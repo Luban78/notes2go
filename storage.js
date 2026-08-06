@@ -31,3 +31,12 @@ function toggleTaskCompleted(index) {
     localStorage.setItem("savedTask", JSON.stringify(tasks));
   }
   
+function updateTask(index, updatedTask) {
+  const tasks = loadTask();
+  console.log(index);
+  console.log(updatedTask);
+  tasks[index] = updatedTask;
+  
+  localStorage.setItem("savedTask", JSON.stringify(tasks));
+  
+}

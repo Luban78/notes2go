@@ -1,3 +1,36 @@
+function updateVisualViewport() {
+  const viewport = window.visualViewport;
+
+  if (viewport) {
+    document.documentElement.style.setProperty(
+      "--visual-height",
+      `${viewport.height}px`
+    );
+
+    document.documentElement.style.setProperty(
+      "--visual-top",
+      `${viewport.offsetTop}px`
+    );
+  }
+}
+
+updateVisualViewport();
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener(
+    "resize",
+    updateVisualViewport
+  );
+
+  window.visualViewport.addEventListener(
+    "scroll",
+    updateVisualViewport
+  );
+}
+
+
+let activeTaskIndex = null;
+
 const editorBackButton = document.getElementById("editorBackButton");
 
 const taskForm = document.getElementById("taskForm");
@@ -7,176 +40,233 @@ const taskDate = document.getElementById("taskDate");
 
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
+
+const editorTopActions = document.querySelector(".editorTopActions");
+const editorBottomBar = document.querySelector(".editorBottomBar");
+
+
+modalText.addEventListener("focus", () => {
+  taskModal.classList.add("editing");
+  
+});
+
+modalText.addEventListener("blur", () => {
+  taskModal.classList.remove("editing");
+});
+
 const modalDate = document.getElementById("modalDate");
 
 const taskModal = document.getElementById("taskModal");
 const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
 
+
+/* ========================================
+   OTEVŘENÍ NOVÉ POZNÁMKY PŘES +
+======================================== */
+
 addTaskButton.addEventListener("click", () => {
-  modalTitle.textContent = "";
-  modalText.textContent = "";
-  modalDate.textContent = "";
-  taskModal.hidden = false;
-  taskModal.classList.add("show");
-  document.body.classList.add("noScroll");
-});
-
-
-editorBackButton.addEventListener("click", (event) => {
-  taskModal.classList.remove("show");
-  setTimeout(() => {
-  taskModal.hidden = true;
-}, 250);
-  document.body.classList.remove("noScroll");
-});
-
-
-taskForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const titleValue = taskTitle.value;
-  const noteValue = taskNote.value;
-  const dateValue = taskDate.value;
-  
-  const newTask = {
-    title: titleValue,
-    note: noteValue,
-    date: dateValue,
-    completed: false
-  };
-  
-  
-  
-  
-  
-  if (titleValue === "") {
-    console.log("Název úkolu je povinný.");
-    return
-  }
-  saveTask(newTask);
-  const taskCard = document.createElement("div");
-  taskCard.classList.add("taskCard");
-  const taskHeading = document.createElement("h3");
-  const taskNoteText = document.createElement("p");
-  const taskDateText = document.createElement("p");
-  const completeButton = document.createElement("button");
-  const deleteButton = document.createElement("button");
-  
-  
-  
-  deleteButton.textContent = "🗑️ Smazat";
-  completeButton.textContent = " ✅ Hotovo";
-  taskHeading.textContent = titleValue;
-  taskNoteText.textContent = noteValue;
-  taskDateText.textContent = dateValue;
-  
-  
-  taskCard.append(taskHeading);
-  taskCard.append(taskNoteText);
-  taskCard.append(taskDateText);
-  taskCard.append(completeButton);
-  taskCard.append(deleteButton);
-  
-  completeButton.addEventListener("click", () => {
-    console.log("Ukol je dokoncem");
-    taskCard.classList.toggle("completed");
-  })
-  deleteButton.addEventListener("click", () => {
-    taskCard.remove();
-  })
-  
-  
-  
-  
-  
-  
-  karty.append(taskCard);
-  
-  
-  taskNoteText.classList.add("taskNoteText");
+  activeTaskIndex = null;
   
   modalTitle.value = "";
   modalText.value = "";
   modalDate.value = "";
-  /*
-    taskNote.value = "";
-    taskTitle.value = "";
-    taskDate.value = "";
-    */
   
-  taskCard.addEventListener("click", () => {
-    //taskNoteText.classList.toggle("expanded");
-    
-    modalTitle.textContent = titleValue;
-    modalText.textContent = noteValue;
-    modalDate.textContent = dateValue;
-    taskModal.hidden = false;
-    taskModal.classList.add("show");
-    document.body.classList.add("noScroll");
-    //console.log("Kliknutí na kartu funguje");
-  })
+  taskModal.hidden = false;
+  taskModal.classList.add("show");
+  document.body.classList.add("noScroll");
   
+  modalTitle.focus();
 });
 
-const loadedTasks = loadTask();
-loadedTasks.forEach((loadedTask, index) => {
-  const loadedCompleteButton = document.createElement("button");
-  const loadedDeleteButton = document.createElement("button");
-  loadedCompleteButton.textContent = "hotovo";
-  loadedDeleteButton.textContent = "smazat";
+
+/* ========================================
+   ZAVŘENÍ EDITORU A AUTOMATICKÉ ULOŽENÍ
+======================================== */
+
+editorBackButton.addEventListener("click", () => {
+  const title = modalTitle.value.trim();
+  const note = modalText.value;
+  const date = modalDate.value;
   
-  
-  
-  
-  
-  //console.log("Uložený úkol existuje.");
-  console.log(loadedTask);
-  const loadedTitle = loadedTask.title;
-  const loadedNote = loadedTask.note;
-  const loadedDate = loadedTask.date;
-  const loadedCompleted = loadedTask.completed;
-  const loadedCard = document.createElement("div");
-  loadedCard.classList.add("taskCard");
-  const loadedHeading = document.createElement("h3");
-  loadedHeading.textContent = loadedTitle;
-  const loadedNoteText = document.createElement("p");
-  loadedNoteText.textContent = loadedNote;
-  loadedNoteText.classList.add("taskNoteText");
-  const loadedDateText = document.createElement("p");
-  loadedDateText.textContent = loadedDate;
-  
-  loadedCard.append(loadedHeading, loadedNoteText, loadedDateText,
-    loadedCompleteButton,
-    loadedDeleteButton
-  );
-  if (loadedCompleted) {
-    loadedCard.classList.add("completed");
+  if (activeTaskIndex !== null) {
+    const tasks = loadTask();
+    const currentTask = tasks[activeTaskIndex];
+    
+    if (currentTask) {
+      const updatedTask = {
+        ...currentTask,
+        title,
+        note,
+        date
+      };
+      
+      updateTask(activeTaskIndex, updatedTask);
+    }
+  } else {
+    const isEmpty =
+      title === "" &&
+      note.trim() === "" &&
+      date === "";
+    
+    if (!isEmpty) {
+      const newTask = {
+        title,
+        note,
+        date,
+        completed: false
+      };
+      
+      saveTask(newTask);
+    }
   }
   
-  karty.append(loadedCard);
-  loadedDeleteButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    deleteTask(index);
-    loadedCard.remove();
-  });
+  renderTasks();
   
+  taskModal.classList.remove("show");
   
-  loadedCompleteButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    
-    toggleTaskCompleted(index);
-    loadedCard.classList.toggle("completed");
-  });
+  setTimeout(() => {
+    taskModal.hidden = true;
+  }, 250);
   
-  
-  loadedCard.addEventListener("click", () => {
-    modalTitle.value = loadedTitle;
-    modalText.value = loadedNote;
-    modalDate.value = loadedDate;
-    taskModal.hidden = false;
-    taskModal.classList.add("show");
-    document.body.classList.add("noScroll");
-    
-    
-  });
+  document.body.classList.remove("noScroll");
+  activeTaskIndex = null;
 });
+
+
+/* ========================================
+   STARÝ FORMULÁŘ
+   Zatím funguje, později ho schováme.
+======================================== */
+
+taskForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  
+  const title = taskTitle.value.trim();
+  const note = taskNote.value;
+  const date = taskDate.value;
+  
+  if (title === "") {
+    return;
+  }
+  
+  const newTask = {
+    title,
+    note,
+    date,
+    completed: false
+  };
+  
+  saveTask(newTask);
+  renderTasks();
+  
+  taskTitle.value = "";
+  taskNote.value = "";
+  taskDate.value = "";
+});
+
+
+/* ========================================
+   VYKRESLENÍ VŠECH KARET
+======================================== */
+
+function renderTasks() {
+  karty.innerHTML = "";
+  
+  const loadedTasks = loadTask();
+  
+  loadedTasks.forEach((loadedTask, index) => {
+    const loadedCard = document.createElement("div");
+    loadedCard.classList.add("taskCard");
+    
+    const loadedHeading = document.createElement("h3");
+    loadedHeading.textContent =
+      loadedTask.title || "Bez názvu";
+    
+    const loadedNoteText = document.createElement("p");
+    loadedNoteText.textContent = loadedTask.note;
+    loadedNoteText.classList.add("taskNoteText");
+    
+    const loadedDateText = document.createElement("p");
+    loadedDateText.textContent = loadedTask.date;
+    
+    const loadedCompleteButton =
+      document.createElement("button");
+    
+    loadedCompleteButton.textContent = "✅ Hotovo";
+    
+    const loadedDeleteButton =
+      document.createElement("button");
+    
+    loadedDeleteButton.textContent = "🗑️ Smazat";
+    
+    loadedCard.append(
+      loadedHeading,
+      loadedNoteText,
+      loadedDateText,
+      loadedCompleteButton,
+      loadedDeleteButton
+    );
+    
+    if (loadedTask.completed) {
+      loadedCard.classList.add("completed");
+    }
+    
+    karty.append(loadedCard);
+    
+    
+    /* Otevření existující poznámky */
+    
+    loadedCard.addEventListener("click", () => {
+      const currentTasks = loadTask();
+      const currentTask = currentTasks[index];
+      
+      if (!currentTask) {
+        return;
+      }
+      
+      activeTaskIndex = index;
+      
+      modalTitle.value = currentTask.title;
+      modalText.value = currentTask.note;
+      modalDate.value = currentTask.date;
+      
+      taskModal.hidden = false;
+      taskModal.classList.add("show");
+      document.body.classList.add("noScroll");
+    });
+    
+    
+    /* Přepnutí stavu Hotovo */
+    
+    loadedCompleteButton.addEventListener(
+      "click",
+      (event) => {
+        event.stopPropagation();
+        
+        toggleTaskCompleted(index);
+        renderTasks();
+      }
+    );
+    
+    
+    /* Smazání poznámky */
+    
+    loadedDeleteButton.addEventListener(
+      "click",
+      (event) => {
+        event.stopPropagation();
+        
+        deleteTask(index);
+        renderTasks();
+      }
+    );
+  });
+}
+
+
+/* ========================================
+   PRVNÍ VYKRESLENÍ PO SPUŠTĚNÍ
+======================================== */
+
+renderTasks();

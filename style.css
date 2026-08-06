@@ -17,8 +17,8 @@ body {
 }
 
 .app {
-  max-width: 500px;
-  width: 90%;
+  max-width: 900px;
+  width: 95%;
   padding: 15px;
   text-align: left;
 }
@@ -30,13 +30,15 @@ body {
   padding: 10px;
   border-radius: var(--border-radius);
   background: #000000;
-  background-color: #474040;
+  background-color: #F0EDED;
+  
+  display: none;
 }
 
 .taskForm input,
 .taskForm textarea {
   box-sizing: border-box;
-  background: #2A2727;
+  background: #F0EDED;
   width: 100%;
   border-radius: var(--border-radius);
   margin: 0;
@@ -46,7 +48,7 @@ body {
 }
 
 .taskCard {
-  background: #4D4747;
+  background: #F0EDED;
   color: #000;
   border-radius: var(--border-radius);
   margin: 10px;
@@ -59,7 +61,7 @@ body {
 .karty {
   width: 100%;
   column-count: 2;
-  column-gap: 12px;
+  column-gap: 16px;
   margin-top: 18px;
 }
 
@@ -76,7 +78,10 @@ body {
 .taskModal {
   background: transparent;
   position: fixed;
-  inset: 0;
+  top: var(--visual-top, 0px);
+left: 0;
+right: 0;
+height: var(--visual-height, 100dvh);
   z-index: 1000;
   display: flex;
   justify-content: stretch;
@@ -88,16 +93,16 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: none;
-  padding: 8px 15px 15px;
+  padding: 8px 8px 15px;
   border-radius: 0px;
-  background: #4D4747;
-  color: #EFE3E3;
+  background: #F0EDED;
+  color: #2E2727;
   box-shadow: 3px 3px 10px #000000;
   height: 100%;
   max-height: none;
   text-align: left;
   overflow-y: auto;
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   padding-bottom: calc(15px + env(safe-area-inset-bottom));
   box-sizing: border-box;
@@ -110,7 +115,7 @@ body {
 }
 
 .completed {
-  background: #D3838366;
+  background: #F0EDED;
   text-decoration: line-through;
 }
 
@@ -120,7 +125,7 @@ body {
 
 .tlacitko {
   border-radius: var(--border-radius);
-  background: #736666;
+  background: #F0EDED;
 }
 
 .addTaskButton {
@@ -140,10 +145,12 @@ body {
   outline: none;
   resize: none;
   background: transparent;
-  color: #EFE3E3;
+  color: #2E1515;
   font-family: inherit;
   overflow-y: auto;
+  font-size: 1.3rem;
 }
+
 .editorTopBar {
   display: flex;
   align-items: center;
@@ -164,7 +171,7 @@ body {
   
   font-size: 1.5rem;
   font-weight: 700;
-  color: #EFE3E3;
+  color: #392424;
   
   width: 100%;
   box-sizing: border-box;
@@ -176,9 +183,22 @@ body {
   flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 10px 0;
+  
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  
+  background: #F0EDED;
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+  
+  padding: 2px 0;
+  min-height: 48px;
 }
+
+
+
+
+
 
 
 .editorTopBar button,
@@ -207,4 +227,34 @@ body {
 .editorTopBar button:active,
 .editorBottomBar button:active {
   transform: scale(0.92);
+}
+
+.editorTopBar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 36px;
+  margin: 0;
+}
+
+.editorTopBar button {
+  width: 40px;
+  height: 40px;
+  font-size: 1.5rem;
+}
+.editing .editorTopBar {
+  min-height: 44px;
+}
+
+.editing .editorTopBar button,
+.editing .editorBottomBar button {
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+  transition: all 0.25s ease;
+}
+
+.editing .editorBottomBar {
+  transform: translateY(+15px);
+  transition: transform 0.25s ease;
 }

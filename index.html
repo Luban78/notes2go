@@ -30,11 +30,14 @@
   <div class="modalContent">
 
     <div class="editorTopBar">
-      <div class="editorTopActions">
-        <button id="pinTaskButton">📌</button>
-        <button id="reminderButton">🔔</button>
-      </div>
-    </div>
+  <input type="datetime-local" id="modalDate">
+  
+  <div class="editorTopActions">
+    <button id="pinTaskButton">&#128204;</button>
+    <button id="reminderButton">&#128276;</button>
+    <button id="moreOptionsButton">&#8942;</button>
+  </div>
+</div>
 
     <input
       type="text"
@@ -42,10 +45,7 @@
       placeholder="Název úkolu"
     >
 
-    <input
-      type="datetime-local"
-      id="modalDate"
-    >
+    
 
     <textarea
       id="modalText"
