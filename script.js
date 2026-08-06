@@ -1,3 +1,5 @@
+const editorBackButton = document.getElementById("editorBackButton");
+
 const taskForm = document.getElementById("taskForm");
 const taskTitle = document.getElementById("taskTitle");
 const taskNote = document.getElementById("taskNote");
@@ -6,7 +8,7 @@ const taskDate = document.getElementById("taskDate");
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
 const modalDate = document.getElementById("modalDate");
-const modalClose = document.getElementById("modalClose");
+
 const taskModal = document.getElementById("taskModal");
 const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
@@ -16,13 +18,19 @@ addTaskButton.addEventListener("click", () => {
   modalText.textContent = "";
   modalDate.textContent = "";
   taskModal.hidden = false;
+  taskModal.classList.add("show");
   document.body.classList.add("noScroll");
 });
 
-modalClose.addEventListener("click", (event) => {
+
+editorBackButton.addEventListener("click", (event) => {
+  taskModal.classList.remove("show");
+  setTimeout(() => {
   taskModal.hidden = true;
+}, 250);
   document.body.classList.remove("noScroll");
 });
+
 
 taskForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -103,6 +111,7 @@ taskForm.addEventListener("submit", (event) => {
     modalText.textContent = noteValue;
     modalDate.textContent = dateValue;
     taskModal.hidden = false;
+    taskModal.classList.add("show");
     document.body.classList.add("noScroll");
     //console.log("Kliknutí na kartu funguje");
   })
@@ -165,6 +174,7 @@ loadedTasks.forEach((loadedTask, index) => {
     modalText.value = loadedNote;
     modalDate.value = loadedDate;
     taskModal.hidden = false;
+    taskModal.classList.add("show");
     document.body.classList.add("noScroll");
     
     

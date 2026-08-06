@@ -27,35 +27,42 @@
     </div>
   </main>
   <div id="taskModal" class="taskModal" hidden>
-    <div class="modalContent">
-      <div class="editorTopBar">
-        <button id="modalClose">←</button>
-        
-        <div class="editorTopActions">
-          <button id="pinTaskButton">📌</button>
-          <button id="reminderButton">🔔</button>
-        </div>
+  <div class="modalContent">
+
+    <div class="editorTopBar">
+      <div class="editorTopActions">
+        <button id="pinTaskButton">📌</button>
+        <button id="reminderButton">🔔</button>
       </div>
-      <input type="text" id="modalTitle" placeholder="Název úkolu">
-      <input type="datetime-local" id="modalDate">
-      
-      <textarea id="modalText" placeholder="Napiš poznámku..."></textarea>
-      
-      <!-- <p id="modalDate">📅 Datum</p>-->
-      
-      
-      
-      <div class="editorBottomBar">
-        <button id="colorTaskButton">🎨</button>
-        <button id="priorityTaskButton">⭐</button>
-        <button id="categoryTaskButton">💼</button>
-        <button id="tagTaskButton">🏷️</button>
-        <button id="deleteTaskButton">🗑️</button>
-      </div>
-      
-      
     </div>
+
+    <input
+      type="text"
+      id="modalTitle"
+      placeholder="Název úkolu"
+    >
+
+    <input
+      type="datetime-local"
+      id="modalDate"
+    >
+
+    <textarea
+      id="modalText"
+      placeholder="Napiš poznámku..."
+    ></textarea>
+
+    <div class="editorBottomBar">
+      <button id="editorBackButton">⬅️</button>
+      <button id="categoryTaskButton">💼</button>
+      <button id="priorityTaskButton">⭐</button>
+      <button id="colorTaskButton">🎨</button>
+      <button id="tagTaskButton">🏷️</button>
+      <button id="deleteTaskButton">🗑️</button>
+    </div>
+
   </div>
+</div>
   <button id="addTaskButton" class="addTaskButton">+</button>
   <script src="storage.js"></script>
   <script src="script.js"></script>
