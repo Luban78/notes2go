@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notes2Go</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <h1>Notes2Go</h1>
+  <main class="app">
+    
+    <form id="taskForm" class="taskForm">
+      <!--<h2>Nový úkol</h2>-->
+      <input id="taskTitle" type="text" placeholder="přidat úkol">
+      <textarea id="taskNote" name="poznamka" rows="5" placeholder="Krátká poznámka"></textarea>
+      <input id="taskDate" type="datetime-local">
+      
+      <button type="submit" class="tlacitko">Přidat úkol</button>
+    </form>
+    
+    
+    <div class="karty">
+      
+    </div>
+  </main>
+  <div id="taskModal" class="taskModal" hidden>
+    <div class="modalContent">
+      <div class="editorTopBar">
+        <button id="modalClose">←</button>
+        
+        <div class="editorTopActions">
+          <button id="pinTaskButton">📌</button>
+          <button id="reminderButton">🔔</button>
+        </div>
+      </div>
+      <input type="text" id="modalTitle" placeholder="Název úkolu">
+      <input type="datetime-local" id="modalDate">
+      
+      <textarea id="modalText" placeholder="Napiš poznámku..."></textarea>
+      
+      <!-- <p id="modalDate">📅 Datum</p>-->
+      
+      
+      
+      <div class="editorBottomBar">
+        <button id="colorTaskButton">🎨</button>
+        <button id="priorityTaskButton">⭐</button>
+        <button id="categoryTaskButton">💼</button>
+        <button id="tagTaskButton">🏷️</button>
+        <button id="deleteTaskButton">🗑️</button>
+      </div>
+      
+      
+    </div>
+  </div>
+  <button id="addTaskButton" class="addTaskButton">+</button>
+  <script src="storage.js"></script>
+  <script src="script.js"></script>
+</body>
+
+</html>
