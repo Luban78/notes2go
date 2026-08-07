@@ -17,11 +17,27 @@ async function requestNotificationPermission() {
 
   const permission =
     await LocalNotifications.requestPermissions();
-
+await createReminderChannel();
   console.log("Povolení notifikací:", permission);
 }
 
+async function createReminderChannel() {
+  const LocalNotifications =
+    window.Capacitor?.Plugins?.LocalNotifications;
 
+  if (!LocalNotifications) {
+    return;
+  }
+
+  await LocalNotifications.createChannel({
+    id: "reminders",
+    name: "Připomínky Notes2Go",
+    description: "Upozornění na naplánované poznámky",
+    importance: 5,
+    visibility: 1,
+    vibration: true
+  });
+}
 
 
 // 2. Naplánuje konkrétní notifikaci na datum a čas
@@ -42,6 +58,7 @@ async function scheduleNotification(notificationId, title, dateTime) {
         title: title || "Notes2Go",
         body: "Máš naplánovanou poznámku.",
         id: notificationId,
+        channelId: "reminders",
         schedule: {
           at: notificationDate
         }
