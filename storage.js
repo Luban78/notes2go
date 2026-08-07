@@ -40,3 +40,39 @@ function updateTask(index, updatedTask) {
   localStorage.setItem("savedTask", JSON.stringify(tasks));
   
 }
+function exportTasks() {
+  const tasks = loadTask();
+
+  const data = JSON.stringify(tasks, null, 2);
+
+  const blob = new Blob([data], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "notes2go-backup.json";
+
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function importTasks(file) {
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    const importedTasks = JSON.parse(reader.result);
+
+    localStorage.setItem(
+      "savedTask",
+      JSON.stringify(importedTasks)
+    );
+
+    location.reload();
+  };
+
+  reader.readAsText(file);
+}
