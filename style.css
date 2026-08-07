@@ -625,3 +625,8 @@ transition:
 #modalTime {
   flex: 0.7;
 }
+
+#reminderButton.active {
+  background: #7444dc;
+  color: white;
+}

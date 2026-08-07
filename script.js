@@ -30,6 +30,7 @@ if (window.visualViewport) {
 
 
 let activeTaskIndex = null;
+let reminderEnabled = false;
 
 const editorBackButton = document.getElementById("editorBackButton");
 
@@ -37,6 +38,10 @@ const taskForm = document.getElementById("taskForm");
 const taskTitle = document.getElementById("taskTitle");
 const taskNote = document.getElementById("taskNote");
 const taskDate = document.getElementById("taskDate");
+
+const reminderButton = document.getElementById("reminderButton");
+
+
 
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
@@ -95,6 +100,22 @@ const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
 
 
+
+reminderButton.addEventListener("click", () => {
+  if (!modalDate.value || !modalTime.value) {
+  alert("Nejdřív nastav datum a čas upozornění.");
+  return;
+}
+  reminderEnabled = !reminderEnabled;
+
+  if (reminderEnabled) {
+    reminderButton.classList.add("active");
+  } else {
+    reminderButton.classList.remove("active");
+  }
+});
+
+
 /* ========================================
    OTEVŘENÍ NOVÉ POZNÁMKY PŘES +
 ======================================== */
@@ -106,7 +127,9 @@ addTaskButton.addEventListener("click", () => {
   modalText.value = "";
   modalDate.value = "";
   modalTime.value = "";
-  
+  reminderEnabled = false;
+reminderButton.classList.remove("active");
+
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
@@ -136,7 +159,8 @@ editorBackButton.addEventListener("click", () => {
         ...currentTask,
         title,
         note,
-        date
+        date,
+        reminder: reminderEnabled
       };
       
       updateTask(activeTaskIndex, updatedTask);
@@ -152,7 +176,8 @@ editorBackButton.addEventListener("click", () => {
         title,
         note,
         date,
-        completed: false
+        completed: false,
+        reminder: reminderEnabled
       };
       
       saveTask(newTask);
@@ -280,6 +305,8 @@ loadedCard.append(
     loadedCard.addEventListener("click", () => {
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
+      reminderEnabled = currentTask.reminder === true;
+reminderButton.classList.toggle("active", reminderEnabled);
       
       if (!currentTask) {
         return;
