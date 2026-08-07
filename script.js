@@ -101,20 +101,6 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 
 
-reminderButton.addEventListener("click", () => {
-  if (!modalDate.value || !modalTime.value) {
-  alert("Nejdřív nastav datum a čas upozornění.");
-  return;
-}
-  reminderEnabled = !reminderEnabled;
-
-  if (reminderEnabled) {
-    reminderButton.classList.add("active");
-  } else {
-    reminderButton.classList.remove("active");
-  }
-});
-
 
 /* ========================================
    OTEVŘENÍ NOVÉ POZNÁMKY PŘES +
@@ -128,7 +114,7 @@ addTaskButton.addEventListener("click", () => {
   modalDate.value = "";
   modalTime.value = "";
   reminderEnabled = false;
-reminderButton.classList.remove("active");
+updateReminderButton(false);
 
   taskModal.hidden = false;
   taskModal.classList.add("show");
@@ -306,7 +292,7 @@ loadedCard.append(
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
       reminderEnabled = currentTask.reminder === true;
-reminderButton.classList.toggle("active", reminderEnabled);
+updateReminderButton(reminderEnabled);
       
       if (!currentTask) {
         return;
