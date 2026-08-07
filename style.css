@@ -589,3 +589,39 @@ transition:
 .taskActions .taskActionButton {
   flex: 1;
 }
+
+
+
+
+.dateTimeInputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.modalWeekday {
+  flex-shrink: 0;
+  min-width: 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #392424;
+  text-align: center;
+}
+
+.dateTimeInputs input {
+  box-sizing: border-box;
+  height: 36px;
+  min-width: 0;
+  padding: 2px 5px;
+  font-size: 0.95rem;
+}
+
+#modalDate {
+  flex: 1.25;
+}
+
+#modalTime {
+  flex: 0.7;
+}

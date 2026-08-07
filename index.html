@@ -72,8 +72,11 @@
   <div class="modalContent">
 
     <div class="editorTopBar">
-  <input type="datetime-local" id="modalDate">
-  
+  <div class="dateTimeInputs">
+    <span id="modalWeekday" class="modalWeekday"></span>
+  <input type="date" id="modalDate">
+  <input type="time" id="modalTime">
+</div>
   <div class="editorTopActions">
     <button id="pinTaskButton">&#128204;</button>
     <button id="reminderButton">&#128276;</button>

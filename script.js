@@ -63,6 +63,33 @@ modalText.addEventListener("blur", () => {
 
 const modalDate = document.getElementById("modalDate");
 
+const modalTime = document.getElementById("modalTime");
+const modalWeekday = document.getElementById("modalWeekday");
+function updateModalWeekday() {
+  if (!modalDate.value) {
+    modalWeekday.textContent = "";
+    return;
+  }
+
+  const date = new Date(`${modalDate.value}T12:00`);
+
+  const weekdays = [
+    "Ne",
+    "Po",
+    "Út",
+    "St",
+    "Čt",
+    "Pá",
+    "So"
+  ];
+
+  modalWeekday.textContent = weekdays[date.getDay()];
+}
+modalDate.addEventListener("change", updateModalWeekday);
+
+
+
+
 const taskModal = document.getElementById("taskModal");
 const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
@@ -78,6 +105,7 @@ addTaskButton.addEventListener("click", () => {
   modalTitle.value = "";
   modalText.value = "";
   modalDate.value = "";
+  modalTime.value = "";
   
   taskModal.hidden = false;
   taskModal.classList.add("show");
@@ -94,7 +122,10 @@ addTaskButton.addEventListener("click", () => {
 editorBackButton.addEventListener("click", () => {
   const title = modalTitle.value.trim();
   const note = modalText.value;
-  const date = modalDate.value;
+  const date =
+  modalDate.value && modalTime.value ?
+  `${modalDate.value}T${modalTime.value}` :
+  "";
   
   if (activeTaskIndex !== null) {
     const tasks = loadTask();
@@ -258,7 +289,17 @@ loadedCard.append(
       
       modalTitle.value = currentTask.title;
       modalText.value = currentTask.note;
-      modalDate.value = currentTask.date;
+      if (currentTask.date) {
+  const [savedDate, savedTime] = currentTask.date.split("T");
+  
+  modalDate.value = savedDate || "";
+  modalTime.value = savedTime || "";
+  updateModalWeekday();
+} else {
+  modalDate.value = "";
+  modalTime.value = "";
+  updateModalWeekday();
+}
       
       taskModal.hidden = false;
       taskModal.classList.add("show");
