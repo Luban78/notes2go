@@ -121,3 +121,4 @@ reminderButton.addEventListener("click", () => {
     updateReminderButton(false);
   }
 });
+createReminderChannel();
