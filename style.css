@@ -69,7 +69,6 @@ body {
   background: var(--editor-background);
 }
 
-
 /* ==================================================
    KARTY POZNÁMEK
 ================================================== */
@@ -79,7 +78,7 @@ body {
   box-sizing: border-box;
   margin: 14px auto 90px;
   padding: 0 8px;
-  
+
   column-count: 2;
   column-gap: 10px;
 }
@@ -111,17 +110,13 @@ body {
 
   border-radius: 22px;
 
-  background: #FFFFFF;
-  color: #231B33;
+  background: #ffffff;
+  color: #231b33;
 
-  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 
   break-inside: avoid;
 }
-
-
-
-
 
 .taskNoteText {
   display: -webkit-box;
@@ -135,7 +130,6 @@ body {
   background: var(--editor-background);
   text-decoration: line-through;
 }
-
 
 /* ==================================================
    PLOVOUCÍ TLAČÍTKO +
@@ -152,7 +146,6 @@ body {
   border-radius: 50%;
   font-size: 2rem;
 }
-
 
 /* ==================================================
    CELOPLOŠNÝ EDITOR
@@ -213,7 +206,6 @@ body {
   overflow: hidden;
 }
 
-
 /* ==================================================
    HORNÍ LIŠTA
 ================================================== */
@@ -236,7 +228,6 @@ body {
   margin-left: auto;
 }
 
-
 /* Datum uvnitř horní lišty */
 
 #modalDate {
@@ -247,7 +238,6 @@ body {
 
   font-size: 1rem;
 }
-
 
 /* ==================================================
    NÁZEV POZNÁMKY
@@ -268,13 +258,13 @@ body {
 
   font-size: 1.5rem;
   font-weight: 700;
-  
+
   max-height: 60px;
-overflow: hidden;
-transition:
-  max-height 0.2s ease,
-  padding 0.2s ease,
-  opacity 0.2s ease;
+  overflow: hidden;
+  transition:
+    max-height 0.2s ease,
+    padding 0.2s ease,
+    opacity 0.2s ease;
 }
 .taskModal.titleCollapsed #modalTitle {
   max-height: 0;
@@ -308,7 +298,6 @@ transition:
   line-height: 1.35;
 }
 
-
 /* ==================================================
    SPODNÍ LIŠTA
 ================================================== */
@@ -330,7 +319,6 @@ transition:
   border-top: 1px solid rgba(0, 0, 0, 0.15);
   background: var(--editor-background);
 }
-
 
 /* ==================================================
    TLAČÍTKA OBOU LIŠT
@@ -590,9 +578,6 @@ transition:
   flex: 1;
 }
 
-
-
-
 .dateTimeInputs {
   display: flex;
   align-items: center;
@@ -629,4 +614,36 @@ transition:
 #reminderButton.active {
   background: #7444dc;
   color: white;
+}
+.homeActions {
+  position: relative;
+}
+
+.mainMenu {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  min-width: 165px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+
+.mainMenu button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.mainMenu button:active {
+  background: #f2f2f2;
 }

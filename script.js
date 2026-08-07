@@ -27,11 +27,20 @@ if (window.visualViewport) {
     updateVisualViewport
   );
 }
+const mainMenuButton = document.getElementById("mainMenuButton");
+const mainMenu = document.getElementById("mainMenu");
 
+mainMenuButton.addEventListener("click", () => {
+  mainMenu.hidden = !mainMenu.hidden;
+});
 
 let activeTaskIndex = null;
 let reminderEnabled = false;
+const exportButton = document.getElementById("exportButton");
 
+exportButton.addEventListener("click", () => {
+  exportTasks();
+});
 const editorBackButton = document.getElementById("editorBackButton");
 
 const taskForm = document.getElementById("taskForm");
@@ -41,7 +50,20 @@ const taskDate = document.getElementById("taskDate");
 
 const reminderButton = document.getElementById("reminderButton");
 
+const importButton = document.getElementById("importButton");
+const importFile = document.getElementById("importFile");
 
+importButton.addEventListener("click", () => {
+  importFile.click();
+});
+
+importFile.addEventListener("change", () => {
+  const file = importFile.files[0];
+
+  if (file) {
+    importTasks(file);
+  }
+});
 
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
