@@ -9,7 +9,49 @@
 </head>
 
 <body>
-  <h1>Notes2Go</h1>
+  <header class="homeHeader">
+
+  <div class="homeTitleRow">
+    <div class="homeBrand">
+      <div class="homeLogo">N</div>
+      <h1>Notes2Go</h1>
+    </div>
+
+    <div class="homeActions">
+      <button id="changeViewButton" aria-label="Změnit zobrazení">
+        ▦
+      </button>
+
+      <button id="mainMenuButton" aria-label="Hlavní nabídka">
+        ⋮
+      </button>
+    </div>
+  </div>
+
+  <div class="searchRow">
+    <div class="searchBox">
+      <span aria-hidden="true">⌕</span>
+
+      <input
+        id="searchNotes"
+        type="search"
+        placeholder="Hledat poznámky..."
+      >
+    </div>
+
+    <button id="filterButton" aria-label="Filtrovat poznámky">
+      ☷
+    </button>
+  </div>
+
+  <nav class="categoryTabs" aria-label="Kategorie poznámek">
+    <button class="categoryTab active">Poznámky</button>
+    <button class="categoryTab">Nákup</button>
+    <button class="categoryTab">Práce</button>
+    <button class="categoryTab">Osobní</button>
+  </nav>
+
+</header>
   <main class="app">
     
     <form id="taskForm" class="taskForm">

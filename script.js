@@ -40,6 +40,13 @@ const taskDate = document.getElementById("taskDate");
 
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
+modalText.addEventListener("scroll", () => {
+  if (modalText.scrollTop > 20) {
+    taskModal.classList.add("titleCollapsed");
+  } else {
+    taskModal.classList.remove("titleCollapsed");
+  }
+});
 
 const editorTopActions = document.querySelector(".editorTopActions");
 const editorBottomBar = document.querySelector(".editorBottomBar");
@@ -188,7 +195,21 @@ function renderTasks() {
     loadedNoteText.classList.add("taskNoteText");
     
     const loadedDateText = document.createElement("p");
-    loadedDateText.textContent = loadedTask.date;
+    
+    
+    if (loadedTask.date) {
+  const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  
+  loadedDateText.textContent = formattedDate;
+} else {
+  loadedDateText.textContent = "";
+}
     
     const loadedCompleteButton =
       document.createElement("button");
@@ -200,14 +221,22 @@ function renderTasks() {
     
     loadedDeleteButton.textContent = "🗑️ Smazat";
     
-    loadedCard.append(
-      loadedHeading,
-      loadedNoteText,
-      loadedDateText,
-      loadedCompleteButton,
-      loadedDeleteButton
-    );
-    
+    loadedCompleteButton.classList.add("taskActionButton", "completeTaskButton");
+loadedDeleteButton.classList.add("taskActionButton", "deleteTaskButton");
+    const loadedActions = document.createElement("div");
+loadedActions.classList.add("taskActions");
+
+loadedActions.append(
+  loadedCompleteButton,
+  loadedDeleteButton
+);
+
+loadedCard.append(
+  loadedHeading,
+  loadedNoteText,
+  loadedDateText,
+  loadedActions
+);
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }

@@ -1,227 +1,361 @@
 :root {
   --border-radius: 15px;
+  --editor-background: #f0eded;
+  --editor-text: #2e1515;
 }
+
+/* ==================================================
+   ZÁKLAD STRÁNKY
+================================================== */
 
 body {
   display: flex;
   flex-direction: column;
-  /*justify-content: flex-start;*/
   justify-content: center;
-  text-align: center;
   flex-wrap: wrap;
-  align-items: right;
-  background: #000000;
-  color: #8C8FB0;
+
   min-height: 100dvh;
   margin: 0;
+
+  background: #f7f4f2;
+  color: #8c8fb0;
+  text-align: center;
 }
 
 .app {
-  max-width: 900px;
   width: 95%;
+  max-width: 900px;
   padding: 15px;
   text-align: left;
 }
+.app {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+/* ==================================================
+   STARÝ FORMULÁŘ – ZATÍM SCHOVANÝ
+================================================== */
 
 .taskForm {
-  display: flex;
+  display: none;
+
   flex-direction: column;
   gap: 10px;
   padding: 10px;
+
   border-radius: var(--border-radius);
-  background: #000000;
-  background-color: #F0EDED;
-  
-  display: none;
+  background: var(--editor-background);
 }
 
 .taskForm input,
 .taskForm textarea {
   box-sizing: border-box;
-  background: #F0EDED;
   width: 100%;
-  border-radius: var(--border-radius);
   margin: 0;
   padding: 12px;
+
+  border-radius: var(--border-radius);
+  background: var(--editor-background);
   font-size: 1.2rem;
-  
 }
 
-.taskCard {
-  background: #F0EDED;
-  color: #000;
+.tlacitko {
   border-radius: var(--border-radius);
-  margin: 10px;
-  padding: 12px;
-  break-inside: avoid;
-  margin-top: 0;
-  margin-bottom: 12px;
+  background: var(--editor-background);
 }
+
+
+/* ==================================================
+   KARTY POZNÁMEK
+================================================== */
 
 .karty {
   width: 100%;
+  box-sizing: border-box;
+  margin: 14px auto 90px;
+  padding: 0 8px;
+  
   column-count: 2;
-  column-gap: 16px;
-  margin-top: 18px;
+  column-gap: 10px;
 }
 
+/*.taskCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+
+  border-radius: 18px;
+  background: #BCB2AB;
+  color: #17132f;
+
+  box-shadow: 0 4px 14px rgba(23, 19, 47, 0.08);
+}*/
+.taskCard {
+  display: inline-flex;
+  flex-direction: column;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  margin: 0 0 12px;
+  padding: 18px;
+
+  border-radius: 22px;
+
+  background: #FFFFFF;
+  color: #231B33;
+
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+
+  break-inside: avoid;
+}
+
+
+
+
+
 .taskNoteText {
-  overflow: hidden;
   display: -webkit-box;
+  overflow: hidden;
+
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 
-/*.expanded{
-  -webkit-line-clamp: none;
-}*/
+.completed {
+  background: var(--editor-background);
+  text-decoration: line-through;
+}
+
+
+/* ==================================================
+   PLOVOUCÍ TLAČÍTKO +
+================================================== */
+
+.addTaskButton {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+
+  width: 60px;
+  height: 60px;
+
+  border-radius: 50%;
+  font-size: 2rem;
+}
+
+
+/* ==================================================
+   CELOPLOŠNÝ EDITOR
+================================================== */
+
 .taskModal {
-  background: transparent;
   position: fixed;
   top: var(--visual-top, 0px);
-left: 0;
-right: 0;
-height: var(--visual-height, 100dvh);
+  right: 0;
+  left: 0;
+
+  height: var(--visual-height, 100dvh);
   z-index: 1000;
+
   display: flex;
-  justify-content: stretch;
   align-items: stretch;
+  justify-content: stretch;
+
+  background: transparent;
+}
+
+.taskModal[hidden] {
+  display: none;
 }
 
 .modalContent {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: none;
-  padding: 8px 8px 15px;
-  border-radius: 0px;
-  background: #F0EDED;
-  color: #2E2727;
-  box-shadow: 3px 3px 10px #000000;
-  height: 100%;
-  max-height: none;
-  text-align: left;
-  overflow-y: auto;
-  font-size: 2.5rem;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  padding-bottom: calc(15px + env(safe-area-inset-bottom));
+
   box-sizing: border-box;
-  
-}
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 4px 8px env(safe-area-inset-bottom);
 
-.taskModal[hidden] {
-  display: none;
-  
-}
+  overflow: hidden;
 
-.completed {
-  background: #F0EDED;
-  text-decoration: line-through;
+  border-radius: 0;
+  background: var(--editor-background);
+  color: #2e2727;
+
+  text-align: left;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Open Sans",
+    "Helvetica Neue",
+    sans-serif;
 }
 
 .noScroll {
   overflow: hidden;
 }
 
-.tlacitko {
-  border-radius: var(--border-radius);
-  background: #F0EDED;
-}
 
-.addTaskButton {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  font-size: 2rem;
-}
-
-#modalText {
-  flex: 1;
-  min-height: 0;
-  border: none;
-  outline: none;
-  resize: none;
-  background: transparent;
-  color: #2E1515;
-  font-family: inherit;
-  overflow-y: auto;
-  font-size: 1.3rem;
-}
+/* ==================================================
+   HORNÍ LIŠTA
+================================================== */
 
 .editorTopBar {
   display: flex;
-  align-items: center;
   flex-shrink: 0;
-  
-  height: 48px;
+  align-items: center;
+
+  min-height: 44px;
+  margin: 0;
   padding: 0;
-  margin: 0 0 4px;
-}
-
-#modalTitle {
-  border: none;
-  background: transparent;
-  
-  outline: none;
-  border-bottom: 1px solid #777;
-  padding: 8px 0;
-  
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #392424;
-  
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 12px;
-}
-
-.editorBottomBar {
-  display: flex;
-  flex-shrink: 0;
-  justify-content: space-between;
-  align-items: center;
-  
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  
-  background: #F0EDED;
-  border-top: 1px solid rgba(0, 0, 0, 0.15);
-  
-  padding: 2px 0;
-  min-height: 48px;
-}
-
-
-
-
-
-
-
-.editorTopBar button,
-.editorBottomBar button {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: transparent;
-  border: none;
-  font-size: 1.7rem;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  outline: none;
 }
 
 .editorTopActions {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 4px;
+
   margin-left: auto;
+}
+
+
+/* Datum uvnitř horní lišty */
+
+#modalDate {
+  box-sizing: border-box;
+  width: min(58%, 380px);
+  height: 36px;
+  padding: 2px 8px;
+
+  font-size: 1rem;
+}
+
+
+/* ==================================================
+   NÁZEV POZNÁMKY
+================================================== */
+
+#modalTitle {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0 6px;
+
+  border: none;
+  border-bottom: 1px solid #777;
+  outline: none;
+
+  background: transparent;
+  color: #392424;
+
+  font-size: 1.5rem;
+  font-weight: 700;
+  
+  max-height: 60px;
+overflow: hidden;
+transition:
+  max-height 0.2s ease,
+  padding 0.2s ease,
+  opacity 0.2s ease;
+}
+.taskModal.titleCollapsed #modalTitle {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ==================================================
+   TEXT POZNÁMKY
+================================================== */
+
+#modalText {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 6px 0 2px;
+
+  overflow-y: auto;
+  resize: none;
+
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--editor-text);
+
+  font-family: inherit;
+  font-size: 1.3rem;
+  line-height: 1.35;
+}
+
+
+/* ==================================================
+   SPODNÍ LIŠTA
+================================================== */
+
+.editorBottomBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+  background: var(--editor-background);
+}
+
+
+/* ==================================================
+   TLAČÍTKA OBOU LIŠT
+================================================== */
+
+.editorTopBar button,
+.editorBottomBar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 40px;
+  height: 40px;
+  padding: 0;
+
+  border: none;
+  border-radius: 10px;
+  outline: none;
+
+  background: transparent;
+  font-size: 1.5rem;
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
 }
 
 .editorTopBar button:active,
@@ -229,32 +363,229 @@ height: var(--visual-height, 100dvh);
   transform: scale(0.92);
 }
 
-.editorTopBar {
+/* ==================================================
+   HLAVNÍ OBRAZOVKA – HORNÍ ČÁST
+================================================== */
+
+.homeHeader {
+  width: min(100%, 900px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 22px 18px 14px;
+
+  background: #f7f4f2;
+  color: #17132f;
+}
+
+.homeTitleRow {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
-  height: 36px;
-  margin: 0;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.editorTopBar button {
-  width: 40px;
-  height: 40px;
-  font-size: 1.5rem;
-}
-.editing .editorTopBar {
-  min-height: 44px;
+.homeBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.editing .editorTopBar button,
-.editing .editorBottomBar button {
-  width: 40px;
-  height: 40px;
+.homeLogo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7d4de8, #ac7cff);
+  color: #fff;
+
   font-size: 1.4rem;
-  transition: all 0.25s ease;
+  font-weight: 800;
 }
 
-.editing .editorBottomBar {
-  transform: translateY(+15px);
-  transition: transform 0.25s ease;
+.homeHeader h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.homeActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.homeActions button,
+#filterButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #17132f;
+
+  font-size: 1.6rem;
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin-top: 22px;
+}
+
+.searchBox {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0;
+  padding: 0 14px;
+
+  border: 1px solid rgba(23, 19, 47, 0.12);
+  border-radius: 18px;
+  background: #fff;
+
+  box-shadow: 0 4px 14px rgba(23, 19, 47, 0.06);
+}
+
+.searchBox span {
+  flex-shrink: 0;
+  color: #6d6878;
+  font-size: 1.8rem;
+}
+
+#searchNotes {
+  width: 100%;
+  min-width: 0;
+  height: 54px;
+
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #17132f;
+
+  font-size: 1.1rem;
+}
+
+#searchNotes::placeholder {
+  color: #a39da8;
+}
+
+.categoryTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  margin-top: 16px;
+}
+
+.categoryTab {
+  min-width: 0;
+  padding: 10px 6px;
+
+  border: 1px solid rgba(23, 19, 47, 0.12);
+  border-radius: 16px;
+  background: #fff;
+  color: #17132f;
+
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.categoryTab.active {
+  border-color: #7444dc;
+  color: #5f32c9;
+  box-shadow: 0 0 0 1px rgba(116, 68, 220, 0.12);
+}
+
+.taskCard h3 {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.taskCard p {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+.taskCard .taskNoteText {
+  margin-top: 8px;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.taskCard p:not(.taskNoteText) {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(35, 27, 51, 0.12);
+
+  color: #625a6c;
+  font-size: 0.85rem;
+}
+
+.taskActionButton {
+  border: 1px solid rgba(35, 27, 51, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  color: #231b33;
+
+  padding: 8px 12px;
+
+  font-size: 0.95rem;
+  font-weight: 600;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.completeTaskButton {
+  color: #4f8a3a;
+}
+
+.deleteTaskButton {
+  color: #b24a4a;
+}
+
+.taskActionButton:active {
+  transform: scale(0.96);
+}
+
+.taskCard .taskActionButton {
+  width: calc(50% - 4px);
+  padding: 7px 6px;
+}
+
+.taskCard .completeTaskButton,
+.taskCard .deleteTaskButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.taskActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.taskActions .taskActionButton {
+  flex: 1;
 }
