@@ -11,18 +11,17 @@ async function requestNotificationPermission() {
     window.Capacitor?.Plugins?.LocalNotifications;
 
   if (!LocalNotifications) {
-    alert("Local Notifications plugin není dostupný.");
+    console.log("Local Notifications nejsou dostupné.");
     return;
   }
 
   const permission =
     await LocalNotifications.requestPermissions();
 
-  alert(
-    "Výsledek oprávnění: " +
-    JSON.stringify(permission)
-  );
+  console.log("Povolení notifikací:", permission);
 }
+
+
 
 
 // 2. Naplánuje konkrétní notifikaci na datum a čas
