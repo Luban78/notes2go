@@ -11,14 +11,17 @@ async function requestNotificationPermission() {
     window.Capacitor?.Plugins?.LocalNotifications;
 
   if (!LocalNotifications) {
-    console.log("Local Notifications nejsou dostupné.");
+    alert("Local Notifications plugin není dostupný.");
     return;
   }
 
   const permission =
     await LocalNotifications.requestPermissions();
 
-  console.log("Povolení notifikací:", permission);
+  alert(
+    "Výsledek oprávnění: " +
+    JSON.stringify(permission)
+  );
 }
 
 
