@@ -45,7 +45,7 @@ jobs:
         working-directory: android
         run: |
           ./gradlew assembleDebug \
-            -Pandroid.injected.signing.store.file=notes2go-release.jks \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/notes2go-release.jks" \
             -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
