@@ -168,14 +168,26 @@ editorBackButton.addEventListener("click", () => {
     
     if (currentTask) {
       const updatedTask = {
-        ...currentTask,
-        title,
-        note,
-        date,
-        reminder: reminderEnabled
-      };
+  ...currentTask,
+  title,
+  note,
+  date,
+  reminder: reminderEnabled,
+  notificationId:
+    currentTask.notificationId ||
+    Date.now() % 2147483647
+};
       
       updateTask(activeTaskIndex, updatedTask);
+      if (updatedTask.reminder && updatedTask.date) {
+  scheduleNotification(
+    updatedTask.notificationId,
+    updatedTask.title,
+    updatedTask.date
+  );
+      }else {
+  cancelNotification(updatedTask.notificationId);
+      }
     }
   } else {
     const isEmpty =
@@ -185,14 +197,22 @@ editorBackButton.addEventListener("click", () => {
     
     if (!isEmpty) {
       const newTask = {
-        title,
-        note,
-        date,
-        completed: false,
-        reminder: reminderEnabled
-      };
+  title,
+  note,
+  date,
+  completed: false,
+  reminder: reminderEnabled,
+  notificationId: Date.now() % 2147483647
+};
       
       saveTask(newTask);
+      if (newTask.reminder && newTask.date) {
+  scheduleNotification(
+    newTask.notificationId,
+    newTask.title,
+    newTask.date
+  );
+      }
     }
   }
   
@@ -362,14 +382,21 @@ updateReminderButton(reminderEnabled);
     /* Smazání poznámky */
     
     loadedDeleteButton.addEventListener(
-      "click",
-      (event) => {
-        event.stopPropagation();
-        
-        deleteTask(index);
-        renderTasks();
-      }
-    );
+  "click",
+  (event) => {
+    event.stopPropagation();
+
+    const tasks = loadTask();
+    const taskToDelete = tasks[index];
+
+    if (taskToDelete?.notificationId) {
+      cancelNotification(taskToDelete.notificationId);
+    }
+
+    deleteTask(index);
+    renderTasks();
+  }
+);
   });
 }
 
