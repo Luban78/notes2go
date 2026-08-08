@@ -175,7 +175,9 @@ editorBackButton.addEventListener("click", () => {
   reminder: reminderEnabled,
   notificationId:
     currentTask.notificationId ||
-    Date.now() % 2147483647
+    Date.now() % 2147483647,
+  area: activeArea,
+  tags: [...activeTags]
 };
       
       updateTask(activeTaskIndex, updatedTask);
@@ -202,7 +204,9 @@ editorBackButton.addEventListener("click", () => {
   date,
   completed: false,
   reminder: reminderEnabled,
-  notificationId: Date.now() % 2147483647
+  notificationId: Date.now() % 2147483647,
+  area: activeArea,
+  tags: [...activeTags]
 };
       
       saveTask(newTask);
@@ -277,7 +281,14 @@ function renderTasks() {
     const loadedHeading = document.createElement("h3");
     loadedHeading.textContent =
       loadedTask.title || "Bez názvu";
-    
+    const loadedArea = document.createElement("span");
+loadedArea.classList.add("taskArea");
+
+if (loadedTask.area === "work") {
+  loadedArea.textContent = "💼 Pracovní";
+} else {
+  loadedArea.textContent = "🏠 Soukromé";
+}
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
@@ -318,13 +329,27 @@ loadedActions.append(
   loadedCompleteButton,
   loadedDeleteButton
 );
-
+const loadedTags = document.createElement("div");
 loadedCard.append(
   loadedHeading,
+  loadedArea,
+  loadedTags,
   loadedNoteText,
   loadedDateText,
   loadedActions
 );
+
+loadedTags.classList.add("taskTags");
+
+const taskTags = loadedTask.tags || [];
+
+taskTags.forEach(tag => {
+  const tagBadge = document.createElement("span");
+  tagBadge.classList.add("taskTag");
+  tagBadge.textContent = tag;
+
+  loadedTags.append(tagBadge);
+});
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }
@@ -339,6 +364,10 @@ loadedCard.append(
       const currentTask = currentTasks[index];
       reminderEnabled = currentTask.reminder === true;
 updateReminderButton(reminderEnabled);
+activeArea = currentTask.area || "private";
+activeTags = currentTask.tags || [];
+updateTagMenuUI();
+closeTagMenu();
       
       if (!currentTask) {
         return;

@@ -3,121 +3,359 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
   <title>Notes2Go</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+
+  <!-- ========================================
+       HLAVNÍ OBRAZOVKA
+  ======================================== -->
+
   <header class="homeHeader">
 
-  <div class="homeTitleRow">
-    <div class="homeBrand">
-      <div class="homeLogo">N</div>
-      <h1>Notes2Go</h1>
-    </div>
+    <div class="homeTitleRow">
 
-    <div class="homeActions">
-      <button id="changeViewButton" aria-label="Změnit zobrazení">
-        ▦
-      </button>
-
-      <button id="mainMenuButton" aria-label="Hlavní nabídka">
-        ⋮
-      </button>
-      <div id="mainMenu" class="mainMenu" hidden>
-  <button id="exportButton">Export zálohy</button>
-  <button id="importButton">Import zálohy</button>
+      <div class="homeBrand">
+        <div class="homeLogo">N</div>
+        <h1>Notes2Go</h1>
       </div>
-<input id="importFile" type="file" accept="application/json" hidden>
+
+      <div class="homeActions">
+
+        <button
+          id="changeViewButton"
+          aria-label="Změnit zobrazení"
+        >
+          ▦
+        </button>
+
+        <button
+          id="mainMenuButton"
+          aria-label="Hlavní nabídka"
+        >
+          ⋮
+        </button>
+
+        <div
+          id="mainMenu"
+          class="mainMenu"
+          hidden
+        >
+          <button id="exportButton">
+            Export zálohy
+          </button>
+
+          <button id="importButton">
+            Import zálohy
+          </button>
+        </div>
+
+        <input
+          id="importFile"
+          type="file"
+          accept="application/json"
+          hidden
+        >
+
+      </div>
     </div>
-  </div>
 
-  <div class="searchRow">
-    <div class="searchBox">
-      <span aria-hidden="true">⌕</span>
 
-      <input
-        id="searchNotes"
-        type="search"
-        placeholder="Hledat poznámky..."
+    <!-- Hledání -->
+
+    <div class="searchRow">
+
+      <div class="searchBox">
+
+        <span aria-hidden="true">⌕</span>
+
+        <input
+          id="searchNotes"
+          type="search"
+          placeholder="Hledat poznámky..."
+        >
+
+      </div>
+
+      <button
+        id="filterButton"
+        aria-label="Filtrovat poznámky"
       >
+        ☷
+      </button>
+
     </div>
 
-    <button id="filterButton" aria-label="Filtrovat poznámky">
-      ☷
-    </button>
-  </div>
 
-  <nav class="categoryTabs" aria-label="Kategorie poznámek">
-    <button class="categoryTab active">Poznámky</button>
-    <button class="categoryTab">Nákup</button>
-    <button class="categoryTab">Práce</button>
-    <button class="categoryTab">Osobní</button>
-  </nav>
+    <!-- Kategorie -->
 
-</header>
+    <nav
+      class="categoryTabs"
+      aria-label="Kategorie poznámek"
+    >
+      <button class="categoryTab active">
+        Poznámky
+      </button>
+
+      <button class="categoryTab">
+        Nákup
+      </button>
+
+      <button class="categoryTab">
+        Práce
+      </button>
+
+      <button class="categoryTab">
+        Osobní
+      </button>
+    </nav>
+
+  </header>
+
+
+  <!-- ========================================
+       KARTY POZNÁMEK
+  ======================================== -->
+
   <main class="app">
-    
-    <form id="taskForm" class="taskForm">
-      <!--<h2>Nový úkol</h2>-->
-      <input id="taskTitle" type="text" placeholder="přidat úkol">
-      <textarea id="taskNote" name="poznamka" rows="5" placeholder="Krátká poznámka"></textarea>
-      <input id="taskDate" type="datetime-local">
-      
-      <button type="submit" class="tlacitko">Přidat úkol</button>
-    </form>
-    
-    
-    <div class="karty">
-      
-    </div>
-  </main>
-  <div id="taskModal" class="taskModal" hidden>
-  <div class="modalContent">
 
-    <div class="editorTopBar">
-  <div class="dateTimeInputs">
-    <span id="modalWeekday" class="modalWeekday"></span>
-  <input type="date" id="modalDate">
-  <input type="time" id="modalTime">
-</div>
-  <div class="editorTopActions">
-    <button id="pinTaskButton">&#128204;</button>
-    <button id="reminderButton">&#128276;</button>
-    <button id="moreOptionsButton">&#8942;</button>
-  </div>
-</div>
+    <!-- Starý formulář - zatím schovaný -->
 
-    <input
-      type="text"
-      id="modalTitle"
-      placeholder="Název úkolu"
+    <form
+      id="taskForm"
+      class="taskForm"
     >
 
-    
+      <input
+        id="taskTitle"
+        type="text"
+        placeholder="přidat úkol"
+      >
 
-    <textarea
-      id="modalText"
-      placeholder="Napiš poznámku..."
-    ></textarea>
+      <textarea
+        id="taskNote"
+        name="poznamka"
+        rows="5"
+        placeholder="Krátká poznámka"
+      ></textarea>
 
-    <div class="editorBottomBar">
-      <button id="editorBackButton">⬅️</button>
-      <button id="categoryTaskButton">💼</button>
-      <button id="priorityTaskButton">⭐</button>
-      <button id="colorTaskButton">🎨</button>
-      <button id="tagTaskButton">🏷️</button>
-      <button id="deleteTaskButton">🗑️</button>
+      <input
+        id="taskDate"
+        type="datetime-local"
+      >
+
+      <button
+        type="submit"
+        class="tlacitko"
+      >
+        Přidat úkol
+      </button>
+
+    </form>
+
+
+    <div class="karty"></div>
+
+  </main>
+
+
+  <!-- ========================================
+       CELOPLOŠNÝ EDITOR
+  ======================================== -->
+
+  <div
+    id="taskModal"
+    class="taskModal"
+    hidden
+  >
+
+    <div class="modalContent">
+
+
+      <!-- Horní lišta -->
+
+      <div class="editorTopBar">
+
+        <div class="dateTimeInputs">
+
+          <span
+            id="modalWeekday"
+            class="modalWeekday"
+          ></span>
+
+          <input
+            type="date"
+            id="modalDate"
+          >
+
+          <input
+            type="time"
+            id="modalTime"
+          >
+
+        </div>
+
+
+        <div class="editorTopActions">
+
+          <button id="pinTaskButton">
+            &#128204;
+          </button>
+
+          <button id="reminderButton">
+            &#128276;
+          </button>
+
+          <button id="moreOptionsButton">
+            &#8942;
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- Název -->
+
+      <input
+        type="text"
+        id="modalTitle"
+        placeholder="Název úkolu"
+      >
+
+
+      <!-- Text poznámky -->
+
+      <textarea
+        id="modalText"
+        placeholder="Napiš poznámku..."
+      ></textarea>
+
+
+      <!-- ========================================
+           NABÍDKA OBLASTI A ŠTÍTKŮ
+           Je uvnitř editoru, ale mimo spodní lištu.
+      ======================================== -->
+
+      <div
+        id="tagMenu"
+        class="tagMenu"
+        hidden
+      >
+
+        <h3>Oblast poznámky</h3>
+
+        <div class="areaOptions">
+
+          <button
+            type="button"
+            data-area="work"
+          >
+            💼 Pracovní
+          </button>
+
+          <button
+            type="button"
+            data-area="private"
+          >
+            🏠 Soukromé
+          </button>
+
+        </div>
+
+
+        <h3>Štítky</h3>
+
+        <div class="tagOptions">
+
+          <button
+            type="button"
+            data-tag="code"
+          >
+            code
+          </button>
+
+          <button
+            type="button"
+            data-tag="důležité"
+          >
+            důležité
+          </button>
+
+          <button
+            type="button"
+            data-tag="projekt"
+          >
+            projekt
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- Spodní lišta -->
+
+      <div class="editorBottomBar">
+
+        <button id="editorBackButton">
+          ⬅️
+        </button>
+
+        <button id="categoryTaskButton">
+          💼
+        </button>
+
+        <button id="priorityTaskButton">
+          ⭐
+        </button>
+
+        <button id="colorTaskButton">
+          🎨
+        </button>
+
+        <button id="tagTaskButton">
+          🏷️
+        </button>
+
+        <button id="deleteTaskButton">
+          🗑️
+        </button>
+
+      </div>
+
     </div>
 
   </div>
-</div>
-  <button id="addTaskButton" class="addTaskButton">+</button>
-  
+
+
+  <!-- Přidat novou poznámku -->
+
+  <button
+    id="addTaskButton"
+    class="addTaskButton"
+  >
+    +
+  </button>
+
+
+  <!-- ========================================
+       JAVASCRIPT
+  ======================================== -->
+
   <script src="reminders.js"></script>
   <script src="storage.js"></script>
+  <script src="tags.js"></script>
   <script src="script.js"></script>
+
 </body>
 
 </html>

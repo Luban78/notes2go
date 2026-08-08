@@ -693,3 +693,83 @@ body {
 .karty {
   overflow: visible;
 }
+
+
+.tagMenu button.active {
+  background: #7444dc;
+  color: white;
+}
+.tagMenu[hidden] {
+  display: none !important;
+}
+
+/* ========================================
+   PANEL OBLASTI A ŠTÍTKŮ
+======================================== */
+
+.tagMenu {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--editor-background);
+}
+
+.tagMenu[hidden] {
+  display: none !important;
+}
+
+.tagMenu h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+}
+
+.tagMenu h3:not(:first-child) {
+  margin-top: 10px;
+}
+
+.areaOptions,
+.tagOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.areaOptions button,
+.tagOptions button {
+  padding: 6px 10px;
+
+  border: 1px solid rgba(46, 21, 21, 0.25);
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--editor-text);
+
+  font-size: 0.95rem;
+}
+
+.areaOptions button.active,
+.tagOptions button.active {
+  background: #7444dc;
+  color: white;
+  border-color: #7444dc;
+}
+.taskTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.taskTag {
+  padding: 3px 7px;
+
+  border-radius: 8px;
+  background: rgba(116, 68, 220, 0.12);
+  color: #5f32c9;
+
+  font-size: 0.75rem;
+  font-weight: 600;
+}
