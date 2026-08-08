@@ -647,3 +647,49 @@ body {
 .mainMenu button:active {
   background: #f2f2f2;
 }
+
+/* ========================================
+   ANDROID APK - prostor pro kameru / notch
+======================================== */
+
+.nativeApp .homeHeader {
+  padding-top: max(18px, env(safe-area-inset-top));
+}
+
+.nativeApp .editorTopBar {
+  padding-top: max(18px, env(safe-area-inset-top));
+}
+
+/* ========================================
+   HLAVNÍ OBRAZOVKA - PEVNÝ VRŠEK,
+   SCROLLUJÍ POUZE POZNÁMKY
+======================================== */
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+}
+
+.homeHeader {
+  flex-shrink: 0;
+}
+
+.app {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.karty {
+  overflow: visible;
+}

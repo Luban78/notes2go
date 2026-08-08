@@ -1,3 +1,7 @@
+if (window.Capacitor?.isNativePlatform?.()) {
+  document.body.classList.add("nativeApp");
+}
+
 function updateVisualViewport() {
   const viewport = window.visualViewport;
 
