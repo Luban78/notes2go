@@ -4,7 +4,34 @@
 
 let activeArea = "private";
 let activeTags = [];
+let activeAreaFilter = "all";
+let activeTagFilter = null;
 
+const areaFilterButtons =
+  document.querySelectorAll("[data-area-filter]");
+  
+areaFilterButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    activeAreaFilter = button.dataset.areaFilter;
+
+    if (activeAreaFilter === "all") {
+      activeTagFilter = null;
+    }
+    updateTagFilterUI();
+
+    updateAreaFilterUI();
+    renderTasks();
+  });
+});
+
+function updateAreaFilterUI() {
+  areaFilterButtons.forEach(button => {
+    button.classList.toggle(
+      "active",
+      button.dataset.areaFilter === activeAreaFilter
+    );
+  });
+}
 
 /* Nastavení oblasti poznámky */
 
@@ -130,3 +157,78 @@ categoryTaskButton.textContent =
 /* První nastavení vzhledu */
 
 updateTagMenuUI();
+
+function taskMatchesArea(task) {
+  if (activeAreaFilter === "all") {
+    return true;
+  }
+
+  const taskArea = task.area || "private";
+
+  return taskArea === activeAreaFilter;
+}
+
+function taskMatchesTag(task) {
+  if (activeTagFilter === null) {
+    return true;
+  }
+
+  const taskTags = task.tags || [];
+
+  return taskTags.includes(activeTagFilter);
+}
+
+function getAllTags() {
+  const tasks = loadTask();
+  const allTags = tasks.flatMap(task => task.tags || []);
+
+  return [...new Set(allTags)];
+}
+
+const tagFilterButtons =
+  document.getElementById("tagFilterButtons");
+
+function renderTagFilters() {
+  tagFilterButtons.innerHTML = "";
+
+  const tags = getAllTags();
+
+  tags.forEach(tag => {
+    const button = document.createElement("button");
+
+    button.classList.add("categoryTab");
+    button.textContent = tag;
+    button.dataset.tagFilter = tag;
+
+    tagFilterButtons.append(button);
+  });
+}
+renderTagFilters();
+
+tagFilterButtons.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-tag-filter]");
+  
+  if (!button) {
+    return;
+  }
+  
+  activeTagFilter =
+  activeTagFilter === button.dataset.tagFilter ?
+  null :
+  button.dataset.tagFilter;
+  
+  updateTagFilterUI();
+  
+  renderTasks();
+});
+
+function updateTagFilterUI() {
+  tagFilterButtons
+    .querySelectorAll("[data-tag-filter]")
+    .forEach(button => {
+      button.classList.toggle(
+        "active",
+        button.dataset.tagFilter === activeTagFilter
+      );
+    });
+}

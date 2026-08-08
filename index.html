@@ -97,26 +97,20 @@
 
     <!-- Kategorie -->
 
-    <nav
-      class="categoryTabs"
-      aria-label="Kategorie poznámek"
-    >
-      <button class="categoryTab active">
-        Poznámky
-      </button>
-
-      <button class="categoryTab">
-        Nákup
-      </button>
-
-      <button class="categoryTab">
-        Práce
-      </button>
-
-      <button class="categoryTab">
-        Osobní
-      </button>
-    </nav>
+    <nav class="categoryTabs" aria-label="Filtr poznámek">
+  <button class="categoryTab active" data-area-filter="all">
+    Vše
+  </button>
+  
+  <button class="categoryTab" data-area-filter="work">
+    💼 Pracovní
+  </button>
+  
+  <button class="categoryTab" data-area-filter="private">
+    🏠 Soukromé
+  </button>
+  <div id="tagFilterButtons"></div>
+</nav>
 
   </header>
 

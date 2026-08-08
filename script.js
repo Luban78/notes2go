@@ -275,6 +275,12 @@ function renderTasks() {
   const loadedTasks = loadTask();
   
   loadedTasks.forEach((loadedTask, index) => {
+    if (!taskMatchesArea(loadedTask)) {
+  return;
+}
+if (!taskMatchesTag(loadedTask)) {
+  return;
+}
     const loadedCard = document.createElement("div");
     loadedCard.classList.add("taskCard");
     

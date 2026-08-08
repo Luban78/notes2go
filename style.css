@@ -475,11 +475,22 @@ body {
 }
 
 .categoryTabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
   gap: 8px;
-
+  
   margin-top: 16px;
+  
+  overflow-x: auto;
+  overflow-y: hidden;
+  
+  white-space: nowrap;
+  
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.categoryTabs::-webkit-scrollbar {
+  display: none;
 }
 
 .categoryTab {
@@ -777,3 +788,9 @@ body {
   padding-bottom: 12px;
 }
 
+.categoryTabs .categoryTab,
+#tagFilterButtons .categoryTab {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+}
