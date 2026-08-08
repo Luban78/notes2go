@@ -33,7 +33,9 @@ if (window.visualViewport) {
 }
 const mainMenuButton = document.getElementById("mainMenuButton");
 const mainMenu = document.getElementById("mainMenu");
-
+const pinnedCards = document.getElementById("pinnedCards");
+const pinnedLeft = document.getElementById("pinnedLeft");
+const pinnedRight = document.getElementById("pinnedRight");
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
@@ -177,6 +179,7 @@ editorBackButton.addEventListener("click", () => {
     currentTask.notificationId ||
     Date.now() % 2147483647,
   area: activeArea,
+  pinned: currentTask.pinned === true,
   tags: [...activeTags]
 };
       
@@ -206,6 +209,7 @@ editorBackButton.addEventListener("click", () => {
   reminder: reminderEnabled,
   notificationId: Date.now() % 2147483647,
   area: activeArea,
+  pinned: false,
   tags: [...activeTags]
 };
       
@@ -264,6 +268,10 @@ taskForm.addEventListener("submit", (event) => {
   taskDate.value = "";
 });
 
+let longPressTimer = null;
+const LONG_PRESS_TIME = 600;
+let selectedCardIndex = null;
+let blockNextCardClick = false;
 
 /* ========================================
    VYKRESLENÍ VŠECH KARET
@@ -271,10 +279,22 @@ taskForm.addEventListener("submit", (event) => {
 
 function renderTasks() {
   karty.innerHTML = "";
-  
+  pinnedLeft.innerHTML = "";
+pinnedRight.innerHTML = "";
+  pinnedCards.hidden = true;
+  let leftColumnHeight = 0;
+let rightColumnHeight = 0;
   const loadedTasks = loadTask();
-  
-  loadedTasks.forEach((loadedTask, index) => {
+  const sortedTasks = loadedTasks
+  .map((task, originalIndex) => ({
+    task,
+    originalIndex
+  }))
+  .sort((a, b) => {
+    return Number(b.task.pinned === true) -
+           Number(a.task.pinned === true);
+  });
+  sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
     if (!taskMatchesArea(loadedTask)) {
   return;
 }
@@ -282,11 +302,31 @@ if (!taskMatchesTag(loadedTask)) {
   return;
 }
     const loadedCard = document.createElement("div");
+  loadedCard.addEventListener("pointerdown", () => {
+  longPressTimer = setTimeout(() => {
+    selectedCardIndex = index;
+    const cardMenu = document.getElementById("cardMenu");
+cardMenu.hidden = false;
+  }, LONG_PRESS_TIME);
+});
+
+loadedCard.addEventListener("pointerup", () => {
+  clearTimeout(longPressTimer);
+});
+
+loadedCard.addEventListener("pointercancel", () => {
+  clearTimeout(longPressTimer);
+});
+
     loadedCard.classList.add("taskCard");
     
     const loadedHeading = document.createElement("h3");
     loadedHeading.textContent =
       loadedTask.title || "Bez názvu";
+      if (loadedTask.pinned === true) {
+  loadedHeading.textContent =
+    "📌 " + loadedHeading.textContent;
+}
     const loadedArea = document.createElement("span");
 loadedArea.classList.add("taskArea");
 
@@ -360,12 +400,26 @@ taskTags.forEach(tag => {
       loadedCard.classList.add("completed");
     }
     
-    karty.append(loadedCard);
+    pinnedCards.hidden = false;
+
+const cardCount =
+  pinnedLeft.children.length +
+  pinnedRight.children.length;
+
+if (cardCount % 2 === 0) {
+  pinnedLeft.append(loadedCard);
+} else {
+  pinnedRight.append(loadedCard);
+}
     
     
     /* Otevření existující poznámky */
     
     loadedCard.addEventListener("click", () => {
+      if (blockNextCardClick) {
+  blockNextCardClick = false;
+  return;
+}
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
       reminderEnabled = currentTask.reminder === true;
@@ -441,3 +495,73 @@ closeTagMenu();
 ======================================== */
 
 renderTasks();
+
+const cardMenu = document.getElementById("cardMenu");
+
+
+
+
+
+cardMenu.addEventListener("click", (event) => {
+  const actionButton =
+    event.target.closest("[data-card-action]");
+  
+  if (!actionButton) {
+    return;
+  }
+  
+  const action = actionButton.dataset.cardAction;
+  
+  if (action === "complete") {
+    toggleTaskCompleted(selectedCardIndex);
+    cardMenu.hidden = true;
+    renderTasks();
+  }
+  
+  if (action === "pin") {
+    const tasks = loadTask();
+    const selectedTask = tasks[selectedCardIndex];
+    
+    if (!selectedTask) {
+      return;
+    }
+    
+    selectedTask.pinned = !selectedTask.pinned;
+    
+    localStorage.setItem(
+      "savedTask",
+      JSON.stringify(tasks)
+    );
+    
+    cardMenu.hidden = true;
+    renderTasks();
+  }
+  
+  if (action === "delete") {
+    const confirmed = confirm(
+      "Opravdu chceš tuto poznámku smazat?"
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    deleteTask(selectedCardIndex);
+    cardMenu.hidden = true;
+    renderTasks();
+  }
+});
+
+document.addEventListener("pointerdown", (event) => {
+  const cardMenu = document.getElementById("cardMenu");
+  
+  if (
+    !cardMenu.hidden &&
+    !cardMenu.contains(event.target)
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    blockNextCardClick = true;
+    cardMenu.hidden = true;
+  }
+}, true);

@@ -154,9 +154,13 @@
       </button>
 
     </form>
+    
+    <div id="pinnedCards" class="pinnedCards" hidden>
+  <div id="pinnedLeft" class="pinnedColumn"></div>
+  <div id="pinnedRight" class="pinnedColumn"></div>
+</div>
 
-
-    <div class="karty"></div>
+<div class="karty"></div>
 
   </main>
 
@@ -333,6 +337,23 @@
 
   <!-- Přidat novou poznámku -->
 
+  <div id="cardMenu" class="cardMenu" hidden>
+  <button type="button" data-card-action="plan">
+    📅 Naplánovat
+  </button>
+
+  <button type="button" data-card-action="pin">
+    📌 Připnout
+  </button>
+
+  <button type="button" data-card-action="complete">
+    ✅ Hotovo
+  </button>
+
+  <button type="button" data-card-action="delete">
+    🗑️ Smazat
+  </button>
+</div>
   <button
     id="addTaskButton"
     class="addTaskButton"

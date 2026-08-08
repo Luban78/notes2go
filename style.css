@@ -794,3 +794,63 @@ body {
   width: auto;
   min-width: max-content;
 }
+
+.taskCard {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cardMenu {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+
+  z-index: 2000;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+
+  width: min(90%, 360px);
+  padding: 12px;
+
+  border-radius: 18px;
+  background: #ffffff;
+
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.cardMenu[hidden] {
+  display: none !important;
+}
+
+.cardMenu button {
+  padding: 12px 10px;
+
+  border: 1px solid rgba(35, 27, 51, 0.12);
+  border-radius: 12px;
+
+  background: #ffffff;
+  color: #231b33;
+
+  font-size: 1rem;
+  font-weight: 600;
+}
+.pinnedCards {
+  display: flex;
+  gap: 10px;
+
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 8px 8px;
+}
+
+.pinnedCards[hidden] {
+  display: none !important;
+}
+
+.pinnedColumn {
+  flex: 1;
+  min-width: 0;
+}
