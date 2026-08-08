@@ -773,3 +773,7 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
 }
+.nativeApp .editorBottomBar {
+  padding-bottom: 12px;
+}
+
