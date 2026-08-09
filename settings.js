@@ -3,7 +3,58 @@
 ======================================== */
 
 (() => {
+  const decreaseFontButton =
+  document.getElementById("decreaseFontButton");
 
+const increaseFontButton =
+  document.getElementById("increaseFontButton");
+
+const fontSizeValue =
+  document.getElementById("fontSizeValue");
+  
+let currentFontSize = 16;
+const savedFontSize =
+  localStorage.getItem("fontSize");
+
+if (savedFontSize) {
+  currentFontSize = Number(savedFontSize);
+
+  document.documentElement.style.setProperty(
+    "--font-size",
+    `${currentFontSize}px`
+  );
+
+  fontSizeValue.textContent =
+    `${currentFontSize} px`;
+}
+increaseFontButton.addEventListener("click", () => {
+  currentFontSize = Math.min(currentFontSize + 1, 28);
+  
+  localStorage.setItem("fontSize", currentFontSize);
+  
+
+  document.documentElement.style.setProperty(
+    "--font-size",
+    `${currentFontSize}px`
+  );
+
+  fontSizeValue.textContent =
+    `${currentFontSize} px`;
+});
+
+decreaseFontButton.addEventListener("click", () => {
+  currentFontSize = Math.max(currentFontSize - 1, 12);
+  
+  localStorage.setItem("fontSize", currentFontSize);
+
+  document.documentElement.style.setProperty(
+    "--font-size",
+    `${currentFontSize}px`
+  );
+
+  fontSizeValue.textContent =
+    `${currentFontSize} px`;
+});
   const settingsModal =
     document.getElementById("settingsModal");
 
@@ -41,6 +92,9 @@ const importFile =
 settingsImportButton.addEventListener("click", () => {
   importFile.click();
 });
+
+
+
 
 
 })();

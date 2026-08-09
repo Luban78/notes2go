@@ -354,20 +354,19 @@ loadedCard.addEventListener("pointercancel", () => {
     loadedCard.classList.add("taskCard");
     
     const loadedHeading = document.createElement("h3");
-    loadedHeading.textContent =
-      loadedTask.title || "Bez názvu";
-      if (loadedTask.pinned === true) {
-  loadedHeading.textContent =
-    "📌 " + loadedHeading.textContent;
-}
-    const loadedArea = document.createElement("span");
-loadedArea.classList.add("taskArea");
 
-if (loadedTask.area === "work") {
-  loadedArea.textContent = "💼 Pracovní";
-} else {
-  loadedArea.textContent = "🏠 Soukromé";
-}
+const areaIcon =
+  loadedTask.area === "work" ?
+  "💼" :
+  "🏠";
+
+const pinIcon =
+  loadedTask.pinned === true ?
+  "📌 " :
+  "";
+
+loadedHeading.textContent =
+  `${pinIcon}${areaIcon} ${loadedTask.title || "Bez názvu"}`;
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
@@ -393,7 +392,6 @@ if (loadedTask.area === "work") {
 const loadedTags = document.createElement("div");
 loadedCard.append(
   loadedHeading,
-  loadedArea,
   loadedTags,
   loadedNoteText,
   loadedDateText

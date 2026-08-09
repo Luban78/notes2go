@@ -50,19 +50,7 @@
   </button>
 </div>
 
-<div id="fontSizeMenu" class="fontSizeMenu" hidden>
-  <button type="button" data-font-size="small">
-    Malé
-  </button>
 
-  <button type="button" data-font-size="normal">
-    Normální
-  </button>
-
-  <button type="button" data-font-size="large">
-    Velké
-  </button>
-</div>
 
         <input
           id="importFile"
@@ -436,22 +424,31 @@
 
       <div class="fontSizeSetting">
   <span>Velikost písma</span>
-  
-  <div class="fontSizeOptions">
-    <button type="button" data-font-size="small">
-      Malé
+
+  <div class="fontSizeControl">
+
+    <button
+      id="decreaseFontButton"
+      type="button"
+      aria-label="Zmenšit písmo"
+    >
+      −
     </button>
-    
-    <button type="button" data-font-size="normal">
-      Normální
+
+    <span id="fontSizeValue">
+      16 px
+    </span>
+
+    <button
+      id="increaseFontButton"
+      type="button"
+      aria-label="Zvětšit písmo"
+    >
+      +
     </button>
-    
-    <button type="button" data-font-size="large">
-      Velké
-    </button>
+
   </div>
 </div>
-
       <button type="button">
         Barevný motiv
       </button>
