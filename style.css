@@ -3,6 +3,21 @@
   --editor-background: #f0eded;
   --editor-text: #2e1515;
   --font-size: 16px;
+  /* ===== BARVY APLIKACE ===== */
+
+--color-background: #f7f4f2;
+--color-surface: #ffffff;
+
+--color-text: #231b33;
+--color-text-secondary: #6d6878;
+
+--color-accent: #7444dc;
+--color-accent-text: #5f32c9;
+
+--color-border: rgba(35, 27, 51, 0.12);
+
+--color-editor-background: #f0eded;
+--color-editor-text: #2e1515;
 }
 
 /* ==================================================
@@ -18,7 +33,7 @@ body {
   min-height: 100dvh;
   margin: 0;
 
-  background: #f7f4f2;
+  background: var(--color-background);
   color: #8c8fb0;
   text-align: center;
 }
@@ -111,8 +126,8 @@ body {
 
   border-radius: 22px;
 
-  background: #ffffff;
-  color: #231b33;
+  background: var(--color-surface);
+  color: var(--color-text);
 
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 
@@ -128,10 +143,10 @@ body {
 }
 
 .completed {
-  background: var(--editor-background);
+  background: var(--color-surface);
   text-decoration: line-through;
+  opacity: 0.55;
 }
-
 /* ==================================================
    PLOVOUCÍ TLAČÍTKO +
 ================================================== */
@@ -146,6 +161,9 @@ body {
 
   border-radius: 50%;
   font-size: 2rem;
+  background: var(--color-accent);
+color: #ffffff;
+border-color: var(--color-accent);
 }
 
 /* ==================================================
@@ -185,8 +203,8 @@ body {
   overflow: hidden;
 
   border-radius: 0;
-  background: var(--editor-background);
-  color: #2e2727;
+  background: var(--color-editor-background);
+color: var(--color-editor-text);
 
   text-align: left;
   font-family:
@@ -255,7 +273,7 @@ body {
   outline: none;
 
   background: transparent;
-  color: #392424;
+  color: var(--color-editor-text);
 
   font-size: calc(var(--font-size) + 8px);
   font-weight: 700;
@@ -292,7 +310,7 @@ body {
   border: none;
   outline: none;
   background: transparent;
-  color: var(--editor-text);
+  color: var(--color-editor-text);
 
   font-family: inherit;
   font-size: var(--font-size);
@@ -318,7 +336,7 @@ body {
   padding: 0;
 
   border-top: 1px solid rgba(0, 0, 0, 0.15);
-  background: var(--editor-background);
+  background: var(--color-editor-background);
 }
 
 /* ==================================================
@@ -362,8 +380,8 @@ body {
   margin: 0 auto;
   padding: 22px 18px 14px;
 
-  background: #f7f4f2;
-  color: #17132f;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .homeTitleRow {
@@ -420,7 +438,7 @@ body {
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #17132f;
+  color: var(--color-text);
 
   font-size: 1.6rem;
   cursor: pointer;
@@ -444,11 +462,9 @@ body {
 
   min-width: 0;
   padding: 0 14px;
-
-  border: 1px solid rgba(23, 19, 47, 0.12);
   border-radius: 18px;
-  background: #fff;
-
+  border: 1px solid var(--color-border);
+background: var(--color-surface);
   box-shadow: 0 4px 14px rgba(23, 19, 47, 0.06);
 }
 
@@ -498,10 +514,11 @@ body {
   min-width: 0;
   padding: 10px 6px;
 
-  border: 1px solid rgba(23, 19, 47, 0.12);
+  
   border-radius: 16px;
-  background: #fff;
-  color: #17132f;
+  border: 1px solid var(--color-border);
+background: var(--color-surface);
+color: var(--color-text);
 
   font-size: calc(var(--font-size) - 1px);
   font-weight: 600;
@@ -509,8 +526,13 @@ body {
 }
 
 .categoryTab.active {
-  border-color: #7444dc;
-  color: #5f32c9;
+  border-color: var(--color-accent);
+color: var(--color-accent-text);
+box-shadow: 0 0 0 1px color-mix(
+  in srgb,
+  var(--color-accent) 12%,
+  transparent
+);
   box-shadow: 0 0 0 1px rgba(116, 68, 220, 0.12);
 }
 
@@ -537,7 +559,7 @@ body {
   padding-top: 10px;
   border-top: 1px solid rgba(35, 27, 51, 0.12);
 
-  color: #625a6c;
+  color: var(--color-text-secondary);
   font-size: calc(var(--font-size) - 3px);
 }
 
@@ -568,7 +590,7 @@ body {
   min-width: 24px;
   font-size: calc(var(--font-size) - 2px);
   font-weight: 700;
-  color: #392424;
+  color: var(--color-editor-text);
   text-align: center;
 }
 
@@ -579,11 +601,12 @@ body {
   
   padding: 4px 10px;
   
-  border: 1px solid rgba(35, 27, 51, 0.14);
+  
   border-radius: 12px;
   
-  background: #ffffff;
-  color: #231b33;
+  border: 1px solid var(--color-border);
+background: var(--color-surface);
+color: var(--color-text);
   
   font-size: calc(var(--font-size) - 1px);
   
@@ -614,8 +637,8 @@ body {
   right: 0;
   min-width: 165px;
   padding: 6px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 1000;
@@ -627,6 +650,7 @@ body {
   padding: 10px 12px;
   border: 0;
   background: transparent;
+  color: var(--color-text);
   text-align: left;
   font: inherit;
   font-size: 16px;
@@ -634,8 +658,15 @@ body {
 }
 
 .mainMenu button:active {
-  background: #f2f2f2;
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
 }
+
+
+
 
 /* ========================================
    ANDROID APK - prostor pro kameru / notch
@@ -756,8 +787,13 @@ body {
   padding: 3px 7px;
 
   border-radius: 8px;
-  background: rgba(116, 68, 220, 0.12);
-  color: #5f32c9;
+  background: color-mix(
+  in srgb,
+  var(--color-accent) 12%,
+  transparent
+);
+
+color: var(--color-accent-text);
 
   font-size: calc(var(--font-size) - 3px);
   font-weight: 600;
@@ -946,8 +982,8 @@ color: #ffffff;
 
   padding: 24px 18px;
 
-  background: #f7f4f2;
-  color: #231b33;
+  background: var(--color-background);
+color: var(--color-text);
 
   overflow-y: auto;
 }
@@ -973,7 +1009,7 @@ color: #ffffff;
   border-radius: 12px;
 
   background: transparent;
-
+color: var(--color-text);
   font-size: 1.4rem;
 }
 
@@ -985,7 +1021,7 @@ color: #ffffff;
   margin: 0 0 10px;
 
   font-size: calc(var(--font-size) - 2px);
-  color: #6d6878;
+  color: var(--color-text-secondary);
 }
 
 .settingsSection button {
@@ -998,7 +1034,7 @@ color: #ffffff;
   border-bottom: 1px solid rgba(35, 27, 51, 0.1);
 
   background: transparent;
-  color: #231b33;
+  color: var(--color-text);
 
   text-align: left;
   font-size: var(--font-size);
@@ -1026,11 +1062,12 @@ font-size: var(--font-size);
   height: 42px;
   padding: 0;
 
-  border: 1px solid rgba(35, 27, 51, 0.14);
+  
   border-radius: 12px;
 
-  background: #ffffff;
-  color: #231b33;
+  background: var(--color-surface);
+color: var(--color-text);
+border: 1px solid var(--color-border);
 
   text-align: center;
   font-size: 1.35rem;
@@ -1063,4 +1100,37 @@ font-size: var(--font-size);
   line-height: 42px;
   padding-top: 0;
   padding-bottom: 0;
+}
+/* theme dark*/
+
+body.theme-dark {
+  --color-background: #100d18;
+  --color-surface: #241d30;
+
+  --color-text: #f4effa;
+  --color-text-secondary: #b8aec4;
+
+  --color-accent: #9b6cff;
+  --color-accent-text: #c5a9ff;
+
+  --color-border: rgba(255, 255, 255, 0.12);
+
+  --color-editor-background: #1d1725;
+  --color-editor-text: #f4effa;
+}
+
+body.theme-cappuccino {
+  --color-background: #efe6dc;
+  --color-surface: #f8f1ea;
+
+  --color-text: #3a2a22;
+  --color-text-secondary: #7b675c;
+
+  --color-accent: #b77a52;
+  --color-accent-text: #8b5838;
+
+  --color-border: rgba(58, 42, 34, 0.14);
+
+  --color-editor-background: #f2e9e1;
+  --color-editor-text: #3a2a22;
 }

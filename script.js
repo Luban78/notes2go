@@ -108,9 +108,17 @@ importFile.addEventListener("change", () => {
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
 modalText.addEventListener("scroll", () => {
-  if (modalText.scrollTop > 20) {
+  if (
+    !taskModal.classList.contains("titleCollapsed") &&
+    modalText.scrollTop > 28
+  ) {
     taskModal.classList.add("titleCollapsed");
-  } else {
+  }
+  
+  if (
+    taskModal.classList.contains("titleCollapsed") &&
+    modalText.scrollTop < 8
+  ) {
     taskModal.classList.remove("titleCollapsed");
   }
 });
