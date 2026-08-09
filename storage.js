@@ -40,6 +40,8 @@ function updateTask(index, updatedTask) {
   localStorage.setItem("savedTask", JSON.stringify(tasks));
   
 }
+
+
 function exportTasks() {
   const tasks = loadTask();
 
@@ -52,13 +54,24 @@ function exportTasks() {
   const url = URL.createObjectURL(blob);
 
   const link = document.createElement("a");
+
   link.href = url;
   link.download = "notes2go-backup.json";
 
+  document.body.appendChild(link);
+
   link.click();
 
-  URL.revokeObjectURL(url);
+  link.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
+
+
+
+
 
 function importTasks(file) {
   const reader = new FileReader();

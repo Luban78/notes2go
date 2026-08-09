@@ -44,19 +44,25 @@
           ⋮
         </button>
 
-        <div
-          id="mainMenu"
-          class="mainMenu"
-          hidden
-        >
-          <button id="exportButton">
-            Export zálohy
-          </button>
+        <div id="mainMenu" class="mainMenu" hidden>
+  <button id="fontSizeSettingsButton">
+    ⚙️ Nastavení
+  </button>
+</div>
 
-          <button id="importButton">
-            Import zálohy
-          </button>
-        </div>
+<div id="fontSizeMenu" class="fontSizeMenu" hidden>
+  <button type="button" data-font-size="small">
+    Malé
+  </button>
+
+  <button type="button" data-font-size="normal">
+    Normální
+  </button>
+
+  <button type="button" data-font-size="large">
+    Velké
+  </button>
+</div>
 
         <input
           id="importFile"
@@ -354,6 +360,125 @@
     🗑️ Smazat
   </button>
 </div>
+
+<div id="deleteConfirmModal" class="deleteConfirmModal" hidden>
+  <div class="deleteConfirmBox">
+
+    <h3>Smazat poznámku?</h3>
+
+    <p>
+      Opravdu chceš tuto poznámku smazat?
+    </p>
+
+    <div class="deleteConfirmActions">
+      <button
+        id="cancelDeleteButton"
+        type="button"
+      >
+        Zrušit
+      </button>
+
+      <button
+        id="confirmDeleteButton"
+        type="button"
+      >
+        🗑️ Smazat
+      </button>
+    </div>
+  </div>
+</div>
+<div id="deleteConfirmModal" class="deleteConfirmModal" hidden>
+  <div class="deleteConfirmBox">
+
+    <h3>Smazat poznámku?</h3>
+
+    <p>
+      Opravdu chceš tuto poznámku smazat?
+    </p>
+
+    <div class="deleteConfirmActions">
+      <button
+        id="cancelDeleteButton"
+        type="button"
+      >
+        Zrušit
+      </button>
+
+      <button
+        id="confirmDeleteButton"
+        type="button"
+      >
+        🗑️ Smazat
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- SEM vlož settingsModal -->
+<div id="settingsModal" class="settingsModal" hidden>
+  <div class="settingsContent">
+
+    <div class="settingsHeader">
+      <h2>Nastavení</h2>
+
+      <button
+        id="closeSettingsButton"
+        type="button"
+        aria-label="Zavřít nastavení"
+      >
+        ✕
+      </button>
+    </div>
+
+    <section class="settingsSection">
+      <h3>Vzhled</h3>
+
+      <div class="fontSizeSetting">
+  <span>Velikost písma</span>
+  
+  <div class="fontSizeOptions">
+    <button type="button" data-font-size="small">
+      Malé
+    </button>
+    
+    <button type="button" data-font-size="normal">
+      Normální
+    </button>
+    
+    <button type="button" data-font-size="large">
+      Velké
+    </button>
+  </div>
+</div>
+
+      <button type="button">
+        Barevný motiv
+      </button>
+    </section>
+
+    <section class="settingsSection">
+      <h3>Data</h3>
+
+      <button
+  id="settingsExportButton"
+  type="button"
+>
+  Export zálohy
+</button>
+
+<button
+  id="settingsImportButton"
+  type="button"
+>
+  Import zálohy
+</button>
+    </section>
+
+  </div>
+</div>
+
+
   <button
     id="addTaskButton"
     class="addTaskButton"
@@ -369,6 +494,7 @@
   <script src="reminders.js"></script>
   <script src="storage.js"></script>
   <script src="tags.js"></script>
+  <script src="settings.js"></script>
   <script src="script.js"></script>
 
 </body>

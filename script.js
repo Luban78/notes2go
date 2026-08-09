@@ -31,6 +31,40 @@ if (window.visualViewport) {
     updateVisualViewport
   );
 }
+const deleteConfirmModal =
+  document.getElementById("deleteConfirmModal");
+
+const cancelDeleteButton =
+  document.getElementById("cancelDeleteButton");
+
+const confirmDeleteButton =
+  document.getElementById("confirmDeleteButton");
+  
+  
+cancelDeleteButton.addEventListener("click", () => {
+  deleteConfirmModal.hidden = true;
+});
+
+confirmDeleteButton.addEventListener("click", () => {
+  if (selectedCardIndex === null) {
+    return;
+  }
+
+  const tasks = loadTask();
+  const taskToDelete = tasks[selectedCardIndex];
+
+  if (taskToDelete?.notificationId) {
+    cancelNotification(taskToDelete.notificationId);
+  }
+
+  deleteTask(selectedCardIndex);
+
+  deleteConfirmModal.hidden = true;
+  selectedCardIndex = null;
+
+  renderTasks();
+});
+
 const mainMenuButton = document.getElementById("mainMenuButton");
 const mainMenu = document.getElementById("mainMenu");
 const pinnedCards = document.getElementById("pinnedCards");
@@ -44,9 +78,9 @@ let activeTaskIndex = null;
 let reminderEnabled = false;
 const exportButton = document.getElementById("exportButton");
 
-exportButton.addEventListener("click", () => {
-  exportTasks();
-});
+//exportButton.addEventListener("click", () => {
+ // exportTasks();
+//});
 const editorBackButton = document.getElementById("editorBackButton");
 
 const taskForm = document.getElementById("taskForm");
@@ -59,9 +93,9 @@ const reminderButton = document.getElementById("reminderButton");
 const importButton = document.getElementById("importButton");
 const importFile = document.getElementById("importFile");
 
-importButton.addEventListener("click", () => {
+/*importButton.addEventListener("click", () => {
   importFile.click();
-});
+});*/
 
 importFile.addEventListener("change", () => {
   const file = importFile.files[0];
@@ -481,18 +515,11 @@ cardMenu.addEventListener("click", (event) => {
   }
   
   if (action === "delete") {
-    const confirmed = confirm(
-      "Opravdu chceš tuto poznámku smazat?"
-    );
-    
-    if (!confirmed) {
-      return;
-    }
-    
-    deleteTask(selectedCardIndex);
-    cardMenu.hidden = true;
-    renderTasks();
-  }
+  deleteConfirmModal.hidden = false;
+  cardMenu.hidden = true;
+}
+  
+  
 });
 
 document.addEventListener("pointerdown", (event) => {
