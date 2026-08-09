@@ -124,7 +124,7 @@ modalDate.addEventListener("change", updateModalWeekday);
 
 
 const taskModal = document.getElementById("taskModal");
-const karty = document.querySelector(".karty");
+//const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
 
 
@@ -278,12 +278,11 @@ let blockNextCardClick = false;
 ======================================== */
 
 function renderTasks() {
-  karty.innerHTML = "";
+  //karty.innerHTML = "";
   pinnedLeft.innerHTML = "";
 pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
-  let leftColumnHeight = 0;
-let rightColumnHeight = 0;
+  
   const loadedTasks = loadTask();
   const sortedTasks = loadedTasks
   .map((task, originalIndex) => ({
@@ -355,34 +354,15 @@ if (loadedTask.area === "work") {
 } else {
   loadedDateText.textContent = "";
 }
-    
-    const loadedCompleteButton =
-      document.createElement("button");
-    
-    loadedCompleteButton.textContent = "✅ Hotovo";
-    
-    const loadedDeleteButton =
-      document.createElement("button");
-    
-    loadedDeleteButton.textContent = "🗑️ Smazat";
-    
-    loadedCompleteButton.classList.add("taskActionButton", "completeTaskButton");
-loadedDeleteButton.classList.add("taskActionButton", "deleteTaskButton");
-    const loadedActions = document.createElement("div");
-loadedActions.classList.add("taskActions");
 
-loadedActions.append(
-  loadedCompleteButton,
-  loadedDeleteButton
-);
+
 const loadedTags = document.createElement("div");
 loadedCard.append(
   loadedHeading,
   loadedArea,
   loadedTags,
   loadedNoteText,
-  loadedDateText,
-  loadedActions
+  loadedDateText
 );
 
 loadedTags.classList.add("taskTags");
@@ -454,41 +434,8 @@ closeTagMenu();
       document.body.classList.add("noScroll");
     });
     
-    
-    /* Přepnutí stavu Hotovo */
-    
-    loadedCompleteButton.addEventListener(
-      "click",
-      (event) => {
-        event.stopPropagation();
-        
-        toggleTaskCompleted(index);
-        renderTasks();
-      }
-    );
-    
-    
-    /* Smazání poznámky */
-    
-    loadedDeleteButton.addEventListener(
-  "click",
-  (event) => {
-    event.stopPropagation();
-
-    const tasks = loadTask();
-    const taskToDelete = tasks[index];
-
-    if (taskToDelete?.notificationId) {
-      cancelNotification(taskToDelete.notificationId);
-    }
-
-    deleteTask(index);
-    renderTasks();
-  }
-);
   });
 }
-
 
 /* ========================================
    PRVNÍ VYKRESLENÍ PO SPUŠTĚNÍ
@@ -497,10 +444,6 @@ closeTagMenu();
 renderTasks();
 
 const cardMenu = document.getElementById("cardMenu");
-
-
-
-
 
 cardMenu.addEventListener("click", (event) => {
   const actionButton =
