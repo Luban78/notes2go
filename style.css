@@ -4,20 +4,20 @@
   --editor-text: #2e1515;
   --font-size: 16px;
   /* ===== BARVY APLIKACE ===== */
-
---color-background: #f7f4f2;
---color-surface: #ffffff;
-
---color-text: #231b33;
---color-text-secondary: #6d6878;
-
---color-accent: #7444dc;
---color-accent-text: #5f32c9;
-
---color-border: rgba(35, 27, 51, 0.12);
-
---color-editor-background: #f0eded;
---color-editor-text: #2e1515;
+  
+  --color-background: #f7f4f2;
+  --color-surface: #ffffff;
+  
+  --color-text: #231b33;
+  --color-text-secondary: #6d6878;
+  
+  --color-accent: #7444dc;
+  --color-accent-text: #5f32c9;
+  
+  --color-border: rgba(35, 27, 51, 0.12);
+  
+  --color-editor-background: #f0eded;
+  --color-editor-text: #2e1515;
 }
 
 /* ==================================================
@@ -29,10 +29,10 @@ body {
   flex-direction: column;
   justify-content: center;
   flex-wrap: wrap;
-
+  
   min-height: 100dvh;
   margin: 0;
-
+  
   background: var(--color-background);
   color: #8c8fb0;
   text-align: center;
@@ -44,6 +44,7 @@ body {
   padding: 15px;
   text-align: left;
 }
+
 .app {
   width: 100%;
   max-width: 900px;
@@ -59,11 +60,11 @@ body {
 
 .taskForm {
   display: none;
-
+  
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-
+  
   border-radius: var(--border-radius);
   background: var(--editor-background);
 }
@@ -74,7 +75,7 @@ body {
   width: 100%;
   margin: 0;
   padding: 12px;
-
+  
   border-radius: var(--border-radius);
   background: var(--editor-background);
   font-size: 1.2rem;
@@ -94,7 +95,7 @@ body {
   box-sizing: border-box;
   margin: 14px auto 90px;
   padding: 0 8px;
-
+  
   column-count: 2;
   column-gap: 10px;
 }
@@ -117,27 +118,27 @@ body {
 .taskCard {
   display: inline-flex;
   flex-direction: column;
-
+  
   width: 100%;
   box-sizing: border-box;
-
+  
   margin: 0 0 12px;
   padding: 18px;
-
+  
   border-radius: 22px;
-
+  
   background: var(--color-surface);
   color: var(--color-text);
-
+  
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-
+  
   break-inside: avoid;
 }
 
 .taskNoteText {
   display: -webkit-box;
   overflow: hidden;
-
+  
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   white-space: pre-line;
@@ -148,6 +149,7 @@ body {
   text-decoration: line-through;
   opacity: 0.55;
 }
+
 /* ==================================================
    PLOVOUCÍ TLAČÍTKO +
 ================================================== */
@@ -156,15 +158,15 @@ body {
   position: fixed;
   right: 20px;
   bottom: 20px;
-
+  
   width: 60px;
   height: 60px;
-
+  
   border-radius: 50%;
   font-size: 2rem;
   background: var(--color-accent);
-color: #ffffff;
-border-color: var(--color-accent);
+  color: #ffffff;
+  border-color: var(--color-accent);
 }
 
 /* ==================================================
@@ -176,14 +178,14 @@ border-color: var(--color-accent);
   top: var(--visual-top, 0px);
   right: 0;
   left: 0;
-
+  
   height: var(--visual-height, 100dvh);
   z-index: 1000;
-
+  
   display: flex;
   align-items: stretch;
   justify-content: stretch;
-
+  
   background: transparent;
 }
 
@@ -194,19 +196,19 @@ border-color: var(--color-accent);
 .modalContent {
   display: flex;
   flex-direction: column;
-
+  
   box-sizing: border-box;
   width: 100%;
   height: 100%;
   min-height: 0;
   padding: 4px 8px env(safe-area-inset-bottom);
-
+  
   overflow: hidden;
-
+  
   border-radius: 0;
   background: var(--color-editor-background);
-color: var(--color-editor-text);
-
+  color: var(--color-editor-text);
+  
   text-align: left;
   font-family:
     system-ui,
@@ -234,7 +236,7 @@ color: var(--color-editor-text);
   display: flex;
   flex-shrink: 0;
   align-items: center;
-
+  
   min-height: 44px;
   margin: 0;
   padding: 0;
@@ -244,7 +246,7 @@ color: var(--color-editor-text);
   display: flex;
   align-items: center;
   gap: 4px;
-
+  
   margin-left: auto;
 }
 
@@ -255,7 +257,7 @@ color: var(--color-editor-text);
   width: min(58%, 380px);
   height: 36px;
   padding: 2px 8px;
-
+  
   font-size: 1rem;
 }
 
@@ -268,17 +270,17 @@ color: var(--color-editor-text);
   width: 100%;
   margin: 0;
   padding: 4px 0 6px;
-
+  
   border: none;
   border-bottom: 1px solid #777;
   outline: none;
-
+  
   background: transparent;
   color: var(--color-editor-text);
-
+  
   font-size: calc(var(--font-size) + 8px);
   font-weight: 700;
-
+  
   max-height: 60px;
   overflow: hidden;
   transition:
@@ -286,6 +288,7 @@ color: var(--color-editor-text);
     padding 0.2s ease,
     opacity 0.2s ease;
 }
+
 .taskModal.titleCollapsed #modalTitle {
   max-height: 0;
   padding-top: 0;
@@ -304,15 +307,15 @@ color: var(--color-editor-text);
   min-height: 0;
   width: 100%;
   padding: 6px 0 2px;
-
+  
   overflow-y: auto;
   resize: none;
-
+  
   border: none;
   outline: none;
   background: transparent;
   color: var(--color-editor-text);
-
+  
   font-family: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
@@ -326,16 +329,16 @@ color: var(--color-editor-text);
   position: sticky;
   bottom: 0;
   z-index: 10;
-
+  
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-
+  
   min-height: 42px;
   margin: 0;
   padding: 0;
-
+  
   border-top: 1px solid rgba(0, 0, 0, 0.15);
   background: var(--color-editor-background);
 }
@@ -349,20 +352,20 @@ color: var(--color-editor-text);
   display: flex;
   align-items: center;
   justify-content: center;
-
+  
   width: 40px;
   height: 40px;
   padding: 0;
-
+  
   border: none;
   border-radius: 10px;
   outline: none;
-
+  
   background: transparent;
   color: var(--color-editor-text);
   font-size: 1.5rem;
   cursor: pointer;
-
+  
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s ease;
 }
@@ -381,7 +384,7 @@ color: var(--color-editor-text);
   box-sizing: border-box;
   margin: 0 auto;
   padding: 22px 18px 14px;
-
+  
   background: var(--color-background);
   color: var(--color-text);
 }
@@ -396,7 +399,7 @@ color: var(--color-editor-text);
 .homeBrand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -404,22 +407,22 @@ color: var(--color-editor-text);
   display: flex;
   align-items: center;
   justify-content: center;
-
-  width: 44px;
-  height: 44px;
-
+  
+  width: calc(var(--font-size) + 24px);
+  height: calc(var(--font-size) + 24px);
+  flex-shrink: 0;
   border-radius: 12px;
   background: linear-gradient(135deg, #7d4de8, #ac7cff);
   color: #fff;
-
-  font-size: 1.4rem;
+  font-size: calc(var(--font-size) + 4px);
   font-weight: 800;
 }
 
 .homeHeader h1 {
   margin: 0;
-  font-size: 2.2rem;
+  font-size: calc(var(--font-size) + 16px);
   line-height: 1;
+  white-space: nowrap;
 }
 
 .homeActions {
@@ -434,19 +437,19 @@ color: var(--color-editor-text);
   display: flex;
   align-items: center;
   justify-content: center;
-
+  
   width: 44px;
   height: 44px;
   padding: 0;
-
+  
   border: none;
   border-radius: 12px;
   background: transparent;
   color: var(--color-text);
-
+  
   font-size: 1.6rem;
   cursor: pointer;
-
+  
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -454,7 +457,7 @@ color: var(--color-editor-text);
   display: flex;
   align-items: center;
   gap: 10px;
-
+  
   margin-top: 22px;
 }
 
@@ -463,12 +466,12 @@ color: var(--color-editor-text);
   flex: 1;
   align-items: center;
   gap: 10px;
-
+  
   min-width: 0;
   padding: 0 14px;
   border-radius: 18px;
   border: 1px solid var(--color-border);
-background: var(--color-surface);
+  background: var(--color-surface);
   box-shadow: 0 4px 14px rgba(23, 19, 47, 0.06);
 }
 
@@ -482,12 +485,12 @@ background: var(--color-surface);
   width: 100%;
   min-width: 0;
   height: 54px;
-
+  
   border: none;
   outline: none;
   background: transparent;
   color: #17132f;
-
+  
   font-size: 1.1rem;
 }
 
@@ -517,13 +520,13 @@ background: var(--color-surface);
 .categoryTab {
   min-width: 0;
   padding: 10px 6px;
-
+  
   
   border-radius: 16px;
   border: 1px solid var(--color-border);
-background: var(--color-surface);
-color: var(--color-text);
-
+  background: var(--color-surface);
+  color: var(--color-text);
+  
   font-size: calc(var(--font-size) - 1px);
   font-weight: 600;
   white-space: nowrap;
@@ -531,12 +534,10 @@ color: var(--color-text);
 
 .categoryTab.active {
   border-color: var(--color-accent);
-color: var(--color-accent-text);
-box-shadow: 0 0 0 1px color-mix(
-  in srgb,
-  var(--color-accent) 12%,
-  transparent
-);
+  color: var(--color-accent-text);
+  box-shadow: 0 0 0 1px color-mix(in srgb,
+      var(--color-accent) 12%,
+      transparent);
   box-shadow: 0 0 0 1px rgba(116, 68, 220, 0.12);
 }
 
@@ -562,7 +563,7 @@ box-shadow: 0 0 0 1px color-mix(
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid rgba(35, 27, 51, 0.12);
-
+  
   color: var(--color-text-secondary);
   font-size: calc(var(--font-size) - 3px);
 }
@@ -609,8 +610,8 @@ box-shadow: 0 0 0 1px color-mix(
   border-radius: 12px;
   
   border: 1px solid var(--color-border);
-background: var(--color-surface);
-color: var(--color-text);
+  background: var(--color-surface);
+  color: var(--color-text);
   
   font-size: calc(var(--font-size) - 1px);
   
@@ -631,6 +632,7 @@ color: var(--color-text);
   background: #7444dc;
   color: white;
 }
+
 .homeActions {
   position: relative;
 }
@@ -662,11 +664,9 @@ color: var(--color-text);
 }
 
 .mainMenu button:active {
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 12%,
-    transparent
-  );
+  background: color-mix(in srgb,
+      var(--color-accent) 12%,
+      transparent);
 }
 
 
@@ -723,6 +723,7 @@ body {
   background: #7444dc;
   color: white;
 }
+
 .tagMenu[hidden] {
   display: none !important;
 }
@@ -736,7 +737,7 @@ body {
   box-sizing: border-box;
   width: 100%;
   padding: 10px 12px;
-
+  
   border-top: 1px solid rgba(0, 0, 0, 0.12);
   background: var(--editor-background);
 }
@@ -764,13 +765,13 @@ body {
 .areaOptions button,
 .tagOptions button {
   padding: 6px 10px;
-
+  
   border: 1px solid rgba(46, 21, 21, 0.25);
   border-radius: 12px;
-
+  
   background: transparent;
   color: var(--editor-text);
-
+  
   font-size: 0.95rem;
 }
 
@@ -780,6 +781,7 @@ body {
   color: white;
   border-color: #7444dc;
 }
+
 .taskTags {
   display: flex;
   flex-wrap: wrap;
@@ -789,19 +791,18 @@ body {
 
 .taskTag {
   padding: 3px 7px;
-
+  
   border-radius: 8px;
-  background: color-mix(
-  in srgb,
-  var(--color-accent) 12%,
-  transparent
-);
-
-color: var(--color-accent-text);
-
+  background: color-mix(in srgb,
+      var(--color-accent) 12%,
+      transparent);
+  
+  color: var(--color-accent-text);
+  
   font-size: calc(var(--font-size) - 3px);
   font-weight: 600;
 }
+
 .nativeApp .editorBottomBar {
   padding-bottom: 12px;
 }
@@ -818,6 +819,7 @@ color: var(--color-accent-text);
   user-select: none;
   -webkit-touch-callout: none;
 }
+
 .cardMenu {
   position: fixed;
   left: 50%;
@@ -829,12 +831,12 @@ color: var(--color-accent-text);
   gap: 8px;
   width: min(90%, 360px);
   padding: 12px;
-
+  
   border-radius: 18px;
   
   background: var(--color-surface);
-border: 1px solid var(--color-border);
-box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
 .cardMenu[hidden] {
@@ -843,27 +845,26 @@ box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 
 .cardMenu button {
   padding: 12px 10px;
-
+  
   
   border-radius: 12px;
-
+  
   border: 1px solid var(--color-border);
-
-background: color-mix(
-  in srgb,
-  var(--color-accent) 8%,
-  var(--color-surface)
-);
-
-color: var(--color-text);
-
+  
+  background: color-mix(in srgb,
+      var(--color-accent) 8%,
+      var(--color-surface));
+  
+  color: var(--color-text);
+  
   font-size: var(--font-size);
   font-weight: 600;
 }
+
 .pinnedCards {
   display: flex;
   gap: 10px;
-
+  
   width: 100%;
   box-sizing: border-box;
   padding: 0 8px 8px;
@@ -882,15 +883,15 @@ color: var(--color-text);
 .deleteConfirmModal {
   position: fixed;
   inset: 0;
-
+  
   z-index: 3000;
-
+  
   display: flex;
   align-items: center;
   justify-content: center;
-
+  
   padding: 20px;
-
+  
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -901,27 +902,27 @@ color: var(--color-text);
 .deleteConfirmBox {
   width: min(100%, 360px);
   box-sizing: border-box;
-
+  
   padding: 22px;
-
+  
   border-radius: 22px;
   background: #ffffff;
   color: #231b33;
-
+  
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
-
+  
   text-align: left;
 }
 
 .deleteConfirmBox h3 {
   margin: 0 0 10px;
-
+  
   font-size: 1.35rem;
 }
 
 .deleteConfirmBox p {
   margin: 0;
-
+  
   font-size: 1rem;
   line-height: 1.4;
 }
@@ -929,21 +930,21 @@ color: var(--color-text);
 .deleteConfirmActions {
   display: flex;
   gap: 10px;
-
+  
   margin-top: 20px;
 }
 
 .deleteConfirmActions button {
   flex: 1;
-
+  
   padding: 12px;
-
+  
   border: 1px solid rgba(35, 27, 51, 0.12);
   border-radius: 14px;
-
+  
   background: #ffffff;
   color: #231b33;
-
+  
   font-size: 1rem;
   font-weight: 600;
 }
@@ -958,6 +959,7 @@ color: var(--color-text);
   user-select: none;
   -webkit-touch-callout: none;
 }
+
 .cardMenu button {
   transition:
     transform 0.12s ease,
@@ -972,13 +974,13 @@ color: var(--color-text);
 .settingsModal {
   position: fixed;
   inset: 0;
-
+  
   z-index: 3000;
-
+  
   display: flex;
   align-items: stretch;
   justify-content: center;
-
+  
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -990,12 +992,12 @@ color: var(--color-text);
   width: min(100%, 500px);
   height: 100%;
   box-sizing: border-box;
-
+  
   padding: 24px 18px;
-
+  
   background: var(--color-background);
-color: var(--color-text);
-
+  color: var(--color-text);
+  
   overflow-y: auto;
 }
 
@@ -1003,7 +1005,7 @@ color: var(--color-text);
   display: flex;
   align-items: center;
   justify-content: space-between;
-
+  
   margin-bottom: 24px;
 }
 
@@ -1015,12 +1017,12 @@ color: var(--color-text);
 #closeSettingsButton {
   width: 44px;
   height: 44px;
-
+  
   border: none;
   border-radius: 12px;
-
+  
   background: transparent;
-color: var(--color-text);
+  color: var(--color-text);
   font-size: 1.4rem;
 }
 
@@ -1030,23 +1032,23 @@ color: var(--color-text);
 
 .settingsSection h3 {
   margin: 0 0 10px;
-
+  
   font-size: calc(var(--font-size) - 2px);
   color: var(--color-text-secondary);
 }
 
 .settingsSection button {
   display: block;
-
+  
   width: 100%;
   padding: 14px 12px;
-
+  
   border: none;
   border-bottom: 1px solid rgba(35, 27, 51, 0.1);
-
+  
   background: transparent;
   color: var(--color-text);
-
+  
   text-align: left;
   font-size: var(--font-size);
 }
@@ -1057,7 +1059,7 @@ color: var(--color-text);
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-font-size: var(--font-size);
+  font-size: var(--font-size);
   padding: 14px 12px;
   border-bottom: 1px solid rgba(35, 27, 51, 0.1);
 }
@@ -1072,14 +1074,14 @@ font-size: var(--font-size);
   width: 42px;
   height: 42px;
   padding: 0;
-
+  
   
   border-radius: 12px;
-
+  
   background: var(--color-surface);
-color: var(--color-text);
-border: 1px solid var(--color-border);
-
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  
   text-align: center;
   font-size: 1.35rem;
   font-weight: 600;
@@ -1112,20 +1114,21 @@ border: 1px solid var(--color-border);
   padding-top: 0;
   padding-bottom: 0;
 }
+
 /* theme dark*/
 
 body.theme-dark {
   --color-background: #100d18;
   --color-surface: #241d30;
-
+  
   --color-text: #f4effa;
   --color-text-secondary: #b8aec4;
-
+  
   --color-accent: #9b6cff;
   --color-accent-text: #c5a9ff;
-
+  
   --color-border: rgba(255, 255, 255, 0.12);
-
+  
   --color-editor-background: #1d1725;
   --color-editor-text: #f4effa;
 }
@@ -1133,15 +1136,15 @@ body.theme-dark {
 body.theme-cappuccino {
   --color-background: #efe6dc;
   --color-surface: #f8f1ea;
-
+  
   --color-text: #3a2a22;
   --color-text-secondary: #7b675c;
-
+  
   --color-accent: #b77a52;
   --color-accent-text: #8b5838;
-
+  
   --color-border: rgba(58, 42, 34, 0.14);
-
+  
   --color-editor-background: #f2e9e1;
   --color-editor-text: #3a2a22;
 }
@@ -1151,11 +1154,11 @@ body.theme-cappuccino {
   flex: 1;
   flex-direction: column;
   gap: 10px;
-
+  
   width: 100%;
   min-height: 0;
   padding-top: 12px;
-
+  
   overflow-y: auto;
 }
 
@@ -1167,16 +1170,16 @@ body.theme-cappuccino {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-
+  
   width: 100%;
   box-sizing: border-box;
   padding: 0 14px 0 24px;
-
+  
   border-radius: 12px;
-
+  
   color: var(--color-editor-text);
   font-size: var(--font-size);
-
+  
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1184,7 +1187,7 @@ body.theme-cappuccino {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
-
+  
   margin: 1px 0 0;
   cursor: pointer;
 }
@@ -1194,18 +1197,18 @@ body.theme-cappuccino {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-
+  
   margin: 0;
   padding: 0 0 4px;
-
+  
   color: var(--color-editor-text);
   font: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
-
+  
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-
+  
   /*
    * Běžný režim TODO není editovací prvek. Android tak při
    * long-pressu nezkouší označovat text a gesto patří přesunu.
@@ -1226,24 +1229,24 @@ body.theme-cappuccino {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-
+  
   margin: 0;
   padding: 0 0 4px;
-
+  
   resize: none;
   overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-
+  
   border: none;
   outline: none;
   background: transparent;
   color: var(--color-editor-text);
-
+  
   font: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
-
+  
   /* V editaci musí zůstat nativní označení a kopírování textu. */
   user-select: text;
   -webkit-user-select: text;
@@ -1276,20 +1279,16 @@ body.theme-cappuccino {
   width: calc(100% - 32px);
   box-sizing: border-box;
   margin: 0 12px 0 20px;
-
-  border: 2px dashed color-mix(
-    in srgb,
-    var(--color-accent) 58%,
-    transparent
-  );
+  
+  border: 2px dashed color-mix(in srgb,
+      var(--color-accent) 58%,
+      transparent);
   border-radius: 12px;
-
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 10%,
-    transparent
-  );
-
+  
+  background: color-mix(in srgb,
+      var(--color-accent) 10%,
+      transparent);
+  
   transition:
     height 0.12s ease,
     background 0.12s ease;
@@ -1299,26 +1298,22 @@ body.theme-cappuccino {
 .todoDragGhost {
   position: fixed;
   z-index: 10000;
-
+  
   margin: 0 !important;
   pointer-events: none;
-
+  
   opacity: 0.98;
   transform: scale(1.035);
   transform-origin: left center;
-
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 20%,
-    var(--color-editor-background)
-  );
-
-  border: 1px solid color-mix(
-    in srgb,
-    var(--color-accent) 48%,
-    transparent
-  );
-
+  
+  background: color-mix(in srgb,
+      var(--color-accent) 20%,
+      var(--color-editor-background));
+  
+  border: 1px solid color-mix(in srgb,
+      var(--color-accent) 48%,
+      transparent);
+  
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
 }
 
@@ -1328,19 +1323,17 @@ body.theme-cappuccino {
   flex: 0 0 28px;
   align-items: center;
   justify-content: center;
-
+  
   width: 28px;
   height: 28px;
   box-sizing: border-box;
   margin: 1px 0 0;
-
-  border: 2px solid color-mix(
-    in srgb,
-    var(--color-accent) 70%,
-    var(--color-editor-text)
-  );
+  
+  border: 2px solid color-mix(in srgb,
+      var(--color-accent) 70%,
+      var(--color-editor-text));
   border-radius: 5px;
-
+  
   color: var(--color-accent-text);
   font-size: 20px;
   font-weight: 700;
@@ -1351,17 +1344,17 @@ body.theme-cappuccino {
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
-
+  
   margin: 0;
   padding: 0 0 4px;
-
+  
   color: var(--color-accent-text);
-
+  
   font: inherit;
   font-size: var(--font-size);
   font-weight: 600;
   line-height: 1.35;
-
+  
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
