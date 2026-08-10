@@ -373,8 +373,13 @@ const pinIcon =
   "📌 " :
   "";
 
+const reminderIcon =
+  loadedTask.reminder === true ?
+  "🔔 " :
+  "";
+
 loadedHeading.textContent =
-  `${pinIcon}${areaIcon} ${loadedTask.title || "Bez názvu"}`;
+  `${pinIcon}${areaIcon} ${reminderIcon}${loadedTask.title || "Bez názvu"}`;
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
