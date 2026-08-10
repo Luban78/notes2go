@@ -828,8 +828,8 @@ color: var(--color-accent-text);
 
   border-radius: 18px;
   
-  background: #2b2340;
-border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface);
+border: 1px solid var(--color-border);
 box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
@@ -840,13 +840,20 @@ box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 .cardMenu button {
   padding: 12px 10px;
 
-  border: 1px solid rgba(35, 27, 51, 0.12);
+  
   border-radius: 12px;
 
-  background: rgba(255, 255, 255, 0.08);
-color: #ffffff;
+  border: 1px solid var(--color-border);
 
-  font-size: 1rem;
+background: color-mix(
+  in srgb,
+  var(--color-accent) 8%,
+  var(--color-surface)
+);
+
+color: var(--color-text);
+
+  font-size: var(--font-size);
   font-weight: 600;
 }
 .pinnedCards {
