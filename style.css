@@ -1168,10 +1168,14 @@ body.theme-cappuccino {
 
   width: 100%;
   box-sizing: border-box;
-  padding: 0 12px 0 20px;
+  padding: 0 14px 0 24px;
+
+  border-radius: 12px;
 
   color: var(--color-editor-text);
   font-size: var(--font-size);
+
+  -webkit-tap-highlight-color: transparent;
 }
 
 .todoItem input[type="checkbox"] {
@@ -1183,41 +1187,36 @@ body.theme-cappuccino {
   cursor: pointer;
 }
 
-.todoDragHandle {
-  display: flex;
-  flex: 0 0 34px;
-  align-items: center;
-  justify-content: center;
+.todoTextDisplay {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 
-  width: 34px;
-  height: 34px;
-  margin: -2px 0 0;
-  padding: 0;
+  margin: 0;
+  padding: 0 0 4px;
 
-  border: none;
-  outline: none;
-  background: transparent;
   color: var(--color-editor-text);
-
   font: inherit;
-  font-size: calc(var(--font-size) + 4px);
-  line-height: 1;
+  font-size: var(--font-size);
+  line-height: 1.35;
 
-  cursor: grab;
-  touch-action: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  /*
+   * Běžný režim TODO není editovací prvek. Android tak při
+   * long-pressu nezkouší označovat text a gesto patří přesunu.
+   */
   user-select: none;
   -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  cursor: text;
 }
 
-.todoDragging,
-.todoDragging * {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
-.todoDragHandle:active {
-  cursor: grabbing;
+.todoTextDisplay[hidden],
+.todoTextInput[hidden] {
+  display: none !important;
 }
 
 .todoTextInput {
@@ -1242,10 +1241,145 @@ body.theme-cappuccino {
   font: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
+
+  /* V editaci musí zůstat nativní označení a kopírování textu. */
+  user-select: text;
+  -webkit-user-select: text;
 }
 
+.todoItem.todoCompleted .todoTextDisplay,
 .todoItem.todoCompleted .todoTextInput {
   opacity: 0.55;
   text-decoration: line-through;
 }
 
+
+/* ========================================
+   TODO – profesionální long-press drag & drop
+======================================== */
+
+.todoDragging,
+.todoDragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Původní řádek během přesunu nahradí placeholder. */
+.todoItem.dragSource {
+  display: none;
+}
+
+.todoDropPlaceholder {
+  flex: 0 0 auto;
+  width: calc(100% - 32px);
+  box-sizing: border-box;
+  margin: 0 12px 0 20px;
+
+  border: 2px dashed color-mix(
+    in srgb,
+    var(--color-accent) 58%,
+    transparent
+  );
+  border-radius: 12px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 10%,
+    transparent
+  );
+
+  transition:
+    height 0.12s ease,
+    background 0.12s ease;
+}
+
+/* Kopie řádku, která fyzicky sleduje prst. */
+.todoDragGhost {
+  position: fixed;
+  z-index: 10000;
+
+  margin: 0 !important;
+  pointer-events: none;
+
+  opacity: 0.98;
+  transform: scale(1.035);
+  transform-origin: left center;
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 20%,
+    var(--color-editor-background)
+  );
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 48%,
+    transparent
+  );
+
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+}
+
+/* V ghostu nepoužíváme nativní checkbox – je stabilnější vlastní vizuál. */
+.todoDragGhostCheckbox {
+  display: flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  margin: 1px 0 0;
+
+  border: 2px solid color-mix(
+    in srgb,
+    var(--color-accent) 70%,
+    var(--color-editor-text)
+  );
+  border-radius: 5px;
+
+  color: var(--color-accent-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.todoDragGhostText {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+
+  margin: 0;
+  padding: 0 0 4px;
+
+  color: var(--color-accent-text);
+
+  font: inherit;
+  font-size: var(--font-size);
+  font-weight: 600;
+  line-height: 1.35;
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.todoDragGhost.todoCompleted .todoDragGhostText {
+  opacity: 0.58;
+  text-decoration: line-through;
+}
+
+
+/* ========================================
+   TODO – zobrazení vs. editace textu
+======================================== */
+
+/*
+ * Textarea existuje pouze v aktivní editaci. V tom okamžiku
+ * necháváme Androidu nativní práci s kurzorem, výběrem a Copy.
+ */
+.todoTextInput.todoEditing {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
