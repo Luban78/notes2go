@@ -26,7 +26,7 @@ jobs:
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html style.css script.js storage.js reminders.js tags.js www/
+        cp index.html style.css script.js storage.js reminders.js tags.js settings.js www/
 
       - name: Sync Capacitor Android
         run: npx cap sync android
