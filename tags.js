@@ -193,6 +193,13 @@ function renderTagFilters() {
 
   const tags = getAllTags();
 
+  if (
+    activeTagFilter !== null &&
+    !tags.includes(activeTagFilter)
+  ) {
+    activeTagFilter = null;
+  }
+
   tags.forEach(tag => {
     const button = document.createElement("button");
 

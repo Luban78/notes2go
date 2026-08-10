@@ -40,6 +40,8 @@ const cancelDeleteButton =
 const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
   
+
+  
   
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
@@ -70,6 +72,10 @@ const mainMenu = document.getElementById("mainMenu");
 const pinnedCards = document.getElementById("pinnedCards");
 const pinnedLeft = document.getElementById("pinnedLeft");
 const pinnedRight = document.getElementById("pinnedRight");
+
+  
+  
+  
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
@@ -93,9 +99,9 @@ const reminderButton = document.getElementById("reminderButton");
 const importButton = document.getElementById("importButton");
 const importFile = document.getElementById("importFile");
 
-/*importButton.addEventListener("click", () => {
-  importFile.click();
-});*/
+
+
+
 
 importFile.addEventListener("change", () => {
   const file = importFile.files[0];
@@ -178,6 +184,7 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 addTaskButton.addEventListener("click", () => {
   activeTaskIndex = null;
+  resetTodos();
   
   modalTitle.value = "";
   modalText.value = "";
@@ -222,7 +229,8 @@ editorBackButton.addEventListener("click", () => {
     Date.now() % 2147483647,
   area: activeArea,
   pinned: currentTask.pinned === true,
-  tags: [...activeTags]
+  tags: [...activeTags],
+  todos: [...activeTodos]
 };
       
       updateTask(activeTaskIndex, updatedTask);
@@ -240,10 +248,11 @@ editorBackButton.addEventListener("click", () => {
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      date === "";
+      date === "" &&
+      activeTodos.length === 0;
     
     if (!isEmpty) {
-      const newTask = {
+     const newTask = {
   title,
   note,
   date,
@@ -252,7 +261,8 @@ editorBackButton.addEventListener("click", () => {
   notificationId: Date.now() % 2147483647,
   area: activeArea,
   pinned: false,
-  tags: [...activeTags]
+  tags: [...activeTags],
+  todos: [...activeTodos]
 };
       
       saveTask(newTask);
@@ -279,36 +289,7 @@ editorBackButton.addEventListener("click", () => {
 });
 
 
-/* ========================================
-   STARÝ FORMULÁŘ
-   Zatím funguje, později ho schováme.
-======================================== */
 
-taskForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  
-  const title = taskTitle.value.trim();
-  const note = taskNote.value;
-  const date = taskDate.value;
-  
-  if (title === "") {
-    return;
-  }
-  
-  const newTask = {
-    title,
-    note,
-    date,
-    completed: false
-  };
-  
-  saveTask(newTask);
-  renderTasks();
-  
-  taskTitle.value = "";
-  taskNote.value = "";
-  taskDate.value = "";
-});
 
 let longPressTimer = null;
 const LONG_PRESS_TIME = 600;
@@ -320,6 +301,11 @@ let blockNextCardClick = false;
 ======================================== */
 
 function renderTasks() {
+  if (typeof renderTagFilters === "function") {
+    renderTagFilters();
+    updateTagFilterUI();
+  }
+
   //karty.innerHTML = "";
   pinnedLeft.innerHTML = "";
 pinnedRight.innerHTML = "";
@@ -384,6 +370,17 @@ loadedHeading.textContent =
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
     
+    const taskTodos = loadedTask.todos || [];
+
+if (taskTodos.length > 0) {
+  loadedNoteText.textContent = taskTodos
+    .slice(0, 3)
+    .map(todo =>
+      `${todo.completed ? "☑" : "☐"} ${todo.text}`
+    )
+    .join("\n");
+}
+    
     const loadedDateText = document.createElement("p");
     
     
@@ -447,16 +444,17 @@ if (cardCount % 2 === 0) {
 }
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
-      reminderEnabled = currentTask.reminder === true;
-updateReminderButton(reminderEnabled);
-activeArea = currentTask.area || "private";
-activeTags = currentTask.tags || [];
-updateTagMenuUI();
-closeTagMenu();
-      
+
       if (!currentTask) {
         return;
       }
+
+      reminderEnabled = currentTask.reminder === true;
+      updateReminderButton(reminderEnabled);
+      activeArea = currentTask.area || "private";
+      activeTags = currentTask.tags || [];
+      updateTagMenuUI();
+      closeTagMenu();
       
       activeTaskIndex = index;
       
@@ -477,6 +475,10 @@ closeTagMenu();
       taskModal.hidden = false;
       taskModal.classList.add("show");
       document.body.classList.add("noScroll");
+
+      /* TODO se vykreslí až ve viditelném editoru,
+         aby šla správně změřit výška dlouhých řádků. */
+      loadTodos(currentTask.todos);
     });
     
   });
