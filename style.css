@@ -1378,3 +1378,16 @@ body.theme-cappuccino {
   user-select: text;
   -webkit-touch-callout: default;
 }
+
+.pinnedCards.listView {
+  flex-direction: column;
+}
+
+.pinnedCards.listView .pinnedColumn {
+  width: 100%;
+}
+
+.pinnedCards.listView .taskCard {
+  width: 100%;
+  box-sizing: border-box;
+}

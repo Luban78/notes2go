@@ -423,15 +423,21 @@ taskTags.forEach(tag => {
     }
     
     pinnedCards.hidden = false;
+const listMode =
+  localStorage.getItem("cardView") === "list";
 
-const cardCount =
-  pinnedLeft.children.length +
-  pinnedRight.children.length;
-
-if (cardCount % 2 === 0) {
+if (listMode) {
   pinnedLeft.append(loadedCard);
 } else {
-  pinnedRight.append(loadedCard);
+  const cardCount =
+    pinnedLeft.children.length +
+    pinnedRight.children.length;
+  
+  if (cardCount % 2 === 0) {
+    pinnedLeft.append(loadedCard);
+  } else {
+    pinnedRight.append(loadedCard);
+  }
 }
     
     
