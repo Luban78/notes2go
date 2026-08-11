@@ -92,3 +92,47 @@ async function loadNotesFromSupabase() {
 
 //loadNotesFromSupabase();
 
+const loginScreen =
+  document.getElementById("loginScreen");
+
+const loginEmail =
+  document.getElementById("loginEmail");
+
+const loginPassword =
+  document.getElementById("loginPassword");
+
+const loginButton =
+  document.getElementById("loginButton");
+
+const loginMessage =
+  document.getElementById("loginMessage");
+  
+async function updateLoginScreen() {
+  const {
+    data: { session }
+  } = await supabaseClient.auth.getSession();
+
+  loginScreen.hidden = !!session;
+}
+
+updateLoginScreen();
+
+loginButton.addEventListener("click", async () => {
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+
+  const { error } =
+    await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+  if (error) {
+    console.log("Login CHYBA:", error.message);
+    return;
+  }
+
+  loginScreen.hidden = true;
+
+  await syncNotes();
+});

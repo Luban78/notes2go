@@ -1430,3 +1430,73 @@ body.theme-cappuccino {
   filter: brightness(2);
   transform: scale(1.4);
 }
+
+
+#loginScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: var(--color-background);
+}
+#loginScreen[hidden] {
+  display: none;
+}
+.loginCard {
+  width: min(90%, 360px);
+max-height: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  padding: 24px;
+  border-radius: 24px;
+
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.loginCard h2 {
+  margin: 0 0 8px;
+
+  text-align: center;
+  color: var(--color-text);
+}
+
+.loginCard input,
+.loginCard button {
+  width: 100%;
+  box-sizing: border-box;
+
+  min-height: 50px;
+  border-radius: 14px;
+
+  font-size: 1rem;
+}
+
+.loginCard input {
+  padding: 0 14px;
+
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.loginCard input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.loginCard button {
+  border: none;
+  background: #8b5cf6;
+  color: white;
+  font-weight: 700;
+}
+
+#loginMessage:empty {
+  display: none;
+}
