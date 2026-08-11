@@ -589,61 +589,6 @@ body {
   flex: 0.55;
 }
 
-/* Moderní vzhled data a času bez změny nativního pickeru */
-#modalDate,
-#modalTime {
-  -webkit-appearance: none;
-  appearance: none;
-  font-family: inherit;
-
-  border: 1px solid color-mix(in srgb,
-      var(--color-editor-text) 18%,
-      transparent);
-  border-radius: 14px;
-
-  background: color-mix(in srgb,
-      var(--color-editor-background) 86%,
-      var(--color-surface));
-  color: var(--color-editor-text);
-  box-shadow: none;
-
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    background 0.16s ease;
-}
-
-#modalDate:hover,
-#modalTime:hover {
-  border-color: color-mix(in srgb,
-      var(--color-accent) 55%,
-      var(--color-border));
-}
-
-#modalDate:focus,
-#modalTime:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb,
-      var(--color-accent) 16%,
-      transparent);
-}
-
-#modalDate::-webkit-calendar-picker-indicator,
-#modalTime::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.72;
-}
-
-body.theme-dark #modalDate,
-body.theme-dark #modalTime {
-  color-scheme: dark;
-}
-
-body.theme-dark #modalDate::-webkit-calendar-picker-indicator,
-body.theme-dark #modalTime::-webkit-calendar-picker-indicator {
-  filter: brightness(1.7);
-}
-
 #reminderButton.active {
   background: #7444dc;
   color: white;
@@ -727,25 +672,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
-}
-
-.app::-webkit-scrollbar,
-#modalText::-webkit-scrollbar,
-.todoList::-webkit-scrollbar,
-.settingsContent::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-#modalText,
-.todoList,
-.settingsContent {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
 .karty {
@@ -769,8 +696,7 @@ body {
   padding: 10px 12px;
   
   border-top: 1px solid rgba(0, 0, 0, 0.12);
-  background: var(--color-editor-background);
-  color: var(--color-editor-text);
+  background: var(--editor-background);
 }
 
 .tagMenu[hidden] {
@@ -797,22 +723,20 @@ body {
 .tagOptions button {
   padding: 6px 10px;
   
-  border: 1px solid color-mix(in srgb,
-      var(--color-editor-text) 22%,
-      transparent);
+  border: 1px solid rgba(46, 21, 21, 0.25);
   border-radius: 12px;
   
   background: transparent;
-  color: var(--color-editor-text);
+  color: var(--editor-text);
   
   font-size: 0.95rem;
 }
 
 .areaOptions button.active,
 .tagOptions button.active {
-  background: var(--color-accent);
-  color: #ffffff;
-  border-color: var(--color-accent);
+  background: #7444dc;
+  color: white;
+  border-color: #7444dc;
 }
 
 .taskTags {
@@ -1600,22 +1524,6 @@ body.authPending .addTaskButton {
   .addTaskButton {
     right: 32px;
     bottom: 28px;
-  }
-
-  /* Na PC je GRID dvousloupcový. LIST zůstává skutečný seznam,
-     ale není natažený přes celý monitor. */
-  .pinnedCards.listView {
-    width: min(820px, 100%);
-    margin-right: auto;
-    margin-left: auto;
-  }
-
-  .pinnedCards.listView .taskCard {
-    padding: 18px 20px;
-  }
-
-  .pinnedCards.listView .pinnedColumn:empty {
-    display: none;
   }
 
   .taskModal {
