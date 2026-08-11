@@ -1,8 +1,8 @@
-console.log("Capacitor:", window.Capacitor);
-console.log(
+//console.log("Capacitor:", window.Capacitor);
+/*console.log(
   "LocalNotifications:",
   window.Capacitor?.Plugins?.LocalNotifications
-);
+);*/
 
 
 // 1. Požádá Android o povolení zobrazovat notifikace

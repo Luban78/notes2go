@@ -1413,3 +1413,20 @@ body.theme-cappuccino {
 .pinnedCards.listView .taskCard .taskNoteText {
   margin-top: 4px;
 }
+
+#noSearchResults {
+  color: var(--color-text);
+}
+
+#noSearchResults {
+  margin-top: 28px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size);
+}
+
+#searchNotes::-webkit-search-cancel-button {
+  opacity: 1;
+  filter: brightness(2);
+  transform: scale(1.4);
+}
