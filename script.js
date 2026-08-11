@@ -41,8 +41,6 @@ const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
 
 
-
-
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
@@ -75,33 +73,18 @@ const pinnedLeft = document.getElementById("pinnedLeft");
 const pinnedRight = document.getElementById("pinnedRight");
 
 
-
-
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
 
 let activeTaskIndex = null;
 let reminderEnabled = false;
-const exportButton = document.getElementById("exportButton");
-
-//exportButton.addEventListener("click", () => {
-// exportTasks();
-//});
 const editorBackButton = document.getElementById("editorBackButton");
 
-const taskForm = document.getElementById("taskForm");
-const taskTitle = document.getElementById("taskTitle");
-const taskNote = document.getElementById("taskNote");
-const taskDate = document.getElementById("taskDate");
 
 const reminderButton = document.getElementById("reminderButton");
 
-const importButton = document.getElementById("importButton");
 const importFile = document.getElementById("importFile");
-
-
-
 
 
 importFile.addEventListener("change", () => {
@@ -129,9 +112,6 @@ modalText.addEventListener("scroll", () => {
     taskModal.classList.remove("titleCollapsed");
   }
 });
-
-const editorTopActions = document.querySelector(".editorTopActions");
-const editorBottomBar = document.querySelector(".editorBottomBar");
 
 
 modalText.addEventListener("focus", () => {
@@ -171,18 +151,9 @@ function updateModalWeekday() {
 modalDate.addEventListener("change", updateModalWeekday);
 
 
-
-
 const taskModal = document.getElementById("taskModal");
-//const karty = document.querySelector(".karty");
 const addTaskButton = document.getElementById("addTaskButton");
 
-
-
-
-/* ========================================
-   OTEVŘENÍ NOVÉ POZNÁMKY PŘES +
-======================================== */
 
 addTaskButton.addEventListener("click", () => {
   activeTaskIndex = null;
@@ -202,10 +173,6 @@ addTaskButton.addEventListener("click", () => {
   modalTitle.focus();
 });
 
-
-/* ========================================
-   ZAVŘENÍ EDITORU A AUTOMATICKÉ ULOŽENÍ
-======================================== */
 
 editorBackButton.addEventListener("click", () => {
   const title = modalTitle.value.trim();
@@ -295,8 +262,6 @@ editorBackButton.addEventListener("click", () => {
 });
 
 
-
-
 let longPressTimer = null;
 const LONG_PRESS_TIME = 600;
 let selectedCardIndex = null;
@@ -324,17 +289,12 @@ document.addEventListener("pointercancel", (event) => {
 }, true);
 
 
-/* ========================================
-   VYKRESLENÍ VŠECH KARET
-======================================== */
-
 function renderTasks() {
   if (typeof renderTagFilters === "function") {
     renderTagFilters();
     updateTagFilterUI();
   }
   
-  //karty.innerHTML = "";
   pinnedLeft.innerHTML = "";
   pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
@@ -559,9 +519,6 @@ function renderTasks() {
   });
 }
 
-/* ========================================
-   PRVNÍ VYKRESLENÍ PO SPUŠTĚNÍ
-======================================== */
 
 renderTasks();
 
@@ -578,7 +535,13 @@ cardMenu.addEventListener("click", (event) => {
   const action = actionButton.dataset.cardAction;
   
   if (action === "complete") {
-    toggleTaskCompleted(selectedCardIndex);
+    const updatedTask =
+      toggleTaskCompleted(selectedCardIndex);
+
+    if (updatedTask) {
+      uploadLocalNoteToSupabase(updatedTask);
+    }
+
     cardMenu.hidden = true;
     renderTasks();
   }
@@ -592,12 +555,11 @@ cardMenu.addEventListener("click", (event) => {
     }
     
     selectedTask.pinned = !selectedTask.pinned;
-    
-    localStorage.setItem(
-      "savedTask",
-      JSON.stringify(tasks)
-    );
-    
+    selectedTask.updatedAt = new Date().toISOString();
+
+    saveAllTasks(tasks);
+    uploadLocalNoteToSupabase(selectedTask);
+
     cardMenu.hidden = true;
     renderTasks();
   }

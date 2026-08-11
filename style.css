@@ -38,12 +38,6 @@ body {
   text-align: center;
 }
 
-.app {
-  width: 95%;
-  max-width: 900px;
-  padding: 15px;
-  text-align: left;
-}
 
 .app {
   width: 100%;
@@ -52,38 +46,6 @@ body {
   padding: 0;
   box-sizing: border-box;
   text-align: left;
-}
-
-/* ==================================================
-   STARÝ FORMULÁŘ – ZATÍM SCHOVANÝ
-================================================== */
-
-.taskForm {
-  display: none;
-  
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  
-  border-radius: var(--border-radius);
-  background: var(--editor-background);
-}
-
-.taskForm input,
-.taskForm textarea {
-  box-sizing: border-box;
-  width: 100%;
-  margin: 0;
-  padding: 12px;
-  
-  border-radius: var(--border-radius);
-  background: var(--editor-background);
-  font-size: 1.2rem;
-}
-
-.tlacitko {
-  border-radius: var(--border-radius);
-  background: var(--editor-background);
 }
 
 /* ==================================================
@@ -100,21 +62,6 @@ body {
   column-gap: 10px;
 }
 
-/*.taskCard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  min-width: 0;
-  margin: 0;
-  padding: 14px;
-
-  border-radius: 18px;
-  background: #BCB2AB;
-  color: #17132f;
-
-  box-shadow: 0 4px 14px rgba(23, 19, 47, 0.08);
-}*/
 .taskCard {
   display: inline-flex;
   flex-direction: column;
@@ -736,10 +683,6 @@ body {
 .tagMenu button.active {
   background: #7444dc;
   color: white;
-}
-
-.tagMenu[hidden] {
-  display: none !important;
 }
 
 /* ========================================
@@ -1414,9 +1357,6 @@ body.theme-cappuccino {
   margin-top: 4px;
 }
 
-#noSearchResults {
-  color: var(--color-text);
-}
 
 #noSearchResults {
   margin-top: 28px;
@@ -1432,6 +1372,13 @@ body.theme-cappuccino {
 }
 
 
+
+body.authPending .homeHeader,
+body.authPending .app,
+body.authPending .addTaskButton {
+  visibility: hidden;
+}
+
 #loginScreen {
   position: fixed;
   inset: 0;
@@ -1440,50 +1387,84 @@ body.theme-cappuccino {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  padding: 24px;
 
   background: var(--color-background);
 }
+
 #loginScreen[hidden] {
   display: none;
 }
+
 .loginCard {
-  width: min(90%, 360px);
-max-height: 340px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 
-  padding: 24px;
-  border-radius: 24px;
+  box-sizing: border-box;
+  width: min(100%, 390px);
+  height: auto;
+  margin: 0;
+  padding: 28px;
 
-  background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12);
+}
+
+.loginBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 8px);
+}
+
+.loginLogo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+
+  background: linear-gradient(135deg, #7d4de8, #ac7cff);
+  color: #ffffff;
+  font-weight: 800;
 }
 
 .loginCard h2 {
-  margin: 0 0 8px;
-
+  margin: 4px 0 8px;
   text-align: center;
   color: var(--color-text);
+  font-size: calc(var(--font-size) + 12px);
 }
 
 .loginCard input,
 .loginCard button {
   width: 100%;
-  box-sizing: border-box;
-
   min-height: 50px;
+  box-sizing: border-box;
   border-radius: 14px;
-
-  font-size: 1rem;
+  font-size: var(--font-size);
 }
 
 .loginCard input {
   padding: 0 14px;
-
   border: 1px solid var(--color-border);
+  outline: none;
   background: var(--color-background);
   color: var(--color-text);
+}
+
+.loginCard input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(116, 68, 220, 0.12);
 }
 
 .loginCard input::placeholder {
@@ -1492,11 +1473,153 @@ max-height: 340px;
 
 .loginCard button {
   border: none;
-  background: #8b5cf6;
-  color: white;
+  background: var(--color-accent);
+  color: #ffffff;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.loginCard button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+#loginMessage {
+  margin: 0;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1.35;
+}
+
+#loginMessage.error {
+  color: #b24a4a;
 }
 
 #loginMessage:empty {
   display: none;
+}
+
+@media (min-width: 900px) {
+  .homeHeader,
+  .app {
+    width: min(calc(100% - 64px), 1180px);
+    max-width: 1180px;
+  }
+
+  .homeHeader {
+    padding: 28px 10px 18px;
+  }
+
+  .pinnedCards {
+    gap: 18px;
+    padding: 0 0 28px;
+  }
+
+  .taskCard {
+    margin-bottom: 18px;
+    padding: 20px;
+  }
+
+  .addTaskButton {
+    right: 32px;
+    bottom: 28px;
+  }
+
+  .taskModal {
+    top: 0;
+    height: 100dvh;
+    box-sizing: border-box;
+    padding: 28px;
+
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(10, 8, 16, 0.52);
+    backdrop-filter: blur(5px);
+  }
+
+  .modalContent {
+    width: min(920px, calc(100vw - 56px));
+    height: min(720px, calc(100dvh - 56px));
+    padding: 14px 22px 12px;
+
+    border: 1px solid var(--color-border);
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  .editorTopBar {
+    min-height: 56px;
+    gap: 14px;
+  }
+
+  .dateTimeInputs {
+    flex: 0 1 560px;
+    gap: 8px;
+  }
+
+  #modalDate {
+    flex: 0 1 230px;
+    width: auto;
+  }
+
+  #modalTime {
+    flex: 0 1 140px;
+  }
+
+  #modalTitle {
+    padding: 12px 2px 14px;
+    font-size: calc(var(--font-size) + 8px);
+  }
+
+  #modalText {
+    padding: 18px 2px 14px;
+    line-height: 1.5;
+  }
+
+  .todoList {
+    padding: 18px 0 10px;
+  }
+
+  .todoItem {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .editorBottomBar {
+    position: static;
+    min-height: 58px;
+    padding-top: 8px;
+  }
+
+  .editorTopBar button,
+  .editorBottomBar button {
+    width: 46px;
+    height: 46px;
+  }
+
+  .tagMenu {
+    margin: 8px 0;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-editor-background);
+  }
+
+  .settingsModal {
+    align-items: center;
+    padding: 32px;
+  }
+
+  .settingsContent {
+    width: min(560px, 100%);
+    height: auto;
+    max-height: calc(100dvh - 64px);
+    border-radius: 24px;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.25);
+  }
+
+  .cardMenu {
+    bottom: 34px;
+  }
 }
