@@ -89,3 +89,12 @@ function importTasks(file) {
 
   reader.readAsText(file);
 }
+
+function saveAllTasks(tasks) {
+  localStorage.setItem(
+    "savedTask",
+    JSON.stringify(tasks)
+  );
+}
+
+

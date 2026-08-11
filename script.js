@@ -4,13 +4,13 @@ if (window.Capacitor?.isNativePlatform?.()) {
 
 function updateVisualViewport() {
   const viewport = window.visualViewport;
-
+  
   if (viewport) {
     document.documentElement.style.setProperty(
       "--visual-height",
       `${viewport.height}px`
     );
-
+    
     document.documentElement.style.setProperty(
       "--visual-top",
       `${viewport.offsetTop}px`
@@ -25,7 +25,7 @@ if (window.visualViewport) {
     "resize",
     updateVisualViewport
   );
-
+  
   window.visualViewport.addEventListener(
     "scroll",
     updateVisualViewport
@@ -39,10 +39,10 @@ const cancelDeleteButton =
 
 const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
-  
 
-  
-  
+
+
+
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
@@ -51,19 +51,20 @@ confirmDeleteButton.addEventListener("click", () => {
   if (selectedCardIndex === null) {
     return;
   }
-
+  
   const tasks = loadTask();
   const taskToDelete = tasks[selectedCardIndex];
-
+  
   if (taskToDelete?.notificationId) {
     cancelNotification(taskToDelete.notificationId);
   }
-
+  
   deleteTask(selectedCardIndex);
-
+  markNoteDeletedInSupabase(taskToDelete);
+  
   deleteConfirmModal.hidden = true;
   selectedCardIndex = null;
-
+  
   renderTasks();
 });
 
@@ -73,9 +74,9 @@ const pinnedCards = document.getElementById("pinnedCards");
 const pinnedLeft = document.getElementById("pinnedLeft");
 const pinnedRight = document.getElementById("pinnedRight");
 
-  
-  
-  
+
+
+
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
@@ -85,7 +86,7 @@ let reminderEnabled = false;
 const exportButton = document.getElementById("exportButton");
 
 //exportButton.addEventListener("click", () => {
- // exportTasks();
+// exportTasks();
 //});
 const editorBackButton = document.getElementById("editorBackButton");
 
@@ -105,7 +106,7 @@ const importFile = document.getElementById("importFile");
 
 importFile.addEventListener("change", () => {
   const file = importFile.files[0];
-
+  
   if (file) {
     importTasks(file);
   }
@@ -146,14 +147,15 @@ const modalDate = document.getElementById("modalDate");
 
 const modalTime = document.getElementById("modalTime");
 const modalWeekday = document.getElementById("modalWeekday");
+
 function updateModalWeekday() {
   if (!modalDate.value) {
     modalWeekday.textContent = "";
     return;
   }
-
+  
   const date = new Date(`${modalDate.value}T12:00`);
-
+  
   const weekdays = [
     "Ne",
     "Po",
@@ -163,7 +165,7 @@ function updateModalWeekday() {
     "Pá",
     "So"
   ];
-
+  
   modalWeekday.textContent = weekdays[date.getDay()];
 }
 modalDate.addEventListener("change", updateModalWeekday);
@@ -191,8 +193,8 @@ addTaskButton.addEventListener("click", () => {
   modalDate.value = "";
   modalTime.value = "";
   reminderEnabled = false;
-updateReminderButton(false);
-
+  updateReminderButton(false);
+  
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
@@ -209,9 +211,9 @@ editorBackButton.addEventListener("click", () => {
   const title = modalTitle.value.trim();
   const note = modalText.value;
   const date =
-  modalDate.value && modalTime.value ?
-  `${modalDate.value}T${modalTime.value}` :
-  "";
+    modalDate.value && modalTime.value ?
+    `${modalDate.value}T${modalTime.value}` :
+    "";
   
   if (activeTaskIndex !== null) {
     const tasks = loadTask();
@@ -219,29 +221,30 @@ editorBackButton.addEventListener("click", () => {
     
     if (currentTask) {
       const updatedTask = {
-  ...currentTask,
-  title,
-  note,
-  date,
-  reminder: reminderEnabled,
-  notificationId:
-    currentTask.notificationId ||
-    Date.now() % 2147483647,
-  area: activeArea,
-  pinned: currentTask.pinned === true,
-  tags: [...activeTags],
-  todos: [...activeTodos]
-};
+        ...currentTask,
+        updatedAt: new Date().toISOString(),
+        title,
+        note,
+        date,
+        reminder: reminderEnabled,
+        notificationId: currentTask.notificationId ||
+          Date.now() % 2147483647,
+        area: activeArea,
+        pinned: currentTask.pinned === true,
+        tags: [...activeTags],
+        todos: [...activeTodos]
+      };
       
       updateTask(activeTaskIndex, updatedTask);
+      uploadLocalNoteToSupabase(updatedTask);
       if (updatedTask.reminder && updatedTask.date) {
-  scheduleNotification(
-    updatedTask.notificationId,
-    updatedTask.title,
-    updatedTask.date
-  );
-      }else {
-  cancelNotification(updatedTask.notificationId);
+        scheduleNotification(
+          updatedTask.notificationId,
+          updatedTask.title,
+          updatedTask.date
+        );
+      } else {
+        cancelNotification(updatedTask.notificationId);
       }
     }
   } else {
@@ -252,26 +255,29 @@ editorBackButton.addEventListener("click", () => {
       activeTodos.length === 0;
     
     if (!isEmpty) {
-     const newTask = {
-  title,
-  note,
-  date,
-  completed: false,
-  reminder: reminderEnabled,
-  notificationId: Date.now() % 2147483647,
-  area: activeArea,
-  pinned: false,
-  tags: [...activeTags],
-  todos: [...activeTodos]
-};
+      const newTask = {
+        id: crypto.randomUUID(),
+        updatedAt: new Date().toISOString(),
+        title,
+        note,
+        date,
+        completed: false,
+        reminder: reminderEnabled,
+        notificationId: Date.now() % 2147483647,
+        area: activeArea,
+        pinned: false,
+        tags: [...activeTags],
+        todos: [...activeTodos]
+      };
       
       saveTask(newTask);
+      uploadLocalNoteToSupabase(newTask);
       if (newTask.reminder && newTask.date) {
-  scheduleNotification(
-    newTask.notificationId,
-    newTask.title,
-    newTask.date
-  );
+        scheduleNotification(
+          newTask.notificationId,
+          newTask.title,
+          newTask.date
+        );
       }
     }
   }
@@ -327,198 +333,197 @@ function renderTasks() {
     renderTagFilters();
     updateTagFilterUI();
   }
-
+  
   //karty.innerHTML = "";
   pinnedLeft.innerHTML = "";
-pinnedRight.innerHTML = "";
+  pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
   
   const loadedTasks = loadTask();
   const sortedTasks = loadedTasks
-  .map((task, originalIndex) => ({
-    task,
-    originalIndex
-  }))
-  .sort((a, b) => {
-    return Number(b.task.pinned === true) -
-           Number(a.task.pinned === true);
-  });
+    .map((task, originalIndex) => ({
+      task,
+      originalIndex
+    }))
+    .sort((a, b) => {
+      return Number(b.task.pinned === true) -
+        Number(a.task.pinned === true);
+    });
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
     if (!taskMatchesArea(loadedTask)) {
-  return;
-}
-if (!taskMatchesTag(loadedTask)) {
-  return;
-}
-if (
-  typeof taskMatchesSearch === "function" &&
-  !taskMatchesSearch(loadedTask)
-) {
-  return;
-}
+      return;
+    }
+    if (!taskMatchesTag(loadedTask)) {
+      return;
+    }
+    if (
+      typeof taskMatchesSearch === "function" &&
+      !taskMatchesSearch(loadedTask)
+    ) {
+      return;
+    }
     const loadedCard = document.createElement("div");
-  loadedCard.addEventListener("pointerdown", (event) => {
-  cardPressStartX = event.clientX;
-  cardPressStartY = event.clientY;
-  
-  longPressTimer = setTimeout(() => {
-    selectedCardIndex = index;
-    const cardMenu = document.getElementById("cardMenu");
-    cardMenu.hidden = false;
-  }, LONG_PRESS_TIME);
-});
-
-loadedCard.addEventListener("pointermove", (event) => {
-  const distanceX =
-    Math.abs(event.clientX - cardPressStartX);
-
-  const distanceY =
-    Math.abs(event.clientY - cardPressStartY);
-
-  if (
-    distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
-    distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
-  ) {
-    clearTimeout(longPressTimer);
-  }
-});
-
-
-
-
-loadedCard.addEventListener("pointerup", () => {
-  clearTimeout(longPressTimer);
-});
-
-loadedCard.addEventListener("pointercancel", () => {
-  clearTimeout(longPressTimer);
-});
-
+    loadedCard.addEventListener("pointerdown", (event) => {
+      cardPressStartX = event.clientX;
+      cardPressStartY = event.clientY;
+      
+      longPressTimer = setTimeout(() => {
+        selectedCardIndex = index;
+        const cardMenu = document.getElementById("cardMenu");
+        cardMenu.hidden = false;
+      }, LONG_PRESS_TIME);
+    });
+    
+    loadedCard.addEventListener("pointermove", (event) => {
+      const distanceX =
+        Math.abs(event.clientX - cardPressStartX);
+      
+      const distanceY =
+        Math.abs(event.clientY - cardPressStartY);
+      
+      if (
+        distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
+        distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
+      ) {
+        clearTimeout(longPressTimer);
+      }
+    });
+    
+    
+    
+    
+    loadedCard.addEventListener("pointerup", () => {
+      clearTimeout(longPressTimer);
+    });
+    
+    loadedCard.addEventListener("pointercancel", () => {
+      clearTimeout(longPressTimer);
+    });
+    
     loadedCard.classList.add("taskCard");
     
     const loadedHeading = document.createElement("h3");
-
-const areaIcon =
-  loadedTask.area === "work" ?
-  "💼" :
-  "🏠";
-
-const pinIcon =
-  loadedTask.pinned === true ?
-  "📌" :
-  "";
-
-const reminderIcon =
-  loadedTask.reminder === true ?
-  "🔔" :
-  "";
-
-const loadedHeadingIcons =
-  document.createElement("span");
-
-loadedHeadingIcons.classList.add("taskCardIcons");
-
-loadedHeadingIcons.textContent =
-  [pinIcon, areaIcon, reminderIcon]
-    .filter(Boolean)
-    .join(" ");
-
-loadedHeading.append(
-  loadedHeadingIcons,
-  document.createTextNode(
-    loadedTask.title || "Bez názvu"
-  )
-);
+    
+    const areaIcon =
+      loadedTask.area === "work" ?
+      "💼" :
+      "🏠";
+    
+    const pinIcon =
+      loadedTask.pinned === true ?
+      "📌" :
+      "";
+    
+    const reminderIcon =
+      loadedTask.reminder === true ?
+      "🔔" :
+      "";
+    
+    const loadedHeadingIcons =
+      document.createElement("span");
+    
+    loadedHeadingIcons.classList.add("taskCardIcons");
+    
+    loadedHeadingIcons.textContent = [pinIcon, areaIcon, reminderIcon]
+      .filter(Boolean)
+      .join(" ");
+    
+    loadedHeading.append(
+      loadedHeadingIcons,
+      document.createTextNode(
+        loadedTask.title || "Bez názvu"
+      )
+    );
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
     
     const taskTodos = loadedTask.todos || [];
-
-if (taskTodos.length > 0) {
-  loadedNoteText.textContent = taskTodos
-    .slice(0, 3)
-    .map(todo =>
-      `${todo.completed ? "☑" : "☐"} ${todo.text}`
-    )
-    .join("\n");
-}
+    
+    if (taskTodos.length > 0) {
+      loadedNoteText.textContent = taskTodos
+        .slice(0, 3)
+        .map(todo =>
+          `${todo.completed ? "☑" : "☐"} ${todo.text}`
+        )
+        .join("\n");
+    }
     
     const loadedDateText = document.createElement("p");
     
     
     if (loadedTask.date) {
-  const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
-    day: "numeric",
-    month: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-  
-  loadedDateText.textContent = formattedDate;
-} else {
-  loadedDateText.textContent = "";
-}
-
-
-const loadedTags = document.createElement("div");
-loadedCard.append(
-  loadedHeading,
-  loadedTags,
-  loadedNoteText,
-  loadedDateText
-);
-
-loadedTags.classList.add("taskTags");
-
-const taskTags = loadedTask.tags || [];
-
-taskTags.forEach(tag => {
-  const tagBadge = document.createElement("span");
-  tagBadge.classList.add("taskTag");
-  tagBadge.textContent = tag;
-
-  loadedTags.append(tagBadge);
-});
+      const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+      
+      loadedDateText.textContent = formattedDate;
+    } else {
+      loadedDateText.textContent = "";
+    }
+    
+    
+    const loadedTags = document.createElement("div");
+    loadedCard.append(
+      loadedHeading,
+      loadedTags,
+      loadedNoteText,
+      loadedDateText
+    );
+    
+    loadedTags.classList.add("taskTags");
+    
+    const taskTags = loadedTask.tags || [];
+    
+    taskTags.forEach(tag => {
+      const tagBadge = document.createElement("span");
+      tagBadge.classList.add("taskTag");
+      tagBadge.textContent = tag;
+      
+      loadedTags.append(tagBadge);
+    });
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }
     
     pinnedCards.hidden = false;
-
-const listMode =
-  localStorage.getItem("cardView") === "list";
-
-if (listMode) {
-  pinnedLeft.append(loadedCard);
-} else {
-  const cardCount =
-    pinnedLeft.children.length +
-    pinnedRight.children.length;
-  
-  if (cardCount % 2 === 0) {
-    pinnedLeft.append(loadedCard);
-  } else {
-    pinnedRight.append(loadedCard);
-  }
-}
+    
+    const listMode =
+      localStorage.getItem("cardView") === "list";
+    
+    if (listMode) {
+      pinnedLeft.append(loadedCard);
+    } else {
+      const cardCount =
+        pinnedLeft.children.length +
+        pinnedRight.children.length;
+      
+      if (cardCount % 2 === 0) {
+        pinnedLeft.append(loadedCard);
+      } else {
+        pinnedRight.append(loadedCard);
+      }
+    }
     
     
     /* Otevření existující poznámky */
     
     loadedCard.addEventListener("click", () => {
       if (blockNextCardClick) {
-  blockNextCardClick = false;
-  return;
-}
+        blockNextCardClick = false;
+        return;
+      }
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
-
+      
       if (!currentTask) {
         return;
       }
-
+      
       reminderEnabled = currentTask.reminder === true;
       updateReminderButton(reminderEnabled);
       activeArea = currentTask.area || "private";
@@ -531,21 +536,21 @@ if (listMode) {
       modalTitle.value = currentTask.title;
       modalText.value = currentTask.note;
       if (currentTask.date) {
-  const [savedDate, savedTime] = currentTask.date.split("T");
-  
-  modalDate.value = savedDate || "";
-  modalTime.value = savedTime || "";
-  updateModalWeekday();
-} else {
-  modalDate.value = "";
-  modalTime.value = "";
-  updateModalWeekday();
-}
+        const [savedDate, savedTime] = currentTask.date.split("T");
+        
+        modalDate.value = savedDate || "";
+        modalTime.value = savedTime || "";
+        updateModalWeekday();
+      } else {
+        modalDate.value = "";
+        modalTime.value = "";
+        updateModalWeekday();
+      }
       
       taskModal.hidden = false;
       taskModal.classList.add("show");
       document.body.classList.add("noScroll");
-
+      
       /* TODO se vykreslí až ve viditelném editoru,
          aby šla správně změřit výška dlouhých řádků. */
       loadTodos(currentTask.todos);
@@ -598,9 +603,9 @@ cardMenu.addEventListener("click", (event) => {
   }
   
   if (action === "delete") {
-  deleteConfirmModal.hidden = false;
-  cardMenu.hidden = true;
-}
+    deleteConfirmModal.hidden = false;
+    cardMenu.hidden = true;
+  }
   
   
 });
