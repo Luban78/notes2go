@@ -296,6 +296,28 @@ const LONG_PRESS_TIME = 600;
 let selectedCardIndex = null;
 let blockNextCardClick = false;
 
+let cardPressStartX = 0;
+let cardPressStartY = 0;
+const CARD_LONG_PRESS_CANCEL_DISTANCE = 20;
+const activeCardPointers = new Set();
+
+document.addEventListener("pointerdown", (event) => {
+  activeCardPointers.add(event.pointerId);
+  
+  if (activeCardPointers.size > 1) {
+    clearTimeout(longPressTimer);
+  }
+}, true);
+
+document.addEventListener("pointerup", (event) => {
+  activeCardPointers.delete(event.pointerId);
+}, true);
+
+document.addEventListener("pointercancel", (event) => {
+  activeCardPointers.delete(event.pointerId);
+}, true);
+
+
 /* ========================================
    VYKRESLENÍ VŠECH KARET
 ======================================== */
@@ -328,14 +350,41 @@ pinnedRight.innerHTML = "";
 if (!taskMatchesTag(loadedTask)) {
   return;
 }
+if (
+  typeof taskMatchesSearch === "function" &&
+  !taskMatchesSearch(loadedTask)
+) {
+  return;
+}
     const loadedCard = document.createElement("div");
-  loadedCard.addEventListener("pointerdown", () => {
+  loadedCard.addEventListener("pointerdown", (event) => {
+  cardPressStartX = event.clientX;
+  cardPressStartY = event.clientY;
+  
   longPressTimer = setTimeout(() => {
     selectedCardIndex = index;
     const cardMenu = document.getElementById("cardMenu");
-cardMenu.hidden = false;
+    cardMenu.hidden = false;
   }, LONG_PRESS_TIME);
 });
+
+loadedCard.addEventListener("pointermove", (event) => {
+  const distanceX =
+    Math.abs(event.clientX - cardPressStartX);
+
+  const distanceY =
+    Math.abs(event.clientY - cardPressStartY);
+
+  if (
+    distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
+    distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
+  ) {
+    clearTimeout(longPressTimer);
+  }
+});
+
+
+
 
 loadedCard.addEventListener("pointerup", () => {
   clearTimeout(longPressTimer);
@@ -356,16 +405,30 @@ const areaIcon =
 
 const pinIcon =
   loadedTask.pinned === true ?
-  "📌 " :
+  "📌" :
   "";
 
 const reminderIcon =
   loadedTask.reminder === true ?
-  "🔔 " :
+  "🔔" :
   "";
 
-loadedHeading.textContent =
-  `${pinIcon}${areaIcon} ${reminderIcon}${loadedTask.title || "Bez názvu"}`;
+const loadedHeadingIcons =
+  document.createElement("span");
+
+loadedHeadingIcons.classList.add("taskCardIcons");
+
+loadedHeadingIcons.textContent =
+  [pinIcon, areaIcon, reminderIcon]
+    .filter(Boolean)
+    .join(" ");
+
+loadedHeading.append(
+  loadedHeadingIcons,
+  document.createTextNode(
+    loadedTask.title || "Bez názvu"
+  )
+);
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
@@ -423,6 +486,7 @@ taskTags.forEach(tag => {
     }
     
     pinnedCards.hidden = false;
+
 const listMode =
   localStorage.getItem("cardView") === "list";
 
