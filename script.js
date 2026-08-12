@@ -538,6 +538,27 @@ renderTasks();
 
 const cardMenu = document.getElementById("cardMenu");
 
+const plannerModal =
+  document.getElementById("plannerModal");
+
+const plannerTaskTitle =
+  document.getElementById("plannerTaskTitle");
+
+const plannerDate =
+  document.getElementById("plannerDate");
+
+const plannerTime =
+  document.getElementById("plannerTime");
+
+const closePlannerButton =
+  document.getElementById("closePlannerButton");
+
+const cancelPlannerButton =
+  document.getElementById("cancelPlannerButton");
+
+const savePlannerButton =
+  document.getElementById("savePlannerButton");
+
 cardMenu.addEventListener("click", (event) => {
   const actionButton =
     event.target.closest("[data-card-action]");
@@ -548,6 +569,30 @@ cardMenu.addEventListener("click", (event) => {
   
   const action = actionButton.dataset.cardAction;
   
+  if (action === "plan") {
+  const tasks = loadTask();
+  const selectedTask = tasks[selectedCardIndex];
+  
+  if (!selectedTask) {
+    return;
+  }
+  
+  /* Starší poznámce doplníme ID, pokud ho ještě nemá */
+  if (!selectedTask.id) {
+    selectedTask.id = crypto.randomUUID();
+    selectedTask.updatedAt = new Date().toISOString();
+    
+    saveAllTasks(tasks);
+    uploadLocalNoteToSupabase(selectedTask);
+  }
+  
+  cardMenu.hidden = true;
+  
+  openPlannerForNote(selectedTask);
+  
+  return;
+}
+
   if (action === "complete") {
     const updatedTask =
       toggleTaskCompleted(selectedCardIndex);
@@ -585,6 +630,10 @@ cardMenu.addEventListener("click", (event) => {
   
   
 });
+
+
+
+
 
 document.addEventListener("pointerdown", (event) => {
   const cardMenu = document.getElementById("cardMenu");
