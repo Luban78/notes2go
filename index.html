@@ -407,10 +407,26 @@
       ></div>
 
       <!-- Hlavní text poznámky -->
-      <textarea
-        id="modalText"
-        placeholder="Napiš poznámku..."
-      ></textarea>
+      <textarea id="modalText" placeholder="Napiš poznámku..."></textarea>
+      <!-- ========================================
+     NOVÝ RICH-TEXT EDITOR
+     - barevné zvýraznění textu
+     - odkazy na naplánované úkoly
+     ======================================== -->
+
+<div
+  id="modalRichText"
+  class="modalRichText"
+  contenteditable="true"
+  spellcheck="true"
+  hidden
+></div>
+      
+      <div
+  id="plannedTextLinks"
+  class="plannedTextLinks"
+  hidden
+></div>
 
 
       <!-- ====================================
@@ -511,6 +527,13 @@
         >
           🎨
         </button>
+        <div id="textColorPalette" class="textColorPalette" hidden>
+  <button type="button" data-highlight-color="#fff59d" aria-label="Žlutá"></button>
+  <button type="button" data-highlight-color="#a5d6a7" aria-label="Zelená"></button>
+  <button type="button" data-highlight-color="#90caf9" aria-label="Modrá"></button>
+  <button type="button" data-highlight-color="#ce93d8" aria-label="Fialová"></button>
+  <button type="button" data-highlight-color="#ef9a9a" aria-label="Červená"></button>
+</div>
 
         <button
           id="tagTaskButton"
@@ -519,7 +542,13 @@
         >
           🏷️
         </button>
-
+        <button
+  id="planSelectionButton"
+  type="button"
+  aria-label="Naplánovat označený text"
+>
+  📅
+</button>
         <button
           id="addTodoButton"
           type="button"

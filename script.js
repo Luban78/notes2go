@@ -40,7 +40,17 @@ const cancelDeleteButton =
 const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
 
-
+const colorTaskButton =
+  document.getElementById("colorTaskButton");
+  
+const textColorPalette =
+  document.getElementById("textColorPalette");
+  
+  
+colorTaskButton.addEventListener("click", () => {
+  textColorPalette.hidden =
+    !textColorPalette.hidden;
+});
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
@@ -97,6 +107,10 @@ importFile.addEventListener("change", () => {
 
 const modalTitle = document.getElementById("modalTitle");
 const modalText = document.getElementById("modalText");
+
+const modalRichText =
+  document.getElementById("modalRichText");
+  
 modalText.addEventListener("scroll", () => {
   if (
     !taskModal.classList.contains("titleCollapsed") &&
@@ -112,6 +126,88 @@ modalText.addEventListener("scroll", () => {
     taskModal.classList.remove("titleCollapsed");
   }
 });
+textColorPalette.addEventListener("click", (event) => {
+  console.log("COLOR CLICK", {
+  savedRichTextRange,
+  target: event.target
+});
+  const colorButton =
+    event.target.closest("[data-highlight-color]");
+
+  if (!colorButton || !savedRichTextRange) {
+    return;
+  }
+
+  const color =
+    colorButton.dataset.highlightColor;
+
+  const selection =
+    window.getSelection();
+
+  selection.removeAllRanges();
+  selection.addRange(savedRichTextRange);
+
+  const range =
+    selection.getRangeAt(0);
+
+  const mark =
+    document.createElement("mark");
+
+  mark.className = "richTextHighlight";
+  mark.style.backgroundColor = color;
+
+  try {
+    range.surroundContents(mark);
+  } catch (error) {
+    console.error(
+      "Barevné zvýraznění se nepodařilo:",
+      error
+    );
+  }
+
+  selection.removeAllRanges();
+  savedRichTextRange = null;
+  textColorPalette.hidden = true;
+});
+
+
+
+
+
+
+let savedRichTextRange = null;
+
+modalRichText.addEventListener("mouseup", () => {
+  const selection = window.getSelection();
+
+  if (
+    selection &&
+    selection.rangeCount > 0 &&
+    !selection.isCollapsed
+  ) {
+    savedRichTextRange =
+      selection.getRangeAt(0).cloneRange();
+  }
+});
+
+modalRichText.addEventListener("touchend", () => {
+  setTimeout(() => {
+    const selection = window.getSelection();
+
+    if (
+      selection &&
+      selection.rangeCount > 0 &&
+      !selection.isCollapsed
+    ) {
+      savedRichTextRange =
+        selection.getRangeAt(0).cloneRange();
+    }
+  }, 50);
+});
+
+
+
+
 
 
 modalText.addEventListener("focus", () => {
@@ -190,7 +286,8 @@ addTaskButton.addEventListener("click", () => {
 
 editorBackButton.addEventListener("click", () => {
   const title = modalTitle.value.trim();
-  const note = modalText.value;
+  const note = modalRichText.innerText;
+const richContent = modalRichText.innerHTML;
   const date =
     modalDate.value && modalTime.value ?
     `${modalDate.value}T${modalTime.value}` :
@@ -206,6 +303,7 @@ editorBackButton.addEventListener("click", () => {
         updatedAt: new Date().toISOString(),
         title,
         note,
+        richContent,
         date,
         reminder: reminderEnabled,
         notificationId: currentTask.notificationId ||
@@ -241,6 +339,7 @@ editorBackButton.addEventListener("click", () => {
         updatedAt: new Date().toISOString(),
         title,
         note,
+        richContent,
         date,
         completed: false,
         reminder: reminderEnabled,
@@ -301,6 +400,62 @@ document.addEventListener("pointerup", (event) => {
 document.addEventListener("pointercancel", (event) => {
   activeCardPointers.delete(event.pointerId);
 }, true);
+
+function openTaskEditorById(taskId) {
+  const currentTasks = loadTask();
+
+  const index = currentTasks.findIndex(
+    task => task.id === taskId
+  );
+
+  if (index === -1) {
+    console.error("Poznámka nebyla nalezena:", taskId);
+    return;
+  }
+
+  const currentTask = currentTasks[index];
+
+  reminderEnabled = currentTask.reminder === true;
+  updateReminderButton(reminderEnabled);
+
+  activeArea = currentTask.area || "private";
+  activeTags = currentTask.tags || [];
+
+  updateTagMenuUI();
+  closeTagMenu();
+
+  activeTaskIndex = index;
+
+  modalTitle.value = currentTask.title;
+  modalText.value = currentTask.note;
+  
+  modalRichText.innerHTML =
+  currentTask.richContent || currentTask.note;
+  modalText.hidden = true;
+modalRichText.hidden = false;
+modalText.style.display = "none";
+
+  if (currentTask.date) {
+    const [savedDate, savedTime] =
+      currentTask.date.split("T");
+
+    modalDate.value = savedDate || "";
+    modalTime.value = savedTime || "";
+  } else {
+    modalDate.value = "";
+    modalTime.value = "";
+  }
+
+  updateModalWeekday();
+
+  taskModal.hidden = false;
+  taskModal.classList.add("show");
+  document.body.classList.add("noScroll");
+
+  loadTodos(currentTask.todos);
+  
+  renderPlannedTextLinks(currentTask.id);
+}
 
 
 function renderTasks() {
@@ -484,58 +639,30 @@ function renderTasks() {
     }
     
     
-    /* Otevření existující poznámky */
+        /* Otevření existující poznámky */
     
     loadedCard.addEventListener("click", () => {
-      if (blockNextCardClick) {
-        blockNextCardClick = false;
-        return;
-      }
-      const currentTasks = loadTask();
-      const currentTask = currentTasks[index];
-      
-      if (!currentTask) {
-        return;
-      }
-      
-      reminderEnabled = currentTask.reminder === true;
-      updateReminderButton(reminderEnabled);
-      activeArea = currentTask.area || "private";
-      activeTags = currentTask.tags || [];
-      updateTagMenuUI();
-      closeTagMenu();
-      
-      activeTaskIndex = index;
-      
-      modalTitle.value = currentTask.title;
-      modalText.value = currentTask.note;
-      if (currentTask.date) {
-        const [savedDate, savedTime] = currentTask.date.split("T");
-        
-        modalDate.value = savedDate || "";
-        modalTime.value = savedTime || "";
-        updateModalWeekday();
-      } else {
-        modalDate.value = "";
-        modalTime.value = "";
-        updateModalWeekday();
-      }
-      
-      taskModal.hidden = false;
-      taskModal.classList.add("show");
-      document.body.classList.add("noScroll");
-      
-      /* TODO se vykreslí až ve viditelném editoru,
-         aby šla správně změřit výška dlouhých řádků. */
-      loadTodos(currentTask.todos);
+    if (blockNextCardClick) {
+      blockNextCardClick = false;
+      return;
+    }
+    
+    const currentTasks = loadTask();
+    const currentTask = currentTasks[index];
+    
+    if (!currentTask) {
+      return;
+    }
+    
+    openTaskEditorById(currentTask.id);
     });
     
-  });
-}
-
-
-renderTasks();
-
+    });
+    }
+    
+    
+    /* První vykreslení poznámek */
+    renderTasks();
 const cardMenu = document.getElementById("cardMenu");
 
 const plannerModal =
@@ -648,3 +775,60 @@ document.addEventListener("pointerdown", (event) => {
     cardMenu.hidden = true;
   }
 }, true);
+
+function highlightSelectedRichText() {
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (range.collapsed) {
+    return;
+  }
+
+  const mark = document.createElement("mark");
+  mark.className = "richTextHighlight";
+
+  try {
+    range.surroundContents(mark);
+  } catch (error) {
+    console.error("Zvýraznění se nepodařilo:", error);
+  }
+
+  selection.removeAllRanges();
+}
+
+
+
+document.addEventListener("selectionchange", () => {
+  const selection = window.getSelection();
+
+  if (
+    !selection ||
+    selection.rangeCount === 0 ||
+    selection.isCollapsed
+  ) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  const container =
+    range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer;
+
+  if (!modalRichText.contains(container)) {
+    return;
+  }
+
+  savedRichTextRange = range.cloneRange();
+
+  console.log(
+    "✅ Rich text výběr uložen:",
+    savedRichTextRange.toString()
+  );
+});

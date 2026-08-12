@@ -212,7 +212,9 @@ function renderCalendarAgenda() {
       item.text;
 
     row.append(time, text);
-
+    row.addEventListener("click", () => {
+  openTaskEditorById(item.sourceNoteId);
+});
     calendarDayItems.append(row);
   });
 }

@@ -2272,3 +2272,122 @@ body.authPending .addTaskButton {
 #addTaskButton[hidden] {
   display: none;
 }
+
+/* ==========================================
+   VRSTVA PRO ZVÝRAZNĚNÉ PLÁNOVANÉ ČÁSTI TEXTU
+   ========================================== */
+
+.modalTextWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.modalTextWrapper #modalText {
+  position: relative;
+  z-index: 2;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  background: transparent;
+}
+
+.modalTextHighlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  box-sizing: border-box;
+
+  pointer-events: none;
+
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+
+  visibility: hidden;
+}
+
+#modalText[hidden] {
+  display: none !important;
+}
+
+#modalRichText[hidden] {
+  display: none !important;
+}
+
+#modalRichText {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 18px 2px 14px;
+
+  overflow-y: auto;
+
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-editor-text);
+
+  font-family: inherit;
+  font-size: var(--font-size);
+  line-height: 1.5;
+
+  box-sizing: border-box;
+
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.textColorPalette {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+
+  display: flex;
+  gap: 10px;
+
+  padding: 10px 12px;
+
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  z-index: 2000;
+}
+
+.textColorPalette[hidden] {
+  display: none !important;
+}
+
+.textColorPalette button {
+  width: 34px;
+  height: 34px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+
+  padding: 0;
+}
+
+.textColorPalette button[data-highlight-color="#fff59d"] {
+  background: #fff59d;
+}
+
+.textColorPalette button[data-highlight-color="#a5d6a7"] {
+  background: #a5d6a7;
+}
+
+.textColorPalette button[data-highlight-color="#90caf9"] {
+  background: #90caf9;
+}
+
+.textColorPalette button[data-highlight-color="#ce93d8"] {
+  background: #ce93d8;
+}
+
+.textColorPalette button[data-highlight-color="#ef9a9a"] {
+  background: #ef9a9a;
+}
