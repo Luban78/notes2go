@@ -153,14 +153,14 @@
 
         <!-- Servisní nabídka aplikace -->
         <button
-  id="mainMenuButton"
-  type="button"
-  aria-label="Hlavní nabídka"
-  aria-haspopup="menu"
-  aria-expanded="false"
->
-  <span class="mainMenuIcon">⋮</span>
-</button>
+          id="mainMenuButton"
+          type="button"
+          aria-label="Hlavní nabídka"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          ⋮
+        </button>
 
         <div id="mainMenu" class="mainMenu" role="menu" hidden>
           <button id="fontSizeSettingsButton" type="button" role="menuitem">
@@ -256,6 +256,66 @@
 
   </main>
 
+<!-- ========================================
+     OBRAZOVKA PLÁN
+     ======================================== -->
+
+<section
+  id="calendarScreen"
+  class="calendarScreen"
+  hidden
+>
+
+  <div class="calendarHeader">
+
+    <button
+      id="calendarPrevMonth"
+      type="button"
+      aria-label="Předchozí měsíc"
+    >
+      ‹
+    </button>
+
+    <h2 id="calendarMonthTitle">
+      Srpen 2026
+    </h2>
+
+    <button
+      id="calendarNextMonth"
+      type="button"
+      aria-label="Další měsíc"
+    >
+      ›
+    </button>
+
+  </div>
+
+  <div class="calendarWeekdays">
+    <span>Po</span>
+    <span>Út</span>
+    <span>St</span>
+    <span>Čt</span>
+    <span>Pá</span>
+    <span>So</span>
+    <span>Ne</span>
+  </div>
+
+  <div
+    id="calendarGrid"
+    class="calendarGrid"
+  ></div>
+
+  <div class="calendarAgenda">
+
+    <h3 id="calendarSelectedDate">
+      Vybraný den
+    </h3>
+
+    <div id="calendarDayItems"></div>
+
+  </div>
+
+</section>
 
   <!-- ========================================
        EDITOR POZNÁMKY / ÚKOLU
@@ -347,10 +407,26 @@
       ></div>
 
       <!-- Hlavní text poznámky -->
-      <textarea
-        id="modalText"
-        placeholder="Napiš poznámku..."
-      ></textarea>
+      <textarea id="modalText" placeholder="Napiš poznámku..."></textarea>
+      <!-- ========================================
+     NOVÝ RICH-TEXT EDITOR
+     - barevné zvýraznění textu
+     - odkazy na naplánované úkoly
+     ======================================== -->
+
+<div
+  id="modalRichText"
+  class="modalRichText"
+  contenteditable="true"
+  spellcheck="true"
+  hidden
+></div>
+      
+      <div
+  id="plannedTextLinks"
+  class="plannedTextLinks"
+  hidden
+></div>
 
 
       <!-- ====================================
@@ -451,6 +527,13 @@
         >
           🎨
         </button>
+        <div id="textColorPalette" class="textColorPalette" hidden>
+  <button type="button" data-highlight-color="#fff59d" aria-label="Žlutá"></button>
+  <button type="button" data-highlight-color="#a5d6a7" aria-label="Zelená"></button>
+  <button type="button" data-highlight-color="#90caf9" aria-label="Modrá"></button>
+  <button type="button" data-highlight-color="#ce93d8" aria-label="Fialová"></button>
+  <button type="button" data-highlight-color="#ef9a9a" aria-label="Červená"></button>
+</div>
 
         <button
           id="tagTaskButton"
@@ -459,7 +542,13 @@
         >
           🏷️
         </button>
-
+        <button
+  id="planSelectionButton"
+  type="button"
+  aria-label="Naplánovat označený text"
+>
+  📅
+</button>
         <button
           id="addTodoButton"
           type="button"
@@ -563,7 +652,72 @@
     </div>
 
   </div>
+<!-- ========================================
+     PLÁNOVÁNÍ POZNÁMKY
+     ======================================== -->
 
+<div
+  id="plannerModal"
+  class="plannerModal"
+  hidden
+>
+  <div class="plannerBox">
+
+    <div class="plannerHeader">
+      <h2>Naplánovat</h2>
+
+      <button
+        id="closePlannerButton"
+        type="button"
+        aria-label="Zavřít plánování"
+      >
+        ✕
+      </button>
+    </div>
+
+    <p
+      id="plannerTaskTitle"
+      class="plannerTaskTitle"
+    ></p>
+
+    <label for="plannerDate">
+      Datum
+    </label>
+
+    <input
+      id="plannerDate"
+      type="date"
+    >
+
+    <label for="plannerTime">
+      Čas
+    </label>
+
+    <input
+      id="plannerTime"
+      type="time"
+    >
+
+    <div class="plannerActions">
+
+      <button
+        id="cancelPlannerButton"
+        type="button"
+      >
+        Zrušit
+      </button>
+
+      <button
+        id="savePlannerButton"
+        type="button"
+      >
+        📅 Naplánovat
+      </button>
+
+    </div>
+
+  </div>
+</div>
 
   <!-- ========================================
        OBRAZOVKA NASTAVENÍ
@@ -766,8 +920,13 @@
   <script src="settings.js"></script>
 
   <script src="todos.js"></script>
+  
 
   <script src="script.js"></script>
+  
+  <script src="planner.js"></script>
+  
+  <script src="calendar.js"></script>
 
   <script src="cardView.js"></script>
 

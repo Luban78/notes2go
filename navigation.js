@@ -11,6 +11,88 @@
 
   const plannerButton =
     document.getElementById("plannerModuleButton");
+  const addTaskButton =
+  document.getElementById("addTaskButton");
+  
+  /* ==================================================
+   PŘEPÍNÁNÍ MODULŮ
+   Poznámky ↔ Plán
+================================================== */
+
+const notesScreen =
+  document.querySelector(".app");
+
+const searchRow =
+  document.querySelector(".searchRow");
+
+const categoryTabs =
+  document.querySelector(".categoryTabs");
+
+
+function setActiveModule(activeButton) {
+  [notesButton, plannerButton, remindersButton]
+  .forEach((button) => {
+    const isActive =
+      button === activeButton;
+    
+    button.classList.toggle(
+      "active",
+      isActive
+    );
+    
+    if (isActive) {
+      button.setAttribute(
+        "aria-current",
+        "page"
+      );
+    } else {
+      button.removeAttribute(
+        "aria-current"
+      );
+    }
+  });
+}
+
+
+/* ------------------------------
+   POZNÁMKY
+------------------------------ */
+
+notesButton.addEventListener("click", () => {
+  closeMainMenu();
+  
+  notesScreen.hidden = false;
+  searchRow.hidden = false;
+  categoryTabs.hidden = false;
+  addTaskButton.hidden = false;
+  
+  calendarScreen.hidden = true;
+  
+  setActiveModule(notesButton);
+});
+
+/* ------------------------------
+   PLÁN
+------------------------------ */
+
+plannerButton.addEventListener("click", () => {
+  closeMainMenu();
+  
+  notesScreen.hidden = true;
+  searchRow.hidden = true;
+  categoryTabs.hidden = true;
+  addTaskButton.hidden = true;
+  
+  calendarScreen.hidden = false;
+  
+  calendarCurrentDate = new Date();
+  calendarSelectedDay = new Date();
+  
+  setActiveModule(plannerButton);
+  
+  renderCalendar();
+});
+
 
   const remindersButton =
     document.getElementById("remindersModuleButton");
@@ -72,9 +154,7 @@
   });
 
   /* Plán a Připomínky připravujeme jako samostatné obrazovky. */
-  plannerButton.addEventListener("click", () => {
-    showToast("📅 Plán připravujeme");
-  });
+  
 
   remindersButton.addEventListener("click", () => {
     showToast("🔔 Přehled připomínek připravujeme");

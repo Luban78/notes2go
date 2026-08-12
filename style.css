@@ -152,6 +152,7 @@ body {
   min-height: 0;
   padding: 4px 8px env(safe-area-inset-bottom);
   
+  
   overflow: hidden;
   
   border-radius: 0;
@@ -2018,4 +2019,375 @@ body.authPending .addTaskButton {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ==========================================
+   DIALOG – NAPLÁNOVAT POZNÁMKU
+   ========================================== */
+
+.plannerModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.plannerModal[hidden] {
+  display: none;
+}
+
+.plannerBox {
+  width: min(100%, 360px);
+
+  padding: 20px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.plannerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 16px;
+}
+
+.plannerHeader h2 {
+  margin: 0;
+}
+
+#closePlannerButton {
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+
+  font-size: 1.3rem;
+}
+
+.plannerTaskTitle {
+  margin: 0 0 18px;
+
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.plannerBox label {
+  display: block;
+
+  margin: 14px 0 6px;
+
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+#plannerDate,
+#plannerTime {
+  width: 100%;
+  min-height: 48px;
+
+  box-sizing: border-box;
+  padding: 0 12px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+}
+
+.plannerActions {
+  display: flex;
+  gap: 10px;
+
+  margin-top: 22px;
+}
+
+.plannerActions button {
+  flex: 1;
+
+  min-height: 46px;
+
+  border: 0;
+  border-radius: 12px;
+
+  font: inherit;
+  font-weight: 600;
+}
+
+#cancelPlannerButton {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+#savePlannerButton {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* ==========================================
+   OBRAZOVKA PLÁN
+   ========================================== */
+
+.calendarScreen {
+  padding: 12px 14px 90px;
+}
+
+.calendarScreen[hidden] {
+  display: none;
+}
+
+.calendarHeader {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+
+  margin-bottom: 12px;
+}
+
+.calendarHeader h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.calendarHeader button {
+  width: 44px;
+  height: 44px;
+
+  border: 0;
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font-size: 1.6rem;
+}
+
+.calendarWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+
+  margin-bottom: 6px;
+
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.calendarDay {
+  position: relative;
+
+  aspect-ratio: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+}
+
+.calendarDay.today {
+  border: 1px solid var(--color-accent);
+}
+
+.calendarDay.selected {
+  background: var(--color-accent);
+  color: white;
+}
+
+.calendarDay.hasItems::after {
+  content: "";
+
+  position: absolute;
+  bottom: 5px;
+
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.calendarAgenda {
+  margin-top: 18px;
+}
+
+.calendarAgenda h3 {
+  margin: 0 0 10px;
+}
+
+.calendarAgendaItem {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 10px;
+
+  padding: 12px 0;
+
+  border-bottom: 1px solid var(--color-border);
+}
+
+.calendarAgendaTime {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.calendarAgendaText {
+  color: var(--color-text);
+}
+
+/* ==========================================
+   SKRYTÉ PRVKY PŘI PŘEPÍNÁNÍ MODULŮ
+   ========================================== */
+
+.searchRow[hidden],
+.categoryTabs[hidden],
+#addTaskButton[hidden] {
+  display: none;
+}
+
+/* ==========================================
+   VRSTVA PRO ZVÝRAZNĚNÉ PLÁNOVANÉ ČÁSTI TEXTU
+   ========================================== */
+
+.modalTextWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.modalTextWrapper #modalText {
+  position: relative;
+  z-index: 2;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  background: transparent;
+}
+
+.modalTextHighlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  box-sizing: border-box;
+
+  pointer-events: none;
+
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+
+  visibility: hidden;
+}
+
+#modalText[hidden] {
+  display: none !important;
+}
+
+#modalRichText[hidden] {
+  display: none !important;
+}
+
+#modalRichText {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 18px 2px 14px;
+
+  overflow-y: auto;
+
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-editor-text);
+
+  font-family: inherit;
+  font-size: var(--font-size);
+  line-height: 1.5;
+
+  box-sizing: border-box;
+
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.textColorPalette {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+
+  display: flex;
+  gap: 10px;
+
+  padding: 10px 12px;
+
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  z-index: 2000;
+}
+
+.textColorPalette[hidden] {
+  display: none !important;
+}
+
+.textColorPalette button {
+  width: 34px;
+  height: 34px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+
+  padding: 0;
+}
+
+.textColorPalette button[data-highlight-color="#fff59d"] {
+  background: #fff59d;
+}
+
+.textColorPalette button[data-highlight-color="#a5d6a7"] {
+  background: #a5d6a7;
+}
+
+.textColorPalette button[data-highlight-color="#90caf9"] {
+  background: #90caf9;
+}
+
+.textColorPalette button[data-highlight-color="#ce93d8"] {
+  background: #ce93d8;
+}
+
+.textColorPalette button[data-highlight-color="#ef9a9a"] {
+  background: #ef9a9a;
 }
