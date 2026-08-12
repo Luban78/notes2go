@@ -3,18 +3,45 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LubanNote</title>
-  <link rel="stylesheet" href="style.css">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>LubaNote</title>
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
 </head>
 
 <body class="authPending">
-  <div id="loginScreen" hidden>
-    <form id="loginForm" class="loginCard" novalidate>
+
+  <!-- ========================================
+       PŘIHLAŠOVACÍ OBRAZOVKA
+       ======================================== -->
+
+  <div
+    id="loginScreen"
+    hidden
+  >
+    <form
+      id="loginForm"
+      class="loginCard"
+      novalidate
+    >
+
+      <!-- Logo a název na loginu -->
       <div class="loginBrand">
-  <img src="icons/lubanote.png" alt="" class="loginLogoImage">
-  <strong>LubaNote</strong>
-</div>
+        <img
+          src="icons/lubanote.png"
+          alt=""
+          class="loginLogoImage"
+        >
+
+        <strong>LubaNote</strong>
+      </div>
 
       <h2>Přihlášení</h2>
 
@@ -36,175 +63,731 @@
         required
       >
 
-      <button id="loginButton" type="submit">
+      <button
+        id="loginButton"
+        type="submit"
+      >
         Přihlásit se
       </button>
 
-      <p id="loginMessage" role="alert" aria-live="polite"></p>
+      <p
+        id="loginMessage"
+        role="alert"
+        aria-live="polite"
+      ></p>
+
     </form>
   </div>
 
+
+  <!-- ========================================
+       HLAVNÍ HORNÍ ČÁST APLIKACE
+       Logo + moduly nahoře, hledání a akce pod nimi
+       ======================================== -->
+
   <header class="homeHeader">
-    <div class="homeTitleRow">
-      <div class="homeBrand">
-  <img src="icons/lubanote.png" alt="" class="homeLogoImage">
-  <h1>LubaNote</h1>
-</div>
 
-      <div class="homeActions">
-        <button id="changeViewButton" aria-label="Změnit zobrazení">▦</button>
-        <button id="mainMenuButton" aria-label="Hlavní nabídka">⋮</button>
+    <!-- HLAVNÍ MODULY LUBANOTE -->
+    <div class="moduleBar">
+      <img
+        src="icons/lubanote.png"
+        alt="LubaNote"
+        class="moduleLogo"
+      >
 
-        <div id="mainMenu" class="mainMenu" hidden>
-          <button id="fontSizeSettingsButton">⚙️ Nastavení</button>
-        </div>
+      <nav class="moduleTabs" aria-label="Hlavní části LubaNote">
+        <button
+          id="notesModuleButton"
+          class="moduleTab active"
+          type="button"
+          data-module="notes"
+          aria-current="page"
+        >
+          <span class="moduleTabIcon" aria-hidden="true">📝</span>
+          <span class="moduleTabText">Poznámky</span>
+        </button>
 
-        <input id="importFile" type="file" accept="application/json" hidden>
-      </div>
+        <button
+          id="plannerModuleButton"
+          class="moduleTab"
+          type="button"
+          data-module="planner"
+        >
+          <span class="moduleTabIcon" aria-hidden="true">📅</span>
+          <span class="moduleTabText">Plán</span>
+        </button>
+
+        <button
+          id="remindersModuleButton"
+          class="moduleTab"
+          type="button"
+          data-module="reminders"
+        >
+          <span class="moduleTabIcon" aria-hidden="true">🔔</span>
+          <span class="moduleTabText">Připomínky</span>
+        </button>
+      </nav>
     </div>
 
+    <!-- HLEDÁNÍ + PŘEPÍNAČ KARET + HLAVNÍ MENU -->
     <div class="searchRow">
       <div class="searchBox">
-        <span aria-hidden="true">⌕</span>
-        <input id="searchNotes" type="search" placeholder="Hledat poznámky...">
+        <span class="searchIcon" aria-hidden="true">⌕</span>
+        <input
+          id="searchNotes"
+          type="search"
+          placeholder="Hledat poznámky..."
+          aria-label="Hledat poznámky"
+        >
       </div>
 
-      <button id="filterButton" aria-label="Filtrovat poznámky">☷</button>
+      <div class="searchActions">
+        <!-- 1 sloupec / 2 sloupce -->
+        <button
+          id="changeViewButton"
+          type="button"
+          aria-label="Změnit zobrazení karet"
+        >
+          ▦
+        </button>
+
+        <!-- Servisní nabídka aplikace -->
+        <button
+          id="mainMenuButton"
+          type="button"
+          aria-label="Hlavní nabídka"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          ⋮
+        </button>
+
+        <div id="mainMenu" class="mainMenu" role="menu" hidden>
+          <button id="fontSizeSettingsButton" type="button" role="menuitem">
+            <span aria-hidden="true">⚙️</span>
+            <span>Nastavení</span>
+          </button>
+
+          <button id="backupRestoreButton" type="button" role="menuitem">
+            <span aria-hidden="true">💾</span>
+            <span>Záloha a obnova</span>
+          </button>
+
+          <button id="aboutAppButton" type="button" role="menuitem">
+            <span aria-hidden="true">ℹ️</span>
+            <span>O aplikaci</span>
+          </button>
+
+          <hr>
+
+          <button id="logoutButton" type="button" role="menuitem">
+            <span aria-hidden="true">🚪</span>
+            <span>Odhlásit se</span>
+          </button>
+        </div>
+      </div>
     </div>
 
+    <!-- FILTRY OBLASTÍ A ŠTÍTKŮ -->
     <nav class="categoryTabs" aria-label="Filtr poznámek">
-      <button class="categoryTab active" data-area-filter="all">Vše</button>
-      <button class="categoryTab" data-area-filter="work">💼 Pracovní</button>
-      <button class="categoryTab" data-area-filter="private">🏠 Soukromé</button>
+      <button
+        class="categoryTab active"
+        type="button"
+        data-area-filter="all"
+      >
+        Vše
+      </button>
+
+      <button
+        class="categoryTab"
+        type="button"
+        data-area-filter="work"
+      >
+        💼 Pracovní
+      </button>
+
+      <button
+        class="categoryTab"
+        type="button"
+        data-area-filter="private"
+      >
+        🏠 Soukromé
+      </button>
+
+      <!-- Sem tags.js doplňuje vlastní štítky -->
       <div id="tagFilterButtons"></div>
     </nav>
+
   </header>
 
+
+  <!-- ========================================
+       HLAVNÍ SEZNAM POZNÁMEK
+       ======================================== -->
+
   <main class="app">
-    <div id="pinnedCards" class="pinnedCards" hidden>
-      <div id="pinnedLeft" class="pinnedColumn"></div>
-      <div id="pinnedRight" class="pinnedColumn"></div>
+
+    <div
+      id="pinnedCards"
+      class="pinnedCards"
+      hidden
+    >
+
+      <div
+        id="pinnedLeft"
+        class="pinnedColumn"
+      ></div>
+
+      <div
+        id="pinnedRight"
+        class="pinnedColumn"
+      ></div>
+
     </div>
 
-    <p id="noSearchResults" hidden>Nenalezeny žádné poznámky.</p>
+
+    <!-- Zpráva při prázdném výsledku hledání -->
+    <p
+      id="noSearchResults"
+      hidden
+    >
+      Nenalezeny žádné poznámky.
+    </p>
+
   </main>
 
-  <div id="taskModal" class="taskModal" hidden>
+
+  <!-- ========================================
+       EDITOR POZNÁMKY / ÚKOLU
+       ======================================== -->
+
+  <div
+    id="taskModal"
+    class="taskModal"
+    hidden
+  >
+
     <div class="modalContent">
+
+
+      <!-- ====================================
+           HORNÍ LIŠTA EDITORU
+           ==================================== -->
+
       <div class="editorTopBar">
+
+        <!-- Datum + čas -->
         <div class="dateTimeInputs">
-          <span id="modalWeekday" class="modalWeekday"></span>
-          <input type="date" id="modalDate">
-          <input type="time" id="modalTime">
+
+          <span
+            id="modalWeekday"
+            class="modalWeekday"
+          ></span>
+
+          <input
+            type="date"
+            id="modalDate"
+          >
+
+          <input
+            type="time"
+            id="modalTime"
+          >
+
         </div>
 
+
+        <!-- Akce editoru -->
         <div class="editorTopActions">
-          <button id="pinTaskButton" aria-label="Připnout poznámku">&#128204;</button>
-          <button id="reminderButton" aria-label="Připomínka">&#128276;</button>
-          <button id="moreOptionsButton" aria-label="Další možnosti">&#8942;</button>
+
+          <button
+            id="pinTaskButton"
+            type="button"
+            aria-label="Připnout poznámku"
+          >
+            &#128204;
+          </button>
+
+          <button
+            id="reminderButton"
+            type="button"
+            aria-label="Připomínka"
+          >
+            &#128276;
+          </button>
+
+          <button
+            id="moreOptionsButton"
+            type="button"
+            aria-label="Další možnosti"
+          >
+            &#8942;
+          </button>
+
         </div>
+
       </div>
 
-      <input type="text" id="modalTitle" placeholder="Název úkolu">
-      <div id="todoList" class="todoList" hidden></div>
-      <textarea id="modalText" placeholder="Napiš poznámku..."></textarea>
 
-      <div id="tagMenu" class="tagMenu" hidden>
+      <!-- ====================================
+           OBSAH POZNÁMKY
+           ==================================== -->
+
+      <input
+        type="text"
+        id="modalTitle"
+        placeholder="Název úkolu"
+      >
+
+      <!-- TODO seznam -->
+      <div
+        id="todoList"
+        class="todoList"
+        hidden
+      ></div>
+
+      <!-- Hlavní text poznámky -->
+      <textarea
+        id="modalText"
+        placeholder="Napiš poznámku..."
+      ></textarea>
+
+
+      <!-- ====================================
+           MENU OBLASTÍ A ŠTÍTKŮ
+           ==================================== -->
+
+      <div
+        id="tagMenu"
+        class="tagMenu"
+        hidden
+      >
+
         <h3>Oblast poznámky</h3>
+
         <div class="areaOptions">
-          <button type="button" data-area="work">💼 Pracovní</button>
-          <button type="button" data-area="private">🏠 Soukromé</button>
+
+          <button
+            type="button"
+            data-area="work"
+          >
+            💼 Pracovní
+          </button>
+
+          <button
+            type="button"
+            data-area="private"
+          >
+            🏠 Soukromé
+          </button>
+
         </div>
+
 
         <h3>Štítky</h3>
+
         <div class="tagOptions">
-          <button type="button" data-tag="code">code</button>
-          <button type="button" data-tag="důležité">důležité</button>
-          <button type="button" data-tag="projekt">projekt</button>
+
+          <button
+            type="button"
+            data-tag="code"
+          >
+            code
+          </button>
+
+          <button
+            type="button"
+            data-tag="důležité"
+          >
+            důležité
+          </button>
+
+          <button
+            type="button"
+            data-tag="projekt"
+          >
+            projekt
+          </button>
+
         </div>
+
       </div>
+
+
+      <!-- ====================================
+           SPODNÍ LIŠTA EDITORU
+           ==================================== -->
 
       <div class="editorBottomBar">
-        <button id="editorBackButton" aria-label="Uložit a zavřít">✔️</button>
-        <button id="categoryTaskButton" aria-label="Oblast poznámky">💼</button>
-        <button id="priorityTaskButton" aria-label="Priorita">⭐</button>
-        <button id="colorTaskButton" aria-label="Barva">🎨</button>
-        <button id="tagTaskButton" aria-label="Štítky">🏷️</button>
-        <button id="addTodoButton" type="button" aria-label="Přidat položku TODO">☐</button>
-        <button id="deleteTaskButton" aria-label="Smazat poznámku">🗑️</button>
+
+        <button
+          id="editorBackButton"
+          type="button"
+          aria-label="Uložit a zavřít"
+        >
+          ✔️
+        </button>
+
+        <button
+          id="categoryTaskButton"
+          type="button"
+          aria-label="Oblast poznámky"
+        >
+          💼
+        </button>
+
+        <button
+          id="priorityTaskButton"
+          type="button"
+          aria-label="Priorita"
+        >
+          ⭐
+        </button>
+
+        <button
+          id="colorTaskButton"
+          type="button"
+          aria-label="Barva"
+        >
+          🎨
+        </button>
+
+        <button
+          id="tagTaskButton"
+          type="button"
+          aria-label="Štítky"
+        >
+          🏷️
+        </button>
+
+        <button
+          id="addTodoButton"
+          type="button"
+          aria-label="Přidat položku TODO"
+        >
+          ☐
+        </button>
+
+        <button
+          id="deleteTaskButton"
+          type="button"
+          aria-label="Smazat poznámku"
+        >
+          🗑️
+        </button>
+
       </div>
+
     </div>
+
   </div>
 
-  <div id="cardMenu" class="cardMenu" hidden>
-    <button type="button" data-card-action="plan">📅 Naplánovat</button>
-    <button type="button" data-card-action="pin">📌 Připnout</button>
-    <button type="button" data-card-action="complete">✅ Hotovo</button>
-    <button type="button" data-card-action="delete">🗑️ Smazat</button>
+
+  <!-- ========================================
+       MENU KARTY PO DLOUHÉM STISKU
+       ======================================== -->
+
+  <div
+    id="cardMenu"
+    class="cardMenu"
+    hidden
+  >
+
+    <button
+      type="button"
+      data-card-action="plan"
+    >
+      📅 Naplánovat
+    </button>
+
+    <button
+      type="button"
+      data-card-action="pin"
+    >
+      📌 Připnout
+    </button>
+
+    <button
+      type="button"
+      data-card-action="complete"
+    >
+      ✅ Hotovo
+    </button>
+
+    <button
+      type="button"
+      data-card-action="delete"
+    >
+      🗑️ Smazat
+    </button>
+
   </div>
 
-  <div id="deleteConfirmModal" class="deleteConfirmModal" hidden>
+
+  <!-- ========================================
+       POTVRZENÍ SMAZÁNÍ POZNÁMKY
+       ======================================== -->
+
+  <div
+    id="deleteConfirmModal"
+    class="deleteConfirmModal"
+    hidden
+  >
+
     <div class="deleteConfirmBox">
+
       <h3>Smazat poznámku?</h3>
-      <p>Opravdu chceš tuto poznámku smazat?</p>
+
+      <p>
+        Opravdu chceš tuto poznámku smazat?
+      </p>
 
       <div class="deleteConfirmActions">
-        <button id="cancelDeleteButton" type="button">Zrušit</button>
-        <button id="confirmDeleteButton" type="button">🗑️ Smazat</button>
+
+        <button
+          id="cancelDeleteButton"
+          type="button"
+        >
+          Zrušit
+        </button>
+
+        <button
+          id="confirmDeleteButton"
+          type="button"
+        >
+          🗑️ Smazat
+        </button>
+
       </div>
+
     </div>
+
   </div>
 
-  <div id="settingsModal" class="settingsModal" hidden>
+
+  <!-- ========================================
+       OBRAZOVKA NASTAVENÍ
+       ======================================== -->
+
+  <div
+    id="settingsModal"
+    class="settingsModal"
+    hidden
+  >
+
     <div class="settingsContent">
+
+
+      <!-- Hlavička nastavení -->
       <div class="settingsHeader">
+
         <h2>Nastavení</h2>
-        <button id="closeSettingsButton" type="button" aria-label="Zavřít nastavení">✕</button>
+
+        <button
+          id="closeSettingsButton"
+          type="button"
+          aria-label="Zavřít nastavení"
+        >
+          ✕
+        </button>
+
       </div>
 
+
+      <!-- ====================================
+           NASTAVENÍ VZHLEDU
+           ==================================== -->
+
       <section class="settingsSection">
+
         <h3>Vzhled</h3>
 
+
+        <!-- Velikost písma -->
         <div class="fontSizeSetting">
+
           <span>Velikost písma</span>
+
           <div class="fontSizeControl">
-            <button id="decreaseFontButton" type="button" aria-label="Zmenšit písmo">−</button>
-            <span id="fontSizeValue">16 px</span>
-            <button id="increaseFontButton" type="button" aria-label="Zvětšit písmo">+</button>
+
+            <button
+              id="decreaseFontButton"
+              type="button"
+              aria-label="Zmenšit písmo"
+            >
+              −
+            </button>
+
+            <span id="fontSizeValue">
+              16 px
+            </span>
+
+            <button
+              id="increaseFontButton"
+              type="button"
+              aria-label="Zvětšit písmo"
+            >
+              +
+            </button>
+
           </div>
+
         </div>
 
+
+        <!-- Barevný motiv -->
         <div class="themeSetting">
+
           <span>Barevný motiv</span>
+
           <div class="themeOptions">
-            <button type="button" data-theme="light">Světlý</button>
-            <button type="button" data-theme="dark">Tmavý</button>
-            <button type="button" data-theme="cappuccino">Cappuccino</button>
+
+            <button
+              type="button"
+              data-theme="light"
+            >
+              Světlý
+            </button>
+
+            <button
+              type="button"
+              data-theme="dark"
+            >
+              Tmavý
+            </button>
+
+            <button
+              type="button"
+              data-theme="cappuccino"
+            >
+              Cappuccino
+            </button>
+
           </div>
+
         </div>
+
       </section>
 
-      <section class="settingsSection">
+
+      <!-- ====================================
+           DATA / ZÁLOHY
+           ==================================== -->
+
+      <section id="dataSettingsSection" class="settingsSection">
+
         <h3>Data</h3>
-        <button id="settingsExportButton" type="button">Export zálohy</button>
-        <button id="settingsImportButton" type="button">Import zálohy</button>
+
+        <button
+          id="settingsExportButton"
+          type="button"
+        >
+          Export zálohy
+        </button>
+
+        <button
+          id="settingsImportButton"
+          type="button"
+        >
+          Import zálohy
+        </button>
+
       </section>
+
+    </div>
+
+  </div>
+
+
+
+  <!-- ========================================
+       O APLIKACI
+       ======================================== -->
+
+  <div id="aboutModal" class="aboutModal" hidden>
+    <div class="aboutCard">
+      <button
+        id="closeAboutButton"
+        class="aboutCloseButton"
+        type="button"
+        aria-label="Zavřít informace o aplikaci"
+      >
+        ✕
+      </button>
+
+      <img src="icons/lubanote.png" alt="" class="aboutLogo">
+      <h2>LubaNote</h2>
+      <p class="aboutVersion">Verze 1.0</p>
+      <p>Poznámky, úkoly, plánování a připomínky na jednom místě.</p>
     </div>
   </div>
 
-  <button id="addTaskButton" class="addTaskButton" aria-label="Přidat poznámku">+</button>
+
+  <!-- Krátká zpráva pro moduly, které teprve připravujeme -->
+  <div id="appToast" class="appToast" role="status" aria-live="polite" hidden></div>
+
+  <!-- ========================================
+       HLAVNÍ TLAČÍTKO +
+       ======================================== -->
+
+  <button
+    id="addTaskButton"
+    class="addTaskButton"
+    type="button"
+    aria-label="Přidat poznámku"
+  >
+    +
+  </button>
+
+
+  <!-- ========================================
+       SKRYTÝ INPUT PRO IMPORT ZÁLOHY
+       ======================================== -->
+
+  <input
+    id="importFile"
+    type="file"
+    accept="application/json"
+    hidden
+  >
+
+
+  <!-- ========================================
+       JAVASCRIPT
+       POŘADÍ NEMĚNIT
+       ======================================== -->
 
   <script src="reminders.js"></script>
+
   <script src="storage.js"></script>
+
   <script src="tags.js"></script>
+
   <script src="settings.js"></script>
+
   <script src="todos.js"></script>
+
   <script src="script.js"></script>
+
   <script src="cardView.js"></script>
+
   <script src="search.js"></script>
+
+
+  <!-- Supabase knihovna -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+  <!-- Supabase přihlášení -->
   <script src="supabaseClient.js"></script>
+
+  <!-- Navigace modulů a servisní nabídka -->
+  <script src="navigation.js"></script>
+
+
+  <!-- Synchronizace poznámek -->
   <script src="sync.js"></script>
+
 </body>
 
 </html>

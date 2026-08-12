@@ -12,8 +12,17 @@ function applyCardView() {
 }
 
 function updateCardViewButton() {
-  changeViewButton.textContent =
-    cardView === "grid" ? "☰" : "▦";
+  changeViewButton.innerHTML =
+    cardView === "grid" ?
+    "☰" :
+    `
+        <span class="cardGridIcon">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+      `;
 }
 
 changeViewButton.addEventListener("click", () => {

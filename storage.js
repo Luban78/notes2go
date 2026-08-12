@@ -58,7 +58,7 @@ function exportTasks() {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "lubannote-backup.json";
+  link.download = "lubanote-backup.json";
 
   document.body.appendChild(link);
   link.click();
@@ -93,7 +93,7 @@ function importTasks(file) {
       location.reload();
     } catch (error) {
       console.error("Import backup error:", error);
-      alert("Soubor není platná záloha LubanNote.");
+      alert("Soubor není platná záloha LubaNote.");
     }
   };
 

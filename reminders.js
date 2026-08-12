@@ -20,7 +20,7 @@ async function createReminderChannel() {
 
   await LocalNotifications.createChannel({
     id: "reminders",
-    name: "Připomínky LubanNote",
+    name: "Připomínky LubaNote",
     description: "Upozornění na naplánované poznámky",
     importance: 5,
     visibility: 1,
@@ -39,7 +39,7 @@ async function scheduleNotification(notificationId, title, dateTime) {
   await LocalNotifications.schedule({
     notifications: [
       {
-        title: title || "LubanNote",
+        title: title || "LubaNote",
         body: "Máš naplánovanou poznámku.",
         id: notificationId,
         channelId: "reminders",
