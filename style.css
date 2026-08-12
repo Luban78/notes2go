@@ -1715,3 +1715,17 @@ body.authPending .addTaskButton {
     bottom: 34px;
   }
 }
+.homeLogoImage,
+.loginLogoImage {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
+.loginLogoImage {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+}
