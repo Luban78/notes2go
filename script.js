@@ -156,14 +156,28 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 
 addTaskButton.addEventListener("click", () => {
-  activeTaskIndex = null;
-  resetTodos();
-  
-  modalTitle.value = "";
-  modalText.value = "";
-  modalDate.value = "";
-  modalTime.value = "";
-  reminderEnabled = false;
+      activeTaskIndex = null;
+      resetTodos();
+      
+      modalTitle.value = "";
+      modalText.value = "";
+      
+      /* Aktuální datum a čas při vytvoření nové poznámky */
+      const now = new Date();
+      
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      
+      modalDate.value = `${year}-${month}-${day}`;
+      modalTime.value = `${hours}:${minutes}`;
+      
+      updateModalWeekday();
+      
+      reminderEnabled = false;
   updateReminderButton(false);
   
   taskModal.hidden = false;
@@ -218,7 +232,7 @@ editorBackButton.addEventListener("click", () => {
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      date === "" &&
+      //date === "" &&
       activeTodos.length === 0;
     
     if (!isEmpty) {
