@@ -524,8 +524,13 @@ body {
   transform: scale(0.94);
 }
 
-#mainMenuButton {
-  font-size: 1.8rem;
+/*#mainMenuButton {
+  font-size: 1.8rem;*/
+  
+}
+.mainMenuIcon {
+  display: inline-block;
+  transform: translate( 0px, -2px);
 }
 
 /* ---------- SERVISNÍ MENU POD ⋮ ---------- */
@@ -1999,6 +2004,7 @@ body.authPending .addTaskButton {
   grid-template-columns: repeat(2, 8px);
   grid-template-rows: repeat(2, 8px);
   gap: 3px;
+  transform: translate(-2px, -2px);
 }
 
 .cardGridIcon span {
@@ -2006,4 +2012,10 @@ body.authPending .addTaskButton {
   height: 8px;
   border: 2px solid currentColor;
   border-radius: 2px;
+}
+
+#changeViewButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
