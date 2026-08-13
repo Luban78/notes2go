@@ -145,6 +145,16 @@ async function syncNotes() {
   }
 
   const localNotes = getLocalNotesForSync();
+
+  /* Přeneseme i starší lokální Planner položky do objektů poznámek,
+     aby se automaticky dostaly do stejného Supabase syncu. */
+  if (
+    typeof migrateLocalPlannedItemsIntoNotes === "function" &&
+    migrateLocalPlannedItemsIntoNotes(localNotes)
+  ) {
+    saveAllTasks(localNotes);
+  }
+
   const cloudRows = await getCloudNotesForSync();
   const cloudMap = createCloudNotesMap(cloudRows);
 

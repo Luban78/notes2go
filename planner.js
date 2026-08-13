@@ -20,7 +20,7 @@ let selectedPlannerText = "";
    NAČTENÍ / ULOŽENÍ PLÁNOVANÝCH POLOŽEK
    ========================================== */
 
-function loadPlannedItems() {
+function getLocalPlannedItems() {
   try {
     return JSON.parse(
       localStorage.getItem(PLANNER_STORAGE_KEY)
@@ -35,11 +35,71 @@ function loadPlannedItems() {
   }
 }
 
+function loadPlannedItems() {
+  const merged = new Map();
+
+  /* Starší položky uložené jen lokálně. */
+  getLocalPlannedItems().forEach((item) => {
+    if (item?.id) {
+      merged.set(item.id, item);
+    }
+  });
+
+  /* Nově jsou položky uložené také uvnitř poznámky,
+     takže se přenesou přes existující Supabase sync poznámek. */
+  loadTask().forEach((note) => {
+    (note.plannedItems || []).forEach((item) => {
+      if (item?.id) {
+        merged.set(item.id, item);
+      }
+    });
+  });
+
+  return Array.from(merged.values());
+}
+
 function savePlannedItems(items) {
   localStorage.setItem(
     PLANNER_STORAGE_KEY,
     JSON.stringify(items)
   );
+}
+
+/* Jednorázově připne staré lokální položky k jejich zdrojovým
+   poznámkám. Díky tomu se nahrají do Supabase bez nové DB tabulky. */
+function migrateLocalPlannedItemsIntoNotes(notes) {
+  const localItems = getLocalPlannedItems();
+  let changed = false;
+
+  localItems.forEach((item) => {
+    if (!item?.id || !item.sourceNoteId) {
+      return;
+    }
+
+    const note = notes.find(
+      candidate => candidate.id === item.sourceNoteId
+    );
+
+    if (!note) {
+      return;
+    }
+
+    note.plannedItems = Array.isArray(note.plannedItems)
+      ? note.plannedItems
+      : [];
+
+    const alreadyStored = note.plannedItems.some(
+      stored => stored.id === item.id
+    );
+
+    if (!alreadyStored) {
+      note.plannedItems.push(item);
+      note.updatedAt = new Date().toISOString();
+      changed = true;
+    }
+  });
+
+  return changed;
 }
 
 
@@ -193,16 +253,34 @@ function saveCurrentPlannedItem() {
   plannedItem.id;
   
   if (plannerSourceType === "selection") {
-  wrapCurrentSelectionAsPlannedLink(
-    plannedItem.id
-  );
-}
-
-  
+    wrapCurrentSelectionAsPlannedLink(
+      plannedItem.id
+    );
+  }
 
   const plannedItems = loadPlannedItems();
   plannedItems.push(plannedItem);
   savePlannedItems(plannedItems);
+
+  /* Plán i backlink uložíme přímo do zdrojové poznámky.
+     Celý objekt poznámky se už synchronizuje v Supabase jako JSON. */
+  sourceNote.plannedItems = Array.isArray(sourceNote.plannedItems)
+    ? sourceNote.plannedItems
+    : [];
+
+  if (!sourceNote.plannedItems.some(item => item.id === plannedItem.id)) {
+    sourceNote.plannedItems.push(plannedItem);
+  }
+
+  if (plannerSourceType === "selection") {
+    sourceNote.note = modalRichText.innerText;
+    sourceNote.richContent = modalRichText.innerHTML;
+  }
+
+  sourceNote.updatedAt = new Date().toISOString();
+
+  saveAllTasks(tasks);
+  uploadLocalNoteToSupabase(sourceNote);
 
   closePlanner();
 
