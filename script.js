@@ -555,8 +555,16 @@ function renderTasks() {
     
     const listMode =
       localStorage.getItem("cardView") === "list";
-    
-    if (listMode) {
+
+    const desktopCardLayout =
+      window.matchMedia("(min-width: 900px)").matches;
+
+    /*
+     * PC: všechny karty držíme v jednom zdrojovém sloupci.
+     * CSS z něj udělá 4sloupcový masonry GRID nebo 2sloupcový LIST.
+     * Mobil: zachováme původní 2 nezávislé masonry sloupce.
+     */
+    if (desktopCardLayout || listMode) {
       pinnedLeft.append(loadedCard);
     } else {
       const cardCount =

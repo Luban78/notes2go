@@ -5,9 +5,6 @@
 
 const PLANNER_STORAGE_KEY = "plannedItems";
 
-const plannedTextLinks =
-  document.getElementById("plannedTextLinks");
-
 const planSelectionButton =
   document.getElementById("planSelectionButton");
 
@@ -284,36 +281,3 @@ planSelectionButton.addEventListener(
     plannerModal.hidden = false;
   }
 );
-
-
-/* ==========================================
-   PŘEHLED NAPLÁNOVANÝCH ČÁSTÍ U POZNÁMKY
-   ========================================== */
-
-function renderPlannedTextLinks(noteId) {
-  const items = loadPlannedItems().filter(
-    item =>
-      item.sourceNoteId === noteId &&
-      item.sourceType === "selection"
-  );
-
-  plannedTextLinks.innerHTML = "";
-
-  if (items.length === 0) {
-    plannedTextLinks.hidden = true;
-    return;
-  }
-
-  plannedTextLinks.hidden = false;
-
-  items.forEach((item) => {
-    const button =
-      document.createElement("button");
-
-    button.type = "button";
-    button.className = "plannedTextLink";
-    button.textContent = `📅 ${item.text}`;
-
-    plannedTextLinks.append(button);
-  });
-}

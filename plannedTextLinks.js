@@ -15,6 +15,11 @@ function createPlannedTextLink(
   span.dataset.plannedItemId =
     plannedItemId;
 
+  span.setAttribute(
+    "aria-label",
+    "Otevřít naplánovaný úkol"
+  );
+
   span.textContent =
     text;
 
@@ -70,11 +75,14 @@ document.addEventListener("pointerdown", (event) => {
   }
 
   /*
-   * Zabráníme contenteditable editoru,
-   * aby při klepnutí na odkaz získal focus
-   * a otevřel Android klávesnici.
+   * Na mobilu zabráníme contenteditable editoru,
+   * aby při klepnutí na odkaz otevřel klávesnici.
+   * Myš na PC ale neblokujeme – desktopový click
+   * tak zůstane plně funkční.
    */
-  event.preventDefault();
+  if (event.pointerType !== "mouse") {
+    event.preventDefault();
+  }
 });
 
 document.addEventListener("click", (event) => {
@@ -84,6 +92,8 @@ document.addEventListener("click", (event) => {
   if (!link) {
     return;
   }
+
+  event.preventDefault();
   
   const plannedItemId =
     link.dataset.plannedItemId;
@@ -121,4 +131,4 @@ calendarSelectedDay =
   new Date(plannedDate);
 
 renderCalendar();
-});
+}, true);

@@ -2384,3 +2384,152 @@ body.authPending .addTaskButton {
 
   cursor: pointer;
 }
+
+/* ==================================================
+   PC / NOTEBOOK – LUBANOTE DESKTOP LAYOUT
+   4 karty v GRID, 2 karty v LIST a kompaktní Plán
+================================================== */
+
+@media (min-width: 900px) {
+  /* ---------- POZNÁMKY: 4 KARTY VEDLE SEBE ---------- */
+
+  .pinnedCards {
+    display: block;
+    width: 100%;
+    padding: 0 0 32px;
+  }
+
+  #pinnedRight {
+    display: none;
+  }
+
+  #pinnedLeft {
+    width: 100%;
+  }
+
+  .pinnedCards:not(.listView) #pinnedLeft {
+    column-count: 4;
+    column-gap: 18px;
+  }
+
+  .pinnedCards:not(.listView) .taskCard {
+    display: inline-flex;
+    width: 100%;
+    margin: 0 0 18px;
+    break-inside: avoid;
+  }
+
+  /* ---------- POZNÁMKY: LIST = 2 KARTY VEDLE SEBE ---------- */
+
+  .pinnedCards.listView {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .pinnedCards.listView #pinnedLeft {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+
+  .pinnedCards.listView .taskCard {
+    width: 100%;
+    margin: 0;
+    padding: 18px 20px;
+  }
+
+  /* ---------- PLÁN: KOMPAKTNÍ DESKTOPOVÁ OBRAZOVKA ---------- */
+
+  .calendarScreen:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(500px, 620px) minmax(300px, 380px);
+    grid-template-rows: auto auto auto;
+    column-gap: 32px;
+    align-items: start;
+
+    width: min(calc(100% - 64px), 1040px);
+    margin: 0 auto;
+    padding: 24px 10px 48px;
+    box-sizing: border-box;
+  }
+
+  .calendarHeader {
+    grid-column: 1;
+    grid-row: 1;
+    margin-bottom: 14px;
+  }
+
+  .calendarHeader h2 {
+    font-size: 1.35rem;
+  }
+
+  .calendarHeader button {
+    width: 46px;
+    height: 46px;
+    cursor: pointer;
+  }
+
+  .calendarWeekdays {
+    grid-column: 1;
+    grid-row: 2;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+  }
+
+  .calendarGrid {
+    grid-column: 1;
+    grid-row: 3;
+    gap: 8px;
+  }
+
+  .calendarDay {
+    aspect-ratio: auto;
+    min-height: 64px;
+    border-radius: 14px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .calendarDay.hasItems::after {
+    bottom: 7px;
+  }
+
+  .calendarAgenda {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+
+    margin-top: 0;
+    padding: 18px 20px;
+    box-sizing: border-box;
+
+    max-height: calc(100dvh - 210px);
+    overflow-y: auto;
+
+    position: sticky;
+    top: 20px;
+
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    background: var(--color-surface);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+  }
+
+  .calendarAgenda h3 {
+    margin-bottom: 14px;
+    font-size: 1.08rem;
+  }
+
+  .calendarAgendaItem {
+    grid-template-columns: 64px 1fr;
+    gap: 12px;
+    padding: 14px 0;
+    cursor: pointer;
+  }
+
+  /* Desktopové odkazy z poznámky musí být zřetelně klikatelné. */
+  .plannedTextLink {
+    cursor: pointer;
+  }
+}

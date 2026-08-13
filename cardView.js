@@ -43,3 +43,17 @@ changeViewButton.addEventListener("click", () => {
 
 applyCardView();
 updateCardViewButton();
+
+/* ==========================================
+   RESPONSIVNÍ PŘECHOD MOBIL ↔ PC
+   ========================================== */
+
+const desktopCardLayoutMedia =
+  window.matchMedia("(min-width: 900px)");
+
+desktopCardLayoutMedia.addEventListener?.(
+  "change",
+  () => {
+    renderTasks();
+  }
+);

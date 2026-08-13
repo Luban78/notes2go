@@ -250,10 +250,6 @@ function renderCalendarAgenda() {
       behavior: "smooth"
     });
     
-    setTimeout(() => {
-  
-}, 500);
-
   }, 150);
 });
 
