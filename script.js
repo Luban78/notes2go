@@ -40,11 +40,6 @@ const cancelDeleteButton =
 const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
 
-const colorTaskButton =
-  document.getElementById("colorTaskButton");
-
-const textColorPalette =
-  document.getElementById("textColorPalette");
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
@@ -105,196 +100,7 @@ const modalText = document.getElementById("modalText");
 const modalRichText =
   document.getElementById("modalRichText");
   
-/* ==================================================
-   RICH-TEXT EDITOR – výběr a barevné zvýraznění
-================================================== */
-
-let savedRichTextRange = null;
-
-function isRangeInsideRichText(range) {
-  if (!range) {
-    return false;
-  }
-
-  const startNode =
-    range.startContainer.nodeType === Node.TEXT_NODE
-      ? range.startContainer.parentElement
-      : range.startContainer;
-
-  const endNode =
-    range.endContainer.nodeType === Node.TEXT_NODE
-      ? range.endContainer.parentElement
-      : range.endContainer;
-
-  return Boolean(
-    startNode &&
-    endNode &&
-    modalRichText.contains(startNode) &&
-    modalRichText.contains(endNode)
-  );
-}
-
-function getRichTextOffset(node, offset) {
-  const probe = document.createRange();
-  probe.selectNodeContents(modalRichText);
-
-  try {
-    probe.setEnd(node, offset);
-    return probe.toString().length;
-  } catch {
-    return null;
-  }
-}
-
-function getSavedRichTextSelectionSnapshot() {
-  if (
-    !savedRichTextRange ||
-    savedRichTextRange.collapsed ||
-    !isRangeInsideRichText(savedRichTextRange)
-  ) {
-    return null;
-  }
-
-  const range = savedRichTextRange.cloneRange();
-  const text = range.toString();
-
-  if (!text.trim()) {
-    return null;
-  }
-
-  return {
-    range,
-    text,
-    start: getRichTextOffset(
-      range.startContainer,
-      range.startOffset
-    ),
-    end: getRichTextOffset(
-      range.endContainer,
-      range.endOffset
-    )
-  };
-}
-
-function saveCurrentRichTextSelection() {
-  const selection = window.getSelection();
-
-  if (
-    !selection ||
-    selection.rangeCount === 0 ||
-    selection.isCollapsed
-  ) {
-    return;
-  }
-
-  const range = selection.getRangeAt(0);
-
-  if (!isRangeInsideRichText(range)) {
-    return;
-  }
-
-  savedRichTextRange = range.cloneRange();
-}
-
-function applyRichTextHighlight(color) {
-  const snapshot = getSavedRichTextSelectionSnapshot();
-
-  if (!snapshot) {
-    return false;
-  }
-
-  modalRichText.focus({ preventScroll: true });
-
-  const selection = window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(snapshot.range);
-
-  /*
-   * Chromium/WebView umí přes contenteditable spolehlivě změnit
-   * barvu i u části už obarveného textu. Na rozdíl od
-   * Range.surroundContents() se tím nerozbije výběr přes hranici
-   * existujícího formátování.
-   */
-  let applied = false;
-  const htmlBefore = modalRichText.innerHTML;
-
-  try {
-    document.execCommand("styleWithCSS", false, true);
-    applied = document.execCommand(
-      "backColor",
-      false,
-      color
-    );
-
-    if (!applied) {
-      applied = document.execCommand(
-        "hiliteColor",
-        false,
-        color
-      );
-    }
-
-    /* Některé WebView vrátí false, i když DOM skutečně změnily. */
-    if (modalRichText.innerHTML !== htmlBefore) {
-      applied = true;
-    }
-  } catch (error) {
-    console.error(
-      "Barevné zvýraznění se nepodařilo:",
-      error
-    );
-  }
-
-  /* Záložní cesta pro prohlížeč bez execCommand. */
-  if (!applied) {
-    try {
-      const range = snapshot.range.cloneRange();
-      const fragment = range.extractContents();
-      const mark = document.createElement("mark");
-
-      mark.className = "richTextHighlight";
-      mark.style.backgroundColor = color;
-      mark.append(fragment);
-      range.insertNode(mark);
-      applied = true;
-    } catch (error) {
-      console.error(
-        "Záložní zvýraznění se nepodařilo:",
-        error
-      );
-    }
-  }
-
-  syncLegacyModalText();
-
-  selection.removeAllRanges();
-  savedRichTextRange = null;
-  textColorPalette.hidden = true;
-
-  return applied;
-}
-
-colorTaskButton.addEventListener("click", () => {
-  textColorPalette.hidden =
-    !textColorPalette.hidden;
-});
-
-textColorPalette.addEventListener("click", (event) => {
-  const colorButton =
-    event.target.closest("[data-highlight-color]");
-
-  if (!colorButton) {
-    return;
-  }
-
-  applyRichTextHighlight(
-    colorButton.dataset.highlightColor
-  );
-});
-
-document.addEventListener("selectionchange", () => {
-  saveCurrentRichTextSelection();
-});
+/* Barevné označování je oddělené v richTextColors.js. */
 
 modalRichText.addEventListener("scroll", () => {
   if (
@@ -318,15 +124,6 @@ modalRichText.addEventListener("focus", () => {
 
 modalRichText.addEventListener("blur", () => {
   taskModal.classList.remove("editing");
-});
-
-/* Hidden textarea držíme jen jako kompatibilní plain-text kopii. */
-function syncLegacyModalText() {
-  modalText.value = modalRichText.innerText;
-}
-
-modalRichText.addEventListener("input", () => {
-  syncLegacyModalText();
 });
 
 const modalDate = document.getElementById("modalDate");
@@ -370,8 +167,7 @@ addTaskButton.addEventListener("click", () => {
       modalRichText.innerHTML = "";
       modalText.hidden = true;
       modalRichText.hidden = false;
-      savedRichTextRange = null;
-      textColorPalette.hidden = true;
+      RichTextColors.reset();
       document.getElementById("plannedTextLinks")?.replaceChildren();
       if (document.getElementById("plannedTextLinks")) {
         document.getElementById("plannedTextLinks").hidden = true;
@@ -491,8 +287,7 @@ editorBackButton.addEventListener("click", () => {
   
   document.body.classList.remove("noScroll");
   activeTaskIndex = null;
-  savedRichTextRange = null;
-  textColorPalette.hidden = true;
+  RichTextColors.reset();
 });
 
 
@@ -559,8 +354,7 @@ function openTaskEditorById(taskId) {
 
   modalText.hidden = true;
   modalRichText.hidden = false;
-  savedRichTextRange = null;
-  textColorPalette.hidden = true;
+  RichTextColors.reset();
 
   if (currentTask.date) {
     const [savedDate, savedTime] =
