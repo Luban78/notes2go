@@ -11,6 +11,10 @@
 
   const plannerButton =
     document.getElementById("plannerModuleButton");
+
+  const remindersButton =
+    document.getElementById("remindersModuleButton");
+
   const addTaskButton =
   document.getElementById("addTaskButton");
   
@@ -94,9 +98,6 @@ plannerButton.addEventListener("click", () => {
 });
 
 
-  const remindersButton =
-    document.getElementById("remindersModuleButton");
-
   const menuButton =
     document.getElementById("mainMenuButton");
 
@@ -148,13 +149,7 @@ plannerButton.addEventListener("click", () => {
     }, 1800);
   }
 
-  /* Poznámky jsou aktuálně hotový hlavní modul. */
-  notesButton.addEventListener("click", () => {
-    closeMainMenu();
-  });
-
-  /* Plán a Připomínky připravujeme jako samostatné obrazovky. */
-  
+  /* Připomínky zatím zůstávají jako připravovaný modul. */
 
   remindersButton.addEventListener("click", () => {
     showToast("🔔 Přehled připomínek připravujeme");

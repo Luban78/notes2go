@@ -18,6 +18,9 @@ const tagModalTitle =
 const tagModalText =
   document.getElementById("modalText");
 
+const tagModalRichText =
+  document.getElementById("modalRichText");
+
 const categoryTaskButton =
   document.getElementById("categoryTaskButton");
 
@@ -156,6 +159,7 @@ tagTaskButton.addEventListener("click", () => {
 
 tagModalTitle.addEventListener("pointerdown", closeTagMenu);
 tagModalText.addEventListener("pointerdown", closeTagMenu);
+tagModalRichText.addEventListener("pointerdown", closeTagMenu);
 
 areaButtons.forEach((button) => {
   button.addEventListener("click", () => {
