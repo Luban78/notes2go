@@ -28,7 +28,12 @@ async function createReminderChannel() {
   });
 }
 
-async function scheduleNotification(notificationId, title, dateTime) {
+async function scheduleNotification(
+  notificationId,
+  title,
+  dateTime,
+  noteText = ""
+) {
   const LocalNotifications =
     window.Capacitor?.Plugins?.LocalNotifications;
 
@@ -36,13 +41,32 @@ async function scheduleNotification(notificationId, title, dateTime) {
     return;
   }
 
+  const cleanText =
+    noteText
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const shortText =
+    cleanText.length > 140
+      ? `${cleanText.slice(0, 140)}…`
+      : cleanText;
+
   await LocalNotifications.schedule({
     notifications: [
       {
         title: title || "LubaNote",
-        body: "Máš naplánovanou poznámku.",
+
+        body:
+          shortText ||
+          "Máš naplánovanou poznámku.",
+
+        largeBody:
+          cleanText ||
+          "Máš naplánovanou poznámku.",
+
         id: notificationId,
         channelId: "reminders",
+
         schedule: {
           at: new Date(dateTime)
         }
@@ -50,6 +74,9 @@ async function scheduleNotification(notificationId, title, dateTime) {
     ]
   });
 }
+
+
+
 
 async function cancelNotification(notificationId) {
   const LocalNotifications =

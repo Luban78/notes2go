@@ -99,7 +99,7 @@ const modalText = document.getElementById("modalText");
 
 const modalRichText =
   document.getElementById("modalRichText");
-  
+
 /* Barevné označování je oddělené v richTextColors.js. */
 
 modalRichText.addEventListener("scroll", () => {
@@ -109,7 +109,7 @@ modalRichText.addEventListener("scroll", () => {
   ) {
     taskModal.classList.add("titleCollapsed");
   }
-
+  
   if (
     taskModal.classList.contains("titleCollapsed") &&
     modalRichText.scrollTop < 8
@@ -159,36 +159,36 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 
 addTaskButton.addEventListener("click", () => {
-      activeTaskIndex = null;
-      resetTodos();
-      
-      modalTitle.value = "";
-      modalText.value = "";
-      modalRichText.innerHTML = "";
-      modalText.hidden = true;
-      modalRichText.hidden = false;
-      RichTextColors.reset();
-      document.getElementById("plannedTextLinks")?.replaceChildren();
-      if (document.getElementById("plannedTextLinks")) {
-        document.getElementById("plannedTextLinks").hidden = true;
-      }
-      
-      /* Aktuální datum a čas při vytvoření nové poznámky */
-      const now = new Date();
-      
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const day = String(now.getDate()).padStart(2, "0");
-      
-      const hours = String(now.getHours()).padStart(2, "0");
-      const minutes = String(now.getMinutes()).padStart(2, "0");
-      
-      modalDate.value = `${year}-${month}-${day}`;
-      modalTime.value = `${hours}:${minutes}`;
-      
-      updateModalWeekday();
-      
-      reminderEnabled = false;
+  activeTaskIndex = null;
+  resetTodos();
+  
+  modalTitle.value = "";
+  modalText.value = "";
+  modalRichText.innerHTML = "";
+  modalText.hidden = true;
+  modalRichText.hidden = false;
+  RichTextColors.reset();
+  document.getElementById("plannedTextLinks")?.replaceChildren();
+  if (document.getElementById("plannedTextLinks")) {
+    document.getElementById("plannedTextLinks").hidden = true;
+  }
+  
+  /* Aktuální datum a čas při vytvoření nové poznámky */
+  const now = new Date();
+  
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  
+  modalDate.value = `${year}-${month}-${day}`;
+  modalTime.value = `${hours}:${minutes}`;
+  
+  updateModalWeekday();
+  
+  reminderEnabled = false;
   updateReminderButton(false);
   
   taskModal.hidden = false;
@@ -235,7 +235,8 @@ editorBackButton.addEventListener("click", () => {
         scheduleNotification(
           updatedTask.notificationId,
           updatedTask.title,
-          updatedTask.date
+          updatedTask.date,
+          updatedTask.note
         );
       } else {
         cancelNotification(updatedTask.notificationId);
@@ -269,10 +270,11 @@ editorBackButton.addEventListener("click", () => {
       uploadLocalNoteToSupabase(newTask);
       if (newTask.reminder && newTask.date) {
         scheduleNotification(
-          newTask.notificationId,
-          newTask.title,
-          newTask.date
-        );
+  newTask.notificationId,
+  newTask.title,
+  newTask.date,
+  newTask.note
+);
       }
     }
   }
@@ -322,60 +324,60 @@ document.addEventListener("pointercancel", (event) => {
 
 function openTaskEditorById(taskId) {
   const currentTasks = loadTask();
-
+  
   const index = currentTasks.findIndex(
     task => task.id === taskId
   );
-
+  
   if (index === -1) {
     console.error("Poznámka nebyla nalezena:", taskId);
     return;
   }
-
+  
   const currentTask = currentTasks[index];
-
+  
   reminderEnabled = currentTask.reminder === true;
   updateReminderButton(reminderEnabled);
-
+  
   activeArea = currentTask.area || "private";
   activeTags = currentTask.tags || [];
-
+  
   updateTagMenuUI();
   closeTagMenu();
-
+  
   activeTaskIndex = index;
-
+  
   modalTitle.value = currentTask.title || "";
   modalText.value = currentTask.note || "";
-
+  
   if (currentTask.richContent) {
     modalRichText.innerHTML = currentTask.richContent;
   } else {
     /* Staré plain-text poznámky načteme bezpečně jako text. */
     modalRichText.textContent = currentTask.note || "";
   }
-
+  
   modalText.hidden = true;
   modalRichText.hidden = false;
   RichTextColors.reset();
-
+  
   if (currentTask.date) {
     const [savedDate, savedTime] =
-      currentTask.date.split("T");
-
+    currentTask.date.split("T");
+    
     modalDate.value = savedDate || "";
     modalTime.value = savedTime || "";
   } else {
     modalDate.value = "";
     modalTime.value = "";
   }
-
+  
   updateModalWeekday();
-
+  
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-
+  
   loadTodos(currentTask.todos);
   
   //renderPlannedTextLinks(currentTask.id);
@@ -569,38 +571,38 @@ function renderTasks() {
     }
     
     
-        /* Otevření existující poznámky */
+    /* Otevření existující poznámky */
     
     loadedCard.addEventListener("click", () => {
-    if (blockNextCardClick) {
-      blockNextCardClick = false;
-      return;
-    }
+      if (blockNextCardClick) {
+        blockNextCardClick = false;
+        return;
+      }
+      
+      const currentTasks = loadTask();
+      const currentTask = currentTasks[index];
+      
+      if (!currentTask) {
+        return;
+      }
+      
+      /* Starší lokální poznámce doplníme stabilní ID. */
+      if (!currentTask.id) {
+        currentTask.id = crypto.randomUUID();
+        currentTask.updatedAt = new Date().toISOString();
+        saveAllTasks(currentTasks);
+        uploadLocalNoteToSupabase(currentTask);
+      }
+      
+      openTaskEditorById(currentTask.id);
+    });
     
-    const currentTasks = loadTask();
-    const currentTask = currentTasks[index];
-    
-    if (!currentTask) {
-      return;
-    }
+  });
+}
 
-    /* Starší lokální poznámce doplníme stabilní ID. */
-    if (!currentTask.id) {
-      currentTask.id = crypto.randomUUID();
-      currentTask.updatedAt = new Date().toISOString();
-      saveAllTasks(currentTasks);
-      uploadLocalNoteToSupabase(currentTask);
-    }
-    
-    openTaskEditorById(currentTask.id);
-    });
-    
-    });
-    }
-    
-    
-    /* První vykreslení poznámek */
-    renderTasks();
+
+/* První vykreslení poznámek */
+renderTasks();
 const cardMenu = document.getElementById("cardMenu");
 
 const plannerModal =
@@ -635,37 +637,37 @@ cardMenu.addEventListener("click", (event) => {
   const action = actionButton.dataset.cardAction;
   
   if (action === "plan") {
-  const tasks = loadTask();
-  const selectedTask = tasks[selectedCardIndex];
-  
-  if (!selectedTask) {
+    const tasks = loadTask();
+    const selectedTask = tasks[selectedCardIndex];
+    
+    if (!selectedTask) {
+      return;
+    }
+    
+    /* Starší poznámce doplníme ID, pokud ho ještě nemá */
+    if (!selectedTask.id) {
+      selectedTask.id = crypto.randomUUID();
+      selectedTask.updatedAt = new Date().toISOString();
+      
+      saveAllTasks(tasks);
+      uploadLocalNoteToSupabase(selectedTask);
+    }
+    
+    cardMenu.hidden = true;
+    
+    openPlannerForNote(selectedTask);
+    
     return;
   }
   
-  /* Starší poznámce doplníme ID, pokud ho ještě nemá */
-  if (!selectedTask.id) {
-    selectedTask.id = crypto.randomUUID();
-    selectedTask.updatedAt = new Date().toISOString();
-    
-    saveAllTasks(tasks);
-    uploadLocalNoteToSupabase(selectedTask);
-  }
-  
-  cardMenu.hidden = true;
-  
-  openPlannerForNote(selectedTask);
-  
-  return;
-}
-
   if (action === "complete") {
     const updatedTask =
       toggleTaskCompleted(selectedCardIndex);
-
+    
     if (updatedTask) {
       uploadLocalNoteToSupabase(updatedTask);
     }
-
+    
     cardMenu.hidden = true;
     renderTasks();
   }
@@ -680,10 +682,10 @@ cardMenu.addEventListener("click", (event) => {
     
     selectedTask.pinned = !selectedTask.pinned;
     selectedTask.updatedAt = new Date().toISOString();
-
+    
     saveAllTasks(tasks);
     uploadLocalNoteToSupabase(selectedTask);
-
+    
     cardMenu.hidden = true;
     renderTasks();
   }
