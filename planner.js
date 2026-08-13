@@ -138,7 +138,7 @@ function closePlanner() {
   selectedPlannerText = "";
 
   /* Starý výběr už nesmí ovlivnit další akci. */
-  savedRichTextRange = null;
+  RichTextColors.clearSelection();
 }
 
 
@@ -233,7 +233,7 @@ planSelectionButton.addEventListener(
   "click",
   () => {
     const snapshot =
-      getSavedRichTextSelectionSnapshot();
+      RichTextColors.getSelectionSnapshot();
 
     if (!snapshot) {
       console.log(
