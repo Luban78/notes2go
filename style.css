@@ -2533,84 +2533,190 @@ body.authPending .addTaskButton {
    OBRAZOVKA PŘIPOMÍNKY
    ======================================== */
 
+/*
+ * Připomínky jsou samostatný modul.
+ * Důležité: vlastní display:flex nesmí přebít atribut hidden.
+ */
+.remindersScreen[hidden] {
+  display: none !important;
+}
+
 .remindersScreen {
-  height: calc(100dvh - 210px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
 
-  padding: 18px 18px 120px;
+  width: min(100%, 900px);
+  min-height: 0;
   box-sizing: border-box;
+  margin: 0 auto;
+  padding: 10px 14px 0;
+
+  overflow: hidden;
+  background: var(--color-background);
+  color: var(--color-text);
+  text-align: left;
 }
 
-.remindersHeader h2 {
-  margin: 8px 0 18px;
-  text-align: center;
-}
-
+/* Filtry zůstávají nahoře, scrolluje jen seznam pod nimi. */
 .remindersFilters {
   display: flex;
+  flex: 0 0 auto;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 24px;
+
+  margin: 0;
+  padding: 8px 0 14px;
+
+  background: var(--color-background);
 }
 
 .remindersFilter {
-  min-width: 56px;
+  min-width: 60px;
   min-height: 42px;
+  padding: 0 16px;
+
+  border: 1px solid var(--color-border);
   border-radius: 14px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remindersFilter.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      var(--color-surface)
+    );
+}
+
+.remindersScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  padding: 0 1px max(96px, env(safe-area-inset-bottom));
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.remindersScroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .remindersGroup {
-  margin-bottom: 26px;
+  margin: 0 0 22px;
 }
 
 .remindersGroup h3 {
-  margin: 0 0 8px;
-  font-size: 1.05rem;
-  font-weight: 700;
+  margin: 14px 4px 9px;
+
+  color: var(--color-text-secondary);
+
+  font-size: 0.9rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.72;
 }
 
+/*
+ * Kompaktní „outlined row“ – připomínka má vlastní border,
+ * ale nevypadá jako velká karta z hlavní obrazovky Poznámek.
+ */
 .reminderItem {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 36px;
+  grid-template-columns: 58px minmax(0, 1fr) 32px;
   gap: 10px;
   align-items: start;
 
-  padding: 12px 0;
+  margin: 0 0 8px;
+  padding: 10px 10px;
 
-  border-bottom: 1px solid
-    rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-surface) 70%,
+      transparent
+    );
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reminderItem:active {
+  transform: scale(0.992);
 }
 
 .reminderItemTime {
-  padding-top: 2px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  padding-top: 1px;
+
+  color: var(--color-accent-text);
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.2;
   white-space: nowrap;
+}
+
+.reminderItemDateLine {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 650;
 }
 
 .reminderItemContent {
   min-width: 0;
+  text-align: left;
 }
 
 .reminderItemTitle {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  align-items: flex-start;
+  gap: 6px;
 
-  font-size: 1rem;
-  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.96rem;
+  font-weight: 720;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.reminderItemArea {
+  flex: 0 0 auto;
 }
 
 .reminderItemPreview {
-  margin-top: 4px;
+  margin-top: 3px;
 
-  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
   line-height: 1.3;
-
-  opacity: 0.72;
+  text-align: left;
 
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2619,63 +2725,208 @@ body.authPending .addTaskButton {
 }
 
 .reminderItemMenu {
-  width: 34px;
-  height: 34px;
-
+  width: 30px;
+  height: 32px;
   padding: 0;
-  border: none;
-  background: transparent;
 
-  font-size: 1.5rem;
+  border: 0;
+  border-radius: 10px;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.35rem;
   line-height: 1;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reminderItemMenu:active {
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      transparent
+    );
 }
 
 .remindersEmpty {
-  margin: 12px 0 0 74px;
-  opacity: 0.55;
+  margin: 8px 4px 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  opacity: 0.65;
 }
-.reminderItemContent {
+
+/* ========================================
+   RYCHLÉ MENU PŘIPOMÍNKY / ODLOŽENÍ
+   ======================================== */
+
+.reminderQuickMenu[hidden] {
+  display: none !important;
+}
+
+.reminderQuickMenu {
+  position: fixed;
+  inset: 0;
+  z-index: 6200;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  padding: 16px 12px max(16px, env(safe-area-inset-bottom));
+
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.reminderQuickSheet {
+  width: min(100%, 480px);
+  box-sizing: border-box;
+  padding: 16px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   text-align: left;
 }
 
-.reminderItemTitle {
-  justify-content: flex-start;
-  text-align: left;
+.reminderQuickHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-bottom: 14px;
 }
 
-.reminderItemPreview {
-  text-align: left;
+.reminderQuickLabel {
+  margin-bottom: 3px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-transform: uppercase;
 }
 
-.reminderItem {
-  padding: 8px 0;
+.reminderQuickHeader h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.25;
 }
 
-.remindersGroup {
-  margin-bottom: 20px;
+.reminderQuickClose {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+
+  border: 0;
+  border-radius: 12px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-text) 7%,
+      transparent
+    );
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.1rem;
 }
 
-.remindersGroup h3 {
-  text-align: left;
-  margin-left: 74px;
+.reminderDelayGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  margin-bottom: 14px;
 }
 
-{
-  text-align: left;
-  margin-left: 74px;
-}
-.remindersFilters {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  
+.reminderDelayGrid button,
+.reminderQuickPrimary,
+.reminderQuickFooter button {
+  min-height: 44px;
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+
   background: var(--color-background);
-  
-  margin-left: -18px;
-  margin-right: -18px;
-  
-  padding: 10px 18px 14px;
-  
-  box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.05);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.reminderQuickDateTime {
+  display: grid;
+  grid-template-columns: 1fr 0.72fr;
+  gap: 8px;
+
+  margin-bottom: 10px;
+}
+
+.reminderQuickDateTime label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.reminderQuickDateTime input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 9px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  color-scheme: light dark;
+}
+
+.reminderQuickPrimary {
+  width: 100%;
+
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.reminderQuickFooter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+
+  margin-top: 10px;
+}
+
+.reminderQuickFooter .danger {
+  color: #c84f58;
+}
+
+@media (min-width: 700px) {
+  .remindersScreen {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .reminderItem {
+    grid-template-columns: 76px minmax(0, 1fr) 36px;
+    padding: 12px 14px;
+  }
 }

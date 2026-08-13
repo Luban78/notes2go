@@ -373,6 +373,72 @@
   </div>
 
 </section>
+
+<!-- ========================================
+     RYCHLÉ ÚPRAVY PŘIPOMÍNKY
+     ======================================== -->
+
+<div
+  id="reminderQuickMenu"
+  class="reminderQuickMenu"
+  hidden
+>
+  <div
+    class="reminderQuickSheet"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="reminderQuickTitle"
+  >
+    <div class="reminderQuickHeader">
+      <div>
+        <div class="reminderQuickLabel">Připomínka</div>
+        <h3 id="reminderQuickTitle">Bez názvu</h3>
+      </div>
+
+      <button
+        id="closeReminderQuickMenu"
+        type="button"
+        class="reminderQuickClose"
+        aria-label="Zavřít"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="reminderDelayGrid">
+      <button type="button" data-reminder-delay="15">+ 15 min</button>
+      <button type="button" data-reminder-delay="60">+ 1 hod</button>
+      <button type="button" data-reminder-delay="180">+ 3 hod</button>
+      <button id="reminderTomorrowMorningButton" type="button">Zítra 8:00</button>
+    </div>
+
+    <div class="reminderQuickDateTime">
+      <label>
+        Datum
+        <input id="reminderQuickDate" type="date">
+      </label>
+
+      <label>
+        Čas
+        <input id="reminderQuickTime" type="time">
+      </label>
+    </div>
+
+    <button
+      id="saveReminderQuickDateButton"
+      type="button"
+      class="reminderQuickPrimary"
+    >
+      Uložit datum a čas
+    </button>
+
+    <div class="reminderQuickFooter">
+      <button id="openReminderNoteButton" type="button">📝 Otevřít poznámku</button>
+      <button id="disableReminderButton" type="button" class="danger">🔕 Vypnout připomínku</button>
+    </div>
+  </div>
+</div>
+
   <!-- ========================================
        EDITOR POZNÁMKY / ÚKOLU
        ======================================== -->
