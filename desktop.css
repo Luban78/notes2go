@@ -76,3 +76,71 @@
   }
 
 }
+
+/* ========================================
+   VELKÝ DESKTOP / EXTERNÍ MONITOR
+   ======================================== */
+
+@media (min-width: 1700px) {
+
+  .moduleBar {
+    width: min(1450px, 90vw);
+    max-width: none;
+  }
+
+  #calendarScreen {
+    width: min(1450px, 90vw);
+    max-width: none;
+
+    display: grid;
+    grid-template-columns:
+      minmax(700px, 820px)
+      minmax(420px, 1fr);
+
+    grid-template-areas:
+      "header agenda"
+      "weekdays agenda"
+      "grid agenda";
+
+    column-gap: 48px;
+    align-items: start;
+  }
+
+  .calendarHeader {
+    grid-area: header;
+  }
+
+  .calendarWeekdays {
+    grid-area: weekdays;
+  }
+
+  .calendarGrid {
+    grid-area: grid;
+    gap: 12px;
+  }
+
+  .calendarAgenda {
+    grid-area: agenda;
+
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .calendarDay {
+    min-height: 72px;
+    font-size: 1.25rem;
+  }
+
+  .calendarHeader h2 {
+    font-size: 1.6rem;
+  }
+
+  .calendarWeekdays {
+    font-size: 1.05rem;
+  }
+
+  .calendarAgenda {
+    font-size: 1.15rem;
+  }
+}
