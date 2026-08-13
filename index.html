@@ -317,7 +317,62 @@
   </div>
 
 </section>
+<!-- ========================================
+     OBRAZOVKA PŘIPOMÍNKY
+     ======================================== -->
 
+<section
+  id="remindersScreen"
+  class="remindersScreen"
+  hidden
+>
+
+  <div class="remindersFilters">
+    <button
+      type="button"
+      class="remindersFilter active"
+      data-reminder-filter="all"
+    >
+      Vše
+    </button>
+
+    <button
+      type="button"
+      class="remindersFilter"
+      data-reminder-filter="work"
+    >
+      💼
+    </button>
+
+    <button
+      type="button"
+      class="remindersFilter"
+      data-reminder-filter="private"
+    >
+      🏠
+    </button>
+  </div>
+
+  <div class="remindersGroups remindersScroll">
+
+    <section class="remindersGroup">
+      <h3>Dnes</h3>
+      <div id="remindersToday"></div>
+    </section>
+
+    <section class="remindersGroup">
+      <h3>Zítra</h3>
+      <div id="remindersTomorrow"></div>
+    </section>
+
+    <section class="remindersGroup">
+      <h3>Později</h3>
+      <div id="remindersLater"></div>
+    </section>
+
+  </div>
+
+</section>
   <!-- ========================================
        EDITOR POZNÁMKY / ÚKOLU
        ======================================== -->

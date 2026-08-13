@@ -31,6 +31,9 @@ const searchRow =
 
 const categoryTabs =
   document.querySelector(".categoryTabs");
+  
+const remindersScreen =
+  document.getElementById("remindersScreen");
 
 
 function setActiveModule(activeButton) {
@@ -71,6 +74,7 @@ notesButton.addEventListener("click", () => {
   addTaskButton.hidden = false;
   
   calendarScreen.hidden = true;
+  remindersScreen.hidden = true;
   
   setActiveModule(notesButton);
 });
@@ -88,6 +92,7 @@ plannerButton.addEventListener("click", () => {
   addTaskButton.hidden = true;
   
   calendarScreen.hidden = false;
+  remindersScreen.hidden = true;
   
   calendarCurrentDate = new Date();
   calendarSelectedDay = new Date();
@@ -149,11 +154,27 @@ plannerButton.addEventListener("click", () => {
     }, 1800);
   }
 
-  /* Připomínky zatím zůstávají jako připravovaný modul. */
+/* ------------------------------
+   PŘIPOMÍNKY
+------------------------------ */
 
-  remindersButton.addEventListener("click", () => {
-    showToast("🔔 Přehled připomínek připravujeme");
-  });
+remindersButton.addEventListener("click", () => {
+  closeMainMenu();
+  
+  notesScreen.hidden = true;
+  searchRow.hidden = true;
+  categoryTabs.hidden = true;
+  addTaskButton.hidden = true;
+  
+  calendarScreen.hidden = true;
+  remindersScreen.hidden = false;
+  
+  setActiveModule(remindersButton);
+  
+  renderRemindersScreen();
+});
+
+
 
   /* script.js menu otevře/zavře; tady jen synchronizujeme aria stav. */
   menuButton.addEventListener("click", () => {
