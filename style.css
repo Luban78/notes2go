@@ -888,6 +888,7 @@ body {
 
 .app::-webkit-scrollbar,
 #modalText::-webkit-scrollbar,
+#modalRichText::-webkit-scrollbar,
 .todoList::-webkit-scrollbar,
 .settingsContent::-webkit-scrollbar {
   display: none;
@@ -896,6 +897,7 @@ body {
 }
 
 #modalText,
+#modalRichText,
 .todoList,
 .settingsContent {
   scrollbar-width: none;
@@ -2273,40 +2275,6 @@ body.authPending .addTaskButton {
   display: none;
 }
 
-/* ==========================================
-   VRSTVA PRO ZVÝRAZNĚNÉ PLÁNOVANÉ ČÁSTI TEXTU
-   ========================================== */
-
-.modalTextWrapper {
-  position: relative;
-  width: 100%;
-}
-
-.modalTextWrapper #modalText {
-  position: relative;
-  z-index: 2;
-
-  width: 100%;
-  box-sizing: border-box;
-
-  background: transparent;
-}
-
-.modalTextHighlight {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-
-  box-sizing: border-box;
-
-  pointer-events: none;
-
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-
-  visibility: hidden;
-}
-
 #modalText[hidden] {
   display: none !important;
 }
@@ -2336,6 +2304,14 @@ body.authPending .addTaskButton {
 
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+#modalRichText .richTextHighlight {
+  color: inherit;
+}
+
+#modalRichText:focus {
+  outline: none;
 }
 
 .textColorPalette {

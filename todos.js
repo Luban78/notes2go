@@ -5,6 +5,9 @@
 const todoModalText =
   document.getElementById("modalText");
 
+const todoRichText =
+  document.getElementById("modalRichText");
+
 const todoList =
   document.getElementById("todoList");
 
@@ -188,7 +191,11 @@ addTodoButton.addEventListener("click", () => {
     return;
   }
 
-  const todoLines = todoModalText.value
+  const sourceText = todoRichText
+    ? todoRichText.innerText
+    : todoModalText.value;
+
+  const todoLines = sourceText
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
@@ -204,6 +211,11 @@ addTodoButton.addEventListener("click", () => {
       }];
 
   todoModalText.value = "";
+
+  if (todoRichText) {
+    todoRichText.innerHTML = "";
+  }
+
   renderTodos();
   focusTodo(0, activeTodos[0].text.length);
 });
@@ -213,7 +225,13 @@ function removeTodo(index) {
 
   if (activeTodos.length === 0) {
     renderTodos();
-    todoModalText.focus();
+
+    if (todoRichText) {
+      todoRichText.focus();
+    } else {
+      todoModalText.focus();
+    }
+
     return;
   }
 
@@ -1111,14 +1129,24 @@ function createTodoItem(todo, index) {
 function renderTodos() {
   todoList.innerHTML = "";
 
+  /* Starý textarea už slouží jen jako kompatibilní datový prvek. */
+  todoModalText.hidden = true;
+
   if (activeTodos.length === 0) {
     todoList.hidden = true;
-    todoModalText.hidden = false;
+
+    if (todoRichText) {
+      todoRichText.hidden = false;
+    }
+
     return;
   }
 
   todoList.hidden = false;
-  todoModalText.hidden = true;
+
+  if (todoRichText) {
+    todoRichText.hidden = true;
+  }
 
   activeTodos.forEach((todo, index) => {
     todoList.append(

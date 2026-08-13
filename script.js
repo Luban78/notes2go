@@ -42,15 +42,9 @@ const confirmDeleteButton =
 
 const colorTaskButton =
   document.getElementById("colorTaskButton");
-  
+
 const textColorPalette =
   document.getElementById("textColorPalette");
-  
-  
-colorTaskButton.addEventListener("click", () => {
-  textColorPalette.hidden =
-    !textColorPalette.hidden;
-});
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
@@ -111,53 +105,139 @@ const modalText = document.getElementById("modalText");
 const modalRichText =
   document.getElementById("modalRichText");
   
-modalText.addEventListener("scroll", () => {
-  if (
-    !taskModal.classList.contains("titleCollapsed") &&
-    modalText.scrollTop > 28
-  ) {
-    taskModal.classList.add("titleCollapsed");
-  }
-  
-  if (
-    taskModal.classList.contains("titleCollapsed") &&
-    modalText.scrollTop < 8
-  ) {
-    taskModal.classList.remove("titleCollapsed");
-  }
-});
-textColorPalette.addEventListener("click", (event) => {
-  console.log("COLOR CLICK", {
-  savedRichTextRange,
-  target: event.target
-});
-  const colorButton =
-    event.target.closest("[data-highlight-color]");
+/* ==================================================
+   RICH-TEXT EDITOR – výběr a barevné zvýraznění
+================================================== */
 
-  if (!colorButton || !savedRichTextRange) {
+let savedRichTextRange = null;
+
+function isRangeInsideRichText(range) {
+  if (!range) {
+    return false;
+  }
+
+  const startNode =
+    range.startContainer.nodeType === Node.TEXT_NODE
+      ? range.startContainer.parentElement
+      : range.startContainer;
+
+  const endNode =
+    range.endContainer.nodeType === Node.TEXT_NODE
+      ? range.endContainer.parentElement
+      : range.endContainer;
+
+  return Boolean(
+    startNode &&
+    endNode &&
+    modalRichText.contains(startNode) &&
+    modalRichText.contains(endNode)
+  );
+}
+
+function getRichTextOffset(node, offset) {
+  const probe = document.createRange();
+  probe.selectNodeContents(modalRichText);
+
+  try {
+    probe.setEnd(node, offset);
+    return probe.toString().length;
+  } catch {
+    return null;
+  }
+}
+
+function getSavedRichTextSelectionSnapshot() {
+  if (
+    !savedRichTextRange ||
+    savedRichTextRange.collapsed ||
+    !isRangeInsideRichText(savedRichTextRange)
+  ) {
+    return null;
+  }
+
+  const range = savedRichTextRange.cloneRange();
+  const text = range.toString();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  return {
+    range,
+    text,
+    start: getRichTextOffset(
+      range.startContainer,
+      range.startOffset
+    ),
+    end: getRichTextOffset(
+      range.endContainer,
+      range.endOffset
+    )
+  };
+}
+
+function saveCurrentRichTextSelection() {
+  const selection = window.getSelection();
+
+  if (
+    !selection ||
+    selection.rangeCount === 0 ||
+    selection.isCollapsed
+  ) {
     return;
   }
 
-  const color =
-    colorButton.dataset.highlightColor;
+  const range = selection.getRangeAt(0);
 
-  const selection =
-    window.getSelection();
+  if (!isRangeInsideRichText(range)) {
+    return;
+  }
 
+  savedRichTextRange = range.cloneRange();
+}
+
+function applyRichTextHighlight(color) {
+  const snapshot = getSavedRichTextSelectionSnapshot();
+
+  if (!snapshot) {
+    return false;
+  }
+
+  modalRichText.focus({ preventScroll: true });
+
+  const selection = window.getSelection();
   selection.removeAllRanges();
-  selection.addRange(savedRichTextRange);
+  selection.addRange(snapshot.range);
 
-  const range =
-    selection.getRangeAt(0);
-
-  const mark =
-    document.createElement("mark");
-
-  mark.className = "richTextHighlight";
-  mark.style.backgroundColor = color;
+  /*
+   * Chromium/WebView umí přes contenteditable spolehlivě změnit
+   * barvu i u části už obarveného textu. Na rozdíl od
+   * Range.surroundContents() se tím nerozbije výběr přes hranici
+   * existujícího formátování.
+   */
+  let applied = false;
+  const htmlBefore = modalRichText.innerHTML;
 
   try {
-    range.surroundContents(mark);
+    document.execCommand("styleWithCSS", false, true);
+    applied = document.execCommand(
+      "backColor",
+      false,
+      color
+    );
+
+    if (!applied) {
+      applied = document.execCommand(
+        "hiliteColor",
+        false,
+        color
+      );
+    }
+
+    /* Některé WebView vrátí false, i když DOM skutečně změnily. */
+    if (modalRichText.innerHTML !== htmlBefore) {
+      applied = true;
+    }
   } catch (error) {
     console.error(
       "Barevné zvýraznění se nepodařilo:",
@@ -165,58 +245,88 @@ textColorPalette.addEventListener("click", (event) => {
     );
   }
 
+  /* Záložní cesta pro prohlížeč bez execCommand. */
+  if (!applied) {
+    try {
+      const range = snapshot.range.cloneRange();
+      const fragment = range.extractContents();
+      const mark = document.createElement("mark");
+
+      mark.className = "richTextHighlight";
+      mark.style.backgroundColor = color;
+      mark.append(fragment);
+      range.insertNode(mark);
+      applied = true;
+    } catch (error) {
+      console.error(
+        "Záložní zvýraznění se nepodařilo:",
+        error
+      );
+    }
+  }
+
+  syncLegacyModalText();
+
   selection.removeAllRanges();
   savedRichTextRange = null;
   textColorPalette.hidden = true;
+
+  return applied;
+}
+
+colorTaskButton.addEventListener("click", () => {
+  textColorPalette.hidden =
+    !textColorPalette.hidden;
 });
 
+textColorPalette.addEventListener("click", (event) => {
+  const colorButton =
+    event.target.closest("[data-highlight-color]");
 
+  if (!colorButton) {
+    return;
+  }
 
+  applyRichTextHighlight(
+    colorButton.dataset.highlightColor
+  );
+});
 
+document.addEventListener("selectionchange", () => {
+  saveCurrentRichTextSelection();
+});
 
-
-let savedRichTextRange = null;
-
-modalRichText.addEventListener("mouseup", () => {
-  const selection = window.getSelection();
+modalRichText.addEventListener("scroll", () => {
+  if (
+    !taskModal.classList.contains("titleCollapsed") &&
+    modalRichText.scrollTop > 28
+  ) {
+    taskModal.classList.add("titleCollapsed");
+  }
 
   if (
-    selection &&
-    selection.rangeCount > 0 &&
-    !selection.isCollapsed
+    taskModal.classList.contains("titleCollapsed") &&
+    modalRichText.scrollTop < 8
   ) {
-    savedRichTextRange =
-      selection.getRangeAt(0).cloneRange();
+    taskModal.classList.remove("titleCollapsed");
   }
 });
 
-modalRichText.addEventListener("touchend", () => {
-  setTimeout(() => {
-    const selection = window.getSelection();
-
-    if (
-      selection &&
-      selection.rangeCount > 0 &&
-      !selection.isCollapsed
-    ) {
-      savedRichTextRange =
-        selection.getRangeAt(0).cloneRange();
-    }
-  }, 50);
-});
-
-
-
-
-
-
-modalText.addEventListener("focus", () => {
+modalRichText.addEventListener("focus", () => {
   taskModal.classList.add("editing");
-  
 });
 
-modalText.addEventListener("blur", () => {
+modalRichText.addEventListener("blur", () => {
   taskModal.classList.remove("editing");
+});
+
+/* Hidden textarea držíme jen jako kompatibilní plain-text kopii. */
+function syncLegacyModalText() {
+  modalText.value = modalRichText.innerText;
+}
+
+modalRichText.addEventListener("input", () => {
+  syncLegacyModalText();
 });
 
 const modalDate = document.getElementById("modalDate");
@@ -257,6 +367,15 @@ addTaskButton.addEventListener("click", () => {
       
       modalTitle.value = "";
       modalText.value = "";
+      modalRichText.innerHTML = "";
+      modalText.hidden = true;
+      modalRichText.hidden = false;
+      savedRichTextRange = null;
+      textColorPalette.hidden = true;
+      document.getElementById("plannedTextLinks")?.replaceChildren();
+      if (document.getElementById("plannedTextLinks")) {
+        document.getElementById("plannedTextLinks").hidden = true;
+      }
       
       /* Aktuální datum a čas při vytvoření nové poznámky */
       const now = new Date();
@@ -287,7 +406,7 @@ addTaskButton.addEventListener("click", () => {
 editorBackButton.addEventListener("click", () => {
   const title = modalTitle.value.trim();
   const note = modalRichText.innerText;
-const richContent = modalRichText.innerHTML;
+  const richContent = modalRichText.innerHTML;
   const date =
     modalDate.value && modalTime.value ?
     `${modalDate.value}T${modalTime.value}` :
@@ -372,6 +491,8 @@ const richContent = modalRichText.innerHTML;
   
   document.body.classList.remove("noScroll");
   activeTaskIndex = null;
+  savedRichTextRange = null;
+  textColorPalette.hidden = true;
 });
 
 
@@ -426,14 +547,20 @@ function openTaskEditorById(taskId) {
 
   activeTaskIndex = index;
 
-  modalTitle.value = currentTask.title;
-  modalText.value = currentTask.note;
-  
-  modalRichText.innerHTML =
-  currentTask.richContent || currentTask.note;
+  modalTitle.value = currentTask.title || "";
+  modalText.value = currentTask.note || "";
+
+  if (currentTask.richContent) {
+    modalRichText.innerHTML = currentTask.richContent;
+  } else {
+    /* Staré plain-text poznámky načteme bezpečně jako text. */
+    modalRichText.textContent = currentTask.note || "";
+  }
+
   modalText.hidden = true;
-modalRichText.hidden = false;
-modalText.style.display = "none";
+  modalRichText.hidden = false;
+  savedRichTextRange = null;
+  textColorPalette.hidden = true;
 
   if (currentTask.date) {
     const [savedDate, savedTime] =
@@ -653,6 +780,14 @@ function renderTasks() {
     if (!currentTask) {
       return;
     }
+
+    /* Starší lokální poznámce doplníme stabilní ID. */
+    if (!currentTask.id) {
+      currentTask.id = crypto.randomUUID();
+      currentTask.updatedAt = new Date().toISOString();
+      saveAllTasks(currentTasks);
+      uploadLocalNoteToSupabase(currentTask);
+    }
     
     openTaskEditorById(currentTask.id);
     });
@@ -775,60 +910,3 @@ document.addEventListener("pointerdown", (event) => {
     cardMenu.hidden = true;
   }
 }, true);
-
-function highlightSelectedRichText() {
-  const selection = window.getSelection();
-
-  if (!selection || selection.rangeCount === 0) {
-    return;
-  }
-
-  const range = selection.getRangeAt(0);
-
-  if (range.collapsed) {
-    return;
-  }
-
-  const mark = document.createElement("mark");
-  mark.className = "richTextHighlight";
-
-  try {
-    range.surroundContents(mark);
-  } catch (error) {
-    console.error("Zvýraznění se nepodařilo:", error);
-  }
-
-  selection.removeAllRanges();
-}
-
-
-
-document.addEventListener("selectionchange", () => {
-  const selection = window.getSelection();
-
-  if (
-    !selection ||
-    selection.rangeCount === 0 ||
-    selection.isCollapsed
-  ) {
-    return;
-  }
-
-  const range = selection.getRangeAt(0);
-
-  const container =
-    range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-      ? range.commonAncestorContainer.parentElement
-      : range.commonAncestorContainer;
-
-  if (!modalRichText.contains(container)) {
-    return;
-  }
-
-  savedRichTextRange = range.cloneRange();
-
-  console.log(
-    "✅ Rich text výběr uložen:",
-    savedRichTextRange.toString()
-  );
-});
