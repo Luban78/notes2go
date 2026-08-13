@@ -394,3 +394,9 @@ window.RichTextColors = (() => {
     removeColor
   };
 })();
+
+window.getSavedRichTextRange = function() {
+  return savedRange ?
+    savedRange.cloneRange() :
+    null;
+};

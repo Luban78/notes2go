@@ -191,6 +191,17 @@ function saveCurrentPlannedItem() {
     plannerSelectionStart,
     plannerSelectionEnd
   );
+  
+  window.lastCreatedPlannedItemId =
+  plannedItem.id;
+  
+  if (plannerSourceType === "selection") {
+  wrapCurrentSelectionAsPlannedLink(
+    plannedItem.id
+  );
+}
+
+  
 
   const plannedItems = loadPlannedItems();
   plannedItems.push(plannedItem);

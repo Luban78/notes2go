@@ -2367,3 +2367,20 @@ body.authPending .addTaskButton {
 .textColorPalette button[data-highlight-color="#ef9a9a"] {
   background: #ef9a9a;
 }
+
+/* ==========================================
+   ODKAZ NA NAPLÁNOVANÝ ÚKOL V POZNÁMCE
+   ========================================== */
+
+.plannedTextLink {
+  text-decoration-line: underline;
+  text-decoration-style: solid;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+
+  text-decoration-color: var(--color-accent);
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
