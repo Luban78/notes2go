@@ -121,10 +121,4 @@ calendarSelectedDay =
   new Date(plannedDate);
 
 renderCalendar();
-
-  
-  console.log(
-    "🔗 Nalezený úkol:",
-    plannedItem
-  );
 });

@@ -212,9 +212,54 @@ function renderCalendarAgenda() {
       item.text;
 
     row.append(time, text);
+    
+    
     row.addEventListener("click", () => {
   openTaskEditorById(item.sourceNoteId);
+  
+  setTimeout(() => {
+    const plannedLink =
+      modalRichText.querySelector(
+        `[data-planned-item-id="${item.id}"]`
+      );
+    
+    if (!plannedLink) {
+      console.error(
+        "Plánovaný odkaz nebyl v poznámce nalezen:",
+        item.id
+      );
+      return;
+    }
+    
+    const editorRect =
+      modalRichText.getBoundingClientRect();
+    
+    const linkRect =
+      plannedLink.getBoundingClientRect();
+    
+    const targetTop =
+      modalRichText.scrollTop +
+      (linkRect.top - editorRect.top) -
+      (modalRichText.clientHeight / 2) +
+      (linkRect.height / 2);
+      
+      
+    
+    modalRichText.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: "smooth"
+    });
+    
+    setTimeout(() => {
+  
+}, 500);
+
+  }, 150);
 });
+
+
+
+
     calendarDayItems.append(row);
   });
 }

@@ -317,6 +317,9 @@ document.addEventListener("pointercancel", (event) => {
   activeCardPointers.delete(event.pointerId);
 }, true);
 
+
+
+
 function openTaskEditorById(taskId) {
   const currentTasks = loadTask();
 
@@ -375,8 +378,14 @@ function openTaskEditorById(taskId) {
 
   loadTodos(currentTask.todos);
   
-  renderPlannedTextLinks(currentTask.id);
+  //renderPlannedTextLinks(currentTask.id);
 }
+
+
+
+
+
+
 
 
 function renderTasks() {

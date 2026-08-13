@@ -209,10 +209,6 @@ function saveCurrentPlannedItem() {
 
   closePlanner();
 
-  console.log(
-    "✅ Naplánováno:",
-    plannedItem
-  );
 }
 
 
@@ -247,9 +243,6 @@ planSelectionButton.addEventListener(
       RichTextColors.getSelectionSnapshot();
 
     if (!snapshot) {
-      console.log(
-        "Nejdřív označ část textu."
-      );
       return;
     }
 
