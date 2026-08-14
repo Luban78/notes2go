@@ -2420,6 +2420,16 @@ body.authPending .addTaskButton {
   text-align: left;
 }
 
+/*
+ * Společný obal filtrů.
+ * V mobilním základu zůstávají oblastní a stavové filtry pod sebou.
+ * Desktop je skládá do jedné řady až v desktop.css.
+ */
+.remindersToolbar {
+  display: block;
+  flex: 0 0 auto;
+}
+
 /* Filtry zůstávají nahoře, scrolluje jen seznam pod nimi. */
 .remindersFilters {
   display: flex;
@@ -2792,22 +2802,6 @@ font-size: calc(var(--font-size) - 1px);
     grid-template-columns: 76px minmax(0, 1fr) 36px;
     padding: 12px 14px;
   }
-  .remindersToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-
-  width: 100%;
-  margin: 0 0 16px;
-}
-
-.remindersToolbar .remindersFilters,
-.remindersToolbar .remindersStatusTabs {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 0;
-}
 }
 
 /* ========================================
@@ -3237,15 +3231,3 @@ font-size: calc(var(--font-size) - 1px);
 }
 
 
-
-
-
-
-
-.remindersToolbar {
-  flex: 0 0 auto;
-}
-.remindersToolbar {
-  display: block;
-  flex: 0 0 auto;
-}
