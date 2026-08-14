@@ -184,7 +184,7 @@ createReminderChannel();
 
 let activeReminderFilter = "all";
 let selectedReminderEntry = null;
-
+let activeReminderStatus = "active";
 
 function getReminderEntries() {
   const notes =
@@ -1397,19 +1397,31 @@ function createReminderRow(
 function renderRemindersScreen() {
   const overdueList =
     document.getElementById("remindersOverdue");
-
-  const overdueGroup =
-    document.querySelector(".remindersOverdueGroup");
-
+  
   const todayList =
     document.getElementById("remindersToday");
-
+  
   const tomorrowList =
     document.getElementById("remindersTomorrow");
-
+  
   const laterList =
     document.getElementById("remindersLater");
-
+  
+  const overdueGroup =
+    document.querySelector(".remindersOverdueGroup");
+  
+  const todayGroup =
+    todayList?.closest(".remindersGroup");
+  
+  const tomorrowGroup =
+    tomorrowList?.closest(".remindersGroup");
+  
+  const laterGroup =
+    laterList?.closest(".remindersGroup");
+  
+  const overdueReminderCount =
+    document.getElementById("overdueReminderCount");
+  
   if (
     !overdueList ||
     !todayList ||
@@ -1418,48 +1430,48 @@ function renderRemindersScreen() {
   ) {
     return;
   }
-
+  
   overdueList.innerHTML = "";
   todayList.innerHTML = "";
   tomorrowList.innerHTML = "";
   laterList.innerHTML = "";
-
+  
   const reminders =
     getReminderEntries();
-
+  
   const now = new Date();
-
+  
   const todayStart =
     new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate()
     );
-
+  
   const tomorrowStart =
     new Date(todayStart);
-
+  
   tomorrowStart.setDate(
     tomorrowStart.getDate() + 1
   );
-
+  
   const dayAfterTomorrow =
     new Date(todayStart);
-
+  
   dayAfterTomorrow.setDate(
     dayAfterTomorrow.getDate() + 2
   );
-
+  
   reminders.forEach((entry) => {
     const date = new Date(entry.date);
-
+    
     if (date < now) {
       overdueList.append(
         createReminderRow(entry, true, true)
       );
       return;
     }
-
+    
     if (
       date >= todayStart &&
       date < tomorrowStart
@@ -1469,7 +1481,7 @@ function renderRemindersScreen() {
       );
       return;
     }
-
+    
     if (
       date >= tomorrowStart &&
       date < dayAfterTomorrow
@@ -1479,34 +1491,74 @@ function renderRemindersScreen() {
       );
       return;
     }
-
+    
     laterList.append(
       createReminderRow(entry, true)
     );
   });
-
-  if (overdueGroup) {
-    overdueGroup.hidden =
-      !overdueList.children.length;
+  
+  const overdueCount =
+    overdueList.children.length;
+  
+  if (overdueReminderCount) {
+    overdueReminderCount.textContent =
+      overdueCount ? `(${overdueCount})` : "";
   }
-
+  
   if (!todayList.children.length) {
     todayList.innerHTML =
       `<p class="remindersEmpty">Žádné připomínky.</p>`;
   }
-
+  
   if (!tomorrowList.children.length) {
     tomorrowList.innerHTML =
       `<p class="remindersEmpty">Žádné připomínky.</p>`;
   }
-
+  
   if (!laterList.children.length) {
     laterList.innerHTML =
       `<p class="remindersEmpty">Žádné připomínky.</p>`;
   }
+  
+  if (!overdueList.children.length) {
+    overdueList.innerHTML =
+      `<p class="remindersEmpty">Žádné připomínky po termínu.</p>`;
+  }
+  
+  if (activeReminderStatus === "overdue") {
+    if (overdueGroup) {
+      overdueGroup.hidden = false;
+    }
+    
+    if (todayGroup) {
+      todayGroup.hidden = true;
+    }
+    
+    if (tomorrowGroup) {
+      tomorrowGroup.hidden = true;
+    }
+    
+    if (laterGroup) {
+      laterGroup.hidden = true;
+    }
+  } else {
+    if (overdueGroup) {
+      overdueGroup.hidden = true;
+    }
+    
+    if (todayGroup) {
+      todayGroup.hidden = false;
+    }
+    
+    if (tomorrowGroup) {
+      tomorrowGroup.hidden = false;
+    }
+    
+    if (laterGroup) {
+      laterGroup.hidden = false;
+    }
+  }
 }
-
-
 /* ==================================================
    OVLÁDÁNÍ FILTRŮ A RYCHLÉHO MENU
 ================================================== */
@@ -1517,7 +1569,7 @@ document
     button.addEventListener("click", () => {
       activeReminderFilter =
         button.dataset.reminderFilter || "all";
-
+      
       document
         .querySelectorAll(".remindersFilter")
         .forEach((filterButton) => {
@@ -1526,7 +1578,28 @@ document
             filterButton === button
           );
         });
+      
+      renderRemindersScreen();
+    });
+  });
 
+
+document
+  .querySelectorAll(".remindersStatusTab")
+  .forEach((button) => {
+    button.addEventListener("click", () => {
+      activeReminderStatus =
+        button.dataset.reminderStatus || "active";
+      
+      document
+        .querySelectorAll(".remindersStatusTab")
+        .forEach((statusButton) => {
+          statusButton.classList.toggle(
+            "active",
+            statusButton === button
+          );
+        });
+      
       renderRemindersScreen();
     });
   });
@@ -1557,11 +1630,11 @@ document
       const minutes = Number(
         button.dataset.reminderDelay
       );
-
+      
       if (!Number.isFinite(minutes)) {
         return;
       }
-
+      
       await postponeReminder(minutes);
     });
   });
@@ -1599,22 +1672,65 @@ document
   .getElementById("openReminderNoteButton")
   ?.addEventListener("click", () => {
     const entry = getSelectedReminderEntry();
-
+    
     closeReminderQuickMenu();
-
+    
     if (!entry) {
       return;
     }
-
+    
     if (entry.kind === "planned") {
       openPlannedSourceInEditor(entry.id);
       return;
     }
-
+    
     if (
       entry.id &&
       typeof openTaskEditorById === "function"
     ) {
       openTaskEditorById(entry.id);
     }
+  
+    const overdueCount =
+  overdueList.children.length;
+
+if (overdueReminderCount) {
+  overdueReminderCount.textContent =
+    overdueCount ? `(${overdueCount})` : "";
+}
+
+if (activeReminderStatus === "overdue") {
+  if (overdueGroup) {
+    overdueGroup.hidden = false;
+  }
+
+  if (todayGroup) {
+    todayGroup.hidden = true;
+  }
+
+  if (tomorrowGroup) {
+    tomorrowGroup.hidden = true;
+  }
+
+  if (laterGroup) {
+    laterGroup.hidden = true;
+  }
+} else {
+  if (overdueGroup) {
+    overdueGroup.hidden = true;
+  }
+
+  if (todayGroup) {
+    todayGroup.hidden = false;
+  }
+
+  if (tomorrowGroup) {
+    tomorrowGroup.hidden = false;
+  }
+
+  if (laterGroup) {
+    laterGroup.hidden = false;
+  }
+}
+    
   });

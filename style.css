@@ -3131,3 +3131,29 @@ body.authPending .addTaskButton {
   text-decoration: line-through;
   opacity: 0.55;
 }
+.remindersStatusTabs {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.remindersStatusTab {
+  border: 1px solid #d8d2e3;
+  background: #f6f3fa;
+  color: #62576f;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.remindersStatusTab.active {
+  background: #7c3aed;
+  color: white;
+  border-color: #7c3aed;
+}
+
+#overdueReminderCount:not(:empty) {
+  margin-left: 4px;
+  font-weight: 700;
+}
