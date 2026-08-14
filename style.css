@@ -2930,3 +2930,68 @@ body.authPending .addTaskButton {
     padding: 12px 14px;
   }
 }
+
+/* ========================================
+   VLASTNÍ ŠTÍTKY
+======================================== */
+
+.tagOptions .createTagButton {
+  border-style: dashed;
+  opacity: 0.9;
+}
+
+.newTagRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.newTagRow[hidden] {
+  display: none !important;
+}
+
+.newTagRow input {
+  min-width: 0;
+  flex: 1;
+  box-sizing: border-box;
+  padding: 8px 10px;
+
+  border: 1px solid color-mix(in srgb,
+      var(--color-editor-text) 24%,
+      transparent);
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-editor-text);
+
+  font: inherit;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.newTagRow input:focus {
+  border-color: var(--color-accent);
+}
+
+.newTagRow button {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+
+  border: 1px solid color-mix(in srgb,
+      var(--color-editor-text) 22%,
+      transparent);
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-editor-text);
+
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+#saveNewTagButton {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}

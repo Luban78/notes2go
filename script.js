@@ -161,6 +161,10 @@ const addTaskButton = document.getElementById("addTaskButton");
 addTaskButton.addEventListener("click", () => {
   activeTaskIndex = null;
   resetTodos();
+  activeArea = "private";
+activeTags = [];
+updateTagMenuUI();
+closeTagMenu();
   
   modalTitle.value = "";
   modalText.value = "";
