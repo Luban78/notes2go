@@ -27,12 +27,14 @@
 body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  flex-wrap: wrap;
-  
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+
   min-height: 100dvh;
+  height: 100%;
   margin: 0;
-  
+  overflow: hidden;
+
   background: var(--color-background);
   color: #8c8fb0;
   text-align: center;
@@ -40,11 +42,18 @@ body {
 
 
 .app {
+  flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
   padding: 0;
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
   text-align: left;
 }
 
@@ -57,7 +66,8 @@ body {
   box-sizing: border-box;
   margin: 14px auto 90px;
   padding: 0 8px;
-  
+  overflow: visible;
+
   column-count: 2;
   column-gap: 10px;
 }
@@ -65,21 +75,24 @@ body {
 .taskCard {
   display: inline-flex;
   flex-direction: column;
-  
+
   width: 100%;
   box-sizing: border-box;
-  
+
   margin: 0 0 12px;
   padding: 18px;
-  
+
   border-radius: 22px;
-  
+
   background: var(--color-surface);
   color: var(--color-text);
-  
+
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  
+
   break-inside: avoid;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 
@@ -203,11 +216,12 @@ body {
 /* Datum uvnitř horní lišty */
 
 #modalDate {
+  flex: 1.25;
   box-sizing: border-box;
   width: min(58%, 380px);
   height: 36px;
   padding: 2px 8px;
-  
+
   font-size: 1rem;
 }
 
@@ -331,6 +345,7 @@ body {
 ================================================== */
 
 .homeHeader {
+  flex-shrink: 0;
   width: min(100%, 900px);
   box-sizing: border-box;
   margin: 0 auto;
@@ -525,10 +540,6 @@ body {
   transform: scale(0.94);
 }
 
-/*#mainMenuButton {
-  font-size: 1.8rem;
-  
-}*/
 .mainMenuIcon {
   display: inline-block;
   transform: translate( 0px, -2px);
@@ -774,9 +785,6 @@ body {
   outline: none;
 }
 
-#modalDate {
-  flex: 1.25;
-}
 
 #modalTime {
   flex: 0.55;
@@ -785,9 +793,15 @@ body {
 /* Moderní vzhled data a času bez změny nativního pickeru */
 #modalDate,
 #modalTime {
+  height: 42px !important;
+  line-height: 42px;
+  padding-top: 0;
+  padding-bottom: 0;
+
   -webkit-appearance: none;
   appearance: none;
   font-family: inherit;
+  font-size: calc(var(--font-size) - 1px) !important;
 
   border: 1px solid color-mix(in srgb,
       var(--color-editor-text) 18%,
@@ -859,32 +873,12 @@ body.theme-dark #modalTime::-webkit-calendar-picker-indicator {
    SCROLLUJÍ POUZE POZNÁMKY
 ======================================== */
 
-html,
-body {
+html {
   height: 100%;
   overflow: hidden;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-}
 
-.homeHeader {
-  flex-shrink: 0;
-}
-
-.app {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-}
 
 .app::-webkit-scrollbar,
 #modalText::-webkit-scrollbar,
@@ -904,9 +898,6 @@ body {
   -ms-overflow-style: none;
 }
 
-.karty {
-  overflow: visible;
-}
 
 
 .tagMenu button.active {
@@ -1003,11 +994,6 @@ body {
   min-width: max-content;
 }
 
-.taskCard {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
 
 .cardMenu {
   position: fixed;
@@ -1034,20 +1020,24 @@ body {
 
 .cardMenu button {
   padding: 12px 10px;
-  
-  
-  border-radius: 12px;
-  
+
   border: 1px solid var(--color-border);
-  
+  border-radius: 12px;
+
   background: color-mix(in srgb,
       var(--color-accent) 8%,
       var(--color-surface));
-  
   color: var(--color-text);
-  
+
   font-size: var(--font-size);
   font-weight: 600;
+
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
 }
 
 .pinnedCards {
@@ -1143,17 +1133,6 @@ body {
 }
 
 .cardMenu,
-.cardMenu button {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.cardMenu button {
-  transition:
-    transform 0.12s ease,
-    background 0.12s ease;
-}
 
 .cardMenu button:active {
   transform: scale(0.94);
@@ -1291,18 +1270,6 @@ body {
   display: none;
 }
 
-#modalDate,
-#modalTime {
-  font-size: calc(var(--font-size) - 1px) !important;
-}
-
-#modalDate,
-#modalTime {
-  height: 42px !important;
-  line-height: 42px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
 
 /* theme dark*/
 
@@ -2125,7 +2092,7 @@ body.authPending .addTaskButton {
   min-height: 46px;
 
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
 
   font: inherit;
   font-weight: 600;
@@ -2146,7 +2113,7 @@ body.authPending .addTaskButton {
    ========================================== */
 
 .calendarScreen {
-  padding: 12px 14px 90px;
+  padding: 2px 14px 72px;
 }
 
 .calendarScreen[hidden] {
@@ -2159,7 +2126,7 @@ body.authPending .addTaskButton {
   align-items: center;
   gap: 8px;
 
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .calendarHeader h2 {
@@ -2185,7 +2152,7 @@ body.authPending .addTaskButton {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
 
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 
   text-align: center;
   color: var(--color-text-secondary);
@@ -2195,14 +2162,13 @@ body.authPending .addTaskButton {
 .calendarGrid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 5px;
+  gap: 4px;
 }
 
 .calendarDay {
   position: relative;
-  aspect-ratio: auto;
-height: 42px;
-  
+  height: 40px;
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2241,9 +2207,13 @@ height: 42px;
 }
 
 
-
+.calendarAgenda {
+  max-height: 42vh;
+  overflow-y: auto;
+  padding-bottom: max(72px, env(safe-area-inset-bottom));
+}
 .calendarAgenda h3 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: calc(var(--font-size) + 1px);
 }
 
@@ -2252,8 +2222,8 @@ height: 42px;
   grid-template-columns: 58px 1fr;
   gap: 10px;
 
-  padding: 12px 0;
-font-size: var(--font-size);
+  padding: 8px 0;
+  font-size: var(--font-size);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -3160,23 +3130,3 @@ font-size: calc(var(--font-size) - 1px);
   font-weight: 700;
 }
 
-.calendarAgenda {
-  max-height: 42vh;
-  overflow-y: auto;
-  padding-bottom: 24px;
-}
-.calendarGrid {
-  gap: 6px;
-}
-
-.calendarDay {
-  border-radius: 10px;
-}
-
-.calendarAgenda {
-  margin-top: 10px;
-}
-
-.calendarWeekdays {
-  margin-bottom: 4px;
-}
