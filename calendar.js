@@ -23,6 +23,56 @@ const calendarPrevMonth =
 const calendarNextMonth =
   document.getElementById("calendarNextMonth");
 
+
+const calendarSelectedDateButton =
+  document.getElementById("calendarSelectedDate");
+
+const dayDetailScreen =
+  document.getElementById("dayDetailScreen");
+
+const dayDetailTitle =
+  document.getElementById("dayDetailTitle");
+
+const dayDetailItems =
+  document.getElementById("dayDetailItems");
+
+const dayDetailBackButton =
+  document.getElementById("dayDetailBackButton");
+  
+calendarSelectedDateButton?.addEventListener(
+  "click",
+  () => {
+    if (!dayDetailScreen) {
+      return;
+    }
+    
+    calendarScreen.hidden = true;
+    dayDetailScreen.hidden = false;
+    
+    if (dayDetailTitle) {
+      dayDetailTitle.textContent =
+        calendarSelectedDateButton.textContent;
+    }
+    
+    if (dayDetailItems) {
+      renderCalendarItems(
+        dayDetailItems
+      );
+    }
+  }
+);
+
+
+dayDetailBackButton?.addEventListener(
+  "click",
+  () => {
+    dayDetailScreen.hidden = true;
+    calendarScreen.hidden = false;
+  }
+);
+
+
+
 let calendarCurrentDate = new Date();
 let calendarSelectedDay = new Date();
 
@@ -167,126 +217,122 @@ function renderCalendar() {
 }
 
 
+function renderCalendarItems(targetElement) {
+  targetElement.innerHTML = "";
+  
+  const year =
+    calendarSelectedDay.getFullYear();
+  
+  const month =
+    String(
+      calendarSelectedDay.getMonth() + 1
+    ).padStart(2, "0");
+  
+  const day =
+    String(
+      calendarSelectedDay.getDate()
+    ).padStart(2, "0");
+  
+  const dateKey =
+    `${year}-${month}-${day}`;
+  
+  const items =
+    loadCalendarItems()
+    .filter(
+      item =>
+      item.plannedAt?.startsWith(dateKey)
+    )
+    .sort(
+      (a, b) =>
+      a.plannedAt.localeCompare(
+        b.plannedAt
+      )
+    );
+  
+  if (items.length === 0) {
+    targetElement.textContent =
+      "Na tento den není nic naplánováno.";
+    
+    return;
+  }
+  
+  items.forEach((item) => {
+    const row =
+      document.createElement("div");
+    
+    row.className =
+      "calendarAgendaItem";
+    
+    if (item.completed === true) {
+      row.classList.add("completed");
+    }
+    
+    const time =
+      document.createElement("div");
+    
+    time.className =
+      "calendarAgendaTime";
+    
+    time.textContent =
+      item.plannedAt.slice(11, 16);
+    
+    const text =
+      document.createElement("div");
+    
+    text.className =
+      "calendarAgendaText";
+    
+    text.textContent =
+      item.text;
+    
+    row.append(time, text);
+    
+    row.addEventListener("click", () => {
+      openTaskEditorById(item.sourceNoteId);
+      
+      setTimeout(() => {
+        const plannedLink =
+          modalRichText.querySelector(
+            `[data-planned-item-id="${item.id}"]`
+          );
+        
+        if (!plannedLink) {
+          return;
+        }
+        
+        const editorRect =
+          modalRichText.getBoundingClientRect();
+        
+        const linkRect =
+          plannedLink.getBoundingClientRect();
+        
+        const targetTop =
+          modalRichText.scrollTop +
+          (linkRect.top - editorRect.top) -
+          (modalRichText.clientHeight / 2) +
+          (linkRect.height / 2);
+        
+        modalRichText.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: "smooth"
+        });
+        
+      }, 150);
+    });
+    
+    targetElement.append(row);
+  });
+}
+
 function renderCalendarAgenda() {
   calendarSelectedDate.textContent =
     formatCalendarDate(
       calendarSelectedDay
     );
-
-  calendarDayItems.innerHTML = "";
-
-  const year =
-    calendarSelectedDay.getFullYear();
-
-  const month =
-    String(
-      calendarSelectedDay.getMonth() + 1
-    ).padStart(2, "0");
-
-  const day =
-    String(
-      calendarSelectedDay.getDate()
-    ).padStart(2, "0");
-
-  const dateKey =
-    `${year}-${month}-${day}`;
-
-  const items =
-    loadCalendarItems()
-      .filter(
-        item =>
-          item.plannedAt?.startsWith(dateKey)
-      )
-      .sort(
-        (a, b) =>
-          a.plannedAt.localeCompare(
-            b.plannedAt
-          )
-      );
-
-  if (items.length === 0) {
-    calendarDayItems.textContent =
-      "Na tento den není nic naplánováno.";
-
-    return;
-  }
-
-  items.forEach((item) => {
-    const row =
-      document.createElement("div");
-
-    row.className =
-      "calendarAgendaItem";
-
-    if (item.completed === true) {
-      row.classList.add("completed");
-    }
-
-    const time =
-      document.createElement("div");
-
-    time.className =
-      "calendarAgendaTime";
-
-    time.textContent =
-      item.plannedAt.slice(11, 16);
-
-    const text =
-      document.createElement("div");
-
-    text.className =
-      "calendarAgendaText";
-
-    text.textContent =
-      item.text;
-
-    row.append(time, text);
-    
-    
-    row.addEventListener("click", () => {
-  openTaskEditorById(item.sourceNoteId);
   
-  setTimeout(() => {
-    const plannedLink =
-      modalRichText.querySelector(
-        `[data-planned-item-id="${item.id}"]`
-      );
-    
-    if (!plannedLink) {
-      console.error(
-        "Plánovaný odkaz nebyl v poznámce nalezen:",
-        item.id
-      );
-      return;
-    }
-    
-    const editorRect =
-      modalRichText.getBoundingClientRect();
-    
-    const linkRect =
-      plannedLink.getBoundingClientRect();
-    
-    const targetTop =
-      modalRichText.scrollTop +
-      (linkRect.top - editorRect.top) -
-      (modalRichText.clientHeight / 2) +
-      (linkRect.height / 2);
-      
-      
-    
-    modalRichText.scrollTo({
-      top: Math.max(0, targetTop),
-      behavior: "smooth"
-    });
-    
-  }, 150);
-});
-
-
-
-
-    calendarDayItems.append(row);
-  });
+  renderCalendarItems(
+    calendarDayItems
+  );
 }
 
 

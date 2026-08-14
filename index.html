@@ -308,13 +308,51 @@
 
   <div class="calendarAgenda">
 
-    <h3 id="calendarSelectedDate">
-      Vybraný den
-    </h3>
+    <button
+  id="calendarSelectedDate"
+  class="calendarSelectedDateButton"
+  type="button"
+>
+  Vybraný den
+</button>
 
     <div id="calendarDayItems"></div>
 
   </div>
+
+</section>
+
+<!-- ========================================
+     DETAIL DNE
+     ======================================== -->
+
+<section
+  id="dayDetailScreen"
+  class="dayDetailScreen"
+  hidden
+>
+
+  <div class="dayDetailHeader">
+
+  <button
+    id="dayDetailBackButton"
+    class="dayDetailBackButton"
+    type="button"
+    aria-label="Zpět na kalendář"
+  >
+    <span class="dayDetailBackArrow">‹</span>
+
+    <span id="dayDetailTitle">
+      Vybraný den
+    </span>
+  </button>
+
+</div>
+
+  <div
+    id="dayDetailItems"
+    class="dayDetailItems"
+  ></div>
 
 </section>
 <!-- ========================================

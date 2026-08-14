@@ -2136,16 +2136,28 @@ body.authPending .addTaskButton {
 }
 
 .calendarHeader button {
-  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  width: 45px;
   height: 44px;
-
+  
+  padding: 0;
   border: 0;
   border-radius: 12px;
-
+  
   background: var(--color-surface);
   color: var(--color-text);
+  
+  font-size: 1.7rem;
+  line-height: 1;
+}
 
-  font-size: 1.6rem;
+/* Optické vycentrování znaků ‹ › */
+#calendarPrevMonth,
+#calendarNextMonth {
+  padding-bottom: 7px;
 }
 
 .calendarWeekdays {
@@ -2197,7 +2209,7 @@ body.authPending .addTaskButton {
   content: "";
 
   position: absolute;
-  bottom: 5px;
+  bottom: 1px;
 
   width: 5px;
   height: 5px;
@@ -2211,6 +2223,9 @@ body.authPending .addTaskButton {
   max-height: 42vh;
   overflow-y: auto;
   padding-bottom: max(72px, env(safe-area-inset-bottom));
+  
+  margin-top: 4px;
+  overflow: hidden;
 }
 .calendarAgenda h3 {
   margin: 0 0 8px;
@@ -3129,4 +3144,194 @@ font-size: calc(var(--font-size) - 1px);
   margin-left: 4px;
   font-weight: 700;
 }
+/* KLIKACÍ DATUM POD KALENDÁŘEM – OTEVŘE DETAIL DNE */
+.calendarSelectedDateButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 
+  width: fit-content;
+  max-width: calc(100% - 24px);
+
+  margin: 6px auto 10px;
+  padding: 9px 16px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+
+  font: inherit;
+  font-size: calc(var(--font-size) + 1px);
+  font-weight: 700;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  
+  
+}
+
+.calendarSelectedDateButton::after {
+  content: "›";
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  color: var(--color-accent-text);
+  font-size: calc(var(--font-size) + 5px);
+  font-weight: 700;
+  line-height: 1;
+  
+  transform: translateY(-2px);
+}
+.calendarSelectedDateButton:active {
+  transform: scale(0.97);
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      var(--color-surface)
+    );
+}
+
+.calendarSelectedDateButton:active {
+  transform: scale(0.98);
+}
+/* DETAIL DNE – HLAVIČKA */
+/* ========================================
+   DETAIL DNE
+   ======================================== */
+
+.dayDetailHeader {
+  display: flex;
+  justify-content: center;
+
+  margin: 6px 0 12px;
+}
+
+.dayDetailBackButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: fit-content;
+  max-width: calc(100% - 24px);
+
+  margin: 0 auto;
+  padding: 9px 16px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+
+  font-family: inherit;
+  font-size: calc(var(--font-size) + 1px);
+  font-weight: 700;
+  line-height: 1.2;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+.dayDetailBackArrow {
+  flex-shrink: 0;
+
+  color: var(--color-accent-text);
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1;
+
+  transform: translateY(-2px);
+}
+
+.dayDetailBackButton:active {
+  transform: scale(0.97);
+}
+
+.dayDetailItems {
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  
+
+  padding-bottom: max(
+    32px,
+    env(safe-area-inset-bottom)
+  );
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+
+
+
+#calendarDayItems {
+  max-height: 42vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding-bottom: max(
+    72px,
+    env(safe-area-inset-bottom)
+  );
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 20px,
+    black 100%
+  );
+
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 20px,
+    black 100%
+  );
+}
+/* ========================================
+   DETAIL DNE – CELÁ OBRAZOVKA
+   ======================================== */
+
+.dayDetailScreen[hidden] {
+  display: none !important;
+}
+
+.dayDetailScreen:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+
+  min-height: 0;
+  height: 100%;
+}
+
+.dayDetailHeader {
+  flex: 0 0 auto;
+}
+
+.dayDetailItems {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding-bottom: max(
+    32px,
+    env(safe-area-inset-bottom)
+  );
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
