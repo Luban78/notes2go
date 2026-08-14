@@ -292,7 +292,9 @@ editorBackButton.addEventListener("click", () => {
   }
   
   renderTasks();
-  
+  if (typeof renderRemindersScreen === "function") {
+  renderRemindersScreen();
+}
   taskModal.classList.remove("show");
   
   setTimeout(() => {

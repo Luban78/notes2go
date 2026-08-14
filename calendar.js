@@ -40,6 +40,32 @@ function formatCalendarDate(date) {
 }
 
 
+
+function loadCalendarItems() {
+  const items = [...loadPlannedItems()];
+
+  loadTask().forEach((note) => {
+    if (
+      note.reminder === true &&
+      note.date &&
+      note.completed !== true
+    ) {
+      items.push({
+        id: `reminder-${note.id}`,
+        sourceNoteId: note.id,
+        text: note.title || "Bez názvu",
+        plannedAt: note.date,
+        completed: false,
+        sourceType: "reminder"
+      });
+    }
+  });
+
+  return items;
+}
+
+
+
 function renderCalendar() {
   calendarGrid.innerHTML = "";
 
@@ -78,8 +104,7 @@ function renderCalendar() {
     calendarGrid.append(empty);
   }
 
-  const plannedItems =
-    loadPlannedItems();
+  const plannedItems = loadCalendarItems();
 
   for (
     let day = 1;
@@ -167,7 +192,7 @@ function renderCalendarAgenda() {
     `${year}-${month}-${day}`;
 
   const items =
-    loadPlannedItems()
+    loadCalendarItems()
       .filter(
         item =>
           item.plannedAt?.startsWith(dateKey)
