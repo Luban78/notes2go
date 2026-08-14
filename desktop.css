@@ -2,32 +2,23 @@
    LubaNote – DESKTOP
    ======================================== */
 
-@media (min-width: 900px) {
+@media (hover: hover) and (pointer: fine){
 
-  /* Horní navigace */
-  .appTabs {
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
+  /* ========================================
+     CELÁ APLIKACE
+     ======================================== */
+
+  .app {
+    width: 94vw;
+    max-width: 1400px;
+    margin: 0 auto;
   }
 
-  /* Obsah obrazovek pod navigací */
-  .appMain {
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-}
-
-/* ========================================
-   LUBANOTE – DESKTOP
-   ======================================== */
-
-@media (min-width: 900px) {
-
+  .appTabs,
+  .appMain,
   .moduleBar {
-    width: min(1100px, calc(100% - 48px));
+    width: 100%;
+    max-width: none;
     margin-left: auto;
     margin-right: auto;
   }
@@ -37,110 +28,348 @@
     justify-content: center;
   }
 
-}
 
-@media (min-width: 900px) {
-
-  #calendarScreen {
-    width: min(1100px, calc(100% - 48px));
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-}
-
-@media (min-width: 900px) {
+  /* ========================================
+     HORNÍ NAVIGACE
+     ======================================== */
 
   .moduleTab {
-    font-size: clamp(1rem, 0.7rem + 0.35vw, 1.25rem);
+    font-size: clamp(
+      1rem,
+      0.7rem + 0.35vw,
+      1.25rem
+    );
   }
 
   .moduleTabIcon {
-    font-size: clamp(1.1rem, 0.8rem + 0.4vw, 1.4rem);
+    font-size: clamp(
+      1.1rem,
+      0.8rem + 0.4vw,
+      1.4rem
+    );
   }
 
-  .calendarHeader h2 {
-    font-size: clamp(1.2rem, 0.9rem + 0.5vw, 1.6rem);
+
+  /* ========================================
+     POZNÁMKY – GRID 4 SLOUPCE
+     ======================================== */
+
+  .pinnedCards {
+    display: block;
+    width: 100%;
+    padding: 0 0 32px;
   }
 
-  .calendarWeekdays {
-    font-size: clamp(0.85rem, 0.7rem + 0.25vw, 1rem);
+  #pinnedRight {
+    display: none;
   }
 
-  .calendarDay {
-    font-size: clamp(0.95rem, 0.75rem + 0.3vw, 1.15rem);
+  #pinnedLeft {
+    width: 100%;
   }
 
-  .calendarAgenda {
-    font-size: clamp(1rem, 0.8rem + 0.3vw, 1.2rem);
+  .pinnedCards:not(.listView) #pinnedLeft {
+    column-count: 4;
+    column-gap: 18px;
   }
 
-}
-
-/* ========================================
-   VELKÝ DESKTOP / EXTERNÍ MONITOR
-   ======================================== */
-
-@media (min-width: 1700px) {
-
-  .moduleBar {
-    width: min(1450px, 90vw);
-    max-width: none;
+  .pinnedCards:not(.listView) .taskCard {
+    display: inline-flex;
+    width: 100%;
+    margin: 0 0 18px;
+    break-inside: avoid;
   }
 
-  #calendarScreen {
-    width: min(1450px, 90vw);
-    max-width: none;
 
-    display: grid;
-    grid-template-columns:
-      minmax(700px, 820px)
-      minmax(420px, 1fr);
+  /* ========================================
+     POZNÁMKY – LIST 2 SLOUPCE
+     ======================================== */
 
-    grid-template-areas:
-      "header agenda"
-      "weekdays agenda"
-      "grid agenda";
-
-    column-gap: 48px;
-    align-items: start;
-  }
-
-  .calendarHeader {
-    grid-area: header;
-  }
-
-  .calendarWeekdays {
-    grid-area: weekdays;
-  }
-
-  .calendarGrid {
-    grid-area: grid;
-    gap: 12px;
-  }
-
-  .calendarAgenda {
-    grid-area: agenda;
-
+  .pinnedCards.listView {
     width: 100%;
     max-width: none;
     margin: 0;
   }
 
-  .calendarDay {
-    min-height: 72px;
-    font-size: 1.25rem;
+  .pinnedCards.listView #pinnedLeft {
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 18px;
+    align-items: start;
+  }
+
+  .pinnedCards.listView .taskCard {
+    width: 100%;
+    margin: 0;
+    padding: 18px 20px;
+  }
+
+
+  /* ========================================
+     PLÁN – DESKTOP
+     ======================================== */
+
+  #calendarScreen:not([hidden]) {
+    display: grid;
+
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, 0.75fr);
+
+    grid-template-rows:
+      auto auto auto;
+
+    column-gap: 24px;
+    align-items: start;
+
+    width: min(1100px, calc(100% - 40px));
+    max-width: none;
+
+    margin: 0 auto;
+    padding: 14px 0 32px;
+
+    box-sizing: border-box;
+  }
+
+
+  /* ---------- HLAVIČKA KALENDÁŘE ---------- */
+
+  .calendarHeader {
+    grid-column: 1;
+    grid-row: 1;
+
+    margin-bottom: 8px;
   }
 
   .calendarHeader h2 {
-    font-size: 1.6rem;
+    font-size: clamp(
+      1.2rem,
+      0.9rem + 0.5vw,
+      1.6rem
+    );
   }
+
+  .calendarHeader button {
+    width: 38px;
+    height: 38px;
+
+    border-radius: 11px;
+    cursor: pointer;
+  }
+
+
+  /* ---------- DNY Po–Ne ---------- */
 
   .calendarWeekdays {
-    font-size: 1.05rem;
+    grid-column: 1;
+    grid-row: 2;
+
+    width: 560px;
+    max-width: 100%;
+
+    margin: 0 auto 5px;
+
+    font-size: clamp(
+      0.85rem,
+      0.7rem + 0.25vw,
+      1rem
+    );
   }
 
+
+  /* ---------- MŘÍŽKA KALENDÁŘE ---------- */
+
+  .calendarGrid {
+    grid-column: 1;
+    grid-row: 3;
+
+    width: 560px;
+    max-width: 100%;
+
+    margin: 0 auto;
+
+    gap: 6px;
+  }
+
+  .calendarDay {
+    aspect-ratio: auto;
+    min-height: 70px;
+
+    border-radius: 11px;
+
+    font-size: clamp(
+      0.95rem,
+      0.75rem + 0.3vw,
+      1.15rem
+    );
+
+    cursor: pointer;
+  }
+
+  .calendarDay.hasItems::after {
+    bottom: 4px;
+  }
+
+
+  /* ========================================
+     AGENDA
+     ======================================== */
+
   .calendarAgenda {
-    font-size: 1.15rem;
+    grid-column: 2;
+    grid-row: 1 / span 3;
+
+    position: sticky;
+    top: 14px;
+
+    margin: 0;
+    padding: 14px 16px;
+
+    box-sizing: border-box;
+
+    max-height: calc(100dvh - 190px);
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+
+    background: var(--color-surface);
+
+    box-shadow:
+      0 8px 22px
+      rgba(0, 0, 0, 0.07);
+
+    /* scrollbar schovaný */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .calendarAgenda::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+
+  /* ---------- VNITŘNÍ SEZNAM ÚKOLŮ ---------- */
+
+  #calendarDayItems {
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  #calendarDayItems::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+
+  .calendarAgenda h3 {
+    margin-bottom: 10px;
+    font-size: 0.98rem;
+  }
+
+  .calendarAgendaItem {
+    grid-template-columns: 56px 1fr;
+
+    gap: 10px;
+    padding: 10px 0;
+
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .plannedTextLink {
+    cursor: pointer;
+  }
+
+
+}
+
+
+
+
+
+
+
+/* ========================================
+   ŠIROKÝ DESKTOP
+   – agenda ve 2 sloupcích
+   ======================================== */
+
+@media (min-width: 1200px) {
+
+  #calendarDayItems {
+    display: grid;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    column-gap: 18px;
+    align-content: start;
+  }
+  /* ========================================
+   PŘIPOMÍNKY – FILTRY V JEDNÉ ŘADĚ
+   ======================================== */
+
+.remindersScreen {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  justify-content: center;
+  align-items: center;
+  column-gap: 14px;
+}
+
+.remindersFilters {
+  grid-column: 1;
+  grid-row: 1;
+
+  margin: 0;
+  padding: 8px 0 14px;
+}
+
+.remindersStatusTabs {
+  grid-column: 2;
+  grid-row: 1;
+
+  margin: 0;
+  padding: 8px 0 14px;
+}
+
+.remindersGroups {
+  grid-column: 1 / -1;
+  grid-row: 2;
+
+  width: 100%;
+  min-height: 0;
+}
+  @media (hover: hover) and (pointer: fine) {
+  .remindersToolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+
+    width: 100%;
+    margin: 0 0 16px;
+  }
+
+  .remindersToolbar .remindersFilters,
+  .remindersToolbar .remindersStatusTabs {
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
   }
 }
+}
+
+

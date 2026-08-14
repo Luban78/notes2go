@@ -365,50 +365,59 @@
   hidden
 >
 
-  <div class="remindersFilters">
-    <button
-      type="button"
-      class="remindersFilter active"
-      data-reminder-filter="all"
-    >
-      Vše
-    </button>
+  <div class="remindersToolbar">
 
-    <button
-      type="button"
-      class="remindersFilter"
-      data-reminder-filter="work"
-    >
-      💼
-    </button>
+    <div class="remindersFilters">
 
-    <button
-      type="button"
-      class="remindersFilter"
-      data-reminder-filter="private"
-    >
-      🏠
-    </button>
-    
+      <button
+        type="button"
+        class="remindersFilter active"
+        data-reminder-filter="all"
+      >
+        Vše
+      </button>
+
+      <button
+        type="button"
+        class="remindersFilter"
+        data-reminder-filter="work"
+      >
+        💼
+      </button>
+
+      <button
+        type="button"
+        class="remindersFilter"
+        data-reminder-filter="private"
+      >
+        🏠
+      </button>
+
+    </div>
+
+    <div class="remindersStatusTabs">
+
+      <button
+        type="button"
+        class="remindersStatusTab active"
+        data-reminder-status="active"
+      >
+        Aktivní
+      </button>
+
+      <button
+        type="button"
+        class="remindersStatusTab"
+        data-reminder-status="overdue"
+      >
+        Po termínu
+        <span id="overdueReminderCount"></span>
+      </button>
+
+    </div>
+
   </div>
-  <div class="remindersStatusTabs">
-    <button
-      type="button"
-      class="remindersStatusTab active"
-      data-reminder-status="active"
-    >
-      Aktivní
-    </button>
 
-    <button
-      type="button"
-      class="remindersStatusTab"
-      data-reminder-status="overdue"
-    >
-      Po termínu
-      <span id="overdueReminderCount"></span>
-    </button>
-  </div>
   <div class="remindersGroups remindersScroll">
 
     <section class="remindersGroup remindersOverdueGroup">

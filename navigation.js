@@ -171,6 +171,8 @@ remindersButton.addEventListener("click", () => {
   calendarScreen.hidden = true;
   remindersScreen.hidden = false;
   dayDetailScreen.hidden = true;
+
+  
   setActiveModule(remindersButton);
   
   renderRemindersScreen();
