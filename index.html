@@ -1061,6 +1061,27 @@
 
 
   <!-- ========================================
+       modal vytvoření štítků 
+       ======================================== -->
+
+<div id="newTagModal" class="newTagModal" hidden>
+  <div class="newTagDialog">
+    <h3>Nový štítek</h3>
+
+    <input
+      id="newTagModalInput"
+      type="text"
+      placeholder="Název štítku"
+      maxlength="30"
+    >
+
+    <div class="newTagDialogActions">
+      <button id="cancelNewTagModalButton" type="button">Zrušit</button>
+      <button id="saveNewTagModalButton" type="button">Vytvořit</button>
+    </div>
+  </div>
+</div>
+  <!-- ========================================
        SKRYTÝ INPUT PRO IMPORT ZÁLOHY
        ======================================== -->
 
@@ -1071,6 +1092,22 @@
     hidden
   >
 
+
+<div id="tagMessageModal" class="newTagModal" hidden>
+  <div class="newTagDialog">
+    <h3>Štítky</h3>
+
+    <p id="tagMessageText">
+      Štítek s tímto názvem už existuje.
+    </p>
+
+    <div class="newTagDialogActions">
+      <button id="closeTagMessageButton" type="button">
+        OK
+      </button>
+    </div>
+  </div>
+</div>
 
   <!-- ========================================
        JAVASCRIPT

@@ -4,6 +4,7 @@ let activeAreaFilter = "all";
 let activeTagFilter = null;
 
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
+let syncedTags = [];
 
 const areaFilterButtons =
   document.querySelectorAll("[data-area-filter]");
@@ -41,14 +42,75 @@ const newTagRow =
 const newTagInput =
   document.getElementById("newTagInput");
 
-const saveNewTagButton =
-  document.getElementById("saveNewTagButton");
+const saveNewTagButton = document.getElementById("saveNewTagButton");
 
 const cancelNewTagButton =
   document.getElementById("cancelNewTagButton");
 
 const tagFilterButtons =
   document.getElementById("tagFilterButtons");
+
+
+const newTagModalInput = document.getElementById("newTagModalInput");
+
+const cancelNewTagModalButton =
+  document.getElementById("cancelNewTagModalButton");
+const tagMessageModal = document.getElementById("tagMessageModal");
+const tagMessageText = document.getElementById("tagMessageText");
+const closeTagMessageButton = document.getElementById("closeTagMessageButton");
+
+cancelNewTagModalButton.addEventListener("click", () => {
+  newTagModal.hidden = true;
+});
+
+cancelNewTagButton.addEventListener("click", () => {
+  newTagModal.hidden = true;
+});
+
+saveNewTagModalButton.addEventListener("click", async () => {
+  const name = newTagModalInput.value.trim();
+
+  if (!name) {
+    return;
+  }
+  const tagAlreadyExists = syncedTags.some((tag) =>
+  tag.name.trim().toLowerCase() === name.toLowerCase()
+);
+
+if (tagAlreadyExists) {
+  newTagModal.hidden = true;
+  
+  tagMessageText.textContent = "Štítek s tímto názvem už existuje.";
+  tagMessageModal.hidden = false;
+  
+  return;
+}
+
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from("tags")
+    .insert({
+      user_id: user.id,
+      name: name,
+      is_secret: false,
+      sort_order: syncedTags.length
+    });
+
+  if (error) {
+    console.error("Tag insert error:", error.message);
+    return;
+  }
+
+  newTagModal.hidden = true;
+
+  await loadTagsFromSupabase();
+});
+
 
 function updateAreaFilterUI() {
   areaFilterButtons.forEach((button) => {
@@ -85,12 +147,41 @@ function normalizeTagName(tag) {
   return tag.trim().replace(/\s+/g, " ");
 }
 
-function getAllTags() {
-  const allTags = loadTask()
-    .flatMap((task) => task.tags || []);
 
-  return [...new Set(allTags)];
+
+async function loadTagsFromSupabase() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("tags")
+    .select("*")
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("Tag download error:", error.message);
+    return;
+  }
+
+  syncedTags = data || [];
+  renderTagFilters();
 }
+
+
+
+function getAllTags() {
+  const noteTags = loadTask()
+    .flatMap((task) => task.tags || []);
+  
+  const cloudTags = syncedTags.map((tag) => tag.name);
+  
+  return [...new Set([...noteTags, ...cloudTags])];
+}
+
 
 function getAvailableTags() {
   return [...new Set([
@@ -175,9 +266,12 @@ function renderTagFilters() {
 addTagButton.classList.add("categoryTab");
 addTagButton.textContent = "+";
 addTagButton.addEventListener("click", () => {
-  tagMenu.hidden = false;
-  updateTagMenuUI();
-  openNewTagEditor();
+  const newTagModal = document.getElementById("newTagModal");
+  const newTagModalInput = document.getElementById("newTagModalInput");
+  
+  newTagModal.hidden = false;
+  newTagModalInput.value = "";
+  newTagModalInput.focus();
 });
 
 tagFilterButtons.append(addTagButton);
@@ -325,3 +419,7 @@ tagFilterButtons.addEventListener("click", (event) => {
 
 updateTagMenuUI();
 renderTagFilters();
+
+closeTagMessageButton.addEventListener("click", () => {
+  tagMessageModal.hidden = true;
+});

@@ -191,4 +191,9 @@ async function syncNotes() {
   renderTasks();
 }
 
-syncNotes();
+async function startSync() {
+  await syncNotes();
+  await loadTagsFromSupabase();
+}
+
+startSync();
