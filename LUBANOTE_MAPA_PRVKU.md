@@ -766,12 +766,34 @@ Důležité funkce:
 - `scheduleNotification()`
 - `cancelNotification()`
 - `updateReminderButton()`
+- `getReminderEntries()` – spojuje připomínky celých poznámek a položky Planneru
+- `renderRemindersScreen()` – vykreslí Po termínu / Dnes / Zítra / Později
+- `openReminderQuickMenu()` – správa konkrétní připomínky / plánovaného úkolu
+- `completeSelectedPlannedReminder()` – dokončí jen konkrétní planned item
+- `handleNotificationOpen()` – po klepnutí na Android notifikaci otevře modul Připomínky
 
 Tlačítko v editoru:
 
 ```text
 #reminderButton
 ```
+
+Obrazovka Připomínky:
+
+```text
+#remindersScreen
+#remindersOverdue
+#remindersToday
+#remindersTomorrow
+#remindersLater
+#reminderQuickMenu
+#completeReminderButton
+```
+
+Naplánovaná označená část textu (`sourceType: "selection"`) je samostatný úkol.
+Po akci **Hotovo** se dokončí pouze daný planned item a propojený
+`.plannedTextLink` v původní poznámce dostane třídu
+`.plannedTextLinkCompleted` (podtržení + přeškrtnutí).
 
 ---
 

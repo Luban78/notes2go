@@ -193,6 +193,10 @@ function renderCalendarAgenda() {
     row.className =
       "calendarAgendaItem";
 
+    if (item.completed === true) {
+      row.classList.add("completed");
+    }
+
     const time =
       document.createElement("div");
 

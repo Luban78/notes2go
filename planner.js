@@ -122,6 +122,10 @@ function createPlannedItem(
     text,
     plannedAt,
     completed: false,
+    notificationId:
+      typeof createUniqueNotificationId === "function"
+        ? createUniqueNotificationId()
+        : ((Date.now() % 2147483646) + 1),
     createdAt: new Date().toISOString(),
     selectionStart,
     selectionEnd
@@ -203,7 +207,7 @@ function closePlanner() {
    ULOŽENÍ NAPLÁNOVANÉHO ÚKOLU
    ========================================== */
 
-function saveCurrentPlannedItem() {
+async function saveCurrentPlannedItem() {
   if (
     !plannerDate.value ||
     !plannerTime.value
@@ -280,9 +284,60 @@ function saveCurrentPlannedItem() {
   sourceNote.updatedAt = new Date().toISOString();
 
   saveAllTasks(tasks);
-  uploadLocalNoteToSupabase(sourceNote);
+
+  if (typeof uploadLocalNoteToSupabase === "function") {
+    await uploadLocalNoteToSupabase(sourceNote);
+  }
+
+  /* Každá položka Planneru je současně samostatný úkol v Připomínkách.
+     V APK jí proto naplánujeme vlastní systémovou notifikaci. */
+  if (
+    typeof requestNotificationPermission === "function" &&
+    typeof scheduleNotification === "function"
+  ) {
+    try {
+      await requestNotificationPermission();
+
+      const notificationTitle =
+        plannerSourceType === "selection"
+          ? plannedItem.text
+          : (sourceNote.title || plannedItem.text);
+
+      const notificationBody =
+        plannerSourceType === "selection"
+          ? (
+              sourceNote.title
+                ? `Z poznámky: ${sourceNote.title}`
+                : plannedItem.text
+            )
+          : (sourceNote.note || plannedItem.text);
+
+      if (new Date(plannedItem.plannedAt) > new Date()) {
+        await scheduleNotification(
+          plannedItem.notificationId,
+          notificationTitle,
+          plannedItem.plannedAt,
+          notificationBody,
+          {
+            lubanoteType: "planned",
+            plannedItemId: plannedItem.id,
+            sourceNoteId: sourceNote.id
+          }
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Planned notification schedule error:",
+        error
+      );
+    }
+  }
 
   closePlanner();
+
+  if (typeof renderRemindersScreen === "function") {
+    renderRemindersScreen();
+  }
 
 }
 

@@ -240,7 +240,11 @@ editorBackButton.addEventListener("click", () => {
           updatedTask.notificationId,
           updatedTask.title,
           updatedTask.date,
-          updatedTask.note
+          updatedTask.note,
+          {
+            lubanoteType: "note",
+            taskId: updatedTask.id
+          }
         );
       } else {
         cancelNotification(updatedTask.notificationId);
@@ -277,7 +281,11 @@ editorBackButton.addEventListener("click", () => {
   newTask.notificationId,
   newTask.title,
   newTask.date,
-  newTask.note
+  newTask.note,
+  {
+    lubanoteType: "note",
+    taskId: newTask.id
+  }
 );
       }
     }

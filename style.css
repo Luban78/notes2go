@@ -3073,3 +3073,61 @@ body.authPending .addTaskButton {
 #closeTagMessageButton:active {
   transform: scale(0.97);
 }
+/* ==========================================
+   PŘIPOMÍNKY – PROŠLÉ A NAPLÁNOVANÉ ÚKOLY
+   ========================================== */
+
+.remindersOverdueGroup h3 {
+  color: #c84f58;
+}
+
+.reminderItem.overdue .reminderItemTime {
+  color: #c84f58;
+}
+
+.plannedReminderItem .reminderItemTitle::after {
+  content: "📅";
+  flex: 0 0 auto;
+  margin-left: 3px;
+  font-size: 0.78em;
+  opacity: 0.72;
+}
+
+.reminderQuickDone {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-accent);
+  border-radius: 13px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 14%,
+      var(--color-background)
+    );
+  color: var(--color-accent-text);
+
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.reminderQuickDone[hidden] {
+  display: none !important;
+}
+
+/* Hotový naplánovaný výřez zůstane čitelný a zároveň je jasně hotový. */
+.plannedTextLink.plannedTextLinkCompleted {
+  text-decoration-line: underline line-through;
+  text-decoration-thickness: 2px;
+  opacity: 0.58;
+}
+
+.calendarAgendaItem.completed .calendarAgendaText,
+.calendarAgendaItem.completed .calendarAgendaTime {
+  text-decoration: line-through;
+  opacity: 0.55;
+}

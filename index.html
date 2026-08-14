@@ -355,6 +355,11 @@
 
   <div class="remindersGroups remindersScroll">
 
+    <section class="remindersGroup remindersOverdueGroup">
+      <h3>Po termínu</h3>
+      <div id="remindersOverdue"></div>
+    </section>
+
     <section class="remindersGroup">
       <h3>Dnes</h3>
       <div id="remindersToday"></div>
@@ -391,7 +396,7 @@
   >
     <div class="reminderQuickHeader">
       <div>
-        <div class="reminderQuickLabel">Připomínka</div>
+        <div id="reminderQuickLabel" class="reminderQuickLabel">Připomínka</div>
         <h3 id="reminderQuickTitle">Bez názvu</h3>
       </div>
 
@@ -430,6 +435,15 @@
       class="reminderQuickPrimary"
     >
       Uložit datum a čas
+    </button>
+
+    <button
+      id="completeReminderButton"
+      type="button"
+      class="reminderQuickDone"
+      hidden
+    >
+      ✅ Hotovo
     </button>
 
     <div class="reminderQuickFooter">
