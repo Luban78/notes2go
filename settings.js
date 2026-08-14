@@ -41,8 +41,8 @@
   }
 
   currentFontSize = Math.min(
-    28,
-    Math.max(12, currentFontSize)
+    20,
+    Math.max(13, currentFontSize)
   );
 
   function applyFontSize() {
@@ -70,13 +70,13 @@
   applyTheme(localStorage.getItem("theme") || "light");
 
   increaseFontButton.addEventListener("click", () => {
-    currentFontSize = Math.min(currentFontSize + 1, 28);
+    currentFontSize = Math.min(currentFontSize + 1, 20);
     localStorage.setItem("fontSize", currentFontSize);
     applyFontSize();
   });
 
   decreaseFontButton.addEventListener("click", () => {
-    currentFontSize = Math.max(currentFontSize - 1, 12);
+    currentFontSize = Math.max(currentFontSize - 1, 13);
     localStorage.setItem("fontSize", currentFontSize);
     applyFontSize();
   });
