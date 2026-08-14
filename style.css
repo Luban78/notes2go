@@ -3157,3 +3157,9 @@ body.authPending .addTaskButton {
   margin-left: 4px;
   font-weight: 700;
 }
+
+.calendarAgenda {
+  max-height: 42vh;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
