@@ -75,6 +75,7 @@ notesButton.addEventListener("click", () => {
   
   calendarScreen.hidden = true;
   remindersScreen.hidden = true;
+  dayDetailScreen.hidden = true;
   
   setActiveModule(notesButton);
 });
@@ -93,6 +94,7 @@ plannerButton.addEventListener("click", () => {
   
   calendarScreen.hidden = false;
   remindersScreen.hidden = true;
+  dayDetailScreen.hidden = true;
   
   calendarCurrentDate = new Date();
   calendarSelectedDay = new Date();
@@ -168,7 +170,7 @@ remindersButton.addEventListener("click", () => {
   
   calendarScreen.hidden = true;
   remindersScreen.hidden = false;
-  
+  dayDetailScreen.hidden = true;
   setActiveModule(remindersButton);
   
   renderRemindersScreen();

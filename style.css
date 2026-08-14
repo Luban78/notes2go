@@ -23,7 +23,23 @@
 /* ==================================================
    ZÁKLAD STRÁNKY
 ================================================== */
-
+html,
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+}
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
 body {
   display: flex;
   flex-direction: column;
@@ -3334,4 +3350,10 @@ font-size: calc(var(--font-size) - 1px);
 
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+#calendarScreen[hidden],
+#remindersScreen[hidden],
+#dayDetailScreen[hidden] {
+  display: none !important;
 }
