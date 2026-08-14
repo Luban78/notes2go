@@ -2200,7 +2200,8 @@ body.authPending .addTaskButton {
 
 .calendarDay {
   position: relative;
-  aspect-ratio: 1;
+  aspect-ratio: auto;
+height: 42px;
   
   display: flex;
   align-items: center;
@@ -2239,13 +2240,11 @@ body.authPending .addTaskButton {
   background: currentColor;
 }
 
-.calendarAgenda {
-  margin-top: 18px;
-}
+
 
 .calendarAgenda h3 {
   margin: 0 0 10px;
-  font-size: calc(var(--font-size) + 2px);
+  font-size: calc(var(--font-size) + 1px);
 }
 
 .calendarAgendaItem {
@@ -2265,6 +2264,7 @@ font-size: var(--font-size);
 
 .calendarAgendaText {
   color: var(--color-text);
+  text-align: left;
 }
 
 /* ==========================================
@@ -2482,7 +2482,7 @@ font-size: var(--font-size);
   .calendarGrid {
     grid-column: 1;
     grid-row: 3;
-    gap: 5px;
+    gap: 3px;
   }
 
   .calendarDay {
@@ -3164,4 +3164,19 @@ font-size: calc(var(--font-size) - 1px);
   max-height: 42vh;
   overflow-y: auto;
   padding-bottom: 24px;
+}
+.calendarGrid {
+  gap: 6px;
+}
+
+.calendarDay {
+  border-radius: 10px;
+}
+
+.calendarAgenda {
+  margin-top: 10px;
+}
+
+.calendarWeekdays {
+  margin-bottom: 4px;
 }
