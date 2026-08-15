@@ -67,13 +67,32 @@ confirmDeleteButton.addEventListener("click", () => {
 
   renderTasks();
 });
+const modalDateButton =
+  document.getElementById("modalDateButton");
 
+const datePickerModal =
+  document.getElementById("datePickerModal");
+
+const closeDatePickerButton =
+  document.getElementById("closeDatePickerButton");
 const mainMenuButton = document.getElementById("mainMenuButton");
 const mainMenu = document.getElementById("mainMenu");
 const pinnedCards = document.getElementById("pinnedCards");
 const pinnedLeft = document.getElementById("pinnedLeft");
 const pinnedRight = document.getElementById("pinnedRight");
 
+
+const modalTimeButton =
+  document.getElementById("modalTimeButton");
+
+const timePickerModal =
+  document.getElementById("timePickerModal");
+
+const closeTimePickerButton =
+  document.getElementById("closeTimePickerButton");
+
+const timePickerCancelButton =
+  document.getElementById("timePickerCancelButton");
 
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
@@ -97,6 +116,544 @@ deleteTaskButton?.addEventListener("click", () => {
   deleteConfirmModal.hidden = false;
 });
 
+const datePickerGrid =
+  document.getElementById("datePickerGrid");
+
+const datePickerMonthTitle =
+  document.getElementById("datePickerMonthTitle");
+
+const previousMonthButton =
+  document.getElementById("previousMonthButton");
+
+const nextMonthButton =
+  document.getElementById("nextMonthButton");
+
+const datePickerTodayButton =
+  document.getElementById("datePickerTodayButton");
+
+const timePickerClock =
+  document.getElementById("timePickerClock");
+
+const timePickerSelectedHour =
+  document.getElementById("timePickerSelectedHour");
+
+const timePickerSelectedMinute =
+  document.getElementById("timePickerSelectedMinute");  
+
+  const timePickerHand =
+  document.getElementById("timePickerHand");
+const timePickerHourHand =
+  document.getElementById("timePickerHourHand");
+
+ const timePickerSaveButton =
+  document.getElementById("timePickerSaveButton");
+
+const timePickerNowButton =
+  document.getElementById("timePickerNowButton");
+
+const modalTimeLabel =
+  document.getElementById("modalTimeLabel"); 
+  // ==========================================
+// VLASTNÍ CIFERNÍK – VYKRESLENÍ HODIN
+// ==========================================
+
+function vykresliHodinyCiferniku() {
+  timePickerClock
+  .querySelectorAll(".timePickerClockNumber")
+  .forEach((prvek) => prvek.remove());
+
+  const vnejsiHodiny = [
+    12, 1, 2, 3, 4, 5,
+    6, 7, 8, 9, 10, 11
+  ];
+
+  const vnitrniHodiny = [
+    0, 13, 14, 15, 16, 17,
+    18, 19, 20, 21, 22, 23
+  ];
+
+  function vytvorHodinu(hodina, index, polomer) {
+    const tlacitko =
+      document.createElement("button");
+
+    tlacitko.type = "button";
+    tlacitko.className = "timePickerClockNumber";
+    tlacitko.textContent =
+      String(hodina).padStart(2, "0");
+
+    const uhel =
+      (index * 30 - 90) *
+      Math.PI / 180;
+
+    const x =
+      50 + Math.cos(uhel) * polomer;
+
+    const y =
+      50 + Math.sin(uhel) * polomer;
+
+    tlacitko.style.left = `${x}%`;
+    tlacitko.style.top = `${y}%`;
+
+    tlacitko.addEventListener("click", () => {
+  timePickerSelectedHour.textContent =
+    String(hodina).padStart(2, "0");
+
+  timePickerHourHand.style.transform =
+    `translate(-50%, -100%) rotate(${index * 30}deg)`;
+
+  timePickerHourHand.hidden = true;
+  timePickerHand.hidden = false;
+
+  timePickerSelectedHour.classList.remove("active");
+  timePickerSelectedMinute.classList.add("active");
+
+  vykresliMinutyCiferniku();
+});
+
+    timePickerClock.append(tlacitko);
+  }
+
+  vnejsiHodiny.forEach(
+    (hodina, index) => {
+      vytvorHodinu(
+        hodina,
+        index,
+        40
+      );
+    }
+  );
+
+  vnitrniHodiny.forEach(
+    (hodina, index) => {
+      vytvorHodinu(
+        hodina,
+        index,
+        25
+      );
+    }
+  );
+}
+
+// ==========================================
+// VLASTNÍ CIFERNÍK – VYKRESLENÍ MINUT
+// ==========================================
+
+function vykresliMinutyCiferniku() {
+  timePickerClock
+  .querySelectorAll(".timePickerClockNumber")
+  .forEach((prvek) => prvek.remove());
+
+  for (let minuta = 0; minuta < 60; minuta += 5) {
+    const tlacitko =
+      document.createElement("button");
+
+    tlacitko.type = "button";
+    tlacitko.className = "timePickerClockNumber";
+
+    tlacitko.textContent =
+      String(minuta).padStart(2, "0");
+
+    const index = minuta / 5;
+
+    const uhel =
+      (index * 30 - 90) *
+      Math.PI / 180;
+
+    const x =
+      50 + Math.cos(uhel) * 40;
+
+    const y =
+      50 + Math.sin(uhel) * 40;
+
+    tlacitko.style.left = `${x}%`;
+    tlacitko.style.top = `${y}%`;
+
+    tlacitko.addEventListener("click", () => {
+      timePickerSelectedMinute.textContent =
+        String(minuta).padStart(2, "0");
+    });
+
+    timePickerClock.append(tlacitko);
+  }
+}
+
+
+
+// ==========================================
+// VLASTNÍ CIFERNÍK – TAŽENÍ MINUT
+// Funguje prstem na mobilu i myší na PC.
+// ==========================================
+
+let minutovyCifernikAktivni = false;
+
+function nastavMinutuPodlePozice(event) {
+  const rect =
+    timePickerClock.getBoundingClientRect();
+
+  const stredX =
+    rect.left + rect.width / 2;
+
+  const stredY =
+    rect.top + rect.height / 2;
+
+  const x =
+    event.clientX - stredX;
+
+  const y =
+    event.clientY - stredY;
+
+  let uhel =
+    Math.atan2(y, x) * 180 / Math.PI;
+
+  uhel += 90;
+
+  if (uhel < 0) {
+    uhel += 360;
+  }
+
+  const minuta =
+    Math.round(uhel / 6) % 60;
+
+  timePickerSelectedMinute.textContent =
+    String(minuta).padStart(2, "0");
+
+  timePickerHand.style.transform =
+  `translate(-50%, -100%) rotate(${minuta * 6}deg)`;
+}
+
+timePickerClock.addEventListener(
+  "pointerdown",
+  (event) => {
+
+    // Výběr hodin
+    if (
+      timePickerSelectedHour.classList.contains(
+        "active"
+      )
+    ) {
+      hodinovyCifernikAktivni = true;
+
+      timePickerClock.setPointerCapture(
+        event.pointerId
+      );
+
+      nastavHodinuPodlePozice(event);
+
+      return;
+    }
+
+    // Výběr minut
+    if (
+      timePickerSelectedMinute.classList.contains(
+        "active"
+      )
+    ) {
+      minutovyCifernikAktivni = true;
+
+      timePickerClock.setPointerCapture(
+        event.pointerId
+      );
+
+      nastavMinutuPodlePozice(event);
+    }
+  }
+);
+
+timePickerClock.addEventListener(
+  "pointermove",
+  (event) => {
+
+    if (hodinovyCifernikAktivni) {
+      nastavHodinuPodlePozice(event);
+      return;
+    }
+
+    if (minutovyCifernikAktivni) {
+      nastavMinutuPodlePozice(event);
+    }
+  }
+);
+
+timePickerClock.addEventListener(
+  "pointerup",
+  () => {
+    if (hodinovyCifernikAktivni) {
+      hodinovyCifernikAktivni = false;
+
+      timePickerHourHand.hidden = true;
+      timePickerHand.hidden = false;
+
+      timePickerSelectedHour.classList.remove(
+        "active"
+      );
+
+      timePickerSelectedMinute.classList.add(
+        "active"
+      );
+
+      vykresliMinutyCiferniku();
+
+      return;
+    }
+
+    minutovyCifernikAktivni = false;
+  }
+);
+
+timePickerClock.addEventListener(
+  "pointercancel",
+  () => {
+    hodinovyCifernikAktivni = false;
+    minutovyCifernikAktivni = false;
+  }
+);
+
+
+
+
+timePickerSaveButton?.addEventListener("click", () => {
+  const hodina =
+    timePickerSelectedHour.textContent.padStart(2, "0");
+
+  const minuta =
+    timePickerSelectedMinute.textContent.padStart(2, "0");
+
+  modalTime.value =
+    `${hodina}:${minuta}`;
+
+  modalTimeLabel.textContent =
+    `${hodina}:${minuta}`;
+
+  timePickerModal.hidden = true;
+});
+// ==========================================
+// VLASTNÍ CIFERNÍK – TAŽENÍ HODIN
+// Funguje prstem na mobilu i myší na PC.
+// ==========================================
+
+let hodinovyCifernikAktivni = false;
+
+function nastavHodinuPodlePozice(event) {
+  const rect =
+    timePickerClock.getBoundingClientRect();
+
+  const stredX =
+    rect.left + rect.width / 2;
+
+  const stredY =
+    rect.top + rect.height / 2;
+
+  const x =
+    event.clientX - stredX;
+
+  const y =
+    event.clientY - stredY;
+
+  let uhel =
+    Math.atan2(y, x) * 180 / Math.PI;
+
+  uhel += 90;
+
+  if (uhel < 0) {
+    uhel += 360;
+  }
+
+  const vzdalenost =
+    Math.sqrt(x * x + y * y);
+
+  const polomer =
+    rect.width / 2;
+
+  const vnitrniKruh =
+    vzdalenost < polomer * 0.67;
+
+  const index =
+    Math.round(uhel / 30) % 12;
+
+  let hodina;
+
+  if (vnitrniKruh) {
+    const vnitrniHodiny = [
+      0, 13, 14, 15, 16, 17,
+      18, 19, 20, 21, 22, 23
+    ];
+
+    hodina = vnitrniHodiny[index];
+  } else {
+    const vnejsiHodiny = [
+      12, 1, 2, 3, 4, 5,
+      6, 7, 8, 9, 10, 11
+    ];
+
+    hodina = vnejsiHodiny[index];
+  }
+
+  timePickerSelectedHour.textContent =
+    String(hodina).padStart(2, "0");
+
+  timePickerHourHand.style.transform =
+    `translate(-50%, -100%) rotate(${index * 30}deg)`;
+}
+// ==========================================
+// VLASTNÍ KALENDÁŘ – AKTUÁLNĚ ZOBRAZENÝ MĚSÍC
+// ==========================================
+
+let datePickerYear = new Date().getFullYear();
+let datePickerMonth = new Date().getMonth();
+
+// ==========================================
+// VLASTNÍ KALENDÁŘ – VYKRESLENÍ MĚSÍCE
+// ==========================================
+
+function vykresliVyberData() {
+  datePickerGrid.innerHTML = "";
+
+  const prvniDenMesice =
+    new Date(
+      datePickerYear,
+      datePickerMonth,
+      1
+    );
+
+  const pocetDniVMesici =
+    new Date(
+      datePickerYear,
+      datePickerMonth + 1,
+      0
+    ).getDate();
+
+  const nazvyMesicu = [
+    "Leden",
+    "Únor",
+    "Březen",
+    "Duben",
+    "Květen",
+    "Červen",
+    "Červenec",
+    "Srpen",
+    "Září",
+    "Říjen",
+    "Listopad",
+    "Prosinec"
+  ];
+
+  datePickerMonthTitle.textContent =
+    `${nazvyMesicu[datePickerMonth]} ${datePickerYear}`;
+
+  /*
+   * JavaScript počítá neděli jako 0.
+   * My máme kalendář od pondělí,
+   * proto hodnotu převedeme na 0–6.
+   */
+  const pocatecniPozice =
+    (prvniDenMesice.getDay() + 6) % 7;
+
+  for (
+    let pozice = 0;
+    pozice < pocatecniPozice;
+    pozice++
+  ) {
+    const prazdneMisto =
+      document.createElement("span");
+
+    datePickerGrid.append(
+      prazdneMisto
+    );
+  }
+
+  const dnes = new Date();
+
+  for (
+    let den = 1;
+    den <= pocetDniVMesici;
+    den++
+  ) {
+    const tlacitkoDne =
+      document.createElement("button");
+
+    tlacitkoDne.type = "button";
+    tlacitkoDne.textContent = den;
+
+    tlacitkoDne.addEventListener("click", () => {
+  const mesic =
+    String(datePickerMonth + 1).padStart(2, "0");
+
+  const denText =
+    String(den).padStart(2, "0");
+
+  modalDate.value =
+    `${datePickerYear}-${mesic}-${denText}`;
+
+  modalDateLabel.textContent =
+    `${den}. ${datePickerMonth + 1}. ${datePickerYear}`;
+
+  updateModalWeekday();
+
+  datePickerModal.hidden = true;
+});
+
+
+
+    if (
+      den === dnes.getDate() &&
+      datePickerMonth === dnes.getMonth() &&
+      datePickerYear === dnes.getFullYear()
+    ) {
+      tlacitkoDne.classList.add("today");
+    }
+
+    datePickerGrid.append(
+      tlacitkoDne
+    );
+  }
+}
+
+previousMonthButton?.addEventListener("click", () => {
+  datePickerMonth--;
+
+  if (datePickerMonth < 0) {
+    datePickerMonth = 11;
+    datePickerYear--;
+  }
+
+  vykresliVyberData();
+});
+
+nextMonthButton?.addEventListener("click", () => {
+  datePickerMonth++;
+
+  if (datePickerMonth > 11) {
+    datePickerMonth = 0;
+    datePickerYear++;
+  }
+
+  vykresliVyberData();
+});
+
+datePickerTodayButton?.addEventListener("click", () => {
+  const dnes = new Date();
+
+  datePickerYear = dnes.getFullYear();
+  datePickerMonth = dnes.getMonth();
+
+  const mesic =
+    String(dnes.getMonth() + 1).padStart(2, "0");
+
+  const den =
+    String(dnes.getDate()).padStart(2, "0");
+
+  modalDate.value =
+    `${dnes.getFullYear()}-${mesic}-${den}`;
+
+  modalDateLabel.textContent =
+    `${dnes.getDate()}. ${dnes.getMonth() + 1}. ${dnes.getFullYear()}`;
+
+  updateModalWeekday();
+
+  datePickerModal.hidden = true;
+});
+
+
 const reminderButton = document.getElementById("reminderButton");
 
 const importFile = document.getElementById("importFile");
@@ -110,6 +667,31 @@ priorityTaskButton?.addEventListener("click", () => {
     "active",
     favoriteEnabled
   );
+});
+
+
+modalDateButton?.addEventListener("click", () => {
+  vykresliVyberData();
+
+  datePickerModal.hidden = false;
+});
+
+closeDatePickerButton?.addEventListener("click", () => {
+  datePickerModal.hidden = true;
+});
+
+modalTimeButton?.addEventListener("click", () => {
+  vykresliHodinyCiferniku();
+
+  timePickerModal.hidden = false;
+});
+
+closeTimePickerButton?.addEventListener("click", () => {
+  timePickerModal.hidden = true;
+});
+
+timePickerCancelButton?.addEventListener("click", () => {
+  timePickerModal.hidden = true;
 });
 
 importFile.addEventListener("change", () => {

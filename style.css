@@ -3698,3 +3698,480 @@ body.authPending .addTaskButton {
       var(--color-accent) 18%,
       transparent);
 }
+
+/* ========================================
+   VLASTNÍ VÝBĚR DATA A ČASU – TLAČÍTKA
+   ======================================== */
+
+.dateTimePickerButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  min-width: 0;
+  height: calc(var(--font-size) + 24px);
+  padding: 4px 10px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-editor-background) 86%,
+    var(--color-surface)
+  );
+
+  color: var(--color-editor-text);
+
+  font: inherit;
+  font-size: calc(var(--font-size) - 1px);
+
+  cursor: pointer;
+}
+
+.dateTimePickerButton:active {
+  transform: scale(0.98);
+}
+
+#modalDateButton {
+  flex: 1.25;
+}
+
+#modalTimeButton {
+  flex: 0.55;
+}
+
+
+
+/* ========================================
+   VLASTNÍ VÝBĚR DATA – KALENDÁŘ
+   Nahrazuje systémový date picker.
+   Používá barvy aktuálního motivu.
+   ======================================== */
+
+.datePickerModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.datePickerModal[hidden] {
+  display: none;
+}
+
+.datePickerContent {
+  width: min(100%, 420px);
+
+  padding: 20px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.datePickerHeader {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.datePickerHeader h2 {
+  margin: 0;
+
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+.datePickerHeader button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.5rem;
+}
+
+.datePickerWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+
+  margin-top: 16px;
+  margin-bottom: 8px;
+
+  color: var(--color-text-secondary);
+
+  font-size: calc(var(--font-size) - 3px);
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.datePickerGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.datePickerGrid button {
+  aspect-ratio: 1 / 1;
+
+  border: 1px solid transparent;
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: calc(var(--font-size) - 1px);
+
+  cursor: pointer;
+}
+
+.datePickerGrid button:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      transparent
+    );
+}
+
+.datePickerGrid button.selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.datePickerGrid button.today {
+  border-color: var(--color-accent);
+}
+
+.datePickerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.datePickerActions button {
+  min-height: 44px;
+  padding: 8px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 650;
+}
+
+/* ========================================
+   VLASTNÍ VÝBĚR ČASU – CIFERNÍK
+   Klasický time picker ve stylu LubaNote.
+   Používá barvy aktuálního motivu.
+   ======================================== */
+
+.timePickerModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.timePickerModal[hidden] {
+  display: none;
+}
+
+.timePickerContent {
+  width: min(100%, 420px);
+
+  padding: 20px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.timePickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.timePickerHeader h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+#closeTimePickerButton {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.3rem;
+}
+
+.timePickerSelected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  margin: 18px 0 16px;
+
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+.timePickerSelectedPart {
+  min-width: 72px;
+  padding: 10px 12px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.timePickerSelectedPart.active {
+  border-color: var(--color-accent);
+  box-shadow:
+    0 0 0 2px
+    color-mix(
+      in srgb,
+      var(--color-accent) 18%,
+      transparent
+    );
+}
+
+.timePickerClock {
+  position: relative;
+
+  width: min(72vw, 300px);
+  aspect-ratio: 1 / 1;
+
+  margin: 0 auto;
+
+  border-radius: 50%;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-background) 86%,
+      var(--color-surface)
+    );
+
+  border: 1px solid var(--color-border);
+}
+
+.timePickerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.timePickerActions button {
+  min-height: 44px;
+  padding: 8px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 650;
+}
+
+#timePickerSaveButton {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.timePickerClockNumber {
+  position: absolute;
+
+  width: 42px;
+  height: 42px;
+
+  transform: translate(-50%, -50%);
+
+  border: none;
+  border-radius: 50%;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+/* ========================================
+   VLASTNÍ CIFERNÍK – RUČIČKA
+   ======================================== */
+
+.timePickerHand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+
+  width: 2px;
+  height: 38%;
+
+  background: var(--color-accent);
+
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(0deg);
+
+  border-radius: 999px;
+
+  pointer-events: none;
+  z-index: 1;
+}
+
+.timePickerHand::before {
+  content: "";
+
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+
+  width: 12px;
+  height: 12px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background: var(--color-accent);
+}
+
+.timePickerHand::after {
+  content: "";
+
+  position: absolute;
+  left: 50%;
+  top: -6px;
+
+  width: 12px;
+  height: 12px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background: var(--color-accent);
+}
+
+.timePickerHourHand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+
+  width: 3px;
+  height: 27%;
+
+  background: var(--color-accent);
+
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(0deg);
+
+  border-radius: 999px;
+
+  pointer-events: none;
+  z-index: 1;
+}
+
+.timePickerHourHand::before {
+  content: "";
+
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+
+  width: 12px;
+  height: 12px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background: var(--color-accent);
+}
+
+.timePickerHourHand::after {
+  content: "";
+
+  position: absolute;
+  left: 50%;
+  top: -6px;
+
+  width: 12px;
+  height: 12px;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background: var(--color-accent);
+}
+
+.timePickerHourHand[hidden],
+.timePickerHand[hidden] {
+  display: none;
+}

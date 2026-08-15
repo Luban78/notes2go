@@ -373,9 +373,19 @@
 
           <span id="modalWeekday" class="modalWeekday"></span>
 
-          <input type="date" id="modalDate">
+          <button id="modalDateButton" class="dateTimePickerButton" type="button" aria-label="Vybrat datum">
+            <span id="modalDateLabel">Vybrat datum</span>
+            <span aria-hidden="true">📅</span>
+          </button>
 
-          <input type="time" id="modalTime">
+          <button id="modalTimeButton" class="dateTimePickerButton" type="button" aria-label="Vybrat čas">
+            <span id="modalTimeLabel">Vybrat čas</span>
+            <span aria-hidden="true">🕒</span>
+          </button>
+
+          <input type="hidden" id="modalDate">
+
+          <input type="hidden" id="modalTime">
 
         </div>
 
@@ -573,6 +583,128 @@
 
     </div>
 
+  </div>
+
+  <!-- ========================================
+     VLASTNÍ VÝBĚR DATA
+     Kalendář pro výběr data v editoru.
+     Nahrazuje systémový date picker.
+     ======================================== -->
+
+  <div id="datePickerModal" class="datePickerModal" hidden>
+    <div class="datePickerContent">
+
+      <div class="datePickerHeader">
+
+        <button id="previousMonthButton" type="button" aria-label="Předchozí měsíc">
+          ‹
+        </button>
+
+        <h2 id="datePickerMonthTitle">
+          Srpen 2026
+        </h2>
+
+        <button id="nextMonthButton" type="button" aria-label="Další měsíc">
+          ›
+        </button>
+
+      </div>
+
+      <div class="datePickerWeekdays">
+        <span>Po</span>
+        <span>Út</span>
+        <span>St</span>
+        <span>Čt</span>
+        <span>Pá</span>
+        <span>So</span>
+        <span>Ne</span>
+      </div>
+
+      <div id="datePickerGrid" class="datePickerGrid">
+      </div>
+
+      <div class="datePickerActions">
+
+        <button id="datePickerTodayButton" type="button">
+          Dnes
+        </button>
+
+        <button id="closeDatePickerButton" type="button">
+          Zavřít
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================
+     VLASTNÍ VÝBĚR ČASU
+     Klasický ciferník ve stylu LubaNote.
+     Nahrazuje systémový time picker.
+     ======================================== -->
+
+  <div id="timePickerModal" class="timePickerModal" hidden>
+    <div class="timePickerContent">
+
+      <div class="timePickerHeader">
+        <h2>Vybrat čas</h2>
+
+        <button id="closeTimePickerButton" type="button" aria-label="Zavřít výběr času">
+          ✕
+        </button>
+      </div>
+
+      <div class="timePickerSelected">
+        <button id="timePickerSelectedHour" class="timePickerSelectedPart active" type="button">
+          08
+        </button>
+
+        <span>:</span>
+
+        <button id="timePickerSelectedMinute" class="timePickerSelectedPart" type="button">
+          00
+        </button>
+      </div>
+
+
+
+      <div
+  id="timePickerClock"
+  class="timePickerClock"
+  aria-label="Ciferník výběru času"
+>
+  <!-- Hodinová ručička – používá se při výběru hodin -->
+  <div
+    id="timePickerHourHand"
+    class="timePickerHourHand"
+  ></div>
+
+  <!-- Minutová ručička – používá se při výběru minut -->
+  <div
+    id="timePickerHand"
+    class="timePickerHand"
+    hidden
+  ></div>
+</div>
+
+      <div class="timePickerActions">
+
+        <button id="timePickerNowButton" type="button">
+          Teď
+        </button>
+
+        <button id="timePickerCancelButton" type="button">
+          Zrušit
+        </button>
+
+        <button id="timePickerSaveButton" type="button">
+          Nastavit
+        </button>
+
+      </div>
+
+    </div>
   </div>
   <!-- ========================================
      PLÁNOVÁNÍ POZNÁMKY
@@ -789,67 +921,49 @@
      Seznam štítků sem vykresluje JavaScript.
      ======================================== -->
 
-<div
-  id="manageTagsModal"
-  class="manageTagsModal"
-  hidden
->
-  <div class="manageTagsContent">
+  <div id="manageTagsModal" class="manageTagsModal" hidden>
+    <div class="manageTagsContent">
 
-    <div class="manageTagsHeader">
-      <h2>Správa štítků</h2>
+      <div class="manageTagsHeader">
+        <h2>Správa štítků</h2>
 
-      <button
-        id="closeManageTagsButton"
-        type="button"
-        aria-label="Zavřít správu štítků"
-      >
-        ✕
-      </button>
+        <button id="closeManageTagsButton" type="button" aria-label="Zavřít správu štítků">
+          ✕
+        </button>
+      </div>
+
+      <div id="manageTagsList">
+      </div>
+
     </div>
-
-    <div id="manageTagsList">
-    </div>
-
   </div>
-</div>
-<!-- ========================================
+  <!-- ========================================
      POTVRZENÍ SMAZÁNÍ ŠTÍTKU
      Potvrzuje odstranění štítku ze systému
      i ze všech poznámek, které ho používají.
      ======================================== -->
 
-<div
-  id="deleteTagConfirmModal"
-  class="deleteTagConfirmModal"
-  hidden
->
-  <div class="deleteTagConfirmContent">
+  <div id="deleteTagConfirmModal" class="deleteTagConfirmModal" hidden>
+    <div class="deleteTagConfirmContent">
 
-    <h3>Smazat štítek?</h3>
+      <h3>Smazat štítek?</h3>
 
-    <p id="deleteTagConfirmText">
-      Opravdu chceš tento štítek smazat?
-    </p>
+      <p id="deleteTagConfirmText">
+        Opravdu chceš tento štítek smazat?
+      </p>
 
-    <div class="deleteTagConfirmActions">
-      <button
-        id="cancelDeleteTagButton"
-        type="button"
-      >
-        Zrušit
-      </button>
+      <div class="deleteTagConfirmActions">
+        <button id="cancelDeleteTagButton" type="button">
+          Zrušit
+        </button>
 
-      <button
-        id="confirmDeleteTagButton"
-        type="button"
-      >
-        🗑️ Smazat
-      </button>
+        <button id="confirmDeleteTagButton" type="button">
+          🗑️ Smazat
+        </button>
+      </div>
+
     </div>
-
   </div>
-</div>
 
 
   <!-- ========================================
