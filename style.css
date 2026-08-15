@@ -3461,3 +3461,8 @@ font-size: calc(var(--font-size) - 1px);
 .choiceDialogOption:disabled {
   opacity: 0.8;
 }
+
+#priorityTaskButton.active {
+  background: var(--color-accent);
+  color: #ffffff;
+}

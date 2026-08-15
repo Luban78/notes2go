@@ -3,17 +3,11 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>LubaNote</title>
 
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="desktop.css">
 </head>
 
@@ -23,59 +17,28 @@
        PŘIHLAŠOVACÍ OBRAZOVKA
        ======================================== -->
 
-  <div
-    id="loginScreen"
-    hidden
-  >
-    <form
-      id="loginForm"
-      class="loginCard"
-      novalidate
-    >
+  <div id="loginScreen" hidden>
+    <form id="loginForm" class="loginCard" novalidate>
 
       <!-- Logo a název na loginu -->
       <div class="loginBrand">
-        <img
-          src="icons/lubanote.png"
-          alt=""
-          class="loginLogoImage"
-        >
+        <img src="icons/lubanote.png" alt="" class="loginLogoImage">
 
         <strong>LubaNote</strong>
       </div>
 
       <h2>Přihlášení</h2>
 
-      <input
-        id="loginEmail"
-        type="email"
-        placeholder="E-mail"
-        autocomplete="email"
-        autocapitalize="none"
-        spellcheck="false"
-        required
-      >
+      <input id="loginEmail" type="email" placeholder="E-mail" autocomplete="email" autocapitalize="none"
+        spellcheck="false" required>
 
-      <input
-        id="loginPassword"
-        type="password"
-        placeholder="Heslo"
-        autocomplete="current-password"
-        required
-      >
+      <input id="loginPassword" type="password" placeholder="Heslo" autocomplete="current-password" required>
 
-      <button
-        id="loginButton"
-        type="submit"
-      >
+      <button id="loginButton" type="submit">
         Přihlásit se
       </button>
 
-      <p
-        id="loginMessage"
-        role="alert"
-        aria-live="polite"
-      ></p>
+      <p id="loginMessage" role="alert" aria-live="polite"></p>
 
     </form>
   </div>
@@ -90,40 +53,20 @@
 
     <!-- HLAVNÍ MODULY LUBANOTE -->
     <div class="moduleBar">
-      <img
-        src="icons/lubanote.png"
-        alt="LubaNote"
-        class="moduleLogo"
-      >
+      <img src="icons/lubanote.png" alt="LubaNote" class="moduleLogo">
 
       <nav class="moduleTabs" aria-label="Hlavní části LubaNote">
-        <button
-          id="notesModuleButton"
-          class="moduleTab active"
-          type="button"
-          data-module="notes"
-          aria-current="page"
-        >
+        <button id="notesModuleButton" class="moduleTab active" type="button" data-module="notes" aria-current="page">
           <span class="moduleTabIcon" aria-hidden="true">📝</span>
           <span class="moduleTabText">Poznámky</span>
         </button>
 
-        <button
-          id="plannerModuleButton"
-          class="moduleTab"
-          type="button"
-          data-module="planner"
-        >
+        <button id="plannerModuleButton" class="moduleTab" type="button" data-module="planner">
           <span class="moduleTabIcon" aria-hidden="true">📅</span>
           <span class="moduleTabText">Plán</span>
         </button>
 
-        <button
-          id="remindersModuleButton"
-          class="moduleTab"
-          type="button"
-          data-module="reminders"
-        >
+        <button id="remindersModuleButton" class="moduleTab" type="button" data-module="reminders">
           <span class="moduleTabIcon" aria-hidden="true">🔔</span>
           <span class="moduleTabText">Připomínky</span>
         </button>
@@ -134,32 +77,18 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" aria-hidden="true">⌕</span>
-        <input
-          id="searchNotes"
-          type="search"
-          placeholder="Hledat poznámky..."
-          aria-label="Hledat poznámky"
-        >
+        <input id="searchNotes" type="search" placeholder="Hledat poznámky..." aria-label="Hledat poznámky">
       </div>
 
       <div class="searchActions">
         <!-- 1 sloupec / 2 sloupce -->
-        <button
-          id="changeViewButton"
-          type="button"
-          aria-label="Změnit zobrazení karet"
-        >
+        <button id="changeViewButton" type="button" aria-label="Změnit zobrazení karet">
           ▦
         </button>
 
         <!-- Servisní nabídka aplikace -->
-        <button
-          id="mainMenuButton"
-          type="button"
-          aria-label="Hlavní nabídka"
-          aria-haspopup="menu"
-          aria-expanded="false"
-        >
+        <button id="mainMenuButton" type="button" aria-label="Hlavní nabídka" aria-haspopup="menu"
+          aria-expanded="false">
           ⋮
         </button>
 
@@ -191,27 +120,19 @@
 
     <!-- FILTRY OBLASTÍ A ŠTÍTKŮ -->
     <nav class="categoryTabs" aria-label="Filtr poznámek">
-      <button
-        class="categoryTab active"
-        type="button"
-        data-area-filter="all"
-      >
+      <button class="categoryTab active" type="button" data-area-filter="all">
         Vše
       </button>
 
-      <button
-        class="categoryTab"
-        type="button"
-        data-area-filter="work"
-      >
+      <button id="favoriteFilterButton" class="categoryTab" type="button" aria-label="Oblíbené poznámky">
+        ⭐
+      </button>
+
+      <button class="categoryTab" type="button" data-area-filter="work">
         💼 Pracovní
       </button>
 
-      <button
-        class="categoryTab"
-        type="button"
-        data-area-filter="private"
-      >
+      <button class="categoryTab" type="button" data-area-filter="private">
         🏠 Soukromé
       </button>
 
@@ -228,305 +149,210 @@
 
   <main class="app">
 
-    <div
-      id="pinnedCards"
-      class="pinnedCards"
-      hidden
-    >
+    <div id="pinnedCards" class="pinnedCards" hidden>
 
-      <div
-        id="pinnedLeft"
-        class="pinnedColumn"
-      ></div>
+      <div id="pinnedLeft" class="pinnedColumn"></div>
 
-      <div
-        id="pinnedRight"
-        class="pinnedColumn"
-      ></div>
+      <div id="pinnedRight" class="pinnedColumn"></div>
 
     </div>
 
 
     <!-- Zpráva při prázdném výsledku hledání -->
-    <p
-      id="noSearchResults"
-      hidden
-    >
+    <p id="noSearchResults" hidden>
       Nenalezeny žádné poznámky.
     </p>
 
   </main>
 
-<!-- ========================================
+  <!-- ========================================
      OBRAZOVKA PLÁN
      ======================================== -->
 
-<section
-  id="calendarScreen"
-  class="calendarScreen"
-  hidden
->
+  <section id="calendarScreen" class="calendarScreen" hidden>
 
-  <div class="calendarHeader">
+    <div class="calendarHeader">
 
-    <button
-      id="calendarPrevMonth"
-      type="button"
-      aria-label="Předchozí měsíc"
-    >
-      ‹
-    </button>
+      <button id="calendarPrevMonth" type="button" aria-label="Předchozí měsíc">
+        ‹
+      </button>
 
-    <h2 id="calendarMonthTitle">
-      Srpen 2026
-    </h2>
+      <h2 id="calendarMonthTitle">
+        Srpen 2026
+      </h2>
 
-    <button
-      id="calendarNextMonth"
-      type="button"
-      aria-label="Další měsíc"
-    >
-      ›
-    </button>
+      <button id="calendarNextMonth" type="button" aria-label="Další měsíc">
+        ›
+      </button>
 
-  </div>
+    </div>
 
-  <div class="calendarWeekdays">
-    <span>Po</span>
-    <span>Út</span>
-    <span>St</span>
-    <span>Čt</span>
-    <span>Pá</span>
-    <span>So</span>
-    <span>Ne</span>
-  </div>
+    <div class="calendarWeekdays">
+      <span>Po</span>
+      <span>Út</span>
+      <span>St</span>
+      <span>Čt</span>
+      <span>Pá</span>
+      <span>So</span>
+      <span>Ne</span>
+    </div>
 
-  <div
-    id="calendarGrid"
-    class="calendarGrid"
-  ></div>
+    <div id="calendarGrid" class="calendarGrid"></div>
 
-  <div class="calendarAgenda">
+    <div class="calendarAgenda">
 
-    <button
-  id="calendarSelectedDate"
-  class="calendarSelectedDateButton"
-  type="button"
->
-  Vybraný den
-</button>
+      <button id="calendarSelectedDate" class="calendarSelectedDateButton" type="button">
+        Vybraný den
+      </button>
 
-    <div id="calendarDayItems"></div>
+      <div id="calendarDayItems"></div>
 
-  </div>
+    </div>
 
-</section>
+  </section>
 
-<!-- ========================================
+  <!-- ========================================
      DETAIL DNE
      ======================================== -->
 
-<section
-  id="dayDetailScreen"
-  class="dayDetailScreen"
-  hidden
->
+  <section id="dayDetailScreen" class="dayDetailScreen" hidden>
 
-  <div class="dayDetailHeader">
+    <div class="dayDetailHeader">
 
-  <button
-    id="dayDetailBackButton"
-    class="dayDetailBackButton"
-    type="button"
-    aria-label="Zpět na kalendář"
-  >
-    <span class="dayDetailBackArrow">‹</span>
+      <button id="dayDetailBackButton" class="dayDetailBackButton" type="button" aria-label="Zpět na kalendář">
+        <span class="dayDetailBackArrow">‹</span>
 
-    <span id="dayDetailTitle">
-      Vybraný den
-    </span>
-  </button>
+        <span id="dayDetailTitle">
+          Vybraný den
+        </span>
+      </button>
 
-</div>
+    </div>
 
-  <div
-    id="dayDetailItems"
-    class="dayDetailItems"
-  ></div>
+    <div id="dayDetailItems" class="dayDetailItems"></div>
 
-</section>
-<!-- ========================================
+  </section>
+  <!-- ========================================
      OBRAZOVKA PŘIPOMÍNKY
      ======================================== -->
 
-<section
-  id="remindersScreen"
-  class="remindersScreen"
-  hidden
->
+  <section id="remindersScreen" class="remindersScreen" hidden>
 
-  <div class="remindersToolbar">
+    <div class="remindersToolbar">
 
-    <div class="remindersFilters">
+      <div class="remindersFilters">
 
-      <button
-        type="button"
-        class="remindersFilter active"
-        data-reminder-filter="all"
-      >
-        Vše
-      </button>
+        <button type="button" class="remindersFilter active" data-reminder-filter="all">
+          Vše
+        </button>
 
-      <button
-        type="button"
-        class="remindersFilter"
-        data-reminder-filter="work"
-      >
-        💼
-      </button>
+        <button type="button" class="remindersFilter" data-reminder-filter="work">
+          💼
+        </button>
 
-      <button
-        type="button"
-        class="remindersFilter"
-        data-reminder-filter="private"
-      >
-        🏠
-      </button>
+        <button type="button" class="remindersFilter" data-reminder-filter="private">
+          🏠
+        </button>
 
-    </div>
+      </div>
 
-    <div class="remindersStatusTabs">
+      <div class="remindersStatusTabs">
 
-      <button
-        type="button"
-        class="remindersStatusTab active"
-        data-reminder-status="active"
-      >
-        Aktivní
-      </button>
+        <button type="button" class="remindersStatusTab active" data-reminder-status="active">
+          Aktivní
+        </button>
 
-      <button
-        type="button"
-        class="remindersStatusTab"
-        data-reminder-status="overdue"
-      >
-        Po termínu
-        <span id="overdueReminderCount"></span>
-      </button>
+        <button type="button" class="remindersStatusTab" data-reminder-status="overdue">
+          Po termínu
+          <span id="overdueReminderCount"></span>
+        </button>
+
+      </div>
 
     </div>
 
-  </div>
+    <div class="remindersGroups remindersScroll">
 
-  <div class="remindersGroups remindersScroll">
+      <section class="remindersGroup remindersOverdueGroup">
+        <h3>Po termínu</h3>
+        <div id="remindersOverdue"></div>
+      </section>
 
-    <section class="remindersGroup remindersOverdueGroup">
-      <h3>Po termínu</h3>
-      <div id="remindersOverdue"></div>
-    </section>
+      <section class="remindersGroup">
+        <h3>Dnes</h3>
+        <div id="remindersToday"></div>
+      </section>
 
-    <section class="remindersGroup">
-      <h3>Dnes</h3>
-      <div id="remindersToday"></div>
-    </section>
+      <section class="remindersGroup">
+        <h3>Zítra</h3>
+        <div id="remindersTomorrow"></div>
+      </section>
 
-    <section class="remindersGroup">
-      <h3>Zítra</h3>
-      <div id="remindersTomorrow"></div>
-    </section>
+      <section class="remindersGroup">
+        <h3>Později</h3>
+        <div id="remindersLater"></div>
+      </section>
 
-    <section class="remindersGroup">
-      <h3>Později</h3>
-      <div id="remindersLater"></div>
-    </section>
+    </div>
 
-  </div>
+  </section>
 
-</section>
-
-<!-- ========================================
+  <!-- ========================================
      RYCHLÉ ÚPRAVY PŘIPOMÍNKY
      ======================================== -->
 
-<div
-  id="reminderQuickMenu"
-  class="reminderQuickMenu"
-  hidden
->
-  <div
-    class="reminderQuickSheet"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="reminderQuickTitle"
-  >
-    <div class="reminderQuickHeader">
-      <div>
-        <div id="reminderQuickLabel" class="reminderQuickLabel">Připomínka</div>
-        <h3 id="reminderQuickTitle">Bez názvu</h3>
+  <div id="reminderQuickMenu" class="reminderQuickMenu" hidden>
+    <div class="reminderQuickSheet" role="dialog" aria-modal="true" aria-labelledby="reminderQuickTitle">
+      <div class="reminderQuickHeader">
+        <div>
+          <div id="reminderQuickLabel" class="reminderQuickLabel">Připomínka</div>
+          <h3 id="reminderQuickTitle">Bez názvu</h3>
+        </div>
+
+        <button id="closeReminderQuickMenu" type="button" class="reminderQuickClose" aria-label="Zavřít">
+          ✕
+        </button>
       </div>
 
-      <button
-        id="closeReminderQuickMenu"
-        type="button"
-        class="reminderQuickClose"
-        aria-label="Zavřít"
-      >
-        ✕
+      <div class="reminderDelayGrid">
+        <button type="button" data-reminder-delay="15">+ 15 min</button>
+        <button type="button" data-reminder-delay="30">+ 30 min</button>
+        <button type="button" data-reminder-delay="60">+ 1 hod</button>
+        <button id="reminderTomorrowMorningButton" type="button">Zítra 8:00</button>
+      </div>
+
+      <div class="reminderQuickDateTime">
+        <label>
+          Datum
+          <input id="reminderQuickDate" type="date">
+        </label>
+
+        <label>
+          Čas
+          <input id="reminderQuickTime" type="time">
+        </label>
+      </div>
+
+      <button id="saveReminderQuickDateButton" type="button" class="reminderQuickPrimary">
+        Uložit datum a čas
       </button>
-    </div>
 
-    <div class="reminderDelayGrid">
-      <button type="button" data-reminder-delay="15">+ 15 min</button>
-      <button type="button" data-reminder-delay="30">+ 30 min</button>
-      <button type="button" data-reminder-delay="60">+ 1 hod</button>
-      <button id="reminderTomorrowMorningButton" type="button">Zítra 8:00</button>
-    </div>
+      <button id="completeReminderButton" type="button" class="reminderQuickDone" hidden>
+        ✅ Hotovo
+      </button>
 
-    <div class="reminderQuickDateTime">
-      <label>
-        Datum
-        <input id="reminderQuickDate" type="date">
-      </label>
-
-      <label>
-        Čas
-        <input id="reminderQuickTime" type="time">
-      </label>
-    </div>
-
-    <button
-      id="saveReminderQuickDateButton"
-      type="button"
-      class="reminderQuickPrimary"
-    >
-      Uložit datum a čas
-    </button>
-
-    <button
-      id="completeReminderButton"
-      type="button"
-      class="reminderQuickDone"
-      hidden
-    >
-      ✅ Hotovo
-    </button>
-
-    <div class="reminderQuickFooter">
-      <button id="openReminderNoteButton" type="button">📝 Otevřít poznámku</button>
-      <button id="disableReminderButton" type="button" class="danger">🔕 Vypnout připomínku</button>
+      <div class="reminderQuickFooter">
+        <button id="openReminderNoteButton" type="button">📝 Otevřít poznámku</button>
+        <button id="disableReminderButton" type="button" class="danger">🔕 Vypnout připomínku</button>
+      </div>
     </div>
   </div>
-</div>
 
   <!-- ========================================
        EDITOR POZNÁMKY / ÚKOLU
        ======================================== -->
 
-  <div
-    id="taskModal"
-    class="taskModal"
-    hidden
-  >
+  <div id="taskModal" class="taskModal" hidden>
 
     <div class="modalContent">
 
@@ -540,20 +366,11 @@
         <!-- Datum + čas -->
         <div class="dateTimeInputs">
 
-          <span
-            id="modalWeekday"
-            class="modalWeekday"
-          ></span>
+          <span id="modalWeekday" class="modalWeekday"></span>
 
-          <input
-            type="date"
-            id="modalDate"
-          >
+          <input type="date" id="modalDate">
 
-          <input
-            type="time"
-            id="modalTime"
-          >
+          <input type="time" id="modalTime">
 
         </div>
 
@@ -561,27 +378,15 @@
         <!-- Akce editoru -->
         <div class="editorTopActions">
 
-          <button
-            id="pinTaskButton"
-            type="button"
-            aria-label="Připnout poznámku"
-          >
+          <button id="pinTaskButton" type="button" aria-label="Připnout poznámku">
             &#128204;
           </button>
 
-          <button
-            id="reminderButton"
-            type="button"
-            aria-label="Připomínka"
-          >
+          <button id="reminderButton" type="button" aria-label="Připomínka">
             &#128276;
           </button>
 
-          <button
-            id="moreOptionsButton"
-            type="button"
-            aria-label="Další možnosti"
-          >
+          <button id="moreOptionsButton" type="button" aria-label="Další možnosti">
             &#8942;
           </button>
 
@@ -594,18 +399,10 @@
            OBSAH POZNÁMKY
            ==================================== -->
 
-      <input
-        type="text"
-        id="modalTitle"
-        placeholder="Název úkolu"
-      >
+      <input type="text" id="modalTitle" placeholder="Název úkolu">
 
       <!-- TODO seznam -->
-      <div
-        id="todoList"
-        class="todoList"
-        hidden
-      ></div>
+      <div id="todoList" class="todoList" hidden></div>
 
       <!-- Hlavní text poznámky -->
       <textarea id="modalText" placeholder="Napiš poznámku..." hidden></textarea>
@@ -615,14 +412,8 @@
      - odkazy na naplánované úkoly
      ======================================== -->
 
-<div
-  id="modalRichText"
-  class="modalRichText"
-  contenteditable="true"
-  spellcheck="true"
-  hidden
-></div>
-<!--
+      <div id="modalRichText" class="modalRichText" contenteditable="true" spellcheck="true" hidden></div>
+      <!--
       <div
   id="plannedTextLinks"
   class="plannedTextLinks"
@@ -634,156 +425,86 @@
      MENU ŠTÍTKŮ
      ==================================== -->
 
-<div
-  id="tagMenu"
-  class="tagMenu"
-  hidden
->
+      <div id="tagMenu" class="tagMenu" hidden>
 
-  <h3>Štítky</h3>
+        <h3>Štítky</h3>
 
-  <div class="tagOptions">
+        <div class="tagOptions">
 
-    <button
-      type="button"
-      data-tag="code"
-    >
-      code
-    </button>
+          <button type="button" data-tag="code">
+            code
+          </button>
 
-    <button
-      type="button"
-      data-tag="důležité"
-    >
-      důležité
-    </button>
+          <button type="button" data-tag="důležité">
+            důležité
+          </button>
 
-    <button
-      type="button"
-      data-tag="projekt"
-    >
-      projekt
-    </button>
+          <button type="button" data-tag="projekt">
+            projekt
+          </button>
 
-    <button
-      id="createTagButton"
-      class="createTagButton"
-      type="button"
-    >
-      ＋ Nový štítek
-    </button>
+          <button id="createTagButton" class="createTagButton" type="button">
+            ＋ Nový štítek
+          </button>
 
-  </div>
+        </div>
 
-  <div
-    id="newTagRow"
-    class="newTagRow"
-    hidden
-  >
-    <input
-      id="newTagInput"
-      type="text"
-      maxlength="24"
-      placeholder="Název štítku"
-      autocomplete="off"
-    >
+        <div id="newTagRow" class="newTagRow" hidden>
+          <input id="newTagInput" type="text" maxlength="24" placeholder="Název štítku" autocomplete="off">
 
-    <button
-      id="saveNewTagButton"
-      type="button"
-    >
-      Přidat
-    </button>
+          <button id="saveNewTagButton" type="button">
+            Přidat
+          </button>
 
-    <button
-      id="cancelNewTagButton"
-      type="button"
-      aria-label="Zrušit nový štítek"
-    >
-      ✕
-    </button>
-  </div>
+          <button id="cancelNewTagButton" type="button" aria-label="Zrušit nový štítek">
+            ✕
+          </button>
+        </div>
 
-</div>
+      </div>
       <!-- ====================================
            SPODNÍ LIŠTA EDITORU
            ==================================== -->
 
       <div class="editorBottomBar">
 
-        <button
-          id="editorBackButton"
-          type="button"
-          aria-label="Uložit a zavřít"
-        >
+        <button id="editorBackButton" type="button" aria-label="Uložit a zavřít">
           ✔️
         </button>
 
-        <button
-          id="categoryTaskButton"
-          type="button"
-          aria-label="Oblast poznámky"
-        >
+        <button id="categoryTaskButton" type="button" aria-label="Oblast poznámky">
           💼
         </button>
 
-        <button
-          id="priorityTaskButton"
-          type="button"
-          aria-label="Priorita"
-        >
+        <button id="priorityTaskButton" type="button" aria-label="Priorita">
           ⭐
         </button>
 
-        <button
-          id="colorTaskButton"
-          type="button"
-          aria-label="Barva"
-        >
+        <button id="colorTaskButton" type="button" aria-label="Barva">
           🎨
         </button>
         <div id="textColorPalette" class="textColorPalette" hidden>
-  <button type="button" data-highlight-color="#fff59d" aria-label="Žlutá"></button>
-  <button type="button" data-highlight-color="#a5d6a7" aria-label="Zelená"></button>
-  <button type="button" data-highlight-color="#90caf9" aria-label="Modrá"></button>
-  <button type="button" data-highlight-color="#ce93d8" aria-label="Fialová"></button>
-  <button type="button" data-highlight-color="#ef9a9a" aria-label="Červená"></button>
-  <button
-  type="button"
-  data-highlight-remove
-  aria-label="Odstranit zvýraznění"
->
-  ✕
-</button>
-</div>
+          <button type="button" data-highlight-color="#fff59d" aria-label="Žlutá"></button>
+          <button type="button" data-highlight-color="#a5d6a7" aria-label="Zelená"></button>
+          <button type="button" data-highlight-color="#90caf9" aria-label="Modrá"></button>
+          <button type="button" data-highlight-color="#ce93d8" aria-label="Fialová"></button>
+          <button type="button" data-highlight-color="#ef9a9a" aria-label="Červená"></button>
+          <button type="button" data-highlight-remove aria-label="Odstranit zvýraznění">
+            ✕
+          </button>
+        </div>
 
-        <button
-          id="tagTaskButton"
-          type="button"
-          aria-label="Štítky"
-        >
+        <button id="tagTaskButton" type="button" aria-label="Štítky">
           🏷️
         </button>
-        <button
-  id="planSelectionButton"
-  type="button"
-  aria-label="Naplánovat označený text"
->
-  📅
-</button>
-        <button
-          id="addTodoButton"
-          type="button"
-          aria-label="Přidat položku TODO"
-        >
+        <button id="planSelectionButton" type="button" aria-label="Naplánovat označený text">
+          📅
+        </button>
+        <button id="addTodoButton" type="button" aria-label="Přidat položku TODO">
           ☐
         </button>
 
-        <button
-          id="deleteTaskButton"
-          type="button"
-          aria-label="Smazat poznámku"
-        >
+        <button id="deleteTaskButton" type="button" aria-label="Smazat poznámku">
           🗑️
         </button>
 
@@ -798,37 +519,21 @@
        MENU KARTY PO DLOUHÉM STISKU
        ======================================== -->
 
-  <div
-    id="cardMenu"
-    class="cardMenu"
-    hidden
-  >
+  <div id="cardMenu" class="cardMenu" hidden>
 
-    <button
-      type="button"
-      data-card-action="plan"
-    >
+    <button type="button" data-card-action="plan">
       📅 Naplánovat
     </button>
 
-    <button
-      type="button"
-      data-card-action="pin"
-    >
+    <button type="button" data-card-action="pin">
       📌 Připnout
     </button>
 
-    <button
-      type="button"
-      data-card-action="complete"
-    >
+    <button type="button" data-card-action="complete">
       ✅ Hotovo
     </button>
 
-    <button
-      type="button"
-      data-card-action="delete"
-    >
+    <button type="button" data-card-action="delete">
       🗑️ Smazat
     </button>
 
@@ -839,11 +544,7 @@
        POTVRZENÍ SMAZÁNÍ POZNÁMKY
        ======================================== -->
 
-  <div
-    id="deleteConfirmModal"
-    class="deleteConfirmModal"
-    hidden
-  >
+  <div id="deleteConfirmModal" class="deleteConfirmModal" hidden>
 
     <div class="deleteConfirmBox">
 
@@ -855,17 +556,11 @@
 
       <div class="deleteConfirmActions">
 
-        <button
-          id="cancelDeleteButton"
-          type="button"
-        >
+        <button id="cancelDeleteButton" type="button">
           Zrušit
         </button>
 
-        <button
-          id="confirmDeleteButton"
-          type="button"
-        >
+        <button id="confirmDeleteButton" type="button">
           🗑️ Smazat
         </button>
 
@@ -874,82 +569,55 @@
     </div>
 
   </div>
-<!-- ========================================
+  <!-- ========================================
      PLÁNOVÁNÍ POZNÁMKY
      ======================================== -->
 
-<div
-  id="plannerModal"
-  class="plannerModal"
-  hidden
->
-  <div class="plannerBox">
+  <div id="plannerModal" class="plannerModal" hidden>
+    <div class="plannerBox">
 
-    <div class="plannerHeader">
-      <h2>Naplánovat</h2>
+      <div class="plannerHeader">
+        <h2>Naplánovat</h2>
 
-      <button
-        id="closePlannerButton"
-        type="button"
-        aria-label="Zavřít plánování"
-      >
-        ✕
-      </button>
-    </div>
+        <button id="closePlannerButton" type="button" aria-label="Zavřít plánování">
+          ✕
+        </button>
+      </div>
 
-    <p
-      id="plannerTaskTitle"
-      class="plannerTaskTitle"
-    ></p>
+      <p id="plannerTaskTitle" class="plannerTaskTitle"></p>
 
-    <label for="plannerDate">
-      Datum
-    </label>
+      <label for="plannerDate">
+        Datum
+      </label>
 
-    <input
-      id="plannerDate"
-      type="date"
-    >
+      <input id="plannerDate" type="date">
 
-    <label for="plannerTime">
-      Čas
-    </label>
+      <label for="plannerTime">
+        Čas
+      </label>
 
-    <input
-      id="plannerTime"
-      type="time"
-    >
+      <input id="plannerTime" type="time">
 
-    <div class="plannerActions">
+      <div class="plannerActions">
 
-      <button
-        id="cancelPlannerButton"
-        type="button"
-      >
-        Zrušit
-      </button>
+        <button id="cancelPlannerButton" type="button">
+          Zrušit
+        </button>
 
-      <button
-        id="savePlannerButton"
-        type="button"
-      >
-        📅 Naplánovat
-      </button>
+        <button id="savePlannerButton" type="button">
+          📅 Naplánovat
+        </button>
+
+      </div>
 
     </div>
-
   </div>
-</div>
 
   <!-- ========================================
        OBRAZOVKA NASTAVENÍ
        ======================================== -->
 
-  <div
-    id="settingsModal"
-    class="settingsModal"
-    hidden
-  >
+  <div id="settingsModal" class="settingsModal" hidden>
 
     <div class="settingsContent">
 
@@ -959,11 +627,7 @@
 
         <h2>Nastavení</h2>
 
-        <button
-          id="closeSettingsButton"
-          type="button"
-          aria-label="Zavřít nastavení"
-        >
+        <button id="closeSettingsButton" type="button" aria-label="Zavřít nastavení">
           ✕
         </button>
 
@@ -986,11 +650,7 @@
 
           <div class="fontSizeControl">
 
-            <button
-              id="decreaseFontButton"
-              type="button"
-              aria-label="Zmenšit písmo"
-            >
+            <button id="decreaseFontButton" type="button" aria-label="Zmenšit písmo">
               −
             </button>
 
@@ -998,11 +658,7 @@
               16 px
             </span>
 
-            <button
-              id="increaseFontButton"
-              type="button"
-              aria-label="Zvětšit písmo"
-            >
+            <button id="increaseFontButton" type="button" aria-label="Zvětšit písmo">
               +
             </button>
 
@@ -1014,18 +670,14 @@
         <!-- Barevný motiv -->
         <div class="themeSetting">
 
-  <span>Barevný motiv</span>
+          <span>Barevný motiv</span>
 
-  <button
-    id="openThemeModalButton"
-    type="button"
-    class="themeSelectButton"
-  >
-    <span id="currentThemeLabel">Tmavý</span>
-    <span class="themeSelectArrow">›</span>
-  </button>
+          <button id="openThemeModalButton" type="button" class="themeSelectButton">
+            <span id="currentThemeLabel">Tmavý</span>
+            <span class="themeSelectArrow">›</span>
+          </button>
 
-</div>
+        </div>
 
 
 
@@ -1034,30 +686,26 @@
 
       </section>
 
-<!-- ====================================
+      <!-- ====================================
      NASTAVENÍ PŘIPOMÍNEK
      ==================================== -->
 
-<section class="settingsSection">
+      <section class="settingsSection">
 
-  <h3>Připomínky</h3>
+        <h3>Připomínky</h3>
 
-  <div class="themeSetting">
+        <div class="themeSetting">
 
-    <span>Rychlé odložení</span>
+          <span>Rychlé odložení</span>
 
-    <button
-      id="openReminderDelaySettingsButton"
-      type="button"
-      class="themeSelectButton"
-    >
-      <span>Nastavit</span>
-      <span class="themeSelectArrow">›</span>
-    </button>
+          <button id="openReminderDelaySettingsButton" type="button" class="themeSelectButton">
+            <span>Nastavit</span>
+            <span class="themeSelectArrow">›</span>
+          </button>
 
-  </div>
+        </div>
 
-</section>
+      </section>
       <!-- ====================================
            DATA / ZÁLOHY
            ==================================== -->
@@ -1066,17 +714,11 @@
 
         <h3>Data</h3>
 
-        <button
-          id="settingsExportButton"
-          type="button"
-        >
+        <button id="settingsExportButton" type="button">
           Export zálohy
         </button>
 
-        <button
-          id="settingsImportButton"
-          type="button"
-        >
+        <button id="settingsImportButton" type="button">
           Import zálohy
         </button>
 
@@ -1094,12 +736,7 @@
 
   <div id="aboutModal" class="aboutModal" hidden>
     <div class="aboutCard">
-      <button
-        id="closeAboutButton"
-        class="aboutCloseButton"
-        type="button"
-        aria-label="Zavřít informace o aplikaci"
-      >
+      <button id="closeAboutButton" class="aboutCloseButton" type="button" aria-label="Zavřít informace o aplikaci">
         ✕
       </button>
 
@@ -1118,12 +755,7 @@
        HLAVNÍ TLAČÍTKO +
        ======================================== -->
 
-  <button
-    id="addTaskButton"
-    class="addTaskButton"
-    type="button"
-    aria-label="Přidat poznámku"
-  >
+  <button id="addTaskButton" class="addTaskButton" type="button" aria-label="Přidat poznámku">
     +
   </button>
 
@@ -1132,23 +764,18 @@
        modal vytvoření štítků 
        ======================================== -->
 
-<div id="newTagModal" class="newTagModal" hidden>
-  <div class="newTagDialog">
-    <h3>Nový štítek</h3>
+  <div id="newTagModal" class="newTagModal" hidden>
+    <div class="newTagDialog">
+      <h3>Nový štítek</h3>
 
-    <input
-      id="newTagModalInput"
-      type="text"
-      placeholder="Název štítku"
-      maxlength="30"
-    >
+      <input id="newTagModalInput" type="text" placeholder="Název štítku" maxlength="30">
 
-    <div class="newTagDialogActions">
-      <button id="cancelNewTagModalButton" type="button">Zrušit</button>
-      <button id="saveNewTagModalButton" type="button">Vytvořit</button>
+      <div class="newTagDialogActions">
+        <button id="cancelNewTagModalButton" type="button">Zrušit</button>
+        <button id="saveNewTagModalButton" type="button">Vytvořit</button>
+      </div>
     </div>
   </div>
-</div>
 
 
 
@@ -1156,29 +783,24 @@
        SKRYTÝ INPUT PRO IMPORT ZÁLOHY
        ======================================== -->
 
-  <input
-    id="importFile"
-    type="file"
-    accept="application/json"
-    hidden
-  >
+  <input id="importFile" type="file" accept="application/json" hidden>
 
 
-<div id="tagMessageModal" class="newTagModal" hidden>
-  <div class="newTagDialog">
-    <h3>Štítky</h3>
+  <div id="tagMessageModal" class="newTagModal" hidden>
+    <div class="newTagDialog">
+      <h3>Štítky</h3>
 
-    <p id="tagMessageText">
-      Štítek s tímto názvem už existuje.
-    </p>
+      <p id="tagMessageText">
+        Štítek s tímto názvem už existuje.
+      </p>
 
-    <div class="newTagDialogActions">
-      <button id="closeTagMessageButton" type="button">
-        OK
-      </button>
+      <div class="newTagDialogActions">
+        <button id="closeTagMessageButton" type="button">
+          OK
+        </button>
+      </div>
     </div>
   </div>
-</div>
 
   <!-- ========================================
        JAVASCRIPT
@@ -1197,17 +819,17 @@
   <script src="settings.js"></script>
 
   <script src="todos.js"></script>
-  
+
 
   <script src="script.js"></script>
 
   <!-- Barevné zvýrazňování rich-text editoru -->
   <script src="richTextColors.js"></script>
-  
+
   <script src="planner.js"></script>
-  
+
   <script src="plannedTextLinks.js"></script>
-  
+
   <script src="calendar.js"></script>
 
   <script src="cardView.js"></script>

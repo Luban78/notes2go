@@ -4,13 +4,13 @@ if (window.Capacitor?.isNativePlatform?.()) {
 
 function updateVisualViewport() {
   const viewport = window.visualViewport;
-  
+
   if (viewport) {
     document.documentElement.style.setProperty(
       "--visual-height",
       `${viewport.height}px`
     );
-    
+
     document.documentElement.style.setProperty(
       "--visual-top",
       `${viewport.offsetTop}px`
@@ -25,7 +25,7 @@ if (window.visualViewport) {
     "resize",
     updateVisualViewport
   );
-  
+
   window.visualViewport.addEventListener(
     "scroll",
     updateVisualViewport
@@ -48,24 +48,24 @@ confirmDeleteButton.addEventListener("click", () => {
   if (selectedCardIndex === null) {
     return;
   }
-  
+
   const tasks = loadTask();
   const taskToDelete = tasks[selectedCardIndex];
-  
+
   if (taskToDelete?.notificationId) {
     cancelNotification(taskToDelete.notificationId);
   }
-  
+
   deleteTask(selectedCardIndex);
   markNoteDeletedInSupabase(taskToDelete);
-  
+
   deleteConfirmModal.hidden = true;
-selectedCardIndex = null;
+  selectedCardIndex = null;
 
-taskModal.hidden = true;
-activeTaskIndex = null;
+  taskModal.hidden = true;
+  activeTaskIndex = null;
 
-renderTasks();
+  renderTasks();
 });
 
 const mainMenuButton = document.getElementById("mainMenuButton");
@@ -81,7 +81,10 @@ mainMenuButton.addEventListener("click", () => {
 
 let activeTaskIndex = null;
 let reminderEnabled = false;
+let favoriteEnabled = false;
+
 const editorBackButton = document.getElementById("editorBackButton");
+
 const deleteTaskButton =
   document.getElementById("deleteTaskButton");
 deleteTaskButton?.addEventListener("click", () => {
@@ -98,10 +101,20 @@ const reminderButton = document.getElementById("reminderButton");
 
 const importFile = document.getElementById("importFile");
 
+const priorityTaskButton =
+  document.getElementById("priorityTaskButton");
+priorityTaskButton?.addEventListener("click", () => {
+  favoriteEnabled = !favoriteEnabled;
+
+  priorityTaskButton.classList.toggle(
+    "active",
+    favoriteEnabled
+  );
+});
 
 importFile.addEventListener("change", () => {
   const file = importFile.files[0];
-  
+
   if (file) {
     importTasks(file);
   }
@@ -122,7 +135,7 @@ modalRichText.addEventListener("scroll", () => {
   ) {
     taskModal.classList.add("titleCollapsed");
   }
-  
+
   if (
     taskModal.classList.contains("titleCollapsed") &&
     modalRichText.scrollTop < 8
@@ -149,9 +162,9 @@ function updateModalWeekday() {
     modalWeekday.textContent = "";
     return;
   }
-  
+
   const date = new Date(`${modalDate.value}T12:00`);
-  
+
   const weekdays = [
     "Ne",
     "Po",
@@ -161,7 +174,7 @@ function updateModalWeekday() {
     "Pá",
     "So"
   ];
-  
+
   modalWeekday.textContent = weekdays[date.getDay()];
 }
 modalDate.addEventListener("change", () => {
@@ -183,10 +196,10 @@ addTaskButton.addEventListener("click", () => {
   activeTaskIndex = null;
   resetTodos();
   activeArea = "private";
-activeTags = [];
-updateTagMenuUI();
-closeTagMenu();
-  
+  activeTags = [];
+  updateTagMenuUI();
+  closeTagMenu();
+
   modalTitle.value = "";
   modalText.value = "";
   modalRichText.innerHTML = "";
@@ -197,29 +210,29 @@ closeTagMenu();
   if (document.getElementById("plannedTextLinks")) {
     document.getElementById("plannedTextLinks").hidden = true;
   }
-  
+
   /* Aktuální datum a čas při vytvoření nové poznámky */
   const now = new Date();
-  
+
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  
+
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
-  
+
   modalDate.value = `${year}-${month}-${day}`;
   modalTime.value = `${hours}:${minutes}`;
-  
+
   updateModalWeekday();
-  
+
   reminderEnabled = false;
   updateReminderButton(false);
-  
+
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-  
+
   modalTitle.focus();
 });
 
@@ -230,13 +243,13 @@ editorBackButton.addEventListener("click", () => {
   const richContent = modalRichText.innerHTML;
   const date =
     modalDate.value && modalTime.value ?
-    `${modalDate.value}T${modalTime.value}` :
-    "";
-  
+      `${modalDate.value}T${modalTime.value}` :
+      "";
+
   if (activeTaskIndex !== null) {
     const tasks = loadTask();
     const currentTask = tasks[activeTaskIndex];
-    
+
     if (currentTask) {
       const updatedTask = {
         ...currentTask,
@@ -246,6 +259,7 @@ editorBackButton.addEventListener("click", () => {
         richContent,
         date,
         reminder: reminderEnabled,
+        favorite: favoriteEnabled,
         notificationId: currentTask.notificationId ||
           Date.now() % 2147483647,
         area: activeArea,
@@ -253,7 +267,7 @@ editorBackButton.addEventListener("click", () => {
         tags: [...activeTags],
         todos: [...activeTodos]
       };
-      
+
       updateTask(activeTaskIndex, updatedTask);
       uploadLocalNoteToSupabase(updatedTask);
       if (updatedTask.reminder && updatedTask.date) {
@@ -277,7 +291,7 @@ editorBackButton.addEventListener("click", () => {
       note.trim() === "" &&
       //date === "" &&
       activeTodos.length === 0;
-    
+
     if (!isEmpty) {
       const newTask = {
         id: crypto.randomUUID(),
@@ -294,34 +308,34 @@ editorBackButton.addEventListener("click", () => {
         tags: [...activeTags],
         todos: [...activeTodos]
       };
-      
+
       saveTask(newTask);
       uploadLocalNoteToSupabase(newTask);
       if (newTask.reminder && newTask.date) {
         scheduleNotification(
-  newTask.notificationId,
-  newTask.title,
-  newTask.date,
-  newTask.note,
-  {
-    lubanoteType: "note",
-    taskId: newTask.id
-  }
-);
+          newTask.notificationId,
+          newTask.title,
+          newTask.date,
+          newTask.note,
+          {
+            lubanoteType: "note",
+            taskId: newTask.id
+          }
+        );
       }
     }
   }
-  
+
   renderTasks();
   if (typeof renderRemindersScreen === "function") {
-  renderRemindersScreen();
-}
+    renderRemindersScreen();
+  }
   taskModal.classList.remove("show");
-  
+
   setTimeout(() => {
     taskModal.hidden = true;
   }, 250);
-  
+
   document.body.classList.remove("noScroll");
   activeTaskIndex = null;
   RichTextColors.reset();
@@ -340,7 +354,7 @@ const activeCardPointers = new Set();
 
 document.addEventListener("pointerdown", (event) => {
   activeCardPointers.add(event.pointerId);
-  
+
   if (activeCardPointers.size > 1) {
     clearTimeout(longPressTimer);
   }
@@ -359,62 +373,69 @@ document.addEventListener("pointercancel", (event) => {
 
 function openTaskEditorById(taskId) {
   const currentTasks = loadTask();
-  
+
   const index = currentTasks.findIndex(
     task => task.id === taskId
   );
-  
+
   if (index === -1) {
     console.error("Poznámka nebyla nalezena:", taskId);
     return;
   }
-  
+
   const currentTask = currentTasks[index];
-  
+
   reminderEnabled = currentTask.reminder === true;
   updateReminderButton(reminderEnabled);
-  
+
+  favoriteEnabled = currentTask.favorite === true;
+
+  priorityTaskButton?.classList.toggle(
+    "active",
+    favoriteEnabled
+  );
+
   activeArea = currentTask.area || "private";
   activeTags = currentTask.tags || [];
-  
+
   updateTagMenuUI();
   closeTagMenu();
-  
+
   activeTaskIndex = index;
-  
+
   modalTitle.value = currentTask.title || "";
   modalText.value = currentTask.note || "";
-  
+
   if (currentTask.richContent) {
     modalRichText.innerHTML = currentTask.richContent;
   } else {
     /* Staré plain-text poznámky načteme bezpečně jako text. */
     modalRichText.textContent = currentTask.note || "";
   }
-  
+
   modalText.hidden = true;
   modalRichText.hidden = false;
   RichTextColors.reset();
-  
+
   if (currentTask.date) {
     const [savedDate, savedTime] =
-    currentTask.date.split("T");
-    
+      currentTask.date.split("T");
+
     modalDate.value = savedDate || "";
     modalTime.value = savedTime || "";
   } else {
     modalDate.value = "";
     modalTime.value = "";
   }
-  
+
   updateModalWeekday();
-  
+
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-  
+
   loadTodos(currentTask.todos);
-  
+
   //renderPlannedTextLinks(currentTask.id);
 }
 
@@ -430,11 +451,11 @@ function renderTasks() {
     renderTagFilters();
     updateTagFilterUI();
   }
-  
+
   pinnedLeft.innerHTML = "";
   pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
-  
+
   const loadedTasks = loadTask();
   const sortedTasks = loadedTasks
     .map((task, originalIndex) => ({
@@ -447,6 +468,9 @@ function renderTasks() {
     });
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
     if (!taskMatchesArea(loadedTask)) {
+      return;
+    }
+    if (!taskMatchesFavorite(loadedTask)) {
       return;
     }
     if (!taskMatchesTag(loadedTask)) {
@@ -462,7 +486,7 @@ function renderTasks() {
     loadedCard.addEventListener("pointerdown", (event) => {
       cardPressStartX = event.clientX;
       cardPressStartY = event.clientY;
-      
+
       longPressTimer = setTimeout(() => {
         selectedCardIndex = index;
 
@@ -503,8 +527,8 @@ function renderTasks() {
               Math.min(
                 menuTop,
                 window.innerHeight -
-                  menuRect.height -
-                  okraj
+                menuRect.height -
+                okraj
               )
             );
 
@@ -520,14 +544,14 @@ function renderTasks() {
         }
       }, LONG_PRESS_TIME);
     });
-    
+
     loadedCard.addEventListener("pointermove", (event) => {
       const distanceX =
         Math.abs(event.clientX - cardPressStartX);
-      
+
       const distanceY =
         Math.abs(event.clientY - cardPressStartY);
-      
+
       if (
         distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
         distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
@@ -535,46 +559,56 @@ function renderTasks() {
         clearTimeout(longPressTimer);
       }
     });
-    
-    
-    
-    
+
+
+
+
     loadedCard.addEventListener("pointerup", () => {
       clearTimeout(longPressTimer);
     });
-    
+
     loadedCard.addEventListener("pointercancel", () => {
       clearTimeout(longPressTimer);
     });
-    
+
     loadedCard.classList.add("taskCard");
-    
+
     const loadedHeading = document.createElement("h3");
-    
+
     const areaIcon =
       loadedTask.area === "work" ?
-      "💼" :
-      "🏠";
-    
+        "💼" :
+        "🏠";
+
     const pinIcon =
       loadedTask.pinned === true ?
-      "📌" :
-      "";
-    
+        "📌" :
+        "";
+
+    const favoriteIcon =
+      loadedTask.favorite === true ?
+        "⭐" :
+        "";
+
     const reminderIcon =
       loadedTask.reminder === true ?
-      "🔔" :
-      "";
-    
+        "🔔" :
+        "";
+
     const loadedHeadingIcons =
       document.createElement("span");
-    
+
     loadedHeadingIcons.classList.add("taskCardIcons");
-    
-    loadedHeadingIcons.textContent = [pinIcon, areaIcon, reminderIcon]
+
+    loadedHeadingIcons.textContent = [
+      pinIcon,
+      favoriteIcon,
+      areaIcon,
+      reminderIcon
+    ]
       .filter(Boolean)
       .join(" ");
-    
+
     loadedHeading.append(
       loadedHeadingIcons,
       document.createTextNode(
@@ -584,9 +618,9 @@ function renderTasks() {
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
-    
+
     const taskTodos = loadedTask.todos || [];
-    
+
     if (taskTodos.length > 0) {
       loadedNoteText.textContent = taskTodos
         .slice(0, 3)
@@ -595,10 +629,10 @@ function renderTasks() {
         )
         .join("\n");
     }
-    
+
     const loadedDateText = document.createElement("p");
-    
-    
+
+
     if (loadedTask.date) {
       const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
         day: "numeric",
@@ -607,13 +641,13 @@ function renderTasks() {
         hour: "2-digit",
         minute: "2-digit"
       });
-      
+
       loadedDateText.textContent = formattedDate;
     } else {
       loadedDateText.textContent = "";
     }
-    
-    
+
+
     const loadedTags = document.createElement("div");
     loadedCard.append(
       loadedHeading,
@@ -621,24 +655,24 @@ function renderTasks() {
       loadedNoteText,
       loadedDateText
     );
-    
+
     loadedTags.classList.add("taskTags");
-    
+
     const taskTags = loadedTask.tags || [];
-    
+
     taskTags.forEach(tag => {
       const tagBadge = document.createElement("span");
       tagBadge.classList.add("taskTag");
       tagBadge.textContent = tag;
-      
+
       loadedTags.append(tagBadge);
     });
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }
-    
+
     pinnedCards.hidden = false;
-    
+
     const listMode =
       localStorage.getItem("cardView") === "list";
 
@@ -656,30 +690,30 @@ function renderTasks() {
       const cardCount =
         pinnedLeft.children.length +
         pinnedRight.children.length;
-      
+
       if (cardCount % 2 === 0) {
         pinnedLeft.append(loadedCard);
       } else {
         pinnedRight.append(loadedCard);
       }
     }
-    
-    
+
+
     /* Otevření existující poznámky */
-    
+
     loadedCard.addEventListener("click", () => {
       if (blockNextCardClick) {
         blockNextCardClick = false;
         return;
       }
-      
+
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
-      
+
       if (!currentTask) {
         return;
       }
-      
+
       /* Starší lokální poznámce doplníme stabilní ID. */
       if (!currentTask.id) {
         currentTask.id = crypto.randomUUID();
@@ -687,12 +721,19 @@ function renderTasks() {
         saveAllTasks(currentTasks);
         uploadLocalNoteToSupabase(currentTask);
       }
-      
+
       openTaskEditorById(currentTask.id);
     });
-    
+
   });
 }
+
+
+
+
+
+
+
 
 
 /* První vykreslení poznámek */
@@ -723,73 +764,73 @@ const savePlannerButton =
 cardMenu.addEventListener("click", (event) => {
   const actionButton =
     event.target.closest("[data-card-action]");
-  
+
   if (!actionButton) {
     return;
   }
-  
+
   const action = actionButton.dataset.cardAction;
-  
+
   if (action === "plan") {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
-    
+
     if (!selectedTask) {
       return;
     }
-    
+
     /* Starší poznámce doplníme ID, pokud ho ještě nemá */
     if (!selectedTask.id) {
       selectedTask.id = crypto.randomUUID();
       selectedTask.updatedAt = new Date().toISOString();
-      
+
       saveAllTasks(tasks);
       uploadLocalNoteToSupabase(selectedTask);
     }
-    
+
     cardMenu.hidden = true;
-    
+
     openPlannerForNote(selectedTask);
-    
+
     return;
   }
-  
+
   if (action === "complete") {
     const updatedTask =
       toggleTaskCompleted(selectedCardIndex);
-    
+
     if (updatedTask) {
       uploadLocalNoteToSupabase(updatedTask);
     }
-    
+
     cardMenu.hidden = true;
     renderTasks();
   }
-  
+
   if (action === "pin") {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
-    
+
     if (!selectedTask) {
       return;
     }
-    
+
     selectedTask.pinned = !selectedTask.pinned;
     selectedTask.updatedAt = new Date().toISOString();
-    
+
     saveAllTasks(tasks);
     uploadLocalNoteToSupabase(selectedTask);
-    
+
     cardMenu.hidden = true;
     renderTasks();
   }
-  
+
   if (action === "delete") {
     deleteConfirmModal.hidden = false;
     cardMenu.hidden = true;
   }
-  
-  
+
+
 });
 
 
@@ -798,7 +839,7 @@ cardMenu.addEventListener("click", (event) => {
 
 document.addEventListener("pointerdown", (event) => {
   const cardMenu = document.getElementById("cardMenu");
-  
+
   if (
     !cardMenu.hidden &&
     !cardMenu.contains(event.target)

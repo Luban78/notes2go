@@ -15,6 +15,9 @@ const tagTaskButton =
 const tagMenu =
   document.getElementById("tagMenu");
 
+const favoriteFilterButton =
+  document.getElementById("favoriteFilterButton");
+
 const tagModalTitle =
   document.getElementById("modalTitle");
 
@@ -58,6 +61,21 @@ const cancelNewTagModalButton =
 const tagMessageModal = document.getElementById("tagMessageModal");
 const tagMessageText = document.getElementById("tagMessageText");
 const closeTagMessageButton = document.getElementById("closeTagMessageButton");
+
+
+let favoriteFilterActive = false;
+
+favoriteFilterButton?.addEventListener("click", () => {
+  favoriteFilterActive =
+    !favoriteFilterActive;
+
+  favoriteFilterButton.classList.toggle(
+    "active",
+    favoriteFilterActive
+  );
+
+  renderTasks();
+});
 
 cancelNewTagModalButton.addEventListener("click", () => {
   newTagModal.hidden = true;
@@ -229,6 +247,14 @@ function taskMatchesArea(task) {
   }
 
   return (task.area || "private") === activeAreaFilter;
+}
+
+function taskMatchesFavorite(task) {
+  if (!favoriteFilterActive) {
+    return true;
+  }
+
+  return task.favorite === true;
 }
 
 function taskMatchesTag(task) {
