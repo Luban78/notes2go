@@ -31,6 +31,48 @@ themeModal?.addEventListener("click", (event) => {
   }
 });
 
+const themeOptionButtons =
+  document.querySelectorAll("[data-theme-option]");
+
+const currentThemeLabel =
+  document.getElementById("currentThemeLabel");
+
+themeOptionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const selectedTheme =
+      button.dataset.themeOption;
+
+    applyTheme(selectedTheme);
+
+    localStorage.setItem(
+      "theme",
+      selectedTheme
+    );
+
+    if (currentThemeLabel) {
+      if (selectedTheme === "light") {
+        currentThemeLabel.textContent = "Světlý";
+      }
+
+      if (selectedTheme === "dark") {
+        currentThemeLabel.textContent = "Tmavý";
+      }
+
+      if (selectedTheme === "cappuccino") {
+        currentThemeLabel.textContent = "Cappuccino";
+      }
+    }
+
+    themeOptionButtons.forEach((option) => {
+      option.classList.remove("active");
+    });
+
+    button.classList.add("active");
+
+    themeModal.hidden = true;
+  });
+});
+
   const settingsModal =
     document.getElementById("settingsModal");
 
@@ -87,7 +129,34 @@ themeModal?.addEventListener("click", (event) => {
   }
 
   applyFontSize();
-  applyTheme(localStorage.getItem("theme") || "light");
+
+const ulozenyMotiv =
+  localStorage.getItem("theme") || "light";
+
+applyTheme(ulozenyMotiv);
+
+if (currentThemeLabel) {
+  if (ulozenyMotiv === "light") {
+    currentThemeLabel.textContent = "Světlý";
+  }
+  
+  if (ulozenyMotiv === "dark") {
+    currentThemeLabel.textContent = "Tmavý";
+  }
+  
+  if (ulozenyMotiv === "cappuccino") {
+    currentThemeLabel.textContent = "Cappuccino";
+  }
+}
+
+themeOptionButtons.forEach((button) => {
+  button.classList.toggle(
+    "active",
+    button.dataset.themeOption === ulozenyMotiv
+  );
+});
+  
+  
 
   increaseFontButton.addEventListener("click", () => {
     currentFontSize = Math.min(currentFontSize + 1, 20);
@@ -116,17 +185,5 @@ themeModal?.addEventListener("click", (event) => {
     importFile.click();
   });
 
-  const themeSelect =
-  document.getElementById("themeSelect");
-
-themeSelect?.addEventListener("change", () => {
-  const selectedTheme = themeSelect.value;
   
-  applyTheme(selectedTheme);
-  
-  localStorage.setItem(
-    "theme",
-    selectedTheme
-  );
-});
 })();

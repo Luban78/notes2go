@@ -1036,26 +1036,24 @@
 
         <!-- Barevný motiv -->
         <div class="themeSetting">
-  
-  <label for="themeSelect">
-    Barevný motiv
-  </label>
-  
-  <select id="themeSelect">
-    <option value="light">
-      Světlý
-    </option>
-    
-    <option value="dark">
-      Tmavý
-    </option>
-    
-    <option value="cappuccino">
-      Cappuccino
-    </option>
-  </select>
-  
+
+  <span>Barevný motiv</span>
+
+  <button
+    id="openThemeModalButton"
+    type="button"
+    class="themeSelectButton"
+  >
+    <span id="currentThemeLabel">Tmavý</span>
+    <span class="themeSelectArrow">›</span>
+  </button>
+
 </div>
+
+
+
+
+
 
       </section>
 
@@ -1150,6 +1148,60 @@
       <button id="saveNewTagModalButton" type="button">Vytvořit</button>
     </div>
   </div>
+</div>
+
+
+
+<!-- ========================================
+     MODAL VÝBĚRU BAREVNÉHO MOTIVU
+     ======================================== -->
+
+<div id="themeModal" class="themeModal" hidden>
+
+  <div class="themeDialog">
+
+    <div class="themeDialogHeader">
+      <h3>Barevný motiv</h3>
+
+      <button
+        id="closeThemeModalButton"
+        type="button"
+        aria-label="Zavřít"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="themeDialogOptions">
+
+      <button
+        type="button"
+        class="themeDialogOption"
+        data-theme-option="light"
+      >
+        Světlý
+      </button>
+
+      <button
+        type="button"
+        class="themeDialogOption"
+        data-theme-option="dark"
+      >
+        Tmavý
+      </button>
+
+      <button
+        type="button"
+        class="themeDialogOption"
+        data-theme-option="cappuccino"
+      >
+        Cappuccino
+      </button>
+
+    </div>
+
+  </div>
+
 </div>
   <!-- ========================================
        SKRYTÝ INPUT PRO IMPORT ZÁLOHY
