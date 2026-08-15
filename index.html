@@ -477,8 +477,8 @@
 
     <div class="reminderDelayGrid">
       <button type="button" data-reminder-delay="15">+ 15 min</button>
+      <button type="button" data-reminder-delay="30">+ 30 min</button>
       <button type="button" data-reminder-delay="60">+ 1 hod</button>
-      <button type="button" data-reminder-delay="180">+ 3 hod</button>
       <button id="reminderTomorrowMorningButton" type="button">Zítra 8:00</button>
     </div>
 
@@ -1036,35 +1036,26 @@
 
         <!-- Barevný motiv -->
         <div class="themeSetting">
-
-          <span>Barevný motiv</span>
-
-          <div class="themeOptions">
-
-            <button
-              type="button"
-              data-theme="light"
-            >
-              Světlý
-            </button>
-
-            <button
-              type="button"
-              data-theme="dark"
-            >
-              Tmavý
-            </button>
-
-            <button
-              type="button"
-              data-theme="cappuccino"
-            >
-              Cappuccino
-            </button>
-
-          </div>
-
-        </div>
+  
+  <label for="themeSelect">
+    Barevný motiv
+  </label>
+  
+  <select id="themeSelect">
+    <option value="light">
+      Světlý
+    </option>
+    
+    <option value="dark">
+      Tmavý
+    </option>
+    
+    <option value="cappuccino">
+      Cappuccino
+    </option>
+  </select>
+  
+</div>
 
       </section>
 

@@ -8,8 +8,28 @@
   const fontSizeValue =
     document.getElementById("fontSizeValue");
 
-  const themeButtons =
-    document.querySelectorAll("[data-theme]");
+const openThemeModalButton =
+  document.getElementById("openThemeModalButton");
+
+const themeModal =
+  document.getElementById("themeModal");
+
+const closeThemeModalButton =
+  document.getElementById("closeThemeModalButton");
+
+openThemeModalButton?.addEventListener("click", () => {
+  themeModal.hidden = false;
+});
+
+closeThemeModalButton?.addEventListener("click", () => {
+  themeModal.hidden = true;
+});
+
+themeModal?.addEventListener("click", (event) => {
+  if (event.target === themeModal) {
+    themeModal.hidden = true;
+  }
+});
 
   const settingsModal =
     document.getElementById("settingsModal");
@@ -96,11 +116,17 @@
     importFile.click();
   });
 
-  themeButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const selectedTheme = button.dataset.theme;
-      applyTheme(selectedTheme);
-      localStorage.setItem("theme", selectedTheme);
-    });
-  });
+  const themeSelect =
+  document.getElementById("themeSelect");
+
+themeSelect?.addEventListener("change", () => {
+  const selectedTheme = themeSelect.value;
+  
+  applyTheme(selectedTheme);
+  
+  localStorage.setItem(
+    "theme",
+    selectedTheme
+  );
+});
 })();

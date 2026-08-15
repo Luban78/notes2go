@@ -1635,18 +1635,47 @@ document
         return;
       }
       
-      await postponeReminder(minutes);
+      const puvodniText = button.textContent;
+      
+      button.disabled = true;
+button.textContent = "✓ Odloženo";
+button.classList.add("delaySuccess");
+
+await postponeReminder(minutes);
+
+setTimeout(() => {
+  button.classList.remove("delaySuccess");
+  button.textContent = puvodniText;
+  button.disabled = false;
+}, 700);
+      
+      setTimeout(() => {
+        button.textContent = puvodniText;
+        button.disabled = false;
+      }, 700);
     });
   });
-
-
 document
   .getElementById("reminderTomorrowMorningButton")
   ?.addEventListener(
     "click",
-    postponeReminderToTomorrowMorning
+    async (event) => {
+      const button = event.currentTarget;
+      const puvodniText = button.textContent;
+      
+      button.disabled = true;
+      button.textContent = "✓ Odloženo";
+      button.classList.add("delaySuccess");
+      
+      await postponeReminderToTomorrowMorning();
+      
+      setTimeout(() => {
+        button.classList.remove("delaySuccess");
+        button.textContent = puvodniText;
+        button.disabled = false;
+      }, 700);
+    }
   );
-
 
 document
   .getElementById("saveReminderQuickDateButton")

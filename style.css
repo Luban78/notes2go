@@ -3231,3 +3231,47 @@ font-size: calc(var(--font-size) - 1px);
 }
 
 
+.reminderDelayGrid button.delaySuccess {
+  background: #9565ff;
+  color: #ffffff;
+  border-color: #a77cff;
+  box-shadow: 0 0 0 2px rgba(149, 101, 255, 0.25);
+}
+
+.themeSetting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  padding: 10px 0;
+}
+
+.themeSetting label {
+  font-size: var(--font-size);
+  color: var(--color-text);
+}
+
+#themeSelect {
+  min-width: 170px;
+
+  padding: 10px 38px 10px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 600;
+
+  cursor: pointer;
+  outline: none;
+}
+
+#themeSelect:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
