@@ -1152,57 +1152,6 @@
 
 
 
-<!-- ========================================
-     MODAL VÝBĚRU BAREVNÉHO MOTIVU
-     ======================================== -->
-
-<div id="themeModal" class="themeModal" hidden>
-
-  <div class="themeDialog">
-
-    <div class="themeDialogHeader">
-      <h3>Barevný motiv</h3>
-
-      <button
-        id="closeThemeModalButton"
-        type="button"
-        aria-label="Zavřít"
-      >
-        ✕
-      </button>
-    </div>
-
-    <div class="themeDialogOptions">
-
-      <button
-        type="button"
-        class="themeDialogOption"
-        data-theme-option="light"
-      >
-        Světlý
-      </button>
-
-      <button
-        type="button"
-        class="themeDialogOption"
-        data-theme-option="dark"
-      >
-        Tmavý
-      </button>
-
-      <button
-        type="button"
-        class="themeDialogOption"
-        data-theme-option="cappuccino"
-      >
-        Cappuccino
-      </button>
-
-    </div>
-
-  </div>
-
-</div>
   <!-- ========================================
        SKRYTÝ INPUT PRO IMPORT ZÁLOHY
        ======================================== -->
@@ -1241,6 +1190,9 @@
   <script src="storage.js"></script>
 
   <script src="tags.js"></script>
+
+  <!-- Univerzální výběrový modal pro nastavení -->
+  <script src="choiceModal.js"></script>
 
   <script src="settings.js"></script>
 

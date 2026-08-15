@@ -3238,49 +3238,68 @@ font-size: calc(var(--font-size) - 1px);
   box-shadow: 0 0 0 2px rgba(149, 101, 255, 0.25);
 }
 
+/* ========================================
+   NASTAVENÍ – ŘÁDEK BAREVNÉHO MOTIVU
+   ======================================== */
+
 .themeSetting {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
 
-  padding: 10px 0;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(35, 27, 51, 0.1);
 }
 
-.themeSetting label {
+.themeSetting > span {
+  color: var(--color-text);
   font-size: var(--font-size);
-  color: var(--color-text);
 }
 
-#themeSelect {
-  min-width: 170px;
+.settingsSection .themeSelectButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 
-  padding: 10px 38px 10px 14px;
+  width: auto;
+  min-width: 150px;
+  padding: 14px 0;
 
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-
-  background: var(--color-surface);
+  border: none;
+  background: transparent;
   color: var(--color-text);
 
+  text-align: right;
   font: inherit;
   font-weight: 600;
-
   cursor: pointer;
+}
+.themeSelectButton {
+  -webkit-tap-highlight-color: transparent;
   outline: none;
 }
 
-#themeSelect:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--color-accent) 22%, transparent);
+.themeSelectButton:focus,
+.themeSelectButton:focus-visible,
+.themeSelectButton:active {
+  outline: none;
+  box-shadow: none;
+}
+
+.themeSelectArrow {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1;
 }
 
 /* ========================================
-   MODAL – BAREVNÝ MOTIV
+   UNIVERZÁLNÍ VÝBĚROVÝ MODAL
+   používá choiceModal.js
    ======================================== */
 
-.themeModal {
+.choiceModal {
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -3295,12 +3314,13 @@ font-size: calc(var(--font-size) - 1px);
   box-sizing: border-box;
 }
 
-.themeModal[hidden] {
-  display: none;
+.choiceModal[hidden] {
+  display: none !important;
 }
 
-.themeDialog {
+.choiceDialog {
   width: min(100%, 420px);
+  max-height: min(80dvh, 680px);
 
   padding: 22px;
 
@@ -3314,7 +3334,7 @@ font-size: calc(var(--font-size) - 1px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
 }
 
-.themeDialogHeader {
+.choiceDialogHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3323,41 +3343,59 @@ font-size: calc(var(--font-size) - 1px);
   margin-bottom: 18px;
 }
 
-.themeDialogHeader h3 {
+.choiceDialogTitle {
   margin: 0;
 
+  color: var(--color-text);
   font-size: calc(var(--font-size) + 4px);
   font-weight: 700;
 }
 
-#closeThemeModalButton {
+.choiceDialogClose {
+  flex: 0 0 auto;
+
   width: 48px;
   height: 48px;
-
   padding: 0;
 
   border: 0;
   border-radius: 14px;
 
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(
+    in srgb,
+    var(--color-text) 7%,
+    transparent
+  );
   color: var(--color-text);
 
   font: inherit;
   font-size: 28px;
   line-height: 1;
-
+  text-align: center;
   cursor: pointer;
 }
 
-.themeDialogOptions {
+.choiceDialogOptions {
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+  max-height: 56dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.themeDialogOption {
-  width: 100%;
+.choiceDialogOptions::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
+.choiceDialogOption {
+  width: 100%;
   padding: 16px 18px;
 
   border: 1px solid var(--color-border);
@@ -3369,18 +3407,26 @@ font-size: calc(var(--font-size) - 1px);
   font: inherit;
   font-size: calc(var(--font-size) + 1px);
   font-weight: 600;
-
   text-align: left;
+
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
-.themeDialogOption:active {
-  transform: scale(0.98);
+.choiceDialogOption:active {
+  transform: scale(0.985);
   border-color: var(--color-accent);
 }
 
-.themeDialogOption.active {
+.choiceDialogOption.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: #fff;
+}
+
+.choiceDialogOption:disabled {
+  opacity: 0.8;
 }

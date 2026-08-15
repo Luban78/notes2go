@@ -8,70 +8,11 @@
   const fontSizeValue =
     document.getElementById("fontSizeValue");
 
-const openThemeModalButton =
-  document.getElementById("openThemeModalButton");
+  const openThemeModalButton =
+    document.getElementById("openThemeModalButton");
 
-const themeModal =
-  document.getElementById("themeModal");
-
-const closeThemeModalButton =
-  document.getElementById("closeThemeModalButton");
-
-openThemeModalButton?.addEventListener("click", () => {
-  themeModal.hidden = false;
-});
-
-closeThemeModalButton?.addEventListener("click", () => {
-  themeModal.hidden = true;
-});
-
-themeModal?.addEventListener("click", (event) => {
-  if (event.target === themeModal) {
-    themeModal.hidden = true;
-  }
-});
-
-const themeOptionButtons =
-  document.querySelectorAll("[data-theme-option]");
-
-const currentThemeLabel =
-  document.getElementById("currentThemeLabel");
-
-themeOptionButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const selectedTheme =
-      button.dataset.themeOption;
-
-    applyTheme(selectedTheme);
-
-    localStorage.setItem(
-      "theme",
-      selectedTheme
-    );
-
-    if (currentThemeLabel) {
-      if (selectedTheme === "light") {
-        currentThemeLabel.textContent = "Světlý";
-      }
-
-      if (selectedTheme === "dark") {
-        currentThemeLabel.textContent = "Tmavý";
-      }
-
-      if (selectedTheme === "cappuccino") {
-        currentThemeLabel.textContent = "Cappuccino";
-      }
-    }
-
-    themeOptionButtons.forEach((option) => {
-      option.classList.remove("active");
-    });
-
-    button.classList.add("active");
-
-    themeModal.hidden = true;
-  });
-});
+  const currentThemeLabel =
+    document.getElementById("currentThemeLabel");
 
   const settingsModal =
     document.getElementById("settingsModal");
@@ -93,6 +34,21 @@ themeOptionButtons.forEach((button) => {
 
   const importFile =
     document.getElementById("importFile");
+
+  const motivy = [
+    {
+      hodnota: "light",
+      popisek: "Světlý"
+    },
+    {
+      hodnota: "dark",
+      popisek: "Tmavý"
+    },
+    {
+      hodnota: "cappuccino",
+      popisek: "Cappuccino"
+    }
+  ];
 
   let currentFontSize = Number(
     localStorage.getItem("fontSize") || 16
@@ -128,47 +84,92 @@ themeOptionButtons.forEach((button) => {
     }
   }
 
+  function ziskejPopisekMotivu(hodnota) {
+    return (
+      motivy.find(
+        (motiv) => motiv.hodnota === hodnota
+      )?.popisek || "Světlý"
+    );
+  }
+
+  function nastavPopisekMotivu(hodnota) {
+    if (!currentThemeLabel) {
+      return;
+    }
+
+    currentThemeLabel.textContent =
+      ziskejPopisekMotivu(hodnota);
+  }
+
+  function otevriModalMotivu() {
+    if (
+      typeof window.otevriVyberovyModal !==
+      "function"
+    ) {
+      console.error(
+        "Chybí choiceModal.js – výběrový modal nelze otevřít."
+      );
+      return;
+    }
+
+    const ulozenyMotiv =
+      localStorage.getItem("theme") || "light";
+
+    window.otevriVyberovyModal({
+      nadpis: "Barevný motiv",
+      moznosti: motivy,
+      vybranaHodnota: ulozenyMotiv,
+      poVyberu: (novyMotiv) => {
+        applyTheme(novyMotiv);
+        localStorage.setItem(
+          "theme",
+          novyMotiv
+        );
+        nastavPopisekMotivu(novyMotiv);
+      }
+    });
+  }
+
   applyFontSize();
 
-const ulozenyMotiv =
-  localStorage.getItem("theme") || "light";
+  const ulozenyMotiv =
+    localStorage.getItem("theme") || "light";
 
-applyTheme(ulozenyMotiv);
-
-if (currentThemeLabel) {
-  if (ulozenyMotiv === "light") {
-    currentThemeLabel.textContent = "Světlý";
-  }
-  
-  if (ulozenyMotiv === "dark") {
-    currentThemeLabel.textContent = "Tmavý";
-  }
-  
-  if (ulozenyMotiv === "cappuccino") {
-    currentThemeLabel.textContent = "Cappuccino";
-  }
-}
-
-themeOptionButtons.forEach((button) => {
-  button.classList.toggle(
-    "active",
-    button.dataset.themeOption === ulozenyMotiv
-  );
-});
-  
-  
+  applyTheme(ulozenyMotiv);
+  nastavPopisekMotivu(ulozenyMotiv);
 
   increaseFontButton.addEventListener("click", () => {
-    currentFontSize = Math.min(currentFontSize + 1, 20);
-    localStorage.setItem("fontSize", currentFontSize);
+    currentFontSize = Math.min(
+      currentFontSize + 1,
+      20
+    );
+
+    localStorage.setItem(
+      "fontSize",
+      currentFontSize
+    );
+
     applyFontSize();
   });
 
   decreaseFontButton.addEventListener("click", () => {
-    currentFontSize = Math.max(currentFontSize - 1, 13);
-    localStorage.setItem("fontSize", currentFontSize);
+    currentFontSize = Math.max(
+      currentFontSize - 1,
+      13
+    );
+
+    localStorage.setItem(
+      "fontSize",
+      currentFontSize
+    );
+
     applyFontSize();
   });
+
+  openThemeModalButton?.addEventListener(
+    "click",
+    otevriModalMotivu
+  );
 
   settingsOpenButton.addEventListener("click", () => {
     settingsModal.hidden = false;
@@ -179,11 +180,12 @@ themeOptionButtons.forEach((button) => {
     settingsModal.hidden = true;
   });
 
-  settingsExportButton.addEventListener("click", exportTasks);
+  settingsExportButton.addEventListener(
+    "click",
+    exportTasks
+  );
 
   settingsImportButton.addEventListener("click", () => {
     importFile.click();
   });
-
-  
 })();
