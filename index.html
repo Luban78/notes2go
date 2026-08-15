@@ -630,104 +630,81 @@
 ></div>
 -->
 
-      <!-- ====================================
-           MENU OBLASTÍ A ŠTÍTKŮ
-           ==================================== -->
+      <!-- ===================<!-- ====================================
+     MENU ŠTÍTKŮ
+     ==================================== -->
 
-      <div
-        id="tagMenu"
-        class="tagMenu"
-        hidden
-      >
+<div
+  id="tagMenu"
+  class="tagMenu"
+  hidden
+>
 
-        <h3>Oblast poznámky</h3>
+  <h3>Štítky</h3>
 
-        <div class="areaOptions">
+  <div class="tagOptions">
 
-          <button
-            type="button"
-            data-area="work"
-          >
-            💼 Pracovní
-          </button>
+    <button
+      type="button"
+      data-tag="code"
+    >
+      code
+    </button>
 
-          <button
-            type="button"
-            data-area="private"
-          >
-            🏠 Soukromé
-          </button>
+    <button
+      type="button"
+      data-tag="důležité"
+    >
+      důležité
+    </button>
 
-        </div>
+    <button
+      type="button"
+      data-tag="projekt"
+    >
+      projekt
+    </button>
 
+    <button
+      id="createTagButton"
+      class="createTagButton"
+      type="button"
+    >
+      ＋ Nový štítek
+    </button>
 
-        <h3>Štítky</h3>
+  </div>
 
-        <div class="tagOptions">
+  <div
+    id="newTagRow"
+    class="newTagRow"
+    hidden
+  >
+    <input
+      id="newTagInput"
+      type="text"
+      maxlength="24"
+      placeholder="Název štítku"
+      autocomplete="off"
+    >
 
-          <button
-            type="button"
-            data-tag="code"
-          >
-            code
-          </button>
+    <button
+      id="saveNewTagButton"
+      type="button"
+    >
+      Přidat
+    </button>
 
-          <button
-            type="button"
-            data-tag="důležité"
-          >
-            důležité
-          </button>
+    <button
+      id="cancelNewTagButton"
+      type="button"
+      aria-label="Zrušit nový štítek"
+    >
+      ✕
+    </button>
+  </div>
 
-          <button
-            type="button"
-            data-tag="projekt"
-          >
-            projekt
-          </button>
-
-          <button
-            id="createTagButton"
-            class="createTagButton"
-            type="button"
-          >
-            ＋ Nový štítek
-          </button>
-
-        </div>
-
-        <div
-          id="newTagRow"
-          class="newTagRow"
-          hidden
-        >
-          <input
-            id="newTagInput"
-            type="text"
-            maxlength="24"
-            placeholder="Název štítku"
-            autocomplete="off"
-          >
-
-          <button
-            id="saveNewTagButton"
-            type="button"
-          >
-            Přidat
-          </button>
-
-          <button
-            id="cancelNewTagButton"
-            type="button"
-            aria-label="Zrušit nový štítek"
-          >
-            ✕
-          </button>
-        </div>
-
-      </div>
-
-
+</div>
       <!-- ====================================
            SPODNÍ LIŠTA EDITORU
            ==================================== -->

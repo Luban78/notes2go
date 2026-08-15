@@ -60,9 +60,12 @@ confirmDeleteButton.addEventListener("click", () => {
   markNoteDeletedInSupabase(taskToDelete);
   
   deleteConfirmModal.hidden = true;
-  selectedCardIndex = null;
-  
-  renderTasks();
+selectedCardIndex = null;
+
+taskModal.hidden = true;
+activeTaskIndex = null;
+
+renderTasks();
 });
 
 const mainMenuButton = document.getElementById("mainMenuButton");
@@ -79,7 +82,17 @@ mainMenuButton.addEventListener("click", () => {
 let activeTaskIndex = null;
 let reminderEnabled = false;
 const editorBackButton = document.getElementById("editorBackButton");
+const deleteTaskButton =
+  document.getElementById("deleteTaskButton");
+deleteTaskButton?.addEventListener("click", () => {
+  if (activeTaskIndex === null) {
+    return;
+  }
 
+  selectedCardIndex = activeTaskIndex;
+
+  deleteConfirmModal.hidden = false;
+});
 
 const reminderButton = document.getElementById("reminderButton");
 

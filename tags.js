@@ -291,6 +291,9 @@ function updateTagFilterUI() {
     });
 }
 
+
+
+
 function openNewTagEditor() {
   if (activeTags.length >= 2) {
     alert("Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.");
@@ -337,6 +340,12 @@ function createNewTag() {
   closeNewTagEditor();
   updateTagMenuUI();
 }
+
+
+
+
+
+
 
 areaFilterButtons.forEach((button) => {
   button.addEventListener("click", () => {
