@@ -341,7 +341,14 @@ function createNewTag() {
   updateTagMenuUI();
 }
 
+categoryTaskButton.addEventListener("click", () => {
+  activeArea =
+    activeArea === "work"
+      ? "private"
+      : "work";
 
+  updateTagMenuUI();
+});
 
 
 
