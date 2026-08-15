@@ -14,6 +14,11 @@
   const currentThemeLabel =
     document.getElementById("currentThemeLabel");
 
+  const openReminderDelaySettingsButton =
+  document.getElementById(
+    "openReminderDelaySettingsButton"
+  );
+  
   const settingsModal =
     document.getElementById("settingsModal");
 
@@ -84,6 +89,131 @@
     }
   }
 
+openReminderDelaySettingsButton?.addEventListener(
+  "click",
+  () => {
+    const ulozeneRychleOdlozeni =
+      JSON.parse(
+        localStorage.getItem("rychleOdlozeni")
+      ) || {
+        volba1: "15",
+        volba2: "30",
+        volba3: "60",
+        volba4: "tomorrow"
+      };
+
+    const ziskejPopisek = (
+      hodnota,
+      moznosti
+    ) => {
+      const nalezenaMoznost =
+        moznosti.find(
+          (moznost) =>
+            moznost.hodnota === hodnota
+        );
+
+      return nalezenaMoznost
+        ? nalezenaMoznost.popisek
+        : hodnota;
+    };
+
+    const moznostiVolba1 = [
+      { hodnota: "5", popisek: "5 minut" },
+      { hodnota: "10", popisek: "10 minut" },
+      { hodnota: "15", popisek: "15 minut" },
+      { hodnota: "30", popisek: "30 minut" },
+      { hodnota: "60", popisek: "1 hodina" }
+    ];
+
+    const moznostiVolba2 = [
+      { hodnota: "5", popisek: "5 minut" },
+      { hodnota: "10", popisek: "10 minut" },
+      { hodnota: "15", popisek: "15 minut" },
+      { hodnota: "30", popisek: "30 minut" },
+      { hodnota: "60", popisek: "1 hodina" }
+    ];
+
+    const moznostiVolba3 = [
+      { hodnota: "15", popisek: "15 minut" },
+      { hodnota: "30", popisek: "30 minut" },
+      { hodnota: "60", popisek: "1 hodina" },
+      { hodnota: "120", popisek: "2 hodiny" },
+      { hodnota: "180", popisek: "3 hodiny" }
+    ];
+
+    const moznostiVolba4 = [
+      { hodnota: "tomorrow", popisek: "Zítra 8:00" },
+      { hodnota: "120", popisek: "2 hodiny" },
+      { hodnota: "180", popisek: "3 hodiny" }
+    ];
+
+    otevriNastavovaciModal({
+      nadpis: "Rychlé odložení",
+
+      polozky: [
+        {
+          klic: "volba1",
+          popisek: "1. volba",
+          hodnota:
+            ulozeneRychleOdlozeni.volba1,
+          zobrazeni: ziskejPopisek(
+            ulozeneRychleOdlozeni.volba1,
+            moznostiVolba1
+          ),
+          moznosti: moznostiVolba1
+        },
+
+        {
+          klic: "volba2",
+          popisek: "2. volba",
+          hodnota:
+            ulozeneRychleOdlozeni.volba2,
+          zobrazeni: ziskejPopisek(
+            ulozeneRychleOdlozeni.volba2,
+            moznostiVolba2
+          ),
+          moznosti: moznostiVolba2
+        },
+
+        {
+          klic: "volba3",
+          popisek: "3. volba",
+          hodnota:
+            ulozeneRychleOdlozeni.volba3,
+          zobrazeni: ziskejPopisek(
+            ulozeneRychleOdlozeni.volba3,
+            moznostiVolba3
+          ),
+          moznosti: moznostiVolba3
+        },
+
+        {
+          klic: "volba4",
+          popisek: "4. volba",
+          hodnota:
+            ulozeneRychleOdlozeni.volba4,
+          zobrazeni: ziskejPopisek(
+            ulozeneRychleOdlozeni.volba4,
+            moznostiVolba4
+          ),
+          moznosti: moznostiVolba4
+        }
+      ],
+
+      poUlozeni: (hodnoty) => {
+        localStorage.setItem(
+          "rychleOdlozeni",
+          JSON.stringify(hodnoty)
+        );
+
+        console.log(
+          "Uložené rychlé odložení:",
+          hodnoty
+        );
+      }
+    });
+  }
+);
   function ziskejPopisekMotivu(hodnota) {
     return (
       motivy.find(

@@ -146,7 +146,30 @@ function updateReminderButton(enabled) {
   const button =
     document.getElementById("reminderButton");
 
-  button?.classList.toggle("active", enabled);
+  if (!button) {
+    return;
+  }
+
+  button.hidden = !enabled;
+  button.classList.toggle("active", enabled);
+}
+
+
+
+function zapniPripominkuPoZmeneTerminu() {
+  const modalDate =
+    document.getElementById("modalDate");
+
+  const modalTime =
+    document.getElementById("modalTime");
+
+  if (!modalDate?.value || !modalTime?.value) {
+    return;
+  }
+
+  reminderEnabled = true;
+  updateReminderButton(true);
+  requestNotificationPermission();
 }
 
 
@@ -690,7 +713,77 @@ function openReminderQuickMenu(entry) {
         ? "🗑️ Odstranit z plánu"
         : "🔕 Vypnout připomínku";
   }
+const rychleOdlozeni =
+  JSON.parse(
+    localStorage.getItem("rychleOdlozeni")
+  ) || {
+    volba1: "15",
+    volba2: "30",
+    volba3: "60",
+    volba4: "tomorrow"
+  };
 
+const formatOdlozeni = (hodnota) => {
+  if (hodnota === "tomorrow") {
+    return "Zítra 8:00";
+  }
+
+  const minuty = Number(hodnota);
+
+  if (minuty === 60) {
+    return "+ 1 hod";
+  }
+
+  if (minuty === 120) {
+    return "+ 2 hod";
+  }
+
+  if (minuty === 180) {
+    return "+ 3 hod";
+  }
+
+  return `+ ${minuty} min`;
+};
+
+const tlacitkaOdlozeni =
+  document.querySelectorAll(
+    "[data-reminder-delay]"
+  );
+
+const hodnotyOdlozeni = [
+  rychleOdlozeni.volba1,
+  rychleOdlozeni.volba2,
+  rychleOdlozeni.volba3
+];
+
+tlacitkaOdlozeni.forEach(
+  (tlacitko, index) => {
+    const hodnota =
+      hodnotyOdlozeni[index];
+
+    if (!hodnota) {
+      return;
+    }
+
+    tlacitko.dataset.reminderDelay =
+      hodnota;
+
+    tlacitko.textContent =
+      formatOdlozeni(hodnota);
+  }
+);
+
+const zitraTlacitko =
+  document.getElementById(
+    "reminderTomorrowMorningButton"
+  );
+
+if (zitraTlacitko) {
+  zitraTlacitko.textContent =
+    formatOdlozeni(
+      rychleOdlozeni.volba4
+    );
+}
   reminderQuickMenu.hidden = false;
 }
 
@@ -886,20 +979,40 @@ async function postponeReminder(minutes) {
 
 
 async function postponeReminderToTomorrowMorning() {
+  const rychleOdlozeni =
+    JSON.parse(
+      localStorage.getItem("rychleOdlozeni")
+    ) || {
+      volba4: "tomorrow"
+    };
+  
+  const ctvrtaVolba =
+    rychleOdlozeni.volba4 || "tomorrow";
+  
+  if (ctvrtaVolba !== "tomorrow") {
+    const minuty = Number(ctvrtaVolba);
+    
+    if (Number.isFinite(minuty)) {
+      await postponeReminder(minuty);
+    }
+    
+    return;
+  }
+  
   const entry = getSelectedReminderEntry();
-
+  
   if (!entry) {
     return;
   }
-
+  
   const tomorrow = new Date();
-
+  
   tomorrow.setDate(
     tomorrow.getDate() + 1
   );
-
+  
   tomorrow.setHours(8, 0, 0, 0);
-
+  
   if (entry.kind === "planned") {
     await savePlannedReminderDate(
       entry.id,

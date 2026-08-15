@@ -151,7 +151,15 @@ function updateModalWeekday() {
   
   modalWeekday.textContent = weekdays[date.getDay()];
 }
-modalDate.addEventListener("change", updateModalWeekday);
+modalDate.addEventListener("change", () => {
+  updateModalWeekday();
+  zapniPripominkuPoZmeneTerminu();
+});
+
+modalTime.addEventListener(
+  "change",
+  zapniPripominkuPoZmeneTerminu
+);
 
 
 const taskModal = document.getElementById("taskModal");
@@ -444,8 +452,59 @@ function renderTasks() {
       
       longPressTimer = setTimeout(() => {
         selectedCardIndex = index;
-        const cardMenu = document.getElementById("cardMenu");
+
+        const cardMenu =
+          document.getElementById("cardMenu");
+
         cardMenu.hidden = false;
+
+        if (window.innerWidth < 900) {
+          cardMenu.style.visibility = "hidden";
+          cardMenu.style.bottom = "auto";
+
+          requestAnimationFrame(() => {
+            const cardRect =
+              loadedCard.getBoundingClientRect();
+
+            const menuRect =
+              cardMenu.getBoundingClientRect();
+
+            const odsazeni = 10;
+            const okraj = 12;
+
+            let menuTop =
+              cardRect.bottom + odsazeni;
+
+            if (
+              menuTop + menuRect.height >
+              window.innerHeight - okraj
+            ) {
+              menuTop =
+                cardRect.top -
+                menuRect.height -
+                odsazeni;
+            }
+
+            menuTop = Math.max(
+              okraj,
+              Math.min(
+                menuTop,
+                window.innerHeight -
+                  menuRect.height -
+                  okraj
+              )
+            );
+
+            cardMenu.style.top =
+              `${Math.round(menuTop)}px`;
+
+            cardMenu.style.visibility = "visible";
+          });
+        } else {
+          cardMenu.style.top = "auto";
+          cardMenu.style.bottom = "34px";
+          cardMenu.style.visibility = "visible";
+        }
       }, LONG_PRESS_TIME);
     });
     

@@ -1018,17 +1018,23 @@ html {
   bottom: 90px;
   transform: translateX(-50%);
   z-index: 2000;
+
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  width: min(90%, 360px);
+
+  box-sizing: border-box;
+  width: min(calc(100vw - 24px), 360px);
   padding: 12px;
-  
-  border-radius: 18px;
-  
-  background: var(--color-surface);
+
   border: 1px solid var(--color-border);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  border-radius: 18px;
+
+  background-color: var(--color-surface);
+  opacity: 1;
+  isolation: isolate;
+
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
 }
 
 .cardMenu[hidden] {
@@ -1148,8 +1154,6 @@ html {
 #confirmDeleteButton {
   color: #b24a4a;
 }
-
-.cardMenu,
 
 .cardMenu button:active {
   transform: scale(0.94);
