@@ -4,18 +4,18 @@
   --editor-text: #2e1515;
   --font-size: 16px;
   /* ===== BARVY APLIKACE ===== */
-  
+
   --color-background: #f7f4f2;
   --color-surface: #ffffff;
-  
+
   --color-text: #231b33;
   --color-text-secondary: #6d6878;
-  
+
   --color-accent: #7444dc;
   --color-accent-text: #5f32c9;
-  
+
   --color-border: rgba(35, 27, 51, 0.12);
-  
+
   --color-editor-background: #f0eded;
   --color-editor-text: #2e1515;
 }
@@ -34,12 +34,14 @@ body {
     Arial,
     sans-serif;
 }
+
 button,
 input,
 textarea,
 select {
   font-family: inherit;
 }
+
 body {
   display: flex;
   flex-direction: column;
@@ -116,7 +118,7 @@ body {
 .taskNoteText {
   display: -webkit-box;
   overflow: hidden;
-  
+
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 2;
@@ -137,10 +139,10 @@ body {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  
+
   width: 60px;
   height: 60px;
-  
+
   border-radius: 50%;
   font-size: 2rem;
   background: var(--color-accent);
@@ -157,14 +159,14 @@ body {
   top: var(--visual-top, 0px);
   right: 0;
   left: 0;
-  
+
   height: var(--visual-height, 100dvh);
   z-index: 1000;
-  
+
   display: flex;
   align-items: stretch;
   justify-content: stretch;
-  
+
   background: transparent;
 }
 
@@ -175,20 +177,20 @@ body {
 .modalContent {
   display: flex;
   flex-direction: column;
-  
+
   box-sizing: border-box;
   width: 100%;
   height: 100%;
   min-height: 0;
   padding: 4px 8px env(safe-area-inset-bottom);
-  
-  
+
+
   overflow: hidden;
-  
+
   border-radius: 0;
   background: var(--color-editor-background);
   color: var(--color-editor-text);
-  
+
   text-align: left;
   font-family:
     system-ui,
@@ -216,7 +218,7 @@ body {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  
+
   min-height: 44px;
   margin: 0;
   padding: 0;
@@ -226,7 +228,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  
+
   margin-left: auto;
 }
 
@@ -251,17 +253,17 @@ body {
   width: 100%;
   margin: 0;
   padding: 4px 0 6px;
-  
+
   border: none;
   border-bottom: 1px solid #777;
   outline: none;
-  
+
   background: transparent;
   color: var(--color-editor-text);
-  
+
   font-size: calc(var(--font-size) + 5px);
   font-weight: 700;
-  
+
   max-height: 60px;
   overflow: hidden;
   transition:
@@ -288,15 +290,15 @@ body {
   min-height: 0;
   width: 100%;
   padding: 6px 0 2px;
-  
+
   overflow-y: auto;
   resize: none;
-  
+
   border: none;
   outline: none;
   background: transparent;
   color: var(--color-editor-text);
-  
+
   font-family: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
@@ -310,16 +312,16 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 10;
-  
+
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  
+
   min-height: 42px;
   margin: 0;
   padding: 0;
-  
+
   border-top: 1px solid rgba(0, 0, 0, 0.15);
   background: var(--color-editor-background);
 }
@@ -333,20 +335,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   width: 40px;
   height: 40px;
   padding: 0;
-  
+
   border: none;
   border-radius: 10px;
   outline: none;
-  
+
   background: transparent;
   color: var(--color-editor-text);
   font-size: 1.5rem;
   cursor: pointer;
-  
+
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s ease;
 }
@@ -496,7 +498,7 @@ body {
 }
 
 .searchIcon,
-.searchBox > span {
+.searchBox>span {
   flex-shrink: 0;
   color: var(--color-text-secondary);
   font-size: 1.7rem;
@@ -533,7 +535,7 @@ body {
   width: 97px;
 }
 
-.searchActions > button {
+.searchActions>button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -553,13 +555,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-.searchActions > button:active {
+.searchActions>button:active {
   transform: scale(0.94);
 }
 
 .mainMenuIcon {
   display: inline-block;
-  transform: translate( 0px, -2px);
+  transform: translate(0px, -2px);
 }
 
 /* ---------- SERVISNÍ MENU POD ⋮ ---------- */
@@ -610,7 +612,7 @@ body {
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
 
-.mainMenu button > span:first-child {
+.mainMenu button>span:first-child {
   text-align: center;
 }
 
@@ -706,7 +708,7 @@ body {
     gap: 4px;
   }
 
-  .searchActions > button {
+  .searchActions>button {
     width: 43px;
   }
 }
@@ -730,6 +732,7 @@ body {
   position: relative;
   top: -2px;
 }
+
 .taskCard p {
   margin: 0;
   font-family: system-ui, sans-serif;
@@ -745,7 +748,7 @@ body {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid rgba(35, 27, 51, 0.12);
-  
+
   color: var(--color-text-secondary);
   font-size: calc(var(--font-size) - 3px);
 }
@@ -785,20 +788,20 @@ body {
   box-sizing: border-box;
   height: calc(var(--font-size) + 24px);
   min-width: 0;
-  
+
   padding: 4px 10px;
-  
-  
+
+
   border-radius: 12px;
-  
+
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
-  
+
   font-size: calc(var(--font-size) - 1px);
-  
+
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  
+
   outline: none;
 }
 
@@ -931,7 +934,7 @@ html {
   box-sizing: border-box;
   width: 100%;
   padding: 10px 12px;
-  
+
   border-top: 1px solid rgba(0, 0, 0, 0.12);
   background: var(--color-editor-background);
   color: var(--color-editor-text);
@@ -960,15 +963,15 @@ html {
 .areaOptions button,
 .tagOptions button {
   padding: 6px 10px;
-  
+
   border: 1px solid color-mix(in srgb,
       var(--color-editor-text) 22%,
       transparent);
   border-radius: 12px;
-  
+
   background: transparent;
   color: var(--color-editor-text);
-  
+
   font-size: 0.95rem;
 }
 
@@ -988,14 +991,14 @@ html {
 
 .taskTag {
   padding: 3px 7px;
-  
+
   border-radius: 8px;
   background: color-mix(in srgb,
       var(--color-accent) 12%,
       transparent);
-  
+
   color: var(--color-accent-text);
-  
+
   font-size: calc(var(--font-size) - 3px);
   font-weight: 600;
 }
@@ -1066,7 +1069,7 @@ html {
 .pinnedCards {
   display: flex;
   gap: 10px;
-  
+
   width: 100%;
   box-sizing: border-box;
   padding: 0 8px 8px;
@@ -1085,15 +1088,15 @@ html {
 .deleteConfirmModal {
   position: fixed;
   inset: 0;
-  
+
   z-index: 3000;
-  
+
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   padding: 20px;
-  
+
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -1122,13 +1125,13 @@ html {
 
 .deleteConfirmBox h3 {
   margin: 0 0 10px;
-  
+
   font-size: 1.35rem;
 }
 
 .deleteConfirmBox p {
   margin: 0;
-  
+
   font-size: 1rem;
   line-height: 1.4;
 }
@@ -1136,7 +1139,7 @@ html {
 .deleteConfirmActions {
   display: flex;
   gap: 10px;
-  
+
   margin-top: 20px;
 }
 
@@ -1154,6 +1157,7 @@ html {
   font-size: 1rem;
   font-weight: 600;
 }
+
 #confirmDeleteButton {
   color: #b24a4a;
 }
@@ -1166,13 +1170,13 @@ html {
 .settingsModal {
   position: fixed;
   inset: 0;
-  
+
   z-index: 3000;
-  
+
   display: flex;
   align-items: stretch;
   justify-content: center;
-  
+
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -1184,12 +1188,12 @@ html {
   width: min(100%, 500px);
   height: 100%;
   box-sizing: border-box;
-  
+
   padding: 24px 18px;
-  
+
   background: var(--color-background);
   color: var(--color-text);
-  
+
   overflow-y: auto;
 }
 
@@ -1197,7 +1201,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  
+
   margin-bottom: 24px;
 }
 
@@ -1209,10 +1213,10 @@ html {
 #closeSettingsButton {
   width: 44px;
   height: 44px;
-  
+
   border: none;
   border-radius: 12px;
-  
+
   background: transparent;
   color: var(--color-text);
   font-size: 1.4rem;
@@ -1224,23 +1228,23 @@ html {
 
 .settingsSection h3 {
   margin: 0 0 10px;
-  
+
   font-size: calc(var(--font-size) - 2px);
   color: var(--color-text-secondary);
 }
 
 .settingsSection button {
   display: block;
-  
+
   width: 100%;
   padding: 14px 12px;
-  
+
   border: none;
   border-bottom: 1px solid rgba(35, 27, 51, 0.1);
-  
+
   background: transparent;
   color: var(--color-text);
-  
+
   text-align: left;
   font-size: var(--font-size);
 }
@@ -1266,14 +1270,14 @@ html {
   width: 42px;
   height: 42px;
   padding: 0;
-  
-  
+
+
   border-radius: 12px;
-  
+
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  
+
   text-align: center;
   font-size: 1.35rem;
   font-weight: 600;
@@ -1300,15 +1304,15 @@ html {
 body.theme-dark {
   --color-background: #100d18;
   --color-surface: #241d30;
-  
+
   --color-text: #f4effa;
   --color-text-secondary: #b8aec4;
-  
+
   --color-accent: #9b6cff;
   --color-accent-text: #c5a9ff;
-  
+
   --color-border: rgba(255, 255, 255, 0.12);
-  
+
   --color-editor-background: #1d1725;
   --color-editor-text: #f4effa;
 }
@@ -1316,15 +1320,15 @@ body.theme-dark {
 body.theme-cappuccino {
   --color-background: #efe6dc;
   --color-surface: #f8f1ea;
-  
+
   --color-text: #3a2a22;
   --color-text-secondary: #7b675c;
-  
+
   --color-accent: #b77a52;
   --color-accent-text: #8b5838;
-  
+
   --color-border: rgba(58, 42, 34, 0.14);
-  
+
   --color-editor-background: #f2e9e1;
   --color-editor-text: #3a2a22;
 }
@@ -1334,11 +1338,11 @@ body.theme-cappuccino {
   flex: 1;
   flex-direction: column;
   gap: 10px;
-  
+
   width: 100%;
   min-height: 0;
   padding-top: 12px;
-  
+
   overflow-y: auto;
 }
 
@@ -1350,16 +1354,16 @@ body.theme-cappuccino {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  
+
   width: 100%;
   box-sizing: border-box;
   padding: 0 14px 0 24px;
-  
+
   border-radius: 12px;
-  
+
   color: var(--color-editor-text);
   font-size: var(--font-size);
-  
+
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1367,7 +1371,7 @@ body.theme-cappuccino {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
-  
+
   margin: 1px 0 0;
   cursor: pointer;
 }
@@ -1377,18 +1381,18 @@ body.theme-cappuccino {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  
+
   margin: 0;
   padding: 0 0 4px;
-  
+
   color: var(--color-editor-text);
   font: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
-  
+
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  
+
   /*
    * Běžný režim TODO není editovací prvek. Android tak při
    * long-pressu nezkouší označovat text a gesto patří přesunu.
@@ -1409,24 +1413,24 @@ body.theme-cappuccino {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  
+
   margin: 0;
   padding: 0 0 4px;
-  
+
   resize: none;
   overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  
+
   border: none;
   outline: none;
   background: transparent;
   color: var(--color-editor-text);
-  
+
   font: inherit;
   font-size: var(--font-size);
   line-height: 1.35;
-  
+
   /* V editaci musí zůstat nativní označení a kopírování textu. */
   user-select: text;
   -webkit-user-select: text;
@@ -1459,16 +1463,16 @@ body.theme-cappuccino {
   width: calc(100% - 32px);
   box-sizing: border-box;
   margin: 0 12px 0 20px;
-  
+
   border: 2px dashed color-mix(in srgb,
       var(--color-accent) 58%,
       transparent);
   border-radius: 12px;
-  
+
   background: color-mix(in srgb,
       var(--color-accent) 10%,
       transparent);
-  
+
   transition:
     height 0.12s ease,
     background 0.12s ease;
@@ -1478,22 +1482,22 @@ body.theme-cappuccino {
 .todoDragGhost {
   position: fixed;
   z-index: 10000;
-  
+
   margin: 0 !important;
   pointer-events: none;
-  
+
   opacity: 0.98;
   transform: scale(1.035);
   transform-origin: left center;
-  
+
   background: color-mix(in srgb,
       var(--color-accent) 20%,
       var(--color-editor-background));
-  
+
   border: 1px solid color-mix(in srgb,
       var(--color-accent) 48%,
       transparent);
-  
+
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
 }
 
@@ -1503,17 +1507,17 @@ body.theme-cappuccino {
   flex: 0 0 28px;
   align-items: center;
   justify-content: center;
-  
+
   width: 28px;
   height: 28px;
   box-sizing: border-box;
   margin: 1px 0 0;
-  
+
   border: 2px solid color-mix(in srgb,
       var(--color-accent) 70%,
       var(--color-editor-text));
   border-radius: 5px;
-  
+
   color: var(--color-accent-text);
   font-size: 20px;
   font-weight: 700;
@@ -1524,17 +1528,17 @@ body.theme-cappuccino {
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
-  
+
   margin: 0;
   padding: 0 0 4px;
-  
+
   color: var(--color-accent-text);
-  
+
   font: inherit;
   font-size: var(--font-size);
   font-weight: 600;
   line-height: 1.35;
-  
+
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1572,10 +1576,12 @@ body.theme-cappuccino {
   box-sizing: border-box;
   padding: 12px 16px;
 }
+
 .pinnedCards.listView .taskCard p:not(.taskNoteText) {
   margin-top: 6px;
   padding-top: 4px;
 }
+
 .pinnedCards.listView .taskCard .taskNoteText {
   margin-top: 4px;
 }
@@ -1822,6 +1828,7 @@ body.authPending .addTaskButton {
 }
 
 @media (min-width: 900px) {
+
   .homeHeader,
   .app {
     width: min(calc(100% - 64px), 1180px);
@@ -1853,7 +1860,7 @@ body.authPending .addTaskButton {
     font-size: 15px;
   }
 
-  .searchActions > button {
+  .searchActions>button {
     width: 52px;
   }
 
@@ -1985,6 +1992,7 @@ body.authPending .addTaskButton {
     bottom: 34px;
   }
 }
+
 .loginLogoImage {
   width: 56px;
   height: 56px;
@@ -2163,17 +2171,17 @@ body.authPending .addTaskButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   width: 45px;
   height: 44px;
-  
+
   padding: 0;
   border: 0;
   border-radius: 12px;
-  
+
   background: var(--color-surface);
   color: var(--color-text);
-  
+
   font-size: 1.7rem;
   line-height: 1;
 }
@@ -2208,13 +2216,13 @@ body.authPending .addTaskButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   border: 0;
   border-radius: 12px;
-  
+
   background: var(--color-surface);
   color: var(--color-text);
-  
+
   font-family: inherit;
   font-weight: inherit;
   font-size: var(--font-size);
@@ -2247,10 +2255,11 @@ body.authPending .addTaskButton {
   max-height: 42vh;
   overflow-y: auto;
   padding-bottom: max(72px, env(safe-area-inset-bottom));
-  
+
   margin-top: 4px;
   overflow: hidden;
 }
+
 .calendarAgenda h3 {
   margin: 0 0 8px;
   font-size: calc(var(--font-size) + 1px);
@@ -2462,7 +2471,7 @@ body.authPending .addTaskButton {
   color: var(--color-text);
 
   font: inherit;
-font-size: calc(var(--font-size) - 1px);
+  font-size: calc(var(--font-size) - 1px);
   font-weight: 650;
 
   cursor: pointer;
@@ -2474,11 +2483,9 @@ font-size: calc(var(--font-size) - 1px);
   color: var(--color-accent-text);
 
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-accent) 10%,
-      var(--color-surface)
-    );
+      var(--color-surface));
 }
 
 .remindersScroll {
@@ -2534,11 +2541,9 @@ font-size: calc(var(--font-size) - 1px);
   border-radius: 15px;
 
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-surface) 70%,
-      transparent
-    );
+      transparent);
 
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -2625,11 +2630,9 @@ font-size: calc(var(--font-size) - 1px);
 
 .reminderItemMenu:active {
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-accent) 10%,
-      transparent
-    );
+      transparent);
 }
 
 .remindersEmpty {
@@ -2708,11 +2711,9 @@ font-size: calc(var(--font-size) - 1px);
   border-radius: 12px;
 
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-text) 7%,
-      transparent
-    );
+      transparent);
   color: var(--color-text);
 
   font: inherit;
@@ -2875,6 +2876,7 @@ font-size: calc(var(--font-size) - 1px);
   border-color: var(--color-accent);
   color: #ffffff;
 }
+
 .newTagModal {
   position: fixed;
   inset: 0;
@@ -2912,6 +2914,7 @@ font-size: calc(var(--font-size) - 1px);
   gap: 10px;
   margin-top: 16px;
 }
+
 .newTagModal[hidden] {
   display: none;
 }
@@ -2953,6 +2956,7 @@ font-size: calc(var(--font-size) - 1px);
 #closeTagMessageButton:active {
   transform: scale(0.97);
 }
+
 /* ==========================================
    PŘIPOMÍNKY – PROŠLÉ A NAPLÁNOVANÉ ÚKOLY
    ========================================== */
@@ -2983,11 +2987,9 @@ font-size: calc(var(--font-size) - 1px);
   border-radius: 13px;
 
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-accent) 14%,
-      var(--color-background)
-    );
+      var(--color-background));
   color: var(--color-accent-text);
 
   font: inherit;
@@ -3011,9 +3013,10 @@ font-size: calc(var(--font-size) - 1px);
   text-decoration: line-through;
   opacity: 0.55;
 }
+
 .remindersStatusTabs {
   display: flex;
-  
+
   flex: 0 0 auto;
   gap: 8px;
   margin: 10px 0 14px;
@@ -3039,6 +3042,7 @@ font-size: calc(var(--font-size) - 1px);
   margin-left: 4px;
   font-weight: 700;
 }
+
 /* KLIKACÍ DATUM POD KALENDÁŘEM – OTEVŘE DETAIL DNE */
 .calendarSelectedDateButton {
   display: flex;
@@ -3064,38 +3068,38 @@ font-size: calc(var(--font-size) - 1px);
 
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  
-  
+
+
 }
 
 .calendarSelectedDateButton::after {
   content: "›";
-  
+
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   color: var(--color-accent-text);
   font-size: calc(var(--font-size) + 5px);
   font-weight: 700;
   line-height: 1;
-  
+
   transform: translateY(-2px);
 }
+
 .calendarSelectedDateButton:active {
   transform: scale(0.97);
 
   background:
-    color-mix(
-      in srgb,
+    color-mix(in srgb,
       var(--color-accent) 10%,
-      var(--color-surface)
-    );
+      var(--color-surface));
 }
 
 .calendarSelectedDateButton:active {
   transform: scale(0.98);
 }
+
 /* DETAIL DNE – HLAVIČKA */
 /* ========================================
    DETAIL DNE
@@ -3154,12 +3158,10 @@ font-size: calc(var(--font-size) - 1px);
   overflow-y: auto;
   overflow-x: hidden;
 
-  
 
-  padding-bottom: max(
-    32px,
-    env(safe-area-inset-bottom)
-  );
+
+  padding-bottom: max(32px,
+      env(safe-area-inset-bottom));
 
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -3173,28 +3175,23 @@ font-size: calc(var(--font-size) - 1px);
   overflow-y: auto;
   overflow-x: hidden;
 
-  padding-bottom: max(
-    72px,
-    env(safe-area-inset-bottom)
-  );
+  padding-bottom: max(72px,
+      env(safe-area-inset-bottom));
 
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    black 20px,
-    black 100%
-  );
 
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    black 20px,
-    black 100%
-  );
+  -webkit-mask-image: linear-gradient(to bottom,
+      transparent 0,
+      black 20px,
+      black 100%);
+
+  mask-image: linear-gradient(to bottom,
+      transparent 0,
+      black 20px,
+      black 100%);
 }
+
 /* ========================================
    DETAIL DNE – CELÁ OBRAZOVKA
    ======================================== */
@@ -3222,10 +3219,8 @@ font-size: calc(var(--font-size) - 1px);
   overflow-y: auto;
   overflow-x: hidden;
 
-  padding-bottom: max(
-    32px,
-    env(safe-area-inset-bottom)
-  );
+  padding-bottom: max(32px,
+      env(safe-area-inset-bottom));
 
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -3259,7 +3254,7 @@ font-size: calc(var(--font-size) - 1px);
   border-bottom: 1px solid rgba(35, 27, 51, 0.1);
 }
 
-.themeSetting > span {
+.themeSetting>span {
   color: var(--color-text);
   font-size: var(--font-size);
 }
@@ -3283,6 +3278,7 @@ font-size: calc(var(--font-size) - 1px);
   font-weight: 600;
   cursor: pointer;
 }
+
 .themeSelectButton {
   -webkit-tap-highlight-color: transparent;
   outline: none;
@@ -3368,11 +3364,9 @@ font-size: calc(var(--font-size) - 1px);
   border: 0;
   border-radius: 14px;
 
-  background: color-mix(
-    in srgb,
-    var(--color-text) 7%,
-    transparent
-  );
+  background: color-mix(in srgb,
+      var(--color-text) 7%,
+      transparent);
   color: var(--color-text);
 
   font: inherit;
@@ -3422,6 +3416,7 @@ font-size: calc(var(--font-size) - 1px);
     border-color 120ms ease,
     background 120ms ease;
 }
+
 .choiceDialogSave {
   width: 100%;
   min-height: 48px;
@@ -3447,6 +3442,7 @@ font-size: calc(var(--font-size) - 1px);
 .choiceDialogSave:active {
   transform: scale(0.98);
 }
+
 .choiceDialogOption:active {
   transform: scale(0.985);
   border-color: var(--color-accent);
@@ -3465,4 +3461,240 @@ font-size: calc(var(--font-size) - 1px);
 #priorityTaskButton.active {
   background: var(--color-accent);
   color: #ffffff;
+}
+
+/* ========================================
+   SPRÁVA ŠTÍTKŮ – MODAL
+   Samostatná obrazovka pro správu štítků.
+   Barvy používají proměnné aktuálního motivu.
+   ======================================== */
+
+.manageTagsModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.manageTagsModal[hidden] {
+  display: none;
+}
+
+.manageTagsContent {
+  width: min(100%, 520px);
+  max-height: 80vh;
+  overflow-y: auto;
+
+  padding: 22px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.manageTagsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.manageTagsHeader h2 {
+  margin: 0;
+
+  font-size: 1.4rem;
+}
+
+#closeManageTagsButton {
+  flex-shrink: 0;
+
+  width: 44px;
+  height: 44px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+#manageTagsList {
+  margin-top: 20px;
+}
+
+/* ========================================
+   SPRÁVA ŠTÍTKŮ – ŘÁDKY A AKCE
+   ======================================== */
+
+.manageTagRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 10px 0;
+
+  border-bottom: 1px solid var(--color-border);
+}
+
+.manageTagRow:last-child {
+  border-bottom: none;
+}
+
+.manageTagName {
+  min-width: 0;
+
+  color: var(--color-text);
+
+  font-size: var(--font-size);
+  font-weight: 600;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manageTagActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.manageTagActions button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.05rem;
+
+  cursor: pointer;
+}
+
+.manageTagActions button:active {
+  transform: scale(0.95);
+}
+
+
+/* ========================================
+   POTVRZENÍ SMAZÁNÍ ŠTÍTKU
+   Používá barvy aktuálního motivu.
+   ======================================== */
+
+.deleteTagConfirmModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3200;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.deleteTagConfirmModal[hidden] {
+  display: none;
+}
+
+.deleteTagConfirmContent {
+  width: min(100%, 420px);
+
+  padding: 22px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.deleteTagConfirmContent h3 {
+  margin: 0 0 10px;
+
+  font-size: 1.35rem;
+}
+
+.deleteTagConfirmContent p {
+  margin: 0 0 18px;
+
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.deleteTagConfirmActions {
+  display: flex;
+  gap: 10px;
+}
+
+.deleteTagConfirmActions button {
+  flex: 1;
+
+  min-height: 46px;
+  padding: 10px 14px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 650;
+}
+
+#confirmDeleteTagButton {
+  color: #c84f58;
+}
+
+.manageTagRenameInput {
+  width: min(220px, 55vw);
+  min-width: 120px;
+
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: var(--font-size);
+  font-weight: 600;
+
+  outline: none;
+}
+
+.manageTagRenameInput:focus {
+  border-color: var(--color-accent);
+
+  box-shadow:
+    0 0 0 2px color-mix(in srgb,
+      var(--color-accent) 18%,
+      transparent);
 }

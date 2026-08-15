@@ -6,6 +6,63 @@ let activeTagFilter = null;
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
 
+// ==========================================
+// VÝCHOZÍ ŠTÍTKY – JEDNORÁZOVÉ ZALOŽENÍ
+// Výchozí štítky vytvoří pouze tehdy,
+// pokud v Supabase nikdy neexistovaly.
+// Smazaný štítek se proto znovu nevytvoří.
+// ==========================================
+
+async function zajistiVychoziStitkyVSupabase(user) {
+  const { data, error } = await supabaseClient
+    .from("tags")
+    .select("name, deleted_at");
+
+  if (error) {
+    console.error(
+      "Načtení výchozích štítků se nepodařilo:",
+      error.message
+    );
+    return;
+  }
+
+  const existujiciNazvy = (data || []).map(
+    (tag) => tag.name.trim().toLowerCase()
+  );
+
+  const chybejiciStitky = DEFAULT_TAGS.filter(
+    (tag) =>
+      !existujiciNazvy.includes(
+        tag.toLowerCase()
+      )
+  );
+
+  if (chybejiciStitky.length === 0) {
+    return;
+  }
+
+  const noveStitky = chybejiciStitky.map(
+    (tag, index) => ({
+      user_id: user.id,
+      name: tag,
+      is_secret: false,
+      sort_order: (data || []).length + index
+    })
+  );
+
+  const { error: insertError } =
+    await supabaseClient
+      .from("tags")
+      .insert(noveStitky);
+
+  if (insertError) {
+    console.error(
+      "Vytvoření výchozích štítků se nepodařilo:",
+      insertError.message
+    );
+  }
+}
+
 const areaFilterButtons =
   document.querySelectorAll("[data-area-filter]");
 
@@ -62,6 +119,37 @@ const tagMessageModal = document.getElementById("tagMessageModal");
 const tagMessageText = document.getElementById("tagMessageText");
 const closeTagMessageButton = document.getElementById("closeTagMessageButton");
 
+const deleteTagConfirmModal =
+  document.getElementById("deleteTagConfirmModal");
+
+const deleteTagConfirmText =
+  document.getElementById("deleteTagConfirmText");
+
+const cancelDeleteTagButton =
+  document.getElementById("cancelDeleteTagButton");
+
+const confirmDeleteTagButton =
+  document.getElementById("confirmDeleteTagButton");
+
+let tagKeSmazani = null;
+
+// ==========================================
+// SPRÁVA ŠTÍTKŮ – MODAL
+// ==========================================
+
+const manageTagsMenuButton =
+  document.getElementById("manageTagsMenuButton");
+
+const manageTagsModal =
+  document.getElementById("manageTagsModal");
+
+const closeManageTagsButton =
+  document.getElementById("closeManageTagsButton");
+
+const manageTagsList =
+  document.getElementById("manageTagsList");
+
+
 
 let favoriteFilterActive = false;
 
@@ -75,6 +163,41 @@ favoriteFilterButton?.addEventListener("click", () => {
   );
 
   renderTasks();
+});
+
+
+cancelDeleteTagButton?.addEventListener("click", () => {
+  deleteTagConfirmModal.hidden = true;
+  tagKeSmazani = null;
+});
+
+confirmDeleteTagButton?.addEventListener("click", async () => {
+  if (!tagKeSmazani) {
+    return;
+  }
+
+  const uspesne = await smazStitek(
+    tagKeSmazani
+  );
+
+  if (!uspesne) {
+    return;
+  }
+
+  deleteTagConfirmModal.hidden = true;
+  tagKeSmazani = null;
+
+  vykresliSpravuStitku();
+});
+
+manageTagsMenuButton?.addEventListener("click", () => {
+  vykresliSpravuStitku();
+  manageTagsModal.hidden = false;
+  mainMenu.hidden = true;
+});
+
+closeManageTagsButton?.addEventListener("click", () => {
+  manageTagsModal.hidden = true;
 });
 
 cancelNewTagModalButton.addEventListener("click", () => {
@@ -92,17 +215,17 @@ saveNewTagModalButton.addEventListener("click", async () => {
     return;
   }
   const tagAlreadyExists = syncedTags.some((tag) =>
-  tag.name.trim().toLowerCase() === name.toLowerCase()
-);
+    tag.name.trim().toLowerCase() === name.toLowerCase()
+  );
 
-if (tagAlreadyExists) {
-  newTagModal.hidden = true;
-  
-  tagMessageText.textContent = "Štítek s tímto názvem už existuje.";
-  tagMessageModal.hidden = false;
-  
-  return;
-}
+  if (tagAlreadyExists) {
+    newTagModal.hidden = true;
+
+    tagMessageText.textContent = "Štítek s tímto názvem už existuje.";
+    tagMessageModal.hidden = false;
+
+    return;
+  }
 
   const user = await getCurrentUser();
 
@@ -174,6 +297,8 @@ async function loadTagsFromSupabase() {
     return;
   }
 
+  await zajistiVychoziStitkyVSupabase(user);
+
   const { data, error } = await supabaseClient
     .from("tags")
     .select("*")
@@ -189,14 +314,288 @@ async function loadTagsFromSupabase() {
   renderTagFilters();
 }
 
+// ==========================================
+// SPRÁVA ŠTÍTKŮ – VYKRESLENÍ SEZNAMU
+// ==========================================
+
+function vykresliSpravuStitku() {
+  manageTagsList.innerHTML = "";
+
+  syncedTags.forEach((tag) => {
+    const radek = document.createElement("div");
+
+    radek.className = "manageTagRow";
+
+    const nazev = document.createElement("span");
+    nazev.className = "manageTagName";
+    nazev.textContent = tag.name;
+
+    const akce = document.createElement("div");
+    akce.className = "manageTagActions";
+
+    const upravitTlacitko = document.createElement("button");
+    upravitTlacitko.type = "button";
+    upravitTlacitko.textContent = "✏️";
+    upravitTlacitko.setAttribute(
+      "aria-label",
+
+      `Přejmenovat štítek ${tag.name}`
+    );
+    let vstup = null;
+
+    upravitTlacitko.addEventListener("click", async () => {
+      if (!vstup) {
+        vstup = document.createElement("input");
+
+        vstup.type = "text";
+        vstup.value = tag.name;
+        vstup.maxLength = 24;
+        vstup.className = "manageTagRenameInput";
+
+        nazev.replaceWith(vstup);
+
+        upravitTlacitko.textContent = "✔️";
+
+        vstup.focus();
+        vstup.select();
+
+        return;
+      }
+
+      const uspesne = await prejmenujStitek(
+        tag,
+        vstup.value
+      );
+
+      if (uspesne) {
+        vykresliSpravuStitku();
+      }
+    });
+
+    const smazatTlacitko = document.createElement("button");
+    smazatTlacitko.type = "button";
+    smazatTlacitko.textContent = "🗑️";
+    smazatTlacitko.setAttribute(
+      "aria-label",
+      `Smazat štítek ${tag.name}`
+    );
+
+    smazatTlacitko.addEventListener("click", () => {
+      tagKeSmazani = tag;
+
+      deleteTagConfirmText.textContent =
+        `Opravdu chceš smazat štítek „${tag.name}“?`;
+
+      deleteTagConfirmModal.hidden = false;
+    });
+
+    akce.append(
+      upravitTlacitko,
+      smazatTlacitko
+    );
+
+    radek.append(
+      nazev,
+      akce
+    );
+
+    manageTagsList.append(radek);
+  });
+}
+
+
+// ==========================================
+// SPRÁVA ŠTÍTKŮ – PŘEJMENOVÁNÍ
+// Změní název štítku v Supabase
+// a ve všech poznámkách, které ho používají.
+// ==========================================
+
+async function prejmenujStitek(tag, novyNazev) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  novyNazev = normalizeTagName(novyNazev);
+
+  if (!novyNazev) {
+    return false;
+  }
+
+  if (
+    novyNazev.toLowerCase() ===
+    tag.name.toLowerCase()
+  ) {
+    return true;
+  }
+
+  const uzExistuje = syncedTags.some(
+    (jinyTag) =>
+      jinyTag.id !== tag.id &&
+      jinyTag.name.toLowerCase() ===
+      novyNazev.toLowerCase()
+  );
+
+  if (uzExistuje) {
+    tagMessageText.textContent =
+      "Štítek s tímto názvem už existuje.";
+
+    tagMessageModal.hidden = false;
+
+    return false;
+  }
+
+  const { error } = await supabaseClient
+    .from("tags")
+    .update({
+      name: novyNazev
+    })
+    .eq("id", tag.id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error(
+      "Přejmenování štítku se nepodařilo:",
+      error.message
+    );
+
+    return false;
+  }
+
+  const poznamky = loadTask();
+  const zmenenePoznamky = [];
+
+  poznamky.forEach((poznamka) => {
+    const puvodniStitky =
+      poznamka.tags || [];
+
+    const obsahujeStitek =
+      puvodniStitky.some(
+        (nazev) =>
+          nazev.toLowerCase() ===
+          tag.name.toLowerCase()
+      );
+
+    if (!obsahujeStitek) {
+      return;
+    }
+
+    poznamka.tags =
+      puvodniStitky.map((nazev) =>
+        nazev.toLowerCase() ===
+          tag.name.toLowerCase()
+          ? novyNazev
+          : nazev
+      );
+
+    poznamka.updatedAt =
+      new Date().toISOString();
+
+    zmenenePoznamky.push(poznamka);
+  });
+
+  if (zmenenePoznamky.length > 0) {
+    saveAllTasks(poznamky);
+
+    for (const poznamka of zmenenePoznamky) {
+      await uploadLocalNoteToSupabase(
+        poznamka
+      );
+    }
+  }
+
+  await loadTagsFromSupabase();
+
+  renderTasks();
+
+  return true;
+}
+
+// ==========================================
+// SPRÁVA ŠTÍTKŮ – SMAZÁNÍ
+// Nastaví deleted_at v Supabase
+// a odebere štítek ze všech poznámek.
+// ==========================================
+
+async function smazStitek(tag) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  const { error } = await supabaseClient
+    .from("tags")
+    .update({
+      deleted_at: deletedAt
+    })
+    .eq("id", tag.id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error(
+      "Smazání štítku se nepodařilo:",
+      error.message
+    );
+
+    return false;
+  }
+
+  const poznamky = loadTask();
+  const zmenenePoznamky = [];
+
+  poznamky.forEach((poznamka) => {
+    const puvodniStitky =
+      poznamka.tags || [];
+
+    const noveStitky =
+      puvodniStitky.filter(
+        (nazev) =>
+          nazev.toLowerCase() !==
+          tag.name.toLowerCase()
+      );
+
+    if (
+      noveStitky.length ===
+      puvodniStitky.length
+    ) {
+      return;
+    }
+
+    poznamka.tags = noveStitky;
+    poznamka.updatedAt =
+      new Date().toISOString();
+
+    zmenenePoznamky.push(poznamka);
+  });
+
+  if (zmenenePoznamky.length > 0) {
+    saveAllTasks(poznamky);
+
+    for (const poznamka of zmenenePoznamky) {
+      await uploadLocalNoteToSupabase(
+        poznamka
+      );
+    }
+  }
+
+  await loadTagsFromSupabase();
+
+  renderTasks();
+
+  return true;
+}
 
 
 function getAllTags() {
   const noteTags = loadTask()
     .flatMap((task) => task.tags || []);
-  
+
   const cloudTags = syncedTags.map((tag) => tag.name);
-  
+
   return [...new Set([...noteTags, ...cloudTags])];
 }
 
@@ -286,21 +685,21 @@ function renderTagFilters() {
 
     tagFilterButtons.append(button);
   });
-  
+
   const addTagButton = document.createElement("button");
 
-addTagButton.classList.add("categoryTab");
-addTagButton.textContent = "+";
-addTagButton.addEventListener("click", () => {
-  const newTagModal = document.getElementById("newTagModal");
-  const newTagModalInput = document.getElementById("newTagModalInput");
-  
-  newTagModal.hidden = false;
-  newTagModalInput.value = "";
-  newTagModalInput.focus();
-});
+  addTagButton.classList.add("categoryTab");
+  addTagButton.textContent = "+";
+  addTagButton.addEventListener("click", () => {
+    const newTagModal = document.getElementById("newTagModal");
+    const newTagModalInput = document.getElementById("newTagModalInput");
 
-tagFilterButtons.append(addTagButton);
+    newTagModal.hidden = false;
+    newTagModalInput.value = "";
+    newTagModalInput.focus();
+  });
+
+  tagFilterButtons.append(addTagButton);
 }
 
 

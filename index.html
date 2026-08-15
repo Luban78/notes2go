@@ -98,6 +98,11 @@
             <span>Nastavení</span>
           </button>
 
+          <button id="manageTagsMenuButton" type="button" role="menuitem">
+            <span aria-hidden="true">🏷️</span>
+            <span>Správa štítků</span>
+          </button>
+
           <button id="backupRestoreButton" type="button" role="menuitem">
             <span aria-hidden="true">💾</span>
             <span>Záloha a obnova</span>
@@ -777,6 +782,74 @@
     </div>
   </div>
 
+  <!-- ========================================
+     SPRÁVA ŠTÍTKŮ
+     Samostatný modal pro přejmenování,
+     mazání a později další správu štítků.
+     Seznam štítků sem vykresluje JavaScript.
+     ======================================== -->
+
+<div
+  id="manageTagsModal"
+  class="manageTagsModal"
+  hidden
+>
+  <div class="manageTagsContent">
+
+    <div class="manageTagsHeader">
+      <h2>Správa štítků</h2>
+
+      <button
+        id="closeManageTagsButton"
+        type="button"
+        aria-label="Zavřít správu štítků"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div id="manageTagsList">
+    </div>
+
+  </div>
+</div>
+<!-- ========================================
+     POTVRZENÍ SMAZÁNÍ ŠTÍTKU
+     Potvrzuje odstranění štítku ze systému
+     i ze všech poznámek, které ho používají.
+     ======================================== -->
+
+<div
+  id="deleteTagConfirmModal"
+  class="deleteTagConfirmModal"
+  hidden
+>
+  <div class="deleteTagConfirmContent">
+
+    <h3>Smazat štítek?</h3>
+
+    <p id="deleteTagConfirmText">
+      Opravdu chceš tento štítek smazat?
+    </p>
+
+    <div class="deleteTagConfirmActions">
+      <button
+        id="cancelDeleteTagButton"
+        type="button"
+      >
+        Zrušit
+      </button>
+
+      <button
+        id="confirmDeleteTagButton"
+        type="button"
+      >
+        🗑️ Smazat
+      </button>
+    </div>
+
+  </div>
+</div>
 
 
   <!-- ========================================
