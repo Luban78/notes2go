@@ -329,12 +329,34 @@
       <div class="reminderQuickDateTime">
         <label>
           Datum
-          <input id="reminderQuickDate" type="date">
+
+          <button
+            id="reminderQuickDateButton"
+            class="sharedDateTimePickerButton"
+            type="button"
+            aria-label="Vybrat datum připomínky"
+          >
+            <span id="reminderQuickDateLabel">Datum</span>
+            <span aria-hidden="true">📅</span>
+          </button>
+
+          <input id="reminderQuickDate" type="hidden">
         </label>
 
         <label>
           Čas
-          <input id="reminderQuickTime" type="time">
+
+          <button
+            id="reminderQuickTimeButton"
+            class="sharedDateTimePickerButton"
+            type="button"
+            aria-label="Vybrat čas připomínky"
+          >
+            <span id="reminderQuickTimeLabel">Čas</span>
+            <span aria-hidden="true">🕒</span>
+          </button>
+
+          <input id="reminderQuickTime" type="hidden">
         </label>
       </div>
 
@@ -723,17 +745,37 @@
 
       <p id="plannerTaskTitle" class="plannerTaskTitle"></p>
 
-      <label for="plannerDate">
+      <label>
         Datum
       </label>
 
-      <input id="plannerDate" type="date">
+      <button
+        id="plannerDateButton"
+        class="sharedDateTimePickerButton plannerDateTimePickerButton"
+        type="button"
+        aria-label="Vybrat datum plánovaného úkolu"
+      >
+        <span id="plannerDateLabel">Datum</span>
+        <span aria-hidden="true">📅</span>
+      </button>
 
-      <label for="plannerTime">
+      <input id="plannerDate" type="hidden">
+
+      <label>
         Čas
       </label>
 
-      <input id="plannerTime" type="time">
+      <button
+        id="plannerTimeButton"
+        class="sharedDateTimePickerButton plannerDateTimePickerButton"
+        type="button"
+        aria-label="Vybrat čas plánovaného úkolu"
+      >
+        <span id="plannerTimeLabel">Čas</span>
+        <span aria-hidden="true">🕒</span>
+      </button>
+
+      <input id="plannerTime" type="hidden">
 
       <div class="plannerActions">
 

@@ -159,6 +159,80 @@ const modalTimeLabel =
   document.getElementById("modalTimeLabel");
 
 // ==========================================
+// VLASTNÍ VÝBĚR DATA A ČASU – SDÍLENÝ CÍL
+// Stejný kalendář a ciferník používá editor,
+// plánování i rychlá úprava připomínky.
+// ==========================================
+
+let aktivniDatumInput =
+  document.getElementById("modalDate");
+let aktivniDatumLabel = modalDateLabel;
+let poVyberuData = null;
+
+let aktivniCasInput =
+  document.getElementById("modalTime");
+let aktivniCasLabel = modalTimeLabel;
+let poVyberuCasu = null;
+
+function formatDatumProTlacitko(hodnota) {
+  if (!hodnota) {
+    return "Datum";
+  }
+
+  const [rok, mesic, den] = hodnota.split("-");
+
+  if (!rok || !mesic || !den) {
+    return "Datum";
+  }
+
+  return `${den}.${mesic}.${rok}`;
+}
+
+function aktualizujPopisekAktivnihoData() {
+  if (!aktivniDatumLabel) {
+    return;
+  }
+
+  aktivniDatumLabel.textContent =
+    formatDatumProTlacitko(aktivniDatumInput?.value);
+}
+
+function aktualizujPopisekAktivnihoCasu() {
+  if (!aktivniCasLabel) {
+    return;
+  }
+
+  aktivniCasLabel.textContent =
+    aktivniCasInput?.value || "Čas";
+}
+
+function nastavAktivniDatum(hodnota) {
+  if (!aktivniDatumInput) {
+    return;
+  }
+
+  aktivniDatumInput.value = hodnota;
+  aktualizujPopisekAktivnihoData();
+
+  if (typeof poVyberuData === "function") {
+    poVyberuData(hodnota);
+  }
+}
+
+function nastavAktivniCas(hodnota) {
+  if (!aktivniCasInput) {
+    return;
+  }
+
+  aktivniCasInput.value = hodnota;
+  aktualizujPopisekAktivnihoCasu();
+
+  if (typeof poVyberuCasu === "function") {
+    poVyberuCasu(hodnota);
+  }
+}
+
+// ==========================================
 // VLASTNÍ CIFERNÍK – HODINY A MINUTY
 // - vnější kruh = 1–12
 // - vnitřní kruh = 00 a 13–23
@@ -583,7 +657,7 @@ function pripravVyberCasu() {
   const ted = new Date();
 
   const vychoziCas =
-    modalTime.value ||
+    aktivniCasInput?.value ||
     `${String(ted.getHours()).padStart(2, "0")}:${String(ted.getMinutes()).padStart(2, "0")}`;
 
   const [hodinaText, minutaText] =
@@ -605,11 +679,9 @@ function ulozVybranyCasDoEditoru() {
   const minuta =
     timePickerSelectedMinute.textContent.padStart(2, "0");
 
-  modalTime.value =
-    `${hodina}:${minuta}`;
-
-  aktualizujPopiskyDataCasu();
-  zapniPripominkuPoZmeneTerminu();
+  nastavAktivniCas(
+    `${hodina}:${minuta}`
+  );
 }
 
 timePickerSelectedHour?.addEventListener(
@@ -737,12 +809,9 @@ function vykresliVyberData() {
       const denText =
         String(den).padStart(2, "0");
 
-      modalDate.value =
-        `${datePickerYear}-${mesic}-${denText}`;
-
-      aktualizujPopiskyDataCasu();
-      updateModalWeekday();
-      zapniPripominkuPoZmeneTerminu();
+      nastavAktivniDatum(
+        `${datePickerYear}-${mesic}-${denText}`
+      );
 
       datePickerModal.hidden = true;
     });
@@ -757,9 +826,9 @@ function vykresliVyberData() {
       tlacitkoDne.classList.add("today");
     }
 
-    if (modalDate.value) {
+    if (aktivniDatumInput?.value) {
       const [vybranyRok, vybranyMesic, vybranyDen] =
-        modalDate.value.split("-").map(Number);
+        aktivniDatumInput.value.split("-").map(Number);
 
       if (
         den === vybranyDen &&
@@ -810,16 +879,73 @@ datePickerTodayButton?.addEventListener("click", () => {
   const den =
     String(dnes.getDate()).padStart(2, "0");
 
-  modalDate.value =
-    `${dnes.getFullYear()}-${mesic}-${den}`;
-
-  aktualizujPopiskyDataCasu();
-  updateModalWeekday();
-  zapniPripominkuPoZmeneTerminu();
+  nastavAktivniDatum(
+    `${dnes.getFullYear()}-${mesic}-${den}`
+  );
 
   datePickerModal.hidden = true;
 });
 
+
+// ==========================================
+// VLASTNÍ VÝBĚR DATA A ČASU – VEŘEJNÉ OTEVŘENÍ
+// Ostatní moduly předají svůj skrytý input,
+// popisek tlačítka a případnou reakci po výběru.
+// ==========================================
+
+function otevriVlastniVyberData({
+  input,
+  label = null,
+  poVyberu = null
+} = {}) {
+  if (!input) {
+    return;
+  }
+
+  aktivniDatumInput = input;
+  aktivniDatumLabel = label;
+  poVyberuData = poVyberu;
+
+  if (input.value) {
+    const [rok, mesic] =
+      input.value.split("-").map(Number);
+
+    datePickerYear = rok;
+    datePickerMonth = mesic - 1;
+  } else {
+    const dnes = new Date();
+    datePickerYear = dnes.getFullYear();
+    datePickerMonth = dnes.getMonth();
+  }
+
+  aktualizujPopisekAktivnihoData();
+  vykresliVyberData();
+  datePickerModal.hidden = false;
+}
+
+function otevriVlastniVyberCasu({
+  input,
+  label = null,
+  poVyberu = null
+} = {}) {
+  if (!input) {
+    return;
+  }
+
+  aktivniCasInput = input;
+  aktivniCasLabel = label;
+  poVyberuCasu = poVyberu;
+
+  aktualizujPopisekAktivnihoCasu();
+  pripravVyberCasu();
+  timePickerModal.hidden = false;
+}
+
+window.otevriVlastniVyberData =
+  otevriVlastniVyberData;
+
+window.otevriVlastniVyberCasu =
+  otevriVlastniVyberCasu;
 
 const reminderButton = document.getElementById("reminderButton");
 
@@ -838,20 +964,14 @@ priorityTaskButton?.addEventListener("click", () => {
 
 
 modalDateButton?.addEventListener("click", () => {
-  if (modalDate.value) {
-    const [rok, mesic] =
-      modalDate.value.split("-").map(Number);
-
-    datePickerYear = rok;
-    datePickerMonth = mesic - 1;
-  } else {
-    const dnes = new Date();
-    datePickerYear = dnes.getFullYear();
-    datePickerMonth = dnes.getMonth();
-  }
-
-  vykresliVyberData();
-  datePickerModal.hidden = false;
+  otevriVlastniVyberData({
+    input: modalDate,
+    label: modalDateLabel,
+    poVyberu: () => {
+      updateModalWeekday();
+      zapniPripominkuPoZmeneTerminu();
+    }
+  });
 });
 
 closeDatePickerButton?.addEventListener("click", () => {
@@ -859,8 +979,13 @@ closeDatePickerButton?.addEventListener("click", () => {
 });
 
 modalTimeButton?.addEventListener("click", () => {
-  pripravVyberCasu();
-  timePickerModal.hidden = false;
+  otevriVlastniVyberCasu({
+    input: modalTime,
+    label: modalTimeLabel,
+    poVyberu: () => {
+      zapniPripominkuPoZmeneTerminu();
+    }
+  });
 });
 
 closeTimePickerButton?.addEventListener("click", () => {

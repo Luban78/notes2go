@@ -649,6 +649,71 @@ const reminderQuickDate =
 const reminderQuickTime =
   document.getElementById("reminderQuickTime");
 
+const reminderQuickDateButton =
+  document.getElementById("reminderQuickDateButton");
+
+const reminderQuickDateLabel =
+  document.getElementById("reminderQuickDateLabel");
+
+const reminderQuickTimeButton =
+  document.getElementById("reminderQuickTimeButton");
+
+const reminderQuickTimeLabel =
+  document.getElementById("reminderQuickTimeLabel");
+
+function aktualizujPopiskyRychlehoTerminu() {
+  if (reminderQuickDateLabel) {
+    if (reminderQuickDate?.value) {
+      const [rok, mesic, den] =
+        reminderQuickDate.value.split("-");
+
+      reminderQuickDateLabel.textContent =
+        `${den}.${mesic}.${rok}`;
+    } else {
+      reminderQuickDateLabel.textContent = "Datum";
+    }
+  }
+
+  if (reminderQuickTimeLabel) {
+    reminderQuickTimeLabel.textContent =
+      reminderQuickTime?.value || "Čas";
+  }
+}
+
+reminderQuickDateButton?.addEventListener(
+  "click",
+  () => {
+    if (
+      typeof window.otevriVlastniVyberData !==
+      "function"
+    ) {
+      return;
+    }
+
+    window.otevriVlastniVyberData({
+      input: reminderQuickDate,
+      label: reminderQuickDateLabel
+    });
+  }
+);
+
+reminderQuickTimeButton?.addEventListener(
+  "click",
+  () => {
+    if (
+      typeof window.otevriVlastniVyberCasu !==
+      "function"
+    ) {
+      return;
+    }
+
+    window.otevriVlastniVyberCasu({
+      input: reminderQuickTime,
+      label: reminderQuickTimeLabel
+    });
+  }
+);
+
 const completeReminderButton =
   document.getElementById("completeReminderButton");
 
@@ -701,6 +766,8 @@ function openReminderQuickMenu(entry) {
       formatReminderLocalDateTime(date)
         .slice(11, 16);
   }
+
+  aktualizujPopiskyRychlehoTerminu();
 
   if (completeReminderButton) {
     completeReminderButton.hidden =

@@ -2023,6 +2023,53 @@ body.authPending .addTaskButton {
 }
 
 /* ==========================================
+   SDÍLENÁ TLAČÍTKA PRO VLASTNÍ DATUM A ČAS
+   Používají je plánování i rychlé připomínky.
+   ========================================== */
+
+.sharedDateTimePickerButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 11px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sharedDateTimePickerButton > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sharedDateTimePickerButton > span:last-child {
+  flex-shrink: 0;
+}
+
+.sharedDateTimePickerButton:active {
+  transform: scale(0.985);
+}
+
+/* ==========================================
    DIALOG – NAPLÁNOVAT POZNÁMKU
    ========================================== */
 
@@ -2094,21 +2141,9 @@ body.authPending .addTaskButton {
   color: var(--color-text-secondary);
 }
 
-#plannerDate,
-#plannerTime {
-  width: 100%;
+.plannerDateTimePickerButton {
   min-height: 48px;
-
-  box-sizing: border-box;
   padding: 0 12px;
-
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-
-  background: var(--color-background);
-  color: var(--color-text);
-
-  font: inherit;
 }
 
 .plannerActions {
@@ -2763,21 +2798,11 @@ body.authPending .addTaskButton {
   font-weight: 650;
 }
 
-.reminderQuickDateTime input {
-  width: 100%;
-  min-width: 0;
-  height: 42px;
-  box-sizing: border-box;
+.reminderQuickDateTime .sharedDateTimePickerButton {
+  min-height: 42px;
   padding: 0 9px;
-
-  border: 1px solid var(--color-border);
   border-radius: 11px;
-
-  background: var(--color-background);
-  color: var(--color-text);
-
-  font: inherit;
-  color-scheme: light dark;
+  font-size: 0.9rem;
 }
 
 .reminderQuickPrimary {
@@ -3767,7 +3792,7 @@ body.authPending .addTaskButton {
 .datePickerModal {
   position: fixed;
   inset: 0;
-  z-index: 3400;
+  z-index: 7200;
 
   display: flex;
   align-items: center;
@@ -3912,7 +3937,7 @@ body.authPending .addTaskButton {
 .timePickerModal {
   position: fixed;
   inset: 0;
-  z-index: 3400;
+  z-index: 7200;
 
   display: flex;
   align-items: center;
@@ -4127,10 +4152,23 @@ body.authPending .addTaskButton {
   font-weight: 600;
 
   cursor: pointer;
+
+  /* Android/WebView: potlačí systémovou modrou klikací plochu. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  outline: none;
+
   transition:
     background 0.1s ease,
     color 0.1s ease,
     box-shadow 0.1s ease;
+}
+
+.timePickerClockNumber:focus,
+.timePickerClockNumber:focus-visible,
+.timePickerClockNumber:active {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .timePickerClockNumber.selected {

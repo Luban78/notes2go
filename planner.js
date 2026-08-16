@@ -8,6 +8,71 @@ const PLANNER_STORAGE_KEY = "plannedItems";
 const planSelectionButton =
   document.getElementById("planSelectionButton");
 
+const plannerDateButton =
+  document.getElementById("plannerDateButton");
+
+const plannerDateLabel =
+  document.getElementById("plannerDateLabel");
+
+const plannerTimeButton =
+  document.getElementById("plannerTimeButton");
+
+const plannerTimeLabel =
+  document.getElementById("plannerTimeLabel");
+
+function aktualizujPopiskyPlanovanehoTerminu() {
+  if (plannerDateLabel) {
+    if (plannerDate?.value) {
+      const [rok, mesic, den] =
+        plannerDate.value.split("-");
+
+      plannerDateLabel.textContent =
+        `${den}.${mesic}.${rok}`;
+    } else {
+      plannerDateLabel.textContent = "Datum";
+    }
+  }
+
+  if (plannerTimeLabel) {
+    plannerTimeLabel.textContent =
+      plannerTime?.value || "Čas";
+  }
+}
+
+plannerDateButton?.addEventListener(
+  "click",
+  () => {
+    if (
+      typeof window.otevriVlastniVyberData !==
+      "function"
+    ) {
+      return;
+    }
+
+    window.otevriVlastniVyberData({
+      input: plannerDate,
+      label: plannerDateLabel
+    });
+  }
+);
+
+plannerTimeButton?.addEventListener(
+  "click",
+  () => {
+    if (
+      typeof window.otevriVlastniVyberCasu !==
+      "function"
+    ) {
+      return;
+    }
+
+    window.otevriVlastniVyberCasu({
+      input: plannerTime,
+      label: plannerTimeLabel
+    });
+  }
+);
+
 /* Poznámka, ze které právě plánujeme. */
 let plannerSourceNoteId = null;
 let plannerSourceType = "note";
@@ -160,6 +225,8 @@ function setPlannerDateTimeToNow() {
 
   plannerTime.value =
     `${hours}:${minutes}`;
+
+  aktualizujPopiskyPlanovanehoTerminu();
 }
 
 
