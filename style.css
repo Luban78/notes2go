@@ -3703,12 +3703,13 @@ body.authPending .addTaskButton {
    VLASTNÍ VÝBĚR DATA A ČASU – TLAČÍTKA
    ======================================== */
 
-.dateTimePickerButton {
+.editorTopBar .dateTimePickerButton {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 
+  width: auto;
   min-width: 0;
   height: calc(var(--font-size) + 24px);
   padding: 4px 10px;
@@ -3724,13 +3725,26 @@ body.authPending .addTaskButton {
 
   color: var(--color-editor-text);
 
-  font: inherit;
+  font-family: inherit;
   font-size: calc(var(--font-size) - 1px);
+  font-weight: 500;
+  line-height: 1;
 
   cursor: pointer;
 }
 
-.dateTimePickerButton:active {
+.editorTopBar .dateTimePickerButton > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorTopBar .dateTimePickerButton > span:last-child {
+  flex-shrink: 0;
+}
+
+.editorTopBar .dateTimePickerButton:active {
   transform: scale(0.98);
 }
 
@@ -4012,6 +4026,59 @@ body.authPending .addTaskButton {
   border: 1px solid var(--color-border);
 }
 
+/*
+ * Hodinový ciferník má dvě 12hodinové vrstvy.
+ * Zvýraznění ukazuje, zda prst právě vybírá
+ * vnější (1–12) nebo vnitřní (00, 13–23) kruh.
+ */
+.timePickerClock::before,
+.timePickerClock::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.timePickerClock::before {
+  width: 92%;
+  height: 92%;
+}
+
+.timePickerClock::after {
+  width: 58%;
+  height: 58%;
+}
+
+.timePickerClock.hourMode.hourRingOuter::before {
+  border-color: var(--color-accent);
+  box-shadow:
+    inset 0 0 0 7px
+    color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.timePickerClock.hourMode.hourRingInner::after {
+  border-color: var(--color-accent);
+  background:
+    color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.timePickerClock.hourMode.hourRingOuter
+  .timePickerClockNumber.hourOuter,
+.timePickerClock.hourMode.hourRingInner
+  .timePickerClockNumber.hourInner {
+  color: var(--color-accent-text);
+}
+
 .timePickerActions {
   display: flex;
   justify-content: flex-end;
@@ -4042,6 +4109,7 @@ body.authPending .addTaskButton {
 
 .timePickerClockNumber {
   position: absolute;
+  z-index: 2;
 
   width: 42px;
   height: 42px;
@@ -4059,6 +4127,18 @@ body.authPending .addTaskButton {
   font-weight: 600;
 
   cursor: pointer;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.timePickerClockNumber.selected {
+  background: var(--color-accent);
+  color: #ffffff !important;
+  box-shadow:
+    0 0 0 3px
+    color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 /* ========================================
@@ -4124,7 +4204,7 @@ body.authPending .addTaskButton {
   top: 50%;
 
   width: 3px;
-  height: 27%;
+  height: 40%;
 
   background: var(--color-accent);
 
@@ -4174,4 +4254,113 @@ body.authPending .addTaskButton {
 .timePickerHourHand[hidden],
 .timePickerHand[hidden] {
   display: none;
+}
+/* ========================================
+   MOBIL – VLASTNÍ DATUM A ČAS
+   Kompaktní horní lišta editoru
+   a plynulé ovládání ciferníku prstem.
+   ======================================== */
+
+@media (max-width: 600px) {
+
+  .editorTopBar {
+    gap: 4px;
+  }
+
+  .dateTimeInputs {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+    overflow: hidden;
+
+    /* Android nesmí automaticky zvětšovat text těchto prvků. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  .modalWeekday {
+    min-width: 22px;
+    font-size: 12px;
+  }
+
+  .editorTopActions {
+    flex: 0 0 auto;
+    gap: 2px;
+  }
+
+  /*
+   * Vyšší specificita než obecné `.editorTopBar button`.
+   * Datum a čas proto nepřevezmou 1.5rem a šířku 40px.
+   */
+  .editorTopBar .dateTimePickerButton {
+    width: auto;
+    min-width: 0;
+    height: 40px;
+    padding: 0 6px;
+    gap: 4px;
+
+    font-family: inherit;
+    font-size:
+      clamp(12px, calc(var(--font-size) - 3px), 14px);
+    font-weight: 600;
+    line-height: 1;
+
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  #modalDateButton {
+    flex: 1.35 1 0;
+  }
+
+  #modalTimeButton {
+    flex: 0.8 1 0;
+  }
+
+  .editorTopBar .dateTimePickerButton > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .editorTopBar .dateTimePickerButton > span:last-child {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  .timePickerContent {
+    width: min(92vw, 390px);
+    box-sizing: border-box;
+    padding: 16px;
+  }
+
+  .timePickerSelected {
+    margin: 14px 0;
+  }
+
+  .timePickerSelectedPart {
+    min-width: 64px;
+    padding: 8px 10px;
+    font-size: 1.8rem;
+  }
+
+  .timePickerClock {
+    width: min(76vw, 300px);
+
+    /*
+     * DŮLEŽITÉ PRO ANDROID:
+     * ciferník ovládáme sami přes pointer events.
+     */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .timePickerClockNumber {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 }
