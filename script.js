@@ -157,7 +157,44 @@ const modalDateLabel =
 
 const modalTimeLabel =
   document.getElementById("modalTimeLabel");
+// ==========================================
+// UNIVERZÁLNÍ INFORMAČNÍ MODAL
+// Společné upozornění pro celou aplikaci.
+// ==========================================
 
+const appMessageModal =
+  document.getElementById("appMessageModal");
+
+const appMessageTitle =
+  document.getElementById("appMessageTitle");
+
+const appMessageText =
+  document.getElementById("appMessageText");
+
+const closeAppMessageButton =
+  document.getElementById("closeAppMessageButton");
+
+
+function zobrazZpravuAplikace(
+  nadpis,
+  zprava
+) {
+  appMessageTitle.textContent =
+    nadpis || "Upozornění";
+
+  appMessageText.textContent =
+    zprava || "";
+
+  appMessageModal.hidden = false;
+}
+
+
+closeAppMessageButton?.addEventListener(
+  "click",
+  () => {
+    appMessageModal.hidden = true;
+  }
+);
 // ==========================================
 // VLASTNÍ VÝBĚR DATA A ČASU – SDÍLENÝ CÍL
 // Stejný kalendář a ciferník používá editor,

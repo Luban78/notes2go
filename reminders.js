@@ -184,7 +184,10 @@ editorReminderButton?.addEventListener("click", () => {
     document.getElementById("modalTime");
 
   if (!modalDate?.value || !modalTime?.value) {
-    alert("Nejdřív nastav datum a čas upozornění.");
+    zobrazZpravuAplikace(
+  "Připomínky",
+  "Nejdřív nastav datum a čas upozornění."
+);
     return;
   }
 
@@ -262,6 +265,9 @@ function getReminderEntries() {
 
     const sourceNote =
       noteById.get(item.sourceNoteId) || null;
+      if (!sourceNote) {
+  return;
+}
 
     entries.push({
       kind: "planned",
@@ -1114,7 +1120,10 @@ async function saveCustomReminderDate() {
   }
 
   if (newDate <= new Date()) {
-    alert("Připomínka musí být nastavena do budoucna.");
+    zobrazZpravuAplikace(
+  "Připomínky",
+  "Připomínka musí být nastavena do budoucna."
+);
     return;
   }
 

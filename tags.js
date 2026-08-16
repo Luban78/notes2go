@@ -115,9 +115,9 @@ const newTagModalInput = document.getElementById("newTagModalInput");
 
 const cancelNewTagModalButton =
   document.getElementById("cancelNewTagModalButton");
-const tagMessageModal = document.getElementById("tagMessageModal");
-const tagMessageText = document.getElementById("tagMessageText");
-const closeTagMessageButton = document.getElementById("closeTagMessageButton");
+//const tagMessageModal = document.getElementById("tagMessageModal");
+//const tagMessageText = document.getElementById("tagMessageText");
+//const closeTagMessageButton = document.getElementById("closeTagMessageButton");
 
 const deleteTagConfirmModal =
   document.getElementById("deleteTagConfirmModal");
@@ -219,13 +219,15 @@ saveNewTagModalButton.addEventListener("click", async () => {
   );
 
   if (tagAlreadyExists) {
-    newTagModal.hidden = true;
-
-    tagMessageText.textContent = "Štítek s tímto názvem už existuje.";
-    tagMessageModal.hidden = false;
-
-    return;
-  }
+  newTagModal.hidden = true;
+  
+  zobrazZpravuAplikace(
+    "Štítky",
+    "Štítek s tímto názvem už existuje."
+  );
+  
+  return;
+}
 
   const user = await getCurrentUser();
 
@@ -438,10 +440,10 @@ async function prejmenujStitek(tag, novyNazev) {
   );
 
   if (uzExistuje) {
-    tagMessageText.textContent =
-      "Štítek s tímto názvem už existuje.";
-
-    tagMessageModal.hidden = false;
+    zobrazZpravuAplikace(
+  "Štítky",
+  "Štítek s tímto názvem už existuje."
+);
 
     return false;
   }
@@ -721,7 +723,10 @@ function updateTagFilterUI() {
 
 function openNewTagEditor() {
   if (activeTags.length >= 2) {
-    alert("Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.");
+    zobrazZpravuAplikace(
+  "Štítky",
+  "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+);
     return;
   }
 
@@ -739,7 +744,10 @@ function closeNewTagEditor() {
 
 function createNewTag() {
   if (activeTags.length >= 2) {
-    alert("Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.");
+    zobrazZpravuAplikace(
+  "Štítky",
+  "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+);
     closeNewTagEditor();
     return;
   }
@@ -814,12 +822,29 @@ areaButtons.forEach((button) => {
 
 tagOptions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-tag]");
-
+  
   if (!button) {
     return;
   }
-
-  toggleTag(button.dataset.tag);
+  
+  const tag = button.dataset.tag;
+  
+  const jeAktivni =
+    activeTags.includes(tag);
+  
+  if (
+    !jeAktivni &&
+    activeTags.length >= 2
+  ) {
+    zobrazZpravuAplikace(
+      "Štítky",
+      "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+    );
+    
+    return;
+  }
+  
+  toggleTag(tag);
   updateTagMenuUI();
 });
 
@@ -861,6 +886,3 @@ tagFilterButtons.addEventListener("click", (event) => {
 updateTagMenuUI();
 renderTagFilters();
 
-closeTagMessageButton.addEventListener("click", () => {
-  tagMessageModal.hidden = true;
-});

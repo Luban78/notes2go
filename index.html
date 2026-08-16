@@ -1015,22 +1015,30 @@
   <input id="importFile" type="file" accept="application/json" hidden>
 
 
-  <div id="tagMessageModal" class="newTagModal" hidden>
-    <div class="newTagDialog">
-      <h3>Štítky</h3>
+  <!-- ========================================
+     UNIVERZÁLNÍ INFORMAČNÍ MODAL
+     Společné upozornění pro celou aplikaci.
+     Nahrazuje systémové alert() dialogy.
+     ======================================== -->
 
-      <p id="tagMessageText">
-        Štítek s tímto názvem už existuje.
-      </p>
-
-      <div class="newTagDialogActions">
-        <button id="closeTagMessageButton" type="button">
-          OK
-        </button>
-      </div>
+<div id="appMessageModal" class="appMessageModal" hidden>
+  <div class="appMessageDialog">
+    
+    <h3 id="appMessageTitle">
+      Upozornění
+    </h3>
+    
+    <p id="appMessageText">
+    </p>
+    
+    <div class="appMessageActions">
+      <button id="closeAppMessageButton" type="button">
+        OK
+      </button>
     </div>
+    
   </div>
-
+</div>
   <!-- ========================================
        JAVASCRIPT
        POŘADÍ NEMĚNIT

@@ -93,7 +93,10 @@ function importTasks(file) {
       location.reload();
     } catch (error) {
       console.error("Import backup error:", error);
-      alert("Soubor není platná záloha LubaNote.");
+      zobrazZpravuAplikace(
+  "Záloha a obnova",
+  "Soubor není platná záloha LubaNote."
+);
     }
   };
 

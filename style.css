@@ -2902,57 +2902,113 @@ body.authPending .addTaskButton {
   color: #ffffff;
 }
 
+/* ========================================
+   MODAL – NOVÝ ŠTÍTEK
+   Automaticky respektuje aktivní motiv.
+   ======================================== */
+
 .newTagModal {
   position: fixed;
   inset: 0;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 9999;
-}
 
-.newTagDialog {
-  width: min(88vw, 360px);
-  background: var(--card-bg, #ffffff);
-  border-radius: 18px;
   padding: 20px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
-}
 
-.newTagDialog h3 {
-  margin: 0 0 16px;
-}
+  background: rgba(0, 0, 0, 0.45);
 
-.newTagDialog input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #ccc;
-  font-size: 16px;
-}
-
-.newTagDialogActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
+  z-index: 9999;
 }
 
 .newTagModal[hidden] {
   display: none;
 }
 
-.newTagDialogActions button {
-  border: none;
+.newTagDialog {
+  width: min(88vw, 360px);
+
+  padding: 20px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+}
+
+.newTagDialog h3 {
+  margin: 0 0 16px;
+
+  color: var(--color-text);
+}
+
+.newTagDialog input {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 12px 14px;
+
+  border: 1px solid var(--color-border);
   border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 16px;
+
+  outline: none;
+}
+
+.newTagDialog input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.newTagDialog input:focus {
+  border-color: var(--color-accent);
+
+  box-shadow:
+    0 0 0 2px
+    color-mix(
+      in srgb,
+      var(--color-accent) 18%,
+      transparent
+    );
+}
+
+.newTagDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 16px;
+}
+
+.newTagDialogActions button {
+  min-height: 44px;
+
   padding: 10px 18px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
   font-size: 16px;
   font-weight: 600;
+
   cursor: pointer;
 }
 
+.newTagDialogActions button:active {
+  transform: scale(0.97);
+}
 #cancelNewTagModalButton {
   background: #f1edf7;
   color: #5f556c;
@@ -4401,4 +4457,88 @@ body.authPending .addTaskButton {
     user-select: none;
     -webkit-user-select: none;
   }
+}
+
+/* ========================================
+   UNIVERZÁLNÍ INFORMAČNÍ MODAL
+   Společné upozornění pro celou aplikaci.
+   Automaticky respektuje aktivní motiv.
+   ======================================== */
+
+.appMessageModal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.appMessageModal[hidden] {
+  display: none;
+}
+
+.appMessageDialog {
+  width: min(100%, 420px);
+
+  padding: 22px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.appMessageDialog h3 {
+  margin: 0 0 12px;
+
+  color: var(--color-text);
+
+  font-size: 1.35rem;
+}
+
+.appMessageDialog p {
+  margin: 0;
+
+  color: var(--color-text-secondary);
+
+  font-size: var(--font-size);
+  line-height: 1.45;
+}
+
+.appMessageActions {
+  display: flex;
+  justify-content: flex-end;
+
+  margin-top: 20px;
+}
+
+.appMessageActions button {
+  min-width: 84px;
+  min-height: 46px;
+
+  padding: 10px 18px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 650;
+
+  cursor: pointer;
+}
+
+.appMessageActions button:active {
+  transform: scale(0.97);
 }

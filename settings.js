@@ -206,10 +206,10 @@ openReminderDelaySettingsButton?.addEventListener(
           JSON.stringify(hodnoty)
         );
 
-        console.log(
+        /*console.log(
           "Uložené rychlé odložení:",
           hodnoty
-        );
+        );*/
       }
     });
   }
