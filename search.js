@@ -1,5 +1,42 @@
 const searchNotes =
   document.getElementById("searchNotes");
+// ==========================================
+// OCHRANA VYHLEDÁVÁNÍ PROTI AUTOFILLU
+// Chrome někdy do vyhledávání automaticky
+// vloží uložený e-mail. Při startu aplikace
+// proto vyhledávání vždy vyčistíme.
+// ==========================================
+
+function vycistiAutofillVyhledavani() {
+  if (!searchNotes) {
+    return;
+  }
+
+  searchNotes.value = "";
+
+  searchNotes.dispatchEvent(
+    new Event("input", {
+      bubbles: true
+    })
+  );
+}
+
+window.addEventListener(
+  "pageshow",
+  () => {
+    vycistiAutofillVyhledavani();
+
+    setTimeout(
+      vycistiAutofillVyhledavani,
+      300
+    );
+
+    setTimeout(
+      vycistiAutofillVyhledavani,
+      1000
+    );
+  }
+);
 
 const noSearchResults =
   document.getElementById("noSearchResults");
