@@ -274,8 +274,262 @@ window.RichTextColors = (() => {
   }
 
 
+  /*
+   * Odbarvení potřebuje vlastní postup.
+   *
+   * Původní transformSelection(null) fungoval jen tehdy,
+   * když byl <mark> celý uvnitř vybraného fragmentu.
+   * Když uživatel označil jen část textu UVNITŘ existujícího
+   * <mark>, extractContents() vyjmulo pouze text a původní
+   * barevný <mark> zůstal okolo místa vložení. Text se proto
+   * po vložení okamžitě znovu "obarvil" barvou rodiče.
+   *
+   * Nový postup rozdělí každý zasažený <mark> na:
+   * - část před výběrem (barva zůstane),
+   * - vybranou část (všechny highlight <mark> odstraníme),
+   * - část za výběrem (barva zůstane).
+   *
+   * Díky tomu funguje odbarvení i jen u části slova,
+   * přes několik barev a přes více řádků.
+   */
+
+  function vytvorRozsahPodleTextovychPozic(
+    root,
+    startOffset,
+    endOffset
+  ) {
+    const range = document.createRange();
+    const totalLength = root.textContent.length;
+
+    const start = Math.max(
+      0,
+      Math.min(startOffset, totalLength)
+    );
+
+    const end = Math.max(
+      start,
+      Math.min(endOffset, totalLength)
+    );
+
+    function setBoundary(offset, isStart) {
+      if (offset === 0) {
+        if (isStart) {
+          range.setStart(root, 0);
+        } else {
+          range.setEnd(root, 0);
+        }
+
+        return;
+      }
+
+      if (offset === totalLength) {
+        const childCount = root.childNodes.length;
+
+        if (isStart) {
+          range.setStart(root, childCount);
+        } else {
+          range.setEnd(root, childCount);
+        }
+
+        return;
+      }
+
+      const walker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_TEXT
+      );
+
+      let currentOffset = 0;
+      let node = walker.nextNode();
+
+      while (node) {
+        const nextOffset =
+          currentOffset + node.data.length;
+
+        if (offset <= nextOffset) {
+          const localOffset =
+            offset - currentOffset;
+
+          if (isStart) {
+            range.setStart(node, localOffset);
+          } else {
+            range.setEnd(node, localOffset);
+          }
+
+          return;
+        }
+
+        currentOffset = nextOffset;
+        node = walker.nextNode();
+      }
+
+      const childCount = root.childNodes.length;
+
+      if (isStart) {
+        range.setStart(root, childCount);
+      } else {
+        range.setEnd(root, childCount);
+      }
+    }
+
+    setBoundary(start, true);
+    setBoundary(end, false);
+
+    return range;
+  }
+
+
+  function vytvorKopiiZvyrazneni(mark, fragment) {
+    if (!fragment || !fragment.textContent.length) {
+      return null;
+    }
+
+    const clone = mark.cloneNode(false);
+    clone.append(fragment);
+    return clone;
+  }
+
+
   function removeColor() {
-    return transformSelection(null);
+    const snapshot = getSelectionSnapshot();
+
+    if (
+      !snapshot ||
+      snapshot.start === null ||
+      snapshot.end === null
+    ) {
+      return false;
+    }
+
+    const selectionStart = snapshot.start;
+    const selectionEnd = snapshot.end;
+
+    const marks = Array.from(
+      modalRichText.querySelectorAll(
+        "mark.richTextHighlight"
+      )
+    );
+
+    marks.forEach((mark) => {
+      /*
+       * Předchozí úprava rodičovského marku mohla tento
+       * původní vnořený mark už nahradit klonem.
+       */
+      if (!mark.isConnected) {
+        return;
+      }
+
+      const markStart = getTextOffset(mark, 0);
+
+      if (markStart === null) {
+        return;
+      }
+
+      const markLength = mark.textContent.length;
+      const markEnd = markStart + markLength;
+
+      const overlapStart = Math.max(
+        selectionStart,
+        markStart
+      );
+
+      const overlapEnd = Math.min(
+        selectionEnd,
+        markEnd
+      );
+
+      if (overlapStart >= overlapEnd) {
+        return;
+      }
+
+      const localStart =
+        overlapStart - markStart;
+
+      const localEnd =
+        overlapEnd - markStart;
+
+      /*
+       * Všechny tři fragmenty vytvoříme ještě před změnou DOM,
+       * protože jejich rozsahy vycházejí z původního marku.
+       */
+      const beforeFragment =
+        vytvorRozsahPodleTextovychPozic(
+          mark,
+          0,
+          localStart
+        ).cloneContents();
+
+      const selectedFragment =
+        vytvorRozsahPodleTextovychPozic(
+          mark,
+          localStart,
+          localEnd
+        ).cloneContents();
+
+      const afterFragment =
+        vytvorRozsahPodleTextovychPozic(
+          mark,
+          localEnd,
+          markLength
+        ).cloneContents();
+
+      /*
+       * Z vybrané části odstraníme i případné vnořené barvy.
+       * Ostatní HTML (např. propojené části textu) zachováme.
+       */
+      unwrapHighlightMarks(selectedFragment);
+
+      const beforeMark =
+        vytvorKopiiZvyrazneni(
+          mark,
+          beforeFragment
+        );
+
+      const afterMark =
+        vytvorKopiiZvyrazneni(
+          mark,
+          afterFragment
+        );
+
+      const parent = mark.parentNode;
+
+      if (!parent) {
+        return;
+      }
+
+      if (beforeMark) {
+        parent.insertBefore(
+          beforeMark,
+          mark
+        );
+      }
+
+      parent.insertBefore(
+        selectedFragment,
+        mark
+      );
+
+      if (afterMark) {
+        parent.insertBefore(
+          afterMark,
+          mark
+        );
+      }
+
+      mark.remove();
+    });
+
+    cleanupHighlightMarkup();
+    syncPlainText();
+
+    window.getSelection()
+      ?.removeAllRanges();
+
+    savedRange = null;
+    selectionLocked = false;
+    textColorPalette.hidden = true;
+
+    return true;
   }
 
 
