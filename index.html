@@ -29,10 +29,11 @@
 
       <h2>Přihlášení</h2>
 
-      <input id="loginEmail" type="email" placeholder="E-mail" autocomplete="email" autocapitalize="none"
-        spellcheck="false" required>
+      <input id="loginEmail" name="username" type="email" placeholder="E-mail" autocomplete="username"
+        autocapitalize="none" spellcheck="false" required>
 
-      <input id="loginPassword" type="password" placeholder="Heslo" autocomplete="current-password" required>
+      <input id="loginPassword" name="password" type="password" placeholder="Heslo"
+        autocomplete="current-password" required>
 
       <button id="loginButton" type="submit">
         Přihlásit se
@@ -77,16 +78,25 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" aria-hidden="true">⌕</span>
-       <input
-  id="searchNotes"
-  type="search"
-  placeholder="Hledat poznámky..."
-  aria-label="Hledat poznámky"
-  autocomplete="off"
-  autocomplete="off"
-  autocapitalize="off"
-  spellcheck="false"
->
+        <input
+          id="searchNotes"
+          name="lubanote-search-query"
+          type="search"
+          placeholder="Hledat poznámky..."
+          aria-label="Hledat poznámky"
+          aria-autocomplete="none"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="search"
+          enterkeyhint="search"
+          readonly
+          data-form-type="other"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-bwignore="true"
+        >
       </div>
 
       <div class="searchActions">
