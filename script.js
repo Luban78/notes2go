@@ -101,7 +101,11 @@ mainMenuButton.addEventListener("click", () => {
 let activeTaskIndex = null;
 let reminderEnabled = false;
 let favoriteEnabled = false;
+let secretTaskEnabled = false;
 
+const secretTaskButton =
+  document.getElementById("secretTaskButton");
+  
 const editorBackButton = document.getElementById("editorBackButton");
 
 const deleteTaskButton =
@@ -1208,6 +1212,7 @@ editorBackButton.addEventListener("click", () => {
           Date.now() % 2147483647,
         area: activeArea,
         pinned: currentTask.pinned === true,
+        isSecret: currentTask.isSecret === true,
         tags: [...activeTags],
         todos: [...activeTodos]
       };
@@ -1249,6 +1254,7 @@ editorBackButton.addEventListener("click", () => {
         notificationId: Date.now() % 2147483647,
         area: activeArea,
         pinned: false,
+        isSecret: false,
         tags: [...activeTags],
         todos: [...activeTodos]
       };

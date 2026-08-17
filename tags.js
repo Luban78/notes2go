@@ -2,6 +2,9 @@ let activeArea = "private";
 let activeTags = [];
 let activeAreaFilter = "all";
 let activeTagFilter = null;
+let vytvarimeTajnyStitek = false;
+
+
 
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
@@ -153,12 +156,8 @@ const secretUnlockDescription =
 const secretUnlockConfirmInput =
   document.getElementById("secretUnlockConfirmInput");
   
-  
-  
-  
-//const tagMessageModal = document.getElementById("tagMessageModal");
-//const tagMessageText = document.getElementById("tagMessageText");
-//const closeTagMessageButton = document.getElementById("closeTagMessageButton");
+const lockSecretModeButton =
+  document.getElementById("lockSecretModeButton");
 
 const deleteTagConfirmModal =
   document.getElementById("deleteTagConfirmModal");
@@ -171,6 +170,26 @@ const cancelDeleteTagButton =
 
 const confirmDeleteTagButton =
   document.getElementById("confirmDeleteTagButton");
+
+const createSecretTagButton =
+  document.getElementById("createSecretTagButton");
+const newTagModalTitle =
+  document.getElementById("newTagModalTitle");
+  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+
+
+
 
 let tagKeSmazani = null;
 
@@ -267,31 +286,51 @@ cancelNewTagButton.addEventListener("click", () => {
 
 saveNewTagModalButton.addEventListener("click", async () => {
   const name = newTagModalInput.value.trim();
-
+  
   if (!name) {
     return;
   }
+  
   const tagAlreadyExists = syncedTags.some((tag) =>
     tag.name.trim().toLowerCase() === name.toLowerCase()
   );
-
+  
   if (tagAlreadyExists) {
-  newTagModal.hidden = true;
+    newTagModal.hidden = true;
+    
+    zobrazZpravuAplikace(
+      vytvarimeTajnyStitek ?
+      "Tajné štítky" :
+      "Štítky",
+      "Štítek s tímto názvem už existuje."
+    );
+    
+    vytvarimeTajnyStitek = false;
+    return;
+  }
   
-  zobrazZpravuAplikace(
-    "Štítky",
-    "Štítek s tímto názvem už existuje."
-  );
+  if (vytvarimeTajnyStitek) {
+    const uspesne =
+      await vytvorTajnyStitek(name);
+    
+    if (!uspesne) {
+      return;
+    }
+    
+    newTagModal.hidden = true;
+    vytvarimeTajnyStitek = false;
+    
+    await loadTagsFromSupabase();
+    
+    return;
+  }
   
-  return;
-}
-
   const user = await getCurrentUser();
-
+  
   if (!user) {
     return;
   }
-
+  
   const { error } = await supabaseClient
     .from("tags")
     .insert({
@@ -300,14 +339,18 @@ saveNewTagModalButton.addEventListener("click", async () => {
       is_secret: false,
       sort_order: syncedTags.length
     });
-
+  
   if (error) {
-    console.error("Tag insert error:", error.message);
+    console.error(
+      "Tag insert error:",
+      error.message
+    );
+    
     return;
   }
-
+  
   newTagModal.hidden = true;
-
+  
   await loadTagsFromSupabase();
 });
 
@@ -824,6 +867,7 @@ async function otevriTajneStitky() {
 
 
 function renderTagFilters() {
+
   tagFilterButtons.innerHTML = "";
 
   const tags = getAllTags();
@@ -861,7 +905,26 @@ closeSecretUnlockButton?.addEventListener(
     secretUnlockInput.value = "";
   }
 );
+lockSecretModeButton?.addEventListener(
+  "click",
+  () => {
+    tajnySifrovaciKlic = null;
+    tajnyRezimOdemceny = false;
+    filtrTajnychPoznamekAktivni = false;
 
+    secretFilterButton.classList.remove("active");
+    secretFilterButton.hidden = true;
+    secretTaskButton.hidden = true;
+    secretMenuModal.hidden = true;
+
+    renderTasks();
+
+    zobrazZpravuAplikace(
+      "Tajný režim",
+      "Tajný režim byl zamčen."
+    );
+  }
+);
 cancelSecretUnlockButton?.addEventListener(
   "click",
   () => {
@@ -915,6 +978,8 @@ closeSecretMenuButton?.addEventListener(
 );
 
 addTagButton.addEventListener("click", () => {
+  vytvarimeTajnyStitek = false;
+  newTagModalTitle.textContent = "Nový štítek";
   if (horniTajnyLongPressSpusten) {
     horniTajnyLongPressSpusten = false;
     return;
@@ -1156,6 +1221,40 @@ newTagInput.addEventListener("keydown", (event) => {
     closeNewTagEditor();
   }
 });
+
+createSecretTagButton?.addEventListener(
+  "click",
+  () => {
+    vytvarimeTajnyStitek = true;
+    secretMenuModal.hidden = true;
+    
+    newTagModalTitle.textContent =
+      "🔐 Nový tajný štítek";
+    
+    newTagModal.hidden = false;
+    newTagModalInput.value = "";
+    newTagModalInput.focus();
+  }
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

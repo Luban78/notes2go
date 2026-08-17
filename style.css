@@ -4691,3 +4691,98 @@ body.authPending .addTaskButton {
   background: var(--color-accent);
   color: #ffffff;
 }
+/* ========================================
+   TAJNÉ ŠTÍTKY – VELKÁ DOTYKOVÁ TLAČÍTKA
+   ======================================== */
+
+.secretTagMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  margin-top: 18px;
+}
+
+.secretTagMenu button {
+  width: 100%;
+  min-height: 58px;
+
+  padding: 14px 16px;
+  padding-left: 24px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.secretTagMenu button:active {
+  transform: scale(0.98);
+}
+
+#lockSecretModeButton {
+  color: #d85b68;
+}
+
+/* ========================================
+   NÁZEV POZNÁMKY + TAJNÝ ZÁMEK
+   ======================================== */
+
+.modalTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.modalTitleRow #modalTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+#secretTaskButton {
+  flex-shrink: 0;
+
+  width: 46px;
+  height: 46px;
+  padding: 0;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.15rem;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#secretTaskButton.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+#secretTaskButton:active {
+  transform: scale(0.96);
+}

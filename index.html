@@ -77,7 +77,16 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" aria-hidden="true">⌕</span>
-        <input id="searchNotes" type="search" placeholder="Hledat poznámky..." aria-label="Hledat poznámky">
+       <input
+  id="searchNotes"
+  type="search"
+  placeholder="Hledat poznámky..."
+  aria-label="Hledat poznámky"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"
+>
       </div>
 
       <div class="searchActions">
@@ -446,7 +455,29 @@
            OBSAH POZNÁMKY
            ==================================== -->
 
-      <input type="text" id="modalTitle" placeholder="Název úkolu">
+      <!-- ========================================
+     NÁZEV POZNÁMKY + TAJNÝ REŽIM POZNÁMKY
+     Název zabere volný prostor a zámek
+     zůstává vždy viditelný vpravo.
+     ======================================== -->
+
+<div class="modalTitleRow">
+
+  <input
+    type="text"
+    id="modalTitle"
+    placeholder="Název úkolu"
+  >
+
+  <button
+    id="secretTaskButton"
+    type="button"
+    aria-label="Tajná poznámka" hidden
+  >
+    🔓
+  </button>
+
+</div>
 
       <!-- TODO seznam -->
       <div id="todoList" class="todoList" hidden></div>
@@ -955,7 +986,7 @@
 
   <div id="newTagModal" class="newTagModal" hidden>
     <div class="newTagDialog">
-      <h3>Nový štítek</h3>
+      <h3 id="newTagModalTitle">Nový štítek</h3>
 
       <input id="newTagModalInput" type="text" placeholder="Název štítku" maxlength="30">
 
@@ -1142,25 +1173,28 @@
     <div class="secretTagMenu">
 
       <button
-        id="createSecretTagButton"
-        type="button"
-      >
-        ➕ Vytvořit tajný štítek
-      </button>
+  id="createSecretTagButton"
+  type="button"
+>
+  <span class="secretTagMenuIcon">➕</span>
+  <span>Vytvořit tajný štítek</span>
+</button>
 
       <button
-        id="manageSecretTagsButton"
-        type="button"
-      >
-        ⚙️ Správa tajných štítků
-      </button>
+  id="manageSecretTagsButton"
+  type="button"
+>
+  <span class="secretTagMenuIcon">⚙️</span>
+  <span>Správa tajných štítků</span>
+</button>
 
       <button
-        id="lockSecretModeButton"
-        type="button"
-      >
-        🔒 Zamknout tajný režim
-      </button>
+  id="lockSecretModeButton"
+  type="button"
+>
+  <span class="secretTagMenuIcon">🔒</span>
+  <span>Zamknout tajný režim</span>
+</button>
 
     </div>
 

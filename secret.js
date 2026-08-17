@@ -252,6 +252,8 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
 
   tajnyRezimOdemceny = true;
   secretFilterButton.hidden = false;
+  secretTaskButton.hidden = false;
+  
 
   return true;
 }
