@@ -133,6 +133,16 @@
         ⭐
       </button>
 
+      <button
+        id="secretFilterButton"
+        class="categoryTab"
+        type="button"
+        aria-label="Tajné poznámky"
+        hidden
+      >
+        🔓
+      </button>
+
       <button class="categoryTab" type="button" data-area-filter="work">
         💼 Pracovní
       </button>
@@ -1039,6 +1049,133 @@
     
   </div>
 </div>
+
+<!-- ========================================
+     TAJNÝ REŽIM – ODEMKNUTÍ
+     Zadání PINu nebo hesla pro vstup
+     do tajného režimu LubaNote.
+     ======================================== -->
+
+<!-- ========================================
+     TAJNÝ REŽIM – HESLO / ODEMKNUTÍ
+     Jeden společný modal pro první vytvoření
+     hlavního hesla i pozdější odemykání.
+     ======================================== -->
+
+<div
+  id="secretUnlockModal"
+  class="secretUnlockModal"
+  hidden
+>
+  <div class="secretUnlockDialog">
+
+    <div class="secretUnlockHeader">
+
+      <h2 id="secretUnlockTitle">
+        🔒 Tajný režim
+      </h2>
+
+      <button
+        id="closeSecretUnlockButton"
+        type="button"
+        aria-label="Zavřít tajný režim"
+      >
+        ✕
+      </button>
+
+    </div>
+
+    <p id="secretUnlockDescription">
+      Zadej hlavní heslo.
+    </p>
+
+    <input
+      id="secretUnlockInput"
+      type="password"
+      autocomplete="current-password"
+      placeholder="Hlavní heslo"
+    >
+
+    <input
+      id="secretUnlockConfirmInput"
+      type="password"
+      autocomplete="new-password"
+      placeholder="Heslo znovu"
+      hidden
+    >
+
+    <div class="secretUnlockActions">
+
+      <button
+        id="cancelSecretUnlockButton"
+        type="button"
+      >
+        Zrušit
+      </button>
+
+      <button
+        id="confirmSecretUnlockButton"
+        type="button"
+      >
+        🔓 Odemknout
+      </button>
+
+    </div>
+
+  </div>
+</div>
+<!-- ========================================
+     TAJNÉ ŠTÍTKY – NABÍDKA
+     Zobrazuje se pouze po odemknutí
+     tajného režimu.
+     ======================================== -->
+
+<div
+  id="secretMenuModal"
+  class="newTagModal"
+  hidden
+>
+  <div class="newTagDialog">
+
+    <h3>🔐 Tajné štítky</h3>
+
+    <div class="secretTagMenu">
+
+      <button
+        id="createSecretTagButton"
+        type="button"
+      >
+        ➕ Vytvořit tajný štítek
+      </button>
+
+      <button
+        id="manageSecretTagsButton"
+        type="button"
+      >
+        ⚙️ Správa tajných štítků
+      </button>
+
+      <button
+        id="lockSecretModeButton"
+        type="button"
+      >
+        🔒 Zamknout tajný režim
+      </button>
+
+    </div>
+
+    <div class="newTagDialogActions">
+      <button
+        id="closeSecretMenuButton"
+        type="button"
+      >
+        Zavřít
+      </button>
+    </div>
+
+  </div>
+</div>
+
   <!-- ========================================
        JAVASCRIPT
        POŘADÍ NEMĚNIT
@@ -1080,6 +1217,8 @@
 
   <!-- Supabase přihlášení -->
   <script src="supabaseClient.js"></script>
+  <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
+<script src="secret.js"></script>
 
   <!-- Navigace modulů a servisní nabídka -->
   <script src="navigation.js"></script>

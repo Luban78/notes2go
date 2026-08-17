@@ -1418,6 +1418,9 @@ function renderTasks() {
     if (!taskMatchesFavorite(loadedTask)) {
       return;
     }
+    if (!taskMatchesSecret(loadedTask)) {
+  return;
+}
     if (!taskMatchesTag(loadedTask)) {
       return;
     }

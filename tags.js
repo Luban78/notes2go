@@ -5,6 +5,13 @@ let activeTagFilter = null;
 
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
+// ==========================================
+// TAJNÝ REŽIM – STAV
+// Záměrně se NEUKLÁDÁ do localStorage.
+// Po restartu aplikace je vždy zamčený.
+// ==========================================
+
+let tajnyRezimOdemceny = false;
 
 // ==========================================
 // VÝCHOZÍ ŠTÍTKY – JEDNORÁZOVÉ ZALOŽENÍ
@@ -12,7 +19,7 @@ let syncedTags = [];
 // pokud v Supabase nikdy neexistovaly.
 // Smazaný štítek se proto znovu nevytvoří.
 // ==========================================
-
+let filtrTajnychPoznamekAktivni = false;
 async function zajistiVychoziStitkyVSupabase(user) {
   const { data, error } = await supabaseClient
     .from("tags")
@@ -62,7 +69,11 @@ async function zajistiVychoziStitkyVSupabase(user) {
     );
   }
 }
+const secretMenuModal =
+  document.getElementById("secretMenuModal");
 
+const closeSecretMenuButton =
+  document.getElementById("closeSecretMenuButton");
 const areaFilterButtons =
   document.querySelectorAll("[data-area-filter]");
 
@@ -74,7 +85,9 @@ const tagMenu =
 
 const favoriteFilterButton =
   document.getElementById("favoriteFilterButton");
-
+const secretFilterButton =
+  document.getElementById("secretFilterButton");
+  
 const tagModalTitle =
   document.getElementById("modalTitle");
 
@@ -115,6 +128,34 @@ const newTagModalInput = document.getElementById("newTagModalInput");
 
 const cancelNewTagModalButton =
   document.getElementById("cancelNewTagModalButton");
+
+const secretUnlockModal =
+  document.getElementById("secretUnlockModal");
+
+const secretUnlockInput =
+  document.getElementById("secretUnlockInput");
+
+const closeSecretUnlockButton =
+  document.getElementById("closeSecretUnlockButton");
+
+const cancelSecretUnlockButton =
+  document.getElementById("cancelSecretUnlockButton");
+
+const confirmSecretUnlockButton =
+  document.getElementById("confirmSecretUnlockButton");
+  
+const secretUnlockTitle =
+  document.getElementById("secretUnlockTitle");
+
+const secretUnlockDescription =
+  document.getElementById("secretUnlockDescription");
+
+const secretUnlockConfirmInput =
+  document.getElementById("secretUnlockConfirmInput");
+  
+  
+  
+  
 //const tagMessageModal = document.getElementById("tagMessageModal");
 //const tagMessageText = document.getElementById("tagMessageText");
 //const closeTagMessageButton = document.getElementById("closeTagMessageButton");
@@ -149,7 +190,23 @@ const closeManageTagsButton =
 const manageTagsList =
   document.getElementById("manageTagsList");
 
+secretFilterButton?.addEventListener(
+  "click",
+  () => {
+    if (!tajnyRezimOdemceny) {
+      return;
+    }
 
+    filtrTajnychPoznamekAktivni =
+      !filtrTajnychPoznamekAktivni;
+
+    secretFilterButton.classList.toggle(
+      "active",
+      filtrTajnychPoznamekAktivni
+    );
+    renderTasks();
+  }
+);
 
 let favoriteFilterActive = false;
 
@@ -602,6 +659,36 @@ function getAllTags() {
 }
 
 
+
+// ==========================================
+// TAJNÉ ŠTÍTKY – KONTROLA TYPU ŠTÍTKU
+// Vrátí true, pokud je štítek v Supabase
+// označený jako tajný.
+// ==========================================
+
+function jeTajnyStitek(nazevStitku) {
+  const tag = syncedTags.find(
+    (tag) =>
+      tag.name.trim().toLowerCase() ===
+      nazevStitku.trim().toLowerCase()
+  );
+
+  return tag?.is_secret === true;
+}
+
+// ==========================================
+// TAJNÉ POZNÁMKY – KONTROLA POZNÁMKY
+// Poznámka je tajná, pokud obsahuje
+// alespoň jeden tajný štítek.
+// ==========================================
+
+function jeTajnaPoznamka(poznamka) {
+  const stitky = poznamka.tags || [];
+
+  return stitky.some(
+    (tag) => jeTajnyStitek(tag)
+  );
+}
 function getAvailableTags() {
   return [...new Set([
     ...DEFAULT_TAGS,
@@ -658,6 +745,28 @@ function taskMatchesFavorite(task) {
   return task.favorite === true;
 }
 
+// ==========================================
+// TAJNÉ POZNÁMKY – FILTROVÁNÍ
+// Zamčený režim tajné poznámky vždy skryje.
+// Odemčený režim je zobrazí a 🔓 může
+// vyfiltrovat pouze tajné poznámky.
+// ==========================================
+
+function taskMatchesSecret(task) {
+  const jeTajna =
+    jeTajnaPoznamka(task);
+
+  if (!tajnyRezimOdemceny) {
+    return !jeTajna;
+  }
+
+  if (filtrTajnychPoznamekAktivni) {
+    return jeTajna;
+  }
+
+  return true;
+}
+
 function taskMatchesTag(task) {
   if (activeTagFilter === null) {
     return true;
@@ -665,6 +774,54 @@ function taskMatchesTag(task) {
 
   return (task.tags || []).includes(activeTagFilter);
 }
+
+
+// ==========================================
+// TAJNÉ ŠTÍTKY – OTEVŘENÍ TAJNÉ NABÍDKY
+// Tuto funkci používá long press
+// nahoře i v editoru poznámky.
+// ==========================================
+
+async function otevriTajneStitky() {
+  if (tajnyRezimOdemceny) {
+  secretMenuModal.hidden = false;
+  return;
+}
+  
+  const maHeslo =
+    await maNastaveneTajneHeslo();
+  
+  secretUnlockInput.value = "";
+  secretUnlockConfirmInput.value = "";
+  
+  if (maHeslo) {
+    secretUnlockTitle.textContent =
+      "🔒 Odemknout tajný režim";
+    
+    secretUnlockDescription.textContent =
+      "Zadej hlavní heslo.";
+    
+    secretUnlockConfirmInput.hidden = true;
+    
+    confirmSecretUnlockButton.textContent =
+      "🔓 Odemknout";
+  } else {
+    secretUnlockTitle.textContent =
+      "🔐 Vytvořit hlavní heslo";
+    
+    secretUnlockDescription.textContent =
+      "Vytvoř hlavní heslo pro tajné poznámky.";
+    
+    secretUnlockConfirmInput.hidden = false;
+    
+    confirmSecretUnlockButton.textContent =
+      "🔐 Vytvořit heslo";
+  }
+  
+  secretUnlockModal.hidden = false;
+  secretUnlockInput.focus();
+}
+
 
 function renderTagFilters() {
   tagFilterButtons.innerHTML = "";
@@ -691,15 +848,88 @@ function renderTagFilters() {
   const addTagButton = document.createElement("button");
 
   addTagButton.classList.add("categoryTab");
-  addTagButton.textContent = "+";
-  addTagButton.addEventListener("click", () => {
-    const newTagModal = document.getElementById("newTagModal");
-    const newTagModalInput = document.getElementById("newTagModalInput");
+  addTagButton.textContent = "+ Nový štítek";
+  let casovacHornihoTajnehoStisku = null;
+let horniTajnyLongPressSpusten = false;
+let horniStiskStartX = 0;
+let horniStiskStartY = 0;
 
-    newTagModal.hidden = false;
-    newTagModalInput.value = "";
-    newTagModalInput.focus();
-  });
+closeSecretUnlockButton?.addEventListener(
+  "click",
+  () => {
+    secretUnlockModal.hidden = true;
+    secretUnlockInput.value = "";
+  }
+);
+
+cancelSecretUnlockButton?.addEventListener(
+  "click",
+  () => {
+    secretUnlockModal.hidden = true;
+    secretUnlockInput.value = "";
+  }
+);
+
+addTagButton.addEventListener("pointerdown", (event) => {
+  horniStiskStartX = event.clientX;
+  horniStiskStartY = event.clientY;
+  
+  horniTajnyLongPressSpusten = false;
+  
+  clearTimeout(casovacHornihoTajnehoStisku);
+  
+  casovacHornihoTajnehoStisku = setTimeout(() => {
+    horniTajnyLongPressSpusten = true;
+    otevriTajneStitky();
+  }, 600);
+});
+
+addTagButton.addEventListener("pointermove", (event) => {
+  const vzdalenostX =
+    Math.abs(event.clientX - horniStiskStartX);
+  
+  const vzdalenostY =
+    Math.abs(event.clientY - horniStiskStartY);
+  
+  if (
+    vzdalenostX > 20 ||
+    vzdalenostY > 20
+  ) {
+    clearTimeout(casovacHornihoTajnehoStisku);
+  }
+});
+
+addTagButton.addEventListener("pointerup", () => {
+  clearTimeout(casovacHornihoTajnehoStisku);
+});
+
+addTagButton.addEventListener("pointercancel", () => {
+  clearTimeout(casovacHornihoTajnehoStisku);
+});
+
+closeSecretMenuButton?.addEventListener(
+  "click",
+  () => {
+    secretMenuModal.hidden = true;
+  }
+);
+
+addTagButton.addEventListener("click", () => {
+  if (horniTajnyLongPressSpusten) {
+    horniTajnyLongPressSpusten = false;
+    return;
+  }
+  
+  const newTagModal =
+    document.getElementById("newTagModal");
+  
+  const newTagModalInput =
+    document.getElementById("newTagModalInput");
+  
+  newTagModal.hidden = false;
+  newTagModalInput.value = "";
+  newTagModalInput.focus();
+});
 
   tagFilterButtons.append(addTagButton);
 }
@@ -848,7 +1078,70 @@ tagOptions.addEventListener("click", (event) => {
   updateTagMenuUI();
 });
 
-createTagButton.addEventListener("click", openNewTagEditor);
+// ==========================================
+// TAJNÉ ŠTÍTKY – LONG PRESS NA NOVÝ ŠTÍTEK
+// Stejný princip jako dlouhý stisk na kartách.
+// Krátký klik = běžný nový štítek.
+// Dlouhý stisk = nabídka tajných štítků.
+// ==========================================
+
+let casovacTajnehoStisku = null;
+let tajnyLongPressSpusten = false;
+let stitekPressStartX = 0;
+let stitekPressStartY = 0;
+
+const CAS_TAJNEHO_STISKU = 600;
+const VZDALENOST_ZRUSENI_TAJNEHO_STISKU = 20;
+
+createTagButton.addEventListener("pointerdown", (event) => {
+  stitekPressStartX = event.clientX;
+  stitekPressStartY = event.clientY;
+  tajnyLongPressSpusten = false;
+
+  clearTimeout(casovacTajnehoStisku);
+
+  casovacTajnehoStisku = setTimeout(() => {
+    tajnyLongPressSpusten = true;
+
+    zobrazZpravuAplikace(
+      "Tajné štítky",
+      "Dlouhý stisk funguje."
+    );
+  }, CAS_TAJNEHO_STISKU);
+});
+
+createTagButton.addEventListener("pointermove", (event) => {
+  const vzdalenostX =
+    Math.abs(event.clientX - stitekPressStartX);
+
+  const vzdalenostY =
+    Math.abs(event.clientY - stitekPressStartY);
+
+  if (
+    vzdalenostX > VZDALENOST_ZRUSENI_TAJNEHO_STISKU ||
+    vzdalenostY > VZDALENOST_ZRUSENI_TAJNEHO_STISKU
+  ) {
+    clearTimeout(casovacTajnehoStisku);
+  }
+});
+
+createTagButton.addEventListener("pointerup", () => {
+  clearTimeout(casovacTajnehoStisku);
+});
+
+createTagButton.addEventListener("pointercancel", () => {
+  clearTimeout(casovacTajnehoStisku);
+});
+
+createTagButton.addEventListener("click", () => {
+  if (tajnyLongPressSpusten) {
+    tajnyLongPressSpusten = false;
+    return;
+  }
+
+  openNewTagEditor();
+});
+
 saveNewTagButton.addEventListener("click", createNewTag);
 cancelNewTagButton.addEventListener("click", closeNewTagEditor);
 
@@ -886,3 +1179,60 @@ tagFilterButtons.addEventListener("click", (event) => {
 updateTagMenuUI();
 renderTagFilters();
 
+// ==========================================
+// TAJNÉ ŠTÍTKY – VYTVOŘENÍ
+// Uloží nový štítek do Supabase
+// s příznakem is_secret = true.
+// ==========================================
+
+async function vytvorTajnyStitek(nazev) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const novyNazev =
+    normalizeTagName(nazev);
+
+  if (!novyNazev) {
+    return false;
+  }
+
+  const uzExistuje = syncedTags.some(
+    (tag) =>
+      tag.name.trim().toLowerCase() ===
+      novyNazev.toLowerCase()
+  );
+
+  if (uzExistuje) {
+    zobrazZpravuAplikace(
+      "Tajné štítky",
+      "Štítek s tímto názvem už existuje."
+    );
+
+    return false;
+  }
+
+  const { error } = await supabaseClient
+    .from("tags")
+    .insert({
+      user_id: user.id,
+      name: novyNazev,
+      is_secret: true,
+      sort_order: syncedTags.length
+    });
+
+  if (error) {
+    console.error(
+      "Vytvoření tajného štítku se nepodařilo:",
+      error.message
+    );
+
+    return false;
+  }
+
+  await loadTagsFromSupabase();
+
+  return true;
+}
