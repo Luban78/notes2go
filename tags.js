@@ -933,24 +933,9 @@ closeSecretUnlockButton?.addEventListener(
 lockSecretModeButton?.addEventListener(
   "click",
   () => {
-    tajnySifrovaciKlic = null;
-    tajnyRezimOdemceny = false;
-    document.body.classList.remove(
-  "secretModeActive"
-);
-    filtrTajnychPoznamekAktivni = false;
-
-    secretFilterButton.classList.remove("active");
-    secretFilterButton.hidden = true;
-    secretTaskButton.hidden = true;
-    secretMenuModal.hidden = true;
-
-    renderTasks();
-
-    zobrazZpravuAplikace(
-      "Tajný režim",
-      "Tajný režim byl zamčen."
-    );
+    if (typeof zamkniTajnyRezim === "function") {
+      zamkniTajnyRezim(false);
+    }
   }
 );
 cancelSecretUnlockButton?.addEventListener(

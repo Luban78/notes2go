@@ -97,28 +97,94 @@ function resetSecretAutoLock() {
 
   spustSecretAutoLock();
 }
-function zamkniTajnyRezimAutomaticky() {
+function obnovObrazovkyPoZmeneTajnehoRezimu() {
+  if (typeof renderTasks === "function") {
+    renderTasks();
+  }
+
+  if (typeof renderRemindersScreen === "function") {
+    renderRemindersScreen();
+  }
+
+  if (typeof renderCalendar === "function") {
+    renderCalendar();
+  }
+}
+
+async function zamkniTajnyRezim(automaticky = false) {
+  /*
+   * Rozpracovanou tajnou poznámku nejdřív bezpečně uložíme do
+   * ciphertextu. Až potom odstraníme plaintext z DOM a zahodíme klíč.
+   */
+  let autoSaveResult = null;
+
+  if (
+    typeof ulozOtevrenouTajnouPoznamkuPredZamknutim === "function"
+  ) {
+    try {
+      autoSaveResult =
+        await ulozOtevrenouTajnouPoznamkuPredZamknutim();
+    } catch (error) {
+      console.error(
+        "Uložení tajné poznámky před zamknutím se nepodařilo:",
+        error
+      );
+    }
+  }
+
+  if (typeof zavriTajnyEditorPriZamknuti === "function") {
+    zavriTajnyEditorPriZamknuti();
+  }
+
   tajnySifrovaciKlic = null;
   tajnyRezimOdemceny = false;
   filtrTajnychPoznamekAktivni = false;
 
-  secretFilterButton.classList.remove("active");
-  secretFilterButton.hidden = true;
-  secretTaskButton.hidden = true;
+  if (typeof vycistiDesifrovaneTajnePoznamky === "function") {
+    vycistiDesifrovaneTajnePoznamky();
+  }
 
-  document.body.classList.remove(
-    "secretModeActive"
-  );
+  secretFilterButton?.classList.remove("active");
+
+  if (secretFilterButton) {
+    secretFilterButton.hidden = true;
+  }
+
+  if (secretTaskButton) {
+    secretTaskButton.hidden = true;
+  }
+
+  if (typeof secretMenuModal !== "undefined" && secretMenuModal) {
+    secretMenuModal.hidden = true;
+  }
+
+  document.body.classList.remove("secretModeActive");
 
   clearTimeout(secretAutoLockTimer);
   secretAutoLockTimer = null;
 
-  renderTasks();
+  obnovObrazovkyPoZmeneTajnehoRezimu();
+
+  /* Cloud upload už používá hotový ciphertext a nepotřebuje AES klíč. */
+  if (
+    autoSaveResult?.encryptedRecord &&
+    typeof uploadEncryptedSecretRecordToSupabase === "function"
+  ) {
+    uploadEncryptedSecretRecordToSupabase(
+      autoSaveResult.encryptedRecord
+    );
+  }
 
   zobrazZpravuAplikace(
     "Tajný režim",
-    "Tajný režim byl automaticky zamčen."
+    automaticky
+      ? "Tajný režim byl automaticky zamčen."
+      : "Tajný režim byl zamčen."
   );
+}
+
+function zamkniTajnyRezimAutomaticky() {
+  zamkniTajnyRezim(true);
 }
 
 async function maNastaveneTajneHeslo() {
@@ -303,12 +369,39 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
 
   tajnyRezimOdemceny = true;
   spustSecretAutoLock();
+
   document.body.classList.add(
-  "secretModeActive"
-);
+    "secretModeActive"
+  );
+
   secretFilterButton.hidden = false;
   secretTaskButton.hidden = false;
-  renderTasks();
+
+  /* Nejdřív dešifrujeme lokální trezor pouze do paměti. */
+  if (typeof nactiTajnePoznamkyZLocalStorage === "function") {
+    await nactiTajnePoznamkyZLocalStorage();
+  }
+
+  /*
+   * Potom stáhneme cloud. syncNotes umí tajné řádky držet šifrované
+   * i při zamknutí a po odemknutí je bezpečně dešifruje do paměti.
+   */
+  if (typeof syncNotes === "function") {
+    await syncNotes();
+  } else {
+    obnovObrazovkyPoZmeneTajnehoRezimu();
+  }
+
+  /*
+   * Po aktualizaci okamžitě uklidíme i případné starší systémové
+   * notifikace tajných poznámek, které mohly vzniknout před zavedením
+   * pravidla SECRET = absolutní ticho.
+   */
+  if (
+    typeof zrusSystemoveNotifikaceTajnychPoznamek === "function"
+  ) {
+    await zrusSystemoveNotifikaceTajnychPoznamek();
+  }
 
   return true;
 }
@@ -497,3 +590,126 @@ async function overHlavniHeslo(heslo) {
     }
   );
 });
+
+
+
+
+// ==========================================
+// TAJNÉ POZNÁMKY – AES-GCM ŠIFROVÁNÍ
+// Citlivý obsah se šifruje ještě v zařízení.
+// ==========================================
+
+function base64ToBytes(base64) {
+  return Uint8Array.from(
+    atob(base64),
+    (char) => char.charCodeAt(0)
+  );
+}
+
+
+async function zasifrujTajnouPoznamku(poznamka) {
+  if (!tajnySifrovaciKlic) {
+    throw new Error(
+      "Tajný režim není odemčený."
+    );
+  }
+
+  if (!poznamka?.id) {
+    throw new Error(
+      "Poznámka nemá platné ID."
+    );
+  }
+
+  const encoder = new TextEncoder();
+
+  /*
+   * Pro každé šifrování vytvoříme nový IV.
+   * 12 bytů = 96 bitů.
+   */
+  const iv =
+    crypto.getRandomValues(
+      new Uint8Array(12)
+    );
+
+  /*
+   * ID poznámky nevkládáme dovnitř ciphertextu
+   * jako tajemství. Použijeme ho jako
+   * autentizovaná doplňková data.
+   */
+  const additionalData =
+    encoder.encode(
+      `LubaNote-secret-note-v1:${poznamka.id}`
+    );
+
+  const plaintext =
+    encoder.encode(
+      JSON.stringify(poznamka)
+    );
+
+  const encrypted =
+    await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData
+      },
+      tajnySifrovaciKlic,
+      plaintext
+    );
+
+  return {
+    version: 1,
+    algorithm: "AES-GCM",
+    iv: bytesToBase64(
+      new Uint8Array(iv)
+    ),
+    ciphertext: bytesToBase64(
+      new Uint8Array(encrypted)
+    )
+  };
+}
+
+
+async function desifrujTajnouPoznamku(
+  encryptedData,
+  noteId
+) {
+  if (!tajnySifrovaciKlic) {
+    throw new Error(
+      "Tajný režim není odemčený."
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const iv =
+    base64ToBytes(
+      encryptedData.iv
+    );
+
+  const ciphertext =
+    base64ToBytes(
+      encryptedData.ciphertext
+    );
+
+  const additionalData =
+    encoder.encode(
+      `LubaNote-secret-note-v1:${noteId}`
+    );
+
+  const decrypted =
+    await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData
+      },
+      tajnySifrovaciKlic,
+      ciphertext
+    );
+
+  return JSON.parse(
+    decoder.decode(decrypted)
+  );
+}

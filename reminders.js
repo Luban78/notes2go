@@ -124,6 +124,123 @@ async function scheduleNotification(
 }
 
 
+
+
+function getBezpecnyObsahNotifikacePoznamky(
+  note,
+  title,
+  body
+) {
+  /*
+   * Tajná poznámka NESMÍ vytvořit systémovou notifikaci vůbec.
+   * Nevracíme proto ani generický text, který by prozradil existenci
+   * tajného obsahu mimo odemčený Secret režim.
+   */
+  if (note?.isSecret === true) {
+    return null;
+  }
+
+  return {
+    title,
+    body
+  };
+}
+
+async function obnovNotifikacePoznamkyPodleSoukromi(note) {
+  if (!note?.id) {
+    return;
+  }
+
+  /*
+   * Nejdřív bezpodmínečně zrušíme starou notifikaci poznámky.
+   * To je důležité při změně běžné poznámky na tajnou.
+   */
+  if (note.notificationId) {
+    await cancelNotification(note.notificationId);
+  }
+
+  const plannedItems = Array.isArray(note.plannedItems)
+    ? note.plannedItems
+    : [];
+
+  /* Zrušíme také všechny systémové notifikace Planner položek. */
+  for (const item of plannedItems) {
+    if (item?.notificationId) {
+      await cancelNotification(item.notificationId);
+    }
+  }
+
+  /*
+   * SECRET = absolutní ticho. Po zrušení starých notifikací už
+   * pro tajnou poznámku nic nového neplánujeme.
+   */
+  if (note.isSecret === true) {
+    return;
+  }
+
+  if (
+    note.notificationId &&
+    note.reminder === true &&
+    note.date &&
+    new Date(note.date) > new Date()
+  ) {
+    await scheduleNotification(
+      note.notificationId,
+      note.title,
+      note.date,
+      note.note,
+      {
+        lubanoteType: "note",
+        taskId: note.id
+      }
+    );
+  }
+
+  for (const item of plannedItems) {
+    if (
+      !item?.notificationId ||
+      item.completed === true ||
+      !item.plannedAt ||
+      new Date(item.plannedAt) <= new Date()
+    ) {
+      continue;
+    }
+
+    await scheduleNotification(
+      item.notificationId,
+      item.text || "Naplánovaný úkol",
+      item.plannedAt,
+      note.title
+        ? `Z poznámky: ${note.title}`
+        : item.text,
+      {
+        lubanoteType: "planned",
+        plannedItemId: item.id,
+        sourceNoteId: note.id
+      }
+    );
+  }
+}
+
+/*
+ * Bezpečnostní úklid po odemknutí / aktualizaci aplikace.
+ * Zruší i případné staré generické "tajné" notifikace naplánované
+ * před zavedením pravidla SECRET = absolutní ticho.
+ */
+async function zrusSystemoveNotifikaceTajnychPoznamek() {
+  if (typeof loadTask !== "function") {
+    return;
+  }
+
+  const tajnePoznamky = loadTask().filter(
+    (note) => note?.isSecret === true
+  );
+
+  for (const note of tajnePoznamky) {
+    await obnovNotifikacePoznamkyPodleSoukromi(note);
+  }
+}
+
 async function cancelNotification(notificationId) {
   const LocalNotifications =
     window.Capacitor?.Plugins?.LocalNotifications;
@@ -157,6 +274,12 @@ function updateReminderButton(enabled) {
 
 
 function zapniPripominkuPoZmeneTerminu() {
+  if (typeof secretTaskEnabled !== "undefined" && secretTaskEnabled) {
+    reminderEnabled = false;
+    updateReminderButton(false);
+    return;
+  }
+
   const modalDate =
     document.getElementById("modalDate");
 
@@ -177,6 +300,18 @@ const editorReminderButton =
   document.getElementById("reminderButton");
 
 editorReminderButton?.addEventListener("click", () => {
+  if (typeof secretTaskEnabled !== "undefined" && secretTaskEnabled) {
+    reminderEnabled = false;
+    updateReminderButton(false);
+
+    zobrazZpravuAplikace(
+      "Tajná poznámka",
+      "Tajná poznámka nepoužívá systémová upozornění."
+    );
+
+    return;
+  }
+
   const modalDate =
     document.getElementById("modalDate");
 
@@ -588,11 +723,22 @@ async function ensureFuturePlannedNotifications() {
         (task) => task.id === currentItem.sourceNoteId
       );
 
+      /*
+       * Bez zdrojové poznámky nic neplánujeme. Tajná poznámka může
+       * být při zamknutém režimu z loadTask() záměrně nepřítomná.
+       */
+      if (!sourceNote || sourceNote.isSecret === true) {
+        if (pendingIds.has(currentItem.notificationId)) {
+          await cancelNotification(currentItem.notificationId);
+        }
+        continue;
+      }
+
       await scheduleNotification(
         currentItem.notificationId,
         currentItem.text || "Naplánovaný úkol",
         currentItem.plannedAt,
-        sourceNote?.title
+        sourceNote.title
           ? `Z poznámky: ${sourceNote.title}`
           : currentItem.text,
         {
@@ -903,16 +1049,18 @@ async function saveReminderDate(taskId, newDate) {
 
   updateTask(index, updatedTask);
 
-  await scheduleNotification(
-    updatedTask.notificationId,
-    updatedTask.title,
-    updatedTask.date,
-    updatedTask.note,
-    {
-      lubanoteType: "note",
-      taskId: updatedTask.id
-    }
-  );
+  if (updatedTask.isSecret !== true) {
+    await scheduleNotification(
+      updatedTask.notificationId,
+      updatedTask.title,
+      updatedTask.date,
+      updatedTask.note,
+      {
+        lubanoteType: "note",
+        taskId: updatedTask.id
+      }
+    );
+  }
 
   if (
     typeof uploadLocalNoteToSupabase === "function"
@@ -991,19 +1139,21 @@ async function savePlannedReminderDate(itemId, newDate) {
     }
   }
 
-  await scheduleNotification(
-    updatedItem.notificationId,
-    updatedItem.text || "Naplánovaný úkol",
-    updatedItem.plannedAt,
-    sourceNote?.title
-      ? `Z poznámky: ${sourceNote.title}`
-      : updatedItem.text,
-    {
-      lubanoteType: "planned",
-      plannedItemId: updatedItem.id,
-      sourceNoteId: updatedItem.sourceNoteId
-    }
-  );
+  if (sourceNote && sourceNote.isSecret !== true) {
+    await scheduleNotification(
+      updatedItem.notificationId,
+      updatedItem.text || "Naplánovaný úkol",
+      updatedItem.plannedAt,
+      sourceNote.title
+        ? `Z poznámky: ${sourceNote.title}`
+        : updatedItem.text,
+      {
+        lubanoteType: "planned",
+        plannedItemId: updatedItem.id,
+        sourceNoteId: updatedItem.sourceNoteId
+      }
+    );
+  }
 
   if (typeof renderCalendar === "function") {
     renderCalendar();

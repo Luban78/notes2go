@@ -195,8 +195,183 @@ secretTaskButton?.addEventListener(
       "active",
       secretTaskEnabled
     );
+
+    if (secretTaskEnabled) {
+      /*
+       * SECRET = absolutní ticho.
+       */
+      reminderEnabled = false;
+
+      if (typeof updateReminderButton === "function") {
+        updateReminderButton(false);
+      }
+
+      if (activeTaskIndex !== null) {
+        const currentTasks = loadTask();
+        const currentTask = currentTasks[activeTaskIndex];
+
+        if (
+          currentTask?.notificationId &&
+          typeof cancelNotification === "function"
+        ) {
+          cancelNotification(currentTask.notificationId);
+        }
+      }
+
+      return;
+    }
+
+    /*
+     * ODTАJNĚNÍ POZNÁMKY:
+     * běžná poznámka nesmí obsahovat tajný štítek.
+     */
+    activeTags = activeTags.filter(
+      (tagName) => {
+        const tag = syncedTags.find(
+          (item) =>
+            item.name.trim().toLowerCase() ===
+            tagName.trim().toLowerCase()
+        );
+
+        return tag?.is_secret !== true;
+      }
+    );
+
+    updateTagMenuUI();
   }
 );
+
+async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
+  if (!secretTaskEnabled || taskModal?.hidden) {
+    return null;
+  }
+
+  const title = modalTitle.value.trim();
+  const note = modalRichText.innerText;
+  const richContent = modalRichText.innerHTML;
+  const date =
+    modalDate.value && modalTime.value
+      ? `${modalDate.value}T${modalTime.value}`
+      : "";
+
+  let savedNote = null;
+
+  if (activeTaskIndex !== null) {
+    const tasks = loadTask();
+    const currentTask = tasks[activeTaskIndex];
+
+    if (currentTask) {
+      savedNote = {
+        ...currentTask,
+        updatedAt: new Date().toISOString(),
+        title,
+        note,
+        richContent,
+        date,
+        reminder: reminderEnabled,
+        favorite: favoriteEnabled,
+        notificationId:
+          currentTask.notificationId ||
+          Date.now() % 2147483647,
+        area: activeArea,
+        pinned: currentTask.pinned === true,
+        isSecret: true,
+        tags: [...activeTags],
+        todos: [...activeTodos]
+      };
+
+      await updateTask(activeTaskIndex, savedNote);
+    }
+  } else {
+    const isEmpty =
+      title === "" &&
+      note.trim() === "" &&
+      activeTodos.length === 0;
+
+    if (!isEmpty) {
+      savedNote = {
+        id: crypto.randomUUID(),
+        updatedAt: new Date().toISOString(),
+        title,
+        note,
+        richContent,
+        date,
+        completed: false,
+        reminder: reminderEnabled,
+        notificationId: Date.now() % 2147483647,
+        area: activeArea,
+        pinned: false,
+        isSecret: true,
+        tags: [...activeTags],
+        todos: [...activeTodos]
+      };
+
+      await saveTask(savedNote);
+    }
+  }
+
+  if (!savedNote) {
+    return null;
+  }
+
+  if (
+    typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+  ) {
+    await obnovNotifikacePoznamkyPodleSoukromi(savedNote);
+  }
+
+  if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
+    await cekajNaUlozeniTajnychPoznamek();
+  }
+
+  const encryptedRecord =
+    typeof nactiSifrovaneTajneZaznamy === "function"
+      ? nactiSifrovaneTajneZaznamy().find(
+          (record) => record.id === savedNote.id
+        ) || null
+      : null;
+
+  return {
+    noteId: savedNote.id,
+    encryptedRecord
+  };
+}
+
+function zavriTajnyEditorPriZamknuti() {
+  if (!secretTaskEnabled || taskModal?.hidden) {
+    return;
+  }
+
+  /*
+   * Auto-lock nesmí nechat plaintext tajné poznámky v DOM.
+   * Rozpracovaná tajná poznámka se při zamknutí zavře bez uložení.
+   */
+  modalTitle.value = "";
+  modalText.value = "";
+  modalRichText.innerHTML = "";
+  modalDate.value = "";
+  modalTime.value = "";
+
+  if (typeof resetTodos === "function") {
+    resetTodos();
+  }
+
+  document.getElementById("plannedTextLinks")?.replaceChildren();
+
+  taskModal.classList.remove("show");
+  taskModal.hidden = true;
+  document.body.classList.remove("noScroll");
+
+  activeTaskIndex = null;
+  secretTaskEnabled = false;
+
+  secretTaskButton.textContent = "🔓";
+  secretTaskButton.classList.remove("active");
+
+  if (typeof RichTextColors !== "undefined") {
+    RichTextColors.reset();
+  }
+}
 function zobrazZpravuAplikace(
   nadpis,
   zprava
@@ -1159,6 +1334,9 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 addTaskButton.addEventListener("click", () => {
   activeTaskIndex = null;
+  secretTaskEnabled = false;
+  secretTaskButton.textContent = "🔓";
+  secretTaskButton.classList.remove("active");
   resetTodos();
   activeArea = "private";
   activeTags = [];
@@ -1203,7 +1381,7 @@ addTaskButton.addEventListener("click", () => {
 });
 
 
-editorBackButton.addEventListener("click", () => {
+editorBackButton.addEventListener("click", async () => {
   const title = modalTitle.value.trim();
   const note = modalRichText.innerText;
   const richContent = modalRichText.innerHTML;
@@ -1235,10 +1413,19 @@ editorBackButton.addEventListener("click", () => {
         todos: [...activeTodos]
       };
 
-      updateTask(activeTaskIndex, updatedTask);
-      uploadLocalNoteToSupabase(updatedTask);
-      if (updatedTask.reminder && updatedTask.date) {
-        scheduleNotification(
+      await updateTask(activeTaskIndex, updatedTask);
+      await uploadLocalNoteToSupabase(updatedTask);
+
+      if (
+        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+      ) {
+        await obnovNotifikacePoznamkyPodleSoukromi(updatedTask);
+      } else if (
+        updatedTask.isSecret !== true &&
+        updatedTask.reminder &&
+        updatedTask.date
+      ) {
+        await scheduleNotification(
           updatedTask.notificationId,
           updatedTask.title,
           updatedTask.date,
@@ -1249,7 +1436,7 @@ editorBackButton.addEventListener("click", () => {
           }
         );
       } else {
-        cancelNotification(updatedTask.notificationId);
+        await cancelNotification(updatedTask.notificationId);
       }
     }
   } else {
@@ -1277,10 +1464,19 @@ editorBackButton.addEventListener("click", () => {
         todos: [...activeTodos]
       };
 
-      saveTask(newTask);
-      uploadLocalNoteToSupabase(newTask);
-      if (newTask.reminder && newTask.date) {
-        scheduleNotification(
+      await saveTask(newTask);
+      await uploadLocalNoteToSupabase(newTask);
+
+      if (
+        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+      ) {
+        await obnovNotifikacePoznamkyPodleSoukromi(newTask);
+      } else if (
+        newTask.isSecret !== true &&
+        newTask.reminder &&
+        newTask.date
+      ) {
+        await scheduleNotification(
           newTask.notificationId,
           newTask.title,
           newTask.date,
@@ -1354,12 +1550,17 @@ function openTaskEditorById(taskId) {
   const currentTask = currentTasks[index];
 
   reminderEnabled = currentTask.reminder === true;
-  updateReminderButton(reminderEnabled);
 
   favoriteEnabled = currentTask.favorite === true;
-  
+
   secretTaskEnabled =
-  currentTask.isSecret === true;
+    currentTask.isSecret === true;
+
+  if (secretTaskEnabled) {
+    reminderEnabled = false;
+  }
+
+  updateReminderButton(reminderEnabled);
 
 secretTaskButton.textContent =
   secretTaskEnabled ? "🔐" : "🔓";

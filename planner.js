@@ -87,9 +87,30 @@ let selectedPlannerText = "";
 
 function getLocalPlannedItems() {
   try {
-    return JSON.parse(
+    const items = JSON.parse(
       localStorage.getItem(PLANNER_STORAGE_KEY)
     ) || [];
+
+    const secretIds =
+      typeof getSecretNoteIds === "function"
+        ? getSecretNoteIds()
+        : new Set();
+
+    const safeItems = Array.isArray(items)
+      ? items.filter(
+          (item) => !secretIds.has(item?.sourceNoteId)
+        )
+      : [];
+
+    /* Starý plaintext Planner z tajné poznámky rovnou odstraníme. */
+    if (safeItems.length !== items.length) {
+      localStorage.setItem(
+        PLANNER_STORAGE_KEY,
+        JSON.stringify(safeItems)
+      );
+    }
+
+    return safeItems;
   } catch (error) {
     console.error(
       "Chyba při načítání plánovaných položek:",
@@ -124,9 +145,19 @@ function loadPlannedItems() {
 }
 
 function savePlannedItems(items) {
+  const secretIds =
+    typeof getSecretNoteIds === "function"
+      ? getSecretNoteIds()
+      : new Set();
+
+  const safeItems = (Array.isArray(items) ? items : [])
+    .filter(
+      (item) => !secretIds.has(item?.sourceNoteId)
+    );
+
   localStorage.setItem(
     PLANNER_STORAGE_KEY,
-    JSON.stringify(items)
+    JSON.stringify(safeItems)
   );
 }
 
@@ -359,6 +390,7 @@ async function saveCurrentPlannedItem() {
   /* Každá položka Planneru je současně samostatný úkol v Připomínkách.
      V APK jí proto naplánujeme vlastní systémovou notifikaci. */
   if (
+    sourceNote.isSecret !== true &&
     typeof requestNotificationPermission === "function" &&
     typeof scheduleNotification === "function"
   ) {
