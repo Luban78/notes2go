@@ -4633,7 +4633,8 @@ body.authPending .addTaskButton {
   color: var(--color-text-secondary);
 }
 
-#secretUnlockInput {
+#secretUnlockInput,
+#secretUnlockConfirmInput {
   width: 100%;
   box-sizing: border-box;
 
@@ -4651,7 +4652,8 @@ body.authPending .addTaskButton {
   outline: none;
 }
 
-#secretUnlockInput:focus {
+#secretUnlockInput:focus,
+#secretUnlockConfirmInput:focus {
   border-color: var(--color-accent);
 
   box-shadow:
@@ -4662,7 +4664,9 @@ body.authPending .addTaskButton {
       transparent
     );
 }
-
+#secretUnlockConfirmInput {
+  margin-top: 10px;
+}
 .secretUnlockActions {
   display: flex;
   gap: 10px;
@@ -4785,4 +4789,38 @@ body.authPending .addTaskButton {
 
 #secretTaskButton:active {
   transform: scale(0.96);
+}
+/* ========================================
+   TAJNÝ REŽIM – BAREVNÉ POZADÍ
+   Funguje ve světlém i tmavém motivu.
+   ======================================== */
+
+/* ========================================
+   SECRET REŽIM – VLASTNÍ PEVNÉ TÉMA
+   Vždy stejné bez ohledu na běžné téma.
+   Musí být až ZA ostatními tématy.
+   ======================================== */
+
+body.secretModeActive {
+  --color-background: #4a203d;
+  --color-surface: #281c30;
+
+  --color-text: #fff5fb;
+  --color-text-secondary: #d5bccd;
+
+  --color-accent: #871663;
+  --color-accent-text: #FF8181;
+
+  --color-border: rgba(255, 220, 242, 0.18);
+
+  --color-editor-background: #241725;
+  --color-editor-text: #fff5fb;
+
+  background: var(--color-background);
+}
+
+/* Celý vršek i oblast pod kartami */
+body.secretModeActive .homeHeader,
+body.secretModeActive .app {
+  background: var(--color-background);
 }

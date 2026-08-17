@@ -9,6 +9,7 @@
 // Zjistí, jestli má přihlášený uživatel
 // už vytvořené hlavní heslo.
 // ==========================================
+
 let tajnySifrovaciKlic = null;
 async function vytvorSifrovaciKlicZHesla(
   heslo,
@@ -67,6 +68,56 @@ async function vytvorSifrovaciKlicZHesla(
       "encrypt",
       "decrypt"
     ]
+  );
+}
+let secretAutoLockTimer = null;
+
+const SECRET_AUTO_LOCK_TIME = 5 * 60 * 1000;
+
+//const SECRET_AUTO_LOCK_TIME =
+ // 10 * 1000;
+  
+  function spustSecretAutoLock() {
+  clearTimeout(secretAutoLockTimer);
+
+  if (!tajnyRezimOdemceny) {
+    return;
+  }
+
+  secretAutoLockTimer = setTimeout(() => {
+    zamkniTajnyRezimAutomaticky();
+  }, SECRET_AUTO_LOCK_TIME);
+}
+
+
+function resetSecretAutoLock() {
+  if (!tajnyRezimOdemceny) {
+    return;
+  }
+
+  spustSecretAutoLock();
+}
+function zamkniTajnyRezimAutomaticky() {
+  tajnySifrovaciKlic = null;
+  tajnyRezimOdemceny = false;
+  filtrTajnychPoznamekAktivni = false;
+
+  secretFilterButton.classList.remove("active");
+  secretFilterButton.hidden = true;
+  secretTaskButton.hidden = true;
+
+  document.body.classList.remove(
+    "secretModeActive"
+  );
+
+  clearTimeout(secretAutoLockTimer);
+  secretAutoLockTimer = null;
+
+  renderTasks();
+
+  zobrazZpravuAplikace(
+    "Tajný režim",
+    "Tajný režim byl automaticky zamčen."
   );
 }
 
@@ -251,9 +302,13 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
     );
 
   tajnyRezimOdemceny = true;
+  spustSecretAutoLock();
+  document.body.classList.add(
+  "secretModeActive"
+);
   secretFilterButton.hidden = false;
   secretTaskButton.hidden = false;
-  
+  renderTasks();
 
   return true;
 }
@@ -429,3 +484,16 @@ async function overHlavniHeslo(heslo) {
   return vypocitanyVerifier === data.verifier;
 }
 
+[
+  "pointerdown",
+  "keydown",
+  "touchstart"
+].forEach((eventName) => {
+  document.addEventListener(
+    eventName,
+    resetSecretAutoLock,
+    {
+      passive: true
+    }
+  );
+});

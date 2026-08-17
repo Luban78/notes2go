@@ -695,10 +695,37 @@ async function smazStitek(tag) {
 function getAllTags() {
   const noteTags = loadTask()
     .flatMap((task) => task.tags || []);
-
-  const cloudTags = syncedTags.map((tag) => tag.name);
-
-  return [...new Set([...noteTags, ...cloudTags])];
+  
+  const cloudTags = syncedTags
+    .filter((tag) => {
+      if (tajnyRezimOdemceny) {
+        return true;
+      }
+      
+      return tag.is_secret !== true;
+    })
+    .map((tag) => tag.name);
+  
+  const secretTagNames = new Set(
+    syncedTags
+    .filter((tag) => tag.is_secret === true)
+    .map((tag) => tag.name)
+  );
+  
+  const visibleNoteTags = noteTags.filter((tagName) => {
+    if (tajnyRezimOdemceny) {
+      return true;
+    }
+    
+    return !secretTagNames.has(tagName);
+  });
+  
+  return [
+    ...new Set([
+      ...visibleNoteTags,
+      ...cloudTags
+    ])
+  ];
 }
 
 
@@ -726,12 +753,10 @@ function jeTajnyStitek(nazevStitku) {
 // ==========================================
 
 function jeTajnaPoznamka(poznamka) {
-  const stitky = poznamka.tags || [];
-
-  return stitky.some(
-    (tag) => jeTajnyStitek(tag)
-  );
+  return poznamka.isSecret === true;
 }
+
+
 function getAvailableTags() {
   return [...new Set([
     ...DEFAULT_TAGS,
@@ -910,6 +935,9 @@ lockSecretModeButton?.addEventListener(
   () => {
     tajnySifrovaciKlic = null;
     tajnyRezimOdemceny = false;
+    document.body.classList.remove(
+  "secretModeActive"
+);
     filtrTajnychPoznamekAktivni = false;
 
     secretFilterButton.classList.remove("active");

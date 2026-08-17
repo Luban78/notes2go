@@ -178,7 +178,25 @@ const appMessageText =
 const closeAppMessageButton =
   document.getElementById("closeAppMessageButton");
 
+secretTaskButton?.addEventListener(
+  "click",
+  () => {
+    if (!tajnyRezimOdemceny) {
+      return;
+    }
 
+    secretTaskEnabled =
+      !secretTaskEnabled;
+
+    secretTaskButton.textContent =
+      secretTaskEnabled ? "🔐" : "🔓";
+
+    secretTaskButton.classList.toggle(
+      "active",
+      secretTaskEnabled
+    );
+  }
+);
 function zobrazZpravuAplikace(
   nadpis,
   zprava
@@ -1212,7 +1230,7 @@ editorBackButton.addEventListener("click", () => {
           Date.now() % 2147483647,
         area: activeArea,
         pinned: currentTask.pinned === true,
-        isSecret: currentTask.isSecret === true,
+        isSecret: secretTaskEnabled,
         tags: [...activeTags],
         todos: [...activeTodos]
       };
@@ -1254,7 +1272,7 @@ editorBackButton.addEventListener("click", () => {
         notificationId: Date.now() % 2147483647,
         area: activeArea,
         pinned: false,
-        isSecret: false,
+        isSecret: secretTaskEnabled,
         tags: [...activeTags],
         todos: [...activeTodos]
       };
@@ -1339,6 +1357,17 @@ function openTaskEditorById(taskId) {
   updateReminderButton(reminderEnabled);
 
   favoriteEnabled = currentTask.favorite === true;
+  
+  secretTaskEnabled =
+  currentTask.isSecret === true;
+
+secretTaskButton.textContent =
+  secretTaskEnabled ? "🔐" : "🔓";
+
+secretTaskButton.classList.toggle(
+  "active",
+  secretTaskEnabled
+);
 
   priorityTaskButton?.classList.toggle(
     "active",
