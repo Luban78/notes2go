@@ -607,6 +607,19 @@ planSelectionButton.addEventListener(
     selectedPlannerText = text;
 
     plannerTaskTitle.textContent = text;
+    /*
+ * Výběr už máme bezpečně uložený v RichTextColors.
+ * Zrušíme pouze nativní Android označení, aby jeho
+ * nabídka Vyjmout/Kopírovat/Vložit nelezla přes Planner.
+ */
+const androidSelection =
+  window.getSelection();
+
+if (androidSelection) {
+  androidSelection.removeAllRanges();
+}
+
+modalRichText.blur();
 
     setPlannerDateTimeToNow();
     plannerModal.hidden = false;
