@@ -4,6 +4,60 @@ function getLocalNotesForSync() {
     : loadTask().filter((note) => note?.isSecret !== true);
 }
 
+function getDeviceId() {
+  let deviceId =
+    localStorage.getItem("lubanoteDeviceId");
+
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+
+    localStorage.setItem(
+      "lubanoteDeviceId",
+      deviceId
+    );
+  }
+
+  return deviceId;
+}
+
+async function registerCurrentDevice() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const deviceId = getDeviceId();
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseClient
+    .from("devices")
+    .upsert(
+      {
+        user_id: user.id,
+        device_id: deviceId,
+        last_sync_at: now
+      },
+      {
+        onConflict: "user_id,device_id"
+      }
+    );
+
+  if (error) {
+    console.error(
+      "Device register error:",
+      error.message
+    );
+
+    return false;
+  }
+
+  return true;
+}
+
+
+
+
 function jeSifrovanyCloudSecretRow(row) {
   return Boolean(
     row?.data?.__lubanoteSecret === true &&
@@ -118,9 +172,12 @@ async function markNoteDeletedInSupabase(note) {
   const { error } = await supabaseClient
     .from("notes")
     .update({
-      deleted_at: deletedAt,
-      updated_at: deletedAt
-    })
+  deleted_at: deletedAt,
+  updated_at: deletedAt,
+  data: {
+    deleted: true
+  }
+})
     .eq("id", note.id)
     .eq("user_id", user.id);
 
@@ -131,6 +188,10 @@ async function markNoteDeletedInSupabase(note) {
 
   return true;
 }
+
+
+
+
 
 async function getCloudNotesForSync() {
   const user = await getCurrentUser();
@@ -653,6 +714,7 @@ async function syncNotes() {
 async function startSync() {
   await syncNotes();
   await loadTagsFromSupabase();
+  await registerCurrentDevice();
 }
 
 startSync();
