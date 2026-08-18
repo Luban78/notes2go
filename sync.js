@@ -624,6 +624,12 @@ async function syncNotes() {
       }
     }
 
+    if (
+      typeof uklidOsirelychPlanovanychPolozek === "function"
+    ) {
+      await uklidOsirelychPlanovanychPolozek();
+    }
+
     if (typeof renderTasks === "function") {
       renderTasks();
     }

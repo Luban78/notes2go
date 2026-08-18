@@ -379,10 +379,70 @@ function saveTask(task) {
   return saveAllTasks(tasks);
 }
 
-function deleteTask(index) {
+async function deleteTask(index) {
   const tasks = loadTask();
+  const taskToDelete = tasks[index];
+
+  if (!taskToDelete) {
+    return false;
+  }
+
+  const noteId = taskToDelete.id || null;
+
+  /*
+   * Smazání celé poznámky musí uklidit i všechny její vedlejší stopy:
+   * - hlavní Android notifikaci,
+   * - notifikace všech podúkolů,
+   * - lokální Planner položky.
+   * Jinak po smazání poznámky zůstávají v Plánu osiřelé úkoly.
+   */
+  if (
+    taskToDelete.notificationId &&
+    typeof cancelNotification === "function"
+  ) {
+    await cancelNotification(taskToDelete.notificationId);
+  }
+
+  const plannedItems =
+    typeof loadPlannedItems === "function"
+      ? loadPlannedItems()
+      : [];
+
+  const relatedPlannedItems = plannedItems.filter(
+    (item) => item?.sourceNoteId === noteId
+  );
+
+  for (const item of relatedPlannedItems) {
+    if (
+      item?.notificationId &&
+      typeof cancelNotification === "function"
+    ) {
+      await cancelNotification(item.notificationId);
+    }
+  }
+
+  if (
+    noteId &&
+    typeof savePlannedItems === "function"
+  ) {
+    savePlannedItems(
+      plannedItems.filter(
+        (item) => item?.sourceNoteId !== noteId
+      )
+    );
+  }
+
   tasks.splice(index, 1);
-  return saveAllTasks(tasks);
+  await saveAllTasks(tasks);
+
+  if (
+    taskToDelete.id &&
+    typeof markNoteDeletedInSupabase === "function"
+  ) {
+    await markNoteDeletedInSupabase(taskToDelete);
+  }
+
+  return true;
 }
 
 function toggleTaskCompleted(index) {

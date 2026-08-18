@@ -294,13 +294,52 @@ async function cancelNotification(notificationId) {
     return;
   }
 
-  await LocalNotifications.cancel({
-    notifications: [
-      {
-        id: notificationId
+  /* Zrušíme případný budoucí alarm. */
+  try {
+    await LocalNotifications.cancel({
+      notifications: [
+        {
+          id: notificationId
+        }
+      ]
+    });
+  } catch (error) {
+    console.error(
+      "Zrušení čekající notifikace se nepodařilo:",
+      error
+    );
+  }
+
+  /*
+   * cancel() ruší jen čekající notifikace. Pokud už notifikace jednou
+   * zazvonila, může stále existovat mezi doručenými. Tu odstraníme také,
+   * aby bylo možné připomínku bezpečně naplánovat znovu.
+   */
+  try {
+    if (
+      typeof LocalNotifications.getDeliveredNotifications === "function" &&
+      typeof LocalNotifications.removeDeliveredNotifications === "function"
+    ) {
+      const delivered =
+        await LocalNotifications.getDeliveredNotifications();
+
+      const matching =
+        (delivered?.notifications || []).filter(
+          (notification) => notification.id === notificationId
+        );
+
+      if (matching.length > 0) {
+        await LocalNotifications.removeDeliveredNotifications({
+          notifications: matching
+        });
       }
-    ]
-  });
+    }
+  } catch (error) {
+    console.error(
+      "Odstranění doručené notifikace se nepodařilo:",
+      error
+    );
+  }
 }
 
 
@@ -1105,24 +1144,28 @@ async function saveReminderDate(taskId, newDate) {
   }
 
   const currentTask = tasks[index];
+  const oldNotificationId = currentTask.notificationId || null;
 
-  if (!currentTask.notificationId) {
-    currentTask.notificationId =
-      createUniqueNotificationId();
+  if (oldNotificationId) {
+    await cancelNotification(oldNotificationId);
   }
 
-  await cancelNotification(
-    currentTask.notificationId
-  );
+  /*
+   * Po již doručené Android notifikaci nepoužíváme znovu stejné ID.
+   * Každé přeplánování dostane čerstvé ID, takže Android vytvoří nový
+   * alarm místo pokusu recyklovat už jednou použitou notifikaci.
+   */
+  const newNotificationId = createUniqueNotificationId();
 
   const updatedTask = {
     ...currentTask,
     date: formatReminderLocalDateTime(newDate),
     reminder: true,
+    notificationId: newNotificationId,
     updatedAt: new Date().toISOString()
   };
 
-  updateTask(index, updatedTask);
+  await updateTask(index, updatedTask);
 
   if (updatedTask.isSecret !== true) {
     await scheduleNotification(
@@ -1159,17 +1202,17 @@ async function savePlannedReminderDate(itemId, newDate) {
     return;
   }
 
+  const oldNotificationId = item.notificationId || null;
+
+  if (oldNotificationId) {
+    await cancelNotification(oldNotificationId);
+  }
+
   const updatedItem = {
     ...item,
     plannedAt: formatReminderLocalDateTime(newDate),
-    notificationId:
-      item.notificationId ||
-      createUniqueNotificationId()
+    notificationId: createUniqueNotificationId()
   };
-
-  if (item.notificationId) {
-    await cancelNotification(item.notificationId);
-  }
 
   const mergedItems = loadPlannedItems().map(
     (candidate) =>
@@ -1664,43 +1707,8 @@ async function smazCelouPoznamkuZPripominek(noteId) {
     return false;
   }
 
-  const note = tasks[noteIndex];
-
-  if (note?.notificationId) {
-    await cancelNotification(note.notificationId);
-  }
-
-  const vsechnyPlannedItems =
-    typeof loadPlannedItems === "function"
-      ? loadPlannedItems()
-      : [];
-
-  const souvisejiciPlannedItems =
-    vsechnyPlannedItems.filter(
-      (item) => item?.sourceNoteId === noteId
-    );
-
-  for (const item of souvisejiciPlannedItems) {
-    if (item?.notificationId) {
-      await cancelNotification(item.notificationId);
-    }
-  }
-
-  if (typeof savePlannedItems === "function") {
-    savePlannedItems(
-      vsechnyPlannedItems.filter(
-        (item) => item?.sourceNoteId !== noteId
-      )
-    );
-  }
-
-  await deleteTask(noteIndex);
-
-  if (typeof markNoteDeletedInSupabase === "function") {
-    await markNoteDeletedInSupabase(note);
-  }
-
-  return true;
+  /* Veškerý úklid Planneru, notifikací i Supabase je centralizovaný. */
+  return await deleteTask(noteIndex);
 }
 
 

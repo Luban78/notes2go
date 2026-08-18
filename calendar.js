@@ -92,9 +92,21 @@ function formatCalendarDate(date) {
 
 
 function loadCalendarItems() {
-  const items = [...loadPlannedItems()];
+  const notes = loadTask();
+  const validNoteIds = new Set(
+    notes
+      .filter((note) => note?.id)
+      .map((note) => note.id)
+  );
 
-  loadTask().forEach((note) => {
+  /* Planner nikdy nezobrazuje položku bez existující zdrojové poznámky. */
+  const items = loadPlannedItems().filter(
+    (item) =>
+      item?.sourceNoteId &&
+      validNoteIds.has(item.sourceNoteId)
+  );
+
+  notes.forEach((note) => {
     if (
       note.reminder === true &&
       note.date &&

@@ -44,20 +44,12 @@ cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
 });
 
-confirmDeleteButton.addEventListener("click", () => {
+confirmDeleteButton.addEventListener("click", async () => {
   if (selectedCardIndex === null) {
     return;
   }
 
-  const tasks = loadTask();
-  const taskToDelete = tasks[selectedCardIndex];
-
-  if (taskToDelete?.notificationId) {
-    cancelNotification(taskToDelete.notificationId);
-  }
-
-  deleteTask(selectedCardIndex);
-  markNoteDeletedInSupabase(taskToDelete);
+  await deleteTask(selectedCardIndex);
 
   deleteConfirmModal.hidden = true;
   selectedCardIndex = null;
@@ -69,6 +61,14 @@ confirmDeleteButton.addEventListener("click", () => {
   editorSessionId += 1;
 
   renderTasks();
+
+  if (typeof renderCalendar === "function") {
+    renderCalendar();
+  }
+
+  if (typeof renderRemindersScreen === "function") {
+    renderRemindersScreen();
+  }
 });
 const modalDateButton =
   document.getElementById("modalDateButton");

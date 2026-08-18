@@ -161,6 +161,54 @@ function savePlannedItems(items) {
   );
 }
 
+
+/*
+ * Úklid osiřelých Planner položek po dokončení synchronizace.
+ * Pokud už zdrojová poznámka neexistuje, nemá položka v Plánu ani její
+ * Android notifikace kam vést.
+ */
+async function uklidOsirelychPlanovanychPolozek() {
+  if (typeof loadTask !== "function") {
+    return 0;
+  }
+
+  const validNoteIds = new Set(
+    loadTask()
+      .filter((note) => note?.id)
+      .map((note) => note.id)
+  );
+
+  const localItems = getLocalPlannedItems();
+  const orphanItems = localItems.filter(
+    (item) =>
+      item?.sourceNoteId &&
+      !validNoteIds.has(item.sourceNoteId)
+  );
+
+  if (orphanItems.length === 0) {
+    return 0;
+  }
+
+  for (const item of orphanItems) {
+    if (
+      item?.notificationId &&
+      typeof cancelNotification === "function"
+    ) {
+      await cancelNotification(item.notificationId);
+    }
+  }
+
+  savePlannedItems(
+    localItems.filter(
+      (item) =>
+        !item?.sourceNoteId ||
+        validNoteIds.has(item.sourceNoteId)
+    )
+  );
+
+  return orphanItems.length;
+}
+
 /* Jednorázově připne staré lokální položky k jejich zdrojovým
    poznámkám. Díky tomu se nahrají do Supabase bez nové DB tabulky. */
 function migrateLocalPlannedItemsIntoNotes(notes) {
