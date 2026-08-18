@@ -270,6 +270,23 @@ window.RichTextColors = (() => {
 
 
   function applyColor(color) {
+    if (
+      window.LubaNoteTodos
+        ?.nastavBarvuVybranehoTodo?.(color)
+    ) {
+      savedRange = null;
+      selectionLocked = false;
+      textColorPalette.hidden = true;
+      return true;
+    }
+
+    if (
+      window.LubaNoteTodos
+        ?.jeTodoRezimAktivni?.()
+    ) {
+      return false;
+    }
+
     return transformSelection(color);
   }
 
@@ -391,6 +408,23 @@ window.RichTextColors = (() => {
 
 
   function removeColor() {
+    if (
+      window.LubaNoteTodos
+        ?.odstranBarvuVybranehoTodo?.()
+    ) {
+      savedRange = null;
+      selectionLocked = false;
+      textColorPalette.hidden = true;
+      return true;
+    }
+
+    if (
+      window.LubaNoteTodos
+        ?.jeTodoRezimAktivni?.()
+    ) {
+      return false;
+    }
+
     const snapshot = getSelectionSnapshot();
 
     if (

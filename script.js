@@ -357,6 +357,16 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       todos: [...activeTodos]
     };
 
+    if (
+      window.LubaNotePlanner
+        ?.synchronizujPlanovaneTodoSPoznamkou
+    ) {
+      await window.LubaNotePlanner
+        .synchronizujPlanovaneTodoSPoznamkou(
+          savedNote
+        );
+    }
+
     await updateTask(aktivni.index, savedNote);
   } else {
     const isEmpty =
@@ -1529,6 +1539,16 @@ editorBackButton.addEventListener("click", async () => {
       todos: [...activeTodos]
     };
 
+    if (
+      window.LubaNotePlanner
+        ?.synchronizujPlanovaneTodoSPoznamkou
+    ) {
+      await window.LubaNotePlanner
+        .synchronizujPlanovaneTodoSPoznamkou(
+          updatedTask
+        );
+    }
+
     await updateTask(aktivni.index, updatedTask);
     await uploadLocalNoteToSupabase(updatedTask);
 
@@ -1911,6 +1931,11 @@ function renderTasks() {
       loadedTask.reminder === true ?
         "🔔" :
         "";
+    const secretIcon =
+  loadedTask.isSecret === true &&
+  tajnyRezimOdemceny ?
+  "🔐" :
+  "";
 
     const loadedHeadingIcons =
       document.createElement("span");
@@ -1920,6 +1945,7 @@ function renderTasks() {
     loadedHeadingIcons.textContent = [
       pinIcon,
       favoriteIcon,
+      secretIcon,
       areaIcon,
       reminderIcon
     ]

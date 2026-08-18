@@ -76,6 +76,7 @@ plannerTimeButton?.addEventListener(
 /* Poznámka, ze které právě plánujeme. */
 let plannerSourceNoteId = null;
 let plannerSourceType = "note";
+let plannerSourceTodoId = null;
 let plannerSelectionStart = null;
 let plannerSelectionEnd = null;
 let selectedPlannerText = "";
@@ -247,6 +248,65 @@ function migrateLocalPlannedItemsIntoNotes(notes) {
 }
 
 
+/*
+ * Když uživatel smaže přímo TODO řádek a potom uloží poznámku,
+ * nesmí po něm v Planneru zůstat osiřelý úkol ani Android notifikace.
+ * Funkce sahá pouze na Planner položky typu "todo"; původní note a
+ * selection plánování zůstává beze změny.
+ */
+async function synchronizujPlanovaneTodoSPoznamkou(note) {
+  if (!note?.id) {
+    return note;
+  }
+
+  const validTodoIds = new Set(
+    (Array.isArray(note.todos) ? note.todos : [])
+      .filter(todo => todo?.id)
+      .map(todo => todo.id)
+  );
+
+  const plannedItems = Array.isArray(note.plannedItems)
+    ? note.plannedItems
+    : [];
+
+  const removedItems = plannedItems.filter(
+    item =>
+      item?.sourceType === "todo" &&
+      item?.sourceTodoId &&
+      !validTodoIds.has(item.sourceTodoId)
+  );
+
+  if (removedItems.length === 0) {
+    return note;
+  }
+
+  const removedIds = new Set(
+    removedItems.map(item => item.id)
+  );
+
+  for (const item of removedItems) {
+    if (
+      item?.notificationId &&
+      typeof cancelNotification === "function"
+    ) {
+      await cancelNotification(item.notificationId);
+    }
+  }
+
+  note.plannedItems = plannedItems.filter(
+    item => !removedIds.has(item?.id)
+  );
+
+  savePlannedItems(
+    getLocalPlannedItems().filter(
+      item => !removedIds.has(item?.id)
+    )
+  );
+
+  return note;
+}
+
+
 /* ==========================================
    VYTVOŘENÍ NOVÉ PLÁNOVANÉ POLOŽKY
    ========================================== */
@@ -257,7 +317,8 @@ function createPlannedItem(
   plannedAt,
   sourceType = "note",
   selectionStart = null,
-  selectionEnd = null
+  selectionEnd = null,
+  sourceTodoId = null
 ) {
   return {
     id: crypto.randomUUID(),
@@ -272,7 +333,8 @@ function createPlannedItem(
         : ((Date.now() % 2147483646) + 1),
     createdAt: new Date().toISOString(),
     selectionStart,
-    selectionEnd
+    selectionEnd,
+    sourceTodoId
   };
 }
 
@@ -320,6 +382,7 @@ function openPlannerForNote(note) {
 
   plannerSourceNoteId = note.id || null;
   plannerSourceType = "note";
+  plannerSourceTodoId = null;
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
@@ -340,6 +403,7 @@ function closePlanner() {
   plannerModal.hidden = true;
   plannerSourceNoteId = null;
   plannerSourceType = "note";
+  plannerSourceTodoId = null;
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
@@ -402,14 +466,45 @@ async function saveCurrentPlannedItem() {
   const plannedAt =
     `${plannerDate.value}T${plannerTime.value}`;
 
+  let sourceTodo = null;
+
+  if (
+    plannerSourceType === "todo" &&
+    window.LubaNoteTodos
+  ) {
+    const currentTodos =
+      window.LubaNoteTodos.ziskejAktivniTodos?.() || [];
+
+    sourceTodo = currentTodos.find(
+      todo => todo?.id === plannerSourceTodoId
+    ) || null;
+
+    if (!sourceTodo) {
+      console.error(
+        "TODO položka pro plánování nebyla nalezena.",
+        plannerSourceTodoId
+      );
+      return;
+    }
+
+    /*
+     * TODO může být právě rozepsané a editor ještě nebyl zavřený.
+     * Před uložením Planneru proto uložíme i aktuální stav checkboxů,
+     * textů, stabilních ID a barev přímo do zdrojové poznámky.
+     */
+    sourceNote.todos = currentTodos;
+  }
+
   const text =
     plannerSourceType === "selection"
       ? selectedPlannerText.trim()
-      : (
-          sourceNote.title ||
-          sourceNote.note ||
-          "Bez názvu"
-        );
+      : plannerSourceType === "todo"
+        ? String(sourceTodo?.text || "").trim()
+        : (
+            sourceNote.title ||
+            sourceNote.note ||
+            "Bez názvu"
+          );
 
   if (!text) {
     return;
@@ -421,7 +516,8 @@ async function saveCurrentPlannedItem() {
     plannedAt,
     plannerSourceType,
     plannerSelectionStart,
-    plannerSelectionEnd
+    plannerSelectionEnd,
+    plannerSourceTodoId
   );
   
   window.lastCreatedPlannedItemId =
@@ -479,12 +575,18 @@ async function saveCurrentPlannedItem() {
       await requestNotificationPermission();
 
       const notificationTitle =
-        plannerSourceType === "selection"
+        (
+          plannerSourceType === "selection" ||
+          plannerSourceType === "todo"
+        )
           ? plannedItem.text
           : (sourceNote.title || plannedItem.text);
 
       const notificationBody =
-        plannerSourceType === "selection"
+        (
+          plannerSourceType === "selection" ||
+          plannerSourceType === "todo"
+        )
           ? (
               sourceNote.title
                 ? `Z poznámky: ${sourceNote.title}`
@@ -546,9 +648,93 @@ closePlannerButton.addEventListener(
    PLÁNOVÁNÍ OZNAČENÉ ČÁSTI RICH TEXTU
    ========================================== */
 
+function najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks) {
+  const editorTaskId =
+    document.getElementById("taskModal")?.dataset.taskId || null;
+
+  const kandidatiId = [
+    editorTaskId,
+    (
+      typeof activeTaskId !== "undefined"
+        ? activeTaskId
+        : null
+    )
+  ].filter(Boolean);
+
+  for (const taskId of kandidatiId) {
+    const sourceNote = tasks.find(
+      task => task?.id === taskId
+    );
+
+    if (sourceNote) {
+      return sourceNote;
+    }
+  }
+
+  if (
+    typeof activeTaskIndex !== "undefined" &&
+    Number.isInteger(activeTaskIndex) &&
+    activeTaskIndex >= 0
+  ) {
+    return tasks[activeTaskIndex] || null;
+  }
+
+  return null;
+}
+
 planSelectionButton.addEventListener(
   "click",
   () => {
+    const todoModeActive =
+      window.LubaNoteTodos
+        ?.jeTodoRezimAktivni?.() === true;
+
+    const selectedTodo =
+      window.LubaNoteTodos?.ziskejVybraneTodo?.() || null;
+
+    if (todoModeActive) {
+      if (!selectedTodo) {
+        return;
+      }
+
+      const todoText =
+        String(selectedTodo.text || "").trim();
+
+      if (!todoText) {
+        return;
+      }
+
+      const tasks = loadTask();
+      const sourceNote =
+        najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
+
+      if (!sourceNote?.id) {
+        console.error(
+          "Zdrojová poznámka TODO nebyla nalezena."
+        );
+        return;
+      }
+
+      plannerSourceNoteId = sourceNote.id;
+      plannerSourceType = "todo";
+      plannerSourceTodoId = selectedTodo.id;
+      plannerSelectionStart = null;
+      plannerSelectionEnd = null;
+      selectedPlannerText = todoText;
+
+      plannerTaskTitle.textContent = todoText;
+
+      window.LubaNoteTodos
+        ?.ukonciEditaciVybranehoTodo?.();
+
+      window.getSelection()
+        ?.removeAllRanges();
+
+      setPlannerDateTimeToNow();
+      plannerModal.hidden = false;
+      return;
+    }
+
     const snapshot =
       RichTextColors.getSelectionSnapshot();
 
@@ -673,3 +859,8 @@ modalRichText.blur();
     plannerModal.hidden = false;
   }
 );
+
+
+window.LubaNotePlanner = {
+  synchronizujPlanovaneTodoSPoznamkou
+};

@@ -16,6 +16,7 @@ const addTodoButton =
 
 let activeTodos = [];
 let activeTodoEditorItem = null;
+let selectedTodoId = null;
 
 
 /* ========================================
@@ -49,6 +50,179 @@ const TODO_GHOST_LIFT = 48;
 /* ========================================
    ZÁKLADNÍ TODO FUNKCE
 ======================================== */
+
+function createTodoId() {
+  if (
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `todo-${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
+}
+
+function normalizeTodo(todo = {}) {
+  return {
+    ...todo,
+    id:
+      typeof todo?.id === "string" && todo.id
+        ? todo.id
+        : createTodoId(),
+    text: todo?.text ?? "",
+    completed: todo?.completed === true,
+    highlightColor:
+      typeof todo?.highlightColor === "string"
+        ? todo.highlightColor
+        : ""
+  };
+}
+
+function getTodoById(todoId) {
+  if (!todoId) {
+    return null;
+  }
+
+  return activeTodos.find(
+    todo => todo?.id === todoId
+  ) || null;
+}
+
+function getTodoItemElementById(todoId) {
+  if (!todoId) {
+    return null;
+  }
+
+  return [...todoList.querySelectorAll(".todoItem")]
+    .find(
+      item => item.dataset.todoId === todoId
+    ) || null;
+}
+
+function getSelectedTodo() {
+  if (
+    todoList.hidden ||
+    activeTodos.length === 0 ||
+    !selectedTodoId
+  ) {
+    return null;
+  }
+
+  return getTodoById(selectedTodoId);
+}
+
+function setTodoDisplayColor(todoItem, color = "") {
+  if (!todoItem) {
+    return;
+  }
+
+  const value =
+    todoItem.querySelector(".todoTextValue");
+
+  if (!value) {
+    return;
+  }
+
+  value.style.backgroundColor = color || "";
+
+  const input = todoItem.querySelector(
+    ".todoTextInput"
+  );
+
+  if (input) {
+    input.style.backgroundColor = color || "";
+    input.style.borderRadius = color ? "4px" : "";
+  }
+}
+
+function setSelectedTodoHighlight(color = "") {
+  const todo = getSelectedTodo();
+
+  if (!todo) {
+    return false;
+  }
+
+  todo.highlightColor = color || "";
+
+  const todoItem = getTodoItemElementById(todo.id);
+
+  setTodoDisplayColor(
+    todoItem,
+    todo.highlightColor
+  );
+
+  return true;
+}
+
+function getActiveTodosSnapshot() {
+  return activeTodos.map(todo => ({ ...todo }));
+}
+
+function blurSelectedTodoEditor() {
+  if (!selectedTodoId) {
+    return;
+  }
+
+  const todoItem = getTodoItemElementById(
+    selectedTodoId
+  );
+
+  const input = todoItem?.querySelector(
+    ".todoTextInput.todoEditing"
+  );
+
+  input?.blur();
+}
+
+function setTodoCompletedById(todoId, completed = true) {
+  const todo = getTodoById(todoId);
+
+  if (!todo) {
+    return false;
+  }
+
+  todo.completed = completed === true;
+
+  const todoItem = getTodoItemElementById(todoId);
+
+  if (todoItem) {
+    todoItem.classList.toggle(
+      "todoCompleted",
+      todo.completed
+    );
+
+    const checkbox = todoItem.querySelector(
+      'input[type="checkbox"]'
+    );
+
+    if (checkbox) {
+      checkbox.checked = todo.completed;
+    }
+  }
+
+  return true;
+}
+
+function scrollTodoIntoView(todoId) {
+  if (!todoId || todoList.hidden) {
+    return false;
+  }
+
+  const todoItem = getTodoItemElementById(todoId);
+
+  if (!todoItem) {
+    return false;
+  }
+
+  todoItem.scrollIntoView({
+    block: "center",
+    behavior: "smooth"
+  });
+
+  return true;
+}
 
 function autoResizeTodoText(textarea) {
   textarea.style.height = "auto";
@@ -165,26 +339,26 @@ function focusTodo(index, cursorPosition = null) {
 
 function resetTodos() {
   activeTodos = [];
+  selectedTodoId = null;
   renderTodos();
 }
 
 function loadTodos(todos) {
   activeTodos = Array.isArray(todos)
-    ? todos.map(todo => ({
-        text: todo?.text ?? "",
-        completed: todo?.completed === true
-      }))
+    ? todos.map(todo => normalizeTodo(todo))
     : [];
+
+  selectedTodoId = null;
 
   renderTodos();
 }
 
 addTodoButton.addEventListener("click", () => {
   if (activeTodos.length > 0) {
-    activeTodos.push({
+    activeTodos.push(normalizeTodo({
       text: "",
       completed: false
-    });
+    }));
 
     renderTodos();
     focusTodo(activeTodos.length - 1, 0);
@@ -201,14 +375,14 @@ addTodoButton.addEventListener("click", () => {
     .filter(line => line !== "");
 
   activeTodos = todoLines.length > 0
-    ? todoLines.map(line => ({
+    ? todoLines.map(line => normalizeTodo({
         text: line,
         completed: false
       }))
-    : [{
+    : [normalizeTodo({
         text: "",
         completed: false
-      }];
+      })];
 
   todoModalText.value = "";
 
@@ -221,7 +395,13 @@ addTodoButton.addEventListener("click", () => {
 });
 
 function removeTodo(index) {
+  const removedTodo = activeTodos[index] || null;
+
   activeTodos.splice(index, 1);
+
+  if (removedTodo?.id === selectedTodoId) {
+    selectedTodoId = null;
+  }
 
   if (activeTodos.length === 0) {
     renderTodos();
@@ -313,6 +493,12 @@ function enterTodoEditMode(
 ) {
   closeOtherTodoEditors(text);
 
+  const todoItem = text.closest(".todoItem");
+
+  if (todoItem?.dataset.todoId) {
+    selectedTodoId = todoItem.dataset.todoId;
+  }
+
   display.hidden = true;
   text.hidden = false;
   text.classList.add("todoEditing");
@@ -352,8 +538,16 @@ function enterTodoEditMode(
 function leaveTodoEditMode(text, display) {
   const item = text.closest(".todoItem");
 
+  const value = display.querySelector(
+    ".todoTextValue"
+  );
+
   text.classList.remove("todoEditing");
-  display.textContent = text.value || " ";
+
+  if (value) {
+    value.textContent = text.value || " ";
+  }
+
   text.hidden = true;
   display.hidden = false;
 
@@ -715,6 +909,11 @@ function createTodoDragGhost(index, rect) {
   ghostText.classList.add("todoDragGhostText");
   ghostText.textContent = todo.text || " ";
 
+  if (todo.highlightColor) {
+    ghostText.style.backgroundColor =
+      todo.highlightColor;
+  }
+
   todoDragGhost.append(
     ghostCheckbox,
     ghostText
@@ -909,6 +1108,7 @@ function createTodoItem(todo, index) {
   const todoItem = document.createElement("div");
   todoItem.classList.add("todoItem");
   todoItem.dataset.todoIndex = index;
+  todoItem.dataset.todoId = todo.id;
 
   if (todo.completed === true) {
     todoItem.classList.add("todoCompleted");
@@ -938,11 +1138,21 @@ function createTodoItem(todo, index) {
 
   const textDisplay = document.createElement("div");
   textDisplay.classList.add("todoTextDisplay");
-  textDisplay.textContent = todo.text || " ";
   textDisplay.setAttribute(
     "aria-label",
     `TODO položka ${index + 1}`
   );
+
+  const textValue = document.createElement("span");
+  textValue.classList.add("todoTextValue");
+  textValue.textContent = todo.text || " ";
+
+  if (todo.highlightColor) {
+    textValue.style.backgroundColor =
+      todo.highlightColor;
+  }
+
+  textDisplay.append(textValue);
 
   const text = document.createElement("textarea");
   text.rows = 1;
@@ -955,11 +1165,18 @@ function createTodoItem(todo, index) {
     `Upravit TODO položku ${index + 1}`
   );
 
+  if (todo.highlightColor) {
+    text.style.backgroundColor =
+      todo.highlightColor;
+    text.style.borderRadius = "4px";
+  }
+
   textDisplay.addEventListener("click", () => {
     if (performance.now() < suppressTodoClickUntil) {
       return;
     }
 
+    selectedTodoId = todo.id;
     enterTodoEditMode(text, textDisplay);
   });
 
@@ -975,7 +1192,7 @@ function createTodoItem(todo, index) {
     }
 
     activeTodos[currentIndex].text = text.value;
-    textDisplay.textContent = text.value || " ";
+    textValue.textContent = text.value || " ";
 
     if (
       text.value === "" &&
@@ -1011,13 +1228,13 @@ function createTodoItem(todo, index) {
 
       activeTodos[currentIndex].text = textBefore;
       text.value = textBefore;
-      textDisplay.textContent = textBefore || " ";
+      textValue.textContent = textBefore || " ";
       autoResizeTodoText(text);
 
-      const newTodo = {
+      const newTodo = normalizeTodo({
         text: textAfter,
         completed: false
-      };
+      });
 
       activeTodos.splice(
         currentIndex + 1,
@@ -1155,3 +1372,35 @@ function renderTodos() {
   });
 }
 
+
+
+/* ========================================
+   VEŘEJNÉ API – BARVA A PLÁNOVÁNÍ TODO
+======================================== */
+
+window.LubaNoteTodos = {
+  jeTodoRezimAktivni: () =>
+    !todoList.hidden && activeTodos.length > 0,
+
+  ziskejVybraneTodo: () => {
+    const todo = getSelectedTodo();
+    return todo ? { ...todo } : null;
+  },
+
+  ziskejAktivniTodos: getActiveTodosSnapshot,
+
+  nastavBarvuVybranehoTodo: (color) =>
+    setSelectedTodoHighlight(color),
+
+  odstranBarvuVybranehoTodo: () =>
+    setSelectedTodoHighlight(""),
+
+  ukonciEditaciVybranehoTodo:
+    blurSelectedTodoEditor,
+
+  oznacTodoJakoHotove:
+    setTodoCompletedById,
+
+  zobrazTodoPodleId:
+    scrollTodoIntoView
+};

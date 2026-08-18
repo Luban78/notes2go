@@ -4899,3 +4899,13 @@ body.secretModeActive .app {
 .reminderQuickPreview[hidden] {
   display: none !important;
 }
+
+/* ========================================
+   TODO – zvýraznění celé jedné položky
+======================================== */
+.todoTextValue,
+.todoDragGhostText {
+  border-radius: 4px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}

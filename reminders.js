@@ -493,10 +493,13 @@ function getReminderEntries() {
       id: item.id,
       sourceNoteId: item.sourceNoteId || null,
       sourceType: item.sourceType || "note",
+      sourceTodoId: item.sourceTodoId || null,
       date: item.plannedAt,
       title: item.text || "Naplánovaný úkol",
       preview:
-        sourceNote?.note || "",
+        item.sourceType === "todo"
+          ? (sourceNote?.title || "")
+          : (sourceNote?.note || ""),
       area: sourceNote?.area || "private",
       notificationId: item.notificationId || null
     });
@@ -1544,6 +1547,29 @@ async function completeSelectedPlannedReminder() {
       }
     }
 
+    if (
+      item.sourceType === "todo" &&
+      item.sourceTodoId
+    ) {
+      sourceNote.todos = Array.isArray(sourceNote.todos)
+        ? sourceNote.todos.map(
+            (todo) =>
+              todo?.id === item.sourceTodoId
+                ? {
+                    ...todo,
+                    completed: true
+                  }
+                : todo
+          )
+        : [];
+
+      window.LubaNoteTodos
+        ?.oznacTodoJakoHotove?.(
+          item.sourceTodoId,
+          true
+        );
+    }
+
     sourceNote.plannedItems = Array.isArray(sourceNote.plannedItems)
       ? sourceNote.plannedItems.map(
           (candidate) =>
@@ -1721,7 +1747,10 @@ async function deleteSelectedReminder() {
 
   if (
     entry.kind === "planned" &&
-    entry.sourceType === "selection"
+    (
+      entry.sourceType === "selection" ||
+      entry.sourceType === "todo"
+    )
   ) {
     zapocitejPouzitiTlacitkaPripominky(
       "delete",
@@ -1770,6 +1799,17 @@ function openPlannedSourceInEditor(itemId) {
   }
 
   openTaskEditorById(item.sourceNoteId);
+
+  if (item.sourceType === "todo") {
+    setTimeout(() => {
+      window.LubaNoteTodos
+        ?.zobrazTodoPodleId?.(
+          item.sourceTodoId
+        );
+    }, 150);
+
+    return;
+  }
 
   if (item.sourceType !== "selection") {
     return;
