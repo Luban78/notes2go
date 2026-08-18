@@ -341,6 +341,11 @@
         <div>
           <div id="reminderQuickLabel" class="reminderQuickLabel">Připomínka</div>
           <h3 id="reminderQuickTitle">Bez názvu</h3>
+          <p
+  id="reminderQuickPreview"
+  class="reminderQuickPreview"
+  hidden
+></p>
         </div>
 
         <button id="closeReminderQuickMenu" type="button" class="reminderQuickClose" aria-label="Zavřít">
@@ -393,13 +398,37 @@
         Uložit datum a čas
       </button>
 
-      <button id="completeReminderButton" type="button" class="reminderQuickDone" hidden>
-        ✅ Hotovo
-      </button>
-
       <div class="reminderQuickFooter">
-        <button id="openReminderNoteButton" type="button">📝 Otevřít poznámku</button>
-        <button id="disableReminderButton" type="button" class="danger">🔕 Vypnout připomínku</button>
+        <button
+          id="completeReminderButton"
+          type="button"
+          class="reminderQuickDone"
+        >
+          ✅ Hotovo
+        </button>
+
+        <button
+          id="deleteReminderButton"
+          type="button"
+          class="danger"
+        >
+          🗑️ Smazat
+        </button>
+
+        <button
+          id="openReminderNoteButton"
+          type="button"
+        >
+          📝 Otevřít poznámku
+        </button>
+
+        <button
+          id="disableReminderButton"
+          type="button"
+          class="danger"
+        >
+          🔕 Vypnout připomínku
+        </button>
       </div>
     </div>
   </div>
@@ -557,7 +586,7 @@
       <div class="editorBottomBar">
 
         <button id="editorBackButton" type="button" aria-label="Uložit a zavřít">
-          ✔️
+          ✅
         </button>
 
         <button id="categoryTaskButton" type="button" aria-label="Oblast poznámky">

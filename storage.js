@@ -304,8 +304,43 @@ async function nactiTajnePoznamkyZLocalStorage() {
   return tajnePoznamky;
 }
 
+function odstranDuplicitniPoznamkySeStejnymId(tasks) {
+  const vysledek = [];
+  const indexPodleId = new Map();
+
+  (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+    if (!task?.id) {
+      vysledek.push(task);
+      return;
+    }
+
+    if (!indexPodleId.has(task.id)) {
+      indexPodleId.set(task.id, vysledek.length);
+      vysledek.push(task);
+      return;
+    }
+
+    const index = indexPodleId.get(task.id);
+    const puvodni = vysledek[index];
+
+    const puvodniCas =
+      new Date(puvodni?.updatedAt || 0).getTime();
+
+    const novyCas =
+      new Date(task?.updatedAt || 0).getTime();
+
+    if (novyCas >= puvodniCas) {
+      vysledek[index] = task;
+    }
+  });
+
+  return vysledek;
+}
+
+
 function saveAllTasks(tasks) {
-  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const safeTasks =
+    odstranDuplicitniPoznamkySeStejnymId(tasks);
   const beznePoznamky = safeTasks.filter(
     (task) => task && task.isSecret !== true
   );

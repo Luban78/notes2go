@@ -63,7 +63,10 @@ confirmDeleteButton.addEventListener("click", () => {
   selectedCardIndex = null;
 
   taskModal.hidden = true;
+  taskModal.removeAttribute("data-task-id");
   activeTaskIndex = null;
+  activeTaskId = null;
+  editorSessionId += 1;
 
   renderTasks();
 });
@@ -99,9 +102,64 @@ mainMenuButton.addEventListener("click", () => {
 });
 
 let activeTaskIndex = null;
+let activeTaskId = null;
+let editorSessionId = 0;
+
 let reminderEnabled = false;
 let favoriteEnabled = false;
 let secretTaskEnabled = false;
+
+
+/* ==========================================
+   STABILNÍ IDENTITA OTEVŘENÉ POZNÁMKY
+   ========================================== */
+
+function zahajEditorSession(taskId = null) {
+  editorSessionId += 1;
+  activeTaskId = taskId || null;
+}
+
+
+function najdiAktivniPoznamku(tasks) {
+  if (!Array.isArray(tasks)) {
+    return null;
+  }
+
+  if (activeTaskId) {
+    const index = tasks.findIndex(
+      (task) => task?.id === activeTaskId
+    );
+
+    if (index === -1) {
+      return null;
+    }
+
+    activeTaskIndex = index;
+
+    return {
+      index,
+      task: tasks[index]
+    };
+  }
+
+  if (
+    activeTaskIndex !== null &&
+    tasks[activeTaskIndex]
+  ) {
+    const task = tasks[activeTaskIndex];
+
+    if (task?.id) {
+      activeTaskId = task.id;
+    }
+
+    return {
+      index: activeTaskIndex,
+      task
+    };
+  }
+
+  return null;
+}
 
 const secretTaskButton =
   document.getElementById("secretTaskButton");
@@ -111,11 +169,14 @@ const editorBackButton = document.getElementById("editorBackButton");
 const deleteTaskButton =
   document.getElementById("deleteTaskButton");
 deleteTaskButton?.addEventListener("click", () => {
-  if (activeTaskIndex === null) {
+  const tasks = loadTask();
+  const aktivni = najdiAktivniPoznamku(tasks);
+
+  if (!aktivni) {
     return;
   }
 
-  selectedCardIndex = activeTaskIndex;
+  selectedCardIndex = aktivni.index;
 
   deleteConfirmModal.hidden = false;
 });
@@ -206,9 +267,13 @@ secretTaskButton?.addEventListener(
         updateReminderButton(false);
       }
 
-      if (activeTaskIndex !== null) {
+      {
         const currentTasks = loadTask();
-        const currentTask = currentTasks[activeTaskIndex];
+        const aktivni =
+          najdiAktivniPoznamku(currentTasks);
+
+        const currentTask =
+          aktivni?.task || null;
 
         if (
           currentTask?.notificationId &&
@@ -256,32 +321,43 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
 
   let savedNote = null;
 
-  if (activeTaskIndex !== null) {
-    const tasks = loadTask();
-    const currentTask = tasks[activeTaskIndex];
+  const tasks = loadTask();
+  const aktivni = najdiAktivniPoznamku(tasks);
 
-    if (currentTask) {
-      savedNote = {
-        ...currentTask,
-        updatedAt: new Date().toISOString(),
-        title,
-        note,
-        richContent,
-        date,
-        reminder: reminderEnabled,
-        favorite: favoriteEnabled,
-        notificationId:
-          currentTask.notificationId ||
-          Date.now() % 2147483647,
-        area: activeArea,
-        pinned: currentTask.pinned === true,
-        isSecret: true,
-        tags: [...activeTags],
-        todos: [...activeTodos]
-      };
+  /*
+   * Pokud editor patří existující poznámce, ale její ID už v datech
+   * nenajdeme, NESMÍME z obsahu vytvořit novou kartu s novým UUID.
+   */
+  if (activeTaskId && !aktivni) {
+    console.error(
+      "Uložení tajné poznámky bylo zastaveno: původní poznámka nebyla nalezena."
+    );
+    return null;
+  }
 
-      await updateTask(activeTaskIndex, savedNote);
-    }
+  if (aktivni) {
+    const currentTask = aktivni.task;
+
+    savedNote = {
+      ...currentTask,
+      updatedAt: new Date().toISOString(),
+      title,
+      note,
+      richContent,
+      date,
+      reminder: reminderEnabled,
+      favorite: favoriteEnabled,
+      notificationId:
+        currentTask.notificationId ||
+        Date.now() % 2147483647,
+      area: activeArea,
+      pinned: currentTask.pinned === true,
+      isSecret: true,
+      tags: [...activeTags],
+      todos: [...activeTodos]
+    };
+
+    await updateTask(aktivni.index, savedNote);
   } else {
     const isEmpty =
       title === "" &&
@@ -298,6 +374,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
         date,
         completed: false,
         reminder: reminderEnabled,
+        favorite: favoriteEnabled,
         notificationId: Date.now() % 2147483647,
         area: activeArea,
         pinned: false,
@@ -363,6 +440,8 @@ function zavriTajnyEditorPriZamknuti() {
   document.body.classList.remove("noScroll");
 
   activeTaskIndex = null;
+  activeTaskId = null;
+  editorSessionId += 1;
   secretTaskEnabled = false;
 
   secretTaskButton.textContent = "🔓";
@@ -1333,8 +1412,12 @@ const addTaskButton = document.getElementById("addTaskButton");
 
 
 addTaskButton.addEventListener("click", () => {
+  zahajEditorSession(null);
+  taskModal.removeAttribute("data-task-id");
   activeTaskIndex = null;
   secretTaskEnabled = false;
+  favoriteEnabled = false;
+  priorityTaskButton?.classList.remove("active");
   secretTaskButton.textContent = "🔓";
   secretTaskButton.classList.remove("active");
   resetTodos();
@@ -1382,68 +1465,99 @@ addTaskButton.addEventListener("click", () => {
 
 
 editorBackButton.addEventListener("click", async () => {
+  const closingSessionId = editorSessionId;
+  const closingTaskId = activeTaskId;
+
   const title = modalTitle.value.trim();
   const note = modalRichText.innerText;
   const richContent = modalRichText.innerHTML;
   const date =
-    modalDate.value && modalTime.value ?
-      `${modalDate.value}T${modalTime.value}` :
-      "";
+    modalDate.value && modalTime.value
+      ? `${modalDate.value}T${modalTime.value}`
+      : "";
 
-  if (activeTaskIndex !== null) {
-    const tasks = loadTask();
+  const tasks = loadTask();
+
+  let aktivni = null;
+
+  if (closingTaskId) {
+    const index = tasks.findIndex(
+      (task) => task?.id === closingTaskId
+    );
+
+    if (index === -1) {
+      console.error(
+        "Uložení editoru bylo zastaveno: původní poznámka nebyla nalezena.",
+        closingTaskId
+      );
+      return;
+    }
+
+    aktivni = {
+      index,
+      task: tasks[index]
+    };
+  } else if (activeTaskIndex !== null) {
     const currentTask = tasks[activeTaskIndex];
 
     if (currentTask) {
-      const updatedTask = {
-        ...currentTask,
-        updatedAt: new Date().toISOString(),
-        title,
-        note,
-        richContent,
-        date,
-        reminder: reminderEnabled,
-        favorite: favoriteEnabled,
-        notificationId: currentTask.notificationId ||
-          Date.now() % 2147483647,
-        area: activeArea,
-        pinned: currentTask.pinned === true,
-        isSecret: secretTaskEnabled,
-        tags: [...activeTags],
-        todos: [...activeTodos]
+      aktivni = {
+        index: activeTaskIndex,
+        task: currentTask
       };
+    }
+  }
 
-      await updateTask(activeTaskIndex, updatedTask);
-      await uploadLocalNoteToSupabase(updatedTask);
+  if (aktivni) {
+    const currentTask = aktivni.task;
 
-      if (
-        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
-      ) {
-        await obnovNotifikacePoznamkyPodleSoukromi(updatedTask);
-      } else if (
-        updatedTask.isSecret !== true &&
-        updatedTask.reminder &&
-        updatedTask.date
-      ) {
-        await scheduleNotification(
-          updatedTask.notificationId,
-          updatedTask.title,
-          updatedTask.date,
-          updatedTask.note,
-          {
-            lubanoteType: "note",
-            taskId: updatedTask.id
-          }
-        );
-      } else {
-        await cancelNotification(updatedTask.notificationId);
-      }
+    const updatedTask = {
+      ...currentTask,
+      updatedAt: new Date().toISOString(),
+      title,
+      note,
+      richContent,
+      date,
+      reminder: reminderEnabled,
+      favorite: favoriteEnabled,
+      notificationId: currentTask.notificationId ||
+        Date.now() % 2147483647,
+      area: activeArea,
+      pinned: currentTask.pinned === true,
+      isSecret: secretTaskEnabled,
+      tags: [...activeTags],
+      todos: [...activeTodos]
+    };
+
+    await updateTask(aktivni.index, updatedTask);
+    await uploadLocalNoteToSupabase(updatedTask);
+
+    if (
+      typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+    ) {
+      await obnovNotifikacePoznamkyPodleSoukromi(updatedTask);
+    } else if (
+      updatedTask.isSecret !== true &&
+      updatedTask.reminder &&
+      updatedTask.date
+    ) {
+      await scheduleNotification(
+        updatedTask.notificationId,
+        updatedTask.title,
+        updatedTask.date,
+        updatedTask.note,
+        {
+          lubanoteType: "note",
+          taskId: updatedTask.id
+        }
+      );
+    } else {
+      await cancelNotification(updatedTask.notificationId);
     }
   } else {
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      //date === "" &&
       activeTodos.length === 0;
 
     if (!isEmpty) {
@@ -1456,6 +1570,7 @@ editorBackButton.addEventListener("click", async () => {
         date,
         completed: false,
         reminder: reminderEnabled,
+        favorite: favoriteEnabled,
         notificationId: Date.now() % 2147483647,
         area: activeArea,
         pinned: false,
@@ -1491,17 +1606,33 @@ editorBackButton.addEventListener("click", async () => {
   }
 
   renderTasks();
+
   if (typeof renderRemindersScreen === "function") {
     renderRemindersScreen();
   }
+
+  /*
+   * Důležité: během await mohl uživatel znovu otevřít editor.
+   * Starý asynchronní save pak NESMÍ vynulovat stav nové relace.
+   */
+  if (closingSessionId !== editorSessionId) {
+    return;
+  }
+
   taskModal.classList.remove("show");
+  document.body.classList.remove("noScroll");
+
+  activeTaskIndex = null;
+  activeTaskId = null;
+  taskModal.removeAttribute("data-task-id");
+  editorSessionId += 1;
 
   setTimeout(() => {
-    taskModal.hidden = true;
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
   }, 250);
 
-  document.body.classList.remove("noScroll");
-  activeTaskIndex = null;
   RichTextColors.reset();
 });
 
@@ -1581,6 +1712,8 @@ secretTaskButton.classList.toggle(
   updateTagMenuUI();
   closeTagMenu();
 
+  zahajEditorSession(currentTask.id);
+  taskModal.dataset.taskId = currentTask.id;
   activeTaskIndex = index;
 
   modalTitle.value = currentTask.title || "";

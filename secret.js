@@ -136,6 +136,24 @@ async function zamkniTajnyRezim(automaticky = false) {
     zavriTajnyEditorPriZamknuti();
   }
 
+  /*
+   * Při zamknutí odstraníme i pomocná UI, která mohla zobrazovat
+   * plaintext tajné poznámky mimo hlavní editor.
+   */
+  if (typeof closeReminderQuickMenu === "function") {
+    closeReminderQuickMenu();
+  }
+
+  if (typeof closePlanner === "function") {
+    closePlanner();
+  }
+
+  if (
+    typeof vycistiVyhledavaniPoZamknutiTajnehoRezimu === "function"
+  ) {
+    vycistiVyhledavaniPoZamknutiTajnehoRezimu();
+  }
+
   tajnySifrovaciKlic = null;
   tajnyRezimOdemceny = false;
   filtrTajnychPoznamekAktivni = false;

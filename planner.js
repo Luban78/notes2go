@@ -296,6 +296,10 @@ function closePlanner() {
   plannerSelectionEnd = null;
   selectedPlannerText = "";
 
+  if (plannerTaskTitle) {
+    plannerTaskTitle.textContent = "";
+  }
+
   /* Starý výběr už nesmí ovlivnit další akci. */
   RichTextColors.clearSelection();
 }
@@ -315,13 +319,34 @@ async function saveCurrentPlannedItem() {
 
   const tasks = loadTask();
 
-  const sourceNote = tasks.find(
+  let sourceNote = tasks.find(
     task => task.id === plannerSourceNoteId
   );
 
   if (!sourceNote) {
+    const editorTaskId =
+      document.getElementById("taskModal")?.dataset.taskId || null;
+
+    if (editorTaskId) {
+      sourceNote = tasks.find(
+        task => task?.id === editorTaskId
+      );
+
+      if (sourceNote) {
+        plannerSourceNoteId = sourceNote.id;
+      }
+    }
+  }
+
+  if (!sourceNote) {
     console.error(
-      "Zdrojová poznámka nebyla nalezena."
+      "Zdrojová poznámka nebyla nalezena.",
+      {
+        plannerSourceNoteId,
+        editorTaskId:
+          document.getElementById("taskModal")?.dataset.taskId || null,
+        taskCount: tasks.length
+      }
     );
     return;
   }
@@ -355,9 +380,17 @@ async function saveCurrentPlannedItem() {
   plannedItem.id;
   
   if (plannerSourceType === "selection") {
-    wrapCurrentSelectionAsPlannedLink(
-      plannedItem.id
-    );
+    const backlinkVytvoren =
+      wrapCurrentSelectionAsPlannedLink(
+        plannedItem.id
+      );
+
+    if (!backlinkVytvoren) {
+      console.error(
+        "Plánování bylo zastaveno: nepodařilo se vytvořit backlink v poznámce."
+      );
+      return;
+    }
   }
 
   const plannedItems = loadPlannedItems();
@@ -381,7 +414,7 @@ async function saveCurrentPlannedItem() {
 
   sourceNote.updatedAt = new Date().toISOString();
 
-  saveAllTasks(tasks);
+  await saveAllTasks(tasks);
 
   if (typeof uploadLocalNoteToSupabase === "function") {
     await uploadLocalNoteToSupabase(sourceNote);
@@ -482,13 +515,79 @@ planSelectionButton.addEventListener(
     }
 
     const tasks = loadTask();
-    const sourceNote = tasks[activeTaskIndex];
+
+    /*
+     * Aktivní poznámku hledáme primárně podle stabilního ID.
+     * Pokud ale ID po předchozí asynchronní akci už nesedí,
+     * bezpečně použijeme aktuální index otevřeného editoru.
+     * Tím plánování nespadne jen kvůli zastaralému activeTaskId.
+     */
+    let sourceNote = null;
+
+    /*
+     * Nejspolehlivější identita otevřené poznámky je uložená
+     * přímo na editoru. Díky tomu plánování přežije i situaci,
+     * kdy jiný asynchronní kód mezitím změní activeTaskId/index.
+     */
+    const editorTaskId =
+      document.getElementById("taskModal")?.dataset.taskId || null;
+
+    const kandidatiId = [
+      editorTaskId,
+      (typeof activeTaskId !== "undefined" ? activeTaskId : null)
+    ].filter(Boolean);
+
+    for (const taskId of kandidatiId) {
+      sourceNote = tasks.find(
+        (task) => task?.id === taskId
+      );
+
+      if (sourceNote) {
+        break;
+      }
+    }
+
+    if (
+      !sourceNote &&
+      typeof activeTaskIndex !== "undefined" &&
+      Number.isInteger(activeTaskIndex) &&
+      activeTaskIndex >= 0
+    ) {
+      sourceNote = tasks[activeTaskIndex] || null;
+    }
 
     if (!sourceNote) {
       console.error(
-        "Zdrojová poznámka nebyla nalezena."
+        "Zdrojová poznámka nebyla nalezena.",
+        {
+          editorTaskId,
+          activeTaskId:
+            typeof activeTaskId !== "undefined" ? activeTaskId : null,
+          activeTaskIndex:
+            typeof activeTaskIndex !== "undefined" ? activeTaskIndex : null,
+          taskCount: tasks.length
+        }
       );
       return;
+    }
+
+    /* Srovnáme všechny identity editoru s právě nalezenou poznámkou. */
+    if (sourceNote.id) {
+      const taskModal = document.getElementById("taskModal");
+
+      if (taskModal) {
+        taskModal.dataset.taskId = sourceNote.id;
+      }
+
+      if (typeof activeTaskId !== "undefined") {
+        activeTaskId = sourceNote.id;
+      }
+
+      if (typeof activeTaskIndex !== "undefined") {
+        activeTaskIndex = tasks.findIndex(
+          (task) => task?.id === sourceNote.id
+        );
+      }
     }
 
     /* Starším poznámkám doplníme ID. */

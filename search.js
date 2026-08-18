@@ -156,3 +156,22 @@ document.addEventListener("visibilitychange", () => {
     prekresliVysledkyVyhledavani();
   }
 });
+
+
+/* ==========================================
+   SECRET – VYČIŠTĚNÍ HLEDÁNÍ PŘI ZAMKNUTÍ
+   ========================================== */
+
+function vycistiVyhledavaniPoZamknutiTajnehoRezimu() {
+  if (!searchNotes) {
+    return;
+  }
+
+  searchNotes.value = "";
+  searchNotes.readOnly = true;
+  vyhledavaniAktivovaneUzivatelem = false;
+
+  if (noSearchResults) {
+    noSearchResults.hidden = true;
+  }
+}
