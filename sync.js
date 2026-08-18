@@ -55,6 +55,112 @@ async function registerCurrentDevice() {
   return true;
 }
 
+async function haveAllDevicesSyncedAfter(
+  timestamp,
+  deletingDeviceId
+) {
+  const user = await getCurrentUser();
+
+  if (!user || !timestamp) {
+    return false;
+  }
+
+  const targetTime = new Date(timestamp).getTime();
+
+  if (Number.isNaN(targetTime)) {
+    return false;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("devices")
+    .select("device_id,last_sync_at")
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error(
+      "Device sync check error:",
+      error.message
+    );
+    return false;
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return false;
+  }
+
+  return data.every((device) => {
+    // Zařízení, které smazání vytvořilo,
+    // už o smazání samozřejmě ví.
+    if (device.device_id === deletingDeviceId) {
+      return true;
+    }
+
+    const syncTime = new Date(device.last_sync_at).getTime();
+
+    return (
+      !Number.isNaN(syncTime) &&
+      syncTime > targetTime
+    );
+  });
+}
+
+async function cleanupSafeDeletedNotes() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const { data: deletedRows, error } =
+    await supabaseClient
+      .from("notes")
+      .select(
+        "id,deleted_at,deleted_by_device_id"
+      )
+      .eq("user_id", user.id)
+      .not("deleted_at", "is", null);
+
+  if (error) {
+    console.error(
+      "Deleted notes cleanup load error:",
+      error.message
+    );
+
+    return false;
+  }
+
+  for (const row of deletedRows || []) {
+    const safeToDelete =
+      await haveAllDevicesSyncedAfter(
+        row.deleted_at,
+        row.deleted_by_device_id
+      );
+
+    if (!safeToDelete) {
+      continue;
+    }
+
+    const { error: deleteError } =
+      await supabaseClient
+        .from("notes")
+        .delete()
+        .eq("id", row.id)
+        .eq("user_id", user.id);
+
+    if (deleteError) {
+      console.error(
+        "Hard delete error:",
+        row.id,
+        deleteError.message
+      );
+    }
+  }
+
+  return true;
+}
+
+
+
 
 
 
@@ -172,12 +278,13 @@ async function markNoteDeletedInSupabase(note) {
   const { error } = await supabaseClient
     .from("notes")
     .update({
-  deleted_at: deletedAt,
-  updated_at: deletedAt,
-  data: {
-    deleted: true
-  }
-})
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+      deleted_by_device_id: getDeviceId(),
+      data: {
+        deleted: true
+      }
+    })
     .eq("id", note.id)
     .eq("user_id", user.id);
 
@@ -715,6 +822,7 @@ async function startSync() {
   await syncNotes();
   await loadTagsFromSupabase();
   await registerCurrentDevice();
+  await cleanupSafeDeletedNotes();
 }
 
 startSync();
