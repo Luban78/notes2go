@@ -369,10 +369,15 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
 
     await updateTask(aktivni.index, savedNote);
   } else {
+    const maVlozenyMediaObsah =
+      window.LubaNoteEditorMedia
+        ?.maVlozenyObsah?.() === true;
+
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      activeTodos.length === 0;
+      activeTodos.length === 0 &&
+      !maVlozenyMediaObsah;
 
     if (!isEmpty) {
       savedNote = {
@@ -1575,10 +1580,15 @@ editorBackButton.addEventListener("click", async () => {
       await cancelNotification(updatedTask.notificationId);
     }
   } else {
+    const maVlozenyMediaObsah =
+      window.LubaNoteEditorMedia
+        ?.maVlozenyObsah?.() === true;
+
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      activeTodos.length === 0;
+      activeTodos.length === 0 &&
+      !maVlozenyMediaObsah;
 
     if (!isEmpty) {
       const newTask = {
@@ -1769,6 +1779,20 @@ secretTaskButton.classList.toggle(
   document.body.classList.add("noScroll");
 
   loadTodos(currentTask.todos);
+
+  /*
+   * Pokud byla karta otevřena z aktivního vyhledávání,
+   * po vykreslení editoru dočasně zvýrazníme všechny shody.
+   * Zvýraznění nemění uložený HTML obsah poznámky ani TODO data.
+   */
+  requestAnimationFrame(() => {
+    if (
+      typeof window.zvyrazniAktualniVyhledavaniVEditoru ===
+      "function"
+    ) {
+      window.zvyrazniAktualniVyhledavaniVEditoru();
+    }
+  });
 
   //renderPlannedTextLinks(currentTask.id);
 }

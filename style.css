@@ -4909,3 +4909,179 @@ body.secretModeActive .app {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+
+
+/* ========================================
+   VYHLEDÁVÁNÍ – DOČASNÁ SHODA V EDITORU
+   ======================================== */
+
+::highlight(lubanote-search-hit) {
+  background-color: #ffeb3b;
+  color: #111111;
+}
+
+#modalTitle.searchTitleMatch {
+  background-color: #ffeb3b;
+  color: #111111;
+  border-radius: 8px;
+}
+
+/* ==================================================
+   EDITOR – OBRÁZKY A INTERNETOVÉ ODKAZY
+================================================== */
+
+#modalRichText .lubaNoteInternetLink {
+  color: var(--color-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+#modalRichText .lubaNoteImage {
+  position: relative;
+  width: min(100%, 720px);
+  margin: 14px auto;
+  padding: 0;
+  overflow: hidden;
+
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+#modalRichText .lubaNoteImage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#modalRichText .lubaNoteImageRemove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+  padding: 0;
+
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.72);
+  color: white;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Křížek je jen CSS obsah – nepropíše se do plain-text poznámky. */
+#modalRichText .lubaNoteImageRemove::before {
+  content: "✕";
+  font-size: 18px;
+  line-height: 1;
+}
+
+.editorLinkModal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+  box-sizing: border-box;
+
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.editorLinkModal[hidden] {
+  display: none !important;
+}
+
+.editorLinkDialog {
+  width: min(420px, 100%);
+  box-sizing: border-box;
+  padding: 20px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.editorLinkDialog h3 {
+  margin: 0 0 16px;
+  font-size: calc(var(--font-size) + 2px);
+}
+
+.editorLinkDialog label {
+  display: block;
+  margin-top: 12px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.editorLinkDialog input {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 0 12px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  outline: none;
+
+  background: var(--color-editor-background);
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: var(--font-size);
+}
+
+.editorLinkDialog input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(
+    in srgb,
+    var(--color-accent) 16%,
+    transparent
+  );
+}
+
+.editorLinkActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.editorLinkActions button {
+  min-height: 44px;
+  padding: 8px 12px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-editor-background);
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: var(--font-size);
+}
+
+.editorLinkActions button.primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: white;
+}
