@@ -62,7 +62,34 @@ body.theme-dark #modalTime::-webkit-calendar-picker-indicator {
   filter: brightness(1.7);
 }
 
+/* THEME: ocean | Ocean | selectable */
 
+body.theme-ocean {
+  --color-background: #071a26;
+  --color-surface: #0d2a3a;
+
+  --color-text: #e8f8ff;
+  --color-text-secondary: #9bc4d4;
+
+  --color-accent: #19b7c9;
+  --color-accent-text: #63e6f2;
+
+  --color-border: rgba(125, 225, 240, 0.16);
+
+  --color-editor-background: #0a2230;
+  --color-editor-text: #e8f8ff;
+}
+
+/* Nativní datum a čas pro tmavý Ocean */
+body.theme-ocean #modalDate,
+body.theme-ocean #modalTime {
+  color-scheme: dark;
+}
+
+body.theme-ocean #modalDate::-webkit-calendar-picker-indicator,
+body.theme-ocean #modalTime::-webkit-calendar-picker-indicator {
+  filter: brightness(1.7);
+}
 
 
 
