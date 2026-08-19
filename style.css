@@ -2316,6 +2316,11 @@ body.authPending .addTaskButton {
 
 #modalRichText .richTextHighlight {
   color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
 }
 
 #modalRichText:focus {
@@ -3076,19 +3081,22 @@ body.authPending .addTaskButton {
 }
 
 .remindersStatusTab {
-  border: 1px solid #d8d2e3;
-  background: #f6f3fa;
-  color: #62576f;
-  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+
+  border-radius: 10px;
+
   padding: 7px 14px;
+
   font-size: 14px;
   font-weight: 600;
 }
 
 .remindersStatusTab.active {
-  background: #7c3aed;
+  background: var(--color-accent);
   color: white;
-  border-color: #7c3aed;
+  border-color: var(--color-accent);
 }
 
 #overdueReminderCount:not(:empty) {
@@ -4957,6 +4965,22 @@ body.authPending .addTaskButton {
   border-radius: 16px;
   background: var(--color-surface);
 }
+#modalRichText .lubaNoteImage[data-zarovnani="vlevo"] {
+  float: left;
+  margin: 14px 16px 12px 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 #modalRichText .lubaNoteImage img {
   display: block;
