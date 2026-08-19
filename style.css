@@ -121,13 +121,13 @@ body {
 .addTaskButton {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: 100px;
 
-  width: 60px;
-  height: 60px;
+  width: 70px;
+  height: 70px;
 
   border-radius: 50%;
-  font-size: 2rem;
+  font-size: 1.9rem;
   background: var(--color-accent);
   color: #ffffff;
   border-color: var(--color-accent);
@@ -3478,6 +3478,104 @@ body.authPending .addTaskButton {
     background 120ms ease;
 }
 
+.choiceDialogSettingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.choiceDialogSettingLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.choiceDialogSettingValue {
+  flex: 0 1 55%;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.choiceDialogField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+
+.choiceDialogFieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size);
+  font-weight: 600;
+}
+
+.choiceDialogInput {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  outline: none;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: calc(var(--font-size) + 2px);
+}
+
+.choiceDialogInput:focus {
+  border-color: var(--color-accent);
+}
+
+.choiceDialogError {
+  color: #ff8181;
+  font-size: calc(var(--font-size) - 1px);
+  font-weight: 600;
+}
+
+.choiceDialogError[hidden] {
+  display: none !important;
+}
+
+.choiceDialogActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.choiceDialogSecondary,
+.choiceDialogActions .choiceDialogSave {
+  flex: 1 1 0;
+  width: auto;
+  min-height: 48px;
+  margin-top: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.choiceDialogSecondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.choiceDialogSecondary:active,
+.choiceDialogActions .choiceDialogSave:active {
+  transform: scale(0.98);
+}
+
 .choiceDialogSave {
   width: 100%;
   min-height: 48px;
@@ -4849,6 +4947,7 @@ body.authPending .addTaskButton {
 
 #modalRichText .lubaNoteImage {
   position: relative;
+  container-type: inline-size;
   width: min(100%, 720px);
   margin: 14px auto;
   padding: 0;
@@ -4872,17 +4971,25 @@ body.authPending .addTaskButton {
 
 #modalRichText .lubaNoteImageRemove {
   position: absolute;
+
+  /* Pevné hodnoty jsou fallback pro starší WebView. */
   top: 8px;
   right: 8px;
+  width: 34px;
+  height: 34px;
+
+  /* V podporovaných prohlížečích se křížek přizpůsobí
+     šířce konkrétního obrázkového bloku. */
+  top: clamp(4px, 2cqi, 8px);
+  right: clamp(4px, 2cqi, 8px);
+  width: clamp(22px, 12cqi, 34px);
+  height: clamp(22px, 12cqi, 34px);
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  width: 34px;
-  height: 34px;
   padding: 0;
-
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 50%;
   background: rgba(20, 20, 20, 0.72);
@@ -4896,6 +5003,7 @@ body.authPending .addTaskButton {
 #modalRichText .lubaNoteImageRemove::before {
   content: "✕";
   font-size: 18px;
+  font-size: clamp(12px, 6cqi, 18px);
   line-height: 1;
 }
 
