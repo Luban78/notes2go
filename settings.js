@@ -1,4 +1,4 @@
-(() => {
+(async () => {
   const decreaseFontButton =
     document.getElementById("decreaseFontButton");
 
@@ -40,7 +40,7 @@
   const importFile =
     document.getElementById("importFile");
 
-  const motivy = [
+/*  const motivy = [
     {
       hodnota: "light",
       popisek: "Světlý"
@@ -54,6 +54,17 @@
       popisek: "Cappuccino"
     }
   ];
+  */
+  const nactenaTemata = await nactiTemata();
+
+console.log(nactenaTemata);
+
+
+const motivy = nactenaTemata.map(tema => ({
+  hodnota: tema.id,
+  popisek: tema.nazev
+}));
+
 
   let currentFontSize = Number(
     localStorage.getItem("fontSize") || 16
@@ -79,15 +90,15 @@
   }
 
   function applyTheme(theme) {
-    document.body.classList.remove(
-      "theme-dark",
-      "theme-cappuccino"
-    );
+  const tridyTemat = [...document.body.classList]
+    .filter(trida => trida.startsWith("theme-"));
 
-    if (theme !== "light") {
-      document.body.classList.add(`theme-${theme}`);
-    }
+  document.body.classList.remove(...tridyTemat);
+
+  if (theme !== "light") {
+    document.body.classList.add(`theme-${theme}`);
   }
+}
 
 openReminderDelaySettingsButton?.addEventListener(
   "click",

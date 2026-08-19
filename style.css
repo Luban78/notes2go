@@ -1,23 +1,6 @@
 :root {
   --border-radius: 15px;
-  --editor-background: #f0eded;
-  --editor-text: #2e1515;
   --font-size: 16px;
-  /* ===== BARVY APLIKACE ===== */
-
-  --color-background: #f7f4f2;
-  --color-surface: #ffffff;
-
-  --color-text: #231b33;
-  --color-text-secondary: #6d6878;
-
-  --color-accent: #7444dc;
-  --color-accent-text: #5f32c9;
-
-  --color-border: rgba(35, 27, 51, 0.12);
-
-  --color-editor-background: #f0eded;
-  --color-editor-text: #2e1515;
 }
 
 /* ==================================================
@@ -861,15 +844,6 @@ body {
   opacity: 0.72;
 }
 
-body.theme-dark #modalDate,
-body.theme-dark #modalTime {
-  color-scheme: dark;
-}
-
-body.theme-dark #modalDate::-webkit-calendar-picker-indicator,
-body.theme-dark #modalTime::-webkit-calendar-picker-indicator {
-  filter: brightness(1.7);
-}
 
 #reminderButton.active {
   background: #7444dc;
@@ -1299,39 +1273,8 @@ html {
 }
 
 
-/* theme dark*/
 
-body.theme-dark {
-  --color-background: #100d18;
-  --color-surface: #241d30;
 
-  --color-text: #f4effa;
-  --color-text-secondary: #b8aec4;
-
-  --color-accent: #9b6cff;
-  --color-accent-text: #c5a9ff;
-
-  --color-border: rgba(255, 255, 255, 0.12);
-
-  --color-editor-background: #1d1725;
-  --color-editor-text: #f4effa;
-}
-
-body.theme-cappuccino {
-  --color-background: #efe6dc;
-  --color-surface: #f8f1ea;
-
-  --color-text: #3a2a22;
-  --color-text-secondary: #7b675c;
-
-  --color-accent: #b77a52;
-  --color-accent-text: #8b5838;
-
-  --color-border: rgba(58, 42, 34, 0.14);
-
-  --color-editor-background: #f2e9e1;
-  --color-editor-text: #3a2a22;
-}
 
 .todoList {
   display: flex;
@@ -4826,40 +4769,6 @@ body.authPending .addTaskButton {
 
 #secretTaskButton:active {
   transform: scale(0.96);
-}
-/* ========================================
-   TAJNÝ REŽIM – BAREVNÉ POZADÍ
-   Funguje ve světlém i tmavém motivu.
-   ======================================== */
-
-/* ========================================
-   SECRET REŽIM – VLASTNÍ PEVNÉ TÉMA
-   Vždy stejné bez ohledu na běžné téma.
-   Musí být až ZA ostatními tématy.
-   ======================================== */
-
-body.secretModeActive {
-  --color-background: #4a203d;
-  --color-surface: #281c30;
-
-  --color-text: #fff5fb;
-  --color-text-secondary: #d5bccd;
-
-  --color-accent: #871663;
-  --color-accent-text: #FF8181;
-
-  --color-border: rgba(255, 220, 242, 0.18);
-
-  --color-editor-background: #241725;
-  --color-editor-text: #fff5fb;
-
-  background: var(--color-background);
-}
-
-/* Celý vršek i oblast pod kartami */
-body.secretModeActive .homeHeader,
-body.secretModeActive .app {
-  background: var(--color-background);
 }
 
 /* ========================================
