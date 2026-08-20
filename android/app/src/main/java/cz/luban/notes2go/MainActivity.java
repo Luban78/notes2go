@@ -3,6 +3,7 @@ package cz.luban.notes2go;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.ActionMode;
 import android.view.View;
 
 import com.getcapacitor.BridgeActivity;
@@ -25,5 +26,22 @@ public class MainActivity extends BridgeActivity {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       getWindow().setNavigationBarContrastEnforced(false);
     }
+  }
+
+
+  @Override
+  public void onActionModeStarted(ActionMode mode) {
+    super.onActionModeStarted(mode);
+
+    if (mode == null) {
+      return;
+    }
+
+    /*
+     * Zachová označení textu a úchyty,
+     * ale odstraní systémovou nabídku Androidu:
+     * Vyjmout / Kopírovat / Vložit / Sdílet...
+     */
+    mode.getMenu().clear();
   }
 }
