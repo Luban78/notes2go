@@ -2,6 +2,7 @@
   "dependencies": {
     "@capacitor/android": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
+    "@capacitor/clipboard": "^6.0.3",
     "@capacitor/core": "^6.2.1",
     "@capacitor/local-notifications": "^6.1.3"
   }
