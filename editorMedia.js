@@ -15,13 +15,13 @@
 ================================================== */
 
 (() => {
-  const moreOptionsButton =
-    document.getElementById("moreOptionsButton");
-  
   const modalRichText =
     document.getElementById("modalRichText");
+
+  const rychlyToolbar =
+    document.getElementById("editorQuickToolbar");
   
-  if (!moreOptionsButton || !modalRichText) {
+  if (!modalRichText) {
     return;
   }
   
@@ -532,8 +532,8 @@
     );
   });
   
-  /* Pointerdown proběhne ještě před ztrátou výběru po klepnutí na ⋮. */
-  moreOptionsButton.addEventListener(
+  /* Pointerdown proběhne ještě před ztrátou výběru po klepnutí na toolbar. */
+  rychlyToolbar?.addEventListener(
     "pointerdown",
     ulozAktualniRozsahEditoru
   );
@@ -1051,60 +1051,33 @@
   
   
   /* ==========================================
-     MENU ⋮ V EDITORU
+     VKLÁDÁNÍ MÉDIÍ Z TOOLBARU
   ========================================== */
-  
-  moreOptionsButton.addEventListener(
-    "click",
-    () => {
-      if (jeTodoRezimAktivni()) {
-        zobrazMediaZpravu(
-          "Vkládání do textu poznámky",
-          "Obrázek nebo internetový odkaz vlož do běžného textu poznámky. TODO řádky zůstávají samostatné úkoly."
-        );
-        return;
-      }
-      
-      if (
-        typeof window.otevriVyberovyModal !==
-        "function"
-      ) {
-        return;
-      }
-      
-      window.otevriVyberovyModal({
-        nadpis: "Vložit do poznámky",
-        zavritPoVyberu: false,
-        moznosti: [
-        {
-          hodnota: "image",
-          popisek: "🖼️ Obrázek"
-        },
-        {
-          hodnota: "link",
-          popisek: "🔗 Internetový odkaz"
-        }],
-        poVyberu: (hodnota) => {
-          window.zavriVyberovyModal?.();
-          
-          if (hodnota === "image") {
-            setTimeout(() => {
-              imageInput.click();
-            }, 0);
-            return;
-          }
-          
-          if (hodnota === "link") {
-            setTimeout(() => {
-              otevriLinkModal();
-            }, 0);
-          }
-        }
-      });
+
+  window.vlozObrazekDoPoznamky = () => {
+    if (jeTodoRezimAktivni()) {
+      zobrazMediaZpravu(
+        "Vkládání do textu poznámky",
+        "Obrázek nebo internetový odkaz vlož do běžného textu poznámky. TODO řádky zůstávají samostatné úkoly."
+      );
+      return;
     }
-  );
-  
-  
+
+    imageInput.click();
+  };
+
+  window.vlozOdkazDoPoznamky = () => {
+    if (jeTodoRezimAktivni()) {
+      zobrazMediaZpravu(
+        "Vkládání do textu poznámky",
+        "Obrázek nebo internetový odkaz vlož do běžného textu poznámky. TODO řádky zůstávají samostatné úkoly."
+      );
+      return;
+    }
+
+    otevriLinkModal();
+  };
+
   /* ==========================================
      AKCE NAD ULOŽENÝM OBRÁZKEM / ODKAZEM
   ========================================== */

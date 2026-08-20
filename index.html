@@ -449,6 +449,25 @@
 
       <div class="editorTopBar">
 
+        <button
+          id="editorToolbarToggle"
+          class="editorToolbarToggle"
+          type="button"
+          aria-label="Otevřít editační nástroje"
+          aria-expanded="false"
+        >
+          ⌄
+        </button>
+
+        <div id="editorQuickToolbar" class="editorQuickToolbar" hidden>
+          <button id="tlacitkoZpet" type="button" class="editorQuickTool" aria-label="Zpět" title="Zpět">↶</button>
+          <button id="tlacitkoZnovu" type="button" class="editorQuickTool" aria-label="Znovu" title="Znovu">↷</button>
+          <button type="button" class="editorQuickTool" aria-label="Formát textu">Aa</button>
+          <button id="tlacitkoVlozitObrazek" type="button" class="editorQuickTool" aria-label="Vložit obrázek">🖼️</button>
+          <button id="tlacitkoVlozitOdkaz" type="button" class="editorQuickTool" aria-label="Vložit odkaz">🔗</button>
+        </div>
+
+
         <!-- Datum + čas -->
         <div class="dateTimeInputs">
 
@@ -480,10 +499,6 @@
 
           <button id="reminderButton" type="button" aria-label="Připomínka">
             &#128276;
-          </button>
-
-          <button id="moreOptionsButton" type="button" aria-label="Další možnosti">
-            &#8942;
           </button>
 
         </div>
@@ -1267,6 +1282,7 @@
   <script src="settings.js"></script>
 
   <script src="todos.js"></script>
+  <script src="editorToolbar.js"></script>
 
 
   <script src="script.js"></script>
