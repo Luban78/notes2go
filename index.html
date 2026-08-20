@@ -456,87 +456,127 @@
           type="button"
           aria-label="Otevřít editační nástroje"
           aria-expanded="false"
+          aria-pressed="false"
         >
-          ⌄
+          Aa
         </button>
 
-        <div id="editorQuickToolbar" class="editorQuickToolbar" hidden>
+        <div
+          id="editorQuickToolbar"
+          class="editorQuickToolbar"
+          role="toolbar"
+          aria-label="Formátování poznámky"
+          hidden
+        >
+          <button id="tlacitkoZpet" type="button" class="editorQuickTool editorQuickToolIcon"
+            aria-label="Zpět" title="Zpět">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 7 5 11l4 4"></path>
+              <path d="M5 11h8a6 6 0 0 1 6 6"></path>
+            </svg>
+          </button>
 
-  <div id="editorToolbarPrvniUroven" class="editorToolbarUroven">
-    <button id="tlacitkoZpet" type="button" class="editorQuickTool"
-      aria-label="Zpět" title="Zpět">↶</button>
+          <button id="tlacitkoZnovu" type="button" class="editorQuickTool editorQuickToolIcon"
+            aria-label="Znovu" title="Znovu">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 7 4 4-4 4"></path>
+              <path d="M19 11h-8a6 6 0 0 0-6 6"></path>
+            </svg>
+          </button>
 
-    <button id="tlacitkoZnovu" type="button" class="editorQuickTool"
-      aria-label="Znovu" title="Znovu">↷</button>
+          <span class="editorToolbarDivider" aria-hidden="true"></span>
 
-    <button id="tlacitkoTucne" type="button" class="editorQuickTool"
-      aria-label="Tučné písmo"><b>B</b></button>
+          <button id="tlacitkoTucne" type="button" class="editorQuickTool editorQuickToolText"
+            aria-label="Tučné písmo" aria-pressed="false"><strong>B</strong></button>
 
-    <button id="tlacitkoKurziva" type="button" class="editorQuickTool"
-      aria-label="Kurzíva"><i>I</i></button>
+          <button id="tlacitkoKurziva" type="button" class="editorQuickTool editorQuickToolText"
+            aria-label="Kurzíva" aria-pressed="false"><em>I</em></button>
 
-    <button id="tlacitkoPodtrzeni" type="button" class="editorQuickTool"
-      aria-label="Podtržení"><u>U</u></button>
+          <button id="tlacitkoPodtrzeni" type="button" class="editorQuickTool editorQuickToolText"
+            aria-label="Podtržení" aria-pressed="false"><u>U</u></button>
 
-    <button id="tlacitkoDruhaUroven" type="button" class="editorQuickTool"
-      aria-label="Další formátování">Aa</button>
-  </div>
+          <span class="editorToolbarDivider" aria-hidden="true"></span>
 
+          <button id="tlacitkoVelikostPisma" type="button" class="editorQuickTool editorQuickToolValue"
+            aria-label="Velikost písma" aria-expanded="false">18</button>
 
-  <div id="editorToolbarDruhaUroven"
-    class="editorToolbarUroven"
-    hidden>
-    
+          <button id="tlacitkoNadpis" type="button" class="editorQuickTool editorQuickToolText"
+            aria-label="Styl textu" aria-expanded="false">H</button>
 
-    <button id="tlacitkoPrvniUroven" type="button" class="editorQuickTool"
-      aria-label="Zpět na hlavní nástroje">‹</button>
+          <button id="tlacitkoZarovnaniTextu" type="button" class="editorQuickTool editorQuickToolIcon"
+            aria-label="Zarovnání textu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16"></path>
+              <path d="M4 10h11"></path>
+              <path d="M4 14h16"></path>
+              <path d="M4 18h11"></path>
+            </svg>
+          </button>
 
-    <button id="tlacitkoVelikostPisma" type="button" class="editorQuickTool"
-      aria-label="Velikost písma">18</button>
+          <span class="editorToolbarDivider" aria-hidden="true"></span>
 
-    <button id="tlacitkoNadpis" type="button" class="editorQuickTool"
-      aria-label="Styl textu">H</button>
+          <button id="tlacitkoVlozitObrazek" type="button" class="editorQuickTool editorQuickToolIcon"
+            aria-label="Vložit obrázek">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <circle cx="8.5" cy="9" r="1.5"></circle>
+              <path d="m5 17 4.5-4.5 3.5 3 2.5-2.5L19 17"></path>
+            </svg>
+          </button>
 
-    <button id="tlacitkoZarovnaniTextu" type="button" class="editorQuickTool"
-      aria-label="Zarovnání textu">≡</button>
+          <button id="tlacitkoVlozitOdkaz" type="button" class="editorQuickTool editorQuickToolIcon"
+            aria-label="Vložit odkaz">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10.5 13.5 13.5 10.5"></path>
+              <path d="M8.2 15.8 6.4 17.6a3.4 3.4 0 0 1-4.8-4.8l3.2-3.2a3.4 3.4 0 0 1 4.8 0"></path>
+              <path d="m15.8 8.2 1.8-1.8a3.4 3.4 0 0 1 4.8 4.8l-3.2 3.2a3.4 3.4 0 0 1-4.8 0"></path>
+            </svg>
+          </button>
+        </div>
 
-    <button id="tlacitkoVlozitObrazek" type="button" class="editorQuickTool"
-      aria-label="Vložit obrázek">🖼️</button>
+        <!-- Plovoucí panel velikosti písma -->
+        <div id="editorPanelVelikost" class="editorToolbarPanel editorToolbarPanelVelikost" hidden>
+          <div class="editorPanelScroll" role="group" aria-label="Velikost písma">
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="12">12</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="14">14</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="16">16</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="18">18</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="20">20</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="24">24</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="28">28</button>
+            <button type="button" class="editorPanelVolba editorVelikostPisma" data-velikost="32">32</button>
+          </div>
+        </div>
 
-    <button id="tlacitkoVlozitOdkaz" type="button" class="editorQuickTool"
-      aria-label="Vložit odkaz">🔗</button>
+        <!-- Plovoucí panel stylu textu -->
+        <div id="editorPanelStyl" class="editorToolbarPanel editorToolbarPanelStyl" hidden>
+          <button type="button" class="editorPanelVolba editorStylTextu" data-styl="div">Text</button>
+          <button type="button" class="editorPanelVolba editorStylTextu" data-styl="h1">H1</button>
+          <button type="button" class="editorPanelVolba editorStylTextu" data-styl="h2">H2</button>
+          <button type="button" class="editorPanelVolba editorStylTextu" data-styl="h3">H3</button>
+        </div>
 
-  </div>
-
-  <!-- ====================================
-       VÝBĚR VELIKOSTI PÍSMA
-       ==================================== -->
-  <div
-    id="editorToolbarVelikosti"
-    class="editorToolbarUroven editorToolbarVelikosti"
-    hidden
-  >
-    <button
-      id="tlacitkoZpetZVelikosti"
-      type="button"
-      class="editorQuickTool"
-      aria-label="Zpět"
-    >‹</button>
-
-    <div class="editorVelikostiScroll">
-      <button type="button" class="editorVelikostPisma" data-velikost="12">12</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="14">14</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="16">16</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="18">18</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="20">20</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="24">24</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="28">28</button>
-      <button type="button" class="editorVelikostPisma" data-velikost="32">32</button>
-    </div>
-  </div>
-
-</div>
-
+        <!-- Plovoucí panel zarovnání -->
+        <div id="editorPanelZarovnani" class="editorToolbarPanel editorToolbarPanelZarovnani" hidden>
+          <button type="button" class="editorPanelVolba editorPanelIkona editorZarovnaniTextu"
+            data-zarovnani="left" aria-label="Zarovnat vlevo">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16"></path><path d="M4 10h10"></path><path d="M4 14h16"></path><path d="M4 18h10"></path>
+            </svg>
+          </button>
+          <button type="button" class="editorPanelVolba editorPanelIkona editorZarovnaniTextu"
+            data-zarovnani="center" aria-label="Zarovnat na střed">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16"></path><path d="M7 10h10"></path><path d="M4 14h16"></path><path d="M7 18h10"></path>
+            </svg>
+          </button>
+          <button type="button" class="editorPanelVolba editorPanelIkona editorZarovnaniTextu"
+            data-zarovnani="right" aria-label="Zarovnat vpravo">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16"></path><path d="M10 10h10"></path><path d="M4 14h16"></path><path d="M10 18h10"></path>
+            </svg>
+          </button>
+        </div>
 
         <!-- Datum + čas -->
         <div class="dateTimeInputs">
@@ -545,12 +585,10 @@
 
           <button id="modalDateButton" class="dateTimePickerButton" type="button" aria-label="Vybrat datum">
             <span id="modalDateLabel">Datum</span>
-            <span aria-hidden="true">📅</span>
           </button>
 
           <button id="modalTimeButton" class="dateTimePickerButton" type="button" aria-label="Vybrat čas">
             <span id="modalTimeLabel">Čas</span>
-            <span aria-hidden="true">🕒</span>
           </button>
 
           <input type="hidden" id="modalDate">
@@ -568,7 +606,10 @@
           </button>
 
           <button id="reminderButton" type="button" aria-label="Připomínka">
-            &#128276;
+            <svg class="editorReminderIcon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+              <path d="M10 21h4"></path>
+            </svg>
           </button>
 
         </div>
