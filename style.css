@@ -5008,6 +5008,10 @@ body.authPending .addTaskButton {
   float: left;
   margin: 14px 16px 12px 0;
 }
+#modalRichText .lubaNoteImage[data-zarovnani="vpravo"] {
+  float: right;
+  margin: 14px 0 12px 16px;
+}
 
 
 
