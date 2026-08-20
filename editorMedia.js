@@ -798,22 +798,46 @@
   });
   
   modalRichText.addEventListener("paste", (event) => {
-    const soubor = event.clipboardData?.files?.[0];
-    
-    if (!soubor) {
-      return;
-    }
-    
-    if (!soubor.type.startsWith("image/")) {
-      return;
-    }
-    
+  const soubor = event.clipboardData?.files?.[0];
+  
+  if (soubor?.type.startsWith("image/")) {
     event.preventDefault();
     
     void vlozVybranyObrazek(soubor);
-  });
+    return;
+  }
   
+  const html = event.clipboardData?.getData("text/html");
   
+  if (!html) {
+    return;
+  }
+  
+  event.preventDefault();
+  
+  const docasnyObal =
+    document.createElement("div");
+  
+  docasnyObal.innerHTML = html;
+  
+  docasnyObal
+    .querySelectorAll("[style]")
+    .forEach(prvek => {
+      prvek.style.fontSize = "";
+      prvek.style.fontFamily = "";
+      prvek.style.lineHeight = "";
+      
+      if (!prvek.getAttribute("style")?.trim()) {
+        prvek.removeAttribute("style");
+      }
+    });
+  
+  document.execCommand(
+    "insertHTML",
+    false,
+    docasnyObal.innerHTML
+  );
+});
   
   
   
