@@ -1,6 +1,7 @@
 (() => {
   /* ==========================================
-     PRVKY HLAVNÍHO TOOLBARU
+     LUBANOTE – MOBILNÍ EDITOR TOOLBAR
+     Jeden vodorovně posuvný řádek + plovoucí panely.
   ========================================== */
 
   const tlacitkoToolbar =
@@ -8,6 +9,9 @@
 
   const rychlyToolbar =
     document.getElementById("editorQuickToolbar");
+
+  const horniLista =
+    document.querySelector(".editorTopBar");
 
   const datumCas =
     document.querySelector(".dateTimeInputs");
@@ -18,13 +22,8 @@
   const editorTextu =
     document.getElementById("modalRichText");
 
-
-  /* ==========================================
-     PRVNÍ ÚROVEŇ
-  ========================================== */
-
-  const prvniUrovenToolbaru =
-    document.getElementById("editorToolbarPrvniUroven");
+  const modalUkolu =
+    document.getElementById("taskModal");
 
   const tlacitkoZpet =
     document.getElementById("tlacitkoZpet");
@@ -41,22 +40,14 @@
   const tlacitkoPodtrzeni =
     document.getElementById("tlacitkoPodtrzeni");
 
-  const tlacitkoDruhaUroven =
-    document.getElementById("tlacitkoDruhaUroven");
-
-
-  /* ==========================================
-     DRUHÁ ÚROVEŇ
-  ========================================== */
-
-  const druhaUrovenToolbaru =
-    document.getElementById("editorToolbarDruhaUroven");
-
-  const tlacitkoPrvniUroven =
-    document.getElementById("tlacitkoPrvniUroven");
-
   const tlacitkoVelikostPisma =
     document.getElementById("tlacitkoVelikostPisma");
+
+  const tlacitkoNadpis =
+    document.getElementById("tlacitkoNadpis");
+
+  const tlacitkoZarovnaniTextu =
+    document.getElementById("tlacitkoZarovnaniTextu");
 
   const tlacitkoVlozitObrazek =
     document.getElementById("tlacitkoVlozitObrazek");
@@ -64,122 +55,135 @@
   const tlacitkoVlozitOdkaz =
     document.getElementById("tlacitkoVlozitOdkaz");
 
+  const panelVelikost =
+    document.getElementById("editorPanelVelikost");
 
-  /* ==========================================
-     VÝBĚR VELIKOSTI PÍSMA
-  ========================================== */
+  const panelStyl =
+    document.getElementById("editorPanelStyl");
 
-  const toolbarVelikosti =
-    document.getElementById("editorToolbarVelikosti");
-
-  const tlacitkoZpetZVelikosti =
-    document.getElementById("tlacitkoZpetZVelikosti");
+  const panelZarovnani =
+    document.getElementById("editorPanelZarovnani");
 
   const tlacitkaVelikosti =
     document.querySelectorAll(".editorVelikostPisma");
 
+  const tlacitkaStylu =
+    document.querySelectorAll(".editorStylTextu");
 
-  /* ==========================================
-     ULOŽENÝ VÝBĚR TEXTU
-  ========================================== */
+  const tlacitkaZarovnani =
+    document.querySelectorAll(".editorZarovnaniTextu");
 
   let ulozenyVyberTextu = null;
-
-
-  function ulozVyberTextu() {
-    const vyber = window.getSelection();
-
-    if (!vyber || vyber.rangeCount === 0) {
-      ulozenyVyberTextu = null;
-      return;
-    }
-
-    ulozenyVyberTextu =
-      vyber.getRangeAt(0).cloneRange();
-  }
-
-
-  function obnovVyberTextu() {
-    if (!ulozenyVyberTextu) {
-      return;
-    }
-
-    const vyber = window.getSelection();
-
-    if (!vyber) {
-      return;
-    }
-
-    vyber.removeAllRanges();
-    vyber.addRange(ulozenyVyberTextu);
-  }
-
-
-  /* ==========================================
-     KONTROLA ZÁKLADNÍCH PRVKŮ
-  ========================================== */
+  let otevrenyPanel = null;
+  let aktivniSpoustecPanelu = null;
 
   if (
     !tlacitkoToolbar ||
     !rychlyToolbar ||
-    !datumCas
+    !horniLista ||
+    !datumCas ||
+    !editorTextu
   ) {
     return;
   }
 
 
   /* ==========================================
-     PŘEPÍNÁNÍ ÚROVNÍ
+     VÝBĚR TEXTU
   ========================================== */
 
-  function zobrazPrvniUroven() {
-    if (prvniUrovenToolbaru) {
-      prvniUrovenToolbaru.hidden = false;
+  function jeUzelVEditoru(uzel) {
+    if (!uzel) {
+      return false;
     }
 
-    if (druhaUrovenToolbaru) {
-      druhaUrovenToolbaru.hidden = true;
-    }
+    const prvek =
+      uzel.nodeType === Node.ELEMENT_NODE
+        ? uzel
+        : uzel.parentElement;
 
-    if (toolbarVelikosti) {
-      toolbarVelikosti.hidden = true;
-    }
+    return Boolean(
+      prvek &&
+      (prvek === editorTextu || editorTextu.contains(prvek))
+    );
   }
 
 
-  function zobrazDruhouUroven() {
-    if (prvniUrovenToolbaru) {
-      prvniUrovenToolbaru.hidden = true;
+  function ulozVyberTextu() {
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0 ||
+      !jeUzelVEditoru(vyber.anchorNode)
+    ) {
+      return false;
     }
 
-    if (druhaUrovenToolbaru) {
-      druhaUrovenToolbaru.hidden = false;
-    }
+    ulozenyVyberTextu =
+      vyber.getRangeAt(0).cloneRange();
 
-    if (toolbarVelikosti) {
-      toolbarVelikosti.hidden = true;
-    }
+    return true;
   }
 
 
-  function zobrazVelikostiPisma() {
-    if (prvniUrovenToolbaru) {
-      prvniUrovenToolbaru.hidden = true;
+  function obnovVyberTextu() {
+    if (!ulozenyVyberTextu) {
+      return false;
     }
 
-    if (druhaUrovenToolbaru) {
-      druhaUrovenToolbaru.hidden = true;
+    const vyber = window.getSelection();
+
+    if (!vyber) {
+      return false;
     }
 
-    if (toolbarVelikosti) {
-      toolbarVelikosti.hidden = false;
-    }
+    vyber.removeAllRanges();
+    vyber.addRange(ulozenyVyberTextu);
+
+    return true;
+  }
+
+
+  function pripravEditorProFormatovani() {
+    obnovVyberTextu();
+
+    editorTextu.focus({
+      preventScroll: true
+    });
   }
 
 
   /* ==========================================
-     OTEVŘENÍ / ZAVŘENÍ TOOLBARU
+     HLAVNÍ TOOLBAR
   ========================================== */
+
+  function zavriVsechnyPanely() {
+    [
+      panelVelikost,
+      panelStyl,
+      panelZarovnani
+    ].forEach(panel => {
+      if (panel) {
+        panel.hidden = true;
+        panel.style.removeProperty("left");
+        panel.style.removeProperty("--panel-sipka-x");
+      }
+    });
+
+    [
+      tlacitkoVelikostPisma,
+      tlacitkoNadpis,
+      tlacitkoZarovnaniTextu
+    ].forEach(tlacitko => {
+      tlacitko?.classList.remove("active");
+      tlacitko?.setAttribute("aria-expanded", "false");
+    });
+
+    otevrenyPanel = null;
+    aktivniSpoustecPanelu = null;
+  }
+
 
   function nastavToolbar(otevreny) {
     rychlyToolbar.hidden = !otevreny;
@@ -189,8 +193,20 @@
       tlacitkoPripominky.hidden = otevreny;
     }
 
-    tlacitkoToolbar.textContent =
-      otevreny ? "⌃" : "⌄";
+    tlacitkoToolbar.classList.toggle(
+      "active",
+      otevreny
+    );
+
+    tlacitkoToolbar.setAttribute(
+      "aria-expanded",
+      String(otevreny)
+    );
+
+    tlacitkoToolbar.setAttribute(
+      "aria-pressed",
+      String(otevreny)
+    );
 
     tlacitkoToolbar.setAttribute(
       "aria-label",
@@ -199,61 +215,105 @@
         : "Otevřít editační nástroje"
     );
 
-    tlacitkoToolbar.setAttribute(
-      "aria-expanded",
-      String(otevreny)
-    );
-
-    zobrazPrvniUroven();
-  }
-
-
-  /* ==========================================
-     HISTORIE
-  ========================================== */
-
-  function provedHistorii(prikaz) {
-    if (!editorTextu || editorTextu.hidden) {
-      return;
-    }
-
-    editorTextu.focus({
-      preventScroll: true
-    });
-
-    try {
-      document.execCommand(
-        prikaz,
-        false,
-        null
-      );
-    } catch (chyba) {
-      console.warn(
-        `Historii editoru se nepodařilo provést: ${prikaz}`,
-        chyba
-      );
+    if (!otevreny) {
+      zavriVsechnyPanely();
+      rychlyToolbar.scrollLeft = 0;
     }
   }
 
 
   /* ==========================================
-     FORMÁTOVÁNÍ TEXTU
+     PLOVOUCÍ PANELY
   ========================================== */
 
-  function provedFormatovani(prikaz) {
-    if (!editorTextu || editorTextu.hidden) {
+  function pozicujPanel(panel, spoustec) {
+    if (!panel || !spoustec) {
       return;
     }
 
-    editorTextu.focus({
-      preventScroll: true
+    requestAnimationFrame(() => {
+      const listaRect =
+        horniLista.getBoundingClientRect();
+
+      const spoustecRect =
+        spoustec.getBoundingClientRect();
+
+      const panelRect =
+        panel.getBoundingClientRect();
+
+      const okraj = 6;
+      const stredSpoustece =
+        spoustecRect.left -
+        listaRect.left +
+        spoustecRect.width / 2;
+
+      let vlevo =
+        stredSpoustece - panelRect.width / 2;
+
+      vlevo = Math.max(
+        okraj,
+        Math.min(
+          vlevo,
+          listaRect.width - panelRect.width - okraj
+        )
+      );
+
+      const sipkaX = Math.max(
+        16,
+        Math.min(
+          stredSpoustece - vlevo,
+          panelRect.width - 16
+        )
+      );
+
+      panel.style.left = `${vlevo}px`;
+      panel.style.setProperty(
+        "--panel-sipka-x",
+        `${sipkaX}px`
+      );
     });
+  }
+
+
+  function prepniPanel(panel, spoustec) {
+    if (!panel || !spoustec) {
+      return;
+    }
+
+    const uzJeOtevreny =
+      otevrenyPanel === panel && !panel.hidden;
+
+    zavriVsechnyPanely();
+
+    if (uzJeOtevreny) {
+      return;
+    }
+
+    ulozVyberTextu();
+
+    panel.hidden = false;
+    otevrenyPanel = panel;
+    aktivniSpoustecPanelu = spoustec;
+
+    spoustec.classList.add("active");
+    spoustec.setAttribute("aria-expanded", "true");
+
+    pozicujPanel(panel, spoustec);
+  }
+
+
+  /* ==========================================
+     EXEC COMMAND POMOCNÍCI
+  ========================================== */
+
+  function provedPrikaz(prikaz, hodnota = null) {
+    pripravEditorProFormatovani();
 
     try {
       document.execCommand(
         prikaz,
         false,
-        null
+        hodnota
       );
     } catch (chyba) {
       console.warn(
@@ -261,11 +321,186 @@
         chyba
       );
     }
+
+    ulozVyberTextu();
+    aktualizujStavFormatovani();
+  }
+
+
+  function nastavVelikostPisma(hodnota) {
+    if (!hodnota) {
+      return;
+    }
+
+    pripravEditorProFormatovani();
+
+    document.execCommand(
+      "fontSize",
+      false,
+      "7"
+    );
+
+    editorTextu
+      .querySelectorAll('font[size="7"]')
+      .forEach(prvek => {
+        prvek.removeAttribute("size");
+        prvek.style.fontSize = `${hodnota}px`;
+        prvek.dataset.velikostPisma = hodnota;
+      });
+
+    tlacitkoVelikostPisma.textContent = hodnota;
+
+    ulozVyberTextu();
+    oznacAktivniVelikost(hodnota);
+    zavriVsechnyPanely();
+  }
+
+
+  function nastavStylTextu(styl) {
+    if (!styl) {
+      return;
+    }
+
+    provedPrikaz(
+      "formatBlock",
+      styl
+    );
+
+    zavriVsechnyPanely();
+  }
+
+
+  function nastavZarovnani(zarovnani) {
+    const prikazy = {
+      left: "justifyLeft",
+      center: "justifyCenter",
+      right: "justifyRight"
+    };
+
+    const prikaz = prikazy[zarovnani];
+
+    if (!prikaz) {
+      return;
+    }
+
+    provedPrikaz(prikaz);
+    zavriVsechnyPanely();
   }
 
 
   /* ==========================================
-     HLAVNÍ ŠIPKA TOOLBARU
+     VIZUÁLNÍ STAV FORMÁTOVÁNÍ
+  ========================================== */
+
+  function nastavStavTlacitka(
+    tlacitko,
+    aktivni
+  ) {
+    if (!tlacitko) {
+      return;
+    }
+
+    tlacitko.classList.toggle(
+      "active",
+      Boolean(aktivni)
+    );
+
+    tlacitko.setAttribute(
+      "aria-pressed",
+      String(Boolean(aktivni))
+    );
+  }
+
+
+  function oznacAktivniVelikost(hodnota) {
+    tlacitkaVelikosti.forEach(tlacitko => {
+      tlacitko.classList.toggle(
+        "active",
+        tlacitko.dataset.velikost === String(hodnota)
+      );
+    });
+  }
+
+
+  function zjistiVelikostPodKurzorem() {
+  const vyber = window.getSelection();
+  
+  if (!vyber || vyber.rangeCount === 0) {
+    return null;
+  }
+  
+  let prvek = vyber.anchorNode;
+  
+  if (prvek?.nodeType === Node.TEXT_NODE) {
+    prvek = prvek.parentElement;
+  }
+  
+  if (!(prvek instanceof Element)) {
+    return null;
+  }
+  
+  const prvekSVelikosti =
+    prvek.closest("[data-velikost-pisma]");
+  
+  if (prvekSVelikosti) {
+    return prvekSVelikosti.dataset.velikostPisma;
+  }
+  
+  const velikost =
+    parseFloat(
+      getComputedStyle(prvek).fontSize
+    );
+  
+  if (!Number.isFinite(velikost)) {
+    return null;
+  }
+  
+  return String(Math.round(velikost));
+}
+
+
+  function aktualizujStavFormatovani() {
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      !vyber.anchorNode ||
+      !jeUzelVEditoru(vyber.anchorNode)
+    ) {
+      return;
+    }
+
+    try {
+      nastavStavTlacitka(
+        tlacitkoTucne,
+        document.queryCommandState("bold")
+      );
+
+      nastavStavTlacitka(
+        tlacitkoKurziva,
+        document.queryCommandState("italic")
+      );
+
+      nastavStavTlacitka(
+        tlacitkoPodtrzeni,
+        document.queryCommandState("underline")
+      );
+    } catch (_chyba) {
+      // Některé WebView queryCommandState nepodporují spolehlivě.
+    }
+
+    const velikost =
+      zjistiVelikostPodKurzorem();
+
+    if (velikost) {
+      tlacitkoVelikostPisma.textContent = velikost;
+      oznacAktivniVelikost(velikost);
+    }
+  }
+
+
+  /* ==========================================
+     UDÁLOSTI – TOOLBAR
   ========================================== */
 
   tlacitkoToolbar.addEventListener(
@@ -278,14 +513,10 @@
   );
 
 
-  /* ==========================================
-     UNDO / REDO
-  ========================================== */
-
   tlacitkoZpet?.addEventListener(
     "click",
     () => {
-      provedHistorii("undo");
+      provedPrikaz("undo");
     }
   );
 
@@ -293,19 +524,16 @@
   tlacitkoZnovu?.addEventListener(
     "click",
     () => {
-      provedHistorii("redo");
+      provedPrikaz("redo");
     }
   );
 
 
-  /* ==========================================
-     B / I / U
-  ========================================== */
-
   tlacitkoTucne?.addEventListener(
     "click",
     () => {
-      provedFormatovani("bold");
+      ulozVyberTextu();
+      provedPrikaz("bold");
     }
   );
 
@@ -313,7 +541,8 @@
   tlacitkoKurziva?.addEventListener(
     "click",
     () => {
-      provedFormatovani("italic");
+      ulozVyberTextu();
+      provedPrikaz("italic");
     }
   );
 
@@ -321,145 +550,200 @@
   tlacitkoPodtrzeni?.addEventListener(
     "click",
     () => {
-      provedFormatovani("underline");
+      ulozVyberTextu();
+      provedPrikaz("underline");
     }
   );
 
 
-  /* ==========================================
-     PRVNÍ → DRUHÁ ÚROVEŇ
-  ========================================== */
-
-  tlacitkoDruhaUroven?.addEventListener(
+  tlacitkoVelikostPisma?.addEventListener(
     "click",
     () => {
-      zobrazDruhouUroven();
+      prepniPanel(
+        panelVelikost,
+        tlacitkoVelikostPisma
+      );
     }
   );
 
 
-  /* ==========================================
-     DRUHÁ → PRVNÍ ÚROVEŇ
-  ========================================== */
-
-  tlacitkoPrvniUroven?.addEventListener(
+  tlacitkoNadpis?.addEventListener(
     "click",
     () => {
-      zobrazPrvniUroven();
+      prepniPanel(
+        panelStyl,
+        tlacitkoNadpis
+      );
     }
   );
 
 
-  /* ==========================================
-     OBRÁZEK
-  ========================================== */
+  tlacitkoZarovnaniTextu?.addEventListener(
+    "click",
+    () => {
+      prepniPanel(
+        panelZarovnani,
+        tlacitkoZarovnaniTextu
+      );
+    }
+  );
+
 
   tlacitkoVlozitObrazek?.addEventListener(
     "click",
     () => {
+      zavriVsechnyPanely();
       window.vlozObrazekDoPoznamky?.();
     }
   );
 
 
-  /* ==========================================
-     ODKAZ
-  ========================================== */
-
   tlacitkoVlozitOdkaz?.addEventListener(
     "click",
     () => {
+      zavriVsechnyPanely();
       window.vlozOdkazDoPoznamky?.();
     }
   );
 
-
-  /* ==========================================
-     OTEVŘENÍ VÝBĚRU VELIKOSTI
-  ========================================== */
-
-  tlacitkoVelikostPisma?.addEventListener(
-    "click",
-    () => {
-      ulozVyberTextu();
-
-      window
-        .getSelection()
-        ?.removeAllRanges();
-
-      zobrazVelikostiPisma();
-    }
-  );
-
-
-  /* ==========================================
-     ZPĚT Z VÝBĚRU VELIKOSTI
-  ========================================== */
-
-  tlacitkoZpetZVelikosti?.addEventListener(
-    "click",
-    () => {
-      zobrazDruhouUroven();
-    }
-  );
-
-
-  /* ==========================================
-     NASTAVENÍ VELIKOSTI PÍSMA
-  ========================================== */
 
   tlacitkaVelikosti.forEach(
     tlacitko => {
       tlacitko.addEventListener(
         "click",
         () => {
-          const hodnota =
-            tlacitko.dataset.velikost;
-
-          if (!hodnota || !editorTextu) {
-            return;
-          }
-
-          obnovVyberTextu();
-
-          editorTextu.focus({
-            preventScroll: true
-          });
-
-          document.execCommand(
-            "fontSize",
-            false,
-            "7"
+          nastavVelikostPisma(
+            tlacitko.dataset.velikost
           );
-
-          editorTextu
-            .querySelectorAll(
-              'font[size="7"]'
-            )
-            .forEach(prvek => {
-              prvek.removeAttribute(
-                "size"
-              );
-
-              prvek.style.fontSize =
-                `${hodnota}px`;
-            });
-
-          if (tlacitkoVelikostPisma) {
-            tlacitkoVelikostPisma.textContent =
-              hodnota;
-          }
-
-          zobrazDruhouUroven();
         }
       );
     }
   );
 
 
-  /* ==========================================
-     VÝCHOZÍ STAV
-  ========================================== */
+  tlacitkaStylu.forEach(
+    tlacitko => {
+      tlacitko.addEventListener(
+        "click",
+        () => {
+          nastavStylTextu(
+            tlacitko.dataset.styl
+          );
+        }
+      );
+    }
+  );
+
+
+  tlacitkaZarovnani.forEach(
+    tlacitko => {
+      tlacitko.addEventListener(
+        "click",
+        () => {
+          nastavZarovnani(
+            tlacitko.dataset.zarovnani
+          );
+        }
+      );
+    }
+  );
+
+
+  /* Klik mimo plovoucí panel jej zavře. */
+  document.addEventListener(
+    "pointerdown",
+    event => {
+      if (!otevrenyPanel) {
+        return;
+      }
+
+      if (
+        otevrenyPanel.contains(event.target) ||
+        aktivniSpoustecPanelu?.contains(event.target)
+      ) {
+        return;
+      }
+
+      zavriVsechnyPanely();
+    },
+    true
+  );
+
+
+  /* Změna výběru průběžně aktualizuje B/I/U a číslo velikosti. */
+  document.addEventListener(
+    "selectionchange",
+    () => {
+      aktualizujStavFormatovani();
+    }
+  );
+
+
+  editorTextu.addEventListener(
+    "keyup",
+    aktualizujStavFormatovani
+  );
+
+
+  editorTextu.addEventListener(
+    "pointerup",
+    aktualizujStavFormatovani
+  );
+
+
+  rychlyToolbar.addEventListener(
+    "scroll",
+    () => {
+      if (
+        otevrenyPanel &&
+        aktivniSpoustecPanelu
+      ) {
+        pozicujPanel(
+          otevrenyPanel,
+          aktivniSpoustecPanelu
+        );
+      }
+    },
+    { passive: true }
+  );
+
+
+  window.addEventListener(
+    "resize",
+    () => {
+      if (
+        otevrenyPanel &&
+        aktivniSpoustecPanelu
+      ) {
+        pozicujPanel(
+          otevrenyPanel,
+          aktivniSpoustecPanelu
+        );
+      }
+    }
+  );
+
+
+  /* Při otevření editoru začínáme vždy v kompaktním stavu. */
+  if (modalUkolu) {
+    const pozorovatelModalu =
+      new MutationObserver(() => {
+        if (!modalUkolu.hidden) {
+          nastavToolbar(false);
+        } else {
+          zavriVsechnyPanely();
+        }
+      });
+
+    pozorovatelModalu.observe(
+      modalUkolu,
+      {
+        attributes: true,
+        attributeFilter: ["hidden"]
+      }
+    );
+  }
+
 
   nastavToolbar(false);
 })();
