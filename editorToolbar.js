@@ -72,6 +72,14 @@
 
   const tlacitkaZarovnani =
     document.querySelectorAll(".editorZarovnaniTextu");
+    
+  const NAZEV_VLASTNIHO_VYBERU =
+  "luba-toolbar-vyber";
+
+
+
+
+
 
   let ulozenyVyberTextu = null;
   let otevrenyPanel = null;
@@ -87,7 +95,48 @@
     return;
   }
 
+function ulozVyberTextu() {
+  const vyber = window.getSelection();
 
+  if (!vyber || vyber.rangeCount === 0) {
+    ulozenyVyberTextu = null;
+    return false;
+  }
+
+  ulozenyVyberTextu =
+    vyber.getRangeAt(0).cloneRange();
+
+  return true;
+}
+
+function zobrazVlastniVyberTextu() {
+  if (
+    !ulozenyVyberTextu ||
+    !window.CSS?.highlights ||
+    typeof window.Highlight !== "function"
+  ) {
+    return false;
+  }
+
+  CSS.highlights.set(
+    NAZEV_VLASTNIHO_VYBERU,
+    new Highlight(ulozenyVyberTextu)
+  );
+
+  return true;
+}
+
+function skryjAndroidVyber() {
+  if (!ulozVyberTextu()) {
+    return;
+  }
+
+  zobrazVlastniVyberTextu();
+
+  window
+    .getSelection()
+    ?.removeAllRanges();
+}
   /* ==========================================
      VÝBĚR TEXTU
   ========================================== */
@@ -559,6 +608,7 @@
   tlacitkoVelikostPisma?.addEventListener(
     "click",
     () => {
+      skryjAndroidVyber();
       prepniPanel(
         panelVelikost,
         tlacitkoVelikostPisma
