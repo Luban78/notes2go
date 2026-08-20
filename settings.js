@@ -57,7 +57,7 @@
   */
   const nactenaTemata = await nactiTemata();
 
-console.log(nactenaTemata);
+//console.log(nactenaTemata);
 
 
 const motivy = nactenaTemata.map(tema => ({
