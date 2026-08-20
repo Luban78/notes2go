@@ -94,6 +94,15 @@
   ) {
     return;
   }
+  
+  
+function zrusVlastniVyberTextu() {
+  window.CSS?.highlights?.delete(
+    NAZEV_VLASTNIHO_VYBERU
+  );
+
+  ulozenyVyberTextu = null;
+}
 
 function ulozVyberTextu() {
   const vyber = window.getSelection();
@@ -350,7 +359,9 @@ function skryjAndroidVyber() {
     pozicujPanel(panel, spoustec);
   }
 
-
+editorTextu?.addEventListener("pointerdown", () => {
+  zrusVlastniVyberTextu();
+});
   /* ==========================================
      EXEC COMMAND POMOCNÍCI
   ========================================== */
