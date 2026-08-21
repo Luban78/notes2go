@@ -489,6 +489,7 @@ editorTextu?.addEventListener("pointerdown", () => {
   );
   
   zavriVsechnyPanely();
+  aktualizujStavFormatovani();
 }
 
 
@@ -507,6 +508,7 @@ editorTextu?.addEventListener("pointerdown", () => {
 
     provedPrikaz(prikaz);
     zavriVsechnyPanely();
+    aktualizujStavFormatovani();
   }
 
 
@@ -581,6 +583,126 @@ editorTextu?.addEventListener("pointerdown", () => {
 }
 
 
+  function zjistiStylTextuPodKurzorem() {
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0 ||
+      !jeUzelVEditoru(vyber.anchorNode)
+    ) {
+      return "div";
+    }
+
+    let prvek = vyber.anchorNode;
+
+    if (prvek?.nodeType === Node.TEXT_NODE) {
+      prvek = prvek.parentElement;
+    }
+
+    if (!(prvek instanceof Element)) {
+      return "div";
+    }
+
+    let aktualniPrvek = prvek;
+
+    while (
+      aktualniPrvek &&
+      aktualniPrvek !== editorTextu
+    ) {
+      if (
+        aktualniPrvek.classList.contains(
+          "editorTextNormalni"
+        )
+      ) {
+        return "div";
+      }
+
+      if (
+        aktualniPrvek.classList.contains(
+          "editorNadpis"
+        )
+      ) {
+        if (aktualniPrvek.classList.contains("h1")) {
+          return "h1";
+        }
+
+        if (aktualniPrvek.classList.contains("h2")) {
+          return "h2";
+        }
+
+        if (aktualniPrvek.classList.contains("h3")) {
+          return "h3";
+        }
+      }
+
+      aktualniPrvek =
+        aktualniPrvek.parentElement;
+    }
+
+    return "div";
+  }
+
+
+  function oznacAktivniStylTextu(styl) {
+    tlacitkaStylu.forEach(tlacitko => {
+      tlacitko.classList.toggle(
+        "active",
+        tlacitko.dataset.styl === styl
+      );
+    });
+  }
+
+
+  function zjistiZarovnaniPodKurzorem() {
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0 ||
+      !jeUzelVEditoru(vyber.anchorNode)
+    ) {
+      return "left";
+    }
+
+    let prvek = vyber.anchorNode;
+
+    if (prvek?.nodeType === Node.TEXT_NODE) {
+      prvek = prvek.parentElement;
+    }
+
+    if (!(prvek instanceof Element)) {
+      return "left";
+    }
+
+    const zarovnani =
+      getComputedStyle(prvek).textAlign;
+
+    if (zarovnani === "center") {
+      return "center";
+    }
+
+    if (
+      zarovnani === "right" ||
+      zarovnani === "end"
+    ) {
+      return "right";
+    }
+
+    return "left";
+  }
+
+
+  function oznacAktivniZarovnani(zarovnani) {
+    tlacitkaZarovnani.forEach(tlacitko => {
+      tlacitko.classList.toggle(
+        "active",
+        tlacitko.dataset.zarovnani === zarovnani
+      );
+    });
+  }
+
+
   function aktualizujStavFormatovani() {
     const vyber = window.getSelection();
 
@@ -607,38 +729,24 @@ editorTextu?.addEventListener("pointerdown", () => {
         tlacitkoPodtrzeni,
         document.queryCommandState("underline")
       );
-      
-      const vyber =
-  window.getSelection();
-
-let prvek =
-  vyber?.anchorNode;
-
-if (
-  prvek?.nodeType === Node.TEXT_NODE
-) {
-  prvek =
-    prvek.parentElement;
-}
-
-const jeNadpis =
-  prvek instanceof Element &&
-  !!prvek.closest(
-    ".editorNadpis.h1, .editorNadpis.h2, .editorNadpis.h3"
-  );
-
-nastavStavTlacitka(
-  tlacitkoNadpis,
-  jeNadpis
-);
     } catch (_chyba) {
       // Některé WebView queryCommandState nepodporují spolehlivě.
     }
-    
-    
-    
-    
 
+    const stylTextu =
+      zjistiStylTextuPodKurzorem();
+
+    oznacAktivniStylTextu(stylTextu);
+
+    nastavStavTlacitka(
+      tlacitkoNadpis,
+      stylTextu !== "div"
+    );
+
+    const zarovnani =
+      zjistiZarovnaniPodKurzorem();
+
+    oznacAktivniZarovnani(zarovnani);
 
     const velikost =
       zjistiVelikostPodKurzorem();
@@ -946,37 +1054,3 @@ nastavStavTlacitka(
   
   
 })();
-
-
-
-function zjistiNadpisPodKurzorem() {
-  const vyber =
-    window.getSelection();
-
-  if (
-    !vyber ||
-    vyber.rangeCount === 0
-  ) {
-    return null;
-  }
-
-  let prvek =
-    vyber
-      .getRangeAt(0)
-      .startContainer;
-
-  if (
-    prvek?.nodeType === Node.TEXT_NODE
-  ) {
-    prvek =
-      prvek.parentElement;
-  }
-
-  if (!(prvek instanceof Element)) {
-    return null;
-  }
-
-  return prvek.closest(
-    ".editorNadpis"
-  );
-}

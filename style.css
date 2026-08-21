@@ -5634,3 +5634,9 @@ text-size-adjust: 100%;
 .textColorDefault {
   color: var(--color-text);
 }
+
+#modalRichText::selection,
+#modalRichText *::selection {
+  background: rgba(60, 160, 210, 0.35);
+  color: inherit;
+}
