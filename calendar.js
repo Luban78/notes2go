@@ -38,22 +38,61 @@ const dayDetailItems =
 
 const dayDetailBackButton =
   document.getElementById("dayDetailBackButton");
+
+const recurringOverviewButton =
+  document.getElementById(
+    "recurringOverviewButton"
+  );
+
+const recurringOverviewScreen =
+  document.getElementById(
+    "recurringOverviewScreen"
+  );
+
+const recurringOverviewBackButton =
+  document.getElementById(
+    "recurringOverviewBackButton"
+  );
+
+const recurringOverviewItems =
+  document.getElementById(
+    "recurringOverviewItems"
+  );
   
+  
+recurringOverviewButton?.addEventListener(
+  "click",
+  () => {
+    renderRecurringOverview();
+
+    calendarScreen.hidden = true;
+    recurringOverviewScreen.hidden = false;
+  }
+);
+
+recurringOverviewBackButton?.addEventListener(
+  "click",
+  () => {
+    recurringOverviewScreen.hidden = true;
+    calendarScreen.hidden = false;
+  }
+);  
+
 calendarSelectedDateButton?.addEventListener(
   "click",
   () => {
     if (!dayDetailScreen) {
       return;
     }
-    
+
     calendarScreen.hidden = true;
     dayDetailScreen.hidden = false;
-    
+
     if (dayDetailTitle) {
       dayDetailTitle.textContent =
         calendarSelectedDateButton.textContent;
     }
-    
+
     if (dayDetailItems) {
       renderCalendarItems(
         dayDetailItems
@@ -188,8 +227,27 @@ function renderCalendar() {
 
     const hasItems =
       plannedItems.some(
-        item =>
-          item.plannedAt?.startsWith(dateKey)
+        item => {
+          if (
+            item.plannedAt?.startsWith(dateKey)
+          ) {
+            return true;
+          }
+
+          if (
+            item.repeat?.enabled === true &&
+            item.repeat.type === "weekly"
+          ) {
+            return jePlatnyTydenniVyskyt(
+              item.repeat.startDate,
+              dateKey,
+              item.repeat.interval,
+              item.repeat.days
+            );
+          }
+
+          return false;
+        }
       );
 
     if (hasItems) {
@@ -231,107 +289,132 @@ function renderCalendar() {
 
 function renderCalendarItems(targetElement) {
   targetElement.innerHTML = "";
-  
+
   const year =
     calendarSelectedDay.getFullYear();
-  
+
   const month =
     String(
       calendarSelectedDay.getMonth() + 1
     ).padStart(2, "0");
-  
+
   const day =
     String(
       calendarSelectedDay.getDate()
     ).padStart(2, "0");
-  
+
   const dateKey =
     `${year}-${month}-${day}`;
-  
+
   const items =
     loadCalendarItems()
-    .filter(
-      item =>
-      item.plannedAt?.startsWith(dateKey)
-    )
-    .sort(
-      (a, b) =>
-      a.plannedAt.localeCompare(
-        b.plannedAt
+      .filter(
+        item => {
+          if (
+            item.plannedAt?.startsWith(dateKey)
+          ) {
+            return true;
+          }
+
+          if (
+            item.repeat?.enabled === true &&
+            item.repeat.type === "weekly"
+          ) {
+            return jePlatnyTydenniVyskyt(
+              item.repeat.startDate,
+              dateKey,
+              item.repeat.interval,
+              item.repeat.days
+            );
+          }
+
+          return false;
+        }
       )
-    );
-  
+      .sort(
+        (a, b) =>
+          a.plannedAt.localeCompare(
+            b.plannedAt
+          )
+      );
+
   if (items.length === 0) {
     targetElement.textContent =
       "Na tento den není nic naplánováno.";
-    
+
     return;
   }
-  
+
   items.forEach((item) => {
     const row =
       document.createElement("div");
-    
+
     row.className =
       "calendarAgendaItem";
-    
+
     if (item.completed === true) {
       row.classList.add("completed");
     }
-    
+
     const time =
       document.createElement("div");
-    
+
     time.className =
       "calendarAgendaTime";
-    
+
     time.textContent =
       item.plannedAt.slice(11, 16);
-    
+
     const text =
       document.createElement("div");
-    
+
     text.className =
       "calendarAgendaText";
-    
+
     text.textContent =
       item.text;
-    
+
+    if (
+      item.repeat?.enabled === true
+    ) {
+      text.textContent += " 🔁";
+    }
+
     row.append(time, text);
-    
+
     row.addEventListener("click", () => {
       openTaskEditorById(item.sourceNoteId);
-      
+
       setTimeout(() => {
         const plannedLink =
           modalRichText.querySelector(
             `[data-planned-item-id="${item.id}"]`
           );
-        
+
         if (!plannedLink) {
           return;
         }
-        
+
         const editorRect =
           modalRichText.getBoundingClientRect();
-        
+
         const linkRect =
           plannedLink.getBoundingClientRect();
-        
+
         const targetTop =
           modalRichText.scrollTop +
           (linkRect.top - editorRect.top) -
           (modalRichText.clientHeight / 2) +
           (linkRect.height / 2);
-        
+
         modalRichText.scrollTo({
           top: Math.max(0, targetTop),
           behavior: "smooth"
         });
-        
+
       }, 150);
     });
-    
+
     targetElement.append(row);
   });
 }
@@ -341,7 +424,7 @@ function renderCalendarAgenda() {
     formatCalendarDate(
       calendarSelectedDay
     );
-  
+
   renderCalendarItems(
     calendarDayItems
   );
@@ -370,3 +453,103 @@ calendarNextMonth.addEventListener(
     renderCalendar();
   }
 );
+
+function renderRecurringOverview() {
+  recurringOverviewItems.innerHTML = "";
+
+  const opakovanePolozky =
+    loadPlannedItems().filter(
+      item =>
+        item.repeat?.enabled === true
+    );
+
+  if (opakovanePolozky.length === 0) {
+    recurringOverviewItems.textContent =
+      "Žádné opakované úkoly.";
+
+    return;
+  }
+
+  opakovanePolozky.forEach(
+    item => {
+      const radek =
+        document.createElement("div");
+
+      radek.className =
+        "recurringOverviewItem";
+
+      const nazev =
+  document.createElement("div");
+
+nazev.className =
+  "recurringOverviewItemTitle";
+
+nazev.textContent =
+  item.text;
+
+const popis =
+  document.createElement("div");
+
+const priste =
+  document.createElement("div");
+
+priste.className =
+  "recurringOverviewItemNext";
+
+
+popis.className =
+  "recurringOverviewItemRule";
+
+if (
+  item.repeat.type === "weekly"
+) {
+  const nazvyDnu = {
+  0: "Ne",
+  1: "Po",
+  2: "Út",
+  3: "St",
+  4: "Čt",
+  5: "Pá",
+  6: "So"
+};
+
+const dnyText =
+  item.repeat.days
+    .map(
+      den => nazvyDnu[den]
+    )
+    .join(", ");
+
+if (item.repeat.interval === 1) {
+  popis.textContent =
+    `Každý týden • ${dnyText}`;
+} else {
+  popis.textContent =
+    `Každé ${item.repeat.interval} týdny • ${dnyText}`;
+}
+
+
+const dalsiDatum =
+  vypocitejDalsiVyskyt(
+    new Date(),
+    item.repeat
+  );
+
+if (dalsiDatum) {
+  priste.textContent =
+    `Příště: ${dalsiDatum.toLocaleDateString("cs-CZ")}`;
+}
+}
+
+radek.append(
+  nazev,
+  popis,
+  priste
+);
+
+      recurringOverviewItems.append(
+        radek
+      );
+    }
+  );
+}

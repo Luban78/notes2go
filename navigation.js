@@ -18,6 +18,10 @@
   const addTaskButton =
   document.getElementById("addTaskButton");
   
+  const recurringOverviewScreen =
+  document.getElementById("recurringOverviewScreen");
+
+
   /* ==================================================
    PŘEPÍNÁNÍ MODULŮ
    Poznámky ↔ Plán
@@ -67,16 +71,17 @@ function setActiveModule(activeButton) {
 
 notesButton.addEventListener("click", () => {
   closeMainMenu();
-  
+
   notesScreen.hidden = false;
   searchRow.hidden = false;
   categoryTabs.hidden = false;
   addTaskButton.hidden = false;
-  
+
   calendarScreen.hidden = true;
   remindersScreen.hidden = true;
   dayDetailScreen.hidden = true;
-  
+  recurringOverviewScreen.hidden = true;
+
   setActiveModule(notesButton);
 });
 
@@ -86,21 +91,22 @@ notesButton.addEventListener("click", () => {
 
 plannerButton.addEventListener("click", () => {
   closeMainMenu();
-  
+
   notesScreen.hidden = true;
   searchRow.hidden = true;
   categoryTabs.hidden = true;
   addTaskButton.hidden = true;
-  
+
   calendarScreen.hidden = false;
   remindersScreen.hidden = true;
   dayDetailScreen.hidden = true;
-  
+  recurringOverviewScreen.hidden = true;
+
   calendarCurrentDate = new Date();
   calendarSelectedDay = new Date();
-  
+
   setActiveModule(plannerButton);
-  
+
   renderCalendar();
 });
 
@@ -162,19 +168,19 @@ plannerButton.addEventListener("click", () => {
 
 remindersButton.addEventListener("click", () => {
   closeMainMenu();
-  
+
   notesScreen.hidden = true;
   searchRow.hidden = true;
   categoryTabs.hidden = true;
   addTaskButton.hidden = true;
-  
+
   calendarScreen.hidden = true;
   remindersScreen.hidden = false;
   dayDetailScreen.hidden = true;
+  recurringOverviewScreen.hidden = true;
 
-  
   setActiveModule(remindersButton);
-  
+
   renderRemindersScreen();
 });
 

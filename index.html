@@ -223,6 +223,8 @@
 
     </div>
 
+    
+
     <div class="calendarWeekdays">
       <span>Po</span>
       <span>Út</span>
@@ -236,10 +238,26 @@
     <div id="calendarGrid" class="calendarGrid"></div>
 
     <div class="calendarAgenda">
+      <div class="calendarAgendaHeader">
 
-      <button id="calendarSelectedDate" class="calendarSelectedDateButton" type="button">
-        Vybraný den
-      </button>
+  <button
+    id="calendarSelectedDate"
+    class="calendarSelectedDateButton"
+    type="button"
+  >
+    Vybraný den
+  </button>
+
+  <button
+    id="recurringOverviewButton"
+    type="button"
+    class="recurringOverviewButton"
+    aria-label="Zobrazit opakované úkoly"
+  >
+    🔁
+  </button>
+
+</div>
 
       <div id="calendarDayItems"></div>
 
@@ -268,6 +286,40 @@
     <div id="dayDetailItems" class="dayDetailItems"></div>
 
   </section>
+
+  <!-- ========================================
+     PŘEHLED OPAKOVANÝCH ÚKOLŮ
+     ======================================== -->
+
+<section
+  id="recurringOverviewScreen"
+  class="recurringOverviewScreen"
+  hidden
+>
+
+  <div class="recurringOverviewHeader">
+
+    <button
+      id="recurringOverviewBackButton"
+      type="button"
+      aria-label="Zpět na kalendář"
+    >
+      ‹
+    </button>
+
+    <h2>
+      Opakující se
+    </h2>
+
+  </div>
+
+  <div
+    id="recurringOverviewItems"
+    class="recurringOverviewItems"
+  ></div>
+
+</section>
+
   <!-- ========================================
      OBRAZOVKA PŘIPOMÍNKY
      ======================================== -->

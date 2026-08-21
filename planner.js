@@ -702,22 +702,42 @@ function najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks) {
 plannerRepeatButton?.addEventListener(
   "click",
   () => {
-    plannerRepeat = {
-      enabled: true,
-      type: "weekly",
-      interval: 1,
-      days: [
-        new Date(
-          plannerDate.value
-        ).getDay()
-      ],
-      startDate:
-        plannerDate.value,
-      endDate: null
-    };
+    if (!plannerRepeat) {
+      plannerRepeat = {
+        enabled: true,
+        type: "weekly",
+        interval: 1,
+        days: [
+          new Date(
+            plannerDate.value
+          ).getDay()
+        ],
+        startDate:
+          plannerDate.value,
+        endDate: null
+      };
+
+      plannerRepeatLabel.textContent =
+        "Každý týden";
+
+      return;
+    }
+
+    if (
+      plannerRepeat.interval === 1
+    ) {
+      plannerRepeat.interval = 2;
+
+      plannerRepeatLabel.textContent =
+        "Každé 2 týdny";
+
+      return;
+    }
+
+    plannerRepeat = null;
 
     plannerRepeatLabel.textContent =
-      "Každý týden";
+      "Neopakovat";
   }
 );
 
