@@ -566,7 +566,6 @@ editorTextu?.addEventListener("pointerdown", () => {
   tlacitkoToolbar.addEventListener(
     "click",
     () => {
-      console.log("DOSLO TO K AA LISTENERU");
       nastavToolbar(
         rychlyToolbar.hidden
       );
