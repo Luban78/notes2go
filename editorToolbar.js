@@ -226,7 +226,8 @@ function skryjAndroidVyber() {
     [
       panelVelikost,
       panelStyl,
-      panelZarovnani
+      panelZarovnani,
+      panelBarvaTextu
     ].forEach(panel => {
       if (panel) {
         panel.hidden = true;
