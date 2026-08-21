@@ -1032,12 +1032,17 @@ editorTextu?.addEventListener("pointerdown", () => {
         obnovVyberTextu();
         
         if (barva === "default") {
-          document.execCommand(
-            "foreColor",
-            false,
-            "inherit"
-          );
-        } else {
+  const barvaMotivu =
+    getComputedStyle(
+      editorTextu
+    ).color;
+  
+  document.execCommand(
+    "foreColor",
+    false,
+    barvaMotivu
+  );
+} else {
           document.execCommand(
             "foreColor",
             false,

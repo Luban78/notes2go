@@ -1697,6 +1697,7 @@ document.addEventListener("pointercancel", (event) => {
 
 
 function openTaskEditorById(taskId) {
+  
   const currentTasks = loadTask();
 
   const index = currentTasks.findIndex(
