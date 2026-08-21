@@ -5588,3 +5588,22 @@ text-size-adjust: 100%;
   display: none !important;
 }
 
+.editorNadpis {
+  font-weight: 700;
+}
+
+.editorNadpis.h1 {
+  font-size: 2rem;
+}
+
+.editorNadpis.h2 {
+  font-size: 1.6rem;
+}
+
+.editorNadpis.h3 {
+  font-size: 1.3rem;
+}
+.editorTextNormalni {
+  font-size: inherit;
+  font-weight: inherit;
+}

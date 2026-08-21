@@ -417,17 +417,72 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   function nastavStylTextu(styl) {
-    if (!styl) {
-      return;
-    }
-
-    provedPrikaz(
-      "formatBlock",
-      styl
-    );
-
-    zavriVsechnyPanely();
+  if (!styl || !ulozenyVyberTextu) {
+    return;
   }
+  
+  obnovVyberTextu();
+  
+  const vyber =
+    window.getSelection();
+  
+  if (
+    !vyber ||
+    vyber.rangeCount === 0
+  ) {
+    return;
+  }
+  
+  const rozsah =
+    vyber.getRangeAt(0);
+  
+  if (rozsah.collapsed) {
+    return;
+  }
+  
+  const obal =
+    document.createElement("span");
+  
+  if (styl === "div") {
+    obal.className =
+      "editorTextNormalni";
+  } else {
+    obal.className =
+      `editorNadpis ${styl}`;
+  }
+  
+  const obsah =
+    rozsah.extractContents();
+  
+  obal.appendChild(obsah);
+  rozsah.insertNode(obal);
+  
+  const novyRozsah =
+    document.createRange();
+  
+  novyRozsah.selectNodeContents(
+    obal
+  );
+  
+  vyber.removeAllRanges();
+  vyber.addRange(
+    novyRozsah
+  );
+  
+  ulozenyVyberTextu =
+    novyRozsah.cloneRange();
+  
+  editorTextu.dispatchEvent(
+    new Event(
+      "input",
+      {
+        bubbles: true
+      }
+    )
+  );
+  
+  zavriVsechnyPanely();
+}
 
 
   function nastavZarovnani(zarovnani) {
@@ -545,9 +600,38 @@ editorTextu?.addEventListener("pointerdown", () => {
         tlacitkoPodtrzeni,
         document.queryCommandState("underline")
       );
+      
+      const vyber =
+  window.getSelection();
+
+let prvek =
+  vyber?.anchorNode;
+
+if (
+  prvek?.nodeType === Node.TEXT_NODE
+) {
+  prvek =
+    prvek.parentElement;
+}
+
+const jeNadpis =
+  prvek instanceof Element &&
+  !!prvek.closest(
+    ".editorNadpis.h1, .editorNadpis.h2, .editorNadpis.h3"
+  );
+
+nastavStavTlacitka(
+  tlacitkoNadpis,
+  jeNadpis
+);
     } catch (_chyba) {
       // Některé WebView queryCommandState nepodporují spolehlivě.
     }
+    
+    
+    
+    
+
 
     const velikost =
       zjistiVelikostPodKurzorem();
@@ -629,14 +713,16 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   tlacitkoNadpis?.addEventListener(
-    "click",
-    () => {
-      prepniPanel(
-        panelStyl,
-        tlacitkoNadpis
-      );
-    }
-  );
+  "click",
+  () => {
+    skryjAndroidVyber();
+
+    prepniPanel(
+      panelStyl,
+      tlacitkoNadpis
+    );
+  }
+);
 
 
   tlacitkoZarovnaniTextu?.addEventListener(
@@ -808,3 +894,37 @@ editorTextu?.addEventListener("pointerdown", () => {
 
   nastavToolbar(false);
 })();
+
+
+
+function zjistiNadpisPodKurzorem() {
+  const vyber =
+    window.getSelection();
+
+  if (
+    !vyber ||
+    vyber.rangeCount === 0
+  ) {
+    return null;
+  }
+
+  let prvek =
+    vyber
+      .getRangeAt(0)
+      .startContainer;
+
+  if (
+    prvek?.nodeType === Node.TEXT_NODE
+  ) {
+    prvek =
+      prvek.parentElement;
+  }
+
+  if (!(prvek instanceof Element)) {
+    return null;
+  }
+
+  return prvek.closest(
+    ".editorNadpis"
+  );
+}
