@@ -2362,6 +2362,8 @@ text-size-adjust: 100%;
   white-space: inherit;
   overflow-wrap: inherit;
   word-break: inherit;
+  
+  padding: 0.08em 0.12em;
 }
 
 #modalRichText:focus {
