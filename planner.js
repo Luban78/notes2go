@@ -20,6 +20,16 @@ const plannerTimeButton =
 const plannerTimeLabel =
   document.getElementById("plannerTimeLabel");
 
+const plannerRepeatButton =
+  document.getElementById("plannerRepeatButton");
+
+const plannerRepeatLabel =
+  document.getElementById("plannerRepeatLabel");
+
+
+
+
+
 function aktualizujPopiskyPlanovanehoTerminu() {
   if (plannerDateLabel) {
     if (plannerDate?.value) {
@@ -80,6 +90,7 @@ let plannerSourceTodoId = null;
 let plannerSelectionStart = null;
 let plannerSelectionEnd = null;
 let selectedPlannerText = "";
+let plannerRepeat = null;
 
 
 /* ==========================================
@@ -318,7 +329,8 @@ function createPlannedItem(
   sourceType = "note",
   selectionStart = null,
   selectionEnd = null,
-  sourceTodoId = null
+  sourceTodoId = null,
+  repeat = null
 ) {
   return {
     id: crypto.randomUUID(),
@@ -334,7 +346,8 @@ function createPlannedItem(
     createdAt: new Date().toISOString(),
     selectionStart,
     selectionEnd,
-    sourceTodoId
+    sourceTodoId,
+    repeat
   };
 }
 
@@ -386,6 +399,7 @@ function openPlannerForNote(note) {
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
+  plannerRepeat = null;
 
   plannerTaskTitle.textContent =
     note.title || "Bez názvu";
@@ -407,6 +421,7 @@ function closePlanner() {
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
+  plannerRepeat = null;
 
   if (plannerTaskTitle) {
     plannerTaskTitle.textContent = "";
@@ -517,7 +532,8 @@ async function saveCurrentPlannedItem() {
     plannerSourceType,
     plannerSelectionStart,
     plannerSelectionEnd,
-    plannerSourceTodoId
+    plannerSourceTodoId,
+    plannerRepeat
   );
   
   window.lastCreatedPlannedItemId =
@@ -681,6 +697,29 @@ function najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks) {
 
   return null;
 }
+
+
+plannerRepeatButton?.addEventListener(
+  "click",
+  () => {
+    plannerRepeat = {
+      enabled: true,
+      type: "weekly",
+      interval: 1,
+      days: [
+        new Date(
+          plannerDate.value
+        ).getDay()
+      ],
+      startDate:
+        plannerDate.value,
+      endDate: null
+    };
+
+    plannerRepeatLabel.textContent =
+      "Každý týden";
+  }
+);
 
 planSelectionButton.addEventListener(
   "click",
