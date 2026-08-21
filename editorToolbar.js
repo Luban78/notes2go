@@ -45,6 +45,9 @@
 
   const tlacitkoNadpis =
     document.getElementById("tlacitkoNadpis");
+  
+  const tlacitkoBarvaTextu =
+  document.getElementById("textColorButton");
 
   const tlacitkoZarovnaniTextu =
     document.getElementById("tlacitkoZarovnaniTextu");
@@ -60,6 +63,9 @@
 
   const panelStyl =
     document.getElementById("editorPanelStyl");
+    
+  const panelBarvaTextu =
+  document.getElementById("textColorPanel");
 
   const panelZarovnani =
     document.getElementById("editorPanelZarovnani");
@@ -724,6 +730,16 @@ nastavStavTlacitka(
   }
 );
 
+ tlacitkoBarvaTextu?.addEventListener(
+  "click",
+  () => {
+    prepniPanel(
+      panelBarvaTextu,
+      tlacitkoBarvaTextu
+    );
+  }
+);
+
 
   tlacitkoZarovnaniTextu?.addEventListener(
     "click",
@@ -893,6 +909,41 @@ nastavStavTlacitka(
 
 
   nastavToolbar(false);
+  
+  
+  panelBarvaTextu
+  ?.querySelectorAll("[data-text-color]")
+  .forEach(tlacitko => {
+    tlacitko.addEventListener(
+      "click",
+      () => {
+        const barva =
+          tlacitko.dataset.textColor;
+        
+        obnovVyberTextu();
+        
+        if (barva === "default") {
+          document.execCommand(
+            "foreColor",
+            false,
+            "inherit"
+          );
+        } else {
+          document.execCommand(
+            "foreColor",
+            false,
+            barva
+          );
+        }
+        
+        zavriVsechnyPanely();
+      }
+    );
+  });
+  
+  
+  
+  
 })();
 
 

@@ -5607,3 +5607,30 @@ text-size-adjust: 100%;
   font-size: inherit;
   font-weight: inherit;
 }
+
+.textColorButton {
+  position: relative;
+}
+
+.textColorLetter {
+  display: block;
+  line-height: 1;
+}
+
+.textColorLine {
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: 6px;
+  height: 3px;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.textColorPanel button {
+  font-size: 22px;
+  font-weight: 700;
+}
+.textColorDefault {
+  color: var(--color-text);
+}
