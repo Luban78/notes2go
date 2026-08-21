@@ -161,6 +161,8 @@
         string: text
       });
       
+      skryjMenu();
+      
       console.log(
         "Zkopírováno:",
         text
