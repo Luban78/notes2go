@@ -244,6 +244,22 @@ remindersButton.addEventListener("click", () => {
   logoutButton.addEventListener("click", async () => {
     closeMainMenu();
 
+    if (!navigator.onLine) {
+      showToast("Odhlášení vyžaduje internet");
+      return;
+    }
+
+    const pripraven =
+      typeof window.LubaNoteSupabase
+        ?.pripravClient === "function"
+        ? await window.LubaNoteSupabase.pripravClient()
+        : Boolean(supabaseClient);
+
+    if (!pripraven || !supabaseClient) {
+      showToast("Synchronizace není dostupná");
+      return;
+    }
+
     const { error } =
       await supabaseClient.auth.signOut();
 
@@ -252,6 +268,9 @@ remindersButton.addEventListener("click", () => {
       showToast("Odhlášení se nepodařilo");
       return;
     }
+
+    window.LubaNoteSupabase
+      ?.zrusPredchoziPrihlaseni?.();
 
     const loginScreen =
       document.getElementById("loginScreen");

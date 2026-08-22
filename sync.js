@@ -842,4 +842,74 @@ async function startSync() {
   }
 }
 
-startSync();
+let probihajiciStartSync = null;
+
+async function spustStartSyncBezpecne() {
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  if (
+    typeof window.LubaNoteSupabase
+      ?.pripravClient === "function"
+  ) {
+    const pripraven =
+      await window.LubaNoteSupabase
+        .pripravClient();
+
+    if (!pripraven) {
+      return false;
+    }
+  }
+
+  if (
+    typeof supabaseClient === "undefined" ||
+    !supabaseClient
+  ) {
+    return false;
+  }
+
+  if (probihajiciStartSync) {
+    return probihajiciStartSync;
+  }
+
+  probihajiciStartSync =
+    (async () => {
+      try {
+        await startSync();
+        return true;
+      } catch (error) {
+        console.warn(
+          "Synchronizace byla odložena:",
+          error
+        );
+        return false;
+      }
+    })();
+
+  try {
+    return await probihajiciStartSync;
+  } finally {
+    probihajiciStartSync = null;
+  }
+}
+
+window.LubaNoteSync = {
+  spustBezpecne: spustStartSyncBezpecne
+};
+
+/*
+ * Offline start nikdy nečeká na síť.
+ * Po návratu internetu se synchronizace spustí sama.
+ */
+spustStartSyncBezpecne();
+
+window.addEventListener(
+  "online",
+  () => {
+    setTimeout(
+      spustStartSyncBezpecne,
+      400
+    );
+  }
+);
