@@ -10,6 +10,15 @@
      - Preview zkusí Web Clipboard API, případně interní dočasnou schránku
   ========================================== */
 
+    const jeDesktop =
+    window.matchMedia(
+      "(hover: hover) and (pointer: fine)"
+    ).matches;
+
+  if (jeDesktop) {
+    return;
+  }
+
   const editorTextu =
     document.getElementById("modalRichText");
 

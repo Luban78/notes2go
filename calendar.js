@@ -59,7 +59,46 @@ const recurringOverviewItems =
     "recurringOverviewItems"
   );
   
+ const calendarWeekNumber =
+  document.getElementById(
+    "calendarWeekNumber"
+  ); 
   
+
+function ziskejCisloTydne(datum) {
+  const kopie =
+    new Date(
+      datum.getFullYear(),
+      datum.getMonth(),
+      datum.getDate()
+    );
+
+  const den =
+    kopie.getDay() || 7;
+
+  kopie.setDate(
+    kopie.getDate() + 4 - den
+  );
+
+  const zacatekRoku =
+    new Date(
+      kopie.getFullYear(),
+      0,
+      1
+    );
+
+  const rozdilDni =
+    Math.floor(
+      (kopie - zacatekRoku) /
+      86400000
+    );
+
+  return Math.ceil(
+    (rozdilDni + 1) / 7
+  );
+}
+
+
 recurringOverviewButton?.addEventListener(
   "click",
   () => {
@@ -429,6 +468,12 @@ function renderCalendarAgenda() {
     formatCalendarDate(
       calendarSelectedDay
     );
+    if (calendarWeekNumber) {
+  calendarWeekNumber.textContent =
+    `T${ziskejCisloTydne(
+      calendarSelectedDay
+    )}`;
+}
 
   renderCalendarItems(
     calendarDayItems

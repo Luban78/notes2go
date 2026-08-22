@@ -109,6 +109,86 @@ let reminderEnabled = false;
 let favoriteEnabled = false;
 let secretTaskEnabled = false;
 
+let puvodniOtiskEditoru = null;
+
+function vytvorOtiskEditoru() {
+  return JSON.stringify({
+    title: modalTitle.value.trim(),
+    richContent: modalRichText.innerHTML,
+    date: modalDate.value,
+    time: modalTime.value,
+    reminder: reminderEnabled,
+    favorite: favoriteEnabled,
+    area: activeArea,
+    secret: secretTaskEnabled,
+    tags: [...activeTags],
+    todos: [...activeTodos],
+    repeat: kopirujEditorRepeat(
+      editorRepeat
+    )
+  });
+}
+
+function bylEditorZmenen() {
+  return (
+    puvodniOtiskEditoru !== null &&
+    vytvorOtiskEditoru() !==
+      puvodniOtiskEditoru
+  );
+}
+
+
+function zpracujZavreniEditoru() {
+  if (bylEditorZmenen()) {
+    appMessageTitle.textContent =
+      "Soubor byl změněn";
+
+    appMessageText.textContent =
+      "Uložit změny?";
+
+    appMessageSaveButton.hidden = false;
+    appMessageDiscardButton.hidden = false;
+
+    closeAppMessageButton.textContent =
+      "Zrušit";
+
+    appMessageModal.hidden = false;
+
+    return;
+  }
+
+  taskModal.classList.remove("show");
+document.body.classList.remove("noScroll");
+
+activeTaskIndex = null;
+activeTaskId = null;
+taskModal.removeAttribute("data-task-id");
+editorSessionId += 1;
+
+setTimeout(() => {
+  if (!taskModal.classList.contains("show")) {
+    taskModal.hidden = true;
+  }
+}, 250);
+
+RichTextColors.reset();
+}
+
+
+
+
+document.addEventListener(
+  "keydown",
+  (udalost) => {
+    if (
+      udalost.key === "Escape" &&
+      !taskModal.hidden
+    ) {
+      udalost.preventDefault();
+      zpracujZavreniEditoru();
+    }
+  }
+);
 /* Opakování celé poznámky – jediný systém opakovaných úkolů. */
 let editorRepeat = null;
 
@@ -264,6 +344,16 @@ const appMessageText =
 
 const closeAppMessageButton =
   document.getElementById("closeAppMessageButton");
+
+const appMessageSaveButton =
+  document.getElementById(
+    "appMessageSaveButton"
+  );
+
+const appMessageDiscardButton =
+  document.getElementById(
+    "appMessageDiscardButton"
+  );  
 
 secretTaskButton?.addEventListener(
   "click",
@@ -499,6 +589,8 @@ function zavriTajnyEditorPriZamknuti() {
     RichTextColors.reset();
   }
 }
+
+
 function zobrazZpravuAplikace(
   nadpis,
   zprava
@@ -517,8 +609,55 @@ closeAppMessageButton?.addEventListener(
   "click",
   () => {
     appMessageModal.hidden = true;
+
+    appMessageSaveButton.hidden = true;
+    appMessageDiscardButton.hidden = true;
+
+    closeAppMessageButton.textContent = "OK";
   }
 );
+appMessageSaveButton?.addEventListener(
+  "click",
+  async () => {
+    appMessageModal.hidden = true;
+
+    appMessageSaveButton.hidden = true;
+    appMessageDiscardButton.hidden = true;
+
+    closeAppMessageButton.textContent = "OK";
+
+    await ulozAZavriEditor();
+  }
+);
+
+appMessageDiscardButton?.addEventListener(
+  "click",
+  () => {
+    appMessageModal.hidden = true;
+
+    appMessageSaveButton.hidden = true;
+    appMessageDiscardButton.hidden = true;
+
+    closeAppMessageButton.textContent = "OK";
+
+    taskModal.classList.remove("show");
+    document.body.classList.remove("noScroll");
+
+    activeTaskIndex = null;
+    activeTaskId = null;
+    taskModal.removeAttribute("data-task-id");
+    editorSessionId += 1;
+
+    setTimeout(() => {
+      if (!taskModal.classList.contains("show")) {
+        taskModal.hidden = true;
+      }
+    }, 250);
+
+    RichTextColors.reset();
+  }
+);
+
 // ==========================================
 // VLASTNÍ VÝBĚR DATA A ČASU – SDÍLENÝ CÍL
 // Stejný kalendář a ciferník používá editor,
@@ -1771,6 +1910,10 @@ addTaskButton.addEventListener("click", () => {
 
   reminderEnabled = false;
   updateReminderButton(false);
+  puvodniOtiskEditoru =
+  vytvorOtiskEditoru();
+
+
 
   taskModal.hidden = false;
   taskModal.classList.add("show");
@@ -1780,7 +1923,11 @@ addTaskButton.addEventListener("click", () => {
 });
 
 
-editorBackButton.addEventListener("click", async () => {
+
+
+
+
+async function ulozAZavriEditor() {
   const closingSessionId = editorSessionId;
   const closingTaskId = activeTaskId;
 
@@ -1971,7 +2118,17 @@ editorBackButton.addEventListener("click", async () => {
   }, 250);
 
   RichTextColors.reset();
-});
+}
+
+editorBackButton.addEventListener(
+  "click",
+  ulozAZavriEditor
+);
+
+
+
+
+
 
 
 let longPressTimer = null;
@@ -2090,6 +2247,8 @@ secretTaskButton.classList.toggle(
   document.body.classList.add("noScroll");
 
   loadTodos(currentTask.todos);
+  puvodniOtiskEditoru =
+  vytvorOtiskEditoru();
 
   /*
    * Pokud byla karta otevřena z aktivního vyhledávání,
@@ -2358,24 +2517,72 @@ function renderTasks() {
       window.matchMedia("(min-width: 900px)").matches;
 
     /*
-     * PC: všechny karty držíme v jednom zdrojovém sloupci.
-     * CSS z něj udělá 4sloupcový masonry GRID nebo 2sloupcový LIST.
-     * Mobil: zachováme původní 2 nezávislé masonry sloupce.
-     */
-    if (desktopCardLayout || listMode) {
-      pinnedLeft.append(loadedCard);
-    } else {
-      const cardCount =
-        pinnedLeft.children.length +
-        pinnedRight.children.length;
+ * PC GRID:
+ * 4 nezávislé masonry sloupce.
+ * Karty se rozdávají zleva doprava 1 → 2 → 3 → 4.
+ *
+ * PC LIST:
+ * všechny karty zůstávají přímo v pinnedLeft.
+ *
+ * Mobil:
+ * zachováme původní 2 nezávislé sloupce.
+ */
+if (
+  desktopCardLayout &&
+  !listMode
+) {
+  let desktopSloupce =
+    pinnedLeft.querySelectorAll(
+      ".desktopMasonryColumn"
+    );
 
-      if (cardCount % 2 === 0) {
-        pinnedLeft.append(loadedCard);
-      } else {
-        pinnedRight.append(loadedCard);
-      }
+  if (desktopSloupce.length === 0) {
+    for (
+      let i = 0;
+      i < 4;
+      i++
+    ) {
+      const sloupec =
+        document.createElement("div");
+
+      sloupec.className =
+        "desktopMasonryColumn";
+
+      pinnedLeft.append(sloupec);
     }
 
+    desktopSloupce =
+      pinnedLeft.querySelectorAll(
+        ".desktopMasonryColumn"
+      );
+  }
+
+  const pocetKaret =
+    pinnedLeft.querySelectorAll(
+      ".taskCard"
+    ).length;
+
+  const cisloSloupce =
+    pocetKaret % 4;
+
+  desktopSloupce[
+    cisloSloupce
+  ].append(loadedCard);
+
+} else if (listMode) {
+  pinnedLeft.append(loadedCard);
+
+} else {
+  const cardCount =
+    pinnedLeft.children.length +
+    pinnedRight.children.length;
+
+  if (cardCount % 2 === 0) {
+    pinnedLeft.append(loadedCard);
+  } else {
+    pinnedRight.append(loadedCard);
+  }
+}
 
     /* Otevření existující poznámky */
 

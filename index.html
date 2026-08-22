@@ -248,13 +248,20 @@
     Vybraný den
   </button>
 
+  <div
+  id="calendarWeekNumber"
+  class="calendarWeekNumber"
+>
+  T--
+</div>
+
   <button
     id="recurringOverviewButton"
     type="button"
     class="recurringOverviewButton"
     aria-label="Zobrazit opakované úkoly"
   >
-    🔁
+    ↻
   </button>
 
 </div>
@@ -1368,10 +1375,29 @@
     </p>
     
     <div class="appMessageActions">
-      <button id="closeAppMessageButton" type="button">
-        OK
-      </button>
-    </div>
+  <button
+    id="appMessageSaveButton"
+    type="button"
+    hidden
+  >
+    Uložit
+  </button>
+
+  <button
+    id="appMessageDiscardButton"
+    type="button"
+    hidden
+  >
+    Neukládat
+  </button>
+
+  <button
+    id="closeAppMessageButton"
+    type="button"
+  >
+    OK
+  </button>
+</div>
     
   </div>
 </div>
