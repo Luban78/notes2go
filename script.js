@@ -2125,6 +2125,41 @@ editorBackButton.addEventListener(
   ulozAZavriEditor
 );
 
+/* ==========================================
+   ANDROID – SYSTÉMOVÉ TLAČÍTKO ZPĚT
+   Native MainActivity se nejdřív zeptá této funkce,
+   jestli má LubaNote stisk Back zpracovat samo.
+   ========================================== */
+
+function zpracujAndroidZpet() {
+  /*
+   * Pokud je otevřený univerzální modal, Back se chová
+   * stejně jako jeho tlačítko Zrušit / OK.
+   */
+  if (appMessageModal && !appMessageModal.hidden) {
+    closeAppMessageButton?.click();
+    return true;
+  }
+
+  /*
+   * V editoru použijeme stejnou logiku jako Esc na PC:
+   * beze změny rovnou zavřít, po změně nabídnout uložení.
+   */
+  if (taskModal && !taskModal.hidden) {
+    zpracujZavreniEditoru();
+    return true;
+  }
+
+  /*
+   * Nic z LubaNote Back nezpracovalo – Android může
+   * pokračovat svým běžným chováním (zavřít aplikaci).
+   */
+  return false;
+}
+
+window.LubaNoteZpracujAndroidZpet =
+  zpracujAndroidZpet;
+
 
 
 

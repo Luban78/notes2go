@@ -6,6 +6,8 @@ import android.os.Bundle;
 import android.view.ActionMode;
 import android.view.View;
 
+import androidx.activity.OnBackPressedCallback;
+
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -26,6 +28,43 @@ public class MainActivity extends BridgeActivity {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       getWindow().setNavigationBarContrastEnforced(false);
     }
+
+    /*
+     * Systémové Android Zpět nejdřív nabídneme webové části LubaNote.
+     * Když je otevřený editor, JavaScript použije stejnou logiku jako
+     * klávesa Esc na PC. Pokud nic v aplikaci Back nezpracuje, zachováme
+     * původní Android chování a Activity zavřeme.
+     */
+    getOnBackPressedDispatcher().addCallback(
+      this,
+      new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+          zpracujSystemoveZpet();
+        }
+      }
+    );
+  }
+
+
+  private void zpracujSystemoveZpet() {
+    if (getBridge() == null || getBridge().getWebView() == null) {
+      finish();
+      return;
+    }
+
+    getBridge().getWebView().evaluateJavascript(
+      "(function(){try{" +
+        "return window.LubaNoteZpracujAndroidZpet" +
+        " ? window.LubaNoteZpracujAndroidZpet()" +
+        " : false;" +
+      "}catch(error){console.error(error);return false;}})();",
+      vysledek -> {
+        if (!"true".equals(vysledek)) {
+          finish();
+        }
+      }
+    );
   }
 
 
