@@ -820,9 +820,26 @@ async function syncNotes() {
 
 async function startSync() {
   await syncNotes();
+
+  if (
+    typeof window.LubaNoteRecurring
+      ?.migrujStareOpakovaniPlanneru ===
+    "function"
+  ) {
+    await window.LubaNoteRecurring
+      .migrujStareOpakovaniPlanneru();
+  }
+
   await loadTagsFromSupabase();
   await registerCurrentDevice();
   await cleanupSafeDeletedNotes();
+
+  if (
+    typeof obnovNotifikaceOpakovanychPoznamek ===
+    "function"
+  ) {
+    await obnovNotifikaceOpakovanychPoznamek();
+  }
 }
 
 startSync();

@@ -20,12 +20,6 @@ const plannerTimeButton =
 const plannerTimeLabel =
   document.getElementById("plannerTimeLabel");
 
-const plannerRepeatButton =
-  document.getElementById("plannerRepeatButton");
-
-const plannerRepeatLabel =
-  document.getElementById("plannerRepeatLabel");
-
 
 
 
@@ -90,7 +84,6 @@ let plannerSourceTodoId = null;
 let plannerSelectionStart = null;
 let plannerSelectionEnd = null;
 let selectedPlannerText = "";
-let plannerRepeat = null;
 
 
 /* ==========================================
@@ -329,8 +322,7 @@ function createPlannedItem(
   sourceType = "note",
   selectionStart = null,
   selectionEnd = null,
-  sourceTodoId = null,
-  repeat = null
+  sourceTodoId = null
 ) {
   return {
     id: crypto.randomUUID(),
@@ -346,8 +338,7 @@ function createPlannedItem(
     createdAt: new Date().toISOString(),
     selectionStart,
     selectionEnd,
-    sourceTodoId,
-    repeat
+    sourceTodoId
   };
 }
 
@@ -385,29 +376,10 @@ function setPlannerDateTimeToNow() {
 
 
 /* ==========================================
-   OTEVŘENÍ PLÁNOVÁNÍ CELÉ POZNÁMKY
+   PLÁNOVACÍ DIALOG
+   Používá se jen pro označený text a TODO.
+   Celá poznámka používá vlastní datum + čas.
    ========================================== */
-
-function openPlannerForNote(note) {
-  if (!note) {
-    return;
-  }
-
-  plannerSourceNoteId = note.id || null;
-  plannerSourceType = "note";
-  plannerSourceTodoId = null;
-  plannerSelectionStart = null;
-  plannerSelectionEnd = null;
-  selectedPlannerText = "";
-  plannerRepeat = null;
-
-  plannerTaskTitle.textContent =
-    note.title || "Bez názvu";
-
-  setPlannerDateTimeToNow();
-  plannerModal.hidden = false;
-}
-
 
 /* ==========================================
    ZAVŘENÍ PLÁNOVACÍHO DIALOGU
@@ -421,7 +393,6 @@ function closePlanner() {
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
-  plannerRepeat = null;
 
   if (plannerTaskTitle) {
     plannerTaskTitle.textContent = "";
@@ -532,8 +503,7 @@ async function saveCurrentPlannedItem() {
     plannerSourceType,
     plannerSelectionStart,
     plannerSelectionEnd,
-    plannerSourceTodoId,
-    plannerRepeat
+    plannerSourceTodoId
   );
   
   window.lastCreatedPlannedItemId =
@@ -698,48 +668,6 @@ function najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks) {
   return null;
 }
 
-
-plannerRepeatButton?.addEventListener(
-  "click",
-  () => {
-    if (!plannerRepeat) {
-      plannerRepeat = {
-        enabled: true,
-        type: "weekly",
-        interval: 1,
-        days: [
-          new Date(
-            plannerDate.value
-          ).getDay()
-        ],
-        startDate:
-          plannerDate.value,
-        endDate: null
-      };
-
-      plannerRepeatLabel.textContent =
-        "Každý týden";
-
-      return;
-    }
-
-    if (
-      plannerRepeat.interval === 1
-    ) {
-      plannerRepeat.interval = 2;
-
-      plannerRepeatLabel.textContent =
-        "Každé 2 týdny";
-
-      return;
-    }
-
-    plannerRepeat = null;
-
-    plannerRepeatLabel.textContent =
-      "Neopakovat";
-  }
-);
 
 planSelectionButton.addEventListener(
   "click",

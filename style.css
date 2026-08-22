@@ -5733,3 +5733,101 @@ text-size-adjust: 100%;
   font-weight: 600;
   color: var(--color-accent);
 }
+/* ========================================
+   OPAKOVÁNÍ PŘÍMO VE VÝBĚRU ČASU
+   Celá poznámka používá jediný termín
+   a jediné pravidlo opakování.
+   ======================================== */
+
+.timePickerContent {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.timeRepeatSection {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.timeRepeatSection[hidden] {
+  display: none;
+}
+
+.timeRepeatHeading {
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.timeRepeatPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.timeRepeatPresets button,
+.timeRepeatWeekdays button {
+  min-height: 40px;
+  padding: 7px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 650;
+}
+
+.timeRepeatPresets button.active,
+.timeRepeatWeekdays button.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.timeRepeatWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.timeRepeatWeekdays[hidden] {
+  display: none;
+}
+
+.timeRepeatWeekdays button {
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.timeRepeatSummary {
+  margin-top: 9px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+@media (max-width: 600px) {
+  .timeRepeatPresets button {
+    flex: 1 1 auto;
+  }
+
+  .timeRepeatWeekdays button {
+    min-height: 38px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Přehled opakovaných úkolů používá celé karty jako tlačítka. */
+.recurringOverviewItem {
+  width: 100%;
+  text-align: left;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendarAgendaHeader .recurringOverviewButton {
+  margin: 0;
+  flex: 0 0 auto;
+}

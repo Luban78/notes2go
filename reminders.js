@@ -191,6 +191,106 @@ function getBezpecnyObsahNotifikacePoznamky(
   };
 }
 
+function vytvorIdOpakovaneNotifikace(noteId, datumCas) {
+  const text = `${noteId}|${datumCas}`;
+  let hash = 2166136261;
+
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return ((hash >>> 0) % 2147483646) + 1;
+}
+
+
+async function zrusCekajiciOpakovaneNotifikacePoznamky(noteId) {
+  const LocalNotifications =
+    window.Capacitor?.Plugins?.LocalNotifications;
+
+  if (
+    !LocalNotifications ||
+    !noteId ||
+    typeof LocalNotifications.getPending !== "function"
+  ) {
+    return;
+  }
+
+  try {
+    const pending =
+      await LocalNotifications.getPending();
+
+    const notifications =
+      (pending?.notifications || [])
+        .filter(
+          (notification) =>
+            notification?.extra?.taskId === noteId &&
+            notification?.extra?.recurring === true
+        )
+        .map((notification) => ({
+          id: notification.id
+        }));
+
+    if (notifications.length > 0) {
+      await LocalNotifications.cancel({
+        notifications
+      });
+    }
+  } catch (error) {
+    console.error(
+      "Zrušení opakovaných notifikací se nepodařilo:",
+      error
+    );
+  }
+}
+
+
+async function naplanujOpakovaneNotifikacePoznamky(note) {
+  if (
+    !note?.id ||
+    !note.date ||
+    note.repeat?.enabled !== true ||
+    note.reminder !== true ||
+    note.isSecret === true ||
+    !window.LubaNoteRecurring
+  ) {
+    return;
+  }
+
+  const terminy =
+    window.LubaNoteRecurring
+      .vypocitejBudouciTerminy(
+        note.date,
+        note.repeat,
+        32,
+        new Date()
+      );
+
+  for (let index = 0; index < terminy.length; index++) {
+    const termin = terminy[index];
+    const notificationId =
+      index === 0 && note.notificationId
+        ? note.notificationId
+        : vytvorIdOpakovaneNotifikace(
+            note.id,
+            termin.toISOString()
+          );
+
+    await scheduleNotification(
+      notificationId,
+      note.title,
+      termin,
+      note.note,
+      {
+        lubanoteType: "note",
+        taskId: note.id,
+        recurring: true
+      }
+    );
+  }
+}
+
+
 async function obnovNotifikacePoznamkyPodleSoukromi(note) {
   if (!note?.id) {
     return;
@@ -203,6 +303,10 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
   if (note.notificationId) {
     await cancelNotification(note.notificationId);
   }
+
+  await zrusCekajiciOpakovaneNotifikacePoznamky(
+    note.id
+  );
 
   const plannedItems = Array.isArray(note.plannedItems)
     ? note.plannedItems
@@ -224,6 +328,14 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
   }
 
   if (
+    note.repeat?.enabled === true &&
+    note.reminder === true &&
+    note.date
+  ) {
+    await naplanujOpakovaneNotifikacePoznamky(
+      note
+    );
+  } else if (
     note.notificationId &&
     note.reminder === true &&
     note.date &&
@@ -266,6 +378,30 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
     );
   }
 }
+
+async function obnovNotifikaceOpakovanychPoznamek() {
+  if (typeof loadTask !== "function") {
+    return;
+  }
+
+  const opakovanePoznamky =
+    loadTask().filter(
+      (note) =>
+        note?.id &&
+        note.isSecret !== true &&
+        note.completed !== true &&
+        note.reminder === true &&
+        note.date &&
+        note.repeat?.enabled === true
+    );
+
+  for (const note of opakovanePoznamky) {
+    await obnovNotifikacePoznamkyPodleSoukromi(
+      note
+    );
+  }
+}
+
 
 /*
  * Bezpečnostní úklid po odemknutí / aktualizaci aplikace.
@@ -445,21 +581,51 @@ function getReminderEntries() {
 
   const entries = [];
 
-  /* Klasické připomínky nastavené na celé poznámce. */
+  /* Připomínky celé poznámky. U opakované poznámky zobrazíme
+     vždy jen nejbližší budoucí výskyt – ne desítky kopií. */
   notes.forEach((task) => {
     if (
       task?.reminder !== true ||
-      !task?.date
+      !task?.date ||
+      task.isSecret === true ||
+      task.completed === true
     ) {
       return;
+    }
+
+    let datumPripominky = task.date;
+
+    if (
+      task.repeat?.enabled === true &&
+      window.LubaNoteRecurring
+    ) {
+      const pristiTermin =
+        window.LubaNoteRecurring
+          .vypocitejPristiTermin(
+            task.date,
+            task.repeat,
+            new Date()
+          );
+
+      if (!pristiTermin) {
+        return;
+      }
+
+      datumPripominky =
+        formatReminderLocalDateTime(
+          pristiTermin
+        );
     }
 
     entries.push({
       kind: "note",
       id: task.id,
       sourceNoteId: task.id,
-      sourceType: "note",
-      date: task.date,
+      sourceType:
+        task.repeat?.enabled === true
+          ? "recurring-note"
+          : "note",
+      date: datumPripominky,
       title: task.title || "Bez názvu",
       preview: task.note || "",
       area: task.area || "private",
@@ -1160,9 +1326,25 @@ async function saveReminderDate(taskId, newDate) {
    */
   const newNotificationId = createUniqueNotificationId();
 
+  const noveDatum =
+    formatReminderLocalDateTime(newDate);
+
+  const aktualizovaneRepeat =
+    currentTask.repeat?.enabled === true
+      ? {
+          ...currentTask.repeat,
+          startDate: noveDatum.slice(0, 10),
+          dayOfMonth:
+            currentTask.repeat.type === "monthly"
+              ? Number(noveDatum.slice(8, 10))
+              : currentTask.repeat.dayOfMonth
+        }
+      : currentTask.repeat || null;
+
   const updatedTask = {
     ...currentTask,
-    date: formatReminderLocalDateTime(newDate),
+    date: noveDatum,
+    repeat: aktualizovaneRepeat,
     reminder: true,
     notificationId: newNotificationId,
     updatedAt: new Date().toISOString()
@@ -1170,18 +1352,9 @@ async function saveReminderDate(taskId, newDate) {
 
   await updateTask(index, updatedTask);
 
-  if (updatedTask.isSecret !== true) {
-    await scheduleNotification(
-      updatedTask.notificationId,
-      updatedTask.title,
-      updatedTask.date,
-      updatedTask.note,
-      {
-        lubanoteType: "note",
-        taskId: updatedTask.id
-      }
-    );
-  }
+  await obnovNotifikacePoznamkyPodleSoukromi(
+    updatedTask
+  );
 
   if (
     typeof uploadLocalNoteToSupabase === "function"
@@ -1435,6 +1608,10 @@ async function disableSelectedNoteReminder(entry) {
   };
 
   await updateTask(index, updatedTask);
+
+  await obnovNotifikacePoznamkyPodleSoukromi(
+    updatedTask
+  );
 
   if (
     typeof uploadLocalNoteToSupabase === "function"

@@ -138,7 +138,7 @@ function loadCalendarItems() {
       .map((note) => note.id)
   );
 
-  /* Planner nikdy nezobrazuje položku bez existující zdrojové poznámky. */
+  /* Samostatné Planner položky zůstávají pro označený text a TODO. */
   const items = loadPlannedItems().filter(
     (item) =>
       item?.sourceNoteId &&
@@ -147,10 +147,31 @@ function loadCalendarItems() {
 
   notes.forEach((note) => {
     if (
-      note.reminder === true &&
-      note.date &&
-      note.completed !== true
+      !note?.id ||
+      note.isSecret === true ||
+      note.completed === true ||
+      !note.date
     ) {
+      return;
+    }
+
+    /* Celá opakovaná poznámka je sama úkolem.
+       Nevytváříme pro ni druhou Planner položku. */
+    if (note.repeat?.enabled === true) {
+      items.push({
+        id: `repeat-note-${note.id}`,
+        sourceNoteId: note.id,
+        text: note.title || "Bez názvu",
+        plannedAt: note.date,
+        completed: false,
+        sourceType: "recurring-note",
+        repeat: note.repeat
+      });
+
+      return;
+    }
+
+    if (note.reminder === true) {
       items.push({
         id: `reminder-${note.id}`,
         sourceNoteId: note.id,
@@ -163,6 +184,22 @@ function loadCalendarItems() {
   });
 
   return items;
+}
+
+
+function jePolozkaProDatum(item, dateKey) {
+  if (
+    item?.sourceType === "recurring-note" &&
+    item.repeat?.enabled === true
+  ) {
+    return window.LubaNoteRecurring
+      ?.jeDatumVOpakovani?.(
+        dateKey,
+        item.repeat
+      ) === true;
+  }
+
+  return item?.plannedAt?.startsWith(dateKey) === true;
 }
 
 
@@ -227,27 +264,11 @@ function renderCalendar() {
 
     const hasItems =
       plannedItems.some(
-        item => {
-          if (
-            item.plannedAt?.startsWith(dateKey)
-          ) {
-            return true;
-          }
-
-          if (
-            item.repeat?.enabled === true &&
-            item.repeat.type === "weekly"
-          ) {
-            return jePlatnyTydenniVyskyt(
-              item.repeat.startDate,
-              dateKey,
-              item.repeat.interval,
-              item.repeat.days
-            );
-          }
-
-          return false;
-        }
+        item =>
+          jePolozkaProDatum(
+            item,
+            dateKey
+          )
       );
 
     if (hasItems) {
@@ -309,27 +330,11 @@ function renderCalendarItems(targetElement) {
   const items =
     loadCalendarItems()
       .filter(
-        item => {
-          if (
-            item.plannedAt?.startsWith(dateKey)
-          ) {
-            return true;
-          }
-
-          if (
-            item.repeat?.enabled === true &&
-            item.repeat.type === "weekly"
-          ) {
-            return jePlatnyTydenniVyskyt(
-              item.repeat.startDate,
-              dateKey,
-              item.repeat.interval,
-              item.repeat.days
-            );
-          }
-
-          return false;
-        }
+        item =>
+          jePolozkaProDatum(
+            item,
+            dateKey
+          )
       )
       .sort(
         (a, b) =>
@@ -375,7 +380,7 @@ function renderCalendarItems(targetElement) {
       item.text;
 
     if (
-      item.repeat?.enabled === true
+      item.sourceType === "recurring-note"
     ) {
       text.textContent += " 🔁";
     }
@@ -457,99 +462,80 @@ calendarNextMonth.addEventListener(
 function renderRecurringOverview() {
   recurringOverviewItems.innerHTML = "";
 
-  const opakovanePolozky =
-    loadPlannedItems().filter(
-      item =>
-        item.repeat?.enabled === true
+  const opakovanePoznamky =
+    loadTask().filter(
+      (note) =>
+        note?.id &&
+        note.isSecret !== true &&
+        note.completed !== true &&
+        note.date &&
+        note.repeat?.enabled === true
     );
 
-  if (opakovanePolozky.length === 0) {
+  if (opakovanePoznamky.length === 0) {
     recurringOverviewItems.textContent =
       "Žádné opakované úkoly.";
 
     return;
   }
 
-  opakovanePolozky.forEach(
-    item => {
-      const radek =
-        document.createElement("div");
+  opakovanePoznamky.forEach((note) => {
+    const radek =
+      document.createElement("button");
 
-      radek.className =
-        "recurringOverviewItem";
+    radek.type = "button";
+    radek.className =
+      "recurringOverviewItem";
 
-      const nazev =
-  document.createElement("div");
+    const nazev =
+      document.createElement("div");
 
-nazev.className =
-  "recurringOverviewItemTitle";
+    nazev.className =
+      "recurringOverviewItemTitle";
 
-nazev.textContent =
-  item.text;
+    nazev.textContent =
+      note.title || "Bez názvu";
 
-const popis =
-  document.createElement("div");
+    const popis =
+      document.createElement("div");
 
-const priste =
-  document.createElement("div");
+    popis.className =
+      "recurringOverviewItemRule";
 
-priste.className =
-  "recurringOverviewItemNext";
+    popis.textContent =
+      window.LubaNoteRecurring
+        ?.formatujPravidlo?.(note.repeat) ||
+      "Opakování";
 
+    const priste =
+      document.createElement("div");
 
-popis.className =
-  "recurringOverviewItemRule";
+    priste.className =
+      "recurringOverviewItemNext";
 
-if (
-  item.repeat.type === "weekly"
-) {
-  const nazvyDnu = {
-  0: "Ne",
-  1: "Po",
-  2: "Út",
-  3: "St",
-  4: "Čt",
-  5: "Pá",
-  6: "So"
-};
+    const dalsiDatum =
+      window.LubaNoteRecurring
+        ?.vypocitejPristiTermin?.(
+          note.date,
+          note.repeat,
+          new Date()
+        ) || null;
 
-const dnyText =
-  item.repeat.days
-    .map(
-      den => nazvyDnu[den]
-    )
-    .join(", ");
+    priste.textContent = dalsiDatum
+      ? `Příště: ${dalsiDatum.toLocaleDateString("cs-CZ")} • ${dalsiDatum.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}`
+      : "Série už nemá další termín.";
 
-if (item.repeat.interval === 1) {
-  popis.textContent =
-    `Každý týden • ${dnyText}`;
-} else {
-  popis.textContent =
-    `Každé ${item.repeat.interval} týdny • ${dnyText}`;
+    radek.append(
+      nazev,
+      popis,
+      priste
+    );
+
+    radek.addEventListener("click", () => {
+      openTaskEditorById(note.id);
+    });
+
+    recurringOverviewItems.append(radek);
+  });
 }
 
-
-const dalsiDatum =
-  vypocitejDalsiVyskyt(
-    new Date(),
-    item.repeat
-  );
-
-if (dalsiDatum) {
-  priste.textContent =
-    `Příště: ${dalsiDatum.toLocaleDateString("cs-CZ")}`;
-}
-}
-
-radek.append(
-  nazev,
-  popis,
-  priste
-);
-
-      recurringOverviewItems.append(
-        radek
-      );
-    }
-  );
-}

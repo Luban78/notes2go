@@ -1,330 +1,530 @@
-  function vypocitejDalsiDatumDenne(
-      datum,
-      interval
-    ) {
-      const dalsiDatum =
-        new Date(datum);
-      
-      dalsiDatum.setDate(
-        dalsiDatum.getDate() + interval
-      );
-      
-      return dalsiDatum;
-    }
-    
-  function vypocitejDalsiDatumZaTydny(
-      datum,
-      interval
-    ) {
-      const dalsiDatum =
-        new Date(datum);
-      
-      dalsiDatum.setDate(
-        dalsiDatum.getDate() + interval * 7
-      );
-      
-      return dalsiDatum;
-    }
-    
-  function vypocitejDalsiDatumZaMesice(
-      datum,
-      interval
-    ) {
-      const puvodniDatum =
-        new Date(datum);
-      
-      const puvodniDen =
-        puvodniDatum.getDate();
-      
-      const cilovyRok =
-        puvodniDatum.getFullYear();
-      
-      const cilovyMesic =
-        puvodniDatum.getMonth() + interval;
-      
-      const posledniDenCilovehoMesice =
-        new Date(
-          cilovyRok,
-          cilovyMesic + 1,
-          0
-        ).getDate();
-      
-      const cilovyDen =
-        Math.min(
-          puvodniDen,
-          posledniDenCilovehoMesice
-        );
-      
-      return new Date(
-        cilovyRok,
-        cilovyMesic,
-        cilovyDen
-      );
-    }
-    
-  function najdiDalsiDenVTydnu(
-  datum,
-  startDatum,
-  interval,
-  dny
-) {
-  const datumHledani =
-    new Date(datum);
+/* ==========================================
+   LUBANOTE – OPAKOVANÉ ÚKOLY
+   Jediný systém opakování je uložený přímo
+   na poznámce v note.repeat.
+   ========================================== */
 
-  let pocitadloDni = 0;
+(() => {
+  const MILISEKUND_ZA_DEN = 86400000;
+  const MAX_HLEDANYCH_DNU = 3660;
 
-  const maximalniPocetDni =
-    interval * 7 + 7;
+  function ziskejCastData(hodnota) {
+    if (hodnota instanceof Date) {
+      return {
+        rok: hodnota.getFullYear(),
+        mesic: hodnota.getMonth() + 1,
+        den: hodnota.getDate()
+      };
+    }
 
-  while (
-    pocitadloDni <
-    maximalniPocetDni
+    const text = String(hodnota || "").slice(0, 10);
+    const [rok, mesic, den] = text.split("-").map(Number);
+
+    if (!rok || !mesic || !den) {
+      return null;
+    }
+
+    return { rok, mesic, den };
+  }
+
+  function datumovyKlic(hodnota) {
+    const casti = ziskejCastData(hodnota);
+
+    if (!casti) {
+      return "";
+    }
+
+    return `${casti.rok}-${String(casti.mesic).padStart(2, "0")}-${String(casti.den).padStart(2, "0")}`;
+  }
+
+  function utcDen(casti) {
+    return Math.floor(
+      Date.UTC(
+        casti.rok,
+        casti.mesic - 1,
+        casti.den
+      ) / MILISEKUND_ZA_DEN
+    );
+  }
+
+  function denVTydnu(casti) {
+    return new Date(
+      Date.UTC(
+        casti.rok,
+        casti.mesic - 1,
+        casti.den
+      )
+    ).getUTCDay();
+  }
+
+  function pondeliTydne(casti) {
+    const cisloDne = denVTydnu(casti);
+    const posunOdPondeli = (cisloDne + 6) % 7;
+    return utcDen(casti) - posunOdPondeli;
+  }
+
+  function jePredStartem(cil, repeat) {
+    if (!repeat?.startDate) {
+      return false;
+    }
+
+    return datumovyKlic(cil) < datumovyKlic(repeat.startDate);
+  }
+
+  function jeZaKoncem(cil, repeat) {
+    if (!repeat?.endDate) {
+      return false;
+    }
+
+    return datumovyKlic(cil) > datumovyKlic(repeat.endDate);
+  }
+
+  function jePlatnyDenniVyskyt(cil, repeat) {
+    const start = ziskejCastData(repeat.startDate);
+    const datum = ziskejCastData(cil);
+
+    if (!start || !datum) {
+      return false;
+    }
+
+    const interval = Math.max(1, Number(repeat.interval) || 1);
+    const rozdilDni = utcDen(datum) - utcDen(start);
+
+    return rozdilDni >= 0 && rozdilDni % interval === 0;
+  }
+
+  function jePlatnyTydenniVyskyt(
+    startDatum,
+    ciloveDatum,
+    interval = 1,
+    dny = []
   ) {
-    datumHledani.setDate(
-      datumHledani.getDate() + 1
+    const start = ziskejCastData(startDatum);
+    const cil = ziskejCastData(ciloveDatum);
+
+    if (!start || !cil) {
+      return false;
+    }
+
+    const povoleneDny = Array.isArray(dny)
+      ? dny.map(Number)
+      : [];
+
+    if (!povoleneDny.includes(denVTydnu(cil))) {
+      return false;
+    }
+
+    const rozdilTydnu = Math.floor(
+      (pondeliTydne(cil) - pondeliTydne(start)) / 7
     );
 
-    pocitadloDni++;
+    const bezpecnyInterval =
+      Math.max(1, Number(interval) || 1);
+
+    return (
+      rozdilTydnu >= 0 &&
+      rozdilTydnu % bezpecnyInterval === 0
+    );
+  }
+
+  function jePlatnyMesicniVyskyt(cil, repeat) {
+    const start = ziskejCastData(repeat.startDate);
+    const datum = ziskejCastData(cil);
+
+    if (!start || !datum) {
+      return false;
+    }
+
+    const interval = Math.max(1, Number(repeat.interval) || 1);
+    const rozdilMesicu =
+      (datum.rok - start.rok) * 12 +
+      (datum.mesic - start.mesic);
+
+    if (rozdilMesicu < 0 || rozdilMesicu % interval !== 0) {
+      return false;
+    }
+
+    const denVMesici = Math.max(
+      1,
+      Number(repeat.dayOfMonth) || start.den
+    );
+
+    const posledniDen = new Date(
+      datum.rok,
+      datum.mesic,
+      0
+    ).getDate();
+
+    return datum.den === Math.min(denVMesici, posledniDen);
+  }
+
+  function jeDatumVOpakovani(ciloveDatum, repeat) {
+    if (!repeat?.enabled || !repeat.startDate) {
+      return false;
+    }
 
     if (
-      jePlatnyTydenniVyskyt(
-        startDatum,
-        datumHledani,
-        interval,
-        dny
-      )
+      jePredStartem(ciloveDatum, repeat) ||
+      jeZaKoncem(ciloveDatum, repeat)
     ) {
-      return datumHledani;
+      return false;
+    }
+
+    switch (repeat.type) {
+      case "daily":
+        return jePlatnyDenniVyskyt(
+          ciloveDatum,
+          repeat
+        );
+
+      case "weekly":
+        return jePlatnyTydenniVyskyt(
+          repeat.startDate,
+          ciloveDatum,
+          repeat.interval,
+          repeat.days
+        );
+
+      case "monthly":
+        return jePlatnyMesicniVyskyt(
+          ciloveDatum,
+          repeat
+        );
+
+      default:
+        return false;
     }
   }
 
-  return null;
-}
+  function posunDatumODen(datum, pocetDni = 1) {
+    const vysledek = new Date(datum);
+    vysledek.setDate(vysledek.getDate() + pocetDni);
+    return vysledek;
+  }
 
-const dalsiPopelnice =
-  najdiDalsiDenVTydnu(
-    "2026-08-26",
-    "2026-08-26",
-    2,
-    [3]
-  );
+  function vypocitejDalsiVyskyt(datumOd, repeat) {
+    if (!repeat?.enabled) {
+      return null;
+    }
 
-console.log(
-  dalsiPopelnice
-    ?.toLocaleDateString("cs-CZ")
-);    
+    let kandidat = posunDatumODen(
+      datumOd instanceof Date
+        ? datumOd
+        : new Date(datumOd),
+      1
+    );
 
+    for (let i = 0; i < MAX_HLEDANYCH_DNU; i++) {
+      if (jeDatumVOpakovani(kandidat, repeat)) {
+        return kandidat;
+      }
 
+      kandidat = posunDatumODen(kandidat, 1);
+    }
 
-
-
-    
-  function vypocitejDalsiVyskyt(
-  datum,
-  repeat
-) {
-  if (
-    !repeat ||
-    !repeat.enabled
-  ) {
     return null;
   }
-  
-  switch (repeat.type) {
-    case "daily":
-  return vypocitejDalsiDatumDenne(
-    datum,
-    repeat.interval
-  );
-      
-    case "weekly":
-  return najdiDalsiDenVTydnu(
-    datum,
-    repeat.startDate,
-    repeat.interval,
-    repeat.days
-  );
-      
-    case "monthly":
-return vypocitejDalsiDatumZaMesice(
-  datum,
-  repeat.interval
-);
-      
-    default:
+
+  function vypocitejPristiTermin(
+    zakladniDatumCas,
+    repeat,
+    odDatumCas = new Date()
+  ) {
+    if (!repeat?.enabled || !zakladniDatumCas) {
       return null;
+    }
+
+    const zaklad = new Date(zakladniDatumCas);
+
+    if (Number.isNaN(zaklad.getTime())) {
+      return null;
+    }
+
+    const od =
+      odDatumCas instanceof Date
+        ? new Date(odDatumCas)
+        : new Date(odDatumCas);
+
+    let kandidatDne = new Date(
+      od.getFullYear(),
+      od.getMonth(),
+      od.getDate(),
+      12,
+      0,
+      0,
+      0
+    );
+
+    for (let i = 0; i < MAX_HLEDANYCH_DNU; i++) {
+      if (jeDatumVOpakovani(kandidatDne, repeat)) {
+        const kandidat = new Date(
+          kandidatDne.getFullYear(),
+          kandidatDne.getMonth(),
+          kandidatDne.getDate(),
+          zaklad.getHours(),
+          zaklad.getMinutes(),
+          0,
+          0
+        );
+
+        if (kandidat > od) {
+          return kandidat;
+        }
+      }
+
+      kandidatDne = posunDatumODen(kandidatDne, 1);
+    }
+
+    return null;
   }
-}
 
-const testOpakovani = {
-  enabled: true,
-  type: "weekly",
-  interval: 1,
-  days: [1, 3, 5],
-  startDate: "2026-08-21"
-};
+  function vypocitejBudouciTerminy(
+    zakladniDatumCas,
+    repeat,
+    pocet = 32,
+    odDatumCas = new Date()
+  ) {
+    const terminy = [];
+    let hledatOd = new Date(odDatumCas);
 
-const dalsiVyskyt =
-  vypocitejDalsiVyskyt(
-    "2026-08-21",
-    testOpakovani
-  );
+    for (let i = 0; i < pocet; i++) {
+      const dalsi = vypocitejPristiTermin(
+        zakladniDatumCas,
+        repeat,
+        hledatOd
+      );
 
-console.log(
-  dalsiVyskyt.toLocaleDateString("cs-CZ")
-);
+      if (!dalsi) {
+        break;
+      }
 
+      terminy.push(dalsi);
+      hledatOd = new Date(dalsi.getTime() + 60000);
+    }
 
-function jePlatnyTyden(
-  cisloTydne,
-  interval
-) {
-  return cisloTydne % interval === 0;
-}
+    return terminy;
+  }
 
-console.log(
-  jePlatnyTyden(4, 2)
-);
+  function formatujPravidlo(repeat) {
+    if (!repeat?.enabled) {
+      return "Neopakovat";
+    }
 
+    const interval = Math.max(1, Number(repeat.interval) || 1);
 
-function spocitejRozdilTydnu(
-  startDatum,
-  ciloveDatum
-) {
-  const start =
-    new Date(startDatum);
+    if (repeat.type === "daily") {
+      return interval === 1
+        ? "Každý den"
+        : `Každé ${interval} dny`;
+    }
 
-  const cil =
-    new Date(ciloveDatum);
+    if (repeat.type === "weekly") {
+      const nazvyDnu = {
+        0: "Ne",
+        1: "Po",
+        2: "Út",
+        3: "St",
+        4: "Čt",
+        5: "Pá",
+        6: "So"
+      };
 
-  const denStartu =
-    start.getDay() || 7;
+      const dny = (Array.isArray(repeat.days) ? repeat.days : [])
+        .map(Number)
+        .sort(
+          (a, b) =>
+            ((a + 6) % 7) -
+            ((b + 6) % 7)
+        )
+        .map((den) => nazvyDnu[den])
+        .filter(Boolean)
+        .join(", ");
 
-  const denCile =
-    cil.getDay() || 7;
+      const zaklad = interval === 1
+        ? "Každý týden"
+        : interval === 2
+          ? "Každé 2 týdny"
+          : `Každé ${interval} týdny`;
 
-  start.setDate(
-    start.getDate() - denStartu + 1
-  );
+      return dny
+        ? `${zaklad} • ${dny}`
+        : zaklad;
+    }
 
-  cil.setDate(
-    cil.getDate() - denCile + 1
-  );
+    if (repeat.type === "monthly") {
+      const den = Number(repeat.dayOfMonth) || 1;
+      const zaklad = interval === 1
+        ? "Každý měsíc"
+        : `Každé ${interval} měsíce`;
 
-  const rozdilMs =
-    cil - start;
+      return `${zaklad} • ${den}. den`;
+    }
 
-  const rozdilDni =
-    rozdilMs / 86400000;
+    return "Opakování";
+  }
 
-  return Math.round(
-    rozdilDni / 7
-  );
-}
+  function kopirujRepeat(repeat) {
+    if (!repeat?.enabled) {
+      return null;
+    }
 
-console.log(
-  spocitejRozdilTydnu(
-    "2026-08-26",
-    "2026-09-09"
-  )
-);
+    return {
+      enabled: true,
+      type: repeat.type,
+      interval: Math.max(1, Number(repeat.interval) || 1),
+      days: Array.isArray(repeat.days)
+        ? [...repeat.days].map(Number)
+        : [],
+      startDate: datumovyKlic(repeat.startDate),
+      endDate: repeat.endDate
+        ? datumovyKlic(repeat.endDate)
+        : null,
+      dayOfMonth: repeat.dayOfMonth
+        ? Number(repeat.dayOfMonth)
+        : undefined
+    };
+  }
 
+  async function migrujStareOpakovaniPlanneru() {
+    if (
+      typeof loadTask !== "function" ||
+      typeof loadPlannedItems !== "function" ||
+      typeof savePlannedItems !== "function"
+    ) {
+      return 0;
+    }
 
-function jeTydenVSpravnemCyklu(
-  startDatum,
-  ciloveDatum,
-  interval
-) {
-  const cisloTydne =
-    spocitejRozdilTydnu(
-      startDatum,
-      ciloveDatum
+    const notes = loadTask();
+    const plannedItems = loadPlannedItems();
+    const noteById = new Map(
+      notes
+        .filter((note) => note?.id)
+        .map((note) => [note.id, note])
     );
 
-  return jePlatnyTyden(
-    cisloTydne,
-    interval
-  );
-}
-console.log(
-  jeTydenVSpravnemCyklu(
-    "2026-08-26",
-    "2026-09-02",
-    2
-  )
-);
+    let pocetMigraci = 0;
+    let bylaZmena = false;
+    const odstraneneIds = new Set();
+    const zmeneneNoteIds = new Set();
 
-function jePlatnyTydenniVyskyt(
-  startDatum,
-  ciloveDatum,
-  interval,
-  dny
-) {
-  const cil =
-    new Date(ciloveDatum);
+    for (const item of plannedItems) {
+      if (item?.repeat?.enabled !== true) {
+        continue;
+      }
 
-  const jeSpravnyDen =
-    dny.includes(
-      cil.getDay()
-    );
+      const note = noteById.get(item.sourceNoteId);
 
-  const jeSpravnyCyklus =
-    jeTydenVSpravnemCyklu(
-      startDatum,
-      ciloveDatum,
-      interval
-    );
+      if (
+        item.sourceType === "note" &&
+        note &&
+        note.isSecret !== true
+      ) {
+        if (note.repeat?.enabled !== true) {
+          note.repeat = kopirujRepeat(item.repeat);
+          note.date = item.plannedAt || note.date;
+          note.reminder = true;
+          note.notificationId =
+            note.notificationId ||
+            item.notificationId ||
+            null;
+          note.updatedAt = new Date().toISOString();
+          pocetMigraci++;
+          bylaZmena = true;
+          zmeneneNoteIds.add(note.id);
+        }
 
-  return (
-    jeSpravnyDen &&
-    jeSpravnyCyklus
-  );
-}
-console.log(
-  jePlatnyTydenniVyskyt(
-    "2026-08-26",
-    "2026-09-10",
-    2,
-    [3]
-  )
-);
+        odstraneneIds.add(item.id);
+        bylaZmena = true;
 
+        if (
+          item.notificationId &&
+          typeof cancelNotification === "function"
+        ) {
+          await cancelNotification(item.notificationId);
+        }
+      }
+    }
 
+    notes.forEach((note) => {
+      if (!Array.isArray(note.plannedItems)) {
+        return;
+      }
 
-const testViceDnu = {
-  enabled: true,
-  type: "weekly",
-  interval: 1,
-  days: [1, 3, 5],
-  startDate: "2026-08-21"
-};
+      const puvodniJson =
+        JSON.stringify(note.plannedItems);
 
-const dalsiViceDnu =
-  vypocitejDalsiVyskyt(
-    "2026-08-24",
-    testViceDnu
-  );
+      note.plannedItems = note.plannedItems
+        .filter((item) => !odstraneneIds.has(item?.id))
+        .map((item) => {
+          if (!item?.repeat) {
+            return item;
+          }
 
-console.log(
-  dalsiViceDnu
-    ?.toLocaleDateString("cs-CZ")
-);
+          const kopie = { ...item };
+          delete kopie.repeat;
+          return kopie;
+        });
 
-const testViceDnuPoDvoutydnech = {
-  enabled: true,
-  type: "weekly",
-  interval: 2,
-  days: [1, 3, 5],
-  startDate: "2026-08-24"
-};
+      if (JSON.stringify(note.plannedItems) !== puvodniJson) {
+        note.updatedAt = new Date().toISOString();
+        bylaZmena = true;
 
-const dalsiViceDnuPoDvoutydnech =
-  vypocitejDalsiVyskyt(
-    "2026-08-28",
-    testViceDnuPoDvoutydnech
-  );
+        if (note.id) {
+          zmeneneNoteIds.add(note.id);
+        }
+      }
+    });
 
-console.log(
-  dalsiViceDnuPoDvoutydnech
-    ?.toLocaleDateString("cs-CZ")
-);
+    const novePlannedItems = plannedItems
+      .filter((item) => !odstraneneIds.has(item?.id))
+      .map((item) => {
+        if (!item?.repeat) {
+          return item;
+        }
+
+        const kopie = { ...item };
+        delete kopie.repeat;
+        return kopie;
+      });
+
+    savePlannedItems(novePlannedItems);
+
+    if (bylaZmena) {
+      if (typeof saveAllTasks === "function") {
+        await saveAllTasks(notes);
+      }
+
+      if (
+        typeof uploadLocalNoteToSupabase ===
+        "function"
+      ) {
+        for (const note of notes) {
+          if (
+            note?.id &&
+            zmeneneNoteIds.has(note.id)
+          ) {
+            await uploadLocalNoteToSupabase(note);
+          }
+        }
+      }
+    }
+
+    return pocetMigraci;
+  }
+
+  window.LubaNoteRecurring = {
+    jeDatumVOpakovani,
+    jePlatnyTydenniVyskyt,
+    vypocitejDalsiVyskyt,
+    vypocitejPristiTermin,
+    vypocitejBudouciTerminy,
+    formatujPravidlo,
+    kopirujRepeat,
+    datumovyKlic,
+    migrujStareOpakovaniPlanneru
+  };
+
+  /* Zpětná kompatibilita se současným calendar.js během migrace. */
+  window.jePlatnyTydenniVyskyt = jePlatnyTydenniVyskyt;
+  window.vypocitejDalsiVyskyt = vypocitejDalsiVyskyt;
+})();

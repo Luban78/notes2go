@@ -868,7 +868,7 @@
   <div id="cardMenu" class="cardMenu" hidden>
 
     <button type="button" data-card-action="plan">
-      📅 Naplánovat
+      🕒 Termín
     </button>
 
     <button type="button" data-card-action="pin">
@@ -1019,6 +1019,32 @@
   ></div>
 </div>
 
+      <!-- Opakování patří přímo k termínu celé poznámky.
+           Zobrazuje se jen při otevření času z editoru. -->
+      <div id="timeRepeatSection" class="timeRepeatSection" hidden>
+        <div class="timeRepeatHeading">Opakování</div>
+
+        <div class="timeRepeatPresets" role="group" aria-label="Opakování úkolu">
+          <button type="button" data-repeat-preset="none">Ne</button>
+          <button type="button" data-repeat-preset="daily">Denně</button>
+          <button type="button" data-repeat-preset="weekly1">Týdně</button>
+          <button type="button" data-repeat-preset="weekly2">2 týdny</button>
+          <button type="button" data-repeat-preset="monthly">Měsíčně</button>
+        </div>
+
+        <div id="timeRepeatWeekdays" class="timeRepeatWeekdays" hidden>
+          <button type="button" data-repeat-day="1">Po</button>
+          <button type="button" data-repeat-day="2">Út</button>
+          <button type="button" data-repeat-day="3">St</button>
+          <button type="button" data-repeat-day="4">Čt</button>
+          <button type="button" data-repeat-day="5">Pá</button>
+          <button type="button" data-repeat-day="6">So</button>
+          <button type="button" data-repeat-day="0">Ne</button>
+        </div>
+
+        <div id="timeRepeatSummary" class="timeRepeatSummary">Neopakovat</div>
+      </div>
+
       <div class="timePickerActions">
 
         <button id="timePickerNowButton" type="button">
@@ -1038,7 +1064,8 @@
     </div>
   </div>
   <!-- ========================================
-     PLÁNOVÁNÍ POZNÁMKY
+     PLÁNOVÁNÍ OZNAČENÉHO TEXTU / TODO
+     Celá poznámka používá datum + čas v editoru.
      ======================================== -->
 
   <div id="plannerModal" class="plannerModal" hidden>
@@ -1085,19 +1112,6 @@
       </button>
 
       <input id="plannerTime" type="hidden">
-      <label>
-  Opakování
-</label>
-
-<button
-  id="plannerRepeatButton"
-  class="sharedDateTimePickerButton plannerDateTimePickerButton"
-  type="button"
-  aria-label="Nastavit opakování úkolu"
->
-  <span id="plannerRepeatLabel">Neopakovat</span>
-  <span aria-hidden="true">🔁</span>
-</button>
 
       <div class="plannerActions">
 
