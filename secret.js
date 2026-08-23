@@ -11,6 +11,215 @@
 // ==========================================
 
 let tajnySifrovaciKlic = null;
+
+/*
+ * OFFLINE ODEMKNUTÍ TAJNÉHO REŽIMU
+ * ---------------------------------
+ * Hlavní heslo ani odvozený AES klíč se nikdy neukládají.
+ * Lokálně uchováváme pouze stejné pomocné údaje, které jsou v
+ * Supabase secret_settings: salt, verifier a počet KDF iterací.
+ * Díky tomu lze správnost hesla ověřit a klíč odvodit i bez internetu.
+ */
+const SECRET_SETTINGS_CACHE_KEY =
+  "lubanoteSecretSettingsV1";
+
+function jePlatneTajneNastaveni(nastaveni) {
+  return Boolean(
+    nastaveni &&
+    typeof nastaveni.salt === "string" &&
+    nastaveni.salt.length > 0 &&
+    typeof nastaveni.verifier === "string" &&
+    nastaveni.verifier.length > 0 &&
+    Number(nastaveni.kdf_iterations) > 0
+  );
+}
+
+function nactiLokalniTajneNastaveni() {
+  const raw = localStorage.getItem(
+    SECRET_SETTINGS_CACHE_KEY
+  );
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const nastaveni = JSON.parse(raw);
+
+    return jePlatneTajneNastaveni(nastaveni)
+      ? nastaveni
+      : null;
+  } catch (error) {
+    console.warn(
+      "Lokální tajné nastavení je nečitelné:",
+      error
+    );
+    return null;
+  }
+}
+
+function ulozLokalniTajneNastaveni(
+  nastaveni,
+  userId = null
+) {
+  if (!jePlatneTajneNastaveni(nastaveni)) {
+    return false;
+  }
+
+  localStorage.setItem(
+    SECRET_SETTINGS_CACHE_KEY,
+    JSON.stringify({
+      userId:
+        userId ||
+        nastaveni.userId ||
+        nastaveni.user_id ||
+        null,
+      salt: nastaveni.salt,
+      verifier: nastaveni.verifier,
+      kdf_iterations:
+        Number(nastaveni.kdf_iterations)
+    })
+  );
+
+  return true;
+}
+
+function existujiLokalniTajnaData() {
+  const sifrovane =
+    typeof nactiSifrovaneTajneZaznamy === "function"
+      ? nactiSifrovaneTajneZaznamy()
+      : [];
+
+  const legacy =
+    typeof nactiStarePlaintextTajnePoznamky === "function"
+      ? nactiStarePlaintextTajnePoznamky()
+      : [];
+
+  return sifrovane.length > 0 || legacy.length > 0;
+}
+
+async function nactiTajneNastaveniZCloudu() {
+  if (!navigator.onLine) {
+    return {
+      stav: "offline",
+      data: null
+    };
+  }
+
+  try {
+    const user = await getCurrentUser();
+
+    if (!user || !supabaseClient) {
+      return {
+        stav: "nedostupne",
+        data: null
+      };
+    }
+
+    const dotaz = supabaseClient
+      .from("secret_settings")
+      .select(
+        "salt, verifier, kdf_iterations"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { data, error } =
+      typeof sCasovymLimitem === "function"
+        ? await sCasovymLimitem(
+            dotaz,
+            5000,
+            "Načtení tajného nastavení"
+          )
+        : await dotaz;
+
+    if (error) {
+      console.warn(
+        "Načtení tajného nastavení z cloudu se nepodařilo:",
+        error.message
+      );
+
+      return {
+        stav: "chyba",
+        data: null
+      };
+    }
+
+    if (!data) {
+      const lokalni =
+        nactiLokalniTajneNastaveni();
+
+      /*
+       * Pokud se na stejném zařízení přihlásí jiný účet, nesmí
+       * zdědit offline verifier předchozího uživatele.
+       */
+      if (
+        lokalni?.userId &&
+        lokalni.userId !== user.id
+      ) {
+        localStorage.removeItem(
+          SECRET_SETTINGS_CACHE_KEY
+        );
+      }
+
+      return {
+        stav: "nenastaveno",
+        data: null
+      };
+    }
+
+    const lokalniData = {
+      userId: user.id,
+      salt: data.salt,
+      verifier: data.verifier,
+      kdf_iterations:
+        Number(data.kdf_iterations)
+    };
+
+    if (!jePlatneTajneNastaveni(lokalniData)) {
+      return {
+        stav: "chyba",
+        data: null
+      };
+    }
+
+    ulozLokalniTajneNastaveni(
+      lokalniData,
+      user.id
+    );
+
+    return {
+      stav: "ok",
+      data: lokalniData
+    };
+  } catch (error) {
+    console.warn(
+      "Načtení tajného nastavení z cloudu selhalo:",
+      error?.message || error
+    );
+
+    return {
+      stav: "chyba",
+      data: null
+    };
+  }
+}
+
+async function ziskejTajneNastaveniProOdemknuti() {
+  const lokalni =
+    nactiLokalniTajneNastaveni();
+
+  if (lokalni) {
+    return lokalni;
+  }
+
+  const cloud =
+    await nactiTajneNastaveniZCloudu();
+
+  return cloud.stav === "ok"
+    ? cloud.data
+    : null;
+}
 async function vytvorSifrovaciKlicZHesla(
   heslo,
   saltBase64,
@@ -206,28 +415,36 @@ function zamkniTajnyRezimAutomaticky() {
 }
 
 async function maNastaveneTajneHeslo() {
-  const user = await getCurrentUser();
+  /*
+   * Jakmile máme lokální verifier, internet už pro rozhodnutí
+   * „odemknout vs. vytvořit heslo“ nepotřebujeme.
+   */
+  if (nactiLokalniTajneNastaveni()) {
+    return true;
+  }
 
-  if (!user) {
+  /*
+   * Starší instalace po aktualizaci ještě nemusí mít cache nastavení.
+   * Pokud ale na zařízení existují tajná data, hlavní heslo evidentně
+   * už existovalo. Nikdy proto offline nenabídneme vytvoření nového.
+   */
+  if (!navigator.onLine) {
+    return existujiLokalniTajnaData();
+  }
+
+  const cloud =
+    await nactiTajneNastaveniZCloudu();
+
+  if (cloud.stav === "ok") {
+    return true;
+  }
+
+  if (cloud.stav === "nenastaveno") {
     return false;
   }
 
-  const { data, error } = await supabaseClient
-    .from("secret_settings")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      "Kontrola tajného režimu se nepodařila:",
-      error.message
-    );
-
-    return false;
-  }
-
-  return Boolean(data);
+  /* Při síťové chybě je bezpečnější předpokládat existující heslo. */
+  return true;
 }
 
 
@@ -346,6 +563,19 @@ async function vytvorNoveTajneNastaveni(heslo) {
     return false;
   }
 
+  /*
+   * Po prvním vytvoření uložíme jen salt + verifier + iterace.
+   * Samotné heslo ani AES klíč se do úložiště nikdy nezapisují.
+   */
+  ulozLokalniTajneNastaveni(
+    {
+      salt,
+      verifier,
+      kdf_iterations: iterace
+    },
+    user.id
+  );
+
   return true;
 }
 
@@ -357,32 +587,21 @@ async function vytvorNoveTajneNastaveni(heslo) {
 // ==========================================
 
 async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
-  const user = await getCurrentUser();
+  const nastaveni =
+    await ziskejTajneNastaveniProOdemknuti();
 
-  if (!user) {
-    return false;
-  }
-
-  const { data, error } = await supabaseClient
-    .from("secret_settings")
-    .select("salt, kdf_iterations")
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) {
+  if (!nastaveni) {
     console.error(
-      "Načtení nastavení pro šifrovací klíč se nepodařilo:",
-      error.message
+      "Tajné nastavení není dostupné pro odvození šifrovacího klíče."
     );
-
     return false;
   }
 
   tajnySifrovaciKlic =
     await vytvorSifrovaciKlicZHesla(
       heslo,
-      data.salt,
-      data.kdf_iterations
+      nastaveni.salt,
+      nastaveni.kdf_iterations
     );
 
   tajnyRezimOdemceny = true;
@@ -525,6 +744,15 @@ confirmSecretUnlockButton?.addEventListener(
       await overHlavniHeslo(heslo);
     
     confirmSecretUnlockButton.disabled = false;
+
+    if (spravneHeslo === null) {
+      zobrazZpravuAplikace(
+        "Tajný režim",
+        "Offline odemknutí na tomto zařízení ještě není připravené. Připoj se jednou k internetu, otevři tajný režim a potom bude fungovat i bez připojení. Tvoje tajné poznámky nejsou smazané."
+      );
+
+      return;
+    }
     
     if (!spravneHeslo) {
       zobrazZpravuAplikace(
@@ -562,37 +790,92 @@ confirmSecretUnlockButton?.addEventListener(
 // ==========================================
 
 async function overHlavniHeslo(heslo) {
-  const user = await getCurrentUser();
+  let nastaveni =
+    nactiLokalniTajneNastaveni();
 
-  if (!user) {
-    return false;
+  /*
+   * Bez lokální cache ji při online provozu jednou stáhneme.
+   * Po tomto úspěšném načtení už další odemykání funguje offline.
+   */
+  if (!nastaveni) {
+    const cloud =
+      await nactiTajneNastaveniZCloudu();
+
+    if (cloud.stav !== "ok") {
+      return null;
+    }
+
+    nastaveni = cloud.data;
   }
 
-  const { data, error } = await supabaseClient
-    .from("secret_settings")
-    .select(
-      "salt, verifier, kdf_iterations"
-    )
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) {
-    console.error(
-      "Načtení tajného nastavení se nepodařilo:",
-      error.message
-    );
-
-    return false;
-  }
-
-  const vypocitanyVerifier =
+  let vypocitanyVerifier =
     await vytvorVerifierZHesla(
       heslo,
-      data.salt,
-      data.kdf_iterations
+      nastaveni.salt,
+      nastaveni.kdf_iterations
     );
 
-  return vypocitanyVerifier === data.verifier;
+  if (vypocitanyVerifier === nastaveni.verifier) {
+    return true;
+  }
+
+  /*
+   * Pokud se lokální nastavení někdy změní na jiném zařízení,
+   * při online provozu ho jednou obnovíme, než prohlásíme heslo
+   * za chybné. Offline zůstává výsledek čistě lokální.
+   */
+  if (navigator.onLine) {
+    const cloud =
+      await nactiTajneNastaveniZCloudu();
+
+    if (cloud.stav === "ok") {
+      nastaveni = cloud.data;
+
+      vypocitanyVerifier =
+        await vytvorVerifierZHesla(
+          heslo,
+          nastaveni.salt,
+          nastaveni.kdf_iterations
+        );
+
+      return vypocitanyVerifier === nastaveni.verifier;
+    }
+  }
+
+  return false;
+}
+
+async function pripravOfflineTajnyRezim() {
+  if (!navigator.onLine) {
+    return;
+  }
+
+  try {
+    await nactiTajneNastaveniZCloudu();
+  } catch (error) {
+    console.warn(
+      "Příprava offline tajného režimu byla přeskočena:",
+      error
+    );
+  }
+}
+
+window.addEventListener(
+  "online",
+  pripravOfflineTajnyRezim
+);
+
+window.addEventListener(
+  "lubanote:supabase-ready",
+  pripravOfflineTajnyRezim
+);
+
+/* Při běžném online startu připravíme cache automaticky na pozadí. */
+if (navigator.onLine) {
+  setTimeout(
+    pripravOfflineTajnyRezim,
+    0
+  );
 }
 
 [
