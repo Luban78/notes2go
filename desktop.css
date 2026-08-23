@@ -337,3 +337,40 @@
   cursor: pointer;
 }
 }
+
+.cardMenu {
+  grid-template-columns: repeat(6, auto);
+  width: max-content;
+  max-width: calc(100vw - 40px);
+
+  padding: 8px;
+  gap: 4px;
+
+  border: 2px solid var(--color-accent);
+  border-radius: 16px;
+
+  background: var(--color-surface);
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.3);
+}
+
+.cardMenu button {
+  white-space: nowrap;
+
+  min-height: 46px;
+  padding: 0 18px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cardMenu button:hover {
+  background: var(--color-background);
+}

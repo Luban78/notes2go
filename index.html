@@ -146,6 +146,25 @@
 
     <!-- FILTRY OBLASTÍ A ŠTÍTKŮ -->
     <nav class="categoryTabs" aria-label="Filtr poznámek">
+
+      <div
+  id="cardSelectionCompact"
+  class="cardSelectionCompact"
+  hidden
+>
+  <span id="cardSelectionCompactCount">
+    0 vybraných
+  </span>
+
+  <button
+    type="button"
+    id="cardSelectionCompactClose"
+    aria-label="Ukončit výběr"
+  >
+    ✕
+  </button>
+</div>
+
       <button class="categoryTab active" type="button" data-area-filter="all">
         Vše
       </button>
@@ -184,6 +203,8 @@
        ======================================== -->
 
   <main class="app">
+
+    
 
     <div id="pinnedCards" class="pinnedCards" hidden>
 
@@ -874,23 +895,23 @@
 
   <div id="cardMenu" class="cardMenu" hidden>
 
-    <button type="button" data-card-action="plan">
-      🕒 Termín
-    </button>
+  <button type="button" data-card-action="plan">
+    🕒 Termín
+  </button>
 
-    <button type="button" data-card-action="pin">
-      📌 Připnout
-    </button>
+  <button type="button" data-card-action="pin">
+    📌 Připnout
+  </button>
 
-    <button type="button" data-card-action="complete">
-      ✅ Hotovo
-    </button>
+  <button type="button" data-card-action="delete">
+    🗑️ Smazat
+  </button>
 
-    <button type="button" data-card-action="delete">
-      🗑️ Smazat
-    </button>
+  <button type="button" data-card-action="more">
+    ⋯ Více akcí
+  </button>
 
-  </div>
+</div>
 
 
   <!-- ========================================

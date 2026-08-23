@@ -1273,19 +1273,81 @@ createSecretTagButton?.addEventListener(
 
 
 tagFilterButtons.addEventListener("click", (event) => {
+
   const button = event.target.closest("[data-tag-filter]");
 
   if (!button) {
     return;
   }
 
+  const vybranyStitek =
+    button.dataset.tagFilter;
+
+
+  /* Hromadné přiřazení štítku */
+  if (rezimVyberuKaret) {
+
+  const ulozeneUkoly = loadTask();
+
+  vybraneKarty.forEach((index) => {
+
+    const ukol = ulozeneUkoly[index];
+
+    if (!ukol) {
+      return;
+    }
+
+    /*
+     * Hromadné přiřazení:
+     * původní štítky zahodíme
+     * a ponecháme pouze nový.
+     */
+    ukol.tags = [vybranyStitek];
+    ukol.updatedAt =
+  new Date().toISOString();
+
+  });
+
+  saveAllTasks(ulozeneUkoly);
+  vybraneKarty.forEach((index) => {
+  const ukol = ulozeneUkoly[index];
+
+  if (!ukol) {
+    return;
+  }
+
+  uploadLocalNoteToSupabase(ukol);
+});
+
+const pocetOznacenych =
+  vybraneKarty.size;
+
+rezimVyberuKaret = false;
+
+vybraneKarty.clear();
+
+aktualizujListuVyberuKaret();
+
+renderTasks();
+
+zobrazHlaseniHromadneAkce(
+  `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+);
+
+return;
+}
+
+
+  /* Normální filtrování štítků */
   activeTagFilter =
-    activeTagFilter === button.dataset.tagFilter
+    activeTagFilter === vybranyStitek
       ? null
-      : button.dataset.tagFilter;
+      : vybranyStitek;
 
   updateTagFilterUI();
+
   renderTasks();
+
 });
 
 updateTagMenuUI();

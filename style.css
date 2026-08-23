@@ -5921,3 +5921,54 @@ text-size-adjust: 100%;
   background: var(--color-accent);
   color: var(--color-accent-text);
 }
+
+.cardSelected {
+  outline: none;
+
+  box-shadow:
+    inset 0 0 0 2px var(--color-accent),
+    0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.cardSelectionCompact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 7px 10px;
+
+  border: 1px solid var(--color-accent);
+  border-radius: 10px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font-weight: 700;
+  white-space: nowrap;
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.cardSelectionCompact[hidden] {
+  display: none;
+}
+
+#cardSelectionCompactClose {
+  width: 22px;
+  height: 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+
+  background: transparent;
+  color: var(--color-accent);
+
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
