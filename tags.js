@@ -1451,21 +1451,9 @@ tagFilterButtons.addEventListener("click", async (event) => {
 
 renderTasks();
 
-const tlacitkoPouzitehoStitku =
-  [...tagFilterButtons.querySelectorAll("[data-tag-filter]")]
-    .find((tlacitko) =>
-      tlacitko.dataset.tagFilter === vybranyStitek
-    );
-
-if (tlacitkoPouzitehoStitku) {
-  tlacitkoPouzitehoStitku.textContent =
-    `${vybranyStitek} ✓ přidáno ${pocetOznacenych} kartám`;
-
-  setTimeout(() => {
-    tlacitkoPouzitehoStitku.textContent =
-      vybranyStitek;
-  }, 1800);
-}
+zobrazPotvrzeniAkce(
+  `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+);
 
 return;
   }

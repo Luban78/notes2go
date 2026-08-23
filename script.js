@@ -2897,6 +2897,26 @@ function zobrazDalsiAkceKarty() {
   `;
 }
 
+function zobrazPotvrzeniAkce(text) {
+  const actionStatusModal =
+    document.getElementById("actionStatusModal");
+
+  const actionStatusText =
+    document.getElementById("actionStatusText");
+
+  if (!actionStatusModal || !actionStatusText) {
+    return;
+  }
+
+  actionStatusText.textContent = text;
+
+  actionStatusModal.hidden = false;
+
+  setTimeout(() => {
+    actionStatusModal.hidden = true;
+  }, 1800);
+}
+
 const plannerModal =
   document.getElementById("plannerModal");
 
