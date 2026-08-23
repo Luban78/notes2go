@@ -338,6 +338,8 @@
 }
 }
 
+
+@media (min-width: 900px) {
 .cardMenu {
   grid-template-columns: repeat(6, auto);
   width: max-content;
@@ -373,4 +375,5 @@
 
 .cardMenu button:hover {
   background: var(--color-background);
+}
 }

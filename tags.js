@@ -1272,7 +1272,7 @@ createSecretTagButton?.addEventListener(
 
 
 
-tagFilterButtons.addEventListener("click", (event) => {
+tagFilterButtons.addEventListener("click", async (event) => {
 
   const button = event.target.closest("[data-tag-filter]");
 
@@ -1284,58 +1284,184 @@ tagFilterButtons.addEventListener("click", (event) => {
     button.dataset.tagFilter;
 
 
-  /* Hromadné přiřazení štítku */
+  /*
+   * HROMADNÉ PŘIŘAZENÍ ŠTÍTKU
+   *
+   * Důležité bezpečnostní pravidlo:
+   * - nejdřív uložíme změny lokálně,
+   * - teprve potom je po jedné a s await odešleme do Supabase,
+   * - během celé operace nesmí běžet startovací/online sync,
+   *   aby starší snapshot nepřepsal čerstvou změnu.
+   *
+   * Původní štítky vybraných karet se záměrně nahradí
+   * právě jedním nově zvoleným štítkem.
+   */
   if (rezimVyberuKaret) {
+    /*
+     * Výběr si před případným čekáním na probíhající sync převedeme
+     * z indexů na stabilní ID. Sync může seznam přerenderovat nebo
+     * některou cloudovou poznámku doplnit/odebrat; index by pak mohl
+     * ukazovat na jinou kartu. ID zůstává bezpečné.
+     */
+    const poznamkyPriKliknuti = loadTask();
+    const vybranaId = [];
+    let chybiStabilniId = false;
 
-  const ulozeneUkoly = loadTask();
+    for (const index of vybraneKarty) {
+      const ukol = poznamkyPriKliknuti[index];
 
-  vybraneKarty.forEach((index) => {
+      if (!ukol) {
+        continue;
+      }
 
-    const ukol = ulozeneUkoly[index];
+      if (!ukol.id) {
+        chybiStabilniId = true;
+        break;
+      }
 
-    if (!ukol) {
+      vybranaId.push(ukol.id);
+    }
+
+    if (chybiStabilniId) {
+      console.error(
+        "Hromadná změna byla zastavena: některá vybraná karta nemá stabilní ID."
+      );
+
+      zobrazHlaseniHromadneAkce(
+        "Starší kartu je potřeba nejdřív otevřít a uložit"
+      );
+
       return;
     }
 
-    /*
-     * Hromadné přiřazení:
-     * původní štítky zahodíme
-     * a ponecháme pouze nový.
-     */
-    ukol.tags = [vybranyStitek];
-    ukol.updatedAt =
-  new Date().toISOString();
+    const provedHromadnouZmenu = async () => {
+      const ulozeneUkoly = loadTask();
+      const zmeneneUkoly = [];
+      const casZmeny = new Date().toISOString();
+      const indexPodleId = new Map(
+        ulozeneUkoly
+          .map((ukol, index) => [ukol?.id, index])
+          .filter(([id]) => Boolean(id))
+      );
 
-  });
+      for (const id of vybranaId) {
+        const index = indexPodleId.get(id);
 
-  saveAllTasks(ulozeneUkoly);
-  vybraneKarty.forEach((index) => {
-  const ukol = ulozeneUkoly[index];
+        if (index === undefined) {
+          continue;
+        }
 
-  if (!ukol) {
+        const ukol = ulozeneUkoly[index];
+
+        if (!ukol) {
+          continue;
+        }
+
+        ukol.tags = [vybranyStitek];
+        ukol.updatedAt = casZmeny;
+
+        zmeneneUkoly.push(ukol);
+      }
+
+      if (zmeneneUkoly.length === 0) {
+        return {
+          pocet: 0,
+          lokalneUlozeno: false,
+          synchronizovano: false
+        };
+      }
+
+      const lokalneUlozeno =
+        await saveAllTasks(ulozeneUkoly);
+
+      if (lokalneUlozeno === false) {
+        return {
+          pocet: zmeneneUkoly.length,
+          lokalneUlozeno: false,
+          synchronizovano: false
+        };
+      }
+
+      let synchronizovano = true;
+
+      if (
+        navigator.onLine &&
+        typeof uploadLocalNoteToSupabase === "function"
+      ) {
+        for (const ukol of zmeneneUkoly) {
+          const uspesne =
+            await uploadLocalNoteToSupabase(ukol);
+
+          if (!uspesne) {
+            synchronizovano = false;
+          }
+        }
+      } else {
+        /*
+         * Offline změna zůstává bezpečně lokálně.
+         * Po návratu internetu ji běžný sync odešle podle updatedAt.
+         */
+        synchronizovano = false;
+      }
+
+      return {
+        pocet: zmeneneUkoly.length,
+        lokalneUlozeno: true,
+        synchronizovano
+      };
+    };
+
+    let vysledek;
+
+    if (
+      typeof window.LubaNoteSync
+        ?.provedLokalniZmenuBezKolizeSeSync ===
+        "function"
+    ) {
+      vysledek = await window.LubaNoteSync
+        .provedLokalniZmenuBezKolizeSeSync(
+          provedHromadnouZmenu
+        );
+    } else {
+      /*
+       * Bezpečný fallback pro případ, že sync modul ještě není dostupný.
+       */
+      vysledek = await provedHromadnouZmenu();
+    }
+
+    if (!vysledek?.lokalneUlozeno) {
+      console.error(
+        "Hromadné přiřazení štítku se nepodařilo lokálně uložit."
+      );
+
+      zobrazHlaseniHromadneAkce(
+        "Uložení štítku se nepodařilo"
+      );
+
+      return;
+    }
+
+    const pocetOznacenych =
+      vysledek.pocet;
+
+    rezimVyberuKaret = false;
+    vybraneKarty.clear();
+
+    aktualizujListuVyberuKaret();
+    renderTasks();
+
+    if (!vysledek.synchronizovano) {
+      console.warn(
+        "Hromadný štítek je uložen lokálně; cloud sync proběhne později."
+      );
+    }
+
+    zobrazHlaseniHromadneAkce(
+      `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+    );
+
     return;
   }
-
-  uploadLocalNoteToSupabase(ukol);
-});
-
-const pocetOznacenych =
-  vybraneKarty.size;
-
-rezimVyberuKaret = false;
-
-vybraneKarty.clear();
-
-aktualizujListuVyberuKaret();
-
-renderTasks();
-
-zobrazHlaseniHromadneAkce(
-  `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
-);
-
-return;
-}
 
 
   /* Normální filtrování štítků */

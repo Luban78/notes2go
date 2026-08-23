@@ -844,7 +844,86 @@ async function startSync() {
 
 let probihajiciStartSync = null;
 
+/*
+ * KRÁTKÝ ZÁMEK PRO LOKÁLNÍ HROMADNÉ ZMĚNY
+ *
+ * Startovací/online synchronizace pracuje se snapshotem poznámek.
+ * Kdyby se přesně během ní provedla hromadná lokální změna, starší
+ * snapshot by mohl později čerstvou změnu přepsat.
+ *
+ * Tato malá fronta dovolí hromadné akci nejdřív počkat na právě
+ * běžící sync a během svého lokálního uložení + uploadu nepustí nový.
+ */
+let probihajiciLokalniZmena = null;
+let synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+async function pockejNaProbihajiciSynchronizaci() {
+  if (probihajiciStartSync) {
+    try {
+      await probihajiciStartSync;
+    } catch (error) {
+      console.warn(
+        "Čekání na startovací synchronizaci skončilo chybou:",
+        error
+      );
+    }
+
+    return;
+  }
+
+  if (probihajiciSync) {
+    try {
+      await probihajiciSync;
+    } catch (error) {
+      console.warn(
+        "Čekání na synchronizaci skončilo chybou:",
+        error
+      );
+    }
+  }
+}
+
+async function provedLokalniZmenuBezKolizeSeSync(akce) {
+  if (typeof akce !== "function") {
+    return null;
+  }
+
+  while (probihajiciLokalniZmena) {
+    try {
+      await probihajiciLokalniZmena;
+    } catch (error) {
+      /* Předchozí lokální změna už si chybu zpracovala sama. */
+    }
+  }
+
+  await pockejNaProbihajiciSynchronizaci();
+
+  probihajiciLokalniZmena = (async () => {
+    return await akce();
+  })();
+
+  try {
+    return await probihajiciLokalniZmena;
+  } finally {
+    probihajiciLokalniZmena = null;
+
+    if (synchronizaceOdlozenaKvuliLokalniZmene) {
+      synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+      setTimeout(
+        spustStartSyncBezpecne,
+        0
+      );
+    }
+  }
+}
+
 async function spustStartSyncBezpecne() {
+  if (probihajiciLokalniZmena) {
+    synchronizaceOdlozenaKvuliLokalniZmene = true;
+    return false;
+  }
+
   if (!navigator.onLine) {
     return false;
   }
@@ -895,7 +974,8 @@ async function spustStartSyncBezpecne() {
 }
 
 window.LubaNoteSync = {
-  spustBezpecne: spustStartSyncBezpecne
+  spustBezpecne: spustStartSyncBezpecne,
+  provedLokalniZmenuBezKolizeSeSync
 };
 
 /*

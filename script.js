@@ -2758,25 +2758,52 @@ const cardSelectionCompactClose =
 
 
 
+let casovacHlaseniHromadneAkce = null;
+
 function aktualizujListuVyberuKaret() {
   const pocetVybranych =
     vybraneKarty.size;
 
+  /*
+   * Pokud uživatel začne nový výběr ještě během krátké potvrzovací
+   * hlášky, starý časovač nesmí nový výběr po chvíli schovat.
+   */
+  if (rezimVyberuKaret && casovacHlaseniHromadneAkce) {
+    clearTimeout(casovacHlaseniHromadneAkce);
+    casovacHlaseniHromadneAkce = null;
+  }
+
   cardSelectionCompactCount.textContent =
     `${pocetVybranych} vybraných`;
 
+  cardSelectionCompactClose.hidden = false;
   cardSelectionCompact.hidden =
     !rezimVyberuKaret;
 }
 
 function zobrazHlaseniHromadneAkce(text) {
+  if (casovacHlaseniHromadneAkce) {
+    clearTimeout(casovacHlaseniHromadneAkce);
+  }
+
   cardSelectionCompactCount.textContent =
     `✓ ${text}`;
 
   cardSelectionCompactClose.hidden = true;
   cardSelectionCompact.hidden = false;
 
-  setTimeout(() => {
+  casovacHlaseniHromadneAkce = setTimeout(() => {
+    casovacHlaseniHromadneAkce = null;
+
+    /*
+     * Probíhá-li už mezitím nový výběr, vrátíme na místo hlášky
+     * aktuální počet a panel rozhodně neschováme.
+     */
+    if (rezimVyberuKaret) {
+      aktualizujListuVyberuKaret();
+      return;
+    }
+
     cardSelectionCompact.hidden = true;
     cardSelectionCompactClose.hidden = false;
   }, 1800);
