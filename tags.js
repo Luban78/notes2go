@@ -1448,19 +1448,26 @@ tagFilterButtons.addEventListener("click", async (event) => {
     vybraneKarty.clear();
 
     aktualizujListuVyberuKaret();
-    renderTasks();
 
-    if (!vysledek.synchronizovano) {
-      console.warn(
-        "Hromadný štítek je uložen lokálně; cloud sync proběhne později."
-      );
-    }
+renderTasks();
 
-    zobrazHlaseniHromadneAkce(
-      `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+const tlacitkoPouzitehoStitku =
+  [...tagFilterButtons.querySelectorAll("[data-tag-filter]")]
+    .find((tlacitko) =>
+      tlacitko.dataset.tagFilter === vybranyStitek
     );
 
-    return;
+if (tlacitkoPouzitehoStitku) {
+  tlacitkoPouzitehoStitku.textContent =
+    `${vybranyStitek} ✓ přidáno ${pocetOznacenych} kartám`;
+
+  setTimeout(() => {
+    tlacitkoPouzitehoStitku.textContent =
+      vybranyStitek;
+  }, 1800);
+}
+
+return;
   }
 
 
