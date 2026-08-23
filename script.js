@@ -40,8 +40,39 @@ const cancelDeleteButton =
 const confirmDeleteButton =
   document.getElementById("confirmDeleteButton");
 
+const deleteConfirmTitle =
+  deleteConfirmModal?.querySelector("h3");
+
+const deleteConfirmText =
+  deleteConfirmModal?.querySelector("p");
+
+const puvodniNadpisPotvrzeniSmazani =
+  deleteConfirmTitle?.textContent?.trim() ||
+  "Smazat poznámku?";
+
+const puvodniTextPotvrzeniSmazani =
+  deleteConfirmText?.textContent?.trim() ||
+  "Opravdu chceš tuto poznámku smazat?";
+
+let hromadneMazaniIds = null;
+
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
+  hromadneMazaniIds = null;
+
+  if (deleteConfirmTitle) {
+    deleteConfirmTitle.textContent =
+      puvodniNadpisPotvrzeniSmazani;
+  }
+
+  if (deleteConfirmText) {
+    deleteConfirmText.textContent =
+      puvodniTextPotvrzeniSmazani;
+  }
+
+  if (rezimVyberuKaret) {
+    zobrazAkceVybranychKaret();
+  }
 });
 
 const appMessageSecretButton =
@@ -57,6 +88,48 @@ const appMessageNormalButton =
 
 
 confirmDeleteButton.addEventListener("click", async () => {
+  /* Hromadné smazání vybraných karet. */
+  if (Array.isArray(hromadneMazaniIds)) {
+    const idsKeSmazani =
+      [...hromadneMazaniIds];
+
+    hromadneMazaniIds = null;
+    deleteConfirmModal.hidden = true;
+
+    if (deleteConfirmTitle) {
+      deleteConfirmTitle.textContent =
+        puvodniNadpisPotvrzeniSmazani;
+    }
+
+    if (deleteConfirmText) {
+      deleteConfirmText.textContent =
+        puvodniTextPotvrzeniSmazani;
+    }
+
+    const vysledek =
+      await smazPoznamkyPodleId(
+        idsKeSmazani
+      );
+
+    ukonciRezimVyberuKaret();
+
+    if (vysledek?.pocet > 0) {
+      zobrazPotvrzeniAkce(
+        `Smazáno ${vysledek.pocet} poznámek`
+      );
+    }
+
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    if (typeof renderRemindersScreen === "function") {
+      renderRemindersScreen();
+    }
+
+    return;
+  }
+
   if (selectedCardIndex === null) {
     return;
   }
@@ -2411,11 +2484,18 @@ function renderTasks() {
     }
     const loadedCard = document.createElement("div");
 
-    if (vybraneKarty.has(index)) {
+    if (
+      loadedTask.id &&
+      vybraneKarty.has(loadedTask.id)
+    ) {
       loadedCard.classList.add("cardSelected");
     }
 
     loadedCard.addEventListener("pointerdown", (event) => {
+      if (rezimVyberuKaret) {
+        return;
+      }
+
       cardPressStartX = event.clientX;
       cardPressStartY = event.clientY;
 
@@ -2689,17 +2769,24 @@ function renderTasks() {
 
     /* Otevření existující poznámky */
 
-    loadedCard.addEventListener("click", () => {
+    loadedCard.addEventListener("click", async () => {
       if (blockNextCardClick) {
         blockNextCardClick = false;
         return;
       }
 
       if (rezimVyberuKaret) {
-        if (vybraneKarty.has(index)) {
-          vybraneKarty.delete(index);
+        const idKarty =
+          await zajistiStabilniIdKarty(index);
+
+        if (!idKarty) {
+          return;
+        }
+
+        if (vybraneKarty.has(idKarty)) {
+          vybraneKarty.delete(idKarty);
         } else {
-          vybraneKarty.add(index);
+          vybraneKarty.add(idKarty);
         }
 
         console.log(
@@ -2707,9 +2794,15 @@ function renderTasks() {
           [...vybraneKarty]
         );
 
+        if (vybraneKarty.size === 0) {
+          ukonciRezimVyberuKaret();
+          return;
+        }
+
         aktualizujListuVyberuKaret();
 
         renderTasks();
+        zobrazAkceVybranychKaret();
         return;
       }
 
@@ -2812,13 +2905,7 @@ function zobrazHlaseniHromadneAkce(text) {
 
 
 cardSelectionCompactClose.addEventListener("click", () => {
-  rezimVyberuKaret = false;
-
-  vybraneKarty.clear();
-
-  aktualizujListuVyberuKaret();
-
-  renderTasks();
+  ukonciRezimVyberuKaret();
 });
 
 
@@ -2827,7 +2914,268 @@ cardSelectionCompactClose.addEventListener("click", () => {
 
 
 
+async function zajistiStabilniIdKarty(index) {
+  const tasks = loadTask();
+  const task = tasks[index];
+
+  if (!task) {
+    return null;
+  }
+
+  if (task.id) {
+    return task.id;
+  }
+
+  task.id = crypto.randomUUID();
+  task.updatedAt =
+    new Date().toISOString();
+
+  await saveAllTasks(tasks);
+
+  return task.id;
+}
+
+async function ziskejIdVybranychKaret() {
+  return [...vybraneKarty]
+    .filter(Boolean);
+}
+
+
+async function provedHromadnouZmenuVybranychKaret(
+  zmenPoznamku
+) {
+  if (typeof zmenPoznamku !== "function") {
+    return null;
+  }
+
+  const vybranaId =
+    await ziskejIdVybranychKaret();
+
+  if (!vybranaId || vybranaId.length === 0) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  const provedZmenu = async () => {
+    const tasks = loadTask();
+    const indexPodleId = new Map(
+      tasks
+        .map((task, index) => [task?.id, index])
+        .filter(([id]) => Boolean(id))
+    );
+
+    const casZmeny =
+      new Date().toISOString();
+
+    let pocet = 0;
+
+    for (const id of vybranaId) {
+      const index = indexPodleId.get(id);
+
+      if (index === undefined) {
+        continue;
+      }
+
+      const task = tasks[index];
+
+      if (!task) {
+        continue;
+      }
+
+      zmenPoznamku(task);
+      task.updatedAt = casZmeny;
+      pocet += 1;
+    }
+
+    if (pocet === 0) {
+      return {
+        pocet: 0,
+        lokalneUlozeno: false
+      };
+    }
+
+    const lokalneUlozeno =
+      await saveAllTasks(tasks);
+
+    return {
+      pocet,
+      lokalneUlozeno:
+        lokalneUlozeno !== false
+    };
+  };
+
+  if (
+    typeof window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj ===
+      "function"
+  ) {
+    return await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(
+        provedZmenu
+      );
+  }
+
+  /*
+   * Bez sync modulu raději bezpečně uložíme jen lokálně.
+   * Přímý upload jednotlivých poznámek zde záměrně nepoužíváme.
+   */
+  return await provedZmenu();
+}
+
+async function smazPoznamkyPodleId(ids) {
+  const bezpecnaId =
+    Array.isArray(ids)
+      ? ids.filter(Boolean)
+      : [];
+
+  const provedSmazani = async () => {
+    let pocet = 0;
+
+    for (const id of bezpecnaId) {
+      const tasks = loadTask();
+      const index = tasks.findIndex(
+        (task) => task?.id === id
+      );
+
+      if (index < 0) {
+        continue;
+      }
+
+      const uspesne =
+        await deleteTask(index);
+
+      if (uspesne !== false) {
+        pocet += 1;
+      }
+    }
+
+    return {
+      pocet,
+      lokalneUlozeno: true
+    };
+  };
+
+  if (
+    typeof window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj ===
+      "function"
+  ) {
+    return await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(
+        provedSmazani
+      );
+  }
+
+  return await provedSmazani();
+}
+
+function ukonciRezimVyberuKaret() {
+  rezimVyberuKaret = false;
+  vybraneKarty.clear();
+
+  aktualizujListuVyberuKaret();
+
+  cardMenu.classList.remove(
+    "selectionMode"
+  );
+  cardMenu.hidden = true;
+
+  renderTasks();
+
+  if (
+    navigator.onLine &&
+    typeof window.LubaNoteSync
+      ?.spustBezpecne === "function"
+  ) {
+    window.LubaNoteSync
+      .spustBezpecne()
+      .catch((error) => {
+        console.warn(
+          "Synchronizace po ukončení výběru selhala:",
+          error
+        );
+      });
+  }
+}
+
+function ziskejStavVybranychKaret() {
+  const tasks = loadTask();
+  const tasksPodleId = new Map(
+    tasks
+      .filter((task) => task?.id)
+      .map((task) => [task.id, task])
+  );
+
+  const vybrane = [...vybraneKarty]
+    .map((id) => tasksPodleId.get(id))
+    .filter(Boolean);
+
+  return {
+    pocet: vybrane.length,
+    vsePripnute:
+      vybrane.length > 0 &&
+      vybrane.every(
+        (task) => task.pinned === true
+      ),
+    vseHotove:
+      vybrane.length > 0 &&
+      vybrane.every(
+        (task) => task.completed === true
+      )
+  };
+}
+
+function zobrazAkceVybranychKaret() {
+  if (!rezimVyberuKaret) {
+    return;
+  }
+
+  const stav =
+    ziskejStavVybranychKaret();
+
+  if (stav.pocet === 0) {
+    ukonciRezimVyberuKaret();
+    return;
+  }
+
+  cardMenu.classList.add(
+    "selectionMode"
+  );
+
+  cardMenu.innerHTML = `
+    <button type="button" data-card-action="bulk-pin">
+      ${stav.vsePripnute ? "📍 Odepnout" : "📌 Připnout"}
+    </button>
+
+    <button type="button" data-card-action="bulk-complete">
+      ${stav.vseHotove ? "↩️ Vrátit" : "✅ Hotovo"}
+    </button>
+
+    <button type="button" data-card-action="bulk-delete">
+      🗑️ Smazat
+    </button>
+
+    <button type="button" data-card-action="bulk-exit">
+      ✕ Konec výběru
+    </button>
+  `;
+
+  cardMenu.style.top = "auto";
+  cardMenu.style.bottom =
+    window.innerWidth < 900
+      ? "90px"
+      : "34px";
+  cardMenu.style.visibility = "visible";
+  cardMenu.hidden = false;
+}
+
 function zobrazHlavniAkceKarty() {
+  cardMenu.classList.remove(
+    "selectionMode"
+  );
+
   if (window.innerWidth < 900) {
     cardMenu.innerHTML = `
       <button type="button" data-card-action="plan">
@@ -2878,6 +3226,10 @@ function zobrazHlavniAkceKarty() {
 
 
 function zobrazDalsiAkceKarty() {
+  cardMenu.classList.remove(
+    "selectionMode"
+  );
+
   cardMenu.innerHTML = `
     <button type="button" data-card-action="select">
       ☑️ Označit
@@ -2942,7 +3294,7 @@ const savePlannerButton =
 
 
 
-cardMenu.addEventListener("click", (event) => {
+cardMenu.addEventListener("click", async (event) => {
   const actionButton =
     event.target.closest("[data-card-action]");
 
@@ -2963,15 +3315,22 @@ cardMenu.addEventListener("click", (event) => {
   }
 
   if (action === "select") {
+    const idKarty =
+      await zajistiStabilniIdKarty(
+        selectedCardIndex
+      );
+
+    if (!idKarty) {
+      return;
+    }
+
     rezimVyberuKaret = true;
-
-    vybraneKarty.add(selectedCardIndex);
-
-    cardMenu.hidden = true;
+    vybraneKarty.add(idKarty);
 
     aktualizujListuVyberuKaret();
 
     renderTasks();
+    zobrazAkceVybranychKaret();
 
     console.log(
       "Rezim vyberu:",
@@ -2988,6 +3347,92 @@ cardMenu.addEventListener("click", (event) => {
 
 
 
+
+  if (action === "bulk-exit") {
+    ukonciRezimVyberuKaret();
+    return;
+  }
+
+  if (action === "bulk-pin") {
+    const stav =
+      ziskejStavVybranychKaret();
+    const novaHodnota =
+      !stav.vsePripnute;
+
+    const vysledek =
+      await provedHromadnouZmenuVybranychKaret(
+        (task) => {
+          task.pinned = novaHodnota;
+        }
+      );
+
+    if (vysledek?.lokalneUlozeno) {
+      const pocet = vysledek.pocet;
+
+      ukonciRezimVyberuKaret();
+
+      zobrazPotvrzeniAkce(
+        novaHodnota
+          ? `Připnuto ${pocet} poznámek`
+          : `Odepnuto ${pocet} poznámek`
+      );
+    }
+
+    return;
+  }
+
+  if (action === "bulk-complete") {
+    const stav =
+      ziskejStavVybranychKaret();
+    const novaHodnota =
+      !stav.vseHotove;
+
+    const vysledek =
+      await provedHromadnouZmenuVybranychKaret(
+        (task) => {
+          task.completed = novaHodnota;
+        }
+      );
+
+    if (vysledek?.lokalneUlozeno) {
+      const pocet = vysledek.pocet;
+
+      ukonciRezimVyberuKaret();
+
+      zobrazPotvrzeniAkce(
+        novaHodnota
+          ? `Hotovo u ${pocet} poznámek`
+          : `Obnoveno ${pocet} poznámek`
+      );
+    }
+
+    return;
+  }
+
+  if (action === "bulk-delete") {
+    const ids =
+      await ziskejIdVybranychKaret();
+
+    if (!ids || ids.length === 0) {
+      return;
+    }
+
+    hromadneMazaniIds = [...ids];
+
+    if (deleteConfirmTitle) {
+      deleteConfirmTitle.textContent =
+        "Smazat poznámky?";
+    }
+
+    if (deleteConfirmText) {
+      deleteConfirmText.textContent =
+        `Opravdu chceš smazat ${ids.length} vybraných poznámek?`;
+    }
+
+    cardMenu.hidden = true;
+    deleteConfirmModal.hidden = false;
+    return;
+  }
 
   if (action === "plan") {
     const tasks = loadTask();
@@ -3065,6 +3510,7 @@ document.addEventListener("pointerdown", (event) => {
   const cardMenu = document.getElementById("cardMenu");
 
   if (
+    !rezimVyberuKaret &&
     !cardMenu.hidden &&
     !cardMenu.contains(event.target)
   ) {

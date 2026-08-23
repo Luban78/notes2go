@@ -20,6 +20,133 @@ function getDeviceId() {
   return deviceId;
 }
 
+const PENDING_DELETE_STORAGE_KEY =
+  "lubanotePendingDeletes";
+
+function nactiCekajiciSmazani() {
+  const raw =
+    localStorage.getItem(
+      PENDING_DELETE_STORAGE_KEY
+    );
+
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    return Array.isArray(parsed)
+      ? parsed.filter((zaznam) => zaznam?.id)
+      : [];
+  } catch (error) {
+    console.error(
+      "Načtení čekajících smazání selhalo:",
+      error
+    );
+
+    return [];
+  }
+}
+
+function ulozCekajiciSmazani(zaznamy) {
+  localStorage.setItem(
+    PENDING_DELETE_STORAGE_KEY,
+    JSON.stringify(
+      Array.isArray(zaznamy)
+        ? zaznamy
+        : []
+    )
+  );
+}
+
+function pridejCekajiciSmazani(
+  noteId,
+  deletedAt = new Date().toISOString()
+) {
+  if (!noteId) {
+    return;
+  }
+
+  const zaznamy = nactiCekajiciSmazani();
+  const bezStejnehoId =
+    zaznamy.filter(
+      (zaznam) => zaznam.id !== noteId
+    );
+
+  bezStejnehoId.push({
+    id: noteId,
+    deletedAt,
+    deviceId: getDeviceId()
+  });
+
+  ulozCekajiciSmazani(bezStejnehoId);
+}
+
+function odeberCekajiciSmazani(noteId) {
+  if (!noteId) {
+    return;
+  }
+
+  ulozCekajiciSmazani(
+    nactiCekajiciSmazani().filter(
+      (zaznam) => zaznam.id !== noteId
+    )
+  );
+}
+
+async function odesliCekajiciSmazaniDoSupabase() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const cekajici = nactiCekajiciSmazani();
+
+  if (cekajici.length === 0) {
+    return true;
+  }
+
+  let vseOdeslano = true;
+
+  for (const zaznam of cekajici) {
+    const deletedAt =
+      zaznam.deletedAt ||
+      new Date().toISOString();
+
+    const { error } = await supabaseClient
+      .from("notes")
+      .upsert({
+        id: zaznam.id,
+        user_id: user.id,
+        deleted_at: deletedAt,
+        updated_at: deletedAt,
+        deleted_by_device_id:
+          zaznam.deviceId || getDeviceId(),
+        data: {
+          deleted: true
+        }
+      });
+
+    if (error) {
+      vseOdeslano = false;
+
+      console.error(
+        "Odeslání čekajícího smazání selhalo:",
+        zaznam.id,
+        error.message
+      );
+
+      continue;
+    }
+
+    odeberCekajiciSmazani(zaznam.id);
+  }
+
+  return vseOdeslano;
+}
+
 async function registerCurrentDevice() {
   const user = await getCurrentUser();
 
@@ -267,31 +394,51 @@ async function uploadEncryptedSecretRecordToSupabase(record) {
 }
 
 async function markNoteDeletedInSupabase(note) {
-  const user = await getCurrentUser();
-
-  if (!user || !note?.id) {
+  if (!note?.id) {
     return false;
   }
 
   const deletedAt = new Date().toISOString();
 
+  /*
+   * Smazání nejdřív zapíšeme do lokální fronty.
+   * Díky tomu se poznámka po offline smazání
+   * při dalším syncu nemůže z cloudu vrátit.
+   */
+  pridejCekajiciSmazani(
+    note.id,
+    deletedAt
+  );
+
+  const user = await getCurrentUser();
+
+  if (!user || !navigator.onLine) {
+    return false;
+  }
+
   const { error } = await supabaseClient
     .from("notes")
-    .update({
+    .upsert({
+      id: note.id,
+      user_id: user.id,
       deleted_at: deletedAt,
       updated_at: deletedAt,
       deleted_by_device_id: getDeviceId(),
       data: {
         deleted: true
       }
-    })
-    .eq("id", note.id)
-    .eq("user_id", user.id);
+    });
 
   if (error) {
-    console.error("Sync delete error:", error.message);
+    console.error(
+      "Sync delete error:",
+      error.message
+    );
+
     return false;
   }
+
+  odeberCekajiciSmazani(note.id);
 
   return true;
 }
@@ -425,11 +572,13 @@ function vytvorMapuVitezu(
   cloudRows
 ) {
   const winners = new Map();
-  const deletedIds = new Set(
-    cloudRows
+  const deletedIds = new Set([
+    ...cloudRows
       .filter((row) => row?.deleted_at)
-      .map((row) => row.id)
-  );
+      .map((row) => row.id),
+    ...nactiCekajiciSmazani()
+      .map((zaznam) => zaznam.id)
+  ]);
 
   localRegular.forEach((note) => {
     if (!note?.id || deletedIds.has(note.id)) {
@@ -615,6 +764,12 @@ async function syncNotes() {
     if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
       await cekajNaUlozeniTajnychPoznamek();
     }
+
+    /*
+     * Nejdřív odešleme případná smazání z offline fronty.
+     * Teprve potom načítáme cloudový snapshot.
+     */
+    await odesliCekajiciSmazaniDoSupabase();
 
     let localRegular = getLocalNotesForSync();
 
@@ -845,17 +1000,16 @@ async function startSync() {
 let probihajiciStartSync = null;
 
 /*
- * KRÁTKÝ ZÁMEK PRO LOKÁLNÍ HROMADNÉ ZMĚNY
+ * ZÁMEK PRO LOKÁLNÍ ZMĚNY
  *
- * Startovací/online synchronizace pracuje se snapshotem poznámek.
- * Kdyby se přesně během ní provedla hromadná lokální změna, starší
- * snapshot by mohl později čerstvou změnu přepsat.
- *
- * Tato malá fronta dovolí hromadné akci nejdřív počkat na právě
- * běžící sync a během svého lokálního uložení + uploadu nepustí nový.
+ * Hromadná změna nesmí proběhnout uprostřed syncu,
+ * protože sync pracuje se snapshotem poznámek.
+ * Lokální změny proto řadíme do krátké fronty.
  */
 let probihajiciLokalniZmena = null;
+let lokalniZmenaRezervovana = false;
 let synchronizaceOdlozenaKvuliLokalniZmene = false;
+let frontaLokalnichZmen = Promise.resolve();
 
 async function pockejNaProbihajiciSynchronizaci() {
   if (probihajiciStartSync) {
@@ -888,24 +1042,42 @@ async function provedLokalniZmenuBezKolizeSeSync(akce) {
     return null;
   }
 
-  while (probihajiciLokalniZmena) {
-    try {
-      await probihajiciLokalniZmena;
-    } catch (error) {
-      /* Předchozí lokální změna už si chybu zpracovala sama. */
-    }
-  }
+  let uvolniFrontu;
 
-  await pockejNaProbihajiciSynchronizaci();
+  const mojeMistoVeFronte =
+    new Promise((resolve) => {
+      uvolniFrontu = resolve;
+    });
 
-  probihajiciLokalniZmena = (async () => {
-    return await akce();
-  })();
+  const predchoziFronta =
+    frontaLokalnichZmen;
+
+  frontaLokalnichZmen =
+    predchoziFronta.then(
+      () => mojeMistoVeFronte
+    );
+
+  await predchoziFronta;
+
+  /*
+   * Rezervaci nastavíme ještě PŘED čekáním na běžící sync.
+   * Nový sync tak nemůže v malé mezeře mezi čekáním a uložením
+   * začít pracovat se starým snapshotem.
+   */
+  lokalniZmenaRezervovana = true;
 
   try {
+    await pockejNaProbihajiciSynchronizaci();
+
+    probihajiciLokalniZmena =
+      Promise.resolve().then(akce);
+
     return await probihajiciLokalniZmena;
   } finally {
     probihajiciLokalniZmena = null;
+    lokalniZmenaRezervovana = false;
+
+    uvolniFrontu?.();
 
     if (synchronizaceOdlozenaKvuliLokalniZmene) {
       synchronizaceOdlozenaKvuliLokalniZmene = false;
@@ -918,8 +1090,52 @@ async function provedLokalniZmenuBezKolizeSeSync(akce) {
   }
 }
 
+/*
+ * Pro hromadné změny používáme centrální sync místo přímého
+ * uploadu jednotlivých poznámek. Lokální změna je hotová hned,
+ * následný sync se spustí z bezpečného aktuálního snapshotu.
+ */
+async function provedLokalniZmenuASynchronizuj(akce) {
+  const vysledek =
+    await provedLokalniZmenuBezKolizeSeSync(
+      akce
+    );
+
+  const vyberKaretAktivni =
+    typeof rezimVyberuKaret !== "undefined" &&
+    rezimVyberuKaret === true;
+
+  if (
+    navigator.onLine &&
+    !vyberKaretAktivni
+  ) {
+    /*
+     * Nečekáme na síť kvůli odezvě UI.
+     * Další lokální hromadná změna si případně na tento sync
+     * bezpečně počká přes stejný zámek.
+     */
+    spustStartSyncBezpecne().catch(
+      (error) => {
+        console.warn(
+          "Následná synchronizace lokální změny selhala:",
+          error
+        );
+      }
+    );
+  }
+
+  return vysledek;
+}
+
 async function spustStartSyncBezpecne() {
-  if (probihajiciLokalniZmena) {
+  if (
+    probihajiciLokalniZmena ||
+    lokalniZmenaRezervovana ||
+    (
+      typeof rezimVyberuKaret !== "undefined" &&
+      rezimVyberuKaret === true
+    )
+  ) {
     synchronizaceOdlozenaKvuliLokalniZmene = true;
     return false;
   }
@@ -927,6 +1143,8 @@ async function spustStartSyncBezpecne() {
   if (!navigator.onLine) {
     return false;
   }
+
+  synchronizaceOdlozenaKvuliLokalniZmene = false;
 
   if (
     typeof window.LubaNoteSupabase
@@ -975,7 +1193,8 @@ async function spustStartSyncBezpecne() {
 
 window.LubaNoteSync = {
   spustBezpecne: spustStartSyncBezpecne,
-  provedLokalniZmenuBezKolizeSeSync
+  provedLokalniZmenuBezKolizeSeSync,
+  provedLokalniZmenuASynchronizuj
 };
 
 /*

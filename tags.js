@@ -1287,155 +1287,22 @@ tagFilterButtons.addEventListener("click", async (event) => {
   /*
    * HROMADNÉ PŘIŘAZENÍ ŠTÍTKU
    *
-   * Důležité bezpečnostní pravidlo:
-   * - nejdřív uložíme změny lokálně,
-   * - teprve potom je po jedné a s await odešleme do Supabase,
-   * - během celé operace nesmí běžet startovací/online sync,
-   *   aby starší snapshot nepřepsal čerstvou změnu.
-   *
    * Původní štítky vybraných karet se záměrně nahradí
    * právě jedním nově zvoleným štítkem.
+   * Uložení i následný sync řeší společná bezpečná cesta
+   * v script.js + sync.js, bez přímých jednotlivých uploadů.
    */
   if (rezimVyberuKaret) {
-    /*
-     * Výběr si před případným čekáním na probíhající sync převedeme
-     * z indexů na stabilní ID. Sync může seznam přerenderovat nebo
-     * některou cloudovou poznámku doplnit/odebrat; index by pak mohl
-     * ukazovat na jinou kartu. ID zůstává bezpečné.
-     */
-    const poznamkyPriKliknuti = loadTask();
-    const vybranaId = [];
-    let chybiStabilniId = false;
-
-    for (const index of vybraneKarty) {
-      const ukol = poznamkyPriKliknuti[index];
-
-      if (!ukol) {
-        continue;
-      }
-
-      if (!ukol.id) {
-        chybiStabilniId = true;
-        break;
-      }
-
-      vybranaId.push(ukol.id);
-    }
-
-    if (chybiStabilniId) {
-      console.error(
-        "Hromadná změna byla zastavena: některá vybraná karta nemá stabilní ID."
-      );
-
-      zobrazHlaseniHromadneAkce(
-        "Starší kartu je potřeba nejdřív otevřít a uložit"
-      );
-
-      return;
-    }
-
-    const provedHromadnouZmenu = async () => {
-      const ulozeneUkoly = loadTask();
-      const zmeneneUkoly = [];
-      const casZmeny = new Date().toISOString();
-      const indexPodleId = new Map(
-        ulozeneUkoly
-          .map((ukol, index) => [ukol?.id, index])
-          .filter(([id]) => Boolean(id))
-      );
-
-      for (const id of vybranaId) {
-        const index = indexPodleId.get(id);
-
-        if (index === undefined) {
-          continue;
+    const vysledek =
+      await provedHromadnouZmenuVybranychKaret(
+        (ukol) => {
+          ukol.tags = [vybranyStitek];
         }
-
-        const ukol = ulozeneUkoly[index];
-
-        if (!ukol) {
-          continue;
-        }
-
-        ukol.tags = [vybranyStitek];
-        ukol.updatedAt = casZmeny;
-
-        zmeneneUkoly.push(ukol);
-      }
-
-      if (zmeneneUkoly.length === 0) {
-        return {
-          pocet: 0,
-          lokalneUlozeno: false,
-          synchronizovano: false
-        };
-      }
-
-      const lokalneUlozeno =
-        await saveAllTasks(ulozeneUkoly);
-
-      if (lokalneUlozeno === false) {
-        return {
-          pocet: zmeneneUkoly.length,
-          lokalneUlozeno: false,
-          synchronizovano: false
-        };
-      }
-
-      let synchronizovano = true;
-
-      if (
-        navigator.onLine &&
-        typeof uploadLocalNoteToSupabase === "function"
-      ) {
-        for (const ukol of zmeneneUkoly) {
-          const uspesne =
-            await uploadLocalNoteToSupabase(ukol);
-
-          if (!uspesne) {
-            synchronizovano = false;
-          }
-        }
-      } else {
-        /*
-         * Offline změna zůstává bezpečně lokálně.
-         * Po návratu internetu ji běžný sync odešle podle updatedAt.
-         */
-        synchronizovano = false;
-      }
-
-      return {
-        pocet: zmeneneUkoly.length,
-        lokalneUlozeno: true,
-        synchronizovano
-      };
-    };
-
-    let vysledek;
-
-    if (
-      typeof window.LubaNoteSync
-        ?.provedLokalniZmenuBezKolizeSeSync ===
-        "function"
-    ) {
-      vysledek = await window.LubaNoteSync
-        .provedLokalniZmenuBezKolizeSeSync(
-          provedHromadnouZmenu
-        );
-    } else {
-      /*
-       * Bezpečný fallback pro případ, že sync modul ještě není dostupný.
-       */
-      vysledek = await provedHromadnouZmenu();
-    }
+      );
 
     if (!vysledek?.lokalneUlozeno) {
       console.error(
         "Hromadné přiřazení štítku se nepodařilo lokálně uložit."
-      );
-
-      zobrazHlaseniHromadneAkce(
-        "Uložení štítku se nepodařilo"
       );
 
       return;
@@ -1444,18 +1311,13 @@ tagFilterButtons.addEventListener("click", async (event) => {
     const pocetOznacenych =
       vysledek.pocet;
 
-    rezimVyberuKaret = false;
-    vybraneKarty.clear();
+    ukonciRezimVyberuKaret();
 
-    aktualizujListuVyberuKaret();
+    zobrazPotvrzeniAkce(
+      `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+    );
 
-renderTasks();
-
-zobrazPotvrzeniAkce(
-  `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
-);
-
-return;
+    return;
   }
 
 
