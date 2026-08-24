@@ -1,0 +1,805 @@
+/* =============================================================
+   LUBANOTE – VISUAL DEBUG PANEL
+   Development-only live UI tuning for mobile and desktop.
+   ============================================================= */
+
+#ln-vd-fab,
+#ln-vd-panel,
+#ln-vd-highlight,
+#ln-vd-toast,
+#ln-vd-grid,
+#ln-vd-measure {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  box-sizing: border-box !important;
+}
+
+#ln-vd-fab {
+  position: fixed !important;
+  left: max(10px, env(safe-area-inset-left)) !important;
+  bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px)) !important;
+  z-index: 2147483600 !important;
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1.5px solid #18ef7d !important;
+  border-radius: 15px !important;
+  color: #18ef7d !important;
+  background: rgba(4, 17, 21, 0.96) !important;
+  box-shadow: 0 0 16px rgba(24, 239, 125, 0.28) !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+#ln-vd-fab:hover,
+#ln-vd-fab:focus-visible {
+  box-shadow: 0 0 24px rgba(24, 239, 125, 0.48) !important;
+}
+
+#ln-vd-panel {
+  position: fixed !important;
+  top: 12px !important;
+  right: 12px !important;
+  z-index: 2147483640 !important;
+  width: min(390px, calc(100vw - 24px)) !important;
+  max-height: calc(100dvh - 24px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1.5px solid rgba(24, 239, 125, 0.9) !important;
+  border-radius: 18px !important;
+  color: #eef8f4 !important;
+  background: rgba(3, 13, 17, 0.985) !important;
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.72), 0 0 28px rgba(24, 239, 125, 0.18) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+#ln-vd-panel[hidden] {
+  display: none !important;
+}
+
+/* Visual Debug je při startu opravdu skrytý i proti display !important. */
+#ln-vd-fab[hidden],
+#ln-vd-panel[hidden] {
+  display: none !important;
+}
+
+.ln-vd-head {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  grid-template-columns: auto 1fr auto auto auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 54px !important;
+  padding: 8px 10px 8px 14px !important;
+  border-bottom: 1px solid rgba(24, 239, 125, 0.2) !important;
+  background: linear-gradient(135deg, rgba(12, 45, 42, 0.92), rgba(4, 17, 21, 0.95)) !important;
+  cursor: grab !important;
+  user-select: none !important;
+  touch-action: none !important;
+  -webkit-user-select: none !important;
+}
+
+#ln-vd-panel.ln-vd-dragging .ln-vd-head {
+  cursor: grabbing !important;
+}
+
+#ln-vd-panel.ln-vd-minimized {
+  max-height: 56px !important;
+}
+
+#ln-vd-panel.ln-vd-minimized .ln-vd-body {
+  display: none !important;
+}
+
+.ln-vd-title {
+  min-width: 0 !important;
+}
+
+.ln-vd-title strong {
+  display: block !important;
+  color: #18ef7d !important;
+  font-size: 15px !important;
+  line-height: 1.15 !important;
+}
+
+.ln-vd-title small {
+  display: block !important;
+  margin-top: 2px !important;
+  overflow: hidden !important;
+  color: rgba(232, 242, 239, 0.64) !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.ln-vd-icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(24, 239, 125, 0.42) !important;
+  border-radius: 11px !important;
+  color: #18ef7d !important;
+  background: rgba(2, 19, 21, 0.86) !important;
+  font-size: 17px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+}
+
+.ln-vd-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  padding: 10px !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(24, 239, 125, 0.55) transparent !important;
+}
+
+.ln-vd-section {
+  margin: 0 0 10px !important;
+  padding: 10px !important;
+  border: 1px solid rgba(24, 239, 125, 0.24) !important;
+  border-radius: 13px !important;
+  background: rgba(6, 25, 28, 0.72) !important;
+}
+
+.ln-vd-section-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin: 0 0 8px !important;
+  color: #dff8ec !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.ln-vd-target {
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  gap: 8px !important;
+}
+
+.ln-vd-field,
+.ln-vd-select,
+.ln-vd-number,
+.ln-vd-selector {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border: 1px solid rgba(24, 239, 125, 0.34) !important;
+  border-radius: 10px !important;
+  outline: none !important;
+  color: #eef8f4 !important;
+  background: rgba(2, 15, 19, 0.96) !important;
+  font-size: 12px !important;
+  line-height: 36px !important;
+  box-sizing: border-box !important;
+}
+
+.ln-vd-selector {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+.ln-vd-field:focus,
+.ln-vd-select:focus,
+.ln-vd-number:focus,
+.ln-vd-selector:focus {
+  border-color: #18ef7d !important;
+  box-shadow: 0 0 0 2px rgba(24, 239, 125, 0.12) !important;
+}
+
+.ln-vd-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.ln-vd-actions.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.ln-vd-btn {
+  min-width: 0 !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 7px 9px !important;
+  border: 1px solid rgba(24, 239, 125, 0.42) !important;
+  border-radius: 10px !important;
+  color: #e9f8f2 !important;
+  background: rgba(3, 26, 27, 0.94) !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+  line-height: 1.15 !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  touch-action: manipulation !important;
+}
+
+.ln-vd-btn.primary {
+  border-color: #18ef7d !important;
+  color: #07130f !important;
+  background: #18ef7d !important;
+}
+
+.ln-vd-btn.danger {
+  border-color: rgba(255, 72, 105, 0.78) !important;
+  color: #ff8ca2 !important;
+  background: rgba(55, 5, 16, 0.92) !important;
+}
+
+.ln-vd-btn.active {
+  color: #07130f !important;
+  background: #18ef7d !important;
+  box-shadow: 0 0 12px rgba(24, 239, 125, 0.34) !important;
+}
+
+.ln-vd-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+  margin-bottom: 10px !important;
+}
+
+.ln-vd-tab {
+  min-width: 0 !important;
+  height: 34px !important;
+  padding: 0 4px !important;
+  border: 1px solid rgba(24, 239, 125, 0.25) !important;
+  border-radius: 9px !important;
+  color: rgba(230, 240, 237, 0.68) !important;
+  background: rgba(2, 17, 20, 0.85) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+
+.ln-vd-tab.active {
+  border-color: #18ef7d !important;
+  color: #18ef7d !important;
+  background: rgba(7, 43, 37, 0.94) !important;
+}
+
+.ln-vd-pane[hidden] {
+  display: none !important;
+}
+
+.ln-vd-control {
+  display: grid !important;
+  grid-template-columns: 104px minmax(0, 1fr) 62px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 0 8px !important;
+}
+
+.ln-vd-control:last-child {
+  margin-bottom: 0 !important;
+}
+
+.ln-vd-control > label {
+  color: rgba(230, 240, 237, 0.78) !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+}
+
+.ln-vd-range {
+  width: 100% !important;
+  height: 20px !important;
+  margin: 0 !important;
+  accent-color: #18ef7d !important;
+}
+
+.ln-vd-value {
+  width: 62px !important;
+  height: 30px !important;
+  padding: 0 5px !important;
+  border: 1px solid rgba(24, 239, 125, 0.27) !important;
+  border-radius: 8px !important;
+  color: #18ef7d !important;
+  background: rgba(2, 15, 18, 0.95) !important;
+  font-size: 11px !important;
+  text-align: center !important;
+}
+
+.ln-vd-color-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.ln-vd-color-field {
+  display: grid !important;
+  grid-template-columns: 1fr 42px !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  padding: 6px 7px !important;
+  border: 1px solid rgba(24, 239, 125, 0.22) !important;
+  border-radius: 10px !important;
+  color: rgba(230, 240, 237, 0.75) !important;
+  background: rgba(2, 16, 19, 0.72) !important;
+  font-size: 10px !important;
+}
+
+.ln-vd-color-field input[type="color"] {
+  width: 42px !important;
+  height: 30px !important;
+  padding: 2px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+}
+
+.ln-vd-info {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  font-size: 10px !important;
+}
+
+.ln-vd-info div {
+  min-width: 0 !important;
+  padding: 6px 7px !important;
+  border-radius: 8px !important;
+  color: rgba(230, 240, 237, 0.66) !important;
+  background: rgba(0, 0, 0, 0.22) !important;
+}
+
+.ln-vd-info b {
+  color: #18ef7d !important;
+}
+
+#ln-vd-highlight {
+  position: fixed !important;
+  z-index: 2147483630 !important;
+  pointer-events: none !important;
+  border: 2px solid #18ef7d !important;
+  border-radius: 4px !important;
+  background: rgba(24, 239, 125, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8), 0 0 22px rgba(24, 239, 125, 0.35) !important;
+}
+
+#ln-vd-measure {
+  position: fixed !important;
+  z-index: 2147483631 !important;
+  max-width: min(440px, calc(100vw - 20px)) !important;
+  padding: 5px 7px !important;
+  border-radius: 7px !important;
+  color: #06130e !important;
+  background: #18ef7d !important;
+  font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#ln-vd-toast {
+  position: fixed !important;
+  left: 50% !important;
+  bottom: max(76px, calc(env(safe-area-inset-bottom) + 70px)) !important;
+  z-index: 2147483647 !important;
+  max-width: calc(100vw - 30px) !important;
+  padding: 9px 13px !important;
+  border: 1px solid rgba(24, 239, 125, 0.65) !important;
+  border-radius: 11px !important;
+  color: #eaf8f2 !important;
+  background: rgba(3, 17, 20, 0.97) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55) !important;
+  font-size: 12px !important;
+  transform: translateX(-50%) !important;
+}
+
+#ln-vd-grid {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483500 !important;
+  pointer-events: none !important;
+  background-image:
+    linear-gradient(rgba(24, 239, 125, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 239, 125, 0.10) 1px, transparent 1px),
+    linear-gradient(rgba(24, 239, 125, 0.17) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 239, 125, 0.17) 1px, transparent 1px) !important;
+  background-size: 10px 10px, 10px 10px, 50px 50px, 50px 50px !important;
+}
+
+body.ln-vd-outlines *:not(#ln-vd-panel):not(#ln-vd-panel *):not(#ln-vd-quickbar):not(#ln-vd-quickbar *):not(#ln-vd-fab):not(#ln-vd-highlight):not(#ln-vd-measure):not(#ln-vd-toast):not(#ln-vd-grid) {
+  outline: 1px solid rgba(0, 229, 255, 0.22) !important;
+}
+
+body.ln-vd-picking,
+body.ln-vd-picking * {
+  cursor: crosshair !important;
+}
+
+body.ln-vd-picking #ln-vd-panel,
+body.ln-vd-picking #ln-vd-panel *,
+body.ln-vd-picking #ln-vd-fab,
+body.ln-vd-picking #ln-vd-quickbar,
+body.ln-vd-picking #ln-vd-quickbar * {
+  cursor: default !important;
+}
+
+@media (max-width: 899px) {
+  #ln-vd-fab {
+    width: 44px !important;
+    height: 44px !important;
+    bottom: calc(env(safe-area-inset-bottom) + 62px) !important;
+    border-radius: 13px !important;
+    font-size: 19px !important;
+  }
+
+  #ln-vd-panel {
+    top: max(8px, env(safe-area-inset-top)) !important;
+    right: 8px !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: min(390px, calc(100vw - 16px)) !important;
+    max-height: min(78dvh, 720px) !important;
+    border: 1.5px solid rgba(24, 239, 125, 0.9) !important;
+    border-radius: 16px !important;
+    padding-bottom: 0 !important;
+  }
+
+  .ln-vd-head {
+    min-height: 52px !important;
+    cursor: grab !important;
+    touch-action: none !important;
+  }
+
+  .ln-vd-control {
+    grid-template-columns: 92px minmax(0, 1fr) 58px !important;
+    gap: 6px !important;
+  }
+
+  .ln-vd-tabs {
+    position: sticky !important;
+    top: -10px !important;
+    z-index: 2 !important;
+    padding: 8px 0 6px !important;
+    background: rgba(3, 13, 17, 0.98) !important;
+  }
+}
+
+/* =============================================================
+   VISUAL DEBUG V3 – DRAG & PANEL OPACITY
+   ============================================================= */
+
+#ln-vd-panel {
+  opacity: var(--ln-vd-panel-opacity, 0.92) !important;
+  transition: opacity 120ms ease, box-shadow 120ms ease !important;
+}
+
+#ln-vd-panel:hover,
+#ln-vd-panel:focus-within,
+#ln-vd-panel.ln-vd-dragging {
+  box-shadow:
+    0 18px 70px rgba(0, 0, 0, 0.72),
+    0 0 34px rgba(24, 239, 125, 0.26) !important;
+}
+
+.ln-vd-panel-tools .ln-vd-section-title > span:last-child {
+  color: rgba(232, 242, 239, 0.55) !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.ln-vd-panel-opacity-row {
+  display: grid !important;
+  grid-template-columns: 88px minmax(0, 1fr) 52px !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.ln-vd-panel-opacity-row > label {
+  color: rgba(230, 240, 237, 0.8) !important;
+  font-size: 11px !important;
+}
+
+.ln-vd-panel-opacity-row > output {
+  color: #18ef7d !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+}
+
+.ln-vd-head::after {
+  content: "⋮⋮" !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 2px !important;
+  transform: translateX(-50%) rotate(90deg) !important;
+  color: rgba(24, 239, 125, 0.38) !important;
+  font-size: 13px !important;
+  letter-spacing: -4px !important;
+  pointer-events: none !important;
+}
+
+.ln-vd-head {
+  position: relative !important;
+}
+
+@media (max-width: 520px) {
+  .ln-vd-panel-opacity-row {
+    grid-template-columns: 78px minmax(0, 1fr) 48px !important;
+    gap: 6px !important;
+  }
+}
+
+/* =============================================================
+   Visual Debug v5 – bezpečný dotyk a přesouvání panelu
+   ============================================================= */
+.ln-vd-head {
+  touch-action: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.ln-vd-body {
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#ln-vd-panel.ln-vd-dragging {
+  transition: none !important;
+}
+
+body.ln-vd-picking {
+  touch-action: pan-y !important;
+}
+
+/* =========================================================
+   VISUAL DEBUG v6 – spolehlivé dotykové přesouvání
+   ========================================================= */
+.ln-vd-drag-handle {
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(24, 239, 125, 0.5) !important;
+  border-radius: 11px !important;
+  color: #18ef7d !important;
+  background: rgba(0, 0, 0, 0.28) !important;
+  font-size: 26px !important;
+  line-height: 1 !important;
+  cursor: grab !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+#ln-vd-panel.ln-vd-dragging .ln-vd-drag-handle {
+  cursor: grabbing !important;
+  background: rgba(24, 239, 125, 0.18) !important;
+}
+
+.ln-vd-element-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 42px !important;
+  gap: 7px !important;
+  align-items: center !important;
+}
+
+#ln-vd-element-list {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+@media (max-width: 899px) {
+  .ln-vd-drag-handle {
+    flex-basis: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 30px !important;
+  }
+}
+
+/* =========================================
+   VÝRAZNÝ STŘED DEBUG MŘÍŽKY
+   ========================================= */
+
+#ln-vd-grid::before,
+#ln-vd-grid::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 2147483000;
+  background: rgba(255, 230, 45, 0.95);
+  box-shadow: 0 0 10px rgba(255, 230, 45, 0.7);
+}
+
+/* Svislý střed */
+#ln-vd-grid::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+}
+
+/* Vodorovný střed */
+#ln-vd-grid::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+}
+/* =============================================================
+   VISUAL DEBUG v9 – MOBILNÍ RYCHLÉ LADĚNÍ − / 🛠 / +
+   Celá trojice je přetažitelná po obrazovce.
+   ============================================================= */
+
+#ln-vd-quickbar {
+  position: fixed !important;
+  left: max(10px, env(safe-area-inset-left)) !important;
+  bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px)) !important;
+  z-index: 2147483600 !important;
+  display: grid !important;
+  grid-template-columns: 46px 50px 46px !important;
+  grid-template-rows: 50px auto !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 5px !important;
+  border: 1.5px solid rgba(24, 239, 125, 0.82) !important;
+  border-radius: 17px !important;
+  color: #18ef7d !important;
+  background: rgba(4, 17, 21, 0.96) !important;
+  box-shadow: 0 0 18px rgba(24, 239, 125, 0.28) !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+#ln-vd-quickbar[hidden] {
+  display: none !important;
+}
+
+#ln-vd-quickbar > button {
+  width: 100% !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(24, 239, 125, 0.48) !important;
+  border-radius: 12px !important;
+  color: #18ef7d !important;
+  background: rgba(2, 19, 21, 0.94) !important;
+  box-shadow: none !important;
+  font: 900 25px/1 system-ui, sans-serif !important;
+  cursor: pointer !important;
+  touch-action: none !important;
+}
+
+#ln-vd-quickbar > button:active,
+#ln-vd-quickbar > button.ln-vd-quick-pressing {
+  color: #06130e !important;
+  background: #18ef7d !important;
+  transform: scale(0.94) !important;
+}
+
+#ln-vd-quickbar #ln-vd-fab {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 50px !important;
+  height: 50px !important;
+  border-radius: 14px !important;
+  font-size: 22px !important;
+}
+
+#ln-vd-quick-status {
+  grid-column: 1 / -1 !important;
+  min-width: 0 !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 7px !important;
+  padding: 2px 5px 1px !important;
+  color: rgba(238, 248, 244, 0.76) !important;
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+}
+
+#ln-vd-quick-status b {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#ln-vd-quick-status small {
+  color: #18ef7d !important;
+  font-size: 9px !important;
+}
+
+#ln-vd-quickbar.ln-vd-quick-active #ln-vd-quick-status {
+  display: flex !important;
+}
+
+#ln-vd-quickbar[data-ready="false"] > button:first-child,
+#ln-vd-quickbar[data-ready="false"] > button:nth-child(3) {
+  opacity: 0.45 !important;
+}
+
+.ln-vd-control.ln-vd-control-active {
+  margin-inline: -4px !important;
+  padding: 5px 4px !important;
+  border: 1px solid rgba(24, 239, 125, 0.72) !important;
+  border-radius: 9px !important;
+  background: rgba(24, 239, 125, 0.08) !important;
+}
+
+.ln-vd-control.ln-vd-control-active > label {
+  color: #18ef7d !important;
+  font-weight: 850 !important;
+}
+
+@media (max-width: 899px) {
+  #ln-vd-quickbar {
+    left: max(10px, env(safe-area-inset-left)) !important;
+    bottom: calc(env(safe-area-inset-bottom) + 62px) !important;
+    grid-template-columns: 44px 48px 44px !important;
+    grid-template-rows: 48px auto !important;
+  }
+
+  #ln-vd-quickbar > button {
+    height: 44px !important;
+    font-size: 23px !important;
+  }
+
+  #ln-vd-quickbar #ln-vd-fab {
+    width: 48px !important;
+    height: 48px !important;
+    font-size: 20px !important;
+  }
+}
+
+/* Visual Debug – přímý zápis CSS */
+#ln-vd-panel .ln-vd-auto-save {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 7px !important;
+}
+
+#ln-vd-panel .ln-vd-auto-save #ln-vd-export-section,
+#ln-vd-panel .ln-vd-auto-save #ln-vd-css-file-status {
+  grid-column: 1 / -1 !important;
+}
+
+#ln-vd-panel .ln-vd-auto-save #ln-vd-css-file-status {
+  display: block !important;
+  padding: 5px 3px 0 !important;
+  color: rgba(230, 255, 240, .72) !important;
+  font-size: 11px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 899px) {
+  #ln-vd-panel .ln-vd-auto-save {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}

@@ -1,0 +1,39 @@
+/* =====================================================
+   LUBANOTE – VISUAL DEBUG GENERATED TABLET 900–1199 CSS
+
+   Tento soubor spravuje Visual Debug.
+   Ruční styly nechávej ve style.css / desktop.css.
+   Pravidla z Visual Debugu patří sem.
+===================================================== */
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  /* LN-VD-SECTION:LOGIN:START */
+  /* LN-VD-SECTION:LOGIN:END */
+
+  /* LN-VD-SECTION:HOME / NOTES:START */
+  /* LN-VD-SECTION:HOME / NOTES:END */
+
+  /* LN-VD-SECTION:EDITOR:START */
+  /* LN-VD-SECTION:EDITOR:END */
+
+  /* LN-VD-SECTION:PLANNER:START */
+  /* LN-VD-SECTION:PLANNER:END */
+
+  /* LN-VD-SECTION:REMINDERS:START */
+  /* LN-VD-SECTION:REMINDERS:END */
+
+  /* LN-VD-SECTION:TAGS / FILTERS:START */
+  /* LN-VD-SECTION:TAGS / FILTERS:END */
+
+  /* LN-VD-SECTION:TODO / MEDIA:START */
+  /* LN-VD-SECTION:TODO / MEDIA:END */
+
+  /* LN-VD-SECTION:SETTINGS:START */
+  /* LN-VD-SECTION:SETTINGS:END */
+
+  /* LN-VD-SECTION:SECRET:START */
+  /* LN-VD-SECTION:SECRET:END */
+
+  /* LN-VD-SECTION:DIALOGS / MODALS:START */
+  /* LN-VD-SECTION:DIALOGS / MODALS:END */
+}
