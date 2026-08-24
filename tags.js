@@ -286,22 +286,35 @@ cancelDeleteTagButton?.addEventListener("click", () => {
 });
 
 confirmDeleteTagButton?.addEventListener("click", async () => {
-  if (!tagKeSmazani) {
+  if (!tagKeSmazani || confirmDeleteTagButton.disabled) {
     return;
   }
 
-  const uspesne = await smazStitek(
-    tagKeSmazani
-  );
+  confirmDeleteTagButton.disabled = true;
 
-  if (!uspesne) {
-    return;
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Mažu štítek…",
+      300
+    ) || (() => {});
+
+  try {
+    const uspesne = await smazStitek(
+      tagKeSmazani
+    );
+
+    if (!uspesne) {
+      return;
+    }
+
+    deleteTagConfirmModal.hidden = true;
+    tagKeSmazani = null;
+
+    vykresliSpravuStitku();
+  } finally {
+    ukonciCekani();
+    confirmDeleteTagButton.disabled = false;
   }
-
-  deleteTagConfirmModal.hidden = true;
-  tagKeSmazani = null;
-
-  vykresliSpravuStitku();
 });
 
 manageTagsMenuButton?.addEventListener("click", () => {
@@ -324,72 +337,90 @@ cancelNewTagButton.addEventListener("click", () => {
 
 saveNewTagModalButton.addEventListener("click", async () => {
   const name = newTagModalInput.value.trim();
-  
-  if (!name) {
+
+  if (!name || saveNewTagModalButton.disabled) {
     return;
   }
-  
+
   const tagAlreadyExists = syncedTags.some((tag) =>
     tag.name.trim().toLowerCase() === name.toLowerCase()
   );
-  
+
   if (tagAlreadyExists) {
     newTagModal.hidden = true;
-    
+
     zobrazZpravuAplikace(
-      vytvarimeTajnyStitek ?
-      "Tajné štítky" :
-      "Štítky",
+      vytvarimeTajnyStitek
+        ? "Tajné štítky"
+        : "Štítky",
       "Štítek s tímto názvem už existuje."
     );
-    
+
     vytvarimeTajnyStitek = false;
     return;
   }
-  
-  if (vytvarimeTajnyStitek) {
-    const uspesne =
-      await vytvorTajnyStitek(name);
-    
-    if (!uspesne) {
+
+  saveNewTagModalButton.disabled = true;
+
+  const puvodniText =
+    saveNewTagModalButton.textContent;
+
+  saveNewTagModalButton.textContent =
+    "⏳ Ukládám…";
+
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ukládám štítek…",
+      300
+    ) || (() => {});
+
+  try {
+    if (vytvarimeTajnyStitek) {
+      const uspesne =
+        await vytvorTajnyStitek(name);
+
+      if (!uspesne) {
+        return;
+      }
+
+      newTagModal.hidden = true;
+      vytvarimeTajnyStitek = false;
+
+      await loadTagsFromSupabase();
       return;
     }
-    
+
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from("tags")
+      .insert({
+        user_id: user.id,
+        name: name,
+        is_secret: false,
+        sort_order: syncedTags.length
+      });
+
+    if (error) {
+      console.error(
+        "Tag insert error:",
+        error.message
+      );
+      return;
+    }
+
     newTagModal.hidden = true;
-    vytvarimeTajnyStitek = false;
-    
     await loadTagsFromSupabase();
-    
-    return;
+  } finally {
+    ukonciCekani();
+    saveNewTagModalButton.disabled = false;
+    saveNewTagModalButton.textContent =
+      puvodniText;
   }
-  
-  const user = await getCurrentUser();
-  
-  if (!user) {
-    return;
-  }
-  
-  const { error } = await supabaseClient
-    .from("tags")
-    .insert({
-      user_id: user.id,
-      name: name,
-      is_secret: false,
-      sort_order: syncedTags.length
-    });
-  
-  if (error) {
-    console.error(
-      "Tag insert error:",
-      error.message
-    );
-    
-    return;
-  }
-  
-  newTagModal.hidden = true;
-  
-  await loadTagsFromSupabase();
 });
 
 
@@ -502,13 +533,26 @@ function vykresliSpravuStitku() {
         return;
       }
 
-      const uspesne = await prejmenujStitek(
-        tag,
-        vstup.value
-      );
+      upravitTlacitko.disabled = true;
 
-      if (uspesne) {
-        vykresliSpravuStitku();
+      const ukonciCekani =
+        window.LubaNoteUI?.zacniCekaniAkce?.(
+          "Přejmenovávám štítek…",
+          300
+        ) || (() => {});
+
+      try {
+        const uspesne = await prejmenujStitek(
+          tag,
+          vstup.value
+        );
+
+        if (uspesne) {
+          vykresliSpravuStitku();
+        }
+      } finally {
+        ukonciCekani();
+        upravitTlacitko.disabled = false;
       }
     });
 
@@ -549,6 +593,50 @@ function vykresliSpravuStitku() {
 // Změní název štítku v Supabase
 // a ve všech poznámkách, které ho používají.
 // ==========================================
+
+async function ulozPoznamkyPoZmeneStitku(poznamky) {
+  if (
+    window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj
+  ) {
+    return await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(
+        () => saveAllTasks(poznamky)
+      );
+  }
+
+  const vysledek = await saveAllTasks(poznamky);
+
+  if (
+    navigator.onLine &&
+    typeof uploadLocalNoteToSupabase === "function"
+  ) {
+    const zmenene = poznamky.filter(
+      (poznamka) => poznamka?.id
+    );
+
+    setTimeout(() => {
+      Promise.allSettled(
+        zmenene.map((poznamka) =>
+          uploadLocalNoteToSupabase(poznamka)
+        )
+      );
+    }, 0);
+  }
+
+  return vysledek;
+}
+
+function obnovStitkyNaPozadi() {
+  setTimeout(() => {
+    loadTagsFromSupabase().catch((error) => {
+      console.warn(
+        "Obnovení štítků z cloudu bylo odloženo:",
+        error
+      );
+    });
+  }, 0);
+}
 
 async function prejmenujStitek(tag, novyNazev) {
   const user = await getCurrentUser();
@@ -636,18 +724,24 @@ async function prejmenujStitek(tag, novyNazev) {
   });
 
   if (zmenenePoznamky.length > 0) {
-    saveAllTasks(poznamky);
-
-    for (const poznamka of zmenenePoznamky) {
-      await uploadLocalNoteToSupabase(
-        poznamka
-      );
-    }
+    await ulozPoznamkyPoZmeneStitku(
+      poznamky
+    );
   }
 
-  await loadTagsFromSupabase();
+  syncedTags = syncedTags.map(
+    (aktualniTag) =>
+      aktualniTag.id === tag.id
+        ? {
+            ...aktualniTag,
+            name: novyNazev
+          }
+        : aktualniTag
+  );
 
-  renderTasks();
+  renderTagFilters();
+  requestAnimationFrame(renderTasks);
+  obnovStitkyNaPozadi();
 
   return true;
 }
@@ -713,18 +807,18 @@ async function smazStitek(tag) {
   });
 
   if (zmenenePoznamky.length > 0) {
-    saveAllTasks(poznamky);
-
-    for (const poznamka of zmenenePoznamky) {
-      await uploadLocalNoteToSupabase(
-        poznamka
-      );
-    }
+    await ulozPoznamkyPoZmeneStitku(
+      poznamky
+    );
   }
 
-  await loadTagsFromSupabase();
+  syncedTags = syncedTags.filter(
+    (aktualniTag) => aktualniTag.id !== tag.id
+  );
 
-  renderTasks();
+  renderTagFilters();
+  requestAnimationFrame(renderTasks);
+  obnovStitkyNaPozadi();
 
   return true;
 }

@@ -1383,6 +1383,27 @@ let probihajiciLokalniZmena = null;
 let lokalniZmenaRezervovana = false;
 let synchronizaceOdlozenaKvuliLokalniZmene = false;
 let frontaLokalnichZmen = Promise.resolve();
+let casovacSynchronizacePoLokalniZmene = null;
+
+function naplanujSynchronizaciPoLokalniZmene(
+  zpozdeni = 350
+) {
+  clearTimeout(casovacSynchronizacePoLokalniZmene);
+
+  casovacSynchronizacePoLokalniZmene =
+    setTimeout(() => {
+      casovacSynchronizacePoLokalniZmene = null;
+
+      spustRychlySyncPoznamekBezpecne().catch(
+        (error) => {
+          console.warn(
+            "Následná synchronizace lokální změny selhala:",
+            error
+          );
+        }
+      );
+    }, Math.max(0, Number(zpozdeni) || 0));
+}
 
 async function provedLokalniZmenuBezKolizeSeSync(akce) {
   if (typeof akce !== "function") {
@@ -1469,23 +1490,72 @@ async function provedLokalniZmenuASynchronizuj(akce) {
       }
 
       /*
-       * Síť běží výhradně na pozadí.
-       * Výsledek lokální akce se vrací bez čekání na Supabase.
+       * Síť běží výhradně na pozadí a krátce se debouncuje.
+       * Několik rychlých kliknutí tak nespustí několik synců za sebou.
        */
-      setTimeout(() => {
-        spustStartSyncBezpecne().catch(
-          (error) => {
-            console.warn(
-              "Následná synchronizace lokální změny selhala:",
-              error
-            );
-          }
-        );
-      }, 0);
+      naplanujSynchronizaciPoLokalniZmene(350);
     }
   }
 
   return vysledek;
+}
+
+async function spustRychlySyncPoznamekBezpecne() {
+  if (
+    probihajiciLokalniZmena ||
+    lokalniZmenaRezervovana ||
+    (
+      typeof rezimVyberuKaret !== "undefined" &&
+      rezimVyberuKaret === true
+    )
+  ) {
+    synchronizaceOdlozenaKvuliLokalniZmene = true;
+    return false;
+  }
+
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  /*
+   * Pokud běží plný start sync, necháme ho doběhnout a pouze
+   * označíme, že po něm má následovat čerstvý notes-only sync.
+   */
+  if (probihajiciStartSync) {
+    odlozOpakovaniSynchronizace();
+    return false;
+  }
+
+  if (
+    typeof window.LubaNoteSupabase
+      ?.pripravClient === "function"
+  ) {
+    const pripraven =
+      await window.LubaNoteSupabase
+        .pripravClient();
+
+    if (!pripraven) {
+      return false;
+    }
+  }
+
+  if (
+    typeof supabaseClient === "undefined" ||
+    !supabaseClient
+  ) {
+    return false;
+  }
+
+  try {
+    await syncNotes();
+    return true;
+  } catch (error) {
+    console.warn(
+      "Rychlá synchronizace poznámek byla odložena:",
+      error
+    );
+    return false;
+  }
 }
 
 async function spustStartSyncBezpecne() {
@@ -1569,8 +1639,8 @@ async function spustStartSyncBezpecne() {
       synchronizaceOdlozenaKvuliLokalniZmene = false;
 
       setTimeout(
-        spustStartSyncBezpecne,
-        0
+        spustRychlySyncPoznamekBezpecne,
+        120
       );
     }
   }
@@ -1578,6 +1648,9 @@ async function spustStartSyncBezpecne() {
 
 window.LubaNoteSync = {
   spustBezpecne: spustStartSyncBezpecne,
+  spustRychle: spustRychlySyncPoznamekBezpecne,
+  naplanujPoLokalniZmene:
+    naplanujSynchronizaciPoLokalniZmene,
   provedLokalniZmenuBezKolizeSeSync,
   provedLokalniZmenuASynchronizuj
 };

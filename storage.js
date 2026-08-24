@@ -640,20 +640,6 @@ async function deleteTask(index) {
 
   const noteId = taskToDelete.id || null;
 
-  /*
-   * Smazání celé poznámky musí uklidit i všechny její vedlejší stopy:
-   * - hlavní Android notifikaci,
-   * - notifikace všech podúkolů,
-   * - lokální Planner položky.
-   * Jinak po smazání poznámky zůstávají v Plánu osiřelé úkoly.
-   */
-  if (
-    taskToDelete.notificationId &&
-    typeof cancelNotification === "function"
-  ) {
-    await cancelNotification(taskToDelete.notificationId);
-  }
-
   const plannedItems =
     typeof loadPlannedItems === "function"
       ? loadPlannedItems()
@@ -663,15 +649,24 @@ async function deleteTask(index) {
     (item) => item?.sourceNoteId === noteId
   );
 
-  for (const item of relatedPlannedItems) {
-    if (
-      item?.notificationId &&
-      typeof cancelNotification === "function"
-    ) {
-      await cancelNotification(item.notificationId);
-    }
+  const notificationIds = new Set();
+
+  if (taskToDelete.notificationId) {
+    notificationIds.add(
+      taskToDelete.notificationId
+    );
   }
 
+  relatedPlannedItems.forEach((item) => {
+    if (item?.notificationId) {
+      notificationIds.add(item.notificationId);
+    }
+  });
+
+  /*
+   * Lokální data smažeme jako první. Uživatel tak nečeká na
+   * Android plugin ani na Supabase.
+   */
   if (
     noteId &&
     typeof savePlannedItems === "function"
@@ -686,14 +681,34 @@ async function deleteTask(index) {
   tasks.splice(index, 1);
   await saveAllTasks(tasks);
 
+  /* Android notifikace uklidíme až na pozadí. */
+  if (
+    notificationIds.size > 0 &&
+    typeof cancelNotification === "function"
+  ) {
+    setTimeout(() => {
+      (async () => {
+        for (const notificationId of notificationIds) {
+          try {
+            await cancelNotification(notificationId);
+          } catch (error) {
+            console.warn(
+              "Zrušení notifikace po smazání bylo odloženo:",
+              error
+            );
+          }
+        }
+      })();
+    }, 0);
+  }
+
   if (
     taskToDelete.id &&
     typeof markNoteDeletedInSupabase === "function"
   ) {
     /*
-     * Tombstone se uvnitř markNoteDeletedInSupabase()
-     * zapíše do lokální fronty ještě před prvním await.
-     * Na síť proto při mazání UI nečeká.
+     * Tombstone se zapíše do lokální fronty ještě před prvním await.
+     * Síť proto mazání UI neblokuje.
      */
     markNoteDeletedInSupabase(taskToDelete)
       .catch((error) => {

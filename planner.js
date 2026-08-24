@@ -293,7 +293,14 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
       item?.notificationId &&
       typeof cancelNotification === "function"
     ) {
-      await cancelNotification(item.notificationId);
+      Promise.resolve(
+        cancelNotification(item.notificationId)
+      ).catch((error) => {
+        console.warn(
+          "Zrušení Planner notifikace bylo odloženo:",
+          error
+        );
+      });
     }
   }
 
@@ -544,67 +551,119 @@ async function saveCurrentPlannedItem() {
 
   sourceNote.updatedAt = new Date().toISOString();
 
-  await saveAllTasks(tasks);
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ukládám plán…",
+      300
+    ) || (() => {});
 
-  if (typeof uploadLocalNoteToSupabase === "function") {
-    await uploadLocalNoteToSupabase(sourceNote);
+  try {
+    if (
+      window.LubaNoteSync
+        ?.provedLokalniZmenuASynchronizuj
+    ) {
+      await window.LubaNoteSync
+        .provedLokalniZmenuASynchronizuj(
+          () => saveAllTasks(tasks)
+        );
+    } else {
+      await saveAllTasks(tasks);
+
+      if (
+        navigator.onLine &&
+        typeof uploadLocalNoteToSupabase === "function"
+      ) {
+        setTimeout(() => {
+          uploadLocalNoteToSupabase(sourceNote)
+            .catch((error) => {
+              console.warn(
+                "Synchronizace Planneru byla odložena:",
+                error
+              );
+            });
+        }, 0);
+      }
+    }
+  } catch (error) {
+    ukonciCekani();
+    console.error(
+      "Lokální uložení Planneru selhalo:",
+      error
+    );
+    zobrazZpravuAplikace(
+      "Plán",
+      "Úkol se nepodařilo bezpečně uložit."
+    );
+    return;
   }
 
-  /* Každá položka Planneru je současně samostatný úkol v Připomínkách.
-     V APK jí proto naplánujeme vlastní systémovou notifikaci. */
+  ukonciCekani();
+  closePlanner();
+
+  if (typeof renderRemindersScreen === "function") {
+    requestAnimationFrame(
+      renderRemindersScreen
+    );
+  }
+
+  /*
+   * Systémová notifikace se připraví až po návratu do aplikace.
+   * Uživatel na Android plugin ani síť nečeká.
+   */
   if (
     sourceNote.isSecret !== true &&
     typeof requestNotificationPermission === "function" &&
     typeof scheduleNotification === "function"
   ) {
-    try {
-      await requestNotificationPermission();
+    setTimeout(() => {
+      (async () => {
+        try {
+          await requestNotificationPermission();
 
-      const notificationTitle =
-        (
-          plannerSourceType === "selection" ||
-          plannerSourceType === "todo"
-        )
-          ? plannedItem.text
-          : (sourceNote.title || plannedItem.text);
-
-      const notificationBody =
-        (
-          plannerSourceType === "selection" ||
-          plannerSourceType === "todo"
-        )
-          ? (
-              sourceNote.title
-                ? `Z poznámky: ${sourceNote.title}`
-                : plannedItem.text
+          const notificationTitle =
+            (
+              plannedItem.sourceType === "selection" ||
+              plannedItem.sourceType === "todo"
             )
-          : (sourceNote.note || plannedItem.text);
+              ? plannedItem.text
+              : (sourceNote.title || plannedItem.text);
 
-      if (new Date(plannedItem.plannedAt) > new Date()) {
-        await scheduleNotification(
-          plannedItem.notificationId,
-          notificationTitle,
-          plannedItem.plannedAt,
-          notificationBody,
-          {
-            lubanoteType: "planned",
-            plannedItemId: plannedItem.id,
-            sourceNoteId: sourceNote.id
+          const notificationBody =
+            (
+              plannedItem.sourceType === "selection" ||
+              plannedItem.sourceType === "todo"
+            )
+              ? (
+                  sourceNote.title
+                    ? `Z poznámky: ${sourceNote.title}`
+                    : plannedItem.text
+                )
+              : (sourceNote.note || plannedItem.text);
+
+          if (
+            new Date(plannedItem.plannedAt) >
+            new Date()
+          ) {
+            await scheduleNotification(
+              plannedItem.notificationId,
+              notificationTitle,
+              plannedItem.plannedAt,
+              notificationBody,
+              {
+                lubanoteType: "planned",
+                plannedItemId: plannedItem.id,
+                sourceNoteId: sourceNote.id
+              }
+            );
           }
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Planned notification schedule error:",
-        error
-      );
-    }
-  }
-
-  closePlanner();
-
-  if (typeof renderRemindersScreen === "function") {
-    renderRemindersScreen();
+        } catch (error) {
+          console.warn(
+            "Planner notifikace bude obnovena později:",
+            error
+          );
+        }
+      })();
+    }, 0);
   }
 
 }

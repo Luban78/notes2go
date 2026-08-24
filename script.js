@@ -2006,6 +2006,135 @@ addTaskButton.addEventListener("click", () => {
 
 
 
+let probihaUlozeniEditoru = false;
+
+function spustUlohuNaPozadi(akce, popis = "Úloha na pozadí") {
+  setTimeout(() => {
+    Promise.resolve()
+      .then(() => {
+        if (typeof akce === "function") {
+          return akce();
+        }
+        return null;
+      })
+      .catch((error) => {
+        console.warn(`${popis} selhala:`, error);
+      });
+  }, 0);
+}
+
+async function ulozPoznamkuLokalneASynchronizuj(
+  akce,
+  poznamkaProFallback = null
+) {
+  if (
+    window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj
+  ) {
+    return await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(akce);
+  }
+
+  const vysledek = await akce();
+
+  if (
+    navigator.onLine &&
+    poznamkaProFallback &&
+    typeof uploadLocalNoteToSupabase === "function"
+  ) {
+    spustUlohuNaPozadi(
+      () => uploadLocalNoteToSupabase(poznamkaProFallback),
+      "Synchronizace poznámky"
+    );
+  }
+
+  return vysledek;
+}
+
+function obnovNotifikaciPoznamkyNaPozadi(poznamka) {
+  if (!poznamka) {
+    return;
+  }
+
+  spustUlohuNaPozadi(
+    async () => {
+      if (
+        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+      ) {
+        await obnovNotifikacePoznamkyPodleSoukromi(
+          poznamka
+        );
+        return;
+      }
+
+      if (
+        poznamka.isSecret !== true &&
+        poznamka.reminder &&
+        poznamka.date
+      ) {
+        await scheduleNotification(
+          poznamka.notificationId,
+          poznamka.title,
+          poznamka.date,
+          poznamka.note,
+          {
+            lubanoteType: "note",
+            taskId: poznamka.id
+          }
+        );
+        return;
+      }
+
+      if (poznamka.notificationId) {
+        await cancelNotification(
+          poznamka.notificationId
+        );
+      }
+    },
+    "Aktualizace notifikace"
+  );
+}
+
+function zavriEditorPoLokalnimUlozeni(
+  closingSessionId
+) {
+  if (closingSessionId !== editorSessionId) {
+    return false;
+  }
+
+  taskModal.classList.remove("show");
+  document.body.classList.remove("noScroll");
+
+  activeTaskIndex = null;
+  activeTaskId = null;
+  taskModal.removeAttribute("data-task-id");
+  editorSessionId += 1;
+
+  setTimeout(() => {
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
+  }, 250);
+
+  RichTextColors.reset();
+
+  /*
+   * Nejdřív dovolíme prohlížeči vykreslit zavřený editor.
+   * Překreslení seznamů proběhne až v dalším snímku.
+   */
+  requestAnimationFrame(() => {
+    renderTasks();
+
+    if (
+      typeof renderRemindersScreen === "function"
+    ) {
+      renderRemindersScreen();
+    }
+  });
+
+  return true;
+}
+
 async function ulozAZavriEditor(
   zpusobUlozeniNove = null
 ) {
@@ -2036,204 +2165,184 @@ async function ulozAZavriEditor(
 
     return;
   }
-  if (zpusobUlozeniNove === "secret") {
-    secretTaskEnabled = true;
+
+  if (probihaUlozeniEditoru) {
+    return;
   }
 
-  if (zpusobUlozeniNove === "normal") {
-    secretTaskEnabled = false;
-  }
+  probihaUlozeniEditoru = true;
 
-  const closingSessionId = editorSessionId;
-  const closingTaskId = activeTaskId;
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ukládám poznámku…",
+      300
+    ) || (() => {});
 
-  const title = modalTitle.value.trim();
-  const note = modalRichText.innerText;
-  const richContent = modalRichText.innerHTML;
-  const date =
-    modalDate.value && modalTime.value ?
-      `${modalDate.value}T${modalTime.value}` :
-      "";
+  try {
+    if (zpusobUlozeniNove === "secret") {
+      secretTaskEnabled = true;
+    }
 
-  const tasks = loadTask();
+    if (zpusobUlozeniNove === "normal") {
+      secretTaskEnabled = false;
+    }
 
-  let aktivni = null;
+    const closingSessionId = editorSessionId;
+    const closingTaskId = activeTaskId;
 
-  if (closingTaskId) {
-    const index = tasks.findIndex(
-      (task) => task?.id === closingTaskId
-    );
+    const title = modalTitle.value.trim();
+    const note = modalRichText.innerText;
+    const richContent = modalRichText.innerHTML;
+    const date =
+      modalDate.value && modalTime.value
+        ? `${modalDate.value}T${modalTime.value}`
+        : "";
 
-    if (index === -1) {
-      console.error(
-        "Uložení editoru bylo zastaveno: původní poznámka nebyla nalezena.",
-        closingTaskId
+    const tasks = loadTask();
+
+    let aktivni = null;
+    let ulozenaPoznamka = null;
+
+    if (closingTaskId) {
+      const index = tasks.findIndex(
+        (task) => task?.id === closingTaskId
       );
-      return;
-    }
 
-    aktivni = {
-      index,
-      task: tasks[index]
-    };
-  } else if (activeTaskIndex !== null) {
-    const currentTask = tasks[activeTaskIndex];
-
-    if (currentTask) {
-      aktivni = {
-        index: activeTaskIndex,
-        task: currentTask
-      };
-    }
-  }
-
-  if (aktivni) {
-    const currentTask = aktivni.task;
-
-    const updatedTask = {
-      ...currentTask,
-      updatedAt: new Date().toISOString(),
-      title,
-      note,
-      richContent,
-      date,
-      reminder: reminderEnabled,
-      favorite: favoriteEnabled,
-      notificationId: currentTask.notificationId ||
-        Date.now() % 2147483647,
-      area: activeArea,
-      pinned: currentTask.pinned === true,
-      isSecret: secretTaskEnabled,
-      tags: [...activeTags],
-      todos: [...activeTodos],
-      repeat: secretTaskEnabled ?
-        null :
-        kopirujEditorRepeat(editorRepeat)
-    };
-
-    if (
-      window.LubaNotePlanner
-        ?.synchronizujPlanovaneTodoSPoznamkou
-    ) {
-      await window.LubaNotePlanner
-        .synchronizujPlanovaneTodoSPoznamkou(
-          updatedTask
+      if (index === -1) {
+        throw new Error(
+          `Původní poznámka nebyla nalezena: ${closingTaskId}`
         );
+      }
+
+      aktivni = {
+        index,
+        task: tasks[index]
+      };
+    } else if (activeTaskIndex !== null) {
+      const currentTask = tasks[activeTaskIndex];
+
+      if (currentTask) {
+        aktivni = {
+          index: activeTaskIndex,
+          task: currentTask
+        };
+      }
     }
 
-    await updateTask(aktivni.index, updatedTask);
-    await uploadLocalNoteToSupabase(updatedTask);
+    if (aktivni) {
+      const currentTask = aktivni.task;
 
-    if (
-      typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
-    ) {
-      await obnovNotifikacePoznamkyPodleSoukromi(updatedTask);
-    } else if (
-      updatedTask.isSecret !== true &&
-      updatedTask.reminder &&
-      updatedTask.date
-    ) {
-      await scheduleNotification(
-        updatedTask.notificationId,
-        updatedTask.title,
-        updatedTask.date,
-        updatedTask.note,
-        {
-          lubanoteType: "note",
-          taskId: updatedTask.id
-        }
-      );
-    } else {
-      await cancelNotification(updatedTask.notificationId);
-    }
-  } else {
-    const maVlozenyMediaObsah =
-      window.LubaNoteEditorMedia
-        ?.maVlozenyObsah?.() === true;
-
-    const isEmpty =
-      title === "" &&
-      note.trim() === "" &&
-      activeTodos.length === 0 &&
-      !maVlozenyMediaObsah;
-
-    if (!isEmpty) {
-      const newTask = {
-        id: crypto.randomUUID(),
+      const updatedTask = {
+        ...currentTask,
         updatedAt: new Date().toISOString(),
         title,
         note,
         richContent,
         date,
-        completed: false,
         reminder: reminderEnabled,
         favorite: favoriteEnabled,
-        notificationId: Date.now() % 2147483647,
+        notificationId:
+          currentTask.notificationId ||
+          Date.now() % 2147483647,
         area: activeArea,
-        pinned: false,
+        pinned: currentTask.pinned === true,
         isSecret: secretTaskEnabled,
         tags: [...activeTags],
         todos: [...activeTodos],
-        repeat: secretTaskEnabled ?
-          null :
-          kopirujEditorRepeat(editorRepeat)
+        repeat: secretTaskEnabled
+          ? null
+          : kopirujEditorRepeat(editorRepeat)
       };
 
-      await saveTask(newTask);
-      await uploadLocalNoteToSupabase(newTask);
-
       if (
-        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+        window.LubaNotePlanner
+          ?.synchronizujPlanovaneTodoSPoznamkou
       ) {
-        await obnovNotifikacePoznamkyPodleSoukromi(newTask);
-      } else if (
-        newTask.isSecret !== true &&
-        newTask.reminder &&
-        newTask.date
-      ) {
-        await scheduleNotification(
-          newTask.notificationId,
-          newTask.title,
-          newTask.date,
-          newTask.note,
-          {
-            lubanoteType: "note",
-            taskId: newTask.id
-          }
+        await window.LubaNotePlanner
+          .synchronizujPlanovaneTodoSPoznamkou(
+            updatedTask
+          );
+      }
+
+      await ulozPoznamkuLokalneASynchronizuj(
+        () => updateTask(
+          aktivni.index,
+          updatedTask
+        ),
+        updatedTask
+      );
+
+      ulozenaPoznamka = updatedTask;
+    } else {
+      const maVlozenyMediaObsah =
+        window.LubaNoteEditorMedia
+          ?.maVlozenyObsah?.() === true;
+
+      const isEmpty =
+        title === "" &&
+        note.trim() === "" &&
+        activeTodos.length === 0 &&
+        !maVlozenyMediaObsah;
+
+      if (!isEmpty) {
+        const newTask = {
+          id: crypto.randomUUID(),
+          updatedAt: new Date().toISOString(),
+          title,
+          note,
+          richContent,
+          date,
+          completed: false,
+          reminder: reminderEnabled,
+          favorite: favoriteEnabled,
+          notificationId:
+            Date.now() % 2147483647,
+          area: activeArea,
+          pinned: false,
+          isSecret: secretTaskEnabled,
+          tags: [...activeTags],
+          todos: [...activeTodos],
+          repeat: secretTaskEnabled
+            ? null
+            : kopirujEditorRepeat(editorRepeat)
+        };
+
+        await ulozPoznamkuLokalneASynchronizuj(
+          () => saveTask(newTask),
+          newTask
         );
+
+        ulozenaPoznamka = newTask;
       }
     }
-  }
 
-  renderTasks();
+    ukonciCekani();
 
-  if (typeof renderRemindersScreen === "function") {
-    renderRemindersScreen();
-  }
+    const editorZavren =
+      zavriEditorPoLokalnimUlozeni(
+        closingSessionId
+      );
 
-  /*
-   * Důležité: během await mohl uživatel znovu otevřít editor.
-   * Starý asynchronní save pak NESMÍ vynulovat stav nové relace.
-   */
-  if (closingSessionId !== editorSessionId) {
-    return;
-  }
-
-  taskModal.classList.remove("show");
-  document.body.classList.remove("noScroll");
-
-  activeTaskIndex = null;
-  activeTaskId = null;
-  taskModal.removeAttribute("data-task-id");
-  editorSessionId += 1;
-
-  setTimeout(() => {
-    if (!taskModal.classList.contains("show")) {
-      taskModal.hidden = true;
+    if (editorZavren && ulozenaPoznamka) {
+      obnovNotifikaciPoznamkyNaPozadi(
+        ulozenaPoznamka
+      );
     }
-  }, 250);
+  } catch (error) {
+    ukonciCekani();
 
-  RichTextColors.reset();
+    console.error(
+      "Uložení poznámky selhalo:",
+      error
+    );
+
+    zobrazZpravuAplikace(
+      "Uložení poznámky",
+      "Poznámku se nepodařilo bezpečně uložit. Editor zůstal otevřený."
+    );
+  } finally {
+    probihaUlozeniEditoru = false;
+  }
 }
 
 editorBackButton.addEventListener(
@@ -3115,10 +3224,10 @@ function ukonciRezimVyberuKaret() {
   if (
     navigator.onLine &&
     typeof window.LubaNoteSync
-      ?.spustBezpecne === "function"
+      ?.spustRychle === "function"
   ) {
     window.LubaNoteSync
-      .spustBezpecne()
+      .spustRychle()
       .catch((error) => {
         console.warn(
           "Synchronizace po ukončení výběru selhala:",
@@ -3281,25 +3390,130 @@ function zobrazDalsiAkceKarty() {
   `;
 }
 
-function zobrazPotvrzeniAkce(text) {
-  const actionStatusModal =
+let casovacPotvrzeniAkce = null;
+let casovacCekaniAkce = null;
+let idCekaniAkce = 0;
+
+function ziskejPrvkyStavuAkce() {
+  const modal =
     document.getElementById("actionStatusModal");
 
-  const actionStatusText =
+  const text =
     document.getElementById("actionStatusText");
 
-  if (!actionStatusModal || !actionStatusText) {
+  const ikona =
+    modal?.querySelector(".actionStatusIcon") || null;
+
+  return {
+    modal,
+    text,
+    ikona
+  };
+}
+
+function vycistiCasovaceStavuAkce() {
+  clearTimeout(casovacPotvrzeniAkce);
+  clearTimeout(casovacCekaniAkce);
+
+  casovacPotvrzeniAkce = null;
+  casovacCekaniAkce = null;
+}
+
+function zobrazPotvrzeniAkce(text, doba = 1800) {
+  const prvky = ziskejPrvkyStavuAkce();
+
+  if (!prvky.modal || !prvky.text) {
     return;
   }
 
-  actionStatusText.textContent = text;
+  idCekaniAkce += 1;
+  vycistiCasovaceStavuAkce();
 
-  actionStatusModal.hidden = false;
+  prvky.modal.classList.remove("actionStatusWaiting");
 
-  setTimeout(() => {
-    actionStatusModal.hidden = true;
-  }, 1800);
+  if (prvky.ikona) {
+    prvky.ikona.textContent = "✓";
+  }
+
+  prvky.text.textContent = text;
+  prvky.modal.hidden = false;
+
+  casovacPotvrzeniAkce = setTimeout(() => {
+    prvky.modal.hidden = true;
+    casovacPotvrzeniAkce = null;
+  }, doba);
 }
+
+/*
+ * Indikátor čekání se zobrazí až po krátkém zpoždění.
+ * Rychlé akce proto neblikají, pomalejší akce ale uživatele
+ * vždy informují, že aplikace skutečně pracuje.
+ * Funkce vrací ukončovací callback.
+ */
+function zacniCekaniAkce(
+  text,
+  zpozdeni = 250
+) {
+  const prvky = ziskejPrvkyStavuAkce();
+
+  if (!prvky.modal || !prvky.text) {
+    return () => {};
+  }
+
+  const mojeId = ++idCekaniAkce;
+  let ukonceno = false;
+
+  vycistiCasovaceStavuAkce();
+
+  casovacCekaniAkce = setTimeout(() => {
+    if (
+      ukonceno ||
+      mojeId !== idCekaniAkce
+    ) {
+      return;
+    }
+
+    prvky.modal.classList.add(
+      "actionStatusWaiting"
+    );
+
+    if (prvky.ikona) {
+      prvky.ikona.textContent = "⏳";
+    }
+
+    prvky.text.textContent = text;
+    prvky.modal.hidden = false;
+  }, Math.max(0, Number(zpozdeni) || 0));
+
+  return () => {
+    if (ukonceno) {
+      return;
+    }
+
+    ukonceno = true;
+    clearTimeout(casovacCekaniAkce);
+    casovacCekaniAkce = null;
+
+    if (mojeId !== idCekaniAkce) {
+      return;
+    }
+
+    prvky.modal.hidden = true;
+    prvky.modal.classList.remove(
+      "actionStatusWaiting"
+    );
+
+    if (prvky.ikona) {
+      prvky.ikona.textContent = "✓";
+    }
+  };
+}
+
+window.LubaNoteUI = {
+  ...(window.LubaNoteUI || {}),
+  zobrazPotvrzeniAkce,
+  zacniCekaniAkce
+};
 
 const plannerModal =
   document.getElementById("plannerModal");

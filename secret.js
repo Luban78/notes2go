@@ -676,12 +676,8 @@ async function vytvorHlavniHesloZModalu() {
     return;
   }
 
-  confirmSecretUnlockButton.disabled = true;
-
   const uspesne =
     await vytvorNoveTajneNastaveni(heslo);
-
-  confirmSecretUnlockButton.disabled = false;
 
   if (!uspesne) {
     zobrazZpravuAplikace(
@@ -718,70 +714,102 @@ async function vytvorHlavniHesloZModalu() {
 confirmSecretUnlockButton?.addEventListener(
   "click",
   async () => {
-    const maHeslo =
-      await maNastaveneTajneHeslo();
-    
-    if (!maHeslo) {
-      await vytvorHlavniHesloZModalu();
+    if (confirmSecretUnlockButton.disabled) {
       return;
     }
-    
-    const heslo =
-      secretUnlockInput.value;
-    
-    if (!heslo) {
-      zobrazZpravuAplikace(
-        "Tajný režim",
-        "Zadej hlavní heslo."
-      );
-      
-      return;
-    }
-    
+
+    const puvodniTextTlacitka =
+      confirmSecretUnlockButton.textContent;
+
     confirmSecretUnlockButton.disabled = true;
-    
-    const spravneHeslo =
-      await overHlavniHeslo(heslo);
-    
-    confirmSecretUnlockButton.disabled = false;
+    confirmSecretUnlockButton.textContent =
+      "⏳ Pracuji…";
 
-    if (spravneHeslo === null) {
+    const ukonciCekani =
+      window.LubaNoteUI?.zacniCekaniAkce?.(
+        "Odemykám tajný režim…",
+        250
+      ) || (() => {});
+
+    try {
+      const maHeslo =
+        await maNastaveneTajneHeslo();
+
+      if (!maHeslo) {
+        await vytvorHlavniHesloZModalu();
+        return;
+      }
+
+      const heslo =
+        secretUnlockInput.value;
+
+      if (!heslo) {
+        zobrazZpravuAplikace(
+          "Tajný režim",
+          "Zadej hlavní heslo."
+        );
+
+        return;
+      }
+
+      const spravneHeslo =
+        await overHlavniHeslo(heslo);
+
+      if (spravneHeslo === null) {
+        zobrazZpravuAplikace(
+          "Tajný režim",
+          "Offline odemknutí na tomto zařízení ještě není připravené. Připoj se jednou k internetu, otevři tajný režim a potom bude fungovat i bez připojení. Tvoje tajné poznámky nejsou smazané."
+        );
+
+        return;
+      }
+
+      if (!spravneHeslo) {
+        zobrazZpravuAplikace(
+          "Tajný režim",
+          "Hlavní heslo není správné."
+        );
+
+        return;
+      }
+
+      const odemceno =
+        await odemkniTajnyRezimSifrovacimKlicem(
+          heslo
+        );
+
+      if (!odemceno) {
+        zobrazZpravuAplikace(
+          "Tajný režim",
+          "Tajný režim se nepodařilo odemknout."
+        );
+
+        return;
+      }
+
+      secretUnlockInput.value = "";
+      secretUnlockModal.hidden = true;
+
       zobrazZpravuAplikace(
         "Tajný režim",
-        "Offline odemknutí na tomto zařízení ještě není připravené. Připoj se jednou k internetu, otevři tajný režim a potom bude fungovat i bez připojení. Tvoje tajné poznámky nejsou smazané."
+        "Tajný režim je odemčený."
+      );
+    } catch (error) {
+      console.error(
+        "Odemknutí tajného režimu selhalo:",
+        error
       );
 
-      return;
-    }
-    
-    if (!spravneHeslo) {
-      zobrazZpravuAplikace(
-        "Tajný režim",
-        "Hlavní heslo není správné."
-      );
-      
-      return;
-    }
-    
-    const odemceno =
-      await odemkniTajnyRezimSifrovacimKlicem(heslo);
-
-    if (!odemceno) {
       zobrazZpravuAplikace(
         "Tajný režim",
         "Tajný režim se nepodařilo odemknout."
       );
-
-      return;
+    } finally {
+      ukonciCekani();
+      confirmSecretUnlockButton.disabled = false;
+      confirmSecretUnlockButton.textContent =
+        puvodniTextTlacitka;
     }
-
-    secretUnlockInput.value = "";
-    secretUnlockModal.hidden = true;
-
-    zobrazZpravuAplikace(
-      "Tajný režim",
-      "Tajný režim je odemčený."
-    );
   }
 );
 
