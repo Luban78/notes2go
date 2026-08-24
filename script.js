@@ -2789,6 +2789,15 @@ function renderTasks() {
           vybraneKarty.add(idKarty);
         }
 
+        /*
+         * Při každém tapu už nepřekreslujeme celý seznam poznámek.
+         * Přepneme jen rámeček právě kliknuté karty.
+         */
+        loadedCard.classList.toggle(
+          "cardSelected",
+          vybraneKarty.has(idKarty)
+        );
+
         console.log(
           "Vybrane karty:",
           [...vybraneKarty]
@@ -2800,8 +2809,6 @@ function renderTasks() {
         }
 
         aktualizujListuVyberuKaret();
-
-        renderTasks();
         zobrazAkceVybranychKaret();
         return;
       }
@@ -3031,6 +3038,15 @@ async function smazPoznamkyPodleId(ids) {
       : [];
 
   const provedSmazani = async () => {
+    if (typeof deleteTasksByIds === "function") {
+      return await deleteTasksByIds(
+        bezpecnaId
+      );
+    }
+
+    /*
+     * Záložní cesta pro starší storage.js.
+     */
     let pocet = 0;
 
     for (const id of bezpecnaId) {
@@ -3074,6 +3090,10 @@ async function smazPoznamkyPodleId(ids) {
 function ukonciRezimVyberuKaret() {
   rezimVyberuKaret = false;
   vybraneKarty.clear();
+
+  document.body.classList.remove(
+    "cardSelectionModeActive"
+  );
 
   aktualizujListuVyberuKaret();
 
@@ -3131,6 +3151,10 @@ function zobrazAkceVybranychKaret() {
   if (!rezimVyberuKaret) {
     return;
   }
+
+  document.body.classList.add(
+    "cardSelectionModeActive"
+  );
 
   const stav =
     ziskejStavVybranychKaret();
@@ -3326,6 +3350,12 @@ cardMenu.addEventListener("click", async (event) => {
 
     rezimVyberuKaret = true;
     vybraneKarty.add(idKarty);
+
+    /*
+     * Long-press už svůj ochranný click spotřeboval na tlačítku
+     * Označit. Další skutečný tap na kartu proto nesmí být blokovaný.
+     */
+    blockNextCardClick = false;
 
     aktualizujListuVyberuKaret();
 

@@ -4,6 +4,33 @@ function getLocalNotesForSync() {
     : loadTask().filter((note) => note?.isSecret !== true);
 }
 
+/*
+ * Lokální UI má vždy přednost před sítí.
+ * Storage zvyšuje revizi při každém uživatelském saveAllTasks().
+ * Pokud se revize během syncu změní, starý cloudový snapshot
+ * se nesmí zapsat zpět přes novější lokální změnu.
+ */
+function ziskejReviziLokalnichZmenProSync() {
+  return Number(
+    window.LubaNoteStorageState
+      ?.ziskejReviziLokalnichZmenPoznamek
+      ?.() || 0
+  );
+}
+
+function lokalniStavSeBehemSyncuZmenil(
+  revizePriStartu
+) {
+  return (
+    ziskejReviziLokalnichZmenProSync() !==
+    revizePriStartu
+  );
+}
+
+function odlozOpakovaniSynchronizace() {
+  synchronizaceOdlozenaKvuliLokalniZmene = true;
+}
+
 function getDeviceId() {
   let deviceId =
     localStorage.getItem("lubanoteDeviceId");
@@ -765,6 +792,9 @@ async function syncNotes() {
       await cekajNaUlozeniTajnychPoznamek();
     }
 
+    const revizeLokalnihoStavuPriStartu =
+      ziskejReviziLokalnichZmenProSync();
+
     /*
      * Nejdřív odešleme případná smazání z offline fronty.
      * Teprve potom načítáme cloudový snapshot.
@@ -799,6 +829,16 @@ async function syncNotes() {
         : [];
 
     const cloudRows = await getCloudNotesForSync();
+
+    if (
+      lokalniStavSeBehemSyncuZmenil(
+        revizeLokalnihoStavuPriStartu
+      )
+    ) {
+      odlozOpakovaniSynchronizace();
+      return false;
+    }
+
     const cloudMap = new Map(
       cloudRows.map((row) => [row.id, row])
     );
@@ -869,6 +909,20 @@ async function syncNotes() {
     }
 
     /*
+     * Během síťových await mohl uživatel něco změnit.
+     * V takovém případě starý snapshot NEZAPÍŠEME do localStorage.
+     * Nový sync si načte čerstvý lokální stav.
+     */
+    if (
+      lokalniStavSeBehemSyncuZmenil(
+        revizeLokalnihoStavuPriStartu
+      )
+    ) {
+      odlozOpakovaniSynchronizace();
+      return false;
+    }
+
+    /*
      * Toto odstraní stale běžnou kopii, pokud na jiném zařízení vyhrála
      * novější tajná verze. Legacy tajný plaintext se zatím zachová.
      */
@@ -902,6 +956,15 @@ async function syncNotes() {
             error
           );
         }
+      }
+
+      if (
+        lokalniStavSeBehemSyncuZmenil(
+          revizeLokalnihoStavuPriStartu
+        )
+      ) {
+        odlozOpakovaniSynchronizace();
+        return false;
       }
 
       nastavDesifrovaneTajnePoznamky(decryptedSecretNotes);
@@ -953,6 +1016,27 @@ async function syncNotes() {
       await uklidOsirelychPlanovanychPolozek();
     }
 
+    if (
+      lokalniStavSeBehemSyncuZmenil(
+        revizeLokalnihoStavuPriStartu
+      )
+    ) {
+      odlozOpakovaniSynchronizace();
+      return false;
+    }
+
+    /*
+     * Probíhající starší sync nesmí během hromadného výběru
+     * překreslit celý seznam karet pod prstem uživatele.
+     */
+    if (
+      typeof rezimVyberuKaret !== "undefined" &&
+      rezimVyberuKaret === true
+    ) {
+      odlozOpakovaniSynchronizace();
+      return false;
+    }
+
     if (typeof renderTasks === "function") {
       renderTasks();
     }
@@ -1000,42 +1084,16 @@ async function startSync() {
 let probihajiciStartSync = null;
 
 /*
- * ZÁMEK PRO LOKÁLNÍ ZMĚNY
+ * FRONTA LOKÁLNÍCH ZMĚN
  *
- * Hromadná změna nesmí proběhnout uprostřed syncu,
- * protože sync pracuje se snapshotem poznámek.
- * Lokální změny proto řadíme do krátké fronty.
+ * Lokální změny řadíme pouze mezi sebou. Na síť nečekají.
+ * Souběh se syncem hlídá revize z storage.js: starý síťový
+ * snapshot se při nové lokální změně zahodí a sync se zopakuje.
  */
 let probihajiciLokalniZmena = null;
 let lokalniZmenaRezervovana = false;
 let synchronizaceOdlozenaKvuliLokalniZmene = false;
 let frontaLokalnichZmen = Promise.resolve();
-
-async function pockejNaProbihajiciSynchronizaci() {
-  if (probihajiciStartSync) {
-    try {
-      await probihajiciStartSync;
-    } catch (error) {
-      console.warn(
-        "Čekání na startovací synchronizaci skončilo chybou:",
-        error
-      );
-    }
-
-    return;
-  }
-
-  if (probihajiciSync) {
-    try {
-      await probihajiciSync;
-    } catch (error) {
-      console.warn(
-        "Čekání na synchronizaci skončilo chybou:",
-        error
-      );
-    }
-  }
-}
 
 async function provedLokalniZmenuBezKolizeSeSync(akce) {
   if (typeof akce !== "function") {
@@ -1057,36 +1115,37 @@ async function provedLokalniZmenuBezKolizeSeSync(akce) {
       () => mojeMistoVeFronte
     );
 
+  /*
+   * Čekáme jen na PŘEDCHOZÍ LOKÁLNÍ změnu.
+   * Na Supabase ani na právě běžící sync už UI nikdy nečeká.
+   */
   await predchoziFronta;
 
-  /*
-   * Rezervaci nastavíme ještě PŘED čekáním na běžící sync.
-   * Nový sync tak nemůže v malé mezeře mezi čekáním a uložením
-   * začít pracovat se starým snapshotem.
-   */
   lokalniZmenaRezervovana = true;
 
   try {
-    await pockejNaProbihajiciSynchronizaci();
-
     probihajiciLokalniZmena =
       Promise.resolve().then(akce);
 
-    return await probihajiciLokalniZmena;
+    const vysledek =
+      await probihajiciLokalniZmena;
+
+    /*
+     * Pokud souběžně běží starší sync, jeho revizní kontrola
+     * zabrání přepsání této změny a po skončení se pustí nový sync.
+     */
+    if (
+      probihajiciSync ||
+      probihajiciStartSync
+    ) {
+      odlozOpakovaniSynchronizace();
+    }
+
+    return vysledek;
   } finally {
     probihajiciLokalniZmena = null;
     lokalniZmenaRezervovana = false;
-
     uvolniFrontu?.();
-
-    if (synchronizaceOdlozenaKvuliLokalniZmene) {
-      synchronizaceOdlozenaKvuliLokalniZmene = false;
-
-      setTimeout(
-        spustStartSyncBezpecne,
-        0
-      );
-    }
   }
 }
 
@@ -1105,23 +1164,36 @@ async function provedLokalniZmenuASynchronizuj(akce) {
     typeof rezimVyberuKaret !== "undefined" &&
     rezimVyberuKaret === true;
 
-  if (
-    navigator.onLine &&
-    !vyberKaretAktivni
-  ) {
-    /*
-     * Nečekáme na síť kvůli odezvě UI.
-     * Další lokální hromadná změna si případně na tento sync
-     * bezpečně počká přes stejný zámek.
-     */
-    spustStartSyncBezpecne().catch(
-      (error) => {
-        console.warn(
-          "Následná synchronizace lokální změny selhala:",
-          error
-        );
+  if (navigator.onLine) {
+    if (vyberKaretAktivni) {
+      /*
+       * Během výběru necháme UI v klidu.
+       * ukonciRezimVyberuKaret() sync následně spustí.
+       */
+      odlozOpakovaniSynchronizace();
+    } else {
+      if (
+        probihajiciStartSync ||
+        probihajiciSync
+      ) {
+        odlozOpakovaniSynchronizace();
       }
-    );
+
+      /*
+       * Síť běží výhradně na pozadí.
+       * Výsledek lokální akce se vrací bez čekání na Supabase.
+       */
+      setTimeout(() => {
+        spustStartSyncBezpecne().catch(
+          (error) => {
+            console.warn(
+              "Následná synchronizace lokální změny selhala:",
+              error
+            );
+          }
+        );
+      }, 0);
+    }
   }
 
   return vysledek;
@@ -1188,6 +1260,30 @@ async function spustStartSyncBezpecne() {
     return await probihajiciStartSync;
   } finally {
     probihajiciStartSync = null;
+
+    /*
+     * Pokud během tohoto syncu přišla lokální změna, pustíme
+     * po jeho skončení nový sync z čerstvého lokálního stavu.
+     * V aktivním výběru počkáme až na jeho ukončení.
+     */
+    const vyberKaretAktivni =
+      typeof rezimVyberuKaret !== "undefined" &&
+      rezimVyberuKaret === true;
+
+    if (
+      synchronizaceOdlozenaKvuliLokalniZmene &&
+      navigator.onLine &&
+      !probihajiciLokalniZmena &&
+      !lokalniZmenaRezervovana &&
+      !vyberKaretAktivni
+    ) {
+      synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+      setTimeout(
+        spustStartSyncBezpecne,
+        0
+      );
+    }
   }
 }
 

@@ -9,6 +9,29 @@ const LUBANOTE_BACKUP_FORMAT = "LubaNote-backup-v2";
 let desifrovaneTajnePoznamky = [];
 let frontaUkladaniTajnychPoznamek = Promise.resolve();
 
+/*
+ * REVIZE LOKÁLNÍCH ZMĚN POZNÁMEK
+ *
+ * Sync podle tohoto čítače pozná, že uživatel během síťové
+ * synchronizace mezitím něco změnil. Síť pak nesmí přepsat
+ * novější lokální stav starým snapshotem.
+ */
+let revizeLokalnichZmenPoznamek = 0;
+
+function zvysReviziLokalnichZmenPoznamek() {
+  revizeLokalnichZmenPoznamek += 1;
+  return revizeLokalnichZmenPoznamek;
+}
+
+function ziskejReviziLokalnichZmenPoznamek() {
+  return revizeLokalnichZmenPoznamek;
+}
+
+window.LubaNoteStorageState = {
+  ziskejReviziLokalnichZmenPoznamek
+};
+
+
 function nactiPoleZLocalStorage(klic) {
   const raw = localStorage.getItem(klic);
 
@@ -341,6 +364,13 @@ function odstranDuplicitniPoznamkySeStejnymId(tasks) {
 function saveAllTasks(tasks) {
   const safeTasks =
     odstranDuplicitniPoznamkySeStejnymId(tasks);
+
+  /*
+   * Každé běžné lokální uložení je nová uživatelská revize.
+   * Přímé zápisy, které provádí samotný sync, tento čítač
+   * nezvyšují.
+   */
+  zvysReviziLokalnichZmenPoznamek();
   const beznePoznamky = safeTasks.filter(
     (task) => task && task.isSecret !== true
   );
@@ -439,10 +469,163 @@ async function deleteTask(index) {
     taskToDelete.id &&
     typeof markNoteDeletedInSupabase === "function"
   ) {
-    await markNoteDeletedInSupabase(taskToDelete);
+    /*
+     * Tombstone se uvnitř markNoteDeletedInSupabase()
+     * zapíše do lokální fronty ještě před prvním await.
+     * Na síť proto při mazání UI nečeká.
+     */
+    markNoteDeletedInSupabase(taskToDelete)
+      .catch((error) => {
+        console.warn(
+          "Odeslání smazání do cloudu bylo odloženo:",
+          error
+        );
+      });
   }
 
   return true;
+}
+
+
+/*
+ * HROMADNÉ SMAZÁNÍ PODLE STABILNÍCH ID
+ *
+ * Poznámky odstraníme jediným lokálním zápisem. Cloudová smazání
+ * se jen zařadí do bezpečné tombstone fronty a odešlou na pozadí.
+ */
+async function deleteTasksByIds(ids) {
+  const bezpecnaId = new Set(
+    (Array.isArray(ids) ? ids : [])
+      .filter(Boolean)
+  );
+
+  if (bezpecnaId.size === 0) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  const tasks = loadTask();
+
+  const mazanePoznamky = tasks.filter(
+    (task) =>
+      task?.id &&
+      bezpecnaId.has(task.id)
+  );
+
+  if (mazanePoznamky.length === 0) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  const mazanaId = new Set(
+    mazanePoznamky.map((task) => task.id)
+  );
+
+  const notificationIds = new Set();
+
+  mazanePoznamky.forEach((task) => {
+    if (task?.notificationId) {
+      notificationIds.add(task.notificationId);
+    }
+  });
+
+  if (
+    typeof loadPlannedItems === "function" &&
+    typeof savePlannedItems === "function"
+  ) {
+    const plannedItems = loadPlannedItems();
+
+    plannedItems.forEach((item) => {
+      if (
+        mazanaId.has(item?.sourceNoteId) &&
+        item?.notificationId
+      ) {
+        notificationIds.add(item.notificationId);
+      }
+    });
+
+    savePlannedItems(
+      plannedItems.filter(
+        (item) =>
+          !mazanaId.has(item?.sourceNoteId)
+      )
+    );
+  }
+
+  const zbyvajiciPoznamky = tasks.filter(
+    (task) =>
+      !task?.id ||
+      !mazanaId.has(task.id)
+  );
+
+  const lokalneUlozeno =
+    await saveAllTasks(zbyvajiciPoznamky);
+
+  if (lokalneUlozeno === false) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  /*
+   * Android notifikace uklízíme na pozadí.
+   * Jejich rušení nesmí zdržovat zmizení karet z obrazovky.
+   */
+  if (
+    notificationIds.size > 0 &&
+    typeof cancelNotification === "function"
+  ) {
+    Promise.allSettled(
+      [...notificationIds].map(
+        (notificationId) =>
+          cancelNotification(notificationId)
+      )
+    ).catch(() => {});
+  }
+
+  /*
+   * U hromadného mazání do sítě vůbec nevstupujeme.
+   * Jen vytvoříme lokální tombstone frontu; centrální sync ji po
+   * ukončení výběru odešle na pozadí.
+   */
+  const casSmazani =
+    new Date().toISOString();
+
+  if (typeof pridejCekajiciSmazani === "function") {
+    mazanePoznamky.forEach((task) => {
+      pridejCekajiciSmazani(
+        task.id,
+        casSmazani
+      );
+    });
+  } else if (
+    typeof markNoteDeletedInSupabase === "function"
+  ) {
+    /*
+     * Záložní cesta, pokud starší sync.js ještě lokální frontu
+     * neposkytuje. Ani zde na síť nečekáme.
+     */
+    mazanePoznamky.forEach((task) => {
+      markNoteDeletedInSupabase(task)
+        .catch((error) => {
+          console.warn(
+            "Odeslání hromadného smazání do cloudu bylo odloženo:",
+            task?.id,
+            error
+          );
+        });
+    });
+  }
+
+  return {
+    pocet: mazanePoznamky.length,
+    lokalneUlozeno: true
+  };
 }
 
 function toggleTaskCompleted(index) {

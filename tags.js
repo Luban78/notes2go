@@ -191,6 +191,44 @@ const newTagModalTitle =
 
 
 
+/*
+ * Trvalá tlačítka Secret modalů registrujeme jen jednou.
+ * Dříve se jejich listenery přidávaly při každém renderTagFilters(),
+ * takže se s každým překreslením vrstvily a aplikace zpomalovala.
+ */
+closeSecretUnlockButton?.addEventListener(
+  "click",
+  () => {
+    secretUnlockModal.hidden = true;
+    secretUnlockInput.value = "";
+  }
+);
+
+lockSecretModeButton?.addEventListener(
+  "click",
+  () => {
+    if (typeof zamkniTajnyRezim === "function") {
+      zamkniTajnyRezim(false);
+    }
+  }
+);
+
+cancelSecretUnlockButton?.addEventListener(
+  "click",
+  () => {
+    secretUnlockModal.hidden = true;
+    secretUnlockInput.value = "";
+  }
+);
+
+closeSecretMenuButton?.addEventListener(
+  "click",
+  () => {
+    secretMenuModal.hidden = true;
+  }
+);
+
+
 let tagKeSmazani = null;
 
 // ==========================================
@@ -923,28 +961,6 @@ let horniTajnyLongPressSpusten = false;
 let horniStiskStartX = 0;
 let horniStiskStartY = 0;
 
-closeSecretUnlockButton?.addEventListener(
-  "click",
-  () => {
-    secretUnlockModal.hidden = true;
-    secretUnlockInput.value = "";
-  }
-);
-lockSecretModeButton?.addEventListener(
-  "click",
-  () => {
-    if (typeof zamkniTajnyRezim === "function") {
-      zamkniTajnyRezim(false);
-    }
-  }
-);
-cancelSecretUnlockButton?.addEventListener(
-  "click",
-  () => {
-    secretUnlockModal.hidden = true;
-    secretUnlockInput.value = "";
-  }
-);
 
 addTagButton.addEventListener("pointerdown", (event) => {
   horniStiskStartX = event.clientX;
@@ -983,12 +999,6 @@ addTagButton.addEventListener("pointercancel", () => {
   clearTimeout(casovacHornihoTajnehoStisku);
 });
 
-closeSecretMenuButton?.addEventListener(
-  "click",
-  () => {
-    secretMenuModal.hidden = true;
-  }
-);
 
 addTagButton.addEventListener("click", () => {
   vytvarimeTajnyStitek = false;

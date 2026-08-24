@@ -1088,6 +1088,18 @@ html {
   padding: 0 8px 8px;
 }
 
+/*
+ * Mobilní 2×2 panel hromadných akcí je fixovaný dole.
+ * Přidáme proto pod karty prostor, aby šly poslední karty
+ * odscrollovat nad panel a zůstaly normálně klikatelné.
+ */
+@media (max-width: 899px) {
+  body.cardSelectionModeActive .pinnedCards {
+    padding-bottom: 230px;
+  }
+}
+
+
 .pinnedCards[hidden] {
   display: none !important;
 }
