@@ -3204,7 +3204,7 @@ text-size-adjust: 100%;
 }
 
 .calendarSelectedDateButton:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 
   background:
     color-mix(in srgb,
@@ -3212,9 +3212,7 @@ text-size-adjust: 100%;
       var(--color-surface));
 }
 
-.calendarSelectedDateButton:active {
-  transform: scale(0.98);
-}
+
 
 /* DETAIL DNE – HLAVIČKA */
 /* ========================================
@@ -3224,8 +3222,8 @@ text-size-adjust: 100%;
 .dayDetailHeader {
   display: flex;
   justify-content: center;
-
   margin: 6px 0 12px;
+  flex: 0 0 auto;
 }
 
 .dayDetailBackButton {
@@ -3332,9 +3330,7 @@ text-size-adjust: 100%;
   height: 100%;
 }
 
-.dayDetailHeader {
-  flex: 0 0 auto;
-}
+
 
 .dayDetailItems {
   flex: 1 1 auto;
