@@ -1192,6 +1192,12 @@ html {
   background: rgba(255, 255, 255, 0.16);
 }
 
+
+
+
+
+
+
 .settingsModal {
   position: fixed;
   inset: 0;
@@ -6061,4 +6067,146 @@ text-size-adjust: 100%;
   .actionStatusModal.actionStatusWaiting .actionStatusIcon {
     animation: none;
   }
+}
+
+/* ========================================
+   NASTAVENÍ – MODERNÍ VZHLED
+   ======================================== */
+
+.settingsContent {
+  width: min(560px, 100%);
+  padding: 26px 22px 28px;
+}
+
+.settingsHeader {
+  margin-bottom: 22px;
+}
+
+.settingsHeader h2 {
+  font-size: calc(var(--font-size) + 8px);
+  font-weight: 800;
+}
+
+#closeSettingsButton {
+  flex: 0 0 auto;
+
+  width: 40px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font-size: 1.2rem;
+}
+
+.settingsSection {
+  margin-bottom: 24px;
+}
+
+.settingsSection h3 {
+  margin: 0 0 8px 4px;
+
+  color: var(--color-text-secondary);
+
+  font-size: calc(var(--font-size) - 3px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Společný vzhled řádků */
+.fontSizeSetting,
+.themeSetting,
+#dataSettingsSection > button {
+  min-height: 58px;
+
+  box-sizing: border-box;
+
+  border-bottom: 1px solid var(--color-border);
+
+  background: var(--color-surface);
+}
+
+/* První řádek skupiny */
+.settingsSection > :nth-child(2) {
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+/* Poslední řádek skupiny */
+.settingsSection > :last-child {
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+  border-bottom: none;
+}
+
+.fontSizeSetting {
+  padding: 8px 12px;
+}
+
+.themeSetting {
+  padding: 0 12px;
+}
+
+.settingsSection .themeSelectButton {
+  min-width: 130px;
+  padding: 14px 0;
+}
+
+#dataSettingsSection > button {
+  width: 100%;
+  padding: 0 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+
+#dataSettingsSection > button::after {
+  content: "›";
+
+  color: var(--color-text-secondary);
+
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1;
+}
+
+.settingsValue {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+/* Text názvu nastavení vždy vlevo */
+.themeSetting > span:first-child {
+  text-align: left;
+}
+
+/* Tlačítka Data – text vlevo */
+#dataSettingsSection > button {
+  text-align: left;
+}
+
+/* Řádek velikosti písma */
+.fontSizeSetting > span:first-child {
+  text-align: left;
+}
+.themeSetting {
+  grid-template-columns: minmax(160px, 1fr) auto;
 }

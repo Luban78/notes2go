@@ -39,6 +39,14 @@ if (aboutVersion) {
     `Verze ${window.LUBANOTE_VERSION || "DEV"}`;
 }
 
+const settingsVersionValue =
+  document.getElementById("settingsVersionValue");
+
+if (settingsVersionValue) {
+  settingsVersionValue.textContent =
+    window.LUBANOTE_VERSION || "DEV";
+}
+
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
 
