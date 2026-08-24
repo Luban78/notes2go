@@ -5932,6 +5932,8 @@ text-size-adjust: 100%;
 #appMessageSaveButton {
   background: var(--color-accent);
   color: var(--color-accent-text);
+  color: #CBCBD2;
+  width: 133px !important;
 }
 
 .cardSelected {
