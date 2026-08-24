@@ -510,6 +510,279 @@ function vytvorCloudRegularNote(row) {
   };
 }
 
+
+/*
+ * OPRAVA JIŽ VZNIKLÝCH LEGACY DUPLIKÁTŮ
+ *
+ * Předchozí verze mohly stejné staré poznámce bez ID na dvou
+ * zařízeních přidělit dvě různá náhodná UUID. Takovou situaci
+ * opravujeme pouze tehdy, když je shoda velmi silná:
+ * - stejný notificationId,
+ * - stejný základní obsah poznámky.
+ *
+ * Běžné dvě úmyslně podobné poznámky bez této shody neslučujeme.
+ */
+function vyberNejnovejsiLegacyKandidat(kandidati) {
+  return [...kandidati].sort((a, b) => {
+    const casA = new Date(a?.note?.updatedAt || 0).getTime();
+    const casB = new Date(b?.note?.updatedAt || 0).getTime();
+
+    if (casA !== casB) {
+      return casB - casA;
+    }
+
+    /* Při shodném čase dáváme přednost lokálnímu stavu. */
+    if (a.source === b.source) {
+      return 0;
+    }
+
+    return a.source === "local" ? -1 : 1;
+  })[0] || null;
+}
+
+function slucViditelnyStavLegacyKandidatu(kandidati, canonicalId) {
+  const nejlepsi =
+    vyberNejnovejsiLegacyKandidat(kandidati);
+
+  if (!nejlepsi?.note) {
+    return null;
+  }
+
+  /*
+   * Obsah a čas bereme z nejnovější verze. Připnutí a oblíbenost
+   * jsou neškodné UI vlastnosti, proto je při opravě duplikátu
+   * neztratíme, pokud je měla alespoň jedna kopie.
+   */
+  const puvodniId = new Set(
+    kandidati
+      .map((kandidat) => kandidat?.note?.id)
+      .filter(Boolean)
+  );
+
+  const plannedItems = Array.isArray(nejlepsi.note.plannedItems)
+    ? nejlepsi.note.plannedItems.map((item) => ({
+        ...item,
+        sourceNoteId:
+          puvodniId.has(item?.sourceNoteId)
+            ? canonicalId
+            : item?.sourceNoteId
+      }))
+    : nejlepsi.note.plannedItems;
+
+  return {
+    ...nejlepsi.note,
+    id: canonicalId,
+    plannedItems,
+    pinned: kandidati.some(
+      (kandidat) => kandidat?.note?.pinned === true
+    ),
+    favorite: kandidati.some(
+      (kandidat) => kandidat?.note?.favorite === true
+    ),
+    isSecret: false
+  };
+}
+
+function prevedOdkazyLegacyDuplikatu(aliasy) {
+  if (!(aliasy instanceof Map) || aliasy.size === 0) {
+    return;
+  }
+
+  if (
+    typeof loadPlannedItems === "function" &&
+    typeof savePlannedItems === "function"
+  ) {
+    const plannedItems = loadPlannedItems();
+    let changed = false;
+
+    plannedItems.forEach((item) => {
+      const noveId = aliasy.get(item?.sourceNoteId);
+
+      if (noveId) {
+        item.sourceNoteId = noveId;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      savePlannedItems(plannedItems);
+    }
+  }
+
+  if (
+    typeof activeTaskId !== "undefined" &&
+    aliasy.has(activeTaskId)
+  ) {
+    activeTaskId = aliasy.get(activeTaskId);
+  }
+
+  if (
+    typeof plannerSourceNoteId !== "undefined" &&
+    aliasy.has(plannerSourceNoteId)
+  ) {
+    plannerSourceNoteId = aliasy.get(plannerSourceNoteId);
+  }
+
+  const taskModal = document.getElementById("taskModal");
+  const modalId = taskModal?.dataset?.taskId;
+
+  if (modalId && aliasy.has(modalId)) {
+    taskModal.dataset.taskId = aliasy.get(modalId);
+  }
+}
+
+function sjednotJasneLegacyDuplikatyPredSyncem(
+  localRegular,
+  cloudRows
+) {
+  if (
+    typeof vytvorKlicJasnehoLegacyDuplikatu !== "function" ||
+    typeof vytvorStabilniIdStarePoznamky !== "function"
+  ) {
+    return {
+      localRegular,
+      cloudRows,
+      pocetOpravenychSkupin: 0
+    };
+  }
+
+  const skupiny = new Map();
+
+  const pridej = (note, source) => {
+    const klic =
+      vytvorKlicJasnehoLegacyDuplikatu(note);
+
+    if (!klic || !note?.id) {
+      return;
+    }
+
+    if (!skupiny.has(klic)) {
+      skupiny.set(klic, []);
+    }
+
+    skupiny.get(klic).push({
+      note,
+      source
+    });
+  };
+
+  (Array.isArray(localRegular) ? localRegular : [])
+    .forEach((note) => pridej(note, "local"));
+
+  (Array.isArray(cloudRows) ? cloudRows : [])
+    .forEach((row) => {
+      const note = vytvorCloudRegularNote(row);
+
+      if (note) {
+        pridej(note, "cloud");
+      }
+    });
+
+  const aliasy = new Map();
+  const canonicalPoznamky = new Map();
+  let pocetOpravenychSkupin = 0;
+
+  skupiny.forEach((kandidati) => {
+    const ruznaId = new Set(
+      kandidati
+        .map((kandidat) => kandidat?.note?.id)
+        .filter(Boolean)
+    );
+
+    if (ruznaId.size < 2) {
+      return;
+    }
+
+    const vzor = kandidati[0]?.note;
+    const canonicalId =
+      vytvorStabilniIdStarePoznamky({
+        ...vzor,
+        id: null
+      });
+
+    if (!canonicalId) {
+      return;
+    }
+
+    const sloucena =
+      slucViditelnyStavLegacyKandidatu(
+        kandidati,
+        canonicalId
+      );
+
+    if (!sloucena) {
+      return;
+    }
+
+    ruznaId.forEach((stareId) => {
+      if (stareId === canonicalId) {
+        return;
+      }
+
+      aliasy.set(stareId, canonicalId);
+
+      /*
+       * Starý cloudový řádek nesmí při příštím syncu znovu ožít.
+       * Tombstone pouze zařadíme do lokální fronty; UI na síť nečeká.
+       */
+      if (typeof pridejCekajiciSmazani === "function") {
+        pridejCekajiciSmazani(stareId);
+      }
+    });
+
+    canonicalPoznamky.set(canonicalId, sloucena);
+    pocetOpravenychSkupin += 1;
+  });
+
+  if (pocetOpravenychSkupin === 0) {
+    return {
+      localRegular,
+      cloudRows,
+      pocetOpravenychSkupin: 0
+    };
+  }
+
+  const puvodniId = new Set(aliasy.keys());
+
+  const noveLocalRegular = (
+    Array.isArray(localRegular) ? localRegular : []
+  ).filter((note) =>
+    note?.id &&
+    !puvodniId.has(note.id) &&
+    !canonicalPoznamky.has(note.id)
+  );
+
+  canonicalPoznamky.forEach((note) => {
+    noveLocalRegular.push(note);
+  });
+
+  const noveCloudRows = (
+    Array.isArray(cloudRows) ? cloudRows : []
+  ).filter((row) => !puvodniId.has(row?.id));
+
+  prevedOdkazyLegacyDuplikatu(aliasy);
+
+  /*
+   * Lokální kopii opravíme okamžitě. Jde o interní migraci syncu,
+   * proto nezvyšujeme uživatelskou revizi přes saveAllTasks().
+   */
+  if (typeof ulozBeznePoznamkyPrimo === "function") {
+    ulozBeznePoznamkyPrimo(noveLocalRegular);
+  }
+
+  odlozOpakovaniSynchronizace();
+
+  console.warn(
+    `LubaNote: opraveno legacy duplikátů: ${pocetOpravenychSkupin}`
+  );
+
+  return {
+    localRegular: noveLocalRegular,
+    cloudRows: noveCloudRows,
+    pocetOpravenychSkupin
+  };
+}
+
 function vytvorCloudEncryptedRecord(row) {
   if (!jeSifrovanyCloudSecretRow(row) || row.deleted_at) {
     return null;
@@ -828,7 +1101,7 @@ async function syncNotes() {
         ? getDesifrovaneTajnePoznamky()
         : [];
 
-    const cloudRows = await getCloudNotesForSync();
+    let cloudRows = await getCloudNotesForSync();
 
     if (
       lokalniStavSeBehemSyncuZmenil(
@@ -838,6 +1111,22 @@ async function syncNotes() {
       odlozOpakovaniSynchronizace();
       return false;
     }
+
+    /*
+     * Ještě před hlavním merge opravíme pouze jasně rozpoznané
+     * legacy duplikáty vzniklé rozdílným UUID na dvou zařízeních.
+     */
+    const opravaLegacyDuplikatu =
+      sjednotJasneLegacyDuplikatyPredSyncem(
+        localRegular,
+        cloudRows
+      );
+
+    localRegular =
+      opravaLegacyDuplikatu.localRegular;
+
+    cloudRows =
+      opravaLegacyDuplikatu.cloudRows;
 
     const cloudMap = new Map(
       cloudRows.map((row) => [row.id, row])

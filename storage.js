@@ -2,6 +2,227 @@ const REGULAR_TASK_STORAGE_KEY = "savedTask";
 const SECRET_TASK_STORAGE_KEY = "savedSecretTask";
 const LUBANOTE_BACKUP_FORMAT = "LubaNote-backup-v2";
 
+
+/*
+ * STABILNÍ IDENTITA STARÝCH POZNÁMEK
+ *
+ * Starší verze LubaNote mohly mít poznámky ještě bez UUID.
+ * Kdyby si dvě zařízení takové poznámce přidělila náhodné UUID
+ * nezávisle na sobě, Supabase by je následně považoval za dvě
+ * různé poznámky. Proto starým poznámkám bez ID vytváříme
+ * deterministické UUID ze stejné původní identity.
+ */
+function normalizujTextProLegacyIdentitu(hodnota) {
+  return String(hodnota ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function vytvorLegacyHash128(text) {
+  let h1 = 0xdeadbeef ^ text.length;
+  let h2 = 0x41c6ce57 ^ text.length;
+  let h3 = 0xc0decafe ^ text.length;
+  let h4 = 0x9e3779b9 ^ text.length;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const znak = text.charCodeAt(i);
+
+    h1 = Math.imul(h1 ^ znak, 2654435761);
+    h2 = Math.imul(h2 ^ znak, 1597334677);
+    h3 = Math.imul(h3 ^ znak, 2246822507);
+    h4 = Math.imul(h4 ^ znak, 3266489909);
+  }
+
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h3 ^ (h3 >>> 13), 3266489909);
+
+  h3 = Math.imul(h3 ^ (h3 >>> 16), 2246822507);
+  h3 ^= Math.imul(h4 ^ (h4 >>> 13), 3266489909);
+
+  h4 = Math.imul(h4 ^ (h4 >>> 16), 2246822507);
+  h4 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+  return [h1, h2, h3, h4]
+    .map((cislo) =>
+      (cislo >>> 0).toString(16).padStart(8, "0")
+    )
+    .join("");
+}
+
+function formatLegacyHashJakoUuid(hash) {
+  const hex = String(hash || "")
+    .replace(/[^0-9a-f]/gi, "")
+    .padEnd(32, "0")
+    .slice(0, 32)
+    .toLowerCase()
+    .split("");
+
+  /*
+   * UUID v4/variant formát. Hodnota je deterministická, ale stále
+   * splňuje formát UUID sloupce v Supabase/PostgreSQL.
+   */
+  hex[12] = "4";
+  hex[16] = (
+    (parseInt(hex[16], 16) & 0x3) | 0x8
+  ).toString(16);
+
+  return [
+    hex.slice(0, 8).join(""),
+    hex.slice(8, 12).join(""),
+    hex.slice(12, 16).join(""),
+    hex.slice(16, 20).join(""),
+    hex.slice(20, 32).join("")
+  ].join("-");
+}
+
+function vytvorLegacyIdentituPoznamky(task) {
+  if (!task || typeof task !== "object") {
+    return "";
+  }
+
+  /*
+   * notificationId vzniká už při vytvoření poznámky a běžně se
+   * synchronizoval spolu s ní. U staré poznámky je proto nejlepší
+   * dostupný společný původní identifikátor napříč zařízeními.
+   */
+  if (
+    task.notificationId !== undefined &&
+    task.notificationId !== null &&
+    String(task.notificationId) !== ""
+  ) {
+    return `notification:${String(task.notificationId)}`;
+  }
+
+  if (task.createdAt) {
+    return `created:${String(task.createdAt)}`;
+  }
+
+  const todoText = Array.isArray(task.todos)
+    ? task.todos
+        .map((todo) =>
+          normalizujTextProLegacyIdentitu(todo?.text)
+        )
+        .join("|")
+    : "";
+
+  const plainRichText =
+    normalizujTextProLegacyIdentitu(
+      String(task.richContent || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+    );
+
+  /*
+   * Záložní identita pro opravdu stará data bez notificationId.
+   * Nezahrnujeme připnutí, štítky, oblíbenost ani dokončení,
+   * protože právě tyto vlastnosti se mohly na dvou zařízeních lišit.
+   */
+  return [
+    "fallback",
+    normalizujTextProLegacyIdentitu(task.title),
+    String(task.date || ""),
+    normalizujTextProLegacyIdentitu(task.note) || plainRichText,
+    todoText
+  ].join("::");
+}
+
+function vytvorStabilniIdStarePoznamky(task) {
+  if (task?.id) {
+    return task.id;
+  }
+
+  const identita =
+    vytvorLegacyIdentituPoznamky(task);
+
+  if (!identita) {
+    return crypto.randomUUID();
+  }
+
+  return formatLegacyHashJakoUuid(
+    vytvorLegacyHash128(
+      `LubaNote:legacy-note:v1:${identita}`
+    )
+  );
+}
+
+/*
+ * Tento klíč používáme pouze pro velmi konzervativní opravu
+ * již vzniklých legacy duplikátů. Automaticky slučujeme jen
+ * běžné poznámky, které mají stejné notificationId a současně
+ * stejný základní obsah.
+ */
+function vytvorKlicJasnehoLegacyDuplikatu(task) {
+  if (
+    !task ||
+    task.isSecret === true ||
+    task.notificationId === undefined ||
+    task.notificationId === null ||
+    String(task.notificationId) === ""
+  ) {
+    return null;
+  }
+
+  const todoText = Array.isArray(task.todos)
+    ? task.todos
+        .map((todo) =>
+          normalizujTextProLegacyIdentitu(todo?.text)
+        )
+        .join("|")
+    : "";
+
+  const plainRichText =
+    normalizujTextProLegacyIdentitu(
+      String(task.richContent || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+    );
+
+  return [
+    String(task.notificationId),
+    normalizujTextProLegacyIdentitu(task.title),
+    String(task.date || ""),
+    normalizujTextProLegacyIdentitu(task.note) || plainRichText,
+    todoText
+  ].join("::");
+}
+
+function nactiSavedTaskSeStabilnimiId() {
+  const puvodni =
+    nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY);
+
+  let zmeneno = false;
+
+  const normalizovane = puvodni.map((task) => {
+    if (!task || task.id) {
+      return task;
+    }
+
+    zmeneno = true;
+
+    return {
+      ...task,
+      id: vytvorStabilniIdStarePoznamky(task)
+    };
+  });
+
+  if (zmeneno) {
+    localStorage.setItem(
+      REGULAR_TASK_STORAGE_KEY,
+      JSON.stringify(normalizovane)
+    );
+
+    console.info(
+      "LubaNote: starým poznámkám byla doplněna stabilní ID."
+    );
+  }
+
+  return normalizovane;
+}
+
 /*
  * Tajné poznámky jsou po odemknutí dostupné pouze v paměti.
  * Do localStorage se ukládá jen jejich AES-GCM obálka.
@@ -49,7 +270,7 @@ function nactiPoleZLocalStorage(klic) {
 }
 
 function nactiBeznePoznamkyZUloziste() {
-  return nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY)
+  return nactiSavedTaskSeStabilnimiId()
     .filter((task) => task && task.isSecret !== true);
 }
 
@@ -60,7 +281,7 @@ function nactiBeznePoznamkyZUloziste() {
  * Po prvním odemknutí se automaticky zašifruje a plaintext odstraní.
  */
 function nactiStarePlaintextTajnePoznamky() {
-  return nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY)
+  return nactiSavedTaskSeStabilnimiId()
     .filter((task) => task?.isSecret === true);
 }
 
@@ -683,7 +904,9 @@ async function exportTasks() {
 function normalizujImportovanouPoznamku(task, importedAt) {
   return {
     ...task,
-    id: task.id || crypto.randomUUID(),
+    id:
+      task.id ||
+      vytvorStabilniIdStarePoznamky(task),
     updatedAt: task.updatedAt || importedAt,
     todos: Array.isArray(task.todos) ? task.todos : [],
     tags: Array.isArray(task.tags) ? task.tags : []

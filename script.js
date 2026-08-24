@@ -2820,9 +2820,13 @@ function renderTasks() {
         return;
       }
 
-      /* Starší lokální poznámce doplníme stabilní ID. */
+      /* Starší lokální poznámce doplníme stejné stabilní ID na všech zařízeních. */
       if (!currentTask.id) {
-        currentTask.id = crypto.randomUUID();
+        currentTask.id =
+          typeof vytvorStabilniIdStarePoznamky === "function"
+            ? vytvorStabilniIdStarePoznamky(currentTask)
+            : crypto.randomUUID();
+
         currentTask.updatedAt = new Date().toISOString();
         saveAllTasks(currentTasks);
         uploadLocalNoteToSupabase(currentTask);
@@ -2933,7 +2937,11 @@ async function zajistiStabilniIdKarty(index) {
     return task.id;
   }
 
-  task.id = crypto.randomUUID();
+  task.id =
+    typeof vytvorStabilniIdStarePoznamky === "function"
+      ? vytvorStabilniIdStarePoznamky(task)
+      : crypto.randomUUID();
+
   task.updatedAt =
     new Date().toISOString();
 
@@ -3472,9 +3480,13 @@ cardMenu.addEventListener("click", async (event) => {
       return;
     }
 
-    /* Starší poznámce doplníme ID, pokud ho ještě nemá */
+    /* Starší poznámce doplníme stejné stabilní ID na všech zařízeních. */
     if (!selectedTask.id) {
-      selectedTask.id = crypto.randomUUID();
+      selectedTask.id =
+        typeof vytvorStabilniIdStarePoznamky === "function"
+          ? vytvorStabilniIdStarePoznamky(selectedTask)
+          : crypto.randomUUID();
+
       selectedTask.updatedAt = new Date().toISOString();
 
       saveAllTasks(tasks);

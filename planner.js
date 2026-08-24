@@ -811,9 +811,13 @@ planSelectionButton.addEventListener(
       }
     }
 
-    /* Starším poznámkám doplníme ID. */
+    /* Starším poznámkám doplníme stejné stabilní ID na všech zařízeních. */
     if (!sourceNote.id) {
-      sourceNote.id = crypto.randomUUID();
+      sourceNote.id =
+        typeof vytvorStabilniIdStarePoznamky === "function"
+          ? vytvorStabilniIdStarePoznamky(sourceNote)
+          : crypto.randomUUID();
+
       sourceNote.updatedAt =
         new Date().toISOString();
 
