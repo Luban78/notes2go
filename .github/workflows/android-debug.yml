@@ -23,6 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate build version
+        run: |
+          echo "window.LUBANOTE_VERSION = '0.9.${GITHUB_RUN_NUMBER}';" > build-version.js
+          echo "window.LUBANOTE_BUILD = '${GITHUB_RUN_NUMBER}';" >> build-version.js
+
       - name: Prepare web assets
         run: |
           mkdir -p www

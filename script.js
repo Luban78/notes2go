@@ -31,6 +31,14 @@ if (window.visualViewport) {
     updateVisualViewport
   );
 }
+const aboutVersion =
+  document.getElementById("aboutVersion");
+
+if (aboutVersion) {
+  aboutVersion.textContent =
+    `Verze ${window.LUBANOTE_VERSION || "DEV"}`;
+}
+
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
 

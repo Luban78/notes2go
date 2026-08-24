@@ -1,0 +1,2 @@
+window.LUBANOTE_VERSION = "DEV";
+window.LUBANOTE_BUILD = "DEV";
