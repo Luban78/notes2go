@@ -5084,9 +5084,11 @@ text-size-adjust: 100%;
   position: relative;
   container-type: inline-size;
   width: min(100%, 720px);
+  max-width: 100%;
   margin: 14px auto;
   padding: 0;
   overflow: hidden;
+  box-sizing: border-box;
 
   border: 1px solid var(--color-border);
   border-radius: 16px;
@@ -5112,6 +5114,44 @@ text-size-adjust: 100%;
   margin-right: 0 !important;
   margin-bottom: -9px;
   margin-left: 3px !important;
+}
+
+/*
+ * Dva obrázky 50 % se musí vejít vedle sebe i s rámečkem
+ * a malou mezerou uprostřed. Bez odečtení mezery přesahovala
+ * dvojice 100 % šířky editoru a druhý obrázek spadl na další řádek.
+ */
+#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"],
+#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"] {
+  width: calc(50% - 4px) !important;
+}
+
+#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"] {
+  margin-right: 4px !important;
+}
+
+#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"] {
+  margin-left: 4px !important;
+}
+
+/*
+ * Přizpůsobit editoru a 100 % jsou vždy samostatný plný řádek.
+ * Zároveň tím ukončíme případnou předchozí dvojici plovoucích obrázků.
+ */
+#modalRichText .lubaNoteImage[data-velikost="prizpusobit"],
+#modalRichText .lubaNoteImage[data-velikost="100"] {
+  float: none !important;
+  clear: both;
+  width: 100% !important;
+  max-width: 100%;
+  margin: 14px auto !important;
+}
+
+/* Plovoucí obrázky se započítají i do konce scrollovatelného editoru. */
+#modalRichText::after {
+  content: "";
+  display: block;
+  clear: both;
 }
 
 #modalRichText .lubaNoteImage img {
