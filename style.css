@@ -588,21 +588,27 @@ body {
 
 /* ---------- SERVISNÍ MENU POD ⋮ ---------- */
 
+/* ---------- SERVISNÍ MENU POD ⋮ ---------- */
+
 .mainMenu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   right: 0;
   z-index: 2200;
 
-  width: 218px;
+  width: 250px;
   box-sizing: border-box;
-  padding: 7px;
+
+  padding: 10px;
 
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: 18px;
+
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.30);
+
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.28);
 }
 
 .mainMenu[hidden] {
@@ -611,37 +617,101 @@ body {
 
 .mainMenu button {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 9px;
+
+  gap: 10px;
 
   width: 100%;
-  min-height: 44px;
-  padding: 0 10px;
+  min-height: 52px;
+
+  padding: 6px 10px;
 
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
+
   background: transparent;
   color: var(--color-text);
 
   font: inherit;
   font-size: 15px;
+  font-weight: 600;
+
   text-align: left;
-  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mainMenu button:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      transparent
+    );
 }
 
 .mainMenu button:active {
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 16%,
+      transparent
+    );
 }
 
-.mainMenu button>span:first-child {
-  text-align: center;
+.mainMenuIcon {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 10px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 12%,
+      var(--color-surface)
+    );
+
+  font-size: 17px;
+}
+
+.mainMenuLabel {
+  min-width: 0;
+}
+
+.mainMenuArrow {
+  color: var(--color-text-secondary);
+
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1;
+
+  text-align: right;
 }
 
 .mainMenu hr {
-  margin: 5px 8px;
+  margin: 8px 6px;
+
   border: none;
   border-top: 1px solid var(--color-border);
+}
+
+#logoutButton {
+  grid-template-columns: 38px minmax(0, 1fr);
+
+  color: var(--color-danger-text, #b94a48);
+}
+
+#logoutButton .mainMenuIcon {
+  background:
+    color-mix(
+      in srgb,
+      var(--color-danger-text, #b94a48) 10%,
+      var(--color-surface)
+    );
 }
 
 /* ---------- FILTRY POD HLEDÁNÍM ---------- */

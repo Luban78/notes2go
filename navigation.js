@@ -16,10 +16,10 @@
     document.getElementById("remindersModuleButton");
 
   const addTaskButton =
-  document.getElementById("addTaskButton");
-  
+    document.getElementById("addTaskButton");
+
   const recurringOverviewScreen =
-  document.getElementById("recurringOverviewScreen");
+    document.getElementById("recurringOverviewScreen");
 
 
   /* ==================================================
@@ -27,88 +27,88 @@
    Poznámky ↔ Plán
 ================================================== */
 
-const notesScreen =
-  document.querySelector(".app");
+  const notesScreen =
+    document.querySelector(".app");
 
-const searchRow =
-  document.querySelector(".searchRow");
+  const searchRow =
+    document.querySelector(".searchRow");
 
-const categoryTabs =
-  document.querySelector(".categoryTabs");
-  
-const remindersScreen =
-  document.getElementById("remindersScreen");
+  const categoryTabs =
+    document.querySelector(".categoryTabs");
+
+  const remindersScreen =
+    document.getElementById("remindersScreen");
 
 
-function setActiveModule(activeButton) {
-  [notesButton, plannerButton, remindersButton]
-  .forEach((button) => {
-    const isActive =
-      button === activeButton;
-    
-    button.classList.toggle(
-      "active",
-      isActive
-    );
-    
-    if (isActive) {
-      button.setAttribute(
-        "aria-current",
-        "page"
-      );
-    } else {
-      button.removeAttribute(
-        "aria-current"
-      );
-    }
+  function setActiveModule(activeButton) {
+    [notesButton, plannerButton, remindersButton]
+      .forEach((button) => {
+        const isActive =
+          button === activeButton;
+
+        button.classList.toggle(
+          "active",
+          isActive
+        );
+
+        if (isActive) {
+          button.setAttribute(
+            "aria-current",
+            "page"
+          );
+        } else {
+          button.removeAttribute(
+            "aria-current"
+          );
+        }
+      });
+  }
+
+
+  /* ------------------------------
+     POZNÁMKY
+  ------------------------------ */
+
+  notesButton.addEventListener("click", () => {
+    closeMainMenu();
+
+    notesScreen.hidden = false;
+    searchRow.hidden = false;
+    categoryTabs.hidden = false;
+    addTaskButton.hidden = false;
+
+    calendarScreen.hidden = true;
+    remindersScreen.hidden = true;
+    dayDetailScreen.hidden = true;
+    recurringOverviewScreen.hidden = true;
+
+    setActiveModule(notesButton);
   });
-}
 
+  /* ------------------------------
+     PLÁN
+  ------------------------------ */
 
-/* ------------------------------
-   POZNÁMKY
------------------------------- */
+  plannerButton.addEventListener("click", () => {
+    closeMainMenu();
 
-notesButton.addEventListener("click", () => {
-  closeMainMenu();
+    notesScreen.hidden = true;
+    searchRow.hidden = true;
+    categoryTabs.hidden = true;
+    addTaskButton.hidden = true;
 
-  notesScreen.hidden = false;
-  searchRow.hidden = false;
-  categoryTabs.hidden = false;
-  addTaskButton.hidden = false;
+    calendarScreen.hidden = false;
+    remindersScreen.hidden = true;
+    dayDetailScreen.hidden = true;
+    recurringOverviewScreen.hidden = true;
 
-  calendarScreen.hidden = true;
-  remindersScreen.hidden = true;
-  dayDetailScreen.hidden = true;
-  recurringOverviewScreen.hidden = true;
+    calendarCurrentDate = new Date();
+    calendarSelectedDay = new Date();
 
-  setActiveModule(notesButton);
-});
+    setActiveModule(plannerButton);
 
-/* ------------------------------
-   PLÁN
------------------------------- */
-
-plannerButton.addEventListener("click", () => {
-  closeMainMenu();
-
-  notesScreen.hidden = true;
-  searchRow.hidden = true;
-  categoryTabs.hidden = true;
-  addTaskButton.hidden = true;
-
-  calendarScreen.hidden = false;
-  remindersScreen.hidden = true;
-  dayDetailScreen.hidden = true;
-  recurringOverviewScreen.hidden = true;
-
-  calendarCurrentDate = new Date();
-  calendarSelectedDay = new Date();
-
-  setActiveModule(plannerButton);
-
-  renderCalendar();
-});
+    renderCalendar();
+  });
 
 
   const menuButton =
@@ -138,6 +138,11 @@ plannerButton.addEventListener("click", () => {
   const aboutModal =
     document.getElementById("aboutModal");
 
+  const openAboutFromSettingsButton =
+    document.getElementById(
+      "openAboutFromSettingsButton"
+    );
+
   const closeAboutButton =
     document.getElementById("closeAboutButton");
 
@@ -145,6 +150,16 @@ plannerButton.addEventListener("click", () => {
     document.getElementById("appToast");
 
   let toastTimer = null;
+
+
+
+  openAboutFromSettingsButton?.addEventListener(
+    "click",
+    () => {
+      settingsModal.hidden = true;
+      aboutModal.hidden = false;
+    }
+  );
 
   function closeMainMenu() {
     menu.hidden = true;
@@ -162,27 +177,27 @@ plannerButton.addEventListener("click", () => {
     }, 1800);
   }
 
-/* ------------------------------
-   PŘIPOMÍNKY
------------------------------- */
+  /* ------------------------------
+     PŘIPOMÍNKY
+  ------------------------------ */
 
-remindersButton.addEventListener("click", () => {
-  closeMainMenu();
+  remindersButton.addEventListener("click", () => {
+    closeMainMenu();
 
-  notesScreen.hidden = true;
-  searchRow.hidden = true;
-  categoryTabs.hidden = true;
-  addTaskButton.hidden = true;
+    notesScreen.hidden = true;
+    searchRow.hidden = true;
+    categoryTabs.hidden = true;
+    addTaskButton.hidden = true;
 
-  calendarScreen.hidden = true;
-  remindersScreen.hidden = false;
-  dayDetailScreen.hidden = true;
-  recurringOverviewScreen.hidden = true;
+    calendarScreen.hidden = true;
+    remindersScreen.hidden = false;
+    dayDetailScreen.hidden = true;
+    recurringOverviewScreen.hidden = true;
 
-  setActiveModule(remindersButton);
+    setActiveModule(remindersButton);
 
-  renderRemindersScreen();
-});
+    renderRemindersScreen();
+  });
 
 
 
