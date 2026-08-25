@@ -86,10 +86,27 @@
   let imageLongPressTimer = null;
   let imagePressStartX = 0;
   let imagePressStartY = 0;
+  let imagePressStartTime = 0;
   let selectedImage = null;
 
-  const IMAGE_LONG_PRESS_CANCEL_DISTANCE = 20;
+  /*
+   * Přesun obrázku používá Pointer Events místo HTML5 drag&drop,
+   * aby stejná logika fungovala myší i prstem. Na telefonu necháme
+   * krátké okno pro běžné scrollování: drag začne až po krátkém
+   * přidržení a následném pohybu. Dlouhý stisk bez pohybu dál
+   * otevírá nastavení obrázku.
+   */
+  let presouvanyObrazek = null;
+  let presouvanyFigure = null;
+  let presouvanyPointerId = null;
+  let presunObrazkuAktivni = false;
+  let cilPresunuObrazku = null;
+  let puvodniPrazdnyRadekObrazku = null;
+  let ukazatelPresunuObrazku = null;
+
   const IMAGE_LONG_PRESS_TIME = 600;
+  const IMAGE_DRAG_START_DISTANCE = 12;
+  const IMAGE_DRAG_TOUCH_HOLD_TIME = 180;
 
   function ziskejBlokObrazku(image) {
     return image?.closest?.(".lubaNoteImage") || null;
@@ -360,6 +377,406 @@
     });
   }
 
+  function ziskejPrimehoPotomkaEditoru(element) {
+    let aktualni = element;
+
+    while (
+      aktualni &&
+      aktualni !== modalRichText &&
+      aktualni.parentNode !== modalRichText
+    ) {
+      aktualni = aktualni.parentNode;
+    }
+
+    if (
+      aktualni &&
+      aktualni.parentNode === modalRichText
+    ) {
+      return aktualni;
+    }
+
+    return null;
+  }
+
+  function zajistiUkazatelPresunuObrazku() {
+    if (ukazatelPresunuObrazku?.isConnected) {
+      return ukazatelPresunuObrazku;
+    }
+
+    ukazatelPresunuObrazku =
+      document.createElement("div");
+
+    ukazatelPresunuObrazku.className =
+      "lubaNoteImageDropIndicator";
+
+    ukazatelPresunuObrazku.hidden = true;
+    ukazatelPresunuObrazku.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    document.body.append(
+      ukazatelPresunuObrazku
+    );
+
+    return ukazatelPresunuObrazku;
+  }
+
+  function schovejUkazatelPresunuObrazku() {
+    if (ukazatelPresunuObrazku) {
+      ukazatelPresunuObrazku.hidden = true;
+    }
+  }
+
+  function urciZarovnaniPodlePozice(clientX) {
+    const rect =
+      modalRichText.getBoundingClientRect();
+
+    if (!rect.width) {
+      return "stred";
+    }
+
+    const pomer =
+      (clientX - rect.left) / rect.width;
+
+    if (pomer < 0.38) {
+      return "vlevo";
+    }
+
+    if (pomer > 0.62) {
+      return "vpravo";
+    }
+
+    return "stred";
+  }
+
+  function najdiCilPresunuObrazku(
+    clientX,
+    clientY
+  ) {
+    const editorRect =
+      modalRichText.getBoundingClientRect();
+
+    const elementPodPrstem =
+      document.elementFromPoint(
+        clientX,
+        clientY
+      );
+
+    let cilovyUzel = null;
+
+    if (
+      elementPodPrstem &&
+      (
+        elementPodPrstem === modalRichText ||
+        modalRichText.contains(elementPodPrstem)
+      )
+    ) {
+      cilovyUzel = ziskejPrimehoPotomkaEditoru(
+        elementPodPrstem
+      );
+    }
+
+    if (
+      cilovyUzel === presouvanyFigure
+    ) {
+      cilovyUzel = null;
+    }
+
+    if (!cilovyUzel) {
+      const ostatniUzly = [
+        ...modalRichText.children
+      ].filter(
+        (uzel) => uzel !== presouvanyFigure
+      );
+
+      if (ostatniUzly.length === 0) {
+        return {
+          uzel: null,
+          pred: false,
+          y: editorRect.top + 8
+        };
+      }
+
+      const prvni = ostatniUzly[0];
+      const posledni =
+        ostatniUzly[ostatniUzly.length - 1];
+
+      if (
+        clientY <=
+        prvni.getBoundingClientRect().top
+      ) {
+        return {
+          uzel: prvni,
+          pred: true,
+          y: prvni.getBoundingClientRect().top
+        };
+      }
+
+      return {
+        uzel: posledni,
+        pred: false,
+        y: posledni.getBoundingClientRect().bottom
+      };
+    }
+
+    const rect =
+      cilovyUzel.getBoundingClientRect();
+
+    const pred =
+      clientY < rect.top + rect.height / 2;
+
+    return {
+      uzel: cilovyUzel,
+      pred,
+      y: pred ? rect.top : rect.bottom
+    };
+  }
+
+  function posunEditorPriPresunuObrazku(clientY) {
+    const rect =
+      modalRichText.getBoundingClientRect();
+
+    const zona = 64;
+    const maximalniKrok = 18;
+
+    if (clientY < rect.top + zona) {
+      const sila = Math.min(
+        1,
+        Math.max(
+          0,
+          (rect.top + zona - clientY) / zona
+        )
+      );
+
+      modalRichText.scrollTop -=
+        maximalniKrok * sila;
+      return;
+    }
+
+    if (clientY > rect.bottom - zona) {
+      const sila = Math.min(
+        1,
+        Math.max(
+          0,
+          (clientY - (rect.bottom - zona)) / zona
+        )
+      );
+
+      modalRichText.scrollTop +=
+        maximalniKrok * sila;
+    }
+  }
+
+  function aktualizujUkazatelPresunuObrazku(
+    clientX,
+    clientY
+  ) {
+    cilPresunuObrazku =
+      najdiCilPresunuObrazku(
+        clientX,
+        clientY
+      );
+
+    const marker =
+      zajistiUkazatelPresunuObrazku();
+
+    const editorRect =
+      modalRichText.getBoundingClientRect();
+
+    const odsazeni = 6;
+
+    marker.style.left =
+      `${Math.round(editorRect.left + odsazeni)}px`;
+
+    marker.style.width =
+      `${Math.max(
+        20,
+        Math.round(editorRect.width - odsazeni * 2)
+      )}px`;
+
+    marker.style.top =
+      `${Math.round(cilPresunuObrazku.y)}px`;
+
+    marker.hidden = false;
+  }
+
+  function spustPresunObrazku(
+    event,
+    image
+  ) {
+    const figure = ziskejBlokObrazku(image);
+
+    if (!figure) {
+      return false;
+    }
+
+    clearTimeout(imageLongPressTimer);
+    imageLongPressTimer = null;
+
+    presouvanyObrazek = image;
+    presouvanyFigure = figure;
+    presouvanyPointerId = event.pointerId;
+    presunObrazkuAktivni = true;
+    cilPresunuObrazku = null;
+
+    const dalsi = figure.nextElementSibling;
+
+    puvodniPrazdnyRadekObrazku =
+      jePrazdnyRadekZaObrazkem(dalsi)
+        ? dalsi
+        : null;
+
+    figure.classList.add(
+      "lubaNoteImageDragging"
+    );
+
+    modalRichText.classList.add(
+      "lubaNoteImageDragMode"
+    );
+
+    try {
+      image.setPointerCapture(event.pointerId);
+    } catch (_) {
+      /* Starší WebView nemusí pointer capture podporovat. */
+    }
+
+    aktualizujUkazatelPresunuObrazku(
+      event.clientX,
+      event.clientY
+    );
+
+    event.preventDefault();
+    return true;
+  }
+
+  function zajistiRadekZaPoslednimObrazkem(
+    figure
+  ) {
+    if (!figure?.isConnected) {
+      return;
+    }
+
+    if (figure.nextSibling) {
+      return;
+    }
+
+    figure.after(
+      vytvorRadekProTextZaObrazkem()
+    );
+  }
+
+  function uklidPuvodniPrazdnyRadek() {
+    const radek = puvodniPrazdnyRadekObrazku;
+
+    if (
+      !radek?.isConnected ||
+      !jePrazdnyRadekZaObrazkem(radek)
+    ) {
+      return;
+    }
+
+    const predchozi = radek.previousElementSibling;
+
+    if (
+      !predchozi?.classList?.contains(
+        "lubaNoteImage"
+      )
+    ) {
+      radek.remove();
+    }
+  }
+
+  function provedPresunObrazku(event) {
+    if (
+      !presunObrazkuAktivni ||
+      !presouvanyFigure
+    ) {
+      return;
+    }
+
+    const figure = presouvanyFigure;
+    const image = presouvanyObrazek;
+    const cil = cilPresunuObrazku;
+
+    if (cil?.uzel?.isConnected) {
+      if (cil.pred) {
+        modalRichText.insertBefore(
+          figure,
+          cil.uzel
+        );
+      } else {
+        cil.uzel.after(figure);
+      }
+    } else {
+      modalRichText.append(figure);
+    }
+
+    nastavZarovnaniObrazku(
+      image,
+      figure,
+      urciZarovnaniPodlePozice(
+        event.clientX
+      )
+    );
+
+    uklidPuvodniPrazdnyRadek();
+    zajistiRadekZaPoslednimObrazkem(
+      figure
+    );
+
+    modalRichText.normalize();
+    oznamZmenuObrazku();
+  }
+
+  function ukonciPresunObrazku(
+    event,
+    ulozitPresun
+  ) {
+    if (!presunObrazkuAktivni) {
+      return false;
+    }
+
+    if (
+      presouvanyPointerId !== null &&
+      event?.pointerId !== undefined &&
+      event.pointerId !== presouvanyPointerId
+    ) {
+      return false;
+    }
+
+    if (ulozitPresun && event) {
+      provedPresunObrazku(event);
+    }
+
+    presouvanyFigure?.classList.remove(
+      "lubaNoteImageDragging"
+    );
+
+    modalRichText.classList.remove(
+      "lubaNoteImageDragMode"
+    );
+
+    try {
+      presouvanyObrazek?.releasePointerCapture?.(
+        presouvanyPointerId
+      );
+    } catch (_) {
+      /* Pointer capture už mohl být uvolněn systémem. */
+    }
+
+    schovejUkazatelPresunuObrazku();
+
+    presouvanyObrazek = null;
+    presouvanyFigure = null;
+    presouvanyPointerId = null;
+    presunObrazkuAktivni = false;
+    cilPresunuObrazku = null;
+    puvodniPrazdnyRadekObrazku = null;
+
+    return true;
+  }
+
   modalRichText.addEventListener(
     "pointerdown",
     (event) => {
@@ -375,6 +792,7 @@
 
       imagePressStartX = event.clientX;
       imagePressStartY = event.clientY;
+      imagePressStartTime = performance.now();
       selectedImage = obrazek;
 
       imageLongPressTimer = setTimeout(() => {
@@ -387,29 +805,62 @@
   modalRichText.addEventListener(
     "pointermove",
     (event) => {
-      if (!imageLongPressTimer) {
+      if (presunObrazkuAktivni) {
+        posunEditorPriPresunuObrazku(
+          event.clientY
+        );
+
+        aktualizujUkazatelPresunuObrazku(
+          event.clientX,
+          event.clientY
+        );
+        event.preventDefault();
         return;
       }
 
-      const distanceX =
-        Math.abs(
-          event.clientX - imagePressStartX
-        );
+      if (!imageLongPressTimer || !selectedImage) {
+        return;
+      }
 
-      const distanceY =
-        Math.abs(
-          event.clientY - imagePressStartY
-        );
+      const distanceX = Math.abs(
+        event.clientX - imagePressStartX
+      );
+
+      const distanceY = Math.abs(
+        event.clientY - imagePressStartY
+      );
+
+      const vzdalenost = Math.hypot(
+        distanceX,
+        distanceY
+      );
 
       if (
-        distanceX >
-          IMAGE_LONG_PRESS_CANCEL_DISTANCE ||
-        distanceY >
-          IMAGE_LONG_PRESS_CANCEL_DISTANCE
+        vzdalenost < IMAGE_DRAG_START_DISTANCE
+      ) {
+        return;
+      }
+
+      const uplynulo =
+        performance.now() - imagePressStartTime;
+
+      /*
+       * Rychlý svislý pohyb prstem bereme jako scroll stránky.
+       * Pro přesun obrázku stačí na něm krátce spočinout a pak táhnout.
+       */
+      if (
+        event.pointerType === "touch" &&
+        uplynulo < IMAGE_DRAG_TOUCH_HOLD_TIME
       ) {
         clearTimeout(imageLongPressTimer);
         imageLongPressTimer = null;
+        return;
       }
+
+      spustPresunObrazku(
+        event,
+        selectedImage
+      );
     }
   );
 
@@ -420,17 +871,32 @@
 
   modalRichText.addEventListener(
     "pointerup",
-    zrusLongPressObrazku
+    (event) => {
+      if (ukonciPresunObrazku(event, true)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      zrusLongPressObrazku();
+    }
   );
 
   modalRichText.addEventListener(
     "pointercancel",
-    zrusLongPressObrazku
+    (event) => {
+      ukonciPresunObrazku(event, false);
+      zrusLongPressObrazku();
+    }
   );
 
   modalRichText.addEventListener(
     "pointerleave",
-    zrusLongPressObrazku
+    (event) => {
+      if (!presunObrazkuAktivni) {
+        zrusLongPressObrazku();
+      }
+    }
   );
 
   /* ==========================================
@@ -514,6 +980,78 @@
     ulozenyRozsahEditoru = range.cloneRange();
   }
   
+  function nastavKurzorPodleBodu(clientX, clientY) {
+    let range = null;
+
+    if (
+      typeof document.caretRangeFromPoint ===
+      "function"
+    ) {
+      range = document.caretRangeFromPoint(
+        clientX,
+        clientY
+      );
+    } else if (
+      typeof document.caretPositionFromPoint ===
+      "function"
+    ) {
+      const pozice =
+        document.caretPositionFromPoint(
+          clientX,
+          clientY
+        );
+
+      if (pozice) {
+        range = document.createRange();
+        range.setStart(
+          pozice.offsetNode,
+          pozice.offset
+        );
+        range.collapse(true);
+      }
+    }
+
+    if (!range || !jeRozsahVEditoru(range)) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+
+    if (!selection) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    ulozenyRozsahEditoru = range.cloneRange();
+
+    return true;
+  }
+
+  /*
+   * Některé Android WebView při klepnutí do prázdného místa mezi
+   * bloky nechají kurzor na staré pozici. Pokud klepneme přímo na
+   * pozadí editoru, znovu dopočítáme nejbližší platné místo kurzoru.
+   * Kliknutí na samotný obrázek tím neměníme – zůstává pro long-press
+   * a přesun obrázku.
+   */
+  modalRichText.addEventListener(
+    "click",
+    (event) => {
+      if (
+        presunObrazkuAktivni ||
+        event.target !== modalRichText
+      ) {
+        return;
+      }
+
+      nastavKurzorPodleBodu(
+        event.clientX,
+        event.clientY
+      );
+    }
+  );
+
   document.addEventListener(
     "selectionchange",
     ulozAktualniRozsahEditoru
@@ -583,6 +1121,118 @@
     
     nastavKurzorZaUzel(node);
     
+    modalRichText.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+  }
+
+  /*
+   * Obrázek je blok s contenteditable=false. Samotný kurzor nastavený
+   * "za figure" není na některých Android WebView dostatečný a klávesnice
+   * pak nemá skutečný editovatelný řádek, do kterého může psát.
+   * Proto za obrázky držíme normální prázdný řádek s <br>.
+   */
+  function vytvorRadekProTextZaObrazkem() {
+    const radek = document.createElement("div");
+    radek.className = "lubaNoteImageTextLine";
+    radek.append(document.createElement("br"));
+    return radek;
+  }
+
+  function jePrazdnyRadekZaObrazkem(radek) {
+    if (!radek?.classList?.contains("lubaNoteImageTextLine")) {
+      return false;
+    }
+
+    return radek.textContent.trim() === "";
+  }
+
+  function najdiRadekZaObrazkemVRozsahu(range) {
+    if (!range?.collapsed) {
+      return null;
+    }
+
+    const startNode = range.startContainer;
+    const startElement =
+      startNode.nodeType === Node.ELEMENT_NODE
+        ? startNode
+        : startNode.parentElement;
+
+    const radek = startElement?.closest?.(
+      ".lubaNoteImageTextLine"
+    );
+
+    if (
+      !radek ||
+      !modalRichText.contains(radek) ||
+      !jePrazdnyRadekZaObrazkem(radek)
+    ) {
+      return null;
+    }
+
+    return radek;
+  }
+
+  function nastavKurzorDoRadku(radek) {
+    if (!radek?.isConnected) {
+      return;
+    }
+
+    modalRichText.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(radek);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    ulozenyRozsahEditoru = range.cloneRange();
+  }
+
+  function vlozObrazekDoEditoru(figure) {
+    const range = ziskejPlatnyUlozenyRozsah();
+    const existujiciRadek =
+      najdiRadekZaObrazkemVRozsahu(range);
+
+    modalRichText.focus();
+
+    if (existujiciRadek) {
+      /*
+       * Typický případ druhého obrázku: kurzor stojí v prázdném řádku
+       * vytvořeném za prvním obrázkem. Druhý figure vložíme PŘED tento
+       * řádek, takže oba obrázky zůstanou sourozenci a 50/50 layout se
+       * nerozbije. Řádek pak dál slouží pro psaní pod dvojicí.
+       */
+      existujiciRadek.before(figure);
+      modalRichText.normalize();
+      nastavKurzorDoRadku(existujiciRadek);
+    } else {
+      range.collapse(false);
+      range.insertNode(figure);
+
+      const radek = vytvorRadekProTextZaObrazkem();
+      figure.after(radek);
+
+      modalRichText.normalize();
+      nastavKurzorDoRadku(radek);
+    }
+
+    /*
+     * Android občas přepne focus během návratu z výběru souboru.
+     * Ještě jednou po vykreslení potvrdíme kurzor v editovatelném řádku.
+     */
+    requestAnimationFrame(() => {
+      const radek = figure.nextElementSibling;
+
+      if (
+        jePrazdnyRadekZaObrazkem(radek)
+      ) {
+        nastavKurzorDoRadku(radek);
+      }
+    });
+
     modalRichText.dispatchEvent(
       new Event("input", { bubbles: true })
     );
@@ -775,7 +1425,7 @@
         file.name
       );
       
-      vlozUzelDoEditoru(figure);
+      vlozObrazekDoEditoru(figure);
     } catch (error) {
       console.error(
         "Vložení obrázku se nepodařilo:",

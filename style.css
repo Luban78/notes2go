@@ -5105,14 +5105,14 @@ text-size-adjust: 100%;
   float: left;
   margin-top: 2px;
   margin-right: 4px !important;
-  margin-bottom: -9px;
+  margin-bottom: 6px;
   margin-left: 0 !important;
 }
 #modalRichText .lubaNoteImage[data-zarovnani="vpravo"] {
   float: right;
   margin-top: 2px;
   margin-right: 0 !important;
-  margin-bottom: -9px;
+  margin-bottom: 6px;
   margin-left: 3px !important;
 }
 
@@ -5152,6 +5152,55 @@ text-size-adjust: 100%;
   content: "";
   display: block;
   clear: both;
+}
+
+/*
+ * Skutečný editovatelný řádek za obrázkem / dvojicí obrázků.
+ * U menšího obrázku může text přirozeně obtékat vedle něj; když vedle
+ * obrázku není místo (100 % nebo dvojice 50 %), prohlížeč řádek sám
+ * posune pod obrázek. Padding nechává text od média lehce odsazený.
+ */
+#modalRichText .lubaNoteImageTextLine {
+  /*
+   * Řádek už záměrně NEMAŽE float pomocí clear: both.
+   * Díky tomu může text přirozeně začít vedle obrázku 50/25 %
+   * a po dosažení spodní hrany pokračuje pod ním. Dva 50% obrázky
+   * vyplní celý řádek, takže text se automaticky posune pod dvojici.
+   */
+  min-height: 1.6em;
+  margin: 0;
+  padding-top: 10px;
+  box-sizing: border-box;
+}
+
+/* Vizuální odezva během přesunu obrázku. */
+#modalRichText .lubaNoteImage.lubaNoteImageDragging {
+  opacity: 0.58;
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 2px;
+  pointer-events: none;
+}
+
+/*
+ * Ukazatel místa vložení je overlay mimo contenteditable DOM, takže
+ * během drag & drop nemůže poškodit obsah ani pozici kurzoru.
+ */
+.lubaNoteImageDropIndicator {
+  position: fixed;
+  z-index: 10050;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-background);
+  pointer-events: none;
+}
+
+.lubaNoteImageDropIndicator[hidden] {
+  display: none !important;
+}
+
+#modalRichText.lubaNoteImageDragMode {
+  cursor: grabbing;
 }
 
 #modalRichText .lubaNoteImage img {
