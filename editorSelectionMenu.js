@@ -59,6 +59,13 @@
   let rozsahKurzoruPredStiskem = null;
   let bodStisku = null;
 
+  /*
+   * Android WebView někdy dokončí označení slova až několik ms po
+   * selectionchange. Krátké odložení zabrání tomu, aby naše menu
+   * vyhodnotilo výběr ještě ve stavu „jen kurzor“.
+   */
+  let casovacAktualizaceVyberu = null;
+
 
   /* ==========================================
      POMOCNÉ FUNKCE PRO RANGE / EDITOR
@@ -696,48 +703,69 @@
 
   /* ==========================================
      BĚŽNÉ OZNAČENÍ TEXTU
+
+     Android WebView může nejdřív nahlásit samotný kurzor a teprve
+     o pár ms později skutečný výběr slova. Proto stav nečteme
+     okamžitě v první selectionchange události.
   ========================================== */
 
-  document.addEventListener(
-    "selectionchange",
-    () => {
-      const vyber =
-        window.getSelection();
+  function aktualizujMenuPodleVyberu() {
+    if (casovacAktualizaceVyberu) {
+      clearTimeout(casovacAktualizaceVyberu);
+    }
 
-      if (
-        !vyber ||
-        vyber.rangeCount === 0
-      ) {
-        return;
-      }
+    requestAnimationFrame(() => {
+      casovacAktualizaceVyberu = setTimeout(() => {
+        casovacAktualizaceVyberu = null;
 
-      const rozsah =
-        vyber.getRangeAt(0);
+        const vyber =
+          window.getSelection();
 
-      if (!jeRozsahVEditoru(rozsah)) {
-        skryjMenu();
-        return;
-      }
+        if (
+          !vyber ||
+          vyber.rangeCount === 0
+        ) {
+          return;
+        }
 
-      if (rozsah.collapsed) {
+        const rozsah =
+          vyber.getRangeAt(0);
+
+        if (!jeRozsahVEditoru(rozsah)) {
+          skryjMenu();
+          return;
+        }
+
+        if (!rozsah.collapsed) {
+          /*
+           * Skutečný textový výběr má vždy přednost před režimem
+           * „Vložit | Vše“. Tím se opravuje případ, kdy Android
+           * označí první slovo až těsně po našem pointerdown.
+           */
+          zrusCasovacDlouhehoStisku();
+          kandidatDlouhehoStisku = false;
+          rozsahKurzoruPredStiskem = null;
+
+          zobrazMenuProOznaceni(rozsah);
+          return;
+        }
+
         /*
-         * Běžný tap = jen kurzor.
-         * Menu se smí ukázat pouze naším skutečným long-pressem
-         * přímo na existujícím kurzoru.
+         * Běžný tap = pouze kurzor.
+         * Vložit | Vše se ukáže jen tehdy, když long-press opravdu
+         * doběhne a Android přitom žádný text neoznačí.
          */
         if (!dlouhyStiskSpusten) {
           skryjMenu();
         }
+      }, 40);
+    });
+  }
 
-        return;
-      }
 
-      if (kandidatDlouhehoStisku) {
-        return;
-      }
-
-      zobrazMenuProOznaceni(rozsah);
-    }
+  document.addEventListener(
+    "selectionchange",
+    aktualizujMenuPodleVyberu
   );
 
 
@@ -866,11 +894,41 @@
               return;
             }
 
-            dlouhyStiskSpusten = true;
-            zablokujKlikPoDlouhemStisku = true;
-
             const vyberAktualni =
               window.getSelection();
+
+            const aktualniRozsah =
+              vyberAktualni?.rangeCount
+                ? vyberAktualni.getRangeAt(0)
+                : null;
+
+            /*
+             * Pokud Android během long-pressu mezitím označil slovo,
+             * NESMÍME jeho výběr vrátit zpět na starý kurzor.
+             */
+            if (
+              aktualniRozsah &&
+              jeRozsahVEditoru(aktualniRozsah) &&
+              !aktualniRozsah.collapsed
+            ) {
+              kandidatDlouhehoStisku = false;
+              rozsahKurzoruPredStiskem = null;
+              bodStisku = null;
+
+              zobrazMenuProOznaceni(
+                aktualniRozsah
+              );
+
+              zrusCasovacDlouhehoStisku();
+              return;
+            }
+
+            /*
+             * Text se neoznačil -> teprve teď jde skutečně o
+             * long-press na samotném kurzoru: Vložit | Vše.
+             */
+            dlouhyStiskSpusten = true;
+            zablokujKlikPoDlouhemStisku = true;
 
             vyberAktualni?.removeAllRanges();
             vyberAktualni?.addRange(
@@ -920,17 +978,11 @@
 
 
   /*
-   * Klíčová část: pokud long-press začíná přímo na existujícím
-   * kurzoru, nenecháme WebView označit nejbližší slovo.
+   * selectstart záměrně NEBLOKUJEME.
+   * Android musí dostat možnost označit slovo i tehdy, když long-press
+   * začal velmi blízko existujícího kurzoru. Pokud žádný výběr
+   * nevznikne, časovač výše teprve potom otevře Vložit | Vše.
    */
-  editorTextu.addEventListener(
-    "selectstart",
-    event => {
-      if (kandidatDlouhehoStisku) {
-        event.preventDefault();
-      }
-    }
-  );
 
 
   editorTextu.addEventListener(
@@ -972,13 +1024,32 @@
   );
 
 
-  /* contextmenu po našem long-pressu nesmí otevřít další nabídku. */
+  /*
+   * Nativní Android/Chrome nabídka nesmí překrýt naši vlastní.
+   * Blokujeme ji při našem long-pressu i při skutečném označení textu.
+   */
   editorTextu.addEventListener(
     "contextmenu",
     event => {
+      const vyber =
+        window.getSelection();
+
+      const rozsah =
+        vyber?.rangeCount
+          ? vyber.getRangeAt(0)
+          : null;
+
+      const maOznaceniVEditoru =
+        Boolean(
+          rozsah &&
+          jeRozsahVEditoru(rozsah) &&
+          !rozsah.collapsed
+        );
+
       if (
         dlouhyStiskSpusten ||
-        kandidatDlouhehoStisku
+        kandidatDlouhehoStisku ||
+        maOznaceniVEditoru
       ) {
         event.preventDefault();
       }
