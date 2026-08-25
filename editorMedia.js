@@ -86,16 +86,21 @@
   let imageLongPressTimer = null;
   let imagePressStartX = 0;
   let imagePressStartY = 0;
-  let imagePressStartTime = 0;
+  let imageLongPressSpusten = false;
   let selectedImage = null;
 
   /*
-   * Přesun obrázku používá Pointer Events místo HTML5 drag&drop,
-   * aby stejná logika fungovala myší i prstem. Na telefonu necháme
-   * krátké okno pro běžné scrollování: drag začne až po krátkém
-   * přidržení a následném pohybu. Dlouhý stisk bez pohybu dál
-   * otevírá nastavení obrázku.
+   * Přesun obrázku je záměrně dvoukrokový:
+   * 1. krátký klik obrázek označí,
+   * 2. až označený obrázek lze dalším tahem přesunout.
+   *
+   * Na mobilu je to podstatně spolehlivější než kombinovat scroll,
+   * long-press a drag v jediném gestu. Dlouhý stisk bez pohybu dál
+   * otevírá nastavení velikosti / zarovnání obrázku.
    */
+  let oznacenyObrazekProPresun = null;
+  let stisknutyObrazek = null;
+  let stisknutyPointerId = null;
   let presouvanyObrazek = null;
   let presouvanyFigure = null;
   let presouvanyPointerId = null;
@@ -105,11 +110,54 @@
   let ukazatelPresunuObrazku = null;
 
   const IMAGE_LONG_PRESS_TIME = 600;
-  const IMAGE_DRAG_START_DISTANCE = 12;
-  const IMAGE_DRAG_TOUCH_HOLD_TIME = 180;
+  const IMAGE_DRAG_START_DISTANCE = 10;
 
   function ziskejBlokObrazku(image) {
     return image?.closest?.(".lubaNoteImage") || null;
+  }
+
+  function oznacObrazekProPresun(image) {
+    if (!image) {
+      oznacenyObrazekProPresun = null;
+      return;
+    }
+
+    oznacenyObrazekProPresun = image;
+
+    /*
+     * Focus používáme jen jako dočasný vizuální stav.
+     * Nevkládáme do richContent žádnou pomocnou selected třídu,
+     * takže se zvýraznění nikdy neuloží do poznámky.
+     */
+    if (!image.hasAttribute("tabindex")) {
+      image.setAttribute("tabindex", "-1");
+    }
+
+    try {
+      image.focus({ preventScroll: true });
+    } catch (_) {
+      image.focus();
+    }
+  }
+
+  function zrusOznaceniObrazkuProPresun() {
+    if (
+      oznacenyObrazekProPresun &&
+      document.activeElement ===
+        oznacenyObrazekProPresun
+    ) {
+      oznacenyObrazekProPresun.blur();
+    }
+
+    oznacenyObrazekProPresun = null;
+  }
+
+  function jeObrazekOznacenyProPresun(image) {
+    return Boolean(
+      image &&
+      oznacenyObrazekProPresun === image &&
+      document.activeElement === image
+    );
   }
 
   function ziskejAktualniVelikostObrazku(image, figure) {
@@ -607,7 +655,10 @@
   ) {
     const figure = ziskejBlokObrazku(image);
 
-    if (!figure) {
+    if (
+      !figure ||
+      !jeObrazekOznacenyProPresun(image)
+    ) {
       return false;
     }
 
@@ -712,6 +763,11 @@
       modalRichText.append(figure);
     }
 
+    /*
+     * Horizontální místo puštění určí obtékání. Vertikální místo
+     * určí pořadí v dokumentu. Obrázek tak zůstává součástí toku
+     * textu a nerozbije responzivitu mezi telefonem a PC.
+     */
     nastavZarovnaniObrazku(
       image,
       figure,
@@ -767,12 +823,21 @@
 
     schovejUkazatelPresunuObrazku();
 
+    /* Po přesunu zůstane obrázek označený pro případné doladění. */
+    if (presouvanyObrazek?.isConnected) {
+      oznacObrazekProPresun(
+        presouvanyObrazek
+      );
+    }
+
     presouvanyObrazek = null;
     presouvanyFigure = null;
     presouvanyPointerId = null;
     presunObrazkuAktivni = false;
     cilPresunuObrazku = null;
     puvodniPrazdnyRadekObrazku = null;
+    stisknutyObrazek = null;
+    stisknutyPointerId = null;
 
     return true;
   }
@@ -785,6 +850,8 @@
       );
 
       if (!obrazek) {
+        stisknutyObrazek = null;
+        stisknutyPointerId = null;
         return;
       }
 
@@ -792,11 +859,14 @@
 
       imagePressStartX = event.clientX;
       imagePressStartY = event.clientY;
-      imagePressStartTime = performance.now();
+      imageLongPressSpusten = false;
       selectedImage = obrazek;
+      stisknutyObrazek = obrazek;
+      stisknutyPointerId = event.pointerId;
 
       imageLongPressTimer = setTimeout(() => {
         imageLongPressTimer = null;
+        imageLongPressSpusten = true;
         otevriNastaveniObrazku(obrazek);
       }, IMAGE_LONG_PRESS_TIME);
     }
@@ -818,7 +888,10 @@
         return;
       }
 
-      if (!imageLongPressTimer || !selectedImage) {
+      if (
+        !stisknutyObrazek ||
+        stisknutyPointerId !== event.pointerId
+      ) {
         return;
       }
 
@@ -841,25 +914,25 @@
         return;
       }
 
-      const uplynulo =
-        performance.now() - imagePressStartTime;
+      clearTimeout(imageLongPressTimer);
+      imageLongPressTimer = null;
 
       /*
-       * Rychlý svislý pohyb prstem bereme jako scroll stránky.
-       * Pro přesun obrázku stačí na něm krátce spočinout a pak táhnout.
+       * Neoznačený obrázek se při pohybu nepřesouvá – prst může dál
+       * přirozeně scrollovat. Přesun se aktivuje až druhým gestem
+       * nad obrázkem, který byl předtím jedním klikem označen.
        */
       if (
-        event.pointerType === "touch" &&
-        uplynulo < IMAGE_DRAG_TOUCH_HOLD_TIME
+        !jeObrazekOznacenyProPresun(
+          stisknutyObrazek
+        )
       ) {
-        clearTimeout(imageLongPressTimer);
-        imageLongPressTimer = null;
         return;
       }
 
       spustPresunObrazku(
         event,
-        selectedImage
+        stisknutyObrazek
       );
     }
   );
@@ -879,6 +952,8 @@
       }
 
       zrusLongPressObrazku();
+      stisknutyObrazek = null;
+      stisknutyPointerId = null;
     }
   );
 
@@ -887,12 +962,14 @@
     (event) => {
       ukonciPresunObrazku(event, false);
       zrusLongPressObrazku();
+      stisknutyObrazek = null;
+      stisknutyPointerId = null;
     }
   );
 
   modalRichText.addEventListener(
     "pointerleave",
-    (event) => {
+    () => {
       if (!presunObrazkuAktivni) {
         zrusLongPressObrazku();
       }
@@ -1028,20 +1105,167 @@
     return true;
   }
 
+  function najdiPlovouciObrazekVedleBodu(
+    clientX,
+    clientY
+  ) {
+    const editorRect =
+      modalRichText.getBoundingClientRect();
+
+    const obrazky = [
+      ...modalRichText.children
+    ].filter((uzel) =>
+      uzel.classList?.contains(
+        "lubaNoteImage"
+      )
+    );
+
+    for (const figure of obrazky) {
+      const image = figure.querySelector("img");
+
+      if (!image) {
+        continue;
+      }
+
+      const velikost =
+        ziskejAktualniVelikostObrazku(
+          image,
+          figure
+        );
+
+      const zarovnani =
+        ziskejAktualniZarovnaniObrazku(
+          image,
+          figure
+        );
+
+      const cisloVelikosti = Number(velikost);
+
+      if (
+        zarovnani === "stred" ||
+        velikost === "prizpusobit" ||
+        !Number.isFinite(cisloVelikosti) ||
+        cisloVelikosti >= 100
+      ) {
+        continue;
+      }
+
+      const rect = figure.getBoundingClientRect();
+
+      if (
+        clientY < rect.top ||
+        clientY > rect.bottom
+      ) {
+        continue;
+      }
+
+      if (
+        zarovnani === "vlevo" &&
+        clientX > rect.right + 3 &&
+        clientX < editorRect.right
+      ) {
+        return figure;
+      }
+
+      if (
+        zarovnani === "vpravo" &&
+        clientX < rect.left - 3 &&
+        clientX > editorRect.left
+      ) {
+        return figure;
+      }
+    }
+
+    return null;
+  }
+
+  function zajistiRadekVedleObrazkuPodleBodu(
+    clientX,
+    clientY
+  ) {
+    const figure = najdiPlovouciObrazekVedleBodu(
+      clientX,
+      clientY
+    );
+
+    if (!figure) {
+      return null;
+    }
+
+    const dalsi = figure.nextElementSibling;
+
+    if (
+      dalsi?.classList?.contains(
+        "lubaNoteImageTextLine"
+      )
+    ) {
+      return dalsi;
+    }
+
+    /*
+     * Vizuálně volné místo vedle float obrázku samo o sobě není
+     * kurzorová pozice. Vytvoříme proto skutečný editovatelný řádek
+     * PŘED následujícím blokem (např. 100% obrázkem). Text pak
+     * přirozeně obtéká vedle menšího obrázku a další blok zůstane pod.
+     */
+    const radek = vytvorRadekProTextZaObrazkem();
+    figure.after(radek);
+    oznamZmenuObrazku();
+
+    return radek;
+  }
+
   /*
-   * Některé Android WebView při klepnutí do prázdného místa mezi
-   * bloky nechají kurzor na staré pozici. Pokud klepneme přímo na
-   * pozadí editoru, znovu dopočítáme nejbližší platné místo kurzoru.
-   * Kliknutí na samotný obrázek tím neměníme – zůstává pro long-press
-   * a přesun obrázku.
+   * Jeden klik obrázek označí pro drag. Kliknutí do prázdného místa
+   * vedle menšího obrázku vytvoří / použije skutečný textový řádek,
+   * takže lze psát i do prostoru, který byl dříve jen vizuálně volný.
    */
   modalRichText.addEventListener(
     "click",
     (event) => {
+      if (presunObrazkuAktivni) {
+        return;
+      }
+
+      const obrazek = event.target.closest?.(
+        ".lubaNoteImage img"
+      );
+
+      if (obrazek) {
+        event.preventDefault();
+
+        /* Po long-pressu nenecháme následný click ukrást focus modalu. */
+        if (imageLongPressSpusten) {
+          imageLongPressSpusten = false;
+          return;
+        }
+
+        oznacObrazekProPresun(obrazek);
+        return;
+      }
+
       if (
-        presunObrazkuAktivni ||
-        event.target !== modalRichText
+        event.target.closest?.(
+          ".lubaNoteImageRemove"
+        )
       ) {
+        return;
+      }
+
+      zrusOznaceniObrazkuProPresun();
+
+      if (event.target !== modalRichText) {
+        return;
+      }
+
+      const radekVedle =
+        zajistiRadekVedleObrazkuPodleBodu(
+          event.clientX,
+          event.clientY
+        );
+
+      if (radekVedle) {
+        nastavKurzorDoRadku(radekVedle);
         return;
       }
 
@@ -1388,6 +1612,7 @@
       "Obrázek v poznámce";
     image.loading = "lazy";
     image.draggable = false;
+    image.tabIndex = -1;
     image.dataset.velikost = "prizpusobit";
     image.dataset.zarovnani = "stred";
     
@@ -1771,6 +1996,15 @@
         const figure = removeButton.closest(
           ".lubaNoteImage"
         );
+
+        if (
+          figure &&
+          ziskejBlokObrazku(
+            oznacenyObrazekProPresun
+          ) === figure
+        ) {
+          zrusOznaceniObrazkuProPresun();
+        }
         
         figure?.remove();
         modalRichText.normalize();
