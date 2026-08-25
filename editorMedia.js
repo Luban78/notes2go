@@ -2340,6 +2340,179 @@
   };
 
   /* ==========================================
+     BACKSPACE NA ZAČÁTKU ŘÁDKU
+
+     Android WebView / Chromium může při Backspace na začátku textového
+     bloku sloučit blok s předchozím a současně převzít jeho inline
+     typografii (např. 20 px). To se projevovalo přesně tak, že po
+     odstranění prázdné mezery text náhle zvětšil velikost i line-height.
+
+     Když je těsně před aktuálním textem opravdu jen prázdný editovatelný
+     blok (<div><br></div>, prázdný řádek za obrázkem apod.), odstraníme
+     pouze tento prázdný blok sami. Aktuální textový blok se vůbec
+     neslučuje, takže si zachová svoji velikost a další formátování.
+  ========================================== */
+
+  function jePrazdnyEditacniBlok(uzel) {
+    if (!uzel) {
+      return false;
+    }
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      return uzel.textContent
+        .replace(/\u200B/g, "")
+        .trim() === "";
+    }
+
+    if (!(uzel instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (
+      uzel.matches(
+        ".lubaNoteImage, img, a[href], ul, ol, li, table"
+      ) ||
+      uzel.querySelector(
+        ".lubaNoteImage, img, a[href], ul, ol, li, table"
+      )
+    ) {
+      return false;
+    }
+
+    return uzel.textContent
+      .replace(/\u200B/g, "")
+      .trim() === "";
+  }
+
+  function jeKurzorNaZacatkuBloku(range, blok) {
+    if (!range?.collapsed || !blok) {
+      return false;
+    }
+
+    try {
+      const predKurzorem = document.createRange();
+      predKurzorem.selectNodeContents(blok);
+      predKurzorem.setEnd(
+        range.startContainer,
+        range.startOffset
+      );
+
+      const fragment =
+        predKurzorem.cloneContents();
+
+      if (
+        fragment.textContent
+          .replace(/\u200B/g, "")
+          .trim() !== ""
+      ) {
+        return false;
+      }
+
+      return !fragment.querySelector?.(
+        ".lubaNoteImage, img, a[href], ul, ol, li, table"
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function najdiPredchoziObsahovyUzel(uzel) {
+    let predchozi = uzel?.previousSibling || null;
+
+    while (
+      predchozi?.nodeType === Node.TEXT_NODE &&
+      predchozi.textContent.trim() === ""
+    ) {
+      predchozi = predchozi.previousSibling;
+    }
+
+    return predchozi;
+  }
+
+  modalRichText.addEventListener(
+    "beforeinput",
+    (event) => {
+      if (
+        event.inputType !== "deleteContentBackward" ||
+        event.isComposing
+      ) {
+        return;
+      }
+
+      const vyber = window.getSelection();
+
+      if (
+        !vyber ||
+        vyber.rangeCount === 0
+      ) {
+        return;
+      }
+
+      const range = vyber.getRangeAt(0);
+
+      if (
+        !range.collapsed ||
+        !jeRozsahVEditoru(range)
+      ) {
+        return;
+      }
+
+      const aktualniBlok =
+        ziskejPrimehoPotomkaEditoru(
+          range.startContainer
+        );
+
+      if (
+        !aktualniBlok ||
+        aktualniBlok.classList?.contains(
+          "lubaNoteImage"
+        ) ||
+        !jeKurzorNaZacatkuBloku(
+          range,
+          aktualniBlok
+        )
+      ) {
+        return;
+      }
+
+      const predchoziBlok =
+        najdiPredchoziObsahovyUzel(
+          aktualniBlok
+        );
+
+      if (!jePrazdnyEditacniBlok(predchoziBlok)) {
+        return;
+      }
+
+      /*
+       * Důležité: nenecháme WebView provést vlastní merge bloků.
+       * Odstraníme pouze prázdný řádek a původní Range vrátíme na stejné
+       * místo v aktuálním bloku. Jeho font-size / line-height se tím
+       * vůbec nemění.
+       */
+      event.preventDefault();
+
+      const zachovanyRange =
+        range.cloneRange();
+
+      predchoziBlok.remove();
+
+      if (
+        zachovanyRange.startContainer?.isConnected
+      ) {
+        vyber.removeAllRanges();
+        vyber.addRange(zachovanyRange);
+        ulozenyRozsahEditoru =
+          zachovanyRange.cloneRange();
+      }
+
+      modalRichText.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    }
+  );
+
+  /* ==========================================
      AKCE NAD ULOŽENÝM OBRÁZKEM / ODKAZEM
   ========================================== */
   
