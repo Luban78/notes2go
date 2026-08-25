@@ -3,9 +3,11 @@
      LUBANOTE – VLASTNÍ NABÍDKA VÝBĚRU TEXTU
 
      Chování:
-     - běžný tap = pouze kurzor, žádné menu
-     - long-press na textu = Android označí text -> naše menu
-     - long-press přímo na existujícím kurzoru = Vložit | Vše
+     - 1× tap = pouze kurzor / editace
+     - 2× tap na slovo = nativní označení slova -> naše menu
+     - rozsah lze dál upravit systémovými úchyty
+     - long-press už NEPATŘÍ výběru textu; používají ho řádkové prvky
+       (bullet / TODO) pro aktivaci režimu přesunu
      - APK používá Capacitor Clipboard
      - Preview zkusí Web Clipboard API, případně interní dočasnou schránku
   ========================================== */
@@ -44,20 +46,10 @@
     return;
   }
 
-  const DELKA_DLOUHEHO_STISKU = 520;
-  const MAX_POHYB_DLOUHEHO_STISKU = 14;
-  const MAX_VZDALENOST_OD_KURZORU = 34;
-
   let ulozenyRozsah = null;
+  let aktivniTextarea = null;
+  let ulozenyVyberTextarea = null;
   let lokalniSchranka = "";
-
-  let casovacDlouhehoStisku = null;
-  let kandidatDlouhehoStisku = false;
-  let dlouhyStiskSpusten = false;
-  let zablokujKlikPoDlouhemStisku = false;
-
-  let rozsahKurzoruPredStiskem = null;
-  let bodStisku = null;
 
   /*
    * Android WebView někdy dokončí označení slova až několik ms po
@@ -166,6 +158,59 @@
   }
 
 
+  function jeTodoTextarea(prvek) {
+    return Boolean(
+      prvek?.matches?.(
+        ".todoTextInput.todoEditing"
+      )
+    );
+  }
+
+
+  function ulozVyberTextarea(textarea) {
+    if (!jeTodoTextarea(textarea)) {
+      return false;
+    }
+
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? start;
+
+    aktivniTextarea = textarea;
+    ulozenyVyberTextarea = {
+      start,
+      end
+    };
+
+    return true;
+  }
+
+
+  function obnovVyberTextarea() {
+    if (
+      !aktivniTextarea ||
+      !ulozenyVyberTextarea ||
+      !document.contains(aktivniTextarea)
+    ) {
+      return false;
+    }
+
+    try {
+      aktivniTextarea.focus({
+        preventScroll: true
+      });
+    } catch {
+      aktivniTextarea.focus();
+    }
+
+    aktivniTextarea.setSelectionRange(
+      ulozenyVyberTextarea.start,
+      ulozenyVyberTextarea.end
+    );
+
+    return true;
+  }
+
+
   /* ==========================================
      ZOBRAZENÍ / POZICE MENU
   ========================================== */
@@ -175,6 +220,9 @@
 
     tlacitkoVyjmout?.removeAttribute("hidden");
     tlacitkoKopirovat?.removeAttribute("hidden");
+
+    aktivniTextarea = null;
+    ulozenyVyberTextarea = null;
   }
 
 
@@ -312,6 +360,9 @@
       return;
     }
 
+    aktivniTextarea = null;
+    ulozenyVyberTextarea = null;
+
     nastavTlacitkaMenu(true);
     selectionMenu.hidden = false;
 
@@ -319,19 +370,33 @@
   }
 
 
-  function zobrazMenuProKurzor(rozsah, bod) {
-    if (!ulozRozsah(rozsah)) {
+  function zobrazMenuProTextarea(textarea) {
+    if (!ulozVyberTextarea(textarea)) {
       return;
     }
 
-    nastavTlacitkaMenu(false);
+    const { start, end } =
+      ulozenyVyberTextarea;
+
+    if (start === end) {
+      skryjMenu();
+      return;
+    }
+
+    nastavTlacitkaMenu(true);
     selectionMenu.hidden = false;
 
+    const rect =
+      textarea.getBoundingClientRect();
+
     pozicujMenu({
-      rozsah,
-      bod
+      bod: {
+        x: rect.left + rect.width / 2,
+        y: rect.top
+      }
     });
   }
+
 
 
   /* ==========================================
@@ -575,6 +640,91 @@
   }
 
 
+  function ziskejTextTextareaVyberu() {
+    if (
+      !aktivniTextarea ||
+      !ulozenyVyberTextarea
+    ) {
+      return "";
+    }
+
+    return aktivniTextarea.value.slice(
+      ulozenyVyberTextarea.start,
+      ulozenyVyberTextarea.end
+    );
+  }
+
+
+  function nahradTextareaVyber(text) {
+    if (!obnovVyberTextarea()) {
+      return false;
+    }
+
+    const textarea = aktivniTextarea;
+    const start = ulozenyVyberTextarea.start;
+    const end = ulozenyVyberTextarea.end;
+
+    textarea.setRangeText(
+      text,
+      start,
+      end,
+      "end"
+    );
+
+    ulozenyVyberTextarea = {
+      start: textarea.selectionStart ?? start,
+      end: textarea.selectionEnd ?? start
+    };
+
+    try {
+      textarea.dispatchEvent(
+        new InputEvent(
+          "input",
+          {
+            bubbles: true,
+            inputType: text
+              ? "insertText"
+              : "deleteContentBackward",
+            data: text || null
+          }
+        )
+      );
+    } catch {
+      textarea.dispatchEvent(
+        new Event(
+          "input",
+          { bubbles: true }
+        )
+      );
+    }
+
+    return true;
+  }
+
+
+  function sklapniTextareaVyberNaKonec() {
+    if (
+      !aktivniTextarea ||
+      !ulozenyVyberTextarea
+    ) {
+      return;
+    }
+
+    const konec =
+      ulozenyVyberTextarea.end;
+
+    aktivniTextarea.setSelectionRange(
+      konec,
+      konec
+    );
+
+    ulozenyVyberTextarea = {
+      start: konec,
+      end: konec
+    };
+  }
+
+
   /* ==========================================
      TLAČÍTKA MENU
   ========================================== */
@@ -596,9 +746,11 @@
     "click",
     async () => {
       const text =
-        ulozenyRozsah
-          ?.toString()
-          ?.trim();
+        aktivniTextarea
+          ? ziskejTextTextareaVyberu().trim()
+          : ulozenyRozsah
+              ?.toString()
+              ?.trim();
 
       if (!text) {
         return;
@@ -606,8 +758,14 @@
 
       try {
         await zapisDoSchranky(text);
+
+        if (aktivniTextarea) {
+          sklapniTextareaVyberNaKonec();
+        } else {
+          sklapniVyberNaKonec();
+        }
+
         skryjMenu();
-        sklapniVyberNaKonec();
       } catch (chyba) {
         console.error(
           "Kopírování se nepodařilo:",
@@ -622,9 +780,11 @@
     "click",
     async () => {
       const text =
-        ulozenyRozsah
-          ?.toString()
-          ?.trim();
+        aktivniTextarea
+          ? ziskejTextTextareaVyberu().trim()
+          : ulozenyRozsah
+              ?.toString()
+              ?.trim();
 
       if (!text) {
         return;
@@ -633,7 +793,11 @@
       try {
         await zapisDoSchranky(text);
 
-        if (smazAktualniOznaceni()) {
+        const smazano = aktivniTextarea
+          ? nahradTextareaVyber("")
+          : smazAktualniOznaceni();
+
+        if (smazano) {
           skryjMenu();
         }
       } catch (chyba) {
@@ -649,7 +813,7 @@
   tlacitkoVlozit?.addEventListener(
     "click",
     async () => {
-      if (!ulozenyRozsah) {
+      if (!ulozenyRozsah && !aktivniTextarea) {
         return;
       }
 
@@ -662,7 +826,11 @@
           return;
         }
 
-        if (vlozTextDoEditoru(text)) {
+        const vlozeno = aktivniTextarea
+          ? nahradTextareaVyber(text)
+          : vlozTextDoEditoru(text);
+
+        if (vlozeno) {
           skryjMenu();
         }
       } catch (chyba) {
@@ -678,6 +846,23 @@
   tlacitkoVybratVse?.addEventListener(
     "click",
     () => {
+      if (aktivniTextarea) {
+        aktivniTextarea.setSelectionRange(
+          0,
+          aktivniTextarea.value.length
+        );
+
+        ulozenyVyberTextarea = {
+          start: 0,
+          end: aktivniTextarea.value.length
+        };
+
+        zobrazMenuProTextarea(
+          aktivniTextarea
+        );
+        return;
+      }
+
       const rozsah =
         document.createRange();
 
@@ -704,6 +889,11 @@
   /* ==========================================
      BĚŽNÉ OZNAČENÍ TEXTU
 
+     Jednotné pravidlo LubaNote:
+     - 1× tap = kurzor / editace
+     - 2× tap = nativní výběr slova
+     - long-press zde neřešíme; patří řádkovým prvkům pro MOVE MODE
+
      Android WebView může nejdřív nahlásit samotný kurzor a teprve
      o pár ms později skutečný výběr slova. Proto stav nečteme
      okamžitě v první selectionchange události.
@@ -718,6 +908,24 @@
       casovacAktualizaceVyberu = setTimeout(() => {
         casovacAktualizaceVyberu = null;
 
+        const textarea =
+          jeTodoTextarea(document.activeElement)
+            ? document.activeElement
+            : null;
+
+        if (textarea) {
+          if (
+            (textarea.selectionStart ?? 0) !==
+            (textarea.selectionEnd ?? 0)
+          ) {
+            zobrazMenuProTextarea(textarea);
+          } else {
+            skryjMenu();
+          }
+
+          return;
+        }
+
         const vyber =
           window.getSelection();
 
@@ -725,6 +933,7 @@
           !vyber ||
           vyber.rangeCount === 0
         ) {
+          skryjMenu();
           return;
         }
 
@@ -736,28 +945,16 @@
           return;
         }
 
-        if (!rozsah.collapsed) {
+        if (rozsah.collapsed) {
           /*
-           * Skutečný textový výběr má vždy přednost před režimem
-           * „Vložit | Vše“. Tím se opravuje případ, kdy Android
-           * označí první slovo až těsně po našem pointerdown.
+           * Jednoduchý tap znamená pouze editaci. Nabídku ukážeme
+           * až při skutečně označeném textu.
            */
-          zrusCasovacDlouhehoStisku();
-          kandidatDlouhehoStisku = false;
-          rozsahKurzoruPredStiskem = null;
-
-          zobrazMenuProOznaceni(rozsah);
+          skryjMenu();
           return;
         }
 
-        /*
-         * Běžný tap = pouze kurzor.
-         * Vložit | Vše se ukáže jen tehdy, když long-press opravdu
-         * doběhne a Android přitom žádný text neoznačí.
-         */
-        if (!dlouhyStiskSpusten) {
-          skryjMenu();
-        }
+        zobrazMenuProOznaceni(rozsah);
       }, 40);
     });
   }
@@ -769,264 +966,23 @@
   );
 
 
-  /* ==========================================
-     LONG-PRESS PŘÍMO NA EXISTUJÍCÍM KURZORU
-
-     Android jinak může začít označovat nejbližší slovo.
-     Pokud ale uživatel dlouze drží přímo na existujícím
-     kurzoru, zablokujeme vznik výběru a otevřeme pouze
-     Vložit | Vše.
-  ========================================== */
-
-  function vzdalenost(
-    prvni,
-    druha
-  ) {
-    return Math.hypot(
-      prvni.x - druha.x,
-      prvni.y - druha.y
-    );
-  }
-
-
-  function bodKurzoru(rozsah) {
-    const obdelnik =
-      zjistiObdelnikRozsahu(rozsah);
-
-    if (!obdelnik) {
-      return null;
-    }
-
-    return {
-      x: obdelnik.left,
-      y:
-        obdelnik.top +
-        Math.max(obdelnik.height / 2, 1)
-    };
-  }
-
-
-  function zrusCasovacDlouhehoStisku() {
-    if (casovacDlouhehoStisku) {
-      clearTimeout(
-        casovacDlouhehoStisku
-      );
-    }
-
-    casovacDlouhehoStisku = null;
-  }
-
-
-  function ukonciKandidataDlouhehoStisku() {
-    zrusCasovacDlouhehoStisku();
-    kandidatDlouhehoStisku = false;
-    rozsahKurzoruPredStiskem = null;
-    bodStisku = null;
-  }
-
-
-  editorTextu.addEventListener(
-    "pointerdown",
+  document.addEventListener(
+    "select",
     event => {
-      if (
-        event.pointerType &&
-        event.pointerType !== "touch" &&
-        event.pointerType !== "pen"
-      ) {
-        return;
-      }
-
-      dlouhyStiskSpusten = false;
-
-      const vyber =
-        window.getSelection();
-
-      if (
-        !vyber ||
-        vyber.rangeCount === 0
-      ) {
-        return;
-      }
-
-      const rozsah =
-        vyber.getRangeAt(0);
-
-      if (
-        !rozsah.collapsed ||
-        !jeRozsahVEditoru(rozsah)
-      ) {
-        return;
-      }
-
-      const kurzor =
-        bodKurzoru(rozsah);
-
-      if (!kurzor) {
-        return;
-      }
-
-      const dotyk = {
-        x: event.clientX,
-        y: event.clientY
-      };
-
-      if (
-        vzdalenost(kurzor, dotyk) >
-        MAX_VZDALENOST_OD_KURZORU
-      ) {
-        return;
-      }
-
-      kandidatDlouhehoStisku = true;
-      rozsahKurzoruPredStiskem =
-        rozsah.cloneRange();
-      bodStisku = dotyk;
-
-      zrusCasovacDlouhehoStisku();
-
-      casovacDlouhehoStisku =
-        setTimeout(
-          () => {
-            if (
-              !kandidatDlouhehoStisku ||
-              !rozsahKurzoruPredStiskem
-            ) {
-              return;
-            }
-
-            const vyberAktualni =
-              window.getSelection();
-
-            const aktualniRozsah =
-              vyberAktualni?.rangeCount
-                ? vyberAktualni.getRangeAt(0)
-                : null;
-
-            /*
-             * Pokud Android během long-pressu mezitím označil slovo,
-             * NESMÍME jeho výběr vrátit zpět na starý kurzor.
-             */
-            if (
-              aktualniRozsah &&
-              jeRozsahVEditoru(aktualniRozsah) &&
-              !aktualniRozsah.collapsed
-            ) {
-              kandidatDlouhehoStisku = false;
-              rozsahKurzoruPredStiskem = null;
-              bodStisku = null;
-
-              zobrazMenuProOznaceni(
-                aktualniRozsah
-              );
-
-              zrusCasovacDlouhehoStisku();
-              return;
-            }
-
-            /*
-             * Text se neoznačil -> teprve teď jde skutečně o
-             * long-press na samotném kurzoru: Vložit | Vše.
-             */
-            dlouhyStiskSpusten = true;
-            zablokujKlikPoDlouhemStisku = true;
-
-            vyberAktualni?.removeAllRanges();
-            vyberAktualni?.addRange(
-              rozsahKurzoruPredStiskem
-            );
-
-            zobrazMenuProKurzor(
-              rozsahKurzoruPredStiskem,
-              bodStisku
-            );
-
-            zrusCasovacDlouhehoStisku();
-          },
-          DELKA_DLOUHEHO_STISKU
+      if (jeTodoTextarea(event.target)) {
+        zobrazMenuProTextarea(
+          event.target
         );
-    },
-    { passive: true }
-  );
-
-
-  editorTextu.addEventListener(
-    "pointermove",
-    event => {
-      if (
-        !kandidatDlouhehoStisku ||
-        !bodStisku
-      ) {
-        return;
       }
-
-      const aktualniBod = {
-        x: event.clientX,
-        y: event.clientY
-      };
-
-      if (
-        vzdalenost(
-          bodStisku,
-          aktualniBod
-        ) > MAX_POHYB_DLOUHEHO_STISKU
-      ) {
-        ukonciKandidataDlouhehoStisku();
-      }
-    },
-    { passive: true }
-  );
-
-
-  /*
-   * selectstart záměrně NEBLOKUJEME.
-   * Android musí dostat možnost označit slovo i tehdy, když long-press
-   * začal velmi blízko existujícího kurzoru. Pokud žádný výběr
-   * nevznikne, časovač výše teprve potom otevře Vložit | Vše.
-   */
-
-
-  editorTextu.addEventListener(
-    "pointerup",
-    () => {
-      if (!dlouhyStiskSpusten) {
-        ukonciKandidataDlouhehoStisku();
-        return;
-      }
-
-      kandidatDlouhehoStisku = false;
-      rozsahKurzoruPredStiskem = null;
-      bodStisku = null;
-    }
-  );
-
-
-  editorTextu.addEventListener(
-    "pointercancel",
-    () => {
-      ukonciKandidataDlouhehoStisku();
-      dlouhyStiskSpusten = false;
-    }
-  );
-
-
-  editorTextu.addEventListener(
-    "click",
-    event => {
-      if (!zablokujKlikPoDlouhemStisku) {
-        return;
-      }
-
-      zablokujKlikPoDlouhemStisku = false;
-      event.preventDefault();
-      event.stopPropagation();
     },
     true
   );
 
 
   /*
-   * Nativní Android/Chrome nabídka nesmí překrýt naši vlastní.
-   * Blokujeme ji při našem long-pressu i při skutečném označení textu.
+   * Nativní Android/Chrome kontextovou nabídku blokujeme jen tehdy,
+   * když už v editoru skutečně existuje označený text. Samotný
+   * long-press si tak mohou bezpečně převzít bullet/TODO řádky.
    */
   editorTextu.addEventListener(
     "contextmenu",
@@ -1046,14 +1002,30 @@
           !rozsah.collapsed
         );
 
-      if (
-        dlouhyStiskSpusten ||
-        kandidatDlouhehoStisku ||
-        maOznaceniVEditoru
-      ) {
+      if (maOznaceniVEditoru) {
         event.preventDefault();
       }
     }
+  );
+
+
+  document.addEventListener(
+    "contextmenu",
+    event => {
+      const textarea =
+        event.target.closest?.(
+          ".todoTextInput.todoEditing"
+        );
+
+      if (
+        textarea &&
+        (textarea.selectionStart ?? 0) !==
+          (textarea.selectionEnd ?? 0)
+      ) {
+        event.preventDefault();
+      }
+    },
+    true
   );
 
 

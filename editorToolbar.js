@@ -108,6 +108,18 @@
   let tazenyPointerId = null;
   let tazenyDotykId = null;
   let casPoslednihoTazeniBulletu = 0;
+  let casPoslednihoLongPressBulletu = 0;
+
+  let vybranaPolozkaProPresun = null;
+  let casovacLongPressBulletu = null;
+  let kandidatLongPressBulletu = null;
+  let kandidatPointerIdBulletu = null;
+  let kandidatDotykIdBulletu = null;
+  let kandidatStartXBulletu = 0;
+  let kandidatStartYBulletu = 0;
+
+  const DELKA_LONG_PRESS_BULLETU = 420;
+  const MAX_POHYB_LONG_PRESS_BULLETU = 20;
 
   let nahledTazenePolozky = null;
 
@@ -1017,7 +1029,103 @@
   }
 
 
-  function uklidTazeniBulletu() {
+  function zrusCasovacLongPressBulletu() {
+    if (casovacLongPressBulletu !== null) {
+      clearTimeout(casovacLongPressBulletu);
+    }
+
+    casovacLongPressBulletu = null;
+    kandidatLongPressBulletu = null;
+    kandidatPointerIdBulletu = null;
+    kandidatDotykIdBulletu = null;
+  }
+
+
+  function zrusVyberPolozkyProPresun() {
+    vybranaPolozkaProPresun?.classList.remove(
+      "bulletMoveSelected"
+    );
+
+    vybranaPolozkaProPresun = null;
+    editorTextu.classList.remove(
+      "bulletMoveMode"
+    );
+  }
+
+
+  function aktivujPolozkuProPresun(polozka) {
+    if (!polozka) {
+      return;
+    }
+
+    if (vybranaPolozkaProPresun !== polozka) {
+      zrusVyberPolozkyProPresun();
+    }
+
+    vybranaPolozkaProPresun = polozka;
+
+    polozka.classList.add(
+      "bulletMoveSelected"
+    );
+
+    editorTextu.classList.add(
+      "bulletMoveMode"
+    );
+
+    /*
+     * Long-press znamená práci s celým řádkem, ne výběr textu.
+     * Zrušíme proto případný nativní výběr a schováme klávesnici.
+     */
+    window.getSelection()?.removeAllRanges();
+    zrusVlastniVyberTextu();
+
+    try {
+      editorTextu.blur();
+    } catch (_) {
+      /* Blur není pro MOVE MODE kritický. */
+    }
+
+    if (navigator.vibrate) {
+      navigator.vibrate(18);
+    }
+  }
+
+
+  function jePrvekMimoBulletMove(target) {
+    return Boolean(
+      target?.closest?.(
+        ".lubaNoteImage, .lubaNoteImageSettings, .lubaNoteImageRemove"
+      )
+    );
+  }
+
+
+  function oznamPresunBulletu() {
+    try {
+      editorTextu.dispatchEvent(
+        new InputEvent(
+          "input",
+          {
+            bubbles: true,
+            inputType: "insertFromDrop"
+          }
+        )
+      );
+    } catch (_) {
+      editorTextu.dispatchEvent(
+        new Event(
+          "input",
+          { bubbles: true }
+        )
+      );
+    }
+  }
+
+
+  function uklidTazeniBulletu({
+    zrusVyber = true,
+    oznamZmenu = false
+  } = {}) {
     if (probihaTazeni) {
       casPoslednihoTazeniBulletu =
         Date.now();
@@ -1041,6 +1149,14 @@
     tazenyPointerId = null;
     tazenyDotykId = null;
     probihaTazeni = false;
+
+    if (zrusVyber) {
+      zrusVyberPolozkyProPresun();
+    }
+
+    if (oznamZmenu) {
+      oznamPresunBulletu();
+    }
   }
 
 
@@ -1238,14 +1354,129 @@
   );
 
   /* ==========================================
-     BULLET DRAG – MYŠ / TOUCH
+     BULLET – JEDNOTNÉ OVLÁDÁNÍ ŘÁDKU
+
+     1× tap / klik = editace
+     2× tap / klik = nativní výběr slova
+     long-press kdekoliv v <li> = MOVE MODE
+     po aktivaci MOVE MODE lze řádek táhnout kdekoliv
+     tap na samotnou kulku mimo MOVE MODE = sbalit / rozbalit
      ========================================== */
 
-  /*
-   * Desktop používá Pointer Events. Dotyk má vlastní Touch Events větev
-   * níže, protože Android při běžném pointer dragu rád převezme gesto pro
-   * scroll a pošle pointercancel.
-   */
+  function spustLongPressBulletu({
+    polozka,
+    x,
+    y,
+    pointerId = null,
+    dotykId = null
+  }) {
+    zrusCasovacLongPressBulletu();
+
+    kandidatLongPressBulletu = polozka;
+    kandidatPointerIdBulletu = pointerId;
+    kandidatDotykIdBulletu = dotykId;
+    kandidatStartXBulletu = x;
+    kandidatStartYBulletu = y;
+
+    casovacLongPressBulletu = setTimeout(() => {
+      const kandidat =
+        kandidatLongPressBulletu;
+
+      if (!kandidat) {
+        return;
+      }
+
+      casovacLongPressBulletu = null;
+      casPoslednihoLongPressBulletu =
+        Date.now();
+
+      aktivujPolozkuProPresun(
+        kandidat
+      );
+
+      /*
+       * Prst / myš mohou po long-pressu rovnou pokračovat v pohybu.
+       * Pokud uživatel prst pustí, položka zůstane pouze označená a
+       * lze ji chytit znovu kdekoliv v řádku.
+       */
+      tazenaPolozka = kandidat;
+      zacatekTazeniX = kandidatStartXBulletu;
+      zacatekTazeniY = kandidatStartYBulletu;
+      tazenyPointerId =
+        kandidatPointerIdBulletu;
+      tazenyDotykId =
+        kandidatDotykIdBulletu;
+      probihaTazeni = false;
+
+      if (tazenyPointerId !== null) {
+        try {
+          kandidat.setPointerCapture(
+            tazenyPointerId
+          );
+        } catch (_) {
+          /* Pointer capture není pro MOVE MODE povinný. */
+        }
+      }
+
+      kandidatLongPressBulletu = null;
+      kandidatPointerIdBulletu = null;
+      kandidatDotykIdBulletu = null;
+    }, DELKA_LONG_PRESS_BULLETU);
+  }
+
+
+  function zrusLongPressPriPohybu(x, y) {
+    if (
+      casovacLongPressBulletu === null ||
+      !kandidatLongPressBulletu
+    ) {
+      return false;
+    }
+
+    const vzdalenost =
+      Math.hypot(
+        x - kandidatStartXBulletu,
+        y - kandidatStartYBulletu
+      );
+
+    if (
+      vzdalenost <=
+      MAX_POHYB_LONG_PRESS_BULLETU
+    ) {
+      return false;
+    }
+
+    zrusCasovacLongPressBulletu();
+    return true;
+  }
+
+
+  function pripravAktivniBulletProTazeni(
+    polozka,
+    x,
+    y,
+    { pointerId = null, dotykId = null } = {}
+  ) {
+    if (
+      !polozka ||
+      vybranaPolozkaProPresun !== polozka
+    ) {
+      return false;
+    }
+
+    tazenaPolozka = polozka;
+    zacatekTazeniX = x;
+    zacatekTazeniY = y;
+    tazenyPointerId = pointerId;
+    tazenyDotykId = dotykId;
+    probihaTazeni = false;
+
+    return true;
+  }
+
+
+  /* ---------- MYŠ / PERO ---------- */
+
   editorTextu.addEventListener(
     "pointerdown",
     (udalost) => {
@@ -1253,38 +1484,51 @@
         return;
       }
 
+      if (
+        udalost.button !== undefined &&
+        udalost.button !== 0
+      ) {
+        return;
+      }
+
       const polozka =
-        udalost.target.closest("li");
+        udalost.target.closest?.("li");
 
       if (
         !polozka ||
-        !editorTextu.contains(polozka)
+        !editorTextu.contains(polozka) ||
+        jePrvekMimoBulletMove(udalost.target)
       ) {
         return;
       }
 
       if (
-        !jePoziceNaKulce(
-          polozka,
-          udalost.clientX
-        )
+        vybranaPolozkaProPresun === polozka
       ) {
+        pripravAktivniBulletProTazeni(
+          polozka,
+          udalost.clientX,
+          udalost.clientY,
+          { pointerId: udalost.pointerId }
+        );
+
+        try {
+          polozka.setPointerCapture(
+            udalost.pointerId
+          );
+        } catch (_) {
+          /* Pointer capture není povinný. */
+        }
+
         return;
       }
 
-      tazenaPolozka = polozka;
-      tazenyPointerId = udalost.pointerId;
-      zacatekTazeniX = udalost.clientX;
-      zacatekTazeniY = udalost.clientY;
-      probihaTazeni = false;
-
-      try {
-        polozka.setPointerCapture(
-          udalost.pointerId
-        );
-      } catch (_) {
-        /* Pointer capture není pro funkci povinný. */
-      }
+      spustLongPressBulletu({
+        polozka,
+        x: udalost.clientX,
+        y: udalost.clientY,
+        pointerId: udalost.pointerId
+      });
     }
   );
 
@@ -1292,8 +1536,21 @@
   editorTextu.addEventListener(
     "pointermove",
     (udalost) => {
+      if (udalost.pointerType === "touch") {
+        return;
+      }
+
       if (
-        udalost.pointerType === "touch" ||
+        kandidatPointerIdBulletu ===
+        udalost.pointerId
+      ) {
+        zrusLongPressPriPohybu(
+          udalost.clientX,
+          udalost.clientY
+        );
+      }
+
+      if (
         !tazenaPolozka ||
         tazenyPointerId !== udalost.pointerId
       ) {
@@ -1338,13 +1595,37 @@
       }
 
       if (
+        kandidatPointerIdBulletu ===
+        udalost.pointerId
+      ) {
+        zrusCasovacLongPressBulletu();
+        return;
+      }
+
+      if (
         tazenyPointerId !== null &&
         udalost.pointerId !== tazenyPointerId
       ) {
         return;
       }
 
-      uklidTazeniBulletu();
+      if (!tazenaPolozka) {
+        return;
+      }
+
+      if (probihaTazeni) {
+        uklidTazeniBulletu({
+          zrusVyber: true,
+          oznamZmenu: true
+        });
+        return;
+      }
+
+      /* Long-press proběhl, ale uživatel zatím netáhl. MOVE MODE zůstává. */
+      tazenaPolozka = null;
+      tazenyPointerId = null;
+      casPoslednihoLongPressBulletu =
+        Date.now();
     }
   );
 
@@ -1357,16 +1638,25 @@
       }
 
       if (
-        tazenyPointerId !== null &&
-        udalost.pointerId !== tazenyPointerId
+        kandidatPointerIdBulletu ===
+        udalost.pointerId
       ) {
-        return;
+        zrusCasovacLongPressBulletu();
       }
 
-      uklidTazeniBulletu();
+      if (
+        tazenyPointerId !== null &&
+        udalost.pointerId === tazenyPointerId
+      ) {
+        uklidTazeniBulletu({
+          zrusVyber: false
+        });
+      }
     }
   );
 
+
+  /* ---------- TOUCH ---------- */
 
   function najdiDotykPodleId(dotyky, id) {
     return Array.from(dotyky).find(
@@ -1379,6 +1669,7 @@
     "touchstart",
     (udalost) => {
       if (udalost.touches.length !== 1) {
+        zrusCasovacLongPressBulletu();
         return;
       }
 
@@ -1387,7 +1678,8 @@
 
       if (
         !polozka ||
-        !editorTextu.contains(polozka)
+        !editorTextu.contains(polozka) ||
+        jePrvekMimoBulletMove(udalost.target)
       ) {
         return;
       }
@@ -1396,26 +1688,29 @@
         udalost.touches[0];
 
       if (
-        !jePoziceNaKulce(
+        vybranaPolozkaProPresun === polozka
+      ) {
+        /*
+         * MOVE MODE už je aktivní. Od této chvíle patří gesto přesunu,
+         * proto můžeme scroll bezpečně zablokovat už na touchstart.
+         */
+        udalost.preventDefault();
+
+        pripravAktivniBulletProTazeni(
           polozka,
           dotyk.clientX,
-          true
-        )
-      ) {
+          dotyk.clientY,
+          { dotykId: dotyk.identifier }
+        );
         return;
       }
 
-      /*
-       * Scroll blokujeme pouze při dotyku v zóně kulky. Dotyk na textu
-       * seznamu dál normálně scrolluje celý editor.
-       */
-      udalost.preventDefault();
-
-      tazenaPolozka = polozka;
-      tazenyDotykId = dotyk.identifier;
-      zacatekTazeniX = dotyk.clientX;
-      zacatekTazeniY = dotyk.clientY;
-      probihaTazeni = false;
+      spustLongPressBulletu({
+        polozka,
+        x: dotyk.clientX,
+        y: dotyk.clientY,
+        dotykId: dotyk.identifier
+      });
     },
     { passive: false }
   );
@@ -1424,6 +1719,28 @@
   editorTextu.addEventListener(
     "touchmove",
     (udalost) => {
+      if (
+        kandidatDotykIdBulletu !== null
+      ) {
+        const kandidatDotyk =
+          najdiDotykPodleId(
+            udalost.touches,
+            kandidatDotykIdBulletu
+          );
+
+        if (kandidatDotyk) {
+          const zruseno =
+            zrusLongPressPriPohybu(
+              kandidatDotyk.clientX,
+              kandidatDotyk.clientY
+            );
+
+          if (zruseno) {
+            return;
+          }
+        }
+      }
+
       if (
         !tazenaPolozka ||
         tazenyDotykId === null
@@ -1451,7 +1768,7 @@
 
       if (
         !probihaTazeni &&
-        Math.hypot(rozdilX, rozdilY) < 10
+        Math.hypot(rozdilX, rozdilY) < 8
       ) {
         return;
       }
@@ -1475,6 +1792,21 @@
   editorTextu.addEventListener(
     "touchend",
     (udalost) => {
+      if (
+        kandidatDotykIdBulletu !== null
+      ) {
+        const kratkyDotyk =
+          najdiDotykPodleId(
+            udalost.changedTouches,
+            kandidatDotykIdBulletu
+          );
+
+        if (kratkyDotyk) {
+          zrusCasovacLongPressBulletu();
+          return;
+        }
+      }
+
       if (tazenyDotykId === null) {
         return;
       }
@@ -1491,20 +1823,22 @@
 
       udalost.preventDefault();
 
-      /*
-       * Krátký tap na kulku = expand/collapse. Jakmile se prst opravdu
-       * rozjede, stejné místo funguje jako drag handle.
-       */
-      if (
-        !probihaTazeni &&
-        tazenaPolozka
-      ) {
-        prepniSbaleniPolozky(
-          tazenaPolozka
-        );
+      if (probihaTazeni) {
+        uklidTazeniBulletu({
+          zrusVyber: true,
+          oznamZmenu: true
+        });
+        return;
       }
 
-      uklidTazeniBulletu();
+      /*
+       * Long-press pouze aktivoval MOVE MODE. Prst lze pustit a
+       * označená položka zůstane připravená na další drag.
+       */
+      tazenaPolozka = null;
+      tazenyDotykId = null;
+      casPoslednihoLongPressBulletu =
+        Date.now();
     },
     { passive: false }
   );
@@ -1513,10 +1847,60 @@
   editorTextu.addEventListener(
     "touchcancel",
     () => {
-      uklidTazeniBulletu();
+      zrusCasovacLongPressBulletu();
+
+      if (tazenaPolozka) {
+        uklidTazeniBulletu({
+          zrusVyber: false
+        });
+      }
     },
     { passive: false }
   );
+
+
+  /* Aktivní MOVE MODE zruší tap/klik mimo vybraný řádek. */
+  document.addEventListener(
+    "pointerdown",
+    (udalost) => {
+      if (!vybranaPolozkaProPresun) {
+        return;
+      }
+
+      if (
+        vybranaPolozkaProPresun.contains(
+          udalost.target
+        )
+      ) {
+        return;
+      }
+
+      zrusVyberPolozkyProPresun();
+    },
+    true
+  );
+
+
+  /* Během MOVE MODE a long-pressu nesmí vyskočit nativní menu Androidu. */
+  editorTextu.addEventListener(
+    "contextmenu",
+    (udalost) => {
+      const polozka =
+        udalost.target.closest?.("li");
+
+      if (
+        polozka &&
+        (
+          vybranaPolozkaProPresun === polozka ||
+          kandidatLongPressBulletu === polozka ||
+          tazenaPolozka === polozka
+        )
+      ) {
+        udalost.preventDefault();
+      }
+    }
+  );
+
 
   tlacitkoBullet?.addEventListener(
     "click",
@@ -1570,10 +1954,16 @@
   editorTextu.addEventListener(
     "click",
     (udalost) => {
-      /* Po skutečném dragu nesmí následný syntetický click sbalit větev. */
+      /*
+       * Po long-pressu nebo skutečném dragu nesmí syntetický click
+       * otevřít editaci ani omylem sbalit větev.
+       */
       if (
-        Date.now() - casPoslednihoTazeniBulletu < 250
+        Date.now() - casPoslednihoTazeniBulletu < 300 ||
+        Date.now() - casPoslednihoLongPressBulletu < 450
       ) {
+        udalost.preventDefault();
+        udalost.stopPropagation();
         return;
       }
 
@@ -1587,12 +1977,23 @@
         return;
       }
 
-      const pozice =
-        polozka.getBoundingClientRect();
+      /*
+       * Označený řádek je v MOVE MODE. Dokud jej uživatel nedropne
+       * nebo neklepne mimo něj, nedáváme klik zpět editoru.
+       */
+      if (
+        vybranaPolozkaProPresun === polozka
+      ) {
+        udalost.preventDefault();
+        return;
+      }
 
       const klikNaKulku =
-        udalost.clientX >= pozice.left - 28 &&
-        udalost.clientX <= pozice.left;
+        jePoziceNaKulce(
+          polozka,
+          udalost.clientX,
+          !jeDesktopEditor()
+        );
 
       if (!klikNaKulku) {
         return;

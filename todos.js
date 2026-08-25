@@ -36,15 +36,21 @@ let pendingTodoIndex = null;
 let pendingTodoElement = null;
 let pendingStartX = 0;
 let pendingStartY = 0;
+let pendingTodoMoveReady = false;
+
+let todoMoveSelectedElement = null;
 
 let dragPointerOffsetY = 0;
 let dragGhostLeft = 0;
 let suppressTodoClickUntil = 0;
 let lastTouchTime = 0;
+let cekaniNaDruhyTapTodo = null;
 
 const TODO_LONG_PRESS_TIME = 420;
-const TODO_LONG_PRESS_CANCEL_DISTANCE = 32;
-const TODO_GHOST_LIFT = 48;
+const TODO_DOUBLE_TAP_TIME = 460;
+const TODO_LONG_PRESS_CANCEL_DISTANCE = 20;
+const TODO_DRAG_START_DISTANCE = 8;
+const TODO_GHOST_LIFT = 92;
 
 
 /* ========================================
@@ -437,13 +443,12 @@ function moveTodo(fromIndex, toIndex) {
 
 
 /* ========================================
-   DRAG & DROP – dlouhé podržení
+   TODO – JEDNOTNÉ OVLÁDÁNÍ ŘÁDKU
 
-   Ovládání:
-   - krátké klepnutí na text = editace
-   - pokud už text edituji, dlouhé podržení =
-     systémový výběr / kopírování textu
-   - dlouhé podržení na needitovaném řádku = přesun
+   1× tap / klik = editace
+   2× tap / klik = výběr slova v aktivním textarea
+   long-press kdekoliv v řádku = MOVE MODE
+   po aktivaci MOVE MODE lze řádek táhnout kdekoliv
 ======================================== */
 
 function clearTodoLongPressTimer() {
@@ -453,6 +458,7 @@ function clearTodoLongPressTimer() {
   }
 }
 
+
 function clearPendingTodoDrag() {
   clearTodoLongPressTimer();
 
@@ -460,21 +466,156 @@ function clearPendingTodoDrag() {
   pendingTouchIdentifier = null;
   pendingTodoIndex = null;
   pendingTodoElement = null;
+  pendingTodoMoveReady = false;
 }
 
-function isTodoTextAlreadyEditing(event) {
-  const text = event.target.closest?.(".todoTextInput");
 
-  /*
-   * Textarea je aktivní pouze v režimu editace. V běžném režimu
-   * je nad ní samostatný textový prvek, takže Android nemá co
-   * označovat a long-press může spolehlivě patřit přesunu.
-   */
-  return Boolean(
-    text &&
-    text.classList.contains("todoEditing")
+function clearTodoMoveSelection() {
+  todoMoveSelectedElement?.classList.remove(
+    "todoMoveSelected"
   );
+
+  todoMoveSelectedElement = null;
+  todoList.classList.remove("todoMoveMode");
 }
+
+
+function selectTodoForMove(todoItem) {
+  if (!todoItem) {
+    return;
+  }
+
+  if (todoMoveSelectedElement !== todoItem) {
+    clearTodoMoveSelection();
+  }
+
+  closeOtherTodoEditors();
+
+  todoMoveSelectedElement = todoItem;
+  todoItem.classList.add("todoMoveSelected");
+  todoList.classList.add("todoMoveMode");
+
+  if (todoItem.dataset.todoId) {
+    selectedTodoId = todoItem.dataset.todoId;
+  }
+
+  window.getSelection()?.removeAllRanges();
+
+  suppressTodoClickUntil =
+    performance.now() + 650;
+
+  if (navigator.vibrate) {
+    navigator.vibrate(18);
+  }
+}
+
+
+function najdiRozsahSlovaTodo(hodnota, pozice) {
+  if (!hodnota) {
+    return null;
+  }
+
+  const bezpecnaPozice = Math.max(
+    0,
+    Math.min(pozice ?? 0, hodnota.length)
+  );
+
+  if (typeof Intl?.Segmenter === "function") {
+    const segmenter = new Intl.Segmenter(
+      "cs",
+      { granularity: "word" }
+    );
+
+    const segmenty = [
+      ...segmenter.segment(hodnota)
+    ];
+
+    const kandidati = [
+      bezpecnaPozice,
+      Math.max(0, bezpecnaPozice - 1)
+    ];
+
+    for (const kandidat of kandidati) {
+      const segment = segmenty.find(cast => (
+        cast.isWordLike &&
+        kandidat >= cast.index &&
+        kandidat <= cast.index + cast.segment.length
+      ));
+
+      if (segment) {
+        return {
+          start: segment.index,
+          end: segment.index + segment.segment.length
+        };
+      }
+    }
+  }
+
+  const jeZnakSlova = znak =>
+    /[\p{L}\p{N}_]/u.test(znak || "");
+
+  let bod = Math.min(
+    bezpecnaPozice,
+    Math.max(0, hodnota.length - 1)
+  );
+
+  if (!jeZnakSlova(hodnota[bod]) && bod > 0) {
+    bod -= 1;
+  }
+
+  if (!jeZnakSlova(hodnota[bod])) {
+    return null;
+  }
+
+  let start = bod;
+  let end = bod + 1;
+
+  while (
+    start > 0 &&
+    jeZnakSlova(hodnota[start - 1])
+  ) {
+    start -= 1;
+  }
+
+  while (
+    end < hodnota.length &&
+    jeZnakSlova(hodnota[end])
+  ) {
+    end += 1;
+  }
+
+  return { start, end };
+}
+
+
+function vyberSlovoVTodoTextarea(text) {
+  if (!text || text.hidden) {
+    return false;
+  }
+
+  const rozsah = najdiRozsahSlovaTodo(
+    text.value,
+    text.selectionStart ?? 0
+  );
+
+  if (!rozsah) {
+    return false;
+  }
+
+  try {
+    text.focus({ preventScroll: true });
+  } catch {
+    text.focus();
+  }
+
+  text.setSelectionRange(
+    rozsah.start,
+    rozsah.end
+  );
+
+  return true;
+}
+
 
 function closeOtherTodoEditors(exceptText = null) {
   todoList
@@ -485,6 +626,7 @@ function closeOtherTodoEditors(exceptText = null) {
       }
     });
 }
+
 
 function enterTodoEditMode(
   text,
@@ -535,6 +677,7 @@ function enterTodoEditMode(
   });
 }
 
+
 function leaveTodoEditMode(text, display) {
   const item = text.closest(".todoItem");
 
@@ -556,13 +699,15 @@ function leaveTodoEditMode(text, display) {
   }
 }
 
-function beginPendingTodoDrag(
+
+function beginPendingTodoMove(
   type,
   index,
   todoItem,
   clientX,
   clientY,
-  touchIdentifier = null
+  touchIdentifier = null,
+  moveModeReady = false
 ) {
   clearPendingTodoDrag();
 
@@ -572,6 +717,11 @@ function beginPendingTodoDrag(
   pendingTodoElement = todoItem;
   pendingStartX = clientX;
   pendingStartY = clientY;
+  pendingTodoMoveReady = moveModeReady;
+
+  if (moveModeReady) {
+    return;
+  }
 
   todoLongPressTimer = setTimeout(() => {
     todoLongPressTimer = null;
@@ -583,12 +733,11 @@ function beginPendingTodoDrag(
       return;
     }
 
-    activateTodoDrag(
-      pendingTodoIndex,
-      pendingTodoElement,
-      pendingStartX,
-      pendingStartY
+    selectTodoForMove(
+      pendingTodoElement
     );
+
+    pendingTodoMoveReady = true;
   }, TODO_LONG_PRESS_TIME);
 }
 
@@ -603,23 +752,23 @@ function prepareTodoTouchLongPress(event, index, todoItem) {
     return;
   }
 
-  /*
-   * Pokud už v textarea bliká kurzor, necháme Androidu
-   * jeho nativní dlouhé podržení – označení a kopírování.
-   */
-  if (isTodoTextAlreadyEditing(event)) {
-    return;
+  const touch = event.touches[0];
+  const uzJeVybrany =
+    todoMoveSelectedElement === todoItem;
+
+  if (uzJeVybrany) {
+    /* MOVE MODE už je aktivní – toto gesto patří přesunu. */
+    event.preventDefault();
   }
 
-  const touch = event.touches[0];
-
-  beginPendingTodoDrag(
+  beginPendingTodoMove(
     "touch",
     index,
     todoItem,
     touch.clientX,
     touch.clientY,
-    touch.identifier
+    touch.identifier,
+    uzJeVybrany
   );
 
   document.addEventListener(
@@ -641,6 +790,7 @@ function prepareTodoTouchLongPress(event, index, todoItem) {
   );
 }
 
+
 function findTrackedTouch(touchList) {
   if (pendingTouchIdentifier === null) {
     return null;
@@ -650,6 +800,7 @@ function findTrackedTouch(touchList) {
     touch => touch.identifier === pendingTouchIdentifier
   ) || null;
 }
+
 
 function handleTodoTouchMove(event) {
   if (pendingDragType !== "touch") {
@@ -662,16 +813,13 @@ function handleTodoTouchMove(event) {
     return;
   }
 
-  if (!todoDragActive) {
-    const distance = Math.hypot(
-      touch.clientX - pendingStartX,
-      touch.clientY - pendingStartY
-    );
+  const distance = Math.hypot(
+    touch.clientX - pendingStartX,
+    touch.clientY - pendingStartY
+  );
 
-    /*
-     * Uživatel začal normálně scrollovat dřív,
-     * než doběhl long-press. Drag zrušíme a scroll necháme být.
-     */
+  if (!pendingTodoMoveReady) {
+    /* Uživatel začal scrollovat dřív, než doběhl long-press. */
     if (distance > TODO_LONG_PRESS_CANCEL_DISTANCE) {
       clearPendingTodoDrag();
       removeTodoTouchListeners();
@@ -681,15 +829,35 @@ function handleTodoTouchMove(event) {
   }
 
   event.preventDefault();
-  updateActiveTodoDrag(touch.clientY);
+
+  if (!todoDragActive) {
+    if (distance < TODO_DRAG_START_DISTANCE) {
+      return;
+    }
+
+    activateTodoDrag(
+      pendingTodoIndex,
+      pendingTodoElement,
+      touch.clientX,
+      touch.clientY
+    );
+  }
+
+  updateActiveTodoDrag(
+    touch.clientX,
+    touch.clientY
+  );
 }
+
 
 function handleTodoTouchEnd(event) {
   if (pendingDragType !== "touch") {
     return;
   }
 
-  const endedTouch = findTrackedTouch(event.changedTouches);
+  const endedTouch = findTrackedTouch(
+    event.changedTouches
+  );
 
   if (!endedTouch) {
     return;
@@ -698,12 +866,20 @@ function handleTodoTouchEnd(event) {
   if (todoDragActive) {
     event.preventDefault();
     finishTodoDrag(false);
+  } else if (pendingTodoMoveReady) {
+    /* Long-press pouze vybral řádek. MOVE MODE zůstává aktivní. */
+    event.preventDefault();
+    suppressTodoClickUntil =
+      performance.now() + 650;
+    clearPendingTodoDrag();
   } else {
+    /* Krátký tap necháme běžně otevřít editaci. */
     clearPendingTodoDrag();
   }
 
   removeTodoTouchListeners();
 }
+
 
 function handleTodoTouchCancel() {
   if (todoDragActive) {
@@ -714,6 +890,7 @@ function handleTodoTouchCancel() {
 
   removeTodoTouchListeners();
 }
+
 
 function removeTodoTouchListeners() {
   document.removeEventListener(
@@ -745,16 +922,17 @@ function prepareTodoMouseLongPress(event, index, todoItem) {
     return;
   }
 
-  if (isTodoTextAlreadyEditing(event)) {
-    return;
-  }
+  const uzJeVybrany =
+    todoMoveSelectedElement === todoItem;
 
-  beginPendingTodoDrag(
+  beginPendingTodoMove(
     "mouse",
     index,
     todoItem,
     event.clientX,
-    event.clientY
+    event.clientY,
+    null,
+    uzJeVybrany
   );
 
   document.addEventListener(
@@ -769,17 +947,18 @@ function prepareTodoMouseLongPress(event, index, todoItem) {
   );
 }
 
+
 function handleTodoMouseMove(event) {
   if (pendingDragType !== "mouse") {
     return;
   }
 
-  if (!todoDragActive) {
-    const distance = Math.hypot(
-      event.clientX - pendingStartX,
-      event.clientY - pendingStartY
-    );
+  const distance = Math.hypot(
+    event.clientX - pendingStartX,
+    event.clientY - pendingStartY
+  );
 
+  if (!pendingTodoMoveReady) {
     if (distance > TODO_LONG_PRESS_CANCEL_DISTANCE) {
       clearPendingTodoDrag();
       removeTodoMouseListeners();
@@ -789,18 +968,41 @@ function handleTodoMouseMove(event) {
   }
 
   event.preventDefault();
-  updateActiveTodoDrag(event.clientY);
+
+  if (!todoDragActive) {
+    if (distance < TODO_DRAG_START_DISTANCE) {
+      return;
+    }
+
+    activateTodoDrag(
+      pendingTodoIndex,
+      pendingTodoElement,
+      event.clientX,
+      event.clientY
+    );
+  }
+
+  updateActiveTodoDrag(
+    event.clientX,
+    event.clientY
+  );
 }
+
 
 function handleTodoMouseUp() {
   if (todoDragActive) {
     finishTodoDrag(false);
+  } else if (pendingTodoMoveReady) {
+    suppressTodoClickUntil =
+      performance.now() + 650;
+    clearPendingTodoDrag();
   } else {
     clearPendingTodoDrag();
   }
 
   removeTodoMouseListeners();
 }
+
 
 function removeTodoMouseListeners() {
   document.removeEventListener(
@@ -815,29 +1017,50 @@ function removeTodoMouseListeners() {
 }
 
 
+/* Aktivní TODO MOVE MODE zruší tap/klik mimo vybraný řádek. */
+document.addEventListener(
+  "pointerdown",
+  event => {
+    if (!todoMoveSelectedElement) {
+      return;
+    }
+
+    if (
+      todoMoveSelectedElement.contains(
+        event.target
+      )
+    ) {
+      return;
+    }
+
+    clearTodoMoveSelection();
+  },
+  true
+);
+
+
 /* ========================================
    DRAG & DROP – aktivní přesun
 ======================================== */
 
 function activateTodoDrag(index, todoItem, clientX, clientY) {
-  if (todoDragActive) {
+  if (
+    todoDragActive ||
+    !todoItem ||
+    !Number.isInteger(index) ||
+    index < 0
+  ) {
     return;
   }
 
   draggedTodoIndex = index;
   draggedTodoElement = todoItem;
 
-  /* Při skutečném přesunu zavřeme případnou editaci jiného řádku. */
   closeOtherTodoEditors();
 
   const rect =
     draggedTodoElement.getBoundingClientRect();
 
-  /*
-   * Pokud se textarea při prvním dotyku mezitím zaměřila,
-   * drag má přednost. Při dalším long-pressu už bude textarea
-   * předem aktivní a prepare... drag vůbec nespustí.
-   */
   const activeElement = document.activeElement;
 
   if (
@@ -853,9 +1076,12 @@ function activateTodoDrag(index, todoItem, clientX, clientY) {
   todoDragActive = true;
   document.body.classList.add("todoDragging");
 
+  /*
+   * Stejně jako u bulletu ukazujeme pouze jasnou cílovou čáru,
+   * ne velký blok, který by při přesunu zakrýval sousední položky.
+   */
   todoDropPlaceholder = document.createElement("div");
   todoDropPlaceholder.classList.add("todoDropPlaceholder");
-  todoDropPlaceholder.style.height = `${rect.height}px`;
 
   todoList.insertBefore(
     todoDropPlaceholder,
@@ -867,20 +1093,39 @@ function activateTodoDrag(index, todoItem, clientX, clientY) {
   createTodoDragGhost(index, rect);
 
   dragPointerOffsetY = clientY - rect.top;
-  dragGhostLeft = rect.left;
 
-  todoDragGhost.style.width = `${rect.width}px`;
+  const jeMobil = window.innerWidth < 900;
+
+  const ghostWidth = jeMobil
+    ? Math.min(
+        rect.width,
+        Math.max(170, window.innerWidth * 0.76)
+      )
+    : rect.width;
+
+  todoDragGhost.style.width = `${ghostWidth}px`;
+
+  if (jeMobil) {
+    dragGhostLeft = Math.max(
+      8,
+      Math.min(
+        clientX - ghostWidth / 2,
+        window.innerWidth - ghostWidth - 8
+      )
+    );
+  } else {
+    dragGhostLeft = rect.left;
+  }
+
   todoDragGhost.style.left = `${dragGhostLeft}px`;
 
   document.body.append(todoDragGhost);
-  positionTodoDragGhost(clientY);
+  positionTodoDragGhost(clientX, clientY);
 
-  suppressTodoClickUntil = performance.now() + 650;
-
-  if (navigator.vibrate) {
-    navigator.vibrate(18);
-  }
+  suppressTodoClickUntil =
+    performance.now() + 650;
 }
+
 
 function createTodoDragGhost(index, rect) {
   const todo = activeTodos[index] || {
@@ -922,21 +1167,36 @@ function createTodoDragGhost(index, rect) {
   todoDragGhost.style.minHeight = `${rect.height}px`;
 }
 
-function positionTodoDragGhost(clientY) {
+
+function positionTodoDragGhost(clientX, clientY) {
   if (!todoDragGhost) {
     return;
   }
 
-  /*
-   * Ghost je lehce NAD prstem. Uživatel tak vidí celý text,
-   * i když drží řádek přímo přes jeho obsah.
-   */
   const ghostHeight = todoDragGhost.offsetHeight;
+  const ghostWidth = todoDragGhost.offsetWidth;
+  const jeMobil = window.innerWidth < 900;
 
-  const requestedTop =
-    clientY -
-    dragPointerOffsetY -
-    TODO_GHOST_LIFT;
+  let top;
+
+  if (jeMobil) {
+    /* Stejný princip jako bullet preview – celý náhled je nad prstem. */
+    top = clientY - TODO_GHOST_LIFT;
+
+    const left = Math.max(
+      8,
+      Math.min(
+        clientX - ghostWidth / 2,
+        window.innerWidth - ghostWidth - 8
+      )
+    );
+
+    todoDragGhost.style.left = `${left}px`;
+  } else {
+    top =
+      clientY -
+      dragPointerOffsetY;
+  }
 
   const minTop = 8;
   const maxTop = Math.max(
@@ -944,13 +1204,14 @@ function positionTodoDragGhost(clientY) {
     window.innerHeight - ghostHeight - 8
   );
 
-  const top = Math.min(
+  top = Math.min(
     maxTop,
-    Math.max(minTop, requestedTop)
+    Math.max(minTop, top)
   );
 
   todoDragGhost.style.top = `${top}px`;
 }
+
 
 function updateTodoDropPlaceholder(clientY) {
   if (!todoDropPlaceholder) {
@@ -998,12 +1259,12 @@ function autoScrollTodoList(clientY) {
   }
 }
 
-function updateActiveTodoDrag(clientY) {
+function updateActiveTodoDrag(clientX, clientY) {
   if (!todoDragActive) {
     return;
   }
 
-  positionTodoDragGhost(clientY);
+  positionTodoDragGhost(clientX, clientY);
   autoScrollTodoList(clientY);
   updateTodoDropPlaceholder(clientY);
 }
@@ -1057,8 +1318,15 @@ function finishTodoDrag(cancelled = false) {
 
   draggedTodoIndex = null;
 
+  if (cancelled) {
+    /* Při zrušeném gestu necháme řádek vybraný pro další pokus. */
+    return;
+  }
+
+  /* Skutečný drop vždy ukončí MOVE MODE, i když pozice zůstala stejná. */
+  clearTodoMoveSelection();
+
   if (
-    !cancelled &&
     fromIndex !== null &&
     toIndex !== null &&
     fromIndex !== toIndex
@@ -1177,8 +1445,44 @@ function createTodoItem(todo, index) {
     }
 
     selectedTodoId = todo.id;
+
+    cekaniNaDruhyTapTodo = {
+      todoId: todo.id,
+      cas: performance.now()
+    };
+
     enterTodoEditMode(text, textDisplay);
   });
+
+  text.addEventListener(
+    "pointerup",
+    () => {
+      if (
+        !cekaniNaDruhyTapTodo ||
+        cekaniNaDruhyTapTodo.todoId !== todo.id
+      ) {
+        return;
+      }
+
+      if (
+        performance.now() - cekaniNaDruhyTapTodo.cas >
+        TODO_DOUBLE_TAP_TIME
+      ) {
+        cekaniNaDruhyTapTodo = null;
+        return;
+      }
+
+      cekaniNaDruhyTapTodo = null;
+
+      /*
+       * První tap otevřel editaci, druhý tap už leží v textarea.
+       * Po jeho dokončení označíme celé slovo pod kurzorem.
+       */
+      requestAnimationFrame(() => {
+        vyberSlovoVTodoTextarea(text);
+      });
+    }
+  );
 
   text.addEventListener("blur", () => {
     leaveTodoEditMode(text, textDisplay);
@@ -1295,7 +1599,7 @@ function createTodoItem(todo, index) {
         todoItem
       );
     },
-    { passive: true }
+    { passive: false }
   );
 
   todoItem.addEventListener(
@@ -1312,10 +1616,8 @@ function createTodoItem(todo, index) {
   todoItem.addEventListener("contextmenu", event => {
     if (
       todoDragActive ||
-      (
-        todoLongPressTimer !== null &&
-        pendingTodoElement === todoItem
-      )
+      todoMoveSelectedElement === todoItem ||
+      pendingTodoElement === todoItem
     ) {
       event.preventDefault();
     }
@@ -1324,7 +1626,10 @@ function createTodoItem(todo, index) {
   todoItem.addEventListener(
     "click",
     event => {
-      if (performance.now() < suppressTodoClickUntil) {
+      if (
+        performance.now() < suppressTodoClickUntil ||
+        todoMoveSelectedElement === todoItem
+      ) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -1344,6 +1649,7 @@ function createTodoItem(todo, index) {
 }
 
 function renderTodos() {
+  clearTodoMoveSelection();
   todoList.innerHTML = "";
 
   /* Starý textarea už slouží jen jako kompatibilní datový prvek. */

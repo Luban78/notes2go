@@ -1514,8 +1514,27 @@ html {
 
 
 /* ========================================
-   TODO – profesionální long-press drag & drop
+   TODO – jednotný MOVE MODE + drag & drop
 ======================================== */
+
+.todoItem.todoMoveSelected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.todoList.todoMoveMode .todoItem.todoMoveSelected {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
 .todoDragging,
 .todoDragging * {
@@ -1529,23 +1548,18 @@ html {
 }
 
 .todoDropPlaceholder {
-  flex: 0 0 auto;
-  width: calc(100% - 32px);
+  flex: 0 0 4px;
+  width: calc(100% - 40px);
+  height: 4px;
   box-sizing: border-box;
-  margin: 0 12px 0 20px;
+  margin: 2px 12px 2px 28px;
 
-  border: 2px dashed color-mix(in srgb,
-      var(--color-accent) 58%,
-      transparent);
-  border-radius: 12px;
+  border-radius: 999px;
+  background: var(--color-accent);
 
-  background: color-mix(in srgb,
-      var(--color-accent) 10%,
-      transparent);
+  box-shadow: 0 0 0 1px var(--color-background);
 
-  transition:
-    height 0.12s ease,
-    background 0.12s ease;
+  pointer-events: none;
 }
 
 /* Kopie řádku, která fyzicky sleduje prst. */
@@ -1557,8 +1571,8 @@ html {
   pointer-events: none;
 
   opacity: 0.98;
-  transform: scale(1.035);
-  transform-origin: left center;
+  transform: scale(1.03);
+  transform-origin: center center;
 
   background: color-mix(in srgb,
       var(--color-accent) 20%,
@@ -6509,6 +6523,32 @@ text-size-adjust: 100%;
 
 .modalRichText li:not(.bulletSbaleny)::before {
   content: "•";
+}
+
+.modalRichText li.bulletMoveSelected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+
+  border-radius: 8px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.modalRichText li.bulletMoveSelected::before {
+  color: var(--color-accent);
+  transform: scale(1.22);
+}
+
+.modalRichText.bulletMoveMode li.bulletMoveSelected {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .modalRichText ul.bulletDragActive > li {
