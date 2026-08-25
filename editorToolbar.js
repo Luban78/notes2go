@@ -11,11 +11,11 @@
     document.getElementById("editorQuickToolbar");
 
   const editorToolsToolbar =
-  document.getElementById(
-    "editorToolsToolbar"
-  );
+    document.getElementById(
+      "editorToolsToolbar"
+    );
 
-  
+
 
   const horniLista =
     document.querySelector(".editorTopBar");
@@ -52,9 +52,9 @@
 
   const tlacitkoNadpis =
     document.getElementById("tlacitkoNadpis");
-  
+
   const tlacitkoBarvaTextu =
-  document.getElementById("textColorButton");
+    document.getElementById("textColorButton");
 
   const tlacitkoZarovnaniTextu =
     document.getElementById("tlacitkoZarovnaniTextu");
@@ -70,9 +70,9 @@
 
   const panelStyl =
     document.getElementById("editorPanelStyl");
-    
+
   const panelBarvaTextu =
-  document.getElementById("textColorPanel");
+    document.getElementById("textColorPanel");
 
   const panelZarovnani =
     document.getElementById("editorPanelZarovnani");
@@ -85,9 +85,12 @@
 
   const tlacitkaZarovnani =
     document.querySelectorAll(".editorZarovnaniTextu");
-    
+
   const NAZEV_VLASTNIHO_VYBERU =
-  "luba-toolbar-vyber";
+    "luba-toolbar-vyber";
+
+  const tlacitkoBullet =
+    document.getElementById("tlacitkoBullet");
 
 
 
@@ -98,9 +101,14 @@
   let otevrenyPanel = null;
   let aktivniSpoustecPanelu = null;
 
+  let tazenaPolozka = null;
+  let zacatekTazeniX = 0;
+  let zacatekTazeniY = 0;
+  let probihaTazeni = false;
+
   function jeDesktopEditor() {
-  return window.innerWidth >= 900;
-}
+    return window.innerWidth >= 900;
+  }
 
   if (
     !tlacitkoToolbar ||
@@ -111,58 +119,68 @@
   ) {
     return;
   }
-  
-  
-function zrusVlastniVyberTextu() {
-  window.CSS?.highlights?.delete(
-    NAZEV_VLASTNIHO_VYBERU
-  );
 
-  ulozenyVyberTextu = null;
-}
+  function jePoziceNaKulce(polozka, x) {
+    const pozice =
+      polozka.getBoundingClientRect();
 
-function ulozVyberTextu() {
-  const vyber = window.getSelection();
+    return (
+      x >= pozice.left - 28 &&
+      x <= pozice.left
+    );
+  }
 
-  if (!vyber || vyber.rangeCount === 0) {
+
+  function zrusVlastniVyberTextu() {
+    window.CSS?.highlights?.delete(
+      NAZEV_VLASTNIHO_VYBERU
+    );
+
     ulozenyVyberTextu = null;
-    return false;
   }
 
-  ulozenyVyberTextu =
-    vyber.getRangeAt(0).cloneRange();
+  function ulozVyberTextu() {
+    const vyber = window.getSelection();
 
-  return true;
-}
+    if (!vyber || vyber.rangeCount === 0) {
+      ulozenyVyberTextu = null;
+      return false;
+    }
 
-function zobrazVlastniVyberTextu() {
-  if (
-    !ulozenyVyberTextu ||
-    !window.CSS?.highlights ||
-    typeof window.Highlight !== "function"
-  ) {
-    return false;
+    ulozenyVyberTextu =
+      vyber.getRangeAt(0).cloneRange();
+
+    return true;
   }
 
-  CSS.highlights.set(
-    NAZEV_VLASTNIHO_VYBERU,
-    new Highlight(ulozenyVyberTextu)
-  );
+  function zobrazVlastniVyberTextu() {
+    if (
+      !ulozenyVyberTextu ||
+      !window.CSS?.highlights ||
+      typeof window.Highlight !== "function"
+    ) {
+      return false;
+    }
 
-  return true;
-}
+    CSS.highlights.set(
+      NAZEV_VLASTNIHO_VYBERU,
+      new Highlight(ulozenyVyberTextu)
+    );
 
-function skryjAndroidVyber() {
-  if (!ulozVyberTextu()) {
-    return;
+    return true;
   }
 
-  zobrazVlastniVyberTextu();
+  function skryjAndroidVyber() {
+    if (!ulozVyberTextu()) {
+      return;
+    }
 
-  window
-    .getSelection()
-    ?.removeAllRanges();
-}
+    zobrazVlastniVyberTextu();
+
+    window
+      .getSelection()
+      ?.removeAllRanges();
+  }
   /* ==========================================
      VÝBĚR TEXTU
   ========================================== */
@@ -263,119 +281,119 @@ function skryjAndroidVyber() {
 
   let rezimToolbaru = "cas";
 
-function nastavToolbar(rezim) {
-  /*
-   * DESKTOP:
-   * využijeme šířku a ukážeme vše najednou.
-   */
-  if (jeDesktopEditor()) {
-    rezimToolbaru = "desktop";
+  function nastavToolbar(rezim) {
+    /*
+     * DESKTOP:
+     * využijeme šířku a ukážeme vše najednou.
+     */
+    if (jeDesktopEditor()) {
+      rezimToolbaru = "desktop";
 
-    datumCas.hidden = false;
-    rychlyToolbar.hidden = false;
-    editorToolsToolbar.hidden = false;
+      datumCas.hidden = false;
+      rychlyToolbar.hidden = false;
+      editorToolsToolbar.hidden = false;
 
-    tlacitkoToolbar.hidden = true;
+      tlacitkoToolbar.hidden = true;
+
+      if (tlacitkoPripominky) {
+        tlacitkoPripominky.hidden = false;
+      }
+
+      zavriVsechnyPanely();
+
+      return;
+    }
+
+
+    /*
+     * MOBIL:
+     * čas → text → další nástroje
+     */
+    rezimToolbaru = rezim;
+
+    const jeCas =
+      rezim === "cas";
+
+    const jeText =
+      rezim === "text";
+
+    const jsouNastroje =
+      rezim === "nastroje";
+
+
+    tlacitkoToolbar.hidden = false;
+
+    datumCas.hidden =
+      !jeCas;
+
+    rychlyToolbar.hidden =
+      !jeText;
+
+    editorToolsToolbar.hidden =
+      !jsouNastroje;
+
 
     if (tlacitkoPripominky) {
-      tlacitkoPripominky.hidden = false;
+      tlacitkoPripominky.hidden =
+        !jeCas;
     }
+
+
+    tlacitkoToolbar.classList.toggle(
+      "active",
+      !jeCas
+    );
+
+
+    if (jeCas) {
+      tlacitkoToolbar.textContent = "Aa";
+
+      tlacitkoToolbar.setAttribute(
+        "aria-label",
+        "Otevřít textové nástroje"
+      );
+    }
+
+    if (jeText) {
+      tlacitkoToolbar.textContent = "☷";
+
+      tlacitkoToolbar.setAttribute(
+        "aria-label",
+        "Otevřít další nástroje"
+      );
+    }
+
+    if (jsouNastroje) {
+      tlacitkoToolbar.textContent = "🕒";
+
+      tlacitkoToolbar.setAttribute(
+        "aria-label",
+        "Zobrazit datum a čas"
+      );
+    }
+
+
+    tlacitkoToolbar.setAttribute(
+      "aria-expanded",
+      String(!jeCas)
+    );
+
+    tlacitkoToolbar.setAttribute(
+      "aria-pressed",
+      String(!jeCas)
+    );
+
 
     zavriVsechnyPanely();
 
-    return;
+    if (!jeText) {
+      rychlyToolbar.scrollLeft = 0;
+    }
+
+    if (!jsouNastroje) {
+      editorToolsToolbar.scrollLeft = 0;
+    }
   }
-
-
-  /*
-   * MOBIL:
-   * čas → text → další nástroje
-   */
-  rezimToolbaru = rezim;
-
-  const jeCas =
-    rezim === "cas";
-
-  const jeText =
-    rezim === "text";
-
-  const jsouNastroje =
-    rezim === "nastroje";
-
-
-  tlacitkoToolbar.hidden = false;
-
-  datumCas.hidden =
-    !jeCas;
-
-  rychlyToolbar.hidden =
-    !jeText;
-
-  editorToolsToolbar.hidden =
-    !jsouNastroje;
-
-
-  if (tlacitkoPripominky) {
-    tlacitkoPripominky.hidden =
-      !jeCas;
-  }
-
-
-  tlacitkoToolbar.classList.toggle(
-    "active",
-    !jeCas
-  );
-
-
-  if (jeCas) {
-    tlacitkoToolbar.textContent = "Aa";
-
-    tlacitkoToolbar.setAttribute(
-      "aria-label",
-      "Otevřít textové nástroje"
-    );
-  }
-
-  if (jeText) {
-    tlacitkoToolbar.textContent = "☷";
-
-    tlacitkoToolbar.setAttribute(
-      "aria-label",
-      "Otevřít další nástroje"
-    );
-  }
-
-  if (jsouNastroje) {
-    tlacitkoToolbar.textContent = "🕒";
-
-    tlacitkoToolbar.setAttribute(
-      "aria-label",
-      "Zobrazit datum a čas"
-    );
-  }
-
-
-  tlacitkoToolbar.setAttribute(
-    "aria-expanded",
-    String(!jeCas)
-  );
-
-  tlacitkoToolbar.setAttribute(
-    "aria-pressed",
-    String(!jeCas)
-  );
-
-
-  zavriVsechnyPanely();
-
-  if (!jeText) {
-    rychlyToolbar.scrollLeft = 0;
-  }
-
-  if (!jsouNastroje) {
-    editorToolsToolbar.scrollLeft = 0;
-  }
-}
 
 
   /* ==========================================
@@ -457,9 +475,9 @@ function nastavToolbar(rezim) {
     pozicujPanel(panel, spoustec);
   }
 
-editorTextu?.addEventListener("pointerdown", () => {
-  zrusVlastniVyberTextu();
-});
+  editorTextu?.addEventListener("pointerdown", () => {
+    zrusVlastniVyberTextu();
+  });
   /* ==========================================
      EXEC COMMAND POMOCNÍCI
   ========================================== */
@@ -483,6 +501,36 @@ editorTextu?.addEventListener("pointerdown", () => {
     ulozVyberTextu();
     aktualizujStavFormatovani();
   }
+
+  function prepniSbaleniPolozky(polozka) {
+    if (!polozka) {
+      return;
+    }
+
+    const vnorenySeznam =
+      Array.from(polozka.children).find(
+        (potomek) => potomek.tagName === "UL"
+      );
+
+    if (!vnorenySeznam) {
+      return;
+    }
+
+    const jeSbaleny =
+      vnorenySeznam.hidden;
+
+    vnorenySeznam.hidden =
+      !jeSbaleny;
+
+    polozka.classList.toggle(
+      "bulletSbaleny",
+      !jeSbaleny
+    );
+  }
+
+
+
+
 
 
   function nastavVelikostPisma(hodnota) {
@@ -515,73 +563,73 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   function nastavStylTextu(styl) {
-  if (!styl || !ulozenyVyberTextu) {
-    return;
+    if (!styl || !ulozenyVyberTextu) {
+      return;
+    }
+
+    obnovVyberTextu();
+
+    const vyber =
+      window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0
+    ) {
+      return;
+    }
+
+    const rozsah =
+      vyber.getRangeAt(0);
+
+    if (rozsah.collapsed) {
+      return;
+    }
+
+    const obal =
+      document.createElement("span");
+
+    if (styl === "div") {
+      obal.className =
+        "editorTextNormalni";
+    } else {
+      obal.className =
+        `editorNadpis ${styl}`;
+    }
+
+    const obsah =
+      rozsah.extractContents();
+
+    obal.appendChild(obsah);
+    rozsah.insertNode(obal);
+
+    const novyRozsah =
+      document.createRange();
+
+    novyRozsah.selectNodeContents(
+      obal
+    );
+
+    vyber.removeAllRanges();
+    vyber.addRange(
+      novyRozsah
+    );
+
+    ulozenyVyberTextu =
+      novyRozsah.cloneRange();
+
+    editorTextu.dispatchEvent(
+      new Event(
+        "input",
+        {
+          bubbles: true
+        }
+      )
+    );
+
+    zavriVsechnyPanely();
+    aktualizujStavFormatovani();
   }
-  
-  obnovVyberTextu();
-  
-  const vyber =
-    window.getSelection();
-  
-  if (
-    !vyber ||
-    vyber.rangeCount === 0
-  ) {
-    return;
-  }
-  
-  const rozsah =
-    vyber.getRangeAt(0);
-  
-  if (rozsah.collapsed) {
-    return;
-  }
-  
-  const obal =
-    document.createElement("span");
-  
-  if (styl === "div") {
-    obal.className =
-      "editorTextNormalni";
-  } else {
-    obal.className =
-      `editorNadpis ${styl}`;
-  }
-  
-  const obsah =
-    rozsah.extractContents();
-  
-  obal.appendChild(obsah);
-  rozsah.insertNode(obal);
-  
-  const novyRozsah =
-    document.createRange();
-  
-  novyRozsah.selectNodeContents(
-    obal
-  );
-  
-  vyber.removeAllRanges();
-  vyber.addRange(
-    novyRozsah
-  );
-  
-  ulozenyVyberTextu =
-    novyRozsah.cloneRange();
-  
-  editorTextu.dispatchEvent(
-    new Event(
-      "input",
-      {
-        bubbles: true
-      }
-    )
-  );
-  
-  zavriVsechnyPanely();
-  aktualizujStavFormatovani();
-}
 
 
   function nastavZarovnani(zarovnani) {
@@ -638,40 +686,40 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   function zjistiVelikostPodKurzorem() {
-  const vyber = window.getSelection();
-  
-  if (!vyber || vyber.rangeCount === 0) {
-    return null;
+    const vyber = window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
+      return null;
+    }
+
+    let prvek = vyber.anchorNode;
+
+    if (prvek?.nodeType === Node.TEXT_NODE) {
+      prvek = prvek.parentElement;
+    }
+
+    if (!(prvek instanceof Element)) {
+      return null;
+    }
+
+    const prvekSVelikosti =
+      prvek.closest("[data-velikost-pisma]");
+
+    if (prvekSVelikosti) {
+      return prvekSVelikosti.dataset.velikostPisma;
+    }
+
+    const velikost =
+      parseFloat(
+        getComputedStyle(prvek).fontSize
+      );
+
+    if (!Number.isFinite(velikost)) {
+      return null;
+    }
+
+    return String(Math.round(velikost));
   }
-  
-  let prvek = vyber.anchorNode;
-  
-  if (prvek?.nodeType === Node.TEXT_NODE) {
-    prvek = prvek.parentElement;
-  }
-  
-  if (!(prvek instanceof Element)) {
-    return null;
-  }
-  
-  const prvekSVelikosti =
-    prvek.closest("[data-velikost-pisma]");
-  
-  if (prvekSVelikosti) {
-    return prvekSVelikosti.dataset.velikostPisma;
-  }
-  
-  const velikost =
-    parseFloat(
-      getComputedStyle(prvek).fontSize
-    );
-  
-  if (!Number.isFinite(velikost)) {
-    return null;
-  }
-  
-  return String(Math.round(velikost));
-}
 
 
   function zjistiStylTextuPodKurzorem() {
@@ -783,6 +831,19 @@ editorTextu?.addEventListener("pointerdown", () => {
     return "left";
   }
 
+  function zrusBulletDropIndikator() {
+  editorTextu
+    .querySelectorAll(
+      ".bulletDropBefore, .bulletDropAfter"
+    )
+    .forEach((prvek) => {
+      prvek.classList.remove(
+        "bulletDropBefore",
+        "bulletDropAfter"
+      );
+    });
+}
+
 
   function oznacAktivniZarovnani(zarovnani) {
     tlacitkaZarovnani.forEach(tlacitko => {
@@ -854,21 +915,21 @@ editorTextu?.addEventListener("pointerdown", () => {
   ========================================== */
 
   tlacitkoToolbar.addEventListener(
-  "click",
-  () => {
-    if (rezimToolbaru === "cas") {
-      nastavToolbar("text");
-      return;
-    }
+    "click",
+    () => {
+      if (rezimToolbaru === "cas") {
+        nastavToolbar("text");
+        return;
+      }
 
-    if (rezimToolbaru === "text") {
-      nastavToolbar("nastroje");
-      return;
-    }
+      if (rezimToolbaru === "text") {
+        nastavToolbar("nastroje");
+        return;
+      }
 
-    nastavToolbar("cas");
-  }
-);
+      nastavToolbar("cas");
+    }
+  );
 
 
   tlacitkoZpet?.addEventListener(
@@ -927,26 +988,26 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   tlacitkoNadpis?.addEventListener(
-  "click",
-  () => {
-    skryjAndroidVyber();
+    "click",
+    () => {
+      skryjAndroidVyber();
 
-    prepniPanel(
-      panelStyl,
-      tlacitkoNadpis
-    );
-  }
-);
+      prepniPanel(
+        panelStyl,
+        tlacitkoNadpis
+      );
+    }
+  );
 
- tlacitkoBarvaTextu?.addEventListener(
-  "click",
-  () => {
-    prepniPanel(
-      panelBarvaTextu,
-      tlacitkoBarvaTextu
-    );
-  }
-);
+  tlacitkoBarvaTextu?.addEventListener(
+    "click",
+    () => {
+      prepniPanel(
+        panelBarvaTextu,
+        tlacitkoBarvaTextu
+      );
+    }
+  );
 
 
   tlacitkoZarovnaniTextu?.addEventListener(
@@ -974,6 +1035,236 @@ editorTextu?.addEventListener("pointerdown", () => {
     () => {
       zavriVsechnyPanely();
       window.vlozOdkazDoPoznamky?.();
+    }
+  );
+
+  editorTextu.addEventListener(
+    "pointerdown",
+    (udalost) => {
+      const polozka =
+        udalost.target.closest("li");
+
+      if (
+        !polozka ||
+        !editorTextu.contains(polozka)
+      ) {
+        return;
+      }
+
+      if (
+        !jePoziceNaKulce(
+          polozka,
+          udalost.clientX
+        )
+      ) {
+        return;
+      }
+
+      tazenaPolozka = polozka;
+
+      zacatekTazeniX =
+        udalost.clientX;
+
+      zacatekTazeniY =
+        udalost.clientY;
+
+      probihaTazeni = false;
+    }
+  );
+
+  editorTextu.addEventListener(
+  "pointermove",
+  (udalost) => {
+    if (!tazenaPolozka) {
+      return;
+    }
+
+    const rozdilY =
+      udalost.clientY - zacatekTazeniY;
+
+    if (
+      !probihaTazeni &&
+      Math.abs(rozdilY) < 6
+    ) {
+      return;
+    }
+
+    probihaTazeni = true;
+
+    tazenaPolozka.classList.add(
+      "bulletDragging"
+    );
+
+    tazenaPolozka.parentElement.classList.add(
+      "bulletDragActive"
+    );
+
+    udalost.preventDefault();
+
+    const vyber =
+      window.getSelection();
+
+    if (
+      vyber &&
+      !vyber.isCollapsed
+    ) {
+      vyber.removeAllRanges();
+    }
+
+    zrusBulletDropIndikator();
+
+    const seznam =
+      tazenaPolozka.parentElement;
+
+    const polozky =
+      Array.from(
+        seznam.children
+      ).filter(
+        (prvek) =>
+          prvek.tagName === "LI" &&
+          prvek !== tazenaPolozka
+      );
+
+    for (const polozka of polozky) {
+      const pozice =
+        polozka.getBoundingClientRect();
+
+      const stred =
+        pozice.top +
+        pozice.height / 2;
+
+      if (
+        udalost.clientY <
+        stred
+      ) {
+        polozka.classList.add(
+          "bulletDropBefore"
+        );
+
+        seznam.insertBefore(
+          tazenaPolozka,
+          polozka
+        );
+
+        return;
+      }
+    }
+
+    const posledniPolozka =
+      polozky[
+        polozky.length - 1
+      ];
+
+    if (posledniPolozka) {
+      posledniPolozka.classList.add(
+        "bulletDropAfter"
+      );
+    }
+
+    seznam.appendChild(
+      tazenaPolozka
+    );
+  }
+);
+
+  window.addEventListener(
+    "pointerup",
+    () => {
+      zrusBulletDropIndikator();
+      
+      if (tazenaPolozka) {
+        tazenaPolozka.classList.remove(
+          "bulletDragging"
+        );
+
+        tazenaPolozka.parentElement?.classList.remove(
+          "bulletDragActive"
+        );
+      }
+
+      tazenaPolozka = null;
+      probihaTazeni = false;
+    }
+  );
+
+  tlacitkoBullet?.addEventListener(
+    "click",
+    () => {
+      const vyber = window.getSelection();
+
+      let poziceKurzoru = null;
+
+      if (
+        vyber &&
+        vyber.rangeCount > 0 &&
+        jeUzelVEditoru(vyber.anchorNode)
+      ) {
+        poziceKurzoru =
+          vyber.getRangeAt(0).cloneRange();
+      }
+
+      provedPrikaz(
+        "insertUnorderedList"
+      );
+
+      if (poziceKurzoru) {
+        requestAnimationFrame(() => {
+          const aktualniVyber =
+            window.getSelection();
+
+          if (!aktualniVyber) {
+            return;
+          }
+
+          try {
+            aktualniVyber.removeAllRanges();
+            aktualniVyber.addRange(
+              poziceKurzoru
+            );
+
+            ulozVyberTextu();
+          } catch (chyba) {
+            console.warn(
+              "Kurzor po vytvoření odrážek nešel obnovit.",
+              chyba
+            );
+          }
+        });
+      }
+    }
+  );
+
+
+
+  editorTextu.addEventListener(
+    "click",
+    (udalost) => {
+      const polozka =
+        udalost.target.closest("li");
+
+      if (
+        !polozka ||
+        !editorTextu.contains(polozka)
+      ) {
+        return;
+      }
+
+      const pozice =
+        polozka.getBoundingClientRect();
+
+      const klikNaKulku =
+        udalost.clientX >= pozice.left - 28 &&
+        udalost.clientX <= pozice.left;
+
+      if (!klikNaKulku) {
+        return;
+      }
+
+      udalost.preventDefault();
+
+      prepniSbaleniPolozky(
+        polozka
+      );
     }
   );
 
@@ -1117,44 +1408,44 @@ editorTextu?.addEventListener("pointerdown", () => {
 
 
   nastavToolbar("cas");
-  
-  
+
+
   panelBarvaTextu
-  ?.querySelectorAll("[data-text-color]")
-  .forEach(tlacitko => {
-    tlacitko.addEventListener(
-      "click",
-      () => {
-        const barva =
-          tlacitko.dataset.textColor;
-        
-        obnovVyberTextu();
-        
-        if (barva === "default") {
-  const barvaMotivu =
-    getComputedStyle(
-      editorTextu
-    ).color;
-  
-  document.execCommand(
-    "foreColor",
-    false,
-    barvaMotivu
-  );
-} else {
-          document.execCommand(
-            "foreColor",
-            false,
-            barva
-          );
+    ?.querySelectorAll("[data-text-color]")
+    .forEach(tlacitko => {
+      tlacitko.addEventListener(
+        "click",
+        () => {
+          const barva =
+            tlacitko.dataset.textColor;
+
+          obnovVyberTextu();
+
+          if (barva === "default") {
+            const barvaMotivu =
+              getComputedStyle(
+                editorTextu
+              ).color;
+
+            document.execCommand(
+              "foreColor",
+              false,
+              barvaMotivu
+            );
+          } else {
+            document.execCommand(
+              "foreColor",
+              false,
+              barva
+            );
+          }
+
+          zavriVsechnyPanely();
         }
-        
-        zavriVsechnyPanely();
-      }
-    );
-  });
-  
-  
-  
-  
+      );
+    });
+
+
+
+
 })();

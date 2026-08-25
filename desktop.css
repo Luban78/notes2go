@@ -380,4 +380,20 @@
 .cardMenu button:hover {
   background: var(--color-background);
 }
+
+#editorQuickToolbar,
+#editorToolsToolbar {
+  flex: 0 0 auto;
+}
+
+#editorToolsToolbar {
+  padding-left: 0;
+}
+
+.dateTimeInputs {
+  margin-left: auto;
+}
+
+
+
 }

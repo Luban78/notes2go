@@ -6468,3 +6468,110 @@ text-size-adjust: 100%;
 .themeSetting {
   grid-template-columns: minmax(160px, 1fr) auto;
 }
+
+
+
+
+/* Editor bulety */
+
+.modalRichText ul {
+  list-style: none;
+  padding-left: 28px;
+}
+
+.modalRichText li {
+  position: relative;
+}
+
+.modalRichText li::before {
+  content: "•";
+
+  position: absolute;
+  left: -22px;
+  top: 0;
+
+  width: 18px;
+  height: 1.5em;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 1.1em;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.modalRichText li.bulletSbaleny::before {
+  content: "▸";
+}
+
+.modalRichText li:not(.bulletSbaleny)::before {
+  content: "•";
+}
+
+.modalRichText ul.bulletDragActive > li {
+  transition:
+    transform 120ms ease,
+    margin 120ms ease,
+    background 120ms ease;
+}
+
+.modalRichText li.bulletDragging {
+  position: relative;
+  z-index: 5;
+
+  margin-top: 6px;
+  margin-bottom: 6px;
+
+  transform: scale(1.03);
+
+  border-radius: 8px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 12%,
+      transparent
+    );
+
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.16);
+}
+
+.modalRichText li.bulletDragging::before {
+  color: var(--color-accent);
+  transform: scale(1.25);
+}
+
+.modalRichText ul.bulletDragActive {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.modalRichText li.bulletDropBefore::after,
+.modalRichText li.bulletDropAfter::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  right: 0;
+
+  height: 3px;
+
+  border-radius: 999px;
+
+  background: var(--color-accent);
+
+  pointer-events: none;
+}
+
+.modalRichText li.bulletDropBefore::after {
+  top: -5px;
+}
+
+.modalRichText li.bulletDropAfter::after {
+  bottom: -5px;
+}
