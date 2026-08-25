@@ -2599,6 +2599,627 @@
     return true;
   }
 
+
+  /* ==========================================
+     DOČASNÁ DIAGNOSTIKA BACKSPACE / FONTU
+
+     Tento blok je záměrně diagnostický. Nemění typografii ani druhý
+     Backspace. Zachytí DOM a computed styly těsně PŘED a PO Backspace,
+     aby bylo vidět, odkud Android WebView bere novou velikost písma.
+
+     Jakmile se u Backspace u obrázku změní font-size / line-height,
+     zobrazí se panel s tlačítkem "Kopírovat diagnostiku".
+  ========================================== */
+
+  let backspaceDiagCekajici = null;
+  let backspaceDiagHistorie = [];
+  let backspaceDiagCislo = 0;
+  let backspaceDiagTimeout = null;
+
+  function backspaceDiagZkratHtml(uzel, max = 2400) {
+    if (!uzel) {
+      return null;
+    }
+
+    let html = "";
+
+    try {
+      if (uzel.nodeType === Node.TEXT_NODE) {
+        html = `#text(${JSON.stringify(uzel.textContent || "")})`;
+      } else if (uzel instanceof Element) {
+        html = uzel.outerHTML || "";
+      } else {
+        html = String(uzel.nodeName || uzel);
+      }
+    } catch (_) {
+      html = "[nelze nacist]";
+    }
+
+    if (html.length > max) {
+      return `${html.slice(0, max)}…`;
+    }
+
+    return html;
+  }
+
+  function backspaceDiagPopisUzlu(uzel) {
+    if (!uzel) {
+      return null;
+    }
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      const text = (uzel.textContent || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 120);
+
+      return {
+        typ: "#text",
+        text
+      };
+    }
+
+    if (!(uzel instanceof Element)) {
+      return {
+        typ: String(uzel.nodeName || "unknown")
+      };
+    }
+
+    const styl = getComputedStyle(uzel);
+
+    return {
+      typ: uzel.tagName,
+      id: uzel.id || null,
+      class: uzel.className || null,
+      style: uzel.getAttribute("style") || null,
+      dataVelikostPisma:
+        uzel.getAttribute("data-velikost-pisma"),
+      fontSize: styl.fontSize,
+      lineHeight: styl.lineHeight,
+      letterSpacing: styl.letterSpacing
+    };
+  }
+
+  function backspaceDiagCestaPredku(uzel) {
+    let prvek =
+      uzel?.nodeType === Node.TEXT_NODE
+        ? uzel.parentElement
+        : uzel;
+
+    const vysledek = [];
+    let pojistka = 0;
+
+    while (
+      prvek instanceof Element &&
+      pojistka < 10
+    ) {
+      vysledek.push(
+        backspaceDiagPopisUzlu(prvek)
+      );
+
+      if (prvek === modalRichText) {
+        break;
+      }
+
+      prvek = prvek.parentElement;
+      pojistka += 1;
+    }
+
+    return vysledek;
+  }
+
+  function backspaceDiagSnapshot(faze, inputType = "") {
+    const vyber = window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
+      return {
+        faze,
+        inputType,
+        chyba: "bez selection"
+      };
+    }
+
+    const range = vyber.getRangeAt(0);
+
+    if (!jeRozsahVEditoru(range)) {
+      return {
+        faze,
+        inputType,
+        chyba: "selection mimo editor"
+      };
+    }
+
+    const startNode = range.startContainer;
+
+    const primyBlok =
+      ziskejPrimehoPotomkaEditoru(startNode);
+
+    const predchozi =
+      primyBlok?.previousSibling || null;
+
+    const predPredchozi =
+      predchozi?.previousSibling || null;
+
+    const nasledujici =
+      primyBlok?.nextSibling || null;
+
+    const kotvaPrvek =
+      startNode.nodeType === Node.TEXT_NODE
+        ? startNode.parentElement
+        : startNode;
+
+    const stylKotvy =
+      kotvaPrvek instanceof Element
+        ? getComputedStyle(kotvaPrvek)
+        : getComputedStyle(modalRichText);
+
+    const editorStyl =
+      getComputedStyle(modalRichText);
+
+    const rootStyl =
+      getComputedStyle(document.documentElement);
+
+    const explicitniVelikost =
+      kotvaPrvek instanceof Element
+        ? kotvaPrvek.closest(
+            "[data-velikost-pisma]"
+          )
+        : null;
+
+    const sousedeHtml = [
+      backspaceDiagZkratHtml(predPredchozi, 900),
+      backspaceDiagZkratHtml(predchozi, 1200),
+      backspaceDiagZkratHtml(primyBlok, 2600),
+      backspaceDiagZkratHtml(nasledujici, 900)
+    ].filter(Boolean);
+
+    const obrazekVNedavnemOkoli =
+      sousedeHtml.some(html =>
+        html.includes("lubaNoteImage")
+      );
+
+    return {
+      faze,
+      inputType,
+      cas: new Date().toISOString(),
+
+      selection: {
+        collapsed: range.collapsed,
+        startOffset: range.startOffset,
+        startNode:
+          backspaceDiagPopisUzlu(startNode)
+      },
+
+      typografieKurzoru: {
+        fontSize: stylKotvy.fontSize,
+        lineHeight: stylKotvy.lineHeight,
+        letterSpacing: stylKotvy.letterSpacing,
+        fontFamily: stylKotvy.fontFamily
+      },
+
+      zakladEditoru: {
+        cssPromennaFontSize:
+          rootStyl.getPropertyValue(
+            "--font-size"
+          ).trim(),
+        fontSize: editorStyl.fontSize,
+        lineHeight: editorStyl.lineHeight
+      },
+
+      explicitniVelikost:
+        explicitniVelikost
+          ? backspaceDiagPopisUzlu(
+              explicitniVelikost
+            )
+          : null,
+
+      primyBlok:
+        backspaceDiagPopisUzlu(primyBlok),
+
+      predchozi:
+        backspaceDiagPopisUzlu(predchozi),
+
+      predPredchozi:
+        backspaceDiagPopisUzlu(predPredchozi),
+
+      cestaPredku:
+        backspaceDiagCestaPredku(startNode),
+
+      obrazekVNedavnemOkoli,
+
+      htmlOkoli: sousedeHtml
+    };
+  }
+
+  function backspaceDiagPx(hodnota) {
+    const cislo = parseFloat(hodnota);
+    return Number.isFinite(cislo)
+      ? cislo
+      : null;
+  }
+
+  function backspaceDiagZobraz(report) {
+    localStorage.setItem(
+      "lubanoteBackspaceDiag",
+      report
+    );
+
+    let overlay =
+      document.getElementById(
+        "lubanoteBackspaceDiagOverlay"
+      );
+
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id =
+        "lubanoteBackspaceDiagOverlay";
+
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "999999",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        background: "rgba(0,0,0,.72)"
+      });
+
+      const panel =
+        document.createElement("div");
+
+      Object.assign(panel.style, {
+        width: "min(720px, 100%)",
+        maxHeight: "88dvh",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        padding: "14px",
+        borderRadius: "16px",
+        background: "var(--color-surface)",
+        color: "var(--color-text)",
+        border: "1px solid var(--color-border)"
+      });
+
+      const nadpis =
+        document.createElement("strong");
+
+      nadpis.textContent =
+        "🐞 Backspace diagnostika";
+
+      const popis =
+        document.createElement("div");
+
+      popis.textContent =
+        "Bug byl zachycen. Klepni na Kopírovat diagnostiku a vlož text do chatu.";
+
+      popis.style.fontSize = "14px";
+
+      const textarea =
+        document.createElement("textarea");
+
+      textarea.id =
+        "lubanoteBackspaceDiagText";
+
+      textarea.readOnly = true;
+
+      Object.assign(textarea.style, {
+        width: "100%",
+        minHeight: "45dvh",
+        boxSizing: "border-box",
+        resize: "vertical",
+        padding: "10px",
+        borderRadius: "10px",
+        background: "var(--color-background)",
+        color: "var(--color-text)",
+        border: "1px solid var(--color-border)",
+        fontFamily: "monospace",
+        fontSize: "12px"
+      });
+
+      const akce =
+        document.createElement("div");
+
+      Object.assign(akce.style, {
+        display: "flex",
+        gap: "8px",
+        justifyContent: "flex-end"
+      });
+
+      const kopirovat =
+        document.createElement("button");
+
+      kopirovat.type = "button";
+      kopirovat.textContent =
+        "Kopírovat diagnostiku";
+
+      const zavrit =
+        document.createElement("button");
+
+      zavrit.type = "button";
+      zavrit.textContent = "Zavřít";
+
+      [kopirovat, zavrit].forEach(
+        tlacitko => {
+          Object.assign(
+            tlacitko.style,
+            {
+              padding: "10px 12px",
+              borderRadius: "10px",
+              border:
+                "1px solid var(--color-border)",
+              background:
+                "var(--color-background)",
+              color: "var(--color-text)",
+              fontWeight: "700"
+            }
+          );
+        }
+      );
+
+      kopirovat.addEventListener(
+        "click",
+        async () => {
+          const text =
+            textarea.value;
+
+          let zkopirovano = false;
+
+          try {
+            await navigator.clipboard
+              .writeText(text);
+
+            zkopirovano = true;
+          } catch (_) {
+            try {
+              textarea.focus();
+              textarea.select();
+              zkopirovano =
+                document.execCommand("copy");
+            } catch (_) {
+              zkopirovano = false;
+            }
+          }
+
+          kopirovat.textContent =
+            zkopirovano
+              ? "✓ Zkopírováno"
+              : "Označ text ručně";
+
+          setTimeout(() => {
+            kopirovat.textContent =
+              "Kopírovat diagnostiku";
+          }, 1600);
+        }
+      );
+
+      zavrit.addEventListener(
+        "click",
+        () => {
+          overlay.hidden = true;
+        }
+      );
+
+      akce.append(
+        kopirovat,
+        zavrit
+      );
+
+      panel.append(
+        nadpis,
+        popis,
+        textarea,
+        akce
+      );
+
+      overlay.append(panel);
+      document.body.append(overlay);
+    }
+
+    const textarea =
+      overlay.querySelector(
+        "#lubanoteBackspaceDiagText"
+      );
+
+    if (textarea) {
+      textarea.value = report;
+    }
+
+    overlay.hidden = false;
+  }
+
+  function backspaceDiagDokonci(zdroj) {
+    if (!backspaceDiagCekajici) {
+      return;
+    }
+
+    clearTimeout(backspaceDiagTimeout);
+    backspaceDiagTimeout = null;
+
+    const cekajici =
+      backspaceDiagCekajici;
+
+    backspaceDiagCekajici = null;
+
+    const po =
+      backspaceDiagSnapshot(
+        `PO (${zdroj})`,
+        cekajici.inputType
+      );
+
+    const zaznam = {
+      cislo: cekajici.cislo,
+      pred: cekajici.pred,
+      po
+    };
+
+    backspaceDiagHistorie.push(zaznam);
+
+    if (backspaceDiagHistorie.length > 6) {
+      backspaceDiagHistorie =
+        backspaceDiagHistorie.slice(-6);
+    }
+
+    const predFont =
+      backspaceDiagPx(
+        cekajici.pred
+          ?.typografieKurzoru
+          ?.fontSize
+      );
+
+    const poFont =
+      backspaceDiagPx(
+        po
+          ?.typografieKurzoru
+          ?.fontSize
+      );
+
+    const predLine =
+      backspaceDiagPx(
+        cekajici.pred
+          ?.typografieKurzoru
+          ?.lineHeight
+      );
+
+    const poLine =
+      backspaceDiagPx(
+        po
+          ?.typografieKurzoru
+          ?.lineHeight
+      );
+
+    const zmenaFontu =
+      predFont !== null &&
+      poFont !== null &&
+      Math.abs(predFont - poFont) >= 0.5;
+
+    const zmenaRadku =
+      predLine !== null &&
+      poLine !== null &&
+      Math.abs(predLine - poLine) >= 0.5;
+
+    const uObrazku =
+      Boolean(
+        cekajici.pred
+          ?.obrazekVNedavnemOkoli ||
+        po
+          ?.obrazekVNedavnemOkoli
+      );
+
+    /*
+     * Panel se otevře při skutečné typografické změně.
+     * Jako pojistka i po druhém Backspace v okolí obrázku,
+     * abychom dostali report i kdyby WebView přesunul selection
+     * způsobem, který změnu computed stylu skryje.
+     */
+    if (
+      zmenaFontu ||
+      zmenaRadku ||
+      (
+        uObrazku &&
+        backspaceDiagHistorie
+          .filter(
+            polozka =>
+              polozka.pred
+                ?.obrazekVNedavnemOkoli ||
+              polozka.po
+                ?.obrazekVNedavnemOkoli
+          )
+          .length >= 2
+      )
+    ) {
+      const report = [
+        "LUBANOTE BACKSPACE DIAGNOSTIKA",
+        `Vytvoreno: ${new Date().toISOString()}`,
+        "",
+        `Zmena fontu: ${zmenaFontu}`,
+        `Zmena line-height: ${zmenaRadku}`,
+        `Pred font: ${predFont}px`,
+        `Po font: ${poFont}px`,
+        "",
+        JSON.stringify(
+          backspaceDiagHistorie,
+          null,
+          2
+        )
+      ].join("\n");
+
+      console.warn(
+        "LubaNote Backspace diagnostika:",
+        report
+      );
+
+      backspaceDiagZobraz(report);
+    }
+  }
+
+  modalRichText.addEventListener(
+    "beforeinput",
+    (event) => {
+      const typ =
+        String(event.inputType || "");
+
+      if (
+        !typ.includes("Backward") ||
+        event.isComposing
+      ) {
+        return;
+      }
+
+      const vyber =
+        window.getSelection();
+
+      if (
+        !vyber ||
+        vyber.rangeCount === 0 ||
+        !jeRozsahVEditoru(
+          vyber.getRangeAt(0)
+        )
+      ) {
+        return;
+      }
+
+      backspaceDiagCislo += 1;
+
+      backspaceDiagCekajici = {
+        cislo: backspaceDiagCislo,
+        inputType: typ,
+        pred:
+          backspaceDiagSnapshot(
+            "PRED",
+            typ
+          )
+      };
+
+      clearTimeout(
+        backspaceDiagTimeout
+      );
+
+      backspaceDiagTimeout =
+        setTimeout(() => {
+          backspaceDiagDokonci(
+            "timeout"
+          );
+        }, 80);
+    },
+    true
+  );
+
+  modalRichText.addEventListener(
+    "input",
+    () => {
+      if (!backspaceDiagCekajici) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        backspaceDiagDokonci(
+          "input"
+        );
+      });
+    },
+    true
+  );
+
   modalRichText.addEventListener(
     "beforeinput",
     (event) => {
@@ -2672,35 +3293,12 @@
       }
 
       /*
-       * Druhý Backspace: když je před blokem přímo figure, nenecháme
-       * WebView provést vadný merge. Místo blokování však blok bezpečně
-       * rozbalíme. Vizuálně tedy text skutečně vyskočí nahoru k obrázku.
+       * DIAGNOSTICKÝ BUILD:
+       * Druhý Backspace zde záměrně NEPŘEPISUJEME a NEBLOKUJEME.
+       * Potřebujeme jednou vidět přesný DOM, který vytvoří Android
+       * WebView při svém nativním spojení bloků. Diagnostika výše
+       * zachytí stav před/po a při změně fontu otevře report.
        */
-      const uzelPredKurzorem =
-        najdiUzelTesnePredKurzorem(range);
-
-      const jeHraniceObrazku =
-        jeUzelObrazkovaHranice(
-          uzelPredKurzorem
-        ) ||
-        jeUzelObrazkovaHranice(
-          predchoziBlok
-        );
-
-      if (!jeHraniceObrazku) {
-        return;
-      }
-
-      if (!jeBezpecnyTextovyBlokProRozbaleni(aktualniBlok)) {
-        return;
-      }
-
-      event.preventDefault();
-
-      rozbalTextovyBlokZaObrazkem(
-        aktualniBlok,
-        vyber
-      );
     },
     true
   );
