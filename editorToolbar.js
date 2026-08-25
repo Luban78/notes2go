@@ -10,6 +10,13 @@
   const rychlyToolbar =
     document.getElementById("editorQuickToolbar");
 
+  const editorToolsToolbar =
+  document.getElementById(
+    "editorToolsToolbar"
+  );
+
+  
+
   const horniLista =
     document.querySelector(".editorTopBar");
 
@@ -90,6 +97,10 @@
   let ulozenyVyberTextu = null;
   let otevrenyPanel = null;
   let aktivniSpoustecPanelu = null;
+
+  function jeDesktopEditor() {
+  return window.innerWidth >= 900;
+}
 
   if (
     !tlacitkoToolbar ||
@@ -250,41 +261,121 @@ function skryjAndroidVyber() {
   }
 
 
-  function nastavToolbar(otevreny) {
-    rychlyToolbar.hidden = !otevreny;
-    datumCas.hidden = otevreny;
+  let rezimToolbaru = "cas";
+
+function nastavToolbar(rezim) {
+  /*
+   * DESKTOP:
+   * využijeme šířku a ukážeme vše najednou.
+   */
+  if (jeDesktopEditor()) {
+    rezimToolbaru = "desktop";
+
+    datumCas.hidden = false;
+    rychlyToolbar.hidden = false;
+    editorToolsToolbar.hidden = false;
+
+    tlacitkoToolbar.hidden = true;
 
     if (tlacitkoPripominky) {
-      tlacitkoPripominky.hidden = otevreny;
+      tlacitkoPripominky.hidden = false;
     }
 
-    tlacitkoToolbar.classList.toggle(
-      "active",
-      otevreny
-    );
+    zavriVsechnyPanely();
 
-    tlacitkoToolbar.setAttribute(
-      "aria-expanded",
-      String(otevreny)
-    );
+    return;
+  }
 
-    tlacitkoToolbar.setAttribute(
-      "aria-pressed",
-      String(otevreny)
-    );
+
+  /*
+   * MOBIL:
+   * čas → text → další nástroje
+   */
+  rezimToolbaru = rezim;
+
+  const jeCas =
+    rezim === "cas";
+
+  const jeText =
+    rezim === "text";
+
+  const jsouNastroje =
+    rezim === "nastroje";
+
+
+  tlacitkoToolbar.hidden = false;
+
+  datumCas.hidden =
+    !jeCas;
+
+  rychlyToolbar.hidden =
+    !jeText;
+
+  editorToolsToolbar.hidden =
+    !jsouNastroje;
+
+
+  if (tlacitkoPripominky) {
+    tlacitkoPripominky.hidden =
+      !jeCas;
+  }
+
+
+  tlacitkoToolbar.classList.toggle(
+    "active",
+    !jeCas
+  );
+
+
+  if (jeCas) {
+    tlacitkoToolbar.textContent = "Aa";
 
     tlacitkoToolbar.setAttribute(
       "aria-label",
-      otevreny
-        ? "Zavřít editační nástroje"
-        : "Otevřít editační nástroje"
+      "Otevřít textové nástroje"
     );
-
-    if (!otevreny) {
-      zavriVsechnyPanely();
-      rychlyToolbar.scrollLeft = 0;
-    }
   }
+
+  if (jeText) {
+    tlacitkoToolbar.textContent = "☷";
+
+    tlacitkoToolbar.setAttribute(
+      "aria-label",
+      "Otevřít další nástroje"
+    );
+  }
+
+  if (jsouNastroje) {
+    tlacitkoToolbar.textContent = "🕒";
+
+    tlacitkoToolbar.setAttribute(
+      "aria-label",
+      "Zobrazit datum a čas"
+    );
+  }
+
+
+  tlacitkoToolbar.setAttribute(
+    "aria-expanded",
+    String(!jeCas)
+  );
+
+  tlacitkoToolbar.setAttribute(
+    "aria-pressed",
+    String(!jeCas)
+  );
+
+
+  zavriVsechnyPanely();
+
+  if (!jeText) {
+    rychlyToolbar.scrollLeft = 0;
+  }
+
+  if (!jsouNastroje) {
+    editorToolsToolbar.scrollLeft = 0;
+  }
+}
 
 
   /* ==========================================
@@ -763,13 +854,21 @@ editorTextu?.addEventListener("pointerdown", () => {
   ========================================== */
 
   tlacitkoToolbar.addEventListener(
-    "click",
-    () => {
-      nastavToolbar(
-        rychlyToolbar.hidden
-      );
+  "click",
+  () => {
+    if (rezimToolbaru === "cas") {
+      nastavToolbar("text");
+      return;
     }
-  );
+
+    if (rezimToolbaru === "text") {
+      nastavToolbar("nastroje");
+      return;
+    }
+
+    nastavToolbar("cas");
+  }
+);
 
 
   tlacitkoZpet?.addEventListener(
@@ -1001,7 +1100,7 @@ editorTextu?.addEventListener("pointerdown", () => {
     const pozorovatelModalu =
       new MutationObserver(() => {
         if (!modalUkolu.hidden) {
-          nastavToolbar(false);
+          nastavToolbar("cas");
         } else {
           zavriVsechnyPanely();
         }
@@ -1017,7 +1116,7 @@ editorTextu?.addEventListener("pointerdown", () => {
   }
 
 
-  nastavToolbar(false);
+  nastavToolbar("cas");
   
   
   panelBarvaTextu
