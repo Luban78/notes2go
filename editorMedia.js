@@ -2093,8 +2093,14 @@
           zrusOznaceniObrazkuProPresun();
         }
         
+        /*
+         * Při smazání obrázku odstraňujeme pouze samotný figure.
+         * modalRichText.normalize() zde záměrně NEVOLÁME:
+         * v contenteditable může po zásahu do média změnit hranice
+         * textových uzlů a WebView pak někdy převezme sousední
+         * inline formátování (např. jinou velikost písma).
+         */
         figure?.remove();
-        modalRichText.normalize();
         ulozenyRozsahEditoru = null;
         
         modalRichText.dispatchEvent(
