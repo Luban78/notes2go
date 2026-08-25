@@ -106,6 +106,9 @@
   let zacatekTazeniY = 0;
   let probihaTazeni = false;
 
+  let nahledTazenePolozky = null;
+
+
   function jeDesktopEditor() {
     return window.innerWidth >= 900;
   }
@@ -152,6 +155,46 @@
 
     return true;
   }
+
+  function vytvorNahledTazenePolozky(polozka) {
+  if (window.innerWidth >= 900) {
+    return;
+  }
+
+  nahledTazenePolozky =
+    document.createElement("div");
+
+  nahledTazenePolozky.className =
+    "bulletDragPreview";
+
+  nahledTazenePolozky.textContent =
+    polozka.childNodes[0]?.textContent?.trim() ||
+    polozka.textContent.trim();
+
+  document.body.appendChild(
+    nahledTazenePolozky
+  );
+}
+
+
+function posunNahledTazenePolozky(x, y) {
+  if (!nahledTazenePolozky) {
+    return;
+  }
+
+  nahledTazenePolozky.style.left =
+    `${x}px`;
+
+  nahledTazenePolozky.style.top =
+    `${y - 75}px`;
+}
+
+
+function odstranNahledTazenePolozky() {
+  nahledTazenePolozky?.remove();
+  nahledTazenePolozky = null;
+}
+
 
   function zobrazVlastniVyberTextu() {
     if (
@@ -1090,6 +1133,16 @@
     }
 
     probihaTazeni = true;
+    if (!nahledTazenePolozky) {
+  vytvorNahledTazenePolozky(
+    tazenaPolozka
+  );
+}
+
+posunNahledTazenePolozky(
+  udalost.clientX,
+  udalost.clientY
+);
 
     tazenaPolozka.classList.add(
       "bulletDragging"
@@ -1171,7 +1224,7 @@
     "pointerup",
     () => {
       zrusBulletDropIndikator();
-      
+
       if (tazenaPolozka) {
         tazenaPolozka.classList.remove(
           "bulletDragging"
@@ -1184,6 +1237,7 @@
 
       tazenaPolozka = null;
       probihaTazeni = false;
+      odstranNahledTazenePolozky();
     }
   );
 

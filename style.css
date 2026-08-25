@@ -6575,3 +6575,38 @@ text-size-adjust: 100%;
 .modalRichText li.bulletDropAfter::after {
   bottom: -5px;
 }
+.bulletDragPreview {
+  position: fixed;
+  z-index: 99999;
+
+  max-width: min(70vw, 320px);
+
+  padding: 10px 14px;
+
+  border: 2px solid var(--color-accent);
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.24);
+
+  font-size: var(--font-size);
+  font-weight: 600;
+
+  pointer-events: none;
+
+  transform:
+    translateX(-50%);
+}
+@media (max-width: 899px) {
+  .modalRichText li.bulletDragging {
+    opacity: 0.35;
+  }
+
+  .modalRichText li.bulletDropBefore::after,
+  .modalRichText li.bulletDropAfter::after {
+    height: 4px;
+  }
+}
