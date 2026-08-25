@@ -2430,16 +2430,18 @@
   }
 
   /*
-   * Android WebView při Backspace na hranici text ↔ obrázek někdy
-   * sloučí okolní editovatelné bloky tak, že text převezme typografii
-   * sousedního uzlu (např. 16 px -> 20 px a vyšší line-height).
+   * BACKSPACE NA HRANICI TEXT ↔ OBRÁZEK
    *
-   * Důležité: Backspace přes tuto hranici NESMÍME blokovat. Uživatel
-   * ho potřebuje právě k přitažení / spojení textu. Místo zákazu si
-   * před nativním sloučením zapamatujeme skutečnou typografii textu
-   * pod kurzorem a po nativním inputu ji vrátíme výslednému bloku.
+   * Nativní Android WebView při druhém Backspace umí přes contenteditable=false
+   * <figure> sloučit DOM tak, že běžný text převezme cizí font-size / line-height.
+   * Oprava se proto už nesnaží nativní merge "léčit" zpětně.
+   *
+   * Když je kurzor na začátku běžného textového bloku bezprostředně za
+   * plovoucím obrázkem, provedeme přesně tu vizuální operaci sami:
+   * odstraníme pouze blokový obal textu a jeho obsah necháme přímo za figure.
+   * Text tak začne přirozeně obtékat obrázek od jeho horní hrany, ale jeho
+   * vlastní inline formátování zůstane beze změny.
    */
-  let cekajiciOpravaTypografiePoBackspace = null;
 
   function najdiUzelTesnePredKurzorem(range) {
     if (!range?.collapsed) {
@@ -2471,11 +2473,7 @@
   }
 
   function jeUzelObrazkovaHranice(uzel) {
-    if (!uzel) {
-      return false;
-    }
-
-    if (uzel.nodeType === Node.TEXT_NODE) {
+    if (!uzel || uzel.nodeType !== Node.ELEMENT_NODE) {
       return false;
     }
 
@@ -2490,183 +2488,115 @@
     );
   }
 
-  function ziskejPrvekTypografiePodKurzorem(range) {
-    let prvek = range?.startContainer || null;
-
-    if (prvek?.nodeType === Node.TEXT_NODE) {
-      prvek = prvek.parentElement;
-    }
-
-    if (!(prvek instanceof HTMLElement)) {
-      return null;
+  function jeBezpecnyTextovyBlokProRozbaleni(blok) {
+    if (!(blok instanceof HTMLElement)) {
+      return false;
     }
 
     if (
-      prvek !== modalRichText &&
-      !modalRichText.contains(prvek)
+      blok.classList.contains("lubaNoteImage") ||
+      blok.matches("h1, h2, h3, ul, ol, li, table, blockquote")
     ) {
-      return null;
+      return false;
     }
 
-    return prvek === modalRichText
-      ? modalRichText
-      : prvek;
+    /*
+     * U běžného DIV/P a našich normálních textových řádků je odstranění
+     * obalu bezpečné. Vnitřní B/I/U/SPAN/A uzly se přesunou beze změny.
+     */
+    return (
+      blok.tagName === "DIV" ||
+      blok.tagName === "P" ||
+      blok.classList.contains("lubaNoteImageTextLine") ||
+      blok.classList.contains("editorTextNormalni")
+    );
   }
 
-  function ulozTypografiiPredSloucenim(range) {
-    const prvek =
-      ziskejPrvekTypografiePodKurzorem(range);
+  function najdiPrvniPoziciProKurzor(uzly) {
+    for (const uzel of uzly) {
+      if (uzel.nodeType === Node.TEXT_NODE) {
+        return {
+          uzel,
+          offset: 0
+        };
+      }
 
-    if (!prvek) {
-      return null;
+      if (uzel.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+
+      const walker = document.createTreeWalker(
+        uzel,
+        NodeFilter.SHOW_TEXT
+      );
+
+      const textovyUzel = walker.nextNode();
+
+      if (textovyUzel) {
+        return {
+          uzel: textovyUzel,
+          offset: 0
+        };
+      }
     }
 
-    const styl = getComputedStyle(prvek);
-    const velikost = parseFloat(styl.fontSize);
-
-    return {
-      fontSize: styl.fontSize,
-      lineHeight: styl.lineHeight,
-      letterSpacing: styl.letterSpacing,
-      velikostPisma: Number.isFinite(velikost)
-        ? String(Math.round(velikost))
-        : null,
-      puvodniBlok: ziskejPrimehoPotomkaEditoru(
-        range.startContainer
-      )
-    };
+    return null;
   }
 
-  function odstranNechtenouTypografiiNaCeste(
-    prvek,
-    koncovyBlok
+  function rozbalTextovyBlokZaObrazkem(
+    blok,
+    vyber
   ) {
-    let aktualni = prvek;
-
-    while (
-      aktualni instanceof HTMLElement &&
-      aktualni !== modalRichText
-    ) {
-      aktualni.style.removeProperty("font-size");
-      aktualni.style.removeProperty("line-height");
-      aktualni.style.removeProperty("letter-spacing");
-      aktualni.removeAttribute("data-velikost-pisma");
-
-      if (aktualni === koncovyBlok) {
-        break;
-      }
-
-      aktualni = aktualni.parentElement;
-    }
-  }
-
-  function opravTypografiiPoSlouceniBackspace() {
-    const oprava =
-      cekajiciOpravaTypografiePoBackspace;
-
-    if (!oprava) {
-      return;
+    if (!jeBezpecnyTextovyBlokProRozbaleni(blok)) {
+      return false;
     }
 
-    cekajiciOpravaTypografiePoBackspace = null;
+    const presouvaneUzly = [
+      ...blok.childNodes
+    ];
 
-    requestAnimationFrame(() => {
-      const vyber = window.getSelection();
+    if (presouvaneUzly.length === 0) {
+      return false;
+    }
 
-      if (!vyber || vyber.rangeCount === 0) {
-        return;
-      }
-
-      const range = vyber.getRangeAt(0);
-
-      if (!jeRozsahVEditoru(range)) {
-        return;
-      }
-
-      let prvekPodKurzorem =
-        ziskejPrvekTypografiePodKurzorem(range);
-
-      let vyslednyBlok =
-        ziskejPrimehoPotomkaEditoru(
-          range.startContainer
-        );
-
-      /*
-       * Některé verze WebView nechají původní blok připojený a pouze
-       * změní jeho rodičovskou / inline strukturu. V takovém případě je
-       * původní blok přesnější cíl než obecný blok nalezený z caretu.
-       */
-      if (
-        oprava.puvodniBlok?.isConnected &&
-        modalRichText.contains(oprava.puvodniBlok) &&
-        (
-          oprava.puvodniBlok === range.startContainer ||
-          oprava.puvodniBlok.contains?.(range.startContainer)
-        )
-      ) {
-        vyslednyBlok = oprava.puvodniBlok;
-      }
-
-      if (
-        !(vyslednyBlok instanceof HTMLElement) ||
-        vyslednyBlok.classList.contains("lubaNoteImage")
-      ) {
-        return;
-      }
-
-      if (
-        !(prvekPodKurzorem instanceof HTMLElement) ||
-        !vyslednyBlok.contains(prvekPodKurzorem)
-      ) {
-        prvekPodKurzorem = vyslednyBlok;
-      }
-
-      /*
-       * Chromium může při merge obalit caret starým SPAN/FONT uzlem.
-       * Nejdřív proto odstraníme pouze typografické přepisy na cestě
-       * od caretu k výslednému bloku. Tučné, kurzíva, barva, odkazy atd.
-       * zůstávají nedotčené.
-       */
-      odstranNechtenouTypografiiNaCeste(
-        prvekPodKurzorem,
-        vyslednyBlok
-      );
-
-      vyslednyBlok.style.fontSize = oprava.fontSize;
-      vyslednyBlok.style.lineHeight = oprava.lineHeight;
-
-      if (
-        oprava.letterSpacing &&
-        oprava.letterSpacing !== "normal"
-      ) {
-        vyslednyBlok.style.letterSpacing =
-          oprava.letterSpacing;
-      } else {
-        vyslednyBlok.style.removeProperty(
-          "letter-spacing"
-        );
-      }
-
-      if (oprava.velikostPisma) {
-        vyslednyBlok.dataset.velikostPisma =
-          oprava.velikostPisma;
-      }
-
-      /* Stylování DOM nemění obsah; caret pouze znovu uložíme pro toolbar. */
-      const aktualniVyber = window.getSelection();
-      if (
-        aktualniVyber &&
-        aktualniVyber.rangeCount > 0
-      ) {
-        ulozenyRozsahEditoru =
-          aktualniVyber.getRangeAt(0).cloneRange();
-      }
-
-      /* Toolbar si znovu načte reálných např. 16 px místo chybného 20. */
-      document.dispatchEvent(
-        new Event("selectionchange")
-      );
+    /*
+     * Přesouváme skutečné uzly, ne jejich textContent. Díky tomu zůstanou
+     * zachované tučné/kurzíva/odkazy/barvy i případná záměrná velikost.
+     */
+    presouvaneUzly.forEach((uzel) => {
+      blok.before(uzel);
     });
+
+    blok.remove();
+
+    const poziceKurzu =
+      najdiPrvniPoziciProKurzor(
+        presouvaneUzly
+      );
+
+    if (poziceKurzu) {
+      const novyRange = document.createRange();
+      novyRange.setStart(
+        poziceKurzu.uzel,
+        poziceKurzu.offset
+      );
+      novyRange.collapse(true);
+
+      vyber.removeAllRanges();
+      vyber.addRange(novyRange);
+      ulozenyRozsahEditoru =
+        novyRange.cloneRange();
+    }
+
+    modalRichText.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    document.dispatchEvent(
+      new Event("selectionchange")
+    );
+
+    return true;
   }
 
   modalRichText.addEventListener(
@@ -2720,8 +2650,7 @@
         );
 
       /*
-       * První Backspace: před textem je opravdu prázdný editovatelný
-       * řádek. Ten můžeme bezpečně odstranit sami bez merge DOMu.
+       * První Backspace: zruší pouze skutečný prázdný řádek.
        */
       if (jePrazdnyEditacniBlok(predchoziBlok)) {
         event.preventDefault();
@@ -2743,8 +2672,9 @@
       }
 
       /*
-       * Druhý Backspace: dovolíme nativní spojení. Jen si předem uložíme
-       * velikost/line-height textu, aby je WebView po merge nesmělo změnit.
+       * Druhý Backspace: když je před blokem přímo figure, nenecháme
+       * WebView provést vadný merge. Místo blokování však blok bezpečně
+       * rozbalíme. Vizuálně tedy text skutečně vyskočí nahoru k obrázku.
        */
       const uzelPredKurzorem =
         najdiUzelTesnePredKurzorem(range);
@@ -2753,49 +2683,24 @@
         jeUzelObrazkovaHranice(
           uzelPredKurzorem
         ) ||
-        (
-          predchoziBlok instanceof HTMLElement &&
-          predchoziBlok.classList.contains(
-            "lubaNoteImage"
-          )
+        jeUzelObrazkovaHranice(
+          predchoziBlok
         );
 
       if (!jeHraniceObrazku) {
         return;
       }
 
-      cekajiciOpravaTypografiePoBackspace =
-        ulozTypografiiPredSloucenim(range);
-
-      if (cekajiciOpravaTypografiePoBackspace) {
-        const tatoOprava =
-          cekajiciOpravaTypografiePoBackspace;
-
-        /*
-         * Android standardně po beforeinput pošle i input. Kdyby některý
-         * WebView input vynechal, requestAnimationFrame je bezpečná druhá
-         * pojistka: proběhne až po nativním zpracování Backspace.
-         */
-        requestAnimationFrame(() => {
-          if (
-            cekajiciOpravaTypografiePoBackspace ===
-            tatoOprava
-          ) {
-            opravTypografiiPoSlouceniBackspace();
-          }
-        });
+      if (!jeBezpecnyTextovyBlokProRozbaleni(aktualniBlok)) {
+        return;
       }
-      /* Záměrně bez preventDefault(): WebView provede skutečné spojení. */
-    },
-    true
-  );
 
-  modalRichText.addEventListener(
-    "input",
-    () => {
-      if (cekajiciOpravaTypografiePoBackspace) {
-        opravTypografiiPoSlouceniBackspace();
-      }
+      event.preventDefault();
+
+      rozbalTextovyBlokZaObrazkem(
+        aktualniBlok,
+        vyber
+      );
     },
     true
   );
