@@ -36,6 +36,20 @@
   imageInput.hidden = true;
   imageInput.setAttribute("aria-hidden", "true");
   document.body.append(imageInput);
+
+  /*
+   * Samostatný input pro fotoaparát. `capture=environment` požádá Android
+   * WebView o zadní kameru, ale fotografie pak projde úplně stejnou
+   * kompresí a vkládáním jako obrázek vybraný z galerie.
+   * Nevyžaduje druhý systém práce s obrázky ani nový formát poznámky.
+   */
+  const cameraInput = document.createElement("input");
+  cameraInput.type = "file";
+  cameraInput.accept = "image/*";
+  cameraInput.setAttribute("capture", "environment");
+  cameraInput.hidden = true;
+  cameraInput.setAttribute("aria-hidden", "true");
+  document.body.append(cameraInput);
   
   
   
@@ -1938,12 +1952,19 @@
         "Zkus vybrat jiný obrázek."
       );
     } finally {
+      /* Stejný soubor lze díky resetu vybrat / vyfotit znovu. */
       imageInput.value = "";
+      cameraInput.value = "";
     }
   }
   
   imageInput.addEventListener("change", () => {
     const file = imageInput.files?.[0] || null;
+    void vlozVybranyObrazek(file);
+  });
+
+  cameraInput.addEventListener("change", () => {
+    const file = cameraInput.files?.[0] || null;
     void vlozVybranyObrazek(file);
   });
   
@@ -2315,7 +2336,17 @@
      VKLÁDÁNÍ MÉDIÍ Z TOOLBARU
   ========================================== */
 
-  window.vlozObrazekDoPoznamky = () => {
+  function otevriGaleriiObrazku() {
+    imageInput.value = "";
+    imageInput.click();
+  }
+
+  function otevriFotoaparatObrazku() {
+    cameraInput.value = "";
+    cameraInput.click();
+  }
+
+  function otevriVyberZdrojeObrazku() {
     if (jeTodoRezimAktivni()) {
       zobrazMediaZpravu(
         "Vkládání do textu poznámky",
@@ -2324,8 +2355,41 @@
       return;
     }
 
-    imageInput.click();
-  };
+    /*
+     * Jeden vstup v toolbaru, dvě přirozené cesty. V obou případech se
+     * použije stejný editorMedia pipeline: komprese -> figure -> drag -> sync.
+     */
+    if (typeof window.otevriVyberovyModal === "function") {
+      window.otevriVyberovyModal({
+        nadpis: "Vložit obrázek",
+        moznosti: [
+          {
+            hodnota: "galerie",
+            popisek: "🖼️ Galerie"
+          },
+          {
+            hodnota: "fotoaparat",
+            popisek: "📷 Fotoaparát"
+          }
+        ],
+        poVyberu: (hodnota) => {
+          if (hodnota === "fotoaparat") {
+            otevriFotoaparatObrazku();
+            return;
+          }
+
+          otevriGaleriiObrazku();
+        }
+      });
+      return;
+    }
+
+    /* Bez choiceModal.js zůstane bezpečný původní fallback. */
+    otevriGaleriiObrazku();
+  }
+
+  window.vlozObrazekDoPoznamky =
+    otevriVyberZdrojeObrazku;
 
   window.vlozOdkazDoPoznamky = () => {
     if (jeTodoRezimAktivni()) {
@@ -2722,7 +2786,9 @@
         )
       ),
     
-    vlozObrazek: () => imageInput.click(),
+    vlozObrazek: otevriVyberZdrojeObrazku,
+    vlozObrazekZGalerie: otevriGaleriiObrazku,
+    vyfotObrazek: otevriFotoaparatObrazku,
     otevriOdkaz: otevriLinkModal
   };
 })();

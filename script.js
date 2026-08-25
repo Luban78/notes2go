@@ -1868,21 +1868,117 @@ const modalRichText =
 
 /* Barevné označování je oddělené v richTextColors.js. */
 
+/*
+ * NÁZEV EDITORU – stabilní sbalení bez "třepání"
+ *
+ * Původně se název řídil jen scrollTop. Když se začal animovaně
+ * zmenšovat, změnila se výška editoru a WebView samo posunulo scrollTop
+ * zpět. Tím mohlo během jedné animace opakovaně vznikat
+ * sbalit -> rozbalit -> sbalit...
+ *
+ * Nově se po sbalení název smí znovu ukázat jen tehdy, když uživatel
+ * prokazatelně roluje směrem k začátku poznámky. Layoutový posun vyvolaný
+ * samotným schováním názvu tedy stav neotočí zpět.
+ */
+let posledniPohybKZacatkuEditoru = 0;
+let posledniPointerYEditoru = null;
+
+const CAS_ZAMERU_ROLOVAT_K_ZACATKU = 700;
+
+function oznacRolovaniKZacatkuEditoru() {
+  posledniPohybKZacatkuEditoru = performance.now();
+}
+
+modalRichText.addEventListener(
+  "pointerdown",
+  (event) => {
+    posledniPointerYEditoru = event.clientY;
+  },
+  { passive: true }
+);
+
+modalRichText.addEventListener(
+  "pointermove",
+  (event) => {
+    if (posledniPointerYEditoru === null) {
+      return;
+    }
+
+    const rozdilY =
+      event.clientY - posledniPointerYEditoru;
+
+    /* Prst jde dolů -> obsah se vrací směrem k začátku. */
+    if (rozdilY > 4) {
+      oznacRolovaniKZacatkuEditoru();
+    }
+
+    if (Math.abs(rozdilY) > 2) {
+      posledniPointerYEditoru = event.clientY;
+    }
+  },
+  { passive: true }
+);
+
+["pointerup", "pointercancel"].forEach(
+  (nazevUdalosti) => {
+    modalRichText.addEventListener(
+      nazevUdalosti,
+      () => {
+        posledniPointerYEditoru = null;
+      },
+      { passive: true }
+    );
+  }
+);
+
+modalRichText.addEventListener(
+  "wheel",
+  (event) => {
+    if (event.deltaY < 0) {
+      oznacRolovaniKZacatkuEditoru();
+    }
+  },
+  { passive: true }
+);
+
+modalRichText.addEventListener("keydown", (event) => {
+  if (["ArrowUp", "PageUp", "Home"].includes(event.key)) {
+    oznacRolovaniKZacatkuEditoru();
+  }
+});
+
 modalRichText.addEventListener("scroll", () => {
-  if (
-    !taskModal.classList.contains("titleCollapsed") &&
-    modalRichText.scrollTop > 28
-  ) {
+  const scrollTop = modalRichText.scrollTop;
+  const jeNazevSbaleny =
+    taskModal.classList.contains("titleCollapsed");
+
+  if (!jeNazevSbaleny && scrollTop > 28) {
     taskModal.classList.add("titleCollapsed");
+    return;
   }
 
-  if (
-    taskModal.classList.contains("titleCollapsed") &&
-    modalRichText.scrollTop < 8
-  ) {
+  if (!jeNazevSbaleny || scrollTop >= 8) {
+    return;
+  }
+
+  const uzivatelRolujeKZacatku =
+    performance.now() - posledniPohybKZacatkuEditoru <
+    CAS_ZAMERU_ROLOVAT_K_ZACATKU;
+
+  if (uzivatelRolujeKZacatku) {
     taskModal.classList.remove("titleCollapsed");
   }
 });
+
+function resetujSbaleniNazvuEditoru() {
+  taskModal.classList.remove("titleCollapsed");
+  posledniPohybKZacatkuEditoru = 0;
+  posledniPointerYEditoru = null;
+
+  requestAnimationFrame(() => {
+    modalRichText.scrollTop = 0;
+  });
+}
 
 modalRichText.addEventListener("focus", () => {
   taskModal.classList.add("editing");
@@ -2010,6 +2106,7 @@ addTaskButton.addEventListener("click", () => {
 
 
 
+  resetujSbaleniNazvuEditoru();
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
@@ -2536,6 +2633,7 @@ function openTaskEditorById(taskId) {
   aktualizujPopiskyDataCasu();
   updateModalWeekday();
 
+  resetujSbaleniNazvuEditoru();
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
