@@ -2429,13 +2429,133 @@
     return predchozi;
   }
 
+  /*
+   * Android někdy při druhém Backspace na hranici text ↔ obrázek
+   * vytvoří Range jinak, než očekává běžná bloková logika. Proto
+   * kontrolujeme i SKUTEČNÝ DOM uzel bezprostředně před caretem.
+   *
+   * První Backspace může normálně odstranit <br> / prázdný řádek.
+   * Jakmile je ale přímo před caretem contenteditable=false figure,
+   * další Backspace zastavíme. Obrázek má vlastní tlačítko ✕.
+   */
+  function najdiUzelTesnePredKurzorem(range) {
+    if (!range?.collapsed) {
+      return null;
+    }
+
+    let uzel = range.startContainer;
+    const offset = range.startOffset;
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      /* Uvnitř textu nejsme na mediální hranici. */
+      if (offset > 0) {
+        return null;
+      }
+    } else if (uzel.nodeType === Node.ELEMENT_NODE) {
+      if (offset > 0) {
+        return uzel.childNodes[offset - 1] || null;
+      }
+    }
+
+    while (uzel && uzel !== modalRichText) {
+      if (uzel.previousSibling) {
+        return uzel.previousSibling;
+      }
+
+      uzel = uzel.parentNode;
+    }
+
+    return null;
+  }
+
+  function jeUzelObrazkovaHranice(uzel) {
+    if (!uzel) {
+      return false;
+    }
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      return false;
+    }
+
+    if (!(uzel instanceof Element)) {
+      return false;
+    }
+
+    return Boolean(
+      uzel.matches?.(".lubaNoteImage") ||
+      uzel.closest?.(".lubaNoteImage") ||
+      uzel.querySelector?.(":scope > .lubaNoteImage")
+    );
+  }
+
+  function zablokujBackspacePresObrazek(event) {
+    const vyber = window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
+      return false;
+    }
+
+    const range = vyber.getRangeAt(0);
+
+    if (
+      !range.collapsed ||
+      !jeRozsahVEditoru(range)
+    ) {
+      return false;
+    }
+
+    const uzelPredKurzorem =
+      najdiUzelTesnePredKurzorem(range);
+
+    if (!jeUzelObrazkovaHranice(uzelPredKurzorem)) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation?.();
+
+    const zachovanyRange = range.cloneRange();
+
+    requestAnimationFrame(() => {
+      if (!zachovanyRange.startContainer?.isConnected) {
+        return;
+      }
+
+      const aktualniVyber = window.getSelection();
+      aktualniVyber?.removeAllRanges();
+      aktualniVyber?.addRange(zachovanyRange);
+      ulozenyRozsahEditoru = zachovanyRange.cloneRange();
+    });
+
+    return true;
+  }
+
+  /* Desktop / HW klávesnice. Na Androidu je hlavní pojistka beforeinput níže. */
+  modalRichText.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Backspace") {
+        zablokujBackspacePresObrazek(event);
+      }
+    },
+    true
+  );
+
   modalRichText.addEventListener(
     "beforeinput",
     (event) => {
       if (
-        event.inputType !== "deleteContentBackward" ||
+        !String(event.inputType || "").startsWith("delete") ||
         event.isComposing
       ) {
+        return;
+      }
+
+      /*
+       * Nejdřív zkusíme přímou DOM hranici. Tohle pokrývá i Android
+       * WebView případy, kdy caret neleží v očekávaném přímém bloku.
+       */
+      if (zablokujBackspacePresObrazek(event)) {
         return;
       }
 
