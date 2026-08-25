@@ -105,6 +105,9 @@
   let zacatekTazeniX = 0;
   let zacatekTazeniY = 0;
   let probihaTazeni = false;
+  let tazenyPointerId = null;
+  let tazenyDotykId = null;
+  let casPoslednihoTazeniBulletu = 0;
 
   let nahledTazenePolozky = null;
 
@@ -123,13 +126,28 @@
     return;
   }
 
-  function jePoziceNaKulce(polozka, x) {
+  function jePoziceNaKulce(
+    polozka,
+    x,
+    jeDotyk = false
+  ) {
     const pozice =
       polozka.getBoundingClientRect();
 
+    /*
+     * Myš je přesná, prst ne. Na mobilu proto používáme větší
+     * neviditelnou zónu kolem kulky, aniž bychom zvětšovali samotnou
+     * odrážku.
+     */
+    const dosahVlevo =
+      jeDotyk ? 42 : 28;
+
+    const dosahVpravo =
+      jeDotyk ? 8 : 0;
+
     return (
-      x >= pozice.left - 28 &&
-      x <= pozice.left
+      x >= pozice.left - dosahVlevo &&
+      x <= pozice.left + dosahVpravo
     );
   }
 
@@ -156,44 +174,64 @@
     return true;
   }
 
+  function ziskejTextPolozkyProNahled(polozka) {
+    const kopie =
+      polozka.cloneNode(true);
+
+    kopie
+      .querySelectorAll("ul, ol")
+      .forEach((seznam) => seznam.remove());
+
+    return (
+      kopie.textContent.trim() ||
+      "Položka seznamu"
+    );
+  }
+
+
   function vytvorNahledTazenePolozky(polozka) {
-  if (window.innerWidth >= 900) {
-    return;
+    if (jeDesktopEditor()) {
+      return;
+    }
+
+    odstranNahledTazenePolozky();
+
+    nahledTazenePolozky =
+      document.createElement("div");
+
+    nahledTazenePolozky.className =
+      "bulletDragPreview";
+
+    nahledTazenePolozky.textContent =
+      ziskejTextPolozkyProNahled(polozka);
+
+    document.body.appendChild(
+      nahledTazenePolozky
+    );
   }
 
-  nahledTazenePolozky =
-    document.createElement("div");
 
-  nahledTazenePolozky.className =
-    "bulletDragPreview";
+  function posunNahledTazenePolozky(x, y) {
+    if (!nahledTazenePolozky) {
+      return;
+    }
 
-  nahledTazenePolozky.textContent =
-    polozka.childNodes[0]?.textContent?.trim() ||
-    polozka.textContent.trim();
+    nahledTazenePolozky.style.left =
+      `${x}px`;
 
-  document.body.appendChild(
-    nahledTazenePolozky
-  );
-}
-
-
-function posunNahledTazenePolozky(x, y) {
-  if (!nahledTazenePolozky) {
-    return;
+    /*
+     * Náhled zvedneme dost vysoko nad prst, aby uživatel viděl
+     * taženou položku i cílovou čáru.
+     */
+    nahledTazenePolozky.style.top =
+      `${y - 92}px`;
   }
 
-  nahledTazenePolozky.style.left =
-    `${x}px`;
 
-  nahledTazenePolozky.style.top =
-    `${y - 75}px`;
-}
-
-
-function odstranNahledTazenePolozky() {
-  nahledTazenePolozky?.remove();
-  nahledTazenePolozky = null;
-}
+  function odstranNahledTazenePolozky() {
+    nahledTazenePolozky?.remove();
+    nahledTazenePolozky = null;
+  }
 
 
   function zobrazVlastniVyberTextu() {
@@ -875,17 +913,135 @@ function odstranNahledTazenePolozky() {
   }
 
   function zrusBulletDropIndikator() {
-  editorTextu
-    .querySelectorAll(
-      ".bulletDropBefore, .bulletDropAfter"
-    )
-    .forEach((prvek) => {
-      prvek.classList.remove(
-        "bulletDropBefore",
+    editorTextu
+      .querySelectorAll(
+        ".bulletDropBefore, .bulletDropAfter"
+      )
+      .forEach((prvek) => {
+        prvek.classList.remove(
+          "bulletDropBefore",
+          "bulletDropAfter"
+        );
+      });
+  }
+
+
+  function zahajVzhledTazeniBulletu(x, y) {
+    if (!tazenaPolozka) {
+      return;
+    }
+
+    probihaTazeni = true;
+
+    tazenaPolozka.classList.add(
+      "bulletDragging"
+    );
+
+    tazenaPolozka.parentElement?.classList.add(
+      "bulletDragActive"
+    );
+
+    if (!nahledTazenePolozky) {
+      vytvorNahledTazenePolozky(
+        tazenaPolozka
+      );
+    }
+
+    posunNahledTazenePolozky(x, y);
+
+    const vyber =
+      window.getSelection();
+
+    if (vyber && !vyber.isCollapsed) {
+      vyber.removeAllRanges();
+    }
+  }
+
+
+  function presunBulletPodlePozice(x, y) {
+    if (!tazenaPolozka) {
+      return;
+    }
+
+    posunNahledTazenePolozky(x, y);
+    zrusBulletDropIndikator();
+
+    const seznam =
+      tazenaPolozka.parentElement;
+
+    if (!seznam) {
+      return;
+    }
+
+    const polozky =
+      Array.from(seznam.children).filter(
+        (prvek) =>
+          prvek.tagName === "LI" &&
+          prvek !== tazenaPolozka
+      );
+
+    for (const polozka of polozky) {
+      const pozice =
+        polozka.getBoundingClientRect();
+
+      const stred =
+        pozice.top +
+        pozice.height / 2;
+
+      if (y < stred) {
+        polozka.classList.add(
+          "bulletDropBefore"
+        );
+
+        seznam.insertBefore(
+          tazenaPolozka,
+          polozka
+        );
+
+        return;
+      }
+    }
+
+    const posledniPolozka =
+      polozky[polozky.length - 1];
+
+    if (posledniPolozka) {
+      posledniPolozka.classList.add(
         "bulletDropAfter"
       );
-    });
-}
+    }
+
+    seznam.appendChild(
+      tazenaPolozka
+    );
+  }
+
+
+  function uklidTazeniBulletu() {
+    if (probihaTazeni) {
+      casPoslednihoTazeniBulletu =
+        Date.now();
+    }
+
+    zrusBulletDropIndikator();
+
+    if (tazenaPolozka) {
+      tazenaPolozka.classList.remove(
+        "bulletDragging"
+      );
+
+      tazenaPolozka.parentElement?.classList.remove(
+        "bulletDragActive"
+      );
+    }
+
+    odstranNahledTazenePolozky();
+
+    tazenaPolozka = null;
+    tazenyPointerId = null;
+    tazenyDotykId = null;
+    probihaTazeni = false;
+  }
 
 
   function oznacAktivniZarovnani(zarovnani) {
@@ -1081,9 +1237,22 @@ function odstranNahledTazenePolozky() {
     }
   );
 
+  /* ==========================================
+     BULLET DRAG – MYŠ / TOUCH
+     ========================================== */
+
+  /*
+   * Desktop používá Pointer Events. Dotyk má vlastní Touch Events větev
+   * níže, protože Android při běžném pointer dragu rád převezme gesto pro
+   * scroll a pošle pointercancel.
+   */
   editorTextu.addEventListener(
     "pointerdown",
     (udalost) => {
+      if (udalost.pointerType === "touch") {
+        return;
+      }
+
       const polozka =
         udalost.target.closest("li");
 
@@ -1104,141 +1273,249 @@ function odstranNahledTazenePolozky() {
       }
 
       tazenaPolozka = polozka;
-
-      zacatekTazeniX =
-        udalost.clientX;
-
-      zacatekTazeniY =
-        udalost.clientY;
-
+      tazenyPointerId = udalost.pointerId;
+      zacatekTazeniX = udalost.clientX;
+      zacatekTazeniY = udalost.clientY;
       probihaTazeni = false;
-    }
-  );
 
-  editorTextu.addEventListener(
-  "pointermove",
-  (udalost) => {
-    if (!tazenaPolozka) {
-      return;
-    }
-
-    const rozdilY =
-      udalost.clientY - zacatekTazeniY;
-
-    if (
-      !probihaTazeni &&
-      Math.abs(rozdilY) < 6
-    ) {
-      return;
-    }
-
-    probihaTazeni = true;
-    if (!nahledTazenePolozky) {
-  vytvorNahledTazenePolozky(
-    tazenaPolozka
-  );
-}
-
-posunNahledTazenePolozky(
-  udalost.clientX,
-  udalost.clientY
-);
-
-    tazenaPolozka.classList.add(
-      "bulletDragging"
-    );
-
-    tazenaPolozka.parentElement.classList.add(
-      "bulletDragActive"
-    );
-
-    udalost.preventDefault();
-
-    const vyber =
-      window.getSelection();
-
-    if (
-      vyber &&
-      !vyber.isCollapsed
-    ) {
-      vyber.removeAllRanges();
-    }
-
-    zrusBulletDropIndikator();
-
-    const seznam =
-      tazenaPolozka.parentElement;
-
-    const polozky =
-      Array.from(
-        seznam.children
-      ).filter(
-        (prvek) =>
-          prvek.tagName === "LI" &&
-          prvek !== tazenaPolozka
-      );
-
-    for (const polozka of polozky) {
-      const pozice =
-        polozka.getBoundingClientRect();
-
-      const stred =
-        pozice.top +
-        pozice.height / 2;
-
-      if (
-        udalost.clientY <
-        stred
-      ) {
-        polozka.classList.add(
-          "bulletDropBefore"
+      try {
+        polozka.setPointerCapture(
+          udalost.pointerId
         );
-
-        seznam.insertBefore(
-          tazenaPolozka,
-          polozka
-        );
-
-        return;
+      } catch (_) {
+        /* Pointer capture není pro funkci povinný. */
       }
     }
+  );
 
-    const posledniPolozka =
-      polozky[
-        polozky.length - 1
-      ];
 
-    if (posledniPolozka) {
-      posledniPolozka.classList.add(
-        "bulletDropAfter"
+  editorTextu.addEventListener(
+    "pointermove",
+    (udalost) => {
+      if (
+        udalost.pointerType === "touch" ||
+        !tazenaPolozka ||
+        tazenyPointerId !== udalost.pointerId
+      ) {
+        return;
+      }
+
+      const rozdilX =
+        udalost.clientX - zacatekTazeniX;
+
+      const rozdilY =
+        udalost.clientY - zacatekTazeniY;
+
+      if (
+        !probihaTazeni &&
+        Math.hypot(rozdilX, rozdilY) < 6
+      ) {
+        return;
+      }
+
+      udalost.preventDefault();
+
+      if (!probihaTazeni) {
+        zahajVzhledTazeniBulletu(
+          udalost.clientX,
+          udalost.clientY
+        );
+      }
+
+      presunBulletPodlePozice(
+        udalost.clientX,
+        udalost.clientY
       );
     }
+  );
 
-    seznam.appendChild(
-      tazenaPolozka
-    );
-  }
-);
 
   window.addEventListener(
     "pointerup",
-    () => {
-      zrusBulletDropIndikator();
+    (udalost) => {
+      if (udalost.pointerType === "touch") {
+        return;
+      }
 
-      if (tazenaPolozka) {
-        tazenaPolozka.classList.remove(
-          "bulletDragging"
+      if (
+        tazenyPointerId !== null &&
+        udalost.pointerId !== tazenyPointerId
+      ) {
+        return;
+      }
+
+      uklidTazeniBulletu();
+    }
+  );
+
+
+  window.addEventListener(
+    "pointercancel",
+    (udalost) => {
+      if (udalost.pointerType === "touch") {
+        return;
+      }
+
+      if (
+        tazenyPointerId !== null &&
+        udalost.pointerId !== tazenyPointerId
+      ) {
+        return;
+      }
+
+      uklidTazeniBulletu();
+    }
+  );
+
+
+  function najdiDotykPodleId(dotyky, id) {
+    return Array.from(dotyky).find(
+      (dotyk) => dotyk.identifier === id
+    ) || null;
+  }
+
+
+  editorTextu.addEventListener(
+    "touchstart",
+    (udalost) => {
+      if (udalost.touches.length !== 1) {
+        return;
+      }
+
+      const polozka =
+        udalost.target.closest?.("li");
+
+      if (
+        !polozka ||
+        !editorTextu.contains(polozka)
+      ) {
+        return;
+      }
+
+      const dotyk =
+        udalost.touches[0];
+
+      if (
+        !jePoziceNaKulce(
+          polozka,
+          dotyk.clientX,
+          true
+        )
+      ) {
+        return;
+      }
+
+      /*
+       * Scroll blokujeme pouze při dotyku v zóně kulky. Dotyk na textu
+       * seznamu dál normálně scrolluje celý editor.
+       */
+      udalost.preventDefault();
+
+      tazenaPolozka = polozka;
+      tazenyDotykId = dotyk.identifier;
+      zacatekTazeniX = dotyk.clientX;
+      zacatekTazeniY = dotyk.clientY;
+      probihaTazeni = false;
+    },
+    { passive: false }
+  );
+
+
+  editorTextu.addEventListener(
+    "touchmove",
+    (udalost) => {
+      if (
+        !tazenaPolozka ||
+        tazenyDotykId === null
+      ) {
+        return;
+      }
+
+      const dotyk =
+        najdiDotykPodleId(
+          udalost.touches,
+          tazenyDotykId
         );
 
-        tazenaPolozka.parentElement?.classList.remove(
-          "bulletDragActive"
+      if (!dotyk) {
+        return;
+      }
+
+      udalost.preventDefault();
+
+      const rozdilX =
+        dotyk.clientX - zacatekTazeniX;
+
+      const rozdilY =
+        dotyk.clientY - zacatekTazeniY;
+
+      if (
+        !probihaTazeni &&
+        Math.hypot(rozdilX, rozdilY) < 10
+      ) {
+        return;
+      }
+
+      if (!probihaTazeni) {
+        zahajVzhledTazeniBulletu(
+          dotyk.clientX,
+          dotyk.clientY
         );
       }
 
-      tazenaPolozka = null;
-      probihaTazeni = false;
-      odstranNahledTazenePolozky();
-    }
+      presunBulletPodlePozice(
+        dotyk.clientX,
+        dotyk.clientY
+      );
+    },
+    { passive: false }
+  );
+
+
+  editorTextu.addEventListener(
+    "touchend",
+    (udalost) => {
+      if (tazenyDotykId === null) {
+        return;
+      }
+
+      const dotyk =
+        najdiDotykPodleId(
+          udalost.changedTouches,
+          tazenyDotykId
+        );
+
+      if (!dotyk) {
+        return;
+      }
+
+      udalost.preventDefault();
+
+      /*
+       * Krátký tap na kulku = expand/collapse. Jakmile se prst opravdu
+       * rozjede, stejné místo funguje jako drag handle.
+       */
+      if (
+        !probihaTazeni &&
+        tazenaPolozka
+      ) {
+        prepniSbaleniPolozky(
+          tazenaPolozka
+        );
+      }
+
+      uklidTazeniBulletu();
+    },
+    { passive: false }
+  );
+
+
+  editorTextu.addEventListener(
+    "touchcancel",
+    () => {
+      uklidTazeniBulletu();
+    },
+    { passive: false }
   );
 
   tlacitkoBullet?.addEventListener(
@@ -1293,6 +1570,13 @@ posunNahledTazenePolozky(
   editorTextu.addEventListener(
     "click",
     (udalost) => {
+      /* Po skutečném dragu nesmí následný syntetický click sbalit větev. */
+      if (
+        Date.now() - casPoslednihoTazeniBulletu < 250
+      ) {
+        return;
+      }
+
       const polozka =
         udalost.target.closest("li");
 

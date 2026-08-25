@@ -6579,7 +6579,7 @@ text-size-adjust: 100%;
   position: fixed;
   z-index: 99999;
 
-  max-width: min(70vw, 320px);
+  max-width: min(78vw, 360px);
 
   padding: 10px 14px;
 
@@ -6595,18 +6595,40 @@ text-size-adjust: 100%;
   font-size: var(--font-size);
   font-weight: 600;
 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
   pointer-events: none;
 
-  transform:
-    translateX(-50%);
+  transform: translateX(-50%);
 }
+
 @media (max-width: 899px) {
+  /*
+   * Větší neviditelná plocha kulky pro prst. Střed kulky zůstává
+   * prakticky na stejném místě, takže vzhled seznamu se nemění.
+   */
+  .modalRichText li::before {
+    left: -32px;
+    width: 36px;
+    height: 2em;
+
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   .modalRichText li.bulletDragging {
-    opacity: 0.35;
+    opacity: 0.28;
   }
 
   .modalRichText li.bulletDropBefore::after,
   .modalRichText li.bulletDropAfter::after {
     height: 4px;
+  }
+
+  .bulletDragPreview {
+    min-width: 140px;
+    max-width: 76vw;
   }
 }
