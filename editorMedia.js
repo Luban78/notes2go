@@ -2480,35 +2480,65 @@
           aktualniBlok
         );
 
-      if (!jePrazdnyEditacniBlok(predchoziBlok)) {
+      /*
+       * 1) Před textem je skutečný prázdný řádek.
+       *    Odstraníme jen ten a nenecháme WebView slučovat bloky.
+       */
+      if (jePrazdnyEditacniBlok(predchoziBlok)) {
+        event.preventDefault();
+
+        const zachovanyRange =
+          range.cloneRange();
+
+        predchoziBlok.remove();
+
+        if (
+          zachovanyRange.startContainer?.isConnected
+        ) {
+          vyber.removeAllRanges();
+          vyber.addRange(zachovanyRange);
+          ulozenyRozsahEditoru =
+            zachovanyRange.cloneRange();
+        }
+
+        modalRichText.dispatchEvent(
+          new Event("input", { bubbles: true })
+        );
         return;
       }
 
       /*
-       * Důležité: nenecháme WebView provést vlastní merge bloků.
-       * Odstraníme pouze prázdný řádek a původní Range vrátíme na stejné
-       * místo v aktuálním bloku. Jeho font-size / line-height se tím
-       * vůbec nemění.
+       * 2) Před textem už je přímo obrázek.
+       *
+       * Druhý Backspace na této hranici už nemá žádný prázdný text,
+       * který by mohl bezpečně smazat. Chromium by se proto pokusilo
+       * spojit textový blok přes contenteditable=false <figure> a na
+       * Androidu při tom dokázalo převzít cizí font-size / line-height
+       * (typicky skok 16 -> 20 px).
+       *
+       * Obrázek se maže vlastním tlačítkem X, takže Backspace přes tuto
+       * mediální hranici záměrně zastavíme a zachováme kurzor i styl.
        */
-      event.preventDefault();
-
-      const zachovanyRange =
-        range.cloneRange();
-
-      predchoziBlok.remove();
-
       if (
-        zachovanyRange.startContainer?.isConnected
+        predchoziBlok instanceof HTMLElement &&
+        predchoziBlok.classList.contains(
+          "lubaNoteImage"
+        )
       ) {
-        vyber.removeAllRanges();
-        vyber.addRange(zachovanyRange);
-        ulozenyRozsahEditoru =
-          zachovanyRange.cloneRange();
-      }
+        event.preventDefault();
 
-      modalRichText.dispatchEvent(
-        new Event("input", { bubbles: true })
-      );
+        const zachovanyRange =
+          range.cloneRange();
+
+        if (
+          zachovanyRange.startContainer?.isConnected
+        ) {
+          vyber.removeAllRanges();
+          vyber.addRange(zachovanyRange);
+          ulozenyRozsahEditoru =
+            zachovanyRange.cloneRange();
+        }
+      }
     }
   );
 
