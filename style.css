@@ -5229,6 +5229,18 @@ text-size-adjust: 100%;
   pointer-events: none;
 }
 
+.lubaNoteImageDropIndicator::after {
+  content: "";
+  position: absolute;
+  left: var(--luba-note-drop-x, 50%);
+  top: -5px;
+  width: 3px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transform: translateX(-1px);
+}
+
 .lubaNoteImageDropIndicator[hidden] {
   display: none !important;
 }
@@ -5248,19 +5260,18 @@ text-size-adjust: 100%;
   -webkit-touch-callout: none;
 }
 
+#modalRichText .lubaNoteImageSettings,
 #modalRichText .lubaNoteImageRemove {
   position: absolute;
+  z-index: 4;
 
   /* Pevné hodnoty jsou fallback pro starší WebView. */
   top: 8px;
-  right: 8px;
   width: 34px;
   height: 34px;
 
-  /* V podporovaných prohlížečích se křížek přizpůsobí
-     šířce konkrétního obrázkového bloku. */
+  /* V podporovaných prohlížečích se ovládání přizpůsobí šířce obrázku. */
   top: clamp(4px, 2cqi, 8px);
-  right: clamp(4px, 2cqi, 8px);
   width: clamp(22px, 12cqi, 34px);
   height: clamp(22px, 12cqi, 34px);
 
@@ -5271,14 +5282,58 @@ text-size-adjust: 100%;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 50%;
-  background: rgba(20, 20, 20, 0.72);
+  background: rgba(20, 20, 20, 0.76);
   color: white;
 
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+
+  /*
+   * V běžném stavu je obrázek úplně čistý. ⚙ a ✕ se ukážou až po
+   * jednom kliknutí / focusu obrázku.
+   */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.88);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
 }
 
-/* Křížek je jen CSS obsah – nepropíše se do plain-text poznámky. */
+#modalRichText .lubaNoteImageRemove {
+  right: 8px;
+  right: clamp(4px, 2cqi, 8px);
+}
+
+#modalRichText .lubaNoteImageSettings {
+  /* Vedle křížku, ne přes něj. */
+  right: 48px;
+  right: clamp(30px, 16cqi, 48px);
+}
+
+#modalRichText .lubaNoteImage:focus-within .lubaNoteImageSettings,
+#modalRichText .lubaNoteImage:focus-within .lubaNoteImageRemove {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+#modalRichText .lubaNoteImageSettings:active,
+#modalRichText .lubaNoteImageRemove:active {
+  transform: scale(0.92);
+}
+
+/* Ikony jsou pouze CSS obsah – nepropíšou se do plain-text poznámky. */
+#modalRichText .lubaNoteImageSettings::before {
+  content: "⚙";
+  font-size: 17px;
+  font-size: clamp(11px, 5.5cqi, 17px);
+  line-height: 1;
+}
+
 #modalRichText .lubaNoteImageRemove::before {
   content: "✕";
   font-size: 18px;

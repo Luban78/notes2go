@@ -83,20 +83,16 @@
     }
   ];
 
-  let imageLongPressTimer = null;
-  let imagePressStartX = 0;
-  let imagePressStartY = 0;
-  let imageLongPressSpusten = false;
   let selectedImage = null;
 
   /*
-   * Přesun obrázku je záměrně dvoukrokový:
-   * 1. krátký klik obrázek označí,
-   * 2. až označený obrázek lze dalším tahem přesunout.
+   * Ovládání obrázku je záměrně jednoduché:
+   * 1. jeden klik obrázek označí,
+   * 2. zobrazí se ⚙ nastavení + ✕ smazání,
+   * 3. označený obrázek lze dalším tahem přesunout.
    *
-   * Na mobilu je to podstatně spolehlivější než kombinovat scroll,
-   * long-press a drag v jediném gestu. Dlouhý stisk bez pohybu dál
-   * otevírá nastavení velikosti / zarovnání obrázku.
+   * Long-press už nepoužíváme. Na webu tím zároveň nevzniká konflikt
+   * s nativní nabídkou Chrome (Google Lens / stáhnout obrázek...).
    */
   let oznacenyObrazekProPresun = null;
   let stisknutyObrazek = null;
@@ -109,20 +105,72 @@
   let puvodniPrazdnyRadekObrazku = null;
   let ukazatelPresunuObrazku = null;
 
-  const IMAGE_LONG_PRESS_TIME = 600;
-  const IMAGE_DRAG_START_DISTANCE = 10;
+  const IMAGE_DRAG_START_DISTANCE = 9;
 
   function ziskejBlokObrazku(image) {
     return image?.closest?.(".lubaNoteImage") || null;
   }
 
-  function oznacObrazekProPresun(image) {
-    if (!image) {
-      oznacenyObrazekProPresun = null;
+  function vytvorTlacitkoNastaveniObrazku() {
+    const tlacitko = document.createElement("button");
+    tlacitko.type = "button";
+    tlacitko.className = "lubaNoteImageSettings";
+    tlacitko.setAttribute(
+      "aria-label",
+      "Nastavení obrázku"
+    );
+    tlacitko.contentEditable = "false";
+    return tlacitko;
+  }
+
+  function zajistiOvladaniObrazku(figure) {
+    if (!figure) {
       return;
     }
 
+    figure.contentEditable = "false";
+
+    const image = figure.querySelector("img");
+
+    if (image) {
+      image.draggable = false;
+
+      if (!image.hasAttribute("tabindex")) {
+        image.setAttribute("tabindex", "-1");
+      }
+    }
+
+    if (!figure.querySelector(".lubaNoteImageSettings")) {
+      const tlacitkoNastaveni =
+        vytvorTlacitkoNastaveniObrazku();
+
+      const removeButton = figure.querySelector(
+        ".lubaNoteImageRemove"
+      );
+
+      if (removeButton) {
+        figure.insertBefore(
+          tlacitkoNastaveni,
+          removeButton
+        );
+      } else {
+        figure.append(tlacitkoNastaveni);
+      }
+    }
+  }
+
+  function oznacObrazekProPresun(image) {
+    if (!image) {
+      oznacenyObrazekProPresun = null;
+      selectedImage = null;
+      return;
+    }
+
+    const figure = ziskejBlokObrazku(image);
+    zajistiOvladaniObrazku(figure);
+
     oznacenyObrazekProPresun = image;
+    selectedImage = image;
 
     /*
      * Focus používáme jen jako dočasný vizuální stav.
@@ -150,6 +198,7 @@
     }
 
     oznacenyObrazekProPresun = null;
+    selectedImage = null;
   }
 
   function jeObrazekOznacenyProPresun(image) {
@@ -498,87 +547,306 @@
     return "stred";
   }
 
+  function ziskejRozsahZBoduPresunu(
+    clientX,
+    clientY
+  ) {
+    let range = null;
+
+    if (
+      typeof document.caretRangeFromPoint ===
+      "function"
+    ) {
+      range = document.caretRangeFromPoint(
+        clientX,
+        clientY
+      );
+    } else if (
+      typeof document.caretPositionFromPoint ===
+      "function"
+    ) {
+      const pozice =
+        document.caretPositionFromPoint(
+          clientX,
+          clientY
+        );
+
+      if (pozice) {
+        range = document.createRange();
+        range.setStart(
+          pozice.offsetNode,
+          pozice.offset
+        );
+        range.collapse(true);
+      }
+    }
+
+    if (!range || !jeRozsahVEditoru(range)) {
+      return null;
+    }
+
+    const startElement =
+      range.startContainer.nodeType === Node.TEXT_NODE
+        ? range.startContainer.parentElement
+        : range.startContainer;
+
+    if (
+      presouvanyFigure &&
+      startElement &&
+      presouvanyFigure.contains(startElement)
+    ) {
+      return null;
+    }
+
+    range.collapse(true);
+    return range;
+  }
+
+  function ziskejRectUzluProPresun(uzel) {
+    if (!uzel?.isConnected) {
+      return null;
+    }
+
+    if (uzel.nodeType === Node.ELEMENT_NODE) {
+      return uzel.getBoundingClientRect();
+    }
+
+    try {
+      const range = document.createRange();
+      range.selectNode(uzel);
+      return range.getBoundingClientRect();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function vytvorNahradniRozsahPresunu(clientY) {
+    const range = document.createRange();
+
+    const uzly = [
+      ...modalRichText.childNodes
+    ].filter((uzel) => uzel !== presouvanyFigure);
+
+    if (uzly.length === 0) {
+      range.selectNodeContents(modalRichText);
+      range.collapse(false);
+      return range;
+    }
+
+    for (const uzel of uzly) {
+      const rect = ziskejRectUzluProPresun(uzel);
+
+      if (!rect) {
+        continue;
+      }
+
+      if (clientY < rect.top + rect.height / 2) {
+        range.setStartBefore(uzel);
+        range.collapse(true);
+        return range;
+      }
+    }
+
+    range.setStartAfter(uzly[uzly.length - 1]);
+    range.collapse(true);
+    return range;
+  }
+
+  function ziskejYProUkazatelPresunu(
+    range,
+    clientY
+  ) {
+    try {
+      const rect = range?.getBoundingClientRect?.();
+
+      if (
+        rect &&
+        Number.isFinite(rect.top) &&
+        (rect.height > 0 || rect.width > 0)
+      ) {
+        return rect.bottom || rect.top;
+      }
+    } catch (_) {
+      /* Některé prázdné caret pozice nemají vlastní rect. */
+    }
+
+    const editorRect =
+      modalRichText.getBoundingClientRect();
+
+    return Math.max(
+      editorRect.top + 4,
+      Math.min(clientY, editorRect.bottom - 4)
+    );
+  }
+
   function najdiCilPresunuObrazku(
     clientX,
     clientY
   ) {
-    const editorRect =
-      modalRichText.getBoundingClientRect();
-
-    const elementPodPrstem =
-      document.elementFromPoint(
+    const range =
+      ziskejRozsahZBoduPresunu(
         clientX,
         clientY
-      );
-
-    let cilovyUzel = null;
-
-    if (
-      elementPodPrstem &&
-      (
-        elementPodPrstem === modalRichText ||
-        modalRichText.contains(elementPodPrstem)
-      )
-    ) {
-      cilovyUzel = ziskejPrimehoPotomkaEditoru(
-        elementPodPrstem
-      );
-    }
-
-    if (
-      cilovyUzel === presouvanyFigure
-    ) {
-      cilovyUzel = null;
-    }
-
-    if (!cilovyUzel) {
-      const ostatniUzly = [
-        ...modalRichText.children
-      ].filter(
-        (uzel) => uzel !== presouvanyFigure
-      );
-
-      if (ostatniUzly.length === 0) {
-        return {
-          uzel: null,
-          pred: false,
-          y: editorRect.top + 8
-        };
-      }
-
-      const prvni = ostatniUzly[0];
-      const posledni =
-        ostatniUzly[ostatniUzly.length - 1];
-
-      if (
-        clientY <=
-        prvni.getBoundingClientRect().top
-      ) {
-        return {
-          uzel: prvni,
-          pred: true,
-          y: prvni.getBoundingClientRect().top
-        };
-      }
-
-      return {
-        uzel: posledni,
-        pred: false,
-        y: posledni.getBoundingClientRect().bottom
-      };
-    }
-
-    const rect =
-      cilovyUzel.getBoundingClientRect();
-
-    const pred =
-      clientY < rect.top + rect.height / 2;
+      ) || vytvorNahradniRozsahPresunu(clientY);
 
     return {
-      uzel: cilovyUzel,
-      pred,
-      y: pred ? rect.top : rect.bottom
+      range: range.cloneRange(),
+      y: ziskejYProUkazatelPresunu(
+        range,
+        clientY
+      )
     };
+  }
+
+  function maFragmentSkutecnyObsah(fragment) {
+    if (!fragment) {
+      return false;
+    }
+
+    if (fragment.textContent.trim() !== "") {
+      return true;
+    }
+
+    return Boolean(
+      fragment.querySelector?.(
+        "img, figure, a[href], ul, ol, li, table"
+      )
+    );
+  }
+
+  function vlozFigureNaPresnouPozici(
+    figure,
+    range,
+    clientY
+  ) {
+    if (!figure || !range || !jeRozsahVEditoru(range)) {
+      modalRichText.append(figure);
+      return;
+    }
+
+    const cilovyRange = range.cloneRange();
+    cilovyRange.collapse(true);
+
+    const primyUzel =
+      ziskejPrimehoPotomkaEditoru(
+        cilovyRange.startContainer
+      );
+
+    /* Caret leží přímo mezi kořenovými uzly editoru. */
+    if (!primyUzel) {
+      if (cilovyRange.startContainer === modalRichText) {
+        const index = Math.min(
+          cilovyRange.startOffset,
+          modalRichText.childNodes.length
+        );
+
+        const pred = modalRichText.childNodes[index] || null;
+        modalRichText.insertBefore(figure, pred);
+        return;
+      }
+
+      modalRichText.append(figure);
+      return;
+    }
+
+    if (primyUzel === figure) {
+      return;
+    }
+
+    /* Přetažení přes jiný obrázek = před / za něj podle výšky prstu. */
+    if (
+      primyUzel.nodeType === Node.ELEMENT_NODE &&
+      primyUzel.classList?.contains("lubaNoteImage")
+    ) {
+      const rect = primyUzel.getBoundingClientRect();
+
+      if (clientY < rect.top + rect.height / 2) {
+        primyUzel.before(figure);
+      } else {
+        primyUzel.after(figure);
+      }
+      return;
+    }
+
+    /* Prázdný řádek je skutečné připravené drop místo. */
+    if (
+      primyUzel.nodeType === Node.ELEMENT_NODE &&
+      jePrazdnyRadekZaObrazkem(primyUzel)
+    ) {
+      primyUzel.before(figure);
+      return;
+    }
+
+    /* Kořenový textový uzel umí Range rozdělit přímo. */
+    if (primyUzel.nodeType === Node.TEXT_NODE) {
+      cilovyRange.insertNode(figure);
+      return;
+    }
+
+    if (primyUzel.nodeType !== Node.ELEMENT_NODE) {
+      primyUzel.before?.(figure);
+      return;
+    }
+
+    /*
+     * Drop uvnitř odstavce / DIVu: rozdělíme blok přesně v caret pozici.
+     * Obrázek se tak může vložit i doprostřed hotového textu, ne jen před
+     * nebo za celý blok. Následující část textu pak může přirozeně obtékat
+     * menší obrázek vlevo / vpravo.
+     */
+    try {
+      const predRozsah = document.createRange();
+      predRozsah.selectNodeContents(primyUzel);
+      predRozsah.setEnd(
+        cilovyRange.startContainer,
+        cilovyRange.startOffset
+      );
+
+      const zaRozsah = document.createRange();
+      zaRozsah.setStart(
+        cilovyRange.startContainer,
+        cilovyRange.startOffset
+      );
+      zaRozsah.setEnd(
+        primyUzel,
+        primyUzel.childNodes.length
+      );
+
+      const obsahPred = predRozsah.cloneContents();
+      const obsahZa = zaRozsah.cloneContents();
+      const maPred = maFragmentSkutecnyObsah(obsahPred);
+      const maZa = maFragmentSkutecnyObsah(obsahZa);
+
+      if (!maPred && maZa) {
+        primyUzel.before(figure);
+        return;
+      }
+
+      if (maPred && !maZa) {
+        primyUzel.after(figure);
+        return;
+      }
+
+      if (!maPred && !maZa) {
+        primyUzel.before(figure);
+        return;
+      }
+
+      const fragmentZa = zaRozsah.extractContents();
+      const blokZa = primyUzel.cloneNode(false);
+
+      /* ID nesmí být po rozdělení bloku duplicitní. */
+      blokZa.removeAttribute?.("id");
+      blokZa.append(fragmentZa);
+
+      primyUzel.after(figure, blokZa);
+    } catch (error) {
+      console.warn(
+        "Přesné vložení obrázku se nepodařilo, používám nejbližší pozici.",
+        error
+      );
+      primyUzel.after(figure);
+    }
   }
 
   function posunEditorPriPresunuObrazku(clientY) {
@@ -646,6 +914,19 @@
     marker.style.top =
       `${Math.round(cilPresunuObrazku.y)}px`;
 
+    const relativniX = Math.max(
+      0,
+      Math.min(
+        editorRect.width - odsazeni * 2,
+        clientX - (editorRect.left + odsazeni)
+      )
+    );
+
+    marker.style.setProperty(
+      "--luba-note-drop-x",
+      `${Math.round(relativniX)}px`
+    );
+
     marker.hidden = false;
   }
 
@@ -661,9 +942,6 @@
     ) {
       return false;
     }
-
-    clearTimeout(imageLongPressTimer);
-    imageLongPressTimer = null;
 
     presouvanyObrazek = image;
     presouvanyFigure = figure;
@@ -750,23 +1028,20 @@
     const image = presouvanyObrazek;
     const cil = cilPresunuObrazku;
 
-    if (cil?.uzel?.isConnected) {
-      if (cil.pred) {
-        modalRichText.insertBefore(
-          figure,
-          cil.uzel
-        );
-      } else {
-        cil.uzel.after(figure);
-      }
+    if (cil?.range) {
+      vlozFigureNaPresnouPozici(
+        figure,
+        cil.range,
+        event.clientY
+      );
     } else {
       modalRichText.append(figure);
     }
 
     /*
-     * Horizontální místo puštění určí obtékání. Vertikální místo
-     * určí pořadí v dokumentu. Obrázek tak zůstává součástí toku
-     * textu a nerozbije responzivitu mezi telefonem a PC.
+     * Horizontální místo puštění určí obtékání. Vertikální místo je už
+     * přesná caret pozice v textu. Obrázek zůstává součástí toku dokumentu
+     * a nerozbije responzivitu mezi telefonem a PC.
      */
     nastavZarovnaniObrazku(
       image,
@@ -781,7 +1056,11 @@
       figure
     );
 
-    modalRichText.normalize();
+    /*
+     * Záměrně NEVOLÁME modalRichText.normalize(). U contenteditable může
+     * po přesunu média spojit textové uzly s rozdílným inline formátováním
+     * a změnit tím velikost části textu.
+     */
     oznamZmenuObrazku();
   }
 
@@ -823,7 +1102,7 @@
 
     schovejUkazatelPresunuObrazku();
 
-    /* Po přesunu zůstane obrázek označený pro případné doladění. */
+    /* Po přesunu zůstane obrázek označený pro další doladění. */
     if (presouvanyObrazek?.isConnected) {
       oznacObrazekProPresun(
         presouvanyObrazek
@@ -855,20 +1134,11 @@
         return;
       }
 
-      clearTimeout(imageLongPressTimer);
-
       imagePressStartX = event.clientX;
       imagePressStartY = event.clientY;
-      imageLongPressSpusten = false;
       selectedImage = obrazek;
       stisknutyObrazek = obrazek;
       stisknutyPointerId = event.pointerId;
-
-      imageLongPressTimer = setTimeout(() => {
-        imageLongPressTimer = null;
-        imageLongPressSpusten = true;
-        otevriNastaveniObrazku(obrazek);
-      }, IMAGE_LONG_PRESS_TIME);
     }
   );
 
@@ -914,13 +1184,10 @@
         return;
       }
 
-      clearTimeout(imageLongPressTimer);
-      imageLongPressTimer = null;
-
       /*
-       * Neoznačený obrázek se při pohybu nepřesouvá – prst může dál
-       * přirozeně scrollovat. Přesun se aktivuje až druhým gestem
-       * nad obrázkem, který byl předtím jedním klikem označen.
+       * První tap jen označí obrázek. Drag se spustí až dalším gestem
+       * na již označeném obrázku, takže běžný scroll přes neoznačené
+       * médium zůstává přirozený.
        */
       if (
         !jeObrazekOznacenyProPresun(
@@ -937,11 +1204,6 @@
     }
   );
 
-  function zrusLongPressObrazku() {
-    clearTimeout(imageLongPressTimer);
-    imageLongPressTimer = null;
-  }
-
   modalRichText.addEventListener(
     "pointerup",
     (event) => {
@@ -951,7 +1213,6 @@
         return;
       }
 
-      zrusLongPressObrazku();
       stisknutyObrazek = null;
       stisknutyPointerId = null;
     }
@@ -961,17 +1222,35 @@
     "pointercancel",
     (event) => {
       ukonciPresunObrazku(event, false);
-      zrusLongPressObrazku();
       stisknutyObrazek = null;
       stisknutyPointerId = null;
     }
   );
 
+  /*
+   * Zakážeme vestavěný HTML drag obrázku. Jinak může desktopový browser
+   * místo našeho figure přesunu začít táhnout samotný <img> element.
+   */
   modalRichText.addEventListener(
-    "pointerleave",
-    () => {
-      if (!presunObrazkuAktivni) {
-        zrusLongPressObrazku();
+    "dragstart",
+    (event) => {
+      if (event.target.closest?.(".lubaNoteImage")) {
+        event.preventDefault();
+      }
+    }
+  );
+
+  /*
+   * Webová verze: Chrome na Androidu jinak po dlouhém stisku obrázku
+   * otevře vlastní menu (Lens / kopírovat / stáhnout). V editoru máme
+   * vlastní ovládání, takže nativní context menu potlačíme jen na obrázku.
+   */
+  modalRichText.addEventListener(
+    "contextmenu",
+    (event) => {
+      if (event.target.closest?.(".lubaNoteImage")) {
+        event.preventDefault();
+        event.stopPropagation();
       }
     }
   );
@@ -1216,9 +1495,9 @@
   }
 
   /*
-   * Jeden klik obrázek označí pro drag. Kliknutí do prázdného místa
-   * vedle menšího obrázku vytvoří / použije skutečný textový řádek,
-   * takže lze psát i do prostoru, který byl dříve jen vizuálně volný.
+   * Jeden klik obrázek označí. Teprve potom se ukážou ⚙ a ✕ a druhým
+   * gestem lze obrázek přetáhnout. Kliknutí do prázdného místa vedle
+   * menšího obrázku vytvoří / použije skutečný textový řádek.
    */
   modalRichText.addEventListener(
     "click",
@@ -1233,20 +1512,14 @@
 
       if (obrazek) {
         event.preventDefault();
-
-        /* Po long-pressu nenecháme následný click ukrást focus modalu. */
-        if (imageLongPressSpusten) {
-          imageLongPressSpusten = false;
-          return;
-        }
-
         oznacObrazekProPresun(obrazek);
         return;
       }
 
+      /* Ovládací tlačítka si zpracují vlastní listener níže. */
       if (
         event.target.closest?.(
-          ".lubaNoteImageRemove"
+          ".lubaNoteImageSettings, .lubaNoteImageRemove"
         )
       ) {
         return;
@@ -1430,7 +1703,6 @@
        * nerozbije. Řádek pak dál slouží pro psaní pod dvojicí.
        */
       existujiciRadek.before(figure);
-      modalRichText.normalize();
       nastavKurzorDoRadku(existujiciRadek);
     } else {
       range.collapse(false);
@@ -1439,7 +1711,6 @@
       const radek = vytvorRadekProTextZaObrazkem();
       figure.after(radek);
 
-      modalRichText.normalize();
       nastavKurzorDoRadku(radek);
     }
 
@@ -1617,6 +1888,9 @@
     image.dataset.zarovnani = "stred";
     
     
+    const settingsButton =
+      vytvorTlacitkoNastaveniObrazku();
+
     const removeButton =
       document.createElement("button");
     removeButton.type = "button";
@@ -1630,6 +1904,7 @@
     
     figure.append(
       image,
+      settingsButton,
       removeButton
     );
     
@@ -2071,6 +2346,27 @@
   modalRichText.addEventListener(
     "click",
     (event) => {
+      const settingsButton =
+        event.target.closest?.(
+          ".lubaNoteImageSettings"
+        );
+
+      if (settingsButton) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const figure = settingsButton.closest(
+          ".lubaNoteImage"
+        );
+        const image = figure?.querySelector("img");
+
+        if (image) {
+          oznacObrazekProPresun(image);
+          otevriNastaveniObrazku(image);
+        }
+        return;
+      }
+
       const removeButton =
         event.target.closest?.(
           ".lubaNoteImageRemove"
