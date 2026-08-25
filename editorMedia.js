@@ -271,6 +271,156 @@
     return true;
   }
 
+  function jePrazdnyPomocnyUzelObrazku(node) {
+    if (!node) {
+      return false;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return !String(node.textContent || "").trim();
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+
+    if (node.tagName === "BR") {
+      return true;
+    }
+
+    return (
+      (node.tagName === "DIV" || node.tagName === "P") &&
+      !String(node.textContent || "").trim() &&
+      node.querySelector("img, a, input, button") === null
+    );
+  }
+
+  function zrusRadekObrazku(figure) {
+    const radek = figure?.parentElement;
+
+    if (!radek?.classList?.contains("lubaNoteImageRow")) {
+      return;
+    }
+
+    const rodic = radek.parentNode;
+
+    if (!rodic) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    [...radek.children].forEach((obrazekFigure) => {
+      fragment.append(obrazekFigure);
+    });
+
+    radek.replaceWith(fragment);
+  }
+
+  function najdiPredchoziLevyObrazek50(figure) {
+    let uzel = figure?.previousSibling || null;
+
+    while (uzel && jePrazdnyPomocnyUzelObrazku(uzel)) {
+      uzel = uzel.previousSibling;
+    }
+
+    if (
+      uzel?.nodeType === Node.ELEMENT_NODE &&
+      uzel.matches?.(
+        '.lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"]'
+      )
+    ) {
+      return uzel;
+    }
+
+    return null;
+  }
+
+  function najdiNasledujiciPravyObrazek50(figure) {
+    let uzel = figure?.nextSibling || null;
+
+    while (uzel && jePrazdnyPomocnyUzelObrazku(uzel)) {
+      uzel = uzel.nextSibling;
+    }
+
+    if (
+      uzel?.nodeType === Node.ELEMENT_NODE &&
+      uzel.matches?.(
+        '.lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"]'
+      )
+    ) {
+      return uzel;
+    }
+
+    return null;
+  }
+
+  function vytvorRadekDvouObrazku(levyObrazek, pravyObrazek) {
+    if (
+      !levyObrazek ||
+      !pravyObrazek ||
+      !levyObrazek.parentNode ||
+      levyObrazek.parentNode !== pravyObrazek.parentNode
+    ) {
+      return false;
+    }
+
+    const rodic = levyObrazek.parentNode;
+    const radek = document.createElement("div");
+
+    radek.className = "lubaNoteImageRow";
+    radek.dataset.lubanoteImageRow = "true";
+    radek.contentEditable = "false";
+
+    rodic.insertBefore(radek, levyObrazek);
+    radek.append(levyObrazek, pravyObrazek);
+
+    nastavKurzorZaUzel(radek);
+    return true;
+  }
+
+  function usporadejObrazekPoZmene(figure) {
+    if (!figure) {
+      return;
+    }
+
+    /*
+     * Při změně velikosti nebo zarovnání nejdřív zrušíme starou dvojici.
+     * Potom ji případně sestavíme znovu podle aktuálních dat atributů.
+     */
+    zrusRadekObrazku(figure);
+
+    if (figure.dataset.velikost !== "50") {
+      return;
+    }
+
+    if (figure.dataset.zarovnani === "vpravo") {
+      const levyObrazek =
+        najdiPredchoziLevyObrazek50(figure);
+
+      if (levyObrazek) {
+        vytvorRadekDvouObrazku(
+          levyObrazek,
+          figure
+        );
+      }
+
+      return;
+    }
+
+    if (figure.dataset.zarovnani === "vlevo") {
+      const pravyObrazek =
+        najdiNasledujiciPravyObrazek50(figure);
+
+      if (pravyObrazek) {
+        vytvorRadekDvouObrazku(
+          figure,
+          pravyObrazek
+        );
+      }
+    }
+  }
+
   function otevriNastaveniObrazku(image) {
     const figure = ziskejBlokObrazku(image);
 
@@ -354,6 +504,8 @@
           figure,
           hodnoty.zarovnani
         );
+
+        usporadejObrazekPoZmene(figure);
 
         oznamZmenuObrazku();
       }
@@ -1121,8 +1273,26 @@
         const figure = removeButton.closest(
           ".lubaNoteImage"
         );
+
+        const radek = figure?.parentElement?.classList?.contains(
+          "lubaNoteImageRow"
+        ) ? figure.parentElement : null;
         
         figure?.remove();
+
+        if (radek) {
+          const zbyvajiciObrazky =
+            radek.querySelectorAll(
+              ":scope > .lubaNoteImage"
+            );
+
+          if (zbyvajiciObrazky.length === 1) {
+            radek.replaceWith(zbyvajiciObrazky[0]);
+          } else if (zbyvajiciObrazky.length === 0) {
+            radek.remove();
+          }
+        }
+
         modalRichText.normalize();
         ulozenyRozsahEditoru = null;
         

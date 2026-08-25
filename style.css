@@ -5135,6 +5135,37 @@ text-size-adjust: 100%;
 }
 
 /*
+ * Skutečný řádek pro dvojici obrázků 50 %.
+ * JavaScript jej vytvoří teprve ve chvíli, kdy máme vlevo 50 %
+ * a za ním vpravo 50 %. Flexbox je zde stabilnější než dva floaty:
+ * oba obrázky mají vždy společnou základnu a nemohou spadnout pod sebe.
+ */
+#modalRichText .lubaNoteImageRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0;
+  padding: 0;
+
+  clear: both;
+  box-sizing: border-box;
+}
+
+#modalRichText .lubaNoteImageRow > .lubaNoteImage {
+  float: none !important;
+  clear: none !important;
+
+  flex: 1 1 0;
+  width: calc(50% - 4px) !important;
+  max-width: calc(50% - 4px) !important;
+
+  margin: 0 !important;
+}
+
+/*
  * Přizpůsobit editoru a 100 % jsou vždy samostatný plný řádek.
  * Zároveň tím ukončíme případnou předchozí dvojici plovoucích obrázků.
  */
