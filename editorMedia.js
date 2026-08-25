@@ -2430,14 +2430,17 @@
   }
 
   /*
-   * Android někdy při druhém Backspace na hranici text ↔ obrázek
-   * vytvoří Range jinak, než očekává běžná bloková logika. Proto
-   * kontrolujeme i SKUTEČNÝ DOM uzel bezprostředně před caretem.
+   * Android WebView při Backspace na hranici text ↔ obrázek někdy
+   * sloučí okolní editovatelné bloky tak, že text převezme typografii
+   * sousedního uzlu (např. 16 px -> 20 px a vyšší line-height).
    *
-   * První Backspace může normálně odstranit <br> / prázdný řádek.
-   * Jakmile je ale přímo před caretem contenteditable=false figure,
-   * další Backspace zastavíme. Obrázek má vlastní tlačítko ✕.
+   * Důležité: Backspace přes tuto hranici NESMÍME blokovat. Uživatel
+   * ho potřebuje právě k přitažení / spojení textu. Místo zákazu si
+   * před nativním sloučením zapamatujeme skutečnou typografii textu
+   * pod kurzorem a po nativním inputu ji vrátíme výslednému bloku.
    */
+  let cekajiciOpravaTypografiePoBackspace = null;
+
   function najdiUzelTesnePredKurzorem(range) {
     if (!range?.collapsed) {
       return null;
@@ -2447,7 +2450,6 @@
     const offset = range.startOffset;
 
     if (uzel.nodeType === Node.TEXT_NODE) {
-      /* Uvnitř textu nejsme na mediální hranici. */
       if (offset > 0) {
         return null;
       }
@@ -2488,83 +2490,200 @@
     );
   }
 
-  function zablokujBackspacePresObrazek(event) {
-    const vyber = window.getSelection();
+  function ziskejPrvekTypografiePodKurzorem(range) {
+    let prvek = range?.startContainer || null;
 
-    if (!vyber || vyber.rangeCount === 0) {
-      return false;
+    if (prvek?.nodeType === Node.TEXT_NODE) {
+      prvek = prvek.parentElement;
     }
 
-    const range = vyber.getRangeAt(0);
+    if (!(prvek instanceof HTMLElement)) {
+      return null;
+    }
 
     if (
-      !range.collapsed ||
-      !jeRozsahVEditoru(range)
+      prvek !== modalRichText &&
+      !modalRichText.contains(prvek)
     ) {
-      return false;
+      return null;
     }
 
-    const uzelPredKurzorem =
-      najdiUzelTesnePredKurzorem(range);
+    return prvek === modalRichText
+      ? modalRichText
+      : prvek;
+  }
 
-    if (!jeUzelObrazkovaHranice(uzelPredKurzorem)) {
-      return false;
+  function ulozTypografiiPredSloucenim(range) {
+    const prvek =
+      ziskejPrvekTypografiePodKurzorem(range);
+
+    if (!prvek) {
+      return null;
     }
 
-    event.preventDefault();
-    event.stopPropagation?.();
+    const styl = getComputedStyle(prvek);
+    const velikost = parseFloat(styl.fontSize);
 
-    const zachovanyRange = range.cloneRange();
+    return {
+      fontSize: styl.fontSize,
+      lineHeight: styl.lineHeight,
+      letterSpacing: styl.letterSpacing,
+      velikostPisma: Number.isFinite(velikost)
+        ? String(Math.round(velikost))
+        : null,
+      puvodniBlok: ziskejPrimehoPotomkaEditoru(
+        range.startContainer
+      )
+    };
+  }
+
+  function odstranNechtenouTypografiiNaCeste(
+    prvek,
+    koncovyBlok
+  ) {
+    let aktualni = prvek;
+
+    while (
+      aktualni instanceof HTMLElement &&
+      aktualni !== modalRichText
+    ) {
+      aktualni.style.removeProperty("font-size");
+      aktualni.style.removeProperty("line-height");
+      aktualni.style.removeProperty("letter-spacing");
+      aktualni.removeAttribute("data-velikost-pisma");
+
+      if (aktualni === koncovyBlok) {
+        break;
+      }
+
+      aktualni = aktualni.parentElement;
+    }
+  }
+
+  function opravTypografiiPoSlouceniBackspace() {
+    const oprava =
+      cekajiciOpravaTypografiePoBackspace;
+
+    if (!oprava) {
+      return;
+    }
+
+    cekajiciOpravaTypografiePoBackspace = null;
 
     requestAnimationFrame(() => {
-      if (!zachovanyRange.startContainer?.isConnected) {
+      const vyber = window.getSelection();
+
+      if (!vyber || vyber.rangeCount === 0) {
         return;
       }
 
-      const aktualniVyber = window.getSelection();
-      aktualniVyber?.removeAllRanges();
-      aktualniVyber?.addRange(zachovanyRange);
-      ulozenyRozsahEditoru = zachovanyRange.cloneRange();
-    });
+      const range = vyber.getRangeAt(0);
 
-    return true;
-  }
-
-  /* Desktop / HW klávesnice. Na Androidu je hlavní pojistka beforeinput níže. */
-  modalRichText.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.key === "Backspace") {
-        zablokujBackspacePresObrazek(event);
+      if (!jeRozsahVEditoru(range)) {
+        return;
       }
-    },
-    true
-  );
+
+      let prvekPodKurzorem =
+        ziskejPrvekTypografiePodKurzorem(range);
+
+      let vyslednyBlok =
+        ziskejPrimehoPotomkaEditoru(
+          range.startContainer
+        );
+
+      /*
+       * Některé verze WebView nechají původní blok připojený a pouze
+       * změní jeho rodičovskou / inline strukturu. V takovém případě je
+       * původní blok přesnější cíl než obecný blok nalezený z caretu.
+       */
+      if (
+        oprava.puvodniBlok?.isConnected &&
+        modalRichText.contains(oprava.puvodniBlok) &&
+        (
+          oprava.puvodniBlok === range.startContainer ||
+          oprava.puvodniBlok.contains?.(range.startContainer)
+        )
+      ) {
+        vyslednyBlok = oprava.puvodniBlok;
+      }
+
+      if (
+        !(vyslednyBlok instanceof HTMLElement) ||
+        vyslednyBlok.classList.contains("lubaNoteImage")
+      ) {
+        return;
+      }
+
+      if (
+        !(prvekPodKurzorem instanceof HTMLElement) ||
+        !vyslednyBlok.contains(prvekPodKurzorem)
+      ) {
+        prvekPodKurzorem = vyslednyBlok;
+      }
+
+      /*
+       * Chromium může při merge obalit caret starým SPAN/FONT uzlem.
+       * Nejdřív proto odstraníme pouze typografické přepisy na cestě
+       * od caretu k výslednému bloku. Tučné, kurzíva, barva, odkazy atd.
+       * zůstávají nedotčené.
+       */
+      odstranNechtenouTypografiiNaCeste(
+        prvekPodKurzorem,
+        vyslednyBlok
+      );
+
+      vyslednyBlok.style.fontSize = oprava.fontSize;
+      vyslednyBlok.style.lineHeight = oprava.lineHeight;
+
+      if (
+        oprava.letterSpacing &&
+        oprava.letterSpacing !== "normal"
+      ) {
+        vyslednyBlok.style.letterSpacing =
+          oprava.letterSpacing;
+      } else {
+        vyslednyBlok.style.removeProperty(
+          "letter-spacing"
+        );
+      }
+
+      if (oprava.velikostPisma) {
+        vyslednyBlok.dataset.velikostPisma =
+          oprava.velikostPisma;
+      }
+
+      /* Stylování DOM nemění obsah; caret pouze znovu uložíme pro toolbar. */
+      const aktualniVyber = window.getSelection();
+      if (
+        aktualniVyber &&
+        aktualniVyber.rangeCount > 0
+      ) {
+        ulozenyRozsahEditoru =
+          aktualniVyber.getRangeAt(0).cloneRange();
+      }
+
+      /* Toolbar si znovu načte reálných např. 16 px místo chybného 20. */
+      document.dispatchEvent(
+        new Event("selectionchange")
+      );
+    });
+  }
 
   modalRichText.addEventListener(
     "beforeinput",
     (event) => {
+      const typVstupu = String(event.inputType || "");
+
       if (
-        !String(event.inputType || "").startsWith("delete") ||
+        !typVstupu.includes("Backward") ||
         event.isComposing
       ) {
         return;
       }
 
-      /*
-       * Nejdřív zkusíme přímou DOM hranici. Tohle pokrývá i Android
-       * WebView případy, kdy caret neleží v očekávaném přímém bloku.
-       */
-      if (zablokujBackspacePresObrazek(event)) {
-        return;
-      }
-
       const vyber = window.getSelection();
 
-      if (
-        !vyber ||
-        vyber.rangeCount === 0
-      ) {
+      if (!vyber || vyber.rangeCount === 0) {
         return;
       }
 
@@ -2601,20 +2720,16 @@
         );
 
       /*
-       * 1) Před textem je skutečný prázdný řádek.
-       *    Odstraníme jen ten a nenecháme WebView slučovat bloky.
+       * První Backspace: před textem je opravdu prázdný editovatelný
+       * řádek. Ten můžeme bezpečně odstranit sami bez merge DOMu.
        */
       if (jePrazdnyEditacniBlok(predchoziBlok)) {
         event.preventDefault();
 
-        const zachovanyRange =
-          range.cloneRange();
-
+        const zachovanyRange = range.cloneRange();
         predchoziBlok.remove();
 
-        if (
-          zachovanyRange.startContainer?.isConnected
-        ) {
+        if (zachovanyRange.startContainer?.isConnected) {
           vyber.removeAllRanges();
           vyber.addRange(zachovanyRange);
           ulozenyRozsahEditoru =
@@ -2628,38 +2743,61 @@
       }
 
       /*
-       * 2) Před textem už je přímo obrázek.
-       *
-       * Druhý Backspace na této hranici už nemá žádný prázdný text,
-       * který by mohl bezpečně smazat. Chromium by se proto pokusilo
-       * spojit textový blok přes contenteditable=false <figure> a na
-       * Androidu při tom dokázalo převzít cizí font-size / line-height
-       * (typicky skok 16 -> 20 px).
-       *
-       * Obrázek se maže vlastním tlačítkem X, takže Backspace přes tuto
-       * mediální hranici záměrně zastavíme a zachováme kurzor i styl.
+       * Druhý Backspace: dovolíme nativní spojení. Jen si předem uložíme
+       * velikost/line-height textu, aby je WebView po merge nesmělo změnit.
        */
-      if (
-        predchoziBlok instanceof HTMLElement &&
-        predchoziBlok.classList.contains(
-          "lubaNoteImage"
-        )
-      ) {
-        event.preventDefault();
+      const uzelPredKurzorem =
+        najdiUzelTesnePredKurzorem(range);
 
-        const zachovanyRange =
-          range.cloneRange();
+      const jeHraniceObrazku =
+        jeUzelObrazkovaHranice(
+          uzelPredKurzorem
+        ) ||
+        (
+          predchoziBlok instanceof HTMLElement &&
+          predchoziBlok.classList.contains(
+            "lubaNoteImage"
+          )
+        );
 
-        if (
-          zachovanyRange.startContainer?.isConnected
-        ) {
-          vyber.removeAllRanges();
-          vyber.addRange(zachovanyRange);
-          ulozenyRozsahEditoru =
-            zachovanyRange.cloneRange();
-        }
+      if (!jeHraniceObrazku) {
+        return;
       }
-    }
+
+      cekajiciOpravaTypografiePoBackspace =
+        ulozTypografiiPredSloucenim(range);
+
+      if (cekajiciOpravaTypografiePoBackspace) {
+        const tatoOprava =
+          cekajiciOpravaTypografiePoBackspace;
+
+        /*
+         * Android standardně po beforeinput pošle i input. Kdyby některý
+         * WebView input vynechal, requestAnimationFrame je bezpečná druhá
+         * pojistka: proběhne až po nativním zpracování Backspace.
+         */
+        requestAnimationFrame(() => {
+          if (
+            cekajiciOpravaTypografiePoBackspace ===
+            tatoOprava
+          ) {
+            opravTypografiiPoSlouceniBackspace();
+          }
+        });
+      }
+      /* Záměrně bez preventDefault(): WebView provede skutečné spojení. */
+    },
+    true
+  );
+
+  modalRichText.addEventListener(
+    "input",
+    () => {
+      if (cekajiciOpravaTypografiePoBackspace) {
+        opravTypografiiPoSlouceniBackspace();
+      }
+    },
+    true
   );
 
   /* ==========================================
