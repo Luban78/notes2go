@@ -1673,46 +1673,133 @@
   });
   
   modalRichText.addEventListener("paste", (event) => {
-  const soubor = event.clipboardData?.files?.[0];
-  
-  if (soubor?.type.startsWith("image/")) {
+    const soubor =
+      event.clipboardData?.files?.[0];
+
+    if (soubor?.type.startsWith("image/")) {
+      event.preventDefault();
+
+      void vlozVybranyObrazek(soubor);
+      return;
+    }
+
+    const html =
+      event.clipboardData?.getData("text/html") || "";
+
+    const text =
+      event.clipboardData?.getData("text/plain") || "";
+
+    if (!html && !text) {
+      return;
+    }
+
     event.preventDefault();
-    
-    void vlozVybranyObrazek(soubor);
-    return;
-  }
-  
-  const html = event.clipboardData?.getData("text/html");
-  
-  if (!html) {
-    return;
-  }
-  
-  event.preventDefault();
-  
-  const docasnyObal =
-    document.createElement("div");
-  
-  docasnyObal.innerHTML = html;
-  
-  docasnyObal
-    .querySelectorAll("[style]")
-    .forEach(prvek => {
-      prvek.style.fontSize = "";
-      prvek.style.fontFamily = "";
-      prvek.style.lineHeight = "";
-      
-      if (!prvek.getAttribute("style")?.trim()) {
-        prvek.removeAttribute("style");
-      }
-    });
-  
-  document.execCommand(
-    "insertHTML",
-    false,
-    docasnyObal.innerHTML
-  );
-});
+
+    /*
+     * Text vložený do LubaNote nesmí přinést cizí velikost/font ani
+     * zdědit velikost ze starého inline span-u v místě kurzoru.
+     * Zachováváme významové formátování (B/I/U, odkazy, seznamy, barvy),
+     * ale typografii velikosti necháváme řídit LubaNote.
+     */
+    if (html) {
+      const docasnyObal =
+        document.createElement("div");
+
+      docasnyObal.innerHTML = html;
+
+      docasnyObal
+        .querySelectorAll("*")
+        .forEach(prvek => {
+          prvek.style.removeProperty("font");
+          prvek.style.removeProperty("font-size");
+          prvek.style.removeProperty("font-family");
+          prvek.style.removeProperty("line-height");
+          prvek.style.removeProperty("letter-spacing");
+
+          prvek.removeAttribute("size");
+          prvek.removeAttribute("face");
+          prvek.removeAttribute("data-velikost-pisma");
+
+          if (!prvek.getAttribute("style")?.trim()) {
+            prvek.removeAttribute("style");
+          }
+        });
+
+      /*
+       * Kořenové uzly dostanou základní typografii LubaNote. Díky tomu
+       * ani vložení dovnitř starého zvětšeného span-u nezvětší nový text.
+       */
+      [...docasnyObal.childNodes]
+        .forEach(uzel => {
+          if (uzel.nodeType === Node.TEXT_NODE) {
+            if (!uzel.textContent) {
+              return;
+            }
+
+            const span =
+              document.createElement("span");
+
+            span.className =
+              "lubaNoteVlozenyText";
+
+            uzel.replaceWith(span);
+            span.append(uzel);
+            return;
+          }
+
+          if (uzel instanceof HTMLElement) {
+            uzel.classList.add(
+              "lubaNoteVlozenyText"
+            );
+          }
+        });
+
+      document.execCommand(
+        "insertHTML",
+        false,
+        docasnyObal.innerHTML
+      );
+
+      return;
+    }
+
+    /*
+     * Android / některé schránky poskytují jen text/plain. I ten vložíme
+     * přes neutrální span, jinak by execCommand/default paste mohl zdědit
+     * velikost písma z místa, kde právě stojí kurzor.
+     */
+    const vyber =
+      window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
+      return;
+    }
+
+    const rozsah =
+      vyber.getRangeAt(0);
+
+    rozsah.deleteContents();
+
+    const vlozenyText =
+      document.createElement("span");
+
+    vlozenyText.className =
+      "lubaNoteVlozenyText";
+
+    vlozenyText.textContent = text;
+
+    rozsah.insertNode(vlozenyText);
+    rozsah.setStartAfter(vlozenyText);
+    rozsah.collapse(true);
+
+    vyber.removeAllRanges();
+    vyber.addRange(rozsah);
+
+    modalRichText.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+  });
+
   
   
   

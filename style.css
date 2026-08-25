@@ -2443,6 +2443,18 @@ body.authPending .addTaskButton {
 text-size-adjust: 100%;
 }
 
+/*
+ * Text vložený ze schránky používá základní typografii LubaNote.
+ * Záměrně bez !important: uživatel ho může později normálně označit
+ * a změnit velikost / styl pomocí toolbaru editoru.
+ */
+#modalRichText .lubaNoteVlozenyText {
+  font-family: inherit;
+  font-size: var(--font-size);
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
 #modalRichText .richTextHighlight {
   color: inherit;
   font: inherit;

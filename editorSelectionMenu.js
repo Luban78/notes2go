@@ -487,35 +487,6 @@
       preventScroll: true
     });
 
-    let provedeno = false;
-
-    try {
-      provedeno =
-        document.execCommand(
-          "insertText",
-          false,
-          text
-        );
-    } catch (_chyba) {
-      provedeno = false;
-    }
-
-    if (provedeno) {
-      const vyber =
-        window.getSelection();
-
-      if (
-        vyber &&
-        vyber.rangeCount > 0 &&
-        jeRozsahVEditoru(vyber.getRangeAt(0))
-      ) {
-        ulozenyRozsah =
-          vyber.getRangeAt(0).cloneRange();
-      }
-
-      return true;
-    }
-
     try {
       const vyber =
         window.getSelection();
@@ -527,13 +498,31 @@
       const rozsah =
         vyber.getRangeAt(0);
 
+      if (!jeRozsahVEditoru(rozsah)) {
+        return false;
+      }
+
       rozsah.deleteContents();
 
-      const textovyUzel =
-        document.createTextNode(text);
+      /*
+       * Vlastní schránka LubaNote ukládá čistý text. Při vložení ho
+       * nesmíme nechat zdědit z případného starého <span style="font-size">,
+       * ve kterém zrovna leží kurzor. Jinak stejný zkopírovaný text může
+       * po vložení dostat jinou velikost než běžný text editoru.
+       *
+       * Tento span používá základní typografii editoru, ale uživatel ho
+       * může později normálně označit a změnit velikost toolbar-em.
+       */
+      const vlozenyText =
+        document.createElement("span");
 
-      rozsah.insertNode(textovyUzel);
-      rozsah.setStartAfter(textovyUzel);
+      vlozenyText.className =
+        "lubaNoteVlozenyText";
+
+      vlozenyText.textContent = text;
+
+      rozsah.insertNode(vlozenyText);
+      rozsah.setStartAfter(vlozenyText);
       rozsah.collapse(true);
 
       vyber.removeAllRanges();
