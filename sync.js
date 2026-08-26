@@ -50,6 +50,257 @@ function getDeviceId() {
 const PENDING_DELETE_STORAGE_KEY =
   "lubanotePendingDeletes";
 
+/*
+ * SERVEROVÁ REVIZE POZNÁMEK
+ *
+ * Lokálně si pamatujeme poslední serverovou revizi, kterou tato
+ * konkrétní instalace skutečně přijala nebo úspěšně zapsala.
+ * Tento údaj se záměrně NEUKLÁDÁ dovnitř samotné poznámky.
+ * Starý klient ho tedy nemůže omylem přenášet jako obsah poznámky.
+ */
+const CLOUD_SYNC_META_STORAGE_KEY =
+  "lubanoteCloudSyncMetaV1";
+
+const aktivniKonfliktySyncu = new Map();
+let konfliktSyncuUzOhlasen = false;
+const frontyServerovychZapisu = new Map();
+
+function zaradServerovyZapis(noteId, akce) {
+  if (!noteId || typeof akce !== "function") {
+    return Promise.resolve({ ok: false });
+  }
+
+  const predchozi =
+    frontyServerovychZapisu.get(noteId) ||
+    Promise.resolve();
+
+  const aktualni = predchozi
+    .catch(() => null)
+    .then(akce);
+
+  frontyServerovychZapisu.set(
+    noteId,
+    aktualni
+  );
+
+  const uklidFronty = () => {
+    if (
+      frontyServerovychZapisu.get(noteId) ===
+      aktualni
+    ) {
+      frontyServerovychZapisu.delete(noteId);
+    }
+  };
+
+  aktualni.then(
+    uklidFronty,
+    uklidFronty
+  );
+
+  return aktualni;
+}
+
+function nactiCloudSyncMetaMapu() {
+  const raw = localStorage.getItem(
+    CLOUD_SYNC_META_STORAGE_KEY
+  );
+
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? parsed
+      : {};
+  } catch (error) {
+    console.error(
+      "Načtení sync revizí selhalo:",
+      error
+    );
+    return {};
+  }
+}
+
+function ulozCloudSyncMetaMapu(mapa) {
+  localStorage.setItem(
+    CLOUD_SYNC_META_STORAGE_KEY,
+    JSON.stringify(
+      mapa && typeof mapa === "object"
+        ? mapa
+        : {}
+    )
+  );
+}
+
+function ziskejCloudSyncMeta(noteId) {
+  if (!noteId) {
+    return null;
+  }
+
+  const meta =
+    nactiCloudSyncMetaMapu()[noteId];
+
+  if (!meta || typeof meta !== "object") {
+    return null;
+  }
+
+  const revision = Number(meta.revision);
+
+  if (!Number.isFinite(revision)) {
+    return null;
+  }
+
+  return {
+    revision,
+    localUpdatedAt:
+      meta.localUpdatedAt ?? null,
+    serverUpdatedAt:
+      meta.serverUpdatedAt ?? null
+  };
+}
+
+function ulozCloudSyncMeta(
+  noteId,
+  {
+    revision,
+    localUpdatedAt = null,
+    serverUpdatedAt = null
+  } = {}
+) {
+  if (!noteId) {
+    return;
+  }
+
+  const bezpecnaRevize = Number(revision);
+
+  if (!Number.isFinite(bezpecnaRevize)) {
+    return;
+  }
+
+  const mapa = nactiCloudSyncMetaMapu();
+
+  mapa[noteId] = {
+    revision: bezpecnaRevize,
+    localUpdatedAt,
+    serverUpdatedAt
+  };
+
+  ulozCloudSyncMetaMapu(mapa);
+}
+
+function oznamKonfliktSynchronizace(
+  noteId,
+  duvod,
+  detail = {}
+) {
+  if (noteId) {
+    aktivniKonfliktySyncu.set(noteId, {
+      id: noteId,
+      duvod,
+      detail,
+      cas: new Date().toISOString()
+    });
+  }
+
+  console.warn(
+    "LubaNote sync konflikt – nic nebylo přepsáno:",
+    noteId,
+    duvod,
+    detail
+  );
+
+  if (konfliktSyncuUzOhlasen) {
+    return;
+  }
+
+  konfliktSyncuUzOhlasen = true;
+
+  if (typeof zobrazZpravuAplikace === "function") {
+    zobrazZpravuAplikace(
+      "Synchronizace pozastavena",
+      "LubaNote našla rozdílnou verzi stejné poznámky na jiném zařízení. Žádná verze nebyla přepsána. Konflikt vyřešíme bezpečně."
+    );
+  }
+}
+
+function zrusKonfliktSynchronizace(noteId) {
+  if (!noteId) {
+    return;
+  }
+
+  aktivniKonfliktySyncu.delete(noteId);
+}
+
+async function provedBezpecnyZapisPoznamky({
+  id,
+  data,
+  expectedRevision,
+  localUpdatedAt = null,
+  deleteNote = false,
+  deletedByDeviceId = null
+}) {
+  if (!id) {
+    return { ok: false };
+  }
+
+  const { data: vysledek, error } =
+    await supabaseClient.rpc(
+      "save_note_safe",
+      {
+        p_id: id,
+        p_data: data,
+        p_expected_revision:
+          Number(expectedRevision),
+        p_delete: Boolean(deleteNote),
+        p_deleted_by_device_id:
+          deletedByDeviceId
+      }
+    );
+
+  if (error) {
+    console.error(
+      "Bezpečný sync zápis selhal:",
+      id,
+      error.message
+    );
+
+    return {
+      ok: false,
+      error
+    };
+  }
+
+  if (!vysledek?.ok) {
+    oznamKonfliktSynchronizace(
+      id,
+      vysledek?.reason || "revision_conflict",
+      vysledek || {}
+    );
+
+    return {
+      ok: false,
+      conflict: true,
+      result: vysledek
+    };
+  }
+
+  ulozCloudSyncMeta(id, {
+    revision: vysledek.revision,
+    localUpdatedAt,
+    serverUpdatedAt:
+      vysledek.updated_at || null
+  });
+
+  zrusKonfliktSynchronizace(id);
+
+  return {
+    ok: true,
+    result: vysledek
+  };
+}
+
 function nactiCekajiciSmazani() {
   const raw =
     localStorage.getItem(
@@ -89,11 +340,21 @@ function ulozCekajiciSmazani(zaznamy) {
 
 function pridejCekajiciSmazani(
   noteId,
-  deletedAt = new Date().toISOString()
+  deletedAt = new Date().toISOString(),
+  expectedRevision = null
 ) {
   if (!noteId) {
     return;
   }
+
+  const meta = ziskejCloudSyncMeta(noteId);
+
+  const bezpecnaExpectedRevision =
+    Number.isFinite(Number(expectedRevision))
+      ? Number(expectedRevision)
+      : Number.isFinite(Number(meta?.revision))
+        ? Number(meta.revision)
+        : 0;
 
   const zaznamy = nactiCekajiciSmazani();
   const bezStejnehoId =
@@ -104,7 +365,9 @@ function pridejCekajiciSmazani(
   bezStejnehoId.push({
     id: noteId,
     deletedAt,
-    deviceId: getDeviceId()
+    deviceId: getDeviceId(),
+    expectedRevision:
+      bezpecnaExpectedRevision
   });
 
   ulozCekajiciSmazani(bezStejnehoId);
@@ -142,29 +405,28 @@ async function odesliCekajiciSmazaniDoSupabase() {
       zaznam.deletedAt ||
       new Date().toISOString();
 
-    const { error } = await supabaseClient
-      .from("notes")
-      .upsert({
+    const expectedRevision =
+      Number.isFinite(
+        Number(zaznam.expectedRevision)
+      )
+        ? Number(zaznam.expectedRevision)
+        : 0;
+
+    const vysledek =
+      await provedBezpecnyZapisPoznamky({
         id: zaznam.id,
-        user_id: user.id,
-        deleted_at: deletedAt,
-        updated_at: deletedAt,
-        deleted_by_device_id:
-          zaznam.deviceId || getDeviceId(),
         data: {
           deleted: true
-        }
+        },
+        expectedRevision,
+        localUpdatedAt: deletedAt,
+        deleteNote: true,
+        deletedByDeviceId:
+          zaznam.deviceId || getDeviceId()
       });
 
-    if (error) {
+    if (!vysledek.ok) {
       vseOdeslano = false;
-
-      console.error(
-        "Odeslání čekajícího smazání selhalo:",
-        zaznam.id,
-        error.message
-      );
-
       continue;
     }
 
@@ -259,57 +521,11 @@ async function haveAllDevicesSyncedAfter(
 }
 
 async function cleanupSafeDeletedNotes() {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return false;
-  }
-
-  const { data: deletedRows, error } =
-    await supabaseClient
-      .from("notes")
-      .select(
-        "id,deleted_at,deleted_by_device_id"
-      )
-      .eq("user_id", user.id)
-      .not("deleted_at", "is", null);
-
-  if (error) {
-    console.error(
-      "Deleted notes cleanup load error:",
-      error.message
-    );
-
-    return false;
-  }
-
-  for (const row of deletedRows || []) {
-    const safeToDelete =
-      await haveAllDevicesSyncedAfter(
-        row.deleted_at,
-        row.deleted_by_device_id
-      );
-
-    if (!safeToDelete) {
-      continue;
-    }
-
-    const { error: deleteError } =
-      await supabaseClient
-        .from("notes")
-        .delete()
-        .eq("id", row.id)
-        .eq("user_id", user.id);
-
-    if (deleteError) {
-      console.error(
-        "Hard delete error:",
-        row.id,
-        deleteError.message
-      );
-    }
-  }
-
+  /*
+   * Tombstones zatím záměrně fyzicky nemažeme.
+   * Historie a serverová revize mají přednost před úsporou několika
+   * řádků v databázi. Staré klienty navíc přímý DELETE už nesmí pustit.
+   */
   return true;
 }
 
@@ -368,23 +584,28 @@ async function uploadLocalNoteToSupabase(note) {
     };
   }
 
-  const { error } = await supabaseClient
-    .from("notes")
-    .upsert({
-      id: note.id,
-      user_id: user.id,
-      data: dataToStore,
-      updated_at:
-        note.updatedAt || new Date().toISOString(),
-      deleted_at: null
-    });
+  const vysledek = await zaradServerovyZapis(
+    note.id,
+    async () => {
+      const meta = ziskejCloudSyncMeta(note.id);
+      const expectedRevision =
+        Number.isFinite(Number(meta?.revision))
+          ? Number(meta.revision)
+          : 0;
 
-  if (error) {
-    console.error("Sync upload error:", error.message);
-    return false;
-  }
+      return await provedBezpecnyZapisPoznamky({
+        id: note.id,
+        data: dataToStore,
+        expectedRevision,
+        localUpdatedAt:
+          note.updatedAt || null,
+        deleteNote: false,
+        deletedByDeviceId: null
+      });
+    }
+  );
 
-  return true;
+  return vysledek.ok;
 }
 
 async function uploadEncryptedSecretRecordToSupabase(record) {
@@ -394,30 +615,32 @@ async function uploadEncryptedSecretRecordToSupabase(record) {
     return false;
   }
 
-  const { error } = await supabaseClient
-    .from("notes")
-    .upsert({
-      id: record.id,
-      user_id: user.id,
-      data: {
-        __lubanoteSecret: true,
-        version: 1,
-        encrypted: record.encrypted
-      },
-      updated_at:
-        record.updatedAt || new Date().toISOString(),
-      deleted_at: null
-    });
+  const vysledek = await zaradServerovyZapis(
+    record.id,
+    async () => {
+      const meta = ziskejCloudSyncMeta(record.id);
+      const expectedRevision =
+        Number.isFinite(Number(meta?.revision))
+          ? Number(meta.revision)
+          : 0;
 
-  if (error) {
-    console.error(
-      "Encrypted secret sync upload error:",
-      error.message
-    );
-    return false;
-  }
+      return await provedBezpecnyZapisPoznamky({
+        id: record.id,
+        data: {
+          __lubanoteSecret: true,
+          version: 1,
+          encrypted: record.encrypted
+        },
+        expectedRevision,
+        localUpdatedAt:
+          record.updatedAt || null,
+        deleteNote: false,
+        deletedByDeviceId: null
+      });
+    }
+  );
 
-  return true;
+  return vysledek.ok;
 }
 
 async function markNoteDeletedInSupabase(note) {
@@ -426,15 +649,21 @@ async function markNoteDeletedInSupabase(note) {
   }
 
   const deletedAt = new Date().toISOString();
+  const meta = ziskejCloudSyncMeta(note.id);
+  const expectedRevision =
+    Number.isFinite(Number(meta?.revision))
+      ? Number(meta.revision)
+      : 0;
 
   /*
    * Smazání nejdřív zapíšeme do lokální fronty.
-   * Díky tomu se poznámka po offline smazání
-   * při dalším syncu nemůže z cloudu vrátit.
+   * Fronta nese i revizi, ze které uživatel při smazání vycházel.
+   * Starší zařízení proto nemůže smazat novější cloudovou verzi.
    */
   pridejCekajiciSmazani(
     note.id,
-    deletedAt
+    deletedAt,
+    expectedRevision
   );
 
   const user = await getCurrentUser();
@@ -443,25 +672,19 @@ async function markNoteDeletedInSupabase(note) {
     return false;
   }
 
-  const { error } = await supabaseClient
-    .from("notes")
-    .upsert({
+  const vysledek =
+    await provedBezpecnyZapisPoznamky({
       id: note.id,
-      user_id: user.id,
-      deleted_at: deletedAt,
-      updated_at: deletedAt,
-      deleted_by_device_id: getDeviceId(),
       data: {
         deleted: true
-      }
+      },
+      expectedRevision,
+      localUpdatedAt: deletedAt,
+      deleteNote: true,
+      deletedByDeviceId: getDeviceId()
     });
 
-  if (error) {
-    console.error(
-      "Sync delete error:",
-      error.message
-    );
-
+  if (!vysledek.ok) {
     return false;
   }
 
@@ -483,7 +706,8 @@ async function getCloudNotesForSync() {
 
   const { data, error } = await supabaseClient
     .from("notes")
-    .select("*");
+    .select("*")
+    .eq("user_id", user.id);
 
   if (error) {
     console.error("Sync download error:", error.message);
@@ -508,6 +732,182 @@ function vytvorCloudRegularNote(row) {
     updatedAt: row.updated_at,
     isSecret: false
   };
+}
+
+
+function jsouStejneCasoveZnacky(a, b) {
+  return String(a ?? "") === String(b ?? "");
+}
+
+function pripravRevizniMerge(
+  localRegular,
+  localEncrypted,
+  localLegacySecret,
+  localDecryptedSecret,
+  cloudRows
+) {
+  const lokalniMapa =
+    vytvorMapuVitezu(
+      localRegular,
+      localEncrypted,
+      localLegacySecret,
+      localDecryptedSecret,
+      []
+    ).winners;
+
+  const konfliktniId = new Set();
+  const vynutitCloudId = new Set();
+  const vynutitLocalId = new Set();
+  const prijmoutCloudMetaId = new Set();
+
+  (Array.isArray(cloudRows) ? cloudRows : [])
+    .forEach((row) => {
+      if (!row?.id) {
+        return;
+      }
+
+      const lokalni = lokalniMapa.get(row.id);
+      const meta = ziskejCloudSyncMeta(row.id);
+      const cloudRevision =
+        Number(row.revision);
+
+      if (!Number.isFinite(cloudRevision)) {
+        oznamKonfliktSynchronizace(
+          row.id,
+          "missing_server_revision",
+          { row }
+        );
+        konfliktniId.add(row.id);
+        return;
+      }
+
+      if (!lokalni) {
+        prijmoutCloudMetaId.add(row.id);
+        return;
+      }
+
+      if (!meta) {
+        /*
+         * První start po zavedení revizí: existující cloudovou revizi
+         * převezmeme automaticky jen tehdy, když má lokální kopie
+         * stejný známý čas jako cloud. Jakýkoli rozdíl je raději konflikt.
+         */
+        if (
+          jsouStejneCasoveZnacky(
+            lokalni.updatedAt,
+            row.updated_at
+          )
+        ) {
+          ulozCloudSyncMeta(row.id, {
+            revision: cloudRevision,
+            localUpdatedAt:
+              lokalni.updatedAt || null,
+            serverUpdatedAt:
+              row.updated_at || null
+          });
+          return;
+        }
+
+        konfliktniId.add(row.id);
+        oznamKonfliktSynchronizace(
+          row.id,
+          "first_revision_migration_conflict",
+          {
+            localUpdatedAt:
+              lokalni.updatedAt || null,
+            cloudUpdatedAt:
+              row.updated_at || null,
+            cloudRevision
+          }
+        );
+        return;
+      }
+
+      const cloudSeZmenil =
+        cloudRevision !== Number(meta.revision);
+
+      const localSeZmenil =
+        !jsouStejneCasoveZnacky(
+          lokalni.updatedAt,
+          meta.localUpdatedAt
+        );
+
+      if (cloudSeZmenil && localSeZmenil) {
+        konfliktniId.add(row.id);
+        oznamKonfliktSynchronizace(
+          row.id,
+          "both_sides_changed",
+          {
+            expectedRevision: meta.revision,
+            cloudRevision,
+            localUpdatedAt:
+              lokalni.updatedAt || null,
+            lastSyncedLocalUpdatedAt:
+              meta.localUpdatedAt || null,
+            cloudUpdatedAt:
+              row.updated_at || null
+          }
+        );
+        return;
+      }
+
+      if (cloudSeZmenil) {
+        vynutitCloudId.add(row.id);
+        prijmoutCloudMetaId.add(row.id);
+        return;
+      }
+
+      if (localSeZmenil) {
+        vynutitLocalId.add(row.id);
+        return;
+      }
+
+      /*
+       * Ani jedna strana se od poslední známé revize nezměnila.
+       * Přijmeme serverovou reprezentaci, aby se lokální updatedAt
+       * srovnal se serverovým časem vráceným save_note_safe().
+       */
+      vynutitCloudId.add(row.id);
+      prijmoutCloudMetaId.add(row.id);
+    });
+
+  return {
+    konfliktniId,
+    vynutitCloudId,
+    vynutitLocalId,
+    prijmoutCloudMetaId
+  };
+}
+
+function ulozPrijateCloudMetaPoMerge(
+  cloudRows,
+  prijmoutCloudMetaId
+) {
+  if (!(prijmoutCloudMetaId instanceof Set)) {
+    return;
+  }
+
+  (Array.isArray(cloudRows) ? cloudRows : [])
+    .forEach((row) => {
+      if (
+        !row?.id ||
+        !prijmoutCloudMetaId.has(row.id)
+      ) {
+        return;
+      }
+
+      ulozCloudSyncMeta(row.id, {
+        revision: row.revision,
+        localUpdatedAt:
+          row.deleted_at
+            ? null
+            : row.updated_at || null,
+        serverUpdatedAt:
+          row.updated_at || null
+      });
+
+      zrusKonfliktSynchronizace(row.id);
+    });
 }
 
 
@@ -726,7 +1126,19 @@ function sjednotJasneLegacyDuplikatyPredSyncem(
        * Tombstone pouze zařadíme do lokální fronty; UI na síť nečeká.
        */
       if (typeof pridejCekajiciSmazani === "function") {
-        pridejCekajiciSmazani(stareId);
+        const cloudRowStarehoId =
+          (Array.isArray(cloudRows) ? cloudRows : [])
+            .find((row) => row?.id === stareId);
+
+        pridejCekajiciSmazani(
+          stareId,
+          new Date().toISOString(),
+          Number.isFinite(
+            Number(cloudRowStarehoId?.revision)
+          )
+            ? Number(cloudRowStarehoId.revision)
+            : 0
+        );
       }
     });
 
@@ -1132,12 +1544,59 @@ async function syncNotes() {
       cloudRows.map((row) => [row.id, row])
     );
 
-    const { winners } = vytvorMapuVitezu(
+    /*
+     * Od této chvíle nerozhoduje mezi dvěma zařízeními pouze čas.
+     * Základ je poslední serverová revize, kterou tento klient znal.
+     * Pokud se od ní změnily obě strany, nic automaticky nepřepisujeme.
+     */
+    const revizniMerge = pripravRevizniMerge(
       localRegular,
       localEncrypted,
       localLegacySecret,
       localDecryptedSecret,
       cloudRows
+    );
+
+    const {
+      konfliktniId,
+      vynutitCloudId,
+      vynutitLocalId,
+      prijmoutCloudMetaId
+    } = revizniMerge;
+
+    const localRegularProMerge =
+      localRegular.filter(
+        (note) => !vynutitCloudId.has(note?.id)
+      );
+
+    const localEncryptedProMerge =
+      localEncrypted.filter(
+        (record) => !vynutitCloudId.has(record?.id)
+      );
+
+    const localLegacySecretProMerge =
+      localLegacySecret.filter(
+        (note) => !vynutitCloudId.has(note?.id)
+      );
+
+    const localDecryptedSecretProMerge =
+      localDecryptedSecret.filter(
+        (note) => !vynutitCloudId.has(note?.id)
+      );
+
+    const cloudRowsProMerge =
+      cloudRows.filter(
+        (row) =>
+          !konfliktniId.has(row?.id) &&
+          !vynutitLocalId.has(row?.id)
+      );
+
+    const { winners } = vytvorMapuVitezu(
+      localRegularProMerge,
+      localEncryptedProMerge,
+      localLegacySecretProMerge,
+      localDecryptedSecretProMerge,
+      cloudRowsProMerge
     );
 
     const mergedRegular = [];
@@ -1160,8 +1619,14 @@ async function syncNotes() {
         });
 
         if (
+          !konfliktniId.has(id) &&
           winner.source === "local-regular" &&
-          (!cloudRow || winnerTime > cloudTime || jeCloudSecretRow(cloudRow))
+          (
+            !cloudRow ||
+            vynutitLocalId.has(id) ||
+            winnerTime > cloudTime ||
+            jeCloudSecretRow(cloudRow)
+          )
         ) {
           await uploadLocalNoteToSupabase(winner.note);
         }
@@ -1190,8 +1655,14 @@ async function syncNotes() {
       }
 
       if (
+        !konfliktniId.has(id) &&
         winner.source === "local-secret-encrypted" &&
-        (!cloudRow || winnerTime > cloudTime || !jeCloudSecretRow(cloudRow))
+        (
+          !cloudRow ||
+          vynutitLocalId.has(id) ||
+          winnerTime > cloudTime ||
+          !jeCloudSecretRow(cloudRow)
+        )
       ) {
         await uploadEncryptedSecretRecordToSupabase(winner.record);
       }
@@ -1217,6 +1688,16 @@ async function syncNotes() {
      */
     ulozBeznePoznamkyPrimo(mergedRegular);
     ulozSifrovaneTajneZaznamy(encryptedToKeep);
+
+    /*
+     * Meta revizi posuneme až poté, co jsme cloudový stav opravdu
+     * přijali do lokálního úložiště. Při pádu uprostřed syncu tak
+     * nevznikne falešný dojem, že starý lokální obsah je aktuální.
+     */
+    ulozPrijateCloudMetaPoMerge(
+      cloudRows,
+      prijmoutCloudMetaId
+    );
 
     const secretUnlocked =
       typeof tajnySifrovaciKlic !== "undefined" &&
@@ -1290,9 +1771,13 @@ async function syncNotes() {
           : 0;
 
         if (
-          !cloudRow ||
-          !jeSifrovanyCloudSecretRow(cloudRow) ||
-          noteTime > cloudTime
+          !konfliktniId.has(note.id) &&
+          (
+            !cloudRow ||
+            vynutitLocalId.has(note.id) ||
+            !jeSifrovanyCloudSecretRow(cloudRow) ||
+            noteTime > cloudTime
+          )
         ) {
           await uploadLocalNoteToSupabase(note);
         }
@@ -1652,7 +2137,10 @@ window.LubaNoteSync = {
   naplanujPoLokalniZmene:
     naplanujSynchronizaciPoLokalniZmene,
   provedLokalniZmenuBezKolizeSeSync,
-  provedLokalniZmenuASynchronizuj
+  provedLokalniZmenuASynchronizuj,
+  ziskejKonflikty: () =>
+    Array.from(aktivniKonfliktySyncu.values()),
+  ziskejCloudSyncMeta
 };
 
 /*
