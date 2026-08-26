@@ -1948,15 +1948,14 @@ nahledTazenePolozky?.classList.toggle(
       udalost.preventDefault();
 
       if (probihaTazeni) {
+  const posunX =
+    dotyk.clientX - zacatekTazeniX;
+  
   const chceZanorit =
-    nahledTazenePolozky?.classList.contains(
-      "bulletChceZanorit"
-    );
+    posunX > 36;
   
   const chceVysunout =
-    nahledTazenePolozky?.classList.contains(
-      "bulletChceVysunout"
-    );
+    posunX < -36;
   
   if (
     chceZanorit ||

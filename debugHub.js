@@ -27,7 +27,8 @@
   const MODULY = {
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
-    gestures: "Gesta – pointer / touch / click"
+    gestures: "Gesta – pointer / touch / click",
+    bulletDrag: "Bullet – drag / hierarchie"
   };
 
   function jeDebugPrvek(target) {
@@ -624,6 +625,178 @@
     };
   }
 
+
+  function spustBulletDrag() {
+    const editor = document.getElementById("modalRichText");
+    const uklidy = [];
+    let posledniMoveLog = 0;
+
+    if (!editor) {
+      zapis("CHYBA | chybí #modalRichText");
+      return () => {};
+    }
+
+    function hloubkaLi(li) {
+      if (!li) return 0;
+      let hloubka = 0;
+      let uzel = li.parentElement;
+
+      while (uzel && uzel !== editor) {
+        if (uzel.tagName === "UL") {
+          hloubka += 1;
+        }
+        uzel = uzel.parentElement;
+      }
+
+      return hloubka;
+    }
+
+    function infoLi(li) {
+      if (!li) return "li=NONE";
+
+      const rodicUl = li.parentElement?.tagName === "UL"
+        ? li.parentElement
+        : null;
+      const sourozenci = rodicUl
+        ? [...rodicUl.children].filter(prvek => prvek.tagName === "LI")
+        : [];
+      const index = sourozenci.indexOf(li);
+      const diteUl = [...li.children].find(prvek => prvek.tagName === "UL") || null;
+      const pocetDeti = diteUl
+        ? [...diteUl.children].filter(prvek => prvek.tagName === "LI").length
+        : 0;
+
+      return [
+        `li=\"${zkratText(li.childNodes[0]?.textContent || li.textContent, 26)}\"`,
+        `depth=${hloubkaLi(li)}`,
+        `index=${index}/${sourozenci.length}`,
+        `children=${pocetDeti}`,
+        `collapsed=${li.classList.contains("bulletSbaleny")}`,
+        `selected=${li.classList.contains("bulletMoveSelected")}`,
+        `dragging=${li.classList.contains("bulletDragging")}`
+      ].join(" ");
+    }
+
+    function strom() {
+      const radky = [];
+
+      editor.querySelectorAll("li").forEach(li => {
+        const text = zkratText(li.childNodes[0]?.textContent || li.textContent, 22);
+        radky.push(`${"  ".repeat(Math.max(0, hloubkaLi(li) - 1))}• ${text}`);
+      });
+
+      return radky.join(" / ") || "(bez LI)";
+    }
+
+    function aktualniLi(event) {
+      const element = event?.target instanceof Element
+        ? event.target
+        : event?.target?.parentElement;
+
+      return element?.closest?.("#modalRichText li") ||
+        editor.querySelector("li.bulletDragging") ||
+        editor.querySelector("li.bulletMoveSelected") ||
+        null;
+    }
+
+    function zapisBullet(typ, event, { move = false } = {}) {
+      if (event && jeDebugPrvek(event.target)) return;
+
+      if (move) {
+        const ted = performance.now();
+        if (ted - posledniMoveLog < 90) return;
+        posledniMoveLog = ted;
+      }
+
+      const bod = event ? bodUdalosti(event) : null;
+      const li = aktualniLi(event);
+      const casti = [typ, infoLi(li)];
+
+      if (bod) {
+        casti.push(`@${Math.round(bod.x)},${Math.round(bod.y)}`);
+      }
+
+      const vybrany = editor.querySelector("li.bulletMoveSelected");
+      const tazeny = editor.querySelector("li.bulletDragging");
+      const aktivniUl = editor.querySelector("ul.bulletDragActive");
+
+      casti.push(`moveMode=${editor.classList.contains("bulletMoveMode")}`);
+      casti.push(`selectedDOM=${Boolean(vybrany)}`);
+      casti.push(`dragDOM=${Boolean(tazeny)}`);
+      casti.push(`activeUL=${Boolean(aktivniUl)}`);
+
+      zapis(casti.join(" | "));
+    }
+
+    [
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
+      "touchstart",
+      "touchend",
+      "touchcancel",
+      "click"
+    ].forEach(typ => {
+      pridejPosluchac(
+        uklidy,
+        editor,
+        typ,
+        event => zapisBullet(typ, event),
+        true
+      );
+    });
+
+    pridejPosluchac(
+      uklidy,
+      editor,
+      "pointermove",
+      event => zapisBullet("pointermove", event, { move: true }),
+      true
+    );
+
+    pridejPosluchac(
+      uklidy,
+      editor,
+      "touchmove",
+      event => zapisBullet("touchmove", event, { move: true }),
+      { capture: true, passive: true }
+    );
+
+    const observer = new MutationObserver(mutations => {
+      const relevantni = mutations.some(mutation => {
+        if (mutation.type === "childList") return true;
+        if (mutation.type === "attributes") {
+          return ["class", "hidden"].includes(mutation.attributeName);
+        }
+        return false;
+      });
+
+      if (!relevantni) return;
+
+      const vybrany = editor.querySelector("li.bulletMoveSelected");
+      const tazeny = editor.querySelector("li.bulletDragging");
+
+      zapis(
+        `DOM MUTATION | selected=${Boolean(vybrany)} drag=${Boolean(tazeny)} | strom=${strom()}`
+      );
+    });
+
+    observer.observe(editor, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["class", "hidden"]
+    });
+
+    pridejObserver(uklidy, observer);
+
+    zapis(`START BULLET DRAG | strom=${strom()}`);
+
+    return () => {
+      uklidy.forEach(uklid => uklid());
+    };
+  }
+
   function stopModulu({ zapisStop = true } = {}) {
     if (typeof stopAktivnihoModulu === "function") {
       stopAktivnihoModulu();
@@ -662,6 +835,8 @@
       stopAktivnihoModulu = spustEditorSelection();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
+    } else if (aktivniModul === "bulletDrag") {
+      stopAktivnihoModulu = spustBulletDrag();
     }
 
     statusEl.textContent = `běží: ${MODULY[aktivniModul]}`;
@@ -714,6 +889,7 @@
           <option value="todoSelection">TODO – výběr / Vložit / Vše</option>
           <option value="editorSelection">Editor – výběr textu</option>
           <option value="gestures">Gesta – pointer / touch / click</option>
+          <option value="bulletDrag">Bullet – drag / hierarchie</option>
         </select>
         <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
         <button type="button" data-dh="stop">Stop</button>
