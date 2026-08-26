@@ -916,19 +916,41 @@ function pripravRevizniMerge(
 
       if (!meta) {
         /*
-         * První start po zavedení revizí: existující cloudovou revizi
-         * převezmeme automaticky jen tehdy, když je celý skutečný obsah
-         * lokální a cloudové kopie shodný. Samotný čas nestačí: dvě různé
-         * verze mohou výjimečně nést stejnou časovou značku.
+         * První start po zavedení revizí:
+         *
+         * - shodný obsah bezpečně převezme serverovou revizi,
+         * - prokazatelně novější cloud opraví starou lokální kopii,
+         * - stejně starý nebo starší cloud s rozdílným obsahem zůstane
+         *   konfliktem, protože může jít o dosud neodeslanou lokální změnu.
+         *
+         * Přímé zápisy starých klientů jsou na serveru zakázané. Novější
+         * serverový čas proto už nemůže vzniknout obyčejným legacy upsertem.
          */
+        const lokalniCas =
+          new Date(
+            lokalni.updatedAt || 0
+          ).getTime();
+
+        const cloudCas =
+          new Date(
+            row.updated_at || 0
+          ).getTime();
+
+        const cloudJeProkazatelneNovejsi =
+          Number.isFinite(cloudCas) &&
+          Number.isFinite(lokalniCas) &&
+          cloudCas > lokalniCas;
+
         if (
           maStejnyObsahProPrvniRevizi(
             lokalni,
             row
-          )
+          ) ||
+          cloudJeProkazatelneNovejsi
         ) {
           vynutitCloudId.add(row.id);
           prijmoutCloudMetaId.add(row.id);
+          zrusKonfliktSynchronizace(row.id);
           return;
         }
 
