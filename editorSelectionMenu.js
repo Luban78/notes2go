@@ -1308,39 +1308,88 @@
       );
     });
 
+  function ziskejTextCelehoTodo() {
+  const todoList =
+    document.getElementById("todoList");
+
+  if (!todoList) {
+    return "";
+  }
+
+  const todoPolozky =
+    todoList.querySelectorAll(
+      ".todoItem"
+    );
+
+  return Array.from(todoPolozky)
+    .map((polozka) => {
+      const textarea =
+        polozka.querySelector(
+          ".todoTextInput"
+        );
+
+      if (textarea) {
+        return textarea.value;
+      }
+
+      const zobrazenyText =
+        polozka.querySelector(
+          ".todoTextDisplay"
+        );
+
+      return zobrazenyText
+        ?.textContent ?? "";
+    })
+    .join("\n")
+    .trim();
+}
 
   tlacitkoKopirovat?.addEventListener(
-    "click",
-    async () => {
-      const text =
-        aktivniTextarea
+  "click",
+  async () => {
+    const todoList =
+      document.getElementById("todoList");
+
+    const jeVybraneCeleTodo =
+      todoList?.classList.contains(
+        "todoVyberVse"
+      );
+
+    const text =
+      jeVybraneCeleTodo
+        ? ziskejTextCelehoTodo()
+        : aktivniTextarea
           ? ziskejTextTextareaVyberu().trim()
           : ulozenyRozsah
             ?.toString()
             ?.trim();
 
-      if (!text) {
-        return;
-      }
-
-      try {
-        await zapisDoSchranky(text);
-
-        if (aktivniTextarea) {
-          sklapniTextareaVyberNaKonec();
-        } else {
-          sklapniVyberNaKonec();
-        }
-
-        skryjMenu();
-      } catch (chyba) {
-        console.error(
-          "Kopírování se nepodařilo:",
-          chyba
-        );
-      }
+    if (!text) {
+      return;
     }
-  );
+
+    try {
+      await zapisDoSchranky(text);
+
+      if (jeVybraneCeleTodo) {
+        todoList.classList.remove(
+          "todoVyberVse"
+        );
+      } else if (aktivniTextarea) {
+        sklapniTextareaVyberNaKonec();
+      } else {
+        sklapniVyberNaKonec();
+      }
+
+      skryjMenu();
+    } catch (chyba) {
+      console.error(
+        "Kopírování se nepodařilo:",
+        chyba
+      );
+    }
+  }
+);
 
 
   tlacitkoVyjmout?.addEventListener(
