@@ -1487,14 +1487,24 @@
     "click",
     () => {
       if (aktivniTextarea) {
-        if (vyberVsechnyTodoPolozky()) {
-          nastavTlacitkaMenu(true);
+  if (vyberVsechnyTodoPolozky()) {
+    nastavTlacitkaMenu(true);
 
-          selectionMenu.hidden = false;
+    selectionMenu.hidden = false;
 
-          return;
-        }
+    const rect =
+      aktivniTextarea.getBoundingClientRect();
+
+    pozicujMenu({
+      bod: {
+        x: rect.left + rect.width / 2,
+        y: rect.top
       }
+    });
+
+    return;
+  }
+}
 
       const rozsah =
         document.createRange();
