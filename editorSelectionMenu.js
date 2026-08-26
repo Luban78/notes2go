@@ -12,7 +12,7 @@
      - Preview zkusí Web Clipboard API, případně interní dočasnou schránku
   ========================================== */
 
-    const jeDesktop =
+  const jeDesktop =
     window.matchMedia(
       "(hover: hover) and (pointer: fine)"
     ).matches;
@@ -330,9 +330,9 @@
         Math.min(
           vlevo,
           viewportVlevo +
-            viewportSirka -
-            menuSirka -
-            8
+          viewportSirka -
+          menuSirka -
+          8
         )
       );
 
@@ -439,16 +439,16 @@
         startZnaku =
           jeKonec
             ? Math.min(
-                Math.max(0, offset),
-                Math.max(0, text.length - 1)
-              )
+              Math.max(0, offset),
+              Math.max(0, text.length - 1)
+            )
             : Math.max(
-                0,
-                Math.min(
-                  offset - 1,
-                  text.length - 1
-                )
-              );
+              0,
+              Math.min(
+                offset - 1,
+                text.length - 1
+              )
+            );
       }
 
       if (
@@ -497,8 +497,8 @@
     const obdelnik =
       jeKonec
         ? obdelniky[
-            obdelniky.length - 1
-          ]
+        obdelniky.length - 1
+        ]
         : obdelniky[0];
 
     return {
@@ -1316,8 +1316,8 @@
         aktivniTextarea
           ? ziskejTextTextareaVyberu().trim()
           : ulozenyRozsah
-              ?.toString()
-              ?.trim();
+            ?.toString()
+            ?.trim();
 
       if (!text) {
         return;
@@ -1350,8 +1350,8 @@
         aktivniTextarea
           ? ziskejTextTextareaVyberu().trim()
           : ulozenyRozsah
-              ?.toString()
-              ?.trim();
+            ?.toString()
+            ?.trim();
 
       if (!text) {
         return;
@@ -1410,24 +1410,41 @@
   );
 
 
+  function vyberVsechnyTodoPolozky() {
+    const todoList =
+      document.getElementById("todoList");
+
+    if (!todoList) {
+      return false;
+    }
+
+    const todoPolozky =
+      todoList.querySelectorAll(
+        ".todoItem"
+      );
+
+    if (!todoPolozky.length) {
+      return false;
+    }
+
+    todoList.classList.add(
+      "todoVyberVse"
+    );
+
+    return true;
+  }
+
   tlacitkoVybratVse?.addEventListener(
     "click",
     () => {
       if (aktivniTextarea) {
-        aktivniTextarea.setSelectionRange(
-          0,
-          aktivniTextarea.value.length
-        );
+        if (vyberVsechnyTodoPolozky()) {
+          nastavTlacitkaMenu(true);
 
-        ulozenyVyberTextarea = {
-          start: 0,
-          end: aktivniTextarea.value.length
-        };
+          selectionMenu.hidden = false;
 
-        zobrazMenuProTextarea(
-          aktivniTextarea
-        );
-        return;
+          return;
+        }
       }
 
       const rozsah =
@@ -1681,7 +1698,7 @@
         if (
           !nejlepsi ||
           vzdalenost <
-            nejlepsi.vzdalenost
+          nejlepsi.vzdalenost
         ) {
           nejlepsi = {
             index,
@@ -1719,7 +1736,7 @@
             cast.isWordLike &&
             pozice >= cast.index &&
             pozice <
-              cast.index + cast.segment.length
+            cast.index + cast.segment.length
           ));
 
       if (segment) {
@@ -1914,7 +1931,7 @@
       const jeDruhyTap = Boolean(
         posledniTapEditoru &&
         ted - posledniTapEditoru.cas <=
-          MAX_CAS_DVOJTAPU &&
+        MAX_CAS_DVOJTAPU &&
         Math.hypot(
           dotyk.clientX - posledniTapEditoru.x,
           dotyk.clientY - posledniTapEditoru.y
@@ -1942,9 +1959,9 @@
         vybrano
           ? false
           : zobrazMenuProKurzorVBodu(
-              dotyk.clientX,
-              dotyk.clientY
-            );
+            dotyk.clientX,
+            dotyk.clientY
+          );
 
       if (
         !vybrano &&
@@ -2089,9 +2106,9 @@
       zobrazMenuProKurzorTextarea(
         textarea,
         event.detail?.x ??
-          textarea.getBoundingClientRect().left,
+        textarea.getBoundingClientRect().left,
         event.detail?.y ??
-          textarea.getBoundingClientRect().top
+        textarea.getBoundingClientRect().top
       );
     }
   );
@@ -2157,7 +2174,7 @@
       if (
         textarea &&
         (textarea.selectionStart ?? 0) !==
-          (textarea.selectionEnd ?? 0)
+        (textarea.selectionEnd ?? 0)
       ) {
         event.preventDefault();
       }
