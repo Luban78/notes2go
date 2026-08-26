@@ -839,6 +839,11 @@ body {
   font-family: system-ui, sans-serif;
   font-size: calc(var(--font-size) + 2px);
   line-height: 1.2;
+  max-width: 100%;
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .taskCardIcons {
