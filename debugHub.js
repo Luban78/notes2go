@@ -845,29 +845,88 @@
     prekresli();
   }
 
-  async function zkopirujReport(tlacitko) {
-    const report = hlavickaReportu() + zaznamy.join("\n");
-
-    try {
-      await navigator.clipboard.writeText(report);
-    } catch {
-      const pomocnyInput = document.createElement("textarea");
-      pomocnyInput.value = report;
-      pomocnyInput.style.position = "fixed";
-      pomocnyInput.style.opacity = "0";
-      document.body.appendChild(pomocnyInput);
-      pomocnyInput.select();
+  function zkopirujTextFallback(text) {
+  const textarea =
+    document.createElement("textarea");
+  
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.opacity = "0";
+  
+  document.body.appendChild(textarea);
+  
+  textarea.focus();
+  textarea.select();
+  
+  textarea.setSelectionRange(
+    0,
+    textarea.value.length
+  );
+  
+  let zkopirovano = false;
+  
+  try {
+    zkopirovano =
       document.execCommand("copy");
-      pomocnyInput.remove();
-    }
-
-    const puvodni = tlacitko.textContent;
-    tlacitko.textContent = "Zkopírováno ✓";
-
-    setTimeout(() => {
-      tlacitko.textContent = puvodni;
-    }, 1200);
+  } catch {
+    zkopirovano = false;
   }
+  
+  textarea.remove();
+  
+  return zkopirovano;
+}
+
+
+async function zkopirujTextRobustne(text) {
+  if (zkopirujTextFallback(text)) {
+    return true;
+  }
+  
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(
+        text
+      );
+      
+      return true;
+    }
+  } catch {
+    // Zkusíme všechny dostupné cesty.
+  }
+  
+  return false;
+}
+
+
+async function zkopirujReport(tlacitko) {
+  const report =
+    hlavickaReportu() +
+    zaznamy.join("\n");
+  
+  const zkopirovano =
+    await zkopirujTextRobustne(report);
+  
+  const puvodni =
+    tlacitko.textContent;
+  
+  if (zkopirovano) {
+    tlacitko.textContent =
+      "Zkopírováno ✓";
+  } else {
+    tlacitko.textContent =
+      "Kopírování selhalo";
+  }
+  
+  setTimeout(() => {
+    tlacitko.textContent =
+      puvodni;
+  }, 1200);
+}
 
   function vytvorHub() {
     if (hub) return hub;
