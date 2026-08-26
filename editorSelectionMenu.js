@@ -4,7 +4,7 @@
 
      Chování:
      - 1× tap = pouze kurzor / editace
-     - 2× tap na slovo = nativní označení slova -> naše menu
+     - 2× tap na slovo = vlastní spolehlivé označení slova -> naše menu
      - rozsah lze dál upravit systémovými úchyty
      - long-press už NEPATŘÍ výběru textu; používají ho řádkové prvky
        (bullet / TODO) pro aktivaci režimu přesunu
@@ -50,6 +50,27 @@
   let aktivniTextarea = null;
   let ulozenyVyberTextarea = null;
   let lokalniSchranka = "";
+
+  /*
+   * Android WebView neumí spolehlivě označit slovo nativním dvojtapem
+   * ve všech řádcích contenteditable editoru. Dvojtap proto detekuje
+   * LubaNote samo a vytvoří Range přesně ve slově pod prstem.
+   */
+  const MAX_CAS_DVOJTAPU = 330;
+  const MAX_VZDALENOST_DVOJTAPU = 34;
+  const MAX_DELKA_JEDNOHO_TAPU = 300;
+  const MAX_POHYB_JEDNOHO_TAPU = 16;
+
+  let zacatekTapuEditoru = null;
+  let posledniTapEditoru = null;
+  let ignorujKlikPoDvojtapuDo = 0;
+
+  let menuProKurzorAktivni = false;
+  let bodMenuKurzor = null;
+
+  let levyUchytVyberu = null;
+  let pravyUchytVyberu = null;
+  let tazenyUchytVyberu = null;
 
   /*
    * Android WebView někdy dokončí označení slova až několik ms po
@@ -215,6 +236,13 @@
      ZOBRAZENÍ / POZICE MENU
   ========================================== */
 
+  function skryjUchytyVyberu() {
+    levyUchytVyberu?.setAttribute("hidden", "");
+    pravyUchytVyberu?.setAttribute("hidden", "");
+    tazenyUchytVyberu = null;
+  }
+
+
   function skryjMenu() {
     selectionMenu.hidden = true;
 
@@ -223,6 +251,11 @@
 
     aktivniTextarea = null;
     ulozenyVyberTextarea = null;
+
+    menuProKurzorAktivni = false;
+    bodMenuKurzor = null;
+
+    skryjUchytyVyberu();
   }
 
 
@@ -355,6 +388,471 @@
   }
 
 
+
+  function zjistiBodOkrajeRozsahu(
+    rozsah,
+    jeKonec = false
+  ) {
+    if (!rozsah) {
+      return null;
+    }
+
+    const sbalenyRozsah =
+      rozsah.cloneRange();
+
+    sbalenyRozsah.collapse(!jeKonec);
+
+    const primeObdelniky =
+      Array.from(
+        sbalenyRozsah.getClientRects()
+      );
+
+    const primyObdelnik =
+      primeObdelniky.find(
+        obdelnik => obdelnik.height > 0
+      ) ??
+      sbalenyRozsah.getBoundingClientRect();
+
+    if (primyObdelnik?.height > 0) {
+      return {
+        x: primyObdelnik.left,
+        y: primyObdelnik.bottom
+      };
+    }
+
+    const kontejner =
+      jeKonec
+        ? rozsah.endContainer
+        : rozsah.startContainer;
+
+    const offset =
+      jeKonec
+        ? rozsah.endOffset
+        : rozsah.startOffset;
+
+    if (
+      kontejner?.nodeType ===
+      Node.TEXT_NODE
+    ) {
+      const text =
+        kontejner.textContent ?? "";
+
+      let startZnaku =
+        jeKonec
+          ? offset - 1
+          : offset;
+
+      if (
+        startZnaku < 0 ||
+        startZnaku >= text.length
+      ) {
+        startZnaku =
+          jeKonec
+            ? Math.min(
+                Math.max(0, offset),
+                Math.max(0, text.length - 1)
+              )
+            : Math.max(
+                0,
+                Math.min(
+                  offset - 1,
+                  text.length - 1
+                )
+              );
+      }
+
+      if (
+        text.length > 0 &&
+        startZnaku >= 0 &&
+        startZnaku < text.length
+      ) {
+        const znakRozsah =
+          document.createRange();
+
+        znakRozsah.setStart(
+          kontejner,
+          startZnaku
+        );
+
+        znakRozsah.setEnd(
+          kontejner,
+          startZnaku + 1
+        );
+
+        const obdelnik =
+          znakRozsah.getBoundingClientRect();
+
+        if (obdelnik?.height > 0) {
+          return {
+            x: jeKonec
+              ? obdelnik.right
+              : obdelnik.left,
+            y: obdelnik.bottom
+          };
+        }
+      }
+    }
+
+    const obdelniky =
+      Array.from(
+        rozsah.getClientRects()
+      ).filter(
+        obdelnik => obdelnik.height > 0
+      );
+
+    if (!obdelniky.length) {
+      return null;
+    }
+
+    const obdelnik =
+      jeKonec
+        ? obdelniky[
+            obdelniky.length - 1
+          ]
+        : obdelniky[0];
+
+    return {
+      x: jeKonec
+        ? obdelnik.right
+        : obdelnik.left,
+      y: obdelnik.bottom
+    };
+  }
+
+
+  function zajistiUchytyVyberu() {
+    if (
+      levyUchytVyberu &&
+      pravyUchytVyberu
+    ) {
+      return;
+    }
+
+    function vytvorUchyt(strana) {
+      const uchyt =
+        document.createElement("div");
+
+      uchyt.className =
+        `selectionHandle selectionHandle${strana}`;
+
+      uchyt.dataset.strana =
+        strana;
+
+      uchyt.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+      uchyt.hidden = true;
+
+      document.body.appendChild(
+        uchyt
+      );
+
+      uchyt.addEventListener(
+        "pointerdown",
+        event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          tazenyUchytVyberu =
+            strana;
+
+          try {
+            uchyt.setPointerCapture(
+              event.pointerId
+            );
+          } catch {
+            // Není kritické.
+          }
+        }
+      );
+
+      uchyt.addEventListener(
+        "pointermove",
+        event => {
+          if (
+            tazenyUchytVyberu !==
+            strana
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          const caretRozsah =
+            najdiCaretRozsahVBodu(
+              event.clientX,
+              event.clientY - 18
+            );
+
+          if (
+            !caretRozsah ||
+            !jeRozsahVEditoru(
+              caretRozsah
+            )
+          ) {
+            return;
+          }
+
+          const aktualniRozsah =
+            ulozenyRozsah
+              ?.cloneRange();
+
+          if (
+            !aktualniRozsah ||
+            aktualniRozsah.collapsed
+          ) {
+            return;
+          }
+
+          try {
+            if (strana === "Start") {
+              const konecRozsahu =
+                aktualniRozsah
+                  .cloneRange();
+
+              konecRozsahu.collapse(
+                false
+              );
+
+              if (
+                konecRozsahu.comparePoint(
+                  caretRozsah.startContainer,
+                  caretRozsah.startOffset
+                ) > 0
+              ) {
+                return;
+              }
+
+              aktualniRozsah.setStart(
+                caretRozsah.startContainer,
+                caretRozsah.startOffset
+              );
+            } else {
+              const zacatekRozsahu =
+                aktualniRozsah
+                  .cloneRange();
+
+              zacatekRozsahu.collapse(
+                true
+              );
+
+              if (
+                zacatekRozsahu.comparePoint(
+                  caretRozsah.startContainer,
+                  caretRozsah.startOffset
+                ) < 0
+              ) {
+                return;
+              }
+
+              aktualniRozsah.setEnd(
+                caretRozsah.startContainer,
+                caretRozsah.startOffset
+              );
+            }
+
+            if (aktualniRozsah.collapsed) {
+              return;
+            }
+
+            const vyber =
+              window.getSelection();
+
+            vyber?.removeAllRanges();
+            vyber?.addRange(
+              aktualniRozsah
+            );
+
+            ulozenyRozsah =
+              aktualniRozsah
+                .cloneRange();
+
+            menuProKurzorAktivni =
+              false;
+
+            nastavTlacitkaMenu(true);
+            selectionMenu.hidden =
+              false;
+
+            zobrazUchytyVyberu(
+              aktualniRozsah
+            );
+
+            pozicujMenu({
+              rozsah: aktualniRozsah
+            });
+          } catch (_chyba) {
+            // Při rychlém přesunu přes složitější HTML
+            // prostě ponecháme poslední platný Range.
+          }
+        }
+      );
+
+      const ukonciTazeni =
+        event => {
+          if (
+            tazenyUchytVyberu !==
+            strana
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          tazenyUchytVyberu = null;
+
+          if (
+            ulozenyRozsah &&
+            !ulozenyRozsah.collapsed
+          ) {
+            zobrazUchytyVyberu(
+              ulozenyRozsah
+            );
+
+            pozicujMenu({
+              rozsah:
+                ulozenyRozsah
+            });
+          }
+        };
+
+      uchyt.addEventListener(
+        "pointerup",
+        ukonciTazeni
+      );
+
+      uchyt.addEventListener(
+        "pointercancel",
+        () => {
+          tazenyUchytVyberu = null;
+        }
+      );
+
+      return uchyt;
+    }
+
+    levyUchytVyberu =
+      vytvorUchyt("Start");
+
+    pravyUchytVyberu =
+      vytvorUchyt("End");
+  }
+
+
+  function zobrazUchytyVyberu(
+    rozsah
+  ) {
+    if (
+      !rozsah ||
+      rozsah.collapsed ||
+      !jeRozsahVEditoru(rozsah)
+    ) {
+      skryjUchytyVyberu();
+      return;
+    }
+
+    zajistiUchytyVyberu();
+
+    const zacatek =
+      zjistiBodOkrajeRozsahu(
+        rozsah,
+        false
+      );
+
+    const konec =
+      zjistiBodOkrajeRozsahu(
+        rozsah,
+        true
+      );
+
+    if (!zacatek || !konec) {
+      skryjUchytyVyberu();
+      return;
+    }
+
+    levyUchytVyberu.style.left =
+      `${Math.round(zacatek.x)}px`;
+
+    levyUchytVyberu.style.top =
+      `${Math.round(zacatek.y)}px`;
+
+    pravyUchytVyberu.style.left =
+      `${Math.round(konec.x)}px`;
+
+    pravyUchytVyberu.style.top =
+      `${Math.round(konec.y)}px`;
+
+    levyUchytVyberu.hidden = false;
+    pravyUchytVyberu.hidden = false;
+  }
+
+
+  function zobrazMenuProKurzorVBodu(
+    x,
+    y
+  ) {
+    const rozsah =
+      najdiCaretRozsahVBodu(x, y);
+
+    if (
+      !rozsah ||
+      !jeRozsahVEditoru(rozsah)
+    ) {
+      return false;
+    }
+
+    const kurzorRozsah =
+      rozsah.cloneRange();
+
+    kurzorRozsah.collapse(true);
+
+    try {
+      editorTextu.focus({
+        preventScroll: true
+      });
+    } catch {
+      editorTextu.focus();
+    }
+
+    const vyber =
+      window.getSelection();
+
+    if (!vyber) {
+      return false;
+    }
+
+    vyber.removeAllRanges();
+    vyber.addRange(
+      kurzorRozsah
+    );
+
+    ulozRozsah(
+      kurzorRozsah
+    );
+
+    aktivniTextarea = null;
+    ulozenyVyberTextarea = null;
+
+    menuProKurzorAktivni = true;
+    bodMenuKurzor = { x, y };
+
+    nastavTlacitkaMenu(false);
+    skryjUchytyVyberu();
+
+    selectionMenu.hidden = false;
+
+    pozicujMenu({
+      bod: bodMenuKurzor
+    });
+
+    return true;
+  }
+
+
   function zobrazMenuProOznaceni(rozsah) {
     if (!ulozRozsah(rozsah)) {
       return;
@@ -363,9 +861,13 @@
     aktivniTextarea = null;
     ulozenyVyberTextarea = null;
 
+    menuProKurzorAktivni = false;
+    bodMenuKurzor = null;
+
     nastavTlacitkaMenu(true);
     selectionMenu.hidden = false;
 
+    zobrazUchytyVyberu(rozsah);
     pozicujMenu({ rozsah });
   }
 
@@ -374,6 +876,10 @@
     if (!ulozVyberTextarea(textarea)) {
       return;
     }
+
+    menuProKurzorAktivni = false;
+    bodMenuKurzor = null;
+    skryjUchytyVyberu();
 
     const { start, end } =
       ulozenyVyberTextarea;
@@ -879,9 +1385,9 @@
       vyber?.removeAllRanges();
       vyber?.addRange(rozsah);
 
-      nastavTlacitkaMenu(true);
-      selectionMenu.hidden = false;
-      pozicujMenu({ rozsah });
+      zobrazMenuProOznaceni(
+        rozsah
+      );
     }
   );
 
@@ -891,13 +1397,529 @@
 
      Jednotné pravidlo LubaNote:
      - 1× tap = kurzor / editace
-     - 2× tap = nativní výběr slova
+     - 2× tap = LubaNote vybere celé slovo pod prstem
      - long-press zde neřešíme; patří řádkovým prvkům pro MOVE MODE
 
-     Android WebView může nejdřív nahlásit samotný kurzor a teprve
-     o pár ms později skutečný výběr slova. Proto stav nečteme
-     okamžitě v první selectionchange události.
+     Android WebView se na nativní dvojtap nedá spolehlivě použít:
+     v některých řádcích nechá pouze kurzor. Proto druhý tap poznáme
+     sami a vytvoříme DOM Range přímo ve slově pod souřadnicí dotyku.
   ========================================== */
+
+  function jePrvekMimoTextovyDvojtap(prvek) {
+    return Boolean(
+      prvek?.closest?.(
+        ".lubaNoteImage, .lubaNoteImageSettings, .lubaNoteImageRemove, button, input, textarea, select"
+      )
+    );
+  }
+
+
+  function jeBodNaKulce(polozka, x) {
+    if (!polozka) {
+      return false;
+    }
+
+    const pozice =
+      polozka.getBoundingClientRect();
+
+    /*
+     * Stejná oblast jako u bullet click logiky. Na kulce má přednost
+     * sbalit / rozbalit, ne výběr slova.
+     */
+    const presah =
+      window.innerWidth < 900
+        ? 40
+        : 28;
+
+    return (
+      x >= pozice.left - presah &&
+      x <= pozice.left + 4
+    );
+  }
+
+
+  function najdiCaretRozsahVBodu(x, y) {
+    if (typeof document.caretRangeFromPoint === "function") {
+      const rozsah =
+        document.caretRangeFromPoint(x, y);
+
+      if (rozsah) {
+        return rozsah;
+      }
+    }
+
+    if (typeof document.caretPositionFromPoint === "function") {
+      const pozice =
+        document.caretPositionFromPoint(x, y);
+
+      if (!pozice?.offsetNode) {
+        return null;
+      }
+
+      const rozsah =
+        document.createRange();
+
+      try {
+        rozsah.setStart(
+          pozice.offsetNode,
+          pozice.offset
+        );
+        rozsah.collapse(true);
+        return rozsah;
+      } catch (_chyba) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+
+  function najdiTextovyUzelProSlovo(rozsah) {
+    if (!rozsah) {
+      return null;
+    }
+
+    if (
+      rozsah.startContainer.nodeType ===
+      Node.TEXT_NODE
+    ) {
+      return {
+        uzel: rozsah.startContainer,
+        offset: rozsah.startOffset
+      };
+    }
+
+    const kontejner =
+      rozsah.startContainer;
+
+    if (kontejner.nodeType !== Node.ELEMENT_NODE) {
+      return null;
+    }
+
+    const deti =
+      Array.from(kontejner.childNodes);
+
+    const kandidati = [
+      deti[rozsah.startOffset] ?? null,
+      deti[rozsah.startOffset - 1] ?? null
+    ];
+
+    for (const kandidat of kandidati) {
+      if (kandidat?.nodeType === Node.TEXT_NODE) {
+        return {
+          uzel: kandidat,
+          offset:
+            kandidat === deti[rozsah.startOffset]
+              ? 0
+              : kandidat.textContent.length
+        };
+      }
+    }
+
+    return null;
+  }
+
+
+  function jeZnakSlova(znak) {
+    return /[\p{L}\p{N}_]/u.test(
+      znak || ""
+    );
+  }
+
+
+  function najdiIndexSlovaPodBodem(
+    textovyUzel,
+    caretOffset,
+    x,
+    y
+  ) {
+    const text =
+      textovyUzel?.textContent ?? "";
+
+    if (!text) {
+      return null;
+    }
+
+    const kandidati =
+      new Set([
+        caretOffset,
+        caretOffset - 1,
+        caretOffset + 1,
+        caretOffset - 2
+      ]);
+
+    let nejlepsi = null;
+
+    for (const index of kandidati) {
+      if (
+        index < 0 ||
+        index >= text.length ||
+        !jeZnakSlova(text[index])
+      ) {
+        continue;
+      }
+
+      const znakRozsah =
+        document.createRange();
+
+      try {
+        znakRozsah.setStart(
+          textovyUzel,
+          index
+        );
+
+        znakRozsah.setEnd(
+          textovyUzel,
+          index + 1
+        );
+      } catch {
+        continue;
+      }
+
+      const obdelniky =
+        Array.from(
+          znakRozsah.getClientRects()
+        );
+
+      for (const obdelnik of obdelniky) {
+        /*
+         * Vodorovně nesmíme přidávat žádnou toleranci.
+         * Mezera mezi slovy má vlastní šířku a předchozí ±2 px
+         * zasahovaly do sousedních písmen. Dvojtap na mezeru pak
+         * omylem vybral levé nebo pravé slovo místo nabídky
+         * Vložit / Vše. Svislá rezerva nevadí, protože pouze
+         * usnadňuje zásah stejného řádku.
+         */
+        const rezervaY = 4;
+
+        const jeVBodu =
+          x >= obdelnik.left &&
+          x <= obdelnik.right &&
+          y >= obdelnik.top - rezervaY &&
+          y <= obdelnik.bottom + rezervaY;
+
+        if (!jeVBodu) {
+          continue;
+        }
+
+        const stredX =
+          obdelnik.left +
+          obdelnik.width / 2;
+
+        const stredY =
+          obdelnik.top +
+          obdelnik.height / 2;
+
+        const vzdalenost =
+          Math.hypot(
+            x - stredX,
+            y - stredY
+          );
+
+        if (
+          !nejlepsi ||
+          vzdalenost <
+            nejlepsi.vzdalenost
+        ) {
+          nejlepsi = {
+            index,
+            vzdalenost
+          };
+        }
+      }
+    }
+
+    return nejlepsi?.index ?? null;
+  }
+
+
+  function najdiHraniceSlova(text, pozice) {
+    if (
+      !text ||
+      pozice == null ||
+      pozice < 0 ||
+      pozice >= text.length ||
+      !jeZnakSlova(text[pozice])
+    ) {
+      return null;
+    }
+
+    if (typeof Intl?.Segmenter === "function") {
+      const segmenter =
+        new Intl.Segmenter(
+          "cs",
+          { granularity: "word" }
+        );
+
+      const segment =
+        [...segmenter.segment(text)]
+          .find(cast => (
+            cast.isWordLike &&
+            pozice >= cast.index &&
+            pozice <
+              cast.index + cast.segment.length
+          ));
+
+      if (segment) {
+        return {
+          start: segment.index,
+          end:
+            segment.index +
+            segment.segment.length
+        };
+      }
+    }
+
+    let start = pozice;
+    let end = pozice + 1;
+
+    while (
+      start > 0 &&
+      jeZnakSlova(text[start - 1])
+    ) {
+      start -= 1;
+    }
+
+    while (
+      end < text.length &&
+      jeZnakSlova(text[end])
+    ) {
+      end += 1;
+    }
+
+    return { start, end };
+  }
+
+
+  function vyberSlovoVBodu(x, y) {
+    const caretRozsah =
+      najdiCaretRozsahVBodu(x, y);
+
+    if (
+      !caretRozsah ||
+      !jeRozsahVEditoru(caretRozsah)
+    ) {
+      return false;
+    }
+
+    const textovyBod =
+      najdiTextovyUzelProSlovo(caretRozsah);
+
+    if (
+      !textovyBod?.uzel ||
+      !jeUzelVEditoru(textovyBod.uzel)
+    ) {
+      return false;
+    }
+
+    const text =
+      textovyBod.uzel.textContent ?? "";
+
+    const indexSlova =
+      najdiIndexSlovaPodBodem(
+        textovyBod.uzel,
+        textovyBod.offset,
+        x,
+        y
+      );
+
+    const hranice =
+      najdiHraniceSlova(
+        text,
+        indexSlova
+      );
+
+    if (!hranice) {
+      return false;
+    }
+
+    const rozsah =
+      document.createRange();
+
+    rozsah.setStart(
+      textovyBod.uzel,
+      hranice.start
+    );
+
+    rozsah.setEnd(
+      textovyBod.uzel,
+      hranice.end
+    );
+
+    try {
+      editorTextu.focus({
+        preventScroll: true
+      });
+    } catch {
+      editorTextu.focus();
+    }
+
+    const vyber =
+      window.getSelection();
+
+    if (!vyber) {
+      return false;
+    }
+
+    vyber.removeAllRanges();
+    vyber.addRange(rozsah);
+
+    ulozRozsah(rozsah);
+    zobrazMenuProOznaceni(rozsah);
+
+    return true;
+  }
+
+
+  editorTextu.addEventListener(
+    "touchstart",
+    event => {
+      if (
+        event.touches.length !== 1 ||
+        jePrvekMimoTextovyDvojtap(event.target)
+      ) {
+        zacatekTapuEditoru = null;
+        return;
+      }
+
+      if (menuProKurzorAktivni) {
+        skryjMenu();
+      }
+
+      const dotyk =
+        event.touches[0];
+
+      zacatekTapuEditoru = {
+        id: dotyk.identifier,
+        x: dotyk.clientX,
+        y: dotyk.clientY,
+        cas: performance.now()
+      };
+    },
+    { passive: true }
+  );
+
+
+  editorTextu.addEventListener(
+    "touchend",
+    event => {
+      if (!zacatekTapuEditoru) {
+        return;
+      }
+
+      const dotyk =
+        Array.from(event.changedTouches).find(
+          kandidat =>
+            kandidat.identifier ===
+            zacatekTapuEditoru.id
+        );
+
+      if (!dotyk) {
+        zacatekTapuEditoru = null;
+        return;
+      }
+
+      const ted =
+        performance.now();
+
+      const delkaTapu =
+        ted - zacatekTapuEditoru.cas;
+
+      const pohyb =
+        Math.hypot(
+          dotyk.clientX - zacatekTapuEditoru.x,
+          dotyk.clientY - zacatekTapuEditoru.y
+        );
+
+      const polozka =
+        event.target.closest?.("li");
+
+      const jeKratkyTap =
+        delkaTapu <= MAX_DELKA_JEDNOHO_TAPU &&
+        pohyb <= MAX_POHYB_JEDNOHO_TAPU &&
+        !jeBodNaKulce(
+          polozka,
+          dotyk.clientX
+        );
+
+      zacatekTapuEditoru = null;
+
+      if (!jeKratkyTap) {
+        posledniTapEditoru = null;
+        return;
+      }
+
+      const jeDruhyTap = Boolean(
+        posledniTapEditoru &&
+        ted - posledniTapEditoru.cas <=
+          MAX_CAS_DVOJTAPU &&
+        Math.hypot(
+          dotyk.clientX - posledniTapEditoru.x,
+          dotyk.clientY - posledniTapEditoru.y
+        ) <= MAX_VZDALENOST_DVOJTAPU
+      );
+
+      if (!jeDruhyTap) {
+        posledniTapEditoru = {
+          x: dotyk.clientX,
+          y: dotyk.clientY,
+          cas: ted
+        };
+        return;
+      }
+
+      posledniTapEditoru = null;
+
+      const vybrano =
+        vyberSlovoVBodu(
+          dotyk.clientX,
+          dotyk.clientY
+        );
+
+      const zobrazenoMenuKurzor =
+        vybrano
+          ? false
+          : zobrazMenuProKurzorVBodu(
+              dotyk.clientX,
+              dotyk.clientY
+            );
+
+      if (
+        !vybrano &&
+        !zobrazenoMenuKurzor
+      ) {
+        return;
+      }
+
+      /*
+       * Druhý syntetický click Androidu by jinak mohl nový Range
+       * nebo kurzor znovu přepsat.
+       */
+      event.preventDefault();
+      ignorujKlikPoDvojtapuDo =
+        performance.now() + 380;
+    },
+    { passive: false }
+  );
+
+
+  editorTextu.addEventListener(
+    "click",
+    event => {
+      if (
+        performance.now() >=
+        ignorujKlikPoDvojtapuDo
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true
+  );
+
 
   function aktualizujMenuPodleVyberu() {
     if (casovacAktualizaceVyberu) {
@@ -946,9 +1968,24 @@
         }
 
         if (rozsah.collapsed) {
+          if (menuProKurzorAktivni) {
+            ulozRozsah(rozsah);
+            nastavTlacitkaMenu(false);
+            skryjUchytyVyberu();
+            selectionMenu.hidden = false;
+
+            if (bodMenuKurzor) {
+              pozicujMenu({
+                bod: bodMenuKurzor
+              });
+            }
+
+            return;
+          }
+
           /*
-           * Jednoduchý tap znamená pouze editaci. Nabídku ukážeme
-           * až při skutečně označeném textu.
+           * Jednoduchý tap znamená pouze editaci.
+           * Nabídku u kurzoru otevírá až dvojtap mimo slovo.
            */
           skryjMenu();
           return;
