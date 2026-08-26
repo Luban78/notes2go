@@ -701,7 +701,9 @@ async function getCloudNotesForSync() {
   const user = await getCurrentUser();
 
   if (!user) {
-    return [];
+    throw new Error(
+      "Synchronizace byla zastavena: uživatel není přihlášený."
+    );
   }
 
   /*
@@ -714,10 +716,21 @@ async function getCloudNotesForSync() {
 
   if (error) {
     console.error("Sync download error:", error.message);
-    return [];
+    /*
+     * Chybu čtení nikdy nesmíme zaměnit za prázdný cloud.
+     * Jinak by klient mohl začít všechny lokální poznámky posílat
+     * jako údajně nové. Při nejistotě proto celý sync bezpečně končí.
+     */
+    throw error;
   }
 
-  return Array.isArray(data) ? data : [];
+  if (!Array.isArray(data)) {
+    throw new Error(
+      "Synchronizace byla zastavena: server vrátil neplatná data."
+    );
+  }
+
+  return data;
 }
 
 function vytvorCloudRegularNote(row) {
@@ -742,6 +755,99 @@ function jsouStejneCasoveZnacky(a, b) {
   return String(a ?? "") === String(b ?? "");
 }
 
+function seradJsonProSyncPorovnani(hodnota) {
+  if (Array.isArray(hodnota)) {
+    return hodnota.map(seradJsonProSyncPorovnani);
+  }
+
+  if (
+    hodnota &&
+    typeof hodnota === "object"
+  ) {
+    return Object.keys(hodnota)
+      .sort()
+      .reduce((vysledek, klic) => {
+        if (hodnota[klic] !== undefined) {
+          vysledek[klic] =
+            seradJsonProSyncPorovnani(
+              hodnota[klic]
+            );
+        }
+
+        return vysledek;
+      }, {});
+  }
+
+  return hodnota;
+}
+
+function normalizujPoznamkuProPrvniRevizi(
+  poznamka,
+  id
+) {
+  if (!poznamka || typeof poznamka !== "object") {
+    return null;
+  }
+
+  const vysledek = {
+    ...poznamka,
+    id: id || poznamka.id
+  };
+
+  /*
+   * updatedAt se po starém syncu nemusí rovnat serverovému
+   * updated_at. Pro bezpečné převzetí první revize proto porovnáváme
+   * celý skutečný obsah poznámky a ignorujeme pouze tuto časovou stopu.
+   */
+  delete vysledek.updatedAt;
+
+  if (vysledek.isSecret === false) {
+    delete vysledek.isSecret;
+  }
+
+  return seradJsonProSyncPorovnani(vysledek);
+}
+
+function maStejnyObsahProPrvniRevizi(
+  lokalni,
+  row
+) {
+  if (!lokalni || !row || row.deleted_at) {
+    return false;
+  }
+
+  if (
+    lokalni.record &&
+    jeSifrovanyCloudSecretRow(row)
+  ) {
+    return JSON.stringify(
+      seradJsonProSyncPorovnani(
+        lokalni.record.encrypted
+      )
+    ) === JSON.stringify(
+      seradJsonProSyncPorovnani(
+        row.data.encrypted
+      )
+    );
+  }
+
+  if (!lokalni.note || jeSifrovanyCloudSecretRow(row)) {
+    return false;
+  }
+
+  return JSON.stringify(
+    normalizujPoznamkuProPrvniRevizi(
+      lokalni.note,
+      row.id
+    )
+  ) === JSON.stringify(
+    normalizujPoznamkuProPrvniRevizi(
+      row.data,
+      row.id
+    )
+  );
+}
+
 function pripravRevizniMerge(
   localRegular,
   localEncrypted,
@@ -762,10 +868,29 @@ function pripravRevizniMerge(
   const vynutitCloudId = new Set();
   const vynutitLocalId = new Set();
   const prijmoutCloudMetaId = new Set();
+  const cekajiciSmazaniId = new Set(
+    nactiCekajiciSmazani().map(
+      (zaznam) => zaznam?.id
+    ).filter(Boolean)
+  );
 
   (Array.isArray(cloudRows) ? cloudRows : [])
     .forEach((row) => {
       if (!row?.id) {
+        return;
+      }
+
+      /*
+       * Dokud server bezpečně nepotvrdí tombstone, nesmíme pro tuto
+       * poznámku přijmout novou cloudovou revizi ani zrušit případný
+       * konflikt. Uložená expectedRevision je přesně stav, ze kterého
+       * uživatel mazal, a musí zůstat beze změny.
+       */
+      if (cekajiciSmazaniId.has(row.id)) {
+        if (aktivniKonfliktySyncu.has(row.id)) {
+          konfliktniId.add(row.id);
+        }
+
         return;
       }
 
@@ -792,22 +917,18 @@ function pripravRevizniMerge(
       if (!meta) {
         /*
          * První start po zavedení revizí: existující cloudovou revizi
-         * převezmeme automaticky jen tehdy, když má lokální kopie
-         * stejný známý čas jako cloud. Jakýkoli rozdíl je raději konflikt.
+         * převezmeme automaticky jen tehdy, když je celý skutečný obsah
+         * lokální a cloudové kopie shodný. Samotný čas nestačí: dvě různé
+         * verze mohou výjimečně nést stejnou časovou značku.
          */
         if (
-          jsouStejneCasoveZnacky(
-            lokalni.updatedAt,
-            row.updated_at
+          maStejnyObsahProPrvniRevizi(
+            lokalni,
+            row
           )
         ) {
-          ulozCloudSyncMeta(row.id, {
-            revision: cloudRevision,
-            localUpdatedAt:
-              lokalni.updatedAt || null,
-            serverUpdatedAt:
-              row.updated_at || null
-          });
+          vynutitCloudId.add(row.id);
+          prijmoutCloudMetaId.add(row.id);
           return;
         }
 
