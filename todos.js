@@ -517,55 +517,47 @@ function najdiRozsahSlovaTodo(hodnota, pozice) {
     Math.min(pozice ?? 0, hodnota.length)
   );
 
+  const jeZnakSlova = znak =>
+    /[\p{L}\p{N}_]/u.test(znak || "");
+
+  /*
+   * Důležité pravidlo LubaNote:
+   * kurzor musí opravdu ležet UPROSTŘED slova.
+   * Mezery a konec řádku nesmí přebírat sousední slovo,
+   * protože dvojtap tam patří nabídce Vložit / Vše.
+   */
+  if (
+    bezpecnaPozice >= hodnota.length ||
+    !jeZnakSlova(hodnota[bezpecnaPozice])
+  ) {
+    return null;
+  }
+
   if (typeof Intl?.Segmenter === "function") {
     const segmenter = new Intl.Segmenter(
       "cs",
       { granularity: "word" }
     );
 
-    const segmenty = [
+    const segment = [
       ...segmenter.segment(hodnota)
-    ];
+    ].find(cast => (
+      cast.isWordLike &&
+      bezpecnaPozice >= cast.index &&
+      bezpecnaPozice <
+        cast.index + cast.segment.length
+    ));
 
-    const kandidati = [
-      bezpecnaPozice,
-      Math.max(0, bezpecnaPozice - 1)
-    ];
-
-    for (const kandidat of kandidati) {
-      const segment = segmenty.find(cast => (
-        cast.isWordLike &&
-        kandidat >= cast.index &&
-        kandidat <= cast.index + cast.segment.length
-      ));
-
-      if (segment) {
-        return {
-          start: segment.index,
-          end: segment.index + segment.segment.length
-        };
-      }
+    if (segment) {
+      return {
+        start: segment.index,
+        end: segment.index + segment.segment.length
+      };
     }
   }
 
-  const jeZnakSlova = znak =>
-    /[\p{L}\p{N}_]/u.test(znak || "");
-
-  let bod = Math.min(
-    bezpecnaPozice,
-    Math.max(0, hodnota.length - 1)
-  );
-
-  if (!jeZnakSlova(hodnota[bod]) && bod > 0) {
-    bod -= 1;
-  }
-
-  if (!jeZnakSlova(hodnota[bod])) {
-    return null;
-  }
-
-  let start = bod;
-  let end = bod + 1;
+  let start = bezpecnaPozice;
+  let end = bezpecnaPozice + 1;
 
   while (
     start > 0 &&
@@ -1502,7 +1494,7 @@ function createTodoItem(todo, index) {
 
   text.addEventListener(
     "pointerup",
-    () => {
+    (event) => {
       if (
         !cekaniNaDruhyTapTodo ||
         cekaniNaDruhyTapTodo.todoId !== todo.id
@@ -1522,10 +1514,29 @@ function createTodoItem(todo, index) {
 
       /*
        * První tap otevřel editaci, druhý tap už leží v textarea.
-       * Po jeho dokončení označíme celé slovo pod kurzorem.
+       * Uprostřed slova vybereme celé slovo. Mimo slovo otevřeme
+       * stejnou nabídku Vložit / Vše jako v hlavním editoru.
        */
       requestAnimationFrame(() => {
-        vyberSlovoVTodoTextarea(text);
+        const vybranoSlovo =
+          vyberSlovoVTodoTextarea(text);
+
+        if (vybranoSlovo) {
+          return;
+        }
+
+        document.dispatchEvent(
+          new CustomEvent(
+            "lubanote:todo-kurzor-menu",
+            {
+              detail: {
+                textarea: text,
+                x: event.clientX,
+                y: event.clientY
+              }
+            }
+          )
+        );
       });
     }
   );

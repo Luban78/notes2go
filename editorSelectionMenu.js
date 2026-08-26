@@ -68,6 +68,9 @@
   let menuProKurzorAktivni = false;
   let bodMenuKurzor = null;
 
+  let menuProTextareaKurzorAktivni = false;
+  let bodMenuTextareaKurzor = null;
+
   let levyUchytVyberu = null;
   let pravyUchytVyberu = null;
   let tazenyUchytVyberu = null;
@@ -254,6 +257,9 @@
 
     menuProKurzorAktivni = false;
     bodMenuKurzor = null;
+
+    menuProTextareaKurzorAktivni = false;
+    bodMenuTextareaKurzor = null;
 
     skryjUchytyVyberu();
   }
@@ -837,6 +843,9 @@
     aktivniTextarea = null;
     ulozenyVyberTextarea = null;
 
+    menuProTextareaKurzorAktivni = false;
+    bodMenuTextareaKurzor = null;
+
     menuProKurzorAktivni = true;
     bodMenuKurzor = { x, y };
 
@@ -864,11 +873,42 @@
     menuProKurzorAktivni = false;
     bodMenuKurzor = null;
 
+    menuProTextareaKurzorAktivni = false;
+    bodMenuTextareaKurzor = null;
+
     nastavTlacitkaMenu(true);
     selectionMenu.hidden = false;
 
     zobrazUchytyVyberu(rozsah);
     pozicujMenu({ rozsah });
+  }
+
+
+  function zobrazMenuProKurzorTextarea(
+    textarea,
+    x,
+    y
+  ) {
+    if (!ulozVyberTextarea(textarea)) {
+      return false;
+    }
+
+    menuProKurzorAktivni = false;
+    bodMenuKurzor = null;
+
+    menuProTextareaKurzorAktivni = true;
+    bodMenuTextareaKurzor = { x, y };
+
+    nastavTlacitkaMenu(false);
+    skryjUchytyVyberu();
+
+    selectionMenu.hidden = false;
+
+    pozicujMenu({
+      bod: bodMenuTextareaKurzor
+    });
+
+    return true;
   }
 
 
@@ -879,6 +919,10 @@
 
     menuProKurzorAktivni = false;
     bodMenuKurzor = null;
+
+    menuProTextareaKurzorAktivni = false;
+    bodMenuTextareaKurzor = null;
+
     skryjUchytyVyberu();
 
     const { start, end } =
@@ -1941,10 +1985,28 @@
             (textarea.selectionEnd ?? 0)
           ) {
             zobrazMenuProTextarea(textarea);
-          } else {
-            skryjMenu();
+            return;
           }
 
+          if (
+            menuProTextareaKurzorAktivni &&
+            aktivniTextarea === textarea
+          ) {
+            ulozVyberTextarea(textarea);
+            nastavTlacitkaMenu(false);
+            skryjUchytyVyberu();
+            selectionMenu.hidden = false;
+
+            if (bodMenuTextareaKurzor) {
+              pozicujMenu({
+                bod: bodMenuTextareaKurzor
+              });
+            }
+
+            return;
+          }
+
+          skryjMenu();
           return;
         }
 
@@ -1995,6 +2057,27 @@
       }, 40);
     });
   }
+
+
+  document.addEventListener(
+    "lubanote:todo-kurzor-menu",
+    event => {
+      const textarea =
+        event.detail?.textarea;
+
+      if (!jeTodoTextarea(textarea)) {
+        return;
+      }
+
+      zobrazMenuProKurzorTextarea(
+        textarea,
+        event.detail?.x ??
+          textarea.getBoundingClientRect().left,
+        event.detail?.y ??
+          textarea.getBoundingClientRect().top
+      );
+    }
+  );
 
 
   document.addEventListener(
