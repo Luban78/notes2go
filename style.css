@@ -1515,6 +1515,7 @@ html {
 
 /* ========================================
    TODO – jednotný MOVE MODE + drag & drop
+   Stejný princip jako nový bullet editor
 ======================================== */
 
 .todoItem.todoMoveSelected {
@@ -1542,47 +1543,97 @@ html {
   -webkit-user-select: none !important;
 }
 
-/* Původní řádek během přesunu nahradí placeholder. */
-.todoItem.dragSource {
-  display: none;
+/*
+ * Při dragování už řádek neschováváme. Stejně jako bullet se fyzicky
+ * přesouvá v seznamu a na mobilu zůstává zeslabený pod plovoucím náhledem.
+ */
+.todoList.todoDragActive > .todoItem {
+  transition:
+    transform 120ms ease,
+    margin 120ms ease,
+    background 120ms ease,
+    opacity 120ms ease;
 }
 
-.todoDropPlaceholder {
-  flex: 0 0 4px;
-  width: calc(100% - 40px);
-  height: 4px;
-  box-sizing: border-box;
-  margin: 2px 12px 2px 28px;
+.todoItem.todoDraggingItem {
+  position: relative;
+  z-index: 5;
 
+  margin-top: 4px;
+  margin-bottom: 4px;
+
+  transform: scale(1.015);
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 10%,
+    transparent
+  );
+
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.14);
+}
+
+/* Jasná cílová čára – stejný princip jako u bulletů. */
+.todoItem.todoDropBefore,
+.todoItem.todoDropAfter {
+  position: relative;
+}
+
+.todoItem.todoDropBefore::after,
+.todoItem.todoDropAfter::after {
+  content: "";
+
+  position: absolute;
+  z-index: 8;
+
+  left: 24px;
+  right: 14px;
+
+  height: 3px;
   border-radius: 999px;
-  background: var(--color-accent);
 
+  background: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-background);
 
   pointer-events: none;
 }
 
-/* Kopie řádku, která fyzicky sleduje prst. */
+.todoItem.todoDropBefore::after {
+  top: -7px;
+}
+
+.todoItem.todoDropAfter::after {
+  bottom: -7px;
+}
+
+/* Kopie řádku nad prstem – mobilní princip shodný s bullet preview. */
 .todoDragGhost {
   position: fixed;
   z-index: 10000;
 
   margin: 0 !important;
+  padding: 10px 14px !important;
+
   pointer-events: none;
 
   opacity: 0.98;
   transform: scale(1.03);
   transform-origin: center center;
 
-  background: color-mix(in srgb,
-      var(--color-accent) 20%,
-      var(--color-editor-background));
+  border: 2px solid var(--color-accent);
+  border-radius: 12px;
 
-  border: 1px solid color-mix(in srgb,
-      var(--color-accent) 48%,
-      transparent);
+  background: var(--color-surface);
+  color: var(--color-text);
 
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+  box-shadow:
+    0 0 0 3px
+      color-mix(
+        in srgb,
+        var(--color-accent) 16%,
+        transparent
+      ),
+    0 10px 26px rgba(0, 0, 0, 0.24);
 }
 
 /* V ghostu nepoužíváme nativní checkbox – je stabilnější vlastní vizuál. */
@@ -1597,13 +1648,16 @@ html {
   box-sizing: border-box;
   margin: 1px 0 0;
 
-  border: 2px solid color-mix(in srgb,
-      var(--color-accent) 70%,
-      var(--color-editor-text));
-  border-radius: 5px;
+  border: 2px solid color-mix(
+    in srgb,
+    var(--color-accent) 70%,
+    var(--color-border)
+  );
+  border-radius: 7px;
 
-  color: var(--color-accent-text);
-  font-size: 20px;
+  color: var(--color-accent);
+
+  font-size: 18px;
   font-weight: 700;
   line-height: 1;
 }
@@ -1616,20 +1670,37 @@ html {
   margin: 0;
   padding: 0 0 4px;
 
-  color: var(--color-accent-text);
+  color: var(--color-text);
 
   font: inherit;
   font-size: var(--font-size);
   font-weight: 600;
   line-height: 1.35;
 
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
 }
 
 .todoDragGhost.todoCompleted .todoDragGhostText {
   opacity: 0.58;
   text-decoration: line-through;
+}
+
+@media (max-width: 899px) {
+  .todoItem.todoDraggingItem {
+    opacity: 0.28;
+  }
+
+  .todoItem.todoDropBefore::after,
+  .todoItem.todoDropAfter::after {
+    height: 4px;
+  }
+
+  .todoDragGhost {
+    min-width: 140px;
+    max-width: 76vw;
+  }
 }
 
 
@@ -6728,4 +6799,77 @@ text-size-adjust: 100%;
     min-width: 140px;
     max-width: 76vw;
   }
+}
+
+.bulletDragPreview.bulletChceZanorit {
+  border-color: var(--color-accent);
+
+  box-shadow:
+    0 0 0 3px
+      color-mix(
+        in srgb,
+        var(--color-accent) 25%,
+        transparent
+      ),
+    0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+.bulletDragPreview.bulletChceZanorit,
+.bulletDragPreview.bulletChceVysunout {
+  overflow: visible;
+}
+
+
+.bulletDragPreview.bulletChceZanorit::after {
+  content: "→ zanořit";
+  
+  position: absolute;
+  
+  left: 50%;
+  bottom: calc(100% + 7px);
+  top: auto;
+  right: auto;
+  
+  transform: translateX(-50%);
+  
+  padding: 3px 8px;
+  
+  border-radius: 8px;
+  
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+
+.bulletDragPreview.bulletChceVysunout {
+  border-style: dashed;
+}
+
+
+.bulletDragPreview.bulletChceVysunout::after {
+  content: "← vysunout";
+  
+  position: absolute;
+  
+  left: 50%;
+  bottom: calc(100% + 7px);
+  top: auto;
+  right: auto;
+  
+  transform: translateX(-50%);
+  
+  padding: 3px 8px;
+  
+  border-radius: 8px;
+  
+  background: var(--color-surface);
+  color: var(--color-text);
+  
+  border: 1px solid var(--color-border);
+  
+  font-size: 12px;
+  white-space: nowrap;
 }

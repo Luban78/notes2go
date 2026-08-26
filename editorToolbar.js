@@ -974,8 +974,30 @@
     if (!tazenaPolozka) {
       return;
     }
+    
+    const posunX =
+  x - zacatekTazeniX;
+
+const chceZanorit =
+  posunX > 36;
+
+const chceVysunout =
+  posunX < -36;
+
+nahledTazenePolozky?.classList.toggle(
+  "bulletChceZanorit",
+  chceZanorit
+);
+
+nahledTazenePolozky?.classList.toggle(
+  "bulletChceVysunout",
+  chceVysunout
+);
 
     posunNahledTazenePolozky(x, y);
+    
+    
+    
     zrusBulletDropIndikator();
 
     const seznam =
@@ -1120,6 +1142,108 @@
       );
     }
   }
+  function vysunTazenouPolozku() {
+  if (!tazenaPolozka) {
+    return false;
+  }
+
+  const vnorenySeznam =
+    tazenaPolozka.parentElement;
+
+  if (
+    !vnorenySeznam ||
+    vnorenySeznam.tagName !== "UL"
+  ) {
+    return false;
+  }
+
+  const rodicovskaPolozka =
+    vnorenySeznam.parentElement;
+
+  if (
+    !rodicovskaPolozka ||
+    rodicovskaPolozka.tagName !== "LI"
+  ) {
+    return false;
+  }
+
+  const nadrazenySeznam =
+    rodicovskaPolozka.parentElement;
+
+  if (
+    !nadrazenySeznam ||
+    nadrazenySeznam.tagName !== "UL"
+  ) {
+    return false;
+  }
+
+  nadrazenySeznam.insertBefore(
+    tazenaPolozka,
+    rodicovskaPolozka.nextSibling
+  );
+
+  const maJesteDeti =
+    Array.from(
+      vnorenySeznam.children
+    ).some(
+      (prvek) =>
+        prvek.tagName === "LI"
+    );
+
+  if (!maJesteDeti) {
+    vnorenySeznam.remove();
+
+    rodicovskaPolozka.classList.remove(
+      "bulletSbaleny"
+    );
+  }
+
+  return true;
+}
+  function zanorTazenouPolozku() {
+  if (!tazenaPolozka) {
+    return false;
+  }
+
+  const predchoziPolozka =
+    tazenaPolozka.previousElementSibling;
+
+  if (
+    !predchoziPolozka ||
+    predchoziPolozka.tagName !== "LI"
+  ) {
+    return false;
+  }
+
+  let vnorenySeznam =
+    Array.from(
+      predchoziPolozka.children
+    ).find(
+      (prvek) =>
+        prvek.tagName === "UL"
+    );
+
+  if (!vnorenySeznam) {
+    vnorenySeznam =
+      document.createElement("ul");
+
+    predchoziPolozka.appendChild(
+      vnorenySeznam
+    );
+  }
+
+  vnorenySeznam.hidden = false;
+
+  predchoziPolozka.classList.remove(
+    "bulletSbaleny"
+  );
+
+  vnorenySeznam.appendChild(
+    tazenaPolozka
+  );
+
+  return true;
+}
 
 
   function uklidTazeniBulletu({
@@ -1824,12 +1948,38 @@
       udalost.preventDefault();
 
       if (probihaTazeni) {
-        uklidTazeniBulletu({
-          zrusVyber: true,
-          oznamZmenu: true
-        });
-        return;
-      }
+  const chceZanorit =
+    nahledTazenePolozky?.classList.contains(
+      "bulletChceZanorit"
+    );
+  
+  const chceVysunout =
+    nahledTazenePolozky?.classList.contains(
+      "bulletChceVysunout"
+    );
+  
+  if (
+    chceZanorit ||
+    chceVysunout
+  ) {
+    tazenaPolozka?.parentElement?.classList.remove(
+      "bulletDragActive"
+    );
+  }
+  
+  if (chceZanorit) {
+    zanorTazenouPolozku();
+  } else if (chceVysunout) {
+    vysunTazenouPolozku();
+  }
+  
+  uklidTazeniBulletu({
+    zrusVyber: true,
+    oznamZmenu: true
+  });
+  
+  return;
+}
 
       /*
        * Long-press pouze aktivoval MOVE MODE. Prst lze pustit a
@@ -2004,6 +2154,13 @@
       prepniSbaleniPolozky(
         polozka
       );
+      
+      const vyber =
+  window.getSelection();
+
+if (vyber) {
+  vyber.removeAllRanges();
+}
     }
   );
 

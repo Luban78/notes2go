@@ -26,7 +26,6 @@ let selectedTodoId = null;
 let draggedTodoIndex = null;
 let draggedTodoElement = null;
 let todoDragGhost = null;
-let todoDropPlaceholder = null;
 let todoDragActive = false;
 
 let todoLongPressTimer = null;
@@ -40,8 +39,6 @@ let pendingTodoMoveReady = false;
 
 let todoMoveSelectedElement = null;
 
-let dragPointerOffsetY = 0;
-let dragGhostLeft = 0;
 let suppressTodoClickUntil = 0;
 let lastTouchTime = 0;
 let cekaniNaDruhyTapTodo = null;
@@ -1043,6 +1040,20 @@ document.addEventListener(
    DRAG & DROP – aktivní přesun
 ======================================== */
 
+function zrusTodoDropIndikator() {
+  todoList
+    .querySelectorAll(
+      ".todoDropBefore, .todoDropAfter"
+    )
+    .forEach(item => {
+      item.classList.remove(
+        "todoDropBefore",
+        "todoDropAfter"
+      );
+    });
+}
+
+
 function activateTodoDrag(index, todoItem, clientX, clientY) {
   if (
     todoDragActive ||
@@ -1075,52 +1086,31 @@ function activateTodoDrag(index, todoItem, clientX, clientY) {
 
   todoDragActive = true;
   document.body.classList.add("todoDragging");
+  todoList.classList.add("todoDragActive");
 
   /*
-   * Stejně jako u bulletu ukazujeme pouze jasnou cílovou čáru,
-   * ne velký blok, který by při přesunu zakrýval sousední položky.
+   * Stejně jako u bulletů zůstává skutečný řádek v seznamu.
+   * Při pohybu ho rovnou přesouváme mezi ostatními položkami.
+   * Na mobilu je původní řádek zeslabený a nad prstem běží náhled.
    */
-  todoDropPlaceholder = document.createElement("div");
-  todoDropPlaceholder.classList.add("todoDropPlaceholder");
-
-  todoList.insertBefore(
-    todoDropPlaceholder,
-    draggedTodoElement
+  draggedTodoElement.classList.add(
+    "todoDraggingItem"
   );
-
-  draggedTodoElement.classList.add("dragSource");
-
-  createTodoDragGhost(index, rect);
-
-  dragPointerOffsetY = clientY - rect.top;
 
   const jeMobil = window.innerWidth < 900;
 
-  const ghostWidth = jeMobil
-    ? Math.min(
-        rect.width,
-        Math.max(170, window.innerWidth * 0.76)
-      )
-    : rect.width;
-
-  todoDragGhost.style.width = `${ghostWidth}px`;
-
   if (jeMobil) {
-    dragGhostLeft = Math.max(
-      8,
-      Math.min(
-        clientX - ghostWidth / 2,
-        window.innerWidth - ghostWidth - 8
-      )
+    createTodoDragGhost(index, rect);
+
+    const ghostWidth = Math.min(
+      rect.width,
+      Math.max(170, window.innerWidth * 0.76)
     );
-  } else {
-    dragGhostLeft = rect.left;
+
+    todoDragGhost.style.width = `${ghostWidth}px`;
+    document.body.append(todoDragGhost);
+    positionTodoDragGhost(clientX, clientY);
   }
-
-  todoDragGhost.style.left = `${dragGhostLeft}px`;
-
-  document.body.append(todoDragGhost);
-  positionTodoDragGhost(clientX, clientY);
 
   suppressTodoClickUntil =
     performance.now() + 650;
@@ -1175,28 +1165,16 @@ function positionTodoDragGhost(clientX, clientY) {
 
   const ghostHeight = todoDragGhost.offsetHeight;
   const ghostWidth = todoDragGhost.offsetWidth;
-  const jeMobil = window.innerWidth < 900;
 
-  let top;
+  const left = Math.max(
+    8,
+    Math.min(
+      clientX - ghostWidth / 2,
+      window.innerWidth - ghostWidth - 8
+    )
+  );
 
-  if (jeMobil) {
-    /* Stejný princip jako bullet preview – celý náhled je nad prstem. */
-    top = clientY - TODO_GHOST_LIFT;
-
-    const left = Math.max(
-      8,
-      Math.min(
-        clientX - ghostWidth / 2,
-        window.innerWidth - ghostWidth - 8
-      )
-    );
-
-    todoDragGhost.style.left = `${left}px`;
-  } else {
-    top =
-      clientY -
-      dragPointerOffsetY;
-  }
+  let top = clientY - TODO_GHOST_LIFT;
 
   const minTop = 8;
   const maxTop = Math.max(
@@ -1209,40 +1187,61 @@ function positionTodoDragGhost(clientX, clientY) {
     Math.max(minTop, top)
   );
 
+  todoDragGhost.style.left = `${left}px`;
   todoDragGhost.style.top = `${top}px`;
 }
 
 
-function updateTodoDropPlaceholder(clientY) {
-  if (!todoDropPlaceholder) {
+function presunTodoPodlePozice(clientY) {
+  if (
+    !todoDragActive ||
+    !draggedTodoElement
+  ) {
     return;
   }
 
-  const items = [
+  zrusTodoDropIndikator();
+
+  const polozky = [
     ...todoList.querySelectorAll(
-      ".todoItem:not(.dragSource)"
+      ":scope > .todoItem"
     )
-  ];
+  ].filter(
+    item => item !== draggedTodoElement
+  );
 
-  for (const item of items) {
+  for (const item of polozky) {
     const rect = item.getBoundingClientRect();
-    const middle = rect.top + rect.height / 2;
+    const stred = rect.top + rect.height / 2;
 
-    if (clientY < middle) {
-      if (todoDropPlaceholder.nextSibling !== item) {
+    if (clientY < stred) {
+      item.classList.add("todoDropBefore");
+
+      if (draggedTodoElement.nextSibling !== item) {
         todoList.insertBefore(
-          todoDropPlaceholder,
+          draggedTodoElement,
           item
         );
       }
+
       return;
     }
   }
 
-  if (todoList.lastElementChild !== todoDropPlaceholder) {
-    todoList.append(todoDropPlaceholder);
+  const posledniPolozka =
+    polozky[polozky.length - 1];
+
+  if (posledniPolozka) {
+    posledniPolozka.classList.add(
+      "todoDropAfter"
+    );
+  }
+
+  if (todoList.lastElementChild !== draggedTodoElement) {
+    todoList.append(draggedTodoElement);
   }
 }
+
 
 function autoScrollTodoList(clientY) {
   const rect = todoList.getBoundingClientRect();
@@ -1259,6 +1258,7 @@ function autoScrollTodoList(clientY) {
   }
 }
 
+
 function updateActiveTodoDrag(clientX, clientY) {
   if (!todoDragActive) {
     return;
@@ -1266,52 +1266,98 @@ function updateActiveTodoDrag(clientX, clientY) {
 
   positionTodoDragGhost(clientX, clientY);
   autoScrollTodoList(clientY);
-  updateTodoDropPlaceholder(clientY);
+  presunTodoPodlePozice(clientY);
 }
 
-function getTodoDropIndex() {
-  if (!todoDropPlaceholder) {
-    return draggedTodoIndex;
+
+function obnovPuvodniPoziciTodo() {
+  if (
+    !draggedTodoElement ||
+    draggedTodoIndex === null
+  ) {
+    return;
   }
 
-  let index = 0;
+  const ostatniPolozky = [
+    ...todoList.querySelectorAll(
+      ":scope > .todoItem"
+    )
+  ].filter(
+    item => item !== draggedTodoElement
+  );
 
-  for (const child of todoList.children) {
-    if (child === todoDropPlaceholder) {
-      return index;
-    }
+  const cilovaPolozka =
+    ostatniPolozky[draggedTodoIndex] || null;
 
-    if (
-      child.classList?.contains("todoItem") &&
-      child !== draggedTodoElement
-    ) {
-      index += 1;
-    }
+  if (cilovaPolozka) {
+    todoList.insertBefore(
+      draggedTodoElement,
+      cilovaPolozka
+    );
+  } else {
+    todoList.append(draggedTodoElement);
   }
-
-  return index;
 }
+
+
+function ulozPoradiTodoPodleDom() {
+  const poradiId = [
+    ...todoList.querySelectorAll(
+      ":scope > .todoItem"
+    )
+  ]
+    .map(item => item.dataset.todoId)
+    .filter(Boolean);
+
+  if (poradiId.length !== activeTodos.length) {
+    return false;
+  }
+
+  const todoPodleId = new Map(
+    activeTodos.map(todo => [todo.id, todo])
+  );
+
+  const novePoradi = poradiId
+    .map(id => todoPodleId.get(id))
+    .filter(Boolean);
+
+  if (novePoradi.length !== activeTodos.length) {
+    return false;
+  }
+
+  activeTodos = novePoradi;
+  refreshTodoIndexes();
+
+  return true;
+}
+
 
 function cleanupTodoDrag() {
+  zrusTodoDropIndikator();
+
   todoDragGhost?.remove();
-  todoDropPlaceholder?.remove();
-  draggedTodoElement?.classList.remove("dragSource");
+
+  draggedTodoElement?.classList.remove(
+    "todoDraggingItem"
+  );
 
   todoDragGhost = null;
-  todoDropPlaceholder = null;
   draggedTodoElement = null;
   todoDragActive = false;
 
+  todoList.classList.remove("todoDragActive");
   document.body.classList.remove("todoDragging");
 }
+
 
 function finishTodoDrag(cancelled = false) {
   const fromIndex = draggedTodoIndex;
 
-  const toIndex =
-    !cancelled && todoDragActive
-      ? getTodoDropIndex()
-      : fromIndex;
+  if (cancelled) {
+    obnovPuvodniPoziciTodo();
+  } else {
+    ulozPoradiTodoPodleDom();
+  }
 
   cleanupTodoDrag();
   clearPendingTodoDrag();
@@ -1319,21 +1365,21 @@ function finishTodoDrag(cancelled = false) {
   draggedTodoIndex = null;
 
   if (cancelled) {
-    /* Při zrušeném gestu necháme řádek vybraný pro další pokus. */
+    /*
+     * Při touchcancel necháme MOVE MODE aktivní,
+     * aby mohl uživatel přesun bez nového long-pressu zopakovat.
+     */
     return;
   }
 
-  /* Skutečný drop vždy ukončí MOVE MODE, i když pozice zůstala stejná. */
+  /* Skutečný drop vždy ukončí MOVE MODE. */
   clearTodoMoveSelection();
 
-  if (
-    fromIndex !== null &&
-    toIndex !== null &&
-    fromIndex !== toIndex
-  ) {
-    moveTodo(fromIndex, toIndex);
-    renderTodos();
-  }
+  /*
+   * fromIndex necháváme kvůli čitelnosti stavu a případnému debugování.
+   * Pořadí samotné už je uloženo přímo podle aktuálního DOM.
+   */
+  void fromIndex;
 }
 
 
