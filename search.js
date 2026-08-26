@@ -328,14 +328,22 @@ function zvyrazniAktualniVyhledavaniVEditoru() {
   const hledanyTextLower =
     hledanyText.toLocaleLowerCase("cs-CZ");
 
+  const textNazvu = titleInput
+    ? String(
+        "value" in titleInput
+          ? titleInput.value
+          : titleInput.textContent || ""
+      )
+    : "";
+
   if (
-    titleInput?.value
+    textNazvu
       .toLocaleLowerCase("cs-CZ")
       .includes(hledanyTextLower)
   ) {
     /*
-     * Input nemá samostatné textové DOM uzly, proto u shody
-     * v názvu zvýrazníme bezpečně celé pole bez zásahu do hodnoty.
+     * U shody v názvu zvýrazníme bezpečně celé pole bez zásahu
+     * do jeho hodnoty nebo pozice kurzoru.
      */
     titleInput.classList.add(
       "searchTitleMatch"

@@ -266,7 +266,7 @@ let puvodniOtiskEditoru = null;
 
 function vytvorOtiskEditoru() {
   return JSON.stringify({
-    title: modalTitle.value.trim(),
+    title: ziskejNazevPoznamkyZEditoru().trim(),
     richContent: modalRichText.innerHTML,
     date: modalDate.value,
     time: modalTime.value,
@@ -581,7 +581,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
     return null;
   }
 
-  const title = modalTitle.value.trim();
+  const title = ziskejNazevPoznamkyZEditoru().trim();
   const note = modalRichText.innerText;
   const richContent = modalRichText.innerHTML;
   const date =
@@ -711,7 +711,7 @@ function zavriTajnyEditorPriZamknuti() {
    * Auto-lock nesmí nechat plaintext tajné poznámky v DOM.
    * Rozpracovaná tajná poznámka se při zamknutí zavře bez uložení.
    */
-  modalTitle.value = "";
+  nastavNazevPoznamkyVEditoru("");
   modalText.value = "";
   modalRichText.innerHTML = "";
   editorRepeat = null;
@@ -1918,6 +1918,120 @@ const modalText = document.getElementById("modalText");
 const modalRichText =
   document.getElementById("modalRichText");
 
+function ziskejNazevPoznamkyZEditoru() {
+  return String(
+    modalTitle?.textContent ?? ""
+  ).replace(/[\r\n]+/g, " ");
+}
+
+function aktualizujStavPrazdnehoNazvu() {
+  if (!modalTitle) {
+    return;
+  }
+
+  modalTitle.dataset.prazdny =
+    ziskejNazevPoznamkyZEditoru().length === 0
+      ? "true"
+      : "false";
+}
+
+function nastavNazevPoznamkyVEditoru(hodnota) {
+  if (!modalTitle) {
+    return;
+  }
+
+  modalTitle.textContent = String(hodnota ?? "")
+    .replace(/[\r\n]+/g, " ");
+
+  aktualizujStavPrazdnehoNazvu();
+}
+
+function vlozTextDoNazvuNaPoziciKurzoru(
+  rozsah,
+  text
+) {
+  const textovyUzel =
+    document.createTextNode(text);
+
+  rozsah.deleteContents();
+  rozsah.insertNode(textovyUzel);
+  rozsah.setStartAfter(textovyUzel);
+  rozsah.collapse(true);
+
+  const vyber = window.getSelection();
+  vyber?.removeAllRanges();
+  vyber?.addRange(rozsah);
+}
+
+modalTitle?.addEventListener("input", () => {
+  aktualizujStavPrazdnehoNazvu();
+});
+
+modalTitle?.addEventListener("keydown", (event) => {
+  if (
+    event.key !== "Enter" ||
+    event.isComposing
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  modalRichText?.focus();
+});
+
+modalTitle?.addEventListener("beforeinput", (event) => {
+  if (
+    event.isComposing ||
+    event.inputType !== "insertParagraph" &&
+    event.inputType !== "insertLineBreak"
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  modalRichText?.focus();
+});
+
+modalTitle?.addEventListener("paste", (event) => {
+  const vlozenyText =
+    event.clipboardData
+      ?.getData("text/plain")
+      ?.replace(/[\r\n]+/g, " ");
+
+  if (vlozenyText === undefined) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const vyber = window.getSelection();
+  const rozsah =
+    vyber?.rangeCount
+      ? vyber.getRangeAt(0)
+      : null;
+
+  if (
+    rozsah &&
+    modalTitle.contains(
+      rozsah.commonAncestorContainer
+    )
+  ) {
+    vlozTextDoNazvuNaPoziciKurzoru(
+      rozsah,
+      vlozenyText
+    );
+  } else {
+    nastavNazevPoznamkyVEditoru(
+      ziskejNazevPoznamkyZEditoru() +
+      vlozenyText
+    );
+  }
+
+  modalTitle.dispatchEvent(
+    new Event("input", { bubbles: true })
+  );
+});
+
 /* Barevné označování je oddělené v richTextColors.js. */
 
 /*
@@ -2123,7 +2237,7 @@ addTaskButton.addEventListener("click", () => {
   updateTagMenuUI();
   closeTagMenu();
 
-  modalTitle.value = "";
+  nastavNazevPoznamkyVEditoru("");
   modalText.value = "";
   modalRichText.innerHTML = "";
   editorRepeat = null;
@@ -2355,7 +2469,7 @@ async function ulozAZavriEditor(
     const closingSessionId = editorSessionId;
     const closingTaskId = activeTaskId;
 
-    const title = modalTitle.value.trim();
+    const title = ziskejNazevPoznamkyZEditoru().trim();
     const note = modalRichText.innerText;
     const richContent = modalRichText.innerHTML;
     const date =
@@ -2657,7 +2771,9 @@ function openTaskEditorById(taskId) {
   taskModal.dataset.taskId = currentTask.id;
   activeTaskIndex = index;
 
-  modalTitle.value = currentTask.title || "";
+  nastavNazevPoznamkyVEditoru(
+    currentTask.title || ""
+  );
   modalText.value = currentTask.note || "";
 
   if (currentTask.richContent) {

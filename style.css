@@ -317,10 +317,22 @@ body {
 
   max-height: 60px;
   overflow: hidden;
+  white-space: nowrap;
+  cursor: text;
+  caret-color: var(--color-editor-text);
+  -webkit-user-select: text;
+  user-select: text;
   transition:
     max-height 0.2s ease,
     padding 0.2s ease,
     opacity 0.2s ease;
+}
+
+#modalTitle[data-prazdny="true"]::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-secondary);
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .taskModal.titleCollapsed #modalTitle {

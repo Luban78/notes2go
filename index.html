@@ -8,7 +8,7 @@
 
   <title>LubaNote</title>
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260826-nazev-editor-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
 
@@ -821,11 +821,17 @@
 
 <div class="modalTitleRow">
 
-  <input
-    type="text"
+  <div
     id="modalTitle"
-    placeholder="Název úkolu"
-  >
+    contenteditable="plaintext-only"
+    role="textbox"
+    aria-label="Název úkolu"
+    aria-multiline="false"
+    data-placeholder="Název úkolu"
+    data-prazdny="true"
+    inputmode="text"
+    spellcheck="true"
+  ></div>
 
   <button
     id="secretTaskButton"
@@ -1716,7 +1722,7 @@
 
 <script src="recurringTasks.js"></script>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20260826-nazev-editor-1"></script>
 
   <!-- Barevné zvýrazňování rich-text editoru -->
   <script src="richTextColors.js"></script>
@@ -1732,7 +1738,7 @@
 
   <script src="cardView.js"></script>
 
-  <script src="search.js"></script>
+  <script src="search.js?v=20260826-nazev-editor-1"></script>
 
 
   <!-- Supabase přihlášení / offline-first loader -->
@@ -1745,7 +1751,7 @@
 
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260826-bezpecne-revize-2"></script>
+  <script src="sync.js?v=20260826-bezpecne-revize-1"></script>
 
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
   <script src="visualDebug.js"></script>
