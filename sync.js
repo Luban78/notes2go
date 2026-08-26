@@ -704,17 +704,20 @@ async function getCloudNotesForSync() {
     return [];
   }
 
+  /*
+   * Čtení poznámek jde přes serverovou RPC funkci.
+   * Přímý SELECT na public.notes zůstává klientům zakázaný,
+   * takže stará verze LubaNote nemůže ani stáhnout cloudový stav.
+   */
   const { data, error } = await supabaseClient
-    .from("notes")
-    .select("*")
-    .eq("user_id", user.id);
+    .rpc("get_notes_safe");
 
   if (error) {
     console.error("Sync download error:", error.message);
     return [];
   }
 
-  return data || [];
+  return Array.isArray(data) ? data : [];
 }
 
 function vytvorCloudRegularNote(row) {
