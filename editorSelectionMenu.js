@@ -369,22 +369,6 @@
           8;
       }
 
-      /*
-       * SPCK Preview má vlastní systémovou Android nabídku.
-       * V Preview naši nabídku posuneme níž, aby ji systémová
-       * nepřekrývala. V APK je Capacitor Clipboard dostupný,
-       * takže se tento posun nepoužije.
-       */
-      if (!schrankaCapacitor) {
-        nahore = Math.min(
-          dolniBod + 120,
-          viewportNahore +
-            viewportVyska -
-            menuVyska -
-            8
-        );
-      }
-
       selectionMenu.style.left =
         `${Math.round(vlevo)}px`;
 

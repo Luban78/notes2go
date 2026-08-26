@@ -883,23 +883,45 @@
 
 
 async function zkopirujTextRobustne(text) {
-  if (zkopirujTextFallback(text)) {
-    return true;
+  /*
+   * APK: použijeme přímo Capacitor Clipboard.
+   * Je spolehlivější než Web Clipboard API ve WebView.
+   */
+  const schrankaCapacitor =
+    window.Capacitor?.Plugins?.Clipboard;
+
+  if (schrankaCapacitor?.write) {
+    try {
+      await schrankaCapacitor.write({
+        string: text
+      });
+
+      return true;
+    } catch (_chyba) {
+      // Pokračujeme dalšími dostupnými cestami.
+    }
   }
-  
+
+  /*
+   * WEB / GitHub Pages: na zabezpečeném originu
+   * zkusíme standardní Clipboard API.
+   */
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(
         text
       );
-      
+
       return true;
     }
-  } catch {
-    // Zkusíme všechny dostupné cesty.
+  } catch (_chyba) {
+    // Pokračujeme fallbackem.
   }
-  
-  return false;
+
+  /*
+   * Poslední fallback pro Preview / starší WebView.
+   */
+  return zkopirujTextFallback(text);
 }
 
 
@@ -907,21 +929,27 @@ async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
     zaznamy.join("\n");
-  
-  const zkopirovano =
-    await zkopirujTextRobustne(report);
-  
+
   const puvodni =
     tlacitko.textContent;
-  
-  if (zkopirovano) {
-    tlacitko.textContent =
-      "Zkopírováno ✓";
-  } else {
-    tlacitko.textContent =
-      "Kopírování selhalo";
+
+  let zkopirovano = false;
+
+  try {
+    zkopirovano =
+      await zkopirujTextRobustne(report);
+  } catch (chyba) {
+    console.warn(
+      "Debug Hub: kopírování reportu selhalo.",
+      chyba
+    );
   }
-  
+
+  tlacitko.textContent =
+    zkopirovano
+      ? "Zkopírováno ✓"
+      : "Kopírování selhalo";
+
   setTimeout(() => {
     tlacitko.textContent =
       puvodni;
