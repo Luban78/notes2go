@@ -201,6 +201,12 @@ const timePickerCancelButton =
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
+
+/*
+ * Tap mimo hlavní menu pouze menu zavře.
+ * Ochranu následného syntetického clicku registrujeme JEDNOU,
+ * ne při každém zavření menu. Tím se nehromadí globální listenery.
+ */
 document.addEventListener(
   "pointerdown",
   (event) => {
@@ -217,11 +223,22 @@ document.addEventListener(
 
     event.preventDefault();
     event.stopPropagation();
+
     blokovatKlikPoZavreniMainMenu = true;
 
-setTimeout(() => {
-  blokovatKlikPoZavreniMainMenu = false;
-}, 500);
+    setTimeout(() => {
+      blokovatKlikPoZavreniMainMenu = false;
+    }, 500);
+
+    mainMenu.hidden = true;
+    mainMenuButton.setAttribute(
+      "aria-expanded",
+      "false"
+    );
+  },
+  true
+);
+
 document.addEventListener(
   "click",
   (event) => {
@@ -233,15 +250,6 @@ document.addEventListener(
 
     event.preventDefault();
     event.stopImmediatePropagation();
-  },
-  true
-);
-
-    mainMenu.hidden = true;
-    mainMenuButton.setAttribute(
-      "aria-expanded",
-      "false"
-    );
   },
   true
 );
