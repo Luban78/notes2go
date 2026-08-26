@@ -2307,6 +2307,16 @@
     });
 
     wireEvents();
+
+    /*
+     * Debug Hub se vytváří až po tajném odemčení Visual Debugu.
+     * Tím v běžném provozu neběží žádné diagnostické posluchače.
+     */
+    document.dispatchEvent(
+      new CustomEvent("lubanote:visual-debug-ready", {
+        detail: { panel }
+      })
+    );
   }
 
   function wireEvents() {

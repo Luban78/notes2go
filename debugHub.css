@@ -1,0 +1,155 @@
+/* ========================================
+   LUBANOTE – DEBUG HUB
+   Skrytá diagnostika dostupná z Visual Debugu.
+   V běžném provozu je panel nevytvořený a nic neloguje.
+======================================== */
+
+#ln-debug-hub[hidden] {
+  display: none !important;
+}
+
+#ln-debug-hub {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2147483647;
+
+  display: flex;
+  flex-direction: column;
+  max-height: min(58vh, 520px);
+
+  border: 1px solid rgba(24, 239, 125, 0.5);
+  border-radius: 14px;
+
+  background: rgba(10, 18, 21, 0.97);
+  color: #f5fff9;
+
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+
+  font: 11px/1.38 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+#ln-debug-hub.ln-dh-minimized {
+  max-height: 48px;
+}
+
+#ln-debug-hub.ln-dh-minimized .ln-dh-controls,
+#ln-debug-hub.ln-dh-minimized .ln-dh-summary,
+#ln-debug-hub.ln-dh-minimized .ln-dh-log,
+#ln-debug-hub.ln-dh-minimized .ln-dh-footer {
+  display: none;
+}
+
+.ln-dh-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 239, 125, 0.08);
+}
+
+.ln-dh-head strong {
+  font-size: 13px;
+}
+
+.ln-dh-status {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.68);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ln-dh-head button,
+.ln-dh-controls button,
+.ln-dh-controls select,
+.ln-dh-footer button {
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+}
+
+.ln-dh-head button {
+  min-width: 34px;
+  padding-inline: 7px;
+  font-size: 16px;
+}
+
+.ln-dh-controls {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ln-dh-controls select {
+  width: 100%;
+  min-width: 0;
+}
+
+.ln-dh-start.active {
+  border-color: rgba(24, 239, 125, 0.85);
+  background: rgba(24, 239, 125, 0.18);
+}
+
+.ln-dh-summary {
+  flex: 0 0 auto;
+  margin: 7px 8px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ln-dh-log {
+  flex: 1 1 auto;
+  min-height: 90px;
+  margin: 7px 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.34);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.ln-dh-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 0 8px 8px;
+}
+
+#ln-dh-launch-section .ln-dh-launch-note {
+  display: block;
+  margin-top: 7px;
+  opacity: 0.72;
+  line-height: 1.35;
+}
+
+@media (min-width: 900px) {
+  #ln-debug-hub {
+    left: auto;
+    right: 14px;
+    width: min(680px, calc(100vw - 28px));
+    bottom: 14px;
+  }
+}
