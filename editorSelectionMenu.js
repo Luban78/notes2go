@@ -913,6 +913,20 @@
 
 
   function zobrazMenuProTextarea(textarea) {
+    /*
+     * Nejdřív si musíme zapamatovat, zda je pro TUTO textarea
+     * záměrně otevřený kurzorový režim Vložit / Vše.
+     * ulozVyberTextarea() pak aktualizuje selectionStart/End, ale
+     * kurzorový režim nesmíme shodit dřív, než zjistíme, jestli je
+     * výběr stále collapsed.
+     */
+    const zachovejKurzoroveMenu =
+      menuProTextareaKurzorAktivni &&
+      aktivniTextarea === textarea;
+
+    const ulozenyBodKurzorovehoMenu =
+      bodMenuTextareaKurzor;
+
     if (!ulozVyberTextarea(textarea)) {
       return;
     }
@@ -920,18 +934,37 @@
     menuProKurzorAktivni = false;
     bodMenuKurzor = null;
 
-    menuProTextareaKurzorAktivni = false;
-    bodMenuTextareaKurzor = null;
-
     skryjUchytyVyberu();
 
     const { start, end } =
       ulozenyVyberTextarea;
 
     if (start === end) {
+      if (zachovejKurzoroveMenu) {
+        menuProTextareaKurzorAktivni = true;
+        bodMenuTextareaKurzor =
+          ulozenyBodKurzorovehoMenu;
+
+        nastavTlacitkaMenu(false);
+        selectionMenu.hidden = false;
+
+        if (bodMenuTextareaKurzor) {
+          pozicujMenu({
+            bod: bodMenuTextareaKurzor
+          });
+        }
+
+        return;
+      }
+
+      menuProTextareaKurzorAktivni = false;
+      bodMenuTextareaKurzor = null;
       skryjMenu();
       return;
     }
+
+    menuProTextareaKurzorAktivni = false;
+    bodMenuTextareaKurzor = null;
 
     nastavTlacitkaMenu(true);
     selectionMenu.hidden = false;

@@ -42,6 +42,8 @@ let todoMoveSelectedElement = null;
 let suppressTodoClickUntil = 0;
 let lastTouchTime = 0;
 let cekaniNaDruhyTapTodo = null;
+let posledniKlikVEditTodo = null;
+let ignorujKlikTodoPoDvojtapuDo = 0;
 
 const TODO_LONG_PRESS_TIME = 420;
 const TODO_DOUBLE_TAP_TIME = 460;
@@ -512,9 +514,13 @@ function najdiRozsahSlovaTodo(hodnota, pozice) {
     return null;
   }
 
+  if (pozice == null) {
+    return null;
+  }
+
   const bezpecnaPozice = Math.max(
     0,
-    Math.min(pozice ?? 0, hodnota.length)
+    Math.min(pozice, hodnota.length)
   );
 
   const jeZnakSlova = znak =>
@@ -577,14 +583,97 @@ function najdiRozsahSlovaTodo(hodnota, pozice) {
 }
 
 
-function vyberSlovoVTodoTextarea(text) {
-  if (!text || text.hidden) {
+function najdiIndexZnakuTodoVZobrazeni(
+  textValue,
+  x,
+  y
+) {
+  const textovyUzel =
+    textValue?.firstChild;
+
+  const hodnota =
+    textovyUzel?.textContent ?? "";
+
+  if (
+    !textovyUzel ||
+    textovyUzel.nodeType !== Node.TEXT_NODE ||
+    !hodnota ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y)
+  ) {
+    return null;
+  }
+
+  const rozsahZnaku =
+    document.createRange();
+
+  for (
+    let index = 0;
+    index < hodnota.length;
+    index += 1
+  ) {
+    if (hodnota[index] === "\n") {
+      continue;
+    }
+
+    try {
+      rozsahZnaku.setStart(
+        textovyUzel,
+        index
+      );
+
+      rozsahZnaku.setEnd(
+        textovyUzel,
+        index + 1
+      );
+    } catch {
+      continue;
+    }
+
+    const obdelniky =
+      Array.from(
+        rozsahZnaku.getClientRects()
+      );
+
+    for (const obdelnik of obdelniky) {
+      /*
+       * Stejné pravidlo jako v hlavním editoru:
+       * vodorovně žádná tolerance. Mezera musí zůstat
+       * mezerou a nesmí se přilepit k sousednímu slovu.
+       */
+      const rezervaY = 4;
+
+      const jeVBodu =
+        x >= obdelnik.left &&
+        x <= obdelnik.right &&
+        y >= obdelnik.top - rezervaY &&
+        y <= obdelnik.bottom + rezervaY;
+
+      if (jeVBodu) {
+        return index;
+      }
+    }
+  }
+
+  return null;
+}
+
+
+function vyberSlovoVTodoTextarea(
+  text,
+  pozice
+) {
+  if (
+    !text ||
+    text.hidden ||
+    pozice == null
+  ) {
     return false;
   }
 
   const rozsah = najdiRozsahSlovaTodo(
     text.value,
-    text.selectionStart ?? 0
+    pozice
   );
 
   if (!rozsah) {
@@ -604,7 +693,6 @@ function vyberSlovoVTodoTextarea(text) {
 
   return true;
 }
-
 
 function closeOtherTodoEditors(exceptText = null) {
   todoList
@@ -1477,16 +1565,32 @@ function createTodoItem(todo, index) {
     text.style.borderRadius = "4px";
   }
 
-  textDisplay.addEventListener("click", () => {
+  textDisplay.addEventListener("click", event => {
     if (performance.now() < suppressTodoClickUntil) {
       return;
     }
 
     selectedTodoId = todo.id;
 
+    /*
+     * První tap probíhá ještě nad skutečným DOM textem, kde umíme
+     * přesně poznat písmeno i mezeru. Tuto informaci si uložíme
+     * ještě před přepnutím řádku na textarea. Android pak už nemůže
+     * mezeru „přicvaknout“ k sousednímu slovu.
+     */
+    const indexPrvnihoTapu =
+      najdiIndexZnakuTodoVZobrazeni(
+        textValue,
+        event.clientX,
+        event.clientY
+      );
+
     cekaniNaDruhyTapTodo = {
       todoId: todo.id,
-      cas: performance.now()
+      cas: performance.now(),
+      x: event.clientX,
+      y: event.clientY,
+      index: indexPrvnihoTapu
     };
 
     enterTodoEditMode(text, textDisplay);
@@ -1510,16 +1614,42 @@ function createTodoItem(todo, index) {
         return;
       }
 
+      const prvniTap =
+        cekaniNaDruhyTapTodo;
+
       cekaniNaDruhyTapTodo = null;
 
       /*
-       * První tap otevřel editaci, druhý tap už leží v textarea.
-       * Uprostřed slova vybereme celé slovo. Mimo slovo otevřeme
-       * stejnou nabídku Vložit / Vše jako v hlavním editoru.
+       * Druhý tap této první dvojice proběhne ještě jako běžný click
+       * nad textarea. Ten už nesmí založit novou dvojici pro režim
+       * editace, protože tuto dvojici právě zpracováváme zde.
+       */
+      ignorujKlikTodoPoDvojtapuDo =
+        performance.now() + 180;
+      posledniKlikVEditTodo = null;
+
+      const vzdalenostTapu =
+        Math.hypot(
+          event.clientX - prvniTap.x,
+          event.clientY - prvniTap.y
+        );
+
+      if (vzdalenostTapu > 36) {
+        return;
+      }
+
+      /*
+       * O tom, zda uživatel dvojtapnul slovo nebo mezeru, rozhoduje
+       * PRVNÍ tap nad běžným DOM textem. Druhý tap jen potvrdí gesto.
+       * Tím nejsme závislí na selectionStart v Android textarea,
+       * který uměl mezeru posunout na začátek sousedního slova.
        */
       requestAnimationFrame(() => {
         const vybranoSlovo =
-          vyberSlovoVTodoTextarea(text);
+          vyberSlovoVTodoTextarea(
+            text,
+            prvniTap.index
+          );
 
         if (vybranoSlovo) {
           return;
@@ -1540,6 +1670,88 @@ function createTodoItem(todo, index) {
       });
     }
   );
+
+  /*
+   * Jakmile už je TODO v režimu editace, první tap neprobíhá nad
+   * textValue, ale přímo nad textarea. Android nastaví selectionStart
+   * spolehlivě až při události click (v pointerup je ještě stará
+   * pozice). Proto si zde ukládáme pozici PRVNÍHO kliku a druhým
+   * klikem potvrdíme dvojtap.
+   *
+   * Díky tomu platí stejné pravidlo i při opakovaných dvojtapech:
+   * - první klik leží ve slově -> vyber celé slovo
+   * - první klik leží na mezeře / konci -> Vložit / Vše
+   */
+  text.addEventListener("click", event => {
+    const ted = performance.now();
+
+    if (ted < ignorujKlikTodoPoDvojtapuDo) {
+      return;
+    }
+
+    if (
+      text.hidden ||
+      !text.classList.contains("todoEditing")
+    ) {
+      return;
+    }
+
+    const indexKliknuti =
+      text.selectionStart ?? 0;
+
+    const predchoziKlik =
+      posledniKlikVEditTodo;
+
+    const jeDruhyKlik = Boolean(
+      predchoziKlik &&
+      predchoziKlik.todoId === todo.id &&
+      ted - predchoziKlik.cas <=
+        TODO_DOUBLE_TAP_TIME &&
+      Math.hypot(
+        event.clientX - predchoziKlik.x,
+        event.clientY - predchoziKlik.y
+      ) <= 36
+    );
+
+    if (!jeDruhyKlik) {
+      posledniKlikVEditTodo = {
+        todoId: todo.id,
+        cas: ted,
+        x: event.clientX,
+        y: event.clientY,
+        index: indexKliknuti
+      };
+      return;
+    }
+
+    posledniKlikVEditTodo = null;
+
+    requestAnimationFrame(() => {
+      const vybranoSlovo =
+        vyberSlovoVTodoTextarea(
+          text,
+          predchoziKlik.index
+        );
+
+      if (vybranoSlovo) {
+        return;
+      }
+
+      document.dispatchEvent(
+        new CustomEvent(
+          "lubanote:todo-kurzor-menu",
+          {
+            detail: {
+              textarea: text,
+              x: event.clientX,
+              y: event.clientY
+            }
+          }
+        )
+      );
+    });
+  });
+
 
   text.addEventListener("blur", () => {
     leaveTodoEditMode(text, textDisplay);
