@@ -97,37 +97,36 @@ body {
 }
 
 .taskCard[data-barva-karty="cervena"] {
-  background: #5a2d2d;
+  background: var(--card-cervena);
 }
 
 .taskCard[data-barva-karty="oranzova"] {
-  background: #5a3a24;
+  background: var(--card-oranzova);
 }
 
 .taskCard[data-barva-karty="zluta"] {
-  background: #5a4d23;
+  background: var(--card-zluta);
 }
 
 .taskCard[data-barva-karty="zelena"] {
-  background: #274a33;
+  background: var(--card-zelena);
 }
 
 .taskCard[data-barva-karty="tyrkysova"] {
-  background: #24505a;
+  background: var(--card-tyrkysova);
 }
 
 .taskCard[data-barva-karty="modra"] {
-  background: #263f5a;
+  background: var(--card-modra);
 }
 
 .taskCard[data-barva-karty="fialova"] {
-  background: #3e315a;
+  background: var(--card-fialova);
 }
 
 .taskCard[data-barva-karty="ruzova"] {
-  background: #563047;
+  background: var(--card-ruzova);
 }
-
 
 .taskNoteText {
   display: -webkit-box;
@@ -6943,39 +6942,79 @@ text-size-adjust: 100%;
 
 /* Paleta LubaNote */
 .cardColorOption[data-card-color="cervena"] {
-  background: #5a2d2d;
+  background: var(--card-cervena);
 }
 
 .cardColorOption[data-card-color="oranzova"] {
-  background: #5a3a24;
+  background: var(--card-oranzova);
 }
 
 .cardColorOption[data-card-color="zluta"] {
-  background: #5a4d23;
+  background: var(--card-zluta);
 }
 
 .cardColorOption[data-card-color="zelena"] {
-  background: #274a33;
+  background: var(--card-zelena);
 }
 
 .cardColorOption[data-card-color="tyrkysova"] {
-  background: #24505a;
+  background: var(--card-tyrkysova);
 }
 
 .cardColorOption[data-card-color="modra"] {
-  background: #263f5a;
+  background: var(--card-modra);
 }
 
 .cardColorOption[data-card-color="fialova"] {
-  background: #3e315a;
+  background: var(--card-fialova);
 }
 
 .cardColorOption[data-card-color="ruzova"] {
-  background: #563047;
+  background: var(--card-ruzova);
 }
+
+/* ==================================================
+   BARVY KARET – SVĚTLÁ TÉMATA
+================================================== */
+
+:root {
+  --card-cervena: #f2b0b0;
+  --card-oranzova: #f2bf91;
+  --card-zluta: #ead787;
+  --card-zelena: #a9d8b4;
+  --card-tyrkysova: #9ed9d6;
+  --card-modra: #a9c8e8;
+  --card-fialova: #c5b2e5;
+  --card-ruzova: #e4abc4;
+}
+
+
+/* ==================================================
+   BARVY KARET – DARK TÉMA
+================================================== */
+
+body.theme-dark {
+  --card-cervena: #5a2d2d;
+  --card-oranzova: #5a3a24;
+  --card-zluta: #5a4d23;
+  --card-zelena: #274a33;
+  --card-tyrkysova: #24505a;
+  --card-modra: #263f5a;
+  --card-fialova: #3e315a;
+  --card-ruzova: #563047;
+}
+
 
 /* Zpět bude přes celou šířku pod paletou */
 .cardColorPalette +
 [data-card-action="back"] {
   grid-column: 1 / -1;
 }
+
+.cardColorOption.cardColorSelected {
+  /*position: relative;*/
+
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+

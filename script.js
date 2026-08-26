@@ -201,6 +201,50 @@ const timePickerCancelButton =
 mainMenuButton.addEventListener("click", () => {
   mainMenu.hidden = !mainMenu.hidden;
 });
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (mainMenu.hidden) {
+      return;
+    }
+
+    if (
+      mainMenu.contains(event.target) ||
+      mainMenuButton.contains(event.target)
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    blokovatKlikPoZavreniMainMenu = true;
+
+setTimeout(() => {
+  blokovatKlikPoZavreniMainMenu = false;
+}, 500);
+document.addEventListener(
+  "click",
+  (event) => {
+    if (!blokovatKlikPoZavreniMainMenu) {
+      return;
+    }
+
+    blokovatKlikPoZavreniMainMenu = false;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  },
+  true
+);
+
+    mainMenu.hidden = true;
+    mainMenuButton.setAttribute(
+      "aria-expanded",
+      "false"
+    );
+  },
+  true
+);
 
 let activeTaskIndex = null;
 let activeTaskId = null;
@@ -2523,6 +2567,9 @@ let longPressTimer = null;
 const LONG_PRESS_TIME = 600;
 let selectedCardIndex = null;
 let blockNextCardClick = false;
+let blokovatKlikKartyDo = 0;
+let blokovatKlikPoZavreniMainMenu = false;
+
 
 let rezimVyberuKaret = false;
 let vybraneKarty = new Set();
@@ -2997,10 +3044,16 @@ function renderTasks() {
     /* Otevření existující poznámky */
 
     loadedCard.addEventListener("click", async () => {
-      if (blockNextCardClick) {
-        blockNextCardClick = false;
-        return;
-      }
+        if (
+          Date.now() < blokovatKlikKartyDo
+        ) {
+          return;
+        }
+        
+        if (blockNextCardClick) {
+          blockNextCardClick = false;
+          return;
+        }
 
       if (rezimVyberuKaret) {
         const idKarty =
@@ -3484,6 +3537,14 @@ function zobrazHlavniAkceKarty() {
 
 
 function zobrazPaletuBarevKarty() {
+  const tasks = loadTask();
+
+const selectedTask =
+  tasks[selectedCardIndex];
+
+const aktualniBarva =
+  selectedTask?.barvaKarty ||
+  "system";
   cardMenu.classList.remove(
     "selectionMode"
   );
@@ -3567,6 +3628,14 @@ function zobrazPaletuBarevKarty() {
       ← Zpět
     </button>
   `;
+  const aktivniBarva =
+  cardMenu.querySelector(
+    `[data-card-color="${aktualniBarva}"]`
+  );
+
+aktivniBarva?.classList.add(
+  "cardColorSelected"
+);
 }
 
 
@@ -4018,7 +4087,9 @@ document.addEventListener("pointerdown", (event) => {
   ) {
     event.preventDefault();
     event.stopPropagation();
-    blockNextCardClick = true;
+    
+    blokovatKlikKartyDo =
+  Date.now() + 400;
     cardMenu.hidden = true;
   }
 }, true);
