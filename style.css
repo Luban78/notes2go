@@ -96,6 +96,37 @@ body {
   -webkit-touch-callout: none;
 }
 
+.taskCard[data-barva-karty="cervena"] {
+  background: #5a2d2d;
+}
+
+.taskCard[data-barva-karty="oranzova"] {
+  background: #5a3a24;
+}
+
+.taskCard[data-barva-karty="zluta"] {
+  background: #5a4d23;
+}
+
+.taskCard[data-barva-karty="zelena"] {
+  background: #274a33;
+}
+
+.taskCard[data-barva-karty="tyrkysova"] {
+  background: #24505a;
+}
+
+.taskCard[data-barva-karty="modra"] {
+  background: #263f5a;
+}
+
+.taskCard[data-barva-karty="fialova"] {
+  background: #3e315a;
+}
+
+.taskCard[data-barva-karty="ruzova"] {
+  background: #563047;
+}
 
 
 .taskNoteText {
@@ -109,7 +140,6 @@ body {
 }
 
 .completed {
-  background: var(--color-surface);
   text-decoration: line-through;
   opacity: 0.55;
 }
@@ -6872,4 +6902,80 @@ text-size-adjust: 100%;
   
   font-size: 12px;
   white-space: nowrap;
+}
+
+.cardColorPalette {
+  grid-column: 1 / -1;
+
+  display: grid;
+  grid-template-columns: repeat(5, 48px);
+
+  justify-content: center;
+  gap: 12px;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 8px 4px 4px;
+}
+
+
+.cardColorOption {
+  width: 48px;
+  height: 48px;
+
+  padding: 0;
+
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+
+  box-sizing: border-box;
+
+  cursor: pointer;
+}
+
+
+/* Výchozí systémová barva */
+.cardColorOption[data-card-color="system"] {
+  background: var(--color-surface);
+}
+
+
+/* Paleta LubaNote */
+.cardColorOption[data-card-color="cervena"] {
+  background: #5a2d2d;
+}
+
+.cardColorOption[data-card-color="oranzova"] {
+  background: #5a3a24;
+}
+
+.cardColorOption[data-card-color="zluta"] {
+  background: #5a4d23;
+}
+
+.cardColorOption[data-card-color="zelena"] {
+  background: #274a33;
+}
+
+.cardColorOption[data-card-color="tyrkysova"] {
+  background: #24505a;
+}
+
+.cardColorOption[data-card-color="modra"] {
+  background: #263f5a;
+}
+
+.cardColorOption[data-card-color="fialova"] {
+  background: #3e315a;
+}
+
+.cardColorOption[data-card-color="ruzova"] {
+  background: #563047;
+}
+
+/* Zpět bude přes celou šířku pod paletou */
+.cardColorPalette +
+[data-card-action="back"] {
+  grid-column: 1 / -1;
 }

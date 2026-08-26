@@ -2811,6 +2811,10 @@ function renderTasks() {
     });
 
     loadedCard.classList.add("taskCard");
+    if (loadedTask.barvaKarty) {
+  loadedCard.dataset.barvaKarty =
+    loadedTask.barvaKarty;
+}
 
     const loadedHeading = document.createElement("h3");
 
@@ -3479,6 +3483,92 @@ function zobrazHlavniAkceKarty() {
 }
 
 
+function zobrazPaletuBarevKarty() {
+  cardMenu.classList.remove(
+    "selectionMode"
+  );
+
+  cardMenu.innerHTML = `
+    <div class="cardColorPalette">
+      <button
+        type="button"
+        class="cardColorOption cardColorSystem"
+        data-card-color="system"
+        aria-label="Systémová barva"
+        title="Systémová barva"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="cervena"
+        aria-label="Červená"
+        title="Červená"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="oranzova"
+        aria-label="Oranžová"
+        title="Oranžová"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="zluta"
+        aria-label="Žlutá"
+        title="Žlutá"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="zelena"
+        aria-label="Zelená"
+        title="Zelená"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="tyrkysova"
+        aria-label="Tyrkysová"
+        title="Tyrkysová"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="modra"
+        aria-label="Modrá"
+        title="Modrá"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="fialova"
+        aria-label="Fialová"
+        title="Fialová"
+      ></button>
+
+      <button
+        type="button"
+        class="cardColorOption"
+        data-card-color="ruzova"
+        aria-label="Růžová"
+        title="Růžová"
+      ></button>
+    </div>
+
+    <button type="button" data-card-action="back">
+      ← Zpět
+    </button>
+  `;
+}
+
 
 function zobrazDalsiAkceKarty() {
   cardMenu.classList.remove(
@@ -3657,6 +3747,43 @@ const savePlannerButton =
 cardMenu.addEventListener("click", async (event) => {
   const actionButton =
     event.target.closest("[data-card-action]");
+  
+  const colorButton =
+  event.target.closest("[data-card-color]");
+  
+  if (colorButton) {
+  const tasks = loadTask();
+
+  const selectedTask =
+    tasks[selectedCardIndex];
+
+  if (!selectedTask) {
+    return;
+  }
+
+  const novaBarva =
+    colorButton.dataset.cardColor;
+
+  selectedTask.barvaKarty =
+    novaBarva === "system"
+      ? null
+      : novaBarva;
+
+  selectedTask.updatedAt =
+    new Date().toISOString();
+
+  saveAllTasks(tasks);
+
+  await uploadLocalNoteToSupabase(
+    selectedTask
+  );
+
+  cardMenu.hidden = true;
+
+  renderTasks();
+
+  return;
+}
 
   if (!actionButton) {
     return;
@@ -3673,6 +3800,11 @@ cardMenu.addEventListener("click", async (event) => {
     zobrazHlavniAkceKarty();
     return;
   }
+  
+  if (action === "color") {
+  zobrazPaletuBarevKarty();
+return;
+}
 
   if (action === "select") {
     const idKarty =
