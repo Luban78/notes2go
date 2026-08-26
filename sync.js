@@ -2289,6 +2289,44 @@ window.LubaNoteSync = {
   ziskejCloudSyncMeta
 };
 
+let casovacSyncuPoAktivaci = null;
+
+/*
+ * Druhé zařízení nemusí stránku ručně obnovovat.
+ * Jakmile se uživatel do LubaNote vrátí, stáhneme bezpečně
+ * aktuální revize poznámek. Více událostí při jednom návratu
+ * sloučíme do jediného síťového požadavku.
+ */
+function naplanujSyncPoAktivaci(
+  zpozdeni = 180
+) {
+  clearTimeout(casovacSyncuPoAktivaci);
+
+  casovacSyncuPoAktivaci =
+    setTimeout(() => {
+      casovacSyncuPoAktivaci = null;
+
+      if (!navigator.onLine) {
+        return;
+      }
+
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+
+      spustRychlySyncPoznamekBezpecne()
+        .catch((error) => {
+          console.warn(
+            "Synchronizace po návratu do aplikace byla odložena:",
+            error
+          );
+        });
+    }, Math.max(0, Number(zpozdeni) || 0));
+}
+
 /*
  * Offline start nikdy nečeká na síť.
  * Po návratu internetu se synchronizace spustí sama.
@@ -2304,3 +2342,31 @@ window.addEventListener(
     );
   }
 );
+
+window.addEventListener(
+  "focus",
+  () => {
+    naplanujSyncPoAktivaci();
+  }
+);
+
+window.addEventListener(
+  "pageshow",
+  () => {
+    naplanujSyncPoAktivaci();
+  }
+);
+
+if (
+  typeof document !== "undefined" &&
+  typeof document.addEventListener === "function"
+) {
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.visibilityState === "visible") {
+        naplanujSyncPoAktivaci();
+      }
+    }
+  );
+}
