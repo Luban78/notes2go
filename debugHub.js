@@ -150,7 +150,7 @@
     if (!logEl) return;
 
     logEl.textContent = zaznamy.join("\n");
-    logEl.scrollTop = logEl.scrollHeight;
+    
 
     if (summaryEl) {
       summaryEl.textContent = [
