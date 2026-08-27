@@ -797,6 +797,99 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 13%, transparent);
 }
 
+.categoryTab[data-tag-color="cervena"] {
+  background: var(--card-cervena);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="oranzova"] {
+  background: var(--card-oranzova);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="zluta"] {
+  background: var(--card-zluta);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="zelena"] {
+  background: var(--card-zelena);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="tyrkysova"] {
+  background: var(--card-tyrkysova);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="modra"] {
+  background: var(--card-modra);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="fialova"] {
+  background: var(--card-fialova);
+  color: var(--color-text);
+}
+
+.categoryTab[data-tag-color="ruzova"] {
+  background: var(--card-ruzova);
+  color: var(--color-text);
+}
+
+/* Jemné zvýraznění tajného štítku po odemčení Secret režimu */
+.categoryTab.secretTagFilter {
+  background-image: linear-gradient(
+    color-mix(
+      in srgb,
+      var(--color-accent) 18%,
+      transparent
+    ),
+    color-mix(
+      in srgb,
+      var(--color-accent) 18%,
+      transparent
+    )
+  );
+
+  box-shadow:
+    inset 0 0 0 2px
+    color-mix(
+      in srgb,
+      var(--color-accent) 35%,
+      transparent
+    );
+}
+
+/* Tajný štítek ve Správě štítků */
+/* Tajný štítek ve Správě štítků */
+.manageTagRow.secretManageTagRow {
+  position: relative;
+  z-index: 0;
+}
+
+.manageTagRow.secretManageTagRow::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  right: -10px;
+  bottom: 0;
+  left: -12px;
+
+  background: rgba(180, 45, 110, 0.28);
+
+  border-radius: 14px;
+
+  box-shadow:
+    inset 5px 0 0 #ff5ca8,
+    inset 0 0 0 1px
+    rgba(255, 92, 168, 0.45);
+
+  z-index: -1;
+}
+
 #tagFilterButtons {
   display: flex;
   gap: 8px;
@@ -848,12 +941,16 @@ body {
 
 .taskCard h3 {
   margin: 0;
+
+  max-width: 100%;
+
   font-family: system-ui, sans-serif;
   font-size: calc(var(--font-size) + 2px);
   line-height: 1.2;
-  
-}
 
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .taskCardIcons {
   display: inline-block;
   margin-right: 7px;
@@ -1127,6 +1224,8 @@ html {
   font-size: calc(var(--font-size) - 3px);
   font-weight: 600;
 }
+
+
 
 .nativeApp .editorBottomBar {
   padding-bottom: 12px;
@@ -4027,7 +4126,136 @@ text-size-adjust: 100%;
 .manageTagActions button:active {
   transform: scale(0.95);
 }
+/* Barva štítku ve Správě štítků */
+.manageTagActions .manageTagColorButton {
+  border-radius: 50%;
+}
 
+/* Zatím neurčená barva = barevná paleta */
+.manageTagColorButton[data-tag-color="system"] {
+  background: conic-gradient(
+    var(--card-cervena),
+    var(--card-oranzova),
+    var(--card-zluta),
+    var(--card-zelena),
+    var(--card-tyrkysova),
+    var(--card-modra),
+    var(--card-fialova),
+    var(--card-ruzova),
+    var(--card-cervena)
+  );
+}
+
+.manageTagColorButton[data-tag-color="cervena"] {
+  background: var(--card-cervena);
+}
+
+.manageTagColorButton[data-tag-color="oranzova"] {
+  background: var(--card-oranzova);
+}
+
+.manageTagColorButton[data-tag-color="zluta"] {
+  background: var(--card-zluta);
+}
+
+.manageTagColorButton[data-tag-color="zelena"] {
+  background: var(--card-zelena);
+}
+
+.manageTagColorButton[data-tag-color="tyrkysova"] {
+  background: var(--card-tyrkysova);
+}
+
+.manageTagColorButton[data-tag-color="modra"] {
+  background: var(--card-modra);
+}
+
+.manageTagColorButton[data-tag-color="fialova"] {
+  background: var(--card-fialova);
+}
+
+.manageTagColorButton[data-tag-color="ruzova"] {
+  background: var(--card-ruzova);
+}
+
+/* Paleta barev pod řádkem štítku */
+.manageTagRow {
+  flex-wrap: wrap;
+}
+
+.manageTagColorPalette {
+  flex: 0 0 100%;
+  
+  display: flex;
+  gap: 12px;
+  
+  overflow-x: auto;
+  overflow-y: hidden;
+  
+  padding: 8px 0 6px;
+  
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.manageTagColorPalette::-webkit-scrollbar {
+  display: none;
+}
+
+.manageTagColorOption {
+  flex: 0 0 42px;
+  
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  
+  cursor: pointer;
+  
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.manageTagColorOption[data-tag-color="cervena"] {
+  background: var(--card-cervena);
+}
+
+.manageTagColorOption[data-tag-color="oranzova"] {
+  background: var(--card-oranzova);
+}
+
+.manageTagColorOption[data-tag-color="zluta"] {
+  background: var(--card-zluta);
+}
+
+.manageTagColorOption[data-tag-color="zelena"] {
+  background: var(--card-zelena);
+}
+
+.manageTagColorOption[data-tag-color="tyrkysova"] {
+  background: var(--card-tyrkysova);
+}
+
+.manageTagColorOption[data-tag-color="modra"] {
+  background: var(--card-modra);
+}
+
+.manageTagColorOption[data-tag-color="fialova"] {
+  background: var(--card-fialova);
+}
+
+.manageTagColorOption[data-tag-color="ruzova"] {
+  background: var(--card-ruzova);
+}
+
+.manageTagColorOption:active {
+  transform: scale(0.9);
+}
+.manageTagColorButton {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 
 /* ========================================
    POTVRZENÍ SMAZÁNÍ ŠTÍTKU

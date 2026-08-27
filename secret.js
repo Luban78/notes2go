@@ -542,8 +542,7 @@ let secretAutoLockTimer = null;
 
 const SECRET_AUTO_LOCK_TIME = 5 * 60 * 1000;
 
-//const SECRET_AUTO_LOCK_TIME =
- // 10 * 1000;
+//const SECRET_AUTO_LOCK_TIME = 10 * 1000;
   
   function spustSecretAutoLock() {
   clearTimeout(secretAutoLockTimer);
@@ -625,6 +624,13 @@ async function zamkniTajnyRezim(automaticky = false) {
   tajnySifrovaciKlic = null;
   tajnyRezimOdemceny = false;
   filtrTajnychPoznamekAktivni = false;
+  
+  if (
+  typeof vycistiTajneStitkyPoZamknuti === "function"
+) {
+  vycistiTajneStitkyPoZamknuti();
+}
+
 
   if (typeof vycistiDesifrovaneTajnePoznamky === "function") {
     vycistiDesifrovaneTajnePoznamky();
@@ -893,6 +899,23 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
    * Obnovíme je až po úspěšném odvození klíče ze správného hesla.
    */
   await obnovCekajiciTajnaMetadataZeZalohy();
+  
+  /*
+ * Po odemknutí znovu načteme štítky.
+ * Tajné názvy se díky dostupnému AES klíči
+ * dešifrují pouze do paměti aplikace.
+ */
+if (
+  typeof loadTagsFromSupabase === "function"
+) {
+  await loadTagsFromSupabase();
+}
+
+if (
+  typeof updateTagMenuUI === "function"
+) {
+  updateTagMenuUI();
+}
 
   /*
    * Po aktualizaci okamžitě uklidíme i případné starší systémové
@@ -1208,7 +1231,114 @@ function base64ToBytes(base64) {
     (char) => char.charCodeAt(0)
   );
 }
+// ==========================================
+// TAJNÉ ŠTÍTKY – ŠIFROVÁNÍ NÁZVU
+// Skutečný název tajného štítku
+// nesmí být uložený v cloudu jako otevřený text.
+// ==========================================
 
+async function zasifrujNazevTajnehoStitku(
+  nazevStitku,
+  tagId
+) {
+  if (!tajnySifrovaciKlic) {
+    throw new Error(
+      "Tajný režim není odemčený."
+    );
+  }
+
+  const nazev = String(
+    nazevStitku || ""
+  ).trim();
+
+  if (!nazev || !tagId) {
+    throw new Error(
+      "Tajný štítek nemá platný název nebo ID."
+    );
+  }
+
+  const encoder = new TextEncoder();
+
+  const iv =
+    crypto.getRandomValues(
+      new Uint8Array(12)
+    );
+
+  const additionalData =
+    encoder.encode(
+      `LubaNote-secret-tag-v1:${tagId}`
+    );
+
+  const encrypted =
+    await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData
+      },
+      tajnySifrovaciKlic,
+      encoder.encode(nazev)
+    );
+
+  return {
+    version: 1,
+    algorithm: "AES-GCM",
+    iv: bytesToBase64(
+      new Uint8Array(iv)
+    ),
+    ciphertext: bytesToBase64(
+      new Uint8Array(encrypted)
+    )
+  };
+}
+
+
+async function desifrujNazevTajnehoStitku(
+  encryptedData,
+  tagId
+) {
+  if (!tajnySifrovaciKlic) {
+    throw new Error(
+      "Tajný režim není odemčený."
+    );
+  }
+
+  if (
+    !tagId ||
+    encryptedData?.algorithm !== "AES-GCM" ||
+    !encryptedData?.iv ||
+    !encryptedData?.ciphertext
+  ) {
+    throw new Error(
+      "Šifrovaný název tajného štítku není platný."
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const additionalData =
+    encoder.encode(
+      `LubaNote-secret-tag-v1:${tagId}`
+    );
+
+  const decrypted =
+    await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: base64ToBytes(
+          encryptedData.iv
+        ),
+        additionalData
+      },
+      tajnySifrovaciKlic,
+      base64ToBytes(
+        encryptedData.ciphertext
+      )
+    );
+
+  return decoder.decode(decrypted);
+}
 
 async function zasifrujTajnouPoznamku(poznamka) {
   if (!tajnySifrovaciKlic) {

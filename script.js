@@ -4,13 +4,13 @@ if (window.Capacitor?.isNativePlatform?.()) {
 
 function updateVisualViewport() {
   const viewport = window.visualViewport;
-
+  
   if (viewport) {
     document.documentElement.style.setProperty(
       "--visual-height",
       `${viewport.height}px`
     );
-
+    
     document.documentElement.style.setProperty(
       "--visual-top",
       `${viewport.offsetTop}px`
@@ -25,7 +25,7 @@ if (window.visualViewport) {
     "resize",
     updateVisualViewport
   );
-
+  
   window.visualViewport.addEventListener(
     "scroll",
     updateVisualViewport
@@ -75,17 +75,17 @@ let hromadneMazaniIds = null;
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
   hromadneMazaniIds = null;
-
+  
   if (deleteConfirmTitle) {
     deleteConfirmTitle.textContent =
       puvodniNadpisPotvrzeniSmazani;
   }
-
+  
   if (deleteConfirmText) {
     deleteConfirmText.textContent =
       puvodniTextPotvrzeniSmazani;
   }
-
+  
   if (rezimVyberuKaret) {
     zobrazAkceVybranychKaret();
   }
@@ -106,67 +106,66 @@ const appMessageNormalButton =
 confirmDeleteButton.addEventListener("click", async () => {
   /* Hromadné smazání vybraných karet. */
   if (Array.isArray(hromadneMazaniIds)) {
-    const idsKeSmazani =
-      [...hromadneMazaniIds];
-
+    const idsKeSmazani = [...hromadneMazaniIds];
+    
     hromadneMazaniIds = null;
     deleteConfirmModal.hidden = true;
-
+    
     if (deleteConfirmTitle) {
       deleteConfirmTitle.textContent =
         puvodniNadpisPotvrzeniSmazani;
     }
-
+    
     if (deleteConfirmText) {
       deleteConfirmText.textContent =
         puvodniTextPotvrzeniSmazani;
     }
-
+    
     const vysledek =
       await smazPoznamkyPodleId(
         idsKeSmazani
       );
-
+    
     ukonciRezimVyberuKaret();
-
+    
     if (vysledek?.pocet > 0) {
       zobrazPotvrzeniAkce(
         `Smazáno ${vysledek.pocet} poznámek`
       );
     }
-
+    
     if (typeof renderCalendar === "function") {
       renderCalendar();
     }
-
+    
     if (typeof renderRemindersScreen === "function") {
       renderRemindersScreen();
     }
-
+    
     return;
   }
-
+  
   if (selectedCardIndex === null) {
     return;
   }
-
+  
   await deleteTask(selectedCardIndex);
-
+  
   deleteConfirmModal.hidden = true;
   selectedCardIndex = null;
-
+  
   taskModal.hidden = true;
   taskModal.removeAttribute("data-task-id");
   activeTaskIndex = null;
   activeTaskId = null;
   editorSessionId += 1;
-
+  
   renderTasks();
-
+  
   if (typeof renderCalendar === "function") {
     renderCalendar();
   }
-
+  
   if (typeof renderRemindersScreen === "function") {
     renderRemindersScreen();
   }
@@ -213,23 +212,23 @@ document.addEventListener(
     if (mainMenu.hidden) {
       return;
     }
-
+    
     if (
       mainMenu.contains(event.target) ||
       mainMenuButton.contains(event.target)
     ) {
       return;
     }
-
+    
     event.preventDefault();
     event.stopPropagation();
-
+    
     blokovatKlikPoZavreniMainMenu = true;
-
+    
     setTimeout(() => {
       blokovatKlikPoZavreniMainMenu = false;
     }, 500);
-
+    
     mainMenu.hidden = true;
     mainMenuButton.setAttribute(
       "aria-expanded",
@@ -245,9 +244,9 @@ document.addEventListener(
     if (!blokovatKlikPoZavreniMainMenu) {
       return;
     }
-
+    
     blokovatKlikPoZavreniMainMenu = false;
-
+    
     event.preventDefault();
     event.stopImmediatePropagation();
   },
@@ -295,35 +294,35 @@ function zpracujZavreniEditoru() {
   if (bylEditorZmenen()) {
     appMessageTitle.textContent =
       "Soubor byl změněn";
-
+    
     appMessageText.textContent =
       "Uložit změny?";
-
+    
     appMessageSaveButton.hidden = false;
     appMessageDiscardButton.hidden = false;
-
+    
     closeAppMessageButton.textContent =
       "Zrušit";
-
+    
     appMessageModal.hidden = false;
-
+    
     return;
   }
-
+  
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
-
+  
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
   editorSessionId += 1;
-
+  
   setTimeout(() => {
     if (!taskModal.classList.contains("show")) {
       taskModal.hidden = true;
     }
   }, 250);
-
+  
   RichTextColors.reset();
 }
 
@@ -360,40 +359,40 @@ function najdiAktivniPoznamku(tasks) {
   if (!Array.isArray(tasks)) {
     return null;
   }
-
+  
   if (activeTaskId) {
     const index = tasks.findIndex(
       (task) => task?.id === activeTaskId
     );
-
+    
     if (index === -1) {
       return null;
     }
-
+    
     activeTaskIndex = index;
-
+    
     return {
       index,
       task: tasks[index]
     };
   }
-
+  
   if (
     activeTaskIndex !== null &&
     tasks[activeTaskIndex]
   ) {
     const task = tasks[activeTaskIndex];
-
+    
     if (task?.id) {
       activeTaskId = task.id;
     }
-
+    
     return {
       index: activeTaskIndex,
       task
     };
   }
-
+  
   return null;
 }
 
@@ -407,13 +406,13 @@ const deleteTaskButton =
 deleteTaskButton?.addEventListener("click", () => {
   const tasks = loadTask();
   const aktivni = najdiAktivniPoznamku(tasks);
-
+  
   if (!aktivni) {
     return;
   }
-
+  
   selectedCardIndex = aktivni.index;
-
+  
   deleteConfirmModal.hidden = false;
 });
 
@@ -514,17 +513,17 @@ secretTaskButton?.addEventListener(
     if (!tajnyRezimOdemceny) {
       return;
     }
-
+    
     secretTaskEnabled = !secretTaskEnabled;
-
+    
     secretTaskButton.textContent =
       secretTaskEnabled ? "🔐" : "🔓";
-
+    
     secretTaskButton.classList.toggle(
       "active",
       secretTaskEnabled
     );
-
+    
     if (secretTaskEnabled) {
       /*
        * SECRET = absolutní ticho.
@@ -532,19 +531,19 @@ secretTaskButton?.addEventListener(
       reminderEnabled = false;
       editorRepeat = null;
       aktualizujPopiskyDataCasu();
-
+      
       if (typeof updateReminderButton === "function") {
         updateReminderButton(false);
       }
-
+      
       {
         const currentTasks = loadTask();
         const aktivni =
           najdiAktivniPoznamku(currentTasks);
-
+        
         const currentTask =
           aktivni?.task || null;
-
+        
         if (
           currentTask?.notificationId &&
           typeof cancelNotification === "function"
@@ -552,10 +551,16 @@ secretTaskButton?.addEventListener(
           cancelNotification(currentTask.notificationId);
         }
       }
+      
+      /*
+       * Po přepnutí poznámky na Secret znovu
+       * vykreslíme nabídku štítků.
+       */
+      updateTagMenuUI();
 
       return;
     }
-
+    
     /*
      * ODTАJNĚNÍ POZNÁMKY:
      * běžná poznámka nesmí obsahovat tajný štítek.
@@ -564,14 +569,14 @@ secretTaskButton?.addEventListener(
       (tagName) => {
         const tag = syncedTags.find(
           (item) =>
-            item.name.trim().toLowerCase() ===
-            tagName.trim().toLowerCase()
+          item.name.trim().toLowerCase() ===
+          tagName.trim().toLowerCase()
         );
-
+        
         return tag?.is_secret !== true;
       }
     );
-
+    
     updateTagMenuUI();
   }
 );
@@ -580,20 +585,20 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
   if (!secretTaskEnabled || taskModal?.hidden) {
     return null;
   }
-
+  
   const title = ziskejNazevPoznamkyZEditoru().trim();
   const note = modalRichText.innerText;
   const richContent = modalRichText.innerHTML;
   const date =
     modalDate.value && modalTime.value ?
-      `${modalDate.value}T${modalTime.value}` :
-      "";
-
+    `${modalDate.value}T${modalTime.value}` :
+    "";
+  
   let savedNote = null;
-
+  
   const tasks = loadTask();
   const aktivni = najdiAktivniPoznamku(tasks);
-
+  
   /*
    * Pokud editor patří existující poznámce, ale její ID už v datech
    * nenajdeme, NESMÍME z obsahu vytvořit novou kartu s novým UUID.
@@ -604,10 +609,10 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
     );
     return null;
   }
-
+  
   if (aktivni) {
     const currentTask = aktivni.task;
-
+    
     savedNote = {
       ...currentTask,
       updatedAt: new Date().toISOString(),
@@ -625,32 +630,31 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       tags: [...activeTags],
       todos: [...activeTodos],
       repeat: secretTaskEnabled ?
-        null :
-        kopirujEditorRepeat(editorRepeat)
+        null : kopirujEditorRepeat(editorRepeat)
     };
-
+    
     if (
       window.LubaNotePlanner
-        ?.synchronizujPlanovaneTodoSPoznamkou
+      ?.synchronizujPlanovaneTodoSPoznamkou
     ) {
       await window.LubaNotePlanner
         .synchronizujPlanovaneTodoSPoznamkou(
           savedNote
         );
     }
-
+    
     await updateTask(aktivni.index, savedNote);
   } else {
     const maVlozenyMediaObsah =
       window.LubaNoteEditorMedia
-        ?.maVlozenyObsah?.() === true;
-
+      ?.maVlozenyObsah?.() === true;
+    
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
       activeTodos.length === 0 &&
       !maVlozenyMediaObsah;
-
+    
     if (!isEmpty) {
       savedNote = {
         id: crypto.randomUUID(),
@@ -670,32 +674,32 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
         todos: [...activeTodos],
         repeat: null
       };
-
+      
       await saveTask(savedNote);
     }
   }
-
+  
   if (!savedNote) {
     return null;
   }
-
+  
   if (
     typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
   ) {
     await obnovNotifikacePoznamkyPodleSoukromi(savedNote);
   }
-
+  
   if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
     await cekajNaUlozeniTajnychPoznamek();
   }
-
+  
   const encryptedRecord =
     typeof nactiSifrovaneTajneZaznamy === "function" ?
-      nactiSifrovaneTajneZaznamy().find(
-        (record) => record.id === savedNote.id
-      ) || null :
-      null;
-
+    nactiSifrovaneTajneZaznamy().find(
+      (record) => record.id === savedNote.id
+    ) || null :
+    null;
+  
   return {
     noteId: savedNote.id,
     encryptedRecord
@@ -706,7 +710,7 @@ function zavriTajnyEditorPriZamknuti() {
   if (!secretTaskEnabled || taskModal?.hidden) {
     return;
   }
-
+  
   /*
    * Auto-lock nesmí nechat plaintext tajné poznámky v DOM.
    * Rozpracovaná tajná poznámka se při zamknutí zavře bez uložení.
@@ -717,25 +721,25 @@ function zavriTajnyEditorPriZamknuti() {
   editorRepeat = null;
   modalDate.value = "";
   modalTime.value = "";
-
+  
   if (typeof resetTodos === "function") {
     resetTodos();
   }
-
+  
   document.getElementById("plannedTextLinks")?.replaceChildren();
-
+  
   taskModal.classList.remove("show");
   taskModal.hidden = true;
   document.body.classList.remove("noScroll");
-
+  
   activeTaskIndex = null;
   activeTaskId = null;
   editorSessionId += 1;
   secretTaskEnabled = false;
-
+  
   secretTaskButton.textContent = "🔓";
   secretTaskButton.classList.remove("active");
-
+  
   if (typeof RichTextColors !== "undefined") {
     RichTextColors.reset();
   }
@@ -748,10 +752,10 @@ function zobrazZpravuAplikace(
 ) {
   appMessageTitle.textContent =
     nadpis || "Upozornění";
-
+  
   appMessageText.textContent =
     zprava || "";
-
+  
   appMessageModal.hidden = false;
 }
 
@@ -760,12 +764,12 @@ closeAppMessageButton?.addEventListener(
   "click",
   () => {
     appMessageModal.hidden = true;
-
+    
     appMessageSaveButton.hidden = true;
     appMessageDiscardButton.hidden = true;
     appMessageSecretButton.hidden = true;
     appMessageNormalButton.hidden = true;
-
+    
     closeAppMessageButton.textContent = "OK";
   }
 );
@@ -773,12 +777,12 @@ appMessageSaveButton?.addEventListener(
   "click",
   async () => {
     appMessageModal.hidden = true;
-
+    
     appMessageSaveButton.hidden = true;
     appMessageDiscardButton.hidden = true;
-
+    
     closeAppMessageButton.textContent = "OK";
-
+    
     await ulozAZavriEditor();
   }
 );
@@ -787,26 +791,26 @@ appMessageDiscardButton?.addEventListener(
   "click",
   () => {
     appMessageModal.hidden = true;
-
+    
     appMessageSaveButton.hidden = true;
     appMessageDiscardButton.hidden = true;
-
+    
     closeAppMessageButton.textContent = "OK";
-
+    
     taskModal.classList.remove("show");
     document.body.classList.remove("noScroll");
-
+    
     activeTaskIndex = null;
     activeTaskId = null;
     taskModal.removeAttribute("data-task-id");
     editorSessionId += 1;
-
+    
     setTimeout(() => {
       if (!taskModal.classList.contains("show")) {
         taskModal.hidden = true;
       }
     }, 250);
-
+    
     RichTextColors.reset();
   }
 );
@@ -833,13 +837,13 @@ function formatDatumProTlacitko(hodnota) {
   if (!hodnota) {
     return "Datum";
   }
-
+  
   const [rok, mesic, den] = hodnota.split("-");
-
+  
   if (!rok || !mesic || !den) {
     return "Datum";
   }
-
+  
   return `${den}.${mesic}.${rok}`;
 }
 
@@ -847,7 +851,7 @@ function aktualizujPopisekAktivnihoData() {
   if (!aktivniDatumLabel) {
     return;
   }
-
+  
   aktivniDatumLabel.textContent =
     formatDatumProTlacitko(aktivniDatumInput?.value);
 }
@@ -856,7 +860,7 @@ function aktualizujPopisekAktivnihoCasu() {
   if (!aktivniCasLabel) {
     return;
   }
-
+  
   aktivniCasLabel.textContent =
     aktivniCasInput?.value || "Čas";
 }
@@ -865,10 +869,10 @@ function nastavAktivniDatum(hodnota) {
   if (!aktivniDatumInput) {
     return;
   }
-
+  
   aktivniDatumInput.value = hodnota;
   aktualizujPopisekAktivnihoData();
-
+  
   if (typeof poVyberuData === "function") {
     poVyberuData(hodnota);
   }
@@ -878,10 +882,10 @@ function nastavAktivniCas(hodnota) {
   if (!aktivniCasInput) {
     return;
   }
-
+  
   aktivniCasInput.value = hodnota;
   aktualizujPopisekAktivnihoCasu();
-
+  
   if (typeof poVyberuCasu === "function") {
     poVyberuCasu(hodnota);
   }
@@ -896,7 +900,7 @@ function denVTydnuZDataEditoru() {
   if (!modalDate?.value) {
     return new Date().getDay();
   }
-
+  
   return new Date(
     `${modalDate.value}T12:00`
   ).getDay();
@@ -906,13 +910,13 @@ function vytvorRepeatZPredvolby(predvolba) {
   const startDate =
     modalDate?.value ||
     window.LubaNoteRecurring
-      ?.datumovyKlic?.(new Date()) ||
+    ?.datumovyKlic?.(new Date()) ||
     "";
-
+  
   if (predvolba === "none") {
     return null;
   }
-
+  
   if (predvolba === "daily") {
     return {
       enabled: true,
@@ -923,18 +927,16 @@ function vytvorRepeatZPredvolby(predvolba) {
       endDate: null
     };
   }
-
+  
   if (
     predvolba === "weekly1" ||
     predvolba === "weekly2"
   ) {
     const zachovaneDny =
       pracovniRepeat?.type === "weekly" &&
-        Array.isArray(pracovniRepeat.days) &&
-        pracovniRepeat.days.length > 0 ?
-        [...pracovniRepeat.days] :
-        [denVTydnuZDataEditoru()];
-
+      Array.isArray(pracovniRepeat.days) &&
+      pracovniRepeat.days.length > 0 ? [...pracovniRepeat.days] : [denVTydnuZDataEditoru()];
+    
     return {
       enabled: true,
       type: "weekly",
@@ -944,12 +946,12 @@ function vytvorRepeatZPredvolby(predvolba) {
       endDate: null
     };
   }
-
+  
   if (predvolba === "monthly") {
     const denVMesici = modalDate?.value ?
       Number(modalDate.value.slice(8, 10)) :
       new Date().getDate();
-
+    
     return {
       enabled: true,
       type: "monthly",
@@ -960,7 +962,7 @@ function vytvorRepeatZPredvolby(predvolba) {
       endDate: null
     };
   }
-
+  
   return null;
 }
 
@@ -968,21 +970,21 @@ function zjistiAktivniPredvolbuRepeat() {
   if (!pracovniRepeat?.enabled) {
     return "none";
   }
-
+  
   if (pracovniRepeat.type === "daily") {
     return "daily";
   }
-
+  
   if (pracovniRepeat.type === "monthly") {
     return "monthly";
   }
-
+  
   if (pracovniRepeat.type === "weekly") {
     return Number(pracovniRepeat.interval) === 2 ?
       "weekly2" :
       "weekly1";
   }
-
+  
   return "none";
 }
 
@@ -990,16 +992,16 @@ function aktualizujRepeatUI() {
   if (!timeRepeatSection) {
     return;
   }
-
+  
   timeRepeatSection.hidden = !aktivniCasPovolujeOpakovani;
-
+  
   if (!aktivniCasPovolujeOpakovani) {
     return;
   }
-
+  
   const aktivniPredvolba =
     zjistiAktivniPredvolbuRepeat();
-
+  
   timeRepeatPresetButtons.forEach(
     (button) => {
       button.classList.toggle(
@@ -1009,18 +1011,18 @@ function aktualizujRepeatUI() {
       );
     }
   );
-
+  
   const jeTydenni =
     pracovniRepeat?.type === "weekly";
-
+  
   timeRepeatWeekdays.hidden = !jeTydenni;
-
+  
   timeRepeatDayButtons.forEach(
     (button) => {
       const den = Number(
         button.dataset.repeatDay
       );
-
+      
       button.classList.toggle(
         "active",
         jeTydenni &&
@@ -1028,11 +1030,11 @@ function aktualizujRepeatUI() {
       );
     }
   );
-
+  
   if (timeRepeatSummary) {
     timeRepeatSummary.textContent =
       window.LubaNoteRecurring
-        ?.formatujPravidlo?.(pracovniRepeat) ||
+      ?.formatujPravidlo?.(pracovniRepeat) ||
       "Neopakovat";
   }
 }
@@ -1043,16 +1045,16 @@ function pripravRepeatProVyberCasu() {
     aktualizujRepeatUI();
     return;
   }
-
+  
   pracovniRepeat =
     kopirujEditorRepeat(editorRepeat);
-
+  
   if (pracovniRepeat?.enabled) {
     pracovniRepeat.startDate =
       modalDate.value ||
       pracovniRepeat.startDate;
   }
-
+  
   aktualizujRepeatUI();
 }
 
@@ -1060,18 +1062,18 @@ function ulozRepeatZVyberuCasu() {
   if (!aktivniCasPovolujeOpakovani) {
     return;
   }
-
+  
   editorRepeat =
     kopirujEditorRepeat(pracovniRepeat);
-
+  
   if (editorRepeat?.enabled) {
     editorRepeat.startDate = modalDate.value;
-
+    
     if (editorRepeat.type === "monthly") {
       editorRepeat.dayOfMonth =
         Number(modalDate.value.slice(8, 10));
     }
-
+    
     reminderEnabled = true;
     updateReminderButton(true);
   }
@@ -1081,9 +1083,9 @@ function synchronizujRepeatSDatemEditoru() {
   if (!editorRepeat?.enabled || !modalDate.value) {
     return;
   }
-
+  
   editorRepeat.startDate = modalDate.value;
-
+  
   if (editorRepeat.type === "monthly") {
     editorRepeat.dayOfMonth =
       Number(modalDate.value.slice(8, 10));
@@ -1095,7 +1097,7 @@ timeRepeatPresetButtons.forEach((button) => {
     pracovniRepeat = vytvorRepeatZPredvolby(
       button.dataset.repeatPreset
     );
-
+    
     aktualizujRepeatUI();
   });
 });
@@ -1105,15 +1107,15 @@ timeRepeatDayButtons.forEach((button) => {
     if (pracovniRepeat?.type !== "weekly") {
       return;
     }
-
+    
     const den = Number(
       button.dataset.repeatDay
     );
-
+    
     const dny = new Set(
       pracovniRepeat.days || []
     );
-
+    
     if (dny.has(den)) {
       if (dny.size > 1) {
         dny.delete(den);
@@ -1121,14 +1123,14 @@ timeRepeatDayButtons.forEach((button) => {
     } else {
       dny.add(den);
     }
-
+    
     pracovniRepeat.days =
       Array.from(dny).sort(
         (a, b) =>
-          ((a + 6) % 7) -
-          ((b + 6) % 7)
+        ((a + 6) % 7) -
+        ((b + 6) % 7)
       );
-
+    
     aktualizujRepeatUI();
   });
 });
@@ -1170,12 +1172,12 @@ function ziskejIndexHodiny(hodina) {
 function nastavAktivniHodinovyKruh(vnitrniKruh) {
   timePickerClock.classList.add("hourMode");
   timePickerClock.classList.remove("minuteMode");
-
+  
   timePickerClock.classList.toggle(
     "hourRingInner",
     vnitrniKruh
   );
-
+  
   timePickerClock.classList.toggle(
     "hourRingOuter",
     !vnitrniKruh
@@ -1195,12 +1197,12 @@ function zvyrazniVybranouHodinu(hodina) {
 
 function nastavVybranouHodinu(hodina, vnitrniKruh) {
   const index = ziskejIndexHodiny(hodina);
-
+  
   timePickerSelectedHour.textContent =
     String(hodina).padStart(2, "0");
-
+  
   nastavAktivniHodinovyKruh(vnitrniKruh);
-
+  
   /*
    * Vnější kruh potřebuje delší ručičku,
    * vnitřní kratší. Uživatel tak hned vidí,
@@ -1208,37 +1210,37 @@ function nastavVybranouHodinu(hodina, vnitrniKruh) {
    */
   timePickerHourHand.style.height =
     vnitrniKruh ? "25%" : "40%";
-
+  
   timePickerHourHand.style.transform =
     `translate(-50%, -100%) rotate(${index * 30}deg)`;
-
+  
   zvyrazniVybranouHodinu(hodina);
 }
 
 function prepniCifernikNaMinuty() {
   hodinovyCifernikAktivni = false;
-
+  
   timePickerSelectedHour.classList.remove("active");
   timePickerSelectedMinute.classList.add("active");
-
+  
   timePickerHourHand.hidden = true;
   timePickerHand.hidden = false;
-
+  
   vykresliMinutyCiferniku();
 }
 
 function vykresliHodinyCiferniku() {
   smazCislaCiferniku();
-
+  
   timePickerSelectedHour.classList.add("active");
   timePickerSelectedMinute.classList.remove("active");
-
+  
   timePickerHourHand.hidden = false;
   timePickerHand.hidden = true;
-
+  
   const vybranaHodina =
     Number(timePickerSelectedHour.textContent) || 0;
-
+  
   function vytvorHodinu(
     hodina,
     index,
@@ -1247,27 +1249,27 @@ function vykresliHodinyCiferniku() {
   ) {
     const tlacitko =
       document.createElement("button");
-
+    
     tlacitko.type = "button";
     tlacitko.className =
       `timePickerClockNumber ${vnitrniKruh ? "hourInner" : "hourOuter"}`;
-
+    
     tlacitko.dataset.hour = String(hodina);
     tlacitko.textContent =
       String(hodina).padStart(2, "0");
-
+    
     const uhel =
       (index * 30 - 90) * Math.PI / 180;
-
+    
     const x =
       50 + Math.cos(uhel) * polomer;
-
+    
     const y =
       50 + Math.sin(uhel) * polomer;
-
+    
     tlacitko.style.left = `${x}%`;
     tlacitko.style.top = `${y}%`;
-
+    
     /*
      * Pointer (prst/myš) řeší rodičovský ciferník.
      * Click zde zůstává hlavně pro klávesnici.
@@ -1276,18 +1278,18 @@ function vykresliHodinyCiferniku() {
       if (event.detail !== 0) {
         return;
       }
-
+      
       nastavVybranouHodinu(
         hodina,
         vnitrniKruh
       );
-
+      
       prepniCifernikNaMinuty();
     });
-
+    
     timePickerClock.append(tlacitko);
   }
-
+  
   HODINY_VNEJSI.forEach(
     (hodina, index) => {
       vytvorHodinu(
@@ -1298,7 +1300,7 @@ function vykresliHodinyCiferniku() {
       );
     }
   );
-
+  
   HODINY_VNITRNI.forEach(
     (hodina, index) => {
       vytvorHodinu(
@@ -1309,7 +1311,7 @@ function vykresliHodinyCiferniku() {
       );
     }
   );
-
+  
   nastavVybranouHodinu(
     vybranaHodina,
     jeVnitrniHodina(vybranaHodina)
@@ -1330,68 +1332,68 @@ function zvyrazniVybranouMinutu(minuta) {
 function nastavVybranouMinutu(minuta) {
   timePickerSelectedMinute.textContent =
     String(minuta).padStart(2, "0");
-
+  
   timePickerHand.style.transform =
     `translate(-50%, -100%) rotate(${minuta * 6}deg)`;
-
+  
   zvyrazniVybranouMinutu(minuta);
 }
 
 function vykresliMinutyCiferniku() {
   smazCislaCiferniku();
-
+  
   timePickerClock.classList.remove(
     "hourMode",
     "hourRingInner",
     "hourRingOuter"
   );
   timePickerClock.classList.add("minuteMode");
-
+  
   timePickerSelectedHour.classList.remove("active");
   timePickerSelectedMinute.classList.add("active");
-
+  
   timePickerHourHand.hidden = true;
   timePickerHand.hidden = false;
-
+  
   const vybranaMinuta =
     Number(timePickerSelectedMinute.textContent) || 0;
-
+  
   for (let minuta = 0; minuta < 60; minuta += 5) {
     const tlacitko =
       document.createElement("button");
-
+    
     tlacitko.type = "button";
     tlacitko.className = "timePickerClockNumber";
     tlacitko.dataset.minute = String(minuta);
-
+    
     tlacitko.textContent =
       String(minuta).padStart(2, "0");
-
+    
     const index = minuta / 5;
-
+    
     const uhel =
       (index * 30 - 90) * Math.PI / 180;
-
+    
     const x =
       50 + Math.cos(uhel) * 40;
-
+    
     const y =
       50 + Math.sin(uhel) * 40;
-
+    
     tlacitko.style.left = `${x}%`;
     tlacitko.style.top = `${y}%`;
-
+    
     tlacitko.addEventListener("click", (event) => {
       if (event.detail !== 0) {
         return;
       }
-
+      
       nastavVybranouMinutu(minuta);
     });
-
+    
     timePickerClock.append(tlacitko);
   }
-
+  
   nastavVybranouMinutu(vybranaMinuta);
 }
 
@@ -1402,65 +1404,65 @@ function vykresliMinutyCiferniku() {
 function nastavMinutuPodlePozice(event) {
   const rect =
     timePickerClock.getBoundingClientRect();
-
+  
   const stredX =
     rect.left + rect.width / 2;
-
+  
   const stredY =
     rect.top + rect.height / 2;
-
+  
   const x =
     event.clientX - stredX;
-
+  
   const y =
     event.clientY - stredY;
-
+  
   let uhel =
     Math.atan2(y, x) * 180 / Math.PI;
-
+  
   uhel += 90;
-
+  
   if (uhel < 0) {
     uhel += 360;
   }
-
+  
   const minuta =
     Math.round(uhel / 6) % 60;
-
+  
   nastavVybranouMinutu(minuta);
 }
 
 function nastavHodinuPodlePozice(event) {
   const rect =
     timePickerClock.getBoundingClientRect();
-
+  
   const stredX =
     rect.left + rect.width / 2;
-
+  
   const stredY =
     rect.top + rect.height / 2;
-
+  
   const x =
     event.clientX - stredX;
-
+  
   const y =
     event.clientY - stredY;
-
+  
   let uhel =
     Math.atan2(y, x) * 180 / Math.PI;
-
+  
   uhel += 90;
-
+  
   if (uhel < 0) {
     uhel += 360;
   }
-
+  
   const vzdalenost =
     Math.sqrt(x * x + y * y);
-
+  
   const polomer =
     rect.width / 2;
-
+  
   /*
    * Hranice je mezi vnitřními a vnějšími čísly.
    * Při přetažení přes hranici se okamžitě změní
@@ -1468,14 +1470,14 @@ function nastavHodinuPodlePozice(event) {
    */
   const vnitrniKruh =
     vzdalenost < polomer * 0.67;
-
+  
   const index =
     Math.round(uhel / 30) % 12;
-
+  
   const hodina = vnitrniKruh ?
     HODINY_VNITRNI[index] :
     HODINY_VNEJSI[index];
-
+  
   nastavVybranouHodinu(
     hodina,
     vnitrniKruh
@@ -1491,26 +1493,26 @@ timePickerClock.addEventListener(
       )
     ) {
       hodinovyCifernikAktivni = true;
-
+      
       timePickerClock.setPointerCapture(
         event.pointerId
       );
-
+      
       nastavHodinuPodlePozice(event);
       return;
     }
-
+    
     if (
       timePickerSelectedMinute.classList.contains(
         "active"
       )
     ) {
       minutovyCifernikAktivni = true;
-
+      
       timePickerClock.setPointerCapture(
         event.pointerId
       );
-
+      
       nastavMinutuPodlePozice(event);
     }
   }
@@ -1523,7 +1525,7 @@ timePickerClock.addEventListener(
       nastavHodinuPodlePozice(event);
       return;
     }
-
+    
     if (minutovyCifernikAktivni) {
       nastavMinutuPodlePozice(event);
     }
@@ -1537,7 +1539,7 @@ timePickerClock.addEventListener(
       prepniCifernikNaMinuty();
       return;
     }
-
+    
     minutovyCifernikAktivni = false;
   }
 );
@@ -1556,20 +1558,20 @@ timePickerClock.addEventListener(
 
 function pripravVyberCasu() {
   const ted = new Date();
-
+  
   const vychoziCas =
     aktivniCasInput?.value ||
     `${String(ted.getHours()).padStart(2, "0")}:${String(ted.getMinutes()).padStart(2, "0")}`;
-
+  
   const [hodinaText, minutaText] =
-    vychoziCas.split(":");
-
+  vychoziCas.split(":");
+  
   timePickerSelectedHour.textContent =
     String(Number(hodinaText) || 0).padStart(2, "0");
-
+  
   timePickerSelectedMinute.textContent =
     String(Number(minutaText) || 0).padStart(2, "0");
-
+  
   pripravRepeatProVyberCasu();
   vykresliHodinyCiferniku();
 }
@@ -1577,10 +1579,10 @@ function pripravVyberCasu() {
 function ulozVybranyCasDoEditoru() {
   const hodina =
     timePickerSelectedHour.textContent.padStart(2, "0");
-
+  
   const minuta =
     timePickerSelectedMinute.textContent.padStart(2, "0");
-
+  
   nastavAktivniCas(
     `${hodina}:${minuta}`
   );
@@ -1613,13 +1615,13 @@ timePickerNowButton?.addEventListener(
   "click",
   () => {
     const ted = new Date();
-
+    
     timePickerSelectedHour.textContent =
       String(ted.getHours()).padStart(2, "0");
-
+    
     timePickerSelectedMinute.textContent =
       String(ted.getMinutes()).padStart(2, "0");
-
+    
     ulozRepeatZVyberuCasu();
     ulozVybranyCasDoEditoru();
     timePickerModal.hidden = true;
@@ -1639,21 +1641,21 @@ let datePickerMonth = new Date().getMonth();
 
 function vykresliVyberData() {
   datePickerGrid.innerHTML = "";
-
+  
   const prvniDenMesice =
     new Date(
       datePickerYear,
       datePickerMonth,
       1
     );
-
+  
   const pocetDniVMesici =
     new Date(
       datePickerYear,
       datePickerMonth + 1,
       0
     ).getDate();
-
+  
   const nazvyMesicu = [
     "Leden",
     "Únor",
@@ -1668,10 +1670,10 @@ function vykresliVyberData() {
     "Listopad",
     "Prosinec"
   ];
-
+  
   datePickerMonthTitle.textContent =
     `${nazvyMesicu[datePickerMonth]} ${datePickerYear}`;
-
+  
   /*
    * JavaScript počítá neděli jako 0.
    * My máme kalendář od pondělí,
@@ -1679,45 +1681,45 @@ function vykresliVyberData() {
    */
   const pocatecniPozice =
     (prvniDenMesice.getDay() + 6) % 7;
-
+  
   for (
     let pozice = 0; pozice < pocatecniPozice; pozice++
   ) {
     const prazdneMisto =
       document.createElement("span");
-
+    
     datePickerGrid.append(
       prazdneMisto
     );
   }
-
+  
   const dnes = new Date();
-
+  
   for (
     let den = 1; den <= pocetDniVMesici; den++
   ) {
     const tlacitkoDne =
       document.createElement("button");
-
+    
     tlacitkoDne.type = "button";
     tlacitkoDne.textContent = den;
-
+    
     tlacitkoDne.addEventListener("click", () => {
       const mesic =
         String(datePickerMonth + 1).padStart(2, "0");
-
+      
       const denText =
         String(den).padStart(2, "0");
-
+      
       nastavAktivniDatum(
         `${datePickerYear}-${mesic}-${denText}`
       );
-
+      
       datePickerModal.hidden = true;
     });
-
-
-
+    
+    
+    
     if (
       den === dnes.getDate() &&
       datePickerMonth === dnes.getMonth() &&
@@ -1725,11 +1727,11 @@ function vykresliVyberData() {
     ) {
       tlacitkoDne.classList.add("today");
     }
-
+    
     if (aktivniDatumInput?.value) {
       const [vybranyRok, vybranyMesic, vybranyDen] =
-        aktivniDatumInput.value.split("-").map(Number);
-
+      aktivniDatumInput.value.split("-").map(Number);
+      
       if (
         den === vybranyDen &&
         datePickerMonth === vybranyMesic - 1 &&
@@ -1738,7 +1740,7 @@ function vykresliVyberData() {
         tlacitkoDne.classList.add("selected");
       }
     }
-
+    
     datePickerGrid.append(
       tlacitkoDne
     );
@@ -1747,42 +1749,42 @@ function vykresliVyberData() {
 
 previousMonthButton?.addEventListener("click", () => {
   datePickerMonth--;
-
+  
   if (datePickerMonth < 0) {
     datePickerMonth = 11;
     datePickerYear--;
   }
-
+  
   vykresliVyberData();
 });
 
 nextMonthButton?.addEventListener("click", () => {
   datePickerMonth++;
-
+  
   if (datePickerMonth > 11) {
     datePickerMonth = 0;
     datePickerYear++;
   }
-
+  
   vykresliVyberData();
 });
 
 datePickerTodayButton?.addEventListener("click", () => {
   const dnes = new Date();
-
+  
   datePickerYear = dnes.getFullYear();
   datePickerMonth = dnes.getMonth();
-
+  
   const mesic =
     String(dnes.getMonth() + 1).padStart(2, "0");
-
+  
   const den =
     String(dnes.getDate()).padStart(2, "0");
-
+  
   nastavAktivniDatum(
     `${dnes.getFullYear()}-${mesic}-${den}`
   );
-
+  
   datePickerModal.hidden = true;
 });
 
@@ -1801,15 +1803,15 @@ function otevriVlastniVyberData({
   if (!input) {
     return;
   }
-
+  
   aktivniDatumInput = input;
   aktivniDatumLabel = label;
   poVyberuData = poVyberu;
-
+  
   if (input.value) {
     const [rok, mesic] =
-      input.value.split("-").map(Number);
-
+    input.value.split("-").map(Number);
+    
     datePickerYear = rok;
     datePickerMonth = mesic - 1;
   } else {
@@ -1817,7 +1819,7 @@ function otevriVlastniVyberData({
     datePickerYear = dnes.getFullYear();
     datePickerMonth = dnes.getMonth();
   }
-
+  
   aktualizujPopisekAktivnihoData();
   vykresliVyberData();
   datePickerModal.hidden = false;
@@ -1832,14 +1834,14 @@ function otevriVlastniVyberCasu({
   if (!input) {
     return;
   }
-
+  
   aktivniCasInput = input;
   aktivniCasLabel = label;
   poVyberuCasu = poVyberu;
   aktivniCasPovolujeOpakovani =
     povolOpakovani === true &&
     secretTaskEnabled !== true;
-
+  
   aktualizujPopisekAktivnihoCasu();
   pripravVyberCasu();
   timePickerModal.hidden = false;
@@ -1859,7 +1861,7 @@ const priorityTaskButton =
   document.getElementById("priorityTaskButton");
 priorityTaskButton?.addEventListener("click", () => {
   favoriteEnabled = !favoriteEnabled;
-
+  
   priorityTaskButton.classList.toggle(
     "active",
     favoriteEnabled
@@ -1906,7 +1908,7 @@ timePickerCancelButton?.addEventListener("click", () => {
 
 importFile.addEventListener("change", () => {
   const file = importFile.files[0];
-
+  
   if (file) {
     importTasks(file);
   }
@@ -1928,21 +1930,21 @@ function aktualizujStavPrazdnehoNazvu() {
   if (!modalTitle) {
     return;
   }
-
+  
   modalTitle.dataset.prazdny =
-    ziskejNazevPoznamkyZEditoru().length === 0
-      ? "true"
-      : "false";
+    ziskejNazevPoznamkyZEditoru().length === 0 ?
+    "true" :
+    "false";
 }
 
 function nastavNazevPoznamkyVEditoru(hodnota) {
   if (!modalTitle) {
     return;
   }
-
+  
   modalTitle.textContent = String(hodnota ?? "")
     .replace(/[\r\n]+/g, " ");
-
+  
   aktualizujStavPrazdnehoNazvu();
 }
 
@@ -1952,12 +1954,12 @@ function vlozTextDoNazvuNaPoziciKurzoru(
 ) {
   const textovyUzel =
     document.createTextNode(text);
-
+  
   rozsah.deleteContents();
   rozsah.insertNode(textovyUzel);
   rozsah.setStartAfter(textovyUzel);
   rozsah.collapse(true);
-
+  
   const vyber = window.getSelection();
   vyber?.removeAllRanges();
   vyber?.addRange(rozsah);
@@ -1974,7 +1976,7 @@ modalTitle?.addEventListener("keydown", (event) => {
   ) {
     return;
   }
-
+  
   event.preventDefault();
   modalRichText?.focus();
 });
@@ -1987,7 +1989,7 @@ modalTitle?.addEventListener("beforeinput", (event) => {
   ) {
     return;
   }
-
+  
   event.preventDefault();
   modalRichText?.focus();
 });
@@ -1995,21 +1997,21 @@ modalTitle?.addEventListener("beforeinput", (event) => {
 modalTitle?.addEventListener("paste", (event) => {
   const vlozenyText =
     event.clipboardData
-      ?.getData("text/plain")
-      ?.replace(/[\r\n]+/g, " ");
-
+    ?.getData("text/plain")
+    ?.replace(/[\r\n]+/g, " ");
+  
   if (vlozenyText === undefined) {
     return;
   }
-
+  
   event.preventDefault();
-
+  
   const vyber = window.getSelection();
   const rozsah =
-    vyber?.rangeCount
-      ? vyber.getRangeAt(0)
-      : null;
-
+    vyber?.rangeCount ?
+    vyber.getRangeAt(0) :
+    null;
+  
   if (
     rozsah &&
     modalTitle.contains(
@@ -2026,7 +2028,7 @@ modalTitle?.addEventListener("paste", (event) => {
       vlozenyText
     );
   }
-
+  
   modalTitle.dispatchEvent(
     new Event("input", { bubbles: true })
   );
@@ -2059,8 +2061,7 @@ modalRichText.addEventListener(
   "pointerdown",
   (event) => {
     posledniPointerYEditoru = event.clientY;
-  },
-  { passive: true }
+  }, { passive: true }
 );
 
 modalRichText.addEventListener(
@@ -2069,20 +2070,19 @@ modalRichText.addEventListener(
     if (posledniPointerYEditoru === null) {
       return;
     }
-
+    
     const rozdilY =
       event.clientY - posledniPointerYEditoru;
-
+    
     /* Prst jde dolů -> obsah se vrací směrem k začátku. */
     if (rozdilY > 4) {
       oznacRolovaniKZacatkuEditoru();
     }
-
+    
     if (Math.abs(rozdilY) > 2) {
       posledniPointerYEditoru = event.clientY;
     }
-  },
-  { passive: true }
+  }, { passive: true }
 );
 
 ["pointerup", "pointercancel"].forEach(
@@ -2091,8 +2091,7 @@ modalRichText.addEventListener(
       nazevUdalosti,
       () => {
         posledniPointerYEditoru = null;
-      },
-      { passive: true }
+      }, { passive: true }
     );
   }
 );
@@ -2103,8 +2102,7 @@ modalRichText.addEventListener(
     if (event.deltaY < 0) {
       oznacRolovaniKZacatkuEditoru();
     }
-  },
-  { passive: true }
+  }, { passive: true }
 );
 
 modalRichText.addEventListener("keydown", (event) => {
@@ -2117,20 +2115,20 @@ modalRichText.addEventListener("scroll", () => {
   const scrollTop = modalRichText.scrollTop;
   const jeNazevSbaleny =
     taskModal.classList.contains("titleCollapsed");
-
+  
   if (!jeNazevSbaleny && scrollTop > 28) {
     taskModal.classList.add("titleCollapsed");
     return;
   }
-
+  
   if (!jeNazevSbaleny || scrollTop >= 8) {
     return;
   }
-
+  
   const uzivatelRolujeKZacatku =
     performance.now() - posledniPohybKZacatkuEditoru <
     CAS_ZAMERU_ROLOVAT_K_ZACATKU;
-
+  
   if (uzivatelRolujeKZacatku) {
     taskModal.classList.remove("titleCollapsed");
   }
@@ -2140,7 +2138,7 @@ function resetujSbaleniNazvuEditoru() {
   taskModal.classList.remove("titleCollapsed");
   posledniPohybKZacatkuEditoru = 0;
   posledniPointerYEditoru = null;
-
+  
   requestAnimationFrame(() => {
     modalRichText.scrollTop = 0;
   });
@@ -2164,9 +2162,9 @@ function updateModalWeekday() {
     modalWeekday.textContent = "";
     return;
   }
-
+  
   const date = new Date(`${modalDate.value}T12:00`);
-
+  
   const weekdays = [
     "Ne",
     "Po",
@@ -2176,7 +2174,7 @@ function updateModalWeekday() {
     "Pá",
     "So"
   ];
-
+  
   modalWeekday.textContent = weekdays[date.getDay()];
 }
 
@@ -2189,19 +2187,19 @@ function updateModalWeekday() {
 function aktualizujPopiskyDataCasu() {
   if (modalDate.value) {
     const [rok, mesic, den] =
-      modalDate.value.split("-");
-
+    modalDate.value.split("-");
+    
     modalDateLabel.textContent =
       `${den}.${mesic}.${rok}`;
   } else {
     modalDateLabel.textContent = "Datum";
   }
-
+  
   const repeatIkona =
     editorRepeat?.enabled === true ?
-      " 🔁" :
-      "";
-
+    " 🔁" :
+    "";
+  
   modalTimeLabel.textContent =
     `${modalTime.value || "Čas"}${repeatIkona}`;
 }
@@ -2236,7 +2234,7 @@ addTaskButton.addEventListener("click", () => {
   activeTags = [];
   updateTagMenuUI();
   closeTagMenu();
-
+  
   nastavNazevPoznamkyVEditoru("");
   modalText.value = "";
   modalRichText.innerHTML = "";
@@ -2248,35 +2246,35 @@ addTaskButton.addEventListener("click", () => {
   if (document.getElementById("plannedTextLinks")) {
     document.getElementById("plannedTextLinks").hidden = true;
   }
-
+  
   /* Aktuální datum a čas při vytvoření nové poznámky */
   const now = new Date();
-
+  
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-
+  
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
-
+  
   modalDate.value = `${year}-${month}-${day}`;
   modalTime.value = `${hours}:${minutes}`;
-
+  
   aktualizujPopiskyDataCasu();
   updateModalWeekday();
-
+  
   reminderEnabled = false;
   updateReminderButton(false);
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
-
-
-
+  
+  
+  
   resetujSbaleniNazvuEditoru();
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-
+  
   modalTitle.focus();
 });
 
@@ -2308,14 +2306,14 @@ async function ulozPoznamkuLokalneASynchronizuj(
 ) {
   if (
     window.LubaNoteSync
-      ?.provedLokalniZmenuASynchronizuj
+    ?.provedLokalniZmenuASynchronizuj
   ) {
     return await window.LubaNoteSync
       .provedLokalniZmenuASynchronizuj(akce);
   }
-
+  
   const vysledek = await akce();
-
+  
   if (
     navigator.onLine &&
     poznamkaProFallback &&
@@ -2326,7 +2324,7 @@ async function ulozPoznamkuLokalneASynchronizuj(
       "Synchronizace poznámky"
     );
   }
-
+  
   return vysledek;
 }
 
@@ -2334,43 +2332,43 @@ function obnovNotifikaciPoznamkyNaPozadi(poznamka) {
   if (!poznamka) {
     return;
   }
-
+  
   spustUlohuNaPozadi(
     async () => {
-      if (
-        typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
-      ) {
-        await obnovNotifikacePoznamkyPodleSoukromi(
-          poznamka
-        );
-        return;
-      }
-
-      if (
-        poznamka.isSecret !== true &&
-        poznamka.reminder &&
-        poznamka.date
-      ) {
-        await scheduleNotification(
-          poznamka.notificationId,
-          poznamka.title,
-          poznamka.date,
-          poznamka.note,
-          {
-            lubanoteType: "note",
-            taskId: poznamka.id
-          }
-        );
-        return;
-      }
-
-      if (poznamka.notificationId) {
-        await cancelNotification(
-          poznamka.notificationId
-        );
-      }
-    },
-    "Aktualizace notifikace"
+        if (
+          typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+        ) {
+          await obnovNotifikacePoznamkyPodleSoukromi(
+            poznamka
+          );
+          return;
+        }
+        
+        if (
+          poznamka.isSecret !== true &&
+          poznamka.reminder &&
+          poznamka.date
+        ) {
+          await scheduleNotification(
+            poznamka.notificationId,
+            poznamka.title,
+            poznamka.date,
+            poznamka.note,
+            {
+              lubanoteType: "note",
+              taskId: poznamka.id
+            }
+          );
+          return;
+        }
+        
+        if (poznamka.notificationId) {
+          await cancelNotification(
+            poznamka.notificationId
+          );
+        }
+      },
+      "Aktualizace notifikace"
   );
 }
 
@@ -2380,37 +2378,37 @@ function zavriEditorPoLokalnimUlozeni(
   if (closingSessionId !== editorSessionId) {
     return false;
   }
-
+  
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
-
+  
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
   editorSessionId += 1;
-
+  
   setTimeout(() => {
     if (!taskModal.classList.contains("show")) {
       taskModal.hidden = true;
     }
   }, 250);
-
+  
   RichTextColors.reset();
-
+  
   /*
    * Nejdřív dovolíme prohlížeči vykreslit zavřený editor.
    * Překreslení seznamů proběhne až v dalším snímku.
    */
   requestAnimationFrame(() => {
     renderTasks();
-
+    
     if (
       typeof renderRemindersScreen === "function"
     ) {
       renderRemindersScreen();
     }
   });
-
+  
   return true;
 }
 
@@ -2427,79 +2425,94 @@ async function ulozAZavriEditor(
   ) {
     appMessageTitle.textContent =
       "Jak uložit poznámku?";
-
+    
     appMessageText.textContent =
       "Vyber způsob uložení nové poznámky.";
-
+    
     appMessageSecretButton.hidden = false;
     appMessageNormalButton.hidden = false;
-
+    
     appMessageSaveButton.hidden = true;
     appMessageDiscardButton.hidden = true;
-
+    
     closeAppMessageButton.textContent =
       "Zrušit";
-
+    
     appMessageModal.hidden = false;
-
+    
     return;
   }
-
+  
   if (probihaUlozeniEditoru) {
     return;
   }
-
+  
   probihaUlozeniEditoru = true;
-
+  
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
       "Ukládám poznámku…",
       300
     ) || (() => {});
-
+  
   try {
     if (zpusobUlozeniNove === "secret") {
       secretTaskEnabled = true;
     }
-
+    
     if (zpusobUlozeniNove === "normal") {
       secretTaskEnabled = false;
     }
-
+    
     const closingSessionId = editorSessionId;
     const closingTaskId = activeTaskId;
-
+    
     const title = ziskejNazevPoznamkyZEditoru().trim();
     const note = modalRichText.innerText;
     const richContent = modalRichText.innerHTML;
     const date =
-      modalDate.value && modalTime.value
-        ? `${modalDate.value}T${modalTime.value}`
-        : "";
-
+      modalDate.value && modalTime.value ?
+      `${modalDate.value}T${modalTime.value}` :
+      "";
+    
+    /*
+     * Poslední bezpečnostní pojistka:
+     * veřejná poznámka nesmí nikdy uložit
+     * tajný štítek.
+     */
+    const stitkyProUlozeni =
+      secretTaskEnabled ?
+      [...activeTags] :
+      activeTags.filter(
+        (nazevStitku) =>
+        !jeTajnyStitek(nazevStitku)
+      );
+    
     const tasks = loadTask();
-
+    
+    
+    
     let aktivni = null;
     let ulozenaPoznamka = null;
-
+    
     if (closingTaskId) {
       const index = tasks.findIndex(
         (task) => task?.id === closingTaskId
       );
-
+      
       if (index === -1) {
         throw new Error(
           `Původní poznámka nebyla nalezena: ${closingTaskId}`
         );
       }
-
+      
       aktivni = {
         index,
         task: tasks[index]
       };
     } else if (activeTaskIndex !== null) {
       const currentTask = tasks[activeTaskIndex];
-
+      
       if (currentTask) {
         aktivni = {
           index: activeTaskIndex,
@@ -2507,10 +2520,10 @@ async function ulozAZavriEditor(
         };
       }
     }
-
+    
     if (aktivni) {
       const currentTask = aktivni.task;
-
+      
       const updatedTask = {
         ...currentTask,
         updatedAt: new Date().toISOString(),
@@ -2520,29 +2533,28 @@ async function ulozAZavriEditor(
         date,
         reminder: reminderEnabled,
         favorite: favoriteEnabled,
-        notificationId:
-          currentTask.notificationId ||
+        notificationId: currentTask.notificationId ||
           Date.now() % 2147483647,
         area: activeArea,
         pinned: currentTask.pinned === true,
         isSecret: secretTaskEnabled,
-        tags: [...activeTags],
+        tags: [...stitkyProUlozeni],
         todos: [...activeTodos],
-        repeat: secretTaskEnabled
-          ? null
-          : kopirujEditorRepeat(editorRepeat)
+        repeat: secretTaskEnabled ?
+          null :
+          kopirujEditorRepeat(editorRepeat)
       };
-
+      
       if (
         window.LubaNotePlanner
-          ?.synchronizujPlanovaneTodoSPoznamkou
+        ?.synchronizujPlanovaneTodoSPoznamkou
       ) {
         await window.LubaNotePlanner
           .synchronizujPlanovaneTodoSPoznamkou(
             updatedTask
           );
       }
-
+      
       await ulozPoznamkuLokalneASynchronizuj(
         () => updateTask(
           aktivni.index,
@@ -2550,19 +2562,19 @@ async function ulozAZavriEditor(
         ),
         updatedTask
       );
-
+      
       ulozenaPoznamka = updatedTask;
     } else {
       const maVlozenyMediaObsah =
         window.LubaNoteEditorMedia
-          ?.maVlozenyObsah?.() === true;
-
+        ?.maVlozenyObsah?.() === true;
+      
       const isEmpty =
         title === "" &&
         note.trim() === "" &&
         activeTodos.length === 0 &&
         !maVlozenyMediaObsah;
-
+      
       if (!isEmpty) {
         const newTask = {
           id: crypto.randomUUID(),
@@ -2574,34 +2586,33 @@ async function ulozAZavriEditor(
           completed: false,
           reminder: reminderEnabled,
           favorite: favoriteEnabled,
-          notificationId:
-            Date.now() % 2147483647,
+          notificationId: Date.now() % 2147483647,
           area: activeArea,
           pinned: false,
           isSecret: secretTaskEnabled,
-          tags: [...activeTags],
+          tags: [...stitkyProUlozeni],
           todos: [...activeTodos],
-          repeat: secretTaskEnabled
-            ? null
-            : kopirujEditorRepeat(editorRepeat)
+          repeat: secretTaskEnabled ?
+            null :
+            kopirujEditorRepeat(editorRepeat)
         };
-
+        
         await ulozPoznamkuLokalneASynchronizuj(
           () => saveTask(newTask),
           newTask
         );
-
+        
         ulozenaPoznamka = newTask;
       }
     }
-
+    
     ukonciCekani();
-
+    
     const editorZavren =
       zavriEditorPoLokalnimUlozeni(
         closingSessionId
       );
-
+    
     if (editorZavren && ulozenaPoznamka) {
       obnovNotifikaciPoznamkyNaPozadi(
         ulozenaPoznamka
@@ -2609,12 +2620,12 @@ async function ulozAZavriEditor(
     }
   } catch (error) {
     ukonciCekani();
-
+    
     console.error(
       "Uložení poznámky selhalo:",
       error
     );
-
+    
     zobrazZpravuAplikace(
       "Uložení poznámky",
       "Poznámku se nepodařilo bezpečně uložit. Editor zůstal otevřený."
@@ -2635,12 +2646,12 @@ appMessageNormalButton?.addEventListener(
   "click",
   async () => {
     appMessageModal.hidden = true;
-
+    
     appMessageSecretButton.hidden = true;
     appMessageNormalButton.hidden = true;
-
+    
     closeAppMessageButton.textContent = "OK";
-
+    
     await ulozAZavriEditor("normal");
   }
 );
@@ -2659,7 +2670,7 @@ function zpracujAndroidZpet() {
     closeAppMessageButton?.click();
     return true;
   }
-
+  
   /*
    * V editoru použijeme stejnou logiku jako Esc na PC:
    * beze změny rovnou zavřít, po změně nabídnout uložení.
@@ -2668,7 +2679,7 @@ function zpracujAndroidZpet() {
     zpracujZavreniEditoru();
     return true;
   }
-
+  
   /*
    * Nic z LubaNote Back nezpracovalo – Android může
    * pokračovat svým běžným chováním (zavřít aplikaci).
@@ -2703,7 +2714,7 @@ const activeCardPointers = new Set();
 
 document.addEventListener("pointerdown", (event) => {
   activeCardPointers.add(event.pointerId);
-
+  
   if (activeCardPointers.size > 1) {
     clearTimeout(longPressTimer);
   }
@@ -2721,98 +2732,98 @@ document.addEventListener("pointercancel", (event) => {
 
 
 function openTaskEditorById(taskId) {
-
+  
   const currentTasks = loadTask();
-
+  
   const index = currentTasks.findIndex(
     task => task.id === taskId
   );
-
+  
   if (index === -1) {
     console.error("Poznámka nebyla nalezena:", taskId);
     return;
   }
-
+  
   const currentTask = currentTasks[index];
-
+  
   reminderEnabled = currentTask.reminder === true;
-
+  
   favoriteEnabled = currentTask.favorite === true;
-
+  
   secretTaskEnabled =
     currentTask.isSecret === true;
-
+  
   if (secretTaskEnabled) {
     reminderEnabled = false;
   }
-
+  
   updateReminderButton(reminderEnabled);
-
+  
   secretTaskButton.textContent =
     secretTaskEnabled ? "🔐" : "🔓";
-
+  
   secretTaskButton.classList.toggle(
     "active",
     secretTaskEnabled
   );
-
+  
   priorityTaskButton?.classList.toggle(
     "active",
     favoriteEnabled
   );
-
+  
   activeArea = currentTask.area || "private";
   activeTags = currentTask.tags || [];
-
+  
   updateTagMenuUI();
   closeTagMenu();
-
+  
   zahajEditorSession(currentTask.id);
   taskModal.dataset.taskId = currentTask.id;
   activeTaskIndex = index;
-
+  
   nastavNazevPoznamkyVEditoru(
     currentTask.title || ""
   );
   modalText.value = currentTask.note || "";
-
+  
   if (currentTask.richContent) {
     modalRichText.innerHTML = currentTask.richContent;
   } else {
     /* Staré plain-text poznámky načteme bezpečně jako text. */
     modalRichText.textContent = currentTask.note || "";
   }
-
+  
   modalText.hidden = true;
   modalRichText.hidden = false;
   RichTextColors.reset();
-
+  
   editorRepeat =
     kopirujEditorRepeat(currentTask.repeat);
-
+  
   if (currentTask.date) {
     const [savedDate, savedTime] =
-      currentTask.date.split("T");
-
+    currentTask.date.split("T");
+    
     modalDate.value = savedDate || "";
     modalTime.value = savedTime || "";
   } else {
     modalDate.value = "";
     modalTime.value = "";
   }
-
+  
   aktualizujPopiskyDataCasu();
   updateModalWeekday();
-
+  
   resetujSbaleniNazvuEditoru();
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-
+  
   loadTodos(currentTask.todos);
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
-
+  
   /*
    * Pokud byla karta otevřena z aktivního vyhledávání,
    * po vykreslení editoru dočasně zvýrazníme všechny shody.
@@ -2826,7 +2837,7 @@ function openTaskEditorById(taskId) {
       window.zvyrazniAktualniVyhledavaniVEditoru();
     }
   });
-
+  
   //renderPlannedTextLinks(currentTask.id);
 }
 
@@ -2839,10 +2850,10 @@ function openTaskEditorById(taskId) {
 
 function ziskejSmerRazeniKaret() {
   return localStorage.getItem(
-    "cardSortDirection"
-  ) === "asc"
-    ? "asc"
-    : "desc";
+      "cardSortDirection"
+    ) === "asc" ?
+    "asc" :
+    "desc";
 }
 
 
@@ -2850,10 +2861,10 @@ function ziskejCasUpravyKarty(task) {
   const cas = new Date(
     task?.updatedAt || 0
   ).getTime();
-
-  return Number.isFinite(cas)
-    ? cas
-    : 0;
+  
+  return Number.isFinite(cas) ?
+    cas :
+    0;
 }
 
 
@@ -2861,23 +2872,23 @@ function porovnejKartyProZobrazeni(a, b) {
   const rozdilPripnuti =
     Number(b.task?.pinned === true) -
     Number(a.task?.pinned === true);
-
+  
   if (rozdilPripnuti !== 0) {
     return rozdilPripnuti;
   }
-
+  
   const casA =
     ziskejCasUpravyKarty(a.task);
-
+  
   const casB =
     ziskejCasUpravyKarty(b.task);
-
+  
   if (casA !== casB) {
-    return ziskejSmerRazeniKaret() === "asc"
-      ? casA - casB
-      : casB - casA;
+    return ziskejSmerRazeniKaret() === "asc" ?
+      casA - casB :
+      casB - casA;
   }
-
+  
   /*
    * Stejný čas může vzniknout při hromadné změně více karet.
    * Stabilní ID zajistí stejné pořadí i tehdy, když Supabase vrátí
@@ -2889,10 +2900,10 @@ function porovnejKartyProZobrazeni(a, b) {
     String(b.task?.id || ""),
     "cs"
   );
-
-  return rozdilId !== 0
-    ? rozdilId
-    : a.originalIndex - b.originalIndex;
+  
+  return rozdilId !== 0 ?
+    rozdilId :
+    a.originalIndex - b.originalIndex;
 }
 
 
@@ -2901,11 +2912,11 @@ function renderTasks() {
     renderTagFilters();
     updateTagFilterUI();
   }
-
+  
   pinnedLeft.innerHTML = "";
   pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
-
+  
   const loadedTasks = loadTask();
   const sortedTasks = loadedTasks
     .map((task, originalIndex) => ({
@@ -2933,51 +2944,51 @@ function renderTasks() {
       return;
     }
     const loadedCard = document.createElement("div");
-
+    
     if (
       loadedTask.id &&
       vybraneKarty.has(loadedTask.id)
     ) {
       loadedCard.classList.add("cardSelected");
     }
-
+    
     loadedCard.addEventListener("pointerdown", (event) => {
       if (rezimVyberuKaret) {
         return;
       }
-
+      
       cardPressStartX = event.clientX;
       cardPressStartY = event.clientY;
-
+      
       longPressTimer = setTimeout(() => {
         selectedCardIndex = index;
-
+        
         blockNextCardClick = true;
-
+        
         const cardMenu =
           document.getElementById("cardMenu");
-
+        
         zobrazHlavniAkceKarty();
-
+        
         cardMenu.hidden = false;
-
+        
         if (window.innerWidth < 900) {
           cardMenu.style.visibility = "hidden";
           cardMenu.style.bottom = "auto";
-
+          
           requestAnimationFrame(() => {
             const cardRect =
               loadedCard.getBoundingClientRect();
-
+            
             const menuRect =
               cardMenu.getBoundingClientRect();
-
+            
             const odsazeni = 10;
             const okraj = 12;
-
+            
             let menuTop =
               cardRect.bottom + odsazeni;
-
+            
             if (
               menuTop + menuRect.height >
               window.innerHeight - okraj
@@ -2987,7 +2998,7 @@ function renderTasks() {
                 menuRect.height -
                 odsazeni;
             }
-
+            
             menuTop = Math.max(
               okraj,
               Math.min(
@@ -2997,10 +3008,10 @@ function renderTasks() {
                 okraj
               )
             );
-
+            
             cardMenu.style.top =
               `${Math.round(menuTop)}px`;
-
+            
             cardMenu.style.visibility = "visible";
           });
         } else {
@@ -3010,14 +3021,14 @@ function renderTasks() {
         }
       }, LONG_PRESS_TIME);
     });
-
+    
     loadedCard.addEventListener("pointermove", (event) => {
       const distanceX =
         Math.abs(event.clientX - cardPressStartX);
-
+      
       const distanceY =
         Math.abs(event.clientY - cardPressStartY);
-
+      
       if (
         distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
         distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
@@ -3025,66 +3036,80 @@ function renderTasks() {
         clearTimeout(longPressTimer);
       }
     });
-
-
-
-
+    
+    
+    
+    
     loadedCard.addEventListener("pointerup", () => {
       clearTimeout(longPressTimer);
     });
-
+    
     loadedCard.addEventListener("pointercancel", () => {
       clearTimeout(longPressTimer);
     });
-
+    
     loadedCard.classList.add("taskCard");
-    if (loadedTask.barvaKarty) {
-  loadedCard.dataset.barvaKarty =
-    loadedTask.barvaKarty;
-}
-
+    
+    const hlavniStitek =
+      (loadedTask.tags || [])[0];
+    
+    const barvaHlavnihoStitku =
+      hlavniStitek ?
+      ziskejBarvuStitku(hlavniStitek) :
+      "system";
+    
+    if (barvaHlavnihoStitku !== "system") {
+      loadedCard.dataset.barvaKarty =
+        barvaHlavnihoStitku;
+    }
+    
     const loadedHeading = document.createElement("h3");
-
+    
     const areaIcon =
       loadedTask.area === "work" ?
-        "💼" :
-        "🏠";
-
+      "💼" :
+      "🏠";
+    
     const pinIcon =
       loadedTask.pinned === true ?
-        "📌" :
-        "";
-
+      "📌" :
+      "";
+    
     const favoriteIcon =
       loadedTask.favorite === true ?
-        "⭐" :
-        "";
-
+      "⭐" :
+      "";
+    
     const reminderIcon =
       loadedTask.reminder === true ?
-        "🔔" :
-        "";
+      "🔔" :
+      "";
+    const repeatIcon =
+      loadedTask.repeat?.enabled === true ?
+      "🔁" :
+      "";
     const secretIcon =
       loadedTask.isSecret === true &&
-        tajnyRezimOdemceny ?
-        "🔐" :
-        "";
-
+      tajnyRezimOdemceny ?
+      "🔐" :
+      "";
+    
     const loadedHeadingIcons =
       document.createElement("span");
-
+    
     loadedHeadingIcons.classList.add("taskCardIcons");
-
+    
     loadedHeadingIcons.textContent = [
-      pinIcon,
-      favoriteIcon,
-      secretIcon,
-      areaIcon,
-      reminderIcon
-    ]
+        pinIcon,
+        favoriteIcon,
+        secretIcon,
+        areaIcon,
+        reminderIcon,
+        repeatIcon
+      ]
       .filter(Boolean)
       .join(" ");
-
+    
     loadedHeading.append(
       loadedHeadingIcons,
       document.createTextNode(
@@ -3094,9 +3119,9 @@ function renderTasks() {
     const loadedNoteText = document.createElement("p");
     loadedNoteText.textContent = loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
-
+    
     const taskTodos = loadedTask.todos || [];
-
+    
     if (taskTodos.length > 0) {
       loadedNoteText.textContent = taskTodos
         .slice(0, 3)
@@ -3105,10 +3130,10 @@ function renderTasks() {
         )
         .join("\n");
     }
-
+    
     const loadedDateText = document.createElement("p");
-
-
+    
+    
     if (loadedTask.date) {
       const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
         day: "numeric",
@@ -3117,13 +3142,13 @@ function renderTasks() {
         hour: "2-digit",
         minute: "2-digit"
       });
-
+      
       loadedDateText.textContent = formattedDate;
     } else {
       loadedDateText.textContent = "";
     }
-
-
+    
+    
     const loadedTags = document.createElement("div");
     loadedCard.append(
       loadedHeading,
@@ -3131,30 +3156,30 @@ function renderTasks() {
       loadedNoteText,
       loadedDateText
     );
-
+    
     loadedTags.classList.add("taskTags");
-
+    
     const taskTags = loadedTask.tags || [];
-
+    
     taskTags.forEach(tag => {
       const tagBadge = document.createElement("span");
       tagBadge.classList.add("taskTag");
       tagBadge.textContent = tag;
-
+      
       loadedTags.append(tagBadge);
     });
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }
-
+    
     pinnedCards.hidden = false;
-
+    
     const listMode =
       localStorage.getItem("cardView") === "list";
-
+    
     const desktopCardLayout =
       window.matchMedia("(min-width: 900px)").matches;
-
+    
     /*
      * PC GRID:
      * 4 nezávislé masonry sloupce.
@@ -3174,81 +3199,81 @@ function renderTasks() {
         pinnedLeft.querySelectorAll(
           ".desktopMasonryColumn"
         );
-
+      
       if (desktopSloupce.length === 0) {
         for (
           let i = 0; i < 4; i++
         ) {
           const sloupec =
             document.createElement("div");
-
+          
           sloupec.className =
             "desktopMasonryColumn";
-
+          
           pinnedLeft.append(sloupec);
         }
-
+        
         desktopSloupce =
           pinnedLeft.querySelectorAll(
             ".desktopMasonryColumn"
           );
       }
-
+      
       const pocetKaret =
         pinnedLeft.querySelectorAll(
           ".taskCard"
         ).length;
-
+      
       const cisloSloupce =
         pocetKaret % 4;
-
+      
       desktopSloupce[
         cisloSloupce
       ].append(loadedCard);
-
+      
     } else if (listMode) {
       pinnedLeft.append(loadedCard);
-
+      
     } else {
       const cardCount =
         pinnedLeft.children.length +
         pinnedRight.children.length;
-
+      
       if (cardCount % 2 === 0) {
         pinnedLeft.append(loadedCard);
       } else {
         pinnedRight.append(loadedCard);
       }
     }
-
+    
     /* Otevření existující poznámky */
-
+    
     loadedCard.addEventListener("click", async () => {
-        if (
-          Date.now() < blokovatKlikKartyDo
-        ) {
-          return;
-        }
-        
-        if (blockNextCardClick) {
-          blockNextCardClick = false;
-          return;
-        }
-
+      if (
+        Date.now() < blokovatKlikKartyDo
+      ) {
+        return;
+      }
+      
+      if (blockNextCardClick) {
+        blockNextCardClick = false;
+        return;
+      }
+      
       if (rezimVyberuKaret) {
         const idKarty =
           await zajistiStabilniIdKarty(index);
-
+        
         if (!idKarty) {
           return;
         }
-
+        
         if (vybraneKarty.has(idKarty)) {
           vybraneKarty.delete(idKarty);
         } else {
           vybraneKarty.add(idKarty);
         }
-
+        
         /*
          * Při každém tapu už nepřekreslujeme celý seznam poznámek.
          * Přepneme jen rámeček právě kliknuté karty.
@@ -3257,44 +3282,44 @@ function renderTasks() {
           "cardSelected",
           vybraneKarty.has(idKarty)
         );
-
+        
         console.log(
           "Vybrane karty:",
           [...vybraneKarty]
         );
-
+        
         if (vybraneKarty.size === 0) {
           ukonciRezimVyberuKaret();
           return;
         }
-
+        
         aktualizujListuVyberuKaret();
         zobrazAkceVybranychKaret();
         return;
       }
-
+      
       const currentTasks = loadTask();
       const currentTask = currentTasks[index];
-
+      
       if (!currentTask) {
         return;
       }
-
+      
       /* Starší lokální poznámce doplníme stejné stabilní ID na všech zařízeních. */
       if (!currentTask.id) {
         currentTask.id =
-          typeof vytvorStabilniIdStarePoznamky === "function"
-            ? vytvorStabilniIdStarePoznamky(currentTask)
-            : crypto.randomUUID();
-
+          typeof vytvorStabilniIdStarePoznamky === "function" ?
+          vytvorStabilniIdStarePoznamky(currentTask) :
+          crypto.randomUUID();
+        
         currentTask.updatedAt = new Date().toISOString();
         saveAllTasks(currentTasks);
         uploadLocalNoteToSupabase(currentTask);
       }
-
+      
       openTaskEditorById(currentTask.id);
     });
-
+    
   });
 }
 
@@ -3311,7 +3336,7 @@ renderTasks();
 const cardMenu = document.getElementById("cardMenu");
 
 
-  const cardSelectionCompact =
+const cardSelectionCompact =
   document.getElementById("cardSelectionCompact");
 
 const cardSelectionCompactCount =
@@ -3327,7 +3352,7 @@ let casovacHlaseniHromadneAkce = null;
 function aktualizujListuVyberuKaret() {
   const pocetVybranych =
     vybraneKarty.size;
-
+  
   /*
    * Pokud uživatel začne nový výběr ještě během krátké potvrzovací
    * hlášky, starý časovač nesmí nový výběr po chvíli schovat.
@@ -3336,29 +3361,28 @@ function aktualizujListuVyberuKaret() {
     clearTimeout(casovacHlaseniHromadneAkce);
     casovacHlaseniHromadneAkce = null;
   }
-
+  
   cardSelectionCompactCount.textContent =
     `${pocetVybranych} vybraných`;
-
+  
   cardSelectionCompactClose.hidden = false;
-  cardSelectionCompact.hidden =
-    !rezimVyberuKaret;
+  cardSelectionCompact.hidden = !rezimVyberuKaret;
 }
 
 function zobrazHlaseniHromadneAkce(text) {
   if (casovacHlaseniHromadneAkce) {
     clearTimeout(casovacHlaseniHromadneAkce);
   }
-
+  
   cardSelectionCompactCount.textContent =
     `✓ ${text}`;
-
+  
   cardSelectionCompactClose.hidden = true;
   cardSelectionCompact.hidden = false;
-
+  
   casovacHlaseniHromadneAkce = setTimeout(() => {
     casovacHlaseniHromadneAkce = null;
-
+    
     /*
      * Probíhá-li už mezitím nový výběr, vrátíme na místo hlášky
      * aktuální počet a panel rozhodně neschováme.
@@ -3367,7 +3391,7 @@ function zobrazHlaseniHromadneAkce(text) {
       aktualizujListuVyberuKaret();
       return;
     }
-
+    
     cardSelectionCompact.hidden = true;
     cardSelectionCompactClose.hidden = false;
   }, 1800);
@@ -3388,25 +3412,25 @@ cardSelectionCompactClose.addEventListener("click", () => {
 async function zajistiStabilniIdKarty(index) {
   const tasks = loadTask();
   const task = tasks[index];
-
+  
   if (!task) {
     return null;
   }
-
+  
   if (task.id) {
     return task.id;
   }
-
+  
   task.id =
-    typeof vytvorStabilniIdStarePoznamky === "function"
-      ? vytvorStabilniIdStarePoznamky(task)
-      : crypto.randomUUID();
-
+    typeof vytvorStabilniIdStarePoznamky === "function" ?
+    vytvorStabilniIdStarePoznamky(task) :
+    crypto.randomUUID();
+  
   task.updatedAt =
     new Date().toISOString();
-
+  
   await saveAllTasks(tasks);
-
+  
   return task.id;
 }
 
@@ -3422,76 +3446,75 @@ async function provedHromadnouZmenuVybranychKaret(
   if (typeof zmenPoznamku !== "function") {
     return null;
   }
-
+  
   const vybranaId =
     await ziskejIdVybranychKaret();
-
+  
   if (!vybranaId || vybranaId.length === 0) {
     return {
       pocet: 0,
       lokalneUlozeno: false
     };
   }
-
+  
   const provedZmenu = async () => {
     const tasks = loadTask();
     const indexPodleId = new Map(
       tasks
-        .map((task, index) => [task?.id, index])
-        .filter(([id]) => Boolean(id))
+      .map((task, index) => [task?.id, index])
+      .filter(([id]) => Boolean(id))
     );
-
+    
     const casZmeny =
       new Date().toISOString();
-
+    
     let pocet = 0;
-
+    
     for (const id of vybranaId) {
       const index = indexPodleId.get(id);
-
+      
       if (index === undefined) {
         continue;
       }
-
+      
       const task = tasks[index];
-
+      
       if (!task) {
         continue;
       }
-
+      
       zmenPoznamku(task);
       task.updatedAt = casZmeny;
       pocet += 1;
     }
-
+    
     if (pocet === 0) {
       return {
         pocet: 0,
         lokalneUlozeno: false
       };
     }
-
+    
     const lokalneUlozeno =
       await saveAllTasks(tasks);
-
+    
     return {
       pocet,
-      lokalneUlozeno:
-        lokalneUlozeno !== false
+      lokalneUlozeno: lokalneUlozeno !== false
     };
   };
-
+  
   if (
     typeof window.LubaNoteSync
-      ?.provedLokalniZmenuASynchronizuj ===
-      "function"
+    ?.provedLokalniZmenuASynchronizuj ===
+    "function"
   ) {
     return await window.LubaNoteSync
       .provedLokalniZmenuASynchronizuj(
         provedZmenu
       );
   }
-
+  
   /*
    * Bez sync modulu raději bezpečně uložíme jen lokálně.
    * Přímý upload jednotlivých poznámek zde záměrně nepoužíváme.
@@ -3501,81 +3524,81 @@ async function provedHromadnouZmenuVybranychKaret(
 
 async function smazPoznamkyPodleId(ids) {
   const bezpecnaId =
-    Array.isArray(ids)
-      ? ids.filter(Boolean)
-      : [];
-
+    Array.isArray(ids) ?
+    ids.filter(Boolean) :
+    [];
+  
   const provedSmazani = async () => {
     if (typeof deleteTasksByIds === "function") {
       return await deleteTasksByIds(
         bezpecnaId
       );
     }
-
+    
     /*
      * Záložní cesta pro starší storage.js.
      */
     let pocet = 0;
-
+    
     for (const id of bezpecnaId) {
       const tasks = loadTask();
       const index = tasks.findIndex(
         (task) => task?.id === id
       );
-
+      
       if (index < 0) {
         continue;
       }
-
+      
       const uspesne =
         await deleteTask(index);
-
+      
       if (uspesne !== false) {
         pocet += 1;
       }
     }
-
+    
     return {
       pocet,
       lokalneUlozeno: true
     };
   };
-
+  
   if (
     typeof window.LubaNoteSync
-      ?.provedLokalniZmenuASynchronizuj ===
-      "function"
+    ?.provedLokalniZmenuASynchronizuj ===
+    "function"
   ) {
     return await window.LubaNoteSync
       .provedLokalniZmenuASynchronizuj(
         provedSmazani
       );
   }
-
+  
   return await provedSmazani();
 }
 
 function ukonciRezimVyberuKaret() {
   rezimVyberuKaret = false;
   vybraneKarty.clear();
-
+  
   document.body.classList.remove(
     "cardSelectionModeActive"
   );
-
+  
   aktualizujListuVyberuKaret();
-
+  
   cardMenu.classList.remove(
     "selectionMode"
   );
   cardMenu.hidden = true;
-
+  
   renderTasks();
-
+  
   if (
     navigator.onLine &&
     typeof window.LubaNoteSync
-      ?.spustRychle === "function"
+    ?.spustRychle === "function"
   ) {
     window.LubaNoteSync
       .spustRychle()
@@ -3592,23 +3615,21 @@ function ziskejStavVybranychKaret() {
   const tasks = loadTask();
   const tasksPodleId = new Map(
     tasks
-      .filter((task) => task?.id)
-      .map((task) => [task.id, task])
+    .filter((task) => task?.id)
+    .map((task) => [task.id, task])
   );
-
+  
   const vybrane = [...vybraneKarty]
     .map((id) => tasksPodleId.get(id))
     .filter(Boolean);
-
+  
   return {
     pocet: vybrane.length,
-    vsePripnute:
-      vybrane.length > 0 &&
+    vsePripnute: vybrane.length > 0 &&
       vybrane.every(
         (task) => task.pinned === true
       ),
-    vseHotove:
-      vybrane.length > 0 &&
+    vseHotove: vybrane.length > 0 &&
       vybrane.every(
         (task) => task.completed === true
       )
@@ -3619,23 +3640,23 @@ function zobrazAkceVybranychKaret() {
   if (!rezimVyberuKaret) {
     return;
   }
-
+  
   document.body.classList.add(
     "cardSelectionModeActive"
   );
-
+  
   const stav =
     ziskejStavVybranychKaret();
-
+  
   if (stav.pocet === 0) {
     ukonciRezimVyberuKaret();
     return;
   }
-
+  
   cardMenu.classList.add(
     "selectionMode"
   );
-
+  
   cardMenu.innerHTML = `
     <button type="button" data-card-action="bulk-pin">
       ${stav.vsePripnute ? "📍 Odepnout" : "📌 Připnout"}
@@ -3653,12 +3674,12 @@ function zobrazAkceVybranychKaret() {
       ✕ Konec výběru
     </button>
   `;
-
+  
   cardMenu.style.top = "auto";
   cardMenu.style.bottom =
-    window.innerWidth < 900
-      ? "90px"
-      : "34px";
+    window.innerWidth < 900 ?
+    "90px" :
+    "34px";
   cardMenu.style.visibility = "visible";
   cardMenu.hidden = false;
 }
@@ -3667,7 +3688,7 @@ function zobrazHlavniAkceKarty() {
   cardMenu.classList.remove(
     "selectionMode"
   );
-
+  
   if (window.innerWidth < 900) {
     cardMenu.innerHTML = `
       <button type="button" data-card-action="plan">
@@ -3718,17 +3739,17 @@ function zobrazHlavniAkceKarty() {
 
 function zobrazPaletuBarevKarty() {
   const tasks = loadTask();
-
-const selectedTask =
-  tasks[selectedCardIndex];
-
-const aktualniBarva =
-  selectedTask?.barvaKarty ||
-  "system";
+  
+  const selectedTask =
+    tasks[selectedCardIndex];
+  
+  const aktualniBarva =
+    selectedTask?.barvaKarty ||
+    "system";
   cardMenu.classList.remove(
     "selectionMode"
   );
-
+  
   cardMenu.innerHTML = `
     <div class="cardColorPalette">
       <button
@@ -3809,13 +3830,13 @@ const aktualniBarva =
     </button>
   `;
   const aktivniBarva =
-  cardMenu.querySelector(
-    `[data-card-color="${aktualniBarva}"]`
+    cardMenu.querySelector(
+      `[data-card-color="${aktualniBarva}"]`
+    );
+  
+  aktivniBarva?.classList.add(
+    "cardColorSelected"
   );
-
-aktivniBarva?.classList.add(
-  "cardColorSelected"
-);
 }
 
 
@@ -3823,7 +3844,7 @@ function zobrazDalsiAkceKarty() {
   cardMenu.classList.remove(
     "selectionMode"
   );
-
+  
   cardMenu.innerHTML = `
     <button type="button" data-card-action="select">
       ☑️ Označit
@@ -3850,13 +3871,13 @@ let idCekaniAkce = 0;
 function ziskejPrvkyStavuAkce() {
   const modal =
     document.getElementById("actionStatusModal");
-
+  
   const text =
     document.getElementById("actionStatusText");
-
+  
   const ikona =
     modal?.querySelector(".actionStatusIcon") || null;
-
+  
   return {
     modal,
     text,
@@ -3867,30 +3888,30 @@ function ziskejPrvkyStavuAkce() {
 function vycistiCasovaceStavuAkce() {
   clearTimeout(casovacPotvrzeniAkce);
   clearTimeout(casovacCekaniAkce);
-
+  
   casovacPotvrzeniAkce = null;
   casovacCekaniAkce = null;
 }
 
 function zobrazPotvrzeniAkce(text, doba = 1800) {
   const prvky = ziskejPrvkyStavuAkce();
-
+  
   if (!prvky.modal || !prvky.text) {
     return;
   }
-
+  
   idCekaniAkce += 1;
   vycistiCasovaceStavuAkce();
-
+  
   prvky.modal.classList.remove("actionStatusWaiting");
-
+  
   if (prvky.ikona) {
     prvky.ikona.textContent = "✓";
   }
-
+  
   prvky.text.textContent = text;
   prvky.modal.hidden = false;
-
+  
   casovacPotvrzeniAkce = setTimeout(() => {
     prvky.modal.hidden = true;
     casovacPotvrzeniAkce = null;
@@ -3908,16 +3929,16 @@ function zacniCekaniAkce(
   zpozdeni = 250
 ) {
   const prvky = ziskejPrvkyStavuAkce();
-
+  
   if (!prvky.modal || !prvky.text) {
     return () => {};
   }
-
+  
   const mojeId = ++idCekaniAkce;
   let ukonceno = false;
-
+  
   vycistiCasovaceStavuAkce();
-
+  
   casovacCekaniAkce = setTimeout(() => {
     if (
       ukonceno ||
@@ -3925,37 +3946,37 @@ function zacniCekaniAkce(
     ) {
       return;
     }
-
+    
     prvky.modal.classList.add(
       "actionStatusWaiting"
     );
-
+    
     if (prvky.ikona) {
       prvky.ikona.textContent = "⏳";
     }
-
+    
     prvky.text.textContent = text;
     prvky.modal.hidden = false;
   }, Math.max(0, Number(zpozdeni) || 0));
-
+  
   return () => {
     if (ukonceno) {
       return;
     }
-
+    
     ukonceno = true;
     clearTimeout(casovacCekaniAkce);
     casovacCekaniAkce = null;
-
+    
     if (mojeId !== idCekaniAkce) {
       return;
     }
-
+    
     prvky.modal.hidden = true;
     prvky.modal.classList.remove(
       "actionStatusWaiting"
     );
-
+    
     if (prvky.ikona) {
       prvky.ikona.textContent = "✓";
     }
@@ -3998,259 +4019,257 @@ cardMenu.addEventListener("click", async (event) => {
     event.target.closest("[data-card-action]");
   
   const colorButton =
-  event.target.closest("[data-card-color]");
+    event.target.closest("[data-card-color]");
   
   if (colorButton) {
-  const tasks = loadTask();
-
-  const selectedTask =
-    tasks[selectedCardIndex];
-
-  if (!selectedTask) {
+    const tasks = loadTask();
+    
+    const selectedTask =
+      tasks[selectedCardIndex];
+    
+    if (!selectedTask) {
+      return;
+    }
+    
+    const novaBarva =
+      colorButton.dataset.cardColor;
+    
+    selectedTask.barvaKarty =
+      novaBarva === "system" ?
+      null :
+      novaBarva;
+    
+    selectedTask.updatedAt =
+      new Date().toISOString();
+    
+    saveAllTasks(tasks);
+    
+    await uploadLocalNoteToSupabase(
+      selectedTask
+    );
+    
+    cardMenu.hidden = true;
+    
+    renderTasks();
+    
     return;
   }
-
-  const novaBarva =
-    colorButton.dataset.cardColor;
-
-  selectedTask.barvaKarty =
-    novaBarva === "system"
-      ? null
-      : novaBarva;
-
-  selectedTask.updatedAt =
-    new Date().toISOString();
-
-  saveAllTasks(tasks);
-
-  await uploadLocalNoteToSupabase(
-    selectedTask
-  );
-
-  cardMenu.hidden = true;
-
-  renderTasks();
-
-  return;
-}
-
+  
   if (!actionButton) {
     return;
   }
-
+  
   const action = actionButton.dataset.cardAction;
-
+  
   if (action === "more") {
     zobrazDalsiAkceKarty();
     return;
   }
-
+  
   if (action === "back") {
     zobrazHlavniAkceKarty();
     return;
   }
   
   if (action === "color") {
-  zobrazPaletuBarevKarty();
-return;
-}
-
+    zobrazPaletuBarevKarty();
+    return;
+  }
+  
   if (action === "select") {
     const idKarty =
       await zajistiStabilniIdKarty(
         selectedCardIndex
       );
-
+    
     if (!idKarty) {
       return;
     }
-
+    
     rezimVyberuKaret = true;
     vybraneKarty.add(idKarty);
-
+    
     /*
      * Long-press už svůj ochranný click spotřeboval na tlačítku
      * Označit. Další skutečný tap na kartu proto nesmí být blokovaný.
      */
     blockNextCardClick = false;
-
+    
     aktualizujListuVyberuKaret();
-
+    
     renderTasks();
     zobrazAkceVybranychKaret();
-
+    
     console.log(
       "Rezim vyberu:",
       rezimVyberuKaret
     );
-
+    
     console.log(
       "Vybrane karty:",
       [...vybraneKarty]
     );
-
+    
     return;
   }
-
-
-
-
+  
+  
+  
+  
   if (action === "bulk-exit") {
     ukonciRezimVyberuKaret();
     return;
   }
-
+  
   if (action === "bulk-pin") {
     const stav =
       ziskejStavVybranychKaret();
-    const novaHodnota =
-      !stav.vsePripnute;
-
+    const novaHodnota = !stav.vsePripnute;
+    
     const vysledek =
       await provedHromadnouZmenuVybranychKaret(
         (task) => {
           task.pinned = novaHodnota;
         }
       );
-
+    
     if (vysledek?.lokalneUlozeno) {
       const pocet = vysledek.pocet;
-
+      
       ukonciRezimVyberuKaret();
-
+      
       zobrazPotvrzeniAkce(
-        novaHodnota
-          ? `Připnuto ${pocet} poznámek`
-          : `Odepnuto ${pocet} poznámek`
+        novaHodnota ?
+        `Připnuto ${pocet} poznámek` :
+        `Odepnuto ${pocet} poznámek`
       );
     }
-
+    
     return;
   }
-
+  
   if (action === "bulk-complete") {
     const stav =
       ziskejStavVybranychKaret();
-    const novaHodnota =
-      !stav.vseHotove;
-
+    const novaHodnota = !stav.vseHotove;
+    
     const vysledek =
       await provedHromadnouZmenuVybranychKaret(
         (task) => {
           task.completed = novaHodnota;
         }
       );
-
+    
     if (vysledek?.lokalneUlozeno) {
       const pocet = vysledek.pocet;
-
+      
       ukonciRezimVyberuKaret();
-
+      
       zobrazPotvrzeniAkce(
-        novaHodnota
-          ? `Hotovo u ${pocet} poznámek`
-          : `Obnoveno ${pocet} poznámek`
+        novaHodnota ?
+        `Hotovo u ${pocet} poznámek` :
+        `Obnoveno ${pocet} poznámek`
       );
     }
-
+    
     return;
   }
-
+  
   if (action === "bulk-delete") {
     const ids =
       await ziskejIdVybranychKaret();
-
+    
     if (!ids || ids.length === 0) {
       return;
     }
-
+    
     hromadneMazaniIds = [...ids];
-
+    
     if (deleteConfirmTitle) {
       deleteConfirmTitle.textContent =
         "Smazat poznámky?";
     }
-
+    
     if (deleteConfirmText) {
       deleteConfirmText.textContent =
         `Opravdu chceš smazat ${ids.length} vybraných poznámek?`;
     }
-
+    
     cardMenu.hidden = true;
     deleteConfirmModal.hidden = false;
     return;
   }
-
+  
   if (action === "plan") {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
-
+    
     if (!selectedTask) {
       return;
     }
-
+    
     /* Starší poznámce doplníme stejné stabilní ID na všech zařízeních. */
     if (!selectedTask.id) {
       selectedTask.id =
-        typeof vytvorStabilniIdStarePoznamky === "function"
-          ? vytvorStabilniIdStarePoznamky(selectedTask)
-          : crypto.randomUUID();
-
+        typeof vytvorStabilniIdStarePoznamky === "function" ?
+        vytvorStabilniIdStarePoznamky(selectedTask) :
+        crypto.randomUUID();
+      
       selectedTask.updatedAt = new Date().toISOString();
-
+      
       saveAllTasks(tasks);
       uploadLocalNoteToSupabase(selectedTask);
     }
-
+    
     cardMenu.hidden = true;
-
+    
     /* Celá poznámka se plánuje jen jedním způsobem:
        přes její vlastní datum + čas + opakování v editoru. */
     openTaskEditorById(selectedTask.id);
-
+    
     setTimeout(() => {
       modalTimeButton?.click();
     }, 0);
-
+    
     return;
   }
-
+  
   if (action === "complete") {
     const updatedTask =
       toggleTaskCompleted(selectedCardIndex);
-
+    
     if (updatedTask) {
       uploadLocalNoteToSupabase(updatedTask);
     }
-
+    
     cardMenu.hidden = true;
     renderTasks();
   }
-
+  
   if (action === "pin") {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
-
+    
     if (!selectedTask) {
       return;
     }
-
+    
     selectedTask.pinned = !selectedTask.pinned;
     selectedTask.updatedAt = new Date().toISOString();
-
+    
     saveAllTasks(tasks);
     uploadLocalNoteToSupabase(selectedTask);
-
+    
     cardMenu.hidden = true;
     renderTasks();
   }
-
+  
   if (action === "delete") {
     deleteConfirmModal.hidden = false;
     cardMenu.hidden = true;
   }
-
-
+  
+  
 });
 
 
@@ -4259,7 +4278,7 @@ return;
 
 document.addEventListener("pointerdown", (event) => {
   const cardMenu = document.getElementById("cardMenu");
-
+  
   if (
     !rezimVyberuKaret &&
     !cardMenu.hidden &&
@@ -4269,7 +4288,7 @@ document.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
     
     blokovatKlikKartyDo =
-  Date.now() + 400;
+      Date.now() + 400;
     cardMenu.hidden = true;
   }
 }, true);
@@ -4278,12 +4297,12 @@ appMessageSecretButton?.addEventListener(
   "click",
   async () => {
     appMessageModal.hidden = true;
-
+    
     appMessageSecretButton.hidden = true;
     appMessageNormalButton.hidden = true;
-
+    
     closeAppMessageButton.textContent = "OK";
-
+    
     await ulozAZavriEditor("secret");
   }
 );
