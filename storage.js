@@ -973,8 +973,95 @@ async function ulozZalohuDoSouboruVApk(
     );
   }
 
-  return await BackupExport.ulozJson({
-    data,
+  await BackupExport.zahajExport();
+
+  const VELIKOST_CASTI_EXPORTU =
+    64 * 1024;
+
+  const kodovani = new TextEncoder();
+  let ocekavanyPocetBajtu = 0;
+
+  for (
+    let zacatek = 0;
+    zacatek < data.length;
+  ) {
+    let konec = Math.min(
+      zacatek + VELIKOST_CASTI_EXPORTU,
+      data.length
+    );
+
+    /*
+     * Řez nesmí rozdělit emoji ani jiný znak tvořený
+     * dvojicí UTF-16 surrogate znaků.
+     */
+    if (
+      konec < data.length &&
+      konec > zacatek
+    ) {
+      const posledniKod =
+        data.charCodeAt(konec - 1);
+      const dalsiKod =
+        data.charCodeAt(konec);
+
+      if (
+        posledniKod >= 0xD800 &&
+        posledniKod <= 0xDBFF &&
+        dalsiKod >= 0xDC00 &&
+        dalsiKod <= 0xDFFF
+      ) {
+        konec -= 1;
+      }
+    }
+
+    const cast = data.slice(
+      zacatek,
+      konec
+    );
+
+    ocekavanyPocetBajtu +=
+      kodovani.encode(cast).byteLength;
+
+    const vysledek =
+      await BackupExport.pridejCast({
+        cast
+      });
+
+    const prijatyPocetBajtu =
+      Number(vysledek?.bytes || 0);
+
+    if (
+      prijatyPocetBajtu !==
+      ocekavanyPocetBajtu
+    ) {
+      throw new Error(
+        "Android nepřijal celou zálohu."
+      );
+    }
+
+    const tlacitko =
+      document.getElementById(
+        "settingsExportButton"
+      );
+
+    if (tlacitko) {
+      const procent = Math.round(
+        (konec / data.length) * 100
+      );
+
+      tlacitko.textContent =
+        `Připravuji zálohu… ${procent} %`;
+    }
+
+    zacatek = konec;
+  }
+
+  if (ocekavanyPocetBajtu <= 0) {
+    throw new Error(
+      "Připravená záloha je prázdná."
+    );
+  }
+
+  return await BackupExport.otevriUlozeni({
     nazevSouboru
   });
 }

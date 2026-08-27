@@ -24,55 +24,93 @@ import java.nio.charset.StandardCharsets;
 @CapacitorPlugin(name = "LubaNoteBackupExport")
 public class LubaNoteBackupExportPlugin extends Plugin {
 
-  private File cekajiciSouborZalohy;
+  private File ziskejCekajiciSoubor() {
+    return new File(
+      getContext().getCacheDir(),
+      "lubanote-backup-export.tmp"
+    );
+  }
 
   private void vycistiCekajiciSoubor() {
-    File soubor = cekajiciSouborZalohy;
-    cekajiciSouborZalohy = null;
+    File soubor = ziskejCekajiciSoubor();
 
-    if (soubor != null && soubor.exists()) {
+    if (soubor.exists()) {
       // Jde pouze o dočasnou kopii v cache aplikace.
       soubor.delete();
     }
   }
 
   @PluginMethod
-  public void ulozJson(PluginCall call) {
-    String obsah = call.getString("data");
-
-    if (obsah == null) {
-      call.reject("Chybí obsah zálohy.");
-      return;
-    }
-
-    /*
-     * PluginCall se po návratu ze systémového správce souborů nemusí
-     * vrátit s původním velkým JSON řetězcem. Proto obsah uložíme ještě
-     * před otevřením dialogu do dočasného souboru v cache aplikace.
-     */
+  public void zahajExport(PluginCall call) {
     vycistiCekajiciSoubor();
 
-    cekajiciSouborZalohy = new File(
-      getContext().getCacheDir(),
-      "lubanote-backup-export.tmp"
-    );
+    File soubor = ziskejCekajiciSoubor();
 
     try (
       FileOutputStream docasnyVystup =
         new FileOutputStream(
-          cekajiciSouborZalohy,
+          soubor,
           false
         )
     ) {
-      docasnyVystup.write(
-        obsah.getBytes(StandardCharsets.UTF_8)
-      );
       docasnyVystup.flush();
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("bytes", 0);
+      call.resolve(odpoved);
     } catch (IOException chyba) {
       vycistiCekajiciSoubor();
       call.reject(
-        "Příprava dočasné zálohy selhala.",
+        "Zahájení exportu zálohy selhalo.",
         chyba
+      );
+    }
+  }
+
+  @PluginMethod
+  public void pridejCast(PluginCall call) {
+    String cast = call.getString("cast");
+    File soubor = ziskejCekajiciSoubor();
+
+    if (cast == null || !soubor.isFile()) {
+      call.reject(
+        "Export nebyl zahájen nebo chybí část zálohy."
+      );
+      return;
+    }
+
+    try (
+      FileOutputStream docasnyVystup =
+        new FileOutputStream(
+          soubor,
+          true
+        )
+    ) {
+      docasnyVystup.write(
+        cast.getBytes(StandardCharsets.UTF_8)
+      );
+      docasnyVystup.flush();
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("bytes", soubor.length());
+      call.resolve(odpoved);
+    } catch (IOException chyba) {
+      vycistiCekajiciSoubor();
+      call.reject(
+        "Přenos části zálohy selhal.",
+        chyba
+      );
+    }
+  }
+
+  @PluginMethod
+  public void otevriUlozeni(PluginCall call) {
+    File soubor = ziskejCekajiciSoubor();
+
+    if (!soubor.isFile() || soubor.length() == 0) {
+      vycistiCekajiciSoubor();
+      call.reject(
+        "Připravená záloha je prázdná nebo chybí."
       );
       return;
     }
@@ -127,9 +165,10 @@ public class LubaNoteBackupExportPlugin extends Plugin {
     }
 
     Uri cil = dataZameru.getData();
+    File cekajiciSouborZalohy =
+      ziskejCekajiciSoubor();
 
     if (
-      cekajiciSouborZalohy == null ||
       !cekajiciSouborZalohy.isFile() ||
       cekajiciSouborZalohy.length() == 0
     ) {
