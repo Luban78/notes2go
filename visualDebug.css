@@ -188,6 +188,9 @@
   font-size: 12px !important;
   line-height: 36px !important;
   box-sizing: border-box !important;
+
+  resize: none;
+  overflow: hidden;
 }
 
 .ln-vd-selector {

@@ -2168,23 +2168,31 @@
     const textLabel = document.createElement("label");
     textLabel.textContent = "Text odkazu";
     
-    linkTextInput = document.createElement("input");
-    linkTextInput.type = "text";
+    linkTextInput = document.createElement("textarea");
+    linkTextInput.rows = 1;
     linkTextInput.placeholder =
       "např. OpenAI";
-    linkTextInput.autocomplete = "off";
+    linkTextInput.autocomplete = "one-time-code";
+    linkTextInput.setAttribute("data-form-type", "other");
+    linkTextInput.setAttribute("data-lpignore", "true");
+    linkTextInput.setAttribute("data-1p-ignore", "true");
+    linkTextInput.setAttribute("data-bwignore", "true");
     
     textLabel.append(linkTextInput);
     
     const urlLabel = document.createElement("label");
     urlLabel.textContent = "Internetová adresa";
     
-    linkUrlInput = document.createElement("input");
-    linkUrlInput.type = "url";
+    linkUrlInput = document.createElement("textarea");
+    linkUrlInput.rows = 1;
     linkUrlInput.placeholder =
       "https://example.com";
-    linkUrlInput.autocomplete = "off";
+    linkUrlInput.autocomplete = "one-time-code";
     linkUrlInput.inputMode = "url";
+    linkUrlInput.setAttribute("data-form-type", "other");
+    linkUrlInput.setAttribute("data-lpignore", "true");
+    linkUrlInput.setAttribute("data-1p-ignore", "true");
+    linkUrlInput.setAttribute("data-bwignore", "true");
     
     urlLabel.append(linkUrlInput);
     
@@ -2276,6 +2284,16 @@
       ulozOdkaz
     );
     
+    linkTextInput.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          linkUrlInput.focus();
+        }
+      }
+    );
+
     linkUrlInput.addEventListener(
       "keydown",
       (event) => {

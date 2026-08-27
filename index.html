@@ -716,7 +716,7 @@
         </div>
         
         <div id="newTagRow" class="newTagRow" hidden>
-          <input id="newTagInput" type="text" maxlength="24" placeholder="Název štítku" autocomplete="off">
+          <textarea id="newTagInput" rows="1" maxlength="24" placeholder="Název štítku" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
           
           <button id="saveNewTagButton" type="button">
             Přidat
@@ -1211,7 +1211,7 @@
     <div class="newTagDialog">
       <h3 id="newTagModalTitle">Nový štítek</h3>
       
-      <input id="newTagModalInput" type="text" placeholder="Název štítku" maxlength="30">
+      <textarea id="newTagModalInput" rows="1" placeholder="Název štítku" maxlength="30" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
       
       <div class="newTagDialogActions">
         <button id="cancelNewTagModalButton" type="button">Zrušit</button>
@@ -1363,9 +1363,9 @@
         Zadej hlavní heslo.
       </p>
       
-      <input id="secretUnlockInput" type="password" autocomplete="current-password" placeholder="Hlavní heslo">
+      <input id="secretUnlockInput" type="password" autocomplete="new-password" placeholder="Hlavní heslo" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
       
-      <input id="secretUnlockConfirmInput" type="password" autocomplete="new-password" placeholder="Heslo znovu" hidden>
+      <input id="secretUnlockConfirmInput" type="password" autocomplete="new-password" placeholder="Heslo znovu" hidden data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
       
       <div class="secretUnlockActions">
         
@@ -1428,6 +1428,7 @@
        ======================================== -->
   
   <script src="build-version.js"></script>
+  <script src="autofillGuard.js"></script>
   
   <script src="reminders.js?v=20260827-kompletni-zaloha-1"></script>
   

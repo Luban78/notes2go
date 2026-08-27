@@ -3246,7 +3246,8 @@ text-size-adjust: 100%;
   display: none !important;
 }
 
-.newTagRow input {
+.newTagRow input,
+.newTagRow textarea {
   min-width: 0;
   flex: 1;
   box-sizing: border-box;
@@ -3262,10 +3263,14 @@ text-size-adjust: 100%;
 
   font: inherit;
   font-size: 0.95rem;
+  line-height: 1.25;
+  resize: none;
+  overflow: hidden;
   outline: none;
 }
 
-.newTagRow input:focus {
+.newTagRow input:focus,
+.newTagRow textarea:focus {
   border-color: var(--color-accent);
 }
 
@@ -3335,7 +3340,8 @@ text-size-adjust: 100%;
   color: var(--color-text);
 }
 
-.newTagDialog input {
+.newTagDialog input,
+.newTagDialog textarea {
   width: 100%;
   box-sizing: border-box;
 
@@ -3349,15 +3355,20 @@ text-size-adjust: 100%;
 
   font: inherit;
   font-size: 16px;
+  line-height: 1.25;
+  resize: none;
+  overflow: hidden;
 
   outline: none;
 }
 
-.newTagDialog input::placeholder {
+.newTagDialog input::placeholder,
+.newTagDialog textarea::placeholder {
   color: var(--color-text-secondary);
 }
 
-.newTagDialog input:focus {
+.newTagDialog input:focus,
+.newTagDialog textarea:focus {
   border-color: var(--color-accent);
 
   box-shadow:
@@ -4380,6 +4391,9 @@ text-size-adjust: 100%;
   font: inherit;
   font-size: var(--font-size);
   font-weight: 600;
+  line-height: 1.25;
+  resize: none;
+  overflow: hidden;
 
   outline: none;
 }
@@ -5783,7 +5797,8 @@ text-size-adjust: 100%;
   font-size: calc(var(--font-size) - 2px);
 }
 
-.editorLinkDialog input {
+.editorLinkDialog input,
+.editorLinkDialog textarea {
   width: 100%;
   height: 44px;
   box-sizing: border-box;
@@ -5798,9 +5813,13 @@ text-size-adjust: 100%;
   color: var(--color-editor-text);
   font: inherit;
   font-size: var(--font-size);
+  line-height: 42px;
+  resize: none;
+  overflow: hidden;
 }
 
-.editorLinkDialog input:focus {
+.editorLinkDialog input:focus,
+.editorLinkDialog textarea:focus {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px color-mix(
     in srgb,

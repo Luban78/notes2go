@@ -254,32 +254,20 @@ function zobrazLokalniAplikaci() {
   loginScreen.hidden = true;
 
   /*
-   * Po přihlášení skutečně deaktivujeme
-   * credential inputy.
-   *
-   * Nestačí je pouze schovat přes hidden,
-   * protože Chrome Password Manager je jinak
-   * stále může považovat za aktivní login formulář.
+   * Důležité pro Chrome Password Manager:
+   * po přihlášení login formulář nejen skryjeme,
+   * ale úplně ho odpojíme z aktivního DOM.
+   * Reference i event listenery zůstávají zachované
+   * a při odhlášení ho zase vložíme zpět.
    */
   loginForm.setAttribute("inert", "");
-
   loginEmail.disabled = true;
   loginPassword.disabled = true;
-
-  loginEmail.removeAttribute("name");
-  loginPassword.removeAttribute("name");
-
-  loginEmail.setAttribute(
-    "autocomplete",
-    "off"
-  );
-
-  loginPassword.setAttribute(
-    "autocomplete",
-    "off"
-  );
-
   loginPassword.value = "";
+
+  if (loginForm.isConnected) {
+    loginForm.remove();
+  }
 
   document.body.classList.remove(
     "authPending"
@@ -294,6 +282,10 @@ function zobrazPrihlaseni(
   message = "",
   isError = true
 ) {
+  if (!loginForm.isConnected) {
+    loginScreen.append(loginForm);
+  }
+
   loginForm.removeAttribute("inert");
 
   loginEmail.disabled = false;
@@ -517,7 +509,8 @@ window.LubaNoteSupabase = {
   jePripraven: () => Boolean(supabaseClient),
   maPredchoziPrihlaseni:
     existujePredchoziPrihlaseni,
-  zrusPredchoziPrihlaseni
+  zrusPredchoziPrihlaseni,
+  zobrazPrihlaseni
 };
 
 window.addEventListener("online", () => {

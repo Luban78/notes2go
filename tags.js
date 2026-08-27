@@ -769,6 +769,13 @@ cancelNewTagButton.addEventListener("click", () => {
   newTagModal.hidden = true;
 });
 
+newTagModalInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveNewTagModalButton.click();
+  }
+});
+
 saveNewTagModalButton.addEventListener("click", async () => {
   const name = newTagModalInput.value.trim();
   
@@ -1086,12 +1093,23 @@ function vykresliSpravuStitku() {
     
     upravitTlacitko.addEventListener("click", async () => {
       if (!vstup) {
-        vstup = document.createElement("input");
-        
-        vstup.type = "text";
+        vstup = document.createElement("textarea");
+        vstup.rows = 1;
         vstup.value = tag.name;
         vstup.maxLength = 24;
         vstup.className = "manageTagRenameInput";
+        vstup.autocomplete = "one-time-code";
+        vstup.setAttribute("data-form-type", "other");
+        vstup.setAttribute("data-lpignore", "true");
+        vstup.setAttribute("data-1p-ignore", "true");
+        vstup.setAttribute("data-bwignore", "true");
+
+        vstup.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            upravitTlacitko.click();
+          }
+        });
         
         nazev.replaceWith(vstup);
         
