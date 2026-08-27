@@ -723,17 +723,9 @@ async function loadTagsFromSupabase() {
      * název dešifrujeme pouze do paměti.
      */
     try {
-      let sifrovanaData =
-        tag.encrypted_name;
-
-      if (typeof sifrovanaData === "string") {
-        sifrovanaData =
-          JSON.parse(sifrovanaData);
-      }
-
       const desifrovanyNazev =
         await desifrujNazevTajnehoStitku(
-          sifrovanaData,
+          tag.encrypted_name,
           tag.id
         );
       
@@ -1387,45 +1379,101 @@ function getAvailableTags() {
   ])];
 }
 
-async function renderTagMenuTags() {
-  /*
-   * Po zamknutí se názvy Secret štítků z RAM záměrně mažou.
-   * Pokud uživatel otevře Secret poznámku, ale v paměti jsou
-   * ještě prázdné názvy, jednou je bezpečně znovu načteme
-   * a dešifrujeme.
-   */
-  const chybiDesifrovanyTajnyNazev =
-    tajnyRezimOdemceny &&
-    secretTaskEnabled &&
-    syncedTags.some(
-      (tag) =>
-        tag.is_secret === true &&
-        !String(tag.name || "").trim()
-    );
-
+/*
+ * Secret štítky pro editor načítáme přímo z cloudu až ve chvíli,
+ * kdy je Secret odemčený a právě editovaná poznámka je tajná.
+ * Nejsme tak závislí na tom, v jakém stavu zrovna zůstalo syncedTags
+ * po zamknutí / odemknutí.
+ */
+async function ziskejTajneStitkyProEditor() {
   if (
-    chybiDesifrovanyTajnyNazev &&
-    typeof loadTagsFromSupabase === "function"
+    !tajnyRezimOdemceny ||
+    !secretTaskEnabled
   ) {
-    await loadTagsFromSupabase();
+    return [];
   }
 
-  /*
-   * Secret štítky přidáváme do editoru přímo ze syncedTags.
-   * Tím nejsme závislí na tom, jestli je zrovna vrátí
-   * pomocné skládání getAvailableTags().
-   */
+  const user = await getCurrentUser();
+
+  if (!user?.id || !supabaseClient) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient
+    .from("tags")
+    .select(
+      "id, user_id, name, encrypted_name, is_secret, sort_order, color, deleted_at"
+    )
+    .eq("user_id", user.id)
+    .eq("is_secret", true)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error(
+      "Načtení tajných štítků pro editor selhalo:",
+      error.message
+    );
+    return [];
+  }
+
+  const nazvy = [];
+
+  for (const tag of (data || [])) {
+    /*
+     * Legacy tajný štítek bez encrypted_name záměrně neukazujeme.
+     * Otevřený plaintext název se nesmí vrátit do Secret UI.
+     */
+    if (!tag.encrypted_name) {
+      continue;
+    }
+
+    try {
+      const desifrovanyNazev =
+        await desifrujNazevTajnehoStitku(
+          tag.encrypted_name,
+          tag.id
+        );
+
+      const cistyNazev = String(
+        desifrovanyNazev || ""
+      ).trim();
+
+      if (!cistyNazev) {
+        continue;
+      }
+
+      const pametovyTag = {
+        ...tag,
+        name: cistyNazev
+      };
+
+      const index = syncedTags.findIndex(
+        (polozka) => polozka.id === tag.id
+      );
+
+      if (index >= 0) {
+        syncedTags[index] = pametovyTag;
+      } else {
+        syncedTags.push(pametovyTag);
+      }
+
+      nazvy.push(cistyNazev);
+    } catch (error) {
+      console.error(
+        "Dešifrování tajného štítku pro editor selhalo:",
+        tag.id,
+        error
+      );
+    }
+  }
+
+  return nazvy;
+}
+
+async function renderTagMenuTags() {
   const tajneStitkyProEditor =
-    tajnyRezimOdemceny &&
-    secretTaskEnabled ?
-      syncedTags
-        .filter(
-          (tag) =>
-            tag.is_secret === true &&
-            String(tag.name || "").trim()
-        )
-        .map((tag) => tag.name) :
-      [];
+    await ziskejTajneStitkyProEditor();
 
   const availableTags = [
     ...new Set([
@@ -1433,8 +1481,14 @@ async function renderTagMenuTags() {
       ...tajneStitkyProEditor
     ])
   ].filter((tag) => {
+    const cistyNazev = String(tag || "").trim();
+
+    if (!cistyNazev) {
+      return false;
+    }
+
     const jeTajny =
-      jeTajnyStitek(tag);
+      jeTajnyStitek(cistyNazev);
 
     if (jeTajny) {
       return (
@@ -1467,18 +1521,18 @@ async function renderTagMenuTags() {
   });
 }
 
-function updateTagMenuUI() {
+async function updateTagMenuUI() {
   areaButtons.forEach((button) => {
     button.classList.toggle(
       "active",
       button.dataset.area === activeArea
     );
   });
-  
+
   categoryTaskButton.textContent =
     activeArea === "work" ? "💼" : "🏠";
-  
-  renderTagMenuTags();
+
+  await renderTagMenuTags();
 }
 
 function taskMatchesArea(task) {

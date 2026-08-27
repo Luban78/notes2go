@@ -509,7 +509,7 @@ const appMessageDiscardButton =
 
 secretTaskButton?.addEventListener(
   "click",
-  () => {
+  async () => {
     if (!tajnyRezimOdemceny) {
       return;
     }
@@ -551,12 +551,10 @@ secretTaskButton?.addEventListener(
           cancelNotification(currentTask.notificationId);
         }
       }
-      
-      /*
-       * Po přepnutí poznámky na Secret znovu
-       * vykreslíme nabídku štítků.
-       */
-      updateTagMenuUI();
+
+      if (typeof updateTagMenuUI === "function") {
+        await updateTagMenuUI();
+      }
 
       return;
     }
@@ -577,7 +575,7 @@ secretTaskButton?.addEventListener(
       }
     );
     
-    updateTagMenuUI();
+    await updateTagMenuUI();
   }
 );
 
@@ -2224,9 +2222,27 @@ addTaskButton.addEventListener("click", () => {
   zahajEditorSession(null);
   taskModal.removeAttribute("data-task-id");
   activeTaskIndex = null;
-  secretTaskEnabled = false;
-  favoriteEnabled = false;
-  priorityTaskButton?.classList.remove("active");
+  /*
+ * Pokud je Secret režim odemčený,
+ * nový editor se rovnou připraví jako Secret.
+ * Uživatel tak okamžitě vidí i tajné štítky.
+ */
+secretTaskEnabled =
+  tajnyRezimOdemceny === true;
+
+favoriteEnabled = false;
+
+priorityTaskButton?.classList.remove(
+  "active"
+);
+
+secretTaskButton.textContent =
+  secretTaskEnabled ? "🔐" : "🔓";
+
+secretTaskButton.classList.toggle(
+  "active",
+  secretTaskEnabled
+);
   secretTaskButton.textContent = "🔓";
   secretTaskButton.classList.remove("active");
   resetTodos();
