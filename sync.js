@@ -808,6 +808,65 @@ function normalizujPoznamkuProPrvniRevizi(
   return seradJsonProSyncPorovnani(vysledek);
 }
 
+function vytvorKonfliktniKopiiBeznePoznamky(
+  poznamka,
+  puvodniId
+) {
+  if (!poznamka || poznamka.isSecret === true) {
+    return null;
+  }
+
+  let kopie;
+
+  try {
+    kopie = typeof structuredClone === "function"
+      ? structuredClone(poznamka)
+      : JSON.parse(JSON.stringify(poznamka));
+  } catch (error) {
+    console.error(
+      "Vytvoření bezpečné konfliktní kopie selhalo:",
+      error
+    );
+    return null;
+  }
+
+  const noveId = crypto.randomUUID();
+  const cas = new Date().toISOString();
+  const puvodniNazev = String(
+    kopie.title || "Poznámka"
+  ).trim();
+
+  kopie.id = noveId;
+  kopie.title = `${puvodniNazev} ⚠️ konfliktní kopie`;
+  kopie.updatedAt = cas;
+  kopie.isSecret = false;
+
+  /* Konfliktní kopie zachovává text, TODO, štítky a další obsah,
+     ale nesmí vytvořit duplicitní systémovou notifikaci ani
+     zdvojit Planner položky se stejnými ID. Původní cloudová
+     verze zůstává beze změny. */
+  kopie.reminder = false;
+  kopie.notificationId = null;
+  kopie.plannedItems = [];
+
+  if (
+    kopie.repeat &&
+    typeof kopie.repeat === "object"
+  ) {
+    kopie.repeat = {
+      ...kopie.repeat,
+      enabled: false
+    };
+  }
+
+  kopie.syncConflict = {
+    originalId: puvodniId || poznamka.id || null,
+    preservedAt: cas
+  };
+
+  return kopie;
+}
+
 function maStejnyObsahProPrvniRevizi(
   lokalni,
   row
@@ -868,6 +927,7 @@ function pripravRevizniMerge(
   const vynutitCloudId = new Set();
   const vynutitLocalId = new Set();
   const prijmoutCloudMetaId = new Set();
+  const konfliktniKopie = [];
   const cekajiciSmazaniId = new Set(
     nactiCekajiciSmazani().map(
       (zaznam) => zaznam?.id
@@ -954,6 +1014,32 @@ function pripravRevizniMerge(
           return;
         }
 
+        if (
+          lokalni.type === "regular" &&
+          lokalni.note &&
+          !jeCloudSecretRow(row)
+        ) {
+          const kopie =
+            vytvorKonfliktniKopiiBeznePoznamky(
+              lokalni.note,
+              row.id
+            );
+
+          if (kopie) {
+            konfliktniKopie.push(kopie);
+            vynutitCloudId.add(row.id);
+            prijmoutCloudMetaId.add(row.id);
+            zrusKonfliktSynchronizace(row.id);
+
+            console.warn(
+              "LubaNote sync: rozdílné první revize byly zachovány jako dvě poznámky:",
+              row.id,
+              kopie.id
+            );
+            return;
+          }
+        }
+
         konfliktniId.add(row.id);
         oznamKonfliktSynchronizace(
           row.id,
@@ -979,6 +1065,41 @@ function pripravRevizniMerge(
         );
 
       if (cloudSeZmenil && localSeZmenil) {
+        /*
+         * Dvě moderní zařízení změnila stejnou běžnou poznámku.
+         * Starší řešení sync úplně zastavilo a modal se opakoval.
+         * Bezpečnější a praktičtější je NEPŘEPSAT ani jednu verzi:
+         * cloud zůstane na původním ID a lokální změna dostane nové ID.
+         * Starý klient tak stále nikdy nemůže přepsat novější cloud.
+         */
+        if (
+          lokalni.type === "regular" &&
+          lokalni.note &&
+          !jeCloudSecretRow(row)
+        ) {
+          const kopie =
+            vytvorKonfliktniKopiiBeznePoznamky(
+              lokalni.note,
+              row.id
+            );
+
+          if (kopie) {
+            konfliktniKopie.push(kopie);
+            vynutitCloudId.add(row.id);
+            prijmoutCloudMetaId.add(row.id);
+            zrusKonfliktSynchronizace(row.id);
+
+            console.warn(
+              "LubaNote sync: obě současně změněné verze byly zachovány:",
+              row.id,
+              kopie.id
+            );
+            return;
+          }
+        }
+
+        /* Secret konflikt nebo selhání vytvoření kopie zůstává
+           konzervativně blokovaný – zde nesmíme riskovat plaintext. */
         konfliktniId.add(row.id);
         oznamKonfliktSynchronizace(
           row.id,
@@ -1021,7 +1142,8 @@ function pripravRevizniMerge(
     konfliktniId,
     vynutitCloudId,
     vynutitLocalId,
-    prijmoutCloudMetaId
+    prijmoutCloudMetaId,
+    konfliktniKopie
   };
 }
 
@@ -1707,8 +1829,16 @@ async function syncNotes() {
       konfliktniId,
       vynutitCloudId,
       vynutitLocalId,
-      prijmoutCloudMetaId
+      prijmoutCloudMetaId,
+      konfliktniKopie
     } = revizniMerge;
+
+    if (konfliktniKopie.length > 0) {
+      localRegular = [
+        ...localRegular,
+        ...konfliktniKopie
+      ];
+    }
 
     const localRegularProMerge =
       localRegular.filter(
@@ -1844,6 +1974,17 @@ async function syncNotes() {
       cloudRows,
       prijmoutCloudMetaId
     );
+
+    if (
+      konfliktniKopie.length > 0 &&
+      typeof showToast === "function"
+    ) {
+      showToast(
+        konfliktniKopie.length === 1
+          ? "Obě verze poznámky byly zachovány"
+          : `Zachovány obě verze ${konfliktniKopie.length} poznámek`
+      );
+    }
 
     const secretUnlocked =
       typeof tajnySifrovaciKlic !== "undefined" &&
@@ -2332,6 +2473,22 @@ function naplanujSyncPoAktivaci(
  * Po návratu internetu se synchronizace spustí sama.
  */
 spustStartSyncBezpecne();
+
+/*
+ * Obnovení Supabase session je asynchronní. Pokud první pokus syncu
+ * proběhne dřív než auth knihovna obnoví uživatele, supabaseClient.js
+ * po potvrzení session vyšle tuto událost a sync se spustí znovu.
+ * Tím se běžné GIPA chová stejně jako čerstvé anonymní okno.
+ */
+window.addEventListener(
+  "lubanote:auth-valid",
+  () => {
+    setTimeout(
+      spustStartSyncBezpecne,
+      0
+    );
+  }
+);
 
 window.addEventListener(
   "online",

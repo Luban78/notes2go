@@ -4,6 +4,9 @@ const searchNotes =
 const noSearchResults =
   document.getElementById("noSearchResults");
 
+const clearSearchButton =
+  document.getElementById("clearSearchButton");
+
 // ==========================================
 // OCHRANA VYHLEDÁVÁNÍ PROTI AUTOFILLU
 //
@@ -16,6 +19,15 @@ const noSearchResults =
 // ==========================================
 
 let vyhledavaniAktivovaneUzivatelem = false;
+
+function aktualizujTlacitkoMazaniVyhledavani() {
+  if (!clearSearchButton || !searchNotes) {
+    return;
+  }
+
+  clearSearchButton.hidden =
+    searchNotes.value.length === 0;
+}
 
 function prekresliVysledkyVyhledavani() {
   renderTasks();
@@ -86,6 +98,7 @@ function zajistiCisteNeaktivniVyhledavani() {
     document.activeElement !== searchNotes;
 
   noSearchResults.hidden = true;
+  aktualizujTlacitkoMazaniVyhledavani();
 }
 
 function taskMatchesSearch(task) {
@@ -138,7 +151,16 @@ searchNotes.addEventListener(
 
 searchNotes.addEventListener(
   "keydown",
-  aktivujVyhledavaniUzivatelem
+  (event) => {
+    /* Textarea je použita schválně: Chrome Password Manager ji
+       neklasifikuje jako přihlašovací textové pole. Enter však
+       nesmí vytvořit nový řádek ve vyhledávání. */
+    if (event.key === "Enter") {
+      event.preventDefault();
+    }
+
+    aktivujVyhledavaniUzivatelem();
+  }
 );
 
 /*
@@ -164,10 +186,21 @@ searchNotes.addEventListener(
 searchNotes.addEventListener("input", () => {
   if (!vyhledavaniAktivovaneUzivatelem) {
     zajistiCisteNeaktivniVyhledavani();
+    aktualizujTlacitkoMazaniVyhledavani();
     prekresliVysledkyVyhledavani();
     return;
   }
 
+  aktualizujTlacitkoMazaniVyhledavani();
+  prekresliVysledkyVyhledavani();
+});
+
+clearSearchButton?.addEventListener("click", () => {
+  searchNotes.value = "";
+  vyhledavaniAktivovaneUzivatelem = false;
+  searchNotes.readOnly = true;
+  clearSearchButton.hidden = true;
+  searchNotes.blur();
   prekresliVysledkyVyhledavani();
 });
 
@@ -223,6 +256,8 @@ function vycistiVyhledavaniPoZamknutiTajnehoRezimu() {
   if (noSearchResults) {
     noSearchResults.hidden = true;
   }
+
+  aktualizujTlacitkoMazaniVyhledavani();
 }
 
 

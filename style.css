@@ -569,22 +569,55 @@ body {
 }
 
 #searchNotes {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
   height: 46px;
+  box-sizing: border-box;
+  padding: 11px 0;
 
   border: none;
   outline: none;
+  resize: none;
+  overflow: hidden;
   background: transparent;
   color: var(--color-text);
 
   font: inherit;
   font-size: clamp(15px, calc(var(--font-size) + 1px), 18px);
+  line-height: 24px;
+  white-space: nowrap;
 }
 
 #searchNotes::placeholder {
   color: var(--color-text-secondary);
   opacity: 0.78;
+}
+
+.searchClearButton {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.searchClearButton[hidden] {
+  display: none;
+}
+
+.searchClearButton:active {
+  transform: scale(0.92);
 }
 
 .searchActions {

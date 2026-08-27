@@ -219,6 +219,12 @@ function setLoginMessage(message = "", isError = false) {
   loginMessage.classList.toggle("error", isError);
 }
 
+function oznamPlatnePrihlaseni() {
+  window.dispatchEvent(
+    new CustomEvent("lubanote:auth-valid")
+  );
+}
+
 function zobrazLokalniAplikaci() {
   loginScreen.hidden = true;
 
@@ -328,6 +334,12 @@ async function overPrihlaseniOnline({
       ) {
         await loadTagsFromSupabase();
       }
+
+      /* sync.js může při prvním načtení doběhnout dřív než
+         obnovení Supabase session. Tato událost spustí druhý,
+         už autentizovaný pokus a tím odstraní rozdíl mezi
+         anonymním oknem a běžným dlouhodobým Chrome profilem. */
+      oznamPlatnePrihlaseni();
 
       return true;
     }
@@ -448,6 +460,8 @@ loginForm.addEventListener("submit", async (event) => {
     ) {
       await loadTagsFromSupabase();
     }
+
+    oznamPlatnePrihlaseni();
 
     if (
       typeof window.LubaNoteSync
