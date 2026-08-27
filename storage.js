@@ -885,18 +885,16 @@ function updateTask(index, updatedTask) {
   return saveAllTasks(tasks);
 }
 
-async function exportTasks() {
-  await cekajNaUlozeniTajnychPoznamek();
+function vytvorNazevSouboruZalohy() {
+  const cas = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-");
 
-  const backup = {
-    format: LUBANOTE_BACKUP_FORMAT,
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    notes: nactiBeznePoznamkyZUloziste(),
-    secretNotes: nactiSifrovaneTajneZaznamy()
-  };
+  return `lubanote-backup-${cas}.json`;
+}
 
-  const data = JSON.stringify(backup, null, 2);
+
+function stahniZalohuVeWebu(data, nazevSouboru) {
   const blob = new Blob([data], {
     type: "application/json"
   });
@@ -905,7 +903,7 @@ async function exportTasks() {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "lubanote-backup.json";
+  link.download = nazevSouboru;
 
   document.body.appendChild(link);
   link.click();
@@ -914,6 +912,122 @@ async function exportTasks() {
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, 1000);
+}
+
+
+async function sdilejZalohuVApk(
+  data,
+  nazevSouboru
+) {
+  const Filesystem =
+    window.Capacitor?.Plugins?.Filesystem;
+
+  const Share =
+    window.Capacitor?.Plugins?.Share;
+
+  if (!Filesystem || !Share) {
+    throw new Error(
+      "V APK chybí nativní pluginy Filesystem nebo Share."
+    );
+  }
+
+  /*
+   * Android WebView neumí spolehlivě stáhnout blob: odkaz.
+   * Zálohu proto nejdřív vytvoříme jako skutečný soubor v cache
+   * aplikace a jeho content URI předáme systémovému Android menu.
+   */
+  const ulozenySoubor =
+    await Filesystem.writeFile({
+      path: nazevSouboru,
+      data,
+      directory: "CACHE",
+      encoding: "utf8"
+    });
+
+  if (!ulozenySoubor?.uri) {
+    throw new Error(
+      "Android nevytvořil soubor zálohy."
+    );
+  }
+
+  await Share.share({
+    title: "Záloha LubaNote",
+    text: "Záloha poznámek LubaNote",
+    files: [ulozenySoubor.uri],
+    dialogTitle: "Uložit nebo sdílet zálohu"
+  });
+}
+
+
+async function exportTasks() {
+  const tlacitko =
+    document.getElementById(
+      "settingsExportButton"
+    );
+
+  const puvodniText =
+    tlacitko?.textContent ||
+    "Export zálohy";
+
+  if (tlacitko) {
+    tlacitko.disabled = true;
+    tlacitko.textContent =
+      "Připravuji zálohu…";
+  }
+
+  try {
+    await cekajNaUlozeniTajnychPoznamek();
+
+    const backup = {
+      format: LUBANOTE_BACKUP_FORMAT,
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      notes: nactiBeznePoznamkyZUloziste(),
+      secretNotes: nactiSifrovaneTajneZaznamy()
+    };
+
+    const data =
+      JSON.stringify(backup, null, 2);
+
+    const nazevSouboru =
+      vytvorNazevSouboruZalohy();
+
+    const jeApk =
+      window.Capacitor
+        ?.isNativePlatform?.() === true;
+
+    if (jeApk) {
+      await sdilejZalohuVApk(
+        data,
+        nazevSouboru
+      );
+    } else {
+      stahniZalohuVeWebu(
+        data,
+        nazevSouboru
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Export zálohy selhal:",
+      error
+    );
+
+    if (
+      typeof zobrazZpravuAplikace ===
+      "function"
+    ) {
+      zobrazZpravuAplikace(
+        "Export zálohy",
+        "Zálohu se nepodařilo vytvořit. Zkus to prosím znovu."
+      );
+    }
+  } finally {
+    if (tlacitko) {
+      tlacitko.disabled = false;
+      tlacitko.textContent = puvodniText;
+    }
+  }
 }
 
 function normalizujImportovanouPoznamku(task, importedAt) {
