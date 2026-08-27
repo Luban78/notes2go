@@ -1917,12 +1917,20 @@ async function provedKompletniObnovuSeZpracovanimChyby(
   imported,
   importedAt
 ) {
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Obnovuji kompletní zálohu…",
+      150
+    ) || (() => {});
+
   try {
     await obnovKompletniZalohu(
       imported,
       importedAt
     );
   } catch (error) {
+    ukonciCekani();
+
     console.error(
       "Complete backup restore error:",
       error
@@ -1933,7 +1941,11 @@ async function provedKompletniObnovuSeZpracovanimChyby(
       error?.uzivatelskaZprava ||
       "Soubor není platná kompletní záloha LubaNote."
     );
+
+    return;
   }
+
+  ukonciCekani();
 }
 
 function importTasks(file) {
