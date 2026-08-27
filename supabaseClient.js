@@ -268,6 +268,15 @@ async function overPrihlaseniOnline({
       oznacPredchoziPrihlaseni();
       setLoginMessage();
       zobrazLokalniAplikaci();
+
+
+
+      if (
+        typeof loadTagsFromSupabase === "function"
+      ) {
+        await loadTagsFromSupabase();
+      }
+
       return true;
     }
 
@@ -381,6 +390,12 @@ loginForm.addEventListener("submit", async (event) => {
     loginPassword.value = "";
     setLoginMessage();
     zobrazLokalniAplikaci();
+
+    if (
+      typeof loadTagsFromSupabase === "function"
+    ) {
+      await loadTagsFromSupabase();
+    }
 
     if (
       typeof window.LubaNoteSync
