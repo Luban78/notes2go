@@ -2837,6 +2837,65 @@ function openTaskEditorById(taskId) {
 
 
 
+function ziskejSmerRazeniKaret() {
+  return localStorage.getItem(
+    "cardSortDirection"
+  ) === "asc"
+    ? "asc"
+    : "desc";
+}
+
+
+function ziskejCasUpravyKarty(task) {
+  const cas = new Date(
+    task?.updatedAt || 0
+  ).getTime();
+
+  return Number.isFinite(cas)
+    ? cas
+    : 0;
+}
+
+
+function porovnejKartyProZobrazeni(a, b) {
+  const rozdilPripnuti =
+    Number(b.task?.pinned === true) -
+    Number(a.task?.pinned === true);
+
+  if (rozdilPripnuti !== 0) {
+    return rozdilPripnuti;
+  }
+
+  const casA =
+    ziskejCasUpravyKarty(a.task);
+
+  const casB =
+    ziskejCasUpravyKarty(b.task);
+
+  if (casA !== casB) {
+    return ziskejSmerRazeniKaret() === "asc"
+      ? casA - casB
+      : casB - casA;
+  }
+
+  /*
+   * Stejný čas může vzniknout při hromadné změně více karet.
+   * Stabilní ID zajistí stejné pořadí i tehdy, když Supabase vrátí
+   * řádky pokaždé v jiném pořadí.
+   */
+  const rozdilId = String(
+    a.task?.id || ""
+  ).localeCompare(
+    String(b.task?.id || ""),
+    "cs"
+  );
+
+  return rozdilId !== 0
+    ? rozdilId
+    : a.originalIndex - b.originalIndex;
+}
+
+
 function renderTasks() {
   if (typeof renderTagFilters === "function") {
     renderTagFilters();
@@ -2853,10 +2912,7 @@ function renderTasks() {
       task,
       originalIndex
     }))
-    .sort((a, b) => {
-      return Number(b.task.pinned === true) -
-        Number(a.task.pinned === true);
-    });
+    .sort(porovnejKartyProZobrazeni);
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
     if (!taskMatchesArea(loadedTask)) {
       return;
