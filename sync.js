@@ -64,6 +64,43 @@ const CLOUD_SYNC_META_STORAGE_KEY =
 const aktivniKonfliktySyncu = new Map();
 let konfliktSyncuUzOhlasen = false;
 const frontyServerovychZapisu = new Map();
+let casovacVyreseniBeznehoReviznihoKonfliktu = null;
+
+function naplanujVyreseniBeznehoReviznihoKonfliktu() {
+  clearTimeout(
+    casovacVyreseniBeznehoReviznihoKonfliktu
+  );
+
+  const beziciSyncPriPlanovani = probihajiciSync;
+  const beziciStartPriPlanovani = probihajiciStartSync;
+
+  casovacVyreseniBeznehoReviznihoKonfliktu =
+    setTimeout(async () => {
+      casovacVyreseniBeznehoReviznihoKonfliktu = null;
+
+      try {
+        /*
+         * Pokud konflikt vznikl uvnitř právě běžícího syncu,
+         * nejdřív ho necháme bezpečně doběhnout. Teprve potom
+         * načteme čerstvý lokální i cloudový stav a provedeme merge.
+         */
+        if (beziciSyncPriPlanovani) {
+          await beziciSyncPriPlanovani.catch(() => null);
+        }
+
+        if (beziciStartPriPlanovani) {
+          await beziciStartPriPlanovani.catch(() => null);
+        }
+
+        await spustRychlySyncPoznamekBezpecne();
+      } catch (error) {
+        console.warn(
+          "Automatické vyřešení běžného revizního konfliktu bylo odloženo:",
+          error
+        );
+      }
+    }, 120);
+}
 
 function zaradServerovyZapis(noteId, akce) {
   if (!noteId || typeof akce !== "function") {
@@ -239,7 +276,8 @@ async function provedBezpecnyZapisPoznamky({
   expectedRevision,
   localUpdatedAt = null,
   deleteNote = false,
-  deletedByDeviceId = null
+  deletedByDeviceId = null,
+  oznamitKonflikt = true
 }) {
   if (!id) {
     return { ok: false };
@@ -273,11 +311,25 @@ async function provedBezpecnyZapisPoznamky({
   }
 
   if (!vysledek?.ok) {
-    oznamKonfliktSynchronizace(
-      id,
-      vysledek?.reason || "revision_conflict",
-      vysledek || {}
-    );
+    if (oznamitKonflikt) {
+      oznamKonfliktSynchronizace(
+        id,
+        vysledek?.reason || "revision_conflict",
+        vysledek || {}
+      );
+    } else {
+      /*
+       * Běžný zápis z UI může narazit na novější serverovou revizi.
+       * To ještě není důvod zobrazovat kritický modal: plný revizní
+       * merge umí obě běžné verze bezpečně zachovat.
+       */
+      console.warn(
+        "LubaNote sync: běžný zápis narazil na novější revizi; konflikt převezme revizní merge:",
+        id,
+        vysledek?.reason || "revision_conflict",
+        vysledek || {}
+      );
+    }
 
     return {
       ok: false,
@@ -600,10 +652,21 @@ async function uploadLocalNoteToSupabase(note) {
         localUpdatedAt:
           note.updatedAt || null,
         deleteNote: false,
-        deletedByDeviceId: null
+        deletedByDeviceId: null,
+        /* Secret konflikt zůstává konzervativně blokovaný.
+           Běžný konflikt převezme centrální revizní merge. */
+        oznamitKonflikt: note.isSecret === true
       });
     }
   );
+
+  if (
+    !vysledek.ok &&
+    vysledek.conflict &&
+    note.isSecret !== true
+  ) {
+    naplanujVyreseniBeznehoReviznihoKonfliktu();
+  }
 
   return vysledek.ok;
 }
@@ -928,6 +991,13 @@ function pripravRevizniMerge(
   const vynutitLocalId = new Set();
   const prijmoutCloudMetaId = new Set();
   const konfliktniKopie = [];
+  const puvodniIdJizZachovanychKonfliktnichKopii =
+    new Set(
+      (Array.isArray(localRegular) ? localRegular : [])
+        .map((note) => note?.syncConflict?.originalId)
+        .filter(Boolean)
+    );
+
   const cekajiciSmazaniId = new Set(
     nactiCekajiciSmazani().map(
       (zaznam) => zaznam?.id
@@ -1019,6 +1089,22 @@ function pripravRevizniMerge(
           lokalni.note &&
           !jeCloudSecretRow(row)
         ) {
+          /*
+           * Pokud už byla tato lokální verze dříve bezpečně zachována
+           * jako konfliktní kopie s novým ID, nevytváříme další kopii.
+           * Původní ID už může bez ztráty převzít cloud.
+           */
+          if (
+            puvodniIdJizZachovanychKonfliktnichKopii.has(
+              row.id
+            )
+          ) {
+            vynutitCloudId.add(row.id);
+            prijmoutCloudMetaId.add(row.id);
+            zrusKonfliktSynchronizace(row.id);
+            return;
+          }
+
           const kopie =
             vytvorKonfliktniKopiiBeznePoznamky(
               lokalni.note,
@@ -1027,6 +1113,9 @@ function pripravRevizniMerge(
 
           if (kopie) {
             konfliktniKopie.push(kopie);
+            puvodniIdJizZachovanychKonfliktnichKopii.add(
+              row.id
+            );
             vynutitCloudId.add(row.id);
             prijmoutCloudMetaId.add(row.id);
             zrusKonfliktSynchronizace(row.id);
@@ -1077,6 +1166,22 @@ function pripravRevizniMerge(
           lokalni.note &&
           !jeCloudSecretRow(row)
         ) {
+          /*
+           * Pokud už byla tato lokální verze dříve bezpečně zachována
+           * jako konfliktní kopie s novým ID, nevytváříme další kopii.
+           * Původní ID už může bez ztráty převzít cloud.
+           */
+          if (
+            puvodniIdJizZachovanychKonfliktnichKopii.has(
+              row.id
+            )
+          ) {
+            vynutitCloudId.add(row.id);
+            prijmoutCloudMetaId.add(row.id);
+            zrusKonfliktSynchronizace(row.id);
+            return;
+          }
+
           const kopie =
             vytvorKonfliktniKopiiBeznePoznamky(
               lokalni.note,
@@ -1085,6 +1190,9 @@ function pripravRevizniMerge(
 
           if (kopie) {
             konfliktniKopie.push(kopie);
+            puvodniIdJizZachovanychKonfliktnichKopii.add(
+              row.id
+            );
             vynutitCloudId.add(row.id);
             prijmoutCloudMetaId.add(row.id);
             zrusKonfliktSynchronizace(row.id);
