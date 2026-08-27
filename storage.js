@@ -1,6 +1,14 @@
 const REGULAR_TASK_STORAGE_KEY = "savedTask";
 const SECRET_TASK_STORAGE_KEY = "savedSecretTask";
-const LUBANOTE_BACKUP_FORMAT = "LubaNote-backup-v2";
+const LUBANOTE_BACKUP_FORMAT_V2 =
+  "LubaNote-backup-v2";
+const LUBANOTE_BACKUP_FORMAT =
+  "LubaNote-complete-backup-v3";
+
+const BACKUP_CLOUD_META_STORAGE_KEY =
+  "lubanoteCloudSyncMetaV1";
+const BACKUP_PENDING_DELETE_STORAGE_KEY =
+  "lubanotePendingDeletes";
 
 
 /*
@@ -951,8 +959,8 @@ async function sdilejZalohuVApk(
   }
 
   await Share.share({
-    title: "Záloha LubaNote",
-    text: "Záloha poznámek LubaNote",
+    title: "Kompletní záloha LubaNote",
+    text: "Kompletní záloha dat LubaNote",
     files: [ulozenySoubor.uri],
     dialogTitle: "Uložit nebo sdílet zálohu"
   });
@@ -1067,6 +1075,333 @@ async function ulozZalohuDoSouboruVApk(
 }
 
 
+function vytvorChybuZalohy(
+  zprava,
+  uzivatelskaZprava = zprava
+) {
+  const error = new Error(zprava);
+  error.uzivatelskaZprava =
+    uzivatelskaZprava;
+  return error;
+}
+
+
+function nactiNastaveniProKompletniZalohu() {
+  let rychleOdlozeni = null;
+
+  try {
+    rychleOdlozeni = JSON.parse(
+      localStorage.getItem(
+        "rychleOdlozeni"
+      ) || "null"
+    );
+  } catch (error) {
+    rychleOdlozeni = null;
+  }
+
+  const velikostPisma = Number(
+    localStorage.getItem("fontSize")
+  );
+
+  return {
+    fontSize:
+      Number.isFinite(velikostPisma)
+        ? Math.min(
+            20,
+            Math.max(13, velikostPisma)
+          )
+        : 16,
+    theme:
+      localStorage.getItem("theme") ||
+      "light",
+    cardView:
+      localStorage.getItem("cardView") ===
+      "list"
+        ? "list"
+        : "grid",
+    cardSortDirection:
+      localStorage.getItem(
+        "cardSortDirection"
+      ) === "asc"
+        ? "asc"
+        : "desc",
+    rychleOdlozeni:
+      rychleOdlozeni &&
+      typeof rychleOdlozeni === "object"
+        ? rychleOdlozeni
+        : null
+  };
+}
+
+
+function obnovNastaveniZKompletniZalohy(
+  nastaveni
+) {
+  if (!nastaveni || typeof nastaveni !== "object") {
+    return;
+  }
+
+  const velikostPisma = Number(
+    nastaveni.fontSize
+  );
+
+  if (Number.isFinite(velikostPisma)) {
+    localStorage.setItem(
+      "fontSize",
+      String(
+        Math.min(
+          20,
+          Math.max(13, velikostPisma)
+        )
+      )
+    );
+  }
+
+  if (
+    typeof nastaveni.theme === "string" &&
+    nastaveni.theme.trim()
+  ) {
+    localStorage.setItem(
+      "theme",
+      nastaveni.theme.trim()
+    );
+  }
+
+  localStorage.setItem(
+    "cardView",
+    nastaveni.cardView === "list"
+      ? "list"
+      : "grid"
+  );
+
+  localStorage.setItem(
+    "cardSortDirection",
+    nastaveni.cardSortDirection === "asc"
+      ? "asc"
+      : "desc"
+  );
+
+  if (
+    nastaveni.rychleOdlozeni &&
+    typeof nastaveni.rychleOdlozeni ===
+      "object"
+  ) {
+    localStorage.setItem(
+      "rychleOdlozeni",
+      JSON.stringify(
+        nastaveni.rychleOdlozeni
+      )
+    );
+  }
+}
+
+
+function pripravTajneNastaveniProZalohu(
+  nastaveni
+) {
+  if (
+    !nastaveni ||
+    typeof nastaveni.salt !== "string" ||
+    !nastaveni.salt ||
+    typeof nastaveni.verifier !== "string" ||
+    !nastaveni.verifier ||
+    !Number.isFinite(
+      Number(nastaveni.kdf_iterations)
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    salt: nastaveni.salt,
+    verifier: nastaveni.verifier,
+    kdf_iterations:
+      Number(nastaveni.kdf_iterations)
+  };
+}
+
+
+async function ziskejTajneNastaveniProZalohu(
+  pocetTajnychPoznamek
+) {
+  let nastaveni =
+    typeof nactiLokalniTajneNastaveni ===
+    "function"
+      ? nactiLokalniTajneNastaveni()
+      : null;
+
+  if (
+    !nastaveni &&
+    typeof nactiTajneNastaveniZCloudu ===
+      "function" &&
+    navigator.onLine
+  ) {
+    const cloud =
+      await nactiTajneNastaveniZCloudu();
+
+    if (cloud?.stav === "ok") {
+      nastaveni = cloud.data;
+    }
+  }
+
+  const bezpecneNastaveni =
+    pripravTajneNastaveniProZalohu(
+      nastaveni
+    );
+
+  if (
+    pocetTajnychPoznamek > 0 &&
+    !bezpecneNastaveni
+  ) {
+    throw vytvorChybuZalohy(
+      "Chybí šifrovací nastavení tajných poznámek.",
+      "Kompletní zálohu nelze vytvořit bez šifrovacího nastavení. Připoj zařízení k internetu, odemkni tajný režim a zkus export znovu."
+    );
+  }
+
+  return {
+    nastaveni: bezpecneNastaveni,
+    userId:
+      nastaveni?.userId ||
+      nastaveni?.user_id ||
+      null
+  };
+}
+
+
+async function vytvorKompletniZalohu() {
+  await cekajNaUlozeniTajnychPoznamek();
+
+  const notes =
+    nactiBeznePoznamkyZUloziste();
+  const secretNotes =
+    nactiSifrovaneTajneZaznamy();
+
+  const tajneNastaveni =
+    await ziskejTajneNastaveniProZalohu(
+      secretNotes.length
+    );
+
+  if (
+    typeof ziskejStitkyProKompletniZalohu !==
+    "function"
+  ) {
+    throw vytvorChybuZalohy(
+      "Modul štítků není dostupný.",
+      "Kompletní zálohu se nepodařilo připravit, protože nejsou dostupné štítky."
+    );
+  }
+
+  let vsechnyStitky;
+
+  try {
+    vsechnyStitky =
+      await ziskejStitkyProKompletniZalohu();
+  } catch (error) {
+    const zprava = String(
+      error?.message || error || ""
+    );
+
+    throw vytvorChybuZalohy(
+      zprava,
+      zprava ||
+      "Štítky se nepodařilo načíst pro kompletní zálohu."
+    );
+  }
+
+  const verejneStitky = vsechnyStitky
+    .filter(
+      (stitek) => stitek.is_secret !== true
+    );
+
+  const tajneStitky = vsechnyStitky
+    .filter(
+      (stitek) => stitek.is_secret === true
+    );
+
+  let secretMetadata = null;
+
+  if (tajneStitky.length > 0) {
+    if (
+      typeof zasifrujMetadataKompletniZalohy !==
+        "function" ||
+      typeof tajnySifrovaciKlic === "undefined" ||
+      !tajnySifrovaciKlic
+    ) {
+      throw vytvorChybuZalohy(
+        "Tajný režim je zamknutý.",
+        "Nejdřív odemkni tajný režim. Tajné štítky musí být v kompletní záloze bezpečně zašifrované."
+      );
+    }
+
+    secretMetadata =
+      await zasifrujMetadataKompletniZalohy({
+        tags: tajneStitky
+      });
+  }
+
+  const user =
+    typeof getCurrentUser === "function"
+      ? await getCurrentUser()
+      : null;
+
+  const ownerUserId =
+    user?.id ||
+    tajneNastaveni.userId ||
+    null;
+
+  if (
+    user?.id &&
+    tajneNastaveni.userId &&
+    user.id !== tajneNastaveni.userId
+  ) {
+    throw vytvorChybuZalohy(
+      "Lokální tajné nastavení patří jinému účtu.",
+      "Kompletní zálohu nelze vytvořit, protože tajné nastavení patří jinému účtu. Připoj se k internetu a zkus to znovu."
+    );
+  }
+
+  const plannedItems =
+    typeof loadPlannedItems === "function"
+      ? loadPlannedItems()
+      : [];
+
+  return {
+    format: LUBANOTE_BACKUP_FORMAT,
+    version: 3,
+    exportedAt: new Date().toISOString(),
+    appVersion:
+      window.LUBANOTE_VERSION || null,
+    owner: {
+      userId: ownerUserId
+    },
+    manifest: {
+      complete: true,
+      regularNoteCount: notes.length,
+      secretNoteCount: secretNotes.length,
+      publicTagCount: verejneStitky.length,
+      secretTagCount: tajneStitky.length,
+      plannedItemCount:
+        Array.isArray(plannedItems)
+          ? plannedItems.length
+          : 0
+    },
+    notes,
+    secretNotes,
+    secretSettings:
+      tajneNastaveni.nastaveni,
+    publicTags: verejneStitky,
+    secretMetadata,
+    plannedItems:
+      Array.isArray(plannedItems)
+        ? plannedItems
+        : [],
+    preferences:
+      nactiNastaveniProKompletniZalohu()
+  };
+}
+
+
 async function pripravAProvedExportZalohy(
   zpusobExportu
 ) {
@@ -1086,15 +1421,8 @@ async function pripravAProvedExportZalohy(
   }
 
   try {
-    await cekajNaUlozeniTajnychPoznamek();
-
-    const backup = {
-      format: LUBANOTE_BACKUP_FORMAT,
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      notes: nactiBeznePoznamkyZUloziste(),
-      secretNotes: nactiSifrovaneTajneZaznamy()
-    };
+    const backup =
+      await vytvorKompletniZalohu();
 
     const data =
       JSON.stringify(backup, null, 2);
@@ -1127,8 +1455,8 @@ async function pripravAProvedExportZalohy(
         "function"
       ) {
         zobrazZpravuAplikace(
-          "Export zálohy",
-          "Záloha byla uložena do vybraného umístění."
+          "Kompletní záloha",
+          "Kompletní záloha byla uložena do vybraného umístění."
         );
       }
     } else {
@@ -1160,7 +1488,8 @@ async function pripravAProvedExportZalohy(
       "function"
     ) {
       zobrazZpravuAplikace(
-        "Export zálohy",
+        "Kompletní záloha",
+        error?.uzivatelskaZprava ||
         "Zálohu se nepodařilo vytvořit. Zkus to prosím znovu."
       );
     }
@@ -1184,7 +1513,7 @@ function exportTasks() {
     "function"
   ) {
     window.otevriVyberovyModal({
-      nadpis: "Export zálohy",
+      nadpis: "Kompletní záloha",
       moznosti: [
         {
           hodnota: "ulozit",
@@ -1221,6 +1550,392 @@ function normalizujImportovanouPoznamku(task, importedAt) {
   };
 }
 
+
+function jePlatnySifrovanyZaznamZalohy(
+  zaznam
+) {
+  return Boolean(
+    zaznam?.id &&
+    zaznam?.encrypted?.iv &&
+    zaznam?.encrypted?.ciphertext &&
+    zaznam?.encrypted?.algorithm ===
+      "AES-GCM"
+  );
+}
+
+
+function jePlatnaKompletniZaloha(
+  zaloha
+) {
+  if (
+    zaloha?.format !==
+      LUBANOTE_BACKUP_FORMAT ||
+    Number(zaloha.version) !== 3 ||
+    zaloha?.manifest?.complete !== true ||
+    !Array.isArray(zaloha.notes) ||
+    !Array.isArray(zaloha.secretNotes) ||
+    !Array.isArray(zaloha.publicTags) ||
+    !Array.isArray(zaloha.plannedItems) ||
+    !zaloha.preferences ||
+    typeof zaloha.preferences !== "object"
+  ) {
+    return false;
+  }
+
+  if (
+    !zaloha.notes.every(
+      (note) =>
+        note && typeof note === "object"
+    ) ||
+    !zaloha.secretNotes.every(
+      jePlatnySifrovanyZaznamZalohy
+    ) ||
+    !zaloha.publicTags.every(
+      (stitek) =>
+        typeof stitek?.name === "string" &&
+        stitek.name.trim() &&
+        stitek.is_secret !== true
+    )
+  ) {
+    return false;
+  }
+
+  const tajneNastaveni =
+    pripravTajneNastaveniProZalohu(
+      zaloha.secretSettings
+    );
+
+  if (
+    zaloha.secretNotes.length > 0 &&
+    !tajneNastaveni
+  ) {
+    return false;
+  }
+
+  if (
+    zaloha.secretMetadata !== null &&
+    zaloha.secretMetadata !== undefined &&
+    (
+      zaloha.secretMetadata.algorithm !==
+        "AES-GCM" ||
+      !zaloha.secretMetadata.iv ||
+      !zaloha.secretMetadata.ciphertext
+    )
+  ) {
+    return false;
+  }
+
+  const manifest = zaloha.manifest;
+
+  return (
+    Number(manifest.regularNoteCount) ===
+      zaloha.notes.length &&
+    Number(manifest.secretNoteCount) ===
+      zaloha.secretNotes.length &&
+    Number(manifest.publicTagCount) ===
+      zaloha.publicTags.length &&
+    Number(manifest.plannedItemCount) ===
+      zaloha.plannedItems.length &&
+    (
+      Number(manifest.secretTagCount) === 0 ||
+      Boolean(zaloha.secretMetadata)
+    )
+  );
+}
+
+
+function nactiObjektZLocalStorageProObnovu(
+  klic,
+  vychoziHodnota
+) {
+  try {
+    const raw = localStorage.getItem(klic);
+
+    return raw
+      ? JSON.parse(raw)
+      : vychoziHodnota;
+  } catch (error) {
+    return vychoziHodnota;
+  }
+}
+
+
+async function vytvorPlanCloudoveSynchronizacePoObnove(
+  obnovovanaId,
+  importedAt
+) {
+  if (
+    !navigator.onLine ||
+    typeof getCurrentUser !== "function" ||
+    typeof getCloudNotesForSync !== "function"
+  ) {
+    throw vytvorChybuZalohy(
+      "Cloud není dostupný pro bezpečnou obnovu.",
+      "Kompletní obnova potřebuje připojení k internetu, aby ji následná synchronizace znovu nepřepsala."
+    );
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user?.id) {
+    throw vytvorChybuZalohy(
+      "Uživatel není přihlášený.",
+      "Před kompletní obnovou se přihlas ke svému účtu LubaNote."
+    );
+  }
+
+  const cloudRows =
+    await getCloudNotesForSync();
+
+  const cloudPodleId = new Map(
+    (Array.isArray(cloudRows) ? cloudRows : [])
+      .filter((row) => row?.id)
+      .map((row) => [row.id, row])
+  );
+
+  const meta = nactiObjektZLocalStorageProObnovu(
+    BACKUP_CLOUD_META_STORAGE_KEY,
+    {}
+  );
+
+  const cekajiciSmazani =
+    nactiObjektZLocalStorageProObnovu(
+      BACKUP_PENDING_DELETE_STORAGE_KEY,
+      []
+    );
+
+  const obnovovanaIdSet = new Set(
+    Array.isArray(obnovovanaId)
+      ? obnovovanaId.filter(Boolean)
+      : []
+  );
+
+  const novaMeta = {
+    ...(meta && typeof meta === "object"
+      ? meta
+      : {})
+  };
+
+  const znackaObnovy =
+    `restore-pending:${importedAt}`;
+
+  obnovovanaIdSet.forEach((id) => {
+    const cloudRow = cloudPodleId.get(id);
+
+    if (!cloudRow) {
+      delete novaMeta[id];
+      return;
+    }
+
+    const revision = Number(
+      cloudRow.revision
+    );
+
+    if (!Number.isFinite(revision)) {
+      throw vytvorChybuZalohy(
+        `Cloudová poznámka ${id} nemá revizi.`,
+        "Bezpečnou obnovu se nepodařilo připravit. Žádná data nebyla importována."
+      );
+    }
+
+    /*
+     * Serverovou revizi známe, ale lokální čas záměrně označíme
+     * jinak. Bezpečný sync tak pozná výslovně obnovenou lokální
+     * verzi a nahraje ji i přes novější cloudový tombstone.
+     */
+    novaMeta[id] = {
+      revision,
+      localUpdatedAt: znackaObnovy,
+      serverUpdatedAt:
+        cloudRow.updated_at || null
+    };
+  });
+
+  return {
+    user,
+    meta: novaMeta,
+    cekajiciSmazani:
+      (Array.isArray(cekajiciSmazani)
+        ? cekajiciSmazani
+        : []
+      ).filter(
+        (zaznam) =>
+          !obnovovanaIdSet.has(
+            zaznam?.id
+          )
+      )
+  };
+}
+
+
+function aplikujPlanCloudoveSynchronizacePoObnove(
+  plan
+) {
+  localStorage.setItem(
+    BACKUP_CLOUD_META_STORAGE_KEY,
+    JSON.stringify(plan.meta || {})
+  );
+
+  localStorage.setItem(
+    BACKUP_PENDING_DELETE_STORAGE_KEY,
+    JSON.stringify(
+      plan.cekajiciSmazani || []
+    )
+  );
+}
+
+
+async function obnovKompletniZalohu(
+  imported,
+  importedAt
+) {
+  if (!jePlatnaKompletniZaloha(imported)) {
+    throw new Error(
+      "Invalid complete backup format"
+    );
+  }
+
+  const regularNotes = imported.notes.map(
+    (task) =>
+      normalizujImportovanouPoznamku(
+        task,
+        importedAt
+      )
+  );
+
+  const obnovovanaId = [
+    ...regularNotes.map((note) => note.id),
+    ...imported.secretNotes.map(
+      (record) => record.id
+    )
+  ];
+
+  const plan =
+    await vytvorPlanCloudoveSynchronizacePoObnove(
+      obnovovanaId,
+      importedAt
+    );
+
+  const ownerUserId =
+    imported?.owner?.userId || null;
+
+  if (
+    ownerUserId &&
+    ownerUserId !== plan.user.id
+  ) {
+    throw vytvorChybuZalohy(
+      "Záloha patří jinému účtu.",
+      "Tato kompletní záloha patří jinému účtu LubaNote. Obnova byla bezpečně zastavena."
+    );
+  }
+
+  if (imported.secretSettings) {
+    if (
+      typeof obnovTajneNastaveniZKompletniZalohy !==
+        "function" ||
+      !await obnovTajneNastaveniZKompletniZalohy(
+        imported.secretSettings,
+        plan.user
+      )
+    ) {
+      throw vytvorChybuZalohy(
+        "Obnova tajného nastavení selhala.",
+        "Tajné nastavení se nepodařilo bezpečně obnovit. Poznámky nebyly importovány."
+      );
+    }
+  }
+
+  if (
+    typeof obnovStitkyZKompletniZalohy !==
+      "function" ||
+    !await obnovStitkyZKompletniZalohy(
+      imported.publicTags,
+      plan.user
+    )
+  ) {
+    throw vytvorChybuZalohy(
+      "Obnova veřejných štítků selhala.",
+      "Štítky se nepodařilo bezpečně obnovit. Poznámky nebyly importovány."
+    );
+  }
+
+  aplikujPlanCloudoveSynchronizacePoObnove(
+    plan
+  );
+
+  ulozBeznePoznamkyPrimo(
+    regularNotes,
+    false
+  );
+  ulozSifrovaneTajneZaznamy(
+    imported.secretNotes
+  );
+
+  localStorage.setItem(
+    "plannedItems",
+    JSON.stringify(imported.plannedItems)
+  );
+
+  obnovNastaveniZKompletniZalohy(
+    imported.preferences
+  );
+
+  if (
+    typeof ulozCekajiciTajnaMetadataZeZalohy ===
+    "function"
+  ) {
+    ulozCekajiciTajnaMetadataZeZalohy(
+      imported.secretMetadata || null,
+      ownerUserId
+    );
+  }
+
+  vycistiDesifrovaneTajnePoznamky();
+  zvysReviziLokalnichZmenPoznamek();
+
+  if (
+    typeof obnovSystemoveNotifikacePoKompletniObnove ===
+    "function"
+  ) {
+    try {
+      await obnovSystemoveNotifikacePoKompletniObnove(
+        regularNotes
+      );
+    } catch (error) {
+      console.warn(
+        "Systémové notifikace budou obnoveny později:",
+        error
+      );
+    }
+  }
+
+  location.reload();
+}
+
+
+async function provedKompletniObnovuSeZpracovanimChyby(
+  imported,
+  importedAt
+) {
+  try {
+    await obnovKompletniZalohu(
+      imported,
+      importedAt
+    );
+  } catch (error) {
+    console.error(
+      "Complete backup restore error:",
+      error
+    );
+
+    zobrazZpravuAplikace(
+      "Záloha a obnova",
+      error?.uzivatelskaZprava ||
+      "Soubor není platná kompletní záloha LubaNote."
+    );
+  }
+}
+
 function importTasks(file) {
   const reader = new FileReader();
 
@@ -1230,7 +1945,56 @@ function importTasks(file) {
       const importedAt = new Date().toISOString();
 
       if (
-        imported?.format === LUBANOTE_BACKUP_FORMAT &&
+        imported?.format ===
+        LUBANOTE_BACKUP_FORMAT
+      ) {
+        if (!jePlatnaKompletniZaloha(imported)) {
+          throw new Error(
+            "Invalid complete backup format"
+          );
+        }
+
+        if (
+          typeof window.otevriVyberovyModal ===
+          "function"
+        ) {
+          window.otevriVyberovyModal({
+            nadpis:
+              "Obnovit kompletní zálohu? Obnovené verze se uloží také do cloudu.",
+            moznosti: [
+              {
+                hodnota: "obnovit",
+                popisek: "Obnovit zálohu"
+              },
+              {
+                hodnota: "zrusit",
+                popisek: "Zrušit"
+              }
+            ],
+            poVyberu: async (volba) => {
+              if (volba !== "obnovit") {
+                return;
+              }
+
+              await provedKompletniObnovuSeZpracovanimChyby(
+                imported,
+                importedAt
+              );
+            }
+          });
+          return;
+        }
+
+        await provedKompletniObnovuSeZpracovanimChyby(
+          imported,
+          importedAt
+        );
+        return;
+      }
+
+      if (
+        imported?.format ===
+          LUBANOTE_BACKUP_FORMAT_V2 &&
         Array.isArray(imported.notes) &&
         Array.isArray(imported.secretNotes)
       ) {
@@ -1288,6 +2052,7 @@ function importTasks(file) {
       console.error("Import backup error:", error);
       zobrazZpravuAplikace(
         "Záloha a obnova",
+        error?.uzivatelskaZprava ||
         "Soubor není platná záloha LubaNote."
       );
     }

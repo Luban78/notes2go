@@ -403,6 +403,70 @@ async function obnovNotifikaceOpakovanychPoznamek() {
 }
 
 
+async function obnovSystemoveNotifikacePoKompletniObnove(
+  poznamky
+) {
+  const LocalNotifications =
+    window.Capacitor?.Plugins?.LocalNotifications;
+
+  if (!LocalNotifications) {
+    return true;
+  }
+
+  const permission =
+    await LocalNotifications.checkPermissions();
+
+  if (permission?.display !== "granted") {
+    return false;
+  }
+
+  await createReminderChannel();
+
+  if (
+    typeof LocalNotifications.getPending ===
+    "function"
+  ) {
+    const pending =
+      await LocalNotifications.getPending();
+
+    const notifications =
+      (pending?.notifications || [])
+        .filter(
+          (notification) =>
+            Number.isInteger(notification?.id)
+        )
+        .map((notification) => ({
+          id: notification.id
+        }));
+
+    if (notifications.length > 0) {
+      await LocalNotifications.cancel({
+        notifications
+      });
+    }
+  }
+
+  const beznePoznamky =
+    (Array.isArray(poznamky)
+      ? poznamky
+      : []
+    ).filter(
+      (note) =>
+        note?.id &&
+        note.isSecret !== true &&
+        note.completed !== true
+    );
+
+  for (const note of beznePoznamky) {
+    await obnovNotifikacePoznamkyPodleSoukromi(
+      note
+    );
+  }
+
+  return true;
+}
+
+
 /*
  * Bezpečnostní úklid po odemknutí / aktualizaci aplikace.
  * Zruší i případné staré generické "tajné" notifikace naplánované

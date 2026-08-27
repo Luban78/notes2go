@@ -8,6 +8,217 @@ let vytvarimeTajnyStitek = false;
 
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
+
+
+function normalizujStitekProZalohu(
+  stitek,
+  vychoziPoradi = 0
+) {
+  const name = String(
+    stitek?.name || ""
+  ).trim();
+
+  if (!name) {
+    return null;
+  }
+
+  const poradi = Number(
+    stitek?.sort_order
+  );
+
+  return {
+    name,
+    is_secret:
+      stitek?.is_secret === true,
+    sort_order:
+      Number.isFinite(poradi)
+        ? poradi
+        : vychoziPoradi
+  };
+}
+
+
+function pripravStitkyProZalohu(stitky) {
+  const podleNazvu = new Map();
+
+  (Array.isArray(stitky) ? stitky : [])
+    .forEach((stitek, index) => {
+      const normalizovany =
+        normalizujStitekProZalohu(
+          stitek,
+          index
+        );
+
+      if (!normalizovany) {
+        return;
+      }
+
+      podleNazvu.set(
+        normalizovany.name
+          .toLocaleLowerCase("cs-CZ"),
+        normalizovany
+      );
+    });
+
+  return Array.from(podleNazvu.values())
+    .sort(
+      (a, b) =>
+        a.sort_order - b.sort_order
+    );
+}
+
+
+async function ziskejStitkyProKompletniZalohu() {
+  if (
+    !navigator.onLine ||
+    !supabaseClient ||
+    typeof getCurrentUser !== "function"
+  ) {
+    throw new Error(
+      "Kompletní záloha potřebuje připojení k internetu pro bezpečné načtení všech štítků."
+    );
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user?.id) {
+    throw new Error(
+      "Před kompletní zálohou se přihlas ke svému účtu LubaNote."
+    );
+  }
+
+  const dotaz = supabaseClient
+    .from("tags")
+    .select(
+      "name, is_secret, sort_order"
+    )
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .order("sort_order", {
+      ascending: true
+    });
+
+  const { data, error } =
+    typeof sCasovymLimitem === "function"
+      ? await sCasovymLimitem(
+          dotaz,
+          5000,
+          "Načtení štítků pro zálohu"
+        )
+      : await dotaz;
+
+  if (error || !Array.isArray(data)) {
+    throw new Error(
+      "Štítky se nepodařilo bezpečně načíst pro kompletní zálohu."
+    );
+  }
+
+  syncedTags = data;
+
+  return pripravStitkyProZalohu(data);
+}
+
+
+async function obnovStitkyZKompletniZalohy(
+  stitky,
+  user
+) {
+  const obnovovaneStitky =
+    pripravStitkyProZalohu(stitky);
+
+  if (
+    !user?.id ||
+    !supabaseClient
+  ) {
+    return false;
+  }
+
+  const { data: existujici, error } =
+    await supabaseClient
+      .from("tags")
+      .select(
+        "id, name, is_secret, sort_order, deleted_at"
+      )
+      .eq("user_id", user.id);
+
+  if (error) {
+    console.error(
+      "Načtení štítků před obnovou selhalo:",
+      error.message
+    );
+    return false;
+  }
+
+  const podleNazvu = new Map(
+    (existujici || []).map((stitek) => [
+      String(stitek.name || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ"),
+      stitek
+    ])
+  );
+
+  const noveStitky = [];
+
+  for (const stitek of obnovovaneStitky) {
+    const klic = stitek.name
+      .toLocaleLowerCase("cs-CZ");
+
+    const puvodni = podleNazvu.get(klic);
+
+    if (!puvodni) {
+      noveStitky.push({
+        user_id: user.id,
+        ...stitek
+      });
+      continue;
+    }
+
+    const { error: updateError } =
+      await supabaseClient
+        .from("tags")
+        .update({
+          name: stitek.name,
+          is_secret: stitek.is_secret,
+          sort_order: stitek.sort_order,
+          deleted_at: null
+        })
+        .eq("id", puvodni.id);
+
+    if (updateError) {
+      console.error(
+        "Obnova štítku selhala:",
+        stitek.name,
+        updateError.message
+      );
+      return false;
+    }
+  }
+
+  if (noveStitky.length > 0) {
+    const { error: insertError } =
+      await supabaseClient
+        .from("tags")
+        .insert(noveStitky);
+
+    if (insertError) {
+      console.error(
+        "Obnova nových štítků selhala:",
+        insertError.message
+      );
+      return false;
+    }
+  }
+
+  if (
+    typeof loadTagsFromSupabase ===
+    "function"
+  ) {
+    await loadTagsFromSupabase();
+  }
+
+  return true;
+}
 // ==========================================
 // TAJNÝ REŽIM – STAV
 // Záměrně se NEUKLÁDÁ do localStorage.

@@ -23,6 +23,9 @@ let tajnySifrovaciKlic = null;
 const SECRET_SETTINGS_CACHE_KEY =
   "lubanoteSecretSettingsV1";
 
+const PENDING_SECRET_BACKUP_METADATA_KEY =
+  "lubanotePendingSecretBackupMetadataV1";
+
 function jePlatneTajneNastaveni(nastaveni) {
   return Boolean(
     nastaveni &&
@@ -82,6 +85,262 @@ function ulozLokalniTajneNastaveni(
   );
 
   return true;
+}
+
+
+async function obnovTajneNastaveniZKompletniZalohy(
+  nastaveni,
+  user
+) {
+  if (
+    !jePlatneTajneNastaveni(nastaveni) ||
+    !user?.id ||
+    !supabaseClient
+  ) {
+    return false;
+  }
+
+  const hodnoty = {
+    salt: nastaveni.salt,
+    verifier: nastaveni.verifier,
+    kdf_iterations:
+      Number(nastaveni.kdf_iterations)
+  };
+
+  const { data: existujici, error } =
+    await supabaseClient
+      .from("secret_settings")
+      .select(
+        "salt, verifier, kdf_iterations"
+      )
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Kontrola tajného nastavení před obnovou selhala:",
+      error.message
+    );
+    return false;
+  }
+
+  const nastaveniSeShoduje = Boolean(
+    existujici &&
+    existujici.salt === hodnoty.salt &&
+    existujici.verifier ===
+      hodnoty.verifier &&
+    Number(existujici.kdf_iterations) ===
+      hodnoty.kdf_iterations
+  );
+
+  if (existujici && !nastaveniSeShoduje) {
+    console.error(
+      "Tajné nastavení v účtu se liší od obnovované zálohy."
+    );
+    return false;
+  }
+
+  if (!existujici) {
+    const { error: zapisError } =
+      await supabaseClient
+        .from("secret_settings")
+        .insert({
+          user_id: user.id,
+          ...hodnoty
+        });
+
+    if (zapisError) {
+      console.error(
+        "Obnova tajného nastavení selhala:",
+        zapisError.message
+      );
+      return false;
+    }
+  }
+
+  return ulozLokalniTajneNastaveni(
+    hodnoty,
+    user.id
+  );
+}
+
+
+async function zasifrujMetadataKompletniZalohy(
+  metadata
+) {
+  if (!tajnySifrovaciKlic) {
+    throw new Error(
+      "Tajný režim musí být před kompletní zálohou odemčený."
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12)
+  );
+
+  const additionalData = encoder.encode(
+    "LubaNote-complete-backup-metadata-v1"
+  );
+
+  const plaintext = encoder.encode(
+    JSON.stringify(metadata || {})
+  );
+
+  const encrypted =
+    await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData
+      },
+      tajnySifrovaciKlic,
+      plaintext
+    );
+
+  return {
+    version: 1,
+    algorithm: "AES-GCM",
+    iv: bytesToBase64(
+      new Uint8Array(iv)
+    ),
+    ciphertext: bytesToBase64(
+      new Uint8Array(encrypted)
+    )
+  };
+}
+
+
+async function desifrujMetadataKompletniZalohy(
+  encryptedData
+) {
+  if (
+    !tajnySifrovaciKlic ||
+    encryptedData?.algorithm !== "AES-GCM" ||
+    !encryptedData?.iv ||
+    !encryptedData?.ciphertext
+  ) {
+    throw new Error(
+      "Šifrovaná metadata zálohy nejsou dostupná."
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const decrypted =
+    await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: base64ToBytes(
+          encryptedData.iv
+        ),
+        additionalData: encoder.encode(
+          "LubaNote-complete-backup-metadata-v1"
+        )
+      },
+      tajnySifrovaciKlic,
+      base64ToBytes(
+        encryptedData.ciphertext
+      )
+    );
+
+  return JSON.parse(
+    decoder.decode(decrypted)
+  );
+}
+
+
+function ulozCekajiciTajnaMetadataZeZalohy(
+  encryptedData,
+  ownerUserId = null
+) {
+  if (!encryptedData) {
+    localStorage.removeItem(
+      PENDING_SECRET_BACKUP_METADATA_KEY
+    );
+    return;
+  }
+
+  localStorage.setItem(
+    PENDING_SECRET_BACKUP_METADATA_KEY,
+    JSON.stringify({
+      ownerUserId,
+      encryptedData
+    })
+  );
+}
+
+
+async function obnovCekajiciTajnaMetadataZeZalohy() {
+  const raw = localStorage.getItem(
+    PENDING_SECRET_BACKUP_METADATA_KEY
+  );
+
+  if (!raw || !tajnySifrovaciKlic) {
+    return true;
+  }
+
+  try {
+    const cekajici = JSON.parse(raw);
+    const user = await getCurrentUser();
+
+    if (!user?.id || !navigator.onLine) {
+      return false;
+    }
+
+    if (
+      cekajici.ownerUserId &&
+      cekajici.ownerUserId !== user.id
+    ) {
+      throw new Error(
+        "Tajná metadata patří jinému účtu."
+      );
+    }
+
+    const metadata =
+      await desifrujMetadataKompletniZalohy(
+        cekajici.encryptedData
+      );
+
+    const stitky = Array.isArray(
+      metadata?.tags
+    )
+      ? metadata.tags.map((stitek) => ({
+          ...stitek,
+          is_secret: true
+        }))
+      : [];
+
+    if (
+      typeof obnovStitkyZKompletniZalohy !==
+      "function"
+    ) {
+      return false;
+    }
+
+    const obnoveno =
+      await obnovStitkyZKompletniZalohy(
+        stitky,
+        user
+      );
+
+    if (!obnoveno) {
+      return false;
+    }
+
+    localStorage.removeItem(
+      PENDING_SECRET_BACKUP_METADATA_KEY
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Obnova tajných metadat ze zálohy selhala:",
+      error
+    );
+    return false;
+  }
 }
 
 function existujiLokalniTajnaData() {
@@ -630,6 +889,12 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
   }
 
   /*
+   * Tajné názvy štítků jsou v kompletní záloze také zašifrované.
+   * Obnovíme je až po úspěšném odvození klíče ze správného hesla.
+   */
+  await obnovCekajiciTajnaMetadataZeZalohy();
+
+  /*
    * Po aktualizaci okamžitě uklidíme i případné starší systémové
    * notifikace tajných poznámek, které mohly vzniknout před zavedením
    * pravidla SECRET = absolutní ticho.
@@ -891,6 +1156,15 @@ async function pripravOfflineTajnyRezim() {
 window.addEventListener(
   "online",
   pripravOfflineTajnyRezim
+);
+
+window.addEventListener(
+  "online",
+  () => {
+    if (tajnyRezimOdemceny) {
+      obnovCekajiciTajnaMetadataZeZalohy();
+    }
+  }
 );
 
 window.addEventListener(
