@@ -178,6 +178,31 @@ async function getCurrentUser() {
   }
 
   try {
+    /*
+     * Při obnovené Supabase session po startu aplikace
+     * může getUser() krátce vrátit null / selhat dřív, než
+     * se dokončí obnova auth stavu. getSession() ale už v tu
+     * chvíli obsahuje lokálně obnoveného uživatele.
+     *
+     * Právě to způsobovalo, že GIPA i čerstvě spuštěná APK
+     * po restartu nenačetly štítky ani nespustily sync, ale
+     * po odhlášení a novém přihlášení vše fungovalo.
+     */
+    const {
+      data: { session }
+    } = await sCasovymLimitem(
+      supabaseClient.auth.getSession(),
+      5000,
+      "Načtení přihlášené session"
+    );
+
+    if (session?.user) {
+      return session.user;
+    }
+
+    /*
+     * Fallback pro čerstvé přihlášení / neobvyklý stav.
+     */
     const {
       data: { user }
     } = await sCasovymLimitem(
