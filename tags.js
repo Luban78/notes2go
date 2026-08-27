@@ -17,16 +17,21 @@ function normalizujStitekProZalohu(
   const name = String(
     stitek?.name || ""
   ).trim();
-  
+
   if (!name) {
     return null;
   }
-  
+
   const poradi = Number(
     stitek?.sort_order
   );
-  
+
+  const id = String(
+    stitek?.id || ""
+  ).trim();
+
   return {
+    ...(id ? { id } : {}),
     name,
     is_secret: stitek?.is_secret === true,
     sort_order: Number.isFinite(poradi) ?
@@ -39,7 +44,7 @@ function normalizujStitekProZalohu(
 
 function pripravStitkyProZalohu(stitky) {
   const podleNazvu = new Map();
-  
+
   (Array.isArray(stitky) ? stitky : [])
   .forEach((stitek, index) => {
     const normalizovany =
@@ -47,18 +52,22 @@ function pripravStitkyProZalohu(stitky) {
         stitek,
         index
       );
-    
+
     if (!normalizovany) {
       return;
     }
-    
+
+    const typ = normalizovany.is_secret ?
+      "secret" :
+      "public";
+
     podleNazvu.set(
-      normalizovany.name
-      .toLocaleLowerCase("cs-CZ"),
+      `${typ}:${normalizovany.name
+        .toLocaleLowerCase("cs-CZ")}`,
       normalizovany
     );
   });
-  
+
   return Array.from(podleNazvu.values())
     .sort(
       (a, b) =>
@@ -77,26 +86,26 @@ async function ziskejStitkyProKompletniZalohu() {
       "Kompletní záloha potřebuje připojení k internetu pro bezpečné načtení všech štítků."
     );
   }
-  
+
   const user = await getCurrentUser();
-  
+
   if (!user?.id) {
     throw new Error(
       "Před kompletní zálohou se přihlas ke svému účtu LubaNote."
     );
   }
-  
+
   const dotaz = supabaseClient
     .from("tags")
     .select(
-      "name, is_secret, sort_order, color"
+      "id, name, encrypted_name, is_secret, sort_order, color"
     )
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .order("sort_order", {
       ascending: true
     });
-  
+
   const { data, error } =
   typeof sCasovymLimitem === "function" ?
     await sCasovymLimitem(
@@ -105,16 +114,80 @@ async function ziskejStitkyProKompletniZalohu() {
       "Načtení štítků pro zálohu"
     ) :
     await dotaz;
-  
+
   if (error || !Array.isArray(data)) {
     throw new Error(
       "Štítky se nepodařilo bezpečně načíst pro kompletní zálohu."
     );
   }
-  
-  syncedTags = data;
-  
-  return pripravStitkyProZalohu(data);
+
+  const stitkyProZalohu = [];
+
+  for (const tag of data) {
+    if (tag.is_secret !== true) {
+      stitkyProZalohu.push({
+        id: tag.id,
+        name: tag.name,
+        is_secret: false,
+        sort_order: tag.sort_order,
+        color: tag.color
+      });
+      continue;
+    }
+
+    if (
+      !tajnyRezimOdemceny ||
+      typeof tajnySifrovaciKlic === "undefined" ||
+      !tajnySifrovaciKlic ||
+      typeof desifrujNazevTajnehoStitku !== "function"
+    ) {
+      throw new Error(
+        "Nejdřív odemkni tajný režim. Tajné štítky musí být v kompletní záloze bezpečně zašifrované."
+      );
+    }
+
+    if (!tag.encrypted_name) {
+      throw new Error(
+        "Tajný štítek nemá platný šifrovaný název. Záloha byla bezpečně zastavena."
+      );
+    }
+
+    let skutecnyNazev;
+
+    try {
+      skutecnyNazev =
+        await desifrujNazevTajnehoStitku(
+          tag.encrypted_name,
+          tag.id
+        );
+    } catch (error) {
+      console.error(
+        "Dešifrování tajného štítku pro zálohu selhalo:",
+        error
+      );
+
+      throw new Error(
+        "Tajný štítek se nepodařilo bezpečně připravit pro zálohu."
+      );
+    }
+
+    stitkyProZalohu.push({
+      id: tag.id,
+      name: skutecnyNazev,
+      is_secret: true,
+      sort_order: tag.sort_order,
+      color: tag.color
+    });
+  }
+
+  /*
+   * Důležité: data načtená přímo ze Supabase
+   * NEPŘEPISUJÍ syncedTags. U tajných štítků je
+   * name pouze technický identifikátor.
+   */
+  return pripravStitkyProZalohu(
+    stitkyProZalohu
+  );
 }
 
 
@@ -124,22 +197,22 @@ async function obnovStitkyZKompletniZalohy(
 ) {
   const obnovovaneStitky =
     pripravStitkyProZalohu(stitky);
-  
+
   if (
     !user?.id ||
     !supabaseClient
   ) {
     return false;
   }
-  
+
   const { data: existujici, error } =
   await supabaseClient
     .from("tags")
     .select(
-      "id, name, is_secret, sort_order, deleted_at"
+      "id, name, encrypted_name, is_secret, sort_order, color, deleted_at"
     )
     .eq("user_id", user.id);
-  
+
   if (error) {
     console.error(
       "Načtení štítků před obnovou selhalo:",
@@ -147,79 +220,230 @@ async function obnovStitkyZKompletniZalohy(
     );
     return false;
   }
-  
-  const podleNazvu = new Map(
-    (existujici || []).map((stitek) => [
-      String(stitek.name || "")
-      .trim()
-      .toLocaleLowerCase("cs-CZ"),
-      stitek
-    ])
+
+  const existujiciStitky =
+    Array.isArray(existujici) ?
+      existujici :
+      [];
+
+  const verejnePodleNazvu = new Map(
+    existujiciStitky
+      .filter(
+        (stitek) => stitek.is_secret !== true
+      )
+      .map((stitek) => [
+        String(stitek.name || "")
+          .trim()
+          .toLocaleLowerCase("cs-CZ"),
+        stitek
+      ])
   );
-  
-  const noveStitky = [];
-  
-  for (const stitek of obnovovaneStitky) {
-    const klic = stitek.name
-      .toLocaleLowerCase("cs-CZ");
-    
-    const puvodni = podleNazvu.get(klic);
-    
-    if (!puvodni) {
-      noveStitky.push({
-        user_id: user.id,
-        ...stitek
-      });
-      continue;
-    }
-    
-    const { error: updateError } =
-    await supabaseClient
-      .from("tags")
-      .update({
-        name: stitek.name,
-        is_secret: puvodni.is_secret === true ||
-          stitek.is_secret === true,
-        sort_order: stitek.sort_order,
-        color: stitek.color,
-        deleted_at: null
-      })
-      .eq("id", puvodni.id);
-    
-    if (updateError) {
+
+  const tajnePodleId = new Map(
+    existujiciStitky
+      .filter(
+        (stitek) => stitek.is_secret === true
+      )
+      .map((stitek) => [
+        String(stitek.id || ""),
+        stitek
+      ])
+  );
+
+  const tajnePodleNazvu = new Map();
+
+  const obnovujeSeTajnyStitek =
+    obnovovaneStitky.some(
+      (stitek) => stitek.is_secret === true
+    );
+
+  if (obnovujeSeTajnyStitek) {
+    if (
+      !tajnyRezimOdemceny ||
+      typeof tajnySifrovaciKlic === "undefined" ||
+      !tajnySifrovaciKlic ||
+      typeof zasifrujNazevTajnehoStitku !== "function" ||
+      typeof desifrujNazevTajnehoStitku !== "function"
+    ) {
       console.error(
-        "Obnova štítku selhala:",
-        stitek.name,
-        updateError.message
+        "Obnova tajných štítků vyžaduje odemčený tajný režim."
       );
       return false;
     }
+
+    for (const tag of existujiciStitky) {
+      if (
+        tag.is_secret !== true ||
+        !tag.encrypted_name
+      ) {
+        continue;
+      }
+
+      try {
+        const nazev =
+          await desifrujNazevTajnehoStitku(
+            tag.encrypted_name,
+            tag.id
+          );
+
+        tajnePodleNazvu.set(
+          String(nazev || "")
+            .trim()
+            .toLocaleLowerCase("cs-CZ"),
+          tag
+        );
+      } catch (error) {
+        console.warn(
+          "Existující tajný štítek se nepodařilo porovnat při obnově:",
+          tag.id,
+          error
+        );
+      }
+    }
   }
-  
-  if (noveStitky.length > 0) {
+
+  for (const stitek of obnovovaneStitky) {
+    if (stitek.is_secret === true) {
+      const zalozeneId = String(
+        stitek.id || ""
+      ).trim();
+
+      const klicNazvu = stitek.name
+        .toLocaleLowerCase("cs-CZ");
+
+      const puvodni =
+        (zalozeneId &&
+          tajnePodleId.get(zalozeneId)) ||
+        tajnePodleNazvu.get(klicNazvu) ||
+        null;
+
+      const tagId =
+        puvodni?.id ||
+        zalozeneId ||
+        crypto.randomUUID();
+
+      const zasifrovanyNazev =
+        await zasifrujNazevTajnehoStitku(
+          stitek.name,
+          tagId
+        );
+
+      const dataProUlozeni = {
+        name: `__secret_tag_${tagId}`,
+        encrypted_name: zasifrovanyNazev,
+        is_secret: true,
+        sort_order: stitek.sort_order,
+        color: stitek.color,
+        deleted_at: null
+      };
+
+      if (puvodni) {
+        const { error: updateError } =
+        await supabaseClient
+          .from("tags")
+          .update(dataProUlozeni)
+          .eq("id", puvodni.id)
+          .eq("user_id", user.id);
+
+        if (updateError) {
+          console.error(
+            "Obnova tajného štítku selhala:",
+            stitek.name,
+            updateError.message
+          );
+          return false;
+        }
+      } else {
+        const { error: insertError } =
+        await supabaseClient
+          .from("tags")
+          .insert({
+            id: tagId,
+            user_id: user.id,
+            ...dataProUlozeni
+          });
+
+        if (insertError) {
+          console.error(
+            "Obnova nového tajného štítku selhala:",
+            insertError.message
+          );
+          return false;
+        }
+      }
+
+      continue;
+    }
+
+    const klic = stitek.name
+      .toLocaleLowerCase("cs-CZ");
+
+    const puvodni =
+      verejnePodleNazvu.get(klic);
+
+    if (puvodni) {
+      const { error: updateError } =
+      await supabaseClient
+        .from("tags")
+        .update({
+          name: stitek.name,
+          is_secret: false,
+          sort_order: stitek.sort_order,
+          color: stitek.color,
+          deleted_at: null
+        })
+        .eq("id", puvodni.id)
+        .eq("user_id", user.id);
+
+      if (updateError) {
+        console.error(
+          "Obnova veřejného štítku selhala:",
+          stitek.name,
+          updateError.message
+        );
+        return false;
+      }
+
+      continue;
+    }
+
+    const dataNovehoStitku = {
+      user_id: user.id,
+      name: stitek.name,
+      is_secret: false,
+      sort_order: stitek.sort_order,
+      color: stitek.color,
+      deleted_at: null
+    };
+
+    if (stitek.id) {
+      dataNovehoStitku.id = stitek.id;
+    }
+
     const { error: insertError } =
-    await supabaseClient
-      .from("tags")
-      .insert(noveStitky);
-    
+      await supabaseClient
+        .from("tags")
+        .insert(dataNovehoStitku);
+
     if (insertError) {
       console.error(
-        "Obnova nových štítků selhala:",
+        "Obnova nového veřejného štítku selhala:",
         insertError.message
       );
       return false;
     }
   }
-  
+
   if (
     typeof loadTagsFromSupabase ===
     "function"
   ) {
     await loadTagsFromSupabase();
   }
-  
+
   return true;
 }
+
 // ==========================================
 // TAJNÝ REŽIM – STAV
 // Záměrně se NEUKLÁDÁ do localStorage.
