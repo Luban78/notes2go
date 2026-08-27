@@ -1,0 +1,91 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare web
+        run: |
+          mkdir -p _site
+          cp index.html *.css *.js _site/
+          cp -r icons _site/
+          touch _site/.nojekyll
+
+      - name: Generate automatic version
+        run: |
+          VERSION="${GITHUB_SHA::12}"
+
+          echo "window.LUBANOTE_VERSION = '${VERSION}';" > _site/build-version.js
+          echo "window.LUBANOTE_BUILD = '${GITHUB_RUN_NUMBER}';" >> _site/build-version.js
+
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Add automatic cache version
+        run: |
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          cesta = Path("_site/index.html")
+          html = cesta.read_text(encoding="utf-8")
+
+          verze = os.environ["VERSION"]
+
+          vzor = re.compile(
+              r'((?:src|href)=["\'])'
+              r'(?!https?:|//|data:)'
+              r'([^"\']+\.(?:js|css))'
+              r'(?:\?[^"\']*)?'
+              r'(["\'])'
+          )
+
+          html = vzor.sub(
+              lambda shoda:
+                  f"{shoda.group(1)}"
+                  f"{shoda.group(2)}"
+                  f"?v={verze}"
+                  f"{shoda.group(3)}",
+              html
+          )
+
+          cesta.write_text(
+              html,
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Upload Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
