@@ -14,6 +14,10 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
+    registerPlugin(
+      LubaNoteBackupExportPlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();

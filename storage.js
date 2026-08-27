@@ -959,7 +959,30 @@ async function sdilejZalohuVApk(
 }
 
 
-async function exportTasks() {
+async function ulozZalohuDoSouboruVApk(
+  data,
+  nazevSouboru
+) {
+  const BackupExport =
+    window.Capacitor
+      ?.Plugins?.LubaNoteBackupExport;
+
+  if (!BackupExport) {
+    throw new Error(
+      "V APK chybí nativní ukládání zálohy."
+    );
+  }
+
+  return await BackupExport.ulozJson({
+    data,
+    nazevSouboru
+  });
+}
+
+
+async function pripravAProvedExportZalohy(
+  zpusobExportu
+) {
   const tlacitko =
     document.getElementById(
       "settingsExportButton"
@@ -996,11 +1019,31 @@ async function exportTasks() {
       window.Capacitor
         ?.isNativePlatform?.() === true;
 
-    if (jeApk) {
+    if (
+      jeApk &&
+      zpusobExportu === "sdilet"
+    ) {
       await sdilejZalohuVApk(
         data,
         nazevSouboru
       );
+    } else if (jeApk) {
+      const vysledek =
+        await ulozZalohuDoSouboruVApk(
+          data,
+          nazevSouboru
+        );
+
+      if (
+        vysledek?.saved === true &&
+        typeof zobrazZpravuAplikace ===
+        "function"
+      ) {
+        zobrazZpravuAplikace(
+          "Export zálohy",
+          "Záloha byla uložena do vybraného umístění."
+        );
+      }
     } else {
       stahniZalohuVeWebu(
         data,
@@ -1008,6 +1051,18 @@ async function exportTasks() {
       );
     }
   } catch (error) {
+    const zpravaChyby = String(
+      error?.message || error || ""
+    );
+
+    if (
+      zpravaChyby.includes(
+        "Share canceled"
+      )
+    ) {
+      return;
+    }
+
     console.error(
       "Export zálohy selhal:",
       error
@@ -1028,6 +1083,43 @@ async function exportTasks() {
       tlacitko.textContent = puvodniText;
     }
   }
+}
+
+
+function exportTasks() {
+  const jeApk =
+    window.Capacitor
+      ?.isNativePlatform?.() === true;
+
+  if (
+    jeApk &&
+    typeof window.otevriVyberovyModal ===
+    "function"
+  ) {
+    window.otevriVyberovyModal({
+      nadpis: "Export zálohy",
+      moznosti: [
+        {
+          hodnota: "ulozit",
+          popisek: "Uložit do telefonu"
+        },
+        {
+          hodnota: "sdilet",
+          popisek: "Sdílet zálohu"
+        }
+      ],
+      poVyberu: (zpusobExportu) =>
+        pripravAProvedExportZalohy(
+          zpusobExportu
+        )
+    });
+
+    return;
+  }
+
+  pripravAProvedExportZalohy(
+    jeApk ? "ulozit" : "web"
+  );
 }
 
 function normalizujImportovanouPoznamku(task, importedAt) {
