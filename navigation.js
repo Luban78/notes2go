@@ -288,17 +288,47 @@
       ?.zrusPredchoziPrihlaseni?.();
 
     const loginScreen =
-      document.getElementById("loginScreen");
+  document.getElementById("loginScreen");
 
-    const loginPassword =
-      document.getElementById("loginPassword");
+const loginForm =
+  document.getElementById("loginForm");
 
-    const loginMessage =
-      document.getElementById("loginMessage");
+const loginEmail =
+  document.getElementById("loginEmail");
 
-    loginPassword.value = "";
-    loginMessage.textContent = "";
-    loginMessage.classList.remove("error");
-    loginScreen.hidden = false;
+const loginPassword =
+  document.getElementById("loginPassword");
+
+const loginMessage =
+  document.getElementById("loginMessage");
+
+/*
+ * Po odhlášení znovu aktivujeme
+ * skutečný přihlašovací formulář.
+ */
+loginForm.removeAttribute("inert");
+
+loginEmail.disabled = false;
+loginPassword.disabled = false;
+
+loginEmail.name = "username";
+loginPassword.name = "password";
+
+loginEmail.setAttribute(
+  "autocomplete",
+  "username"
+);
+
+loginPassword.setAttribute(
+  "autocomplete",
+  "current-password"
+);
+
+loginPassword.value = "";
+
+loginMessage.textContent = "";
+loginMessage.classList.remove("error");
+
+loginScreen.hidden = false;
   });
 })();

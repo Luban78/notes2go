@@ -221,13 +221,65 @@ function setLoginMessage(message = "", isError = false) {
 
 function zobrazLokalniAplikaci() {
   loginScreen.hidden = true;
-  document.body.classList.remove("authPending");
+
+  /*
+   * Po přihlášení skutečně deaktivujeme
+   * credential inputy.
+   *
+   * Nestačí je pouze schovat přes hidden,
+   * protože Chrome Password Manager je jinak
+   * stále může považovat za aktivní login formulář.
+   */
+  loginForm.setAttribute("inert", "");
+
+  loginEmail.disabled = true;
+  loginPassword.disabled = true;
+
+  loginEmail.removeAttribute("name");
+  loginPassword.removeAttribute("name");
+
+  loginEmail.setAttribute(
+    "autocomplete",
+    "off"
+  );
+
+  loginPassword.setAttribute(
+    "autocomplete",
+    "off"
+  );
+
+  loginPassword.value = "";
+
+  document.body.classList.remove(
+    "authPending"
+  );
 }
+
+
+
+
 
 function zobrazPrihlaseni(
   message = "",
   isError = true
 ) {
+  loginForm.removeAttribute("inert");
+
+  loginEmail.disabled = false;
+  loginPassword.disabled = false;
+
+  loginEmail.name = "username";
+  loginPassword.name = "password";
+
+  loginEmail.setAttribute(
+    "autocomplete",
+    "username"
+  );
+
+  loginPassword.setAttribute(
+    "autocomplete",
+    "current-password"
+  );
   loginScreen.hidden = false;
   document.body.classList.remove("authPending");
 
