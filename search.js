@@ -45,6 +45,25 @@ function aktivujVyhledavaniUzivatelem() {
   searchNotes.readOnly = false;
 }
 
+function pripravVyhledavaniPoKliknuti() {
+  if (!searchNotes) {
+    return;
+  }
+
+  /*
+   * Kliknutí pouze připraví input pro psaní.
+   * Ještě NEŘÍKÁME, že uživatel něco napsal.
+   *
+   * Chrome tak nemůže svůj autofill vydávat
+   * za skutečný dotaz uživatele.
+   */
+  if (!vyhledavaniAktivovaneUzivatelem) {
+    searchNotes.value = "";
+  }
+
+  searchNotes.readOnly = false;
+}
+
 function zajistiCisteNeaktivniVyhledavani() {
   if (!searchNotes) {
     return;
@@ -55,7 +74,17 @@ function zajistiCisteNeaktivniVyhledavani() {
   }
 
   searchNotes.value = "";
-  searchNotes.readOnly = true;
+
+  /*
+   * Pokud je uživatel právě uvnitř vyhledávání,
+   * necháme pole odemčené pro psaní.
+   *
+   * Autofill se tak smaže, ale uživateli
+   * nezavřeme pole pod rukama.
+   */
+  searchNotes.readOnly =
+    document.activeElement !== searchNotes;
+
   noSearchResults.hidden = true;
 }
 
@@ -104,12 +133,32 @@ function taskMatchesSearch(task) {
  */
 searchNotes.addEventListener(
   "pointerdown",
-  aktivujVyhledavaniUzivatelem
+  pripravVyhledavaniPoKliknuti
 );
 
 searchNotes.addEventListener(
   "keydown",
   aktivujVyhledavaniUzivatelem
+);
+
+/*
+ * Mobilní klávesnice nemusí vždy poslat keydown.
+ * Skutečné psaní ale pošle beforeinput.
+ *
+ * Chrome autofill typicky používá jinou cestu,
+ * takže ho tím neoznačíme jako uživatelské psaní.
+ */
+searchNotes.addEventListener(
+  "beforeinput",
+  (event) => {
+    if (
+      event.inputType === "insertText" ||
+      event.inputType === "insertCompositionText" ||
+      event.inputType === "insertFromPaste"
+    ) {
+      aktivujVyhledavaniUzivatelem();
+    }
+  }
 );
 
 searchNotes.addEventListener("input", () => {
