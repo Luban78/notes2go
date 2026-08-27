@@ -1917,11 +1917,24 @@ async function provedKompletniObnovuSeZpracovanimChyby(
   imported,
   importedAt
 ) {
+  window.zavriVyberovyModal?.();
+
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
       "Obnovuji kompletní zálohu…",
-      150
+      0
     ) || (() => {});
+
+  /*
+   * Potvrzovací okno musí nejdřív zmizet a čekací stav se musí
+   * skutečně vykreslit. Teprve další snímek může zahájit delší
+   * obnovu, jinak Android WebView přeskočí rovnou k reloadu.
+   */
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 
   try {
     await obnovKompletniZalohu(
