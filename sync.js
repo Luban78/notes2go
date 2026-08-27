@@ -474,10 +474,39 @@ async function odesliCekajiciSmazaniDoSupabase() {
         localUpdatedAt: deletedAt,
         deleteNote: true,
         deletedByDeviceId:
-          zaznam.deviceId || getDeviceId()
+          zaznam.deviceId || getDeviceId(),
+        /*
+         * Čekající smazání řešíme zvlášť.
+         * Stará revize smazání nesmí vyvolat obecný konfliktový modal.
+         */
+        oznamitKonflikt: false
       });
 
     if (!vysledek.ok) {
+      const duvod =
+        vysledek?.result?.reason || null;
+
+      /*
+       * Poznámka byla po našem posledním známém stavu změněná
+       * na jiném zařízení. Staré čekající smazání proto rušíme.
+       *
+       * Bezpečnější je zachovat novější cloudovou verzi než ji
+       * automaticky smazat. Hlavní merge ji v témže syncu stáhne
+       * zpět do tohoto zařízení. Pokud ji uživatel stále chce
+       * smazat, udělá to znovu nad aktuální revizí.
+       */
+      if (duvod === "revision_mismatch") {
+        console.warn(
+          "LubaNote sync: čekající smazání bylo zrušeno, protože poznámka byla mezitím změněna na jiném zařízení:",
+          zaznam.id,
+          vysledek.result
+        );
+
+        odeberCekajiciSmazani(zaznam.id);
+        zrusKonfliktSynchronizace(zaznam.id);
+        continue;
+      }
+
       vseOdeslano = false;
       continue;
     }
