@@ -60,6 +60,7 @@
   const MAX_VZDALENOST_DVOJTAPU = 34;
   const MAX_DELKA_JEDNOHO_TAPU = 300;
   const MAX_POHYB_JEDNOHO_TAPU = 16;
+  const REZERVA_MEZERY_EDITORU_X = 10;
 
   let zacatekTapuEditoru = null;
   let posledniTapEditoru = null;
@@ -783,9 +784,11 @@
 
   function zobrazMenuProKurzorVBodu(
     x,
-    y
+    y,
+    vynucenyRozsah = null
   ) {
     const rozsah =
+      vynucenyRozsah ??
       najdiCaretRozsahVBodu(x, y);
 
     if (
@@ -1665,6 +1668,130 @@
   }
 
 
+  function najdiKurzorMezeryPoblizBodu(
+    textovyUzel,
+    caretOffset,
+    x,
+    y
+  ) {
+    const text =
+      textovyUzel?.textContent ?? "";
+
+    if (!text) {
+      return null;
+    }
+
+    const kandidati =
+      new Set([
+        caretOffset,
+        caretOffset - 1,
+        caretOffset + 1,
+        caretOffset - 2,
+        caretOffset + 2
+      ]);
+
+    let nejlepsi = null;
+
+    for (const index of kandidati) {
+      const znak = text[index];
+
+      if (
+        index < 0 ||
+        index >= text.length ||
+        !/\s/u.test(znak || "") ||
+        znak === "\n" ||
+        znak === "\r"
+      ) {
+        continue;
+      }
+
+      const znakRozsah =
+        document.createRange();
+
+      try {
+        znakRozsah.setStart(
+          textovyUzel,
+          index
+        );
+
+        znakRozsah.setEnd(
+          textovyUzel,
+          index + 1
+        );
+      } catch {
+        continue;
+      }
+
+      const obdelniky =
+        Array.from(
+          znakRozsah.getClientRects()
+        );
+
+      for (const obdelnik of obdelniky) {
+        const rezervaY = 4;
+
+        const jePoblizMezery =
+          x >=
+          obdelnik.left -
+          REZERVA_MEZERY_EDITORU_X &&
+          x <=
+          obdelnik.right +
+          REZERVA_MEZERY_EDITORU_X &&
+          y >= obdelnik.top - rezervaY &&
+          y <= obdelnik.bottom + rezervaY;
+
+        if (!jePoblizMezery) {
+          continue;
+        }
+
+        const stredX =
+          obdelnik.left +
+          obdelnik.width / 2;
+
+        const stredY =
+          obdelnik.top +
+          obdelnik.height / 2;
+
+        const vzdalenost =
+          Math.hypot(
+            x - stredX,
+            y - stredY
+          );
+
+        if (
+          nejlepsi &&
+          vzdalenost >=
+          nejlepsi.vzdalenost
+        ) {
+          continue;
+        }
+
+        const kurzorRozsah =
+          document.createRange();
+
+        try {
+          kurzorRozsah.setStart(
+            textovyUzel,
+            x <= stredX
+              ? index
+              : index + 1
+          );
+          kurzorRozsah.collapse(true);
+        } catch {
+          continue;
+        }
+
+        nejlepsi = {
+          rozsah: kurzorRozsah,
+          vzdalenost
+        };
+      }
+    }
+
+    return nejlepsi?.rozsah ?? null;
+  }
+
+
   function najdiIndexSlovaPodBodem(
     textovyUzel,
     caretOffset,
@@ -2008,18 +2135,43 @@
 
       posledniTapEditoru = null;
 
-      const vybrano =
-        vyberSlovoVBodu(
+      const caretRozsah =
+        najdiCaretRozsahVBodu(
           dotyk.clientX,
           dotyk.clientY
         );
+
+      const textovyBod =
+        najdiTextovyUzelProSlovo(
+          caretRozsah
+        );
+
+      const kurzorMezery =
+        textovyBod?.uzel &&
+        jeUzelVEditoru(textovyBod.uzel)
+          ? najdiKurzorMezeryPoblizBodu(
+            textovyBod.uzel,
+            textovyBod.offset,
+            dotyk.clientX,
+            dotyk.clientY
+          )
+          : null;
+
+      const vybrano =
+        kurzorMezery
+          ? false
+          : vyberSlovoVBodu(
+            dotyk.clientX,
+            dotyk.clientY
+          );
 
       const zobrazenoMenuKurzor =
         vybrano
           ? false
           : zobrazMenuProKurzorVBodu(
             dotyk.clientX,
-            dotyk.clientY
+            dotyk.clientY,
+            kurzorMezery
           );
 
       if (

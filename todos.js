@@ -50,6 +50,7 @@ const TODO_DOUBLE_TAP_TIME = 460;
 const TODO_LONG_PRESS_CANCEL_DISTANCE = 20;
 const TODO_DRAG_START_DISTANCE = 8;
 const TODO_GHOST_LIFT = 92;
+const TODO_REZERVA_MEZERY_X = 10;
 
 
 /* ========================================
@@ -509,7 +510,16 @@ function selectTodoForMove(todoItem) {
 }
 
 
-function najdiRozsahSlovaTodo(hodnota, pozice) {
+function jeMezeraTodo(znak) {
+  return /\s/u.test(znak || "");
+}
+
+
+function najdiRozsahSlovaTodo(
+  hodnota,
+  pozice,
+  preferujMezeruPredPozici = false
+) {
   if (!hodnota) {
     return null;
   }
@@ -527,12 +537,25 @@ function najdiRozsahSlovaTodo(hodnota, pozice) {
     /[\p{L}\p{N}_]/u.test(znak || "");
 
   /*
+   * Textarea na Androidu často umístí kurzor až ZA úzkou mezeru.
+   * Při dvojtapu proto hranice bezprostředně za mezerou může patřit
+   * kurzorovému menu místo prvnímu písmenu následujícího slova.
+   */
+  const jeTesneZaMezerou =
+    preferujMezeruPredPozici &&
+    bezpecnaPozice > 0 &&
+    jeMezeraTodo(
+      hodnota[bezpecnaPozice - 1]
+    );
+
+  /*
    * Důležité pravidlo LubaNote:
    * kurzor musí opravdu ležet UPROSTŘED slova.
    * Mezery a konec řádku nesmí přebírat sousední slovo,
    * protože dvojtap tam patří nabídce Vložit / Vše.
    */
   if (
+    jeTesneZaMezerou ||
     bezpecnaPozice >= hodnota.length ||
     !jeZnakSlova(hodnota[bezpecnaPozice])
   ) {
@@ -607,6 +630,9 @@ function najdiIndexZnakuTodoVZobrazeni(
   const rozsahZnaku =
     document.createRange();
 
+  let nejblizsiMezera = null;
+  let nejblizsiZnak = null;
+
   for (
     let index = 0;
     index < hodnota.length;
@@ -637,31 +663,85 @@ function najdiIndexZnakuTodoVZobrazeni(
 
     for (const obdelnik of obdelniky) {
       /*
-       * Stejné pravidlo jako v hlavním editoru:
-       * vodorovně žádná tolerance. Mezera musí zůstat
-       * mezerou a nesmí se přilepit k sousednímu slovu.
+       * Mezera je pro prst příliš úzká. Dostane proto neviditelnou
+       * vodorovnou rezervu a v této malé zóně má přednost před
+       * sousedním písmenem. Uprostřed slova se dál vybírá slovo.
        */
       const rezervaY = 4;
 
-      const jeVBodu =
-        x >= obdelnik.left &&
-        x <= obdelnik.right &&
+      const jeNaStejnemRadku =
         y >= obdelnik.top - rezervaY &&
         y <= obdelnik.bottom + rezervaY;
 
-      if (jeVBodu) {
-        return index;
+      if (!jeNaStejnemRadku) {
+        continue;
+      }
+
+      const stredX =
+        obdelnik.left +
+        obdelnik.width / 2;
+
+      const vzdalenostX =
+        Math.abs(x - stredX);
+
+      if (jeMezeraTodo(hodnota[index])) {
+        const jeVRezerveMezery =
+          x >=
+            obdelnik.left -
+            TODO_REZERVA_MEZERY_X &&
+          x <=
+            obdelnik.right +
+            TODO_REZERVA_MEZERY_X;
+
+        if (
+          jeVRezerveMezery &&
+          (
+            !nejblizsiMezera ||
+            vzdalenostX <
+              nejblizsiMezera.vzdalenostX
+          )
+        ) {
+          nejblizsiMezera = {
+            index,
+            vzdalenostX
+          };
+        }
+
+        continue;
+      }
+
+      const jePresneNaZnaku =
+        x >= obdelnik.left &&
+        x <= obdelnik.right;
+
+      if (
+        jePresneNaZnaku &&
+        (
+          !nejblizsiZnak ||
+          vzdalenostX <
+            nejblizsiZnak.vzdalenostX
+        )
+      ) {
+        nejblizsiZnak = {
+          index,
+          vzdalenostX
+        };
       }
     }
   }
 
-  return null;
+  return (
+    nejblizsiMezera?.index ??
+    nejblizsiZnak?.index ??
+    null
+  );
 }
 
 
 function vyberSlovoVTodoTextarea(
   text,
-  pozice
+  pozice,
+  preferujMezeruPredPozici = false
 ) {
   if (
     !text ||
@@ -673,7 +753,8 @@ function vyberSlovoVTodoTextarea(
 
   const rozsah = najdiRozsahSlovaTodo(
     text.value,
-    pozice
+    pozice,
+    preferujMezeruPredPozici
   );
 
   if (!rozsah) {
@@ -1730,7 +1811,8 @@ function createTodoItem(todo, index) {
       const vybranoSlovo =
         vyberSlovoVTodoTextarea(
           text,
-          predchoziKlik.index
+          predchoziKlik.index,
+          true
         );
 
       if (vybranoSlovo) {
