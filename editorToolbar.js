@@ -98,6 +98,7 @@
 
 
   let ulozenyVyberTextu = null;
+  let ulozenyEditorTextu = null;
   let otevrenyPanel = null;
   let aktivniSpoustecPanelu = null;
 
@@ -170,6 +171,7 @@
     );
 
     ulozenyVyberTextu = null;
+    ulozenyEditorTextu = null;
   }
 
   function ulozVyberTextu() {
@@ -295,26 +297,85 @@
   }
 
 
+  function ziskejEditorFormatovaniProUzel(uzel) {
+    if (!uzel) {
+      return null;
+    }
+
+    const prvek =
+      uzel.nodeType === Node.ELEMENT_NODE
+        ? uzel
+        : uzel.parentElement;
+
+    if (!prvek) {
+      return null;
+    }
+
+    if (
+      prvek === editorTextu ||
+      editorTextu.contains(prvek)
+    ) {
+      return editorTextu;
+    }
+
+    return prvek.closest?.(
+      ".todoRichTextInput.todoEditing"
+    ) || null;
+  }
+
+
+  function ziskejEditorFormatovaniProRozsah(rozsah) {
+    if (!rozsah) {
+      return null;
+    }
+
+    const zacatek = ziskejEditorFormatovaniProUzel(
+      rozsah.startContainer
+    );
+
+    const konec = ziskejEditorFormatovaniProUzel(
+      rozsah.endContainer
+    );
+
+    return zacatek && zacatek === konec
+      ? zacatek
+      : null;
+  }
+
+
   function ulozVyberTextu() {
     const vyber = window.getSelection();
 
     if (
       !vyber ||
-      vyber.rangeCount === 0 ||
-      !jeUzelVEditoru(vyber.anchorNode)
+      vyber.rangeCount === 0
     ) {
       return false;
     }
 
+    const rozsah = vyber.getRangeAt(0);
+    const cilovyEditor =
+      ziskejEditorFormatovaniProRozsah(rozsah);
+
+    if (!cilovyEditor) {
+      return false;
+    }
+
     ulozenyVyberTextu =
-      vyber.getRangeAt(0).cloneRange();
+      rozsah.cloneRange();
+
+    ulozenyEditorTextu =
+      cilovyEditor;
 
     return true;
   }
 
 
   function obnovVyberTextu() {
-    if (!ulozenyVyberTextu) {
+    if (
+      !ulozenyVyberTextu ||
+      !ulozenyEditorTextu?.isConnected
+    ) {
       return false;
     }
 
@@ -332,11 +393,46 @@
 
 
   function pripravEditorProFormatovani() {
-    obnovVyberTextu();
+    const cilovyEditor =
+      ulozenyEditorTextu || editorTextu;
 
-    editorTextu.focus({
-      preventScroll: true
-    });
+    /*
+     * Normální poznámku necháváme přesně ve starém pořadí,
+     * protože její toolbar je dlouhodobě odladěný.
+     */
+    if (cilovyEditor === editorTextu) {
+      obnovVyberTextu();
+
+      editorTextu.focus({
+        preventScroll: true
+      });
+
+      return editorTextu;
+    }
+
+    try {
+      cilovyEditor.focus({
+        preventScroll: true
+      });
+    } catch {
+      cilovyEditor.focus();
+    }
+
+    obnovVyberTextu();
+    return cilovyEditor;
+  }
+
+
+  function synchronizujTodoPoFormatovani(editor) {
+    if (
+      editor?.matches?.(
+        ".todoRichTextInput.todoEditing"
+      )
+    ) {
+      editor.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    }
   }
 
 
@@ -576,7 +672,8 @@
   ========================================== */
 
   function provedPrikaz(prikaz, hodnota = null) {
-    pripravEditorProFormatovani();
+    const cilovyEditor =
+      pripravEditorProFormatovani();
 
     try {
       document.execCommand(
@@ -590,6 +687,10 @@
         chyba
       );
     }
+
+    synchronizujTodoPoFormatovani(
+      cilovyEditor
+    );
 
     ulozVyberTextu();
     aktualizujStavFormatovani();
@@ -1347,6 +1448,69 @@ nahledTazenePolozky?.classList.toggle(
       oznacAktivniVelikost(velikost);
     }
   }
+
+
+  function zachovejTodoVyberPredKlikem(event) {
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0
+    ) {
+      return;
+    }
+
+    const rozsah = vyber.getRangeAt(0);
+    const cilovyEditor =
+      ziskejEditorFormatovaniProRozsah(rozsah);
+
+    if (
+      !cilovyEditor?.matches?.(
+        ".todoRichTextInput.todoEditing"
+      )
+    ) {
+      return;
+    }
+
+    ulozVyberTextu();
+
+    /*
+     * Android nesmí při stisku tlačítka převést focus z TODO
+     * na toolbar a zahodit označený Range. Click se vyvolá dál.
+     */
+    event.preventDefault();
+  }
+
+
+  [
+    tlacitkoToolbar,
+    tlacitkoTucne,
+    tlacitkoKurziva,
+    tlacitkoPodtrzeni,
+    tlacitkoBarvaTextu
+  ].forEach(tlacitko => {
+    tlacitko?.addEventListener(
+      "pointerdown",
+      zachovejTodoVyberPredKlikem
+    );
+  });
+
+
+  panelBarvaTextu?.addEventListener(
+    "pointerdown",
+    event => {
+      if (
+        ulozenyEditorTextu?.matches?.(
+          ".todoRichTextInput.todoEditing"
+        ) &&
+        event.target.closest?.(
+          "[data-text-color]"
+        )
+      ) {
+        event.preventDefault();
+      }
+    }
+  );
 
 
   /* ==========================================
@@ -2314,12 +2478,13 @@ if (vyber) {
           const barva =
             tlacitko.dataset.textColor;
 
-          obnovVyberTextu();
+          const cilovyEditor =
+            pripravEditorProFormatovani();
 
           if (barva === "default") {
             const barvaMotivu =
               getComputedStyle(
-                editorTextu
+                cilovyEditor || editorTextu
               ).color;
 
             document.execCommand(
@@ -2335,6 +2500,11 @@ if (vyber) {
             );
           }
 
+          synchronizujTodoPoFormatovani(
+            cilovyEditor
+          );
+
+          ulozVyberTextu();
           zavriVsechnyPanely();
         }
       );

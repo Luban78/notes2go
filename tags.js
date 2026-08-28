@@ -1726,55 +1726,76 @@ async function ziskejTajneStitkyProEditor() {
 }
 
 async function renderTagMenuTags() {
-  const tajneStitkyProEditor =
-    await ziskejTajneStitkyProEditor();
-
-  const availableTags = [
-    ...new Set([
-      ...getAvailableTags(),
-      ...tajneStitkyProEditor
-    ])
-  ].filter((tag) => {
-    const cistyNazev = String(tag || "").trim();
-
-    if (!cistyNazev) {
-      return false;
-    }
-
-    const jeTajny =
-      jeTajnyStitek(cistyNazev);
-
-    if (jeTajny) {
-      return (
-        tajnyRezimOdemceny &&
-        secretTaskEnabled
+  /*
+   * Editor používá stejný seznam štítků
+   * jako zbytek aplikace.
+   *
+   * Secret štítek se zobrazí pouze:
+   * - při odemčeném Secret režimu
+   * - v Secret poznámce
+   */
+  const availableTags =
+    getAvailableTags().filter((tag) => {
+      const cistyNazev =
+        String(tag || "").trim();
+      
+      if (!cistyNazev) {
+        return false;
+      }
+      
+      const stitek = syncedTags.find(
+        (polozka) =>
+        String(polozka.name || "")
+        .trim()
+        .toLowerCase() ===
+        cistyNazev.toLowerCase()
       );
-    }
-
-    return true;
-  });
-
+      
+      const jeTajny =
+        stitek?.is_secret === true;
+      
+      if (jeTajny) {
+  return tajnyRezimOdemceny;
+}
+      
+      return true;
+    });
+  
   tagOptions
     .querySelectorAll("[data-tag]")
-    .forEach((button) => button.remove());
-
+    .forEach((button) => {
+      button.remove();
+    });
+  
   availableTags.forEach((tag) => {
-    const button = document.createElement("button");
+    const button =
+      document.createElement("button");
+    
     button.type = "button";
     button.dataset.tag = tag;
+    
+    button.dataset.tagColor =
+      ziskejBarvuStitku(tag);
+    
     button.textContent = tag;
+    
     button.classList.toggle(
       "active",
       activeTags.includes(tag)
     );
-
+    
+    if (jeTajnyStitek(tag)) {
+      button.classList.add(
+        "secretTagOption"
+      );
+    }
+    
     tagOptions.insertBefore(
       button,
       createTagButton
     );
   });
 }
-
 async function updateTagMenuUI() {
   areaButtons.forEach((button) => {
     button.classList.toggle(
@@ -2106,6 +2127,18 @@ tagOptions.addEventListener("click", (event) => {
   }
   
   const tag = button.dataset.tag;
+  
+  /*
+ * Tajný štítek může patřit pouze tajné poznámce.
+ * Pokud ho uživatel zvolí v odemčeném Secret režimu,
+ * editor poznámku automaticky přepne na Secret.
+ */
+if (
+  jeTajnyStitek(tag) &&
+  !secretTaskEnabled
+) {
+  secretTaskButton?.click();
+}
   
   const jeAktivni =
     activeTags.includes(tag);

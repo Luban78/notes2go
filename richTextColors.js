@@ -26,33 +26,67 @@ window.RichTextColors = (() => {
      KONTROLA A ULOŽENÍ VÝBĚRU
      ========================================== */
 
-  function isRangeInsideEditor(range) {
-    if (!range) {
-      return false;
+  function ziskejRichEditorProUzel(uzel) {
+    if (!uzel) {
+      return null;
     }
 
-    const startNode =
-      range.startContainer.nodeType === Node.TEXT_NODE
-        ? range.startContainer.parentElement
-        : range.startContainer;
+    const prvek =
+      uzel.nodeType === Node.TEXT_NODE
+        ? uzel.parentElement
+        : uzel;
 
-    const endNode =
-      range.endContainer.nodeType === Node.TEXT_NODE
-        ? range.endContainer.parentElement
-        : range.endContainer;
+    if (!prvek) {
+      return null;
+    }
 
+    if (
+      prvek === modalRichText ||
+      modalRichText.contains(prvek)
+    ) {
+      return modalRichText;
+    }
+
+    const todoEditor = prvek.closest?.(
+      ".todoRichTextInput.todoEditing"
+    );
+
+    return todoEditor || null;
+  }
+
+
+  function ziskejRichEditorProRozsah(range) {
+    if (!range) {
+      return null;
+    }
+
+    const startEditor = ziskejRichEditorProUzel(
+      range.startContainer
+    );
+
+    const endEditor = ziskejRichEditorProUzel(
+      range.endContainer
+    );
+
+    return (
+      startEditor &&
+      startEditor === endEditor
+    )
+      ? startEditor
+      : null;
+  }
+
+
+  function isRangeInsideEditor(range) {
     return Boolean(
-      startNode &&
-      endNode &&
-      modalRichText.contains(startNode) &&
-      modalRichText.contains(endNode)
+      ziskejRichEditorProRozsah(range)
     );
   }
 
 
-  function getTextOffset(node, offset) {
+  function getTextOffset(root, node, offset) {
     const probe = document.createRange();
-    probe.selectNodeContents(modalRichText);
+    probe.selectNodeContents(root);
 
     try {
       probe.setEnd(node, offset);
@@ -73,6 +107,13 @@ window.RichTextColors = (() => {
     }
 
     const range = savedRange.cloneRange();
+    const root =
+      ziskejRichEditorProRozsah(range);
+
+    if (!root) {
+      return null;
+    }
+
     const text = range.toString();
 
     if (!text.trim()) {
@@ -81,12 +122,15 @@ window.RichTextColors = (() => {
 
     return {
       range,
+      root,
       text,
       start: getTextOffset(
+        root,
         range.startContainer,
         range.startOffset
       ),
       end: getTextOffset(
+        root,
         range.endContainer,
         range.endOffset
       )
@@ -201,14 +245,14 @@ window.RichTextColors = (() => {
   }
 
 
-  function cleanupHighlightMarkup() {
-    modalRichText
+  function cleanupHighlightMarkup(root) {
+    root
       .querySelectorAll(
         "mark.richTextHighlight:empty"
       )
       .forEach((mark) => mark.remove());
 
-    modalRichText.normalize();
+    root.normalize();
   }
 
 
@@ -255,8 +299,8 @@ window.RichTextColors = (() => {
     /* Vrátíme upravený obsah přesně na původní místo. */
     range.insertNode(fragment);
 
-    cleanupHighlightMarkup();
-    syncPlainText();
+    cleanupHighlightMarkup(snapshot.root);
+    syncPlainText(snapshot.root);
 
     window.getSelection()
       ?.removeAllRanges();
@@ -270,23 +314,6 @@ window.RichTextColors = (() => {
 
 
   function applyColor(color) {
-    if (
-      window.LubaNoteTodos
-        ?.nastavBarvuVybranehoTodo?.(color)
-    ) {
-      savedRange = null;
-      selectionLocked = false;
-      textColorPalette.hidden = true;
-      return true;
-    }
-
-    if (
-      window.LubaNoteTodos
-        ?.jeTodoRezimAktivni?.()
-    ) {
-      return false;
-    }
-
     return transformSelection(color);
   }
 
@@ -408,23 +435,6 @@ window.RichTextColors = (() => {
 
 
   function removeColor() {
-    if (
-      window.LubaNoteTodos
-        ?.odstranBarvuVybranehoTodo?.()
-    ) {
-      savedRange = null;
-      selectionLocked = false;
-      textColorPalette.hidden = true;
-      return true;
-    }
-
-    if (
-      window.LubaNoteTodos
-        ?.jeTodoRezimAktivni?.()
-    ) {
-      return false;
-    }
-
     const snapshot = getSelectionSnapshot();
 
     if (
@@ -439,7 +449,7 @@ window.RichTextColors = (() => {
     const selectionEnd = snapshot.end;
 
     const marks = Array.from(
-      modalRichText.querySelectorAll(
+      snapshot.root.querySelectorAll(
         "mark.richTextHighlight"
       )
     );
@@ -453,7 +463,11 @@ window.RichTextColors = (() => {
         return;
       }
 
-      const markStart = getTextOffset(mark, 0);
+      const markStart = getTextOffset(
+        snapshot.root,
+        mark,
+        0
+      );
 
       if (markStart === null) {
         return;
@@ -553,8 +567,8 @@ window.RichTextColors = (() => {
       mark.remove();
     });
 
-    cleanupHighlightMarkup();
-    syncPlainText();
+    cleanupHighlightMarkup(snapshot.root);
+    syncPlainText(snapshot.root);
 
     window.getSelection()
       ?.removeAllRanges();
@@ -571,9 +585,22 @@ window.RichTextColors = (() => {
      KOMPATIBILNÍ PLAIN-TEXT KOPIE
      ========================================== */
 
-  function syncPlainText() {
-    modalText.value =
-      modalRichText.innerText;
+  function syncPlainText(root = modalRichText) {
+    if (root === modalRichText) {
+      modalText.value =
+        modalRichText.innerText;
+      return;
+    }
+
+    if (
+      root?.matches?.(
+        ".todoRichTextInput"
+      )
+    ) {
+      root.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    }
   }
 
 

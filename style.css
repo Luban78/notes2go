@@ -1214,7 +1214,74 @@ html {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* ==========================================
+   ŠTÍTKY V EDITORU – MAX 3 ŘADY
+   ========================================== */
 
+.tagOptions {
+  max-height: 132px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  align-content: flex-start;
+
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: none;
+}
+/* ==========================================
+   BARVY ŠTÍTKŮ V EDITORU
+   ========================================== */
+
+.tagOptions button[data-tag-color="cervena"] {
+  background: var(--card-cervena);
+}
+
+.tagOptions button[data-tag-color="oranzova"] {
+  background: var(--card-oranzova);
+}
+
+.tagOptions button[data-tag-color="zluta"] {
+  background: var(--card-zluta);
+}
+
+.tagOptions button[data-tag-color="zelena"] {
+  background: var(--card-zelena);
+}
+
+.tagOptions button[data-tag-color="tyrkysova"] {
+  background: var(--card-tyrkysova);
+}
+
+.tagOptions button[data-tag-color="modra"] {
+  background: var(--card-modra);
+}
+
+.tagOptions button[data-tag-color="fialova"] {
+  background: var(--card-fialova);
+}
+
+.tagOptions button[data-tag-color="ruzova"] {
+  background: var(--card-ruzova);
+}
+
+.tagOptions button.active[data-tag-color]:not(
+  [data-tag-color="system"]
+) {
+  border-color: var(--color-accent);
+
+  box-shadow:
+    inset 0 0 0 2px var(--color-accent);
+
+  color: var(--color-editor-text);
+}
+
+
+.tagOptions::-webkit-scrollbar {
+  display: none;
+}
 .areaOptions button,
 .tagOptions button {
   padding: 6px 10px;
@@ -1227,7 +1294,7 @@ html {
   background: transparent;
   color: var(--color-editor-text);
 
-  font-size: 0.95rem;
+  font-size: var(--font-size);
 }
 
 .areaOptions button.active,
@@ -2712,7 +2779,8 @@ text-size-adjust: 100%;
   letter-spacing: normal;
 }
 
-#modalRichText .richTextHighlight {
+#modalRichText .richTextHighlight,
+.todoRichTextInput .richTextHighlight {
   color: inherit;
   font: inherit;
   line-height: inherit;
@@ -7357,4 +7425,28 @@ body.secretModeActive {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
   border-radius: 6px;
+}
+
+.todoRichTextInput {
+  flex: 1;
+  min-width: 0;
+
+  font: inherit;
+  line-height: inherit;
+
+  color: inherit;
+  background: transparent;
+
+  border: 0;
+  outline: 0;
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.todoRichTextInput[hidden] {
+  display: none;
 }

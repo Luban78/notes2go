@@ -71,14 +71,48 @@ function createTodoId() {
 }
 
 function normalizeTodo(todo = {}) {
+  const text =
+    typeof todo?.text === "string"
+      ? todo.text
+      : String(todo?.text ?? "");
+
   return {
     ...todo,
+
     id:
       typeof todo?.id === "string" && todo.id
         ? todo.id
         : createTodoId(),
-    text: todo?.text ?? "",
-    completed: todo?.completed === true,
+
+    /*
+     * Plain-text kopie zůstává kvůli:
+     * - hledání
+     * - preview
+     * - Planneru
+     * - starším částem aplikace
+     */
+    text,
+
+    /*
+     * Rich-text obsah TODO.
+     *
+     * Starší TODO tuto vlastnost nemají,
+     * proto zatím dostanou prázdný řetězec
+     * a editor použije jejich původní text.
+     */
+    html:
+      typeof todo?.html === "string"
+        ? todo.html
+        : "",
+
+    completed:
+      todo?.completed === true,
+
+    /*
+     * Dočasně zachováme kvůli kompatibilitě
+     * se starým zvýrazněním celé TODO položky.
+     * Později ho převedeme do html.
+     */
     highlightColor:
       typeof todo?.highlightColor === "string"
         ? todo.highlightColor
@@ -137,10 +171,18 @@ function setTodoDisplayColor(todoItem, color = "") {
     ".todoTextInput"
   );
 
-  if (input) {
-    input.style.backgroundColor = color || "";
-    input.style.borderRadius = color ? "4px" : "";
-  }
+  const richText = todoItem.querySelector(
+    ".todoRichTextInput"
+  );
+
+  [input, richText].forEach(editor => {
+    if (!editor) {
+      return;
+    }
+
+    editor.style.backgroundColor = color || "";
+    editor.style.borderRadius = color ? "4px" : "";
+  });
 }
 
 function setSelectedTodoHighlight(color = "") {
@@ -176,7 +218,7 @@ function blurSelectedTodoEditor() {
   );
 
   const input = todoItem?.querySelector(
-    ".todoTextInput.todoEditing"
+    ".todoRichTextInput.todoEditing, .todoTextInput.todoEditing"
   );
 
   input?.blur();
@@ -327,6 +369,7 @@ function focusTodo(index, cursorPosition = null) {
   }
 
   const input =
+    item.querySelector(".todoRichTextInput") ||
     item.querySelector(".todoTextInput");
 
   const display =
@@ -775,88 +818,356 @@ function vyberSlovoVTodoTextarea(
   return true;
 }
 
-function closeOtherTodoEditors(exceptText = null) {
+function closeOtherTodoEditors(exceptEditor = null) {
   todoList
-    .querySelectorAll(".todoTextInput.todoEditing")
-    .forEach(input => {
-      if (input !== exceptText) {
-        input.blur();
+    .querySelectorAll(
+      ".todoRichTextInput.todoEditing, .todoTextInput.todoEditing"
+    )
+    .forEach(editor => {
+      if (editor !== exceptEditor) {
+        editor.blur();
       }
     });
 }
 
 
+function ziskejTextZTodoRichText(editor) {
+  return editor?.textContent ?? "";
+}
+
+
+function ziskejHtmlZTodoRichText(editor) {
+  const text = ziskejTextZTodoRichText(editor);
+
+  if (text === "") {
+    return "";
+  }
+
+  return editor?.innerHTML ?? "";
+}
+
+
+function ziskejPoziciKurzoruTodoRichText(editor) {
+  const selection = window.getSelection();
+
+  if (
+    !editor ||
+    !selection ||
+    selection.rangeCount === 0
+  ) {
+    return ziskejTextZTodoRichText(editor).length;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (!editor.contains(range.startContainer)) {
+    return ziskejTextZTodoRichText(editor).length;
+  }
+
+  const predKurzorem = document.createRange();
+  predKurzorem.selectNodeContents(editor);
+  predKurzorem.setEnd(
+    range.startContainer,
+    range.startOffset
+  );
+
+  return predKurzorem.toString().length;
+}
+
+
+function nastavKurzorVTodoRichText(
+  editor,
+  pozice = null
+) {
+  if (!editor) {
+    return;
+  }
+
+  const textLength =
+    ziskejTextZTodoRichText(editor).length;
+
+  const cilovaPozice =
+    pozice === null
+      ? textLength
+      : Math.max(
+          0,
+          Math.min(pozice, textLength)
+        );
+
+  const walker = document.createTreeWalker(
+    editor,
+    NodeFilter.SHOW_TEXT
+  );
+
+  let zbyva = cilovaPozice;
+  let uzel = walker.nextNode();
+
+  while (uzel) {
+    const delka = uzel.textContent?.length ?? 0;
+
+    if (zbyva <= delka) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+
+      range.setStart(uzel, zbyva);
+      range.collapse(true);
+
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+
+    zbyva -= delka;
+    uzel = walker.nextNode();
+  }
+
+  const range = document.createRange();
+  const selection = window.getSelection();
+
+  range.selectNodeContents(editor);
+  range.collapse(false);
+
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+
+function vyberRozsahVTodoRichText(
+  editor,
+  start,
+  end
+) {
+  if (!editor) {
+    return false;
+  }
+
+  const walker = document.createTreeWalker(
+    editor,
+    NodeFilter.SHOW_TEXT
+  );
+
+  let globalniPozice = 0;
+  let startUzel = null;
+  let startOffset = 0;
+  let endUzel = null;
+  let endOffset = 0;
+  let uzel = walker.nextNode();
+
+  while (uzel) {
+    const delka = uzel.textContent?.length ?? 0;
+    const konecUzlu = globalniPozice + delka;
+
+    if (
+      startUzel === null &&
+      start >= globalniPozice &&
+      start <= konecUzlu
+    ) {
+      startUzel = uzel;
+      startOffset = start - globalniPozice;
+    }
+
+    if (
+      endUzel === null &&
+      end >= globalniPozice &&
+      end <= konecUzlu
+    ) {
+      endUzel = uzel;
+      endOffset = end - globalniPozice;
+      break;
+    }
+
+    globalniPozice = konecUzlu;
+    uzel = walker.nextNode();
+  }
+
+  if (!startUzel || !endUzel) {
+    return false;
+  }
+
+  try {
+    const range = document.createRange();
+    const selection = window.getSelection();
+
+    range.setStart(startUzel, startOffset);
+    range.setEnd(endUzel, endOffset);
+
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    editor.focus({ preventScroll: true });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+function vyberSlovoVTodoRichText(
+  editor,
+  pozice,
+  preferujMezeruPredPozici = false
+) {
+  const hodnota = ziskejTextZTodoRichText(editor);
+
+  const rozsah = najdiRozsahSlovaTodo(
+    hodnota,
+    pozice,
+    preferujMezeruPredPozici
+  );
+
+  if (!rozsah) {
+    return false;
+  }
+
+  return vyberRozsahVTodoRichText(
+    editor,
+    rozsah.start,
+    rozsah.end
+  );
+}
+
+
 function enterTodoEditMode(
-  text,
+  editor,
   display,
   cursorPosition = null
 ) {
-  closeOtherTodoEditors(text);
+  if (!editor || !display) {
+    return;
+  }
 
-  const todoItem = text.closest(".todoItem");
+  /*
+   * Přechodová kompatibilita:
+   * starší volání může stále předat skrytou textarea.
+   * V takovém případě použijeme rich-text editor
+   * ze stejného TODO řádku.
+   */
+  const todoItem = editor.closest(".todoItem");
+
+  const richText =
+    todoItem?.querySelector(".todoRichTextInput");
+
+  const skutecnyEditor = richText || editor;
+
+  closeOtherTodoEditors(skutecnyEditor);
 
   if (todoItem?.dataset.todoId) {
     selectedTodoId = todoItem.dataset.todoId;
   }
 
   display.hidden = true;
-  text.hidden = false;
-  text.classList.add("todoEditing");
-
-  /*
-   * Focus musí zůstat souvislý. Hlavně po Enteru nesmíme
-   * zbourat DOM a čekat na další frame, jinak Android na
-   * okamžik zavře klávesnici a znovu ji otevře.
-   */
-  autoResizeTodoText(text);
+  skutecnyEditor.hidden = false;
+  skutecnyEditor.classList.add("todoEditing");
 
   try {
-    text.focus({ preventScroll: true });
+    skutecnyEditor.focus({ preventScroll: true });
   } catch {
-    text.focus();
+    skutecnyEditor.focus();
   }
 
-  const position =
-    cursorPosition === null
-      ? text.value.length
-      : Math.max(
-          0,
-          Math.min(cursorPosition, text.value.length)
-        );
+  if (
+    skutecnyEditor.classList.contains(
+      "todoRichTextInput"
+    )
+  ) {
+    nastavKurzorVTodoRichText(
+      skutecnyEditor,
+      cursorPosition
+    );
+  } else {
+    const position =
+      cursorPosition === null
+        ? skutecnyEditor.value.length
+        : Math.max(
+            0,
+            Math.min(
+              cursorPosition,
+              skutecnyEditor.value.length
+            )
+          );
 
-  text.setSelectionRange(position, position);
+    skutecnyEditor.setSelectionRange(
+      position,
+      position
+    );
+  }
 
-  activeTodoEditorItem =
-    text.closest(".todoItem");
+  activeTodoEditorItem = todoItem;
 
   requestAnimationFrame(() => {
-    autoResizeTodoText(text);
     scheduleTodoItemVisibility(activeTodoEditorItem);
   });
 }
 
 
-function leaveTodoEditMode(text, display) {
-  const item = text.closest(".todoItem");
+function leaveTodoEditMode(editor, display) {
+  const item = editor?.closest(".todoItem");
+
+  if (!item || !display) {
+    return;
+  }
 
   const value = display.querySelector(
     ".todoTextValue"
   );
 
-  text.classList.remove("todoEditing");
+  const currentIndex = getTodoItemIndex(item);
+  const richText = item.querySelector(
+    ".todoRichTextInput"
+  );
 
-  if (value) {
-    value.textContent = text.value || " ";
+  const legacyText = item.querySelector(
+    ".todoTextInput"
+  );
+
+  const skutecnyEditor = richText || editor;
+
+  if (
+    currentIndex >= 0 &&
+    activeTodos[currentIndex] &&
+    skutecnyEditor
+  ) {
+    const novyText =
+      skutecnyEditor.classList.contains(
+        "todoRichTextInput"
+      )
+        ? ziskejTextZTodoRichText(skutecnyEditor)
+        : skutecnyEditor.value;
+
+    const noveHtml =
+      skutecnyEditor.classList.contains(
+        "todoRichTextInput"
+      )
+        ? ziskejHtmlZTodoRichText(skutecnyEditor)
+        : "";
+
+    activeTodos[currentIndex].text = novyText;
+    activeTodos[currentIndex].html = noveHtml;
+
+    if (legacyText) {
+      legacyText.value = novyText;
+    }
+
+    if (value) {
+      nastavObsahTodoTextu(
+        value,
+        activeTodos[currentIndex]
+      );
+    }
   }
 
-  text.hidden = true;
+  skutecnyEditor?.classList.remove("todoEditing");
+
+  if (skutecnyEditor) {
+    skutecnyEditor.hidden = true;
+  }
+
   display.hidden = false;
 
   if (activeTodoEditorItem === item) {
     activeTodoEditorItem = null;
   }
 }
-
 
 function beginPendingTodoMove(
   type,
@@ -1567,6 +1878,9 @@ function refreshTodoIndexes() {
       const input =
         item.querySelector(".todoTextInput");
 
+      const richText =
+        item.querySelector(".todoRichTextInput");
+
       display?.setAttribute(
         "aria-label",
         `TODO položka ${index + 1}`
@@ -1576,7 +1890,25 @@ function refreshTodoIndexes() {
         "aria-label",
         `Upravit TODO položku ${index + 1}`
       );
+
+      richText?.setAttribute(
+        "aria-label",
+        `Upravit TODO položku ${index + 1}`
+      );
     });
+}
+function nastavObsahTodoTextu(element, todo) {
+  if (!element || !todo) {
+    return;
+  }
+
+  if (todo.html) {
+    element.innerHTML = todo.html;
+    return;
+  }
+
+  element.textContent =
+    todo.text || " ";
 }
 
 function createTodoItem(todo, index) {
@@ -1619,8 +1951,12 @@ function createTodoItem(todo, index) {
   );
 
   const textValue = document.createElement("span");
-  textValue.classList.add("todoTextValue");
-  textValue.textContent = todo.text || " ";
+textValue.classList.add("todoTextValue");
+
+nastavObsahTodoTextu(
+  textValue,
+  todo
+);
 
   if (todo.highlightColor) {
     textValue.style.backgroundColor =
@@ -1635,6 +1971,45 @@ function createTodoItem(todo, index) {
   text.value = todo.text;
   text.classList.add("todoTextInput");
   text.hidden = true;
+  
+  const richText =
+  document.createElement("div");
+
+richText.classList.add(
+  "todoRichTextInput"
+);
+
+richText.contentEditable = "true";
+
+richText.setAttribute(
+  "role",
+  "textbox"
+);
+
+richText.setAttribute(
+  "aria-multiline",
+  "false"
+);
+
+richText.setAttribute(
+  "aria-label",
+  `Upravit TODO položku ${index + 1}`
+);
+
+richText.hidden = true;
+
+if (todo.html) {
+  richText.innerHTML = todo.html;
+} else {
+  richText.textContent =
+    todo.text || "";
+}
+
+  if (todo.highlightColor) {
+    richText.style.backgroundColor =
+      todo.highlightColor;
+    richText.style.borderRadius = "4px";
+  }
   text.setAttribute(
     "aria-label",
     `Upravit TODO položku ${index + 1}`
@@ -1674,8 +2049,242 @@ function createTodoItem(todo, index) {
       index: indexPrvnihoTapu
     };
 
-    enterTodoEditMode(text, textDisplay);
+    enterTodoEditMode(
+      richText,
+      textDisplay,
+      indexPrvnihoTapu
+    );
   });
+
+
+  /*
+   * Rich-text TODO editor.
+   * Starou textarea ponecháváme jen jako skryté zrcadlo
+   * kvůli kompatibilitě s částmi aplikace, které ji ještě hledají.
+   */
+  richText.addEventListener("input", event => {
+    const currentIndex = getTodoItemIndex(todoItem);
+
+    if (currentIndex < 0 || !activeTodos[currentIndex]) {
+      return;
+    }
+
+    const novyText =
+      ziskejTextZTodoRichText(richText);
+
+    activeTodos[currentIndex].text = novyText;
+    activeTodos[currentIndex].html =
+      ziskejHtmlZTodoRichText(richText);
+
+    text.value = novyText;
+
+    nastavObsahTodoTextu(
+      textValue,
+      activeTodos[currentIndex]
+    );
+
+    if (
+      novyText === "" &&
+      typeof event.inputType === "string" &&
+      event.inputType.startsWith("delete")
+    ) {
+      removeTodo(currentIndex);
+      return;
+    }
+
+    scheduleTodoItemVisibility(todoItem);
+  });
+
+
+  richText.addEventListener("blur", () => {
+    leaveTodoEditMode(
+      richText,
+      textDisplay
+    );
+  });
+
+
+  richText.addEventListener("keydown", event => {
+    const currentIndex = getTodoItemIndex(todoItem);
+
+    if (currentIndex < 0 || !activeTodos[currentIndex]) {
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      const selection = window.getSelection();
+
+      let aktivniRange = null;
+
+      if (
+        selection &&
+        selection.rangeCount > 0
+      ) {
+        const kandidat = selection.getRangeAt(0);
+
+        if (
+          richText.contains(kandidat.startContainer) &&
+          richText.contains(kandidat.endContainer)
+        ) {
+          aktivniRange = kandidat.cloneRange();
+        }
+      }
+
+      if (!aktivniRange) {
+        aktivniRange = document.createRange();
+        aktivniRange.selectNodeContents(richText);
+        aktivniRange.collapse(false);
+      }
+
+      /*
+       * Pokud je něco označeno, Enter nejprve označený obsah odstraní
+       * stejně jako běžný textový editor.
+       */
+      if (!aktivniRange.collapsed) {
+        aktivniRange.deleteContents();
+        aktivniRange.collapse(true);
+      }
+
+      const pred = document.createRange();
+      pred.selectNodeContents(richText);
+      pred.setEnd(
+        aktivniRange.startContainer,
+        aktivniRange.startOffset
+      );
+
+      const za = document.createRange();
+      za.selectNodeContents(richText);
+      za.setStart(
+        aktivniRange.startContainer,
+        aktivniRange.startOffset
+      );
+
+      const predBox = document.createElement("div");
+      const zaBox = document.createElement("div");
+
+      predBox.append(pred.cloneContents());
+      zaBox.append(za.cloneContents());
+
+      const textBefore =
+        predBox.textContent ?? "";
+
+      const textAfter =
+        zaBox.textContent ?? "";
+
+      const htmlBefore =
+        textBefore === ""
+          ? ""
+          : predBox.innerHTML;
+
+      const htmlAfter =
+        textAfter === ""
+          ? ""
+          : zaBox.innerHTML;
+
+      activeTodos[currentIndex].text =
+        textBefore;
+
+      activeTodos[currentIndex].html =
+        htmlBefore;
+
+      richText.innerHTML = htmlBefore;
+      text.value = textBefore;
+
+      nastavObsahTodoTextu(
+        textValue,
+        activeTodos[currentIndex]
+      );
+
+      const newTodo = normalizeTodo({
+        text: textAfter,
+        html: htmlAfter,
+        completed: false
+      });
+
+      activeTodos.splice(
+        currentIndex + 1,
+        0,
+        newTodo
+      );
+
+      const newItem = createTodoItem(
+        newTodo,
+        currentIndex + 1
+      );
+
+      todoItem.insertAdjacentElement(
+        "afterend",
+        newItem
+      );
+
+      refreshTodoIndexes();
+
+      const newRichText =
+        newItem.querySelector(
+          ".todoRichTextInput"
+        );
+
+      const newDisplay =
+        newItem.querySelector(
+          ".todoTextDisplay"
+        );
+
+      if (newRichText && newDisplay) {
+        enterTodoEditMode(
+          newRichText,
+          newDisplay,
+          0
+        );
+      }
+
+      return;
+    }
+
+    if (
+      event.key === "Backspace" &&
+      ziskejTextZTodoRichText(richText) === ""
+    ) {
+      event.preventDefault();
+      removeTodo(currentIndex);
+    }
+  });
+
+
+  /*
+   * V rich-text režimu necháme dvojklik/dvojtap vybrat slovo
+   * nativně prohlížečem. Pokud výběr nevznikne, otevřeme
+   * naši kurzorovou nabídku Vložit / Vše.
+   */
+  richText.addEventListener("dblclick", event => {
+    requestAnimationFrame(() => {
+      const selection = window.getSelection();
+
+      if (
+        selection &&
+        !selection.isCollapsed &&
+        richText.contains(selection.anchorNode)
+      ) {
+        return;
+      }
+
+      document.dispatchEvent(
+        new CustomEvent(
+          "lubanote:todo-kurzor-menu",
+          {
+            detail: {
+              textarea: text,
+              richText,
+              x: event.clientX,
+              y: event.clientY
+            }
+          }
+        )
+      );
+    });
+  });
+
 
   text.addEventListener(
     "pointerup",
@@ -1846,8 +2455,18 @@ function createTodoItem(todo, index) {
       return;
     }
 
-    activeTodos[currentIndex].text = text.value;
-    textValue.textContent = text.value || " ";
+    activeTodos[currentIndex].text =
+  text.value;
+
+/*
+ * Dokud TODO ještě editujeme přes textarea,
+ * jakákoli ruční změna textu znamená,
+ * že staré rich-text HTML už neodpovídá textu.
+ */
+activeTodos[currentIndex].html = "";
+
+textValue.textContent =
+  text.value || " ";
 
     if (
       text.value === "" &&
@@ -1881,9 +2500,14 @@ function createTodoItem(todo, index) {
       const textAfter =
         text.value.slice(cursorPosition);
 
-      activeTodos[currentIndex].text = textBefore;
-      text.value = textBefore;
-      textValue.textContent = textBefore || " ";
+      activeTodos[currentIndex].text =
+  textBefore;
+
+activeTodos[currentIndex].html = "";
+
+text.value = textBefore;
+textValue.textContent =
+  textBefore || " ";
       autoResizeTodoText(text);
 
       const newTodo = normalizeTodo({
@@ -1989,10 +2613,11 @@ function createTodoItem(todo, index) {
   );
 
   todoItem.append(
-    checkbox,
-    textDisplay,
-    text
-  );
+  checkbox,
+  textDisplay,
+  richText,
+  text
+);
 
   autoResizeTodoText(text);
 
@@ -2003,7 +2628,7 @@ function renderTodos() {
   clearTodoMoveSelection();
   todoList.innerHTML = "";
 
-  /* Starý textarea už slouží jen jako kompatibilní datový prvek. */
+  /* Stará textarea slouží jen jako skryté kompatibilní zrcadlo. */
   todoModalText.hidden = true;
 
   if (activeTodos.length === 0) {
