@@ -1136,7 +1136,23 @@ function leaveTodoEditMode(editor, display) {
     ".todoTextValue"
   );
 
-  const currentIndex = getTodoItemIndex(item);
+  /*
+   * DŮLEŽITÉ: po smazání se activeTodos.splice() změní dřív, než
+   * prohlížeč při překreslení vyvolá blur starého contenteditable.
+   * DOM index proto v blur handleru nesmí být zdrojem pravdy:
+   * mohl by už ukazovat na následující TODO a přepsat jeho text.
+   *
+   * TODO hledáme výhradně podle stabilního ID. Pokud už bylo
+   * smazáno, v activeTodos není a blur nic neukládá.
+   */
+  const todoId = item.dataset.todoId || "";
+
+  const currentIndex = todoId
+    ? activeTodos.findIndex(
+        todo => todo?.id === todoId
+      )
+    : -1;
+
   const richText = item.querySelector(
     ".todoRichTextInput"
   );
