@@ -836,6 +836,18 @@ function ziskejTextZTodoRichText(editor) {
 }
 
 
+function jeTodoTextPrazdny(text = "") {
+  /*
+   * contenteditable může po smazání posledního znaku na Androidu
+   * ponechat neviditelný znak nebo nedělitelnou mezeru. Pro uživatele
+   * je ale TODO už prázdné a má zmizet i jeho checkbox.
+   */
+  return String(text)
+    .replace(/[\u200B\uFEFF\u00A0]/gu, " ")
+    .trim() === "";
+}
+
+
 function ziskejHtmlZTodoRichText(editor) {
   const text = ziskejTextZTodoRichText(editor);
 
@@ -1104,6 +1116,19 @@ function leaveTodoEditMode(editor, display) {
   const item = editor?.closest(".todoItem");
 
   if (!item || !display) {
+    return;
+  }
+
+  /*
+   * Po smazání TODO se celý seznam může překreslit. Starý editor pak
+   * dostane blur už jako odpojený DOM prvek. Nesmí podle starého indexu
+   * přepsat následující TODO položku.
+   */
+  if (!item.isConnected) {
+    if (activeTodoEditorItem === item) {
+      activeTodoEditorItem = null;
+    }
+
     return;
   }
 
@@ -2069,8 +2094,32 @@ if (todo.html) {
       return;
     }
 
+    const predchoziText =
+      activeTodos[currentIndex].text ?? "";
+
     const novyText =
       ziskejTextZTodoRichText(richText);
+
+    const byloTodoNeprazdne =
+      !jeTodoTextPrazdny(predchoziText);
+
+    const jeTodoNyniPrazdne =
+      jeTodoTextPrazdny(novyText);
+
+    /*
+     * Jakmile uživatel smaže poslední viditelný znak existujícího TODO,
+     * smažeme celou položku včetně checkboxu. Nespoléháme jen na
+     * event.inputType, protože Android contenteditable ho neposílá vždy
+     * stejně a může po smazání ponechat neviditelný znak.
+     */
+    if (byloTodoNeprazdne && jeTodoNyniPrazdne) {
+      activeTodos[currentIndex].text = "";
+      activeTodos[currentIndex].html = "";
+      text.value = "";
+
+      removeTodo(currentIndex);
+      return;
+    }
 
     activeTodos[currentIndex].text = novyText;
     activeTodos[currentIndex].html =
@@ -2082,15 +2131,6 @@ if (todo.html) {
       textValue,
       activeTodos[currentIndex]
     );
-
-    if (
-      novyText === "" &&
-      typeof event.inputType === "string" &&
-      event.inputType.startsWith("delete")
-    ) {
-      removeTodo(currentIndex);
-      return;
-    }
 
     scheduleTodoItemVisibility(todoItem);
   });
