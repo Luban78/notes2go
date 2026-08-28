@@ -778,3 +778,228 @@
       );
   }
 }
+
+/* ==================================================
+   LUBANOTE – PROFESIONALNI SVG IKONY / DESKTOP
+   --------------------------------------------------
+   Vsechny ikony pouzivaji currentColor, proto se
+   automaticky prizpusobi aktivnimu motivu.
+================================================== */
+
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .lubaSvgIcon {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    color: inherit;
+    pointer-events: none;
+  }
+
+  .lubaSvgIcon * {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* ---------- SIDEBAR ---------- */
+
+  .desktopSidebarButton {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .desktopSidebarButton > .desktopSidebarIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+
+    border: 1px solid transparent;
+    border-radius: 9px;
+
+    color: color-mix(
+      in srgb,
+      var(--color-text-secondary) 86%,
+      var(--color-accent) 14%
+    );
+
+    background: transparent;
+
+    transition:
+      color 0.16s ease,
+      background 0.16s ease,
+      border-color 0.16s ease,
+      box-shadow 0.16s ease,
+      transform 0.16s ease;
+  }
+
+  .desktopSidebarIcon .lubaSvgIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .desktopSidebarButton:hover > .desktopSidebarIcon {
+    color: var(--color-text);
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 8%,
+      transparent
+    );
+  }
+
+  .desktopSidebarButton.active > .desktopSidebarIcon {
+    color: var(--color-accent);
+
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 24%,
+      transparent
+    );
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 12%,
+      var(--color-surface)
+    );
+
+    box-shadow:
+      inset 0 0 0 1px color-mix(
+        in srgb,
+        var(--color-accent) 8%,
+        transparent
+      ),
+      0 5px 14px color-mix(
+        in srgb,
+        var(--color-accent) 9%,
+        transparent
+      );
+  }
+
+  /* ---------- HORNI 3 MODULY ---------- */
+
+  .moduleTab .moduleTabIcon.desktopModuleIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    box-sizing: border-box;
+
+    margin-right: 2px;
+
+    border: 1px solid color-mix(
+      in srgb,
+      var(--color-border) 72%,
+      transparent
+    );
+
+    border-radius: 9px;
+
+    color: color-mix(
+      in srgb,
+      var(--color-text-secondary) 88%,
+      var(--color-accent) 12%
+    );
+
+    background: color-mix(
+      in srgb,
+      var(--color-surface) 90%,
+      var(--color-accent) 10%
+    );
+
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+    transition:
+      color 0.16s ease,
+      border-color 0.16s ease,
+      background 0.16s ease,
+      box-shadow 0.16s ease,
+      transform 0.16s ease;
+  }
+
+  .desktopModuleIcon .lubaSvgIcon {
+    width: 19px;
+    height: 19px;
+  }
+
+  .moduleTab:hover:not(.active) .desktopModuleIcon {
+    color: var(--color-text);
+
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 22%,
+      var(--color-border)
+    );
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 8%,
+      var(--color-surface)
+    );
+  }
+
+  .moduleTab.active .desktopModuleIcon {
+    color: var(--color-accent);
+
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 42%,
+      transparent
+    );
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 15%,
+      var(--color-surface)
+    );
+
+    box-shadow:
+      inset 0 0 0 1px color-mix(
+        in srgb,
+        var(--color-accent) 10%,
+        transparent
+      ),
+      0 5px 14px color-mix(
+        in srgb,
+        var(--color-accent) 12%,
+        transparent
+      );
+  }
+
+  /* ---------- HLEDANI ---------- */
+
+  .searchIcon.desktopSearchIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+
+    margin-right: 10px;
+
+    color: color-mix(
+      in srgb,
+      var(--color-text-secondary) 88%,
+      var(--color-accent) 12%
+    );
+  }
+
+  .desktopSearchIcon .lubaSvgIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .desktopSidebarButton:hover > .desktopSidebarIcon,
+    .moduleTab:hover .desktopModuleIcon {
+      transform: translateY(-1px);
+    }
+  }
+}

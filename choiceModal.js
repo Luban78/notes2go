@@ -30,7 +30,14 @@
     zavritTlacitko.type = "button";
     zavritTlacitko.className = "choiceDialogClose";
     zavritTlacitko.setAttribute("aria-label", "Zavřít");
-    zavritTlacitko.textContent = "✕";
+
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(
+        zavritTlacitko,
+        "zavrit",
+        ["choiceCloseSvgIcon"]
+      );
+    }
     
     moznostiElement = document.createElement("div");
     moznostiElement.className = "choiceDialogOptions";
@@ -105,7 +112,20 @@
       const tlacitko = document.createElement("button");
       tlacitko.type = "button";
       tlacitko.className = "choiceDialogOption";
-      tlacitko.textContent = moznost.popisek;
+
+      if (
+        moznost.ikona &&
+        window.LubaNoteIcons?.nastavObsahSIkonou
+      ) {
+        window.LubaNoteIcons.nastavObsahSIkonou(
+          tlacitko,
+          moznost.ikona,
+          moznost.popisek || "",
+          ["choiceOptionSvgIcon"]
+        );
+      } else {
+        tlacitko.textContent = moznost.popisek;
+      }
       
       if (moznost.hodnota === vybranaHodnota) {
         tlacitko.classList.add("active");

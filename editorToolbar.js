@@ -885,7 +885,15 @@
     }
 
     if (jeText) {
-      tlacitkoToolbar.textContent = "☷";
+      if (window.LubaNoteIcons?.nastavJenIkonu) {
+        window.LubaNoteIcons.nastavJenIkonu(
+          tlacitkoToolbar,
+          "odrazky",
+          ["editorModeSvgIcon"]
+        );
+      } else {
+        tlacitkoToolbar.textContent = "Nástroje";
+      }
 
       tlacitkoToolbar.setAttribute(
         "aria-label",
@@ -894,7 +902,15 @@
     }
 
     if (jsouNastroje) {
-      tlacitkoToolbar.textContent = "🕒";
+      if (window.LubaNoteIcons?.nastavJenIkonu) {
+        window.LubaNoteIcons.nastavJenIkonu(
+          tlacitkoToolbar,
+          "hodiny",
+          ["editorModeSvgIcon"]
+        );
+      } else {
+        tlacitkoToolbar.textContent = "Čas";
+      }
 
       tlacitkoToolbar.setAttribute(
         "aria-label",

@@ -64,22 +64,22 @@
 
     <nav class="desktopSidebarNav" aria-label="Rychlá navigace">
       <button id="desktopHomeButton" class="desktopSidebarButton active" type="button">
-        <span aria-hidden="true">⌂</span>
+        <span class="desktopSidebarIcon" data-luba-icon="domov" aria-hidden="true"></span>
         <span>Domů</span>
       </button>
 
       <button id="desktopAllNotesButton" class="desktopSidebarButton" type="button">
-        <span aria-hidden="true">▤</span>
+        <span class="desktopSidebarIcon" data-luba-icon="poznamky" aria-hidden="true"></span>
         <span>Všechny poznámky</span>
       </button>
 
       <button id="desktopFavoriteButton" class="desktopSidebarButton" type="button">
-        <span aria-hidden="true">☆</span>
+        <span class="desktopSidebarIcon" data-luba-icon="oblibene" aria-hidden="true"></span>
         <span>Oblíbené</span>
       </button>
 
       <button id="desktopTagsButton" class="desktopSidebarButton" type="button">
-        <span aria-hidden="true">◇</span>
+        <span class="desktopSidebarIcon" data-luba-icon="stitky" aria-hidden="true"></span>
         <span>Štítky</span>
       </button>
     </nav>
@@ -88,12 +88,12 @@
 
     <nav class="desktopSidebarNav desktopSidebarNavSecondary" aria-label="Nástroje">
       <button id="desktopSettingsButton" class="desktopSidebarButton" type="button">
-        <span aria-hidden="true">⚙</span>
+        <span class="desktopSidebarIcon" data-luba-icon="nastaveni" aria-hidden="true"></span>
         <span>Nastavení</span>
       </button>
 
       <button id="desktopBackupButton" class="desktopSidebarButton" type="button">
-        <span aria-hidden="true">▣</span>
+        <span class="desktopSidebarIcon" data-luba-icon="zaloha" aria-hidden="true"></span>
         <span>Záloha a obnova</span>
       </button>
     </nav>
@@ -118,17 +118,17 @@
       
       <nav class="moduleTabs" aria-label="Hlavní části LubaNote">
         <button id="notesModuleButton" class="moduleTab active" type="button" data-module="notes" aria-current="page">
-          <span class="moduleTabIcon" aria-hidden="true">📝</span>
+          <span class="moduleTabIcon" data-luba-icon="modulPoznamky" aria-hidden="true"></span>
           <span class="moduleTabText">Poznámky</span>
         </button>
         
         <button id="plannerModuleButton" class="moduleTab" type="button" data-module="planner">
-          <span class="moduleTabIcon" aria-hidden="true">📅</span>
+          <span class="moduleTabIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
           <span class="moduleTabText">Plán</span>
         </button>
         
         <button id="remindersModuleButton" class="moduleTab" type="button" data-module="reminders">
-          <span class="moduleTabIcon" aria-hidden="true">🔔</span>
+          <span class="moduleTabIcon" data-luba-icon="zvonek" aria-hidden="true"></span>
           <span class="moduleTabText">Připomínky</span>
         </button>
       </nav>
@@ -137,58 +137,60 @@
     <!-- HLEDÁNÍ + PŘEPÍNAČ KARET + HLAVNÍ MENU -->
     <div class="searchRow">
       <div class="searchBox">
-        <span class="searchIcon" aria-hidden="true">⌕</span>
+        <span class="searchIcon" data-luba-icon="hledat" aria-hidden="true"></span>
         <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
-        <button id="clearSearchButton" class="searchClearButton" type="button" aria-label="Vymazat hledání" hidden>×</button>
+        <button id="clearSearchButton" class="searchClearButton lubaIconOnlyButton" type="button" aria-label="Vymazat hledání" hidden>
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
+        </button>
       </div>
       
       <div class="searchActions">
         <!-- 1 sloupec / 2 sloupce -->
         <button id="changeViewButton" type="button" aria-label="Změnit zobrazení karet">
-          ▦
+          <span class="searchActionIcon" data-luba-icon="seznam" aria-hidden="true"></span>
         </button>
         
         <!-- Servisní nabídka aplikace -->
         <button id="mainMenuButton" type="button" aria-label="Hlavní nabídka" aria-haspopup="menu" aria-expanded="false">
-          ⋮
+          <span class="searchActionIcon" data-luba-icon="vice" aria-hidden="true"></span>
         </button>
         
         <div id="mainMenu" class="mainMenu" role="menu" hidden>
           
           <button id="cardSortButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">↕️</span>
+            <span class="mainMenuIcon" data-luba-icon="razeni" aria-hidden="true"></span>
             <span id="cardSortMenuLabel" class="mainMenuLabel">Řazení: nejnovější nahoře</span>
-            <span class="mainMenuArrow" aria-hidden="true">⇅</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="razeni" aria-hidden="true"></span>
           </button>
           
           <button id="fontSizeSettingsButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">⚙️</span>
+            <span class="mainMenuIcon" data-luba-icon="nastaveni" aria-hidden="true"></span>
             <span class="mainMenuLabel">Nastavení</span>
-            <span class="mainMenuArrow" aria-hidden="true">›</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
           <button id="manageTagsMenuButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">🏷️</span>
+            <span class="mainMenuIcon" data-luba-icon="stitky" aria-hidden="true"></span>
             <span class="mainMenuLabel">Správa štítků</span>
-            <span class="mainMenuArrow" aria-hidden="true">›</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
           <button id="backupRestoreButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">💾</span>
+            <span class="mainMenuIcon" data-luba-icon="zaloha" aria-hidden="true"></span>
             <span class="mainMenuLabel">Záloha a obnova</span>
-            <span class="mainMenuArrow" aria-hidden="true">›</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
           <button id="aboutAppButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">ℹ️</span>
+            <span class="mainMenuIcon" data-luba-icon="info" aria-hidden="true"></span>
             <span class="mainMenuLabel">O aplikaci</span>
-            <span class="mainMenuArrow" aria-hidden="true">›</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
           <hr>
           
           <button id="logoutButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" aria-hidden="true">🚪</span>
+            <span class="mainMenuIcon" data-luba-icon="odhlasit" aria-hidden="true"></span>
             <span class="mainMenuLabel">Odhlásit se</span>
           </button>
           
@@ -204,8 +206,8 @@
           0 vybraných
         </span>
         
-        <button type="button" id="cardSelectionCompactClose" aria-label="Ukončit výběr">
-          ✕
+        <button type="button" id="cardSelectionCompactClose" class="lubaIconOnlyButton" aria-label="Ukončit výběr">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -213,20 +215,22 @@
         Vše
       </button>
       
-      <button id="favoriteFilterButton" class="categoryTab" type="button" aria-label="Oblíbené poznámky">
-        ⭐
+      <button id="favoriteFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Oblíbené poznámky">
+        <span class="categoryTabIcon" data-luba-icon="oblibene" aria-hidden="true"></span>
       </button>
       
-      <button id="secretFilterButton" class="categoryTab" type="button" aria-label="Tajné poznámky" hidden>
-        🔓
+      <button id="secretFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Tajné poznámky" hidden>
+        <span class="categoryTabIcon" data-luba-icon="odemceno" aria-hidden="true"></span>
       </button>
       
       <button class="categoryTab" type="button" data-area-filter="work">
-        💼 Pracovní
+        <span class="categoryTabIcon" data-luba-icon="prace" aria-hidden="true"></span>
+        <span>Pracovní</span>
       </button>
       
       <button class="categoryTab" type="button" data-area-filter="private">
-        🏠 Soukromé
+        <span class="categoryTabIcon" data-luba-icon="soukrome" aria-hidden="true"></span>
+        <span>Soukromé</span>
       </button>
       
       <!-- Sem tags.js doplňuje vlastní štítky -->
@@ -268,16 +272,16 @@
     
     <div class="calendarHeader">
       
-      <button id="calendarPrevMonth" type="button" aria-label="Předchozí měsíc">
-        ‹
+      <button id="calendarPrevMonth" class="lubaIconOnlyButton" type="button" aria-label="Předchozí měsíc">
+        <span class="lubaActionIcon" data-luba-icon="sipkaVlevo" aria-hidden="true"></span>
       </button>
       
       <h2 id="calendarMonthTitle">
         Srpen 2026
       </h2>
       
-      <button id="calendarNextMonth" type="button" aria-label="Další měsíc">
-        ›
+      <button id="calendarNextMonth" class="lubaIconOnlyButton" type="button" aria-label="Další měsíc">
+        <span class="lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
       </button>
       
     </div>
@@ -307,8 +311,8 @@
           T--
         </div>
         
-        <button id="recurringOverviewButton" type="button" class="recurringOverviewButton" aria-label="Zobrazit opakované úkoly">
-          ↻
+        <button id="recurringOverviewButton" type="button" class="recurringOverviewButton lubaIconOnlyButton" aria-label="Zobrazit opakované úkoly">
+          <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -328,7 +332,7 @@
     <div class="dayDetailHeader">
       
       <button id="dayDetailBackButton" class="dayDetailBackButton" type="button" aria-label="Zpět na kalendář">
-        <span class="dayDetailBackArrow">‹</span>
+        <span class="dayDetailBackArrow lubaActionIcon" data-luba-icon="sipkaVlevo" aria-hidden="true"></span>
         
         <span id="dayDetailTitle">
           Vybraný den
@@ -349,8 +353,8 @@
     
     <div class="recurringOverviewHeader">
       
-      <button id="recurringOverviewBackButton" type="button" aria-label="Zpět na kalendář">
-        ‹
+      <button id="recurringOverviewBackButton" class="lubaIconOnlyButton" type="button" aria-label="Zpět na kalendář">
+        <span class="lubaActionIcon" data-luba-icon="sipkaVlevo" aria-hidden="true"></span>
       </button>
       
       <h2>
@@ -377,12 +381,12 @@
           Vše
         </button>
         
-        <button type="button" class="remindersFilter" data-reminder-filter="work">
-          💼
+        <button type="button" class="remindersFilter lubaIconOnlyButton" data-reminder-filter="work" aria-label="Pracovní">
+          <span class="lubaActionIcon" data-luba-icon="prace" aria-hidden="true"></span>
         </button>
         
-        <button type="button" class="remindersFilter" data-reminder-filter="private">
-          🏠
+        <button type="button" class="remindersFilter lubaIconOnlyButton" data-reminder-filter="private" aria-label="Soukromé">
+          <span class="lubaActionIcon" data-luba-icon="soukrome" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -441,8 +445,8 @@
           <p id="reminderQuickPreview" class="reminderQuickPreview" hidden></p>
         </div>
         
-        <button id="closeReminderQuickMenu" type="button" class="reminderQuickClose" aria-label="Zavřít">
-          ✕
+        <button id="closeReminderQuickMenu" type="button" class="reminderQuickClose lubaIconOnlyButton" aria-label="Zavřít">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -459,7 +463,7 @@
           
           <button id="reminderQuickDateButton" class="sharedDateTimePickerButton" type="button" aria-label="Vybrat datum připomínky">
             <span id="reminderQuickDateLabel">Datum</span>
-            <span aria-hidden="true">📅</span>
+            <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
           </button>
           
           <input id="reminderQuickDate" type="hidden">
@@ -470,7 +474,7 @@
           
           <button id="reminderQuickTimeButton" class="sharedDateTimePickerButton" type="button" aria-label="Vybrat čas připomínky">
             <span id="reminderQuickTimeLabel">Čas</span>
-            <span aria-hidden="true">🕒</span>
+            <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span>
           </button>
           
           <input id="reminderQuickTime" type="hidden">
@@ -482,20 +486,24 @@
       </button>
       
       <div class="reminderQuickFooter">
-        <button id="completeReminderButton" type="button" class="reminderQuickDone">
-          ✅ Hotovo
+        <button id="completeReminderButton" type="button" class="reminderQuickDone lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span>
+          <span>Hotovo</span>
         </button>
         
-        <button id="deleteReminderButton" type="button" class="danger">
-          🗑️ Smazat
+        <button id="deleteReminderButton" type="button" class="danger lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
+          <span>Smazat</span>
         </button>
         
-        <button id="openReminderNoteButton" type="button">
-          📝 Otevřít poznámku
+        <button id="openReminderNoteButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="poznamky" aria-hidden="true"></span>
+          <span>Otevřít poznámku</span>
         </button>
         
-        <button id="disableReminderButton" type="button" class="danger">
-          🔕 Vypnout připomínku
+        <button id="disableReminderButton" type="button" class="danger lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="vypnoutZvonek" aria-hidden="true"></span>
+          <span>Vypnout připomínku</span>
         </button>
       </div>
     </div>
@@ -684,8 +692,8 @@
         <!-- Akce editoru -->
         <div class="editorTopActions">
           
-          <button id="pinTaskButton" type="button" aria-label="Připnout poznámku">
-            &#128204;
+          <button id="pinTaskButton" type="button" class="lubaIconOnlyButton" aria-label="Připnout poznámku">
+            <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span>
           </button>
           
           <button id="reminderButton" type="button" aria-label="Připomínka">
@@ -714,8 +722,8 @@
         
         <div id="modalTitle" contenteditable="plaintext-only" role="textbox" aria-label="Název úkolu" aria-multiline="false" data-placeholder="Název úkolu" data-prazdny="true" inputmode="text" spellcheck="true"></div>
         
-        <button id="secretTaskButton" type="button" aria-label="Tajná poznámka" hidden>
-          🔓
+        <button id="secretTaskButton" type="button" class="lubaIconOnlyButton" aria-label="Tajná poznámka" hidden>
+          <span class="lubaActionIcon" data-luba-icon="odemceno" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -762,8 +770,9 @@
             projekt
           </button>
           
-          <button id="createTagButton" class="createTagButton" type="button">
-            ＋ Nový štítek
+          <button id="createTagButton" class="createTagButton lubaHasIcon" type="button">
+            <span class="lubaActionIcon" data-luba-icon="plus" aria-hidden="true"></span>
+            <span>Nový štítek</span>
           </button>
           
         </div>
@@ -775,8 +784,8 @@
             Přidat
           </button>
           
-          <button id="cancelNewTagButton" type="button" aria-label="Zrušit nový štítek">
-            ✕
+          <button id="cancelNewTagButton" class="lubaIconOnlyButton" type="button" aria-label="Zrušit nový štítek">
+            <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
           </button>
         </div>
         
@@ -787,20 +796,20 @@
       
       <div class="editorBottomBar">
         
-        <button id="editorBackButton" type="button" aria-label="Uložit a zavřít">
-          ✅
+        <button id="editorBackButton" class="lubaIconOnlyButton" type="button" aria-label="Uložit a zavřít">
+          <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span>
         </button>
         
-        <button id="categoryTaskButton" type="button" aria-label="Oblast poznámky">
-          💼
+        <button id="categoryTaskButton" class="lubaIconOnlyButton" type="button" aria-label="Oblast poznámky">
+          <span class="lubaActionIcon" data-luba-icon="prace" aria-hidden="true"></span>
         </button>
         
-        <button id="priorityTaskButton" type="button" aria-label="Priorita">
-          ⭐
+        <button id="priorityTaskButton" class="lubaIconOnlyButton" type="button" aria-label="Priorita">
+          <span class="lubaActionIcon" data-luba-icon="oblibene" aria-hidden="true"></span>
         </button>
         
-        <button id="colorTaskButton" type="button" aria-label="Barva">
-          🎨
+        <button id="colorTaskButton" class="lubaIconOnlyButton" type="button" aria-label="Barva">
+          <span class="lubaActionIcon" data-luba-icon="paleta" aria-hidden="true"></span>
         </button>
         <div id="textColorPalette" class="textColorPalette" hidden>
           <button type="button" data-highlight-color="#fff59d" aria-label="Žlutá"></button>
@@ -808,23 +817,23 @@
           <button type="button" data-highlight-color="#90caf9" aria-label="Modrá"></button>
           <button type="button" data-highlight-color="#ce93d8" aria-label="Fialová"></button>
           <button type="button" data-highlight-color="#ef9a9a" aria-label="Červená"></button>
-          <button type="button" data-highlight-remove aria-label="Odstranit zvýraznění">
-            ✕
+          <button type="button" class="lubaIconOnlyButton" data-highlight-remove aria-label="Odstranit zvýraznění">
+            <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
           </button>
         </div>
         
-        <button id="tagTaskButton" type="button" aria-label="Štítky">
-          🏷️
+        <button id="tagTaskButton" class="lubaIconOnlyButton" type="button" aria-label="Štítky">
+          <span class="lubaActionIcon" data-luba-icon="stitky" aria-hidden="true"></span>
         </button>
-        <button id="planSelectionButton" type="button" aria-label="Naplánovat označený text">
-          📅
+        <button id="planSelectionButton" class="lubaIconOnlyButton" type="button" aria-label="Naplánovat označený text">
+          <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
         </button>
-        <button id="addTodoButton" type="button" aria-label="Přidat položku TODO">
-          ☐
+        <button id="addTodoButton" class="lubaIconOnlyButton" type="button" aria-label="Přidat položku TODO">
+          <span class="lubaActionIcon" data-luba-icon="todo" aria-hidden="true"></span>
         </button>
         
-        <button id="deleteTaskButton" type="button" aria-label="Smazat poznámku">
-          🗑️
+        <button id="deleteTaskButton" class="lubaIconOnlyButton" type="button" aria-label="Smazat poznámku">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -840,20 +849,20 @@
   
   <div id="cardMenu" class="cardMenu" hidden>
     
-    <button type="button" data-card-action="plan">
-      🕒 Termín
+    <button type="button" class="lubaHasIcon" data-card-action="plan">
+      <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span><span>Termín</span>
     </button>
     
-    <button type="button" data-card-action="pin">
-      📌 Připnout
+    <button type="button" class="lubaHasIcon" data-card-action="pin">
+      <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span><span>Připnout</span>
     </button>
     
-    <button type="button" data-card-action="delete">
-      🗑️ Smazat
+    <button type="button" class="lubaHasIcon" data-card-action="delete">
+      <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
     </button>
     
-    <button type="button" data-card-action="more">
-      ⋯ Více akcí
+    <button type="button" class="lubaHasIcon" data-card-action="more">
+      <span class="lubaActionIcon" data-luba-icon="vice" aria-hidden="true"></span><span>Více akcí</span>
     </button>
     
   </div>
@@ -879,8 +888,8 @@
           Zrušit
         </button>
         
-        <button id="confirmDeleteButton" type="button">
-          🗑️ Smazat
+        <button id="confirmDeleteButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
         </button>
         
       </div>
@@ -900,16 +909,16 @@
       
       <div class="datePickerHeader">
         
-        <button id="previousMonthButton" type="button" aria-label="Předchozí měsíc">
-          ‹
+        <button id="previousMonthButton" class="lubaIconOnlyButton" type="button" aria-label="Předchozí měsíc">
+          <span class="lubaActionIcon" data-luba-icon="sipkaVlevo" aria-hidden="true"></span>
         </button>
         
         <h2 id="datePickerMonthTitle">
           Srpen 2026
         </h2>
         
-        <button id="nextMonthButton" type="button" aria-label="Další měsíc">
-          ›
+        <button id="nextMonthButton" class="lubaIconOnlyButton" type="button" aria-label="Další měsíc">
+          <span class="lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -954,8 +963,8 @@
       <div class="timePickerHeader">
         <h2>Vybrat čas</h2>
         
-        <button id="closeTimePickerButton" type="button" aria-label="Zavřít výběr času">
-          ✕
+        <button id="closeTimePickerButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít výběr času">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -1036,8 +1045,8 @@
       <div class="plannerHeader">
         <h2>Naplánovat</h2>
         
-        <button id="closePlannerButton" type="button" aria-label="Zavřít plánování">
-          ✕
+        <button id="closePlannerButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít plánování">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -1049,7 +1058,7 @@
       
       <button id="plannerDateButton" class="sharedDateTimePickerButton plannerDateTimePickerButton" type="button" aria-label="Vybrat datum plánovaného úkolu">
         <span id="plannerDateLabel">Datum</span>
-        <span aria-hidden="true">📅</span>
+        <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
       </button>
       
       <input id="plannerDate" type="hidden">
@@ -1060,7 +1069,7 @@
       
       <button id="plannerTimeButton" class="sharedDateTimePickerButton plannerDateTimePickerButton" type="button" aria-label="Vybrat čas plánovaného úkolu">
         <span id="plannerTimeLabel">Čas</span>
-        <span aria-hidden="true">🕒</span>
+        <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span>
       </button>
       
       <input id="plannerTime" type="hidden">
@@ -1071,8 +1080,8 @@
           Zrušit
         </button>
         
-        <button id="savePlannerButton" type="button">
-          📅 Naplánovat
+        <button id="savePlannerButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span><span>Naplánovat</span>
         </button>
         
       </div>
@@ -1094,8 +1103,8 @@
         
         <h2>Nastavení</h2>
         
-        <button id="closeSettingsButton" type="button" aria-label="Zavřít nastavení">
-          ✕
+        <button id="closeSettingsButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít nastavení">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -1141,7 +1150,7 @@
           
           <button id="openThemeModalButton" type="button" class="themeSelectButton">
             <span id="currentThemeLabel">Tmavý</span>
-            <span class="themeSelectArrow">›</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
         </div>
@@ -1167,7 +1176,7 @@
           
           <button id="openReminderDelaySettingsButton" type="button" class="themeSelectButton">
             <span>Nastavit</span>
-            <span class="themeSelectArrow">›</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
         </div>
@@ -1211,7 +1220,7 @@
           
           <button id="openAboutFromSettingsButton" type="button" class="themeSelectButton">
             <span>Otevřít</span>
-            <span class="themeSelectArrow">›</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
         </div>
@@ -1230,8 +1239,8 @@
   
   <div id="aboutModal" class="aboutModal" hidden>
     <div class="aboutCard">
-      <button id="closeAboutButton" class="aboutCloseButton" type="button" aria-label="Zavřít informace o aplikaci">
-        ✕
+      <button id="closeAboutButton" class="aboutCloseButton lubaIconOnlyButton" type="button" aria-label="Zavřít informace o aplikaci">
+        <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
       </button>
       
       <img src="icons/lubanote.png" alt="" class="aboutLogo">
@@ -1286,8 +1295,8 @@
       <div class="manageTagsHeader">
         <h2>Správa štítků</h2>
         
-        <button id="closeManageTagsButton" type="button" aria-label="Zavřít správu štítků">
-          ✕
+        <button id="closeManageTagsButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít správu štítků">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -1316,8 +1325,8 @@
           Zrušit
         </button>
         
-        <button id="confirmDeleteTagButton" type="button">
-          🗑️ Smazat
+        <button id="confirmDeleteTagButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
         </button>
       </div>
       
@@ -1361,12 +1370,12 @@
           OK
         </button>
         
-        <button id="appMessageSecretButton" type="button" hidden>
-          🔐 Uložit jako tajnou
+        <button id="appMessageSecretButton" type="button" class="lubaHasIcon" hidden>
+          <span class="lubaActionIcon" data-luba-icon="zamek" aria-hidden="true"></span><span>Uložit jako tajnou</span>
         </button>
         
-        <button id="appMessageNormalButton" type="button" hidden>
-          📄 Uložit normálně
+        <button id="appMessageNormalButton" type="button" class="lubaHasIcon" hidden>
+          <span class="lubaActionIcon" data-luba-icon="dokument" aria-hidden="true"></span><span>Uložit normálně</span>
         </button>
       </div>
       
@@ -1376,7 +1385,7 @@
   <div id="actionStatusModal" class="actionStatusModal" hidden>
     <div class="actionStatusDialog">
       <div class="actionStatusIcon">
-        ✓
+        <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span>
       </div>
       
       <div id="actionStatusText">
@@ -1402,12 +1411,12 @@
       
       <div class="secretUnlockHeader">
         
-        <h2 id="secretUnlockTitle">
-          🔒 Tajný režim
+        <h2 id="secretUnlockTitle" class="lubaHeadingWithIcon">
+          <span class="lubaActionIcon" data-luba-icon="zamek" aria-hidden="true"></span><span>Tajný režim</span>
         </h2>
         
-        <button id="closeSecretUnlockButton" type="button" aria-label="Zavřít tajný režim">
-          ✕
+        <button id="closeSecretUnlockButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít tajný režim">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
         </button>
         
       </div>
@@ -1426,8 +1435,8 @@
           Zrušit
         </button>
         
-        <button id="confirmSecretUnlockButton" type="button">
-          🔓 Odemknout
+        <button id="confirmSecretUnlockButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="odemceno" aria-hidden="true"></span><span>Odemknout</span>
         </button>
         
       </div>
@@ -1443,17 +1452,17 @@
   <div id="secretMenuModal" class="newTagModal" hidden>
     <div class="newTagDialog">
       
-      <h3>🔐 Tajné štítky</h3>
+      <h3 class="lubaHeadingWithIcon"><span class="lubaActionIcon" data-luba-icon="zamek" aria-hidden="true"></span><span>Tajné štítky</span></h3>
       
       <div class="secretTagMenu">
         
         <button id="createSecretTagButton" type="button">
-          <span class="secretTagMenuIcon">➕</span>
+          <span class="secretTagMenuIcon" data-luba-icon="plus" aria-hidden="true"></span>
           <span>Vytvořit tajný štítek</span>
         </button>
         
         <button id="lockSecretModeButton" type="button">
-          <span class="secretTagMenuIcon">🔒</span>
+          <span class="secretTagMenuIcon" data-luba-icon="zamek" aria-hidden="true"></span>
           <span>Zamknout tajný režim</span>
         </button>
         
@@ -1481,6 +1490,7 @@
        ======================================== -->
   
   <script src="build-version.js"></script>
+  <script src="lubaIcons.js"></script>
   <script src="autofillGuard.js"></script>
   
   <script src="reminders.js?v=20260827-kompletni-zaloha-1"></script>
@@ -1526,6 +1536,9 @@
   
   <!-- Navigace modulů a servisní nabídka -->
   <script src="navigation.js"></script>
+
+  <!-- Desktop doplnění SVG ikon do levého panelu -->
+  <script src="desktopIcons.js"></script>
 
   <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
   <script src="desktop.js"></script>

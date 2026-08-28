@@ -18,17 +18,20 @@ function applyCardView() {
 }
 
 function updateCardViewButton() {
-  changeViewButton.innerHTML =
+  const nazevIkony =
     cardView === "grid" ?
-    "☰" :
-    `
-        <span class="cardGridIcon">
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
-      `;
+      "seznam" :
+      "mrizka";
+
+  const hostitel =
+    window.LubaNoteIcons?.vytvorHostitele(
+      nazevIkony,
+      ["searchActionIcon"]
+    );
+
+  if (hostitel) {
+    changeViewButton.replaceChildren(hostitel);
+  }
 }
 
 function ziskejSmerRazeniKaretProMenu() {

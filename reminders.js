@@ -1390,10 +1390,20 @@ function openReminderQuickMenu(entry) {
   }
 
   if (disableReminderButton) {
-    disableReminderButton.textContent =
-      entry.kind === "planned"
-        ? "📅 Zrušit plán"
-        : "🔕 Vypnout připomínku";
+    const jePlan = entry.kind === "planned";
+    const popisek = jePlan
+      ? "Zrušit plán"
+      : "Vypnout připomínku";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        disableReminderButton,
+        jePlan ? "kalendar" : "vypnoutZvonek",
+        popisek
+      );
+    } else {
+      disableReminderButton.textContent = popisek;
+    }
   }
 
 const rychleOdlozeni =
@@ -2512,8 +2522,16 @@ function createReminderRow(
   icon.className =
     "reminderItemArea";
 
-  icon.textContent =
-    entry.area === "work" ? "💼" : "🏠";
+  const ikonaOblasti =
+    entry.area === "work" ? "prace" : "soukrome";
+
+  if (window.LubaNoteIcons?.vlozIkonu) {
+    window.LubaNoteIcons.vlozIkonu(
+      icon,
+      ikonaOblasti,
+      ["reminderItemAreaIcon"]
+    );
+  }
 
   const titleText =
     document.createElement("span");
@@ -2522,6 +2540,19 @@ function createReminderRow(
     entry.title || "Bez názvu";
 
   title.append(icon, titleText);
+
+  if (entry.kind === "planned") {
+    const planIcon =
+      window.LubaNoteIcons?.vytvorHostitele?.(
+        "kalendar",
+        ["reminderPlannedIcon"]
+      );
+
+    if (planIcon) {
+      title.append(planIcon);
+    }
+  }
+
   content.append(title);
 
   const preview =
@@ -2550,7 +2581,13 @@ function createReminderRow(
     "aria-label",
     `Upravit ${entry.title || "připomínku"}`
   );
-  menuButton.textContent = "⋮";
+  if (window.LubaNoteIcons?.nastavJenIkonu) {
+    window.LubaNoteIcons.nastavJenIkonu(
+      menuButton,
+      "vice",
+      ["reminderMenuSvgIcon"]
+    );
+  }
 
   menuButton.addEventListener(
     "click",
@@ -2827,7 +2864,7 @@ document
       const puvodniText = button.textContent;
 
       button.disabled = true;
-      button.textContent = "⏳ Odkládám…";
+      button.textContent = "Odkládám…";
 
       try {
         await postponeReminder(minutes);
@@ -2846,7 +2883,7 @@ document
       const puvodniText = button.textContent;
 
       button.disabled = true;
-      button.textContent = "⏳ Odkládám…";
+      button.textContent = "Odkládám…";
 
       try {
         await postponeReminderToTomorrowMorning();

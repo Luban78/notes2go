@@ -421,7 +421,18 @@ function renderCalendarItems(targetElement) {
     if (
       item.sourceType === "recurring-note"
     ) {
-      text.textContent += " 🔁";
+      const repeatIcon =
+        window.LubaNoteIcons?.vytvorHostitele?.(
+          "opakovat",
+          ["calendarAgendaRepeatIcon"]
+        );
+
+      if (repeatIcon) {
+        text.append(
+          document.createTextNode(" "),
+          repeatIcon
+        );
+      }
     }
 
     row.append(time, text);

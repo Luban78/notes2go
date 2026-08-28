@@ -134,6 +134,13 @@
       "Nastavení obrázku"
     );
     tlacitko.contentEditable = "false";
+
+    window.LubaNoteIcons?.nastavJenIkonu?.(
+      tlacitko,
+      "nastaveni",
+      ["editorImageControlSvgIcon"]
+    );
+
     return tlacitko;
   }
 
@@ -1915,6 +1922,12 @@
       "Odstranit obrázek"
     );
     removeButton.contentEditable = "false";
+
+    window.LubaNoteIcons?.nastavJenIkonu?.(
+      removeButton,
+      "zavrit",
+      ["editorImageControlSvgIcon"]
+    );
     
     figure.append(
       image,
@@ -2163,7 +2176,17 @@
     
     const title = document.createElement("h3");
     title.id = "editorLinkTitle";
-    title.textContent = "🔗 Internetový odkaz";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        title,
+        "odkaz",
+        "Internetový odkaz",
+        ["editorLinkTitleIcon"]
+      );
+    } else {
+      title.textContent = "Internetový odkaz";
+    }
     
     const textLabel = document.createElement("label");
     textLabel.textContent = "Text odkazu";
@@ -2207,8 +2230,18 @@
     const saveButton =
       document.createElement("button");
     saveButton.type = "button";
-    saveButton.className = "primary";
-    saveButton.textContent = "🔗 Vložit";
+    saveButton.className = "primary lubaHasIcon";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        saveButton,
+        "odkaz",
+        "Vložit",
+        ["editorLinkActionIcon"]
+      );
+    } else {
+      saveButton.textContent = "Vložit";
+    }
     
     actions.append(
       cancelButton,
@@ -2383,11 +2416,13 @@
         moznosti: [
           {
             hodnota: "galerie",
-            popisek: "🖼️ Galerie"
+            popisek: "Galerie",
+            ikona: "obrazek"
           },
           {
             hodnota: "fotoaparat",
-            popisek: "📷 Fotoaparát"
+            popisek: "Fotoaparát",
+            ikona: "fotoaparat"
           }
         ],
         poVyberu: (hodnota) => {

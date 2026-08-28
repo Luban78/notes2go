@@ -399,6 +399,23 @@ function najdiAktivniPoznamku(tasks) {
 const secretTaskButton =
   document.getElementById("secretTaskButton");
 
+function aktualizujIkonuTajnePoznamky() {
+  if (!secretTaskButton) {
+    return;
+  }
+
+  const nazevIkony =
+    secretTaskEnabled ? "zamek" : "odemceno";
+
+  if (window.LubaNoteIcons?.nastavJenIkonu) {
+    window.LubaNoteIcons.nastavJenIkonu(
+      secretTaskButton,
+      nazevIkony,
+      ["editorSecretSvgIcon"]
+    );
+  }
+}
+
 const editorBackButton = document.getElementById("editorBackButton");
 
 const deleteTaskButton =
@@ -516,8 +533,7 @@ secretTaskButton?.addEventListener(
     
     secretTaskEnabled = !secretTaskEnabled;
     
-    secretTaskButton.textContent =
-      secretTaskEnabled ? "🔐" : "🔓";
+    aktualizujIkonuTajnePoznamky();
     
     secretTaskButton.classList.toggle(
       "active",
@@ -735,7 +751,7 @@ function zavriTajnyEditorPriZamknuti() {
   editorSessionId += 1;
   secretTaskEnabled = false;
   
-  secretTaskButton.textContent = "🔓";
+  aktualizujIkonuTajnePoznamky();
   secretTaskButton.classList.remove("active");
   
   if (typeof RichTextColors !== "undefined") {
@@ -2193,13 +2209,23 @@ function aktualizujPopiskyDataCasu() {
     modalDateLabel.textContent = "Datum";
   }
   
-  const repeatIkona =
-    editorRepeat?.enabled === true ?
-    " 🔁" :
-    "";
-  
   modalTimeLabel.textContent =
-    `${modalTime.value || "Čas"}${repeatIkona}`;
+    modalTime.value || "Čas";
+
+  if (editorRepeat?.enabled === true) {
+    const repeatIcon =
+      window.LubaNoteIcons?.vytvorHostitele?.(
+        "opakovat",
+        ["editorTimeRepeatIcon"]
+      );
+
+    if (repeatIcon) {
+      modalTimeLabel.append(
+        document.createTextNode(" "),
+        repeatIcon
+      );
+    }
+  }
 }
 modalDate.addEventListener("change", () => {
   synchronizujRepeatSDatemEditoru();
@@ -2236,14 +2262,13 @@ priorityTaskButton?.classList.remove(
   "active"
 );
 
-secretTaskButton.textContent =
-  secretTaskEnabled ? "🔐" : "🔓";
+aktualizujIkonuTajnePoznamky();
 
 secretTaskButton.classList.toggle(
   "active",
   secretTaskEnabled
 );
-  secretTaskButton.textContent = "🔓";
+  aktualizujIkonuTajnePoznamky();
   secretTaskButton.classList.remove("active");
   resetTodos();
   activeArea = "private";
@@ -2775,8 +2800,7 @@ function openTaskEditorById(taskId) {
   
   updateReminderButton(reminderEnabled);
   
-  secretTaskButton.textContent =
-    secretTaskEnabled ? "🔐" : "🔓";
+  aktualizujIkonuTajnePoznamky();
   
   secretTaskButton.classList.toggle(
     "active",
@@ -3081,50 +3105,64 @@ function renderTasks() {
     
     const loadedHeading = document.createElement("h3");
     
-    const areaIcon =
-      loadedTask.area === "work" ?
-      "💼" :
-      "🏠";
-    
-    const pinIcon =
-      loadedTask.pinned === true ?
-      "📌" :
-      "";
-    
-    const favoriteIcon =
-      loadedTask.favorite === true ?
-      "⭐" :
-      "";
-    
-    const reminderIcon =
-      loadedTask.reminder === true ?
-      "🔔" :
-      "";
-    const repeatIcon =
-      loadedTask.repeat?.enabled === true ?
-      "🔁" :
-      "";
-    const secretIcon =
-      loadedTask.isSecret === true &&
-      tajnyRezimOdemceny ?
-      "🔐" :
-      "";
-    
     const loadedHeadingIcons =
       document.createElement("span");
-    
+
     loadedHeadingIcons.classList.add("taskCardIcons");
-    
-    loadedHeadingIcons.textContent = [
-        pinIcon,
-        favoriteIcon,
-        secretIcon,
-        areaIcon,
-        reminderIcon,
-        repeatIcon
-      ]
-      .filter(Boolean)
-      .join(" ");
+
+    const ikonyKarty = [
+      {
+        zobrazit: loadedTask.pinned === true,
+        nazev: "pripnout",
+        trida: "taskCardIconPin"
+      },
+      {
+        zobrazit: loadedTask.favorite === true,
+        nazev: "oblibene",
+        trida: "taskCardIconFavorite"
+      },
+      {
+        zobrazit:
+          loadedTask.isSecret === true &&
+          tajnyRezimOdemceny,
+        nazev: "zamek",
+        trida: "taskCardIconSecret"
+      },
+      {
+        zobrazit: true,
+        nazev:
+          loadedTask.area === "work" ?
+            "prace" :
+            "soukrome",
+        trida: "taskCardIconArea"
+      },
+      {
+        zobrazit: loadedTask.reminder === true,
+        nazev: "zvonek",
+        trida: "taskCardIconReminder"
+      },
+      {
+        zobrazit: loadedTask.repeat?.enabled === true,
+        nazev: "opakovat",
+        trida: "taskCardIconRepeat"
+      }
+    ];
+
+    ikonyKarty.forEach((ikona) => {
+      if (!ikona.zobrazit) {
+        return;
+      }
+
+      const hostitel =
+        window.LubaNoteIcons?.vytvorHostitele(
+          ikona.nazev,
+          ["taskCardIcon", ikona.trida]
+        );
+
+      if (hostitel) {
+        loadedHeadingIcons.append(hostitel);
+      }
+    });
     
     loadedHeading.append(
       loadedHeadingIcons,
@@ -3390,8 +3428,16 @@ function zobrazHlaseniHromadneAkce(text) {
     clearTimeout(casovacHlaseniHromadneAkce);
   }
   
-  cardSelectionCompactCount.textContent =
-    `✓ ${text}`;
+  if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+    window.LubaNoteIcons.nastavObsahSIkonou(
+      cardSelectionCompactCount,
+      "hotovo",
+      text,
+      ["cardSelectionStatusIcon"]
+    );
+  } else {
+    cardSelectionCompactCount.textContent = text;
+  }
   
   cardSelectionCompactClose.hidden = true;
   cardSelectionCompact.hidden = false;
@@ -3674,22 +3720,28 @@ function zobrazAkceVybranychKaret() {
   );
   
   cardMenu.innerHTML = `
-    <button type="button" data-card-action="bulk-pin">
-      ${stav.vsePripnute ? "📍 Odepnout" : "📌 Připnout"}
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-pin">
+      <span class="lubaActionIcon" data-luba-icon="${stav.vsePripnute ? "odepnout" : "pripnout"}" aria-hidden="true"></span>
+      <span>${stav.vsePripnute ? "Odepnout" : "Připnout"}</span>
     </button>
 
-    <button type="button" data-card-action="bulk-complete">
-      ${stav.vseHotove ? "↩️ Vrátit" : "✅ Hotovo"}
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-complete">
+      <span class="lubaActionIcon" data-luba-icon="${stav.vseHotove ? "zpet" : "hotovo"}" aria-hidden="true"></span>
+      <span>${stav.vseHotove ? "Vrátit" : "Hotovo"}</span>
     </button>
 
-    <button type="button" data-card-action="bulk-delete">
-      🗑️ Smazat
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-delete">
+      <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
+      <span>Smazat</span>
     </button>
 
-    <button type="button" data-card-action="bulk-exit">
-      ✕ Konec výběru
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-exit">
+      <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
+      <span>Konec výběru</span>
     </button>
   `;
+
+  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
   
   cardMenu.style.top = "auto";
   cardMenu.style.bottom =
@@ -3707,48 +3759,52 @@ function zobrazHlavniAkceKarty() {
   
   if (window.innerWidth < 900) {
     cardMenu.innerHTML = `
-      <button type="button" data-card-action="plan">
-        🕒 Termín
+      <button type="button" class="lubaHasIcon" data-card-action="plan">
+        <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span><span>Termín</span>
       </button>
 
-      <button type="button" data-card-action="pin">
-        📌 Připnout
+      <button type="button" class="lubaHasIcon" data-card-action="pin">
+        <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span><span>Připnout</span>
       </button>
 
-      <button type="button" data-card-action="delete">
-        🗑️ Smazat
+      <button type="button" class="lubaHasIcon" data-card-action="delete">
+        <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
       </button>
 
-      <button type="button" data-card-action="more">
-        ⋯ Více akcí
+      <button type="button" class="lubaHasIcon" data-card-action="more">
+        <span class="lubaActionIcon" data-luba-icon="vice" aria-hidden="true"></span><span>Více akcí</span>
       </button>
     `;
+
+    window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
   } else {
     cardMenu.innerHTML = `
-      <button type="button" data-card-action="plan">
-        🕒 Termín
+      <button type="button" class="lubaHasIcon" data-card-action="plan">
+        <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span><span>Termín</span>
       </button>
 
-      <button type="button" data-card-action="pin">
-        📌 Připnout
+      <button type="button" class="lubaHasIcon" data-card-action="pin">
+        <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span><span>Připnout</span>
       </button>
 
-      <button type="button" data-card-action="delete">
-        🗑️ Smazat
+      <button type="button" class="lubaHasIcon" data-card-action="delete">
+        <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
       </button>
 
-      <button type="button" data-card-action="select">
-        ☑️ Označit
+      <button type="button" class="lubaHasIcon" data-card-action="select">
+        <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span><span>Označit</span>
       </button>
 
-      <button type="button" data-card-action="complete">
-        ✅ Hotovo
+      <button type="button" class="lubaHasIcon" data-card-action="complete">
+        <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span><span>Hotovo</span>
       </button>
 
-      <button type="button" data-card-action="color">
-        🎨 Barva
+      <button type="button" class="lubaHasIcon" data-card-action="color">
+        <span class="lubaActionIcon" data-luba-icon="paleta" aria-hidden="true"></span><span>Barva</span>
       </button>
     `;
+
+    window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
   }
 }
 
@@ -3841,10 +3897,13 @@ function zobrazPaletuBarevKarty() {
       ></button>
     </div>
 
-    <button type="button" data-card-action="back">
-      ← Zpět
+    <button type="button" class="lubaHasIcon" data-card-action="back">
+      <span class="lubaActionIcon" data-luba-icon="zpet" aria-hidden="true"></span><span>Zpět</span>
     </button>
   `;
+
+  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
+
   const aktivniBarva =
     cardMenu.querySelector(
       `[data-card-color="${aktualniBarva}"]`
@@ -3862,22 +3921,24 @@ function zobrazDalsiAkceKarty() {
   );
   
   cardMenu.innerHTML = `
-    <button type="button" data-card-action="select">
-      ☑️ Označit
+    <button type="button" class="lubaHasIcon" data-card-action="select">
+      <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span><span>Označit</span>
     </button>
 
-    <button type="button" data-card-action="complete">
-      ✅ Hotovo
+    <button type="button" class="lubaHasIcon" data-card-action="complete">
+      <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span><span>Hotovo</span>
     </button>
 
-    <button type="button" data-card-action="color">
-      🎨 Barva
+    <button type="button" class="lubaHasIcon" data-card-action="color">
+      <span class="lubaActionIcon" data-luba-icon="paleta" aria-hidden="true"></span><span>Barva</span>
     </button>
 
-    <button type="button" data-card-action="back">
-      ← Zpět
+    <button type="button" class="lubaHasIcon" data-card-action="back">
+      <span class="lubaActionIcon" data-luba-icon="zpet" aria-hidden="true"></span><span>Zpět</span>
     </button>
   `;
+
+  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
 }
 
 let casovacPotvrzeniAkce = null;
@@ -3922,7 +3983,11 @@ function zobrazPotvrzeniAkce(text, doba = 1800) {
   prvky.modal.classList.remove("actionStatusWaiting");
   
   if (prvky.ikona) {
-    prvky.ikona.textContent = "✓";
+    window.LubaNoteIcons?.nastavJenIkonu?.(
+      prvky.ikona,
+      "hotovo",
+      ["actionStatusSvgIcon"]
+    );
   }
   
   prvky.text.textContent = text;
@@ -3968,7 +4033,11 @@ function zacniCekaniAkce(
     );
     
     if (prvky.ikona) {
-      prvky.ikona.textContent = "⏳";
+      window.LubaNoteIcons?.nastavJenIkonu?.(
+        prvky.ikona,
+        "obnovit",
+        ["actionStatusSvgIcon", "actionStatusSpinIcon"]
+      );
     }
     
     prvky.text.textContent = text;
@@ -3994,7 +4063,11 @@ function zacniCekaniAkce(
     );
     
     if (prvky.ikona) {
-      prvky.ikona.textContent = "✓";
+      window.LubaNoteIcons?.nastavJenIkonu?.(
+        prvky.ikona,
+        "hotovo",
+        ["actionStatusSvgIcon"]
+      );
     }
   };
 }

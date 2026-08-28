@@ -807,7 +807,7 @@ saveNewTagModalButton.addEventListener("click", async () => {
     saveNewTagModalButton.textContent;
   
   saveNewTagModalButton.textContent =
-    "⏳ Ukládám…";
+    "Ukládám…";
   
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
@@ -1095,7 +1095,13 @@ function vykresliSpravuStitku() {
     
     const upravitTlacitko = document.createElement("button");
     upravitTlacitko.type = "button";
-    upravitTlacitko.textContent = "✏️";
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(
+        upravitTlacitko,
+        "upravit",
+        ["manageTagActionIcon"]
+      );
+    }
     upravitTlacitko.setAttribute(
       "aria-label",
       
@@ -1125,7 +1131,13 @@ function vykresliSpravuStitku() {
         
         nazev.replaceWith(vstup);
         
-        upravitTlacitko.textContent = "✔️";
+        if (window.LubaNoteIcons?.nastavJenIkonu) {
+          window.LubaNoteIcons.nastavJenIkonu(
+            upravitTlacitko,
+            "hotovo",
+            ["manageTagActionIcon"]
+          );
+        }
         
         vstup.focus();
         vstup.select();
@@ -1158,7 +1170,13 @@ function vykresliSpravuStitku() {
     
     const smazatTlacitko = document.createElement("button");
     smazatTlacitko.type = "button";
-    smazatTlacitko.textContent = "🗑️";
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(
+        smazatTlacitko,
+        "smazat",
+        ["manageTagActionIcon"]
+      );
+    }
     smazatTlacitko.setAttribute(
       "aria-label",
       `Smazat štítek ${tag.name}`
@@ -1804,8 +1822,13 @@ async function updateTagMenuUI() {
     );
   });
 
-  categoryTaskButton.textContent =
-    activeArea === "work" ? "💼" : "🏠";
+  if (window.LubaNoteIcons?.nastavJenIkonu) {
+    window.LubaNoteIcons.nastavJenIkonu(
+      categoryTaskButton,
+      activeArea === "work" ? "prace" : "soukrome",
+      ["editorBottomSvgIcon"]
+    );
+  }
 
   await renderTagMenuTags();
 }
@@ -1876,27 +1899,59 @@ async function otevriTajneStitky() {
   secretUnlockConfirmInput.value = "";
   
   if (maHeslo) {
-    secretUnlockTitle.textContent =
-      "🔒 Odemknout tajný režim";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        secretUnlockTitle,
+        "zamek",
+        "Odemknout tajný režim"
+      );
+    } else {
+      secretUnlockTitle.textContent =
+        "Odemknout tajný režim";
+    }
     
     secretUnlockDescription.textContent =
       "Zadej hlavní heslo.";
     
     secretUnlockConfirmInput.hidden = true;
     
-    confirmSecretUnlockButton.textContent =
-      "🔓 Odemknout";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        confirmSecretUnlockButton,
+        "odemceno",
+        "Odemknout"
+      );
+    } else {
+      confirmSecretUnlockButton.textContent =
+        "Odemknout";
+    }
   } else {
-    secretUnlockTitle.textContent =
-      "🔐 Vytvořit hlavní heslo";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        secretUnlockTitle,
+        "zamek",
+        "Vytvořit hlavní heslo"
+      );
+    } else {
+      secretUnlockTitle.textContent =
+        "Vytvořit hlavní heslo";
+    }
     
     secretUnlockDescription.textContent =
       "Vytvoř hlavní heslo pro tajné poznámky.";
     
     secretUnlockConfirmInput.hidden = false;
     
-    confirmSecretUnlockButton.textContent =
-      "🔐 Vytvořit heslo";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        confirmSecretUnlockButton,
+        "zamek",
+        "Vytvořit heslo"
+      );
+    } else {
+      confirmSecretUnlockButton.textContent =
+        "Vytvořit heslo";
+    }
   }
   
   secretUnlockModal.hidden = false;
@@ -1984,6 +2039,10 @@ function renderTagFilters() {
   addTagButton.addEventListener("click", () => {
     vytvarimeTajnyStitek = false;
     newTagModalTitle.textContent = "Nový štítek";
+    newTagModalTitle.classList.remove(
+      "lubaHasIcon",
+      "lubaIconOnlyContent"
+    );
     if (horniTajnyLongPressSpusten) {
       horniTajnyLongPressSpusten = false;
       return;
@@ -2244,8 +2303,16 @@ createSecretTagButton?.addEventListener(
     vytvarimeTajnyStitek = true;
     secretMenuModal.hidden = true;
     
-    newTagModalTitle.textContent =
-      "🔐 Nový tajný štítek";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        newTagModalTitle,
+        "zamek",
+        "Nový tajný štítek"
+      );
+    } else {
+      newTagModalTitle.textContent =
+        "Nový tajný štítek";
+    }
     
     newTagModal.hidden = false;
     newTagModalInput.value = "";
