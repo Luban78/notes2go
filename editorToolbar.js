@@ -281,18 +281,13 @@
   ========================================== */
 
   function jeUzelVEditoru(uzel) {
-    if (!uzel) {
-      return false;
-    }
-
-    const prvek =
-      uzel.nodeType === Node.ELEMENT_NODE
-        ? uzel
-        : uzel.parentElement;
-
+    /*
+     * Stejná kontrola pro hlavní rich-text i právě editované TODO.
+     * Dříve se zde uznával jen editorTextu, takže selectionchange
+     * v TODO vůbec neaktualizoval B / I / U / velikost / zarovnání.
+     */
     return Boolean(
-      prvek &&
-      (prvek === editorTextu || editorTextu.contains(prvek))
+      ziskejEditorFormatovaniProUzel(uzel)
     );
   }
 
@@ -434,6 +429,352 @@
       );
     }
   }
+
+
+  function jeTodoEditorFormatovani(editor) {
+    return Boolean(
+      editor?.matches?.(
+        ".todoRichTextInput.todoEditing"
+      )
+    );
+  }
+
+
+  function zachovejVyberTodoPoFormatovani(editor) {
+    if (!jeTodoEditorFormatovani(editor)) {
+      return;
+    }
+
+    /*
+     * TODO je na rozdíl od hlavního editoru schované při blur.
+     * Po formátování proto znovu uložíme aktuální Range, obnovíme
+     * ho a necháme focus v TODO. Uživatel tak pořád vidí, CO upravuje,
+     * a může na stejný výběr hned navázat dalším B / I / U / barvou.
+     */
+    ulozVyberTextu();
+
+    try {
+      editor.focus({ preventScroll: true });
+    } catch {
+      editor.focus();
+    }
+
+    obnovVyberTextu();
+  }
+
+
+  /* ==========================================
+     TODO – VLASTNÍ UNDO / REDO HISTORIE
+
+     Hlavní editor necháváme na nativním browser undo přes execCommand.
+     TODO je ale dynamický contenteditable a část změn (barvy, velikost,
+     vlastní obaly) vzniká přes JS. Tyto změny se v Android WebView
+     do nativní undo historie nezapisují spolehlivě, proto má TODO
+     vlastní lehkou historii HTML snapshotů.
+  ========================================== */
+
+  const historieTodoEditoru = new WeakMap();
+  let obnovujemeHistoriiTodo = false;
+
+
+  function ziskejOffsetVyberuTodo(editor, uzel, offset) {
+    if (!editor || !uzel) {
+      return null;
+    }
+
+    const rozsah = document.createRange();
+    rozsah.selectNodeContents(editor);
+
+    try {
+      rozsah.setEnd(uzel, offset);
+      return rozsah.toString().length;
+    } catch {
+      return null;
+    }
+  }
+
+
+  function ziskejVyberProHistoriiTodo(editor) {
+    const vyber = window.getSelection();
+
+    if (
+      !editor ||
+      !vyber ||
+      vyber.rangeCount === 0
+    ) {
+      return null;
+    }
+
+    const rozsah = vyber.getRangeAt(0);
+
+    if (
+      !editor.contains(rozsah.startContainer) ||
+      !editor.contains(rozsah.endContainer)
+    ) {
+      return null;
+    }
+
+    const start = ziskejOffsetVyberuTodo(
+      editor,
+      rozsah.startContainer,
+      rozsah.startOffset
+    );
+
+    const end = ziskejOffsetVyberuTodo(
+      editor,
+      rozsah.endContainer,
+      rozsah.endOffset
+    );
+
+    if (start === null || end === null) {
+      return null;
+    }
+
+    return { start, end };
+  }
+
+
+  function vytvorSnapshotTodo(editor) {
+    return {
+      html: editor?.innerHTML ?? "",
+      vyber: ziskejVyberProHistoriiTodo(editor)
+    };
+  }
+
+
+  function zajistiHistoriiTodo(editor) {
+    if (!jeTodoEditorFormatovani(editor)) {
+      return null;
+    }
+
+    let historie = historieTodoEditoru.get(editor);
+
+    if (!historie) {
+      historie = {
+        zaznamy: [vytvorSnapshotTodo(editor)],
+        index: 0
+      };
+
+      historieTodoEditoru.set(editor, historie);
+    }
+
+    return historie;
+  }
+
+
+  function ulozSnapshotTodo(editor) {
+    if (
+      obnovujemeHistoriiTodo ||
+      !jeTodoEditorFormatovani(editor)
+    ) {
+      return;
+    }
+
+    const historie = zajistiHistoriiTodo(editor);
+
+    if (!historie) {
+      return;
+    }
+
+    const snapshot = vytvorSnapshotTodo(editor);
+    const aktualni = historie.zaznamy[historie.index];
+
+    if (aktualni?.html === snapshot.html) {
+      /*
+       * HTML se nezměnilo, ale kurzor/výběr ano. Ten si aktualizujeme,
+       * aby se po undo/redo vrátil na přirozené místo.
+       */
+      aktualni.vyber = snapshot.vyber;
+      return;
+    }
+
+    historie.zaznamy.splice(historie.index + 1);
+    historie.zaznamy.push(snapshot);
+
+    /* Historie nemusí růst bez omezení. */
+    if (historie.zaznamy.length > 100) {
+      historie.zaznamy.shift();
+    } else {
+      historie.index += 1;
+    }
+
+    if (historie.zaznamy.length === 100) {
+      historie.index = historie.zaznamy.length - 1;
+    }
+  }
+
+
+  function nastavVyberTodoPodleOffsetu(editor, start, end) {
+    if (!editor) {
+      return false;
+    }
+
+    const delkaTextu = editor.textContent?.length ?? 0;
+    const bezpecnyStart = Math.max(0, Math.min(start ?? delkaTextu, delkaTextu));
+    const bezpecnyEnd = Math.max(bezpecnyStart, Math.min(end ?? bezpecnyStart, delkaTextu));
+
+    const walker = document.createTreeWalker(
+      editor,
+      NodeFilter.SHOW_TEXT
+    );
+
+    let startUzel = null;
+    let startOffset = 0;
+    let endUzel = null;
+    let endOffset = 0;
+    let soucet = 0;
+    let uzel = walker.nextNode();
+
+    while (uzel) {
+      const delka = uzel.textContent?.length ?? 0;
+      const konec = soucet + delka;
+
+      if (!startUzel && bezpecnyStart <= konec) {
+        startUzel = uzel;
+        startOffset = Math.max(0, bezpecnyStart - soucet);
+      }
+
+      if (!endUzel && bezpecnyEnd <= konec) {
+        endUzel = uzel;
+        endOffset = Math.max(0, bezpecnyEnd - soucet);
+        break;
+      }
+
+      soucet = konec;
+      uzel = walker.nextNode();
+    }
+
+    if (!startUzel || !endUzel) {
+      const rozsah = document.createRange();
+      rozsah.selectNodeContents(editor);
+      rozsah.collapse(false);
+
+      const vyber = window.getSelection();
+      vyber?.removeAllRanges();
+      vyber?.addRange(rozsah);
+      return true;
+    }
+
+    const rozsah = document.createRange();
+    rozsah.setStart(startUzel, startOffset);
+    rozsah.setEnd(endUzel, endOffset);
+
+    const vyber = window.getSelection();
+    vyber?.removeAllRanges();
+    vyber?.addRange(rozsah);
+    return true;
+  }
+
+
+  function obnovSnapshotTodo(editor, snapshot) {
+    if (!editor || !snapshot) {
+      return false;
+    }
+
+    obnovujemeHistoriiTodo = true;
+
+    try {
+      editor.innerHTML = snapshot.html;
+
+      try {
+        editor.focus({ preventScroll: true });
+      } catch {
+        editor.focus();
+      }
+
+      if (snapshot.vyber) {
+        nastavVyberTodoPodleOffsetu(
+          editor,
+          snapshot.vyber.start,
+          snapshot.vyber.end
+        );
+      } else {
+        nastavVyberTodoPodleOffsetu(
+          editor,
+          editor.textContent?.length ?? 0,
+          editor.textContent?.length ?? 0
+        );
+      }
+
+      /*
+       * todos.js si z input události obnoví text + html v activeTodos
+       * i náhled řádku. Během tohoto dispatch historie nový záznam
+       * nevytváří, protože pouze přehráváme existující snapshot.
+       */
+      editor.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    } finally {
+      obnovujemeHistoriiTodo = false;
+    }
+
+    ulozVyberTextu();
+    zachovejVyberTodoPoFormatovani(editor);
+    aktualizujStavFormatovani();
+    return true;
+  }
+
+
+  function provedHistoriiTodo(smer) {
+    const editor = ulozenyEditorTextu;
+
+    if (!jeTodoEditorFormatovani(editor)) {
+      return false;
+    }
+
+    const historie = zajistiHistoriiTodo(editor);
+
+    if (!historie) {
+      return false;
+    }
+
+    const novyIndex = historie.index + smer;
+
+    if (
+      novyIndex < 0 ||
+      novyIndex >= historie.zaznamy.length
+    ) {
+      return true;
+    }
+
+    historie.index = novyIndex;
+
+    return obnovSnapshotTodo(
+      editor,
+      historie.zaznamy[historie.index]
+    );
+  }
+
+
+  document.addEventListener(
+    "focusin",
+    event => {
+      const editor = event.target?.closest?.(
+        ".todoRichTextInput.todoEditing"
+      );
+
+      if (editor) {
+        zajistiHistoriiTodo(editor);
+      }
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "input",
+    event => {
+      const editor = event.target?.matches?.(
+        ".todoRichTextInput.todoEditing"
+      )
+        ? event.target
+        : null;
+
+      if (editor) {
+        ulozSnapshotTodo(editor);
+      }
+    }
+  );
 
 
   /* ==========================================
@@ -693,6 +1034,9 @@
     );
 
     ulozVyberTextu();
+    zachovejVyberTodoPoFormatovani(
+      cilovyEditor
+    );
     aktualizujStavFormatovani();
   }
 
@@ -732,7 +1076,8 @@
       return;
     }
 
-    pripravEditorProFormatovani();
+    const cilovyEditor =
+      pripravEditorProFormatovani();
 
     document.execCommand(
       "fontSize",
@@ -740,7 +1085,13 @@
       "7"
     );
 
-    editorTextu
+    /*
+     * Dříve se <font size="7"> převáděl na px pouze v hlavním
+     * editoru. V TODO proto například volba 18 skončila jako obří
+     * browserová velikost 7. Převádíme vždy jen editor, který se
+     * právě formátuje.
+     */
+    (cilovyEditor || editorTextu)
       .querySelectorAll('font[size="7"]')
       .forEach(prvek => {
         prvek.removeAttribute("size");
@@ -748,9 +1099,16 @@
         prvek.dataset.velikostPisma = hodnota;
       });
 
+    synchronizujTodoPoFormatovani(
+      cilovyEditor
+    );
+
     tlacitkoVelikostPisma.textContent = hodnota;
 
     ulozVyberTextu();
+    zachovejVyberTodoPoFormatovani(
+      cilovyEditor
+    );
     oznacAktivniVelikost(hodnota);
     zavriVsechnyPanely();
   }
@@ -937,11 +1295,16 @@
       return "div";
     }
 
+    const cilovyEditor =
+      ziskejEditorFormatovaniProUzel(
+        vyber.anchorNode
+      ) || editorTextu;
+
     let aktualniPrvek = prvek;
 
     while (
       aktualniPrvek &&
-      aktualniPrvek !== editorTextu
+      aktualniPrvek !== cilovyEditor
     ) {
       if (
         aktualniPrvek.classList.contains(
@@ -1453,26 +1816,39 @@ nahledTazenePolozky?.classList.toggle(
   function zachovejTodoVyberPredKlikem(event) {
     const vyber = window.getSelection();
 
+    let cilovyEditor = null;
+
     if (
-      !vyber ||
-      vyber.rangeCount === 0
+      vyber &&
+      vyber.rangeCount > 0
+    ) {
+      const rozsah = vyber.getRangeAt(0);
+
+      cilovyEditor =
+        ziskejEditorFormatovaniProRozsah(rozsah);
+
+      if (jeTodoEditorFormatovani(cilovyEditor)) {
+        ulozVyberTextu();
+      }
+    }
+
+    /*
+     * U vysouvacích panelů může být nativní Selection záměrně
+     * schované funkcí skryjAndroidVyber(). V tom okamžiku už Range
+     * není ve window.getSelection(), ale pořád ho bezpečně držíme
+     * v ulozenyVyberTextu. I v tomto stavu musíme zabránit blur TODO.
+     */
+    const mameUlozenyTodoVyber = Boolean(
+      jeTodoEditorFormatovani(ulozenyEditorTextu) &&
+      ulozenyVyberTextu
+    );
+
+    if (
+      !jeTodoEditorFormatovani(cilovyEditor) &&
+      !mameUlozenyTodoVyber
     ) {
       return;
     }
-
-    const rozsah = vyber.getRangeAt(0);
-    const cilovyEditor =
-      ziskejEditorFormatovaniProRozsah(rozsah);
-
-    if (
-      !cilovyEditor?.matches?.(
-        ".todoRichTextInput.todoEditing"
-      )
-    ) {
-      return;
-    }
-
-    ulozVyberTextu();
 
     /*
      * Android nesmí při stisku tlačítka převést focus z TODO
@@ -1484,33 +1860,29 @@ nahledTazenePolozky?.classList.toggle(
 
   [
     tlacitkoToolbar,
-    tlacitkoTucne,
-    tlacitkoKurziva,
-    tlacitkoPodtrzeni,
-    tlacitkoBarvaTextu
-  ].forEach(tlacitko => {
-    tlacitko?.addEventListener(
+    rychlyToolbar,
+    panelVelikost,
+    panelStyl,
+    panelZarovnani,
+    panelBarvaTextu
+  ].forEach(prvekToolbaru => {
+    prvekToolbaru?.addEventListener(
       "pointerdown",
       zachovejTodoVyberPredKlikem
     );
   });
 
 
-  panelBarvaTextu?.addEventListener(
-    "pointerdown",
-    event => {
-      if (
-        ulozenyEditorTextu?.matches?.(
-          ".todoRichTextInput.todoEditing"
-        ) &&
-        event.target.closest?.(
-          "[data-text-color]"
-        )
-      ) {
-        event.preventDefault();
-      }
-    }
-  );
+  /*
+   * Důležité pro contenteditable TODO:
+   * pointerdown na libovolném ovládacím prvku horního toolbaru
+   * nesmí přesunout focus z TODO. Kdyby došlo k blur, todos.js
+   * přepne rich editor zpět na display a uživatel ztratí viditelný
+   * výběr přesně ve chvíli, kdy ho chce formátovat.
+   *
+   * Listener na kontejnerech pokrývá i volby ve vysouvacích panelech
+   * (velikost, H, zarovnání, barva), ne jen B / I / U.
+   */
 
 
   /* ==========================================
@@ -1538,7 +1910,10 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoZpet?.addEventListener(
     "click",
     () => {
-      provedPrikaz("undo");
+      /* TODO má vlastní spolehlivou historii, hlavní editor zůstává beze změny. */
+      if (!provedHistoriiTodo(-1)) {
+        provedPrikaz("undo");
+      }
     }
   );
 
@@ -1546,7 +1921,10 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoZnovu?.addEventListener(
     "click",
     () => {
-      provedPrikaz("redo");
+      /* TODO má vlastní spolehlivou historii, hlavní editor zůstává beze změny. */
+      if (!provedHistoriiTodo(1)) {
+        provedPrikaz("redo");
+      }
     }
   );
 
@@ -2505,6 +2883,10 @@ if (vyber) {
           );
 
           ulozVyberTextu();
+          zachovejVyberTodoPoFormatovani(
+            cilovyEditor
+          );
+          aktualizujStavFormatovani();
           zavriVsechnyPanely();
         }
       );

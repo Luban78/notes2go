@@ -6445,6 +6445,14 @@ text-size-adjust: 100%;
   color: inherit;
 }
 
+/* TODO rich-text: při aktivním výběru musí být okamžitě vidět
+   skutečná barva textu stejně jako v hlavním editoru. */
+.todoRichTextInput::selection,
+.todoRichTextInput *::selection {
+  background: rgba(60, 160, 210, 0.35);
+  color: inherit;
+}
+
 .recurringOverviewButton {
   width: 44px;
   height: 44px;

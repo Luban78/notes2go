@@ -302,10 +302,48 @@ window.RichTextColors = (() => {
     cleanupHighlightMarkup(snapshot.root);
     syncPlainText(snapshot.root);
 
-    window.getSelection()
-      ?.removeAllRanges();
+    const jeTodo = snapshot.root.matches?.(
+      ".todoRichTextInput.todoEditing"
+    );
 
-    savedRange = null;
+    if (
+      jeTodo &&
+      snapshot.start !== null &&
+      snapshot.end !== null
+    ) {
+      /*
+       * TODO musí po obarvení zůstat označené stejně jako text
+       * v hlavním editoru. DOM se při vložení <mark> změnil, proto
+       * původní Range nepoužíváme a vytvoříme nový podle textových
+       * pozic. Díky tomu je změna barvy vidět okamžitě a lze na stejný
+       * výběr hned použít další formátování.
+       */
+      const novyRange =
+        vytvorRozsahPodleTextovychPozic(
+          snapshot.root,
+          snapshot.start,
+          snapshot.end
+        );
+
+      try {
+        snapshot.root.focus({ preventScroll: true });
+      } catch {
+        snapshot.root.focus();
+      }
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(novyRange);
+
+      savedRange = novyRange.cloneRange();
+    } else {
+      /* Hlavní editor necháváme přesně v původním odladěném režimu. */
+      window.getSelection()
+        ?.removeAllRanges();
+
+      savedRange = null;
+    }
+
     selectionLocked = false;
     textColorPalette.hidden = true;
 
@@ -570,10 +608,37 @@ window.RichTextColors = (() => {
     cleanupHighlightMarkup(snapshot.root);
     syncPlainText(snapshot.root);
 
-    window.getSelection()
-      ?.removeAllRanges();
+    const jeTodo = snapshot.root.matches?.(
+      ".todoRichTextInput.todoEditing"
+    );
 
-    savedRange = null;
+    if (jeTodo) {
+      const novyRange =
+        vytvorRozsahPodleTextovychPozic(
+          snapshot.root,
+          selectionStart,
+          selectionEnd
+        );
+
+      try {
+        snapshot.root.focus({ preventScroll: true });
+      } catch {
+        snapshot.root.focus();
+      }
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(novyRange);
+
+      savedRange = novyRange.cloneRange();
+    } else {
+      /* Hlavní editor necháváme přesně v původním odladěném režimu. */
+      window.getSelection()
+        ?.removeAllRanges();
+
+      savedRange = null;
+    }
+
     selectionLocked = false;
     textColorPalette.hidden = true;
 
