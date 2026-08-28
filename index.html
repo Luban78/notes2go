@@ -53,6 +53,59 @@
   
   
   <!-- ========================================
+       DESKTOP – LEVÝ POSTRANNÍ PANEL
+       Na mobilu je skrytý přes desktop.css.
+       ======================================== -->
+  <aside class="desktopSidebar" aria-label="Desktop navigace LubaNote">
+    <div class="desktopSidebarBrand">
+      <img src="icons/lubanote.png" alt="" class="desktopSidebarLogo" aria-hidden="true">
+      <span class="desktopSidebarBrandText">Luba<span>Note</span></span>
+    </div>
+
+    <nav class="desktopSidebarNav" aria-label="Rychlá navigace">
+      <button id="desktopHomeButton" class="desktopSidebarButton active" type="button">
+        <span aria-hidden="true">⌂</span>
+        <span>Domů</span>
+      </button>
+
+      <button id="desktopAllNotesButton" class="desktopSidebarButton" type="button">
+        <span aria-hidden="true">▤</span>
+        <span>Všechny poznámky</span>
+      </button>
+
+      <button id="desktopFavoriteButton" class="desktopSidebarButton" type="button">
+        <span aria-hidden="true">☆</span>
+        <span>Oblíbené</span>
+      </button>
+
+      <button id="desktopTagsButton" class="desktopSidebarButton" type="button">
+        <span aria-hidden="true">◇</span>
+        <span>Štítky</span>
+      </button>
+    </nav>
+
+    <div class="desktopSidebarDivider" aria-hidden="true"></div>
+
+    <nav class="desktopSidebarNav desktopSidebarNavSecondary" aria-label="Nástroje">
+      <button id="desktopSettingsButton" class="desktopSidebarButton" type="button">
+        <span aria-hidden="true">⚙</span>
+        <span>Nastavení</span>
+      </button>
+
+      <button id="desktopBackupButton" class="desktopSidebarButton" type="button">
+        <span aria-hidden="true">▣</span>
+        <span>Záloha a obnova</span>
+      </button>
+    </nav>
+
+    <div class="desktopSidebarFooter">
+      <span class="desktopSidebarFooterDot" aria-hidden="true"></span>
+      <span>LubaNote desktop</span>
+    </div>
+  </aside>
+
+
+  <!-- ========================================
        HLAVNÍ HORNÍ ČÁST APLIKACE
        Logo + moduly nahoře, hledání a akce pod nimi
        ======================================== -->
@@ -1473,6 +1526,9 @@
   
   <!-- Navigace modulů a servisní nabídka -->
   <script src="navigation.js"></script>
+
+  <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
+  <script src="desktop.js"></script>
   
   
   <!-- Synchronizace poznámek -->

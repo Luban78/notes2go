@@ -398,3 +398,383 @@
 
 
 }
+
+/* ==================================================
+   LUBANOTE – NOVÉ DESKTOP ROZLOŽENÍ
+   --------------------------------------------------
+   Tato část je záměrně oddělená od mobilního UI.
+   Sidebar je na touch/mobilních zařízeních skrytý.
+================================================== */
+
+.desktopSidebar {
+  display: none;
+}
+
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body {
+    padding-left: 236px;
+    box-sizing: border-box;
+  }
+
+  /* ---------- LEVÝ SIDEBAR ---------- */
+
+  .desktopSidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 1800;
+
+    display: flex;
+    flex-direction: column;
+
+    width: 236px;
+    box-sizing: border-box;
+    padding: 26px 16px 18px;
+
+    border-right: 1px solid color-mix(
+      in srgb,
+      var(--color-border) 78%,
+      transparent
+    );
+
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-surface) 96%, transparent),
+        color-mix(in srgb, var(--color-background) 98%, transparent)
+      );
+
+    color: var(--color-text);
+    text-align: left;
+  }
+
+  .desktopSidebarBrand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 58px;
+    margin: 0 8px 24px;
+  }
+
+  .desktopSidebarLogo {
+    width: 50px;
+    height: 50px;
+    flex: 0 0 50px;
+    object-fit: cover;
+    border-radius: 13px;
+
+    box-shadow:
+      0 8px 24px color-mix(
+        in srgb,
+        var(--color-accent) 28%,
+        transparent
+      );
+  }
+
+  .desktopSidebarBrandText {
+    min-width: 0;
+    color: var(--color-text);
+    font-size: 1.28rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  .desktopSidebarBrandText span {
+    color: var(--color-accent);
+  }
+
+  .desktopSidebarNav {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .desktopSidebarButton {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+
+    width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
+    padding: 0 13px;
+
+    border: 1px solid transparent;
+    border-radius: 11px;
+
+    background: transparent;
+    color: var(--color-text-secondary);
+
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 620;
+    text-align: left;
+
+    cursor: pointer;
+    transition:
+      background 0.16s ease,
+      border-color 0.16s ease,
+      color 0.16s ease,
+      transform 0.12s ease;
+  }
+
+  .desktopSidebarButton > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    font-size: 1.25rem;
+  }
+
+  .desktopSidebarButton:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 8%,
+      var(--color-surface)
+    );
+    color: var(--color-text);
+  }
+
+  .desktopSidebarButton:active {
+    transform: translateY(1px);
+  }
+
+  .desktopSidebarButton.active {
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 24%,
+      transparent
+    );
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 14%,
+      var(--color-surface)
+    );
+    color: var(--color-accent);
+  }
+
+  .desktopSidebarDivider {
+    height: 1px;
+    margin: 18px 6px;
+    background: color-mix(
+      in srgb,
+      var(--color-border) 76%,
+      transparent
+    );
+  }
+
+  .desktopSidebarNavSecondary {
+    margin-top: 0;
+  }
+
+  .desktopSidebarFooter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+    padding: 13px 12px 2px;
+    color: var(--color-text-secondary);
+    font-size: 0.78rem;
+  }
+
+  .desktopSidebarFooterDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 12px color-mix(
+      in srgb,
+      var(--color-accent) 60%,
+      transparent
+    );
+  }
+
+  /* ---------- HLAVNÍ DESKTOP OBSAH ---------- */
+
+  .homeHeader,
+  .app {
+    width: min(calc(100% - 48px), 1320px);
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .homeHeader {
+    padding: 20px 0 10px;
+  }
+
+  /* Logo už je vlevo v sidebaru. */
+  .homeHeader .moduleLogo {
+    display: none;
+  }
+
+  .moduleBar {
+    justify-content: center;
+    overflow: visible;
+  }
+
+  .moduleTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+
+    flex: 0 1 850px;
+    width: min(100%, 850px);
+  }
+
+  .moduleTabs .moduleTab:nth-child(1),
+  .moduleTabs .moduleTab:nth-child(2),
+  .moduleTabs .moduleTab:nth-child(3) {
+    flex: none;
+  }
+
+  .moduleTab {
+    width: 100%;
+    height: 54px;
+    padding: 0 18px;
+
+    border-radius: 13px;
+
+    font-size: 1rem;
+    font-weight: 720;
+  }
+
+  .moduleTabIcon {
+    font-size: 1.2rem;
+  }
+
+  .moduleTab:hover:not(.active) {
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 24%,
+      var(--color-border)
+    );
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 5%,
+      var(--color-surface)
+    );
+  }
+
+  .moduleTab.active {
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 72%,
+      transparent
+    );
+
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-accent) 30%, var(--color-surface)),
+      color-mix(in srgb, var(--color-accent) 12%, var(--color-surface))
+    );
+
+    color: var(--color-text);
+
+    box-shadow:
+      inset 0 -2px 0 var(--color-accent),
+      0 8px 22px color-mix(
+        in srgb,
+        var(--color-accent) 12%,
+        transparent
+      );
+  }
+
+  /* ---------- HLEDÁNÍ ---------- */
+
+  .searchRow {
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .searchBox {
+    height: 50px;
+    padding: 0 15px;
+    border-radius: 13px;
+    box-shadow: none;
+  }
+
+  #searchNotes {
+    height: 48px;
+    padding: 12px 0;
+    font-size: 1rem;
+  }
+
+  .searchActions {
+    width: auto;
+    gap: 8px;
+  }
+
+  .searchActions > button {
+    width: 50px;
+    height: 50px;
+    border-radius: 13px;
+  }
+
+  /* ---------- FILTRY ---------- */
+
+  .categoryTabs {
+    gap: 8px;
+    margin-top: 11px;
+    padding-bottom: 4px;
+  }
+
+  .categoryTabs .categoryTab,
+  #tagFilterButtons .categoryTab {
+    min-height: 38px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-radius: 11px;
+  }
+
+  /* ---------- KARTY ---------- */
+
+  .pinnedCards:not(.listView) #pinnedLeft {
+    gap: 14px;
+  }
+
+  .desktopMasonryColumn {
+    gap: 14px;
+  }
+
+  .taskCard {
+    border-radius: 17px;
+    padding: 16px 17px;
+
+    box-shadow:
+      inset 0 0 0 1px color-mix(
+        in srgb,
+        var(--color-border) 38%,
+        transparent
+      ),
+      0 10px 24px rgba(0, 0, 0, 0.06);
+  }
+
+  .taskCard:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 0 0 1px color-mix(
+        in srgb,
+        var(--color-accent) 22%,
+        var(--color-border)
+      ),
+      0 14px 28px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Floating + zůstává funkčně stejný, jen desktopově uhlazený. */
+  .addTaskButton {
+    right: 28px;
+    bottom: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    box-shadow:
+      0 12px 30px color-mix(
+        in srgb,
+        var(--color-accent) 28%,
+        transparent
+      );
+  }
+}
