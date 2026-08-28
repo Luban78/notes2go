@@ -978,7 +978,19 @@ async function loadTagsFromSupabase() {
   }
   
   syncedTags = nacteneStitky;
-  renderTagFilters();
+
+renderTagFilters();
+
+/*
+ * Barvy karet závisejí na barvách štítků.
+ * Pokud se štítky načetly až po prvním
+ * vykreslení karet, musíme karty překreslit.
+ */
+if (
+  typeof renderTasks === "function"
+) {
+  renderTasks();
+}
 }
 
 // ==========================================

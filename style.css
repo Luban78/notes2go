@@ -2156,16 +2156,14 @@ body.authPending .addTaskButton {
   display: none !important;
 }
 
-@media (min-width: 900px) {
+
+
+  @media (min-width: 900px) {
 
   .homeHeader,
   .app {
-    width: min(calc(100% - 64px), 1180px);
-    max-width: 1180px;
-  }
-
-  .homeHeader {
-    padding: 28px 10px 18px;
+    width: 94vw;
+    max-width: 1400px;
   }
 
   .moduleBar {
@@ -7295,6 +7293,48 @@ body.theme-dark {
   --card-modra: #263f5a;
   --card-fialova: #3e315a;
   --card-ruzova: #563047;
+}
+
+/* ==================================================
+   BARVY KARET – CAPPUCCINO
+================================================== */
+
+body.theme-cappuccino {
+  --card-cervena: #d9a09a;
+  --card-oranzova: #d5a06f;
+  --card-zluta: #d3bf72;
+  --card-zelena: #8fb59a;
+  --card-tyrkysova: #7fb2ae;
+  --card-modra: #8ca7bf;
+  --card-fialova: #a796c2;
+  --card-ruzova: #c58fa9;
+}
+
+
+/* ==================================================
+   BARVY KARET – OCEAN
+================================================== */
+
+body.theme-ocean {
+  --card-cervena: #5b2f3a;
+  --card-oranzova: #5b402b;
+  --card-zluta: #5b5225;
+  --card-zelena: #294d39;
+  --card-tyrkysova: #24515a;
+  --card-modra: #28445f;
+  --card-fialova: #44365c;
+  --card-ruzova: #5c334b;
+}
+
+body.secretModeActive {
+  --card-cervena: #5b2f3a;
+  --card-oranzova: #5b402b;
+  --card-zluta: #5b5225;
+  --card-zelena: #294d39;
+  --card-tyrkysova: #24515a;
+  --card-modra: #28445f;
+  --card-fialova: #44365c;
+  --card-ruzova: #5c334b;
 }
 
 

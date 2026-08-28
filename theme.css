@@ -127,6 +127,8 @@ body.secretModeActive {
   background: var(--color-background);
 }
 
+
+
 /*SECRET REZIM*/
 /* Celý vršek i oblast pod kartami */
 body.secretModeActive .homeHeader,

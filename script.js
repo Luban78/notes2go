@@ -4322,3 +4322,32 @@ appMessageSecretButton?.addEventListener(
     await ulozAZavriEditor("secret");
   }
 );
+
+
+const listaStitku =
+  document.querySelector(".categoryTabs");
+
+if (listaStitku) {
+  listaStitku.addEventListener(
+    "wheel",
+    (event) => {
+      const lzePosouvat =
+        listaStitku.scrollWidth >
+        listaStitku.clientWidth;
+
+      if (!lzePosouvat) {
+        return;
+      }
+
+      event.preventDefault();
+
+      listaStitku.scrollLeft +=
+        event.deltaY !== 0
+          ? event.deltaY
+          : event.deltaX;
+    },
+    {
+      passive: false
+    }
+  );
+}
