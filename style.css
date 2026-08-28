@@ -7677,6 +7677,12 @@ body.secretModeActive {
 
 /* ---------- Systémové filtry / štítky ---------- */
 
+/* Secret/systemove filtry s atributem hidden musi zustat opravdu skryte.
+   Autorovy display:inline-flex u SVG filtru jinak muze prepsat browserove [hidden]. */
+.categoryTab[hidden] {
+  display: none !important;
+}
+
 .categoryTab:has(.categoryTabIcon) {
   display: inline-flex;
   align-items: center;
