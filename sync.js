@@ -1893,16 +1893,6 @@ async function syncNotes() {
 
     let localRegular = getLocalNotesForSync();
 
-    /* Přeneseme pouze běžné starší Planner položky do poznámek. */
-    if (
-      typeof migrateLocalPlannedItemsIntoNotes === "function" &&
-      migrateLocalPlannedItemsIntoNotes(localRegular)
-    ) {
-      ulozBeznePoznamkyPrimo(localRegular);
-    }
-
-    localRegular = getLocalNotesForSync();
-
     const localEncrypted =
       typeof nactiSifrovaneTajneZaznamy === "function"
         ? nactiSifrovaneTajneZaznamy()
@@ -1919,6 +1909,57 @@ async function syncNotes() {
         : [];
 
     let cloudRows = await getCloudNotesForSync();
+
+    /*
+     * LEGACY PLANNER MIGRACE – pouze skutečně lokální poznámky.
+     *
+     * Původní kód spouštěl migrateLocalPlannedItemsIntoNotes() nad
+     * KAŽDOU poznámkou ještě před načtením cloudu. Funkce přitom při
+     * doplnění staré Planner položky mění updatedAt. Lokální cache
+     * plannedItems tak mohla během startu označit dávno synchronizovanou
+     * poznámku jako „lokálně změněnou“. Pokud mezitím stejnou poznámku
+     * změnilo jiné zařízení, revizní merge správně viděl změnu obou stran,
+     * ale výsledkem byla falešná konfliktní kopie.
+     *
+     * Jednorázová legacy migrace proto smí sahat pouze na poznámku, která:
+     * - ještě nemá žádnou známou serverovou revizi na tomto zařízení, A
+     * - současně vůbec neexistuje v aktuálním cloudovém snapshotu.
+     *
+     * U moderních synchronizovaných poznámek je zdrojem pravdy obsah
+     * poznámky z cloudu; stará lokální Planner cache ho nesmí znovu měnit.
+     */
+    if (
+      typeof migrateLocalPlannedItemsIntoNotes === "function"
+    ) {
+      const cloudId = new Set(
+        (Array.isArray(cloudRows) ? cloudRows : [])
+          .map((row) => row?.id)
+          .filter(Boolean)
+      );
+
+      const pouzeLokalniLegacyPoznamky =
+        localRegular.filter((note) => (
+          note?.id &&
+          !ziskejCloudSyncMeta(note.id) &&
+          !cloudId.has(note.id)
+        ));
+
+      if (
+        pouzeLokalniLegacyPoznamky.length > 0 &&
+        migrateLocalPlannedItemsIntoNotes(
+          pouzeLokalniLegacyPoznamky
+        )
+      ) {
+        /*
+         * Kandidáti jsou stejné objekty jako v localRegular, takže
+         * uložíme celý bezpečný seznam. Jde o interní migraci uvnitř
+         * syncu, proto nepoužíváme saveAllTasks() a nevytváříme falešnou
+         * uživatelskou lokální revizi.
+         */
+        ulozBeznePoznamkyPrimo(localRegular);
+        localRegular = getLocalNotesForSync();
+      }
+    }
 
     if (
       lokalniStavSeBehemSyncuZmenil(

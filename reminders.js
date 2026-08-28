@@ -960,6 +960,30 @@ async function ensureFuturePlannedNotifications() {
     return;
   }
 
+  /*
+   * Dříve tato technická migrace startovala 300 ms po načtení stránky
+   * souběžně s úvodním syncem. Mohla tak změnit updatedAt lokální
+   * poznámky ve chvíli, kdy už jiné zařízení mělo v cloudu novější
+   * revizi. Výsledkem byla falešná „konfliktní kopie“.
+   *
+   * Online proto nejdřív vždy počkáme na centrální bezpečný start sync.
+   * Teprve nad čerstvým lokálním stavem doplníme chybějící notificationId.
+   */
+  if (
+    navigator.onLine &&
+    window.LubaNoteSync?.spustBezpecne
+  ) {
+    const synchronizovano =
+      await window.LubaNoteSync.spustBezpecne();
+
+    if (!synchronizovano) {
+      console.warn(
+        "Doplnění Planner notifikací bylo odloženo: úvodní sync ještě není bezpečně hotový."
+      );
+      return;
+    }
+  }
+
   try {
     const permission =
       await LocalNotifications.checkPermissions();
@@ -977,8 +1001,14 @@ async function ensureFuturePlannedNotifications() {
     );
 
     const items = loadPlannedItems();
-    const tasks = loadTask();
-    const changedNoteIds = new Set();
+
+    /*
+     * Tento snapshot používáme jen pro text notifikace. Nikdy ho později
+     * celý neukládáme zpět – během awaitů by totiž mohl zastarat.
+     */
+    const tasksProNotifikace = loadTask();
+
+    const polozkySNovymNotificationId = new Map();
     let plannedItemsChanged = false;
 
     for (let index = 0; index < items.length; index++) {
@@ -1004,37 +1034,17 @@ async function ensureFuturePlannedNotifications() {
         items[index] = currentItem;
         plannedItemsChanged = true;
 
-        const noteIndex = tasks.findIndex(
-          (task) => task.id === currentItem.sourceNoteId
+        polozkySNovymNotificationId.set(
+          currentItem.id,
+          currentItem
         );
-
-        if (noteIndex !== -1) {
-          const sourceNote = tasks[noteIndex];
-          sourceNote.plannedItems = Array.isArray(sourceNote.plannedItems)
-            ? sourceNote.plannedItems.map(
-                (candidate) =>
-                  candidate.id === currentItem.id
-                    ? currentItem
-                    : candidate
-              )
-            : [];
-
-          if (!sourceNote.plannedItems.some(
-            (candidate) => candidate.id === currentItem.id
-          )) {
-            sourceNote.plannedItems.push(currentItem);
-          }
-
-          sourceNote.updatedAt = new Date().toISOString();
-          changedNoteIds.add(sourceNote.id);
-        }
       }
 
       if (pendingIds.has(currentItem.notificationId)) {
         continue;
       }
 
-      const sourceNote = tasks.find(
+      const sourceNote = tasksProNotifikace.find(
         (task) => task.id === currentItem.sourceNoteId
       );
 
@@ -1043,9 +1053,6 @@ async function ensureFuturePlannedNotifications() {
        * být při zamknutém režimu z loadTask() záměrně nepřítomná.
        */
       if (!sourceNote || sourceNote.isSecret === true) {
-        if (pendingIds.has(currentItem.notificationId)) {
-          await cancelNotification(currentItem.notificationId);
-        }
         continue;
       }
 
@@ -1064,21 +1071,93 @@ async function ensureFuturePlannedNotifications() {
       );
     }
 
-    if (plannedItemsChanged) {
+    if (!plannedItemsChanged) {
+      return;
+    }
+
+    /*
+     * Offline uložíme pouze lokální Planner cache. Do samotných poznámek
+     * bez čerstvé serverové revize nesaháme – technická migrace nesmí
+     * vytvořit zdánlivou uživatelskou změnu proti novějšímu cloudu.
+     */
+    if (!navigator.onLine) {
       savePlannedItems(items);
-      saveAllTasks(tasks);
+      return;
+    }
 
-      if (typeof uploadLocalNoteToSupabase === "function") {
-        for (const noteId of changedNoteIds) {
-          const note = tasks.find(
-            (candidate) => candidate.id === noteId
-          );
+    const ulozBezpecnouMigraci = async () => {
+      savePlannedItems(items);
 
-          if (note) {
-            await uploadLocalNoteToSupabase(note);
-          }
+      /*
+       * Načteme ČERSTVÉ poznámky až těsně před zápisem. Pokud uživatel
+       * během plánování notifikací něco editoval, jeho změna se tím
+       * nepřepíše starým snapshotem.
+       */
+      const aktualniTasks = loadTask();
+      let zmenenaPoznamka = false;
+      const casZmeny = new Date().toISOString();
+
+      for (const currentItem of
+        polozkySNovymNotificationId.values()) {
+        const sourceNote = aktualniTasks.find(
+          (task) =>
+            task?.id === currentItem.sourceNoteId &&
+            task.isSecret !== true
+        );
+
+        if (!sourceNote || !Array.isArray(sourceNote.plannedItems)) {
+          continue;
         }
+
+        const indexPolozky = sourceNote.plannedItems.findIndex(
+          (candidate) => candidate?.id === currentItem.id
+        );
+
+        /*
+         * Důležité: chybějící položku do moderní synchronizované poznámky
+         * NEVRACÍME ze staré lokální cache. Tím se nemůže znovu objevit
+         * již smazaný Planner úkol. Doplňujeme pouze notificationId do
+         * položky, která v poznámce skutečně stále existuje.
+         */
+        if (indexPolozky === -1) {
+          continue;
+        }
+
+        const puvodni = sourceNote.plannedItems[indexPolozky];
+
+        if (
+          puvodni?.notificationId ===
+          currentItem.notificationId
+        ) {
+          continue;
+        }
+
+        sourceNote.plannedItems[indexPolozky] = {
+          ...puvodni,
+          notificationId: currentItem.notificationId
+        };
+
+        sourceNote.updatedAt = casZmeny;
+        zmenenaPoznamka = true;
       }
+
+      if (zmenenaPoznamka) {
+        await saveAllTasks(aktualniTasks);
+      }
+
+      return true;
+    };
+
+    if (
+      window.LubaNoteSync
+        ?.provedLokalniZmenuASynchronizuj
+    ) {
+      await window.LubaNoteSync
+        .provedLokalniZmenuASynchronizuj(
+          ulozBezpecnouMigraci
+        );
+    } else {
+      await ulozBezpecnouMigraci();
     }
   } catch (error) {
     console.error(
@@ -1088,13 +1167,51 @@ async function ensureFuturePlannedNotifications() {
   }
 }
 
+let casovacBezpecnehoDoplneniNotifikaci = null;
+
+function naplanujBezpecneDoplneniPlanovanychNotifikaci(
+  zpozdeni = 300
+) {
+  clearTimeout(casovacBezpecnehoDoplneniNotifikaci);
+
+  casovacBezpecnehoDoplneniNotifikaci = setTimeout(
+    () => {
+      casovacBezpecnehoDoplneniNotifikaci = null;
+
+      ensureFuturePlannedNotifications()
+        .catch((error) => {
+          console.warn(
+            "Doplnění Planner notifikací bylo odloženo:",
+            error
+          );
+        });
+    },
+    Math.max(0, Number(zpozdeni) || 0)
+  );
+}
 
 window.addEventListener("load", () => {
-  setTimeout(
-    ensureFuturePlannedNotifications,
-    300
-  );
+  naplanujBezpecneDoplneniPlanovanychNotifikaci(300);
 });
+
+/*
+ * Pokud první pokus proběhl dřív než obnovení Supabase session,
+ * auth-valid ho zopakuje až po připraveném účtu. Po návratu internetu
+ * se totéž provede nad čerstvým cloudovým stavem.
+ */
+window.addEventListener(
+  "lubanote:auth-valid",
+  () => {
+    naplanujBezpecneDoplneniPlanovanychNotifikaci(500);
+  }
+);
+
+window.addEventListener(
+  "online",
+  () => {
+    naplanujBezpecneDoplneniPlanovanychNotifikaci(700);
+  }
+);
 
 
 /* ==================================================
