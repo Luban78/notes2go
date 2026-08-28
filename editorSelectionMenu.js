@@ -249,6 +249,12 @@
 
   function skryjMenu() {
     selectionMenu.hidden = true;
+    const todoList =
+  document.getElementById("todoList");
+
+todoList?.classList.remove(
+  "todoVyberVse"
+);
 
     tlacitkoVyjmout?.removeAttribute("hidden");
     tlacitkoKopirovat?.removeAttribute("hidden");
