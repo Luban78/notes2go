@@ -7325,7 +7325,9 @@ body.theme-ocean {
   --card-fialova: #44365c;
   --card-ruzova: #5c334b;
 }
-
+/* ==================================================
+   BARVY KARET – secret
+================================================== */
 body.secretModeActive {
   --card-cervena: #5b2f3a;
   --card-oranzova: #5b402b;
