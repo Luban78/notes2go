@@ -7821,3 +7821,41 @@ body.secretModeActive {
     height: 18px;
   }
 }
+
+
+/* =========================================
+   MOBIL – VELIKOST SVG PODLE PÍSMA
+   ========================================= */
+
+@media (max-width: 899px) {
+
+  /* horní Poznámky / Plán / Připomínky */
+  .moduleTabIcon.lubaIconHost,
+  .moduleTabIcon .lubaSvgIcon {
+    width: calc(var(--font-size) * 1.35);
+    height: calc(var(--font-size) * 1.35);
+  }
+
+  /* filtry: hvězda, pracovní, soukromé, secret */
+  .categoryTabIcon,
+  .categoryTabIcon .lubaSvgIcon {
+    width: calc(var(--font-size) * 1.2);
+    height: calc(var(--font-size) * 1.2);
+  }
+
+  /* ikony na kartách */
+  .taskCardIcon,
+  .taskCardIcon .lubaSvgIcon {
+    width: calc(var(--font-size) * 1.15);
+    height: calc(var(--font-size) * 1.15);
+  }
+
+  /* běžné akční ikony */
+  .lubaActionIcon,
+  .lubaInlineIcon {
+    width: calc(var(--font-size) * 1.25);
+    height: calc(var(--font-size) * 1.25);
+    min-width: calc(var(--font-size) * 1.25);
+    min-height: calc(var(--font-size) * 1.25);
+  }
+}

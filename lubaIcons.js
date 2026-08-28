@@ -10,6 +10,81 @@
 (() => {
   const SVG_NS = "http://www.w3.org/2000/svg";
 
+  /* ==================================================
+     PŘEPÍNAČ IKON
+     --------------------------------------------------
+     false = na mobilu / v APK použít původní emoji ikony
+     true  = na mobilu / v APK použít nové SVG ikony
+
+     Desktop používá SVG vždy.
+  ================================================== */
+  const POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU = false;
+  const DESKTOP_BREAKPOINT = 900;
+
+  const puvodniMobilniIkony = {
+    domov: "🏠",
+    poznamky: "📝",
+    modulPoznamky: "📝",
+    kalendar: "📅",
+    zvonek: "🔔",
+    hledat: "⌕",
+    oblibene: "⭐",
+    stitky: "🏷️",
+    nastaveni: "⚙️",
+    zaloha: "💾",
+    prace: "💼",
+    soukrome: "🏠",
+    pripnout: "📌",
+    zamek: "🔒",
+    odemceno: "🔓",
+    opakovat: "🔁",
+    mrizka: "▦",
+    seznam: "☷",
+    vice: "⋮",
+    razeni: "↕️",
+    info: "ℹ️",
+    odhlasit: "🚪",
+    smazat: "🗑️",
+    upozorneni: "⚠️",
+    hodiny: "⏰",
+    hotovo: "✅",
+    zavrit: "✕",
+    paleta: "🎨",
+    upravit: "✏️",
+    plus: "➕",
+    vypnoutZvonek: "🔕",
+    obrazek: "🖼️",
+    fotoaparat: "📷",
+    odkaz: "🔗",
+    todo: "☐",
+    dokument: "📄",
+    obnovit: "↻",
+    zpet: "←",
+    odepnout: "📍",
+    oznacit: "☑️",
+    sipkaVlevo: "‹",
+    sipkaVpravo: "›",
+    minus: "−",
+    odrazky: "•"
+  };
+
+  function jeDesktop() {
+    return window.matchMedia(
+      `(min-width: ${DESKTOP_BREAKPOINT}px)`
+    ).matches;
+  }
+
+  function pouzitSvgIkony() {
+    return (
+      jeDesktop() ||
+      POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU
+    );
+  }
+
+  function ziskejPuvodniMobilniIkonu(nazev) {
+    return puvodniMobilniIkony[nazev] || "•";
+  }
+
   const definiceIkon = {
     domov: [
       ["path", { d: "M3.5 10.8 12 3.8l8.5 7" }],
@@ -322,19 +397,66 @@
     return svg;
   }
 
-  function vytvorHostitele(nazev, tridy = []) {
-    const hostitel = document.createElement("span");
-    hostitel.classList.add("lubaIconHost", ...tridy.filter(Boolean));
-    hostitel.dataset.lubaIcon = nazev;
-    hostitel.setAttribute("aria-hidden", "true");
-
-    const svg = vytvorSvgIkonu(nazev);
-
-    if (svg) {
-      hostitel.append(svg);
+  function nastavVzhledHostitele(hostitel, nazev) {
+    if (!hostitel) {
+      return null;
     }
 
+    hostitel.dataset.lubaIcon = nazev;
+    hostitel.classList.add("lubaIconHost");
+    hostitel.setAttribute("aria-hidden", "true");
+
+    if (pouzitSvgIkony()) {
+      const svg = vytvorSvgIkonu(nazev);
+
+      hostitel.classList.remove("lubaEmojiIcon");
+      hostitel.style.removeProperty("width");
+      hostitel.style.removeProperty("height");
+      hostitel.style.removeProperty("min-width");
+      hostitel.style.removeProperty("min-height");
+      hostitel.style.removeProperty("font-size");
+      hostitel.style.removeProperty("line-height");
+
+      if (svg) {
+        hostitel.replaceChildren(svg);
+      } else {
+        hostitel.replaceChildren();
+      }
+
+      return hostitel;
+    }
+
+    hostitel.replaceChildren(
+      document.createTextNode(
+        ziskejPuvodniMobilniIkonu(nazev)
+      )
+    );
+
+    hostitel.classList.add("lubaEmojiIcon");
+
+    /*
+     * Původní emoji se mají řídit velikostí písma, ne pevnými
+     * rozměry SVG hostitele. Inline hodnoty přebijí naše obecné
+     * SVG width/height pouze v mobilním režimu.
+     */
+    hostitel.style.width = "auto";
+    hostitel.style.height = "auto";
+    hostitel.style.minWidth = "0";
+    hostitel.style.minHeight = "0";
+    hostitel.style.fontSize = "1em";
+    hostitel.style.lineHeight = "1";
+
     return hostitel;
+  }
+
+  function vytvorHostitele(nazev, tridy = []) {
+    const hostitel = document.createElement("span");
+    hostitel.classList.add(...tridy.filter(Boolean));
+
+    return nastavVzhledHostitele(
+      hostitel,
+      nazev
+    );
   }
 
   function vlozIkonu(cil, nazev, tridyHostitele = []) {
@@ -342,18 +464,11 @@
       return null;
     }
 
-    const svg = vytvorSvgIkonu(nazev);
+    cil.classList.add(
+      ...tridyHostitele.filter(Boolean)
+    );
 
-    if (!svg) {
-      return null;
-    }
-
-    cil.replaceChildren(svg);
-    cil.dataset.lubaIcon = nazev;
-    cil.classList.add("lubaIconHost", ...tridyHostitele.filter(Boolean));
-    cil.setAttribute("aria-hidden", "true");
-
-    return cil;
+    return nastavVzhledHostitele(cil, nazev);
   }
 
   function nastavObsahSIkonou(
@@ -407,18 +522,19 @@
     root.querySelectorAll("[data-luba-icon]").forEach((hostitel) => {
       const nazev = hostitel.dataset.lubaIcon;
 
-      if (!nazev || hostitel.querySelector(".lubaSvgIcon")) {
+      if (!nazev) {
         return;
       }
 
-      const svg = vytvorSvgIkonu(nazev);
-
-      if (svg) {
-        hostitel.replaceChildren(svg);
-        hostitel.classList.add("lubaIconHost");
-        hostitel.setAttribute("aria-hidden", "true");
-      }
+      nastavVzhledHostitele(
+        hostitel,
+        nazev
+      );
     });
+  }
+
+  function obnovVsechnyIkonyPoZmeneSiritky() {
+    naplnDeklarovaneIkony(document);
   }
 
   window.LubaNoteIcons = {
@@ -428,8 +544,18 @@
     nastavObsahSIkonou,
     nastavJenIkonu,
     naplnDeklarovaneIkony,
+    pouzitSvgIkony,
+    pouzivaSvgNaMobilu: () =>
+      POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU,
     seznamIkon: () => Object.keys(definiceIkon)
   };
 
   naplnDeklarovaneIkony();
+
+  window.matchMedia(
+    `(min-width: ${DESKTOP_BREAKPOINT}px)`
+  ).addEventListener(
+    "change",
+    obnovVsechnyIkonyPoZmeneSiritky
+  );
 })();
