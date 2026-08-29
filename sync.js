@@ -2296,7 +2296,24 @@ async function syncNotes() {
   }
 }
 
+function oznamObsahPripravenyProSplash() {
+  window.dispatchEvent(
+    new CustomEvent("lubanote:splash-ready")
+  );
+}
+
 async function startSync() {
+  /*
+   * Splash nesmíme zavřít po neautentizovaném pokusu o sync.
+   * Při obnovení session přijde lubanote:auth-valid a start se
+   * zopakuje už s platným uživatelem.
+   */
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return false;
+  }
+
   await syncNotes();
 
   if (
@@ -2309,6 +2326,15 @@ async function startSync() {
   }
 
   await loadTagsFromSupabase();
+
+  /*
+   * Tohle je skutečný konec VIZUÁLNÍ inicializace poznámek:
+   * syncNotes() už vykreslil finální poznámky a loadTagsFromSupabase()
+   * je znovu překreslil se správnými barvami štítků. Teprve teď
+   * smí zmizet splash. Servisní úlohy níže mohou doběhnout na pozadí.
+   */
+  oznamObsahPripravenyProSplash();
+
   await registerCurrentDevice();
   await cleanupSafeDeletedNotes();
 
@@ -2318,6 +2344,8 @@ async function startSync() {
   ) {
     await obnovNotifikaceOpakovanychPoznamek();
   }
+
+  return true;
 }
 
 let probihajiciStartSync = null;

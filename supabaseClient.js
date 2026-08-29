@@ -250,6 +250,12 @@ function oznamPlatnePrihlaseni() {
   );
 }
 
+function oznamSplashPripravenyBezCloudovehoStartu() {
+  window.dispatchEvent(
+    new CustomEvent("lubanote:splash-ready")
+  );
+}
+
 function zobrazLokalniAplikaci() {
   loginScreen.hidden = true;
 
@@ -326,6 +332,12 @@ async function overPrihlaseniOnline({
       zobrazPrihlaseni(
         "Nepodařilo se připojit k synchronizaci. Zkus to znovu po připojení k internetu."
       );
+    } else {
+      /*
+       * Dříve přihlášený uživatel zůstává v offline-first režimu
+       * na lokálních datech. Není důvod držet splash až do fallbacku.
+       */
+      oznamSplashPripravenyBezCloudovehoStartu();
     }
     return false;
   }
@@ -363,6 +375,8 @@ async function overPrihlaseniOnline({
 
     if (zobrazitLoginPriNeuspechu) {
       zobrazPrihlaseni();
+    } else {
+      oznamSplashPripravenyBezCloudovehoStartu();
     }
 
     return false;
@@ -376,6 +390,8 @@ async function overPrihlaseniOnline({
       zobrazPrihlaseni(
         "Ověření přihlášení se nepodařilo."
       );
+    } else {
+      oznamSplashPripravenyBezCloudovehoStartu();
     }
 
     return false;
@@ -395,9 +411,16 @@ async function updateLoginScreen() {
     zobrazLokalniAplikaci();
 
     if (navigator.onLine) {
+      /*
+       * Online start nechá splash zakrývat aplikaci, dokud sync.js
+       * nenačte poznámky i štítky a nevyšle lubanote:splash-ready.
+       */
       overPrihlaseniOnline({
         zobrazitLoginPriNeuspechu: false
       });
+    } else {
+      /* Offline nemá na co čekat: lokální karty už jsou vykreslené. */
+      oznamSplashPripravenyBezCloudovehoStartu();
     }
 
     return;
@@ -407,6 +430,7 @@ async function updateLoginScreen() {
     zobrazPrihlaseni(
       "První přihlášení vyžaduje připojení k internetu."
     );
+    oznamSplashPripravenyBezCloudovehoStartu();
     return;
   }
 
@@ -415,6 +439,12 @@ async function updateLoginScreen() {
     "Ověřuji přihlášení…",
     false
   );
+
+  /*
+   * Uživatel bez uloženého přihlášení musí vidět login hned.
+   * Splash tedy není podmíněný synchronizací, která ještě nemůže běžet.
+   */
+  oznamSplashPripravenyBezCloudovehoStartu();
 
   await overPrihlaseniOnline({
     zobrazitLoginPriNeuspechu: true

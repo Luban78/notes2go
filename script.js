@@ -4594,18 +4594,61 @@ function skryjSplashScreen() {
   );
 }
 
+let skryvaniSplashSpusteno = false;
+
+async function skryjSplashPoDokonceniStartu() {
+  if (skryvaniSplashSpusteno) {
+    return;
+  }
+
+  skryvaniSplashSpusteno = true;
+
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch (error) {
+      console.warn(
+        "Čekání na písma před skrytím splash screenu selhalo:",
+        error
+      );
+    }
+  }
+
+  /*
+   * Splash mizí až po signálu z inicializace aplikace.
+   * Dvě vykreslení navíc zajistí, že už jsou na obrazovce
+   * finální karty i jejich barvy podle načtených štítků.
+   */
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      skryjSplashScreen();
+    });
+  });
+}
+
+window.addEventListener(
+  "lubanote:splash-ready",
+  skryjSplashPoDokonceniStartu,
+  { once: true }
+);
+
+/*
+ * Nouzová pojistka: chyba sítě nebo inicializace nesmí nechat
+ * aplikaci navždy zakrytou splash screenem. Běžný start tuto
+ * cestu nepoužije; splash zavře událost lubanote:splash-ready.
+ */
 window.addEventListener(
   "load",
-  async () => {
-    if (document.fonts?.ready) {
-      await document.fonts.ready;
-    }
+  () => {
+    setTimeout(() => {
+      if (!skryvaniSplashSpusteno) {
+        console.warn(
+          "Splash screen byl skryt nouzovou pojistkou po 15 s."
+        );
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        skryjSplashScreen();
-      });
-    });
+        skryjSplashPoDokonceniStartu();
+      }
+    }, 15000);
   },
   { once: true }
 );

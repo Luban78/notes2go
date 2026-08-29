@@ -1574,6 +1574,13 @@
 
   function unlockFromSecretClicks() {
     const targets = [
+      /*
+       * Hlavní mobilní spouštěč po odstranění loga:
+       * 5× rychle klepnout na záložku „Poznámky“.
+       */
+      { element: document.getElementById("notesModuleButton"), clicks: 5 },
+
+      /* Staré spouštěče ponecháváme jako kompatibilní zálohu. */
       { element: document.querySelector(".moduleLogo"), clicks: 5 },
       { element: document.querySelector(".loginLogoImage"), clicks: 5 }
     ].filter(item => item.element);
@@ -2487,7 +2494,7 @@
     clearOldStoredDebugData();
     unlockFromSecretClicks();
 
-    /* Desktopová vývojářská zkratka. Na mobilu zůstává skryté 5× klepnutí na logo. */
+    /* Desktop: Ctrl+Shift+D. Mobil: 5× rychle klepnout na záložku Poznámky. */
     document.addEventListener("keydown", event => {
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
