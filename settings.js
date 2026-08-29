@@ -14,6 +14,12 @@
   const currentThemeLabel =
     document.getElementById("currentThemeLabel");
 
+  const openIconStyleModalButton =
+    document.getElementById("openIconStyleModalButton");
+
+  const currentIconStyleLabel =
+    document.getElementById("currentIconStyleLabel");
+
   const openReminderDelaySettingsButton =
   document.getElementById(
     "openReminderDelaySettingsButton"
@@ -242,6 +248,64 @@ openReminderDelaySettingsButton?.addEventListener(
       ziskejPopisekMotivu(hodnota);
   }
 
+  const stylyIkon = [
+    {
+      hodnota: "auto",
+      popisek: "Automaticky"
+    },
+    {
+      hodnota: "classic",
+      popisek: "Původní ikony"
+    },
+    {
+      hodnota: "svg",
+      popisek: "SVG ikony"
+    }
+  ];
+
+  function ziskejPopisekStyluIkon(hodnota) {
+    return (
+      stylyIkon.find(
+        (styl) => styl.hodnota === hodnota
+      )?.popisek || "Automaticky"
+    );
+  }
+
+  function nastavPopisekStyluIkon(hodnota) {
+    if (!currentIconStyleLabel) {
+      return;
+    }
+
+    currentIconStyleLabel.textContent =
+      ziskejPopisekStyluIkon(hodnota);
+  }
+
+  function otevriModalStyluIkon() {
+    if (
+      typeof window.otevriVyberovyModal !==
+      "function"
+    ) {
+      return;
+    }
+
+    const ulozenyStyl =
+      window.LubaNoteIcons?.ziskejStylIkon?.() ||
+      "auto";
+
+    window.otevriVyberovyModal({
+      nadpis: "Styl ikon",
+      moznosti: stylyIkon,
+      vybranaHodnota: ulozenyStyl,
+      poVyberu: (novyStyl) => {
+        window.LubaNoteIcons?.nastavStylIkon?.(
+          novyStyl
+        );
+
+        nastavPopisekStyluIkon(novyStyl);
+      }
+    });
+  }
+
   function otevriModalMotivu() {
     if (
       typeof window.otevriVyberovyModal !==
@@ -279,6 +343,12 @@ openReminderDelaySettingsButton?.addEventListener(
   applyTheme(ulozenyMotiv);
   nastavPopisekMotivu(ulozenyMotiv);
 
+  const ulozenyStylIkon =
+    window.LubaNoteIcons?.ziskejStylIkon?.() ||
+    "auto";
+
+  nastavPopisekStyluIkon(ulozenyStylIkon);
+
   increaseFontButton.addEventListener("click", () => {
     currentFontSize = Math.min(
       currentFontSize + 1,
@@ -310,6 +380,21 @@ openReminderDelaySettingsButton?.addEventListener(
   openThemeModalButton?.addEventListener(
     "click",
     otevriModalMotivu
+  );
+
+  openIconStyleModalButton?.addEventListener(
+    "click",
+    otevriModalStyluIkon
+  );
+
+  window.addEventListener(
+    "lubanote:icon-style-change",
+    () => {
+      nastavPopisekStyluIkon(
+        window.LubaNoteIcons?.ziskejStylIkon?.() ||
+        "auto"
+      );
+    }
   );
 
   settingsOpenButton.addEventListener("click", () => {

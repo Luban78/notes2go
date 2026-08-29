@@ -3389,6 +3389,15 @@ function renderTasks() {
 renderTasks();
 const cardMenu = document.getElementById("cardMenu");
 
+window.addEventListener(
+  "lubanote:icon-style-change",
+  () => {
+    if (cardMenu) {
+      cardMenu.hidden = true;
+    }
+  }
+);
+
 
 const cardSelectionCompact =
   document.getElementById("cardSelectionCompact");
@@ -3698,6 +3707,12 @@ function ziskejStavVybranychKaret() {
   };
 }
 
+function pouzivaSvgIkonyRozhrani() {
+  return (
+    window.LubaNoteIcons?.pouzitSvgIkony?.() === true
+  );
+}
+
 function zobrazAkceVybranychKaret() {
   if (!rezimVyberuKaret) {
     return;
@@ -3712,6 +3727,39 @@ function zobrazAkceVybranychKaret() {
   
   if (stav.pocet === 0) {
     ukonciRezimVyberuKaret();
+    return;
+  }
+
+  if (!pouzivaSvgIkonyRozhrani()) {
+    cardMenu.classList.add(
+      "selectionMode"
+    );
+
+    cardMenu.innerHTML = `
+      <button type="button" data-card-action="bulk-pin">
+        ${stav.vsePripnute ? "📍 Odepnout" : "📌 Připnout"}
+      </button>
+
+      <button type="button" data-card-action="bulk-complete">
+        ${stav.vseHotove ? "↩️ Vrátit" : "✅ Hotovo"}
+      </button>
+
+      <button type="button" data-card-action="bulk-delete">
+        🗑️ Smazat
+      </button>
+
+      <button type="button" data-card-action="bulk-exit">
+        ✕ Konec výběru
+      </button>
+    `;
+
+    cardMenu.style.top = "auto";
+    cardMenu.style.bottom =
+      window.innerWidth < 900 ?
+      "90px" :
+      "34px";
+    cardMenu.style.visibility = "visible";
+    cardMenu.hidden = false;
     return;
   }
   
@@ -3756,6 +3804,56 @@ function zobrazHlavniAkceKarty() {
   cardMenu.classList.remove(
     "selectionMode"
   );
+
+  if (!pouzivaSvgIkonyRozhrani()) {
+    if (window.innerWidth < 900) {
+      cardMenu.innerHTML = `
+        <button type="button" data-card-action="plan">
+          🕒 Termín
+        </button>
+
+        <button type="button" data-card-action="pin">
+          📌 Připnout
+        </button>
+
+        <button type="button" data-card-action="delete">
+          🗑️ Smazat
+        </button>
+
+        <button type="button" data-card-action="more">
+          ⋯ Více akcí
+        </button>
+      `;
+    } else {
+      cardMenu.innerHTML = `
+        <button type="button" data-card-action="plan">
+          🕒 Termín
+        </button>
+
+        <button type="button" data-card-action="pin">
+          📌 Připnout
+        </button>
+
+        <button type="button" data-card-action="delete">
+          🗑️ Smazat
+        </button>
+
+        <button type="button" data-card-action="select">
+          ☑️ Označit
+        </button>
+
+        <button type="button" data-card-action="complete">
+          ✅ Hotovo
+        </button>
+
+        <button type="button" data-card-action="color">
+          🎨 Barva
+        </button>
+      `;
+    }
+
+    return;
+  }
   
   if (window.innerWidth < 900) {
     cardMenu.innerHTML = `
@@ -3902,7 +4000,17 @@ function zobrazPaletuBarevKarty() {
     </button>
   `;
 
-  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
+  if (pouzivaSvgIkonyRozhrani()) {
+    window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
+  } else {
+    const tlacitkoZpet =
+      cardMenu.querySelector('[data-card-action="back"]');
+
+    if (tlacitkoZpet) {
+      tlacitkoZpet.classList.remove("lubaHasIcon");
+      tlacitkoZpet.textContent = "← Zpět";
+    }
+  }
 
   const aktivniBarva =
     cardMenu.querySelector(
@@ -3919,6 +4027,28 @@ function zobrazDalsiAkceKarty() {
   cardMenu.classList.remove(
     "selectionMode"
   );
+
+  if (!pouzivaSvgIkonyRozhrani()) {
+    cardMenu.innerHTML = `
+      <button type="button" data-card-action="select">
+        ☑️ Označit
+      </button>
+
+      <button type="button" data-card-action="complete">
+        ✅ Hotovo
+      </button>
+
+      <button type="button" data-card-action="color">
+        🎨 Barva
+      </button>
+
+      <button type="button" data-card-action="back">
+        ← Zpět
+      </button>
+    `;
+
+    return;
+  }
   
   cardMenu.innerHTML = `
     <button type="button" class="lubaHasIcon" data-card-action="select">

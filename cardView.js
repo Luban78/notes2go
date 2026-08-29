@@ -18,6 +18,29 @@ function applyCardView() {
 }
 
 function updateCardViewButton() {
+  const pouzitSvg =
+    window.LubaNoteIcons?.pouzitSvgIkony?.() === true;
+
+  if (!pouzitSvg) {
+    /*
+     * Původní přepínač LubaNote – vracíme přesně jeho
+     * původní vzhled.
+     */
+    changeViewButton.innerHTML =
+      cardView === "grid" ?
+      "☰" :
+      `
+        <span class="cardGridIcon">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+      `;
+
+    return;
+  }
+
   const nazevIkony =
     cardView === "grid" ?
       "seznam" :
@@ -111,6 +134,11 @@ changeViewButton.addEventListener("click", () => {
   renderTasks();
   updateCardViewButton();
 });
+
+window.addEventListener(
+  "lubanote:icon-style-change",
+  updateCardViewButton
+);
 
 applyCardView();
 updateCardViewButton();

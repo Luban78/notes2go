@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="style.css?v=20260826-nazev-editor-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
+  <link rel="stylesheet" href="iconPreference.css">
   
   <!-- Visual Debug: uložené úpravy podle breakpointu + samotný vývojářský panel -->
   <link rel="stylesheet" href="debugMobileGenerated.css">
@@ -118,17 +119,17 @@
       
       <nav class="moduleTabs" aria-label="Hlavní části LubaNote">
         <button id="notesModuleButton" class="moduleTab active" type="button" data-module="notes" aria-current="page">
-          <span class="moduleTabIcon" data-luba-icon="modulPoznamky" aria-hidden="true"></span>
+          <span class="moduleTabIcon" data-luba-icon="modulPoznamky" data-luba-classic-icon="📝" aria-hidden="true"></span>
           <span class="moduleTabText">Poznámky</span>
         </button>
         
         <button id="plannerModuleButton" class="moduleTab" type="button" data-module="planner">
-          <span class="moduleTabIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
+          <span class="moduleTabIcon" data-luba-icon="kalendar" data-luba-classic-icon="📅" aria-hidden="true"></span>
           <span class="moduleTabText">Plán</span>
         </button>
         
         <button id="remindersModuleButton" class="moduleTab" type="button" data-module="reminders">
-          <span class="moduleTabIcon" data-luba-icon="zvonek" aria-hidden="true"></span>
+          <span class="moduleTabIcon" data-luba-icon="zvonek" data-luba-classic-icon="🔔" aria-hidden="true"></span>
           <span class="moduleTabText">Připomínky</span>
         </button>
       </nav>
@@ -137,10 +138,10 @@
     <!-- HLEDÁNÍ + PŘEPÍNAČ KARET + HLAVNÍ MENU -->
     <div class="searchRow">
       <div class="searchBox">
-        <span class="searchIcon" data-luba-icon="hledat" aria-hidden="true"></span>
+        <span class="searchIcon" data-luba-icon="hledat" data-luba-classic-icon="⌕" aria-hidden="true"></span>
         <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
         <button id="clearSearchButton" class="searchClearButton lubaIconOnlyButton" type="button" aria-label="Vymazat hledání" hidden>
-          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
+          <span class="lubaActionIcon" data-luba-icon="zavrit" data-luba-classic-icon="×" aria-hidden="true"></span>
         </button>
       </div>
       
@@ -152,15 +153,15 @@
         
         <!-- Servisní nabídka aplikace -->
         <button id="mainMenuButton" type="button" aria-label="Hlavní nabídka" aria-haspopup="menu" aria-expanded="false">
-          <span class="searchActionIcon" data-luba-icon="vice" aria-hidden="true"></span>
+          <span class="searchActionIcon" data-luba-icon="vice" data-luba-classic-icon="⋮" aria-hidden="true"></span>
         </button>
         
         <div id="mainMenu" class="mainMenu" role="menu" hidden>
           
           <button id="cardSortButton" type="button" role="menuitem">
-            <span class="mainMenuIcon" data-luba-icon="razeni" aria-hidden="true"></span>
+            <span class="mainMenuIcon" data-luba-icon="razeni" data-luba-classic-icon="↕️" aria-hidden="true"></span>
             <span id="cardSortMenuLabel" class="mainMenuLabel">Řazení: nejnovější nahoře</span>
-            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="razeni" aria-hidden="true"></span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="razeni" data-luba-classic-icon="⇅" aria-hidden="true"></span>
           </button>
           
           <button id="fontSizeSettingsButton" type="button" role="menuitem">
@@ -216,20 +217,20 @@
       </button>
       
       <button id="favoriteFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Oblíbené poznámky">
-        <span class="categoryTabIcon" data-luba-icon="oblibene" aria-hidden="true"></span>
+        <span class="categoryTabIcon" data-luba-icon="oblibene" data-luba-classic-icon="⭐" aria-hidden="true"></span>
       </button>
       
       <button id="secretFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Tajné poznámky" hidden>
-        <span class="categoryTabIcon" data-luba-icon="odemceno" aria-hidden="true"></span>
+        <span class="categoryTabIcon" data-luba-icon="odemceno" data-luba-classic-icon="🔓" aria-hidden="true"></span>
       </button>
       
       <button class="categoryTab" type="button" data-area-filter="work">
-        <span class="categoryTabIcon" data-luba-icon="prace" aria-hidden="true"></span>
+        <span class="categoryTabIcon" data-luba-icon="prace" data-luba-classic-icon="💼" aria-hidden="true"></span>
         <span>Pracovní</span>
       </button>
       
       <button class="categoryTab" type="button" data-area-filter="private">
-        <span class="categoryTabIcon" data-luba-icon="soukrome" aria-hidden="true"></span>
+        <span class="categoryTabIcon" data-luba-icon="soukrome" data-luba-classic-icon="🏠" aria-hidden="true"></span>
         <span>Soukromé</span>
       </button>
       
@@ -1151,6 +1152,18 @@
           <button id="openThemeModalButton" type="button" class="themeSelectButton">
             <span id="currentThemeLabel">Tmavý</span>
             <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
+          </button>
+          
+        </div>
+
+        <!-- Styl ikon -->
+        <div class="themeSetting">
+          
+          <span>Styl ikon</span>
+          
+          <button id="openIconStyleModalButton" type="button" class="themeSelectButton">
+            <span id="currentIconStyleLabel">Automaticky</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" data-luba-classic-icon="›" aria-hidden="true"></span>
           </button>
           
         </div>

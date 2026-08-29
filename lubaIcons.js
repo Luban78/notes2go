@@ -11,15 +11,22 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
 
   /* ==================================================
-     PŘEPÍNAČ IKON
+     STYL IKON
      --------------------------------------------------
-     false = na mobilu / v APK použít původní emoji ikony
-     true  = na mobilu / v APK použít nové SVG ikony
+     Uživatel si může v Nastavení zvolit:
+     - auto    = mobil/APK původní ikony, desktop SVG
+     - classic = původní ikony všude
+     - svg     = nové SVG ikony všude
 
-     Desktop používá SVG vždy.
+     Nastavení je lokální pro konkrétní zařízení/prohlížeč.
   ================================================== */
-  const POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU = false;
   const DESKTOP_BREAKPOINT = 900;
+  const ICON_STYLE_KEY = "iconStyle";
+  const PLATNE_STYLY_IKON = new Set([
+    "auto",
+    "classic",
+    "svg"
+  ]);
 
   const puvodniMobilniIkony = {
     domov: "🏠",
@@ -46,7 +53,7 @@
     odhlasit: "🚪",
     smazat: "🗑️",
     upozorneni: "⚠️",
-    hodiny: "⏰",
+    hodiny: "🕒",
     hotovo: "✅",
     zavrit: "✕",
     paleta: "🎨",
@@ -74,14 +81,37 @@
     ).matches;
   }
 
-  function pouzitSvgIkony() {
-    return (
-      jeDesktop() ||
-      POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU
-    );
+  function ziskejStylIkon() {
+    const ulozenyStyl =
+      localStorage.getItem(ICON_STYLE_KEY) || "auto";
+
+    return PLATNE_STYLY_IKON.has(ulozenyStyl)
+      ? ulozenyStyl
+      : "auto";
   }
 
-  function ziskejPuvodniMobilniIkonu(nazev) {
+  function ziskejEfektivniStylIkon() {
+    const styl = ziskejStylIkon();
+
+    if (styl === "classic" || styl === "svg") {
+      return styl;
+    }
+
+    return jeDesktop() ? "svg" : "classic";
+  }
+
+  function pouzitSvgIkony() {
+    return ziskejEfektivniStylIkon() === "svg";
+  }
+
+  function ziskejKlasickouIkonu(nazev, hostitel = null) {
+    const vlastniIkona =
+      hostitel?.dataset?.lubaClassicIcon;
+
+    if (vlastniIkona) {
+      return vlastniIkona;
+    }
+
     return puvodniMobilniIkony[nazev] || "•";
   }
 
@@ -428,14 +458,14 @@
 
     hostitel.replaceChildren(
       document.createTextNode(
-        ziskejPuvodniMobilniIkonu(nazev)
+        ziskejKlasickouIkonu(nazev, hostitel)
       )
     );
 
     hostitel.classList.add("lubaEmojiIcon");
 
     /*
-     * Původní emoji se mají řídit velikostí písma, ne pevnými
+     * Původní ikony se mají řídit velikostí písma, ne pevnými
      * rozměry SVG hostitele. Inline hodnoty přebijí naše obecné
      * SVG width/height pouze v mobilním režimu.
      */
@@ -533,8 +563,46 @@
     });
   }
 
-  function obnovVsechnyIkonyPoZmeneSiritky() {
+  function obnovVsechnyIkony() {
     naplnDeklarovaneIkony(document);
+
+    document.documentElement.dataset.iconStyle =
+      ziskejEfektivniStylIkon();
+  }
+
+  function nastavStylIkon(novyStyl = "auto") {
+    const bezpecnyStyl = PLATNE_STYLY_IKON.has(novyStyl)
+      ? novyStyl
+      : "auto";
+
+    localStorage.setItem(ICON_STYLE_KEY, bezpecnyStyl);
+    obnovVsechnyIkony();
+
+    window.dispatchEvent(
+      new CustomEvent("lubanote:icon-style-change", {
+        detail: {
+          styl: bezpecnyStyl,
+          efektivniStyl: ziskejEfektivniStylIkon()
+        }
+      })
+    );
+  }
+
+  function obnovVsechnyIkonyPoZmeneSiritky() {
+    if (ziskejStylIkon() !== "auto") {
+      return;
+    }
+
+    obnovVsechnyIkony();
+
+    window.dispatchEvent(
+      new CustomEvent("lubanote:icon-style-change", {
+        detail: {
+          styl: "auto",
+          efektivniStyl: ziskejEfektivniStylIkon()
+        }
+      })
+    );
   }
 
   window.LubaNoteIcons = {
@@ -544,13 +612,15 @@
     nastavObsahSIkonou,
     nastavJenIkonu,
     naplnDeklarovaneIkony,
+    obnovVsechnyIkony,
     pouzitSvgIkony,
-    pouzivaSvgNaMobilu: () =>
-      POUZIVAT_NOVE_SVG_IKONY_NA_MOBILU,
+    ziskejStylIkon,
+    ziskejEfektivniStylIkon,
+    nastavStylIkon,
     seznamIkon: () => Object.keys(definiceIkon)
   };
 
-  naplnDeklarovaneIkony();
+  obnovVsechnyIkony();
 
   window.matchMedia(
     `(min-width: ${DESKTOP_BREAKPOINT}px)`
