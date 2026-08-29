@@ -292,6 +292,8 @@ function bylEditorZmenen() {
 
 function zpracujZavreniEditoru() {
   if (bylEditorZmenen()) {
+    resetujAkceZpravyAplikace();
+
     appMessageTitle.textContent =
       "Soubor byl změněn";
     
@@ -760,10 +762,27 @@ function zavriTajnyEditorPriZamknuti() {
 }
 
 
+function resetujAkceZpravyAplikace() {
+  appMessageSaveButton.hidden = true;
+  appMessageDiscardButton.hidden = true;
+  appMessageSecretButton.hidden = true;
+  appMessageNormalButton.hidden = true;
+
+  closeAppMessageButton.textContent = "OK";
+}
+
+
 function zobrazZpravuAplikace(
   nadpis,
   zprava
 ) {
+  /*
+   * Informační zpráva nikdy nesmí zdědit tlačítka
+   * z předchozího typu modalu (Uložit/Neukládat nebo
+   * Uložit jako tajnou/Uložit normálně).
+   */
+  resetujAkceZpravyAplikace();
+
   appMessageTitle.textContent =
     nadpis || "Upozornění";
   
@@ -778,13 +797,7 @@ closeAppMessageButton?.addEventListener(
   "click",
   () => {
     appMessageModal.hidden = true;
-    
-    appMessageSaveButton.hidden = true;
-    appMessageDiscardButton.hidden = true;
-    appMessageSecretButton.hidden = true;
-    appMessageNormalButton.hidden = true;
-    
-    closeAppMessageButton.textContent = "OK";
+    resetujAkceZpravyAplikace();
   }
 );
 appMessageSaveButton?.addEventListener(
@@ -2464,6 +2477,8 @@ async function ulozAZavriEditor(
     activeTaskIndex === null &&
     zpusobUlozeniNove === null
   ) {
+    resetujAkceZpravyAplikace();
+
     appMessageTitle.textContent =
       "Jak uložit poznámku?";
     

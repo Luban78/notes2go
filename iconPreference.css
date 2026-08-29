@@ -32,3 +32,18 @@ html[data-icon-style="classic"] .mainMenuArrow.lubaEmojiIcon {
   border-color: transparent;
   box-shadow: none;
 }
+
+/* ==================================================
+   OCHRANA ATRIBUTU hidden
+   --------------------------------------------------
+   Pomocné ikonové třídy používají display:flex / inline-flex.
+   Bez tohoto pravidla by mohly omylem odkrýt tlačítko, které
+   JavaScript správně označil jako hidden (např. volby Secret
+   v univerzálním informačním modalu).
+================================================== */
+.lubaHasIcon[hidden],
+.lubaIconOnlyButton[hidden],
+.lubaIconOnlyContent[hidden],
+.lubaIconHost[hidden] {
+  display: none !important;
+}

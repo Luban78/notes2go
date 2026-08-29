@@ -248,11 +248,16 @@ openReminderDelaySettingsButton?.addEventListener(
       ziskejPopisekMotivu(hodnota);
   }
 
+  /*
+   * V nastavení nabízíme jen dvě skutečné volby.
+   * Interní stav "auto" zůstává kvůli výchozímu chování:
+   * - mobil / APK -> původní ikony
+   * - desktop     -> SVG ikony
+   *
+   * Jakmile uživatel něco zvolí, uloží se explicitně
+   * "classic" nebo "svg".
+   */
   const stylyIkon = [
-    {
-      hodnota: "auto",
-      popisek: "Automaticky"
-    },
     {
       hodnota: "classic",
       popisek: "Původní ikony"
@@ -263,11 +268,25 @@ openReminderDelaySettingsButton?.addEventListener(
     }
   ];
 
+  function ziskejEfektivniStylIkonProNastaveni(hodnota) {
+    if (hodnota === "classic" || hodnota === "svg") {
+      return hodnota;
+    }
+
+    return (
+      window.LubaNoteIcons?.ziskejEfektivniStylIkon?.() ||
+      (window.innerWidth >= 900 ? "svg" : "classic")
+    );
+  }
+
   function ziskejPopisekStyluIkon(hodnota) {
+    const efektivniStyl =
+      ziskejEfektivniStylIkonProNastaveni(hodnota);
+
     return (
       stylyIkon.find(
-        (styl) => styl.hodnota === hodnota
-      )?.popisek || "Automaticky"
+        (styl) => styl.hodnota === efektivniStyl
+      )?.popisek || "Původní ikony"
     );
   }
 
@@ -292,10 +311,15 @@ openReminderDelaySettingsButton?.addEventListener(
       window.LubaNoteIcons?.ziskejStylIkon?.() ||
       "auto";
 
+    const vybranyStyl =
+      ziskejEfektivniStylIkonProNastaveni(
+        ulozenyStyl
+      );
+
     window.otevriVyberovyModal({
       nadpis: "Styl ikon",
       moznosti: stylyIkon,
-      vybranaHodnota: ulozenyStyl,
+      vybranaHodnota: vybranyStyl,
       poVyberu: (novyStyl) => {
         window.LubaNoteIcons?.nastavStylIkon?.(
           novyStyl

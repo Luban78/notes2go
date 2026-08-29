@@ -137,3 +137,13 @@ Systémové akce, navigace, stavy, modaly a ovládání používají SVG z `luba
 Uživatelské barevné štítky (`code`, `LubaNote`, `projekt`...) zůstávají bez ikon, aby se seznam štítků nepřeplnil.
 
 TODO checkboxy a skutečné odrážky nejsou dekorativní ikony – zůstávají součástí obsahu/ovládání.
+
+
+## Volba stylu ikon v Nastavení
+
+V uživatelském výběru jsou jen dvě skutečné volby:
+
+- **Původní ikony** – klasické emoji / znaky LubaNote.
+- **SVG ikony** – nová vektorová sada.
+
+Pokud uživatel ještě nic ručně nevybral, interní výchozí režim zůstává automatický: na mobilu/APK používá původní ikony a na desktopu SVG. Jakmile uživatel jednu ze dvou možností vybere, volba se uloží lokálně pro dané zařízení/prohlížeč.
