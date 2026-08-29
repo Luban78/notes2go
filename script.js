@@ -4569,3 +4569,43 @@ if (listaStitku) {
     }
   );
 }
+
+
+/* ========================================
+   UKONCENI SPLASH SCREENU
+   ======================================== */
+
+function skryjSplashScreen() {
+  const splashScreen = document.getElementById("appSplash");
+
+  if (!splashScreen) {
+    return;
+  }
+
+  splashScreen.classList.add("appSplashHidden");
+  splashScreen.setAttribute("aria-hidden", "true");
+
+  splashScreen.addEventListener(
+    "transitionend",
+    () => {
+      splashScreen.remove();
+    },
+    { once: true }
+  );
+}
+
+window.addEventListener(
+  "load",
+  async () => {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        skryjSplashScreen();
+      });
+    });
+  },
+  { once: true }
+);

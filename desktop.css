@@ -1003,3 +1003,13 @@
     }
   }
 }
+/* =========================================
+   DESKTOP – SKRYTI PANELU PRI EDITACI
+   ========================================= */
+
+@media (min-width: 900px) {
+
+  body:has(#taskModal:not([hidden])) .desktopSidebar {
+    display: none !important;
+  }
+}
