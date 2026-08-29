@@ -481,9 +481,9 @@ function renderCalendarAgenda() {
     );
     if (calendarWeekNumber) {
   calendarWeekNumber.textContent =
-    `T${ziskejCisloTydne(
-      calendarSelectedDay
-    )}`;
+  `${ziskejCisloTydne(
+    calendarSelectedDay
+  )}. týden`;
 }
 
   renderCalendarItems(

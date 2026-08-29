@@ -473,7 +473,7 @@
     hostitel.style.height = "auto";
     hostitel.style.minWidth = "0";
     hostitel.style.minHeight = "0";
-    hostitel.style.fontSize = "1em";
+    hostitel.style.removeProperty("font-size");
     hostitel.style.lineHeight = "1";
 
     return hostitel;
