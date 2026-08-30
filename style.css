@@ -7846,8 +7846,8 @@ body.secretModeActive {
   /* ikony na kartách */
   .taskCardIcon,
   .taskCardIcon .lubaSvgIcon {
-    width: calc(var(--font-size) * 1.15);
-    height: calc(var(--font-size) * 1.15);
+    width: calc(var(--font-size) * 1.55);
+    height: calc(var(--font-size) * 1.55);
   }
 
   /* běžné akční ikony */
@@ -7924,8 +7924,8 @@ body.secretModeActive {
   /* pokud jsou zapnute SVG ikony */
   .moduleTabIcon.lubaIconHost,
 .moduleTabIcon .lubaSvgIcon {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
 }
 
 /* =========================================
