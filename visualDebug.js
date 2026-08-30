@@ -55,6 +55,7 @@
   const state = {
     selected: null,
     selector: "",
+    selectionBackStack: [],
     profile: window.innerWidth <= 899 ? "mobile" : (window.innerWidth <= 1199 ? "tablet" : "desktop"),
     rules: { all: {}, mobile: {}, tablet: {}, desktop: {} },
     ruleSections: { all: {}, mobile: {}, tablet: {}, desktop: {} },
@@ -1382,8 +1383,13 @@
     return `${value}${config.unit}`;
   }
 
-  function selectElement(element, selectorOverride = "") {
+  function selectElement(element, selectorOverride = "", options = {}) {
     if (!element || isInternal(element)) return;
+
+    if (options.preserveSelectionTrail !== true) {
+      state.selectionBackStack = [];
+    }
+
     state.selected = element;
     state.selector = selectorOverride || uniqueSelector(element);
     refs.selector.value = state.selector;
@@ -1393,6 +1399,7 @@
     syncControls();
     updateHighlight(element);
     updateRuleInfo();
+    updateSelectionNavigation();
   }
 
   function describeElement(element) {
@@ -1400,6 +1407,135 @@
     const id = element.id ? `#${element.id}` : "";
     const cls = [...element.classList].slice(0, 2).map(c => `.${c}`).join("");
     return `${element.tagName.toLowerCase()}${id}${cls}`;
+  }
+
+  function stableElementClasses(element) {
+    if (!element?.classList) return [];
+
+    return [...element.classList].filter(name =>
+      name &&
+      !name.startsWith("active") &&
+      !name.startsWith("open") &&
+      !name.startsWith("hidden") &&
+      !name.startsWith(INTERNAL_PREFIX)
+    );
+  }
+
+  /*
+   * Najde čitelný selektor, který reprezentuje více stejných prvků.
+   * Visual Debug tak umí po výběru jednoho prvku upravit celou skupinu
+   * (například všechny .taskCardIcons na kartách).
+   */
+  function groupSelectorInfo(element = state.selected) {
+    if (!element || isInternal(element)) return null;
+
+    const classes = stableElementClasses(element);
+    if (!classes.length) return null;
+
+    const candidates = [];
+    const allClasses = classes
+      .slice(0, 4)
+      .map(name => `.${cssEscape(name)}`)
+      .join("");
+
+    if (allClasses) candidates.push(allClasses);
+
+    classes.slice(0, 4).forEach(name => {
+      const selector = `.${cssEscape(name)}`;
+      if (!candidates.includes(selector)) candidates.push(selector);
+    });
+
+    for (const selector of candidates) {
+      try {
+        const elements = [...document.querySelectorAll(selector)];
+        if (elements.length > 1 && elements.includes(element)) {
+          return { selector, count: elements.length };
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  function updateSelectionNavigation() {
+    if (!refs.parentBtn || !refs.childBtn || !refs.groupBtn) return;
+
+    const parent = state.selected?.parentElement || null;
+    const canGoParent = Boolean(
+      parent &&
+      parent !== document.body &&
+      parent !== document.documentElement &&
+      !isInternal(parent)
+    );
+
+    refs.parentBtn.disabled = !canGoParent;
+    refs.childBtn.disabled = state.selectionBackStack.length === 0;
+
+    const group = groupSelectorInfo();
+    refs.groupBtn.disabled = !group;
+    refs.groupBtn.dataset.selector = group?.selector || "";
+    refs.groupBtn.textContent = group ? `Skupina ×${group.count}` : "Skupina";
+    refs.groupBtn.title = group
+      ? `Použít ${group.selector} na ${group.count} stejných prvků`
+      : "Vybraný prvek nemá opakovanou společnou třídu";
+    refs.groupBtn.classList.toggle(
+      "active",
+      Boolean(group && state.selector === group.selector)
+    );
+  }
+
+  function selectParentElement() {
+    const current = state.selected;
+    const parent = current?.parentElement || null;
+
+    if (
+      !current ||
+      !parent ||
+      parent === document.body ||
+      parent === document.documentElement ||
+      isInternal(parent)
+    ) {
+      toast("Výš už není vhodný rodič");
+      return;
+    }
+
+    state.selectionBackStack.push(current);
+    if (state.selectionBackStack.length > 20) {
+      state.selectionBackStack.shift();
+    }
+
+    selectElement(parent, "", { preserveSelectionTrail: true });
+    toast(`Rodič: ${describeElement(parent)}`);
+  }
+
+  function selectPreviousChild() {
+    while (state.selectionBackStack.length) {
+      const child = state.selectionBackStack.pop();
+      if (!child || !document.contains(child) || isInternal(child)) continue;
+
+      selectElement(child, "", { preserveSelectionTrail: true });
+      toast(`Dítě: ${describeElement(child)}`);
+      return;
+    }
+
+    updateSelectionNavigation();
+    toast("Není kam se vrátit");
+  }
+
+  function selectElementGroup() {
+    const group = groupSelectorInfo();
+
+    if (!state.selected || !group) {
+      toast("Pro tento prvek není společná skupina");
+      return;
+    }
+
+    selectElement(
+      state.selected,
+      group.selector,
+      { preserveSelectionTrail: true }
+    );
+    toast(`Skupina: ${group.count} prvků`);
   }
 
   function resolveSelector() {
@@ -2159,6 +2295,11 @@
               <option value="desktop">Desktop ≥1200</option>
             </select>
           </div>
+          <div class="ln-vd-actions three ln-vd-selection-nav" style="margin-top:8px !important">
+            <button id="ln-vd-parent" class="ln-vd-btn" type="button" disabled>↑ Rodič</button>
+            <button id="ln-vd-child" class="ln-vd-btn" type="button" disabled>↓ Dítě</button>
+            <button id="ln-vd-group" class="ln-vd-btn" type="button" disabled>Skupina</button>
+          </div>
         </section>
 
         <div class="ln-vd-tabs">
@@ -2284,6 +2425,9 @@
       selector: panel.querySelector("#ln-vd-selector"),
       resolve: panel.querySelector("#ln-vd-resolve"),
       pickBtn: panel.querySelector("#ln-vd-pick"),
+      parentBtn: panel.querySelector("#ln-vd-parent"),
+      childBtn: panel.querySelector("#ln-vd-child"),
+      groupBtn: panel.querySelector("#ln-vd-group"),
       elementList: panel.querySelector("#ln-vd-element-list"),
       elementsRefresh: panel.querySelector("#ln-vd-elements-refresh"),
       profile: panel.querySelector("#ln-vd-profile"),
@@ -2383,6 +2527,9 @@
     refs.freeMove?.addEventListener("click", freeSelectedMovement);
     refs.undo.addEventListener("click", undo);
     refs.pickBtn.addEventListener("click", () => setPicking(!state.picking));
+    refs.parentBtn?.addEventListener("click", selectParentElement);
+    refs.childBtn?.addEventListener("click", selectPreviousChild);
+    refs.groupBtn?.addEventListener("click", selectElementGroup);
     refs.elementList?.addEventListener("change", selectFromElementList);
     refs.elementsRefresh?.addEventListener("click", refreshElementList);
     refs.resolve.addEventListener("click", resolveSelector);
@@ -2476,11 +2623,13 @@
     /* Po odemčení nesmí být vybraný ani orámovaný žádný prvek. */
     state.selected = null;
     state.selector = "";
+    state.selectionBackStack = [];
     state.picking = false;
     refs.selector.value = "";
     refs.targetName.textContent = "Žádný prvek";
     refs.highlight.hidden = true;
     refs.measure.hidden = true;
+    updateSelectionNavigation();
     document.body.classList.remove("ln-vd-picking");
   }
 

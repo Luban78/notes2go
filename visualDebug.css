@@ -806,3 +806,18 @@ body.ln-vd-picking {
     grid-template-columns: 1fr 1fr !important;
   }
 }
+
+/* =============================================================
+   VISUAL DEBUG – NAVIGACE V DOM A SKUPINOVÝ VÝBĚR
+   ============================================================= */
+
+#ln-vd-panel .ln-vd-btn:disabled {
+  opacity: 0.38 !important;
+  cursor: default !important;
+  box-shadow: none !important;
+}
+
+#ln-vd-panel .ln-vd-selection-nav .ln-vd-btn {
+  padding-inline: 5px !important;
+  white-space: nowrap !important;
+}
