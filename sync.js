@@ -959,7 +959,7 @@ function vytvorKonfliktniKopiiBeznePoznamky(
   return kopie;
 }
 
-function maStejnyObsahProPrvniRevizi(
+function maStejnyObsahProRevizniMerge(
   lokalni,
   row
 ) {
@@ -1101,7 +1101,7 @@ function pripravRevizniMerge(
           cloudCas > lokalniCas;
 
         if (
-          maStejnyObsahProPrvniRevizi(
+          maStejnyObsahProRevizniMerge(
             lokalni,
             row
           ) ||
@@ -1181,6 +1181,35 @@ function pripravRevizniMerge(
           lokalni.updatedAt,
           meta.localUpdatedAt
         );
+
+      /*
+       * Revize i lokální čas se mohou změnit, i když výsledný obsah
+       * obou verzí skončil shodně (např. dvě zařízení uložila stejnou
+       * poznámku nebo proběhla interní normalizace dat).
+       *
+       * V takovém případě nejde o skutečný konflikt. Cloudovou revizi
+       * bezpečně přijmeme a nevytváříme zbytečnou „konfliktní kopii“.
+       * updatedAt se při porovnání záměrně ignoruje. Skutečně rozdílný
+       * obsah dál pokračuje do konzervativní ochrany níže.
+       */
+      if (
+        cloudSeZmenil &&
+        localSeZmenil &&
+        maStejnyObsahProRevizniMerge(
+          lokalni,
+          row
+        )
+      ) {
+        vynutitCloudId.add(row.id);
+        prijmoutCloudMetaId.add(row.id);
+        zrusKonfliktSynchronizace(row.id);
+
+        console.info(
+          "LubaNote sync: rozdílné revize mají shodný obsah, konfliktní kopie není potřeba:",
+          row.id
+        );
+        return;
+      }
 
       if (cloudSeZmenil && localSeZmenil) {
         /*

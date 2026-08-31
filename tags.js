@@ -1773,19 +1773,83 @@ async function renderTagMenuTags() {
         stitek?.is_secret === true;
       
       if (jeTajny) {
-  return tajnyRezimOdemceny;
-}
+        return tajnyRezimOdemceny;
+      }
       
       return true;
     });
+
+  /*
+   * Editor má jen tři řádky štítků, proto musí být nejdůležitější
+   * ovládání vždy na začátku:
+   * 1. + Nový štítek
+   * 2. nejnověji vytvořený dostupný štítek
+   * 3. ostatní štítky v dosavadním pořadí
+   */
+  const dostupneNazvy = new Set(
+    availableTags.map((tag) =>
+      String(tag || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ")
+    )
+  );
+
+  const nejnovejsiStitek = syncedTags
+    .filter((tag) => {
+      const nazev = String(tag?.name || "").trim();
+
+      return (
+        nazev &&
+        dostupneNazvy.has(
+          nazev.toLocaleLowerCase("cs-CZ")
+        )
+      );
+    })
+    .reduce((nejnovejsi, tag) => {
+      if (!nejnovejsi) {
+        return tag;
+      }
+
+      const poradiTagu = Number(tag?.sort_order);
+      const poradiNejnovejsiho = Number(
+        nejnovejsi?.sort_order
+      );
+
+      return (
+        Number.isFinite(poradiTagu) &&
+        (
+          !Number.isFinite(poradiNejnovejsiho) ||
+          poradiTagu > poradiNejnovejsiho
+        )
+      ) ? tag : nejnovejsi;
+    }, null);
+
+  const nejnovejsiNazev = String(
+    nejnovejsiStitek?.name || ""
+  ).trim();
+
+  const serazeneStitky = nejnovejsiNazev ? [
+    nejnovejsiNazev,
+    ...availableTags.filter((tag) =>
+      String(tag || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ") !==
+      nejnovejsiNazev.toLocaleLowerCase("cs-CZ")
+    )
+  ] : availableTags;
   
   tagOptions
     .querySelectorAll("[data-tag]")
     .forEach((button) => {
       button.remove();
     });
+
+  /* + Nový štítek musí být vždy úplně první. */
+  tagOptions.prepend(createTagButton);
+
+  let posledniTlacitko = createTagButton;
   
-  availableTags.forEach((tag) => {
+  serazeneStitky.forEach((tag) => {
     const button =
       document.createElement("button");
     
@@ -1807,11 +1871,13 @@ async function renderTagMenuTags() {
         "secretTagOption"
       );
     }
-    
-    tagOptions.insertBefore(
-      button,
-      createTagButton
+
+    posledniTlacitko.insertAdjacentElement(
+      "afterend",
+      button
     );
+
+    posledniTlacitko = button;
   });
 }
 async function updateTagMenuUI() {
@@ -2100,36 +2166,131 @@ function closeNewTagEditor() {
   newTagInput.value = "";
 }
 
-function createNewTag() {
-  if (activeTags.length >= 2) {
+async function ulozBeznyStitekZeEditoru(nazev) {
+  const novyNazev = normalizeTagName(nazev);
+
+  if (!novyNazev) {
+    return null;
+  }
+
+  /*
+   * Pokud štítek už opravdu existuje v centrálním seznamu,
+   * nic znovu nevytváříme. Vrátíme jeho uložený název,
+   * aby se zachovalo původní psaní velkých/malých písmen.
+   */
+  const existujiciStitek = syncedTags.find(
+    (tag) =>
+      tag.is_secret !== true &&
+      String(tag.name || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ") ===
+      novyNazev.toLocaleLowerCase("cs-CZ")
+  );
+
+  if (existujiciStitek) {
+    return existujiciStitek.name;
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user) {
     zobrazZpravuAplikace(
       "Štítky",
-      "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+      "Nový štítek se nepodařilo uložit."
     );
-    closeNewTagEditor();
+    return null;
+  }
+
+  const { error } = await supabaseClient
+    .from("tags")
+    .insert({
+      user_id: user.id,
+      name: novyNazev,
+      is_secret: false,
+      sort_order: syncedTags.length
+    });
+
+  if (error) {
+    console.error(
+      "Vytvoření štítku z editoru selhalo:",
+      error.message
+    );
+
+    zobrazZpravuAplikace(
+      "Štítky",
+      "Nový štítek se nepodařilo uložit. Zkontroluj připojení a zkus to znovu."
+    );
+    return null;
+  }
+
+  /*
+   * Důležité: nový štítek musí být hned součástí syncedTags.
+   * Díky tomu se objeví ve Správě štítků, ve filtrech a nezmizí
+   * ani po odebrání z právě editované poznámky.
+   */
+  await loadTagsFromSupabase();
+
+  const ulozenyStitek = syncedTags.find(
+    (tag) =>
+      tag.is_secret !== true &&
+      String(tag.name || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ") ===
+      novyNazev.toLocaleLowerCase("cs-CZ")
+  );
+
+  return ulozenyStitek?.name || novyNazev;
+}
+
+async function createNewTag() {
+  if (
+    activeTags.length >= 2 ||
+    saveNewTagButton.disabled
+  ) {
+    if (activeTags.length >= 2) {
+      zobrazZpravuAplikace(
+        "Štítky",
+        "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+      );
+      closeNewTagEditor();
+    }
     return;
   }
-  
+
   const newTag = normalizeTagName(newTagInput.value);
-  
+
   if (!newTag) {
     newTagInput.focus();
     return;
   }
-  
-  const existingTag = getAvailableTags().find(
-    (tag) => tag.toLocaleLowerCase("cs-CZ") ===
-    newTag.toLocaleLowerCase("cs-CZ")
-  );
-  
-  const tagToUse = existingTag || newTag;
-  
-  if (!activeTags.includes(tagToUse)) {
-    activeTags.push(tagToUse);
+
+  saveNewTagButton.disabled = true;
+
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ukládám štítek…",
+      300
+    ) || (() => {});
+
+  try {
+    const tagToUse =
+      await ulozBeznyStitekZeEditoru(newTag);
+
+    if (!tagToUse) {
+      newTagInput.focus();
+      return;
+    }
+
+    if (!activeTags.includes(tagToUse)) {
+      activeTags.push(tagToUse);
+    }
+
+    closeNewTagEditor();
+    await updateTagMenuUI();
+  } finally {
+    ukonciCekani();
+    saveNewTagButton.disabled = false;
   }
-  
-  closeNewTagEditor();
-  updateTagMenuUI();
 }
 
 categoryTaskButton.addEventListener("click", () => {
