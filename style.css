@@ -1208,6 +1208,53 @@ html {
   margin-top: 10px;
 }
 
+.tagMenuTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tagMenuTitleRow h3 {
+  margin: 0;
+}
+
+.tagScrollButton {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .tagScrollButton:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      var(--color-surface)
+    );
+    color: var(--color-accent);
+
+    font: inherit;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1;
+
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 .areaOptions,
 .tagOptions {
   display: flex;

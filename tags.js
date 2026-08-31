@@ -556,6 +556,9 @@ const tagOptions =
 const createTagButton =
   document.getElementById("createTagButton");
 
+const tagScrollButton =
+  document.getElementById("tagScrollButton");
+
 const newTagRow =
   document.getElementById("newTagRow");
 
@@ -903,6 +906,73 @@ function closeTagMenu() {
   tagMenu.hidden = true;
   closeNewTagEditor();
 }
+
+
+/* ==========================================
+   EDITOR – RYCHLÉ ROLOVÁNÍ ŠTÍTKŮ NA MOBILU
+   ========================================== */
+
+function aktualizujSipkuRolovaniStitku() {
+  if (!tagScrollButton || !tagOptions) {
+    return;
+  }
+
+  if (
+    window.innerWidth >= 900 ||
+    tagMenu.hidden
+  ) {
+    tagScrollButton.hidden = true;
+    return;
+  }
+
+  const maximalniPosun = Math.max(
+    0,
+    tagOptions.scrollHeight - tagOptions.clientHeight
+  );
+
+  const lzeRolovat = maximalniPosun > 3;
+
+  tagScrollButton.hidden = !lzeRolovat;
+
+  if (!lzeRolovat) {
+    return;
+  }
+
+  const jsmeDole =
+    tagOptions.scrollTop >= maximalniPosun - 3;
+
+  tagScrollButton.dataset.smer =
+    jsmeDole ? "nahoru" : "dolu";
+
+  tagScrollButton.textContent =
+    jsmeDole ? "↑" : "↓";
+
+  tagScrollButton.setAttribute(
+    "aria-label",
+    jsmeDole ?
+      "Posunout štítky nahoru" :
+      "Posunout štítky dolů"
+  );
+}
+
+
+function narolujStitkyNahoru({
+  plynule = false
+} = {}) {
+  if (!tagOptions) {
+    return;
+  }
+
+  tagOptions.scrollTo({
+    top: 0,
+    behavior: plynule ? "smooth" : "auto"
+  });
+
+  requestAnimationFrame(
+    aktualizujSipkuRolovaniStitku
+  );
+}
+
 
 function normalizeTagName(tag) {
   return tag.trim().replace(/\s+/g, " ");
@@ -1862,6 +1932,10 @@ async function renderTagMenuTags() {
 
     posledniTlacitko = button;
   });
+
+  requestAnimationFrame(
+    aktualizujSipkuRolovaniStitku
+  );
 }
 async function updateTagMenuUI() {
   areaButtons.forEach((button) => {
@@ -2276,6 +2350,7 @@ async function createNewTag() {
 
     closeNewTagEditor();
     await updateTagMenuUI();
+    narolujStitkyNahoru();
   } finally {
     ukonciCekani();
     saveNewTagButton.disabled = false;
@@ -2309,11 +2384,17 @@ areaFilterButtons.forEach((button) => {
   });
 });
 
-tagTaskButton.addEventListener("click", () => {
+tagTaskButton.addEventListener("click", async () => {
   tagMenu.hidden = !tagMenu.hidden;
   
   if (!tagMenu.hidden) {
-    updateTagMenuUI();
+    await updateTagMenuUI();
+
+    /*
+     * Každé nové otevření štítků začíná nahoře.
+     * + Nový štítek a právě vytvořený štítek jsou tak vždy viditelné.
+     */
+    narolujStitkyNahoru();
   }
 });
 
@@ -2327,6 +2408,38 @@ areaButtons.forEach((button) => {
     updateTagMenuUI();
   });
 });
+
+tagOptions.addEventListener(
+  "scroll",
+  aktualizujSipkuRolovaniStitku,
+  { passive: true }
+);
+
+window.addEventListener(
+  "resize",
+  aktualizujSipkuRolovaniStitku
+);
+
+tagScrollButton?.addEventListener("click", () => {
+  const maximalniPosun = Math.max(
+    0,
+    tagOptions.scrollHeight - tagOptions.clientHeight
+  );
+
+  if (maximalniPosun <= 3) {
+    aktualizujSipkuRolovaniStitku();
+    return;
+  }
+
+  const smerNahoru =
+    tagScrollButton.dataset.smer === "nahoru";
+
+  tagOptions.scrollTo({
+    top: smerNahoru ? 0 : maximalniPosun,
+    behavior: "smooth"
+  });
+});
+
 
 tagOptions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-tag]");

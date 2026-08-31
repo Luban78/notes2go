@@ -153,10 +153,10 @@
      * odrážku.
      */
     const dosahVlevo =
-      jeDotyk ? 42 : 28;
+      jeDotyk ? 42 : 36;
 
     const dosahVpravo =
-      jeDotyk ? 8 : 0;
+      jeDotyk ? 8 : 4;
 
     return (
       x >= pozice.left - dosahVlevo &&
