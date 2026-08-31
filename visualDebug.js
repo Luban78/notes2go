@@ -1491,25 +1491,76 @@
   function groupSelectorInfo(element = state.selected) {
     if (!element || isInternal(element)) return null;
 
-    const classes = stableElementClasses(element);
-    if (!classes.length) return null;
-
     const candidates = [];
+    const addCandidate = selector => {
+      if (selector && !candidates.includes(selector)) candidates.push(selector);
+    };
+
+    const classes = stableElementClasses(element);
+    const tag = element.tagName.toLowerCase();
+
+    /*
+     * 1) Nejprve preferujeme společné třídy – to je nejčitelnější varianta.
+     *    Např. .taskCardIcons.
+     */
     const allClasses = classes
       .slice(0, 4)
       .map(name => `.${cssEscape(name)}`)
       .join("");
 
-    if (allClasses) candidates.push(allClasses);
+    if (allClasses) addCandidate(allClasses);
 
     classes.slice(0, 4).forEach(name => {
-      const selector = `.${cssEscape(name)}`;
-      if (!candidates.includes(selector)) candidates.push(selector);
+      addCandidate(`.${cssEscape(name)}`);
     });
+
+    /*
+     * 2) Prvky jako <li> často žádnou vlastní třídu nemají.
+     *    V tom případě vytvoříme skupinu podle typu prvku uvnitř
+     *    nejbližšího stabilního kontejneru.
+     *
+     *    Příklad bulletů v editoru:
+     *      #modalRichText li::before
+     *
+     *    Díky tomu funguje tlačítko „Skupina ×N“ i pro ::before/::after.
+     */
+    const idAncestor = element.parentElement?.closest?.("[id]");
+    if (idAncestor && !isInternal(idAncestor)) {
+      addCandidate(`#${cssEscape(idAncestor.id)} ${tag}`);
+    }
+
+    let ancestor = element.parentElement;
+    while (ancestor && ancestor !== document.body && ancestor !== document.documentElement) {
+      if (!isInternal(ancestor)) {
+        const ancestorClasses = stableElementClasses(ancestor);
+        if (ancestorClasses.length) {
+          addCandidate(`.${cssEscape(ancestorClasses[0])} ${tag}`);
+          break;
+        }
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    /* Poslední bezpečná možnost: stejný tag ve stejném rodiči. */
+    const parent = element.parentElement;
+    if (parent && !isInternal(parent)) {
+      const parentSelector = uniqueSelector(parent);
+      if (parentSelector) addCandidate(`${parentSelector} > ${tag}`);
+    }
 
     for (const selector of candidates) {
       try {
-        const elements = [...document.querySelectorAll(selector)];
+        let elements = [...document.querySelectorAll(selector)];
+
+        /*
+         * Při úpravě pseudo-prvku počítáme jen hostitele, kteří stejný
+         * pseudo-prvek skutečně mají. Skupina tak nezasahuje do prvků,
+         * kde ::before / ::after vůbec neexistuje.
+         */
+        if (state.pseudo) {
+          elements = elements.filter(item => pseudoExists(item, state.pseudo));
+        }
+
         if (elements.length > 1 && elements.includes(element)) {
           return { selector, count: elements.length };
         }
