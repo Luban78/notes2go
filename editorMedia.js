@@ -29,6 +29,15 @@
   let linkModal = null;
   let linkTextInput = null;
   let linkUrlInput = null;
+
+  /*
+   * Odkaz může nově vzniknout nejen v hlavním rich-text editoru,
+   * ale i v právě editovaném TODO. Range si musíme uložit ještě
+   * před otevřením modalu, protože focus následně přejde do polí
+   * „Text odkazu“ / „Internetová adresa“.
+   */
+  let cilovyEditorOdkazu = null;
+  let ulozenyRozsahOdkazu = null;
   
   const imageInput = document.createElement("input");
   imageInput.type = "file";
@@ -2146,14 +2155,148 @@
     }
   }
   
+  function jeRozsahVKonkretnimEditoru(range, editor) {
+    if (!range || !editor?.isConnected) {
+      return false;
+    }
+
+    const jeUzelUvnit = (node) => {
+      const element =
+        node?.nodeType === Node.TEXT_NODE
+          ? node.parentElement
+          : node;
+
+      return Boolean(
+        element &&
+        (element === editor || editor.contains(element))
+      );
+    };
+
+    return (
+      jeUzelUvnit(range.startContainer) &&
+      jeUzelUvnit(range.endContainer)
+    );
+  }
+
+  function ziskejAktivniTodoEditorProOdkaz() {
+    return document.querySelector(
+      ".todoRichTextInput.todoEditing"
+    );
+  }
+
+  function pripravCilOdkazu() {
+    const todoEditor =
+      ziskejAktivniTodoEditorProOdkaz();
+
+    if (todoEditor) {
+      const vyber = window.getSelection();
+      let range = null;
+
+      if (vyber?.rangeCount > 0) {
+        const kandidat = vyber.getRangeAt(0);
+
+        if (
+          jeRozsahVKonkretnimEditoru(
+            kandidat,
+            todoEditor
+          )
+        ) {
+          range = kandidat.cloneRange();
+        }
+      }
+
+      /*
+       * Když uživatel nic neoznačil, vloží se odkaz na konec
+       * právě editovaného TODO. To odpovídá fallbacku hlavního
+       * editoru a hlavně nikdy neskočí do jiné poznámky.
+       */
+      if (!range) {
+        range = document.createRange();
+        range.selectNodeContents(todoEditor);
+        range.collapse(false);
+      }
+
+      cilovyEditorOdkazu = todoEditor;
+      ulozenyRozsahOdkazu = range;
+      return;
+    }
+
+    cilovyEditorOdkazu = modalRichText;
+    ulozenyRozsahOdkazu =
+      ziskejPlatnyUlozenyRozsah();
+  }
+
+  function ziskejRozsahOdkazu() {
+    if (
+      cilovyEditorOdkazu &&
+      ulozenyRozsahOdkazu &&
+      jeRozsahVKonkretnimEditoru(
+        ulozenyRozsahOdkazu,
+        cilovyEditorOdkazu
+      )
+    ) {
+      return ulozenyRozsahOdkazu.cloneRange();
+    }
+
+    cilovyEditorOdkazu = modalRichText;
+    ulozenyRozsahOdkazu =
+      ziskejPlatnyUlozenyRozsah();
+
+    return ulozenyRozsahOdkazu.cloneRange();
+  }
+
   function ziskejTextAktualnihoVyberu() {
-    const range = ziskejPlatnyUlozenyRozsah();
+    const range = ziskejRozsahOdkazu();
     
     if (range.collapsed) {
       return "";
     }
     
     return range.toString().trim();
+  }
+
+  function vlozOdkazDoTodoEditoru(
+    anchor,
+    { nahradVyber = false } = {}
+  ) {
+    const editor = cilovyEditorOdkazu;
+    const range = ziskejRozsahOdkazu();
+
+    if (
+      !editor?.matches?.(
+        ".todoRichTextInput"
+      ) ||
+      !jeRozsahVKonkretnimEditoru(
+        range,
+        editor
+      )
+    ) {
+      return false;
+    }
+
+    if (nahradVyber && !range.collapsed) {
+      range.deleteContents();
+    } else {
+      range.collapse(false);
+    }
+
+    range.insertNode(anchor);
+
+    /* Mezera za odkazem usnadní pokračování v psaní. */
+    const mezera = document.createTextNode(" ");
+    anchor.after(mezera);
+
+    editor.normalize();
+
+    /*
+     * TODO input listener okamžitě synchronizuje text + HTML
+     * do activeTodos a překreslí čtecí podobu řádku.
+     */
+    editor.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    return true;
   }
   
   function vytvorLinkModalPokudChybi() {
@@ -2292,17 +2435,40 @@
       anchor.rel = "noopener noreferrer";
       anchor.textContent = text;
       
-      vlozUzelDoEditoru(
-        anchor,
-        {
-          nahradVyber: Boolean(vybranyText)
-        }
+      const jeTodoOdkaz = Boolean(
+        cilovyEditorOdkazu?.matches?.(
+          ".todoRichTextInput"
+        )
       );
-      
-      /* Mezera za odkazem usnadní pokračování v psaní. */
-      const mezera = document.createTextNode(" ");
-      anchor.after(mezera);
-      nastavKurzorZaUzel(mezera);
+
+      if (jeTodoOdkaz) {
+        const vlozeno = vlozOdkazDoTodoEditoru(
+          anchor,
+          {
+            nahradVyber: Boolean(vybranyText)
+          }
+        );
+
+        if (!vlozeno) {
+          zobrazMediaZpravu(
+            "Odkaz se nepodařilo vložit",
+            "Zkus znovu otevřít TODO položku a označit text."
+          );
+          return;
+        }
+      } else {
+        vlozUzelDoEditoru(
+          anchor,
+          {
+            nahradVyber: Boolean(vybranyText)
+          }
+        );
+        
+        /* Mezera za odkazem usnadní pokračování v psaní. */
+        const mezera = document.createTextNode(" ");
+        anchor.after(mezera);
+        nastavKurzorZaUzel(mezera);
+      }
       
       zavriLinkModal();
     }
@@ -2355,6 +2521,11 @@
   }
   
   function otevriLinkModal() {
+    /*
+     * Cíl a Range ukládáme ještě před tím, než modal převezme focus.
+     * Funguje tedy stejně označený text i pouhý kurzor.
+     */
+    pripravCilOdkazu();
     vytvorLinkModalPokudChybi();
     
     const vybranyText =
@@ -2445,14 +2616,10 @@
     otevriVyberZdrojeObrazku;
 
   window.vlozOdkazDoPoznamky = () => {
-    if (jeTodoRezimAktivni()) {
-      zobrazMediaZpravu(
-        "Vkládání do textu poznámky",
-        "Obrázek nebo internetový odkaz vlož do běžného textu poznámky. TODO řádky zůstávají samostatné úkoly."
-      );
-      return;
-    }
-
+    /*
+     * Odkazy jsou povolené i v TODO. Obrázky zůstávají nadále
+     * omezené na hlavní text poznámky.
+     */
     otevriLinkModal();
   };
 

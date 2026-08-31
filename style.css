@@ -5545,7 +5545,9 @@ text-size-adjust: 100%;
    EDITOR – OBRÁZKY A INTERNETOVÉ ODKAZY
 ================================================== */
 
-#modalRichText .lubaNoteInternetLink {
+#modalRichText .lubaNoteInternetLink,
+.todoRichTextInput .lubaNoteInternetLink,
+.todoTextValue .lubaNoteInternetLink {
   color: var(--color-accent);
   text-decoration-line: underline;
   text-decoration-thickness: 2px;
