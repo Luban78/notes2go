@@ -11,7 +11,23 @@
   /* LN-VD-SECTION:LOGIN:END */
 
   /* LN-VD-SECTION:HOME / NOTES:START */
-  /* LN-VD-SECTION:HOME / NOTES:END */
+
+/* LN-VD:span.searchIcon.lubaIconHost:START */
+  :is(#ln-vd-specificity-a, span.searchIcon.lubaIconHost):is(#ln-vd-specificity-b, span.searchIcon.lubaIconHost) {
+    position: relative !important;
+    z-index: 20 !important;
+    overflow: visible !important;
+    translate: 0px 3px !important;
+  }
+  /* LN-VD:span.searchIcon.lubaIconHost:END */
+
+
+  /* LN-VD:div.searchBox%3Anth-of-type(1):START */
+  :is(#ln-vd-specificity-a, div.searchBox:nth-of-type(1)):is(#ln-vd-specificity-b, div.searchBox:nth-of-type(1)) {
+    overflow: visible !important;
+  }
+  /* LN-VD:div.searchBox%3Anth-of-type(1):END */
+/* LN-VD-SECTION:HOME / NOTES:END */
 
   /* LN-VD-SECTION:EDITOR:START */
   /* LN-VD-SECTION:EDITOR:END */
