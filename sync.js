@@ -873,6 +873,88 @@ function seradJsonProSyncPorovnani(hodnota) {
   return hodnota;
 }
 
+function normalizujPoznamkuProPorovnaniKonfliktu(
+  poznamka,
+  id
+) {
+  if (!poznamka || typeof poznamka !== "object") {
+    return null;
+  }
+
+  /*
+   * Porovnáváme uživatelský obsah, ne technický stav konkrétního
+   * zařízení. notificationId je lokální identifikátor systémové
+   * notifikace a updatedAt je pouze časová stopa synchronizace.
+   * Tyto hodnoty proto nesmí samy vytvořit konfliktní kopii.
+   *
+   * Naopak reminder, repeat, plannedItems, text, TODO, štítky atd.
+   * zůstávají součástí porovnání. Skutečnou uživatelskou změnu tedy
+   * nikdy automaticky nesloučíme jen proto, že karta vypadá podobně.
+   */
+  const odstranTechnickaPole = (hodnota) => {
+    if (Array.isArray(hodnota)) {
+      return hodnota.map(odstranTechnickaPole);
+    }
+
+    if (hodnota && typeof hodnota === "object") {
+      return Object.keys(hodnota)
+        .sort()
+        .reduce((vysledek, klic) => {
+          if (
+            klic === "updatedAt" ||
+            klic === "notificationId" ||
+            klic === "syncConflict"
+          ) {
+            return vysledek;
+          }
+
+          if (hodnota[klic] !== undefined) {
+            vysledek[klic] = odstranTechnickaPole(
+              hodnota[klic]
+            );
+          }
+
+          return vysledek;
+        }, {});
+    }
+
+    return hodnota;
+  };
+
+  const vysledek = {
+    ...poznamka,
+    id: id || poznamka.id
+  };
+
+  if (vysledek.isSecret === false) {
+    delete vysledek.isSecret;
+  }
+
+  return odstranTechnickaPole(vysledek);
+}
+
+function majiStejnySkutecnyObsahPoznamky(
+  lokalniPoznamka,
+  cloudPoznamka,
+  id
+) {
+  if (!lokalniPoznamka || !cloudPoznamka) {
+    return false;
+  }
+
+  return JSON.stringify(
+    normalizujPoznamkuProPorovnaniKonfliktu(
+      lokalniPoznamka,
+      id
+    )
+  ) === JSON.stringify(
+    normalizujPoznamkuProPorovnaniKonfliktu(
+      cloudPoznamka,
+      id
+    )
+  );
+}
+
 function normalizujPoznamkuProPrvniRevizi(
   poznamka,
   id
@@ -959,7 +1041,7 @@ function vytvorKonfliktniKopiiBeznePoznamky(
   return kopie;
 }
 
-function maStejnyObsahProRevizniMerge(
+function maStejnyObsahProPrvniRevizi(
   lokalni,
   row
 ) {
@@ -986,16 +1068,10 @@ function maStejnyObsahProRevizniMerge(
     return false;
   }
 
-  return JSON.stringify(
-    normalizujPoznamkuProPrvniRevizi(
-      lokalni.note,
-      row.id
-    )
-  ) === JSON.stringify(
-    normalizujPoznamkuProPrvniRevizi(
-      row.data,
-      row.id
-    )
+  return majiStejnySkutecnyObsahPoznamky(
+    lokalni.note,
+    row.data,
+    row.id
   );
 }
 
@@ -1101,7 +1177,7 @@ function pripravRevizniMerge(
           cloudCas > lokalniCas;
 
         if (
-          maStejnyObsahProRevizniMerge(
+          maStejnyObsahProPrvniRevizi(
             lokalni,
             row
           ) ||
@@ -1182,36 +1258,35 @@ function pripravRevizniMerge(
           meta.localUpdatedAt
         );
 
-      /*
-       * Revize i lokální čas se mohou změnit, i když výsledný obsah
-       * obou verzí skončil shodně (např. dvě zařízení uložila stejnou
-       * poznámku nebo proběhla interní normalizace dat).
-       *
-       * V takovém případě nejde o skutečný konflikt. Cloudovou revizi
-       * bezpečně přijmeme a nevytváříme zbytečnou „konfliktní kopii“.
-       * updatedAt se při porovnání záměrně ignoruje. Skutečně rozdílný
-       * obsah dál pokračuje do konzervativní ochrany níže.
-       */
-      if (
-        cloudSeZmenil &&
-        localSeZmenil &&
-        maStejnyObsahProRevizniMerge(
-          lokalni,
-          row
-        )
-      ) {
-        vynutitCloudId.add(row.id);
-        prijmoutCloudMetaId.add(row.id);
-        zrusKonfliktSynchronizace(row.id);
-
-        console.info(
-          "LubaNote sync: rozdílné revize mají shodný obsah, konfliktní kopie není potřeba:",
-          row.id
-        );
-        return;
-      }
-
       if (cloudSeZmenil && localSeZmenil) {
+        /*
+         * Než vytvoříme konfliktní kopii, ověříme skutečný obsah.
+         * Obě strany mohou mít změněnou revizi/updatedAt pouze kvůli
+         * technickému housekeeping-u (např. notificationId), přestože
+         * uživatelský obsah zůstal totožný. V takovém případě konflikt
+         * neexistuje a bezpečně převezmeme serverovou revizi.
+         */
+        if (
+          lokalni.type === "regular" &&
+          lokalni.note &&
+          !jeCloudSecretRow(row) &&
+          majiStejnySkutecnyObsahPoznamky(
+            lokalni.note,
+            row.data,
+            row.id
+          )
+        ) {
+          vynutitCloudId.add(row.id);
+          prijmoutCloudMetaId.add(row.id);
+          zrusKonfliktSynchronizace(row.id);
+
+          console.info(
+            "LubaNote sync: falešný konflikt přeskočen – skutečný obsah je shodný:",
+            row.id
+          );
+          return;
+        }
+
         /*
          * Dvě moderní zařízení změnila stejnou běžnou poznámku.
          * Starší řešení sync úplně zastavilo a modal se opakoval.
