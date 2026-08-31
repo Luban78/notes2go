@@ -1990,111 +1990,67 @@
     void vlozVybranyObrazek(file);
   });
   
-  modalRichText.addEventListener("paste", (event) => {
-    const soubor =
-      event.clipboardData?.files?.[0];
+  /* ==========================================
+     VKLÁDÁNÍ ZE SCHRÁNKY – VŽDY ČISTÝ TEXT
+     ========================================== */
 
-    if (soubor?.type.startsWith("image/")) {
-      event.preventDefault();
+  function ziskejProstyTextZeSchranky(event) {
+    const schrankka = event.clipboardData;
 
-      void vlozVybranyObrazek(soubor);
-      return;
+    if (!schrankka) {
+      return "";
     }
 
+    const prostyText =
+      schrankka.getData("text/plain") || "";
+
+    if (prostyText) {
+      return prostyText;
+    }
+
+    /*
+     * Některé WebView / weby dodají jen text/html.
+     * HTML nikdy nevkládáme – použijeme z něj pouze viditelný text.
+     */
     const html =
-      event.clipboardData?.getData("text/html") || "";
+      schrankka.getData("text/html") || "";
 
-    const text =
-      event.clipboardData?.getData("text/plain") || "";
-
-    if (!html && !text) {
-      return;
+    if (!html) {
+      return "";
     }
 
-    event.preventDefault();
+    const docasnyObal =
+      document.createElement("div");
 
-    /*
-     * Text vložený do LubaNote nesmí přinést cizí velikost/font ani
-     * zdědit velikost ze starého inline span-u v místě kurzoru.
-     * Zachováváme významové formátování (B/I/U, odkazy, seznamy, barvy),
-     * ale typografii velikosti necháváme řídit LubaNote.
-     */
-    if (html) {
-      const docasnyObal =
-        document.createElement("div");
+    docasnyObal.innerHTML = html;
 
-      docasnyObal.innerHTML = html;
+    return (
+      docasnyObal.innerText ||
+      docasnyObal.textContent ||
+      ""
+    );
+  }
 
-      docasnyObal
-        .querySelectorAll("*")
-        .forEach(prvek => {
-          prvek.style.removeProperty("font");
-          prvek.style.removeProperty("font-size");
-          prvek.style.removeProperty("font-family");
-          prvek.style.removeProperty("line-height");
-          prvek.style.removeProperty("letter-spacing");
-
-          prvek.removeAttribute("size");
-          prvek.removeAttribute("face");
-          prvek.removeAttribute("data-velikost-pisma");
-
-          if (!prvek.getAttribute("style")?.trim()) {
-            prvek.removeAttribute("style");
-          }
-        });
-
-      /*
-       * Kořenové uzly dostanou základní typografii LubaNote. Díky tomu
-       * ani vložení dovnitř starého zvětšeného span-u nezvětší nový text.
-       */
-      [...docasnyObal.childNodes]
-        .forEach(uzel => {
-          if (uzel.nodeType === Node.TEXT_NODE) {
-            if (!uzel.textContent) {
-              return;
-            }
-
-            const span =
-              document.createElement("span");
-
-            span.className =
-              "lubaNoteVlozenyText";
-
-            uzel.replaceWith(span);
-            span.append(uzel);
-            return;
-          }
-
-          if (uzel instanceof HTMLElement) {
-            uzel.classList.add(
-              "lubaNoteVlozenyText"
-            );
-          }
-        });
-
-      document.execCommand(
-        "insertHTML",
-        false,
-        docasnyObal.innerHTML
-      );
-
-      return;
+  function vlozProstyTextDoEditoru(editor, text) {
+    if (!editor || typeof text !== "string") {
+      return false;
     }
 
-    /*
-     * Android / některé schránky poskytují jen text/plain. I ten vložíme
-     * přes neutrální span, jinak by execCommand/default paste mohl zdědit
-     * velikost písma z místa, kde právě stojí kurzor.
-     */
-    const vyber =
-      window.getSelection();
+    const vyber = window.getSelection();
 
     if (!vyber || vyber.rangeCount === 0) {
-      return;
+      return false;
     }
 
-    const rozsah =
-      vyber.getRangeAt(0);
+    const rozsah = vyber.getRangeAt(0);
+    const spolecnyUzel = rozsah.commonAncestorContainer;
+
+    if (
+      spolecnyUzel !== editor &&
+      !editor.contains(spolecnyUzel)
+    ) {
+      return false;
+    }
 
     rozsah.deleteContents();
 
@@ -2104,7 +2060,34 @@
     vlozenyText.className =
       "lubaNoteVlozenyText";
 
-    vlozenyText.textContent = text;
+    /*
+     * Pokud má celé TODO vlastní zvýraznění, zachováme ho.
+     * Jinak čistý vložený text používá pozadí aktuálního editoru.
+     * Tím se překryje i případné staré zvýraznění nadřazeného span-u.
+     */
+    const vlastniPozadiEditoru =
+      editor.style?.backgroundColor || "";
+
+    vlozenyText.style.setProperty(
+      "--luba-vlozeny-text-pozadi",
+      vlastniPozadiEditoru ||
+      "var(--color-editor-background)"
+    );
+
+    const radky =
+      text.replace(/\r\n?/g, "\n").split("\n");
+
+    radky.forEach((radek, index) => {
+      if (index > 0) {
+        vlozenyText.append(
+          document.createElement("br")
+        );
+      }
+
+      vlozenyText.append(
+        document.createTextNode(radek)
+      );
+    });
 
     rozsah.insertNode(vlozenyText);
     rozsah.setStartAfter(vlozenyText);
@@ -2113,9 +2096,71 @@
     vyber.removeAllRanges();
     vyber.addRange(rozsah);
 
-    modalRichText.dispatchEvent(
+    editor.dispatchEvent(
       new Event("input", { bubbles: true })
     );
+
+    return true;
+  }
+
+  modalRichText.addEventListener("paste", (event) => {
+    const soubor =
+      event.clipboardData?.files?.[0];
+
+    /*
+     * Obrázky vložené přímo ze schránky zůstávají podporované.
+     * Text / HTML ale vždy pokračuje jako čistý text níže.
+     */
+    if (soubor?.type.startsWith("image/")) {
+      event.preventDefault();
+
+      void vlozVybranyObrazek(soubor);
+      return;
+    }
+
+    const text =
+      ziskejProstyTextZeSchranky(event);
+
+    if (!text) {
+      return;
+    }
+
+    event.preventDefault();
+    vlozProstyTextDoEditoru(modalRichText, text);
+  });
+
+  /*
+   * TODO rich-text editory vznikají dynamicky až při vykreslení položek,
+   * proto jejich paste zachytáváme delegovaně na documentu.
+   */
+  document.addEventListener("paste", (event) => {
+    const cil = event.target;
+
+    if (!(cil instanceof Element)) {
+      return;
+    }
+
+    const todoEditor =
+      cil.closest(".todoRichTextInput");
+
+    if (!todoEditor) {
+      return;
+    }
+
+    const text =
+      ziskejProstyTextZeSchranky(event);
+
+    /*
+     * TODO nepodporuje obrázky ze schránky. Pokud schránka obsahuje
+     * jen obrázek / jiná netextová data, nenecháme WebView vložit HTML.
+     */
+    event.preventDefault();
+
+    if (!text) {
+      return;
+    }
+
+    vlozProstyTextDoEditoru(todoEditor, text);
   });
 
   
