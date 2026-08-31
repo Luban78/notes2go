@@ -1016,136 +1016,231 @@
 
 /* ========================================
    EDITOR – DESKTOP BULLETY
-   Větší kulka i aktivní plocha pro myš.
+   Velká, přesně zarovnaná odrážka pro myš.
+   Samotná tečka má vlastní kruh, takže není
+   závislá na velikosti fontového znaku "•".
    ======================================== */
 
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .modalRichText ul {
-    padding-left: 36px;
+    padding-left: 34px;
   }
 
-  .modalRichText li::before {
-    left: -34px;
-    width: 32px;
-    height: 1.55em;
+  .modalRichText li {
+    position: relative;
+  }
 
-    font-size: 1.5em;
-    line-height: 1;
+  .modalRichText li:not(.bulletSbaleny)::before {
+    content: "";
+
+    left: -28px;
+    top: 0.42em;
+
+    width: 13px;
+    height: 13px;
+
+    display: block;
+
+    border-radius: 50%;
+    background: currentColor;
+
+    font-size: 0;
+    line-height: 0;
   }
 
   .modalRichText li.bulletSbaleny::before {
-    font-size: 1.35em;
+    content: "▸";
+
+    left: -32px;
+    top: -0.05em;
+
+    width: 26px;
+    height: 1.35em;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: transparent;
+
+    font-size: 1.65em;
+    line-height: 1;
+  }
+
+  .modalRichText li.bulletMoveSelected:not(.bulletSbaleny)::before {
+    transform: scale(1.25);
   }
 }
 
 
 /* ========================================
-   VÝBĚR ČASU – KOMPAKTNÍ DESKTOP
-   Ciferník i opakování se mají vejít bez
-   zbytečného svislého posuvníku.
+   VÝBĚR ČASU – DESKTOP DVA SLOUPCE
+
+   Vlevo zůstává velký ciferník.
+   Vpravo je celé Opakování + potvrzovací
+   tlačítka. Mobilní rozložení se nemění.
    ======================================== */
 
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .timePickerModal {
-    padding: 12px;
+    padding: 16px;
   }
 
-  .timePickerContent {
-    width: min(94vw, 460px);
-    max-height: calc(100dvh - 24px);
-    padding: 14px 18px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) {
+    width: min(94vw, 780px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+
+    padding: 18px 22px 20px;
+
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) 250px;
+    grid-template-rows: auto auto 1fr auto;
+    column-gap: 28px;
+    row-gap: 8px;
   }
 
-  .timePickerHeader h2 {
-    font-size: 1.08rem;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerHeader {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 
-  #closeTimePickerButton {
-    width: 40px;
-    height: 40px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerHeader h2 {
+    font-size: 1.12rem;
   }
 
-  .timePickerSelected {
-    gap: 8px;
-    margin: 8px 0 10px;
-
-    font-size: 1.8rem;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) #closeTimePickerButton {
+    width: 42px;
+    height: 42px;
   }
 
-  .timePickerSelectedPart {
-    min-width: 60px;
-    padding: 6px 9px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerSelected {
+    grid-column: 1;
+    grid-row: 2;
+
+    gap: 9px;
+    margin: 2px 0 4px;
+
+    font-size: 2rem;
+  }
+
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerSelectedPart {
+    min-width: 68px;
+    padding: 7px 10px;
 
     border-radius: 12px;
-    font-size: 1.55rem;
+    font-size: 1.7rem;
   }
 
-  .timePickerClock {
-    width: min(34vh, 240px);
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerClock {
+    grid-column: 1;
+    grid-row: 3 / 5;
+
+    width: min(42vh, 350px);
+    max-width: 100%;
+
+    align-self: center;
+    justify-self: center;
+
+    margin: 2px auto 0;
   }
 
-  .timePickerClockNumber {
-    width: 36px;
-    height: 36px;
-    font-size: 0.84rem;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerClockNumber {
+    width: 40px;
+    height: 40px;
+    font-size: 0.94rem;
   }
 
-  .timeRepeatSection {
-    margin-top: 10px;
-    padding-top: 9px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatSection {
+    grid-column: 2;
+    grid-row: 2 / 4;
+
+    align-self: center;
+
+    margin: 0;
+    padding: 0;
+    border-top: 0;
   }
 
-  .timeRepeatHeading {
-    margin-bottom: 6px;
-    font-size: 0.95rem;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatHeading {
+    margin: 0 0 8px;
+    font-size: 1rem;
+    text-align: center;
   }
 
-  .timeRepeatPresets {
-    flex-wrap: nowrap;
-    gap: 5px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatPresets {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
-  .timeRepeatPresets button,
-  .timeRepeatWeekdays button {
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatPresets button,
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatWeekdays button {
     min-height: 34px;
-    padding: 5px 8px;
+    padding: 5px 9px;
+
     border-radius: 10px;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
   }
 
-  .timeRepeatWeekdays {
-    gap: 4px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatWeekdays {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
     margin-top: 7px;
   }
 
-  .timeRepeatWeekdays button {
-    min-height: 32px;
-    padding-inline: 3px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatWeekdays button {
+    min-height: 30px;
+    padding-inline: 1px;
+    font-size: 0.78rem;
   }
 
-  .timeRepeatSummary {
-    margin-top: 6px;
-    font-size: 0.82rem;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatSummary {
+    margin-top: 7px;
+    font-size: 0.84rem;
+    text-align: center;
   }
 
-  .timePickerActions {
-    gap: 8px;
-    margin-top: 10px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerActions {
+    grid-column: 2;
+    grid-row: 4;
+
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+
+    margin: 10px 0 0;
   }
 
-  .timePickerActions button {
-    min-height: 38px;
-    padding: 6px 12px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerActions button {
+    min-height: 36px;
+    padding: 5px 7px;
+
+    border-radius: 10px;
+    font-size: 0.86rem;
   }
 }
 
+/* Nižší notebook: ciferník zůstane dobře čitelný,
+   ale nepřeroste dostupnou výšku. */
 @media (min-width: 900px) and (max-height: 700px) and (hover: hover) and (pointer: fine) {
-  .timePickerClock {
-    width: min(30vh, 200px);
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) {
+    grid-template-columns: minmax(330px, 1fr) 235px;
+    column-gap: 22px;
+    padding-block: 14px 16px;
   }
 
-  .timePickerSelected {
-    margin-top: 4px;
-    margin-bottom: 7px;
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timePickerClock {
+    width: min(45vh, 315px);
+  }
+
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatPresets {
+    gap: 4px;
+  }
+
+  .timePickerContent:has(.timeRepeatSection:not([hidden])) .timeRepeatPresets button {
+    min-height: 31px;
+    padding-block: 3px;
   }
 }
+
