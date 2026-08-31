@@ -440,6 +440,204 @@
   }
 
 
+  /* ==========================================
+     DESKTOP – ZACHOVÁNÍ VÝBĚRU TAŽENÍM MYŠI
+
+     Některý následný listener může po mouse/pointer up zkolabovat
+     nativní Selection na kurzor. Během tažení proto průběžně držíme
+     poslední platný Range a po puštění myši ho obnovíme jen tehdy,
+     když skutečný výběr mezitím zmizel.
+
+     Platí pro hlavní editor i právě editované TODO.
+  ========================================== */
+
+  let desktopVyberMysi = null;
+
+  function ulozDesktopVyberBehemTazeni() {
+    if (!desktopVyberMysi) {
+      return;
+    }
+
+    const vyber = window.getSelection();
+
+    if (
+      !vyber ||
+      vyber.rangeCount === 0 ||
+      vyber.isCollapsed
+    ) {
+      return;
+    }
+
+    const rozsah =
+      vyber.getRangeAt(0);
+
+    const cilovyEditor =
+      ziskejEditorFormatovaniProRozsah(
+        rozsah
+      );
+
+    if (
+      !cilovyEditor ||
+      cilovyEditor !==
+        desktopVyberMysi.editor
+    ) {
+      return;
+    }
+
+    desktopVyberMysi.rozsah =
+      rozsah.cloneRange();
+  }
+
+
+  document.addEventListener(
+    "pointerdown",
+    event => {
+      if (
+        !jeDesktopEditor() ||
+        event.pointerType !== "mouse" ||
+        event.button !== 0
+      ) {
+        return;
+      }
+
+      const cilovyEditor =
+        ziskejEditorFormatovaniProUzel(
+          event.target
+        );
+
+      if (!cilovyEditor) {
+        desktopVyberMysi = null;
+        return;
+      }
+
+      desktopVyberMysi = {
+        pointerId: event.pointerId,
+        editor: cilovyEditor,
+        rozsah: null
+      };
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "selectionchange",
+    ulozDesktopVyberBehemTazeni
+  );
+
+
+  window.addEventListener(
+    "pointerup",
+    event => {
+      const stav =
+        desktopVyberMysi;
+
+      if (
+        !stav ||
+        event.pointerId !== stav.pointerId
+      ) {
+        return;
+      }
+
+      /*
+       * Ještě na pointerup může být nativní Range správný,
+       * proto ho uložíme naposledy před ukončením sledování.
+       */
+      ulozDesktopVyberBehemTazeni();
+
+      desktopVyberMysi = null;
+
+      const ulozenyRozsah =
+        stav.rozsah?.cloneRange();
+
+      if (
+        !ulozenyRozsah ||
+        ulozenyRozsah.collapsed ||
+        !stav.editor?.isConnected
+      ) {
+        return;
+      }
+
+      /*
+       * Počkáme, až doběhnou všechny pointerup/mouseup listenery.
+       * Pokud výběr zůstal v pořádku, vůbec do něj nezasahujeme.
+       */
+      requestAnimationFrame(() => {
+        const aktualniVyber =
+          window.getSelection();
+
+        const aktualniRozsah =
+          aktualniVyber?.rangeCount
+            ? aktualniVyber.getRangeAt(0)
+            : null;
+
+        const aktualniEditor =
+          ziskejEditorFormatovaniProRozsah(
+            aktualniRozsah
+          );
+
+        if (
+          aktualniRozsah &&
+          !aktualniRozsah.collapsed &&
+          aktualniEditor === stav.editor
+        ) {
+          return;
+        }
+
+        try {
+          stav.editor.focus({
+            preventScroll: true
+          });
+        } catch {
+          stav.editor.focus();
+        }
+
+        const vyber =
+          window.getSelection();
+
+        if (!vyber) {
+          return;
+        }
+
+        try {
+          vyber.removeAllRanges();
+          vyber.addRange(
+            ulozenyRozsah
+          );
+
+          ulozenyVyberTextu =
+            ulozenyRozsah.cloneRange();
+
+          ulozenyEditorTextu =
+            stav.editor;
+
+          aktualizujStavFormatovani();
+        } catch (chyba) {
+          console.warn(
+            "LubaNote: nepodařilo se obnovit desktopový výběr.",
+            chyba
+          );
+        }
+      });
+    },
+    true
+  );
+
+
+  window.addEventListener(
+    "pointercancel",
+    event => {
+      if (
+        desktopVyberMysi?.pointerId ===
+        event.pointerId
+      ) {
+        desktopVyberMysi = null;
+      }
+    },
+    true
+  );
+
+
   function zachovejVyberTodoPoFormatovani(editor) {
     if (!jeTodoEditorFormatovani(editor)) {
       return;

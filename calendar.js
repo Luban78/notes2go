@@ -66,25 +66,39 @@ const recurringOverviewItems =
   
 
 function ziskejCisloTydne(datum) {
+  /*
+   * ISO 8601 týden počítáme v UTC.
+   *
+   * Původní výpočet používal lokální půlnoc. Mezi 1. lednem
+   * a letním časem je ale rozdíl v UTC offsetu o jednu hodinu.
+   * Odečtení dvou lokálních Date proto mohlo dát o zlomek dne méně
+   * a Math.floor() posunul pondělí na předchozí týden.
+   *
+   * Příklad: pondělí 31. 8. 2026 je správně ISO týden 36.
+   */
   const kopie =
     new Date(
-      datum.getFullYear(),
-      datum.getMonth(),
-      datum.getDate()
+      Date.UTC(
+        datum.getFullYear(),
+        datum.getMonth(),
+        datum.getDate()
+      )
     );
 
   const den =
-    kopie.getDay() || 7;
+    kopie.getUTCDay() || 7;
 
-  kopie.setDate(
-    kopie.getDate() + 4 - den
+  kopie.setUTCDate(
+    kopie.getUTCDate() + 4 - den
   );
 
   const zacatekRoku =
     new Date(
-      kopie.getFullYear(),
-      0,
-      1
+      Date.UTC(
+        kopie.getUTCFullYear(),
+        0,
+        1
+      )
     );
 
   const rozdilDni =
