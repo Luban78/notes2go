@@ -55,6 +55,8 @@
   const state = {
     selected: null,
     selector: "",
+    baseSelector: "",
+    pseudo: "",
     selectionBackStack: [],
     profile: window.innerWidth <= 899 ? "mobile" : (window.innerWidth <= 1199 ? "tablet" : "desktop"),
     rules: { all: {}, mobile: {}, tablet: {}, desktop: {} },
@@ -108,6 +110,8 @@
     { key: "opacity", label: "Průhlednost", tab: "style", min: 0.05, max: 1, step: 0.01, unit: "" },
     { key: "box-shadow-blur", label: "Síla neon glow", tab: "style", min: 0, max: 80, step: 1, unit: "px", virtual: true },
 
+    { key: "left", label: "Left", tab: "position", min: -500, max: 1000, step: 1, unit: "px" },
+    { key: "top", label: "Top", tab: "position", min: -500, max: 1000, step: 1, unit: "px" },
     { key: "translate-x", label: "Posun X", tab: "position", min: -500, max: 500, step: 1, unit: "px", virtual: true },
     { key: "translate-y", label: "Posun Y", tab: "position", min: -500, max: 500, step: 1, unit: "px", virtual: true },
     { key: "scale", label: "Měřítko", tab: "position", min: 0.25, max: 2, step: 0.01, unit: "", virtual: true },
@@ -244,17 +248,29 @@
       .join("\n");
   }
 
-  function boostedSelector(selector) {
+  function splitPseudoSelector(selector) {
     const value = String(selector || "").trim();
-    if (!value || value === ":root") return value;
+    const match = value.match(/^(.*?)(::before|::after)\s*$/);
+    if (!match) return { base: value, pseudo: "" };
+    return { base: match[1].trim(), pseudo: match[2] };
+  }
+
+  function selectedComputedStyle(element = state.selected, pseudo = state.pseudo) {
+    if (!element) return null;
+    return getComputedStyle(element, pseudo || null);
+  }
+
+  function boostedSelector(selector) {
+    const { base, pseudo } = splitPseudoSelector(selector);
+    const value = String(base || "").trim();
+    if (!value || value === ":root") return `${value}${pseudo}`;
 
     /*
-     * Existing application CSS contains several highly-specific !important
-     * rules (for example #selectedAlg .alg-title). Two :is() wrappers add
-     * enough specificity for Visual Debug declarations to win reliably,
-     * while still matching exactly the originally selected element.
+     * Pseudo-prvek nesmí být uvnitř :is(). Proto zesílíme pouze selektor
+     * skutečného DOM prvku a ::before / ::after připojíme až nakonec.
      */
-    return `:is(#ln-vd-specificity-a, ${value}):is(#ln-vd-specificity-b, ${value})`;
+    const boosted = `:is(#ln-vd-specificity-a, ${value}):is(#ln-vd-specificity-b, ${value})`;
+    return `${boosted}${pseudo}`;
   }
 
   function profileCss(profile) {
@@ -1270,7 +1286,7 @@
     if (!state.selected || !state.selector) return;
 
     const rule = currentRule(true);
-    const selectedStyle = getComputedStyle(state.selected);
+    const selectedStyle = selectedComputedStyle();
     if ((selectedStyle.position || "static") === "static" && !rule.position) {
       rule.position = "relative";
     }
@@ -1335,7 +1351,8 @@
 
   function computedNumeric(element, config) {
     if (!element) return config.key === "scale" ? 1 : 0;
-    const style = getComputedStyle(element);
+    const style = selectedComputedStyle(element);
+    const pseudoActive = Boolean(state.pseudo);
     switch (config.key) {
       case "padding-inline": return averagePx(style.paddingLeft, style.paddingRight);
       case "padding-block": return averagePx(style.paddingTop, style.paddingBottom);
@@ -1346,12 +1363,14 @@
       case "translate-y": return 0;
       case "scale": return 1;
       case "width": {
+        if (pseudoActive) return Math.round(parseFloat(style.width) || 0);
         const value = element instanceof SVGElement
           ? (element.getBBox?.().width || element.getBoundingClientRect().width)
           : (element.offsetWidth || parseFloat(style.width) || element.getBoundingClientRect().width);
         return Math.round(value);
       }
       case "height": {
+        if (pseudoActive) return Math.round(parseFloat(style.height) || 0);
         const value = element instanceof SVGElement
           ? (element.getBBox?.().height || element.getBoundingClientRect().height)
           : (element.offsetHeight || parseFloat(style.height) || element.getBoundingClientRect().height);
@@ -1390,10 +1409,16 @@
       state.selectionBackStack = [];
     }
 
+    const parsed = splitPseudoSelector(selectorOverride);
+    const baseSelector = parsed.base || uniqueSelector(element);
+    const pseudo = options.pseudo !== undefined ? options.pseudo : parsed.pseudo;
+
     state.selected = element;
-    state.selector = selectorOverride || uniqueSelector(element);
+    state.baseSelector = baseSelector;
+    state.pseudo = pseudo === "::before" || pseudo === "::after" ? pseudo : "";
+    state.selector = `${state.baseSelector}${state.pseudo}`;
     refs.selector.value = state.selector;
-    refs.targetName.textContent = describeElement(element);
+    refs.targetName.textContent = describeElement(element, state.pseudo);
     state.exportSection = ruleSection(state.selector);
     if (refs.exportSection) refs.exportSection.value = state.exportSection;
     syncControls();
@@ -1402,11 +1427,48 @@
     updateSelectionNavigation();
   }
 
-  function describeElement(element) {
+  function describeElement(element, pseudo = state.pseudo) {
     if (!element) return "Žádný prvek";
     const id = element.id ? `#${element.id}` : "";
     const cls = [...element.classList].slice(0, 2).map(c => `.${c}`).join("");
-    return `${element.tagName.toLowerCase()}${id}${cls}`;
+    return `${element.tagName.toLowerCase()}${id}${cls}${pseudo || ""}`;
+  }
+
+  function pseudoExists(element, pseudo) {
+    if (!element || !pseudo) return false;
+    try {
+      const style = getComputedStyle(element, pseudo);
+      const content = String(style.content || "").trim();
+      const hasContent = content !== "none" && content !== "normal";
+      const hasBox =
+        (parseFloat(style.width) || 0) > 0 ||
+        (parseFloat(style.height) || 0) > 0 ||
+        style.backgroundColor !== "rgba(0, 0, 0, 0)";
+      return style.display !== "none" && (hasContent || hasBox);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function selectPseudo(pseudo = "") {
+    if (!state.selected) {
+      toast("Nejdřív vyber prvek");
+      return;
+    }
+
+    const nextPseudo = pseudo === "::before" || pseudo === "::after" ? pseudo : "";
+    if (nextPseudo && !pseudoExists(state.selected, nextPseudo)) {
+      toast(`${nextPseudo} na tomto prvku není aktivní`);
+      return;
+    }
+
+    const base = state.baseSelector || splitPseudoSelector(state.selector).base || uniqueSelector(state.selected);
+    selectElement(
+      state.selected,
+      `${base}${nextPseudo}`,
+      { preserveSelectionTrail: true, pseudo: nextPseudo }
+    );
+    toast(nextPseudo ? `Vybrán ${nextPseudo}` : "Vybrán skutečný prvek");
   }
 
   function stableElementClasses(element) {
@@ -1462,30 +1524,56 @@
 
     const parent = state.selected?.parentElement || null;
     const canGoParent = Boolean(
-      parent &&
-      parent !== document.body &&
-      parent !== document.documentElement &&
-      !isInternal(parent)
+      state.pseudo || (
+        parent &&
+        parent !== document.body &&
+        parent !== document.documentElement &&
+        !isInternal(parent)
+      )
     );
 
     refs.parentBtn.disabled = !canGoParent;
     refs.childBtn.disabled = state.selectionBackStack.length === 0;
 
     const group = groupSelectorInfo();
+    const groupSelector = group ? `${group.selector}${state.pseudo || ""}` : "";
     refs.groupBtn.disabled = !group;
-    refs.groupBtn.dataset.selector = group?.selector || "";
+    refs.groupBtn.dataset.selector = groupSelector;
     refs.groupBtn.textContent = group ? `Skupina ×${group.count}` : "Skupina";
     refs.groupBtn.title = group
-      ? `Použít ${group.selector} na ${group.count} stejných prvků`
+      ? `Použít ${groupSelector} na ${group.count} stejných prvků`
       : "Vybraný prvek nemá opakovanou společnou třídu";
     refs.groupBtn.classList.toggle(
       "active",
-      Boolean(group && state.selector === group.selector)
+      Boolean(group && state.selector === groupSelector)
     );
+
+    if (refs.elementBtn) {
+      refs.elementBtn.disabled = !state.selected;
+      refs.elementBtn.classList.toggle("active", Boolean(state.selected && !state.pseudo));
+    }
+    if (refs.beforeBtn) {
+      const exists = pseudoExists(state.selected, "::before");
+      refs.beforeBtn.disabled = !exists;
+      refs.beforeBtn.classList.toggle("active", state.pseudo === "::before");
+      refs.beforeBtn.title = exists ? "Upravit ::before" : "Tento prvek nemá aktivní ::before";
+    }
+    if (refs.afterBtn) {
+      const exists = pseudoExists(state.selected, "::after");
+      refs.afterBtn.disabled = !exists;
+      refs.afterBtn.classList.toggle("active", state.pseudo === "::after");
+      refs.afterBtn.title = exists ? "Upravit ::after" : "Tento prvek nemá aktivní ::after";
+    }
   }
 
   function selectParentElement() {
     const current = state.selected;
+
+    if (current && state.pseudo) {
+      selectPseudo("");
+      return;
+    }
+
     const parent = current?.parentElement || null;
 
     if (
@@ -1530,10 +1618,11 @@
       return;
     }
 
+    const selector = `${group.selector}${state.pseudo || ""}`;
     selectElement(
       state.selected,
-      group.selector,
-      { preserveSelectionTrail: true }
+      selector,
+      { preserveSelectionTrail: true, pseudo: state.pseudo }
     );
     toast(`Skupina: ${group.count} prvků`);
   }
@@ -1541,25 +1630,81 @@
   function resolveSelector() {
     const selector = refs.selector.value.trim();
     if (!selector) return;
+    const parsed = splitPseudoSelector(selector);
     try {
-      const element = document.querySelector(selector);
+      const element = document.querySelector(parsed.base);
       if (!element) {
         toast("Selektor nebyl nalezen");
         return;
       }
-      selectElement(element, selector);
+      if (parsed.pseudo && !pseudoExists(element, parsed.pseudo)) {
+        toast(`${parsed.pseudo} na tomto prvku není aktivní`);
+        return;
+      }
+      selectElement(element, selector, { pseudo: parsed.pseudo });
     } catch (_) {
       toast("Neplatný CSS selektor");
     }
   }
 
-  function updateHighlight(element = state.selected) {
+  function pseudoRect(element, pseudo) {
+    if (!element || !pseudo) return null;
+    const hostRect = element.getBoundingClientRect();
+    const style = getComputedStyle(element, pseudo);
+    const width = parseFloat(style.width);
+    const height = parseFloat(style.height);
+    const left = parseFloat(style.left);
+    const top = parseFloat(style.top);
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return null;
+    }
+
+    /* Nejčastější případ v LubaNote: position:absolute na ::before/::after. */
+    if (style.position === "absolute" || style.position === "fixed") {
+      return {
+        left: hostRect.left + (Number.isFinite(left) ? left : 0),
+        top: hostRect.top + (Number.isFinite(top) ? top : 0),
+        width,
+        height
+      };
+    }
+
+    /* U inline pseudo-prvků browser neposkytuje vlastní DOMRect; zobrazíme
+       alespoň odhad od levého horního rohu hostitele. */
+    return { left: hostRect.left, top: hostRect.top, width, height };
+  }
+
+  function pseudoAtPoint(element, x, y) {
+    if (!element) return "";
+
+    for (const pseudo of ["::before", "::after"]) {
+      if (!pseudoExists(element, pseudo)) continue;
+      const rect = pseudoRect(element, pseudo);
+      if (!rect) continue;
+      const tolerance = 4;
+      if (
+        x >= rect.left - tolerance &&
+        x <= rect.left + rect.width + tolerance &&
+        y >= rect.top - tolerance &&
+        y <= rect.top + rect.height + tolerance
+      ) {
+        return pseudo;
+      }
+    }
+
+    return "";
+  }
+
+  function updateHighlight(element = state.selected, pseudoOverride = undefined) {
     if (!element || !document.contains(element)) {
       refs.highlight.hidden = true;
       refs.measure.hidden = true;
       return;
     }
-    const rect = element.getBoundingClientRect();
+
+    const pseudo = pseudoOverride === undefined ? state.pseudo : pseudoOverride;
+    const rect = pseudo ? (pseudoRect(element, pseudo) || element.getBoundingClientRect()) : element.getBoundingClientRect();
     refs.highlight.hidden = false;
     Object.assign(refs.highlight.style, {
       left: `${rect.left}px`,
@@ -1568,7 +1713,8 @@
       height: `${rect.height}px`
     });
     refs.measure.hidden = !state.showMeasure;
-    refs.measure.textContent = `${state.selector || describeElement(element)}  ${Math.round(rect.width)}×${Math.round(rect.height)} px`;
+    const label = state.selector || `${uniqueSelector(element)}${pseudo || ""}`;
+    refs.measure.textContent = `${label}  ${Math.round(rect.width)}×${Math.round(rect.height)} px`;
     const top = Math.max(4, rect.top - 27);
     const left = Math.min(Math.max(4, rect.left), window.innerWidth - Math.min(440, window.innerWidth - 8));
     Object.assign(refs.measure.style, { left: `${left}px`, top: `${top}px` });
@@ -1598,8 +1744,9 @@
     const target = event.target instanceof Element ? event.target : null;
     if (!target || isInternal(target)) return;
     state.hoverTarget = target;
-    state.selector = uniqueSelector(target);
-    updateHighlight(target);
+    const pseudo = pseudoAtPoint(target, event.clientX, event.clientY);
+    state.selector = `${uniqueSelector(target)}${pseudo}`;
+    updateHighlight(target, pseudo);
   }
 
   function startPickGesture(event) {
@@ -1639,7 +1786,13 @@
     event.stopPropagation();
     event.stopImmediatePropagation();
     state.suppressClickUntil = performance.now() + 500;
-    selectElement(target);
+    const pseudo = pseudoAtPoint(target, event.clientX, event.clientY);
+    const baseSelector = uniqueSelector(target);
+    selectElement(
+      target,
+      `${baseSelector}${pseudo}`,
+      { pseudo }
+    );
     setPicking(false);
   }
 
@@ -1751,7 +1904,7 @@
     });
 
     if (state.selected) {
-      const style = getComputedStyle(state.selected);
+      const style = selectedComputedStyle();
       refs.textColor.value = rgbToHex(style.color) || "#ffffff";
       refs.bgColor.value = rgbToHex(style.backgroundColor) || "#001015";
       refs.borderColor.value = rgbToHex(style.borderColor) || "#18ef7d";
@@ -2300,6 +2453,11 @@
             <button id="ln-vd-child" class="ln-vd-btn" type="button" disabled>↓ Dítě</button>
             <button id="ln-vd-group" class="ln-vd-btn" type="button" disabled>Skupina</button>
           </div>
+          <div class="ln-vd-actions three ln-vd-pseudo-nav" style="margin-top:8px !important">
+            <button id="ln-vd-element" class="ln-vd-btn" type="button" disabled>Prvek</button>
+            <button id="ln-vd-before" class="ln-vd-btn" type="button" disabled>::before</button>
+            <button id="ln-vd-after" class="ln-vd-btn" type="button" disabled>::after</button>
+          </div>
         </section>
 
         <div class="ln-vd-tabs">
@@ -2428,6 +2586,9 @@
       parentBtn: panel.querySelector("#ln-vd-parent"),
       childBtn: panel.querySelector("#ln-vd-child"),
       groupBtn: panel.querySelector("#ln-vd-group"),
+      elementBtn: panel.querySelector("#ln-vd-element"),
+      beforeBtn: panel.querySelector("#ln-vd-before"),
+      afterBtn: panel.querySelector("#ln-vd-after"),
       elementList: panel.querySelector("#ln-vd-element-list"),
       elementsRefresh: panel.querySelector("#ln-vd-elements-refresh"),
       profile: panel.querySelector("#ln-vd-profile"),
@@ -2530,6 +2691,9 @@
     refs.parentBtn?.addEventListener("click", selectParentElement);
     refs.childBtn?.addEventListener("click", selectPreviousChild);
     refs.groupBtn?.addEventListener("click", selectElementGroup);
+    refs.elementBtn?.addEventListener("click", () => selectPseudo(""));
+    refs.beforeBtn?.addEventListener("click", () => selectPseudo("::before"));
+    refs.afterBtn?.addEventListener("click", () => selectPseudo("::after"));
     refs.elementList?.addEventListener("change", selectFromElementList);
     refs.elementsRefresh?.addEventListener("click", refreshElementList);
     refs.resolve.addEventListener("click", resolveSelector);
@@ -2623,6 +2787,8 @@
     /* Po odemčení nesmí být vybraný ani orámovaný žádný prvek. */
     state.selected = null;
     state.selector = "";
+    state.baseSelector = "";
+    state.pseudo = "";
     state.selectionBackStack = [];
     state.picking = false;
     refs.selector.value = "";
