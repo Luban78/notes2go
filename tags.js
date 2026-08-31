@@ -9,6 +9,14 @@ let vytvarimeTajnyStitek = false;
 const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
 
+/*
+ * Poslední štítek vytvořený přímo v editoru.
+ * Editor má maximálně tři řádky štítků, proto ho po vytvoření
+ * držíme hned za tlačítkem „+ Nový štítek“, aby nezapadl na konec.
+ * Po restartu aplikace se pořadí vrátí k běžnému pořadí štítků.
+ */
+let posledniStitekVytvorenyVEditoru = "";
+
 
 function normalizujStitekProZalohu(
   stitek,
@@ -1783,58 +1791,33 @@ async function renderTagMenuTags() {
    * Editor má jen tři řádky štítků, proto musí být nejdůležitější
    * ovládání vždy na začátku:
    * 1. + Nový štítek
-   * 2. nejnověji vytvořený dostupný štítek
+   * 2. štítek právě vytvořený v editoru
    * 3. ostatní štítky v dosavadním pořadí
+   *
+   * Dřívější pokus určoval „nejnovější“ podle sort_order. To není
+   * spolehlivé, protože starší štítky mohou mít vyšší sort_order.
+   * Teď si pamatujeme přímo konkrétní štítek vytvořený v editoru.
    */
-  const dostupneNazvy = new Set(
-    availableTags.map((tag) =>
-      String(tag || "")
-        .trim()
-        .toLocaleLowerCase("cs-CZ")
-    )
-  );
-
-  const nejnovejsiStitek = syncedTags
-    .filter((tag) => {
-      const nazev = String(tag?.name || "").trim();
-
-      return (
-        nazev &&
-        dostupneNazvy.has(
-          nazev.toLocaleLowerCase("cs-CZ")
-        )
-      );
-    })
-    .reduce((nejnovejsi, tag) => {
-      if (!nejnovejsi) {
-        return tag;
-      }
-
-      const poradiTagu = Number(tag?.sort_order);
-      const poradiNejnovejsiho = Number(
-        nejnovejsi?.sort_order
-      );
-
-      return (
-        Number.isFinite(poradiTagu) &&
-        (
-          !Number.isFinite(poradiNejnovejsiho) ||
-          poradiTagu > poradiNejnovejsiho
-        )
-      ) ? tag : nejnovejsi;
-    }, null);
-
-  const nejnovejsiNazev = String(
-    nejnovejsiStitek?.name || ""
+  const preferovanyNazev = String(
+    posledniStitekVytvorenyVEditoru || ""
   ).trim();
 
-  const serazeneStitky = nejnovejsiNazev ? [
-    nejnovejsiNazev,
+  const preferovanyJeDostupny =
+    Boolean(preferovanyNazev) &&
+    availableTags.some((tag) =>
+      String(tag || "")
+        .trim()
+        .toLocaleLowerCase("cs-CZ") ===
+      preferovanyNazev.toLocaleLowerCase("cs-CZ")
+    );
+
+  const serazeneStitky = preferovanyJeDostupny ? [
+    preferovanyNazev,
     ...availableTags.filter((tag) =>
       String(tag || "")
         .trim()
         .toLocaleLowerCase("cs-CZ") !==
-      nejnovejsiNazev.toLocaleLowerCase("cs-CZ")
+      preferovanyNazev.toLocaleLowerCase("cs-CZ")
     )
   ] : availableTags;
   
@@ -2239,7 +2222,13 @@ async function ulozBeznyStitekZeEditoru(nazev) {
       novyNazev.toLocaleLowerCase("cs-CZ")
   );
 
-  return ulozenyStitek?.name || novyNazev;
+  const ulozenyNazev =
+    ulozenyStitek?.name || novyNazev;
+
+  posledniStitekVytvorenyVEditoru =
+    ulozenyNazev;
+
+  return ulozenyNazev;
 }
 
 async function createNewTag() {

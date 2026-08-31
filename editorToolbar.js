@@ -2236,11 +2236,16 @@ nahledTazenePolozky?.classList.toggle(
   /* ==========================================
      BULLET – JEDNOTNÉ OVLÁDÁNÍ ŘÁDKU
 
-     1× tap / klik = editace
-     2× tap / klik = nativní výběr slova
+     MOBIL / TABLET:
+     1× tap = editace
+     2× tap = nativní výběr slova
      long-press kdekoliv v <li> = MOVE MODE
      po aktivaci MOVE MODE lze řádek táhnout kdekoliv
-     tap na samotnou kulku mimo MOVE MODE = sbalit / rozbalit
+
+     DESKTOP:
+     klik na kulku = sbalit / rozbalit
+     chycení kulky + drag = přesun
+     drag doprava / doleva = zanořit / vynořit
      ========================================== */
 
   function spustLongPressBulletu({
@@ -2382,6 +2387,46 @@ nahledTazenePolozky?.classList.toggle(
         return;
       }
 
+      /*
+       * DESKTOP:
+       * Celé ovládání bulletu patří jen samotné odrážce.
+       * Text řádku necháváme browseru, takže lze normálně označovat
+       * text myší bez aktivace MOVE MODE.
+       *
+       * - klik na odrážku = sbalit / rozbalit
+       * - chycení odrážky + drag = přesun řádku
+       * - drag doprava / doleva = zanořit / vynořit
+       */
+      if (jeDesktopEditor()) {
+        const jeNaKulce = jePoziceNaKulce(
+          polozka,
+          udalost.clientX,
+          false
+        );
+
+        if (!jeNaKulce) {
+          return;
+        }
+
+        tazenaPolozka = polozka;
+        zacatekTazeniX = udalost.clientX;
+        zacatekTazeniY = udalost.clientY;
+        tazenyPointerId = udalost.pointerId;
+        tazenyDotykId = null;
+        probihaTazeni = false;
+
+        try {
+          polozka.setPointerCapture(
+            udalost.pointerId
+          );
+        } catch (_) {
+          /* Pointer capture není povinný. */
+        }
+
+        return;
+      }
+
+      /* Mobil / tablet si ponechává současný long-press MOVE MODE. */
       if (
         vybranaPolozkaProPresun === polozka
       ) {
@@ -2494,10 +2539,49 @@ nahledTazenePolozky?.classList.toggle(
       }
 
       if (probihaTazeni) {
+        const posunX =
+          udalost.clientX - zacatekTazeniX;
+
+        const chceZanorit =
+          posunX > 36;
+
+        const chceVysunout =
+          posunX < -36;
+
+        /*
+         * Na desktopu dříve pointerup pouze ukončil drag a horizontální
+         * změna úrovně se vůbec neprovedla. Stejnou logiku jako na
+         * dotyku teď dokončíme i pro myš / pero.
+         */
+        if (
+          chceZanorit ||
+          chceVysunout
+        ) {
+          tazenaPolozka?.parentElement?.classList.remove(
+            "bulletDragActive"
+          );
+        }
+
+        if (chceZanorit) {
+          zanorTazenouPolozku();
+        } else if (chceVysunout) {
+          vysunTazenouPolozku();
+        }
+
         uklidTazeniBulletu({
           zrusVyber: true,
           oznamZmenu: true
         });
+        return;
+      }
+
+      if (jeDesktopEditor()) {
+        /*
+         * Pouhý klik na odrážku není MOVE MODE. Jen uvolníme připravený
+         * drag a následný click listener provede sbalení / rozbalení.
+         */
+        tazenaPolozka = null;
+        tazenyPointerId = null;
         return;
       }
 
