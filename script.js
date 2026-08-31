@@ -2455,14 +2455,29 @@ function zavriEditorPoLokalnimUlozeni(
    */
   requestAnimationFrame(() => {
     renderTasks();
-    
+
     if (
       typeof renderRemindersScreen === "function"
     ) {
       renderRemindersScreen();
     }
+
+    /* Úkol vytvořený přímo z Planneru se po uložení
+       musí okamžitě objevit i v kalendáři / detailu dne. */
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    if (
+      typeof dayDetailScreen !== "undefined" &&
+      !dayDetailScreen.hidden &&
+      typeof dayDetailItems !== "undefined" &&
+      typeof renderCalendarItems === "function"
+    ) {
+      renderCalendarItems(dayDetailItems);
+    }
   });
-  
+
   return true;
 }
 

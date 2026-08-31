@@ -8312,3 +8312,84 @@ body.secretModeActive {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 }
+
+/* =========================================
+   PLÁN + PŘIPOMÍNKY – RYCHLÉ AKCE
+   31. 8. 2026
+   ========================================= */
+
+/* + v Plánu, + v detailu dne a Opakování v Připomínkách
+   mají stejnou kompaktní tap zónu. */
+.plannerAddTaskButton,
+.dayDetailAddTaskButton,
+.remindersRecurringButton {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+
+  margin: 0;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-accent);
+
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.plannerAddTaskButton:active,
+.dayDetailAddTaskButton:active,
+.remindersRecurringButton:active {
+  transform: scale(0.96);
+}
+
+/* Tlačítko Opakování je čtvrtá rychlá akce filtrů,
+   ale není filtrem – proto nemá třídu .remindersFilter. */
+.remindersRecurringButton {
+  flex: 0 0 44px;
+}
+
+/* Detail dne: datum zůstane uprostřed dostupného prostoru,
+   + je vždy vpravo a nepřekrývá dlouhý název dne. */
+.dayDetailHeader {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.dayDetailBackButton {
+  min-width: 0;
+  justify-self: center;
+}
+
+.dayDetailAddTaskButton {
+  justify-self: end;
+}
+
+@media (max-width: 899px) {
+  .calendarAgendaHeader .plannerAddTaskButton {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .remindersFilters {
+    flex-wrap: nowrap;
+  }
+}
+

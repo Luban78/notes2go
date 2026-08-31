@@ -39,6 +39,16 @@ const dayDetailItems =
 const dayDetailBackButton =
   document.getElementById("dayDetailBackButton");
 
+const plannerAddTaskButton =
+  document.getElementById(
+    "plannerAddTaskButton"
+  );
+
+const dayDetailAddTaskButton =
+  document.getElementById(
+    "dayDetailAddTaskButton"
+  );
+
 const recurringOverviewButton =
   document.getElementById(
     "recurringOverviewButton"
@@ -113,12 +123,95 @@ function ziskejCisloTydne(datum) {
 }
 
 
+function datumProInput(datum) {
+  return [
+    datum.getFullYear(),
+    String(datum.getMonth() + 1).padStart(2, "0"),
+    String(datum.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+
+function otevriNovyUkolProVybranyDen() {
+  const tlacitkoPridat =
+    document.getElementById("addTaskButton");
+
+  if (!tlacitkoPridat) {
+    return;
+  }
+
+  /*
+   * Použijeme stejný editor jako tlačítko + v Poznámkách,
+   * ale Planner mu hned předvyplní vybraný den a zapne termín.
+   * Díky tomu se uložená poznámka okamžitě stane úkolem v Plánu.
+   */
+  tlacitkoPridat.click();
+
+  if (typeof modalDate !== "undefined") {
+    modalDate.value =
+      datumProInput(calendarSelectedDay);
+  }
+
+  if (typeof reminderEnabled !== "undefined") {
+    reminderEnabled = true;
+  }
+
+  if (typeof updateReminderButton === "function") {
+    updateReminderButton(true);
+  }
+
+  if (
+    typeof aktualizujPopiskyDataCasu ===
+    "function"
+  ) {
+    aktualizujPopiskyDataCasu();
+  }
+
+  if (typeof updateModalWeekday === "function") {
+    updateModalWeekday();
+  }
+
+  /* Předvyplněný den a zapnutý termín jsou výchozí stav,
+     ne uživatelská změna – Back tedy bez další editace neotravuje
+     dialogem Uložit / Neukládat. */
+  if (
+    typeof vytvorOtiskEditoru === "function" &&
+    typeof puvodniOtiskEditoru !== "undefined"
+  ) {
+    puvodniOtiskEditoru =
+      vytvorOtiskEditoru();
+  }
+}
+
+
+plannerAddTaskButton?.addEventListener(
+  "click",
+  otevriNovyUkolProVybranyDen
+);
+
+dayDetailAddTaskButton?.addEventListener(
+  "click",
+  otevriNovyUkolProVybranyDen
+);
+
+
 recurringOverviewButton?.addEventListener(
   "click",
   () => {
     renderRecurringOverview();
 
+    const remindersScreen =
+      document.getElementById(
+        "remindersScreen"
+      );
+
     calendarScreen.hidden = true;
+    dayDetailScreen.hidden = true;
+
+    if (remindersScreen) {
+      remindersScreen.hidden = true;
+    }
+
     recurringOverviewScreen.hidden = false;
   }
 );
@@ -126,10 +219,26 @@ recurringOverviewButton?.addEventListener(
 recurringOverviewBackButton?.addEventListener(
   "click",
   () => {
+    const remindersScreen =
+      document.getElementById(
+        "remindersScreen"
+      );
+
     recurringOverviewScreen.hidden = true;
-    calendarScreen.hidden = false;
+
+    if (remindersScreen) {
+      remindersScreen.hidden = false;
+    }
+
+    if (
+      typeof renderRemindersScreen ===
+      "function"
+    ) {
+      renderRemindersScreen();
+    }
   }
 );  
+
 
 calendarSelectedDateButton?.addEventListener(
   "click",
