@@ -794,6 +794,32 @@ planSelectionButton.addEventListener(
       return;
     }
 
+    const kontrolaBacklinku =
+      window.LubaNotePlannedTextLinks
+        ?.overVyberProBacklink?.(snapshot.range);
+
+    if (
+      kontrolaBacklinku &&
+      kontrolaBacklinku.ok === false
+    ) {
+      if (
+        typeof window.zobrazZpravuAplikace ===
+        "function"
+      ) {
+        window.zobrazZpravuAplikace(
+          "Backlink nelze vytvořit",
+          kontrolaBacklinku.duvod
+        );
+      } else {
+        console.warn(
+          "Backlink nelze vytvořit:",
+          kontrolaBacklinku.duvod
+        );
+      }
+
+      return;
+    }
+
     const tasks = loadTask();
 
     /*

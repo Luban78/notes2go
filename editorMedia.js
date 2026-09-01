@@ -973,6 +973,17 @@
       return false;
     }
 
+    /*
+     * Obrázek vložený do bulletu je příloha konkrétní položky.
+     * Samotný bullet se už spolehlivě přesouvá jako celek, takže
+     * obrázek uvnitř něj nepovolujeme vytáhnout mimo <li>.
+     * Velikost, zarovnání i odstranění obrázku zůstávají dostupné
+     * přes běžné ovládání obrázku.
+     */
+    if (figure.closest("li")) {
+      return false;
+    }
+
     presouvanyObrazek = image;
     presouvanyFigure = figure;
     presouvanyPointerId = event.pointerId;
@@ -1718,8 +1729,139 @@
     ulozenyRozsahEditoru = range.cloneRange();
   }
 
+  function ziskejElementProBulletZUzelu(uzel) {
+    if (!uzel) {
+      return null;
+    }
+
+    return uzel.nodeType === Node.ELEMENT_NODE
+      ? uzel
+      : uzel.parentElement;
+  }
+
+  function ziskejBulletProRozsah(range) {
+    if (!range || !jeRozsahVEditoru(range)) {
+      return null;
+    }
+
+    const startElement =
+      ziskejElementProBulletZUzelu(
+        range.startContainer
+      );
+
+    const endElement =
+      ziskejElementProBulletZUzelu(
+        range.endContainer
+      );
+
+    const startBullet =
+      startElement?.closest?.("li") || null;
+
+    const endBullet =
+      endElement?.closest?.("li") || null;
+
+    if (
+      !startBullet ||
+      startBullet !== endBullet ||
+      !modalRichText.contains(startBullet)
+    ) {
+      return null;
+    }
+
+    return startBullet;
+  }
+
+  function ziskejPrimyVnorenySeznam(bullet) {
+    if (!bullet) {
+      return null;
+    }
+
+    return Array.from(bullet.children).find(
+      (prvek) =>
+        prvek.tagName === "UL" ||
+        prvek.tagName === "OL"
+    ) || null;
+  }
+
+  function vlozObrazekDoBulletu(figure, bullet) {
+    if (!figure || !bullet) {
+      return false;
+    }
+
+    /*
+     * Obrázek patří k celé položce bulletu. Vkládáme ho proto jako
+     * přímého potomka <li>, nikdy dovnitř <span>/<b>/<a>. Tím zůstane
+     * HTML seznamu stabilní i po změně formátování textu.
+     *
+     * Případný vnořený <ul> držíme vždy až ZA obrázkem a textovým
+     * řádkem. Při přesunu bulletu se tak obrázek i všechny děti
+     * přenesou společně s rodičovskou položkou.
+     */
+    figure.dataset.bulletMedia = "true";
+
+    const vnorenySeznam =
+      ziskejPrimyVnorenySeznam(bullet);
+
+    const prazdnyRadek =
+      Array.from(bullet.children).find(
+        (prvek) =>
+          jePrazdnyRadekZaObrazkem(prvek) &&
+          prvek.dataset.bulletMediaLine === "true"
+      ) || null;
+
+    if (prazdnyRadek) {
+      bullet.insertBefore(figure, prazdnyRadek);
+      nastavKurzorDoRadku(prazdnyRadek);
+    } else {
+      const radek =
+        vytvorRadekProTextZaObrazkem();
+
+      radek.classList.add(
+        "lubaNoteBulletImageTextLine"
+      );
+      radek.dataset.bulletMediaLine = "true";
+
+      if (vnorenySeznam) {
+        bullet.insertBefore(figure, vnorenySeznam);
+        bullet.insertBefore(radek, vnorenySeznam);
+      } else {
+        bullet.append(figure, radek);
+      }
+
+      nastavKurzorDoRadku(radek);
+    }
+
+    requestAnimationFrame(() => {
+      const radek =
+        Array.from(bullet.children).find(
+          (prvek) =>
+            prvek.dataset?.bulletMediaLine ===
+              "true"
+        );
+
+      if (radek) {
+        nastavKurzorDoRadku(radek);
+      }
+    });
+
+    modalRichText.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    return true;
+  }
+
   function vlozObrazekDoEditoru(figure) {
     const range = ziskejPlatnyUlozenyRozsah();
+
+    const bullet =
+      ziskejBulletProRozsah(range);
+
+    if (bullet) {
+      vlozObrazekDoBulletu(figure, bullet);
+      return;
+    }
+
     const existujiciRadek =
       najdiRadekZaObrazkemVRozsahu(range);
 

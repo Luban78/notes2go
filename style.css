@@ -6495,26 +6495,6 @@ text-size-adjust: 100%;
   color: var(--color-text);
 }
 
-/*
- * Bílá a černá jsou v paletě explicitní barvy.
- * Kontrastní podklad zajišťuje viditelnost v obou motivech.
- * Vyšší specificita + !important zabrání přepsání obecnými pravidly toolbaru.
- */
-.editorTopBar .editorToolbarPanel.textColorPanel button.textColorWhite {
-  color: #ffffff !important;
-  background: #27313a !important;
-  border: 1px solid rgba(255, 255, 255, 0.28) !important;
-  border-radius: 8px;
-}
-
-.editorTopBar .editorToolbarPanel.textColorPanel button.textColorBlack {
-  color: #000000 !important;
-  background: #ffffff !important;
-  border: 1px solid rgba(0, 0, 0, 0.28) !important;
-  border-radius: 8px;
-}
-
-
 #modalRichText::selection,
 #modalRichText *::selection {
   background: rgba(60, 160, 210, 0.35);
@@ -8413,3 +8393,61 @@ body.secretModeActive {
   }
 }
 
+
+/* ========================================
+   BULLET EDITOR – OBRÁZKY + BACKLINKY
+   ======================================== */
+
+/*
+ * Obrázek vložený z kurzoru uvnitř <li> je příloha konkrétního bulletu.
+ * Zůstává přímo uvnitř položky a při přesunu / zanoření bulletu cestuje
+ * společně s ním. Float uvnitř seznamu vypínáme, aby se nerozbila
+ * hierarchie a aby odrážka zůstala vizuálně čitelná.
+ */
+#modalRichText li > .lubaNoteImage[data-bullet-media="true"] {
+  float: none !important;
+  clear: both;
+
+  max-width: 100%;
+  margin-top: 10px !important;
+  margin-bottom: 6px !important;
+}
+
+#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="vlevo"] {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="stred"] {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="vpravo"] {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+/*
+ * Obrázek uvnitř bulletu se nepřetahuje samostatně. Přesouvá se celý
+ * bullet, což chrání strukturu <ul>/<li>. Nastavení velikosti, zarovnání
+ * a odstranění obrázku zůstává dostupné po kliknutí na obrázek.
+ */
+#modalRichText li > .lubaNoteImage[data-bullet-media="true"]:focus-within img {
+  cursor: default;
+  touch-action: auto;
+}
+
+/* Editovatelný řádek pod obrázkem zůstává součástí stejného bulletu. */
+#modalRichText li > .lubaNoteBulletImageTextLine {
+  min-height: 1.35em;
+  padding-top: 4px;
+  margin: 0;
+}
+
+/* Backlink v bulletu musí zůstat jednoznačně klikací i uvnitř listu. */
+#modalRichText li .plannedTextLink {
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}

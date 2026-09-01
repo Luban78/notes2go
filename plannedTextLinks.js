@@ -2,6 +2,95 @@
    LUBANOTE – ODKAZY NA NAPLÁNOVANÉ ÚKOLY
    ========================================== */
 
+/* ==========================================
+   BEZPEČNÝ BACKLINK UVNITŘ BULLETU
+   ========================================== */
+
+function ziskejElementBacklinkZUzelu(uzel) {
+  if (!uzel) {
+    return null;
+  }
+
+  return uzel.nodeType === Node.ELEMENT_NODE
+    ? uzel
+    : uzel.parentElement;
+}
+
+
+function ziskejBulletBacklinkZUzelu(uzel) {
+  const element =
+    ziskejElementBacklinkZUzelu(uzel);
+
+  return element?.closest?.("li") || null;
+}
+
+
+function overVyberProBacklink(range) {
+  if (!range) {
+    return {
+      ok: false,
+      duvod: "Nebyl nalezen výběr textu."
+    };
+  }
+
+  const startBullet =
+    ziskejBulletBacklinkZUzelu(
+      range.startContainer
+    );
+
+  const endBullet =
+    ziskejBulletBacklinkZUzelu(
+      range.endContainer
+    );
+
+  /*
+   * Backlink uvnitř jednoho bulletu je plně podporovaný.
+   * Výběr přes více položek seznamu ale nesmíme obalit jedním
+   * inline <span>, protože by prohlížeč mohl rozbít strukturu <ul>/<li>.
+   */
+  if (
+    (startBullet || endBullet) &&
+    startBullet !== endBullet
+  ) {
+    return {
+      ok: false,
+      duvod:
+        "Backlink vytvoř vždy z textu jedné odrážky. Výběr přes více bulletů by poškodil strukturu seznamu."
+    };
+  }
+
+  try {
+    const fragment =
+      range.cloneContents();
+
+    if (
+      fragment.querySelector?.(
+        ".lubaNoteImage, figure, ul, ol, li"
+      )
+    ) {
+      return {
+        ok: false,
+        duvod:
+          "Pro backlink označ pouze text bulletu, ne obrázek nebo vnořený seznam."
+      };
+    }
+  } catch (_) {
+    return {
+      ok: false,
+      duvod: "Výběr textu se nepodařilo bezpečně ověřit."
+    };
+  }
+
+  return { ok: true, duvod: "" };
+}
+
+
+window.LubaNotePlannedTextLinks = {
+  ...(window.LubaNotePlannedTextLinks || {}),
+  overVyberProBacklink
+};
+
+
 function createPlannedTextLink(
   plannedItemId,
   text
@@ -153,6 +242,17 @@ function wrapCurrentSelectionAsPlannedLink(plannedItemId) {
   }
 
   let range = snapshot.range.cloneRange();
+
+  const kontrolaBacklinku =
+    overVyberProBacklink(range);
+
+  if (!kontrolaBacklinku.ok) {
+    console.warn(
+      "Backlink nebyl vytvořen:",
+      kontrolaBacklinku.duvod
+    );
+    return false;
+  }
 
   /*
    * Pokud už byl stejný text dříve dokončený a uživatel ho plánuje

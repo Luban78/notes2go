@@ -124,18 +124,6 @@
 
   let nahledTazenePolozky = null;
 
-  /*
-   * Desktop má dvě jasně oddělená gesta:
-   * - svislé = změna pořadí na stejné úrovni,
-   * - vodorovné = zanoření / vynoření.
-   * Směr po prvních pár pixelech zamkneme, aby se při zanořování
-   * položka současně sama nepřerovnala.
-   */
-  let smerTazeniBulletuDesktop = null;
-
-  const PRAG_START_TAZENI_DESKTOP = 5;
-  const PRAG_ZMENY_UROVNE_DESKTOP = 16;
-
 
   function jeDesktopEditor() {
     return window.innerWidth >= 900;
@@ -279,15 +267,6 @@
 
   function skryjAndroidVyber() {
     if (!ulozVyberTextu()) {
-      return;
-    }
-
-    /*
-     * Na desktopu nativní Selection necháváme viditelný.
-     * CSS Highlight + removeAllRanges byl určený pro Android, ale na PC
-     * zbytečně vytvářel „lepivý“ výběr po použití toolbaru.
-     */
-    if (jeDesktopEditor()) {
       return;
     }
 
@@ -474,13 +453,8 @@
 
   let desktopVyberMysi = null;
 
-  const MIN_POHYB_PRO_DESKTOP_VYBER = 4;
-
   function ulozDesktopVyberBehemTazeni() {
-    if (
-      !desktopVyberMysi ||
-      !desktopVyberMysi.probihaTazeni
-    ) {
+    if (!desktopVyberMysi) {
       return;
     }
 
@@ -539,42 +513,8 @@
       desktopVyberMysi = {
         pointerId: event.pointerId,
         editor: cilovyEditor,
-        rozsah: null,
-        startX: event.clientX,
-        startY: event.clientY,
-        probihaTazeni: false
+        rozsah: null
       };
-    },
-    true
-  );
-
-
-  document.addEventListener(
-    "pointermove",
-    event => {
-      const stav = desktopVyberMysi;
-
-      if (
-        !stav ||
-        event.pointerId !== stav.pointerId ||
-        stav.probihaTazeni
-      ) {
-        return;
-      }
-
-      const rozdilX =
-        event.clientX - stav.startX;
-
-      const rozdilY =
-        event.clientY - stav.startY;
-
-      if (
-        Math.hypot(rozdilX, rozdilY) >=
-        MIN_POHYB_PRO_DESKTOP_VYBER
-      ) {
-        stav.probihaTazeni = true;
-        ulozDesktopVyberBehemTazeni();
-      }
     },
     true
   );
@@ -596,16 +536,6 @@
         !stav ||
         event.pointerId !== stav.pointerId
       ) {
-        return;
-      }
-
-      /*
-       * Prostý klik není tažení. Dříve se při kliknutí do editoru
-       * znovu obnovil starý označený Range, takže po formátování
-       * nešlo výběr zrušit. Obnovu děláme jen po skutečném tahu myší.
-       */
-      if (!stav.probihaTazeni) {
-        desktopVyberMysi = null;
         return;
       }
 
@@ -1355,198 +1285,6 @@
 
 
 
-  function ziskejTextoveUzlyVRozsahu(editor, rozsah) {
-    if (!editor || !rozsah) {
-      return [];
-    }
-
-    const uzly = [];
-    const walker = document.createTreeWalker(
-      editor,
-      NodeFilter.SHOW_TEXT
-    );
-
-    let uzel = walker.nextNode();
-
-    while (uzel) {
-      if (
-        uzel.nodeValue?.length &&
-        rozsah.intersectsNode(uzel)
-      ) {
-        uzly.push(uzel);
-      }
-
-      uzel = walker.nextNode();
-    }
-
-    return uzly;
-  }
-
-
-  function aplikujVelikostNaOznacenyText(
-    editor,
-    rozsah,
-    hodnota
-  ) {
-    if (
-      !editor ||
-      !rozsah ||
-      rozsah.collapsed
-    ) {
-      return false;
-    }
-
-    const textoveUzly =
-      ziskejTextoveUzlyVRozsahu(
-        editor,
-        rozsah
-      );
-
-    if (textoveUzly.length === 0) {
-      return false;
-    }
-
-    /*
-     * Hranice si uložíme před první změnou DOM. Range se při splitText()
-     * automaticky posouvá, proto pro přesný Ctrl+A / vícerádkový výběr
-     * používáme původní uzly a offsety.
-     */
-    const startContainer = rozsah.startContainer;
-    const startOffset = rozsah.startOffset;
-    const endContainer = rozsah.endContainer;
-    const endOffset = rozsah.endOffset;
-
-    const upravenePrvky = [];
-
-    /*
-     * Jdeme odzadu. Rozdělení textového uzlu tak nemůže posunout offsety
-     * textů, které ještě čekají na zpracování.
-     */
-    [...textoveUzly]
-      .reverse()
-      .forEach(puvodniUzel => {
-        const puvodniDelka =
-          puvodniUzel.nodeValue?.length ?? 0;
-
-        let zacatek =
-          puvodniUzel === startContainer
-            ? startOffset
-            : 0;
-
-        let konec =
-          puvodniUzel === endContainer
-            ? endOffset
-            : puvodniDelka;
-
-        zacatek = Math.max(
-          0,
-          Math.min(zacatek, puvodniDelka)
-        );
-
-        konec = Math.max(
-          zacatek,
-          Math.min(konec, puvodniDelka)
-        );
-
-        if (konec <= zacatek) {
-          return;
-        }
-
-        let vybranyUzel = puvodniUzel;
-
-        if (konec < puvodniDelka) {
-          puvodniUzel.splitText(konec);
-        }
-
-        if (zacatek > 0) {
-          vybranyUzel =
-            puvodniUzel.splitText(zacatek);
-        }
-
-        const rodic =
-          vybranyUzel.parentElement;
-
-        let formatovanyPrvek = null;
-
-        /*
-         * Pokud celý text už leží v samostatném SPAN/FONT, nemusíme
-         * vytvářet další vnořený span. U částečného výběru jsou po splitu
-         * sourozenci, takže se automaticky použije nový obal jen na výběr.
-         */
-        if (
-          rodic &&
-          rodic !== editor &&
-          rodic.childNodes.length === 1 &&
-          ["SPAN", "FONT"].includes(rodic.tagName)
-        ) {
-          formatovanyPrvek = rodic;
-          rodic.removeAttribute("size");
-        } else {
-          formatovanyPrvek =
-            document.createElement("span");
-
-          vybranyUzel.parentNode?.insertBefore(
-            formatovanyPrvek,
-            vybranyUzel
-          );
-
-          formatovanyPrvek.appendChild(
-            vybranyUzel
-          );
-        }
-
-        formatovanyPrvek.style.fontSize =
-          `${hodnota}px`;
-
-        formatovanyPrvek.dataset.velikostPisma =
-          String(hodnota);
-
-        upravenePrvky.unshift(
-          formatovanyPrvek
-        );
-      });
-
-    if (upravenePrvky.length === 0) {
-      return false;
-    }
-
-    /*
-     * Po vlastní DOM úpravě obnovíme jeden souvislý výběr přes všechny
-     * upravené části. To je důležité hlavně pro Ctrl+A přes více bloků.
-     */
-    const novyRozsah =
-      document.createRange();
-
-    novyRozsah.setStartBefore(
-      upravenePrvky[0]
-    );
-
-    novyRozsah.setEndAfter(
-      upravenePrvky[
-        upravenePrvky.length - 1
-      ]
-    );
-
-    const vyber = window.getSelection();
-
-    if (vyber) {
-      vyber.removeAllRanges();
-      vyber.addRange(novyRozsah);
-    }
-
-    ulozenyVyberTextu =
-      novyRozsah.cloneRange();
-
-    ulozenyEditorTextu = editor;
-
-    editor.dispatchEvent(
-      new Event("input", { bubbles: true })
-    );
-
-    return true;
-  }
-
-
   function nastavVelikostPisma(hodnota) {
     if (!hodnota) {
       return;
@@ -1555,45 +1293,25 @@
     const cilovyEditor =
       pripravEditorProFormatovani();
 
-    const vyber = window.getSelection();
-    const rozsah =
-      vyber?.rangeCount
-        ? vyber.getRangeAt(0)
-        : null;
+    document.execCommand(
+      "fontSize",
+      false,
+      "7"
+    );
 
-    const upravenVlastnimFormatovanim =
-      Boolean(
-        rozsah &&
-        !rozsah.collapsed &&
-        ziskejEditorFormatovaniProRozsah(
-          rozsah
-        ) === cilovyEditor &&
-        aplikujVelikostNaOznacenyText(
-          cilovyEditor,
-          rozsah.cloneRange(),
-          hodnota
-        )
-      );
-
-    if (!upravenVlastnimFormatovanim) {
-      /*
-       * Bez výběru zachováme původní execCommand chování – nastaví
-       * velikost pro další psaní na pozici kurzoru.
-       */
-      document.execCommand(
-        "fontSize",
-        false,
-        "7"
-      );
-
-      (cilovyEditor || editorTextu)
-        .querySelectorAll('font[size="7"]')
-        .forEach(prvek => {
-          prvek.removeAttribute("size");
-          prvek.style.fontSize = `${hodnota}px`;
-          prvek.dataset.velikostPisma = hodnota;
-        });
-    }
+    /*
+     * Dříve se <font size="7"> převáděl na px pouze v hlavním
+     * editoru. V TODO proto například volba 18 skončila jako obří
+     * browserová velikost 7. Převádíme vždy jen editor, který se
+     * právě formátuje.
+     */
+    (cilovyEditor || editorTextu)
+      .querySelectorAll('font[size="7"]')
+      .forEach(prvek => {
+        prvek.removeAttribute("size");
+        prvek.style.fontSize = `${hodnota}px`;
+        prvek.dataset.velikostPisma = hodnota;
+      });
 
     synchronizujTodoPoFormatovani(
       cilovyEditor
@@ -1733,48 +1451,28 @@
   }
 
 
-  function zjistiPrvekProVelikostZRozsahu(rozsah) {
-    if (!rozsah) {
+  function zjistiVelikostPodKurzorem() {
+    const vyber = window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
       return null;
     }
 
-    let uzel = rozsah.startContainer;
+    let prvek = vyber.anchorNode;
 
-    if (uzel?.nodeType === Node.TEXT_NODE) {
-      return uzel.parentElement;
+    if (prvek?.nodeType === Node.TEXT_NODE) {
+      prvek = prvek.parentElement;
     }
 
-    if (!(uzel instanceof Element)) {
-      return null;
-    }
-
-    const deti = uzel.childNodes;
-
-    let kandidat =
-      deti[Math.max(0, rozsah.startOffset - 1)] ||
-      deti[rozsah.startOffset] ||
-      uzel;
-
-    while (
-      kandidat?.nodeType === Node.ELEMENT_NODE &&
-      kandidat.lastChild
-    ) {
-      kandidat = kandidat.lastChild;
-    }
-
-    if (kandidat?.nodeType === Node.TEXT_NODE) {
-      return kandidat.parentElement;
-    }
-
-    return kandidat instanceof Element
-      ? kandidat
-      : uzel;
-  }
-
-
-  function ziskejSkutecnouVelikostPrvku(prvek) {
     if (!(prvek instanceof Element)) {
       return null;
+    }
+
+    const prvekSVelikosti =
+      prvek.closest("[data-velikost-pisma]");
+
+    if (prvekSVelikosti) {
+      return prvekSVelikosti.dataset.velikostPisma;
     }
 
     const velikost =
@@ -1787,79 +1485,6 @@
     }
 
     return String(Math.round(velikost));
-  }
-
-
-  function zjistiVelikostPodKurzorem() {
-    const vyber = window.getSelection();
-
-    let rozsah = null;
-
-    if (
-      vyber?.rangeCount &&
-      ziskejEditorFormatovaniProRozsah(
-        vyber.getRangeAt(0)
-      )
-    ) {
-      rozsah = vyber.getRangeAt(0);
-    } else if (
-      ulozenyVyberTextu &&
-      ziskejEditorFormatovaniProRozsah(
-        ulozenyVyberTextu
-      )
-    ) {
-      rozsah = ulozenyVyberTextu;
-    }
-
-    if (!rozsah) {
-      return null;
-    }
-
-    const cilovyEditor =
-      ziskejEditorFormatovaniProRozsah(
-        rozsah
-      );
-
-    if (!cilovyEditor) {
-      return null;
-    }
-
-    if (!rozsah.collapsed) {
-      const velikosti = new Set();
-
-      ziskejTextoveUzlyVRozsahu(
-        cilovyEditor,
-        rozsah
-      ).forEach(uzel => {
-        if (!uzel.nodeValue?.trim()) {
-          return;
-        }
-
-        const velikost =
-          ziskejSkutecnouVelikostPrvku(
-            uzel.parentElement
-          );
-
-        if (velikost) {
-          velikosti.add(velikost);
-        }
-      });
-
-      if (velikosti.size === 1) {
-        return [...velikosti][0];
-      }
-
-      if (velikosti.size > 1) {
-        /* Smíšený výběr – nelžeme jedním náhodným číslem. */
-        return "—";
-      }
-    }
-
-    return ziskejSkutecnouVelikostPrvku(
-      zjistiPrvekProVelikostZRozsahu(
-        rozsah
-      )
-    );
   }
 
 
@@ -2023,122 +1648,43 @@
   }
 
 
-  function muzeZanoritPolozku(polozka) {
-    return Boolean(
-      polozka?.previousElementSibling?.tagName === "LI"
-    );
-  }
-
-
-  function muzeVysunoutPolozku(polozka) {
-    const seznam = polozka?.parentElement;
-    const rodicovskaPolozka = seznam?.parentElement;
-
-    return Boolean(
-      seznam?.tagName === "UL" &&
-      rodicovskaPolozka?.tagName === "LI" &&
-      rodicovskaPolozka.parentElement?.tagName === "UL"
-    );
-  }
-
-
-  function zrusDesktopZamerBulletu(
-    polozka = tazenaPolozka,
-    { ponechChyceni = true } = {}
-  ) {
-    if (!polozka) {
-      return;
-    }
-
-    polozka.classList.remove(
-      "bulletChceZanorit",
-      "bulletChceVysunout",
-      "bulletAkceNelze"
-    );
-
-    delete polozka.dataset.bulletAkce;
-
-    if (!ponechChyceni) {
-      polozka.classList.remove(
-        "bulletDesktopChyceny"
-      );
-    }
-  }
-
-
-  function aktualizujDesktopZamerBulletu(x) {
+  function presunBulletPodlePozice(x, y) {
     if (!tazenaPolozka) {
       return;
     }
-
+    
     const posunX =
-      x - zacatekTazeniX;
+  x - zacatekTazeniX;
 
-    const chceZanorit =
-      posunX >= PRAG_ZMENY_UROVNE_DESKTOP;
+const chceZanorit =
+  posunX > 36;
 
-    const chceVysunout =
-      posunX <= -PRAG_ZMENY_UROVNE_DESKTOP;
+const chceVysunout =
+  posunX < -36;
 
-    const muzeZanorit =
-      chceZanorit &&
-      muzeZanoritPolozku(tazenaPolozka);
+nahledTazenePolozky?.classList.toggle(
+  "bulletChceZanorit",
+  chceZanorit
+);
 
-    const muzeVysunout =
-      chceVysunout &&
-      muzeVysunoutPolozku(tazenaPolozka);
+nahledTazenePolozky?.classList.toggle(
+  "bulletChceVysunout",
+  chceVysunout
+);
 
-    tazenaPolozka.classList.toggle(
-      "bulletChceZanorit",
-      chceZanorit
-    );
-
-    tazenaPolozka.classList.toggle(
-      "bulletChceVysunout",
-      chceVysunout
-    );
-
-    tazenaPolozka.classList.toggle(
-      "bulletAkceNelze",
-      (chceZanorit && !muzeZanorit) ||
-      (chceVysunout && !muzeVysunout)
-    );
-
-    if (chceZanorit) {
-      tazenaPolozka.dataset.bulletAkce =
-        muzeZanorit
-          ? "→ zanořit"
-          : "→ nelze zanořit";
-    } else if (chceVysunout) {
-      tazenaPolozka.dataset.bulletAkce =
-        muzeVysunout
-          ? "← vynořit"
-          : "← nelze vynořit";
-    } else {
-      delete tazenaPolozka.dataset.bulletAkce;
-    }
-  }
-
-
-  function presunBulletSvislePodlePozice(y) {
-    if (!tazenaPolozka) {
-      return;
-    }
-
+    posunNahledTazenePolozky(x, y);
+    
+    
+    
     zrusBulletDropIndikator();
 
     const seznam =
       tazenaPolozka.parentElement;
 
-    if (!seznam || seznam.tagName !== "UL") {
+    if (!seznam) {
       return;
     }
 
-    /*
-     * Přesunujeme pouze mezi sourozenci stejné úrovně. Celý případný
-     * podstrom položky (<ul> uvnitř <li>) cestuje spolu s ní.
-     * Zanoření/vynoření se řeší samostatně vodorovným gestem.
-     */
     const polozky =
       Array.from(seznam.children).filter(
         (prvek) =>
@@ -2180,39 +1726,6 @@
     seznam.appendChild(
       tazenaPolozka
     );
-  }
-
-
-  function presunBulletPodlePozice(x, y) {
-    if (!tazenaPolozka) {
-      return;
-    }
-
-    /*
-     * Mobilní MOVE MODE zachovává plovoucí náhled. Desktop sem už
-     * nevstupuje – má vlastní směrově zamknuté ovládání.
-     */
-    const posunX =
-      x - zacatekTazeniX;
-
-    const chceZanorit =
-      posunX > 36;
-
-    const chceVysunout =
-      posunX < -36;
-
-    nahledTazenePolozky?.classList.toggle(
-      "bulletChceZanorit",
-      chceZanorit
-    );
-
-    nahledTazenePolozky?.classList.toggle(
-      "bulletChceVysunout",
-      chceVysunout
-    );
-
-    posunNahledTazenePolozky(x, y);
-    presunBulletSvislePodlePozice(y);
   }
 
 
@@ -2281,7 +1794,8 @@
   function jePrvekMimoBulletMove(target) {
     return Boolean(
       target?.closest?.(
-        ".lubaNoteImage, .lubaNoteImageSettings, .lubaNoteImageRemove"
+        ".lubaNoteImage, .lubaNoteImageSettings, .lubaNoteImageRemove, " +
+        ".plannedTextLink, .lubaNoteInternetLink, a[href]"
       )
     );
   }
@@ -2430,11 +1944,6 @@
       tazenaPolozka.parentElement?.classList.remove(
         "bulletDragActive"
       );
-
-      zrusDesktopZamerBulletu(
-        tazenaPolozka,
-        { ponechChyceni: false }
-      );
     }
 
     odstranNahledTazenePolozky();
@@ -2443,7 +1952,6 @@
     tazenyPointerId = null;
     tazenyDotykId = null;
     probihaTazeni = false;
-    smerTazeniBulletuDesktop = null;
 
     if (zrusVyber) {
       zrusVyberPolozkyProPresun();
@@ -2901,34 +2409,12 @@
           return;
         }
 
-        /*
-         * Browser nesmí po chycení pseudo-odrážky přesunout caret ani
-         * vytvořit vlastní drag. Právě to dříve spolu se scale efektem
-         * působilo jako okamžitý skok položky doleva.
-         */
-        udalost.preventDefault();
-
-        zrusBulletDropIndikator();
-        zrusDesktopZamerBulletu(
-          tazenaPolozka,
-          { ponechChyceni: false }
-        );
-
         tazenaPolozka = polozka;
         zacatekTazeniX = udalost.clientX;
         zacatekTazeniY = udalost.clientY;
         tazenyPointerId = udalost.pointerId;
         tazenyDotykId = null;
         probihaTazeni = false;
-        smerTazeniBulletuDesktop = null;
-
-        /*
-         * Okamžitá vizuální odezva: už při pouhém držení je jasně
-         * vidět, že máme odrážku chycenou, ale samotný řádek se nehýbe.
-         */
-        polozka.classList.add(
-          "bulletDesktopChyceny"
-        );
 
         try {
           polozka.setPointerCapture(
@@ -3003,74 +2489,6 @@
       const rozdilY =
         udalost.clientY - zacatekTazeniY;
 
-      if (jeDesktopEditor()) {
-        const absolutniX = Math.abs(rozdilX);
-        const absolutniY = Math.abs(rozdilY);
-        const nejvetsiPosun =
-          Math.max(absolutniX, absolutniY);
-
-        /*
-         * Nejdřív pouze držíme. Po pár pixelech zamkneme směr gesta.
-         * Díky tomu vodorovné zanořování nikdy současně nepřerovnává
-         * položku nahoru/dolů a naopak.
-         */
-        if (!smerTazeniBulletuDesktop) {
-          if (
-            nejvetsiPosun <
-            PRAG_START_TAZENI_DESKTOP
-          ) {
-            return;
-          }
-
-          if (absolutniX >= absolutniY + 2) {
-            smerTazeniBulletuDesktop =
-              "vodorovne";
-          } else if (
-            absolutniY >= absolutniX + 2
-          ) {
-            smerTazeniBulletuDesktop =
-              "svisle";
-          } else if (nejvetsiPosun >= 9) {
-            smerTazeniBulletuDesktop =
-              absolutniX >= absolutniY
-                ? "vodorovne"
-                : "svisle";
-          } else {
-            return;
-          }
-        }
-
-        udalost.preventDefault();
-
-        if (!probihaTazeni) {
-          zahajVzhledTazeniBulletu(
-            udalost.clientX,
-            udalost.clientY
-          );
-        }
-
-        if (
-          smerTazeniBulletuDesktop ===
-          "vodorovne"
-        ) {
-          zrusBulletDropIndikator();
-          aktualizujDesktopZamerBulletu(
-            udalost.clientX
-          );
-          return;
-        }
-
-        zrusDesktopZamerBulletu(
-          tazenaPolozka,
-          { ponechChyceni: true }
-        );
-
-        presunBulletSvislePodlePozice(
-          udalost.clientY
-        );
-        return;
-      }
-
       if (
         !probihaTazeni &&
         Math.hypot(rozdilX, rozdilY) < 6
@@ -3121,82 +2539,6 @@
         return;
       }
 
-      if (jeDesktopEditor()) {
-        const polozka = tazenaPolozka;
-
-        if (probihaTazeni) {
-          let zmenaUrovne = false;
-
-          if (
-            smerTazeniBulletuDesktop ===
-            "vodorovne"
-          ) {
-            const posunX =
-              udalost.clientX - zacatekTazeniX;
-
-            if (
-              posunX >=
-              PRAG_ZMENY_UROVNE_DESKTOP
-            ) {
-              if (muzeZanoritPolozku(polozka)) {
-                polozka.parentElement?.classList.remove(
-                  "bulletDragActive"
-                );
-                zmenaUrovne =
-                  zanorTazenouPolozku();
-              }
-            } else if (
-              posunX <=
-              -PRAG_ZMENY_UROVNE_DESKTOP
-            ) {
-              if (muzeVysunoutPolozku(polozka)) {
-                polozka.parentElement?.classList.remove(
-                  "bulletDragActive"
-                );
-                zmenaUrovne =
-                  vysunTazenouPolozku();
-              }
-            }
-
-            uklidTazeniBulletu({
-              zrusVyber: true,
-              oznamZmenu: zmenaUrovne
-            });
-            return;
-          }
-
-          /* Svislý drag mění pouze pořadí mezi sourozenci. */
-          uklidTazeniBulletu({
-            zrusVyber: true,
-            oznamZmenu: true
-          });
-          return;
-        }
-
-        /*
-         * Pouhé kliknutí / držení bez posunu: žádný layoutový skok.
-         * Na uvolnění jen přepneme sbalení, pokud položka má děti.
-         * Syntetický následný click potlačí časová pojistka níže.
-         */
-        zrusDesktopZamerBulletu(
-          polozka,
-          { ponechChyceni: false }
-        );
-
-        tazenaPolozka = null;
-        tazenyPointerId = null;
-        smerTazeniBulletuDesktop = null;
-
-        prepniSbaleniPolozky(polozka);
-
-        window.getSelection()?.removeAllRanges();
-
-        casPoslednihoTazeniBulletu =
-          Date.now();
-
-        return;
-      }
-
       if (probihaTazeni) {
         const posunX =
           udalost.clientX - zacatekTazeniX;
@@ -3207,6 +2549,11 @@
         const chceVysunout =
           posunX < -36;
 
+        /*
+         * Na desktopu dříve pointerup pouze ukončil drag a horizontální
+         * změna úrovně se vůbec neprovedla. Stejnou logiku jako na
+         * dotyku teď dokončíme i pro myš / pero.
+         */
         if (
           chceZanorit ||
           chceVysunout
@@ -3226,6 +2573,16 @@
           zrusVyber: true,
           oznamZmenu: true
         });
+        return;
+      }
+
+      if (jeDesktopEditor()) {
+        /*
+         * Pouhý klik na odrážku není MOVE MODE. Jen uvolníme připravený
+         * drag a následný click listener provede sbalení / rozbalení.
+         */
+        tazenaPolozka = null;
+        tazenyPointerId = null;
         return;
       }
 
