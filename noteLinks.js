@@ -1,11 +1,14 @@
 /* ========================================
-   LUBANOTE – INTERNÍ ODKAZY NA POZNÁMKY V3
+   LUBANOTE – INTERNÍ ODKAZY NA POZNÁMKY
    ========================================
 
-   V3: hlavní rich-text editor + autocomplete + otevření odkazu
-   + historie interní navigace a návrat na předchozí poznámku.
-   TODO, bullety a skutečné backlinky „Odkazuje sem“ zůstávají
-   v dalších samostatných verzích.
+   V2 rozšiřuje společný [[ engine na:
+   - hlavní rich-text editor,
+   - bullety uvnitř hlavního editoru,
+   - rich-text TODO položky.
+
+   Navigace A → B → C a návratový řádek z V3 zůstávají zachované.
+   Skutečné backlinky „Odkazuje sem“ přijdou v další samostatné verzi.
 */
 (() => {
   "use strict";
@@ -246,24 +249,71 @@
     posledniSpoust = null;
   }
 
-  function jeVBeznemTextu(node) {
+  function jeTodoRichTextEditor(element) {
+    return Boolean(
+      element?.classList?.contains("todoRichTextInput")
+    );
+  }
+
+  function jePodporovanyEditor(element) {
+    if (!element) {
+      return false;
+    }
+
+    return (
+      element === editor ||
+      jeTodoRichTextEditor(element)
+    );
+  }
+
+  function ziskejEditorProNode(node) {
     const element =
       node?.nodeType === Node.ELEMENT_NODE
         ? node
         : node?.parentElement;
 
-    if (!element || !editor.contains(element)) {
-      return false;
+    if (!element) {
+      return null;
     }
 
-    /* V1 – bullet editor přijde až ve verzi 2. */
-    if (element.closest("li")) {
-      return false;
+    const todoEditor = element.closest?.(
+      ".todoRichTextInput"
+    );
+
+    if (todoEditor && jePodporovanyEditor(todoEditor)) {
+      return todoEditor;
     }
+
+    if (editor.contains(element)) {
+      return editor;
+    }
+
+    return null;
+  }
+
+  function jeVPodporovanemTextu(node, cilovyEditor) {
+    const element =
+      node?.nodeType === Node.ELEMENT_NODE
+        ? node
+        : node?.parentElement;
 
     if (
+      !element ||
+      !cilovyEditor ||
+      !cilovyEditor.contains(element)
+    ) {
+      return false;
+    }
+
+    /*
+     * V2: <li> už je povolené. Záměrně ale nikdy nevstupujeme do
+     * obrázků, figure, hotového interního odkazu ani dalších atomických
+     * prvků. Samotný [[ výraz musí zůstat v jednom textovém uzlu.
+     */
+    if (
       element.closest(
-        ".lubaNoteImage, figure, .noteInternalLink"
+        ".lubaNoteImage, figure, .noteInternalLink, " +
+        ".plannedTextLink, .lubaNoteInternetLink, a[href]"
       )
     ) {
       return false;
@@ -272,7 +322,7 @@
     return true;
   }
 
-  function ziskejSpoustUCursoru() {
+  function ziskejSpoustUCursoru(cilovyEditor = null) {
     const selection = window.getSelection();
 
     if (
@@ -285,11 +335,23 @@
 
     const range = selection.getRangeAt(0);
 
-    if (!editor.contains(range.startContainer)) {
+    const skutecnyEditor =
+      cilovyEditor ||
+      ziskejEditorProNode(range.startContainer);
+
+    if (
+      !jePodporovanyEditor(skutecnyEditor) ||
+      !skutecnyEditor.contains(range.startContainer)
+    ) {
       return null;
     }
 
-    if (!jeVBeznemTextu(range.startContainer)) {
+    if (
+      !jeVPodporovanemTextu(
+        range.startContainer,
+        skutecnyEditor
+      )
+    ) {
       return null;
     }
 
@@ -323,6 +385,7 @@
     const startOffset = caretOffset - match[0].length;
 
     return {
+      editor: skutecnyEditor,
       textNode,
       startOffset,
       endOffset: caretOffset,
@@ -371,7 +434,9 @@
     }
 
     /* Poslední bezpečný fallback: levý horní roh skutečného řádku editoru. */
-    const editorRect = editor.getBoundingClientRect();
+    const editorRect =
+      spoust.editor?.getBoundingClientRect?.() ||
+      editor.getBoundingClientRect();
     return {
       left: editorRect.left + 16,
       right: editorRect.left + 16,
@@ -534,8 +599,8 @@
     panel.style.maxHeight = `${Math.round(maxVyska)}px`;
   }
 
-  function otevriNeboAktualizujPanel() {
-    const spoust = ziskejSpoustUCursoru();
+  function otevriNeboAktualizujPanel(cilovyEditor = null) {
+    const spoust = ziskejSpoustUCursoru(cilovyEditor);
 
     if (!spoust) {
       zavriPanel();
@@ -576,9 +641,12 @@
       return;
     }
 
+    const cilovyEditor = spoust.editor;
+
     if (
       !spoust.textNode?.isConnected ||
-      !editor.contains(spoust.textNode)
+      !cilovyEditor?.isConnected ||
+      !cilovyEditor.contains(spoust.textNode)
     ) {
       zavriPanel();
       return;
@@ -609,9 +677,14 @@
     selection.addRange(caretRange);
 
     zavriPanel();
-    editor.focus({ preventScroll: true });
 
-    editor.dispatchEvent(
+    try {
+      cilovyEditor.focus({ preventScroll: true });
+    } catch (_) {
+      cilovyEditor.focus();
+    }
+
+    cilovyEditor.dispatchEvent(
       new InputEvent("input", {
         bubbles: true,
         inputType: "insertText",
@@ -632,8 +705,60 @@
     aktualizujAktivniPolozku();
   }
 
+  function patriPanelEditoru(cilovyEditor) {
+    return Boolean(
+      posledniSpoust?.editor &&
+      posledniSpoust.editor === cilovyEditor
+    );
+  }
+
+  function obsluzKeydownAutocomplete(event, cilovyEditor) {
+    if (
+      !panel ||
+      panel.hidden ||
+      !patriPanelEditoru(cilovyEditor)
+    ) {
+      return false;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      posunAktivni(1);
+      return true;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      posunAktivni(-1);
+      return true;
+    }
+
+    if (event.key === "Enter") {
+      if (aktualniVysledky.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        vlozVybranouPoznamku(aktivniIndex);
+      }
+
+      return true;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      zavriPanel();
+      return true;
+    }
+
+    return false;
+  }
+
+  /* ---------- HLAVNÍ EDITOR + BULLETY ---------- */
+
   editor.addEventListener("input", () => {
-    otevriNeboAktualizujPanel();
+    otevriNeboAktualizujPanel(editor);
   });
 
   editor.addEventListener("keyup", (event) => {
@@ -647,54 +772,99 @@
     }
 
     if (!panel || panel.hidden) {
-      otevriNeboAktualizujPanel();
+      otevriNeboAktualizujPanel(editor);
     }
   });
 
   editor.addEventListener(
     "keydown",
     (event) => {
+      obsluzKeydownAutocomplete(event, editor);
+    },
+    true
+  );
+
+  /* ---------- TODO RICH-TEXT – dynamické editory ---------- */
+
+  document.addEventListener(
+    "input",
+    (event) => {
+      const todoEditor = event.target?.closest?.(
+        ".todoRichTextInput"
+      );
+
+      if (!todoEditor) {
+        return;
+      }
+
+      otevriNeboAktualizujPanel(todoEditor);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keyup",
+    (event) => {
+      const todoEditor = event.target?.closest?.(
+        ".todoRichTextInput"
+      );
+
+      if (!todoEditor) {
+        return;
+      }
+
+      if (
+        event.key === "ArrowUp" ||
+        event.key === "ArrowDown" ||
+        event.key === "Enter" ||
+        event.key === "Escape"
+      ) {
+        return;
+      }
+
       if (!panel || panel.hidden) {
-        return;
-      }
-
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        event.stopPropagation();
-        posunAktivni(1);
-        return;
-      }
-
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        event.stopPropagation();
-        posunAktivni(-1);
-        return;
-      }
-
-      if (event.key === "Enter") {
-        if (aktualniVysledky.length > 0) {
-          event.preventDefault();
-          event.stopPropagation();
-          vlozVybranouPoznamku(aktivniIndex);
-        }
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        zavriPanel();
+        otevriNeboAktualizujPanel(todoEditor);
       }
     },
     true
   );
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const todoEditor = event.target?.closest?.(
+        ".todoRichTextInput"
+      );
+
+      if (!todoEditor) {
+        return;
+      }
+
+      obsluzKeydownAutocomplete(
+        event,
+        todoEditor
+      );
+    },
+    true
+  );
+
+  /* ---------- POZICE PANELU ---------- */
 
   editor.addEventListener("scroll", () => {
     if (panel && !panel.hidden) {
       requestAnimationFrame(umistiPanel);
     }
   });
+
+  document.addEventListener(
+    "scroll",
+    () => {
+      if (panel && !panel.hidden) {
+        requestAnimationFrame(umistiPanel);
+      }
+    },
+    true
+  );
 
   window.addEventListener("resize", () => {
     if (panel && !panel.hidden) {
@@ -713,7 +883,12 @@
       return;
     }
 
-    if (panel.contains(event.target) || editor.contains(event.target)) {
+    const aktivniEditor = posledniSpoust?.editor;
+
+    if (
+      panel.contains(event.target) ||
+      aktivniEditor?.contains?.(event.target)
+    ) {
       return;
     }
 
@@ -1042,17 +1217,28 @@
     }
   }
 
-  editor.addEventListener("click", (event) => {
-    const link = event.target.closest?.(".noteInternalLink");
+  /*
+   * V2: interní odkaz může být v hlavním textu, bulletu i TODO.
+   * Posloucháme v capture fázi, aby TODO tap nejdřív neotevřel editaci
+   * a bullet tap nespustil své vlastní gesto.
+   */
+  (taskModalElement || document).addEventListener(
+    "click",
+    (event) => {
+      const link = event.target.closest?.(
+        ".noteInternalLink"
+      );
 
-    if (!link) {
-      return;
-    }
+      if (!link) {
+        return;
+      }
 
-    event.preventDefault();
-    event.stopPropagation();
-    void otevriInterniOdkaz(link);
-  });
+      event.preventDefault();
+      event.stopPropagation();
+      void otevriInterniOdkaz(link);
+    },
+    true
+  );
 
   noteLinkBackButton?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -1113,7 +1299,7 @@
   }
 
   window.LubaNoteNoteLinks = {
-    verze: "3.0",
+    verze: "3.1-v2",
     zavriAutocomplete: zavriPanel,
     normalizujVyhledavani: bezDiakritiky,
     aktualizujInterniNavrat,

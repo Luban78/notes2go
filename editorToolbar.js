@@ -1795,7 +1795,7 @@ nahledTazenePolozky?.classList.toggle(
     return Boolean(
       target?.closest?.(
         ".lubaNoteImage, .lubaNoteImageSettings, .lubaNoteImageRemove, " +
-        ".plannedTextLink, .lubaNoteInternetLink, a[href]"
+        ".plannedTextLink, .lubaNoteInternetLink, .noteInternalLink, a[href]"
       )
     );
   }

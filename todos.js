@@ -2063,6 +2063,11 @@ if (todo.html) {
   }
 
   textDisplay.addEventListener("click", event => {
+    /* Interní link se otevírá přes noteLinks.js; tap nesmí otevřít TODO editaci. */
+    if (event.target.closest?.(".noteInternalLink")) {
+      return;
+    }
+
     if (performance.now() < suppressTodoClickUntil) {
       return;
     }
@@ -2624,6 +2629,10 @@ textValue.textContent =
   todoItem.addEventListener(
     "touchstart",
     event => {
+      if (event.target.closest?.(".noteInternalLink")) {
+        return;
+      }
+
       prepareTodoTouchLongPress(
         event,
         getTodoItemIndex(todoItem),
@@ -2636,6 +2645,10 @@ textValue.textContent =
   todoItem.addEventListener(
     "mousedown",
     event => {
+      if (event.target.closest?.(".noteInternalLink")) {
+        return;
+      }
+
       prepareTodoMouseLongPress(
         event,
         getTodoItemIndex(todoItem),
