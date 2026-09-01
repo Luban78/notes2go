@@ -546,9 +546,19 @@
     const casti = [];
 
     if (poznamka?.area === "work") {
-      casti.push("Pracovní");
+      casti.push(
+        window.LubaNoteI18n?.t?.(
+          "filter.work",
+          "Pracovní"
+        ) || "Pracovní"
+      );
     } else if (poznamka?.area === "private") {
-      casti.push("Soukromé");
+      casti.push(
+        window.LubaNoteI18n?.t?.(
+          "filter.private",
+          "Soukromé"
+        ) || "Soukromé"
+      );
     }
 
     if (poznamka?.updatedAt) {
@@ -556,7 +566,8 @@
 
       if (!Number.isNaN(datum.getTime())) {
         casti.push(
-          datum.toLocaleDateString("cs-CZ", {
+          datum.toLocaleDateString(
+            window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ", {
             day: "numeric",
             month: "numeric"
           })
@@ -581,7 +592,11 @@
     if (aktualniVysledky.length === 0) {
       const prazdne = document.createElement("div");
       prazdne.className = "noteLinkAutocompleteEmpty";
-      prazdne.textContent = "Žádná odpovídající poznámka";
+      prazdne.textContent =
+        window.LubaNoteI18n?.t?.(
+          "noteLinks.noMatch",
+          "Žádná odpovídající poznámka"
+        ) || "Žádná odpovídající poznámka";
       seznam.append(prazdne);
       return;
     }
@@ -737,7 +752,11 @@
     link.setAttribute("role", "link");
     link.setAttribute(
       "aria-label",
-      `Interní odkaz na poznámku ${ziskejNazevPoznamky(poznamka)}`
+      window.LubaNoteI18n?.t?.(
+        "noteLinks.ariaTarget",
+        `Interní odkaz na poznámku ${ziskejNazevPoznamky(poznamka)}`,
+        { value: ziskejNazevPoznamky(poznamka) }
+      ) || `Interní odkaz na poznámku ${ziskejNazevPoznamky(poznamka)}`
     );
     link.textContent = ziskejNazevPoznamky(poznamka);
     return link;
@@ -959,7 +978,13 @@
       if (zdrojoveId) {
         historieInterniNavigace.push({
           id: String(zdrojoveId),
-          nazev: zdrojovyNazev || "Předchozí poznámka"
+          nazev:
+            zdrojovyNazev ||
+            window.LubaNoteI18n?.t?.(
+              "noteLinks.previous",
+              "Předchozí poznámka"
+            ) ||
+            "Předchozí poznámka"
         });
       }
 
@@ -976,8 +1001,15 @@
 
       if (typeof zobrazZpravuAplikace === "function") {
         zobrazZpravuAplikace(
-          "Interní odkaz",
-          "Novou propojenou poznámku se nepodařilo bezpečně vytvořit."
+          window.LubaNoteI18n?.t?.(
+            "noteLinks.dialogTitle",
+            "Interní odkaz"
+          ) || "Interní odkaz",
+          window.LubaNoteI18n?.t?.(
+            "noteLinks.createFailed",
+            "Novou propojenou poznámku se nepodařilo bezpečně vytvořit."
+          ) ||
+            "Novou propojenou poznámku se nepodařilo bezpečně vytvořit."
         );
       }
     } finally {
@@ -1283,12 +1315,19 @@
     if (!cil) {
       link.classList.add("noteInternalLinkBroken");
       link.dataset.noteTitle = "";
-      link.textContent = "Smazaná poznámka";
+      link.textContent =
+        (window.LubaNoteI18n?.t?.(
+          "noteLinks.deleted",
+          "⚠ Smazaná poznámka"
+        ) || "⚠ Smazaná poznámka").replace(/^⚠\s*/, "");
       link.setAttribute("contenteditable", "false");
       link.setAttribute("role", "link");
       link.setAttribute(
         "aria-label",
-        "Interní odkaz na nedostupnou poznámku"
+        window.LubaNoteI18n?.t?.(
+          "noteLinks.ariaMissing",
+          "Interní odkaz na nedostupnou poznámku"
+        ) || "Interní odkaz na nedostupnou poznámku"
       );
       return true;
     }
@@ -1302,7 +1341,11 @@
     link.setAttribute("role", "link");
     link.setAttribute(
       "aria-label",
-      `Interní odkaz na poznámku ${aktualniNazev}`
+      window.LubaNoteI18n?.t?.(
+        "noteLinks.ariaTarget",
+        `Interní odkaz na poznámku ${aktualniNazev}`,
+        { value: aktualniNazev }
+      ) || `Interní odkaz na poznámku ${aktualniNazev}`
     );
 
     return true;
@@ -1447,8 +1490,14 @@
   function zobrazNedostupnyInterniOdkaz() {
     if (typeof zobrazZpravuAplikace === "function") {
       zobrazZpravuAplikace(
-        "Interní odkaz",
-        "Cílová poznámka už není dostupná."
+        window.LubaNoteI18n?.t?.(
+          "noteLinks.dialogTitle",
+          "Interní odkaz"
+        ) || "Interní odkaz",
+        window.LubaNoteI18n?.t?.(
+          "noteLinks.unavailable",
+          "Cílová poznámka už není dostupná."
+        ) || "Cílová poznámka už není dostupná."
       );
     }
   }
@@ -1770,7 +1819,12 @@
     }
 
     if (noteBacklinksTitle) {
-      noteBacklinksTitle.textContent = "Odkazy na tuto poznámku (0)";
+      noteBacklinksTitle.textContent =
+        window.LubaNoteI18n?.t?.(
+          "backlinks.title",
+          "Odkazy na tuto poznámku (0)",
+          { count: 0 }
+        ) || "Odkazy na tuto poznámku (0)";
     }
 
     nastavBacklinkyRozbalene(false);
@@ -1877,7 +1931,7 @@
         return ziskejNazevPoznamky(a.poznamka)
           .localeCompare(
             ziskejNazevPoznamky(b.poznamka),
-            "cs-CZ"
+            window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ"
           );
       });
   }
@@ -1915,7 +1969,11 @@
     }
 
     noteBacklinksTitle.textContent =
-      `Odkazy na tuto poznámku (${backlinky.length})`;
+      window.LubaNoteI18n?.t?.(
+        "backlinks.title",
+        `Odkazy na tuto poznámku (${backlinky.length})`,
+        { count: backlinky.length }
+      ) || `Odkazy na tuto poznámku (${backlinky.length})`;
     noteBacklinksList.replaceChildren();
 
     backlinky.forEach(({ poznamka, pocetOdkazu }) => {
@@ -2096,6 +2154,14 @@
       attributeFilter: ["class", "hidden", "data-task-id"]
     });
   }
+
+  window.addEventListener(
+    "lubanote:language-change",
+    () => {
+      aktualizujOdkazyVEditoru();
+      aktualizujBacklinky();
+    }
+  );
 
   window.LubaNoteNoteLinks = {
     verze: "7.0-rychle-linky",

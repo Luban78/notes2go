@@ -72,8 +72,18 @@ function aktualizujPopisekRazeniKaret() {
 
   cardSortMenuLabel.textContent =
     ziskejSmerRazeniKaretProMenu() === "asc"
-      ? "Řazení: nejstarší nahoře"
-      : "Řazení: nejnovější nahoře";
+      ? (
+        window.LubaNoteI18n?.t?.(
+          "sort.labelOldest",
+          "Řazení: nejstarší nahoře"
+        ) || "Řazení: nejstarší nahoře"
+      )
+      : (
+        window.LubaNoteI18n?.t?.(
+          "sort.labelNewest",
+          "Řazení: nejnovější nahoře"
+        ) || "Řazení: nejnovější nahoře"
+      );
 }
 
 cardSortButton?.addEventListener(
@@ -91,17 +101,29 @@ cardSortButton?.addEventListener(
     }
 
     window.otevriVyberovyModal({
-      nadpis: "Řazení karet",
+      nadpis:
+        window.LubaNoteI18n?.t?.(
+          "sort.title",
+          "Řazení karet"
+        ) || "Řazení karet",
       vybranaHodnota:
         ziskejSmerRazeniKaretProMenu(),
       moznosti: [
         {
           hodnota: "desc",
-          popisek: "Nejnovější nahoře"
+          popisek:
+            window.LubaNoteI18n?.t?.(
+              "sort.newest",
+              "Nejnovější nahoře"
+            ) || "Nejnovější nahoře"
         },
         {
           hodnota: "asc",
-          popisek: "Nejstarší nahoře"
+          popisek:
+            window.LubaNoteI18n?.t?.(
+              "sort.oldest",
+              "Nejstarší nahoře"
+            ) || "Nejstarší nahoře"
         }
       ],
       poVyberu: (novySmer) => {
@@ -156,4 +178,10 @@ desktopCardLayoutMedia.addEventListener?.(
   () => {
     renderTasks();
   }
+);
+
+
+window.addEventListener(
+  "lubanote:language-change",
+  aktualizujPopisekRazeniKaret
 );

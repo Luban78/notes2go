@@ -2479,7 +2479,7 @@ function createReminderRow(
 
     dateLine.textContent =
       date.toLocaleDateString(
-        "cs-CZ",
+        window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
         {
           weekday: "short",
           day: "numeric",
@@ -2495,7 +2495,7 @@ function createReminderRow(
 
   timeLine.textContent =
     date.toLocaleTimeString(
-      "cs-CZ",
+      window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
       {
         hour: "2-digit",
         minute: "2-digit"

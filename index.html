@@ -68,6 +68,8 @@
         <strong>LubaNote</strong>
       </div>
       
+      <div id="loginLanguagePicker" class="loginLanguagePicker" aria-label="Vyber jazyk"></div>
+
       <h2>Přihlášení</h2>
       
       <input id="loginEmail" name="username" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
@@ -1262,6 +1264,16 @@
           </button>
           
         </div>
+
+        <!-- Jazyk aplikace -->
+        <div class="themeSetting">
+          <span id="settingsLanguageLabel">Jazyk</span>
+
+          <button id="openLanguageModalButton" type="button" class="themeSelectButton">
+            <span id="currentLanguageLabel">🇨🇿 Čeština</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" data-luba-classic-icon="›" aria-hidden="true"></span>
+          </button>
+        </div>
         
         
         
@@ -1618,6 +1630,12 @@
        ======================================== -->
   
   <script src="build-version.js"></script>
+
+  <!-- Jazyky: každý překlad je samostatný soubor -->
+  <script src="lang-cs.js"></script>
+  <script src="lang-en.js"></script>
+  <script src="i18n.js?v=20260901-jazyky-1"></script>
+
   <script src="lubaIcons.js"></script>
   <script src="autofillGuard.js"></script>
   

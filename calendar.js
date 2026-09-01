@@ -280,7 +280,7 @@ let calendarSelectedDay = new Date();
 
 function formatCalendarDate(date) {
   return date.toLocaleDateString(
-    "cs-CZ",
+    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
     {
       weekday: "long",
       day: "numeric",
@@ -383,7 +383,7 @@ function renderCalendar() {
 
   calendarMonthTitle.textContent =
     firstDay.toLocaleDateString(
-      "cs-CZ",
+      window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
       {
         month: "long",
         year: "numeric"
@@ -606,7 +606,12 @@ function renderCalendarAgenda() {
   calendarWeekNumber.textContent =
   `${ziskejCisloTydne(
     calendarSelectedDay
-  )}. týden`;
+  )}. ${
+    window.LubaNoteI18n?.t?.(
+      "calendar.week",
+      "týden"
+    ) || "týden"
+  }`;
 }
 
   renderCalendarItems(
@@ -653,7 +658,10 @@ function renderRecurringOverview() {
 
   if (opakovanePoznamky.length === 0) {
     recurringOverviewItems.textContent =
-      "Žádné opakované úkoly.";
+      window.LubaNoteI18n?.t?.(
+        "recurring.none",
+        "Žádné opakované úkoly."
+      ) || "Žádné opakované úkoly.";
 
     return;
   }
@@ -673,7 +681,12 @@ function renderRecurringOverview() {
       "recurringOverviewItemTitle";
 
     nazev.textContent =
-      note.title || "Bez názvu";
+      note.title ||
+      window.LubaNoteI18n?.t?.(
+        "reminders.untitled",
+        "Bez názvu"
+      ) ||
+      "Bez názvu";
 
     const popis =
       document.createElement("div");
@@ -684,6 +697,10 @@ function renderRecurringOverview() {
     popis.textContent =
       window.LubaNoteRecurring
         ?.formatujPravidlo?.(note.repeat) ||
+      window.LubaNoteI18n?.t?.(
+        "recurring.repeat",
+        "Opakování"
+      ) ||
       "Opakování";
 
     const priste =
@@ -700,9 +717,32 @@ function renderRecurringOverview() {
           new Date()
         ) || null;
 
-    priste.textContent = dalsiDatum
-      ? `Příště: ${dalsiDatum.toLocaleDateString("cs-CZ")} • ${dalsiDatum.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}`
-      : "Série už nemá další termín.";
+    if (dalsiDatum) {
+      const locale =
+        window.LubaNoteI18n?.ziskejLocale?.() ||
+        "cs-CZ";
+
+      const datumCas =
+        `${dalsiDatum.toLocaleDateString(locale)} • ${
+          dalsiDatum.toLocaleTimeString(locale, {
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        }`;
+
+      priste.textContent =
+        window.LubaNoteI18n?.t?.(
+          "recurring.next",
+          `Příště: ${datumCas}`,
+          { value: datumCas }
+        ) || `Příště: ${datumCas}`;
+    } else {
+      priste.textContent =
+        window.LubaNoteI18n?.t?.(
+          "recurring.noNext",
+          "Série už nemá další termín."
+        ) || "Série už nemá další termín.";
+    }
 
     radek.append(
       nazev,
@@ -718,3 +758,21 @@ function renderRecurringOverview() {
   });
 }
 
+
+
+window.addEventListener(
+  "lubanote:language-change",
+  () => {
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    if (
+      recurringOverviewScreen &&
+      !recurringOverviewScreen.hidden &&
+      typeof renderRecurringOverview === "function"
+    ) {
+      renderRecurringOverview();
+    }
+  }
+);

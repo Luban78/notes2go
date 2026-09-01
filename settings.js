@@ -232,10 +232,14 @@ openReminderDelaySettingsButton?.addEventListener(
   }
 );
   function ziskejPopisekMotivu(hodnota) {
-    return (
+    const popisek =
       motivy.find(
         (motiv) => motiv.hodnota === hodnota
-      )?.popisek || "Světlý"
+      )?.popisek || "Světlý";
+
+    return (
+      window.LubaNoteI18n?.prelozText?.(popisek) ||
+      popisek
     );
   }
 
@@ -283,10 +287,14 @@ openReminderDelaySettingsButton?.addEventListener(
     const efektivniStyl =
       ziskejEfektivniStylIkonProNastaveni(hodnota);
 
-    return (
+    const popisek =
       stylyIkon.find(
         (styl) => styl.hodnota === efektivniStyl
-      )?.popisek || "Původní ikony"
+      )?.popisek || "Původní ikony";
+
+    return (
+      window.LubaNoteI18n?.prelozText?.(popisek) ||
+      popisek
     );
   }
 
@@ -414,6 +422,20 @@ openReminderDelaySettingsButton?.addEventListener(
   window.addEventListener(
     "lubanote:icon-style-change",
     () => {
+      nastavPopisekStyluIkon(
+        window.LubaNoteIcons?.ziskejStylIkon?.() ||
+        "auto"
+      );
+    }
+  );
+
+  window.addEventListener(
+    "lubanote:language-change",
+    () => {
+      nastavPopisekMotivu(
+        localStorage.getItem("theme") || "light"
+      );
+
       nastavPopisekStyluIkon(
         window.LubaNoteIcons?.ziskejStylIkon?.() ||
         "auto"

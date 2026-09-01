@@ -1683,23 +1683,15 @@ function vykresliVyberData() {
       0
     ).getDate();
   
-  const nazvyMesicu = [
-    "Leden",
-    "Únor",
-    "Březen",
-    "Duben",
-    "Květen",
-    "Červen",
-    "Červenec",
-    "Srpen",
-    "Září",
-    "Říjen",
-    "Listopad",
-    "Prosinec"
-  ];
-  
+  const locale =
+    window.LubaNoteI18n?.ziskejLocale?.() ||
+    "cs-CZ";
+
   datePickerMonthTitle.textContent =
-    `${nazvyMesicu[datePickerMonth]} ${datePickerYear}`;
+    prvniDenMesice.toLocaleDateString(
+      locale,
+      { month: "long", year: "numeric" }
+    );
   
   /*
    * JavaScript počítá neděli jako 0.
@@ -3241,7 +3233,8 @@ function renderTasks() {
     
     
     if (loadedTask.date) {
-      const formattedDate = new Date(loadedTask.date).toLocaleString("cs-CZ", {
+      const formattedDate = new Date(loadedTask.date).toLocaleString(
+        window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ", {
         day: "numeric",
         month: "numeric",
         year: "numeric",
@@ -4688,4 +4681,17 @@ window.addEventListener(
     }, 15000);
   },
   { once: true }
+);
+
+window.addEventListener(
+  "lubanote:language-change",
+  () => {
+    if (
+      typeof vykresliVyberData === "function" &&
+      datePickerModal &&
+      !datePickerModal.hidden
+    ) {
+      vykresliVyberData();
+    }
+  }
 );

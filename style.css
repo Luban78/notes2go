@@ -9279,3 +9279,51 @@ body.pdfViewerOpen {
     padding: 8px;
   }
 }
+
+/* ==================================================
+   JAZYK – LOGIN + NASTAVENÍ
+================================================== */
+
+.loginLanguagePicker {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loginLanguageButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  width: auto !important;
+  min-width: 118px;
+  min-height: 42px !important;
+  padding: 0 13px;
+
+  border: 1px solid var(--color-border) !important;
+  border-radius: 999px !important;
+  background: var(--color-background) !important;
+  color: var(--color-text) !important;
+  font-size: calc(var(--font-size) - 1px) !important;
+  font-weight: 650 !important;
+}
+
+.loginLanguageButton.active {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 24%, transparent);
+  color: var(--color-accent) !important;
+}
+
+.loginLanguageFlag {
+  font-size: 20px;
+  line-height: 1;
+}
+
+@media (max-width: 420px) {
+  .loginLanguageButton {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+}
