@@ -22,6 +22,10 @@ public class MainActivity extends BridgeActivity {
       LubaNoteSecretBiometricPlugin.class
     );
 
+    registerPlugin(
+      LubaNoteDocumentPlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();
