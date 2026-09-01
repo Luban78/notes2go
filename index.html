@@ -763,6 +763,17 @@
      zůstává vždy viditelný vpravo.
      ======================================== -->
       
+      <!-- ========================================
+           INTERNÍ NAVIGACE MEZI POZNÁMKAMI
+           Zobrazuje se jen při přechodu přes interní link.
+           ======================================== -->
+      <div id="noteLinkBackRow" class="noteLinkBackRow" hidden>
+        <button id="noteLinkBackButton" class="noteLinkBackButton" type="button" aria-label="Zpět na předchozí propojenou poznámku">
+          <span class="noteLinkBackArrow" aria-hidden="true">←</span>
+          <span id="noteLinkBackTitle" class="noteLinkBackTitle"></span>
+        </button>
+      </div>
+
       <div class="modalTitleRow">
         
         <div id="modalTitle" contenteditable="plaintext-only" role="textbox" aria-label="Název úkolu" aria-multiline="false" data-placeholder="Název úkolu" data-prazdny="true" inputmode="text" spellcheck="true"></div>

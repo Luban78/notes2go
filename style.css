@@ -8597,3 +8597,78 @@ body.secretModeActive {
     padding: 8px 10px;
   }
 }
+
+
+/* ========================================
+   LUBANOTE – INTERNÍ NAVIGACE V3
+   Řádek návratu pod datumem a nad názvem poznámky.
+   ======================================== */
+
+.noteLinkBackRow {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 30px;
+  margin: 0 0 2px;
+  padding: 0 2px;
+}
+
+.noteLinkBackRow[hidden] {
+  display: none !important;
+}
+
+.noteLinkBackButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-accent);
+
+  font: inherit;
+  font-size: 0.92em;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: left;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.noteLinkBackButton:active {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
+}
+
+.noteLinkBackArrow {
+  flex: 0 0 auto;
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.noteLinkBackTitle {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .noteLinkBackButton:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 9%,
+      transparent
+    );
+  }
+}

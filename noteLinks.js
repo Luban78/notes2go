@@ -1,9 +1,10 @@
 /* ========================================
-   LUBANOTE – INTERNÍ ODKAZY NA POZNÁMKY V1
+   LUBANOTE – INTERNÍ ODKAZY NA POZNÁMKY V3
    ========================================
 
-   V1 záměrně podporuje pouze hlavní rich-text editor.
-   TODO, bullety, navigace po kliknutí a backlinky přijdou
+   V3: hlavní rich-text editor + autocomplete + otevření odkazu
+   + historie interní navigace a návrat na předchozí poznámku.
+   TODO, bullety a skutečné backlinky „Odkazuje sem“ zůstávají
    v dalších samostatných verzích.
 */
 (() => {
@@ -48,7 +49,17 @@
       // activeTaskId nemusí být v daném buildu dostupné.
     }
 
-    return null;
+    /*
+     * Fallback pro okamžik, kdy editor už má načtenou poznámku,
+     * ale globální activeTaskId ještě není / už není dostupné.
+     */
+    const taskModalElement =
+      document.getElementById("taskModal");
+    const modalTaskId = String(
+      taskModalElement?.dataset?.taskId || ""
+    ).trim();
+
+    return modalTaskId || null;
   }
 
   function nactiKandidaty(dotaz) {
@@ -709,11 +720,328 @@
     zavriPanel();
   });
 
-  /*
-   * V1 záměrně nepřidává navigaci po kliknutí.
-   * Kliknutí jen chrání atomický link před editací; skutečné otevření
-   * cílové poznámky bude samostatná V3 s historií a Back navigací.
-   */
+  /* ========================================
+     V3 – INTERNÍ NAVIGACE + HISTORIE
+     ========================================
+
+     A → B → C
+     V C se zobrazí: ← B
+     Po návratu v B: ← A
+
+     Skutečné backlinky „Odkazuje sem“ jsou samostatná další verze.
+  */
+
+  const noteLinkBackRow =
+    document.getElementById("noteLinkBackRow");
+  const noteLinkBackButton =
+    document.getElementById("noteLinkBackButton");
+  const noteLinkBackTitle =
+    document.getElementById("noteLinkBackTitle");
+  const taskModalElement =
+    document.getElementById("taskModal");
+  const modalTitleElement =
+    document.getElementById("modalTitle");
+
+  let historieInterniNavigace = [];
+  let aktivniInterniCilId = null;
+  let probihaInterniPrepnuti = false;
+
+  function zobrazNedostupnyInterniOdkaz() {
+    if (typeof zobrazZpravuAplikace === "function") {
+      zobrazZpravuAplikace(
+        "Interní odkaz",
+        "Cílová poznámka už není dostupná."
+      );
+    }
+  }
+
+  function najdiCilovouPoznamku(noteId) {
+    if (!noteId || typeof loadTask !== "function") {
+      return null;
+    }
+
+    return loadTask().find(
+      (poznamka) =>
+        String(poznamka?.id || "") === String(noteId)
+    ) || null;
+  }
+
+  function ziskejNazevAktualniPoznamky(noteId) {
+    const aktivniId = ziskejAktivniPoznamkuId();
+
+    if (
+      noteId &&
+      aktivniId &&
+      String(noteId) === String(aktivniId)
+    ) {
+      const nazevZEditoru = String(
+        modalTitleElement?.textContent || ""
+      ).trim();
+
+      if (nazevZEditoru) {
+        return nazevZEditoru;
+      }
+    }
+
+    const poznamka = najdiCilovouPoznamku(noteId);
+    return poznamka
+      ? ziskejNazevPoznamky(poznamka)
+      : "Předchozí poznámka";
+  }
+
+  function skryjInterniNavrat() {
+    if (!noteLinkBackRow) {
+      return;
+    }
+
+    noteLinkBackRow.hidden = true;
+
+    if (noteLinkBackTitle) {
+      noteLinkBackTitle.textContent = "";
+    }
+  }
+
+  function aktualizujInterniNavrat() {
+    if (
+      !noteLinkBackRow ||
+      !noteLinkBackButton ||
+      !noteLinkBackTitle
+    ) {
+      return;
+    }
+
+    const aktivniId = ziskejAktivniPoznamkuId();
+    const posledni =
+      historieInterniNavigace[
+        historieInterniNavigace.length - 1
+      ];
+
+    if (
+      !aktivniId ||
+      !aktivniInterniCilId ||
+      String(aktivniId) !== String(aktivniInterniCilId) ||
+      !posledni
+    ) {
+      skryjInterniNavrat();
+      return;
+    }
+
+    /*
+     * Název čteme z aktuálních dat, takže když se zdrojová poznámka
+     * mezitím přejmenuje, řádek návratu ukáže nový název.
+     */
+    const aktualniZdroj = najdiCilovouPoznamku(posledni.id);
+    const nazev = aktualniZdroj
+      ? ziskejNazevPoznamky(aktualniZdroj)
+      : posledni.nazev || "Předchozí poznámka";
+
+    noteLinkBackTitle.textContent = nazev;
+    noteLinkBackButton.setAttribute(
+      "aria-label",
+      `Zpět na poznámku ${nazev}`
+    );
+    noteLinkBackRow.hidden = false;
+  }
+
+  function resetujInterniNavigaci() {
+    historieInterniNavigace = [];
+    aktivniInterniCilId = null;
+    skryjInterniNavrat();
+  }
+
+  function odfokusujEditorPredNavigaci() {
+    try {
+      editor.blur();
+      document.activeElement?.blur?.();
+      window.getSelection()?.removeAllRanges();
+    } catch (_) {
+      // Odfokusování nesmí zablokovat navigaci.
+    }
+  }
+
+  function otevriPoznamkuBezKlavesnice(ciloveId) {
+    if (typeof openTaskEditorById !== "function") {
+      console.warn(
+        "Interní odkaz: openTaskEditorById není dostupné."
+      );
+      return false;
+    }
+
+    aktivniInterniCilId = String(ciloveId);
+    odfokusujEditorPredNavigaci();
+    openTaskEditorById(ciloveId);
+
+    requestAnimationFrame(() => {
+      odfokusujEditorPredNavigaci();
+      aktualizujInterniNavrat();
+    });
+
+    return true;
+  }
+
+  async function pripravPrepnutiZAktualniPoznamky() {
+    let jeEditorZmenen = true;
+
+    if (typeof bylEditorZmenen === "function") {
+      jeEditorZmenen = bylEditorZmenen();
+    }
+
+    if (!jeEditorZmenen) {
+      return true;
+    }
+
+    if (typeof ulozAZavriEditor !== "function") {
+      console.warn(
+        "Interní odkaz: ulozAZavriEditor není dostupné."
+      );
+      return false;
+    }
+
+    const puvodniId = ziskejAktivniPoznamkuId();
+
+    await ulozAZavriEditor();
+
+    /*
+     * Když uložení čeká na volbu nebo selže, původní editor zůstane
+     * otevřený. Navigaci v takovém případě zastavíme.
+     */
+    if (taskModalElement?.classList?.contains("show")) {
+      return false;
+    }
+
+    if (
+      puvodniId &&
+      ziskejAktivniPoznamkuId() === String(puvodniId)
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async function otevriInterniOdkaz(link) {
+    if (probihaInterniPrepnuti) {
+      return;
+    }
+
+    const ciloveId = String(
+      link?.dataset?.noteId || ""
+    ).trim();
+
+    if (!ciloveId) {
+      return;
+    }
+
+    const cilovaPoznamka = najdiCilovouPoznamku(ciloveId);
+
+    /* Secret cíl V3 stále nikdy neprozrazujeme ani neotevíráme. */
+    if (!cilovaPoznamka || cilovaPoznamka.isSecret === true) {
+      zobrazNedostupnyInterniOdkaz();
+      return;
+    }
+
+    const zdrojoveId = ziskejAktivniPoznamkuId();
+
+    if (zdrojoveId && String(zdrojoveId) === ciloveId) {
+      return;
+    }
+
+    const zdrojovyNazev = zdrojoveId
+      ? ziskejNazevAktualniPoznamky(zdrojoveId)
+      : "";
+
+    probihaInterniPrepnuti = true;
+    zavriPanel();
+
+    try {
+      const muzemePrepnout =
+        await pripravPrepnutiZAktualniPoznamky();
+
+      if (!muzemePrepnout) {
+        return;
+      }
+
+      /* Cíl mohl být během ukládání/synchronizace odstraněn. */
+      const aktualniCil = najdiCilovouPoznamku(ciloveId);
+
+      if (!aktualniCil || aktualniCil.isSecret === true) {
+        zobrazNedostupnyInterniOdkaz();
+        return;
+      }
+
+      if (zdrojoveId) {
+        historieInterniNavigace.push({
+          id: String(zdrojoveId),
+          nazev: zdrojovyNazev || "Předchozí poznámka"
+        });
+      }
+
+      otevriPoznamkuBezKlavesnice(ciloveId);
+    } catch (error) {
+      console.error(
+        "Otevření interního odkazu selhalo:",
+        error
+      );
+    } finally {
+      probihaInterniPrepnuti = false;
+      requestAnimationFrame(aktualizujInterniNavrat);
+    }
+  }
+
+  async function vratSeNaPredchoziPoznamku() {
+    if (
+      probihaInterniPrepnuti ||
+      historieInterniNavigace.length === 0
+    ) {
+      return;
+    }
+
+    const posledni =
+      historieInterniNavigace[
+        historieInterniNavigace.length - 1
+      ];
+
+    const cil = najdiCilovouPoznamku(posledni.id);
+
+    if (!cil || cil.isSecret === true) {
+      historieInterniNavigace.pop();
+      aktualizujInterniNavrat();
+      zobrazNedostupnyInterniOdkaz();
+      return;
+    }
+
+    probihaInterniPrepnuti = true;
+    zavriPanel();
+
+    try {
+      const muzemePrepnout =
+        await pripravPrepnutiZAktualniPoznamky();
+
+      if (!muzemePrepnout) {
+        return;
+      }
+
+      const aktualniCil = najdiCilovouPoznamku(posledni.id);
+
+      if (!aktualniCil || aktualniCil.isSecret === true) {
+        historieInterniNavigace.pop();
+        zobrazNedostupnyInterniOdkaz();
+        return;
+      }
+
+      historieInterniNavigace.pop();
+      otevriPoznamkuBezKlavesnice(posledni.id);
+    } catch (error) {
+      console.error(
+        "Návrat interní navigací selhal:",
+        error
+      );
+    } finally {
+      probihaInterniPrepnuti = false;
+      requestAnimationFrame(aktualizujInterniNavrat);
+    }
+  }
+
   editor.addEventListener("click", (event) => {
     const link = event.target.closest?.(".noteInternalLink");
 
@@ -722,11 +1050,73 @@
     }
 
     event.preventDefault();
+    event.stopPropagation();
+    void otevriInterniOdkaz(link);
   });
 
+  noteLinkBackButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void vratSeNaPredchoziPoznamku();
+  });
+
+  /*
+   * Když uživatel poznámku otevře normálně z karty, Planneru,
+   * připomínky apod., nejde o pokračování interní cesty a starou
+   * historii zahodíme. Při našem interním přepnutí je ochranný flag
+   * aktivní, takže krátké zavření editoru během uložení historii nemaže.
+   */
+  if (taskModalElement) {
+    const observerNavigace = new MutationObserver(() => {
+      requestAnimationFrame(() => {
+        if (probihaInterniPrepnuti) {
+          aktualizujInterniNavrat();
+          return;
+        }
+
+        const jeOtevreny =
+          !taskModalElement.hidden &&
+          taskModalElement.classList.contains("show");
+
+        if (!jeOtevreny) {
+          resetujInterniNavigaci();
+          return;
+        }
+
+        const aktivniId = ziskejAktivniPoznamkuId();
+
+        if (
+          aktivniInterniCilId &&
+          aktivniId &&
+          String(aktivniId) === String(aktivniInterniCilId)
+        ) {
+          aktualizujInterniNavrat();
+          return;
+        }
+
+        if (
+          historieInterniNavigace.length > 0 ||
+          aktivniInterniCilId
+        ) {
+          resetujInterniNavigaci();
+          return;
+        }
+
+        skryjInterniNavrat();
+      });
+    });
+
+    observerNavigace.observe(taskModalElement, {
+      attributes: true,
+      attributeFilter: ["class", "hidden", "data-task-id"]
+    });
+  }
+
   window.LubaNoteNoteLinks = {
-    verze: 1,
+    verze: "3.0",
     zavriAutocomplete: zavriPanel,
-    normalizujVyhledavani: bezDiakritiky
+    normalizujVyhledavani: bezDiakritiky,
+    aktualizujInterniNavrat,
+    resetujInterniNavigaci
   };
 })();
