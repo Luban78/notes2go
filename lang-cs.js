@@ -70,6 +70,7 @@ window.LubaNoteLanguagePacks.push({
     "calendar.back": "Zpět na kalendář",
     "calendar.addDay": "Přidat úkol na tento den",
     "calendar.week": "týden",
+    "calendar.weekNumber": "{value}. týden",
     "weekday.mo": "Po",
     "weekday.tu": "Út",
     "weekday.we": "St",
@@ -87,7 +88,10 @@ window.LubaNoteLanguagePacks.push({
     "recurring.noNext": "Série už nemá další termín.",
 
     "reminders.overdue": "Po termínu",
+    "reminders.active": "Aktivní",
     "reminders.today": "Dnes",
+    "reminders.none": "Žádné připomínky.",
+    "reminders.noneOverdue": "Žádné připomínky po termínu.",
     "reminders.tomorrow": "Zítra",
     "reminders.later": "Později",
     "reminders.label": "Připomínka",
@@ -218,6 +222,7 @@ window.LubaNoteLanguagePacks.push({
     "addNote": "Přidat poznámku",
 
     "tags.new": "Nový štítek",
+    "tags.newSecret": "Nový tajný štítek",
     "tags.manage": "Správa štítků",
     "tags.closeManage": "Zavřít správu štítků",
     "tags.deleteTitle": "Smazat štítek?",

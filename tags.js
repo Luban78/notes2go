@@ -2143,8 +2143,15 @@ function renderTagFilters() {
   
   const addTagButton = document.createElement("button");
   
-  addTagButton.classList.add("categoryTab");
-  addTagButton.textContent = "+ Nový štítek";
+  addTagButton.classList.add(
+    "categoryTab",
+    "newTagFilterButton"
+  );
+  addTagButton.textContent =
+    window.LubaNoteI18n?.t?.(
+      "editor.newTag",
+      "+ Nový štítek"
+    ) || "+ Nový štítek";
   let casovacHornihoTajnehoStisku = null;
   let horniTajnyLongPressSpusten = false;
   let horniStiskStartX = 0;
@@ -2191,7 +2198,11 @@ function renderTagFilters() {
   
   addTagButton.addEventListener("click", () => {
     vytvarimeTajnyStitek = false;
-    newTagModalTitle.textContent = "Nový štítek";
+    newTagModalTitle.textContent =
+      window.LubaNoteI18n?.t?.(
+        "tags.new",
+        "Nový štítek"
+      ) || "Nový štítek";
     newTagModalTitle.classList.remove(
       "lubaHasIcon",
       "lubaIconOnlyContent"
@@ -2600,11 +2611,17 @@ createSecretTagButton?.addEventListener(
       window.LubaNoteIcons.nastavObsahSIkonou(
         newTagModalTitle,
         "zamek",
-        "Nový tajný štítek"
+        window.LubaNoteI18n?.t?.(
+          "tags.newSecret",
+          "Nový tajný štítek"
+        ) || "Nový tajný štítek"
       );
     } else {
       newTagModalTitle.textContent =
-        "Nový tajný štítek";
+        window.LubaNoteI18n?.t?.(
+          "tags.newSecret",
+          "Nový tajný štítek"
+        ) || "Nový tajný štítek";
     }
     
     newTagModal.hidden = false;
@@ -2790,3 +2807,12 @@ async function vytvorTajnyStitek(nazev) {
 
   return true;
 }
+
+window.addEventListener(
+  "lubanote:language-change",
+  () => {
+    if (typeof renderTagFilters === "function") {
+      renderTagFilters();
+    }
+  }
+);

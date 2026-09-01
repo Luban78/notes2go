@@ -64,6 +64,7 @@ window.LubaNoteLanguagePacks.push({
     "calendar.back": "Back to calendar",
     "calendar.addDay": "Add task for this day",
     "calendar.week": "week",
+    "calendar.weekNumber": "Week {value}",
     "weekday.mo": "Mon",
     "weekday.tu": "Tue",
     "weekday.we": "Wed",
@@ -81,7 +82,10 @@ window.LubaNoteLanguagePacks.push({
     "recurring.noNext": "This series has no next occurrence.",
 
     "reminders.overdue": "Overdue",
+    "reminders.active": "Active",
     "reminders.today": "Today",
+    "reminders.none": "No reminders.",
+    "reminders.noneOverdue": "No overdue reminders.",
     "reminders.tomorrow": "Tomorrow",
     "reminders.later": "Later",
     "reminders.label": "Reminder",
@@ -212,6 +216,7 @@ window.LubaNoteLanguagePacks.push({
     "addNote": "Add note",
 
     "tags.new": "New tag",
+    "tags.newSecret": "New secret tag",
     "tags.manage": "Manage tags",
     "tags.closeManage": "Close tag management",
     "tags.deleteTitle": "Delete tag?",
@@ -262,6 +267,21 @@ window.LubaNoteLanguagePacks.push({
     "Soukromé": "Private",
     "Bez názvu": "Untitled",
     "Žádná odpovídající poznámka": "No matching note",
-    "⚠ Smazaná poznámka": "⚠ Deleted note"
+    "⚠ Smazaná poznámka": "⚠ Deleted note",
+    "Tajný režim": "Secret mode",
+    "Tajný režim byl zamčen.": "Secret mode was locked.",
+    "Tajný režim byl automaticky zamčen.": "Secret mode was locked automatically.",
+    "Tajný režim je odemčený.": "Secret mode is unlocked.",
+    "Tajný režim se nepodařilo odemknout.": "Secret mode could not be unlocked.",
+    "Tajný režim není odemčený.": "Secret mode is not unlocked.",
+    "Zadej hlavní heslo.": "Enter the main password.",
+    "Hlavní heslo není správné.": "The main password is incorrect.",
+    "Hlavní heslo musí mít alespoň 8 znaků.": "The main password must be at least 8 characters long.",
+    "Hlavní heslo se nepodařilo vytvořit.": "The main password could not be created.",
+    "Upozornění": "Notice",
+    "Nový štítek": "New tag",
+    "Název štítku": "Tag name",
+    "+ Nový štítek": "+ New tag",
+    "Nový tajný štítek": "New secret tag"
   }
 });

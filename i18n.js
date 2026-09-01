@@ -52,10 +52,18 @@
     ["#dayDetailTitle", "calendar.selectedDay"],
     ["#recurringOverviewScreen .recurringOverviewHeader h2", "recurring.title"],
 
-    [".remindersSection.overdue h3", "reminders.overdue"],
-    [".remindersSection.today h3", "reminders.today"],
-    [".remindersSection.tomorrow h3", "reminders.tomorrow"],
-    [".remindersSection.later h3", "reminders.later"],
+    [".remindersFilter[data-reminder-filter='all']", "filter.all"],
+    [".remindersStatusTab[data-reminder-status='active']", "reminders.active"],
+    [
+      ".remindersStatusTab[data-reminder-status='overdue']",
+      "reminders.overdue",
+      null,
+      "leadingText"
+    ],
+    [".remindersOverdueGroup h3", "reminders.overdue"],
+    ["#remindersToday", "reminders.today", null, "parentHeading"],
+    ["#remindersTomorrow", "reminders.tomorrow", null, "parentHeading"],
+    ["#remindersLater", "reminders.later", null, "parentHeading"],
     ["#reminderQuickLabel", "reminders.label"],
     ["#reminderQuickTitle", "reminders.untitled"],
     ["#reminderTomorrowMorningButton", "reminders.tomorrow8"],
@@ -227,6 +235,7 @@
     ["#modalTitle", "data-placeholder", "editor.titlePlaceholder"],
     ["#modalText", "placeholder", "editor.notePlaceholder"],
     ["#newTagInput", "placeholder", "tags.name"],
+    ["#newTagModalInput", "placeholder", "tags.name"],
     ["#secretTaskButton", "aria-label", "editor.secret"],
     ["#noteBacklinksSection", "aria-label", "backlinks.aria"],
     ["#tagScrollButton", "aria-label", "editor.tags"],
@@ -315,6 +324,35 @@
 
       elementy.forEach((element) => {
         if (special === "themeLabel") {
+          return;
+        }
+
+        if (special === "parentHeading") {
+          const nadpis = element.previousElementSibling;
+
+          if (nadpis) {
+            nadpis.textContent = t(
+              klic,
+              nadpis.textContent,
+              hodnoty || {}
+            );
+          }
+
+          return;
+        }
+
+        if (special === "leadingText") {
+          const textovyUzel = [...element.childNodes].find(
+            (uzel) =>
+              uzel.nodeType === Node.TEXT_NODE &&
+              String(uzel.nodeValue || "").trim()
+          );
+
+          if (textovyUzel) {
+            textovyUzel.nodeValue =
+              ` ${t(klic, textovyUzel.nodeValue.trim(), hodnoty || {})} `;
+          }
+
           return;
         }
 

@@ -2733,22 +2733,42 @@ function renderRemindersScreen() {
   
   if (!todayList.children.length) {
     todayList.innerHTML =
-      `<p class="remindersEmpty">Žádné připomínky.</p>`;
+      `<p class="remindersEmpty">${
+        window.LubaNoteI18n?.t?.(
+          "reminders.none",
+          "Žádné připomínky."
+        ) || "Žádné připomínky."
+      }</p>`;
   }
   
   if (!tomorrowList.children.length) {
     tomorrowList.innerHTML =
-      `<p class="remindersEmpty">Žádné připomínky.</p>`;
+      `<p class="remindersEmpty">${
+        window.LubaNoteI18n?.t?.(
+          "reminders.none",
+          "Žádné připomínky."
+        ) || "Žádné připomínky."
+      }</p>`;
   }
   
   if (!laterList.children.length) {
     laterList.innerHTML =
-      `<p class="remindersEmpty">Žádné připomínky.</p>`;
+      `<p class="remindersEmpty">${
+        window.LubaNoteI18n?.t?.(
+          "reminders.none",
+          "Žádné připomínky."
+        ) || "Žádné připomínky."
+      }</p>`;
   }
   
   if (!overdueList.children.length) {
     overdueList.innerHTML =
-      `<p class="remindersEmpty">Žádné připomínky po termínu.</p>`;
+      `<p class="remindersEmpty">${
+        window.LubaNoteI18n?.t?.(
+          "reminders.noneOverdue",
+          "Žádné připomínky po termínu."
+        ) || "Žádné připomínky po termínu."
+      }</p>`;
   }
   
   if (activeReminderStatus === "overdue") {
@@ -3033,3 +3053,13 @@ document
       openTaskEditorById(entry.id);
     }
   });
+
+
+window.addEventListener(
+  "lubanote:language-change",
+  () => {
+    if (typeof renderRemindersScreen === "function") {
+      renderRemindersScreen();
+    }
+  }
+);

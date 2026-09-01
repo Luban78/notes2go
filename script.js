@@ -783,11 +783,18 @@ function zobrazZpravuAplikace(
    */
   resetujAkceZpravyAplikace();
 
+  const prelozDynamickyText =
+    window.LubaNoteI18n?.prelozText;
+
   appMessageTitle.textContent =
-    nadpis || "Upozornění";
-  
+    typeof prelozDynamickyText === "function"
+      ? prelozDynamickyText(nadpis || "Upozornění")
+      : (nadpis || "Upozornění");
+
   appMessageText.textContent =
-    zprava || "";
+    typeof prelozDynamickyText === "function"
+      ? prelozDynamickyText(zprava || "")
+      : (zprava || "");
   
   appMessageModal.hidden = false;
 }

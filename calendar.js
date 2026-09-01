@@ -603,15 +603,15 @@ function renderCalendarAgenda() {
       calendarSelectedDay
     );
     if (calendarWeekNumber) {
+  const cisloTydne =
+    ziskejCisloTydne(calendarSelectedDay);
+
   calendarWeekNumber.textContent =
-  `${ziskejCisloTydne(
-    calendarSelectedDay
-  )}. ${
     window.LubaNoteI18n?.t?.(
-      "calendar.week",
-      "týden"
-    ) || "týden"
-  }`;
+      "calendar.weekNumber",
+      `${cisloTydne}. týden`,
+      { value: cisloTydne }
+    ) || `${cisloTydne}. týden`;
 }
 
   renderCalendarItems(
