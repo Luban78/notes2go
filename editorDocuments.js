@@ -5,9 +5,9 @@
      LUBANOTE – OTEVŘÍT / ULOŽIT JAKO
      Samostatný dokumentový modul editoru.
 
-     V1:
+     V2:
      - Otevřít: HTML / TXT
-     - Uložit jako: HTML / TXT
+     - Uložit jako: HTML / TXT / PDF
      - Android: Storage Access Framework přes nativní plugin
      - Web/PC: File System Access API + bezpečný fallback
      - Secret: záměrně zakázáno
@@ -209,6 +209,120 @@
 </html>`;
   }
 
+  function vytvorPdfHtmlDokument(data) {
+    /*
+     * PDF se tiskne z čistého dokumentového HTML, nikoli z celé obrazovky
+     * LubaNote. Tím se do PDF nedostane toolbar, modaly ani navigace.
+     */
+    const html = vytvorHtmlDokument(data);
+
+    const tiskCss = `
+    @page { size: A4; margin: 14mm; }
+    html, body { background: #fff !important; color: #111; }
+    body { max-width: none; margin: 0; padding: 0; }
+    .ln-doc-content, .ln-doc-todos { break-inside: auto; }
+    .ln-doc-content img, .ln-doc-content figure { break-inside: avoid; }
+    .ln-doc-todo { break-inside: avoid; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    `;
+
+    return html
+      .replace('</style>', `${tiskCss}</style>`)
+      .replace(
+        /\s*<script id="lubanote-document-data"[\s\S]*?<\/script>/i,
+        ''
+      );
+  }
+
+  async function ulozPdfPresWeb(data) {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.position = "fixed";
+    iframe.style.width = "1px";
+    iframe.style.height = "1px";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+
+    const html = vytvorPdfHtmlDokument(data);
+
+    return await new Promise((resolve, reject) => {
+      let dokonceno = false;
+
+      const uklid = (vysledek) => {
+        if (dokonceno) {
+          return;
+        }
+
+        dokonceno = true;
+        iframe.remove();
+        resolve(vysledek);
+      };
+
+      iframe.addEventListener(
+        "load",
+        () => {
+          try {
+            const okno = iframe.contentWindow;
+
+            if (!okno || typeof okno.print !== "function") {
+              throw new Error("Tiskový dialog není v tomto prohlížeči dostupný.");
+            }
+
+            const spustTisk = () => {
+              try {
+                okno.focus();
+
+                const poTisku = () => {
+                  okno.removeEventListener?.("afterprint", poTisku);
+                  uklid(true);
+                };
+
+                okno.addEventListener?.("afterprint", poTisku);
+                okno.print();
+
+                /*
+                 * Některé mobilní prohlížeče afterprint neposílají.
+                 * Iframe proto po návratu z dialogu uklidíme záložním timerem.
+                 */
+                setTimeout(() => uklid(true), 2500);
+              } catch (error) {
+                iframe.remove();
+                reject(error);
+              }
+            };
+
+            const dokument = iframe.contentDocument;
+            const obrazky = [
+              ...(dokument?.images || [])
+            ];
+
+            const cekaniNaObrazky = obrazky
+              .filter((img) => !img.complete)
+              .map(
+                (img) =>
+                  new Promise((hotovo) => {
+                    img.addEventListener("load", hotovo, { once: true });
+                    img.addEventListener("error", hotovo, { once: true });
+                  })
+              );
+
+            Promise.all(cekaniNaObrazky).then(spustTisk);
+          } catch (error) {
+            iframe.remove();
+            reject(error);
+          }
+        },
+        { once: true }
+      );
+
+      iframe.srcdoc = html;
+      document.body.appendChild(iframe);
+    });
+  }
+
   function vytvorTxtDokument(data) {
     const casti = [];
 
@@ -299,6 +413,23 @@
 
     const data = vytvorDataDokumentu();
     const zaklad = bezpecnyNazevSouboru(data.title);
+    const plugin = ziskejNativniPlugin();
+
+    if (format === "pdf") {
+      const nazevSouboru = `${zaklad}.pdf`;
+      const html = vytvorPdfHtmlDokument(data);
+
+      if (jeNativniAndroid() && plugin?.ulozPdf) {
+        const vysledek = await plugin.ulozPdf({
+          html,
+          nazevSouboru
+        });
+
+        return vysledek?.saved === true;
+      }
+
+      return await ulozPdfPresWeb(data);
+    }
 
     const jeHtml = format === "html";
     const pripona = jeHtml ? ".html" : ".txt";
@@ -308,8 +439,6 @@
       : vytvorTxtDokument(data);
 
     const nazevSouboru = `${zaklad}${pripona}`;
-
-    const plugin = ziskejNativniPlugin();
 
     if (jeNativniAndroid() && plugin?.ulozDokument) {
       const vysledek = await plugin.ulozDokument({
@@ -777,6 +906,10 @@
           {
             hodnota: "txt",
             popisek: "TXT – prostý text"
+          },
+          {
+            hodnota: "pdf",
+            popisek: "PDF – hotový dokument"
           }
         ],
         poVyberu: async (format) => {
@@ -840,6 +973,7 @@
     otevriDokument,
     ulozDokument,
     parsujDokument,
-    vytvorDataDokumentu
+    vytvorDataDokumentu,
+    vytvorPdfHtmlDokument
   };
 })();
