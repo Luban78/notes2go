@@ -270,6 +270,15 @@
       return;
     }
 
+    /*
+     * Na desktopu nativní Selection necháváme viditelný.
+     * CSS Highlight + removeAllRanges byl určený pro Android, ale na PC
+     * zbytečně vytvářel „lepivý“ výběr po použití toolbaru.
+     */
+    if (jeDesktopEditor()) {
+      return;
+    }
+
     zobrazVlastniVyberTextu();
 
     window
@@ -453,8 +462,13 @@
 
   let desktopVyberMysi = null;
 
+  const MIN_POHYB_PRO_DESKTOP_VYBER = 4;
+
   function ulozDesktopVyberBehemTazeni() {
-    if (!desktopVyberMysi) {
+    if (
+      !desktopVyberMysi ||
+      !desktopVyberMysi.probihaTazeni
+    ) {
       return;
     }
 
@@ -513,8 +527,42 @@
       desktopVyberMysi = {
         pointerId: event.pointerId,
         editor: cilovyEditor,
-        rozsah: null
+        rozsah: null,
+        startX: event.clientX,
+        startY: event.clientY,
+        probihaTazeni: false
       };
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "pointermove",
+    event => {
+      const stav = desktopVyberMysi;
+
+      if (
+        !stav ||
+        event.pointerId !== stav.pointerId ||
+        stav.probihaTazeni
+      ) {
+        return;
+      }
+
+      const rozdilX =
+        event.clientX - stav.startX;
+
+      const rozdilY =
+        event.clientY - stav.startY;
+
+      if (
+        Math.hypot(rozdilX, rozdilY) >=
+        MIN_POHYB_PRO_DESKTOP_VYBER
+      ) {
+        stav.probihaTazeni = true;
+        ulozDesktopVyberBehemTazeni();
+      }
     },
     true
   );
@@ -536,6 +584,16 @@
         !stav ||
         event.pointerId !== stav.pointerId
       ) {
+        return;
+      }
+
+      /*
+       * Prostý klik není tažení. Dříve se při kliknutí do editoru
+       * znovu obnovil starý označený Range, takže po formátování
+       * nešlo výběr zrušit. Obnovu děláme jen po skutečném tahu myší.
+       */
+      if (!stav.probihaTazeni) {
+        desktopVyberMysi = null;
         return;
       }
 
@@ -1285,6 +1343,198 @@
 
 
 
+  function ziskejTextoveUzlyVRozsahu(editor, rozsah) {
+    if (!editor || !rozsah) {
+      return [];
+    }
+
+    const uzly = [];
+    const walker = document.createTreeWalker(
+      editor,
+      NodeFilter.SHOW_TEXT
+    );
+
+    let uzel = walker.nextNode();
+
+    while (uzel) {
+      if (
+        uzel.nodeValue?.length &&
+        rozsah.intersectsNode(uzel)
+      ) {
+        uzly.push(uzel);
+      }
+
+      uzel = walker.nextNode();
+    }
+
+    return uzly;
+  }
+
+
+  function aplikujVelikostNaOznacenyText(
+    editor,
+    rozsah,
+    hodnota
+  ) {
+    if (
+      !editor ||
+      !rozsah ||
+      rozsah.collapsed
+    ) {
+      return false;
+    }
+
+    const textoveUzly =
+      ziskejTextoveUzlyVRozsahu(
+        editor,
+        rozsah
+      );
+
+    if (textoveUzly.length === 0) {
+      return false;
+    }
+
+    /*
+     * Hranice si uložíme před první změnou DOM. Range se při splitText()
+     * automaticky posouvá, proto pro přesný Ctrl+A / vícerádkový výběr
+     * používáme původní uzly a offsety.
+     */
+    const startContainer = rozsah.startContainer;
+    const startOffset = rozsah.startOffset;
+    const endContainer = rozsah.endContainer;
+    const endOffset = rozsah.endOffset;
+
+    const upravenePrvky = [];
+
+    /*
+     * Jdeme odzadu. Rozdělení textového uzlu tak nemůže posunout offsety
+     * textů, které ještě čekají na zpracování.
+     */
+    [...textoveUzly]
+      .reverse()
+      .forEach(puvodniUzel => {
+        const puvodniDelka =
+          puvodniUzel.nodeValue?.length ?? 0;
+
+        let zacatek =
+          puvodniUzel === startContainer
+            ? startOffset
+            : 0;
+
+        let konec =
+          puvodniUzel === endContainer
+            ? endOffset
+            : puvodniDelka;
+
+        zacatek = Math.max(
+          0,
+          Math.min(zacatek, puvodniDelka)
+        );
+
+        konec = Math.max(
+          zacatek,
+          Math.min(konec, puvodniDelka)
+        );
+
+        if (konec <= zacatek) {
+          return;
+        }
+
+        let vybranyUzel = puvodniUzel;
+
+        if (konec < puvodniDelka) {
+          puvodniUzel.splitText(konec);
+        }
+
+        if (zacatek > 0) {
+          vybranyUzel =
+            puvodniUzel.splitText(zacatek);
+        }
+
+        const rodic =
+          vybranyUzel.parentElement;
+
+        let formatovanyPrvek = null;
+
+        /*
+         * Pokud celý text už leží v samostatném SPAN/FONT, nemusíme
+         * vytvářet další vnořený span. U částečného výběru jsou po splitu
+         * sourozenci, takže se automaticky použije nový obal jen na výběr.
+         */
+        if (
+          rodic &&
+          rodic !== editor &&
+          rodic.childNodes.length === 1 &&
+          ["SPAN", "FONT"].includes(rodic.tagName)
+        ) {
+          formatovanyPrvek = rodic;
+          rodic.removeAttribute("size");
+        } else {
+          formatovanyPrvek =
+            document.createElement("span");
+
+          vybranyUzel.parentNode?.insertBefore(
+            formatovanyPrvek,
+            vybranyUzel
+          );
+
+          formatovanyPrvek.appendChild(
+            vybranyUzel
+          );
+        }
+
+        formatovanyPrvek.style.fontSize =
+          `${hodnota}px`;
+
+        formatovanyPrvek.dataset.velikostPisma =
+          String(hodnota);
+
+        upravenePrvky.unshift(
+          formatovanyPrvek
+        );
+      });
+
+    if (upravenePrvky.length === 0) {
+      return false;
+    }
+
+    /*
+     * Po vlastní DOM úpravě obnovíme jeden souvislý výběr přes všechny
+     * upravené části. To je důležité hlavně pro Ctrl+A přes více bloků.
+     */
+    const novyRozsah =
+      document.createRange();
+
+    novyRozsah.setStartBefore(
+      upravenePrvky[0]
+    );
+
+    novyRozsah.setEndAfter(
+      upravenePrvky[
+        upravenePrvky.length - 1
+      ]
+    );
+
+    const vyber = window.getSelection();
+
+    if (vyber) {
+      vyber.removeAllRanges();
+      vyber.addRange(novyRozsah);
+    }
+
+    ulozenyVyberTextu =
+      novyRozsah.cloneRange();
+
+    ulozenyEditorTextu = editor;
+
+    editor.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    return true;
+  }
+
+
   function nastavVelikostPisma(hodnota) {
     if (!hodnota) {
       return;
@@ -1293,25 +1543,45 @@
     const cilovyEditor =
       pripravEditorProFormatovani();
 
-    document.execCommand(
-      "fontSize",
-      false,
-      "7"
-    );
+    const vyber = window.getSelection();
+    const rozsah =
+      vyber?.rangeCount
+        ? vyber.getRangeAt(0)
+        : null;
 
-    /*
-     * Dříve se <font size="7"> převáděl na px pouze v hlavním
-     * editoru. V TODO proto například volba 18 skončila jako obří
-     * browserová velikost 7. Převádíme vždy jen editor, který se
-     * právě formátuje.
-     */
-    (cilovyEditor || editorTextu)
-      .querySelectorAll('font[size="7"]')
-      .forEach(prvek => {
-        prvek.removeAttribute("size");
-        prvek.style.fontSize = `${hodnota}px`;
-        prvek.dataset.velikostPisma = hodnota;
-      });
+    const upravenVlastnimFormatovanim =
+      Boolean(
+        rozsah &&
+        !rozsah.collapsed &&
+        ziskejEditorFormatovaniProRozsah(
+          rozsah
+        ) === cilovyEditor &&
+        aplikujVelikostNaOznacenyText(
+          cilovyEditor,
+          rozsah.cloneRange(),
+          hodnota
+        )
+      );
+
+    if (!upravenVlastnimFormatovanim) {
+      /*
+       * Bez výběru zachováme původní execCommand chování – nastaví
+       * velikost pro další psaní na pozici kurzoru.
+       */
+      document.execCommand(
+        "fontSize",
+        false,
+        "7"
+      );
+
+      (cilovyEditor || editorTextu)
+        .querySelectorAll('font[size="7"]')
+        .forEach(prvek => {
+          prvek.removeAttribute("size");
+          prvek.style.fontSize = `${hodnota}px`;
+          prvek.dataset.velikostPisma = hodnota;
+        });
+    }
 
     synchronizujTodoPoFormatovani(
       cilovyEditor
@@ -1451,28 +1721,48 @@
   }
 
 
-  function zjistiVelikostPodKurzorem() {
-    const vyber = window.getSelection();
-
-    if (!vyber || vyber.rangeCount === 0) {
+  function zjistiPrvekProVelikostZRozsahu(rozsah) {
+    if (!rozsah) {
       return null;
     }
 
-    let prvek = vyber.anchorNode;
+    let uzel = rozsah.startContainer;
 
-    if (prvek?.nodeType === Node.TEXT_NODE) {
-      prvek = prvek.parentElement;
+    if (uzel?.nodeType === Node.TEXT_NODE) {
+      return uzel.parentElement;
     }
 
+    if (!(uzel instanceof Element)) {
+      return null;
+    }
+
+    const deti = uzel.childNodes;
+
+    let kandidat =
+      deti[Math.max(0, rozsah.startOffset - 1)] ||
+      deti[rozsah.startOffset] ||
+      uzel;
+
+    while (
+      kandidat?.nodeType === Node.ELEMENT_NODE &&
+      kandidat.lastChild
+    ) {
+      kandidat = kandidat.lastChild;
+    }
+
+    if (kandidat?.nodeType === Node.TEXT_NODE) {
+      return kandidat.parentElement;
+    }
+
+    return kandidat instanceof Element
+      ? kandidat
+      : uzel;
+  }
+
+
+  function ziskejSkutecnouVelikostPrvku(prvek) {
     if (!(prvek instanceof Element)) {
       return null;
-    }
-
-    const prvekSVelikosti =
-      prvek.closest("[data-velikost-pisma]");
-
-    if (prvekSVelikosti) {
-      return prvekSVelikosti.dataset.velikostPisma;
     }
 
     const velikost =
@@ -1485,6 +1775,79 @@
     }
 
     return String(Math.round(velikost));
+  }
+
+
+  function zjistiVelikostPodKurzorem() {
+    const vyber = window.getSelection();
+
+    let rozsah = null;
+
+    if (
+      vyber?.rangeCount &&
+      ziskejEditorFormatovaniProRozsah(
+        vyber.getRangeAt(0)
+      )
+    ) {
+      rozsah = vyber.getRangeAt(0);
+    } else if (
+      ulozenyVyberTextu &&
+      ziskejEditorFormatovaniProRozsah(
+        ulozenyVyberTextu
+      )
+    ) {
+      rozsah = ulozenyVyberTextu;
+    }
+
+    if (!rozsah) {
+      return null;
+    }
+
+    const cilovyEditor =
+      ziskejEditorFormatovaniProRozsah(
+        rozsah
+      );
+
+    if (!cilovyEditor) {
+      return null;
+    }
+
+    if (!rozsah.collapsed) {
+      const velikosti = new Set();
+
+      ziskejTextoveUzlyVRozsahu(
+        cilovyEditor,
+        rozsah
+      ).forEach(uzel => {
+        if (!uzel.nodeValue?.trim()) {
+          return;
+        }
+
+        const velikost =
+          ziskejSkutecnouVelikostPrvku(
+            uzel.parentElement
+          );
+
+        if (velikost) {
+          velikosti.add(velikost);
+        }
+      });
+
+      if (velikosti.size === 1) {
+        return [...velikosti][0];
+      }
+
+      if (velikosti.size > 1) {
+        /* Smíšený výběr – nelžeme jedním náhodným číslem. */
+        return "—";
+      }
+    }
+
+    return ziskejSkutecnouVelikostPrvku(
+      zjistiPrvekProVelikostZRozsahu(
+        rozsah
+      )
+    );
   }
 
 

@@ -6495,6 +6495,13 @@ text-size-adjust: 100%;
   color: var(--color-text);
 }
 
+/* Explicitní černá musí být vidět i v tmavém motivu. */
+.textColorBlack {
+  color: #000000;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
 #modalRichText::selection,
 #modalRichText *::selection {
   background: rgba(60, 160, 210, 0.35);
