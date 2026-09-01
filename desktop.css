@@ -1261,3 +1261,132 @@
     border: 1px solid rgba(0, 0, 0, 0.28) !important;
   }
 }
+
+/* =========================================
+   EDITOR – PC BULLET DRAG BEZ POSKAKOVÁNÍ
+
+   - chycení odrážky je vidět okamžitě,
+   - samotný řádek při chycení ani vodorovném gestu nemění polohu,
+   - vodorovný pohyb = pouze zanořit / vynořit,
+   - svislý pohyb = pouze změnit pořadí.
+   ========================================= */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  /*
+   * Globální mobilní drag používá scale + margin. Na PC to působilo
+   * jako okamžitý skok textu a odrážky doleva. Desktop proto při drag
+   * nikdy nemění geometrii samotného <li>.
+   */
+  .modalRichText li.bulletDragging {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    transform: none !important;
+
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 9%,
+      transparent
+    );
+
+    box-shadow:
+      inset 0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--color-accent) 32%,
+        transparent
+      );
+  }
+
+  .modalRichText ul.bulletDragActive > li {
+    transition:
+      background 90ms ease,
+      box-shadow 90ms ease !important;
+  }
+
+  /*
+   * Stav „mám ji chycenou“. Nemění width/height/left/top odrážky,
+   * takže respektuje i doladění z Visual Debugu.
+   */
+  .modalRichText li.bulletDesktopChyceny::before,
+  .modalRichText li.bulletDragging::before {
+    color: var(--color-accent) !important;
+    transform: none !important;
+
+    box-shadow:
+      0 0 0 5px
+      color-mix(
+        in srgb,
+        var(--color-accent) 22%,
+        transparent
+      );
+  }
+
+  .modalRichText li.bulletDesktopChyceny {
+    cursor: grabbing;
+  }
+
+  /*
+   * Vodorovné gesto má jen informační štítek. Řádek se neposouvá
+   * doprava/doleva; skutečná úroveň se změní až po puštění myši.
+   */
+  .modalRichText li.bulletDesktopChyceny[data-bullet-akce]:not([data-bullet-akce=""])::after {
+    content: attr(data-bullet-akce);
+
+    position: absolute;
+    z-index: 40;
+
+    left: 0;
+    top: -30px;
+
+    width: max-content;
+    max-width: 220px;
+
+    padding: 4px 9px;
+
+    border: 1px solid
+      color-mix(
+        in srgb,
+        var(--color-accent) 55%,
+        var(--color-border)
+      );
+    border-radius: 8px;
+
+    background: var(--color-surface);
+    color: var(--color-accent);
+
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.16);
+
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+
+    pointer-events: none;
+  }
+
+  .modalRichText li.bulletDesktopChyceny.bulletAkceNelze[data-bullet-akce]:not([data-bullet-akce=""])::after {
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+    opacity: 0.82;
+  }
+
+  /* Odrážka sama zůstává na místě; mění se jen halo. */
+  .modalRichText li.bulletChceZanorit::before {
+    box-shadow:
+      0 0 0 6px
+      color-mix(
+        in srgb,
+        var(--color-accent) 30%,
+        transparent
+      );
+  }
+
+  .modalRichText li.bulletChceVysunout::before {
+    box-shadow:
+      0 0 0 6px
+      color-mix(
+        in srgb,
+        var(--color-accent) 18%,
+        transparent
+      );
+  }
+}

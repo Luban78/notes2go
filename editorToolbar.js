@@ -124,6 +124,18 @@
 
   let nahledTazenePolozky = null;
 
+  /*
+   * Desktop má dvě jasně oddělená gesta:
+   * - svislé = změna pořadí na stejné úrovni,
+   * - vodorovné = zanoření / vynoření.
+   * Směr po prvních pár pixelech zamkneme, aby se při zanořování
+   * položka současně sama nepřerovnala.
+   */
+  let smerTazeniBulletuDesktop = null;
+
+  const PRAG_START_TAZENI_DESKTOP = 5;
+  const PRAG_ZMENY_UROVNE_DESKTOP = 16;
+
 
   function jeDesktopEditor() {
     return window.innerWidth >= 900;
@@ -2011,43 +2023,122 @@
   }
 
 
-  function presunBulletPodlePozice(x, y) {
+  function muzeZanoritPolozku(polozka) {
+    return Boolean(
+      polozka?.previousElementSibling?.tagName === "LI"
+    );
+  }
+
+
+  function muzeVysunoutPolozku(polozka) {
+    const seznam = polozka?.parentElement;
+    const rodicovskaPolozka = seznam?.parentElement;
+
+    return Boolean(
+      seznam?.tagName === "UL" &&
+      rodicovskaPolozka?.tagName === "LI" &&
+      rodicovskaPolozka.parentElement?.tagName === "UL"
+    );
+  }
+
+
+  function zrusDesktopZamerBulletu(
+    polozka = tazenaPolozka,
+    { ponechChyceni = true } = {}
+  ) {
+    if (!polozka) {
+      return;
+    }
+
+    polozka.classList.remove(
+      "bulletChceZanorit",
+      "bulletChceVysunout",
+      "bulletAkceNelze"
+    );
+
+    delete polozka.dataset.bulletAkce;
+
+    if (!ponechChyceni) {
+      polozka.classList.remove(
+        "bulletDesktopChyceny"
+      );
+    }
+  }
+
+
+  function aktualizujDesktopZamerBulletu(x) {
     if (!tazenaPolozka) {
       return;
     }
-    
+
     const posunX =
-  x - zacatekTazeniX;
+      x - zacatekTazeniX;
 
-const chceZanorit =
-  posunX > 36;
+    const chceZanorit =
+      posunX >= PRAG_ZMENY_UROVNE_DESKTOP;
 
-const chceVysunout =
-  posunX < -36;
+    const chceVysunout =
+      posunX <= -PRAG_ZMENY_UROVNE_DESKTOP;
 
-nahledTazenePolozky?.classList.toggle(
-  "bulletChceZanorit",
-  chceZanorit
-);
+    const muzeZanorit =
+      chceZanorit &&
+      muzeZanoritPolozku(tazenaPolozka);
 
-nahledTazenePolozky?.classList.toggle(
-  "bulletChceVysunout",
-  chceVysunout
-);
+    const muzeVysunout =
+      chceVysunout &&
+      muzeVysunoutPolozku(tazenaPolozka);
 
-    posunNahledTazenePolozky(x, y);
-    
-    
-    
+    tazenaPolozka.classList.toggle(
+      "bulletChceZanorit",
+      chceZanorit
+    );
+
+    tazenaPolozka.classList.toggle(
+      "bulletChceVysunout",
+      chceVysunout
+    );
+
+    tazenaPolozka.classList.toggle(
+      "bulletAkceNelze",
+      (chceZanorit && !muzeZanorit) ||
+      (chceVysunout && !muzeVysunout)
+    );
+
+    if (chceZanorit) {
+      tazenaPolozka.dataset.bulletAkce =
+        muzeZanorit
+          ? "→ zanořit"
+          : "→ nelze zanořit";
+    } else if (chceVysunout) {
+      tazenaPolozka.dataset.bulletAkce =
+        muzeVysunout
+          ? "← vynořit"
+          : "← nelze vynořit";
+    } else {
+      delete tazenaPolozka.dataset.bulletAkce;
+    }
+  }
+
+
+  function presunBulletSvislePodlePozice(y) {
+    if (!tazenaPolozka) {
+      return;
+    }
+
     zrusBulletDropIndikator();
 
     const seznam =
       tazenaPolozka.parentElement;
 
-    if (!seznam) {
+    if (!seznam || seznam.tagName !== "UL") {
       return;
     }
 
+    /*
+     * Přesunujeme pouze mezi sourozenci stejné úrovně. Celý případný
+     * podstrom položky (<ul> uvnitř <li>) cestuje spolu s ní.
+     * Zanoření/vynoření se řeší samostatně vodorovným gestem.
+     */
     const polozky =
       Array.from(seznam.children).filter(
         (prvek) =>
@@ -2089,6 +2180,39 @@ nahledTazenePolozky?.classList.toggle(
     seznam.appendChild(
       tazenaPolozka
     );
+  }
+
+
+  function presunBulletPodlePozice(x, y) {
+    if (!tazenaPolozka) {
+      return;
+    }
+
+    /*
+     * Mobilní MOVE MODE zachovává plovoucí náhled. Desktop sem už
+     * nevstupuje – má vlastní směrově zamknuté ovládání.
+     */
+    const posunX =
+      x - zacatekTazeniX;
+
+    const chceZanorit =
+      posunX > 36;
+
+    const chceVysunout =
+      posunX < -36;
+
+    nahledTazenePolozky?.classList.toggle(
+      "bulletChceZanorit",
+      chceZanorit
+    );
+
+    nahledTazenePolozky?.classList.toggle(
+      "bulletChceVysunout",
+      chceVysunout
+    );
+
+    posunNahledTazenePolozky(x, y);
+    presunBulletSvislePodlePozice(y);
   }
 
 
@@ -2306,6 +2430,11 @@ nahledTazenePolozky?.classList.toggle(
       tazenaPolozka.parentElement?.classList.remove(
         "bulletDragActive"
       );
+
+      zrusDesktopZamerBulletu(
+        tazenaPolozka,
+        { ponechChyceni: false }
+      );
     }
 
     odstranNahledTazenePolozky();
@@ -2314,6 +2443,7 @@ nahledTazenePolozky?.classList.toggle(
     tazenyPointerId = null;
     tazenyDotykId = null;
     probihaTazeni = false;
+    smerTazeniBulletuDesktop = null;
 
     if (zrusVyber) {
       zrusVyberPolozkyProPresun();
@@ -2771,12 +2901,34 @@ nahledTazenePolozky?.classList.toggle(
           return;
         }
 
+        /*
+         * Browser nesmí po chycení pseudo-odrážky přesunout caret ani
+         * vytvořit vlastní drag. Právě to dříve spolu se scale efektem
+         * působilo jako okamžitý skok položky doleva.
+         */
+        udalost.preventDefault();
+
+        zrusBulletDropIndikator();
+        zrusDesktopZamerBulletu(
+          tazenaPolozka,
+          { ponechChyceni: false }
+        );
+
         tazenaPolozka = polozka;
         zacatekTazeniX = udalost.clientX;
         zacatekTazeniY = udalost.clientY;
         tazenyPointerId = udalost.pointerId;
         tazenyDotykId = null;
         probihaTazeni = false;
+        smerTazeniBulletuDesktop = null;
+
+        /*
+         * Okamžitá vizuální odezva: už při pouhém držení je jasně
+         * vidět, že máme odrážku chycenou, ale samotný řádek se nehýbe.
+         */
+        polozka.classList.add(
+          "bulletDesktopChyceny"
+        );
 
         try {
           polozka.setPointerCapture(
@@ -2851,6 +3003,74 @@ nahledTazenePolozky?.classList.toggle(
       const rozdilY =
         udalost.clientY - zacatekTazeniY;
 
+      if (jeDesktopEditor()) {
+        const absolutniX = Math.abs(rozdilX);
+        const absolutniY = Math.abs(rozdilY);
+        const nejvetsiPosun =
+          Math.max(absolutniX, absolutniY);
+
+        /*
+         * Nejdřív pouze držíme. Po pár pixelech zamkneme směr gesta.
+         * Díky tomu vodorovné zanořování nikdy současně nepřerovnává
+         * položku nahoru/dolů a naopak.
+         */
+        if (!smerTazeniBulletuDesktop) {
+          if (
+            nejvetsiPosun <
+            PRAG_START_TAZENI_DESKTOP
+          ) {
+            return;
+          }
+
+          if (absolutniX >= absolutniY + 2) {
+            smerTazeniBulletuDesktop =
+              "vodorovne";
+          } else if (
+            absolutniY >= absolutniX + 2
+          ) {
+            smerTazeniBulletuDesktop =
+              "svisle";
+          } else if (nejvetsiPosun >= 9) {
+            smerTazeniBulletuDesktop =
+              absolutniX >= absolutniY
+                ? "vodorovne"
+                : "svisle";
+          } else {
+            return;
+          }
+        }
+
+        udalost.preventDefault();
+
+        if (!probihaTazeni) {
+          zahajVzhledTazeniBulletu(
+            udalost.clientX,
+            udalost.clientY
+          );
+        }
+
+        if (
+          smerTazeniBulletuDesktop ===
+          "vodorovne"
+        ) {
+          zrusBulletDropIndikator();
+          aktualizujDesktopZamerBulletu(
+            udalost.clientX
+          );
+          return;
+        }
+
+        zrusDesktopZamerBulletu(
+          tazenaPolozka,
+          { ponechChyceni: true }
+        );
+
+        presunBulletSvislePodlePozice(
+          udalost.clientY
+        );
+        return;
+      }
+
       if (
         !probihaTazeni &&
         Math.hypot(rozdilX, rozdilY) < 6
@@ -2901,6 +3121,82 @@ nahledTazenePolozky?.classList.toggle(
         return;
       }
 
+      if (jeDesktopEditor()) {
+        const polozka = tazenaPolozka;
+
+        if (probihaTazeni) {
+          let zmenaUrovne = false;
+
+          if (
+            smerTazeniBulletuDesktop ===
+            "vodorovne"
+          ) {
+            const posunX =
+              udalost.clientX - zacatekTazeniX;
+
+            if (
+              posunX >=
+              PRAG_ZMENY_UROVNE_DESKTOP
+            ) {
+              if (muzeZanoritPolozku(polozka)) {
+                polozka.parentElement?.classList.remove(
+                  "bulletDragActive"
+                );
+                zmenaUrovne =
+                  zanorTazenouPolozku();
+              }
+            } else if (
+              posunX <=
+              -PRAG_ZMENY_UROVNE_DESKTOP
+            ) {
+              if (muzeVysunoutPolozku(polozka)) {
+                polozka.parentElement?.classList.remove(
+                  "bulletDragActive"
+                );
+                zmenaUrovne =
+                  vysunTazenouPolozku();
+              }
+            }
+
+            uklidTazeniBulletu({
+              zrusVyber: true,
+              oznamZmenu: zmenaUrovne
+            });
+            return;
+          }
+
+          /* Svislý drag mění pouze pořadí mezi sourozenci. */
+          uklidTazeniBulletu({
+            zrusVyber: true,
+            oznamZmenu: true
+          });
+          return;
+        }
+
+        /*
+         * Pouhé kliknutí / držení bez posunu: žádný layoutový skok.
+         * Na uvolnění jen přepneme sbalení, pokud položka má děti.
+         * Syntetický následný click potlačí časová pojistka níže.
+         */
+        zrusDesktopZamerBulletu(
+          polozka,
+          { ponechChyceni: false }
+        );
+
+        tazenaPolozka = null;
+        tazenyPointerId = null;
+        smerTazeniBulletuDesktop = null;
+
+        prepniSbaleniPolozky(polozka);
+
+        window.getSelection()?.removeAllRanges();
+
+        casPoslednihoTazeniBulletu =
+          Date.now();
+
+        return;
+      }
+
       if (probihaTazeni) {
         const posunX =
           udalost.clientX - zacatekTazeniX;
@@ -2911,11 +3207,6 @@ nahledTazenePolozky?.classList.toggle(
         const chceVysunout =
           posunX < -36;
 
-        /*
-         * Na desktopu dříve pointerup pouze ukončil drag a horizontální
-         * změna úrovně se vůbec neprovedla. Stejnou logiku jako na
-         * dotyku teď dokončíme i pro myš / pero.
-         */
         if (
           chceZanorit ||
           chceVysunout
@@ -2935,16 +3226,6 @@ nahledTazenePolozky?.classList.toggle(
           zrusVyber: true,
           oznamZmenu: true
         });
-        return;
-      }
-
-      if (jeDesktopEditor()) {
-        /*
-         * Pouhý klik na odrážku není MOVE MODE. Jen uvolníme připravený
-         * drag a následný click listener provede sbalení / rozbalení.
-         */
-        tazenaPolozka = null;
-        tazenyPointerId = null;
         return;
       }
 
