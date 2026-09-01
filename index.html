@@ -1515,10 +1515,25 @@
       <p id="secretUnlockDescription">
         Zadej hlavní heslo.
       </p>
+
+      <button id="secretBiometricUnlockButton" class="secretBiometricUnlockButton" type="button" hidden>
+        <span aria-hidden="true">🫆</span>
+        <span>Odemknout otiskem</span>
+      </button>
+
+      <p id="secretBiometricStatus" class="secretBiometricStatus" hidden></p>
       
       <input id="secretUnlockInput" type="password" autocomplete="new-password" placeholder="Hlavní heslo" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
       
       <input id="secretUnlockConfirmInput" type="password" autocomplete="new-password" placeholder="Heslo znovu" hidden data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+
+      <label id="secretBiometricEnableRow" class="secretBiometricEnableRow" hidden>
+        <input id="secretBiometricEnableCheckbox" type="checkbox" checked>
+        <span>
+          <strong>🫆 Příště odemykat otiskem</strong>
+          <small>Jen na tomto zařízení</small>
+        </span>
+      </label>
       
       <div class="secretUnlockActions">
         
@@ -1552,6 +1567,11 @@
           <span>Vytvořit tajný štítek</span>
         </button>
         
+        <button id="disableSecretBiometricButton" type="button" hidden>
+          <span class="secretTagMenuIcon" aria-hidden="true">🫆</span>
+          <span>Zrušit odemykání otiskem</span>
+        </button>
+
         <button id="lockSecretModeButton" type="button">
           <span class="secretTagMenuIcon" data-luba-icon="zamek" aria-hidden="true"></span>
           <span>Zamknout tajný režim</span>
@@ -1626,7 +1646,8 @@
   <!-- Supabase přihlášení / offline-first loader -->
   <script src="supabaseClient.js"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
-  <script src="secret.js?v=20260827-secret-stitek-3"></script>
+  <script src="secret.js?v=20260901-biometrie-1"></script>
+  <script src="secretBiometric.js?v=20260901-biometrie-1"></script>
   
   <!-- Navigace modulů a servisní nabídka -->
   <script src="navigation.js"></script>

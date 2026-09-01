@@ -15,9 +15,12 @@ let tajnySifrovaciKlic = null;
 /*
  * OFFLINE ODEMKNUTÍ TAJNÉHO REŽIMU
  * ---------------------------------
- * Hlavní heslo ani odvozený AES klíč se nikdy neukládají.
- * Lokálně uchováváme pouze stejné pomocné údaje, které jsou v
+ * Webová část LubaNote hlavní heslo ani odvozený AES klíč neukládá.
+ * Lokálně uchovává pouze stejné pomocné údaje, které jsou v
  * Supabase secret_settings: salt, verifier a počet KDF iterací.
+ * Pokud uživatel výslovně zapne biometrické odemykání v Android APK,
+ * nativní vrstva uloží pouze zašifrovanou kopii hesla chráněnou
+ * Android Keystore a biometrickým ověřením. Plaintext se netrvale neukládá.
  * Díky tomu lze správnost hesla ověřit a klíč odvodit i bez internetu.
  */
 const SECRET_SETTINGS_CACHE_KEY =
@@ -829,8 +832,10 @@ async function vytvorNoveTajneNastaveni(heslo) {
   }
 
   /*
-   * Po prvním vytvoření uložíme jen salt + verifier + iterace.
-   * Samotné heslo ani AES klíč se do úložiště nikdy nezapisují.
+   * Po prvním vytvoření uloží webová část jen salt + verifier + iterace.
+   * Hlavní heslo ani AES klíč se do localStorage ani Supabase nezapisují.
+   * Volitelná biometrická kopie hesla patří výhradně do Android Keystore
+   * vrstvy a vznikne až po samostatném biometrickém potvrzení uživatele.
    */
   ulozLokalniTajneNastaveni(
     {
@@ -935,7 +940,7 @@ if (
 // ==========================================
 // TAJNÝ REŽIM – VYTVOŘENÍ HLAVNÍHO HESLA
 // Zkontroluje obě hesla a uloží do Supabase
-// pouze salt + verifier. Samotné heslo se
+// pouze salt + verifier. Webová část heslo
 // nikam neukládá ani neposílá.
 // ==========================================
 
@@ -1061,6 +1066,19 @@ confirmSecretUnlockButton?.addEventListener(
         return;
       }
 
+      /*
+       * První aktivace biometrie proběhne až po správném hlavním
+       * hesle. Když uživatel biometrický dialog zruší, Secret se
+       * normálně odemkne heslem a nic se nerozbije.
+       */
+      if (
+        window.LubaNoteSecretBiometric
+          ?.maBytAktivovana?.()
+      ) {
+        await window.LubaNoteSecretBiometric
+          .aktivujProHeslo(heslo);
+      }
+
       const odemceno =
         await odemkniTajnyRezimSifrovacimKlicem(
           heslo
@@ -1077,6 +1095,9 @@ confirmSecretUnlockButton?.addEventListener(
 
       secretUnlockInput.value = "";
       secretUnlockModal.hidden = true;
+
+      await window.LubaNoteSecretBiometric
+        ?.aktualizujUI?.({ maHeslo: true });
 
       zobrazZpravuAplikace(
         "Tajný režim",

@@ -18,6 +18,10 @@ public class MainActivity extends BridgeActivity {
       LubaNoteBackupExportPlugin.class
     );
 
+    registerPlugin(
+      LubaNoteSecretBiometricPlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();

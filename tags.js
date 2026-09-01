@@ -2017,6 +2017,25 @@ async function otevriTajneStitky() {
   
   const maHeslo =
     await maNastaveneTajneHeslo();
+
+  /*
+   * Pokud má toto Android zařízení biometrické odemykání už
+   * nastavené, nejdřív zkusíme otisk. Heslový modal je až bezpečný
+   * fallback při zrušení, chybě nebo nedostupné biometrii.
+   */
+  if (
+    maHeslo &&
+    window.LubaNoteSecretBiometric
+      ?.zkusAutomatickeOdemknuti
+  ) {
+    const biometrie =
+      await window.LubaNoteSecretBiometric
+        .zkusAutomatickeOdemknuti();
+
+    if (biometrie?.odemceno) {
+      return;
+    }
+  }
   
   secretUnlockInput.value = "";
   secretUnlockConfirmInput.value = "";
@@ -2078,7 +2097,18 @@ async function otevriTajneStitky() {
   }
   
   secretUnlockModal.hidden = false;
-  secretUnlockInput.focus();
+
+  const stavBiometrie =
+    await window.LubaNoteSecretBiometric
+      ?.aktualizujUI?.({ maHeslo });
+
+  /*
+   * Po zrušení automatického otisku nevyvoláme hned klávesnici.
+   * Uživatel může otisk zopakovat nebo teprve tapnout do hesla.
+   */
+  if (!stavBiometrie?.configured) {
+    secretUnlockInput.focus();
+  }
 }
 
 

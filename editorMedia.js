@@ -128,6 +128,18 @@
   let puvodniPrazdnyRadekObrazku = null;
   let ukazatelPresunuObrazku = null;
 
+  /*
+   * Obrázek může mít na desktopu např. 25 %, ale stejných 25 %
+   * je na mobilu příliš malé. Proto si u procentní velikosti ukládáme
+   * i reálnou šířku v pixelech. Desktop dál používá procenta, mobil
+   * preferovanou pixelovou šířku (s max-width: 100 %).
+   */
+  const REFERENCNI_SIRKA_OBRAZKU = 720;
+  const DVOJTAP_OBRAZKU_MS = 340;
+  let posledniTapObrazek = null;
+  let posledniTapCas = 0;
+  let nahledObrazku = null;
+
   const IMAGE_DRAG_START_DISTANCE = 9;
 
   function ziskejBlokObrazku(image) {
@@ -159,6 +171,7 @@
     }
 
     figure.contentEditable = "false";
+    obnovPreferovanouSirkuObrazku(figure);
 
     const image = figure.querySelector("img");
 
@@ -237,6 +250,110 @@
       oznacenyObrazekProPresun === image &&
       document.activeElement === image
     );
+  }
+
+  function ulozPreferovanouSirkuObrazku(image, figure) {
+    if (!image || !figure) {
+      return;
+    }
+
+    const velikost = ziskejAktualniVelikostObrazku(
+      image,
+      figure
+    );
+
+    if (
+      velikost === "prizpusobit" ||
+      Number(velikost) >= 100
+    ) {
+      delete figure.dataset.sirkaPx;
+      delete image.dataset.sirkaPx;
+      figure.style.removeProperty(
+        "--luba-note-image-sirka-px"
+      );
+      return;
+    }
+
+    const rect = figure.getBoundingClientRect();
+    let sirkaPx = Math.round(rect.width);
+
+    /*
+     * U starších poznámek může být obrázek poprvé otevřen právě
+     * na mobilu, kde už je procentní šířka malá. V tom případě
+     * použijeme konzervativní referenci podle původního 720px limitu
+     * editorového obrázku. 25 % tak vychází přibližně na 180 px.
+     */
+    if (window.innerWidth < 900) {
+      const procenta = Number(velikost);
+
+      if (
+        Number.isFinite(procenta) &&
+        procenta > 0 &&
+        procenta < 100
+      ) {
+        sirkaPx = Math.max(
+          sirkaPx,
+          Math.round(
+            REFERENCNI_SIRKA_OBRAZKU *
+              (procenta / 100)
+          )
+        );
+      }
+    }
+
+    if (!Number.isFinite(sirkaPx) || sirkaPx <= 0) {
+      return;
+    }
+
+    figure.dataset.sirkaPx = String(sirkaPx);
+    image.dataset.sirkaPx = String(sirkaPx);
+    figure.style.setProperty(
+      "--luba-note-image-sirka-px",
+      `${sirkaPx}px`
+    );
+  }
+
+  function obnovPreferovanouSirkuObrazku(figure) {
+    if (!figure) {
+      return;
+    }
+
+    const image = figure.querySelector("img");
+
+    if (!image) {
+      return;
+    }
+
+    const ulozenaSirka = Number(
+      figure.dataset.sirkaPx ||
+        image.dataset.sirkaPx
+    );
+
+    if (
+      Number.isFinite(ulozenaSirka) &&
+      ulozenaSirka > 0
+    ) {
+      figure.dataset.sirkaPx = String(
+        Math.round(ulozenaSirka)
+      );
+      image.dataset.sirkaPx = String(
+        Math.round(ulozenaSirka)
+      );
+      figure.style.setProperty(
+        "--luba-note-image-sirka-px",
+        `${Math.round(ulozenaSirka)}px`
+      );
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      if (figure.isConnected) {
+        ulozPreferovanouSirkuObrazku(
+          image,
+          figure
+        );
+      }
+    });
   }
 
   function ziskejAktualniVelikostObrazku(image, figure) {
@@ -395,6 +512,11 @@
       figure.style.removeProperty("width");
       figure.dataset.velikost = "prizpusobit";
       image.dataset.velikost = "prizpusobit";
+      delete figure.dataset.sirkaPx;
+      delete image.dataset.sirkaPx;
+      figure.style.removeProperty(
+        "--luba-note-image-sirka-px"
+      );
       return true;
     }
 
@@ -411,6 +533,15 @@
     figure.style.width = `${cislo}%`;
     figure.dataset.velikost = String(cislo);
     image.dataset.velikost = String(cislo);
+
+    requestAnimationFrame(() => {
+      if (figure.isConnected) {
+        ulozPreferovanouSirkuObrazku(
+          image,
+          figure
+        );
+      }
+    });
 
     return true;
   }
@@ -1535,6 +1666,73 @@
     return radek;
   }
 
+  function zavriNahledObrazku() {
+    if (!nahledObrazku) {
+      return;
+    }
+
+    nahledObrazku.remove();
+    nahledObrazku = null;
+    document.body.classList.remove(
+      "lubaNoteImagePreviewOpen"
+    );
+  }
+
+  function otevriNahledObrazku(image) {
+    if (!image?.src) {
+      return;
+    }
+
+    zavriNahledObrazku();
+
+    const overlay = document.createElement("div");
+    overlay.className = "lubaNoteImagePreview";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute(
+      "aria-label",
+      "Náhled obrázku"
+    );
+
+    const nahled = document.createElement("img");
+    nahled.className = "lubaNoteImagePreviewImg";
+    nahled.src = image.currentSrc || image.src;
+    nahled.alt = image.alt || "Obrázek v poznámce";
+    nahled.draggable = false;
+
+    const zavrit = document.createElement("button");
+    zavrit.type = "button";
+    zavrit.className = "lubaNoteImagePreviewClose";
+    zavrit.setAttribute("aria-label", "Zavřít náhled");
+    zavrit.textContent = "×";
+
+    overlay.append(nahled, zavrit);
+    document.body.append(overlay);
+    document.body.classList.add(
+      "lubaNoteImagePreviewOpen"
+    );
+    nahledObrazku = overlay;
+
+    zavrit.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      zavriNahledObrazku();
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        zavriNahledObrazku();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && nahledObrazku) {
+      event.preventDefault();
+      zavriNahledObrazku();
+    }
+  });
+
   /*
    * Jeden klik obrázek označí. Teprve potom se ukážou ⚙ a ✕ a druhým
    * gestem lze obrázek přetáhnout. Kliknutí do prázdného místa vedle
@@ -1553,6 +1751,23 @@
 
       if (obrazek) {
         event.preventDefault();
+
+        const ted = performance.now();
+        const jeDvojtap =
+          posledniTapObrazek === obrazek &&
+          ted - posledniTapCas <= DVOJTAP_OBRAZKU_MS;
+
+        posledniTapObrazek = obrazek;
+        posledniTapCas = ted;
+
+        if (jeDvojtap) {
+          posledniTapObrazek = null;
+          posledniTapCas = 0;
+          zrusOznaceniObrazkuProPresun();
+          otevriNahledObrazku(obrazek);
+          return;
+        }
+
         oznacObrazekProPresun(obrazek);
         return;
       }
@@ -3185,6 +3400,48 @@
   );
   
   
+  /*
+   * Rich-content se při otevření poznámky vkládá přes innerHTML.
+   * Observer proto doplní responzivní šířku i starším uloženým
+   * obrázkům, aniž bychom museli měnit formát celé poznámky.
+   */
+  const observerObrazku = new MutationObserver((zmeny) => {
+    for (const zmena of zmeny) {
+      for (const uzel of zmena.addedNodes) {
+        if (!(uzel instanceof Element)) {
+          continue;
+        }
+
+        const figures = [];
+
+        if (uzel.matches?.(".lubaNoteImage")) {
+          figures.push(uzel);
+        }
+
+        figures.push(
+          ...uzel.querySelectorAll?.(
+            ".lubaNoteImage"
+          ) || []
+        );
+
+        for (const figure of figures) {
+          obnovPreferovanouSirkuObrazku(figure);
+        }
+      }
+    }
+  });
+
+  observerObrazku.observe(modalRichText, {
+    childList: true,
+    subtree: true
+  });
+
+  for (const figure of modalRichText.querySelectorAll(
+    ".lubaNoteImage"
+  )) {
+    obnovPreferovanouSirkuObrazku(figure);
+  }
+
   window.LubaNoteEditorMedia = {
     maVlozenyObsah: () =>
       Boolean(
