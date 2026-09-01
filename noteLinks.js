@@ -145,23 +145,78 @@
     panel.append(seznam);
     document.body.append(panel);
 
+    /*
+     * Mobil: položku nesmíme vybírat už při pointerdown.
+     * Jinak první pohyb prstu při scrollování okamžitě vloží položku.
+     * Výběr proto provedeme až při pointerup a jen pokud se prst/myš
+     * prakticky nepohnuly.
+     */
+    let vyberPointer = null;
+
     panel.addEventListener("pointerdown", (event) => {
       const tlacitko = event.target.closest(
         ".noteLinkAutocompleteItem"
       );
 
       if (!tlacitko) {
+        vyberPointer = null;
         return;
       }
 
-      /* Zachová caret v editoru, aby šlo přesně nahradit [[dotaz. */
-      event.preventDefault();
+      vyberPointer = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        index: Number(tlacitko.dataset.index),
+        presunuto: false
+      };
 
-      const index = Number(tlacitko.dataset.index);
-
-      if (Number.isInteger(index)) {
-        vlozVybranouPoznamku(index);
+      /* U myši zachováme caret v editoru. Touch musí zůstat scrollovatelný. */
+      if (event.pointerType === "mouse") {
+        event.preventDefault();
       }
+    });
+
+    panel.addEventListener("pointermove", (event) => {
+      if (
+        !vyberPointer ||
+        vyberPointer.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+
+      const dx = event.clientX - vyberPointer.x;
+      const dy = event.clientY - vyberPointer.y;
+
+      if (Math.hypot(dx, dy) > 8) {
+        vyberPointer.presunuto = true;
+      }
+    });
+
+    panel.addEventListener("pointerup", (event) => {
+      if (
+        !vyberPointer ||
+        vyberPointer.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+
+      const stav = vyberPointer;
+      vyberPointer = null;
+
+      if (
+        stav.presunuto ||
+        !Number.isInteger(stav.index)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      vlozVybranouPoznamku(stav.index);
+    });
+
+    panel.addEventListener("pointercancel", () => {
+      vyberPointer = null;
     });
 
     return panel;
@@ -266,17 +321,54 @@
   }
 
   function ziskejCaretRect(spoust) {
+    const textNode = spoust.textNode;
+    const offset = spoust.endOffset;
     const range = document.createRange();
-    range.setStart(spoust.textNode, spoust.endOffset);
+
+    range.setStart(textNode, offset);
     range.collapse(true);
 
-    let rect = range.getBoundingClientRect();
+    let rect = range.getClientRects()?.[0] || range.getBoundingClientRect();
 
-    if (!rect || (!rect.width && !rect.height)) {
-      rect = editor.getBoundingClientRect();
+    if (rect && (rect.height || rect.width)) {
+      return rect;
     }
 
-    return rect;
+    /*
+     * Android/WebView někdy vrátí u collapsed range nulový obdélník.
+     * Nechceme v takovém případě použít celý editor (panel pak skočí
+     * přes obrazovku), ale změříme poslední znak těsně před caretem.
+     */
+    if (offset > 0) {
+      const znakRange = document.createRange();
+      znakRange.setStart(textNode, offset - 1);
+      znakRange.setEnd(textNode, offset);
+      const znakRect =
+        znakRange.getClientRects()?.[0] ||
+        znakRange.getBoundingClientRect();
+
+      if (znakRect && (znakRect.height || znakRect.width)) {
+        return {
+          left: znakRect.right,
+          right: znakRect.right,
+          top: znakRect.top,
+          bottom: znakRect.bottom,
+          width: 0,
+          height: znakRect.height
+        };
+      }
+    }
+
+    /* Poslední bezpečný fallback: levý horní roh skutečného řádku editoru. */
+    const editorRect = editor.getBoundingClientRect();
+    return {
+      left: editorRect.left + 16,
+      right: editorRect.left + 16,
+      top: editorRect.top + 16,
+      bottom: editorRect.top + 40,
+      width: 0,
+      height: 24
+    };
   }
 
   function formatMeta(poznamka) {
@@ -380,32 +472,55 @@
     }
 
     const rect = ziskejCaretRect(posledniSpoust);
-    const viewportWidth =
-      window.visualViewport?.width || window.innerWidth;
-    const viewportHeight =
-      window.visualViewport?.height || window.innerHeight;
+    const vv = window.visualViewport;
 
-    const sirka = Math.min(360, Math.max(240, viewportWidth - 24));
-    const odsazeni = 8;
+    const viewportLeft = vv?.offsetLeft || 0;
+    const viewportTop = vv?.offsetTop || 0;
+    const viewportWidth = vv?.width || window.innerWidth;
+    const viewportHeight = vv?.height || window.innerHeight;
+    const viewportRight = viewportLeft + viewportWidth;
+    const viewportBottom = viewportTop + viewportHeight;
 
-    panel.style.width = `${sirka}px`;
+    /*
+     * Mobilní V1: panel má přibližně polovinu viditelné šířky.
+     * Na velmi úzkém displeji držíme použitelné minimum, na tabletu/PC
+     * ho nenecháme zbytečně široký.
+     */
+    const jeMobil = viewportWidth <= 899;
+    const sirka = jeMobil
+      ? Math.min(280, Math.max(170, viewportWidth * 0.52))
+      : Math.min(360, Math.max(240, viewportWidth * 0.34));
+    const odsazeni = 6;
+    const okraj = 10;
 
+    panel.style.width = `${Math.round(sirka)}px`;
+
+    /* Panel začíná u caretu a jen se ořízne o pravý okraj viewportu. */
     let left = rect.left;
-    left = Math.max(12, Math.min(left, viewportWidth - sirka - 12));
-
-    /* Nejdřív zkusíme panel pod caret. */
-    let top = rect.bottom + odsazeni;
-    const odhadVysky = Math.min(
-      320,
-      58 * Math.max(1, aktualniVysledky.length) + 8
+    left = Math.max(
+      viewportLeft + okraj,
+      Math.min(left, viewportRight - sirka - okraj)
     );
 
-    if (top + odhadVysky > viewportHeight - 12) {
-      top = Math.max(12, rect.top - odhadVysky - odsazeni);
-    }
+    /* Vždy přímo POD aktuálním textem/caretem – už nepřeskakujeme nad něj. */
+    const top = Math.max(
+      viewportTop + okraj,
+      rect.bottom + odsazeni
+    );
+
+    /*
+     * Výška se přizpůsobí prostoru nad klávesnicí. Seznam má vlastní
+     * scroll a standardně ukazuje zhruba 3–4 položky.
+     */
+    const dostupnaVyska = Math.max(
+      96,
+      viewportBottom - top - okraj
+    );
+    const maxVyska = Math.min(230, dostupnaVyska);
 
     panel.style.left = `${Math.round(left)}px`;
     panel.style.top = `${Math.round(top)}px`;
+    panel.style.maxHeight = `${Math.round(maxVyska)}px`;
   }
 
   function otevriNeboAktualizujPanel() {

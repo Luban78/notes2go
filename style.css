@@ -713,6 +713,9 @@ body {
 
   text-align: left;
   cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mainMenu button:hover {
@@ -8492,7 +8495,7 @@ body.secretModeActive {
   position: fixed;
   z-index: 14000;
 
-  max-height: min(320px, 46vh);
+  max-height: min(230px, 34vh);
   overflow: hidden;
   box-sizing: border-box;
 
@@ -8519,6 +8522,9 @@ body.secretModeActive {
   max-height: inherit;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
   padding: 5px;
 }
 
@@ -8540,6 +8546,9 @@ body.secretModeActive {
   text-align: left;
   font: inherit;
   cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .noteLinkAutocompleteItem:hover,
@@ -8577,12 +8586,14 @@ body.secretModeActive {
 
 @media (max-width: 899px) {
   .noteLinkAutocomplete {
-    max-height: min(300px, 38vh);
-    border-radius: 16px;
+    /* Šířku a výšku dopočítává noteLinks.js podle caretu a klávesnice. */
+    min-width: 170px;
+    max-width: 52vw;
+    border-radius: 14px;
   }
 
   .noteLinkAutocompleteItem {
-    min-height: 54px;
-    padding: 9px 12px;
+    min-height: 52px;
+    padding: 8px 10px;
   }
 }
