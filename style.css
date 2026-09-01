@@ -6495,13 +6495,25 @@ text-size-adjust: 100%;
   color: var(--color-text);
 }
 
-/* Explicitní černá musí být vidět i v tmavém motivu. */
-.textColorBlack {
-  color: #000000 !important;
-  background: #ffffff  !important;
-  border: 1px solid #777  !important;
-  border-radius: 8px  !important;
+/*
+ * Bílá a černá jsou v paletě explicitní barvy.
+ * Kontrastní podklad zajišťuje viditelnost v obou motivech.
+ * Vyšší specificita + !important zabrání přepsání obecnými pravidly toolbaru.
+ */
+.editorTopBar .editorToolbarPanel.textColorPanel button.textColorWhite {
+  color: #ffffff !important;
+  background: #27313a !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 8px;
 }
+
+.editorTopBar .editorToolbarPanel.textColorPanel button.textColorBlack {
+  color: #000000 !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.28) !important;
+  border-radius: 8px;
+}
+
 
 #modalRichText::selection,
 #modalRichText *::selection {

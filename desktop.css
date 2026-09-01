@@ -1244,3 +1244,20 @@
   }
 }
 
+/* =========================================
+   EDITOR – PALETA BARVY TEXTU, PC
+   Bílá/černá musí zůstat čitelné bez ohledu na motiv.
+   ========================================= */
+@media (min-width: 900px) {
+  .editorTopBar .editorToolbarPanel.textColorPanel button.textColorWhite {
+    color: #ffffff !important;
+    background: #27313a !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  }
+
+  .editorTopBar .editorToolbarPanel.textColorPanel button.textColorBlack {
+    color: #000000 !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.28) !important;
+  }
+}
