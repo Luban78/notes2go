@@ -8460,7 +8460,9 @@ body.secretModeActive {
    [[ + AUTOCOMPLETE V HLAVNÍM EDITORU
    ======================================== */
 
-#modalRichText .noteInternalLink {
+#modalRichText .noteInternalLink,
+.todoRichTextInput .noteInternalLink,
+.todoTextValue .noteInternalLink {
   display: inline;
   padding: 1px 5px;
   border-radius: 7px;
@@ -8480,11 +8482,22 @@ body.secretModeActive {
   -webkit-box-decoration-break: clone;
 }
 
-#modalRichText .noteInternalLink::before {
+#modalRichText .noteInternalLink::before,
+.todoRichTextInput .noteInternalLink::before,
+.todoTextValue .noteInternalLink::before {
   content: "🔗";
   margin-right: 0.28em;
   font-size: 0.82em;
   vertical-align: 0.04em;
+}
+
+/* V2 – TODO interní odkazy: klikatelné i mimo hlavní rich-text editor. */
+.todoRichTextInput .noteInternalLink,
+.todoTextValue .noteInternalLink {
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .noteLinkAutocomplete[hidden] {
@@ -8672,3 +8685,181 @@ body.secretModeActive {
     );
   }
 }
+
+
+/* ========================================
+   LUBANOTE – INTERNÍ ODKAZY V4
+   KOMPAKTNÍ ZPĚTNÉ ODKAZY „ODKAZUJE SEM“
+   ======================================== */
+
+.noteBacklinksSection {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 6px 2px 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.noteBacklinksSection[hidden],
+.noteBacklinksSection.noteBacklinksEditingHidden {
+  display: none !important;
+}
+
+.noteBacklinksToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px 6px;
+
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-secondary);
+
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.noteBacklinksToggle:active {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 10%,
+    transparent
+  );
+}
+
+.noteBacklinksIcon {
+  flex: 0 0 auto;
+  color: var(--color-accent);
+  font-size: 0.92em;
+  line-height: 1;
+}
+
+.noteBacklinksTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--color-text-secondary);
+  font-size: 0.82em;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.noteBacklinksChevron {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: 0.78em;
+  line-height: 1;
+}
+
+.noteBacklinksList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  max-height: 132px;
+  margin-top: 2px;
+  padding: 2px 0;
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.noteBacklinksList[hidden] {
+  display: none !important;
+}
+
+.noteBacklinkItem {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+
+  padding: 4px 7px;
+
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.noteBacklinkItem:active {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 11%,
+    transparent
+  );
+}
+
+.noteBacklinkMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.noteBacklinkArrow {
+  flex: 0 0 auto;
+  color: var(--color-accent);
+  font-size: 0.9em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.noteBacklinkName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--color-accent-text);
+  font-size: 0.88em;
+  font-weight: 650;
+}
+
+.noteBacklinkMeta {
+  min-width: 0;
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  padding: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.72em;
+  text-align: right;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .noteBacklinksToggle:hover,
+  .noteBacklinkItem:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 8%,
+      transparent
+    );
+  }
+}
+

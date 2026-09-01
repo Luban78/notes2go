@@ -796,6 +796,25 @@
      ======================================== -->
       
       <div id="modalRichText" class="modalRichText" contenteditable="true" spellcheck="true" hidden></div>
+
+      <!-- ========================================
+           INTERNÍ ODKAZY V4 – ZPĚTNÉ ODKAZY
+           Zobrazuje poznámky, které odkazují na právě otevřenou poznámku.
+           ======================================== -->
+      <section id="noteBacklinksSection" class="noteBacklinksSection" hidden aria-label="Zpětné odkazy na tuto poznámku">
+        <button
+          id="noteBacklinksToggle"
+          class="noteBacklinksToggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="noteBacklinksList"
+        >
+          <span class="noteBacklinksIcon" aria-hidden="true">↩</span>
+          <span id="noteBacklinksTitle" class="noteBacklinksTitle">Odkazuje sem (0)</span>
+          <span id="noteBacklinksChevron" class="noteBacklinksChevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="noteBacklinksList" class="noteBacklinksList" hidden></div>
+      </section>
       <!--
       <div
   id="plannedTextLinks"

@@ -8,7 +8,12 @@
    - rich-text TODO položky.
 
    Navigace A → B → C a návratový řádek z V3 zůstávají zachované.
-   Skutečné backlinky „Odkazuje sem“ přijdou v další samostatné verzi.
+
+   V4 přidává skutečné zpětné odkazy „Odkazuje sem“:
+   - hledá odkazy v hlavním rich-textu, bulletech i TODO HTML,
+   - každý zdroj zobrazí jen jednou,
+   - Secret poznámky se nikdy neprozrazují,
+   - klik na backlink používá stejnou bezpečnou interní navigaci.
 */
 (() => {
   "use strict";
@@ -903,7 +908,7 @@
      V C se zobrazí: ← B
      Po návratu v B: ← A
 
-     Skutečné backlinky „Odkazuje sem“ jsou samostatná další verze.
+     V4 pod hlavním obsahem zobrazuje skutečné backlinky „Odkazuje sem“.
   */
 
   const noteLinkBackRow =
@@ -916,6 +921,16 @@
     document.getElementById("taskModal");
   const modalTitleElement =
     document.getElementById("modalTitle");
+  const noteBacklinksSection =
+    document.getElementById("noteBacklinksSection");
+  const noteBacklinksTitle =
+    document.getElementById("noteBacklinksTitle");
+  const noteBacklinksToggle =
+    document.getElementById("noteBacklinksToggle");
+  const noteBacklinksChevron =
+    document.getElementById("noteBacklinksChevron");
+  const noteBacklinksList =
+    document.getElementById("noteBacklinksList");
 
   let historieInterniNavigace = [];
   let aktivniInterniCilId = null;
@@ -1049,6 +1064,7 @@
     requestAnimationFrame(() => {
       odfokusujEditorPredNavigaci();
       aktualizujInterniNavrat();
+      aktualizujBacklinky();
     });
 
     return true;
@@ -1217,6 +1233,304 @@
     }
   }
 
+  /* ========================================
+     V4 – SKUTEČNÉ ZPĚTNÉ ODKAZY
+     ======================================== */
+
+  function nastavBacklinkyRozbalene(rozbalene) {
+    if (!noteBacklinksToggle || !noteBacklinksList) {
+      return;
+    }
+
+    const maBytRozbalene = rozbalene === true;
+
+    noteBacklinksToggle.setAttribute(
+      "aria-expanded",
+      String(maBytRozbalene)
+    );
+    noteBacklinksList.hidden = !maBytRozbalene;
+
+    if (noteBacklinksChevron) {
+      noteBacklinksChevron.textContent =
+        maBytRozbalene ? "▴" : "▾";
+    }
+  }
+
+  function skryjBacklinky() {
+    if (noteBacklinksSection) {
+      noteBacklinksSection.hidden = true;
+      noteBacklinksSection.classList.remove(
+        "noteBacklinksEditingHidden"
+      );
+    }
+
+    if (noteBacklinksTitle) {
+      noteBacklinksTitle.textContent = "Odkazuje sem (0)";
+    }
+
+    nastavBacklinkyRozbalene(false);
+    noteBacklinksList?.replaceChildren();
+  }
+
+  function spocitejInterniOdkazyVHtml(html, ciloveId) {
+    if (!html || !ciloveId) {
+      return 0;
+    }
+
+    const obsah = String(html);
+
+    /*
+     * Rychlá pojistka: většina poznámek žádný interní link nemá,
+     * takže u nich vůbec nemusíme stavět pomocný DOM strom.
+     */
+    if (
+      !obsah.includes("noteInternalLink") ||
+      !obsah.includes("data-note-id")
+    ) {
+      return 0;
+    }
+
+    const docasnyKontejner = document.createElement("div");
+    docasnyKontejner.innerHTML = obsah;
+
+    let pocet = 0;
+
+    docasnyKontejner
+      .querySelectorAll(".noteInternalLink[data-note-id]")
+      .forEach((link) => {
+        if (
+          String(link.dataset.noteId || "") ===
+          String(ciloveId)
+        ) {
+          pocet += 1;
+        }
+      });
+
+    return pocet;
+  }
+
+  function spocitejOdkazyVPoznamce(poznamka, ciloveId) {
+    if (!poznamka || !ciloveId) {
+      return 0;
+    }
+
+    let pocet = spocitejInterniOdkazyVHtml(
+      poznamka.richContent,
+      ciloveId
+    );
+
+    if (Array.isArray(poznamka.todos)) {
+      poznamka.todos.forEach((todo) => {
+        pocet += spocitejInterniOdkazyVHtml(
+          todo?.html,
+          ciloveId
+        );
+      });
+    }
+
+    return pocet;
+  }
+
+  function najdiBacklinky(ciloveId) {
+    if (!ciloveId || typeof loadTask !== "function") {
+      return [];
+    }
+
+    return loadTask()
+      .filter((poznamka) => {
+        if (!poznamka?.id) {
+          return false;
+        }
+
+        /* Secret zdroj nesmí prozradit svou existenci. */
+        if (poznamka.isSecret === true) {
+          return false;
+        }
+
+        return String(poznamka.id) !== String(ciloveId);
+      })
+      .map((poznamka) => ({
+        poznamka,
+        pocetOdkazu: spocitejOdkazyVPoznamce(
+          poznamka,
+          ciloveId
+        )
+      }))
+      .filter((polozka) => polozka.pocetOdkazu > 0)
+      .sort((a, b) => {
+        const casA = new Date(
+          a.poznamka.updatedAt || 0
+        ).getTime() || 0;
+        const casB = new Date(
+          b.poznamka.updatedAt || 0
+        ).getTime() || 0;
+
+        if (casA !== casB) {
+          return casB - casA;
+        }
+
+        return ziskejNazevPoznamky(a.poznamka)
+          .localeCompare(
+            ziskejNazevPoznamky(b.poznamka),
+            "cs-CZ"
+          );
+      });
+  }
+
+  function aktualizujBacklinky() {
+    if (
+      !noteBacklinksSection ||
+      !noteBacklinksTitle ||
+      !noteBacklinksToggle ||
+      !noteBacklinksList
+    ) {
+      return;
+    }
+
+    const aktivniId = ziskejAktivniPoznamkuId();
+
+    if (!aktivniId) {
+      skryjBacklinky();
+      return;
+    }
+
+    const cilovaPoznamka = najdiCilovouPoznamku(aktivniId);
+
+    /* Backlinky Secret poznámky ve V4 vůbec nezobrazujeme. */
+    if (!cilovaPoznamka || cilovaPoznamka.isSecret === true) {
+      skryjBacklinky();
+      return;
+    }
+
+    const backlinky = najdiBacklinky(aktivniId);
+
+    if (backlinky.length === 0) {
+      skryjBacklinky();
+      return;
+    }
+
+    noteBacklinksTitle.textContent =
+      `Odkazuje sem (${backlinky.length})`;
+    noteBacklinksList.replaceChildren();
+
+    backlinky.forEach(({ poznamka, pocetOdkazu }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "noteBacklinkItem";
+      button.dataset.noteId = String(poznamka.id);
+
+      const radek = document.createElement("span");
+      radek.className = "noteBacklinkMain";
+
+      const sipka = document.createElement("span");
+      sipka.className = "noteBacklinkArrow";
+      sipka.setAttribute("aria-hidden", "true");
+      sipka.textContent = "←";
+
+      const nazev = document.createElement("span");
+      nazev.className = "noteBacklinkName";
+      nazev.textContent = ziskejNazevPoznamky(poznamka);
+
+      radek.append(sipka, nazev);
+      button.append(radek);
+
+      const metaCast = [];
+      const meta = formatMeta(poznamka);
+
+      if (meta) {
+        metaCast.push(meta);
+      }
+
+      if (pocetOdkazu > 1) {
+        metaCast.push(`${pocetOdkazu} odkazy`);
+      }
+
+      if (metaCast.length > 0) {
+        const metaElement = document.createElement("span");
+        metaElement.className = "noteBacklinkMeta";
+        metaElement.textContent = metaCast.join(" • ");
+        button.append(metaElement);
+      }
+
+      button.setAttribute(
+        "aria-label",
+        `Otevřít poznámku ${ziskejNazevPoznamky(poznamka)}`
+      );
+
+      noteBacklinksList.append(button);
+    });
+
+    nastavBacklinkyRozbalene(false);
+    noteBacklinksSection.hidden = false;
+  }
+
+  noteBacklinksToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const jeRozbalene =
+      noteBacklinksToggle.getAttribute("aria-expanded") === "true";
+
+    nastavBacklinkyRozbalene(!jeRozbalene);
+  });
+
+  /*
+   * Na mobilu backlink při samotném psaní nepotřebujeme.
+   * Jakmile je fokus v hlavním rich-textu nebo v TODO editoru,
+   * schováme celý kompaktní řádek. Po zavření klávesnice/fokusu
+   * se znovu objeví.
+   */
+  function aktualizujViditelnostBacklinkuPriEditaci() {
+    if (!noteBacklinksSection || noteBacklinksSection.hidden) {
+      return;
+    }
+
+    const aktivni = document.activeElement;
+    const probihaEditace =
+      aktivni === editor ||
+      aktivni?.classList?.contains("todoRichTextInput") ||
+      aktivni?.classList?.contains("todoTextInput");
+
+    noteBacklinksSection.classList.toggle(
+      "noteBacklinksEditingHidden",
+      Boolean(probihaEditace)
+    );
+  }
+
+  taskModalElement?.addEventListener(
+    "focusin",
+    () => {
+      requestAnimationFrame(
+        aktualizujViditelnostBacklinkuPriEditaci
+      );
+    },
+    true
+  );
+
+  taskModalElement?.addEventListener(
+    "focusout",
+    () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(
+          aktualizujViditelnostBacklinkuPriEditaci
+        );
+      });
+    },
+    true
+  );
+
+  noteBacklinksList?.addEventListener("click", (event) => {
+    const polozka = event.target.closest?.(".noteBacklinkItem");
+
+    if (!polozka) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    void otevriInterniOdkaz(polozka);
+  });
+
   /*
    * V2: interní odkaz může být v hlavním textu, bulletu i TODO.
    * Posloucháme v capture fázi, aby TODO tap nejdřív neotevřel editaci
@@ -1266,8 +1580,11 @@
 
         if (!jeOtevreny) {
           resetujInterniNavigaci();
+          skryjBacklinky();
           return;
         }
+
+        aktualizujBacklinky();
 
         const aktivniId = ziskejAktivniPoznamkuId();
 
@@ -1299,10 +1616,24 @@
   }
 
   window.LubaNoteNoteLinks = {
-    verze: "3.1-v2",
+    verze: "4.0-v2",
     zavriAutocomplete: zavriPanel,
     normalizujVyhledavani: bezDiakritiky,
     aktualizujInterniNavrat,
+    aktualizujBacklinky,
     resetujInterniNavigaci
   };
+
+  requestAnimationFrame(() => {
+    const jeOtevreny =
+      taskModalElement &&
+      !taskModalElement.hidden &&
+      taskModalElement.classList.contains("show");
+
+    if (jeOtevreny) {
+      aktualizujBacklinky();
+    } else {
+      skryjBacklinky();
+    }
+  });
 })();
