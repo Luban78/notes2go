@@ -936,6 +936,203 @@
   let aktivniInterniCilId = null;
   let probihaInterniPrepnuti = false;
 
+
+  /* ========================================
+     V5 – ODOLNOST INTERNÍCH ODKAZŮ
+     ========================================
+
+     Zobrazený název odkazu je pouze popisek. Skutečná vazba je vždy
+     data-note-id. Díky tomu lze cílovou poznámku přejmenovat bez
+     přepisování všech zdrojových poznámek a bez zbytečných sync revizí.
+  */
+
+  function vytvorMapuBeznychPoznamek() {
+    if (typeof loadTask !== "function") {
+      return new Map();
+    }
+
+    return new Map(
+      loadTask()
+        .filter((poznamka) =>
+          poznamka?.id && poznamka.isSecret !== true
+        )
+        .map((poznamka) => [String(poznamka.id), poznamka])
+    );
+  }
+
+  function aktualizujJedenInterniOdkaz(link, mapaPoznamek = null) {
+    if (!link?.classList?.contains("noteInternalLink")) {
+      return false;
+    }
+
+    const noteId = String(link.dataset.noteId || "").trim();
+    const mapa = mapaPoznamek || vytvorMapuBeznychPoznamek();
+    const cil = noteId ? mapa.get(noteId) : null;
+
+    if (!cil) {
+      link.classList.add("noteInternalLinkBroken");
+      link.dataset.noteTitle = "";
+      link.textContent = "Smazaná poznámka";
+      link.setAttribute("contenteditable", "false");
+      link.setAttribute("role", "link");
+      link.setAttribute(
+        "aria-label",
+        "Interní odkaz na nedostupnou poznámku"
+      );
+      return true;
+    }
+
+    const aktualniNazev = ziskejNazevPoznamky(cil);
+
+    link.classList.remove("noteInternalLinkBroken");
+    link.dataset.noteTitle = aktualniNazev;
+    link.textContent = aktualniNazev;
+    link.setAttribute("contenteditable", "false");
+    link.setAttribute("role", "link");
+    link.setAttribute(
+      "aria-label",
+      `Interní odkaz na poznámku ${aktualniNazev}`
+    );
+
+    return true;
+  }
+
+  function aktualizujOdkazyVKoreni(koren) {
+    if (!koren?.querySelectorAll) {
+      return 0;
+    }
+
+    const mapa = vytvorMapuBeznychPoznamek();
+    let pocet = 0;
+
+    koren
+      .querySelectorAll(".noteInternalLink[data-note-id]")
+      .forEach((link) => {
+        if (aktualizujJedenInterniOdkaz(link, mapa)) {
+          pocet += 1;
+        }
+      });
+
+    return pocet;
+  }
+
+  function aktualizujOdkazyVEditoru() {
+    const taskModal = document.getElementById("taskModal");
+
+    if (!taskModal) {
+      return 0;
+    }
+
+    return aktualizujOdkazyVKoreni(taskModal);
+  }
+
+  function aktualizujOdkazyVHtml(html) {
+    const obsah = String(html || "");
+
+    if (!obsah.includes("noteInternalLink")) {
+      return obsah;
+    }
+
+    const docasny = document.createElement("div");
+    docasny.innerHTML = obsah;
+    aktualizujOdkazyVKoreni(docasny);
+    return docasny.innerHTML;
+  }
+
+  function prevedDomNaProstyText(koren) {
+    if (!koren) {
+      return "";
+    }
+
+    const blokoveTagy = new Set([
+      "DIV", "P", "LI", "UL", "OL",
+      "H1", "H2", "H3", "H4", "H5", "H6",
+      "SECTION", "ARTICLE", "BLOCKQUOTE"
+    ]);
+
+    let vysledek = "";
+
+    function pridejNovyRadek() {
+      if (vysledek && !vysledek.endsWith("\n")) {
+        vysledek += "\n";
+      }
+    }
+
+    function projdi(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        vysledek += node.nodeValue || "";
+        return;
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+
+      if (node.tagName === "BR") {
+        pridejNovyRadek();
+        return;
+      }
+
+      const jeBlok = blokoveTagy.has(node.tagName);
+
+      if (jeBlok && vysledek && !vysledek.endsWith("\n")) {
+        pridejNovyRadek();
+      }
+
+      node.childNodes.forEach(projdi);
+
+      if (jeBlok) {
+        pridejNovyRadek();
+      }
+    }
+
+    koren.childNodes.forEach(projdi);
+
+    return vysledek
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function ziskejTextProNahledPoznamky(poznamka) {
+    if (!poznamka) {
+      return "";
+    }
+
+    const html = String(poznamka.richContent || "");
+
+    if (!html.includes("noteInternalLink")) {
+      return String(poznamka.note || "");
+    }
+
+    const docasny = document.createElement("div");
+    docasny.innerHTML = html;
+    aktualizujOdkazyVKoreni(docasny);
+
+    return prevedDomNaProstyText(docasny);
+  }
+
+  function ziskejTextProNahledTodo(todo) {
+    if (!todo) {
+      return "";
+    }
+
+    const html = String(todo.html || "");
+
+    if (!html.includes("noteInternalLink")) {
+      return String(todo.text || "");
+    }
+
+    const docasny = document.createElement("div");
+    docasny.innerHTML = html;
+    aktualizujOdkazyVKoreni(docasny);
+
+    return prevedDomNaProstyText(docasny);
+  }
+
   function zobrazNedostupnyInterniOdkaz() {
     if (typeof zobrazZpravuAplikace === "function") {
       zobrazZpravuAplikace(
@@ -1590,11 +1787,15 @@
   }
 
   window.LubaNoteNoteLinks = {
-    verze: "4.0-v2",
+    verze: "5.0-odolnost",
     zavriAutocomplete: zavriPanel,
     normalizujVyhledavani: bezDiakritiky,
     aktualizujInterniNavrat,
     aktualizujBacklinky,
+    aktualizujOdkazyVEditoru,
+    aktualizujOdkazyVHtml,
+    ziskejTextProNahledPoznamky,
+    ziskejTextProNahledTodo,
     resetujInterniNavigaci
   };
 

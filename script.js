@@ -2891,6 +2891,16 @@ function openTaskEditorById(taskId) {
   document.body.classList.add("noScroll");
   
   loadTodos(currentTask.todos);
+
+  /*
+   * Interní link drží cílovou poznámku podle stabilního ID.
+   * Při otevření proto obnovíme jen jeho zobrazený název.
+   * Děláme to PŘED otiskem editoru, aby samotné přejmenování cíle
+   * nevypadalo jako ruční změna této zdrojové poznámky.
+   */
+  window.LubaNoteNoteLinks
+    ?.aktualizujOdkazyVEditoru?.();
+
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
   
@@ -3201,7 +3211,13 @@ function renderTasks() {
       )
     );
     const loadedNoteText = document.createElement("p");
-    loadedNoteText.textContent = loadedTask.note;
+
+    const aktualniNahledPoznamky =
+      window.LubaNoteNoteLinks
+        ?.ziskejTextProNahledPoznamky?.(loadedTask);
+
+    loadedNoteText.textContent =
+      aktualniNahledPoznamky ?? loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
     
     const taskTodos = loadedTask.todos || [];
@@ -3209,9 +3225,15 @@ function renderTasks() {
     if (taskTodos.length > 0) {
       loadedNoteText.textContent = taskTodos
         .slice(0, 3)
-        .map(todo =>
-          `${todo.completed ? "☑" : "☐"} ${todo.text}`
-        )
+        .map(todo => {
+          const aktualniTodoText =
+            window.LubaNoteNoteLinks
+              ?.ziskejTextProNahledTodo?.(todo);
+
+          return `${todo.completed ? "☑" : "☐"} ${
+            aktualniTodoText ?? todo.text
+          }`;
+        })
         .join("\n");
     }
     

@@ -8862,3 +8862,22 @@ body.secretModeActive {
   }
 }
 
+
+
+/* ========================================
+   INTERNÍ ODKAZY V5 – SMAZANÝ / NEDOSTUPNÝ CÍL
+   ======================================== */
+#modalRichText .noteInternalLink.noteInternalLinkBroken,
+.todoRichTextInput .noteInternalLink.noteInternalLinkBroken,
+.todoTextValue .noteInternalLink.noteInternalLinkBroken {
+  opacity: 0.78;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+#modalRichText .noteInternalLink.noteInternalLinkBroken::before,
+.todoRichTextInput .noteInternalLink.noteInternalLinkBroken::before,
+.todoTextValue .noteInternalLink.noteInternalLinkBroken::before {
+  content: "⚠";
+}
