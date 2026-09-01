@@ -8591,6 +8591,20 @@ body.secretModeActive {
   font-size: 0.78em;
 }
 
+/* V7 – vytvoření nové poznámky přímo z [[ vyhledávání. */
+.noteLinkAutocompleteCreate {
+  margin-top: 4px;
+  border-top: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 24%,
+    var(--color-border)
+  );
+}
+
+.noteLinkAutocompleteCreate .noteLinkAutocompleteTitle {
+  color: var(--color-accent);
+}
+
 .noteLinkAutocompleteEmpty {
   padding: 12px;
   color: var(--color-text-secondary);

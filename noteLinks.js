@@ -9,11 +9,13 @@
 
    Navigace A → B → C a návratový řádek z V3 zůstávají zachované.
 
-   V4 přidává skutečné zpětné odkazy „Odkazuje sem“:
-   - hledá odkazy v hlavním rich-textu, bulletech i TODO HTML,
-   - každý zdroj zobrazí jen jednou,
-   - Secret poznámky se nikdy neprozrazují,
-   - klik na backlink používá stejnou bezpečnou interní navigaci.
+   V4 přidává skutečné zpětné odkazy.
+   V5 drží vazby podle stabilního ID a umí přejmenování/smazání.
+   V7 přidává rychlejší wiki práci:
+   - po samotném [[ osm naposledy upravených běžných poznámek,
+   - při psaní všechny odpovídající výsledky přes scroll,
+   - možnost + Vytvořit poznámku „…“,
+   - Secret zůstává úplně mimo interní linkování.
 */
 (() => {
   "use strict";
@@ -24,7 +26,7 @@
     return;
   }
 
-  const MAX_VYSLEDKU = 8;
+  const MAX_NEDAVNYCH_VYSLEDKU = 8;
   const MAX_DELKA_DOTAZU = 80;
 
   let panel = null;
@@ -70,6 +72,56 @@
     return modalTaskId || null;
   }
 
+  function jeAktivniZdrojSecret() {
+    try {
+      if (
+        typeof secretTaskEnabled !== "undefined" &&
+        secretTaskEnabled === true
+      ) {
+        return true;
+      }
+    } catch (_) {
+      // Některé buildy nemusí globální stav editoru zpřístupnit.
+    }
+
+    const aktivniId = ziskejAktivniPoznamkuId();
+
+    if (!aktivniId || typeof loadTask !== "function") {
+      return false;
+    }
+
+    return loadTask().some(
+      (poznamka) =>
+        String(poznamka?.id || "") === String(aktivniId) &&
+        poznamka?.isSecret === true
+    );
+  }
+
+  function existujeBeznaPoznamkaSNazvem(nazev) {
+    if (typeof loadTask !== "function") {
+      return false;
+    }
+
+    const hledanyNazev = bezDiakritiky(
+      String(nazev || "").trim()
+    );
+
+    if (!hledanyNazev) {
+      return false;
+    }
+
+    return loadTask().some((poznamka) => {
+      if (!poznamka?.id || poznamka.isSecret === true) {
+        return false;
+      }
+
+      return (
+        bezDiakritiky(ziskejNazevPoznamky(poznamka)) ===
+        hledanyNazev
+      );
+    });
+  }
+
   function nactiKandidaty(dotaz) {
     if (typeof loadTask !== "function") {
       return [];
@@ -85,8 +137,8 @@
         }
 
         /*
-         * V1 nikdy nenabízí Secret poznámky – ani když je trezor
-         * právě odemčený. Secret propojení je samostatná budoucí verze.
+         * Secret zůstává úplně oddělený ostrov.
+         * V interních odkazech se nikdy nenabízí ani neprozrazuje.
          */
         if (poznamka.isSecret === true) {
           return false;
@@ -115,6 +167,7 @@
         }
 
         return {
+          typ: "poznamka",
           poznamka,
           nazev,
           skore,
@@ -141,7 +194,36 @@
         return b.updatedAt - a.updatedAt;
       });
 
-    return kandidati.slice(0, MAX_VYSLEDKU);
+    /*
+     * Po samotném [[ ukazujeme jen osm naposledy upravených poznámek.
+     * Jakmile uživatel začne psát, žádný pevný limit nepoužíváme –
+     * panel má vlastní scroll a může nabídnout všechny shody.
+     */
+    if (!normalizovanyDotaz) {
+      return kandidati.slice(0, MAX_NEDAVNYCH_VYSLEDKU);
+    }
+
+    return kandidati;
+  }
+
+  function vytvorPolozkyProPanel(dotaz) {
+    const kandidati = nactiKandidaty(dotaz);
+    const cistyDotaz = String(dotaz || "").trim();
+
+    if (
+      cistyDotaz &&
+      !existujeBeznaPoznamkaSNazvem(cistyDotaz)
+    ) {
+      kandidati.push({
+        typ: "vytvorit",
+        poznamka: null,
+        nazev: cistyDotaz,
+        skore: 99,
+        updatedAt: 0
+      });
+    }
+
+    return kandidati;
   }
 
   function vytvorPanel() {
@@ -328,6 +410,14 @@
   }
 
   function ziskejSpoustUCursoru(cilovyEditor = null) {
+    /*
+     * Secret režim je záměrně úplně oddělený.
+     * Ani zdrojová Secret poznámka nesmí interní linky vytvářet.
+     */
+    if (jeAktivniZdrojSecret()) {
+      return null;
+    }
+
     const selection = window.getSelection();
 
     if (
@@ -509,6 +599,21 @@
 
       const nazev = document.createElement("span");
       nazev.className = "noteLinkAutocompleteTitle";
+
+      if (vysledek.typ === "vytvorit") {
+        button.classList.add("noteLinkAutocompleteCreate");
+        button.dataset.action = "create";
+        nazev.textContent =
+          `+ Vytvořit poznámku „${vysledek.nazev}“`;
+
+        const meta = document.createElement("span");
+        meta.className = "noteLinkAutocompleteMeta";
+        meta.textContent = "Nová běžná poznámka";
+        button.append(nazev, meta);
+        seznam.append(button);
+        return;
+      }
+
       nazev.textContent = vysledek.nazev;
 
       const metaText = formatMeta(vysledek.poznamka);
@@ -613,7 +718,7 @@
     }
 
     posledniSpoust = spoust;
-    aktualniVysledky = nactiKandidaty(spoust.dotaz);
+    aktualniVysledky = vytvorPolozkyProPanel(spoust.dotaz);
     aktivniIndex = 0;
 
     vytvorPanel();
@@ -638,12 +743,9 @@
     return link;
   }
 
-  function vlozVybranouPoznamku(index) {
-    const vysledek = aktualniVysledky[index];
-    const spoust = posledniSpoust;
-
-    if (!vysledek || !spoust) {
-      return;
+  function vlozPoznamkuDoSpouste(poznamka, spoust) {
+    if (!poznamka || !spoust) {
+      return false;
     }
 
     const cilovyEditor = spoust.editor;
@@ -653,8 +755,7 @@
       !cilovyEditor?.isConnected ||
       !cilovyEditor.contains(spoust.textNode)
     ) {
-      zavriPanel();
-      return;
+      return false;
     }
 
     const range = document.createRange();
@@ -663,11 +764,10 @@
       range.setStart(spoust.textNode, spoust.startOffset);
       range.setEnd(spoust.textNode, spoust.endOffset);
     } catch (_) {
-      zavriPanel();
-      return;
+      return false;
     }
 
-    const link = vytvorInterniOdkaz(vysledek.poznamka);
+    const link = vytvorInterniOdkaz(poznamka);
     const mezera = document.createTextNode(" ");
 
     range.deleteContents();
@@ -680,8 +780,6 @@
     caretRange.collapse(true);
     selection.removeAllRanges();
     selection.addRange(caretRange);
-
-    zavriPanel();
 
     try {
       cilovyEditor.focus({ preventScroll: true });
@@ -696,6 +794,219 @@
         data: null
       })
     );
+
+    return true;
+  }
+
+  function vytvorDatumCasProNovouPoznamku() {
+    const ted = new Date();
+    const rok = ted.getFullYear();
+    const mesic = String(ted.getMonth() + 1).padStart(2, "0");
+    const den = String(ted.getDate()).padStart(2, "0");
+    const hodina = String(ted.getHours()).padStart(2, "0");
+    const minuta = String(ted.getMinutes()).padStart(2, "0");
+
+    return `${rok}-${mesic}-${den}T${hodina}:${minuta}`;
+  }
+
+  function ziskejOblastProNovouPoznamku() {
+    const aktivniId = ziskejAktivniPoznamkuId();
+
+    if (aktivniId && typeof loadTask === "function") {
+      const zdroj = loadTask().find(
+        (poznamka) =>
+          String(poznamka?.id || "") === String(aktivniId)
+      );
+
+      if (
+        zdroj?.area === "work" ||
+        zdroj?.area === "private"
+      ) {
+        return zdroj.area;
+      }
+    }
+
+    try {
+      if (
+        typeof activeArea !== "undefined" &&
+        (activeArea === "work" || activeArea === "private")
+      ) {
+        return activeArea;
+      }
+    } catch (_) {
+      // Bezpečný fallback níže.
+    }
+
+    return "private";
+  }
+
+  async function ulozNovouBeznouPoznamku(poznamka) {
+    if (typeof saveTask !== "function") {
+      throw new Error("saveTask není dostupné.");
+    }
+
+    if (
+      window.LubaNoteSync
+        ?.provedLokalniZmenuASynchronizuj
+    ) {
+      await window.LubaNoteSync
+        .provedLokalniZmenuASynchronizuj(
+          () => saveTask(poznamka)
+        );
+      return;
+    }
+
+    await saveTask(poznamka);
+
+    if (
+      navigator.onLine &&
+      typeof uploadLocalNoteToSupabase === "function"
+    ) {
+      setTimeout(() => {
+        Promise.resolve(
+          uploadLocalNoteToSupabase(poznamka)
+        ).catch((error) => {
+          console.warn(
+            "Synchronizace nové propojené poznámky byla odložena:",
+            error
+          );
+        });
+      }, 0);
+    }
+  }
+
+  async function vytvorNovouPoznamkuZAutocomplete(nazev) {
+    if (
+      probihaInterniPrepnuti ||
+      jeAktivniZdrojSecret()
+    ) {
+      return;
+    }
+
+    const cistyNazev = String(nazev || "").trim();
+    const spoust = posledniSpoust;
+
+    if (!cistyNazev || !spoust) {
+      return;
+    }
+
+    /*
+     * Během poslední chvíle mohl vzniknout stejný název z jiné akce.
+     * V takovém případě nový duplikát nevytváříme.
+     */
+    if (existujeBeznaPoznamkaSNazvem(cistyNazev)) {
+      otevriNeboAktualizujPanel(spoust.editor);
+      return;
+    }
+
+    const zdrojoveId = ziskejAktivniPoznamkuId();
+    const zdrojovyNazev = zdrojoveId
+      ? ziskejNazevAktualniPoznamky(zdrojoveId)
+      : "";
+
+    const novaPoznamka = {
+      id: crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+      title: cistyNazev,
+      note: "",
+      richContent: "",
+      date: vytvorDatumCasProNovouPoznamku(),
+      completed: false,
+      reminder: false,
+      favorite: false,
+      notificationId: Date.now() % 2147483647,
+      area: ziskejOblastProNovouPoznamku(),
+      pinned: false,
+      isSecret: false,
+      tags: [],
+      todos: [],
+      repeat: null
+    };
+
+    probihaInterniPrepnuti = true;
+
+    try {
+      /*
+       * Nejdřív vytvoříme cíl se stabilním ID. Pak vložíme link
+       * do zdroje a zdroj uložíme stejnou bezpečnou cestou jako
+       * při normální interní navigaci.
+       */
+      await ulozNovouBeznouPoznamku(novaPoznamka);
+
+      if (!vlozPoznamkuDoSpouste(novaPoznamka, spoust)) {
+        throw new Error(
+          "Místo pro vložení interního odkazu už není dostupné."
+        );
+      }
+
+      zavriPanel();
+
+      const muzemePrepnout =
+        await pripravPrepnutiZAktualniPoznamky();
+
+      if (!muzemePrepnout) {
+        return;
+      }
+
+      const aktualniCil =
+        najdiCilovouPoznamku(novaPoznamka.id);
+
+      if (!aktualniCil || aktualniCil.isSecret === true) {
+        zobrazNedostupnyInterniOdkaz();
+        return;
+      }
+
+      if (zdrojoveId) {
+        historieInterniNavigace.push({
+          id: String(zdrojoveId),
+          nazev: zdrojovyNazev || "Předchozí poznámka"
+        });
+      }
+
+      /*
+       * Stejně jako běžný interní odkaz otevřeme novou poznámku
+       * bez automatické klávesnice.
+       */
+      otevriPoznamkuBezKlavesnice(novaPoznamka.id);
+    } catch (error) {
+      console.error(
+        "Vytvoření propojené poznámky selhalo:",
+        error
+      );
+
+      if (typeof zobrazZpravuAplikace === "function") {
+        zobrazZpravuAplikace(
+          "Interní odkaz",
+          "Novou propojenou poznámku se nepodařilo bezpečně vytvořit."
+        );
+      }
+    } finally {
+      probihaInterniPrepnuti = false;
+      requestAnimationFrame(aktualizujInterniNavrat);
+    }
+  }
+
+  function vlozVybranouPoznamku(index) {
+    const vysledek = aktualniVysledky[index];
+    const spoust = posledniSpoust;
+
+    if (!vysledek || !spoust) {
+      return;
+    }
+
+    if (vysledek.typ === "vytvorit") {
+      void vytvorNovouPoznamkuZAutocomplete(
+        vysledek.nazev
+      );
+      return;
+    }
+
+    if (!vlozPoznamkuDoSpouste(vysledek.poznamka, spoust)) {
+      zavriPanel();
+      return;
+    }
+
+    zavriPanel();
   }
 
   function posunAktivni(smer) {
@@ -1787,7 +2098,7 @@
   }
 
   window.LubaNoteNoteLinks = {
-    verze: "5.0-odolnost",
+    verze: "7.0-rychle-linky",
     zavriAutocomplete: zavriPanel,
     normalizujVyhledavani: bezDiakritiky,
     aktualizujInterniNavrat,
