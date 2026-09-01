@@ -8451,3 +8451,138 @@ body.secretModeActive {
   z-index: 1;
   cursor: pointer;
 }
+
+/* ========================================
+   INTERNÍ ODKAZY NA POZNÁMKY – V1
+   [[ + AUTOCOMPLETE V HLAVNÍM EDITORU
+   ======================================== */
+
+#modalRichText .noteInternalLink {
+  display: inline;
+  padding: 1px 5px;
+  border-radius: 7px;
+
+  color: var(--color-accent-text);
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 13%,
+    transparent
+  );
+
+  font-weight: 600;
+  text-decoration: none;
+  white-space: normal;
+  cursor: default;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+#modalRichText .noteInternalLink::before {
+  content: "🔗";
+  margin-right: 0.28em;
+  font-size: 0.82em;
+  vertical-align: 0.04em;
+}
+
+.noteLinkAutocomplete[hidden] {
+  display: none !important;
+}
+
+.noteLinkAutocomplete {
+  position: fixed;
+  z-index: 14000;
+
+  max-height: min(320px, 46vh);
+  overflow: hidden;
+  box-sizing: border-box;
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 35%,
+    var(--color-border)
+  );
+  border-radius: 14px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(
+      in srgb,
+      var(--color-accent) 8%,
+      transparent
+    );
+}
+
+.noteLinkAutocompleteList {
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+}
+
+.noteLinkAutocompleteItem {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 10px;
+
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.noteLinkAutocompleteItem:hover,
+.noteLinkAutocompleteItem.active,
+.noteLinkAutocompleteItem[aria-selected="true"] {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 16%,
+    var(--color-surface)
+  );
+}
+
+.noteLinkAutocompleteTitle {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.noteLinkAutocompleteMeta {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: 0.78em;
+}
+
+.noteLinkAutocompleteEmpty {
+  padding: 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+}
+
+@media (max-width: 899px) {
+  .noteLinkAutocomplete {
+    max-height: min(300px, 38vh);
+    border-radius: 16px;
+  }
+
+  .noteLinkAutocompleteItem {
+    min-height: 54px;
+    padding: 9px 12px;
+  }
+}

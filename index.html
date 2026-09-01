@@ -8,7 +8,7 @@
   
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260826-nazev-editor-1">
+  <link rel="stylesheet" href="style.css?v=20260901-note-links-v1-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -637,11 +637,12 @@
             </svg>
           </button>
           
-          <button id="tlacitkoVlozitOdkaz" type="button" class="editorQuickTool editorQuickToolIcon" aria-label="Vložit odkaz">
+          <button id="tlacitkoVlozitOdkaz" type="button" class="editorQuickTool editorQuickToolIcon" aria-label="Vložit internetový odkaz" title="Internetový odkaz">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10.5 13.5 13.5 10.5"></path>
-              <path d="M8.2 15.8 6.4 17.6a3.4 3.4 0 0 1-4.8-4.8l3.2-3.2a3.4 3.4 0 0 1 4.8 0"></path>
-              <path d="m15.8 8.2 1.8-1.8a3.4 3.4 0 0 1 4.8 4.8l-3.2 3.2a3.4 3.4 0 0 1-4.8 0"></path>
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M3 12h18"></path>
+              <path d="M12 3c2.3 2.45 3.5 5.45 3.5 9S14.3 18.55 12 21"></path>
+              <path d="M12 3c-2.3 2.45-3.5 5.45-3.5 9S9.7 18.55 12 21"></path>
             </svg>
           </button>
         </div>
@@ -1577,6 +1578,9 @@
   
   <!-- Obrázky a internetové odkazy v rich-text editoru -->
   <script src="editorMedia.js"></script>
+
+  <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
+  <script src="noteLinks.js?v=20260901-note-links-v1-1"></script>
   
   <script src="planner.js"></script>
   
