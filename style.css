@@ -9072,3 +9072,210 @@ body.lubaNoteImagePreviewOpen {
 .lubaNoteImagePreviewClose:active {
   transform: scale(0.94);
 }
+
+/* =========================================================
+   PDF PROHLÍŽEČ – externí i LubaNote PDF
+   ========================================================= */
+
+.pdfViewerOverlay[hidden],
+.pdfViewerOverlay [hidden] {
+  display: none !important;
+}
+
+.pdfViewerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 0;
+}
+
+body.pdfViewerOpen {
+  overflow: hidden !important;
+}
+
+.pdfViewerPanel {
+  width: min(1120px, 94vw);
+  height: min(92dvh, 980px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.35));
+  border-radius: 16px;
+  background: var(--bg-color, #fff);
+  color: var(--text-color, #111);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+}
+
+.pdfViewerHeader {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+  background: var(--panel-bg, var(--bg-color, #fff));
+  flex: 0 0 auto;
+}
+
+.pdfViewerClose,
+.pdfViewerZoom button,
+.pdfViewerPageBar button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pdfViewerClose:active,
+.pdfViewerZoom button:active,
+.pdfViewerPageBar button:active {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.pdfViewerClose:disabled,
+.pdfViewerZoom button:disabled,
+.pdfViewerPageBar button:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.pdfViewerTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.pdfViewerZoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pdfViewerZoomValue {
+  min-width: 54px;
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdfViewerPageBar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.22));
+  background: var(--panel-bg, var(--bg-color, #fff));
+  flex: 0 0 auto;
+}
+
+.pdfViewerPageValue {
+  min-width: 72px;
+  text-align: center;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdfViewerBody {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #525659;
+}
+
+.pdfViewerFrame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #525659;
+}
+
+.pdfViewerNative {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  text-align: center;
+  touch-action: pan-x pan-y;
+}
+
+.pdfViewerImage {
+  display: block;
+  max-width: none;
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.38);
+}
+
+.pdfViewerImage.is-loading {
+  opacity: 0.58;
+}
+
+.pdfViewerLoading {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(20, 20, 20, 0.84);
+  color: #fff;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+@media (max-width: 899px) {
+  .pdfViewerOverlay {
+    align-items: stretch;
+  }
+
+  .pdfViewerPanel {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .pdfViewerHeader {
+    min-height: 50px;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    padding-left: max(5px, env(safe-area-inset-left));
+    padding-right: max(5px, env(safe-area-inset-right));
+  }
+
+  .pdfViewerZoomValue {
+    min-width: 46px;
+    font-size: 12px;
+  }
+
+  .pdfViewerZoom button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .pdfViewerNative {
+    padding: 8px;
+  }
+}

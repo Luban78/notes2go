@@ -4,14 +4,20 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -46,15 +52,20 @@ public class LubaNoteDocumentPlugin extends Plugin {
   private String pdfNazev = "LubaNote-poznamka.pdf";
   private boolean pdfTiskSpusten = false;
 
+  private final Object pdfViewerLock = new Object();
+  private ParcelFileDescriptor pdfViewerDescriptor = null;
+  private PdfRenderer pdfViewerRenderer = null;
+
   @PluginMethod
   public void otevriDokument(PluginCall call) {
     Intent zamer = new Intent(Intent.ACTION_OPEN_DOCUMENT);
     zamer.addCategory(Intent.CATEGORY_OPENABLE);
-    zamer.setType("text/*");
+    zamer.setType("*/*");
 
     String[] mimeTypy = new String[] {
       "text/html",
-      "text/plain"
+      "text/plain",
+      "application/pdf"
     };
 
     zamer.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypy);
@@ -89,26 +100,220 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
 
     Uri uri = dataZameru.getData();
+    String nazevSouboru = ziskejNazevSouboru(uri);
+    String mimeType =
+      getContext().getContentResolver().getType(uri);
+
+    boolean jePdf =
+      "application/pdf".equalsIgnoreCase(mimeType) ||
+      nazevSouboru.toLowerCase().endsWith(".pdf");
 
     try {
+      if (jePdf) {
+        JSObject odpoved = otevriPdfProViewer(
+          uri,
+          nazevSouboru,
+          mimeType
+        );
+        call.resolve(odpoved);
+        return;
+      }
+
       String obsah = nactiTextovySoubor(uri);
 
       JSObject odpoved = new JSObject();
       odpoved.put("canceled", false);
+      odpoved.put("typ", "text");
       odpoved.put("obsah", obsah);
-      odpoved.put("nazevSouboru", ziskejNazevSouboru(uri));
-      odpoved.put(
-        "mimeType",
-        getContext().getContentResolver().getType(uri)
-      );
+      odpoved.put("nazevSouboru", nazevSouboru);
+      odpoved.put("mimeType", mimeType);
       odpoved.put("uri", uri.toString());
 
       call.resolve(odpoved);
-    } catch (IOException chyba) {
+    } catch (SecurityException chyba) {
       call.reject(
-        "Dokument se nepodařilo přečíst.",
+        "PDF je chráněné heslem nebo k němu Android nepovolil přístup.",
         chyba
       );
+    } catch (IOException chyba) {
+      call.reject(
+        jePdf
+          ? "PDF se nepodařilo otevřít."
+          : "Dokument se nepodařilo přečíst.",
+        chyba
+      );
+    }
+  }
+
+  private JSObject otevriPdfProViewer(
+    Uri uri,
+    String nazevSouboru,
+    String mimeType
+  ) throws IOException {
+    synchronized (pdfViewerLock) {
+      zavriPdfViewerInterni();
+
+      ParcelFileDescriptor descriptor =
+        getContext()
+          .getContentResolver()
+          .openFileDescriptor(uri, "r");
+
+      if (descriptor == null) {
+        throw new IOException("Android neotevřel PDF soubor.");
+      }
+
+      try {
+        PdfRenderer renderer = new PdfRenderer(descriptor);
+
+        if (renderer.getPageCount() <= 0) {
+          renderer.close();
+          descriptor.close();
+          throw new IOException("PDF neobsahuje žádné stránky.");
+        }
+
+        pdfViewerDescriptor = descriptor;
+        pdfViewerRenderer = renderer;
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("canceled", false);
+        odpoved.put("typ", "pdf");
+        odpoved.put("pageCount", renderer.getPageCount());
+        odpoved.put("nazevSouboru", nazevSouboru);
+        odpoved.put(
+          "mimeType",
+          mimeType == null ? "application/pdf" : mimeType
+        );
+        odpoved.put("uri", uri.toString());
+        return odpoved;
+      } catch (IOException | SecurityException chyba) {
+        try {
+          descriptor.close();
+        } catch (Exception ignored) {
+          // Descriptor už může být zavřený.
+        }
+        throw chyba;
+      }
+    }
+  }
+
+  @PluginMethod
+  public void vykresliPdfStranku(PluginCall call) {
+    Integer indexHodnota = call.getInt("index");
+    Integer sirkaHodnota = call.getInt("targetWidth");
+
+    int index = indexHodnota == null ? 0 : indexHodnota;
+    int cilovaSirka = sirkaHodnota == null ? 1200 : sirkaHodnota;
+    cilovaSirka = Math.max(320, Math.min(2600, cilovaSirka));
+
+    synchronized (pdfViewerLock) {
+      if (pdfViewerRenderer == null) {
+        call.reject("PDF není otevřené.");
+        return;
+      }
+
+      if (index < 0 || index >= pdfViewerRenderer.getPageCount()) {
+        call.reject("Požadovaná PDF stránka neexistuje.");
+        return;
+      }
+
+      PdfRenderer.Page stranka = null;
+      Bitmap bitmap = null;
+
+      try {
+        stranka = pdfViewerRenderer.openPage(index);
+
+        int zdrojSirka = Math.max(1, stranka.getWidth());
+        int zdrojVyska = Math.max(1, stranka.getHeight());
+        int cilovaVyska = Math.max(1, Math.round(
+          cilovaSirka * (zdrojVyska / (float) zdrojSirka)
+        ));
+
+        final long maxPixelu = 12_000_000L;
+        long pixely = (long) cilovaSirka * cilovaVyska;
+
+        if (pixely > maxPixelu) {
+          double pomer = Math.sqrt(maxPixelu / (double) pixely);
+          cilovaSirka = Math.max(320, (int) Math.floor(cilovaSirka * pomer));
+          cilovaVyska = Math.max(1, (int) Math.floor(cilovaVyska * pomer));
+        }
+
+        bitmap = Bitmap.createBitmap(
+          cilovaSirka,
+          cilovaVyska,
+          Bitmap.Config.ARGB_8888
+        );
+        bitmap.eraseColor(Color.WHITE);
+
+        float meritko = cilovaSirka / (float) zdrojSirka;
+        Matrix matice = new Matrix();
+        matice.postScale(meritko, meritko);
+
+        stranka.render(
+          bitmap,
+          null,
+          matice,
+          PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+        );
+
+        ByteArrayOutputStream vystup = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 94, vystup);
+
+        String base64 = Base64.encodeToString(
+          vystup.toByteArray(),
+          Base64.NO_WRAP
+        );
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("dataUrl", "data:image/jpeg;base64," + base64);
+        odpoved.put("width", cilovaSirka);
+        odpoved.put("height", cilovaVyska);
+        odpoved.put("pageCount", pdfViewerRenderer.getPageCount());
+        call.resolve(odpoved);
+      } catch (Exception chyba) {
+        call.reject(
+          "PDF stránku se nepodařilo vykreslit.",
+          chyba
+        );
+      } finally {
+        if (bitmap != null) {
+          bitmap.recycle();
+        }
+
+        if (stranka != null) {
+          stranka.close();
+        }
+      }
+    }
+  }
+
+  @PluginMethod
+  public void zavriPdf(PluginCall call) {
+    synchronized (pdfViewerLock) {
+      zavriPdfViewerInterni();
+    }
+
+    JSObject odpoved = new JSObject();
+    odpoved.put("closed", true);
+    call.resolve(odpoved);
+  }
+
+  private void zavriPdfViewerInterni() {
+    if (pdfViewerRenderer != null) {
+      try {
+        pdfViewerRenderer.close();
+      } catch (Exception ignored) {
+        // Renderer už může být zavřený.
+      }
+      pdfViewerRenderer = null;
+    }
+
+    if (pdfViewerDescriptor != null) {
+      try {
+        pdfViewerDescriptor.close();
+      } catch (Exception ignored) {
+        // Descriptor už může být zavřený.
+      }
+      pdfViewerDescriptor = null;
     }
   }
 

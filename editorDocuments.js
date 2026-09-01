@@ -29,6 +29,14 @@
   const MAX_VELIKOST_OTEVRENEHO_SOUBORU =
     20 * 1024 * 1024;
 
+  const MAX_VELIKOST_PDF_WEB =
+    100 * 1024 * 1024;
+
+  let pdfViewerStav = null;
+  let pdfViewerUrl = null;
+  let pdfViewerRenderToken = 0;
+  let pdfViewerPrvky = null;
+
   function jeSecretEditor() {
     return (
       secretTaskEnabled === true ||
@@ -47,6 +55,320 @@
     return window.Capacitor
       ?.Plugins
       ?.LubaNoteDocument || null;
+  }
+
+  function jePdfSoubor({ nazevSouboru = "", mimeType = "" } = {}) {
+    return (
+      /\.pdf$/i.test(String(nazevSouboru)) ||
+      /application\/pdf/i.test(String(mimeType))
+    );
+  }
+
+  function zajistiPdfViewer() {
+    if (pdfViewerPrvky) {
+      return pdfViewerPrvky;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.id = "pdfViewerOverlay";
+    overlay.className = "pdfViewerOverlay";
+    overlay.hidden = true;
+
+    overlay.innerHTML = `
+      <section class="pdfViewerPanel" role="dialog" aria-modal="true" aria-label="PDF prohlížeč">
+        <header class="pdfViewerHeader">
+          <button type="button" class="pdfViewerClose" aria-label="Zavřít PDF">←</button>
+          <div class="pdfViewerTitle" title=""></div>
+          <div class="pdfViewerZoom" hidden>
+            <button type="button" class="pdfViewerZoomOut" aria-label="Zmenšit PDF">−</button>
+            <span class="pdfViewerZoomValue">100 %</span>
+            <button type="button" class="pdfViewerZoomIn" aria-label="Zvětšit PDF">+</button>
+          </div>
+        </header>
+
+        <div class="pdfViewerPageBar" hidden>
+          <button type="button" class="pdfViewerPrev" aria-label="Předchozí strana">‹</button>
+          <span class="pdfViewerPageValue">1 / 1</span>
+          <button type="button" class="pdfViewerNext" aria-label="Další strana">›</button>
+        </div>
+
+        <div class="pdfViewerBody">
+          <div class="pdfViewerLoading" hidden>Načítám PDF…</div>
+          <div class="pdfViewerNative" hidden>
+            <img class="pdfViewerImage" alt="PDF strana">
+          </div>
+          <iframe class="pdfViewerFrame" title="PDF dokument" hidden></iframe>
+        </div>
+      </section>`;
+
+    document.body.appendChild(overlay);
+
+    const prvky = {
+      overlay,
+      panel: overlay.querySelector(".pdfViewerPanel"),
+      close: overlay.querySelector(".pdfViewerClose"),
+      title: overlay.querySelector(".pdfViewerTitle"),
+      zoom: overlay.querySelector(".pdfViewerZoom"),
+      zoomOut: overlay.querySelector(".pdfViewerZoomOut"),
+      zoomIn: overlay.querySelector(".pdfViewerZoomIn"),
+      zoomValue: overlay.querySelector(".pdfViewerZoomValue"),
+      pageBar: overlay.querySelector(".pdfViewerPageBar"),
+      prev: overlay.querySelector(".pdfViewerPrev"),
+      next: overlay.querySelector(".pdfViewerNext"),
+      pageValue: overlay.querySelector(".pdfViewerPageValue"),
+      body: overlay.querySelector(".pdfViewerBody"),
+      loading: overlay.querySelector(".pdfViewerLoading"),
+      native: overlay.querySelector(".pdfViewerNative"),
+      image: overlay.querySelector(".pdfViewerImage"),
+      frame: overlay.querySelector(".pdfViewerFrame")
+    };
+
+    prvky.close.addEventListener("click", () => {
+      zavriPdfViewer();
+    });
+
+    prvky.prev.addEventListener("click", () => {
+      prejdiNaPdfStranku(-1);
+    });
+
+    prvky.next.addEventListener("click", () => {
+      prejdiNaPdfStranku(1);
+    });
+
+    prvky.zoomOut.addEventListener("click", () => {
+      zmenPdfZoom(-1);
+    });
+
+    prvky.zoomIn.addEventListener("click", () => {
+      zmenPdfZoom(1);
+    });
+
+    const zpracujKlavesyPdf = (event) => {
+      if (!pdfViewerStav) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        zavriPdfViewer();
+        return;
+      }
+
+      if (pdfViewerStav.native && event.key === "ArrowLeft") {
+        event.preventDefault();
+        prejdiNaPdfStranku(-1);
+      }
+
+      if (pdfViewerStav.native && event.key === "ArrowRight") {
+        event.preventDefault();
+        prejdiNaPdfStranku(1);
+      }
+    };
+
+    document.addEventListener("keydown", zpracujKlavesyPdf, true);
+
+    pdfViewerPrvky = prvky;
+    return prvky;
+  }
+
+  function aktualizujPdfOvládani() {
+    if (!pdfViewerStav || !pdfViewerPrvky) {
+      return;
+    }
+
+    const {
+      pageCount = 1,
+      pageIndex = 0,
+      zoom = 1
+    } = pdfViewerStav;
+
+    pdfViewerPrvky.pageValue.textContent =
+      `${pageIndex + 1} / ${pageCount}`;
+
+    pdfViewerPrvky.prev.disabled = pageIndex <= 0;
+    pdfViewerPrvky.next.disabled = pageIndex >= pageCount - 1;
+    pdfViewerPrvky.zoomValue.textContent =
+      `${Math.round(zoom * 100)} %`;
+    pdfViewerPrvky.zoomOut.disabled = zoom <= 0.75;
+    pdfViewerPrvky.zoomIn.disabled = zoom >= 2;
+  }
+
+  async function vykresliAktualniPdfStranku() {
+    if (!pdfViewerStav?.native || !pdfViewerPrvky) {
+      return;
+    }
+
+    const plugin = ziskejNativniPlugin();
+
+    if (!plugin?.vykresliPdfStranku) {
+      throw new Error("Nativní PDF renderer není dostupný.");
+    }
+
+    const token = ++pdfViewerRenderToken;
+    const viewportWidth = Math.max(280, pdfViewerPrvky.body.clientWidth - 24);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const targetWidth = Math.min(2600, Math.max(520,
+      Math.round(viewportWidth * pdfViewerStav.zoom * pixelRatio)
+    ));
+
+    pdfViewerPrvky.loading.hidden = false;
+    pdfViewerPrvky.image.classList.add("is-loading");
+
+    const vysledek = await plugin.vykresliPdfStranku({
+      index: pdfViewerStav.pageIndex,
+      targetWidth
+    });
+
+    if (token !== pdfViewerRenderToken || !pdfViewerStav?.native) {
+      return;
+    }
+
+    if (!vysledek?.dataUrl) {
+      throw new Error("PDF stránka nemá obrazová data.");
+    }
+
+    pdfViewerPrvky.image.src = vysledek.dataUrl;
+    pdfViewerPrvky.image.style.width =
+      `${Math.round(viewportWidth * pdfViewerStav.zoom)}px`;
+
+    pdfViewerPrvky.loading.hidden = true;
+    pdfViewerPrvky.image.classList.remove("is-loading");
+    pdfViewerPrvky.native.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "auto"
+    });
+  }
+
+  async function prejdiNaPdfStranku(posun) {
+    if (!pdfViewerStav?.native) {
+      return;
+    }
+
+    const dalsi = Math.max(0, Math.min(
+      pdfViewerStav.pageCount - 1,
+      pdfViewerStav.pageIndex + posun
+    ));
+
+    if (dalsi === pdfViewerStav.pageIndex) {
+      return;
+    }
+
+    pdfViewerStav.pageIndex = dalsi;
+    aktualizujPdfOvládani();
+
+    try {
+      await vykresliAktualniPdfStranku();
+    } catch (error) {
+      console.error("PDF stránku se nepodařilo vykreslit:", error);
+      zobrazChybu("PDF", "Stránku se nepodařilo zobrazit.");
+    }
+  }
+
+  async function zmenPdfZoom(smer) {
+    if (!pdfViewerStav?.native) {
+      return;
+    }
+
+    const urovne = [0.75, 1, 1.25, 1.5, 2];
+    const aktualniIndex = urovne.findIndex(
+      (hodnota) => Math.abs(hodnota - pdfViewerStav.zoom) < 0.01
+    );
+    const zakladIndex = aktualniIndex >= 0 ? aktualniIndex : 1;
+    const novyIndex = Math.max(0, Math.min(
+      urovne.length - 1,
+      zakladIndex + smer
+    ));
+
+    pdfViewerStav.zoom = urovne[novyIndex];
+    aktualizujPdfOvládani();
+
+    try {
+      await vykresliAktualniPdfStranku();
+    } catch (error) {
+      console.error("PDF zoom selhal:", error);
+    }
+  }
+
+  async function otevriPdfViewer(soubor) {
+    const prvky = zajistiPdfViewer();
+    modalRichText?.blur();
+
+    prvky.title.textContent = soubor.nazevSouboru || "PDF dokument";
+    prvky.title.title = soubor.nazevSouboru || "PDF dokument";
+    prvky.overlay.hidden = false;
+    document.body.classList.add("pdfViewerOpen");
+
+    if (soubor.native === true) {
+      pdfViewerStav = {
+        native: true,
+        pageCount: Math.max(1, Number(soubor.pageCount) || 1),
+        pageIndex: 0,
+        zoom: 1
+      };
+
+      prvky.frame.hidden = true;
+      prvky.native.hidden = false;
+      prvky.pageBar.hidden = false;
+      prvky.zoom.hidden = false;
+      aktualizujPdfOvládani();
+
+      try {
+        await vykresliAktualniPdfStranku();
+      } catch (error) {
+        await zavriPdfViewer();
+        throw error;
+      }
+
+      return;
+    }
+
+    pdfViewerStav = { native: false };
+    prvky.native.hidden = true;
+    prvky.pageBar.hidden = true;
+    prvky.zoom.hidden = true;
+    prvky.loading.hidden = true;
+    prvky.frame.hidden = false;
+
+    if (pdfViewerUrl) {
+      URL.revokeObjectURL(pdfViewerUrl);
+    }
+
+    pdfViewerUrl = URL.createObjectURL(soubor.file);
+    prvky.frame.src = pdfViewerUrl;
+  }
+
+  async function zavriPdfViewer() {
+    if (!pdfViewerPrvky || !pdfViewerStav) {
+      return false;
+    }
+
+    const byloNativni = pdfViewerStav.native === true;
+    pdfViewerRenderToken += 1;
+    pdfViewerStav = null;
+
+    pdfViewerPrvky.overlay.hidden = true;
+    pdfViewerPrvky.loading.hidden = true;
+    pdfViewerPrvky.image.removeAttribute("src");
+    pdfViewerPrvky.image.style.removeProperty("width");
+    pdfViewerPrvky.frame.src = "about:blank";
+    document.body.classList.remove("pdfViewerOpen");
+
+    if (pdfViewerUrl) {
+      URL.revokeObjectURL(pdfViewerUrl);
+      pdfViewerUrl = null;
+    }
+
+    if (byloNativni) {
+      try {
+        await ziskejNativniPlugin()?.zavriPdf?.();
+      } catch (error) {
+        console.warn("PDF renderer se nepodařilo zavřít:", error);
+      }
+    }
+
+    return true;
   }
 
   function jeNativniAndroid() {
@@ -462,7 +784,7 @@
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".html,.htm,.txt,text/html,text/plain";
+      input.accept = ".html,.htm,.txt,.pdf,text/html,text/plain,application/pdf";
       input.hidden = true;
 
       const uklid = () => {
@@ -480,20 +802,43 @@
             return;
           }
 
-          if (file.size > MAX_VELIKOST_OTEVRENEHO_SOUBORU) {
+          const pdf = jePdfSoubor({
+            nazevSouboru: file.name,
+            mimeType: file.type || ""
+          });
+
+          const limit = pdf
+            ? MAX_VELIKOST_PDF_WEB
+            : MAX_VELIKOST_OTEVRENEHO_SOUBORU;
+
+          if (file.size > limit) {
             uklid();
             zobrazChybu(
               "Otevřít dokument",
-              "Soubor je příliš velký. Maximální velikost je 20 MB."
+              pdf
+                ? "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB."
+                : "Soubor je příliš velký. Maximální velikost je 20 MB."
             );
             resolve(null);
             return;
           }
 
           try {
+            if (pdf) {
+              uklid();
+              resolve({
+                typ: "pdf",
+                file,
+                nazevSouboru: file.name,
+                mimeType: file.type || "application/pdf"
+              });
+              return;
+            }
+
             const obsah = await file.text();
             uklid();
             resolve({
+              typ: "text",
               obsah,
               nazevSouboru: file.name,
               mimeType: file.type || ""
@@ -518,10 +863,11 @@
           multiple: false,
           types: [
             {
-              description: "HTML nebo text",
+              description: "HTML, text nebo PDF",
               accept: {
                 "text/html": [".html", ".htm"],
-                "text/plain": [".txt"]
+                "text/plain": [".txt"],
+                "application/pdf": [".pdf"]
               }
             }
           ]
@@ -533,15 +879,36 @@
 
         const file = await handle.getFile();
 
-        if (file.size > MAX_VELIKOST_OTEVRENEHO_SOUBORU) {
+        const pdf = jePdfSoubor({
+          nazevSouboru: file.name,
+          mimeType: file.type || ""
+        });
+
+        const limit = pdf
+          ? MAX_VELIKOST_PDF_WEB
+          : MAX_VELIKOST_OTEVRENEHO_SOUBORU;
+
+        if (file.size > limit) {
           zobrazChybu(
             "Otevřít dokument",
-            "Soubor je příliš velký. Maximální velikost je 20 MB."
+            pdf
+              ? "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB."
+              : "Soubor je příliš velký. Maximální velikost je 20 MB."
           );
           return null;
         }
 
+        if (pdf) {
+          return {
+            typ: "pdf",
+            file,
+            nazevSouboru: file.name,
+            mimeType: file.type || "application/pdf"
+          };
+        }
+
         return {
+          typ: "text",
           obsah: await file.text(),
           nazevSouboru: file.name,
           mimeType: file.type || ""
@@ -564,15 +931,26 @@
     if (jeNativniAndroid() && plugin?.otevriDokument) {
       const vysledek = await plugin.otevriDokument();
 
-      if (
-        !vysledek ||
-        vysledek.canceled === true ||
-        typeof vysledek.obsah !== "string"
-      ) {
+      if (!vysledek || vysledek.canceled === true) {
+        return null;
+      }
+
+      if (vysledek.typ === "pdf") {
+        return {
+          typ: "pdf",
+          native: true,
+          pageCount: vysledek.pageCount || 1,
+          nazevSouboru: vysledek.nazevSouboru || "dokument.pdf",
+          mimeType: vysledek.mimeType || "application/pdf"
+        };
+      }
+
+      if (typeof vysledek.obsah !== "string") {
         return null;
       }
 
       return {
+        typ: "text",
         obsah: vysledek.obsah,
         nazevSouboru: vysledek.nazevSouboru || "dokument",
         mimeType: vysledek.mimeType || ""
@@ -857,6 +1235,19 @@
       return;
     }
 
+    if (soubor.typ === "pdf") {
+      try {
+        await otevriPdfViewer(soubor);
+      } catch (error) {
+        console.error("PDF se nepodařilo otevřít:", error);
+        zobrazChybu(
+          "Otevřít PDF",
+          "PDF se nepodařilo zobrazit. Soubor může být poškozený nebo chráněný heslem."
+        );
+      }
+      return;
+    }
+
     let data;
 
     try {
@@ -967,6 +1358,22 @@
     queueMicrotask(aktualizujDostupnost);
   });
 
+  const puvodniAndroidZpet =
+    window.LubaNoteZpracujAndroidZpet;
+
+  window.LubaNoteZpracujAndroidZpet = function () {
+    if (pdfViewerStav) {
+      zavriPdfViewer();
+      return true;
+    }
+
+    if (typeof puvodniAndroidZpet === "function") {
+      return puvodniAndroidZpet();
+    }
+
+    return false;
+  };
+
   aktualizujDostupnost();
 
   window.LubaNoteDocuments = {
@@ -974,6 +1381,8 @@
     ulozDokument,
     parsujDokument,
     vytvorDataDokumentu,
-    vytvorPdfHtmlDokument
+    vytvorPdfHtmlDokument,
+    otevriPdfViewer,
+    zavriPdfViewer
   };
 })();
