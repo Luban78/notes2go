@@ -8701,8 +8701,7 @@ body.secretModeActive {
   background: transparent;
 }
 
-.noteBacklinksSection[hidden],
-.noteBacklinksSection.noteBacklinksEditingHidden {
+.noteBacklinksSection[hidden] {
   display: none !important;
 }
 
@@ -8713,8 +8712,8 @@ body.secretModeActive {
 
   width: 100%;
   min-width: 0;
-  min-height: 34px;
-  padding: 3px 6px;
+  min-height: 30px;
+  padding: 2px 5px;
 
   border: 0;
   border-radius: 9px;

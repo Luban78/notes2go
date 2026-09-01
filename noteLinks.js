@@ -1259,13 +1259,10 @@
   function skryjBacklinky() {
     if (noteBacklinksSection) {
       noteBacklinksSection.hidden = true;
-      noteBacklinksSection.classList.remove(
-        "noteBacklinksEditingHidden"
-      );
     }
 
     if (noteBacklinksTitle) {
-      noteBacklinksTitle.textContent = "Odkazuje sem (0)";
+      noteBacklinksTitle.textContent = "Odkazy na tuto poznámku (0)";
     }
 
     nastavBacklinkyRozbalene(false);
@@ -1410,7 +1407,7 @@
     }
 
     noteBacklinksTitle.textContent =
-      `Odkazuje sem (${backlinky.length})`;
+      `Odkazy na tuto poznámku (${backlinky.length})`;
     noteBacklinksList.replaceChildren();
 
     backlinky.forEach(({ poznamka, pocetOdkazu }) => {
@@ -1475,46 +1472,23 @@
   });
 
   /*
-   * Na mobilu backlink při samotném psaní nepotřebujeme.
-   * Jakmile je fokus v hlavním rich-textu nebo v TODO editoru,
-   * schováme celý kompaktní řádek. Po zavření klávesnice/fokusu
-   * se znovu objeví.
+   * Backlinkový řádek při editaci nikdy neschováváme.
+   * Pokud je seznam právě rozbalený a uživatel tapne do editoru,
+   * pouze jej sbalíme zpět na jeden kompaktní řádek.
+   * Tím se nemění výška modalu během nájezdu klávesnice.
    */
-  function aktualizujViditelnostBacklinkuPriEditaci() {
-    if (!noteBacklinksSection || noteBacklinksSection.hidden) {
-      return;
-    }
-
-    const aktivni = document.activeElement;
-    const probihaEditace =
-      aktivni === editor ||
-      aktivni?.classList?.contains("todoRichTextInput") ||
-      aktivni?.classList?.contains("todoTextInput");
-
-    noteBacklinksSection.classList.toggle(
-      "noteBacklinksEditingHidden",
-      Boolean(probihaEditace)
-    );
-  }
-
   taskModalElement?.addEventListener(
     "focusin",
-    () => {
-      requestAnimationFrame(
-        aktualizujViditelnostBacklinkuPriEditaci
-      );
-    },
-    true
-  );
+    (event) => {
+      const aktivni = event.target;
+      const jeEditor =
+        aktivni === editor ||
+        aktivni?.classList?.contains("todoRichTextInput") ||
+        aktivni?.classList?.contains("todoTextInput");
 
-  taskModalElement?.addEventListener(
-    "focusout",
-    () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(
-          aktualizujViditelnostBacklinkuPriEditaci
-        );
-      });
+      if (jeEditor) {
+        nastavBacklinkyRozbalene(false);
+      }
     },
     true
   );
