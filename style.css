@@ -5733,9 +5733,13 @@ text-size-adjust: 100%;
   overflow: hidden;
   box-sizing: border-box;
 
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: var(--color-surface);
+  /*
+   * Figure je jen technický nosič pro zarovnání, přesun a ovládací
+   * tlačítka. V editoru nesmí vypadat jako druhý obal kolem obrázku.
+   */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 #modalRichText,
@@ -5828,7 +5832,7 @@ text-size-adjust: 100%;
 
 /* Vizuální odezva během přesunu obrázku. */
 /*
- * Jeden klik obrázek označí pro přesun. Focus je pouze dočasný stav
+ * Jeden klik obrázek označí pro zobrazení ovládání. Focus je pouze dočasný stav
  * pro editor – do uloženého richContent nepřidáváme žádnou selected třídu.
  */
 #modalRichText .lubaNoteImage:focus-within {
@@ -5841,7 +5845,12 @@ text-size-adjust: 100%;
 
 #modalRichText .lubaNoteImage:focus-within img {
   cursor: grab;
-  touch-action: none;
+
+  /*
+   * Označení obrázku je pouze vizuální / editační stav. Samo o sobě
+   * NESMÍ blokovat scroll. Přesun se aktivuje až dlouhým stiskem.
+   */
+  touch-action: pan-y;
   outline: none;
 }
 
@@ -5854,6 +5863,7 @@ text-size-adjust: 100%;
 
 #modalRichText .lubaNoteImage.lubaNoteImageDragging img {
   cursor: grabbing;
+  touch-action: none;
 }
 
 /*
@@ -5890,15 +5900,70 @@ text-size-adjust: 100%;
   cursor: grabbing;
 }
 
+/*
+ * Po doběhnutí long-pressu uzamkneme scroll ještě před prvním pohybem.
+ * Android WebView tak nemůže stejné gesto současně použít pro scroll
+ * textu a pro přesun obrázku. Po puštění se třída ihned odstraní.
+ */
+#modalRichText.lubaNoteImageMoveReady {
+  overflow-y: hidden !important;
+  overscroll-behavior: contain;
+}
+
+#modalRichText.lubaNoteImageMoveReady .lubaNoteImage img,
+#modalRichText.lubaNoteImageDragMode .lubaNoteImage img {
+  touch-action: none;
+}
+
+/* Malá značka u prstu / kurzoru: long-press je aktivní a obrázek lze táhnout. */
+.lubaNoteImageMoveHint {
+  position: fixed;
+  z-index: 10070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  transform: translateY(-50%);
+}
+
+.lubaNoteImageMoveHint[hidden] {
+  display: none !important;
+}
+
 #modalRichText .lubaNoteImage img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 70vh;
+  max-width: 100%;
+
+  /*
+   * DŮLEŽITÉ PRO APK:
+   * Nepoužívat max-height v jednotkách vh. Android WebView při otevření
+   * a zavření klávesnice mění výšku viewportu, takže portrétní obrázek
+   * s max-height: 70vh se za běhu opticky zvětšoval a zmenšoval.
+   * Šířku teď určuje pouze nastavená velikost obrázku a poměr stran
+   * zůstává přirozený přes height: auto.
+   */
+  max-height: none;
   object-fit: contain;
+
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+
+  /* Běžný tah přes obrázek je scroll editoru. */
+  touch-action: pan-y;
 }
 
 #modalRichText .lubaNoteImageSettings,

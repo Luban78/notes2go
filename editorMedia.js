@@ -109,17 +109,17 @@
   let selectedImage = null;
 
   /*
-   * Ovládání obrázku je záměrně jednoduché:
-   * 1. jeden klik obrázek označí,
-   * 2. zobrazí se ⚙ nastavení + ✕ smazání,
-   * 3. označený obrázek lze dalším tahem přesunout.
+   * Obrázek má dvě ZCELA ODDĚLENÁ gesta:
    *
-   * Long-press už nepoužíváme. Na webu tím zároveň nevzniká konflikt
-   * s nativní nabídkou Chrome (Google Lens / stáhnout obrázek...).
+   * 1. krátký tap = zapnout / vypnout ovládání obrázku,
+   * 2. dlouhý stisk + stále držený prst = přesun obrázku.
+   *
+   * Přesun se nikdy nesmí odvozovat od toho, zda je obrázek právě
+   * označený. Tím zůstává běžný scroll přes obrázek přirozený a tap
+   * na ovládání nemůže omylem přejít do drag režimu.
    */
   let oznacenyObrazekProPresun = null;
-  let stisknutyObrazek = null;
-  let stisknutyPointerId = null;
+
   let presouvanyObrazek = null;
   let presouvanyFigure = null;
   let presouvanyPointerId = null;
@@ -135,12 +135,33 @@
    * preferovanou pixelovou šířku (s max-width: 100 %).
    */
   const REFERENCNI_SIRKA_OBRAZKU = 720;
-  const DVOJTAP_OBRAZKU_MS = 340;
-  let posledniTapObrazek = null;
-  let posledniTapCas = 0;
+
+  /* Fullscreen viewer v kódu zůstává, ale na obrázek už není navázaný
+   * žádný dvojtap. Uživatel chce druhý tap použít pro odznačení. */
   let nahledObrazku = null;
 
-  const IMAGE_DRAG_START_DISTANCE = 9;
+  /*
+   * Dlouhý stisk funguje stejným principem jako přesun TODO:
+   * - před vypršením času se pohyb bere jako normální scroll,
+   * - po vypršení času se ukáže značka přesunu,
+   * - dokud prst / tlačítko zůstává dole, lze obrázek přesouvat,
+   * - po puštění přesun okamžitě končí.
+   */
+  const DELKA_DLOUHEHO_STISKU_OBRAZKU = 900;
+  const VZDALENOST_ZRUSENI_DLOUHEHO_STISKU = 20;
+  const VZDALENOST_START_PRESUNU_OBRAZKU = 6;
+
+  let casovacDlouhehoStiskuObrazku = null;
+  let cekajiciTypPresunuObrazku = null;
+  let cekajiciObrazek = null;
+  let cekajiciPointerId = null;
+  let cekajiciTouchId = null;
+  let zacatekStiskuObrazkuX = 0;
+  let zacatekStiskuObrazkuY = 0;
+  let presunObrazkuPripraven = false;
+  let scrollTopPredPresunemObrazku = 0;
+  let potlacKlikObrazkuDo = 0;
+  let napovedaPresunuObrazku = null;
 
   function ziskejBlokObrazku(image) {
     return image?.closest?.(".lubaNoteImage") || null;
@@ -247,12 +268,15 @@
   function jeObrazekOznacenyProPresun(image) {
     return Boolean(
       image &&
-      oznacenyObrazekProPresun === image &&
-      document.activeElement === image
+      oznacenyObrazekProPresun === image
     );
   }
 
-  function ulozPreferovanouSirkuObrazku(image, figure) {
+  function ulozPreferovanouSirkuObrazku(
+    image,
+    figure,
+    pouzitReferencniMinimum = true
+  ) {
     if (!image || !figure) {
       return;
     }
@@ -283,7 +307,10 @@
      * použijeme konzervativní referenci podle původního 720px limitu
      * editorového obrázku. 25 % tak vychází přibližně na 180 px.
      */
-    if (window.innerWidth < 900) {
+    if (
+      pouzitReferencniMinimum &&
+      window.innerWidth < 900
+    ) {
       const procenta = Number(velikost);
 
       if (
@@ -530,15 +557,36 @@
       return false;
     }
 
+    /*
+     * APK / mobil: procentní velikost je po prvním nastavení doplněná
+     * také o data-sirka-px. Mobilní CSS tuto pixelovou hodnotu používá
+     * přes !important, takže stará data-sirka-px by při dalším změnění
+     * velikosti přebila nových např. 50 % a obrázek by vypadal, že se
+     * vůbec nezměnil. Před novým měřením proto starou pixelovou šířku
+     * vždy uvolníme.
+     */
+    delete figure.dataset.sirkaPx;
+    delete image.dataset.sirkaPx;
+    figure.style.removeProperty(
+      "--luba-note-image-sirka-px"
+    );
+
     figure.style.width = `${cislo}%`;
     figure.dataset.velikost = String(cislo);
     image.dataset.velikost = String(cislo);
 
     requestAnimationFrame(() => {
       if (figure.isConnected) {
+        /*
+         * Jde o výslovný zásah uživatele právě na tomto zařízení.
+         * Uložíme proto skutečně naměřenou šířku z aktuálního editoru,
+         * ne historické referenční minimum 720 px určené jen pro starší
+         * poznámky bez uložené pixelové šířky.
+         */
         ulozPreferovanouSirkuObrazku(
           image,
-          figure
+          figure,
+          false
         );
       }
     });
@@ -613,9 +661,19 @@
         }
       ],
       poUlozeni: (hodnoty) => {
+        /*
+         * Nastavení patří přesně obrázku, pro který byl modal otevřen.
+         * Nepoužíváme zde proměnnou selectedImage – ta slouží hlavně
+         * pro výběr/přesun a Android může její stav během práce s
+         * překryvným modalem změnit společně s focusem.
+         */
+        if (!image.isConnected || !figure.isConnected) {
+          return;
+        }
+
         const velikostNastavena =
           nastavVelikostObrazku(
-            selectedImage,
+            image,
             figure,
             hodnoty.velikost
           );
@@ -625,7 +683,7 @@
         }
 
         nastavZarovnaniObrazku(
-          selectedImage,
+          image,
           figure,
           hodnoty.zarovnani
         );
@@ -1097,10 +1155,12 @@
   ) {
     const figure = ziskejBlokObrazku(image);
 
-    if (
-      !figure ||
-      !jeObrazekOznacenyProPresun(image)
-    ) {
+    /*
+     * Dlouhý stisk je sám o sobě oprávnění k přesunu. Obrázek nemusí
+     * být předem označený jedním tapem – výběr pro ⚙ / ✕ a drag jsou
+     * dvě nezávislé funkce.
+     */
+    if (!figure) {
       return false;
     }
 
@@ -1117,7 +1177,8 @@
 
     presouvanyObrazek = image;
     presouvanyFigure = figure;
-    presouvanyPointerId = event.pointerId;
+    presouvanyPointerId =
+      event?.pointerId ?? null;
     presunObrazkuAktivni = true;
     cilPresunuObrazku = null;
 
@@ -1136,10 +1197,14 @@
       "lubaNoteImageDragMode"
     );
 
-    try {
-      image.setPointerCapture(event.pointerId);
-    } catch (_) {
-      /* Starší WebView nemusí pointer capture podporovat. */
+    if (presouvanyPointerId !== null) {
+      try {
+        image.setPointerCapture(
+          presouvanyPointerId
+        );
+      } catch (_) {
+        /* Starší WebView nemusí pointer capture podporovat. */
+      }
     }
 
     aktualizujUkazatelPresunuObrazku(
@@ -1147,7 +1212,7 @@
       event.clientY
     );
 
-    event.preventDefault();
+    event.preventDefault?.();
     return true;
   }
 
@@ -1264,22 +1329,24 @@
       "lubaNoteImageDragMode"
     );
 
-    try {
-      presouvanyObrazek?.releasePointerCapture?.(
-        presouvanyPointerId
-      );
-    } catch (_) {
-      /* Pointer capture už mohl být uvolněn systémem. */
+    if (presouvanyPointerId !== null) {
+      try {
+        presouvanyObrazek?.releasePointerCapture?.(
+          presouvanyPointerId
+        );
+      } catch (_) {
+        /* Pointer capture už mohl být uvolněn systémem. */
+      }
     }
 
     schovejUkazatelPresunuObrazku();
+    schovejNapoveduPresunuObrazku();
 
-    /* Po přesunu zůstane obrázek označený pro další doladění. */
-    if (presouvanyObrazek?.isConnected) {
-      oznacObrazekProPresun(
-        presouvanyObrazek
-      );
-    }
+    /*
+     * Výběr obrázku pro ⚙ / ✕ záměrně NEMĚNÍME. Long-press je čistě
+     * přesunové gesto a po puštění má zůstat přesně takový výběr, jaký
+     * byl před začátkem přesunu.
+     */
 
     presouvanyObrazek = null;
     presouvanyFigure = null;
@@ -1287,115 +1354,499 @@
     presunObrazkuAktivni = false;
     cilPresunuObrazku = null;
     puvodniPrazdnyRadekObrazku = null;
-    stisknutyObrazek = null;
-    stisknutyPointerId = null;
 
     return true;
   }
 
+  function zrusCasovacDlouhehoStiskuObrazku() {
+    if (casovacDlouhehoStiskuObrazku !== null) {
+      clearTimeout(casovacDlouhehoStiskuObrazku);
+    }
+
+    casovacDlouhehoStiskuObrazku = null;
+  }
+
+  function zajistiNapoveduPresunuObrazku() {
+    if (napovedaPresunuObrazku?.isConnected) {
+      return napovedaPresunuObrazku;
+    }
+
+    napovedaPresunuObrazku =
+      document.createElement("div");
+
+    napovedaPresunuObrazku.className =
+      "lubaNoteImageMoveHint";
+    napovedaPresunuObrazku.textContent = "↕";
+    napovedaPresunuObrazku.hidden = true;
+    napovedaPresunuObrazku.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    document.body.append(
+      napovedaPresunuObrazku
+    );
+
+    return napovedaPresunuObrazku;
+  }
+
+  function zobrazNapoveduPresunuObrazku(
+    clientX,
+    clientY
+  ) {
+    const napoveda =
+      zajistiNapoveduPresunuObrazku();
+
+    napoveda.style.left =
+      `${Math.round(clientX + 18)}px`;
+    napoveda.style.top =
+      `${Math.round(clientY - 18)}px`;
+    napoveda.hidden = false;
+  }
+
+  function schovejNapoveduPresunuObrazku() {
+    if (napovedaPresunuObrazku) {
+      napovedaPresunuObrazku.hidden = true;
+    }
+  }
+
+  function odemkniScrollPoPresunuObrazku() {
+    modalRichText.classList.remove(
+      "lubaNoteImageMoveReady"
+    );
+  }
+
+  function vycistiCekajiciPresunObrazku() {
+    zrusCasovacDlouhehoStiskuObrazku();
+    odemkniScrollPoPresunuObrazku();
+    schovejNapoveduPresunuObrazku();
+
+    cekajiciTypPresunuObrazku = null;
+    cekajiciObrazek = null;
+    cekajiciPointerId = null;
+    cekajiciTouchId = null;
+    presunObrazkuPripraven = false;
+  }
+
+  function pripravDlouhyStiskObrazku(
+    typ,
+    obrazek,
+    clientX,
+    clientY,
+    pointerId = null,
+    touchId = null
+  ) {
+    vycistiCekajiciPresunObrazku();
+
+    cekajiciTypPresunuObrazku = typ;
+    cekajiciObrazek = obrazek;
+    cekajiciPointerId = pointerId;
+    cekajiciTouchId = touchId;
+    zacatekStiskuObrazkuX = clientX;
+    zacatekStiskuObrazkuY = clientY;
+    presunObrazkuPripraven = false;
+
+    casovacDlouhehoStiskuObrazku =
+      setTimeout(() => {
+        casovacDlouhehoStiskuObrazku = null;
+
+        if (
+          !cekajiciObrazek?.isConnected ||
+          cekajiciObrazek !== obrazek
+        ) {
+          vycistiCekajiciPresunObrazku();
+          return;
+        }
+
+        /*
+         * Teprve TADY přechází gesto ze scrollu do MOVE MODE.
+         * Do tohoto okamžiku jsme nevolali preventDefault(), takže
+         * rychlý tah přes obrázek zůstává normálním scrollováním APK.
+         */
+        presunObrazkuPripraven = true;
+        scrollTopPredPresunemObrazku =
+          modalRichText.scrollTop;
+
+        modalRichText.classList.add(
+          "lubaNoteImageMoveReady"
+        );
+
+        zobrazNapoveduPresunuObrazku(
+          clientX,
+          clientY
+        );
+      }, DELKA_DLOUHEHO_STISKU_OBRAZKU);
+  }
+
+  function vzdalenostOdZacatkuObrazku(
+    clientX,
+    clientY
+  ) {
+    return Math.hypot(
+      clientX - zacatekStiskuObrazkuX,
+      clientY - zacatekStiskuObrazkuY
+    );
+  }
+
+  /* ---------- APK / DOTYK ---------- */
+
+  function najdiSledovanyDotykObrazku(
+    seznamDotyku
+  ) {
+    if (cekajiciTouchId === null) {
+      return null;
+    }
+
+    return [...seznamDotyku].find(
+      dotyk =>
+        dotyk.identifier === cekajiciTouchId
+    ) || null;
+  }
+
+  function odeberTouchListeneryObrazku() {
+    document.removeEventListener(
+      "touchmove",
+      zpracujPohybDotykuObrazku
+    );
+    document.removeEventListener(
+      "touchend",
+      zpracujKonecDotykuObrazku
+    );
+    document.removeEventListener(
+      "touchcancel",
+      zpracujZruseniDotykuObrazku
+    );
+  }
+
+  function zpracujPohybDotykuObrazku(event) {
+    if (cekajiciTypPresunuObrazku !== "touch") {
+      return;
+    }
+
+    const dotyk = najdiSledovanyDotykObrazku(
+      event.touches
+    );
+
+    if (!dotyk) {
+      return;
+    }
+
+    const vzdalenost =
+      vzdalenostOdZacatkuObrazku(
+        dotyk.clientX,
+        dotyk.clientY
+      );
+
+    if (!presunObrazkuPripraven) {
+      /* Pohyb před long-pressem = běžný scroll, ne přesun. */
+      if (
+        vzdalenost >
+        VZDALENOST_ZRUSENI_DLOUHEHO_STISKU
+      ) {
+        vycistiCekajiciPresunObrazku();
+        odeberTouchListeneryObrazku();
+      }
+
+      return;
+    }
+
+    /*
+     * Long-press už proběhl. Od tohoto okamžiku pohyb patří jen obrázku.
+     * Zároveň držíme scrollTop na stejné hodnotě jako pojistku proti
+     * Android WebView – obsah editoru se při dragování nesmí rozjet.
+     */
+    event.preventDefault();
+    modalRichText.scrollTop =
+      scrollTopPredPresunemObrazku;
+
+    zobrazNapoveduPresunuObrazku(
+      dotyk.clientX,
+      dotyk.clientY
+    );
+
+    if (!presunObrazkuAktivni) {
+      if (
+        vzdalenost <
+        VZDALENOST_START_PRESUNU_OBRAZKU
+      ) {
+        return;
+      }
+
+      spustPresunObrazku(
+        {
+          clientX: dotyk.clientX,
+          clientY: dotyk.clientY,
+          pointerId: null,
+          preventDefault() {}
+        },
+        cekajiciObrazek
+      );
+    }
+
+    if (presunObrazkuAktivni) {
+      aktualizujUkazatelPresunuObrazku(
+        dotyk.clientX,
+        dotyk.clientY
+      );
+    }
+  }
+
+  function zpracujKonecDotykuObrazku(event) {
+    if (cekajiciTypPresunuObrazku !== "touch") {
+      return;
+    }
+
+    const dotyk = najdiSledovanyDotykObrazku(
+      event.changedTouches
+    );
+
+    if (!dotyk) {
+      return;
+    }
+
+    if (presunObrazkuAktivni) {
+      event.preventDefault();
+      ukonciPresunObrazku(
+        {
+          clientX: dotyk.clientX,
+          clientY: dotyk.clientY
+        },
+        true
+      );
+      potlacKlikObrazkuDo =
+        performance.now() + 650;
+    } else if (presunObrazkuPripraven) {
+      /* Long-press bez pohybu nic nepřesune a nesmí vyvolat tap. */
+      event.preventDefault();
+      potlacKlikObrazkuDo =
+        performance.now() + 650;
+    }
+
+    vycistiCekajiciPresunObrazku();
+    odeberTouchListeneryObrazku();
+  }
+
+  function zpracujZruseniDotykuObrazku() {
+    if (presunObrazkuAktivni) {
+      ukonciPresunObrazku(null, false);
+    }
+
+    vycistiCekajiciPresunObrazku();
+    odeberTouchListeneryObrazku();
+  }
+
   modalRichText.addEventListener(
-    "pointerdown",
+    "touchstart",
     (event) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+
       const obrazek = event.target.closest?.(
         ".lubaNoteImage img"
       );
 
       if (!obrazek) {
-        stisknutyObrazek = null;
-        stisknutyPointerId = null;
         return;
       }
 
-      imagePressStartX = event.clientX;
-      imagePressStartY = event.clientY;
-      selectedImage = obrazek;
-      stisknutyObrazek = obrazek;
-      stisknutyPointerId = event.pointerId;
-    }
+      /* Obrázek uvnitř bulletu se přesouvá jen spolu s celým bulletem. */
+      if (ziskejBlokObrazku(obrazek)?.closest("li")) {
+        return;
+      }
+
+      const dotyk = event.touches[0];
+
+      pripravDlouhyStiskObrazku(
+        "touch",
+        obrazek,
+        dotyk.clientX,
+        dotyk.clientY,
+        null,
+        dotyk.identifier
+      );
+
+      document.addEventListener(
+        "touchmove",
+        zpracujPohybDotykuObrazku,
+        { passive: false }
+      );
+      document.addEventListener(
+        "touchend",
+        zpracujKonecDotykuObrazku,
+        { passive: false }
+      );
+      document.addEventListener(
+        "touchcancel",
+        zpracujZruseniDotykuObrazku,
+        { passive: false }
+      );
+    },
+    { passive: false }
   );
 
-  modalRichText.addEventListener(
-    "pointermove",
-    (event) => {
-      if (presunObrazkuAktivni) {
-        posunEditorPriPresunuObrazku(
-          event.clientY
-        );
+  /* ---------- PC / MYŠ / PERO ---------- */
 
-        aktualizujUkazatelPresunuObrazku(
-          event.clientX,
-          event.clientY
-        );
-        event.preventDefault();
-        return;
-      }
+  function odeberPointerListeneryObrazku() {
+    document.removeEventListener(
+      "pointermove",
+      zpracujPohybPointeruObrazku
+    );
+    document.removeEventListener(
+      "pointerup",
+      zpracujKonecPointeruObrazku
+    );
+    document.removeEventListener(
+      "pointercancel",
+      zpracujZruseniPointeruObrazku
+    );
+  }
 
+  function zpracujPohybPointeruObrazku(event) {
+    if (
+      cekajiciTypPresunuObrazku !== "pointer" ||
+      cekajiciPointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    const vzdalenost =
+      vzdalenostOdZacatkuObrazku(
+        event.clientX,
+        event.clientY
+      );
+
+    if (!presunObrazkuPripraven) {
       if (
-        !stisknutyObrazek ||
-        stisknutyPointerId !== event.pointerId
+        vzdalenost >
+        VZDALENOST_ZRUSENI_DLOUHEHO_STISKU
       ) {
-        return;
+        vycistiCekajiciPresunObrazku();
+        odeberPointerListeneryObrazku();
       }
 
-      const distanceX = Math.abs(
-        event.clientX - imagePressStartX
-      );
+      return;
+    }
 
-      const distanceY = Math.abs(
-        event.clientY - imagePressStartY
-      );
+    event.preventDefault();
+    modalRichText.scrollTop =
+      scrollTopPredPresunemObrazku;
 
-      const vzdalenost = Math.hypot(
-        distanceX,
-        distanceY
-      );
+    zobrazNapoveduPresunuObrazku(
+      event.clientX,
+      event.clientY
+    );
 
+    if (!presunObrazkuAktivni) {
       if (
-        vzdalenost < IMAGE_DRAG_START_DISTANCE
-      ) {
-        return;
-      }
-
-      /*
-       * První tap jen označí obrázek. Drag se spustí až dalším gestem
-       * na již označeném obrázku, takže běžný scroll přes neoznačené
-       * médium zůstává přirozený.
-       */
-      if (
-        !jeObrazekOznacenyProPresun(
-          stisknutyObrazek
-        )
+        vzdalenost <
+        VZDALENOST_START_PRESUNU_OBRAZKU
       ) {
         return;
       }
 
       spustPresunObrazku(
         event,
-        stisknutyObrazek
+        cekajiciObrazek
       );
     }
-  );
+
+    if (presunObrazkuAktivni) {
+      aktualizujUkazatelPresunuObrazku(
+        event.clientX,
+        event.clientY
+      );
+    }
+  }
+
+  function zpracujKonecPointeruObrazku(event) {
+    if (
+      cekajiciTypPresunuObrazku !== "pointer" ||
+      cekajiciPointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    if (presunObrazkuAktivni) {
+      event.preventDefault();
+      ukonciPresunObrazku(event, true);
+      potlacKlikObrazkuDo =
+        performance.now() + 650;
+    } else if (presunObrazkuPripraven) {
+      event.preventDefault();
+      potlacKlikObrazkuDo =
+        performance.now() + 650;
+    }
+
+    vycistiCekajiciPresunObrazku();
+    odeberPointerListeneryObrazku();
+  }
+
+  function zpracujZruseniPointeruObrazku(event) {
+    if (
+      cekajiciTypPresunuObrazku !== "pointer" ||
+      cekajiciPointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    if (presunObrazkuAktivni) {
+      ukonciPresunObrazku(event, false);
+    }
+
+    vycistiCekajiciPresunObrazku();
+    odeberPointerListeneryObrazku();
+  }
 
   modalRichText.addEventListener(
-    "pointerup",
+    "pointerdown",
     (event) => {
-      if (ukonciPresunObrazku(event, true)) {
-        event.preventDefault();
-        event.stopPropagation();
+      /* Dotyk má vlastní Touch Events větev výše. */
+      if (event.pointerType === "touch") {
         return;
       }
 
-      stisknutyObrazek = null;
-      stisknutyPointerId = null;
-    }
-  );
+      if (
+        event.pointerType === "mouse" &&
+        event.button !== 0
+      ) {
+        return;
+      }
 
-  modalRichText.addEventListener(
-    "pointercancel",
-    (event) => {
-      ukonciPresunObrazku(event, false);
-      stisknutyObrazek = null;
-      stisknutyPointerId = null;
+      const obrazek = event.target.closest?.(
+        ".lubaNoteImage img"
+      );
+
+      if (!obrazek) {
+        return;
+      }
+
+      /* Obrázek uvnitř bulletu se přesouvá jen spolu s celým bulletem. */
+      if (ziskejBlokObrazku(obrazek)?.closest("li")) {
+        return;
+      }
+
+      pripravDlouhyStiskObrazku(
+        "pointer",
+        obrazek,
+        event.clientX,
+        event.clientY,
+        event.pointerId,
+        null
+      );
+
+      document.addEventListener(
+        "pointermove",
+        zpracujPohybPointeruObrazku
+      );
+      document.addEventListener(
+        "pointerup",
+        zpracujKonecPointeruObrazku
+      );
+      document.addEventListener(
+        "pointercancel",
+        zpracujZruseniPointeruObrazku
+      );
     }
   );
 
@@ -1734,9 +2185,12 @@
   });
 
   /*
-   * Jeden klik obrázek označí. Teprve potom se ukážou ⚙ a ✕ a druhým
-   * gestem lze obrázek přetáhnout. Kliknutí do prázdného místa vedle
-   * menšího obrázku vytvoří / použije skutečný textový řádek.
+   * Tap je přepínač ovládání obrázku:
+   * - 1. tap = označit + zobrazit ⚙ / ✕,
+   * - 2. tap na stejný obrázek = odznačit.
+   *
+   * Žádný dvojtap na obrázku nepoužíváme. Přesun je samostatné gesto
+   * dlouhý stisk + držení + pohyb.
    */
   modalRichText.addEventListener(
     "click",
@@ -1752,23 +2206,18 @@
       if (obrazek) {
         event.preventDefault();
 
-        const ted = performance.now();
-        const jeDvojtap =
-          posledniTapObrazek === obrazek &&
-          ted - posledniTapCas <= DVOJTAP_OBRAZKU_MS;
-
-        posledniTapObrazek = obrazek;
-        posledniTapCas = ted;
-
-        if (jeDvojtap) {
-          posledniTapObrazek = null;
-          posledniTapCas = 0;
-          zrusOznaceniObrazkuProPresun();
-          otevriNahledObrazku(obrazek);
+        if (
+          performance.now() < potlacKlikObrazkuDo
+        ) {
           return;
         }
 
-        oznacObrazekProPresun(obrazek);
+        if (jeObrazekOznacenyProPresun(obrazek)) {
+          zrusOznaceniObrazkuProPresun();
+        } else {
+          oznacObrazekProPresun(obrazek);
+        }
+
         return;
       }
 
@@ -2066,7 +2515,45 @@
     return true;
   }
 
+  function jeEditorPredPrvnimObrazkemPrazdny() {
+    return Boolean(
+      modalRichText.textContent.trim() === "" &&
+      !modalRichText.querySelector(".lubaNoteImage")
+    );
+  }
+
+  function zachovejNazevPoPrvnimObrazku(figure) {
+    const zachovej = () => {
+      window.LubaNoteEditorUI
+        ?.zachovejViditelnyNazev?.(900);
+    };
+
+    zachovej();
+
+    const image = figure?.querySelector("img");
+
+    /*
+     * Data-URL obrázek se v Android WebView může dopočítat až po
+     * vložení do DOM. Jeho pozdní změna výšky umí znovu posunout
+     * scroll editoru, proto ochranu názvu obnovíme i po načtení média.
+     */
+    if (image && !image.complete) {
+      image.addEventListener(
+        "load",
+        zachovej,
+        { once: true }
+      );
+    }
+  }
+
   function vlozObrazekDoEditoru(figure) {
+    const editorBylPredVlozenimPrazdny =
+      jeEditorPredPrvnimObrazkemPrazdny();
+
+    if (editorBylPredVlozenimPrazdny) {
+      zachovejNazevPoPrvnimObrazku(figure);
+    }
+
     const range = ziskejPlatnyUlozenyRozsah();
 
     const bullet =
@@ -2112,6 +2599,11 @@
         jePrazdnyRadekZaObrazkem(radek)
       ) {
         nastavKurzorDoRadku(radek);
+      }
+
+      if (editorBylPredVlozenimPrazdny) {
+        window.LubaNoteEditorUI
+          ?.zachovejViditelnyNazev?.(900);
       }
     });
 

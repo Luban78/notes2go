@@ -2080,8 +2080,31 @@ modalTitle?.addEventListener("paste", (event) => {
  */
 let posledniPohybKZacatkuEditoru = 0;
 let posledniPointerYEditoru = null;
+let chranNazevPredAutomatickymSbalenimDo = 0;
 
 const CAS_ZAMERU_ROLOVAT_K_ZACATKU = 700;
+
+function zachovejViditelnyNazevEditoru(trvaniMs = 900) {
+  const delkaOchrany = Math.max(
+    0,
+    Number(trvaniMs) || 0
+  );
+
+  chranNazevPredAutomatickymSbalenimDo = Math.max(
+    chranNazevPredAutomatickymSbalenimDo,
+    performance.now() + delkaOchrany
+  );
+
+  document
+    .getElementById("taskModal")
+    ?.classList.remove("titleCollapsed");
+}
+
+window.LubaNoteEditorUI = {
+  ...(window.LubaNoteEditorUI || {}),
+  zachovejViditelnyNazev:
+    zachovejViditelnyNazevEditoru
+};
 
 function oznacRolovaniKZacatkuEditoru() {
   posledniPohybKZacatkuEditoru = performance.now();
@@ -2107,6 +2130,24 @@ modalRichText.addEventListener(
     /* Prst jde dolů -> obsah se vrací směrem k začátku. */
     if (rozdilY > 4) {
       oznacRolovaniKZacatkuEditoru();
+
+      /*
+       * Android WebView nemusí na úplném začátku vyvolat další scroll
+       * událost – scrollTop už totiž nemá kam klesnout. Starší logika
+       * proto někdy nechala nadpis sbalený navždy, i když uživatel na
+       * horním okraji dál táhl obsah dolů. Při jasném gestu směrem k
+       * začátku ho na horním okraji rozbalíme rovnou.
+       */
+      if (
+        modalRichText.scrollTop < 8 &&
+        taskModal.classList.contains(
+          "titleCollapsed"
+        )
+      ) {
+        taskModal.classList.remove(
+          "titleCollapsed"
+        );
+      }
     }
     
     if (Math.abs(rozdilY) > 2) {
@@ -2147,6 +2188,14 @@ modalRichText.addEventListener("scroll", () => {
     taskModal.classList.contains("titleCollapsed");
   
   if (!jeNazevSbaleny && scrollTop > 28) {
+    const jeNazevDocasneChraneny =
+      performance.now() <
+      chranNazevPredAutomatickymSbalenimDo;
+
+    if (jeNazevDocasneChraneny) {
+      return;
+    }
+
     taskModal.classList.add("titleCollapsed");
     return;
   }
@@ -2168,6 +2217,7 @@ function resetujSbaleniNazvuEditoru() {
   taskModal.classList.remove("titleCollapsed");
   posledniPohybKZacatkuEditoru = 0;
   posledniPointerYEditoru = null;
+  chranNazevPredAutomatickymSbalenimDo = 0;
   
   requestAnimationFrame(() => {
     modalRichText.scrollTop = 0;
