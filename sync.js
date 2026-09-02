@@ -1185,12 +1185,84 @@ function maStejnyObsahProPrvniRevizi(
   );
 }
 
+async function ziskejShodneSecretIdProRevizniMerge(
+  localDecryptedSecret,
+  cloudRows
+) {
+  const shodneId = new Set();
+
+  if (
+    !Array.isArray(localDecryptedSecret) ||
+    localDecryptedSecret.length === 0 ||
+    typeof desifrujTajnouPoznamku !== "function"
+  ) {
+    return shodneId;
+  }
+
+  const lokalniMapa = new Map(
+    localDecryptedSecret
+      .filter((note) => note?.id)
+      .map((note) => [note.id, note])
+  );
+
+  for (const row of Array.isArray(cloudRows) ? cloudRows : []) {
+    if (
+      !row?.id ||
+      row.deleted_at ||
+      !jeSifrovanyCloudSecretRow(row)
+    ) {
+      continue;
+    }
+
+    const lokalni = lokalniMapa.get(row.id);
+
+    if (!lokalni) {
+      continue;
+    }
+
+    try {
+      const cloudPoznamka = await desifrujTajnouPoznamku(
+        row.data.encrypted,
+        row.id
+      );
+
+      if (
+        cloudPoznamka &&
+        majiStejnySkutecnyObsahPoznamky(
+          {
+            ...lokalni,
+            id: row.id,
+            isSecret: true
+          },
+          {
+            ...cloudPoznamka,
+            id: row.id,
+            isSecret: true
+          },
+          row.id
+        )
+      ) {
+        shodneId.add(row.id);
+      }
+    } catch (error) {
+      /*
+       * Secret může být zamčený nebo může chybět klíč.
+       * V takovém případě zůstává původní konzervativní ochrana:
+       * nic automaticky nepřepisujeme a případný konflikt zůstane.
+       */
+    }
+  }
+
+  return shodneId;
+}
+
 function pripravRevizniMerge(
   localRegular,
   localEncrypted,
   localLegacySecret,
   localDecryptedSecret,
-  cloudRows
+  cloudRows,
+  shodneSecretId = new Set()
 ) {
   const lokalniMapa =
     vytvorMapuVitezu(
@@ -1291,11 +1363,20 @@ function pripravRevizniMerge(
             lokalni,
             row
           ) ||
-          cloudJeProkazatelneNovejsi
+          cloudJeProkazatelneNovejsi ||
+          shodneSecretId.has(row.id)
         ) {
           vynutitCloudId.add(row.id);
           prijmoutCloudMetaId.add(row.id);
           zrusKonfliktSynchronizace(row.id);
+
+          if (shodneSecretId.has(row.id)) {
+            console.info(
+              "LubaNote sync: falešný Secret konflikt přeskočen – skutečný obsah je shodný:",
+              row.id
+            );
+          }
+
           return;
         }
 
@@ -1369,6 +1450,24 @@ function pripravRevizniMerge(
         );
 
       if (cloudSeZmenil && localSeZmenil) {
+        /*
+         * Secret poznámka může být po importu nebo novém zašifrování
+         * binárně jiná, i když je její skutečný dešifrovaný obsah
+         * naprosto stejný. Pokud je Secret právě odemčený, porovnání
+         * proběhlo výše pouze v paměti. Shodný obsah není konflikt.
+         */
+        if (shodneSecretId.has(row.id)) {
+          vynutitCloudId.add(row.id);
+          prijmoutCloudMetaId.add(row.id);
+          zrusKonfliktSynchronizace(row.id);
+
+          console.info(
+            "LubaNote sync: falešný Secret konflikt přeskočen – skutečný obsah je shodný:",
+            row.id
+          );
+          return;
+        }
+
         /*
          * Než vytvoříme konfliktní kopii, ověříme skutečný obsah.
          * Obě strany mohou mít změněnou revizi/updatedAt pouze kvůli
@@ -2210,12 +2309,19 @@ async function syncNotes() {
      * Základ je poslední serverová revize, kterou tento klient znal.
      * Pokud se od ní změnily obě strany, nic automaticky nepřepisujeme.
      */
+    const shodneSecretId =
+      await ziskejShodneSecretIdProRevizniMerge(
+        localDecryptedSecret,
+        cloudRows
+      );
+
     const revizniMerge = pripravRevizniMerge(
       localRegular,
       localEncrypted,
       localLegacySecret,
       localDecryptedSecret,
-      cloudRows
+      cloudRows,
+      shodneSecretId
     );
 
     const {
