@@ -157,6 +157,22 @@
   let potlacKlikObrazkuDo = 0;
   let napovedaPresunuObrazku = null;
 
+  /*
+   * Automatický posun editoru během SKUTEČNÉHO drag & drop.
+   *
+   * Důležité:
+   * - před long-pressem zůstává běžný nativní scroll,
+   * - po long-pressu a zahájení přesunu blokujeme nativní scroll,
+   * - pokud držíme obrázek u horního / dolního okraje editoru,
+   *   posouváme obsah pouze řízeně přes scrollTop.
+   *
+   * Tím lze obrázek přenést i k textu mimo právě viditelnou část,
+   * aniž by se zároveň pral nativní Android scroll s drag gestem.
+   */
+  let posledniXPresunuObrazku = null;
+  let posledniYPresunuObrazku = null;
+  let animaceAutoScrollObrazku = null;
+
   function ziskejBlokObrazku(image) {
     return image?.closest?.(".lubaNoteImage") || null;
   }
@@ -1148,12 +1164,19 @@
     }
   }
 
-  function posunEditorPriPresunuObrazku(clientY) {
+  function ziskejKrokAutoScrollObrazku(clientY) {
     const rect =
       modalRichText.getBoundingClientRect();
 
-    const zona = 64;
-    const maximalniKrok = 18;
+    /*
+     * Okrajová zóna je dost velká pro prst na mobilu, ale nezasahuje
+     * zbytečně hluboko do textu. Rychlost roste směrem k okraji.
+     */
+    const zona = Math.min(
+      86,
+      Math.max(58, rect.height * 0.16)
+    );
+    const maximalniKrok = 16;
 
     if (clientY < rect.top + zona) {
       const sila = Math.min(
@@ -1164,9 +1187,7 @@
         )
       );
 
-      modalRichText.scrollTop -=
-        maximalniKrok * sila;
-      return;
+      return -maximalniKrok * sila;
     }
 
     if (clientY > rect.bottom - zona) {
@@ -1178,8 +1199,118 @@
         )
       );
 
-      modalRichText.scrollTop +=
-        maximalniKrok * sila;
+      return maximalniKrok * sila;
+    }
+
+    return 0;
+  }
+
+  function zastavAutoScrollObrazku() {
+    if (animaceAutoScrollObrazku !== null) {
+      cancelAnimationFrame(
+        animaceAutoScrollObrazku
+      );
+    }
+
+    animaceAutoScrollObrazku = null;
+    posledniXPresunuObrazku = null;
+    posledniYPresunuObrazku = null;
+  }
+
+  function provedKrokAutoScrollObrazku() {
+    animaceAutoScrollObrazku = null;
+
+    if (
+      !presunObrazkuAktivni ||
+      posledniXPresunuObrazku === null ||
+      posledniYPresunuObrazku === null
+    ) {
+      return;
+    }
+
+    const krok =
+      ziskejKrokAutoScrollObrazku(
+        posledniYPresunuObrazku
+      );
+
+    if (Math.abs(krok) < 0.2) {
+      return;
+    }
+
+    const pred =
+      modalRichText.scrollTop;
+
+    const maximum = Math.max(
+      0,
+      modalRichText.scrollHeight -
+        modalRichText.clientHeight
+    );
+
+    modalRichText.scrollTop = Math.max(
+      0,
+      Math.min(
+        maximum,
+        pred + krok
+      )
+    );
+
+    const po =
+      modalRichText.scrollTop;
+
+    if (Math.abs(po - pred) < 0.1) {
+      /*
+       * Jsme na začátku / konci dokumentu. Další frame nemá smysl,
+       * ale při novém pohybu prstu / myši se může auto-scroll znovu
+       * spustit opačným směrem.
+       */
+      return;
+    }
+
+    /*
+     * Po posunu obsahu se pod stejným bodem prstu nachází jiný text.
+     * Proto cíl přesunu přepočítáme i bez dalšího pointermove/touchmove.
+     */
+    aktualizujUkazatelPresunuObrazku(
+      posledniXPresunuObrazku,
+      posledniYPresunuObrazku
+    );
+
+    animaceAutoScrollObrazku =
+      requestAnimationFrame(
+        provedKrokAutoScrollObrazku
+      );
+  }
+
+  function posunEditorPriPresunuObrazku(
+    clientX,
+    clientY
+  ) {
+    if (!presunObrazkuAktivni) {
+      zastavAutoScrollObrazku();
+      return;
+    }
+
+    posledniXPresunuObrazku = clientX;
+    posledniYPresunuObrazku = clientY;
+
+    const krok =
+      ziskejKrokAutoScrollObrazku(clientY);
+
+    if (Math.abs(krok) < 0.2) {
+      if (animaceAutoScrollObrazku !== null) {
+        cancelAnimationFrame(
+          animaceAutoScrollObrazku
+        );
+        animaceAutoScrollObrazku = null;
+      }
+      return;
+    }
+
+    if (animaceAutoScrollObrazku === null) {
+      animaceAutoScrollObrazku =
+        requestAnimationFrame(
+          provedKrokAutoScrollObrazku
+        );
     }
   }
 
@@ -1261,6 +1392,7 @@
       event?.pointerId ?? null;
     presunObrazkuAktivni = true;
     cilPresunuObrazku = null;
+    zastavAutoScrollObrazku();
 
     const dalsi = figure.nextElementSibling;
 
@@ -1388,6 +1520,12 @@
     if (!presunObrazkuAktivni) {
       return false;
     }
+
+    /*
+     * Nejdřív zastavíme řízený posun editoru, aby už po puštění
+     * nemohl doběhnout další animation frame.
+     */
+    zastavAutoScrollObrazku();
 
     if (
       presouvanyPointerId !== null &&
@@ -1636,8 +1774,16 @@
      * Android WebView – obsah editoru se při dragování nesmí rozjet.
      */
     event.preventDefault();
-    modalRichText.scrollTop =
-      scrollTopPredPresunemObrazku;
+
+    /*
+     * Dokud se drag skutečně nerozběhl, držíme scroll na místě.
+     * Jakmile je obrázek v MOVE režimu, nativní scroll je stále
+     * blokovaný, ale okrajový auto-scroll už smí měnit scrollTop.
+     */
+    if (!presunObrazkuAktivni) {
+      modalRichText.scrollTop =
+        scrollTopPredPresunemObrazku;
+    }
 
     zobrazNapoveduPresunuObrazku(
       dotyk.clientX,
@@ -1665,6 +1811,11 @@
 
     if (presunObrazkuAktivni) {
       aktualizujUkazatelPresunuObrazku(
+        dotyk.clientX,
+        dotyk.clientY
+      );
+
+      posunEditorPriPresunuObrazku(
         dotyk.clientX,
         dotyk.clientY
       );
@@ -1809,8 +1960,11 @@
     }
 
     event.preventDefault();
-    modalRichText.scrollTop =
-      scrollTopPredPresunemObrazku;
+
+    if (!presunObrazkuAktivni) {
+      modalRichText.scrollTop =
+        scrollTopPredPresunemObrazku;
+    }
 
     zobrazNapoveduPresunuObrazku(
       event.clientX,
@@ -1833,6 +1987,11 @@
 
     if (presunObrazkuAktivni) {
       aktualizujUkazatelPresunuObrazku(
+        event.clientX,
+        event.clientY
+      );
+
+      posunEditorPriPresunuObrazku(
         event.clientX,
         event.clientY
       );
