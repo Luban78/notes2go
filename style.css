@@ -9413,6 +9413,10 @@ body.pdfViewerOpen {
 
 /* ==================================================
    KOŠ
+   --------------------------------------------------
+   Vzhled navazuje na hlavní karty LubaNote a Plán.
+   Tlačítko zpět používá stejnou 44px tap-zónu jako
+   šipky v kalendáři.
    ================================================== */
 body.trashScreenOpen {
   overflow: hidden;
@@ -9422,139 +9426,278 @@ body.trashScreenOpen {
   position: fixed;
   inset: 0;
   z-index: 3600;
+
   display: flex;
   flex-direction: column;
-  background: var(--app-bg, #100d18);
-  color: var(--text-color, #f5f2fa);
-  overflow: auto;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100dvh;
+
+  padding:
+    max(8px, env(safe-area-inset-top))
+    14px
+    max(24px, env(safe-area-inset-bottom));
+
+  background: var(--color-background);
+  color: var(--color-text);
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .trashScreen[hidden] {
   display: none;
 }
 
+/* Hlavička je stejný princip jako v kalendáři:
+   44 px tlačítko – vycentrovaný obsah – 44 px mezera. */
 .trashScreenHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: min(100%, 980px);
-  margin: 0 auto 18px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 8px;
+
+  width: min(100%, 900px);
+  margin: 0 auto 14px;
 }
 
-.trashScreenHeader > .lubaIconOnlyButton {
-  flex: 0 0 auto;
-  margin-top: 2px;
+.trashScreenHeader::after {
+  content: "";
+  width: 44px;
+  height: 44px;
+}
+
+.trashBackButton {
+  width: 45px;
+  height: 44px;
+  min-width: 45px;
+  min-height: 44px;
+
+  margin: 0;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 12px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: 1.7rem;
+  line-height: 1;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trashBackButton .lubaActionIcon {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+.trashBackButton:active {
+  transform: scale(0.96);
 }
 
 .trashScreenHeading {
   min-width: 0;
+  text-align: center;
 }
 
 .trashScreenHeading h2 {
   margin: 0;
-  font-size: 1.55rem;
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1.2;
 }
 
 .trashScreenHeading p {
-  margin: 4px 0 0;
-  opacity: 0.72;
+  margin: 5px 0 0;
+
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
   line-height: 1.35;
 }
 
 .trashList {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
-  gap: 14px;
-  width: min(100%, 980px);
-  margin: 0 auto;
-}
+  grid-template-columns: 1fr;
+  gap: 12px;
 
-.trashCard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  border-radius: 22px;
-  background: var(--card-bg, rgba(255, 255, 255, 0.07));
-  padding: 16px;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: 0 0 8px;
+
   box-sizing: border-box;
 }
 
+/* Karta v Koši používá stejné základní proporce jako .taskCard. */
+.trashCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+
+  min-width: 0;
+  box-sizing: border-box;
+
+  padding: 18px;
+
+  border: 0;
+  border-radius: 22px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+
+  text-align: left;
+}
+
+/* Tajný Koš zůstává vizuálně diskrétní – žádná informace
+   o Secret režimu se nepřenáší do běžného Koše. */
 .trashScreen[data-secret="true"] .trashCard {
-  outline: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+  outline: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 22%,
+    transparent
+  );
 }
 
 .trashCardHeader h3 {
   margin: 0;
-  font-size: 1.18rem;
-  line-height: 1.25;
+
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 2px);
+  line-height: 1.2;
+
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .trashCardPreview {
   display: -webkit-box;
-  margin: 0;
+  margin: 8px 0 0;
   overflow: hidden;
+
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-height: 1.4;
-  opacity: 0.9;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+
+  color: var(--color-text);
+  font-size: var(--font-size);
+  line-height: 1.35;
+  white-space: pre-line;
 }
 
 .trashCardMeta {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin-top: auto;
-  font-size: 0.82rem;
-  opacity: 0.62;
+
+  margin-top: 12px;
+  padding-top: 10px;
+
+  border-top: 1px solid color-mix(
+    in srgb,
+    var(--color-text) 12%,
+    transparent
+  );
+
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 3px);
+  line-height: 1.35;
 }
 
 .trashCardActions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 4px;
+
+  margin-top: 14px;
 }
 
 .trashCardAction {
+  min-width: 0;
+  min-height: 44px;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 44px;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+
+  padding: 8px 10px;
+
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  color: inherit;
+
+  background: var(--color-background);
+  color: var(--color-text);
+
   font: inherit;
+  font-size: calc(var(--font-size) - 1px);
+  font-weight: 600;
+  line-height: 1.15;
+
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trashRestoreButton .lubaActionIcon {
+  color: var(--color-accent-text);
 }
 
 .trashDeleteForeverButton {
-  border-color: color-mix(in srgb, #ff5f6d 45%, transparent);
+  border-color: color-mix(
+    in srgb,
+    #b24a4a 58%,
+    var(--color-border)
+  );
+  color: #c96565;
+}
+
+.trashCardAction:active {
+  transform: scale(0.97);
 }
 
 .trashCardAction:disabled {
   opacity: 0.5;
   cursor: default;
+  transform: none;
 }
 
 .trashEmpty {
-  width: min(100%, 980px);
-  margin: 48px auto 0;
+  width: min(100%, 680px);
+  margin: 42px auto 0;
+
+  color: var(--color-text-secondary);
+  font-size: var(--font-size);
   text-align: center;
-  opacity: 0.62;
 }
 
-@media (max-width: 520px) {
+/* Na širší obrazovce využijeme prostor stejně jako hlavní
+   dvousloupcové karty, telefon zůstává přehledný v jednom sloupci. */
+@media (min-width: 760px) {
   .trashList {
-    grid-template-columns: 1fr;
+    width: min(100%, 900px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .trashEmpty {
+    width: min(100%, 900px);
+  }
+}
+
+/* Jen na opravdu úzkém displeji dáme akce pod sebe,
+   aby se dlouhý český text tlačítek nemačkal. */
+@media (max-width: 340px) {
   .trashCardActions {
     grid-template-columns: 1fr;
   }
 }
+
