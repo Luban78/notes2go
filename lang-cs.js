@@ -39,6 +39,11 @@ window.LubaNoteLanguagePacks.push({
     "modules.planner": "Plán",
     "modules.reminders": "Připomínky",
 
+    "sync.synced": "✓ Synchronizováno",
+    "sync.syncing": "⟳ Synchronizuji…",
+    "sync.authExpired": "⚠ Přihlášení vypršelo",
+    "sync.conflict": "⚠ Konflikt",
+
     "search.placeholder": "Hledat poznámky...",
     "search.aria": "Hledat poznámky",
     "search.clear": "Vymazat hledání",

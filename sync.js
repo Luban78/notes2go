@@ -161,6 +161,22 @@ function oznamChybejiciOnlineSession() {
   );
 }
 
+function nastavStavSynchronizaceUI(stav) {
+  window.dispatchEvent(
+    new CustomEvent("lubanote:sync-state", {
+      detail: { stav }
+    })
+  );
+}
+
+function nastavKoncovyStavSynchronizaceUI() {
+  nastavStavSynchronizaceUI(
+    aktivniKonfliktySyncu.size > 0
+      ? "conflict"
+      : "synced"
+  );
+}
+
 const frontyServerovychZapisu = new Map();
 let casovacVyreseniBeznehoReviznihoKonfliktu = null;
 
@@ -345,6 +361,8 @@ function oznamKonfliktSynchronizace(
     duvod,
     detail
   );
+
+  nastavStavSynchronizaceUI("conflict");
 
   /*
    * Stejný konflikt může při každém startu znovu vzniknout z téhož
@@ -2192,6 +2210,8 @@ async function syncNotes() {
       return false;
     }
 
+    nastavStavSynchronizaceUI("syncing");
+
     if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
       await cekajNaUlozeniTajnychPoznamek();
     }
@@ -2613,7 +2633,21 @@ async function syncNotes() {
   })();
 
   try {
-    return await probihajiciSync;
+    const vysledek = await probihajiciSync;
+
+    if (vysledek === true) {
+      nastavKoncovyStavSynchronizaceUI();
+    }
+
+    return vysledek;
+  } catch (error) {
+    if (aktivniKonfliktySyncu.size > 0) {
+      nastavStavSynchronizaceUI("conflict");
+    } else {
+      nastavStavSynchronizaceUI("restore");
+    }
+
+    throw error;
   } finally {
     probihajiciSync = null;
   }
@@ -2644,6 +2678,8 @@ async function startSync() {
     return false;
   }
 
+  nastavStavSynchronizaceUI("syncing");
+
   if (
     typeof window.LubaNoteRecurring
       ?.migrujStareOpakovaniPlanneru ===
@@ -2672,6 +2708,8 @@ async function startSync() {
   ) {
     await obnovNotifikaceOpakovanychPoznamek();
   }
+
+  nastavKoncovyStavSynchronizaceUI();
 
   return true;
 }
@@ -2910,13 +2948,19 @@ async function spustStartSyncBezpecne() {
   probihajiciStartSync =
     (async () => {
       try {
-        await startSync();
-        return true;
+        return (await startSync()) === true;
       } catch (error) {
         console.warn(
           "Synchronizace byla odložena:",
           error
         );
+
+        if (aktivniKonfliktySyncu.size > 0) {
+          nastavStavSynchronizaceUI("conflict");
+        } else {
+          nastavStavSynchronizaceUI("restore");
+        }
+
         return false;
       }
     })();

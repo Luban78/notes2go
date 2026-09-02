@@ -33,6 +33,11 @@ window.LubaNoteLanguagePacks.push({
     "modules.planner": "Planner",
     "modules.reminders": "Reminders",
 
+    "sync.synced": "✓ Synced",
+    "sync.syncing": "⟳ Syncing…",
+    "sync.authExpired": "⚠ Sign-in expired",
+    "sync.conflict": "⚠ Conflict",
+
     "search.placeholder": "Search notes...",
     "search.aria": "Search notes",
     "search.clear": "Clear search",
@@ -251,6 +256,7 @@ window.LubaNoteLanguagePacks.push({
   },
 
   texty: {
+    "Přihlášení vypršelo. Přihlas se znovu, aby mohla pokračovat synchronizace. Tvoje lokální data zůstala zachována.": "Your sign-in expired. Sign in again so synchronization can continue. Your local data has been preserved.",
     "Nepodařilo se připojit k synchronizaci. Zkus to znovu po připojení k internetu.": "Could not connect to sync. Try again when you are online.",
     "Ověření přihlášení se nepodařilo.": "Sign-in verification failed.",
     "První přihlášení vyžaduje připojení k internetu.": "Your first sign-in requires an internet connection.",

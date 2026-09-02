@@ -8,7 +8,7 @@
   
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260901-note-links-v7-1">
+  <link rel="stylesheet" href="style.css?v=20260902-sync-status-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -162,6 +162,7 @@
         </button>
         
         <button id="remindersModuleButton" class="moduleTab" type="button" data-module="reminders">
+          <span id="syncStatusText" class="syncStatusText" hidden aria-hidden="true"></span>
           <span class="moduleTabIcon" data-luba-icon="zvonek" data-luba-classic-icon="🔔" aria-hidden="true"></span>
           <span class="moduleTabText">Připomínky</span>
         </button>
@@ -1681,8 +1682,11 @@
   <script src="search.js?v=20260826-nazev-editor-1"></script>
   
   
+  <!-- Viditelný stav synchronizace nad ikonou Připomínky -->
+  <script src="syncStatus.js?v=20260902-sync-status-1"></script>
+
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js"></script>
+  <script src="supabaseClient.js?v=20260902-sync-status-1"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
   <script src="secret.js?v=20260901-biometrie-1"></script>
   <script src="secretBiometric.js?v=20260901-biometrie-1"></script>
@@ -1698,7 +1702,7 @@
   
   
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260826-bezpecne-revize-3"></script>
+  <script src="sync.js?v=20260902-sync-status-1"></script>
   
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
   <script src="visualDebug.js"></script>

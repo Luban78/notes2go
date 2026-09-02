@@ -9327,3 +9327,111 @@ body.pdfViewerOpen {
     flex: 1 1 0;
   }
 }
+
+/* =========================================
+   STAV SYNCHRONIZACE – HLAVNÍ MODULY
+   Text je záměrně přímo nad ikonou Připomínky.
+   ========================================= */
+
+#remindersModuleButton {
+  position: relative;
+}
+
+.syncStatusText {
+  box-sizing: border-box;
+  max-width: 100%;
+
+  color: var(--color-text);
+  font-size: clamp(7px, calc(var(--font-size) * 0.5), 9px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.12px;
+  text-align: center;
+  white-space: nowrap;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+.syncStatusText[hidden] {
+  display: none !important;
+}
+
+.syncStatusText[data-state="synced"] {
+  color: #79d99c;
+}
+
+.syncStatusText[data-state="syncing"] {
+  color: #73ccff;
+  animation: lubaSyncStatusPulse 0.9s ease-in-out infinite alternate;
+}
+
+.syncStatusText[data-state="auth-expired"] {
+  color: #ff8585;
+}
+
+.syncStatusText[data-state="conflict"] {
+  color: #ffc35f;
+}
+
+@keyframes lubaSyncStatusPulse {
+  from {
+    opacity: 0.58;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Mobil: Připomínky mají tři řádky:
+ * stav synchronizace -> zvonek -> název modulu.
+ * Výška horního tlačítka se nemění.
+ */
+@media (max-width: 899px) {
+  #remindersModuleButton {
+    gap: 1px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  #remindersModuleButton .syncStatusText {
+    display: block;
+    min-height: 8px;
+    width: 100%;
+  }
+
+  #remindersModuleButton .moduleTabIcon.lubaIconHost,
+  #remindersModuleButton .moduleTabIcon .lubaSvgIcon {
+    width: calc(var(--font-size) * 1.15);
+    height: calc(var(--font-size) * 1.15);
+  }
+}
+
+/*
+ * Desktop: zachováme horizontální rozložení ikon + názvu.
+ * Stav je malý samostatný řádek v horní části tlačítka.
+ */
+@media (min-width: 900px) {
+  #remindersModuleButton {
+    padding-top: 11px;
+  }
+
+  #remindersModuleButton .syncStatusText {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+
+    overflow: hidden;
+    text-overflow: clip;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncStatusText[data-state="syncing"] {
+    animation: none;
+  }
+}
+

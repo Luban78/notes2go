@@ -240,7 +240,9 @@ const loginMessage =
   document.getElementById("loginMessage");
 
 function setLoginMessage(message = "", isError = false) {
-  loginMessage.textContent = message;
+  loginMessage.dataset.i18nSource = message;
+  loginMessage.textContent =
+    window.LubaNoteI18n?.prelozText?.(message) || message;
   loginMessage.classList.toggle("error", isError);
 }
 
@@ -318,6 +320,10 @@ function zobrazPrihlaseni(
 }
 
 function zobrazVyprselePrihlaseni() {
+  window.dispatchEvent(
+    new CustomEvent("lubanote:auth-expired")
+  );
+
   zobrazPrihlaseni(
     "Přihlášení vypršelo. Přihlas se znovu, aby mohla pokračovat synchronizace. Tvoje lokální data zůstala zachována.",
     true
@@ -587,6 +593,15 @@ loginForm.addEventListener("submit", async (event) => {
     console.error("Login error:", error);
   } finally {
     loginButton.disabled = false;
+  }
+});
+
+window.addEventListener("lubanote:language-change", () => {
+  const zdroj = loginMessage.dataset.i18nSource || "";
+
+  if (zdroj) {
+    loginMessage.textContent =
+      window.LubaNoteI18n?.prelozText?.(zdroj) || zdroj;
   }
 });
 
