@@ -5,12 +5,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.ActionMode;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 
 import androidx.activity.OnBackPressedCallback;
 
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+  private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -54,13 +58,72 @@ public class MainActivity extends BridgeActivity {
   }
 
 
+  /*
+   * LubaNote schovává pouze horní systémovou stavovou lištu.
+   * Spodní Android navigace zůstává zachovaná a průhledná stejně jako dřív.
+   *
+   * Android 11+:
+   * používáme moderní WindowInsetsController. Režim transient bars dovolí
+   * lištu gestem dočasně zobrazit, ale po zavření se znovu sama schová.
+   *
+   * Android 10 a starší:
+   * ponecháváme legacy systémové flagy, ale doplňujeme IMMERSIVE_STICKY,
+   * aby stažení horní lišty trvale nezrušilo fullscreen.
+   */
   private void nastavFullscreen() {
-    getWindow().getDecorView().setSystemUiVisibility(
+    View decorView = getWindow().getDecorView();
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      getWindow().setDecorFitsSystemWindows(false);
+
+      WindowInsetsController controller =
+        getWindow().getInsetsController();
+
+      if (controller != null) {
+        controller.setSystemBarsBehavior(
+          WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        );
+
+        controller.hide(
+          WindowInsets.Type.statusBars()
+        );
+      }
+
+      return;
+    }
+
+    decorView.setSystemUiVisibility(
       View.SYSTEM_UI_FLAG_FULLSCREEN
         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
     );
+  }
+
+
+  /*
+   * Po návratu z notifikační lišty / systémového dialogu Android někdy ještě
+   * krátce dokončuje animaci systémových lišt. Kromě okamžitého nastavení proto
+   * fullscreen zopakujeme s malým zpožděním. Tím se systémová animace nemůže
+   * stát posledním zápisem a nechat stavovou lištu trvale zobrazenou.
+   */
+  private void obnovFullscreen() {
+    nastavFullscreen();
+
+    View decorView = getWindow().getDecorView();
+    decorView.removeCallbacks(this::nastavFullscreen);
+    decorView.postDelayed(
+      this::nastavFullscreen,
+      FULLSCREEN_OBNOVA_ZPOZDENI_MS
+    );
+  }
+
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    obnovFullscreen();
   }
 
 
@@ -69,7 +132,7 @@ public class MainActivity extends BridgeActivity {
     super.onWindowFocusChanged(hasFocus);
 
     if (hasFocus) {
-      nastavFullscreen();
+      obnovFullscreen();
     }
   }
 
