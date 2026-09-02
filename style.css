@@ -9330,19 +9330,32 @@ body.pdfViewerOpen {
 
 /* =========================================
    STAV SYNCHRONIZACE – HLAVNÍ MODULY
-   Text je záměrně přímo nad ikonou Připomínky.
+   Stav je vizuálně NAD tlačítkem Připomínky,
+   nikoli uvnitř jeho plochy.
    ========================================= */
+
+/* Modulová lišta musí dovolit stav vykreslit do horního volného prostoru. */
+.moduleBar {
+  overflow: visible;
+}
 
 #remindersModuleButton {
   position: relative;
+  overflow: visible;
 }
 
 .syncStatusText {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -15px;
+
   box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
 
   color: var(--color-text);
-  font-size: clamp(7px, calc(var(--font-size) * 0.5), 9px);
+  font-size: clamp(8px, calc(var(--font-size) * 0.5), 10px);
   font-weight: 750;
   line-height: 1;
   letter-spacing: -0.12px;
@@ -9384,48 +9397,11 @@ body.pdfViewerOpen {
   }
 }
 
-/*
- * Mobil: Připomínky mají tři řádky:
- * stav synchronizace -> zvonek -> název modulu.
- * Výška horního tlačítka se nemění.
- */
-@media (max-width: 899px) {
-  #remindersModuleButton {
-    gap: 1px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-  }
-
-  #remindersModuleButton .syncStatusText {
-    display: block;
-    min-height: 8px;
-    width: 100%;
-  }
-
-  #remindersModuleButton .moduleTabIcon.lubaIconHost,
-  #remindersModuleButton .moduleTabIcon .lubaSvgIcon {
-    width: calc(var(--font-size) * 1.15);
-    height: calc(var(--font-size) * 1.15);
-  }
-}
-
-/*
- * Desktop: zachováme horizontální rozložení ikon + názvu.
- * Stav je malý samostatný řádek v horní části tlačítka.
- */
-@media (min-width: 900px) {
-  #remindersModuleButton {
-    padding-top: 11px;
-  }
-
-  #remindersModuleButton .syncStatusText {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    right: 4px;
-
-    overflow: hidden;
-    text-overflow: clip;
+/* Na velmi úzkém telefonu posuneme text o chlup blíž k tlačítku. */
+@media (max-width: 420px) {
+  .syncStatusText {
+    top: -13px;
+    font-size: 8px;
   }
 }
 
@@ -9434,4 +9410,3 @@ body.pdfViewerOpen {
     animation: none;
   }
 }
-
