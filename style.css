@@ -9052,35 +9052,14 @@ body.secretModeActive {
 }
 
 /* ==================================================
-   EDITOR – RESPONSIVNÍ OBRÁZKY + FULLSCREEN NÁHLED
+   EDITOR – RESPONZIVNÍ OBRÁZKY + FULLSCREEN NÁHLED
    ================================================== */
 
 /*
- * RESPONSIVNÍ VELIKOST PC ↔ MOBIL
- *
- * Uložená procentní velikost patří desktopovému rozložení poznámky.
- * Na úzkém mobilu se obrázek záměrně zobrazí přes celou šířku editoru,
- * ale uložené data-velikost ani inline width se NEMĚNÍ.
- *
- * Příklad:
- *   PC:    data-velikost="25" + width: 25 %  -> obrázek je 25 % editoru
- *   mobil: stejné HTML                         -> obrázek je 100 % editoru
- *   návrat na PC                               -> znovu 25 %
- *
- * Tím není potřeba velikost při přechodu PC ↔ APK pokaždé ručně měnit.
- * Zároveň na mobilu vypneme float, aby vedle plně širokého obrázku
- * nezůstával úzký sloupec textu. Gesta obrázků tento blok nijak nemění.
+ * V4: PC, web i APK používají JEDNU společnou procentní velikost.
+ * Šířku aplikuje editorMedia.js inline podle data-velikost.
+ * Není zde žádné mobilní width: 100% pravidlo ani pixelová náhrada.
  */
-@media (max-width: 899px) {
-  #modalRichText .lubaNoteImage[data-velikost]:not([data-velikost="prizpusobit"]):not([data-velikost="100"]),
-  #modalRichText .lubaNoteImage[data-sirka-px]:not([data-velikost="prizpusobit"]):not([data-velikost="100"]) {
-    float: none !important;
-    clear: both;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 14px auto !important;
-  }
-}
 
 body.lubaNoteImagePreviewOpen {
   overflow: hidden !important;

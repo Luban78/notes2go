@@ -128,13 +128,7 @@
   let puvodniPrazdnyRadekObrazku = null;
   let ukazatelPresunuObrazku = null;
 
-  /*
-   * Obrázek může mít na desktopu např. 25 %, ale stejných 25 %
-   * je na mobilu příliš malé. Proto si u procentní velikosti ukládáme
-   * i reálnou šířku v pixelech. Desktop dál používá procenta, mobil
-   * preferovanou pixelovou šířku (s max-width: 100 %).
-   */
-  const REFERENCNI_SIRKA_OBRAZKU = 720;
+  /* Velikost obrázku je vždy relativní procento šířky editoru. */
 
   /* Fullscreen viewer v kódu zůstává, ale na obrázek už není navázaný
    * žádný dvojtap. Uživatel chce druhý tap použít pro odznačení. */
@@ -272,71 +266,240 @@
     );
   }
 
-  function ulozPreferovanouSirkuObrazku(
+  /*
+   * JEDINÁ velikost obrázku pro všechna zařízení.
+   *
+   * Ukládáme pouze relativní hodnotu v procentech do data-velikost.
+   * To znamená například:
+   * - 25 % = čtvrtina šířky editoru na PC i v APK,
+   * - 50 % = polovina šířky editoru na PC i v APK,
+   * - 100 % / "prizpusobit" = celá šířka aktuálního editoru.
+   *
+   * Neexistuje samostatná PC a mobilní velikost. Staré dočasné
+   * data-velikost-mobil z předchozího patche pouze migrujeme jako
+   * fallback, pokud by data-velikost úplně chybělo, a pak ho odstraníme.
+   */
+  function ziskejJednotnouVelikostObrazku(
     image,
-    figure,
-    pouzitReferencniMinimum = true
+    figure
+  ) {
+    const kandidati = [
+      figure?.dataset?.velikost,
+      image?.dataset?.velikost
+    ];
+
+    for (const hodnota of kandidati) {
+      if (hodnota === "prizpusobit") {
+        return "prizpusobit";
+      }
+
+      const cislo = Number(hodnota);
+      if (
+        Number.isFinite(cislo) &&
+        cislo >= 10 &&
+        cislo <= 100
+      ) {
+        return String(cislo);
+      }
+    }
+
+    /*
+     * Jednorázová kompatibilita s V2/V3: pokud by standardní hodnota
+     * chyběla, vezmeme starou mobilní hodnotu jako společnou. Jakmile
+     * se obrázek aplikuje, data-velikost-mobil se odstraní.
+     */
+    const stareMobilniHodnoty = [
+      figure?.dataset?.velikostMobil,
+      image?.dataset?.velikostMobil
+    ];
+
+    for (const hodnota of stareMobilniHodnoty) {
+      if (hodnota === "prizpusobit") {
+        return "prizpusobit";
+      }
+
+      const cislo = Number(hodnota);
+      if (
+        Number.isFinite(cislo) &&
+        cislo >= 10 &&
+        cislo <= 100
+      ) {
+        return String(cislo);
+      }
+    }
+
+    /* Kompatibilita s velmi starými poznámkami pouze s inline width. */
+    const inlineSirka = String(
+      figure?.style?.width || ""
+    ).trim();
+
+    let procenta = inlineSirka.match(
+      /^(\d+(?:\.\d+)?)%$/
+    );
+
+    if (!procenta) {
+      procenta = inlineSirka.match(
+        /^calc\((\d+(?:\.\d+)?)%\s*-/
+      );
+    }
+
+    if (procenta) {
+      const cislo = Number(procenta[1]);
+      if (
+        Number.isFinite(cislo) &&
+        cislo >= 10 &&
+        cislo <= 100
+      ) {
+        return String(cislo);
+      }
+    }
+
+    return "prizpusobit";
+  }
+
+  function aplikujAktualniVelikostObrazku(
+    image,
+    figure
   ) {
     if (!image || !figure) {
       return;
     }
 
-    const velikost = ziskejAktualniVelikostObrazku(
-      image,
-      figure
+    const velikost =
+      ziskejJednotnouVelikostObrazku(
+        image,
+        figure
+      );
+
+    /*
+     * data-velikost je jediný zdroj pravdy pro PC, web i APK.
+     * Zároveň uklidíme dočasná mobilní/pixelová metadata z V1–V3,
+     * aby už nikdy nemohla přebít relativní procentní velikost.
+     */
+    figure.dataset.velikost = velikost;
+    image.dataset.velikost = velikost;
+
+    delete figure.dataset.velikostMobil;
+    delete image.dataset.velikostMobil;
+    delete figure.dataset.sirkaPx;
+    delete image.dataset.sirkaPx;
+
+    figure.style.removeProperty(
+      "--luba-note-image-sirka-mobil"
+    );
+    figure.style.removeProperty(
+      "--luba-note-image-sirka-px"
     );
 
-    if (
+    const zarovnani =
+      figure.dataset.zarovnani ||
+      image.dataset.zarovnani ||
+      "stred";
+
+    const jePlnaSirka =
       velikost === "prizpusobit" ||
-      Number(velikost) >= 100
+      Number(velikost) >= 100;
+
+    let sirka = jePlnaSirka
+      ? "100%"
+      : `${Number(velikost)}%`;
+
+    /* Dva 50% plovoucí obrázky se vejdou vedle sebe i s mezerou. */
+    if (
+      !jePlnaSirka &&
+      Number(velikost) === 50 &&
+      (zarovnani === "vlevo" ||
+        zarovnani === "vpravo")
     ) {
-      delete figure.dataset.sirkaPx;
-      delete image.dataset.sirkaPx;
-      figure.style.removeProperty(
-        "--luba-note-image-sirka-px"
+      sirka = "calc(50% - 4px)";
+    }
+
+    /*
+     * Inline !important drží stejné procento i v Android WebView.
+     * Hodnota je ale pořád relativní k šířce AKTUÁLNÍHO editoru,
+     * nikoli k pixelům konkrétního zařízení.
+     */
+    figure.style.setProperty(
+      "width",
+      sirka,
+      "important"
+    );
+    figure.style.setProperty(
+      "max-width",
+      "100%",
+      "important"
+    );
+
+    if (jePlnaSirka) {
+      figure.style.setProperty(
+        "float",
+        "none",
+        "important"
+      );
+      figure.style.setProperty("clear", "both");
+      figure.style.setProperty(
+        "margin",
+        "14px auto",
+        "important"
       );
       return;
     }
 
-    const rect = figure.getBoundingClientRect();
-    let sirkaPx = Math.round(rect.width);
-
-    /*
-     * U starších poznámek může být obrázek poprvé otevřen právě
-     * na mobilu, kde už je procentní šířka malá. V tom případě
-     * použijeme konzervativní referenci podle původního 720px limitu
-     * editorového obrázku. 25 % tak vychází přibližně na 180 px.
-     */
-    if (
-      pouzitReferencniMinimum &&
-      window.innerWidth < 900
-    ) {
-      const procenta = Number(velikost);
-
-      if (
-        Number.isFinite(procenta) &&
-        procenta > 0 &&
-        procenta < 100
-      ) {
-        sirkaPx = Math.max(
-          sirkaPx,
-          Math.round(
-            REFERENCNI_SIRKA_OBRAZKU *
-              (procenta / 100)
-          )
-        );
-      }
-    }
-
-    if (!Number.isFinite(sirkaPx) || sirkaPx <= 0) {
+    if (zarovnani === "vlevo") {
+      figure.style.setProperty(
+        "float",
+        "left",
+        "important"
+      );
+      figure.style.setProperty("clear", "none");
+      figure.style.setProperty(
+        "margin",
+        "2px 4px 6px 0",
+        "important"
+      );
       return;
     }
 
-    figure.dataset.sirkaPx = String(sirkaPx);
-    image.dataset.sirkaPx = String(sirkaPx);
+    if (zarovnani === "vpravo") {
+      figure.style.setProperty(
+        "float",
+        "right",
+        "important"
+      );
+      figure.style.setProperty("clear", "none");
+      figure.style.setProperty(
+        "margin",
+        "2px 0 6px 4px",
+        "important"
+      );
+      return;
+    }
+
     figure.style.setProperty(
-      "--luba-note-image-sirka-px",
-      `${sirkaPx}px`
+      "float",
+      "none",
+      "important"
+    );
+    figure.style.setProperty("clear", "both");
+    figure.style.setProperty(
+      "margin",
+      "14px auto",
+      "important"
+    );
+  }
+
+  /*
+   * Starý název funkce ponecháváme kvůli kompatibilitě s existujícími
+   * voláními. Pixelovou šířku už neukládá – pouze znovu aplikuje
+   * společnou procentní velikost.
+   */
+  function ulozPreferovanouSirkuObrazku(
+    image,
+    figure
+  ) {
+    aplikujAktualniVelikostObrazku(
+      image,
+      figure
     );
   }
 
@@ -351,78 +514,17 @@
       return;
     }
 
-    const ulozenaSirka = Number(
-      figure.dataset.sirkaPx ||
-        image.dataset.sirkaPx
+    aplikujAktualniVelikostObrazku(
+      image,
+      figure
     );
-
-    if (
-      Number.isFinite(ulozenaSirka) &&
-      ulozenaSirka > 0
-    ) {
-      figure.dataset.sirkaPx = String(
-        Math.round(ulozenaSirka)
-      );
-      image.dataset.sirkaPx = String(
-        Math.round(ulozenaSirka)
-      );
-      figure.style.setProperty(
-        "--luba-note-image-sirka-px",
-        `${Math.round(ulozenaSirka)}px`
-      );
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      if (figure.isConnected) {
-        ulozPreferovanouSirkuObrazku(
-          image,
-          figure
-        );
-      }
-    });
   }
 
   function ziskejAktualniVelikostObrazku(image, figure) {
-    const inlineSirka = String(
-      figure?.style?.width || ""
-    ).trim();
-
-    const procenta = inlineSirka.match(
-      /^(\d+(?:\.\d+)?)%$/
+    return ziskejJednotnouVelikostObrazku(
+      image,
+      figure
     );
-
-    if (procenta) {
-      const cislo = Number(procenta[1]);
-
-      if (
-        Number.isFinite(cislo) &&
-        cislo >= 10 &&
-        cislo <= 100
-      ) {
-        return String(cislo);
-      }
-    }
-
-    const ulozenaVelikost =
-      figure?.dataset?.velikost ||
-      image?.dataset?.velikost;
-
-    if (ulozenaVelikost === "prizpusobit") {
-      return "prizpusobit";
-    }
-
-    const cislo = Number(ulozenaVelikost);
-
-    if (
-      Number.isFinite(cislo) &&
-      cislo >= 10 &&
-      cislo <= 100
-    ) {
-      return String(cislo);
-    }
-
-    return "prizpusobit";
   }
 
   function ziskejPopisekVelikostiObrazku(velikost) {
@@ -510,20 +612,14 @@
     image.dataset.zarovnani = zarovnani;
     figure.dataset.zarovnani = zarovnani;
 
-    if (zarovnani === "vlevo") {
-      figure.style.marginLeft = "0px";
-      figure.style.marginRight = "auto";
-      return;
-    }
-
-    if (zarovnani === "vpravo") {
-      figure.style.marginLeft = "auto";
-      figure.style.marginRight = "0px";
-      return;
-    }
-
-    figure.style.marginLeft = "auto";
-    figure.style.marginRight = "auto";
+    /*
+     * Zarovnání i šířku nastavíme jedním společným výpočtem.
+     * Je tak stejné v PC, SPCK i nativním Android WebView.
+     */
+    aplikujAktualniVelikostObrazku(
+      image,
+      figure
+    );
   }
 
   function nastavVelikostObrazku(
@@ -536,13 +632,16 @@
     }
 
     if (velikost === "prizpusobit") {
-      figure.style.removeProperty("width");
       figure.dataset.velikost = "prizpusobit";
       image.dataset.velikost = "prizpusobit";
-      delete figure.dataset.sirkaPx;
-      delete image.dataset.sirkaPx;
-      figure.style.removeProperty(
-        "--luba-note-image-sirka-px"
+
+      /* Dočasné oddělené mobilní nastavení z V2/V3 rušíme. */
+      delete figure.dataset.velikostMobil;
+      delete image.dataset.velikostMobil;
+
+      aplikujAktualniVelikostObrazku(
+        image,
+        figure
       );
       return true;
     }
@@ -558,38 +657,19 @@
     }
 
     /*
-     * APK / mobil: procentní velikost je po prvním nastavení doplněná
-     * také o data-sirka-px. Mobilní CSS tuto pixelovou hodnotu používá
-     * přes !important, takže stará data-sirka-px by při dalším změnění
-     * velikosti přebila nových např. 50 % a obrázek by vypadal, že se
-     * vůbec nezměnil. Před novým měřením proto starou pixelovou šířku
-     * vždy uvolníme.
+     * Jedna společná relativní hodnota. 50 % znamená polovinu editoru
+     * na PC, ve SPCK i v APK – bez jakéhokoli dalšího nastavování.
      */
-    delete figure.dataset.sirkaPx;
-    delete image.dataset.sirkaPx;
-    figure.style.removeProperty(
-      "--luba-note-image-sirka-px"
-    );
-
-    figure.style.width = `${cislo}%`;
     figure.dataset.velikost = String(cislo);
     image.dataset.velikost = String(cislo);
 
-    requestAnimationFrame(() => {
-      if (figure.isConnected) {
-        /*
-         * Jde o výslovný zásah uživatele právě na tomto zařízení.
-         * Uložíme proto skutečně naměřenou šířku z aktuálního editoru,
-         * ne historické referenční minimum 720 px určené jen pro starší
-         * poznámky bez uložené pixelové šířky.
-         */
-        ulozPreferovanouSirkuObrazku(
-          image,
-          figure,
-          false
-        );
-      }
-    });
+    delete figure.dataset.velikostMobil;
+    delete image.dataset.velikostMobil;
+
+    aplikujAktualniVelikostObrazku(
+      image,
+      figure
+    );
 
     return true;
   }
