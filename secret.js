@@ -582,6 +582,10 @@ function obnovObrazovkyPoZmeneTajnehoRezimu() {
 }
 
 async function zamkniTajnyRezim(automaticky = false) {
+  if (window.LubaNoteTrash?.jeOtevrenTajnyKos?.()) {
+    window.LubaNoteTrash.zavri();
+  }
+
   /*
    * Rozpracovanou tajnou poznámku nejdřív bezpečně uložíme do
    * ciphertextu. Až potom odstraníme plaintext z DOM a zahodíme klíč.
@@ -897,6 +901,14 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
     await syncNotes();
   } else {
     obnovObrazovkyPoZmeneTajnehoRezimu();
+  }
+
+  /*
+   * Secret Koš zůstává celý uvnitř šifrovaného obsahu. Starší než
+   * 30 dní ho proto můžeme bezpečně vyčistit až po odemknutí trezoru.
+   */
+  if (typeof uklidPoznamkyVKosiPo30Dnech === "function") {
+    await uklidPoznamkyVKosiPo30Dnech();
   }
 
   /*

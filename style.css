@@ -9410,3 +9410,151 @@ body.pdfViewerOpen {
     animation: none;
   }
 }
+
+/* ==================================================
+   KOŠ
+   ================================================== */
+body.trashScreenOpen {
+  overflow: hidden;
+}
+
+.trashScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-bg, #100d18);
+  color: var(--text-color, #f5f2fa);
+  overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+
+.trashScreen[hidden] {
+  display: none;
+}
+
+.trashScreenHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(100%, 980px);
+  margin: 0 auto 18px;
+}
+
+.trashScreenHeader > .lubaIconOnlyButton {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.trashScreenHeading {
+  min-width: 0;
+}
+
+.trashScreenHeading h2 {
+  margin: 0;
+  font-size: 1.55rem;
+}
+
+.trashScreenHeading p {
+  margin: 4px 0 0;
+  opacity: 0.72;
+  line-height: 1.35;
+}
+
+.trashList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 14px;
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+.trashCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 22px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.07));
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.trashScreen[data-secret="true"] .trashCard {
+  outline: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.trashCardHeader h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.trashCardPreview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.trashCardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: auto;
+  font-size: 0.82rem;
+  opacity: 0.62;
+}
+
+.trashCardActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.trashCardAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.trashDeleteForeverButton {
+  border-color: color-mix(in srgb, #ff5f6d 45%, transparent);
+}
+
+.trashCardAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.trashEmpty {
+  width: min(100%, 980px);
+  margin: 48px auto 0;
+  text-align: center;
+  opacity: 0.62;
+}
+
+@media (max-width: 520px) {
+  .trashList {
+    grid-template-columns: 1fr;
+  }
+
+  .trashCardActions {
+    grid-template-columns: 1fr;
+  }
+}

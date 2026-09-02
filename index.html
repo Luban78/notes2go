@@ -253,6 +253,10 @@
       <button id="favoriteFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Oblíbené poznámky">
         <span class="categoryTabIcon" data-luba-icon="oblibene" data-luba-classic-icon="⭐" aria-hidden="true"></span>
       </button>
+
+      <button id="trashFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Koš">
+        <span class="categoryTabIcon" data-luba-icon="smazat" data-luba-classic-icon="🗑️" aria-hidden="true"></span>
+      </button>
       
       <button id="secretFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Tajné poznámky" hidden>
         <span class="categoryTabIcon" data-luba-icon="odemceno" data-luba-classic-icon="🔓" aria-hidden="true"></span>
@@ -957,7 +961,7 @@
     </button>
     
     <button type="button" class="lubaHasIcon" data-card-action="delete">
-      <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
+      <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Do koše</span>
     </button>
     
     <button type="button" class="lubaHasIcon" data-card-action="more">
@@ -978,7 +982,7 @@
       <h3>Smazat poznámku?</h3>
       
       <p>
-        Opravdu chceš tuto poznámku smazat?
+        Poznámka se přesune do Koše a můžeš ji později obnovit.
       </p>
       
       <div class="deleteConfirmActions">
@@ -1626,6 +1630,38 @@
   </div>
   
   <!-- ========================================
+       KOŠ – běžný a oddělený Secret Koš
+       ======================================== -->
+  <section id="trashScreen" class="trashScreen" hidden aria-labelledby="trashTitle">
+    <div class="trashScreenHeader">
+      <button id="trashBackButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít Koš">
+        <span class="lubaActionIcon" data-luba-icon="zpet" aria-hidden="true"></span>
+      </button>
+      <div class="trashScreenHeading">
+        <h2 id="trashTitle">Koš</h2>
+        <p id="trashInfo">Poznámky se po 30 dnech automaticky smažou trvale.</p>
+      </div>
+    </div>
+
+    <div id="trashList" class="trashList"></div>
+    <p id="trashEmpty" class="trashEmpty" hidden>Koš je prázdný.</p>
+  </section>
+
+  <div id="trashConfirmModal" class="deleteConfirmModal" hidden>
+    <div class="deleteConfirmBox">
+      <h3>Smazat trvale?</h3>
+      <p id="trashConfirmText">Tato poznámka bude smazána trvale a nepůjde obnovit.</p>
+      <div class="deleteConfirmActions">
+        <button id="trashConfirmCancel" type="button">Zrušit</button>
+        <button id="trashConfirmDelete" type="button" class="danger lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
+          <span>Smazat trvale</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================
        JAVASCRIPT
        POŘADÍ NEMĚNIT
        ======================================== -->
@@ -1642,7 +1678,7 @@
   
   <script src="reminders.js?v=20260827-kompletni-zaloha-1"></script>
   
-  <script src="storage.js?v=20260827-obnova-presypaci-hodiny-2"></script>
+  <script src="storage.js?v=20260902-kos-1"></script>
   
   <script src="tags.js?v=20260827-secret-stitek-3"></script>
   
@@ -1657,7 +1693,10 @@
   
   <script src="recurringTasks.js"></script>
   
-  <script src="script.js?v=20260901-note-links-v5-1"></script>
+  <script src="script.js?v=20260902-kos-1"></script>
+
+  <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
+  <script src="trash.js?v=20260902-kos-1"></script>
   
   <!-- Barevné zvýrazňování rich-text editoru -->
   <script src="richTextColors.js"></script>

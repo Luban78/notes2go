@@ -258,7 +258,26 @@ window.LubaNoteLanguagePacks.push({
     "noteLinks.createFailed": "Novou propojenou poznámku se nepodařilo bezpečně vytvořit.",
     "noteLinks.ariaTarget": "Interní odkaz na poznámku {value}",
     "noteLinks.ariaMissing": "Interní odkaz na nedostupnou poznámku",
-    "noteLinks.dialogTitle": "Interní odkaz"
+    "noteLinks.dialogTitle": "Interní odkaz",
+
+    "trash.title": "Koš",
+    "trash.secretTitle": "Tajný koš",
+    "trash.close": "Zavřít Koš",
+    "trash.autoDeleteInfo": "Poznámky se po 30 dnech automaticky smažou trvale.",
+    "trash.empty": "Koš je prázdný.",
+    "trash.untitled": "Bez názvu",
+    "trash.noPreview": "Bez náhledu",
+    "trash.moved": "V koši od",
+    "trash.daysLeft": "Automatické smazání za {count} dní",
+    "trash.restore": "Obnovit",
+    "trash.deleteForever": "Smazat trvale",
+    "trash.deleteForeverTitle": "Smazat trvale?",
+    "trash.deleteConfirm": "Tato poznámka bude smazána trvale a nepůjde obnovit.",
+    "trash.moveTitle": "Přesunout do koše?",
+    "trash.moveMessage": "Poznámka se přesune do Koše a můžeš ji později obnovit.",
+    "trash.moveAction": "Do koše",
+    "trash.moveManyMessage": "Přesunout {count} vybraných poznámek do Koše?",
+    "trash.movedMany": "Přesunuto do Koše: {count} poznámek"
   },
 
   /*

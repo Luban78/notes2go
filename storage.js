@@ -358,18 +358,35 @@ function getSecretNoteIds() {
   ].filter(Boolean));
 }
 
+function jePoznamkaVKosi(task) {
+  return Boolean(task?.trashedAt);
+}
+
 function loadTask() {
   const beznePoznamky = nactiBeznePoznamkyZUloziste();
 
   /*
-   * Cache tajných poznámek je při zamknutí prázdná.
-   * Díky tomu je nemůže najít render, search, planner ani reminders.
+   * Koš je oddělený od běžné aplikace. Poznámka v koši proto nesmí
+   * prosakovat do vyhledávání, Plánu, Připomínek ani běžných karet.
+   * Tajné poznámky jsou navíc při zamknutí stále pouze ciphertext.
    */
   return [
     ...beznePoznamky,
     ...desifrovaneTajnePoznamky
-  ];
+  ].filter((task) => !jePoznamkaVKosi(task));
 }
+
+function nactiPoznamkyVKosi({ tajne = false } = {}) {
+  if (tajne) {
+    return desifrovaneTajnePoznamky
+      .filter((task) => jePoznamkaVKosi(task))
+      .map((task) => ({ ...task, isSecret: true }));
+  }
+
+  return nactiBeznePoznamkyZUloziste()
+    .filter((task) => jePoznamkaVKosi(task));
+}
+
 
 function odstranPlaintextPlanovanePolozkyTajnychPoznamek(secretIds) {
   if (!(secretIds instanceof Set) || secretIds.size === 0) {
@@ -590,9 +607,51 @@ function odstranDuplicitniPoznamkySeStejnymId(tasks) {
 }
 
 
+function slucPoznamkySPuvodnimKosem(prichozi, puvodni) {
+  const vysledek = [];
+  const obsazenaId = new Set();
+
+  (Array.isArray(prichozi) ? prichozi : []).forEach((task) => {
+    if (!task) {
+      return;
+    }
+
+    if (task.id) {
+      obsazenaId.add(task.id);
+    }
+
+    vysledek.push(task);
+  });
+
+  (Array.isArray(puvodni) ? puvodni : []).forEach((task) => {
+    if (
+      !task ||
+      !jePoznamkaVKosi(task) ||
+      (task.id && obsazenaId.has(task.id))
+    ) {
+      return;
+    }
+
+    vysledek.push(task);
+  });
+
+  return odstranDuplicitniPoznamkySeStejnymId(vysledek);
+}
+
 function saveAllTasks(tasks) {
   const safeTasks =
     odstranDuplicitniPoznamkySeStejnymId(tasks);
+
+  /*
+   * loadTask() záměrně vrací jen aktivní poznámky. Každé běžné uložení
+   * proto musí zachovat starší položky Koše, které v předaném seznamu
+   * vůbec nejsou. Pokud stejná poznámka přijde v novém stavu (např.
+   * obnovená z Koše), příchozí verze má přednost.
+   */
+  const puvodniBezne =
+    nactiBeznePoznamkyZUloziste();
+  const puvodniTajne =
+    desifrovaneTajnePoznamky;
 
   /*
    * Každé běžné lokální uložení je nová uživatelská revize.
@@ -600,12 +659,25 @@ function saveAllTasks(tasks) {
    * nezvyšují.
    */
   zvysReviziLokalnichZmenPoznamek();
-  const beznePoznamky = safeTasks.filter(
+
+  const beznePrichozi = safeTasks.filter(
     (task) => task && task.isSecret !== true
   );
-  const tajnePoznamky = safeTasks.filter(
+  const tajnePrichozi = safeTasks.filter(
     (task) => task?.id && task.isSecret === true
   );
+
+  const beznePoznamky =
+    slucPoznamkySPuvodnimKosem(
+      beznePrichozi,
+      puvodniBezne
+    );
+
+  const tajnePoznamky =
+    slucPoznamkySPuvodnimKosem(
+      tajnePrichozi,
+      puvodniTajne
+    );
 
   /* Plaintext tajné poznámky se do savedTask nikdy nezapisují. */
   ulozBeznePoznamkyPrimo(beznePoznamky);
@@ -623,7 +695,7 @@ function saveAllTasks(tasks) {
    * Při zamknutém trezoru zachováme existující ciphertext beze změny.
    * Tajná data se nikdy nepokusíme uložit jako náhradní plaintext.
    */
-  if (tajnePoznamky.length > 0) {
+  if (tajnePrichozi.length > 0) {
     console.error(
       "Tajné poznámky nelze uložit bez odemčeného tajného režimu."
     );
@@ -638,6 +710,67 @@ function saveTask(task) {
   return saveAllTasks(tasks);
 }
 
+function ziskejNotifikacePoznamkyAKNavazanymPlanum(task) {
+  const ids = new Set();
+  const noteId = task?.id || null;
+
+  if (task?.notificationId) {
+    ids.add(task.notificationId);
+  }
+
+  if (typeof loadPlannedItems === "function") {
+    const plannedItems = loadPlannedItems();
+
+    plannedItems.forEach((item) => {
+      if (
+        item?.sourceNoteId === noteId &&
+        item?.notificationId
+      ) {
+        ids.add(item.notificationId);
+      }
+    });
+  }
+
+  return ids;
+}
+
+function odstranPlanovanePolozkyPoznamek(idsPoznamek) {
+  if (
+    !(idsPoznamek instanceof Set) ||
+    idsPoznamek.size === 0 ||
+    typeof loadPlannedItems !== "function" ||
+    typeof savePlannedItems !== "function"
+  ) {
+    return;
+  }
+
+  const plannedItems = loadPlannedItems();
+
+  savePlannedItems(
+    plannedItems.filter(
+      (item) => !idsPoznamek.has(item?.sourceNoteId)
+    )
+  );
+}
+
+function zrusNotifikaceNaPozadi(notificationIds) {
+  if (
+    !(notificationIds instanceof Set) ||
+    notificationIds.size === 0 ||
+    typeof cancelNotification !== "function"
+  ) {
+    return;
+  }
+
+  setTimeout(() => {
+    Promise.allSettled(
+      [...notificationIds].map((id) =>
+        cancelNotification(id)
+      )
+    ).catch(() => {});
+  }, 0);
+}
+
 async function deleteTask(index) {
   const tasks = loadTask();
   const taskToDelete = tasks[index];
@@ -646,82 +779,34 @@ async function deleteTask(index) {
     return false;
   }
 
-  const noteId = taskToDelete.id || null;
+  const casPresunu = new Date().toISOString();
+  const notificationIds =
+    ziskejNotifikacePoznamkyAKNavazanymPlanum(
+      taskToDelete
+    );
 
-  const plannedItems =
-    typeof loadPlannedItems === "function"
-      ? loadPlannedItems()
-      : [];
+  taskToDelete.trashedAt = casPresunu;
+  taskToDelete.updatedAt = casPresunu;
 
-  const relatedPlannedItems = plannedItems.filter(
-    (item) => item?.sourceNoteId === noteId
+  odstranPlanovanePolozkyPoznamek(
+    new Set([taskToDelete.id].filter(Boolean))
   );
 
-  const notificationIds = new Set();
-
-  if (taskToDelete.notificationId) {
-    notificationIds.add(
-      taskToDelete.notificationId
-    );
-  }
-
-  relatedPlannedItems.forEach((item) => {
-    if (item?.notificationId) {
-      notificationIds.add(item.notificationId);
-    }
-  });
+  await saveAllTasks(tasks);
+  zrusNotifikaceNaPozadi(notificationIds);
 
   /*
-   * Lokální data smažeme jako první. Uživatel tak nečeká na
-   * Android plugin ani na Supabase.
+   * Přesun do Koše není serverové smazání. Synchronizujeme celý nový
+   * stav poznámky, takže se Koš objeví stejně i na ostatních zařízeních.
    */
   if (
-    noteId &&
-    typeof savePlannedItems === "function"
-  ) {
-    savePlannedItems(
-      plannedItems.filter(
-        (item) => item?.sourceNoteId !== noteId
-      )
-    );
-  }
-
-  tasks.splice(index, 1);
-  await saveAllTasks(tasks);
-
-  /* Android notifikace uklidíme až na pozadí. */
-  if (
-    notificationIds.size > 0 &&
-    typeof cancelNotification === "function"
-  ) {
-    setTimeout(() => {
-      (async () => {
-        for (const notificationId of notificationIds) {
-          try {
-            await cancelNotification(notificationId);
-          } catch (error) {
-            console.warn(
-              "Zrušení notifikace po smazání bylo odloženo:",
-              error
-            );
-          }
-        }
-      })();
-    }, 0);
-  }
-
-  if (
     taskToDelete.id &&
-    typeof markNoteDeletedInSupabase === "function"
+    typeof uploadLocalNoteToSupabase === "function"
   ) {
-    /*
-     * Tombstone se zapíše do lokální fronty ještě před prvním await.
-     * Síť proto mazání UI neblokuje.
-     */
-    markNoteDeletedInSupabase(taskToDelete)
+    uploadLocalNoteToSupabase(taskToDelete)
       .catch((error) => {
         console.warn(
-          "Odeslání smazání do cloudu bylo odloženo:",
+          "Synchronizace přesunu do Koše byla odložena:",
           error
         );
       });
@@ -730,12 +815,8 @@ async function deleteTask(index) {
   return true;
 }
 
-
 /*
- * HROMADNÉ SMAZÁNÍ PODLE STABILNÍCH ID
- *
- * Poznámky odstraníme jediným lokálním zápisem. Cloudová smazání
- * se jen zařadí do bezpečné tombstone fronty a odešlou na pozadí.
+ * HROMADNÉ PŘESUNUTÍ DO KOŠE PODLE STABILNÍCH ID.
  */
 async function deleteTasksByIds(ids) {
   const bezpecnaId = new Set(
@@ -751,11 +832,8 @@ async function deleteTasksByIds(ids) {
   }
 
   const tasks = loadTask();
-
   const mazanePoznamky = tasks.filter(
-    (task) =>
-      task?.id &&
-      bezpecnaId.has(task.id)
+    (task) => task?.id && bezpecnaId.has(task.id)
   );
 
   if (mazanePoznamky.length === 0) {
@@ -765,49 +843,23 @@ async function deleteTasksByIds(ids) {
     };
   }
 
-  const mazanaId = new Set(
-    mazanePoznamky.map((task) => task.id)
-  );
-
+  const casPresunu = new Date().toISOString();
   const notificationIds = new Set();
 
   mazanePoznamky.forEach((task) => {
-    if (task?.notificationId) {
-      notificationIds.add(task.notificationId);
-    }
+    ziskejNotifikacePoznamkyAKNavazanymPlanum(task)
+      .forEach((id) => notificationIds.add(id));
+
+    task.trashedAt = casPresunu;
+    task.updatedAt = casPresunu;
   });
 
-  if (
-    typeof loadPlannedItems === "function" &&
-    typeof savePlannedItems === "function"
-  ) {
-    const plannedItems = loadPlannedItems();
-
-    plannedItems.forEach((item) => {
-      if (
-        mazanaId.has(item?.sourceNoteId) &&
-        item?.notificationId
-      ) {
-        notificationIds.add(item.notificationId);
-      }
-    });
-
-    savePlannedItems(
-      plannedItems.filter(
-        (item) =>
-          !mazanaId.has(item?.sourceNoteId)
-      )
-    );
-  }
-
-  const zbyvajiciPoznamky = tasks.filter(
-    (task) =>
-      !task?.id ||
-      !mazanaId.has(task.id)
+  odstranPlanovanePolozkyPoznamek(
+    new Set(mazanePoznamky.map((task) => task.id))
   );
 
   const lokalneUlozeno =
-    await saveAllTasks(zbyvajiciPoznamky);
+    await saveAllTasks(tasks);
 
   if (lokalneUlozeno === false) {
     return {
@@ -816,60 +868,184 @@ async function deleteTasksByIds(ids) {
     };
   }
 
-  /*
-   * Android notifikace uklízíme na pozadí.
-   * Jejich rušení nesmí zdržovat zmizení karet z obrazovky.
-   */
-  if (
-    notificationIds.size > 0 &&
-    typeof cancelNotification === "function"
-  ) {
-    Promise.allSettled(
-      [...notificationIds].map(
-        (notificationId) =>
-          cancelNotification(notificationId)
-      )
-    ).catch(() => {});
-  }
-
-  /*
-   * U hromadného mazání do sítě vůbec nevstupujeme.
-   * Jen vytvoříme lokální tombstone frontu; centrální sync ji po
-   * ukončení výběru odešle na pozadí.
-   */
-  const casSmazani =
-    new Date().toISOString();
-
-  if (typeof pridejCekajiciSmazani === "function") {
-    mazanePoznamky.forEach((task) => {
-      pridejCekajiciSmazani(
-        task.id,
-        casSmazani
-      );
-    });
-  } else if (
-    typeof markNoteDeletedInSupabase === "function"
-  ) {
-    /*
-     * Záložní cesta, pokud starší sync.js ještě lokální frontu
-     * neposkytuje. Ani zde na síť nečekáme.
-     */
-    mazanePoznamky.forEach((task) => {
-      markNoteDeletedInSupabase(task)
-        .catch((error) => {
-          console.warn(
-            "Odeslání hromadného smazání do cloudu bylo odloženo:",
-            task?.id,
-            error
-          );
-        });
-    });
-  }
+  zrusNotifikaceNaPozadi(notificationIds);
 
   return {
     pocet: mazanePoznamky.length,
     lokalneUlozeno: true
   };
+}
+
+async function obnovPoznamkuZKose(noteId, tajne = false) {
+  if (!noteId) {
+    return false;
+  }
+
+  if (
+    tajne &&
+    (
+      typeof tajnyRezimOdemceny === "undefined" ||
+      tajnyRezimOdemceny !== true
+    )
+  ) {
+    return false;
+  }
+
+  const kos = nactiPoznamkyVKosi({ tajne });
+  const puvodni = kos.find((task) => task?.id === noteId);
+
+  if (!puvodni) {
+    return false;
+  }
+
+  const obnovena = {
+    ...puvodni,
+    updatedAt: new Date().toISOString()
+  };
+
+  delete obnovena.trashedAt;
+
+  const aktivni = loadTask();
+  const bezStejnehoId = aktivni.filter(
+    (task) => task?.id !== noteId
+  );
+
+  const ulozeno = await saveAllTasks([
+    ...bezStejnehoId,
+    obnovena
+  ]);
+
+  if (ulozeno === false) {
+    return false;
+  }
+
+  if (
+    window.LubaNotePlanner
+      ?.synchronizujPlanovaneTodoSPoznamkou
+  ) {
+    await window.LubaNotePlanner
+      .synchronizujPlanovaneTodoSPoznamkou(
+        obnovena
+      );
+  }
+
+  if (
+    typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+  ) {
+    obnovNotifikacePoznamkyPodleSoukromi(
+      obnovena
+    ).catch(() => {});
+  }
+
+  if (typeof uploadLocalNoteToSupabase === "function") {
+    uploadLocalNoteToSupabase(obnovena)
+      .catch((error) => {
+        console.warn(
+          "Synchronizace obnovení z Koše byla odložena:",
+          error
+        );
+      });
+  }
+
+  return true;
+}
+
+async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
+  if (!noteId) {
+    return false;
+  }
+
+  if (
+    tajne &&
+    (
+      typeof tajnyRezimOdemceny === "undefined" ||
+      tajnyRezimOdemceny !== true
+    )
+  ) {
+    return false;
+  }
+
+  const zdroj = tajne
+    ? [...desifrovaneTajnePoznamky]
+    : nactiBeznePoznamkyZUloziste();
+
+  const poznamka = zdroj.find(
+    (task) => task?.id === noteId && jePoznamkaVKosi(task)
+  );
+
+  if (!poznamka) {
+    return false;
+  }
+
+  zvysReviziLokalnichZmenPoznamek();
+
+  if (tajne) {
+    const zbyvajici = zdroj.filter(
+      (task) => task?.id !== noteId
+    );
+
+    nastavDesifrovaneTajnePoznamky(zbyvajici);
+    const ulozeno =
+      await ulozTajnePoznamkySifrovaneHned(zbyvajici);
+
+    if (ulozeno === false) {
+      return false;
+    }
+  } else {
+    ulozBeznePoznamkyPrimo(
+      zdroj.filter((task) => task?.id !== noteId)
+    );
+  }
+
+  if (
+    typeof markNoteDeletedInSupabase === "function"
+  ) {
+    await markNoteDeletedInSupabase(poznamka);
+  }
+
+  return true;
+}
+
+async function uklidPoznamkyVKosiPo30Dnech() {
+  const LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
+  const hranice = Date.now() - LIMIT_MS;
+  const kandidati = [];
+
+  nactiPoznamkyVKosi({ tajne: false })
+    .forEach((task) => {
+      const cas = new Date(task?.trashedAt || 0).getTime();
+      if (Number.isFinite(cas) && cas <= hranice) {
+        kandidati.push({ id: task.id, tajne: false });
+      }
+    });
+
+  if (
+    typeof tajnyRezimOdemceny !== "undefined" &&
+    tajnyRezimOdemceny === true
+  ) {
+    nactiPoznamkyVKosi({ tajne: true })
+      .forEach((task) => {
+        const cas = new Date(task?.trashedAt || 0).getTime();
+        if (Number.isFinite(cas) && cas <= hranice) {
+          kandidati.push({ id: task.id, tajne: true });
+        }
+      });
+  }
+
+  let pocet = 0;
+
+  for (const kandidat of kandidati) {
+    const uspesne = await smazPoznamkuZKoseTrvale(
+      kandidat.id,
+      kandidat.tajne
+    );
+
+    if (uspesne) {
+      pocet += 1;
+    }
+  }
+
+  return pocet;
 }
 
 function toggleTaskCompleted(index) {

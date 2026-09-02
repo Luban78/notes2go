@@ -252,7 +252,26 @@ window.LubaNoteLanguagePacks.push({
     "noteLinks.createFailed": "The linked note could not be created safely.",
     "noteLinks.ariaTarget": "Internal link to note {value}",
     "noteLinks.ariaMissing": "Internal link to unavailable note",
-    "noteLinks.dialogTitle": "Internal link"
+    "noteLinks.dialogTitle": "Internal link",
+
+    "trash.title": "Trash",
+    "trash.secretTitle": "Secret trash",
+    "trash.close": "Close Trash",
+    "trash.autoDeleteInfo": "Notes are permanently deleted automatically after 30 days.",
+    "trash.empty": "Trash is empty.",
+    "trash.untitled": "Untitled",
+    "trash.noPreview": "No preview",
+    "trash.moved": "In trash since",
+    "trash.daysLeft": "Permanent deletion in {count} days",
+    "trash.restore": "Restore",
+    "trash.deleteForever": "Delete forever",
+    "trash.deleteForeverTitle": "Delete forever?",
+    "trash.deleteConfirm": "This note will be permanently deleted and cannot be restored.",
+    "trash.moveTitle": "Move to Trash?",
+    "trash.moveMessage": "The note will be moved to Trash and can be restored later.",
+    "trash.moveAction": "Move to Trash",
+    "trash.moveManyMessage": "Move {count} selected notes to Trash?",
+    "trash.movedMany": "Moved to Trash: {count} notes"
   },
 
   texty: {

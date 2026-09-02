@@ -64,11 +64,11 @@ const deleteConfirmText =
 
 const puvodniNadpisPotvrzeniSmazani =
   deleteConfirmTitle?.textContent?.trim() ||
-  "Smazat poznámku?";
+  "Přesunout do koše?";
 
 const puvodniTextPotvrzeniSmazani =
   deleteConfirmText?.textContent?.trim() ||
-  "Opravdu chceš tuto poznámku smazat?";
+  "Poznámka se přesune do Koše a můžeš ji později obnovit.";
 
 let hromadneMazaniIds = null;
 
@@ -130,7 +130,11 @@ confirmDeleteButton.addEventListener("click", async () => {
     
     if (vysledek?.pocet > 0) {
       zobrazPotvrzeniAkce(
-        `Smazáno ${vysledek.pocet} poznámek`
+        window.LubaNoteI18n?.t?.(
+          "trash.movedMany",
+          "Přesunuto do Koše: {count} poznámek",
+          { count: vysledek.pocet }
+        ) || `Přesunuto do Koše: ${vysledek.pocet} poznámek`
       );
     }
     
@@ -4458,12 +4462,16 @@ cardMenu.addEventListener("click", async (event) => {
     
     if (deleteConfirmTitle) {
       deleteConfirmTitle.textContent =
-        "Smazat poznámky?";
+        "Přesunout do koše?";
     }
     
     if (deleteConfirmText) {
       deleteConfirmText.textContent =
-        `Opravdu chceš smazat ${ids.length} vybraných poznámek?`;
+        window.LubaNoteI18n?.t?.(
+          "trash.moveManyMessage",
+          "Přesunout {count} vybraných poznámek do Koše?",
+          { count: ids.length }
+        ) || `Přesunout ${ids.length} vybraných poznámek do Koše?`;
     }
     
     cardMenu.hidden = true;
