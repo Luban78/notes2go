@@ -167,19 +167,24 @@ body {
 ================================================== */
 
 .taskModal {
+  /*
+   * Vnější fullscreen shell editoru se při nájezdu klávesnice NESMÍ
+   * zmenšit. Zůstává přes celý layout viewport a zakrývá podkladové
+   * Poznámky i během přechodových frame Android WebView.
+   *
+   * Keyboard-safe rozměr podle visualViewport používá až .modalContent
+   * v mobilním pravidle níže.
+   */
   position: fixed;
-  top: var(--visual-top, 0px);
-  right: 0;
-  left: 0;
-
-  height: var(--visual-height, 100dvh);
+  inset: 0;
   z-index: 1000;
 
   display: flex;
   align-items: stretch;
   justify-content: stretch;
 
-  background: transparent;
+  overflow: hidden;
+  background: var(--color-editor-background);
 }
 
 .taskModal[hidden] {
@@ -220,6 +225,33 @@ body {
 
 .noScroll {
   overflow: hidden;
+}
+
+/*
+ * MOBIL / APK – keyboard-safe fullscreen.
+ *
+ * script.js už průběžně aktualizuje:
+ *   --visual-top    = visualViewport.offsetTop
+ *   --visual-height = visualViewport.height
+ * při visualViewport.resize i visualViewport.scroll.
+ *
+ * Vnější .taskModal zůstává přes celou obrazovku jako neprůhledný shell,
+ * zatímco pouze jeho obsah kopíruje skutečně viditelnou oblast nad
+ * softwarovou klávesnicí. Proto během resize animace nemají kudy
+ * probliknout karty z hlavní obrazovky.
+ */
+@media (max-width: 899px) {
+  .taskModal .modalContent {
+    position: fixed;
+    top: var(--visual-top, 0px);
+    right: 0;
+    left: 0;
+
+    width: 100%;
+    height: var(--visual-height, 100dvh);
+    max-width: none;
+    max-height: none;
+  }
 }
 
 /* ==================================================
