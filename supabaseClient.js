@@ -240,9 +240,7 @@ const loginMessage =
   document.getElementById("loginMessage");
 
 function setLoginMessage(message = "", isError = false) {
-  loginMessage.dataset.i18nSource = message;
-  loginMessage.textContent =
-    window.LubaNoteI18n?.prelozText?.(message) || message;
+  loginMessage.textContent = message;
   loginMessage.classList.toggle("error", isError);
 }
 
@@ -319,6 +317,55 @@ function zobrazPrihlaseni(
   }
 }
 
+function zobrazVyprselePrihlaseni() {
+  zobrazPrihlaseni(
+    "Přihlášení vypršelo. Přihlas se znovu, aby mohla pokračovat synchronizace. Tvoje lokální data zůstala zachována.",
+    true
+  );
+}
+
+async function overChybejiciSessionAProbudLogin() {
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  const pripraven = await pripravSupabaseClient();
+
+  if (!pripraven || !supabaseClient) {
+    return false;
+  }
+
+  try {
+    const {
+      data: { session }
+    } = await sCasovymLimitem(
+      supabaseClient.auth.getSession(),
+      5000,
+      "Ověření přihlášené session"
+    );
+
+    if (session?.user) {
+      return true;
+    }
+
+    if (existujePredchoziPrihlaseni()) {
+      zobrazVyprselePrihlaseni();
+    }
+
+    return false;
+  } catch (error) {
+    /*
+     * Síťová chyba nebo timeout není totéž jako potvrzeně chybějící
+     * session. Offline-first aplikaci kvůli tomu nevyhazujeme na login.
+     */
+    console.warn(
+      "Kontrola session pro synchronizaci byla odložena:",
+      error.message
+    );
+    return false;
+  }
+}
+
 async function overPrihlaseniOnline({
   zobrazitLoginPriNeuspechu = false
 } = {}) {
@@ -375,7 +422,14 @@ async function overPrihlaseniOnline({
       return true;
     }
 
-    if (zobrazitLoginPriNeuspechu) {
+    /*
+     * Máme internet, Supabase odpovědělo a session opravdu chybí.
+     * Dříve přihlášeného uživatele už nesmíme nechat v aplikaci
+     * s dojmem, že cloud funguje. Lokální data ale nemažeme.
+     */
+    if (existujePredchoziPrihlaseni()) {
+      zobrazVyprselePrihlaseni();
+    } else if (zobrazitLoginPriNeuspechu) {
       zobrazPrihlaseni();
     } else {
       oznamSplashPripravenyBezCloudovehoStartu();
@@ -536,23 +590,22 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-window.addEventListener("lubanote:language-change", () => {
-  const zdroj = loginMessage.dataset.i18nSource || "";
-
-  if (zdroj) {
-    loginMessage.textContent =
-      window.LubaNoteI18n?.prelozText?.(zdroj) || zdroj;
-  }
-});
-
 window.LubaNoteSupabase = {
   pripravClient: pripravSupabaseClient,
   jePripraven: () => Boolean(supabaseClient),
   maPredchoziPrihlaseni:
     existujePredchoziPrihlaseni,
   zrusPredchoziPrihlaseni,
-  zobrazPrihlaseni
+  zobrazPrihlaseni,
+  overChybejiciSessionAProbudLogin
 };
+
+window.addEventListener(
+  "lubanote:auth-required",
+  () => {
+    overChybejiciSessionAProbudLogin();
+  }
+);
 
 window.addEventListener("online", () => {
   /*

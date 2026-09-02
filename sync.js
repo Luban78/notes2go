@@ -63,6 +63,104 @@ const CLOUD_SYNC_META_STORAGE_KEY =
 
 const aktivniKonfliktySyncu = new Map();
 let konfliktSyncuUzOhlasen = false;
+
+/*
+ * Stejný nevyřešený konflikt nesmí po každém refreshi znovu
+ * zobrazovat modal. Otisk konfliktu si pamatujeme v localStorage.
+ * Pokud se konflikt skutečně změní (nová revize / čas), otisk se
+ * změní a uživatel bude upozorněn znovu. Po vyřešení se záznam maže.
+ */
+const OHLASENE_KONFLIKTY_STORAGE_KEY =
+  "lubanoteOhlaseneKonfliktySyncuV1";
+
+function nactiOhlaseneKonfliktySyncu() {
+  try {
+    const raw = localStorage.getItem(
+      OHLASENE_KONFLIKTY_STORAGE_KEY
+    );
+
+    const parsed = raw ? JSON.parse(raw) : {};
+
+    return parsed && typeof parsed === "object"
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function ulozOhlaseneKonfliktySyncu(mapa) {
+  try {
+    localStorage.setItem(
+      OHLASENE_KONFLIKTY_STORAGE_KEY,
+      JSON.stringify(mapa || {})
+    );
+  } catch {
+    // Evidování modalu nikdy nesmí blokovat samotnou synchronizaci.
+  }
+}
+
+function vytvorOtiskKonfliktu(noteId, duvod, detail = {}) {
+  return JSON.stringify({
+    id: noteId || "",
+    duvod: duvod || "",
+    expectedRevision: detail?.expectedRevision ?? null,
+    cloudRevision: detail?.cloudRevision ?? null,
+    localUpdatedAt: detail?.localUpdatedAt ?? null,
+    cloudUpdatedAt: detail?.cloudUpdatedAt ?? null
+  });
+}
+
+function bylKonfliktUzOhlasen(noteId, duvod, detail = {}) {
+  if (!noteId) {
+    return false;
+  }
+
+  const mapa = nactiOhlaseneKonfliktySyncu();
+
+  return mapa[noteId] ===
+    vytvorOtiskKonfliktu(noteId, duvod, detail);
+}
+
+function oznacKonfliktJakoOhlaseny(noteId, duvod, detail = {}) {
+  if (!noteId) {
+    return;
+  }
+
+  const mapa = nactiOhlaseneKonfliktySyncu();
+  mapa[noteId] = vytvorOtiskKonfliktu(
+    noteId,
+    duvod,
+    detail
+  );
+  ulozOhlaseneKonfliktySyncu(mapa);
+}
+
+function zrusOhlaseniKonfliktu(noteId) {
+  if (!noteId) {
+    return;
+  }
+
+  const mapa = nactiOhlaseneKonfliktySyncu();
+
+  if (!(noteId in mapa)) {
+    return;
+  }
+
+  delete mapa[noteId];
+  ulozOhlaseneKonfliktySyncu(mapa);
+}
+
+function oznamChybejiciOnlineSession() {
+  if (!navigator.onLine) {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("lubanote:auth-required")
+  );
+}
+
 const frontyServerovychZapisu = new Map();
 let casovacVyreseniBeznehoReviznihoKonfliktu = null;
 
@@ -248,6 +346,17 @@ function oznamKonfliktSynchronizace(
     detail
   );
 
+  /*
+   * Stejný konflikt může při každém startu znovu vzniknout z téhož
+   * lokálního a cloudového snapshotu. Evidujeme ho dál, ale modal
+   * zobrazíme pouze při prvním výskytu konkrétní verze konfliktu.
+   */
+  if (bylKonfliktUzOhlasen(noteId, duvod, detail)) {
+    return;
+  }
+
+  oznacKonfliktJakoOhlaseny(noteId, duvod, detail);
+
   if (konfliktSyncuUzOhlasen) {
     return;
   }
@@ -256,8 +365,8 @@ function oznamKonfliktSynchronizace(
 
   if (typeof zobrazZpravuAplikace === "function") {
     zobrazZpravuAplikace(
-      "Synchronizace pozastavena",
-      "LubaNote našla rozdílnou verzi stejné poznámky na jiném zařízení. Žádná verze nebyla přepsána. Konflikt vyřešíme bezpečně."
+      "Konflikt synchronizace",
+      "LubaNote našla dvě změněné verze stejné poznámky. Nic nepřepsala a obě verze zůstávají v bezpečí. Stejný konflikt už po každém obnovení stránky znovu hlásit nebude."
     );
   }
 }
@@ -268,6 +377,7 @@ function zrusKonfliktSynchronizace(noteId) {
   }
 
   aktivniKonfliktySyncu.delete(noteId);
+  zrusOhlaseniKonfliktu(noteId);
 }
 
 async function provedBezpecnyZapisPoznamky({
@@ -1979,7 +2089,8 @@ async function syncNotes() {
     const user = await getCurrentUser();
 
     if (!user) {
-      return;
+      oznamChybejiciOnlineSession();
+      return false;
     }
 
     if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
@@ -2391,10 +2502,12 @@ async function syncNotes() {
     if (typeof renderCalendar === "function") {
       renderCalendar();
     }
+
+    return true;
   })();
 
   try {
-    await probihajiciSync;
+    return await probihajiciSync;
   } finally {
     probihajiciSync = null;
   }
@@ -2415,10 +2528,15 @@ async function startSync() {
   const user = await getCurrentUser();
 
   if (!user) {
+    oznamChybejiciOnlineSession();
     return false;
   }
 
-  await syncNotes();
+  const poznamkySynchronizovany = await syncNotes();
+
+  if (poznamkySynchronizovany !== true) {
+    return false;
+  }
 
   if (
     typeof window.LubaNoteRecurring
@@ -2629,8 +2747,8 @@ async function spustRychlySyncPoznamekBezpecne() {
   }
 
   try {
-    await syncNotes();
-    return true;
+    const vysledek = await syncNotes();
+    return vysledek === true;
   } catch (error) {
     console.warn(
       "Rychlá synchronizace poznámek byla odložena:",
