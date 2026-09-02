@@ -130,8 +130,15 @@
 
   /* Velikost obrázku je vždy relativní procento šířky editoru. */
 
-  /* Fullscreen viewer v kódu zůstává, ale na obrázek už není navázaný
-   * žádný dvojtap. Uživatel chce druhý tap použít pro odznačení. */
+  /*
+   * Dvojtap otevírá fullscreen náhled obrázku.
+   * Samostatný druhý tap po delší prodlevě dál obrázek odznačí.
+   * Díky tomu se fullscreen náhled a přepínání označení navzájem
+   * neruší.
+   */
+  const DVOJTAP_OBRAZKU_MS = 340;
+  let posledniTapObrazek = null;
+  let posledniTapCas = 0;
   let nahledObrazku = null;
 
   /*
@@ -2442,11 +2449,12 @@
   });
 
   /*
-   * Tap je přepínač ovládání obrázku:
+   * Ovládání obrázku:
    * - 1. tap = označit + zobrazit ⚙ / ✕,
-   * - 2. tap na stejný obrázek = odznačit.
+   * - rychlý 2. tap na stejný obrázek = fullscreen náhled,
+   * - samostatný další tap po delší prodlevě = odznačit.
    *
-   * Žádný dvojtap na obrázku nepoužíváme. Přesun je samostatné gesto
+   * Přesun zůstává úplně samostatné gesto:
    * dlouhý stisk + držení + pohyb.
    */
   modalRichText.addEventListener(
@@ -2463,9 +2471,26 @@
       if (obrazek) {
         event.preventDefault();
 
-        if (
-          performance.now() < potlacKlikObrazkuDo
-        ) {
+        const ted = performance.now();
+
+        if (ted < potlacKlikObrazkuDo) {
+          posledniTapObrazek = null;
+          posledniTapCas = 0;
+          return;
+        }
+
+        const jeDvojtap =
+          posledniTapObrazek === obrazek &&
+          ted - posledniTapCas <= DVOJTAP_OBRAZKU_MS;
+
+        posledniTapObrazek = obrazek;
+        posledniTapCas = ted;
+
+        if (jeDvojtap) {
+          posledniTapObrazek = null;
+          posledniTapCas = 0;
+          zrusOznaceniObrazkuProPresun();
+          otevriNahledObrazku(obrazek);
           return;
         }
 
