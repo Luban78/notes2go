@@ -141,7 +141,7 @@
    * - dokud prst / tlačítko zůstává dole, lze obrázek přesouvat,
    * - po puštění přesun okamžitě končí.
    */
-  const DELKA_DLOUHEHO_STISKU_OBRAZKU = 900;
+  const DELKA_DLOUHEHO_STISKU_OBRAZKU = 650;
   const VZDALENOST_ZRUSENI_DLOUHEHO_STISKU = 20;
   const VZDALENOST_START_PRESUNU_OBRAZKU = 6;
 
@@ -1610,15 +1610,33 @@
 
   function zobrazNapoveduPresunuObrazku(
     clientX,
-    clientY
+    clientY,
+    typPresunu = cekajiciTypPresunuObrazku
   ) {
     const napoveda =
       zajistiNapoveduPresunuObrazku();
 
+    const jeDotyk =
+      typPresunu === "touch";
+
+    /*
+     * Mobil / tablet:
+     * - značka je vodorovně přesně nad středem prstu,
+     * - je posunutá o 65 px nahoru, aby ji prst nezakrýval.
+     *
+     * PC / myš / pero:
+     * - střed značky je přesně v bodě kliknutí / držení.
+     */
     napoveda.style.left =
-      `${Math.round(clientX + 18)}px`;
+      `${Math.round(clientX)}px`;
     napoveda.style.top =
-      `${Math.round(clientY - 18)}px`;
+      `${Math.round(
+        jeDotyk
+          ? clientY - 65
+          : clientY
+      )}px`;
+    napoveda.style.transform =
+      "translate(-50%, -50%)";
     napoveda.hidden = false;
   }
 
