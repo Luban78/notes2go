@@ -9056,18 +9056,29 @@ body.secretModeActive {
    ================================================== */
 
 /*
- * Procentní velikost je vhodná na desktopu, ale stejných 25 % je na
- * úzkém mobilu příliš malé. editorMedia.js proto ukládá také reálnou
- * preferovanou šířku v px. Na mobilu použijeme tuto šířku, nikdy však
- * nepovolíme přesah přes šířku editoru.
+ * RESPONSIVNÍ VELIKOST PC ↔ MOBIL
+ *
+ * Uložená procentní velikost patří desktopovému rozložení poznámky.
+ * Na úzkém mobilu se obrázek záměrně zobrazí přes celou šířku editoru,
+ * ale uložené data-velikost ani inline width se NEMĚNÍ.
+ *
+ * Příklad:
+ *   PC:    data-velikost="25" + width: 25 %  -> obrázek je 25 % editoru
+ *   mobil: stejné HTML                         -> obrázek je 100 % editoru
+ *   návrat na PC                               -> znovu 25 %
+ *
+ * Tím není potřeba velikost při přechodu PC ↔ APK pokaždé ručně měnit.
+ * Zároveň na mobilu vypneme float, aby vedle plně širokého obrázku
+ * nezůstával úzký sloupec textu. Gesta obrázků tento blok nijak nemění.
  */
 @media (max-width: 899px) {
+  #modalRichText .lubaNoteImage[data-velikost]:not([data-velikost="prizpusobit"]):not([data-velikost="100"]),
   #modalRichText .lubaNoteImage[data-sirka-px]:not([data-velikost="prizpusobit"]):not([data-velikost="100"]) {
-    width: min(
-      100%,
-      var(--luba-note-image-sirka-px)
-    ) !important;
+    float: none !important;
+    clear: both;
+    width: 100% !important;
     max-width: 100% !important;
+    margin: 14px auto !important;
   }
 }
 
