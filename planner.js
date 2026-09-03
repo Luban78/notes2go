@@ -253,10 +253,14 @@ function migrateLocalPlannedItemsIntoNotes(notes) {
 
 
 /*
- * Když uživatel smaže přímo TODO řádek a potom uloží poznámku,
- * nesmí po něm v Planneru zůstat osiřelý úkol ani Android notifikace.
- * Funkce sahá pouze na Planner položky typu "todo"; původní note a
- * selection plánování zůstává beze změny.
+ * Udržuje Planner položky navázané na obsah poznámky.
+ *
+ * 1) Když uživatel smaže přímo TODO řádek, odstraní se jeho Planner položka.
+ * 2) Když uživatel smaže naplánovaný označený text, odstraní se Planner položka,
+ *    pokud už v richContent neexistuje odpovídající data-planned-item-id nebo
+ *    pokud po smazání zůstal jen prázdný wrapper.
+ *
+ * Celá zdrojová poznámka se touto funkcí nikdy nemaže.
  */
 async function synchronizujPlanovaneTodoSPoznamkou(note) {
   if (!note?.id) {
@@ -269,16 +273,87 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
       .map(todo => todo.id)
   );
 
-  const plannedItems = Array.isArray(note.plannedItems)
-    ? note.plannedItems
-    : [];
+  /*
+   * Ověření selection backlinků děláme podle stabilního plannedItemId,
+   * ne podle textu. Stejný text se totiž může v poznámce objevit vícekrát.
+   */
+  const platneSelectionIds = new Set();
 
-  const removedItems = plannedItems.filter(
-    item =>
-      item?.sourceType === "todo" &&
-      item?.sourceTodoId &&
-      !validTodoIds.has(item.sourceTodoId)
-  );
+  if (typeof note.richContent === "string") {
+    const sablona = document.createElement("template");
+    sablona.innerHTML = note.richContent;
+
+    sablona.content
+      .querySelectorAll("[data-planned-item-id]")
+      .forEach((odkaz) => {
+        const plannedItemId =
+          String(odkaz.dataset?.plannedItemId || "").trim();
+
+        const maObsah =
+          String(odkaz.textContent || "").trim().length > 0;
+
+        if (plannedItemId && maObsah) {
+          platneSelectionIds.add(plannedItemId);
+        }
+      });
+  }
+
+  const plannedItemsVPoznamce =
+    Array.isArray(note.plannedItems)
+      ? note.plannedItems
+      : [];
+
+  const lokalniItems = getLocalPlannedItems();
+
+  /*
+   * Starší data mohla mít Planner položku jen v lokálním seznamu.
+   * Proto kontrolujeme sjednocení obou zdrojů a odstraníme vazbu z obou míst.
+   */
+  const kandidati = new Map();
+
+  plannedItemsVPoznamce.forEach((item) => {
+    if (item?.id) {
+      kandidati.set(item.id, item);
+    }
+  });
+
+  lokalniItems.forEach((item) => {
+    if (
+      item?.id &&
+      item?.sourceNoteId === note.id &&
+      !kandidati.has(item.id)
+    ) {
+      kandidati.set(item.id, item);
+    }
+  });
+
+  const removedItems = Array.from(kandidati.values())
+    .filter((item) => {
+      if (!item?.id || item.sourceNoteId !== note.id) {
+        return false;
+      }
+
+      if (
+        item.sourceType === "todo" &&
+        item.sourceTodoId
+      ) {
+        return !validTodoIds.has(item.sourceTodoId);
+      }
+
+      if (item.sourceType === "selection") {
+        /*
+         * Když richContent chybí úplně (např. velmi stará poznámka),
+         * nic automaticky nemažeme – nemáme důkaz, že backlink zmizel.
+         */
+        if (typeof note.richContent !== "string") {
+          return false;
+        }
+
+        return !platneSelectionIds.has(item.id);
+      }
+
+      return false;
+    });
 
   if (removedItems.length === 0) {
     return note;
@@ -304,12 +379,12 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
     }
   }
 
-  note.plannedItems = plannedItems.filter(
+  note.plannedItems = plannedItemsVPoznamce.filter(
     item => !removedIds.has(item?.id)
   );
 
   savePlannedItems(
-    getLocalPlannedItems().filter(
+    lokalniItems.filter(
       item => !removedIds.has(item?.id)
     )
   );
