@@ -9798,4 +9798,6 @@ body.trashScreenOpen {
     grid-template-columns: 1fr;
   }
 }
-
+#trashConfirmModal {
+  z-index: 3700;
+}
