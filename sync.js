@@ -793,6 +793,40 @@ async function uploadLocalNoteToSupabase(note) {
     return false;
   }
 
+  /*
+   * FÁZE B ATTACHMENTS – cloudová stínová vrstva.
+   * Nové běžné JPEG přílohy se zkusí rezervovat a nahrát do
+   * privátního Storage ještě PŘED zápisem revize poznámky.
+   *
+   * Data URL ale zatím zůstává součástí poznámky, takže chyba
+   * Storage NESMÍ zastavit původní bezpečný revision sync.
+   * Tvrdou závislost zapneme až po ověření Storage, downloadu,
+   * backupu a migrace ve Fázi B2.
+   */
+  if (
+    note.isSecret !== true &&
+    window.LubaNoteAttachmentsCloud
+      ?.zajistiStinovePrilohyPoznamkyVCloudu
+  ) {
+    try {
+      const stavPriloh =
+        await window.LubaNoteAttachmentsCloud
+          .zajistiStinovePrilohyPoznamkyVCloudu(note);
+
+      if (stavPriloh?.ok !== true) {
+        console.warn(
+          "LubaNote attachments: některá stínová cloudová příloha zatím není nahraná. Poznámka se bezpečně synchronizuje původním Data URL způsobem.",
+          stavPriloh
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "LubaNote attachments: příprava cloudové stínové přílohy selhala; původní sync pokračuje.",
+        error
+      );
+    }
+  }
+
   let dataToStore = note;
 
   if (note.isSecret === true) {
@@ -846,6 +880,27 @@ async function uploadLocalNoteToSupabase(note) {
     note.isSecret !== true
   ) {
     naplanujVyreseniBeznehoReviznihoKonfliktu();
+  }
+
+  if (
+    vysledek.ok &&
+    note.isSecret !== true &&
+    window.LubaNoteAttachmentsCloud
+      ?.oznacPrilohyPoznamkyJakoAktivni
+  ) {
+    try {
+      await window.LubaNoteAttachmentsCloud
+        .oznacPrilohyPoznamkyJakoAktivni(note);
+    } catch (error) {
+      /*
+       * Aktivace je ve Fázi B pouze metadata stínové vrstvy.
+       * Úspěšnou revizi poznámky kvůli ní nikdy nevracíme zpět.
+       */
+      console.warn(
+        "LubaNote attachments: aktivace stínových příloh se dokončí později.",
+        error
+      );
+    }
   }
 
   return vysledek.ok;
@@ -2316,6 +2371,31 @@ async function syncNotes() {
     await odesliCekajiciSmazaniDoSupabase();
 
     let localRegular = getLocalNotesForSync();
+
+    /*
+     * FÁZE B: trvalá upload fronta se musí umět obnovit i tehdy,
+     * když byla poznámka offline uložena a po návratu internetu už
+     * není potřeba měnit její textovou revizi. Proto při každém
+     * čerstvém notes syncu zkusíme dokončit stínové JPEG uploady
+     * podle aktuálních lokálních poznámek. Selhání Storage zde
+     * původní notes sync nezastaví.
+     */
+    if (
+      window.LubaNoteAttachmentsCloud
+        ?.zpracujStinovePrilohyPoznamekVCloudu
+    ) {
+      try {
+        await window.LubaNoteAttachmentsCloud
+          .zpracujStinovePrilohyPoznamekVCloudu(
+            localRegular
+          );
+      } catch (error) {
+        console.warn(
+          "LubaNote attachments: obnovení stínové upload fronty se dokončí později.",
+          error
+        );
+      }
+    }
 
     const localEncrypted =
       typeof nactiSifrovaneTajneZaznamy === "function"

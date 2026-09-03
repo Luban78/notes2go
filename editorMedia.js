@@ -9,15 +9,13 @@
    - otevření uloženého odkazu,
    - odstranění vloženého obrázku.
 
-   Obrázky se ukládají přímo do richContent jako
-   komprimovaný WEBP data URL. Díky tomu fungují offline
-   a u tajné poznámky zůstávají uvnitř šifrovaných dat.
-
-   FÁZE A attachments:
-   U normálních poznámek se nově ukládá ještě neautoritativní
-   stínová Blob kopie do IndexedDB. RichContent / Data URL je
-   stále jediná autorita pro sync, export/import i zobrazení.
-   Secret obrázky se do stínové cache vůbec nekopírují.
+   FÁZE B attachments:
+   - nové NORMÁLNÍ obrázky: JPEG, max 1280 px, quality 0.70,
+   - Data URL zatím zůstává v richContent jako bezpečná autorita,
+   - stejný JPEG Blob se paralelně uloží do IndexedDB a upload fronty,
+   - cloudová vrstva jej následně rezervuje a nahraje do privátního Storage,
+   - Secret obrázky zůstávají na původní WEBP/Data URL cestě a
+     plaintext Blob se z nich do attachment cache vůbec nekopíruje.
 ================================================== */
 
 (() => {
@@ -3092,23 +3090,101 @@
     );
   }
   
+  function vykresliObrazekDoJpeg(
+    image,
+    maxRozmer = 1280,
+    kvalita = 0.7
+  ) {
+    const puvodniSirka =
+      image.naturalWidth || image.width;
+    const puvodniVyska =
+      image.naturalHeight || image.height;
+
+    const nejvetsiStrana = Math.max(
+      puvodniSirka,
+      puvodniVyska
+    );
+
+    const pomer = Math.min(
+      1,
+      maxRozmer / nejvetsiStrana
+    );
+
+    const sirka = Math.max(
+      1,
+      Math.round(puvodniSirka * pomer)
+    );
+
+    const vyska = Math.max(
+      1,
+      Math.round(puvodniVyska * pomer)
+    );
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sirka;
+    canvas.height = vyska;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error(
+        "Obrázek se nepodařilo připravit."
+      );
+    }
+
+    /*
+     * JPEG nemá průhlednost. Bílý podklad zabrání tomu, aby se
+     * průhledné PNG po převodu zobrazilo s černým pozadím.
+     */
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, sirka, vyska);
+
+    context.drawImage(
+      image,
+      0,
+      0,
+      sirka,
+      vyska
+    );
+
+    return canvas.toDataURL(
+      "image/jpeg",
+      kvalita
+    );
+  }
+
   async function pripravObrazekProPoznamku(file) {
     if (!file?.type?.startsWith("image/")) {
       throw new Error(
         "Vybraný soubor není obrázek."
       );
     }
-    
+
     const originalDataUrl =
       await nactiSouborJakoDataUrl(file);
-    
+
     const image =
       await nactiObrazek(originalDataUrl);
-    
+
     /*
-     * Data URL ukládáme přímo do poznámky. Proto držíme
-     * obrázek rozumně malý, aby localStorage a synchronizace
-     * zůstaly rychlé i na telefonu.
+     * FÁZE B – běžná poznámka používá stejnou kompresi jako
+     * Kontrola středisek: JPEG, max. 1280 px, quality 0.70.
+     * Data URL zatím zůstává v poznámce jako kompatibilní
+     * bezpečnostní kopie, vedle ní se ale stejný JPEG Blob
+     * ukládá do IndexedDB a následně do Supabase Storage.
+     */
+    if (!jeAktualniPoznamkaTajnaProPrilohu()) {
+      return vykresliObrazekDoJpeg(
+        image,
+        1280,
+        0.7
+      );
+    }
+
+    /*
+     * Secret ve Fázi B necháváme úplně na původním, potvrzeném
+     * WebP/Data URL toku. Plaintext Blob nesmí vzniknout mimo
+     * zašifrovanou tajnou poznámku.
      */
     const pokusy = [
       { maxRozmer: 1280, kvalita: 0.78 },
@@ -3116,28 +3192,27 @@
       { maxRozmer: 900, kvalita: 0.68 },
       { maxRozmer: 760, kvalita: 0.64 }
     ];
-    
+
     let vysledek = "";
-    
+
     for (const pokus of pokusy) {
       vysledek = vykresliObrazekDoWebp(
         image,
         pokus.maxRozmer,
         pokus.kvalita
       );
-      
-      /* přibližně do 500 kB binárních dat */
+
       if (vysledek.length <= 700000) {
         break;
       }
     }
-    
+
     if (!vysledek) {
       throw new Error(
         "Obrázek se nepodařilo připravit."
       );
     }
-    
+
     return vysledek;
   }
   
@@ -3174,7 +3249,11 @@
     const taskModal =
       document.getElementById("taskModal");
 
-    return taskModal?.dataset?.taskId || null;
+    return (
+      taskModal?.dataset?.taskId ||
+      taskModal?.dataset?.draftTaskId ||
+      null
+    );
   }
 
   function vytvorIdStinovePrilohy() {
@@ -3203,10 +3282,10 @@
 
     if (
       !lokalniPrilohy
-        ?.ulozStinovouPrilohuZDataUrl
+        ?.ulozCloudovouStinovouPrilohuZDataUrl
     ) {
       console.warn(
-        "LubaNote attachments: lokální stínová cache není dostupná."
+        "LubaNote attachments: lokální cloudová stínová cache není dostupná."
       );
       return null;
     }
@@ -3216,7 +3295,7 @@
 
     try {
       await lokalniPrilohy
-        .ulozStinovouPrilohuZDataUrl({
+        .ulozCloudovouStinovouPrilohuZDataUrl({
           id: attachmentId,
           dataUrl,
           noteId:
@@ -3348,9 +3427,10 @@
         await pripravObrazekProPoznamku(file);
 
       /*
-       * FÁZE A: před vložením zkusíme vytvořit pouze stínovou
-       * IndexedDB kopii. Data URL zůstává v obrázku i poznámce,
-       * takže případná chyba lokální databáze nic nerozbije.
+       * FÁZE B: před vložením vytvoříme lokální JPEG Blob a
+       * zařadíme jej do trvalé fronty pro Supabase Storage.
+       * Data URL stále zůstává v obrázku i poznámce, takže
+       * Storage je zatím pouze bezpečná cloudová stínová vrstva.
        */
       const attachmentId =
         await ulozObrazekDoStinoveCache(

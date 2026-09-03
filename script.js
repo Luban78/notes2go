@@ -165,6 +165,7 @@ confirmDeleteButton.addEventListener("click", async () => {
 
   taskModal.hidden = true;
   taskModal.removeAttribute("data-task-id");
+  ukonciDraftPoznamky();
   activeTaskIndex = null;
   activeTaskId = null;
   editorSessionId += 1;
@@ -336,6 +337,7 @@ function zpracujZavreniEditoru() {
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
+  ukonciDraftPoznamky();
   editorSessionId += 1;
   
   setTimeout(() => {
@@ -397,6 +399,57 @@ let editorRepeat = null;
 function zahajEditorSession(taskId = null) {
   editorSessionId += 1;
   activeTaskId = taskId || null;
+}
+
+function vytvorDraftIdPoznamky() {
+  return (
+    crypto.randomUUID?.() ||
+    `draft-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`
+  );
+}
+
+function zahajDraftNovePoznamky() {
+  const draftId = vytvorDraftIdPoznamky();
+
+  taskModal?.setAttribute(
+    "data-draft-task-id",
+    draftId
+  );
+
+  return draftId;
+}
+
+function ziskejDraftIdPoznamky() {
+  return taskModal?.dataset?.draftTaskId || null;
+}
+
+function ukonciDraftPoznamky() {
+  taskModal?.removeAttribute(
+    "data-draft-task-id"
+  );
+}
+
+async function zahodLokalniPrilohyDraftu() {
+  const draftId = ziskejDraftIdPoznamky();
+
+  if (!draftId) {
+    return 0;
+  }
+
+  try {
+    return await window.LubaNoteAttachmentsLocal
+      ?.smazPrilohyPodleNoteId?.(draftId) || 0;
+  } catch (error) {
+    console.warn(
+      "LubaNote attachments: přílohy zahozeného draftu se nepodařilo uklidit.",
+      error
+    );
+    return 0;
+  } finally {
+    ukonciDraftPoznamky();
+  }
 }
 
 
@@ -728,7 +781,8 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
     
     if (!isEmpty) {
       savedNote = {
-        id: crypto.randomUUID(),
+        id: ziskejDraftIdPoznamky() ||
+          crypto.randomUUID(),
         updatedAt: new Date().toISOString(),
         title,
         note,
@@ -747,6 +801,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       };
       
       await saveTask(savedNote);
+      ukonciDraftPoznamky();
     }
   }
   
@@ -810,6 +865,7 @@ function zavriTajnyEditorPriZamknuti() {
   
   activeTaskIndex = null;
   activeTaskId = null;
+  ukonciDraftPoznamky();
   editorSessionId += 1;
   secretTaskEnabled = false;
   
@@ -958,7 +1014,7 @@ appMessageSaveButton?.addEventListener(
 
 appMessageDiscardButton?.addEventListener(
   "click",
-  () => {
+  async () => {
     appMessageModal.hidden = true;
     
     appMessageSaveButton.hidden = true;
@@ -973,10 +1029,15 @@ appMessageDiscardButton?.addEventListener(
     uvolniVzdalenouEditorSession(
       zahazovanyTaskId
     );
+
+    if (!zahazovanyTaskId) {
+      await zahodLokalniPrilohyDraftu();
+    }
     
     activeTaskIndex = null;
     activeTaskId = null;
     taskModal.removeAttribute("data-task-id");
+    ukonciDraftPoznamky();
     editorSessionId += 1;
     
     setTimeout(() => {
@@ -2449,6 +2510,8 @@ const addTaskButton = document.getElementById("addTaskButton");
 addTaskButton.addEventListener("click", () => {
   zahajEditorSession(null);
   taskModal.removeAttribute("data-task-id");
+  ukonciDraftPoznamky();
+  zahajDraftNovePoznamky();
   activeTaskIndex = null;
   /*
  * Pokud je Secret režim odemčený,
@@ -2633,6 +2696,7 @@ function zavriEditorPoLokalnimUlozeni(
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
+  ukonciDraftPoznamky();
   editorSessionId += 1;
   
   setTimeout(() => {
@@ -2849,7 +2913,8 @@ async function ulozAZavriEditor(
       
       if (!isEmpty) {
         const newTask = {
-          id: crypto.randomUUID(),
+          id: ziskejDraftIdPoznamky() ||
+            crypto.randomUUID(),
           updatedAt: new Date().toISOString(),
           title,
           note,
@@ -2873,7 +2938,8 @@ async function ulozAZavriEditor(
           () => saveTask(newTask),
           newTask
         );
-        
+
+        ukonciDraftPoznamky();
         ulozenaPoznamka = newTask;
       }
     }
@@ -3295,6 +3361,7 @@ async function openTaskEditorById(taskId) {
   closeTagMenu();
   
   zahajEditorSession(currentTask.id);
+  ukonciDraftPoznamky();
   taskModal.dataset.taskId = currentTask.id;
   activeTaskIndex = index;
   

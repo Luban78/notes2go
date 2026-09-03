@@ -1,20 +1,19 @@
 /* ==================================================
-   LUBANOTE – LOKÁLNÍ PŘÍLOHY / INDEXEDDB – FÁZE A
+   LUBANOTE – LOKÁLNÍ PŘÍLOHY / INDEXEDDB – FÁZE B
 
-   Bezpečná stínová vrstva pro budoucí attachments.
+   FÁZE B = cloudová STÍNOVÁ vrstva.
 
-   DŮLEŽITÉ PRO FÁZI A:
-   - současný WEBP Data URL v poznámce zůstává autoritou,
-   - synchronizace, export/import ani zobrazení obrázků
-     na IndexedDB zatím NEZÁVISÍ,
-   - Secret obrázky se sem vůbec neukládají,
-   - fronta uploadů je pouze připravena pro další fázi;
-     nic se z ní zatím neposílá do cloudu.
+   DŮLEŽITÉ:
+   - Data URL v poznámce zůstává autoritou a kompatibilní zálohou,
+   - nový normální obrázek se navíc ukládá jako Blob do IndexedDB,
+   - trvalá fronta si pamatuje čekající cloudový upload,
+   - Secret obrázky se sem v plaintextu vůbec neukládají,
+   - sync poznámky zatím na Storage NENÍ existenčně závislý.
 ================================================== */
 
 (() => {
   const NAZEV_DB = "LubaNoteAttachments";
-  const VERZE_DB = 1;
+  const VERZE_DB = 2;
   const SKLAD_PRILOH = "prilohy";
   const SKLAD_FRONTY = "frontaPriloh";
 
@@ -39,43 +38,71 @@
     return chyba;
   }
 
-  function nastavSchemaDatabaze(databaze) {
+  function nastavSchemaDatabaze(databaze, transakce = null) {
+    let prilohy;
+
     if (!databaze.objectStoreNames.contains(SKLAD_PRILOH)) {
-      const prilohy = databaze.createObjectStore(
+      prilohy = databaze.createObjectStore(
         SKLAD_PRILOH,
         { keyPath: "id" }
       );
-
-      prilohy.createIndex(
-        "noteId",
-        "noteId",
-        { unique: false }
-      );
-
-      prilohy.createIndex(
-        "lastAccessAt",
-        "lastAccessAt",
-        { unique: false }
-      );
+    } else if (transakce) {
+      prilohy = transakce.objectStore(SKLAD_PRILOH);
     }
 
+    if (prilohy) {
+      if (!prilohy.indexNames.contains("noteId")) {
+        prilohy.createIndex(
+          "noteId",
+          "noteId",
+          { unique: false }
+        );
+      }
+
+      if (!prilohy.indexNames.contains("lastAccessAt")) {
+        prilohy.createIndex(
+          "lastAccessAt",
+          "lastAccessAt",
+          { unique: false }
+        );
+      }
+
+      if (!prilohy.indexNames.contains("cloudState")) {
+        prilohy.createIndex(
+          "cloudState",
+          "cloudState",
+          { unique: false }
+        );
+      }
+    }
+
+    let fronta;
+
     if (!databaze.objectStoreNames.contains(SKLAD_FRONTY)) {
-      const fronta = databaze.createObjectStore(
+      fronta = databaze.createObjectStore(
         SKLAD_FRONTY,
         { keyPath: "id" }
       );
+    } else if (transakce) {
+      fronta = transakce.objectStore(SKLAD_FRONTY);
+    }
 
-      fronta.createIndex(
-        "attachmentId",
-        "attachmentId",
-        { unique: false }
-      );
+    if (fronta) {
+      if (!fronta.indexNames.contains("attachmentId")) {
+        fronta.createIndex(
+          "attachmentId",
+          "attachmentId",
+          { unique: false }
+        );
+      }
 
-      fronta.createIndex(
-        "stav",
-        "stav",
-        { unique: false }
-      );
+      if (!fronta.indexNames.contains("stav")) {
+        fronta.createIndex(
+          "stav",
+          "stav",
+          { unique: false }
+        );
+      }
     }
   }
 
@@ -97,7 +124,10 @@
       );
 
       request.onupgradeneeded = () => {
-        nastavSchemaDatabaze(request.result);
+        nastavSchemaDatabaze(
+          request.result,
+          request.transaction
+        );
       };
 
       request.onsuccess = () => {
@@ -172,49 +202,202 @@
     );
   }
 
-  async function ulozZaznamDoSkladu(
+  async function provedTransakci(
     sklad,
-    zaznam
+    rezim,
+    akce,
+    chybaText
   ) {
     const databaze = await otevriDatabazi();
 
     return new Promise((resolve, reject) => {
       const transakce = databaze.transaction(
         sklad,
-        "readwrite"
+        rezim
       );
+      const objectStore = transakce.objectStore(sklad);
+      let vysledek;
 
-      const request = transakce
-        .objectStore(sklad)
-        .put(zaznam);
+      try {
+        vysledek = akce(objectStore, transakce);
+      } catch (error) {
+        try {
+          transakce.abort();
+        } catch {
+          // Nic dalšího není třeba dělat.
+        }
+        reject(error);
+        return;
+      }
 
-      request.onerror = (udalost) => {
-        console.warn(
-          "LubaNote attachments: zápis do IndexedDB selhal.",
-          udalost?.target?.error || udalost
-        );
-      };
-
-      /*
-       * Úspěch hlásíme až po skutečném dokončení transakce.
-       * Request může být úspěšný o okamžik dřív, než je zápis commitnutý.
-       */
-      transakce.oncomplete = () => resolve(zaznam);
-
+      transakce.oncomplete = () => resolve(vysledek);
       transakce.onerror = (udalost) => reject(
         vytvorChybuDatabaze(
-          "Lokální přílohu se nepodařilo uložit.",
+          chybaText,
           udalost
         )
       );
-
       transakce.onabort = (udalost) => reject(
         vytvorChybuDatabaze(
-          "Uložení lokální přílohy bylo přerušeno.",
+          chybaText,
           udalost
         )
       );
     });
+  }
+
+  async function ulozZaznamDoSkladu(sklad, zaznam) {
+    return provedTransakci(
+      sklad,
+      "readwrite",
+      (objectStore) => {
+        objectStore.put(zaznam);
+        return zaznam;
+      },
+      "Lokální přílohu se nepodařilo uložit."
+    );
+  }
+
+  async function nactiZaznamZeSkladu(sklad, id) {
+    if (!id) {
+      return null;
+    }
+
+    const databaze = await otevriDatabazi();
+
+    return new Promise((resolve, reject) => {
+      const transakce = databaze.transaction(
+        sklad,
+        "readonly"
+      );
+      const request = transakce
+        .objectStore(sklad)
+        .get(id);
+
+      request.onsuccess = () => {
+        resolve(request.result || null);
+      };
+
+      request.onerror = (udalost) => reject(
+        vytvorChybuDatabaze(
+          "Lokální záznam přílohy se nepodařilo načíst.",
+          udalost
+        )
+      );
+    });
+  }
+
+  async function smazZaznamZeSkladu(sklad, id) {
+    if (!id) {
+      return false;
+    }
+
+    await provedTransakci(
+      sklad,
+      "readwrite",
+      (objectStore) => {
+        objectStore.delete(id);
+        return true;
+      },
+      "Lokální záznam přílohy se nepodařilo odstranit."
+    );
+
+    return true;
+  }
+
+  async function upravPrilohu(id, zmeny = {}) {
+    const puvodni = await nactiZaznamZeSkladu(
+      SKLAD_PRILOH,
+      id
+    );
+
+    if (!puvodni) {
+      return null;
+    }
+
+    const novy = {
+      ...puvodni,
+      ...(zmeny && typeof zmeny === "object" ? zmeny : {}),
+      id: puvodni.id
+    };
+
+    await ulozZaznamDoSkladu(
+      SKLAD_PRILOH,
+      novy
+    );
+
+    return novy;
+  }
+
+  async function zaradUpload({
+    attachmentId,
+    noteId = null
+  } = {}) {
+    if (!attachmentId) {
+      throw new Error("Fronta příloh nemá attachmentId.");
+    }
+
+    const ted = new Date().toISOString();
+    const id = `upload:${attachmentId}`;
+    const puvodni = await nactiZaznamZeSkladu(
+      SKLAD_FRONTY,
+      id
+    );
+
+    const zaznam = {
+      id,
+      attachmentId,
+      noteId: noteId || puvodni?.noteId || null,
+      akce: "upload",
+      stav: puvodni?.stav === "uploaded"
+        ? "uploaded"
+        : "pending_upload",
+      pocetPokusu: Number(puvodni?.pocetPokusu) || 0,
+      posledniChyba: puvodni?.posledniChyba || "",
+      createdAt: puvodni?.createdAt || ted,
+      updatedAt: ted
+    };
+
+    await ulozZaznamDoSkladu(
+      SKLAD_FRONTY,
+      zaznam
+    );
+
+    return zaznam;
+  }
+
+  async function aktualizujUpload(
+    attachmentId,
+    zmeny = {}
+  ) {
+    if (!attachmentId) {
+      return null;
+    }
+
+    const id = `upload:${attachmentId}`;
+    const puvodni = await nactiZaznamZeSkladu(
+      SKLAD_FRONTY,
+      id
+    );
+
+    if (!puvodni) {
+      return null;
+    }
+
+    const zaznam = {
+      ...puvodni,
+      ...(zmeny && typeof zmeny === "object" ? zmeny : {}),
+      id,
+      attachmentId,
+      updatedAt: new Date().toISOString()
+    };
+
+    await ulozZaznamDoSkladu(
+      SKLAD_FRONTY,
+      zaznam
+    );
+
+    return zaznam;
   }
 
   async function ulozStinovouPrilohuZDataUrl({
@@ -240,7 +423,8 @@
       fileName: fileName || "",
       createdAt: ted,
       lastAccessAt: ted,
-      faze: "shadow_v1"
+      faze: "shadow_v1",
+      cloudState: "disabled"
     };
 
     await ulozZaznamDoSkladu(
@@ -257,33 +441,61 @@
     };
   }
 
-  async function nactiPrilohu(id) {
+  async function ulozCloudovouStinovouPrilohuZDataUrl({
+    id,
+    dataUrl,
+    noteId = null,
+    fileName = ""
+  } = {}) {
     if (!id) {
-      return null;
+      throw new Error("Lokální příloha nemá ID.");
     }
 
-    const databaze = await otevriDatabazi();
+    const blob = dataUrlNaBlob(dataUrl);
+    const ted = new Date().toISOString();
 
-    return new Promise((resolve, reject) => {
-      const transakce = databaze.transaction(
-        SKLAD_PRILOH,
-        "readonly"
-      );
-      const request = transakce
-        .objectStore(SKLAD_PRILOH)
-        .get(id);
+    const zaznam = {
+      id,
+      noteId: noteId || null,
+      blob,
+      mimeType: blob.type || "image/jpeg",
+      sizeBytes: blob.size,
+      fileName: fileName || "",
+      createdAt: ted,
+      lastAccessAt: ted,
+      faze: "cloud_shadow_v1",
+      cloudState: "pending_upload",
+      storagePath: "",
+      uploadedAt: null,
+      activatedAt: null,
+      lastCloudError: ""
+    };
 
-      request.onsuccess = () => {
-        resolve(request.result || null);
-      };
+    await ulozZaznamDoSkladu(
+      SKLAD_PRILOH,
+      zaznam
+    );
 
-      request.onerror = (udalost) => reject(
-        vytvorChybuDatabaze(
-          "Lokální přílohu se nepodařilo načíst.",
-          udalost
-        )
-      );
+    await zaradUpload({
+      attachmentId: id,
+      noteId
     });
+
+    return {
+      id: zaznam.id,
+      noteId: zaznam.noteId,
+      mimeType: zaznam.mimeType,
+      sizeBytes: zaznam.sizeBytes,
+      createdAt: zaznam.createdAt,
+      cloudState: zaznam.cloudState
+    };
+  }
+
+  async function nactiPrilohu(id) {
+    return nactiZaznamZeSkladu(
+      SKLAD_PRILOH,
+      id
+    );
   }
 
   async function smazPrilohu(id) {
@@ -291,44 +503,73 @@
       return false;
     }
 
-    const databaze = await otevriDatabazi();
+    await smazZaznamZeSkladu(
+      SKLAD_FRONTY,
+      `upload:${id}`
+    );
 
-    return new Promise((resolve, reject) => {
-      const transakce = databaze.transaction(
-        SKLAD_PRILOH,
-        "readwrite"
-      );
-
-      transakce.objectStore(SKLAD_PRILOH)
-        .delete(id);
-
-      transakce.oncomplete = () => resolve(true);
-      transakce.onerror = (udalost) => reject(
-        vytvorChybuDatabaze(
-          "Lokální přílohu se nepodařilo odstranit.",
-          udalost
-        )
-      );
-      transakce.onabort = (udalost) => reject(
-        vytvorChybuDatabaze(
-          "Odstranění lokální přílohy bylo přerušeno.",
-          udalost
-        )
-      );
-    });
+    return smazZaznamZeSkladu(
+      SKLAD_PRILOH,
+      id
+    );
   }
 
-  async function spocitejPrilohy() {
+  async function smazPrilohyPodleNoteId(noteId) {
+    if (!noteId) {
+      return 0;
+    }
+
     const databaze = await otevriDatabazi();
 
-    return new Promise((resolve, reject) => {
+    const ids = await new Promise((resolve, reject) => {
       const transakce = databaze.transaction(
         SKLAD_PRILOH,
         "readonly"
       );
-      const request = transakce
+      const index = transakce
         .objectStore(SKLAD_PRILOH)
-        .count();
+        .index("noteId");
+      const request = index.getAllKeys(noteId);
+
+      request.onsuccess = () => {
+        resolve(
+          Array.isArray(request.result)
+            ? request.result
+            : []
+        );
+      };
+
+      request.onerror = (udalost) => reject(
+        vytvorChybuDatabaze(
+          "Lokální přílohy draftu se nepodařilo najít.",
+          udalost
+        )
+      );
+    });
+
+    let smazano = 0;
+
+    for (const id of ids) {
+      if (await smazPrilohu(id)) {
+        smazano += 1;
+      }
+    }
+
+    return smazano;
+  }
+
+  async function spocitejSklad(sklad, index = null, hodnota = null) {
+    const databaze = await otevriDatabazi();
+
+    return new Promise((resolve, reject) => {
+      const transakce = databaze.transaction(
+        sklad,
+        "readonly"
+      );
+      const objectStore = transakce.objectStore(sklad);
+      const request = index
+        ? objectStore.index(index).count(hodnota)
+        : objectStore.count();
 
       request.onsuccess = () => resolve(request.result || 0);
       request.onerror = (udalost) => reject(
@@ -340,16 +581,39 @@
     });
   }
 
+  async function spocitejPrilohy() {
+    return spocitejSklad(SKLAD_PRILOH);
+  }
+
   async function ziskejDiagnostiku() {
     try {
-      const pocetPriloh = await spocitejPrilohy();
+      const [
+        pocetPriloh,
+        cekajiciUploady,
+        nahraneUploady
+      ] = await Promise.all([
+        spocitejSklad(SKLAD_PRILOH),
+        spocitejSklad(
+          SKLAD_FRONTY,
+          "stav",
+          "pending_upload"
+        ),
+        spocitejSklad(
+          SKLAD_FRONTY,
+          "stav",
+          "uploaded"
+        )
+      ]);
 
       return {
         dostupne: true,
         databaze: NAZEV_DB,
         verze: VERZE_DB,
         pocetPriloh,
-        frontaUploaduAktivni: false
+        cekajiciUploady,
+        nahraneUploady,
+        frontaUploaduAktivni: true,
+        rezim: "cloud_shadow"
       };
     } catch (error) {
       return {
@@ -357,7 +621,10 @@
         databaze: NAZEV_DB,
         verze: VERZE_DB,
         pocetPriloh: 0,
-        frontaUploaduAktivni: false,
+        cekajiciUploady: 0,
+        nahraneUploady: 0,
+        frontaUploaduAktivni: true,
+        rezim: "cloud_shadow",
         chyba: error?.message || String(error)
       };
     }
@@ -366,8 +633,13 @@
   window.LubaNoteAttachmentsLocal = {
     jeDostupne: jeIndexedDbDostupne,
     ulozStinovouPrilohuZDataUrl,
+    ulozCloudovouStinovouPrilohuZDataUrl,
     nactiPrilohu,
+    upravPrilohu,
     smazPrilohu,
+    smazPrilohyPodleNoteId,
+    zaradUpload,
+    aktualizujUpload,
     spocitejPrilohy,
     ziskejDiagnostiku
   };

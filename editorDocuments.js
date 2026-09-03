@@ -1121,6 +1121,7 @@
   function pripravPrazdnyNovyEditor() {
     zahajEditorSession(null);
     taskModal.removeAttribute("data-task-id");
+    zahajDraftNovePoznamky();
     activeTaskIndex = null;
 
     secretTaskEnabled = false;
