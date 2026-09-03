@@ -38,6 +38,13 @@
    */
   let cilovyEditorOdkazu = null;
   let ulozenyRozsahOdkazu = null;
+
+  /*
+   * Obrázek může být vložen i do právě editovaného TODO.
+   * Cíl si uložíme ještě před otevřením galerie/fotoaparátu, protože
+   * výběr souboru dočasně odebere focus z contenteditable TODO.
+   */
+  let cilovyEditorObrazku = null;
   
   const imageInput = document.createElement("input");
   imageInput.type = "file";
@@ -453,6 +460,48 @@
       "important"
     );
 
+    /*
+     * V TODO je obrázek příloha konkrétního řádku stejně jako v bulletu.
+     * Proto uvnitř TODO nikdy neplave mezi textem; zarovnání řešíme
+     * pouze blokovými okraji. Tím nerozbíjíme checkbox ani drag celého TODO.
+     */
+    const jeTodoObrazek = Boolean(
+      figure.closest?.(
+        ".todoRichTextInput, .todoTextValue"
+      )
+    );
+
+    if (jeTodoObrazek) {
+      figure.style.setProperty(
+        "float",
+        "none",
+        "important"
+      );
+      figure.style.setProperty("clear", "both");
+
+      if (zarovnani === "vlevo") {
+        figure.style.setProperty(
+          "margin",
+          "10px auto 6px 0",
+          "important"
+        );
+      } else if (zarovnani === "vpravo") {
+        figure.style.setProperty(
+          "margin",
+          "10px 0 6px auto",
+          "important"
+        );
+      } else {
+        figure.style.setProperty(
+          "margin",
+          "10px auto 6px",
+          "important"
+        );
+      }
+
+      return;
+    }
+
     if (jePlnaSirka) {
       figure.style.setProperty(
         "float",
@@ -617,8 +666,14 @@
     return image?.dataset?.zarovnani || "stred";
   }
 
-  function oznamZmenuObrazku() {
-    modalRichText.dispatchEvent(
+  function oznamZmenuObrazku(figure = null) {
+    const todoEditor = figure?.closest?.(
+      ".todoRichTextInput"
+    );
+
+    const editor = todoEditor || modalRichText;
+
+    editor.dispatchEvent(
       new Event("input", { bubbles: true })
     );
   }
@@ -791,7 +846,7 @@
           hodnoty.zarovnani
         );
 
-        oznamZmenuObrazku();
+        oznamZmenuObrazku(figure);
       }
     });
   }
@@ -2828,6 +2883,45 @@
     }
   }
 
+  function vlozObrazekDoTodoEditoru(figure, todoEditor) {
+    if (
+      !figure ||
+      !todoEditor?.matches?.(".todoRichTextInput") ||
+      !todoEditor.isConnected
+    ) {
+      return false;
+    }
+
+    /*
+     * TODO je samostatný úkol. Obrázek proto patří přímo do jeho HTML
+     * a přesouvá se vždy společně s celým TODO řádkem. Samostatný image
+     * drag uvnitř TODO záměrně nepoužíváme.
+     */
+    figure.dataset.todoMedia = "true";
+
+    const image = figure.querySelector("img");
+
+    if (image) {
+      aplikujAktualniVelikostObrazku(
+        image,
+        figure
+      );
+    }
+
+    todoEditor.append(figure);
+
+    /*
+     * Standardní TODO input listener uloží nové innerHTML do activeTodos
+     * a zároveň překreslí čtecí podobu řádku.
+     */
+    todoEditor.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    return true;
+  }
+
+
   function vlozObrazekDoEditoru(figure) {
     const editorBylPredVlozenimPrazdny =
       jeEditorPredPrvnimObrazkemPrazdny();
@@ -3078,8 +3172,12 @@
     return figure;
   }
   
-  async function vlozVybranyObrazek(file) {
+  async function vlozVybranyObrazek(
+    file,
+    cilovyEditor = null
+  ) {
     if (!file) {
+      cilovyEditorObrazku = null;
       return;
     }
     
@@ -3091,8 +3189,29 @@
         dataUrl,
         file.name
       );
-      
-      vlozObrazekDoEditoru(figure);
+
+      const editor =
+        cilovyEditor ||
+        (cilovyEditorObrazku?.isConnected
+          ? cilovyEditorObrazku
+          : modalRichText);
+
+      if (
+        editor?.matches?.(".todoRichTextInput")
+      ) {
+        const vlozeno = vlozObrazekDoTodoEditoru(
+          figure,
+          editor
+        );
+
+        if (!vlozeno) {
+          throw new Error(
+            "TODO editor už není dostupný."
+          );
+        }
+      } else {
+        vlozObrazekDoEditoru(figure);
+      }
     } catch (error) {
       console.error(
         "Vložení obrázku se nepodařilo:",
@@ -3108,6 +3227,7 @@
       /* Stejný soubor lze díky resetu vybrat / vyfotit znovu. */
       imageInput.value = "";
       cameraInput.value = "";
+      cilovyEditorObrazku = null;
     }
   }
   
@@ -3245,7 +3365,10 @@
     if (soubor?.type.startsWith("image/")) {
       event.preventDefault();
 
-      void vlozVybranyObrazek(soubor);
+      void vlozVybranyObrazek(
+        soubor,
+        modalRichText
+      );
       return;
     }
 
@@ -3278,13 +3401,22 @@
       return;
     }
 
+    const soubor =
+      event.clipboardData?.files?.[0] || null;
+
+    if (soubor?.type?.startsWith("image/")) {
+      event.preventDefault();
+
+      void vlozVybranyObrazek(
+        soubor,
+        todoEditor
+      );
+      return;
+    }
+
     const text =
       ziskejProstyTextZeSchranky(event);
 
-    /*
-     * TODO nepodporuje obrázky ze schránky. Pokud schránka obsahuje
-     * jen obrázek / jiná netextová data, nenecháme WebView vložit HTML.
-     */
     event.preventDefault();
 
     if (!text) {
@@ -3734,6 +3866,16 @@
      VKLÁDÁNÍ MÉDIÍ Z TOOLBARU
   ========================================== */
 
+  function pripravCilObrazku() {
+    const todoEditor = document.querySelector(
+      ".todoRichTextInput.todoEditing"
+    );
+
+    cilovyEditorObrazku =
+      todoEditor || modalRichText;
+  }
+
+
   function otevriGaleriiObrazku() {
     imageInput.value = "";
     imageInput.click();
@@ -3745,13 +3887,11 @@
   }
 
   function otevriVyberZdrojeObrazku() {
-    if (jeTodoRezimAktivni()) {
-      zobrazMediaZpravu(
-        "Vkládání do textu poznámky",
-        "Obrázek nebo internetový odkaz vlož do běžného textu poznámky. TODO řádky zůstávají samostatné úkoly."
-      );
-      return;
-    }
+    /*
+     * Cíl uložíme ještě před choice modalem / systémovým pickerem.
+     * V TODO tak výběr souboru neztratí informaci, ke kterému úkolu patří.
+     */
+    pripravCilObrazku();
 
     /*
      * Jeden vstup v toolbaru, dvě přirozené cesty. V obou případech se
@@ -3792,10 +3932,7 @@
     otevriVyberZdrojeObrazku;
 
   window.vlozOdkazDoPoznamky = () => {
-    /*
-     * Odkazy jsou povolené i v TODO. Obrázky zůstávají nadále
-     * omezené na hlavní text poznámky.
-     */
+    /* Odkazy i obrázky jsou povolené v hlavním textu i v TODO. */
     otevriLinkModal();
   };
 
@@ -4079,6 +4216,108 @@
     },
     true
   );
+
+  /* ==========================================
+     OBRÁZKY UVNITŘ TODO
+     - obrázek se nepřetahuje samostatně, pohybuje se s celým TODO,
+     - klik = ovládání, dvojklik/dvojtap = fullscreen,
+     - nastavení a odstranění mění přímo uložené TODO HTML.
+  ========================================== */
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      const todoEditor = event.target.closest?.(
+        ".todoRichTextInput"
+      );
+
+      if (!todoEditor) {
+        return;
+      }
+
+      const settingsButton = event.target.closest?.(
+        ".lubaNoteImageSettings"
+      );
+
+      if (settingsButton) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const figure = settingsButton.closest(
+          ".lubaNoteImage"
+        );
+        const image = figure?.querySelector("img");
+
+        if (image) {
+          oznacObrazekProPresun(image);
+          otevriNastaveniObrazku(image);
+        }
+        return;
+      }
+
+      const removeButton = event.target.closest?.(
+        ".lubaNoteImageRemove"
+      );
+
+      if (removeButton) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const figure = removeButton.closest(
+          ".lubaNoteImage"
+        );
+
+        if (
+          figure &&
+          ziskejBlokObrazku(
+            oznacenyObrazekProPresun
+          ) === figure
+        ) {
+          zrusOznaceniObrazkuProPresun();
+        }
+
+        figure?.remove();
+        todoEditor.dispatchEvent(
+          new Event("input", { bubbles: true })
+        );
+        return;
+      }
+
+      const obrazek = event.target.closest?.(
+        ".lubaNoteImage img"
+      );
+
+      if (!obrazek) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const ted = performance.now();
+      const jeDvojtap =
+        posledniTapObrazek === obrazek &&
+        ted - posledniTapCas <= DVOJTAP_OBRAZKU_MS;
+
+      posledniTapObrazek = obrazek;
+      posledniTapCas = ted;
+
+      if (jeDvojtap) {
+        posledniTapObrazek = null;
+        posledniTapCas = 0;
+        zrusOznaceniObrazkuProPresun();
+        otevriNahledObrazku(obrazek);
+        return;
+      }
+
+      if (jeObrazekOznacenyProPresun(obrazek)) {
+        zrusOznaceniObrazkuProPresun();
+      } else {
+        oznacObrazekProPresun(obrazek);
+      }
+    }
+  );
+
 
   /* ==========================================
      AKCE NAD ULOŽENÝM OBRÁZKEM / ODKAZEM

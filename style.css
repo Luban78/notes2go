@@ -9798,6 +9798,108 @@ body.trashScreenOpen {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+/* ========================================
+   TODO – OBRÁZKY UVNITŘ JEDNOHO ÚKOLU
+   Stejný uložený formát .lubaNoteImage jako v hlavním editoru.
+   Obrázek se přesouvá vždy společně s celým TODO řádkem.
+======================================== */
+.todoRichTextInput .lubaNoteImage,
+.todoTextValue .lubaNoteImage {
+  position: relative;
+  container-type: inline-size;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 10px auto 6px;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  clear: both;
+}
+
+.todoRichTextInput .lubaNoteImage img,
+.todoTextValue .lubaNoteImage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: none;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+}
+
+/* Čtecí podoba TODO je bez editačních ovladačů. Po tapnutí se TODO otevře
+   k editaci a ovladače jsou dostupné přímo v .todoRichTextInput. */
+.todoTextValue .lubaNoteImageSettings,
+.todoTextValue .lubaNoteImageRemove {
+  display: none !important;
+}
+
+.todoRichTextInput .lubaNoteImageSettings,
+.todoRichTextInput .lubaNoteImageRemove {
+  position: absolute;
+  z-index: 4;
+  top: clamp(4px, 2cqi, 8px);
+  width: clamp(22px, 12cqi, 34px);
+  height: clamp(22px, 12cqi, 34px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.76);
+  color: white;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.88);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
+}
+
+.todoRichTextInput .lubaNoteImageRemove {
+  right: clamp(4px, 2cqi, 8px);
+}
+
+.todoRichTextInput .lubaNoteImageSettings {
+  right: clamp(30px, 16cqi, 48px);
+}
+
+.todoRichTextInput .lubaNoteImage:focus-within {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 1px var(--color-background),
+    0 8px 22px rgba(0, 0, 0, 0.18);
+}
+
+.todoRichTextInput .lubaNoteImage:focus-within .lubaNoteImageSettings,
+.todoRichTextInput .lubaNoteImage:focus-within .lubaNoteImageRemove {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.todoRichTextInput .lubaNoteImageSettings:active,
+.todoRichTextInput .lubaNoteImageRemove:active {
+  transform: scale(0.92);
+}
+
 #trashConfirmModal {
   z-index: 3700;
 }

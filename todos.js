@@ -864,7 +864,16 @@ function jeTodoTextPrazdny(text = "") {
 function ziskejHtmlZTodoRichText(editor) {
   const text = ziskejTextZTodoRichText(editor);
 
-  if (text === "") {
+  /*
+   * TODO může nově obsahovat i obrázek. Obrázek nemá textContent,
+   * proto nesmíme zahodit HTML jen proto, že je plain-text kopie prázdná.
+   * Bez toho by například obrázkový TODO po prvním přerenderování zmizel.
+   */
+  const maObrazek = Boolean(
+    editor?.querySelector?.(".lubaNoteImage")
+  );
+
+  if (text === "" && !maObrazek) {
     return "";
   }
 
