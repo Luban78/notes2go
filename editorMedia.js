@@ -12,6 +12,12 @@
    Obrázky se ukládají přímo do richContent jako
    komprimovaný WEBP data URL. Díky tomu fungují offline
    a u tajné poznámky zůstávají uvnitř šifrovaných dat.
+
+   FÁZE A attachments:
+   U normálních poznámek se nově ukládá ještě neautoritativní
+   stínová Blob kopie do IndexedDB. RichContent / Data URL je
+   stále jediná autorita pro sync, export/import i zobrazení.
+   Secret obrázky se do stínové cache vůbec nekopírují.
 ================================================== */
 
 (() => {
@@ -66,6 +72,19 @@
   cameraInput.hidden = true;
   cameraInput.setAttribute("aria-hidden", "true");
   document.body.append(cameraInput);
+
+  /*
+   * Pokud uživatel převede rozepsanou normální poznámku na Secret,
+   * stínové plaintext Blob kopie z ní ihned odstraníme. Posluchač
+   * script.js je registrovaný dříve a secretTaskEnabled přepne ještě
+   * před touto následnou kontrolou.
+   */
+  document.getElementById("secretTaskButton")
+    ?.addEventListener("click", () => {
+      queueMicrotask(() => {
+        vycistiStinovePrilohyPriPrepnutiNaSecret();
+      });
+    });
   
   
   
@@ -3122,6 +3141,149 @@
     return vysledek;
   }
   
+  function jeAktualniPoznamkaTajnaProPrilohu() {
+    try {
+      if (typeof secretTaskEnabled !== "undefined") {
+        return secretTaskEnabled === true;
+      }
+
+      /*
+       * Záložní bezpečnostní kontrola. Normálně používáme přesný stav
+       * secretTaskEnabled. Kdyby však binding z nějakého důvodu nebyl
+       * dostupný, při odemčeném Secret režimu plaintext Blob raději
+       * vůbec nevytváříme.
+       */
+      return document.body.classList.contains(
+        "secretModeActive"
+      );
+    } catch (error) {
+      console.warn(
+        "LubaNote attachments: stav Secret poznámky se nepodařilo ověřit.",
+        error
+      );
+
+      /*
+       * Bezpečnější je stínovou plaintext kopii nevytvořit.
+       * Samotné vložení obrázku dál pokračuje starým Data URL systémem.
+       */
+      return true;
+    }
+  }
+
+  function ziskejAktualniIdPoznamkyProPrilohu() {
+    const taskModal =
+      document.getElementById("taskModal");
+
+    return taskModal?.dataset?.taskId || null;
+  }
+
+  function vytvorIdStinovePrilohy() {
+    return (
+      crypto.randomUUID?.() ||
+      `attachment-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`
+    );
+  }
+
+  async function ulozObrazekDoStinoveCache(
+    dataUrl,
+    file
+  ) {
+    /*
+     * Secret zůstává ve Fázi A zcela beze změny.
+     * Nechceme vytvořit plaintext Blob vedle šifrované poznámky.
+     */
+    if (jeAktualniPoznamkaTajnaProPrilohu()) {
+      return null;
+    }
+
+    const lokalniPrilohy =
+      window.LubaNoteAttachmentsLocal;
+
+    if (
+      !lokalniPrilohy
+        ?.ulozStinovouPrilohuZDataUrl
+    ) {
+      console.warn(
+        "LubaNote attachments: lokální stínová cache není dostupná."
+      );
+      return null;
+    }
+
+    const attachmentId =
+      vytvorIdStinovePrilohy();
+
+    try {
+      await lokalniPrilohy
+        .ulozStinovouPrilohuZDataUrl({
+          id: attachmentId,
+          dataUrl,
+          noteId:
+            ziskejAktualniIdPoznamkyProPrilohu(),
+          fileName: file?.name || ""
+        });
+
+      return attachmentId;
+    } catch (error) {
+      /*
+       * IndexedDB je zatím jen stín. Její chyba NESMÍ zabránit
+       * vložení obrázku starým, potvrzeným Data URL způsobem.
+       */
+      console.warn(
+        "LubaNote attachments: stínovou kopii obrázku se nepodařilo uložit.",
+        error
+      );
+      return null;
+    }
+  }
+
+  async function odstranStinovouPrilohu(attachmentId) {
+    if (!attachmentId) {
+      return;
+    }
+
+    try {
+      await window.LubaNoteAttachmentsLocal
+        ?.smazPrilohu?.(attachmentId);
+    } catch (error) {
+      console.warn(
+        "LubaNote attachments: stínovou kopii se nepodařilo odstranit.",
+        error
+      );
+    }
+  }
+
+  function vycistiStinovePrilohyPriPrepnutiNaSecret() {
+    if (!jeAktualniPoznamkaTajnaProPrilohu()) {
+      return;
+    }
+
+    const taskModal =
+      document.getElementById("taskModal");
+
+    const bloky = taskModal
+      ? Array.from(
+          taskModal.querySelectorAll(
+            ".lubaNoteImage[data-attachment-id]"
+          )
+        )
+      : [];
+
+    for (const figure of bloky) {
+      const attachmentId =
+        figure.dataset.attachmentId || "";
+
+      /*
+       * Z HTML odstraníme stínové ID okamžitě. Data URL obrázku
+       * zůstává beze změny a při Secret uložení se zašifruje jako dnes.
+       */
+      delete figure.dataset.attachmentId;
+
+      void odstranStinovouPrilohu(attachmentId);
+    }
+  }
+
   function vytvorBlokObrazku(dataUrl, fileName = "") {
     const figure = document.createElement("figure");
     figure.className = "lubaNoteImage";
@@ -3184,11 +3346,27 @@
     try {
       const dataUrl =
         await pripravObrazekProPoznamku(file);
+
+      /*
+       * FÁZE A: před vložením zkusíme vytvořit pouze stínovou
+       * IndexedDB kopii. Data URL zůstává v obrázku i poznámce,
+       * takže případná chyba lokální databáze nic nerozbije.
+       */
+      const attachmentId =
+        await ulozObrazekDoStinoveCache(
+          dataUrl,
+          file
+        );
       
       const figure = vytvorBlokObrazku(
         dataUrl,
         file.name
       );
+
+      if (attachmentId) {
+        figure.dataset.attachmentId =
+          attachmentId;
+      }
 
       const editor =
         cilovyEditor ||
