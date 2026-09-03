@@ -324,6 +324,56 @@ function skryjEditorHandoffModal() {
   }
 }
 
+function formatujZbyvajiciCasEditoru(ms) {
+  const sekundy = Math.max(
+    0,
+    Math.ceil(Number(ms || 0) / 1000)
+  );
+
+  const minuty = Math.floor(sekundy / 60);
+  const zbytek = sekundy % 60;
+
+  if (minuty <= 0) {
+    return `${zbytek} s`;
+  }
+
+  return `${minuty}:${String(zbytek).padStart(2, "0")}`;
+}
+
+function aktualizujCekaniNaBeznePredani(zbyvaMs) {
+  const modal = document.getElementById(
+    "editorHandoffModal"
+  );
+
+  if (!modal || modal.hidden) {
+    return;
+  }
+
+  const title = modal.querySelector(
+    "#editorHandoffTitle"
+  );
+  const zprava = modal.querySelector(
+    "#editorHandoffText"
+  );
+  const potvrdit = modal.querySelector(
+    "#editorHandoffConfirmButton"
+  );
+
+  if (title) {
+    title.textContent = "Přebírám poznámku";
+  }
+
+  if (zprava) {
+    zprava.textContent =
+      `Čekám, až druhé zařízení uloží poslední změny, dokončí synchronizaci a editor bezpečně zavře. Běžné předání může trvat ještě ${formatujZbyvajiciCasEditoru(zbyvaMs)}.`;
+  }
+
+  if (potvrdit) {
+    potvrdit.textContent =
+      `Probíhá předání… ${formatujZbyvajiciCasEditoru(zbyvaMs)}`;
+  }
+}
+
 function zobrazEditorHandoffInfo(
   nadpis,
   text
@@ -420,7 +470,7 @@ function zeptejSeNaNucenePrevzetiStalehoEditoru() {
       text:
         "Původní editor už neobnovuje spojení. Můžeš převzít poslední verzi, která byla bezpečně synchronizovaná v Supabase. Neuložené změny, které zůstaly jen na druhém zařízení, se tím nepřevezmou.",
       textPotvrdit:
-        "Převzít poslední uloženou verzi"
+        "Přesto převzít"
     });
 
     const zrusit = modal.querySelector(
@@ -781,10 +831,12 @@ async function vynutPrevzetiStaleEditorSession(
 
 async function zkusNucenePrevzetiStalehoEditoru(
   noteId,
-  novaSessionId
+  novaSessionId,
+  preskocitDotaz = false
 ) {
-  const chcePrevzit =
-    await zeptejSeNaNucenePrevzetiStalehoEditoru();
+  const chcePrevzit = preskocitDotaz
+    ? true
+    : await zeptejSeNaNucenePrevzetiStalehoEditoru();
 
   if (!chcePrevzit) {
     return false;
@@ -847,6 +899,165 @@ async function zkusNucenePrevzetiStalehoEditoru(
   }
 
   return true;
+}
+
+async function cekejNaMoznostNucenehoPrevzeti(
+  noteId,
+  novaSessionId
+) {
+  const modal = ziskejEditorHandoffModal();
+  const title = modal.querySelector(
+    "#editorHandoffTitle"
+  );
+  const zprava = modal.querySelector(
+    "#editorHandoffText"
+  );
+  const zrusit = modal.querySelector(
+    "#editorHandoffCancelButton"
+  );
+  const potvrdit = modal.querySelector(
+    "#editorHandoffConfirmButton"
+  );
+
+  title.textContent = "Druhé zařízení neodpovídá";
+  zrusit.hidden = false;
+  zrusit.disabled = false;
+  zrusit.textContent = "Zrušit";
+  potvrdit.hidden = false;
+  potvrdit.disabled = true;
+  modal.hidden = false;
+
+  let ukonceno = false;
+
+  return await new Promise((resolve) => {
+    const uklid = () => {
+      ukonceno = true;
+      zrusit.removeEventListener(
+        "click",
+        zruseno
+      );
+      potvrdit.removeEventListener(
+        "click",
+        potvrzeno
+      );
+    };
+
+    const dokoncit = (vysledek) => {
+      if (ukonceno) {
+        return;
+      }
+
+      uklid();
+      resolve(vysledek);
+    };
+
+    const zruseno = () => {
+      skryjEditorHandoffModal();
+      dokoncit({
+        ok: false,
+        reason: "cancelled"
+      });
+    };
+
+    const potvrzeno = () => {
+      if (potvrdit.disabled) {
+        return;
+      }
+
+      dokoncit({
+        ok: true,
+        force: true
+      });
+    };
+
+    zrusit.addEventListener(
+      "click",
+      zruseno
+    );
+
+    potvrdit.addEventListener(
+      "click",
+      potvrzeno
+    );
+
+    const kontroluj = async () => {
+      while (!ukonceno) {
+        const row =
+          await ziskejServerovouEditorSession(
+            noteId
+          );
+
+        if (ukonceno) {
+          return;
+        }
+
+        if (!row) {
+          const claim = await claimEditorSession(
+            noteId,
+            novaSessionId
+          );
+
+          if (claim?.acquired === true) {
+            dokoncit({
+              ok: true,
+              acquired: true
+            });
+            return;
+          }
+        } else if (
+          row.owner_device_id ===
+            ziskejDeviceIdEditoru() &&
+          row.owner_session_id === novaSessionId
+        ) {
+          dokoncit({
+            ok: true,
+            acquired: true
+          });
+          return;
+        } else {
+          const leaseDo = Date.parse(
+            row.lease_until
+          );
+          const zbyvaMs = Number.isFinite(leaseDo)
+            ? leaseDo - Date.now()
+            : EDITOR_LEASE_SECONDS * 1000;
+
+          if (zbyvaMs <= 0) {
+            zprava.textContent =
+              "Druhé zařízení už neobnovuje ochranný zámek. Můžeš přesto převzít poslední bezpečně synchronizovanou verzi. Neuložené změny, které zůstaly jen na druhém zařízení, se nepřevezmou.";
+            potvrdit.disabled = false;
+            potvrdit.textContent =
+              "Přesto převzít";
+          } else {
+            zprava.textContent =
+              `Druhé zařízení zatím neodpovědělo. Kvůli ochraně neuložených změn bude možné převzít poslední uloženou verzi za ${formatujZbyvajiciCasEditoru(zbyvaMs)}. Pokud se původní zařízení znovu ozve, tento čas se může prodloužit.`;
+            potvrdit.disabled = true;
+            potvrdit.textContent =
+              `Přesto převzít za ${formatujZbyvajiciCasEditoru(zbyvaMs)}`;
+          }
+        }
+
+        await new Promise((resolveCekani) =>
+          setTimeout(resolveCekani, 750)
+        );
+      }
+    };
+
+    kontroluj().catch((error) => {
+      console.warn(
+        "Čekání na nouzové převzetí selhalo:",
+        error
+      );
+
+      if (!ukonceno) {
+        zprava.textContent =
+          "Nepodařilo se ověřit stav druhého zařízení. Zkontroluj připojení a zkus poznámku otevřít znovu.";
+        potvrdit.disabled = true;
+        potvrdit.textContent =
+          "Přesto převzít";
+      }
+    });
+  });
 }
 
 async function pozadejOPredaniEditoru(
@@ -1127,6 +1338,11 @@ async function cekejNaPrevzetiEditoru({
     Date.now() - start <
     EDITOR_HANDOFF_TIMEOUT_MS
   ) {
+    aktualizujCekaniNaBeznePredani(
+      EDITOR_HANDOFF_TIMEOUT_MS -
+        (Date.now() - start)
+    );
+
     const row =
       await ziskejServerovouEditorSession(
         noteId
@@ -1433,6 +1649,50 @@ async function pripravOtevreniEditoru(noteId) {
       });
 
     if (prevzeti?.ok !== true) {
+      if (prevzeti?.reason === "timeout") {
+        const nouzove =
+          await cekejNaMoznostNucenehoPrevzeti(
+            noteId,
+            novaSessionId
+          );
+
+        if (nouzove?.acquired === true) {
+          await aktivujVzdalenyEditorSession(
+            noteId,
+            novaSessionId
+          );
+
+          const synchronizovano =
+            await window.LubaNoteSync
+              ?.synchronizujPoznamkyTed?.(
+                noteId
+              );
+
+          if (synchronizovano !== true) {
+            await uvolniEditorPoznamky(noteId);
+            skryjEditorHandoffModal();
+            await zobrazEditorHandoffInfo(
+              "Synchronizace se nezdařila",
+              "Původní editor už nebyl aktivní, ale toto zařízení nedokázalo stáhnout poslední potvrzenou cloudovou verzi. Zkus poznámku otevřít znovu."
+            );
+            return false;
+          }
+
+          skryjEditorHandoffModal();
+          return true;
+        }
+
+        if (nouzove?.force === true) {
+          return await zkusNucenePrevzetiStalehoEditoru(
+            noteId,
+            novaSessionId,
+            true
+          );
+        }
+
+        return false;
+      }
+
       skryjEditorHandoffModal();
 
       await zobrazEditorHandoffInfo(
@@ -1440,7 +1700,7 @@ async function pripravOtevreniEditoru(noteId) {
         prevzeti?.reason ===
           "remote_save_failed"
           ? "Druhé zařízení poznámku nezavřelo, protože se mu nepodařilo bezpečně dokončit synchronizaci."
-          : "Druhé zařízení nepotvrdilo bezpečné uložení a zavření včas. Poznámka zde proto nebyla otevřena."
+          : "Předání bylo přerušeno. Poznámka zde proto nebyla otevřena."
       );
 
       return false;
