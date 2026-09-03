@@ -1979,6 +1979,53 @@ async function disableSelectedNoteReminder(entry) {
 }
 
 
+function najdiPlannedLinkVHtml(
+  sourceNote,
+  plannedItemId
+) {
+  if (!sourceNote?.richContent || !plannedItemId) {
+    return null;
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = sourceNote.richContent;
+
+  return template.content.querySelector(
+    `[data-planned-item-id="${plannedItemId}"]`
+  );
+}
+
+
+function ziskejBezpecnyTypPlanovanePolozky(
+  item,
+  sourceNote
+) {
+  if (!item) {
+    return "note";
+  }
+
+  /*
+   * Stabilní vazba na konkrétní TODO má přednost před historickým
+   * sourceType. Starší synchronizovaná data totiž mohou mít sourceType
+   * chybějící nebo chybně "note".
+   */
+  if (item.sourceTodoId) {
+    return "todo";
+  }
+
+  /*
+   * Backlink data-planned-item-id je nejsilnější důkaz, že Planner
+   * položka vznikla z označeného textu. Díky tomu nikdy nesmažeme ani
+   * nedokončíme celou zdrojovou poznámku jen kvůli starému sourceType.
+   */
+  if (najdiPlannedLinkVHtml(sourceNote, item.id)) {
+    return "selection";
+  }
+
+  return item.sourceType || "note";
+}
+
+
 function updatePlannedLinkHtml(
   sourceNote,
   plannedItemId,
@@ -2038,8 +2085,31 @@ async function completeSelectedPlannedReminder() {
     "planned"
   );
 
+  const tasks = loadTask();
+  const noteIndex = tasks.findIndex(
+    (task) => task.id === item.sourceNoteId
+  );
+
+  let sourceNote = null;
+
+  if (noteIndex !== -1) {
+    sourceNote = tasks[noteIndex];
+  }
+
+  /*
+   * Typ úkolu neurčujeme jen podle historického sourceType. Pokud má
+   * položka konkrétní TODO ID nebo backlink v rich-textu, jde bezpečně
+   * poznat její skutečný původ i u starších / neúplných dat.
+   */
+  const bezpecnySourceType =
+    ziskejBezpecnyTypPlanovanePolozky(
+      item,
+      sourceNote
+    );
+
   const completedItem = {
     ...item,
+    sourceType: bezpecnySourceType,
     completed: true,
     completedAt: new Date().toISOString()
   };
@@ -2061,17 +2131,8 @@ async function completeSelectedPlannedReminder() {
     )
   );
 
-  const tasks = loadTask();
-  const noteIndex = tasks.findIndex(
-    (task) => task.id === item.sourceNoteId
-  );
-
-  let sourceNote = null;
-
-  if (noteIndex !== -1) {
-    sourceNote = tasks[noteIndex];
-
-    if (item.sourceType === "note") {
+  if (sourceNote) {
+    if (bezpecnySourceType === "note") {
       sourceNote.completed = true;
       sourceNote.reminder = false;
 
@@ -2083,7 +2144,7 @@ async function completeSelectedPlannedReminder() {
     }
 
     if (
-      item.sourceType === "todo" &&
+      bezpecnySourceType === "todo" &&
       item.sourceTodoId
     ) {
       sourceNote.todos = Array.isArray(sourceNote.todos)
@@ -2121,7 +2182,7 @@ async function completeSelectedPlannedReminder() {
       sourceNote.plannedItems.push(completedItem);
     }
 
-    if (item.sourceType === "selection") {
+    if (bezpecnySourceType === "selection") {
       updatePlannedLinkHtml(
         sourceNote,
         item.id,
@@ -2155,6 +2216,7 @@ async function completeSelectedPlannedReminder() {
     ukonciCekani();
 
     if (
+      bezpecnySourceType === "selection" &&
       typeof modalRichText !== "undefined" &&
       (
         (
@@ -2234,13 +2296,16 @@ async function removeSelectedPlannedReminder(entry) {
           )
         : [];
 
-    if (item.sourceType === "selection") {
-      updatePlannedLinkHtml(
-        sourceNote,
-        item.id,
-        "remove"
-      );
-    }
+    /*
+     * Odebrání odkazu z rich-textu je bezpečný no-op, pokud žádný
+     * backlink neexistuje. Voláme ho proto vždy – opraví i staré
+     * Planner položky, kterým chybí sourceType="selection".
+     */
+    updatePlannedLinkHtml(
+      sourceNote,
+      item.id,
+      "remove"
+    );
 
     sourceNote.updatedAt =
       new Date().toISOString();
@@ -2339,13 +2404,14 @@ async function deleteSelectedReminder() {
     return;
   }
 
-  if (
-    entry.kind === "planned" &&
-    (
-      entry.sourceType === "selection" ||
-      entry.sourceType === "todo"
-    )
-  ) {
+  /*
+   * Zásadní bezpečnostní pravidlo:
+   * položka kind="planned" je VŽDY samostatný Planner úkol. Tlačítko
+   * Smazat v Připomínkách proto nikdy nesmí smazat její zdrojovou kartu,
+   * ani když stará synchronizovaná data nemají sourceType nebo ho mají
+   * chybně jako "note".
+   */
+  if (entry.kind === "planned") {
     zapocitejPouzitiTlacitkaPripominky(
       "delete",
       "planned"
@@ -2353,19 +2419,14 @@ async function deleteSelectedReminder() {
 
     await removeSelectedPlannedReminder(entry);
   } else {
-    const noteId =
-      entry.kind === "planned"
-        ? entry.sourceNoteId
-        : entry.id;
-
     zapocitejPouzitiTlacitkaPripominky(
       "delete",
-      entry.kind === "planned"
-        ? "planned"
-        : "note"
+      "note"
     );
 
-    await smazCelouPoznamkuZPripominek(noteId);
+    await smazCelouPoznamkuZPripominek(
+      entry.id
+    );
   }
 
   if (typeof renderCalendar === "function") {
