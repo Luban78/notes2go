@@ -24,6 +24,22 @@
   document.getElementById(
     "openReminderDelaySettingsButton"
   );
+
+  const openOverdueRetentionSettingsButton =
+    document.getElementById(
+      "openOverdueRetentionSettingsButton"
+    );
+
+  const overdueRetentionValue =
+    document.getElementById(
+      "overdueRetentionValue"
+    );
+
+  const REMINDER_OVERDUE_RETENTION_KEY =
+    "reminderOverdueRetentionDays";
+
+  const REMINDER_OVERDUE_RETENTION_CONFIRMED_KEY =
+    "reminderOverdueRetentionConfirmed";
   
   const settingsModal =
     document.getElementById("settingsModal");
@@ -105,6 +121,123 @@ const motivy = nactenaTemata.map(tema => ({
     document.body.classList.add(`theme-${theme}`);
   }
 }
+
+  function prelozNastaveni(klic, vychozi, parametry = {}) {
+    return (
+      window.LubaNoteI18n?.t?.(
+        klic,
+        vychozi,
+        parametry
+      ) || vychozi
+    );
+  }
+
+  function ziskejPopisekRetence(hodnota) {
+    if (hodnota === "never") {
+      return prelozNastaveni(
+        "settings.overdueNever",
+        "Nikdy"
+      );
+    }
+
+    const dny = Number(hodnota) || 30;
+
+    return prelozNastaveni(
+      "settings.overdueDays",
+      `${dny} dní`,
+      { count: dny }
+    );
+  }
+
+  function nastavPopisekRetence() {
+    if (!overdueRetentionValue) {
+      return;
+    }
+
+    const hodnota =
+      localStorage.getItem(
+        REMINDER_OVERDUE_RETENTION_KEY
+      ) || "30";
+
+    const potvrzeno =
+      localStorage.getItem(
+        REMINDER_OVERDUE_RETENTION_CONFIRMED_KEY
+      ) === "true";
+
+    const zaklad = ziskejPopisekRetence(hodnota);
+
+    overdueRetentionValue.textContent =
+      potvrzeno
+        ? zaklad
+        : `${zaklad} (${prelozNastaveni(
+            "settings.overdueConfirm",
+            "potvrdit"
+          )})`;
+  }
+
+  function otevriNastaveniRetencePoTerminu() {
+    const hodnota =
+      localStorage.getItem(
+        REMINDER_OVERDUE_RETENTION_KEY
+      ) || "30";
+
+    const moznosti = [
+      { hodnota: "never", popisek: ziskejPopisekRetence("never") },
+      { hodnota: "7", popisek: ziskejPopisekRetence("7") },
+      { hodnota: "14", popisek: ziskejPopisekRetence("14") },
+      { hodnota: "30", popisek: ziskejPopisekRetence("30") },
+      { hodnota: "60", popisek: ziskejPopisekRetence("60") },
+      { hodnota: "90", popisek: ziskejPopisekRetence("90") }
+    ];
+
+    otevriNastavovaciModal({
+      nadpis: prelozNastaveni(
+        "settings.overdueRetention",
+        "Mazat po termínu"
+      ),
+      polozky: [
+        {
+          klic: "retence",
+          popisek: prelozNastaveni(
+            "settings.overdueRetention",
+            "Mazat po termínu"
+          ),
+          hodnota,
+          zobrazeni: ziskejPopisekRetence(hodnota),
+          moznosti
+        }
+      ],
+      poUlozeni: (hodnoty) => {
+        const novaHodnota =
+          hodnoty?.retence || "30";
+
+        localStorage.setItem(
+          REMINDER_OVERDUE_RETENTION_KEY,
+          novaHodnota
+        );
+
+        localStorage.setItem(
+          REMINDER_OVERDUE_RETENTION_CONFIRMED_KEY,
+          "true"
+        );
+
+        nastavPopisekRetence();
+
+        window.LubaNoteReminders
+          ?.vycistiStarePoTerminu?.({
+            vynutit: true
+          });
+      }
+    });
+  }
+
+  nastavPopisekRetence();
+
+  openOverdueRetentionSettingsButton
+    ?.addEventListener(
+      "click",
+      otevriNastaveniRetencePoTerminu
+    );
 
 openReminderDelaySettingsButton?.addEventListener(
   "click",
@@ -426,6 +559,8 @@ openReminderDelaySettingsButton?.addEventListener(
         window.LubaNoteIcons?.ziskejStylIkon?.() ||
         "auto"
       );
+
+      nastavPopisekRetence();
     }
   );
 

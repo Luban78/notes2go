@@ -17,6 +17,7 @@ const addTodoButton =
 let activeTodos = [];
 let activeTodoEditorItem = null;
 let selectedTodoId = null;
+let naplanovaneTodoIds = new Set();
 
 
 /* ========================================
@@ -389,13 +390,25 @@ function focusTodo(index, cursorPosition = null) {
 function resetTodos() {
   activeTodos = [];
   selectedTodoId = null;
+  naplanovaneTodoIds = new Set();
   renderTodos();
 }
 
-function loadTodos(todos) {
+function loadTodos(todos, plannedItems = []) {
   activeTodos = Array.isArray(todos)
     ? todos.map(todo => normalizeTodo(todo))
     : [];
+
+  naplanovaneTodoIds = new Set(
+    (Array.isArray(plannedItems) ? plannedItems : [])
+      .filter(
+        item =>
+          item?.completed !== true &&
+          typeof item?.sourceTodoId === "string" &&
+          item.sourceTodoId
+      )
+      .map(item => item.sourceTodoId)
+  );
 
   selectedTodoId = null;
 
@@ -1962,6 +1975,10 @@ function createTodoItem(todo, index) {
     todoItem.classList.add("todoCompleted");
   }
 
+  if (naplanovaneTodoIds.has(todo.id)) {
+    todoItem.classList.add("todoPlanned");
+  }
+
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = todo.completed === true;
@@ -2725,6 +2742,30 @@ function renderTodos() {
 
 
 
+function nastavTodoJakoNaplanovane(
+  todoId,
+  naplanovano = true
+) {
+  if (!todoId) {
+    return false;
+  }
+
+  if (naplanovano) {
+    naplanovaneTodoIds.add(todoId);
+  } else {
+    naplanovaneTodoIds.delete(todoId);
+  }
+
+  const todoItem = getTodoItemElementById(todoId);
+  todoItem?.classList.toggle(
+    "todoPlanned",
+    naplanovano === true
+  );
+
+  return true;
+}
+
+
 /* ========================================
    VEŘEJNÉ API – BARVA A PLÁNOVÁNÍ TODO
 ======================================== */
@@ -2753,5 +2794,7 @@ window.LubaNoteTodos = {
     setTodoCompletedById,
 
   zobrazTodoPodleId:
-    scrollTodoIntoView
+    scrollTodoIntoView,
+
+  nastavTodoJakoNaplanovane
 };

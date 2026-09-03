@@ -270,6 +270,11 @@ let reminderEnabled = false;
 let favoriteEnabled = false;
 let secretTaskEnabled = false;
 
+/* Čekající bezpečné první uložení nové poznámky vyvolané Plannerem.
+   Používá se jen v odemčeném Secret režimu, kde musí zůstat zachována
+   volba Uložit jako tajnou / Uložit normálně. */
+let cekajiciUlozeniNoveProPlanner = null;
+
 let puvodniOtiskEditoru = null;
 
 function vytvorOtiskEditoru() {
@@ -855,9 +860,84 @@ function zobrazZpravuAplikace(
 }
 
 
+async function ulozNovouPoznamkuProPlanovani() {
+  const jeNovaPoznamka =
+    activeTaskId === null &&
+    activeTaskIndex === null;
+
+  if (!jeNovaPoznamka) {
+    return {
+      ok: true,
+      noteId: activeTaskId || null
+    };
+  }
+
+  const jeSecretKontext =
+    document.body.classList.contains(
+      "secretModeActive"
+    ) && secretTaskEnabled === true;
+
+  if (!jeSecretKontext) {
+    return await ulozAZavriEditor(
+      "normal",
+      {
+        nezavirat: true,
+        tichyRezim: true
+      }
+    );
+  }
+
+  if (cekajiciUlozeniNoveProPlanner) {
+    return await cekajiciUlozeniNoveProPlanner.promise;
+  }
+
+  let vyresit = null;
+
+  const promise = new Promise((resolve) => {
+    vyresit = resolve;
+  });
+
+  cekajiciUlozeniNoveProPlanner = {
+    promise,
+    vyresit
+  };
+
+  resetujAkceZpravyAplikace();
+
+  appMessageTitle.textContent =
+    "Jak uložit poznámku?";
+
+  appMessageText.textContent =
+    "Vyber způsob uložení nové poznámky. Po uložení bude plánování pokračovat.";
+
+  appMessageSecretButton.hidden = false;
+  appMessageNormalButton.hidden = false;
+  appMessageSaveButton.hidden = true;
+  appMessageDiscardButton.hidden = true;
+  closeAppMessageButton.textContent = "Zrušit";
+  appMessageModal.hidden = false;
+
+  return await promise;
+}
+
+window.ulozNovouPoznamkuProPlanovani =
+  ulozNovouPoznamkuProPlanovani;
+
+
 closeAppMessageButton?.addEventListener(
   "click",
   () => {
+    if (cekajiciUlozeniNoveProPlanner) {
+      const cekajici =
+        cekajiciUlozeniNoveProPlanner;
+
+      cekajiciUlozeniNoveProPlanner = null;
+      cekajici.vyresit?.({
+        ok: false,
+        reason: "cancelled"
+      });
+    }
+
     appMessageModal.hidden = true;
     resetujAkceZpravyAplikace();
   }
@@ -3012,6 +3092,24 @@ appMessageNormalButton?.addEventListener(
     appMessageNormalButton.hidden = true;
     
     closeAppMessageButton.textContent = "OK";
+
+    if (cekajiciUlozeniNoveProPlanner) {
+      const cekajici =
+        cekajiciUlozeniNoveProPlanner;
+
+      cekajiciUlozeniNoveProPlanner = null;
+
+      const vysledek = await ulozAZavriEditor(
+        "normal",
+        {
+          nezavirat: true,
+          tichyRezim: true
+        }
+      );
+
+      cekajici.vyresit?.(vysledek);
+      return;
+    }
     
     await ulozAZavriEditor("normal");
   }
@@ -3238,7 +3336,7 @@ async function openTaskEditorById(taskId) {
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
   
-  loadTodos(currentTask.todos);
+  loadTodos(currentTask.todos, currentTask.plannedItems);
 
   /*
    * Interní link drží cílovou poznámku podle stabilního ID.
@@ -4931,6 +5029,24 @@ appMessageSecretButton?.addEventListener(
     appMessageNormalButton.hidden = true;
     
     closeAppMessageButton.textContent = "OK";
+
+    if (cekajiciUlozeniNoveProPlanner) {
+      const cekajici =
+        cekajiciUlozeniNoveProPlanner;
+
+      cekajiciUlozeniNoveProPlanner = null;
+
+      const vysledek = await ulozAZavriEditor(
+        "secret",
+        {
+          nezavirat: true,
+          tichyRezim: true
+        }
+      );
+
+      cekajici.vyresit?.(vysledek);
+      return;
+    }
     
     await ulozAZavriEditor("secret");
   }

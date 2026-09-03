@@ -1836,6 +1836,17 @@ html {
 }
 
 
+/* Naplánovaný TODO řádek – stejná akcentní vazba jako plánovaný text. */
+.todoItem.todoPlanned .todoTextValue,
+.todoItem.todoPlanned .todoTextInput,
+.todoItem.todoPlanned .todoRichTextInput {
+  text-decoration-line: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+
 /* ========================================
    TODO – jednotný MOVE MODE + drag & drop
    Stejný princip jako nový bullet editor

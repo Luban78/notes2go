@@ -673,6 +673,18 @@ async function saveCurrentPlannedItem() {
   }
 
   ukonciCekani();
+
+  if (
+    plannerSourceType === "todo" &&
+    plannerSourceTodoId
+  ) {
+    window.LubaNoteTodos
+      ?.nastavTodoJakoNaplanovane?.(
+        plannerSourceTodoId,
+        true
+      );
+  }
+
   closePlanner();
 
   if (typeof renderRemindersScreen === "function") {
@@ -803,9 +815,124 @@ function najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks) {
 }
 
 
+async function zajistiUlozenouZdrojovouPoznamkuProPlanner() {
+  let tasks = loadTask();
+  let sourceNote =
+    najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
+
+  if (sourceNote?.id) {
+    return { tasks, sourceNote };
+  }
+
+  /* Velmi stará uložená poznámka může ještě existovat bez ID.
+     Nebereme ji jako novou – pouze jí doplníme stabilní identitu. */
+  if (sourceNote && !sourceNote.id) {
+    sourceNote.id =
+      typeof vytvorStabilniIdStarePoznamky === "function"
+        ? vytvorStabilniIdStarePoznamky(sourceNote)
+        : crypto.randomUUID();
+
+    sourceNote.updatedAt = new Date().toISOString();
+
+    if (
+      window.LubaNoteSync
+        ?.provedLokalniZmenuASynchronizuj
+    ) {
+      await window.LubaNoteSync
+        .provedLokalniZmenuASynchronizuj(
+          () => saveAllTasks(tasks)
+        );
+    } else {
+      await saveAllTasks(tasks);
+    }
+
+    const taskModal = document.getElementById("taskModal");
+    if (taskModal) {
+      taskModal.dataset.taskId = sourceNote.id;
+    }
+
+    if (typeof activeTaskId !== "undefined") {
+      activeTaskId = sourceNote.id;
+    }
+
+    return { tasks, sourceNote };
+  }
+
+  /*
+   * Nová poznámka dosud není v localStorage, takže Planner nemá
+   * stabilní sourceNoteId. Plánování je samo o sobě vědomá akce,
+   * proto novou poznámku nejdřív bezpečně uložíme, ale editor
+   * necháme otevřený. V odemčeném Secret režimu se zachová stávající
+   * volba „Uložit jako tajnou / Uložit normálně“ a po ní plánování
+   * automaticky pokračuje.
+   */
+  if (typeof ulozAZavriEditor !== "function") {
+    return null;
+  }
+
+  const vysledek =
+    typeof window.ulozNovouPoznamkuProPlanovani === "function"
+      ? await window.ulozNovouPoznamkuProPlanovani()
+      : await ulozAZavriEditor(
+          "normal",
+          {
+            nezavirat: true,
+            tichyRezim: true
+          }
+        );
+
+  if (vysledek?.ok !== true || !vysledek.noteId) {
+    return null;
+  }
+
+  tasks = loadTask();
+  sourceNote = tasks.find(
+    task => task?.id === vysledek.noteId
+  ) || null;
+
+  if (!sourceNote) {
+    return null;
+  }
+
+  /* Nově uložená poznámka se od této chvíle chová jako běžně
+     otevřená uložená poznámka – včetně handoff ochrany. */
+  if (
+    window.LubaNoteEditorHandoff
+      ?.pripravOtevreniEditoru
+  ) {
+    const povoleno =
+      await window.LubaNoteEditorHandoff
+        .pripravOtevreniEditoru(sourceNote.id);
+
+    if (povoleno !== true) {
+      return null;
+    }
+  }
+
+  if (typeof zahajEditorSession === "function") {
+    zahajEditorSession(sourceNote.id);
+  } else if (typeof activeTaskId !== "undefined") {
+    activeTaskId = sourceNote.id;
+  }
+
+  const taskModal = document.getElementById("taskModal");
+  if (taskModal) {
+    taskModal.dataset.taskId = sourceNote.id;
+  }
+
+  if (typeof activeTaskIndex !== "undefined") {
+    activeTaskIndex = tasks.findIndex(
+      task => task?.id === sourceNote.id
+    );
+  }
+
+  return { tasks, sourceNote };
+}
+
+
 planSelectionButton.addEventListener(
   "click",
-  () => {
+  async () => {
     const todoModeActive =
       window.LubaNoteTodos
         ?.jeTodoRezimAktivni?.() === true;
@@ -825,13 +952,21 @@ planSelectionButton.addEventListener(
         return;
       }
 
-      const tasks = loadTask();
-      const sourceNote =
+      let tasks = loadTask();
+      let sourceNote =
         najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
 
       if (!sourceNote?.id) {
+        const zajisteno =
+          await zajistiUlozenouZdrojovouPoznamkuProPlanner();
+
+        tasks = zajisteno?.tasks || loadTask();
+        sourceNote = zajisteno?.sourceNote || null;
+      }
+
+      if (!sourceNote?.id) {
         console.error(
-          "Zdrojová poznámka TODO nebyla nalezena."
+          "Zdrojová poznámka TODO nebyla nalezena ani po bezpečném uložení."
         );
         return;
       }
@@ -895,59 +1030,21 @@ planSelectionButton.addEventListener(
       return;
     }
 
-    const tasks = loadTask();
+    let tasks = loadTask();
+    let sourceNote =
+      najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
 
-    /*
-     * Aktivní poznámku hledáme primárně podle stabilního ID.
-     * Pokud ale ID po předchozí asynchronní akci už nesedí,
-     * bezpečně použijeme aktuální index otevřeného editoru.
-     * Tím plánování nespadne jen kvůli zastaralému activeTaskId.
-     */
-    let sourceNote = null;
+    if (!sourceNote?.id) {
+      const zajisteno =
+        await zajistiUlozenouZdrojovouPoznamkuProPlanner();
 
-    /*
-     * Nejspolehlivější identita otevřené poznámky je uložená
-     * přímo na editoru. Díky tomu plánování přežije i situaci,
-     * kdy jiný asynchronní kód mezitím změní activeTaskId/index.
-     */
-    const editorTaskId =
-      document.getElementById("taskModal")?.dataset.taskId || null;
-
-    const kandidatiId = [
-      editorTaskId,
-      (typeof activeTaskId !== "undefined" ? activeTaskId : null)
-    ].filter(Boolean);
-
-    for (const taskId of kandidatiId) {
-      sourceNote = tasks.find(
-        (task) => task?.id === taskId
-      );
-
-      if (sourceNote) {
-        break;
-      }
-    }
-
-    if (
-      !sourceNote &&
-      typeof activeTaskIndex !== "undefined" &&
-      Number.isInteger(activeTaskIndex) &&
-      activeTaskIndex >= 0
-    ) {
-      sourceNote = tasks[activeTaskIndex] || null;
+      tasks = zajisteno?.tasks || loadTask();
+      sourceNote = zajisteno?.sourceNote || null;
     }
 
     if (!sourceNote) {
       console.error(
-        "Zdrojová poznámka nebyla nalezena.",
-        {
-          editorTaskId,
-          activeTaskId:
-            typeof activeTaskId !== "undefined" ? activeTaskId : null,
-          activeTaskIndex:
-            typeof activeTaskIndex !== "undefined" ? activeTaskIndex : null,
-          taskCount: tasks.length
-        }
+        "Zdrojová poznámka nebyla nalezena ani po bezpečném uložení."
       );
       return;
     }

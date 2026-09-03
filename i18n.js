@@ -129,6 +129,7 @@
     ["#settingsModal .settingsSection:nth-of-type(2) > h3", "settings.reminders"],
     ["#settingsModal .themeSetting:has(#openReminderDelaySettingsButton) > span:first-child", "settings.quickDelay"],
     ["#openReminderDelaySettingsButton span:first-child", "settings.configure"],
+    ["#overdueRetentionSettingLabel", "settings.overdueRetention"],
     ["#dataSettingsSection h3", "settings.data"],
     ["#settingsExportButton", "settings.export"],
     ["#settingsImportButton", "settings.import"],
