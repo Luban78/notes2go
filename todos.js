@@ -2184,10 +2184,30 @@ if (todo.html) {
 
 
   richText.addEventListener("blur", () => {
-    leaveTodoEditMode(
-      richText,
-      textDisplay
-    );
+    /*
+     * Obrázek uvnitř TODO je contenteditable=false a jeho ovládací
+     * tlačítka jsou samostatné focusovatelné prvky. Při tapnutí na
+     * obrázek / ⚙ / ✕ proto může blur proběhnout i přesto, že uživatel
+     * stále pracuje uvnitř stejného TODO. Staré okamžité zavření editace
+     * v takové chvíli schovalo obrázek i ovládání dřív, než mohl click
+     * doběhnout. Počkáme jeden frame a editor zavřeme jen tehdy, když
+     * focus skutečně odešel mimo jeho obsah.
+     */
+    requestAnimationFrame(() => {
+      const aktivniPrvek = document.activeElement;
+
+      if (
+        aktivniPrvek &&
+        richText.contains(aktivniPrvek)
+      ) {
+        return;
+      }
+
+      leaveTodoEditMode(
+        richText,
+        textDisplay
+      );
+    });
   });
 
 

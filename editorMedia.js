@@ -4227,6 +4227,64 @@
   document.addEventListener(
     "click",
     (event) => {
+      /*
+       * TODO má v klidovém stavu čtecí kopii .todoTextValue a vlastní
+       * contenteditable se zobrazí až po prvním tapnutí. Když uživatel
+       * tapne přímo na obrázek v čtecí kopii, todos.js během stejné
+       * události otevře TODO editor. Po jednom frame proto označíme
+       * odpovídající obrázek i v právě otevřeném editoru. Výsledek je
+       * stejný jako v bullet režimu: jediný tap na obrázek ukáže ⚙ / ✕.
+       */
+      const obrazekVZobrazeni = event.target.closest?.(
+        ".todoTextValue .lubaNoteImage img"
+      );
+
+      if (obrazekVZobrazeni) {
+        const todoItem = obrazekVZobrazeni.closest(
+          ".todoItem"
+        );
+
+        const obrazkyVZobrazeni = todoItem
+          ? [
+              ...todoItem.querySelectorAll(
+                ".todoTextValue .lubaNoteImage img"
+              )
+            ]
+          : [];
+
+        const indexObrazku =
+          obrazkyVZobrazeni.indexOf(
+            obrazekVZobrazeni
+          );
+
+        requestAnimationFrame(() => {
+          const editor = todoItem?.querySelector?.(
+            ".todoRichTextInput"
+          );
+
+          if (
+            !editor ||
+            editor.hidden ||
+            indexObrazku < 0
+          ) {
+            return;
+          }
+
+          const obrazekVEditoru =
+            editor.querySelectorAll(
+              ".lubaNoteImage img"
+            )[indexObrazku];
+
+          if (obrazekVEditoru) {
+            oznacObrazekProPresun(
+              obrazekVEditoru
+            );
+          }
+        });
+
+        return;
+      }
+
       const todoEditor = event.target.closest?.(
         ".todoRichTextInput"
       );

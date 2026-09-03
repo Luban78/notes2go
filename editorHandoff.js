@@ -271,7 +271,8 @@ function nastavEditorHandoffModal({
   nadpis,
   text,
   cekani = false,
-  pouzeOk = false
+  pouzeOk = false,
+  textPotvrdit = null
 }) {
   const modal = ziskejEditorHandoffModal();
   const title = modal.querySelector(
@@ -303,7 +304,10 @@ function nastavEditorHandoffModal({
     potvrdit.hidden = false;
     potvrdit.textContent = cekani
       ? "Probíhá předání…"
-      : "Uložit tam a převzít";
+      : (
+          textPotvrdit ||
+          "Uložit tam a převzít"
+        );
   }
 
   modal.hidden = false;
@@ -400,6 +404,68 @@ function zeptejSeNaPredaniEditoru() {
       zruseno,
       { once: true }
     );
+    potvrdit.addEventListener(
+      "click",
+      potvrzeno,
+      { once: true }
+    );
+  });
+}
+
+
+function zeptejSeNaNucenePrevzetiStalehoEditoru() {
+  return new Promise((resolve) => {
+    const modal = nastavEditorHandoffModal({
+      nadpis: "Druhé zařízení neodpovídá",
+      text:
+        "Původní editor už neobnovuje spojení. Můžeš převzít poslední verzi, která byla bezpečně synchronizovaná v Supabase. Neuložené změny, které zůstaly jen na druhém zařízení, se tím nepřevezmou.",
+      textPotvrdit:
+        "Převzít poslední uloženou verzi"
+    });
+
+    const zrusit = modal.querySelector(
+      "#editorHandoffCancelButton"
+    );
+    const potvrdit = modal.querySelector(
+      "#editorHandoffConfirmButton"
+    );
+
+    const uklid = () => {
+      zrusit.removeEventListener(
+        "click",
+        zruseno
+      );
+      potvrdit.removeEventListener(
+        "click",
+        potvrzeno
+      );
+    };
+
+    const zruseno = () => {
+      uklid();
+      skryjEditorHandoffModal();
+      resolve(false);
+    };
+
+    const potvrzeno = () => {
+      uklid();
+
+      nastavEditorHandoffModal({
+        nadpis: "Přebírám poslední uloženou verzi",
+        text:
+          "Ověřuji, že původní editor už opravdu neodpovídá, a stahuji poslední bezpečně synchronizovaný stav…",
+        cekani: true
+      });
+
+      resolve(true);
+    };
+
+    zrusit.addEventListener(
+      "click",
+      zruseno,
+      { once: true }
+    );
+
     potvrdit.addEventListener(
       "click",
       potvrzeno,
@@ -677,6 +743,110 @@ async function claimEditorSession(
   return data || {
     acquired: false
   };
+}
+
+
+async function vynutPrevzetiStaleEditorSession(
+  noteId,
+  sessionId
+) {
+  const { data, error } =
+    await supabaseClient.rpc(
+      "lubanote_force_claim_stale_note_editor",
+      {
+        p_note_id: noteId,
+        p_device_id: ziskejDeviceIdEditoru(),
+        p_session_id: sessionId,
+        p_lease_seconds:
+          EDITOR_LEASE_SECONDS
+      }
+    );
+
+  if (error) {
+    console.error(
+      "Editor stale force-claim error:",
+      error.message
+    );
+
+    return {
+      acquired: false,
+      error: true
+    };
+  }
+
+  return data || {
+    acquired: false
+  };
+}
+
+async function zkusNucenePrevzetiStalehoEditoru(
+  noteId,
+  novaSessionId
+) {
+  const chcePrevzit =
+    await zeptejSeNaNucenePrevzetiStalehoEditoru();
+
+  if (!chcePrevzit) {
+    return false;
+  }
+
+  const prevzeti =
+    await vynutPrevzetiStaleEditorSession(
+      noteId,
+      novaSessionId
+    );
+
+  if (prevzeti?.acquired !== true) {
+    skryjEditorHandoffModal();
+
+    if (prevzeti?.reason === "owner_active") {
+      await zobrazEditorHandoffInfo(
+        "Druhé zařízení znovu odpovídá",
+        "Původní editor mezitím obnovil spojení, takže LubaNote jeho aktivní práci nepřevzalo. Otevři poznámku znovu a použij běžné bezpečné předání."
+      );
+    } else {
+      await zobrazEditorHandoffInfo(
+        "Převzetí se nezdařilo",
+        "Nepodařilo se bezpečně převzít poslední uloženou verzi poznámky. Zkus to prosím znovu."
+      );
+    }
+
+    return false;
+  }
+
+  await aktivujVzdalenyEditorSession(
+    noteId,
+    novaSessionId
+  );
+
+  const synchronizovano =
+    await window.LubaNoteSync
+      ?.synchronizujPoznamkyTed?.(noteId);
+
+  if (synchronizovano !== true) {
+    await uvolniEditorPoznamky(noteId);
+    skryjEditorHandoffModal();
+
+    await zobrazEditorHandoffInfo(
+      "Synchronizace se nezdařila",
+      "Editor byl převzat, ale toto zařízení nedokázalo stáhnout poslední potvrzenou cloudovou verzi. Zkus poznámku otevřít znovu."
+    );
+
+    return false;
+  }
+
+  skryjEditorHandoffModal();
+
+  if (
+    typeof window.zobrazPotvrzeniAkce ===
+      "function"
+  ) {
+    window.zobrazPotvrzeniAkce(
+      "Převzata poslední uložená verze"
+    );
+  }
+
+  return true;
 }
 
 async function pozadejOPredaniEditoru(
@@ -1172,11 +1342,10 @@ async function pripravOtevreniEditoru(noteId) {
     }
 
     if (claim?.stale === true) {
-      await zobrazEditorHandoffInfo(
-        "Druhé zařízení neodpovídá",
-        "Poznámka byla otevřená na jiném zařízení, ale jeho editor už neobnovuje spojení. LubaNote ji z bezpečnostních důvodů automaticky nepřevzalo, aby se neztratily případné neuložené změny."
+      return await zkusNucenePrevzetiStalehoEditoru(
+        noteId,
+        novaSessionId
       );
-      return false;
     }
 
     const chcePrevzit =
@@ -1237,9 +1406,9 @@ async function pripravOtevreniEditoru(noteId) {
       skryjEditorHandoffModal();
 
       if (pozadavek?.reason === "owner_stale") {
-        await zobrazEditorHandoffInfo(
-          "Druhé zařízení neodpovídá",
-          "Bezpečné předání nebylo spuštěno, protože původní zařízení už neodpovídá."
+        return await zkusNucenePrevzetiStalehoEditoru(
+          noteId,
+          novaSessionId
         );
       } else if (pozadavek?.reason === "handoff_busy") {
         await zobrazEditorHandoffInfo(
