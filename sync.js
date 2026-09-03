@@ -2372,31 +2372,6 @@ async function syncNotes() {
 
     let localRegular = getLocalNotesForSync();
 
-    /*
-     * FÁZE B: trvalá upload fronta se musí umět obnovit i tehdy,
-     * když byla poznámka offline uložena a po návratu internetu už
-     * není potřeba měnit její textovou revizi. Proto při každém
-     * čerstvém notes syncu zkusíme dokončit stínové JPEG uploady
-     * podle aktuálních lokálních poznámek. Selhání Storage zde
-     * původní notes sync nezastaví.
-     */
-    if (
-      window.LubaNoteAttachmentsCloud
-        ?.zpracujStinovePrilohyPoznamekVCloudu
-    ) {
-      try {
-        await window.LubaNoteAttachmentsCloud
-          .zpracujStinovePrilohyPoznamekVCloudu(
-            localRegular
-          );
-      } catch (error) {
-        console.warn(
-          "LubaNote attachments: obnovení stínové upload fronty se dokončí později.",
-          error
-        );
-      }
-    }
-
     const localEncrypted =
       typeof nactiSifrovaneTajneZaznamy === "function"
         ? nactiSifrovaneTajneZaznamy()
@@ -2893,6 +2868,35 @@ async function startSync() {
   }
 
   nastavKoncovyStavSynchronizaceUI();
+
+  /*
+   * FÁZE B: obnova trvalé upload fronty je servisní úloha.
+   * NESMÍ blokovat první vykreslení aplikace ani splash screen.
+   *
+   * Bezpečné pořadí attachment -> revize poznámky zůstává zachováno
+   * přímo v uploadLocalNoteToSupabase(), kde se před serverovým
+   * zápisem konkrétní poznámky stále čeká na její stínové přílohy.
+   * Tohle je pouze dodatečné obnovení fronty po startu pro přílohy,
+   * které už nepotřebují novou textovou revizi poznámky.
+   */
+  if (
+    window.LubaNoteAttachmentsCloud
+      ?.zpracujStinovePrilohyPoznamekVCloudu
+  ) {
+    setTimeout(() => {
+      Promise.resolve(
+        window.LubaNoteAttachmentsCloud
+          .zpracujStinovePrilohyPoznamekVCloudu(
+            getLocalNotesForSync()
+          )
+      ).catch((error) => {
+        console.warn(
+          "LubaNote attachments: obnovení stínové upload fronty se dokončí později.",
+          error
+        );
+      });
+    }, 0);
+  }
 
   return true;
 }
