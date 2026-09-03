@@ -2381,7 +2381,7 @@ async function deleteSelectedReminder() {
 }
 
 
-function openPlannedSourceInEditor(itemId) {
+async function openPlannedSourceInEditor(itemId) {
   const item = getPlannedItemById(itemId);
 
   if (!item?.sourceNoteId) {
@@ -2392,7 +2392,15 @@ function openPlannedSourceInEditor(itemId) {
     return;
   }
 
-  openTaskEditorById(item.sourceNoteId);
+  await openTaskEditorById(item.sourceNoteId);
+
+  if (
+    document.getElementById("taskModal")
+      ?.dataset?.taskId !==
+      String(item.sourceNoteId)
+  ) {
+    return;
+  }
 
   if (item.sourceType === "todo") {
     setTimeout(() => {

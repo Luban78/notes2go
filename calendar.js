@@ -560,8 +560,16 @@ function renderCalendarItems(targetElement) {
 
     row.append(time, text);
 
-    row.addEventListener("click", () => {
-      openTaskEditorById(item.sourceNoteId);
+    row.addEventListener("click", async () => {
+      await openTaskEditorById(item.sourceNoteId);
+
+      if (
+        document.getElementById("taskModal")
+          ?.dataset?.taskId !==
+          String(item.sourceNoteId)
+      ) {
+        return;
+      }
 
       setTimeout(() => {
         const plannedLink =

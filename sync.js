@@ -2996,13 +2996,100 @@ async function spustStartSyncBezpecne() {
   }
 }
 
+async function synchronizujPoznamkyTed(
+  noteId = null
+) {
+  clearTimeout(
+    casovacSynchronizacePoLokalniZmene
+  );
+  casovacSynchronizacePoLokalniZmene = null;
+
+  try {
+    await frontaLokalnichZmen;
+  } catch {
+    // Čerstvý sync níže sám ověří konzistenci.
+  }
+
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  /*
+   * Pokud právě dobíhá starší sync/start-sync, nejdřív ho necháme
+   * skončit. Jinak by syncNotes() pouze vrátil jeho starý Promise a
+   * předání by mohlo chybně vyhodnotit starý snapshot jako finální.
+   */
+  if (probihajiciStartSync) {
+    try {
+      await probihajiciStartSync;
+    } catch {
+      // Potom stejně spustíme vlastní čerstvý notes sync.
+    }
+  }
+
+  if (probihajiciSync) {
+    try {
+      await probihajiciSync;
+    } catch {
+      // Potom stejně spustíme vlastní čerstvý notes sync.
+    }
+  }
+
+  try {
+    await frontaLokalnichZmen;
+  } catch {
+    // Další sync rozhodne podle revize lokálního stavu.
+  }
+
+  /*
+   * Dva pokusy pokryjí legitimní případ, kdy první čerstvý sync
+   * zruší souběžná lokální změna jiného modulu. Aktivní editor je
+   * během předání překrytý a už do něj uživatel dál nepíše.
+   */
+  for (let pokus = 0; pokus < 2; pokus += 1) {
+    if (!navigator.onLine) {
+      return false;
+    }
+
+    let vysledek = false;
+
+    try {
+      vysledek = await syncNotes();
+    } catch (error) {
+      console.warn(
+        "Potvrzovací synchronizace editoru selhala:",
+        error
+      );
+      vysledek = false;
+    }
+
+    if (
+      vysledek === true &&
+      (!noteId || !aktivniKonfliktySyncu.has(noteId))
+    ) {
+      return true;
+    }
+
+    try {
+      await frontaLokalnichZmen;
+    } catch {
+      // Druhý pokus použije aktuální stav.
+    }
+  }
+
+  return false;
+}
+
+
 window.LubaNoteSync = {
   spustBezpecne: spustStartSyncBezpecne,
+  ziskejDeviceId: getDeviceId,
   spustRychle: spustRychlySyncPoznamekBezpecne,
   naplanujPoLokalniZmene:
     naplanujSynchronizaciPoLokalniZmene,
   provedLokalniZmenuBezKolizeSeSync,
   provedLokalniZmenuASynchronizuj,
+  synchronizujPoznamkyTed,
   ziskejKonflikty: () =>
     Array.from(aktivniKonfliktySyncu.values()),
   ziskejCloudSyncMeta

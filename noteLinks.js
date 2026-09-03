@@ -992,7 +992,14 @@
        * Stejně jako běžný interní odkaz otevřeme novou poznámku
        * bez automatické klávesnice.
        */
-      otevriPoznamkuBezKlavesnice(novaPoznamka.id);
+      const otevreno =
+        await otevriPoznamkuBezKlavesnice(
+          novaPoznamka.id
+        );
+
+      if (!otevreno && zdrojoveId) {
+        historieInterniNavigace.pop();
+      }
     } catch (error) {
       console.error(
         "Vytvoření propojené poznámky selhalo:",
@@ -1606,7 +1613,7 @@
     }
   }
 
-  function otevriPoznamkuBezKlavesnice(ciloveId) {
+  async function otevriPoznamkuBezKlavesnice(ciloveId) {
     if (typeof openTaskEditorById !== "function") {
       console.warn(
         "Interní odkaz: openTaskEditorById není dostupné."
@@ -1614,9 +1621,28 @@
       return false;
     }
 
+    const predchoziAktivniCilId =
+      aktivniInterniCilId;
+
     aktivniInterniCilId = String(ciloveId);
     odfokusujEditorPredNavigaci();
-    openTaskEditorById(ciloveId);
+    await openTaskEditorById(ciloveId);
+
+    /*
+     * Předání editoru mezi zařízeními může otevření záměrně
+     * zastavit (uživatel dá Zrušit nebo bezpečný sync selže).
+     * Historii interních odkazů proto aktualizujeme až poté,
+     * co je cílová poznámka skutečně otevřená.
+     */
+    if (
+      document.getElementById("taskModal")
+        ?.dataset?.taskId !== String(ciloveId)
+    ) {
+      aktivniInterniCilId =
+        predchoziAktivniCilId;
+      aktualizujInterniNavrat();
+      return false;
+    }
 
     requestAnimationFrame(() => {
       odfokusujEditorPredNavigaci();
@@ -1629,12 +1655,24 @@
 
   async function pripravPrepnutiZAktualniPoznamky() {
     let jeEditorZmenen = true;
+    const puvodniId = ziskejAktivniPoznamkuId();
 
     if (typeof bylEditorZmenen === "function") {
       jeEditorZmenen = bylEditorZmenen();
     }
 
     if (!jeEditorZmenen) {
+      /*
+       * Při interním odkazu se stejný modal pouze přepíše obsahem
+       * jiné poznámky. Starou editor-session proto musíme explicitně
+       * uvolnit i tehdy, když nebylo co ukládat.
+       */
+      if (puvodniId) {
+        window.LubaNoteEditorHandoff
+          ?.uvolniEditorPoznamky?.(
+            puvodniId
+          );
+      }
       return true;
     }
 
@@ -1644,8 +1682,6 @@
       );
       return false;
     }
-
-    const puvodniId = ziskejAktivniPoznamkuId();
 
     await ulozAZavriEditor();
 
@@ -1724,7 +1760,14 @@
         });
       }
 
-      otevriPoznamkuBezKlavesnice(ciloveId);
+      const otevreno =
+        await otevriPoznamkuBezKlavesnice(
+          ciloveId
+        );
+
+      if (!otevreno && zdrojoveId) {
+        historieInterniNavigace.pop();
+      }
     } catch (error) {
       console.error(
         "Otevření interního odkazu selhalo:",
@@ -1778,7 +1821,15 @@
       }
 
       historieInterniNavigace.pop();
-      otevriPoznamkuBezKlavesnice(posledni.id);
+
+      const otevreno =
+        await otevriPoznamkuBezKlavesnice(
+          posledni.id
+        );
+
+      if (!otevreno) {
+        historieInterniNavigace.push(posledni);
+      }
     } catch (error) {
       console.error(
         "Návrat interní navigací selhal:",

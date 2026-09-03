@@ -158,6 +158,11 @@ confirmDeleteButton.addEventListener("click", async () => {
   deleteConfirmModal.hidden = true;
   selectedCardIndex = null;
   
+  const mazanyTaskId = activeTaskId;
+  uvolniVzdalenouEditorSession(
+    mazanyTaskId
+  );
+
   taskModal.hidden = true;
   taskModal.removeAttribute("data-task-id");
   activeTaskIndex = null;
@@ -317,6 +322,11 @@ function zpracujZavreniEditoru() {
   
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
+
+  const zaviranyTaskId = activeTaskId;
+  uvolniVzdalenouEditorSession(
+    zaviranyTaskId
+  );
   
   activeTaskIndex = null;
   activeTaskId = null;
@@ -338,10 +348,34 @@ function zpracujZavreniEditoru() {
 document.addEventListener(
   "keydown",
   (udalost) => {
-    if (
-      udalost.key === "Escape" &&
-      !taskModal.hidden
-    ) {
+    if (udalost.key !== "Escape") {
+      return;
+    }
+
+    const handoffModal =
+      document.getElementById(
+        "editorHandoffModal"
+      );
+
+    if (handoffModal && !handoffModal.hidden) {
+      udalost.preventDefault();
+
+      const zrusit = handoffModal.querySelector(
+        "#editorHandoffCancelButton"
+      );
+
+      if (
+        zrusit &&
+        !zrusit.hidden &&
+        !zrusit.disabled
+      ) {
+        zrusit.click();
+      }
+
+      return;
+    }
+
+    if (!taskModal.hidden) {
       udalost.preventDefault();
       zpracujZavreniEditoru();
     }
@@ -358,6 +392,18 @@ let editorRepeat = null;
 function zahajEditorSession(taskId = null) {
   editorSessionId += 1;
   activeTaskId = taskId || null;
+}
+
+
+function uvolniVzdalenouEditorSession(
+  taskId = activeTaskId
+) {
+  if (!taskId) {
+    return;
+  }
+
+  window.LubaNoteEditorHandoff
+    ?.uvolniEditorPoznamky?.(taskId);
 }
 
 
@@ -748,6 +794,11 @@ function zavriTajnyEditorPriZamknuti() {
   
   document.getElementById("plannedTextLinks")?.replaceChildren();
   
+  const zamykanyTaskId = activeTaskId;
+  uvolniVzdalenouEditorSession(
+    zamykanyTaskId
+  );
+
   taskModal.classList.remove("show");
   taskModal.hidden = true;
   document.body.classList.remove("noScroll");
@@ -837,6 +888,11 @@ appMessageDiscardButton?.addEventListener(
     
     taskModal.classList.remove("show");
     document.body.classList.remove("noScroll");
+
+    const zahazovanyTaskId = activeTaskId;
+    uvolniVzdalenouEditorSession(
+      zahazovanyTaskId
+    );
     
     activeTaskIndex = null;
     activeTaskId = null;
@@ -2488,6 +2544,11 @@ function zavriEditorPoLokalnimUlozeni(
   
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
+
+  const zaviranyTaskId = activeTaskId;
+  uvolniVzdalenouEditorSession(
+    zaviranyTaskId
+  );
   
   activeTaskIndex = null;
   activeTaskId = null;
@@ -2535,8 +2596,15 @@ function zavriEditorPoLokalnimUlozeni(
 }
 
 async function ulozAZavriEditor(
-  zpusobUlozeniNove = null
+  zpusobUlozeniNove = null,
+  moznosti = {}
 ) {
+  const cekejNaCloud =
+    moznosti?.cekejNaCloud === true;
+  const nezavirat =
+    moznosti?.nezavirat === true;
+  const tichyRezim =
+    moznosti?.tichyRezim === true;
   if (
     document.body.classList.contains(
       "secretModeActive"
@@ -2564,11 +2632,11 @@ async function ulozAZavriEditor(
     
     appMessageModal.hidden = false;
     
-    return;
+    return { ok: false, reason: "needs_save_mode" };
   }
   
   if (probihaUlozeniEditoru) {
-    return;
+    return { ok: false, reason: "save_in_progress" };
   }
   
   probihaUlozeniEditoru = true;
@@ -2730,7 +2798,47 @@ async function ulozAZavriEditor(
       }
     }
     
+    if (
+      cekejNaCloud &&
+      ulozenaPoznamka
+    ) {
+      const synchronizovano =
+        await window.LubaNoteSync
+          ?.synchronizujPoznamkyTed?.(
+            ulozenaPoznamka.id
+          );
+
+      if (synchronizovano !== true) {
+        throw new Error(
+          "Cloud nepotvrdil bezpečnou synchronizaci poznámky."
+        );
+      }
+    }
+
     ukonciCekani();
+
+    if (nezavirat) {
+      /*
+       * Při předání editoru musí původní zařízení nejdřív
+       * bezpečně uložit a potvrdit cloudovou revizi. Editor
+       * zavře až synchronizační vrstva po atomickém předání
+       * vlastnictví novému zařízení.
+       */
+      puvodniOtiskEditoru =
+        vytvorOtiskEditoru();
+
+      if (ulozenaPoznamka) {
+        obnovNotifikaciPoznamkyNaPozadi(
+          ulozenaPoznamka
+        );
+      }
+
+      return {
+        ok: true,
+        noteId: ulozenaPoznamka?.id ||
+          closingTaskId || null
+      };
+    }
     
     const editorZavren =
       zavriEditorPoLokalnimUlozeni(
@@ -2742,6 +2850,12 @@ async function ulozAZavriEditor(
         ulozenaPoznamka
       );
     }
+
+    return {
+      ok: editorZavren === true,
+      noteId: ulozenaPoznamka?.id ||
+        closingTaskId || null
+    };
   } catch (error) {
     ukonciCekani();
     
@@ -2750,14 +2864,137 @@ async function ulozAZavriEditor(
       error
     );
     
-    zobrazZpravuAplikace(
-      "Uložení poznámky",
-      "Poznámku se nepodařilo bezpečně uložit. Editor zůstal otevřený."
-    );
+    if (!tichyRezim) {
+      zobrazZpravuAplikace(
+        "Uložení poznámky",
+        "Poznámku se nepodařilo bezpečně uložit. Editor zůstal otevřený."
+      );
+    }
+
+    return {
+      ok: false,
+      error
+    };
   } finally {
     probihaUlozeniEditoru = false;
   }
+
 }
+
+/* ==========================================
+   BEZPEČNÉ PŘEDÁNÍ OTEVŘENÉ POZNÁMKY
+   Synchronizační vrstva volá tyto dvě funkce pouze tehdy,
+   když jiné zařízení požádá o převzetí stejné poznámky.
+   ========================================== */
+
+async function ulozAktivniEditorProPredani(
+  noteId
+) {
+  if (
+    !noteId ||
+    taskModal.hidden ||
+    activeTaskId !== noteId
+  ) {
+    return false;
+  }
+
+  /*
+   * Modal předání zakryje editor, ale hardwarová klávesnice by
+   * mohla dál posílat znaky do právě fokusovaného rich-textu.
+   * Před vytvořením finálního snapshotu proto fokus ukončíme.
+   */
+  if (
+    document.activeElement &&
+    typeof document.activeElement.blur ===
+      "function"
+  ) {
+    document.activeElement.blur();
+  }
+
+  const vysledek =
+    await ulozAZavriEditor(
+      null,
+      {
+        cekejNaCloud: true,
+        nezavirat: true,
+        tichyRezim: true
+      }
+    );
+
+  return vysledek?.ok === true;
+}
+
+function zavriAktivniEditorPoPredani(
+  noteId
+) {
+  if (
+    !noteId ||
+    taskModal.hidden ||
+    activeTaskId !== noteId
+  ) {
+    return false;
+  }
+
+  /*
+   * Předání může přijít i ve chvíli, kdy je nad editorem otevřený
+   * pomocný dialog. Po bezpečném uložení nesmí takový starý dialog
+   * zůstat viset nad hlavní obrazovkou.
+   */
+  if (appMessageModal) {
+    appMessageModal.hidden = true;
+    resetujAkceZpravyAplikace();
+  }
+
+  if (datePickerModal) {
+    datePickerModal.hidden = true;
+  }
+
+  if (timePickerModal) {
+    timePickerModal.hidden = true;
+  }
+
+  if (deleteConfirmModal) {
+    deleteConfirmModal.hidden = true;
+  }
+
+  closeTagMenu?.();
+
+  return zavriEditorPoLokalnimUlozeni(
+    editorSessionId
+  );
+}
+
+window.LubaNoteEditorPredani = {
+  ulozAktivniEditorProPredani,
+  zavriAktivniEditorPoPredani
+};
+
+window.addEventListener(
+  "lubanote:editor-ownership-lost",
+  () => {
+    if (
+      taskModal.hidden ||
+      !activeTaskId
+    ) {
+      return;
+    }
+
+    /*
+     * Pokud server potvrdí, že toto zařízení už není vlastníkem
+     * editoru, starý editor nesmí později uložit svou kopii přes
+     * novější stav. V běžném předání se sem nedostaneme, protože
+     * původní zařízení nejdřív bezpečně uloží a teprve potom předá.
+     */
+    zavriEditorPoLokalnimUlozeni(
+      editorSessionId
+    );
+
+    zobrazZpravuAplikace(
+      "Editace byla ukončena",
+      "Tuto poznámku nyní upravuje jiné zařízení. Starý editor byl z bezpečnostních důvodů zavřen."
+    );
+  }
+);
 
 editorBackButton.addEventListener(
   "click",
@@ -2786,6 +3023,31 @@ appMessageNormalButton?.addEventListener(
    ========================================== */
 
 function zpracujAndroidZpet() {
+  const handoffModal =
+    document.getElementById(
+      "editorHandoffModal"
+    );
+
+  if (handoffModal && !handoffModal.hidden) {
+    const zrusit = handoffModal.querySelector(
+      "#editorHandoffCancelButton"
+    );
+
+    if (
+      zrusit &&
+      !zrusit.hidden &&
+      !zrusit.disabled
+    ) {
+      zrusit.click();
+    }
+
+    /*
+     * Během samotného bezpečného ukládání je Zrušit deaktivované.
+     * Back pouze pohltíme, aby nemohl zavřít editor pod procesem.
+     */
+    return true;
+  }
+
   /*
    * Pokud je otevřený univerzální modal, Back se chová
    * stejně jako jeho tlačítko Zrušit / OK.
@@ -2855,7 +3117,19 @@ document.addEventListener("pointercancel", (event) => {
 
 
 
-function openTaskEditorById(taskId) {
+async function openTaskEditorById(taskId) {
+  if (
+    window.LubaNoteEditorHandoff
+      ?.pripravOtevreniEditoru
+  ) {
+    const povoleno =
+      await window.LubaNoteEditorHandoff
+        .pripravOtevreniEditoru(taskId);
+
+    if (povoleno !== true) {
+      return;
+    }
+  }
   
   const currentTasks = loadTask();
   
@@ -2865,6 +3139,8 @@ function openTaskEditorById(taskId) {
   
   if (index === -1) {
     console.error("Poznámka nebyla nalezena:", taskId);
+    window.LubaNoteEditorHandoff
+      ?.uvolniEditorPoznamky?.(taskId);
     return;
   }
   
@@ -3477,7 +3753,7 @@ function renderTasks() {
         uploadLocalNoteToSupabase(currentTask);
       }
       
-      openTaskEditorById(currentTask.id);
+      await openTaskEditorById(currentTask.id);
     });
     
   });
@@ -4554,11 +4830,16 @@ cardMenu.addEventListener("click", async (event) => {
     
     /* Celá poznámka se plánuje jen jedním způsobem:
        přes její vlastní datum + čas + opakování v editoru. */
-    openTaskEditorById(selectedTask.id);
-    
-    setTimeout(() => {
-      modalTimeButton?.click();
-    }, 0);
+    await openTaskEditorById(selectedTask.id);
+
+    if (
+      taskModal.dataset.taskId ===
+      selectedTask.id
+    ) {
+      setTimeout(() => {
+        modalTimeButton?.click();
+      }, 0);
+    }
     
     return;
   }
