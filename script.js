@@ -3118,6 +3118,25 @@ document.addEventListener("pointercancel", (event) => {
 
 
 async function openTaskEditorById(taskId) {
+  /*
+   * Pokud právě dorazil Realtime signál, že je v cloudu novější
+   * verze této poznámky, nejdřív bezpečně dokončíme její sync.
+   * Výjimka: poznámku stále vlastní editor na jiném zařízení;
+   * v takovém případě pokračuje standardní handoff modal.
+   */
+  if (
+    window.LubaNoteSyncRealtime
+      ?.pockejPredOtevrenim
+  ) {
+    const aktualni =
+      await window.LubaNoteSyncRealtime
+        .pockejPredOtevrenim(taskId);
+
+    if (aktualni !== true) {
+      return;
+    }
+  }
+
   if (
     window.LubaNoteEditorHandoff
       ?.pripravOtevreniEditoru

@@ -475,6 +475,29 @@ async function provedBezpecnyZapisPoznamky({
 
   zrusKonfliktSynchronizace(id);
 
+  /*
+   * Realtime zde neposílá obsah poznámky. Pouze oznámíme, že
+   * server právě bezpečně potvrdil novou revizi. Samostatný modul
+   * syncRealtime.js z tohoto lokálního signálu vytvoří malý
+   * Broadcast pro ostatní právě připojená zařízení.
+   */
+  if (
+    typeof window !== "undefined" &&
+    typeof window.dispatchEvent === "function"
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        "lubanote:cloud-write-confirmed",
+        {
+          detail: {
+            noteId: id,
+            revision: vysledek.revision
+          }
+        }
+      )
+    );
+  }
+
   return {
     ok: true,
     result: vysledek
@@ -3170,6 +3193,7 @@ window.LubaNoteSync = {
   provedLokalniZmenuBezKolizeSeSync,
   provedLokalniZmenuASynchronizuj,
   synchronizujPoznamkyTed,
+  ziskejIdPoznamekEditovanychJinde,
   ziskejKonflikty: () =>
     Array.from(aktivniKonfliktySyncu.values()),
   ziskejCloudSyncMeta
