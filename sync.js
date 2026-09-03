@@ -1280,7 +1280,8 @@ function pripravRevizniMerge(
   localLegacySecret,
   localDecryptedSecret,
   cloudRows,
-  shodneSecretId = new Set()
+  shodneSecretId = new Set(),
+  idPoznamekEditovanychJinde = new Set()
 ) {
   const lokalniMapa =
     vytvorMapuVitezu(
@@ -1312,6 +1313,15 @@ function pripravRevizniMerge(
   (Array.isArray(cloudRows) ? cloudRows : [])
     .forEach((row) => {
       if (!row?.id) {
+        return;
+      }
+
+      /*
+       * Cizí aktivní editor má během svého lease výhradní právo
+       * změnit tuto poznámku. Tento klient ji proto neposuzuje jako
+       * revizní konflikt a její lokální kopii zatím nechá nedotčenou.
+       */
+      if (idPoznamekEditovanychJinde.has(row.id)) {
         return;
       }
 
@@ -2197,6 +2207,63 @@ async function desifrujViteznySecret(candidate) {
 
 let probihajiciSync = null;
 
+/* ============================================================
+   OCHRANA POZNÁMKY OTEVŘENÉ NA JINÉM ZAŘÍZENÍ
+
+   Aktivní editor lease je autorita i pro běžný background sync.
+   Zařízení, které poznámku právě NEEDITUJE, ji během platného
+   cizího lease nesmí uploadovat, stahovat přes starou lokální kopii
+   ani z ní vytvářet konfliktní kopii. Po bezpečném předání se nový
+   vlastník přestane blokovat a stáhne potvrzenou serverovou revizi.
+   ============================================================ */
+async function ziskejIdPoznamekEditovanychJinde() {
+  if (!navigator.onLine) {
+    return new Set();
+  }
+
+  const deviceId = getDeviceId();
+
+  if (!deviceId) {
+    return new Set();
+  }
+
+  try {
+    const { data, error } = await supabaseClient.rpc(
+      "lubanote_get_remote_active_editor_note_ids",
+      {
+        p_device_id: deviceId
+      }
+    );
+
+    if (error) {
+      /*
+       * Doplňková handoff ochrana nesmí rozbít původní sync při
+       * dočasné síťové chybě nebo před aplikací SQL V1.3.
+       * V takovém případě zůstává aktivní původní revision airbag.
+       */
+      console.warn(
+        "Kontrola aktivních editorů pro sync nebyla dostupná:",
+        error.message
+      );
+      return new Set();
+    }
+
+    const radky = Array.isArray(data) ? data : [];
+
+    return new Set(
+      radky
+        .map((row) => row?.note_id)
+        .filter(Boolean)
+    );
+  } catch (error) {
+    console.warn(
+      "Kontrola aktivních editorů pro sync selhala:",
+      error
+    );
+    return new Set();
+  }
+}
+
 async function syncNotes() {
   if (probihajiciSync) {
     return probihajiciSync;
@@ -2243,6 +2310,15 @@ async function syncNotes() {
         : [];
 
     let cloudRows = await getCloudNotesForSync();
+
+    /*
+     * Pokud stejnou poznámku právě drží aktivní editor na jiném
+     * zařízení, tento klient ji v tomto syncu pouze ponechá beze změny.
+     * Tím mobil při otevření aplikace nemůže zvýšit serverovou revizi
+     * pod rozepsaným editorem na PC ještě před požadavkem na handoff.
+     */
+    const idPoznamekEditovanychJinde =
+      await ziskejIdPoznamekEditovanychJinde();
 
     /*
      * LEGACY PLANNER MIGRACE – pouze skutečně lokální poznámky.
@@ -2341,7 +2417,8 @@ async function syncNotes() {
       localLegacySecret,
       localDecryptedSecret,
       cloudRows,
-      shodneSecretId
+      shodneSecretId,
+      idPoznamekEditovanychJinde
     );
 
     const {
@@ -2383,7 +2460,8 @@ async function syncNotes() {
       cloudRows.filter(
         (row) =>
           !konfliktniId.has(row?.id) &&
-          !vynutitLocalId.has(row?.id)
+          !vynutitLocalId.has(row?.id) &&
+          !idPoznamekEditovanychJinde.has(row?.id)
       );
 
     const { winners } = vytvorMapuVitezu(
@@ -2415,6 +2493,7 @@ async function syncNotes() {
 
         if (
           !konfliktniId.has(id) &&
+          !idPoznamekEditovanychJinde.has(id) &&
           winner.source === "local-regular" &&
           (
             !cloudRow ||
@@ -2451,6 +2530,7 @@ async function syncNotes() {
 
       if (
         !konfliktniId.has(id) &&
+        !idPoznamekEditovanychJinde.has(id) &&
         winner.source === "local-secret-encrypted" &&
         (
           !cloudRow ||
