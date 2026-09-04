@@ -20,7 +20,15 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Restore node_modules cache
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node20-node-modules-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Generate build version
@@ -43,10 +51,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Cache Gradle wrapper + dependencies between GitHub-hosted runners.
-      # Build runs on the long-lived android-capacitor branch, so allow this
-      # branch to WRITE its own Gradle cache (setup-gradle defaults to
-      # read-only outside the repository default branch).
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
         with:
