@@ -886,18 +886,32 @@ async function uploadLocalNoteToSupabase(note) {
     vysledek.ok &&
     note.isSecret !== true &&
     window.LubaNoteAttachmentsCloud
-      ?.oznacPrilohyPoznamkyJakoAktivni
   ) {
     try {
-      await window.LubaNoteAttachmentsCloud
-        .oznacPrilohyPoznamkyJakoAktivni(note);
+      const cloud = window.LubaNoteAttachmentsCloud;
+
+      if (cloud.synchronizujReferencePrilohPoznamky) {
+        /*
+         * Až PO úspěšném zápisu nové revize sjednotíme serverové
+         * attachment reference s tím, co v poznámce skutečně zůstalo.
+         * Chybějící dříve aktivní attachmenty se pouze označí jako
+         * pending_delete; fyzický soubor se v této fázi nemaže.
+         */
+        await cloud.synchronizujReferencePrilohPoznamky(note);
+      } else if (cloud.oznacPrilohyPoznamkyJakoAktivni) {
+        /*
+         * Kompatibilní fallback pro případ, že klient krátce běží proti
+         * starší serverové/JS vrstvě bez reconciliation RPC.
+         */
+        await cloud.oznacPrilohyPoznamkyJakoAktivni(note);
+      }
     } catch (error) {
       /*
-       * Aktivace je ve Fázi B pouze metadata stínové vrstvy.
-       * Úspěšnou revizi poznámky kvůli ní nikdy nevracíme zpět.
+       * Attachment metadata nesmí vrátit zpět už úspěšně zapsanou
+       * revizi poznámky. Další sync reconciliation zkusí znovu.
        */
       console.warn(
-        "LubaNote attachments: aktivace stínových příloh se dokončí později.",
+        "LubaNote attachments: synchronizace attachment referencí se dokončí později.",
         error
       );
     }

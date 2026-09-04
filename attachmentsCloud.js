@@ -513,6 +513,95 @@
     }
   }
 
+  async function synchronizujReferencePrilohPoznamky(note) {
+    if (
+      !note?.id ||
+      note.isSecret === true ||
+      !navigator.onLine
+    ) {
+      return {
+        ok: false,
+        skipped: true
+      };
+    }
+
+    if (!await pripravCloud()) {
+      return {
+        ok: false,
+        reason: "cloud_unavailable"
+      };
+    }
+
+    const ids = ziskejAttachmentIdsZPoznamky(note);
+
+    try {
+      const { data, error } =
+        await supabaseClient.rpc(
+          "lubanote_sync_note_attachment_refs",
+          {
+            p_note_id: note.id,
+            p_attachment_ids: ids
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      const aktivovaneIds = Array.isArray(data?.activated_ids)
+        ? data.activated_ids
+        : [];
+      const cekajiciSmazaniIds = Array.isArray(
+        data?.pending_delete_ids
+      )
+        ? data.pending_delete_ids
+        : [];
+
+      for (const id of aktivovaneIds) {
+        try {
+          await window.LubaNoteAttachmentsLocal
+            ?.upravPrilohu?.(
+              id,
+              {
+                cloudState: "active",
+                activatedAt:
+                  new Date().toISOString(),
+                lastCloudError: ""
+              }
+            );
+        } catch {
+          // Cloud je autorita; lokální status se může opravit později.
+        }
+      }
+
+      for (const id of cekajiciSmazaniIds) {
+        try {
+          await window.LubaNoteAttachmentsLocal
+            ?.smazPrilohu?.(id);
+        } catch {
+          // Server už attachment označil. Lokální orphan se může uklidit později.
+        }
+      }
+
+      return {
+        ok: data?.ok === true,
+        activatedIds: aktivovaneIds,
+        pendingDeleteIds: cekajiciSmazaniIds
+      };
+    } catch (error) {
+      console.warn(
+        "LubaNote attachments: synchronizace referencí příloh se nepodařila.",
+        error
+      );
+
+      return {
+        ok: false,
+        reason: "rpc_failed",
+        error
+      };
+    }
+  }
+
   async function zpracujStinovePrilohyPoznamekVCloudu(notes) {
     const seznam = Array.isArray(notes) ? notes : [];
     let zpracovano = 0;
@@ -582,6 +671,7 @@
     ziskejAttachmentIdsZPoznamky,
     zajistiStinovePrilohyPoznamkyVCloudu,
     oznacPrilohyPoznamkyJakoAktivni,
+    synchronizujReferencePrilohPoznamky,
     zpracujStinovePrilohyPoznamekVCloudu,
     ziskejCloudDiagnostiku
   };
