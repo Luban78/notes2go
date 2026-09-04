@@ -129,6 +129,17 @@
     return window.innerWidth >= 900;
   }
 
+  /*
+   * S2D.1c – sdílený editor nemá osobní datum/čas.
+   * Na mobilu proto používá jen dva smysluplné režimy:
+   * textové formátování <-> další sdílené nástroje.
+   */
+  function jeSdilenyEditor() {
+    return modalUkolu?.classList.contains(
+      "sharingEditorMode"
+    ) === true;
+  }
+
   if (
     !tlacitkoToolbar ||
     !rychlyToolbar ||
@@ -1035,8 +1046,16 @@
 
     /*
      * MOBIL:
-     * čas → text → další nástroje
+     * běžný editor: čas → text → další nástroje
+     * shared editor: text ↔ další nástroje
      */
+    if (
+      jeSdilenyEditor() &&
+      rezim === "cas"
+    ) {
+      rezim = "text";
+    }
+
     rezimToolbaru = rezim;
 
     const jeCas =
@@ -2107,6 +2126,20 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoToolbar.addEventListener(
     "click",
     () => {
+      /*
+       * Ve shared editoru není osobní režim datum/čas.
+       * Přepínáme proto jen text <-> nástroje a nevytvoříme
+       * už nikdy prázdnou horní lištu s osamoceným Aa.
+       */
+      if (jeSdilenyEditor()) {
+        nastavToolbar(
+          rezimToolbaru === "text"
+            ? "nastroje"
+            : "text"
+        );
+        return;
+      }
+
       if (rezimToolbaru === "cas") {
         nastavToolbar("text");
         return;
@@ -3127,7 +3160,11 @@ if (vyber) {
     const pozorovatelModalu =
       new MutationObserver(() => {
         if (!modalUkolu.hidden) {
-          nastavToolbar("cas");
+          nastavToolbar(
+            jeSdilenyEditor()
+              ? "text"
+              : "cas"
+          );
         } else {
           zavriVsechnyPanely();
         }

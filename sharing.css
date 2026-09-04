@@ -743,11 +743,25 @@ body.sharingReadOnlyOpen {
 #taskModal.sharingEditorMode #reminderButton,
 #taskModal.sharingEditorMode #categoryTaskButton,
 #taskModal.sharingEditorMode #priorityTaskButton,
-#taskModal.sharingEditorMode #colorTaskButton,
 #taskModal.sharingEditorMode #tagTaskButton,
 #taskModal.sharingEditorMode #planSelectionButton,
 #taskModal.sharingEditorMode #deleteTaskButton {
   display: none !important;
+}
+
+/*
+ * S2D.1c – ve spodní liště zůstávají jen akce, které opravdu
+ * mění společný obsah: uložit, zvýraznit text a TODO.
+ * Osobní stav uživatele se sem nemíchá.
+ */
+#taskModal.sharingEditorMode .editorBottomBar {
+  justify-content: space-between;
+}
+
+#taskModal.sharingEditorMode #editorBackButton,
+#taskModal.sharingEditorMode #colorTaskButton,
+#taskModal.sharingEditorMode #addTodoButton {
+  display: inline-flex !important;
 }
 
 .sharingReadOnlyHeaderText {
