@@ -43,6 +43,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Cache Gradle wrapper + dependencies between GitHub-hosted runners.
+      # Build runs on the long-lived android-capacitor branch, so allow this
+      # branch to WRITE its own Gradle cache (setup-gradle defaults to
+      # read-only outside the repository default branch).
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
       - name: Restore keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/notes2go-release.jks
