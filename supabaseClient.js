@@ -21,6 +21,37 @@ const SUPABASE_AUTH_STORAGE_KEY =
 const SUPABASE_LIBRARY_URL =
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8/dist/umd/supabase.js";
 
+/*
+ * Do vydání s vlastní doménou používáme jako návrat po potvrzení
+ * e-mailu veřejnou GitHub Pages adresu LubaNote. Nesmíme spoléhat
+ * na obecnou Site URL Supabase, protože ta může skončit na kořeni
+ * luban78.github.io místo /notes2go/.
+ */
+const LUBANOTE_AUTH_REDIRECT_URL =
+  "https://luban78.github.io/notes2go/";
+
+function vycistiStarouAuthChybuZAdresy() {
+  const hash = String(window.location.hash || "");
+
+  if (!hash || !/(^#|&)error=/.test(hash)) {
+    return;
+  }
+
+  /*
+   * Chybový hash je pouze výsledek už použitého / expirovaného
+   * e-mailového odkazu. Není součástí navigace LubaNote a nesmí
+   * zůstávat v adrese při přepínání Poznámky / Plán / Připomínky.
+   * Úspěšné auth hash parametry zde záměrně nemažeme.
+   */
+  window.history.replaceState(
+    null,
+    document.title,
+    `${window.location.pathname}${window.location.search}`
+  );
+}
+
+vycistiStarouAuthChybuZAdresy();
+
 let supabaseClient = null;
 let nacitaniSupabaseKnihovny = null;
 
@@ -1072,7 +1103,10 @@ async function provedRegistraci(
     } = await sCasovymLimitem(
       supabaseClient.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: LUBANOTE_AUTH_REDIRECT_URL
+        }
       }),
       15000,
       "Registrace"
