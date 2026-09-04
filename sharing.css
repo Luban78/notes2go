@@ -1,0 +1,191 @@
+/* ============================================================
+   LubaNote – S2A Sharing Identity
+============================================================ */
+
+.sharingIdentitySetting {
+  min-height: 58px;
+}
+
+.sharingUsernameButton {
+  max-width: min(230px, 56vw);
+}
+
+#sharingUsernameValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#sharingUsernameValue:not(.sharingUsernameUnset) {
+  font-weight: 800;
+}
+
+.sharingUsernameUnset {
+  color: var(--color-text-secondary);
+}
+
+.sharingIdentityModal {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 18px;
+  box-sizing: border-box;
+
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.sharingIdentityModal[hidden] {
+  display: none !important;
+}
+
+.sharingIdentityCard {
+  width: min(100%, 440px);
+  box-sizing: border-box;
+
+  padding: 18px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.26);
+}
+
+.sharingIdentityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  margin-bottom: 8px;
+}
+
+.sharingIdentityHeader h3 {
+  margin: 0;
+  font-size: calc(var(--font-size) + 3px);
+}
+
+.sharingIdentityClose {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: transparent;
+  color: var(--color-text);
+}
+
+.sharingIdentityDescription {
+  margin: 0 0 16px;
+
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1.45;
+}
+
+.sharingIdentityField {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+
+  min-height: 52px;
+  box-sizing: border-box;
+
+  padding: 0 12px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+
+  background: var(--color-background);
+}
+
+.sharingIdentityPrefix {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) + 2px);
+  font-weight: 800;
+}
+
+.sharingIdentityField input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 12px 8px;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+  color: var(--color-text);
+
+  font: inherit;
+  font-weight: 700;
+}
+
+.sharingIdentityError {
+  min-height: 20px;
+  margin: 8px 2px 0;
+
+  color: #d44;
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1.35;
+}
+
+.sharingIdentityError[hidden] {
+  display: none;
+}
+
+.sharingIdentityActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.sharingIdentityActions button {
+  min-height: 46px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sharingIdentitySecondary {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.sharingIdentityPrimary {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.sharingIdentityActions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 520px) {
+  .sharingIdentityModal {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .sharingIdentityCard {
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+  }
+}
