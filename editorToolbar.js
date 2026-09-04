@@ -153,13 +153,14 @@
    *   zpět, znovu, B, I, U, velikost
    *
    * Strana 2:
-   *   styl H, barva textu, zarovnání, odkaz, uložit jako, odrážky
+   *   styl H, barva textu, zarovnání, obrázek, odkaz, uložit jako, odrážky
    */
   const sdileneToolbarPrvky = [
     tlacitkoNadpis,
     panelBarvaTextu,
     tlacitkoBarvaTextu,
     tlacitkoZarovnaniTextu,
+    tlacitkoVlozitObrazek,
     tlacitkoVlozitOdkaz
   ].filter(Boolean);
 

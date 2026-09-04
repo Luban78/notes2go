@@ -719,22 +719,26 @@ body.sharingReadOnlyOpen {
 }
 
 /*
- * S2D.1: nové obrázky zatím záměrně nepřidáváme.
- * Existující obrázky se v shared obsahu zachovají.
- * Cloudový shared attachment upload napojíme v S2E.
+ * S2E – obrázky jsou už součást společného editovatelného obsahu.
+ * Otevření libovolného dokumentu zůstává mimo shared V1, ale
+ * vložení obrázku + jeho velikost/zarovnání/odebrání používá stejné
+ * editorMedia UI jako běžná poznámka.
  */
-#taskModal.sharingEditorMode #tlacitkoVlozitObrazek,
 #taskModal.sharingEditorMode #tlacitkoOtevritDokument {
   display: none !important;
 }
 
+#taskModal.sharingEditorMode #tlacitkoVlozitObrazek {
+  display: inline-flex !important;
+}
+
 #taskModal.sharingEditorMode .lubaNoteImageSettings,
 #taskModal.sharingEditorMode .lubaNoteImageRemove {
-  display: none !important;
+  display: inline-flex !important;
 }
 
 #taskModal.sharingEditorMode .lubaNoteImage {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 #taskModal.sharingEditorMode #secretTaskButton,
@@ -938,16 +942,20 @@ body.sharingReadOnlyOpen {
   order: 4;
 }
 
-#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoVlozitOdkaz {
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoVlozitObrazek {
   order: 5;
 }
 
-#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoUlozitDokument {
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoVlozitOdkaz {
   order: 6;
 }
 
-#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoBullet {
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoUlozitDokument {
   order: 7;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoBullet {
+  order: 8;
 }
 
 /*

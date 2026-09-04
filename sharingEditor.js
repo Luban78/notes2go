@@ -9,7 +9,7 @@
    - saves through lubanote_save_shared_note_safe()
    - releases lock when editor closes
    - live takeover request comes in S2D.2
-   - new shared attachment upload comes in S2E
+   - S2E uploads new shared images through uploader-owned Storage
 ============================================================ */
 
 (() => {
@@ -449,6 +449,38 @@
         throw new Error("shared_snapshot_missing");
       }
 
+      /*
+       * S2E – nové obrázky, které vložil tento uživatel, musí být
+       * před shared save bezpečně rezervované a uploadnuté pod jeho
+       * vlastním účtem. Cizí attachmenty se z lokální cache nečtou.
+       */
+      if (
+        typeof window.LubaNoteSharingAttachments
+          ?.pripravPredSharedSave === "function"
+      ) {
+        const pripravaPriloh =
+          await window.LubaNoteSharingAttachments
+            .pripravPredSharedSave(
+              snapshot.data,
+              session
+            );
+
+        if (pripravaPriloh?.ok !== true) {
+          zobrazZpravu(
+            t("sharing.readOnlyTitle", "Sdílená poznámka"),
+            "Obrázek se nepodařilo bezpečně uložit do cloudu. Editor zůstal otevřený; zkontroluj připojení a zkus Uložit znovu."
+          );
+
+          return {
+            ok: false,
+            reason:
+              pripravaPriloh?.reason ||
+              pripravaPriloh?.neuspesne?.[0]?.reason ||
+              "shared_attachment_prepare_failed"
+          };
+        }
+      }
+
       const klient = await zajistiSupabase();
 
       if (!klient) {
@@ -501,6 +533,30 @@
       host.aktualizujRevision?.(
         session.revision
       );
+
+      /*
+       * Až po úspěšném canonical shared save necháme server z notes.data
+       * sám vyhodnotit attachment reference napříč všemi uploadery.
+       * Tím se odstranění cizího obrázku nikdy neřeší přes jeho storage
+       * path v klientu.
+       */
+      if (
+        typeof window.LubaNoteSharingAttachments
+          ?.synchronizujPoSharedSave === "function"
+      ) {
+        const syncPriloh =
+          await window.LubaNoteSharingAttachments
+            .synchronizujPoSharedSave(
+              session.noteId
+            );
+
+        if (syncPriloh?.ok !== true) {
+          console.warn(
+            "Sdílený editor: reference obrázků se dokončí při dalším online uložení.",
+            syncPriloh
+          );
+        }
+      }
 
       const zavreno =
         moznosti?.nezavirat === true
