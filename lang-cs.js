@@ -56,6 +56,13 @@ window.LubaNoteLanguagePacks.push({
     "login.emailNotConfirmed": "E-mail ještě není potvrzený. Otevři potvrzovací odkaz v e-mailu a pak se přihlas znovu.",
     "login.accountCheckFailed": "Stav účtu se nepodařilo ověřit. Zkus to znovu.",
     "login.localOwnerMismatch": "Toto zařízení obsahuje lokální data jiného LubaNote účtu. Kvůli bezpečnosti se účty na stejné instalaci nesmí míchat.",
+    "login.demoExpiredTitle": "Demo skončilo",
+    "login.demoExpiredText": "Tvoje Demo skončilo {date}. Všechna data zůstávají bezpečně uložená. Pro další používání bude potřeba aktivovat plnou verzi LubaNote.",
+    "login.fullExpiredTitle": "Přístup k plné verzi skončil",
+    "login.fullExpiredText": "Tvoje data zůstávají bezpečně uložená. Po obnovení plné verze se LubaNote znovu odemkne.",
+    "account.demoUntil": "Demo do {date}",
+    "limits.notesTitle": "Limit poznámek dosažen",
+    "limits.notesText": "Tvůj plán umožňuje maximálně {limit} poznámek. Novou poznámku teď nelze bezpečně uložit. Tvoje stávající data zůstávají zachována.",
 
     "nav.quick": "Rychlá navigace",
     "nav.tools": "Nástroje",

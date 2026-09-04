@@ -8,7 +8,7 @@
   
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260904-c3-admin-dashboard-v1">
+  <link rel="stylesheet" href="style.css?v=20260904-c4-mega-client-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -249,6 +249,11 @@
             <span class="mainMenuLabel">O aplikaci</span>
             <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
+
+          <div id="accountPlanMenuInfo" class="accountPlanMenuInfo" hidden>
+            <span class="accountPlanMenuBadge">Demo</span>
+            <span id="accountPlanMenuText"></span>
+          </div>
           
           <hr>
           
@@ -1752,8 +1757,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js"></script>
-  <script src="lang-en.js"></script>
+  <script src="lang-cs.js?v=20260904-c4-mega-client-1"></script>
+  <script src="lang-en.js?v=20260904-c4-mega-client-1"></script>
   <script src="i18n.js?v=20260904-registrace-c2-1"></script>
 
   <script src="lubaIcons.js"></script>
@@ -1761,7 +1766,7 @@
   
   <script src="reminders.js?v=20260827-kompletni-zaloha-1"></script>
   
-  <script src="storage.js?v=20260904-backup-v4-import-1"></script>
+  <script src="storage.js?v=20260904-c4-mega-client-1"></script>
   
   <script src="tags.js?v=20260904-backup-v4-import-1"></script>
   
@@ -1776,7 +1781,7 @@
   
   <script src="recurringTasks.js"></script>
   
-  <script src="script.js?v=20260903-attachments-faze-b-draft-1"></script>
+  <script src="script.js?v=20260904-c4-mega-client-1"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
   <script src="trash.js?v=20260902-kos-1"></script>
@@ -1811,7 +1816,9 @@
   <script src="syncStatus.js?v=20260902-sync-status-1"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260904-c3-admin-dashboard-v1"></script>
+  <script src="supabaseClient.js?v=20260904-c4-mega-client-1"></script>
+  <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
+  <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <script src="adminDashboard.js?v=20260904-c3-admin-dashboard-v1"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
@@ -1834,7 +1841,7 @@
   <script src="syncRealtime.js"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260904-attachments-physical-delete-1"></script>
+  <script src="sync.js?v=20260904-c4-mega-client-1"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js"></script>

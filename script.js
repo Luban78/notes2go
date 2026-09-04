@@ -2912,6 +2912,30 @@ async function ulozAZavriEditor(
         !maVlozenyMediaObsah;
       
       if (!isEmpty) {
+        const kontrolaLimitu =
+          window.LubaNoteSupabase
+            ?.zkontrolujLimitNovePoznamky?.();
+
+        if (kontrolaLimitu?.dosazen === true) {
+          window.dispatchEvent(
+            new CustomEvent(
+              "lubanote:note-limit-reached",
+              {
+                detail: {
+                  source: "editor-precheck",
+                  noteLimit: kontrolaLimitu.noteLimit,
+                  currentCount: kontrolaLimitu.currentCount
+                }
+              }
+            )
+          );
+
+          return {
+            ok: false,
+            reason: "note_limit_reached"
+          };
+        }
+
         const newTask = {
           id: ziskejDraftIdPoznamky() ||
             crypto.randomUUID(),

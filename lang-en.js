@@ -50,6 +50,13 @@ window.LubaNoteLanguagePacks.push({
     "login.emailNotConfirmed": "Your email has not been confirmed yet. Open the confirmation link in your email, then sign in again.",
     "login.accountCheckFailed": "Account status could not be verified. Try again.",
     "login.localOwnerMismatch": "This installation contains local data from another LubaNote account. For safety, accounts cannot be mixed in the same installation.",
+    "login.demoExpiredTitle": "Demo ended",
+    "login.demoExpiredText": "Your Demo ended on {date}. All your data remains safely stored. Full LubaNote access will be required to continue using the app.",
+    "login.fullExpiredTitle": "Full access ended",
+    "login.fullExpiredText": "Your data remains safely stored. LubaNote will unlock again after full access is renewed.",
+    "account.demoUntil": "Demo until {date}",
+    "limits.notesTitle": "Note limit reached",
+    "limits.notesText": "Your plan allows up to {limit} notes. A new note cannot be safely saved right now. Your existing data remains preserved.",
 
     "nav.quick": "Quick navigation",
     "nav.tools": "Tools",

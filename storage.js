@@ -256,8 +256,27 @@ function ziskejReviziLokalnichZmenPoznamek() {
   return revizeLokalnichZmenPoznamek;
 }
 
+function spocitejPoznamkyProLimit() {
+  const ids = new Set();
+
+  nactiBeznePoznamkyZUloziste().forEach((task) => {
+    if (task?.id) {
+      ids.add(task.id);
+    }
+  });
+
+  getSecretNoteIds().forEach((id) => {
+    if (id) {
+      ids.add(id);
+    }
+  });
+
+  return ids.size;
+}
+
 window.LubaNoteStorageState = {
-  ziskejReviziLokalnichZmenPoznamek
+  ziskejReviziLokalnichZmenPoznamek,
+  spocitejPoznamkyProLimit
 };
 
 

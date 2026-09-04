@@ -15,6 +15,7 @@ const SUPABASE_PUBLISHABLE_KEY =
 const LUBANOTE_AUTH_OK_KEY = "lubanoteAuthOk";
 const LUBANOTE_AUTH_BLOCKED_KEY = "lubanoteAuthBlocked";
 const LUBANOTE_LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
+const LUBANOTE_ACCESS_CACHE_KEY = "lubanoteAccessCacheV1";
 const SUPABASE_PROJECT_REF = "nwdacgigplofksexssws";
 const SUPABASE_AUTH_STORAGE_KEY =
   `sb-${SUPABASE_PROJECT_REF}-auth-token`;
@@ -214,6 +215,138 @@ function zrusPredchoziPrihlaseni() {
   );
   localStorage.removeItem(
     LUBANOTE_AUTH_BLOCKED_KEY
+  );
+}
+
+function nactiLokalniCachePristupu() {
+  const vlastnik = String(
+    localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
+  ).trim();
+
+  if (!vlastnik) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(
+      LUBANOTE_ACCESS_CACHE_KEY
+    );
+
+    if (!raw) {
+      return null;
+    }
+
+    const stav = JSON.parse(raw);
+
+    if (String(stav?.user_id || "") !== vlastnik) {
+      return null;
+    }
+
+    return stav;
+  } catch (error) {
+    console.warn(
+      "Lokální cache přístupu nebyla čitelná:",
+      error
+    );
+    return null;
+  }
+}
+
+function ulozLokalniCachePristupu(stav, userId) {
+  const id = String(userId || "").trim();
+
+  if (!id || !stav?.ok) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(
+      LUBANOTE_ACCESS_CACHE_KEY,
+      JSON.stringify({
+        user_id: id,
+        account_status: stav.account_status || null,
+        plan_id: stav.plan_id || null,
+        plan_name: stav.plan_name || null,
+        plan_active: stav.plan_active === true,
+        data_access_active:
+          typeof stav.data_access_active === "boolean"
+            ? stav.data_access_active
+            : null,
+        demo_until: stav.demo_until || null,
+        full_until: stav.full_until || null,
+        note_limit:
+          stav.note_limit !== null &&
+          stav.note_limit !== undefined &&
+          Number.isFinite(Number(stav.note_limit))
+            ? Number(stav.note_limit)
+            : null,
+        checked_at: new Date().toISOString()
+      })
+    );
+  } catch (error) {
+    console.warn(
+      "Lokální cache přístupu se nepodařila uložit:",
+      error
+    );
+  }
+}
+
+function jeStavPristupuCasovePlatny(stav) {
+  if (
+    stav?.account_status !== "active" ||
+    stav?.plan_active === false ||
+    stav?.data_access_active === false
+  ) {
+    return false;
+  }
+
+  if (stav.plan_id === "internal") {
+    return true;
+  }
+
+  if (stav.plan_id === "demo") {
+    const konec = new Date(stav.demo_until || 0).getTime();
+    return Number.isFinite(konec) && konec > Date.now();
+  }
+
+  if (stav.plan_id === "full") {
+    if (!stav.full_until) {
+      return true;
+    }
+
+    const konec = new Date(stav.full_until).getTime();
+    return Number.isFinite(konec) && konec > Date.now();
+  }
+
+  return false;
+}
+
+function formatDatumPristupu(hodnota) {
+  const datum = new Date(hodnota || 0);
+
+  if (Number.isNaN(datum.getTime())) {
+    return "";
+  }
+
+  try {
+    return new Intl.DateTimeFormat(
+      window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+      {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric"
+      }
+    ).format(datum);
+  } catch (_) {
+    return datum.toLocaleDateString();
+  }
+}
+
+function doplnParametryTextu(text, parametry = {}) {
+  return Object.entries(parametry).reduce(
+    (vysledek, [klic, hodnota]) =>
+      vysledek.replaceAll(`{${klic}}`, String(hodnota)),
+    String(text || "")
   );
 }
 
@@ -478,11 +611,130 @@ const accountStatusRefresh =
 const accountStatusSignOut =
   document.getElementById("accountStatusSignOut");
 
+const accountPlanMenuInfo =
+  document.getElementById("accountPlanMenuInfo");
+
+const accountPlanMenuText =
+  document.getElementById("accountPlanMenuText");
+
 let aktualniRezimAuth = "login";
 let aktualniStavUctu = null;
+let aktualniPristupUctu = null;
+let posledniLimitModalAt = 0;
 
 function tAuth(klic, zaloha = "") {
   return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha || klic;
+}
+
+function aktualizujInfoPlanuVMenu(stav = aktualniPristupUctu) {
+  if (!accountPlanMenuInfo || !accountPlanMenuText) {
+    return;
+  }
+
+  if (
+    stav?.account_status === "active" &&
+    stav?.plan_id === "demo" &&
+    jeStavPristupuCasovePlatny(stav)
+  ) {
+    const datum = formatDatumPristupu(stav.demo_until);
+    const vzor = tAuth(
+      "account.demoUntil",
+      "Demo do {date}"
+    );
+
+    accountPlanMenuText.textContent =
+      doplnParametryTextu(vzor, { date: datum });
+    accountPlanMenuInfo.hidden = false;
+    return;
+  }
+
+  accountPlanMenuInfo.hidden = true;
+  accountPlanMenuText.textContent = "";
+}
+
+function zkontrolujLimitNovePoznamky() {
+  const rawLimit = aktualniPristupUctu?.note_limit;
+
+  if (rawLimit === null || rawLimit === undefined) {
+    return {
+      dosazen: false,
+      noteLimit: null,
+      currentCount: null
+    };
+  }
+
+  const limit = Number(rawLimit);
+
+  if (!Number.isFinite(limit) || limit < 0) {
+    return {
+      dosazen: false,
+      noteLimit: null,
+      currentCount: null
+    };
+  }
+
+  const currentCount = Number(
+    window.LubaNoteStorageState
+      ?.spocitejPoznamkyProLimit?.()
+  );
+
+  if (!Number.isFinite(currentCount)) {
+    return {
+      dosazen: false,
+      noteLimit: limit,
+      currentCount: null
+    };
+  }
+
+  return {
+    dosazen: currentCount >= limit,
+    noteLimit: limit,
+    currentCount
+  };
+}
+
+function zobrazLimitPoznamek(detail = {}) {
+  const ted = Date.now();
+
+  if (ted - posledniLimitModalAt < 2500) {
+    return;
+  }
+
+  posledniLimitModalAt = ted;
+
+  const detailLimit = detail.noteLimit;
+  const accessLimit = aktualniPristupUctu?.note_limit;
+
+  const limit =
+    detailLimit !== null &&
+    detailLimit !== undefined &&
+    Number.isFinite(Number(detailLimit))
+      ? Number(detailLimit)
+      : accessLimit !== null &&
+          accessLimit !== undefined &&
+          Number.isFinite(Number(accessLimit))
+        ? Number(accessLimit)
+        : 100;
+
+  const title = tAuth(
+    "limits.notesTitle",
+    "Limit poznámek dosažen"
+  );
+
+  const text = doplnParametryTextu(
+    tAuth(
+      "limits.notesText",
+      "Tvůj plán umožňuje maximálně {limit} poznámek. Novou poznámku teď nelze bezpečně uložit. Tvoje stávající data zůstávají zachována."
+    ),
+    { limit }
+  );
+
+  if (typeof zobrazZpravuAplikace === "function") {
+    zobrazZpravuAplikace(title, text);
+    return;
+  }
+
+  console.warn(title, text);
 }
 
 function setLoginMessage(message = "", isError = false) {
@@ -572,6 +824,45 @@ function nastavRezimAuth(
 }
 
 function textStavuUctu(stav) {
+  if (
+    stav?.account_status === "active" &&
+    stav?.plan_id === "demo" &&
+    !jeStavPristupuCasovePlatny(stav)
+  ) {
+    const datum = formatDatumPristupu(stav.demo_until);
+
+    return {
+      title: tAuth(
+        "login.demoExpiredTitle",
+        "Demo skončilo"
+      ),
+      text: doplnParametryTextu(
+        tAuth(
+          "login.demoExpiredText",
+          "Tvoje Demo skončilo {date}. Všechna data zůstávají bezpečně uložená. Pro další používání bude potřeba aktivovat plnou verzi LubaNote."
+        ),
+        { date: datum }
+      )
+    };
+  }
+
+  if (
+    stav?.account_status === "active" &&
+    stav?.plan_id === "full" &&
+    !jeStavPristupuCasovePlatny(stav)
+  ) {
+    return {
+      title: tAuth(
+        "login.fullExpiredTitle",
+        "Přístup k plné verzi skončil"
+      ),
+      text: tAuth(
+        "login.fullExpiredText",
+        "Tvoje data zůstávají bezpečně uložená. Po obnovení plné verze se LubaNote znovu odemkne."
+      )
+    };
+  }
+
   switch (stav?.account_status) {
     case "pending":
       return {
@@ -697,6 +988,7 @@ function zobrazPrihlaseni(
   message = "",
   isError = true
 ) {
+  aktualizujInfoPlanuVMenu(null);
   pripravLoginFormular();
   nastavRezimAuth("login", {
     zachovatZpravu: true
@@ -710,6 +1002,8 @@ function zobrazPrihlaseni(
 }
 
 function zobrazStavUctu(stav) {
+  aktualizujInfoPlanuVMenu(null);
+
   /* Stejný privacy lock platí i pro pending/rejected/suspended obrazovku. */
   document.body.classList.add("authPending");
 
@@ -785,7 +1079,7 @@ async function odhlasPoKonfliktuVlastnika() {
 
 async function povolAktivniUcet(
   user,
-  { spustitSync = true } = {}
+  { spustitSync = true, stav = null } = {}
 ) {
   if (
     !overNeboNastavVlastnikaLokalnichDat(user?.id)
@@ -794,8 +1088,18 @@ async function povolAktivniUcet(
     return false;
   }
 
+  aktualniPristupUctu = stav || aktualniPristupUctu;
+
+  if (aktualniPristupUctu?.ok) {
+    ulozLokalniCachePristupu(
+      aktualniPristupUctu,
+      user?.id
+    );
+  }
+
   oznacPredchoziPrihlaseni();
   setLoginMessage();
+  aktualizujInfoPlanuVMenu(aktualniPristupUctu);
   zobrazLokalniAplikaci();
 
   /*
@@ -845,13 +1149,30 @@ async function zpracujStavPrihlasenehoUzivatele(
 ) {
   const stav = await nactiStavPristupu();
 
+  aktualniPristupUctu = stav?.ok ? stav : null;
+
+  const vlastnik = String(
+    localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
+  ).trim();
+
+  if (
+    stav?.ok &&
+    user?.id &&
+    (!vlastnik || vlastnik === String(user.id))
+  ) {
+    ulozLokalniCachePristupu(stav, user.id);
+  }
+
   if (
     stav?.ok === true &&
     stav.account_status === "active" &&
-    stav.plan_active === true
+    stav.plan_active === true &&
+    stav.data_access_active !== false &&
+    jeStavPristupuCasovePlatny(stav)
   ) {
     return povolAktivniUcet(user, {
-      spustitSync
+      spustitSync,
+      stav
     });
   }
 
@@ -1012,6 +1333,32 @@ async function updateLoginScreen() {
       false
     );
     oznamSplashPripravenyBezCloudovehoStartu();
+    return;
+  }
+
+  const lokalniCachePristupu =
+    nactiLokalniCachePristupu();
+
+  /*
+   * Demo / časově omezený Full nesmí po známé expiraci probliknout
+   * do lokálních dat ani při offline-first startu. Server zůstává
+   * autorita; tahle cache pouze umí stejnou známou expiraci dodržet
+   * i bez sítě.
+   */
+  if (
+    lokalniCachePristupu?.account_status === "active" &&
+    !jeStavPristupuCasovePlatny(lokalniCachePristupu)
+  ) {
+    aktualniPristupUctu = lokalniCachePristupu;
+    zobrazStavUctu(lokalniCachePristupu);
+    oznamSplashPripravenyBezCloudovehoStartu();
+
+    if (navigator.onLine) {
+      overPrihlaseniOnline({
+        zobrazitLoginPriNeuspechu: false
+      });
+    }
+
     return;
   }
 
@@ -1429,7 +1776,50 @@ window.addEventListener("lubanote:language-change", () => {
   }
 
   aktualizujAuthTexty();
+  aktualizujInfoPlanuVMenu(aktualniPristupUctu);
 });
+
+window.addEventListener(
+  "lubanote:note-limit-reached",
+  (event) => {
+    zobrazLimitPoznamek(event?.detail || {});
+  }
+);
+
+window.addEventListener(
+  "lubanote:account-access-denied",
+  async () => {
+    if (!navigator.onLine) {
+      return;
+    }
+
+    try {
+      const pripraven = await pripravSupabaseClient();
+
+      if (!pripraven || !supabaseClient) {
+        return;
+      }
+
+      const { data: { session } } =
+        await supabaseClient.auth.getSession();
+
+      if (!session?.user) {
+        zobrazVyprselePrihlaseni();
+        return;
+      }
+
+      await zpracujStavPrihlasenehoUzivatele(
+        session.user,
+        { spustitSync: false }
+      );
+    } catch (error) {
+      console.warn(
+        "Obnovení stavu účtu po odmítnutí přístupu selhalo:",
+        error
+      );
+    }
+  }
+);
 
 window.LubaNoteSupabase = {
   pripravClient: pripravSupabaseClient,
@@ -1439,7 +1829,10 @@ window.LubaNoteSupabase = {
   zrusPredchoziPrihlaseni,
   zobrazPrihlaseni,
   overChybejiciSessionAProbudLogin,
-  nactiStavPristupu
+  nactiStavPristupu,
+  ziskejAktualniPristup: () =>
+    aktualniPristupUctu || nactiLokalniCachePristupu(),
+  zkontrolujLimitNovePoznamky
 };
 
 window.addEventListener(

@@ -398,6 +398,55 @@ function zrusKonfliktSynchronizace(noteId) {
   zrusOhlaseniKonfliktu(noteId);
 }
 
+function jeChybaOdeprenehoPristupu(error) {
+  const text = String(
+    error?.message || error?.details || error?.hint || ""
+  ).toLowerCase();
+
+  return (
+    String(error?.code || "") === "42501" ||
+    text.includes("account_not_active_or_plan_expired") ||
+    text.includes("row-level security")
+  );
+}
+
+function oznamOdeprenyPristupUctu(error = null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(
+      "lubanote:account-access-denied",
+      {
+        detail: {
+          code: error?.code || null,
+          message: error?.message || null
+        }
+      }
+    )
+  );
+}
+
+function oznamLimitPoznamek(vysledek = {}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(
+      "lubanote:note-limit-reached",
+      {
+        detail: {
+          source: "server",
+          noteLimit: vysledek?.note_limit ?? null,
+          currentCount: vysledek?.current_count ?? null
+        }
+      }
+    )
+  );
+}
+
 async function provedBezpecnyZapisPoznamky({
   id,
   data,
@@ -432,9 +481,33 @@ async function provedBezpecnyZapisPoznamky({
       error.message
     );
 
+    if (jeChybaOdeprenehoPristupu(error)) {
+      oznamOdeprenyPristupUctu(error);
+
+      return {
+        ok: false,
+        accessDenied: true,
+        error
+      };
+    }
+
     return {
       ok: false,
       error
+    };
+  }
+
+  if (
+    !vysledek?.ok &&
+    vysledek?.limit === true &&
+    vysledek?.reason === "note_limit_reached"
+  ) {
+    oznamLimitPoznamek(vysledek);
+
+    return {
+      ok: false,
+      limit: true,
+      result: vysledek
     };
   }
 
@@ -1028,6 +1101,11 @@ async function getCloudNotesForSync() {
 
   if (error) {
     console.error("Sync download error:", error.message);
+
+    if (jeChybaOdeprenehoPristupu(error)) {
+      oznamOdeprenyPristupUctu(error);
+    }
+
     /*
      * Chybu čtení nikdy nesmíme zaměnit za prázdný cloud.
      * Jinak by klient mohl začít všechny lokální poznámky posílat
@@ -2813,6 +2891,10 @@ async function syncNotes() {
 
     return vysledek;
   } catch (error) {
+    if (jeChybaOdeprenehoPristupu(error)) {
+      oznamOdeprenyPristupUctu(error);
+    }
+
     if (aktivniKonfliktySyncu.size > 0) {
       nastavStavSynchronizaceUI("conflict");
     } else {
@@ -2851,6 +2933,41 @@ async function startSync() {
   }
 
   nastavStavSynchronizaceUI("syncing");
+
+  /*
+   * Onboarding se spouští až PO prvním bezpečném syncu. Server tak ví,
+   * zda je účet opravdu nový a čistý. Pokud právě vytvořil uvítací
+   * poznámku, provedeme ještě jeden sync před skrytím splash screenu,
+   * aby uživatel nikdy neviděl nejdřív prázdnou aplikaci.
+   */
+  if (
+    typeof window.LubaNoteOnboarding
+      ?.zajistiUvitaciPoznamku === "function"
+  ) {
+    try {
+      const onboarding =
+        await window.LubaNoteOnboarding
+          .zajistiUvitaciPoznamku();
+
+      if (onboarding?.created === true) {
+        const uvodSynchronizovan = await syncNotes();
+
+        if (uvodSynchronizovan !== true) {
+          return false;
+        }
+      }
+    } catch (error) {
+      /*
+       * Onboarding nesmí zablokovat už existující účet ani základní
+       * synchronizaci. Server si stav pamatuje a pokus může zopakovat
+       * při dalším bezpečném startu.
+       */
+      console.warn(
+        "Uvítací poznámka se dokončí později:",
+        error
+      );
+    }
+  }
 
   if (
     typeof window.LubaNoteRecurring
