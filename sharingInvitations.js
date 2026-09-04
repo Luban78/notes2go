@@ -483,7 +483,39 @@
         : t("sharing.editorRole", "Editor");
 
       info.append(username, role);
-      item.append(info);
+
+      const napsat = document.createElement("button");
+      napsat.type = "button";
+      napsat.className = "lubanoteChatFromShareButton";
+      napsat.textContent = t("chat.writeMessage", "Napsat zprávu");
+
+      const kontaktUsername = username.textContent;
+
+      napsat.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!navigator.onLine) {
+          nastavShareStatus(
+            t("chat.offline", "Chat vyžaduje připojení k internetu."),
+            "error"
+          );
+          return;
+        }
+
+        if (typeof window.LubaNoteChat?.openChatWithUsername !== "function") {
+          nastavShareStatus(
+            t("chat.loadFailed", "Chat se nepodařilo načíst."),
+            "error"
+          );
+          return;
+        }
+
+        zavriShareModal();
+        await window.LubaNoteChat.openChatWithUsername(kontaktUsername);
+      });
+
+      item.append(info, napsat);
       modal.collaboratorsList.append(item);
     }
   }

@@ -1,0 +1,534 @@
+/* ============================================================
+   LubaNote – S3D CHAT CLIENT V1
+============================================================ */
+
+.chatHeaderButton {
+  position: relative;
+}
+
+.chatHeaderIcon {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chatBadge,
+.chatContactUnread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 5px;
+
+  border-radius: 999px;
+  background: #d84c57;
+  color: #fff;
+
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.chatBadge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  border: 2px solid var(--color-background);
+}
+
+.chatBadge[hidden],
+.chatContactUnread[hidden] {
+  display: none !important;
+}
+
+.chatHeaderButton.hasUnread {
+  color: var(--color-accent);
+}
+
+.chatContactsModal,
+.chatDeleteModal,
+.chatThreadOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5350;
+
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.chatContactsModal,
+.chatDeleteModal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.chatThreadOverlay {
+  z-index: 5380;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.chatDeleteModal {
+  z-index: 5420;
+}
+
+.chatContactsModal[hidden],
+.chatDeleteModal[hidden],
+.chatThreadOverlay[hidden] {
+  display: none !important;
+}
+
+.chatUiOpen {
+  overflow: hidden;
+}
+
+.chatContactsCard,
+.chatDeleteCard,
+.chatThreadCard {
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.chatContactsCard {
+  width: min(100%, 480px);
+  max-height: min(720px, calc(100dvh - 36px));
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.chatContactsHeader,
+.chatThreadHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chatContactsHeader {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.chatContactsHeader h3,
+.chatThreadHeader h3,
+.chatDeleteCard h3 {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.chatCloseButton,
+.chatBackButton {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chatBackButton {
+  font-size: 36px;
+  font-weight: 500;
+}
+
+.chatStatus,
+.chatThreadStatus {
+  margin: 6px 0 10px;
+  padding: 9px 11px;
+  border-radius: 11px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.chatStatus[data-typ="error"],
+.chatThreadStatus[data-typ="error"] {
+  color: #d84c57;
+}
+
+.chatContactsList {
+  display: grid;
+  gap: 8px;
+  max-height: min(590px, calc(100dvh - 140px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chatContactRow {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 9px 10px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-background);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chatContactAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-background));
+  color: var(--color-accent);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.chatContactText {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.chatContactText strong,
+.chatContactText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatContactText span {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 3px);
+}
+
+.chatContactUnread {
+  min-width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+.chatEmptyState,
+.chatEmptyMessages {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: 13px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.chatThreadCard {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+
+  width: min(100%, 620px);
+  height: min(780px, calc(100dvh - 28px));
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.chatThreadHeader {
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.chatThreadTitleWrap {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+}
+
+.chatThreadTitleWrap h3,
+.chatThreadTitleWrap span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatThreadTitleWrap span {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 3px);
+}
+
+.chatThreadStatus {
+  margin: 8px 12px 0;
+}
+
+.chatMessages {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 12px 18px;
+  background: var(--color-background);
+  scroll-behavior: smooth;
+}
+
+.chatMessageRow {
+  display: flex;
+  margin: 5px 0;
+}
+
+.chatMessageRow.mine {
+  justify-content: flex-end;
+}
+
+.chatMessageRow.other {
+  justify-content: flex-start;
+}
+
+.chatMessageBubble {
+  position: relative;
+  min-width: 70px;
+  max-width: min(82%, 460px);
+  box-sizing: border-box;
+  padding: 9px 11px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.chatMessageRow.mine .chatMessageBubble {
+  padding-right: 30px;
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+}
+
+.chatMessageBubble.deleted {
+  opacity: 0.76;
+}
+
+.chatMessageBody {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.38;
+}
+
+.chatMessageBubble.deleted .chatMessageBody {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.chatMessageMeta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.chatReadReceipt {
+  font-weight: 700;
+}
+
+.chatMessageDeleteButton {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chatComposer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+
+  box-sizing: border-box;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.chatComposer textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  box-sizing: border-box;
+  resize: none;
+
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  outline: none;
+
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.35;
+}
+
+.chatComposer textarea:focus {
+  border-color: var(--color-accent);
+}
+
+.chatSendButton,
+.chatSecondaryButton,
+.chatDangerButton,
+.lubanoteChatFromShareButton {
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chatSendButton {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.chatSendButton:disabled,
+.chatComposer textarea:disabled,
+.chatSecondaryButton:disabled,
+.chatDangerButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chatDeleteCard {
+  width: min(100%, 420px);
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.chatDeleteCard p {
+  margin: 10px 0 18px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.chatDeleteActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.chatSecondaryButton {
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.chatDangerButton {
+  border: 1px solid #c84650;
+  background: #c84650;
+  color: #fff;
+}
+
+.lubanoteChatFromShareButton {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: calc(var(--font-size) - 3px);
+}
+
+@media (max-width: 620px) {
+  .chatContactsModal,
+  .chatThreadOverlay {
+    inset: auto 0 auto 0;
+    top: var(--visual-top, 0px);
+    width: 100%;
+    height: var(--visual-height, 100dvh);
+    min-height: 0;
+  }
+
+  .chatContactsModal {
+    align-items: center;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      10px
+      max(58px, env(safe-area-inset-bottom));
+  }
+
+  .chatContactsCard {
+    width: 100%;
+    max-height: calc(var(--visual-height, 100dvh) - 82px);
+  }
+
+  .chatThreadOverlay {
+    padding: 0;
+    background: var(--color-background);
+  }
+
+  .chatThreadCard {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .chatThreadHeader {
+    padding-top: max(9px, env(safe-area-inset-top));
+  }
+
+  .chatMessageBubble {
+    max-width: 86%;
+  }
+
+  .lubanoteChatFromShareButton {
+    max-width: 118px;
+    white-space: normal;
+    line-height: 1.15;
+  }
+}
+
+/* Nově jsou v searchActions čtyři akce: zobrazení, pozvánky, chat, menu. */
+.searchActions {
+  width: 199px;
+}
+
+@media (max-width: 620px) {
+  .searchActions {
+    width: auto;
+  }
+}
