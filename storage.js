@@ -2190,7 +2190,7 @@ async function ziskejTajneNastaveniProZalohu(
 }
 
 
-async function vytvorKompletniZalohu() {
+async function vytvorKompletniZalohu(moznosti = {}) {
   await cekajNaUlozeniTajnychPoznamek();
 
   const notes =
@@ -2203,21 +2203,76 @@ async function vytvorKompletniZalohu() {
       secretNotes.length
     );
 
-  if (
-    typeof ziskejStitkyProKompletniZalohu !==
-    "function"
-  ) {
-    throw vytvorChybuZalohy(
-      "Modul štítků není dostupný.",
-      "Kompletní zálohu se nepodařilo připravit, protože nejsou dostupné štítky."
-    );
-  }
+  const pouzitSifrovaneTajneStitkyV4 =
+    moznosti?.sifrovaneTajneStitkyV4 === true;
 
-  let vsechnyStitky;
+  let verejneStitky = [];
+  let tajneStitky = [];
+  let secretTagRecords = [];
+  let secretMetadata = null;
 
   try {
-    vsechnyStitky =
-      await ziskejStitkyProKompletniZalohu();
+    if (pouzitSifrovaneTajneStitkyV4) {
+      if (
+        typeof ziskejStitkyProKompletniZalohuV4 !==
+        "function"
+      ) {
+        throw new Error(
+          "Modul štítků V4 není dostupný."
+        );
+      }
+
+      const stitkyV4 =
+        await ziskejStitkyProKompletniZalohuV4();
+
+      verejneStitky = Array.isArray(
+        stitkyV4?.publicTags
+      ) ? stitkyV4.publicTags : [];
+
+      secretTagRecords = Array.isArray(
+        stitkyV4?.secretTagRecords
+      ) ? stitkyV4.secretTagRecords : [];
+    } else {
+      if (
+        typeof ziskejStitkyProKompletniZalohu !==
+        "function"
+      ) {
+        throw new Error(
+          "Modul štítků není dostupný."
+        );
+      }
+
+      const vsechnyStitky =
+        await ziskejStitkyProKompletniZalohu();
+
+      verejneStitky = vsechnyStitky
+        .filter(
+          (stitek) => stitek.is_secret !== true
+        );
+
+      tajneStitky = vsechnyStitky
+        .filter(
+          (stitek) => stitek.is_secret === true
+        );
+
+      if (tajneStitky.length > 0) {
+        if (
+          typeof zasifrujMetadataKompletniZalohy !==
+            "function" ||
+          typeof tajnySifrovaciKlic === "undefined" ||
+          !tajnySifrovaciKlic
+        ) {
+          throw new Error(
+            "Nejdřív odemkni tajný režim. Tajné štítky musí být v kompletní záloze bezpečně zašifrované."
+          );
+        }
+
+        secretMetadata =
+          await zasifrujMetadataKompletniZalohy({
+            tags: tajneStitky
+          });
+      }
+    }
   } catch (error) {
     const zprava = String(
       error?.message || error || ""
@@ -2228,37 +2283,6 @@ async function vytvorKompletniZalohu() {
       zprava ||
       "Štítky se nepodařilo načíst pro kompletní zálohu."
     );
-  }
-
-  const verejneStitky = vsechnyStitky
-    .filter(
-      (stitek) => stitek.is_secret !== true
-    );
-
-  const tajneStitky = vsechnyStitky
-    .filter(
-      (stitek) => stitek.is_secret === true
-    );
-
-  let secretMetadata = null;
-
-  if (tajneStitky.length > 0) {
-    if (
-      typeof zasifrujMetadataKompletniZalohy !==
-        "function" ||
-      typeof tajnySifrovaciKlic === "undefined" ||
-      !tajnySifrovaciKlic
-    ) {
-      throw vytvorChybuZalohy(
-        "Tajný režim je zamknutý.",
-        "Nejdřív odemkni tajný režim. Tajné štítky musí být v kompletní záloze bezpečně zašifrované."
-      );
-    }
-
-    secretMetadata =
-      await zasifrujMetadataKompletniZalohy({
-        tags: tajneStitky
-      });
   }
 
   const user =
@@ -2301,7 +2325,9 @@ async function vytvorKompletniZalohu() {
       regularNoteCount: notes.length,
       secretNoteCount: secretNotes.length,
       publicTagCount: verejneStitky.length,
-      secretTagCount: tajneStitky.length,
+      secretTagCount: pouzitSifrovaneTajneStitkyV4 ?
+        secretTagRecords.length :
+        tajneStitky.length,
       plannedItemCount:
         Array.isArray(plannedItems)
           ? plannedItems.length
@@ -2313,6 +2339,14 @@ async function vytvorKompletniZalohu() {
       tajneNastaveni.nastaveni,
     publicTags: verejneStitky,
     secretMetadata,
+    secretTagEncoding:
+      pouzitSifrovaneTajneStitkyV4 ?
+        "encrypted-records-v1" :
+        "legacy-secret-metadata-v1",
+    secretTagRecords:
+      pouzitSifrovaneTajneStitkyV4 ?
+        secretTagRecords :
+        undefined,
     plannedItems:
       Array.isArray(plannedItems)
         ? plannedItems
@@ -2342,12 +2376,14 @@ async function pripravAProvedExportZalohy(
   }
 
   try {
-    const backup =
-      await vytvorKompletniZalohu();
-
     const jeApk =
       window.Capacitor
         ?.isNativePlatform?.() === true;
+
+    const backup =
+      await vytvorKompletniZalohu({
+        sifrovaneTajneStitkyV4: jeApk
+      });
 
     if (jeApk) {
       const vysledek =
@@ -2412,7 +2448,9 @@ async function pripravAProvedExportZalohy(
       zobrazZpravuAplikace(
         "Kompletní záloha",
         error?.uzivatelskaZprava ||
-        "Zálohu se nepodařilo vytvořit. Zkus to prosím znovu."
+        (zpravaChyby
+          ? `Zálohu se nepodařilo vytvořit. Detail: ${zpravaChyby}`
+          : "Zálohu se nepodařilo vytvořit. Zkus to prosím znovu.")
       );
     }
   } finally {

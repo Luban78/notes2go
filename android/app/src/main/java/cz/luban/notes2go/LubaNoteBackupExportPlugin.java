@@ -97,6 +97,28 @@ public class LubaNoteBackupExportPlugin extends Plugin {
     }
   }
 
+  private Long ziskejCeleCisloJakoLong(
+    PluginCall call,
+    String klic
+  ) {
+    if (call == null || klic == null) {
+      return null;
+    }
+
+    Double hodnota = call.getDouble(klic);
+
+    if (
+      hodnota == null ||
+      hodnota.isNaN() ||
+      hodnota.isInfinite() ||
+      hodnota < 0
+    ) {
+      return null;
+    }
+
+    return hodnota.longValue();
+  }
+
   private boolean jeBezpecnaCestaArchivu(String cesta) {
     if (cesta == null) {
       return false;
@@ -363,7 +385,10 @@ public class LubaNoteBackupExportPlugin extends Plugin {
   @PluginMethod
   public synchronized void zahajPrilohu(PluginCall call) {
     String nazev = call.getString("nazev");
-    Long ocekavaneBajty = call.getLong("ocekavaneBajty");
+    Long ocekavaneBajty = ziskejCeleCisloJakoLong(
+      call,
+      "ocekavaneBajty"
+    );
 
     if (
       archivniVystup == null ||

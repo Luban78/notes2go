@@ -199,6 +199,97 @@ async function ziskejStitkyProKompletniZalohu() {
 }
 
 
+async function ziskejStitkyProKompletniZalohuV4() {
+  if (
+    !navigator.onLine ||
+    !supabaseClient ||
+    typeof getCurrentUser !== "function"
+  ) {
+    throw new Error(
+      "Kompletní záloha potřebuje připojení k internetu pro bezpečné načtení všech štítků."
+    );
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user?.id) {
+    throw new Error(
+      "Před kompletní zálohou se přihlas ke svému účtu LubaNote."
+    );
+  }
+
+  const dotaz = supabaseClient
+    .from("tags")
+    .select(
+      "id, name, encrypted_name, is_secret, sort_order, color"
+    )
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .order("sort_order", {
+      ascending: true
+    });
+
+  const { data, error } =
+  typeof sCasovymLimitem === "function" ?
+    await sCasovymLimitem(
+      dotaz,
+      5000,
+      "Načtení štítků pro zálohu V4"
+    ) :
+    await dotaz;
+
+  if (error || !Array.isArray(data)) {
+    throw new Error(
+      "Štítky se nepodařilo bezpečně načíst pro kompletní zálohu."
+    );
+  }
+
+  const verejneStitky = [];
+  const sifrovaneTajneStitky = [];
+
+  for (const tag of data) {
+    if (tag.is_secret !== true) {
+      const normalizovany = normalizujStitekProZalohu({
+        id: tag.id,
+        name: tag.name,
+        is_secret: false,
+        sort_order: tag.sort_order,
+        color: tag.color
+      });
+
+      if (normalizovany) {
+        verejneStitky.push(normalizovany);
+      }
+
+      continue;
+    }
+
+    if (!tag.id || !tag.encrypted_name) {
+      throw new Error(
+        "Tajný štítek nemá platná šifrovaná data. Záloha byla bezpečně zastavena."
+      );
+    }
+
+    const poradi = Number(tag.sort_order);
+
+    sifrovaneTajneStitky.push({
+      id: String(tag.id),
+      encrypted_name: tag.encrypted_name,
+      is_secret: true,
+      sort_order: Number.isFinite(poradi) ?
+        poradi :
+        0,
+      color: String(tag.color || "system")
+    });
+  }
+
+  return {
+    publicTags: pripravStitkyProZalohu(verejneStitky),
+    secretTagRecords: sifrovaneTajneStitky
+  };
+}
+
+
 async function obnovStitkyZKompletniZalohy(
   stitky,
   user
