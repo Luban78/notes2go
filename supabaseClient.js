@@ -681,6 +681,18 @@ async function povolAktivniUcet(
   setLoginMessage();
   zobrazLokalniAplikaci();
 
+  /*
+   * C3 Admin Dashboard a další účetní UI dostanou signál až poté,
+   * co server skutečně povolil aktivní účet. Samotná session nestačí.
+   */
+  window.dispatchEvent(
+    new CustomEvent("lubanote:account-active", {
+      detail: {
+        userId: user?.id || null
+      }
+    })
+  );
+
   if (
     typeof loadTagsFromSupabase === "function"
   ) {

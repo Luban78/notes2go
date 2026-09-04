@@ -10033,3 +10033,313 @@ body.trashScreenOpen {
 #trashConfirmModal {
   z-index: 3700;
 }
+
+/* ==================================================
+   C3 – ADMIN DASHBOARD V1
+   Server rozhoduje, kdo je admin. UI je pouze klientský pohled.
+================================================== */
+
+.adminDashboardModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.46);
+  backdrop-filter: blur(3px);
+}
+
+.adminDashboardModal[hidden] {
+  display: none !important;
+}
+
+.adminDashboardContent {
+  width: min(100%, 720px);
+  height: 100%;
+  box-sizing: border-box;
+  padding: 22px 18px 32px;
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.adminDashboardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.adminDashboardEyebrow {
+  margin-bottom: 3px;
+  color: var(--color-accent);
+  font-size: calc(var(--font-size) - 3px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.adminDashboardHeader h2 {
+  margin: 0;
+  font-size: calc(var(--font-size) + 10px);
+}
+
+#closeAdminDashboardButton,
+.adminRefreshButton {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.adminStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.adminStatCard {
+  min-width: 0;
+  padding: 15px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.adminStatValue {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--color-accent);
+  font-size: calc(var(--font-size) + 11px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.adminStatLabel {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminDashboardToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.adminDashboardTabs {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.adminDashboardTab {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-weight: 650;
+}
+
+.adminDashboardTab.active {
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.adminDashboardStatus {
+  min-height: 22px;
+  margin: 8px 2px 12px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.adminDashboardStatus.error {
+  color: #d35c5c;
+}
+
+.adminUsersList {
+  display: grid;
+  gap: 12px;
+}
+
+.adminUserCard {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+
+.adminUserTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminUserIdentity {
+  min-width: 0;
+}
+
+.adminUserEmail {
+  display: block;
+  overflow-wrap: anywhere;
+  font-weight: 750;
+}
+
+.adminUserRegistered {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 3px);
+}
+
+.adminUserBadges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.adminBadge {
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 4px);
+  font-weight: 700;
+}
+
+.adminBadge.pending {
+  color: #d99a38;
+}
+
+.adminBadge.active,
+.adminBadge.demo {
+  color: var(--color-accent);
+}
+
+.adminBadge.rejected,
+.adminBadge.suspended {
+  color: #d35c5c;
+}
+
+.adminUserMeta {
+  display: grid;
+  gap: 6px;
+  margin-top: 13px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.adminUserMetaRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.adminUserMetaRow strong {
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.adminUserActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.adminUserActions button {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.adminApproveButton {
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.adminRejectButton {
+  background: var(--color-background);
+  color: #d35c5c;
+}
+
+.adminUserActions button:disabled,
+.adminRefreshButton:disabled {
+  opacity: 0.5;
+}
+
+.adminEmptyState {
+  padding: 30px 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+@media (min-width: 760px) {
+  .adminDashboardModal {
+    align-items: center;
+    padding: 28px;
+  }
+
+  .adminDashboardContent {
+    height: min(86vh, 780px);
+    border: 1px solid var(--color-border);
+    border-radius: 26px;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+  }
+}
+
+@media (max-width: 480px) {
+  .adminUserTop {
+    display: block;
+  }
+
+  .adminUserBadges {
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+
+  .adminUserActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hidden musí vyhrát i nad layoutovými display pravidly menu/sidebaru. */
+#adminDashboardButton[hidden],
+#desktopAdminDashboardButton[hidden] {
+  display: none !important;
+}

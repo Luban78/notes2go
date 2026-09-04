@@ -8,7 +8,7 @@
   
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260904-login-privacy-v2">
+  <link rel="stylesheet" href="style.css?v=20260904-c3-admin-dashboard-v1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -143,6 +143,11 @@
         <span>Nastavení</span>
       </button>
 
+      <button id="desktopAdminDashboardButton" class="desktopSidebarButton" type="button" hidden>
+        <span class="desktopSidebarIcon" data-luba-icon="zamek" aria-hidden="true"></span>
+        <span>Admin Dashboard</span>
+      </button>
+
       <button id="desktopBackupButton" class="desktopSidebarButton" type="button">
         <span class="desktopSidebarIcon" data-luba-icon="zaloha" aria-hidden="true"></span>
         <span>Záloha a obnova</span>
@@ -233,6 +238,12 @@
             <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
+          <button id="adminDashboardButton" type="button" role="menuitem" hidden>
+            <span class="mainMenuIcon" data-luba-icon="zamek" aria-hidden="true"></span>
+            <span class="mainMenuLabel">Admin Dashboard</span>
+            <span class="mainMenuArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
+          </button>
+
           <button id="aboutAppButton" type="button" role="menuitem">
             <span class="mainMenuIcon" data-luba-icon="info" aria-hidden="true"></span>
             <span class="mainMenuLabel">O aplikaci</span>
@@ -1210,6 +1221,52 @@
   </div>
   
   <!-- ========================================
+       ADMIN DASHBOARD – pouze pro serverově ověřeného admina
+       ======================================== -->
+
+  <div id="adminDashboardModal" class="adminDashboardModal" hidden>
+    <div class="adminDashboardContent" role="dialog" aria-modal="true" aria-labelledby="adminDashboardTitle">
+      <div class="adminDashboardHeader">
+        <div>
+          <div class="adminDashboardEyebrow">LubaNote</div>
+          <h2 id="adminDashboardTitle">Admin Dashboard</h2>
+        </div>
+        <button id="closeAdminDashboardButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít Admin Dashboard">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="adminStats" aria-label="Přehled uživatelů">
+        <div class="adminStatCard">
+          <span id="adminPendingCount" class="adminStatValue">–</span>
+          <span id="adminPendingLabel" class="adminStatLabel">Čeká</span>
+        </div>
+        <div class="adminStatCard">
+          <span id="adminActiveCount" class="adminStatValue">–</span>
+          <span id="adminActiveLabel" class="adminStatLabel">Aktivní</span>
+        </div>
+        <div class="adminStatCard">
+          <span id="adminDemoCount" class="adminStatValue">–</span>
+          <span id="adminDemoLabel" class="adminStatLabel">Demo</span>
+        </div>
+      </div>
+
+      <div class="adminDashboardToolbar">
+        <div class="adminDashboardTabs" role="tablist" aria-label="Filtr uživatelů">
+          <button id="adminPendingTab" class="adminDashboardTab active" type="button" role="tab" aria-selected="true">Čekající</button>
+          <button id="adminAllTab" class="adminDashboardTab" type="button" role="tab" aria-selected="false">Všichni</button>
+        </div>
+        <button id="adminRefreshButton" class="adminRefreshButton lubaIconOnlyButton" type="button" aria-label="Obnovit uživatele" title="Obnovit">
+          <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <p id="adminDashboardStatus" class="adminDashboardStatus" aria-live="polite"></p>
+      <div id="adminUsersList" class="adminUsersList"></div>
+    </div>
+  </div>
+
+  <!-- ========================================
        OBRAZOVKA NASTAVENÍ
        ======================================== -->
   
@@ -1754,7 +1811,9 @@
   <script src="syncStatus.js?v=20260902-sync-status-1"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260904-login-privacy-v2"></script>
+  <script src="supabaseClient.js?v=20260904-c3-admin-dashboard-v1"></script>
+  <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
+  <script src="adminDashboard.js?v=20260904-c3-admin-dashboard-v1"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260904-attachments-physical-delete-1"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
