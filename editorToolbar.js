@@ -140,6 +140,83 @@
     ) === true;
   }
 
+
+  /*
+   * S2D.1d – vyvážené rozložení shared toolbaru.
+   *
+   * V běžném editoru necháváme původní DOM přesně tak, jak je.
+   * Ve shared editoru přesuneme část textových nástrojů do druhé
+   * stránky toolbaru, aby první stránka nemusela rolovat a druhá
+   * nezůstala skoro prázdná.
+   *
+   * Strana 1:
+   *   zpět, znovu, B, I, U, velikost
+   *
+   * Strana 2:
+   *   styl H, barva textu, zarovnání, odkaz, uložit jako, odrážky
+   */
+  const sdileneToolbarPrvky = [
+    tlacitkoNadpis,
+    panelBarvaTextu,
+    tlacitkoBarvaTextu,
+    tlacitkoZarovnaniTextu,
+    tlacitkoVlozitOdkaz
+  ].filter(Boolean);
+
+  const sdileneToolbarPozice = new Map();
+
+  sdileneToolbarPrvky.forEach((prvek, index) => {
+    const znacka = document.createComment(
+      `luba-shared-toolbar-${index}`
+    );
+
+    prvek.parentNode?.insertBefore(znacka, prvek);
+
+    sdileneToolbarPozice.set(
+      prvek,
+      znacka
+    );
+  });
+
+  let sdileneToolbarRozlozeniAktivni = false;
+
+  function pripravSdileneToolbarRozlozeni() {
+    if (
+      sdileneToolbarRozlozeniAktivni ||
+      !editorToolsToolbar
+    ) {
+      return;
+    }
+
+    sdileneToolbarPrvky.forEach((prvek) => {
+      editorToolsToolbar.appendChild(prvek);
+    });
+
+    sdileneToolbarRozlozeniAktivni = true;
+  }
+
+  function obnovPuvodniToolbarRozlozeni() {
+    if (!sdileneToolbarRozlozeniAktivni) {
+      return;
+    }
+
+    sdileneToolbarPrvky.forEach((prvek) => {
+      const znacka =
+        sdileneToolbarPozice.get(prvek);
+
+      if (!znacka?.parentNode) {
+        return;
+      }
+
+      znacka.parentNode.insertBefore(
+        prvek,
+        znacka.nextSibling
+      );
+    });
+
+    sdileneToolbarRozlozeniAktivni = false;
+  }
+
   if (
     !tlacitkoToolbar ||
     !rychlyToolbar ||
@@ -1021,6 +1098,12 @@
   let rezimToolbaru = "cas";
 
   function nastavToolbar(rezim) {
+    if (jeSdilenyEditor()) {
+      pripravSdileneToolbarRozlozeni();
+    } else {
+      obnovPuvodniToolbarRozlozeni();
+    }
+
     /*
      * DESKTOP:
      * využijeme šířku a ukážeme vše najednou.
@@ -1119,20 +1202,33 @@
     }
 
     if (jsouNastroje) {
-      if (window.LubaNoteIcons?.nastavJenIkonu) {
-        window.LubaNoteIcons.nastavJenIkonu(
-          tlacitkoToolbar,
-          "hodiny",
-          ["editorModeSvgIcon"]
+      /*
+       * Shared editor nemá osobní datum/čas.
+       * Druhá stránka proto vrací jasné Aa místo ikony hodin.
+       */
+      if (jeSdilenyEditor()) {
+        tlacitkoToolbar.textContent = "Aa";
+
+        tlacitkoToolbar.setAttribute(
+          "aria-label",
+          "Zpět na formátování textu"
         );
       } else {
-        tlacitkoToolbar.textContent = "Čas";
-      }
+        if (window.LubaNoteIcons?.nastavJenIkonu) {
+          window.LubaNoteIcons.nastavJenIkonu(
+            tlacitkoToolbar,
+            "hodiny",
+            ["editorModeSvgIcon"]
+          );
+        } else {
+          tlacitkoToolbar.textContent = "Čas";
+        }
 
-      tlacitkoToolbar.setAttribute(
-        "aria-label",
-        "Zobrazit datum a čas"
-      );
+        tlacitkoToolbar.setAttribute(
+          "aria-label",
+          "Zobrazit datum a čas"
+        );
+      }
     }
 
 

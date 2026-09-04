@@ -622,6 +622,12 @@
       const row = document.createElement("div");
       row.className = "sharingReadOnlyTodo";
 
+      if (todo?.completed === true) {
+        row.classList.add(
+          "sharingReadOnlyTodoCompleted"
+        );
+      }
+
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = todo?.completed === true;

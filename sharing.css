@@ -884,3 +884,318 @@ body.sharingReadOnlyOpen {
     padding-bottom: max(72px, env(safe-area-inset-bottom));
   }
 }
+
+
+/* ============================================================
+   S2D.1d – Shared editor UI + faithful read-only viewer
+============================================================ */
+
+/*
+ * Shared note content has no shared date/time/reminder layer.
+ * Hide the empty top-actions wrapper as well so toolbar gets the
+ * whole row.
+ */
+#taskModal.sharingEditorMode .editorTopActions {
+  display: none !important;
+}
+
+/*
+ * Two balanced toolbar pages on mobile.
+ * No horizontal scrolling is needed in shared mode.
+ */
+#taskModal.sharingEditorMode .editorQuickToolbar {
+  justify-content: space-evenly;
+  gap: 0;
+  padding-inline: 0;
+  overflow-x: hidden;
+}
+
+#taskModal.sharingEditorMode .editorToolbarDivider {
+  display: none !important;
+}
+
+#taskModal.sharingEditorMode .editorQuickToolbar > .editorQuickTool,
+#taskModal.sharingEditorMode .editorQuickToolbar > .editorToolbarButton {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 36px;
+  max-width: 44px;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoNadpis {
+  order: 1;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #textColorPanel {
+  order: 2;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #textColorButton {
+  order: 3;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoZarovnaniTextu {
+  order: 4;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoVlozitOdkaz {
+  order: 5;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoUlozitDokument {
+  order: 6;
+}
+
+#taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoBullet {
+  order: 7;
+}
+
+/*
+ * Read-only fullscreen follows the same useful width as the normal
+ * editor instead of stretching TODO rows across a desktop monitor.
+ */
+.sharingReadOnlyContent,
+.sharingReadOnlyTodos {
+  width: 100%;
+  max-width: 920px;
+  box-sizing: border-box;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/*
+ * Default alignment is left. Any explicit alignment stored in
+ * richContent/todo.html remains authoritative on child elements.
+ */
+.sharingReadOnlyContent,
+.sharingReadOnlyTodoText,
+.sharingReadOnlyTodos h3 {
+  text-align: left;
+}
+
+.sharingReadOnlyContent {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-family: inherit;
+  font-size: var(--font-size);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Preserve the normal LubaNote rich-text vocabulary in the viewer. */
+.sharingReadOnlyContent .lubaNoteVlozenyText,
+.sharingReadOnlyTodoText .lubaNoteVlozenyText {
+  color: var(--color-editor-text);
+  background-color: var(
+    --luba-vlozeny-text-pozadi,
+    var(--color-editor-background)
+  );
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+  font-size: var(--font-size);
+  font-weight: 400;
+  font-style: normal;
+  font-variant: normal;
+  line-height: inherit;
+  letter-spacing: normal;
+  text-decoration: none;
+  text-transform: none;
+  text-shadow: none;
+  white-space: pre-wrap;
+}
+
+.sharingReadOnlyContent .richTextHighlight,
+.sharingReadOnlyTodoText .richTextHighlight {
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+  padding: 0.08em 0.12em;
+}
+
+.sharingReadOnlyContent h1,
+.sharingReadOnlyContent h2,
+.sharingReadOnlyContent h3,
+.sharingReadOnlyTodoText h1,
+.sharingReadOnlyTodoText h2,
+.sharingReadOnlyTodoText h3 {
+  color: inherit;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.sharingReadOnlyContent h1,
+.sharingReadOnlyTodoText h1 {
+  margin: 0.55em 0 0.30em;
+  font-size: 1.60em;
+  line-height: 1.18;
+}
+
+.sharingReadOnlyContent h2,
+.sharingReadOnlyTodoText h2 {
+  margin: 0.50em 0 0.28em;
+  font-size: 1.36em;
+  line-height: 1.22;
+}
+
+.sharingReadOnlyContent h3,
+.sharingReadOnlyTodoText h3 {
+  margin: 0.45em 0 0.25em;
+  font-size: 1.18em;
+  line-height: 1.28;
+}
+
+.sharingReadOnlyContent ul,
+.sharingReadOnlyContent ol,
+.sharingReadOnlyTodoText ul,
+.sharingReadOnlyTodoText ol {
+  margin-block: 0.35em;
+  padding-inline-start: 1.55em;
+}
+
+.sharingReadOnlyContent .lubaNoteInternetLink,
+.sharingReadOnlyTodoText .lubaNoteInternetLink {
+  color: var(--color-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/*
+ * Existing shared images keep their editor width/alignment.
+ * Controls remain absent in read-only mode.
+ */
+.sharingReadOnlyContent .lubaNoteImage,
+.sharingReadOnlyTodoText .lubaNoteImage {
+  position: relative;
+  width: min(100%, 720px);
+  max-width: 100%;
+  margin: 14px auto;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sharingReadOnlyContent .lubaNoteImage[data-zarovnani="vlevo"],
+.sharingReadOnlyTodoText .lubaNoteImage[data-zarovnani="vlevo"] {
+  float: left;
+  margin: 2px 4px 6px 0 !important;
+}
+
+.sharingReadOnlyContent .lubaNoteImage[data-zarovnani="vpravo"],
+.sharingReadOnlyTodoText .lubaNoteImage[data-zarovnani="vpravo"] {
+  float: right;
+  margin: 2px 0 6px 3px !important;
+}
+
+.sharingReadOnlyContent .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"],
+.sharingReadOnlyContent .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"],
+.sharingReadOnlyTodoText .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"],
+.sharingReadOnlyTodoText .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"] {
+  width: calc(50% - 4px) !important;
+}
+
+/*
+ * TODO preview now looks like the normal editor list: no giant card,
+ * no forced centered text, and sane checkbox sizing.
+ */
+.sharingReadOnlyTodos {
+  margin-top: 22px;
+  padding-top: 16px;
+}
+
+.sharingReadOnlyTodoList {
+  display: grid;
+  gap: 6px;
+}
+
+.sharingReadOnlyTodo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 8px;
+
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+
+  color: var(--color-editor-text);
+  font-size: var(--font-size);
+}
+
+.sharingReadOnlyTodo input[type="checkbox"] {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  margin: 1px 0 0;
+}
+
+.sharingReadOnlyTodoText {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  padding: 0 0 4px;
+
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: var(--font-size);
+  line-height: 1.35;
+
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sharingReadOnlyTodoCompleted .sharingReadOnlyTodoText {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+@media (max-width: 600px) {
+  #taskModal.sharingEditorMode .editorTopBar {
+    gap: 0;
+  }
+
+  #taskModal.sharingEditorMode .editorTopBar .editorToolbarToggle {
+    flex: 0 0 42px;
+    width: 42px;
+  }
+
+  #taskModal.sharingEditorMode .editorQuickToolbar > .editorQuickTool,
+  #taskModal.sharingEditorMode .editorQuickToolbar > .editorToolbarButton {
+    min-width: 34px;
+    max-width: 42px;
+  }
+
+  .sharingReadOnlyBody {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .sharingReadOnlyTodo {
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+}
+
+
+.sharingReadOnlyContent .lubaNoteImageSettings,
+.sharingReadOnlyContent .lubaNoteImageRemove,
+.sharingReadOnlyTodoText .lubaNoteImageSettings,
+.sharingReadOnlyTodoText .lubaNoteImageRemove {
+  display: none !important;
+}
