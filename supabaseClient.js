@@ -27,30 +27,116 @@ const SUPABASE_LIBRARY_URL =
  * na obecnou Site URL Supabase, protože ta může skončit na kořeni
  * luban78.github.io místo /notes2go/.
  */
+const LUBANOTE_AUTH_RETURN_PARAM =
+  "lubanote_email_confirmed";
+
 const LUBANOTE_AUTH_REDIRECT_URL =
-  "https://luban78.github.io/notes2go/";
+  "https://luban78.github.io/notes2go/?lubanote_email_confirmed=1";
 
-function vycistiStarouAuthChybuZAdresy() {
-  const hash = String(window.location.hash || "");
+/*
+ * Výsledek potvrzovacího e-mailu musíme rozlišit od skutečně
+ * vypršelé Supabase session. Potvrzovací odkaz se může otevřít
+ * v interním prohlížeči Gmailu / jiné e-mailové aplikace, kde
+ * nejsou stejné auth údaje jako v původní kartě. Bez tohoto markeru
+ * by LubaNote mohla chybně zobrazit hlášku o vypršené synchronizaci.
+ */
+function nactiAuthNavratZAdresy() {
+  const url = new URL(window.location.href);
+  const hash = String(url.hash || "");
+  const hashParams = new URLSearchParams(
+    hash.startsWith("#") ? hash.slice(1) : hash
+  );
 
-  if (!hash || !/(^#|&)error=/.test(hash)) {
-    return;
+  const potvrzenyEmail =
+    url.searchParams.get(LUBANOTE_AUTH_RETURN_PARAM) === "1";
+
+  const errorCode = String(
+    url.searchParams.get("error_code") ||
+    hashParams.get("error_code") ||
+    ""
+  ).trim();
+
+  const maAuthChybu = Boolean(
+    url.searchParams.get("error") ||
+    hashParams.get("error") ||
+    errorCode
+  );
+
+  let zmenenaAdresa = false;
+
+  if (url.searchParams.has(LUBANOTE_AUTH_RETURN_PARAM)) {
+    url.searchParams.delete(LUBANOTE_AUTH_RETURN_PARAM);
+    zmenenaAdresa = true;
   }
 
   /*
-   * Chybový hash je pouze výsledek už použitého / expirovaného
-   * e-mailového odkazu. Není součástí navigace LubaNote a nesmí
-   * zůstávat v adrese při přepínání Poznámky / Plán / Připomínky.
-   * Úspěšné auth hash parametry zde záměrně nemažeme.
+   * Pokud jde o náš návrat po potvrzení e-mailu, uživatele stejně
+   * necháme znovu přihlásit heslem. Případný PKCE kód / auth tokeny
+   * proto nesmí zůstat viset v adresním řádku ani historii.
    */
-  window.history.replaceState(
-    null,
-    document.title,
-    `${window.location.pathname}${window.location.search}`
-  );
+  if (potvrzenyEmail) {
+    for (const klic of [
+      "code",
+      "token",
+      "token_hash",
+      "type",
+      "access_token",
+      "refresh_token",
+      "expires_in",
+      "expires_at",
+      "token_type"
+    ]) {
+      if (url.searchParams.has(klic)) {
+        url.searchParams.delete(klic);
+        zmenenaAdresa = true;
+      }
+    }
+
+    if (
+      url.hash &&
+      (
+        hashParams.has("access_token") ||
+        hashParams.has("refresh_token") ||
+        hashParams.has("type")
+      )
+    ) {
+      url.hash = "";
+      zmenenaAdresa = true;
+    }
+  }
+
+  for (const klic of [
+    "error",
+    "error_code",
+    "error_description"
+  ]) {
+    if (url.searchParams.has(klic)) {
+      url.searchParams.delete(klic);
+      zmenenaAdresa = true;
+    }
+  }
+
+  if (maAuthChybu && url.hash) {
+    url.hash = "";
+    zmenenaAdresa = true;
+  }
+
+  if (zmenenaAdresa) {
+    window.history.replaceState(
+      null,
+      document.title,
+      `${url.pathname}${url.search}${url.hash}`
+    );
+  }
+
+  return {
+    potvrzenyEmail,
+    maAuthChybu,
+    errorCode
+  };
 }
 
-vycistiStarouAuthChybuZAdresy();
+const lubanoteAuthNavrat = nactiAuthNavratZAdresy();
 
 let supabaseClient = null;
 let nacitaniSupabaseKnihovny = null;
@@ -900,6 +986,35 @@ async function overPrihlaseniOnline({
 }
 
 async function updateLoginScreen() {
+  /*
+   * Potvrzení e-mailu je samostatný auth návrat, ne vypršení session.
+   * Vždy ukážeme čisté přihlášení a nikdy kvůli tomu neodemykáme
+   * lokální data předchozího účtu.
+   */
+  if (lubanoteAuthNavrat.maAuthChybu) {
+    zrusPredchoziPrihlaseni();
+    zobrazPrihlaseni("", false);
+    setLoginMessageKey(
+      "login.emailLinkInvalid",
+      "Potvrzovací odkaz už byl použit nebo vypršel. Pokud je e-mail potvrzený, přihlas se.",
+      true
+    );
+    oznamSplashPripravenyBezCloudovehoStartu();
+    return;
+  }
+
+  if (lubanoteAuthNavrat.potvrzenyEmail) {
+    zrusPredchoziPrihlaseni();
+    zobrazPrihlaseni("", false);
+    setLoginMessageKey(
+      "login.emailConfirmed",
+      "E-mail byl potvrzen. Teď se přihlas.",
+      false
+    );
+    oznamSplashPripravenyBezCloudovehoStartu();
+    return;
+  }
+
   const maPredchoziPrihlaseni =
     existujePredchoziPrihlaseni();
 
@@ -1233,10 +1348,22 @@ accountStatusRefresh.addEventListener(
         return;
       }
 
-      await zpracujStavPrihlasenehoUzivatele(
-        session.user,
-        { spustitSync: true }
-      );
+      const povolen =
+        await zpracujStavPrihlasenehoUzivatele(
+          session.user,
+          { spustitSync: true }
+        );
+
+      if (
+        !povolen &&
+        aktualniStavUctu?.account_status === "pending"
+      ) {
+        setLoginMessageKey(
+          "login.stillPending",
+          "Účet stále čeká na schválení.",
+          false
+        );
+      }
     } catch (error) {
       console.warn("Account status refresh failed:", error);
       setLoginMessageKey(
