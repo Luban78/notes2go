@@ -519,7 +519,9 @@
     height: auto;
     min-height: 0;
     padding: 0;
-    background: var(--color-background);
+
+    /* Vzdy skutecne nepruhledny fullscreen shell. */
+    background-color: var(--color-background);
   }
 
   .chatThreadCard {
@@ -554,6 +556,15 @@
     flex: 0 0 auto;
     position: relative;
     z-index: 2;
+  }
+
+  /*
+   * Android navigation bar nehlasi na vsech zarizenich spolehlivy
+   * safe-area-inset-bottom. Drzime proto malou pevnou rezervu navic,
+   * aby se psaci pole nemohlo plest se systemovou listou.
+   */
+  body.nativeApp .chatThreadCard > .chatComposer {
+    padding-bottom: max(20px, calc(env(safe-area-inset-bottom) + 10px));
   }
 
   .chatThreadHeader {

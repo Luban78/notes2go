@@ -772,12 +772,23 @@
     modal.overlay.hidden = false;
     document.body.classList.add("chatUiOpen");
 
+    /*
+     * GLOBALNI FULLSCREEN GUARD:
+     * pod fullscreen chatem se hlavni UI fyzicky skryje.
+     * Android WebView tak pri animaci klavesnice nema co prosvitnout.
+     */
+    document.body.classList.add("lubaFullscreenOpaqueOpen");
+
     await nactiZpravy({ tichy: false, zachovatScroll: false });
     spustThreadPolling();
   }
 
   function zavriThread({ otevritKontakty = false } = {}) {
     if (threadModal) threadModal.overlay.hidden = true;
+
+    /* Kontakty jsou normalni modal s viditelnym pozadim, guard tam nechceme. */
+    document.body.classList.remove("lubaFullscreenOpaqueOpen");
+
     otevrenyKontakt = null;
     posledniOtiskZprav = null;
     clearInterval(threadPollTimer);

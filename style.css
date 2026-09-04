@@ -144,6 +144,50 @@ body {
 }
 
 /* ==================================================
+   GLOBALNI FULLSCREEN GUARD – MOBIL / APK
+================================================== */
+
+/*
+ * Jednotna ochrana proti prosvitnuti hlavni obrazovky pri animaci
+ * softwarove klavesnice v Android WebView.
+ *
+ * Problem nevznika jen v jednom modalu: visualViewport se pri vysouvani
+ * klavesnice meni v nekolika framech a fixed vrstvy mohou byt prekomponovany
+ * drive, nez se prepocita jejich vnitrni obsah. Proto se u fullscreen ploch
+ * nespoléháme jen na to, ze prekryv "zrovna" zakryva karty.
+ *
+ * Kdyz je otevren fullscreen editor (body.noScroll) nebo libovolna nova
+ * keyboard-safe fullscreen plocha (body.lubaFullscreenOpaqueOpen), zakladni
+ * UI pod ni se na mobilu docasne skryje. I kdyby WebView pri resize na jeden
+ * frame prekreslil fixed vrstvy, nema co prosvitnout.
+ *
+ * Nova fullscreen funkce, ktera muze otevrit klavesnici, ma pouze pridat
+ * body class "lubaFullscreenOpaqueOpen" po dobu sveho otevreni.
+ */
+@media (max-width: 899px) {
+  html {
+    background: var(--color-background);
+  }
+
+  body.lubaFullscreenOpaqueOpen,
+  body.noScroll {
+    background: var(--color-background);
+  }
+
+  body.lubaFullscreenOpaqueOpen > .desktopSidebar,
+  body.lubaFullscreenOpaqueOpen > .homeHeader,
+  body.lubaFullscreenOpaqueOpen > .app,
+  body.lubaFullscreenOpaqueOpen > .addTaskButton,
+  body.noScroll > .desktopSidebar,
+  body.noScroll > .homeHeader,
+  body.noScroll > .app,
+  body.noScroll > .addTaskButton {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+/* ==================================================
    PLOVOUCÍ TLAČÍTKO +
 ================================================== */
 
