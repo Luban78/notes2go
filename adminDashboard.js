@@ -201,6 +201,148 @@
     return badge;
   }
 
+  let adminPotvrzeniModal = null;
+  let adminPotvrzeniAkce = null;
+
+  function zajistiAdminPotvrzeniModal() {
+    if (adminPotvrzeniModal) {
+      return adminPotvrzeniModal;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "choiceModal";
+    overlay.hidden = true;
+
+    const dialog = document.createElement("div");
+    dialog.className = "choiceDialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+
+    const hlavicka = document.createElement("div");
+    hlavicka.className = "choiceDialogHeader";
+
+    const nadpis = document.createElement("h3");
+    nadpis.className = "choiceDialogTitle";
+    nadpis.id = "adminConfirmTitle";
+    dialog.setAttribute("aria-labelledby", nadpis.id);
+
+    const zavrit = document.createElement("button");
+    zavrit.type = "button";
+    zavrit.className = "choiceDialogClose";
+    zavrit.setAttribute("aria-label", "Zavřít");
+
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(
+        zavrit,
+        "zavrit",
+        ["choiceCloseSvgIcon"]
+      );
+    } else {
+      zavrit.textContent = "×";
+    }
+
+    const zprava = document.createElement("p");
+    zprava.className = "choiceDialogFieldLabel";
+    zprava.style.margin = "0 0 18px";
+    zprava.style.lineHeight = "1.45";
+    zprava.style.overflowWrap = "anywhere";
+
+    const akce = document.createElement("div");
+    akce.className = "choiceDialogActions";
+
+    const zrusit = document.createElement("button");
+    zrusit.type = "button";
+    zrusit.className = "choiceDialogSecondary";
+
+    const potvrdit = document.createElement("button");
+    potvrdit.type = "button";
+    potvrdit.className = "choiceDialogSave";
+
+    hlavicka.append(nadpis, zavrit);
+    akce.append(zrusit, potvrdit);
+    dialog.append(hlavicka, zprava, akce);
+    overlay.append(dialog);
+    document.body.append(overlay);
+
+    function zavriPotvrzeni() {
+      overlay.hidden = true;
+      adminPotvrzeniAkce = null;
+    }
+
+    zavrit.addEventListener("click", zavriPotvrzeni);
+    zrusit.addEventListener("click", zavriPotvrzeni);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        zavriPotvrzeni();
+      }
+    });
+
+    potvrdit.addEventListener("click", async () => {
+      const provedAkci = adminPotvrzeniAkce;
+      if (typeof provedAkci !== "function") {
+        zavriPotvrzeni();
+        return;
+      }
+
+      potvrdit.disabled = true;
+      zrusit.disabled = true;
+
+      try {
+        zavriPotvrzeni();
+        await provedAkci();
+      } finally {
+        potvrdit.disabled = false;
+        zrusit.disabled = false;
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !overlay.hidden) {
+        zavriPotvrzeni();
+      }
+    });
+
+    adminPotvrzeniModal = {
+      overlay,
+      nadpis,
+      zprava,
+      zrusit,
+      potvrdit
+    };
+
+    return adminPotvrzeniModal;
+  }
+
+  function otevriAdminPotvrzeni({
+    nadpis,
+    zprava,
+    potvrditText,
+    nebezpecne = false,
+    poPotvrzeni
+  }) {
+    const prvky = zajistiAdminPotvrzeniModal();
+
+    prvky.nadpis.textContent = nadpis;
+    prvky.zprava.textContent = zprava;
+    prvky.zrusit.textContent = tAdmin(
+      "actions.cancel",
+      "Zrušit"
+    );
+    prvky.potvrdit.textContent = potvrditText;
+
+    prvky.potvrdit.className = nebezpecne
+      ? "choiceDialogSecondary adminRejectButton"
+      : "choiceDialogSave";
+
+    adminPotvrzeniAkce = poPotvrzeni;
+    prvky.overlay.hidden = false;
+
+    requestAnimationFrame(() => {
+      prvky.potvrdit.focus();
+    });
+  }
+
   async function schvalDemo(uzivatel) {
     const email = bezpecnyText(uzivatel.email || "—");
     const dotaz = tAdmin(
@@ -209,15 +351,22 @@
       { email }
     );
 
-    if (!window.confirm(dotaz)) {
-      return;
-    }
+    otevriAdminPotvrzeni({
+      nadpis: tAdmin(
+        "admin.approveDemo",
+        "Schválit Demo"
+      ),
+      zprava: dotaz,
+      potvrditText: tAdmin(
+        "admin.approveDemo",
+        "Schválit Demo"
+      ),
+      poPotvrzeni: async () => {
+        nastavStav(
+          tAdmin("admin.approving", "Schvaluji účet…")
+        );
 
-    nastavStav(
-      tAdmin("admin.approving", "Schvaluji účet…")
-    );
-
-    try {
+        try {
       const { error } = await supabaseClient.rpc(
         "lubanote_admin_approve_demo",
         { p_user_id: uzivatel.user_id }
@@ -234,16 +383,18 @@
           "Účet byl schválen jako Demo."
         )
       );
-    } catch (error) {
-      console.error("Admin approve failed:", error);
-      nastavStav(
-        tAdmin(
-          "admin.actionFailed",
-          "Akci se nepodařilo dokončit."
-        ),
-        true
-      );
-    }
+        } catch (error) {
+          console.error("Admin approve failed:", error);
+          nastavStav(
+            tAdmin(
+              "admin.actionFailed",
+              "Akci se nepodařilo dokončit."
+            ),
+            true
+          );
+        }
+      }
+    });
   }
 
   async function zamitniUzivatele(uzivatel) {
@@ -254,15 +405,23 @@
       { email }
     );
 
-    if (!window.confirm(dotaz)) {
-      return;
-    }
+    otevriAdminPotvrzeni({
+      nadpis: tAdmin(
+        "admin.reject",
+        "Zamítnout"
+      ),
+      zprava: dotaz,
+      potvrditText: tAdmin(
+        "admin.reject",
+        "Zamítnout"
+      ),
+      nebezpecne: true,
+      poPotvrzeni: async () => {
+        nastavStav(
+          tAdmin("admin.rejecting", "Zamítám registraci…")
+        );
 
-    nastavStav(
-      tAdmin("admin.rejecting", "Zamítám registraci…")
-    );
-
-    try {
+        try {
       const { error } = await supabaseClient.rpc(
         "lubanote_admin_reject_user",
         { p_user_id: uzivatel.user_id }
@@ -279,16 +438,18 @@
           "Registrace byla zamítnuta."
         )
       );
-    } catch (error) {
-      console.error("Admin reject failed:", error);
-      nastavStav(
-        tAdmin(
-          "admin.actionFailed",
-          "Akci se nepodařilo dokončit."
-        ),
-        true
-      );
-    }
+        } catch (error) {
+          console.error("Admin reject failed:", error);
+          nastavStav(
+            tAdmin(
+              "admin.actionFailed",
+              "Akci se nepodařilo dokončit."
+            ),
+            true
+          );
+        }
+      }
+    });
   }
 
   function vykresliUzivatele() {
