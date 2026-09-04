@@ -10,7 +10,8 @@
 (() => {
   const LOGIN_IDS = new Set([
     "loginEmail",
-    "loginPassword"
+    "loginPassword",
+    "loginPasswordConfirm"
   ]);
 
   function jeTextovePole(pole) {

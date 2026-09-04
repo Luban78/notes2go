@@ -13,6 +13,8 @@ const SUPABASE_PUBLISHABLE_KEY =
  * zobrazí lokální data a synchronizace se zkusí po návratu internetu.
  */
 const LUBANOTE_AUTH_OK_KEY = "lubanoteAuthOk";
+const LUBANOTE_AUTH_BLOCKED_KEY = "lubanoteAuthBlocked";
+const LUBANOTE_LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
 const SUPABASE_PROJECT_REF = "nwdacgigplofksexssws";
 const SUPABASE_AUTH_STORAGE_KEY =
   `sb-${SUPABASE_PROJECT_REF}-auth-token`;
@@ -42,6 +44,16 @@ function sCasovymLimitem(promise, timeoutMs, popis) {
 }
 
 function existujePredchoziPrihlaseni() {
+  /*
+   * Pending / rejected / suspended účet nesmí použít offline-first
+   * vstup do lokální aplikace jen proto, že Supabase drží session.
+   */
+  if (
+    localStorage.getItem(LUBANOTE_AUTH_BLOCKED_KEY) === "1"
+  ) {
+    return false;
+  }
+
   if (
     localStorage.getItem(LUBANOTE_AUTH_OK_KEY) === "1"
   ) {
@@ -51,6 +63,8 @@ function existujePredchoziPrihlaseni() {
   /*
    * Přechod pro instalace vytvořené před zavedením
    * LUBANOTE_AUTH_OK_KEY. Supabase má svou session v localStorage.
+   * Nová registrace si vždy nastaví BLOCKED marker, takže tato
+   * legacy větev pending účet nepropustí.
    */
   return Boolean(
     localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY)
@@ -62,13 +76,91 @@ function oznacPredchoziPrihlaseni() {
     LUBANOTE_AUTH_OK_KEY,
     "1"
   );
+  localStorage.removeItem(
+    LUBANOTE_AUTH_BLOCKED_KEY
+  );
+}
+
+function oznacBlokovanePrihlaseni() {
+  localStorage.removeItem(
+    LUBANOTE_AUTH_OK_KEY
+  );
+  localStorage.setItem(
+    LUBANOTE_AUTH_BLOCKED_KEY,
+    "1"
+  );
 }
 
 function zrusPredchoziPrihlaseni() {
   localStorage.removeItem(
     LUBANOTE_AUTH_OK_KEY
   );
+  localStorage.removeItem(
+    LUBANOTE_AUTH_BLOCKED_KEY
+  );
 }
+
+function overNeboNastavVlastnikaLokalnichDat(userId) {
+  const id = String(userId || "").trim();
+
+  if (!id) {
+    return false;
+  }
+
+  const ulozeny = String(
+    localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
+  ).trim();
+
+  if (!ulozeny) {
+    localStorage.setItem(
+      LUBANOTE_LOCAL_OWNER_KEY,
+      id
+    );
+    return true;
+  }
+
+  return ulozeny === id;
+}
+
+function migrujVlastnikaZeStavajiciSession() {
+  if (
+    localStorage.getItem(LUBANOTE_AUTH_OK_KEY) !== "1" ||
+    localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY)
+  ) {
+    return;
+  }
+
+  try {
+    const raw = localStorage.getItem(
+      SUPABASE_AUTH_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return;
+    }
+
+    const session = JSON.parse(raw);
+    const userId = String(
+      session?.user?.id ||
+      session?.currentSession?.user?.id ||
+      ""
+    ).trim();
+
+    if (userId) {
+      localStorage.setItem(
+        LUBANOTE_LOCAL_OWNER_KEY,
+        userId
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "Migrace vlastníka lokálních dat byla přeskočena:",
+      error
+    );
+  }
+}
+
+migrujVlastnikaZeStavajiciSession();
 
 function vytvorSupabaseClientPokudLze() {
   if (supabaseClient) {
@@ -227,11 +319,29 @@ const loginScreen =
 const loginForm =
   document.getElementById("loginForm");
 
+const loginModeSwitch =
+  document.getElementById("loginModeSwitch");
+
+const loginModeSignIn =
+  document.getElementById("loginModeSignIn");
+
+const loginModeRegister =
+  document.getElementById("loginModeRegister");
+
+const loginTitle =
+  document.getElementById("loginTitle");
+
+const loginCredentialsFields =
+  document.getElementById("loginCredentialsFields");
+
 const loginEmail =
   document.getElementById("loginEmail");
 
 const loginPassword =
   document.getElementById("loginPassword");
+
+const loginPasswordConfirm =
+  document.getElementById("loginPasswordConfirm");
 
 const loginButton =
   document.getElementById("loginButton");
@@ -239,10 +349,41 @@ const loginButton =
 const loginMessage =
   document.getElementById("loginMessage");
 
+const accountStatusPanel =
+  document.getElementById("accountStatusPanel");
+
+const accountStatusText =
+  document.getElementById("accountStatusText");
+
+const accountStatusRefresh =
+  document.getElementById("accountStatusRefresh");
+
+const accountStatusSignOut =
+  document.getElementById("accountStatusSignOut");
+
+let aktualniRezimAuth = "login";
+let aktualniStavUctu = null;
+
+function tAuth(klic, zaloha = "") {
+  return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha || klic;
+}
+
 function setLoginMessage(message = "", isError = false) {
+  delete loginMessage.dataset.i18nKey;
   loginMessage.dataset.i18nSource = message;
   loginMessage.textContent =
     window.LubaNoteI18n?.prelozText?.(message) || message;
+  loginMessage.classList.toggle("error", isError);
+}
+
+function setLoginMessageKey(
+  klic,
+  zaloha,
+  isError = false
+) {
+  loginMessage.dataset.i18nKey = klic;
+  loginMessage.dataset.i18nSource = "";
+  loginMessage.textContent = tAuth(klic, zaloha);
   loginMessage.classList.toggle("error", isError);
 }
 
@@ -258,6 +399,132 @@ function oznamSplashPripravenyBezCloudovehoStartu() {
   );
 }
 
+function nastavRezimAuth(
+  rezim,
+  { zachovatZpravu = false } = {}
+) {
+  aktualniRezimAuth =
+    rezim === "register" ? "register" : "login";
+
+  const registrace = aktualniRezimAuth === "register";
+
+  loginModeSignIn.classList.toggle("active", !registrace);
+  loginModeRegister.classList.toggle("active", registrace);
+
+  loginModeSignIn.setAttribute(
+    "aria-selected",
+    String(!registrace)
+  );
+  loginModeRegister.setAttribute(
+    "aria-selected",
+    String(registrace)
+  );
+
+  loginPasswordConfirm.hidden = !registrace;
+  loginPasswordConfirm.disabled = !registrace;
+
+  loginEmail.name = registrace ? "email" : "username";
+  loginPassword.name = registrace
+    ? "new-password"
+    : "password";
+
+  loginEmail.setAttribute(
+    "autocomplete",
+    registrace ? "email" : "username"
+  );
+
+  loginPassword.setAttribute(
+    "autocomplete",
+    registrace ? "new-password" : "current-password"
+  );
+
+  loginPasswordConfirm.setAttribute(
+    "autocomplete",
+    "new-password"
+  );
+
+  if (!registrace) {
+    loginPasswordConfirm.value = "";
+  }
+
+  aktualizujAuthTexty();
+
+  if (!zachovatZpravu) {
+    setLoginMessage();
+  }
+}
+
+function textStavuUctu(stav) {
+  switch (stav?.account_status) {
+    case "pending":
+      return {
+        title: tAuth(
+          "login.pendingTitle",
+          "Účet čeká na schválení"
+        ),
+        text: tAuth(
+          "login.pendingText",
+          "Registrace je hotová. Až správce účet schválí, LubaNote se odemkne."
+        )
+      };
+
+    case "rejected":
+      return {
+        title: tAuth(
+          "login.rejectedTitle",
+          "Registrace nebyla schválena"
+        ),
+        text: tAuth(
+          "login.rejectedText",
+          "Tento účet nebyl schválen."
+        )
+      };
+
+    case "suspended":
+      return {
+        title: tAuth(
+          "login.suspendedTitle",
+          "Účet je pozastavený"
+        ),
+        text: tAuth(
+          "login.suspendedText",
+          "Přístup k LubaNote je dočasně pozastavený."
+        )
+      };
+
+    default:
+      return {
+        title: tAuth(
+          "login.unavailableTitle",
+          "Účet není dostupný"
+        ),
+        text: tAuth(
+          "login.unavailableText",
+          "Přístup k účtu se nepodařilo ověřit. Zkus kontrolu znovu."
+        )
+      };
+  }
+}
+
+function aktualizujAuthTexty() {
+  if (!accountStatusPanel.hidden && aktualniStavUctu) {
+    const texty = textStavuUctu(aktualniStavUctu);
+    loginTitle.textContent = texty.title;
+    accountStatusText.textContent = texty.text;
+    return;
+  }
+
+  const registrace = aktualniRezimAuth === "register";
+
+  loginTitle.textContent = registrace
+    ? tAuth("login.registerTitle", "Registrace")
+    : tAuth("login.title", "Přihlášení");
+
+  loginButton.textContent = registrace
+    ? tAuth("login.registerSubmit", "Registrovat")
+    : tAuth("login.submit", "Přihlásit se");
+}
+
 function zobrazLokalniAplikaci() {
   loginScreen.hidden = true;
 
@@ -271,7 +538,9 @@ function zobrazLokalniAplikaci() {
   loginForm.setAttribute("inert", "");
   loginEmail.disabled = true;
   loginPassword.disabled = true;
+  loginPasswordConfirm.disabled = true;
   loginPassword.value = "";
+  loginPasswordConfirm.value = "";
 
   if (loginForm.isConnected) {
     loginForm.remove();
@@ -282,41 +551,59 @@ function zobrazLokalniAplikaci() {
   );
 }
 
-
-
-
-
-function zobrazPrihlaseni(
-  message = "",
-  isError = true
-) {
+function pripravLoginFormular() {
   if (!loginForm.isConnected) {
     loginScreen.append(loginForm);
   }
 
   loginForm.removeAttribute("inert");
-
   loginEmail.disabled = false;
   loginPassword.disabled = false;
 
-  loginEmail.name = "username";
-  loginPassword.name = "password";
+  loginModeSwitch.hidden = false;
+  loginCredentialsFields.hidden = false;
+  accountStatusPanel.hidden = true;
+  aktualniStavUctu = null;
 
-  loginEmail.setAttribute(
-    "autocomplete",
-    "username"
-  );
-
-  loginPassword.setAttribute(
-    "autocomplete",
-    "current-password"
-  );
   loginScreen.hidden = false;
   document.body.classList.remove("authPending");
+}
+
+function zobrazPrihlaseni(
+  message = "",
+  isError = true
+) {
+  pripravLoginFormular();
+  nastavRezimAuth("login", {
+    zachovatZpravu: true
+  });
 
   if (message) {
     setLoginMessage(message, isError);
+  } else {
+    setLoginMessage();
   }
+}
+
+function zobrazStavUctu(stav) {
+  if (!loginForm.isConnected) {
+    loginScreen.append(loginForm);
+  }
+
+  loginForm.removeAttribute("inert");
+  loginScreen.hidden = false;
+  document.body.classList.remove("authPending");
+
+  loginModeSwitch.hidden = true;
+  loginCredentialsFields.hidden = true;
+  accountStatusPanel.hidden = false;
+
+  aktualniStavUctu = stav || {
+    account_status: "unavailable"
+  };
+
+  setLoginMessage();
+  aktualizujAuthTexty();
 }
 
 function zobrazVyprselePrihlaseni() {
@@ -328,6 +615,118 @@ function zobrazVyprselePrihlaseni() {
     "Přihlášení vypršelo. Přihlas se znovu, aby mohla pokračovat synchronizace. Tvoje lokální data zůstala zachována.",
     true
   );
+}
+
+async function nactiStavPristupu() {
+  const {
+    data,
+    error
+  } = await sCasovymLimitem(
+    supabaseClient.rpc("lubanote_get_my_access"),
+    7000,
+    "Ověření stavu účtu"
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return data || {
+    ok: false,
+    reason: "access_not_configured"
+  };
+}
+
+async function odhlasPoKonfliktuVlastnika() {
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (error) {
+    console.warn(
+      "Sign-out after local owner mismatch skipped:",
+      error
+    );
+  }
+
+  zrusPredchoziPrihlaseni();
+  zobrazPrihlaseni();
+  setLoginMessageKey(
+    "login.localOwnerMismatch",
+    "Toto zařízení obsahuje lokální data jiného LubaNote účtu. Kvůli bezpečnosti se účty na stejné instalaci nesmí míchat.",
+    true
+  );
+  oznamSplashPripravenyBezCloudovehoStartu();
+}
+
+async function povolAktivniUcet(
+  user,
+  { spustitSync = true } = {}
+) {
+  if (
+    !overNeboNastavVlastnikaLokalnichDat(user?.id)
+  ) {
+    await odhlasPoKonfliktuVlastnika();
+    return false;
+  }
+
+  oznacPredchoziPrihlaseni();
+  setLoginMessage();
+  zobrazLokalniAplikaci();
+
+  if (
+    typeof loadTagsFromSupabase === "function"
+  ) {
+    await loadTagsFromSupabase();
+  }
+
+  oznamPlatnePrihlaseni();
+
+  if (!spustitSync) {
+    return true;
+  }
+
+  if (
+    typeof window.LubaNoteSync
+      ?.spustBezpecne === "function"
+  ) {
+    window.LubaNoteSync.spustBezpecne();
+  } else if (typeof syncNotes === "function") {
+    syncNotes().catch((error) => {
+      console.warn(
+        "Initial sync skipped:",
+        error
+      );
+    });
+  }
+
+  return true;
+}
+
+async function zpracujStavPrihlasenehoUzivatele(
+  user,
+  { spustitSync = true } = {}
+) {
+  const stav = await nactiStavPristupu();
+
+  if (
+    stav?.ok === true &&
+    stav.account_status === "active" &&
+    stav.plan_active === true
+  ) {
+    return povolAktivniUcet(user, {
+      spustitSync
+    });
+  }
+
+  oznacBlokovanePrihlaseni();
+
+  zobrazStavUctu({
+    ...stav,
+    account_status:
+      stav?.account_status || "unavailable"
+  });
+
+  oznamSplashPripravenyBezCloudovehoStartu();
+  return false;
 }
 
 async function overChybejiciSessionAProbudLogin() {
@@ -406,26 +805,11 @@ async function overPrihlaseniOnline({
       "Ověření přihlášení"
     );
 
-    if (session) {
-      oznacPredchoziPrihlaseni();
-      setLoginMessage();
-      zobrazLokalniAplikaci();
-
-
-
-      if (
-        typeof loadTagsFromSupabase === "function"
-      ) {
-        await loadTagsFromSupabase();
-      }
-
-      /* sync.js může při prvním načtení doběhnout dřív než
-         obnovení Supabase session. Tato událost spustí druhý,
-         už autentizovaný pokus a tím odstraní rozdíl mezi
-         anonymním oknem a běžným dlouhodobým Chrome profilem. */
-      oznamPlatnePrihlaseni();
-
-      return true;
+    if (session?.user) {
+      return await zpracujStavPrihlasenehoUzivatele(
+        session.user,
+        { spustitSync: true }
+      );
     }
 
     /*
@@ -449,8 +833,11 @@ async function overPrihlaseniOnline({
     );
 
     if (zobrazitLoginPriNeuspechu) {
-      zobrazPrihlaseni(
-        "Ověření přihlášení se nepodařilo."
+      zobrazPrihlaseni();
+      setLoginMessageKey(
+        "login.accountCheckFailed",
+        "Stav účtu se nepodařilo ověřit. Zkus to znovu.",
+        true
       );
     } else {
       oznamSplashPripravenyBezCloudovehoStartu();
@@ -466,7 +853,7 @@ async function updateLoginScreen() {
 
   /*
    * Klíčová offline-first větev:
-   * dříve přihlášený uživatel dostane lokální aplikaci ihned.
+   * dříve schválený uživatel dostane lokální aplikaci ihned.
    * Síťové ověření proběhne pouze na pozadí.
    */
   if (maPredchoziPrihlaseni) {
@@ -513,14 +900,13 @@ async function updateLoginScreen() {
   });
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const email = loginEmail.value.trim();
-  const password = loginPassword.value;
-
+async function provedPrihlaseni(email, password) {
   if (!email || !password) {
-    setLoginMessage("Vyplň e-mail i heslo.", true);
+    setLoginMessageKey(
+      "login.enterCredentials",
+      "Vyplň e-mail i heslo.",
+      true
+    );
     return;
   }
 
@@ -533,7 +919,10 @@ loginForm.addEventListener("submit", async (event) => {
   }
 
   loginButton.disabled = true;
-  setLoginMessage("Přihlašuji…");
+  setLoginMessageKey(
+    "login.signingIn",
+    "Přihlašuji…"
+  );
 
   try {
     const pripraven =
@@ -545,48 +934,51 @@ loginForm.addEventListener("submit", async (event) => {
       );
     }
 
-    const { error } =
-      await sCasovymLimitem(
-        supabaseClient.auth.signInWithPassword({
-          email,
-          password
-        }),
-        12000,
-        "Přihlášení"
-      );
+    const {
+      data,
+      error
+    } = await sCasovymLimitem(
+      supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      }),
+      12000,
+      "Přihlášení"
+    );
 
     if (error) {
+      if (
+        String(error.message || "")
+          .toLowerCase()
+          .includes("email not confirmed")
+      ) {
+        setLoginMessageKey(
+          "login.emailNotConfirmed",
+          "E-mail ještě není potvrzený. Otevři potvrzovací odkaz v e-mailu a pak se přihlas znovu.",
+          true
+        );
+        return;
+      }
+
       throw error;
     }
 
-    oznacPredchoziPrihlaseni();
+    /*
+     * Úspěšná Auth session ještě není oprávnění k datům LubaNote.
+     * Nejdřív musí projít serverová kontrola account_status.
+     */
+    oznacBlokovanePrihlaseni();
+
     loginPassword.value = "";
-    setLoginMessage();
-    zobrazLokalniAplikaci();
+    loginPasswordConfirm.value = "";
 
-    if (
-      typeof loadTagsFromSupabase === "function"
-    ) {
-      await loadTagsFromSupabase();
-    }
-
-    oznamPlatnePrihlaseni();
-
-    if (
-      typeof window.LubaNoteSync
-        ?.spustBezpecne === "function"
-    ) {
-      window.LubaNoteSync.spustBezpecne();
-    } else if (typeof syncNotes === "function") {
-      syncNotes().catch((error) => {
-        console.warn(
-          "Initial sync skipped:",
-          error
-        );
-      });
-    }
+    await zpracujStavPrihlasenehoUzivatele(
+      data?.user,
+      { spustitSync: true }
+    );
   } catch (error) {
-    setLoginMessage(
+    setLoginMessageKey(
+      "login.signInFailed",
       "Přihlášení se nezdařilo. Zkontroluj e-mail, heslo a připojení.",
       true
     );
@@ -594,15 +986,248 @@ loginForm.addEventListener("submit", async (event) => {
   } finally {
     loginButton.disabled = false;
   }
+}
+
+async function provedRegistraci(
+  email,
+  password,
+  passwordConfirm
+) {
+  if (!email || !password || !passwordConfirm) {
+    setLoginMessageKey(
+      "login.enterRegistration",
+      "Vyplň e-mail, heslo i heslo znovu.",
+      true
+    );
+    return;
+  }
+
+  if (password !== passwordConfirm) {
+    setLoginMessageKey(
+      "login.passwordMismatch",
+      "Zadaná hesla se neshodují.",
+      true
+    );
+    return;
+  }
+
+  if (password.length < 8) {
+    setLoginMessageKey(
+      "login.passwordTooShort",
+      "Heslo musí mít alespoň 8 znaků.",
+      true
+    );
+    return;
+  }
+
+  if (!navigator.onLine) {
+    setLoginMessageKey(
+      "login.registrationOnline",
+      "Registrace vyžaduje připojení k internetu.",
+      true
+    );
+    return;
+  }
+
+  loginButton.disabled = true;
+  setLoginMessageKey(
+    "login.registering",
+    "Registruji…"
+  );
+
+  try {
+    const pripraven =
+      await pripravSupabaseClient();
+
+    if (!pripraven || !supabaseClient) {
+      throw new Error(
+        "Nepodařilo se načíst synchronizační službu."
+      );
+    }
+
+    const {
+      data,
+      error
+    } = await sCasovymLimitem(
+      supabaseClient.auth.signUp({
+        email,
+        password
+      }),
+      15000,
+      "Registrace"
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    if (
+      data?.user &&
+      Array.isArray(data.user.identities) &&
+      data.user.identities.length === 0
+    ) {
+      nastavRezimAuth("login", {
+        zachovatZpravu: true
+      });
+      setLoginMessageKey(
+        "login.alreadyRegistered",
+        "Tento e-mail už je zaregistrovaný. Použij Přihlášení.",
+        true
+      );
+      return;
+    }
+
+    /*
+     * Nový Auth účet serverový trigger vždy založí jako PENDING.
+     * Dokud server nepotvrdí ACTIVE, nikdy nenastavujeme offline-first
+     * marker pro vstup do lokální aplikace.
+     */
+    oznacBlokovanePrihlaseni();
+
+    loginPassword.value = "";
+    loginPasswordConfirm.value = "";
+
+    if (data?.session?.user) {
+      await zpracujStavPrihlasenehoUzivatele(
+        data.session.user,
+        { spustitSync: false }
+      );
+      return;
+    }
+
+    nastavRezimAuth("login", {
+      zachovatZpravu: true
+    });
+    loginEmail.value = email;
+    setLoginMessageKey(
+      "login.registrationCreated",
+      "Registrace byla vytvořena. Potvrď e-mail a potom se přihlas.",
+      false
+    );
+  } catch (error) {
+    setLoginMessageKey(
+      "login.registrationFailed",
+      "Registrace se nezdařila. Zkontroluj e-mail, heslo a připojení.",
+      true
+    );
+    console.error("Registration error:", error);
+  } finally {
+    loginButton.disabled = false;
+  }
+}
+
+loginModeSignIn.addEventListener("click", () => {
+  nastavRezimAuth("login");
 });
 
+loginModeRegister.addEventListener("click", () => {
+  nastavRezimAuth("register");
+});
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+
+  if (aktualniRezimAuth === "register") {
+    await provedRegistraci(
+      email,
+      password,
+      loginPasswordConfirm.value
+    );
+    return;
+  }
+
+  await provedPrihlaseni(email, password);
+});
+
+accountStatusRefresh.addEventListener(
+  "click",
+  async () => {
+    if (!navigator.onLine) {
+      setLoginMessageKey(
+        "login.accountCheckFailed",
+        "Stav účtu se nepodařilo ověřit. Zkus to znovu.",
+        true
+      );
+      return;
+    }
+
+    accountStatusRefresh.disabled = true;
+    setLoginMessage();
+
+    try {
+      const pripraven = await pripravSupabaseClient();
+
+      if (!pripraven || !supabaseClient) {
+        throw new Error("Supabase unavailable");
+      }
+
+      const {
+        data: { session }
+      } = await sCasovymLimitem(
+        supabaseClient.auth.getSession(),
+        5000,
+        "Kontrola session"
+      );
+
+      if (!session?.user) {
+        zrusPredchoziPrihlaseni();
+        zobrazPrihlaseni();
+        return;
+      }
+
+      await zpracujStavPrihlasenehoUzivatele(
+        session.user,
+        { spustitSync: true }
+      );
+    } catch (error) {
+      console.warn("Account status refresh failed:", error);
+      setLoginMessageKey(
+        "login.accountCheckFailed",
+        "Stav účtu se nepodařilo ověřit. Zkus to znovu.",
+        true
+      );
+    } finally {
+      accountStatusRefresh.disabled = false;
+    }
+  }
+);
+
+accountStatusSignOut.addEventListener(
+  "click",
+  async () => {
+    accountStatusSignOut.disabled = true;
+
+    try {
+      const pripraven = await pripravSupabaseClient();
+
+      if (pripraven && supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.warn("Pending account sign-out skipped:", error);
+    } finally {
+      zrusPredchoziPrihlaseni();
+      accountStatusSignOut.disabled = false;
+      zobrazPrihlaseni();
+    }
+  }
+);
+
 window.addEventListener("lubanote:language-change", () => {
+  const klic = loginMessage.dataset.i18nKey || "";
   const zdroj = loginMessage.dataset.i18nSource || "";
 
-  if (zdroj) {
+  if (klic) {
+    loginMessage.textContent = tAuth(klic, loginMessage.textContent);
+  } else if (zdroj) {
     loginMessage.textContent =
       window.LubaNoteI18n?.prelozText?.(zdroj) || zdroj;
   }
+
+  aktualizujAuthTexty();
 });
 
 window.LubaNoteSupabase = {
@@ -612,7 +1237,8 @@ window.LubaNoteSupabase = {
     existujePredchoziPrihlaseni,
   zrusPredchoziPrihlaseni,
   zobrazPrihlaseni,
-  overChybejiciSessionAProbudLogin
+  overChybejiciSessionAProbudLogin,
+  nactiStavPristupu
 };
 
 window.addEventListener(
@@ -632,4 +1258,5 @@ window.addEventListener("online", () => {
   });
 });
 
+aktualizujAuthTexty();
 updateLoginScreen();

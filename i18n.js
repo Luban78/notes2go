@@ -16,8 +16,12 @@
   let aktualniJazykId = null;
 
   const textoveVazby = [
-    ["#loginScreen h2", "login.title"],
+    ["#loginTitle", "login.title"],
     ["#loginButton", "login.submit"],
+    ["#loginModeSignIn", "login.modeSignIn"],
+    ["#loginModeRegister", "login.modeRegister"],
+    ["#accountStatusRefresh", "login.checkStatus"],
+    ["#accountStatusSignOut", "menu.logout"],
 
     ["#desktopHomeButton span:last-child", "nav.home"],
     ["#desktopAllNotesButton span:last-child", "nav.allNotes"],
@@ -179,6 +183,7 @@
     ["#appSplash", "aria-label", "login.loading"],
     ["#loginEmail", "placeholder", "login.email"],
     ["#loginPassword", "placeholder", "login.password"],
+    ["#loginPasswordConfirm", "placeholder", "login.passwordAgain"],
     ["#desktopSidebar", "aria-label", "nav.quick"],
     [".desktopSidebarNav:first-of-type", "aria-label", "nav.quick"],
     [".desktopSidebarNavSecondary", "aria-label", "nav.tools"],

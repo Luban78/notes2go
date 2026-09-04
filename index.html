@@ -8,7 +8,7 @@
   
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260902-editor-visualviewport-keyboard-safe-2">
+  <link rel="stylesheet" href="style.css?v=20260904-registrace-c2-1">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -70,15 +70,32 @@
       
       <div id="loginLanguagePicker" class="loginLanguagePicker" aria-label="Vyber jazyk"></div>
 
-      <h2>Přihlášení</h2>
-      
-      <input id="loginEmail" name="username" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-      
-      <input id="loginPassword" name="password" type="password" placeholder="Heslo" autocomplete="current-password" required>
-      
-      <button id="loginButton" type="submit">
-        Přihlásit se
-      </button>
+      <div id="loginModeSwitch" class="loginModeSwitch" role="tablist" aria-label="Přihlášení nebo registrace">
+        <button id="loginModeSignIn" class="loginModeButton active" type="button" role="tab" aria-selected="true">Přihlášení</button>
+        <button id="loginModeRegister" class="loginModeButton" type="button" role="tab" aria-selected="false">Registrace</button>
+      </div>
+
+      <h2 id="loginTitle">Přihlášení</h2>
+
+      <div id="loginCredentialsFields" class="loginCredentialsFields">
+        <input id="loginEmail" name="username" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        
+        <input id="loginPassword" name="password" type="password" placeholder="Heslo" autocomplete="current-password" required>
+
+        <input id="loginPasswordConfirm" name="password-confirm" type="password" placeholder="Heslo znovu" autocomplete="new-password" hidden disabled>
+        
+        <button id="loginButton" type="submit">
+          Přihlásit se
+        </button>
+      </div>
+
+      <div id="accountStatusPanel" class="accountStatusPanel" hidden>
+        <p id="accountStatusText"></p>
+        <div class="accountStatusActions">
+          <button id="accountStatusRefresh" type="button">Zkontrolovat stav</button>
+          <button id="accountStatusSignOut" class="loginSecondaryButton" type="button">Odhlásit se</button>
+        </div>
+      </div>
       
       <p id="loginMessage" role="alert" aria-live="polite"></p>
       
@@ -1680,10 +1697,10 @@
   <!-- Jazyky: každý překlad je samostatný soubor -->
   <script src="lang-cs.js"></script>
   <script src="lang-en.js"></script>
-  <script src="i18n.js?v=20260901-jazyky-1"></script>
+  <script src="i18n.js?v=20260904-registrace-c2-1"></script>
 
   <script src="lubaIcons.js"></script>
-  <script src="autofillGuard.js"></script>
+  <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
   
   <script src="reminders.js?v=20260827-kompletni-zaloha-1"></script>
   
@@ -1737,7 +1754,7 @@
   <script src="syncStatus.js?v=20260902-sync-status-1"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260902-sync-status-1"></script>
+  <script src="supabaseClient.js?v=20260904-registrace-c2-1"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260904-attachments-physical-delete-1"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
