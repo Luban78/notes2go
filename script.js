@@ -278,6 +278,13 @@ let cekajiciUlozeniNoveProPlanner = null;
 
 let puvodniOtiskEditoru = null;
 
+/*
+ * Sdílený editor (S2D.1) používá stejný vizuální editor jako vlastní
+ * poznámky, ale nikdy nevkládá sdílenou poznámku do savedTask.
+ * Síťovou logiku drží samostatný sharingEditor.js.
+ */
+let aktivniSdilenaEditace = null;
+
 function vytvorOtiskEditoru() {
   return JSON.stringify({
     title: ziskejNazevPoznamkyZEditoru().trim(),
@@ -333,7 +340,20 @@ function zpracujZavreniEditoru() {
   uvolniVzdalenouEditorSession(
     zaviranyTaskId
   );
-  
+
+  if (
+    aktivniSdilenaEditace?.noteId ===
+      zaviranyTaskId
+  ) {
+    aktivniSdilenaEditace = null;
+    taskModal.classList.remove(
+      "sharingEditorMode"
+    );
+    taskModal.removeAttribute(
+      "data-shared-task-id"
+    );
+  }
+
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
@@ -457,6 +477,14 @@ function uvolniVzdalenouEditorSession(
   taskId = activeTaskId
 ) {
   if (!taskId) {
+    return;
+  }
+
+  if (
+    aktivniSdilenaEditace?.noteId === taskId
+  ) {
+    window.LubaNoteSharedEditor
+      ?.uvolniSdilenyEditor?.(taskId);
     return;
   }
 
@@ -1029,6 +1057,18 @@ appMessageDiscardButton?.addEventListener(
     uvolniVzdalenouEditorSession(
       zahazovanyTaskId
     );
+    if (
+      aktivniSdilenaEditace?.noteId ===
+        zahazovanyTaskId
+    ) {
+      aktivniSdilenaEditace = null;
+      taskModal.classList.remove(
+        "sharingEditorMode"
+      );
+      taskModal.removeAttribute(
+        "data-shared-task-id"
+      );
+    }
 
     if (!zahazovanyTaskId) {
       await zahodLokalniPrilohyDraftu();
@@ -2692,7 +2732,20 @@ function zavriEditorPoLokalnimUlozeni(
   uvolniVzdalenouEditorSession(
     zaviranyTaskId
   );
-  
+
+  if (
+    aktivniSdilenaEditace?.noteId ===
+      zaviranyTaskId
+  ) {
+    aktivniSdilenaEditace = null;
+    taskModal.classList.remove(
+      "sharingEditorMode"
+    );
+    taskModal.removeAttribute(
+      "data-shared-task-id"
+    );
+  }
+
   activeTaskIndex = null;
   activeTaskId = null;
   taskModal.removeAttribute("data-task-id");
@@ -2749,6 +2802,31 @@ async function ulozAZavriEditor(
     moznosti?.nezavirat === true;
   const tichyRezim =
     moznosti?.tichyRezim === true;
+
+  if (aktivniSdilenaEditace) {
+    if (
+      typeof window.LubaNoteSharedEditor
+        ?.ulozAZavriSdilenyEditor !==
+      "function"
+    ) {
+      zobrazZpravuAplikace(
+        "Sdílená editace",
+        "Modul sdíleného editoru není dostupný. Editor zůstal otevřený."
+      );
+
+      return {
+        ok: false,
+        reason: "shared_editor_module_missing"
+      };
+    }
+
+    return await window.LubaNoteSharedEditor
+      .ulozAZavriSdilenyEditor({
+        nezavirat,
+        tichyRezim
+      });
+  }
+
   if (
     document.body.classList.contains(
       "secretModeActive"
@@ -3303,6 +3381,322 @@ document.addEventListener("pointercancel", (event) => {
 }, true);
 
 
+
+
+
+/* ==========================================
+   S2D.1 – HOST PRO SDÍLENÝ EDITOR
+
+   Sdílená poznámka se NIKDY nevkládá do savedTask.
+   sharingEditor.js vlastní serverový lock a save RPC,
+   tento blok pouze bezpečně naplní existující editor UI.
+   ========================================== */
+
+function otevriSdilenouPoznamkuVEditoru(
+  note,
+  sessionInfo = {}
+) {
+  if (!note?.id) {
+    return false;
+  }
+
+  reminderEnabled = note.reminder === true;
+  favoriteEnabled = note.favorite === true;
+  secretTaskEnabled = false;
+
+  updateReminderButton(reminderEnabled);
+  aktualizujIkonuTajnePoznamky();
+
+  secretTaskButton?.classList.remove("active");
+  priorityTaskButton?.classList.toggle(
+    "active",
+    favoriteEnabled
+  );
+
+  activeArea = note.area || "private";
+  activeTags = Array.isArray(note.tags)
+    ? [...note.tags]
+    : [];
+
+  updateTagMenuUI();
+  closeTagMenu();
+
+  zahajEditorSession(note.id);
+  ukonciDraftPoznamky();
+
+  taskModal.dataset.taskId = note.id;
+  taskModal.dataset.sharedTaskId = note.id;
+  taskModal.classList.add("sharingEditorMode");
+
+  activeTaskIndex = null;
+
+  aktivniSdilenaEditace = {
+    noteId: note.id,
+    revision:
+      Number(
+        sessionInfo.revision ??
+        note.__lubanoteSharedRevision ??
+        0
+      ) || 0,
+    ownerUsername:
+      String(
+        sessionInfo.ownerUsername ??
+        note.__lubanoteSharedOwnerUsername ??
+        ""
+      ),
+    role:
+      String(
+        sessionInfo.role ??
+        note.__lubanoteSharedRole ??
+        "editor"
+      ),
+    note: {
+      ...note,
+      tags: Array.isArray(note.tags)
+        ? [...note.tags]
+        : [],
+      todos: Array.isArray(note.todos)
+        ? note.todos.map((todo) => ({ ...todo }))
+        : [],
+      plannedItems:
+        Array.isArray(note.plannedItems)
+          ? note.plannedItems.map(
+              (item) => ({ ...item })
+            )
+          : []
+    }
+  };
+
+  nastavNazevPoznamkyVEditoru(
+    note.title || ""
+  );
+
+  modalText.value = note.note || "";
+
+  if (note.richContent) {
+    modalRichText.innerHTML = note.richContent;
+  } else {
+    modalRichText.textContent = note.note || "";
+  }
+
+  modalText.hidden = true;
+  modalRichText.hidden = false;
+  RichTextColors.reset();
+
+  editorRepeat =
+    kopirujEditorRepeat(note.repeat);
+
+  if (note.date) {
+    const [savedDate, savedTime] =
+      String(note.date).split("T");
+
+    modalDate.value = savedDate || "";
+    modalTime.value = savedTime || "";
+  } else {
+    modalDate.value = "";
+    modalTime.value = "";
+  }
+
+  aktualizujPopiskyDataCasu();
+  updateModalWeekday();
+
+  resetujSbaleniNazvuEditoru();
+
+  taskModal.hidden = false;
+  taskModal.classList.add("show");
+  document.body.classList.add("noScroll");
+
+  loadTodos(
+    note.todos,
+    note.plannedItems
+  );
+
+  /*
+   * Interní linky v S2D.1 pouze zachováme v uloženém HTML.
+   * Jejich sdílené přístupové/privacy chování napojíme samostatně.
+   */
+
+  puvodniOtiskEditoru =
+    vytvorOtiskEditoru();
+
+  return true;
+}
+
+
+function vytvorDataSdilenehoEditoru() {
+  if (!aktivniSdilenaEditace) {
+    return null;
+  }
+
+  const base =
+    aktivniSdilenaEditace.note || {};
+
+  const title =
+    ziskejNazevPoznamkyZEditoru().trim();
+
+  const note =
+    modalRichText.innerText;
+
+  const richContent =
+    modalRichText.innerHTML;
+
+  const date =
+    modalDate.value && modalTime.value
+      ? `${modalDate.value}T${modalTime.value}`
+      : "";
+
+  const tags =
+    activeTags.filter(
+      (nazevStitku) =>
+        !jeTajnyStitek(nazevStitku)
+    );
+
+  return {
+    context: {
+      noteId:
+        aktivniSdilenaEditace.noteId,
+      revision:
+        aktivniSdilenaEditace.revision,
+      ownerUsername:
+        aktivniSdilenaEditace.ownerUsername,
+      role:
+        aktivniSdilenaEditace.role
+    },
+
+    data: {
+      id:
+        aktivniSdilenaEditace.noteId,
+      updatedAt:
+        new Date().toISOString(),
+
+      title,
+      note,
+      richContent,
+
+      date,
+      completed:
+        base.completed === true,
+      reminder:
+        reminderEnabled,
+      favorite:
+        favoriteEnabled,
+      notificationId:
+        base.notificationId ?? null,
+      area:
+        activeArea,
+      pinned:
+        base.pinned === true,
+      isSecret:
+        false,
+      tags:
+        [...tags],
+      todos:
+        activeTodos.map(
+          (todo) => ({ ...todo })
+        ),
+      repeat:
+        kopirujEditorRepeat(editorRepeat),
+      plannedItems:
+        Array.isArray(base.plannedItems)
+          ? base.plannedItems.map(
+              (item) => ({ ...item })
+            )
+          : []
+    }
+  };
+}
+
+
+function zavriSdilenyEditorPoUlozeni() {
+  return zavriEditorPoLokalnimUlozeni(
+    editorSessionId
+  );
+}
+
+
+function zavriSdilenyEditorPoZtrateLocku() {
+  if (!aktivniSdilenaEditace) {
+    return false;
+  }
+
+  taskModal.classList.remove("show");
+  document.body.classList.remove("noScroll");
+
+  aktivniSdilenaEditace = null;
+  taskModal.classList.remove(
+    "sharingEditorMode"
+  );
+  taskModal.removeAttribute(
+    "data-shared-task-id"
+  );
+
+  activeTaskIndex = null;
+  activeTaskId = null;
+
+  taskModal.removeAttribute(
+    "data-task-id"
+  );
+
+  ukonciDraftPoznamky();
+  editorSessionId += 1;
+
+  setTimeout(() => {
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
+  }, 250);
+
+  RichTextColors.reset();
+
+  requestAnimationFrame(() => {
+    renderTasks();
+  });
+
+  return true;
+}
+
+
+function aktualizujRevisionSdilenehoEditoru(
+  revision
+) {
+  if (
+    !aktivniSdilenaEditace ||
+    !Number.isFinite(Number(revision))
+  ) {
+    return;
+  }
+
+  aktivniSdilenaEditace.revision =
+    Number(revision);
+}
+
+
+window.LubaNoteSharedEditorHost = {
+  otevriSdilenouPoznamku:
+    otevriSdilenouPoznamkuVEditoru,
+
+  vytvorDataProUlozeni:
+    vytvorDataSdilenehoEditoru,
+
+  zavriPoUlozeni:
+    zavriSdilenyEditorPoUlozeni,
+
+  zavriPoZtrateLocku:
+    zavriSdilenyEditorPoZtrateLocku,
+
+  aktualizujRevision:
+    aktualizujRevisionSdilenehoEditoru,
+
+  zobrazZpravu:
+    (nadpis, text) =>
+      zobrazZpravuAplikace(
+        nadpis,
+        text
+      ),
+
+  jeAktivni:
+    () => !!aktivniSdilenaEditace
+};
 
 
 async function openTaskEditorById(taskId) {

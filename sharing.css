@@ -687,6 +687,69 @@ body.sharingReadOnlyOpen {
   touch-action: manipulation;
 }
 
+
+.sharingReadOnlyEdit {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 15px;
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 72%,
+    var(--color-border)
+  );
+  border-radius: 13px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 18%,
+    var(--color-background)
+  );
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: calc(var(--font-size) - 2px);
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.sharingReadOnlyEdit:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/*
+ * S2D.1: nové obrázky zatím záměrně nepřidáváme.
+ * Existující obrázky se v shared obsahu zachovají.
+ * Cloudový shared attachment upload napojíme v S2E.
+ */
+#taskModal.sharingEditorMode #tlacitkoVlozitObrazek,
+#taskModal.sharingEditorMode #tlacitkoOtevritDokument {
+  display: none !important;
+}
+
+#taskModal.sharingEditorMode .lubaNoteImageSettings,
+#taskModal.sharingEditorMode .lubaNoteImageRemove {
+  display: none !important;
+}
+
+#taskModal.sharingEditorMode .lubaNoteImage {
+  pointer-events: none;
+}
+
+#taskModal.sharingEditorMode #secretTaskButton,
+#taskModal.sharingEditorMode .dateTimeInputs,
+#taskModal.sharingEditorMode #pinTaskButton,
+#taskModal.sharingEditorMode #reminderButton,
+#taskModal.sharingEditorMode #categoryTaskButton,
+#taskModal.sharingEditorMode #priorityTaskButton,
+#taskModal.sharingEditorMode #colorTaskButton,
+#taskModal.sharingEditorMode #tagTaskButton,
+#taskModal.sharingEditorMode #planSelectionButton,
+#taskModal.sharingEditorMode #deleteTaskButton {
+  display: none !important;
+}
+
 .sharingReadOnlyHeaderText {
   min-width: 0;
   flex: 1 1 auto;

@@ -481,6 +481,15 @@
     close.textContent = "×";
     close.setAttribute("aria-label", t("sharing.close", "Zavřít"));
 
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "sharingReadOnlyEdit";
+    edit.textContent = t("sharing.editShared", "Upravit");
+    edit.setAttribute(
+      "aria-label",
+      t("sharing.editShared", "Upravit")
+    );
+
     const hlavickaText = document.createElement("div");
     hlavickaText.className = "sharingReadOnlyHeaderText";
 
@@ -488,7 +497,7 @@
     const meta = document.createElement("p");
 
     hlavickaText.append(title, meta);
-    header.append(close, hlavickaText);
+    header.append(close, hlavickaText, edit);
 
     const body = document.createElement("div");
     body.className = "sharingReadOnlyBody";
@@ -510,9 +519,38 @@
 
     close.addEventListener("click", zavriReadOnly);
 
+    edit.addEventListener("click", async () => {
+      if (
+        !viewerNoteId ||
+        edit.disabled
+      ) {
+        return;
+      }
+
+      if (
+        typeof window.LubaNoteSharedEditor
+          ?.otevriSdilenouEditaci !==
+        "function"
+      ) {
+        return;
+      }
+
+      edit.disabled = true;
+
+      try {
+        await window.LubaNoteSharedEditor
+          .otevriSdilenouEditaci(
+            viewerNoteId
+          );
+      } finally {
+        edit.disabled = false;
+      }
+    });
+
     viewer = {
       overlay,
       close,
+      edit,
       title,
       meta,
       body,
@@ -531,6 +569,11 @@
     }
 
     viewer.close.setAttribute("aria-label", t("sharing.close", "Zavřít"));
+    viewer.edit.textContent = t("sharing.editShared", "Upravit");
+    viewer.edit.setAttribute(
+      "aria-label",
+      t("sharing.editShared", "Upravit")
+    );
     viewer.todoTitle.textContent = t("sharing.readOnlyTodos", "Úkoly");
 
     if (viewerNoteId) {
