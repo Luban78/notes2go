@@ -2912,6 +2912,29 @@ async function startSync() {
     }, 0);
   }
 
+  /*
+   * FÁZE B – fyzický cleanup starých pending_delete attachmentů.
+   * Spouští se AŽ po splash a s malým odkladem, takže neblokuje start.
+   * Server vydá claim pouze attachmentům starším než 7 dní; samotný
+   * soubor se maže přes Storage API a kvóta se uvolní až po potvrzení.
+   */
+  if (
+    window.LubaNoteAttachmentsCloud
+      ?.vycistiCloudovePrilohyPoProdleve
+  ) {
+    setTimeout(() => {
+      Promise.resolve(
+        window.LubaNoteAttachmentsCloud
+          .vycistiCloudovePrilohyPoProdleve(20)
+      ).catch((error) => {
+        console.warn(
+          "LubaNote attachments: fyzický cleanup se dokončí při některém dalším připojení.",
+          error
+        );
+      });
+    }, 1500);
+  }
+
   return true;
 }
 

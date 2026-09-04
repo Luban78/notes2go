@@ -635,6 +635,158 @@
     };
   }
 
+  async function vycistiCloudovePrilohyPoProdleve(limit = 20) {
+    if (!navigator.onLine) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: "offline"
+      };
+    }
+
+    if (!await pripravCloud()) {
+      return {
+        ok: false,
+        reason: "cloud_unavailable"
+      };
+    }
+
+    const bezpecnyLimit = Math.max(
+      1,
+      Math.min(Number(limit) || 20, 100)
+    );
+
+    try {
+      const { data, error } =
+        await supabaseClient.rpc(
+          "lubanote_claim_pending_attachment_deletes",
+          { p_limit: bezpecnyLimit }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.ok !== true) {
+        return {
+          ok: false,
+          reason: data?.reason || "claim_failed"
+        };
+      }
+
+      const claimed = Array.isArray(data?.claimed)
+        ? data.claimed
+        : [];
+      const vysledky = [];
+
+      for (const claim of claimed) {
+        const attachmentId = String(claim?.id || "");
+        const storagePath = String(claim?.storage_path || "");
+        const claimToken = String(claim?.claim_token || "");
+
+        if (!attachmentId || !storagePath || !claimToken) {
+          vysledky.push({
+            id: attachmentId,
+            ok: false,
+            reason: "invalid_claim_payload"
+          });
+          continue;
+        }
+
+        try {
+          /*
+           * FYZICKÉ smazání MUSÍ jít přes Storage API.
+           * Serverová DELETE RLS policy pustí jen vlastní objekt,
+           * který má stále platný stav deleting + claim lease.
+           */
+          const { error: chybaSmazani } =
+            await supabaseClient.storage
+              .from(BUCKET)
+              .remove([storagePath]);
+
+          if (chybaSmazani) {
+            throw chybaSmazani;
+          }
+
+          const { data: potvrzeni, error: chybaPotvrzeni } =
+            await supabaseClient.rpc(
+              "lubanote_confirm_attachment_deleted",
+              {
+                p_attachment_id: attachmentId,
+                p_claim_token: claimToken
+              }
+            );
+
+          if (chybaPotvrzeni) {
+            throw chybaPotvrzeni;
+          }
+
+          if (potvrzeni?.ok !== true) {
+            throw new Error(
+              `Potvrzení smazání selhalo: ${potvrzeni?.reason || "unknown"}`
+            );
+          }
+
+          try {
+            await window.LubaNoteAttachmentsLocal
+              ?.smazPrilohu?.(attachmentId);
+          } catch {
+            // Cloud je autorita; lokální orphan se uklidí později.
+          }
+
+          vysledky.push({
+            id: attachmentId,
+            ok: true,
+            status: "deleted"
+          });
+        } catch (errorSmazani) {
+          try {
+            await supabaseClient.rpc(
+              "lubanote_release_attachment_delete_claim",
+              {
+                p_attachment_id: attachmentId,
+                p_claim_token: claimToken
+              }
+            );
+          } catch {
+            // Claim má 30min lease a server jej umí později obnovit.
+          }
+
+          console.warn(
+            "LubaNote attachments: fyzické smazání přílohy se dokončí později.",
+            attachmentId,
+            errorSmazani
+          );
+
+          vysledky.push({
+            id: attachmentId,
+            ok: false,
+            reason: errorSmazani?.message || "delete_failed"
+          });
+        }
+      }
+
+      return {
+        ok: vysledky.every((polozka) => polozka.ok === true),
+        graceDays: Number(data?.grace_days) || 7,
+        claimed: claimed.length,
+        deleted: vysledky.filter((polozka) => polozka.ok === true).length,
+        vysledky
+      };
+    } catch (error) {
+      console.warn(
+        "LubaNote attachments: cleanup cloudových příloh se nepodařilo spustit.",
+        error
+      );
+
+      return {
+        ok: false,
+        reason: "cleanup_failed",
+        error
+      };
+    }
+  }
+
   async function ziskejCloudDiagnostiku() {
     if (!await pripravCloud()) {
       return {
@@ -673,6 +825,7 @@
     oznacPrilohyPoznamkyJakoAktivni,
     synchronizujReferencePrilohPoznamky,
     zpracujStinovePrilohyPoznamekVCloudu,
+    vycistiCloudovePrilohyPoProdleve,
     ziskejCloudDiagnostiku
   };
 })();
