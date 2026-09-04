@@ -2097,6 +2097,22 @@ body.authPending .addTaskButton {
   visibility: hidden;
 }
 
+/*
+ * LOGIN PRIVACY LOCK V2
+ * ---------------------
+ * Po odhlášení zůstává offline cache lokálně uložená, ale žádný kus
+ * uživatelského UI nesmí prosvitnout pod loginem ani během změny
+ * visualViewport při vysouvání klávesnice.
+ *
+ * Schováme proto všechny přímé UI potomky body kromě splash/login vrstvy.
+ * Supabase klient třídu authPending drží po celou dobu, kdy není aktivní
+ * schválený účet.
+ */
+body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 #loginScreen {
   position: fixed;
   inset: 0;

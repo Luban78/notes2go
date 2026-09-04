@@ -552,6 +552,14 @@ function zobrazLokalniAplikaci() {
 }
 
 function pripravLoginFormular() {
+  /*
+   * PRIVACY LOCK:
+   * Lokální poznámky zůstávají po odhlášení uložené kvůli offline-first
+   * režimu, ale při loginu nesmí být ani na jediný frame viditelné.
+   * Třídu odstraní výhradně zobrazLokalniAplikaci() po povolení účtu.
+   */
+  document.body.classList.add("authPending");
+
   if (!loginForm.isConnected) {
     loginScreen.append(loginForm);
   }
@@ -566,7 +574,6 @@ function pripravLoginFormular() {
   aktualniStavUctu = null;
 
   loginScreen.hidden = false;
-  document.body.classList.remove("authPending");
 }
 
 function zobrazPrihlaseni(
@@ -586,13 +593,15 @@ function zobrazPrihlaseni(
 }
 
 function zobrazStavUctu(stav) {
+  /* Stejný privacy lock platí i pro pending/rejected/suspended obrazovku. */
+  document.body.classList.add("authPending");
+
   if (!loginForm.isConnected) {
     loginScreen.append(loginForm);
   }
 
   loginForm.removeAttribute("inert");
   loginScreen.hidden = false;
-  document.body.classList.remove("authPending");
 
   loginModeSwitch.hidden = true;
   loginCredentialsFields.hidden = true;
