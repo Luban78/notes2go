@@ -452,6 +452,87 @@
     });
   }
 
+  async function smazUzivatele(uzivatel) {
+    const email = bezpecnyText(uzivatel.email || "—");
+
+    otevriAdminPotvrzeni({
+      nadpis: tAdmin(
+        "admin.deleteUser",
+        "Smazat účet"
+      ),
+      zprava: tAdmin(
+        "admin.deleteUserConfirm",
+        `Opravdu trvale smazat účet ${email}? Tuto akci nelze vrátit zpět.`,
+        { email }
+      ),
+      potvrditText: tAdmin(
+        "admin.deleteUser",
+        "Smazat účet"
+      ),
+      nebezpecne: true,
+      poPotvrzeni: async () => {
+        nastavStav(
+          tAdmin("admin.deletingUser", "Mažu účet…")
+        );
+
+        try {
+          const { error } = await supabaseClient.rpc(
+            "lubanote_admin_delete_user",
+            { p_user_id: uzivatel.user_id }
+          );
+
+          if (error) {
+            const zprava = String(error?.message || "");
+
+            if (zprava.includes("USER_HAS_STORAGE_OBJECTS")) {
+              nastavStav(
+                tAdmin(
+                  "admin.deleteUserHasStorage",
+                  "Účet má ještě soubory ve Storage. Nejdřív je potřeba bezpečně odstranit přílohy."
+                ),
+                true
+              );
+              return;
+            }
+
+            if (
+              zprava.includes("ADMIN_ACCOUNT_DELETE_FORBIDDEN") ||
+              zprava.includes("CANNOT_DELETE_SELF")
+            ) {
+              nastavStav(
+                tAdmin(
+                  "admin.deleteUserForbidden",
+                  "Tento účet nelze z Admin Dashboardu smazat."
+                ),
+                true
+              );
+              return;
+            }
+
+            throw error;
+          }
+
+          await nactiUzivatele();
+          nastavStav(
+            tAdmin(
+              "admin.userDeleted",
+              "Účet byl trvale smazán."
+            )
+          );
+        } catch (error) {
+          console.error("Admin delete user failed:", error);
+          nastavStav(
+            tAdmin(
+              "admin.actionFailed",
+              "Akci se nepodařilo dokončit."
+            ),
+            true
+          );
+        }
+      }
+    });
+  }
+
   function vykresliUzivatele() {
     seznam.replaceChildren();
 
@@ -582,6 +663,34 @@
 
         akce.append(schvalit, zamitnout);
         karta.append(akce);
+      }
+
+      /*
+       * Trvalé smazání je záměrně dostupné jen v přehledu Všichni.
+       * INTERNAL účet tlačítko vůbec nedostane a server navíc vždy
+       * znovu ověří, že cílový účet není admin ani aktuální uživatel.
+       */
+      if (
+        filtr === "all" &&
+        uzivatel.plan_id !== "internal"
+      ) {
+        const mazaciAkce = document.createElement("div");
+        mazaciAkce.className = "adminUserActions";
+
+        const smazat = document.createElement("button");
+        smazat.type = "button";
+        smazat.className = "adminRejectButton";
+        smazat.textContent = tAdmin(
+          "admin.deleteUser",
+          "Smazat účet"
+        );
+        smazat.addEventListener(
+          "click",
+          () => smazUzivatele(uzivatel)
+        );
+
+        mazaciAkce.append(smazat);
+        karta.append(mazaciAkce);
       }
 
       seznam.append(karta);

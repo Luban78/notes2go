@@ -1275,11 +1275,30 @@ async function provedRegistraci(
       false
     );
   } catch (error) {
-    setLoginMessageKey(
-      "login.registrationFailed",
-      "Registrace se nezdařila. Zkontroluj e-mail, heslo a připojení.",
-      true
-    );
+    const chybaText = String(
+      error?.message || error?.code || ""
+    ).toLowerCase();
+    const jeEmailRateLimit =
+      Number(error?.status) === 429 ||
+      chybaText.includes("rate limit") ||
+      chybaText.includes("rate_limit") ||
+      chybaText.includes("email rate") ||
+      chybaText.includes("over_email_send_rate_limit");
+
+    if (jeEmailRateLimit) {
+      setLoginMessageKey(
+        "login.registrationRateLimited",
+        "Bylo odesláno příliš mnoho potvrzovacích e-mailů. Zkus registraci později.",
+        true
+      );
+    } else {
+      setLoginMessageKey(
+        "login.registrationFailed",
+        "Registrace se nezdařila. Zkontroluj e-mail, heslo a připojení.",
+        true
+      );
+    }
+
     console.error("Registration error:", error);
   } finally {
     loginButton.disabled = false;
