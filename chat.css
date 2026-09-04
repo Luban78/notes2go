@@ -471,16 +471,13 @@
 }
 
 @media (max-width: 620px) {
-  .chatContactsModal,
-  .chatThreadOverlay {
+  .chatContactsModal {
     inset: auto 0 auto 0;
     top: var(--visual-top, 0px);
     width: 100%;
     height: var(--visual-height, 100dvh);
     min-height: 0;
-  }
 
-  .chatContactsModal {
     align-items: center;
     padding:
       max(10px, env(safe-area-inset-top))
@@ -493,15 +490,35 @@
     max-height: calc(var(--visual-height, 100dvh) - 82px);
   }
 
+  /*
+   * CHAT – keyboard-safe fullscreen.
+   *
+   * Vnější overlay se při animaci softwarové klávesnice NESMÍ zmenšit.
+   * Zůstává přes celý layout viewport a neprůhledně zakrývá karty pod chatem.
+   * Pouze vnitřní chat karta kopíruje visualViewport, stejně jako stabilní
+   * fullscreen editor LubaNote. Tím během resize frame nemají karty kudy
+   * probliknout.
+   */
   .chatThreadOverlay {
+    inset: 0;
+    top: auto;
+    width: auto;
+    height: auto;
+    min-height: 0;
     padding: 0;
     background: var(--color-background);
   }
 
   .chatThreadCard {
+    position: fixed;
+    top: var(--visual-top, 0px);
+    right: 0;
+    left: 0;
+
     width: 100%;
-    height: 100%;
+    height: var(--visual-height, 100dvh);
     max-height: none;
+
     border: none;
     border-radius: 0;
     box-shadow: none;
