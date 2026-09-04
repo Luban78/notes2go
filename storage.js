@@ -1078,6 +1078,751 @@ function vytvorNazevSouboruZalohy() {
 }
 
 
+const LUBANOTE_BACKUP_ARCHIVE_FORMAT =
+  "LubaNote-backup-archive-v4";
+
+const LUBANOTE_BACKUP_ARCHIVE_VERSION = 4;
+
+const LUBANOTE_BACKUP_ATTACHMENT_PHASE =
+  "cloud_shadow_v1";
+
+
+function vytvorNazevSouboruZalohyArchivu() {
+  const cas = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-");
+
+  return `lubanote-backup-${cas}.lubbackup`;
+}
+
+
+function najdiAttachmentIdsVHtmlProZalohu(
+  html,
+  cil
+) {
+  if (typeof html !== "string" || !html) {
+    return;
+  }
+
+  const regex =
+    /data-attachment-id\s*=\s*["']([^"']+)["']/gi;
+  let shoda;
+
+  while ((shoda = regex.exec(html)) !== null) {
+    const id = String(shoda[1] || "").trim();
+
+    if (id) {
+      cil.add(id);
+    }
+  }
+}
+
+
+function ziskejAttachmentIdsPoznamkyProZalohu(note) {
+  if (
+    typeof window.LubaNoteAttachmentsCloud
+      ?.ziskejAttachmentIdsZPoznamky === "function"
+  ) {
+    return window.LubaNoteAttachmentsCloud
+      .ziskejAttachmentIdsZPoznamky(note);
+  }
+
+  const ids = new Set();
+
+  najdiAttachmentIdsVHtmlProZalohu(
+    note?.richContent,
+    ids
+  );
+
+  for (const todo of Array.isArray(note?.todos)
+    ? note.todos
+    : []) {
+    najdiAttachmentIdsVHtmlProZalohu(
+      todo?.html,
+      ids
+    );
+  }
+
+  return Array.from(ids);
+}
+
+
+function vytvorMapuPrilohProZalohu(notes) {
+  const mapa = new Map();
+
+  for (const note of Array.isArray(notes) ? notes : []) {
+    if (!note?.id || note.isSecret === true) {
+      continue;
+    }
+
+    const ids =
+      ziskejAttachmentIdsPoznamkyProZalohu(note);
+
+    for (const id of ids) {
+      if (!mapa.has(id)) {
+        mapa.set(id, {
+          id,
+          noteId: note.id
+        });
+      }
+    }
+  }
+
+  return mapa;
+}
+
+
+function najdiDataUrlPrilohVHtml(
+  html,
+  mapa
+) {
+  if (typeof html !== "string" || !html) {
+    return;
+  }
+
+  const kontejner = document.createElement("div");
+  kontejner.innerHTML = html;
+
+  kontejner
+    .querySelectorAll("[data-attachment-id]")
+    .forEach((prvek) => {
+      const id = String(
+        prvek.dataset?.attachmentId || ""
+      ).trim();
+
+      if (!id || mapa.has(id)) {
+        return;
+      }
+
+      const obrazek = prvek.matches("img")
+        ? prvek
+        : prvek.querySelector("img");
+
+      const src = String(
+        obrazek?.getAttribute("src") || ""
+      );
+
+      if (src.startsWith("data:")) {
+        mapa.set(id, src);
+      }
+    });
+}
+
+
+function vytvorMapuDataUrlPrilohProZalohu(notes) {
+  const mapa = new Map();
+
+  for (const note of Array.isArray(notes) ? notes : []) {
+    if (note?.isSecret === true) {
+      continue;
+    }
+
+    najdiDataUrlPrilohVHtml(
+      note?.richContent,
+      mapa
+    );
+
+    for (const todo of Array.isArray(note?.todos)
+      ? note.todos
+      : []) {
+      najdiDataUrlPrilohVHtml(
+        todo?.html,
+        mapa
+      );
+    }
+  }
+
+  return mapa;
+}
+
+
+function dataUrlNaBlobProZalohu(dataUrl) {
+  if (
+    typeof dataUrl !== "string" ||
+    !dataUrl.startsWith("data:")
+  ) {
+    return null;
+  }
+
+  const oddelovac = dataUrl.indexOf(",");
+
+  if (oddelovac < 0) {
+    return null;
+  }
+
+  const hlavicka = dataUrl.slice(5, oddelovac);
+  const obsah = dataUrl.slice(oddelovac + 1);
+  const casti = hlavicka.split(";");
+  const mimeType = casti[0] ||
+    "application/octet-stream";
+  const jeBase64 = casti.includes("base64");
+
+  if (!jeBase64) {
+    return new Blob(
+      [decodeURIComponent(obsah)],
+      { type: mimeType }
+    );
+  }
+
+  const binarni = atob(obsah);
+  const bajty = new Uint8Array(binarni.length);
+
+  for (let i = 0; i < binarni.length; i += 1) {
+    bajty[i] = binarni.charCodeAt(i);
+  }
+
+  return new Blob(
+    [bajty],
+    { type: mimeType }
+  );
+}
+
+
+async function pripravCloudProKompletniZalohu() {
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  if (
+    typeof window.LubaNoteSupabase
+      ?.pripravClient === "function"
+  ) {
+    const pripraven =
+      await window.LubaNoteSupabase
+        .pripravClient();
+
+    if (!pripraven) {
+      return false;
+    }
+  } else if (
+    typeof pripravSupabaseClient === "function"
+  ) {
+    const pripraven =
+      await pripravSupabaseClient();
+
+    if (!pripraven) {
+      return false;
+    }
+  }
+
+  return Boolean(
+    typeof supabaseClient !== "undefined" &&
+    supabaseClient
+  );
+}
+
+
+async function nactiCloudMetadataPrilohProZalohu(
+  attachmentIds
+) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(attachmentIds)
+        ? attachmentIds
+        : []
+      ).filter(Boolean)
+    )
+  );
+
+  const mapa = new Map();
+
+  if (ids.length === 0) {
+    return mapa;
+  }
+
+  if (!await pripravCloudProKompletniZalohu()) {
+    return mapa;
+  }
+
+  for (let zacatek = 0; zacatek < ids.length; zacatek += 100) {
+    const cast = ids.slice(zacatek, zacatek + 100);
+
+    const { data, error } = await supabaseClient
+      .from("attachments")
+      .select(
+        "id,note_id,mime_type,storage_path,size_bytes,status,is_secret"
+      )
+      .in("id", cast);
+
+    if (error) {
+      console.warn(
+        "LubaNote backup: metadata příloh se nepodařilo načíst z cloudu.",
+        error
+      );
+      return mapa;
+    }
+
+    for (const zaznam of Array.isArray(data) ? data : []) {
+      if (zaznam?.id) {
+        mapa.set(zaznam.id, zaznam);
+      }
+    }
+  }
+
+  return mapa;
+}
+
+
+async function nactiBlobPrilohyProZalohu({
+  attachmentId,
+  lokalniZaznam,
+  cloudMetadata,
+  dataUrl
+}) {
+  if (lokalniZaznam?.blob instanceof Blob) {
+    return lokalniZaznam.blob;
+  }
+
+  if (
+    cloudMetadata?.storage_path &&
+    cloudMetadata?.status !== "deleted" &&
+    await pripravCloudProKompletniZalohu()
+  ) {
+    const bucket =
+      window.LubaNoteAttachmentsCloud?.bucket ||
+      "lubanote-attachments";
+
+    const { data, error } =
+      await supabaseClient.storage
+        .from(bucket)
+        .download(cloudMetadata.storage_path);
+
+    if (!error && data instanceof Blob) {
+      return data;
+    }
+
+    if (error) {
+      console.warn(
+        `LubaNote backup: cloudová příloha ${attachmentId} se nepodařila stáhnout.`,
+        error
+      );
+    }
+  }
+
+  return dataUrlNaBlobProZalohu(dataUrl);
+}
+
+
+async function vypocitejSha256Blobu(blob) {
+  if (!globalThis.crypto?.subtle) {
+    return null;
+  }
+
+  const buffer = await blob.arrayBuffer();
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    buffer
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .map((bajt) =>
+      bajt.toString(16).padStart(2, "0")
+    )
+    .join("");
+}
+
+
+function prevedBajtyNaBase64(bajty) {
+  let binarni = "";
+  const VELIKOST_PREVODU = 0x8000;
+
+  for (
+    let zacatek = 0;
+    zacatek < bajty.length;
+    zacatek += VELIKOST_PREVODU
+  ) {
+    const cast = bajty.subarray(
+      zacatek,
+      Math.min(
+        zacatek + VELIKOST_PREVODU,
+        bajty.length
+      )
+    );
+
+    binarni += String.fromCharCode(...cast);
+  }
+
+  return btoa(binarni);
+}
+
+
+async function pridejTextDoNativnihoArchivu(
+  BackupExport,
+  archivniCesta,
+  text
+) {
+  const obsah = String(text ?? "");
+  const kodovani = new TextEncoder();
+  const ocekavaneBajty =
+    kodovani.encode(obsah).byteLength;
+
+  await BackupExport.zahajPrilohu({
+    nazev: archivniCesta,
+    ocekavaneBajty
+  });
+
+  const VELIKOST_TEXTOVE_CASTI =
+    64 * 1024;
+  let zacatek = 0;
+  let odeslaneBajty = 0;
+
+  while (zacatek < obsah.length) {
+    let konec = Math.min(
+      zacatek + VELIKOST_TEXTOVE_CASTI,
+      obsah.length
+    );
+
+    if (
+      konec < obsah.length &&
+      konec > zacatek
+    ) {
+      const posledniKod =
+        obsah.charCodeAt(konec - 1);
+      const dalsiKod =
+        obsah.charCodeAt(konec);
+
+      if (
+        posledniKod >= 0xD800 &&
+        posledniKod <= 0xDBFF &&
+        dalsiKod >= 0xDC00 &&
+        dalsiKod <= 0xDFFF
+      ) {
+        konec -= 1;
+      }
+    }
+
+    const bajty = kodovani.encode(
+      obsah.slice(zacatek, konec)
+    );
+
+    const vysledek =
+      await BackupExport.pridejPrilohuCast({
+        base64: prevedBajtyNaBase64(bajty)
+      });
+
+    odeslaneBajty += bajty.byteLength;
+
+    if (
+      Number(vysledek?.bytes || 0) !==
+      odeslaneBajty
+    ) {
+      throw new Error(
+        `Android nepřijal celý soubor ${archivniCesta}.`
+      );
+    }
+
+    zacatek = konec;
+  }
+
+  const dokonceni =
+    await BackupExport.dokoncitPrilohu();
+
+  if (
+    Number(dokonceni?.bytes || 0) !==
+    ocekavaneBajty
+  ) {
+    throw new Error(
+      `Soubor ${archivniCesta} není v archivu kompletní.`
+    );
+  }
+}
+
+
+async function pridejBlobDoNativnihoArchivu(
+  BackupExport,
+  archivniCesta,
+  blob
+) {
+  const VELIKOST_BINARNI_CASTI =
+    192 * 1024;
+
+  await BackupExport.zahajPrilohu({
+    nazev: archivniCesta,
+    ocekavaneBajty: blob.size
+  });
+
+  let odeslano = 0;
+
+  while (odeslano < blob.size) {
+    const konec = Math.min(
+      odeslano + VELIKOST_BINARNI_CASTI,
+      blob.size
+    );
+
+    const buffer = await blob
+      .slice(odeslano, konec)
+      .arrayBuffer();
+
+    const base64 = prevedBajtyNaBase64(
+      new Uint8Array(buffer)
+    );
+
+    const vysledek =
+      await BackupExport.pridejPrilohuCast({
+        base64
+      });
+
+    const prijato = Number(
+      vysledek?.bytes || 0
+    );
+
+    if (prijato !== konec) {
+      throw new Error(
+        `Android nepřijal celou přílohu ${archivniCesta}.`
+      );
+    }
+
+    odeslano = konec;
+  }
+
+  const dokonceni =
+    await BackupExport.dokoncitPrilohu();
+
+  if (Number(dokonceni?.bytes || 0) !== blob.size) {
+    throw new Error(
+      `Příloha ${archivniCesta} není v archivu kompletní.`
+    );
+  }
+}
+
+
+async function vytvorAProvedKompletniArchivV4(
+  backup,
+  zpusobExportu,
+  tlacitko
+) {
+  const BackupExport =
+    window.Capacitor
+      ?.Plugins?.LubaNoteBackupExport;
+
+  if (
+    !BackupExport?.zahajArchiv ||
+    !BackupExport?.zahajPrilohu ||
+    !BackupExport?.pridejPrilohuCast ||
+    !BackupExport?.dokoncitPrilohu ||
+    !BackupExport?.dokoncitArchiv
+  ) {
+    throw vytvorChybuZalohy(
+      "APK nemá podporu kompletního archivu V4.",
+      "Tato APK ještě neumí novou kompletní zálohu s přílohami. Nainstaluj aktuální verzi LubaNote a export zopakuj."
+    );
+  }
+
+  const mapaPriloh =
+    vytvorMapuPrilohProZalohu(backup.notes);
+
+  const dataUrlMapa =
+    vytvorMapuDataUrlPrilohProZalohu(backup.notes);
+
+  const ids = Array.from(mapaPriloh.keys());
+  const cloudMetadataMapa =
+    await nactiCloudMetadataPrilohProZalohu(ids);
+
+  const polozkyManifestu = [];
+  let celkemBajtuPriloh = 0;
+  let archivDokoncen = false;
+
+  await BackupExport.zahajArchiv();
+
+  try {
+    await pridejTextDoNativnihoArchivu(
+      BackupExport,
+      "backup.json",
+      JSON.stringify(backup)
+    );
+
+    let poradoveCislo = 0;
+
+    for (const [attachmentId, identita] of mapaPriloh) {
+      const lokalniZaznam =
+        await window.LubaNoteAttachmentsLocal
+          ?.nactiPrilohu?.(attachmentId);
+
+      const cloudMetadata =
+        cloudMetadataMapa.get(attachmentId) || null;
+
+      /*
+       * Staré shadow_v1 attachment ID je pouze diagnostická cache
+       * FÁZE A. Jeho obrázek zůstává uvnitř backup.json jako Data URL
+       * a není součástí nové Storage autority.
+       */
+      const jeNovaPriloha = Boolean(
+        cloudMetadata ||
+        lokalniZaznam?.faze ===
+          LUBANOTE_BACKUP_ATTACHMENT_PHASE
+      );
+
+      if (!jeNovaPriloha) {
+        continue;
+      }
+
+      poradoveCislo += 1;
+
+      if (tlacitko) {
+        tlacitko.textContent =
+          `Přidávám přílohy… ${poradoveCislo}/${mapaPriloh.size}`;
+      }
+
+      const blob = await nactiBlobPrilohyProZalohu({
+        attachmentId,
+        lokalniZaznam,
+        cloudMetadata,
+        dataUrl: dataUrlMapa.get(attachmentId) || null
+      });
+
+      if (!(blob instanceof Blob) || blob.size <= 0) {
+        throw vytvorChybuZalohy(
+          `Příloha ${attachmentId} není dostupná.`,
+          "Kompletní zálohu nelze dokončit, protože jedna z příloh není dostupná ani lokálně ani v cloudu. Připoj zařízení k internetu a export zopakuj."
+        );
+      }
+
+      const mimeType =
+        cloudMetadata?.mime_type ||
+        lokalniZaznam?.mimeType ||
+        blob.type ||
+        "application/octet-stream";
+
+      const pripona =
+        mimeType === "image/jpeg"
+          ? "jpg"
+          : "bin";
+
+      const archivniCesta =
+        `attachments/${attachmentId}.${pripona}`;
+
+      const sha256 =
+        await vypocitejSha256Blobu(blob);
+
+      await pridejBlobDoNativnihoArchivu(
+        BackupExport,
+        archivniCesta,
+        blob
+      );
+
+      celkemBajtuPriloh += blob.size;
+
+      polozkyManifestu.push({
+        id: attachmentId,
+        noteId:
+          cloudMetadata?.note_id ||
+          lokalniZaznam?.noteId ||
+          identita.noteId ||
+          null,
+        mimeType,
+        sizeBytes: blob.size,
+        sha256,
+        archivePath: archivniCesta,
+        storagePath:
+          cloudMetadata?.storage_path ||
+          lokalniZaznam?.storagePath ||
+          null
+      });
+    }
+
+    const manifest = {
+      format: LUBANOTE_BACKUP_ARCHIVE_FORMAT,
+      version: LUBANOTE_BACKUP_ARCHIVE_VERSION,
+      complete: true,
+      exportedAt: backup.exportedAt,
+      appVersion: backup.appVersion || null,
+      owner: backup.owner || { userId: null },
+      backupJson: {
+        path: "backup.json",
+        format: backup.format,
+        version: backup.version
+      },
+      attachmentCount: polozkyManifestu.length,
+      attachmentBytes: celkemBajtuPriloh,
+      attachments: polozkyManifestu
+    };
+
+    await pridejTextDoNativnihoArchivu(
+      BackupExport,
+      "manifest.json",
+      JSON.stringify(manifest, null, 2)
+    );
+
+    const dokonceni =
+      await BackupExport.dokoncitArchiv();
+
+    archivDokoncen = true;
+
+    if (
+      !dokonceni?.ready ||
+      Number(dokonceni?.bytes || 0) <= 0
+    ) {
+      throw new Error(
+        "Android nevytvořil platný kompletní archiv."
+      );
+    }
+
+    const nazevSouboru =
+      vytvorNazevSouboruZalohyArchivu();
+
+    if (zpusobExportu === "sdilet") {
+      const Share =
+        window.Capacitor?.Plugins?.Share;
+
+      if (!Share) {
+        throw new Error(
+          "V APK chybí nativní plugin Share."
+        );
+      }
+
+      const soubor =
+        await BackupExport.ziskejArchivProSdileni();
+
+      if (!soubor?.uri) {
+        throw new Error(
+          "Android nepřipravil archiv ke sdílení."
+        );
+      }
+
+      await Share.share({
+        title: "Kompletní záloha LubaNote",
+        text: "Kompletní záloha dat a příloh LubaNote",
+        files: [soubor.uri],
+        dialogTitle: "Uložit nebo sdílet zálohu"
+      });
+
+      /*
+       * Dočasný soubor po sdílení nemažeme hned. Cílová aplikace
+       * může content URI načítat ještě chvíli po zavření share sheetu.
+       * Při příštím exportu se stejný jediný temp soubor bezpečně
+       * přepíše a Android cache jej může uklidit také sama.
+       */
+      return {
+        saved: true,
+        shared: true,
+        bytes: Number(soubor?.bytes || 0),
+        manifest
+      };
+    }
+
+    const vysledek =
+      await BackupExport.otevriUlozeniArchivu({
+        nazevSouboru
+      });
+
+    return {
+      ...(vysledek || {}),
+      manifest
+    };
+  } catch (error) {
+    if (!archivDokoncen) {
+      try {
+        await BackupExport.vycistiArchiv?.();
+      } catch {
+        // Dočasný archiv se při dalším exportu stejně přepíše.
+      }
+    }
+
+    throw error;
+  }
+}
+
+
 function stahniZalohuVeWebu(data, nazevSouboru) {
   const blob = new Blob([data], {
     type: "application/json"
@@ -1600,45 +2345,46 @@ async function pripravAProvedExportZalohy(
     const backup =
       await vytvorKompletniZalohu();
 
-    const data =
-      JSON.stringify(backup, null, 2);
-
-    const nazevSouboru =
-      vytvorNazevSouboruZalohy();
-
     const jeApk =
       window.Capacitor
         ?.isNativePlatform?.() === true;
 
-    if (
-      jeApk &&
-      zpusobExportu === "sdilet"
-    ) {
-      await sdilejZalohuVApk(
-        data,
-        nazevSouboru
-      );
-    } else if (jeApk) {
+    if (jeApk) {
       const vysledek =
-        await ulozZalohuDoSouboruVApk(
-          data,
-          nazevSouboru
+        await vytvorAProvedKompletniArchivV4(
+          backup,
+          zpusobExportu,
+          tlacitko
         );
 
       if (
         vysledek?.saved === true &&
+        zpusobExportu !== "sdilet" &&
         typeof zobrazZpravuAplikace ===
         "function"
       ) {
+        const pocetPriloh = Number(
+          vysledek?.manifest?.attachmentCount || 0
+        );
+
         zobrazZpravuAplikace(
           "Kompletní záloha",
-          "Kompletní záloha byla uložena do vybraného umístění."
+          `Kompletní záloha byla uložena. Archiv obsahuje ${pocetPriloh} cloudových příloh.`
         );
       }
     } else {
+      /*
+       * Web zatím zůstává na kompatibilním JSON V3. V současné
+       * FÁZI B jsou Data URL stále uvnitř poznámek, takže je webová
+       * záloha pořád kompletní. Před odstraněním Data URL autority
+       * dostane web stejný streamovaný archivový formát V4.
+       */
+      const data =
+        JSON.stringify(backup, null, 2);
+
       stahniZalohuVeWebu(
         data,
-        nazevSouboru
+        vytvorNazevSouboruZalohy()
       );
     }
   } catch (error) {
