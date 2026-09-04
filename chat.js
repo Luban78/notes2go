@@ -38,6 +38,12 @@
   let mazu = false;
   let puvodniAndroidZpet = null;
 
+  /*
+   * Scroll chatu:
+   * polling nesmí každé 3 s znovu skládat stejné DOM a shazovat gesto.
+   */
+  let posledniOtiskZprav = null;
+
   function t(klic, zaloha, promenne = null) {
     const fn = window.LubaNoteI18n?.t;
 
@@ -436,9 +442,33 @@
     threadModal.messages.scrollTop = threadModal.messages.scrollHeight;
   }
 
+  function vytvorOtiskZprav(rows) {
+    return JSON.stringify(
+      rows.map((message) => [
+        message.id,
+        message.body,
+        message.created_at,
+        message.read_at,
+        !!message.deleted,
+        !!message.mine
+      ])
+    );
+  }
+
   function vykresliZpravy(rows, { zachovatScroll = true } = {}) {
     const modal = vytvorThreadModal();
+    const novyOtisk = vytvorOtiskZprav(rows);
+
+    /*
+     * Když polling vrátil přesně stejná data, DOM vůbec neměníme.
+     * Android tak nepřijde o právě probíhající swipe/scroll.
+     */
+    if (zachovatScroll && novyOtisk === posledniOtiskZprav) {
+      return;
+    }
+
     const zustatDole = !zachovatScroll || jeScrollUspodu(modal.messages);
+    const puvodniScrollTop = modal.messages.scrollTop;
 
     modal.messages.innerHTML = "";
 
@@ -498,8 +528,15 @@
       modal.messages.append(row);
     }
 
+    posledniOtiskZprav = novyOtisk;
+
     requestAnimationFrame(() => {
-      if (zustatDole) scrollDolů();
+      if (zustatDole) {
+        scrollDolů();
+      } else {
+        /* Uživatel byl výš v historii – zůstane přesně tam. */
+        modal.messages.scrollTop = puvodniScrollTop;
+      }
     });
   }
 
@@ -725,6 +762,7 @@
       ? t("chat.blocked", "Chat je blokovaný")
       : t("chat.trustedContact", "Kontakt ze sdílení");
     modal.messages.innerHTML = "";
+    posledniOtiskZprav = null;
     modal.input.value = "";
     upravVyskuComposeru();
     nastavComposerStav();
@@ -741,6 +779,7 @@
   function zavriThread({ otevritKontakty = false } = {}) {
     if (threadModal) threadModal.overlay.hidden = true;
     otevrenyKontakt = null;
+    posledniOtiskZprav = null;
     clearInterval(threadPollTimer);
     threadPollTimer = null;
     if (deleteModal && !deleteModal.overlay.hidden && !mazu) zavriDeleteModal();
