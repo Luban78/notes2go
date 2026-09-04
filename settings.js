@@ -593,6 +593,14 @@ openReminderDelaySettingsButton?.addEventListener(
   );
 
   settingsImportButton.addEventListener("click", () => {
+    if (
+      window.Capacitor?.isNativePlatform?.() === true &&
+      typeof importTasksApk === "function"
+    ) {
+      importTasksApk();
+      return;
+    }
+
     importFile.click();
   });
 })();

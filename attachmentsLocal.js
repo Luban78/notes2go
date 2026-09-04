@@ -491,6 +491,70 @@
     };
   }
 
+  async function ulozObnovenouPrilohuDoCache({
+    id,
+    noteId = null,
+    blob,
+    mimeType = "image/jpeg",
+    fileName = "",
+    storagePath = ""
+  } = {}) {
+    if (!id || !noteId) {
+      throw new Error(
+        "Obnovená příloha nemá platné attachmentId nebo noteId."
+      );
+    }
+
+    if (!(blob instanceof Blob) || blob.size <= 0) {
+      throw new Error(
+        "Obnovená příloha neobsahuje platný Blob."
+      );
+    }
+
+    const typ = String(
+      mimeType || blob.type || ""
+    ).toLowerCase();
+
+    if (typ !== "image/jpeg") {
+      throw new Error(
+        `Obnovená příloha má nepovolený typ ${typ || "neznámý"}.`
+      );
+    }
+
+    const ted = new Date().toISOString();
+
+    const zaznam = {
+      id,
+      noteId,
+      blob,
+      mimeType: "image/jpeg",
+      sizeBytes: blob.size,
+      fileName: fileName || "",
+      createdAt: ted,
+      lastAccessAt: ted,
+      faze: "cloud_shadow_v1",
+      cloudState: "restore_staged",
+      storagePath: storagePath || "",
+      uploadedAt: null,
+      activatedAt: null,
+      lastCloudError: ""
+    };
+
+    await ulozZaznamDoSkladu(
+      SKLAD_PRILOH,
+      zaznam
+    );
+
+    return {
+      id: zaznam.id,
+      noteId: zaznam.noteId,
+      mimeType: zaznam.mimeType,
+      sizeBytes: zaznam.sizeBytes,
+      cloudState: zaznam.cloudState
+    };
+  }
+
+
   async function nactiPrilohu(id) {
     return nactiZaznamZeSkladu(
       SKLAD_PRILOH,
@@ -634,6 +698,7 @@
     jeDostupne: jeIndexedDbDostupne,
     ulozStinovouPrilohuZDataUrl,
     ulozCloudovouStinovouPrilohuZDataUrl,
+    ulozObnovenouPrilohuDoCache,
     nactiPrilohu,
     upravPrilohu,
     smazPrilohu,

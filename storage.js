@@ -2524,6 +2524,21 @@ function jePlatnySifrovanyZaznamZalohy(
 }
 
 
+function jePlatnySifrovanyTajnyStitekV4(zaznam) {
+  const encryptedName = zaznam?.encrypted_name;
+
+  return Boolean(
+    zaznam?.id &&
+    zaznam?.is_secret === true &&
+    encryptedName &&
+    typeof encryptedName === "object" &&
+    encryptedName.algorithm === "AES-GCM" &&
+    encryptedName.iv &&
+    encryptedName.ciphertext
+  );
+}
+
+
 function jePlatnaKompletniZaloha(
   zaloha
 ) {
@@ -2586,6 +2601,30 @@ function jePlatnaKompletniZaloha(
   }
 
   const manifest = zaloha.manifest;
+  const pocetTajnychStitku = Number(
+    manifest.secretTagCount
+  );
+  const pouzivaV4TajneStitky =
+    zaloha.secretTagEncoding ===
+      "encrypted-records-v1";
+
+  if (pouzivaV4TajneStitky) {
+    if (
+      !Array.isArray(zaloha.secretTagRecords) ||
+      zaloha.secretTagRecords.length !==
+        pocetTajnychStitku ||
+      !zaloha.secretTagRecords.every(
+        jePlatnySifrovanyTajnyStitekV4
+      )
+    ) {
+      return false;
+    }
+  } else if (
+    pocetTajnychStitku > 0 &&
+    !zaloha.secretMetadata
+  ) {
+    return false;
+  }
 
   return (
     Number(manifest.regularNoteCount) ===
@@ -2595,11 +2634,7 @@ function jePlatnaKompletniZaloha(
     Number(manifest.publicTagCount) ===
       zaloha.publicTags.length &&
     Number(manifest.plannedItemCount) ===
-      zaloha.plannedItems.length &&
-    (
-      Number(manifest.secretTagCount) === 0 ||
-      Boolean(zaloha.secretMetadata)
-    )
+      zaloha.plannedItems.length
   );
 }
 
@@ -2747,7 +2782,8 @@ function aplikujPlanCloudoveSynchronizacePoObnove(
 
 async function obnovKompletniZalohu(
   imported,
-  importedAt
+  importedAt,
+  moznosti = {}
 ) {
   if (!jePlatnaKompletniZaloha(imported)) {
     throw new Error(
@@ -2789,6 +2825,16 @@ async function obnovKompletniZalohu(
     );
   }
 
+  if (
+    typeof moznosti.predObnovou === "function"
+  ) {
+    await moznosti.predObnovou({
+      plan,
+      regularNotes,
+      ownerUserId
+    });
+  }
+
   if (imported.secretSettings) {
     if (
       typeof obnovTajneNastaveniZKompletniZalohy !==
@@ -2805,7 +2851,26 @@ async function obnovKompletniZalohu(
     }
   }
 
-  if (
+  const pouzivaSifrovaneTajneStitkyV4 =
+    imported.secretTagEncoding ===
+      "encrypted-records-v1";
+
+  if (pouzivaSifrovaneTajneStitkyV4) {
+    if (
+      typeof obnovStitkyZKompletniZalohyV4 !==
+        "function" ||
+      !await obnovStitkyZKompletniZalohyV4(
+        imported.publicTags,
+        imported.secretTagRecords,
+        plan.user
+      )
+    ) {
+      throw vytvorChybuZalohy(
+        "Obnova štítků V4 selhala.",
+        "Štítky se nepodařilo bezpečně obnovit. Poznámky nebyly importovány."
+      );
+    }
+  } else if (
     typeof obnovStitkyZKompletniZalohy !==
       "function" ||
     !await obnovStitkyZKompletniZalohy(
@@ -2817,6 +2882,17 @@ async function obnovKompletniZalohu(
       "Obnova veřejných štítků selhala.",
       "Štítky se nepodařilo bezpečně obnovit. Poznámky nebyly importovány."
     );
+  }
+
+  if (
+    typeof moznosti.predLokalnimUlozenim ===
+      "function"
+  ) {
+    await moznosti.predLokalnimUlozenim({
+      plan,
+      regularNotes,
+      ownerUserId
+    });
   }
 
   aplikujPlanCloudoveSynchronizacePoObnove(
@@ -2842,7 +2918,7 @@ async function obnovKompletniZalohu(
 
   if (
     typeof ulozCekajiciTajnaMetadataZeZalohy ===
-    "function"
+      "function"
   ) {
     ulozCekajiciTajnaMetadataZeZalohy(
       imported.secretMetadata || null,
@@ -2869,13 +2945,24 @@ async function obnovKompletniZalohu(
     }
   }
 
+  if (
+    typeof moznosti.predReload === "function"
+  ) {
+    await moznosti.predReload({
+      plan,
+      regularNotes,
+      ownerUserId
+    });
+  }
+
   location.reload();
 }
 
 
 async function provedKompletniObnovuSeZpracovanimChyby(
   imported,
-  importedAt
+  importedAt,
+  moznosti = {}
 ) {
   window.zavriVyberovyModal?.();
 
@@ -2899,7 +2986,8 @@ async function provedKompletniObnovuSeZpracovanimChyby(
   try {
     await obnovKompletniZalohu(
       imported,
-      importedAt
+      importedAt,
+      moznosti
     );
   } catch (error) {
     ukonciCekani();
@@ -2920,6 +3008,492 @@ async function provedKompletniObnovuSeZpracovanimChyby(
 
   ukonciCekani();
 }
+
+
+function base64NaUint8ArrayProImport(base64) {
+  const binarni = atob(base64 || "");
+  const bajty = new Uint8Array(binarni.length);
+
+  for (let i = 0; i < binarni.length; i += 1) {
+    bajty[i] = binarni.charCodeAt(i);
+  }
+
+  return bajty;
+}
+
+
+async function nactiPolozkuNativeZalohyV4(
+  BackupExport,
+  nazev,
+  moznosti = {}
+) {
+  const jakoText = moznosti.jakoText === true;
+  const mimeType = moznosti.mimeType ||
+    "application/octet-stream";
+
+  const start = await BackupExport.zahajCteniImportu({
+    nazev
+  });
+
+  const ocekavaneBajty = Number(start?.bytes) || 0;
+
+  if (ocekavaneBajty <= 0) {
+    throw new Error(
+      `Položka ${nazev || "zálohy"} je prázdná.`
+    );
+  }
+
+  const casti = [];
+  const decoder = jakoText
+    ? new TextDecoder("utf-8", { fatal: true })
+    : null;
+
+  let prijato = 0;
+  let hotovo = false;
+
+  try {
+    while (!hotovo) {
+      const odpoved =
+        await BackupExport.nactiCastImportu({
+          maxBajtu: 96 * 1024
+        });
+
+      const bajty = base64NaUint8ArrayProImport(
+        odpoved?.base64 || ""
+      );
+
+      prijato += bajty.byteLength;
+
+      if (jakoText) {
+        casti.push(
+          decoder.decode(
+            bajty,
+            { stream: odpoved?.done !== true }
+          )
+        );
+      } else if (bajty.byteLength > 0) {
+        casti.push(bajty);
+      }
+
+      hotovo = odpoved?.done === true;
+    }
+
+    await BackupExport.dokoncitCteniImportu();
+  } catch (error) {
+    try {
+      await BackupExport.dokoncitCteniImportu();
+    } catch {
+      // Původní chyba má přednost.
+    }
+    throw error;
+  }
+
+  if (prijato !== ocekavaneBajty) {
+    throw new Error(
+      `Položka ${nazev || "zálohy"} není kompletní.`
+    );
+  }
+
+  if (jakoText) {
+    return casti.join("");
+  }
+
+  return new Blob(casti, { type: mimeType });
+}
+
+
+function jePlatnyManifestArchivuV4(
+  manifest,
+  backup
+) {
+  if (
+    manifest?.format !==
+      LUBANOTE_BACKUP_ARCHIVE_FORMAT ||
+    Number(manifest.version) !==
+      LUBANOTE_BACKUP_ARCHIVE_VERSION ||
+    manifest.complete !== true ||
+    manifest?.backupJson?.path !== "backup.json" ||
+    manifest?.backupJson?.format !==
+      LUBANOTE_BACKUP_FORMAT ||
+    Number(manifest?.backupJson?.version) !== 3 ||
+    !Array.isArray(manifest.attachments) ||
+    Number(manifest.attachmentCount) !==
+      manifest.attachments.length
+  ) {
+    return false;
+  }
+
+  if (
+    manifest?.owner?.userId &&
+    backup?.owner?.userId &&
+    manifest.owner.userId !==
+      backup.owner.userId
+  ) {
+    return false;
+  }
+
+  const mapaReferenci =
+    vytvorMapuPrilohProZalohu(backup.notes);
+  const ids = new Set();
+  let soucetBajtu = 0;
+
+  for (const polozka of manifest.attachments) {
+    const id = String(polozka?.id || "").trim();
+    const noteId = String(
+      polozka?.noteId || ""
+    ).trim();
+    const velikost = Number(polozka?.sizeBytes);
+    const reference = mapaReferenci.get(id);
+
+    if (
+      !id ||
+      !noteId ||
+      ids.has(id) ||
+      polozka?.mimeType !== "image/jpeg" ||
+      !Number.isFinite(velikost) ||
+      velikost <= 0 ||
+      velikost > 2 * 1024 * 1024 ||
+      polozka?.archivePath !==
+        `attachments/${id}.jpg` ||
+      !/^[0-9a-f]{64}$/i.test(
+        String(polozka?.sha256 || "")
+      ) ||
+      !reference ||
+      String(reference.noteId) !== noteId
+    ) {
+      return false;
+    }
+
+    ids.add(id);
+    soucetBajtu += velikost;
+  }
+
+  return (
+    ids.size === manifest.attachments.length &&
+    soucetBajtu ===
+      Number(manifest.attachmentBytes || 0)
+  );
+}
+
+
+async function ulozPrilohyArchivuV4DoCache(
+  BackupExport,
+  manifest
+) {
+  const lokalni =
+    window.LubaNoteAttachmentsLocal;
+
+  if (
+    !lokalni?.ulozObnovenouPrilohuDoCache
+  ) {
+    throw vytvorChybuZalohy(
+      "Lokální attachment cache V4 není dostupná.",
+      "Přílohy ze zálohy se nepodařilo bezpečně připravit."
+    );
+  }
+
+  for (const polozka of manifest.attachments) {
+    const blob = await nactiPolozkuNativeZalohyV4(
+      BackupExport,
+      polozka.archivePath,
+      {
+        mimeType: "image/jpeg"
+      }
+    );
+
+    if (blob.size !== Number(polozka.sizeBytes)) {
+      throw vytvorChybuZalohy(
+        `Velikost obnovené přílohy ${polozka.id} nesedí.`,
+        "Příloha v záloze neprošla kontrolou velikosti. Obnova byla zastavena."
+      );
+    }
+
+    await lokalni.ulozObnovenouPrilohuDoCache({
+      id: polozka.id,
+      noteId: polozka.noteId,
+      blob,
+      mimeType: "image/jpeg",
+      fileName: `${polozka.id}.jpg`,
+      storagePath: ""
+    });
+  }
+}
+
+
+async function pripravCloudProObnovuPrilohV4(
+  manifest
+) {
+  if (manifest.attachments.length === 0) {
+    return true;
+  }
+
+  if (!await pripravCloudProKompletniZalohu()) {
+    throw vytvorChybuZalohy(
+      "Cloud není dostupný pro obnovu příloh.",
+      "Kompletní obnova příloh potřebuje připojení k internetu."
+    );
+  }
+
+  const polozky = manifest.attachments.map(
+    (polozka) => ({
+      id: polozka.id,
+      noteId: polozka.noteId,
+      sizeBytes: Number(polozka.sizeBytes),
+      mimeType: "image/jpeg"
+    })
+  );
+
+  const { data, error } =
+    await supabaseClient.rpc(
+      "lubanote_prepare_attachment_restore",
+      { p_items: polozky }
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  if (data?.ok !== true) {
+    const duvod = data?.reason ||
+      "restore_prepare_failed";
+
+    throw vytvorChybuZalohy(
+      `Server odmítl přípravu příloh: ${duvod}`,
+      data?.message ||
+      `Přílohy ze zálohy nelze obnovit (${duvod}). Žádné poznámky nebyly obnoveny.`
+    );
+  }
+
+  return true;
+}
+
+
+async function zaradPrilohyArchivuV4PoObnove(
+  manifest
+) {
+  const lokalni =
+    window.LubaNoteAttachmentsLocal;
+
+  for (const polozka of manifest.attachments) {
+    await lokalni?.upravPrilohu?.(
+      polozka.id,
+      {
+        noteId: polozka.noteId,
+        cloudState: "pending_upload",
+        lastCloudError: ""
+      }
+    );
+
+    await lokalni?.zaradUpload?.({
+      attachmentId: polozka.id,
+      noteId: polozka.noteId
+    });
+  }
+}
+
+
+async function vycistiNativeImportBezChyby(BackupExport) {
+  try {
+    await BackupExport?.vycistiImport?.();
+  } catch {
+    // Dočasný import se při příštím výběru stejně přepíše.
+  }
+}
+
+
+async function importTasksApk() {
+  const BackupExport =
+    window.Capacitor?.Plugins
+      ?.LubaNoteBackupExport;
+
+  if (
+    window.Capacitor?.isNativePlatform?.() !== true ||
+    !BackupExport?.otevriImport ||
+    !BackupExport?.zahajCteniImportu ||
+    !BackupExport?.nactiCastImportu ||
+    !BackupExport?.dokoncitCteniImportu
+  ) {
+    const input = document.getElementById("importFile");
+    input?.click();
+    return;
+  }
+
+  let vyber;
+
+  try {
+    vyber = await BackupExport.otevriImport();
+  } catch (error) {
+    console.error("Výběr zálohy selhal:", error);
+    zobrazZpravuAplikace(
+      "Záloha a obnova",
+      error?.message ||
+      "Zálohu se nepodařilo otevřít."
+    );
+    return;
+  }
+
+  if (vyber?.canceled === true) {
+    return;
+  }
+
+  if (vyber?.typ === "json") {
+    try {
+      const text = await nactiPolozkuNativeZalohyV4(
+        BackupExport,
+        "legacy.json",
+        { jakoText: true }
+      );
+
+      await BackupExport.vycistiImport?.();
+
+      importTasks(
+        new Blob([text], {
+          type: "application/json"
+        })
+      );
+    } catch (error) {
+      await vycistiNativeImportBezChyby(BackupExport);
+      console.error("Import JSON zálohy selhal:", error);
+      zobrazZpravuAplikace(
+        "Záloha a obnova",
+        error?.message ||
+        "Soubor není platná záloha LubaNote."
+      );
+    }
+    return;
+  }
+
+  if (vyber?.typ !== "archive-v4") {
+    await vycistiNativeImportBezChyby(BackupExport);
+    zobrazZpravuAplikace(
+      "Záloha a obnova",
+      "Vybraný soubor není podporovaná záloha LubaNote."
+    );
+    return;
+  }
+
+  const ukonciKontrolu =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ověřuji kompletní zálohu…",
+      0
+    ) || (() => {});
+
+  let manifest;
+  let imported;
+
+  try {
+    const kontrola =
+      await BackupExport.overArchivImportu();
+
+    manifest = JSON.parse(
+      kontrola?.manifestJson || "{}"
+    );
+
+    const backupText =
+      await nactiPolozkuNativeZalohyV4(
+        BackupExport,
+        manifest?.backupJson?.path || "backup.json",
+        { jakoText: true }
+      );
+
+    imported = JSON.parse(backupText);
+
+    if (
+      !jePlatnaKompletniZaloha(imported) ||
+      !jePlatnyManifestArchivuV4(
+        manifest,
+        imported
+      )
+    ) {
+      throw new Error(
+        "Archiv V4 nebo backup.json nemá platnou strukturu."
+      );
+    }
+  } catch (error) {
+    ukonciKontrolu();
+    await vycistiNativeImportBezChyby(BackupExport);
+
+    console.error(
+      "Kontrola archivu V4 selhala:",
+      error
+    );
+
+    zobrazZpravuAplikace(
+      "Záloha a obnova",
+      error?.message ||
+      "Kompletní archiv V4 neprošel bezpečnostní kontrolou."
+    );
+    return;
+  }
+
+  ukonciKontrolu();
+
+  const importedAt = new Date().toISOString();
+  const provedObnovu = async () => {
+    try {
+      await provedKompletniObnovuSeZpracovanimChyby(
+        imported,
+        importedAt,
+        {
+          predObnovou: async () => {
+            await ulozPrilohyArchivuV4DoCache(
+              BackupExport,
+              manifest
+            );
+          },
+          predLokalnimUlozenim: async () => {
+            await pripravCloudProObnovuPrilohV4(
+              manifest
+            );
+          },
+          predReload: async () => {
+            await zaradPrilohyArchivuV4PoObnove(
+              manifest
+            );
+          }
+        }
+      );
+    } finally {
+      try {
+        await BackupExport.vycistiImport?.();
+      } catch {
+        // Cache se při příštím importu stejně přepíše.
+      }
+    }
+  };
+
+  if (
+    typeof window.otevriVyberovyModal ===
+    "function"
+  ) {
+    window.otevriVyberovyModal({
+      nadpis:
+        `Obnovit kompletní zálohu V4? Archiv obsahuje ${manifest.attachmentCount} příloh. Obnovené verze se uloží také do cloudu.`,
+      moznosti: [
+        {
+          hodnota: "obnovit",
+          popisek: "Obnovit zálohu"
+        },
+        {
+          hodnota: "zrusit",
+          popisek: "Zrušit"
+        }
+      ],
+      poVyberu: async (volba) => {
+        if (volba !== "obnovit") {
+          await vycistiNativeImportBezChyby(BackupExport);
+          return;
+        }
+
+        await provedObnovu();
+      }
+    });
+    return;
+  }
+
+  await provedObnovu();
+}
+
 
 function importTasks(file) {
   const reader = new FileReader();

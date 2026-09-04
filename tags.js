@@ -543,6 +543,128 @@ async function obnovStitkyZKompletniZalohy(
   return true;
 }
 
+
+async function obnovStitkyZKompletniZalohyV4(
+  verejneStitky,
+  secretTagRecords,
+  user
+) {
+  if (!user?.id || !supabaseClient) {
+    return false;
+  }
+
+  if (!await obnovStitkyZKompletniZalohy(
+    verejneStitky,
+    user
+  )) {
+    return false;
+  }
+
+  const sifrovane = Array.isArray(secretTagRecords)
+    ? secretTagRecords
+    : [];
+
+  if (sifrovane.length === 0) {
+    return true;
+  }
+
+  const { data: existujici, error } =
+    await supabaseClient
+      .from("tags")
+      .select("id, user_id, is_secret")
+      .eq("user_id", user.id);
+
+  if (error) {
+    console.error(
+      "Načtení tajných štítků před obnovou V4 selhalo:",
+      error.message
+    );
+    return false;
+  }
+
+  const existujiciPodleId = new Map(
+    (Array.isArray(existujici) ? existujici : [])
+      .filter((stitek) => stitek?.id)
+      .map((stitek) => [String(stitek.id), stitek])
+  );
+
+  for (const zaznam of sifrovane) {
+    const id = String(zaznam?.id || "").trim();
+    const encryptedName = zaznam?.encrypted_name;
+    const poradi = Number(zaznam?.sort_order);
+
+    if (
+      !id ||
+      zaznam?.is_secret !== true ||
+      !encryptedName ||
+      typeof encryptedName !== "object" ||
+      encryptedName.algorithm !== "AES-GCM" ||
+      !encryptedName.iv ||
+      !encryptedName.ciphertext
+    ) {
+      console.error(
+        "Tajný štítek V4 nemá platná šifrovaná data.",
+        zaznam
+      );
+      return false;
+    }
+
+    const dataProUlozeni = {
+      name: `__secret_tag_${id}`,
+      encrypted_name: encryptedName,
+      is_secret: true,
+      sort_order: Number.isFinite(poradi) ? poradi : 0,
+      color: String(zaznam?.color || "system"),
+      deleted_at: null
+    };
+
+    if (existujiciPodleId.has(id)) {
+      const { error: updateError } =
+        await supabaseClient
+          .from("tags")
+          .update(dataProUlozeni)
+          .eq("id", id)
+          .eq("user_id", user.id);
+
+      if (updateError) {
+        console.error(
+          "Obnova tajného štítku V4 selhala:",
+          id,
+          updateError.message
+        );
+        return false;
+      }
+    } else {
+      const { error: insertError } =
+        await supabaseClient
+          .from("tags")
+          .insert({
+            id,
+            user_id: user.id,
+            ...dataProUlozeni
+          });
+
+      if (insertError) {
+        console.error(
+          "Obnova nového tajného štítku V4 selhala:",
+          id,
+          insertError.message
+        );
+        return false;
+      }
+    }
+  }
+
+  if (
+    typeof loadTagsFromSupabase === "function"
+  ) {
+    await loadTagsFromSupabase();
+  }
+
+  return true;
+}
+
+
 // ==========================================
 // TAJNÝ REŽIM – STAV
 // Záměrně se NEUKLÁDÁ do localStorage.
