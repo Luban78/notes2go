@@ -3700,6 +3700,31 @@ window.LubaNoteSharedEditorHost = {
 
 
 async function openTaskEditorById(taskId) {
+  await window.LubaNoteSharingNotes
+    ?.zajistiAktualniSharedStav?.();
+
+  /*
+   * Vlastní poznámka s aktivním sdílením už nesmí vstoupit do
+   * původního private editor/sync toku. Obě strany musí používat
+   * stejný shared lock a shared save RPC, jinak by collaboratorova
+   * změna vypadala vlastníkovi jako revizní konflikt.
+   */
+  if (
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(taskId)
+  ) {
+    if (
+      typeof window.LubaNoteSharedEditor
+        ?.otevriSdilenouEditaci ===
+      "function"
+    ) {
+      await window.LubaNoteSharedEditor
+        .otevriSdilenouEditaci(taskId);
+    }
+
+    return;
+  }
+
   /*
    * Pokud právě dorazil Realtime signál, že je v cloudu novější
    * verze této poznámky, nejdřív bezpečně dokončíme její sync.

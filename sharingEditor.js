@@ -515,7 +515,23 @@
               tichy: true,
               vykreslit: true
             });
-        }, 80);
+
+          /*
+           * Vlastník má shared note stále i v běžném lokálním seznamu
+           * kvůli Planneru/reminderům. Po shared save proto hned stáhneme
+           * novou serverovou revizi do této lokální kopie. Sync už díky
+           * owner-shared guardu nevytvoří konfliktní kopii ani nic neposílá
+           * zpět přes private save_note_safe().
+           */
+          window.LubaNoteSync
+            ?.spustRychle?.()
+            ?.catch?.((error) => {
+              console.warn(
+                "Sdílený editor: následný owner sync se dokončí později.",
+                error
+              );
+            });
+        }, 120);
       }
 
       window.dispatchEvent(

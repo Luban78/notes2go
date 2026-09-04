@@ -2,7 +2,9 @@
    LubaNote – S2C SHARED NOTES READ-ONLY CLIENT V1
    ------------------------------------------------------------
    - načítá přijaté shared notes přes S1C RPC
-   - drží je v oddělené per-user cache (nikdy v savedTask)
+   - načítá i vlastní poznámky, které už mají collaboratora
+   - collaborator notes drží odděleně od savedTask; owner shared notes
+     slouží jako autoritativní metadata pro shared editor
    - private sync/storage proto zůstává nedotčený
    - přikreslí shared karty do hlavního seznamu
    - otevře bezpečný fullscreen read-only náhled
@@ -25,6 +27,7 @@
   let viewerNoteId = null;
   let pollTimer = null;
   let probihajiciNacteni = null;
+  let serverovyStavNacten = false;
   let puvodniRenderTasks = null;
   let puvodniAndroidZpet = null;
 
@@ -409,8 +412,11 @@
       .querySelectorAll(".sharingSharedCard")
       .forEach((card) => card.remove());
 
-    const visible = seradSharedNotes(sdilenePoznamky)
-      .filter(projdeAktualnimiFiltry);
+    const visible = seradSharedNotes(
+      sdilenePoznamky.filter(
+        (note) => note?.__lubanoteSharedRole !== "owner"
+      )
+    ).filter(projdeAktualnimiFiltry);
 
     for (const note of visible) {
       pripojKartuDoLayoutu(vytvorSharedKartu(note));
@@ -687,15 +693,27 @@
           throw new Error("supabase_unavailable");
         }
 
-        const { data, error } = await klient.rpc(
-          "lubanote_get_shared_notes_safe"
-        );
+        const [prijate, vlastni] = await Promise.all([
+          klient.rpc(
+            "lubanote_get_shared_notes_safe"
+          ),
+          klient.rpc(
+            "lubanote_get_my_owned_shared_notes_safe"
+          )
+        ]);
 
-        if (error) {
-          throw error;
+        if (prijate.error) {
+          throw prijate.error;
         }
 
-        const nove = ziskejRadkyZRcp(data)
+        if (vlastni.error) {
+          throw vlastni.error;
+        }
+
+        const nove = [
+          ...ziskejRadkyZRcp(prijate.data),
+          ...ziskejRadkyZRcp(vlastni.data)
+        ]
           .map(prevedRadekNaPoznamku)
           .filter(Boolean);
 
@@ -707,6 +725,7 @@
           return sdilenePoznamky;
         }
 
+        serverovyStavNacten = true;
         sdilenePoznamky = nove;
         ulozCache(nove);
 
@@ -803,6 +822,7 @@
 
   function nastavUcet(userId) {
     aktualniUserId = userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
+    serverovyStavNacten = false;
     sdilenePoznamky = nactiCache();
 
     if (typeof window.renderTasks === "function") {
@@ -829,6 +849,7 @@
 
   window.addEventListener("lubanote:auth-expired", () => {
     aktualniUserId = null;
+    serverovyStavNacten = false;
     sdilenePoznamky = [];
     zavriReadOnly();
 
@@ -891,12 +912,54 @@
     obnovZeServeru({ tichy: true, vykreslit: true });
   }
 
+
+
+  async function zajistiAktualniSharedStav() {
+    if (serverovyStavNacten || !navigator.onLine) {
+      return serverovyStavNacten;
+    }
+
+    await obnovZeServeru({
+      tichy: true,
+      vykreslit: false
+    });
+
+    return serverovyStavNacten;
+  }
+
+  function jeVlastniSdilenaPoznamka(noteId) {
+    if (!noteId) {
+      return false;
+    }
+
+    return sdilenePoznamky.some(
+      (note) =>
+        note?.id === noteId &&
+        note?.__lubanoteSharedRole === "owner"
+    );
+  }
+
+  function ziskejVlastniSdilenouPoznamku(noteId) {
+    if (!noteId) {
+      return null;
+    }
+
+    return sdilenePoznamky.find(
+      (note) =>
+        note?.id === noteId &&
+        note?.__lubanoteSharedRole === "owner"
+    ) || null;
+  }
+
   window.LubaNoteSharingNotes = {
     obnovZeServeru,
     vykresliSdileneKarty,
     ziskejSdilenePoznamky: () => [...sdilenePoznamky],
     jeSdilenaPoznamka: (noteId) =>
       sdilenePoznamky.some((note) => note.id === noteId),
+    zajistiAktualniSharedStav,
+    jeVlastniSdilenaPoznamka,
+    ziskejVlastniSdilenouPoznamku,
     otevriReadOnly,
     zavriReadOnly
   };

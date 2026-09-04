@@ -1123,6 +1123,47 @@ async function getCloudNotesForSync() {
   return data;
 }
 
+
+async function ziskejVlastniSdileneIdProSync() {
+  const user = await getCurrentUser();
+
+  if (!user || !navigator.onLine) {
+    return new Set();
+  }
+
+  try {
+    const { data, error } = await supabaseClient.rpc(
+      "lubanote_get_my_owned_shared_notes_safe"
+    );
+
+    if (error) {
+      console.warn(
+        "LubaNote sync: seznam vlastních sdílených poznámek se nepodařilo načíst; běžný sync je pro jistotu nepovažuje za shared.",
+        error
+      );
+      return new Set();
+    }
+
+    const radky = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.notes)
+        ? data.notes
+        : [];
+
+    return new Set(
+      radky
+        .map((row) => row?.note_id || row?.id || null)
+        .filter(Boolean)
+    );
+  } catch (error) {
+    console.warn(
+      "LubaNote sync: detekce vlastních sdílených poznámek selhala.",
+      error
+    );
+    return new Set();
+  }
+}
+
 function vytvorCloudRegularNote(row) {
   if (
     !row?.data ||
@@ -1451,7 +1492,8 @@ function pripravRevizniMerge(
   localDecryptedSecret,
   cloudRows,
   shodneSecretId = new Set(),
-  idPoznamekEditovanychJinde = new Set()
+  idPoznamekEditovanychJinde = new Set(),
+  vlastniSdileneId = new Set()
 ) {
   const lokalniMapa =
     vytvorMapuVitezu(
@@ -1506,6 +1548,27 @@ function pripravRevizniMerge(
           konfliktniId.add(row.id);
         }
 
+        return;
+      }
+
+      /*
+       * VLASTNÍ SDÍLENÁ POZNÁMKA
+       * --------------------------------------------------------
+       * Jakmile má poznámka přijatého spolupracovníka, její společný
+       * obsah už nesmí řešit starý private revision merge. Jinak změna
+       * provedená collaborator-em v shared editoru vypadá vlastníkovi
+       * jako "změna z druhého zařízení" a starý ochranný algoritmus
+       * správně, ale zbytečně vytvoří konfliktní kopii.
+       *
+       * Shared obsah je autoritativní na serveru a editace obou stran
+       * prochází jediným shared lockem. Proto vlastník po skončení
+       * cizího aktivního lease bezpečně převezme cloudovou revizi a
+       * private sync ji nikdy neposílá zpět přes save_note_safe().
+       */
+      if (vlastniSdileneId.has(row.id)) {
+        vynutitCloudId.add(row.id);
+        prijmoutCloudMetaId.add(row.id);
+        zrusKonfliktSynchronizace(row.id);
         return;
       }
 
@@ -2482,6 +2545,14 @@ async function syncNotes() {
     let cloudRows = await getCloudNotesForSync();
 
     /*
+     * Jediný serverový dotaz určí, které poznámky tohoto vlastníka
+     * už patří do shared-lock režimu. Tyto ID se nesmí dostat do
+     * běžného private conflict/save rozhodování.
+     */
+    const vlastniSdileneId =
+      await ziskejVlastniSdileneIdProSync();
+
+    /*
      * Pokud stejnou poznámku právě drží aktivní editor na jiném
      * zařízení, tento klient ji v tomto syncu pouze ponechá beze změny.
      * Tím mobil při otevření aplikace nemůže zvýšit serverovou revizi
@@ -2588,7 +2659,8 @@ async function syncNotes() {
       localDecryptedSecret,
       cloudRows,
       shodneSecretId,
-      idPoznamekEditovanychJinde
+      idPoznamekEditovanychJinde,
+      vlastniSdileneId
     );
 
     const {
