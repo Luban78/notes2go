@@ -331,6 +331,11 @@ window.LubaNoteLanguagePacks.push({
     "sharing.close": "Zavřít",
     "sharing.loading": "Načítám…",
     "sharing.loadFailed": "Data sdílení se nepodařilo načíst.",
+    "sharing.sharedUntitled": "Bez názvu",
+    "sharing.sharedCardMeta": "Sdíleno · {owner} · pouze pro čtení",
+    "sharing.readOnlyTitle": "Sdílená poznámka",
+    "sharing.readOnlyMeta": "{owner} · pouze pro čtení",
+    "sharing.readOnlyTodos": "Úkoly",
 
     "settings.title": "Nastavení",
     "settings.close": "Zavřít nastavení",

@@ -785,6 +785,71 @@
     );
   }
 
+  function pridejSpolehlivyMobilniTap(tlacitko, callback) {
+    let pointerStart = null;
+    let zpracovanoPointeremDo = 0;
+
+    tlacitko.style.touchAction = "manipulation";
+
+    tlacitko.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+        return;
+      }
+
+      pointerStart = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY
+      };
+    });
+
+    tlacitko.addEventListener("pointercancel", () => {
+      pointerStart = null;
+    });
+
+    tlacitko.addEventListener("pointerup", (event) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+        return;
+      }
+
+      const start = pointerStart;
+      pointerStart = null;
+
+      if (!start || start.id !== event.pointerId) {
+        return;
+      }
+
+      const vzdalenost = Math.hypot(
+        event.clientX - start.x,
+        event.clientY - start.y
+      );
+
+      if (vzdalenost > 18) {
+        return;
+      }
+
+      /*
+       * Android WebView může první syntetický click po změně overlaye
+       * spolknout globální ochranou menu. Pointerup zpracujeme přímo
+       * a následující syntetický click už jen potlačíme.
+       */
+      zpracovanoPointeremDo = Date.now() + 700;
+      event.preventDefault();
+      event.stopPropagation();
+      callback();
+    });
+
+    tlacitko.addEventListener("click", (event) => {
+      if (Date.now() < zpracovanoPointeremDo) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      callback();
+    });
+  }
+
   function renderIncoming(rows) {
     const modal = vytvorInvitationsModal();
     modal.list.innerHTML = "";
@@ -802,6 +867,7 @@
 
     for (const row of rows) {
       const invitationId = row.invitation_id ?? row.id;
+      const invitationNoteId = row.note_id ?? row.noteId ?? null;
       const card = document.createElement("article");
       card.className = "sharingInvitationCard";
 
@@ -895,6 +961,31 @@
             "success"
           );
 
+          if (action === "accept") {
+            /*
+             * S2C drží shared notes v oddělené cache. Po přijetí
+             * pozvánky ji obnovíme hned, takže karta může být vidět
+             * okamžitě po zavření okna pozvánek.
+             */
+            try {
+              await window.LubaNoteSharingNotes?.obnovZeServeru?.({
+                tichy: true,
+                vykreslit: true
+              });
+            } catch (_) {
+              // Membership už je potvrzený serverem; cache se obnoví později.
+            }
+
+            window.dispatchEvent(
+              new CustomEvent("lubanote:sharing-changed", {
+                detail: {
+                  action: "accepted",
+                  noteId: invitationNoteId
+                }
+              })
+            );
+          }
+
           await nactiPrichoziPozvanky({ zobrazNacitani: false });
         } catch (error) {
           console.error("Sdílení: pozvánku se nepodařilo zpracovat.", error);
@@ -909,8 +1000,8 @@
         }
       }
 
-      accept.addEventListener("click", () => respond("accept"));
-      decline.addEventListener("click", () => respond("decline"));
+      pridejSpolehlivyMobilniTap(accept, () => respond("accept"));
+      pridejSpolehlivyMobilniTap(decline, () => respond("decline"));
 
       actions.append(decline, accept);
       card.append(title, inviter, actions);

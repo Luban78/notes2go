@@ -563,13 +563,28 @@
 
 @media (max-width: 520px) {
   .sharingModal {
-    align-items: flex-end;
-    padding: 10px;
+    /*
+     * Android edge-to-edge může mít systémovou navigaci uvnitř
+     * layout viewportu. Stejně jako fullscreen editor se proto
+     * řídíme skutečným visualViewport z script.js a necháváme
+     * pevnou bezpečnou rezervu pod kartou.
+     */
+    inset: auto 0 auto 0;
+    top: var(--visual-top, 0px);
+    width: 100%;
+    height: var(--visual-height, 100dvh);
+    min-height: 0;
+
+    align-items: center;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      10px
+      max(58px, env(safe-area-inset-bottom));
   }
 
   .sharingModalCard {
     width: 100%;
-    max-height: 86vh;
+    max-height: calc(var(--visual-height, 100dvh) - 82px);
     border-bottom-left-radius: 16px;
     border-bottom-right-radius: 16px;
   }
@@ -580,5 +595,215 @@
 
   .sharingInviteForm .sharingPrimaryButton {
     width: 100%;
+  }
+}
+
+
+/* ============================================================
+   S2C – SHARED NOTE CARDS + READ-ONLY VIEWER
+============================================================ */
+
+.sharingSharedCard {
+  position: relative;
+  cursor: pointer;
+}
+
+.sharingSharedCard::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 42%, transparent);
+  border-radius: 17px;
+}
+
+.sharingSharedCardIcon {
+  display: inline-block;
+  margin-right: 7px;
+  font-size: 0.9em;
+  vertical-align: 0.05em;
+}
+
+.taskCard .sharingSharedCardMeta {
+  margin: 7px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  color: var(--color-accent) !important;
+  font-size: calc(var(--font-size) - 4px) !important;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.sharingReadOnlyViewer {
+  position: fixed;
+  inset: 0;
+  z-index: 5240;
+
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+
+  background: var(--color-editor-background);
+  color: var(--color-editor-text);
+}
+
+.sharingReadOnlyViewer[hidden] {
+  display: none !important;
+}
+
+body.sharingReadOnlyOpen {
+  overflow: hidden;
+}
+
+.sharingReadOnlyHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  box-sizing: border-box;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-editor-background);
+}
+
+.sharingReadOnlyClose {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+
+  background: var(--color-background);
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: 29px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.sharingReadOnlyHeaderText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sharingReadOnlyHeaderText h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-editor-text);
+  font-size: calc(var(--font-size) + 5px);
+  line-height: 1.2;
+}
+
+.sharingReadOnlyHeaderText p {
+  margin: 5px 0 0;
+  color: var(--color-accent);
+  font-size: calc(var(--font-size) - 3px);
+  font-weight: 750;
+}
+
+.sharingReadOnlyBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  box-sizing: border-box;
+  padding: 18px 18px 36px;
+}
+
+.sharingReadOnlyContent {
+  min-height: 30px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--color-editor-text);
+  font-size: var(--font-size);
+  line-height: 1.5;
+}
+
+.sharingReadOnlyContent img,
+.sharingReadOnlyTodoText img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 10px auto;
+  border-radius: 12px;
+}
+
+.sharingReadOnlyContent a,
+.sharingReadOnlyTodoText a {
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+
+.sharingReadOnlyTodos {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.sharingReadOnlyTodos[hidden] {
+  display: none !important;
+}
+
+.sharingReadOnlyTodos h3 {
+  margin: 0 0 10px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 1px);
+}
+
+.sharingReadOnlyTodoList {
+  display: grid;
+  gap: 8px;
+}
+
+.sharingReadOnlyTodo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: var(--color-background);
+}
+
+.sharingReadOnlyTodo input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  margin: 2px 0 0;
+  opacity: 1;
+}
+
+.sharingReadOnlyTodoText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-editor-text);
+  line-height: 1.4;
+}
+
+@media (max-width: 899px) {
+  .sharingReadOnlyViewer {
+    inset: auto 0 auto 0;
+    top: var(--visual-top, 0px);
+    width: 100%;
+    height: var(--visual-height, 100dvh);
+  }
+
+  .sharingReadOnlyHeader {
+    padding-top: max(9px, env(safe-area-inset-top));
+  }
+
+  .sharingReadOnlyBody {
+    padding-bottom: max(72px, env(safe-area-inset-bottom));
   }
 }

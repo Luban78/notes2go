@@ -325,6 +325,11 @@ window.LubaNoteLanguagePacks.push({
     "sharing.close": "Close",
     "sharing.loading": "Loading…",
     "sharing.loadFailed": "Sharing data could not be loaded.",
+    "sharing.sharedUntitled": "Untitled",
+    "sharing.sharedCardMeta": "Shared · {owner} · read only",
+    "sharing.readOnlyTitle": "Shared note",
+    "sharing.readOnlyMeta": "{owner} · read only",
+    "sharing.readOnlyTodos": "Tasks",
 
     "settings.title": "Settings",
     "settings.close": "Close settings",
