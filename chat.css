@@ -243,16 +243,18 @@
 }
 
 .chatThreadCard {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
 
   width: min(100%, 620px);
   height: min(780px, calc(100dvh - 28px));
+  min-height: 0;
   overflow: hidden;
   border-radius: 18px;
 }
 
 .chatThreadHeader {
+  flex: 0 0 auto;
   min-height: 64px;
   box-sizing: border-box;
   padding: 9px 12px;
@@ -280,14 +282,16 @@
 }
 
 .chatThreadStatus {
+  flex: 0 0 auto;
   margin: 8px 12px 0;
 }
 
 .chatMessages {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
 
   /* Mobil musí dostat vlastní skutečný svislý scroll kontejner. */
   overscroll-behavior-x: none;
@@ -378,6 +382,7 @@
 }
 
 .chatComposer {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
@@ -532,13 +537,23 @@
     box-shadow: none;
   }
 
-  /* Grid nesmí nechat řádek se zprávami růst podle obsahu. */
+  /*
+   * Jen zprávy se smějí roztahovat a scrollovat.
+   * Header a composer zůstávají vždy viditelné uvnitř visualViewport.
+   */
   .chatThreadCard > .chatMessages {
+    flex: 1 1 auto;
     min-height: 0;
-    max-height: 100%;
-    overflow-y: scroll;
+    max-height: none;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
+  }
+
+  .chatThreadCard > .chatComposer {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
   }
 
   .chatThreadHeader {
