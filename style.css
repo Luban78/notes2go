@@ -10409,3 +10409,11 @@ body.trashScreenOpen {
 #desktopAdminDashboardButton[hidden] {
   display: none !important;
 }
+.modalRichText b,
+.modalRichText strong,
+.todoRichTextInput b,
+.todoRichTextInput strong,
+.todoTextValue b,
+.todoTextValue strong {
+  font-weight: 800;
+}

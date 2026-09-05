@@ -2939,6 +2939,68 @@
   }
 
 
+  function ziskejPrimyBlokEditoruProRozsah(range) {
+    if (!range?.startContainer) {
+      return null;
+    }
+
+    let uzel =
+      range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer
+        : range.startContainer.parentElement;
+
+    while (
+      uzel &&
+      uzel !== modalRichText &&
+      uzel.parentElement !== modalRichText
+    ) {
+      uzel = uzel.parentElement;
+    }
+
+    return uzel?.parentElement === modalRichText
+      ? uzel
+      : null;
+  }
+
+  function jePrazdnyBlokProVlozeniObrazku(blok) {
+    if (!blok || blok === modalRichText) {
+      return false;
+    }
+
+    if (
+      blok.matches?.(
+        ".lubaNoteImage, ul, ol, li, table, img, a[href]"
+      ) ||
+      blok.querySelector?.(
+        ".lubaNoteImage, ul, ol, li, table, img"
+      )
+    ) {
+      return false;
+    }
+
+    return blok.textContent
+      .replace(/\u200B/g, "")
+      .trim() === "";
+  }
+
+  function nastavKurzorNaZacatekBloku(blok) {
+    if (!blok?.isConnected) {
+      return;
+    }
+
+    modalRichText.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(blok);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    ulozenyRozsahEditoru = range.cloneRange();
+  }
+
   function vlozObrazekDoEditoru(figure) {
     const editorBylPredVlozenimPrazdny =
       jeEditorPredPrvnimObrazkemPrazdny();
@@ -2960,6 +3022,14 @@
     const existujiciRadek =
       najdiRadekZaObrazkemVRozsahu(range);
 
+    const prazdnyBlokVlozeni =
+      ziskejPrimyBlokEditoruProRozsah(range);
+
+    const vlozenoDoPrazdnehoBloku =
+      jePrazdnyBlokProVlozeniObrazku(
+        prazdnyBlokVlozeni
+      );
+
     modalRichText.focus();
 
     if (existujiciRadek) {
@@ -2971,6 +3041,37 @@
        */
       existujiciRadek.before(figure);
       nastavKurzorDoRadku(existujiciRadek);
+    } else if (vlozenoDoPrazdnehoBloku) {
+      /*
+       * Když uživatel vloží obrázek do existujícího prázdného řádku
+       * mezi dvěma odstavci, tento řádek už sám představuje místo
+       * vložení. Původní logika do něj vložila figure a ZA figure ještě
+       * vytvořila pomocný <div><br></div>. Výsledkem byly dva skutečné
+       * prázdné řádky pod obrázkem.
+       *
+       * Prázdný řádek proto obrázkem NAHRADÍME. Pokud už za ním existuje
+       * další blok (např. druhý odstavec), žádný pomocný řádek nepřidáváme
+       * a kurzor přesuneme rovnou na začátek tohoto bloku. Jen když byl
+       * prázdný řádek úplně poslední, vytvoříme jediný bezpečný řádek pro
+       * Android WebView.
+       */
+      const dalsiBlok =
+        prazdnyBlokVlozeni.nextElementSibling;
+
+      if (dalsiBlok) {
+        prazdnyBlokVlozeni.replaceWith(figure);
+        nastavKurzorNaZacatekBloku(dalsiBlok);
+      } else {
+        const radek =
+          vytvorRadekProTextZaObrazkem();
+
+        prazdnyBlokVlozeni.replaceWith(
+          figure,
+          radek
+        );
+
+        nastavKurzorDoRadku(radek);
+      }
     } else {
       range.collapse(false);
       range.insertNode(figure);
@@ -3561,6 +3662,45 @@
       return false;
     }
 
+    /*
+     * Stejně jako naše vlastní tlačítko „Vložit“: zdrojové formátování
+     * zahodíme, ale čistý text má převzít FORMÁT MÍSTA KURZORU.
+     * Styl musíme odečíst před deleteContents(), protože výběr může být
+     * uvnitř span-u s vlastní velikostí / B / I / U / barvou.
+     */
+    const ziskejElementMista = () => {
+      const uzel = rozsah.startContainer;
+
+      if (uzel?.nodeType === Node.TEXT_NODE) {
+        return uzel.parentElement;
+      }
+
+      if (uzel instanceof Element) {
+        const index = rozsah.startOffset;
+        const predchozi = index > 0 ? uzel.childNodes[index - 1] : null;
+        const dalsi = uzel.childNodes[index] || null;
+        const kandidat = predchozi || dalsi;
+
+        if (kandidat?.nodeType === Node.TEXT_NODE) {
+          return kandidat.parentElement;
+        }
+
+        if (kandidat instanceof Element) {
+          return kandidat;
+        }
+
+        return uzel;
+      }
+
+      return editor;
+    };
+
+    const elementMista =
+      ziskejElementMista() || editor;
+
+    const stylMista =
+      window.getComputedStyle(elementMista);
+
     rozsah.deleteContents();
 
     const vlozenyText =
@@ -3569,19 +3709,34 @@
     vlozenyText.className =
       "lubaNoteVlozenyText";
 
-    /*
-     * Pokud má celé TODO vlastní zvýraznění, zachováme ho.
-     * Jinak čistý vložený text používá pozadí aktuálního editoru.
-     * Tím se překryje i případné staré zvýraznění nadřazeného span-u.
-     */
-    const vlastniPozadiEditoru =
-      editor.style?.backgroundColor || "";
+    vlozenyText.style.fontFamily = stylMista.fontFamily;
+    vlozenyText.style.fontSize = stylMista.fontSize;
+    vlozenyText.style.fontWeight = stylMista.fontWeight;
+    vlozenyText.style.fontStyle = stylMista.fontStyle;
+    vlozenyText.style.fontVariant = stylMista.fontVariant;
+    vlozenyText.style.lineHeight = stylMista.lineHeight;
+    vlozenyText.style.letterSpacing = stylMista.letterSpacing;
+    vlozenyText.style.textDecorationLine = stylMista.textDecorationLine;
+    vlozenyText.style.textDecorationStyle = stylMista.textDecorationStyle;
+    vlozenyText.style.textDecorationColor = stylMista.textDecorationColor;
+    vlozenyText.style.color = stylMista.color;
 
-    vlozenyText.style.setProperty(
-      "--luba-vlozeny-text-pozadi",
-      vlastniPozadiEditoru ||
-      "var(--color-editor-background)"
-    );
+    if (
+      stylMista.backgroundColor &&
+      stylMista.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+      stylMista.backgroundColor !== "transparent"
+    ) {
+      vlozenyText.style.backgroundColor = stylMista.backgroundColor;
+    } else {
+      const vlastniPozadiEditoru =
+        editor.style?.backgroundColor || "";
+
+      vlozenyText.style.setProperty(
+        "--luba-vlozeny-text-pozadi",
+        vlastniPozadiEditoru ||
+        "var(--color-editor-background)"
+      );
+    }
 
     const radky =
       text.replace(/\r\n?/g, "\n").split("\n");

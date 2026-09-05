@@ -1229,22 +1229,80 @@ todoList?.classList.remove(
         return false;
       }
 
+      /*
+       * Čistý text má zahodit FORMÁT ZE ZDROJE, ale má převzít
+       * FORMÁT MÍSTA VLOŽENÍ. To je stejné chování jako při běžném
+       * psaní na pozici kurzoru a jako Android systémové „Vložit“.
+       *
+       * Dříve třída .lubaNoteVlozenyText vynutila základní font-size,
+       * takže naše vlastní tlačítko „Vložit“ umělo např. text 20 px
+       * zmenšit na výchozí velikost. Styl místa si proto vezmeme ještě
+       * PŘED deleteContents() a přeneseme ho inline na nový čistý span.
+       */
+      const ziskejElementMista = () => {
+        const uzel = rozsah.startContainer;
+
+        if (uzel?.nodeType === Node.TEXT_NODE) {
+          return uzel.parentElement;
+        }
+
+        if (uzel instanceof Element) {
+          const index = rozsah.startOffset;
+          const predchozi = index > 0 ? uzel.childNodes[index - 1] : null;
+          const dalsi = uzel.childNodes[index] || null;
+          const kandidat = predchozi || dalsi;
+
+          if (kandidat?.nodeType === Node.TEXT_NODE) {
+            return kandidat.parentElement;
+          }
+
+          if (kandidat instanceof Element) {
+            return kandidat;
+          }
+
+          return uzel;
+        }
+
+        return cilovyEditor;
+      };
+
+      const elementMista =
+        ziskejElementMista() || cilovyEditor;
+
+      const stylMista =
+        window.getComputedStyle(elementMista);
+
       rozsah.deleteContents();
 
-      /*
-       * Vlastní schránka LubaNote ukládá čistý text. Při vložení ho
-       * nesmíme nechat zdědit z případného starého <span style="font-size">,
-       * ve kterém zrovna leží kurzor. Jinak stejný zkopírovaný text může
-       * po vložení dostat jinou velikost než běžný text editoru.
-       *
-       * Tento span používá základní typografii editoru, ale uživatel ho
-       * může později normálně označit a změnit velikost toolbar-em.
-       */
       const vlozenyText =
         document.createElement("span");
 
       vlozenyText.className =
         "lubaNoteVlozenyText";
+
+      /*
+       * Inline hodnoty přebijí resetovací CSS této třídy. Zdrojové HTML
+       * se stále nevkládá – zachováváme tedy bezpečný čistý text.
+       */
+      vlozenyText.style.fontFamily = stylMista.fontFamily;
+      vlozenyText.style.fontSize = stylMista.fontSize;
+      vlozenyText.style.fontWeight = stylMista.fontWeight;
+      vlozenyText.style.fontStyle = stylMista.fontStyle;
+      vlozenyText.style.fontVariant = stylMista.fontVariant;
+      vlozenyText.style.lineHeight = stylMista.lineHeight;
+      vlozenyText.style.letterSpacing = stylMista.letterSpacing;
+      vlozenyText.style.textDecorationLine = stylMista.textDecorationLine;
+      vlozenyText.style.textDecorationStyle = stylMista.textDecorationStyle;
+      vlozenyText.style.textDecorationColor = stylMista.textDecorationColor;
+      vlozenyText.style.color = stylMista.color;
+
+      if (
+        stylMista.backgroundColor &&
+        stylMista.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+        stylMista.backgroundColor !== "transparent"
+      ) {
+        vlozenyText.style.backgroundColor = stylMista.backgroundColor;
+      }
 
       vlozenyText.textContent = text;
 
