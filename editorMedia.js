@@ -3663,102 +3663,36 @@
     }
 
     /*
-     * Stejně jako naše vlastní tlačítko „Vložit“: zdrojové formátování
-     * zahodíme, ale čistý text má převzít FORMÁT MÍSTA KURZORU.
-     * Styl musíme odečíst před deleteContents(), protože výběr může být
-     * uvnitř span-u s vlastní velikostí / B / I / U / barvou.
+     * Stejná logika jako vlastní LubaNote „Vložit“:
+     * čistý text vložíme jako běžné psaní na caret-u.
+     * Ruční přepis font-size / font-weight zde záměrně není.
      */
-    const ziskejElementMista = () => {
-      const uzel = rozsah.startContainer;
+    let vlozenoNativne = false;
 
-      if (uzel?.nodeType === Node.TEXT_NODE) {
-        return uzel.parentElement;
-      }
-
-      if (uzel instanceof Element) {
-        const index = rozsah.startOffset;
-        const predchozi = index > 0 ? uzel.childNodes[index - 1] : null;
-        const dalsi = uzel.childNodes[index] || null;
-        const kandidat = predchozi || dalsi;
-
-        if (kandidat?.nodeType === Node.TEXT_NODE) {
-          return kandidat.parentElement;
-        }
-
-        if (kandidat instanceof Element) {
-          return kandidat;
-        }
-
-        return uzel;
-      }
-
-      return editor;
-    };
-
-    const elementMista =
-      ziskejElementMista() || editor;
-
-    const stylMista =
-      window.getComputedStyle(elementMista);
-
-    rozsah.deleteContents();
-
-    const vlozenyText =
-      document.createElement("span");
-
-    vlozenyText.className =
-      "lubaNoteVlozenyText";
-
-    vlozenyText.style.fontFamily = stylMista.fontFamily;
-    vlozenyText.style.fontSize = stylMista.fontSize;
-    vlozenyText.style.fontWeight = stylMista.fontWeight;
-    vlozenyText.style.fontStyle = stylMista.fontStyle;
-    vlozenyText.style.fontVariant = stylMista.fontVariant;
-    vlozenyText.style.lineHeight = stylMista.lineHeight;
-    vlozenyText.style.letterSpacing = stylMista.letterSpacing;
-    vlozenyText.style.textDecorationLine = stylMista.textDecorationLine;
-    vlozenyText.style.textDecorationStyle = stylMista.textDecorationStyle;
-    vlozenyText.style.textDecorationColor = stylMista.textDecorationColor;
-    vlozenyText.style.color = stylMista.color;
-
-    if (
-      stylMista.backgroundColor &&
-      stylMista.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-      stylMista.backgroundColor !== "transparent"
-    ) {
-      vlozenyText.style.backgroundColor = stylMista.backgroundColor;
-    } else {
-      const vlastniPozadiEditoru =
-        editor.style?.backgroundColor || "";
-
-      vlozenyText.style.setProperty(
-        "--luba-vlozeny-text-pozadi",
-        vlastniPozadiEditoru ||
-        "var(--color-editor-background)"
-      );
+    try {
+      vlozenoNativne =
+        document.execCommand(
+          "insertText",
+          false,
+          text
+        );
+    } catch {
+      vlozenoNativne = false;
     }
 
-    const radky =
-      text.replace(/\r\n?/g, "\n").split("\n");
+    if (!vlozenoNativne) {
+      rozsah.deleteContents();
 
-    radky.forEach((radek, index) => {
-      if (index > 0) {
-        vlozenyText.append(
-          document.createElement("br")
-        );
-      }
+      const textovyUzel =
+        document.createTextNode(text);
 
-      vlozenyText.append(
-        document.createTextNode(radek)
-      );
-    });
+      rozsah.insertNode(textovyUzel);
+      rozsah.setStartAfter(textovyUzel);
+      rozsah.collapse(true);
 
-    rozsah.insertNode(vlozenyText);
-    rozsah.setStartAfter(vlozenyText);
-    rozsah.collapse(true);
-
-    vyber.removeAllRanges();
-    vyber.addRange(rozsah);
+      vyber.removeAllRanges();
+      vyber.addRange(rozsah);
+    }
 
     editor.dispatchEvent(
       new Event("input", { bubbles: true })

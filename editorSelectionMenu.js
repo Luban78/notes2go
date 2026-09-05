@@ -42,6 +42,15 @@
   const schrankaCapacitor =
     window.Capacitor?.Plugins?.Clipboard;
 
+  /*
+   * V nativní Android APK už WebView zobrazuje vlastní systémové
+   * úchyty výběru. LubaNote tedy nesmí kreslit druhý pár přes ně.
+   * Programové označení slova i naše menu zůstávají zachované.
+   */
+  const jeNativniAndroid =
+    window.Capacitor?.getPlatform?.() === "android" ||
+    window.Capacitor?.isNativePlatform?.() === true;
+
   if (!editorTextu || !selectionMenu) {
     return;
   }
@@ -796,6 +805,16 @@ todoList?.classList.remove(
   function zobrazUchytyVyberu(
     rozsah
   ) {
+    /*
+     * Android WebView už má nativní úchyty. Druhý vlastní pár by
+     * překrýval systémové body a mohl měnit Range jinak než uživatel
+     * očekává. V APK proto ponecháme jen systémové úchyty.
+     */
+    if (jeNativniAndroid) {
+      skryjUchytyVyberu();
+      return;
+    }
+
     if (
       !rozsah ||
       rozsah.collapsed ||
@@ -1215,106 +1234,70 @@ todoList?.classList.remove(
     }
 
     try {
-      const vyber =
-        window.getSelection();
+      const vyber = window.getSelection();
 
       if (!vyber || vyber.rangeCount === 0) {
         return false;
       }
 
-      const rozsah =
-        vyber.getRangeAt(0);
+      const rozsah = vyber.getRangeAt(0);
 
       if (!jeRozsahVEditoru(rozsah)) {
         return false;
       }
 
       /*
-       * Čistý text má zahodit FORMÁT ZE ZDROJE, ale má převzít
-       * FORMÁT MÍSTA VLOŽENÍ. To je stejné chování jako při běžném
-       * psaní na pozici kurzoru a jako Android systémové „Vložit“.
+       * NEKOPÍRUJEME ručně computed style. To umělo v Android WebView
+       * v některých stavech vzít velikost z jiného rodiče a vložený
+       * text byl menší nebo naopak větší.
        *
-       * Dříve třída .lubaNoteVlozenyText vynutila základní font-size,
-       * takže naše vlastní tlačítko „Vložit“ umělo např. text 20 px
-       * zmenšit na výchozí velikost. Styl místa si proto vezmeme ještě
-       * PŘED deleteContents() a přeneseme ho inline na nový čistý span.
+       * insertText se chová jako normální psaní na aktuálním caret-u:
+       * zahodí zdrojové HTML, ale zachová právě aktivní typografický
+       * kontext editoru. Přesně to chceme od „Vložit jako čistý text“.
        */
-      const ziskejElementMista = () => {
-        const uzel = rozsah.startContainer;
+      let vlozenoNativne = false;
 
-        if (uzel?.nodeType === Node.TEXT_NODE) {
-          return uzel.parentElement;
-        }
-
-        if (uzel instanceof Element) {
-          const index = rozsah.startOffset;
-          const predchozi = index > 0 ? uzel.childNodes[index - 1] : null;
-          const dalsi = uzel.childNodes[index] || null;
-          const kandidat = predchozi || dalsi;
-
-          if (kandidat?.nodeType === Node.TEXT_NODE) {
-            return kandidat.parentElement;
-          }
-
-          if (kandidat instanceof Element) {
-            return kandidat;
-          }
-
-          return uzel;
-        }
-
-        return cilovyEditor;
-      };
-
-      const elementMista =
-        ziskejElementMista() || cilovyEditor;
-
-      const stylMista =
-        window.getComputedStyle(elementMista);
-
-      rozsah.deleteContents();
-
-      const vlozenyText =
-        document.createElement("span");
-
-      vlozenyText.className =
-        "lubaNoteVlozenyText";
-
-      /*
-       * Inline hodnoty přebijí resetovací CSS této třídy. Zdrojové HTML
-       * se stále nevkládá – zachováváme tedy bezpečný čistý text.
-       */
-      vlozenyText.style.fontFamily = stylMista.fontFamily;
-      vlozenyText.style.fontSize = stylMista.fontSize;
-      vlozenyText.style.fontWeight = stylMista.fontWeight;
-      vlozenyText.style.fontStyle = stylMista.fontStyle;
-      vlozenyText.style.fontVariant = stylMista.fontVariant;
-      vlozenyText.style.lineHeight = stylMista.lineHeight;
-      vlozenyText.style.letterSpacing = stylMista.letterSpacing;
-      vlozenyText.style.textDecorationLine = stylMista.textDecorationLine;
-      vlozenyText.style.textDecorationStyle = stylMista.textDecorationStyle;
-      vlozenyText.style.textDecorationColor = stylMista.textDecorationColor;
-      vlozenyText.style.color = stylMista.color;
-
-      if (
-        stylMista.backgroundColor &&
-        stylMista.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-        stylMista.backgroundColor !== "transparent"
-      ) {
-        vlozenyText.style.backgroundColor = stylMista.backgroundColor;
+      try {
+        vlozenoNativne =
+          document.execCommand(
+            "insertText",
+            false,
+            text
+          );
+      } catch {
+        vlozenoNativne = false;
       }
 
-      vlozenyText.textContent = text;
+      if (!vlozenoNativne) {
+        /*
+         * Bezpečný fallback: obyčejný textový uzel bez vlastního span-u
+         * a bez font-size. Browser tak stále zdědí styl okolí.
+         */
+        const aktualniRozsah =
+          window.getSelection()?.getRangeAt(0);
 
-      rozsah.insertNode(vlozenyText);
-      rozsah.setStartAfter(vlozenyText);
-      rozsah.collapse(true);
+        if (!aktualniRozsah) {
+          return false;
+        }
 
-      vyber.removeAllRanges();
-      vyber.addRange(rozsah);
+        aktualniRozsah.deleteContents();
 
-      ulozenyRozsah =
-        rozsah.cloneRange();
+        const textovyUzel =
+          document.createTextNode(text);
+
+        aktualniRozsah.insertNode(textovyUzel);
+        aktualniRozsah.setStartAfter(textovyUzel);
+        aktualniRozsah.collapse(true);
+
+        vyber.removeAllRanges();
+        vyber.addRange(aktualniRozsah);
+      }
+
+      const novyVyber = window.getSelection();
+      if (novyVyber?.rangeCount) {
+        ulozenyRozsah =
+          novyVyber.getRangeAt(0).cloneRange();
+      }
 
       oznamZmenuEditoru(
         "insertText",
@@ -1326,7 +1309,6 @@ todoList?.classList.remove(
       return false;
     }
   }
-
 
   function sklapniVyberNaKonec() {
     if (!ulozenyRozsah) {
