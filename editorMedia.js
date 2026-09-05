@@ -4579,6 +4579,19 @@
         event.preventDefault();
         event.stopPropagation();
 
+        /*
+         * Než obrázek programově odstraníme, uložíme TODO snapshot.
+         * Nativní browser undo programové figure.remove() na Androidu
+         * spolehlivě nezná, takže změnu musí zachytit vlastní TODO
+         * historie v editorToolbar.js.
+         */
+        todoEditor.dispatchEvent(
+          new CustomEvent(
+            "lubanote:todo-history-before-change",
+            { bubbles: true }
+          )
+        );
+
         const figure = removeButton.closest(
           ".lubaNoteImage"
         );

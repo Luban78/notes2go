@@ -129,95 +129,6 @@
     return window.innerWidth >= 900;
   }
 
-  /*
-   * S2D.1c – sdílený editor nemá osobní datum/čas.
-   * Na mobilu proto používá jen dva smysluplné režimy:
-   * textové formátování <-> další sdílené nástroje.
-   */
-  function jeSdilenyEditor() {
-    return modalUkolu?.classList.contains(
-      "sharingEditorMode"
-    ) === true;
-  }
-
-
-  /*
-   * S2D.1d – vyvážené rozložení shared toolbaru.
-   *
-   * V běžném editoru necháváme původní DOM přesně tak, jak je.
-   * Ve shared editoru přesuneme část textových nástrojů do druhé
-   * stránky toolbaru, aby první stránka nemusela rolovat a druhá
-   * nezůstala skoro prázdná.
-   *
-   * Strana 1:
-   *   zpět, znovu, B, I, U, velikost
-   *
-   * Strana 2:
-   *   styl H, barva textu, zarovnání, obrázek, odkaz, uložit jako, odrážky
-   */
-  const sdileneToolbarPrvky = [
-    tlacitkoNadpis,
-    panelBarvaTextu,
-    tlacitkoBarvaTextu,
-    tlacitkoZarovnaniTextu,
-    tlacitkoVlozitObrazek,
-    tlacitkoVlozitOdkaz
-  ].filter(Boolean);
-
-  const sdileneToolbarPozice = new Map();
-
-  sdileneToolbarPrvky.forEach((prvek, index) => {
-    const znacka = document.createComment(
-      `luba-shared-toolbar-${index}`
-    );
-
-    prvek.parentNode?.insertBefore(znacka, prvek);
-
-    sdileneToolbarPozice.set(
-      prvek,
-      znacka
-    );
-  });
-
-  let sdileneToolbarRozlozeniAktivni = false;
-
-  function pripravSdileneToolbarRozlozeni() {
-    if (
-      sdileneToolbarRozlozeniAktivni ||
-      !editorToolsToolbar
-    ) {
-      return;
-    }
-
-    sdileneToolbarPrvky.forEach((prvek) => {
-      editorToolsToolbar.appendChild(prvek);
-    });
-
-    sdileneToolbarRozlozeniAktivni = true;
-  }
-
-  function obnovPuvodniToolbarRozlozeni() {
-    if (!sdileneToolbarRozlozeniAktivni) {
-      return;
-    }
-
-    sdileneToolbarPrvky.forEach((prvek) => {
-      const znacka =
-        sdileneToolbarPozice.get(prvek);
-
-      if (!znacka?.parentNode) {
-        return;
-      }
-
-      znacka.parentNode.insertBefore(
-        prvek,
-        znacka.nextSibling
-      );
-    });
-
-    sdileneToolbarRozlozeniAktivni = false;
-  }
-
   if (
     !tlacitkoToolbar ||
     !rychlyToolbar ||
@@ -763,6 +674,282 @@
   const historieTodoEditoru = new WeakMap();
   let obnovujemeHistoriiTodo = false;
 
+  /*
+   * Poslední TODO editor, ve kterém proběhla změna.
+   * Je potřeba hlavně pro změny přes ovládací prvky obrázku:
+   * po kliknutí na ✕ může contenteditable ztratit focus dřív, než
+   * uživatel stiskne Undo. Historie ale musí pořád vědět, ke kterému
+   * TODO patří.
+   */
+  let posledniTodoEditorHistorie = null;
+
+  /*
+   * DESTRUKTIVNÍ TODO HISTORIE NA ÚROVNI DATOVÉHO MODELU
+   *
+   * Původní 0.0E ukládala snapshot jen konkrétního contenteditable
+   * elementu. To nestačí: po odstranění obrázku nebo Backspace může
+   * todos.js řádek přerenderovat a původní DOM uzel už není spolehlivý
+   * cíl pro Undo.
+   *
+   * Tady proto držíme stav CELÉHO activeTodos přes veřejné API
+   * LubaNoteTodos. Undo tak umí vrátit i řádek, který mezitím z DOM
+   * úplně zmizel.
+   */
+  const historieDestruktivnichTodo = [];
+  let indexHistorieDestruktivnichTodo = -1;
+  let cekajiciDestruktivniTodo = null;
+  let casovacCekajicihoDestruktivnihoTodo = null;
+  let prehravameDestruktivniHistoriiTodo = false;
+
+
+  function ziskejModelTodoProHistorii() {
+    const snapshot =
+      window.LubaNoteTodos
+        ?.ziskejAktivniTodos?.();
+
+    if (!Array.isArray(snapshot)) {
+      return null;
+    }
+
+    return snapshot.map(todo => ({ ...todo }));
+  }
+
+
+  function podpisModeluTodo(snapshot) {
+    try {
+      return JSON.stringify(snapshot || []);
+    } catch {
+      return "";
+    }
+  }
+
+
+  function ziskejTodoIdEditoru(editor) {
+    return (
+      editor
+        ?.closest?.(".todoItem")
+        ?.dataset?.todoId ||
+      null
+    );
+  }
+
+
+  function zrusCekajiciDestruktivniTodo() {
+    if (casovacCekajicihoDestruktivnihoTodo) {
+      clearTimeout(
+        casovacCekajicihoDestruktivnihoTodo
+      );
+    }
+
+    casovacCekajicihoDestruktivnihoTodo = null;
+    cekajiciDestruktivniTodo = null;
+  }
+
+
+  function zacniDestruktivniHistoriiTodo(editor) {
+    if (prehravameDestruktivniHistoriiTodo) {
+      return;
+    }
+
+    const pred = ziskejModelTodoProHistorii();
+
+    if (!pred) {
+      return;
+    }
+
+    const todoId = ziskejTodoIdEditoru(editor);
+    const podpisPred = podpisModeluTodo(pred);
+
+    /*
+     * keydown + beforeinput mohou přijít pro jediný Backspace oba.
+     * Pokud čekáme na změnu stejného stavu, druhý pre-event už nový
+     * snapshot nevytváří.
+     */
+    if (
+      cekajiciDestruktivniTodo &&
+      cekajiciDestruktivniTodo.podpisPred === podpisPred &&
+      cekajiciDestruktivniTodo.todoId === todoId
+    ) {
+      return;
+    }
+
+    cekajiciDestruktivniTodo = {
+      pred,
+      podpisPred,
+      todoId
+    };
+
+    if (casovacCekajicihoDestruktivnihoTodo) {
+      clearTimeout(
+        casovacCekajicihoDestruktivnihoTodo
+      );
+    }
+
+    /*
+     * Když prohlížeč destruktivní klávesu nakonec neprovede
+     * (např. náš handler Backspace zablokuje), neponecháme čekající
+     * snapshot viset pro následující nesouvisející input.
+     */
+    casovacCekajicihoDestruktivnihoTodo =
+      setTimeout(() => {
+        zrusCekajiciDestruktivniTodo();
+      }, 700);
+  }
+
+
+  function dokonciDestruktivniHistoriiTodo() {
+    if (
+      prehravameDestruktivniHistoriiTodo ||
+      !cekajiciDestruktivniTodo
+    ) {
+      return false;
+    }
+
+    const po = ziskejModelTodoProHistorii();
+
+    if (!po) {
+      zrusCekajiciDestruktivniTodo();
+      return false;
+    }
+
+    const podpisPo = podpisModeluTodo(po);
+    const cekajici = cekajiciDestruktivniTodo;
+
+    zrusCekajiciDestruktivniTodo();
+
+    if (podpisPo === cekajici.podpisPred) {
+      return false;
+    }
+
+    /* Nová větev po Undo zahodí staré Redo záznamy. */
+    historieDestruktivnichTodo.splice(
+      indexHistorieDestruktivnichTodo + 1
+    );
+
+    historieDestruktivnichTodo.push({
+      pred: cekajici.pred,
+      po,
+      podpisPred: cekajici.podpisPred,
+      podpisPo,
+      todoId: cekajici.todoId
+    });
+
+    if (historieDestruktivnichTodo.length > 50) {
+      historieDestruktivnichTodo.shift();
+    }
+
+    indexHistorieDestruktivnichTodo =
+      historieDestruktivnichTodo.length - 1;
+
+    return true;
+  }
+
+
+  function provedDestruktivniHistoriiTodo(smer) {
+    const obnov =
+      window.LubaNoteTodos
+        ?.obnovAktivniTodosZeSnapshot;
+
+    if (typeof obnov !== "function") {
+      return false;
+    }
+
+    const aktualni = ziskejModelTodoProHistorii();
+
+    if (!aktualni) {
+      return false;
+    }
+
+    const podpisAktualni =
+      podpisModeluTodo(aktualni);
+
+    let zaznam = null;
+    let snapshot = null;
+    let novyIndex = indexHistorieDestruktivnichTodo;
+
+    if (smer < 0) {
+      if (indexHistorieDestruktivnichTodo < 0) {
+        return false;
+      }
+
+      zaznam = historieDestruktivnichTodo[
+        indexHistorieDestruktivnichTodo
+      ];
+
+      /*
+       * Pokud uživatel po smazání ještě psal, nejdřív necháme běžné
+       * TODO undo vrátit toto psaní. Destruktivní krok převezmeme až
+       * ve chvíli, kdy aktuální model přesně odpovídá stavu PO změně.
+       */
+      if (podpisAktualni !== zaznam?.podpisPo) {
+        return false;
+      }
+
+      snapshot = zaznam.pred;
+      novyIndex = indexHistorieDestruktivnichTodo - 1;
+    } else {
+      const cilovyIndex =
+        indexHistorieDestruktivnichTodo + 1;
+
+      if (
+        cilovyIndex < 0 ||
+        cilovyIndex >= historieDestruktivnichTodo.length
+      ) {
+        return false;
+      }
+
+      zaznam = historieDestruktivnichTodo[cilovyIndex];
+
+      if (podpisAktualni !== zaznam?.podpisPred) {
+        return false;
+      }
+
+      snapshot = zaznam.po;
+      novyIndex = cilovyIndex;
+    }
+
+    prehravameDestruktivniHistoriiTodo = true;
+
+    try {
+      const obnoveno = obnov(
+        snapshot,
+        zaznam?.todoId || null
+      );
+
+      if (!obnoveno) {
+        return false;
+      }
+
+      indexHistorieDestruktivnichTodo = novyIndex;
+      posledniTodoEditorHistorie = null;
+      ulozenyEditorTextu = null;
+      zrusCekajiciDestruktivniTodo();
+      return true;
+    } finally {
+      prehravameDestruktivniHistoriiTodo = false;
+    }
+  }
+
+
+  function blikniHistorickymTlacitkem(tlacitko) {
+    if (!tlacitko) {
+      return;
+    }
+
+    tlacitko.classList.add("active");
+
+    setTimeout(() => {
+      tlacitko.classList.remove("active");
+    }, 160);
+  }
+
+
+  function jeTodoEditorHistorie(editor) {
+    return Boolean(
+      editor?.matches?.(".todoRichTextInput")
+    );
+  }
+
 
   function ziskejOffsetVyberuTodo(editor, uzel, offset) {
     if (!editor || !uzel) {
@@ -830,7 +1017,7 @@
 
 
   function zajistiHistoriiTodo(editor) {
-    if (!jeTodoEditorFormatovani(editor)) {
+    if (!jeTodoEditorHistorie(editor)) {
       return null;
     }
 
@@ -852,10 +1039,12 @@
   function ulozSnapshotTodo(editor) {
     if (
       obnovujemeHistoriiTodo ||
-      !jeTodoEditorFormatovani(editor)
+      !jeTodoEditorHistorie(editor)
     ) {
       return;
     }
+
+    posledniTodoEditorHistorie = editor;
 
     const historie = zajistiHistoriiTodo(editor);
 
@@ -958,6 +1147,35 @@
       return false;
     }
 
+    /*
+     * Po kliknutí na ✕ obrázku mohl TODO editor mezitím přejít zpět
+     * do čtecího stavu. Před obnovením snapshotu ho znovu otevřeme,
+     * aby Undo nebylo závislé na tom, zda contenteditable stále drží
+     * focus.
+     */
+    if (!editor.matches?.(".todoRichTextInput.todoEditing")) {
+      const todoItem = editor.closest?.(".todoItem");
+      const display = todoItem?.querySelector?.(".todoTextDisplay");
+
+      if (
+        display &&
+        typeof window.enterTodoEditMode === "function"
+      ) {
+        window.enterTodoEditMode(
+          editor,
+          display,
+          null
+        );
+      } else {
+        display && (display.hidden = true);
+        editor.hidden = false;
+        editor.classList.add("todoEditing");
+      }
+    }
+
+    posledniTodoEditorHistorie = editor;
+    ulozenyEditorTextu = editor;
+
     obnovujemeHistoriiTodo = true;
 
     try {
@@ -1003,9 +1221,15 @@
 
 
   function provedHistoriiTodo(smer) {
-    const editor = ulozenyEditorTextu;
+    const editor =
+      jeTodoEditorHistorie(ulozenyEditorTextu)
+        ? ulozenyEditorTextu
+        : posledniTodoEditorHistorie;
 
-    if (!jeTodoEditorFormatovani(editor)) {
+    if (
+      !jeTodoEditorHistorie(editor) ||
+      !editor.isConnected
+    ) {
       return false;
     }
 
@@ -1021,7 +1245,12 @@
       novyIndex < 0 ||
       novyIndex >= historie.zaznamy.length
     ) {
-      return true;
+      /*
+       * Vlastní TODO historie nemá co přehrát. Vrátíme false, aby
+       * toolbar mohl zkusit nativní browser undo/redo místo tichého
+       * spolknutí kliknutí.
+       */
+      return false;
     }
 
     historie.index = novyIndex;
@@ -1033,6 +1262,107 @@
   }
 
 
+  /*
+   * Programové změny TODO (např. odstranění obrázku přes ✕) si mohou
+   * před změnou výslovně uložit výchozí snapshot a označit správný
+   * editor jako cíl pro Undo.
+   */
+  document.addEventListener(
+    "lubanote:todo-history-before-change",
+    event => {
+      const editor = event.target?.closest?.(
+        ".todoRichTextInput"
+      );
+
+      if (!editor) {
+        return;
+      }
+
+      posledniTodoEditorHistorie = editor;
+      ulozenyEditorTextu = editor;
+      zajistiHistoriiTodo(editor);
+      ulozSnapshotTodo(editor);
+      zacniDestruktivniHistoriiTodo(editor);
+    },
+    true
+  );
+
+
+  /*
+   * TODO – SNAPSHOT PŘED DESTRUKTIVNÍM MAZÁNÍM Z KLÁVESNICE
+   *
+   * Klik na ✕ už posílá lubanote:todo-history-before-change z
+   * editorMedia.js. Stejný princip musí platit i pro Backspace / Delete.
+   * Android WebView může destruktivní změnu provést přes beforeinput,
+   * zatímco některé klávesnice pošlou spolehlivěji keydown. Posloucháme
+   * obě cesty. Opakovaný snapshot stejného HTML nevytvoří nový záznam,
+   * takže dvojí zachycení jedné akce je bezpečné.
+   */
+  function ulozSnapshotPredMazanimTodo(editor) {
+    if (
+      !editor?.matches?.(
+        ".todoRichTextInput.todoEditing"
+      )
+    ) {
+      return;
+    }
+
+    posledniTodoEditorHistorie = editor;
+    ulozenyEditorTextu = editor;
+    zajistiHistoriiTodo(editor);
+    ulozSnapshotTodo(editor);
+    zacniDestruktivniHistoriiTodo(editor);
+  }
+
+
+  document.addEventListener(
+    "beforeinput",
+    event => {
+      if (event.isComposing) {
+        return;
+      }
+
+      const typVstupu = String(
+        event.inputType || ""
+      );
+
+      if (!typVstupu.startsWith("delete")) {
+        return;
+      }
+
+      const editor = event.target?.closest?.(
+        ".todoRichTextInput.todoEditing"
+      );
+
+      ulozSnapshotPredMazanimTodo(editor);
+    },
+    true
+  );
+
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.isComposing ||
+        (
+          event.key !== "Backspace" &&
+          event.key !== "Delete"
+        )
+      ) {
+        return;
+      }
+
+      const editor = event.target?.closest?.(
+        ".todoRichTextInput.todoEditing"
+      );
+
+      ulozSnapshotPredMazanimTodo(editor);
+    },
+    true
+  );
+
+
   document.addEventListener(
     "focusin",
     event => {
@@ -1041,6 +1371,7 @@
       );
 
       if (editor) {
+        posledniTodoEditorHistorie = editor;
         zajistiHistoriiTodo(editor);
       }
     },
@@ -1048,17 +1379,44 @@
   );
 
 
+  /*
+   * Strukturální změny TODO (typicky odstranění prázdného řádku přes
+   * Backspace/Delete) nemusí vyvolat input na contenteditable. todos.js
+   * proto po dokončení změny pošle tento signál a zde uzavřeme čekající
+   * modelový snapshot. Díky tomu funguje posloupnost:
+   * znak -> Backspace -> prázdný checkbox -> Backspace -> řádek pryč
+   * a následná Undo vracejí jednotlivé kroky po jednom.
+   */
+  document.addEventListener(
+    "lubanote:todo-history-after-change",
+    () => {
+      dokonciDestruktivniHistoriiTodo();
+    }
+  );
+
+
   document.addEventListener(
     "input",
     event => {
       const editor = event.target?.matches?.(
-        ".todoRichTextInput.todoEditing"
+        ".todoRichTextInput"
       )
         ? event.target
         : null;
 
       if (editor) {
+        /*
+         * Programový click na ✕ může editor během stejné události
+         * připravit o focus / todoEditing. HTML historii proto ukládáme
+         * podle stabilní třídy todoRichTextInput, ne podle focus stavu.
+         */
         ulozSnapshotTodo(editor);
+
+        /*
+         * activeTodos už je v tomto bodě aktualizované listenerem
+         * todos.js, takže můžeme bezpečně uzavřít modelový snapshot.
+         */
+        dokonciDestruktivniHistoriiTodo();
       }
     }
   );
@@ -1099,12 +1457,6 @@
   let rezimToolbaru = "cas";
 
   function nastavToolbar(rezim) {
-    if (jeSdilenyEditor()) {
-      pripravSdileneToolbarRozlozeni();
-    } else {
-      obnovPuvodniToolbarRozlozeni();
-    }
-
     /*
      * DESKTOP:
      * využijeme šířku a ukážeme vše najednou.
@@ -1130,16 +1482,8 @@
 
     /*
      * MOBIL:
-     * běžný editor: čas → text → další nástroje
-     * shared editor: text ↔ další nástroje
+     * čas → text → další nástroje
      */
-    if (
-      jeSdilenyEditor() &&
-      rezim === "cas"
-    ) {
-      rezim = "text";
-    }
-
     rezimToolbaru = rezim;
 
     const jeCas =
@@ -1203,33 +1547,20 @@
     }
 
     if (jsouNastroje) {
-      /*
-       * Shared editor nemá osobní datum/čas.
-       * Druhá stránka proto vrací jasné Aa místo ikony hodin.
-       */
-      if (jeSdilenyEditor()) {
-        tlacitkoToolbar.textContent = "Aa";
-
-        tlacitkoToolbar.setAttribute(
-          "aria-label",
-          "Zpět na formátování textu"
+      if (window.LubaNoteIcons?.nastavJenIkonu) {
+        window.LubaNoteIcons.nastavJenIkonu(
+          tlacitkoToolbar,
+          "hodiny",
+          ["editorModeSvgIcon"]
         );
       } else {
-        if (window.LubaNoteIcons?.nastavJenIkonu) {
-          window.LubaNoteIcons.nastavJenIkonu(
-            tlacitkoToolbar,
-            "hodiny",
-            ["editorModeSvgIcon"]
-          );
-        } else {
-          tlacitkoToolbar.textContent = "Čas";
-        }
-
-        tlacitkoToolbar.setAttribute(
-          "aria-label",
-          "Zobrazit datum a čas"
-        );
+        tlacitkoToolbar.textContent = "Čas";
       }
+
+      tlacitkoToolbar.setAttribute(
+        "aria-label",
+        "Zobrazit datum a čas"
+      );
     }
 
 
@@ -2223,20 +2554,6 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoToolbar.addEventListener(
     "click",
     () => {
-      /*
-       * Ve shared editoru není osobní režim datum/čas.
-       * Přepínáme proto jen text <-> nástroje a nevytvoříme
-       * už nikdy prázdnou horní lištu s osamoceným Aa.
-       */
-      if (jeSdilenyEditor()) {
-        nastavToolbar(
-          rezimToolbaru === "text"
-            ? "nastroje"
-            : "text"
-        );
-        return;
-      }
-
       if (rezimToolbaru === "cas") {
         nastavToolbar("text");
         return;
@@ -2255,10 +2572,23 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoZpet?.addEventListener(
     "click",
     () => {
-      /* TODO má vlastní spolehlivou historii, hlavní editor zůstává beze změny. */
-      if (!provedHistoriiTodo(-1)) {
-        provedPrikaz("undo");
+      /*
+       * 1) destruktivní TODO změny obnovujeme z celého datového modelu,
+       * 2) běžné TODO změny zůstávají ve vlastní HTML historii,
+       * 3) hlavní editor používá nativní browser undo.
+       */
+      if (provedDestruktivniHistoriiTodo(-1)) {
+        blikniHistorickymTlacitkem(tlacitkoZpet);
+        return;
       }
+
+      if (provedHistoriiTodo(-1)) {
+        blikniHistorickymTlacitkem(tlacitkoZpet);
+        return;
+      }
+
+      provedPrikaz("undo");
+      blikniHistorickymTlacitkem(tlacitkoZpet);
     }
   );
 
@@ -2266,10 +2596,18 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoZnovu?.addEventListener(
     "click",
     () => {
-      /* TODO má vlastní spolehlivou historii, hlavní editor zůstává beze změny. */
-      if (!provedHistoriiTodo(1)) {
-        provedPrikaz("redo");
+      if (provedDestruktivniHistoriiTodo(1)) {
+        blikniHistorickymTlacitkem(tlacitkoZnovu);
+        return;
       }
+
+      if (provedHistoriiTodo(1)) {
+        blikniHistorickymTlacitkem(tlacitkoZnovu);
+        return;
+      }
+
+      provedPrikaz("redo");
+      blikniHistorickymTlacitkem(tlacitkoZnovu);
     }
   );
 
@@ -3257,11 +3595,7 @@ if (vyber) {
     const pozorovatelModalu =
       new MutationObserver(() => {
         if (!modalUkolu.hidden) {
-          nastavToolbar(
-            jeSdilenyEditor()
-              ? "text"
-              : "cas"
-          );
+          nastavToolbar("cas");
         } else {
           zavriVsechnyPanely();
         }

@@ -312,6 +312,34 @@ function bylEditorZmenen() {
 }
 
 
+function uvolniSdilenyLockPriZavreni(
+  noteId
+) {
+  if (
+    !noteId ||
+    aktivniSdilenaEditace?.noteId !==
+      noteId
+  ) {
+    return;
+  }
+
+  /*
+   * Shared lock nesmí po zavření editoru zůstat viset.
+   * Modul si nejdřív lokálně ukončí heartbeat/session a pak
+   * best-effort odešle release na server. Zavření UI na RPC
+   * nečeká, aby bylo okamžité.
+   */
+  Promise.resolve(
+    window.LubaNoteSharedEditor
+      ?.uvolniSdilenyEditor?.(noteId)
+  ).catch((error) => {
+    console.warn(
+      "Sdílený editor: release při zavření se dokončí expirací lease.",
+      error
+    );
+  });
+}
+
 function zpracujZavreniEditoru() {
   if (bylEditorZmenen()) {
     resetujAkceZpravyAplikace();
@@ -338,6 +366,9 @@ function zpracujZavreniEditoru() {
 
   const zaviranyTaskId = activeTaskId;
   uvolniVzdalenouEditorSession(
+    zaviranyTaskId
+  );
+  uvolniSdilenyLockPriZavreni(
     zaviranyTaskId
   );
 
@@ -468,6 +499,7 @@ async function zahodLokalniPrilohyDraftu() {
     );
     return 0;
   } finally {
+    await smazPersistovanyDraftPoznamky(draftId);
     ukonciDraftPoznamky();
   }
 }
@@ -2732,6 +2764,9 @@ function zavriEditorPoLokalnimUlozeni(
   uvolniVzdalenouEditorSession(
     zaviranyTaskId
   );
+  uvolniSdilenyLockPriZavreni(
+    zaviranyTaskId
+  );
 
   if (
     aktivniSdilenaEditace?.noteId ===
@@ -3041,6 +3076,11 @@ async function ulozAZavriEditor(
           newTask
         );
 
+        /*
+         * Nová poznámka už bezpečně existuje v běžném úložišti.
+         * Recovery draft můžeme odstranit až PO úspěšném save.
+         */
+        await smazPersistovanyDraftPoznamky(newTask.id);
         ukonciDraftPoznamky();
         ulozenaPoznamka = newTask;
       }
@@ -3246,8 +3286,19 @@ window.addEventListener(
 
 editorBackButton.addEventListener(
   "click",
-  () => {
-    ulozAZavriEditor();
+  async () => {
+    /*
+     * Fajfka = „uložit změny a zavřít“.
+     * Když se ale obsah od otevření vůbec nezměnil, není co
+     * ukládat ani synchronizovat. Použijeme stejný otisk,
+     * který už používá systémový Back / Esc.
+     */
+    if (!bylEditorZmenen()) {
+      zpracujZavreniEditoru();
+      return;
+    }
+
+    await ulozAZavriEditor();
   }
 );
 
@@ -3700,31 +3751,6 @@ window.LubaNoteSharedEditorHost = {
 
 
 async function openTaskEditorById(taskId) {
-  await window.LubaNoteSharingNotes
-    ?.zajistiAktualniSharedStav?.();
-
-  /*
-   * Vlastní poznámka s aktivním sdílením už nesmí vstoupit do
-   * původního private editor/sync toku. Obě strany musí používat
-   * stejný shared lock a shared save RPC, jinak by collaboratorova
-   * změna vypadala vlastníkovi jako revizní konflikt.
-   */
-  if (
-    window.LubaNoteSharingNotes
-      ?.jeVlastniSdilenaPoznamka?.(taskId)
-  ) {
-    if (
-      typeof window.LubaNoteSharedEditor
-        ?.otevriSdilenouEditaci ===
-      "function"
-    ) {
-      await window.LubaNoteSharedEditor
-        .otevriSdilenouEditaci(taskId);
-    }
-
-    return;
-  }
-
   /*
    * Pokud právě dorazil Realtime signál, že je v cloudu novější
    * verze této poznámky, nejdřív bezpečně dokončíme její sync.
@@ -5686,3 +5712,617 @@ window.addEventListener(
     }
   }
 );
+
+
+
+/* ==========================================
+   STABILIZACE 0.0B – PERSISTENTNÍ DRAFT NOVÉ POZNÁMKY
+   --------------------------------------------------
+   Cíl:
+   - nová NE-SECRET poznámka nesmí zmizet při reloadu / uspání WebView,
+   - draft se průběžně ukládá do IndexedDB, nikoli do localStorage,
+   - po návratu aplikace nabídneme Obnovit / Zahodit,
+   - Secret obsah se do této plaintext recovery vrstvy NIKDY neukládá.
+   ========================================== */
+
+const LUBANOTE_DRAFT_DB_NAME =
+  "LubaNoteDraftRecoveryV1";
+const LUBANOTE_DRAFT_DB_VERSION = 1;
+const LUBANOTE_DRAFT_STORE = "drafts";
+const LUBANOTE_DRAFT_OWNER_KEY =
+  "lubanoteLocalOwnerUserId";
+const LUBANOTE_DRAFT_AUTH_OK_KEY =
+  "lubanoteAuthOk";
+
+let draftDbPromise = null;
+let draftUlozeniTimer = null;
+let posledniUlozenyOtiskDraftu = null;
+let probihaObnovaDraftu = false;
+
+function otevriDraftDb() {
+  if (draftDbPromise) {
+    return draftDbPromise;
+  }
+
+  draftDbPromise = new Promise(
+    (resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(
+          new Error("IndexedDB není dostupné.")
+        );
+        return;
+      }
+
+      const request = indexedDB.open(
+        LUBANOTE_DRAFT_DB_NAME,
+        LUBANOTE_DRAFT_DB_VERSION
+      );
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+
+        if (
+          !db.objectStoreNames.contains(
+            LUBANOTE_DRAFT_STORE
+          )
+        ) {
+          db.createObjectStore(
+            LUBANOTE_DRAFT_STORE,
+            { keyPath: "ownerUserId" }
+          );
+        }
+      };
+
+      request.onsuccess = () =>
+        resolve(request.result);
+
+      request.onerror = () =>
+        reject(
+          request.error ||
+          new Error(
+            "Draft IndexedDB se nepodařilo otevřít."
+          )
+        );
+    }
+  ).catch((error) => {
+    draftDbPromise = null;
+    throw error;
+  });
+
+  return draftDbPromise;
+}
+
+function ziskejVlastnikaDraftu() {
+  if (
+    localStorage.getItem(
+      LUBANOTE_DRAFT_AUTH_OK_KEY
+    ) !== "1"
+  ) {
+    return "";
+  }
+
+  return String(
+    window.LubaNoteSupabase
+      ?.ziskejAktualniPristup?.()?.user_id ||
+    localStorage.getItem(
+      LUBANOTE_DRAFT_OWNER_KEY
+    ) ||
+    ""
+  ).trim();
+}
+
+async function nactiPersistovanyDraftPoznamky() {
+  const ownerUserId = ziskejVlastnikaDraftu();
+
+  if (!ownerUserId) {
+    return null;
+  }
+
+  try {
+    const db = await otevriDraftDb();
+
+    return await new Promise(
+      (resolve, reject) => {
+        const tx = db.transaction(
+          LUBANOTE_DRAFT_STORE,
+          "readonly"
+        );
+
+        const request = tx
+          .objectStore(LUBANOTE_DRAFT_STORE)
+          .get(ownerUserId);
+
+        request.onsuccess = () =>
+          resolve(request.result || null);
+
+        request.onerror = () =>
+          reject(request.error);
+      }
+    );
+  } catch (error) {
+    console.warn(
+      "LubaNote draft: recovery draft se nepodařilo načíst.",
+      error
+    );
+    return null;
+  }
+}
+
+async function smazPersistovanyDraftPoznamky(
+  draftId = null
+) {
+  const ownerUserId = ziskejVlastnikaDraftu();
+
+  if (!ownerUserId) {
+    return false;
+  }
+
+  try {
+    const existujici =
+      await nactiPersistovanyDraftPoznamky();
+
+    if (
+      draftId &&
+      existujici?.draftId &&
+      existujici.draftId !== draftId
+    ) {
+      return false;
+    }
+
+    const db = await otevriDraftDb();
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(
+        LUBANOTE_DRAFT_STORE,
+        "readwrite"
+      );
+
+      tx.objectStore(LUBANOTE_DRAFT_STORE)
+        .delete(ownerUserId);
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+
+    posledniUlozenyOtiskDraftu = null;
+    return true;
+  } catch (error) {
+    console.warn(
+      "LubaNote draft: recovery draft se nepodařilo odstranit.",
+      error
+    );
+    return false;
+  }
+}
+
+function vytvorSnapshotNovehoDraftu() {
+  if (
+    probihaObnovaDraftu ||
+    !taskModal ||
+    taskModal.hidden ||
+    aktivniSdilenaEditace ||
+    activeTaskId !== null ||
+    activeTaskIndex !== null
+  ) {
+    return null;
+  }
+
+  const draftId = ziskejDraftIdPoznamky();
+
+  if (!draftId) {
+    return null;
+  }
+
+  /*
+   * Bezpečnost: Secret obsah se nesmí dostat do plaintext recovery DB.
+   * To platí i pro novou poznámku otevřenou uvnitř odemčeného
+   * Secret režimu, dokud uživatel výslovně nezvolí běžné uložení.
+   */
+  if (
+    secretTaskEnabled === true ||
+    document.body.classList.contains(
+      "secretModeActive"
+    )
+  ) {
+    return null;
+  }
+
+  const ownerUserId = ziskejVlastnikaDraftu();
+
+  if (!ownerUserId) {
+    return null;
+  }
+
+  const otisk = vytvorOtiskEditoru();
+
+  if (
+    puvodniOtiskEditoru === null ||
+    otisk === puvodniOtiskEditoru
+  ) {
+    return {
+      prazdny: true,
+      ownerUserId,
+      draftId,
+      otisk
+    };
+  }
+
+  return {
+    version: 1,
+    ownerUserId,
+    draftId,
+    savedAt: new Date().toISOString(),
+    puvodniOtiskEditoru,
+    otisk,
+
+    title:
+      ziskejNazevPoznamkyZEditoru(),
+    richContent:
+      modalRichText.innerHTML,
+    date: modalDate.value,
+    time: modalTime.value,
+    reminder: reminderEnabled === true,
+    favorite: favoriteEnabled === true,
+    area: activeArea || "private",
+    tags: Array.isArray(activeTags)
+      ? [...activeTags]
+      : [],
+    todos: Array.isArray(activeTodos)
+      ? activeTodos.map((todo) => ({ ...todo }))
+      : [],
+    repeat:
+      kopirujEditorRepeat(editorRepeat),
+    secret: false
+  };
+}
+
+async function ulozPersistovanyDraftPoznamky() {
+  const snapshot = vytvorSnapshotNovehoDraftu();
+
+  if (!snapshot) {
+    return false;
+  }
+
+  if (snapshot.prazdny === true) {
+    await smazPersistovanyDraftPoznamky(
+      snapshot.draftId
+    );
+    return true;
+  }
+
+  if (
+    snapshot.otisk ===
+    posledniUlozenyOtiskDraftu
+  ) {
+    return true;
+  }
+
+  try {
+    const db = await otevriDraftDb();
+
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(
+        LUBANOTE_DRAFT_STORE,
+        "readwrite"
+      );
+
+      tx.objectStore(LUBANOTE_DRAFT_STORE)
+        .put(snapshot);
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+
+    posledniUlozenyOtiskDraftu =
+      snapshot.otisk;
+
+    return true;
+  } catch (error) {
+    console.warn(
+      "LubaNote draft: průběžné uložení recovery draftu selhalo.",
+      error
+    );
+    return false;
+  }
+}
+
+function naplanujUlozeniDraftu(
+  zpozdeni = 1200
+) {
+  clearTimeout(draftUlozeniTimer);
+
+  draftUlozeniTimer = setTimeout(() => {
+    draftUlozeniTimer = null;
+    void ulozPersistovanyDraftPoznamky();
+  }, zpozdeni);
+}
+
+function vytvorModalObnovyDraftu() {
+  let modal = document.getElementById(
+    "draftRecoveryModal"
+  );
+
+  if (modal) {
+    return modal;
+  }
+
+  modal = document.createElement("div");
+  modal.id = "draftRecoveryModal";
+  modal.className = "appMessageModal";
+  modal.hidden = true;
+
+  modal.innerHTML = `
+    <div class="appMessageDialog">
+      <h3>Rozepsaná poznámka</h3>
+      <p id="draftRecoveryText">
+        LubaNote našla neuloženou rozepsanou poznámku.
+      </p>
+      <div class="appMessageActions">
+        <button id="draftRecoveryRestoreButton" type="button">
+          Obnovit
+        </button>
+        <button id="draftRecoveryDiscardButton" type="button">
+          Zahodit
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.append(modal);
+  return modal;
+}
+
+function obnovDraftDoEditoru(draft) {
+  if (
+    !draft?.draftId ||
+    draft.secret === true
+  ) {
+    return false;
+  }
+
+  probihaObnovaDraftu = true;
+
+  try {
+    zahajEditorSession(null);
+    taskModal.removeAttribute("data-task-id");
+    taskModal.removeAttribute(
+      "data-shared-task-id"
+    );
+    taskModal.classList.remove(
+      "sharingEditorMode"
+    );
+
+    activeTaskIndex = null;
+    activeTaskId = null;
+    aktivniSdilenaEditace = null;
+
+    taskModal.dataset.draftTaskId =
+      draft.draftId;
+
+    secretTaskEnabled = false;
+    favoriteEnabled =
+      draft.favorite === true;
+    reminderEnabled =
+      draft.reminder === true;
+
+    aktualizujIkonuTajnePoznamky();
+    secretTaskButton?.classList.remove(
+      "active"
+    );
+    priorityTaskButton?.classList.toggle(
+      "active",
+      favoriteEnabled
+    );
+    updateReminderButton(reminderEnabled);
+
+    activeArea = draft.area || "private";
+    activeTags = Array.isArray(draft.tags)
+      ? [...draft.tags]
+      : [];
+
+    updateTagMenuUI();
+    closeTagMenu();
+
+    nastavNazevPoznamkyVEditoru(
+      draft.title || ""
+    );
+
+    modalText.value = "";
+    modalRichText.innerHTML =
+      draft.richContent || "";
+    modalText.hidden = true;
+    modalRichText.hidden = false;
+    RichTextColors.reset();
+
+    editorRepeat =
+      kopirujEditorRepeat(draft.repeat);
+
+    modalDate.value = draft.date || "";
+    modalTime.value = draft.time || "";
+
+    aktualizujPopiskyDataCasu();
+    updateModalWeekday();
+
+    loadTodos(
+      Array.isArray(draft.todos)
+        ? draft.todos
+        : [],
+      []
+    );
+
+    resetujSbaleniNazvuEditoru();
+    taskModal.hidden = false;
+    taskModal.classList.add("show");
+    document.body.classList.add("noScroll");
+
+    /*
+     * DŮLEŽITÉ: původní otisk je otisk prázdné nové poznámky
+     * z okamžiku jejího vytvoření, ne otisk obnoveného draftu.
+     * Proto je obnovený obsah dál správně považován za neuloženou změnu
+     * a fajfka jej opravdu uloží jako novou poznámku.
+     */
+    puvodniOtiskEditoru =
+      draft.puvodniOtiskEditoru || null;
+
+    posledniUlozenyOtiskDraftu =
+      draft.otisk || null;
+
+    return true;
+  } finally {
+    probihaObnovaDraftu = false;
+  }
+}
+
+async function nabidniObnovuDraftuPokudExistuje() {
+  if (
+    localStorage.getItem(
+      LUBANOTE_DRAFT_AUTH_OK_KEY
+    ) !== "1" ||
+    !ziskejVlastnikaDraftu()
+  ) {
+    return;
+  }
+
+  const draft =
+    await nactiPersistovanyDraftPoznamky();
+
+  if (!draft?.draftId) {
+    return;
+  }
+
+  /*
+   * Kdyby běžný save proběhl, ale následné mazání recovery záznamu
+   * selhalo, nesmíme nabídnout duplikát. Existující note ID je důkaz,
+   * že draft už byl bezpečně uložen jako skutečná poznámka.
+   */
+  const uzJeUlozeny = loadTask().some(
+    (task) => task?.id === draft.draftId
+  );
+
+  if (uzJeUlozeny) {
+    await smazPersistovanyDraftPoznamky(
+      draft.draftId
+    );
+    return;
+  }
+
+  if (
+    taskModal &&
+    !taskModal.hidden
+  ) {
+    return;
+  }
+
+  const modal = vytvorModalObnovyDraftu();
+  const restoreButton = modal.querySelector(
+    "#draftRecoveryRestoreButton"
+  );
+  const discardButton = modal.querySelector(
+    "#draftRecoveryDiscardButton"
+  );
+
+  restoreButton.onclick = () => {
+    modal.hidden = true;
+    obnovDraftDoEditoru(draft);
+  };
+
+  discardButton.onclick = async () => {
+    modal.hidden = true;
+
+    try {
+      await window.LubaNoteAttachmentsLocal
+        ?.smazPrilohyPodleNoteId?.(
+          draft.draftId
+        );
+    } catch (error) {
+      console.warn(
+        "LubaNote draft: přílohy zahozeného recovery draftu se nepodařilo uklidit.",
+        error
+      );
+    }
+
+    await smazPersistovanyDraftPoznamky(
+      draft.draftId
+    );
+  };
+
+  modal.hidden = false;
+}
+
+/*
+ * Input/change pokryje psaní, checkboxy a většinu formátovacích akcí.
+ * MutationObserver zachytí i programové změny DOM – např. vložení
+ * obrázku nebo převod rich textu na TODO.
+ */
+taskModal?.addEventListener(
+  "input",
+  () => naplanujUlozeniDraftu()
+);
+
+taskModal?.addEventListener(
+  "change",
+  () => naplanujUlozeniDraftu(500)
+);
+
+taskModal?.addEventListener(
+  "click",
+  () => naplanujUlozeniDraftu(700)
+);
+
+if (taskModal && window.MutationObserver) {
+  const draftObserver = new MutationObserver(
+    () => naplanujUlozeniDraftu()
+  );
+
+  draftObserver.observe(taskModal, {
+    subtree: true,
+    childList: true,
+    characterData: true
+  });
+}
+
+/*
+ * Při odchodu aplikace do backgroundu se pokusíme uložit okamžitě.
+ * Průběžný debounce už zpravidla drží čerstvou kopii; toto je poslední
+ * pojistka pro Android WebView / mobilní prohlížeč.
+ */
+document.addEventListener(
+  "visibilitychange",
+  () => {
+    if (document.visibilityState === "hidden") {
+      clearTimeout(draftUlozeniTimer);
+      draftUlozeniTimer = null;
+      void ulozPersistovanyDraftPoznamky();
+    }
+  }
+);
+
+window.addEventListener(
+  "pagehide",
+  () => {
+    clearTimeout(draftUlozeniTimer);
+    draftUlozeniTimer = null;
+    void ulozPersistovanyDraftPoznamky();
+  }
+);
+
+/*
+ * Po startu dáme auth/offline-first vrstvě krátký čas obnovit účet.
+ * Owner ID je navíc svázané s lokálními daty účtu, takže draft jiného
+ * uživatele se nenabídne.
+ */
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    void nabidniObnovuDraftuPokudExistuje();
+  }, 1200);
+});
+
+window.LubaNoteDraftRecovery = {
+  ulozTed: ulozPersistovanyDraftPoznamky,
+  nacti: nactiPersistovanyDraftPoznamky,
+  smaz: smazPersistovanyDraftPoznamky,
+  nabidniObnovu:
+    nabidniObnovuDraftuPokudExistuje
+};

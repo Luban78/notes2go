@@ -19,6 +19,96 @@ let activeTodoEditorItem = null;
 let selectedTodoId = null;
 let naplanovaneTodoIds = new Set();
 
+/*
+ * Stabilizace 0.0H – most pro Android IME při TODO Undo/Redo.
+ *
+ * Destruktivní Undo může přerenderovat celý todoList. Když je v té
+ * chvíli aktivní contenteditable odstraněn z DOM, Android WebView na
+ * okamžik zavře klávesnici a následný focusTodo() ji znovu otevře.
+ * Při několika Undo za sebou proto klávesnice nepříjemně „pumpovala“.
+ *
+ * Před přerenderováním krátce převedeme focus na stabilní, neviditelný
+ * textarea most. Android tak po celou dobu zůstává v textovém vstupu.
+ * Po renderu focus vrátíme do TODO a most už není aktivní.
+ */
+let zachovavameTodoImePriHistorii = false;
+let todoImeMost = null;
+
+function zajistiTodoImeMost() {
+  if (todoImeMost?.isConnected) {
+    return todoImeMost;
+  }
+
+  const most = document.createElement("textarea");
+  most.id = "lubanoteTodoImeMost";
+  most.tabIndex = -1;
+  most.autocomplete = "off";
+  most.autocapitalize = "off";
+  most.spellcheck = false;
+  most.inputMode = "text";
+  most.value = " ";
+
+  Object.assign(most.style, {
+    position: "fixed",
+    left: "0",
+    bottom: "0",
+    width: "1px",
+    height: "1px",
+    padding: "0",
+    margin: "0",
+    border: "0",
+    opacity: "0",
+    pointerEvents: "none",
+    fontSize: "16px",
+    zIndex: "-1"
+  });
+
+  document.body.appendChild(most);
+  todoImeMost = most;
+  return most;
+}
+
+function prevedFocusNaTodoImeMost() {
+  const aktivni = document.activeElement;
+
+  const jeAktivniTodoEditor = Boolean(
+    aktivni?.matches?.(
+      ".todoRichTextInput.todoEditing, .todoTextInput.todoEditing"
+    )
+  );
+
+  if (!jeAktivniTodoEditor) {
+    return null;
+  }
+
+  const puvodniTodoId =
+    aktivni.closest?.(".todoItem")?.dataset?.todoId || null;
+
+  const most = zajistiTodoImeMost();
+  zachovavameTodoImePriHistorii = true;
+
+  try {
+    most.focus({ preventScroll: true });
+  } catch {
+    most.focus();
+  }
+
+  try {
+    most.setSelectionRange(
+      most.value.length,
+      most.value.length
+    );
+  } catch {
+    /* WebView může selection API odmítnout; focus samotný stačí. */
+  }
+
+  return puvodniTodoId;
+}
+
+function ukonciZachovaniTodoIme() {
+  zachovavameTodoImePriHistorii = false;
+}
+
 
 /* ========================================
    DRAG & DROP – stav
@@ -579,6 +669,47 @@ function vytvorTodosZRichehoEditoru(editor) {
   return vysledek;
 }
 
+/* ========================================
+   STABILIZACE 0.0F – TAP POD POSLEDNÍ TODO
+
+   Když uživatel smaže prázdný poslední checkbox (např. pod
+   obrázkem), prázdná plocha pod posledním TODO nesmí působit jako
+   „mrtvé místo“. Klepnutí do této plochy vytvoří nový TODO řádek
+   přes stejnou oficiální cestu jako tlačítko TODO ve spodní liště.
+
+   Reagujeme jen POD posledním řádkem, ne do mezer mezi položkami.
+======================================== */
+todoList.addEventListener("click", event => {
+  if (
+    todoList.hidden ||
+    event.target !== todoList ||
+    activeTodos.length === 0 ||
+    todoDragActive
+  ) {
+    return;
+  }
+
+  const posledniPolozka = todoList.lastElementChild;
+
+  if (!posledniPolozka) {
+    return;
+  }
+
+  const rectPosledni =
+    posledniPolozka.getBoundingClientRect();
+
+  /*
+   * Klik do mezery mezi řádky nebereme jako požadavek přidat TODO.
+   * Nový checkbox vznikne jen v opravdu volné ploše pod posledním.
+   */
+  if (event.clientY < rectPosledni.bottom) {
+    return;
+  }
+
+  addTodoButton.click();
+});
+
+
 addTodoButton.addEventListener("click", () => {
   if (activeTodos.length > 0) {
     activeTodos.push(normalizeTodo({
@@ -595,8 +726,36 @@ addTodoButton.addEventListener("click", () => {
     ? vytvorTodosZRichehoEditoru(todoRichText)
     : [];
 
+  let cilovyIndexPoPrevodu = 0;
+
   if (richTodos.length > 0) {
     activeTodos = richTodos;
+
+    /*
+     * Když běžná poznámka končí obrázkem, hlavní rich editor za něj
+     * schválně drží prázdný editovatelný řádek. Při převodu na TODO
+     * se prázdný řádek dříve zahodil, takže uživatel viděl kurzor pod
+     * obrázkem, ale bez checkboxu.
+     *
+     * Pokud poslední převedený TODO obsahuje obrázek, vytvoříme za ním
+     * skutečný prázdný TODO řádek. Je to stejný princip jako při vložení
+     * obrázku přímo do posledního TODO.
+     */
+    const posledniTodo = activeTodos.at(-1);
+    const posledniHtml =
+      typeof posledniTodo?.html === "string"
+        ? posledniTodo.html
+        : "";
+
+    if (posledniHtml.includes("lubaNoteImage")) {
+      activeTodos.push(normalizeTodo({
+        text: "",
+        html: "",
+        completed: false
+      }));
+
+      cilovyIndexPoPrevodu = activeTodos.length - 1;
+    }
   } else {
     const sourceText = todoRichText
       ? todoRichText.innerText
@@ -625,7 +784,15 @@ addTodoButton.addEventListener("click", () => {
   }
 
   renderTodos();
-  focusTodo(0, activeTodos[0].text.length);
+
+  const cilovyTodo =
+    activeTodos[cilovyIndexPoPrevodu] ||
+    activeTodos[0];
+
+  focusTodo(
+    cilovyIndexPoPrevodu,
+    cilovyTodo?.text?.length ?? 0
+  );
 });
 
 function removeTodo(index) {
@@ -633,12 +800,38 @@ function removeTodo(index) {
 
   activeTodos.splice(index, 1);
 
+  /*
+   * Stabilizace 0.0G v2:
+   * Backspace/Delete, který odstraní CELÝ TODO řádek, nevyvolá nativní
+   * input událost. Destruktivní historie proto dříve zůstala jen ve
+   * stavu „před změnou“ a Undo nemělo hotový záznam, který by mohlo
+   * vrátit.
+   *
+   * Po strukturálním odstranění řádku pošleme explicitní signál, že
+   * datový model activeTodos už obsahuje stav PO změně. Toolbar tím
+   * dokončí přesně ten snapshot, který zachytil před Backspace/Delete.
+   */
+  const oznamDokonceniHistorie = () => {
+    document.dispatchEvent(
+      new CustomEvent(
+        "lubanote:todo-history-after-change",
+        {
+          detail: {
+            type: "removeTodo",
+            todoId: removedTodo?.id || null
+          }
+        }
+      )
+    );
+  };
+
   if (removedTodo?.id === selectedTodoId) {
     selectedTodoId = null;
   }
 
   if (activeTodos.length === 0) {
     renderTodos();
+    oznamDokonceniHistorie();
 
     if (todoRichText) {
       todoRichText.focus();
@@ -651,6 +844,7 @@ function removeTodo(index) {
 
   const newFocusIndex = Math.max(0, index - 1);
   renderTodos();
+  oznamDokonceniHistorie();
   focusTodo(newFocusIndex);
 }
 
@@ -2152,6 +2346,22 @@ function createTodoItem(todo, index) {
   todoItem.dataset.todoIndex = index;
   todoItem.dataset.todoId = todo.id;
 
+  /*
+   * Obrázek převedený z běžného editoru může tvořit samostatný TODO
+   * řádek bez textu. .todoTextValue je jinak inline span a kolem blokového
+   * <figure> by prohlížeč vytvořil prázdné řádkové boxy. Výsledkem byla
+   * velká prázdná mezera pod obrázkem před následujícím checkboxem.
+   * Označíme pouze čistě obrázkový řádek; běžné textové TODO se nemění.
+   */
+  const todoJeJenObrazek =
+    !normalizujPlainTextTodo(todo.text || "") &&
+    typeof todo.html === "string" &&
+    todo.html.includes("lubaNoteImage");
+
+  if (todoJeJenObrazek) {
+    todoItem.classList.add("todoImageOnly");
+  }
+
   if (todo.completed === true) {
     todoItem.classList.add("todoCompleted");
   }
@@ -2326,17 +2536,27 @@ if (todo.html) {
       jeTodoTextPrazdny(novyText);
 
     /*
-     * Jakmile uživatel smaže poslední viditelný znak existujícího TODO,
-     * smažeme celou položku včetně checkboxu. Nespoléháme jen na
-     * event.inputType, protože Android contenteditable ho neposílá vždy
-     * stejně a může po smazání ponechat neviditelný znak.
+     * Stabilizace 0.0G:
+     * smazání POSLEDNÍHO znaku nesmí současně smazat celý checkbox.
+     *
+     * Intuitivní chování je dvoukrokové:
+     *   1) první Backspace smaže poslední znak a ponechá prázdné TODO,
+     *   2) další Backspace na prázdném TODO smaže teprve celý řádek.
+     *
+     * Díky tomu také Undo po smazání prázdného checkboxu vrátí opravdu
+     * prázdný checkbox; případný předchozí znak se vrátí až dalším Undo.
      */
     if (byloTodoNeprazdne && jeTodoNyniPrazdne) {
       activeTodos[currentIndex].text = "";
       activeTodos[currentIndex].html = "";
       text.value = "";
 
-      removeTodo(currentIndex);
+      nastavObsahTodoTextu(
+        textValue,
+        activeTodos[currentIndex]
+      );
+
+      scheduleTodoItemVisibility(todoItem);
       return;
     }
 
@@ -2366,6 +2586,15 @@ if (todo.html) {
      * focus skutečně odešel mimo jeho obsah.
      */
     requestAnimationFrame(() => {
+      /*
+       * Při destruktivním Undo/Redo drží focus na zlomek okamžiku
+       * neviditelný IME most. Tento technický blur nesmí ukončit TODO
+       * editaci ani rozhýbat klávesnici.
+       */
+      if (zachovavameTodoImePriHistorii) {
+        return;
+      }
+
       const aktivniPrvek = document.activeElement;
 
       if (
@@ -2452,15 +2681,20 @@ if (todo.html) {
       const textAfter =
         zaBox.textContent ?? "";
 
+      /*
+       * HTML nesmíme rozhodovat jen podle textContent. Obrázek nemá
+       * žádný text, takže Enter za obrázkem dříve vyhodnotil levou část
+       * jako prázdnou a obrázek z TODO potichu smazal.
+       */
       const htmlBefore =
-        textBefore === ""
-          ? ""
-          : predBox.innerHTML;
+        maRichTodoObsah(predBox)
+          ? predBox.innerHTML
+          : "";
 
       const htmlAfter =
-        textAfter === ""
-          ? ""
-          : zaBox.innerHTML;
+        maRichTodoObsah(zaBox)
+          ? zaBox.innerHTML
+          : "";
 
       activeTodos[currentIndex].text =
         textBefore;
@@ -2523,8 +2757,16 @@ if (todo.html) {
 
     if (
       event.key === "Backspace" &&
-      ziskejTextZTodoRichText(richText) === ""
+      jeTodoTextPrazdny(
+        ziskejTextZTodoRichText(richText)
+      ) &&
+      !maRichTodoObsah(richText)
     ) {
+      /*
+       * Obrázkový TODO má prázdné textContent, ale NENÍ prázdný.
+       * Backspace na jeho začátku proto nesmí smazat celý řádek
+       * včetně obrázku. Obrázek se maže jen jeho vlastním tlačítkem ✕.
+       */
       event.preventDefault();
       removeTodo(currentIndex);
     }
@@ -2968,6 +3210,88 @@ function nastavTodoJakoNaplanovane(
 
 
 /* ========================================
+   HISTORIE – OBNOVA CELÉHO TODO MODELU
+
+   Destruktivní Undo (obrázek / Backspace / Delete) nesmí být
+   navázané jen na právě existující contenteditable DOM uzel.
+   Backspace může celý TODO řádek přerenderovat nebo odstranit,
+   takže starý DOM editor už po změně nemusí existovat.
+
+   Proto editorToolbar.js může obnovit stabilní snapshot activeTodos
+   přímo do datového modelu a až potom necháme TODO znovu vyrenderovat.
+======================================== */
+
+function obnovAktivniTodosZeSnapshot(
+  snapshot = [],
+  focusTodoId = null
+) {
+  if (!Array.isArray(snapshot)) {
+    return false;
+  }
+
+  /*
+   * Je-li klávesnice právě otevřená nad TODO editorem, před renderem
+   * převedeme focus na stabilní textarea most. Odstranění starého
+   * contenteditable pak Android nevyhodnotí jako konec psaní.
+   */
+  const puvodniTodoId = prevedFocusNaTodoImeMost();
+  const mameImeMost = Boolean(puvodniTodoId);
+
+  activeTodos = snapshot.map(todo =>
+    normalizeTodo({ ...todo })
+  );
+
+  activeTodoEditorItem = null;
+
+  const existujeFocusId = id =>
+    typeof id === "string" &&
+    activeTodos.some(todo => todo.id === id);
+
+  selectedTodoId =
+    existujeFocusId(focusTodoId)
+      ? focusTodoId
+      : existujeFocusId(puvodniTodoId)
+        ? puvodniTodoId
+        : mameImeMost && activeTodos.length > 0
+          ? activeTodos[activeTodos.length - 1].id
+          : null;
+
+  renderTodos();
+
+  if (selectedTodoId) {
+    const index = activeTodos.findIndex(
+      todo => todo.id === selectedTodoId
+    );
+
+    if (index >= 0) {
+      requestAnimationFrame(() => {
+        const todo = activeTodos[index];
+        focusTodo(
+          index,
+          todo?.text?.length ?? 0
+        );
+        ukonciZachovaniTodoIme();
+      });
+    } else {
+      ukonciZachovaniTodoIme();
+    }
+  } else {
+    ukonciZachovaniTodoIme();
+
+    if (mameImeMost) {
+      try {
+        todoImeMost?.blur();
+      } catch {
+        /* Bez aktivního TODO je zavření klávesnice správné. */
+      }
+    }
+  }
+
+  return true;
+}
+
+
+/* ========================================
    VEŘEJNÉ API – BARVA A PLÁNOVÁNÍ TODO
 ======================================== */
 
@@ -2981,6 +3305,8 @@ window.LubaNoteTodos = {
   },
 
   ziskejAktivniTodos: getActiveTodosSnapshot,
+
+  obnovAktivniTodosZeSnapshot,
 
   nastavBarvuVybranehoTodo: (color) =>
     setSelectedTodoHighlight(color),
