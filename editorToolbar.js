@@ -1732,6 +1732,100 @@
 
 
 
+  /*
+   * Když uživatel zvolí velikost jen na KURZORU (bez označeného textu),
+   * Android WebView si legacy execCommand("fontSize", "7") někdy
+   * pouze zapamatuje jako styl pro DALŠÍ znak. V okamžiku volby tedy
+   * ještě žádný <font size="7"> v DOM není a starý kód ho neměl co
+   * převést na skutečných např. 18 px. První napsaný znak pak vznikl
+   * jako browserová velikost 7 (~60 px).
+   *
+   * Proto si u sbaleného výběru krátce zapamatujeme požadovanou px
+   * velikost a nově vytvořený <font size="7"> převedeme hned při
+   * prvním inputu. Označený text dál používá původní odladěnou cestu.
+   */
+  const cekajiciVelikostPisma = new WeakMap();
+
+
+  function prevedFontSedmNaPx(
+    editor,
+    hodnota,
+    puvodniFonty = null
+  ) {
+    if (!editor || !hodnota) {
+      return 0;
+    }
+
+    let pocet = 0;
+
+    editor
+      .querySelectorAll('font[size="7"]')
+      .forEach(prvek => {
+        if (
+          puvodniFonty instanceof Set &&
+          puvodniFonty.has(prvek)
+        ) {
+          return;
+        }
+
+        prvek.removeAttribute("size");
+        prvek.style.fontSize = `${hodnota}px`;
+        prvek.dataset.velikostPisma = hodnota;
+        pocet += 1;
+      });
+
+    return pocet;
+  }
+
+
+  document.addEventListener(
+    "input",
+    event => {
+      const cilovyEditor =
+        ziskejEditorFormatovaniProUzel(
+          event.target
+        );
+
+      if (!cilovyEditor) {
+        return;
+      }
+
+      const cekajici =
+        cekajiciVelikostPisma.get(
+          cilovyEditor
+        );
+
+      if (!cekajici) {
+        return;
+      }
+
+      /*
+       * První znak po změně velikosti už WebView vložil. Teď pouze
+       * přepíšeme jeho dočasný legacy <font size=7> na přesnou px
+       * hodnotu. Pokud WebView žádný takový prvek nevytvořil, čekání
+       * stejně ukončíme, aby se nemohlo omylem aplikovat později.
+       */
+      prevedFontSedmNaPx(
+        cilovyEditor,
+        cekajici.hodnota,
+        cekajici.puvodniFonty
+      );
+
+      cekajiciVelikostPisma.delete(
+        cilovyEditor
+      );
+
+      synchronizujTodoPoFormatovani(
+        cilovyEditor
+      );
+
+      ulozVyberTextu();
+      aktualizujStavFormatovani();
+    },
+    true
+  );
+
+
   function nastavVelikostPisma(hodnota) {
     if (!hodnota) {
       return;
@@ -1740,6 +1834,23 @@
     const cilovyEditor =
       pripravEditorProFormatovani();
 
+    const vyber =
+      window.getSelection();
+
+    const jeJenKurzor = Boolean(
+      vyber &&
+      vyber.rangeCount > 0 &&
+      vyber.getRangeAt(0).collapsed
+    );
+
+    const puvodniFonty =
+      jeJenKurzor
+        ? new Set(
+            (cilovyEditor || editorTextu)
+              .querySelectorAll('font[size="7"]')
+          )
+        : null;
+
     document.execCommand(
       "fontSize",
       false,
@@ -1747,18 +1858,29 @@
     );
 
     /*
-     * Dříve se <font size="7"> převáděl na px pouze v hlavním
-     * editoru. V TODO proto například volba 18 skončila jako obří
-     * browserová velikost 7. Převádíme vždy jen editor, který se
-     * právě formátuje.
+     * Pro označený text vznikne <font size=7> okamžitě a převedeme ho
+     * stejně jako doposud. Některé WebView ho vytvoří okamžitě i pro
+     * samotný kurzor; i tento případ rovnou opravíme.
      */
-    (cilovyEditor || editorTextu)
-      .querySelectorAll('font[size="7"]')
-      .forEach(prvek => {
-        prvek.removeAttribute("size");
-        prvek.style.fontSize = `${hodnota}px`;
-        prvek.dataset.velikostPisma = hodnota;
-      });
+    const prevedeno = prevedFontSedmNaPx(
+      cilovyEditor || editorTextu,
+      hodnota,
+      jeJenKurzor ? puvodniFonty : null
+    );
+
+    if (jeJenKurzor && prevedeno === 0) {
+      cekajiciVelikostPisma.set(
+        cilovyEditor || editorTextu,
+        {
+          hodnota: String(hodnota),
+          puvodniFonty
+        }
+      );
+    } else {
+      cekajiciVelikostPisma.delete(
+        cilovyEditor || editorTextu
+      );
+    }
 
     synchronizujTodoPoFormatovani(
       cilovyEditor
