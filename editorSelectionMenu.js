@@ -5,8 +5,9 @@
      Chování:
      - 1× tap = pouze kurzor / editace
      - 2× tap na slovo = vlastní spolehlivé označení slova -> naše menu
-     - Android dvojtap používá jeden pár LubaNote úchytů (včetně 1. řádku)
-     - long-press může dál použít nativní Android úchyty
+     - Android Standard používá pouze JEDEN pár systémových úchytů
+     - fallback prvního řádku opravuje jen výběr slova, ne mezery
+     - long-press dál používá nativní Android výběr + naše menu
      - long-press už NEPATŘÍ výběru textu; používají ho řádkové prvky
        (bullet / TODO) pro aktivaci režimu přesunu
      - APK používá Capacitor Clipboard
@@ -96,13 +97,6 @@
   let pravyUchytVyberu = null;
   let tazenyUchytVyberu = null;
 
-  /*
-   * Dvojtap v Android WebView není spolehlivý hlavně na prvním
-   * řádku contenteditable. Když slovo vybere přímo LubaNote,
-   * zobrazíme JEDEN pár našich úchytů a nativní dvojtap zastavíme.
-   * Long-press dál používá nativní Android úchyty.
-   */
-  let vynucujVlastniUchytyAndroid = false;
 
   /*
    * Android WebView někdy dokončí označení slova až několik ms po
@@ -353,7 +347,6 @@ todoList?.classList.remove(
     menuProTextareaKurzorAktivni = false;
     bodMenuTextareaKurzor = null;
 
-    vynucujVlastniUchytyAndroid = false;
     skryjUchytyVyberu();
   }
 
@@ -848,8 +841,7 @@ todoList?.classList.remove(
 
     if (
       jeNativniAndroid &&
-      editorRozsahu === editorTextu &&
-      !vynucujVlastniUchytyAndroid
+      editorRozsahu === editorTextu
     ) {
       skryjUchytyVyberu();
       return;
@@ -2246,29 +2238,79 @@ todoList?.classList.remove(
 
 
   /*
-   * Fallback pro Android první řádek:
-   * caretRangeFromPoint() tam někdy vrátí kořen editoru místo
-   * textového uzlu. První tap ale už správně umístil kurzor, takže
-   * při druhém tapu smíme použít aktuální collapsed Selection, pokud
-   * opravdu leží v hlavním editoru.
+   * Android WebView umí na prvním řádku contenteditable vrátit
+   * z caretRangeFromPoint() kořen editoru místo textového uzlu.
+   * Druhý geometrický hit-test proto ověřuje přímo vykreslené znaky.
+   * Vrátí bod pouze tehdy, když prst opravdu leží nad písmenem/číslem.
+   * Mezera mezi slovy tak zůstává mezerou a může otevřít Vložit / Vše.
    */
-  function najdiTextovyBodZAktualnihoKurzoru() {
-    const vyber = window.getSelection();
-
-    if (!vyber || vyber.rangeCount === 0) {
+  function najdiTextovyBodSlovaPresObdelniky(koren, x, y) {
+    if (!koren) {
       return null;
     }
 
-    const rozsah = vyber.getRangeAt(0);
+    const walker = document.createTreeWalker(
+      koren,
+      NodeFilter.SHOW_TEXT
+    );
 
-    if (
-      !rozsah.collapsed ||
-      ziskejRichEditorProRozsah(rozsah) !== editorTextu
-    ) {
-      return null;
+    let uzel = walker.nextNode();
+
+    while (uzel) {
+      const text = uzel.textContent ?? "";
+
+      if (text) {
+        const celyRozsah = document.createRange();
+
+        try {
+          celyRozsah.selectNodeContents(uzel);
+        } catch {
+          uzel = walker.nextNode();
+          continue;
+        }
+
+        const jeNaStejnemTextu =
+          Array.from(celyRozsah.getClientRects()).some(rect => (
+            x >= rect.left &&
+            x <= rect.right &&
+            y >= rect.top - 4 &&
+            y <= rect.bottom + 4
+          ));
+
+        if (jeNaStejnemTextu) {
+          for (let index = 0; index < text.length; index += 1) {
+            if (!jeZnakSlova(text[index])) {
+              continue;
+            }
+
+            const znakRozsah = document.createRange();
+
+            try {
+              znakRozsah.setStart(uzel, index);
+              znakRozsah.setEnd(uzel, index + 1);
+            } catch {
+              continue;
+            }
+
+            const zasah =
+              Array.from(znakRozsah.getClientRects()).some(rect => (
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top - 4 &&
+                y <= rect.bottom + 4
+              ));
+
+            if (zasah) {
+              return { uzel, offset: index };
+            }
+          }
+        }
+      }
+
+      uzel = walker.nextNode();
     }
 
-    return najdiTextovyUzelProSlovo(rozsah);
+    return null;
   }
 
 
@@ -2580,27 +2622,23 @@ todoList?.classList.remove(
       vynucenyEditor ??
       ziskejRichEditorProRozsah(caretRozsah);
 
+    if (!cilovyEditor) {
+      return false;
+    }
+
     if (
-      !caretRozsah ||
-      !cilovyEditor ||
-      ziskejRichEditorProRozsah(caretRozsah) !== cilovyEditor
+      !vynucenyTextovyBod &&
+      (
+        !caretRozsah ||
+        ziskejRichEditorProRozsah(caretRozsah) !== cilovyEditor
+      )
     ) {
       return false;
     }
 
-    let textovyBod =
+    const textovyBod =
       vynucenyTextovyBod ??
       najdiTextovyUzelProSlovo(caretRozsah);
-
-    if (
-      !textovyBod?.uzel ||
-      !jeUzelVEditoru(textovyBod.uzel)
-    ) {
-      textovyBod =
-        cilovyEditor === editorTextu
-          ? najdiTextovyBodZAktualnihoKurzoru()
-          : null;
-    }
 
     if (
       !textovyBod?.uzel ||
@@ -2612,31 +2650,15 @@ todoList?.classList.remove(
     const text =
       textovyBod.uzel.textContent ?? "";
 
-    let indexSlova =
-      najdiIndexSlovaPodBodem(
-        textovyBod.uzel,
-        textovyBod.offset,
-        x,
-        y
-      );
-
-    /*
-     * Pokud Android na prvním řádku nedá použitelný hit-test,
-     * použijeme offset kurzoru z prvního tapu. Zkoušíme znak na
-     * kurzoru i bezprostředně před ním, protože caret bývá za slovem.
-     */
-    if (indexSlova == null && cilovyEditor === editorTextu) {
-      const kandidati = [
-        textovyBod.offset,
-        textovyBod.offset - 1
-      ];
-
-      indexSlova = kandidati.find(index => (
-        index >= 0 &&
-        index < text.length &&
-        jeZnakSlova(text[index])
-      )) ?? null;
-    }
+    const indexSlova =
+      vynucenyTextovyBod
+        ? textovyBod.offset
+        : najdiIndexSlovaPodBodem(
+            textovyBod.uzel,
+            textovyBod.offset,
+            x,
+            y
+          );
 
     const hranice =
       najdiHraniceSlova(
@@ -2844,37 +2866,65 @@ todoList?.classList.remove(
 
       if (jeAndroidStandard) {
         /*
-         * Android WebView má známou nekonzistenci hlavně na PRVNÍM
-         * řádku contenteditable: nativní dvojtap tam někdy skončí jen
-         * kurzorem a naše logika pak omylem ukáže Vložit / Vše.
-         *
-         * Proto je dvojtap ve Standard editoru odteď jednotný na
-         * VŠECH řádcích: slovo vybírá LubaNote samo. Nativní druhý tap
-         * zastavíme, takže nevznikne druhý pár systémových úchytů.
+         * STANDARD ANDROID – jeden selection systém:
+         * - běžné slovo necháme nativnímu WebView -> systémové úchyty,
+         * - první řádek opravíme jen když nativní hit-test skutečně selže,
+         * - mezera mezi slovy zůstává kurzorem -> Vložit / Vše.
          */
-        vynucujVlastniUchytyAndroid = true;
-
-        const vybranoAndroid =
-          vyberSlovoVBodu(
+        if (
+          jeSlovoVBoduBezZmenyVyberu(
             dotyk.clientX,
-            dotyk.clientY,
-            editorTextu
+            dotyk.clientY
+          )
+        ) {
+          return;
+        }
+
+        const fallbackSlovo =
+          najdiTextovyBodSlovaPresObdelniky(
+            editorTextu,
+            dotyk.clientX,
+            dotyk.clientY
           );
 
-        if (vybranoAndroid) {
-          event.preventDefault();
-          event.stopPropagation();
+        if (fallbackSlovo) {
+          const xFallback = dotyk.clientX;
+          const yFallback = dotyk.clientY;
 
-          ignorujKlikPoDvojtapuDo =
-            performance.now() + 380;
+          /*
+           * Dáme WebView krátkou šanci dokončit nativní dvojtap.
+           * Pokud už vznikl výběr, nedotýkáme se ho. Pokud ne,
+           * označíme přesně geometricky nalezené slovo.
+           */
+          window.setTimeout(() => {
+            const vyberAktualni = window.getSelection();
+            const rozsahAktualni =
+              vyberAktualni?.rangeCount
+                ? vyberAktualni.getRangeAt(0)
+                : null;
+
+            if (
+              rozsahAktualni &&
+              !rozsahAktualni.collapsed &&
+              ziskejRichEditorProRozsah(rozsahAktualni) === editorTextu
+            ) {
+              return;
+            }
+
+            vyberSlovoVBodu(
+              xFallback,
+              yFallback,
+              editorTextu,
+              fallbackSlovo
+            );
+          }, 140);
 
           return;
         }
 
-        vynucujVlastniUchytyAndroid = false;
-
         /*
-         * Dvojtap mimo slovo = kurzorové menu Vložit / Vše.
+         * Dvojtap na skutečné mezeře / prázdném místě.
+         * Zachováváme Vložit / Vše i MEZI dvěma slovy.
          */
         const caretRozsahAndroid =
           najdiCaretRozsahVBodu(
