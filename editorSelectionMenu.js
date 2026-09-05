@@ -49,7 +49,10 @@
    */
   const jeNativniAndroid =
     window.Capacitor?.getPlatform?.() === "android" ||
-    window.Capacitor?.isNativePlatform?.() === true;
+    (
+      window.Capacitor?.isNativePlatform?.() === true &&
+      /Android/i.test(navigator.userAgent || "")
+    );
 
   if (!editorTextu || !selectionMenu) {
     return;
@@ -1228,6 +1231,21 @@ todoList?.classList.remove(
       klon.removeAttribute("contenteditable");
       klon.removeAttribute("draggable");
 
+      /*
+       * Logická velikost LubaNote musí být v interní rich kopii
+       * explicitní. Nestačí spoléhat na dědění z místa vložení.
+       */
+      const logickaVelikost =
+        klon.dataset?.velikostPisma;
+
+      if (
+        logickaVelikost &&
+        Number.isFinite(Number(logickaVelikost))
+      ) {
+        klon.style.fontSize =
+          `${logickaVelikost}px`;
+      }
+
       Array.from(klon.attributes)
         .filter((atribut) =>
           atribut.name
@@ -1301,6 +1319,118 @@ todoList?.classList.remove(
   }
 
 
+  function jeKurzorNaTextovemOkrajiObalu(
+    rozsah,
+    obal,
+    strana
+  ) {
+    if (!rozsah?.collapsed || !(obal instanceof Element)) {
+      return false;
+    }
+
+    try {
+      const test = document.createRange();
+      test.selectNodeContents(obal);
+
+      if (strana === "start") {
+        test.setEnd(
+          rozsah.startContainer,
+          rozsah.startOffset
+        );
+      } else {
+        test.setStart(
+          rozsah.startContainer,
+          rozsah.startOffset
+        );
+      }
+
+      /*
+       * Pro inline text je prázdný textový úsek spolehlivý indikátor,
+       * že caret leží přímo na začátku/konci daného stylového obalu.
+       */
+      return test.toString().length === 0;
+    } catch {
+      return false;
+    }
+  }
+
+
+  function presunRichCaretMimoCilovyInlineObal(
+    rozsah,
+    cilovyEditor
+  ) {
+    if (
+      !rozsah?.collapsed ||
+      !cilovyEditor
+    ) {
+      return rozsah;
+    }
+
+    let aktualni =
+      rozsah.startContainer?.nodeType === Node.ELEMENT_NODE
+        ? rozsah.startContainer
+        : rozsah.startContainer?.parentElement;
+
+    let obalNaZacatku = null;
+    let obalNaKonci = null;
+
+    while (
+      aktualni instanceof Element &&
+      aktualni !== cilovyEditor &&
+      cilovyEditor.contains(aktualni) &&
+      POVOLENE_INLINE_OBALY_KOPIE.has(aktualni.tagName)
+    ) {
+      if (
+        jeKurzorNaTextovemOkrajiObalu(
+          rozsah,
+          aktualni,
+          "start"
+        )
+      ) {
+        obalNaZacatku = aktualni;
+      }
+
+      if (
+        jeKurzorNaTextovemOkrajiObalu(
+          rozsah,
+          aktualni,
+          "end"
+        )
+      ) {
+        obalNaKonci = aktualni;
+      }
+
+      aktualni = aktualni.parentElement;
+    }
+
+    const novyRozsah = rozsah.cloneRange();
+
+    try {
+      /*
+       * Typický bug: caret je těsně za slovem velikosti 14 a vložíme
+       * interní kopii velikosti 20. Když vložení zůstane UVNITŘ
+       * obalu 14, WebView může zdrojový styl sloučit s cílem.
+       * Na hraně proto rich kopii vložíme jako SOUROZENCE obalu.
+       */
+      if (obalNaKonci) {
+        novyRozsah.setStartAfter(obalNaKonci);
+        novyRozsah.collapse(true);
+        return novyRozsah;
+      }
+
+      if (obalNaZacatku) {
+        novyRozsah.setStartBefore(obalNaZacatku);
+        novyRozsah.collapse(true);
+        return novyRozsah;
+      }
+    } catch {
+      return rozsah;
+    }
+
+    return novyRozsah;
+  }
+
+
   function vlozRichHtmlDoEditoru(html, textProInput = "") {
     if (!html || !obnovUlozenyRozsah()) {
       return false;
@@ -1326,10 +1456,25 @@ todoList?.classList.remove(
         return false;
       }
 
-      const rozsah = vyber.getRangeAt(0);
+      let rozsah = vyber.getRangeAt(0);
 
       if (!jeRozsahVEditoru(rozsah)) {
         return false;
+      }
+
+      /*
+       * Interní rich paste na hraně jinak velikého slova nesmí
+       * zdědit velikost cílového slova. Přesuneme proto caret mimo
+       * cílový inline obal ještě před vložením.
+       */
+      if (rozsah.collapsed) {
+        rozsah = presunRichCaretMimoCilovyInlineObal(
+          rozsah,
+          cilovyEditor
+        );
+
+        vyber.removeAllRanges();
+        vyber.addRange(rozsah);
       }
 
       rozsah.deleteContents();
@@ -2472,6 +2617,50 @@ todoList?.classList.remove(
   }
 
 
+  /*
+   * Android Standard editor:
+   * potřebujeme pouze zjistit, zda druhý tap leží na skutečném slově,
+   * aniž bychom sami měnili Range. Pokud ano, necháme dvojtap dokončit
+   * nativní Android/WebView – tím získáme stabilní systémové úchyty.
+   */
+  function jeSlovoVBoduBezZmenyVyberu(x, y) {
+    const caretRozsah =
+      najdiCaretRozsahVBodu(x, y);
+
+    if (
+      !caretRozsah ||
+      ziskejRichEditorProRozsah(caretRozsah) !== editorTextu
+    ) {
+      return false;
+    }
+
+    const textovyBod =
+      najdiTextovyUzelProSlovo(caretRozsah);
+
+    if (!textovyBod?.uzel) {
+      return false;
+    }
+
+    const text =
+      textovyBod.uzel.textContent ?? "";
+
+    const indexSlova =
+      najdiIndexSlovaPodBodem(
+        textovyBod.uzel,
+        textovyBod.offset,
+        x,
+        y
+      );
+
+    return Boolean(
+      najdiHraniceSlova(
+        text,
+        indexSlova
+      )
+    );
+  }
+
+
   editorTextu.addEventListener(
     "touchstart",
     event => {
@@ -2570,6 +2759,76 @@ todoList?.classList.remove(
       }
 
       posledniTapEditoru = null;
+
+      /*
+       * STANDARD editor v Android APK:
+       * - dvojtap na slově necháme plně na nativním WebView,
+       *   aby vznikl jeden stabilní pár systémových úchytů;
+       * - naše selectionchange pak pouze zobrazí LubaNote menu.
+       *
+       * Bullet <li> sem záměrně nepatří – long-press tam používá
+       * MOVE MODE a jeho gesta budeme ladit samostatně v Bullet fázi.
+       */
+      const jeAndroidStandard =
+        jeNativniAndroid &&
+        !event.target.closest?.("li");
+
+      if (jeAndroidStandard) {
+        if (
+          jeSlovoVBoduBezZmenyVyberu(
+            dotyk.clientX,
+            dotyk.clientY
+          )
+        ) {
+          /*
+           * NIC nepreventujeme. Druhý tap musí doběhnout nativně.
+           * Android označí slovo a vytvoří vlastní úchyty.
+           */
+          return;
+        }
+
+        /*
+         * Dvojtap mimo slovo = kurzorové menu Vložit / Vše.
+         * Tady naopak nativní druhý tap zastavíme, protože žádný
+         * textový výběr nepotřebujeme.
+         */
+        const caretRozsahAndroid =
+          najdiCaretRozsahVBodu(
+            dotyk.clientX,
+            dotyk.clientY
+          );
+
+        const textovyBodAndroid =
+          najdiTextovyUzelProSlovo(
+            caretRozsahAndroid
+          );
+
+        const kurzorMezeryAndroid =
+          textovyBodAndroid?.uzel &&
+          jeUzelVEditoru(textovyBodAndroid.uzel)
+            ? najdiKurzorMezeryPoblizBodu(
+                textovyBodAndroid.uzel,
+                textovyBodAndroid.offset,
+                dotyk.clientX,
+                dotyk.clientY
+              )
+            : null;
+
+        const zobrazenoMenuAndroid =
+          zobrazMenuProKurzorVBodu(
+            dotyk.clientX,
+            dotyk.clientY,
+            kurzorMezeryAndroid
+          );
+
+        if (zobrazenoMenuAndroid) {
+          event.preventDefault();
+          ignorujKlikPoDvojtapuDo =
+            performance.now() + 380;
+        }
+
+        return;
+      }
 
       const caretRozsah =
         najdiCaretRozsahVBodu(
@@ -3138,6 +3397,52 @@ todoList?.classList.remove(
   editorTextu.addEventListener(
     "contextmenu",
     event => {
+      const jeAndroidStandard =
+        jeNativniAndroid &&
+        !event.target.closest?.("li");
+
+      if (jeAndroidStandard) {
+        /*
+         * Android long-press:
+         * nativní výběr/úchyty ponecháme, ale systémovou akční lištu
+         * nahradíme jednotným LubaNote menu. U prázdného místa bude
+         * stejné kurzorové menu Vložit / Vše.
+         */
+        const x = event.clientX;
+        const y = event.clientY;
+
+        event.preventDefault();
+
+        setTimeout(() => {
+          const vyber =
+            window.getSelection();
+
+          const rozsah =
+            vyber?.rangeCount
+              ? vyber.getRangeAt(0)
+              : null;
+
+          if (
+            rozsah &&
+            jeRozsahVEditoru(rozsah) &&
+            !rozsah.collapsed
+          ) {
+            ulozRozsah(rozsah);
+            zobrazMenuProOznaceni(rozsah);
+            return;
+          }
+
+          zobrazMenuProKurzorVBodu(
+            x,
+            y,
+            rozsah?.collapsed ? rozsah : null,
+            editorTextu
+          );
+        }, 0);
+
+        return;
+      }
+
       const vyber =
         window.getSelection();
 
