@@ -14,6 +14,9 @@
 
 (() => {
   const CACHE_PREFIX = "lubanoteSharedNotesV1:";
+  const CACHE_DB_NAME = "lubanoteSharedNotesCache";
+  const CACHE_DB_VERSION = 1;
+  const CACHE_DB_STORE = "sharedNotes";
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
   const POLL_MS = 60_000;
 
@@ -66,6 +69,36 @@
     return text ? `@${text}` : "@?";
   }
 
+  function normalizujCacheNotes(notes) {
+    return (Array.isArray(notes) ? notes : [])
+      .filter((note) => note?.id)
+      .map((note) => ({
+        ...note,
+        __lubanoteShared: true,
+        isSecret: false
+      }));
+  }
+
+  function odlehciHtmlProLocalStorage(html) {
+    return String(html || "").replace(
+      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])data:image\/[^;]+;base64,[^"']*\2/gi,
+      '$1$2$2 data-lubanote-offline-image="1"'
+    );
+  }
+
+  function odlehciPoznamkyProLocalStorage(notes) {
+    return normalizujCacheNotes(notes).map((note) => ({
+      ...note,
+      richContent: odlehciHtmlProLocalStorage(note.richContent),
+      todos: Array.isArray(note.todos)
+        ? note.todos.map((todo) => ({
+            ...todo,
+            html: odlehciHtmlProLocalStorage(todo?.html)
+          }))
+        : note.todos
+    }));
+  }
+
   function nactiCache() {
     const userId = ziskejUserId();
     const klic = cacheKey(userId);
@@ -86,16 +119,105 @@
         return [];
       }
 
-      return zaznam.notes
-        .filter((note) => note?.id)
-        .map((note) => ({
-          ...note,
-          __lubanoteShared: true,
-          isSecret: false
-        }));
+      return normalizujCacheNotes(zaznam.notes);
     } catch (error) {
-      console.warn("Sdílení: cache shared notes se nepodařilo načíst.", error);
+      console.warn("Sdílení: lehká cache shared notes se nepodařila načíst.", error);
       return [];
+    }
+  }
+
+  function otevriCacheDb() {
+    return new Promise((resolve, reject) => {
+      if (!("indexedDB" in window)) {
+        reject(new Error("indexeddb_unavailable"));
+        return;
+      }
+
+      const request = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(CACHE_DB_STORE)) {
+          db.createObjectStore(CACHE_DB_STORE, { keyPath: "userId" });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("indexeddb_open_failed"));
+    });
+  }
+
+  async function ulozPlnouCacheDoIndexedDb(userId, notes) {
+    if (!userId) return;
+
+    let db = null;
+    try {
+      db = await otevriCacheDb();
+
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(CACHE_DB_STORE, "readwrite");
+        tx.objectStore(CACHE_DB_STORE).put({
+          userId,
+          fetchedAt: new Date().toISOString(),
+          notes: normalizujCacheNotes(notes)
+        });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("indexeddb_write_failed"));
+        tx.onabort = () => reject(tx.error || new Error("indexeddb_write_aborted"));
+      });
+    } catch (error) {
+      console.warn("Sdílení: plná IndexedDB cache se nepodařila uložit.", error);
+    } finally {
+      try { db?.close(); } catch (_) {}
+    }
+  }
+
+  async function nactiPlnouCacheZIndexedDb(userId) {
+    if (!userId) return [];
+
+    let db = null;
+    try {
+      db = await otevriCacheDb();
+
+      const zaznam = await new Promise((resolve, reject) => {
+        const tx = db.transaction(CACHE_DB_STORE, "readonly");
+        const request = tx.objectStore(CACHE_DB_STORE).get(userId);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("indexeddb_read_failed"));
+      });
+
+      if (!zaznam || zaznam.userId !== userId || !Array.isArray(zaznam.notes)) {
+        return [];
+      }
+
+      return normalizujCacheNotes(zaznam.notes);
+    } catch (error) {
+      console.warn("Sdílení: plná IndexedDB cache se nepodařila načíst.", error);
+      return [];
+    } finally {
+      try { db?.close(); } catch (_) {}
+    }
+  }
+
+  async function doplnPlnouCachePokudJeAktualni(userId) {
+    if (!userId) return;
+
+    const plnaCache = await nactiPlnouCacheZIndexedDb(userId);
+
+    if (
+      ziskejUserId() !== userId ||
+      serverovyStavNacten ||
+      !plnaCache.length
+    ) {
+      return;
+    }
+
+    sdilenePoznamky = plnaCache;
+
+    if (typeof window.renderTasks === "function") {
+      window.renderTasks();
+    } else {
+      vykresliSdileneKarty();
     }
   }
 
@@ -107,17 +229,39 @@
       return;
     }
 
+    /*
+     * Plná cache včetně Data URL obrázků patří do IndexedDB.
+     * localStorage drží jen lehkou textovou kopii pro okamžitý start.
+     */
+    void ulozPlnouCacheDoIndexedDb(userId, notes);
+
+    const lehkePoznamky = odlehciPoznamkyProLocalStorage(notes);
+    const payload = JSON.stringify({
+      userId,
+      fetchedAt: new Date().toISOString(),
+      notes: lehkePoznamky
+    });
+
     try {
-      localStorage.setItem(
-        klic,
-        JSON.stringify({
-          userId,
-          fetchedAt: new Date().toISOString(),
-          notes: Array.isArray(notes) ? notes : []
-        })
-      );
+      localStorage.setItem(klic, payload);
     } catch (error) {
-      console.warn("Sdílení: cache shared notes se nepodařilo uložit.", error);
+      if (error?.name === "QuotaExceededError") {
+        /*
+         * Starší verze mohla pod stejným klíčem zanechat obří cache
+         * s obrázky. Odstraníme jen tento shared klíč a zkusíme lehkou
+         * cache zapsat znovu. Ostatní data LubaNote se nedotýkají.
+         */
+        try {
+          localStorage.removeItem(klic);
+          localStorage.setItem(klic, payload);
+          return;
+        } catch (_) {
+          /* IndexedDB plná cache už běží nezávisle; localStorage je bonus. */
+          return;
+        }
+      }
+
+      console.warn("Sdílení: lehká cache shared notes se nepodařila uložit.", error);
     }
   }
 
@@ -830,6 +974,7 @@
     aktualniUserId = userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
     serverovyStavNacten = false;
     sdilenePoznamky = nactiCache();
+    void doplnPlnouCachePokudJeAktualni(aktualniUserId);
 
     if (typeof window.renderTasks === "function") {
       window.renderTasks();
@@ -846,6 +991,7 @@
   obalAndroidBack();
 
   sdilenePoznamky = nactiCache();
+  void doplnPlnouCachePokudJeAktualni(ziskejUserId());
   vykresliSdileneKarty();
   spustPolling();
 
@@ -875,6 +1021,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       sdilenePoznamky = nactiCache();
+      void doplnPlnouCachePokudJeAktualni(ziskejUserId());
 
       if (typeof window.renderTasks === "function") {
         window.renderTasks();
