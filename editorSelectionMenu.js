@@ -60,6 +60,7 @@
   let aktivniTextarea = null;
   let ulozenyVyberTextarea = null;
   let lokalniSchranka = "";
+  let lokalniRichSchranka = null;
 
   /*
    * Android WebView neumí spolehlivě označit slovo nativním dvojtapem
@@ -1140,6 +1141,118 @@ todoList?.classList.remove(
   }
 
 
+
+
+  function vytvorRichKopiiZRozsahu(rozsah, text) {
+    if (!rozsah || rozsah.collapsed || !text) {
+      return null;
+    }
+
+    try {
+      const fragment = rozsah.cloneContents();
+      const obal = document.createElement("div");
+      obal.appendChild(fragment);
+
+      /*
+       * Obrázky/attachmenty mají vlastní lifecycle a nesmí se
+       * duplikovat prostým HTML copy/paste. Pro ně zatím použijeme
+       * bezpečný plain-text fallback.
+       */
+      if (
+        obal.querySelector(
+          ".lubaNoteImage, figure, img, [data-attachment-id]"
+        )
+      ) {
+        return null;
+      }
+
+      const html = obal.innerHTML;
+
+      if (!html) {
+        return null;
+      }
+
+      return {
+        text,
+        html
+      };
+    } catch (_chyba) {
+      return null;
+    }
+  }
+
+
+  function vlozRichHtmlDoEditoru(html, textProInput = "") {
+    if (!html || !obnovUlozenyRozsah()) {
+      return false;
+    }
+
+    const cilovyEditor =
+      aktivniRichEditor ??
+      ziskejRichEditorProRozsah(ulozenyRozsah) ??
+      editorTextu;
+
+    try {
+      cilovyEditor.focus({
+        preventScroll: true
+      });
+    } catch {
+      cilovyEditor.focus();
+    }
+
+    try {
+      const vyber = window.getSelection();
+
+      if (!vyber || vyber.rangeCount === 0) {
+        return false;
+      }
+
+      const rozsah = vyber.getRangeAt(0);
+
+      if (!jeRozsahVEditoru(rozsah)) {
+        return false;
+      }
+
+      rozsah.deleteContents();
+
+      const fragment =
+        rozsah.createContextualFragment(html);
+
+      const posledniUzel =
+        fragment.lastChild;
+
+      if (!posledniUzel) {
+        return false;
+      }
+
+      rozsah.insertNode(fragment);
+
+      const novyRozsah = document.createRange();
+      novyRozsah.setStartAfter(posledniUzel);
+      novyRozsah.collapse(true);
+
+      vyber.removeAllRanges();
+      vyber.addRange(novyRozsah);
+
+      ulozenyRozsah =
+        novyRozsah.cloneRange();
+
+      oznamZmenuEditoru(
+        "insertText",
+        textProInput || null
+      );
+
+      return true;
+    } catch (chyba) {
+      console.warn(
+        "LubaNote: rich vložení selhalo, použije se plain text.",
+        chyba
+      );
+      return false;
+    }
+  }
+
+
   /* ==========================================
      ZMĚNY EDITORU
   ========================================== */
@@ -1509,17 +1622,27 @@ todoList?.classList.remove(
       jeVybraneCeleTodo
         ? ziskejTextCelehoTodo()
         : aktivniTextarea
-          ? ziskejTextTextareaVyberu().trim()
+          ? ziskejTextTextareaVyberu()
           : ulozenyRozsah
-            ?.toString()
-            ?.trim();
+            ?.toString();
 
     if (!text) {
       return;
     }
 
+    const richKopie =
+      !jeVybraneCeleTodo &&
+      !aktivniTextarea &&
+      ulozenyRozsah
+        ? vytvorRichKopiiZRozsahu(
+            ulozenyRozsah,
+            text
+          )
+        : null;
+
     try {
       await zapisDoSchranky(text);
+      lokalniRichSchranka = richKopie;
 
       if (jeVybraneCeleTodo) {
         todoList.classList.remove(
@@ -1547,17 +1670,25 @@ todoList?.classList.remove(
     async () => {
       const text =
         aktivniTextarea
-          ? ziskejTextTextareaVyberu().trim()
+          ? ziskejTextTextareaVyberu()
           : ulozenyRozsah
-            ?.toString()
-            ?.trim();
+            ?.toString();
 
       if (!text) {
         return;
       }
 
+      const richKopie =
+        !aktivniTextarea && ulozenyRozsah
+          ? vytvorRichKopiiZRozsahu(
+              ulozenyRozsah,
+              text
+            )
+          : null;
+
       try {
         await zapisDoSchranky(text);
+        lokalniRichSchranka = richKopie;
 
         const smazano = aktivniTextarea
           ? nahradTextareaVyber("")
@@ -1592,9 +1723,27 @@ todoList?.classList.remove(
           return;
         }
 
-        const vlozeno = aktivniTextarea
-          ? nahradTextareaVyber(text)
-          : vlozTextDoEditoru(text);
+        const pouzijRichVlozeni =
+          !aktivniTextarea &&
+          lokalniRichSchranka?.html &&
+          lokalniRichSchranka.text === text;
+
+        let vlozeno = false;
+
+        if (aktivniTextarea) {
+          vlozeno = nahradTextareaVyber(text);
+        } else if (pouzijRichVlozeni) {
+          vlozeno = vlozRichHtmlDoEditoru(
+            lokalniRichSchranka.html,
+            text
+          );
+
+          if (!vlozeno) {
+            vlozeno = vlozTextDoEditoru(text);
+          }
+        } else {
+          vlozeno = vlozTextDoEditoru(text);
+        }
 
         if (vlozeno) {
           skryjMenu();
