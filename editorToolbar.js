@@ -2028,30 +2028,47 @@
     }
 
     const rozsah = vyber.getRangeAt(0);
+    const cilovyEditor =
+      ziskejEditorFormatovaniProRozsah(rozsah) ||
+      editorTextu;
 
     let uzel = rozsah.startContainer;
 
     /*
-     * Když Range začíná přímo na elementu, vezmeme skutečný uzel na
-     * startOffset. Android selection může mít anchorNode na rodiči,
-     * přestože označené slovo leží uvnitř hlubšího span/font prvku.
+     * Android WebView může u nativního výběru vrátit startContainer
+     * jako společného rodiče místo textového uzlu. Najdeme proto první
+     * skutečný textový uzel, který se s Range protíná.
      */
-    if (
-      uzel?.nodeType === Node.ELEMENT_NODE &&
-      uzel.childNodes?.length
-    ) {
-      const index = Math.min(
-        rozsah.startOffset,
-        uzel.childNodes.length - 1
-      );
+    if (uzel?.nodeType === Node.ELEMENT_NODE) {
+      const koren = rozsah.commonAncestorContainer;
+      const prochazenyKoren =
+        koren?.nodeType === Node.ELEMENT_NODE
+          ? koren
+          : koren?.parentElement;
 
-      uzel = uzel.childNodes[index] || uzel;
+      if (prochazenyKoren) {
+        const walker = document.createTreeWalker(
+          prochazenyKoren,
+          NodeFilter.SHOW_TEXT
+        );
 
-      while (
-        uzel?.nodeType === Node.ELEMENT_NODE &&
-        uzel.firstChild
-      ) {
-        uzel = uzel.firstChild;
+        let kandidat = walker.nextNode();
+
+        while (kandidat) {
+          try {
+            if (
+              kandidat.textContent &&
+              rozsah.intersectsNode(kandidat)
+            ) {
+              uzel = kandidat;
+              break;
+            }
+          } catch (_) {
+            // intersectsNode nemusí být dostupné ve všech WebView stavech.
+          }
+
+          kandidat = walker.nextNode();
+        }
       }
     }
 
@@ -2065,22 +2082,78 @@
     }
 
     /*
-     * Nejdřív čteme SKUTEČNOU computed velikost vykresleného textu.
-     * data-velikost-pisma může po starších editacích zůstat na rodiči
-     * jako 18, i když vnořený prvek reálně vykresluje jinou velikost.
-     * Právě proto toolbar dříve ukazoval 18 pro dvě různě velká slova.
+     * DŮLEŽITÉ: Toolbar ukazuje LOGICKOU velikost z nabídky LubaNote,
+     * ne fyzickou velikost vykreslenou Android WebView.
+     *
+     * Android při systémovém zvětšení textu může getComputedStyle()
+     * vracet např. 18 px pro logických 14 px nebo 30 px pro 24 px.
+     * Přesně proto poslední patch ukazoval hodnoty, které ani nejsou
+     * v nabídce. Naše záměrně nastavené velikosti mají vždy
+     * data-velikost-pisma, takže nejdřív hledáme NEJBLIŽŠÍ takový prvek.
      */
-    const skutecnaVelikost =
-      parseFloat(getComputedStyle(prvek).fontSize);
+    let aktualni = prvek;
 
-    if (Number.isFinite(skutecnaVelikost)) {
-      return String(Math.round(skutecnaVelikost));
+    while (
+      aktualni instanceof Element &&
+      aktualni !== cilovyEditor?.parentElement
+    ) {
+      const logickaVelikost =
+        aktualni.dataset?.velikostPisma;
+
+      if (
+        logickaVelikost &&
+        Number.isFinite(Number(logickaVelikost))
+      ) {
+        return String(logickaVelikost);
+      }
+
+      if (aktualni === cilovyEditor) {
+        break;
+      }
+
+      aktualni = aktualni.parentElement;
     }
 
-    const prvekSVelikosti =
-      prvek.closest("[data-velikost-pisma]");
+    /*
+     * Starší HTML může mít jen inline font-size bez datasetu. Pokud je
+     * přesně jednou z našich hodnot, bereme ji jako logickou hodnotu.
+     */
+    const povoleneVelikosti = new Set(
+      tlacitkaVelikosti.map(
+        tlacitko => String(tlacitko.dataset.velikost)
+      )
+    );
 
-    return prvekSVelikosti?.dataset.velikostPisma || null;
+    aktualni = prvek;
+
+    while (
+      aktualni instanceof HTMLElement &&
+      aktualni !== cilovyEditor?.parentElement
+    ) {
+      const inlineVelikost =
+        parseFloat(aktualni.style.fontSize);
+
+      if (Number.isFinite(inlineVelikost)) {
+        const kandidát = String(Math.round(inlineVelikost));
+
+        if (povoleneVelikosti.has(kandidát)) {
+          return kandidát;
+        }
+      }
+
+      if (aktualni === cilovyEditor) {
+        break;
+      }
+
+      aktualni = aktualni.parentElement;
+    }
+
+    /*
+     * Neformátovaný text používá výchozí velikost toolbaru. Záměrně
+     * zde už NEPOUŽÍVÁME getComputedStyle(), protože na Androidu vrací
+     * fyzicky přepočtenou hodnotu podle systémového font scale.
+     */
+    return "18";
   }
 
 
