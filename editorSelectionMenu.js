@@ -1143,13 +1143,132 @@ todoList?.classList.remove(
 
 
 
+  const POVOLENE_INLINE_OBALY_KOPIE = new Set([
+    "SPAN",
+    "FONT",
+    "B",
+    "STRONG",
+    "I",
+    "EM",
+    "U",
+    "S",
+    "STRIKE",
+    "A",
+    "MARK",
+    "SMALL",
+    "BIG",
+    "SUB",
+    "SUP",
+    "CODE"
+  ]);
+
+
+  function ziskejSpolecneInlineObalyRozsahu(rozsah) {
+    const cilovyEditor =
+      ziskejRichEditorProRozsah(rozsah);
+
+    if (!cilovyEditor) {
+      return [];
+    }
+
+    let aktualni =
+      rozsah.startContainer?.nodeType === Node.ELEMENT_NODE
+        ? rozsah.startContainer
+        : rozsah.startContainer?.parentElement;
+
+    const obaly = [];
+
+    while (
+      aktualni instanceof Element &&
+      aktualni !== cilovyEditor
+    ) {
+      /*
+       * Range.cloneContents() při označení části jediného textového
+       * uzlu NEZKOPÍRUJE jeho rodičovský <font>/<span>. Právě tím se
+       * při interním Copy/Paste ztrácela velikost 14/20 a vložený text
+       * pak dědil velikost z místa vložení.
+       *
+       * Doplníme proto pouze INLINE předky, které skutečně obsahují
+       * celý výběr. Blokové DIV/P záměrně nekopírujeme, aby vložení
+       * jednoho slova nevytvářelo nové řádky.
+       */
+      if (
+        POVOLENE_INLINE_OBALY_KOPIE.has(
+          aktualni.tagName
+        ) &&
+        aktualni.contains(rozsah.endContainer)
+      ) {
+        obaly.push(aktualni);
+      }
+
+      aktualni = aktualni.parentElement;
+    }
+
+    return obaly;
+  }
+
+
+  function zabalFragmentDoSpolecnychInlineObalu(
+    fragment,
+    rozsah
+  ) {
+    const obaly =
+      ziskejSpolecneInlineObalyRozsahu(
+        rozsah
+      );
+
+    let aktualniFragment = fragment;
+
+    obaly.forEach((zdrojovyObal) => {
+      const klon =
+        zdrojovyObal.cloneNode(false);
+
+      /* Přechodné atributy do schránky nepatří. */
+      klon.removeAttribute("id");
+      klon.removeAttribute("contenteditable");
+      klon.removeAttribute("draggable");
+
+      Array.from(klon.attributes)
+        .filter((atribut) =>
+          atribut.name
+            .toLowerCase()
+            .startsWith("on")
+        )
+        .forEach((atribut) =>
+          klon.removeAttribute(
+            atribut.name
+          )
+        );
+
+      klon.appendChild(
+        aktualniFragment
+      );
+
+      const novyFragment =
+        document.createDocumentFragment();
+
+      novyFragment.appendChild(klon);
+      aktualniFragment = novyFragment;
+    });
+
+    return aktualniFragment;
+  }
+
+
   function vytvorRichKopiiZRozsahu(rozsah, text) {
     if (!rozsah || rozsah.collapsed || !text) {
       return null;
     }
 
     try {
-      const fragment = rozsah.cloneContents();
+      let fragment = rozsah.cloneContents();
+
+      fragment =
+        zabalFragmentDoSpolecnychInlineObalu(
+          fragment,
+          rozsah
+        );
+
       const obal = document.createElement("div");
       obal.appendChild(fragment);
 
