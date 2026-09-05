@@ -2027,33 +2027,60 @@
       return null;
     }
 
-    let prvek = vyber.anchorNode;
+    const rozsah = vyber.getRangeAt(0);
 
-    if (prvek?.nodeType === Node.TEXT_NODE) {
-      prvek = prvek.parentElement;
+    let uzel = rozsah.startContainer;
+
+    /*
+     * Když Range začíná přímo na elementu, vezmeme skutečný uzel na
+     * startOffset. Android selection může mít anchorNode na rodiči,
+     * přestože označené slovo leží uvnitř hlubšího span/font prvku.
+     */
+    if (
+      uzel?.nodeType === Node.ELEMENT_NODE &&
+      uzel.childNodes?.length
+    ) {
+      const index = Math.min(
+        rozsah.startOffset,
+        uzel.childNodes.length - 1
+      );
+
+      uzel = uzel.childNodes[index] || uzel;
+
+      while (
+        uzel?.nodeType === Node.ELEMENT_NODE &&
+        uzel.firstChild
+      ) {
+        uzel = uzel.firstChild;
+      }
     }
+
+    let prvek =
+      uzel?.nodeType === Node.TEXT_NODE
+        ? uzel.parentElement
+        : uzel;
 
     if (!(prvek instanceof Element)) {
       return null;
     }
 
+    /*
+     * Nejdřív čteme SKUTEČNOU computed velikost vykresleného textu.
+     * data-velikost-pisma může po starších editacích zůstat na rodiči
+     * jako 18, i když vnořený prvek reálně vykresluje jinou velikost.
+     * Právě proto toolbar dříve ukazoval 18 pro dvě různě velká slova.
+     */
+    const skutecnaVelikost =
+      parseFloat(getComputedStyle(prvek).fontSize);
+
+    if (Number.isFinite(skutecnaVelikost)) {
+      return String(Math.round(skutecnaVelikost));
+    }
+
     const prvekSVelikosti =
       prvek.closest("[data-velikost-pisma]");
 
-    if (prvekSVelikosti) {
-      return prvekSVelikosti.dataset.velikostPisma;
-    }
-
-    const velikost =
-      parseFloat(
-        getComputedStyle(prvek).fontSize
-      );
-
-    if (!Number.isFinite(velikost)) {
-      return null;
-    }
-
-    return String(Math.round(velikost));
+    return prvekSVelikosti?.dataset.velikostPisma || null;
   }
 
 

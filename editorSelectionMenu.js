@@ -154,9 +154,25 @@
     const editorEnd =
       ziskejRichEditorProUzel(rozsah.endContainer);
 
-    return editorStart && editorStart === editorEnd
-      ? editorStart
-      : null;
+    const editor =
+      editorStart && editorStart === editorEnd
+        ? editorStart
+        : null;
+
+    /*
+     * Stabilizace V1: v nativním Android WebView používá hlavní
+     * Standard/Bullet editor nativní výběr textu, nativní úchyty i
+     * systémové Vyjmout/Kopírovat/Vložit/Vše. Je to jediná cesta,
+     * která se v APK chová konzistentně a zachovává typografii při
+     * paste. Vlastní LubaNote selection menu zůstává pro TODO a web.
+     *
+     * Tím zároveň nevzniká druhý pár úchytů nad systémovými.
+     */
+    if (jeNativniAndroid && editor === editorTextu) {
+      return null;
+    }
+
+    return editor;
   }
 
 
@@ -805,16 +821,6 @@ todoList?.classList.remove(
   function zobrazUchytyVyberu(
     rozsah
   ) {
-    /*
-     * Android WebView už má nativní úchyty. Druhý vlastní pár by
-     * překrýval systémové body a mohl měnit Range jinak než uživatel
-     * očekává. V APK proto ponecháme jen systémové úchyty.
-     */
-    if (jeNativniAndroid) {
-      skryjUchytyVyberu();
-      return;
-    }
-
     if (
       !rozsah ||
       rozsah.collapsed ||

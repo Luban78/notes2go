@@ -3707,7 +3707,6 @@
 
     /*
      * Obrázky vložené přímo ze schránky zůstávají podporované.
-     * Text / HTML ale vždy pokračuje jako čistý text níže.
      */
     if (soubor?.type.startsWith("image/")) {
       event.preventDefault();
@@ -3716,6 +3715,21 @@
         soubor,
         modalRichText
       );
+      return;
+    }
+
+    /*
+     * V nativním Android APK necháme TEXTOVÝ paste plně na WebView.
+     * Nativní paste jako jediný spolehlivě zachovává skutečný styl
+     * caret-u. Naše event.preventDefault()+execCommand(insertText)
+     * v některých stavech dědilo jinou font-size a text byl menší/
+     * větší. Web/PWA dál používá LubaNote čistý text paste.
+     */
+    const jeNativniAndroid =
+      window.Capacitor?.getPlatform?.() === "android" ||
+      window.Capacitor?.isNativePlatform?.() === true;
+
+    if (jeNativniAndroid) {
       return;
     }
 
