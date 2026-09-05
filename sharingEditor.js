@@ -322,6 +322,16 @@
       const lock = await ziskejLock(note);
 
       if (lock?.acquired !== true) {
+        /*
+         * S2E.1: Pokud poznámku drží jiný editor, nesmíme uživatele
+         * po zavření informačního dialogu nechat zpět na seznamu karet.
+         * Nejdřív otevřeme autoritativní read-only viewer a teprve nad něj
+         * zobrazíme hlášku. Po potvrzení OK tak uživatel rovnou pokračuje
+         * ve čtení sdílené poznámky.
+         */
+        window.LubaNoteSharingNotes
+          ?.otevriReadOnly?.(note.id);
+
         zobrazZpravu(
           t("sharing.readOnlyTitle", "Sdílená poznámka"),
           t(
