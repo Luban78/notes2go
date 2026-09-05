@@ -5,7 +5,7 @@
      Chování:
      - 1× tap = pouze kurzor / editace
      - 2× tap na slovo = vlastní spolehlivé označení slova -> naše menu
-     - Android Standard používá pouze JEDEN pár systémových úchytů
+     - Standard = systémové Android úchyty; Bullet/TODO rich = naše stabilní úchyty
      - fallback prvního řádku opravuje jen výběr slova, ne mezery
      - long-press dál používá nativní Android výběr + naše menu
      - long-press už NEPATŘÍ výběru textu; používají ho řádkové prvky
@@ -174,6 +174,56 @@
      * akční lištu nezobrazuje spolehlivě.
      */
     return editor;
+  }
+
+
+  function jeRozsahVBulletu(rozsah) {
+    if (!rozsah) {
+      return false;
+    }
+
+    const startPrvek =
+      ziskejPrvekZUzlu(rozsah.startContainer);
+
+    const endPrvek =
+      ziskejPrvekZUzlu(rozsah.endContainer);
+
+    const startLi =
+      startPrvek?.closest?.("li") ?? null;
+
+    const endLi =
+      endPrvek?.closest?.("li") ?? null;
+
+    return Boolean(
+      startLi &&
+      startLi === endLi &&
+      editorTextu.contains(startLi)
+    );
+  }
+
+
+  function jeVlastniVyberViditelny() {
+    return Boolean(
+      levyUchytVyberu &&
+      pravyUchytVyberu &&
+      !levyUchytVyberu.hidden &&
+      !pravyUchytVyberu.hidden
+    );
+  }
+
+
+  function zrusVlastniVyberPredNovymTapem() {
+    if (!jeVlastniVyberViditelny()) {
+      return false;
+    }
+
+    window.getSelection()?.removeAllRanges();
+
+    ulozenyRozsah = null;
+    aktivniRichEditor = null;
+
+    skryjMenu();
+    return true;
   }
 
 
@@ -832,16 +882,22 @@ todoList?.classList.remove(
     }
 
     /*
-     * Android APK už kreslí vlastní systémové úchyty.
-     * V hlavním Standard/Bullet editoru tedy naše druhé úchyty
-     * nikdy nevykreslujeme. Menu ale zůstává aktivní.
+     * Android Standard používá nativní výběr, takže tam necháme
+     * systémové Android úchyty. Bullet a TODO rich-text ale vybírají
+     * slovo programově; WebView u takového Range systémové úchyty
+     * zobrazuje náhodně. Proto mají Bullet + TODO vždy naše úchyty.
      */
     const editorRozsahu =
       ziskejRichEditorProRozsah(rozsah);
 
+    const rozsahVBulletu =
+      editorRozsahu === editorTextu &&
+      jeRozsahVBulletu(rozsah);
+
     if (
       jeNativniAndroid &&
-      editorRozsahu === editorTextu
+      editorRozsahu === editorTextu &&
+      !rozsahVBulletu
     ) {
       skryjUchytyVyberu();
       return;
@@ -2763,12 +2819,43 @@ todoList?.classList.remove(
         return;
       }
 
+      /*
+       * Bullet/TODO programový výběr nesmí Android při dalším tapu
+       * "adoptovat" a doplnit k našim úchytům svůj druhý pár.
+       * Před novým tapem starý vlastní výběr ukončíme; samotný tap pak
+       * normálně vytvoří kurzor nebo začne novou dvojici.
+       */
+      zrusVlastniVyberPredNovymTapem();
+
       if (menuProKurzorAktivni) {
         skryjMenu();
       }
 
       const dotyk =
         event.touches[0];
+
+      /*
+       * U Bulletu druhý tap zpracovává LubaNote programově. Zakážeme
+       * jen jeho nativní default, aby WebView současně nespustil svůj
+       * vlastní selection systém a nevytvořil náhodný druhý pár úchytů.
+       */
+      const jeBullet =
+        Boolean(event.target.closest?.("li"));
+
+      const jeDruhyTapBullet = Boolean(
+        jeBullet &&
+        posledniTapEditoru &&
+        performance.now() - posledniTapEditoru.cas <=
+          MAX_CAS_DVOJTAPU &&
+        Math.hypot(
+          dotyk.clientX - posledniTapEditoru.x,
+          dotyk.clientY - posledniTapEditoru.y
+        ) <= MAX_VZDALENOST_DVOJTAPU
+      );
+
+      if (jeDruhyTapBullet) {
+        event.preventDefault();
+      }
 
       zacatekTapuEditoru = {
         id: dotyk.identifier,
@@ -2777,7 +2864,7 @@ todoList?.classList.remove(
         cas: performance.now()
       };
     },
-    { passive: true }
+    { passive: false }
   );
 
 
@@ -3186,7 +3273,32 @@ todoList?.classList.remove(
         return;
       }
 
+      zrusVlastniVyberPredNovymTapem();
+
       const dotyk = event.touches[0];
+
+      const jeTodoRich =
+        Boolean(
+          event.target.closest?.(
+            ".todoRichTextInput.todoEditing"
+          )
+        );
+
+      const jeDruhyTapTodoRich = Boolean(
+        jeTodoRich &&
+        posledniTapTodo &&
+        posledniTapTodo.todoId === cil.todoId &&
+        performance.now() - posledniTapTodo.cas <=
+          MAX_CAS_DVOJTAPU &&
+        Math.hypot(
+          dotyk.clientX - posledniTapTodo.x,
+          dotyk.clientY - posledniTapTodo.y
+        ) <= MAX_VZDALENOST_DVOJTAPU
+      );
+
+      if (jeDruhyTapTodoRich) {
+        event.preventDefault();
+      }
 
       zacatekTapuTodo = {
         id: dotyk.identifier,
@@ -3196,7 +3308,7 @@ todoList?.classList.remove(
         cas: performance.now()
       };
     },
-    { passive: true }
+    { passive: false }
   );
 
 
