@@ -732,11 +732,6 @@ body.sharingReadOnlyOpen {
   display: inline-flex !important;
 }
 
-#taskModal.sharingEditorMode .lubaNoteImageSettings,
-#taskModal.sharingEditorMode .lubaNoteImageRemove {
-  display: inline-flex !important;
-}
-
 #taskModal.sharingEditorMode .lubaNoteImage {
   pointer-events: auto;
 }
@@ -1209,37 +1204,15 @@ body.sharingReadOnlyOpen {
 }
 
 /* ============================================================
-   S2E.3 – OVLÁDÁNÍ OBRÁZKU V SHARED EDITORU
+   S2E.4 – OVLÁDÁNÍ OBRÁZKU = STEJNÉ JAKO V BĚŽNÉM EDITORU
    ------------------------------------------------------------
-   S2E povolilo nastavení a odstranění obrázku, ale tlačítka byla
-   součástí běžného toku figure a u menších obrázků skončila pod ním.
-   V shared editoru je držíme jako překryv přímo vpravo nahoře.
+   Shared editor už nepřepisuje rozměry, barvu ani pozici ⚙ / ✕.
+   Autoritou je standardní style.css pro #modalRichText a
+   .todoRichTextInput. Důležité je pouze zabránit tomu, aby se
+   ovladače ukázaly v čtecí kopii TODO (.todoTextValue).
 ============================================================ */
 
-#taskModal.sharingEditorMode .lubaNoteImage {
-  position: relative !important;
-}
-
-#taskModal.sharingEditorMode .lubaNoteImageSettings,
-#taskModal.sharingEditorMode .lubaNoteImageRemove {
-  position: absolute !important;
-  top: 6px !important;
-  z-index: 12 !important;
-  width: 38px !important;
-  min-width: 38px !important;
-  height: 38px !important;
-  min-height: 38px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  align-items: center !important;
-  justify-content: center !important;
-  box-sizing: border-box !important;
-}
-
-#taskModal.sharingEditorMode .lubaNoteImageSettings {
-  right: 50px !important;
-}
-
-#taskModal.sharingEditorMode .lubaNoteImageRemove {
-  right: 6px !important;
+#taskModal.sharingEditorMode .todoTextValue .lubaNoteImageSettings,
+#taskModal.sharingEditorMode .todoTextValue .lubaNoteImageRemove {
+  display: none !important;
 }

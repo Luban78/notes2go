@@ -415,6 +415,170 @@ function loadTodos(todos, plannedItems = []) {
   renderTodos();
 }
 
+/* ============================================================
+   PŘEVOD BĚŽNÉHO RICH-TEXT OBSAHU NA TODO
+   ------------------------------------------------------------
+   Původní převod používal pouze innerText. Tím se při kliknutí na
+   TODO zahodilo všechno, co nemá textovou reprezentaci – hlavně
+   obrázky. Současně mizelo i inline formátování.
+
+   Nově převádíme obsah po logických řádcích / blocích a pro každý
+   TODO zachováme jeho HTML. Obrázek na samostatném řádku proto
+   dostane vlastní checkbox; obrázek uvnitř textového bloku zůstane
+   uvnitř stejného TODO. data-attachment-id se zachová v HTML, takže
+   private i shared attachment pipeline dál vidí stejnou přílohu.
+============================================================ */
+
+const TODO_BLOKOVE_TAGY = new Set([
+  "DIV",
+  "P",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "BLOCKQUOTE",
+  "PRE",
+  "UL",
+  "OL",
+  "TABLE",
+  "FIGURE"
+]);
+
+const TODO_BLOKY_BEZ_VNEJSIHO_OBALU = new Set([
+  "DIV",
+  "P",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6"
+]);
+
+function normalizujPlainTextTodo(text = "") {
+  return String(text)
+    .replace(/[\u200B\uFEFF\u00A0]/gu, " ")
+    .trim();
+}
+
+function maRichTodoObsah(element) {
+  if (!element) {
+    return false;
+  }
+
+  if (normalizujPlainTextTodo(element.textContent)) {
+    return true;
+  }
+
+  return Boolean(
+    element.querySelector(
+      ".lubaNoteImage, img, a[href], ul, ol, table"
+    )
+  );
+}
+
+function vytvorTodoZRichehoElementu(element) {
+  if (!maRichTodoObsah(element)) {
+    return null;
+  }
+
+  return normalizeTodo({
+    text: normalizujPlainTextTodo(
+      element.textContent
+    ),
+    html: element.innerHTML,
+    completed: false
+  });
+}
+
+function vytvorTodosZRichehoEditoru(editor) {
+  if (!editor) {
+    return [];
+  }
+
+  const vysledek = [];
+  let radek = document.createElement("div");
+
+  const ulozRadek = () => {
+    const todo = vytvorTodoZRichehoElementu(radek);
+
+    if (todo) {
+      vysledek.push(todo);
+    }
+
+    radek = document.createElement("div");
+  };
+
+  const pridejBlok = (uzel) => {
+    const obal = document.createElement("div");
+    const kopie = uzel.cloneNode(true);
+
+    if (
+      kopie instanceof HTMLElement &&
+      TODO_BLOKY_BEZ_VNEJSIHO_OBALU.has(
+        kopie.tagName
+      )
+    ) {
+      obal.innerHTML = kopie.innerHTML;
+    } else {
+      obal.append(kopie);
+    }
+
+    const todo = vytvorTodoZRichehoElementu(obal);
+
+    if (todo) {
+      vysledek.push(todo);
+    }
+  };
+
+  for (const uzel of Array.from(editor.childNodes)) {
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      const casti = String(uzel.textContent || "")
+        .split("\n");
+
+      casti.forEach((cast, index) => {
+        if (cast !== "") {
+          radek.append(
+            document.createTextNode(cast)
+          );
+        }
+
+        if (index < casti.length - 1) {
+          ulozRadek();
+        }
+      });
+
+      continue;
+    }
+
+    if (!(uzel instanceof HTMLElement)) {
+      continue;
+    }
+
+    if (uzel.tagName === "BR") {
+      ulozRadek();
+      continue;
+    }
+
+    if (
+      uzel.classList.contains("lubaNoteImage") ||
+      TODO_BLOKOVE_TAGY.has(uzel.tagName)
+    ) {
+      ulozRadek();
+      pridejBlok(uzel);
+      continue;
+    }
+
+    radek.append(uzel.cloneNode(true));
+  }
+
+  ulozRadek();
+
+  return vysledek;
+}
+
 addTodoButton.addEventListener("click", () => {
   if (activeTodos.length > 0) {
     activeTodos.push(normalizeTodo({
@@ -427,24 +591,32 @@ addTodoButton.addEventListener("click", () => {
     return;
   }
 
-  const sourceText = todoRichText
-    ? todoRichText.innerText
-    : todoModalText.value;
+  const richTodos = todoRichText
+    ? vytvorTodosZRichehoEditoru(todoRichText)
+    : [];
 
-  const todoLines = sourceText
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+  if (richTodos.length > 0) {
+    activeTodos = richTodos;
+  } else {
+    const sourceText = todoRichText
+      ? todoRichText.innerText
+      : todoModalText.value;
 
-  activeTodos = todoLines.length > 0
-    ? todoLines.map(line => normalizeTodo({
-        text: line,
-        completed: false
-      }))
-    : [normalizeTodo({
-        text: "",
-        completed: false
-      })];
+    const todoLines = sourceText
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line !== "");
+
+    activeTodos = todoLines.length > 0
+      ? todoLines.map(line => normalizeTodo({
+          text: line,
+          completed: false
+        }))
+      : [normalizeTodo({
+          text: "",
+          completed: false
+        })];
+  }
 
   todoModalText.value = "";
 
