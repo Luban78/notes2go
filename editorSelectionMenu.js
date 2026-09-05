@@ -5,7 +5,8 @@
      Chování:
      - 1× tap = pouze kurzor / editace
      - 2× tap na slovo = vlastní spolehlivé označení slova -> naše menu
-     - rozsah lze dál upravit systémovými úchyty
+     - Android dvojtap používá jeden pár LubaNote úchytů (včetně 1. řádku)
+     - long-press může dál použít nativní Android úchyty
      - long-press už NEPATŘÍ výběru textu; používají ho řádkové prvky
        (bullet / TODO) pro aktivaci režimu přesunu
      - APK používá Capacitor Clipboard
@@ -94,6 +95,14 @@
   let levyUchytVyberu = null;
   let pravyUchytVyberu = null;
   let tazenyUchytVyberu = null;
+
+  /*
+   * Dvojtap v Android WebView není spolehlivý hlavně na prvním
+   * řádku contenteditable. Když slovo vybere přímo LubaNote,
+   * zobrazíme JEDEN pár našich úchytů a nativní dvojtap zastavíme.
+   * Long-press dál používá nativní Android úchyty.
+   */
+  let vynucujVlastniUchytyAndroid = false;
 
   /*
    * Android WebView někdy dokončí označení slova až několik ms po
@@ -344,6 +353,7 @@ todoList?.classList.remove(
     menuProTextareaKurzorAktivni = false;
     bodMenuTextareaKurzor = null;
 
+    vynucujVlastniUchytyAndroid = false;
     skryjUchytyVyberu();
   }
 
@@ -836,7 +846,11 @@ todoList?.classList.remove(
     const editorRozsahu =
       ziskejRichEditorProRozsah(rozsah);
 
-    if (jeNativniAndroid && editorRozsahu === editorTextu) {
+    if (
+      jeNativniAndroid &&
+      editorRozsahu === editorTextu &&
+      !vynucujVlastniUchytyAndroid
+    ) {
       skryjUchytyVyberu();
       return;
     }
@@ -2231,6 +2245,33 @@ todoList?.classList.remove(
   }
 
 
+  /*
+   * Fallback pro Android první řádek:
+   * caretRangeFromPoint() tam někdy vrátí kořen editoru místo
+   * textového uzlu. První tap ale už správně umístil kurzor, takže
+   * při druhém tapu smíme použít aktuální collapsed Selection, pokud
+   * opravdu leží v hlavním editoru.
+   */
+  function najdiTextovyBodZAktualnihoKurzoru() {
+    const vyber = window.getSelection();
+
+    if (!vyber || vyber.rangeCount === 0) {
+      return null;
+    }
+
+    const rozsah = vyber.getRangeAt(0);
+
+    if (
+      !rozsah.collapsed ||
+      ziskejRichEditorProRozsah(rozsah) !== editorTextu
+    ) {
+      return null;
+    }
+
+    return najdiTextovyUzelProSlovo(rozsah);
+  }
+
+
   function jeZnakSlova(znak) {
     return /[\p{L}\p{N}_]/u.test(
       znak || ""
@@ -2547,9 +2588,19 @@ todoList?.classList.remove(
       return false;
     }
 
-    const textovyBod =
+    let textovyBod =
       vynucenyTextovyBod ??
       najdiTextovyUzelProSlovo(caretRozsah);
+
+    if (
+      !textovyBod?.uzel ||
+      !jeUzelVEditoru(textovyBod.uzel)
+    ) {
+      textovyBod =
+        cilovyEditor === editorTextu
+          ? najdiTextovyBodZAktualnihoKurzoru()
+          : null;
+    }
 
     if (
       !textovyBod?.uzel ||
@@ -2561,13 +2612,31 @@ todoList?.classList.remove(
     const text =
       textovyBod.uzel.textContent ?? "";
 
-    const indexSlova =
+    let indexSlova =
       najdiIndexSlovaPodBodem(
         textovyBod.uzel,
         textovyBod.offset,
         x,
         y
       );
+
+    /*
+     * Pokud Android na prvním řádku nedá použitelný hit-test,
+     * použijeme offset kurzoru z prvního tapu. Zkoušíme znak na
+     * kurzoru i bezprostředně před ním, protože caret bývá za slovem.
+     */
+    if (indexSlova == null && cilovyEditor === editorTextu) {
+      const kandidati = [
+        textovyBod.offset,
+        textovyBod.offset - 1
+      ];
+
+      indexSlova = kandidati.find(index => (
+        index >= 0 &&
+        index < text.length &&
+        jeZnakSlova(text[index])
+      )) ?? null;
+    }
 
     const hranice =
       najdiHraniceSlova(
@@ -2774,23 +2843,38 @@ todoList?.classList.remove(
         !event.target.closest?.("li");
 
       if (jeAndroidStandard) {
-        if (
-          jeSlovoVBoduBezZmenyVyberu(
+        /*
+         * Android WebView má známou nekonzistenci hlavně na PRVNÍM
+         * řádku contenteditable: nativní dvojtap tam někdy skončí jen
+         * kurzorem a naše logika pak omylem ukáže Vložit / Vše.
+         *
+         * Proto je dvojtap ve Standard editoru odteď jednotný na
+         * VŠECH řádcích: slovo vybírá LubaNote samo. Nativní druhý tap
+         * zastavíme, takže nevznikne druhý pár systémových úchytů.
+         */
+        vynucujVlastniUchytyAndroid = true;
+
+        const vybranoAndroid =
+          vyberSlovoVBodu(
             dotyk.clientX,
-            dotyk.clientY
-          )
-        ) {
-          /*
-           * NIC nepreventujeme. Druhý tap musí doběhnout nativně.
-           * Android označí slovo a vytvoří vlastní úchyty.
-           */
+            dotyk.clientY,
+            editorTextu
+          );
+
+        if (vybranoAndroid) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          ignorujKlikPoDvojtapuDo =
+            performance.now() + 380;
+
           return;
         }
 
+        vynucujVlastniUchytyAndroid = false;
+
         /*
          * Dvojtap mimo slovo = kurzorové menu Vložit / Vše.
-         * Tady naopak nativní druhý tap zastavíme, protože žádný
-         * textový výběr nepotřebujeme.
          */
         const caretRozsahAndroid =
           najdiCaretRozsahVBodu(
