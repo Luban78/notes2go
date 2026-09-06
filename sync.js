@@ -3426,6 +3426,51 @@ function oznamObsahPripravenyProSplash() {
   );
 }
 
+/*
+ * Onboarding umí při úplně novém účtu vytvořit uvítací poznámku.
+ * Na prvním důvěryhodném startu proto dál blokuje splash stejně jako
+ * dosud. U instalace, která už má bezpečný Fast Sync stav, může stejná
+ * kontrola proběhnout až po UI READY – případně nově vytvořenou
+ * uvítací poznámku bezpečně dosynchronizuje na pozadí.
+ */
+async function provedOnboardingPoBezpecnemSyncu({
+  blokovatStart = true
+} = {}) {
+  if (
+    typeof window.LubaNoteOnboarding
+      ?.zajistiUvitaciPoznamku !== "function"
+  ) {
+    return true;
+  }
+
+  try {
+    const onboarding =
+      await window.LubaNoteOnboarding
+        .zajistiUvitaciPoznamku();
+
+    if (onboarding?.created === true) {
+      zrusFastSyncStav();
+      const uvodSynchronizovan = await syncNotes();
+
+      if (uvodSynchronizovan !== true) {
+        return blokovatStart ? false : true;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    /*
+     * Onboarding nesmí zablokovat už existující účet ani základní
+     * synchronizaci. Server si stav pamatuje a pokus lze zopakovat.
+     */
+    console.warn(
+      "Uvítací poznámka se dokončí později:",
+      error
+    );
+    return true;
+  }
+}
+
 async function startSync() {
   /*
    * Splash nesmíme zavřít po neautentizovaném pokusu o sync.
@@ -3439,7 +3484,19 @@ async function startSync() {
     return false;
   }
 
+  /*
+   * Stav čteme PŘED fast checkem. Jeho existence znamená, že tato
+   * konkrétní instalace už alespoň jednou dokončila bezpečný plný sync.
+   * Pouze tehdy smíme onboarding a síťový refresh štítků odsunout za
+   * první použitelné UI.
+   */
+  const predchoziBezpecnyFastStav =
+    nactiFastSyncStav(user.id);
+
   const fastSync = await pripravFastSyncPriStartu(user);
+
+  const lzeOdlozitServisStartu =
+    Boolean(predchoziBezpecnyFastStav);
 
   let poznamkySynchronizovany = false;
 
@@ -3465,39 +3522,23 @@ async function startSync() {
   nastavStavSynchronizaceUI("syncing");
 
   /*
-   * Onboarding se spouští až PO prvním bezpečném syncu. Server tak ví,
-   * zda je účet opravdu nový a čistý. Pokud právě vytvořil uvítací
-   * poznámku, provedeme ještě jeden sync před skrytím splash screenu,
-   * aby uživatel nikdy neviděl nejdřív prázdnou aplikaci.
+   * Úplně první důvěryhodný start zachovává původní blokující
+   * onboarding. U ověřené instalace ho odsuneme za splash.
    */
-  if (
-    typeof window.LubaNoteOnboarding
-      ?.zajistiUvitaciPoznamku === "function"
-  ) {
-    try {
-      const onboarding =
-        await window.LubaNoteOnboarding
-          .zajistiUvitaciPoznamku();
+  if (!lzeOdlozitServisStartu) {
+    const onboardingHotov =
+      await provedOnboardingPoBezpecnemSyncu({
+        blokovatStart: true
+      });
 
-      if (onboarding?.created === true) {
-        zrusFastSyncStav();
-        const uvodSynchronizovan = await syncNotes();
-
-        if (uvodSynchronizovan !== true) {
-          return false;
-        }
-      }
-    } catch (error) {
-      /*
-       * Onboarding nesmí zablokovat už existující účet ani základní
-       * synchronizaci. Server si stav pamatuje a pokus může zopakovat
-       * při dalším bezpečném startu.
-       */
-      console.warn(
-        "Uvítací poznámka se dokončí později:",
-        error
-      );
+    if (onboardingHotov !== true) {
+      return false;
     }
+  } else {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "FAST",
+      "ONBOARDING DEFERRED AFTER UI READY"
+    );
   }
 
   if (
@@ -3509,15 +3550,70 @@ async function startSync() {
       .migrujStareOpakovaniPlanneru();
   }
 
-  await loadTagsFromSupabase();
+  let stitkyNactenyZCache = false;
+
+  if (
+    lzeOdlozitServisStartu &&
+    typeof window.LubaNoteTagsStartCache?.nacti === "function"
+  ) {
+    stitkyNactenyZCache =
+      window.LubaNoteTagsStartCache.nacti(user.id) === true;
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "FAST",
+      stitkyNactenyZCache
+        ? "TAG START CACHE HIT"
+        : "TAG START CACHE MISS"
+    );
+  }
 
   /*
-   * Tohle je skutečný konec VIZUÁLNÍ inicializace poznámek:
-   * syncNotes() už vykreslil finální poznámky a loadTagsFromSupabase()
-   * je znovu překreslil se správnými barvami štítků. Teprve teď
-   * smí zmizet splash. Servisní úlohy níže mohou doběhnout na pozadí.
+   * Při prvním startu po zavedení cache (nebo po její ztrátě) dál
+   * čekáme na server, aby UI nikdy nezačalo bez známých barev štítků.
+   * Jakmile cache existuje, splash už tento GET blokovat nemusí.
+   */
+  if (!stitkyNactenyZCache) {
+    await loadTagsFromSupabase();
+  }
+
+  /*
+   * Vizuální inicializace je hotová: poznámky jsou bezpečně sloučené
+   * a štítky jsou buď čerstvé ze serveru, nebo z poslední bezpečné
+   * lokální cache. Síťový refresh může u ověřené instalace doběhnout
+   * až po zobrazení aplikace.
    */
   oznamObsahPripravenyProSplash();
+
+  if (lzeOdlozitServisStartu) {
+    Promise.resolve()
+      .then(async () => {
+        const diagServis =
+          window.LubaNoteStartupDiag?.zacni?.(
+            "POST-UI START SERVICES"
+          );
+
+        await provedOnboardingPoBezpecnemSyncu({
+          blokovatStart: false
+        });
+
+        if (stitkyNactenyZCache) {
+          await loadTagsFromSupabase();
+        }
+
+        window.LubaNoteStartupDiag?.konec?.(
+          diagServis,
+          stitkyNactenyZCache
+            ? "OK + TAG REFRESH"
+            : "OK"
+        );
+      })
+      .catch((error) => {
+        console.warn(
+          "Odložené startovní služby se dokončí později:",
+          error
+        );
+      });
+  }
 
   await registerCurrentDevice();
   await cleanupSafeDeletedNotes();

@@ -1220,6 +1220,97 @@ function normalizeTagName(tag) {
 }
 
 
+/*
+ * START CACHE ŠTÍTKŮ V1
+ *
+ * Barvy a názvy veřejných štítků se mezi starty téměř nemění, ale
+ * jejich síťové načtení dosud blokovalo splash o ~150 ms. Pro již
+ * ověřenou instalaci proto držíme poslední bezpečný snapshot v
+ * localStorage a server ho po UI READY pouze obnoví.
+ *
+ * DŮLEŽITÉ: dešifrovaný název tajného štítku se do cache NIKDY
+ * neukládá. Tajný název zůstává prázdný, encrypted_name může zůstat
+ * uložený stejně jako v Supabase.
+ */
+const TAG_START_CACHE_KEY = "lubanoteTagsStartCacheV1";
+
+function pripravBezpecneStitkyProStartCache(stitky) {
+  return (Array.isArray(stitky) ? stitky : []).map((tag) => {
+    const kopie = { ...tag };
+
+    if (kopie.is_secret === true) {
+      kopie.name = "";
+    }
+
+    return kopie;
+  });
+}
+
+function ulozStitkyDoStartCache(userId, stitky = syncedTags) {
+  if (!userId) {
+    return false;
+  }
+
+  try {
+    localStorage.setItem(
+      TAG_START_CACHE_KEY,
+      JSON.stringify({
+        userId: String(userId),
+        savedAt: new Date().toISOString(),
+        tags: pripravBezpecneStitkyProStartCache(stitky)
+      })
+    );
+
+    return true;
+  } catch (error) {
+    console.warn("Cache štítků se nepodařilo uložit:", error);
+    return false;
+  }
+}
+
+function nactiStitkyZeStartCache(userId) {
+  if (!userId) {
+    return false;
+  }
+
+  try {
+    const raw = localStorage.getItem(TAG_START_CACHE_KEY);
+
+    if (!raw) {
+      return false;
+    }
+
+    const cache = JSON.parse(raw);
+
+    if (
+      !cache ||
+      String(cache.userId || "") !== String(userId) ||
+      !Array.isArray(cache.tags)
+    ) {
+      return false;
+    }
+
+    syncedTags = pripravBezpecneStitkyProStartCache(cache.tags);
+
+    if (typeof renderTagFilters === "function") {
+      renderTagFilters();
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("Cache štítků se nepodařilo načíst:", error);
+    return false;
+  }
+}
+
+window.LubaNoteTagsStartCache = {
+  nacti: nactiStitkyZeStartCache
+};
+
 
 async function loadTagsFromSupabase() {
   const user = await getCurrentUser();
@@ -1326,6 +1417,12 @@ async function loadTagsFromSupabase() {
   }
   
   syncedTags = nacteneStitky;
+
+  /*
+   * Cache ukládáme až po úspěšném serverovém načtení. Funkce ji před
+   * zápisem znovu sanitizuje, takže plaintext Secret názvu neunikne.
+   */
+  ulozStitkyDoStartCache(user.id, syncedTags);
 
 renderTagFilters();
 
