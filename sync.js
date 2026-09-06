@@ -2502,10 +2502,6 @@ async function syncNotes() {
     return probihajiciSync;
   }
 
-  const diagnostikaPrivateSync =
-    window.LubaNoteStartupDiag?.zacni?.("PRIVATE SYNC");
-  let diagnostikaPrivateSyncStav = "KONEC";
-
   probihajiciSync = (async () => {
     const user = await getCurrentUser();
 
@@ -2549,21 +2545,28 @@ async function syncNotes() {
     let cloudRows = await getCloudNotesForSync();
 
     /*
-     * Jediný serverový dotaz určí, které poznámky tohoto vlastníka
-     * už patří do shared-lock režimu. Tyto ID se nesmí dostat do
-     * běžného private conflict/save rozhodování.
+     * Start optimalizace 2:
+     * Obě následující kontroly jsou pouze read-only a navzájem na sobě
+     * nezávisí. Dříve čekaly jedna na druhou. Výsledek i bezpečnostní
+     * pravidla zůstávají stejné, jen serverové čtení proběhne paralelně.
      */
-    const vlastniSdileneId =
-      await ziskejVlastniSdileneIdProSync();
+    const [
+      vlastniSdileneId,
+      idPoznamekEditovanychJinde
+    ] = await Promise.all([
+      /*
+       * Určí, které poznámky tohoto vlastníka už patří do shared-lock
+       * režimu a nesmí do běžného private conflict/save rozhodování.
+       */
+      ziskejVlastniSdileneIdProSync(),
 
-    /*
-     * Pokud stejnou poznámku právě drží aktivní editor na jiném
-     * zařízení, tento klient ji v tomto syncu pouze ponechá beze změny.
-     * Tím mobil při otevření aplikace nemůže zvýšit serverovou revizi
-     * pod rozepsaným editorem na PC ještě před požadavkem na handoff.
-     */
-    const idPoznamekEditovanychJinde =
-      await ziskejIdPoznamekEditovanychJinde();
+      /*
+       * Poznámku právě editovanou na jiném zařízení tento klient v tomto
+       * syncu pouze ponechá beze změny, aby nezvýšil serverovou revizi
+       * pod rozepsaným editorem před handoffem.
+       */
+      ziskejIdPoznamekEditovanychJinde()
+    ]);
 
     /*
      * LEGACY PLANNER MIGRACE – pouze skutečně lokální poznámky.
@@ -2961,16 +2964,12 @@ async function syncNotes() {
   try {
     const vysledek = await probihajiciSync;
 
-    diagnostikaPrivateSyncStav =
-      vysledek === true ? "OK" : "FALSE";
-
     if (vysledek === true) {
       nastavKoncovyStavSynchronizaceUI();
     }
 
     return vysledek;
   } catch (error) {
-    diagnostikaPrivateSyncStav = "CHYBA";
     if (jeChybaOdeprenehoPristupu(error)) {
       oznamOdeprenyPristupUctu(error);
     }
@@ -2983,12 +2982,6 @@ async function syncNotes() {
 
     throw error;
   } finally {
-    window.LubaNoteStartupDiag?.konec?.(
-      diagnostikaPrivateSync,
-      aktivniKonfliktySyncu.size > 0
-        ? "KONFLIKT"
-        : diagnostikaPrivateSyncStav
-    );
     probihajiciSync = null;
   }
 }
@@ -3374,16 +3367,9 @@ async function spustStartSyncBezpecne() {
 
   probihajiciStartSync =
     (async () => {
-      const diagnostikaStartSync =
-        window.LubaNoteStartupDiag?.zacni?.("START SYNC FLOW");
-      let diagnostikaStartSyncStav = "KONEC";
-
       try {
-        const uspesne = (await startSync()) === true;
-        diagnostikaStartSyncStav = uspesne ? "OK" : "FALSE";
-        return uspesne;
+        return (await startSync()) === true;
       } catch (error) {
-        diagnostikaStartSyncStav = "CHYBA";
         console.warn(
           "Synchronizace byla odložena:",
           error
@@ -3396,11 +3382,6 @@ async function spustStartSyncBezpecne() {
         }
 
         return false;
-      } finally {
-        window.LubaNoteStartupDiag?.konec?.(
-          diagnostikaStartSync,
-          diagnostikaStartSyncStav
-        );
       }
     })();
 

@@ -680,17 +680,37 @@ let tajnyRezimOdemceny = false;
 // Smazaný štítek se proto znovu nevytvoří.
 // ==========================================
 let filtrTajnychPoznamekAktivni = false;
-async function zajistiVychoziStitkyVSupabase(user) {
-  const { data, error } = await supabaseClient
-    .from("tags")
-    .select("name, deleted_at");
-  
-  if (error) {
-    console.error(
-      "Načtení výchozích štítků se nepodařilo:",
-      error.message
-    );
-    return;
+async function zajistiVychoziStitkyVSupabase(
+  user,
+  prednacteneStitky = null
+) {
+  /*
+   * Start optimalizace 2:
+   * loadTagsFromSupabase() už má při běžném startu načtený celý seznam
+   * štítků. Použijeme stejná data i pro kontrolu výchozích štítků,
+   * místo druhého samostatného GET na tabulku tags.
+   *
+   * Samostatný dotaz zůstává jako fallback pro případ, že tuto funkci
+   * někdy zavolá jiná cesta bez přednačtených dat.
+   */
+  let data = Array.isArray(prednacteneStitky)
+    ? prednacteneStitky
+    : null;
+
+  if (!data) {
+    const vysledek = await supabaseClient
+      .from("tags")
+      .select("name, deleted_at");
+
+    if (vysledek.error) {
+      console.error(
+        "Načtení výchozích štítků se nepodařilo:",
+        vysledek.error.message
+      );
+      return false;
+    }
+
+    data = vysledek.data || [];
   }
   
   const existujiciNazvy = (data || []).map(
@@ -705,7 +725,7 @@ async function zajistiVychoziStitkyVSupabase(user) {
   );
   
   if (chybejiciStitky.length === 0) {
-    return;
+    return false;
   }
   
   const noveStitky = chybejiciStitky.map(
@@ -727,7 +747,15 @@ async function zajistiVychoziStitkyVSupabase(user) {
       "Vytvoření výchozích štítků se nepodařilo:",
       insertError.message
     );
+    return false;
   }
+
+  /*
+   * Jen při opravdu prvním založení výchozích štítků je potřeba
+   * jednorázově načíst seznam znovu, aby nově vložené řádky byly
+   * okamžitě v UI. U běžného startu se druhý GET už neprovede.
+   */
+  return true;
 }
 const secretMenuModal =
   document.getElementById("secretMenuModal");
@@ -1199,23 +1227,52 @@ async function loadTagsFromSupabase() {
   if (!user) {
     return;
   }
-  
-  await zajistiVychoziStitkyVSupabase(user);
-  
-  const { data, error } = await supabaseClient
+
+  /*
+   * Start optimalizace 2:
+   * Jeden GET načte aktivní i historicky smazané štítky. Smazané řádky
+   * potřebujeme pouze k pravidlu „smazaný výchozí štítek znovu
+   * nevytvářej“. Dříve se kvůli tomu dělaly dva GETy za sebou.
+   */
+  let { data, error } = await supabaseClient
     .from("tags")
     .select("*")
-    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
   
   if (error) {
     console.error("Tag download error:", error.message);
     return;
   }
-  
+
+  const vytvorenyVychoziStitky =
+    await zajistiVychoziStitkyVSupabase(
+      user,
+      data || []
+    );
+
+  if (vytvorenyVychoziStitky) {
+    const opakovaneNacteni = await supabaseClient
+      .from("tags")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (opakovaneNacteni.error) {
+      console.error(
+        "Tag download po vytvoření výchozích štítků selhal:",
+        opakovaneNacteni.error.message
+      );
+      return;
+    }
+
+    data = opakovaneNacteni.data || [];
+  }
+
+  const aktivniStitky = (data || []).filter(
+    (tag) => !tag.deleted_at
+  );
   const nacteneStitky = [];
   
-  for (const tag of (data || [])) {
+  for (const tag of aktivniStitky) {
     /*
      * Veřejný štítek má normální název.
      */
