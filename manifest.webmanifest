@@ -1,0 +1,17 @@
+{
+  "name": "LubaNote",
+  "short_name": "LubaNote",
+  "description": "Poznámky, plán a připomínky v LubaNote",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icons/lubanote.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
