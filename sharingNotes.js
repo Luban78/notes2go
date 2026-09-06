@@ -25,6 +25,7 @@
   const pinnedRight = document.getElementById("pinnedRight");
 
   let aktualniUserId = localStorage.getItem(LOCAL_OWNER_KEY) || null;
+  let startUiPripraven = false;
   let sdilenePoznamky = [];
   let viewer = null;
   let viewerNoteId = null;
@@ -961,6 +962,7 @@
 
     pollTimer = setInterval(() => {
       if (
+        startUiPripraven &&
         !document.hidden &&
         navigator.onLine &&
         ziskejUserId()
@@ -982,7 +984,11 @@
       vykresliSdileneKarty();
     }
 
-    if (aktualniUserId && navigator.onLine) {
+    if (
+      startUiPripraven &&
+      aktualniUserId &&
+      navigator.onLine
+    ) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
   }
@@ -1011,11 +1017,24 @@
   });
 
   window.addEventListener("lubanote:sharing-changed", () => {
-    obnovZeServeru({ tichy: true, vykreslit: true });
+    if (startUiPripraven) {
+      obnovZeServeru({ tichy: true, vykreslit: true });
+    }
+  });
+
+  window.addEventListener("lubanote:splash-ready", () => {
+    if (startUiPripraven) return;
+    startUiPripraven = true;
+
+    if (navigator.onLine && ziskejUserId()) {
+      obnovZeServeru({ tichy: true, vykreslit: true });
+    }
   });
 
   window.addEventListener("online", () => {
-    obnovZeServeru({ tichy: true, vykreslit: true });
+    if (startUiPripraven) {
+      obnovZeServeru({ tichy: true, vykreslit: true });
+    }
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -1027,7 +1046,7 @@
         window.renderTasks();
       }
 
-      if (navigator.onLine) {
+      if (startUiPripraven && navigator.onLine) {
         obnovZeServeru({ tichy: true, vykreslit: true });
       }
     }
@@ -1058,13 +1077,10 @@
   );
 
   /*
-   * Pokud už je účet při načtení modulu známý, použijeme cache hned
-   * a online stav poté autoritativně obnovíme ze serveru.
+   * Při načtení modulu použijeme cache hned. Autoritativní online
+   * refresh se při startu spustí až po splash-ready, aby nesoutěžil
+   * s bezpečným private syncem o první Supabase spojení.
    */
-  if (aktualniUserId && navigator.onLine) {
-    obnovZeServeru({ tichy: true, vykreslit: true });
-  }
-
 
 
   async function zajistiAktualniSharedStav() {

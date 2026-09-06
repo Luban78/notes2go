@@ -1114,7 +1114,17 @@ async function povolAktivniUcet(
     })
   );
 
+  /*
+   * Při běžném online startu načte štítky startSync() těsně před
+   * skrytím splash screenu. Dříve se stejný cloudový load dělal
+   * ještě tady před auth-valid a pak znovu ve startSync(), takže
+   * jeden start vytvářel dvě celé série REST dotazů na tags.
+   *
+   * Pokud sync záměrně nespouštíme (např. pouze kontrola stavu
+   * účtu), štítky načteme i nadále tady, aby se UI nezměnilo.
+   */
   if (
+    !spustitSync &&
     typeof loadTagsFromSupabase === "function"
   ) {
     await loadTagsFromSupabase();

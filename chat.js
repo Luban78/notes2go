@@ -25,6 +25,7 @@
   const chatBadge = document.getElementById("chatBadge");
 
   let aktualniUserId = localStorage.getItem(LOCAL_OWNER_KEY) || null;
+  let startUiPripraven = false;
   let kontakty = [];
   let contactsModal = null;
   let threadModal = null;
@@ -1004,7 +1005,12 @@
     clearInterval(globalPollTimer);
 
     globalPollTimer = setInterval(() => {
-      if (!document.hidden && navigator.onLine && ziskejUserId()) {
+      if (
+        startUiPripraven &&
+        !document.hidden &&
+        navigator.onLine &&
+        ziskejUserId()
+      ) {
         obnovGlobalniStav({ tichy: true });
       }
     }, POLL_BADGE_MS);
@@ -1085,7 +1091,11 @@
     zavriThread({ otevritKontakty: false });
     zavriKontakty();
 
-    if (aktualniUserId && navigator.onLine) {
+    if (
+      startUiPripraven &&
+      aktualniUserId &&
+      navigator.onLine
+    ) {
       obnovGlobalniStav({ tichy: true });
     }
   });
@@ -1106,9 +1116,20 @@
 
   window.addEventListener("lubanote:language-change", aplikujPreklady);
 
+  window.addEventListener("lubanote:splash-ready", () => {
+    if (startUiPripraven) return;
+    startUiPripraven = true;
+
+    if (navigator.onLine && ziskejUserId()) {
+      obnovGlobalniStav({ tichy: true });
+    }
+  });
+
   window.addEventListener("online", () => {
     nastavComposerStav();
-    if (ziskejUserId()) obnovGlobalniStav({ tichy: true });
+    if (startUiPripraven && ziskejUserId()) {
+      obnovGlobalniStav({ tichy: true });
+    }
     if (otevrenyKontakt?.thread_id) nactiZpravy({ tichy: true, zachovatScroll: true });
   });
 
@@ -1121,6 +1142,7 @@
 
   document.addEventListener("visibilitychange", () => {
     if (
+      startUiPripraven &&
       document.visibilityState === "visible" &&
       navigator.onLine &&
       ziskejUserId()
@@ -1163,10 +1185,6 @@
   obalAndroidBack();
   aplikujPreklady();
   spustGlobalPolling();
-
-  if (aktualniUserId && navigator.onLine) {
-    obnovGlobalniStav({ tichy: true });
-  }
 
   window.LubaNoteChat = {
     openContacts: otevriKontakty,

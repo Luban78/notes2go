@@ -19,6 +19,7 @@
   const invitationsBadge = document.getElementById("sharingInvitationsBadge");
 
   let aktualniUserId = localStorage.getItem(LOCAL_OWNER_KEY) || null;
+  let startUiPripraven = false;
   let shareModal = null;
   let invitationsModal = null;
   let shareNoteId = null;
@@ -1150,7 +1151,12 @@
   function spustPolling() {
     clearInterval(pollTimer);
     pollTimer = setInterval(() => {
-      if (!document.hidden && navigator.onLine && ziskejAktualniUserId()) {
+      if (
+        startUiPripraven &&
+        !document.hidden &&
+        navigator.onLine &&
+        ziskejAktualniUserId()
+      ) {
         nactiPrichoziPozvanky({ zobrazNacitani: false });
       }
     }, POLL_MS);
@@ -1193,7 +1199,14 @@
   window.addEventListener("lubanote:account-active", (event) => {
     aktualniUserId = event.detail?.userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
     nastavBadge(0);
-    nactiPrichoziPozvanky({ zobrazNacitani: false });
+
+    if (
+      startUiPripraven &&
+      navigator.onLine &&
+      ziskejAktualniUserId()
+    ) {
+      nactiPrichoziPozvanky({ zobrazNacitani: false });
+    }
   });
 
   window.addEventListener("lubanote:auth-expired", () => {
@@ -1205,14 +1218,28 @@
 
   window.addEventListener("lubanote:language-change", aplikujPreklady);
 
+  window.addEventListener("lubanote:splash-ready", () => {
+    if (startUiPripraven) return;
+    startUiPripraven = true;
+
+    if (navigator.onLine && ziskejAktualniUserId()) {
+      nactiPrichoziPozvanky({ zobrazNacitani: false });
+    }
+  });
+
   window.addEventListener("online", () => {
-    if (ziskejAktualniUserId()) {
+    if (startUiPripraven && ziskejAktualniUserId()) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
     }
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && navigator.onLine && ziskejAktualniUserId()) {
+    if (
+      startUiPripraven &&
+      !document.hidden &&
+      navigator.onLine &&
+      ziskejAktualniUserId()
+    ) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
       aktualizujShareButton();
     }
@@ -1221,10 +1248,6 @@
   aplikujPreklady();
   aktualizujShareButton();
   spustPolling();
-
-  if (ziskejAktualniUserId() && navigator.onLine) {
-    nactiPrichoziPozvanky({ zobrazNacitani: false });
-  }
 
   window.LubaNoteSharingInvitations = {
     obnovPozvanky: () => nactiPrichoziPozvanky({ zobrazNacitani: false }),

@@ -1223,18 +1223,23 @@ window.addEventListener(
   }
 );
 
+/*
+ * Příprava offline Secret cache je servisní úloha. Dříve se při
+ * běžném startu spouštěla současně přes lubanote:supabase-ready
+ * i přes setTimeout(..., 0), takže vznikly dva stejné GETy na
+ * secret_settings. Teď ji spustíme až po použitelné UI.
+ */
 window.addEventListener(
-  "lubanote:supabase-ready",
-  pripravOfflineTajnyRezim
+  "lubanote:splash-ready",
+  () => {
+    if (navigator.onLine) {
+      setTimeout(
+        pripravOfflineTajnyRezim,
+        0
+      );
+    }
+  }
 );
-
-/* Při běžném online startu připravíme cache automaticky na pozadí. */
-if (navigator.onLine) {
-  setTimeout(
-    pripravOfflineTajnyRezim,
-    0
-  );
-}
 
 [
   "pointerdown",

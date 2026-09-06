@@ -41,6 +41,7 @@
   }
 
   let jeAdmin = false;
+  let startUiPripraven = false;
   let uzivatele = [];
   let filtr = "pending";
   let nacitam = false;
@@ -912,12 +913,30 @@
   );
 
   window.addEventListener("online", () => {
-    overAdmina();
+    if (startUiPripraven) {
+      overAdmina();
+    }
   });
 
   window.addEventListener(
     "lubanote:account-active",
-    () => overAdmina()
+    () => {
+      if (startUiPripraven) {
+        overAdmina();
+      }
+    }
+  );
+
+  window.addEventListener(
+    "lubanote:splash-ready",
+    () => {
+      if (startUiPripraven) return;
+      startUiPripraven = true;
+
+      if (navigator.onLine) {
+        overAdmina();
+      }
+    }
   );
 
   window.addEventListener(
@@ -928,10 +947,8 @@
   aktualizujTexty();
 
   /*
-   * Kontrola je záměrně odložená o jeden frame: supabaseClient.js
-   * při startu obnovuje session a stejný klient pak použije tento RPC.
+   * Při startu se admin RPC nespouští před hlavním syncem.
+   * Kontrola proběhne po splash-ready; při pozdější změně účtu
+   * nebo návratu internetu se zachová původní chování.
    */
-  requestAnimationFrame(() => {
-    overAdmina();
-  });
 })();

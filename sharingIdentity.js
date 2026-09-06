@@ -15,6 +15,7 @@
 
   let aktualniUserId = null;
   let aktualniUsername = null;
+  let startUiPripraven = false;
   let modal = null;
   let modalInput = null;
   let modalChyba = null;
@@ -593,7 +594,9 @@
       const profilCache = nactiCache();
       nastavUsernameDoUi(profilCache?.username || null);
 
-      nactiProfil({ tichy: true });
+      if (startUiPripraven) {
+        nactiProfil({ tichy: true });
+      }
     }
   );
 
@@ -611,9 +614,21 @@
   );
 
   window.addEventListener(
+    "lubanote:splash-ready",
+    () => {
+      if (startUiPripraven) return;
+      startUiPripraven = true;
+
+      if (navigator.onLine && zjistiUserId()) {
+        nactiProfil({ tichy: true });
+      }
+    }
+  );
+
+  window.addEventListener(
     "online",
     () => {
-      if (zjistiUserId()) {
+      if (startUiPripraven && zjistiUserId()) {
         nactiProfil({ tichy: true });
       }
     }
