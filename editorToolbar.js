@@ -2663,7 +2663,92 @@ nahledTazenePolozky?.classList.toggle(
   }
 
 
-  function aktualizujStavFormatovani() {
+  function popisUzelProDebugVelikosti(uzel) {
+    if (!uzel) return "null";
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      const text = String(uzel.textContent || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 36);
+      return `#text("${text}")`;
+    }
+
+    if (uzel instanceof Element) {
+      let popis = uzel.tagName;
+      if (uzel.id) popis += `#${uzel.id}`;
+      if (uzel.classList?.length) {
+        popis += `.${[...uzel.classList].slice(0, 3).join(".")}`;
+      }
+      return popis;
+    }
+
+    return String(uzel.nodeName || uzel);
+  }
+
+
+  function cestaVelikostiProDebug(uzel) {
+    let prvek =
+      uzel?.nodeType === Node.TEXT_NODE
+        ? uzel.parentElement
+        : uzel instanceof Element
+          ? uzel
+          : null;
+
+    const casti = [];
+    let pocet = 0;
+
+    while (prvek instanceof Element && pocet < 7) {
+      let cast = popisUzelProDebugVelikosti(prvek);
+
+      if (prvek.dataset?.velikostPisma) {
+        cast += `[data=${prvek.dataset.velikostPisma}]`;
+      }
+
+      if (prvek instanceof HTMLElement && prvek.style.fontSize) {
+        cast += `[style=${prvek.style.fontSize}]`;
+      }
+
+      casti.push(cast);
+
+      if (prvek === editorTextu) break;
+      prvek = prvek.parentElement;
+      pocet += 1;
+    }
+
+    return casti.join(" <- ");
+  }
+
+
+  function debugVelikostToolbaru(zdroj, velikost, pred, po) {
+    try {
+      const vyber = window.getSelection();
+      const rozsah = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+
+      document.dispatchEvent(
+        new CustomEvent("lubanote:editor-selection-debug", {
+          detail: {
+            faze: "TOOLBAR_SIZE",
+            zdroj,
+            vypocet: velikost ?? "null",
+            tlacitkoPred: pred ?? "",
+            tlacitkoPo: po ?? "",
+            collapsed: Boolean(rozsah?.collapsed),
+            selected: String(vyber?.toString?.() || "").slice(0, 42),
+            anchor: popisUzelProDebugVelikosti(vyber?.anchorNode),
+            focus: popisUzelProDebugVelikosti(vyber?.focusNode),
+            start: popisUzelProDebugVelikosti(rozsah?.startContainer),
+            startOffset: rozsah?.startOffset ?? "-",
+            cestaAnchor: cestaVelikostiProDebug(vyber?.anchorNode)
+          }
+        })
+      );
+    } catch (_chyba) {
+      // Diagnostika nesmí nikdy ovlivnit toolbar.
+    }
+  }
+
+
+  function aktualizujStavFormatovani(zdroj = "direct") {
     const vyber = window.getSelection();
 
     if (
@@ -2711,10 +2796,20 @@ nahledTazenePolozky?.classList.toggle(
     const velikost =
       zjistiVelikostPodKurzorem();
 
+    const hodnotaPred =
+      tlacitkoVelikostPisma?.textContent || "";
+
     if (velikost) {
       tlacitkoVelikostPisma.textContent = velikost;
       oznacAktivniVelikost(velikost);
     }
+
+    debugVelikostToolbaru(
+      zdroj,
+      velikost,
+      hodnotaPred,
+      tlacitkoVelikostPisma?.textContent || ""
+    );
   }
 
 
@@ -3783,7 +3878,7 @@ if (vyber) {
   document.addEventListener(
     "selectionchange",
     () => {
-      aktualizujStavFormatovani();
+      aktualizujStavFormatovani("selectionchange");
     }
   );
 
@@ -3808,7 +3903,7 @@ if (vyber) {
         return;
       }
 
-      aktualizujStavFormatovani();
+      aktualizujStavFormatovani("late-selection");
     };
 
     requestAnimationFrame(aktualizujPokudAktualni);
@@ -3836,19 +3931,19 @@ if (vyber) {
    */
   document.addEventListener(
     "lubanote:editor-selection-ready",
-    aktualizujStavFormatovani
+    () => aktualizujStavFormatovani("selection-ready")
   );
 
 
   editorTextu.addEventListener(
     "keyup",
-    aktualizujStavFormatovani
+    () => aktualizujStavFormatovani("keyup")
   );
 
 
   editorTextu.addEventListener(
     "pointerup",
-    aktualizujStavFormatovani
+    () => aktualizujStavFormatovani("pointerup")
   );
 
 
