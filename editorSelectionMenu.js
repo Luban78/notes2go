@@ -61,6 +61,15 @@
   }
 
   let ulozenyRozsah = null;
+
+  /*
+   * Android Standard: při programovém fallbacku dvojtapu potřebujeme
+   * dočasně použít naše úchyty. Nativní WebView je u takto vytvořeného
+   * Range na prvním řádku často vůbec nevykreslí.
+   */
+  let vynuceneVlastniUchytyStandard = false;
+  let cekameNaNativniStandardDvojtapDo = 0;
+  let tokenCekaniNaNativniStandardDvojtap = 0;
   let aktivniRichEditor = null;
   let aktivniTextarea = null;
   let ulozenyVyberTextarea = null;
@@ -897,7 +906,8 @@ todoList?.classList.remove(
     if (
       jeNativniAndroid &&
       editorRozsahu === editorTextu &&
-      !rozsahVBulletu
+      !rozsahVBulletu &&
+      !vynuceneVlastniUchytyStandard
     ) {
       skryjUchytyVyberu();
       return;
@@ -2890,6 +2900,17 @@ todoList?.classList.remove(
         event.touches[0];
 
       /*
+       * Nový samostatný tap ruší případný starý Standard fallback.
+       * U nativního výběru zůstávají systémové úchyty; naše vynucené
+       * úchyty používáme jen pro konkrétní programový fallback.
+       */
+      if (
+        performance.now() > cekameNaNativniStandardDvojtapDo
+      ) {
+        vynuceneVlastniUchytyStandard = false;
+      }
+
+      /*
        * U Bulletu druhý tap zpracovává LubaNote programově. Zakážeme
        * jen jeho nativní default, aby WebView současně nespustil svůj
        * vlastní selection systém a nevytvořil náhodný druhý pár úchytů.
@@ -3034,13 +3055,37 @@ todoList?.classList.remove(
         if (fallbackSlovo) {
           const xFallback = dotyk.clientX;
           const yFallback = dotyk.clientY;
+          const mujToken =
+            ++tokenCekaniNaNativniStandardDvojtap;
 
           /*
-           * Dáme WebView krátkou šanci dokončit nativní dvojtap.
-           * Pokud už vznikl výběr, nedotýkáme se ho. Pokud ne,
-           * označíme přesně geometricky nalezené slovo.
+           * První řádek některých nově vytvořených poznámek dokončí
+           * nativní Android dvojtap později než ostatní řádky. Dřívější
+           * fix po 140 ms vytvořil vlastní Range dřív, než WebView stihl
+           * ukázat systémové úchyty. Výsledek byl: krátce Vložit/Vše,
+           * potom plné menu, ale bez úchytů.
+           *
+           * Teď dáme nativnímu výběru delší, ale stále krátké okno.
+           * Během něj potlačíme kurzorové menu, takže nic neproblikne.
+           * Když WebView výběr vytvoří, ponecháme jeho systémové úchyty.
+           * Když ani potom ne, uděláme programový fallback a V TOMTO
+           * JEDINÉM PŘÍPADĚ zobrazíme naše LubaNote úchyty.
            */
+          cekameNaNativniStandardDvojtapDo =
+            performance.now() + 320;
+
+          menuProKurzorAktivni = false;
+          bodMenuKurzor = null;
+          selectionMenu.hidden = true;
+          skryjUchytyVyberu();
+
           window.setTimeout(() => {
+            if (
+              mujToken !== tokenCekaniNaNativniStandardDvojtap
+            ) {
+              return;
+            }
+
             const vyberAktualni = window.getSelection();
             const rozsahAktualni =
               vyberAktualni?.rangeCount
@@ -3052,16 +3097,30 @@ todoList?.classList.remove(
               !rozsahAktualni.collapsed &&
               ziskejRichEditorProRozsah(rozsahAktualni) === editorTextu
             ) {
+              vynuceneVlastniUchytyStandard = false;
+              cekameNaNativniStandardDvojtapDo = 0;
+              zobrazMenuProOznaceni(rozsahAktualni);
               return;
             }
 
-            vyberSlovoVBodu(
-              xFallback,
-              yFallback,
-              editorTextu,
-              fallbackSlovo
-            );
-          }, 140);
+            vynuceneVlastniUchytyStandard = true;
+            cekameNaNativniStandardDvojtapDo = 0;
+
+            const vybranoFallbackem =
+              vyberSlovoVBodu(
+                xFallback,
+                yFallback,
+                editorTextu,
+                fallbackSlovo
+              );
+
+            if (!vybranoFallbackem) {
+              vynuceneVlastniUchytyStandard = false;
+            }
+
+            ignorujKlikPoDvojtapuDo =
+              performance.now() + 380;
+          }, 280);
 
           return;
         }
@@ -3636,6 +3695,15 @@ todoList?.classList.remove(
         }
 
         if (rozsah.collapsed) {
+          if (
+            jeNativniAndroid &&
+            performance.now() < cekameNaNativniStandardDvojtapDo
+          ) {
+            selectionMenu.hidden = true;
+            skryjUchytyVyberu();
+            return;
+          }
+
           if (menuProKurzorAktivni) {
             ulozRozsah(rozsah);
             nastavTlacitkaMenu(false);
@@ -3718,6 +3786,10 @@ todoList?.classList.remove(
         !event.target.closest?.("li");
 
       if (jeAndroidStandard) {
+        vynuceneVlastniUchytyStandard = false;
+        cekameNaNativniStandardDvojtapDo = 0;
+        tokenCekaniNaNativniStandardDvojtap += 1;
+
         /*
          * Android long-press:
          * nativní výběr/úchyty ponecháme, ale systémovou akční lištu
