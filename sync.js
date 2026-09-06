@@ -3206,18 +3206,56 @@ async function syncNotes(moznosti = {}) {
      */
     const diagLocalWrite =
       window.LubaNoteStartupDiag?.zacni?.("PRIVATE LOCAL WRITE");
-    ulozBeznePoznamkyPrimo(mergedRegular);
-    ulozSifrovaneTajneZaznamy(encryptedToKeep);
+
+    try {
+      ulozBeznePoznamkyPrimo(mergedRegular);
+    } catch (error) {
+      let jsonChars = -1;
+
+      try {
+        jsonChars = JSON.stringify(mergedRegular).length;
+      } catch (_) {}
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "ERROR",
+        `PRIVATE LOCAL WRITE REGULAR | ${error?.name || "Error"} | ${error?.message || String(error)} | count=${mergedRegular.length} jsonChars=${jsonChars}`
+      );
+      throw error;
+    }
+
+    try {
+      ulozSifrovaneTajneZaznamy(encryptedToKeep);
+    } catch (error) {
+      let jsonChars = -1;
+
+      try {
+        jsonChars = JSON.stringify(encryptedToKeep).length;
+      } catch (_) {}
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "ERROR",
+        `PRIVATE LOCAL WRITE SECRET | ${error?.name || "Error"} | ${error?.message || String(error)} | count=${encryptedToKeep.length} jsonChars=${jsonChars}`
+      );
+      throw error;
+    }
 
     /*
      * Meta revizi posuneme až poté, co jsme cloudový stav opravdu
      * přijali do lokálního úložiště. Při pádu uprostřed syncu tak
      * nevznikne falešný dojem, že starý lokální obsah je aktuální.
      */
-    ulozPrijateCloudMetaPoMerge(
-      cloudRows,
-      prijmoutCloudMetaId
-    );
+    try {
+      ulozPrijateCloudMetaPoMerge(
+        cloudRows,
+        prijmoutCloudMetaId
+      );
+    } catch (error) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "ERROR",
+        `PRIVATE LOCAL WRITE META | ${error?.name || "Error"} | ${error?.message || String(error)} | cloudRows=${cloudRows.length} accept=${prijmoutCloudMetaId.size}`
+      );
+      throw error;
+    }
     window.LubaNoteStartupDiag?.konec?.(
       diagLocalWrite,
       `regular=${mergedRegular.length} encrypted=${encryptedToKeep.length}`
