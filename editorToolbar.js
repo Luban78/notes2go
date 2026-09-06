@@ -2032,6 +2032,110 @@
       ziskejEditorFormatovaniProRozsah(rozsah) ||
       editorTextu;
 
+    const povoleneVelikosti = new Set(
+      tlacitkaVelikosti.map(
+        tlacitko => String(tlacitko.dataset.velikost)
+      )
+    );
+
+    function najdiExplicitniVelikostProUzel(uzelKandidata) {
+      let aktualni =
+        uzelKandidata?.nodeType === Node.TEXT_NODE
+          ? uzelKandidata.parentElement
+          : uzelKandidata;
+
+      while (
+        aktualni instanceof Element &&
+        aktualni !== cilovyEditor?.parentElement
+      ) {
+        const logickaVelikost =
+          aktualni.dataset?.velikostPisma;
+
+        if (
+          logickaVelikost &&
+          Number.isFinite(Number(logickaVelikost)) &&
+          povoleneVelikosti.has(String(logickaVelikost))
+        ) {
+          return String(logickaVelikost);
+        }
+
+        if (aktualni instanceof HTMLElement) {
+          const inlineVelikost =
+            parseFloat(aktualni.style.fontSize);
+
+          if (Number.isFinite(inlineVelikost)) {
+            const kandidat =
+              String(Math.round(inlineVelikost));
+
+            if (povoleneVelikosti.has(kandidat)) {
+              return kandidat;
+            }
+          }
+        }
+
+        if (aktualni === cilovyEditor) {
+          break;
+        }
+
+        aktualni = aktualni.parentElement;
+      }
+
+      return null;
+    }
+
+    /*
+     * Android/execCommand může jeden vizuálně souvislý výraz rozdělit
+     * do více sousedních SPAN/FONT textových uzlů. Diagnostika 0.9.280
+     * ukázala přesně případ „dvanáct“ rozdělený na „dvan“ + „áct…“.
+     * Původní logika četla jen startContainer a u fragmentu bez vlastního
+     * metadata spadla na výchozích 18, i když zbytek téhož označeného
+     * slova nesl správnou logickou velikost 12.
+     *
+     * U označeného textu ve Standard editoru proto nejdřív projdeme
+     * všechny textové fragmenty, které Range skutečně protíná. Pokud
+     * všechny nalezené explicitní velikosti souhlasí, použijeme tento
+     * konsenzus. Fragment bez metadata nevadí; konfliktní velikosti se
+     * naopak nechají na původním anchor/start fallbacku.
+     * Selection ani DOM zde nijak neměníme.
+     */
+    if (
+      !rozsah.collapsed &&
+      cilovyEditor === editorTextu &&
+      rozsah.startContainer !== rozsah.endContainer
+    ) {
+      const nalezeneVelikosti = new Set();
+      const walker = document.createTreeWalker(
+        cilovyEditor,
+        NodeFilter.SHOW_TEXT
+      );
+
+      let kandidat = walker.nextNode();
+
+      while (kandidat) {
+        try {
+          if (
+            kandidat.textContent &&
+            rozsah.intersectsNode(kandidat)
+          ) {
+            const explicitniVelikost =
+              najdiExplicitniVelikostProUzel(kandidat);
+
+            if (explicitniVelikost) {
+              nalezeneVelikosti.add(explicitniVelikost);
+            }
+          }
+        } catch (_) {
+          // intersectsNode nemusí být dostupné ve všech WebView stavech.
+        }
+
+        kandidat = walker.nextNode();
+      }
+
+      if (nalezeneVelikosti.size === 1) {
+        return [...nalezeneVelikosti][0];
+      }
+    }
+
     let uzel = rozsah.startContainer;
 
     /*
@@ -2139,12 +2243,6 @@
      * Starší HTML může mít jen inline font-size bez datasetu. Pokud je
      * přesně jednou z našich hodnot, bereme ji jako logickou hodnotu.
      */
-    const povoleneVelikosti = new Set(
-      tlacitkaVelikosti.map(
-        tlacitko => String(tlacitko.dataset.velikost)
-      )
-    );
-
     aktualni = prvek;
 
     while (
