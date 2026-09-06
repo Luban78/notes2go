@@ -8485,40 +8485,47 @@ body.secretModeActive {
 @media (max-width: 899px) {
 
   .calendarAgendaHeader {
-  width: 100%;
+    width: 100%;
 
-  display: grid;
-  grid-template-columns: max-content 1fr 44px;
-  align-items: center;
-  gap: 8px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-areas:
+      "date date date"
+      ". week add";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
 
-  padding: 0;
-}
+    padding: 0;
+  }
 
   .calendarSelectedDateButton {
-  width: max-content;
-  min-width: max-content;
-  max-width: none;
+    grid-area: date;
 
-  height: 44px;
-  margin: 0;
-  padding: 0 12px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 1px;
+    height: 44px;
+    margin: 0;
+    padding: 0 12px;
 
-  font-size: 0.8rem;
-  font-weight: 700;
-  line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 1px;
 
-  white-space: nowrap;
-}
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+
+    white-space: nowrap;
+  }
 
   .calendarWeekNumber {
-    justify-self: end;
+    grid-area: week;
+    justify-self: center;
 
     margin: 0;
     padding: 0 5px;
@@ -8533,6 +8540,11 @@ body.secretModeActive {
 
     /* RUŠÍ STARÝ POSUN -20px */
     transform: none;
+  }
+
+  .calendarAgendaHeader .plannerAddTaskButton {
+    grid-area: add;
+    justify-self: end;
   }
 
   .recurringOverviewButton {
@@ -8721,6 +8733,13 @@ body.secretModeActive {
 
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.plannerAddTaskGlyph {
+  display: block;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .plannerAddTaskButton:active,
@@ -10416,4 +10435,52 @@ body.trashScreenOpen {
 .todoTextValue b,
 .todoTextValue strong {
   font-weight: 800;
+}
+/* =========================================
+   PŘIPOMÍNKY – KOMPAKTNÍ MOBILNÍ TOOLBAR
+   6. 9. 2026
+   - menší mezery mezi třemi řadami tlačítek
+   - Opakování má stejnou velikost jako oblastní filtry
+   - jednoduchá modrá ikona místo výrazné oranžové varianty
+   ========================================= */
+@media (max-width: 899px) {
+  .remindersScreen {
+    margin-top: -5px;
+    padding-top: 4px;
+  }
+
+  .remindersFilters {
+    padding-top: 4px;
+    padding-bottom: 6px;
+  }
+
+  .remindersStatusTabs {
+    margin-top: 6px;
+    margin-bottom: 10px;
+  }
+
+  .remindersRecurringButton {
+    width: auto;
+    height: auto;
+    min-width: 60px;
+    min-height: 42px;
+    flex: 0 0 auto;
+    padding: 0 16px;
+    border-radius: 14px;
+    color: var(--color-accent-text);
+    font-size: calc(var(--font-size) - 1px);
+  }
+
+  .remindersRecurringButton .lubaActionIcon {
+    display: none;
+  }
+
+  .remindersRecurringButton::before {
+    content: "↻";
+    display: block;
+    color: var(--color-accent-text);
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1;
+  }
 }
