@@ -2663,92 +2663,20 @@ nahledTazenePolozky?.classList.toggle(
   }
 
 
-  function popisUzelProDebugVelikosti(uzel) {
-    if (!uzel) return "null";
+  function aktualizujVelikostPismaZVyberu() {
+    const velikost =
+      zjistiVelikostPodKurzorem();
 
-    if (uzel.nodeType === Node.TEXT_NODE) {
-      const text = String(uzel.textContent || "")
-        .replace(/\s+/g, " ")
-        .slice(0, 36);
-      return `#text("${text}")`;
+    if (!velikost) {
+      return;
     }
 
-    if (uzel instanceof Element) {
-      let popis = uzel.tagName;
-      if (uzel.id) popis += `#${uzel.id}`;
-      if (uzel.classList?.length) {
-        popis += `.${[...uzel.classList].slice(0, 3).join(".")}`;
-      }
-      return popis;
-    }
-
-    return String(uzel.nodeName || uzel);
+    tlacitkoVelikostPisma.textContent = velikost;
+    oznacAktivniVelikost(velikost);
   }
 
 
-  function cestaVelikostiProDebug(uzel) {
-    let prvek =
-      uzel?.nodeType === Node.TEXT_NODE
-        ? uzel.parentElement
-        : uzel instanceof Element
-          ? uzel
-          : null;
-
-    const casti = [];
-    let pocet = 0;
-
-    while (prvek instanceof Element && pocet < 7) {
-      let cast = popisUzelProDebugVelikosti(prvek);
-
-      if (prvek.dataset?.velikostPisma) {
-        cast += `[data=${prvek.dataset.velikostPisma}]`;
-      }
-
-      if (prvek instanceof HTMLElement && prvek.style.fontSize) {
-        cast += `[style=${prvek.style.fontSize}]`;
-      }
-
-      casti.push(cast);
-
-      if (prvek === editorTextu) break;
-      prvek = prvek.parentElement;
-      pocet += 1;
-    }
-
-    return casti.join(" <- ");
-  }
-
-
-  function debugVelikostToolbaru(zdroj, velikost, pred, po) {
-    try {
-      const vyber = window.getSelection();
-      const rozsah = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-
-      document.dispatchEvent(
-        new CustomEvent("lubanote:editor-selection-debug", {
-          detail: {
-            faze: "TOOLBAR_SIZE",
-            zdroj,
-            vypocet: velikost ?? "null",
-            tlacitkoPred: pred ?? "",
-            tlacitkoPo: po ?? "",
-            collapsed: Boolean(rozsah?.collapsed),
-            selected: String(vyber?.toString?.() || "").slice(0, 42),
-            anchor: popisUzelProDebugVelikosti(vyber?.anchorNode),
-            focus: popisUzelProDebugVelikosti(vyber?.focusNode),
-            start: popisUzelProDebugVelikosti(rozsah?.startContainer),
-            startOffset: rozsah?.startOffset ?? "-",
-            cestaAnchor: cestaVelikostiProDebug(vyber?.anchorNode)
-          }
-        })
-      );
-    } catch (_chyba) {
-      // Diagnostika nesmí nikdy ovlivnit toolbar.
-    }
-  }
-
-
-  function aktualizujStavFormatovani(zdroj = "direct") {
+  function aktualizujStavFormatovani() {
     const vyber = window.getSelection();
 
     if (
@@ -2757,6 +2685,21 @@ nahledTazenePolozky?.classList.toggle(
       !jeUzelVEditoru(vyber.anchorNode)
     ) {
       return;
+    }
+
+    /*
+     * Velikost písma aktualizujeme jako PRVNÍ a odděleně od ostatních
+     * stavů toolbaru. Diagnostika 0.9.279 ukázala, že u některých
+     * nativních Android výběrů se selection změnil správně, ale kód se
+     * k původnímu bloku velikosti vůbec nedostal. Tím mohla zůstat
+     * poslední hodnota (např. 24) viset i na novém 18px výběru.
+     *
+     * Selection ani jeho úchyty zde nijak neměníme.
+     */
+    try {
+      aktualizujVelikostPismaZVyberu();
+    } catch (_chyba) {
+      // Velikost nesmí zablokovat zbytek toolbaru.
     }
 
     try {
@@ -2778,38 +2721,28 @@ nahledTazenePolozky?.classList.toggle(
       // Některé WebView queryCommandState nepodporují spolehlivě.
     }
 
-    const stylTextu =
-      zjistiStylTextuPodKurzorem();
+    try {
+      const stylTextu =
+        zjistiStylTextuPodKurzorem();
 
-    oznacAktivniStylTextu(stylTextu);
+      oznacAktivniStylTextu(stylTextu);
 
-    nastavStavTlacitka(
-      tlacitkoNadpis,
-      stylTextu !== "div"
-    );
-
-    const zarovnani =
-      zjistiZarovnaniPodKurzorem();
-
-    oznacAktivniZarovnani(zarovnani);
-
-    const velikost =
-      zjistiVelikostPodKurzorem();
-
-    const hodnotaPred =
-      tlacitkoVelikostPisma?.textContent || "";
-
-    if (velikost) {
-      tlacitkoVelikostPisma.textContent = velikost;
-      oznacAktivniVelikost(velikost);
+      nastavStavTlacitka(
+        tlacitkoNadpis,
+        stylTextu !== "div"
+      );
+    } catch (_chyba) {
+      // Chyba stylu nesmí zastavit další stav toolbaru.
     }
 
-    debugVelikostToolbaru(
-      zdroj,
-      velikost,
-      hodnotaPred,
-      tlacitkoVelikostPisma?.textContent || ""
-    );
+    try {
+      const zarovnani =
+        zjistiZarovnaniPodKurzorem();
+
+      oznacAktivniZarovnani(zarovnani);
+    } catch (_chyba) {
+      // Chyba zarovnání nesmí zablokovat ostatní stav toolbaru.
+    }
   }
 
 
@@ -3878,7 +3811,7 @@ if (vyber) {
   document.addEventListener(
     "selectionchange",
     () => {
-      aktualizujStavFormatovani("selectionchange");
+      aktualizujStavFormatovani();
     }
   );
 
@@ -3903,7 +3836,7 @@ if (vyber) {
         return;
       }
 
-      aktualizujStavFormatovani("late-selection");
+      aktualizujStavFormatovani();
     };
 
     requestAnimationFrame(aktualizujPokudAktualni);
@@ -3931,19 +3864,19 @@ if (vyber) {
    */
   document.addEventListener(
     "lubanote:editor-selection-ready",
-    () => aktualizujStavFormatovani("selection-ready")
+    aktualizujStavFormatovani
   );
 
 
   editorTextu.addEventListener(
     "keyup",
-    () => aktualizujStavFormatovani("keyup")
+    aktualizujStavFormatovani
   );
 
 
   editorTextu.addEventListener(
     "pointerup",
-    () => aktualizujStavFormatovani("pointerup")
+    aktualizujStavFormatovani
   );
 
 
