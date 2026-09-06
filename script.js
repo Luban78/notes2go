@@ -365,6 +365,13 @@ function zpracujZavreniEditoru() {
   document.body.classList.remove("noScroll");
 
   const zaviranyTaskId = activeTaskId;
+
+  if (zaviranyTaskId) {
+    void smazPersistovanyDraftPoznamky(
+      zaviranyTaskId
+    );
+  }
+
   uvolniVzdalenouEditorSession(
     zaviranyTaskId
   );
@@ -1104,6 +1111,10 @@ appMessageDiscardButton?.addEventListener(
 
     if (!zahazovanyTaskId) {
       await zahodLokalniPrilohyDraftu();
+    } else {
+      await smazPersistovanyDraftPoznamky(
+        zahazovanyTaskId
+      );
     }
     
     activeTaskIndex = null;
@@ -3010,6 +3021,14 @@ async function ulozAZavriEditor(
           updatedTask
         ),
         updatedTask
+      );
+
+      /*
+       * Existující poznámka může mít recovery draft.
+       * Mažeme ho až po úspěšném lokálním save.
+       */
+      await smazPersistovanyDraftPoznamky(
+        updatedTask.id
       );
       
       ulozenaPoznamka = updatedTask;
@@ -5738,6 +5757,7 @@ let draftDbPromise = null;
 let draftUlozeniTimer = null;
 let posledniUlozenyOtiskDraftu = null;
 let probihaObnovaDraftu = false;
+let draftObnovaNabidnuta = false;
 
 function otevriDraftDb() {
   if (draftDbPromise) {
@@ -5901,14 +5921,17 @@ function vytvorSnapshotNovehoDraftu() {
     probihaObnovaDraftu ||
     !taskModal ||
     taskModal.hidden ||
-    aktivniSdilenaEditace ||
-    activeTaskId !== null ||
-    activeTaskIndex !== null
+    aktivniSdilenaEditace
   ) {
     return null;
   }
 
-  const draftId = ziskejDraftIdPoznamky();
+  const existujiciTaskId =
+    activeTaskId || null;
+
+  const draftId =
+    existujiciTaskId ||
+    ziskejDraftIdPoznamky();
 
   if (!draftId) {
     return null;
@@ -5944,14 +5967,16 @@ function vytvorSnapshotNovehoDraftu() {
       prazdny: true,
       ownerUserId,
       draftId,
+      noteId: existujiciTaskId,
       otisk
     };
   }
 
   return {
-    version: 1,
+    version: 2,
     ownerUserId,
     draftId,
+    noteId: existujiciTaskId,
     savedAt: new Date().toISOString(),
     puvodniOtiskEditoru,
     otisk,
@@ -6074,7 +6099,7 @@ function vytvorModalObnovyDraftu() {
   return modal;
 }
 
-function obnovDraftDoEditoru(draft) {
+async function obnovDraftDoEditoru(draft) {
   if (
     !draft?.draftId ||
     draft.secret === true
@@ -6085,6 +6110,104 @@ function obnovDraftDoEditoru(draft) {
   probihaObnovaDraftu = true;
 
   try {
+    /*
+     * EXISTUJÍCÍ POZNÁMKA:
+     * otevřeme ji standardní cestou, aby zůstaly zachované
+     * lock/revision pojistky, a až potom vrstvíme recovery snapshot.
+     */
+    if (draft.noteId) {
+      const tasks = loadTask();
+      const existujici = tasks.find(
+        (task) => task?.id === draft.noteId
+      );
+
+      if (
+        !existujici ||
+        existujici.isSecret === true
+      ) {
+        return false;
+      }
+
+      await openTaskEditorById(draft.noteId);
+
+      if (
+        activeTaskId !== draft.noteId ||
+        !taskModal ||
+        taskModal.hidden
+      ) {
+        return false;
+      }
+
+      const puvodniOtiskPoOtevreni =
+        puvodniOtiskEditoru;
+
+      favoriteEnabled =
+        draft.favorite === true;
+      reminderEnabled =
+        draft.reminder === true;
+
+      updateReminderButton(reminderEnabled);
+      priorityTaskButton?.classList.toggle(
+        "active",
+        favoriteEnabled
+      );
+
+      activeArea = draft.area || "private";
+      activeTags = Array.isArray(draft.tags)
+        ? [...draft.tags]
+        : [];
+
+      updateTagMenuUI();
+      closeTagMenu();
+
+      nastavNazevPoznamkyVEditoru(
+        draft.title || ""
+      );
+
+      modalText.value = "";
+      modalRichText.innerHTML =
+        draft.richContent || "";
+      modalText.hidden = true;
+      modalRichText.hidden = false;
+      RichTextColors.reset();
+
+      editorRepeat =
+        kopirujEditorRepeat(draft.repeat);
+
+      modalDate.value = draft.date || "";
+      modalTime.value = draft.time || "";
+
+      aktualizujPopiskyDataCasu();
+      updateModalWeekday();
+
+      loadTodos(
+        Array.isArray(draft.todos)
+          ? draft.todos
+          : [],
+        Array.isArray(existujici.plannedItems)
+          ? existujici.plannedItems
+          : []
+      );
+
+      resetujSbaleniNazvuEditoru();
+
+      /*
+       * Po obnovení musí editor stále porovnávat proti poslední
+       * bezpečně uložené verzi, ne proti samotnému draftu.
+       */
+      puvodniOtiskEditoru =
+        puvodniOtiskPoOtevreni;
+
+      posledniUlozenyOtiskDraftu =
+        draft.otisk || null;
+
+      return true;
+    }
+
+    /*
+     * NOVÁ POZNÁMKA:
+     * původní recovery chování zůstává beze změny.
+     */
     zahajEditorSession(null);
     taskModal.removeAttribute("data-task-id");
     taskModal.removeAttribute(
@@ -6157,12 +6280,6 @@ function obnovDraftDoEditoru(draft) {
     taskModal.classList.add("show");
     document.body.classList.add("noScroll");
 
-    /*
-     * DŮLEŽITÉ: původní otisk je otisk prázdné nové poznámky
-     * z okamžiku jejího vytvoření, ne otisk obnoveného draftu.
-     * Proto je obnovený obsah dál správně považován za neuloženou změnu
-     * a fajfka jej opravdu uloží jako novou poznámku.
-     */
     puvodniOtiskEditoru =
       draft.puvodniOtiskEditoru || null;
 
@@ -6176,6 +6293,10 @@ function obnovDraftDoEditoru(draft) {
 }
 
 async function nabidniObnovuDraftuPokudExistuje() {
+  if (draftObnovaNabidnuta) {
+    return;
+  }
+
   if (
     localStorage.getItem(
       LUBANOTE_DRAFT_AUTH_OK_KEY
@@ -6197,9 +6318,11 @@ async function nabidniObnovuDraftuPokudExistuje() {
    * selhalo, nesmíme nabídnout duplikát. Existující note ID je důkaz,
    * že draft už byl bezpečně uložen jako skutečná poznámka.
    */
-  const uzJeUlozeny = loadTask().some(
-    (task) => task?.id === draft.draftId
-  );
+  const uzJeUlozeny =
+    !draft.noteId &&
+    loadTask().some(
+      (task) => task?.id === draft.draftId
+    );
 
   if (uzJeUlozeny) {
     await smazPersistovanyDraftPoznamky(
@@ -6223,24 +6346,40 @@ async function nabidniObnovuDraftuPokudExistuje() {
     "#draftRecoveryDiscardButton"
   );
 
-  restoreButton.onclick = () => {
+  restoreButton.onclick = async () => {
     modal.hidden = true;
-    obnovDraftDoEditoru(draft);
+
+    const obnoveno =
+      await obnovDraftDoEditoru(draft);
+
+    if (!obnoveno) {
+      zobrazZpravuAplikace(
+        "Obnova rozepsané poznámky",
+        "Rozepsanou poznámku se nepodařilo bezpečně obnovit. Zkus ji otevřít znovu."
+      );
+    }
   };
 
   discardButton.onclick = async () => {
     modal.hidden = true;
 
-    try {
-      await window.LubaNoteAttachmentsLocal
-        ?.smazPrilohyPodleNoteId?.(
-          draft.draftId
+    /*
+     * Přílohy čistíme jen u NOVÉHO draftu, který používá dočasné ID.
+     * U existující poznámky je draftId skutečné noteId a hromadný
+     * cleanup by mohl smazat její platné lokální attachmenty.
+     */
+    if (!draft.noteId) {
+      try {
+        await window.LubaNoteAttachmentsLocal
+          ?.smazPrilohyPodleNoteId?.(
+            draft.draftId
+          );
+      } catch (error) {
+        console.warn(
+          "LubaNote draft: přílohy zahozeného recovery draftu se nepodařilo uklidit.",
+          error
         );
-    } catch (error) {
-      console.warn(
-        "LubaNote draft: přílohy zahozeného recovery draftu se nepodařilo uklidit.",
-        error
-      );
+      }
     }
 
     await smazPersistovanyDraftPoznamky(
@@ -6248,6 +6387,7 @@ async function nabidniObnovuDraftuPokudExistuje() {
     );
   };
 
+  draftObnovaNabidnuta = true;
   modal.hidden = false;
 }
 
@@ -6313,7 +6453,18 @@ window.addEventListener(
  * Owner ID je navíc svázané s lokálními daty účtu, takže draft jiného
  * uživatele se nenabídne.
  */
+window.addEventListener(
+  "lubanote:splash-ready",
+  () => {
+    void nabidniObnovuDraftuPokudExistuje();
+  }
+);
+
 window.addEventListener("load", () => {
+  /*
+   * Fallback pro offline/login varianty, které splash-ready nemusí
+   * poslat ve stejném pořadí jako běžný online start.
+   */
   setTimeout(() => {
     void nabidniObnovuDraftuPokudExistuje();
   }, 1200);

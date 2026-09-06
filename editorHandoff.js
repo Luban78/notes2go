@@ -29,6 +29,26 @@ function ziskejDeviceIdEditoru() {
   return deviceId;
 }
 
+function jeNativniApkEditorHandoff() {
+  try {
+    if (
+      window.Capacitor?.isNativePlatform?.() ===
+        true
+    ) {
+      return true;
+    }
+  } catch {
+    // Fallback níže pokryje i starší Capacitor runtime.
+  }
+
+  return (
+    window.location?.hostname === "localhost" &&
+    /;\s*wv\)/i.test(
+      navigator.userAgent || ""
+    )
+  );
+}
+
 /* ==========================================
    PŘEDÁNÍ OTEVŘENÉHO EDITORU MEZI ZAŘÍZENÍMI – V1
 
@@ -761,6 +781,81 @@ async function ziskejServerovouEditorSession(
   }
 
   return data || null;
+}
+
+async function zkusObnovitVlastniEditorPoRestartu(
+  noteId,
+  novaSessionId
+) {
+  /*
+   * Android APK má jednu živou WebView instanci. Po hard killu ale
+   * serverový lease může ještě desítky sekund ukazovat na starou
+   * session stejné instalace. To není "jiné zařízení".
+   *
+   * Na web/PWA tuto zkratku záměrně nepoužíváme, protože dvě karty
+   * stejného prohlížeče mohou sdílet deviceId a přitom být obě živé.
+   */
+  if (!jeNativniApkEditorHandoff()) {
+    return false;
+  }
+
+  const row =
+    await ziskejServerovouEditorSession(noteId);
+
+  if (
+    !row ||
+    row.owner_device_id !==
+      ziskejDeviceIdEditoru() ||
+    !row.owner_session_id ||
+    row.owner_session_id === novaSessionId
+  ) {
+    return false;
+  }
+
+  try {
+    const { error } =
+      await supabaseClient.rpc(
+        "lubanote_release_note_editor",
+        {
+          p_note_id: noteId,
+          p_device_id:
+            ziskejDeviceIdEditoru(),
+          p_session_id:
+            row.owner_session_id
+        }
+      );
+
+    if (error) {
+      console.warn(
+        "Editor restart recovery release error:",
+        error.message
+      );
+      return false;
+    }
+
+    const novyClaim =
+      await claimEditorSession(
+        noteId,
+        novaSessionId
+      );
+
+    if (novyClaim?.acquired !== true) {
+      return false;
+    }
+
+    await aktivujVzdalenyEditorSession(
+      noteId,
+      novaSessionId
+    );
+
+    return true;
+  } catch (error) {
+    console.warn(
+      "Editor restart recovery selhalo:",
+      error
+    );
+    return false;
+  }
 }
 
 async function claimEditorSession(
@@ -1546,6 +1641,21 @@ async function pripravOtevreniEditoru(noteId) {
         noteId,
         novaSessionId
       );
+      return true;
+    }
+
+    /*
+     * Po hard killu APK může server ještě držet lease téže instalace.
+     * Na nativním Androidu ho bezpečně nahradíme novou session bez
+     * falešného modalu "Poznámka je otevřená jinde".
+     */
+    const obnovenaVlastniSession =
+      await zkusObnovitVlastniEditorPoRestartu(
+        noteId,
+        novaSessionId
+      );
+
+    if (obnovenaVlastniSession) {
       return true;
     }
 
