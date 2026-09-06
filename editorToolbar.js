@@ -3789,6 +3789,45 @@ if (vyber) {
 
 
   /*
+   * Android WebView někdy při druhém a dalším dvojtapu pošle
+   * selectionchange ještě ve chvíli, kdy nový Range není finální.
+   * Výběr je o pár ms později na obrazovce správně, ale toolbar už
+   * další selectionchange nedostane a zůstane na předchozí velikosti.
+   *
+   * Selection samotný zde NEMĚNÍME. Po nativním dblclick/contextmenu
+   * pouze několikrát v krátkém okně znovu načteme jeho už hotový stav.
+   * To drží první root-text fix i nativní další řádky beze změny.
+   */
+  let tokenPozdniAktualizaceVyberu = 0;
+
+  function naplanujPozdniAktualizaciToolbaru() {
+    const mujToken = ++tokenPozdniAktualizaceVyberu;
+
+    const aktualizujPokudAktualni = () => {
+      if (mujToken !== tokenPozdniAktualizaceVyberu) {
+        return;
+      }
+
+      aktualizujStavFormatovani();
+    };
+
+    requestAnimationFrame(aktualizujPokudAktualni);
+    setTimeout(aktualizujPokudAktualni, 40);
+    setTimeout(aktualizujPokudAktualni, 120);
+  }
+
+  editorTextu.addEventListener(
+    "dblclick",
+    naplanujPozdniAktualizaciToolbaru
+  );
+
+  editorTextu.addEventListener(
+    "contextmenu",
+    naplanujPozdniAktualizaciToolbaru
+  );
+
+
+  /*
    * Standard editor má na Androidu jednu speciální cestu pro dvojtap
    * na root-text prvního řádku. Range tam vytváří LubaNote programově
    * až po pointerup. Touto událostí selection modul pouze oznámí, že
