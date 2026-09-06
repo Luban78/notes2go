@@ -2502,6 +2502,10 @@ async function syncNotes() {
     return probihajiciSync;
   }
 
+  const diagnostikaPrivateSync =
+    window.LubaNoteStartupDiag?.zacni?.("PRIVATE SYNC");
+  let diagnostikaPrivateSyncStav = "KONEC";
+
   probihajiciSync = (async () => {
     const user = await getCurrentUser();
 
@@ -2957,12 +2961,16 @@ async function syncNotes() {
   try {
     const vysledek = await probihajiciSync;
 
+    diagnostikaPrivateSyncStav =
+      vysledek === true ? "OK" : "FALSE";
+
     if (vysledek === true) {
       nastavKoncovyStavSynchronizaceUI();
     }
 
     return vysledek;
   } catch (error) {
+    diagnostikaPrivateSyncStav = "CHYBA";
     if (jeChybaOdeprenehoPristupu(error)) {
       oznamOdeprenyPristupUctu(error);
     }
@@ -2975,6 +2983,12 @@ async function syncNotes() {
 
     throw error;
   } finally {
+    window.LubaNoteStartupDiag?.konec?.(
+      diagnostikaPrivateSync,
+      aktivniKonfliktySyncu.size > 0
+        ? "KONFLIKT"
+        : diagnostikaPrivateSyncStav
+    );
     probihajiciSync = null;
   }
 }
@@ -3360,9 +3374,16 @@ async function spustStartSyncBezpecne() {
 
   probihajiciStartSync =
     (async () => {
+      const diagnostikaStartSync =
+        window.LubaNoteStartupDiag?.zacni?.("START SYNC FLOW");
+      let diagnostikaStartSyncStav = "KONEC";
+
       try {
-        return (await startSync()) === true;
+        const uspesne = (await startSync()) === true;
+        diagnostikaStartSyncStav = uspesne ? "OK" : "FALSE";
+        return uspesne;
       } catch (error) {
+        diagnostikaStartSyncStav = "CHYBA";
         console.warn(
           "Synchronizace byla odložena:",
           error
@@ -3375,6 +3396,11 @@ async function spustStartSyncBezpecne() {
         }
 
         return false;
+      } finally {
+        window.LubaNoteStartupDiag?.konec?.(
+          diagnostikaStartSync,
+          diagnostikaStartSyncStav
+        );
       }
     })();
 

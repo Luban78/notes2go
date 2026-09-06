@@ -25,6 +25,7 @@
   const MAX_ZAZNAMU = 320;
 
   const MODULY = {
+    startup: "Start / sync / síť",
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
@@ -797,6 +798,23 @@
     };
   }
 
+  function spustStartupDiagnostiku() {
+    const diagnostika = window.LubaNoteStartupDiag;
+
+    if (!diagnostika) {
+      zapis("STARTUP diagnostika není dostupná.");
+      return () => {};
+    }
+
+    diagnostika.radky().forEach((radek) => {
+      zapis(radek);
+    });
+
+    return diagnostika.priRadku((radek) => {
+      zapis(radek);
+    });
+  }
+
   function stopModulu({ zapisStop = true } = {}) {
     if (typeof stopAktivnihoModulu === "function") {
       stopAktivnihoModulu();
@@ -829,7 +847,9 @@
     startCas = performance.now();
     zaznamy = [];
 
-    if (aktivniModul === "todoSelection") {
+    if (aktivniModul === "startup") {
+      stopAktivnihoModulu = spustStartupDiagnostiku();
+    } else if (aktivniModul === "todoSelection") {
       stopAktivnihoModulu = spustTodoSelection();
     } else if (aktivniModul === "editorSelection") {
       stopAktivnihoModulu = spustEditorSelection();
@@ -973,6 +993,7 @@ async function zkopirujReport(tlacitko) {
 
       <div class="ln-dh-controls">
         <select data-dh="module" aria-label="Diagnostický modul">
+          <option value="startup">Start / sync / síť</option>
           <option value="todoSelection">TODO – výběr / Vložit / Vše</option>
           <option value="editorSelection">Editor – výběr textu</option>
           <option value="gestures">Gesta – pointer / touch / click</option>
