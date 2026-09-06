@@ -1401,7 +1401,7 @@ function openReminderQuickMenu(entry) {
     const jePlan = entry.kind === "planned";
     const popisek = jePlan
       ? "Zrušit plán"
-      : "Vypnout připomínku";
+      : "Vypnout";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
