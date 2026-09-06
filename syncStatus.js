@@ -21,6 +21,10 @@
       klic: "sync.syncing",
       fallback: "⟳ Synchronizuji…"
     },
+    pending: {
+      klic: "sync.pending",
+      fallback: "⏳ Čeká na synchronizaci"
+    },
     "auth-expired": {
       klic: "sync.authExpired",
       fallback: "⚠ Přihlášení vypršelo"

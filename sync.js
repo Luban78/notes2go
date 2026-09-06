@@ -3697,6 +3697,119 @@ let synchronizaceOdlozenaKvuliLokalniZmene = false;
 let frontaLokalnichZmen = Promise.resolve();
 let casovacSynchronizacePoLokalniZmene = null;
 
+/*
+ * OFFLINE / RECONNECT FRONTa
+ *
+ * Lokální generace ve storage.js už chrání data i přes kill aplikace.
+ * Tady držíme pouze živý stav aktuálního procesu, aby UI nikdy
+ * nehlásilo "Synchronizováno", dokud nová lokální změna nebyla
+ * opravdu potvrzená cloudovým syncem.
+ *
+ * Android WebView obvykle vyšle event "online", ale ne ve všech
+ * lifecycle kombinacích je to stoprocentní. Proto při čekající lokální
+ * změně běží lehká kontrola navigator.onLine. Interval existuje pouze
+ * po dobu čekání a po úspěšném syncu se ihned ruší.
+ */
+let lokalniZmenaCekaNaPotvrzeniServerem = false;
+let casovacKontrolyNavratuInternetu = null;
+let probihajiciSyncCekajiciLokalniZmeny = null;
+
+function zastavKontroluNavratuInternetu() {
+  if (casovacKontrolyNavratuInternetu) {
+    clearInterval(casovacKontrolyNavratuInternetu);
+    casovacKontrolyNavratuInternetu = null;
+  }
+}
+
+function spustKontroluNavratuInternetu() {
+  if (casovacKontrolyNavratuInternetu) {
+    return;
+  }
+
+  casovacKontrolyNavratuInternetu =
+    setInterval(() => {
+      if (!lokalniZmenaCekaNaPotvrzeniServerem) {
+        zastavKontroluNavratuInternetu();
+        return;
+      }
+
+      if (!navigator.onLine) {
+        return;
+      }
+
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+
+      synchronizujCekajiciLokalniZmenu().catch(
+        (error) => {
+          console.warn(
+            "Opakovaná synchronizace po návratu internetu selhala:",
+            error
+          );
+        }
+      );
+    }, 1500);
+}
+
+function oznacLokalniZmenuCekajiciNaSync() {
+  lokalniZmenaCekaNaPotvrzeniServerem = true;
+  odlozOpakovaniSynchronizace();
+  nastavStavSynchronizaceUI("pending");
+  spustKontroluNavratuInternetu();
+}
+
+function potvrzLokalniZmenuNaServeru() {
+  lokalniZmenaCekaNaPotvrzeniServerem = false;
+  zastavKontroluNavratuInternetu();
+  nastavKoncovyStavSynchronizaceUI();
+}
+
+async function synchronizujCekajiciLokalniZmenu() {
+  if (!lokalniZmenaCekaNaPotvrzeniServerem) {
+    return true;
+  }
+
+  if (!navigator.onLine) {
+    nastavStavSynchronizaceUI("pending");
+    spustKontroluNavratuInternetu();
+    return false;
+  }
+
+  if (probihajiciSyncCekajiciLokalniZmeny) {
+    return probihajiciSyncCekajiciLokalniZmeny;
+  }
+
+  nastavStavSynchronizaceUI("syncing");
+
+  probihajiciSyncCekajiciLokalniZmeny =
+    (async () => {
+      const uspesne =
+        await spustRychlySyncPoznamekBezpecne();
+
+      if (uspesne === true) {
+        potvrzLokalniZmenuNaServeru();
+        return true;
+      }
+
+      if (lokalniZmenaCekaNaPotvrzeniServerem) {
+        nastavStavSynchronizaceUI("pending");
+        spustKontroluNavratuInternetu();
+      }
+
+      return false;
+    })();
+
+  try {
+    return await probihajiciSyncCekajiciLokalniZmeny;
+  } finally {
+    probihajiciSyncCekajiciLokalniZmeny = null;
+  }
+}
+
 function naplanujSynchronizaciPoLokalniZmene(
   zpozdeni = 350
 ) {
@@ -3706,12 +3819,17 @@ function naplanujSynchronizaciPoLokalniZmene(
     setTimeout(() => {
       casovacSynchronizacePoLokalniZmene = null;
 
-      spustRychlySyncPoznamekBezpecne().catch(
+      synchronizujCekajiciLokalniZmenu().catch(
         (error) => {
           console.warn(
             "Následná synchronizace lokální změny selhala:",
             error
           );
+
+          if (lokalniZmenaCekaNaPotvrzeniServerem) {
+            nastavStavSynchronizaceUI("pending");
+            spustKontroluNavratuInternetu();
+          }
         }
       );
     }, Math.max(0, Number(zpozdeni) || 0));
@@ -3781,6 +3899,12 @@ async function provedLokalniZmenuASynchronizuj(akce) {
     await provedLokalniZmenuBezKolizeSeSync(
       akce
     );
+
+  /*
+   * Od této chvíle existuje nová lokální změna, kterou server ještě
+   * nepotvrdil. Stav zruší až skutečně úspěšný notes sync.
+   */
+  oznacLokalniZmenuCekajiciNaSync();
 
   const vyberKaretAktivni =
     typeof rezimVyberuKaret !== "undefined" &&
@@ -3860,6 +3984,14 @@ async function spustRychlySyncPoznamekBezpecne() {
 
   try {
     const vysledek = await syncNotes();
+
+    if (
+      vysledek === true &&
+      lokalniZmenaCekaNaPotvrzeniServerem
+    ) {
+      potvrzLokalniZmenuNaServeru();
+    }
+
     return vysledek === true;
   } catch (error) {
     console.warn(
@@ -3946,7 +4078,17 @@ async function spustStartSyncBezpecne() {
     })();
 
   try {
-    return await probihajiciStartSync;
+    const vysledek =
+      await probihajiciStartSync;
+
+    if (
+      vysledek === true &&
+      lokalniZmenaCekaNaPotvrzeniServerem
+    ) {
+      potvrzLokalniZmenuNaServeru();
+    }
+
+    return vysledek;
   } finally {
     probihajiciStartSync = null;
 

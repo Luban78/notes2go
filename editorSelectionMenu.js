@@ -2269,24 +2269,79 @@ todoList?.classList.remove(
       return null;
     }
 
+    /*
+     * Poznámky nemají vždy totožnou HTML kostru. První řádek může být
+     * přímý textový uzel editoru, ale také <div>/<span>/<font> s textem
+     * uvnitř. Android WebView navíc někdy vrátí caret právě na hranici
+     * tohoto obalového elementu. Původní verze uměla jen přímé textové
+     * děti, takže dvojtap fungoval v jedné poznámce a v jiné ne.
+     *
+     * Hledáme proto nejbližší text i uvnitř potomka. U dítěte napravo
+     * použijeme jeho první text, u dítěte nalevo poslední text.
+     */
+    const najdiTextPotomka = (
+      prvek,
+      odKonce = false
+    ) => {
+      if (!prvek) {
+        return null;
+      }
+
+      if (prvek.nodeType === Node.TEXT_NODE) {
+        return prvek;
+      }
+
+      if (prvek.nodeType !== Node.ELEMENT_NODE) {
+        return null;
+      }
+
+      const walker = document.createTreeWalker(
+        prvek,
+        NodeFilter.SHOW_TEXT
+      );
+
+      if (!odKonce) {
+        return walker.nextNode();
+      }
+
+      let posledni = null;
+      let dalsi = walker.nextNode();
+
+      while (dalsi) {
+        posledni = dalsi;
+        dalsi = walker.nextNode();
+      }
+
+      return posledni;
+    };
+
     const deti =
       Array.from(kontejner.childNodes);
 
-    const kandidati = [
-      deti[rozsah.startOffset] ?? null,
-      deti[rozsah.startOffset - 1] ?? null
-    ];
+    const pravyKandidat =
+      deti[rozsah.startOffset] ?? null;
 
-    for (const kandidat of kandidati) {
-      if (kandidat?.nodeType === Node.TEXT_NODE) {
-        return {
-          uzel: kandidat,
-          offset:
-            kandidat === deti[rozsah.startOffset]
-              ? 0
-              : kandidat.textContent.length
-        };
-      }
+    const levyKandidat =
+      deti[rozsah.startOffset - 1] ?? null;
+
+    const pravyText =
+      najdiTextPotomka(pravyKandidat, false);
+
+    if (pravyText) {
+      return {
+        uzel: pravyText,
+        offset: 0
+      };
+    }
+
+    const levyText =
+      najdiTextPotomka(levyKandidat, true);
+
+    if (levyText) {
+      return {
+        uzel: levyText,
+        offset: levyText.textContent.length
+      };
     }
 
     return null;
@@ -2958,15 +3013,17 @@ todoList?.classList.remove(
          * - první řádek opravíme jen když nativní hit-test skutečně selže,
          * - mezera mezi slovy zůstává kurzorem -> Vložit / Vše.
          */
-        if (
-          jeSlovoVBoduBezZmenyVyberu(
-            dotyk.clientX,
-            dotyk.clientY
-          )
-        ) {
-          return;
-        }
-
+        /*
+         * První řádek Android WebView umí zradit dvěma způsoby:
+         * caretRangeFromPoint() už vrátí bod uvnitř slova, takže
+         * jeSlovoVBoduBezZmenyVyberu() vrátí true, ale samotný nativní
+         * dvojtap přesto Range neroztáhne. Dřívější pořadí pak fallback
+         * vůbec nenaplánovalo a zůstalo jen Vložit / Vše.
+         *
+         * Geometrický hit-test proto zkusíme PŘED důvěrou v nativní
+         * selection. Na normálních řádcích se nic nemění: pokud WebView
+         * výběr během 140 ms vytvoří, fallback se ho ani nedotkne.
+         */
         const fallbackSlovo =
           najdiTextovyBodSlovaPresObdelniky(
             editorTextu,
@@ -3006,6 +3063,19 @@ todoList?.classList.remove(
             );
           }, 140);
 
+          return;
+        }
+
+        /*
+         * Pokud geometrie znak nenašla, ale běžný caret hit-test ano,
+         * necháme standardní řádky dál plně na nativním WebView.
+         */
+        if (
+          jeSlovoVBoduBezZmenyVyberu(
+            dotyk.clientX,
+            dotyk.clientY
+          )
+        ) {
           return;
         }
 
