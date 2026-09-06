@@ -115,6 +115,26 @@
   let casovacAktualizaceVyberu = null;
 
 
+  /*
+   * Diagnostika prvního řádku Standard editoru.
+   * Pouze posílá interní rozhodnutí do Debug Hubu; chování výběru nemění.
+   */
+  function debugEditorSelection(faze, detail = {}) {
+    try {
+      document.dispatchEvent(
+        new CustomEvent("lubanote:editor-selection-debug", {
+          detail: {
+            faze,
+            ...detail
+          }
+        })
+      );
+    } catch (_chyba) {
+      // Diagnostika nesmí nikdy ovlivnit editor.
+    }
+  }
+
+
   /* ==========================================
      POMOCNÉ FUNKCE PRO RANGE / EDITOR
   ========================================== */
@@ -3028,6 +3048,12 @@ todoList?.classList.remove(
         !event.target.closest?.("li");
 
       if (jeAndroidStandard) {
+        debugEditorSelection("STANDARD_DVOJTAP", {
+          x: Math.round(dotyk.clientX),
+          y: Math.round(dotyk.clientY),
+          target: event.target?.tagName || event.target?.nodeName || "?"
+        });
+
         /*
          * STANDARD ANDROID – jeden selection systém:
          * - běžné slovo necháme nativnímu WebView -> systémové úchyty,
@@ -3052,6 +3078,12 @@ todoList?.classList.remove(
             dotyk.clientY
           );
 
+        debugEditorSelection("HIT_TEST", {
+          geometrie: Boolean(fallbackSlovo),
+          geometrieOffset: fallbackSlovo?.offset ?? null,
+          geometrieText: fallbackSlovo?.uzel?.textContent?.slice(0, 36) ?? ""
+        });
+
         if (fallbackSlovo) {
           const xFallback = dotyk.clientX;
           const yFallback = dotyk.clientY;
@@ -3074,6 +3106,11 @@ todoList?.classList.remove(
           cekameNaNativniStandardDvojtapDo =
             performance.now() + 320;
 
+          debugEditorSelection("WAIT_NATIVE_START", {
+            token: mujToken,
+            waitMs: 280
+          });
+
           menuProKurzorAktivni = false;
           bodMenuKurzor = null;
           selectionMenu.hidden = true;
@@ -3092,11 +3129,21 @@ todoList?.classList.remove(
                 ? vyberAktualni.getRangeAt(0)
                 : null;
 
+            debugEditorSelection("WAIT_NATIVE_END", {
+              token: mujToken,
+              hasRange: Boolean(rozsahAktualni),
+              collapsed: rozsahAktualni?.collapsed ?? null,
+              selected: vyberAktualni?.toString?.().slice(0, 40) ?? ""
+            });
+
             if (
               rozsahAktualni &&
               !rozsahAktualni.collapsed &&
               ziskejRichEditorProRozsah(rozsahAktualni) === editorTextu
             ) {
+              debugEditorSelection("NATIVE_SELECTION_WON", {
+                selected: vyberAktualni?.toString?.().slice(0, 40) ?? ""
+              });
               vynuceneVlastniUchytyStandard = false;
               cekameNaNativniStandardDvojtapDo = 0;
               zobrazMenuProOznaceni(rozsahAktualni);
@@ -3114,6 +3161,11 @@ todoList?.classList.remove(
                 fallbackSlovo
               );
 
+            debugEditorSelection("PROGRAM_FALLBACK", {
+              ok: Boolean(vybranoFallbackem),
+              selected: window.getSelection()?.toString?.().slice(0, 40) ?? ""
+            });
+
             if (!vybranoFallbackem) {
               vynuceneVlastniUchytyStandard = false;
             }
@@ -3129,12 +3181,18 @@ todoList?.classList.remove(
          * Pokud geometrie znak nenašla, ale běžný caret hit-test ano,
          * necháme standardní řádky dál plně na nativním WebView.
          */
-        if (
+        const nativniHitSlova =
           jeSlovoVBoduBezZmenyVyberu(
             dotyk.clientX,
             dotyk.clientY
-          )
-        ) {
+          );
+
+        debugEditorSelection("NATIVE_HIT_TEST", {
+          slovo: Boolean(nativniHitSlova)
+        });
+
+        if (nativniHitSlova) {
+          debugEditorSelection("NATIVE_ONLY_PATH");
           return;
         }
 
@@ -3142,6 +3200,8 @@ todoList?.classList.remove(
          * Dvojtap na skutečné mezeře / prázdném místě.
          * Zachováváme Vložit / Vše i MEZI dvěma slovy.
          */
+        debugEditorSelection("GAP_OR_EMPTY_PATH");
+
         const caretRozsahAndroid =
           najdiCaretRozsahVBodu(
             dotyk.clientX,

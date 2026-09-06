@@ -304,6 +304,19 @@
     return nejblizsi;
   }
 
+  function infoUchytuVyberu() {
+    const uchyty = [...document.querySelectorAll(".selectionHandle")];
+    const viditelne = uchyty.filter(prvek => {
+      const styl = getComputedStyle(prvek);
+      return !prvek.hidden &&
+        styl.display !== "none" &&
+        styl.visibility !== "hidden" &&
+        Number(styl.opacity || 1) !== 0;
+    });
+
+    return `handles=${viditelne.length}/${uchyty.length}`;
+  }
+
   function infoDomVyberu() {
     const aktivni = document.activeElement;
 
@@ -486,6 +499,39 @@
       return () => {};
     }
 
+    const infoBodu = (x, y) => {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return "hit=N/A";
+      }
+
+      let range = null;
+      try {
+        range = document.caretRangeFromPoint?.(x, y) || null;
+      } catch (_chyba) {
+        range = null;
+      }
+
+      const podPrstem = document.elementFromPoint?.(x, y) || null;
+      const casti = [`elem=${popisPrvku(podPrstem)}`];
+
+      if (!range) {
+        casti.push("caret=NONE");
+        return casti.join(" ");
+      }
+
+      casti.push(
+        `caret=${popisPrvku(range.startContainer)}:${range.startOffset}`
+      );
+
+      const node = range.startContainer;
+      const parent = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      if (parent instanceof Element) {
+        casti.push(`parent=${popisPrvku(parent)}`);
+      }
+
+      return casti.join(" ");
+    };
+
     const zapisEditor = (typ, event = null, doplnek = "") => {
       if (event && jeDebugPrvek(event.target)) return;
 
@@ -512,6 +558,12 @@
         casti.push(infoMenuVyberu());
       }
 
+      casti.push(infoUchytuVyberu());
+
+      if (event) {
+        casti.push(`prevented=${event.defaultPrevented ? "Y" : "N"}`);
+      }
+
       if (doplnek) {
         casti.push(doplnek);
       }
@@ -519,19 +571,35 @@
       zapis(casti.join(" | "));
     };
 
-    ["pointerdown", "pointerup", "pointercancel", "click", "dblclick"].forEach(typ => {
+    ["pointerdown", "pointerup", "pointercancel", "click", "dblclick", "contextmenu"].forEach(typ => {
       pridejPosluchac(uklidy, editor, typ, event => zapisEditor(typ, event), true);
     });
 
     ["touchstart", "touchend", "touchcancel"].forEach(typ => {
       pridejPosluchac(uklidy, editor, typ, event => {
         let doplnek = "";
+        const bod = bodUdalosti(event);
+
+        if (bod) {
+          doplnek = infoBodu(bod.x, bod.y);
+        }
 
         if (typ === "touchend") {
           const ted = performance.now();
           const dt = posledniTouchEnd ? Math.round(ted - posledniTouchEnd) : 0;
           posledniTouchEnd = ted;
-          doplnek = `dt=${dt}ms`;
+          doplnek = `${doplnek} dt=${dt}ms`.trim();
+
+          if (dt > 0 && dt <= 380) {
+            [30, 80, 160, 300, 500].forEach(zpozdeni => {
+              setTimeout(() => {
+                if (aktivniModul !== "editorSelection") return;
+                zapis(
+                  `AFTER DVOJTAP +${zpozdeni}ms | ${infoDomVyberu()} | ${infoMenuVyberu()} | ${infoUchytuVyberu()}`
+                );
+              }, zpozdeni);
+            });
+          }
         }
 
         zapisEditor(typ, event, doplnek);
@@ -547,6 +615,23 @@
       }
 
       zapisEditor("SELECTIONCHANGE");
+    }, true);
+
+    pridejPosluchac(uklidy, document, "lubanote:editor-selection-debug", event => {
+      const detail = event.detail || {};
+      const casti = [
+        `INTERNI ${detail.faze || "?"}`,
+        infoDomVyberu(),
+        infoMenuVyberu(),
+        infoUchytuVyberu()
+      ];
+
+      Object.entries(detail).forEach(([klic, hodnota]) => {
+        if (klic === "faze") return;
+        casti.push(`${klic}=${zkratText(hodnota, 52)}`);
+      });
+
+      zapis(casti.join(" | "));
     }, true);
 
     if (selectionMenu) {
