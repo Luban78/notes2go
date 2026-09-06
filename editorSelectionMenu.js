@@ -3087,6 +3087,64 @@ todoList?.classList.remove(
         if (fallbackSlovo) {
           const xFallback = dotyk.clientX;
           const yFallback = dotyk.clientY;
+
+          /*
+           * Android WebView má zvláštní chybu pro PRVNÍ řádek, pokud je
+           * jeho text přímým textovým potomkem #modalRichText. Diagnostika
+           * ukázala, že contextmenu slovo správně vybere, ale následný
+           * dblclick Range okamžitě zkolabuje na kurzor. Řádky uvnitř
+           * vlastního <div> tím netrpí.
+           *
+           * Proto pouze tento konkrétní root-text případ vůbec nepouštíme
+           * do nativního dvojtapu. Druhý tap převezme LubaNote, vybere slovo
+           * programově a použije stejné vlastní úchyty jako Bullet/TODO.
+           * Ostatní řádky dál používají nativní Android selection.
+           */
+          const jePrimyTextPrvnihoRadku =
+            fallbackSlovo.uzel?.parentNode === editorTextu;
+
+          if (jePrimyTextPrvnihoRadku) {
+            debugEditorSelection("ROOT_TEXT_OWN_SELECTION", {
+              offset: fallbackSlovo.offset,
+              text: fallbackSlovo.uzel?.textContent?.slice(0, 40) ?? ""
+            });
+
+            /* Zastavíme syntetický click/contextmenu/dblclick WebView,
+               který právě tento Range shazuje. */
+            event.preventDefault();
+
+            tokenCekaniNaNativniStandardDvojtap += 1;
+            cekameNaNativniStandardDvojtapDo = 0;
+            menuProKurzorAktivni = false;
+            bodMenuKurzor = null;
+            selectionMenu.hidden = true;
+            skryjUchytyVyberu();
+
+            vynuceneVlastniUchytyStandard = true;
+
+            const vybranoPrvniRadek =
+              vyberSlovoVBodu(
+                xFallback,
+                yFallback,
+                editorTextu,
+                fallbackSlovo
+              );
+
+            debugEditorSelection("ROOT_TEXT_OWN_SELECTION_END", {
+              ok: Boolean(vybranoPrvniRadek),
+              selected: window.getSelection()?.toString?.().slice(0, 40) ?? ""
+            });
+
+            if (!vybranoPrvniRadek) {
+              vynuceneVlastniUchytyStandard = false;
+            }
+
+            ignorujKlikPoDvojtapuDo =
+              performance.now() + 450;
+
+            return;
+          }
+
           const mujToken =
             ++tokenCekaniNaNativniStandardDvojtap;
 
