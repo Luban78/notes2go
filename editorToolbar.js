@@ -2035,9 +2035,30 @@
     let uzel = rozsah.startContainer;
 
     /*
-     * Android WebView může u nativního výběru vrátit startContainer
-     * jako společného rodiče místo textového uzlu. Najdeme proto první
-     * skutečný textový uzel, který se s Range protíná.
+     * Android WebView může po dvojtapu na FORMÁTOVANÝ text vrátit
+     * range.startContainer jako společný obal (DIV/SPAN/FONT), i když
+     * skutečný anchor/focus leží přímo v označeném textovém uzlu.
+     *
+     * Pro velikost písma je proto bezpečnější nejdřív použít skutečný
+     * textový anchor/focus výběru. Tím se vyhneme tomu, že TreeWalker
+     * vezme sousední text na hraně Range a toolbar ponechá starou
+     * velikost. Selection samotný tím nijak neměníme.
+     */
+    if (uzel?.nodeType === Node.ELEMENT_NODE) {
+      const textovyKandidat =
+        [vyber.anchorNode, vyber.focusNode].find(kandidat =>
+          kandidat?.nodeType === Node.TEXT_NODE &&
+          ziskejEditorFormatovaniProUzel(kandidat) === cilovyEditor
+        );
+
+      if (textovyKandidat) {
+        uzel = textovyKandidat;
+      }
+    }
+
+    /*
+     * Když ani anchor/focus není textový uzel, použijeme původní
+     * odladěný fallback přes textové uzly protínající Range.
      */
     if (uzel?.nodeType === Node.ELEMENT_NODE) {
       const koren = rozsah.commonAncestorContainer;
