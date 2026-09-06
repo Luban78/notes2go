@@ -1419,9 +1419,18 @@ async function getCloudNotesForSync() {
 
 
 async function ziskejVlastniSdileneIdProSync() {
+  const diagCelaKontrola =
+    window.LubaNoteStartupDiag?.zacni?.("SYNC GUARD – OWNED SHARED");
+  const diagAuth =
+    window.LubaNoteStartupDiag?.zacni?.("SYNC GUARD AUTH – OWNED SHARED");
   const user = await getCurrentUser();
+  window.LubaNoteStartupDiag?.konec?.(diagAuth, user ? "OK" : "NO-USER");
 
   if (!user || !navigator.onLine) {
+    window.LubaNoteStartupDiag?.konec?.(
+      diagCelaKontrola,
+      !navigator.onLine ? "OFFLINE" : "NO-USER"
+    );
     return new Set();
   }
 
@@ -1431,6 +1440,10 @@ async function ziskejVlastniSdileneIdProSync() {
     );
 
     if (error) {
+      window.LubaNoteStartupDiag?.konec?.(
+        diagCelaKontrola,
+        "RPC-CHYBA"
+      );
       console.warn(
         "LubaNote sync: seznam vlastních sdílených poznámek se nepodařilo načíst; běžný sync je pro jistotu nepovažuje za shared.",
         error
@@ -1444,12 +1457,20 @@ async function ziskejVlastniSdileneIdProSync() {
         ? data.notes
         : [];
 
-    return new Set(
+    const vysledek = new Set(
       radky
         .map((row) => row?.note_id || row?.id || null)
         .filter(Boolean)
     );
+
+    window.LubaNoteStartupDiag?.konec?.(
+      diagCelaKontrola,
+      `OK count=${vysledek.size}`
+    );
+
+    return vysledek;
   } catch (error) {
+    window.LubaNoteStartupDiag?.konec?.(diagCelaKontrola, "CHYBA");
     console.warn(
       "LubaNote sync: detekce vlastních sdílených poznámek selhala.",
       error
@@ -2744,13 +2765,18 @@ let probihajiciSync = null;
    vlastník přestane blokovat a stáhne potvrzenou serverovou revizi.
    ============================================================ */
 async function ziskejIdPoznamekEditovanychJinde() {
+  const diagCelaKontrola =
+    window.LubaNoteStartupDiag?.zacni?.("SYNC GUARD – REMOTE EDITORS");
+
   if (!navigator.onLine) {
+    window.LubaNoteStartupDiag?.konec?.(diagCelaKontrola, "OFFLINE");
     return new Set();
   }
 
   const deviceId = getDeviceId();
 
   if (!deviceId) {
+    window.LubaNoteStartupDiag?.konec?.(diagCelaKontrola, "NO-DEVICE");
     return new Set();
   }
 
@@ -2768,6 +2794,10 @@ async function ziskejIdPoznamekEditovanychJinde() {
        * dočasné síťové chybě nebo před aplikací SQL V1.3.
        * V takovém případě zůstává aktivní původní revision airbag.
        */
+      window.LubaNoteStartupDiag?.konec?.(
+        diagCelaKontrola,
+        "RPC-CHYBA"
+      );
       console.warn(
         "Kontrola aktivních editorů pro sync nebyla dostupná:",
         error.message
@@ -2777,12 +2807,20 @@ async function ziskejIdPoznamekEditovanychJinde() {
 
     const radky = Array.isArray(data) ? data : [];
 
-    return new Set(
+    const vysledek = new Set(
       radky
         .map((row) => row?.note_id)
         .filter(Boolean)
     );
+
+    window.LubaNoteStartupDiag?.konec?.(
+      diagCelaKontrola,
+      `OK count=${vysledek.size}`
+    );
+
+    return vysledek;
   } catch (error) {
+    window.LubaNoteStartupDiag?.konec?.(diagCelaKontrola, "CHYBA");
     console.warn(
       "Kontrola aktivních editorů pro sync selhala:",
       error
@@ -2802,7 +2840,13 @@ async function syncNotes(moznosti = {}) {
   const fastSnapshot = moznosti?.fastSnapshot || null;
 
   probihajiciSync = (async () => {
+    const diagAuthPrivate =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE AUTH");
     const user = await getCurrentUser();
+    window.LubaNoteStartupDiag?.konec?.(
+      diagAuthPrivate,
+      user ? "OK" : "NO-USER"
+    );
 
     if (!user) {
       oznamChybejiciOnlineSession();
@@ -2811,9 +2855,12 @@ async function syncNotes(moznosti = {}) {
 
     nastavStavSynchronizaceUI("syncing");
 
+    const diagSecretFlush =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE SECRET FLUSH");
     if (typeof cekajNaUlozeniTajnychPoznamek === "function") {
       await cekajNaUlozeniTajnychPoznamek();
     }
+    window.LubaNoteStartupDiag?.konec?.(diagSecretFlush, "OK");
 
     const revizeLokalnihoStavuPriStartu =
       ziskejReviziLokalnichZmenProSync();
@@ -2822,8 +2869,13 @@ async function syncNotes(moznosti = {}) {
      * Nejdřív odešleme případná smazání z offline fronty.
      * Teprve potom načítáme cloudový snapshot.
      */
+    const diagPendingDeletes =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE PENDING DELETES");
     await odesliCekajiciSmazaniDoSupabase();
+    window.LubaNoteStartupDiag?.konec?.(diagPendingDeletes, "OK");
 
+    const diagLocalSnapshot =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE LOCAL SNAPSHOT");
     let localRegular = getLocalNotesForSync();
 
     const localEncrypted =
@@ -2841,7 +2893,18 @@ async function syncNotes(moznosti = {}) {
         ? getDesifrovaneTajnePoznamky()
         : [];
 
+    window.LubaNoteStartupDiag?.konec?.(
+      diagLocalSnapshot,
+      `regular=${localRegular.length} encrypted=${localEncrypted.length} legacySecret=${localLegacySecret.length} decryptedSecret=${localDecryptedSecret.length}`
+    );
+
+    const diagCloudSnapshot =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE CLOUD SNAPSHOT");
     let cloudRows = await getCloudNotesForSync();
+    window.LubaNoteStartupDiag?.konec?.(
+      diagCloudSnapshot,
+      `rows=${Array.isArray(cloudRows) ? cloudRows.length : 0}`
+    );
 
     /*
      * Start optimalizace 2:
@@ -2849,6 +2912,8 @@ async function syncNotes(moznosti = {}) {
      * nezávisí. Dříve čekaly jedna na druhou. Výsledek i bezpečnostní
      * pravidla zůstávají stejné, jen serverové čtení proběhne paralelně.
      */
+    const diagSyncGuards =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE SYNC GUARDS");
     const [
       vlastniSdileneId,
       idPoznamekEditovanychJinde
@@ -2866,6 +2931,13 @@ async function syncNotes(moznosti = {}) {
        */
       ziskejIdPoznamekEditovanychJinde()
     ]);
+    window.LubaNoteStartupDiag?.konec?.(
+      diagSyncGuards,
+      `ownedShared=${vlastniSdileneId.size} remoteEditors=${idPoznamekEditovanychJinde.size}`
+    );
+
+    const diagLegacyPlanner =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE LEGACY PLANNER CHECK");
 
     /*
      * LEGACY PLANNER MIGRACE – pouze skutečně lokální poznámky.
@@ -2918,6 +2990,8 @@ async function syncNotes(moznosti = {}) {
       }
     }
 
+    window.LubaNoteStartupDiag?.konec?.(diagLegacyPlanner, "OK");
+
     if (
       lokalniStavSeBehemSyncuZmenil(
         revizeLokalnihoStavuPriStartu
@@ -2926,6 +3000,9 @@ async function syncNotes(moznosti = {}) {
       odlozOpakovaniSynchronizace();
       return false;
     }
+
+    const diagLegacyDedup =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE LEGACY DEDUP");
 
     /*
      * Ještě před hlavním merge opravíme pouze jasně rozpoznané
@@ -2942,6 +3019,10 @@ async function syncNotes(moznosti = {}) {
 
     cloudRows =
       opravaLegacyDuplikatu.cloudRows;
+    window.LubaNoteStartupDiag?.konec?.(diagLegacyDedup, "OK");
+
+    const diagMergePrepare =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE MERGE PREPARE");
 
     const cloudMap = new Map(
       cloudRows.map((row) => [row.id, row])
@@ -2968,6 +3049,7 @@ async function syncNotes(moznosti = {}) {
       idPoznamekEditovanychJinde,
       vlastniSdileneId
     );
+    window.LubaNoteStartupDiag?.konec?.(diagMergePrepare, "OK");
 
     const {
       konfliktniId,
@@ -3012,6 +3094,8 @@ async function syncNotes(moznosti = {}) {
           !idPoznamekEditovanychJinde.has(row?.id)
       );
 
+    const diagWinnerMap =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE WINNER MAP");
     const { winners } = vytvorMapuVitezu(
       localRegularProMerge,
       localEncryptedProMerge,
@@ -3019,7 +3103,13 @@ async function syncNotes(moznosti = {}) {
       localDecryptedSecretProMerge,
       cloudRowsProMerge
     );
+    window.LubaNoteStartupDiag?.konec?.(
+      diagWinnerMap,
+      `winners=${winners.size}`
+    );
 
+    const diagMergeLoop =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE MERGE LOOP + UPLOADS");
     const mergedRegular = [];
     const encryptedToKeep = [];
     const secretCandidates = [];
@@ -3091,6 +3181,11 @@ async function syncNotes(moznosti = {}) {
       }
     }
 
+    window.LubaNoteStartupDiag?.konec?.(
+      diagMergeLoop,
+      `regular=${mergedRegular.length} secretCandidates=${secretCandidates.length}`
+    );
+
     /*
      * Během síťových await mohl uživatel něco změnit.
      * V takovém případě starý snapshot NEZAPÍŠEME do localStorage.
@@ -3109,6 +3204,8 @@ async function syncNotes(moznosti = {}) {
      * Toto odstraní stale běžnou kopii, pokud na jiném zařízení vyhrála
      * novější tajná verze. Legacy tajný plaintext se zatím zachová.
      */
+    const diagLocalWrite =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE LOCAL WRITE");
     ulozBeznePoznamkyPrimo(mergedRegular);
     ulozSifrovaneTajneZaznamy(encryptedToKeep);
 
@@ -3120,6 +3217,10 @@ async function syncNotes(moznosti = {}) {
     ulozPrijateCloudMetaPoMerge(
       cloudRows,
       prijmoutCloudMetaId
+    );
+    window.LubaNoteStartupDiag?.konec?.(
+      diagLocalWrite,
+      `regular=${mergedRegular.length} encrypted=${encryptedToKeep.length}`
     );
 
     if (
@@ -3139,6 +3240,8 @@ async function syncNotes(moznosti = {}) {
       typeof tajnyRezimOdemceny !== "undefined" &&
       tajnyRezimOdemceny === true;
 
+    const diagSecretMerge =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE SECRET MERGE");
     if (secretUnlocked) {
       const decryptedSecretNotes = [];
       const failedEncryptedRecords = [];
@@ -3218,11 +3321,19 @@ async function syncNotes(moznosti = {}) {
       }
     }
 
+    window.LubaNoteStartupDiag?.konec?.(
+      diagSecretMerge,
+      secretUnlocked ? "UNLOCKED" : "LOCKED"
+    );
+
+    const diagPlannerCleanup =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE PLANNER CLEANUP");
     if (
       typeof uklidOsirelychPlanovanychPolozek === "function"
     ) {
       await uklidOsirelychPlanovanychPolozek();
     }
+    window.LubaNoteStartupDiag?.konec?.(diagPlannerCleanup, "OK");
 
     if (
       lokalniStavSeBehemSyncuZmenil(
@@ -3245,6 +3356,8 @@ async function syncNotes(moznosti = {}) {
       return false;
     }
 
+    const diagRender =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE UI REFRESH");
     if (typeof renderTasks === "function") {
       renderTasks();
     }
@@ -3256,13 +3369,17 @@ async function syncNotes(moznosti = {}) {
     if (typeof renderCalendar === "function") {
       renderCalendar();
     }
+    window.LubaNoteStartupDiag?.konec?.(diagRender, "OK");
 
     /*
      * Fast token ukládáme až po úspěšném plném merge. Předstartovní
      * serverový otisk je bezpečné potvrdit pouze pokud tento sync během
      * svého běhu sám server nezměnil a lokální generace zůstala stejná.
      */
+    const diagFastState =
+      window.LubaNoteStartupDiag?.zacni?.("PRIVATE FAST STATE SAVE");
     ulozFastSyncStavPoPlnemSyncu(fastSnapshot);
+    window.LubaNoteStartupDiag?.konec?.(diagFastState, "OK");
 
     return true;
   })();
