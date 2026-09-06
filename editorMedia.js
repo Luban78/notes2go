@@ -488,7 +488,12 @@
       )
     );
 
-    if (jeTodoObrazek) {
+    const jeBulletObrazek = Boolean(
+      figure.dataset.bulletMedia === "true" &&
+      figure.closest?.("#modalRichText li")
+    );
+
+    if (jeTodoObrazek || jeBulletObrazek) {
       figure.style.setProperty(
         "float",
         "none",
