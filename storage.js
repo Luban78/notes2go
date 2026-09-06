@@ -247,13 +247,57 @@ let frontaUkladaniTajnychPoznamek = Promise.resolve();
  */
 let revizeLokalnichZmenPoznamek = 0;
 
+/*
+ * FAST SYNC V1 – TRVALÁ GENERACE LOKÁLNÍCH ZMĚN
+ *
+ * Původní revize výše je záměrně pouze paměťová a chrání jeden právě
+ * běžící sync před souběžnou změnou UI. Pro rychlý start ale potřebujeme
+ * vědět i po úplném killu aplikace, zda se od posledního potvrzeného
+ * serverového snapshotu něco lokálně změnilo.
+ *
+ * Tato generace se zvyšuje pouze tam, kde se už dříve zvyšovala
+ * revizeLokalnichZmenPoznamek. Přímé zápisy provedené samotným syncem
+ * ji tedy nemění.
+ */
+const LOKALNI_GENERACE_FAST_SYNC_STORAGE_KEY =
+  "lubanoteLocalNoteChangeGenerationV1";
+
+function nactiTrvalouGeneraciLokalnichZmenPoznamek() {
+  const hodnota = Number(
+    localStorage.getItem(
+      LOKALNI_GENERACE_FAST_SYNC_STORAGE_KEY
+    ) || 0
+  );
+
+  return Number.isFinite(hodnota) && hodnota >= 0
+    ? Math.floor(hodnota)
+    : 0;
+}
+
+function zvysTrvalouGeneraciLokalnichZmenPoznamek() {
+  const novaGenerace =
+    nactiTrvalouGeneraciLokalnichZmenPoznamek() + 1;
+
+  localStorage.setItem(
+    LOKALNI_GENERACE_FAST_SYNC_STORAGE_KEY,
+    String(novaGenerace)
+  );
+
+  return novaGenerace;
+}
+
 function zvysReviziLokalnichZmenPoznamek() {
   revizeLokalnichZmenPoznamek += 1;
+  zvysTrvalouGeneraciLokalnichZmenPoznamek();
   return revizeLokalnichZmenPoznamek;
 }
 
 function ziskejReviziLokalnichZmenPoznamek() {
   return revizeLokalnichZmenPoznamek;
+}
+
+function ziskejTrvalouGeneraciLokalnichZmenPoznamek() {
+  return nactiTrvalouGeneraciLokalnichZmenPoznamek();
 }
 
 function spocitejPoznamkyProLimit() {
@@ -276,6 +320,7 @@ function spocitejPoznamkyProLimit() {
 
 window.LubaNoteStorageState = {
   ziskejReviziLokalnichZmenPoznamek,
+  ziskejTrvalouGeneraciLokalnichZmenPoznamek,
   spocitejPoznamkyProLimit
 };
 

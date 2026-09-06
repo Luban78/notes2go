@@ -61,6 +61,293 @@ const PENDING_DELETE_STORAGE_KEY =
 const CLOUD_SYNC_META_STORAGE_KEY =
   "lubanoteCloudSyncMetaV1";
 
+/*
+ * FAST SYNC V1
+ *
+ * Serverový otisk je pouze malý validační token. Neobsahuje text
+ * poznámek ani přílohy. Pokud se otisk i trvalá lokální generace shodují
+ * s posledním bezpečně přijatým stavem, není důvod stahovat celý
+ * get_notes_safe snapshot. Při jakékoli nejistotě se fast path nepoužije.
+ */
+const FAST_SYNC_STATE_STORAGE_KEY =
+  "lubanotePrivateFastSyncStateV1";
+
+let pocetPotvrzenychServerovychZapisu = 0;
+
+function ziskejTrvalouGeneraciLokalnichZmenProFastSync() {
+  const hodnota = Number(
+    window.LubaNoteStorageState
+      ?.ziskejTrvalouGeneraciLokalnichZmenPoznamek
+      ?.()
+  );
+
+  return Number.isFinite(hodnota) && hodnota >= 0
+    ? Math.floor(hodnota)
+    : null;
+}
+
+function nactiFastSyncStav(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(
+      FAST_SYNC_STATE_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return null;
+    }
+
+    const stav = JSON.parse(raw);
+
+    if (
+      !stav ||
+      typeof stav !== "object" ||
+      String(stav.userId || "") !== String(userId) ||
+      typeof stav.serverFingerprint !== "string" ||
+      !stav.serverFingerprint ||
+      !Number.isFinite(Number(stav.localGeneration))
+    ) {
+      return null;
+    }
+
+    return {
+      userId: String(stav.userId),
+      serverFingerprint: stav.serverFingerprint,
+      localGeneration: Number(stav.localGeneration),
+      savedAt: stav.savedAt || null
+    };
+  } catch (error) {
+    console.warn(
+      "Fast Sync: lokální validační stav nebylo možné načíst:",
+      error
+    );
+    return null;
+  }
+}
+
+function ulozFastSyncStav({
+  userId,
+  serverFingerprint,
+  localGeneration
+}) {
+  if (
+    !userId ||
+    typeof serverFingerprint !== "string" ||
+    !serverFingerprint ||
+    !Number.isFinite(Number(localGeneration))
+  ) {
+    return false;
+  }
+
+  try {
+    localStorage.setItem(
+      FAST_SYNC_STATE_STORAGE_KEY,
+      JSON.stringify({
+        userId: String(userId),
+        serverFingerprint,
+        localGeneration: Number(localGeneration),
+        savedAt: new Date().toISOString()
+      })
+    );
+    return true;
+  } catch (error) {
+    console.warn(
+      "Fast Sync: validační stav nebylo možné uložit:",
+      error
+    );
+    return false;
+  }
+}
+
+function zrusFastSyncStav() {
+  try {
+    localStorage.removeItem(
+      FAST_SYNC_STATE_STORAGE_KEY
+    );
+  } catch {
+    // Fast path je pouze optimalizace; chyba localStorage nesmí blokovat sync.
+  }
+}
+
+async function ziskejServerovyPrivateFingerprint() {
+  try {
+    const { data, error } = await supabaseClient.rpc(
+      "lubanote_get_private_sync_fingerprint"
+    );
+
+    if (error) {
+      console.warn(
+        "Fast Sync: serverový otisk není dostupný, použije se plný sync:",
+        error.message || error
+      );
+      return null;
+    }
+
+    const vysledek = Array.isArray(data)
+      ? data[0]
+      : data;
+
+    const fingerprint =
+      typeof vysledek === "string"
+        ? vysledek
+        : vysledek?.fingerprint;
+
+    if (
+      typeof fingerprint !== "string" ||
+      !fingerprint
+    ) {
+      console.warn(
+        "Fast Sync: server vrátil neplatný otisk, použije se plný sync."
+      );
+      return null;
+    }
+
+    return {
+      fingerprint,
+      noteCount: Number(vysledek?.note_count ?? 0),
+      maxRevision: Number(vysledek?.max_revision ?? 0)
+    };
+  } catch (error) {
+    console.warn(
+      "Fast Sync: kontrola serverového otisku selhala, použije se plný sync:",
+      error
+    );
+    return null;
+  }
+}
+
+async function pripravFastSyncPriStartu(user) {
+  const diagnostika =
+    window.LubaNoteStartupDiag?.zacni?.("FAST SYNC CHECK");
+
+  let stavDiagnostiky = "FULL";
+
+  try {
+    if (!user?.id || !navigator.onLine) {
+      stavDiagnostiky = "NO-USER/OFFLINE";
+      return { preskocit: false, snapshot: null };
+    }
+
+    const localGeneration =
+      ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+    if (localGeneration === null) {
+      stavDiagnostiky = "NO-LOCAL-GEN";
+      zrusFastSyncStav();
+      return { preskocit: false, snapshot: null };
+    }
+
+    const server =
+      await ziskejServerovyPrivateFingerprint();
+
+    if (!server) {
+      stavDiagnostiky = "NO-SERVER-TOKEN";
+      zrusFastSyncStav();
+      return { preskocit: false, snapshot: null };
+    }
+
+    const snapshot = {
+      userId: user.id,
+      serverFingerprint: server.fingerprint,
+      localGeneration,
+      confirmedWriteCount:
+        pocetPotvrzenychServerovychZapisu
+    };
+
+    const ulozeny = nactiFastSyncStav(user.id);
+    const maCekajiciSmazani =
+      nactiCekajiciSmazani().length > 0;
+
+    const shodnyLokalniStav = Boolean(
+      ulozeny &&
+      Number(ulozeny.localGeneration) ===
+        Number(localGeneration)
+    );
+
+    const shodnyServer = Boolean(
+      ulozeny &&
+      ulozeny.serverFingerprint ===
+        server.fingerprint
+    );
+
+    if (
+      ulozeny &&
+      shodnyLokalniStav &&
+      shodnyServer &&
+      !maCekajiciSmazani &&
+      aktivniKonfliktySyncu.size === 0
+    ) {
+      stavDiagnostiky = "SKIP";
+      window.LubaNoteStartupDiag?.zapis?.(
+        "FAST",
+        `PRIVATE SYNC SKIP | notes=${server.noteCount}`
+      );
+
+      return {
+        preskocit: true,
+        snapshot
+      };
+    }
+
+    if (!ulozeny) {
+      stavDiagnostiky = "BOOTSTRAP-FULL";
+    } else if (maCekajiciSmazani) {
+      stavDiagnostiky = "PENDING-DELETE";
+    } else if (!shodnyLokalniStav) {
+      stavDiagnostiky = "LOCAL-CHANGED";
+    } else if (!shodnyServer) {
+      stavDiagnostiky = "SERVER-CHANGED";
+    } else {
+      stavDiagnostiky = "SAFE-FULL";
+    }
+
+    return {
+      preskocit: false,
+      snapshot
+    };
+  } finally {
+    window.LubaNoteStartupDiag?.konec?.(
+      diagnostika,
+      stavDiagnostiky
+    );
+  }
+}
+
+function ulozFastSyncStavPoPlnemSyncu(snapshot) {
+  if (!snapshot?.userId || !snapshot.serverFingerprint) {
+    return false;
+  }
+
+  const aktualniGenerace =
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+  const behemSyncuSeZapisovaloNaServer =
+    pocetPotvrzenychServerovychZapisu !==
+    snapshot.confirmedWriteCount;
+
+  if (
+    aktualniGenerace === null ||
+    Number(aktualniGenerace) !==
+      Number(snapshot.localGeneration) ||
+    behemSyncuSeZapisovaloNaServer ||
+    nactiCekajiciSmazani().length > 0 ||
+    aktivniKonfliktySyncu.size > 0
+  ) {
+    zrusFastSyncStav();
+    return false;
+  }
+
+  return ulozFastSyncStav({
+    userId: snapshot.userId,
+    serverFingerprint:
+      snapshot.serverFingerprint,
+    localGeneration: aktualniGenerace
+  });
+}
+
 const aktivniKonfliktySyncu = new Map();
 let konfliktSyncuUzOhlasen = false;
 
@@ -538,6 +825,13 @@ async function provedBezpecnyZapisPoznamky({
       result: vysledek
     };
   }
+
+  /*
+   * Počítadlo slouží Fast Syncu pouze k bezpečnému poznání, zda plný
+   * sync během svého běhu sám změnil serverový otisk. Pokud ano,
+   * předstartovní token se nesmí uložit jako nový potvrzený stav.
+   */
+  pocetPotvrzenychServerovychZapisu += 1;
 
   ulozCloudSyncMeta(id, {
     revision: vysledek.revision,
@@ -2497,10 +2791,15 @@ async function ziskejIdPoznamekEditovanychJinde() {
   }
 }
 
-async function syncNotes() {
+async function syncNotes(moznosti = {}) {
   if (probihajiciSync) {
     return probihajiciSync;
   }
+
+  const diagnostikaPrivateSync =
+    window.LubaNoteStartupDiag?.zacni?.("PRIVATE SYNC");
+  let diagnostikaPrivateSyncStav = "KONEC";
+  const fastSnapshot = moznosti?.fastSnapshot || null;
 
   probihajiciSync = (async () => {
     const user = await getCurrentUser();
@@ -2958,11 +3257,21 @@ async function syncNotes() {
       renderCalendar();
     }
 
+    /*
+     * Fast token ukládáme až po úspěšném plném merge. Předstartovní
+     * serverový otisk je bezpečné potvrdit pouze pokud tento sync během
+     * svého běhu sám server nezměnil a lokální generace zůstala stejná.
+     */
+    ulozFastSyncStavPoPlnemSyncu(fastSnapshot);
+
     return true;
   })();
 
   try {
     const vysledek = await probihajiciSync;
+
+    diagnostikaPrivateSyncStav =
+      vysledek === true ? "OK" : "FALSE";
 
     if (vysledek === true) {
       nastavKoncovyStavSynchronizaceUI();
@@ -2970,6 +3279,8 @@ async function syncNotes() {
 
     return vysledek;
   } catch (error) {
+    diagnostikaPrivateSyncStav = "CHYBA";
+
     if (jeChybaOdeprenehoPristupu(error)) {
       oznamOdeprenyPristupUctu(error);
     }
@@ -2982,6 +3293,12 @@ async function syncNotes() {
 
     throw error;
   } finally {
+    window.LubaNoteStartupDiag?.konec?.(
+      diagnostikaPrivateSync,
+      aktivniKonfliktySyncu.size > 0
+        ? "KONFLIKT"
+        : diagnostikaPrivateSyncStav
+    );
     probihajiciSync = null;
   }
 }
@@ -3005,7 +3322,24 @@ async function startSync() {
     return false;
   }
 
-  const poznamkySynchronizovany = await syncNotes();
+  const fastSync = await pripravFastSyncPriStartu(user);
+
+  let poznamkySynchronizovany = false;
+
+  if (fastSync?.preskocit === true) {
+    /*
+     * Lokální data už odpovídají potvrzenému serverovému otisku.
+     * Neprovádíme get_notes_safe ani revizní merge, protože by neměl
+     * co změnit. Všechny servisní kroky startu pod tímto blokem však
+     * zůstávají zachované.
+     */
+    nastavKoncovyStavSynchronizaceUI();
+    poznamkySynchronizovany = true;
+  } else {
+    poznamkySynchronizovany = await syncNotes({
+      fastSnapshot: fastSync?.snapshot || null
+    });
+  }
 
   if (poznamkySynchronizovany !== true) {
     return false;
@@ -3029,6 +3363,7 @@ async function startSync() {
           .zajistiUvitaciPoznamku();
 
       if (onboarding?.created === true) {
+        zrusFastSyncStav();
         const uvodSynchronizovan = await syncNotes();
 
         if (uvodSynchronizovan !== true) {
@@ -3367,9 +3702,16 @@ async function spustStartSyncBezpecne() {
 
   probihajiciStartSync =
     (async () => {
+      const diagnostikaStartSync =
+        window.LubaNoteStartupDiag?.zacni?.("START SYNC FLOW");
+      let diagnostikaStartSyncStav = "KONEC";
+
       try {
-        return (await startSync()) === true;
+        const uspesne = (await startSync()) === true;
+        diagnostikaStartSyncStav = uspesne ? "OK" : "FALSE";
+        return uspesne;
       } catch (error) {
+        diagnostikaStartSyncStav = "CHYBA";
         console.warn(
           "Synchronizace byla odložena:",
           error
@@ -3382,6 +3724,11 @@ async function spustStartSyncBezpecne() {
         }
 
         return false;
+      } finally {
+        window.LubaNoteStartupDiag?.konec?.(
+          diagnostikaStartSync,
+          diagnostikaStartSyncStav
+        );
       }
     })();
 
