@@ -969,49 +969,70 @@ async function obnovPoznamkuZKose(noteId, tajne = false) {
 
   delete obnovena.trashedAt;
 
-  const aktivni = loadTask();
-  const bezStejnehoId = aktivni.filter(
-    (task) => task?.id !== noteId
-  );
+  const provedObnovuLokalne = async () => {
+    const aktivni = loadTask();
+    const bezStejnehoId = aktivni.filter(
+      (task) => task?.id !== noteId
+    );
 
-  const ulozeno = await saveAllTasks([
-    ...bezStejnehoId,
-    obnovena
-  ]);
+    const ulozeno = await saveAllTasks([
+      ...bezStejnehoId,
+      obnovena
+    ]);
 
-  if (ulozeno === false) {
-    return false;
-  }
+    if (ulozeno === false) {
+      return false;
+    }
 
-  if (
-    window.LubaNotePlanner
-      ?.synchronizujPlanovaneTodoSPoznamkou
-  ) {
-    await window.LubaNotePlanner
-      .synchronizujPlanovaneTodoSPoznamkou(
+    if (
+      window.LubaNotePlanner
+        ?.synchronizujPlanovaneTodoSPoznamkou
+    ) {
+      await window.LubaNotePlanner
+        .synchronizujPlanovaneTodoSPoznamkou(
+          obnovena
+        );
+    }
+
+    if (
+      typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
+    ) {
+      obnovNotifikacePoznamkyPodleSoukromi(
         obnovena
+      ).catch(() => {});
+    }
+
+    return true;
+  };
+
+  /*
+   * Obnova z Koše je jedna lokální uživatelská změna a musí projít
+   * stejnou serializovanou sync cestou jako ostatní změny poznámek.
+   *
+   * Dříve se zde zároveň spouštěl přímý uploadLocalNoteToSupabase()
+   * a trash.js hned poté spustil ještě rychlý sync. Dva souběžné
+   * mechanismy mohly pracovat s rozdílnými snapshoty revize a první
+   * obnovení se pak krátce objevilo mezi kartami a starší snapshot ho
+   * vrátil zpět do Koše.
+   *
+   * Centrální wrapper změnu označí jako čekající na potvrzení serverem,
+   * ochrání ji proti právě běžícímu syncu a naplánuje jediný čerstvý sync.
+   */
+  if (
+    typeof window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj === "function"
+  ) {
+    return await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(
+        provedObnovuLokalne
       );
   }
 
-  if (
-    typeof obnovNotifikacePoznamkyPodleSoukromi === "function"
-  ) {
-    obnovNotifikacePoznamkyPodleSoukromi(
-      obnovena
-    ).catch(() => {});
-  }
-
-  if (typeof uploadLocalNoteToSupabase === "function") {
-    uploadLocalNoteToSupabase(obnovena)
-      .catch((error) => {
-        console.warn(
-          "Synchronizace obnovení z Koše byla odložena:",
-          error
-        );
-      });
-  }
-
-  return true;
+  /*
+   * Bez sync modulu uložíme změnu bezpečně pouze lokálně. Při příštím
+   * dostupném plném syncu ji ochrání lokální revize ze saveAllTasks().
+   */
+  return await provedObnovuLokalne();
 }
 
 async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {

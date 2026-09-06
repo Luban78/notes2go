@@ -215,7 +215,11 @@
         );
 
       if (uspesne) {
-        await poZmeneKose();
+        /*
+         * obnovPoznamkuZKose() už změnu předala centrální sync frontě.
+         * Nespouštíme zde druhý okamžitý sync nad stejnou obnovou.
+         */
+        await poZmeneKose({ synchronizovat: false });
       } else {
         obnovit.disabled = false;
         trvaleSmazat.disabled = false;
@@ -294,7 +298,7 @@
     nastavTextyKose();
   }
 
-  async function poZmeneKose() {
+  async function poZmeneKose({ synchronizovat = true } = {}) {
     await renderKos();
 
     if (typeof renderTasks === "function") {
@@ -310,6 +314,7 @@
     }
 
     if (
+      synchronizovat &&
       navigator.onLine &&
       typeof window.LubaNoteSync?.spustRychle === "function"
     ) {
