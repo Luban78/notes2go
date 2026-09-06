@@ -3767,6 +3767,19 @@ if (vyber) {
   );
 
 
+  /*
+   * Standard editor má na Androidu jednu speciální cestu pro dvojtap
+   * na root-text prvního řádku. Range tam vytváří LubaNote programově
+   * až po pointerup. Touto událostí selection modul pouze oznámí, že
+   * je Range hotový; stav toolbaru se přepočítá stejnou odladěnou
+   * funkcí jako u běžného nativního výběru.
+   */
+  document.addEventListener(
+    "lubanote:editor-selection-ready",
+    aktualizujStavFormatovani
+  );
+
+
   editorTextu.addEventListener(
     "keyup",
     aktualizujStavFormatovani

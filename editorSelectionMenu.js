@@ -3137,6 +3137,29 @@ todoList?.classList.remove(
 
             if (!vybranoPrvniRadek) {
               vynuceneVlastniUchytyStandard = false;
+            } else {
+              /*
+               * Root-text dvojtap vzniká až po pointerup programově.
+               * editorToolbar proto už nemůže spoléhat na svůj běžný
+               * pointerup a v některých WebView stavech se ani následný
+               * selectionchange nedoručí ve chvíli, kdy je Range hotový.
+               *
+               * Selection samotný už NEMĚNÍME. Jen po dokončení Range
+               * oznámíme toolbaru, že má znovu načíst B/I/U, zarovnání
+               * a hlavně logickou velikost písma.
+               */
+              requestAnimationFrame(() => {
+                document.dispatchEvent(
+                  new CustomEvent(
+                    "lubanote:editor-selection-ready",
+                    {
+                      detail: {
+                        source: "standard-root-doubletap"
+                      }
+                    }
+                  )
+                );
+              });
             }
 
             ignorujKlikPoDvojtapuDo =
