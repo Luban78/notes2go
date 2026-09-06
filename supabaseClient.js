@@ -1416,6 +1416,40 @@ async function updateLoginScreen() {
    * Síťové ověření proběhne pouze na pozadí.
    */
   if (maPredchoziPrihlaseni) {
+    /*
+     * Offline start neprochází sync.js, kde se běžně načítá start cache
+     * štítků. Bez ní jsou poznámky sice lokálně dostupné, ale barva
+     * jejich štítků spadne na výchozí "system".
+     *
+     * Cache už tags.js ukládá po úspěšném online načtení a před zápisem
+     * sanitizuje Secret názvy. Tady ji pouze použijeme ve stejné podobě
+     * i při skutečně offline startu.
+     */
+    if (
+      !navigator.onLine &&
+      typeof window.LubaNoteTagsStartCache?.nacti === "function"
+    ) {
+      const userIdProOfflineStitky = String(
+        lokalniCachePristupu?.user_id ||
+        localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) ||
+        ""
+      ).trim();
+
+      if (userIdProOfflineStitky) {
+        const stitkyNactenyOffline =
+          window.LubaNoteTagsStartCache.nacti(
+            userIdProOfflineStitky
+          ) === true;
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "FAST",
+          stitkyNactenyOffline
+            ? "TAG OFFLINE CACHE HIT"
+            : "TAG OFFLINE CACHE MISS"
+        );
+      }
+    }
+
     await zobrazLokalniAplikaci();
 
     if (navigator.onLine) {
