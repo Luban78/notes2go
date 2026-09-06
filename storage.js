@@ -10,6 +10,30 @@ const BACKUP_CLOUD_META_STORAGE_KEY =
 const BACKUP_PENDING_DELETE_STORAGE_KEY =
   "lubanotePendingDeletes";
 
+/*
+ * Běžné poznámky zůstávají primárně v localStorage stejně jako dosud.
+ * IndexedDB se aktivuje pouze jako bezpečný overflow režim v prohlížeči,
+ * který už celý savedTask kvůli kvótě localStorage nepobere (typicky iOS).
+ */
+const REGULAR_TASK_OVERFLOW_MODE_KEY =
+  "lubanoteRegularNotesStorageModeV1";
+const REGULAR_TASK_OVERFLOW_MODE_INDEXED_DB =
+  "indexeddb";
+const REGULAR_TASK_OWNER_KEY =
+  "lubanoteLocalOwnerUserId";
+const REGULAR_TASK_DB_NAME =
+  "LubaNoteRegularNotesCache";
+const REGULAR_TASK_DB_VERSION = 1;
+const REGULAR_TASK_DB_STORE =
+  "regularNotes";
+
+let plnaCacheBeznychPoznamek = null;
+let vlastnikPlneCacheBeznychPoznamek = null;
+let stavPlneCacheBeznychPoznamek = "local";
+let slibDatabazeBeznychPoznamek = null;
+let slibPripravyBeznychPoznamek = null;
+let frontaUkladaniBeznychPoznamek = Promise.resolve();
+
 
 /*
  * STABILNÍ IDENTITA STARÝCH POZNÁMEK
@@ -200,7 +224,7 @@ function vytvorKlicJasnehoLegacyDuplikatu(task) {
 
 function nactiSavedTaskSeStabilnimiId() {
   const puvodni =
-    nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY);
+    nactiZdrojSavedTaskProCteni();
 
   let zmeneno = false;
 
@@ -218,10 +242,55 @@ function nactiSavedTaskSeStabilnimiId() {
   });
 
   if (zmeneno) {
-    localStorage.setItem(
-      REGULAR_TASK_STORAGE_KEY,
-      JSON.stringify(normalizovane)
+    const bezneNormalizovane = normalizovane.filter(
+      (task) => task && task.isSecret !== true
     );
+    const legacyTajneNormalizovane = normalizovane.filter(
+      (task) => task?.isSecret === true
+    );
+
+    if (
+      jeOverflowRezimBeznychPoznamek() &&
+      stavPlneCacheBeznychPoznamek !== "ready"
+    ) {
+      /*
+       * Při úplně prvním skrytém renderu ještě může být dostupná jen
+       * lehká localStorage kopie bez obrázků. Tu nikdy nesmíme zapsat
+       * přes plnou IndexedDB cache. Migrace ID se zopakuje po načtení
+       * plné cache před zobrazením aplikace.
+       */
+    } else if (jeOverflowRezimBeznychPoznamek()) {
+      void zaradOverflowUlozeniBeznychPoznamek(
+        bezneNormalizovane,
+        legacyTajneNormalizovane
+      ).catch((error) => {
+        console.warn(
+          "Migraci stabilních ID se nepodařilo uložit do IndexedDB:",
+          error
+        );
+      });
+    } else {
+      try {
+        localStorage.setItem(
+          REGULAR_TASK_STORAGE_KEY,
+          JSON.stringify(normalizovane)
+        );
+      } catch (error) {
+        if (error?.name !== "QuotaExceededError") {
+          throw error;
+        }
+
+        void zaradOverflowUlozeniBeznychPoznamek(
+          bezneNormalizovane,
+          legacyTajneNormalizovane
+        ).catch((errorOverflow) => {
+          console.warn(
+            "Migraci stabilních ID se nepodařilo uložit do IndexedDB:",
+            errorOverflow
+          );
+        });
+      }
+    }
 
     console.info(
       "LubaNote: starým poznámkám byla doplněna stabilní ID."
@@ -341,6 +410,434 @@ function nactiPoleZLocalStorage(klic) {
   }
 }
 
+
+function klonujDataPoznamek(hodnota) {
+  try {
+    return typeof structuredClone === "function"
+      ? structuredClone(hodnota)
+      : JSON.parse(JSON.stringify(hodnota));
+  } catch (error) {
+    console.error("Kopii lokálních poznámek se nepodařilo vytvořit:", error);
+    return Array.isArray(hodnota) ? [...hodnota] : hodnota;
+  }
+}
+
+function ziskejVlastnikaBeznychPoznamek() {
+  return String(
+    localStorage.getItem(REGULAR_TASK_OWNER_KEY) || ""
+  ).trim();
+}
+
+function jeOverflowRezimBeznychPoznamek() {
+  if (
+    localStorage.getItem(REGULAR_TASK_OVERFLOW_MODE_KEY) ===
+    REGULAR_TASK_OVERFLOW_MODE_INDEXED_DB
+  ) {
+    return true;
+  }
+
+  /*
+   * Nouzová detekce pro případ, že Safari po zmenšení savedTask ještě
+   * odmítlo zapsat samotný malý mode klíč. Lehká kopie se pozná podle
+   * markeru obrázků, takže plná IndexedDB cache se i tak načte.
+   */
+  const raw = localStorage.getItem(
+    REGULAR_TASK_STORAGE_KEY
+  );
+
+  return (
+    typeof raw === "string" &&
+    raw.includes('data-lubanote-idb-image="1"')
+  );
+}
+
+function jeIndexedDbProBeznePoznamkyDostupne() {
+  return typeof indexedDB !== "undefined";
+}
+
+function otevriDatabaziBeznychPoznamek() {
+  if (!jeIndexedDbProBeznePoznamkyDostupne()) {
+    return Promise.reject(
+      new Error("IndexedDB není v tomto zařízení dostupné.")
+    );
+  }
+
+  if (slibDatabazeBeznychPoznamek) {
+    return slibDatabazeBeznychPoznamek;
+  }
+
+  slibDatabazeBeznychPoznamek = new Promise(
+    (resolve, reject) => {
+      const request = indexedDB.open(
+        REGULAR_TASK_DB_NAME,
+        REGULAR_TASK_DB_VERSION
+      );
+
+      request.onupgradeneeded = () => {
+        const databaze = request.result;
+
+        if (
+          !databaze.objectStoreNames.contains(
+            REGULAR_TASK_DB_STORE
+          )
+        ) {
+          databaze.createObjectStore(
+            REGULAR_TASK_DB_STORE,
+            { keyPath: "ownerId" }
+          );
+        }
+      };
+
+      request.onsuccess = () => {
+        const databaze = request.result;
+
+        databaze.onversionchange = () => {
+          databaze.close();
+          slibDatabazeBeznychPoznamek = null;
+        };
+
+        resolve(databaze);
+      };
+
+      request.onerror = () => {
+        slibDatabazeBeznychPoznamek = null;
+        reject(
+          request.error ||
+          new Error("Databázi běžných poznámek se nepodařilo otevřít.")
+        );
+      };
+    }
+  );
+
+  return slibDatabazeBeznychPoznamek;
+}
+
+async function ulozPlnouCacheBeznychPoznamekDoIndexedDb(
+  ownerId,
+  notes
+) {
+  if (!ownerId) {
+    throw new Error(
+      "Běžné poznámky nelze bezpečně uložit bez vlastníka lokálních dat."
+    );
+  }
+
+  const databaze =
+    await otevriDatabaziBeznychPoznamek();
+
+  await new Promise((resolve, reject) => {
+    const transakce = databaze.transaction(
+      REGULAR_TASK_DB_STORE,
+      "readwrite"
+    );
+
+    transakce
+      .objectStore(REGULAR_TASK_DB_STORE)
+      .put({
+        ownerId,
+        savedAt: new Date().toISOString(),
+        notes
+      });
+
+    transakce.oncomplete = () => resolve();
+    transakce.onerror = () => reject(
+      transakce.error ||
+      new Error("Plnou cache běžných poznámek se nepodařilo uložit.")
+    );
+    transakce.onabort = () => reject(
+      transakce.error ||
+      new Error("Uložení plné cache běžných poznámek bylo přerušeno.")
+    );
+  });
+}
+
+async function nactiPlnouCacheBeznychPoznamekZIndexedDb(
+  ownerId
+) {
+  if (!ownerId) {
+    return null;
+  }
+
+  const databaze =
+    await otevriDatabaziBeznychPoznamek();
+
+  return new Promise((resolve, reject) => {
+    const transakce = databaze.transaction(
+      REGULAR_TASK_DB_STORE,
+      "readonly"
+    );
+    const request = transakce
+      .objectStore(REGULAR_TASK_DB_STORE)
+      .get(ownerId);
+
+    request.onsuccess = () => {
+      const zaznam = request.result;
+
+      resolve(
+        zaznam?.ownerId === ownerId &&
+        Array.isArray(zaznam.notes)
+          ? zaznam.notes
+          : null
+      );
+    };
+
+    request.onerror = () => reject(
+      request.error ||
+      new Error("Plnou cache běžných poznámek se nepodařilo načíst.")
+    );
+  });
+}
+
+function nastavPlnouCacheBeznychPoznamek(
+  notes,
+  ownerId
+) {
+  plnaCacheBeznychPoznamek = klonujDataPoznamek(
+    (Array.isArray(notes) ? notes : [])
+      .filter((task) => task && task.isSecret !== true)
+  );
+  vlastnikPlneCacheBeznychPoznamek = ownerId || null;
+  stavPlneCacheBeznychPoznamek = "ready";
+}
+
+function nactiZdrojSavedTaskProCteni() {
+  const lokalni =
+    nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY);
+  const ownerId = ziskejVlastnikaBeznychPoznamek();
+
+  if (
+    Array.isArray(plnaCacheBeznychPoznamek) &&
+    vlastnikPlneCacheBeznychPoznamek === ownerId
+  ) {
+    const legacyTajne = lokalni.filter(
+      (task) => task?.isSecret === true
+    );
+
+    return [
+      ...klonujDataPoznamek(plnaCacheBeznychPoznamek),
+      ...legacyTajne
+    ];
+  }
+
+  return lokalni;
+}
+
+function odlehciHtmlBeznePoznamkyProLocalStorage(html) {
+  return String(html || "").replace(
+    /(<img\b[^>]*?\bsrc\s*=\s*)(["'])data:image\/[^"']*\2/gi,
+    '$1$2$2 data-lubanote-idb-image="1"'
+  );
+}
+
+function odlehciBeznePoznamkyProLocalStorage(notes) {
+  return (Array.isArray(notes) ? notes : []).map((note) => ({
+    ...note,
+    richContent:
+      typeof note?.richContent === "string"
+        ? odlehciHtmlBeznePoznamkyProLocalStorage(
+            note.richContent
+          )
+        : note?.richContent,
+    todos: Array.isArray(note?.todos)
+      ? note.todos.map((todo) => ({
+          ...todo,
+          html:
+            typeof todo?.html === "string"
+              ? odlehciHtmlBeznePoznamkyProLocalStorage(
+                  todo.html
+                )
+              : todo?.html
+        }))
+      : note?.todos
+  }));
+}
+
+function zapisLehkouKopiiBeznychPoznamekDoLocalStorage(
+  beznePoznamky,
+  legacyTajne
+) {
+  const legacySeznam = Array.isArray(legacyTajne)
+    ? legacyTajne
+    : [];
+  const payload = JSON.stringify([
+    ...odlehciBeznePoznamkyProLocalStorage(beznePoznamky),
+    ...legacySeznam
+  ]);
+
+  try {
+    localStorage.setItem(
+      REGULAR_TASK_STORAGE_KEY,
+      payload
+    );
+    return true;
+  } catch (error) {
+    /*
+     * Legacy Secret plaintext nikdy nesmíme odstranit jen proto, že se
+     * nevešel lehký bootstrap. Dokud není převedený do ciphertextu,
+     * původní savedTask zůstává bezpečnostní autoritou.
+     */
+    if (legacySeznam.length > 0) {
+      throw error;
+    }
+
+    /*
+     * IndexedDB už je autorita pro všechny běžné poznámky. Bez legacy
+     * Secret dat je proto bezpečné odstranit starý obří savedTask a
+     * zkusit lehký bootstrap znovu.
+     */
+    try {
+      localStorage.removeItem(
+        REGULAR_TASK_STORAGE_KEY
+      );
+      localStorage.setItem(
+        REGULAR_TASK_STORAGE_KEY,
+        payload
+      );
+      return true;
+    } catch (druhaChyba) {
+      try {
+        localStorage.setItem(
+          REGULAR_TASK_STORAGE_KEY,
+          "[]"
+        );
+      } catch (_) {
+        // Plná IndexedDB cache už je bezpečně uložená.
+      }
+
+      console.warn(
+        "Lehká localStorage cache běžných poznámek se nevešla; plná data zůstávají v IndexedDB.",
+        druhaChyba
+      );
+      return false;
+    }
+  }
+}
+
+function zaradOverflowUlozeniBeznychPoznamek(
+  beznePoznamky,
+  legacyTajne
+) {
+  const ownerId = ziskejVlastnikaBeznychPoznamek();
+  const snapshot = klonujDataPoznamek(beznePoznamky);
+  const legacySnapshot = klonujDataPoznamek(legacyTajne);
+
+  nastavPlnouCacheBeznychPoznamek(
+    snapshot,
+    ownerId
+  );
+
+  frontaUkladaniBeznychPoznamek =
+    frontaUkladaniBeznychPoznamek
+      .catch(() => false)
+      .then(async () => {
+        await ulozPlnouCacheBeznychPoznamekDoIndexedDb(
+          ownerId,
+          snapshot
+        );
+
+        zapisLehkouKopiiBeznychPoznamekDoLocalStorage(
+          snapshot,
+          legacySnapshot
+        );
+
+        localStorage.setItem(
+          REGULAR_TASK_OVERFLOW_MODE_KEY,
+          REGULAR_TASK_OVERFLOW_MODE_INDEXED_DB
+        );
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "STORAGE",
+          `REGULAR INDEXEDDB OVERFLOW SAVE | count=${snapshot.length}`
+        );
+
+        return true;
+      });
+
+  return frontaUkladaniBeznychPoznamek;
+}
+
+async function pripravOverflowCacheBeznychPoznamek() {
+  if (!jeOverflowRezimBeznychPoznamek()) {
+    stavPlneCacheBeznychPoznamek = "local";
+    return false;
+  }
+
+  const ownerId = ziskejVlastnikaBeznychPoznamek();
+
+  if (!ownerId) {
+    stavPlneCacheBeznychPoznamek = "missing";
+    return false;
+  }
+
+  if (
+    Array.isArray(plnaCacheBeznychPoznamek) &&
+    vlastnikPlneCacheBeznychPoznamek === ownerId
+  ) {
+    return true;
+  }
+
+  if (slibPripravyBeznychPoznamek) {
+    return slibPripravyBeznychPoznamek;
+  }
+
+  slibPripravyBeznychPoznamek =
+    (async () => {
+      try {
+        const notes =
+          await nactiPlnouCacheBeznychPoznamekZIndexedDb(
+            ownerId
+          );
+
+        if (!Array.isArray(notes)) {
+          stavPlneCacheBeznychPoznamek = "missing";
+          return false;
+        }
+
+        nastavPlnouCacheBeznychPoznamek(
+          notes,
+          ownerId
+        );
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "STORAGE",
+          `REGULAR INDEXEDDB CACHE READY | count=${notes.length}`
+        );
+
+        return true;
+      } catch (error) {
+        stavPlneCacheBeznychPoznamek = "missing";
+        console.warn(
+          "Plná lokální cache běžných poznámek není dostupná; použije se lehká localStorage kopie.",
+          error
+        );
+        return false;
+      } finally {
+        slibPripravyBeznychPoznamek = null;
+      }
+    })();
+
+  return slibPripravyBeznychPoznamek;
+}
+
+function cekajNaUlozeniBeznychPoznamek() {
+  return frontaUkladaniBeznychPoznamek;
+}
+
+function chybiPlnaCacheBeznychPoznamekProSync() {
+  return (
+    jeOverflowRezimBeznychPoznamek() &&
+    stavPlneCacheBeznychPoznamek !== "ready"
+  );
+}
+
+window.LubaNoteRegularNotesStore = {
+  priprav: pripravOverflowCacheBeznychPoznamek,
+  jeOverflowRezim: jeOverflowRezimBeznychPoznamek,
+  chybiPlnaCacheProSync:
+    chybiPlnaCacheBeznychPoznamekProSync,
+  cekejNaUlozeni: cekajNaUlozeniBeznychPoznamek
+};
+
 function nactiBeznePoznamkyZUloziste() {
   return nactiSavedTaskSeStabilnimiId()
     .filter((task) => task && task.isSecret !== true);
@@ -372,13 +869,42 @@ function ulozBeznePoznamkyPrimo(
     ? nactiStarePlaintextTajnePoznamky()
     : [];
 
-  localStorage.setItem(
-    REGULAR_TASK_STORAGE_KEY,
-    JSON.stringify([
-      ...beznePoznamky,
-      ...legacyTajne
-    ])
-  );
+  /*
+   * Zařízení, které už jednou narazilo na kvótu localStorage, zůstává
+   * v bezpečném IndexedDB overflow režimu. Nezkoušíme při každém save
+   * znovu nacpat celý několikamegabajtový JSON do localStorage.
+   */
+  if (jeOverflowRezimBeznychPoznamek()) {
+    return zaradOverflowUlozeniBeznychPoznamek(
+      beznePoznamky,
+      legacyTajne
+    );
+  }
+
+  try {
+    localStorage.setItem(
+      REGULAR_TASK_STORAGE_KEY,
+      JSON.stringify([
+        ...beznePoznamky,
+        ...legacyTajne
+      ])
+    );
+
+    return Promise.resolve(true);
+  } catch (error) {
+    if (error?.name !== "QuotaExceededError") {
+      throw error;
+    }
+
+    /*
+     * Kvóta localStorage je jediný důvod k přepnutí. Původní savedTask
+     * zůstává nedotčený až do úspěšného zápisu plné kopie do IndexedDB.
+     */
+    return zaradOverflowUlozeniBeznychPoznamek(
+      beznePoznamky,
+      legacyTajne
+    );
+  }
 }
 
 function nactiSifrovaneTajneZaznamy() {
@@ -520,7 +1046,7 @@ async function ulozTajnePoznamkySifrovaneHned(tasks) {
 
   /* Ciphertext už existuje, takže starý plaintext můžeme odstranit. */
   if (nactiStarePlaintextTajnePoznamky().length > 0) {
-    ulozBeznePoznamkyPrimo(
+    await ulozBeznePoznamkyPrimo(
       nactiBeznePoznamkyZUloziste(),
       false
     );
@@ -627,7 +1153,7 @@ async function nactiTajnePoznamkyZLocalStorage() {
       await ulozTajnePoznamkySifrovaneHned(tajnePoznamky);
 
     if (encryptedOk) {
-      ulozBeznePoznamkyPrimo(
+      await ulozBeznePoznamkyPrimo(
         nactiBeznePoznamkyZUloziste(),
         false
       );
@@ -744,7 +1270,16 @@ function saveAllTasks(tasks) {
     );
 
   /* Plaintext tajné poznámky se do savedTask nikdy nezapisují. */
-  ulozBeznePoznamkyPrimo(beznePoznamky);
+  const ulozeniBeznychPoznamek =
+    Promise.resolve(
+      ulozBeznePoznamkyPrimo(beznePoznamky)
+    ).catch((error) => {
+      console.error(
+        "Lokální uložení běžných poznámek selhalo:",
+        error
+      );
+      return false;
+    });
 
   const maSifrovaciKlic =
     typeof tajnySifrovaciKlic !== "undefined" &&
@@ -752,7 +1287,13 @@ function saveAllTasks(tasks) {
 
   if (maSifrovaciKlic) {
     nastavDesifrovaneTajnePoznamky(tajnePoznamky);
-    return zaradUlozeniTajnychPoznamek(tajnePoznamky);
+
+    return Promise.all([
+      Promise.resolve(ulozeniBeznychPoznamek),
+      zaradUlozeniTajnychPoznamek(tajnePoznamky)
+    ]).then(([bezneOk, tajneOk]) =>
+      bezneOk !== false && tajneOk !== false
+    );
   }
 
   /*
@@ -765,7 +1306,8 @@ function saveAllTasks(tasks) {
     );
   }
 
-  return Promise.resolve(true);
+  return Promise.resolve(ulozeniBeznychPoznamek)
+    .then((bezneOk) => bezneOk !== false);
 }
 
 function saveTask(task) {
@@ -1077,7 +1619,7 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
       return false;
     }
   } else {
-    ulozBeznePoznamkyPrimo(
+    await ulozBeznePoznamkyPrimo(
       zdroj.filter((task) => task?.id !== noteId)
     );
   }
@@ -2984,7 +3526,7 @@ async function obnovKompletniZalohu(
     plan
   );
 
-  ulozBeznePoznamkyPrimo(
+  await ulozBeznePoznamkyPrimo(
     regularNotes,
     false
   );
@@ -3646,7 +4188,7 @@ function importTasks(file) {
           (task) => normalizujImportovanouPoznamku(task, importedAt)
         );
 
-        ulozBeznePoznamkyPrimo(regularNotes, false);
+        await ulozBeznePoznamkyPrimo(regularNotes, false);
         ulozSifrovaneTajneZaznamy(imported.secretNotes);
         vycistiDesifrovaneTajnePoznamky();
         location.reload();
@@ -3686,7 +4228,7 @@ function importTasks(file) {
         }
       }
 
-      ulozBeznePoznamkyPrimo(
+      await ulozBeznePoznamkyPrimo(
         normalizedTasks.filter((task) => task.isSecret !== true),
         false
       );

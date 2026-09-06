@@ -933,7 +933,42 @@ function aktualizujAuthTexty() {
     : tAuth("login.submit", "Přihlásit se");
 }
 
-function zobrazLokalniAplikaci() {
+async function zobrazLokalniAplikaci() {
+  /*
+   * Pokud localStorage na tomto zařízení nestačil, storage.js drží
+   * plnou běžnou cache v IndexedDB a v localStorage jen lehký bootstrap.
+   * Než odstraníme privacy lock, počkáme na plnou cache a skryté UI
+   * překreslíme. Na běžném Androidu/PC je tato větev okamžitý no-op.
+   */
+  try {
+    const plnaCachePripravena =
+      await window.LubaNoteRegularNotesStore
+        ?.priprav?.();
+
+    if (plnaCachePripravena === true) {
+      if (typeof renderTasks === "function") {
+        renderTasks();
+      }
+
+      if (typeof renderRemindersScreen === "function") {
+        renderRemindersScreen();
+      }
+
+      if (typeof renderCalendar === "function") {
+        renderCalendar();
+      }
+    }
+  } catch (error) {
+    /*
+     * Lehká localStorage kopie zůstává nouzový fallback. Chyba cache
+     * proto nesmí zablokovat přihlášení ani offline otevření aplikace.
+     */
+    console.warn(
+      "Plnou lokální cache poznámek se nepodařilo připravit:",
+      error
+    );
+  }
+
   loginScreen.hidden = true;
 
   /*
@@ -1100,7 +1135,7 @@ async function povolAktivniUcet(
   oznacPredchoziPrihlaseni();
   setLoginMessage();
   aktualizujInfoPlanuVMenu(aktualniPristupUctu);
-  zobrazLokalniAplikaci();
+  await zobrazLokalniAplikaci();
 
   /*
    * C3 Admin Dashboard a další účetní UI dostanou signál až poté,
@@ -1381,7 +1416,7 @@ async function updateLoginScreen() {
    * Síťové ověření proběhne pouze na pozadí.
    */
   if (maPredchoziPrihlaseni) {
-    zobrazLokalniAplikaci();
+    await zobrazLokalniAplikaci();
 
     if (navigator.onLine) {
       /*

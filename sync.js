@@ -1,4 +1,21 @@
 function getLocalNotesForSync() {
+  /*
+   * Lehká localStorage kopie v overflow režimu nemá Data URL obrázky
+   * a nikdy nesmí být omylem považována za autoritativní plnou lokální
+   * poznámku. Pokud se IndexedDB cache nepodařila načíst, necháme při
+   * online syncu obnovit běžné poznámky z cloudu místo uploadu stripu.
+   */
+  if (
+    window.LubaNoteRegularNotesStore
+      ?.chybiPlnaCacheProSync?.() === true
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "STORAGE",
+      "REGULAR FULL CACHE MISSING -> CLOUD RECOVERY"
+    );
+    return [];
+  }
+
   return typeof nactiBeznePoznamkyZUloziste === "function"
     ? nactiBeznePoznamkyZUloziste()
     : loadTask().filter((note) => note?.isSecret !== true);
@@ -2473,7 +2490,17 @@ function sjednotJasneLegacyDuplikatyPredSyncem(
    * proto nezvyšujeme uživatelskou revizi přes saveAllTasks().
    */
   if (typeof ulozBeznePoznamkyPrimo === "function") {
-    ulozBeznePoznamkyPrimo(noveLocalRegular);
+    const ulozeniLegacyDedup =
+      ulozBeznePoznamkyPrimo(noveLocalRegular);
+
+    if (ulozeniLegacyDedup?.catch) {
+      void ulozeniLegacyDedup.catch((error) => {
+        console.warn(
+          "Uložení legacy dedup migrace se dokončí při hlavním zápisu syncu:",
+          error
+        );
+      });
+    }
   }
 
   odlozOpakovaniSynchronizace();
@@ -2985,7 +3012,7 @@ async function syncNotes(moznosti = {}) {
          * syncu, proto nepoužíváme saveAllTasks() a nevytváříme falešnou
          * uživatelskou lokální revizi.
          */
-        ulozBeznePoznamkyPrimo(localRegular);
+        await ulozBeznePoznamkyPrimo(localRegular);
         localRegular = getLocalNotesForSync();
       }
     }
@@ -3208,7 +3235,7 @@ async function syncNotes(moznosti = {}) {
       window.LubaNoteStartupDiag?.zacni?.("PRIVATE LOCAL WRITE");
 
     try {
-      ulozBeznePoznamkyPrimo(mergedRegular);
+      await ulozBeznePoznamkyPrimo(mergedRegular);
     } catch (error) {
       let jsonChars = -1;
 
