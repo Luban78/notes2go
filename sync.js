@@ -3734,12 +3734,6 @@ async function startSync() {
   }
 
   /*
-   * Plný start už barvy štítků obnovil buď z bezpečné cache, nebo ze
-   * serveru. Případný reconnect refresh proto není dál dlužný.
-   */
-  stitkyCekajiNaRefreshPoNavratuInternetu = false;
-
-  /*
    * Vizuální inicializace je hotová: poznámky jsou bezpečně sloučené
    * a štítky jsou buď čerstvé ze serveru, nebo z poslední bezpečné
    * lokální cache. Síťový refresh může u ověřené instalace doběhnout
@@ -3759,7 +3753,10 @@ async function startSync() {
           blokovatStart: false
         });
 
-        if (stitkyNactenyZCache) {
+        if (
+          stitkyNactenyZCache &&
+          !stitkyCekajiNaRefreshPoNavratuInternetu
+        ) {
           await loadTagsFromSupabase();
         }
 
@@ -4300,6 +4297,16 @@ async function spustStartSyncBezpecne() {
   try {
     const vysledek =
       await probihajiciStartSync;
+
+    /*
+     * Po skutečném offline startu event online spouští plný start sync.
+     * Reconnect dluh štítků proto musíme vyřídit i tady, ne jen v
+     * notes-only cestě. Jinak může být sync poznámek hotový, ale karty
+     * zůstanou bez barev až do dalšího restartu aplikace.
+     */
+    if (vysledek === true) {
+      await obnovStitkyPoNavratuInternetuPokudJeTreba();
+    }
 
     if (
       vysledek === true &&
