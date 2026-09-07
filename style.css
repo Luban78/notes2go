@@ -10460,15 +10460,15 @@ body.trashScreenOpen {
   }
 
   .remindersRecurringButton {
-    width: auto;
+    width: 44px;
     height: auto;
-    min-width: 60px;
-    min-height: 42px;
-    flex: 0 0 auto;
-    padding: 0 16px;
-    border-radius: 14px;
+    min-width: 44px;
+    min-height: 0;
+    flex: 0 0 44px;
+    align-self: stretch;
+    padding: 0;
+    border-radius: 10px;
     color: var(--color-accent-text);
-    font-size: calc(var(--font-size) - 1px);
   }
 
   .remindersRecurringButton .lubaActionIcon {
@@ -10477,10 +10477,27 @@ body.trashScreenOpen {
 
   .remindersRecurringButton::before {
     content: "↻";
-    display: block;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--color-accent-text);
     font-size: 21px;
     font-weight: 500;
     line-height: 1;
+    transform: translateY(-1px);
+  }
+}
+
+/* =========================================
+   0.9.295 – PŘIPOMÍNKY: VYSTŘEDĚNÍ TŘÍ ŘAD TLAČÍTEK
+   Jen mobilní layout, bez změny logiky.
+   ========================================= */
+@media (max-width: 899px) {
+  .moduleTabs,
+  .remindersFilters,
+  .remindersStatusTabs {
+    justify-content: center;
   }
 }
