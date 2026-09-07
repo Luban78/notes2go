@@ -3506,9 +3506,25 @@ completeReminderButton?.addEventListener(
             ) || null;
 
         if (dalsiOpakovanyTermin) {
-          note.date = formatReminderLocalDateTime(
-            dalsiOpakovanyTermin
-          );
+          const dalsiTerminText =
+            formatReminderLocalDateTime(
+              dalsiOpakovanyTermin
+            );
+
+          note.date = dalsiTerminText;
+
+          /*
+           * Opakovací engine používá repeat.startDate jako nejnižší
+           * povolený den série. Samotný posun note.date proto nestačí:
+           * starý den by dál zůstával platným výskytem v Planneru i
+           * Připomínkách. Posuneme tedy začátek aktivní části série na
+           * právě vypočtený následující výskyt. Cadence/interval zůstává.
+           */
+          note.repeat = {
+            ...note.repeat,
+            startDate: dalsiTerminText.slice(0, 10)
+          };
+
           note.completed = false;
           note.reminder = true;
           note.notificationId =
