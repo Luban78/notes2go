@@ -1417,35 +1417,35 @@ async function updateLoginScreen() {
    */
   if (maPredchoziPrihlaseni) {
     /*
-     * Offline start neprochází sync.js, kde se běžně načítá start cache
-     * štítků. Bez ní jsou poznámky sice lokálně dostupné, ale barva
-     * jejich štítků spadne na výchozí "system".
+     * Lokální aplikace se může otevřít dřív, než WebView spolehlivě ví,
+     * zda je zařízení online. Na Androidu může navigator.onLine při
+     * studeném startu v režimu Letadlo krátce vracet true, takže podmínka
+     * podle navigator.onLine nesmí rozhodovat o načtení bezpečné cache.
      *
-     * Cache už tags.js ukládá po úspěšném online načtení a před zápisem
-     * sanitizuje Secret názvy. Tady ji pouze použijeme ve stejné podobě
-     * i při skutečně offline startu.
+     * Cache tags.js obsahuje pouze bezpečný snapshot veřejných štítků
+     * (Secret názvy jsou sanitizované), proto ji načteme vždy v této
+     * local-first větvi. Online start ji následně stejně obnoví ze serveru.
      */
     if (
-      !navigator.onLine &&
       typeof window.LubaNoteTagsStartCache?.nacti === "function"
     ) {
-      const userIdProOfflineStitky = String(
+      const userIdProLokalniStitky = String(
         lokalniCachePristupu?.user_id ||
         localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) ||
         ""
       ).trim();
 
-      if (userIdProOfflineStitky) {
-        const stitkyNactenyOffline =
+      if (userIdProLokalniStitky) {
+        const stitkyNactenyLokalne =
           window.LubaNoteTagsStartCache.nacti(
-            userIdProOfflineStitky
+            userIdProLokalniStitky
           ) === true;
 
         window.LubaNoteStartupDiag?.zapis?.(
           "FAST",
-          stitkyNactenyOffline
-            ? "TAG OFFLINE CACHE HIT"
-            : "TAG OFFLINE CACHE MISS"
+          stitkyNactenyLokalne
+            ? "TAG LOCAL CACHE HIT"
+            : "TAG LOCAL CACHE MISS"
         );
       }
     }

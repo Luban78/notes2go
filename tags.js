@@ -1378,7 +1378,7 @@ async function loadTagsFromSupabase() {
   const user = await getCurrentUser();
   
   if (!user) {
-    return;
+    return false;
   }
 
   /*
@@ -1404,7 +1404,7 @@ async function loadTagsFromSupabase() {
       "LOAD FAIL",
       `error=${String(error.message || "neznamy")}`
     );
-    return;
+    return false;
   }
 
   const vytvorenyVychoziStitky =
@@ -1424,7 +1424,7 @@ async function loadTagsFromSupabase() {
         "Tag download po vytvoření výchozích štítků selhal:",
         opakovaneNacteni.error.message
       );
-      return;
+      return false;
     }
 
     data = opakovaneNacteni.data || [];
@@ -1511,6 +1511,7 @@ if (
 }
 
 zapisVdBarevStitku("LOAD RENDERED");
+return true;
 }
 
 // ==========================================

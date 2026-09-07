@@ -3911,7 +3911,6 @@ async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
 
   if (
     !stitkyCekajiNaRefreshPoNavratuInternetu ||
-    !navigator.onLine ||
     typeof loadTagsFromSupabase !== "function"
   ) {
     return true;
@@ -3929,12 +3928,17 @@ async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
           "REFRESH CALL START"
         );
 
-        await loadTagsFromSupabase();
+        const stitkyObnoveny =
+          await loadTagsFromSupabase();
 
         window.LubaNoteStartupDiag?.zapis?.(
           "TAG-VD",
-          "REFRESH CALL END"
+          `REFRESH CALL END | success=${stitkyObnoveny === true}`
         );
+
+        if (stitkyObnoveny !== true) {
+          return false;
+        }
 
         stitkyCekajiNaRefreshPoNavratuInternetu = false;
 
@@ -4231,6 +4235,10 @@ async function spustRychlySyncPoznamekBezpecne() {
   try {
     const vysledek = await syncNotes();
 
+    if (vysledek !== true) {
+      stitkyCekajiNaRefreshPoNavratuInternetu = true;
+    }
+
     if (vysledek === true) {
       await obnovStitkyPoNavratuInternetuPokudJeTreba();
     }
@@ -4244,6 +4252,8 @@ async function spustRychlySyncPoznamekBezpecne() {
 
     return vysledek === true;
   } catch (error) {
+    stitkyCekajiNaRefreshPoNavratuInternetu = true;
+
     console.warn(
       "Rychlá synchronizace poznámek byla odložena:",
       error
@@ -4330,6 +4340,21 @@ async function spustStartSyncBezpecne() {
   try {
     const vysledek =
       await probihajiciStartSync;
+
+    /*
+     * Android WebView může při studeném offline startu vracet
+     * navigator.onLine=true a vůbec nevyvolat offline/online event.
+     * Neúspěšný sync je proto spolehlivější signál, že po příštím
+     * úspěšném spojení musíme jednou obnovit štítky.
+     */
+    if (vysledek !== true) {
+      stitkyCekajiNaRefreshPoNavratuInternetu = true;
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "TAG-VD",
+        "SYNC FAILED | pending=true"
+      );
+    }
 
     /*
      * Po skutečném offline startu event online spouští plný start sync.

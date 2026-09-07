@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="debugTabletGenerated.css">
   <link rel="stylesheet" href="debugDesktopGenerated.css">
   <link rel="stylesheet" href="visualDebug.css">
-  <link rel="stylesheet" href="debugHub.css?v=20260907-tag-vd3-compact-1">
+  <link rel="stylesheet" href="debugHub.css?v=20260907-debug-hub-ux-303">
 </head>
 
 <body class="authPending">
@@ -1823,7 +1823,7 @@
   
   <script src="storage.js?v=20260906-ios-regular-idb-overflow-1"></script>
   
-  <script src="tags.js?v=20260907-tag-color-vd3-compact-1"></script>
+  <script src="tags.js?v=20260907-offline-tag-fix-303"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js"></script>
@@ -1872,7 +1872,7 @@
   <script src="syncStatus.js?v=20260906-offline-pending-1"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260906-offline-tag-cache-1"></script>
+  <script src="supabaseClient.js?v=20260907-offline-tag-fix-303"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
   <script src="sharingIdentity.js?v=20260906-start-opt-1"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->
@@ -1906,7 +1906,7 @@
   <script src="syncRealtime.js?v=20260907-cross-device-notif-1"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260907-tag-color-vd3-compact-1"></script>
+  <script src="sync.js?v=20260907-offline-tag-fix-303"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260906-apk-same-device-restart-09275"></script>
@@ -1917,9 +1917,8 @@
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
   <script src="visualDebug.js"></script>
   
-  <!-- Debug Hub: panel se otevírá z Visual Debugu; TAG-VD startup modul v tomto diagnostickém buildu běží automaticky. -->
-  <script>window.LUBANOTE_TAG_VD_AUTO = true;</script>
-  <script src="debugHub.js?v=20260907-tag-vd3-compact-1"></script>
+  <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
+  <script src="debugHub.js?v=20260907-debug-hub-ux-303"></script>
   
 </body>
 
