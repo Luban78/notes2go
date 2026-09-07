@@ -435,6 +435,110 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
   }
 }
 
+async function obnovSystemoveNotifikacePoSynchronizaci(
+  noteIds = null
+) {
+  const LocalNotifications =
+    window.Capacitor?.Plugins?.LocalNotifications;
+
+  if (
+    !LocalNotifications ||
+    typeof loadTask !== "function"
+  ) {
+    return true;
+  }
+
+  const permission =
+    await LocalNotifications.checkPermissions();
+
+  if (permission?.display !== "granted") {
+    return false;
+  }
+
+  /*
+   * Start / návrat aplikace: srovnáme celý systémový stav s čerstvě
+   * synchronizovanými daty. Tato cesta se nepouští při každé lokální
+   * editaci, jen při startu/online dorovnání.
+   */
+  if (!Array.isArray(noteIds) || noteIds.length === 0) {
+    return await obnovSystemoveNotifikacePoKompletniObnove(
+      loadTask()
+    );
+  }
+
+  const cilovaId = new Set(
+    noteIds.filter(Boolean)
+  );
+
+  if (cilovaId.size === 0) {
+    return true;
+  }
+
+  await createReminderChannel();
+
+  /*
+   * Realtime sync zná přesná ID změněných poznámek. Zrušíme proto
+   * pouze jejich staré alarmy (včetně Planner položek) a z čerstvého
+   * lokálního stavu je znovu vytvoříme. Ostatní notifikace se vůbec
+   * nedotknou.
+   */
+  if (typeof LocalNotifications.getPending === "function") {
+    const pending =
+      await LocalNotifications.getPending();
+
+    const keZruseni =
+      (pending?.notifications || [])
+        .filter((notification) => {
+          const extra = notification?.extra || {};
+
+          return (
+            cilovaId.has(extra.taskId) ||
+            cilovaId.has(extra.sourceNoteId)
+          );
+        })
+        .filter(
+          (notification) =>
+            Number.isInteger(notification?.id)
+        )
+        .map((notification) => ({
+          id: notification.id
+        }));
+
+    if (keZruseni.length > 0) {
+      await LocalNotifications.cancel({
+        notifications: keZruseni
+      });
+    }
+  }
+
+  const poznamky = loadTask();
+
+  for (const noteId of cilovaId) {
+    const note = poznamky.find(
+      (candidate) => candidate?.id === noteId
+    );
+
+    /*
+     * Smazaná / tajná / dokončená poznámka po zrušení starých alarmů
+     * už žádnou novou systémovou notifikaci vytvořit nesmí.
+     */
+    if (
+      !note ||
+      note.isSecret === true ||
+      note.completed === true
+    ) {
+      continue;
+    }
+
+    await obnovNotifikacePoznamkyPodleSoukromi(
+      note
+    );
+  }
+
+  return true;
+}
+
+
 async function obnovNotifikaceOpakovanychPoznamek() {
   if (typeof loadTask !== "function") {
     return;
@@ -1242,13 +1346,16 @@ function naplanujBezpecneDoplneniPlanovanychNotifikaci(
     () => {
       casovacBezpecnehoDoplneniNotifikaci = null;
 
-      ensureFuturePlannedNotifications()
-        .catch((error) => {
-          console.warn(
-            "Doplnění Planner notifikací bylo odloženo:",
-            error
-          );
-        });
+      (async () => {
+        await ensureFuturePlannedNotifications();
+
+        await obnovSystemoveNotifikacePoSynchronizaci();
+      })().catch((error) => {
+        console.warn(
+          "Doplnění systémových notifikací bylo odloženo:",
+          error
+        );
+      });
     },
     Math.max(0, Number(zpozdeni) || 0)
   );
@@ -3454,7 +3561,9 @@ document
 window.LubaNoteReminders = {
   ...(window.LubaNoteReminders || {}),
   vycistiStarePoTerminu: (moznosti = {}) =>
-    vycistiStarePripominkyPoTerminu(moznosti)
+    vycistiStarePripominkyPoTerminu(moznosti),
+  obnovPoSynchronizaci: (noteIds = null) =>
+    obnovSystemoveNotifikacePoSynchronizaci(noteIds)
 };
 
 

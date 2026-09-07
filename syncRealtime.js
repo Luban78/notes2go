@@ -478,6 +478,35 @@
         return false;
       }
 
+      /*
+       * Poznámka už je po Realtime signálu bezpečně stažená. Android
+       * teď musí převést nový synchronizovaný stav také do svých
+       * lokálních systémových alarmů. Jinak se úkol vytvořený na PC/PWA
+       * zobrazí v LubaNote, ale telefon o jeho notifikaci neví.
+       */
+      const obnovNotifikace =
+        window.LubaNoteReminders
+          ?.obnovPoSynchronizaci;
+
+      if (typeof obnovNotifikace === "function") {
+        try {
+          await obnovNotifikace(
+            snapshotGlobalni !== 0
+              ? null
+              : neblokovaneId
+          );
+        } catch (error) {
+          /*
+           * Chyba Android notifikace nesmí vrátit zpět už úspěšný
+           * revizní sync poznámek. Další start/online ji dorovná znovu.
+           */
+          console.warn(
+            "Obnovení notifikací po Realtime syncu selhalo:",
+            error
+          );
+        }
+      }
+
       if (
         snapshotGlobalni !== 0 &&
         cekajiciGlobalniSignal === snapshotGlobalni
