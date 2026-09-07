@@ -3471,8 +3471,58 @@ completeReminderButton?.addEventListener(
         "note"
       );
 
-      note.completed = true;
-      note.reminder = false;
+      /*
+       * U opakované poznámky znamená Hotovo dokončení pouze právě
+       * zobrazeného výskytu. Samotná série musí zůstat aktivní.
+       * Proto posuneme základní datum na následující výskyt a kartu
+       * neoznačíme jako trvale dokončenou.
+       */
+      const jeOpakovanaPoznamka =
+        note.repeat?.enabled === true &&
+        Boolean(note.date) &&
+        Boolean(window.LubaNoteRecurring);
+
+      let dalsiOpakovanyTermin = null;
+
+      if (jeOpakovanaPoznamka) {
+        const aktualniVyskyt = new Date(
+          entry.date || note.date
+        );
+
+        const hledatOd = Number.isNaN(
+          aktualniVyskyt.getTime()
+        )
+          ? new Date()
+          : new Date(
+              aktualniVyskyt.getTime() + 60000
+            );
+
+        dalsiOpakovanyTermin =
+          window.LubaNoteRecurring
+            ?.vypocitejPristiTermin?.(
+              note.date,
+              note.repeat,
+              hledatOd
+            ) || null;
+
+        if (dalsiOpakovanyTermin) {
+          note.date = formatReminderLocalDateTime(
+            dalsiOpakovanyTermin
+          );
+          note.completed = false;
+          note.reminder = true;
+          note.notificationId =
+            createUniqueNotificationId();
+        } else {
+          /* Série přirozeně skončila (např. endDate). */
+          note.completed = true;
+          note.reminder = false;
+        }
+      } else {
+        note.completed = true;
+        note.reminder = false;
+      }
+
       note.updatedAt = new Date().toISOString();
 
       const ukonciCekani =
@@ -3507,10 +3557,30 @@ completeReminderButton?.addEventListener(
       }
 
       zobrazPotvrzeniPripominky(
-        "Poznámka dokončena"
+        jeOpakovanaPoznamka &&
+        dalsiOpakovanyTermin
+          ? "Další opakování naplánováno"
+          : "Poznámka dokončena"
       );
 
       if (
+        jeOpakovanaPoznamka &&
+        typeof obnovNotifikacePoznamkyPodleSoukromi ===
+          "function"
+      ) {
+        /*
+         * Opakovaná série může mít v Androidu více budoucích alarmů.
+         * Po Hotovo proto bezpečně zrušíme jejich starou sadu a z
+         * uloženého nového termínu vytvoříme čerstvou.
+         */
+        spustPripominkovouUlohuNaPozadi(
+          () =>
+            obnovNotifikacePoznamkyPodleSoukromi(
+              note
+            ),
+          "Přeplánování opakované připomínky"
+        );
+      } else if (
         notificationId &&
         typeof cancelNotification === "function"
       ) {
