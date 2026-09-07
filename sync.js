@@ -3886,6 +3886,21 @@ let stitkyCekajiNaRefreshPoNavratuInternetu =
   !navigator.onLine;
 let probihajiciRefreshStitkuPoNavratuInternetu = null;
 
+/*
+ * Pouze diagnostický getter pro VD build. Nemění sync ani stav aplikace.
+ * Debug Hub díky němu umí zkopírovat krátký TAG-VD report bez stovek
+ * běžných HTTP řádků.
+ */
+window.LubaNoteTagReconnectVD = {
+  stav: () => ({
+    pending: stitkyCekajiNaRefreshPoNavratuInternetu,
+    online: navigator.onLine,
+    refreshRunning: Boolean(
+      probihajiciRefreshStitkuPoNavratuInternetu
+    )
+  })
+};
+
 async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
   window.LubaNoteStartupDiag?.zapis?.(
     "TAG-VD",

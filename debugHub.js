@@ -1331,6 +1331,73 @@ async function zkopirujReport(tlacitko) {
   }, 1200);
 }
 
+
+function vytvorTagVdReport() {
+  const vsechnyRadky =
+    window.LubaNoteStartupDiag?.radky?.() || [];
+
+  const relevantni = vsechnyRadky.filter((radek) => {
+    const text = String(radek || "");
+    return (
+      text.includes("| TAG-VD") ||
+      text.includes("| EVENT    | ONLINE") ||
+      text.includes("| EVENT    | OFFLINE")
+    );
+  });
+
+  let reconnectStav = null;
+  let barvyStav = "nedostupné";
+
+  try {
+    reconnectStav =
+      window.LubaNoteTagReconnectVD?.stav?.() || null;
+  } catch (_chyba) {
+    reconnectStav = null;
+  }
+
+  try {
+    barvyStav =
+      window.LubaNoteTagColorVD?.shrnuti?.() ||
+      "nedostupné";
+  } catch (_chyba) {
+    barvyStav = "chyba diagnostiky";
+  }
+
+  return [
+    "LUBANOTE TAG-VD COMPACT REPORT",
+    `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+    `čas: ${new Date().toISOString()}`,
+    `online: ${navigator.onLine}`,
+    `reconnect: ${reconnectStav ? JSON.stringify(reconnectStav) : "nedostupné"}`,
+    `barvy-teď: ${barvyStav}`,
+    "",
+    ...relevantni
+  ].join("\n");
+}
+
+async function zkopirujTagVdReport(tlacitko) {
+  const puvodni = tlacitko.textContent;
+  let zkopirovano = false;
+
+  try {
+    zkopirovano = await zkopirujTextRobustne(
+      vytvorTagVdReport()
+    );
+  } catch (chyba) {
+    console.warn(
+      "Debug Hub: kopírování TAG-VD reportu selhalo.",
+      chyba
+    );
+  }
+
+  tlacitko.textContent =
+    zkopirovano ? "TAG-VD zkopírováno ✓" : "Kopírování selhalo";
+
+  setTimeout(() => {
+    tlacitko.textContent = puvodni;
+  }, 1200);
+}
+
   function vytvorHub() {
     if (hub) return hub;
 
@@ -1396,7 +1463,8 @@ async function zkopirujReport(tlacitko) {
 
       <div class="ln-dh-footer">
         <button type="button" data-dh="clear">Vymazat</button>
-        <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat report</button>
+        <button type="button" class="ln-dh-copy" data-dh="copy-tag">Kopírovat TAG-VD</button>
+        <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
       </div>
 
       <div
@@ -1461,6 +1529,11 @@ async function zkopirujReport(tlacitko) {
         zaznamy = [];
         startCas = performance.now();
         zapis("RESET");
+        return;
+      }
+
+      if (akce === "copy-tag") {
+        zkopirujTagVdReport(tlacitko);
         return;
       }
 

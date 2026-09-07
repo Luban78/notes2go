@@ -1364,6 +1364,11 @@ function zapisVdBarevStitku(faze, detail = "") {
   );
 }
 
+/* Pouze čtecí diagnostika pro kompaktní TAG-VD report. */
+window.LubaNoteTagColorVD = {
+  shrnuti: shrnutiVdBarevStitku
+};
+
 async function loadTagsFromSupabase() {
   zapisVdBarevStitku(
     "LOAD START",
