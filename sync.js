@@ -1393,6 +1393,69 @@ async function markNoteDeletedInSupabase(note) {
 
 
 
+const LIMIT_NACTENI_CLOUDU_MS = 12000;
+const CEKANI_PRED_OPAKOVANIM_CLOUDU_MS = 800;
+const KOD_TIMEOUTU_CLOUD_SYNCU = "LUBANOTE_CLOUD_SYNC_TIMEOUT";
+
+function vytvorChybuTimeoutuCloudSyncu() {
+  const chyba = new Error(
+    "Synchronizace byla zastavena: načtení cloudu trvalo příliš dlouho."
+  );
+  chyba.code = KOD_TIMEOUTU_CLOUD_SYNCU;
+  return chyba;
+}
+
+function jeTimeoutCloudSyncu(error) {
+  return error?.code === KOD_TIMEOUTU_CLOUD_SYNCU;
+}
+
+async function nactiCloudSnapshotJednimPokusem() {
+  const kontroler =
+    typeof AbortController === "function"
+      ? new AbortController()
+      : null;
+
+  let vyprselLimit = false;
+  let casovac = null;
+
+  let pozadavek = supabaseClient.rpc("get_notes_safe");
+
+  if (
+    kontroler &&
+    typeof pozadavek?.abortSignal === "function"
+  ) {
+    pozadavek = pozadavek.abortSignal(kontroler.signal);
+  }
+
+  const timeout = new Promise((_, reject) => {
+    casovac = setTimeout(() => {
+      vyprselLimit = true;
+
+      try {
+        kontroler?.abort();
+      } catch (_) {
+        // Abort je jen úklid; timeout musí fungovat i bez něj.
+      }
+
+      reject(vytvorChybuTimeoutuCloudSyncu());
+    }, LIMIT_NACTENI_CLOUDU_MS);
+  });
+
+  try {
+    return await Promise.race([pozadavek, timeout]);
+  } catch (error) {
+    if (vyprselLimit || jeTimeoutCloudSyncu(error)) {
+      throw vytvorChybuTimeoutuCloudSyncu();
+    }
+
+    throw error;
+  } finally {
+    if (casovac !== null) {
+      clearTimeout(casovac);
+    }
+  }
+}
+
 async function getCloudNotesForSync() {
   const user = await getCurrentUser();
 
@@ -1406,9 +1469,38 @@ async function getCloudNotesForSync() {
    * Čtení poznámek jde přes serverovou RPC funkci.
    * Přímý SELECT na public.notes zůstává klientům zakázaný,
    * takže stará verze LubaNote nemůže ani stáhnout cloudový stav.
+   *
+   * Jednorázově zatuhlé RPC nesmí držet celé UI téměř 100 sekund.
+   * Po 12 s první čtení bezpečně ukončíme a jednou ho zopakujeme.
+   * Jde pouze o read-only snapshot; merge/revision logika pod tímto
+   * blokem se nijak nemění.
    */
-  const { data, error } = await supabaseClient
-    .rpc("get_notes_safe");
+  let vysledek;
+
+  try {
+    vysledek = await nactiCloudSnapshotJednimPokusem();
+  } catch (error) {
+    if (!jeTimeoutCloudSyncu(error)) {
+      throw error;
+    }
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "RETRY",
+      "get_notes_safe timeout – druhý pokus"
+    );
+
+    if (!navigator.onLine) {
+      throw error;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, CEKANI_PRED_OPAKOVANIM_CLOUDU_MS);
+    });
+
+    vysledek = await nactiCloudSnapshotJednimPokusem();
+  }
+
+  const { data, error } = vysledek || {};
 
   if (error) {
     console.error("Sync download error:", error.message);
