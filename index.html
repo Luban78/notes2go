@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260907-reminders-centered-rows-1">
+  <link rel="stylesheet" href="style.css?v=20260907-recurring-delete-series-09298">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -614,6 +614,30 @@
         <button id="disableReminderButton" type="button" class="danger lubaHasIcon">
           <span class="lubaActionIcon" data-luba-icon="vypnoutZvonek" aria-hidden="true"></span>
           <span>Vypnout připomínku</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================
+       POTVRZENÍ SMAZÁNÍ OPAKOVANÉHO ÚKOLU
+       ======================================== -->
+
+  <div id="recurringDeleteConfirmModal" class="deleteConfirmModal" hidden>
+    <div class="deleteConfirmBox" role="dialog" aria-modal="true" aria-labelledby="recurringDeleteConfirmTitle">
+      <h3 id="recurringDeleteConfirmTitle">Smazat opakovaný úkol?</h3>
+      <p>
+        Tento úkol se opakuje. Celá karta se přesune do Koše a všechna budoucí opakování se zruší.
+      </p>
+
+      <div class="deleteConfirmActions">
+        <button id="cancelRecurringDeleteButton" type="button">
+          Zrušit
+        </button>
+
+        <button id="confirmRecurringDeleteButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
+          <span>Smazat vše</span>
         </button>
       </div>
     </div>
@@ -1795,7 +1819,7 @@
   <script src="lubaIcons.js"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
   
-  <script src="reminders.js?v=20260907-recurring-complete-date-09297"></script>
+  <script src="reminders.js?v=20260907-recurring-delete-series-09298"></script>
   
   <script src="storage.js?v=20260906-ios-regular-idb-overflow-1"></script>
   

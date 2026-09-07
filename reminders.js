@@ -1481,6 +1481,17 @@ const deleteReminderButton =
 const disableReminderButton =
   document.getElementById("disableReminderButton");
 
+const recurringDeleteConfirmModal =
+  document.getElementById("recurringDeleteConfirmModal");
+
+const cancelRecurringDeleteButton =
+  document.getElementById("cancelRecurringDeleteButton");
+
+const confirmRecurringDeleteButton =
+  document.getElementById("confirmRecurringDeleteButton");
+
+let cekajiciSmazaniOpakovanePoznamkyId = null;
+
 
 function closeReminderQuickMenu() {
   if (!reminderQuickMenu) {
@@ -2591,6 +2602,113 @@ async function smazCelouPoznamkuZPripominek(noteId) {
 }
 
 
+function zavriPotvrzeniSmazaniOpakovanePoznamky() {
+  if (recurringDeleteConfirmModal) {
+    recurringDeleteConfirmModal.hidden = true;
+  }
+
+  cekajiciSmazaniOpakovanePoznamkyId = null;
+}
+
+
+function otevriPotvrzeniSmazaniOpakovanePoznamky(noteId) {
+  if (!recurringDeleteConfirmModal || !noteId) {
+    return false;
+  }
+
+  cekajiciSmazaniOpakovanePoznamkyId = noteId;
+  recurringDeleteConfirmModal.hidden = false;
+  return true;
+}
+
+
+cancelRecurringDeleteButton?.addEventListener(
+  "click",
+  zavriPotvrzeniSmazaniOpakovanePoznamky
+);
+
+recurringDeleteConfirmModal?.addEventListener(
+  "click",
+  (event) => {
+    if (event.target === recurringDeleteConfirmModal) {
+      zavriPotvrzeniSmazaniOpakovanePoznamky();
+    }
+  }
+);
+
+confirmRecurringDeleteButton?.addEventListener(
+  "click",
+  async () => {
+    const noteId =
+      cekajiciSmazaniOpakovanePoznamkyId;
+
+    if (!noteId) {
+      zavriPotvrzeniSmazaniOpakovanePoznamky();
+      return;
+    }
+
+    /*
+     * Opakovaná poznámka může mít v Androidu několik budoucích alarmů.
+     * Před přesunem celé karty do Koše je zrušíme podle taskId.
+     * Samotný přesun pak vždy vede přes existující deleteTask(), aby
+     * zůstal zachovaný Koš, Planner cleanup i cloudová synchronizace.
+     */
+    if (
+      typeof zrusCekajiciOpakovaneNotifikacePoznamky ===
+        "function"
+    ) {
+      await zrusCekajiciOpakovaneNotifikacePoznamky(
+        noteId
+      );
+    }
+
+    const ukonciCekani =
+      window.LubaNoteUI?.zacniCekaniAkce?.(
+        "Přesouvám opakovaný úkol do Koše…",
+        300
+      ) || (() => {});
+
+    let smazano = false;
+
+    try {
+      smazano =
+        await smazCelouPoznamkuZPripominek(
+          noteId
+        );
+    } catch (error) {
+      console.error(
+        "Smazání opakovaného úkolu selhalo:",
+        error
+      );
+    } finally {
+      ukonciCekani();
+      zavriPotvrzeniSmazaniOpakovanePoznamky();
+    }
+
+    if (!smazano) {
+      return;
+    }
+
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    if (typeof renderRecurringOverview === "function") {
+      renderRecurringOverview();
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+
+    renderRemindersScreen();
+    zobrazPotvrzeniPripominky(
+      "Opakovaný úkol přesunut do Koše"
+    );
+  }
+);
+
+
 async function deleteSelectedReminder() {
   const entry = getSelectedReminderEntry();
 
@@ -2613,12 +2731,36 @@ async function deleteSelectedReminder() {
 
     await removeSelectedPlannedReminder(entry);
   } else {
+    const note =
+      typeof loadTask === "function"
+        ? loadTask().find(
+            (task) => task?.id === entry.id
+          )
+        : null;
+
     /*
-     * Bezpečnostní pravidlo pro celou obrazovku Připomínky:
-     * Smazat zde znamená odstranit připomínku, NIKDY zdrojovou kartu.
-     * Celá poznámka se maže pouze v Poznámkách / editoru.
-     * Tím jsou bezpečná i stará historická data, která se dříve mohla
-     * tvářit jako běžná note připomínka místo Planner položky.
+     * U opakované připomínky má Smazat jiný význam než Vypnout:
+     * uživatel výslovně odstraňuje CELÝ opakovaný úkol. Proto nejdřív
+     * zobrazíme varování a po potvrzení použijeme centrální deleteTask(),
+     * která kartu přesune do Koše a uklidí Planner + synchronizaci.
+     */
+    if (note?.repeat?.enabled === true) {
+      zapocitejPouzitiTlacitkaPripominky(
+        "delete_series",
+        "note"
+      );
+
+      closeReminderQuickMenu();
+      otevriPotvrzeniSmazaniOpakovanePoznamky(
+        note.id
+      );
+      return;
+    }
+
+    /*
+     * U běžné neopakované připomínky zachováváme dosavadní chování:
+     * Smazat zde odstraní připomínku, ne zdrojovou kartu. Pro pouhé
+     * vypnutí opakované série zůstává samostatná akce Vypnout.
      */
     zapocitejPouzitiTlacitkaPripominky(
       "delete",

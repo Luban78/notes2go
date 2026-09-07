@@ -1619,7 +1619,8 @@ html {
   font-weight: 600;
 }
 
-#confirmDeleteButton {
+#confirmDeleteButton,
+#confirmRecurringDeleteButton {
   color: #b24a4a;
 }
 
