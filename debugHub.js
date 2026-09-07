@@ -6,6 +6,10 @@
    1) 5× tap na logo otevře Visual Debug
    2) v něm tlačítko „🐞 Diagnostika“
    3) konkrétní modul se začne logovat až po „Spustit"
+
+   Diagnostický build může nastavit window.LUBANOTE_TAG_VD_AUTO = true.
+   V tom případě se modul Start / sync / síť připojí automaticky na
+   pasivní startup buffer ještě před otevřením Debug Hubu.
 ======================================== */
 
 (() => {
@@ -17,12 +21,16 @@
   let statusEl = null;
   let selectModulu = null;
   let startTlacitko = null;
+  let moduleLabel = null;
+  let moduleMenu = null;
   let stopAktivnihoModulu = null;
   let aktivniModul = "";
   let startCas = 0;
   let zaznamy = [];
+  let presunHubu = null;
+  let zmenaVelikostiHubu = null;
 
-  const MAX_ZAZNAMU = 320;
+  const MAX_ZAZNAMU = 700;
 
   const MODULY = {
     startup: "Start / sync / síť",
@@ -900,6 +908,279 @@
     });
   }
 
+
+  function aktualizujVyberModulu() {
+    if (!selectModulu) return;
+
+    const hodnota = selectModulu.value || "startup";
+    const popis = MODULY[hodnota] || hodnota;
+
+    if (moduleLabel) {
+      moduleLabel.textContent = popis;
+    }
+
+    if (moduleMenu) {
+      moduleMenu.querySelectorAll("[data-dh-module]").forEach((tlacitko) => {
+        const vybrane = tlacitko.dataset.dhModule === hodnota;
+        tlacitko.classList.toggle("active", vybrane);
+        tlacitko.setAttribute("aria-checked", String(vybrane));
+      });
+    }
+  }
+
+  function nastavMenuModuluOtevrene(otevrene) {
+    if (!moduleMenu || !hub) return;
+
+    moduleMenu.hidden = !otevrene;
+    const prep = hub.querySelector('[data-dh="module-toggle"]');
+
+    if (prep) {
+      prep.setAttribute("aria-expanded", String(otevrene));
+      prep.classList.toggle("active", otevrene);
+    }
+  }
+
+  function aktualizujStavHubu() {
+    if (statusEl) {
+      statusEl.textContent = aktivniModul
+        ? `běží: ${MODULY[aktivniModul] || aktivniModul}`
+        : "diagnostika vypnutá";
+    }
+
+    if (startTlacitko) {
+      startTlacitko.classList.toggle("active", Boolean(aktivniModul));
+      startTlacitko.textContent = aktivniModul ? "Restart" : "Spustit";
+    }
+
+    aktualizujVyberModulu();
+  }
+
+  function bodPointeru(event) {
+    return {
+      x: Number(event.clientX) || 0,
+      y: Number(event.clientY) || 0,
+      id: event.pointerId
+    };
+  }
+
+  function ukotviHubNaAktualniPozici() {
+    if (!hub) return null;
+
+    const rect = hub.getBoundingClientRect();
+
+    hub.style.left = `${Math.round(rect.left)}px`;
+    hub.style.top = `${Math.round(rect.top)}px`;
+    hub.style.right = "auto";
+    hub.style.bottom = "auto";
+    hub.style.width = `${Math.round(rect.width)}px`;
+    hub.style.height = `${Math.round(rect.height)}px`;
+    hub.style.maxHeight = "none";
+    hub.classList.add("ln-dh-custom-geometry");
+
+    return rect;
+  }
+
+  function omezPoziciHubu(left, top, sirka, vyska) {
+    const viditelnaHrana = Math.min(72, Math.max(44, vyska));
+    const minLeft = Math.min(0, 72 - sirka);
+    const maxLeft = Math.max(0, window.innerWidth - 72);
+    const minTop = 0;
+    const maxTop = Math.max(0, window.innerHeight - viditelnaHrana);
+
+    return {
+      left: Math.max(minLeft, Math.min(maxLeft, left)),
+      top: Math.max(minTop, Math.min(maxTop, top))
+    };
+  }
+
+  function zacniPresunHubu(event) {
+    if (!hub || event.button > 0) return;
+    if (event.target.closest("button, select, input, textarea, a")) return;
+
+    const rect = ukotviHubNaAktualniPozici();
+    if (!rect) return;
+
+    const bod = bodPointeru(event);
+    presunHubu = {
+      id: bod.id,
+      x: bod.x,
+      y: bod.y,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+
+    hub.classList.add("ln-dh-dragging");
+
+    try {
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+    } catch (_chyba) {}
+
+    event.preventDefault();
+  }
+
+  function presunHub(event) {
+    if (!hub || !presunHubu) return;
+    if (
+      presunHubu.id != null &&
+      event.pointerId != null &&
+      presunHubu.id !== event.pointerId
+    ) {
+      return;
+    }
+
+    const bod = bodPointeru(event);
+    const novaPozice = omezPoziciHubu(
+      presunHubu.left + bod.x - presunHubu.x,
+      presunHubu.top + bod.y - presunHubu.y,
+      presunHubu.width,
+      presunHubu.height
+    );
+
+    hub.style.left = `${Math.round(novaPozice.left)}px`;
+    hub.style.top = `${Math.round(novaPozice.top)}px`;
+    event.preventDefault();
+  }
+
+  function ukonciPresunHubu(event) {
+    if (!presunHubu) return;
+    if (
+      event?.pointerId != null &&
+      presunHubu.id != null &&
+      presunHubu.id !== event.pointerId
+    ) {
+      return;
+    }
+
+    presunHubu = null;
+    hub?.classList.remove("ln-dh-dragging");
+  }
+
+  function zacniZmenuVelikostiHubu(event) {
+    if (!hub || event.button > 0) return;
+
+    const rect = ukotviHubNaAktualniPozici();
+    if (!rect) return;
+
+    const bod = bodPointeru(event);
+    zmenaVelikostiHubu = {
+      id: bod.id,
+      x: bod.x,
+      y: bod.y,
+      width: rect.width,
+      height: rect.height
+    };
+
+    hub.classList.add("ln-dh-resizing");
+
+    try {
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+    } catch (_chyba) {}
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function zmenVelikostHubu(event) {
+    if (!hub || !zmenaVelikostiHubu) return;
+    if (
+      zmenaVelikostiHubu.id != null &&
+      event.pointerId != null &&
+      zmenaVelikostiHubu.id !== event.pointerId
+    ) {
+      return;
+    }
+
+    const bod = bodPointeru(event);
+    const rect = hub.getBoundingClientRect();
+    const minSirka = Math.min(300, Math.max(260, window.innerWidth - 24));
+    const maxSirka = Math.max(minSirka, window.innerWidth - Math.max(8, rect.left));
+    const minVyska = 190;
+    const maxVyska = Math.max(minVyska, window.innerHeight - Math.max(8, rect.top));
+
+    const sirka = Math.max(
+      minSirka,
+      Math.min(
+        maxSirka,
+        zmenaVelikostiHubu.width + bod.x - zmenaVelikostiHubu.x
+      )
+    );
+    const vyska = Math.max(
+      minVyska,
+      Math.min(
+        maxVyska,
+        zmenaVelikostiHubu.height + bod.y - zmenaVelikostiHubu.y
+      )
+    );
+
+    hub.style.width = `${Math.round(sirka)}px`;
+    hub.style.height = `${Math.round(vyska)}px`;
+    event.preventDefault();
+  }
+
+  function ukonciZmenuVelikostiHubu(event) {
+    if (!zmenaVelikostiHubu) return;
+    if (
+      event?.pointerId != null &&
+      zmenaVelikostiHubu.id != null &&
+      zmenaVelikostiHubu.id !== event.pointerId
+    ) {
+      return;
+    }
+
+    zmenaVelikostiHubu = null;
+    hub?.classList.remove("ln-dh-resizing");
+  }
+
+  function srovnejHubDoViewportu() {
+    if (!hub || hub.hidden || !hub.classList.contains("ln-dh-custom-geometry")) {
+      return;
+    }
+
+    const rect = hub.getBoundingClientRect();
+    const maxSirka = Math.max(260, window.innerWidth - 16);
+    const maxVyska = Math.max(190, window.innerHeight - 16);
+
+    if (rect.width > maxSirka) {
+      hub.style.width = `${Math.round(maxSirka)}px`;
+    }
+
+    if (rect.height > maxVyska) {
+      hub.style.height = `${Math.round(maxVyska)}px`;
+    }
+
+    const novyRect = hub.getBoundingClientRect();
+    const pozice = omezPoziciHubu(
+      novyRect.left,
+      novyRect.top,
+      novyRect.width,
+      novyRect.height
+    );
+
+    hub.style.left = `${Math.round(pozice.left)}px`;
+    hub.style.top = `${Math.round(pozice.top)}px`;
+  }
+
+  function spustStartupAutomatickyPokudJeTreba() {
+    if (!window.LUBANOTE_TAG_VD_AUTO || aktivniModul) {
+      return;
+    }
+
+    aktivniModul = "startup";
+    startCas = performance.now();
+    zaznamy = [];
+    stopAktivnihoModulu = spustStartupDiagnostiku();
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "TAG-VD",
+      "DEBUG HUB AUTO START | startup"
+    );
+
+    aktualizujStavHubu();
+    prekresli();
+  }
+
   function stopModulu({ zapisStop = true } = {}) {
     if (typeof stopAktivnihoModulu === "function") {
       stopAktivnihoModulu();
@@ -912,16 +1193,7 @@
     }
 
     aktivniModul = "";
-
-    if (statusEl) {
-      statusEl.textContent = "diagnostika vypnutá";
-    }
-
-    if (startTlacitko) {
-      startTlacitko.classList.remove("active");
-      startTlacitko.textContent = "Spustit";
-    }
-
+    aktualizujStavHubu();
     prekresli();
   }
 
@@ -944,9 +1216,7 @@
       stopAktivnihoModulu = spustBulletDrag();
     }
 
-    statusEl.textContent = `běží: ${MODULY[aktivniModul]}`;
-    startTlacitko.classList.add("active");
-    startTlacitko.textContent = "Restart";
+    aktualizujStavHubu();
     prekresli();
   }
 
@@ -1069,23 +1339,56 @@ async function zkopirujReport(tlacitko) {
     hub.hidden = true;
     hub.setAttribute("aria-label", "LubaNote Debug Hub");
     hub.innerHTML = `
-      <div class="ln-dh-head">
-        <strong>🐞 LubaNote Debug Hub</strong>
-        <span class="ln-dh-status">diagnostika vypnutá</span>
-        <button type="button" data-dh="min" title="Sbalit">—</button>
-        <button type="button" data-dh="close" title="Zavřít">×</button>
+      <div class="ln-dh-head" data-dh-drag>
+        <div class="ln-dh-drag-handle" aria-hidden="true">⠿</div>
+        <div class="ln-dh-title">
+          <strong>LubaNote Debug Hub</strong>
+          <span class="ln-dh-status">diagnostika vypnutá</span>
+        </div>
+        <button type="button" class="ln-dh-icon-btn" data-dh="min" title="Sbalit" aria-label="Sbalit Debug Hub">—</button>
+        <button type="button" class="ln-dh-icon-btn" data-dh="close" title="Skrýt" aria-label="Skrýt Debug Hub">×</button>
       </div>
 
       <div class="ln-dh-controls">
-        <select data-dh="module" aria-label="Diagnostický modul">
-          <option value="startup">Start / sync / síť</option>
-          <option value="todoSelection">TODO – výběr / Vložit / Vše</option>
-          <option value="editorSelection">Editor – výběr textu</option>
-          <option value="gestures">Gesta – pointer / touch / click</option>
-          <option value="bulletDrag">Bullet – drag / hierarchie</option>
-        </select>
-        <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
-        <button type="button" data-dh="stop">Stop</button>
+        <div class="ln-dh-module-picker">
+          <button
+            type="button"
+            class="ln-dh-module-toggle"
+            data-dh="module-toggle"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="ln-dh-module-dot" aria-hidden="true"></span>
+            <span class="ln-dh-module-label">Start / sync / síť</span>
+            <span class="ln-dh-module-arrow" aria-hidden="true">⌄</span>
+          </button>
+
+          <div class="ln-dh-module-menu" role="listbox" aria-label="Diagnostický modul" hidden>
+            ${Object.entries(MODULY).map(([hodnota, popis]) => `
+              <button
+                type="button"
+                class="ln-dh-module-option"
+                data-dh-module="${hodnota}"
+                role="option"
+                aria-checked="${hodnota === "startup" ? "true" : "false"}"
+              >
+                <span class="ln-dh-module-option-dot" aria-hidden="true"></span>
+                <span>${popis}</span>
+              </button>
+            `).join("")}
+          </div>
+
+          <select data-dh="module" aria-label="Diagnostický modul" hidden>
+            ${Object.entries(MODULY).map(([hodnota, popis]) => `
+              <option value="${hodnota}">${popis}</option>
+            `).join("")}
+          </select>
+        </div>
+
+        <div class="ln-dh-run-actions">
+          <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
+          <button type="button" data-dh="stop">Stop</button>
+        </div>
       </div>
 
       <div class="ln-dh-summary">modul: vypnutý</div>
@@ -1093,8 +1396,15 @@ async function zkopirujReport(tlacitko) {
 
       <div class="ln-dh-footer">
         <button type="button" data-dh="clear">Vymazat</button>
-        <button type="button" data-dh="copy">Kopírovat report</button>
+        <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat report</button>
       </div>
+
+      <div
+        class="ln-dh-resize-handle"
+        data-dh-resize
+        title="Táhni pro změnu velikosti"
+        aria-label="Změnit velikost Debug Hubu"
+      >⌟</div>
     `;
 
     document.body.appendChild(hub);
@@ -1104,12 +1414,38 @@ async function zkopirujReport(tlacitko) {
     statusEl = hub.querySelector(".ln-dh-status");
     selectModulu = hub.querySelector('[data-dh="module"]');
     startTlacitko = hub.querySelector('[data-dh="start"]');
+    moduleLabel = hub.querySelector(".ln-dh-module-label");
+    moduleMenu = hub.querySelector(".ln-dh-module-menu");
+
+    if (aktivniModul && MODULY[aktivniModul]) {
+      selectModulu.value = aktivniModul;
+    } else {
+      selectModulu.value = "startup";
+    }
+
+    aktualizujStavHubu();
 
     hub.addEventListener("click", event => {
+      const volbaModulu = event.target.closest("[data-dh-module]");
+
+      if (volbaModulu) {
+        selectModulu.value = volbaModulu.dataset.dhModule;
+        aktualizujVyberModulu();
+        nastavMenuModuluOtevrene(false);
+        return;
+      }
+
       const tlacitko = event.target.closest("button[data-dh]");
       if (!tlacitko) return;
 
       const akce = tlacitko.dataset.dh;
+
+      if (akce === "module-toggle") {
+        nastavMenuModuluOtevrene(Boolean(moduleMenu?.hidden));
+        return;
+      }
+
+      nastavMenuModuluOtevrene(false);
 
       if (akce === "start") {
         spustModul();
@@ -1135,15 +1471,66 @@ async function zkopirujReport(tlacitko) {
 
       if (akce === "min") {
         const sbaleno = hub.classList.toggle("ln-dh-minimized");
-        tlacitko.textContent = sbaleno ? "+" : "—";
+        tlacitko.textContent = sbaleno ? "▢" : "—";
+        tlacitko.setAttribute("aria-label", sbaleno ? "Rozbalit Debug Hub" : "Sbalit Debug Hub");
         return;
       }
 
       if (akce === "close") {
-        stopModulu();
+        /*
+         * Skrýt není Stop. Diagnostika může dál běžet na pozadí a po
+         * opětovném otevření jsou záznamy stále k dispozici.
+         */
+        nastavMenuModuluOtevrene(false);
         hub.hidden = true;
       }
     });
+
+    hub.querySelector("[data-dh-drag]")?.addEventListener(
+      "pointerdown",
+      zacniPresunHubu,
+      { passive: false }
+    );
+
+    hub.querySelector("[data-dh-resize]")?.addEventListener(
+      "pointerdown",
+      zacniZmenuVelikostiHubu,
+      { passive: false }
+    );
+
+    window.addEventListener("pointermove", presunHub, {
+      passive: false,
+      capture: true
+    });
+    window.addEventListener("pointerup", ukonciPresunHubu, {
+      passive: true,
+      capture: true
+    });
+    window.addEventListener("pointercancel", ukonciPresunHubu, {
+      passive: true,
+      capture: true
+    });
+
+    window.addEventListener("pointermove", zmenVelikostHubu, {
+      passive: false,
+      capture: true
+    });
+    window.addEventListener("pointerup", ukonciZmenuVelikostiHubu, {
+      passive: true,
+      capture: true
+    });
+    window.addEventListener("pointercancel", ukonciZmenuVelikostiHubu, {
+      passive: true,
+      capture: true
+    });
+
+    window.addEventListener("resize", srovnejHubDoViewportu);
+
+    document.addEventListener("pointerdown", event => {
+      if (!hub || hub.hidden || moduleMenu?.hidden) return;
+      if (event.target.closest(".ln-dh-module-picker")) return;
+      nastavMenuModuluOtevrene(false);
+    }, true);
 
     return hub;
   }
@@ -1152,6 +1539,15 @@ async function zkopirujReport(tlacitko) {
     const panel = vytvorHub();
     panel.hidden = false;
     panel.classList.remove("ln-dh-minimized");
+
+    const minTlacitko = panel.querySelector('[data-dh="min"]');
+    if (minTlacitko) {
+      minTlacitko.textContent = "—";
+      minTlacitko.setAttribute("aria-label", "Sbalit Debug Hub");
+    }
+
+    aktualizujStavHubu();
+    srovnejHubDoViewportu();
     prekresli();
   }
 
@@ -1199,6 +1595,11 @@ async function zkopirujReport(tlacitko) {
   window.LubaNoteDebugHub = {
     open: otevriHub,
     stop: () => stopModulu(),
+    startStartup: () => {
+      otevriHub();
+      selectModulu.value = "startup";
+      spustModul();
+    },
     startTodoSelection: () => {
       otevriHub();
       selectModulu.value = "todoSelection";
@@ -1215,4 +1616,7 @@ async function zkopirujReport(tlacitko) {
       spustModul();
     }
   };
+  
+
+  spustStartupAutomatickyPokudJeTreba();
 })();
