@@ -10,13 +10,68 @@
 async function requestNotificationPermission() {
   const LocalNotifications =
     window.Capacitor?.Plugins?.LocalNotifications;
-
+  
   if (!LocalNotifications) {
-    return;
+    return false;
   }
-
-  await LocalNotifications.requestPermissions();
+  
+  const permission =
+    await LocalNotifications.requestPermissions();
+  
+  if (permission?.display !== "granted") {
+    return false;
+  }
+  
   await createReminderChannel();
+  
+  const jeAndroid =
+    window.Capacitor?.getPlatform?.() === "android";
+  
+  if (
+    jeAndroid &&
+    typeof LocalNotifications.checkExactNotificationSetting ===
+    "function"
+  ) {
+    try {
+      let stavPresnychAlarmu =
+        await LocalNotifications
+        .checkExactNotificationSetting();
+      
+      if (
+        stavPresnychAlarmu?.exact_alarm !== "granted" &&
+        typeof LocalNotifications
+        .changeExactNotificationSetting === "function"
+      ) {
+        stavPresnychAlarmu =
+          await LocalNotifications
+          .changeExactNotificationSetting();
+      }
+      
+      if (
+        stavPresnychAlarmu?.exact_alarm !== "granted"
+      ) {
+        if (
+          typeof zobrazZpravuAplikace === "function"
+        ) {
+          zobrazZpravuAplikace(
+            "Přesné připomínky",
+            "Povol v Androidu přesné alarmy, jinak může systém upozornění zpozdit."
+          );
+        }
+        
+        return false;
+      }
+    } catch (error) {
+      console.warn(
+        "Kontrola přesných alarmů se nepodařila:",
+        error
+      );
+      
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 
@@ -116,8 +171,9 @@ async function scheduleNotification(
         extra,
 
         schedule: {
-          at: new Date(dateTime)
-        }
+  at: new Date(dateTime),
+  allowWhileIdle: true
+}
       }
     ]
   });
