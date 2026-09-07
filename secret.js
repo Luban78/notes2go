@@ -860,6 +860,79 @@ async function vytvorNoveTajneNastaveni(heslo) {
 // a zobrazí filtr tajných poznámek.
 // ==========================================
 
+async function dokonciOdemknutiTajnehoRezimuNaPozadi() {
+  try {
+    /*
+     * Cloudový sync a servisní údržba už nesmí blokovat potvrzení
+     * úspěšného odemknutí. Lokální šifrovaný trezor je v tuto chvíli
+     * už načtený a Secret režim je bezpečně aktivní.
+     */
+    if (typeof syncNotes === "function") {
+      await syncNotes();
+    }
+
+    /*
+     * Pokud už uživatel mezitím Secret znovu zamkl, nepokračujeme
+     * v krocích, které potřebují aktivní AES klíč v paměti.
+     */
+    if (!tajnyRezimOdemceny || !tajnySifrovaciKlic) {
+      return;
+    }
+
+    /*
+     * Secret Koš zůstává celý uvnitř šifrovaného obsahu. Starší než
+     * 30 dní ho proto můžeme bezpečně vyčistit až po odemknutí trezoru.
+     */
+    if (typeof uklidPoznamkyVKosiPo30Dnech === "function") {
+      await uklidPoznamkyVKosiPo30Dnech();
+    }
+
+    if (!tajnyRezimOdemceny || !tajnySifrovaciKlic) {
+      return;
+    }
+
+    /*
+     * Tajné názvy štítků jsou v kompletní záloze také zašifrované.
+     * Obnovíme je až po úspěšném odvození klíče ze správného hesla.
+     */
+    await obnovCekajiciTajnaMetadataZeZalohy();
+
+    if (!tajnyRezimOdemceny || !tajnySifrovaciKlic) {
+      return;
+    }
+
+    /*
+     * Po odemknutí znovu načteme štítky. Tajné názvy se díky
+     * dostupnému AES klíči dešifrují pouze do paměti aplikace.
+     */
+    if (typeof loadTagsFromSupabase === "function") {
+      await loadTagsFromSupabase();
+    }
+
+    if (
+      tajnyRezimOdemceny &&
+      typeof updateTagMenuUI === "function"
+    ) {
+      updateTagMenuUI();
+    }
+
+    /*
+     * Uklidíme i případné starší systémové notifikace tajných poznámek,
+     * které mohly vzniknout před pravidlem SECRET = absolutní ticho.
+     */
+    if (
+      typeof zrusSystemoveNotifikaceTajnychPoznamek === "function"
+    ) {
+      await zrusSystemoveNotifikaceTajnychPoznamek();
+    }
+  } catch (error) {
+    console.warn(
+      "Servis po odemknutí tajného režimu se nedokončil:",
+      error
+    );
+  }
+}
+
 async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
   const nastaveni =
     await ziskejTajneNastaveniProOdemknuti();
@@ -888,62 +961,24 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
   secretFilterButton.hidden = false;
   secretTaskButton.hidden = false;
 
-  /* Nejdřív dešifrujeme lokální trezor pouze do paměti. */
+  /*
+   * Pro samotné odemknutí čekáme jen na lokální šifrovaný trezor.
+   * Jakmile je v paměti, může UI okamžitě potvrdit úspěšné odemknutí.
+   */
   if (typeof nactiTajnePoznamkyZLocalStorage === "function") {
     await nactiTajnePoznamkyZLocalStorage();
   }
 
-  /*
-   * Potom stáhneme cloud. syncNotes umí tajné řádky držet šifrované
-   * i při zamknutí a po odemknutí je bezpečně dešifruje do paměti.
-   */
-  if (typeof syncNotes === "function") {
-    await syncNotes();
-  } else {
-    obnovObrazovkyPoZmeneTajnehoRezimu();
-  }
+  obnovObrazovkyPoZmeneTajnehoRezimu();
 
   /*
-   * Secret Koš zůstává celý uvnitř šifrovaného obsahu. Starší než
-   * 30 dní ho proto můžeme bezpečně vyčistit až po odemknutí trezoru.
+   * Další cloudový sync a údržbu spustíme až v následujícím event-loop
+   * kroku. Prohlížeč tak dostane prostor vykreslit potvrzovací modal
+   * ještě před pomalejšími síťovými operacemi.
    */
-  if (typeof uklidPoznamkyVKosiPo30Dnech === "function") {
-    await uklidPoznamkyVKosiPo30Dnech();
-  }
-
-  /*
-   * Tajné názvy štítků jsou v kompletní záloze také zašifrované.
-   * Obnovíme je až po úspěšném odvození klíče ze správného hesla.
-   */
-  await obnovCekajiciTajnaMetadataZeZalohy();
-  
-  /*
- * Po odemknutí znovu načteme štítky.
- * Tajné názvy se díky dostupnému AES klíči
- * dešifrují pouze do paměti aplikace.
- */
-if (
-  typeof loadTagsFromSupabase === "function"
-) {
-  await loadTagsFromSupabase();
-}
-
-if (
-  typeof updateTagMenuUI === "function"
-) {
-  updateTagMenuUI();
-}
-
-  /*
-   * Po aktualizaci okamžitě uklidíme i případné starší systémové
-   * notifikace tajných poznámek, které mohly vzniknout před zavedením
-   * pravidla SECRET = absolutní ticho.
-   */
-  if (
-    typeof zrusSystemoveNotifikaceTajnychPoznamek === "function"
-  ) {
-    await zrusSystemoveNotifikaceTajnychPoznamek();
-  }
+  setTimeout(() => {
+    void dokonciOdemknutiTajnehoRezimuNaPozadi();
+  }, 0);
 
   return true;
 }
@@ -1108,13 +1143,20 @@ confirmSecretUnlockButton?.addEventListener(
       secretUnlockInput.value = "";
       secretUnlockModal.hidden = true;
 
-      await window.LubaNoteSecretBiometric
-        ?.aktualizujUI?.({ maHeslo: true });
-
       zobrazZpravuAplikace(
         "Tajný režim",
         "Tajný režim je odemčený."
       );
+
+      /* Skryté biometrické UI můžeme obnovit až po potvrzení odemknutí. */
+      window.LubaNoteSecretBiometric
+        ?.aktualizujUI?.({ maHeslo: true })
+        ?.catch?.((error) => {
+          console.warn(
+            "Obnova biometrického UI po odemknutí se nepodařila:",
+            error
+          );
+        });
     } catch (error) {
       console.error(
         "Odemknutí tajného režimu selhalo:",

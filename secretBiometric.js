@@ -386,12 +386,19 @@
         secretUnlockModalElement.hidden = true;
       }
 
-      await aktualizujUI({ maHeslo: true });
-
       zobrazZpravuAplikace(
         "Tajný režim",
         "Tajný režim je odemčený."
       );
+
+      /* Stav skrytého biometrického UI už nesmí zdržovat potvrzení. */
+      aktualizujUI({ maHeslo: true })
+        .catch((error) => {
+          console.warn(
+            "Obnova biometrického UI po odemknutí se nepodařila:",
+            error
+          );
+        });
 
       return {
         odemceno: true,
