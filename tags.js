@@ -1312,7 +1312,64 @@ window.LubaNoteTagsStartCache = {
 };
 
 
+function shrnutiVdBarevStitku() {
+  const stitky = Array.isArray(syncedTags) ? syncedTags : [];
+  const barevneStitky = stitky.filter((tag) => {
+    const barva = String(tag?.color || "system");
+    return barva !== "system" && barva !== "";
+  }).length;
+
+  let poznamky = [];
+  try {
+    poznamky = typeof loadTask === "function" ? loadTask() : [];
+  } catch (_error) {
+    poznamky = [];
+  }
+
+  const sHlavnimStitkem = poznamky.filter((task) =>
+    Array.isArray(task?.tags) && task.tags.length > 0
+  );
+
+  const hlavniStitekMaBarvu = sHlavnimStitkem.filter((task) => {
+    try {
+      return ziskejBarvuStitku(task.tags[0]) !== "system";
+    } catch (_error) {
+      return false;
+    }
+  }).length;
+
+  let kartyCelkem = 0;
+  let kartyBarevne = 0;
+
+  try {
+    const karty = Array.from(document.querySelectorAll(".taskCard"));
+    kartyCelkem = karty.length;
+    kartyBarevne = karty.filter((karta) =>
+      Boolean(karta.dataset?.barvaKarty)
+    ).length;
+  } catch (_error) {
+    // Diagnostika nesmí ovlivnit aplikaci.
+  }
+
+  return `tags=${stitky.length} coloredTags=${barevneStitky} ` +
+    `notes=${poznamky.length} taggedNotes=${sHlavnimStitkem.length} ` +
+    `resolvedColored=${hlavniStitekMaBarvu} ` +
+    `cards=${kartyCelkem} coloredCards=${kartyBarevne}`;
+}
+
+function zapisVdBarevStitku(faze, detail = "") {
+  window.LubaNoteStartupDiag?.zapis?.(
+    "TAG-VD",
+    `${faze} | ${shrnutiVdBarevStitku()}${detail ? ` | ${detail}` : ""}`
+  );
+}
+
 async function loadTagsFromSupabase() {
+  zapisVdBarevStitku(
+    "LOAD START",
+    `online=${navigator.onLine}`
+  );
+
   const user = await getCurrentUser();
   
   if (!user) {
@@ -1329,9 +1386,19 @@ async function loadTagsFromSupabase() {
     .from("tags")
     .select("*")
     .order("sort_order", { ascending: true });
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "TAG-VD",
+    `LOAD QUERY | rows=${Array.isArray(data) ? data.length : 0} ` +
+      `error=${error ? String(error.message || "ANO") : "NE"}`
+  );
   
   if (error) {
     console.error("Tag download error:", error.message);
+    zapisVdBarevStitku(
+      "LOAD FAIL",
+      `error=${String(error.message || "neznamy")}`
+    );
     return;
   }
 
@@ -1417,6 +1484,7 @@ async function loadTagsFromSupabase() {
   }
   
   syncedTags = nacteneStitky;
+  zapisVdBarevStitku("LOAD APPLIED");
 
   /*
    * Cache ukládáme až po úspěšném serverovém načtení. Funkce ji před
@@ -1436,6 +1504,8 @@ if (
 ) {
   renderTasks();
 }
+
+zapisVdBarevStitku("LOAD RENDERED");
 }
 
 // ==========================================

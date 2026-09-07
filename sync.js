@@ -3887,6 +3887,13 @@ let stitkyCekajiNaRefreshPoNavratuInternetu =
 let probihajiciRefreshStitkuPoNavratuInternetu = null;
 
 async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
+  window.LubaNoteStartupDiag?.zapis?.(
+    "TAG-VD",
+    `REFRESH CHECK | pending=${stitkyCekajiNaRefreshPoNavratuInternetu} ` +
+      `online=${navigator.onLine} ` +
+      `loader=${typeof loadTagsFromSupabase}`
+  );
+
   if (
     !stitkyCekajiNaRefreshPoNavratuInternetu ||
     !navigator.onLine ||
@@ -3902,7 +3909,18 @@ async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
   probihajiciRefreshStitkuPoNavratuInternetu =
     (async () => {
       try {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "TAG-VD",
+          "REFRESH CALL START"
+        );
+
         await loadTagsFromSupabase();
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "TAG-VD",
+          "REFRESH CALL END"
+        );
+
         stitkyCekajiNaRefreshPoNavratuInternetu = false;
 
         window.LubaNoteStartupDiag?.zapis?.(
@@ -4509,12 +4527,22 @@ window.addEventListener(
   "offline",
   () => {
     stitkyCekajiNaRefreshPoNavratuInternetu = true;
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "TAG-VD",
+      "EVENT OFFLINE | pending=true"
+    );
   }
 );
 
 window.addEventListener(
   "online",
   () => {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "TAG-VD",
+      `EVENT ONLINE | pending=${stitkyCekajiNaRefreshPoNavratuInternetu}`
+    );
+
     setTimeout(
       spustStartSyncBezpecne,
       400
