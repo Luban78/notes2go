@@ -3734,6 +3734,12 @@ async function startSync() {
   }
 
   /*
+   * Plný start už barvy štítků obnovil buď z bezpečné cache, nebo ze
+   * serveru. Případný reconnect refresh proto není dál dlužný.
+   */
+  stitkyCekajiNaRefreshPoNavratuInternetu = false;
+
+  /*
    * Vizuální inicializace je hotová: poznámky jsou bezpečně sloučené
    * a štítky jsou buď čerstvé ze serveru, nebo z poslední bezpečné
    * lokální cache. Síťový refresh může u ověřené instalace doběhnout
@@ -3870,6 +3876,59 @@ let casovacSynchronizacePoLokalniZmene = null;
 let lokalniZmenaCekaNaPotvrzeniServerem = false;
 let casovacKontrolyNavratuInternetu = null;
 let probihajiciSyncCekajiciLokalniZmeny = null;
+
+/*
+ * Barvy karet závisejí na syncedTags. Při skutečně offline startu se
+ * použije bezpečná lokální cache štítků, ale pokud Android WebView při
+ * návratu sítě nevyšle event "online", může proběhnout jen notes-only
+ * sync a serverový refresh štítků se přeskočí. Tento příznak proto drží
+ * jediný dlužný refresh po návratu internetu. Běžné online syncy tím
+ * žádný další dotaz na tabulku tags nedostávají.
+ */
+let stitkyCekajiNaRefreshPoNavratuInternetu =
+  !navigator.onLine;
+let probihajiciRefreshStitkuPoNavratuInternetu = null;
+
+async function obnovStitkyPoNavratuInternetuPokudJeTreba() {
+  if (
+    !stitkyCekajiNaRefreshPoNavratuInternetu ||
+    !navigator.onLine ||
+    typeof loadTagsFromSupabase !== "function"
+  ) {
+    return true;
+  }
+
+  if (probihajiciRefreshStitkuPoNavratuInternetu) {
+    return probihajiciRefreshStitkuPoNavratuInternetu;
+  }
+
+  probihajiciRefreshStitkuPoNavratuInternetu =
+    (async () => {
+      try {
+        await loadTagsFromSupabase();
+        stitkyCekajiNaRefreshPoNavratuInternetu = false;
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "FAST",
+          "TAG REFRESH AFTER OFFLINE"
+        );
+
+        return true;
+      } catch (error) {
+        console.warn(
+          "Štítky se po návratu internetu obnoví při dalším syncu:",
+          error
+        );
+        return false;
+      }
+    })();
+
+  try {
+    return await probihajiciRefreshStitkuPoNavratuInternetu;
+  } finally {
+    probihajiciRefreshStitkuPoNavratuInternetu = null;
+  }
+}
 
 function zastavKontroluNavratuInternetu() {
   if (casovacKontrolyNavratuInternetu) {
@@ -4141,6 +4200,10 @@ async function spustRychlySyncPoznamekBezpecne() {
 
   try {
     const vysledek = await syncNotes();
+
+    if (vysledek === true) {
+      await obnovStitkyPoNavratuInternetuPokudJeTreba();
+    }
 
     if (
       vysledek === true &&
@@ -4432,6 +4495,13 @@ window.addEventListener(
       spustStartSyncBezpecne,
       0
     );
+  }
+);
+
+window.addEventListener(
+  "offline",
+  () => {
+    stitkyCekajiNaRefreshPoNavratuInternetu = true;
   }
 );
 
