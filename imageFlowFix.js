@@ -179,41 +179,95 @@
     tlacitkoPridatTodo.click();
   }
 
+  function jeKoreniInlineObsah(editor, uzel) {
+    if (!uzel || uzel.parentNode !== editor) {
+      return false;
+    }
+
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      return true;
+    }
+
+    if (!(uzel instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (
+      uzel.classList.contains("lubaNoteImage") ||
+      uzel.contentEditable === "false"
+    ) {
+      return false;
+    }
+
+    /*
+     * Zvětšení / barva / B-I-U může kořenový text převést z TEXT_NODE
+     * na inline <span> (případně jiný inline wrapper). Právě tento
+     * rozdíl způsobil, že původní 0.9.304 fungovala jen pro obyčejný
+     * text. Blokové prvky sem záměrně nepouštíme.
+     */
+    if (uzel.tagName === "BR") {
+      return true;
+    }
+
+    const display = getComputedStyle(uzel).display;
+    return display === "inline" || display === "inline-block";
+  }
+
   function oddelKoreniTextPredObrazkem(editor, figure) {
     /*
-     * Android WebView umí ponechat první napsaný řádek jako přímý
-     * TEXT_NODE editoru. Když pak prázdný řádek pod ním nahradíme
-     * obrázkem a obrázek později dostane float:left/right, tento
-     * kořenový text se může zpětně přelít vedle obrázku.
+     * Float obrázku nesmí zpětně obtékat text, který byl napsaný
+     * PŘED vložením obrázku. Android WebView může takový řádek držet
+     * přímo v kořeni editoru buď jako TEXT_NODE, nebo po formátování
+     * jako jeden či více inline wrapperů (<span>...).
      *
-     * Normalizujeme jen přesně tento úzký případ: neprázdný přímý
-     * textový sourozenec těsně před nově vloženým figure dostane
-     * vlastní <div>. Žádné existující elementy, výběr, gesta ani
-     * ovládání obrázku tím neměníme.
+     * Normalizujeme jen souvislý kořenový inline úsek bezprostředně
+     * před NOVĚ vloženým figure. Uzly pouze přesuneme do vlastního
+     * <div>; jejich obsah, styly a formátování neměníme. Existující
+     * blokové řádky, obrázky, TODO/Bullet ani gesta zůstávají mimo.
      */
     if (!editor || !figure || figure.parentElement !== editor) {
       return;
     }
 
-    let predchozi = figure.previousSibling;
+    let posledni = figure.previousSibling;
 
     while (
-      predchozi?.nodeType === Node.TEXT_NODE &&
-      String(predchozi.textContent || "").trim() === ""
+      posledni?.nodeType === Node.TEXT_NODE &&
+      String(posledni.textContent || "").trim() === ""
     ) {
-      predchozi = predchozi.previousSibling;
+      posledni = posledni.previousSibling;
     }
 
-    if (
-      predchozi?.nodeType !== Node.TEXT_NODE ||
-      String(predchozi.textContent || "").trim() === ""
-    ) {
+    if (!jeKoreniInlineObsah(editor, posledni)) {
       return;
     }
 
+    const maSkutecnyObsah =
+      posledni.nodeType !== Node.TEXT_NODE ||
+      String(posledni.textContent || "").trim() !== "";
+
+    if (!maSkutecnyObsah) {
+      return;
+    }
+
+    let prvni = posledni;
+    let pred = prvni.previousSibling;
+
+    while (jeKoreniInlineObsah(editor, pred)) {
+      prvni = pred;
+      pred = prvni.previousSibling;
+    }
+
     const radekPredObrazkem = document.createElement("div");
-    predchozi.before(radekPredObrazkem);
-    radekPredObrazkem.append(predchozi);
+    prvni.before(radekPredObrazkem);
+
+    let uzel = prvni;
+
+    while (uzel && uzel !== figure) {
+      const dalsi = uzel.nextSibling;
+      radekPredObrazkem.append(uzel);
+      uzel = dalsi;
+    }
   }
 
   function ziskejVrcholovyBlok(editor, figure) {
