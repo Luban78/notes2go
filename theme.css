@@ -146,10 +146,10 @@ body.theme-darkg {
   --color-text: #e8f8ff;
   --color-text-secondary: #F0EEEE;
 
-  --color-accent: #D2E5E7;
+  --color-accent: #716969;
   --color-accent-text: #897373;
 
-  --color-border: rgba(114, 118, 119, 0.86);
+  --color-border: #000000DB;
 
   --color-editor-background: #0a2230;
   --color-editor-text: #e8f8ff;

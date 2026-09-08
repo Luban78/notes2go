@@ -7845,7 +7845,20 @@ body.secretModeActive {
   --card-fialova: #44365c;
   --card-ruzova: #5c334b;
 }
+/* ==================================================
+   BARVY KARET / ŠTÍTKŮ – DARK GREY
+================================================== */
 
+body.theme-darkg {
+  --card-cervena: #000000;
+  --card-oranzova: #000000;
+  --card-zluta: #000000;
+  --card-zelena: #000000;
+  --card-tyrkysova: #000000;
+  --card-modra: #000000;
+  --card-fialova: #000000;
+  --card-ruzova: #000000;
+}
 
 /* Zpět bude přes celou šířku pod paletou */
 .cardColorPalette +
