@@ -2196,6 +2196,29 @@ function ziskejBezpecnyTypPlanovanePolozky(
   }
 
   /*
+   * Označený text má kromě backlinku uložený i rozsah výběru.
+   * Ten použijeme jako druhý nezávislý důkaz původu položky.
+   * Chrání to starší / neúplně synchronizovaná data, kde mohl být
+   * sourceType chybně "note" nebo backlink dočasně chybět.
+   * Takový Planner úkol pak nikdy nesmí dokončit ani vypnout reminder
+   * celé zdrojové poznámky.
+   */
+  const maSelectionRozsah =
+    item.selectionStart !== null &&
+    item.selectionStart !== undefined &&
+    item.selectionEnd !== null &&
+    item.selectionEnd !== undefined &&
+    Number(item.selectionEnd) >
+      Number(item.selectionStart);
+
+  if (
+    item.sourceType === "selection" ||
+    maSelectionRozsah
+  ) {
+    return "selection";
+  }
+
+  /*
    * Backlink data-planned-item-id je nejsilnější důkaz, že Planner
    * položka vznikla z označeného textu. Díky tomu nikdy nesmažeme ani
    * nedokončíme celou zdrojovou poznámku jen kvůli starému sourceType.
