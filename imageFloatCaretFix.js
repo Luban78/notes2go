@@ -1,5 +1,5 @@
 /* ============================================================
-   LubaNote – IMAGE FLOAT CARET FIX V2
+   LubaNote – IMAGE FLOAT CARET FIX V3
    ------------------------------------------------------------
    Úzký doplněk pouze pro hlavní rich-text editor.
 
@@ -21,7 +21,7 @@
    - nereaguje na tap přímo na obrázek,
    - nemění editorMedia.js ani jeho 1×/2× tap a drag logiku,
    - nic nedělá u 100% / centrovaného obrázku,
-   - V2 navíc opravuje tap do existujícího prázdného řádku pod floatem.
+   - V3 cílí jen na označený koncový řádek pod floatem a přijme i tap na jeho <br>.
 ============================================================ */
 
 (() => {
@@ -33,6 +33,7 @@
   }
 
   const TRIDA_RADKU = "lubaNoteImageTextLine";
+  const TRIDA_RADKU_POD_OBRAZKEM = "lubaNoteImageBelowLine";
   const MAX_NOVYCH_RADKU = 24;
 
   function jePlovouciObrazek(figure) {
@@ -261,11 +262,21 @@
        * prázdný přímý řádek navazující na float obrázek, pouze do něj
        * explicitně nastavíme kurzor. DOM ani obsah tím neměníme.
        */
+      const cilovyElement =
+        event.target instanceof Element
+          ? event.target
+          : null;
+
+      const radekPodObrazkem =
+        cilovyElement?.closest?.(
+          `.${TRIDA_RADKU_POD_OBRAZKEM}`
+        ) || null;
+
       if (
-        jePrazdnyPrimeRadek(event.target) &&
-        patriRadekKPlovoucimuObrazku(event.target)
+        jePrazdnyPrimeRadek(radekPodObrazkem) &&
+        patriRadekKPlovoucimuObrazku(radekPodObrazkem)
       ) {
-        nastavKurzorDoRadku(event.target);
+        nastavKurzorDoRadku(radekPodObrazkem);
         return;
       }
 

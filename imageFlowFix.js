@@ -284,6 +284,7 @@
     }
 
     const novyRadek = document.createElement("div");
+    novyRadek.classList.add("lubaNoteImageBelowLine");
     novyRadek.append(document.createElement("br"));
 
     /*
