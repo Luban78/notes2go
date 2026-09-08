@@ -274,18 +274,6 @@
     }
   }
 
-  function zapisImageVD(text) {
-    try {
-      window.LubaNoteStartupDiag?.zapis?.("IMG-VD", text);
-    } catch (_) {}
-  }
-
-  function rectImageVD(el) {
-    if (!el?.getBoundingClientRect) return "none";
-    const r = el.getBoundingClientRect();
-    return `x=${Math.round(r.left)}..${Math.round(r.right)} y=${Math.round(r.top)}..${Math.round(r.bottom)} h=${Math.round(r.height)}`;
-  }
-
   function zajistiRadekZaObrazkem(editor, figure) {
     oddelKoreniTextPredObrazkem(editor, figure);
 
@@ -309,19 +297,6 @@
     novyRadek.style.clear = "both";
 
     blok.insertAdjacentElement("afterend", novyRadek);
-
-    zapisImageVD(
-      `BELOW CREATE | figure ${rectImageVD(figure)} | below ${rectImageVD(novyRadek)} | parent=${novyRadek.parentElement?.id || novyRadek.parentElement?.className || novyRadek.parentElement?.tagName}`
-    );
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const cs = getComputedStyle(novyRadek);
-        zapisImageVD(
-          `BELOW LAYOUT | figure ${rectImageVD(figure)} | below ${rectImageVD(novyRadek)} | clear=${cs.clear} display=${cs.display} pe=${cs.pointerEvents}`
-        );
-      });
-    });
 
     editor.dispatchEvent(
       new Event("input", { bubbles: true })
