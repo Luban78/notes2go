@@ -344,6 +344,313 @@
     return { radek: posledni, vytvoreno };
   }
 
+  function najdiRadekKurzorovePozice() {
+    const selection = window.getSelection();
+
+    if (
+      !selection ||
+      selection.rangeCount === 0 ||
+      !selection.isCollapsed
+    ) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    let uzel = range.startContainer;
+
+    if (uzel?.nodeType === Node.TEXT_NODE) {
+      uzel = uzel.parentElement;
+    }
+
+    if (!(uzel instanceof HTMLElement)) {
+      return null;
+    }
+
+    const radek = uzel.closest(`.${TRIDA_RADKU}`);
+
+    return radek?.parentElement === hlavniEditor
+      ? radek
+      : null;
+  }
+
+  function jeKurzorNaKonciRadku(radek) {
+    const selection = window.getSelection();
+
+    if (
+      !selection ||
+      selection.rangeCount === 0 ||
+      !selection.isCollapsed ||
+      !radek?.isConnected
+    ) {
+      return false;
+    }
+
+    try {
+      const caret = selection.getRangeAt(0);
+      const zbytek = document.createRange();
+
+      zbytek.selectNodeContents(radek);
+      zbytek.setStart(
+        caret.startContainer,
+        caret.startOffset
+      );
+
+      return zbytek.toString().length === 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function najdiPlovouciObrazekProRadek(radek) {
+    let uzel = radek?.previousElementSibling || null;
+
+    while (uzel?.classList?.contains(TRIDA_RADKU)) {
+      uzel = uzel.previousElementSibling;
+    }
+
+    return jePlovouciObrazek(uzel)
+      ? uzel
+      : null;
+  }
+
+  function vytvorRadekProEnter() {
+    const radek = document.createElement("div");
+    radek.className = TRIDA_RADKU;
+    radek.append(document.createElement("br"));
+    return radek;
+  }
+
+  function vejdeSeRadekVedleObrazku(radek, figure) {
+    if (!radek?.isConnected || !figure?.isConnected) {
+      return false;
+    }
+
+    const rectRadku = radek.getBoundingClientRect();
+    const rectObrazku = figure.getBoundingClientRect();
+
+    /*
+     * Stačí, aby začátek nového řádku ještě ležel uvnitř výšky
+     * plovoucího obrázku. Poslední vizuální řádek tak může přirozeně
+     * dosednout k jeho spodní hraně bez předčasného přesunu pod obrázek.
+     */
+    return rectRadku.top < rectObrazku.bottom - 2;
+  }
+
+  function najdiSpodniRadekZaObrazkem(figure) {
+    let uzel = figure?.nextElementSibling || null;
+
+    while (uzel?.classList?.contains(TRIDA_RADKU)) {
+      uzel = uzel.nextElementSibling;
+    }
+
+    return uzel?.classList?.contains(
+      TRIDA_RADKU_POD_OBRAZKEM
+    )
+      ? uzel
+      : null;
+  }
+
+  function vytvorRadekPodObrazkemPred(figure, predUzel) {
+    const radek = document.createElement("div");
+    radek.style.clear = "both";
+    radek.append(document.createElement("br"));
+
+    if (predUzel?.parentElement === hlavniEditor) {
+      predUzel.before(radek);
+    } else {
+      let posledni = figure;
+      let uzel = figure?.nextElementSibling || null;
+
+      while (uzel?.classList?.contains(TRIDA_RADKU)) {
+        posledni = uzel;
+        uzel = uzel.nextElementSibling;
+      }
+
+      posledni?.after(radek);
+    }
+
+    return radek;
+  }
+
+  function ziskejZakladniInlineStavy() {
+    const stav = {};
+
+    for (const prikaz of ["bold", "italic", "underline"]) {
+      try {
+        stav[prikaz] = document.queryCommandState(prikaz) === true;
+      } catch (_) {
+        stav[prikaz] = false;
+      }
+    }
+
+    return stav;
+  }
+
+  function obnovZakladniInlineStavy(stav) {
+    if (!stav) {
+      return;
+    }
+
+    for (const prikaz of ["bold", "italic", "underline"]) {
+      if (!stav[prikaz]) {
+        continue;
+      }
+
+      try {
+        if (document.queryCommandState(prikaz) !== true) {
+          document.execCommand(prikaz, false, null);
+        }
+      } catch (_) {
+        // Editor zůstává funkční i pokud WebView execCommand odmítne.
+      }
+    }
+  }
+
+  let posledniEnterVedleCas = -Infinity;
+
+  /*
+   * 0.9.313 – Enter uvnitř řádků VEDLE float obrázku.
+   *
+   * Android WebView při nativním Enteru uměl vytvořit další anonymní
+   * blok uvnitř / za .lubaNoteImageTextLine. Tím vznikaly skryté prázdné
+   * řádky a původní text pod obrázkem se posouval dolů dřív, než boční
+   * text skutečně vyčerpal výšku obrázku.
+   *
+   * Zasahujeme jen při collapsed caretu NA KONCI našeho vlastního
+   * bočního řádku. Běžný Enter kdekoliv jinde v editoru, TODO, Bullet,
+   * media gesta ani výběry se tímto handlerem netýkají.
+   */
+  function zpracujEnterVedleObrazku(event) {
+    const jeEnter =
+      (
+        event.type === "keydown" &&
+        event.key === "Enter"
+      ) ||
+      (
+        event.type === "beforeinput" &&
+        event.inputType === "insertParagraph"
+      );
+
+    if (
+      !jeEnter ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.isComposing
+    ) {
+      return false;
+    }
+
+    const ted = performance.now();
+
+    /*
+     * Jeden fyzický Enter může WebView ohlásit jako keydown i beforeinput.
+     * Krátké časové okno zabrání dvojímu vytvoření řádku, aniž by
+     * ovlivnilo běžné opakované mačkání Enteru uživatelem.
+     */
+    if (ted - posledniEnterVedleCas < 50) {
+      event.preventDefault();
+      return true;
+    }
+
+    const radek = najdiRadekKurzorovePozice();
+
+    if (
+      !radek ||
+      !jeKurzorNaKonciRadku(radek)
+    ) {
+      return false;
+    }
+
+    const figure =
+      najdiPlovouciObrazekProRadek(radek);
+
+    if (!figure) {
+      return false;
+    }
+
+    const inlineStavy = ziskejZakladniInlineStavy();
+
+    posledniEnterVedleCas = ted;
+    event.preventDefault();
+
+    /*
+     * Pokud už 0.9.305 při dřívějším tapu vytvořila další prázdný
+     * boční řádek, znovu ho nevytváříme – pouze do něj přejdeme.
+     */
+    const dalsiRadek = radek.nextElementSibling;
+
+    if (
+      dalsiRadek?.classList?.contains(TRIDA_RADKU) &&
+      jePrazdnyPrimeRadek(dalsiRadek)
+    ) {
+      nastavKurzorDoRadku(dalsiRadek);
+      obnovZakladniInlineStavy(inlineStavy);
+
+      /*
+       * editorEnterVisualReset.js si na keydown/beforeinput drží krátký
+       * příznak Enteru. Syntetický input ho korektně uzavře i tehdy,
+       * když jsme jen znovu použili už existující prázdný boční řádek.
+       */
+      hlavniEditor.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+
+      return true;
+    }
+
+    const novyRadek = vytvorRadekProEnter();
+    radek.after(novyRadek);
+
+    if (vejdeSeRadekVedleObrazku(novyRadek, figure)) {
+      nastavKurzorDoRadku(novyRadek);
+    } else {
+      novyRadek.remove();
+
+      const spodniRadek =
+        najdiSpodniRadekZaObrazkem(figure);
+
+      const radekPod =
+        jePrazdnyPrimeRadek(spodniRadek)
+          ? spodniRadek
+          : vytvorRadekPodObrazkemPred(
+              figure,
+              spodniRadek
+            );
+
+      nastavKurzorDoRadku(radekPod);
+    }
+
+    /*
+     * B/I/U jsou záměrně zachovány stejně jako při běžném Enteru.
+     * Barvu, pozadí a velikost naopak nepřenášíme – to odpovídá
+     * stabilnímu pravidlu z 0.9.311.
+     */
+    obnovZakladniInlineStavy(inlineStavy);
+
+    hlavniEditor.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    return true;
+  }
+
+  hlavniEditor.addEventListener(
+    "keydown",
+    zpracujEnterVedleObrazku
+  );
+
+  /*
+   * Některé Android WebView posílají virtuální Enter spolehlivěji
+   * jako beforeinput než jako keydown. Stejný handler je proto i zde;
+   * krátké časové okno zabrání dvojímu zpracování jedné klávesy.
+   */
+  hlavniEditor.addEventListener(
+    "beforeinput",
+    zpracujEnterVedleObrazku
+  );
+
   hlavniEditor.addEventListener(
     "click",
     (event) => {
