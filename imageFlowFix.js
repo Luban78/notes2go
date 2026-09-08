@@ -286,6 +286,15 @@
     const novyRadek = document.createElement("div");
     novyRadek.append(document.createElement("br"));
 
+    /*
+     * U plovouciho obrazku musi byt tento konkretni radek skutecne
+     * az POD obrazkem. Bez clear ho WebView drzi v toku vedle floatu
+     * a pod obrazkem pak neni zadna nativne klikatelna caret pozice.
+     * Radky pro zamerne psani VEDLE obrazku vytvari samostatne
+     * imageFloatCaretFix.js pred timto koncovym radkem.
+     */
+    novyRadek.style.clear = "both";
+
     blok.insertAdjacentElement("afterend", novyRadek);
 
     editor.dispatchEvent(
