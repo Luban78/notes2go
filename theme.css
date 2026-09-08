@@ -93,10 +93,6 @@ body.theme-ocean #modalTime::-webkit-calendar-picker-indicator {
 
 
 
-
-
-
-
 /* ========================================
    TAJNÝ REŽIM – BAREVNÉ POZADÍ
    Funguje ve světlém i tmavém motivu.
@@ -134,4 +130,27 @@ body.secretModeActive {
 body.secretModeActive .homeHeader,
 body.secretModeActive .app {
   background: var(--color-background);
+}
+
+
+
+
+
+
+/* THEME: darkg | DarkG | selectable */
+
+body.theme-darkg {
+  --color-background: #071a26;
+  --color-surface: #000000;
+
+  --color-text: #e8f8ff;
+  --color-text-secondary: #F0EEEE;
+
+  --color-accent: #D2E5E7;
+  --color-accent-text: #897373;
+
+  --color-border: rgba(114, 118, 119, 0.86);
+
+  --color-editor-background: #0a2230;
+  --color-editor-text: #e8f8ff;
 }
