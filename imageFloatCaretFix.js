@@ -1,5 +1,5 @@
 /* ============================================================
-   LubaNote – IMAGE FLOAT CARET FIX V4
+   LubaNote – IMAGE FLOAT CARET FIX V5
    ------------------------------------------------------------
    Úzký doplněk pouze pro hlavní rich-text editor.
 
@@ -21,7 +21,8 @@
    - nereaguje na tap přímo na obrázek,
    - nemění editorMedia.js ani jeho 1×/2× tap a drag logiku,
    - nic nedělá u 100% / centrovaného obrázku,
-   - V4 navíc při tapu těsně POD floatem umí chybějící koncový řádek bezpečně doplnit.
+   - V4 při tapu těsně POD floatem umí chybějící koncový řádek bezpečně doplnit.
+   - V5 hlídá, že se vedle obrázku vejde CELÁ výška nového řádku.
 ============================================================ */
 
 (() => {
@@ -429,11 +430,15 @@
     const rectObrazku = figure.getBoundingClientRect();
 
     /*
-     * Stačí, aby začátek nového řádku ještě ležel uvnitř výšky
-     * plovoucího obrázku. Poslední vizuální řádek tak může přirozeně
-     * dosednout k jeho spodní hraně bez předčasného přesunu pod obrázek.
+     * 0.9.314 – nestačí, aby vedle obrázku začínal jen HORNÍ okraj
+     * řádku. Android WebView pak mohl ponechat poslední řádek vedle
+     * obrázku i tehdy, když jeho spodní část už zasahovala pod float,
+     * a clear řádek „Konec textu“ se předčasně posunul dolů.
+     *
+     * Řádek proto zůstane vedle obrázku jen pokud se do jeho výšky
+     * vejde CELÝ (s malou 1px tolerancí kvůli subpixelům WebView).
      */
-    return rectRadku.top < rectObrazku.bottom - 2;
+    return rectRadku.bottom <= rectObrazku.bottom + 1;
   }
 
   function najdiSpodniRadekZaObrazkem(figure) {
