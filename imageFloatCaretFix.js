@@ -36,6 +36,82 @@
   const TRIDA_RADKU_POD_OBRAZKEM = "lubaNoteImageBelowLine";
   const MAX_NOVYCH_RADKU = 24;
 
+
+  const imageVD = {
+    radky: [],
+    max: 120
+  };
+
+  function zapisVD(text) {
+    const radek = `${Math.round(performance.now())} ms | ${text}`;
+    imageVD.radky.push(radek);
+    if (imageVD.radky.length > imageVD.max) {
+      imageVD.radky.shift();
+    }
+    try {
+      window.LubaNoteStartupDiag?.zapis?.("IMG-VD", text);
+    } catch (_) {}
+  }
+
+  function popisElementu(el) {
+    if (!(el instanceof Element)) return String(el?.nodeName || el || "null");
+    const id = el.id ? `#${el.id}` : "";
+    const cls = [...el.classList].slice(0, 4).map(x => `.${x}`).join("");
+    return `${el.tagName.toLowerCase()}${id}${cls}`;
+  }
+
+  function popisRect(el) {
+    if (!el?.getBoundingClientRect) return "none";
+    const r = el.getBoundingClientRect();
+    return `x=${Math.round(r.left)}..${Math.round(r.right)} y=${Math.round(r.top)}..${Math.round(r.bottom)} h=${Math.round(r.height)}`;
+  }
+
+  function popisSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return "none";
+    const a = sel.anchorNode;
+    const p = a?.nodeType === Node.TEXT_NODE ? a.parentElement : a;
+    return `${popisElementu(p)} off=${sel.anchorOffset} text=${JSON.stringify(String(a?.textContent || "").slice(0, 24))}`;
+  }
+
+  function snapshotVD(event, faze) {
+    const x = Math.round(event?.clientX ?? -1);
+    const y = Math.round(event?.clientY ?? -1);
+    const podPrstem = document.elementFromPoint?.(x, y) || null;
+    const below = [...hlavniEditor.querySelectorAll(`.${TRIDA_RADKU_POD_OBRAZKEM}`)];
+    const posledniBelow = below[below.length - 1] || null;
+    const figs = [...hlavniEditor.children].filter(el => el.classList?.contains("lubaNoteImage"));
+    const figText = figs.map((f, i) => {
+      const z = f.dataset.zarovnani || f.querySelector("img")?.dataset?.zarovnani || "?";
+      const v = f.dataset.velikost || f.querySelector("img")?.dataset?.velikost || "?";
+      return `f${i}[${z}/${v} ${popisRect(f)}]`;
+    }).join(" ") || "none";
+    let belowText = "none";
+    if (posledniBelow) {
+      const cs = getComputedStyle(posledniBelow);
+      belowText = `${popisElementu(posledniBelow)} ${popisRect(posledniBelow)} clear=${cs.clear} disp=${cs.display} pe=${cs.pointerEvents} ce=${posledniBelow.contentEditable || "inherit"}`;
+    }
+    zapisVD(`${faze} | xy=${x},${y} target=${popisElementu(event?.target)} efp=${popisElementu(podPrstem)} | editor ${popisRect(hlavniEditor)} | below=${belowText} | figs=${figText} | sel=${popisSelection()}`);
+  }
+
+  window.LubaNoteImageCaretVD = {
+    radky: () => [...imageVD.radky],
+    report: () => [
+      "LUBANOTE IMG-VD COMPACT REPORT",
+      ...imageVD.radky
+    ].join("\n")
+  };
+
+  zapisVD("DIAGNOSTIKA AKTIVNI | behavior=0.9.308 unchanged");
+
+  hlavniEditor.addEventListener("pointerdown", (event) => {
+    snapshotVD(event, "POINTERDOWN CAPTURE");
+  }, true);
+
+  hlavniEditor.addEventListener("click", (event) => {
+    snapshotVD(event, "CLICK CAPTURE");
+  }, true);
+
   function jePlovouciObrazek(figure) {
     if (
       !figure?.classList?.contains("lubaNoteImage") ||
@@ -248,6 +324,7 @@
   hlavniEditor.addEventListener(
     "click",
     (event) => {
+      zapisVD(`CLICK BUBBLE START | target=${popisElementu(event.target)} xy=${Math.round(event.clientX)},${Math.round(event.clientY)}`);
       /*
        * editorMedia.js už před tímto listenerem zpracuje svůj běžný
        * click. My zasahujeme jen do prázdné plochy kořene editoru.
@@ -272,15 +349,20 @@
           `.${TRIDA_RADKU_POD_OBRAZKEM}`
         ) || null;
 
-      if (
-        jePrazdnyPrimeRadek(radekPodObrazkem) &&
-        patriRadekKPlovoucimuObrazku(radekPodObrazkem)
-      ) {
-        nastavKurzorDoRadku(radekPodObrazkem);
+      const jePrazdnyBelow = jePrazdnyPrimeRadek(radekPodObrazkem);
+      const patriBelow = patriRadekKPlovoucimuObrazku(radekPodObrazkem);
+
+      zapisVD(`BELOW TEST | candidate=${popisElementu(radekPodObrazkem)} prazdny=${jePrazdnyBelow} patri=${patriBelow} rect=${popisRect(radekPodObrazkem)}`);
+
+      if (jePrazdnyBelow && patriBelow) {
+        const ok = nastavKurzorDoRadku(radekPodObrazkem);
+        zapisVD(`BELOW CARET | ok=${ok} sel=${popisSelection()}`);
+        setTimeout(() => zapisVD(`BELOW CARET +50ms | sel=${popisSelection()}`), 50);
         return;
       }
 
       if (event.target !== hlavniEditor) {
+        zapisVD(`EXIT NONROOT | target=${popisElementu(event.target)}`);
         return;
       }
 
@@ -290,8 +372,11 @@
       );
 
       if (!figure) {
+        zapisVD(`ROOT NO FIGURE | xy=${Math.round(event.clientX)},${Math.round(event.clientY)}`);
         return;
       }
+
+      zapisVD(`ROOT FIGURE | ${popisRect(figure)}`);
 
       const vysledek = najdiNeboVytvorRadekProBod(
         figure,
@@ -308,7 +393,8 @@
         );
       }
 
-      nastavKurzorDoRadku(vysledek.radek);
+      const okCaret = nastavKurzorDoRadku(vysledek.radek);
+      zapisVD(`SIDE CARET | ok=${okCaret} created=${vysledek.vytvoreno} row=${popisRect(vysledek.radek)} sel=${popisSelection()}`);
     }
   );
 })();
