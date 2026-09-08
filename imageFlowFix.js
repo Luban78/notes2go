@@ -285,32 +285,81 @@
       : null;
   }
 
-  function maEditovatelnyObsahZa(blok) {
-    let uzel = blok?.nextSibling || null;
+  function oznacPuvodniRadekZaObrazkem(editor, blok) {
+    if (!editor || !blok || blok.parentElement !== editor) {
+      return null;
+    }
 
-    while (uzel) {
-      if (uzel.nodeType === Node.TEXT_NODE) {
-        if (String(uzel.textContent || "").trim() !== "") {
-          return true;
-        }
+    let uzel = blok.nextSibling;
 
-        uzel = uzel.nextSibling;
-        continue;
-      }
-
-      if (uzel instanceof HTMLElement) {
-        if (
-          !uzel.classList.contains("lubaNoteImage") &&
-          uzel.contentEditable !== "false"
-        ) {
-          return true;
-        }
-      }
-
+    /*
+     * Android WebView po vlozeni obrazku casto uz sam vytvori
+     * prazdny pokracovaci radek <div><br></div>. Puvodni kod ho
+     * povazoval jen za "nejaky editovatelny obsah" a vratil se,
+     * takze radek nikdy nedostal clear: both. Po pozdejsim prepnuti
+     * obrazku na 25/50 % + vlevo/vpravo pak text napsany do tohoto
+     * radku zacal spravne podle CSS obtékat float a skocil vedle.
+     *
+     * Tento radek ale vznikl jako PUVODNI pokracovani pod obrazkem,
+     * proto ho oznacime jako koncovy radek pod obrazkem. Radky pro
+     * zamerne psani VEDLE floatu vytvari az imageFloatCaretFix.js
+     * s tridou .lubaNoteImageTextLine a zustavaji bez clear.
+     */
+    while (
+      uzel?.nodeType === Node.TEXT_NODE &&
+      String(uzel.textContent || "").trim() === ""
+    ) {
       uzel = uzel.nextSibling;
     }
 
-    return false;
+    if (!uzel) {
+      return null;
+    }
+
+    /*
+     * Pokud je pokracovani primo v koreni jako text/span/mark,
+     * zabalime pouze tento souvisly inline usek do vlastniho radku.
+     * Obsah ani jeho formatovani nemenime.
+     */
+    if (jeKoreniInlineObsah(editor, uzel)) {
+      const radek = document.createElement("div");
+      radek.classList.add("lubaNoteImageBelowLine");
+      radek.style.clear = "both";
+
+      editor.insertBefore(radek, uzel);
+
+      let aktualni = uzel;
+
+      while (jeKoreniInlineObsah(editor, aktualni)) {
+        const dalsi = aktualni.nextSibling;
+        radek.append(aktualni);
+        aktualni = dalsi;
+      }
+
+      if (!radek.firstChild) {
+        radek.append(document.createElement("br"));
+      }
+
+      return radek;
+    }
+
+    if (!(uzel instanceof HTMLElement)) {
+      return null;
+    }
+
+    if (
+      uzel.parentElement !== editor ||
+      uzel.classList.contains("lubaNoteImage") ||
+      uzel.querySelector(".lubaNoteImage") ||
+      uzel.contentEditable === "false" ||
+      uzel.classList.contains("lubaNoteImageTextLine")
+    ) {
+      return null;
+    }
+
+    uzel.classList.add("lubaNoteImageBelowLine");
+    uzel.style.clear = "both";
+    return uzel;
   }
 
   function nastavKurzorDoRadku(radek) {
@@ -333,7 +382,35 @@
 
     const blok = ziskejVrcholovyBlok(editor, figure);
 
-    if (!blok || maEditovatelnyObsahZa(blok)) {
+    if (!blok) {
+      return;
+    }
+
+    const existujiciRadek =
+      oznacPuvodniRadekZaObrazkem(editor, blok);
+
+    if (existujiciRadek) {
+      editor.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+
+      /*
+       * Pokud WebView pripravil prazdny radek za novym obrazkem,
+       * zachovame dosavadni UX a nechame v nem kurzor. U radku,
+       * ktery uz obsahuje text, selection nemenime.
+       */
+      if (
+        String(existujiciRadek.textContent || "").trim() === ""
+      ) {
+        try {
+          editor.focus({ preventScroll: true });
+        } catch (_) {
+          editor.focus();
+        }
+
+        nastavKurzorDoRadku(existujiciRadek);
+      }
+
       return;
     }
 
