@@ -179,6 +179,43 @@
     tlacitkoPridatTodo.click();
   }
 
+  function oddelKoreniTextPredObrazkem(editor, figure) {
+    /*
+     * Android WebView umí ponechat první napsaný řádek jako přímý
+     * TEXT_NODE editoru. Když pak prázdný řádek pod ním nahradíme
+     * obrázkem a obrázek později dostane float:left/right, tento
+     * kořenový text se může zpětně přelít vedle obrázku.
+     *
+     * Normalizujeme jen přesně tento úzký případ: neprázdný přímý
+     * textový sourozenec těsně před nově vloženým figure dostane
+     * vlastní <div>. Žádné existující elementy, výběr, gesta ani
+     * ovládání obrázku tím neměníme.
+     */
+    if (!editor || !figure || figure.parentElement !== editor) {
+      return;
+    }
+
+    let predchozi = figure.previousSibling;
+
+    while (
+      predchozi?.nodeType === Node.TEXT_NODE &&
+      String(predchozi.textContent || "").trim() === ""
+    ) {
+      predchozi = predchozi.previousSibling;
+    }
+
+    if (
+      predchozi?.nodeType !== Node.TEXT_NODE ||
+      String(predchozi.textContent || "").trim() === ""
+    ) {
+      return;
+    }
+
+    const radekPredObrazkem = document.createElement("div");
+    predchozi.before(radekPredObrazkem);
+    radekPredObrazkem.append(predchozi);
+  }
+
   function ziskejVrcholovyBlok(editor, figure) {
     let blok = figure;
 
@@ -238,6 +275,8 @@
   }
 
   function zajistiRadekZaObrazkem(editor, figure) {
+    oddelKoreniTextPredObrazkem(editor, figure);
+
     const blok = ziskejVrcholovyBlok(editor, figure);
 
     if (!blok || maEditovatelnyObsahZa(blok)) {
