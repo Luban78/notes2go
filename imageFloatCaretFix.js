@@ -1,5 +1,5 @@
 /* ============================================================
-   LubaNote – IMAGE FLOAT CARET FIX V1
+   LubaNote – IMAGE FLOAT CARET FIX V2
    ------------------------------------------------------------
    Úzký doplněk pouze pro hlavní rich-text editor.
 
@@ -20,7 +20,8 @@
    - neběží uvnitř Bulletu,
    - nereaguje na tap přímo na obrázek,
    - nemění editorMedia.js ani jeho 1×/2× tap a drag logiku,
-   - nic nedělá u 100% / centrovaného obrázku.
+   - nic nedělá u 100% / centrovaného obrázku,
+   - V2 navíc opravuje tap do existujícího prázdného řádku pod floatem.
 ============================================================ */
 
 (() => {
@@ -124,6 +125,38 @@
     return radky;
   }
 
+  function jePrazdnyPrimeRadek(uzel) {
+    if (!(uzel instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (uzel.parentElement !== hlavniEditor) {
+      return false;
+    }
+
+    if (
+      uzel.classList.contains("lubaNoteImage") ||
+      uzel.contentEditable === "false" ||
+      uzel.querySelector(
+        ".lubaNoteImage, img, a, button, input, textarea, [contenteditable='false']"
+      )
+    ) {
+      return false;
+    }
+
+    return String(uzel.textContent || "").trim() === "";
+  }
+
+  function patriRadekKPlovoucimuObrazku(radek) {
+    let uzel = radek?.previousElementSibling || null;
+
+    while (uzel?.classList?.contains(TRIDA_RADKU)) {
+      uzel = uzel.previousElementSibling;
+    }
+
+    return jePlovouciObrazek(uzel);
+  }
+
   function nastavKurzorDoRadku(radek) {
     if (!radek?.isConnected) {
       return false;
@@ -219,6 +252,23 @@
        * click. My zasahujeme jen do prázdné plochy kořene editoru.
        * Tap na obrázek, text, Bullet, link, ovládání atd. se nás netýká.
        */
+      /*
+       * 0.9.304 za obrázkem záměrně vytváří skutečný prázdný
+       * <div><br></div>, aby bylo kam pokračovat po obrázku.
+       * Po doplnění řádků 0.9.305 se tento blok přirozeně odsune
+       * až pod float. Android WebView ale někdy tap na prázdný blok
+       * nepromění na caret. Pokud uživatel klepne právě na tento
+       * prázdný přímý řádek navazující na float obrázek, pouze do něj
+       * explicitně nastavíme kurzor. DOM ani obsah tím neměníme.
+       */
+      if (
+        jePrazdnyPrimeRadek(event.target) &&
+        patriRadekKPlovoucimuObrazku(event.target)
+      ) {
+        nastavKurzorDoRadku(event.target);
+        return;
+      }
+
       if (event.target !== hlavniEditor) {
         return;
       }
