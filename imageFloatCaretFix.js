@@ -1,5 +1,5 @@
 /* ============================================================
-   LubaNote – IMAGE FLOAT CARET FIX V5
+   LubaNote – IMAGE FLOAT CARET FIX V5.1
    ------------------------------------------------------------
    Úzký doplněk pouze pro hlavní rich-text editor.
 
@@ -23,6 +23,7 @@
    - nic nedělá u 100% / centrovaného obrázku,
    - V4 při tapu těsně POD floatem umí chybějící koncový řádek bezpečně doplnit.
    - V5 hlídá, že se vedle obrázku vejde CELÁ výška nového řádku.
+   - V5.1 při přetečení z posledního bočního řádku přejde do už existujícího spodního řádku místo vložení nového prázdného.
 ============================================================ */
 
 (() => {
@@ -272,6 +273,32 @@
     const range = document.createRange();
     range.selectNodeContents(radek);
     range.collapse(true);
+
+    const selection = window.getSelection();
+
+    if (!selection) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  function nastavKurzorNaKonecRadku(radek) {
+    if (!radek?.isConnected) {
+      return false;
+    }
+
+    try {
+      hlavniEditor.focus({ preventScroll: true });
+    } catch (_) {
+      hlavniEditor.focus();
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(radek);
+    range.collapse(false);
 
     const selection = window.getSelection();
 
@@ -616,18 +643,28 @@
       const spodniRadek =
         najdiSpodniRadekZaObrazkem(figure);
 
-      const radekPod =
-        jePrazdnyPrimeRadek(spodniRadek)
-          ? spodniRadek
-          : vytvorRadekPodObrazkemPred(
-              figure,
-              spodniRadek
-            );
+      if (spodniRadek?.isConnected) {
+        if (jePrazdnyPrimeRadek(spodniRadek)) {
+          nastavKurzorDoRadku(spodniRadek);
+        } else {
+          nastavKurzorNaKonecRadku(spodniRadek);
+        }
+      } else {
+        const radekPod =
+          vytvorRadekPodObrazkemPred(
+            figure,
+            null
+          );
 
-      nastavKurzorDoRadku(radekPod);
+        nastavKurzorDoRadku(radekPod);
+      }
     }
 
     /*
+     * Pokud už pod floatem existuje skutečný obsah (např. „Konec textu“),
+     * nepřidáváme před něj nový prázdný řádek. Caret plynule přesuneme
+     * na konec tohoto existujícího spodního řádku.
+     *
      * B/I/U jsou záměrně zachovány stejně jako při běžném Enteru.
      * Barvu, pozadí a velikost naopak nepřenášíme – to odpovídá
      * stabilnímu pravidlu z 0.9.311.
