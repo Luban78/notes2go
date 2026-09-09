@@ -1643,19 +1643,17 @@ function openReminderQuickMenu(
     !Number.isNaN(termin.getTime()) &&
     termin.getTime() < Date.now();
 
+  const jePlannerMenu =
+    selectedReminderContext === "planner";
+
   if (reminderQuickLabel) {
-    const jePlannerMenu =
-      selectedReminderContext === "planner";
+    reminderQuickLabel.classList.toggle(
+      "reminderQuickTaskLabel",
+      jePlannerMenu || entry.kind === "planned"
+    );
 
     if (jePlannerMenu || entry.kind === "planned") {
-      reminderQuickLabel.textContent =
-        entry.completed === true
-          ? "DOKONČENÝ NAPLÁNOVANÝ ÚKOL"
-          : (
-              jePoTerminu
-                ? "NAPLÁNOVANÝ ÚKOL PO TERMÍNU"
-                : "AKTIVNÍ NAPLÁNOVANÝ ÚKOL"
-            );
+      reminderQuickLabel.textContent = "Úkol:";
     } else {
       reminderQuickLabel.textContent =
         jePoTerminu
@@ -1670,11 +1668,53 @@ function openReminderQuickMenu(
   }
 
   if (reminderQuickPreview) {
-    const preview =
-      String(entry.preview || "").trim();
+    if (jePlannerMenu || entry.kind === "planned") {
+      const zdrojovaPoznamka =
+        entry.sourceNoteId &&
+        typeof loadTask === "function"
+          ? loadTask().find(
+              (task) => task?.id === entry.sourceNoteId
+            ) || null
+          : null;
 
-    reminderQuickPreview.textContent = preview;
-    reminderQuickPreview.hidden = !preview;
+      const nazevZdrojoveKarty =
+        String(zdrojovaPoznamka?.title || "").trim();
+      const nazevUkolu =
+        String(entry.title || "").trim();
+      const zobrazitZdroj =
+        nazevZdrojoveKarty &&
+        nazevZdrojoveKarty !== nazevUkolu;
+
+      reminderQuickPreview.replaceChildren();
+
+      if (zobrazitZdroj) {
+        const zdrojLabel =
+          document.createElement("span");
+        zdrojLabel.className =
+          "reminderQuickSourceLabel";
+        zdrojLabel.textContent = "Z karty:";
+
+        const zdrojTitle =
+          document.createElement("span");
+        zdrojTitle.className =
+          "reminderQuickSourceTitle";
+        zdrojTitle.textContent = nazevZdrojoveKarty;
+
+        reminderQuickPreview.append(
+          zdrojLabel,
+          document.createTextNode(" "),
+          zdrojTitle
+        );
+      }
+
+      reminderQuickPreview.hidden = !zobrazitZdroj;
+    } else {
+      const preview =
+        String(entry.preview || "").trim();
+
+      reminderQuickPreview.textContent = preview;
+      reminderQuickPreview.hidden = !preview;
+    }
   }
 
   const date = new Date(zobrazeneDatum);
@@ -1734,21 +1774,31 @@ function openReminderQuickMenu(
   if (saveReminderQuickDateButton) {
     saveReminderQuickDateButton.hidden =
       jePlanner && jeOpakovana;
-    saveReminderQuickDateButton.textContent =
-      jePlanner ? "Změnit termín" : "Uložit datum a čas";
+    saveReminderQuickDateButton.textContent = "Termín";
   }
 
   if (editReminderRepeatButton) {
     editReminderRepeatButton.hidden =
       !(jePlanner && jeOpakovana);
+
+    if (!editReminderRepeatButton.hidden) {
+      if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+        window.LubaNoteIcons.nastavObsahSIkonou(
+          editReminderRepeatButton,
+          "opakovat",
+          "Opakování"
+        );
+      } else {
+        editReminderRepeatButton.textContent = "Opakování";
+      }
+    }
   }
 
   const openReminderNoteButton =
     document.getElementById("openReminderNoteButton");
 
   if (openReminderNoteButton) {
-    const popisekOtevrit =
-      jePlanner ? "Otevřít poznámku" : "Otevřít";
+    const popisekOtevrit = "Otevřít";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
@@ -1762,10 +1812,7 @@ function openReminderQuickMenu(
   }
 
   if (deleteReminderButton) {
-    const popisekSmazat =
-      jePlanner
-        ? (jeOpakovana ? "Smazat sérii" : "Smazat z plánu")
-        : "Smazat";
+    const popisekSmazat = "Smazat";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
@@ -1780,7 +1827,7 @@ function openReminderQuickMenu(
 
   if (disableReminderButton) {
     const popisek = pripominkaZapnuta
-      ? "Vypnout připomenutí"
+      ? "Vypnout"
       : "Připomenout";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
@@ -4256,6 +4303,18 @@ function createReminderRow(
 
     if (planIcon) {
       title.append(planIcon);
+    }
+  }
+
+  if (entry.sourceType === "recurring-note") {
+    const repeatIcon =
+      window.LubaNoteIcons?.vytvorHostitele?.(
+        "opakovat",
+        ["reminderRecurringIcon"]
+      );
+
+    if (repeatIcon) {
+      title.append(repeatIcon);
     }
   }
 

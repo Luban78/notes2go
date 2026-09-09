@@ -3455,6 +3455,21 @@ text-size-adjust: 100%;
   text-transform: uppercase;
 }
 
+.reminderQuickLabel.reminderQuickTaskLabel {
+  color: var(--color-text);
+  text-transform: none;
+}
+
+.reminderQuickSourceLabel {
+  color: var(--color-accent-text);
+  font-weight: 750;
+}
+
+.reminderQuickSourceTitle {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
 .reminderQuickHeader h3 {
   margin: 0;
   font-size: 1.05rem;
@@ -3567,7 +3582,7 @@ text-size-adjust: 100%;
   color: var(--color-text);
 
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 650;
   line-height: 1.2;
   text-align: center;
@@ -7990,6 +8005,14 @@ body.theme-darkg {
   margin-left: 4px;
   opacity: 0.76;
   color: var(--color-accent-text);
+}
+
+.reminderRecurringIcon {
+  width: 15px;
+  height: 15px;
+  margin-left: 2px;
+  opacity: 0.86;
+  color: var(--color-accent);
 }
 
 .calendarAgendaRepeatIcon {
