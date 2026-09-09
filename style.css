@@ -10601,6 +10601,17 @@ body.trashScreenOpen {
   color: var(--color-text);
   font-weight: 700;
   pointer-events: none;
+
+  /* V klidu nesmí swipe vrstva prosvítat přes kartu/řádek. */
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.lubaSwipeDoneTarget.lubaSwipeDoneDragging
+  > .lubaSwipeDoneBackground,
+.lubaSwipeDoneTarget.lubaSwipeDoneCommitted
+  > .lubaSwipeDoneBackground {
+  opacity: 1;
 }
 
 .lubaSwipeDoneTarget > :not(.lubaSwipeDoneBackground) {
