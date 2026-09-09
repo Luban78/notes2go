@@ -664,13 +664,14 @@ function renderCalendarItems(targetElement) {
     window.LubaNoteSwipe?.pridejHotovo?.(
       row,
       {
-        isDisabled: () => item.completed === true,
+        isCompleted: () => item.completed === true,
         onComplete: async () => {
-          window.LubaNoteReminders
-            ?.dokoncitPolozkuPlanovace?.(
+          await window.LubaNoteReminders
+            ?.prepniDokonceniPolozkyGestem?.(
               reminderKind,
               reminderId,
-              efektivniTermin
+              efektivniTermin,
+              "planner"
             );
 
           setTimeout(() => {
@@ -678,6 +679,30 @@ function renderCalendarItems(targetElement) {
               renderCalendarItems(targetElement);
             }
           }, 160);
+        },
+        onRestore: async () => {
+          await window.LubaNoteReminders
+            ?.prepniDokonceniPolozkyGestem?.(
+              reminderKind,
+              reminderId,
+              efektivniTermin,
+              "planner"
+            );
+
+          setTimeout(() => {
+            if (targetElement.isConnected) {
+              renderCalendarItems(targetElement);
+            }
+          }, 160);
+        },
+        onDelete: () => {
+          window.LubaNoteReminders
+            ?.otevriSmazaniPolozkyGestem?.(
+              reminderKind,
+              reminderId,
+              efektivniTermin,
+              "planner"
+            );
         }
       }
     );

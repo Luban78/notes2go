@@ -10592,8 +10592,9 @@ body.trashScreenOpen {
   display: none !important;
 }
 
-/* Swipe doprava = Hotovo. Pozadí zůstává na místě,
-   obsah karty/řádku se posouvá nad ním. */
+/* Swipe akce karty / Planneru / Připomínek.
+   Doprava = Hotovo / Vrátit, doleva = Smazat.
+   Pozadí zůstává na místě, obsah se posouvá nad ním. */
 .lubaSwipeDoneTarget {
   --luba-swipe-x: 0px;
   position: relative;
@@ -10601,7 +10602,7 @@ body.trashScreenOpen {
   touch-action: pan-y;
 }
 
-.lubaSwipeDoneTarget > .lubaSwipeDoneBackground {
+.lubaSwipeDoneTarget > .lubaSwipeActionBackground {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -10611,47 +10612,67 @@ body.trashScreenOpen {
   gap: 8px;
   padding-inline: 18px;
 
+  color: var(--color-text);
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.lubaSwipeDoneTarget > .lubaSwipeDoneBackground {
+  justify-content: flex-start;
   background:
     color-mix(
       in srgb,
       var(--color-accent) 24%,
       var(--color-surface)
     );
-  color: var(--color-text);
-  font-weight: 700;
-  pointer-events: none;
+}
 
-  /* V klidu nesmí swipe vrstva prosvítat přes kartu/řádek. */
-  opacity: 0;
-  transition: opacity 80ms ease;
+.lubaSwipeDoneTarget > .lubaSwipeDeleteBackground {
+  justify-content: flex-end;
+  background:
+    color-mix(
+      in srgb,
+      var(--color-danger-text, #b94a48) 28%,
+      var(--color-surface)
+    );
 }
 
 .lubaSwipeDoneTarget.lubaSwipeDoneDragging
   > .lubaSwipeDoneBackground,
 .lubaSwipeDoneTarget.lubaSwipeDoneCommitted
-  > .lubaSwipeDoneBackground {
+  > .lubaSwipeDoneBackground,
+.lubaSwipeDoneTarget.lubaSwipeDeleteDragging
+  > .lubaSwipeDeleteBackground,
+.lubaSwipeDoneTarget.lubaSwipeDeleteCommitted
+  > .lubaSwipeDeleteBackground {
   opacity: 1;
 }
 
-.lubaSwipeDoneTarget > :not(.lubaSwipeDoneBackground) {
+.lubaSwipeDoneTarget
+  > :not(.lubaSwipeActionBackground) {
   position: relative;
   z-index: 1;
   transform: translateX(var(--luba-swipe-x));
   transition: transform 150ms ease;
 }
 
-.lubaSwipeDoneTarget.lubaSwipeDoneDragging
-  > :not(.lubaSwipeDoneBackground) {
+.lubaSwipeDoneTarget.lubaSwipeDragging
+  > :not(.lubaSwipeActionBackground) {
   transition: none;
 }
 
 .lubaSwipeDoneTarget.lubaSwipeDoneCommitted
-  > :not(.lubaSwipeDoneBackground) {
+  > :not(.lubaSwipeActionBackground),
+.lubaSwipeDoneTarget.lubaSwipeDeleteCommitted
+  > :not(.lubaSwipeActionBackground) {
   transition: transform 120ms ease-out;
 }
 
-.lubaSwipeDoneBackground .lubaSwipeDoneIcon,
-.lubaSwipeDoneBackground .lubaActionIcon {
+.lubaSwipeActionBackground .lubaSwipeActionIcon,
+.lubaSwipeActionBackground .lubaActionIcon {
   width: 22px;
   height: 22px;
 }
+

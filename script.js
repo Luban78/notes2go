@@ -4016,18 +4016,40 @@ function porovnejKartyProZobrazeni(a, b) {
 
 
 async function dokoncitKartuPodleIndexu(index) {
-  const updatedTask =
+  const provedZmenu = () =>
     toggleTaskCompleted(index);
 
-  if (updatedTask) {
-    await Promise.resolve(
-      uploadLocalNoteToSupabase(updatedTask)
-    ).catch((error) => {
-      console.warn(
-        "Synchronizace dokončené karty byla odložena:",
-        error
+  let updatedTask = null;
+
+  if (
+    typeof window.LubaNoteSync
+      ?.provedLokalniZmenuASynchronizuj === "function"
+  ) {
+    /*
+     * Hotovo / Vrátit je stejná lokální změna jako editace poznámky.
+     * Musí proto projít centrální sync cestou, aby se změna okamžitě
+     * označila jako čekající na synchronizaci a neobcházela sync status.
+     */
+    updatedTask = await window.LubaNoteSync
+      .provedLokalniZmenuASynchronizuj(
+        provedZmenu
       );
-    });
+  } else {
+    updatedTask = provedZmenu();
+
+    if (
+      updatedTask &&
+      typeof uploadLocalNoteToSupabase === "function"
+    ) {
+      await Promise.resolve(
+        uploadLocalNoteToSupabase(updatedTask)
+      ).catch((error) => {
+        console.warn(
+          "Synchronizace změny Hotovo byla odložena:",
+          error
+        );
+      });
+    }
   }
 
   renderTasks();
@@ -4090,7 +4112,7 @@ function renderTasks() {
       longPressTimer = setTimeout(() => {
         if (
           loadedCard.classList.contains(
-            "lubaSwipeDoneDragging"
+            "lubaSwipeDragging"
           )
         ) {
           return;
@@ -4337,11 +4359,30 @@ function renderTasks() {
     window.LubaNoteSwipe?.pridejHotovo?.(
       loadedCard,
       {
-        isDisabled: () =>
-          rezimVyberuKaret ||
+        isDisabled: () => rezimVyberuKaret,
+        isCompleted: () =>
           loadedTask.completed === true,
         onComplete: async () => {
           await dokoncitKartuPodleIndexu(index);
+        },
+        onRestore: async () => {
+          await dokoncitKartuPodleIndexu(index);
+        },
+        onDelete: () => {
+          selectedCardIndex = index;
+          hromadneMazaniIds = null;
+
+          if (deleteConfirmTitle) {
+            deleteConfirmTitle.textContent =
+              puvodniNadpisPotvrzeniSmazani;
+          }
+
+          if (deleteConfirmText) {
+            deleteConfirmText.textContent =
+              puvodniTextPotvrzeniSmazani;
+          }
+
+          deleteConfirmModal.hidden = false;
         }
       }
     );
