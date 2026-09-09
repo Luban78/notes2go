@@ -647,6 +647,28 @@
       </div>
     </div>
   </div>
+
+  <!-- ========================================
+       POTVRZENÍ DOKONČENÍ OPAKOVANÉHO ÚKOLU
+       ======================================== -->
+
+  <div id="recurringCompleteConfirmModal" class="deleteConfirmModal" hidden>
+    <div class="deleteConfirmBox" role="dialog" aria-modal="true" aria-labelledby="recurringCompleteConfirmTitle">
+      <h3 id="recurringCompleteConfirmTitle">Dokončit opakovaný úkol?</h3>
+      <p id="recurringCompleteConfirmText"></p>
+
+      <div class="deleteConfirmActions">
+        <button id="cancelRecurringCompleteButton" type="button">
+          Zrušit
+        </button>
+
+        <button id="confirmRecurringCompleteButton" type="button" class="lubaHasIcon">
+          <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span>
+          <span>Dokončit a posunout</span>
+        </button>
+      </div>
+    </div>
+  </div>
   
   <!-- ========================================
        EDITOR POZNÁMKY / ÚKOLU
@@ -1838,7 +1860,7 @@
   <script src="lubaIcons.js"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
   
-  <script src="reminders.js?v=20260909-gesture-stabilization-322"></script>
+  <script src="reminders.js?v=20260909-recurring-complete-confirm-323"></script>
   
   <script src="storage.js?v=20260906-ios-regular-idb-overflow-1"></script>
   
@@ -1856,7 +1878,7 @@
   <script src="recurringTasks.js"></script>
   <script src="swipeActions.js?v=20260909-gesture-stabilization-322"></script>
   
-  <script src="script.js?v=20260909-gesture-stabilization-322"></script>
+  <script src="script.js?v=20260909-recurring-complete-confirm-323"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
   <script src="trash.js?v=20260906-trash-restore-race-1"></script>

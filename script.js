@@ -4363,11 +4363,30 @@ function renderTasks() {
         isCompleted: () =>
           loadedTask.completed === true,
         onComplete: async () => {
+          if (
+            loadedTask.repeat?.enabled === true &&
+            loadedTask.id &&
+            window.LubaNoteReminders
+              ?.prepniDokonceniPolozkyGestem
+          ) {
+            await window.LubaNoteReminders
+              .prepniDokonceniPolozkyGestem(
+                "note",
+                loadedTask.id,
+                loadedTask.date || null,
+                "reminders"
+              );
+            return;
+          }
+
           await dokoncitKartuPodleIndexu(index);
         },
-        onRestore: async () => {
-          await dokoncitKartuPodleIndexu(index);
-        },
+        onRestore:
+          loadedTask.repeat?.enabled === true
+            ? null
+            : async () => {
+                await dokoncitKartuPodleIndexu(index);
+              },
         onDelete: () => {
           selectedCardIndex = index;
           hromadneMazaniIds = null;

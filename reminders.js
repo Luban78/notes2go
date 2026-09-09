@@ -1585,7 +1585,21 @@ const cancelRecurringDeleteButton =
 const confirmRecurringDeleteButton =
   document.getElementById("confirmRecurringDeleteButton");
 
+const recurringCompleteConfirmModal =
+  document.getElementById("recurringCompleteConfirmModal");
+
+const recurringCompleteConfirmText =
+  document.getElementById("recurringCompleteConfirmText");
+
+const cancelRecurringCompleteButton =
+  document.getElementById("cancelRecurringCompleteButton");
+
+const confirmRecurringCompleteButton =
+  document.getElementById("confirmRecurringCompleteButton");
+
 let cekajiciSmazaniOpakovanePoznamkyId = null;
+let cekajiciDokonceniOpakovanePoznamky = null;
+let preskocitPotvrzeniOpakovanehoDokonceniJednou = false;
 
 
 function closeReminderQuickMenu() {
@@ -3360,6 +3374,199 @@ confirmRecurringDeleteButton?.addEventListener(
 );
 
 
+function vypocitejDalsiTerminOpakovanePoznamky(
+  note,
+  datumVyskytu = null
+) {
+  if (
+    note?.repeat?.enabled !== true ||
+    !note?.date ||
+    !window.LubaNoteRecurring
+  ) {
+    return null;
+  }
+
+  const aktualniVyskyt = new Date(
+    datumVyskytu || note.date
+  );
+
+  const hledatOd = Number.isNaN(
+    aktualniVyskyt.getTime()
+  )
+    ? new Date()
+    : new Date(
+        aktualniVyskyt.getTime() + 60000
+      );
+
+  return window.LubaNoteRecurring
+    ?.vypocitejPristiTermin?.(
+      note.date,
+      note.repeat,
+      hledatOd
+    ) || null;
+}
+
+
+function formatujTerminOpakovaniProPotvrzeni(datum) {
+  const hodnota = datum instanceof Date
+    ? datum
+    : new Date(datum);
+
+  if (Number.isNaN(hodnota.getTime())) {
+    return "neznámý termín";
+  }
+
+  return hodnota.toLocaleString(
+    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+    {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }
+  );
+}
+
+
+function zavriPotvrzeniDokonceniOpakovanePoznamky() {
+  if (recurringCompleteConfirmModal) {
+    recurringCompleteConfirmModal.hidden = true;
+  }
+
+  cekajiciDokonceniOpakovanePoznamky = null;
+}
+
+
+function otevriPotvrzeniDokonceniOpakovanePoznamky(
+  entry,
+  note
+) {
+  if (
+    !recurringCompleteConfirmModal ||
+    !entry ||
+    !note?.id ||
+    note.repeat?.enabled !== true
+  ) {
+    return false;
+  }
+
+  const aktualniTermin = new Date(
+    entry.date || note.date
+  );
+  const dalsiTermin =
+    vypocitejDalsiTerminOpakovanePoznamky(
+      note,
+      entry.date
+    );
+
+  cekajiciDokonceniOpakovanePoznamky = {
+    noteId: note.id,
+    context: selectedReminderContext,
+    dateOverride: entry.date || note.date
+  };
+
+  if (recurringCompleteConfirmText) {
+    const aktualniText =
+      formatujTerminOpakovaniProPotvrzeni(
+        aktualniTermin
+      );
+
+    if (dalsiTermin) {
+      const dalsiText =
+        formatujTerminOpakovaniProPotvrzeni(
+          dalsiTermin
+        );
+
+      recurringCompleteConfirmText.textContent =
+        `Výskyt ${aktualniText} bude označen jako hotový. ` +
+        `Další plánování série se posune na ${dalsiText}.`;
+    } else {
+      recurringCompleteConfirmText.textContent =
+        `Výskyt ${aktualniText} bude označen jako hotový. ` +
+        "Toto je poslední výskyt série, takže další termín už nebude naplánován.";
+    }
+  }
+
+  if (confirmRecurringCompleteButton) {
+    const maDalsiTermin = Boolean(dalsiTermin);
+    const popisek = maDalsiTermin
+      ? "Dokončit a posunout"
+      : "Dokončit";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        confirmRecurringCompleteButton,
+        "hotovo",
+        popisek
+      );
+    } else {
+      confirmRecurringCompleteButton.textContent =
+        popisek;
+    }
+  }
+
+  /* Rychlé menu už pod potvrzením nemá zůstávat otevřené. */
+  closeReminderQuickMenu();
+  recurringCompleteConfirmModal.hidden = false;
+  return true;
+}
+
+
+cancelRecurringCompleteButton?.addEventListener(
+  "click",
+  zavriPotvrzeniDokonceniOpakovanePoznamky
+);
+
+recurringCompleteConfirmModal?.addEventListener(
+  "click",
+  (event) => {
+    if (event.target === recurringCompleteConfirmModal) {
+      zavriPotvrzeniDokonceniOpakovanePoznamky();
+    }
+  }
+);
+
+confirmRecurringCompleteButton?.addEventListener(
+  "click",
+  () => {
+    const cekajici =
+      cekajiciDokonceniOpakovanePoznamky;
+
+    if (!cekajici?.noteId) {
+      zavriPotvrzeniDokonceniOpakovanePoznamky();
+      return;
+    }
+
+    const entry = getReminderEntry(
+      "note",
+      cekajici.noteId
+    );
+
+    if (!entry) {
+      zavriPotvrzeniDokonceniOpakovanePoznamky();
+      return;
+    }
+
+    const context = cekajici.context;
+    const dateOverride = cekajici.dateOverride;
+
+    recurringCompleteConfirmModal.hidden = true;
+    cekajiciDokonceniOpakovanePoznamky = null;
+
+    nastavPolozkuProGesto(
+      entry,
+      context,
+      dateOverride
+    );
+
+    /* Jediný potvrzený průchod použije stávající Hotovo logiku. */
+    preskocitPotvrzeniOpakovanehoDokonceniJednou = true;
+    completeReminderButton?.click();
+  }
+);
+
+
 async function odeberCelouPoznamkuZPlanu(entry) {
   const tasks = loadTask();
   const index = tasks.findIndex(
@@ -4507,11 +4714,6 @@ completeReminderButton?.addEventListener(
       const pripominkaPredDokoncenim =
         note.reminder === true;
 
-      zapocitejPouzitiTlacitkaPripominky(
-        "complete",
-        "note"
-      );
-
       /*
        * U opakované poznámky znamená Hotovo dokončení pouze právě
        * zobrazeného výskytu. Samotná série musí zůstat aktivní.
@@ -4523,28 +4725,38 @@ completeReminderButton?.addEventListener(
         Boolean(note.date) &&
         Boolean(window.LubaNoteRecurring);
 
+      const potvrzeniUzProbehlo =
+        preskocitPotvrzeniOpakovanehoDokonceniJednou;
+      preskocitPotvrzeniOpakovanehoDokonceniJednou = false;
+
+      if (
+        jeOpakovanaPoznamka &&
+        !potvrzeniUzProbehlo
+      ) {
+        const otevreno =
+          otevriPotvrzeniDokonceniOpakovanePoznamky(
+            entry,
+            note
+          );
+
+        if (otevreno) {
+          return;
+        }
+      }
+
+      zapocitejPouzitiTlacitkaPripominky(
+        "complete",
+        "note"
+      );
+
       let dalsiOpakovanyTermin = null;
 
       if (jeOpakovanaPoznamka) {
-        const aktualniVyskyt = new Date(
-          entry.date || note.date
-        );
-
-        const hledatOd = Number.isNaN(
-          aktualniVyskyt.getTime()
-        )
-          ? new Date()
-          : new Date(
-              aktualniVyskyt.getTime() + 60000
-            );
-
         dalsiOpakovanyTermin =
-          window.LubaNoteRecurring
-            ?.vypocitejPristiTermin?.(
-              note.date,
-              note.repeat,
-              hledatOd
-            ) || null;
+          vypocitejDalsiTerminOpakovanePoznamky(
+            note,
+            entry.date
+          );
 
         if (dalsiOpakovanyTermin) {
           const dalsiTerminText =
