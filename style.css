@@ -160,6 +160,9 @@ body {
   background: var(--color-accent);
   color: #ffffff;
   border-color: var(--color-accent);
+
+  /* Musí zůstat nad kartami a jejich swipe vrstvami. */
+  z-index: 10;
 }
 
 /* ==================================================
@@ -7844,6 +7847,22 @@ body.secretModeActive {
   --card-modra: #28445f;
   --card-fialova: #44365c;
   --card-ruzova: #5c334b;
+}
+
+/* ==================================================
+   BARVY KARET – DARK GREY
+   V DarkG zůstávají všechny barevné varianty karet černé.
+   Uložená barva štítku se nemění a v ostatních tématech se použije normálně.
+================================================== */
+body.theme-darkg {
+  --card-cervena: #000000;
+  --card-oranzova: #000000;
+  --card-zluta: #000000;
+  --card-zelena: #000000;
+  --card-tyrkysova: #000000;
+  --card-modra: #000000;
+  --card-fialova: #000000;
+  --card-ruzova: #000000;
 }
 
 
