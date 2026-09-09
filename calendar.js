@@ -568,14 +568,46 @@ function renderCalendarItems(targetElement) {
     time.textContent =
       efektivniTermin.slice(11, 16);
 
+    const jeCelaPoznamka = [
+      "recurring-note",
+      "reminder",
+      "planned-note"
+    ].includes(item.sourceType);
+
     const text =
       document.createElement("div");
 
     text.className =
       "calendarAgendaText";
 
-    text.textContent =
-      item.text;
+    /*
+     * Typ je vidět ještě před názvem, aby uživatel před swipe přesně
+     * poznal, zda dokončuje celou poznámku, nebo jen její úkol.
+     * Samostatný úkol používá clipboard-check, nikoli TODO checkbox.
+     */
+    const typovaIkona =
+      window.LubaNoteIcons?.vytvorHostitele?.(
+        jeCelaPoznamka
+          ? "poznamky"
+          : "ukol",
+        [
+          "calendarAgendaTypeIcon",
+          jeCelaPoznamka
+            ? "calendarAgendaTypeNote"
+            : "calendarAgendaTypeTask"
+        ]
+      );
+
+    if (typovaIkona) {
+      text.append(
+        typovaIkona,
+        document.createTextNode(" ")
+      );
+    }
+
+    text.append(
+      document.createTextNode(item.text)
+    );
 
     const maPripominku =
       item.sourceType === "recurring-note" ||
@@ -632,12 +664,6 @@ function renderCalendarItems(targetElement) {
       "vice",
       ["calendarAgendaMenuIcon"]
     );
-
-    const jeCelaPoznamka = [
-      "recurring-note",
-      "reminder",
-      "planned-note"
-    ].includes(item.sourceType);
 
     const reminderKind =
       jeCelaPoznamka ? "note" : "planned";
