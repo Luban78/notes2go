@@ -1228,6 +1228,80 @@ function slucPoznamkySPuvodnimKosem(prichozi, puvodni) {
   return odstranDuplicitniPoznamkySeStejnymId(vysledek);
 }
 
+function zajistiStabilniRazeniKaret(
+  tasks,
+  puvodniBezne,
+  puvodniTajne
+) {
+  const puvodniPodleId = new Map();
+
+  [
+    ...(Array.isArray(puvodniBezne) ? puvodniBezne : []),
+    ...(Array.isArray(puvodniTajne) ? puvodniTajne : [])
+  ].forEach((task) => {
+    if (task?.id) {
+      puvodniPodleId.set(task.id, task);
+    }
+  });
+
+  const nahradniCas = new Date().toISOString();
+
+  (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+    if (!task) {
+      return;
+    }
+
+    /*
+     * cardSortAt je stabilní kotva pořadí karty.
+     * updatedAt dál slouží synchronizaci a historii změn, ale běžná
+     * editace už kvůli němu nesmí přesouvat kartu nahoru/dolů.
+     */
+    if (task.cardSortAt) {
+      return;
+    }
+
+    const puvodni =
+      task.id ? puvodniPodleId.get(task.id) : null;
+
+    /*
+     * Pokud už kotva existovala v uložené verzi, zachováme ji i při
+     * starším/částečném objektu, který ji do saveAllTasks nepřinesl.
+     */
+    if (puvodni?.cardSortAt) {
+      task.cardSortAt = puvodni.cardSortAt;
+      return;
+    }
+
+    if (!puvodni) {
+      /*
+       * Skutečně nová karta: její první updatedAt je zároveň okamžik,
+       * podle kterého se zařadí mezi ostatní karty.
+       */
+      task.cardSortAt =
+        task.updatedAt || nahradniCas;
+      return;
+    }
+
+    const prichoziCas =
+      String(task.updatedAt || "");
+    const puvodniCas =
+      String(puvodni.updatedAt || "");
+
+    if (prichoziCas !== puvodniCas) {
+      /*
+       * První editace starší karty bez cardSortAt:
+       * jako kotvu vezmeme čas PŘED editací. Karta tak zůstane přesně
+       * tam, kde byla, místo aby po změně stavu/obsahu vyskočila nahoru.
+       */
+      task.cardSortAt =
+        puvodni.updatedAt ||
+        task.updatedAt ||
+        nahradniCas;
+    }
+  });
+}
+
+
 function saveAllTasks(tasks) {
   const safeTasks =
     odstranDuplicitniPoznamkySeStejnymId(tasks);
@@ -1242,6 +1316,12 @@ function saveAllTasks(tasks) {
     nactiBeznePoznamkyZUloziste();
   const puvodniTajne =
     desifrovaneTajnePoznamky;
+
+  zajistiStabilniRazeniKaret(
+    safeTasks,
+    puvodniBezne,
+    puvodniTajne
+  );
 
   /*
    * Každé běžné lokální uložení je nová uživatelská revize.

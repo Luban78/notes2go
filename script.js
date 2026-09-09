@@ -3958,9 +3958,16 @@ function ziskejSmerRazeniKaret() {
 }
 
 
-function ziskejCasUpravyKarty(task) {
+function ziskejCasRazeniKarty(task) {
+  /*
+   * cardSortAt se mění jen při vytvoření nové karty.
+   * U starších karet bez této kotvy do první změny zachováme
+   * původní pořadí podle updatedAt.
+   */
   const cas = new Date(
-    task?.updatedAt || 0
+    task?.cardSortAt ||
+    task?.updatedAt ||
+    0
   ).getTime();
   
   return Number.isFinite(cas) ?
@@ -3979,10 +3986,10 @@ function porovnejKartyProZobrazeni(a, b) {
   }
   
   const casA =
-    ziskejCasUpravyKarty(a.task);
+    ziskejCasRazeniKarty(a.task);
   
   const casB =
-    ziskejCasUpravyKarty(b.task);
+    ziskejCasRazeniKarty(b.task);
   
   if (casA !== casB) {
     return ziskejSmerRazeniKaret() === "asc" ?
