@@ -38,6 +38,7 @@
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
+    cardDrag: "Karty – drag / pořadí",
     performance: "Výkon – benchmark"
   };
 
@@ -892,6 +893,74 @@
     };
   }
 
+
+  function spustCardDrag() {
+    const handler = (event) => {
+      const detail = event.detail || {};
+      const typ = String(detail.typ || "EVENT");
+
+      if (typ === "START") {
+        zapis(
+          `DRAG START | card=${detail.card || "-"} | index=${detail.index ?? "-"} | slots=${detail.slots ?? "-"} | pinned=${detail.pinned ? "yes" : "no"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "CANDIDATE") {
+        zapis(
+          `DRAG CANDIDATE | ${detail.from ?? "-"} -> ${detail.candidate ?? "-"} | d=${detail.candidateDistance ?? "-"}/${detail.currentDistance ?? "-"} | h=${detail.hysteresis ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SLOT") {
+        zapis(
+          `DRAG SLOT | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | d=${detail.candidateDistance ?? "-"}/${detail.currentDistance ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "END") {
+        zapis(
+          `DRAG END | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | changed=${detail.changed ? "yes" : "no"} | prev=${detail.previous || "-"} | next=${detail.next || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SAVE") {
+        zapis(
+          `DRAG SAVE | ok=${detail.ok ? "yes" : "no"} | prev=${detail.previous || "-"} | next=${detail.next || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "CANCEL") {
+        zapis(
+          `DRAG CANCEL | ${detail.from ?? "-"} -> ${detail.to ?? "-"}`
+        );
+        return;
+      }
+
+      zapis(`DRAG ${typ}`);
+    };
+
+    window.addEventListener(
+      "luba:card-drag-debug",
+      handler
+    );
+
+    zapis(
+      "START CARD DRAG | stabilní sloty + hystereze; udělej 3–5 přesunů"
+    );
+
+    return () => {
+      window.removeEventListener(
+        "luba:card-drag-debug",
+        handler
+      );
+    };
+  }
+
   function nactiPerformanceBenchmark() {
     if (window.LubaNotePerformanceBenchmark?.spust) {
       return Promise.resolve();
@@ -1284,6 +1353,8 @@
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "bulletDrag") {
       stopAktivnihoModulu = spustBulletDrag();
+    } else if (aktivniModul === "cardDrag") {
+      stopAktivnihoModulu = spustCardDrag();
     } else if (aktivniModul === "performance") {
       stopAktivnihoModulu = spustPerformanceBenchmark();
     }

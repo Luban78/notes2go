@@ -9,6 +9,15 @@
   const DOBA_DVOJTAPU = 300;
   const OKRAJ_SYSTEMOVEHO_GESTA = 24;
 
+  /*
+   * Cíl drag & drop už neurčujeme podle právě překreslených karet.
+   * Při startu si uložíme stabilní sloty a během tahu přepínáme
+   * mezi nimi až po překročení hystereze. Tím se přeruší zpětná
+   * vazba "přeskládám DOM -> změním cíl -> přeskládám DOM".
+   */
+  const HYSTEREZE_SLOTU_PX = 28;
+  const DEBUG_MOVE_INTERVAL_MS = 120;
+
   const aktivniPointery = new Set();
   const konfigurace = new WeakMap();
   const casovaceLongPress = new WeakMap();
@@ -26,6 +35,38 @@
     document.getElementById("pinnedLeft");
   const pinnedRight = () =>
     document.getElementById("pinnedRight");
+
+  function emitujDragDebug(typ, data = {}) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("luba:card-drag-debug", {
+          detail: {
+            typ,
+            ...data
+          }
+        })
+      );
+    } catch (_) {
+      // Diagnostika nesmí ovlivnit funkci drag & drop.
+    }
+  }
+
+  function zkratKlic(klic) {
+    const hodnota = String(klic || "-");
+    return hodnota.length <= 18
+      ? hodnota
+      : `${hodnota.slice(0, 15)}…`;
+  }
+
+  function vzdalenostKeSlotu(slot, xDokument, yDokument) {
+    if (!slot) {
+      return Infinity;
+    }
+
+    const dx = xDokument - slot.stredX;
+    const dy = (yDokument - slot.stredY) * 0.9;
+    return Math.hypot(dx, dy);
+  }
 
   function jeZakazano(karta) {
     const config = konfigurace.get(karta);
@@ -158,49 +199,74 @@
     });
   }
 
-  function ziskejCilovouKartu(x, y, pripnuta) {
-    const container = pinnedCards();
-
-    if (!container || !aktivniPresun) {
-      return null;
-    }
-
-    const kandidati = [
-      ...container.querySelectorAll(".taskCard")
-    ].filter((karta) =>
-      karta !== aktivniPresun.karta &&
-      karta.dataset.cardPinned ===
-        (pripnuta ? "1" : "0")
+  function sestavPoradiSeSlotem(stav, cilovyIndexSkupiny) {
+    const skupinaBezTazene = stav.skupinaOriginal.filter(
+      (klic) => klic !== stav.dragKlic
     );
 
-    if (kandidati.length === 0) {
+    const indexVlozeni = Math.max(
+      0,
+      Math.min(cilovyIndexSkupiny, skupinaBezTazene.length)
+    );
+
+    const novaSkupina = [...skupinaBezTazene];
+    novaSkupina.splice(
+      indexVlozeni,
+      0,
+      stav.dragKlic
+    );
+
+    const kliceSkupiny = new Set(stav.skupinaOriginal);
+    let indexSkupiny = 0;
+
+    const celePoradi = stav.poradiOriginal.map((klic) => {
+      if (!kliceSkupiny.has(klic)) {
+        return klic;
+      }
+
+      const novyKlic = novaSkupina[indexSkupiny];
+      indexSkupiny += 1;
+      return novyKlic;
+    });
+
+    return {
+      celaSkupina: novaSkupina,
+      celePoradi
+    };
+  }
+
+  function ziskejNejblizsiSlot(stav, x, y) {
+    if (!stav?.sloty?.length) {
       return null;
     }
 
-    const primo = document
-      .elementFromPoint(x, y)
-      ?.closest?.(".taskCard");
-
-    if (primo && kandidati.includes(primo)) {
-      return primo;
-    }
+    const xDokument = x + window.scrollX;
+    const yDokument = y + window.scrollY;
 
     let nejblizsi = null;
-    let nejmensi = Infinity;
+    let nejmensiVzdalenost = Infinity;
 
-    kandidati.forEach((karta) => {
-      const rect = karta.getBoundingClientRect();
-      const dx = x - (rect.left + rect.width / 2);
-      const dy = y - (rect.top + rect.height / 2);
-      const vzdalenost = Math.hypot(dx, dy * 0.85);
+    stav.sloty.forEach((slot) => {
+      const vzdalenost = vzdalenostKeSlotu(
+        slot,
+        xDokument,
+        yDokument
+      );
 
-      if (vzdalenost < nejmensi) {
-        nejmensi = vzdalenost;
-        nejblizsi = karta;
+      if (vzdalenost < nejmensiVzdalenost) {
+        nejmensiVzdalenost = vzdalenost;
+        nejblizsi = slot;
       }
     });
 
-    return nejblizsi;
+    return nejblizsi
+      ? {
+          slot: nejblizsi,
+          vzdalenost: nejmensiVzdalenost,
+          xDokument,
+          yDokument
+        }
+      : null;
   }
 
   function aktualizujCil(x, y) {
@@ -210,51 +276,70 @@
       return;
     }
 
-    const cil = ziskejCilovouKartu(
-      x,
-      y,
-      stav.pripnuta
+    const kandidat = ziskejNejblizsiSlot(stav, x, y);
+
+    if (!kandidat) {
+      return;
+    }
+
+    const kandidatIndex = kandidat.slot.index;
+    const aktualniSlot =
+      stav.sloty[stav.cilovyIndexSkupiny] || null;
+    const aktualniVzdalenost = vzdalenostKeSlotu(
+      aktualniSlot,
+      kandidat.xDokument,
+      kandidat.yDokument
     );
 
-    if (!cil) {
+    if (kandidatIndex === stav.cilovyIndexSkupiny) {
       return;
     }
 
-    const cilovyKlic = cil.dataset.cardDragKey;
+    const povolitPrechod =
+      kandidat.vzdalenost + HYSTEREZE_SLOTU_PX <
+      aktualniVzdalenost;
 
-    if (!cilovyKlic || cilovyKlic === stav.dragKlic) {
+    const ted = performance.now();
+
+    if (!povolitPrechod) {
+      if (
+        ted - stav.posledniDebugMove >=
+        DEBUG_MOVE_INTERVAL_MS
+      ) {
+        stav.posledniDebugMove = ted;
+        emitujDragDebug("CANDIDATE", {
+          card: zkratKlic(stav.dragKlic),
+          from: stav.cilovyIndexSkupiny,
+          candidate: kandidatIndex,
+          x: Math.round(x),
+          y: Math.round(y),
+          candidateDistance: Math.round(kandidat.vzdalenost),
+          currentDistance: Math.round(aktualniVzdalenost),
+          hysteresis: HYSTEREZE_SLOTU_PX
+        });
+      }
       return;
     }
 
-    const rect = cil.getBoundingClientRect();
-    const vlozitPred =
-      y < rect.top + rect.height / 2;
-
-    if (
-      stav.cilovyKlic === cilovyKlic &&
-      stav.vlozitPred === vlozitPred
-    ) {
-      return;
-    }
-
-    const poradi = stav.poradiAktualni.filter(
-      (klic) => klic !== stav.dragKlic
+    const puvodniIndex = stav.cilovyIndexSkupiny;
+    const vysledek = sestavPoradiSeSlotem(
+      stav,
+      kandidatIndex
     );
-    const cilovyIndex = poradi.indexOf(cilovyKlic);
 
-    if (cilovyIndex < 0) {
-      return;
-    }
+    stav.cilovyIndexSkupiny = kandidatIndex;
+    stav.skupinaAktualni = vysledek.celaSkupina;
+    stav.poradiAktualni = vysledek.celePoradi;
 
-    poradi.splice(
-      cilovyIndex + (vlozitPred ? 0 : 1),
-      0,
-      stav.dragKlic
-    );
-
-    stav.poradiAktualni = poradi;
-    stav.cilovyKlic = cilovyKlic;
-    stav.vlozitPred = vlozitPred;
+    emitujDragDebug("SLOT", {
+      card: zkratKlic(stav.dragKlic),
+      from: puvodniIndex,
+      to: kandidatIndex,
+      x: Math.round(x),
+      y: Math.round(y),
+      candidateDistance: Math.round(kandidat.vzdalenost),
+      currentDistance: Math.round(aktualniVzdalenost)
+    });
 
     rozmistitKarty(
       stav.poradiAktualni,
@@ -411,10 +496,10 @@
 
   async function ulozPresun(
     cardId,
-    cilovyKlic,
-    vlozitPred
+    predchoziKlic,
+    nasledujiciKlic
   ) {
-    if (!cardId || !cilovyKlic) {
+    if (!cardId) {
       return false;
     }
 
@@ -422,47 +507,30 @@
       const tasks = loadTask();
       const presouvana =
         tasks.find((task) => task?.id === cardId);
-      const cil = ziskejTaskPodleKlice(
-        tasks,
-        cilovyKlic
-      );
+
+      if (!presouvana) {
+        return false;
+      }
+
+      const predchozi = predchoziKlic
+        ? ziskejTaskPodleKlice(tasks, predchoziKlic)
+        : null;
+      const nasledujici = nasledujiciKlic
+        ? ziskejTaskPodleKlice(tasks, nasledujiciKlic)
+        : null;
 
       if (
-        !presouvana ||
-        !cil ||
-        presouvana === cil ||
-        (presouvana.pinned === true) !==
-          (cil.pinned === true)
+        (predchozi &&
+          (predchozi === presouvana ||
+            (predchozi.pinned === true) !==
+              (presouvana.pinned === true))) ||
+        (nasledujici &&
+          (nasledujici === presouvana ||
+            (nasledujici.pinned === true) !==
+              (presouvana.pinned === true)))
       ) {
         return false;
       }
-
-      const zakladniSmer =
-        window.LubaNoteCardOrder
-          ?.ziskejZakladniSmer?.(tasks) ||
-        "desc";
-      const skupina = seradSkupinu(
-        tasks,
-        presouvana.pinned === true,
-        zakladniSmer
-      );
-      const bezPresouvane = skupina.filter(
-        ({ task }) => task !== presouvana
-      );
-      const cilovyIndex = bezPresouvane.findIndex(
-        ({ task }) => task === cil
-      );
-
-      if (cilovyIndex < 0) {
-        return false;
-      }
-
-      const indexVlozeni =
-        cilovyIndex + (vlozitPred ? 0 : 1);
-      const predchozi =
-        bezPresouvane[indexVlozeni - 1]?.task || null;
-      const nasledujici =
-        bezPresouvane[indexVlozeni]?.task || null;
 
       const vysledek =
         window.LubaNoteCardOrder
@@ -485,24 +553,33 @@
       return presouvana;
     };
 
+    let vysledek = false;
+
     if (
       typeof window.LubaNoteSync
         ?.provedLokalniZmenuASynchronizuj === "function"
     ) {
-      return await window.LubaNoteSync
+      vysledek = await window.LubaNoteSync
         .provedLokalniZmenuASynchronizuj(
           provedZmenu
         );
+    } else {
+      vysledek = await provedZmenu();
+
+      if (
+        vysledek?.id &&
+        typeof uploadLocalNoteToSupabase === "function"
+      ) {
+        void uploadLocalNoteToSupabase(vysledek);
+      }
     }
 
-    const vysledek = await provedZmenu();
-
-    if (
-      vysledek?.id &&
-      typeof uploadLocalNoteToSupabase === "function"
-    ) {
-      void uploadLocalNoteToSupabase(vysledek);
-    }
+    emitujDragDebug("SAVE", {
+      card: zkratKlic(`id:${cardId}`),
+      previous: zkratKlic(predchoziKlic),
+      next: zkratKlic(nasledujiciKlic),
+      ok: Boolean(vysledek)
+    });
 
     return vysledek;
   }
@@ -567,6 +644,46 @@
       return;
     }
 
+    const pripnuta = karta.dataset.cardPinned === "1";
+    const skupinoveKarty = vsechnyKarty.filter(
+      (prvek) =>
+        prvek.dataset.cardPinned ===
+        (pripnuta ? "1" : "0")
+    );
+    const skupinaOriginal = skupinoveKarty
+      .map((prvek) => prvek.dataset.cardDragKey)
+      .filter(Boolean);
+    const puvodniIndexSkupiny =
+      skupinaOriginal.indexOf(novyKlic);
+
+    if (puvodniIndexSkupiny < 0) {
+      return;
+    }
+
+    /*
+     * Sloty se uloží JEŠTĚ před vytažením karty z layoutu.
+     * Zůstávají po celý drag neměnné, i když ostatní karty vizuálně
+     * uhýbají. Právě to odstraňuje náhodné přeskakování cíle.
+     */
+    const sloty = skupinoveKarty.map((prvek, index) => {
+      const slotRect = prvek.getBoundingClientRect();
+
+      return {
+        index,
+        klic: prvek.dataset.cardDragKey,
+        stredX:
+          slotRect.left +
+          window.scrollX +
+          slotRect.width / 2,
+        stredY:
+          slotRect.top +
+          window.scrollY +
+          slotRect.height / 2,
+        sirka: slotRect.width,
+        vyska: slotRect.height
+      };
+    });
+
     const rect = karta.getBoundingClientRect();
     const placeholder = document.createElement("div");
     placeholder.className = "lubaCardDragPlaceholder";
@@ -581,19 +698,32 @@
       cardId,
       pointerId,
       dragKlic: novyKlic,
-      pripnuta: karta.dataset.cardPinned === "1",
+      pripnuta,
       placeholder,
       mapaPrvku,
       poradiOriginal,
       poradiAktualni: [...poradiOriginal],
-      cilovyKlic: null,
-      vlozitPred: true,
+      skupinaOriginal,
+      skupinaAktualni: [...skupinaOriginal],
+      sloty,
+      puvodniIndexSkupiny,
+      cilovyIndexSkupiny: puvodniIndexSkupiny,
+      posledniDebugMove: 0,
       offsetX: startX - rect.left,
       offsetY: startY - rect.top,
       posledniX: startX,
       posledniY: startY,
       onAfterReorder: config.onAfterReorder
     };
+
+    emitujDragDebug("START", {
+      card: zkratKlic(novyKlic),
+      index: puvodniIndexSkupiny,
+      slots: sloty.length,
+      pinned: pripnuta,
+      x: Math.round(startX),
+      y: Math.round(startY)
+    });
 
     karta.classList.add("lubaCardDragActive");
     document.body.classList.add("lubaCardDragMode");
@@ -635,12 +765,10 @@
       autoScrollFrame = null;
     }
 
-    const zmeneno =
-      Boolean(stav.cilovyKlic) &&
-      !jeStejnePoradi(
-        stav.poradiOriginal,
-        stav.poradiAktualni
-      );
+    const zmeneno = !jeStejnePoradi(
+      stav.skupinaOriginal,
+      stav.skupinaAktualni
+    );
 
     obnovKartu(
       stav,
@@ -652,13 +780,36 @@
     blokovatKlikDo = Date.now() + 500;
 
     if (!zmeneno) {
+      emitujDragDebug("END", {
+        card: zkratKlic(stav.dragKlic),
+        from: stav.puvodniIndexSkupiny,
+        to: stav.cilovyIndexSkupiny,
+        changed: false
+      });
       return;
     }
 
+    const finalniIndex = stav.skupinaAktualni.indexOf(
+      stav.dragKlic
+    );
+    const predchoziKlic =
+      stav.skupinaAktualni[finalniIndex - 1] || null;
+    const nasledujiciKlic =
+      stav.skupinaAktualni[finalniIndex + 1] || null;
+
+    emitujDragDebug("END", {
+      card: zkratKlic(stav.dragKlic),
+      from: stav.puvodniIndexSkupiny,
+      to: finalniIndex,
+      changed: true,
+      previous: zkratKlic(predchoziKlic),
+      next: zkratKlic(nasledujiciKlic)
+    });
+
     await ulozPresun(
       stav.cardId,
-      stav.cilovyKlic,
-      stav.vlozitPred
+      predchoziKlic,
+      nasledujiciKlic
     );
 
     stav.onAfterReorder?.();
@@ -680,6 +831,12 @@
 
     obnovKartu(stav, stav.poradiOriginal);
     blokovatKlikDo = Date.now() + 400;
+
+    emitujDragDebug("CANCEL", {
+      card: zkratKlic(stav.dragKlic),
+      from: stav.puvodniIndexSkupiny,
+      to: stav.cilovyIndexSkupiny
+    });
   }
 
   function pridejKarte(
