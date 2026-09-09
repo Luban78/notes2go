@@ -10722,3 +10722,60 @@ body.trashScreenOpen {
   height: 22px;
 }
 
+
+/* ==================================================
+   DRAG & MOVE KARET
+   Long press zvedne kartu, ostatní karty uhnou do cílové pozice.
+================================================== */
+body.lubaCardDragMode {
+  cursor: grabbing;
+  -webkit-user-select: none;
+  user-select: none;
+  overflow-x: hidden;
+}
+
+.taskCard.lubaCardDragActive {
+  position: fixed !important;
+  margin: 0 !important;
+  z-index: 4500 !important;
+  pointer-events: none !important;
+  touch-action: none !important;
+  transform: scale(1.045);
+  opacity: 0.97;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.28),
+    0 0 0 2px
+      color-mix(
+        in srgb,
+        var(--color-accent) 72%,
+        transparent
+      );
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease !important;
+}
+
+.lubaCardDragPlaceholder {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 12px;
+  border: 2px dashed
+    color-mix(
+      in srgb,
+      var(--color-accent) 68%,
+      var(--color-border)
+    );
+  border-radius: 22px;
+  background:
+    color-mix(
+      in srgb,
+      var(--color-accent) 10%,
+      transparent
+    );
+  opacity: 0.78;
+}
+
+.pinnedCards.listView .lubaCardDragPlaceholder {
+  width: 100%;
+}

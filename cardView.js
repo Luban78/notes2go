@@ -75,14 +75,14 @@ function aktualizujPopisekRazeniKaret() {
       ? (
         window.LubaNoteI18n?.t?.(
           "sort.labelOldest",
-          "Řazení: nejstarší nahoře"
-        ) || "Řazení: nejstarší nahoře"
+          "Nové karty: dole"
+        ) || "Nové karty: dole"
       )
       : (
         window.LubaNoteI18n?.t?.(
           "sort.labelNewest",
-          "Řazení: nejnovější nahoře"
-        ) || "Řazení: nejnovější nahoře"
+          "Nové karty: nahoře"
+        ) || "Nové karty: nahoře"
       );
 }
 
@@ -104,8 +104,8 @@ cardSortButton?.addEventListener(
       nadpis:
         window.LubaNoteI18n?.t?.(
           "sort.title",
-          "Řazení karet"
-        ) || "Řazení karet",
+          "Umístění nových karet"
+        ) || "Umístění nových karet",
       vybranaHodnota:
         ziskejSmerRazeniKaretProMenu(),
       moznosti: [
@@ -114,16 +114,16 @@ cardSortButton?.addEventListener(
           popisek:
             window.LubaNoteI18n?.t?.(
               "sort.newest",
-              "Nejnovější nahoře"
-            ) || "Nejnovější nahoře"
+              "Nové karty nahoru"
+            ) || "Nové karty nahoru"
         },
         {
           hodnota: "asc",
           popisek:
             window.LubaNoteI18n?.t?.(
               "sort.oldest",
-              "Nejstarší nahoře"
-            ) || "Nejstarší nahoře"
+              "Nové karty dolů"
+            ) || "Nové karty dolů"
         }
       ],
       poVyberu: (novySmer) => {

@@ -3427,37 +3427,13 @@ window.LubaNoteZpracujAndroidZpet =
 
 
 
-let longPressTimer = null;
-const LONG_PRESS_TIME = 600;
 let selectedCardIndex = null;
-let blockNextCardClick = false;
 let blokovatKlikKartyDo = 0;
 let blokovatKlikPoZavreniMainMenu = false;
 
 
 let rezimVyberuKaret = false;
 let vybraneKarty = new Set();
-
-let cardPressStartX = 0;
-let cardPressStartY = 0;
-const CARD_LONG_PRESS_CANCEL_DISTANCE = 20;
-const activeCardPointers = new Set();
-
-document.addEventListener("pointerdown", (event) => {
-  activeCardPointers.add(event.pointerId);
-  
-  if (activeCardPointers.size > 1) {
-    clearTimeout(longPressTimer);
-  }
-}, true);
-
-document.addEventListener("pointerup", (event) => {
-  activeCardPointers.delete(event.pointerId);
-}, true);
-
-document.addEventListener("pointercancel", (event) => {
-  activeCardPointers.delete(event.pointerId);
-}, true);
 
 
 
@@ -3976,7 +3952,11 @@ function ziskejCasRazeniKarty(task) {
 }
 
 
-function porovnejKartyProZobrazeni(a, b) {
+function porovnejKartyProZobrazeni(
+  a,
+  b,
+  zakladniSmer = null
+) {
   const rozdilPripnuti =
     Number(b.task?.pinned === true) -
     Number(a.task?.pinned === true);
@@ -3985,23 +3965,24 @@ function porovnejKartyProZobrazeni(a, b) {
     return rozdilPripnuti;
   }
   
-  const casA =
-    ziskejCasRazeniKarty(a.task);
+  const ziskejPoradi =
+    window.LubaNoteCardOrder
+      ?.ziskejEfektivniPoradi;
   
-  const casB =
-    ziskejCasRazeniKarty(b.task);
+  const poradiA =
+    typeof ziskejPoradi === "function"
+      ? ziskejPoradi(a.task, zakladniSmer)
+      : ziskejCasRazeniKarty(a.task);
   
-  if (casA !== casB) {
-    return ziskejSmerRazeniKaret() === "asc" ?
-      casA - casB :
-      casB - casA;
+  const poradiB =
+    typeof ziskejPoradi === "function"
+      ? ziskejPoradi(b.task, zakladniSmer)
+      : ziskejCasRazeniKarty(b.task);
+  
+  if (poradiA !== poradiB) {
+    return poradiB - poradiA;
   }
   
-  /*
-   * Stejný čas může vzniknout při hromadné změně více karet.
-   * Stabilní ID zajistí stejné pořadí i tehdy, když Supabase vrátí
-   * řádky pokaždé v jiném pořadí.
-   */
   const rozdilId = String(
     a.task?.id || ""
   ).localeCompare(
@@ -4014,6 +3995,61 @@ function porovnejKartyProZobrazeni(a, b) {
     a.originalIndex - b.originalIndex;
 }
 
+
+
+function otevriMenuKartyUPrvku(loadedCard, index) {
+  selectedCardIndex = index;
+
+  const menu = document.getElementById("cardMenu");
+
+  if (!menu) {
+    return;
+  }
+
+  zobrazHlavniAkceKarty();
+  menu.hidden = false;
+
+  if (window.innerWidth < 900) {
+    menu.style.visibility = "hidden";
+    menu.style.bottom = "auto";
+
+    requestAnimationFrame(() => {
+      const cardRect = loadedCard.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const odsazeni = 10;
+      const okraj = 12;
+
+      let menuTop = cardRect.bottom + odsazeni;
+
+      if (
+        menuTop + menuRect.height >
+        window.innerHeight - okraj
+      ) {
+        menuTop =
+          cardRect.top -
+          menuRect.height -
+          odsazeni;
+      }
+
+      menuTop = Math.max(
+        okraj,
+        Math.min(
+          menuTop,
+          window.innerHeight -
+            menuRect.height -
+            okraj
+        )
+      );
+
+      menu.style.top = `${Math.round(menuTop)}px`;
+      menu.style.visibility = "visible";
+    });
+  } else {
+    menu.style.top = "auto";
+    menu.style.bottom = "34px";
+    menu.style.visibility = "visible";
+  }
+}
 
 async function dokoncitKartuPodleIndexu(index) {
   const provedZmenu = () =>
@@ -4067,12 +4103,23 @@ function renderTasks() {
   pinnedCards.hidden = true;
   
   const loadedTasks = loadTask();
+  const zakladniSmerPoradi =
+    window.LubaNoteCardOrder
+      ?.ziskejZakladniSmer?.(loadedTasks) ||
+    ziskejSmerRazeniKaret();
   const sortedTasks = loadedTasks
     .map((task, originalIndex) => ({
       task,
       originalIndex
     }))
-    .sort(porovnejKartyProZobrazeni);
+    .sort((a, b) =>
+      porovnejKartyProZobrazeni(
+        a,
+        b,
+        zakladniSmerPoradi
+      )
+    );
+  let poradiVykresleneKarty = 0;
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
     if (!taskMatchesArea(loadedTask)) {
       return;
@@ -4093,6 +4140,15 @@ function renderTasks() {
       return;
     }
     const loadedCard = document.createElement("div");
+    loadedCard.dataset.cardDisplayOrder =
+      String(poradiVykresleneKarty++);
+    loadedCard.dataset.cardDragKey =
+      loadedTask.id
+        ? `id:${loadedTask.id}`
+        : `index:${index}`;
+    loadedCard.dataset.cardSourceIndex = String(index);
+    loadedCard.dataset.cardPinned =
+      loadedTask.pinned === true ? "1" : "0";
     
     if (
       loadedTask.id &&
@@ -4100,110 +4156,6 @@ function renderTasks() {
     ) {
       loadedCard.classList.add("cardSelected");
     }
-    
-    loadedCard.addEventListener("pointerdown", (event) => {
-      if (rezimVyberuKaret) {
-        return;
-      }
-      
-      cardPressStartX = event.clientX;
-      cardPressStartY = event.clientY;
-      
-      longPressTimer = setTimeout(() => {
-        if (
-          loadedCard.classList.contains(
-            "lubaSwipeDragging"
-          )
-        ) {
-          return;
-        }
-
-        selectedCardIndex = index;
-        
-        blockNextCardClick = true;
-        
-        const cardMenu =
-          document.getElementById("cardMenu");
-        
-        zobrazHlavniAkceKarty();
-        
-        cardMenu.hidden = false;
-        
-        if (window.innerWidth < 900) {
-          cardMenu.style.visibility = "hidden";
-          cardMenu.style.bottom = "auto";
-          
-          requestAnimationFrame(() => {
-            const cardRect =
-              loadedCard.getBoundingClientRect();
-            
-            const menuRect =
-              cardMenu.getBoundingClientRect();
-            
-            const odsazeni = 10;
-            const okraj = 12;
-            
-            let menuTop =
-              cardRect.bottom + odsazeni;
-            
-            if (
-              menuTop + menuRect.height >
-              window.innerHeight - okraj
-            ) {
-              menuTop =
-                cardRect.top -
-                menuRect.height -
-                odsazeni;
-            }
-            
-            menuTop = Math.max(
-              okraj,
-              Math.min(
-                menuTop,
-                window.innerHeight -
-                menuRect.height -
-                okraj
-              )
-            );
-            
-            cardMenu.style.top =
-              `${Math.round(menuTop)}px`;
-            
-            cardMenu.style.visibility = "visible";
-          });
-        } else {
-          cardMenu.style.top = "auto";
-          cardMenu.style.bottom = "34px";
-          cardMenu.style.visibility = "visible";
-        }
-      }, LONG_PRESS_TIME);
-    });
-    
-    loadedCard.addEventListener("pointermove", (event) => {
-      const distanceX =
-        Math.abs(event.clientX - cardPressStartX);
-      
-      const distanceY =
-        Math.abs(event.clientY - cardPressStartY);
-      
-      if (
-        distanceX > CARD_LONG_PRESS_CANCEL_DISTANCE ||
-        distanceY > CARD_LONG_PRESS_CANCEL_DISTANCE
-      ) {
-        clearTimeout(longPressTimer);
-      }
-    });
-    
-    
-    
-    
-    loadedCard.addEventListener("pointerup", () => {
-      clearTimeout(longPressTimer);
-    });
-    
-    loadedCard.addEventListener("pointercancel", () => {
-      clearTimeout(longPressTimer);
-    });
     
     loadedCard.classList.add("taskCard");
     
@@ -4479,6 +4431,21 @@ function renderTasks() {
         pinnedRight.append(loadedCard);
       }
     }
+
+    window.LubaNoteCardDrag?.pridejKarte?.(
+      loadedCard,
+      {
+        isDisabled: () => rezimVyberuKaret,
+        ensureId: () =>
+          zajistiStabilniIdKarty(index),
+        onDoubleTap: () =>
+          otevriMenuKartyUPrvku(
+            loadedCard,
+            index
+          ),
+        onAfterReorder: () => renderTasks()
+      }
+    );
     
     /* Otevření existující poznámky */
     
@@ -4486,11 +4453,6 @@ function renderTasks() {
       if (
         Date.now() < blokovatKlikKartyDo
       ) {
-        return;
-      }
-      
-      if (blockNextCardClick) {
-        blockNextCardClick = false;
         return;
       }
       
@@ -5487,12 +5449,6 @@ cardMenu.addEventListener("click", async (event) => {
     
     rezimVyberuKaret = true;
     vybraneKarty.add(idKarty);
-    
-    /*
-     * Long-press už svůj ochranný click spotřeboval na tlačítku
-     * Označit. Další skutečný tap na kartu proto nesmí být blokovaný.
-     */
-    blockNextCardClick = false;
     
     aktualizujListuVyberuKaret();
     

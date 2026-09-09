@@ -205,6 +205,7 @@
         performance.now() < gestoUzamcenoDo ||
         event.button !== 0 ||
         event.pointerType === "mouse" ||
+        document.body.classList.contains("lubaCardDragMode") ||
         isDisabled() ||
         jeInteraktivniPrvek(event.target) ||
         event.clientX <= OKRAJ_SYSTEMOVEHO_GESTA ||
@@ -236,6 +237,15 @@
       "pointermove",
       (event) => {
         if (!aktivni || event.pointerId !== pointerId) {
+          return;
+        }
+
+        if (
+          document.body.classList.contains("lubaCardDragMode") ||
+          element.classList.contains("lubaCardDragActive") ||
+          isDisabled()
+        ) {
+          reset();
           return;
         }
 
@@ -320,6 +330,15 @@
 
     const dokoncitGesto = async (event) => {
       if (!aktivni || event.pointerId !== pointerId) {
+        return;
+      }
+
+      if (
+        document.body.classList.contains("lubaCardDragMode") ||
+        element.classList.contains("lubaCardDragActive") ||
+        isDisabled()
+      ) {
+        reset();
         return;
       }
 

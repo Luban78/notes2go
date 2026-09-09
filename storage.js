@@ -1228,6 +1228,202 @@ function slucPoznamkySPuvodnimKosem(prichozi, puvodni) {
   return odstranDuplicitniPoznamkySeStejnymId(vysledek);
 }
 
+const CARD_ORDER_STEP = 1000000;
+const CARD_ORDER_BASE_DIRECTION_KEY =
+  "cardOrderBaseDirectionV1";
+
+function normalizujSmerZakladnihoPoradiKaret(hodnota) {
+  return hodnota === "asc" ? "asc" : "desc";
+}
+
+function ziskejZakladniSmerPoradiKaret(tasks = []) {
+  const kandidati = (Array.isArray(tasks) ? tasks : [])
+    .filter((task) =>
+      task &&
+      Number.isFinite(Number(task.cardOrder)) &&
+      (task.cardOrderBaseDirection === "asc" ||
+        task.cardOrderBaseDirection === "desc")
+    )
+    .sort((a, b) =>
+      new Date(b.updatedAt || 0).getTime() -
+      new Date(a.updatedAt || 0).getTime()
+    );
+
+  if (kandidati.length > 0) {
+    const smer = normalizujSmerZakladnihoPoradiKaret(
+      kandidati[0].cardOrderBaseDirection
+    );
+
+    localStorage.setItem(
+      CARD_ORDER_BASE_DIRECTION_KEY,
+      smer
+    );
+
+    return smer;
+  }
+
+  const ulozeny = localStorage.getItem(
+    CARD_ORDER_BASE_DIRECTION_KEY
+  );
+
+  if (ulozeny === "asc" || ulozeny === "desc") {
+    return ulozeny;
+  }
+
+  /*
+   * Při prvním startu nové verze zmrazíme právě aktuální pořadí.
+   * Od této chvíle už volba cardSortDirection určuje pouze to,
+   * zda NOVÉ karty přijdou nahoru nebo dolů. Existující karty se
+   * při změně této preference nepřerovnají.
+   */
+  const smer = normalizujSmerZakladnihoPoradiKaret(
+    localStorage.getItem("cardSortDirection")
+  );
+
+  localStorage.setItem(
+    CARD_ORDER_BASE_DIRECTION_KEY,
+    smer
+  );
+
+  return smer;
+}
+
+function ziskejEfektivniPoradiKarty(
+  task,
+  zakladniSmer = null
+) {
+  const rucniPoradi = Number(task?.cardOrder);
+
+  if (Number.isFinite(rucniPoradi)) {
+    return rucniPoradi;
+  }
+
+  const cas = new Date(
+    task?.cardSortAt ||
+    task?.updatedAt ||
+    0
+  ).getTime();
+
+  const bezpecnyCas = Number.isFinite(cas)
+    ? cas
+    : 0;
+
+  const smer =
+    zakladniSmer === "asc" || zakladniSmer === "desc"
+      ? zakladniSmer
+      : ziskejZakladniSmerPoradiKaret();
+
+  return smer === "asc"
+    ? -bezpecnyCas
+    : bezpecnyCas;
+}
+
+function vypocitejPoradiKartyMezi(
+  tasks,
+  predchoziTask,
+  nasledujiciTask
+) {
+  const zakladniSmer =
+    ziskejZakladniSmerPoradiKaret(tasks);
+
+  const predchozi = predchoziTask
+    ? ziskejEfektivniPoradiKarty(
+        predchoziTask,
+        zakladniSmer
+      )
+    : null;
+
+  const nasledujici = nasledujiciTask
+    ? ziskejEfektivniPoradiKarty(
+        nasledujiciTask,
+        zakladniSmer
+      )
+    : null;
+
+  let poradi = 0;
+
+  if (
+    Number.isFinite(predchozi) &&
+    Number.isFinite(nasledujici)
+  ) {
+    if (predchozi > nasledujici) {
+      poradi =
+        nasledujici +
+        (predchozi - nasledujici) / 2;
+    } else {
+      /*
+       * Extrémně vzácná shoda starých časových kotev.
+       * Malý krok stále zachová stabilní směr a příští přesun
+       * už dostane vlastní cardOrder.
+       */
+      poradi = predchozi - 0.001;
+    }
+  } else if (Number.isFinite(predchozi)) {
+    poradi = predchozi - CARD_ORDER_STEP;
+  } else if (Number.isFinite(nasledujici)) {
+    poradi = nasledujici + CARD_ORDER_STEP;
+  }
+
+  return {
+    poradi,
+    zakladniSmer
+  };
+}
+
+function vypocitejPoradiNoveKarty(
+  tasks,
+  novaKarta,
+  preference
+) {
+  const zakladniSmer =
+    ziskejZakladniSmerPoradiKaret(tasks);
+
+  const stejnePripnuti =
+    (Array.isArray(tasks) ? tasks : [])
+      .filter((task) =>
+        task &&
+        task !== novaKarta &&
+        (task.pinned === true) ===
+          (novaKarta?.pinned === true)
+      );
+
+  const hodnoty = stejnePripnuti
+    .map((task) =>
+      ziskejEfektivniPoradiKarty(
+        task,
+        zakladniSmer
+      )
+    )
+    .filter(Number.isFinite);
+
+  if (hodnoty.length === 0) {
+    return {
+      poradi: 0,
+      zakladniSmer
+    };
+  }
+
+  const maximum = Math.max(...hodnoty);
+  const minimum = Math.min(...hodnoty);
+
+  /* desc = nové nahoru, asc = nové dolů */
+  const poradi = preference === "asc"
+    ? minimum - CARD_ORDER_STEP
+    : maximum + CARD_ORDER_STEP;
+
+  return {
+    poradi,
+    zakladniSmer
+  };
+}
+
+window.LubaNoteCardOrder = {
+  ziskejZakladniSmer: ziskejZakladniSmerPoradiKaret,
+  ziskejEfektivniPoradi: ziskejEfektivniPoradiKarty,
+  vypocitejPoradiMezi: vypocitejPoradiKartyMezi,
+  vypocitejPoradiNoveKarty
+};
+
 function zajistiStabilniRazeniKaret(
   tasks,
   puvodniBezne,
@@ -1245,18 +1441,10 @@ function zajistiStabilniRazeniKaret(
   });
 
   const nahradniCas = new Date().toISOString();
+  const noveKarty = [];
 
   (Array.isArray(tasks) ? tasks : []).forEach((task) => {
     if (!task) {
-      return;
-    }
-
-    /*
-     * cardSortAt je stabilní kotva pořadí karty.
-     * updatedAt dál slouží synchronizaci a historii změn, ale běžná
-     * editace už kvůli němu nesmí přesouvat kartu nahoru/dolů.
-     */
-    if (task.cardSortAt) {
       return;
     }
 
@@ -1264,40 +1452,55 @@ function zajistiStabilniRazeniKaret(
       task.id ? puvodniPodleId.get(task.id) : null;
 
     /*
-     * Pokud už kotva existovala v uložené verzi, zachováme ji i při
-     * starším/částečném objektu, který ji do saveAllTasks nepřinesl.
+     * cardSortAt zůstává historickou stabilní kotvou. Pro nové
+     * ruční pořadí slouží cardOrder, ale staré karty bez něj se
+     * díky cardSortAt pořád vykreslí ve stejném pořadí jako dosud.
      */
-    if (puvodni?.cardSortAt) {
-      task.cardSortAt = puvodni.cardSortAt;
-      return;
+    if (!task.cardSortAt) {
+      if (puvodni?.cardSortAt) {
+        task.cardSortAt = puvodni.cardSortAt;
+      } else if (!puvodni) {
+        task.cardSortAt =
+          task.updatedAt || nahradniCas;
+      } else {
+        const prichoziCas =
+          String(task.updatedAt || "");
+        const puvodniCas =
+          String(puvodni.updatedAt || "");
+
+        if (prichoziCas !== puvodniCas) {
+          task.cardSortAt =
+            puvodni.updatedAt ||
+            task.updatedAt ||
+            nahradniCas;
+        }
+      }
     }
 
     if (!puvodni) {
-      /*
-       * Skutečně nová karta: její první updatedAt je zároveň okamžik,
-       * podle kterého se zařadí mezi ostatní karty.
-       */
-      task.cardSortAt =
-        task.updatedAt || nahradniCas;
+      noveKarty.push(task);
+    }
+  });
+
+  const preference =
+    localStorage.getItem("cardSortDirection") === "asc"
+      ? "asc"
+      : "desc";
+
+  noveKarty.forEach((task) => {
+    if (Number.isFinite(Number(task.cardOrder))) {
       return;
     }
 
-    const prichoziCas =
-      String(task.updatedAt || "");
-    const puvodniCas =
-      String(puvodni.updatedAt || "");
+    const vysledek = vypocitejPoradiNoveKarty(
+      tasks,
+      task,
+      preference
+    );
 
-    if (prichoziCas !== puvodniCas) {
-      /*
-       * První editace starší karty bez cardSortAt:
-       * jako kotvu vezmeme čas PŘED editací. Karta tak zůstane přesně
-       * tam, kde byla, místo aby po změně stavu/obsahu vyskočila nahoru.
-       */
-      task.cardSortAt =
-        puvodni.updatedAt ||
-        task.updatedAt ||
-        nahradniCas;
-    }
+    task.cardOrder = vysledek.poradi;
+    task.cardOrderBaseDirection =
+      vysledek.zakladniSmer;
   });
 }
 
