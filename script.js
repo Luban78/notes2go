@@ -268,6 +268,7 @@ let activeTaskId = null;
 let editorSessionId = 0;
 
 let reminderEnabled = false;
+let plannedEnabled = false;
 let favoriteEnabled = false;
 let secretTaskEnabled = false;
 
@@ -292,6 +293,7 @@ function vytvorOtiskEditoru() {
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled,
+    planned: plannedEnabled,
     favorite: favoriteEnabled,
     area: activeArea,
     secret: secretTaskEnabled,
@@ -722,6 +724,7 @@ secretTaskButton?.addEventListener(
        * SECRET = absolutní ticho.
        */
       reminderEnabled = false;
+      plannedEnabled = false;
       editorRepeat = null;
       aktualizujPopiskyDataCasu();
       
@@ -812,6 +815,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       richContent,
       date,
       reminder: reminderEnabled,
+      planned: false,
       favorite: favoriteEnabled,
       notificationId: currentTask.notificationId ||
         Date.now() % 2147483647,
@@ -857,6 +861,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
         date,
         completed: false,
         reminder: reminderEnabled,
+        planned: false,
         favorite: favoriteEnabled,
         notificationId: Date.now() % 2147483647,
         area: activeArea,
@@ -1393,6 +1398,7 @@ function ulozRepeatZVyberuCasu() {
     }
     
     reminderEnabled = true;
+    plannedEnabled = true;
     updateReminderButton(true);
   }
 }
@@ -2653,6 +2659,7 @@ secretTaskButton.classList.toggle(
   updateModalWeekday();
   
   reminderEnabled = false;
+  plannedEnabled = false;
   updateReminderButton(false);
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
@@ -2992,6 +2999,7 @@ async function ulozAZavriEditor(
         richContent,
         date,
         reminder: reminderEnabled,
+        planned: secretTaskEnabled ? false : plannedEnabled,
         favorite: favoriteEnabled,
         notificationId: currentTask.notificationId ||
           Date.now() % 2147483647,
@@ -3078,6 +3086,7 @@ async function ulozAZavriEditor(
           date,
           completed: false,
           reminder: reminderEnabled,
+          planned: secretTaskEnabled ? false : plannedEnabled,
           favorite: favoriteEnabled,
           notificationId: Date.now() % 2147483647,
           area: activeArea,
@@ -3471,6 +3480,10 @@ function otevriSdilenouPoznamkuVEditoru(
   }
 
   reminderEnabled = note.reminder === true;
+  plannedEnabled =
+    note.planned === true ||
+    note.reminder === true ||
+    note.repeat?.enabled === true;
   favoriteEnabled = note.favorite === true;
   secretTaskEnabled = false;
 
@@ -3648,6 +3661,8 @@ function vytvorDataSdilenehoEditoru() {
         base.completed === true,
       reminder:
         reminderEnabled,
+      planned:
+        plannedEnabled,
       favorite:
         favoriteEnabled,
       notificationId:
@@ -3818,6 +3833,10 @@ async function openTaskEditorById(taskId) {
   const currentTask = currentTasks[index];
   
   reminderEnabled = currentTask.reminder === true;
+  plannedEnabled =
+    currentTask.planned === true ||
+    currentTask.reminder === true ||
+    currentTask.repeat?.enabled === true;
   
   favoriteEnabled = currentTask.favorite === true;
   
@@ -3826,6 +3845,7 @@ async function openTaskEditorById(taskId) {
   
   if (secretTaskEnabled) {
     reminderEnabled = false;
+    plannedEnabled = false;
   }
   
   updateReminderButton(reminderEnabled);
@@ -3988,6 +4008,25 @@ function porovnejKartyProZobrazeni(a, b) {
 }
 
 
+async function dokoncitKartuPodleIndexu(index) {
+  const updatedTask =
+    toggleTaskCompleted(index);
+
+  if (updatedTask) {
+    await Promise.resolve(
+      uploadLocalNoteToSupabase(updatedTask)
+    ).catch((error) => {
+      console.warn(
+        "Synchronizace dokončené karty byla odložena:",
+        error
+      );
+    });
+  }
+
+  renderTasks();
+  return updatedTask;
+}
+
 function renderTasks() {
   if (typeof renderTagFilters === "function") {
     renderTagFilters();
@@ -4042,6 +4081,14 @@ function renderTasks() {
       cardPressStartY = event.clientY;
       
       longPressTimer = setTimeout(() => {
+        if (
+          loadedCard.classList.contains(
+            "lubaSwipeDoneDragging"
+          )
+        ) {
+          return;
+        }
+
         selectedCardIndex = index;
         
         blockNextCardClick = true;
@@ -4279,6 +4326,18 @@ function renderTasks() {
     if (loadedTask.completed) {
       loadedCard.classList.add("completed");
     }
+
+    window.LubaNoteSwipe?.pridejHotovo?.(
+      loadedCard,
+      {
+        isDisabled: () =>
+          rezimVyberuKaret ||
+          loadedTask.completed === true,
+        onComplete: async () => {
+          await dokoncitKartuPodleIndexu(index);
+        }
+      }
+    );
     
     pinnedCards.hidden = false;
     
@@ -5517,15 +5576,10 @@ cardMenu.addEventListener("click", async (event) => {
   }
   
   if (action === "complete") {
-    const updatedTask =
-      toggleTaskCompleted(selectedCardIndex);
-    
-    if (updatedTask) {
-      uploadLocalNoteToSupabase(updatedTask);
-    }
-    
     cardMenu.hidden = true;
-    renderTasks();
+    await dokoncitKartuPodleIndexu(
+      selectedCardIndex
+    );
   }
   
   if (action === "pin") {
@@ -5988,6 +6042,7 @@ function vytvorSnapshotNovehoDraftu() {
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled === true,
+    planned: plannedEnabled === true,
     favorite: favoriteEnabled === true,
     area: activeArea || "private",
     tags: Array.isArray(activeTags)
@@ -6145,6 +6200,10 @@ async function obnovDraftDoEditoru(draft) {
         draft.favorite === true;
       reminderEnabled =
         draft.reminder === true;
+      plannedEnabled =
+        draft.planned === true ||
+        draft.reminder === true ||
+        draft.repeat?.enabled === true;
 
       updateReminderButton(reminderEnabled);
       priorityTaskButton?.classList.toggle(
@@ -6229,6 +6288,10 @@ async function obnovDraftDoEditoru(draft) {
       draft.favorite === true;
     reminderEnabled =
       draft.reminder === true;
+    plannedEnabled =
+      draft.planned === true ||
+      draft.reminder === true ||
+      draft.repeat?.enabled === true;
 
     aktualizujIkonuTajnePoznamky();
     secretTaskButton?.classList.remove(

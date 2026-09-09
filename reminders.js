@@ -413,6 +413,7 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
     if (
       !item?.notificationId ||
       item.completed === true ||
+      !jePlanovanaPripominkaZapnuta(item) ||
       !item.plannedAt ||
       new Date(item.plannedAt) <= new Date()
     ) {
@@ -720,6 +721,9 @@ function updateReminderButton(enabled) {
 function zapniPripominkuPoZmeneTerminu() {
   if (typeof secretTaskEnabled !== "undefined" && secretTaskEnabled) {
     reminderEnabled = false;
+    if (typeof plannedEnabled !== "undefined") {
+      plannedEnabled = false;
+    }
     updateReminderButton(false);
     return;
   }
@@ -735,6 +739,9 @@ function zapniPripominkuPoZmeneTerminu() {
   }
 
   reminderEnabled = true;
+  if (typeof plannedEnabled !== "undefined") {
+    plannedEnabled = true;
+  }
   updateReminderButton(true);
   requestNotificationPermission();
 }
@@ -746,6 +753,9 @@ const editorReminderButton =
 editorReminderButton?.addEventListener("click", () => {
   if (typeof secretTaskEnabled !== "undefined" && secretTaskEnabled) {
     reminderEnabled = false;
+    if (typeof plannedEnabled !== "undefined") {
+      plannedEnabled = false;
+    }
     updateReminderButton(false);
 
     zobrazZpravuAplikace(
@@ -772,6 +782,10 @@ editorReminderButton?.addEventListener("click", () => {
 
   reminderEnabled = !reminderEnabled;
 
+  if (typeof plannedEnabled !== "undefined") {
+    plannedEnabled = true;
+  }
+
   if (reminderEnabled) {
     requestNotificationPermission();
   }
@@ -789,6 +803,8 @@ createReminderChannel();
 
 let activeReminderFilter = "all";
 let selectedReminderEntry = null;
+let selectedReminderContext = "reminders";
+let selectedReminderDateOverride = null;
 let activeReminderStatus = "active";
 
 const REMINDER_OVERDUE_RETENTION_KEY =
@@ -798,6 +814,19 @@ const REMINDER_OVERDUE_RETENTION_CONFIRMED_KEY =
 
 let probihaAutomatickyUklidPoTerminu = false;
 let posledniAutomatickyUklidPoTerminu = 0;
+
+function jePlanovanaPripominkaZapnuta(item) {
+  if (item?.reminder === true) {
+    return true;
+  }
+
+  if (item?.reminder === false) {
+    return false;
+  }
+
+  /* Starší Planner položky vznikaly vždy jako připomínky. */
+  return Boolean(item?.notificationId);
+}
 
 function getReminderEntries() {
   const notes =
@@ -861,7 +890,8 @@ function getReminderEntries() {
       title: task.title || "Bez názvu",
       preview: task.note || "",
       area: task.area || "private",
-      notificationId: task.notificationId || null
+      notificationId: task.notificationId || null,
+      reminder: true
     });
   });
 
@@ -875,7 +905,8 @@ function getReminderEntries() {
     if (
       !item?.id ||
       !item?.plannedAt ||
-      item.completed === true
+      item.completed === true ||
+      !jePlanovanaPripominkaZapnuta(item)
     ) {
       return;
     }
@@ -899,7 +930,8 @@ function getReminderEntries() {
           ? (sourceNote?.title || "")
           : (sourceNote?.note || ""),
       area: sourceNote?.area || "private",
-      notificationId: item.notificationId || null
+      notificationId: item.notificationId || null,
+      reminder: true
     });
   });
 
@@ -925,17 +957,65 @@ function getActiveReminders() {
 
 
 function getReminderEntry(kind, id) {
-  const previousFilter = activeReminderFilter;
-  activeReminderFilter = "all";
+  if (kind === "planned") {
+    const item = getPlannedItemById(id);
 
-  const entry = getReminderEntries().find(
-    (candidate) =>
-      candidate.kind === kind &&
-      candidate.id === id
-  ) || null;
+    if (!item) {
+      return null;
+    }
 
-  activeReminderFilter = previousFilter;
-  return entry;
+    const sourceNote =
+      loadTask().find(
+        (task) => task?.id === item.sourceNoteId
+      ) || null;
+
+    if (!sourceNote || sourceNote.isSecret === true) {
+      return null;
+    }
+
+    return {
+      kind: "planned",
+      id: item.id,
+      sourceNoteId: item.sourceNoteId || null,
+      sourceType: item.sourceType || "note",
+      sourceTodoId: item.sourceTodoId || null,
+      date: item.plannedAt,
+      title: item.text || "Naplánovaný úkol",
+      preview:
+        item.sourceType === "todo"
+          ? (sourceNote.title || "")
+          : (sourceNote.note || ""),
+      area: sourceNote.area || "private",
+      notificationId: item.notificationId || null,
+      reminder: jePlanovanaPripominkaZapnuta(item)
+    };
+  }
+
+  if (kind === "note") {
+    const task = getReminderTaskById(id);
+
+    if (!task || task.isSecret === true || !task.date) {
+      return null;
+    }
+
+    return {
+      kind: "note",
+      id: task.id,
+      sourceNoteId: task.id,
+      sourceType:
+        task.repeat?.enabled === true
+          ? "recurring-note"
+          : "note",
+      date: task.date,
+      title: task.title || "Bez názvu",
+      preview: task.note || "",
+      area: task.area || "private",
+      notificationId: task.notificationId || null,
+      reminder: task.reminder === true
+    };
+  }
+
+  return null;
 }
 
 
@@ -1186,6 +1266,7 @@ async function ensureFuturePlannedNotifications() {
         !item?.id ||
         !item?.plannedAt ||
         item.completed === true ||
+        !jePlanovanaPripominkaZapnuta(item) ||
         new Date(item.plannedAt) <= new Date()
       ) {
         continue;
@@ -1481,6 +1562,18 @@ const deleteReminderButton =
 const disableReminderButton =
   document.getElementById("disableReminderButton");
 
+const editReminderRepeatButton =
+  document.getElementById("editReminderRepeatButton");
+
+const reminderDelayGrid =
+  document.querySelector(".reminderDelayGrid");
+
+const reminderQuickDateTime =
+  document.querySelector(".reminderQuickDateTime");
+
+const saveReminderQuickDateButton =
+  document.getElementById("saveReminderQuickDateButton");
+
 const recurringDeleteConfirmModal =
   document.getElementById("recurringDeleteConfirmModal");
 
@@ -1500,6 +1593,8 @@ function closeReminderQuickMenu() {
 
   reminderQuickMenu.hidden = true;
   selectedReminderEntry = null;
+  selectedReminderContext = "reminders";
+  selectedReminderDateOverride = null;
 
   /* Skrytý modal nesmí v DOM držet náhled případné tajné poznámky. */
   if (reminderQuickPreview) {
@@ -1509,7 +1604,10 @@ function closeReminderQuickMenu() {
 }
 
 
-function openReminderQuickMenu(entry) {
+function openReminderQuickMenu(
+  entry,
+  { context = "reminders", dateOverride = null } = {}
+) {
   if (!reminderQuickMenu || !entry) {
     return;
   }
@@ -1518,14 +1616,22 @@ function openReminderQuickMenu(entry) {
     kind: entry.kind,
     id: entry.id
   };
+  selectedReminderContext =
+    context === "planner" ? "planner" : "reminders";
+  selectedReminderDateOverride = dateOverride || null;
 
-  const termin = new Date(entry.date);
+  const zobrazeneDatum =
+    selectedReminderDateOverride || entry.date;
+  const termin = new Date(zobrazeneDatum);
   const jePoTerminu =
     !Number.isNaN(termin.getTime()) &&
     termin.getTime() < Date.now();
 
   if (reminderQuickLabel) {
-    if (entry.kind === "planned") {
+    const jePlannerMenu =
+      selectedReminderContext === "planner";
+
+    if (jePlannerMenu || entry.kind === "planned") {
       reminderQuickLabel.textContent =
         jePoTerminu
           ? "NAPLÁNOVANÝ ÚKOL PO TERMÍNU"
@@ -1551,7 +1657,7 @@ function openReminderQuickMenu(entry) {
     reminderQuickPreview.hidden = !preview;
   }
 
-  const date = new Date(entry.date);
+  const date = new Date(zobrazeneDatum);
 
   if (reminderQuickDate) {
     reminderQuickDate.value =
@@ -1571,21 +1677,89 @@ function openReminderQuickMenu(entry) {
     completeReminderButton.hidden = false;
   }
 
+  const jePlanner =
+    selectedReminderContext === "planner";
+  const jeOpakovana =
+    entry.kind === "note" &&
+    entry.sourceType === "recurring-note";
+  const pripominkaZapnuta =
+    entry.reminder === true;
+
+  if (reminderDelayGrid) {
+    reminderDelayGrid.hidden = jePlanner;
+  }
+
+  if (reminderQuickDateTime) {
+    reminderQuickDateTime.hidden =
+      jePlanner && jeOpakovana;
+  }
+
+  if (saveReminderQuickDateButton) {
+    saveReminderQuickDateButton.hidden =
+      jePlanner && jeOpakovana;
+    saveReminderQuickDateButton.textContent =
+      jePlanner ? "Změnit termín" : "Uložit datum a čas";
+  }
+
+  if (editReminderRepeatButton) {
+    editReminderRepeatButton.hidden =
+      !(jePlanner && jeOpakovana);
+  }
+
+  const openReminderNoteButton =
+    document.getElementById("openReminderNoteButton");
+
+  if (openReminderNoteButton) {
+    const popisekOtevrit =
+      jePlanner ? "Otevřít poznámku" : "Otevřít";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        openReminderNoteButton,
+        "poznamky",
+        popisekOtevrit
+      );
+    } else {
+      openReminderNoteButton.textContent = popisekOtevrit;
+    }
+  }
+
+  if (deleteReminderButton) {
+    const popisekSmazat =
+      jePlanner
+        ? (jeOpakovana ? "Smazat sérii" : "Smazat z plánu")
+        : "Smazat";
+
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(
+        deleteReminderButton,
+        "smazat",
+        popisekSmazat
+      );
+    } else {
+      deleteReminderButton.textContent = popisekSmazat;
+    }
+  }
+
   if (disableReminderButton) {
-    const jePlan = entry.kind === "planned";
-    const popisek = jePlan
-      ? "Zrušit plán"
-      : "Vypnout";
+    const popisek = pripominkaZapnuta
+      ? "Vypnout připomenutí"
+      : "Připomenout";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
         disableReminderButton,
-        jePlan ? "kalendar" : "vypnoutZvonek",
+        pripominkaZapnuta ? "vypnoutZvonek" : "zvonek",
         popisek
       );
     } else {
       disableReminderButton.textContent = popisek;
     }
+
+    disableReminderButton.classList.toggle(
+      "danger",
+      pripominkaZapnuta
+    );
   }
 
 const rychleOdlozeni =
@@ -1668,10 +1842,19 @@ function getSelectedReminderEntry() {
     return null;
   }
 
-  return getReminderEntry(
+  const entry = getReminderEntry(
     selectedReminderEntry.kind,
     selectedReminderEntry.id
   );
+
+  if (!entry || !selectedReminderDateOverride) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    date: selectedReminderDateOverride
+  };
 }
 
 function spustPripominkovouUlohuNaPozadi(
@@ -1731,7 +1914,11 @@ function zobrazPotvrzeniPripominky(text) {
 }
 
 
-async function saveReminderDate(taskId, newDate) {
+async function saveReminderDate(
+  taskId,
+  newDate,
+  { zachovatStavPripominky = false } = {}
+) {
   const tasks = loadTask();
   const index = tasks.findIndex(
     (task) => task.id === taskId
@@ -1742,6 +1929,8 @@ async function saveReminderDate(taskId, newDate) {
   }
 
   const currentTask = tasks[index];
+  const jePlannerZmenaTerminu =
+    selectedReminderContext === "planner";
   const oldNotificationId =
     currentTask.notificationId || null;
 
@@ -1767,12 +1956,21 @@ async function saveReminderDate(taskId, newDate) {
         }
       : currentTask.repeat || null;
 
+  const zustanePripominka =
+    zachovatStavPripominky
+      ? currentTask.reminder === true
+      : true;
+
   const updatedTask = {
     ...currentTask,
     date: noveDatum,
     repeat: aktualizovaneRepeat,
-    reminder: true,
-    notificationId: newNotificationId,
+    planned: true,
+    reminder: zustanePripominka,
+    notificationId:
+      zustanePripominka
+        ? newNotificationId
+        : currentTask.notificationId,
     updatedAt: new Date().toISOString()
   };
 
@@ -1808,13 +2006,19 @@ async function saveReminderDate(taskId, newDate) {
    */
   closeReminderQuickMenu();
 
+  if (typeof renderCalendar === "function") {
+    requestAnimationFrame(renderCalendar);
+  }
+
   if (typeof renderTasks === "function") {
     requestAnimationFrame(renderTasks);
   }
 
   requestAnimationFrame(renderRemindersScreen);
   zobrazPotvrzeniPripominky(
-    "Připomínka odložena"
+    jePlannerZmenaTerminu
+      ? "Termín změněn"
+      : "Připomínka odložena"
   );
 
   spustPripominkovouUlohuNaPozadi(
@@ -1843,13 +2047,21 @@ async function savePlannedReminderDate(itemId, newDate) {
     return false;
   }
 
+  const jePlannerZmenaTerminu =
+    selectedReminderContext === "planner";
   const oldNotificationId =
     item.notificationId || null;
+  const reminderZapnuta =
+    jePlanovanaPripominkaZapnuta(item);
 
   const updatedItem = {
     ...item,
     plannedAt: formatReminderLocalDateTime(newDate),
-    notificationId: createUniqueNotificationId()
+    reminder: reminderZapnuta,
+    notificationId:
+      reminderZapnuta
+        ? createUniqueNotificationId()
+        : item.notificationId
   };
 
   const mergedItems = loadPlannedItems().map(
@@ -1928,7 +2140,9 @@ async function savePlannedReminderDate(itemId, newDate) {
 
   requestAnimationFrame(renderRemindersScreen);
   zobrazPotvrzeniPripominky(
-    "Úkol byl odložen"
+    jePlannerZmenaTerminu
+      ? "Termín změněn"
+      : "Úkol byl odložen"
   );
 
   spustPripominkovouUlohuNaPozadi(
@@ -1940,6 +2154,7 @@ async function savePlannedReminderDate(itemId, newDate) {
       }
 
       if (
+        reminderZapnuta &&
         sourceNote &&
         sourceNote.isSecret !== true
       ) {
@@ -2072,9 +2287,13 @@ async function saveCustomReminderDate() {
 
   if (newDate <= new Date()) {
     zobrazZpravuAplikace(
-  "Připomínky",
-  "Připomínka musí být nastavena do budoucna."
-);
+      selectedReminderContext === "planner"
+        ? "Plán"
+        : "Připomínky",
+      selectedReminderContext === "planner"
+        ? "Termín musí být nastaven do budoucna."
+        : "Připomínka musí být nastavena do budoucna."
+    );
     return;
   }
 
@@ -2086,7 +2305,11 @@ async function saveCustomReminderDate() {
   } else {
     await saveReminderDate(
       entry.id,
-      newDate
+      newDate,
+      {
+        zachovatStavPripominky:
+          selectedReminderContext === "planner"
+      }
     );
   }
 }
@@ -2108,6 +2331,10 @@ async function disableSelectedNoteReminder(entry) {
 
   const updatedTask = {
     ...currentTask,
+    planned:
+      currentTask.planned === true ||
+      currentTask.reminder === true ||
+      currentTask.repeat?.enabled === true,
     reminder: false,
     updatedAt: new Date().toISOString()
   };
@@ -2578,6 +2805,169 @@ async function removeSelectedPlannedReminder(entry) {
 }
 
 
+async function nastavPripominkuPlanovanePolozky(
+  entry,
+  enabled
+) {
+  const item = getPlannedItemById(entry.id);
+
+  if (!item) {
+    return false;
+  }
+
+  if (
+    enabled &&
+    new Date(item.plannedAt) <= new Date()
+  ) {
+    zobrazZpravuAplikace(
+      "Plán",
+      "Nejdřív změň termín úkolu do budoucna."
+    );
+    return false;
+  }
+
+  const oldNotificationId =
+    item.notificationId || null;
+  const updatedItem = {
+    ...item,
+    reminder: enabled === true,
+    notificationId:
+      enabled === true
+        ? createUniqueNotificationId()
+        : item.notificationId
+  };
+
+  const allItems = loadPlannedItems().map(
+    (candidate) =>
+      candidate.id === item.id
+        ? updatedItem
+        : candidate
+  );
+
+  const tasks = loadTask();
+  const noteIndex = tasks.findIndex(
+    (task) => task?.id === item.sourceNoteId
+  );
+  const sourceNote =
+    noteIndex >= 0 ? tasks[noteIndex] : null;
+
+  if (sourceNote) {
+    sourceNote.plannedItems =
+      Array.isArray(sourceNote.plannedItems)
+        ? sourceNote.plannedItems.map(
+            (candidate) =>
+              candidate.id === item.id
+                ? updatedItem
+                : candidate
+          )
+        : [updatedItem];
+
+    if (!sourceNote.plannedItems.some(
+      (candidate) => candidate.id === item.id
+    )) {
+      sourceNote.plannedItems.push(updatedItem);
+    }
+
+    sourceNote.updatedAt = new Date().toISOString();
+  }
+
+  try {
+    await ulozZmenuPripominkyLokalne(
+      async () => {
+        savePlannedItems(allItems);
+        if (sourceNote) {
+          await saveAllTasks(tasks);
+        }
+      },
+      sourceNote
+    );
+  } catch (error) {
+    console.error(
+      "Změna připomenutí Planner úkolu selhala:",
+      error
+    );
+    return false;
+  }
+
+  if (sourceNote) {
+    spustPripominkovouUlohuNaPozadi(
+      () =>
+        obnovNotifikacePoznamkyPodleSoukromi(
+          sourceNote
+        ),
+      "Změna Planner připomenutí"
+    );
+  } else if (!enabled && oldNotificationId) {
+    spustPripominkovouUlohuNaPozadi(
+      () => cancelNotification(oldNotificationId),
+      "Vypnutí Planner připomenutí"
+    );
+  }
+
+  zobrazPotvrzeniPripominky(
+    enabled
+      ? "Připomenutí zapnuto"
+      : "Připomenutí vypnuto"
+  );
+
+  return true;
+}
+
+async function zapniSelectedNoteReminder(entry) {
+  const tasks = loadTask();
+  const index = tasks.findIndex(
+    (task) => task?.id === entry.id
+  );
+
+  if (index === -1) {
+    return false;
+  }
+
+  const currentTask = tasks[index];
+
+  if (new Date(currentTask.date) <= new Date()) {
+    zobrazZpravuAplikace(
+      "Plán",
+      "Nejdřív změň termín úkolu do budoucna."
+    );
+    return false;
+  }
+
+  const updatedTask = {
+    ...currentTask,
+    planned: true,
+    reminder: true,
+    notificationId: createUniqueNotificationId(),
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await ulozZmenuPripominkyLokalne(
+      () => updateTask(index, updatedTask),
+      updatedTask
+    );
+  } catch (error) {
+    console.error(
+      "Zapnutí připomínky poznámky selhalo:",
+      error
+    );
+    return false;
+  }
+
+  spustPripominkovouUlohuNaPozadi(
+    () =>
+      obnovNotifikacePoznamkyPodleSoukromi(
+        updatedTask
+      ),
+    "Zapnutí Android připomínky"
+  );
+
+  zobrazPotvrzeniPripominky(
+    "Připomenutí zapnuto"
+  );
+  return true;
+}
+
 async function disableSelectedReminder() {
   const entry = getSelectedReminderEntry();
 
@@ -2585,22 +2975,29 @@ async function disableSelectedReminder() {
     return;
   }
 
+  let uspesne = false;
+
   if (entry.kind === "planned") {
-    zapocitejPouzitiTlacitkaPripominky(
-      "unplan",
-      "planned"
+    uspesne = await nastavPripominkuPlanovanePolozky(
+      entry,
+      entry.reminder !== true
     );
-
-    await removeSelectedPlannedReminder(entry);
+  } else if (entry.reminder === true) {
+    uspesne = await disableSelectedNoteReminder(entry);
   } else {
-    zapocitejPouzitiTlacitkaPripominky(
-      "disable",
-      "note"
-    );
-
-    await disableSelectedNoteReminder(entry);
+    uspesne = await zapniSelectedNoteReminder(entry);
   }
 
+  if (!uspesne) {
+    return;
+  }
+
+  if (typeof renderCalendar === "function") {
+    renderCalendar();
+  }
+  if (typeof renderCalendarAgenda === "function") {
+    renderCalendarAgenda();
+  }
   renderRemindersScreen();
   closeReminderQuickMenu();
 }
@@ -2732,6 +3129,63 @@ confirmRecurringDeleteButton?.addEventListener(
 );
 
 
+async function odeberCelouPoznamkuZPlanu(entry) {
+  const tasks = loadTask();
+  const index = tasks.findIndex(
+    (task) => task?.id === entry.id
+  );
+
+  if (index === -1) {
+    return false;
+  }
+
+  const currentTask = tasks[index];
+  const oldNotificationId =
+    currentTask.notificationId || null;
+
+  const updatedTask = {
+    ...currentTask,
+    planned: false,
+    reminder: false,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await ulozZmenuPripominkyLokalne(
+      () => updateTask(index, updatedTask),
+      updatedTask
+    );
+  } catch (error) {
+    console.error(
+      "Odebrání poznámky z Plánu selhalo:",
+      error
+    );
+    return false;
+  }
+
+  if (oldNotificationId) {
+    spustPripominkovouUlohuNaPozadi(
+      () => cancelNotification(oldNotificationId),
+      "Zrušení připomínky odebrané z Plánu"
+    );
+  }
+
+  if (typeof renderTasks === "function") {
+    renderTasks();
+  }
+  if (typeof renderCalendar === "function") {
+    renderCalendar();
+  }
+  if (typeof renderCalendarAgenda === "function") {
+    renderCalendarAgenda();
+  }
+  renderRemindersScreen();
+  zobrazPotvrzeniPripominky(
+    "Poznámka odebrána z Plánu"
+  );
+  return true;
+}
+
 async function deleteSelectedReminder() {
   const entry = getSelectedReminderEntry();
 
@@ -2760,6 +3214,15 @@ async function deleteSelectedReminder() {
             (task) => task?.id === entry.id
           )
         : null;
+
+    if (
+      selectedReminderContext === "planner" &&
+      note?.repeat?.enabled !== true
+    ) {
+      await odeberCelouPoznamkuZPlanu(entry);
+      closeReminderQuickMenu();
+      return;
+    }
 
     /*
      * U opakované připomínky má Smazat jiný význam než Vypnout:
@@ -3630,6 +4093,8 @@ completeReminderButton?.addEventListener(
       const note = tasks[noteIndex];
       const notificationId =
         note.notificationId || null;
+      const pripominkaPredDokoncenim =
+        note.reminder === true;
 
       zapocitejPouzitiTlacitkaPripominky(
         "complete",
@@ -3691,9 +4156,14 @@ completeReminderButton?.addEventListener(
           };
 
           note.completed = false;
-          note.reminder = true;
-          note.notificationId =
-            createUniqueNotificationId();
+          note.planned = true;
+          note.reminder =
+            pripominkaPredDokoncenim;
+
+          if (pripominkaPredDokoncenim) {
+            note.notificationId =
+              createUniqueNotificationId();
+          }
         } else {
           /* Série přirozeně skončila (např. endDate). */
           note.completed = true;
@@ -3728,6 +4198,10 @@ completeReminderButton?.addEventListener(
 
       ukonciCekani();
       closeReminderQuickMenu();
+
+      if (typeof renderCalendar === "function") {
+        requestAnimationFrame(renderCalendar);
+      }
 
       requestAnimationFrame(
         renderRemindersScreen
@@ -3809,12 +4283,88 @@ document
   });
 
 
+function otevriMenuPlanovace(
+  kind,
+  id,
+  dateOverride = null
+) {
+  const entry = getReminderEntry(kind, id);
+
+  if (!entry) {
+    return false;
+  }
+
+  openReminderQuickMenu(
+    entry,
+    {
+      context: "planner",
+      dateOverride
+    }
+  );
+  return true;
+}
+
+function dokoncitPolozkuPlanovace(
+  kind,
+  id,
+  dateOverride = null
+) {
+  const otevreno = otevriMenuPlanovace(
+    kind,
+    id,
+    dateOverride
+  );
+
+  if (!otevreno || !completeReminderButton) {
+    return false;
+  }
+
+  completeReminderButton.click();
+  return true;
+}
+
+editReminderRepeatButton?.addEventListener(
+  "click",
+  async () => {
+    const entry = getSelectedReminderEntry();
+
+    if (
+      !entry ||
+      entry.kind !== "note" ||
+      entry.sourceType !== "recurring-note"
+    ) {
+      return;
+    }
+
+    closeReminderQuickMenu();
+
+    if (typeof openTaskEditorById !== "function") {
+      return;
+    }
+
+    await openTaskEditorById(entry.id);
+
+    setTimeout(() => {
+      if (
+        typeof modalTimeButton !== "undefined" &&
+        document.getElementById("taskModal")
+          ?.dataset?.taskId === String(entry.id)
+      ) {
+        modalTimeButton?.click();
+      }
+    }, 0);
+  }
+);
+
 window.LubaNoteReminders = {
   ...(window.LubaNoteReminders || {}),
   vycistiStarePoTerminu: (moznosti = {}) =>
     vycistiStarePripominkyPoTerminu(moznosti),
   obnovPoSynchronizaci: (noteIds = null) =>
-    obnovSystemoveNotifikacePoSynchronizaci(noteIds)
+    obnovSystemoveNotifikacePoSynchronizaci(noteIds),
+  otevriMenuPlanovace,
+  dokoncitPolozkuPlanovace,
+  jePlanovanaPripominkaZapnuta
 };
 
 

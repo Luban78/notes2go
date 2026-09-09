@@ -20,9 +20,61 @@ const plannerTimeButton =
 const plannerTimeLabel =
   document.getElementById("plannerTimeLabel");
 
+const plannerReminderToggle =
+  document.getElementById("plannerReminderToggle");
 
+const plannerReminderToggleLabel =
+  document.getElementById("plannerReminderToggleLabel");
 
+let plannerReminderEnabled = false;
 
+function nastavPlannerReminderToggle(enabled) {
+  plannerReminderEnabled = enabled === true;
+
+  if (!plannerReminderToggle) {
+    return;
+  }
+
+  plannerReminderToggle.classList.toggle(
+    "active",
+    plannerReminderEnabled
+  );
+  plannerReminderToggle.setAttribute(
+    "aria-pressed",
+    String(plannerReminderEnabled)
+  );
+
+  if (plannerReminderToggleLabel) {
+    plannerReminderToggleLabel.textContent =
+      plannerReminderEnabled
+        ? "Připomenout: zapnuto"
+        : "Připomenout: vypnuto";
+  }
+
+  if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+    window.LubaNoteIcons.nastavObsahSIkonou(
+      plannerReminderToggle,
+      plannerReminderEnabled ? "zvonek" : "vypnoutZvonek",
+      plannerReminderEnabled
+        ? "Připomenout: zapnuto"
+        : "Připomenout: vypnuto"
+    );
+  }
+}
+
+function nastavVychoziPlannerReminderProModal() {
+  nastavPlannerReminderToggle(
+    window.LubaNotePlannerPreferences
+      ?.ziskejVychoziPripominku?.() === true
+  );
+}
+
+plannerReminderToggle?.addEventListener(
+  "click",
+  () => {
+    nastavPlannerReminderToggle(!plannerReminderEnabled);
+  }
+);
 
 function aktualizujPopiskyPlanovanehoTerminu() {
   if (plannerDateLabel) {
@@ -404,7 +456,8 @@ function createPlannedItem(
   sourceType = "note",
   selectionStart = null,
   selectionEnd = null,
-  sourceTodoId = null
+  sourceTodoId = null,
+  reminder = false
 ) {
   return {
     id: crypto.randomUUID(),
@@ -413,6 +466,7 @@ function createPlannedItem(
     text,
     plannedAt,
     completed: false,
+    reminder: reminder === true,
     notificationId:
       typeof createUniqueNotificationId === "function"
         ? createUniqueNotificationId()
@@ -475,6 +529,7 @@ function closePlanner() {
   plannerSelectionStart = null;
   plannerSelectionEnd = null;
   selectedPlannerText = "";
+  nastavPlannerReminderToggle(false);
 
   if (plannerTaskTitle) {
     plannerTaskTitle.textContent = "";
@@ -585,7 +640,8 @@ async function saveCurrentPlannedItem() {
     plannerSourceType,
     plannerSelectionStart,
     plannerSelectionEnd,
-    plannerSourceTodoId
+    plannerSourceTodoId,
+    plannerReminderEnabled
   );
   
   window.lastCreatedPlannedItemId =
@@ -698,6 +754,7 @@ async function saveCurrentPlannedItem() {
    * Uživatel na Android plugin ani síť nečeká.
    */
   if (
+    plannedItem.reminder === true &&
     sourceNote.isSecret !== true &&
     typeof requestNotificationPermission === "function" &&
     typeof scheduleNotification === "function"
@@ -987,6 +1044,7 @@ planSelectionButton.addEventListener(
         ?.removeAllRanges();
 
       setPlannerDateTimeToNow();
+      nastavVychoziPlannerReminderProModal();
       plannerModal.hidden = false;
       return;
     }
@@ -1104,6 +1162,7 @@ if (androidSelection) {
 modalRichText.blur();
 
     setPlannerDateTimeToNow();
+    nastavVychoziPlannerReminderProModal();
     plannerModal.hidden = false;
   }
 );

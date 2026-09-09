@@ -40,6 +40,213 @@
 
   const REMINDER_OVERDUE_RETENTION_CONFIRMED_KEY =
     "reminderOverdueRetentionConfirmed";
+
+  const PLANNER_REMINDER_PREFERENCE_KEY =
+    "lubanotePlannerReminderPreferenceV1";
+  const PLANNER_REMINDER_REMOTE_KEY =
+    "lubanote_planner_reminder_preference_v1";
+
+  let plannerPreferenceUserId = null;
+
+  const openPlannerReminderDefaultButton =
+    document.getElementById(
+      "openPlannerReminderDefaultButton"
+    );
+
+  const plannerReminderDefaultValue =
+    document.getElementById(
+      "plannerReminderDefaultValue"
+    );
+
+  function ziskejLokalniPlannerPreference() {
+    try {
+      const raw = localStorage.getItem(
+        PLANNER_REMINDER_PREFERENCE_KEY
+      );
+
+      if (!raw) {
+        return null;
+      }
+
+      const data = JSON.parse(raw);
+
+      if (typeof data?.enabled !== "boolean") {
+        return null;
+      }
+
+      if (
+        plannerPreferenceUserId &&
+        data.userId &&
+        data.userId !== plannerPreferenceUserId
+      ) {
+        return null;
+      }
+
+      return {
+        enabled: data.enabled,
+        updatedAt:
+          typeof data.updatedAt === "string"
+            ? data.updatedAt
+            : "1970-01-01T00:00:00.000Z",
+        userId:
+          typeof data.userId === "string"
+            ? data.userId
+            : null
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function ulozLokalniPlannerPreference(preference) {
+    localStorage.setItem(
+      PLANNER_REMINDER_PREFERENCE_KEY,
+      JSON.stringify(preference)
+    );
+  }
+
+  function ziskejVychoziPlannerReminder() {
+    return ziskejLokalniPlannerPreference()?.enabled === true;
+  }
+
+  function nastavPopisekPlannerReminderu() {
+    if (!plannerReminderDefaultValue) {
+      return;
+    }
+
+    plannerReminderDefaultValue.textContent =
+      ziskejVychoziPlannerReminder()
+        ? "Zapnuto"
+        : "Vypnuto";
+  }
+
+  async function synchronizujPlannerPreference() {
+    if (
+      !navigator.onLine ||
+      typeof supabaseClient === "undefined" ||
+      !supabaseClient?.auth
+    ) {
+      nastavPopisekPlannerReminderu();
+      return false;
+    }
+
+    try {
+      const { data, error } =
+        await supabaseClient.auth.getUser();
+
+      if (error || !data?.user) {
+        nastavPopisekPlannerReminderu();
+        return false;
+      }
+
+      plannerPreferenceUserId = data.user.id || null;
+
+      let local = ziskejLokalniPlannerPreference();
+      const remoteRaw =
+        data.user.user_metadata?.[
+          PLANNER_REMINDER_REMOTE_KEY
+        ] || null;
+
+      const remote =
+        typeof remoteRaw?.enabled === "boolean"
+          ? {
+              enabled: remoteRaw.enabled,
+              updatedAt:
+                typeof remoteRaw.updatedAt === "string"
+                  ? remoteRaw.updatedAt
+                  : "1970-01-01T00:00:00.000Z",
+              userId: plannerPreferenceUserId
+            }
+          : null;
+
+      /*
+       * Lokální preference je navázaná na účet. Při odhlášení a
+       * přihlášení jiného uživatele nesmíme jeho výchozí volbu přenést
+       * do cizího user_metadata. Starší záznam bez userId si při prvním
+       * úspěšném syncu bezpečně přivlastní právě přihlášený účet.
+       */
+      if (local && !local.userId && plannerPreferenceUserId) {
+        local = {
+          ...local,
+          userId: plannerPreferenceUserId
+        };
+        ulozLokalniPlannerPreference(local);
+      }
+
+      if (!local && !remote) {
+        nastavPopisekPlannerReminderu();
+        return true;
+      }
+
+      if (!local && remote) {
+        ulozLokalniPlannerPreference(remote);
+        nastavPopisekPlannerReminderu();
+        return true;
+      }
+
+      const localCas = Date.parse(local.updatedAt) || 0;
+      const remoteCas = Date.parse(remote?.updatedAt || "") || 0;
+
+      if (remote && remoteCas > localCas) {
+        ulozLokalniPlannerPreference(remote);
+        nastavPopisekPlannerReminderu();
+        return true;
+      }
+
+      if (!remote || localCas > remoteCas) {
+        const { error: updateError } =
+          await supabaseClient.auth.updateUser({
+            data: {
+              [PLANNER_REMINDER_REMOTE_KEY]: {
+                enabled: local.enabled,
+                updatedAt: local.updatedAt
+              }
+            }
+          });
+
+        if (updateError) {
+          throw updateError;
+        }
+      }
+
+      nastavPopisekPlannerReminderu();
+      return true;
+    } catch (error) {
+      console.warn(
+        "Synchronizace výchozí Planner připomínky byla odložena:",
+        error
+      );
+      nastavPopisekPlannerReminderu();
+      return false;
+    }
+  }
+
+  async function nastavVychoziPlannerReminder(enabled) {
+    const preference = {
+      enabled: enabled === true,
+      updatedAt: new Date().toISOString(),
+      userId: plannerPreferenceUserId
+    };
+
+    ulozLokalniPlannerPreference(preference);
+    nastavPopisekPlannerReminderu();
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "lubanote:planner-reminder-preference-change",
+        { detail: { enabled: preference.enabled } }
+      )
+    );
+
+    void synchronizujPlannerPreference();
+    return preference.enabled;
+  }
+
+  window.LubaNotePlannerPreferences = {
+    ziskejVychoziPripominku: ziskejVychoziPlannerReminder,
+    nastavVychoziPripominku: nastavVychoziPlannerReminder,
+    synchronizuj: synchronizujPlannerPreference
+  };
   
   const settingsModal =
     document.getElementById("settingsModal");
@@ -232,6 +439,54 @@ const motivy = nactenaTemata.map(tema => ({
   }
 
   nastavPopisekRetence();
+  nastavPopisekPlannerReminderu();
+
+  openPlannerReminderDefaultButton
+    ?.addEventListener("click", () => {
+      const aktualni =
+        ziskejVychoziPlannerReminder()
+          ? "on"
+          : "off";
+
+      otevriNastavovaciModal({
+        nadpis: "Plánování",
+        polozky: [
+          {
+            klic: "plannerReminder",
+            popisek: "Automaticky připomenout",
+            hodnota: aktualni,
+            zobrazeni:
+              aktualni === "on"
+                ? "Zapnuto"
+                : "Vypnuto",
+            moznosti: [
+              { hodnota: "off", popisek: "Vypnuto" },
+              { hodnota: "on", popisek: "Zapnuto" }
+            ]
+          }
+        ],
+        poUlozeni: (hodnoty) => {
+          void nastavVychoziPlannerReminder(
+            hodnoty?.plannerReminder === "on"
+          );
+        }
+      });
+    });
+
+  [
+    "lubanote:supabase-ready",
+    "lubanote:auth-valid"
+  ].forEach((nazevUdalosti) => {
+    window.addEventListener(
+      nazevUdalosti,
+      () => void synchronizujPlannerPreference()
+    );
+  });
+
+  window.addEventListener(
+    "online",
+    () => void synchronizujPlannerPreference()
+  );
 
   openOverdueRetentionSettingsButton
     ?.addEventListener(

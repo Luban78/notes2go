@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260907-recurring-delete-series-09298">
+  <link rel="stylesheet" href="style.css?v=20260909-planner-reminder-separation-318">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
   <link rel="stylesheet" href="iconPreference.css">
@@ -609,6 +609,11 @@
         <button id="openReminderNoteButton" type="button" class="lubaHasIcon">
           <span class="lubaActionIcon" data-luba-icon="poznamky" aria-hidden="true"></span>
           <span>Otevřít</span>
+        </button>
+
+        <button id="editReminderRepeatButton" type="button" class="lubaHasIcon" hidden>
+          <span class="lubaActionIcon" data-luba-icon="opakovat" aria-hidden="true"></span>
+          <span>Upravit opakování</span>
         </button>
         
         <button id="disableReminderButton" type="button" class="danger lubaHasIcon">
@@ -1263,6 +1268,11 @@
       </button>
       
       <input id="plannerTime" type="hidden">
+
+      <button id="plannerReminderToggle" class="plannerReminderToggle" type="button" aria-pressed="false">
+        <span class="lubaActionIcon" data-luba-icon="vypnoutZvonek" aria-hidden="true"></span>
+        <span id="plannerReminderToggleLabel">Připomenout: vypnuto</span>
+      </button>
       
       <div class="plannerActions">
         
@@ -1437,6 +1447,15 @@
             <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
           
+        </div>
+
+        <div class="themeSetting">
+          <span>Automaticky připomenout při plánování</span>
+
+          <button id="openPlannerReminderDefaultButton" type="button" class="themeSelectButton">
+            <span id="plannerReminderDefaultValue">Vypnuto</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
+          </button>
         </div>
 
         <div class="themeSetting">
@@ -1819,7 +1838,7 @@
   <script src="lubaIcons.js"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
   
-  <script src="reminders.js?v=20260907-recurring-delete-series-09298"></script>
+  <script src="reminders.js?v=20260909-planner-reminder-separation-318"></script>
   
   <script src="storage.js?v=20260906-ios-regular-idb-overflow-1"></script>
   
@@ -1828,15 +1847,16 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js"></script>
   <script src="themes.js"></script>
-  <script src="settings.js?v=20260904-backup-v4-import-1"></script>
+  <script src="settings.js?v=20260909-planner-reminder-separation-318"></script>
   
   <script src="todos.js?v=20260905-stabilizace-00h-undo-keyboard-1"></script>
   <script src="editorSelectionMenu.js?v=20260906-root-text-toolbar-refresh-09274"></script>
   <script src="editorToolbar.js?v=20260906-selection-size-rollback-09282"></script>
   
   <script src="recurringTasks.js"></script>
+  <script src="swipeActions.js?v=20260909-planner-reminder-separation-318"></script>
   
-  <script src="script.js?v=20260906-existing-draft-recovery-09275"></script>
+  <script src="script.js?v=20260909-planner-reminder-separation-318"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
   <script src="trash.js?v=20260906-trash-restore-race-1"></script>
@@ -1859,11 +1879,11 @@
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260901-note-links-v7-1"></script>
   
-  <script src="planner.js"></script>
+  <script src="planner.js?v=20260909-planner-reminder-separation-318"></script>
   
   <script src="plannedTextLinks.js"></script>
   
-  <script src="calendar.js"></script>
+  <script src="calendar.js?v=20260909-planner-reminder-separation-318"></script>
   
   <script src="cardView.js?v=20260827-razeni-karet-1"></script>
   

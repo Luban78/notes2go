@@ -152,12 +152,27 @@ function otevriNovyUkolProVybranyDen() {
       datumProInput(calendarSelectedDay);
   }
 
+  if (typeof plannedEnabled !== "undefined") {
+    plannedEnabled = true;
+  }
+
+  const vychoziPripominka =
+    window.LubaNotePlannerPreferences
+      ?.ziskejVychoziPripominku?.() === true;
+
   if (typeof reminderEnabled !== "undefined") {
-    reminderEnabled = true;
+    reminderEnabled = vychoziPripominka;
   }
 
   if (typeof updateReminderButton === "function") {
-    updateReminderButton(true);
+    updateReminderButton(vychoziPripominka);
+  }
+
+  if (
+    vychoziPripominka &&
+    typeof requestNotificationPermission === "function"
+  ) {
+    void requestNotificationPermission();
   }
 
   if (
@@ -327,20 +342,28 @@ function loadCalendarItems() {
         plannedAt: note.date,
         completed: false,
         sourceType: "recurring-note",
-        repeat: note.repeat
+        repeat: note.repeat,
+        reminder: note.reminder === true
       });
 
       return;
     }
 
-    if (note.reminder === true) {
+    if (
+      note.planned === true ||
+      note.reminder === true
+    ) {
       items.push({
-        id: `reminder-${note.id}`,
+        id: `planned-note-${note.id}`,
         sourceNoteId: note.id,
         text: note.title || "Bez názvu",
         plannedAt: note.date,
         completed: false,
-        sourceType: "reminder"
+        sourceType:
+          note.reminder === true
+            ? "reminder"
+            : "planned-note",
+        reminder: note.reminder === true
       });
     }
   });
@@ -467,6 +490,14 @@ function renderCalendar() {
   }
 
   renderCalendarAgenda();
+
+  if (
+    dayDetailScreen &&
+    dayDetailScreen.hidden === false &&
+    dayDetailItems
+  ) {
+    renderCalendarItems(dayDetailItems);
+  }
 }
 
 
@@ -523,6 +554,11 @@ function renderCalendarItems(targetElement) {
       row.classList.add("completed");
     }
 
+    const efektivniTermin =
+      item.sourceType === "recurring-note"
+        ? `${dateKey}T${item.plannedAt.slice(11, 16)}`
+        : item.plannedAt;
+
     const time =
       document.createElement("div");
 
@@ -530,7 +566,7 @@ function renderCalendarItems(targetElement) {
       "calendarAgendaTime";
 
     time.textContent =
-      item.plannedAt.slice(11, 16);
+      efektivniTermin.slice(11, 16);
 
     const text =
       document.createElement("div");
@@ -540,6 +576,29 @@ function renderCalendarItems(targetElement) {
 
     text.textContent =
       item.text;
+
+    const maPripominku =
+      item.sourceType === "recurring-note" ||
+      item.sourceType === "reminder" ||
+      item.sourceType === "planned-note"
+        ? item.reminder === true
+        : window.LubaNoteReminders
+            ?.jePlanovanaPripominkaZapnuta?.(item) === true;
+
+    if (maPripominku) {
+      const bellIcon =
+        window.LubaNoteIcons?.vytvorHostitele?.(
+          "zvonek",
+          ["calendarAgendaReminderIcon"]
+        );
+
+      if (bellIcon) {
+        text.append(
+          document.createTextNode(" "),
+          bellIcon
+        );
+      }
+    }
 
     if (
       item.sourceType === "recurring-note"
@@ -558,7 +617,70 @@ function renderCalendarItems(targetElement) {
       }
     }
 
-    row.append(time, text);
+    const menuButton =
+      document.createElement("button");
+    menuButton.type = "button";
+    menuButton.className =
+      "calendarAgendaMenu lubaIconOnlyButton";
+    menuButton.setAttribute(
+      "aria-label",
+      `Akce pro ${item.text || "úkol"}`
+    );
+
+    window.LubaNoteIcons?.nastavJenIkonu?.(
+      menuButton,
+      "vice",
+      ["calendarAgendaMenuIcon"]
+    );
+
+    const jeCelaPoznamka = [
+      "recurring-note",
+      "reminder",
+      "planned-note"
+    ].includes(item.sourceType);
+
+    const reminderKind =
+      jeCelaPoznamka ? "note" : "planned";
+    const reminderId =
+      jeCelaPoznamka
+        ? item.sourceNoteId
+        : item.id;
+
+    menuButton.addEventListener(
+      "click",
+      (event) => {
+        event.stopPropagation();
+        window.LubaNoteReminders
+          ?.otevriMenuPlanovace?.(
+            reminderKind,
+            reminderId,
+            efektivniTermin
+          );
+      }
+    );
+
+    row.append(time, text, menuButton);
+
+    window.LubaNoteSwipe?.pridejHotovo?.(
+      row,
+      {
+        isDisabled: () => item.completed === true,
+        onComplete: async () => {
+          window.LubaNoteReminders
+            ?.dokoncitPolozkuPlanovace?.(
+              reminderKind,
+              reminderId,
+              efektivniTermin
+            );
+
+          setTimeout(() => {
+            if (targetElement.isConnected) {
+              renderCalendarItems(targetElement);
+            }
+          }, 160);
+        }
+      }
+    );
 
     row.addEventListener("click", async () => {
       await openTaskEditorById(item.sourceNoteId);
@@ -784,3 +906,11 @@ window.addEventListener(
     }
   }
 );
+
+
+window.LubaNoteCalendar = {
+  ...(window.LubaNoteCalendar || {}),
+  obnovPoZmene: () => {
+    renderCalendar();
+  }
+};
