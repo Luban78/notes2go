@@ -29,6 +29,7 @@
   let zaznamy = [];
   let presunHubu = null;
   let zmenaVelikostiHubu = null;
+  let geometrieHubuPredMinimalizaci = null;
 
   const MAX_ZAZNAMU = 700;
 
@@ -38,7 +39,8 @@
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
-    cardDrag: "Karty – drag / pořadí",
+    cardDrag: "Karty – drag (produkce OFF)",
+    cardDragLab: "Karty – Drag Lab Testy 1/2/3",
     performance: "Výkon – benchmark"
   };
 
@@ -901,11 +903,107 @@
 
       if (typ === "START") {
         zapis(
-          `DRAG START | card=${detail.card || "-"} | index=${detail.index ?? "-"} | slots=${detail.slots ?? "-"} | pinned=${detail.pinned ? "yes" : "no"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+          `DRAG START | card=${detail.card || "-"} | index=${detail.index ?? "-"} | slots=${detail.slots ?? "-"} | cols=${detail.columns ?? "-"} | pinned=${detail.pinned ? "yes" : "no"} | scroll=${detail.scrollTop ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
         );
         return;
       }
 
+      if (typ === "READY") {
+        zapis(
+          `DRAG READY | input=${detail.input || "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "PICKUP") {
+        const capture = detail.input === "touch"
+          ? "n/a"
+          : (detail.pointerCaptured ? "yes" : "no");
+
+        zapis(
+          `DRAG PICKUP | input=${detail.input || "-"} | capture=${capture}`
+        );
+        return;
+      }
+
+      if (typ === "MOVE_FIRST") {
+        zapis(
+          `DRAG MOVE FIRST | d=${detail.distance ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SCROLL_ARM") {
+        zapis(
+          `DRAG SCROLL ARM | d=${detail.distance ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "POINTER_CANCEL") {
+        zapis(
+          `DRAG POINTER CANCEL | input=${detail.input || "-"} | active=${detail.active ? "yes" : "no"} | scroll=${detail.autoScroll ? "yes" : "no"} | moved=${detail.moved ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "TARGET") {
+        zapis(
+          `DRAG TARGET | ${detail.from ?? "-"} -> ${detail.candidate ?? "-"} | col=${detail.column ?? "-"} | hold=${detail.hold ?? "-"}ms | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "TARGET_HOLD") {
+        zapis(
+          `DRAG TARGET HOLD | slot=${detail.candidate ?? "-"} | ${detail.ms ?? "-"}ms`
+        );
+        return;
+      }
+
+      if (typ === "TARGET_CONFIRM") {
+        zapis(
+          `DRAG TARGET CONFIRM | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | reason=${detail.reason || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "TARGET_CANCEL") {
+        zapis(
+          `DRAG TARGET CANCEL | slot=${detail.candidate ?? "-"} | reason=${detail.reason || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "GAP") {
+        zapis(
+          `DRAG GAP OPEN | slot=${detail.slot ?? "-"} | reason=${detail.reason || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "TARGET_SHOW") {
+        zapis(
+          `DRAG TARGET SHOW | slot=${detail.slot ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "DROP") {
+        zapis(
+          `DRAG DROP | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | changed=${detail.changed ? "yes" : "no"}`
+        );
+        return;
+      }
+
+      if (typ === "COLUMN") {
+        zapis(
+          `DRAG COLUMN | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | x=${detail.x ?? "-"}`
+        );
+        return;
+      }
+
+      /* Starší typy zůstávají čitelné při porovnání starého reportu. */
       if (typ === "CANDIDATE") {
         zapis(
           `DRAG CANDIDATE | ${detail.from ?? "-"} -> ${detail.candidate ?? "-"} | d=${detail.candidateDistance ?? "-"}/${detail.currentDistance ?? "-"} | h=${detail.hysteresis ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
@@ -916,6 +1014,27 @@
       if (typ === "SLOT") {
         zapis(
           `DRAG SLOT | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | d=${detail.candidateDistance ?? "-"}/${detail.currentDistance ?? "-"} | @${detail.x ?? "-"},${detail.y ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SCROLL_START") {
+        zapis(
+          `DRAG SCROLL START | dir=${detail.direction || "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SCROLL") {
+        zapis(
+          `DRAG SCROLL | dir=${detail.direction || "-"} | top=${detail.scrollTop ?? "-"} | delta=${detail.delta ?? "-"} | speed=${detail.speed ?? "-"} | target=${detail.target ?? "-"}`
+        );
+        return;
+      }
+
+      if (typ === "SCROLL_END") {
+        zapis(
+          `DRAG SCROLL END | top=${detail.scrollTop ?? "-"}`
         );
         return;
       }
@@ -950,7 +1069,7 @@
     );
 
     zapis(
-      "START CARD DRAG | stabilní sloty + hystereze; udělej 3–5 přesunů"
+      "START CARD DRAG | ghost clone + touch takeover; auto-scroll až po skutečném pohybu; sleduj READY/PICKUP/MOVE/CANCEL"
     );
 
     return () => {
@@ -958,6 +1077,75 @@
         "luba:card-drag-debug",
         handler
       );
+    };
+  }
+
+  function nactiCardDragLab() {
+    if (window.LubaNoteCardDragLab?.spust) {
+      return Promise.resolve();
+    }
+
+    const existujici = document.querySelector('script[data-ln-card-drag-lab]');
+    if (existujici) {
+      return new Promise((resolve, reject) => {
+        if (window.LubaNoteCardDragLab?.spust) {
+          resolve();
+          return;
+        }
+        existujici.addEventListener("load", () => resolve(), { once: true });
+        existujici.addEventListener(
+          "error",
+          () => reject(new Error("cardDragLab.js se nepodarilo nacist")),
+          { once: true }
+        );
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "cardDragLab.js?v=20260909-card-drag-lab-tests-335";
+      script.async = true;
+      script.dataset.lnCardDragLab = "1";
+      script.addEventListener("load", () => resolve(), { once: true });
+      script.addEventListener(
+        "error",
+        () => reject(new Error("cardDragLab.js se nepodarilo nacist")),
+        { once: true }
+      );
+      document.head.appendChild(script);
+    });
+  }
+
+  function spustCardDragLab() {
+    let zruseno = false;
+    let stopLabu = null;
+
+    zapis("DRAG LAB LOAD | pripravuji izolovanou laborator...");
+
+    nactiCardDragLab()
+      .then(() => {
+        if (zruseno) return;
+        if (!window.LubaNoteCardDragLab?.spust) {
+          throw new Error("Drag Lab API neni dostupne");
+        }
+        stopLabu = window.LubaNoteCardDragLab.spust(zapis);
+        zapis("DRAG LAB READY | TESTY 1/2/3: 6 stejnych karet; produkcni drag je docasne vypnuty");
+        if (hub && !hub.classList.contains("ln-dh-minimized")) {
+          nastavHubMinimalizovany(true);
+        }
+      })
+      .catch(chyba => {
+        zapis(`DRAG LAB ERROR | ${chyba?.message || chyba}`);
+        console.error("Debug Hub: Drag Lab nelze spustit.", chyba);
+      });
+
+    return () => {
+      zruseno = true;
+      if (typeof stopLabu === "function") {
+        stopLabu();
+      } else {
+        window.LubaNoteCardDragLab?.stop?.();
+      }
     };
   }
 
@@ -1117,6 +1305,64 @@
     hub.classList.add("ln-dh-custom-geometry");
 
     return rect;
+  }
+
+  function nastavHubMinimalizovany(sbalit) {
+    if (!hub) return;
+
+    const tlacitko = hub.querySelector('[data-dh="min"]');
+
+    if (sbalit) {
+      if (!hub.classList.contains("ln-dh-minimized")) {
+        const rect = hub.getBoundingClientRect();
+        geometrieHubuPredMinimalizaci = {
+          width: rect.width,
+          height: rect.height
+        };
+        hub.classList.add("ln-dh-minimized");
+      }
+    } else {
+      const miniRect = hub.getBoundingClientRect();
+      const geometrie = geometrieHubuPredMinimalizaci;
+
+      hub.classList.remove("ln-dh-minimized");
+
+      if (geometrie) {
+        /*
+         * Pokud se sbalený panel mezitím přesouval, ukotvení mohlo
+         * zapsat inline výšku 54 px. Při rozbalení proto explicitně
+         * vracíme poslední plnou velikost, ale zachováme aktuální
+         * pozici sbalené hlavičky.
+         */
+        hub.style.left = `${Math.round(miniRect.left)}px`;
+        hub.style.top = `${Math.round(miniRect.top)}px`;
+        hub.style.right = "auto";
+        hub.style.bottom = "auto";
+        hub.style.width = `${Math.round(geometrie.width)}px`;
+        hub.style.height = `${Math.round(geometrie.height)}px`;
+        hub.style.maxHeight = "none";
+        hub.classList.add("ln-dh-custom-geometry");
+      }
+
+      geometrieHubuPredMinimalizaci = null;
+
+      requestAnimationFrame(() => {
+        srovnejHubDoViewportu();
+        prekresli();
+      });
+    }
+
+    if (tlacitko) {
+      tlacitko.textContent = sbalit ? "▢" : "—";
+      tlacitko.setAttribute(
+        "aria-label",
+        sbalit ? "Rozbalit Debug Hub" : "Sbalit Debug Hub"
+      );
+      tlacitko.setAttribute(
+        "title",
+        sbalit ? "Rozbalit" : "Sbalit"
+      );
+    }
   }
 
   function omezPoziciHubu(left, top, sirka, vyska) {
@@ -1355,6 +1601,8 @@
       stopAktivnihoModulu = spustBulletDrag();
     } else if (aktivniModul === "cardDrag") {
       stopAktivnihoModulu = spustCardDrag();
+    } else if (aktivniModul === "cardDragLab") {
+      stopAktivnihoModulu = spustCardDragLab();
     } else if (aktivniModul === "performance") {
       stopAktivnihoModulu = spustPerformanceBenchmark();
     }
@@ -1686,9 +1934,9 @@ async function zkopirujTagVdReport(tlacitko) {
       }
 
       if (akce === "min") {
-        const sbaleno = hub.classList.toggle("ln-dh-minimized");
-        tlacitko.textContent = sbaleno ? "▢" : "—";
-        tlacitko.setAttribute("aria-label", sbaleno ? "Rozbalit Debug Hub" : "Sbalit Debug Hub");
+        nastavHubMinimalizovany(
+          !hub.classList.contains("ln-dh-minimized")
+        );
         return;
       }
 
@@ -1754,12 +2002,16 @@ async function zkopirujTagVdReport(tlacitko) {
   function otevriHub() {
     const panel = vytvorHub();
     panel.hidden = false;
-    panel.classList.remove("ln-dh-minimized");
 
-    const minTlacitko = panel.querySelector('[data-dh="min"]');
-    if (minTlacitko) {
-      minTlacitko.textContent = "—";
-      minTlacitko.setAttribute("aria-label", "Sbalit Debug Hub");
+    if (panel.classList.contains("ln-dh-minimized")) {
+      nastavHubMinimalizovany(false);
+    } else {
+      const minTlacitko = panel.querySelector('[data-dh="min"]');
+      if (minTlacitko) {
+        minTlacitko.textContent = "—";
+        minTlacitko.setAttribute("aria-label", "Sbalit Debug Hub");
+        minTlacitko.setAttribute("title", "Sbalit");
+      }
     }
 
     aktualizujStavHubu();
@@ -1829,6 +2081,11 @@ async function zkopirujTagVdReport(tlacitko) {
     startGestures: () => {
       otevriHub();
       selectModulu.value = "gestures";
+      spustModul();
+    },
+    startDragLab: () => {
+      otevriHub();
+      selectModulu.value = "cardDragLab";
       spustModul();
     },
     startPerformance: () => {

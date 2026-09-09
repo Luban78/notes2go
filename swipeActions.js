@@ -180,6 +180,25 @@
       aktivni = false;
     };
 
+    element.addEventListener("luba:card-drag-takeover", () => {
+      const zachycenyPointer = pointerId;
+
+      ukonciBlokaciKliku();
+
+      try {
+        if (
+          zachycenyPointer !== null &&
+          element.hasPointerCapture?.(zachycenyPointer)
+        ) {
+          element.releasePointerCapture?.(zachycenyPointer);
+        }
+      } catch (_) {
+        // Drag si pointer převezme hned poté.
+      }
+
+      reset();
+    });
+
     const oznacKlikPoGestu = () => {
       blokovatKlik = true;
 
