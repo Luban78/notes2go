@@ -37,7 +37,8 @@
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
-    bulletDrag: "Bullet – drag / hierarchie"
+    bulletDrag: "Bullet – drag / hierarchie",
+    performance: "Výkon – benchmark"
   };
 
   function jeDebugPrvek(target) {
@@ -891,6 +892,75 @@
     };
   }
 
+  function nactiPerformanceBenchmark() {
+    if (window.LubaNotePerformanceBenchmark?.spust) {
+      return Promise.resolve();
+    }
+
+    const existujici = document.querySelector('script[data-ln-performance-benchmark]');
+
+    if (existujici) {
+      return new Promise((resolve, reject) => {
+        if (window.LubaNotePerformanceBenchmark?.spust) {
+          resolve();
+          return;
+        }
+
+        existujici.addEventListener("load", () => resolve(), { once: true });
+        existujici.addEventListener(
+          "error",
+          () => reject(new Error("performanceBenchmark.js se nepodařilo načíst")),
+          { once: true }
+        );
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "performanceBenchmark.js?v=20260909-perf-baseline-317";
+      script.async = true;
+      script.dataset.lnPerformanceBenchmark = "1";
+      script.addEventListener("load", () => resolve(), { once: true });
+      script.addEventListener(
+        "error",
+        () => reject(new Error("performanceBenchmark.js se nepodařilo načíst")),
+        { once: true }
+      );
+      document.head.appendChild(script);
+    });
+  }
+
+  function spustPerformanceBenchmark() {
+    let zruseno = false;
+    let stopBenchmarku = null;
+
+    zapis("PERF LOAD | připravuji benchmark...");
+
+    nactiPerformanceBenchmark()
+      .then(() => {
+        if (zruseno) return;
+
+        if (!window.LubaNotePerformanceBenchmark?.spust) {
+          throw new Error("Performance benchmark po načtení není dostupný");
+        }
+
+        stopBenchmarku = window.LubaNotePerformanceBenchmark.spust(zapis);
+      })
+      .catch(chyba => {
+        if (zruseno) return;
+        console.error("Debug Hub: Performance benchmark nelze spustit.", chyba);
+        zapis(`PERF ERROR | ${chyba?.message || chyba}`);
+      });
+
+    return () => {
+      zruseno = true;
+
+      if (typeof stopBenchmarku === "function") {
+        stopBenchmarku();
+      }
+    };
+  }
+
   function spustStartupDiagnostiku() {
     const diagnostika = window.LubaNoteStartupDiag;
 
@@ -1214,6 +1284,8 @@
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "bulletDrag") {
       stopAktivnihoModulu = spustBulletDrag();
+    } else if (aktivniModul === "performance") {
+      stopAktivnihoModulu = spustPerformanceBenchmark();
     }
 
     aktualizujStavHubu();
@@ -1686,6 +1758,11 @@ async function zkopirujTagVdReport(tlacitko) {
     startGestures: () => {
       otevriHub();
       selectModulu.value = "gestures";
+      spustModul();
+    },
+    startPerformance: () => {
+      otevriHub();
+      selectModulu.value = "performance";
       spustModul();
     }
   };
