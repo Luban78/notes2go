@@ -25,6 +25,7 @@
     preLongMovePx: 16,
     dwellMs: 320,
     reorderMs: 700,
+    dropMs: 180,
     focusMs: 20,
     insetPx: 8,
     jitterPx: 11,
@@ -40,6 +41,7 @@
     preLongMovePx: { label: "Pohyb před LP", unit: "px", min: 6, max: 30, step: 1 },
     dwellMs: { label: "Dwell / zamknutí", unit: "ms", min: 120, max: 600, step: 20 },
     reorderMs: { label: "Animace přesunu", unit: "ms", min: 0, max: 1000, step: 20 },
+    dropMs: { label: "Položení karty", unit: "ms", min: 0, max: 500, step: 20 },
     focusMs: { label: "Animace scale", unit: "ms", min: 0, max: 500, step: 20 },
     insetPx: { label: "Přesný slot inset", unit: "px", min: 0, max: 20, step: 1 },
     jitterPx: { label: "Tolerance klidu", unit: "px", min: 3, max: 25, step: 1 },
@@ -82,6 +84,7 @@
     "Pohyb před LP": "preLongMovePx",
     "Dwell / zamknutí": "dwellMs",
     "Animace přesunu": "reorderMs",
+    "Položení karty": "dropMs",
     "Animace scale": "focusMs",
     "Přesný slot inset": "insetPx",
     "Tolerance klidu": "jitterPx",
@@ -136,6 +139,7 @@
       `Pohyb před LP: ${hodnoty.preLongMovePx} px`,
       `Dwell / zamknutí: ${hodnoty.dwellMs} ms`,
       `Animace přesunu: ${hodnoty.reorderMs} ms`,
+      `Položení karty: ${hodnoty.dropMs} ms`,
       `Animace scale: ${hodnoty.focusMs} ms`,
       `Přesný slot inset: ${hodnoty.insetPx} px`,
       `Tolerance klidu: ${hodnoty.jitterPx} px`,
@@ -172,7 +176,7 @@
   }
 
   function souhrnNastaveni() {
-    return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | autoEdge=${nastaveni.autoScrollEdgePx}px | autoMax=${nastaveni.autoScrollMaxPx}px/f`;
+    return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | drop=${nastaveni.dropMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | autoEdge=${nastaveni.autoScrollEdgePx}px | autoMax=${nastaveni.autoScrollMaxPx}px/f`;
   }
 
   function vlozDragStyly() {
@@ -1481,6 +1485,59 @@
     spustAutoScroll();
   }
 
+  async function animujPolozeniKarty(stav) {
+    if (
+      !stav?.karta ||
+      !stav?.placeholder ||
+      nastaveni.dropMs <= 0
+    ) {
+      return;
+    }
+
+    const cil = stav.placeholder.getBoundingClientRect();
+    const kartaRect = stav.karta.getBoundingClientRect();
+
+    if (
+      !Number.isFinite(cil.left) ||
+      !Number.isFinite(cil.top)
+    ) {
+      return;
+    }
+
+    const cilLeft =
+      cil.left +
+      Math.max(0, (cil.width - kartaRect.width) / 2);
+
+    const cilTop =
+      cil.top +
+      Math.max(0, (cil.height - kartaRect.height) / 2);
+
+    stav.karta.style.transition = [
+      `left ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
+      `top ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
+      `scale ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`
+    ].join(", ");
+
+    requestAnimationFrame(() => {
+      if (!stav.karta?.isConnected) {
+        return;
+      }
+
+      stav.karta.style.left = `${Math.round(cilLeft)}px`;
+      stav.karta.style.top = `${Math.round(cilTop)}px`;
+      stav.karta.style.scale = "1";
+    });
+
+    emitujDragDebug("DROP_ANIMATION", {
+      card: zkratKlic(stav.dragKlic),
+      ms: nastaveni.dropMs
+    });
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, nastaveni.dropMs + 20)
+    );
+  }
+
   async function dokoncitPresun(x = null, y = null) {
     const stav = aktivniPresun;
     if (!stav) return;
@@ -1503,11 +1560,33 @@
         const vysledekPriPusteni = sestavPoradiSeSlotem(stav, slotPriPusteni.index);
         stav.skupinaAktualni = vysledekPriPusteni.celaSkupina;
         stav.poradiAktualni = vysledekPriPusteni.celePoradi;
+
+        /*
+         * Finger-up pred dokoncenim dwell musi vizualne projit stejnou
+         * animaci jako bezny SLOT_LOCK. Jinak se poradi sice ulozi, ale
+         * obnovKartu() ho na konci vykresli rovnou bez prechodu.
+         */
+        stav.lockAnimating = true;
+        oznacPlaceholder(stav, true);
+        rozmistitKarty(stav.poradiAktualni, stav.mapaPrvkuDrag, { animovat: true });
+
         emitujDragDebug("RELEASE_TARGET", {
           card: zkratKlic(stav.dragKlic),
           from: predchozi,
           to: slotPriPusteni.index,
-          reason: "finger-up"
+          reason: "finger-up",
+          anim: nastaveni.reorderMs
+        });
+
+        if (nastaveni.reorderMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, nastaveni.reorderMs + 24));
+          if (aktivniPresun !== stav) return;
+        }
+        stav.lockAnimating = false;
+        emitujDragDebug("RELEASE_ANIMATION_DONE", {
+          card: zkratKlic(stav.dragKlic),
+          target: stav.cilovyIndexSkupiny,
+          anim: nastaveni.reorderMs
         });
       }
     }
@@ -1530,6 +1609,8 @@
       to: finalniIndex,
       changed: zmeneno
     });
+
+    await animujPolozeniKarty(stav);
 
     try {
       if (stav.pointerId !== null && stav.zdrojKarta?.hasPointerCapture?.(stav.pointerId)) {

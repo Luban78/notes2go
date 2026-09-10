@@ -86,8 +86,11 @@
     return aktualniUserId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
   }
 
-  function ziskejAktualniPoznamku() {
-    const noteId = taskModal?.dataset?.taskId || null;
+  function ziskejAktualniPoznamku(noteIdOverride = null) {
+    const noteId =
+      typeof noteIdOverride === "string" && noteIdOverride
+        ? noteIdOverride
+        : (taskModal?.dataset?.taskId || null);
 
     if (!noteId || typeof loadTask !== "function") {
       return null;
@@ -407,8 +410,13 @@
     }
   }
 
-  async function otevriShareModal() {
-    const task = ziskejAktualniPoznamku();
+  async function otevriShareModal(noteIdOverride = null) {
+    const noteId =
+      typeof noteIdOverride === "string"
+        ? noteIdOverride
+        : null;
+
+    const task = ziskejAktualniPoznamku(noteId);
 
     if (!task?.id) {
       return;

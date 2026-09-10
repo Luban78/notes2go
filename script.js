@@ -3368,6 +3368,13 @@ appMessageNormalButton?.addEventListener(
    ========================================== */
 
 function zpracujAndroidZpet() {
+  if (
+    window.LubaNoteCardActionsMobile
+      ?.zpracujAndroidZpet?.() === true
+  ) {
+    return true;
+  }
+
   const handoffModal =
     document.getElementById(
       "editorHandoffModal"
@@ -4010,41 +4017,23 @@ function otevriMenuKartyUPrvku(loadedCard, index) {
   menu.hidden = false;
 
   if (window.innerWidth < 900) {
-    menu.style.visibility = "hidden";
-    menu.style.bottom = "auto";
+    /*
+     * Mobilní panel má vždy stejné místo nad spodní navigací.
+     * Pokud je aktivní karta nízko, posuneme pouze seznam karet tak,
+     * aby karta zůstala celá viditelná nad panelem.
+     */
+    menu.classList.add("mobilePrimaryActions");
+    menu.style.top = "auto";
+    menu.style.bottom = "90px";
+    menu.style.visibility = "visible";
 
-    requestAnimationFrame(() => {
-      const cardRect = loadedCard.getBoundingClientRect();
-      const menuRect = menu.getBoundingClientRect();
-      const odsazeni = 10;
-      const okraj = 12;
-
-      let menuTop = cardRect.bottom + odsazeni;
-
-      if (
-        menuTop + menuRect.height >
-        window.innerHeight - okraj
-      ) {
-        menuTop =
-          cardRect.top -
-          menuRect.height -
-          odsazeni;
-      }
-
-      menuTop = Math.max(
-        okraj,
-        Math.min(
-          menuTop,
-          window.innerHeight -
-            menuRect.height -
-            okraj
-        )
+    window.LubaNoteCardActionsMobile
+      ?.posunKartuNadPanel?.(
+        loadedCard,
+        menu
       );
-
-      menu.style.top = `${Math.round(menuTop)}px`;
-      menu.style.visibility = "visible";
-    });
   } else {
+    menu.classList.remove("mobilePrimaryActions");
     menu.style.top = "auto";
     menu.style.bottom = "34px";
     menu.style.visibility = "visible";
@@ -4963,23 +4952,58 @@ function zobrazHlavniAkceKarty() {
     "selectionMode"
   );
 
+  const tasks = loadTask();
+  const selectedTask =
+    tasks[selectedCardIndex] || null;
+
+  const textPripnuti =
+    selectedTask?.pinned === true
+      ? "Odepnout"
+      : "Připnout";
+
+  const textHotovo =
+    selectedTask?.completed === true
+      ? "Vrátit"
+      : "Hotovo";
+
+  const ikonaPripnuti =
+    selectedTask?.pinned === true
+      ? "odepnout"
+      : "pripnout";
+
+  const ikonaHotovo =
+    selectedTask?.completed === true
+      ? "zpet"
+      : "hotovo";
+
+  const sdileniZakazano =
+    selectedTask?.isSecret === true;
+
   if (!pouzivaSvgIkonyRozhrani()) {
     if (window.innerWidth < 900) {
       cardMenu.innerHTML = `
+        <button type="button" data-card-action="pin">
+          ${selectedTask?.pinned === true ? "📍" : "📌"} ${textPripnuti}
+        </button>
+
+        <button type="button" data-card-action="select">
+          ☑️ Označit
+        </button>
+
         <button type="button" data-card-action="plan">
           🕒 Termín
         </button>
 
-        <button type="button" data-card-action="pin">
-          📌 Připnout
+        <button type="button" data-card-action="complete">
+          ${selectedTask?.completed === true ? "↩️" : "✅"} ${textHotovo}
+        </button>
+
+        <button type="button" data-card-action="share" ${sdileniZakazano ? 'disabled aria-disabled="true"' : ""}>
+          🔗 Sdílet
         </button>
 
         <button type="button" data-card-action="delete">
           🗑️ Smazat
-        </button>
-
-        <button type="button" data-card-action="more">
-          ⋯ Více akcí
         </button>
       `;
     } else {
@@ -5012,23 +5036,31 @@ function zobrazHlavniAkceKarty() {
 
     return;
   }
-  
+
   if (window.innerWidth < 900) {
     cardMenu.innerHTML = `
+      <button type="button" class="lubaHasIcon" data-card-action="pin">
+        <span class="lubaActionIcon" data-luba-icon="${ikonaPripnuti}" aria-hidden="true"></span><span>${textPripnuti}</span>
+      </button>
+
+      <button type="button" class="lubaHasIcon" data-card-action="select">
+        <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span><span>Označit</span>
+      </button>
+
       <button type="button" class="lubaHasIcon" data-card-action="plan">
         <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span><span>Termín</span>
       </button>
 
-      <button type="button" class="lubaHasIcon" data-card-action="pin">
-        <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span><span>Připnout</span>
+      <button type="button" class="lubaHasIcon" data-card-action="complete">
+        <span class="lubaActionIcon" data-luba-icon="${ikonaHotovo}" aria-hidden="true"></span><span>${textHotovo}</span>
+      </button>
+
+      <button type="button" class="lubaHasIcon" data-card-action="share" ${sdileniZakazano ? 'disabled aria-disabled="true"' : ""}>
+        <span class="lubaActionIcon" data-luba-icon="odkaz" aria-hidden="true"></span><span>Sdílet</span>
       </button>
 
       <button type="button" class="lubaHasIcon" data-card-action="delete">
         <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Smazat</span>
-      </button>
-
-      <button type="button" class="lubaHasIcon" data-card-action="more">
-        <span class="lubaActionIcon" data-luba-icon="vice" aria-hidden="true"></span><span>Více akcí</span>
       </button>
     `;
 
@@ -5575,6 +5607,37 @@ cardMenu.addEventListener("click", async (event) => {
     return;
   }
   
+  if (action === "share") {
+    const tasks = loadTask();
+    const selectedTask = tasks[selectedCardIndex];
+
+    if (!selectedTask || selectedTask.isSecret === true) {
+      return;
+    }
+
+    const idKarty =
+      selectedTask.id ||
+      await zajistiStabilniIdKarty(
+        selectedCardIndex
+      );
+
+    if (!idKarty) {
+      return;
+    }
+
+    cardMenu.hidden = true;
+
+    if (
+      typeof window.LubaNoteSharingInvitations
+        ?.otevriSdileni === "function"
+    ) {
+      await window.LubaNoteSharingInvitations
+        .otevriSdileni(idKarty);
+    }
+
+    return;
+  }
+
   if (action === "plan") {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
@@ -5597,9 +5660,17 @@ cardMenu.addEventListener("click", async (event) => {
     }
     
     cardMenu.hidden = true;
+
+    if (
+      window.innerWidth < 900 &&
+      window.LubaNoteCardActionsMobile
+        ?.otevriTermin?.(selectedTask) === true
+    ) {
+      return;
+    }
     
-    /* Celá poznámka se plánuje jen jedním způsobem:
-       přes její vlastní datum + čas + opakování v editoru. */
+    /* Desktop zatím zachovává původní cestu přes editor.
+       Jeho UX budeme ladit až po dokončení APK. */
     await openTaskEditorById(selectedTask.id);
 
     if (
@@ -5659,6 +5730,14 @@ document.addEventListener("pointerdown", (event) => {
     !cardMenu.hidden &&
     !cardMenu.contains(event.target)
   ) {
+    /*
+     * Tap na jinou kartu necháme projít. Její dvojtap pouze přepne
+     * aktivní kartu, zatímco panel zůstává na stejném místě dole.
+     */
+    if (event.target.closest?.(".taskCard")) {
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
     

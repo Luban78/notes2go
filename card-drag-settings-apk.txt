@@ -4,6 +4,7 @@ Long press: 430 ms
 Pohyb před LP: 16 px
 Dwell / zamknutí: 320 ms
 Animace přesunu: 700 ms
+Položení karty: 180 ms
 Animace scale: 20 ms
 Přesný slot inset: 8 px
 Tolerance klidu: 11 px
