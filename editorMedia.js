@@ -3079,7 +3079,39 @@
       }
     } else {
       range.collapse(false);
-      range.insertNode(figure);
+
+      /*
+       * DŮLEŽITÝ INVARIANT – HLAVNÍ EDITOR / FLOAT OBRÁZKY
+       * ----------------------------------------------------
+       * figure.lubaNoteImage musí být v hlavním editoru samostatný
+       * PŘÍMÝ potomek #modalRichText. imageFloatCaretFix.js na tomto
+       * tvaru záměrně stojí: jen tak umí podle výšky tapu vytvářet
+       * skutečné .lubaNoteImageTextLine řádky vedle 25/50% floatu.
+       *
+       * Prosté range.insertNode(figure) vloží figure při caretu uvnitř
+       * <div> přímo DO tohoto divu. Pak zůstane funkční jen první
+       * fyzický řádek vytvořený níže a další volná plocha vedle obrázku
+       * nemá caret cíle. Používáme proto už existující bezpečnou cestu,
+       * která blok v místě caretu rozdělí a figure vloží mezi kořenové
+       * bloky editoru. Obsah ani formátování okolního textu nemaže.
+       */
+      let cilY = 0;
+
+      try {
+        const rect = range.getBoundingClientRect();
+
+        if (Number.isFinite(rect?.top)) {
+          cilY = rect.top + (rect.height || 0) / 2;
+        }
+      } catch (_) {
+        // Pro běžné vložení není Y potřeba; používá se jen u cíle na obrázku.
+      }
+
+      vlozFigureNaPresnouPozici(
+        figure,
+        range,
+        cilY
+      );
 
       const radek = vytvorRadekProTextZaObrazkem();
       figure.after(radek);
@@ -4408,6 +4440,25 @@
    * kurzoru, pokud takové označení nemá. Barvy, B/I/U, odkazy a ostatní
    * významové formátování tím zůstávají nedotčené.
    */
+
+  /* ============================================================
+     🔒 FROZEN – NEMĚNIT BEZ CÍLENÉ DIAGNOSTIKY
+     ------------------------------------------------------------
+     Tato funkce je odladěná ochrana proti chybě Android WebView,
+     která po Backspace/Delete při spojení řádků vytváří anonymní
+     SPAN s už systémově zvětšeným inline font-size (např. 16.25px).
+     WebView by tuto hodnotu zvětšil znovu a text by po Backspace
+     viditelně narostl.
+
+     Oprava musí zachytit i variantu Chrome/WebView 152, kdy kurzor
+     zůstane v předchozím textovém uzlu a vadný SPAN je jeho soused
+     uvnitř sloučeného DIVu.
+
+     NEMĚNIT / NEZJEDNODUŠOVAT bez:
+     1) záznamu z Visual Debugu,
+     2) kontroly syrového DOM po deleteContentBackward,
+     3) regresního testu Backspace + explicitních velikostí písma.
+     ============================================================ */
 
   function opravWebViewTypografiiUKurzoru() {
     const vyber = window.getSelection();

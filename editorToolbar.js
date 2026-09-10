@@ -2021,6 +2021,28 @@
   }
 
 
+  /* ============================================================
+     🔒 FROZEN – NEMĚNIT BEZ CÍLENÉ DIAGNOSTIKY
+     ------------------------------------------------------------
+     Tato funkce určuje LOGICKOU velikost písma LubaNote, ne fyzickou
+     velikost vykreslenou Android WebView.
+
+     Android může systémovým font scale změnit computed hodnotu,
+     např. logických 13px vykreslit jako 16.25px nebo 24px jako 30px.
+     Proto se NESMÍ vrátit k obyčejnému getComputedStyle(font-size)
+     ani k pevnému fallbacku 18.
+
+     Pravidla:
+     - explicitní velikost číst nejdřív z data-velikost-pisma,
+     - starší explicitní velikost lze vzít z povoleného inline font-size,
+     - základní neformátovaný text číst z CSS --font-size,
+     - tlacitkaVelikosti je NodeList: pro mapování použít Array.from(...),
+       ne tlacitkaVelikosti.map(...).
+
+     NEMĚNIT bez Visual Debugu a regresního testu přepínání mezi
+     základním textem a 12/14/16/18/20/24px + Backspace testu.
+     ============================================================ */
+
   function zjistiVelikostPodKurzorem() {
     const vyber = window.getSelection();
 
