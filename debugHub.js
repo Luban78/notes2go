@@ -40,7 +40,7 @@
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
     cardDrag: "Karty – drag (produkce OFF)",
-    cardDragLab: "Karty – Drag Lab Testy 1/2/3",
+    cardDragLab: "Karty – Drag Lab tuning panel",
     performance: "Výkon – benchmark"
   };
 
@@ -1103,7 +1103,7 @@
 
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = "cardDragLab.js?v=20260909-card-drag-lab-tests-335";
+      script.src = "cardDragLab.js?v=20260910-card-drag-lab-tuning-344";
       script.async = true;
       script.dataset.lnCardDragLab = "1";
       script.addEventListener("load", () => resolve(), { once: true });
@@ -1129,7 +1129,7 @@
           throw new Error("Drag Lab API neni dostupne");
         }
         stopLabu = window.LubaNoteCardDragLab.spust(zapis);
-        zapis("DRAG LAB READY | TESTY 1/2/3: 6 stejnych karet; produkcni drag je docasne vypnuty");
+        zapis("DRAG LAB READY | DELAYED LOCK: karty pri prejizdeni stoji; cil se zamkne az po kratkem klidu nad presnym slotem; produkcni drag je docasne vypnuty");
         if (hub && !hub.classList.contains("ln-dh-minimized")) {
           nastavHubMinimalizovany(true);
         }
