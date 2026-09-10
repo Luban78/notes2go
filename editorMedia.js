@@ -4495,11 +4495,19 @@
 
     if (
       kotva?.nodeType === Node.TEXT_NODE &&
-      kotva.parentElement === modalRichText
+      modalRichText.contains(kotva)
     ) {
       const delkaTextu = kotva.textContent?.length || 0;
       const kandidati = [];
 
+      /*
+       * Po spojení bloků je v Chrome/WebView 152 běžná struktura:
+       *   #modalRichText > DIV > #text + SPAN
+       *
+       * Proto nesmí být textový uzel omezen jen na přímého potomka
+       * editoru. Stačí, že skutečně leží uvnitř editoru. Sousední uzel
+       * se pak kontroluje v jeho reálném rodiči (typicky právě DIV).
+       */
       if (vyber.anchorOffset === delkaTextu) {
         kandidati.push(kotva.nextSibling);
       }
@@ -4512,6 +4520,7 @@
         if (
           kandidat instanceof HTMLElement &&
           kandidat.tagName === "SPAN" &&
+          modalRichText.contains(kandidat) &&
           !kandidat.hasAttribute("data-velikost-pisma") &&
           Boolean(kandidat.style.fontSize) &&
           kandidat.style.fontFamily === "inherit" &&
