@@ -2172,11 +2172,25 @@
     }
 
     /*
-     * Neformátovaný text používá výchozí velikost toolbaru. Záměrně
-     * zde už NEPOUŽÍVÁME getComputedStyle(), protože na Androidu vrací
-     * fyzicky přepočtenou hodnotu podle systémového font scale.
+     * Neformátovaný text používá aktuální základní velikost aplikace
+     * z CSS proměnné --font-size. Tu čteme přímo jako LOGICKOU hodnotu
+     * (např. 13px), nikoli přes computed font-size konkrétního textu,
+     * protože Android WebView může vykreslenou hodnotu násobit podle
+     * systémového font scale (např. 13 -> 16.25 px).
      */
-    return "18";
+    const vychoziVelikost =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-size")
+        .trim();
+
+    const cisloVychoziVelikosti =
+      parseFloat(vychoziVelikost);
+
+    if (Number.isFinite(cisloVychoziVelikosti)) {
+      return String(cisloVychoziVelikosti);
+    }
+
+    return "16";
   }
 
 
