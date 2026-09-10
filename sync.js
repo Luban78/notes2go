@@ -960,6 +960,48 @@ function pridejCekajiciSmazani(
   ulozCekajiciSmazani(bezStejnehoId);
 }
 
+/*
+ * Hromadné trvalé smazání může obsahovat stovky poznámek.
+ * Frontu tombstonů proto načteme a uložíme jen jednou.
+ */
+function pridejCekajiciSmazaniHromadne(
+  poznamky,
+  deletedAt = new Date().toISOString()
+) {
+  const seznam = (Array.isArray(poznamky) ? poznamky : [])
+    .filter((poznamka) => poznamka?.id);
+
+  if (seznam.length === 0) {
+    return 0;
+  }
+
+  const mapa = new Map(
+    nactiCekajiciSmazani()
+      .filter((zaznam) => zaznam?.id)
+      .map((zaznam) => [zaznam.id, zaznam])
+  );
+
+  const deviceId = getDeviceId();
+
+  seznam.forEach((poznamka) => {
+    const meta = ziskejCloudSyncMeta(poznamka.id);
+    const expectedRevision =
+      Number.isFinite(Number(meta?.revision))
+        ? Number(meta.revision)
+        : 0;
+
+    mapa.set(poznamka.id, {
+      id: poznamka.id,
+      deletedAt,
+      deviceId,
+      expectedRevision
+    });
+  });
+
+  ulozCekajiciSmazani(Array.from(mapa.values()));
+  return seznam.length;
+}
+
 function odeberCekajiciSmazani(noteId) {
   if (!noteId) {
     return;
@@ -4500,7 +4542,9 @@ window.LubaNoteSync = {
   ziskejIdPoznamekEditovanychJinde,
   ziskejKonflikty: () =>
     Array.from(aktivniKonfliktySyncu.values()),
-  ziskejCloudSyncMeta
+  ziskejCloudSyncMeta,
+  zaradSmazaniHromadne:
+    pridejCekajiciSmazaniHromadne
 };
 
 let casovacSyncuPoAktivaci = null;

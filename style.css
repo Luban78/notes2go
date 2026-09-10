@@ -2927,6 +2927,11 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   touch-action: manipulation;
 }
 
+#calendarMonthTitle[data-month-picker-enabled="false"] {
+  cursor: default;
+  touch-action: auto;
+}
+
 #calendarMonthTitle.calendarMonthTitleActive {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
@@ -9966,6 +9971,86 @@ body.trashScreenOpen {
   line-height: 1.35;
 }
 
+.trashModeTabs,
+.trashBulkBar {
+  width: min(100%, 680px);
+  margin: 0 auto 12px;
+  box-sizing: border-box;
+}
+
+.trashModeTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trashModeTabs[hidden],
+.trashBulkBar[hidden] {
+  display: none !important;
+}
+
+/* Po zamknutí Secret režimu nesmí zůstat v otevřeném běžném Koši
+   ani samotný náznak tajné části. */
+body:not(.secretModeActive) .trashModeTabs {
+  display: none !important;
+}
+
+.trashModeTab,
+.trashBulkButton {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(var(--font-size) - 1px);
+  font-weight: 700;
+  line-height: 1.15;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trashModeTab.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: white;
+}
+
+.trashModeTab:active,
+.trashBulkButton:active {
+  transform: scale(0.97);
+}
+
+.trashBulkBar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trashBulkButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.trashBulkDeleteButton {
+  border-color: color-mix(
+    in srgb,
+    #b24a4a 58%,
+    var(--color-border)
+  );
+  color: #c96565;
+}
+
+.trashBulkButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
 .trashList {
   display: grid;
   grid-template-columns: 1fr;
@@ -10000,6 +10085,11 @@ body.trashScreenOpen {
   text-align: left;
 }
 
+.trashCard.trashCardSelected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
 /* Tajný Koš zůstává vizuálně diskrétní – žádná informace
    o Secret režimu se nepřenáší do běžného Koše. */
 .trashScreen[data-secret="true"] .trashCard {
@@ -10008,6 +10098,11 @@ body.trashScreenOpen {
     var(--color-accent) 22%,
     transparent
   );
+}
+
+.trashScreen[data-secret="true"] .trashCard.trashCardSelected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .trashCardHeader h3 {
@@ -10124,8 +10219,13 @@ body.trashScreenOpen {
 /* Na širší obrazovce využijeme prostor stejně jako hlavní
    dvousloupcové karty, telefon zůstává přehledný v jednom sloupci. */
 @media (min-width: 760px) {
+  .trashModeTabs,
+  .trashBulkBar,
   .trashList {
     width: min(100%, 900px);
+  }
+
+  .trashList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -10137,6 +10237,7 @@ body.trashScreenOpen {
 /* Jen na opravdu úzkém displeji dáme akce pod sebe,
    aby se dlouhý český text tlačítek nemačkal. */
 @media (max-width: 340px) {
+  .trashBulkBar,
   .trashCardActions {
     grid-template-columns: 1fr;
   }

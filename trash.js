@@ -3,6 +3,8 @@
    --------------------------------------------------
    - běžný Koš je úplně oddělený od Secret Koše
    - Secret názvy/obsah se do běžného UI nikdy nevypisují
+   - při odemčeném Secret režimu jsou filtry Normální / Tajné
+   - hromadný výběr vždy pracuje jen s právě zobrazeným Košem
    - přesun do Koše se synchronizuje jako stav poznámky
    - trvalé smazání vytvoří serverový tombstone
    - položky starší 30 dnů se smažou při nejbližší dostupné kontrole
@@ -19,6 +21,20 @@
     document.getElementById("trashTitle");
   const trashInfo =
     document.getElementById("trashInfo");
+  const trashModeTabs =
+    document.getElementById("trashModeTabs");
+  const trashNormalTab =
+    document.getElementById("trashNormalTab");
+  const trashSecretTab =
+    document.getElementById("trashSecretTab");
+  const trashBulkBar =
+    document.getElementById("trashBulkBar");
+  const trashSelectAllButton =
+    document.getElementById("trashSelectAllButton");
+  const trashBulkDeleteButton =
+    document.getElementById("trashBulkDeleteButton");
+  const trashBulkDeleteText =
+    document.getElementById("trashBulkDeleteText");
   const trashList =
     document.getElementById("trashList");
   const trashEmpty =
@@ -31,9 +47,14 @@
     document.getElementById("trashConfirmCancel");
   const trashConfirmDelete =
     document.getElementById("trashConfirmDelete");
+  const trashConfirmDeleteText =
+    document.getElementById("trashConfirmDeleteText");
 
   let zobrazenTajnyKos = false;
-  let idProTrvaleSmazani = null;
+  let aktualniPoznamkyVKosi = [];
+  let vybranaId = new Set();
+  let idProTrvaleSmazani = [];
+  let potvrzujeHromadneSmazani = false;
 
   function t(klic, zaloha, hodnoty = {}) {
     return window.LubaNoteI18n?.t?.(
@@ -43,12 +64,10 @@
     ) || zaloha;
   }
 
-  function jeSecretFiltrAktivni() {
+  function jeTajnyRezimOdemceny() {
     return Boolean(
       typeof tajnyRezimOdemceny !== "undefined" &&
-      tajnyRezimOdemceny === true &&
-      typeof filtrTajnychPoznamekAktivni !== "undefined" &&
-      filtrTajnychPoznamekAktivni === true
+      tajnyRezimOdemceny === true
     );
   }
 
@@ -155,6 +174,10 @@
     karta.className = "trashCard";
     karta.dataset.noteId = task.id || "";
 
+    if (vybranaId.has(task.id)) {
+      karta.classList.add("trashCardSelected");
+    }
+
     const hlavicka = document.createElement("div");
     hlavicka.className = "trashCardHeader";
 
@@ -215,6 +238,8 @@
         );
 
       if (uspesne) {
+        vybranaId.delete(task.id);
+
         /*
          * obnovPoznamkuZKose() už změnu předala centrální sync frontě.
          * Nespouštíme zde druhý okamžitý sync nad stejnou obnovou.
@@ -227,12 +252,7 @@
     });
 
     trvaleSmazat.addEventListener("click", () => {
-      idProTrvaleSmazani = task.id;
-      trashConfirmText.textContent = t(
-        "trash.deleteConfirm",
-        "Tato poznámka bude smazána trvale a nepůjde obnovit."
-      );
-      trashConfirmModal.hidden = false;
+      otevriPotvrzeniTrvalehoSmazani([task.id], false);
     });
 
     akce.append(obnovit, trvaleSmazat);
@@ -240,6 +260,115 @@
 
     obnovIkonyVKontejneru(karta);
     return karta;
+  }
+
+  function vycistiNeplatnyVyber() {
+    const aktualniId = new Set(
+      aktualniPoznamkyVKosi
+        .map((task) => task?.id)
+        .filter(Boolean)
+    );
+
+    vybranaId = new Set(
+      Array.from(vybranaId)
+        .filter((id) => aktualniId.has(id))
+    );
+  }
+
+  function jsouVybraneVsechny() {
+    return (
+      aktualniPoznamkyVKosi.length > 0 &&
+      vybranaId.size === aktualniPoznamkyVKosi.length
+    );
+  }
+
+  function aktualizujVyberVKartach() {
+    trashList?.querySelectorAll(".trashCard")
+      .forEach((karta) => {
+        karta.classList.toggle(
+          "trashCardSelected",
+          vybranaId.has(karta.dataset.noteId)
+        );
+      });
+  }
+
+  function nastavHromadneOvladani() {
+    if (!trashBulkBar) {
+      return;
+    }
+
+    const maPolozky = aktualniPoznamkyVKosi.length > 0;
+    trashBulkBar.hidden = !maPolozky;
+
+    if (!maPolozky) {
+      vybranaId.clear();
+    }
+
+    const vseVybrane = jsouVybraneVsechny();
+
+    if (trashSelectAllButton) {
+      trashSelectAllButton.textContent = vseVybrane
+        ? t("trash.clearSelection", "Zrušit označení")
+        : t("trash.selectAll", "Označit vše");
+    }
+
+    if (trashBulkDeleteButton) {
+      trashBulkDeleteButton.disabled = vybranaId.size === 0;
+    }
+
+    if (trashBulkDeleteText) {
+      trashBulkDeleteText.textContent = t(
+        "trash.deleteSelected",
+        "Trvale smazat ({count})",
+        { count: vybranaId.size }
+      );
+    }
+  }
+
+  function nastavFiltryKose() {
+    const secretOdemceny = jeTajnyRezimOdemceny();
+
+    if (trashModeTabs) {
+      trashModeTabs.hidden = !secretOdemceny;
+      trashModeTabs.setAttribute(
+        "aria-label",
+        t("trash.typeTabsLabel", "Typ koše")
+      );
+    }
+
+    if (trashNormalTab) {
+      trashNormalTab.textContent = t(
+        "trash.normalTab",
+        "Normální"
+      );
+      trashNormalTab.classList.toggle(
+        "active",
+        !zobrazenTajnyKos
+      );
+      trashNormalTab.setAttribute(
+        "aria-selected",
+        String(!zobrazenTajnyKos)
+      );
+    }
+
+    if (trashSecretTab) {
+      trashSecretTab.textContent = t(
+        "trash.secretTab",
+        "Tajné 🔒"
+      );
+      trashSecretTab.classList.toggle(
+        "active",
+        zobrazenTajnyKos
+      );
+      trashSecretTab.setAttribute(
+        "aria-selected",
+        String(zobrazenTajnyKos)
+      );
+    }
+
+    if (trashScreen) {
+      trashScreen.dataset.secret = String(zobrazenTajnyKos);
+    }
   }
 
   function nastavTextyKose() {
@@ -260,6 +389,13 @@
       "aria-label",
       t("trash.close", "Zavřít Koš")
     );
+
+    if (trashConfirmDeleteText) {
+      trashConfirmDeleteText.textContent = t(
+        "trash.deleteForever",
+        "Smazat trvale"
+      );
+    }
   }
 
   async function renderKos() {
@@ -269,7 +405,7 @@
 
     if (
       zobrazenTajnyKos &&
-      !jeSecretFiltrAktivni()
+      !jeTajnyRezimOdemceny()
     ) {
       zavriKos();
       return;
@@ -277,25 +413,30 @@
 
     await uklidPoznamkyVKosiPo30Dnech();
 
-    const poznamky = nactiPoznamkyVKosi({
+    aktualniPoznamkyVKosi = nactiPoznamkyVKosi({
       tajne: zobrazenTajnyKos
     }).sort((a, b) =>
       new Date(b?.trashedAt || 0).getTime() -
       new Date(a?.trashedAt || 0).getTime()
     );
 
+    vycistiNeplatnyVyber();
+
     trashList.innerHTML = "";
-    trashEmpty.hidden = poznamky.length !== 0;
+    trashEmpty.hidden = aktualniPoznamkyVKosi.length !== 0;
     trashEmpty.textContent = t(
       "trash.empty",
       "Koš je prázdný."
     );
 
-    poznamky.forEach((task) => {
+    aktualniPoznamkyVKosi.forEach((task) => {
       trashList.append(vytvorKartu(task));
     });
 
+    nastavFiltryKose();
+    nastavHromadneOvladani();
     nastavTextyKose();
+    obnovIkonyVKontejneru(trashBulkBar);
   }
 
   async function poZmeneKose({ synchronizovat = true } = {}) {
@@ -322,12 +463,35 @@
     }
   }
 
+  async function prepniKos(tajne) {
+    if (tajne && !jeTajnyRezimOdemceny()) {
+      return;
+    }
+
+    if (zobrazenTajnyKos === tajne) {
+      return;
+    }
+
+    zobrazenTajnyKos = tajne;
+    vybranaId.clear();
+    idProTrvaleSmazani = [];
+    potvrzujeHromadneSmazani = false;
+
+    if (trashConfirmModal) {
+      trashConfirmModal.hidden = true;
+    }
+
+    await renderKos();
+  }
+
   async function otevriKos() {
     if (!trashScreen) {
       return;
     }
 
-    zobrazenTajnyKos = jeSecretFiltrAktivni();
+    /* Po odemknutí Secret režimu je výchozí právě Tajný koš. */
+    zobrazenTajnyKos = jeTajnyRezimOdemceny();
+    vybranaId.clear();
     trashScreen.hidden = false;
     trashScreen.dataset.secret = String(zobrazenTajnyKos);
     document.body.classList.add("trashScreenOpen");
@@ -344,12 +508,51 @@
     trashScreen.removeAttribute("data-secret");
     document.body.classList.remove("trashScreenOpen");
     trashList.innerHTML = "";
+    aktualniPoznamkyVKosi = [];
+    vybranaId.clear();
     zobrazenTajnyKos = false;
-    idProTrvaleSmazani = null;
+    idProTrvaleSmazani = [];
+    potvrzujeHromadneSmazani = false;
 
     if (trashConfirmModal) {
       trashConfirmModal.hidden = true;
     }
+  }
+
+  function otevriPotvrzeniTrvalehoSmazani(
+    ids,
+    hromadne
+  ) {
+    const bezpecnaId = (Array.isArray(ids) ? ids : [])
+      .filter(Boolean);
+
+    if (bezpecnaId.length === 0) {
+      return;
+    }
+
+    idProTrvaleSmazani = bezpecnaId;
+    potvrzujeHromadneSmazani = Boolean(hromadne);
+
+    if (potvrzujeHromadneSmazani) {
+      trashConfirmText.textContent = zobrazenTajnyKos
+        ? t(
+            "trash.deleteManySecretConfirm",
+            "Opravdu chceš trvale smazat {count} položek z tajného koše? Tuto akci nepůjde vrátit.",
+            { count: bezpecnaId.length }
+          )
+        : t(
+            "trash.deleteManyNormalConfirm",
+            "Opravdu chceš trvale smazat {count} položek z normálního koše? Tuto akci nepůjde vrátit.",
+            { count: bezpecnaId.length }
+          );
+    } else {
+      trashConfirmText.textContent = t(
+        "trash.deleteConfirm",
+        "Tato poznámka bude smazána trvale a nepůjde obnovit."
+      );
+    }
+
+    trashConfirmModal.hidden = false;
   }
 
   trashButton?.addEventListener("click", () => {
@@ -358,30 +561,81 @@
 
   trashBackButton?.addEventListener("click", zavriKos);
 
+  trashNormalTab?.addEventListener("click", () => {
+    prepniKos(false);
+  });
+
+  trashSecretTab?.addEventListener("click", () => {
+    prepniKos(true);
+  });
+
+  trashSelectAllButton?.addEventListener("click", () => {
+    if (jsouVybraneVsechny()) {
+      vybranaId.clear();
+    } else {
+      vybranaId = new Set(
+        aktualniPoznamkyVKosi
+          .map((task) => task?.id)
+          .filter(Boolean)
+      );
+    }
+
+    aktualizujVyberVKartach();
+    nastavHromadneOvladani();
+  });
+
+  trashBulkDeleteButton?.addEventListener("click", () => {
+    if (vybranaId.size === 0) {
+      return;
+    }
+
+    otevriPotvrzeniTrvalehoSmazani(
+      Array.from(vybranaId),
+      true
+    );
+  });
+
   trashConfirmCancel?.addEventListener("click", () => {
-    idProTrvaleSmazani = null;
+    idProTrvaleSmazani = [];
+    potvrzujeHromadneSmazani = false;
     trashConfirmModal.hidden = true;
   });
 
   trashConfirmDelete?.addEventListener("click", async () => {
-    if (!idProTrvaleSmazani) {
+    if (idProTrvaleSmazani.length === 0) {
       return;
     }
 
-    const id = idProTrvaleSmazani;
-    idProTrvaleSmazani = null;
+    const ids = [...idProTrvaleSmazani];
+    const hromadne = potvrzujeHromadneSmazani;
+    idProTrvaleSmazani = [];
+    potvrzujeHromadneSmazani = false;
     trashConfirmDelete.disabled = true;
 
     try {
-      const uspesne =
-        await smazPoznamkuZKoseTrvale(
-          id,
+      let uspesne = false;
+
+      if (hromadne) {
+        const vysledek =
+          await smazPoznamkyZKoseTrvale(
+            ids,
+            zobrazenTajnyKos
+          );
+
+        uspesne = Boolean(
+          vysledek?.lokalneUlozeno &&
+          vysledek?.pocet > 0
+        );
+      } else {
+        uspesne = await smazPoznamkuZKoseTrvale(
+          ids[0],
           zobrazenTajnyKos
         );
-
-      trashConfirmModal.hidden = true;
+      }
 
       if (uspesne) {
+        vybranaId.clear();
+        trashConfirmModal.hidden = true;
         await poZmeneKose();
       }
     } finally {
@@ -423,7 +677,8 @@
       !trashScreen?.hidden
     ) {
       if (!trashConfirmModal?.hidden) {
-        idProTrvaleSmazani = null;
+        idProTrvaleSmazani = [];
+        potvrzujeHromadneSmazani = false;
         trashConfirmModal.hidden = true;
         return;
       }

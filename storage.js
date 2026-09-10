@@ -1916,6 +1916,132 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
   return true;
 }
 
+async function smazPoznamkyZKoseTrvale(
+  noteIds,
+  tajne = false
+) {
+  const bezpecnaId = new Set(
+    (Array.isArray(noteIds) ? noteIds : [])
+      .filter(Boolean)
+  );
+
+  if (bezpecnaId.size === 0) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: true
+    };
+  }
+
+  if (
+    tajne &&
+    (
+      typeof tajnyRezimOdemceny === "undefined" ||
+      tajnyRezimOdemceny !== true
+    )
+  ) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  if (
+    typeof window.LubaNoteSync
+      ?.zaradSmazaniHromadne !== "function"
+  ) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  const zdroj = tajne
+    ? [...desifrovaneTajnePoznamky]
+    : nactiBeznePoznamkyZUloziste();
+
+  const mazanePoznamky = zdroj.filter(
+    (task) =>
+      task?.id &&
+      bezpecnaId.has(task.id) &&
+      jePoznamkaVKosi(task)
+  );
+
+  if (mazanePoznamky.length === 0) {
+    return {
+      pocet: 0,
+      lokalneUlozeno: true
+    };
+  }
+
+  const mazanaId = new Set(
+    mazanePoznamky.map((task) => task.id)
+  );
+  const zbyvajici = zdroj.filter(
+    (task) => !mazanaId.has(task?.id)
+  );
+
+  zvysReviziLokalnichZmenPoznamek();
+
+  if (tajne) {
+    nastavDesifrovaneTajnePoznamky(zbyvajici);
+
+    const ulozeno =
+      await ulozTajnePoznamkySifrovaneHned(zbyvajici);
+
+    if (ulozeno === false) {
+      /* Při selhání šifrovaného zápisu vrátíme i paměťový snapshot. */
+      nastavDesifrovaneTajnePoznamky(zdroj);
+      return {
+        pocet: 0,
+        lokalneUlozeno: false
+      };
+    }
+  } else {
+    const ulozeno =
+      await ulozBeznePoznamkyPrimo(zbyvajici);
+
+    if (ulozeno === false) {
+      return {
+        pocet: 0,
+        lokalneUlozeno: false
+      };
+    }
+  }
+
+  /*
+   * UI na síť nečeká. Tombstony zařadíme hromadně do bezpečné
+   * pending fronty a trash.js následně spustí jediný čerstvý sync.
+   */
+  try {
+    window.LubaNoteSync.zaradSmazaniHromadne(
+      mazanePoznamky
+    );
+  } catch (error) {
+    console.error(
+      "Hromadné zařazení tombstonů Koše selhalo:",
+      error
+    );
+
+    /* Bez tombstonů nesmí cloud později smazané karty znovu oživit. */
+    if (tajne) {
+      nastavDesifrovaneTajnePoznamky(zdroj);
+      await ulozTajnePoznamkySifrovaneHned(zdroj);
+    } else {
+      await ulozBeznePoznamkyPrimo(zdroj);
+    }
+
+    return {
+      pocet: 0,
+      lokalneUlozeno: false
+    };
+  }
+
+  return {
+    pocet: mazanePoznamky.length,
+    lokalneUlozeno: true
+  };
+}
+
 async function uklidPoznamkyVKosiPo30Dnech() {
   const LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
   const hranice = Date.now() - LIMIT_MS;

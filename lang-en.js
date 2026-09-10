@@ -456,7 +456,15 @@ window.LubaNoteLanguagePacks.push({
     "trash.moveMessage": "The note will be moved to Trash and can be restored later.",
     "trash.moveAction": "Move to Trash",
     "trash.moveManyMessage": "Move {count} selected notes to Trash?",
-    "trash.movedMany": "Moved to Trash: {count} notes"
+    "trash.movedMany": "Moved to Trash: {count} notes",
+    "trash.normalTab": "Normal",
+    "trash.secretTab": "Secret 🔒",
+    "trash.typeTabsLabel": "Trash type",
+    "trash.selectAll": "Select all",
+    "trash.clearSelection": "Clear selection",
+    "trash.deleteSelected": "Delete forever ({count})",
+    "trash.deleteManyNormalConfirm": "Permanently delete {count} items from normal Trash? This action cannot be undone.",
+    "trash.deleteManySecretConfirm": "Permanently delete {count} items from Secret Trash? This action cannot be undone."
   },
 
   texty: {

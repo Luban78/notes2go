@@ -462,7 +462,15 @@ window.LubaNoteLanguagePacks.push({
     "trash.moveMessage": "Poznámka se přesune do Koše a můžeš ji později obnovit.",
     "trash.moveAction": "Do koše",
     "trash.moveManyMessage": "Přesunout {count} vybraných poznámek do Koše?",
-    "trash.movedMany": "Přesunuto do Koše: {count} poznámek"
+    "trash.movedMany": "Přesunuto do Koše: {count} poznámek",
+    "trash.normalTab": "Normální",
+    "trash.secretTab": "Tajné 🔒",
+    "trash.typeTabsLabel": "Typ koše",
+    "trash.selectAll": "Označit vše",
+    "trash.clearSelection": "Zrušit označení",
+    "trash.deleteSelected": "Trvale smazat ({count})",
+    "trash.deleteManyNormalConfirm": "Opravdu chceš trvale smazat {count} položek z normálního koše? Tuto akci nepůjde vrátit.",
+    "trash.deleteManySecretConfirm": "Opravdu chceš trvale smazat {count} položek z tajného koše? Tuto akci nepůjde vrátit."
   },
 
   /*

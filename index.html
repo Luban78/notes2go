@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260910-month-wheel-tags-352">
+  <link rel="stylesheet" href="style.css?v=20260910-trash-bulk-360">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260910-card-actions-351">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
@@ -1827,6 +1827,19 @@
       </div>
     </div>
 
+    <div id="trashModeTabs" class="trashModeTabs" role="tablist" aria-label="Typ koše" hidden>
+      <button id="trashNormalTab" class="trashModeTab" type="button" role="tab" aria-selected="false">Normální</button>
+      <button id="trashSecretTab" class="trashModeTab" type="button" role="tab" aria-selected="false">Tajné 🔒</button>
+    </div>
+
+    <div id="trashBulkBar" class="trashBulkBar" hidden>
+      <button id="trashSelectAllButton" class="trashBulkButton" type="button">Označit vše</button>
+      <button id="trashBulkDeleteButton" class="trashBulkButton trashBulkDeleteButton lubaHasIcon" type="button" disabled>
+        <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
+        <span id="trashBulkDeleteText">Trvale smazat (0)</span>
+      </button>
+    </div>
+
     <div id="trashList" class="trashList"></div>
     <p id="trashEmpty" class="trashEmpty" hidden>Koš je prázdný.</p>
   </section>
@@ -1839,7 +1852,7 @@
         <button id="trashConfirmCancel" type="button">Zrušit</button>
         <button id="trashConfirmDelete" type="button" class="danger lubaHasIcon">
           <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span>
-          <span>Smazat trvale</span>
+          <span id="trashConfirmDeleteText">Smazat trvale</span>
         </button>
       </div>
     </div>
@@ -1854,8 +1867,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=20260909-card-drag-order-326"></script>
-  <script src="lang-en.js?v=20260909-card-drag-order-326"></script>
+  <script src="lang-cs.js?v=20260910-trash-bulk-360"></script>
+  <script src="lang-en.js?v=20260910-trash-bulk-360"></script>
   <script src="i18n.js?v=20260904-registrace-c2-1"></script>
 
   <script src="lubaIcons.js?v=20260909-planner-type-icons-325"></script>
@@ -1863,7 +1876,7 @@
   
   <script src="reminders.js?v=20260909-reminder-ui-polish-324"></script>
   
-  <script src="storage.js?v=20260909-card-drag-order-326"></script>
+  <script src="storage.js?v=20260910-trash-bulk-360"></script>
   
   <script src="tags.js?v=20260910-drag-tag-order-352"></script>
   
@@ -1884,7 +1897,7 @@
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
-  <script src="trash.js?v=20260906-trash-restore-race-1"></script>
+  <script src="trash.js?v=20260910-trash-bulk-360"></script>
   
   <!-- Barevné zvýrazňování rich-text editoru -->
   <script src="richTextColors.js"></script>
@@ -1908,7 +1921,7 @@
   
   <script src="plannedTextLinks.js"></script>
   
-  <script src="calendar.js?v=20260910-month-wheel-352"></script>
+  <script src="calendar.js?v=20260910-month-wheel-disabled-360"></script>
   
   <script src="cardView.js?v=20260909-card-drag-order-326"></script>
   
@@ -1953,7 +1966,7 @@
   <script src="syncRealtime.js?v=20260907-cross-device-notif-1"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260907-offline-tag-fix-303"></script>
+  <script src="sync.js?v=20260910-trash-bulk-360"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260906-apk-same-device-restart-09275"></script>

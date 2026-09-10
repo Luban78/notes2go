@@ -296,6 +296,8 @@ let calendarSelectedDay = new Date();
    RYCHLÝ VÝBĚR MĚSÍCE – vertikální „kolečko“
    ========================================== */
 
+const RYCHLY_VYBER_MESICE_AKTIVNI = false;
+
 let calendarMonthPicker = null;
 let calendarMonthPickerDate = null;
 let calendarMonthPickerPointer = null;
@@ -514,11 +516,27 @@ function otevriCalendarMonthPicker() {
   renderCalendarMonthPicker();
 }
 
-calendarMonthTitle?.setAttribute("role", "button");
-calendarMonthTitle?.setAttribute("tabindex", "0");
-calendarMonthTitle?.setAttribute("aria-label", "Vybrat měsíc");
+if (calendarMonthTitle) {
+  calendarMonthTitle.dataset.monthPickerEnabled = String(
+    RYCHLY_VYBER_MESICE_AKTIVNI
+  );
+
+  if (RYCHLY_VYBER_MESICE_AKTIVNI) {
+    calendarMonthTitle.setAttribute("role", "button");
+    calendarMonthTitle.setAttribute("tabindex", "0");
+    calendarMonthTitle.setAttribute("aria-label", "Vybrat měsíc");
+  } else {
+    calendarMonthTitle.removeAttribute("role");
+    calendarMonthTitle.removeAttribute("tabindex");
+    calendarMonthTitle.removeAttribute("aria-label");
+  }
+}
 
 calendarMonthTitle?.addEventListener("click", (event) => {
+  if (!RYCHLY_VYBER_MESICE_AKTIVNI) {
+    return;
+  }
+
   event.stopPropagation();
 
   if (calendarMonthPicker && !calendarMonthPicker.hidden) {
@@ -530,6 +548,10 @@ calendarMonthTitle?.addEventListener("click", (event) => {
 });
 
 calendarMonthTitle?.addEventListener("keydown", (event) => {
+  if (!RYCHLY_VYBER_MESICE_AKTIVNI) {
+    return;
+  }
+
   if (event.key !== "Enter" && event.key !== " ") {
     return;
   }
