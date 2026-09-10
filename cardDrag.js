@@ -10,7 +10,8 @@
   const DEBUG_SCROLL_INTERVAL_MS = 180;
   const MIN_POHYB_PO_PICKUP_PRED_AUTOSCROLL = 18;
   const MIN_POHYB_PRO_PRVNI_LOG = 3;
-  const KLIC_NASTAVENI = "lubaCardDragTuningV2";
+  const SOUBOR_NASTAVENI_APK = "./card-drag-settings-apk.txt";
+  const SOUBOR_NASTAVENI_DESKTOP = "./card-drag-settings-desktop.txt";
 
   /*
    * Výchozí hodnoty potvrzené v APK Drag Labu 0.9.345.
@@ -47,23 +48,12 @@
   });
 
   function nactiNastaveni() {
-    try {
-      const ulozene = JSON.parse(localStorage.getItem(KLIC_NASTAVENI) || "null");
-      if (!ulozene || typeof ulozene !== "object") return { ...VYCHOZI_NASTAVENI };
-      const vysledek = { ...VYCHOZI_NASTAVENI };
-      Object.entries(DEFINICE_PARAMETRU).forEach(([klic, def]) => {
-        const hodnota = Number(ulozene[klic]);
-        if (!Number.isFinite(hodnota)) return;
-        vysledek[klic] = Math.min(def.max, Math.max(def.min, hodnota));
-      });
-      if (typeof ulozene.detailLog === "boolean") vysledek.detailLog = ulozene.detailLog;
-      return vysledek;
-    } catch (_) {
-      return { ...VYCHOZI_NASTAVENI };
-    }
+    return { ...VYCHOZI_NASTAVENI };
   }
 
   let nastaveni = nactiNastaveni();
+  let vychoziNastaveniZeSouboru = { ...VYCHOZI_NASTAVENI };
+  let aktivniSouborNastaveni = SOUBOR_NASTAVENI_APK;
   const aktivniPointery = new Set();
   const aktivniTouchy = new Set();
   const konfigurace = new WeakMap();
@@ -81,9 +71,104 @@
   let animaceLockTimer = null;
 
   function ulozNastaveni() {
+    // Tuning panel mění hodnoty jen pro aktuální běh.
+    // Trvalý zdroj je textový soubor načtený při startu.
+  }
+
+  const MAPA_RADKU_NASTAVENI = Object.freeze({
+    "Scale okolních": "scalePct",
+    "Scale tažené": "ghostScalePct",
+    "Long press": "longPressMs",
+    "Pohyb před LP": "preLongMovePx",
+    "Dwell / zamknutí": "dwellMs",
+    "Animace přesunu": "reorderMs",
+    "Animace scale": "focusMs",
+    "Přesný slot inset": "insetPx",
+    "Tolerance klidu": "jitterPx",
+    "Auto-scroll okraj": "autoScrollEdgePx",
+    "Auto-scroll max": "autoScrollMaxPx"
+  });
+
+  function jeAndroidApk() {
     try {
-      localStorage.setItem(KLIC_NASTAVENI, JSON.stringify(nastaveni));
-    } catch (_) {}
+      return window.Capacitor?.getPlatform?.() === "android";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function ziskejSouborNastaveni() {
+    if (jeAndroidApk()) return SOUBOR_NASTAVENI_APK;
+    return window.matchMedia("(min-width: 900px)").matches
+      ? SOUBOR_NASTAVENI_DESKTOP
+      : SOUBOR_NASTAVENI_APK;
+  }
+
+  function parsujNastaveniZeSouboru(text) {
+    const vysledek = { ...VYCHOZI_NASTAVENI };
+    String(text || "").split(/\r?\n/).forEach((radek) => {
+      const pozice = radek.indexOf(":");
+      if (pozice < 0) return;
+      const popisek = radek.slice(0, pozice).trim();
+      if (popisek === "Detail log") {
+        const hodnota = radek.slice(pozice + 1).trim().toUpperCase();
+        if (hodnota === "ZAP") vysledek.detailLog = true;
+        if (hodnota === "VYP") vysledek.detailLog = false;
+        return;
+      }
+      const klic = MAPA_RADKU_NASTAVENI[popisek];
+      const def = DEFINICE_PARAMETRU[klic];
+      if (!klic || !def) return;
+      const shoda = radek.slice(pozice + 1).replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+      if (!shoda) return;
+      const hodnota = Number(shoda[0]);
+      if (!Number.isFinite(hodnota)) return;
+      vysledek[klic] = Math.min(def.max, Math.max(def.min, hodnota));
+    });
+    return vysledek;
+  }
+
+  function textNastaveniProSoubor(hodnoty = nastaveni) {
+    return [
+      `Scale okolních: ${hodnoty.scalePct} %`,
+      `Scale tažené: ${hodnoty.ghostScalePct} %`,
+      `Long press: ${hodnoty.longPressMs} ms`,
+      `Pohyb před LP: ${hodnoty.preLongMovePx} px`,
+      `Dwell / zamknutí: ${hodnoty.dwellMs} ms`,
+      `Animace přesunu: ${hodnoty.reorderMs} ms`,
+      `Animace scale: ${hodnoty.focusMs} ms`,
+      `Přesný slot inset: ${hodnoty.insetPx} px`,
+      `Tolerance klidu: ${hodnoty.jitterPx} px`,
+      `Auto-scroll okraj: ${hodnoty.autoScrollEdgePx} px`,
+      `Auto-scroll max: ${hodnoty.autoScrollMaxPx} px/f`,
+      `Detail log: ${hodnoty.detailLog ? "ZAP" : "VYP"}`
+    ].join("\n");
+  }
+
+  async function nactiNastaveniZeSouboru() {
+    aktivniSouborNastaveni = ziskejSouborNastaveni();
+    try {
+      const odpoved = await fetch(aktivniSouborNastaveni, { cache: "no-store" });
+      if (!odpoved.ok) throw new Error(`HTTP ${odpoved.status}`);
+      const text = await odpoved.text();
+      const nactene = parsujNastaveniZeSouboru(text);
+      nastaveni = { ...nactene };
+      vychoziNastaveniZeSouboru = { ...nastaveni };
+      emitujDragDebug("SETTINGS_FILE", {
+        file: aktivniSouborNastaveni,
+        ok: true,
+        settings: souhrnNastaveni()
+      });
+    } catch (error) {
+      nastaveni = { ...VYCHOZI_NASTAVENI };
+      vychoziNastaveniZeSouboru = { ...nastaveni };
+      emitujDragDebug("SETTINGS_FILE", {
+        file: aktivniSouborNastaveni,
+        ok: false,
+        error: String(error?.message || error || "load-failed"),
+        settings: souhrnNastaveni()
+      });
+    }
   }
 
   function souhrnNastaveni() {
@@ -107,6 +192,11 @@
       }
       body.lubaCardDragMode .taskCard:not(.lubaCardDragSource):not(.lubaCardDragGhost) {
         transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1) !important;
+      }
+      body.lubaCardDragMode .taskCard.lubaCardDragBlockedGroup {
+        filter: grayscale(1) saturate(.12) brightness(.82) !important;
+        opacity: .46 !important;
+        transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1), filter 160ms ease, opacity 160ms ease !important;
       }
       .lubaCardDragPlaceholder {
         position: relative !important;
@@ -241,7 +331,7 @@
         <button type="button" data-action="detail">Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}</button>
         <button type="button" data-action="copy">Kopírovat hodnoty</button>
       </div>
-      <small>Změny se ukládají hned a platí pro další drag. Výchozí = hodnoty potvrzené v APK Drag Labu 0.9.345.</small>`;
+      <small>Změny platí hned pro aktuální běh. Po startu se načtou z příslušného TXT souboru; „Výchozí“ vrátí právě načtené hodnoty.</small>`;
     document.body.appendChild(panel);
     tuningPanel = panel;
 
@@ -286,10 +376,10 @@
         if (tuningTlacitko) tuningTlacitko.hidden = false;
       }
       if (action === "defaults") {
-        nastaveni = { ...VYCHOZI_NASTAVENI };
+        nastaveni = { ...vychoziNastaveniZeSouboru };
         ulozNastaveni();
         prekresli();
-        emitujDragDebug("TUNE", { settings: souhrnNastaveni(), reset: true });
+        emitujDragDebug("TUNE", { settings: souhrnNastaveni(), reset: true, file: aktivniSouborNastaveni });
       }
       if (action === "detail") {
         nastaveni.detailLog = !nastaveni.detailLog;
@@ -297,7 +387,7 @@
         prekresli();
       }
       if (action === "copy") {
-        const text = souhrnNastaveni();
+        const text = textNastaveniProSoubor();
         try { await navigator.clipboard.writeText(text); }
         catch (_) {
           const area = document.createElement("textarea");
@@ -638,6 +728,64 @@
     });
   }
 
+  function aplikujBlokaciOpacneSkupiny(stav, zapnout) {
+    if (!stav) return;
+    stav.mapaPrvkuOriginal.forEach((prvek, klic) => {
+      if (!prvek?.isConnected || klic === stav.dragKlic) return;
+      const jePripnuta = prvek.dataset.cardPinned === "1";
+      const jeOpacna = jePripnuta !== stav.pripnuta;
+      if (!jeOpacna) return;
+      prvek.classList.toggle("lubaCardDragBlockedGroup", zapnout);
+    });
+  }
+
+  function spocitejMaxScroll(kontejner) {
+    return jeDokumentovyScroll(kontejner)
+      ? Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+      : Math.max(0, kontejner.scrollHeight - kontejner.clientHeight);
+  }
+
+  function aktualizujHraniceSkupiny(stav) {
+    if (!stav) return;
+    const kontejner = stav.scrollKontejner;
+    const rect = ziskejScrollRect(kontejner);
+    const vyskaViewportu = Math.max(1, rect.height || window.innerHeight);
+    const obecnyMax = spocitejMaxScroll(kontejner);
+    const rezerva = Math.min(
+      nastaveni.autoScrollEdgePx,
+      Math.max(56, vyskaViewportu * .16)
+    );
+
+    let min = 0;
+    let max = obecnyMax;
+
+    if (stav.maOpacnouSkupinu && Array.isArray(stav.sloty) && stav.sloty.length) {
+      const topSkupiny = Math.min(...stav.sloty.map((slot) => slot.top));
+      const bottomSkupiny = Math.max(...stav.sloty.map((slot) => slot.bottom));
+
+      if (!stav.pripnuta) {
+        // Nepřipnutá karta nesmí auto-scrollem zajet nad začátek své skupiny.
+        // Malá rezerva nechá na hraně zahlédnout šedé připnuté karty.
+        min = Math.max(0, Math.min(obecnyMax, topSkupiny - rezerva));
+      } else {
+        // Připnutá karta nesmí auto-scrollem zajet pod konec připnuté skupiny.
+        // Rezerva nechá dole zahlédnout šedé nepřipnuté karty.
+        max = Math.max(0, Math.min(obecnyMax, bottomSkupiny - vyskaViewportu + rezerva));
+      }
+    }
+
+    stav.scrollMinSkupiny = Math.min(min, max);
+    stav.scrollMaxSkupiny = Math.max(min, max);
+
+    emitujDragDebug("GROUP_LIMIT", {
+      card: zkratKlic(stav.dragKlic),
+      pinned: stav.pripnuta,
+      min: Math.round(stav.scrollMinSkupiny),
+      max: Math.round(stav.scrollMaxSkupiny),
+      opposite: Boolean(stav.maOpacnouSkupinu)
+    });
+  }
+
   function oznacPlaceholder(stav, aktivni = true) {
     if (!stav?.placeholder) return;
     stav.placeholder.classList.toggle("lubaCardDragPlaceholderTarget", aktivni);
@@ -740,6 +888,7 @@
       animaceLockTimer = null;
       if (aktivniPresun !== stav) return;
       stav.sloty = zmerSloty(stav, stav.skupinaAktualni);
+      aktualizujHraniceSkupiny(stav);
       stav.lockAnimating = false;
       emitujDragDebug("REFREEZE", {
         card: zkratKlic(stav.dragKlic),
@@ -879,7 +1028,7 @@
   }
 
   function ziskejAutoScrollStav(stav) {
-    if (!stav?.autoScrollPovoleny) return { smer: 0, sila: 0 };
+    if (!stav?.autoScrollPovoleny) return { smer: 0, sila: 0, hranice: 0 };
 
     const kontejner = stav.scrollKontejner;
     const rect = ziskejScrollRect(kontejner);
@@ -888,23 +1037,30 @@
     const dostupnaVyska = Math.max(1, dolniHrana - horniHrana);
     const okraj = Math.min(nastaveni.autoScrollEdgePx, Math.max(52, dostupnaVyska * .22));
     const scrollTop = ziskejScrollPozici(kontejner).top;
-    const maxScroll = jeDokumentovyScroll(kontejner)
-      ? Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
-      : Math.max(0, kontejner.scrollHeight - kontejner.clientHeight);
+    const minScroll = Number.isFinite(stav.scrollMinSkupiny) ? stav.scrollMinSkupiny : 0;
+    const maxScroll = Number.isFinite(stav.scrollMaxSkupiny) ? stav.scrollMaxSkupiny : spocitejMaxScroll(kontejner);
 
-    if (stav.posledniY < horniHrana + okraj && scrollTop > .5) {
-      return {
-        smer: -1,
-        sila: Math.min(1, Math.max(0, (horniHrana + okraj - stav.posledniY) / okraj))
-      };
+    if (stav.posledniY < horniHrana + okraj) {
+      if (scrollTop > minScroll + .5) {
+        return {
+          smer: -1,
+          sila: Math.min(1, Math.max(0, (horniHrana + okraj - stav.posledniY) / okraj)),
+          hranice: 0
+        };
+      }
+      return { smer: 0, sila: 0, hranice: -1 };
     }
-    if (stav.posledniY > dolniHrana - okraj && scrollTop < maxScroll - .5) {
-      return {
-        smer: 1,
-        sila: Math.min(1, Math.max(0, (stav.posledniY - (dolniHrana - okraj)) / okraj))
-      };
+    if (stav.posledniY > dolniHrana - okraj) {
+      if (scrollTop < maxScroll - .5) {
+        return {
+          smer: 1,
+          sila: Math.min(1, Math.max(0, (stav.posledniY - (dolniHrana - okraj)) / okraj)),
+          hranice: 0
+        };
+      }
+      return { smer: 0, sila: 0, hranice: 1 };
     }
-    return { smer: 0, sila: 0 };
+    return { smer: 0, sila: 0, hranice: 0 };
   }
 
   function spustAutoScroll() {
@@ -921,7 +1077,19 @@
       }
 
       const kontejner = stav.scrollKontejner;
-      const { smer, sila } = ziskejAutoScrollStav(stav);
+      const { smer, sila, hranice } = ziskejAutoScrollStav(stav);
+
+      if (hranice !== 0 && stav.posledniHraniceScrollu !== hranice) {
+        stav.posledniHraniceScrollu = hranice;
+        emitujDragDebug("GROUP_STOP", {
+          card: zkratKlic(stav.dragKlic),
+          pinned: stav.pripnuta,
+          direction: hranice < 0 ? "up" : "down",
+          scrollTop: Math.round(ziskejScrollPozici(kontejner).top)
+        });
+      } else if (hranice === 0) {
+        stav.posledniHraniceScrollu = 0;
+      }
 
       if (smer !== 0 && sila > 0) {
         if (!stav.autoScrollAktivni) {
@@ -935,24 +1103,15 @@
         }
 
         const scrollPred = ziskejScrollPozici(kontejner).top;
-        const maxScroll = jeDokumentovyScroll(kontejner)
-          ? Math.max(
-              0,
-              document.documentElement.scrollHeight -
-                window.innerHeight
-            )
-          : Math.max(
-              0,
-              kontejner.scrollHeight -
-                kontejner.clientHeight
-            );
+        const minScroll = Number.isFinite(stav.scrollMinSkupiny) ? stav.scrollMinSkupiny : 0;
+        const maxScroll = Number.isFinite(stav.scrollMaxSkupiny) ? stav.scrollMaxSkupiny : spocitejMaxScroll(kontejner);
         const rychlost = Math.round(
           Math.min(2, nastaveni.autoScrollMaxPx) +
             (nastaveni.autoScrollMaxPx - Math.min(2, nastaveni.autoScrollMaxPx)) *
               sila * sila
         );
         const cilScroll = Math.max(
-          0,
+          minScroll,
           Math.min(
             maxScroll,
             scrollPred + smer * rychlost
@@ -1015,6 +1174,7 @@
     }
     odstranDropMarker(stav);
     aplikujFocus(stav, false);
+    aplikujBlokaciOpacneSkupiny(stav, false);
     oznacPlaceholder(stav, false);
     stav.karta?.remove();
     stav.placeholder?.remove();
@@ -1208,6 +1368,7 @@
 
     const pripnuta = karta.dataset.cardPinned === "1";
     const skupinoveKarty = vsechnyKarty.filter((prvek) => prvek.dataset.cardPinned === (pripnuta ? "1" : "0"));
+    const maOpacnouSkupinu = vsechnyKarty.some((prvek) => prvek.dataset.cardPinned !== (pripnuta ? "1" : "0"));
     const skupinaOriginal = skupinoveKarty.map((prvek) => prvek.dataset.cardDragKey).filter(Boolean);
     const puvodniIndexSkupiny = skupinaOriginal.indexOf(novyKlic);
     if (puvodniIndexSkupiny < 0) return;
@@ -1246,6 +1407,10 @@
       vstup,
       dragKlic: novyKlic,
       pripnuta,
+      maOpacnouSkupinu,
+      scrollMinSkupiny: 0,
+      scrollMaxSkupiny: spocitejMaxScroll(scrollKontejner),
+      posledniHraniceScrollu: 0,
       mapaPrvkuOriginal,
       mapaPrvkuDrag,
       poradiOriginal,
@@ -1282,11 +1447,13 @@
     // Placeholder má přesně původní slot. Teprve potom zmrazíme logickou mapu.
     rozmistitKarty(poradiOriginal, mapaPrvkuDrag, { animovat: false });
     stav.sloty = zmerSloty(stav, skupinaOriginal);
+    aktualizujHraniceSkupiny(stav);
 
     try { karta.dispatchEvent(new CustomEvent("luba:card-drag-takeover")); } catch (_) {}
     document.body.classList.add("lubaCardDragMode");
     blokovatKlikDo = Date.now() + 800;
     aplikujFocus(stav, true);
+    aplikujBlokaciOpacneSkupiny(stav, true);
 
     if (vstup !== "touch" && pointerId !== null) {
       try { karta.setPointerCapture?.(pointerId); } catch (_) {}
@@ -1314,9 +1481,36 @@
     spustAutoScroll();
   }
 
-  async function dokoncitPresun() {
+  async function dokoncitPresun(x = null, y = null) {
     const stav = aktivniPresun;
     if (!stav) return;
+
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      stav.posledniX = x;
+      stav.posledniY = y;
+    }
+
+    /*
+     * Pustím kartu dřív než doběhne dwell: pokud je prst v přesném
+     * platném slotu stejné skupiny, tento slot se stává cílem okamžitě.
+     * Uživatel tedy nemusí čekat na vizuální rozestoupení karet.
+     */
+    if (!stav.autoScrollAktivni && !stav.lockAnimating) {
+      const slotPriPusteni = najdiPresnySlot(stav, stav.posledniX, stav.posledniY);
+      if (slotPriPusteni && slotPriPusteni.index !== stav.cilovyIndexSkupiny) {
+        const predchozi = stav.cilovyIndexSkupiny;
+        stav.cilovyIndexSkupiny = slotPriPusteni.index;
+        const vysledekPriPusteni = sestavPoradiSeSlotem(stav, slotPriPusteni.index);
+        stav.skupinaAktualni = vysledekPriPusteni.celaSkupina;
+        stav.poradiAktualni = vysledekPriPusteni.celePoradi;
+        emitujDragDebug("RELEASE_TARGET", {
+          card: zkratKlic(stav.dragKlic),
+          from: predchozi,
+          to: slotPriPusteni.index,
+          reason: "finger-up"
+        });
+      }
+    }
 
     zrusTimerKandidata(stav);
     if (animaceLockTimer) {
@@ -1616,7 +1810,7 @@
         event.preventDefault();
         event.stopPropagation();
         aktivniTouchy.delete(touchId);
-        void dokoncitPresun();
+        void dokoncitPresun(dotyk.clientX, dotyk.clientY);
       } else if (touchLongPressPripraven) {
         /* Long-press bez pohybu nesmí následně otevřít kartu. */
         event.preventDefault();
@@ -1908,7 +2102,7 @@
       ) {
         event.preventDefault();
         event.stopPropagation();
-        void dokoncitPresun();
+        void dokoncitPresun(event.clientX, event.clientY);
       }
     },
     true
@@ -1968,10 +2162,12 @@
     zavriLadeni,
     ziskejNastaveni: () => ({ ...nastaveni }),
     resetLadeni: () => {
-      nastaveni = { ...VYCHOZI_NASTAVENI };
+      nastaveni = { ...vychoziNastaveniZeSouboru };
       ulozNastaveni();
-      emitujDragDebug("TUNE", { settings: souhrnNastaveni(), reset: true });
+      emitujDragDebug("TUNE", { settings: souhrnNastaveni(), reset: true, file: aktivniSouborNastaveni });
       return { ...nastaveni };
     }
   };
+
+  void nactiNastaveniZeSouboru();
 })();

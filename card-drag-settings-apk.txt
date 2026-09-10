@@ -1,0 +1,12 @@
+Scale okolních: 78 %
+Scale tažené: 110 %
+Long press: 430 ms
+Pohyb před LP: 16 px
+Dwell / zamknutí: 320 ms
+Animace přesunu: 700 ms
+Animace scale: 20 ms
+Přesný slot inset: 8 px
+Tolerance klidu: 11 px
+Auto-scroll okraj: 85 px
+Auto-scroll max: 20 px/f
+Detail log: ZAP
