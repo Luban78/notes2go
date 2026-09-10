@@ -23,6 +23,114 @@ const calendarPrevMonth =
 const calendarNextMonth =
   document.getElementById("calendarNextMonth");
 
+const calendarHeader =
+  calendarMonthTitle?.closest(".calendarHeader");
+
+let calendarMonthPicker = null;
+
+function zavriVyberMesice() {
+  if (!calendarMonthPicker) {
+    return;
+  }
+
+  calendarMonthPicker.remove();
+  calendarMonthPicker = null;
+
+  calendarMonthTitle?.setAttribute(
+    "aria-expanded",
+    "false"
+  );
+}
+
+function vytvorPopisekMesice(datum) {
+  return datum.toLocaleDateString(
+    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+    {
+      month: "long",
+      year: "numeric"
+    }
+  );
+}
+
+function otevriVyberMesice() {
+  if (!calendarMonthTitle || !calendarHeader) {
+    return;
+  }
+
+  if (calendarMonthPicker) {
+    zavriVyberMesice();
+    return;
+  }
+
+  const picker = document.createElement("div");
+  picker.className = "calendarMonthPicker";
+  picker.setAttribute("role", "listbox");
+  picker.setAttribute(
+    "aria-label",
+    "Vybrat měsíc"
+  );
+
+  const rok = calendarCurrentDate.getFullYear();
+  const mesic = calendarCurrentDate.getMonth();
+  let aktivniTlacitko = null;
+
+  for (let posun = -120; posun <= 120; posun++) {
+    const datum = new Date(
+      rok,
+      mesic + posun,
+      1
+    );
+
+    const tlacitko = document.createElement("button");
+    tlacitko.type = "button";
+    tlacitko.className = "calendarMonthPickerItem";
+    tlacitko.textContent = vytvorPopisekMesice(datum);
+    tlacitko.dataset.year = String(datum.getFullYear());
+    tlacitko.dataset.month = String(datum.getMonth());
+    tlacitko.setAttribute("role", "option");
+
+    if (posun === 0) {
+      tlacitko.classList.add("is-current");
+      tlacitko.setAttribute("aria-selected", "true");
+      aktivniTlacitko = tlacitko;
+    } else {
+      tlacitko.setAttribute("aria-selected", "false");
+    }
+
+    tlacitko.addEventListener("click", (event) => {
+      event.stopPropagation();
+
+      calendarCurrentDate = new Date(
+        Number(tlacitko.dataset.year),
+        Number(tlacitko.dataset.month),
+        1
+      );
+
+      zavriVyberMesice();
+      renderCalendar();
+    });
+
+    picker.append(tlacitko);
+  }
+
+  calendarHeader.append(picker);
+  calendarMonthPicker = picker;
+  calendarMonthTitle.setAttribute(
+    "aria-expanded",
+    "true"
+  );
+
+  requestAnimationFrame(() => {
+    if (!aktivniTlacitko) {
+      return;
+    }
+
+    picker.scrollTop =
+      aktivniTlacitko.offsetTop -
+      (picker.clientHeight - aktivniTlacitko.offsetHeight) / 2;
+  });
+}
+
 
 const calendarSelectedDateButton =
   document.getElementById("calendarSelectedDate");
@@ -801,9 +909,55 @@ function renderCalendarAgenda() {
 }
 
 
+calendarMonthTitle?.setAttribute("role", "button");
+calendarMonthTitle?.setAttribute("tabindex", "0");
+calendarMonthTitle?.setAttribute("aria-haspopup", "listbox");
+calendarMonthTitle?.setAttribute("aria-expanded", "false");
+
+calendarMonthTitle?.addEventListener(
+  "click",
+  (event) => {
+    event.stopPropagation();
+    otevriVyberMesice();
+  }
+);
+
+calendarMonthTitle?.addEventListener(
+  "keydown",
+  (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    otevriVyberMesice();
+  }
+);
+
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (!calendarMonthPicker) {
+      return;
+    }
+
+    if (
+      calendarMonthPicker.contains(event.target) ||
+      calendarMonthTitle?.contains(event.target)
+    ) {
+      return;
+    }
+
+    zavriVyberMesice();
+  },
+  true
+);
+
 calendarPrevMonth.addEventListener(
   "click",
   () => {
+    zavriVyberMesice();
+
     calendarCurrentDate.setMonth(
       calendarCurrentDate.getMonth() - 1
     );
@@ -816,6 +970,8 @@ calendarPrevMonth.addEventListener(
 calendarNextMonth.addEventListener(
   "click",
   () => {
+    zavriVyberMesice();
+
     calendarCurrentDate.setMonth(
       calendarCurrentDate.getMonth() + 1
     );

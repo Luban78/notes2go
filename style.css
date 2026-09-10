@@ -2877,6 +2877,8 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
 }
 
 .calendarHeader {
+  position: relative;
+
   display: grid;
   grid-template-columns: 44px 1fr 44px;
   align-items: center;
@@ -2889,6 +2891,110 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   margin: 0;
   text-align: center;
   font-size: calc(var(--font-size) + 3px);
+}
+
+#calendarMonthTitle {
+  position: relative;
+  z-index: 32;
+
+  padding: 5px 8px;
+  border-radius: 10px;
+
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#calendarMonthTitle:active {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 12%,
+    transparent
+  );
+}
+
+.calendarMonthPicker {
+  position: absolute;
+  z-index: 40;
+  top: -44px;
+  left: 52px;
+  right: 52px;
+
+  height: 132px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 40%,
+    var(--color-border)
+  );
+  border-radius: 14px;
+
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 96%,
+    transparent
+  );
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.calendarMonthPicker::-webkit-scrollbar {
+  display: none;
+}
+
+.calendarMonthPickerItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 8px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: transparent;
+  color: var(--color-text-secondary);
+
+  font: inherit;
+  font-size: calc(var(--font-size) - 2px);
+  text-transform: none;
+
+  scroll-snap-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.calendarMonthPickerItem.is-current {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 18%,
+    var(--color-surface)
+  );
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 2px);
+  font-weight: 700;
+  outline: 1px solid color-mix(
+    in srgb,
+    var(--color-accent) 72%,
+    transparent
+  );
+}
+
+.calendarMonthPickerItem:active {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 28%,
+    var(--color-surface)
+  );
 }
 
 .calendarHeader button {

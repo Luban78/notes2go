@@ -2032,17 +2032,41 @@ async function smazStitek(tag) {
 function getAllTags() {
   const noteTags = loadTask()
     .flatMap((task) => task.tags || []);
-  
+
+  /*
+   * Pořadí horních štítků nesmí záviset na pořadí karet.
+   * Dříve šly noteTags jako první, takže po ručním přesunu karty
+   * změnil Set pořadí podle prvního výskytu štítku v seznamu poznámek.
+   * Autoritou je uložené sort_order štítků; lokální/legacy štítek,
+   * který ještě v syncedTags není, pouze doplníme až na konec.
+   */
   const cloudTags = syncedTags
-    .filter((tag) => {
+    .map((tag, index) => ({ tag, index }))
+    .filter(({ tag }) => {
       if (tajnyRezimOdemceny) {
         return true;
       }
-      
+
       return tag.is_secret !== true;
     })
-    .map((tag) => tag.name);
-  
+    .sort((a, b) => {
+      const poradiA = Number(a.tag?.sort_order);
+      const poradiB = Number(b.tag?.sort_order);
+      const maPoradiA = Number.isFinite(poradiA);
+      const maPoradiB = Number.isFinite(poradiB);
+
+      if (maPoradiA && maPoradiB && poradiA !== poradiB) {
+        return poradiA - poradiB;
+      }
+
+      if (maPoradiA !== maPoradiB) {
+        return maPoradiA ? -1 : 1;
+      }
+
+      return a.index - b.index;
+    })
+    .map(({ tag }) => tag.name);
+
   const secretTagNames = new Set(
     syncedTags
     .filter((tag) => tag.is_secret === true)
@@ -2059,8 +2083,8 @@ function getAllTags() {
   
   return [
     ...new Set([
-      ...visibleNoteTags,
-      ...cloudTags
+      ...cloudTags,
+      ...visibleNoteTags
     ])
   ];
 }
