@@ -38,6 +38,7 @@
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     editorTypography: "Editor – Backspace / velikost",
+    editorCoreV2Lab: "Editor Core V2 – LAB",
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
     cardDrag: "Karty – reálný drag + tuning",
@@ -1889,6 +1890,24 @@
     prekresli();
   }
 
+  function spustEditorCoreV2Lab() {
+    const api = window.LubaNoteEditorV2;
+
+    zapis("START EDITOR CORE V2 LAB | izolovaný model | produkční editor a ukládání jsou vypnuté");
+
+    if (!api?.otevriLab) {
+      zapis("ERROR EDITOR CORE V2 LAB | modul editorCoreV2.js není dostupný");
+      return () => {};
+    }
+
+    zapis(`EDITOR CORE V2 | ${api.verze || "neznámá verze"}`);
+    api.otevriLab({ zapis });
+
+    return () => {
+      api.zavriLab?.();
+    };
+  }
+
   function spustModul() {
     stopModulu({ zapisStop: false });
 
@@ -1904,6 +1923,8 @@
       stopAktivnihoModulu = spustEditorSelection();
     } else if (aktivniModul === "editorTypography") {
       stopAktivnihoModulu = spustEditorTypografii();
+    } else if (aktivniModul === "editorCoreV2Lab") {
+      stopAktivnihoModulu = spustEditorCoreV2Lab();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "bulletDrag") {

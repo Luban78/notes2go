@@ -1,0 +1,213 @@
+/* LubaNote Editor Core V2 – izolovaný LAB. Všechny selektory mají ln-v2 prefix. */
+
+body.ln-v2-lab-otevren {
+  overflow: hidden !important;
+}
+
+.ln-v2-lab {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483200;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-editor-background, var(--color-background, #17131d));
+  color: var(--color-editor-text, var(--color-text, #f5f2f8));
+  font-family: inherit;
+}
+
+.ln-v2-lab[hidden] {
+  display: none !important;
+}
+
+.ln-v2-hlavicka {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 14px 10px;
+  border-bottom: 1px solid var(--color-border, rgba(255,255,255,.16));
+  background: var(--color-surface, rgba(255,255,255,.05));
+}
+
+.ln-v2-hlavicka > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ln-v2-hlavicka strong {
+  font-size: 18px;
+}
+
+.ln-v2-hlavicka small {
+  color: var(--color-text-secondary, currentColor);
+  opacity: .78;
+  font-size: 12px;
+}
+
+.ln-v2-zavrit {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, rgba(255,255,255,.16));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.ln-v2-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border, rgba(255,255,255,.12));
+}
+
+.ln-v2-badge {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--color-accent, #8958f6);
+  color: var(--color-accent-text, #fff);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+
+.ln-v2-stav {
+  min-width: 0;
+  color: var(--color-text-secondary, currentColor);
+  font-size: 12px;
+}
+
+.ln-v2-stav.chyba {
+  font-weight: 700;
+}
+
+.ln-v2-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 16px 80px;
+  outline: none;
+  caret-color: var(--color-accent, currentColor);
+  font-size: var(--font-size, 16px);
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.ln-v2-odstavec {
+  min-height: 1.5em;
+  margin: 0 0 .35em;
+  padding: 0;
+}
+
+.ln-v2-akce {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--color-border, rgba(255,255,255,.12));
+  background: var(--color-surface, rgba(255,255,255,.05));
+  overflow-x: auto;
+}
+
+.ln-v2-akce button {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border, rgba(255,255,255,.16));
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ln-v2-model {
+  flex: 0 0 min(42vh, 360px);
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--color-border, rgba(255,255,255,.12));
+  background: var(--color-background, #111);
+  color: inherit;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ln-v2-paticka {
+  flex: 0 0 auto;
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border, rgba(255,255,255,.12));
+  color: var(--color-text-secondary, currentColor);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+/* V2.2a – toolbar logické velikosti písma dole, mimo nativní Android selection menu. */
+.ln-v2-format {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  border-top: 1px solid var(--color-border, rgba(255,255,255,.12));
+  background: var(--color-surface, rgba(255,255,255,.035));
+  scrollbar-width: thin;
+}
+
+.ln-v2-format-hodnota {
+  flex: 0 0 auto;
+  min-width: 76px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ln-v2-format-hodnota strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-v2-format button {
+  flex: 0 0 auto;
+  min-width: 42px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border, rgba(255,255,255,.16));
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ln-v2-format button.aktivni {
+  border-color: var(--color-accent, currentColor);
+  outline: 2px solid var(--color-accent, currentColor);
+  outline-offset: -2px;
+}
+
+.ln-v2-cast {
+  font: inherit;
+}
+
+
+/* V2.2a – výběr drží model, proto může toolbar bezpečně sedět u spodní hrany LABu. */
+.ln-v2-format {
+  position: relative;
+  z-index: 4;
+  touch-action: manipulation;
+}
+
+.ln-v2-format button {
+  touch-action: manipulation;
+}
