@@ -1,12 +1,12 @@
 /* ==================================================
    LUBANOTE – MOBILNI PANEL AKCI KARTY + RYCHLY TERMIN
-   0.9.349
+   0.9.351
    ================================================== */
 
 @media (max-width: 899px) {
   .cardMenu.mobilePrimaryActions {
     top: auto !important;
-    bottom: max(90px, calc(env(safe-area-inset-bottom, 0px) + 76px)) !important;
+    bottom: max(1px, env(safe-area-inset-bottom, 0px)) !important;
     visibility: visible;
     grid-template-columns: 1fr 1fr;
     width: min(calc(100vw - 24px), 360px);
@@ -165,37 +165,60 @@
   color: #fff;
 }
 
-.cardQuickTermTime {
+.cardQuickTermSwitches {
   display: grid;
-  grid-template-columns: auto 64px auto 64px;
-  align-items: center;
-  justify-content: center;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 14px;
-  padding: 12px;
+  padding: 8px;
   border: 1px solid var(--color-border);
   border-radius: 14px;
   background: color-mix(in srgb, var(--color-accent) 5%, var(--color-surface));
 }
 
-.cardQuickTermTimeLabel {
-  font-weight: 800;
-}
-
-.cardQuickTermTime input {
-  width: 64px;
-  min-width: 0;
-  height: 42px;
-  box-sizing: border-box;
-  padding: 0 6px;
+.cardQuickTermSwitch {
+  min-height: 54px;
+  padding: 7px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--color-background);
   color: var(--color-text);
   font: inherit;
-  font-size: 1.1rem;
-  font-weight: 800;
   text-align: center;
+}
+
+.cardQuickTermSwitch.active {
+  border-color: var(--color-accent);
+}
+
+.cardQuickTermSwitchLabel {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 4px);
+  font-weight: 700;
+}
+
+.cardQuickTermSwitch strong {
+  display: block;
+  font-size: calc(var(--font-size) - 1px);
+  font-weight: 800;
+}
+
+/* Vlastni LubaNote cifernik otevreny z rychleho Terminu musi byt nad nim.
+ * U rychleho Terminu zarovname horni hranu ciferniku na stejne Y jako
+ * puvodni kalendarovy dialog, aby po prepnuti nespadl niz po obrazovce. */
+.timePickerModal.cardQuickTermNestedTime {
+  z-index: 7420;
+  align-items: flex-start;
+  box-sizing: border-box;
+  padding-top: var(--card-quick-term-time-top, 12px);
+  overflow-y: auto;
+}
+
+.timePickerModal.cardQuickTermNestedTime .timePickerContent {
+  max-height: calc(100dvh - var(--card-quick-term-time-top, 12px) - 12px);
+  overflow-y: auto;
 }
 
 .cardQuickTermReminder {
@@ -254,13 +277,5 @@
     gap: 2px;
   }
 
-  .cardQuickTermTime {
-    grid-template-columns: auto 58px auto 58px;
-    gap: 5px;
-    padding: 10px 7px;
-  }
 
-  .cardQuickTermTime input {
-    width: 58px;
-  }
 }

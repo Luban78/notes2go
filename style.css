@@ -1467,6 +1467,23 @@ html {
 }
 
 
+
+/* ==================================================
+   OVLADACI PRVKY – BEZ OZNACENI / KOPIROVANI TEXTU
+   Tlačítka včetně velkého + musí na mobilu reagovat jako ovládání,
+   ne jako text k označení. Editor a obsah poznámek tím nejsou dotčeny.
+   ================================================== */
+button,
+button *,
+[role="button"],
+[role="button"] *,
+.addTaskButton,
+.addTaskButton * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
 .cardMenu {
   position: fixed;
   left: 50%;
@@ -7186,6 +7203,15 @@ text-size-adjust: 100%;
 .cardSelected {
   outline: none;
 
+  box-shadow:
+    inset 0 0 0 2px var(--color-accent),
+    0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* Karta, pro kterou je prave otevreny panel akci po 2x tapu.
+ * Inset ramecek nemeni rozmery masonry layoutu. */
+.taskCard.cardActionTarget {
+  outline: none;
   box-shadow:
     inset 0 0 0 2px var(--color-accent),
     0 6px 18px rgba(0, 0, 0, 0.08);

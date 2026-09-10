@@ -1,14 +1,15 @@
 /* ==================================================
    LUBANOTE – MOBILNI PANEL AKCI / RYCHLY TERMIN
-   0.9.349
+   0.9.351
    ================================================== */
 
 (() => {
   let modal = null;
   let grid = null;
   let monthTitle = null;
-  let hourInput = null;
-  let minuteInput = null;
+  let casInput = null;
+  let dateButton = null;
+  let timeButton = null;
   let reminderButton = null;
   let hint = null;
   let saveButton = null;
@@ -20,6 +21,7 @@
   let pripominkaZapnuta = false;
   let pripominkaZamcena = false;
   let probihaUlozeni = false;
+  let vybranyCas = "00:00";
 
   function jeMobilniPanel() {
     return window.innerWidth < 900;
@@ -48,12 +50,6 @@
     return Math.min(maximum, Math.max(minimum, Math.trunc(cislo)));
   }
 
-  function upravCasovePole(input, minimum, maximum) {
-    if (!input) return;
-    const hodnota = omezCislo(input.value, minimum, maximum);
-    input.value = String(hodnota).padStart(2, "0");
-  }
-
   function aktualizujTlacitkoPripominky() {
     if (!reminderButton) return;
 
@@ -76,6 +72,88 @@
         ? `🔔 ${text}`
         : `🔕 ${text}`;
     }
+  }
+
+  function formatDatumTlacitka() {
+    const datum = datumZTextu(vybraneDatum);
+    if (!datum) return "Datum";
+
+    const locale = window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ";
+    return datum.toLocaleDateString(locale, {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric"
+    });
+  }
+
+  function aktualizujTlacitkaDataCasu() {
+    if (dateButton) {
+      dateButton.innerHTML = `<span class="cardQuickTermSwitchLabel">Datum</span><strong>${formatDatumTlacitka()}</strong>`;
+      dateButton.classList.add("active");
+    }
+
+    if (timeButton) {
+      timeButton.innerHTML = `<span class="cardQuickTermSwitchLabel">Čas</span><strong>${vybranyCas}</strong>`;
+    }
+  }
+
+  function pripravVrstevnyVyberCasu() {
+    const timeModal = document.getElementById("timePickerModal");
+    if (!timeModal) return null;
+
+    const quickTermDialog = modal?.querySelector?.(".cardQuickTermDialog");
+    const horniY = quickTermDialog?.getBoundingClientRect?.().top;
+
+    if (Number.isFinite(horniY)) {
+      timeModal.style.setProperty(
+        "--card-quick-term-time-top",
+        `${Math.max(0, Math.round(horniY))}px`
+      );
+    }
+
+    timeModal.classList.add("cardQuickTermNestedTime");
+
+    if (timeModal.dataset.cardQuickTermHooked !== "1") {
+      timeModal.dataset.cardQuickTermHooked = "1";
+
+      [
+        "#closeTimePickerButton",
+        "#timePickerCancelButton",
+        "#timePickerSaveButton",
+        "#timePickerNowButton"
+      ].forEach((selector) => {
+        document.querySelector(selector)?.addEventListener("click", () => {
+          setTimeout(() => {
+            if (timeModal.hidden) {
+              timeModal.classList.remove("cardQuickTermNestedTime");
+              timeModal.style.removeProperty("--card-quick-term-time-top");
+            }
+          }, 0);
+        });
+      });
+    }
+
+    return timeModal;
+  }
+
+  function otevriHodiny() {
+    if (!casInput || typeof window.otevriVlastniVyberCasu !== "function") {
+      return;
+    }
+
+    casInput.value = vybranyCas;
+    pripravVrstevnyVyberCasu();
+
+    window.otevriVlastniVyberCasu({
+      input: casInput,
+      povolOpakovani: false,
+      poVyberu: (hodnota) => {
+        if (/^\d{2}:\d{2}$/.test(String(hodnota || ""))) {
+          vybranyCas = hodnota;
+          aktualizujTlacitkaDataCasu();
+        }
+      }
+    });
   }
 
   function vykresliKalendář() {
@@ -122,6 +200,8 @@
       tlacitko.addEventListener("click", () => {
         vybraneDatum = datumText;
         vykresliKalendář();
+        aktualizujTlacitkaDataCasu();
+        otevriHodiny();
       });
 
       grid.append(tlacitko);
@@ -133,6 +213,7 @@
     zobrazenyRok = date.getFullYear();
     zobrazenyMesic = date.getMonth();
     vykresliKalendář();
+    aktualizujTlacitkaDataCasu();
   }
 
   function vytvorModal() {
@@ -168,11 +249,10 @@
 
         <div id="cardQuickTermGrid" class="cardQuickTermGrid"></div>
 
-        <div class="cardQuickTermTime">
-          <span class="cardQuickTermTimeLabel">Čas</span>
-          <input id="cardQuickTermHour" type="number" min="0" max="23" step="1" inputmode="numeric" aria-label="Hodiny">
-          <span aria-hidden="true">:</span>
-          <input id="cardQuickTermMinute" type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Minuty">
+        <div class="cardQuickTermSwitches" role="group" aria-label="Datum a čas termínu">
+          <button id="cardQuickTermDateButton" class="cardQuickTermSwitch active" type="button"></button>
+          <button id="cardQuickTermTimeButton" class="cardQuickTermSwitch" type="button"></button>
+          <input id="cardQuickTermTimeValue" type="hidden" value="00:00">
         </div>
 
         <button id="cardQuickTermReminder" class="cardQuickTermReminder" type="button" aria-pressed="false"></button>
@@ -189,8 +269,9 @@
 
     grid = modal.querySelector("#cardQuickTermGrid");
     monthTitle = modal.querySelector("#cardQuickTermMonthTitle");
-    hourInput = modal.querySelector("#cardQuickTermHour");
-    minuteInput = modal.querySelector("#cardQuickTermMinute");
+    casInput = modal.querySelector("#cardQuickTermTimeValue");
+    dateButton = modal.querySelector("#cardQuickTermDateButton");
+    timeButton = modal.querySelector("#cardQuickTermTimeButton");
     reminderButton = modal.querySelector("#cardQuickTermReminder");
     hint = modal.querySelector("#cardQuickTermHint");
     saveButton = modal.querySelector("#cardQuickTermSave");
@@ -223,13 +304,18 @@
           date.setDate(date.getDate() + 1);
         }
         nastavDatum(date);
+        otevriHodiny();
       });
     });
 
-    hourInput?.addEventListener("change", () => upravCasovePole(hourInput, 0, 23));
-    minuteInput?.addEventListener("change", () => upravCasovePole(minuteInput, 0, 59));
-    hourInput?.addEventListener("blur", () => upravCasovePole(hourInput, 0, 23));
-    minuteInput?.addEventListener("blur", () => upravCasovePole(minuteInput, 0, 59));
+
+    dateButton?.addEventListener("click", () => {
+      modal.querySelector(".cardQuickTermMonthHeader")?.scrollIntoView({
+        block: "nearest"
+      });
+    });
+
+    timeButton?.addEventListener("click", otevriHodiny);
 
     reminderButton?.addEventListener("click", () => {
       if (pripominkaZamcena) return;
@@ -283,8 +369,9 @@
     vybraneDatum = datumNaText(datum);
     zobrazenyRok = datum.getFullYear();
     zobrazenyMesic = datum.getMonth();
-    hourInput.value = String(hodiny).padStart(2, "0");
-    minuteInput.value = String(minuty).padStart(2, "0");
+    vybranyCas = `${String(hodiny).padStart(2, "0")}:${String(minuty).padStart(2, "0")}`;
+    casInput.value = vybranyCas;
+    aktualizujTlacitkaDataCasu();
 
     const jeTajna = task.isSecret === true;
     const jeOpakovana = task.repeat?.enabled === true;
@@ -314,11 +401,9 @@
   async function ulozTermin() {
     if (probihaUlozeni || !aktivniPoznamkaId || !vybraneDatum) return;
 
-    upravCasovePole(hourInput, 0, 23);
-    upravCasovePole(minuteInput, 0, 59);
-
-    const hodiny = String(omezCislo(hourInput?.value, 0, 23)).padStart(2, "0");
-    const minuty = String(omezCislo(minuteInput?.value, 0, 59)).padStart(2, "0");
+    const shodaCasu = String(vybranyCas || "").match(/^(\d{2}):(\d{2})$/);
+    const hodiny = String(omezCislo(shodaCasu?.[1], 0, 23)).padStart(2, "0");
+    const minuty = String(omezCislo(shodaCasu?.[2], 0, 59)).padStart(2, "0");
     const novyTermin = `${vybraneDatum}T${hodiny}:${minuty}`;
 
     if (typeof loadTask !== "function" || typeof updateTask !== "function") return;

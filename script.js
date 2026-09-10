@@ -3435,6 +3435,22 @@ window.LubaNoteZpracujAndroidZpet =
 
 
 let selectedCardIndex = null;
+
+let kartaOtevrenehoPanelu = null;
+
+function zrusOznaceniKartyPanelu() {
+  if (kartaOtevrenehoPanelu?.isConnected) {
+    kartaOtevrenehoPanelu.classList.remove("cardActionTarget");
+  }
+  kartaOtevrenehoPanelu = null;
+}
+
+function oznacKartuPanelu(card) {
+  zrusOznaceniKartyPanelu();
+  if (!card?.isConnected) return;
+  kartaOtevrenehoPanelu = card;
+  kartaOtevrenehoPanelu.classList.add("cardActionTarget");
+}
 let blokovatKlikKartyDo = 0;
 let blokovatKlikPoZavreniMainMenu = false;
 
@@ -4013,6 +4029,7 @@ function otevriMenuKartyUPrvku(loadedCard, index) {
     return;
   }
 
+  oznacKartuPanelu(loadedCard);
   zobrazHlavniAkceKarty();
   menu.hidden = false;
 
@@ -4024,7 +4041,7 @@ function otevriMenuKartyUPrvku(loadedCard, index) {
      */
     menu.classList.add("mobilePrimaryActions");
     menu.style.top = "auto";
-    menu.style.bottom = "90px";
+    menu.style.bottom = "1px";
     menu.style.visibility = "visible";
 
     window.LubaNoteCardActionsMobile
@@ -4535,6 +4552,17 @@ function renderTasks() {
 /* První vykreslení poznámek */
 renderTasks();
 const cardMenu = document.getElementById("cardMenu");
+
+if (cardMenu) {
+  new MutationObserver(() => {
+    if (cardMenu.hidden) {
+      zrusOznaceniKartyPanelu();
+    }
+  }).observe(cardMenu, {
+    attributes: true,
+    attributeFilter: ["hidden"]
+  });
+}
 
 window.addEventListener(
   "lubanote:icon-style-change",
@@ -5731,16 +5759,24 @@ document.addEventListener("pointerdown", (event) => {
     !cardMenu.contains(event.target)
   ) {
     /*
-     * Tap na jinou kartu necháme projít. Její dvojtap pouze přepne
-     * aktivní kartu, zatímco panel zůstává na stejném místě dole.
+     * Ovládání Visual Debugu nesmí panel shodit dřív, než lze
+     * vybrat a doladit samotný panel akcí.
      */
-    if (event.target.closest?.(".taskCard")) {
+    const jeVisualDebug =
+      event.target?.id?.startsWith?.("ln-vd-") ||
+      event.target?.closest?.("#ln-vd-panel, #ln-vd-quickbar");
+
+    if (jeVisualDebug) {
       return;
     }
 
+    /*
+     * Jakýkoli běžný tap mimo panel ho zavře, včetně tapu na kartu.
+     * Tím lze omylem otevřený panel vždy jedním tapem schovat.
+     */
     event.preventDefault();
     event.stopPropagation();
-    
+
     blokovatKlikKartyDo =
       Date.now() + 400;
     cardMenu.hidden = true;
