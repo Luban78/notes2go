@@ -1971,7 +1971,8 @@
     const prikazy = {
       left: "justifyLeft",
       center: "justifyCenter",
-      right: "justifyRight"
+      right: "justifyRight",
+      justify: "justifyFull"
     };
 
     const prikaz = prikazy[zarovnani];
@@ -2140,7 +2141,8 @@
      * přesně jednou z našich hodnot, bereme ji jako logickou hodnotu.
      */
     const povoleneVelikosti = new Set(
-      tlacitkaVelikosti.map(
+      Array.from(
+        tlacitkaVelikosti,
         tlacitko => String(tlacitko.dataset.velikost)
       )
     );
@@ -2287,6 +2289,13 @@
       zarovnani === "end"
     ) {
       return "right";
+    }
+
+    if (
+      zarovnani === "justify" ||
+      zarovnani === "justify-all"
+    ) {
+      return "justify";
     }
 
     return "left";

@@ -4428,45 +4428,98 @@
 
     let necoOpraveno = false;
 
+    function vycistiPodezrelySpan(span) {
+      if (
+        !(span instanceof HTMLElement) ||
+        span.tagName !== "SPAN" ||
+        span.hasAttribute("data-velikost-pisma")
+      ) {
+        return false;
+      }
+
+      const maPodezrelouTypografii =
+        Boolean(span.style.fontSize) ||
+        Boolean(span.style.lineHeight) ||
+        Boolean(span.style.letterSpacing) ||
+        span.style.fontFamily === "inherit";
+
+      if (!maPodezrelouTypografii) {
+        return false;
+      }
+
+      span.style.removeProperty("font-size");
+      span.style.removeProperty("line-height");
+      span.style.removeProperty("letter-spacing");
+
+      if (span.style.fontFamily === "inherit") {
+        span.style.removeProperty("font-family");
+      }
+
+      if (
+        span.style.backgroundColor === "transparent" ||
+        span.style.backgroundColor === "rgba(0, 0, 0, 0)"
+      ) {
+        span.style.removeProperty("background-color");
+      }
+
+      if (!span.getAttribute("style")?.trim()) {
+        span.removeAttribute("style");
+      }
+
+      return true;
+    }
+
     while (
       prvek instanceof HTMLElement &&
       prvek !== modalRichText
     ) {
-      if (
-        prvek.tagName === "SPAN" &&
-        !prvek.hasAttribute("data-velikost-pisma")
-      ) {
-        const maPodezrelouTypografii =
-          Boolean(prvek.style.fontSize) ||
-          Boolean(prvek.style.lineHeight) ||
-          Boolean(prvek.style.letterSpacing) ||
-          prvek.style.fontFamily === "inherit";
-
-        if (maPodezrelouTypografii) {
-          prvek.style.removeProperty("font-size");
-          prvek.style.removeProperty("line-height");
-          prvek.style.removeProperty("letter-spacing");
-
-          if (prvek.style.fontFamily === "inherit") {
-            prvek.style.removeProperty("font-family");
-          }
-
-          if (
-            prvek.style.backgroundColor === "transparent" ||
-            prvek.style.backgroundColor === "rgba(0, 0, 0, 0)"
-          ) {
-            prvek.style.removeProperty("background-color");
-          }
-
-          if (!prvek.getAttribute("style")?.trim()) {
-            prvek.removeAttribute("style");
-          }
-
-          necoOpraveno = true;
-        }
+      if (vycistiPodezrelySpan(prvek)) {
+        necoOpraveno = true;
       }
 
       prvek = prvek.parentElement;
+    }
+
+    /*
+     * Chrome/WebView 152 může po spojení dvou root bloků nechat kurzor
+     * na konci PŘEDCHOZÍHO textového uzlu a nový anonymní SPAN vložit
+     * až jako jeho následujícího sourozence. V takovém stavu jej výše
+     * uvedená cesta přes rodiče kurzoru nemůže najít.
+     *
+     * Vedle kurzoru proto kontrolujeme jen velmi úzký WebView podpis:
+     * SPAN bez data-velikost-pisma, který má současně inline font-size
+     * a font-family: inherit. Tím nesaháme na starší záměrné font-size
+     * spany ani na běžné B/I/U/barvy.
+     */
+    const kotva = vyber.anchorNode;
+
+    if (
+      kotva?.nodeType === Node.TEXT_NODE &&
+      kotva.parentElement === modalRichText
+    ) {
+      const delkaTextu = kotva.textContent?.length || 0;
+      const kandidati = [];
+
+      if (vyber.anchorOffset === delkaTextu) {
+        kandidati.push(kotva.nextSibling);
+      }
+
+      if (vyber.anchorOffset === 0) {
+        kandidati.push(kotva.previousSibling);
+      }
+
+      kandidati.forEach(kandidat => {
+        if (
+          kandidat instanceof HTMLElement &&
+          kandidat.tagName === "SPAN" &&
+          !kandidat.hasAttribute("data-velikost-pisma") &&
+          Boolean(kandidat.style.fontSize) &&
+          kandidat.style.fontFamily === "inherit" &&
+          vycistiPodezrelySpan(kandidat)
+        ) {
+          necoOpraveno = true;
+        }
+      });
     }
 
     return necoOpraveno;

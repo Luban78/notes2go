@@ -37,6 +37,7 @@
     startup: "Start / sync / síť",
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
+    editorTypography: "Editor – Backspace / velikost",
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
     cardDrag: "Karty – reálný drag + tuning",
@@ -661,6 +662,281 @@
     }
 
     zapis(`START EDITOR SELECTION | ${infoDomVyberu()} | ${infoMenuVyberu()}`);
+
+    return () => {
+      uklidy.forEach(uklid => uklid());
+    };
+  }
+
+  function spustEditorTypografii() {
+    const editor = document.getElementById("modalRichText");
+    const tlacitkoVelikosti = document.getElementById("tlacitkoVelikostPisma");
+    const uklidy = [];
+    let posledniSelectionLog = 0;
+    let tokenPozdnihoSnimku = 0;
+
+    if (!editor || !tlacitkoVelikosti) {
+      zapis("CHYBA | chybí #modalRichText nebo #tlacitkoVelikostPisma");
+      return () => {};
+    }
+
+    const povoleneVelikosti = new Set(
+      [...document.querySelectorAll("[data-velikost]")]
+        .map(prvek => String(prvek.dataset.velikost || "").trim())
+        .filter(Boolean)
+    );
+
+    function infoStylu(prvek) {
+      if (!(prvek instanceof Element)) return "N/A";
+
+      const styl = getComputedStyle(prvek);
+      const dataVelikost = prvek.dataset?.velikostPisma || "-";
+      const inlineVelikost = prvek.style?.fontSize || "-";
+      const inlineLine = prvek.style?.lineHeight || "-";
+      const inlineLetter = prvek.style?.letterSpacing || "-";
+      const fontAttr = prvek.getAttribute?.("size") || "-";
+      const textAdjust = styl.webkitTextSizeAdjust || styl.textSizeAdjust || "-";
+
+      return [
+        popisPrvku(prvek),
+        `data=${dataVelikost}`,
+        `inline=${inlineVelikost}`,
+        `computed=${styl.fontSize}`,
+        `line=${styl.lineHeight}`,
+        `inlineLine=${inlineLine}`,
+        `letter=${inlineLetter}`,
+        `sizeAttr=${fontAttr}`,
+        `adjust=${textAdjust}`
+      ].join(" ");
+    }
+
+    function rodicElementu(uzel) {
+      if (uzel instanceof Element) return uzel;
+      return uzel?.nodeType === Node.TEXT_NODE ? uzel.parentElement : null;
+    }
+
+    function retezPrvku(uzel) {
+      const casti = [];
+      let prvek = rodicElementu(uzel);
+      let hloubka = 0;
+
+      while (prvek instanceof Element && hloubka < 7) {
+        casti.push(infoStylu(prvek));
+        if (prvek === editor) break;
+        prvek = prvek.parentElement;
+        hloubka += 1;
+      }
+
+      return casti.length ? casti.join(" <= ") : "NONE";
+    }
+
+    function logickaVelikostVRetezu(uzel) {
+      let prvek = rodicElementu(uzel);
+
+      while (prvek instanceof HTMLElement) {
+        const dataVelikost = String(prvek.dataset?.velikostPisma || "").trim();
+        if (dataVelikost && Number.isFinite(Number(dataVelikost))) {
+          return `data:${dataVelikost}@${popisPrvku(prvek)}`;
+        }
+
+        const inline = parseFloat(prvek.style.fontSize);
+        if (Number.isFinite(inline)) {
+          const kandidat = String(Math.round(inline));
+          if (povoleneVelikosti.has(kandidat)) {
+            return `inline:${kandidat}@${popisPrvku(prvek)}`;
+          }
+        }
+
+        if (prvek === editor) break;
+        prvek = prvek.parentElement;
+      }
+
+      return "default:18";
+    }
+
+    function strukturaBloku(uzel) {
+      const prvek = rodicElementu(uzel);
+      if (!prvek) return "NONE";
+
+      let blok = prvek.closest?.("#modalRichText > div, #modalRichText > p, #modalRichText > li, #modalRichText > ul, #modalRichText > ol, #modalRichText > blockquote, #modalRichText > h1, #modalRichText > h2, #modalRichText > h3") || null;
+
+      if (!blok) {
+        let aktualni = prvek;
+        while (aktualni?.parentElement && aktualni.parentElement !== editor) {
+          aktualni = aktualni.parentElement;
+        }
+        if (aktualni?.parentElement === editor) blok = aktualni;
+      }
+
+      if (!blok) return "NONE";
+
+      const kopie = blok.cloneNode(true);
+      const walker = document.createTreeWalker(kopie, NodeFilter.SHOW_TEXT);
+      const texty = [];
+      let textovy = walker.nextNode();
+
+      while (textovy) {
+        texty.push(textovy);
+        textovy = walker.nextNode();
+      }
+
+      texty.forEach(node => {
+        node.textContent = `⟦T${node.textContent?.length || 0}⟧`;
+      });
+
+      return zkratText(kopie.outerHTML, 680);
+    }
+
+    function queryFontInfo() {
+      try {
+        return `qFont=${document.queryCommandValue("fontSize") || "-"}`;
+      } catch (_chyba) {
+        return "qFont=ERR";
+      }
+    }
+
+    function snimek(faze, event = null) {
+      const vyber = window.getSelection();
+      const anchor = vyber?.anchorNode || null;
+      const focus = vyber?.focusNode || null;
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      const start = range?.startContainer || null;
+      const eventInfo = event
+        ? ` | inputType=${event.inputType || "-"} key=${event.key || "-"} prevented=${event.defaultPrevented ? "Y" : "N"}`
+        : "";
+
+      zapis(
+        `${faze}${eventInfo} | toolbar=${tlacitkoVelikosti.textContent?.trim() || "-"} | ${queryFontInfo()} | ${infoDomVyberu()}`
+      );
+
+      zapis(
+        `  ANCHOR expected=${logickaVelikostVRetezu(anchor)} | ${retezPrvku(anchor)}`
+      );
+
+      if (focus !== anchor) {
+        zapis(
+          `  FOCUS expected=${logickaVelikostVRetezu(focus)} | ${retezPrvku(focus)}`
+        );
+      }
+
+      if (start && start !== anchor && start !== focus) {
+        zapis(
+          `  RANGE-START expected=${logickaVelikostVRetezu(start)} | ${retezPrvku(start)}`
+        );
+      }
+
+      zapis(`  BLOCK ${strukturaBloku(anchor || start)}`);
+    }
+
+    function naplanujPozdniSnimky(popisek) {
+      const mujToken = ++tokenPozdnihoSnimku;
+
+      requestAnimationFrame(() => {
+        if (mujToken === tokenPozdnihoSnimku && aktivniModul === "editorTypography") {
+          snimek(`${popisek} +RAF`);
+        }
+      });
+
+      [40, 120, 300].forEach(zpozdeni => {
+        setTimeout(() => {
+          if (mujToken === tokenPozdnihoSnimku && aktivniModul === "editorTypography") {
+            snimek(`${popisek} +${zpozdeni}ms`);
+          }
+        }, zpozdeni);
+      });
+    }
+
+    pridejPosluchac(uklidy, document, "keydown", event => {
+      if (!editor.contains(event.target)) return;
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      snimek(`KEYDOWN ${event.key}`, event);
+    }, true);
+
+    pridejPosluchac(uklidy, document, "beforeinput", event => {
+      if (!editor.contains(event.target)) return;
+      const typ = String(event.inputType || "");
+      if (!typ.startsWith("delete")) return;
+      snimek("BEFOREINPUT", event);
+    }, true);
+
+    /*
+     * Dokument capture fáze je záměrná: input už obsahuje DOM vytvořený
+     * Android WebView, ale běží ještě PŘED opravným input listenerem v
+     * editorMedia.js. Zachytíme tedy i anonymní span dřív, než se jej
+     * stávající ochrana pokusí vyčistit.
+     */
+    pridejPosluchac(uklidy, document, "input", event => {
+      if (!editor.contains(event.target)) return;
+      const typ = String(event.inputType || "");
+      if (!typ.startsWith("delete")) return;
+      snimek("INPUT RAW před editorMedia", event);
+      naplanujPozdniSnimky("INPUT AFTER");
+    }, true);
+
+    pridejPosluchac(uklidy, editor, "pointerup", event => {
+      if (jeDebugPrvek(event.target)) return;
+      snimek("POINTERUP", event);
+      naplanujPozdniSnimky("POINTERUP AFTER");
+    }, true);
+
+    pridejPosluchac(uklidy, editor, "dblclick", event => {
+      if (jeDebugPrvek(event.target)) return;
+      snimek("DBLCLICK", event);
+      naplanujPozdniSnimky("DBLCLICK AFTER");
+    }, true);
+
+    pridejPosluchac(uklidy, document, "selectionchange", () => {
+      const vyber = window.getSelection();
+      const uzel = vyber?.anchorNode;
+      if (!uzel || !editor.contains(uzel)) return;
+
+      const ted = performance.now();
+      if (ted - posledniSelectionLog < 35) return;
+      posledniSelectionLog = ted;
+      snimek("SELECTIONCHANGE");
+    }, true);
+
+    const observerToolbar = new MutationObserver(() => {
+      zapis(`TOOLBAR MUTATION | value=${tlacitkoVelikosti.textContent?.trim() || "-"} | ${infoDomVyberu()}`);
+    });
+    observerToolbar.observe(tlacitkoVelikosti, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
+    pridejObserver(uklidy, observerToolbar);
+
+    const observerEditor = new MutationObserver(zmeny => {
+      const relevantni = zmeny.filter(zmena =>
+        zmena.type === "childList" ||
+        (zmena.type === "attributes" && ["style", "class", "data-velikost-pisma", "size"].includes(zmena.attributeName))
+      );
+
+      if (!relevantni.length) return;
+
+      const souhrn = relevantni.slice(0, 6).map(zmena => {
+        if (zmena.type === "attributes") {
+          return `ATTR ${zmena.attributeName}@${popisPrvku(zmena.target)}`;
+        }
+
+        const pridano = [...zmena.addedNodes].map(popisPrvku).join(",") || "-";
+        const odebrano = [...zmena.removedNodes].map(popisPrvku).join(",") || "-";
+        return `CHILD@${popisPrvku(zmena.target)} +[${pridano}] -[${odebrano}]`;
+      }).join(" ; ");
+
+      zapis(`DOM MUTATION x${relevantni.length} | ${souhrn}`);
+    });
+
+    observerEditor.observe(editor, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["style", "class", "data-velikost-pisma", "size"]
+    });
+    pridejObserver(uklidy, observerEditor);
+
+    zapis("START EDITOR TYPOGRAPHY VD | patch=362 | diagnostika nic v editoru nemění");
+    snimek("START SNAPSHOT");
 
     return () => {
       uklidy.forEach(uklid => uklid());
@@ -1626,6 +1902,8 @@
       stopAktivnihoModulu = spustTodoSelection();
     } else if (aktivniModul === "editorSelection") {
       stopAktivnihoModulu = spustEditorSelection();
+    } else if (aktivniModul === "editorTypography") {
+      stopAktivnihoModulu = spustEditorTypografii();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "bulletDrag") {
