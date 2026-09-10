@@ -39,8 +39,8 @@
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
     bulletDrag: "Bullet – drag / hierarchie",
-    cardDrag: "Karty – drag (produkce OFF)",
-    cardDragLab: "Karty – Drag Lab tuning panel",
+    cardDrag: "Karty – reálný drag + tuning",
+    cardDragLab: "Karty – Drag Lab (syntetický)",
     performance: "Výkon – benchmark"
   };
 
@@ -947,6 +947,33 @@
         return;
       }
 
+      if (typ === "TUNE") {
+        zapis(`DRAG TUNE | ${detail.settings || "-"}`);
+        return;
+      }
+
+      if (typ === "FOCUS_ON" || typ === "FOCUS_OFF") {
+        zapis(`DRAG ${typ === "FOCUS_ON" ? "FOCUS ON" : "FOCUS OFF"} | scale=${detail.scale ?? "-"}% | ${detail.ms ?? "-"}ms`);
+        return;
+      }
+
+      if (typ === "SLOT_LOCK") {
+        zapis(`DRAG SLOT LOCK | ${detail.from ?? "-"} -> ${detail.to ?? "-"} | anim=${detail.anim ?? "-"}ms | reason=${detail.reason || "-"}`);
+        return;
+      }
+
+      if (typ === "REFREEZE") {
+        zapis(`DRAG REFREEZE | target=${detail.target ?? "-"} | slots=${detail.slots ?? "-"}`);
+        return;
+      }
+
+      if (typ === "DWELL_RESET") {
+        if (window.LubaNoteCardDrag?.ziskejNastaveni?.().detailLog) {
+          zapis(`DRAG DWELL RESET | slot=${detail.candidate ?? "-"} | move=${detail.move ?? "-"}px`);
+        }
+        return;
+      }
+
       if (typ === "TARGET") {
         zapis(
           `DRAG TARGET | ${detail.from ?? "-"} -> ${detail.candidate ?? "-"} | col=${detail.column ?? "-"} | hold=${detail.hold ?? "-"}ms | @${detail.x ?? "-"},${detail.y ?? "-"}`
@@ -1069,14 +1096,18 @@
     );
 
     zapis(
-      "START CARD DRAG | ghost clone + touch takeover; auto-scroll až po skutečném pohybu; sleduj READY/PICKUP/MOVE/CANCEL"
+      "START REAL CARD DRAG | hadí sloty + delayed lock + focus + auto-scroll; tuning panel otevřen"
     );
+    const nast = window.LubaNoteCardDrag?.ziskejNastaveni?.();
+    if (nast) zapis(`DRAG DEFAULTS | ${Object.entries(nast).map(([k,v]) => `${k}=${v}`).join(" | ")}`);
+    window.LubaNoteCardDrag?.otevriLadeni?.();
 
     return () => {
       window.removeEventListener(
         "luba:card-drag-debug",
         handler
       );
+      window.LubaNoteCardDrag?.zavriLadeni?.();
     };
   }
 
@@ -1103,7 +1134,7 @@
 
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = "cardDragLab.js?v=20260910-card-drag-lab-tuning-344";
+      script.src = "cardDragLab.js?v=20260910-real-card-drag-tuning-346";
       script.async = true;
       script.dataset.lnCardDragLab = "1";
       script.addEventListener("load", () => resolve(), { once: true });

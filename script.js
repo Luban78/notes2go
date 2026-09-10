@@ -4092,7 +4092,23 @@ async function dokoncitKartuPodleIndexu(index) {
   return updatedTask;
 }
 
+let casovacOdlozenehoRenderuKaret = null;
+
 function renderTasks() {
+  /*
+   * Během aktivního drag gesta nesmí sync/realtime vyhodit DOM karty
+   * pod prstem. Render pouze krátce odložíme; po dropu/cancelu se spustí
+   * na aktuálních datech standardní cestou.
+   */
+  if (window.LubaNoteCardDrag?.jeAktivni?.()) {
+    if (casovacOdlozenehoRenderuKaret) clearTimeout(casovacOdlozenehoRenderuKaret);
+    casovacOdlozenehoRenderuKaret = setTimeout(() => {
+      casovacOdlozenehoRenderuKaret = null;
+      renderTasks();
+    }, 120);
+    return;
+  }
+
   if (typeof renderTagFilters === "function") {
     renderTagFilters();
     updateTagFilterUI();

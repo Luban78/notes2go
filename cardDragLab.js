@@ -1,6 +1,6 @@
 /* ==========================================
-   LUBANOTE – CARD DRAG LAB / TUNING PANEL
-   14 ruzne vysokych syntetickych karet, bez auto-scrollu.
+   LUBANOTE – CARD DRAG LAB / TUNING PANEL + AUTO-SCROLL
+   30 ruzne vysokych syntetickych karet pro test dlouheho presunu.
    Libovolna karta -> libovolny slot.
 
    Model:
@@ -18,23 +18,26 @@
   "use strict";
 
   const FPS_UPDATE_INTERVAL = 500;
-  const POCET_KARET = 14;
+  const POCET_KARET = 30;
   const VYCHOZI_PORADI = Array.from({ length: POCET_KARET }, (_, i) => i + 1);
-  const VYSKY_KARET = [0, 48, 76, 58, 88, 52, 68, 82, 46, 72, 56, 86, 62, 50, 78];
+  const VYSKY_KARET = [0, 48, 76, 58, 88, 52, 68, 82, 46, 72, 56, 86, 62, 50, 78, 64, 90, 54, 74, 60, 84, 49, 70, 80, 57, 92, 66, 52, 76, 61, 86];
   const MEZERA_X = 10;
   const MEZERA_Y = 7;
 
   const VYCHOZI_NASTAVENI = Object.freeze({
-    scalePct: 90,
-    ghostScalePct: 103,
+    // Vyladene hodnoty z APK testu 0.9.344 (screenshot uzivatele).
+    scalePct: 78,
+    ghostScalePct: 110,
     longPressMs: 430,
     preLongMovePx: 16,
     dwellMs: 320,
-    reorderMs: 320,
-    focusMs: 220,
+    reorderMs: 700,
+    focusMs: 20,
     insetPx: 8,
     jitterPx: 11,
-    detailLog: false
+    autoScrollEdgePx: 85,
+    autoScrollMaxPx: 20,
+    detailLog: true
   });
 
   const DEFINICE_PARAMETRU = Object.freeze({
@@ -46,7 +49,9 @@
     reorderMs: { label: "Animace presunu", unit: "ms", min: 0, max: 700, step: 20 },
     focusMs: { label: "Animace scale", unit: "ms", min: 0, max: 500, step: 20 },
     insetPx: { label: "Presny slot inset", unit: "px", min: 0, max: 20, step: 1 },
-    jitterPx: { label: "Tolerance klidu", unit: "px", min: 3, max: 25, step: 1 }
+    jitterPx: { label: "Tolerance klidu", unit: "px", min: 3, max: 25, step: 1 },
+    autoScrollEdgePx: { label: "Auto-scroll okraj", unit: "px", min: 45, max: 160, step: 5 },
+    autoScrollMaxPx: { label: "Auto-scroll max", unit: "px/f", min: 4, max: 28, step: 2 }
   });
 
   let instance = null;
@@ -71,10 +76,10 @@
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         overflow: hidden !important;
         overscroll-behavior: none !important;
-        --ln-cdl-focus-scale: .90;
-        --ln-cdl-ghost-scale: 1.03;
-        --ln-cdl-focus-ms: 220ms;
-        --ln-cdl-reorder-ms: 320ms;
+        --ln-cdl-focus-scale: .78;
+        --ln-cdl-ghost-scale: 1.10;
+        --ln-cdl-focus-ms: 20ms;
+        --ln-cdl-reorder-ms: 700ms;
       }
 
       #ln-card-drag-lab .ln-cdl-head {
@@ -164,11 +169,19 @@
         flex: 1 1 auto !important;
         min-height: 0 !important;
         display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 7px 10px !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        padding: 7px 10px 28px !important;
         touch-action: none !important;
-        overflow: hidden !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+      }
+
+      #ln-card-drag-lab .ln-cdl-board::-webkit-scrollbar {
+        display: none !important;
       }
 
       #ln-card-drag-lab .ln-cdl-grid {
@@ -429,6 +442,7 @@
     let longPressTimer = null;
     let cilTimer = null;
     let animaceTimer = null;
+    let autoScrollFrame = null;
     let fpsFrame = null;
     let stopnuto = false;
     let nastaveni = { ...VYCHOZI_NASTAVENI };
@@ -460,7 +474,7 @@
     }
 
     function souhrnNastaveni() {
-      return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | detailLog=${nastaveni.detailLog ? "on" : "off"}`;
+      return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | autoEdge=${nastaveni.autoScrollEdgePx}px | autoMax=${nastaveni.autoScrollMaxPx}px/f | detailLog=${nastaveni.detailLog ? "on" : "off"}`;
     }
 
     function aplikujNastaveni({ zapisLog = false } = {}) {
@@ -477,7 +491,7 @@
       const detailBtn = tunePanel?.querySelector('[data-lab="detail-log"]');
       if (detailBtn) detailBtn.textContent = `Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}`;
       if (testText) {
-        testText.textContent = `Scale ${nastaveni.scalePct} % · long press ${nastaveni.longPressMs} ms · dwell ${nastaveni.dwellMs} ms · přesun ${nastaveni.reorderMs} ms · focus ${nastaveni.focusMs} ms. Změny v panelu platí okamžitě.`;
+        testText.textContent = `Scale ${nastaveni.scalePct} % · LP ${nastaveni.longPressMs} ms · dwell ${nastaveni.dwellMs} ms · přesun ${nastaveni.reorderMs} ms · auto-scroll okraj ${nastaveni.autoScrollEdgePx}px / max ${nastaveni.autoScrollMaxPx}px/f.`;
       }
       if (zapisLog) log(`TUNE | ${souhrnNastaveni()}`);
     }
@@ -494,7 +508,7 @@
     function resetNastaveni() {
       nastaveni = { ...VYCHOZI_NASTAVENI };
       aplikujNastaveni({ zapisLog: true });
-      status.textContent = "Parametry vráceny na výchozí hodnoty 0.9.343.";
+      status.textContent = "Parametry vráceny na vyladěné výchozí hodnoty 0.9.346.";
     }
 
     function vytvorRadkyTuningu() {
@@ -706,8 +720,10 @@
 
       // Pokud uz prst behem pomale animace stoji nad dalsim slotem,
       // vyhodnotime ho az ted proti nove, znovu zmrazene mape.
-      const cil = najdiPresnySlot(drag.lastX, drag.lastY);
-      zpracujKandidata(cil, drag.lastX, drag.lastY);
+      if (!drag.autoScrolling && !jeVAutoScrollZone(drag.lastY)) {
+        const cil = najdiPresnySlot(drag.lastX, drag.lastY);
+        zpracujKandidata(cil, drag.lastX, drag.lastY);
+      }
     }
 
     function vycistiKandidata() {
@@ -771,6 +787,116 @@
       if (!drag?.ghost) return;
       drag.ghost.style.left = `${x - drag.offsetX}px`;
       drag.ghost.style.top = `${y - drag.offsetY}px`;
+    }
+
+    function posunZmrazenouMapuPriScrollu(deltaY) {
+      if (!drag || !deltaY) return;
+      drag.frozenSlotRects?.forEach(rect => {
+        rect.top -= deltaY;
+        rect.bottom -= deltaY;
+      });
+      if (drag.frozenGridRect) {
+        drag.frozenGridRect.top -= deltaY;
+        drag.frozenGridRect.bottom -= deltaY;
+      }
+    }
+
+    function autoScrollInfo(y) {
+      if (!board || !drag) return { smer: 0, sila: 0 };
+      const rect = board.getBoundingClientRect();
+      const okraj = Math.min(
+        nastaveni.autoScrollEdgePx,
+        Math.max(38, rect.height * 0.32)
+      );
+      if (y < rect.top + okraj) {
+        return {
+          smer: -1,
+          sila: omez((rect.top + okraj - y) / okraj, 0, 1)
+        };
+      }
+      if (y > rect.bottom - okraj) {
+        return {
+          smer: 1,
+          sila: omez((y - (rect.bottom - okraj)) / okraj, 0, 1)
+        };
+      }
+      return { smer: 0, sila: 0 };
+    }
+
+    function jeVAutoScrollZone(y) {
+      const info = autoScrollInfo(y);
+      if (!info.smer || info.sila <= 0) return false;
+      const maxScroll = Math.max(0, board.scrollHeight - board.clientHeight);
+      if (info.smer < 0 && board.scrollTop <= 0.5) return false;
+      if (info.smer > 0 && board.scrollTop >= maxScroll - 0.5) return false;
+      return true;
+    }
+
+    function zastavAutoScroll() {
+      if (autoScrollFrame) cancelAnimationFrame(autoScrollFrame);
+      autoScrollFrame = null;
+      if (drag) drag.autoScrolling = false;
+    }
+
+    function spustAutoScroll() {
+      zastavAutoScroll();
+
+      const krok = () => {
+        if (!drag || stopnuto) {
+          autoScrollFrame = null;
+          return;
+        }
+
+        const info = autoScrollInfo(drag.lastY);
+        const maxScroll = Math.max(0, board.scrollHeight - board.clientHeight);
+        const scrollPred = board.scrollTop;
+        let scrollPo = scrollPred;
+
+        if (info.smer && info.sila > 0 && maxScroll > 0) {
+          const minRychlost = Math.min(2, nastaveni.autoScrollMaxPx);
+          const rychlost = minRychlost +
+            (nastaveni.autoScrollMaxPx - minRychlost) * info.sila * info.sila;
+          scrollPo = omez(scrollPred + info.smer * rychlost, 0, maxScroll);
+          board.scrollTop = scrollPo;
+          scrollPo = board.scrollTop;
+        }
+
+        const delta = scrollPo - scrollPred;
+        const opravduScrolluje = Math.abs(delta) > 0.1;
+
+        if (opravduScrolluje) {
+          if (!drag.autoScrolling) {
+            drag.autoScrolling = true;
+            drag.autoScrollLogTs = 0;
+            vycistiKandidata();
+            log(`AUTO SCROLL START | card=${drag.cislo} | dir=${delta < 0 ? "up" : "down"} | scrollTop=${Math.round(scrollPo)}`);
+          } else if (drag.candidateIndex != null) {
+            vycistiKandidata();
+          }
+
+          // Frozen hit-map je v souřadnicích viewportu. Při programovém
+          // scrollu se proto posune o přesně opačný deltaY, aby nadále
+          // seděla na skutečných slotech bez průběžného přeměřování.
+          posunZmrazenouMapuPriScrollu(delta);
+
+          const ted = performance.now();
+          if (nastaveni.detailLog && ted - (drag.autoScrollLogTs || 0) >= 180) {
+            drag.autoScrollLogTs = ted;
+            log(`AUTO SCROLL | card=${drag.cislo} | dir=${delta < 0 ? "up" : "down"} | delta=${delta.toFixed(1)} | scrollTop=${Math.round(scrollPo)} | max=${Math.round(maxScroll)}`);
+          }
+        } else if (drag.autoScrolling) {
+          drag.autoScrolling = false;
+          log(`AUTO SCROLL STOP | card=${drag.cislo} | scrollTop=${Math.round(board.scrollTop)}`);
+          if (!drag.lockAnimating) {
+            const cil = najdiPresnySlot(drag.lastX, drag.lastY);
+            zpracujKandidata(cil, drag.lastX, drag.lastY);
+          }
+        }
+
+        autoScrollFrame = requestAnimationFrame(krok);
+      };
+
+      autoScrollFrame = requestAnimationFrame(krok);
     }
 
     function nastavPreview(cilIndex) {
@@ -883,6 +1009,8 @@
         lastY: pending.lastY,
         firstMoveLogged: false,
         lockAnimating: false,
+        autoScrolling: false,
+        autoScrollLogTs: 0,
         frozenSlotRects,
         frozenGridRect
       };
@@ -895,7 +1023,8 @@
       umistiMapu(mapaProCil(sourceIndex));
       zvyrazniCil(null);
       pohniGhost(drag.lastX, drag.lastY);
-      status.textContent = `Držíš ${cislo}. Přejeď na nový slot a chvíli nad ním zůstaň.`;
+      spustAutoScroll();
+      status.textContent = `Držíš ${cislo}. U kraje se seznam sám posouvá; na cíli chvíli zůstaň.`;
       log(`PICKUP | card=${cislo} | from=${sourceIndex + 1} | hole=${sourceIndex + 1} | @${Math.round(drag.lastX)},${Math.round(drag.lastY)}`);
       log(`FOCUS ON | card=${cislo} | others-scale=${nastaveni.scalePct}% | ghost-scale=${nastaveni.ghostScalePct}% | anim=${nastaveni.focusMs}ms`);
       log(`FROZEN MAP | slots=${frozenSlotRects.length} | precise-inset=${nastaveni.insetPx}px | dwell=${nastaveni.dwellMs}ms | jitter=${nastaveni.jitterPx}px | grid=${Math.round(frozenGridRect.width)}x${Math.round(frozenGridRect.height)}`);
@@ -952,6 +1081,7 @@
 
       zrusCilTimer();
       zrusAnimaceTimer();
+      zastavAutoScroll();
       zvyrazniKandidata(null);
 
       if (!cancel && drag.candidateIndex != null) {
@@ -1023,6 +1153,10 @@
       drag.lastY = t.clientY;
       pohniGhost(t.clientX, t.clientY);
       if (drag.lockAnimating) return;
+      if (drag.autoScrolling || jeVAutoScrollZone(t.clientY)) {
+        if (drag.candidateIndex != null) vycistiKandidata();
+        return;
+      }
       const cil = najdiPresnySlot(t.clientX, t.clientY);
       zpracujKandidata(cil, t.clientX, t.clientY);
     }
@@ -1062,11 +1196,13 @@
       longPressTimer = null;
       zrusCilTimer();
       zrusAnimaceTimer();
+      zastavAutoScroll();
       pending = null;
       overlay?.classList.remove("ln-cdl-focus-mode");
       poradi = [...VYCHOZI_PORADI];
       cards.forEach(card => parking.appendChild(card));
       umistiMapu(poradi);
+      board.scrollTop = 0;
       result.innerHTML = `Aktuální pořadí: <strong>${poradi.join(", ")}</strong>`;
       status.textContent = "Dlouze podrž kartu, přejeď na slot a chvíli nad ním zůstaň.";
       resetPerf();
@@ -1079,17 +1215,17 @@
       overlay.innerHTML = `
         <header class="ln-cdl-head">
           <div>
-            <strong>🧪 Drag Lab – tuning</strong>
-            <small>14 různě vysokých karet · živé ladění parametrů</small>
+            <strong>🧪 Drag Lab – tuning + auto-scroll</strong>
+            <small>30 různě vysokých karet · dlouhý přesun · živé ladění</small>
           </div>
           <div class="ln-cdl-actions">
             <button type="button" data-lab="tune">Ladit</button>
-            <button type="button" data-lab="reset">Karty 1–14</button>
+            <button type="button" data-lab="reset">Karty 1–30</button>
             <button type="button" data-lab="close">Zavřít</button>
           </div>
         </header>
         <section class="ln-cdl-test">
-          <div class="ln-cdl-test-title">Had 1→2→3→…→14 · delayed lock + focus mode.</div>
+          <div class="ln-cdl-test-title">Had 1→2→3→…→30 · delayed lock + focus + auto-scroll.</div>
           <div class="ln-cdl-test-text"></div>
           <div class="ln-cdl-state">
             <span class="ln-cdl-status">Dlouze podrž kartu, přejeď na slot a chvíli nad ním zůstaň.</span>
@@ -1109,7 +1245,7 @@
             <button type="button" data-lab="detail-log">Detail log: VYP</button>
             <button type="button" data-lab="fps-reset">Reset FPS</button>
           </div>
-          <div class="ln-cdl-tune-hint">Změny platí okamžitě. „Karty 1–14“ resetuje jen pořadí; „Výchozí“ vrátí parametry. Pro čistší měření FPS nech Detail log vypnutý.</div>
+          <div class="ln-cdl-tune-hint">Změny platí okamžitě. „Karty 1–30“ resetuje pořadí i scroll; „Výchozí“ vrátí vyladěné hodnoty ze screenshotu. Pro čistší FPS můžeš Detail log vypnout.</div>
         </section>
         <main class="ln-cdl-board">
           <div class="ln-cdl-grid"></div>
@@ -1139,6 +1275,7 @@
       longPressTimer = null;
       zrusCilTimer();
       zrusAnimaceTimer();
+      zastavAutoScroll();
       drag?.ghost?.remove();
       drag?.source?.classList.remove("ln-cdl-source-anchor");
       drag = null;
@@ -1189,10 +1326,11 @@
       }
     });
 
-    log(`START | SNAKE TUNING PANEL TEST 0.9.344 | cards=14 | equal=no | continuous-touch=keep | viewport=${window.innerWidth}x${window.innerHeight}`);
-    log("MODEL | one linear order 1->2->3->...->14; two columns are compact visual layout only");
+    log(`START | SNAKE TUNING + AUTO-SCROLL TEST 0.9.346 | cards=${POCET_KARET} | equal=no | continuous-touch=keep | viewport=${window.innerWidth}x${window.innerHeight}`);
+    log(`MODEL | one linear order 1->2->3->...->${POCET_KARET}; two columns are compact visual layout only`);
     log(`HEIGHTS | ${VYSKY_KARET.slice(1).join(",")}`);
-    log(`TUNING DEFAULTS | ${souhrnNastaveni()} | no auto-scroll`);
+    log(`AUTO SCROLL | edge=${nastaveni.autoScrollEdgePx}px | max=${nastaveni.autoScrollMaxPx}px/frame | candidate-lock-during-scroll=no`);
+    log(`TUNING DEFAULTS | ${souhrnNastaveni()} | auto-scroll=yes`);
 
     instance = { stop, reset };
     return stop;
