@@ -2155,8 +2155,7 @@ function pripravDesktopDragHornihoStitku(button, event) {
     startY: event.clientY,
     x: event.clientX,
     y: event.clientY,
-    timer: 0,
-    pripravZaznam: zajistiZaznamHornihoStitkuProDrag(button)
+    timer: 0
   };
 
   desktopStitekPointer = stav;
@@ -2169,7 +2168,12 @@ function pripravDesktopDragHornihoStitku(button, event) {
       return;
     }
 
-    const zaznam = await stav.pripravZaznam;
+    /*
+     * Záznam štítku dohledáváme až PO skutečném long-pressu.
+     * Krátký desktop klik tak nikdy nespouští žádnou drag přípravu
+     * ani cloudovou práci navíc.
+     */
+    const zaznam = await zajistiZaznamHornihoStitkuProDrag(button);
 
     if (
       desktopStitekPointer !== stav ||
@@ -2230,6 +2234,19 @@ document.addEventListener(
     if (aktivni) {
       event.preventDefault();
       event.stopPropagation();
+
+      /*
+       * DESKTOP FAILSAFE:
+       * Některé Chromium/WebView kombinace mohou při přesunu přes
+       * horizontálně scrollovaný pás ztratit pointerup. Pokud už levé
+       * tlačítko fyzicky není dole, drag nesmí zůstat viset.
+       */
+      if ((event.buttons & 1) === 0) {
+        void dokoncitPresunHornihoStitku();
+        vycistiDesktopPointerStitku();
+        return;
+      }
+
       pohniGhostemHornihoStitku(stav.x, stav.y);
       return;
     }
@@ -2283,6 +2300,74 @@ document.addEventListener(
     } catch (_) {}
 
     vycistiDesktopPointerStitku();
+  },
+  { capture: true, passive: false }
+);
+
+/*
+ * PC fallback mimo Pointer Events.
+ * Chrome běžně vyšle pointerup + mouseup. Kdyby pointerup z nějakého
+ * důvodu chyběl, mouseup vždy uklidí aktivní ghost. Díky kontrole stavu
+ * je dvojité dokončení neškodné.
+ */
+document.addEventListener(
+  "mouseup",
+  (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const stav = desktopStitekPointer;
+    if (!stav) {
+      return;
+    }
+
+    zrusDesktopTimerStitku();
+    aktivniPointeryHornichStitku.delete(stav.pointerId);
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      event.stopPropagation();
+      pohniGhostemHornihoStitku(event.clientX, event.clientY);
+      void dokoncitPresunHornihoStitku();
+    }
+
+    vycistiDesktopPointerStitku();
+  },
+  { capture: true, passive: false }
+);
+
+document.addEventListener(
+  "mousemove",
+  (event) => {
+    const stav = desktopStitekPointer;
+    if (!stav) {
+      return;
+    }
+
+    stav.x = event.clientX;
+    stav.y = event.clientY;
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (!aktivni) {
+      return;
+    }
+
+    if ((event.buttons & 1) === 0) {
+      void dokoncitPresunHornihoStitku();
+      vycistiDesktopPointerStitku();
+      return;
+    }
+
+    event.preventDefault();
+    pohniGhostemHornihoStitku(event.clientX, event.clientY);
   },
   { capture: true, passive: false }
 );
