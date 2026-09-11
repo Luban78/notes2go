@@ -3565,6 +3565,31 @@
         await pripravObrazekProPoznamku(file);
 
       /*
+       * EDITOR CORE V2 TEST – TENKÝ ADAPTÉR
+       * ------------------------------------
+       * Picker Galerie/Fotoaparát i potvrzená komprese zůstávají přesně
+       * v editorMedia.js. Když je ale aktivní izolovaný V2 TEST, připravený
+       * obrázek NESMÍ skončit ve skrytém produkčním #modalRichText ani ve
+       * cloudové attachment frontě originální poznámky. Předáme pouze Data URL
+       * a název do V2 modelové kopie. Bez aktivního V2 je původní produkční
+       * cesta beze změny.
+       */
+      const v2Bridge = window.LubaNoteEditorV2Bridge;
+      if (v2Bridge?.jeAktivni?.()) {
+        const vlozenoDoV2 = v2Bridge.vlozPripravenyObrazek?.({
+          dataUrl,
+          fileName: file?.name || "",
+          alt: file?.name ? `Obrázek: ${file.name}` : "Obrázek v poznámce"
+        });
+
+        if (!vlozenoDoV2) {
+          throw new Error("Editor Core V2 obrázek nepřijal.");
+        }
+
+        return;
+      }
+
+      /*
        * FÁZE B: před vložením vytvoříme lokální JPEG Blob a
        * zařadíme jej do trvalé fronty pro Supabase Storage.
        * Data URL stále zůstává v obrázku i poznámce, takže

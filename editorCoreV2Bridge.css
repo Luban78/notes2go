@@ -49,7 +49,7 @@
 .lnV2TestBadge {
   position: absolute;
   right: 10px;
-  top: 52px;
+  top: 105px;
   z-index: 40;
   pointer-events: none;
   padding: 4px 7px;
@@ -118,4 +118,10 @@
   color: var(--color-editor-text);
   font: inherit;
   font-weight: 700;
+}
+
+
+/* V2.9a – odkazy jsou v editačním DOMu SPAN, ale Bridge je na tap otevře. */
+.taskModal.editorV2TestMode .ln-v2-odkaz {
+  cursor: pointer;
 }

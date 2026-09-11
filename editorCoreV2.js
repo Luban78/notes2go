@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 (LAB)
-   FÁZE V2.9: vlastní model + LubaNote Bridge TEST mode + internetové odkazy jako atribut segmentu.
+   FÁZE V2.11: vlastní model + LubaNote Bridge TEST mode + obrázek jako samostatný blok modelu.
 
    DŮLEŽITÉ:
    - Tento modul NESMÍ měnit produkční editor ani ukládat poznámky.
@@ -15,7 +15,7 @@
 (() => {
   "use strict";
 
-  const VERZE_MODELU = 2;
+  const VERZE_MODELU = 3;
   const VELIKOSTI_PISMA = [12, 14, 16, 18, 20, 24, 28, 32];
   const LIMIT_HISTORIE = 100;
   const PALETA_BAREV = [
@@ -71,6 +71,7 @@
   let tlacitkoRedo = null;
   let vlozenyHostitel = null;
   let vlozenyRezim = false;
+  let vybranyObrazekId = "";
 
   function noveIdBloku() {
     return `v2b-${Date.now().toString(36)}-${dalsiIdBloku++}`;
@@ -275,6 +276,45 @@
     };
   }
 
+  function jeTextovyBlok(blok) {
+    return blok?.typ === "odstavec";
+  }
+
+  function jeObrazkovyBlok(blok) {
+    return blok?.typ === "obrazek";
+  }
+
+  function normalizujVelikostObrazku(hodnota) {
+    const text = String(hodnota ?? "").trim().toLowerCase();
+    if (!text || text === "prizpusobit") return "prizpusobit";
+    const cislo = Number.parseFloat(text);
+    if (!Number.isFinite(cislo)) return "prizpusobit";
+    return String(Math.max(10, Math.min(100, Math.round(cislo))));
+  }
+
+  function normalizujZarovnaniObrazku(hodnota) {
+    const text = String(hodnota || "").trim().toLowerCase();
+    return ["vlevo", "stred", "vpravo"].includes(text) ? text : "stred";
+  }
+
+  function vytvorBlokObrazku({
+    zdroj = "",
+    alt = "Obrázek v poznámce",
+    attachmentId = "",
+    velikost = "prizpusobit",
+    zarovnani = "stred"
+  } = {}) {
+    return {
+      id: noveIdBloku(),
+      typ: "obrazek",
+      zdroj: String(zdroj || ""),
+      alt: String(alt || "Obrázek v poznámce"),
+      attachmentId: String(attachmentId || ""),
+      velikost: normalizujVelikostObrazku(velikost),
+      zarovnani: normalizujZarovnaniObrazku(zarovnani)
+    };
+  }
+
   function zjistiZakladniVelikost() {
     const kandidati = [];
 
@@ -320,6 +360,7 @@
   }
 
   function nastavObsahBloku(blok, obsah) {
+    if (!jeTextovyBlok(blok)) return;
     blok.obsah = normalizujObsah(obsah);
   }
 
@@ -337,15 +378,34 @@
     }
 
     dokument.verze = VERZE_MODELU;
-    dokument.bloky = dokument.bloky.filter((blok) => blok && blok.typ === "odstavec");
+    dokument.bloky = dokument.bloky.filter((blok) =>
+      blok && (blok.typ === "odstavec" || blok.typ === "obrazek")
+    );
     if (!dokument.bloky.length) dokument.bloky.push(vytvorOdstavec(""));
 
     dokument.bloky.forEach((blok) => {
       if (!blok.id) blok.id = noveIdBloku();
+
+      if (jeObrazkovyBlok(blok)) {
+        blok.zdroj = String(blok.zdroj || "");
+        blok.alt = String(blok.alt || "Obrázek v poznámce");
+        blok.attachmentId = String(blok.attachmentId || "");
+        blok.velikost = normalizujVelikostObrazku(blok.velikost);
+        blok.zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
+        delete blok.obsah;
+        return;
+      }
+
+      blok.typ = "odstavec";
       if (!Array.isArray(blok.obsah)) blok.obsah = [vytvorSegment("")];
       blok.obsah = normalizujObsah(blok.obsah);
       blok.zarovnani = normalizujZarovnani(blok.zarovnani);
     });
+
+    /* Caret musí mít vždy alespoň jeden skutečný textový blok. */
+    if (!dokument.bloky.some(jeTextovyBlok)) {
+      dokument.bloky.push(vytvorOdstavec(""));
+    }
   }
 
   function spocitejOffsetVBloku(blokEl, node, offset) {
@@ -515,6 +575,58 @@
     }
   }
 
+  function vykresliObrazkovyBlok(blok) {
+    const figure = document.createElement("figure");
+    figure.className = "ln-v2-obrazek lubaNoteImage";
+    figure.dataset.lnV2Obrazek = blok.id;
+    figure.dataset.lubanoteImage = "true";
+    figure.dataset.velikost = normalizujVelikostObrazku(blok.velikost);
+    figure.dataset.zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
+    figure.style.setProperty(
+      "--ln-v2-obrazek-sirka",
+      figure.dataset.velikost === "prizpusobit" ? "100%" : `${figure.dataset.velikost}%`
+    );
+    if (blok.attachmentId) figure.dataset.attachmentId = blok.attachmentId;
+    figure.contentEditable = "false";
+    figure.tabIndex = 0;
+
+    const image = document.createElement("img");
+    image.src = blok.zdroj;
+    image.alt = blok.alt || "Obrázek v poznámce";
+    image.loading = "lazy";
+    image.draggable = false;
+    image.tabIndex = -1;
+    image.dataset.velikost = figure.dataset.velikost;
+    image.dataset.zarovnani = figure.dataset.zarovnani;
+
+    const settingsButton = document.createElement("button");
+    settingsButton.type = "button";
+    settingsButton.className = "lubaNoteImageSettings ln-v2-obrazek-nastaveni";
+    settingsButton.dataset.v2ImageSettings = blok.id;
+    settingsButton.setAttribute("aria-label", "Nastavení obrázku");
+    settingsButton.contentEditable = "false";
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(settingsButton, "nastaveni", ["editorImageControlSvgIcon"]);
+    } else {
+      settingsButton.textContent = "⚙";
+    }
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "lubaNoteImageRemove ln-v2-obrazek-smazat";
+    removeButton.dataset.v2ImageRemove = blok.id;
+    removeButton.setAttribute("aria-label", "Odstranit obrázek");
+    removeButton.contentEditable = "false";
+    if (window.LubaNoteIcons?.nastavJenIkonu) {
+      window.LubaNoteIcons.nastavJenIkonu(removeButton, "zavrit", ["editorImageControlSvgIcon"]);
+    } else {
+      removeButton.textContent = "×";
+    }
+
+    figure.append(image, settingsButton, removeButton);
+    return figure;
+  }
+
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
     if (!editor) return;
     normalizujDokument();
@@ -522,6 +634,11 @@
     const fragment = document.createDocumentFragment();
 
     dokument.bloky.forEach((blok) => {
+      if (jeObrazkovyBlok(blok)) {
+        fragment.appendChild(vykresliObrazkovyBlok(blok));
+        return;
+      }
+
       const radek = document.createElement("div");
       radek.className = "ln-v2-odstavec";
       radek.dataset.lnV2Blok = blok.id;
@@ -587,6 +704,7 @@
   }
 
   function rozdelObsah(blok, offset) {
+    if (!jeTextovyBlok(blok)) return { vlevo: [], vpravo: [] };
     const cil = Math.max(0, Math.min(textBloku(blok).length, offset));
     const vlevo = [];
     const vpravo = [];
@@ -615,7 +733,7 @@
   }
 
   function formatNaPozici(blok, offset) {
-    if (!blok?.obsah?.length) return kopieFormatu();
+    if (!jeTextovyBlok(blok) || !blok?.obsah?.length) return kopieFormatu();
     const delkaBloku = textBloku(blok).length;
     if (!delkaBloku) return kopieFormatu(blok.obsah[0]?.format);
 
@@ -685,7 +803,7 @@
   }
 
   function jePoziceNaHraniciFormatu(blok, offset) {
-    if (!blok?.obsah?.length) return false;
+    if (!jeTextovyBlok(blok) || !blok?.obsah?.length) return false;
     const delka = textBloku(blok).length;
     const cil = Math.max(0, Math.min(delka, offset));
 
@@ -858,6 +976,15 @@
     if (caret.blok === 0) return caret;
 
     const predchozi = dokument.bloky[caret.blok - 1];
+
+    /* Obrázek je atomický modelový blok. Backspace na začátku textu za
+       obrázkem odstraní právě tento blok a caret nechá na začátku textu. */
+    if (jeObrazkovyBlok(predchozi)) {
+      dokument.bloky.splice(caret.blok - 1, 1);
+      vybranyObrazekId = "";
+      return { blok: caret.blok - 1, offset: 0 };
+    }
+
     const predText = textBloku(predchozi);
     nastavObsahBloku(predchozi, [...predchozi.obsah, ...blok.obsah]);
     dokument.bloky.splice(caret.blok, 1);
@@ -888,9 +1015,169 @@
     if (caret.blok >= dokument.bloky.length - 1) return caret;
 
     const dalsi = dokument.bloky[caret.blok + 1];
+
+    /* Delete na konci textu před obrázkem odstraní atomický image blok. */
+    if (jeObrazkovyBlok(dalsi)) {
+      dokument.bloky.splice(caret.blok + 1, 1);
+      vybranyObrazekId = "";
+      return caret;
+    }
+
     nastavObsahBloku(blok, [...blok.obsah, ...dalsi.obsah]);
     dokument.bloky.splice(caret.blok + 1, 1);
     return caret;
+  }
+
+  function najdiTextovyBlokOd(index, smer = 1) {
+    if (!dokument?.bloky?.length) return -1;
+    const krok = smer < 0 ? -1 : 1;
+    let i = Math.max(0, Math.min(dokument.bloky.length - 1, Number(index) || 0));
+    while (i >= 0 && i < dokument.bloky.length) {
+      if (jeTextovyBlok(dokument.bloky[i])) return i;
+      i += krok;
+    }
+    return -1;
+  }
+
+  function vlozObrazekZToolbaru(data = {}) {
+    if (!dokument?.bloky?.length) return false;
+
+    const zdroj = String(data.zdroj || data.dataUrl || "").trim();
+    if (!zdroj) {
+      nastavStav("Obrázek: chybí zdroj", true);
+      return false;
+    }
+
+    const vyber = ziskejFormatovaciVyber() || vyberZPosledniPozice();
+    if (!vyber) return false;
+
+    /* Stejně jako starý LubaNote obrázek označený text nemaže – vloží se
+       na konec aktuálního výběru. V2 pak přesně rozdělí modelový odstavec. */
+    let cil = { ...(vyber.konec || vyber.zacatek) };
+    if (!jeTextovyBlok(dokument.bloky[cil.blok])) {
+      const nejblizsi = najdiTextovyBlokOd(cil.blok, 1);
+      const zaloha = nejblizsi >= 0 ? nejblizsi : najdiTextovyBlokOd(cil.blok, -1);
+      if (zaloha < 0) return false;
+      cil = { blok: zaloha, offset: textBloku(dokument.bloky[zaloha]).length };
+    }
+
+    const blok = dokument.bloky[cil.blok];
+    const delka = textBloku(blok).length;
+    cil.offset = Math.max(0, Math.min(delka, Number(cil.offset) || 0));
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const obrazek = vytvorBlokObrazku({
+      zdroj,
+      alt: data.alt || (data.fileName ? `Obrázek: ${data.fileName}` : "Obrázek v poznámce"),
+      attachmentId: data.attachmentId || "",
+      velikost: data.velikost || "prizpusobit",
+      zarovnani: data.zarovnani || "stred"
+    });
+
+    let novaPozice;
+
+    if (delka === 0) {
+      const novyRadek = vytvorOdstavec("");
+      dokument.bloky.splice(cil.blok, 1, obrazek, novyRadek);
+      novaPozice = { blok: cil.blok + 1, offset: 0 };
+    } else if (cil.offset <= 0) {
+      const novyRadek = vytvorOdstavec("");
+      dokument.bloky.splice(cil.blok, 0, obrazek, novyRadek);
+      novaPozice = { blok: cil.blok + 1, offset: 0 };
+    } else if (cil.offset >= delka) {
+      const novyRadek = vytvorOdstavec("");
+      dokument.bloky.splice(cil.blok + 1, 0, obrazek, novyRadek);
+      novaPozice = { blok: cil.blok + 2, offset: 0 };
+    } else {
+      const rez = rozdelObsah(blok, cil.offset);
+      nastavObsahBloku(blok, rez.vlevo);
+      const novyRadek = vytvorOdstavec("");
+      const blokZa = vytvorOdstavecZObsahu(
+        rez.vpravo.length ? rez.vpravo : [vytvorSegment("")],
+        blok.zarovnani || "left"
+      );
+      dokument.bloky.splice(cil.blok + 1, 0, obrazek, novyRadek, blokZa);
+      novaPozice = { blok: cil.blok + 2, offset: 0 };
+    }
+
+    vybranyObrazekId = obrazek.id;
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+    const novyVyber = { zacatek: novaPozice, konec: novaPozice, sbaleny: true };
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    ulozZmenuDoHistorie(snapshotPred, "vložit obrázek");
+    vykresli(novyVyber);
+    nastavStav("Obrázek vložen jako samostatný V2 modelový blok");
+    zapisDebug?.(`EDITOR V2 | image insert | block=${obrazek.id}`);
+    return true;
+  }
+
+  function smazObrazekZModelu(obrazekId) {
+    const id = String(obrazekId || "");
+    const index = dokument?.bloky?.findIndex((blok) => jeObrazkovyBlok(blok) && blok.id === id) ?? -1;
+    if (index < 0) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    dokument.bloky.splice(index, 1);
+    if (!dokument.bloky.some(jeTextovyBlok)) dokument.bloky.push(vytvorOdstavec(""));
+
+    let cil = najdiTextovyBlokOd(Math.min(index, dokument.bloky.length - 1), 1);
+    if (cil < 0) cil = najdiTextovyBlokOd(Math.max(0, index - 1), -1);
+    if (cil < 0) cil = 0;
+    const pozice = { blok: cil, offset: 0 };
+    const novyVyber = { zacatek: pozice, konec: pozice, sbaleny: true };
+
+    vybranyObrazekId = "";
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    ulozZmenuDoHistorie(snapshotPred, "smazat obrázek");
+    vykresli(novyVyber);
+    editor?.focus({ preventScroll: true });
+    nastavStav("Obrázek odstraněn z V2 modelu");
+    zapisDebug?.(`EDITOR V2 | image delete | block=${id}`);
+    return true;
+  }
+
+  function ziskejNastaveniObrazku(obrazekId = vybranyObrazekId) {
+    const id = String(obrazekId || "");
+    const blok = dokument?.bloky?.find((polozka) => jeObrazkovyBlok(polozka) && polozka.id === id);
+    if (!blok) return null;
+
+    return {
+      id: blok.id,
+      velikost: normalizujVelikostObrazku(blok.velikost),
+      zarovnani: normalizujZarovnaniObrazku(blok.zarovnani)
+    };
+  }
+
+  function nastavNastaveniObrazku(obrazekId, hodnoty = {}) {
+    const id = String(obrazekId || vybranyObrazekId || "");
+    const blok = dokument?.bloky?.find((polozka) => jeObrazkovyBlok(polozka) && polozka.id === id);
+    if (!blok) return false;
+
+    const novaVelikost = normalizujVelikostObrazku(hodnoty.velikost ?? blok.velikost);
+    const noveZarovnani = normalizujZarovnaniObrazku(hodnoty.zarovnani ?? blok.zarovnani);
+
+    if (novaVelikost === blok.velikost && noveZarovnani === blok.zarovnani) return true;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    blok.velikost = novaVelikost;
+    blok.zarovnani = noveZarovnani;
+    vybranyObrazekId = id;
+
+    ulozZmenuDoHistorie(snapshotPred, "nastavení obrázku");
+    vykresli(posledniVyber || posledniPozice);
+
+    queueMicrotask(() => {
+      const figure = Array.from(editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || [])
+        .find((polozka) => polozka.dataset.lnV2Obrazek === id);
+      if (!figure) return;
+      try { figure.focus({ preventScroll: true }); } catch (_error) { figure.focus(); }
+    });
+
+    nastavStav(`Obrázek: ${novaVelikost === "prizpusobit" ? "přizpůsobit" : `${novaVelikost} %`} · ${noveZarovnani}`);
+    zapisDebug?.(`EDITOR V2 | image settings | block=${id} | size=${novaVelikost} | align=${noveZarovnani}`);
+    return true;
   }
 
   function vlozViceRadku(text, vyber) {
@@ -913,6 +1200,7 @@
   }
 
   function nastavVelikostVBloku(blok, od, doPozice, velikost) {
+    if (!jeTextovyBlok(blok)) return;
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
     const konecPozice = Math.max(odPozice, Math.min(textBloku(blok).length, doPozice));
     if (odPozice === konecPozice) return;
@@ -967,6 +1255,7 @@
   }
 
   function nastavBarvuVBloku(blok, od, doPozice, klic, hodnota) {
+    if (!jeTextovyBlok(blok)) return;
     if (!["barva", "pozadi"].includes(klic)) return;
 
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
@@ -1032,6 +1321,7 @@
 
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
       let pozice = 0;
@@ -1049,6 +1339,7 @@
   }
 
   function nastavBooleanFormatVBloku(blok, od, doPozice, klic, hodnota) {
+    if (!jeTextovyBlok(blok)) return;
     if (!['tucne', 'kurziva', 'podtrzeni'].includes(klic)) return;
 
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
@@ -1115,6 +1406,7 @@
 
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
       let pozice = 0;
@@ -1169,6 +1461,7 @@
 
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
       let pozice = 0;
@@ -1365,6 +1658,7 @@
   }
 
   function nastavOdkazVBloku(blok, od, doPozice, url) {
+    if (!jeTextovyBlok(blok)) return;
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
     const konecPozice = Math.max(odPozice, Math.min(textBloku(blok).length, doPozice));
     if (odPozice === konecPozice) return;
@@ -1432,6 +1726,7 @@
 
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
       let pozice = 0;
@@ -1531,6 +1826,7 @@
   }
 
   function nastavStylTextuVBloku(blok, od, doPozice, stylTextu) {
+    if (!jeTextovyBlok(blok)) return;
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
     const konecPozice = Math.max(odPozice, Math.min(textBloku(blok).length, doPozice));
     if (odPozice === konecPozice) return;
@@ -1594,6 +1890,7 @@
 
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
       let pozice = 0;
@@ -1640,7 +1937,9 @@
     const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
     const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
     for (let index = od; index <= doBloku; index += 1) {
-      hodnoty.add(normalizujZarovnani(dokument.bloky[index]?.zarovnani));
+      const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
+      hodnoty.add(normalizujZarovnani(blok.zarovnani));
     }
     return hodnoty;
   }
@@ -1655,6 +1954,7 @@
     const snapshotPred = vytvorSnapshotHistorie(vyber);
 
     for (let index = od; index <= doBloku; index += 1) {
+      if (!jeTextovyBlok(dokument.bloky[index])) continue;
       dokument.bloky[index].zarovnani = zarovnani;
     }
 
@@ -1764,6 +2064,29 @@
     for (let b = 0; b < dokument.bloky.length; b += 1) {
       const blok = dokument.bloky[b];
       const blokEl = blokyDom[b];
+
+      if (jeObrazkovyBlok(blok)) {
+        if (!blokEl?.matches?.("figure.ln-v2-obrazek.lubaNoteImage[data-ln-v2-obrazek]")) {
+          return `blok ${b}: neplatný image element`;
+        }
+        if (blokEl.dataset.lnV2Obrazek !== blok.id) return `blok ${b}: jiné image id`;
+        if (blokEl.dataset.velikost !== normalizujVelikostObrazku(blok.velikost)) {
+          return `blok ${b}: jiná velikost obrázku DOM/model`;
+        }
+        if (blokEl.dataset.zarovnani !== normalizujZarovnaniObrazku(blok.zarovnani)) {
+          return `blok ${b}: jiné zarovnání obrázku DOM/model`;
+        }
+        const image = blokEl.querySelector(":scope > img");
+        if (!image) return `blok ${b}: chybí img`;
+        if (String(image.getAttribute("src") || "") !== String(blok.zdroj || "")) {
+          return `blok ${b}: jiný zdroj obrázku DOM/model`;
+        }
+        if (String(image.getAttribute("alt") || "") !== String(blok.alt || "Obrázek v poznámce")) {
+          return `blok ${b}: jiný alt obrázku DOM/model`;
+        }
+        continue;
+      }
+
       if (!blokEl?.matches?.(".ln-v2-odstavec[data-ln-v2-blok]")) return `blok ${b}: neplatný element`;
       if (blokEl.dataset.lnV2Blok !== blok.id) return `blok ${b}: jiné id`;
       const modelZarovnani = normalizujZarovnani(blok.zarovnani);
@@ -1962,6 +2285,41 @@
     });
   }
 
+  function vytvorObrazkovyBlokZHtml(element, nepodporovane) {
+    if (!(element instanceof Element)) return null;
+    const image = element.tagName?.toLowerCase() === "img"
+      ? element
+      : element.querySelector("img");
+    const zdroj = String(image?.getAttribute("src") || "").trim();
+    if (!image || !zdroj) {
+      nepodporovane?.add("obrázek bez zdroje");
+      return null;
+    }
+
+    let velikost = element.dataset?.velikost || image.dataset?.velikost || "";
+    if (!velikost) {
+      const sirka = String(element.style?.width || image.style?.width || "").trim();
+      const match = sirka.match(/^([0-9]+(?:\.[0-9]+)?)%$/);
+      if (match) velikost = match[1];
+    }
+
+    let zarovnani = element.dataset?.zarovnani || image.dataset?.zarovnani || "";
+    if (!zarovnani) {
+      const float = String(element.style?.float || "").toLowerCase();
+      if (float === "left") zarovnani = "vlevo";
+      else if (float === "right") zarovnani = "vpravo";
+      else zarovnani = "stred";
+    }
+
+    return vytvorBlokObrazku({
+      zdroj,
+      alt: image.getAttribute("alt") || "Obrázek v poznámce",
+      attachmentId: element.dataset?.attachmentId || "",
+      velikost: velikost || "prizpusobit",
+      zarovnani
+    });
+  }
+
   function vytvorModelZHtml(html, plainText = "") {
     const sablona = document.createElement("template");
     const vstup = String(html || "");
@@ -1988,6 +2346,16 @@
 
       if (uzel.nodeType !== Node.ELEMENT_NODE) return;
       const tag = uzel.tagName.toLowerCase();
+
+      if (
+        (tag === "figure" && uzel.classList.contains("lubaNoteImage"))
+        || tag === "img"
+      ) {
+        flushRootInline();
+        const obrazek = vytvorObrazkovyBlokZHtml(uzel, nepodporovane);
+        if (obrazek) bloky.push(obrazek);
+        return;
+      }
 
       if (tag === "br") {
         flushRootInline();
@@ -2052,6 +2420,28 @@
   function exportujHtmlZModelu(doc = dokument) {
     const obal = document.createElement("div");
     (doc?.bloky || []).forEach((blok) => {
+      if (jeObrazkovyBlok(blok)) {
+        const figure = document.createElement("figure");
+        figure.className = "lubaNoteImage";
+        figure.dataset.lubanoteImage = "true";
+        figure.dataset.velikost = normalizujVelikostObrazku(blok.velikost);
+        figure.dataset.zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
+        if (blok.attachmentId) figure.dataset.attachmentId = blok.attachmentId;
+        figure.contentEditable = "false";
+
+        const image = document.createElement("img");
+        image.setAttribute("src", String(blok.zdroj || ""));
+        image.alt = blok.alt || "Obrázek v poznámce";
+        image.loading = "lazy";
+        image.draggable = false;
+        image.tabIndex = -1;
+        image.dataset.velikost = figure.dataset.velikost;
+        image.dataset.zarovnani = figure.dataset.zarovnani;
+        figure.appendChild(image);
+        obal.appendChild(figure);
+        return;
+      }
+
       const radek = document.createElement("div");
       const zarovnani = normalizujZarovnani(blok?.zarovnani);
       if (zarovnani !== "left") radek.style.textAlign = zarovnani;
@@ -2108,7 +2498,8 @@
   function nastavDokumentProHost(model) {
     dokument = klonDat(model);
     normalizujDokument();
-    posledniPozice = { blok: 0, offset: 0 };
+    const prvniTextovy = dokument.bloky.findIndex(jeTextovyBlok);
+    posledniPozice = { blok: prvniTextovy >= 0 ? prvniTextovy : 0, offset: 0 };
     posledniVyber = { zacatek: { ...posledniPozice }, konec: { ...posledniPozice }, sbaleny: true };
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     aktivniFormatPsani = null;
@@ -2143,6 +2534,7 @@
     document.body.appendChild(lab);
     vlozenyHostitel = null;
     vlozenyRezim = false;
+    vybranyObrazekId = "";
   }
 
   function zachytAktualniVyber() {
@@ -2181,7 +2573,7 @@
     lab.innerHTML = `
       <header class="ln-v2-hlavicka">
         <div>
-          <strong>Editor Core V2.9 · LAB</strong>
+          <strong>Editor Core V2.10 · LAB</strong>
           <small>Izolovaný test · nic se neukládá do poznámek</small>
         </div>
         <button type="button" class="ln-v2-zavrit" data-v2-akce="zavrit" aria-label="Zavřít Editor Core V2">×</button>
@@ -2231,7 +2623,7 @@
       </div>
 
       <footer class="ln-v2-paticka">
-        V2.9: internetové odkazy jsou atribut segmentu modelu; v editačním DOMu jsou inertní a při exportu se převádějí na kompatibilní &lt;a&gt;. Obrázky, TODO a IME zatím zůstávají vypnuté.
+        V2.11: obrázek je samostatný atomický blok modelu. Galerie/Fotoaparát a komprese se přebírají z LubaNote; velikost a zarovnání používají stejné nastavení jako produkční editor. Drag bude napojený v dalším kroku. TODO a IME zatím zůstávají vypnuté.
       </footer>
     `;
 
@@ -2244,9 +2636,33 @@
     tlacitkoUndo = lab.querySelector('[data-v2-historie="undo"]');
     tlacitkoRedo = lab.querySelector('[data-v2-historie="redo"]');
 
+    poslouchej(editor, "click", (event) => {
+      const smazat = event.target.closest?.("[data-v2-image-remove]");
+      if (smazat) {
+        event.preventDefault();
+        event.stopPropagation();
+        smazObrazekZModelu(smazat.dataset.v2ImageRemove);
+        return;
+      }
+
+      const figure = event.target.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
+      if (!figure || !editor.contains(figure)) return;
+      event.preventDefault();
+      vybranyObrazekId = figure.dataset.lnV2Obrazek || "";
+      figure.focus({ preventScroll: true });
+      nastavStav("Obrázek V2 vybrán · ⚙ nastavení · ✕ odstraní modelový blok");
+    });
+
     poslouchej(editor, "beforeinput", zpracujBeforeInput);
     poslouchej(editor, "paste", zpracujPaste);
     poslouchej(editor, "keydown", (event) => {
+      const aktivniFigure = document.activeElement?.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
+      if (aktivniFigure && (event.key === "Backspace" || event.key === "Delete")) {
+        event.preventDefault();
+        smazObrazekZModelu(aktivniFigure.dataset.lnV2Obrazek);
+        return;
+      }
+
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const klavesa = String(event.key || "").toLowerCase();
       if (klavesa === "z") {
@@ -2386,7 +2802,7 @@
     else vykresli(posledniVyber || posledniPozice);
 
     editor.focus({ preventScroll: true });
-    zapisDebug?.("EDITOR V2 LAB | OPEN V2.9 | produkční editor nedotčen");
+    zapisDebug?.("EDITOR V2 LAB | OPEN V2.10 | produkční editor nedotčen");
     return true;
   }
 
@@ -2470,7 +2886,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.9-LINKS-380",
+    verze: "V2.11-IMAGE-SETTINGS-383",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -2489,6 +2905,10 @@
     nastavStylTextu: nastavStylTextuZToolbaru,
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
+    vlozObrazek: vlozObrazekZToolbaru,
+    smazObrazek: smazObrazekZModelu,
+    ziskejNastaveniObrazku,
+    nastavNastaveniObrazku,
     undo: vratHistoriiZpet,
     redo: vratHistoriiVpred,
     kontrolaDomu,

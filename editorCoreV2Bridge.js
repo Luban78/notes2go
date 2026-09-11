@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.9
+   FÁZE V2.11
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -66,6 +66,32 @@
     "modalDateButton",
     "modalTimeButton"
   ]);
+
+  const moznostiVelikostiObrazku = [
+    { hodnota: "prizpusobit", popisek: "Přizpůsobit editoru" },
+    { hodnota: "100", popisek: "100 %" },
+    { hodnota: "75", popisek: "75 %" },
+    { hodnota: "50", popisek: "50 %" },
+    { hodnota: "25", popisek: "25 %" },
+    { hodnota: "vlastni", popisek: "Vlastní" }
+  ];
+
+  const moznostiZarovnaniObrazku = [
+    { hodnota: "vlevo", popisek: "Vlevo" },
+    { hodnota: "stred", popisek: "Na střed" },
+    { hodnota: "vpravo", popisek: "Vpravo" }
+  ];
+
+  function popisekVelikostiObrazku(hodnota) {
+    const nalezena = moznostiVelikostiObrazku.find((polozka) => polozka.hodnota === String(hodnota));
+    if (nalezena) return nalezena.popisek;
+    const cislo = Number(hodnota);
+    return Number.isFinite(cislo) ? `${cislo} %` : "Přizpůsobit editoru";
+  }
+
+  function popisekZarovnaniObrazku(hodnota) {
+    return moznostiZarovnaniObrazku.find((polozka) => polozka.hodnota === hodnota)?.popisek || "Na střed";
+  }
 
   function core() {
     return window.LubaNoteEditorV2 || null;
@@ -499,6 +525,86 @@
     return true;
   }
 
+  function vlozPripravenyObrazek(data = {}) {
+    if (!aktivni) return false;
+    const api = core();
+    if (!api?.vlozObrazek) {
+      zobrazToast("V2 TEST: Image Block není dostupný", true);
+      return false;
+    }
+
+    const vlozeno = api.vlozObrazek({
+      dataUrl: data.dataUrl || data.zdroj || "",
+      fileName: data.fileName || "",
+      alt: data.alt || "",
+      attachmentId: data.attachmentId || "",
+      velikost: data.velikost || "prizpusobit",
+      zarovnani: data.zarovnani || "stred"
+    });
+
+    if (vlozeno) {
+      obnovToolbar();
+      zobrazToast("V2 TEST: obrázek vložen do modelové kopie");
+    }
+    return Boolean(vlozeno);
+  }
+
+  function otevriV2NastaveniObrazku(obrazekId) {
+    const api = core();
+    const nastaveni = api?.ziskejNastaveniObrazku?.(obrazekId);
+    if (!nastaveni) {
+      zobrazToast("V2 TEST: obrázek už není dostupný", true);
+      return;
+    }
+
+    if (typeof window.otevriNastavovaciModal !== "function") {
+      zobrazToast("V2 TEST: nastavení obrázku není dostupné", true);
+      return;
+    }
+
+    window.otevriNastavovaciModal({
+      nadpis: "Obrázek",
+      polozky: [
+        {
+          klic: "velikost",
+          popisek: "Velikost",
+          hodnota: nastaveni.velikost,
+          zobrazeni: popisekVelikostiObrazku(nastaveni.velikost),
+          moznosti: moznostiVelikostiObrazku,
+          vlastniVstup: {
+            spoustecHodnota: "vlastni",
+            nadpis: "Vlastní velikost",
+            popisek: "Šířka obrázku v procentech",
+            min: 10,
+            max: 100,
+            krok: 1,
+            vychoziHodnota: 50,
+            vytvorZobrazeni: (hodnota) => `${hodnota} %`
+          }
+        },
+        {
+          klic: "zarovnani",
+          popisek: "Zarovnání",
+          hodnota: nastaveni.zarovnani,
+          zobrazeni: popisekZarovnaniObrazku(nastaveni.zarovnani),
+          moznosti: moznostiZarovnaniObrazku
+        }
+      ],
+      poUlozeni: (hodnoty) => {
+        const zmeneno = api?.nastavNastaveniObrazku?.(obrazekId, {
+          velikost: hodnoty.velikost,
+          zarovnani: hodnoty.zarovnani
+        });
+        if (!zmeneno) {
+          zobrazToast("V2 TEST: nastavení obrázku se nepodařilo uložit", true);
+          return;
+        }
+        obnovToolbar();
+        zobrazToast("V2 TEST: nastavení obrázku uloženo do modelové kopie");
+      }
+    });
+  }
+
   function prepniTestRezim() {
     const zapnout = !jeTestRezimZapnuty();
     nastavTestRezim(zapnout);
@@ -644,6 +750,31 @@
       return;
     }
 
+    if (cil.matches(".ln-v2-obrazek .lubaNoteImageSettings[data-v2-image-settings]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      otevriV2NastaveniObrazku(cil.dataset.v2ImageSettings);
+      return;
+    }
+
+    if (id === "tlacitkoVlozitObrazek") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      zavriPanelyFormatu();
+
+      if (typeof window.vlozObrazekDoPoznamky !== "function") {
+        zobrazToast("V2 TEST: výběr obrázku není dostupný", true);
+        return;
+      }
+
+      /* Použijeme přesně současný LubaNote picker Galerie/Fotoaparát a jeho
+         kompresní pipeline. editorMedia.js na konci předá připravený obrázek
+         zpět sem místo zásahu do skrytého produkčního DOMu. */
+      window.vlozObrazekDoPoznamky();
+      return;
+    }
+
     if (id === "tlacitkoVlozitOdkaz") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -672,6 +803,38 @@
     }
   }
 
+  function zpracujKlikNaV2Odkaz(event) {
+    if (!aktivni || !hostitel?.contains(event.target)) return;
+
+    const odkazElement = event.target.closest?.(".ln-v2-odkaz[data-ln-v2-odkaz]");
+    if (!odkazElement || !hostitel.contains(odkazElement)) return;
+
+    /*
+     * Když uživatel právě označuje text odkazu, necháme selection na pokoji.
+     * Běžný tap s collapsed caretem ale funguje stejně jako v produkčním
+     * LubaNote: otevře bezpečně normalizovanou http/https adresu.
+     */
+    const vyber = window.getSelection();
+    if (vyber?.rangeCount && !vyber.isCollapsed) {
+      const range = vyber.getRangeAt(0);
+      try {
+        if (range.intersectsNode(odkazElement)) return;
+      } catch (_error) {}
+    }
+
+    const href = String(odkazElement.dataset.lnV2Odkaz || "").trim();
+    if (!/^https?:\/\//i.test(href)) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    window.open(
+      href,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   document.addEventListener("pointerdown", (event) => {
     if (!aktivni) return;
     if (event.target.closest(".editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
@@ -679,6 +842,7 @@
     }
   }, true);
 
+  document.addEventListener("click", zpracujKlikNaV2Odkaz, true);
   document.addEventListener("click", zpracujToolbarCapture, true);
 
   document.addEventListener("keydown", (event) => {
@@ -727,11 +891,12 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.9-BRIDGE-LINKS-380",
+    verze: "V2.11-IMAGE-SETTINGS-383",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,
     ulozTestKopii,
+    vlozPripravenyObrazek,
     jeAktivni: () => aktivni
   });
 })();
