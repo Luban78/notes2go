@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2
-   FÁZE V2.19: stabilizace selection / MOVE + produkční odkazy / Planner.
+   FÁZE V2.20: produkční selection menu + stabilizace TODO → Planner.
 
    🔒 FROZEN PRINCIPY CORE V2:
    - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
@@ -2728,16 +2728,163 @@
     return soucet + Math.max(0, Number(pozice?.offset) || 0);
   }
 
+  /* ==========================================
+     V2.20 – VLASTNÍ LUBANOTE SELECTION MENU
+
+     UI panel (Vyjmout / Kopírovat / Vložit / Vše) vlastní Bridge, ale
+     veškeré změny obsahu musí jít přes MODEL. Tyto funkce jsou jediná
+     povolená cesta pro cut/paste/select-all z V2 selection menu.
+  ========================================== */
+
+  function ziskejVyberProSelectionMenu() {
+    return klonVyberu(
+      ulozenyFormatovaciVyber
+      || posledniVyber
+      || aktualniVyberModelu()
+      || vyberZPosledniPozice()
+    );
+  }
+
+  function ziskejTextVyberuProSelectionMenu() {
+    const vyber = ziskejVyberProSelectionMenu();
+    return vyber && !vyber.sbaleny ? textVeVyberu(vyber) : "";
+  }
+
+  function ziskejRichVyberProSelectionMenu() {
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber || vyber.sbaleny || vyber.zacatek.blok !== vyber.konec.blok) return null;
+
+    const blok = dokument.bloky[vyber.zacatek.blok];
+    if (!jeTextovyBlok(blok)) return null;
+
+    const prvniRez = rozdelObsah(blok, vyber.zacatek.offset);
+    const docasnyBlok = { ...blok, obsah: prvniRez.vpravo };
+    const druhaDelka = Math.max(0, vyber.konec.offset - vyber.zacatek.offset);
+    const druhyRez = rozdelObsah(docasnyBlok, druhaDelka);
+    const obsah = normalizujObsah(druhyRez.vlevo).filter((cast) => String(cast.text || "").length);
+    const text = obsah.map((cast) => String(cast.text || "")).join("");
+    if (!text) return null;
+
+    return {
+      verze: 1,
+      text,
+      obsah: obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format))
+    };
+  }
+
+  function sklapniVyberNaKonecProSelectionMenu() {
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber) return false;
+    const konec = { ...vyber.konec };
+    nastavVyberModelu(konec, konec);
+    return true;
+  }
+
+  function vyjmiVyberProSelectionMenu() {
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber || vyber.sbaleny) return { ok: false, text: "" };
+
+    const text = textVeVyberu(vyber);
+    if (!text) return { ok: false, text: "" };
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const caret = smazVyber(vyber);
+    ulozZmenuDoHistorie(snapshotPred, "vyjmout text");
+    aktivniFormatPozice = klicPozice(caret);
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup("deleteByCut");
+    return { ok: true, text };
+  }
+
+  function vlozRichVyberProSelectionMenu(fragment) {
+    if (!fragment || fragment.verze !== 1 || !Array.isArray(fragment.obsah) || !fragment.obsah.length) return false;
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const caret = smazVyber(vyber);
+    const blok = dokument.bloky[caret.blok];
+    if (!jeTextovyBlok(blok)) return false;
+
+    const rez = rozdelObsah(blok, caret.offset);
+    const vlozene = fragment.obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format));
+    nastavObsahBloku(blok, [...rez.vlevo, ...vlozene, ...rez.vpravo]);
+    const delka = vlozene.reduce((soucet, cast) => soucet + String(cast.text || "").length, 0);
+    const novaPozice = { blok: caret.blok, offset: caret.offset + delka };
+    ulozZmenuDoHistorie(snapshotPred, "vložit formátovaný text");
+    aktivniFormatPozice = klicPozice(novaPozice);
+    const novyVyber = { zacatek: novaPozice, konec: novaPozice, sbaleny: true };
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup("insertFromPaste");
+    return true;
+  }
+
+  function vlozTextProSelectionMenu(text) {
+    if (typeof text !== "string" || !text.length) return false;
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const caret = vlozViceRadku(text, vyber);
+    ulozZmenuDoHistorie(snapshotPred, "vložit text");
+    aktivniFormatPozice = klicPozice(caret);
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup("insertFromPaste");
+    return true;
+  }
+
+  function vyberVseProSelectionMenu() {
+    const prvni = dokument.bloky.findIndex(jeTextovyBlok);
+    let posledni = -1;
+    for (let i = dokument.bloky.length - 1; i >= 0; i -= 1) {
+      if (jeTextovyBlok(dokument.bloky[i])) {
+        posledni = i;
+        break;
+      }
+    }
+    if (prvni < 0 || posledni < 0) return false;
+
+    const zacatek = { blok: prvni, offset: 0 };
+    const konec = { blok: posledni, offset: textBloku(dokument.bloky[posledni]).length };
+    nastavVyberModelu(zacatek, konec);
+    return true;
+  }
+
   function ziskejPlanovaciKontext() {
     const vyber = ziskejFormatovaciVyber();
     if (!vyber) return { ok: false, duvod: "Nebyl nalezen výběr textu." };
+
+    /*
+     * V2.20 – TODO MÁ PŘEDNOST PŘED OBECNÝM TEXTOVÝM VÝBĚREM.
+     *
+     * Pokud je caret NEBO označený text uvnitř jedné TODO položky, plánuje se
+     * vždy celá TODO položka přes její stabilní todoId. Dříve se označené slovo
+     * uvnitř TODO chybně klasifikovalo jako `selection`. Poznámka s TODO ale
+     * ukládá text v `note.todos` a její `richContent` je prázdný, takže následná
+     * synchronizace správně odstranila takovou „selection“ Planner položku jako
+     * backlink, který v richContent neexistuje. Výsledkem byl podtržený text v
+     * editoru, ale žádný úkol v Planneru.
+     *
+     * TOTO PRAVIDLO NEMĚNIT bez regresního testu TODO → Planner.
+     */
+    if (vyber.zacatek.blok === vyber.konec.blok) {
+      const todoBlok = dokument.bloky[vyber.zacatek.blok];
+      if (jeTodoBlok(todoBlok)) {
+        const text = textBloku(todoBlok).trim();
+        if (!text) return { ok: false, duvod: "Prázdné TODO nelze naplánovat." };
+        ulozenyPlanovaciVyber = null;
+        return { ok: true, typ: "todo", text, todoId: todoBlok.id };
+      }
+    }
 
     if (!vyber.sbaleny) {
       const text = textVeVyberu(vyber).trim();
       if (!text) return { ok: false, duvod: "Označ text, který chceš naplánovat." };
       if (vyber.zacatek.blok !== vyber.konec.blok) {
         const bloky = dokument.bloky.slice(vyber.zacatek.blok, vyber.konec.blok + 1);
-        if (bloky.some((blok) => jeSeznamovyBlok(blok))) {
+        if (bloky.some((blok) => jeSeznamovyBlok(blok) || jeTodoBlok(blok))) {
           return { ok: false, duvod: "Pro plánování označ text jedné položky seznamu." };
         }
       }
@@ -2749,14 +2896,6 @@
         start: absolutniOffsetPozice(vyber.zacatek),
         end: absolutniOffsetPozice(vyber.konec)
       };
-    }
-
-    const blok = dokument.bloky[vyber.zacatek.blok];
-    if (jeTodoBlok(blok)) {
-      const text = textBloku(blok).trim();
-      if (!text) return { ok: false, duvod: "Prázdné TODO nelze naplánovat." };
-      ulozenyPlanovaciVyber = null;
-      return { ok: true, typ: "todo", text, todoId: blok.id };
     }
 
     return { ok: false, duvod: "Nejdřív označ text, který chceš naplánovat." };
@@ -5329,7 +5468,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.19-STABILIZE-393",
+    verze: "V2.20-SELECTION-PLANNER-394",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -5357,6 +5496,13 @@
     vlozInterniOdkazZAutocomplete,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
+    ziskejTextVyberuProSelectionMenu,
+    ziskejRichVyberProSelectionMenu,
+    sklapniVyberNaKonecProSelectionMenu,
+    vyjmiVyberProSelectionMenu,
+    vlozRichVyberProSelectionMenu,
+    vlozTextProSelectionMenu,
+    vyberVseProSelectionMenu,
     vlozObrazek: vlozObrazekZToolbaru,
     smazObrazek: smazObrazekZModelu,
     ziskejNastaveniObrazku,

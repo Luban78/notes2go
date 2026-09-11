@@ -60,6 +60,10 @@
     return;
   }
 
+  function spravujeV2SelectionMenu() {
+    return window.LubaNoteEditorV2Bridge?.spravujeSelectionMenu?.() === true;
+  }
+
   let ulozenyRozsah = null;
 
   /*
@@ -257,6 +261,14 @@
 
 
   function jeUzelVEditoru(uzel) {
+    if (spravujeV2SelectionMenu()) {
+      const prvek = ziskejPrvekZUzlu(uzel);
+      const v2Editor = document.querySelector(".ln-v2-editor");
+      if (prvek && v2Editor?.contains(prvek)) {
+        return true;
+      }
+    }
+
     return Boolean(
       ziskejRichEditorProUzel(uzel)
     );
@@ -3772,6 +3784,15 @@ todoList?.classList.remove(
 
 
   function aktualizujMenuPodleVyberu() {
+    /*
+     * V2.20: když běží nový engine, stejné #selectionMenu vlastní Bridge.
+     * Legacy selection controller do něj nesmí současně zapisovat/hide-show,
+     * jinak by se oba odladěné panely navzájem přetahovaly.
+     */
+    if (spravujeV2SelectionMenu()) {
+      return;
+    }
+
     if (casovacAktualizaceVyberu) {
       clearTimeout(casovacAktualizaceVyberu);
     }

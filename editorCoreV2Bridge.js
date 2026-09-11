@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / PRODUCTION
-   FÁZE V2.18 – INTERNÍ ODKAZY + PLANNER
+   FÁZE V2.20 – SELECTION MENU + TODO PLANNER
 
    🔒 FROZEN INTEGRAČNÍ PRAVIDLA:
    - Editor Core V2 je výchozí engine pro vlastní podporované poznámky.
@@ -23,6 +23,11 @@
   const modalTitle = document.getElementById("modalTitle");
   const todoList = document.getElementById("todoList");
   const editorBackButton = document.getElementById("editorBackButton");
+  const selectionMenu = document.getElementById("selectionMenu");
+  const selectionVyjmout = document.getElementById("selectionVyjmout");
+  const selectionKopirovat = document.getElementById("selectionKopirovat");
+  const selectionVlozit = document.getElementById("selectionVlozit");
+  const selectionVybratVse = document.getElementById("selectionVybratVse");
 
   if (!taskModal || !modalRichText || !modalTitle || !editorBackButton) {
     return;
@@ -51,6 +56,15 @@
   let cropCanvas = null;
   let cropVyber = null;
   let cropStav = null;
+
+  /* V2.20 – stav našeho vlastního selection menu. */
+  let v2SelectionMenuAktivni = false;
+  let v2SelectionMenuKurzor = false;
+  let v2SelectionMenuBod = null;
+  let v2LokalniSchranka = "";
+  let v2RichSchranka = null;
+  let potlacV2SelectionMenuDo = 0;
+  let v2PosledniTapSelection = null;
 
   const podporovaneAkce = new Set([
     "tlacitkoZpet",
@@ -151,6 +165,233 @@
     toastTimer = setTimeout(() => {
       if (toast) toast.hidden = true;
     }, 2600);
+  }
+
+  /* ==========================================
+     V2.20 – VLASTNÍ LUBANOTE SELECTION PANELY
+
+     Používáme stejné #selectionMenu jako Legacy, ale akce vedeme výhradně
+     přes Core V2 model. Tím vracíme oba odladěné režimy:
+       - Vyjmout / Kopírovat / Vložit / Vše pro označený text
+       - Vložit / Vše pro caret / prázdné místo
+  ========================================== */
+
+  function jeV2SelectionRozsah(rozsah) {
+    if (!aktivni || !hostitel || !rozsah) return false;
+    try {
+      return hostitel.contains(rozsah.startContainer) && hostitel.contains(rozsah.endContainer);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function skryjV2SelectionMenu() {
+    if (!selectionMenu) return;
+    if (selectionMenu.dataset.lnV2Owner === "1") {
+      selectionMenu.hidden = true;
+      selectionMenu.removeAttribute("data-ln-v2-owner");
+    }
+    v2SelectionMenuAktivni = false;
+    v2SelectionMenuKurzor = false;
+    v2SelectionMenuBod = null;
+  }
+
+  function nastavV2SelectionMenuTlacitka(kurzor = false) {
+    if (!selectionMenu) return;
+    if (selectionVyjmout) selectionVyjmout.hidden = kurzor;
+    if (selectionKopirovat) selectionKopirovat.hidden = kurzor;
+    if (selectionVlozit) selectionVlozit.hidden = false;
+    if (selectionVybratVse) selectionVybratVse.hidden = false;
+  }
+
+  function pozicujV2SelectionMenu({ rozsah = null, bod = null } = {}) {
+    if (!selectionMenu) return;
+
+    selectionMenu.hidden = false;
+    selectionMenu.dataset.lnV2Owner = "1";
+
+    requestAnimationFrame(() => {
+      if (!aktivni || selectionMenu.hidden) return;
+
+      let rect = null;
+      if (rozsah && !rozsah.collapsed) {
+        const rects = Array.from(rozsah.getClientRects?.() || []).filter((r) => r.width || r.height);
+        rect = rects[0] || rozsah.getBoundingClientRect?.() || null;
+      }
+
+      const sirka = selectionMenu.offsetWidth || 240;
+      const vyska = selectionMenu.offsetHeight || 44;
+      const viewportW = window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth;
+      const viewportH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+      const offsetTop = window.visualViewport?.offsetTop || 0;
+      const okraj = 8;
+
+      let x;
+      let y;
+
+      if (bod) {
+        x = Number(bod.x) - sirka / 2;
+        y = Number(bod.y) - vyska - 14;
+        if (y < offsetTop + okraj) y = Number(bod.y) + 18;
+      } else if (rect) {
+        x = rect.left + rect.width / 2 - sirka / 2;
+        y = rect.top - vyska - 12;
+        if (y < offsetTop + okraj) y = rect.bottom + 12;
+      } else {
+        x = (viewportW - sirka) / 2;
+        y = offsetTop + 70;
+      }
+
+      x = Math.max(okraj, Math.min(x, viewportW - sirka - okraj));
+      y = Math.max(offsetTop + okraj, Math.min(y, offsetTop + viewportH - vyska - okraj));
+
+      selectionMenu.style.left = `${Math.round(x)}px`;
+      selectionMenu.style.top = `${Math.round(y)}px`;
+    });
+  }
+
+  function zobrazV2SelectionMenuProOznaceni(rozsah = null) {
+    if (!aktivni || !selectionMenu) return false;
+    const vyber = window.getSelection();
+    const range = rozsah || (vyber?.rangeCount ? vyber.getRangeAt(0) : null);
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+
+    core()?.zachytAktualniVyber?.();
+    nastavV2SelectionMenuTlacitka(false);
+    v2SelectionMenuAktivni = true;
+    v2SelectionMenuKurzor = false;
+    v2SelectionMenuBod = null;
+    pozicujV2SelectionMenu({ rozsah: range });
+    return true;
+  }
+
+  function zobrazV2SelectionMenuProKurzor(bod = null) {
+    if (!aktivni || !selectionMenu) return false;
+    core()?.zachytAktualniVyber?.();
+    nastavV2SelectionMenuTlacitka(true);
+    v2SelectionMenuAktivni = true;
+    v2SelectionMenuKurzor = true;
+    v2SelectionMenuBod = bod ? { x: Number(bod.x), y: Number(bod.y) } : null;
+    pozicujV2SelectionMenu({ bod: v2SelectionMenuBod });
+    return true;
+  }
+
+  async function zapisV2DoSchranky(text) {
+    const hodnota = String(text || "");
+    if (!hodnota) return false;
+    const plugin = window.Capacitor?.Plugins?.Clipboard;
+    if (plugin?.write) {
+      await plugin.write({ string: hodnota });
+      v2LokalniSchranka = hodnota;
+      return true;
+    }
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(hodnota);
+        v2LokalniSchranka = hodnota;
+        return true;
+      } catch (_error) {}
+    }
+    v2LokalniSchranka = hodnota;
+    return true;
+  }
+
+  async function prectiV2ZeSchranky() {
+    const plugin = window.Capacitor?.Plugins?.Clipboard;
+    if (plugin?.read) {
+      const vysledek = await plugin.read();
+      const text = String(vysledek?.value || "");
+      if (text) v2LokalniSchranka = text;
+      return text;
+    }
+    if (navigator.clipboard?.readText) {
+      try {
+        const text = String(await navigator.clipboard.readText() || "");
+        if (text) v2LokalniSchranka = text;
+        return text;
+      } catch (_error) {}
+    }
+    return v2LokalniSchranka;
+  }
+
+  async function zpracujV2SelectionMenuAkci(event) {
+    if (!aktivni || !selectionMenu || selectionMenu.dataset.lnV2Owner !== "1") return;
+    const button = event.target.closest?.("button");
+    if (!button || !selectionMenu.contains(button)) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    potlacV2SelectionMenuDo = performance.now() + 300;
+
+    try {
+      if (button === selectionKopirovat) {
+        const text = core()?.ziskejTextVyberuProSelectionMenu?.() || "";
+        const rich = core()?.ziskejRichVyberProSelectionMenu?.() || null;
+        if (text && await zapisV2DoSchranky(text)) {
+          v2RichSchranka = rich?.text === text ? rich : null;
+          core()?.sklapniVyberNaKonecProSelectionMenu?.();
+        }
+        skryjV2SelectionMenu();
+        return;
+      }
+
+      if (button === selectionVyjmout) {
+        const text = core()?.ziskejTextVyberuProSelectionMenu?.() || "";
+        const rich = core()?.ziskejRichVyberProSelectionMenu?.() || null;
+        if (!text) return;
+        await zapisV2DoSchranky(text);
+        v2RichSchranka = rich?.text === text ? rich : null;
+        core()?.vyjmiVyberProSelectionMenu?.();
+        skryjV2SelectionMenu();
+        obnovToolbar();
+        return;
+      }
+
+      if (button === selectionVlozit) {
+        const text = await prectiV2ZeSchranky();
+        if (text) {
+          const vlozenoRich = Boolean(
+            v2RichSchranka?.text === text
+            && core()?.vlozRichVyberProSelectionMenu?.(v2RichSchranka)
+          );
+          if (!vlozenoRich) {
+            core()?.vlozTextProSelectionMenu?.(text);
+          }
+          obnovToolbar();
+        }
+        skryjV2SelectionMenu();
+        return;
+      }
+
+      if (button === selectionVybratVse) {
+        if (core()?.vyberVseProSelectionMenu?.()) {
+          queueMicrotask(() => {
+            const vyber = window.getSelection();
+            const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+            if (range && !range.collapsed) zobrazV2SelectionMenuProOznaceni(range);
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("Editor V2: selection menu akce selhala", error);
+      skryjV2SelectionMenu();
+    }
+  }
+
+  function zpracujV2SelectionChangeProMenu() {
+    if (!aktivni || performance.now() < potlacV2SelectionMenuDo) return;
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || !jeV2SelectionRozsah(range)) return;
+
+    core()?.zachytAktualniVyber?.();
+
+    if (!range.collapsed) {
+      zobrazV2SelectionMenuProOznaceni(range);
+      return;
+    }
+
+    if (!v2SelectionMenuKurzor) skryjV2SelectionMenu();
   }
 
   function jeEditorOtevreny() {
@@ -600,6 +841,7 @@
 
   function deaktivuj({ ulozitKopii = false } = {}) {
     if (!aktivni) return;
+    skryjV2SelectionMenu();
     if (ulozitKopii) ulozTestKopii();
 
     core()?.zavriVHostu?.();
@@ -1372,6 +1614,89 @@
     );
   }
 
+  selectionMenu?.addEventListener("click", zpracujV2SelectionMenuAkci, true);
+
+  document.addEventListener("touchend", (event) => {
+    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink")) {
+      v2PosledniTapSelection = null;
+      return;
+    }
+
+    const dotyk = event.changedTouches?.[0];
+    if (!dotyk) return;
+    const ted = performance.now();
+    const aktualni = { x: dotyk.clientX, y: dotyk.clientY, cas: ted };
+    const predchozi = v2PosledniTapSelection;
+    v2PosledniTapSelection = aktualni;
+
+    if (!predchozi) return;
+    if (ted - predchozi.cas > 360 || Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
+
+    v2PosledniTapSelection = null;
+    setTimeout(() => {
+      if (!aktivni) return;
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
+        zobrazV2SelectionMenuProOznaceni(range);
+      } else if (range && jeV2SelectionRozsah(range)) {
+        zobrazV2SelectionMenuProKurzor({ x: aktualni.x, y: aktualni.y });
+      }
+    }, 70);
+  }, { passive: true, capture: true });
+
+  document.addEventListener("dblclick", (event) => {
+    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink")) return;
+
+    const x = event.clientX;
+    const y = event.clientY;
+    setTimeout(() => {
+      if (!aktivni) return;
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
+        zobrazV2SelectionMenuProOznaceni(range);
+      } else if (range && jeV2SelectionRozsah(range)) {
+        zobrazV2SelectionMenuProKurzor({ x, y });
+      }
+    }, 0);
+  }, true);
+
+  document.addEventListener("contextmenu", (event) => {
+    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (event.target.closest?.("button, figure")) return;
+
+    event.preventDefault();
+    const x = event.clientX;
+    const y = event.clientY;
+    setTimeout(() => {
+      if (!aktivni) return;
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
+        zobrazV2SelectionMenuProOznaceni(range);
+      } else {
+        zobrazV2SelectionMenuProKurzor({ x, y });
+      }
+    }, 0);
+  }, true);
+
+  document.addEventListener("lubanote:v2-model-input", () => {
+    if (aktivni) skryjV2SelectionMenu();
+  }, true);
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!aktivni) return;
+    if (selectionMenu?.contains(event.target)) return;
+    if (event.target.closest?.(".editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
+      potlacV2SelectionMenuDo = performance.now() + 350;
+      return;
+    }
+    if (v2SelectionMenuAktivni) skryjV2SelectionMenu();
+  }, true);
+
   document.addEventListener("pointerdown", (event) => {
     if (!aktivni) return;
     if (event.target.closest(".editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
@@ -1403,7 +1728,10 @@
     if (!vyber?.rangeCount) return;
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
-    requestAnimationFrame(obnovToolbar);
+    requestAnimationFrame(() => {
+      obnovToolbar();
+      zpracujV2SelectionChangeProMenu();
+    });
   });
 
   function sledujEditor() {
@@ -1432,7 +1760,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.18-LINKS-PLANNER-392",
+    verze: "V2.20-SELECTION-PLANNER-394",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,
@@ -1444,6 +1772,7 @@
     vlozInterniOdkazZAutocomplete,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
+    spravujeSelectionMenu: () => aktivni,
     jeProdukcniRezim: () => aktivni,
     jeAktivni: () => aktivni
   });
