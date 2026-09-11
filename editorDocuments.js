@@ -39,6 +39,69 @@
 
   const PDF_ZOOM_MIN = 0.5;
   const PDF_ZOOM_MAX = 3;
+  const PDF_NASTAVENI_KLIC = "lubanote_pdf_nastaveni_v1";
+
+  let pdfUlozeniPrvky = null;
+  let pdfNastaveniPrvky = null;
+
+  function vychoziPdfNastaveni() {
+    return {
+      dvojtapFullscreen: true,
+      pamatovatZoom: false,
+      posledniZoom: 1
+    };
+  }
+
+  function nactiPdfNastaveni() {
+    const vychozi = vychoziPdfNastaveni();
+
+    try {
+      const ulozene = JSON.parse(
+        localStorage.getItem(PDF_NASTAVENI_KLIC) || "null"
+      );
+
+      if (!ulozene || typeof ulozene !== "object") {
+        return vychozi;
+      }
+
+      return {
+        dvojtapFullscreen: ulozene.dvojtapFullscreen !== false,
+        pamatovatZoom: ulozene.pamatovatZoom === true,
+        posledniZoom: omezPdfZoom(ulozene.posledniZoom || 1)
+      };
+    } catch {
+      return vychozi;
+    }
+  }
+
+  function ulozPdfNastaveni(nastaveni) {
+    try {
+      localStorage.setItem(
+        PDF_NASTAVENI_KLIC,
+        JSON.stringify({
+          dvojtapFullscreen: nastaveni.dvojtapFullscreen !== false,
+          pamatovatZoom: nastaveni.pamatovatZoom === true,
+          posledniZoom: omezPdfZoom(nastaveni.posledniZoom || 1)
+        })
+      );
+    } catch {
+      // Nastavení není kritické – viewer musí fungovat i bez localStorage.
+    }
+  }
+
+  function ulozPosledniPdfZoom() {
+    if (!pdfViewerStav?.native) {
+      return;
+    }
+
+    const nastaveni = nactiPdfNastaveni();
+    if (!nastaveni.pamatovatZoom) {
+      return;
+    }
+
+    nastaveni.posledniZoom = omezPdfZoom(pdfViewerStav.zoom);
+    ulozPdfNastaveni(nastaveni);
+  }
 
   function jeSecretEditor() {
     return (
@@ -180,6 +243,7 @@
           <button type="button" class="pdfViewerClose" aria-label="Zavřít PDF">←</button>
           <div class="pdfViewerTitle" title=""></div>
           <button type="button" class="pdfViewerSave" aria-label="Uložit kopii PDF">Uložit</button>
+          <button type="button" class="pdfViewerSettings" aria-label="Nastavení PDF" title="Nastavení PDF">⚙</button>
           <button type="button" class="pdfViewerFullscreen" aria-label="Maximální zobrazení PDF" title="Celá obrazovka">⛶</button>
         </header>
 
@@ -218,6 +282,7 @@
       close: overlay.querySelector(".pdfViewerClose"),
       title: overlay.querySelector(".pdfViewerTitle"),
       save: overlay.querySelector(".pdfViewerSave"),
+      settings: overlay.querySelector(".pdfViewerSettings"),
       fullscreen: overlay.querySelector(".pdfViewerFullscreen"),
       fullscreenExit: overlay.querySelector(".pdfViewerFullscreenExit"),
       zoom: overlay.querySelector(".pdfViewerZoom"),
@@ -241,7 +306,11 @@
     });
 
     prvky.save.addEventListener("click", () => {
-      ulozPdfZVieweru();
+      otevriPdfUlozeniModal();
+    });
+
+    prvky.settings.addEventListener("click", () => {
+      otevriPdfNastaveniModal();
     });
 
     prvky.fullscreen.addEventListener("click", () => {
@@ -364,6 +433,7 @@
       }
 
       pdfViewerStav.zoom = omezPdfZoom(pinch.aktualniZoom);
+      ulozPosledniPdfZoom();
       pdfViewerStav.pinch = null;
       pdfViewerStav.blokujTapDo = performance.now() + 500;
       prvky.native.classList.remove("is-pinching");
@@ -449,7 +519,10 @@
 
       if (jeDvojtap) {
         pdfViewerStav.posledniTap = null;
-        nastavPdfFullscreen(!pdfViewerStav.fullscreen);
+
+        if (nactiPdfNastaveni().dvojtapFullscreen) {
+          nastavPdfFullscreen(!pdfViewerStav.fullscreen);
+        }
       } else {
         pdfViewerStav.posledniTap = {
           x: event.clientX,
@@ -623,6 +696,7 @@
     }
 
     pdfViewerStav.zoom = novyZoom;
+    ulozPosledniPdfZoom();
     aktualizujPdfOvladani();
 
     try {
@@ -737,10 +811,230 @@
     return true;
   }
 
-  async function ulozPdfZVieweru() {
+  function normalizujNazevPdf(nazev = "") {
+    let vysledek = bezpecnyNazevSouboru(nazev || "dokument.pdf");
+
+    if (!/\.pdf$/i.test(vysledek)) {
+      vysledek += ".pdf";
+    }
+
+    return vysledek;
+  }
+
+  function zajistiPdfUlozeniModal() {
+    if (pdfUlozeniPrvky) {
+      return pdfUlozeniPrvky;
+    }
+
+    const modal = document.createElement("div");
+    modal.className = "pdfLubaModal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="pdfLubaDialog" role="dialog" aria-modal="true" aria-label="Uložit PDF">
+        <div class="pdfLubaDialogHeader">
+          <div class="pdfLubaDialogIcon" aria-hidden="true">💾</div>
+          <div>
+            <h3>Uložit PDF</h3>
+            <p>Vyber název souboru. V dalším kroku zvolíš místo v telefonu.</p>
+          </div>
+        </div>
+
+        <label class="pdfLubaField">
+          <span>Název souboru</span>
+          <input class="pdfLubaFileName" type="text" autocomplete="off" spellcheck="false" inputmode="text">
+        </label>
+
+        <div class="pdfLubaActions">
+          <button type="button" class="pdfLubaSecondary pdfLubaCancel">Zrušit</button>
+          <button type="button" class="pdfLubaPrimary pdfLubaConfirm">Uložit PDF</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const prvky = {
+      modal,
+      input: modal.querySelector(".pdfLubaFileName"),
+      cancel: modal.querySelector(".pdfLubaCancel"),
+      confirm: modal.querySelector(".pdfLubaConfirm")
+    };
+
+    const zavrit = () => {
+      modal.hidden = true;
+    };
+
+    prvky.cancel.addEventListener("click", zavrit);
+    modal.addEventListener("pointerdown", (event) => {
+      if (event.target === modal) {
+        zavrit();
+      }
+    });
+
+    prvky.confirm.addEventListener("click", async () => {
+      const nazev = normalizujNazevPdf(prvky.input.value);
+      prvky.input.value = nazev;
+      modal.hidden = true;
+      await ulozPdfZVieweru(nazev);
+    });
+
+    prvky.input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        prvky.confirm.click();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        zavrit();
+      }
+    });
+
+    pdfUlozeniPrvky = prvky;
+    return prvky;
+  }
+
+  function otevriPdfUlozeniModal() {
+    if (!pdfViewerStav) {
+      return;
+    }
+
+    const prvky = zajistiPdfUlozeniModal();
+    prvky.input.value = normalizujNazevPdf(
+      pdfViewerStav.nazevSouboru || "dokument.pdf"
+    );
+    prvky.modal.hidden = false;
+
+    requestAnimationFrame(() => {
+      prvky.input.focus({ preventScroll: true });
+      const konec = prvky.input.value.replace(/\.pdf$/i, "").length;
+      try {
+        prvky.input.setSelectionRange(0, konec);
+      } catch {
+        prvky.input.select();
+      }
+    });
+  }
+
+  function zajistiPdfNastaveniModal() {
+    if (pdfNastaveniPrvky) {
+      return pdfNastaveniPrvky;
+    }
+
+    const modal = document.createElement("div");
+    modal.className = "pdfLubaModal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="pdfLubaDialog pdfLubaSettingsDialog" role="dialog" aria-modal="true" aria-label="Nastavení PDF">
+        <div class="pdfLubaDialogHeader">
+          <div class="pdfLubaDialogIcon" aria-hidden="true">⚙️</div>
+          <div>
+            <h3>Nastavení PDF</h3>
+            <p>Platí pro PDF prohlížeč v LubaNote.</p>
+          </div>
+        </div>
+
+        <div class="pdfLubaSettingsList">
+          <button type="button" class="pdfLubaSettingRow" data-setting="dvojtapFullscreen" role="switch" aria-checked="true">
+            <span>
+              <strong>2× tap → celá obrazovka</strong>
+              <small>Dvojtap přepne maximální zobrazení PDF.</small>
+            </span>
+            <span class="pdfLubaSwitch" aria-hidden="true"><i></i></span>
+          </button>
+
+          <button type="button" class="pdfLubaSettingRow" data-setting="pamatovatZoom" role="switch" aria-checked="false">
+            <span>
+              <strong>Zapamatovat poslední zoom</strong>
+              <small>Další PDF se otevře se stejným přiblížením.</small>
+            </span>
+            <span class="pdfLubaSwitch" aria-hidden="true"><i></i></span>
+          </button>
+        </div>
+
+        <div class="pdfLubaActions">
+          <button type="button" class="pdfLubaPrimary pdfLubaSettingsClose">Hotovo</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const prvky = {
+      modal,
+      rows: [...modal.querySelectorAll(".pdfLubaSettingRow")],
+      close: modal.querySelector(".pdfLubaSettingsClose")
+    };
+
+    const zavrit = () => {
+      modal.hidden = true;
+    };
+
+    prvky.close.addEventListener("click", zavrit);
+    modal.addEventListener("pointerdown", (event) => {
+      if (event.target === modal) {
+        zavrit();
+      }
+    });
+
+    prvky.rows.forEach((row) => {
+      row.addEventListener("click", () => {
+        const klic = row.dataset.setting;
+        const nastaveni = nactiPdfNastaveni();
+
+        if (klic === "dvojtapFullscreen") {
+          nastaveni.dvojtapFullscreen = !nastaveni.dvojtapFullscreen;
+        }
+
+        if (klic === "pamatovatZoom") {
+          nastaveni.pamatovatZoom = !nastaveni.pamatovatZoom;
+          if (nastaveni.pamatovatZoom && pdfViewerStav?.native) {
+            nastaveni.posledniZoom = omezPdfZoom(pdfViewerStav.zoom);
+          }
+        }
+
+        ulozPdfNastaveni(nastaveni);
+        aktualizujPdfNastaveniModal();
+      });
+    });
+
+    pdfNastaveniPrvky = prvky;
+    return prvky;
+  }
+
+  function aktualizujPdfNastaveniModal() {
+    if (!pdfNastaveniPrvky) {
+      return;
+    }
+
+    const nastaveni = nactiPdfNastaveni();
+
+    pdfNastaveniPrvky.rows.forEach((row) => {
+      const klic = row.dataset.setting;
+      const aktivni = klic === "dvojtapFullscreen"
+        ? nastaveni.dvojtapFullscreen
+        : nastaveni.pamatovatZoom;
+
+      row.classList.toggle("active", aktivni);
+      row.setAttribute("aria-checked", aktivni ? "true" : "false");
+    });
+  }
+
+  function otevriPdfNastaveniModal() {
+    if (!pdfViewerStav?.native) {
+      return;
+    }
+
+    const prvky = zajistiPdfNastaveniModal();
+    aktualizujPdfNastaveniModal();
+    prvky.modal.hidden = false;
+  }
+
+  async function ulozPdfZVieweru(nazevSouboru) {
     if (!pdfViewerStav || !pdfViewerPrvky || pdfViewerPrvky.save.disabled) {
       return;
     }
+
+    const nazev = normalizujNazevPdf(
+      nazevSouboru || pdfViewerStav.nazevSouboru || "dokument.pdf"
+    );
 
     pdfViewerPrvky.save.disabled = true;
     pdfViewerPrvky.save.classList.add("is-saving");
@@ -756,13 +1050,13 @@
         }
 
         const vysledek = await plugin.ulozOtevrenePdf({
-          nazevSouboru: pdfViewerStav.nazevSouboru || "dokument.pdf"
+          nazevSouboru: nazev
         });
         ulozeno = vysledek?.saved === true;
       } else {
         ulozeno = await ulozPdfPresWebZVieweru(
           pdfViewerStav.file,
-          pdfViewerStav.nazevSouboru || "dokument.pdf"
+          nazev
         );
       }
 
@@ -790,11 +1084,15 @@
     document.body.classList.add("pdfViewerOpen");
 
     if (soubor.native === true) {
+      const pdfNastaveni = nactiPdfNastaveni();
+
       pdfViewerStav = {
         native: true,
         pageCount: Math.max(1, Number(soubor.pageCount) || 1),
         pageIndex: 0,
-        zoom: 1,
+        zoom: pdfNastaveni.pamatovatZoom
+          ? omezPdfZoom(pdfNastaveni.posledniZoom)
+          : 1,
         fullscreen: false,
         pinch: null,
         posledniTap: null,
@@ -805,6 +1103,7 @@
       prvky.frame.hidden = true;
       prvky.native.hidden = false;
       prvky.pageBar.hidden = false;
+      prvky.settings.hidden = false;
       aktualizujPdfOvladani();
 
       try {
@@ -825,6 +1124,7 @@
     };
     prvky.native.hidden = true;
     prvky.pageBar.hidden = true;
+    prvky.settings.hidden = true;
     prvky.loading.hidden = true;
     prvky.frame.hidden = false;
 
@@ -846,6 +1146,8 @@
     pdfViewerStav = null;
 
     pdfViewerPrvky.overlay.hidden = true;
+    pdfUlozeniPrvky && (pdfUlozeniPrvky.modal.hidden = true);
+    pdfNastaveniPrvky && (pdfNastaveniPrvky.modal.hidden = true);
     pdfViewerPrvky.overlay.classList.remove("is-fullscreen");
     pdfViewerPrvky.fullscreenExit.hidden = true;
     pdfViewerPrvky.loading.hidden = true;
