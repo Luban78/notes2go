@@ -1515,6 +1515,926 @@ return true;
 }
 
 // ==========================================
+// ŠTÍTKY NA HLAVNÍ PLOŠE – DRAG & MOVE POŘADÍ
+// ==========================================
+
+/*
+ * Jeden způsob řazení štítků:
+ * long-press přímo na štítku v horní liště, stejně jako u karet.
+ * Správa štítků slouží jen pro barvu / přejmenování / smazání.
+ */
+let presunHornihoStitku = null;
+let presunHornihoStitkuAutoScroll = 0;
+let poradiStitkuSeUklada = false;
+let blokovatKlikHornihoStitkuDo = 0;
+
+const CAS_LONG_PRESS_STITKU = 430;
+const POHYB_PRED_LONG_PRESS_STITKU = 16;
+const POHYB_PO_PREHOZENI_STITKU = 10;
+const OKRAJ_AUTO_SCROLL_STITKU = 72;
+const MAX_AUTO_SCROLL_STITKU = 16;
+
+/*
+ * Legacy štítky mohou existovat jen v poznámkách a nemít ještě vlastní
+ * řádek v tabulce tags. Bez id/sort_order je nelze trvale přesouvat.
+ * Při prvním stisku takový běžný štítek jednorázově doplníme do Supabase.
+ * Mapa brání dvojitému INSERTu při souběhu touch/pointer událostí.
+ */
+const zajisteniLegacyStitkuProDrag = new Map();
+
+function normalizujNazevStitkuProDrag(nazev) {
+  return String(nazev || "")
+    .normalize("NFC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("cs-CZ");
+}
+
+function najdiZaznamHornihoStitku(button) {
+  if (!button) {
+    return null;
+  }
+
+  const id = String(button.dataset.tagId || "").trim();
+
+  if (id) {
+    const podleId = syncedTags.find(
+      (tag) => String(tag?.id || "") === id
+    );
+
+    if (podleId) {
+      return podleId;
+    }
+  }
+
+  const hledanyNazev = normalizujNazevStitkuProDrag(
+    button.dataset.tagFilter || button.textContent
+  );
+
+  if (!hledanyNazev) {
+    return null;
+  }
+
+  const podleNazvu = syncedTags.find((tag) =>
+    normalizujNazevStitkuProDrag(tag?.name) === hledanyNazev
+  ) || null;
+
+  if (podleNazvu?.id) {
+    button.dataset.tagId = String(podleNazvu.id);
+  }
+
+  return podleNazvu;
+}
+
+async function zajistiZaznamHornihoStitkuProDrag(button) {
+  const existujici = najdiZaznamHornihoStitku(button);
+
+  if (existujici?.id) {
+    return existujici;
+  }
+
+  const nazev = String(
+    button?.dataset?.tagFilter || button?.textContent || ""
+  ).trim();
+  const klic = normalizujNazevStitkuProDrag(nazev);
+
+  if (!nazev || !klic) {
+    return null;
+  }
+
+  if (zajisteniLegacyStitkuProDrag.has(klic)) {
+    return zajisteniLegacyStitkuProDrag.get(klic);
+  }
+
+  const promise = (async () => {
+    const user = await getCurrentUser();
+
+    if (!user?.id) {
+      return null;
+    }
+
+    /*
+     * Nejprve zkusíme přesný řádek dohledat v cloudu. Mohl vzniknout
+     * na jiném zařízení a lokální syncedTags ho ještě nemusí znát.
+     */
+    const nalezeny = await supabaseClient
+      .from("tags")
+      .select("id, user_id, name, encrypted_name, is_secret, sort_order, color, deleted_at")
+      .eq("user_id", user.id)
+      .eq("name", nazev)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    let zaznam = nalezeny?.data || null;
+
+    if (!zaznam && !nalezeny?.error) {
+      const dalsiPoradi = syncedTags.reduce(
+        (maximum, tag) => {
+          const poradi = Number(tag?.sort_order);
+          return Number.isFinite(poradi)
+            ? Math.max(maximum, poradi + 1)
+            : maximum;
+        },
+        syncedTags.length
+      );
+
+      const vlozeny = await supabaseClient
+        .from("tags")
+        .insert({
+          user_id: user.id,
+          name: nazev,
+          is_secret: false,
+          sort_order: dalsiPoradi
+        })
+        .select("id, user_id, name, encrypted_name, is_secret, sort_order, color, deleted_at")
+        .single();
+
+      if (vlozeny?.error) {
+        console.error(
+          "Doplnění legacy štítku pro přesun selhalo:",
+          vlozeny.error.message
+        );
+        return null;
+      }
+
+      zaznam = vlozeny?.data || null;
+    }
+
+    if (!zaznam?.id) {
+      if (nalezeny?.error) {
+        console.error(
+          "Dohledání legacy štítku pro přesun selhalo:",
+          nalezeny.error.message
+        );
+      }
+      return null;
+    }
+
+    const uzJeLokalne = syncedTags.some(
+      (tag) => String(tag?.id || "") === String(zaznam.id)
+    );
+
+    if (!uzJeLokalne) {
+      syncedTags.push(zaznam);
+      syncedTags.sort((a, b) =>
+        Number(a?.sort_order || 0) - Number(b?.sort_order || 0)
+      );
+    }
+
+    if (button?.isConnected) {
+      button.dataset.tagId = String(zaznam.id);
+    }
+
+    return zaznam;
+  })().finally(() => {
+    zajisteniLegacyStitkuProDrag.delete(klic);
+  });
+
+  zajisteniLegacyStitkuProDrag.set(klic, promise);
+  return promise;
+}
+
+function pripravIdVsemHornimStitkum() {
+  if (!tagFilterButtons) {
+    return;
+  }
+
+  tagFilterButtons
+    .querySelectorAll(".categoryTab[data-tag-filter]")
+    .forEach((button) => {
+      najdiZaznamHornihoStitku(button);
+    });
+}
+
+function sestavNovePoradiStitku(poradiViditelnychId) {
+  const mapaStitku = new Map(
+    syncedTags.map((tag) => [String(tag.id), tag])
+  );
+
+  const viditelnaId = new Set(
+    poradiViditelnychId.map(String)
+  );
+
+  let indexViditelneho = 0;
+
+  return syncedTags.map((tag) => {
+    if (!viditelnaId.has(String(tag.id))) {
+      return tag;
+    }
+
+    const dalsiId = String(
+      poradiViditelnychId[indexViditelneho++] || ""
+    );
+
+    return mapaStitku.get(dalsiId) || tag;
+  });
+}
+
+async function ulozPoradiStitku(poradiViditelnychId) {
+  if (
+    poradiStitkuSeUklada ||
+    !Array.isArray(poradiViditelnychId) ||
+    poradiViditelnychId.length < 2
+  ) {
+    return true;
+  }
+
+  const puvodniStitky = syncedTags.slice();
+  const serazeneStitky = sestavNovePoradiStitku(
+    poradiViditelnychId
+  );
+
+  const zmeny = serazeneStitky
+    .map((tag, index) => ({
+      tag,
+      novePoradi: index,
+      puvodniPoradi: Number(
+        puvodniStitky.find(
+          (puvodni) => puvodni.id === tag.id
+        )?.sort_order
+      )
+    }))
+    .filter(({ novePoradi, puvodniPoradi }) =>
+      !Number.isFinite(puvodniPoradi) ||
+      novePoradi !== puvodniPoradi
+    );
+
+  if (zmeny.length === 0) {
+    return true;
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user?.id) {
+    renderTagFilters();
+    return false;
+  }
+
+  poradiStitkuSeUklada = true;
+
+  const ukonciCekani =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      "Ukládám pořadí štítků…",
+      350
+    ) || (() => {});
+
+  try {
+    const vysledky = await Promise.all(
+      zmeny.map(async (zmena) => {
+        const { error } = await supabaseClient
+          .from("tags")
+          .update({
+            sort_order: zmena.novePoradi
+          })
+          .eq("id", zmena.tag.id)
+          .eq("user_id", user.id);
+
+        return {
+          ...zmena,
+          error
+        };
+      })
+    );
+
+    const neuspesne = vysledky.filter(
+      (vysledek) => Boolean(vysledek.error)
+    );
+
+    if (neuspesne.length > 0) {
+      await Promise.allSettled(
+        vysledky
+          .filter((vysledek) => !vysledek.error)
+          .map((vysledek) =>
+            supabaseClient
+              .from("tags")
+              .update({
+                sort_order: Number.isFinite(
+                  vysledek.puvodniPoradi
+                )
+                  ? vysledek.puvodniPoradi
+                  : 0
+              })
+              .eq("id", vysledek.tag.id)
+              .eq("user_id", user.id)
+          )
+      );
+
+      console.error(
+        "Uložení pořadí štítků se nepodařilo:",
+        neuspesne.map((vysledek) =>
+          vysledek.error?.message || "Neznámá chyba"
+        )
+      );
+
+      syncedTags = puvodniStitky;
+      renderTagFilters();
+
+      zobrazZpravuAplikace(
+        "Štítky",
+        "Pořadí štítků se nepodařilo uložit."
+      );
+
+      return false;
+    }
+
+    syncedTags = serazeneStitky.map(
+      (tag, index) => ({
+        ...tag,
+        sort_order: index
+      })
+    );
+
+    if (typeof ulozStitkyDoStartCache === "function") {
+      ulozStitkyDoStartCache(user.id, syncedTags);
+    }
+
+    renderTagFilters();
+    return true;
+  } finally {
+    ukonciCekani();
+    poradiStitkuSeUklada = false;
+  }
+}
+
+function ziskejHorniScrollStitku() {
+  return tagFilterButtons?.closest(".categoryTabs") || null;
+}
+
+function ziskejPoradiHornichStitku() {
+  pripravIdVsemHornimStitkum();
+
+  return Array.from(
+    tagFilterButtons.querySelectorAll(
+      ".categoryTab[data-tag-filter]"
+    )
+  )
+    .map((button) => {
+      const zaznam = najdiZaznamHornihoStitku(button);
+      return zaznam?.id ? String(zaznam.id) : "";
+    })
+    .filter(Boolean);
+}
+
+function zastavAutoScrollHornichStitku() {
+  if (presunHornihoStitkuAutoScroll) {
+    cancelAnimationFrame(presunHornihoStitkuAutoScroll);
+    presunHornihoStitkuAutoScroll = 0;
+  }
+}
+
+function prehodHorniStitekPodleX(button, clientX) {
+  if (!button || !tagFilterButtons || !presunHornihoStitku) {
+    return;
+  }
+
+  const stav = presunHornihoStitku;
+
+  /*
+   * Stejná pojistka jako u card-drag loop guardu: po změně slotu
+   * musí prst skutečně pokračovat, aby nový layout okamžitě
+   * nepřehodil štítek zpět pod nehybným prstem.
+   */
+  if (
+    Number.isFinite(stav.lockX) &&
+    Math.abs(clientX - stav.lockX) < POHYB_PO_PREHOZENI_STITKU
+  ) {
+    return;
+  }
+
+  const ostatni = Array.from(
+    tagFilterButtons.querySelectorAll(
+      ".categoryTab[data-tag-filter]"
+    )
+  ).filter((jiny) => jiny !== button);
+
+  const predKtery = ostatni.find((jiny) => {
+    const rect = jiny.getBoundingClientRect();
+    return clientX < rect.left + rect.width / 2;
+  });
+
+  const puvodniPred = button.nextElementSibling;
+
+  if (predKtery) {
+    tagFilterButtons.insertBefore(button, predKtery);
+  } else {
+    const novy = tagFilterButtons.querySelector(
+      ".newTagFilterButton"
+    );
+    tagFilterButtons.insertBefore(button, novy || null);
+  }
+
+  if (button.nextElementSibling !== puvodniPred) {
+    stav.zmeneno = true;
+    stav.lockX = clientX;
+  }
+}
+
+function spustAutoScrollHornichStitku() {
+  if (presunHornihoStitkuAutoScroll) {
+    return;
+  }
+
+  const krok = () => {
+    presunHornihoStitkuAutoScroll = 0;
+
+    const stav = presunHornihoStitku;
+    const scroll = ziskejHorniScrollStitku();
+
+    if (!stav || !scroll) {
+      return;
+    }
+
+    const rect = scroll.getBoundingClientRect();
+    const x = stav.posledniX;
+    let rychlost = 0;
+
+    if (x < rect.left + OKRAJ_AUTO_SCROLL_STITKU) {
+      const pomer = Math.min(
+        1,
+        (rect.left + OKRAJ_AUTO_SCROLL_STITKU - x) /
+          OKRAJ_AUTO_SCROLL_STITKU
+      );
+      rychlost = -Math.max(
+        3,
+        Math.round(MAX_AUTO_SCROLL_STITKU * pomer)
+      );
+    } else if (x > rect.right - OKRAJ_AUTO_SCROLL_STITKU) {
+      const pomer = Math.min(
+        1,
+        (x - (rect.right - OKRAJ_AUTO_SCROLL_STITKU)) /
+          OKRAJ_AUTO_SCROLL_STITKU
+      );
+      rychlost = Math.max(
+        3,
+        Math.round(MAX_AUTO_SCROLL_STITKU * pomer)
+      );
+    }
+
+    if (rychlost !== 0) {
+      scroll.scrollLeft += rychlost;
+      prehodHorniStitekPodleX(stav.button, x);
+      presunHornihoStitkuAutoScroll = requestAnimationFrame(krok);
+    }
+  };
+
+  presunHornihoStitkuAutoScroll = requestAnimationFrame(krok);
+}
+
+function pohniGhostemHornihoStitku(clientX, clientY) {
+  const stav = presunHornihoStitku;
+
+  if (!stav) {
+    return;
+  }
+
+  stav.posledniX = clientX;
+  stav.posledniY = clientY;
+
+  if (stav.ghost) {
+    stav.ghost.style.left = `${Math.round(clientX - stav.offsetX)}px`;
+    stav.ghost.style.top = `${Math.round(clientY - stav.offsetY)}px`;
+  }
+
+  prehodHorniStitekPodleX(stav.button, clientX);
+  zastavAutoScrollHornichStitku();
+  spustAutoScrollHornichStitku();
+}
+
+function zahajPresunHornihoStitku(
+  button,
+  clientX,
+  clientY,
+  vstup,
+  id
+) {
+  if (
+    presunHornihoStitku ||
+    poradiStitkuSeUklada ||
+    !button?.isConnected
+  ) {
+    return false;
+  }
+
+  const zaznamStitku = najdiZaznamHornihoStitku(button);
+
+  if (!zaznamStitku?.id) {
+    return false;
+  }
+
+  button.dataset.tagId = String(zaznamStitku.id);
+
+  const rect = button.getBoundingClientRect();
+  const ghost = button.cloneNode(true);
+
+  ghost.classList.remove("active");
+  ghost.classList.add("lubaTagDragGhost");
+  ghost.style.width = `${Math.round(rect.width)}px`;
+  ghost.style.height = `${Math.round(rect.height)}px`;
+  ghost.style.left = `${Math.round(rect.left)}px`;
+  ghost.style.top = `${Math.round(rect.top)}px`;
+
+  document.body.append(ghost);
+  button.classList.add("lubaTagDragSource");
+  document.body.classList.add("lubaTagDragMode");
+
+  presunHornihoStitku = {
+    button,
+    ghost,
+    vstup,
+    id,
+    offsetX: clientX - rect.left,
+    offsetY: clientY - rect.top,
+    posledniX: clientX,
+    posledniY: clientY,
+    lockX: null,
+    zmeneno: false,
+    puvodniPoradi: ziskejPoradiHornichStitku()
+  };
+
+  try {
+    navigator.vibrate?.(18);
+  } catch (_) {
+    // Haptika není podmínkou funkce.
+  }
+
+  return true;
+}
+
+async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
+  const stav = presunHornihoStitku;
+
+  if (!stav) {
+    return;
+  }
+
+  zastavAutoScrollHornichStitku();
+  presunHornihoStitku = null;
+  document.body.classList.remove("lubaTagDragMode");
+
+  stav.button?.classList.remove("lubaTagDragSource");
+  stav.ghost?.remove();
+
+  /* Long-press/drop nesmí po puštění aktivovat filtr. */
+  blokovatKlikHornihoStitkuDo = Date.now() + 650;
+
+  if (zrusit) {
+    renderTagFilters();
+    return;
+  }
+
+  const novePoradi = ziskejPoradiHornichStitku();
+
+  if (
+    !stav.zmeneno ||
+    novePoradi.join("|") === stav.puvodniPoradi.join("|")
+  ) {
+    return;
+  }
+
+  await ulozPoradiStitku(novePoradi);
+}
+
+function nastavDragHornihoStitku(button) {
+  if (!button || button.dataset.tagDragReady === "true") {
+    return;
+  }
+
+  button.dataset.tagDragReady = "true";
+
+  let pointerId = null;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let pointerX = 0;
+  let pointerY = 0;
+  let pointerTimer = 0;
+
+  let touchId = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchX = 0;
+  let touchY = 0;
+  let touchTimer = 0;
+  let touchListenery = false;
+  let touchAktivovan = false;
+
+  const zrusPointerTimer = () => {
+    if (pointerTimer) {
+      clearTimeout(pointerTimer);
+      pointerTimer = 0;
+    }
+  };
+
+  const najdiTouch = (seznam) =>
+    Array.from(seznam || []).find(
+      (dotyk) => dotyk.identifier === touchId
+    ) || null;
+
+  const odeberTouchListenery = () => {
+    if (!touchListenery) {
+      return;
+    }
+
+    document.removeEventListener(
+      "touchmove",
+      zpracujTouchMove,
+      true
+    );
+    document.removeEventListener(
+      "touchend",
+      zpracujTouchEnd,
+      true
+    );
+    document.removeEventListener(
+      "touchcancel",
+      zpracujTouchCancel,
+      true
+    );
+    touchListenery = false;
+  };
+
+  const vycistiTouch = () => {
+    if (touchTimer) {
+      clearTimeout(touchTimer);
+      touchTimer = 0;
+    }
+    touchId = null;
+    touchAktivovan = false;
+    odeberTouchListenery();
+  };
+
+  function zpracujTouchMove(event) {
+    if (touchId === null) {
+      return;
+    }
+
+    const dotyk = najdiTouch(event.touches);
+    if (!dotyk) {
+      return;
+    }
+
+    touchX = dotyk.clientX;
+    touchY = dotyk.clientY;
+
+    const vzdalenost = Math.hypot(
+      touchX - touchStartX,
+      touchY - touchStartY
+    );
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.vstup === "touch" &&
+      presunHornihoStitku?.id === touchId;
+
+    if (!touchAktivovan && !aktivni) {
+      if (vzdalenost > POHYB_PRED_LONG_PRESS_STITKU) {
+        vycistiTouch();
+      }
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (aktivni) {
+      pohniGhostemHornihoStitku(touchX, touchY);
+    }
+  }
+
+  function zpracujTouchEnd(event) {
+    if (touchId === null) {
+      return;
+    }
+
+    const dotyk = najdiTouch(event.changedTouches);
+    if (!dotyk) {
+      return;
+    }
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.vstup === "touch" &&
+      presunHornihoStitku?.id === touchId;
+
+    if (aktivni || touchAktivovan) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku();
+    }
+
+    vycistiTouch();
+  }
+
+  function zpracujTouchCancel() {
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.vstup === "touch" &&
+      presunHornihoStitku?.id === touchId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    vycistiTouch();
+  }
+
+  button.addEventListener(
+    "touchstart",
+    (event) => {
+      if (
+        event.touches.length !== 1 ||
+        presunHornihoStitku ||
+        poradiStitkuSeUklada
+      ) {
+        return;
+      }
+
+      const dotyk = event.touches[0];
+      touchId = dotyk.identifier;
+      touchStartX = dotyk.clientX;
+      touchStartY = dotyk.clientY;
+      touchX = touchStartX;
+      touchY = touchStartY;
+      touchAktivovan = false;
+
+      const pripravZaznam =
+        zajistiZaznamHornihoStitkuProDrag(button);
+
+      if (!touchListenery) {
+        document.addEventListener(
+          "touchmove",
+          zpracujTouchMove,
+          { passive: false, capture: true }
+        );
+        document.addEventListener(
+          "touchend",
+          zpracujTouchEnd,
+          { passive: false, capture: true }
+        );
+        document.addEventListener(
+          "touchcancel",
+          zpracujTouchCancel,
+          { passive: false, capture: true }
+        );
+        touchListenery = true;
+      }
+
+      touchTimer = setTimeout(async () => {
+        const puvodniTouchId = touchId;
+
+        if (puvodniTouchId === null) {
+          return;
+        }
+
+        const zaznam = await pripravZaznam;
+
+        if (
+          touchId !== puvodniTouchId ||
+          !zaznam?.id
+        ) {
+          return;
+        }
+
+        touchAktivovan = zahajPresunHornihoStitku(
+          button,
+          touchX,
+          touchY,
+          "touch",
+          touchId
+        );
+      }, CAS_LONG_PRESS_STITKU);
+    },
+    { passive: true }
+  );
+
+  button.addEventListener("pointerdown", (event) => {
+    if (
+      event.pointerType === "touch" ||
+      event.button !== 0 ||
+      presunHornihoStitku ||
+      poradiStitkuSeUklada
+    ) {
+      return;
+    }
+
+    pointerId = event.pointerId;
+    pointerStartX = event.clientX;
+    pointerStartY = event.clientY;
+    pointerX = pointerStartX;
+    pointerY = pointerStartY;
+
+    const pripravZaznam =
+      zajistiZaznamHornihoStitkuProDrag(button);
+
+    pointerTimer = setTimeout(async () => {
+      const puvodniPointerId = pointerId;
+
+      if (puvodniPointerId === null) {
+        return;
+      }
+
+      const zaznam = await pripravZaznam;
+
+      if (
+        pointerId !== puvodniPointerId ||
+        !zaznam?.id
+      ) {
+        return;
+      }
+
+      const aktivovano = zahajPresunHornihoStitku(
+        button,
+        pointerX,
+        pointerY,
+        event.pointerType || "pointer",
+        pointerId
+      );
+
+      if (aktivovano) {
+        try {
+          button.setPointerCapture(pointerId);
+        } catch (_) {
+          // Pointer capture není podmínkou funkce.
+        }
+      }
+    }, CAS_LONG_PRESS_STITKU);
+  });
+
+  button.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
+      return;
+    }
+
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      pohniGhostemHornihoStitku(pointerX, pointerY);
+      return;
+    }
+
+    if (
+      Math.hypot(
+        pointerX - pointerStartX,
+        pointerY - pointerStartY
+      ) > POHYB_PRED_LONG_PRESS_STITKU
+    ) {
+      zrusPointerTimer();
+    }
+  });
+
+  button.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
+      return;
+    }
+
+    zrusPointerTimer();
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      void dokoncitPresunHornihoStitku();
+    }
+
+    pointerId = null;
+  });
+
+  button.addEventListener("pointercancel", (event) => {
+    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
+      return;
+    }
+
+    zrusPointerTimer();
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    pointerId = null;
+  });
+
+  button.addEventListener("contextmenu", (event) => {
+    if (presunHornihoStitku?.button === button) {
+      event.preventDefault();
+    }
+  });
+}
+
+// ==========================================
 // SPRÁVA ŠTÍTKŮ – VYKRESLENÍ SEZNAMU
 // ==========================================
 
@@ -1531,6 +2451,8 @@ function vykresliSpravuStitku() {
     const radek = document.createElement("div");
     
     radek.className = "manageTagRow";
+    radek.dataset.tagId = String(tag.id || "");
+
     if (tag.is_secret === true) {
       radek.classList.add("secretManageTagRow");
     }
@@ -2579,12 +3501,33 @@ function renderTagFilters() {
   
   tags.forEach((tag) => {
     const button = document.createElement("button");
+    const zaznamStitku = syncedTags.find(
+      (polozka) =>
+        String(polozka?.name || "")
+          .trim()
+          .toLocaleLowerCase("cs-CZ") ===
+        String(tag || "")
+          .trim()
+          .toLocaleLowerCase("cs-CZ")
+    );
     
     button.classList.add("categoryTab");
     button.textContent = tag;
     button.dataset.tagFilter = tag;
     button.dataset.tagColor =
       ziskejBarvuStitku(tag);
+
+    if (zaznamStitku?.id) {
+      button.dataset.tagId = String(zaznamStitku.id);
+    }
+
+    /*
+     * Drag listener patří na KAŽDÝ horní štítek. ID se při long-pressu
+     * znovu dohledá ze syncedTags, takže později vykreslené / cacheované
+     * štítky nezůstanou bez přesunu jen proto, že ID nebylo při prvním
+     * renderu ještě připojené.
+     */
+    nastavDragHornihoStitku(button);
     
     if (jeTajnyStitek(tag)) {
       button.classList.add("secretTagFilter");
@@ -3101,6 +4044,14 @@ createSecretTagButton?.addEventListener(
 
 
 tagFilterButtons.addEventListener("click", async (event) => {
+  if (
+    Date.now() < blokovatKlikHornihoStitkuDo ||
+    presunHornihoStitku
+  ) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
   
   const button = event.target.closest("[data-tag-filter]");
   
