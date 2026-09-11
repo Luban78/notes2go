@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.15 – COMPLETE LISTS
+   FÁZE V2.16 – COMPLETE TODO
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -19,6 +19,7 @@
   const taskModal = document.getElementById("taskModal");
   const modalRichText = document.getElementById("modalRichText");
   const modalTitle = document.getElementById("modalTitle");
+  const todoList = document.getElementById("todoList");
   const editorBackButton = document.getElementById("editorBackButton");
 
   if (!taskModal || !modalRichText || !modalTitle || !editorBackButton) {
@@ -29,6 +30,8 @@
   let aktivniNoteId = null;
   let zdrojoveHtml = "";
   let puvodniTitleContenteditable = null;
+  let puvodniRichTextHidden = null;
+  let puvodniTodoListHidden = null;
   let preskocCaptureFajfky = false;
   let hostitel = null;
   let badge = null;
@@ -60,7 +63,6 @@
     "tlacitkoVlozitObrazek",
     "tlacitkoOtevritDokument",
     "tlacitkoUlozitDokument",
-    "addTodoButton",
     "planSelectionButton",
     "shareNoteButton",
     "secretTaskButton",
@@ -185,6 +187,22 @@
 
   function klicKopie(noteId) {
     return `${KLIC_KOPIE}${noteId}`;
+  }
+
+  function ziskejZdrojoveTodos() {
+    try {
+      const todos = window.LubaNoteTodos?.ziskejAktivniTodos?.();
+      return Array.isArray(todos) ? todos.map((todo) => ({ ...todo })) : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function vytvorZdrojovyOtisk(sourceHtml, todos) {
+    if (Array.isArray(todos) && todos.length) {
+      try { return `TODO:${JSON.stringify(todos)}`; } catch (_error) { return `TODO:${todos.length}`; }
+    }
+    return String(sourceHtml || "");
   }
 
   function nactiTestKopii(noteId, sourceHtml) {
@@ -387,6 +405,15 @@
       tlacitkoBullet.title = popisek;
     }
 
+    const todoButton = document.getElementById("addTodoButton");
+    if (todoButton) {
+      const todo = stav.todo || "off";
+      todoButton.classList.toggle("active", todo === "on");
+      todoButton.classList.toggle("lnV2Mixed", todo === "mix");
+      todoButton.setAttribute("aria-pressed", todo === "mix" ? "mixed" : (todo === "on" ? "true" : "false"));
+      todoButton.title = todo === "on" ? "Přidat další TODO" : "Převést obsah na TODO";
+    }
+
     document.querySelectorAll("#editorPanelSeznam [data-ln-v2-seznam]").forEach((button) => {
       const seznam = stav.seznam || "off";
       const aktivniVolba = seznam !== "mix" && button.dataset.lnV2Seznam === seznam;
@@ -544,7 +571,10 @@
     aktivniNoteId = null;
     zdrojoveHtml = "";
     taskModal.classList.remove("editorV2TestMode");
-    modalRichText.hidden = false;
+    modalRichText.hidden = puvodniRichTextHidden === null ? false : puvodniRichTextHidden;
+    if (todoList && puvodniTodoListHidden !== null) todoList.hidden = puvodniTodoListHidden;
+    puvodniRichTextHidden = null;
+    puvodniTodoListHidden = null;
     if (hostitel) hostitel.hidden = true;
     if (badge) badge.hidden = true;
     nastavOchranuUi(false);
@@ -574,7 +604,11 @@
     zajistiV2VolbyToolbaru();
     const noteId = ziskejNoteId();
     const sourceHtml = modalRichText.innerHTML;
-    const importVysledek = api.importujHtml(sourceHtml, modalRichText.innerText);
+    const sourceTodos = ziskejZdrojoveTodos();
+    const zdrojovyOtisk = vytvorZdrojovyOtisk(sourceHtml, sourceTodos);
+    const importVysledek = sourceTodos.length && api.importujTodos
+      ? api.importujTodos(sourceTodos)
+      : api.importujHtml(sourceHtml, modalRichText.innerText);
 
     if (!importVysledek?.ok) {
       const prvky = importVysledek?.nepodporovane?.join(", ") || "neznámý prvek";
@@ -582,16 +616,19 @@
       return false;
     }
 
-    const kopie = nactiTestKopii(noteId, sourceHtml);
+    const kopie = nactiTestKopii(noteId, zdrojovyOtisk);
     const model = kopie?.model || importVysledek.model;
 
     if (aktivni) deaktivuj();
 
     aktivni = true;
     aktivniNoteId = noteId;
-    zdrojoveHtml = sourceHtml;
+    zdrojoveHtml = zdrojovyOtisk;
     taskModal.classList.add("editorV2TestMode");
+    puvodniRichTextHidden = modalRichText.hidden;
+    puvodniTodoListHidden = todoList ? todoList.hidden : null;
     modalRichText.hidden = true;
+    if (todoList) todoList.hidden = true;
     hostitel.hidden = false;
     badge.hidden = false;
     badge.textContent = kopie ? "V2 TEST · TEST KOPIE" : "V2 TEST · KOPIE";
@@ -1178,6 +1215,16 @@
       return;
     }
 
+    if (id === "addTodoButton") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      zavriPanelyFormatu();
+      core()?.pridejTodo?.();
+      obnovToolbar();
+      return;
+    }
+
     if (cil.matches("#editorPanelSeznam [data-ln-v2-seznam]")) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1300,7 +1347,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.15-COMPLETE-LISTS-389",
+    verze: "V2.16-COMPLETE-TODO-390",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,
