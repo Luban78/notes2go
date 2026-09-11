@@ -1668,6 +1668,26 @@ async function deleteTask(index) {
     return false;
   }
 
+  /*
+   * 429 – vlastní shared poznámka se nesmí přesouvat do Koše pouze
+   * lokálně. Private sync ji má správně v owner-shared guardu a serverová
+   * verze by ji při dalším syncu vrátila zpět. Přesun proto zapisujeme
+   * stejným shared lock/save RPC jako běžnou společnou editaci.
+   */
+  if (
+    taskToDelete.id &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(taskToDelete.id)
+  ) {
+    const sharedVysledek =
+      await window.LubaNoteSharedEditor
+        ?.presunVlastniSdilenouPoznamkuDoKose?.(
+          taskToDelete.id
+        );
+
+    return sharedVysledek?.ok === true;
+  }
+
   const casPresunu = new Date().toISOString();
   const notificationIds =
     ziskejNotifikacePoznamkyAKNavazanymPlanum(
@@ -1720,6 +1740,33 @@ async function deleteTasksByIds(ids) {
     };
   }
 
+  let pocetSdilenych = 0;
+
+  for (const id of [...bezpecnaId]) {
+    if (
+      !window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(id)
+    ) {
+      continue;
+    }
+
+    const sharedVysledek =
+      await window.LubaNoteSharedEditor
+        ?.presunVlastniSdilenouPoznamkuDoKose?.(id);
+
+    if (sharedVysledek?.ok === true) {
+      pocetSdilenych += 1;
+      bezpecnaId.delete(id);
+    }
+  }
+
+  if (bezpecnaId.size === 0) {
+    return {
+      pocet: pocetSdilenych,
+      lokalneUlozeno: pocetSdilenych > 0
+    };
+  }
+
   const tasks = loadTask();
   const mazanePoznamky = tasks.filter(
     (task) => task?.id && bezpecnaId.has(task.id)
@@ -1760,7 +1807,7 @@ async function deleteTasksByIds(ids) {
   zrusNotifikaceNaPozadi(notificationIds);
 
   return {
-    pocet: mazanePoznamky.length,
+    pocet: mazanePoznamky.length + pocetSdilenych,
     lokalneUlozeno: true
   };
 }
@@ -1778,6 +1825,20 @@ async function obnovPoznamkuZKose(noteId, tajne = false) {
     )
   ) {
     return false;
+  }
+
+  if (
+    !tajne &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(noteId)
+  ) {
+    const sharedVysledek =
+      await window.LubaNoteSharedEditor
+        ?.obnovVlastniSdilenouPoznamkuZKose?.(
+          noteId
+        );
+
+    return sharedVysledek?.ok === true;
   }
 
   const kos = nactiPoznamkyVKosi({ tajne });
@@ -1875,6 +1936,18 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
     return false;
   }
 
+  if (
+    !tajne &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(noteId)
+  ) {
+    window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
+      "Sdílená poznámka",
+      "Trvalé smazání sdílené poznámky ještě není zapojené do serverové shared vrstvy. Poznámka zůstává bezpečně v Koši místo toho, aby se po syncu znovu objevila."
+    );
+    return false;
+  }
+
   const zdroj = tajne
     ? [...desifrovaneTajnePoznamky]
     : nactiBeznePoznamkyZUloziste();
@@ -1914,132 +1987,6 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
   }
 
   return true;
-}
-
-async function smazPoznamkyZKoseTrvale(
-  noteIds,
-  tajne = false
-) {
-  const bezpecnaId = new Set(
-    (Array.isArray(noteIds) ? noteIds : [])
-      .filter(Boolean)
-  );
-
-  if (bezpecnaId.size === 0) {
-    return {
-      pocet: 0,
-      lokalneUlozeno: true
-    };
-  }
-
-  if (
-    tajne &&
-    (
-      typeof tajnyRezimOdemceny === "undefined" ||
-      tajnyRezimOdemceny !== true
-    )
-  ) {
-    return {
-      pocet: 0,
-      lokalneUlozeno: false
-    };
-  }
-
-  if (
-    typeof window.LubaNoteSync
-      ?.zaradSmazaniHromadne !== "function"
-  ) {
-    return {
-      pocet: 0,
-      lokalneUlozeno: false
-    };
-  }
-
-  const zdroj = tajne
-    ? [...desifrovaneTajnePoznamky]
-    : nactiBeznePoznamkyZUloziste();
-
-  const mazanePoznamky = zdroj.filter(
-    (task) =>
-      task?.id &&
-      bezpecnaId.has(task.id) &&
-      jePoznamkaVKosi(task)
-  );
-
-  if (mazanePoznamky.length === 0) {
-    return {
-      pocet: 0,
-      lokalneUlozeno: true
-    };
-  }
-
-  const mazanaId = new Set(
-    mazanePoznamky.map((task) => task.id)
-  );
-  const zbyvajici = zdroj.filter(
-    (task) => !mazanaId.has(task?.id)
-  );
-
-  zvysReviziLokalnichZmenPoznamek();
-
-  if (tajne) {
-    nastavDesifrovaneTajnePoznamky(zbyvajici);
-
-    const ulozeno =
-      await ulozTajnePoznamkySifrovaneHned(zbyvajici);
-
-    if (ulozeno === false) {
-      /* Při selhání šifrovaného zápisu vrátíme i paměťový snapshot. */
-      nastavDesifrovaneTajnePoznamky(zdroj);
-      return {
-        pocet: 0,
-        lokalneUlozeno: false
-      };
-    }
-  } else {
-    const ulozeno =
-      await ulozBeznePoznamkyPrimo(zbyvajici);
-
-    if (ulozeno === false) {
-      return {
-        pocet: 0,
-        lokalneUlozeno: false
-      };
-    }
-  }
-
-  /*
-   * UI na síť nečeká. Tombstony zařadíme hromadně do bezpečné
-   * pending fronty a trash.js následně spustí jediný čerstvý sync.
-   */
-  try {
-    window.LubaNoteSync.zaradSmazaniHromadne(
-      mazanePoznamky
-    );
-  } catch (error) {
-    console.error(
-      "Hromadné zařazení tombstonů Koše selhalo:",
-      error
-    );
-
-    /* Bez tombstonů nesmí cloud později smazané karty znovu oživit. */
-    if (tajne) {
-      nastavDesifrovaneTajnePoznamky(zdroj);
-      await ulozTajnePoznamkySifrovaneHned(zdroj);
-    } else {
-      await ulozBeznePoznamkyPrimo(zdroj);
-    }
-
-    return {
-      pocet: 0,
-      lokalneUlozeno: false
-    };
-  }
-
-  return {
-    pocet: mazanePoznamky.length,
-    lokalneUlozeno: true
-  };
 }
 
 async function uklidPoznamkyVKosiPo30Dnech() {

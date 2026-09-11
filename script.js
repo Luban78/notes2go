@@ -3831,6 +3831,34 @@ window.LubaNoteSharedEditorHost = {
 
 async function openTaskEditorById(taskId) {
   /*
+   * 429 – VLASTNÍ SHARED POZNÁMKA NESMÍ OTEVŘÍT PRIVATE EDITOR.
+   *
+   * Owner shared karta žije kvůli Planneru stále i v savedTask, ale
+   * společný obsah je po přijetí collaboratora autoritativní na serveru.
+   * Kdyby vlastník otevřel tuto lokální kopii běžným editorem, private
+   * sync jeho změnu záměrně nepřijme a při dalším syncu stáhne cloud zpět.
+   * Přesně tím se dříve vracel smazaný obrázek i celá karta.
+   */
+  try {
+    await window.LubaNoteSharingNotes
+      ?.zajistiAktualniSharedStav?.();
+
+    if (
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(taskId)
+    ) {
+      return await window.LubaNoteSharedEditor
+        ?.otevriSdilenouEditaci?.(taskId);
+    }
+  } catch (error) {
+    console.warn(
+      "Sdílení: ověření owner shared editoru selhalo; private editor se z bezpečnostních důvodů neotevře.",
+      error
+    );
+    return false;
+  }
+
+  /*
    * Pokud právě dorazil Realtime signál, že je v cloudu novější
    * verze této poznámky, nejdřív bezpečně dokončíme její sync.
    * Výjimka: poznámku stále vlastní editor na jiném zařízení;

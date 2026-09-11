@@ -269,6 +269,200 @@
     };
   }
 
+  function vytvorKanonickaSharedData(note) {
+    const data = {
+      ...(note && typeof note === "object" ? note : {})
+    };
+
+    /*
+     * Data vrácená shared RPC obsahují i klientská pomocná pole.
+     * Ta se nikdy nesmí zapsat zpět do notes.data.
+     */
+    Object.keys(data).forEach((klic) => {
+      if (klic.startsWith("__lubanoteShared")) {
+        delete data[klic];
+      }
+    });
+
+    data.isSecret = false;
+    return data;
+  }
+
+  async function uvolniDocasnySharedLock(noteId, lock) {
+    if (!noteId || !lock?.deviceId || !lock?.sessionId) {
+      return;
+    }
+
+    try {
+      const klient = await zajistiSupabase();
+      if (!klient) return;
+
+      await klient.rpc(
+        "lubanote_release_shared_note_editor",
+        {
+          p_note_id: noteId,
+          p_device_id: lock.deviceId,
+          p_session_id: lock.sessionId
+        }
+      );
+    } catch (error) {
+      console.warn(
+        "Sdílení: dočasný shared lock se nepodařilo uvolnit.",
+        error
+      );
+    }
+  }
+
+  async function ulozVlastniSharedZmenuBezEditoru(
+    noteId,
+    upravData
+  ) {
+    if (!noteId) {
+      return { handled: false, ok: false, reason: "missing_note_id" };
+    }
+
+    if (!navigator.onLine) {
+      zobrazZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        "Změna sdílené poznámky vyžaduje připojení k internetu."
+      );
+      return { handled: true, ok: false, reason: "offline" };
+    }
+
+    let note = null;
+    let lock = null;
+
+    try {
+      note = await nactiAktualniSdilenouPoznamku(noteId);
+
+      if (!note || note.__lubanoteSharedRole !== "owner") {
+        return { handled: false, ok: false, reason: "not_owned_shared" };
+      }
+
+      lock = await ziskejLock(note);
+
+      if (lock?.acquired !== true) {
+        zobrazZpravu(
+          t("sharing.readOnlyTitle", "Sdílená poznámka"),
+          t(
+            "sharing.sharedEditorBusy",
+            "Poznámku právě upravuje {username}. Zatím ji můžeš pouze číst.",
+            { username: lock?.editorUsername || "@?" }
+          )
+        );
+        return { handled: true, ok: false, reason: "shared_editor_busy" };
+      }
+
+      const klient = await zajistiSupabase();
+      if (!klient) {
+        throw new Error("supabase_unavailable");
+      }
+
+      const cas = new Date().toISOString();
+      const data = vytvorKanonickaSharedData(note);
+
+      if (typeof upravData === "function") {
+        upravData(data, cas);
+      }
+
+      data.id = note.id;
+      data.updatedAt = cas;
+      data.isSecret = false;
+
+      const { data: vysledek, error } = await klient.rpc(
+        "lubanote_save_shared_note_safe",
+        {
+          p_note_id: note.id,
+          p_data: data,
+          p_expected_revision:
+            Number(note.__lubanoteSharedRevision) || 0,
+          p_device_id: lock.deviceId,
+          p_session_id: lock.sessionId
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (vysledek?.ok !== true) {
+        throw new Error(
+          vysledek?.reason || "shared_save_rejected"
+        );
+      }
+
+      await window.LubaNoteSharingNotes
+        ?.obnovZeServeru?.({
+          tichy: true,
+          vykreslit: true
+        });
+
+      try {
+        await window.LubaNoteSync?.spustRychle?.();
+      } catch (error) {
+        console.warn(
+          "Sdílení: owner sync po serverové změně se dokončí později.",
+          error
+        );
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("lubanote:shared-note-saved", {
+          detail: {
+            noteId: note.id,
+            revision:
+              Number(vysledek?.revision) ||
+              Number(note.__lubanoteSharedRevision) ||
+              0
+          }
+        })
+      );
+
+      return {
+        handled: true,
+        ok: true,
+        noteId: note.id,
+        revision: Number(vysledek?.revision) || 0
+      };
+    } catch (error) {
+      console.error(
+        "Sdílení: serverová změna vlastní shared poznámky selhala:",
+        error
+      );
+
+      zobrazZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        "Změnu sdílené poznámky se nepodařilo bezpečně uložit."
+      );
+
+      return {
+        handled: !!note && note.__lubanoteSharedRole === "owner",
+        ok: false,
+        reason: error?.message || "shared_owner_change_failed"
+      };
+    } finally {
+      await uvolniDocasnySharedLock(noteId, lock);
+    }
+  }
+
+  async function presunVlastniSdilenouPoznamkuDoKose(noteId) {
+    return await ulozVlastniSharedZmenuBezEditoru(
+      noteId,
+      (data, cas) => {
+        data.trashedAt = cas;
+      }
+    );
+  }
+
+  async function obnovVlastniSdilenouPoznamkuZKose(noteId) {
+    return await ulozVlastniSharedZmenuBezEditoru(
+      noteId,
+      (data) => {
+        delete data.trashedAt;
+      }
+    );
+  }
+
   async function otevriSdilenouEditaci(noteId) {
     if (probihaOtevreni) {
       return false;
@@ -736,6 +930,8 @@
     otevriSdilenouEditaci,
     ulozAZavriSdilenyEditor,
     uvolniSdilenyEditor,
+    presunVlastniSdilenouPoznamkuDoKose,
+    obnovVlastniSdilenouPoznamkuZKose,
     jeAktivni: () => !!aktivniSession,
     ziskejSession: () => aktivniSession
       ? { ...aktivniSession }

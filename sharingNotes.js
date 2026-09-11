@@ -559,7 +559,9 @@
 
     const visible = seradSharedNotes(
       sdilenePoznamky.filter(
-        (note) => note?.__lubanoteSharedRole !== "owner"
+        (note) =>
+          note?.__lubanoteSharedRole !== "owner" &&
+          !note?.trashedAt
       )
     ).filter(projdeAktualnimiFiltry);
 
@@ -796,7 +798,7 @@
   function otevriReadOnly(noteId) {
     const note = sdilenePoznamky.find((item) => item.id === noteId);
 
-    if (!note) {
+    if (!note || note.trashedAt) {
       return;
     }
 
