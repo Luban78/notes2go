@@ -50,7 +50,9 @@
       dvojtapFullscreen: true,
       pamatovatZoom: false,
       posledniZoom: 1,
-      zpusobUlozeni: "stazene"
+      zpusobUlozeni: "stazene",
+      exportOrientace: "portrait",
+      exportOkraje: "normal"
     };
   }
 
@@ -72,7 +74,13 @@
         posledniZoom: omezPdfZoom(ulozene.posledniZoom || 1),
         zpusobUlozeni: ulozene.zpusobUlozeni === "vybrat"
           ? "vybrat"
-          : "stazene"
+          : "stazene",
+        exportOrientace: ulozene.exportOrientace === "landscape"
+          ? "landscape"
+          : "portrait",
+        exportOkraje: ulozene.exportOkraje === "narrow"
+          ? "narrow"
+          : "normal"
       };
     } catch {
       return vychozi;
@@ -89,7 +97,13 @@
           posledniZoom: omezPdfZoom(nastaveni.posledniZoom || 1),
           zpusobUlozeni: nastaveni.zpusobUlozeni === "vybrat"
             ? "vybrat"
-            : "stazene"
+            : "stazene",
+          exportOrientace: nastaveni.exportOrientace === "landscape"
+            ? "landscape"
+            : "portrait",
+          exportOkraje: nastaveni.exportOkraje === "narrow"
+            ? "narrow"
+            : "normal"
         })
       );
     } catch {
@@ -897,6 +911,26 @@
           </button>
         </div>
 
+        <div class="pdfLubaExportOptions" hidden>
+          <span class="pdfLubaSaveModeTitle">Nastavení PDF</span>
+
+          <div class="pdfLubaExportOption">
+            <span>Orientace</span>
+            <div class="pdfLubaSegments" role="radiogroup" aria-label="Orientace PDF">
+              <button type="button" data-pdf-orientation="portrait" role="radio">Na výšku</button>
+              <button type="button" data-pdf-orientation="landscape" role="radio">Na šířku</button>
+            </div>
+          </div>
+
+          <div class="pdfLubaExportOption">
+            <span>Okraje</span>
+            <div class="pdfLubaSegments" role="radiogroup" aria-label="Okraje PDF">
+              <button type="button" data-pdf-margins="normal" role="radio">Normální</button>
+              <button type="button" data-pdf-margins="narrow" role="radio">Úzké</button>
+            </div>
+          </div>
+        </div>
+
         <div class="pdfLubaActions">
           <button type="button" class="pdfLubaSecondary pdfLubaCancel">Zrušit</button>
           <button type="button" class="pdfLubaPrimary pdfLubaConfirm">Uložit PDF</button>
@@ -911,9 +945,14 @@
       input: modal.querySelector(".pdfLubaFileName"),
       saveMode: modal.querySelector(".pdfLubaSaveMode"),
       metody: [...modal.querySelectorAll(".pdfLubaSaveModeRow")],
+      exportOptions: modal.querySelector(".pdfLubaExportOptions"),
+      orientationButtons: [...modal.querySelectorAll("[data-pdf-orientation]")],
+      marginButtons: [...modal.querySelectorAll("[data-pdf-margins]")],
       cancel: modal.querySelector(".pdfLubaCancel"),
       confirm: modal.querySelector(".pdfLubaConfirm"),
-      zpusob: "stazene"
+      zpusob: "stazene",
+      exportOrientace: "portrait",
+      exportOkraje: "normal"
     };
 
     const zavrit = () => {
@@ -942,17 +981,60 @@
       });
     });
 
+    const nastavExportTlacitka = () => {
+      prvky.orientationButtons.forEach((tlacitko) => {
+        const aktivni = tlacitko.dataset.pdfOrientation === prvky.exportOrientace;
+        tlacitko.classList.toggle("active", aktivni);
+        tlacitko.setAttribute("aria-checked", aktivni ? "true" : "false");
+      });
+
+      prvky.marginButtons.forEach((tlacitko) => {
+        const aktivni = tlacitko.dataset.pdfMargins === prvky.exportOkraje;
+        tlacitko.classList.toggle("active", aktivni);
+        tlacitko.setAttribute("aria-checked", aktivni ? "true" : "false");
+      });
+    };
+
+    prvky.orientationButtons.forEach((tlacitko) => {
+      tlacitko.addEventListener("click", () => {
+        prvky.exportOrientace = tlacitko.dataset.pdfOrientation === "landscape"
+          ? "landscape"
+          : "portrait";
+        nastavExportTlacitka();
+      });
+    });
+
+    prvky.marginButtons.forEach((tlacitko) => {
+      tlacitko.addEventListener("click", () => {
+        prvky.exportOkraje = tlacitko.dataset.pdfMargins === "narrow"
+          ? "narrow"
+          : "normal";
+        nastavExportTlacitka();
+      });
+    });
+
+    prvky.nastavExportTlacitka = nastavExportTlacitka;
+
     prvky.confirm.addEventListener("click", async () => {
       const nazev = normalizujNazevPdf(prvky.input.value);
       const zpusob = prvky.zpusob === "vybrat" ? "vybrat" : "stazene";
+      const exportVolby = {
+        orientace: prvky.exportOrientace === "landscape" ? "landscape" : "portrait",
+        okraje: prvky.exportOkraje === "narrow" ? "narrow" : "normal"
+      };
       const akce = pdfUlozeniAkce;
+
+      const nastaveni = nactiPdfNastaveni();
+      nastaveni.exportOrientace = exportVolby.orientace;
+      nastaveni.exportOkraje = exportVolby.okraje;
+      ulozPdfNastaveni(nastaveni);
 
       prvky.input.value = nazev;
       modal.hidden = true;
       pdfUlozeniAkce = null;
 
       if (typeof akce === "function") {
-        await akce(nazev, zpusob);
+        await akce(nazev, zpusob, exportVolby);
       }
     });
 
@@ -975,6 +1057,7 @@
     nazevSouboru = "",
     poPotvrzeni = null,
     povolitVolbuMista = true,
+    povolitNastaveniExportu = false,
     infoText = ""
   } = {}) {
     const vychoziNazev = nazevSouboru ||
@@ -1010,6 +1093,18 @@
     prvky.metody.forEach((tlacitko) => {
       tlacitko.hidden = !muzeVybiratMisto;
     });
+
+    const maExportNastaveni = povolitNastaveniExportu === true;
+    if (prvky.exportOptions) {
+      prvky.exportOptions.hidden = !maExportNastaveni;
+    }
+    prvky.exportOrientace = nastaveni.exportOrientace === "landscape"
+      ? "landscape"
+      : "portrait";
+    prvky.exportOkraje = nastaveni.exportOkraje === "narrow"
+      ? "narrow"
+      : "normal";
+    prvky.nastavExportTlacitka?.();
 
     if (infoText) {
       prvky.info.textContent = infoText;
@@ -1469,15 +1564,19 @@
 </html>`;
   }
 
-  function vytvorPdfHtmlDokument(data) {
+  function vytvorPdfHtmlDokument(data, exportVolby = {}) {
     /*
      * PDF se tiskne z čistého dokumentového HTML, nikoli z celé obrazovky
      * LubaNote. Tím se do PDF nedostane toolbar, modaly ani navigace.
      */
     const html = vytvorHtmlDokument(data);
+    const orientace = exportVolby?.orientace === "landscape"
+      ? "landscape"
+      : "portrait";
+    const okraj = exportVolby?.okraje === "narrow" ? "8mm" : "14mm";
 
     const tiskCss = `
-    @page { size: A4; margin: 14mm; }
+    @page { size: A4 ${orientace}; margin: ${okraj}; }
     html, body { background: #fff !important; color: #111; }
     body { max-width: none; margin: 0; padding: 0; }
     .ln-doc-content, .ln-doc-todos { break-inside: auto; }
@@ -1494,7 +1593,7 @@
       );
   }
 
-  async function ulozPdfPresWeb(data) {
+  async function ulozPdfPresWeb(data, exportVolby = {}) {
     const iframe = document.createElement("iframe");
     iframe.setAttribute("aria-hidden", "true");
     iframe.style.position = "fixed";
@@ -1506,7 +1605,7 @@
     iframe.style.opacity = "0";
     iframe.style.pointerEvents = "none";
 
-    const html = vytvorPdfHtmlDokument(data);
+    const html = vytvorPdfHtmlDokument(data, exportVolby);
 
     return await new Promise((resolve, reject) => {
       let dokonceno = false;
@@ -1677,15 +1776,16 @@
 
     if (format === "pdf") {
       const nazevSouboru = `${zaklad}.pdf`;
-      const html = vytvorPdfHtmlDokument(data);
 
       if (jeNativniAndroid() && plugin?.ulozPdf) {
         otevriPdfUlozeniModal({
           nazevSouboru,
           povolitVolbuMista: false,
-          infoText: "Po potvrzení Android otevře podporované Uložit jako PDF.",
-          poPotvrzeni: async (nazev) => {
+          povolitNastaveniExportu: true,
+          infoText: "Název a vzhled nastavíš tady. Cílové místo vybere Android v dalším kroku.",
+          poPotvrzeni: async (nazev, _zpusob, exportVolby) => {
             try {
+              const html = vytvorPdfHtmlDokument(data, exportVolby);
               await plugin.ulozPdf({
                 html,
                 nazevSouboru: nazev,
@@ -1704,7 +1804,11 @@
         return true;
       }
 
-      return await ulozPdfPresWeb(data);
+      const nastaveni = nactiPdfNastaveni();
+      return await ulozPdfPresWeb(data, {
+        orientace: nastaveni.exportOrientace,
+        okraje: nastaveni.exportOkraje
+      });
     }
 
     const jeHtml = format === "html";

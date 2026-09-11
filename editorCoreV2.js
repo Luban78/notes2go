@@ -49,7 +49,8 @@
     odkaz: null,
     interniOdkazId: null,
     interniOdkazNazev: null,
-    planOdkazId: null
+    planOdkazId: null,
+    kod: false
   });
 
   let lab = null;
@@ -298,7 +299,8 @@
       odkaz: normalizujInternetovouAdresu(format?.odkaz),
       interniOdkazId: normalizujIdOdkazu(format?.interniOdkazId),
       interniOdkazNazev: String(format?.interniOdkazNazev || "").trim() || null,
-      planOdkazId: normalizujIdOdkazu(format?.planOdkazId)
+      planOdkazId: normalizujIdOdkazu(format?.planOdkazId),
+      kod: format?.kod === true
     };
   }
 
@@ -313,7 +315,8 @@
       && normalizujInternetovouAdresu(a?.odkaz) === normalizujInternetovouAdresu(b?.odkaz)
       && normalizujIdOdkazu(a?.interniOdkazId) === normalizujIdOdkazu(b?.interniOdkazId)
       && String(a?.interniOdkazNazev || "") === String(b?.interniOdkazNazev || "")
-      && normalizujIdOdkazu(a?.planOdkazId) === normalizujIdOdkazu(b?.planOdkazId);
+      && normalizujIdOdkazu(a?.planOdkazId) === normalizujIdOdkazu(b?.planOdkazId)
+      && Boolean(a?.kod) === Boolean(b?.kod);
   }
 
   function vytvorSegment(text = "", format = VYCHOZI_FORMAT) {
@@ -544,6 +547,9 @@
       blok.obsah = normalizujObsah(blok.obsah);
       blok.zarovnani = normalizujZarovnani(blok.zarovnani);
       if (puvodniTyp === "bullet" || puvodniTyp === "ordered" || puvodniTyp === "todo") {
+        delete blok.legacyBlockquote;
+        delete blok.legacyPre;
+        delete blok.legacyHr;
         if (puvodniTyp === "bullet" || puvodniTyp === "ordered") {
           blok.uroven = normalizujUrovenBulletu(blok.uroven);
           blok.sbaleno = Boolean(blok.sbaleno);
@@ -574,6 +580,10 @@
         delete blok.obrazky;
         delete blok.hotovo;
         delete blok.zvyrazneni;
+        blok.legacyBlockquote = blok.legacyBlockquote === true;
+        blok.legacyPre = blok.legacyPre === true;
+        blok.legacyHr = blok.legacyHr === true;
+        if (blok.legacyHr && textBloku(blok).trim()) blok.legacyHr = false;
       }
     });
 
@@ -752,6 +762,12 @@
     if (format?.podtrzeni) span.style.textDecoration = "underline";
     if (format?.barva) span.style.color = format.barva;
     if (format?.pozadi) span.style.backgroundColor = format.pozadi;
+    if (format?.kod) {
+      span.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      span.dataset.lnV2Kod = "1";
+    } else {
+      span.dataset.lnV2Kod = "0";
+    }
 
     const stylTextu = normalizujStylTextu(format?.stylTextu);
     span.dataset.lnV2StylTextu = stylTextu || "text";
@@ -869,6 +885,23 @@
       radek.dataset.lnV2Blok = blok.id;
       radek.dataset.typ = blok.typ;
       radek.style.textAlign = blok.zarovnani || "left";
+      if (blok.legacyBlockquote === true) {
+        radek.style.borderLeft = "3px solid currentColor";
+        radek.style.paddingLeft = "12px";
+        radek.style.opacity = "0.92";
+      }
+      if (blok.legacyPre === true) {
+        radek.style.whiteSpace = "pre-wrap";
+        radek.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        radek.style.padding = "8px 10px";
+        radek.style.borderRadius = "8px";
+        radek.style.background = "color-mix(in srgb, currentColor 7%, transparent)";
+      }
+      if (blok.legacyHr === true) {
+        radek.style.borderTop = "1px solid currentColor";
+        radek.style.minHeight = "12px";
+        radek.style.marginTop = "8px";
+      }
       if (jeSeznamovyBlok(blok)) {
         const uroven = normalizujUrovenBulletu(blok.uroven);
         radek.dataset.lnV2BulletUroven = String(uroven);
@@ -4456,6 +4489,10 @@
     if (tag === "b" || tag === "strong") format.tucne = true;
     if (tag === "i" || tag === "em") format.kurziva = true;
     if (tag === "u") format.podtrzeni = true;
+    if (tag === "code") format.kod = true;
+    if (/monospace|consolas|menlo|courier/i.test(String(element.style?.fontFamily || ""))) {
+      format.kod = true;
+    }
 
     if (element.classList?.contains("editorTextNormalni")) {
       format.stylTextu = null;
@@ -4486,7 +4523,7 @@
   }
 
   function importujInlineUzly(rodic, zakladniFormat, vystup, nepodporovane) {
-    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a"]);
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "code"]);
     const uzly = Array.from(rodic?.childNodes || []);
 
     const pridejLegacyNovyRadek = () => {
@@ -4525,7 +4562,7 @@
        * složitějšího (seznam, obrázek...), rekurze to dál označí jako
        * nepodporované a ochranný fallback zůstane zachovaný.
        */
-      if (tag === "div") {
+      if (tag === "div" || tag === "p") {
         if (vystup.length) {
           pridejLegacyNovyRadek();
         }
@@ -4575,7 +4612,7 @@
     const tagSeznamu = seznam.tagName.toLowerCase();
     if (tagSeznamu !== "ul" && tagSeznamu !== "ol") return;
     const typSeznamu = tagSeznamu === "ol" ? "ordered" : "bullet";
-    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br"]);
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br", "code"]);
 
     Array.from(seznam.children).forEach((li) => {
       if (li.tagName?.toLowerCase() !== "li") {
@@ -4615,6 +4652,13 @@
               docasny.appendChild(dite.cloneNode(true));
             });
           }
+          return;
+        }
+        if (tag === "p" || tag === "div") {
+          if (docasny.childNodes.length) docasny.appendChild(document.createElement("br"));
+          Array.from(uzel.childNodes).forEach((dite) => {
+            docasny.appendChild(dite.cloneNode(true));
+          });
           return;
         }
         if (!povoleneInline.has(tag)) {
@@ -4681,7 +4725,7 @@
     const obsah = [];
     const obrazky = [];
     const docasny = document.createElement("span");
-    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br"]);
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br", "code"]);
 
     Array.from(element.childNodes).forEach((uzel) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
@@ -4703,6 +4747,11 @@
             docasny.appendChild(dite.cloneNode(true));
           });
         }
+        return;
+      }
+      if (tag === "p" || tag === "div") {
+        if (docasny.childNodes.length) docasny.appendChild(document.createElement("br"));
+        Array.from(uzel.childNodes).forEach((dite) => docasny.appendChild(dite.cloneNode(true)));
         return;
       }
       if (!povoleneInline.has(tag)) {
@@ -4728,7 +4777,7 @@
   function vytvorModelZTodos(todos = []) {
     const nepodporovane = new Set();
     const bloky = [];
-    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br"]);
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br", "code"]);
 
     (Array.isArray(todos) ? todos : []).forEach((todo) => {
       const obsah = [];
@@ -4759,6 +4808,11 @@
                 docasny.appendChild(dite.cloneNode(true));
               });
             }
+            return;
+          }
+          if (tag === "p" || tag === "div") {
+            if (docasny.childNodes.length) docasny.appendChild(document.createElement("br"));
+            Array.from(uzel.childNodes).forEach((dite) => docasny.appendChild(dite.cloneNode(true)));
             return;
           }
           if (!povoleneInline.has(tag)) {
@@ -4808,7 +4862,7 @@
     };
 
     const blokoveTagy = new Set(["div", "p", "h1", "h2", "h3"]);
-    const inlineTagy = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a"]);
+    const inlineTagy = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "code"]);
 
     Array.from(sablona.content.childNodes).forEach((uzel) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
@@ -4834,12 +4888,33 @@
       }
 
       if (
-        (tag === "figure" && uzel.classList.contains("lubaNoteImage"))
+        (tag === "figure" && Boolean(uzel.querySelector("img")))
         || tag === "img"
       ) {
         flushRootInline();
         const obrazek = vytvorObrazkovyBlokZHtml(uzel, nepodporovane);
         if (obrazek) bloky.push(obrazek);
+        return;
+      }
+
+      if (tag === "blockquote" || tag === "pre") {
+        flushRootInline();
+        const obsah = [];
+        const format = kopieFormatu(VYCHOZI_FORMAT);
+        if (tag === "pre") format.kod = true;
+        importujInlineUzly(uzel, format, obsah, nepodporovane);
+        const blok = vytvorOdstavecZObsahu(obsah, normalizujZarovnani(uzel.style?.textAlign || uzel.getAttribute("align")));
+        if (tag === "blockquote") blok.legacyBlockquote = true;
+        if (tag === "pre") blok.legacyPre = true;
+        bloky.push(blok);
+        return;
+      }
+
+      if (tag === "hr") {
+        flushRootInline();
+        const blok = vytvorOdstavec("");
+        blok.legacyHr = true;
+        bloky.push(blok);
         return;
       }
 
@@ -4924,7 +4999,7 @@
       const maFormat = Boolean(
         format.tucne || format.kurziva || format.podtrzeni ||
         format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz ||
-        interniId || planId
+        format.kod || interniId || planId
       );
       if (!maFormat) {
         cil.appendChild(document.createTextNode(text));
@@ -4947,6 +5022,8 @@
         inline.href = format.odkaz;
         inline.target = "_blank";
         inline.rel = "noopener noreferrer";
+      } else if (format.kod) {
+        inline = document.createElement("code");
       } else {
         inline = document.createElement("span");
       }
@@ -5128,7 +5205,15 @@
         continue;
       }
 
-      const radek = document.createElement("div");
+      if (blok.legacyHr === true && !textBloku(blok).trim()) {
+        obal.appendChild(document.createElement("hr"));
+        continue;
+      }
+
+      const tagRadku = blok.legacyPre === true
+        ? "pre"
+        : (blok.legacyBlockquote === true ? "blockquote" : "div");
+      const radek = document.createElement(tagRadku);
       const zarovnani = normalizujZarovnani(blok?.zarovnani);
       if (zarovnani !== "left") radek.style.textAlign = zarovnani;
       vlozSegmentyDoExportElementu(radek, blok);

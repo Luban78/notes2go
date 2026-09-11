@@ -361,6 +361,49 @@ body {
   text-transform: uppercase;
 }
 
+
+.pdfLubaExportOptions {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pdfLubaExportOption {
+  display: grid;
+  gap: 7px;
+}
+
+.pdfLubaExportOption > span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.pdfLubaSegments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.pdfLubaSegments button {
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.pdfLubaSegments button.active {
+  border-color: color-mix(in srgb, var(--color-accent) 78%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-background));
+  color: var(--color-accent-text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
 .pdfLubaSaveModeRow {
   width: 100%;
   min-height: 68px;
