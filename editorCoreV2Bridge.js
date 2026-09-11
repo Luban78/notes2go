@@ -75,9 +75,12 @@
     "tlacitkoBullet"
   ]);
 
-  const nepodporovaneAkce = new Set([
+  const dokumentoveAkce = new Set([
     "tlacitkoOtevritDokument",
-    "tlacitkoUlozitDokument",
+    "tlacitkoUlozitDokument"
+  ]);
+
+  const nepodporovaneAkce = new Set([
     "shareNoteButton"
   ]);
 
@@ -1454,6 +1457,22 @@
       return;
     }
 
+    /* V2.22 / 401 – Otevřít a Uložit jako už nejsou Legacy-only.
+       Před předáním akce dokumentovému modulu připravíme kanonický V2 obsah
+       do produkční vrstvy, ale click NEZASTAVUJEME. editorDocuments.js pak
+       normálně otevře systémový výběr souboru / nabídku Uložit jako. */
+    if (dokumentoveAkce.has(id)) {
+      core()?.zachytAktualniVyber?.();
+      zavriPanelyFormatu();
+
+      if (!synchronizujDoProdukcnihoEditoru()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        zobrazToast("Dokumentová akce zastavena: V2 obsah se nepodařilo bezpečně převést.", true);
+      }
+      return;
+    }
+
     if (id === "tlacitkoVelikostPisma") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1821,6 +1840,15 @@
     editorBackButton.click();
   }, true);
 
+  /* Externí HTML/TXT se nejdřív vloží do produkčního editoru.
+     I když otevíráme dokument nad novou poznámkou bez data-task-id, musíme
+     V2 explicitně znovu načíst – MutationObserver by v tomto okraji nemusel
+     dostat změnu atributu. */
+  document.addEventListener("lubanote:dokument-otevren", () => {
+    if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return;
+    obnovZProdukcnihoEditoru();
+  });
+
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
     const vyber = window.getSelection();
@@ -1860,7 +1888,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.21-MIXED-BLOCKS-399",
+    verze: "V2.22-DOCUMENT-OPEN-SAVE-401",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,
