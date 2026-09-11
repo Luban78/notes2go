@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2
-   FÁZE V2.20a: izolace selection menu od Bullet/TODO MOVE.
+   FÁZE V2.20b: návrat odladěného row-wide long-press MOVE + arbitráž selection.
 
    🔒 FROZEN PRINCIPY CORE V2:
    - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
@@ -110,7 +110,7 @@
      Long-press pouze vybere položku, drop atomicky změní `dokument.bloky`.
      Přesouvá se vždy celý podstrom (rodič + jeho vnořené děti).
   ========================================== */
-  const DELKA_LONG_PRESS_SEZNAMU = 650;
+  const DELKA_LONG_PRESS_SEZNAMU = 420;
   const MAX_POHYB_LONG_PRESS_SEZNAMU = 20;
   const START_DRAG_SEZNAMU = 7;
   const PRAH_VNOR_SEZNAMU = 38;
@@ -3585,40 +3585,37 @@
   }
 
   /*
-   * 🔒 V2.19 – TEXT SELECTION vs. MOVE
-   * Přesun seznamové/TODO položky NESMÍ soutěžit s Android výběrem textu.
-   * Drag proto začíná pouze z vizuální značky seznamu (• / 1.) nebo
-   * dlouhým stiskem TODO checkboxu. Samotný text řádku vždy patří selection.
-   * Tohle pravidlo neměnit zpět na „long-press kdekoliv v řádku“ – přesně to
-   * blokovalo 2× tap i dlouhý výběr textu.
+   * 🔒 FROZEN UX – MOBILE MOVE vs. TEXT SELECTION
+   *
+   * ODLADĚNÉ CHOVÁNÍ LUBANOTE:
+   * - krátký tap / 2× tap na text = normální caret a výběr textu,
+   * - skutečný long-press KDEKOLIV NA ŘÁDKU Bullet/TODO = MOVE,
+   * - obrázky, odkazy a ovládací tlačítka mají vlastní interakce a MOVE nespouští.
+   *
+   * Na telefonu NESMÍ být MOVE omezen jen na malou značku • / 1. / checkbox.
+   * Prst by značku zakryl a ovládání by bylo zbytečně nepřesné. Rozlišení dělá
+   * časovač long-pressu + práh pohybu, ne místo dotyku. Tohle pravidlo neměnit
+   * bez cíleného mobilního regresního testu selection + drag + zanoření.
    */
-  function jeV2MoveZonaSeznamu(target, radek, clientX) {
-    if (!radek) return false;
-    if (radek.classList.contains("ln-v2-todo")) {
-      return Boolean(target?.closest?.("[data-v2-todo-check]"));
-    }
-    return jeV2KlikNaZnacceSeznamu(radek, clientX, true);
+  function jeV2MoveZonaSeznamu(target, radek) {
+    if (!radek || !editor?.contains(radek)) return false;
+    return !jePrvekMimoV2SeznamMove(target);
   }
 
   /*
-   * 🔒 V2.20a – VEŘEJNÝ GUARD PRO BRIDGE SELECTION MENU
-   *
-   * Selection menu a MOVE používají na Androidu stejný long-press / contextmenu
-   * životní cyklus. Bridge proto MUSÍ před vlastní selection logikou ověřit,
-   * zda právě nezačíná nebo neběží MOVE seznamu/TODO. Bez tohoto guardu může
-   * capture listener selection menu vyvolat selection/contextmenu uprostřed
-   * long-pressu a MOVE se zruší dřív, než dojde k drag + zanoření.
+   * 🔒 V2.20b – BRIDGE smí potlačit selection až po SKUTEČNÉM long-pressu.
+   * Samotná existence čekajícího kandidáta po touchstartu není MOVE; jinak by
+   * capture selection vrstva znovu zablokovala 1×/2× tap na text řádku.
    */
   function jeV2InterakcePresunuSeznamu() {
-    return Boolean(v2DragSeznamu);
+    return Boolean(v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni);
   }
 
-  function jeV2CilPresunuSeznamu(target, clientX) {
+  function jeV2CilPresunuSeznamu(target) {
     const radek = target?.closest?.(
       ".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo"
     );
-    if (!radek || !editor?.contains(radek)) return false;
-    return jeV2MoveZonaSeznamu(target, radek, Number(clientX));
+    return Boolean(radek && editor?.contains(radek) && jeV2MoveZonaSeznamu(target, radek));
   }
 
   function zrusVyberMoveSeznamuPokudMimo(target) {
@@ -5088,10 +5085,8 @@
       if (event.touches?.length !== 1) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-      if (!radek || !editor.contains(radek)) return;
+      if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
       const dotyk = event.touches[0];
-      if (!jeV2MoveZonaSeznamu(event.target, radek, dotyk.clientX)) return;
-      if (!radek.classList.contains("ln-v2-todo") && jePrvekMimoV2SeznamMove(event.target)) return;
       pripravV2LongPressSeznamu(
         "touch", radek, dotyk.clientX, dotyk.clientY, null, dotyk.identifier, false
       );
@@ -5124,9 +5119,10 @@
       if (event.pointerType === "mouse" && event.button !== 0) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-      if (!radek || !editor.contains(radek)) return;
-      if (!jeV2MoveZonaSeznamu(event.target, radek, event.clientX)) return;
-      if (!radek.classList.contains("ln-v2-todo") && jePrvekMimoV2SeznamMove(event.target)) return;
+      if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
+      /* Desktop pointer zachovává klik na značku pro sbalení větve; mobilní
+         touch má odladěný long-press kdekoliv na řádku. */
+      if (jeV2KlikNaZnacceSeznamu(radek, event.clientX, false)) return;
       pripravV2LongPressSeznamu("pointer", radek, event.clientX, event.clientY, event.pointerId, null, false);
     });
 
@@ -5489,7 +5485,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.20a-MOVE-GUARD-395",
+    verze: "V2.20b-ROW-LONGPRESS-396",
     otevriLab,
     otevriLabPrimo,
     zavriLab,

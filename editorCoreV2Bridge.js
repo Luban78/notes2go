@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / PRODUCTION
-   FÁZE V2.20a – MOVE GUARD PRO SELECTION MENU
+   FÁZE V2.20b – ROW-WIDE LONG-PRESS + SELECTION ARBITRÁŽ
 
    🔒 FROZEN INTEGRAČNÍ PRAVIDLA:
    - Editor Core V2 je výchozí engine pro vlastní podporované poznámky.
@@ -186,17 +186,18 @@
   }
 
   /*
-   * 🔒 V2.20a – selection menu nesmí soutěžit s Bullet/TODO MOVE.
-   * MOVE zóna je značka • / 1. nebo TODO checkbox; během připraveného či
-   * aktivního long-pressu má Core absolutní prioritu nad selection UI.
+   * 🔒 V2.20b – arbitráž selection menu vs. odladěný row-wide MOVE.
+   *
+   * Krátký/2× tap na řádku musí zůstat selection. Selection se potlačí až
+   * tehdy, když Core skutečně dokončil long-press (pripraven/aktivni).
+   * Pouze contextmenu smí preventivně rozpoznat řádek jako MOVE cíl, protože
+   * long-press na Bullet/TODO je záměrně rezervovaný pro přesun.
    */
-  function jeV2MoveInterakce(event = null) {
+  function jeV2MoveInterakce(event = null, zahrnoutCilRadku = false) {
     const jadro = core();
     if (jadro?.jeInterakcePresunuSeznamu?.()) return true;
-    if (!event) return false;
-    const dotyk = event.changedTouches?.[0] || event.touches?.[0] || null;
-    const x = Number.isFinite(event.clientX) ? event.clientX : dotyk?.clientX;
-    return Boolean(jadro?.jeCilPresunuSeznamu?.(event.target, x));
+    if (!zahrnoutCilRadku || !event) return false;
+    return Boolean(jadro?.jeCilPresunuSeznamu?.(event.target));
   }
 
   function potlacSelectionMenuKvuliMove(ms = 550) {
@@ -1695,8 +1696,10 @@
 
   document.addEventListener("contextmenu", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
-    if (jeV2MoveInterakce(event)) {
-      /* Core má vlastní contextmenu ochranu pro MOVE. Selection vrstva musí uhnout. */
+    if (jeV2MoveInterakce(event, true)) {
+      /* Long-press na řádku patří MOVE. Nativní/context selection zde nesmí
+         přebít mobilní přesun, ale krátký/2× tap tím není dotčený. */
+      event.preventDefault();
       potlacSelectionMenuKvuliMove(700);
       return;
     }
@@ -1795,7 +1798,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.20a-MOVE-GUARD-395",
+    verze: "V2.20b-ROW-LONGPRESS-396",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,
