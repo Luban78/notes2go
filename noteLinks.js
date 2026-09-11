@@ -342,6 +342,13 @@
     );
   }
 
+  function jeV2Editor(element) {
+    return Boolean(
+      element?.classList?.contains("ln-v2-editor") &&
+      window.LubaNoteEditorV2Bridge?.jeAktivni?.() === true
+    );
+  }
+
   function jePodporovanyEditor(element) {
     if (!element) {
       return false;
@@ -349,7 +356,8 @@
 
     return (
       element === editor ||
-      jeTodoRichTextEditor(element)
+      jeTodoRichTextEditor(element) ||
+      jeV2Editor(element)
     );
   }
 
@@ -361,6 +369,11 @@
 
     if (!element) {
       return null;
+    }
+
+    const v2Editor = element.closest?.(".ln-v2-editor");
+    if (v2Editor && jePodporovanyEditor(v2Editor)) {
+      return v2Editor;
     }
 
     const todoEditor = element.closest?.(
@@ -769,6 +782,11 @@
 
     const cilovyEditor = spoust.editor;
 
+    if (jeV2Editor(cilovyEditor)) {
+      return window.LubaNoteEditorV2Bridge
+        ?.vlozInterniOdkazZAutocomplete?.(poznamka, spoust) === true;
+    }
+
     if (
       !spoust.textNode?.isConnected ||
       !cilovyEditor?.isConnected ||
@@ -1139,6 +1157,54 @@
     true
   );
 
+  /* ---------- EDITOR CORE V2 – dynamický editor ---------- */
+
+  document.addEventListener(
+    "input",
+    (event) => {
+      const v2Editor = event.target?.closest?.(".ln-v2-editor");
+      if (!v2Editor || !jeV2Editor(v2Editor)) return;
+      otevriNeboAktualizujPanel(v2Editor);
+    },
+    true
+  );
+
+  /*
+   * Android/Gboard u modelově řízeného V2 vstupu nemusí po preventDefault()
+   * poslat nativní input/keyup. Core proto po obnovení selection vyšle tento
+   * neutrální signál, aby [[ autocomplete reagoval stejně spolehlivě jako Legacy.
+   */
+  document.addEventListener(
+    "lubanote:v2-model-input",
+    (event) => {
+      const v2Editor = event.target?.closest?.(".ln-v2-editor");
+      if (!v2Editor || !jeV2Editor(v2Editor)) return;
+      otevriNeboAktualizujPanel(v2Editor);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keyup",
+    (event) => {
+      const v2Editor = event.target?.closest?.(".ln-v2-editor");
+      if (!v2Editor || !jeV2Editor(v2Editor)) return;
+      if (["ArrowUp", "ArrowDown", "Enter", "Escape"].includes(event.key)) return;
+      if (!panel || panel.hidden) otevriNeboAktualizujPanel(v2Editor);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const v2Editor = event.target?.closest?.(".ln-v2-editor");
+      if (!v2Editor || !jeV2Editor(v2Editor)) return;
+      obsluzKeydownAutocomplete(event, v2Editor);
+    },
+    true
+  );
+
   /* ---------- TODO RICH-TEXT – dynamické editory ---------- */
 
   document.addEventListener(
@@ -1312,6 +1378,12 @@
 
   function aktualizujJedenInterniOdkaz(link, mapaPoznamek = null) {
     if (!link?.classList?.contains("noteInternalLink")) {
+      return false;
+    }
+
+    // V2 DOM je pouze projekce modelu. Nesmíme ho přepisovat zvenku,
+    // jinak by DOM Guard změnu správně zahodil. V2 název cíle řeší při importu/exportu.
+    if (link.closest?.(".ln-v2-editor")) {
       return false;
     }
 
@@ -2100,6 +2172,7 @@
       const aktivni = event.target;
       const jeEditor =
         aktivni === editor ||
+        aktivni?.classList?.contains("ln-v2-editor") ||
         aktivni?.classList?.contains("todoRichTextInput") ||
         aktivni?.classList?.contains("todoTextInput");
 
@@ -2215,7 +2288,7 @@
   );
 
   window.LubaNoteNoteLinks = {
-    verze: "7.0-rychle-linky",
+    verze: "7.1-v2-core",
     zavriAutocomplete: zavriPanel,
     normalizujVyhledavani: bezDiakritiky,
     aktualizujInterniNavrat,

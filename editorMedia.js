@@ -3576,13 +3576,29 @@
        */
       const v2Bridge = window.LubaNoteEditorV2Bridge;
       if (v2Bridge?.jeAktivni?.()) {
+        /*
+         * 🔒 V2 PRODUCTION IMAGE ADAPTER
+         * V produkčním V2 už obrázek není laboratorní kopie. Proto nejdřív
+         * použijeme stejnou lokální/cloudovou stínovou attachment pipeline
+         * jako starý editor (Secret ji bezpečně přeskočí) a teprve potom
+         * předáme hotový obrázek + attachmentId modelu V2.
+         */
+        const attachmentId =
+          v2Bridge.jeProdukcniRezim?.() === true
+            ? await ulozObrazekDoStinoveCache(dataUrl, file)
+            : null;
+
         const vlozenoDoV2 = v2Bridge.vlozPripravenyObrazek?.({
           dataUrl,
           fileName: file?.name || "",
-          alt: file?.name ? `Obrázek: ${file.name}` : "Obrázek v poznámce"
+          alt: file?.name ? `Obrázek: ${file.name}` : "Obrázek v poznámce",
+          attachmentId: attachmentId || ""
         });
 
         if (!vlozenoDoV2) {
+          if (attachmentId) {
+            void odstranStinovouPrilohu(attachmentId);
+          }
           throw new Error("Editor Core V2 obrázek nepřijal.");
         }
 

@@ -589,14 +589,34 @@ async function saveCurrentPlannedItem() {
   const plannedAt =
     `${plannerDate.value}T${plannerTime.value}`;
 
+  const v2Bridge = window.LubaNoteEditorV2Bridge;
+  const v2Obsah = v2Bridge?.jeAktivni?.() === true
+    ? v2Bridge.ziskejObsahProProdukci?.()
+    : null;
+
+  /*
+   * Plánování je vědomá změna otevřené poznámky. Pokud běží V2, uložíme
+   * spolu s Planner položkou i celý právě viditelný modelový stav (text,
+   * richContent i TODO), aby Planner nikdy nevrátil do localStorage starší
+   * skrytou Legacy kopii otevřené poznámky.
+   */
+  if (v2Obsah) {
+    sourceNote.note = String(v2Obsah.note || "");
+    sourceNote.richContent = String(v2Obsah.richContent || "");
+    if (Array.isArray(v2Obsah.todos)) {
+      sourceNote.todos = v2Obsah.todos;
+    }
+  }
+
   let sourceTodo = null;
 
   if (
     plannerSourceType === "todo" &&
     window.LubaNoteTodos
   ) {
-    const currentTodos =
-      window.LubaNoteTodos.ziskejAktivniTodos?.() || [];
+    const currentTodos = Array.isArray(v2Obsah?.todos)
+      ? v2Obsah.todos
+      : (window.LubaNoteTodos.ziskejAktivniTodos?.() || []);
 
     sourceTodo = currentTodos.find(
       todo => todo?.id === plannerSourceTodoId
@@ -648,10 +668,9 @@ async function saveCurrentPlannedItem() {
   plannedItem.id;
   
   if (plannerSourceType === "selection") {
-    const backlinkVytvoren =
-      wrapCurrentSelectionAsPlannedLink(
-        plannedItem.id
-      );
+    const backlinkVytvoren = v2Bridge?.jeAktivni?.() === true
+      ? v2Bridge.obalPlanovaciVyber?.(plannedItem.id) === true
+      : wrapCurrentSelectionAsPlannedLink(plannedItem.id);
 
     if (!backlinkVytvoren) {
       console.error(
@@ -676,8 +695,14 @@ async function saveCurrentPlannedItem() {
   }
 
   if (plannerSourceType === "selection") {
-    sourceNote.note = modalRichText.innerText;
-    sourceNote.richContent = modalRichText.innerHTML;
+    const aktualniV2Obsah = v2Bridge?.jeAktivni?.() === true
+      ? v2Bridge.ziskejObsahProProdukci?.()
+      : null;
+    sourceNote.note = aktualniV2Obsah ? String(aktualniV2Obsah.note || "") : modalRichText.innerText;
+    sourceNote.richContent = aktualniV2Obsah ? String(aktualniV2Obsah.richContent || "") : modalRichText.innerHTML;
+    if (Array.isArray(aktualniV2Obsah?.todos)) {
+      sourceNote.todos = aktualniV2Obsah.todos;
+    }
   }
 
   sourceNote.updatedAt = new Date().toISOString();
@@ -990,6 +1015,54 @@ async function zajistiUlozenouZdrojovouPoznamkuProPlanner() {
 planSelectionButton.addEventListener(
   "click",
   async () => {
+    const v2Bridge = window.LubaNoteEditorV2Bridge;
+    if (v2Bridge?.jeAktivni?.() === true) {
+      const v2Kontext = v2Bridge.ziskejPlanovaciKontext?.();
+      if (!v2Kontext?.ok) {
+        if (v2Kontext?.duvod && typeof window.zobrazZpravuAplikace === "function") {
+          window.zobrazZpravuAplikace("Plánování", v2Kontext.duvod);
+        }
+        return;
+      }
+
+      let tasks = loadTask();
+      let sourceNote = najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
+      if (!sourceNote?.id) {
+        const zajisteno = await zajistiUlozenouZdrojovouPoznamkuProPlanner();
+        tasks = zajisteno?.tasks || loadTask();
+        sourceNote = zajisteno?.sourceNote || null;
+      }
+      if (!sourceNote?.id) {
+        console.error("Zdrojová V2 poznámka nebyla nalezena ani po bezpečném uložení.");
+        return;
+      }
+
+      plannerSourceNoteId = sourceNote.id;
+      selectedPlannerText = String(v2Kontext.text || "").trim();
+      plannerTaskTitle.textContent = selectedPlannerText;
+
+      if (v2Kontext.typ === "todo") {
+        v2Bridge.synchronizujDoProdukcnihoEditoru?.();
+        plannerSourceType = "todo";
+        plannerSourceTodoId = v2Kontext.todoId;
+        plannerSelectionStart = null;
+        plannerSelectionEnd = null;
+      } else {
+        plannerSourceType = "selection";
+        plannerSourceTodoId = null;
+        plannerSelectionStart = v2Kontext.start;
+        plannerSelectionEnd = v2Kontext.end;
+      }
+
+      const androidSelection = window.getSelection();
+      if (androidSelection) androidSelection.removeAllRanges();
+      document.querySelector(".ln-v2-editor")?.blur?.();
+
+      setPlannerDateTimeToNow();
+      nastavVychoziPlannerReminderProModal();
+      plannerModal.hidden = false;
+      return;
+    }
     const todoModeActive =
       window.LubaNoteTodos
         ?.jeTodoRezimAktivni?.() === true;

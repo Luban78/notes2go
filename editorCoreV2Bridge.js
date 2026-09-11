@@ -1,20 +1,22 @@
 /* ========================================
-   LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.16 – COMPLETE TODO
+   LUBANOTE – EDITOR CORE V2 BRIDGE / PRODUCTION
+   FÁZE V2.18 – INTERNÍ ODKAZY + PLANNER
 
-   BEZPEČNOSTNÍ PRAVIDLA:
-   - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
-   - V2 pracuje v samostatném hostiteli uvnitř reálného editoru LubaNote.
-   - Fajfka uloží pouze lokální V2 TEST KOPII a originál zavře beze změny.
-   - Sdílené, Secret, nové a zatím nepodporované poznámky se ve V2 neupravují.
-   - 5× tap na Připomínky zapíná/vypíná tento TEST režim.
+   🔒 FROZEN INTEGRAČNÍ PRAVIDLA:
+   - Editor Core V2 je výchozí engine pro vlastní podporované poznámky.
+   - Produkční save/sync stále vlastní stávající LubaNote pipeline; Bridge jí
+     před uložením předá kanonické HTML / plain text / TODO z V2 modelu.
+   - Sdílené a zatím nepodporované HTML se automaticky otevře starým editorem.
+   - 5× tap na Připomínky je nouzový LEGACY přepínač pro aktuální relaci.
+   - Starý editor zůstává v projektu jako rollback cesta; nemaž bez kompletní
+     migrace sdílení, dokumentů a regresních testů.
 ======================================== */
 
 (() => {
   "use strict";
 
-  const KLIC_REZIMU = "ln_editor_v2_test_mode";
-  const KLIC_KOPIE = "ln_editor_v2_test_copy:";
+  const KLIC_LEGACY = "ln_editor_v2_legacy_mode";
+  const KLIC_KOPIE = "ln_editor_v2_test_copy:"; // jen kompatibilita se starými TEST daty
 
   const taskModal = document.getElementById("taskModal");
   const modalRichText = document.getElementById("modalRichText");
@@ -60,20 +62,9 @@
   ]);
 
   const nepodporovaneAkce = new Set([
-    "tlacitkoVlozitObrazek",
     "tlacitkoOtevritDokument",
     "tlacitkoUlozitDokument",
-    "planSelectionButton",
-    "shareNoteButton",
-    "secretTaskButton",
-    "pinTaskButton",
-    "reminderButton",
-    "categoryTaskButton",
-    "priorityTaskButton",
-    "tagTaskButton",
-    "deleteTaskButton",
-    "modalDateButton",
-    "modalTimeButton"
+    "shareNoteButton"
   ]);
 
   const moznostiVelikostiObrazku = [
@@ -107,17 +98,18 @@
   }
 
   function jeTestRezimZapnuty() {
+    // Historický název funkce z LAB fáze. V produkci znamená „V2 je povolen“.
     try {
-      return sessionStorage.getItem(KLIC_REZIMU) === "1";
+      return sessionStorage.getItem(KLIC_LEGACY) !== "1";
     } catch (_error) {
-      return false;
+      return true;
     }
   }
 
   function nastavTestRezim(zapnuto) {
     try {
-      if (zapnuto) sessionStorage.setItem(KLIC_REZIMU, "1");
-      else sessionStorage.removeItem(KLIC_REZIMU);
+      if (zapnuto) sessionStorage.removeItem(KLIC_LEGACY);
+      else sessionStorage.setItem(KLIC_LEGACY, "1");
     } catch (_error) {}
   }
 
@@ -166,21 +158,16 @@
   }
 
   function ziskejNoteId() {
-    return String(taskModal.dataset.taskId || "").trim();
+    return String(
+      taskModal.dataset.taskId ||
+      taskModal.dataset.draftTaskId ||
+      "nova-poznamka"
+    ).trim();
   }
 
   function jeZakazanyKontext() {
     if (taskModal.classList.contains("sharingEditorMode")) {
-      return "Sdílené poznámky zatím V2 TEST neupravuje.";
-    }
-    if (!ziskejNoteId()) {
-      return "Nové poznámky zatím V2 TEST neupravuje.";
-    }
-    if (
-      document.body.classList.contains("secretModeActive") ||
-      document.getElementById("secretTaskButton")?.classList.contains("active")
-    ) {
-      return "Secret poznámky zatím V2 TEST neupravuje.";
+      return "Sdílená poznámka zatím používá původní editor.";
     }
     return "";
   }
@@ -308,7 +295,7 @@
     const uloz = () => {
       const ok = core()?.nastavOdkaz?.(odkazUrlInput.value, odkazTextInput.value);
       if (!ok) {
-        zobrazToast("V2 TEST: zadej platnou internetovou adresu", true);
+        zobrazToast("Editor V2: zadej platnou internetovou adresu", true);
         return;
       }
       zavri();
@@ -337,14 +324,14 @@
   function otevriV2OdkazModal() {
     const api = core();
     if (!api?.ziskejInfoOdkazu || !api?.nastavOdkaz) {
-      zobrazToast("V2 TEST: odkazy nejsou dostupné", true);
+      zobrazToast("Editor V2: odkazy nejsou dostupné", true);
       return;
     }
 
     api.zachytAktualniVyber?.();
     const info = api.ziskejInfoOdkazu() || {};
     if (info.viceBloku) {
-      zobrazToast("V2 TEST: odkaz zatím označ jen v jednom odstavci", true);
+      zobrazToast("Editor V2: odkaz zatím označ jen v jednom odstavci", true);
       return;
     }
     vytvorV2OdkazModal();
@@ -548,18 +535,67 @@
     }
   }
 
-  function nastavOchranuUi(zapnout) {
-    if (zapnout) {
-      puvodniTitleContenteditable = modalTitle.getAttribute("contenteditable");
-      modalTitle.setAttribute("contenteditable", "false");
-      modalTitle.setAttribute("aria-readonly", "true");
-      return;
+  function nastavOchranuUi(_zapnout) {
+    // V produkční V2 zůstává název i metadata plně editovatelná starým UI.
+    modalTitle.removeAttribute("aria-readonly");
+    if (puvodniTitleContenteditable !== null) {
+      modalTitle.setAttribute("contenteditable", puvodniTitleContenteditable);
+      puvodniTitleContenteditable = null;
+    }
+  }
+
+  function ziskejObsahProProdukci() {
+    if (!aktivni) return null;
+    const api = core();
+    if (!api?.exportujHtml || !api?.exportujTodos || !api?.exportujProstyText) {
+      return null;
     }
 
-    if (puvodniTitleContenteditable === null) modalTitle.removeAttribute("contenteditable");
-    else modalTitle.setAttribute("contenteditable", puvodniTitleContenteditable);
-    modalTitle.removeAttribute("aria-readonly");
-    puvodniTitleContenteditable = null;
+    const model = api.ziskejModel?.();
+    const todos = api.exportujTodos() || [];
+    const maTodo = Array.isArray(model?.bloky) &&
+      model.bloky.some((blok) => blok?.typ === "todo");
+    const maMedia = Array.isArray(model?.bloky) &&
+      model.bloky.some((blok) =>
+        blok?.typ === "obrazek" ||
+        (Array.isArray(blok?.obrazky) && blok.obrazky.length > 0)
+      );
+
+    return {
+      richContent: maTodo ? "" : String(api.exportujHtml() || ""),
+      note: maTodo ? "" : String(api.exportujProstyText() || ""),
+      todos: Array.isArray(todos) ? todos.map((todo) => ({ ...todo })) : [],
+      maTodo,
+      maMedia
+    };
+  }
+
+  function synchronizujDoProdukcnihoEditoru() {
+    if (!aktivni) return true;
+    const obsah = ziskejObsahProProdukci();
+    if (!obsah) return false;
+
+    try {
+      modalRichText.innerHTML = obsah.richContent;
+
+      if (window.LubaNoteTodos?.obnovAktivniTodosZeSnapshot) {
+        window.LubaNoteTodos.obnovAktivniTodosZeSnapshot(obsah.todos, null);
+      }
+
+      // Dokud je V2 aktivní, produkční zrcadla zůstanou skrytá.
+      modalRichText.hidden = true;
+      if (todoList) todoList.hidden = true;
+      if (hostitel) hostitel.hidden = false;
+
+      // Když uživatel nouzově přepne do legacy bez zavření editoru,
+      // deaktivace musí odhalit správný typ produkčního editoru.
+      puvodniRichTextHidden = obsah.maTodo ? true : false;
+      puvodniTodoListHidden = obsah.maTodo ? false : true;
+      return true;
+    } catch (error) {
+      console.error("Editor Core V2: synchronizace do produkční save vrstvy selhala.", error);
+      return false;
+    }
   }
 
   function deaktivuj({ ulozitKopii = false } = {}) {
@@ -583,7 +619,7 @@
     zavriV2CropModal();
   }
 
-  function aktivujProOtevrenouPoznamku() {
+  function aktivujProOtevrenouPoznamku(moznosti = {}) {
     if (pozastavAktivaci) return false;
     if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return false;
     if (aktivni && aktivniNoteId === ziskejNoteId()) return true;
@@ -612,12 +648,11 @@
 
     if (!importVysledek?.ok) {
       const prvky = importVysledek?.nepodporovane?.join(", ") || "neznámý prvek";
-      zobrazToast(`V2 TEST tuto poznámku zatím neotevře: ${prvky}`, true);
+      zobrazToast(`V2 tuto poznámku zatím neumí (${prvky}) – používám původní editor.`, true);
       return false;
     }
 
-    const kopie = nactiTestKopii(noteId, zdrojovyOtisk);
-    const model = kopie?.model || importVysledek.model;
+    const model = importVysledek.model;
 
     if (aktivni) deaktivuj();
 
@@ -630,18 +665,21 @@
     modalRichText.hidden = true;
     if (todoList) todoList.hidden = true;
     hostitel.hidden = false;
-    badge.hidden = false;
-    badge.textContent = kopie ? "V2 TEST · TEST KOPIE" : "V2 TEST · KOPIE";
+    badge.hidden = true;
     nastavOchranuUi(true);
 
     if (!api.otevriVHostu(hostitel, model)) {
       deaktivuj();
-      zobrazToast("V2 TEST se nepodařilo připojit do editoru.", true);
+      zobrazToast("Editor V2 se nepodařilo připojit. Používám původní editor.", true);
       return false;
     }
 
     obnovToolbar();
-    zobrazToast(kopie ? "V2 TEST: načtena testovací kopie" : "V2 TEST: originál je chráněný");
+
+    if (moznosti?.zachovatPuvodniOtisk !== true) {
+      window.LubaNoteAktualizujPuvodniOtiskEditoruProV2?.();
+    }
+
     return true;
   }
 
@@ -649,7 +687,7 @@
     if (!aktivni) return false;
     const api = core();
     if (!api?.vlozObrazek) {
-      zobrazToast("V2 TEST: Image Block není dostupný", true);
+      zobrazToast("Editor V2: Image Block není dostupný", true);
       return false;
     }
 
@@ -664,7 +702,7 @@
 
     if (vlozeno) {
       obnovToolbar();
-      zobrazToast("V2 TEST: obrázek vložen do modelové kopie");
+      zobrazToast("Obrázek vložen");
     }
     return Boolean(vlozeno);
   }
@@ -825,7 +863,7 @@
       const sh = Math.max(1, Math.min(naturalH - sy, Math.round((rect.h / displayH) * naturalH)));
 
       if (sx === 0 && sy === 0 && sw === naturalW && sh === naturalH) {
-        zobrazToast("V2 TEST: ořez je celý obrázek");
+        zobrazToast("Ořez odpovídá celému obrázku");
         zavriV2CropModal();
         return;
       }
@@ -848,10 +886,10 @@
 
         zavriV2CropModal();
         obnovToolbar();
-        zobrazToast(`V2 TEST: obrázek oříznut na ${sw} × ${sh} px`);
+        zobrazToast(`Obrázek oříznut na ${sw} × ${sh} px`);
       } catch (error) {
         console.error("V2 crop: ořez se nepodařil", error);
-        zobrazToast("V2 TEST: tento obrázek se nepodařilo oříznout", true);
+        zobrazToast("Editor V2: tento obrázek se nepodařilo oříznout", true);
       }
     });
   }
@@ -860,7 +898,7 @@
     const api = core();
     const data = api?.ziskejNastaveniObrazku?.(obrazekId);
     if (!data?.zdroj) {
-      zobrazToast("V2 TEST: zdroj obrázku není dostupný", true);
+      zobrazToast("Editor V2: zdroj obrázku není dostupný", true);
       return;
     }
 
@@ -881,7 +919,7 @@
       const naturalW = img.naturalWidth || img.width;
       const naturalH = img.naturalHeight || img.height;
       if (!naturalW || !naturalH) {
-        zobrazToast("V2 TEST: obrázek nemá platné rozměry", true);
+        zobrazToast("Editor V2: obrázek nemá platné rozměry", true);
         zavriV2CropModal();
         return;
       }
@@ -922,7 +960,7 @@
     };
 
     img.onerror = () => {
-      zobrazToast("V2 TEST: obrázek se nepodařilo načíst pro ořez", true);
+      zobrazToast("Editor V2: obrázek se nepodařilo načíst pro ořez", true);
       zavriV2CropModal();
     };
 
@@ -970,12 +1008,12 @@
     const api = core();
     const nastaveni = api?.ziskejNastaveniObrazku?.(obrazekId);
     if (!nastaveni) {
-      zobrazToast("V2 TEST: obrázek už není dostupný", true);
+      zobrazToast("Editor V2: obrázek už není dostupný", true);
       return;
     }
 
     if (typeof window.otevriNastavovaciModal !== "function") {
-      zobrazToast("V2 TEST: nastavení obrázku není dostupné", true);
+      zobrazToast("Editor V2: nastavení obrázku není dostupné", true);
       return;
     }
 
@@ -1016,11 +1054,11 @@
           zarovnani: hodnoty.zarovnani
         });
         if (!zmeneno) {
-          zobrazToast("V2 TEST: nastavení obrázku se nepodařilo uložit", true);
+          zobrazToast("Editor V2: nastavení obrázku se nepodařilo uložit", true);
           return;
         }
         obnovToolbar();
-        zobrazToast("V2 TEST: nastavení obrázku uloženo do modelové kopie");
+        zobrazToast("Nastavení obrázku uloženo");
       }
     });
 
@@ -1030,21 +1068,69 @@
     });
   }
 
-  function prepniTestRezim() {
-    const zapnout = !jeTestRezimZapnuty();
-    nastavTestRezim(zapnout);
+  function obnovZProdukcnihoEditoru() {
+    if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return false;
+    if (taskModal.classList.contains("sharingEditorMode")) return false;
 
-    if (!zapnout) {
-      if (aktivni) deaktivuj({ ulozitKopii: true });
-      zobrazToast("Editor V2 TEST vypnut");
+    if (aktivni) deaktivuj();
+    queueMicrotask(() =>
+      aktivujProOtevrenouPoznamku({
+        zachovatPuvodniOtisk: true
+      })
+    );
+    return true;
+  }
+
+  function prepniTestRezim() {
+    // 5× Připomínky = nouzový přepínač V2 ↔ původní editor pro relaci.
+    const zapnoutV2 = !jeTestRezimZapnuty();
+
+    if (!zapnoutV2) {
+      if (aktivni) {
+        if (!synchronizujDoProdukcnihoEditoru()) {
+          zobrazToast("Legacy přepnutí zastaveno: obsah V2 se nepodařilo převést.", true);
+          return true;
+        }
+        deaktivuj();
+      }
+      nastavTestRezim(false);
+      zobrazToast("Nouzový původní editor zapnut pro tuto relaci");
       return false;
     }
 
-    zobrazToast("Editor V2 TEST zapnut · originály se nemění");
+    nastavTestRezim(true);
+    zobrazToast("Editor Core V2 znovu zapnut");
     if (jeEditorOtevreny()) {
-      queueMicrotask(() => aktivujProOtevrenouPoznamku());
+      queueMicrotask(() =>
+        aktivujProOtevrenouPoznamku({
+          zachovatPuvodniOtisk: true
+        })
+      );
     }
     return true;
+  }
+
+  function vlozInterniOdkazZAutocomplete(poznamka, spoust) {
+    if (!aktivni) return false;
+    const vlozeno = core()?.vlozInterniOdkazZAutocomplete?.(poznamka, spoust);
+    if (vlozeno) obnovToolbar();
+    return Boolean(vlozeno);
+  }
+
+  function ziskejPlanovaciKontext() {
+    if (!aktivni) return null;
+    core()?.zachytAktualniVyber?.();
+    return core()?.ziskejPlanovaciKontext?.() || null;
+  }
+
+  function obalPlanovaciVyber(plannedItemId) {
+    if (!aktivni) return false;
+    const ok = core()?.obalPlanovaciVyber?.(plannedItemId) === true;
+    if (ok) {
+      obnovToolbar();
+      synchronizujDoProdukcnihoEditoru();
+    }
+    return ok;
   }
 
   function zpracujToolbarCapture(event) {
@@ -1055,22 +1141,13 @@
     const id = cil.id || "";
 
     if (id === "editorBackButton") {
-      if (preskocCaptureFajfky) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const ulozeno = ulozTestKopii();
-      pozastavAktivaci = true;
-      deaktivuj();
-      preskocCaptureFajfky = true;
-      queueMicrotask(() => {
-        try {
-          editorBackButton.click();
-        } finally {
-          preskocCaptureFajfky = false;
-          setTimeout(() => { pozastavAktivaci = false; }, 0);
-        }
-      });
-      zobrazToast(ulozeno ? "V2 TEST kopie uložena · originál beze změny" : "V2 TEST zavřen · originál beze změny");
+      // Nezastavujeme původní save handler. Jen mu ještě v capture fázi
+      // připravíme kanonický V2 obsah do produkční save vrstvy.
+      if (!synchronizujDoProdukcnihoEditoru()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        zobrazToast("Uložení zastaveno: V2 obsah se nepodařilo bezpečně převést.", true);
+      }
       return;
     }
 
@@ -1189,7 +1266,7 @@
       zavriPanelyFormatu();
 
       if (typeof window.vlozObrazekDoPoznamky !== "function") {
-        zobrazToast("V2 TEST: výběr obrázku není dostupný", true);
+        zobrazToast("Editor V2: výběr obrázku není dostupný", true);
         return;
       }
 
@@ -1212,6 +1289,14 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       otevriV2SeznamPanel();
+      return;
+    }
+
+    if (id === "planSelectionButton") {
+      // Planner si selection převezme přes V2 model. Click nesmíme zastavit,
+      // pouze předem zmrazíme aktuální modelový výběr.
+      core()?.zachytAktualniVyber?.();
+      zavriPanelyFormatu();
       return;
     }
 
@@ -1251,7 +1336,7 @@
     if (nepodporovaneAkce.has(id) || cil.closest("#editorToolsToolbar")) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      zobrazToast("V2 TEST: tato funkce ještě není připojená");
+      zobrazToast("Tato funkce zatím používá původní editor – 5× Připomínky přepne Legacy režim.");
     }
   }
 
@@ -1347,12 +1432,19 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.16-COMPLETE-TODO-390",
-    prepniTestRezim,
+    verze: "V2.18-LINKS-PLANNER-392",
+    prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
+    prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,
-    ulozTestKopii,
+    ziskejObsahProProdukci,
+    synchronizujDoProdukcnihoEditoru,
+    obnovZProdukcnihoEditoru,
     vlozPripravenyObrazek,
+    vlozInterniOdkazZAutocomplete,
+    ziskejPlanovaciKontext,
+    obalPlanovaciVyber,
+    jeProdukcniRezim: () => aktivni,
     jeAktivni: () => aktivni
   });
 })();

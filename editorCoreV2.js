@@ -1,21 +1,23 @@
 /* ========================================
-   LUBANOTE – EDITOR CORE V2 (LAB)
-   FÁZE V2.16: kompletní TODO systém nad vlastním modelem V2.
+   LUBANOTE – EDITOR CORE V2
+   FÁZE V2.18: produkční model + interní odkazy + Planner.
 
-   DŮLEŽITÉ:
-   - Tento modul NESMÍ měnit produkční editor ani ukládat poznámky.
-   - Aktivuje se z Debug Hubu nebo přímo 5× rychlým tapem na „Připomínky“.
-   - Zdrojem pravdy je `dokument`, DOM je jen vykreslení.
+   🔒 FROZEN PRINCIPY CORE V2:
+   - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
+   - Ukládání/synchronizaci vlastní produkční LubaNote pipeline přes Bridge.
+   - 5× tap na Připomínky je nouzový přepínač V2 / Legacy, ne druhý datový režim.
    - Logická velikost písma se NIKDY neurčuje z fyzického getComputedStyle().fontSize.
      Android/WebView může text systémově škálovat; model si stále drží např. 13/20 px.
    - Pro podporované beforeinput operace se vždy volá preventDefault(),
      takže WebView nesmí svévolně měnit strukturu dokumentu.
+   - Modelové vlastnosti (formát, odkazy, plánované backlinky, seznamy, TODO, obrázky)
+     se nesmí nahrazovat přímými DOM mutacemi mimo Core V2.
 ======================================== */
 
 (() => {
   "use strict";
 
-  const VERZE_MODELU = 7;
+  const VERZE_MODELU = 8;
   const VELIKOSTI_PISMA = [12, 14, 16, 18, 20, 24, 28, 32];
   const LIMIT_HISTORIE = 100;
   const PALETA_BAREV = [
@@ -44,7 +46,10 @@
     barva: null,
     pozadi: null,
     stylTextu: null,
-    odkaz: null
+    odkaz: null,
+    interniOdkazId: null,
+    interniOdkazNazev: null,
+    planOdkazId: null
   });
 
   let lab = null;
@@ -72,6 +77,7 @@
   let vlozenyHostitel = null;
   let vlozenyRezim = false;
   let vybranyObrazekId = "";
+  let ulozenyPlanovaciVyber = null;
 
   /* ==========================================
      V2.12 – MODEL DRAG & MOVE OBRÁZKU
@@ -250,6 +256,36 @@
     }
   }
 
+  function normalizujIdOdkazu(hodnota) {
+    const id = String(hodnota || "").trim();
+    return id || null;
+  }
+
+  function ziskejNazevPoznamkyProInterniOdkaz(noteId, fallback = "") {
+    const id = normalizujIdOdkazu(noteId);
+    if (!id) return String(fallback || "").trim();
+    try {
+      if (typeof loadTask === "function") {
+        const cil = loadTask().find((poznamka) =>
+          poznamka?.id && String(poznamka.id) === id && poznamka.isSecret !== true
+        );
+        if (cil) return String(cil.title || "").trim() || "Bez názvu";
+      }
+    } catch (_error) {}
+    return String(fallback || "").trim() || "⚠ Smazaná poznámka";
+  }
+
+  function jePlanovanaPolozkaDokoncena(plannedItemId) {
+    const id = normalizujIdOdkazu(plannedItemId);
+    if (!id) return false;
+    try {
+      if (typeof loadPlannedItems === "function") {
+        return loadPlannedItems().some((item) => String(item?.id || "") === id && item?.completed === true);
+      }
+    } catch (_error) {}
+    return false;
+  }
+
   function kopieFormatu(format = VYCHOZI_FORMAT) {
     return {
       tucne: Boolean(format?.tucne),
@@ -259,7 +295,10 @@
       barva: format?.barva ?? null,
       pozadi: format?.pozadi ?? null,
       stylTextu: normalizujStylTextu(format?.stylTextu),
-      odkaz: normalizujInternetovouAdresu(format?.odkaz)
+      odkaz: normalizujInternetovouAdresu(format?.odkaz),
+      interniOdkazId: normalizujIdOdkazu(format?.interniOdkazId),
+      interniOdkazNazev: String(format?.interniOdkazNazev || "").trim() || null,
+      planOdkazId: normalizujIdOdkazu(format?.planOdkazId)
     };
   }
 
@@ -271,7 +310,10 @@
       && (a?.barva ?? null) === (b?.barva ?? null)
       && (a?.pozadi ?? null) === (b?.pozadi ?? null)
       && normalizujStylTextu(a?.stylTextu) === normalizujStylTextu(b?.stylTextu)
-      && normalizujInternetovouAdresu(a?.odkaz) === normalizujInternetovouAdresu(b?.odkaz);
+      && normalizujInternetovouAdresu(a?.odkaz) === normalizujInternetovouAdresu(b?.odkaz)
+      && normalizujIdOdkazu(a?.interniOdkazId) === normalizujIdOdkazu(b?.interniOdkazId)
+      && String(a?.interniOdkazNazev || "") === String(b?.interniOdkazNazev || "")
+      && normalizujIdOdkazu(a?.planOdkazId) === normalizujIdOdkazu(b?.planOdkazId);
   }
 
   function vytvorSegment(text = "", format = VYCHOZI_FORMAT) {
@@ -722,6 +764,29 @@
       span.setAttribute("role", "link");
       span.setAttribute("aria-label", `Internetový odkaz: ${odkaz}`);
     }
+
+    const interniId = normalizujIdOdkazu(format?.interniOdkazId);
+    span.dataset.lnV2NoteId = interniId || "";
+    if (interniId) {
+      const nazev = ziskejNazevPoznamkyProInterniOdkaz(interniId, format?.interniOdkazNazev);
+      span.classList.add("noteInternalLink");
+      span.dataset.noteId = interniId;
+      span.dataset.noteTitle = nazev;
+      span.setAttribute("role", "link");
+      span.setAttribute("aria-label", `Interní odkaz na poznámku ${nazev}`);
+      span.setAttribute("contenteditable", "false");
+    }
+
+    const planId = normalizujIdOdkazu(format?.planOdkazId);
+    span.dataset.lnV2PlanId = planId || "";
+    if (planId) {
+      span.classList.add("plannedTextLink");
+      span.dataset.plannedItemId = planId;
+      span.setAttribute("aria-label", "Otevřít naplánovaný úkol");
+      if (jePlanovanaPolozkaDokoncena(planId)) {
+        span.classList.add("plannedTextLinkCompleted");
+      }
+    }
   }
 
   function vykresliObrazkovyBlok(blok, jeVSeznamu = false) {
@@ -1063,6 +1128,13 @@
       || formatNaPozici(blokPredVlozenim, vyber.zacatek.offset)
     );
 
+    // Interní odkaz je atomický prvek. Nově psaný text vedle něj nikdy
+    // nesmí samovolně převzít jeho identitu.
+    if (format.interniOdkazId) {
+      format.interniOdkazId = null;
+      format.interniOdkazNazev = null;
+    }
+
     const caret = smazVyber(vyber);
     const blok = dokument.bloky[caret.blok];
     const rez = rozdelObsah(blok, caret.offset);
@@ -1203,6 +1275,23 @@
     return null;
   }
 
+  function rozsahInternihoOdkazuNaHranici(blok, offset, smer) {
+    if (!jeTextovyBlok(blok)) return null;
+    const cil = Math.max(0, Math.min(textBloku(blok).length, offset));
+    let pozice = 0;
+    for (const cast of blok.obsah || []) {
+      const text = String(cast?.text || "");
+      const konec = pozice + text.length;
+      const jeInterni = Boolean(normalizujIdOdkazu(cast?.format?.interniOdkazId));
+      if (jeInterni) {
+        if (smer < 0 && konec === cil) return { od: pozice, do: konec };
+        if (smer > 0 && pozice === cil) return { od: pozice, do: konec };
+      }
+      pozice = konec;
+    }
+    return null;
+  }
+
   function smazZpet(vyber, celeSlovo = false) {
     if (!vyber.sbaleny) return smazVyber(vyber);
 
@@ -1211,6 +1300,14 @@
     const text = textBloku(blok);
 
     if (caret.offset > 0) {
+      const interniAtom = rozsahInternihoOdkazuNaHranici(blok, caret.offset, -1);
+      if (interniAtom) {
+        return smazVyber({
+          zacatek: { blok: caret.blok, offset: interniAtom.od },
+          konec: { blok: caret.blok, offset: interniAtom.do },
+          sbaleny: false
+        });
+      }
       let od = predchoziGraphem(text, caret.offset);
       if (celeSlovo) {
         const cast = text.slice(0, caret.offset);
@@ -1282,6 +1379,14 @@
     const text = textBloku(blok);
 
     if (caret.offset < text.length) {
+      const interniAtom = rozsahInternihoOdkazuNaHranici(blok, caret.offset, 1);
+      if (interniAtom) {
+        return smazVyber({
+          zacatek: { blok: caret.blok, offset: interniAtom.od },
+          konec: { blok: caret.blok, offset: interniAtom.do },
+          sbaleny: false
+        });
+      }
       let doPozice = dalsiGraphem(text, caret.offset);
       if (celeSlovo) {
         const cast = text.slice(caret.offset);
@@ -2541,6 +2646,143 @@
     );
   }
 
+  function aplikujSpecialniFormatNaRozsah(blok, od, doPozice, upravFormat) {
+    if (!jeTextovyBlok(blok) || typeof upravFormat !== "function") return;
+    const zacatek = Math.max(0, Math.min(textBloku(blok).length, od));
+    const konec = Math.max(zacatek, Math.min(textBloku(blok).length, doPozice));
+    if (zacatek === konec) return;
+
+    const vystup = [];
+    let pozice = 0;
+    blok.obsah.forEach((cast) => {
+      const text = String(cast.text ?? "");
+      const castKonec = pozice + text.length;
+      if (castKonec <= zacatek || pozice >= konec) {
+        if (text) vystup.push(vytvorSegment(text, cast.format));
+      } else {
+        const lokalniOd = Math.max(0, zacatek - pozice);
+        const lokalniDo = Math.min(text.length, konec - pozice);
+        const pred = text.slice(0, lokalniOd);
+        const stred = text.slice(lokalniOd, lokalniDo);
+        const po = text.slice(lokalniDo);
+        if (pred) vystup.push(vytvorSegment(pred, cast.format));
+        if (stred) {
+          const novyFormat = kopieFormatu(cast.format);
+          upravFormat(novyFormat);
+          vystup.push(vytvorSegment(stred, novyFormat));
+        }
+        if (po) vystup.push(vytvorSegment(po, cast.format));
+      }
+      pozice = castKonec;
+    });
+    nastavObsahBloku(blok, vystup);
+  }
+
+  function vlozInterniOdkazZAutocomplete(poznamka, spoust) {
+    if (!poznamka?.id || !spoust?.textNode || !editor?.contains(spoust.textNode)) return false;
+    const zacatek = domBodNaModel(spoust.textNode, spoust.startOffset);
+    const konec = domBodNaModel(spoust.textNode, spoust.endOffset);
+    if (!zacatek || !konec || zacatek.blok !== konec.blok) return false;
+
+    const nazev = String(poznamka.title || "").trim() || "Bez názvu";
+    const vyber = { zacatek, konec, sbaleny: false };
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const format = kopieFormatu(formatNaPozici(dokument.bloky[zacatek.blok], zacatek.offset));
+    format.odkaz = null;
+    format.interniOdkazId = String(poznamka.id);
+    format.interniOdkazNazev = nazev;
+    format.planOdkazId = null;
+
+    const formatMezery = kopieFormatu(format);
+    formatMezery.interniOdkazId = null;
+    formatMezery.interniOdkazNazev = null;
+
+    const caret = smazVyber(vyber);
+    const blok = dokument.bloky[caret.blok];
+    const rez = rozdelObsah(blok, caret.offset);
+    nastavObsahBloku(blok, [
+      ...rez.vlevo,
+      vytvorSegment(nazev, format),
+      vytvorSegment(" ", formatMezery),
+      ...rez.vpravo
+    ]);
+
+    const novyCaret = { blok: caret.blok, offset: caret.offset + nazev.length + 1 };
+    posledniPozice = { ...novyCaret };
+    posledniVyber = { zacatek: { ...novyCaret }, konec: { ...novyCaret }, sbaleny: true };
+    ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+    aktivniFormatPsani = kopieFormatu(formatMezery);
+    aktivniFormatPozice = klicPozice(novyCaret);
+    aktivniFormatZdroj = "zdedeny";
+    ulozZmenuDoHistorie(snapshotPred, "interní odkaz");
+    vykresli(novyCaret);
+    return true;
+  }
+
+  function absolutniOffsetPozice(pozice) {
+    let soucet = 0;
+    const cilBlok = Math.max(0, Math.min(dokument.bloky.length - 1, Number(pozice?.blok) || 0));
+    for (let i = 0; i < cilBlok; i += 1) {
+      soucet += textBloku(dokument.bloky[i]).length + 1;
+    }
+    return soucet + Math.max(0, Number(pozice?.offset) || 0);
+  }
+
+  function ziskejPlanovaciKontext() {
+    const vyber = ziskejFormatovaciVyber();
+    if (!vyber) return { ok: false, duvod: "Nebyl nalezen výběr textu." };
+
+    if (!vyber.sbaleny) {
+      const text = textVeVyberu(vyber).trim();
+      if (!text) return { ok: false, duvod: "Označ text, který chceš naplánovat." };
+      if (vyber.zacatek.blok !== vyber.konec.blok) {
+        const bloky = dokument.bloky.slice(vyber.zacatek.blok, vyber.konec.blok + 1);
+        if (bloky.some((blok) => jeSeznamovyBlok(blok))) {
+          return { ok: false, duvod: "Pro plánování označ text jedné položky seznamu." };
+        }
+      }
+      ulozenyPlanovaciVyber = klonVyberu(vyber);
+      return {
+        ok: true,
+        typ: "selection",
+        text,
+        start: absolutniOffsetPozice(vyber.zacatek),
+        end: absolutniOffsetPozice(vyber.konec)
+      };
+    }
+
+    const blok = dokument.bloky[vyber.zacatek.blok];
+    if (jeTodoBlok(blok)) {
+      const text = textBloku(blok).trim();
+      if (!text) return { ok: false, duvod: "Prázdné TODO nelze naplánovat." };
+      ulozenyPlanovaciVyber = null;
+      return { ok: true, typ: "todo", text, todoId: blok.id };
+    }
+
+    return { ok: false, duvod: "Nejdřív označ text, který chceš naplánovat." };
+  }
+
+  function obalPlanovaciVyber(plannedItemId) {
+    const id = normalizujIdOdkazu(plannedItemId);
+    const vyber = klonVyberu(ulozenyPlanovaciVyber);
+    if (!id || !vyber || vyber.sbaleny) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) return false;
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
+      aplikujSpecialniFormatNaRozsah(blok, od, doPozice, (format) => {
+        format.planOdkazId = id;
+      });
+    }
+    ulozZmenuDoHistorie(snapshotPred, "plánovaný odkaz");
+    vykresli(vyber);
+    ulozenyPlanovaciVyber = null;
+    return true;
+  }
+
   function nastavOdkazVBloku(blok, od, doPozice, url) {
     if (!jeTextovyBlok(blok)) return;
     const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
@@ -2567,6 +2809,8 @@
         if (stred) {
           const novyFormat = kopieFormatu(cast.format);
           novyFormat.odkaz = normalizujInternetovouAdresu(url);
+          novyFormat.interniOdkazId = null;
+          novyFormat.interniOdkazNazev = null;
           vystup.push(vytvorSegment(stred, novyFormat));
         }
         if (po) vystup.push(vytvorSegment(po, cast.format));
@@ -3644,8 +3888,25 @@
     }
     const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
     vykresli(novyVyber);
+    oznamModelovyTextovyVstup(event.inputType);
     nastavStav(`Řízeno modelem: ${event.inputType}`);
     zapisDebug?.(`EDITOR V2 LAB | ${event.inputType} | blok=${caret.blok} offset=${caret.offset}`);
+  }
+
+  function oznamModelovyTextovyVstup(inputType = "") {
+    /*
+     * V2 záměrně preventDefault()uje browserový beforeinput, takže Android
+     * nemusí následně vyvolat nativní `input`/`keyup`. Funkce typu [[ autocomplete
+     * proto dostanou vlastní neutrální signál až po obnovení selection z modelu.
+     * Nejde o zdroj dat – pouze o oznámení, že modelový text se právě změnil.
+     */
+    queueMicrotask(() => {
+      if (!editor?.isConnected) return;
+      editor.dispatchEvent(new CustomEvent("lubanote:v2-model-input", {
+        bubbles: true,
+        detail: { inputType: String(inputType || "") }
+      }));
+    });
   }
 
   function zpracujPaste(event) {
@@ -3658,6 +3919,7 @@
     ulozZmenuDoHistorie(snapshotPred, "vložit text");
     const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
     vykresli(novyVyber);
+    oznamModelovyTextovyVstup("insertFromPaste");
     nastavStav("Vložení prostého textu řídil model");
     zapisDebug?.(`EDITOR V2 LAB | paste | chars=${text.length}`);
   }
@@ -3839,6 +4101,21 @@
         if (span.classList.contains("ln-v2-odkaz") !== Boolean(modelOdkaz)) {
           return `blok ${b} segment ${s}: jiný stav odkazu DOM/model`;
         }
+
+        const modelInterniId = normalizujIdOdkazu(cast.format?.interniOdkazId) || "";
+        if ((span.dataset.lnV2NoteId || "") !== modelInterniId) {
+          return `blok ${b} segment ${s}: jiný interní odkaz DOM/model`;
+        }
+        if (span.classList.contains("noteInternalLink") !== Boolean(modelInterniId)) {
+          return `blok ${b} segment ${s}: jiný stav interního odkazu DOM/model`;
+        }
+        const modelPlanId = normalizujIdOdkazu(cast.format?.planOdkazId) || "";
+        if ((span.dataset.lnV2PlanId || "") !== modelPlanId) {
+          return `blok ${b} segment ${s}: jiný plánovaný odkaz DOM/model`;
+        }
+        if (span.classList.contains("plannedTextLink") !== Boolean(modelPlanId)) {
+          return `blok ${b} segment ${s}: jiný stav plánovaného odkazu DOM/model`;
+        }
       }
     }
 
@@ -3892,7 +4169,15 @@
     if (!(element instanceof Element)) return format;
 
     const tag = element.tagName.toLowerCase();
-    if (tag === "a") format.odkaz = normalizujInternetovouAdresu(element.getAttribute("href"));
+    if (element.classList?.contains("noteInternalLink") || element.hasAttribute("data-note-id")) {
+      format.interniOdkazId = normalizujIdOdkazu(element.dataset?.noteId);
+      format.interniOdkazNazev = String(element.dataset?.noteTitle || element.textContent || "").trim() || null;
+      format.odkaz = null;
+    }
+    if (element.classList?.contains("plannedTextLink") || element.hasAttribute("data-planned-item-id")) {
+      format.planOdkazId = normalizujIdOdkazu(element.dataset?.plannedItemId);
+    }
+    if (tag === "a" && !format.interniOdkazId) format.odkaz = normalizujInternetovouAdresu(element.getAttribute("href"));
     if (tag === "b" || tag === "strong") format.tucne = true;
     if (tag === "i" || tag === "em") format.kurziva = true;
     if (tag === "u") format.podtrzeni = true;
@@ -3930,7 +4215,14 @@
 
     Array.from(rodic?.childNodes || []).forEach((uzel) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
-        if (uzel.nodeValue) vystup.push(vytvorSegment(uzel.nodeValue, zakladniFormat));
+        if (uzel.nodeValue) {
+          const format = kopieFormatu(zakladniFormat);
+          const text = format.interniOdkazId
+            ? ziskejNazevPoznamkyProInterniOdkaz(format.interniOdkazId, format.interniOdkazNazev || uzel.nodeValue)
+            : uzel.nodeValue;
+          if (format.interniOdkazId) format.interniOdkazNazev = text;
+          vystup.push(vytvorSegment(text, format));
+        }
         return;
       }
 
@@ -3948,10 +4240,11 @@
       }
 
       if (tag === "a") {
-        const jeSpecialniInterni = uzel.classList.contains("noteInternalLink") || uzel.classList.contains("plannedTextLink");
+        const jeInterni = uzel.classList.contains("noteInternalLink") || uzel.hasAttribute("data-note-id");
+        const jePlan = uzel.classList.contains("plannedTextLink") || uzel.hasAttribute("data-planned-item-id");
         const href = normalizujInternetovouAdresu(uzel.getAttribute("href"));
-        if (jeSpecialniInterni || !href) {
-          nepodporovane.add(jeSpecialniInterni ? "interní odkaz" : "a[href]");
+        if (!jeInterni && !jePlan && !href) {
+          nepodporovane.add("a[href]");
           return;
         }
       }
@@ -4186,10 +4479,11 @@
 
       if (inlineTagy.has(tag)) {
         if (tag === "a") {
-          const jeSpecialniInterni = uzel.classList.contains("noteInternalLink") || uzel.classList.contains("plannedTextLink");
+          const jeInterni = uzel.classList.contains("noteInternalLink") || uzel.hasAttribute("data-note-id");
+          const jePlan = uzel.classList.contains("plannedTextLink") || uzel.hasAttribute("data-planned-item-id");
           const href = normalizujInternetovouAdresu(uzel.getAttribute("href"));
-          if (jeSpecialniInterni || !href) {
-            nepodporovane.add(jeSpecialniInterni ? "interní odkaz" : "a[href]");
+          if (!jeInterni && !jePlan && !href) {
+            nepodporovane.add("a[href]");
             return;
           }
         }
@@ -4247,26 +4541,44 @@
     }
 
     segmenty.forEach((cast) => {
-      const text = String(cast?.text ?? "");
-      if (!text) return;
+      const puvodniText = String(cast?.text ?? "");
+      if (!puvodniText) return;
       const format = kopieFormatu(cast?.format);
+      const interniId = normalizujIdOdkazu(format.interniOdkazId);
+      const planId = normalizujIdOdkazu(format.planOdkazId);
+      const text = interniId
+        ? ziskejNazevPoznamkyProInterniOdkaz(interniId, format.interniOdkazNazev || puvodniText)
+        : puvodniText;
       const maFormat = Boolean(
         format.tucne || format.kurziva || format.podtrzeni ||
-        format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz
+        format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz ||
+        interniId || planId
       );
       if (!maFormat) {
         cil.appendChild(document.createTextNode(text));
         return;
       }
 
-      const inline = document.createElement(format.odkaz ? "a" : "span");
-      if (format.odkaz) {
+      let inline;
+      if (interniId) {
+        inline = document.createElement("span");
+        inline.classList.add("noteInternalLink");
+        inline.dataset.noteId = interniId;
+        inline.dataset.noteTitle = text;
+        inline.setAttribute("contenteditable", "false");
+        inline.setAttribute("role", "link");
+        inline.setAttribute("aria-label", `Interní odkaz na poznámku ${text}`);
+      } else if (format.odkaz) {
+        inline = document.createElement("a");
         inline.classList.add("lubaNoteInternetLink");
         inline.dataset.lubanoteLink = "true";
         inline.href = format.odkaz;
         inline.target = "_blank";
         inline.rel = "noopener noreferrer";
+      } else {
+        inline = document.createElement("span");
       }
+
       if (format.velikost !== null) {
         inline.dataset.velikostPisma = String(format.velikost);
         inline.style.fontSize = `${format.velikost}px`;
@@ -4278,7 +4590,18 @@
       if (format.pozadi) inline.style.backgroundColor = format.pozadi;
       if (format.stylTextu) inline.classList.add("editorNadpis", format.stylTextu);
       inline.textContent = text;
-      cil.appendChild(inline);
+
+      if (planId) {
+        const plan = document.createElement("span");
+        plan.className = "plannedTextLink";
+        plan.dataset.plannedItemId = planId;
+        plan.setAttribute("aria-label", "Otevřít naplánovaný úkol");
+        if (jePlanovanaPolozkaDokoncena(planId)) plan.classList.add("plannedTextLinkCompleted");
+        plan.appendChild(inline);
+        cil.appendChild(plan);
+      } else {
+        cil.appendChild(inline);
+      }
     });
   }
 
@@ -4977,6 +5300,10 @@
       casyRychlehoSpusteni = [];
 
       queueMicrotask(() => {
+        if (typeof window.LubaNoteEditorV2Bridge?.prepniLegacyRezim === "function") {
+          window.LubaNoteEditorV2Bridge.prepniLegacyRezim();
+          return;
+        }
         if (typeof window.LubaNoteEditorV2Bridge?.prepniTestRezim === "function") {
           window.LubaNoteEditorV2Bridge.prepniTestRezim();
           return;
@@ -4989,7 +5316,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.16-COMPLETE-TODO-390",
+    verze: "V2.18-LINKS-PLANNER-392",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -5014,6 +5341,9 @@
     nastavStylTextu: nastavStylTextuZToolbaru,
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
+    vlozInterniOdkazZAutocomplete,
+    ziskejPlanovaciKontext,
+    obalPlanovaciVyber,
     vlozObrazek: vlozObrazekZToolbaru,
     smazObrazek: smazObrazekZModelu,
     ziskejNastaveniObrazku,

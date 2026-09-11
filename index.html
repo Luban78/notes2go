@@ -31,8 +31,8 @@
   <link rel="stylesheet" href="visualDebug.css">
   <link rel="stylesheet" href="debugHub.css?v=20260907-debug-hub-ux-303">
   <!-- Editor Core V2 – izolovaný LAB + bezpečný Bridge TEST uvnitř reálného editoru -->
-  <link rel="stylesheet" href="editorCoreV2.css?v=20260911-editor-core-v2-complete-todo-390">
-  <link rel="stylesheet" href="editorCoreV2Bridge.css?v=20260911-editor-core-v2-bridge-lists-ui-388">
+  <link rel="stylesheet" href="editorCoreV2.css?v=20260911-editor-core-v2-production-391">
+  <link rel="stylesheet" href="editorCoreV2Bridge.css?v=20260911-editor-core-v2-production-391">
 </head>
 
 <body class="authPending">
@@ -1904,7 +1904,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=20260910-card-actions-349"></script>
   
-  <script src="script.js?v=20260910-card-actions-351"></script>
+  <script src="script.js?v=20260911-editor-core-v2-production-391"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
@@ -1918,7 +1918,7 @@
   <script src="attachmentsLocal.js?v=20260904-backup-v4-import-1"></script>
 
   <!-- Obrázky a internetové odkazy v rich-text editoru -->
-  <script src="editorMedia.js?v=20260911-editor-v2-image-adapter-382"></script>
+  <script src="editorMedia.js?v=20260911-editor-core-v2-production-391"></script>
   <script src="imageFlowFix.js?v=20260908-below-existing-boundary-312"></script>
   <script src="imageFloatCaretFix.js?v=20260908-float-side-bottom-existing-line-315"></script>
 
@@ -1926,9 +1926,9 @@
   <script src="editorDocuments.js?v=20260903-attachments-faze-b-draft-1"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
-  <script src="noteLinks.js?v=20260901-note-links-v7-1"></script>
+  <script src="noteLinks.js?v=20260911-editor-v2-links-planner-392"></script>
   
-  <script src="planner.js?v=20260909-planner-reminder-separation-318"></script>
+  <script src="planner.js?v=20260911-editor-v2-links-planner-392"></script>
   
   <script src="plannedTextLinks.js"></script>
   
@@ -1988,9 +1988,9 @@
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
   <script src="visualDebug.js"></script>
   
-  <!-- Editor Core V2 – vlastní model; Bridge TEST jej může vložit do reálného editoru bez změny originálu. -->
-  <script src="editorCoreV2.js?v=20260911-editor-core-v2-complete-todo-390"></script>
-  <script src="editorCoreV2Bridge.js?v=20260911-editor-core-v2-bridge-complete-todo-390"></script>
+  <!-- Editor Core V2 – produkční výchozí engine; Bridge zachovává automatický legacy fallback. -->
+  <script src="editorCoreV2.js?v=20260911-editor-v2-links-planner-392"></script>
+  <script src="editorCoreV2Bridge.js?v=20260911-editor-v2-links-planner-392"></script>
 
   <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
   <script src="debugHub.js?v=20260910-editor-core-v2-lab-367"></script>
