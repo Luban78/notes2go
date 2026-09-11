@@ -1534,6 +1534,7 @@ const POHYB_PO_PREHOZENI_STITKU = 10;
 const OKRAJ_AUTO_SCROLL_STITKU = 72;
 const MAX_AUTO_SCROLL_STITKU = 16;
 const ODSAZENI_GHOSTU_NAD_PRSTEM = 18;
+const POSUN_GHOSTU_DESKTOP_NAHORU = 10;
 
 function zapisTagDragDiag(text) {
   try {
@@ -2061,14 +2062,16 @@ function pohniGhostemHornihoStitku(clientX, clientY) {
     const vyskaGhostu = Number(stav.ghostHeight) || stav.ghost.offsetHeight || 0;
 
     /*
-     * Drag preview držíme NAD prstem, ne přímo pod ním.
-     * Uživatel tak po celou dobu vidí název/barvu štítku i cílové místo.
-     * Horizontálně je ghost vystředěný na prst, svisle končí kousek nad ním.
+     * Mobil: ghost zůstává celý nad prstem, aby jej prst nezakrýval.
+     * PC: kurzor je přesný a malý, proto ghost držíme jen mírně nad myší
+     * (střed štítku cca 10 px nad kurzorem), ne celý štítek vysoko nad ní.
      */
     stav.ghost.style.left = `${Math.round(clientX - sirkaGhostu / 2)}px`;
-    stav.ghost.style.top = `${Math.round(
-      clientY - vyskaGhostu - ODSAZENI_GHOSTU_NAD_PRSTEM
-    )}px`;
+    const ghostTop =
+      stav.vstup === "touch"
+        ? clientY - vyskaGhostu - ODSAZENI_GHOSTU_NAD_PRSTEM
+        : clientY - vyskaGhostu / 2 - POSUN_GHOSTU_DESKTOP_NAHORU;
+    stav.ghost.style.top = `${Math.round(ghostTop)}px`;
   }
 
   prehodHorniStitekPodleX(stav.button, clientX);
@@ -2109,9 +2112,10 @@ function zahajPresunHornihoStitku(
   ghost.style.width = `${Math.round(rect.width)}px`;
   ghost.style.height = `${Math.round(rect.height)}px`;
   ghost.style.left = `${Math.round(clientX - rect.width / 2)}px`;
-  ghost.style.top = `${Math.round(
-    clientY - rect.height - ODSAZENI_GHOSTU_NAD_PRSTEM
-  )}px`;
+  const ghostTop = jeDesktop
+    ? clientY - rect.height / 2 - POSUN_GHOSTU_DESKTOP_NAHORU
+    : clientY - rect.height - ODSAZENI_GHOSTU_NAD_PRSTEM;
+  ghost.style.top = `${Math.round(ghostTop)}px`;
 
   /*
    * PC – FIX 425 / STEJNÝ PRINCIP JAKO KARTY
