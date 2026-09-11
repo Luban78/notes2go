@@ -343,7 +343,7 @@ body.ln-v2-lab-otevren {
 }
 
 /* ==========================================
-   V2.11 – IMAGE BLOCK + EXISTUJÍCÍ NASTAVENÍ
+   V2.12 – IMAGE BLOCK + EXISTUJÍCÍ NASTAVENÍ + MODEL DRAG
 
    Obrázek je samostatný atomický blok V2 modelu. DOM figure je pouze
    vykreslení. Používáme stejné názvy data atributů jako současný LubaNote
@@ -360,7 +360,7 @@ body.ln-v2-lab-otevren {
   position: relative;
   container-type: inline-size;
   width: var(--ln-v2-obrazek-sirka, 100%);
-  max-width: 100%;
+  max-width: calc(100% - 8px);
   margin: 14px auto;
   padding: 0;
   overflow: hidden;
@@ -375,20 +375,20 @@ body.ln-v2-lab-otevren {
 .ln-v2-editor .ln-v2-obrazek[data-velikost="100"] {
   float: none;
   clear: both;
-  width: 100%;
+  width: calc(100% - 8px);
   margin: 14px auto;
 }
 
 .ln-v2-editor .ln-v2-obrazek[data-zarovnani="vlevo"] {
   float: left;
   clear: none;
-  margin: 2px 4px 6px 0;
+  margin: 2px 12px 6px 4px;
 }
 
 .ln-v2-editor .ln-v2-obrazek[data-zarovnani="vpravo"] {
   float: right;
   clear: none;
-  margin: 2px 0 6px 4px;
+  margin: 2px 4px 6px 4px;
 }
 
 .ln-v2-editor .ln-v2-obrazek[data-zarovnani="stred"] {
@@ -399,7 +399,33 @@ body.ln-v2-lab-otevren {
 
 .ln-v2-editor .ln-v2-obrazek[data-velikost="50"][data-zarovnani="vlevo"],
 .ln-v2-editor .ln-v2-obrazek[data-velikost="50"][data-zarovnani="vpravo"] {
-  width: calc(50% - 4px);
+  width: calc(50% - 8px);
+}
+
+/* V2.12 – stejné vizuální stavy jako produkční drag, ale bez přesunu DOMu. */
+.ln-v2-editor .ln-v2-obrazek.lubaNoteImageDragging {
+  opacity: .58;
+  outline: 3px dashed var(--color-accent, currentColor);
+  outline-offset: 3px;
+  pointer-events: none;
+}
+
+.ln-v2-editor.lubaNoteImageMoveReady {
+  overflow-y: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.ln-v2-editor.lubaNoteImageMoveReady .ln-v2-obrazek img,
+.ln-v2-editor.lubaNoteImageDragMode .ln-v2-obrazek img {
+  touch-action: none;
+}
+
+.ln-v2-editor.lubaNoteImageDragMode {
+  cursor: grabbing;
+}
+
+.ln-v2-editor .ln-v2-obrazek.lubaNoteImageDragging img {
+  cursor: grabbing;
 }
 
 .ln-v2-editor .ln-v2-obrazek img {

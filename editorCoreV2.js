@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 (LAB)
-   FÁZE V2.11: vlastní model + LubaNote Bridge TEST mode + obrázek jako samostatný blok modelu.
+   FÁZE V2.13: Image Crop nad vlastním modelem + zachovaný modelový drag & move obrázku.
 
    DŮLEŽITÉ:
    - Tento modul NESMÍ měnit produkční editor ani ukládat poznámky.
@@ -72,6 +72,30 @@
   let vlozenyHostitel = null;
   let vlozenyRezim = false;
   let vybranyObrazekId = "";
+
+  /* ==========================================
+     V2.12 – MODEL DRAG & MOVE OBRÁZKU
+
+     Gesto záměrně kopíruje odladěný produkční UX:
+     - krátký tap = výběr obrázku,
+     - dlouhý stisk 650 ms = připraveno k přesunu,
+     - pohyb až po long-pressu = drag,
+     - před long-pressem zůstává přirozený scroll,
+     - horizontální místo puštění určí vlevo / střed / vpravo.
+
+     ZÁSADNÍ rozdíl proti starému editoru: během dragu se NEMĚNÍ DOM
+     dokumentu. Cíl se pouze počítá a při puštění se atomicky upraví
+     `dokument.bloky`; DOM se potom celý vykreslí z modelu.
+  ========================================== */
+  const DELKA_DLOUHEHO_STISKU_V2_OBRAZKU = 650;
+  const VZDALENOST_ZRUSENI_V2_LONGPRESS = 20;
+  const VZDALENOST_START_V2_DRAG = 6;
+  let v2DragObrazku = null;
+  let v2DragCasovac = null;
+  let v2DropIndicator = null;
+  let v2MoveHint = null;
+  let v2AutoScrollRaf = null;
+  let potlacKlikV2ObrazkuDo = 0;
 
   function noveIdBloku() {
     return `v2b-${Date.now().toString(36)}-${dalsiIdBloku++}`;
@@ -1145,9 +1169,44 @@
 
     return {
       id: blok.id,
+      zdroj: String(blok.zdroj || ""),
+      alt: String(blok.alt || "Obrázek v poznámce"),
+      attachmentId: String(blok.attachmentId || ""),
       velikost: normalizujVelikostObrazku(blok.velikost),
       zarovnani: normalizujZarovnaniObrazku(blok.zarovnani)
     };
+  }
+
+  function nastavOrezanyZdrojObrazku(obrazekId, novyZdroj) {
+    const id = String(obrazekId || vybranyObrazekId || "");
+    const blok = dokument?.bloky?.find((polozka) => jeObrazkovyBlok(polozka) && polozka.id === id);
+    if (!blok) return false;
+
+    const zdroj = String(novyZdroj || "").trim();
+    if (!zdroj || zdroj === blok.zdroj) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    blok.zdroj = zdroj;
+
+    /* Ořez vytváří novou obrazovou variantu. Původní attachmentId už neodpovídá
+       novým pixelům, proto jej ve V2 TEST kopii odpojíme. Undo obnoví celý
+       původní blok včetně attachmentId ze snapshotu historie. */
+    blok.attachmentId = "";
+    vybranyObrazekId = id;
+
+    ulozZmenuDoHistorie(snapshotPred, "oříznout obrázek");
+    vykresli(posledniVyber || posledniPozice);
+
+    queueMicrotask(() => {
+      const figure = Array.from(editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || [])
+        .find((polozka) => polozka.dataset.lnV2Obrazek === id);
+      if (!figure) return;
+      try { figure.focus({ preventScroll: true }); } catch (_error) { figure.focus(); }
+    });
+
+    nastavStav("Obrázek oříznut ve V2 modelové kopii");
+    zapisDebug?.(`EDITOR V2 | image crop | block=${id}`);
+    return true;
   }
 
   function nastavNastaveniObrazku(obrazekId, hodnoty = {}) {
@@ -1178,6 +1237,485 @@
     nastavStav(`Obrázek: ${novaVelikost === "prizpusobit" ? "přizpůsobit" : `${novaVelikost} %`} · ${noveZarovnani}`);
     zapisDebug?.(`EDITOR V2 | image settings | block=${id} | size=${novaVelikost} | align=${noveZarovnani}`);
     return true;
+  }
+
+  function zrusV2DragCasovac() {
+    if (v2DragCasovac !== null) clearTimeout(v2DragCasovac);
+    v2DragCasovac = null;
+  }
+
+  function zajistiV2DropIndicator() {
+    if (v2DropIndicator?.isConnected) return v2DropIndicator;
+    v2DropIndicator = document.createElement("div");
+    v2DropIndicator.className = "lubaNoteImageDropIndicator ln-v2-image-drop-indicator";
+    v2DropIndicator.hidden = true;
+    v2DropIndicator.setAttribute("aria-hidden", "true");
+    document.body.append(v2DropIndicator);
+    return v2DropIndicator;
+  }
+
+  function zajistiV2MoveHint() {
+    if (v2MoveHint?.isConnected) return v2MoveHint;
+    v2MoveHint = document.createElement("div");
+    v2MoveHint.className = "lubaNoteImageMoveHint ln-v2-image-move-hint";
+    v2MoveHint.textContent = "↕";
+    v2MoveHint.hidden = true;
+    v2MoveHint.setAttribute("aria-hidden", "true");
+    document.body.append(v2MoveHint);
+    return v2MoveHint;
+  }
+
+  function schovejV2DragPomucky() {
+    if (v2DropIndicator) v2DropIndicator.hidden = true;
+    if (v2MoveHint) v2MoveHint.hidden = true;
+  }
+
+  function zobrazV2MoveHint(clientX, clientY, jeDotyk) {
+    const hint = zajistiV2MoveHint();
+    hint.style.left = `${Math.round(clientX)}px`;
+    hint.style.top = `${Math.round(jeDotyk ? clientY - 65 : clientY)}px`;
+    hint.style.transform = "translate(-50%, -50%)";
+    hint.hidden = false;
+  }
+
+  function urciV2ZarovnaniZBodu(clientX) {
+    const rect = editor?.getBoundingClientRect?.();
+    if (!rect?.width) return "stred";
+    const pomer = (clientX - rect.left) / rect.width;
+    if (pomer < 0.38) return "vlevo";
+    if (pomer > 0.62) return "vpravo";
+    return "stred";
+  }
+
+  function caretRangeZBoduV2(clientX, clientY) {
+    try {
+      if (typeof document.caretRangeFromPoint === "function") {
+        return document.caretRangeFromPoint(clientX, clientY);
+      }
+      if (typeof document.caretPositionFromPoint === "function") {
+        const pozice = document.caretPositionFromPoint(clientX, clientY);
+        if (!pozice) return null;
+        const range = document.createRange();
+        range.setStart(pozice.offsetNode, pozice.offset);
+        range.collapse(true);
+        return range;
+      }
+    } catch (_error) {}
+    return null;
+  }
+
+  function cilV2PresunuZBodu(clientX, clientY) {
+    if (!editor || !v2DragObrazku) return null;
+
+    const prvek = document.elementFromPoint(clientX, clientY);
+    const figure = prvek?.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
+    if (
+      figure &&
+      editor.contains(figure) &&
+      figure.dataset.lnV2Obrazek !== v2DragObrazku.obrazekId
+    ) {
+      const rect = figure.getBoundingClientRect();
+      const za = clientY >= rect.top + rect.height / 2;
+      return {
+        typ: "obrazek",
+        cilId: figure.dataset.lnV2Obrazek,
+        za,
+        y: za ? rect.bottom : rect.top
+      };
+    }
+
+    const range = caretRangeZBoduV2(clientX, clientY);
+    if (range && editor.contains(range.commonAncestorContainer)) {
+      const pozice = domBodNaModel(range.startContainer, range.startOffset);
+      if (pozice && jeTextovyBlok(dokument.bloky[pozice.blok])) {
+        const blok = dokument.bloky[pozice.blok];
+        let y = clientY;
+        try {
+          const r = range.getBoundingClientRect();
+          if (r && Number.isFinite(r.top)) y = r.bottom || r.top;
+        } catch (_error) {}
+        return {
+          typ: "text",
+          cilId: blok.id,
+          offset: pozice.offset,
+          y
+        };
+      }
+    }
+
+    /* Fallback mezi přímými bloky – používá pouze stabilní ID modelu. */
+    const deti = Array.from(editor.children).filter((el) =>
+      el.dataset?.lnV2Obrazek !== v2DragObrazku.obrazekId
+    );
+    for (const el of deti) {
+      const rect = el.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return {
+          typ: "pred",
+          cilId: el.dataset?.lnV2Blok || el.dataset?.lnV2Obrazek || "",
+          y: rect.top
+        };
+      }
+    }
+
+    const rectEditor = editor.getBoundingClientRect();
+    return {
+      typ: "konec",
+      y: Math.min(rectEditor.bottom - 4, Math.max(rectEditor.top + 4, clientY))
+    };
+  }
+
+  function zobrazV2DropIndicator(clientX, cil) {
+    if (!editor || !cil) return;
+    const marker = zajistiV2DropIndicator();
+    const rect = editor.getBoundingClientRect();
+    const odsazeni = 6;
+    marker.style.left = `${Math.round(rect.left + odsazeni)}px`;
+    marker.style.width = `${Math.max(20, Math.round(rect.width - odsazeni * 2))}px`;
+    marker.style.top = `${Math.round(cil.y)}px`;
+    const relativniX = Math.max(
+      0,
+      Math.min(rect.width - odsazeni * 2, clientX - (rect.left + odsazeni))
+    );
+    marker.style.setProperty("--luba-note-drop-x", `${Math.round(relativniX)}px`);
+    marker.hidden = false;
+  }
+
+  function aktualizujV2CilPresunu(clientX, clientY) {
+    if (!v2DragObrazku?.aktivni) return;
+    v2DragObrazku.lastX = clientX;
+    v2DragObrazku.lastY = clientY;
+    v2DragObrazku.cil = cilV2PresunuZBodu(clientX, clientY);
+    zobrazV2DropIndicator(clientX, v2DragObrazku.cil);
+  }
+
+  function ziskejV2AutoScrollKrok(clientY) {
+    const rect = editor?.getBoundingClientRect?.();
+    if (!rect?.height) return 0;
+    const zona = Math.min(86, Math.max(58, rect.height * 0.16));
+    const maximalniKrok = 16;
+    if (clientY < rect.top + zona) {
+      const sila = Math.min(1, Math.max(0, (rect.top + zona - clientY) / zona));
+      return -maximalniKrok * sila;
+    }
+    if (clientY > rect.bottom - zona) {
+      const sila = Math.min(1, Math.max(0, (clientY - (rect.bottom - zona)) / zona));
+      return maximalniKrok * sila;
+    }
+    return 0;
+  }
+
+  function zastavV2AutoScroll() {
+    if (v2AutoScrollRaf !== null) cancelAnimationFrame(v2AutoScrollRaf);
+    v2AutoScrollRaf = null;
+  }
+
+  function krokV2AutoScroll() {
+    v2AutoScrollRaf = null;
+    if (!v2DragObrazku?.aktivni || !editor) return;
+    const krok = ziskejV2AutoScrollKrok(v2DragObrazku.lastY);
+    if (Math.abs(krok) < 0.2) return;
+    const pred = editor.scrollTop;
+    const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
+    editor.scrollTop = Math.max(0, Math.min(maximum, pred + krok));
+    if (Math.abs(editor.scrollTop - pred) < 0.1) return;
+    aktualizujV2CilPresunu(v2DragObrazku.lastX, v2DragObrazku.lastY);
+    v2AutoScrollRaf = requestAnimationFrame(krokV2AutoScroll);
+  }
+
+  function aktualizujV2AutoScroll(clientX, clientY) {
+    if (!v2DragObrazku?.aktivni) {
+      zastavV2AutoScroll();
+      return;
+    }
+    v2DragObrazku.lastX = clientX;
+    v2DragObrazku.lastY = clientY;
+    if (Math.abs(ziskejV2AutoScrollKrok(clientY)) < 0.2) {
+      zastavV2AutoScroll();
+      return;
+    }
+    if (v2AutoScrollRaf === null) v2AutoScrollRaf = requestAnimationFrame(krokV2AutoScroll);
+  }
+
+  function jePrazdnyV2TextovyBlok(blok) {
+    return jeTextovyBlok(blok) && textBloku(blok) === "";
+  }
+
+  function najdiIndexBlokuPodleId(id) {
+    return dokument?.bloky?.findIndex((blok) => blok?.id === id) ?? -1;
+  }
+
+  function vlozPresouvanyV2ObrazekDoCile(obrazek, cil) {
+    if (!obrazek) return -1;
+
+    if (cil?.typ === "text") {
+      const index = najdiIndexBlokuPodleId(cil.cilId);
+      const blok = dokument.bloky[index];
+      if (index >= 0 && jeTextovyBlok(blok)) {
+        const delka = textBloku(blok).length;
+        const offset = Math.max(0, Math.min(delka, Number(cil.offset) || 0));
+        if (offset <= 0) {
+          dokument.bloky.splice(index, 0, obrazek);
+          return index;
+        }
+        if (offset >= delka) {
+          dokument.bloky.splice(index + 1, 0, obrazek);
+          return index + 1;
+        }
+
+        const rez = rozdelObsah(blok, offset);
+        nastavObsahBloku(blok, rez.vlevo);
+        const blokZa = vytvorOdstavecZObsahu(
+          rez.vpravo.length ? rez.vpravo : [vytvorSegment("")],
+          blok.zarovnani || "left"
+        );
+        dokument.bloky.splice(index + 1, 0, obrazek, blokZa);
+        return index + 1;
+      }
+    }
+
+    if (cil?.typ === "obrazek") {
+      const index = najdiIndexBlokuPodleId(cil.cilId);
+      if (index >= 0) {
+        const kam = cil.za ? index + 1 : index;
+        dokument.bloky.splice(kam, 0, obrazek);
+        return kam;
+      }
+    }
+
+    if (cil?.typ === "pred") {
+      const index = najdiIndexBlokuPodleId(cil.cilId);
+      if (index >= 0) {
+        dokument.bloky.splice(index, 0, obrazek);
+        return index;
+      }
+    }
+
+    dokument.bloky.push(obrazek);
+    return dokument.bloky.length - 1;
+  }
+
+  function presunV2ObrazekDoCile(obrazekId, cil, clientX, zachovatVyberObrazku = false) {
+    const zdrojIndex = dokument?.bloky?.findIndex(
+      (blok) => jeObrazkovyBlok(blok) && blok.id === obrazekId
+    ) ?? -1;
+    if (zdrojIndex < 0) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    const obrazek = dokument.bloky[zdrojIndex];
+    const puvodniPrazdny = jePrazdnyV2TextovyBlok(dokument.bloky[zdrojIndex + 1])
+      ? dokument.bloky[zdrojIndex + 1].id
+      : "";
+
+    dokument.bloky.splice(zdrojIndex, 1);
+
+    obrazek.zarovnani = urciV2ZarovnaniZBodu(clientX);
+    let novyIndex = vlozPresouvanyV2ObrazekDoCile(obrazek, cil);
+
+    /* Stejně jako odladěný produkční drag uklidíme prázdný řádek, který byl
+       pouze technicky za PŮVODNÍ pozicí obrázku. Děláme to až PO vložení:
+       pokud je právě tento řádek novým cílem, obrázek před ním zůstane a
+       řádek se správně zachová jako editovatelná pozice za obrázkem. */
+    if (puvodniPrazdny) {
+      const prazdnyIndex = najdiIndexBlokuPodleId(puvodniPrazdny);
+      if (
+        prazdnyIndex >= 0 &&
+        jePrazdnyV2TextovyBlok(dokument.bloky[prazdnyIndex]) &&
+        !jeObrazkovyBlok(dokument.bloky[prazdnyIndex - 1])
+      ) {
+        dokument.bloky.splice(prazdnyIndex, 1);
+      }
+    }
+
+    if (!dokument.bloky.some(jeTextovyBlok)) dokument.bloky.push(vytvorOdstavec(""));
+    if (jeObrazkovyBlok(dokument.bloky[dokument.bloky.length - 1])) {
+      dokument.bloky.push(vytvorOdstavec(""));
+    }
+
+    novyIndex = dokument.bloky.findIndex((blok) => blok.id === obrazekId);
+    let caretIndex = najdiTextovyBlokOd(Math.min(novyIndex + 1, dokument.bloky.length - 1), 1);
+    if (caretIndex < 0) caretIndex = najdiTextovyBlokOd(Math.max(0, novyIndex - 1), -1);
+    if (caretIndex < 0) caretIndex = 0;
+    const caret = {
+      blok: caretIndex,
+      offset: caretIndex > novyIndex ? 0 : textBloku(dokument.bloky[caretIndex]).length
+    };
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+
+    vybranyObrazekId = zachovatVyberObrazku ? obrazekId : "";
+    posledniPozice = { ...caret };
+    posledniVyber = klonVyberu(novyVyber);
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+
+    const zmeneno = ulozZmenuDoHistorie(snapshotPred, "přesun obrázku");
+    vykresli(novyVyber);
+
+    queueMicrotask(() => {
+      if (zachovatVyberObrazku) {
+        const figure = Array.from(editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || [])
+          .find((polozka) => polozka.dataset.lnV2Obrazek === obrazekId);
+        if (!figure) return;
+        try { figure.focus({ preventScroll: true }); } catch (_error) { figure.focus(); }
+        return;
+      }
+      try { editor?.focus({ preventScroll: true }); } catch (_error) { editor?.focus(); }
+      nastavVyberModelu(caret);
+    });
+
+    nastavStav(zmeneno ? `Obrázek přesunut · ${obrazek.zarovnani}` : "Obrázek zůstal na stejné pozici");
+    zapisDebug?.(`EDITOR V2 | image drag | block=${obrazekId} | changed=${zmeneno ? "Y" : "N"} | align=${obrazek.zarovnani}`);
+    return true;
+  }
+
+  function vzdalenostV2Drag(clientX, clientY) {
+    if (!v2DragObrazku) return 0;
+    return Math.hypot(clientX - v2DragObrazku.startX, clientY - v2DragObrazku.startY);
+  }
+
+  function pripravV2DlouhyStisk(typ, image, clientX, clientY, pointerId = null, touchId = null) {
+    zrusV2Drag();
+    const figure = image?.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
+    if (!figure) return;
+
+    v2DragObrazku = {
+      typ,
+      obrazekId: figure.dataset.lnV2Obrazek || "",
+      image,
+      figure,
+      pointerId,
+      touchId,
+      startX: clientX,
+      startY: clientY,
+      lastX: clientX,
+      lastY: clientY,
+      scrollTopPred: editor?.scrollTop || 0,
+      pripraven: false,
+      aktivni: false,
+      cil: null,
+      puvodneVybrany: vybranyObrazekId === (figure.dataset.lnV2Obrazek || "")
+    };
+
+    v2DragCasovac = setTimeout(() => {
+      v2DragCasovac = null;
+      if (!v2DragObrazku || !v2DragObrazku.figure?.isConnected) {
+        zrusV2Drag();
+        return;
+      }
+      v2DragObrazku.pripraven = true;
+      v2DragObrazku.scrollTopPred = editor?.scrollTop || 0;
+      editor?.classList.add("lubaNoteImageMoveReady");
+      zobrazV2MoveHint(clientX, clientY, typ === "touch");
+      nastavStav("Přesun obrázku připraven · táhni a pusť na cílovém místě");
+    }, DELKA_DLOUHEHO_STISKU_V2_OBRAZKU);
+  }
+
+  function spustV2Drag(clientX, clientY) {
+    if (!v2DragObrazku?.pripraven || v2DragObrazku.aktivni) return;
+    v2DragObrazku.aktivni = true;
+    v2DragObrazku.figure.classList.add("lubaNoteImageDragging");
+    editor?.classList.add("lubaNoteImageDragMode");
+    if (v2DragObrazku.pointerId !== null) {
+      try { v2DragObrazku.image?.setPointerCapture?.(v2DragObrazku.pointerId); } catch (_error) {}
+    }
+    aktualizujV2CilPresunu(clientX, clientY);
+  }
+
+  function zrusV2Drag() {
+    zrusV2DragCasovac();
+    zastavV2AutoScroll();
+    if (v2DragObrazku?.pointerId !== null) {
+      try { v2DragObrazku?.image?.releasePointerCapture?.(v2DragObrazku.pointerId); } catch (_error) {}
+    }
+    v2DragObrazku?.figure?.classList?.remove("lubaNoteImageDragging");
+    editor?.classList?.remove("lubaNoteImageDragMode", "lubaNoteImageMoveReady");
+    schovejV2DragPomucky();
+    v2DragObrazku = null;
+  }
+
+  function dokoncV2Drag(clientX, clientY, ulozit) {
+    if (!v2DragObrazku) return false;
+    const drag = v2DragObrazku;
+    const aktivni = drag.aktivni;
+    const cil = drag.cil || cilV2PresunuZBodu(clientX, clientY);
+    const obrazekId = drag.obrazekId;
+    const puvodneVybrany = Boolean(drag.puvodneVybrany);
+
+    zrusV2DragCasovac();
+    zastavV2AutoScroll();
+    if (drag.pointerId !== null) {
+      try { drag.image?.releasePointerCapture?.(drag.pointerId); } catch (_error) {}
+    }
+    drag.figure?.classList?.remove("lubaNoteImageDragging");
+    editor?.classList?.remove("lubaNoteImageDragMode", "lubaNoteImageMoveReady");
+    schovejV2DragPomucky();
+    v2DragObrazku = null;
+
+    if (aktivni && ulozit) {
+      potlacKlikV2ObrazkuDo = performance.now() + 650;
+      return presunV2ObrazekDoCile(obrazekId, cil, clientX, puvodneVybrany);
+    }
+
+    if (drag.pripraven) potlacKlikV2ObrazkuDo = performance.now() + 650;
+    return false;
+  }
+
+  function zpracujV2TouchMove(event) {
+    if (v2DragObrazku?.typ !== "touch") return;
+    const dotyk = Array.from(event.touches || []).find((t) => t.identifier === v2DragObrazku.touchId);
+    if (!dotyk) return;
+    const vzdalenost = vzdalenostV2Drag(dotyk.clientX, dotyk.clientY);
+
+    if (!v2DragObrazku.pripraven) {
+      if (vzdalenost > VZDALENOST_ZRUSENI_V2_LONGPRESS) zrusV2Drag();
+      return;
+    }
+
+    event.preventDefault();
+    if (!v2DragObrazku.aktivni && editor) editor.scrollTop = v2DragObrazku.scrollTopPred;
+    zobrazV2MoveHint(dotyk.clientX, dotyk.clientY, true);
+    if (!v2DragObrazku.aktivni && vzdalenost >= VZDALENOST_START_V2_DRAG) {
+      spustV2Drag(dotyk.clientX, dotyk.clientY);
+    }
+    if (v2DragObrazku?.aktivni) {
+      aktualizujV2CilPresunu(dotyk.clientX, dotyk.clientY);
+      aktualizujV2AutoScroll(dotyk.clientX, dotyk.clientY);
+    }
+  }
+
+  function zpracujV2TouchEnd(event) {
+    if (v2DragObrazku?.typ !== "touch") return;
+    const dotyk = Array.from(event.changedTouches || []).find((t) => t.identifier === v2DragObrazku.touchId);
+    if (!dotyk) return;
+    if (v2DragObrazku.pripraven) event.preventDefault();
+    dokoncV2Drag(dotyk.clientX, dotyk.clientY, true);
+  }
+
+  function zpracujV2PointerMove(event) {
+    if (v2DragObrazku?.typ !== "pointer" || v2DragObrazku.pointerId !== event.pointerId) return;
+    const vzdalenost = vzdalenostV2Drag(event.clientX, event.clientY);
+    if (!v2DragObrazku.pripraven) {
+      if (vzdalenost > VZDALENOST_ZRUSENI_V2_LONGPRESS) zrusV2Drag();
+      return;
+    }
+    event.preventDefault();
+    if (!v2DragObrazku.aktivni && editor) editor.scrollTop = v2DragObrazku.scrollTopPred;
+    zobrazV2MoveHint(event.clientX, event.clientY, false);
+    if (!v2DragObrazku.aktivni && vzdalenost >= VZDALENOST_START_V2_DRAG) {
+      spustV2Drag(event.clientX, event.clientY);
+    }
+    if (v2DragObrazku?.aktivni) {
+      aktualizujV2CilPresunu(event.clientX, event.clientY);
+      aktualizujV2AutoScroll(event.clientX, event.clientY);
+    }
+  }
+
+  function zpracujV2PointerEnd(event) {
+    if (v2DragObrazku?.typ !== "pointer" || v2DragObrazku.pointerId !== event.pointerId) return;
+    if (v2DragObrazku.pripraven) event.preventDefault();
+    dokoncV2Drag(event.clientX, event.clientY, true);
   }
 
   function vlozViceRadku(text, vyber) {
@@ -2623,7 +3161,7 @@
       </div>
 
       <footer class="ln-v2-paticka">
-        V2.11: obrázek je samostatný atomický blok modelu. Galerie/Fotoaparát a komprese se přebírají z LubaNote; velikost a zarovnání používají stejné nastavení jako produkční editor. Drag bude napojený v dalším kroku. TODO a IME zatím zůstávají vypnuté.
+        V2.13: obrázek je samostatný atomický blok modelu. Galerie/Fotoaparát, velikost, zarovnání, drag & move a ořez zapisují pouze do modelu; ořez mění zdroj obrázku jako jednu Undo/Redo operaci. TODO a IME zatím zůstávají vypnuté.
       </footer>
     `;
 
@@ -2636,7 +3174,65 @@
     tlacitkoUndo = lab.querySelector('[data-v2-historie="undo"]');
     tlacitkoRedo = lab.querySelector('[data-v2-historie="redo"]');
 
+    poslouchej(editor, "touchstart", (event) => {
+      if (event.touches?.length !== 1) return;
+      const image = event.target.closest?.(".ln-v2-obrazek img");
+      if (!image || !editor.contains(image)) return;
+      const dotyk = event.touches[0];
+      pripravV2DlouhyStisk(
+        "touch",
+        image,
+        dotyk.clientX,
+        dotyk.clientY,
+        null,
+        dotyk.identifier
+      );
+    }, { passive: false });
+
+    poslouchej(document, "touchmove", zpracujV2TouchMove, { passive: false });
+    poslouchej(document, "touchend", zpracujV2TouchEnd, { passive: false });
+    poslouchej(document, "touchcancel", () => zrusV2Drag(), { passive: false });
+
+    poslouchej(editor, "pointerdown", (event) => {
+      if (event.pointerType === "touch") return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      const image = event.target.closest?.(".ln-v2-obrazek img");
+      if (!image || !editor.contains(image)) return;
+      pripravV2DlouhyStisk(
+        "pointer",
+        image,
+        event.clientX,
+        event.clientY,
+        event.pointerId,
+        null
+      );
+    });
+
+    poslouchej(document, "pointermove", zpracujV2PointerMove, { passive: false });
+    poslouchej(document, "pointerup", zpracujV2PointerEnd, { passive: false });
+    poslouchej(document, "pointercancel", (event) => {
+      if (v2DragObrazku?.typ === "pointer" && v2DragObrazku.pointerId === event.pointerId) {
+        zrusV2Drag();
+      }
+    });
+
+    poslouchej(editor, "dragstart", (event) => {
+      if (event.target.closest?.(".ln-v2-obrazek")) event.preventDefault();
+    });
+
+    poslouchej(editor, "contextmenu", (event) => {
+      if (!event.target.closest?.(".ln-v2-obrazek")) return;
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
     poslouchej(editor, "click", (event) => {
+      if (performance.now() < potlacKlikV2ObrazkuDo && event.target.closest?.(".ln-v2-obrazek")) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       const smazat = event.target.closest?.("[data-v2-image-remove]");
       if (smazat) {
         event.preventDefault();
@@ -2802,7 +3398,7 @@
     else vykresli(posledniVyber || posledniPozice);
 
     editor.focus({ preventScroll: true });
-    zapisDebug?.("EDITOR V2 LAB | OPEN V2.10 | produkční editor nedotčen");
+    zapisDebug?.("EDITOR V2 LAB | OPEN V2.13 | produkční editor nedotčen");
     return true;
   }
 
@@ -2819,6 +3415,11 @@
   }
 
   function znicLab() {
+    zrusV2Drag();
+    v2DropIndicator?.remove();
+    v2MoveHint?.remove();
+    v2DropIndicator = null;
+    v2MoveHint = null;
     posluchace.splice(0).forEach((odpoj) => {
       try { odpoj(); } catch (_error) {}
     });
@@ -2886,7 +3487,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.11-IMAGE-SETTINGS-383",
+    verze: "V2.13-IMAGE-CROP-385",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -2908,6 +3509,7 @@
     vlozObrazek: vlozObrazekZToolbaru,
     smazObrazek: smazObrazekZModelu,
     ziskejNastaveniObrazku,
+    nastavOrezanyZdrojObrazku,
     nastavNastaveniObrazku,
     undo: vratHistoriiZpet,
     redo: vratHistoriiVpred,

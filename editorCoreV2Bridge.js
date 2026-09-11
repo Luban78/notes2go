@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.11
+   FÁZE V2.13
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -39,6 +39,13 @@
   let observer = null;
   let posledniAktivaceToken = 0;
   let pozastavAktivaci = false;
+  let nastavovaciObrazekId = "";
+  let observerNastaveniObrazku = null;
+  let cropModal = null;
+  let cropStage = null;
+  let cropCanvas = null;
+  let cropVyber = null;
+  let cropStav = null;
 
   const podporovaneAkce = new Set([
     "tlacitkoZpet",
@@ -468,6 +475,7 @@
     nastavOchranuUi(false);
     zavriPanelyFormatu();
     if (odkazModal) odkazModal.hidden = true;
+    zavriV2CropModal();
   }
 
   function aktivujProOtevrenouPoznamku() {
@@ -549,6 +557,303 @@
     return Boolean(vlozeno);
   }
 
+  function zavriV2CropModal() {
+    if (!cropModal) return;
+    cropModal.hidden = true;
+    cropModal.dataset.obrazekId = "";
+    cropModal._lnV2Crop = null;
+  }
+
+  function vytvorV2CropModalPokudChybi() {
+    if (cropModal) return;
+
+    cropModal = document.createElement("div");
+    cropModal.className = "lnV2CropModal";
+    cropModal.hidden = true;
+    cropModal.innerHTML = `
+      <div class="lnV2CropDialog" role="dialog" aria-modal="true" aria-label="Oříznout obrázek">
+        <div class="lnV2CropHeader">
+          <h3>Oříznout obrázek</h3>
+          <button type="button" class="lnV2CropClose" aria-label="Zavřít">×</button>
+        </div>
+        <div class="lnV2CropHelp">Tažením uvnitř výběr posuneš, rohy mění velikost ořezu.</div>
+        <div class="lnV2CropStage" data-v2-crop-stage>
+          <canvas class="lnV2CropCanvas" data-v2-crop-canvas></canvas>
+          <div class="lnV2CropShade lnV2CropShadeTop"></div>
+          <div class="lnV2CropShade lnV2CropShadeRight"></div>
+          <div class="lnV2CropShade lnV2CropShadeBottom"></div>
+          <div class="lnV2CropShade lnV2CropShadeLeft"></div>
+          <div class="lnV2CropSelection" data-v2-crop-selection>
+            <span data-v2-crop-handle="nw"></span>
+            <span data-v2-crop-handle="ne"></span>
+            <span data-v2-crop-handle="sw"></span>
+            <span data-v2-crop-handle="se"></span>
+          </div>
+        </div>
+        <div class="lnV2CropStatus" data-v2-crop-status></div>
+        <div class="lnV2CropActions">
+          <button type="button" class="choiceDialogSecondary" data-v2-crop-reset>Celý obrázek</button>
+          <button type="button" class="choiceDialogSecondary" data-v2-crop-cancel>Zrušit</button>
+          <button type="button" class="choiceDialogSave" data-v2-crop-save>Oříznout</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(cropModal);
+    cropStage = cropModal.querySelector("[data-v2-crop-stage]");
+    cropCanvas = cropModal.querySelector("[data-v2-crop-canvas]");
+    cropVyber = cropModal.querySelector("[data-v2-crop-selection]");
+    cropStav = cropModal.querySelector("[data-v2-crop-status]");
+
+    const prekresliVyber = () => {
+      const stav = cropModal?._lnV2Crop;
+      if (!stav || !cropVyber || !cropStage) return;
+      const { x, y, w, h } = stav.rect;
+      cropVyber.style.left = `${x}px`;
+      cropVyber.style.top = `${y}px`;
+      cropVyber.style.width = `${w}px`;
+      cropVyber.style.height = `${h}px`;
+
+      const top = cropModal.querySelector(".lnV2CropShadeTop");
+      const right = cropModal.querySelector(".lnV2CropShadeRight");
+      const bottom = cropModal.querySelector(".lnV2CropShadeBottom");
+      const left = cropModal.querySelector(".lnV2CropShadeLeft");
+      const sw = stav.displayW;
+      const sh = stav.displayH;
+      if (top) Object.assign(top.style, { left: "0px", top: "0px", width: `${sw}px`, height: `${y}px` });
+      if (bottom) Object.assign(bottom.style, { left: "0px", top: `${y + h}px`, width: `${sw}px`, height: `${Math.max(0, sh - y - h)}px` });
+      if (left) Object.assign(left.style, { left: "0px", top: `${y}px`, width: `${x}px`, height: `${h}px` });
+      if (right) Object.assign(right.style, { left: `${x + w}px`, top: `${y}px`, width: `${Math.max(0, sw - x - w)}px`, height: `${h}px` });
+
+      if (cropStav) {
+        const pxW = Math.max(1, Math.round((w / sw) * stav.naturalW));
+        const pxH = Math.max(1, Math.round((h / sh) * stav.naturalH));
+        cropStav.textContent = `${pxW} × ${pxH} px`;
+      }
+    };
+
+    const resetVyber = () => {
+      const stav = cropModal?._lnV2Crop;
+      if (!stav) return;
+      stav.rect = { x: 0, y: 0, w: stav.displayW, h: stav.displayH };
+      prekresliVyber();
+    };
+
+    cropModal._lnV2Prekresli = prekresliVyber;
+    cropModal._lnV2Reset = resetVyber;
+
+    cropModal.querySelector(".lnV2CropClose")?.addEventListener("click", zavriV2CropModal);
+    cropModal.querySelector("[data-v2-crop-cancel]")?.addEventListener("click", zavriV2CropModal);
+    cropModal.querySelector("[data-v2-crop-reset]")?.addEventListener("click", resetVyber);
+    cropModal.addEventListener("click", (event) => {
+      if (event.target === cropModal) zavriV2CropModal();
+    });
+
+    let drag = null;
+    const zacniDrag = (event) => {
+      const stav = cropModal?._lnV2Crop;
+      if (!stav || event.pointerType === "mouse" && event.button !== 0) return;
+      const handle = event.target.closest?.("[data-v2-crop-handle]")?.dataset.v2CropHandle || "move";
+      drag = {
+        pointerId: event.pointerId,
+        handle,
+        startX: event.clientX,
+        startY: event.clientY,
+        rect: { ...stav.rect }
+      };
+      cropVyber?.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    };
+
+    cropVyber?.addEventListener("pointerdown", zacniDrag);
+    cropVyber?.addEventListener("pointermove", (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const stav = cropModal?._lnV2Crop;
+      if (!stav) return;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      const minW = Math.min(48, stav.displayW);
+      const minH = Math.min(48, stav.displayH);
+      let { x, y, w, h } = drag.rect;
+
+      if (drag.handle === "move") {
+        x = Math.max(0, Math.min(stav.displayW - w, x + dx));
+        y = Math.max(0, Math.min(stav.displayH - h, y + dy));
+      } else {
+        let x2 = x + w;
+        let y2 = y + h;
+        if (drag.handle.includes("w")) x = Math.max(0, Math.min(x2 - minW, x + dx));
+        if (drag.handle.includes("e")) x2 = Math.min(stav.displayW, Math.max(x + minW, x2 + dx));
+        if (drag.handle.includes("n")) y = Math.max(0, Math.min(y2 - minH, y + dy));
+        if (drag.handle.includes("s")) y2 = Math.min(stav.displayH, Math.max(y + minH, y2 + dy));
+        w = x2 - x;
+        h = y2 - y;
+      }
+
+      stav.rect = { x, y, w, h };
+      prekresliVyber();
+      event.preventDefault();
+    });
+
+    const konecDrag = (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      try { cropVyber?.releasePointerCapture?.(event.pointerId); } catch (_error) {}
+      drag = null;
+    };
+    cropVyber?.addEventListener("pointerup", konecDrag);
+    cropVyber?.addEventListener("pointercancel", konecDrag);
+
+    cropModal.querySelector("[data-v2-crop-save]")?.addEventListener("click", () => {
+      const stav = cropModal?._lnV2Crop;
+      if (!stav?.img || !stav.rect || !stav.obrazekId) return;
+      const { rect, displayW, displayH, naturalW, naturalH } = stav;
+      const sx = Math.max(0, Math.round((rect.x / displayW) * naturalW));
+      const sy = Math.max(0, Math.round((rect.y / displayH) * naturalH));
+      const sw = Math.max(1, Math.min(naturalW - sx, Math.round((rect.w / displayW) * naturalW)));
+      const sh = Math.max(1, Math.min(naturalH - sy, Math.round((rect.h / displayH) * naturalH)));
+
+      if (sx === 0 && sy === 0 && sw === naturalW && sh === naturalH) {
+        zobrazToast("V2 TEST: ořez je celý obrázek");
+        zavriV2CropModal();
+        return;
+      }
+
+      try {
+        const vystup = document.createElement("canvas");
+        vystup.width = sw;
+        vystup.height = sh;
+        const ctx = vystup.getContext("2d", { alpha: true });
+        if (!ctx) throw new Error("Canvas není dostupný");
+        ctx.drawImage(stav.img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        const zdroj = String(stav.zdroj || "");
+        const shoda = zdroj.match(/^data:(image\/(?:png|jpeg|jpg|webp));/i);
+        let mime = shoda?.[1]?.toLowerCase() || "image/png";
+        if (mime === "image/jpg") mime = "image/jpeg";
+        const dataUrl = vystup.toDataURL(mime, mime === "image/jpeg" || mime === "image/webp" ? 0.92 : undefined);
+        const ulozeno = core()?.nastavOrezanyZdrojObrazku?.(stav.obrazekId, dataUrl);
+        if (!ulozeno) throw new Error("Model obrázku ořez nepřijal");
+
+        zavriV2CropModal();
+        obnovToolbar();
+        zobrazToast(`V2 TEST: obrázek oříznut na ${sw} × ${sh} px`);
+      } catch (error) {
+        console.error("V2 crop: ořez se nepodařil", error);
+        zobrazToast("V2 TEST: tento obrázek se nepodařilo oříznout", true);
+      }
+    });
+  }
+
+  function otevriV2CropObrazku(obrazekId) {
+    const api = core();
+    const data = api?.ziskejNastaveniObrazku?.(obrazekId);
+    if (!data?.zdroj) {
+      zobrazToast("V2 TEST: zdroj obrázku není dostupný", true);
+      return;
+    }
+
+    vytvorV2CropModalPokudChybi();
+    if (!cropModal || !cropStage || !cropCanvas) return;
+
+    const img = new Image();
+    if (!String(data.zdroj).startsWith("data:") && !String(data.zdroj).startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
+
+    cropModal.hidden = false;
+    cropModal.dataset.obrazekId = String(obrazekId || "");
+    cropStav.textContent = "Načítám obrázek…";
+    cropVyber.hidden = true;
+
+    img.onload = () => {
+      const naturalW = img.naturalWidth || img.width;
+      const naturalH = img.naturalHeight || img.height;
+      if (!naturalW || !naturalH) {
+        zobrazToast("V2 TEST: obrázek nemá platné rozměry", true);
+        zavriV2CropModal();
+        return;
+      }
+
+      const maxW = Math.max(220, Math.min(window.innerWidth - 48, 720));
+      const maxH = Math.max(220, Math.min(window.innerHeight * 0.58, 620));
+      const meritko = Math.min(maxW / naturalW, maxH / naturalH, 1.6);
+      const displayW = Math.max(1, Math.round(naturalW * meritko));
+      const displayH = Math.max(1, Math.round(naturalH * meritko));
+
+      cropStage.style.width = `${displayW}px`;
+      cropStage.style.height = `${displayH}px`;
+      cropCanvas.width = displayW;
+      cropCanvas.height = displayH;
+      const ctx = cropCanvas.getContext("2d", { alpha: true });
+      ctx?.clearRect(0, 0, displayW, displayH);
+      ctx?.drawImage(img, 0, 0, displayW, displayH);
+
+      const okrajX = Math.min(24, Math.round(displayW * 0.08));
+      const okrajY = Math.min(24, Math.round(displayH * 0.08));
+      cropModal._lnV2Crop = {
+        obrazekId: String(obrazekId || ""),
+        zdroj: data.zdroj,
+        img,
+        naturalW,
+        naturalH,
+        displayW,
+        displayH,
+        rect: {
+          x: okrajX,
+          y: okrajY,
+          w: Math.max(1, displayW - (okrajX * 2)),
+          h: Math.max(1, displayH - (okrajY * 2))
+        }
+      };
+      cropVyber.hidden = false;
+      cropModal._lnV2Prekresli?.();
+    };
+
+    img.onerror = () => {
+      zobrazToast("V2 TEST: obrázek se nepodařilo načíst pro ořez", true);
+      zavriV2CropModal();
+    };
+
+    img.src = data.zdroj;
+  }
+
+  function zajistiV2CropRadekVNastaveni() {
+    if (!nastavovaciObrazekId) return;
+    const modal = document.querySelector(".choiceModal:not([hidden])");
+    if (!modal) return;
+    const titul = modal.querySelector(".choiceDialogTitle")?.textContent?.trim();
+    if (titul !== "Obrázek") return;
+    const options = modal.querySelector(".choiceDialogOptions");
+    const save = options?.querySelector(".choiceDialogSave");
+    if (!options || !save || options.querySelector("[data-v2-crop-open]")) return;
+
+    const tlacitko = document.createElement("button");
+    tlacitko.type = "button";
+    tlacitko.className = "choiceDialogOption choiceDialogSettingRow";
+    tlacitko.dataset.v2CropOpen = nastavovaciObrazekId;
+    tlacitko.innerHTML = '<span class="choiceDialogSettingLabel">Oříznout</span><span class="choiceDialogSettingValue">Upravit výřez</span>';
+    tlacitko.addEventListener("click", () => {
+      const id = String(tlacitko.dataset.v2CropOpen || "");
+      nastavovaciObrazekId = "";
+      try { window.zavriVyberovyModal?.(); } catch (_error) {}
+      otevriV2CropObrazku(id);
+    });
+    options.insertBefore(tlacitko, save);
+  }
+
+  function sledujV2NastaveniObrazku() {
+    const modal = document.querySelector(".choiceModal");
+    if (!modal || observerNastaveniObrazku) return;
+    observerNastaveniObrazku = new MutationObserver(() => {
+      if (modal.hidden) {
+        if (!cropModal || cropModal.hidden) nastavovaciObrazekId = "";
+        return;
+      }
+      zajistiV2CropRadekVNastaveni();
+    });
+    observerNastaveniObrazku.observe(modal, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+  }
+
   function otevriV2NastaveniObrazku(obrazekId) {
     const api = core();
     const nastaveni = api?.ziskejNastaveniObrazku?.(obrazekId);
@@ -561,6 +866,9 @@
       zobrazToast("V2 TEST: nastavení obrázku není dostupné", true);
       return;
     }
+
+    nastavovaciObrazekId = String(obrazekId || "");
+    sledujV2NastaveniObrazku();
 
     window.otevriNastavovaciModal({
       nadpis: "Obrázek",
@@ -602,6 +910,11 @@
         obnovToolbar();
         zobrazToast("V2 TEST: nastavení obrázku uloženo do modelové kopie");
       }
+    });
+
+    requestAnimationFrame(() => {
+      sledujV2NastaveniObrazku();
+      zajistiV2CropRadekVNastaveni();
     });
   }
 
@@ -849,6 +1162,10 @@
     if (!aktivni || event.key !== "Escape") return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (cropModal && !cropModal.hidden) {
+      zavriV2CropModal();
+      return;
+    }
     if (odkazModal && !odkazModal.hidden) {
       odkazModal.hidden = true;
       return;
@@ -891,7 +1208,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.11-IMAGE-SETTINGS-383",
+    verze: "V2.13-IMAGE-CROP-385",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,
