@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2
-   FÁZE V2.20: produkční selection menu + stabilizace TODO → Planner.
+   FÁZE V2.20a: izolace selection menu od Bullet/TODO MOVE.
 
    🔒 FROZEN PRINCIPY CORE V2:
    - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
@@ -3600,6 +3600,27 @@
     return jeV2KlikNaZnacceSeznamu(radek, clientX, true);
   }
 
+  /*
+   * 🔒 V2.20a – VEŘEJNÝ GUARD PRO BRIDGE SELECTION MENU
+   *
+   * Selection menu a MOVE používají na Androidu stejný long-press / contextmenu
+   * životní cyklus. Bridge proto MUSÍ před vlastní selection logikou ověřit,
+   * zda právě nezačíná nebo neběží MOVE seznamu/TODO. Bez tohoto guardu může
+   * capture listener selection menu vyvolat selection/contextmenu uprostřed
+   * long-pressu a MOVE se zruší dřív, než dojde k drag + zanoření.
+   */
+  function jeV2InterakcePresunuSeznamu() {
+    return Boolean(v2DragSeznamu);
+  }
+
+  function jeV2CilPresunuSeznamu(target, clientX) {
+    const radek = target?.closest?.(
+      ".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo"
+    );
+    if (!radek || !editor?.contains(radek)) return false;
+    return jeV2MoveZonaSeznamu(target, radek, Number(clientX));
+  }
+
   function zrusVyberMoveSeznamuPokudMimo(target) {
     if (!vybranaPolozkaSeznamuId || !editor) return;
     const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
@@ -5468,7 +5489,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.20-SELECTION-PLANNER-394",
+    verze: "V2.20a-MOVE-GUARD-395",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -5503,6 +5524,8 @@
     vlozRichVyberProSelectionMenu,
     vlozTextProSelectionMenu,
     vyberVseProSelectionMenu,
+    jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,
+    jeCilPresunuSeznamu: jeV2CilPresunuSeznamu,
     vlozObrazek: vlozObrazekZToolbaru,
     smazObrazek: smazObrazekZModelu,
     ziskejNastaveniObrazku,

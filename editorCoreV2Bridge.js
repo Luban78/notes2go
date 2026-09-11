@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / PRODUCTION
-   FÁZE V2.20 – SELECTION MENU + TODO PLANNER
+   FÁZE V2.20a – MOVE GUARD PRO SELECTION MENU
 
    🔒 FROZEN INTEGRAČNÍ PRAVIDLA:
    - Editor Core V2 je výchozí engine pro vlastní podporované poznámky.
@@ -183,6 +183,26 @@
     } catch (_error) {
       return false;
     }
+  }
+
+  /*
+   * 🔒 V2.20a – selection menu nesmí soutěžit s Bullet/TODO MOVE.
+   * MOVE zóna je značka • / 1. nebo TODO checkbox; během připraveného či
+   * aktivního long-pressu má Core absolutní prioritu nad selection UI.
+   */
+  function jeV2MoveInterakce(event = null) {
+    const jadro = core();
+    if (jadro?.jeInterakcePresunuSeznamu?.()) return true;
+    if (!event) return false;
+    const dotyk = event.changedTouches?.[0] || event.touches?.[0] || null;
+    const x = Number.isFinite(event.clientX) ? event.clientX : dotyk?.clientX;
+    return Boolean(jadro?.jeCilPresunuSeznamu?.(event.target, x));
+  }
+
+  function potlacSelectionMenuKvuliMove(ms = 550) {
+    potlacV2SelectionMenuDo = Math.max(potlacV2SelectionMenuDo, performance.now() + ms);
+    v2PosledniTapSelection = null;
+    skryjV2SelectionMenu();
   }
 
   function skryjV2SelectionMenu() {
@@ -380,6 +400,7 @@
 
   function zpracujV2SelectionChangeProMenu() {
     if (!aktivni || performance.now() < potlacV2SelectionMenuDo) return;
+    if (jeV2MoveInterakce()) return;
     const vyber = window.getSelection();
     const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
     if (!range || !jeV2SelectionRozsah(range)) return;
@@ -1618,6 +1639,10 @@
 
   document.addEventListener("touchend", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeV2MoveInterakce(event)) {
+      potlacSelectionMenuKvuliMove();
+      return;
+    }
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink")) {
       v2PosledniTapSelection = null;
       return;
@@ -1648,6 +1673,10 @@
 
   document.addEventListener("dblclick", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeV2MoveInterakce(event)) {
+      potlacSelectionMenuKvuliMove();
+      return;
+    }
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink")) return;
 
     const x = event.clientX;
@@ -1666,6 +1695,11 @@
 
   document.addEventListener("contextmenu", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeV2MoveInterakce(event)) {
+      /* Core má vlastní contextmenu ochranu pro MOVE. Selection vrstva musí uhnout. */
+      potlacSelectionMenuKvuliMove(700);
+      return;
+    }
     if (event.target.closest?.("button, figure")) return;
 
     event.preventDefault();
@@ -1730,6 +1764,7 @@
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
     requestAnimationFrame(() => {
       obnovToolbar();
+      if (jeV2MoveInterakce() || performance.now() < potlacV2SelectionMenuDo) return;
       zpracujV2SelectionChangeProMenu();
     });
   });
@@ -1760,7 +1795,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.20-SELECTION-PLANNER-394",
+    verze: "V2.20a-MOVE-GUARD-395",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,
