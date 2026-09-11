@@ -3079,39 +3079,7 @@
       }
     } else {
       range.collapse(false);
-
-      /*
-       * DŮLEŽITÝ INVARIANT – HLAVNÍ EDITOR / FLOAT OBRÁZKY
-       * ----------------------------------------------------
-       * figure.lubaNoteImage musí být v hlavním editoru samostatný
-       * PŘÍMÝ potomek #modalRichText. imageFloatCaretFix.js na tomto
-       * tvaru záměrně stojí: jen tak umí podle výšky tapu vytvářet
-       * skutečné .lubaNoteImageTextLine řádky vedle 25/50% floatu.
-       *
-       * Prosté range.insertNode(figure) vloží figure při caretu uvnitř
-       * <div> přímo DO tohoto divu. Pak zůstane funkční jen první
-       * fyzický řádek vytvořený níže a další volná plocha vedle obrázku
-       * nemá caret cíle. Používáme proto už existující bezpečnou cestu,
-       * která blok v místě caretu rozdělí a figure vloží mezi kořenové
-       * bloky editoru. Obsah ani formátování okolního textu nemaže.
-       */
-      let cilY = 0;
-
-      try {
-        const rect = range.getBoundingClientRect();
-
-        if (Number.isFinite(rect?.top)) {
-          cilY = rect.top + (rect.height || 0) / 2;
-        }
-      } catch (_) {
-        // Pro běžné vložení není Y potřeba; používá se jen u cíle na obrázku.
-      }
-
-      vlozFigureNaPresnouPozici(
-        figure,
-        range,
-        cilY
-      );
+      range.insertNode(figure);
 
       const radek = vytvorRadekProTextZaObrazkem();
       figure.after(radek);
@@ -3563,47 +3531,6 @@
     try {
       const dataUrl =
         await pripravObrazekProPoznamku(file);
-
-      /*
-       * EDITOR CORE V2 TEST – TENKÝ ADAPTÉR
-       * ------------------------------------
-       * Picker Galerie/Fotoaparát i potvrzená komprese zůstávají přesně
-       * v editorMedia.js. Když je ale aktivní izolovaný V2 TEST, připravený
-       * obrázek NESMÍ skončit ve skrytém produkčním #modalRichText ani ve
-       * cloudové attachment frontě originální poznámky. Předáme pouze Data URL
-       * a název do V2 modelové kopie. Bez aktivního V2 je původní produkční
-       * cesta beze změny.
-       */
-      const v2Bridge = window.LubaNoteEditorV2Bridge;
-      if (v2Bridge?.jeAktivni?.()) {
-        /*
-         * 🔒 V2 PRODUCTION IMAGE ADAPTER
-         * V produkčním V2 už obrázek není laboratorní kopie. Proto nejdřív
-         * použijeme stejnou lokální/cloudovou stínovou attachment pipeline
-         * jako starý editor (Secret ji bezpečně přeskočí) a teprve potom
-         * předáme hotový obrázek + attachmentId modelu V2.
-         */
-        const attachmentId =
-          v2Bridge.jeProdukcniRezim?.() === true
-            ? await ulozObrazekDoStinoveCache(dataUrl, file)
-            : null;
-
-        const vlozenoDoV2 = v2Bridge.vlozPripravenyObrazek?.({
-          dataUrl,
-          fileName: file?.name || "",
-          alt: file?.name ? `Obrázek: ${file.name}` : "Obrázek v poznámce",
-          attachmentId: attachmentId || ""
-        });
-
-        if (!vlozenoDoV2) {
-          if (attachmentId) {
-            void odstranStinovouPrilohu(attachmentId);
-          }
-          throw new Error("Editor Core V2 obrázek nepřijal.");
-        }
-
-        return;
-      }
 
       /*
        * FÁZE B: před vložením vytvoříme lokální JPEG Blob a
@@ -4482,25 +4409,6 @@
    * významové formátování tím zůstávají nedotčené.
    */
 
-  /* ============================================================
-     🔒 FROZEN – NEMĚNIT BEZ CÍLENÉ DIAGNOSTIKY
-     ------------------------------------------------------------
-     Tato funkce je odladěná ochrana proti chybě Android WebView,
-     která po Backspace/Delete při spojení řádků vytváří anonymní
-     SPAN s už systémově zvětšeným inline font-size (např. 16.25px).
-     WebView by tuto hodnotu zvětšil znovu a text by po Backspace
-     viditelně narostl.
-
-     Oprava musí zachytit i variantu Chrome/WebView 152, kdy kurzor
-     zůstane v předchozím textovém uzlu a vadný SPAN je jeho soused
-     uvnitř sloučeného DIVu.
-
-     NEMĚNIT / NEZJEDNODUŠOVAT bez:
-     1) záznamu z Visual Debugu,
-     2) kontroly syrového DOM po deleteContentBackward,
-     3) regresního testu Backspace + explicitních velikostí písma.
-     ============================================================ */
-
   function opravWebViewTypografiiUKurzoru() {
     const vyber = window.getSelection();
 
@@ -4520,107 +4428,45 @@
 
     let necoOpraveno = false;
 
-    function vycistiPodezrelySpan(span) {
-      if (
-        !(span instanceof HTMLElement) ||
-        span.tagName !== "SPAN" ||
-        span.hasAttribute("data-velikost-pisma")
-      ) {
-        return false;
-      }
-
-      const maPodezrelouTypografii =
-        Boolean(span.style.fontSize) ||
-        Boolean(span.style.lineHeight) ||
-        Boolean(span.style.letterSpacing) ||
-        span.style.fontFamily === "inherit";
-
-      if (!maPodezrelouTypografii) {
-        return false;
-      }
-
-      span.style.removeProperty("font-size");
-      span.style.removeProperty("line-height");
-      span.style.removeProperty("letter-spacing");
-
-      if (span.style.fontFamily === "inherit") {
-        span.style.removeProperty("font-family");
-      }
-
-      if (
-        span.style.backgroundColor === "transparent" ||
-        span.style.backgroundColor === "rgba(0, 0, 0, 0)"
-      ) {
-        span.style.removeProperty("background-color");
-      }
-
-      if (!span.getAttribute("style")?.trim()) {
-        span.removeAttribute("style");
-      }
-
-      return true;
-    }
-
     while (
       prvek instanceof HTMLElement &&
       prvek !== modalRichText
     ) {
-      if (vycistiPodezrelySpan(prvek)) {
-        necoOpraveno = true;
+      if (
+        prvek.tagName === "SPAN" &&
+        !prvek.hasAttribute("data-velikost-pisma")
+      ) {
+        const maPodezrelouTypografii =
+          Boolean(prvek.style.fontSize) ||
+          Boolean(prvek.style.lineHeight) ||
+          Boolean(prvek.style.letterSpacing) ||
+          prvek.style.fontFamily === "inherit";
+
+        if (maPodezrelouTypografii) {
+          prvek.style.removeProperty("font-size");
+          prvek.style.removeProperty("line-height");
+          prvek.style.removeProperty("letter-spacing");
+
+          if (prvek.style.fontFamily === "inherit") {
+            prvek.style.removeProperty("font-family");
+          }
+
+          if (
+            prvek.style.backgroundColor === "transparent" ||
+            prvek.style.backgroundColor === "rgba(0, 0, 0, 0)"
+          ) {
+            prvek.style.removeProperty("background-color");
+          }
+
+          if (!prvek.getAttribute("style")?.trim()) {
+            prvek.removeAttribute("style");
+          }
+
+          necoOpraveno = true;
+        }
       }
 
       prvek = prvek.parentElement;
-    }
-
-    /*
-     * Chrome/WebView 152 může po spojení dvou root bloků nechat kurzor
-     * na konci PŘEDCHOZÍHO textového uzlu a nový anonymní SPAN vložit
-     * až jako jeho následujícího sourozence. V takovém stavu jej výše
-     * uvedená cesta přes rodiče kurzoru nemůže najít.
-     *
-     * Vedle kurzoru proto kontrolujeme jen velmi úzký WebView podpis:
-     * SPAN bez data-velikost-pisma, který má současně inline font-size
-     * a font-family: inherit. Tím nesaháme na starší záměrné font-size
-     * spany ani na běžné B/I/U/barvy.
-     */
-    const kotva = vyber.anchorNode;
-
-    if (
-      kotva?.nodeType === Node.TEXT_NODE &&
-      modalRichText.contains(kotva)
-    ) {
-      const delkaTextu = kotva.textContent?.length || 0;
-      const kandidati = [];
-
-      /*
-       * Po spojení bloků je v Chrome/WebView 152 běžná struktura:
-       *   #modalRichText > DIV > #text + SPAN
-       *
-       * Proto nesmí být textový uzel omezen jen na přímého potomka
-       * editoru. Stačí, že skutečně leží uvnitř editoru. Sousední uzel
-       * se pak kontroluje v jeho reálném rodiči (typicky právě DIV).
-       */
-      if (vyber.anchorOffset === delkaTextu) {
-        kandidati.push(kotva.nextSibling);
-      }
-
-      if (vyber.anchorOffset === 0) {
-        kandidati.push(kotva.previousSibling);
-      }
-
-      kandidati.forEach(kandidat => {
-        if (
-          kandidat instanceof HTMLElement &&
-          kandidat.tagName === "SPAN" &&
-          modalRichText.contains(kandidat) &&
-          !kandidat.hasAttribute("data-velikost-pisma") &&
-          Boolean(kandidat.style.fontSize) &&
-          kandidat.style.fontFamily === "inherit" &&
-          vycistiPodezrelySpan(kandidat)
-        ) {
-          necoOpraveno = true;
-        }
-      });
     }
 
     return necoOpraveno;
@@ -5057,6 +4903,7 @@
     vlozObrazek: otevriVyberZdrojeObrazku,
     vlozObrazekZGalerie: otevriGaleriiObrazku,
     vyfotObrazek: otevriFotoaparatObrazku,
+    otevriNahledObrazku,
     otevriOdkaz: otevriLinkModal
   };
 })();

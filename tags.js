@@ -1533,6 +1533,7 @@ const POHYB_PRED_LONG_PRESS_STITKU = 16;
 const POHYB_PO_PREHOZENI_STITKU = 10;
 const OKRAJ_AUTO_SCROLL_STITKU = 72;
 const MAX_AUTO_SCROLL_STITKU = 16;
+const ODSAZENI_GHOSTU_NAD_PRSTEM = 18;
 
 /*
  * Legacy štítky mohou existovat jen v poznámkách a nemít ještě vlastní
@@ -1991,8 +1992,18 @@ function pohniGhostemHornihoStitku(clientX, clientY) {
   stav.posledniY = clientY;
 
   if (stav.ghost) {
-    stav.ghost.style.left = `${Math.round(clientX - stav.offsetX)}px`;
-    stav.ghost.style.top = `${Math.round(clientY - stav.offsetY)}px`;
+    const sirkaGhostu = Number(stav.ghostWidth) || stav.ghost.offsetWidth || 0;
+    const vyskaGhostu = Number(stav.ghostHeight) || stav.ghost.offsetHeight || 0;
+
+    /*
+     * Drag preview držíme NAD prstem, ne přímo pod ním.
+     * Uživatel tak po celou dobu vidí název/barvu štítku i cílové místo.
+     * Horizontálně je ghost vystředěný na prst, svisle končí kousek nad ním.
+     */
+    stav.ghost.style.left = `${Math.round(clientX - sirkaGhostu / 2)}px`;
+    stav.ghost.style.top = `${Math.round(
+      clientY - vyskaGhostu - ODSAZENI_GHOSTU_NAD_PRSTEM
+    )}px`;
   }
 
   prehodHorniStitekPodleX(stav.button, clientX);
@@ -2030,8 +2041,10 @@ function zahajPresunHornihoStitku(
   ghost.classList.add("lubaTagDragGhost");
   ghost.style.width = `${Math.round(rect.width)}px`;
   ghost.style.height = `${Math.round(rect.height)}px`;
-  ghost.style.left = `${Math.round(rect.left)}px`;
-  ghost.style.top = `${Math.round(rect.top)}px`;
+  ghost.style.left = `${Math.round(clientX - rect.width / 2)}px`;
+  ghost.style.top = `${Math.round(
+    clientY - rect.height - ODSAZENI_GHOSTU_NAD_PRSTEM
+  )}px`;
 
   document.body.append(ghost);
   button.classList.add("lubaTagDragSource");
@@ -2042,8 +2055,8 @@ function zahajPresunHornihoStitku(
     ghost,
     vstup,
     id,
-    offsetX: clientX - rect.left,
-    offsetY: clientY - rect.top,
+    ghostWidth: rect.width,
+    ghostHeight: rect.height,
     posledniX: clientX,
     posledniY: clientY,
     lockX: null,

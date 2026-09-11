@@ -104,6 +104,15 @@
   let v2AutoScrollRaf = null;
   let potlacKlikV2ObrazkuDo = 0;
 
+  /*
+   * V2 – 2× tap na obrázek používá STEJNÝ fullscreen náhled jako
+   * produkční Legacy editor. Nevytvářet druhý image viewer: zoom, zavření
+   * a safe-area chování mají zůstat na jednom místě v editorMedia.js.
+   */
+  const DVOJTAP_V2_OBRAZKU_MS = 430;
+  const DVOJTAP_V2_OBRAZKU_VZDALENOST = 42;
+  let posledniTapV2Obrazku = null;
+
   /* ==========================================
      V2.15 – KOMPLETNÍ MOVE SYSTÉM SEZNAMŮ
 
@@ -5504,16 +5513,56 @@
       if (smazat) {
         event.preventDefault();
         event.stopPropagation();
+        posledniTapV2Obrazku = null;
         smazObrazekZModelu(smazat.dataset.v2ImageRemove);
         return;
       }
 
       const figure = event.target.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
-      if (!figure || !editor.contains(figure)) return;
+      if (!figure || !editor.contains(figure)) {
+        posledniTapV2Obrazku = null;
+        return;
+      }
+
+      const obrazek = event.target.closest?.(".ln-v2-obrazek img");
+
+      if (obrazek) {
+        const ted = performance.now();
+        const id = figure.dataset.lnV2Obrazek || "";
+        const predchozi = posledniTapV2Obrazku;
+        const jeDvojtap = Boolean(
+          predchozi &&
+          predchozi.id === id &&
+          ted - predchozi.cas <= DVOJTAP_V2_OBRAZKU_MS &&
+          Math.hypot(
+            event.clientX - predchozi.x,
+            event.clientY - predchozi.y
+          ) <= DVOJTAP_V2_OBRAZKU_VZDALENOST
+        );
+
+        if (jeDvojtap) {
+          event.preventDefault();
+          event.stopPropagation();
+          posledniTapV2Obrazku = null;
+          vybranyObrazekId = "";
+          window.LubaNoteEditorMedia?.otevriNahledObrazku?.(obrazek);
+          return;
+        }
+
+        posledniTapV2Obrazku = {
+          id,
+          cas: ted,
+          x: event.clientX,
+          y: event.clientY
+        };
+      } else {
+        posledniTapV2Obrazku = null;
+      }
+
       event.preventDefault();
       vybranyObrazekId = figure.dataset.lnV2Obrazek || "";
       figure.focus({ preventScroll: true });
-      nastavStav("Obrázek V2 vybrán · ⚙ nastavení · ✕ odstraní modelový blok");
+      nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
     });
 
     poslouchej(editor, "beforeinput", zpracujBeforeInput);
