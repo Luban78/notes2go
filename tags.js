@@ -2268,38 +2268,47 @@ document.addEventListener(
   (event) => {
     aktivniPointeryHornichStitku.delete(event.pointerId);
 
-    const stav = desktopStitekPointer;
-
-    if (
-      !stav ||
-      event.pointerType === "touch" ||
-      event.pointerId !== stav.pointerId
-    ) {
+    if (event.pointerType === "touch") {
       return;
     }
 
-    stav.x = event.clientX;
-    stav.y = event.clientY;
-    zrusDesktopTimerStitku();
+    const stav = desktopStitekPointer;
+    const aktivniDrag = presunHornihoStitku;
 
-    const aktivni =
-      presunHornihoStitku?.button === stav.button &&
-      presunHornihoStitku?.id === stav.pointerId;
-
-    if (aktivni) {
+    /*
+     * PC – KRITICKÝ FAILSAFE 422
+     * ========================================
+     * Debug Hub prokázal, že Chrome pointerup normálně doručí, ale
+     * pomocný desktopStitekPointer může být v tu chvíli už ztracený,
+     * zatímco skutečný drag (presunHornihoStitku + ghost) stále žije.
+     *
+     * Proto ukončení dragu NESMÍ záviset na existenci pomocného stavu.
+     * Zdroj pravdy pro aktivní drag je presunHornihoStitku.
+     */
+    if (
+      aktivniDrag &&
+      aktivniDrag.vstup !== "touch" &&
+      aktivniDrag.id === event.pointerId
+    ) {
       event.preventDefault();
       event.stopPropagation();
-      pohniGhostemHornihoStitku(stav.x, stav.y);
+      pohniGhostemHornihoStitku(event.clientX, event.clientY);
       void dokoncitPresunHornihoStitku();
     }
 
-    try {
-      if (stav.button?.hasPointerCapture?.(stav.pointerId)) {
-        stav.button.releasePointerCapture?.(stav.pointerId);
-      }
-    } catch (_) {}
+    if (stav && event.pointerId === stav.pointerId) {
+      stav.x = event.clientX;
+      stav.y = event.clientY;
+      zrusDesktopTimerStitku();
 
-    vycistiDesktopPointerStitku();
+      try {
+        if (stav.button?.hasPointerCapture?.(stav.pointerId)) {
+          stav.button.releasePointerCapture?.(stav.pointerId);
+        }
+      } catch (_) {}
+
+      vycistiDesktopPointerStitku();
+    }
   },
   { capture: true, passive: false }
 );
@@ -2318,25 +2327,21 @@ document.addEventListener(
     }
 
     const stav = desktopStitekPointer;
-    if (!stav) {
-      return;
-    }
+    const aktivniDrag = presunHornihoStitku;
 
-    zrusDesktopTimerStitku();
-    aktivniPointeryHornichStitku.delete(stav.pointerId);
-
-    const aktivni =
-      presunHornihoStitku?.button === stav.button &&
-      presunHornihoStitku?.id === stav.pointerId;
-
-    if (aktivni) {
+    /* Druhá nezávislá pojistka pro browsery, kde se pointer stav rozpojí. */
+    if (aktivniDrag && aktivniDrag.vstup !== "touch") {
       event.preventDefault();
       event.stopPropagation();
       pohniGhostemHornihoStitku(event.clientX, event.clientY);
       void dokoncitPresunHornihoStitku();
     }
 
-    vycistiDesktopPointerStitku();
+    if (stav) {
+      zrusDesktopTimerStitku();
+      aktivniPointeryHornichStitku.delete(stav.pointerId);
+      vycistiDesktopPointerStitku();
+    }
   },
   { capture: true, passive: false }
 );
