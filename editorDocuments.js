@@ -909,6 +909,7 @@
       modal,
       info: modal.querySelector(".pdfLubaSaveInfo"),
       input: modal.querySelector(".pdfLubaFileName"),
+      saveMode: modal.querySelector(".pdfLubaSaveMode"),
       metody: [...modal.querySelectorAll(".pdfLubaSaveModeRow")],
       cancel: modal.querySelector(".pdfLubaCancel"),
       confirm: modal.querySelector(".pdfLubaConfirm"),
@@ -972,7 +973,9 @@
 
   function otevriPdfUlozeniModal({
     nazevSouboru = "",
-    poPotvrzeni = null
+    poPotvrzeni = null,
+    povolitVolbuMista = true,
+    infoText = ""
   } = {}) {
     const vychoziNazev = nazevSouboru ||
       pdfViewerStav?.nazevSouboru ||
@@ -992,14 +995,25 @@
     }
     modalRichText?.blur?.();
 
+    const muzeVybiratMisto =
+      jeNativniAndroid() && povolitVolbuMista === true;
+
     nastavPdfZpusobUlozeni(
       prvky,
-      jeNativniAndroid() ? nastaveni.zpusobUlozeni : "stazene"
+      muzeVybiratMisto ? nastaveni.zpusobUlozeni : "stazene"
     );
 
+    if (prvky.saveMode) {
+      prvky.saveMode.hidden = !muzeVybiratMisto;
+    }
+
     prvky.metody.forEach((tlacitko) => {
-      tlacitko.hidden = !jeNativniAndroid();
+      tlacitko.hidden = !muzeVybiratMisto;
     });
+
+    if (infoText) {
+      prvky.info.textContent = infoText;
+    }
 
     pdfUlozeniAkce = typeof poPotvrzeni === "function"
       ? poPotvrzeni
@@ -1668,25 +1682,15 @@
       if (jeNativniAndroid() && plugin?.ulozPdf) {
         otevriPdfUlozeniModal({
           nazevSouboru,
-          poPotvrzeni: async (nazev, zpusobUlozeni) => {
+          povolitVolbuMista: false,
+          infoText: "Po potvrzení Android otevře podporované Uložit jako PDF.",
+          poPotvrzeni: async (nazev) => {
             try {
-              const vysledek = await plugin.ulozPdf({
+              await plugin.ulozPdf({
                 html,
                 nazevSouboru: nazev,
-                zpusobUlozeni
+                zpusobUlozeni: "system"
               });
-
-              if (
-                vysledek?.saved === true &&
-                typeof zobrazZpravuAplikace === "function"
-              ) {
-                zobrazZpravuAplikace(
-                  "PDF",
-                  zpusobUlozeni === "vybrat"
-                    ? "PDF bylo uloženo do vybraného místa."
-                    : "PDF bylo uloženo do Stažené/LubaNote."
-                );
-              }
             } catch (error) {
               console.error("PDF se nepodařilo uložit:", error);
               zobrazChybu(

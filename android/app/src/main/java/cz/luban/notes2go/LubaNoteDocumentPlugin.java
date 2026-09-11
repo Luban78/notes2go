@@ -751,9 +751,12 @@ public class LubaNoteDocumentPlugin extends Plugin {
         "LubaNote-poznamka.pdf"
       )
     );
-    pdfVybratMisto = "vybrat".equalsIgnoreCase(
-      call.getString("zpusobUlozeni", "stazene")
-    );
+    /*
+     * Stabilní Android cesta: WebView PDF generuje přes svůj
+     * PrintDocumentAdapter. Přímé WebView.draw() do PdfDocument se
+     * ukázalo jako nespolehlivé (prázdné stránky / pád u obrázků).
+     */
+    pdfVybratMisto = false;
     pdfTiskSpusten = false;
 
     Activity aktivita = getActivity();
@@ -852,19 +855,10 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
-    if (pdfVybratMisto) {
-      pripravPdfPredVyberemMista(call);
-      return;
-    }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      ulozPdfBezSystemovehoTisku(call);
-      return;
-    }
-
     /*
-     * Fallback pouze pro Android 9 a starší. Na Androidu 10+
-     * už se PrintManager UI vůbec neotevírá.
+     * WebView.createPrintDocumentAdapter() je podporovaná Android cesta
+     * pro převod HTML/WebView obsahu do PDF. Systémové PDF UI je zde
+     * záměrné: přímý renderer z patchů 404–407 nepoužíváme.
      */
     try {
       PrintManager spravceTisku =
@@ -894,7 +888,8 @@ public class LubaNoteDocumentPlugin extends Plugin {
       );
 
       JSObject odpoved = new JSObject();
-      odpoved.put("saved", true);
+      /* Tiskový dialog byl spuštěn, ale uživatel ještě nemusí uložit. */
+      odpoved.put("saved", false);
       odpoved.put("started", true);
       call.resolve(odpoved);
 

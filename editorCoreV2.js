@@ -4487,8 +4487,16 @@
 
   function importujInlineUzly(rodic, zakladniFormat, vystup, nepodporovane) {
     const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a"]);
+    const uzly = Array.from(rodic?.childNodes || []);
 
-    Array.from(rodic?.childNodes || []).forEach((uzel) => {
+    const pridejLegacyNovyRadek = () => {
+      const posledni = vystup[vystup.length - 1];
+      if (!posledni || !String(posledni.text || "").endsWith("\n")) {
+        vystup.push(vytvorSegment("\n", zakladniFormat));
+      }
+    };
+
+    uzly.forEach((uzel, index) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
         if (uzel.nodeValue) {
           const format = kopieFormatu(zakladniFormat);
@@ -4506,6 +4514,39 @@
 
       if (tag === "br") {
         vystup.push(vytvorSegment("\n", zakladniFormat));
+        return;
+      }
+
+      /*
+       * Legacy contenteditable někdy uložil nový řádek jako vnořený
+       * <div> uvnitř jiného textového bloku. Pro V2 to není nový typ
+       * obsahu, jen hranice řádku. Jednoduchý vnořený DIV proto bezpečně
+       * zploštíme na newline + jeho inline obsah. Pokud uvnitř leží něco
+       * složitějšího (seznam, obrázek...), rekurze to dál označí jako
+       * nepodporované a ochranný fallback zůstane zachovaný.
+       */
+      if (tag === "div") {
+        if (vystup.length) {
+          pridejLegacyNovyRadek();
+        }
+
+        importujInlineUzly(
+          uzel,
+          formatZInlineElementu(uzel, zakladniFormat),
+          vystup,
+          nepodporovane
+        );
+
+        const maDalsiObsah = uzly.slice(index + 1).some((dalsi) => {
+          if (dalsi.nodeType === Node.TEXT_NODE) {
+            return String(dalsi.nodeValue || "").length > 0;
+          }
+          return dalsi.nodeType === Node.ELEMENT_NODE;
+        });
+
+        if (maDalsiObsah) {
+          pridejLegacyNovyRadek();
+        }
         return;
       }
 
