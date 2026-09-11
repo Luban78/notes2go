@@ -1875,8 +1875,46 @@ function ziskejHorniScrollStitku() {
   return tagFilterButtons?.closest(".categoryTabs") || null;
 }
 
-function ziskejPoradiHornichStitku() {
+function ziskejPoradiHornichStitku(stavPresunu = null) {
   pripravIdVsemHornimStitkum();
+
+  /*
+   * PC používá od 425 stejný bezpečný princip jako drag karet:
+   * zdrojové tlačítko během přesunu NIKDY fyzicky nepřehazujeme v DOM.
+   * V seznamu se pohybuje jen inertní placeholder. Při čtení pořadí proto
+   * placeholder zastupuje id právě taženého štítku a původní zdroj přeskočíme.
+   *
+   * Tím se vyhneme Chromium NotFoundError z insertBefore(), který vznikal,
+   * když browser při přesunu fokusovaného BUTTONu změnil DOM uprostřed operace.
+   */
+  if (
+    stavPresunu?.placeholder?.parentElement === tagFilterButtons &&
+    stavPresunu?.button
+  ) {
+    const zdrojovyZaznam = najdiZaznamHornihoStitku(stavPresunu.button);
+    const zdrojoveId = zdrojovyZaznam?.id
+      ? String(zdrojovyZaznam.id)
+      : "";
+
+    return Array.from(tagFilterButtons.children)
+      .map((prvek) => {
+        if (prvek === stavPresunu.button) {
+          return "";
+        }
+
+        if (prvek === stavPresunu.placeholder) {
+          return zdrojoveId;
+        }
+
+        if (!prvek.matches?.(".categoryTab[data-tag-filter]")) {
+          return "";
+        }
+
+        const zaznam = najdiZaznamHornihoStitku(prvek);
+        return zaznam?.id ? String(zaznam.id) : "";
+      })
+      .filter(Boolean);
+  }
 
   return Array.from(
     tagFilterButtons.querySelectorAll(
@@ -1916,29 +1954,42 @@ function prehodHorniStitekPodleX(button, clientX) {
     return;
   }
 
+  /*
+   * Desktop: přesouvá se pouze placeholder, nikdy fokusovaný BUTTON.
+   * Touch ponecháváme beze změny, protože na mobilu byl drag potvrzen funkční.
+   */
+  const presouvanyPrvek =
+    stav.placeholder?.parentElement === tagFilterButtons
+      ? stav.placeholder
+      : button;
+
   const ostatni = Array.from(
     tagFilterButtons.querySelectorAll(
       ".categoryTab[data-tag-filter]"
     )
-  ).filter((jiny) => jiny !== button);
+  ).filter(
+    (jiny) =>
+      jiny !== button &&
+      jiny.parentElement === tagFilterButtons
+  );
 
   const predKtery = ostatni.find((jiny) => {
     const rect = jiny.getBoundingClientRect();
     return clientX < rect.left + rect.width / 2;
   });
 
-  const puvodniPred = button.nextElementSibling;
+  const puvodniPred = presouvanyPrvek.nextElementSibling;
 
-  if (predKtery) {
-    tagFilterButtons.insertBefore(button, predKtery);
+  if (predKtery?.parentElement === tagFilterButtons) {
+    tagFilterButtons.insertBefore(presouvanyPrvek, predKtery);
   } else {
     const novy = tagFilterButtons.querySelector(
-      ".newTagFilterButton"
+      ":scope > .newTagFilterButton"
     );
-    tagFilterButtons.insertBefore(button, novy || null);
+    tagFilterButtons.insertBefore(presouvanyPrvek, novy || null);
   }
 
-  if (button.nextElementSibling !== puvodniPred) {
+  if (presouvanyPrvek.nextElementSibling !== puvodniPred) {
     stav.zmeneno = true;
     stav.lockX = clientX;
   }
@@ -2050,6 +2101,8 @@ function zahajPresunHornihoStitku(
 
   const rect = button.getBoundingClientRect();
   const ghost = button.cloneNode(true);
+  const jeDesktop = vstup !== "touch";
+  let placeholder = null;
 
   ghost.classList.remove("active");
   ghost.classList.add("lubaTagDragGhost");
@@ -2060,6 +2113,61 @@ function zahajPresunHornihoStitku(
     clientY - rect.height - ODSAZENI_GHOSTU_NAD_PRSTEM
   )}px`;
 
+  /*
+   * PC – FIX 425 / STEJNÝ PRINCIP JAKO KARTY
+   * ==========================================
+   * Původní tlačítko zůstává po celou dobu připojené na stejném místě v DOM.
+   * Z flow ho pouze vizuálně vyjmeme a jeho slot zastoupí inertní placeholder.
+   * Při dragování se přehazuje VÝHRADNĚ placeholder.
+   *
+   * Důvod: konzole prokázala NotFoundError přímo na insertBefore(button,...).
+   * Přesun fokusovaného BUTTONu může v Chromium během interního blur kroku
+   * změnit DOM a insertBefore pak pracuje s uzlem, který už není tam, kde čeká.
+   * Card drag tento problém nemá právě proto, že přesouvá placeholder.
+   */
+  if (jeDesktop && button.parentElement === tagFilterButtons) {
+    placeholder = button.cloneNode(false);
+    placeholder.removeAttribute("id");
+    placeholder.removeAttribute("data-tag-filter");
+    placeholder.removeAttribute("data-tag-id");
+    placeholder.removeAttribute("data-tag-color");
+    placeholder.removeAttribute("data-tag-drag-ready");
+    placeholder.classList.remove(
+      "active",
+      "lubaTagDragSource"
+    );
+    placeholder.classList.add("lubaTagDragPlaceholder");
+    placeholder.textContent = "";
+    placeholder.setAttribute("aria-hidden", "true");
+    Object.assign(placeholder.style, {
+      width: `${Math.round(rect.width)}px`,
+      minWidth: `${Math.round(rect.width)}px`,
+      maxWidth: `${Math.round(rect.width)}px`,
+      height: `${Math.round(rect.height)}px`,
+      visibility: "hidden",
+      pointerEvents: "none",
+      flex: "0 0 auto"
+    });
+
+    tagFilterButtons.insertBefore(placeholder, button);
+
+    /*
+     * Originál neskrýváme přes display:none/visibility:hidden, aby browser
+     * nemusel měnit focus. Pouze ho vyjmeme z layoutu a zprůhledníme.
+     */
+    Object.assign(button.style, {
+      position: "fixed",
+      left: `${Math.round(rect.left)}px`,
+      top: `${Math.round(rect.top)}px`,
+      width: `${Math.round(rect.width)}px`,
+      height: `${Math.round(rect.height)}px`,
+      margin: "0",
+      opacity: "0",
+      pointerEvents: "none",
+      zIndex: "-1"
+    });
+  }
+
   document.body.append(ghost);
   button.classList.add("lubaTagDragSource");
   document.body.classList.add("lubaTagDragMode");
@@ -2067,6 +2175,7 @@ function zahajPresunHornihoStitku(
   presunHornihoStitku = {
     button,
     ghost,
+    placeholder,
     vstup,
     id,
     ghostWidth: rect.width,
@@ -2099,6 +2208,14 @@ async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
     return;
   }
 
+  /*
+   * U desktop placeholderu musíme pořadí přečíst ještě před úklidem DOM.
+   * Placeholder v tomto okamžiku reprezentuje tažený štítek na cílovém místě.
+   */
+  const novePoradi = zrusit
+    ? null
+    : ziskejPoradiHornichStitku(stav);
+
   zastavAutoScrollHornichStitku();
   presunHornihoStitku = null;
   document.body.classList.remove("lubaTagDragMode");
@@ -2106,7 +2223,8 @@ async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
   stav.button?.classList.remove("lubaTagDragSource");
   stav.ghost?.remove();
   zapisTagDragDiag(
-    `CLEANUP id=${stav.id ?? "NONE"} ghostConnected=${Boolean(stav.ghost?.isConnected)}`
+    `CLEANUP id=${stav.id ?? "NONE"} ghostConnected=${Boolean(stav.ghost?.isConnected)} ` +
+    `placeholder=${Boolean(stav.placeholder)}`
   );
 
   /* Long-press/drop nesmí po puštění aktivovat filtr. */
@@ -2117,16 +2235,29 @@ async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
     return;
   }
 
-  const novePoradi = ziskejPoradiHornichStitku();
-
   if (
     !stav.zmeneno ||
+    !Array.isArray(novePoradi) ||
     novePoradi.join("|") === stav.puvodniPoradi.join("|")
   ) {
+    /* Desktop zdroj/placeholder obnovíme čistým renderem i bez změny pořadí. */
+    if (stav.placeholder) {
+      renderTagFilters();
+    }
     return;
   }
 
-  await ulozPoradiStitku(novePoradi);
+  try {
+    await ulozPoradiStitku(novePoradi);
+  } finally {
+    /*
+     * ulozPoradiStitku() běžně render provede samo. Tohle je pojistka pro
+     * předčasný return/neočekávanou výjimku, aby nikdy nezůstal skrytý zdroj.
+     */
+    if (stav.placeholder?.isConnected || stav.button?.classList.contains("lubaTagDragSource")) {
+      renderTagFilters();
+    }
+  }
 }
 
 
@@ -2236,18 +2367,14 @@ function pripravDesktopDragHornihoStitku(button, event) {
 
     if (aktivovano) {
       /*
-       * PC – KRITICKÝ FIX 424
-       * ======================
-       * Štítky při dragování fyzicky přesouváme v DOM pomocí insertBefore().
-       * Na desktopu proto NESMÍME držet pointer capture na samotném tlačítku:
-       * Chrome při prvním přerovnání zachyceného elementu vyvolá pointercancel.
-       * To přesně ukázal TAGDRAG report 423: START -> MOVE -> cancel=true.
-       *
-       * Karty pointer capture používat mohou, protože jejich zdrojová karta se
-       * během dragu nepřesouvá – přesouvá se placeholder. U štítků už máme
-       * globální document pointermove/up/cancel, takže capture nepotřebujeme.
+       * PC – FIX 425
+       * ============
+       * Desktop štítků teď používá stejný bezpečný princip jako karty:
+       * originál zůstává připojený, pořadí mění pouze placeholder.
+       * Globální document pointer lifecycle už stačí, takže pointer capture
+       * záměrně nepoužíváme ani po této změně.
        */
-      zapisTagDragDiag(`NO_CAPTURE id=${stav.pointerId} reason=source-dom-reorder`);
+      zapisTagDragDiag(`NO_CAPTURE id=${stav.pointerId} reason=placeholder-drag`);
     }
   }, CAS_LONG_PRESS_STITKU);
 }
