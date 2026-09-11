@@ -101,6 +101,69 @@
     return Math.max(280, pdfViewerPrvky.native.clientWidth - padding);
   }
 
+  function aktualizujPdfVycentrovani() {
+    if (!pdfViewerPrvky?.native || !pdfViewerPrvky?.image) {
+      return;
+    }
+
+    const styl = getComputedStyle(pdfViewerPrvky.native);
+    const paddingX =
+      (parseFloat(styl.paddingLeft) || 0) +
+      (parseFloat(styl.paddingRight) || 0);
+    const paddingY =
+      (parseFloat(styl.paddingTop) || 0) +
+      (parseFloat(styl.paddingBottom) || 0);
+
+    const dostupnaSirka = Math.max(
+      0,
+      pdfViewerPrvky.native.clientWidth - paddingX
+    );
+    const dostupnaVyska = Math.max(
+      0,
+      pdfViewerPrvky.native.clientHeight - paddingY
+    );
+    const sirkaStranky = Math.round(pdfViewerPrvky.image.offsetWidth || 0);
+    const vyskaStranky = Math.round(pdfViewerPrvky.image.offsetHeight || 0);
+
+    const centrovatVodorovne =
+      sirkaStranky > 0 && sirkaStranky <= dostupnaSirka;
+    const centrovatSvisle =
+      vyskaStranky > 0 && vyskaStranky <= dostupnaVyska;
+
+    pdfViewerPrvky.native.classList.toggle(
+      'is-center-x',
+      centrovatVodorovne
+    );
+    pdfViewerPrvky.native.classList.toggle(
+      'is-center-y',
+      centrovatSvisle
+    );
+  }
+
+  function pockejNaNacteniPdfObrazku() {
+    if (!pdfViewerPrvky?.image) {
+      return Promise.resolve();
+    }
+
+    if (
+      pdfViewerPrvky.image.complete &&
+      pdfViewerPrvky.image.naturalWidth > 0
+    ) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const dokoncit = () => {
+        pdfViewerPrvky.image.removeEventListener('load', dokoncit);
+        pdfViewerPrvky.image.removeEventListener('error', dokoncit);
+        resolve();
+      };
+
+      pdfViewerPrvky.image.addEventListener('load', dokoncit, { once: true });
+      pdfViewerPrvky.image.addEventListener('error', dokoncit, { once: true });
+    });
+  }
+
   function zajistiPdfViewer() {
     if (pdfViewerPrvky) {
       return pdfViewerPrvky;
@@ -509,6 +572,9 @@
     pdfViewerPrvky.image.style.width =
       `${Math.round(viewportWidth * pdfViewerStav.zoom)}px`;
 
+    await pockejNaNacteniPdfObrazku();
+    aktualizujPdfVycentrovani();
+
     pdfViewerPrvky.loading.hidden = true;
     pdfViewerPrvky.image.classList.remove("is-loading");
 
@@ -786,7 +852,11 @@
     pdfViewerPrvky.image.removeAttribute("src");
     pdfViewerPrvky.image.style.removeProperty("width");
     pdfViewerPrvky.image.classList.remove("is-loading");
-    pdfViewerPrvky.native.classList.remove("is-pinching");
+    pdfViewerPrvky.native.classList.remove(
+      "is-pinching",
+      "is-center-x",
+      "is-center-y"
+    );
     pdfViewerPrvky.frame.src = "about:blank";
     document.body.classList.remove("pdfViewerOpen");
 
