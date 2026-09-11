@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.13
+   FÁZE V2.14b
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -52,14 +52,14 @@
     "tlacitkoZnovu",
     "tlacitkoTucne",
     "tlacitkoKurziva",
-    "tlacitkoPodtrzeni"
+    "tlacitkoPodtrzeni",
+    "tlacitkoBullet"
   ]);
 
   const nepodporovaneAkce = new Set([
     "tlacitkoVlozitObrazek",
     "tlacitkoOtevritDokument",
     "tlacitkoUlozitDokument",
-    "tlacitkoBullet",
     "addTodoButton",
     "planSelectionButton",
     "shareNoteButton",
@@ -367,6 +367,34 @@
       button.setAttribute("aria-pressed", hodnota === "mix" ? "mixed" : (hodnota === "on" ? "true" : "false"));
     });
 
+    const tlacitkoBullet = document.getElementById("tlacitkoBullet");
+    if (tlacitkoBullet) {
+      const seznam = stav.seznam || (stav.bullet === "on" ? "bullet" : stav.bullet);
+      const aktivniSeznam = seznam === "bullet" || seznam === "ordered";
+      tlacitkoBullet.classList.toggle("active", aktivniSeznam);
+      tlacitkoBullet.classList.toggle("lnV2Mixed", seznam === "mix");
+      tlacitkoBullet.classList.toggle("lnV2ListBullet", seznam === "bullet");
+      tlacitkoBullet.classList.toggle("lnV2ListOrdered", seznam === "ordered");
+      tlacitkoBullet.dataset.lnV2ListType = seznam;
+      tlacitkoBullet.setAttribute(
+        "aria-pressed",
+        seznam === "mix" ? "mixed" : (aktivniSeznam ? "true" : "false")
+      );
+      const popisek = seznam === "ordered"
+        ? "Číslovaný seznam"
+        : (seznam === "bullet" ? "Odrážkový seznam" : "Seznam");
+      tlacitkoBullet.setAttribute("aria-label", popisek);
+      tlacitkoBullet.title = popisek;
+    }
+
+    document.querySelectorAll("#editorPanelSeznam [data-ln-v2-seznam]").forEach((button) => {
+      const seznam = stav.seznam || "off";
+      const aktivniVolba = seznam !== "mix" && button.dataset.lnV2Seznam === seznam;
+      button.classList.toggle("active", aktivniVolba);
+      button.classList.toggle("lnV2Mixed", seznam === "mix");
+      button.setAttribute("aria-pressed", seznam === "mix" ? "mixed" : (aktivniVolba ? "true" : "false"));
+    });
+
     const stylTextu = stav.stylTextu || "div";
     const tlacitkoNadpis = document.getElementById("tlacitkoNadpis");
     if (tlacitkoNadpis) {
@@ -406,8 +434,39 @@
     });
   }
 
+  function pozicujV2PanelSeznamu() {
+    const panel = document.getElementById("editorPanelSeznam");
+    const spoustec = document.getElementById("tlacitkoBullet");
+    const horniLista = spoustec?.closest(".editorTopBar");
+    if (!panel || !spoustec || !horniLista) return;
+
+    requestAnimationFrame(() => {
+      const listaRect = horniLista.getBoundingClientRect();
+      const spoustecRect = spoustec.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const okraj = 6;
+      const stred = spoustecRect.left - listaRect.left + spoustecRect.width / 2;
+      let vlevo = stred - panelRect.width / 2;
+      vlevo = Math.max(okraj, Math.min(vlevo, listaRect.width - panelRect.width - okraj));
+      const sipkaX = Math.max(16, Math.min(stred - vlevo, panelRect.width - 16));
+      panel.style.left = `${vlevo}px`;
+      panel.style.setProperty("--panel-sipka-x", `${sipkaX}px`);
+    });
+  }
+
+  function otevriV2SeznamPanel() {
+    const api = core();
+    if (!api) return;
+    api.zachytAktualniVyber?.();
+    prepniPanel("editorPanelSeznam");
+    if (!document.getElementById("editorPanelSeznam")?.hidden) {
+      pozicujV2PanelSeznamu();
+    }
+    obnovToolbar();
+  }
+
   function zavriPanelyFormatu() {
-    ["editorPanelVelikost", "textColorPanel", "textColorPalette", "editorPanelStyl", "editorPanelZarovnani"].forEach((id) => {
+    ["editorPanelVelikost", "textColorPanel", "textColorPalette", "editorPanelStyl", "editorPanelZarovnani", "editorPanelSeznam"].forEach((id) => {
       const panel = document.getElementById(id);
       if (panel) panel.hidden = true;
     });
@@ -431,6 +490,22 @@
       button.dataset.lnV2ZakladVelikost = "1";
       button.textContent = "Základ";
       panelVelikost.prepend(button);
+    }
+
+    if (!document.getElementById("editorPanelSeznam")) {
+      const soused = document.getElementById("editorPanelZarovnani");
+      const panel = document.createElement("div");
+      panel.id = "editorPanelSeznam";
+      panel.className = "editorToolbarPanel editorToolbarPanelSeznam";
+      panel.hidden = true;
+      panel.setAttribute("role", "group");
+      panel.setAttribute("aria-label", "Typ seznamu");
+      panel.innerHTML = `
+        <button type="button" class="editorPanelVolba editorPanelSeznamVolba" data-ln-v2-seznam="bullet" aria-label="Odrážkový seznam" title="Odrážkový seznam">•</button>
+        <button type="button" class="editorPanelVolba editorPanelSeznamVolba" data-ln-v2-seznam="ordered" aria-label="Číslovaný seznam" title="Číslovaný seznam">1.</button>
+        <button type="button" class="editorPanelVolba editorPanelSeznamVolba editorPanelSeznamText" data-ln-v2-seznam="off" aria-label="Bez seznamu" title="Bez seznamu">Text</button>
+      `;
+      soused?.parentNode?.insertBefore(panel, soused.nextSibling);
     }
 
     const panelBarva = document.getElementById("textColorPanel");
@@ -1076,6 +1151,15 @@
       core()?.zachytAktualniVyber?.();
       zavriPanelyFormatu();
 
+      /* V2.14a zatím drží obrázek jako samostatný dokumentový blok.
+         Obrázek uvnitř jedné položky seznamu přijde jako samostatná další fáze;
+         do té doby raději akci zablokujeme, než abychom rozbili strukturu listu. */
+      const seznamStav = core()?.ziskejStavFormatu?.()?.seznam || "off";
+      if (seznamStav !== "off") {
+        zobrazToast("V2 TEST: obrázek uvnitř seznamu zatím není připojený", true);
+        return;
+      }
+
       if (typeof window.vlozObrazekDoPoznamky !== "function") {
         zobrazToast("V2 TEST: výběr obrázku není dostupný", true);
         return;
@@ -1093,6 +1177,23 @@
       event.stopImmediatePropagation();
       zavriPanelyFormatu();
       otevriV2OdkazModal();
+      return;
+    }
+
+    if (id === "tlacitkoBullet") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      otevriV2SeznamPanel();
+      return;
+    }
+
+    if (cil.matches("#editorPanelSeznam [data-ln-v2-seznam]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.nastavSeznam?.(cil.dataset.lnV2Seznam || "off");
+      const panel = document.getElementById("editorPanelSeznam");
+      if (panel) panel.hidden = true;
+      obnovToolbar();
       return;
     }
 
@@ -1208,7 +1309,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.13-IMAGE-CROP-385",
+    verze: "V2.14b-LISTS-388",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,

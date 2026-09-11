@@ -1,4 +1,4 @@
-/* LubaNote Editor Core V2.10 – izolovaný LAB/Bridge. Všechny selektory mají ln-v2 prefix. */
+/* LubaNote Editor Core V2.14b – izolovaný LAB/Bridge. Všechny selektory mají ln-v2 prefix. */
 
 body.ln-v2-lab-otevren {
   overflow: hidden !important;
@@ -119,6 +119,50 @@ body.ln-v2-lab-otevren {
   min-height: 1.5em;
   margin: 0 0 .35em;
   padding: 0;
+}
+
+/* ==========================================
+   V2.14a – SEZNAMOVÉ BLOKY
+
+   Odrážka ani číslování nejsou browserové UL/OL/LI v editačním DOMu.
+   Jsou to vlastní bloky modelu; DOM pouze vykreslí značku přes pseudo-element.
+   Tím Backspace/Enter ani WebView nemohou svévolně přestavět hierarchii.
+========================================== */
+.ln-v2-editor .ln-v2-bullet,
+.ln-v2-editor .ln-v2-ordered {
+  position: relative;
+  padding-left: var(--ln-v2-bullet-indent, 30px);
+  box-sizing: border-box;
+}
+
+/* V2.14b – značka seznamu sdílí stejný první line-box jako text.
+   Nepoužíváme flex + zmenšený font, protože čísla pak na Androidu opticky
+   "plavou" nad/pod řádkem. 24 px sloupec + 6 px mezera dává stabilní osu. */
+.ln-v2-editor .ln-v2-bullet::before,
+.ln-v2-editor .ln-v2-ordered::before {
+  position: absolute;
+  left: calc(var(--ln-v2-bullet-indent, 30px) - 30px);
+  top: 0;
+  width: 24px;
+  height: 1.5em;
+  display: block;
+  color: currentColor;
+  font-size: 1em;
+  line-height: 1.5em;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ln-v2-editor .ln-v2-bullet::before {
+  content: "•";
+  text-align: center;
+}
+
+.ln-v2-editor .ln-v2-ordered::before {
+  content: attr(data-ln-v2-list-label);
+  font-variant-numeric: tabular-nums;
 }
 
 .ln-v2-akce {

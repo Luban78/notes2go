@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 (LAB)
-   FÁZE V2.13: Image Crop nad vlastním modelem + zachovaný modelový drag & move obrázku.
+   FÁZE V2.14b: seznamový popup v toolbaru + přesné zarovnání značek.
 
    DŮLEŽITÉ:
    - Tento modul NESMÍ měnit produkční editor ani ukládat poznámky.
@@ -15,7 +15,7 @@
 (() => {
   "use strict";
 
-  const VERZE_MODELU = 3;
+  const VERZE_MODELU = 5;
   const VELIKOSTI_PISMA = [12, 14, 16, 18, 20, 24, 28, 32];
   const LIMIT_HISTORIE = 100;
   const PALETA_BAREV = [
@@ -300,8 +300,45 @@
     };
   }
 
+  function normalizujUrovenBulletu(hodnota) {
+    const cislo = Number.parseInt(hodnota, 10);
+    if (!Number.isFinite(cislo)) return 0;
+    return Math.max(0, Math.min(6, cislo));
+  }
+
+  function vytvorSeznamovyBlokZObsahu(obsah, typ = "bullet", uroven = 0, zarovnani = "left") {
+    const normalizovanyTyp = typ === "ordered" ? "ordered" : "bullet";
+    return {
+      id: noveIdBloku(),
+      typ: normalizovanyTyp,
+      uroven: normalizujUrovenBulletu(uroven),
+      zarovnani,
+      obsah: normalizujObsah(obsah)
+    };
+  }
+
+  function vytvorBulletZObsahu(obsah, uroven = 0, zarovnani = "left") {
+    return vytvorSeznamovyBlokZObsahu(obsah, "bullet", uroven, zarovnani);
+  }
+
+  function vytvorCislovanyZObsahu(obsah, uroven = 0, zarovnani = "left") {
+    return vytvorSeznamovyBlokZObsahu(obsah, "ordered", uroven, zarovnani);
+  }
+
+  function jeBulletBlok(blok) {
+    return blok?.typ === "bullet";
+  }
+
+  function jeCislovanyBlok(blok) {
+    return blok?.typ === "ordered";
+  }
+
+  function jeSeznamovyBlok(blok) {
+    return jeBulletBlok(blok) || jeCislovanyBlok(blok);
+  }
+
   function jeTextovyBlok(blok) {
-    return blok?.typ === "odstavec";
+    return blok?.typ === "odstavec" || jeSeznamovyBlok(blok);
   }
 
   function jeObrazkovyBlok(blok) {
@@ -403,7 +440,7 @@
 
     dokument.verze = VERZE_MODELU;
     dokument.bloky = dokument.bloky.filter((blok) =>
-      blok && (blok.typ === "odstavec" || blok.typ === "obrazek")
+      blok && (blok.typ === "odstavec" || blok.typ === "bullet" || blok.typ === "ordered" || blok.typ === "obrazek")
     );
     if (!dokument.bloky.length) dokument.bloky.push(vytvorOdstavec(""));
 
@@ -420,10 +457,32 @@
         return;
       }
 
-      blok.typ = "odstavec";
+      const puvodniTyp = blok.typ === "bullet" ? "bullet" : (blok.typ === "ordered" ? "ordered" : "odstavec");
+      blok.typ = puvodniTyp;
       if (!Array.isArray(blok.obsah)) blok.obsah = [vytvorSegment("")];
       blok.obsah = normalizujObsah(blok.obsah);
       blok.zarovnani = normalizujZarovnani(blok.zarovnani);
+      if (puvodniTyp === "bullet" || puvodniTyp === "ordered") {
+        blok.uroven = normalizujUrovenBulletu(blok.uroven);
+      } else {
+        delete blok.uroven;
+      }
+    });
+
+    /* V2.14a – úroveň seznamu je čistě modelová. Zabráníme neplatnému skoku
+       o více úrovní; první položka po běžném odstavci začíná na úrovni 0.
+       Stejné pravidlo platí pro odrážky i číslovaný seznam. */
+    let predchoziSeznamUroven = null;
+    dokument.bloky.forEach((blok) => {
+      if (!jeSeznamovyBlok(blok)) {
+        predchoziSeznamUroven = null;
+        return;
+      }
+      let uroven = normalizujUrovenBulletu(blok.uroven);
+      if (predchoziSeznamUroven === null) uroven = 0;
+      else uroven = Math.min(uroven, predchoziSeznamUroven + 1);
+      blok.uroven = uroven;
+      predchoziSeznamUroven = uroven;
     });
 
     /* Caret musí mít vždy alespoň jeden skutečný textový blok. */
@@ -657,17 +716,47 @@
 
     const fragment = document.createDocumentFragment();
 
+    const cislovani = [];
+    let predchoziBylCislovany = false;
+
     dokument.bloky.forEach((blok) => {
       if (jeObrazkovyBlok(blok)) {
         fragment.appendChild(vykresliObrazkovyBlok(blok));
+        predchoziBylCislovany = false;
+        cislovani.length = 0;
         return;
       }
 
       const radek = document.createElement("div");
-      radek.className = "ln-v2-odstavec";
+      const seznamovaTrida = jeBulletBlok(blok)
+        ? " ln-v2-bullet"
+        : (jeCislovanyBlok(blok) ? " ln-v2-ordered" : "");
+      radek.className = `ln-v2-odstavec${seznamovaTrida}`;
       radek.dataset.lnV2Blok = blok.id;
       radek.dataset.typ = blok.typ;
       radek.style.textAlign = blok.zarovnani || "left";
+      if (jeSeznamovyBlok(blok)) {
+        const uroven = normalizujUrovenBulletu(blok.uroven);
+        radek.dataset.lnV2BulletUroven = String(uroven);
+        radek.style.setProperty("--ln-v2-bullet-indent", `${30 + (uroven * 24)}px`);
+
+        if (jeCislovanyBlok(blok)) {
+          if (!predchoziBylCislovany) cislovani.length = 0;
+          cislovani.length = uroven + 1;
+          cislovani[uroven] = (Number(cislovani[uroven]) || 0) + 1;
+          for (let i = 0; i < uroven; i += 1) {
+            if (!Number(cislovani[i])) cislovani[i] = 1;
+          }
+          radek.dataset.lnV2ListLabel = `${cislovani[uroven]}.`;
+          predchoziBylCislovany = true;
+        } else {
+          predchoziBylCislovany = false;
+          cislovani.length = 0;
+        }
+      } else {
+        predchoziBylCislovany = false;
+        cislovani.length = 0;
+      }
 
       const text = textBloku(blok);
       if (text) {
@@ -897,11 +986,28 @@
     );
     const caret = smazVyber(vyber);
     const blok = dokument.bloky[caret.blok];
+
+    /* V2.14a – Enter na prázdné položce ukončí odrážky i číslovaný seznam.
+       WebView do struktury seznamu vůbec nezasahuje. */
+    if (jeSeznamovyBlok(blok) && textBloku(blok).length === 0) {
+      const uroven = normalizujUrovenBulletu(blok.uroven);
+      if (uroven > 0) {
+        blok.uroven = uroven - 1;
+      } else {
+        blok.typ = "odstavec";
+        delete blok.uroven;
+        blok.zarovnani = normalizujZarovnani(blok.zarovnani);
+      }
+      return { blok: caret.blok, offset: 0 };
+    }
+
     const rez = rozdelObsah(blok, caret.offset);
     nastavObsahBloku(blok, rez.vlevo);
 
     const novyObsah = rez.vpravo.length ? rez.vpravo : [vytvorSegment("", format)];
-    const novy = vytvorOdstavecZObsahu(novyObsah, blok.zarovnani || "left");
+    const novy = jeSeznamovyBlok(blok)
+      ? vytvorSeznamovyBlokZObsahu(novyObsah, blok.typ, blok.uroven, blok.zarovnani || "left")
+      : vytvorOdstavecZObsahu(novyObsah, blok.zarovnani || "left");
     dokument.bloky.splice(caret.blok + 1, 0, novy);
     return { blok: caret.blok + 1, offset: 0 };
   }
@@ -995,6 +1101,18 @@
         konec: { ...caret },
         sbaleny: false
       });
+    }
+
+    /* V2.14a – Backspace na začátku položky seznamu nevytváří browserový DOM.
+       Na úrovni 0 seznam zruší a zachová text; vnořená položka se nejprve vysune. */
+    if (jeSeznamovyBlok(blok)) {
+      const uroven = normalizujUrovenBulletu(blok.uroven);
+      if (uroven > 0) blok.uroven = uroven - 1;
+      else {
+        blok.typ = "odstavec";
+        delete blok.uroven;
+      }
+      return caret;
     }
 
     if (caret.blok === 0) return caret;
@@ -2503,6 +2621,106 @@
     return zmeneno;
   }
 
+  function stavSeznamuVeVyberu(vyber) {
+    if (!vyber || !dokument?.bloky?.length) return "off";
+
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    const typy = new Set();
+
+    for (let index = od; index <= doBloku; index += 1) {
+      const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
+      typy.add(jeBulletBlok(blok) ? "bullet" : (jeCislovanyBlok(blok) ? "ordered" : "off"));
+    }
+
+    if (!typy.size) return "off";
+    if (typy.size > 1) return "mix";
+    return Array.from(typy)[0];
+  }
+
+  function stavBulletVeVyberu(vyber) {
+    const stav = stavSeznamuVeVyberu(vyber);
+    if (stav === "mix") return "mix";
+    return stav === "off" ? "off" : "on";
+  }
+
+  function nastavSeznamZToolbaru(hodnota) {
+    const vyber = ziskejFormatovaciVyber();
+    if (!vyber || !dokument?.bloky?.length) return false;
+
+    const cilovyTyp = hodnota === "ordered" ? "ordered" : (hodnota === "bullet" ? "bullet" : "off");
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    const textoveIndexy = [];
+    for (let index = od; index <= doBloku; index += 1) {
+      if (jeTextovyBlok(dokument.bloky[index])) textoveIndexy.push(index);
+    }
+    if (!textoveIndexy.length) return false;
+
+    /* 🔒 V2.14a – typ seznamu NESMÍ měnit formát textových segmentů.
+       Přepnutí odrážka / číslování / běžný text mění pouze vlastnost bloku.
+       Zvlášť u sbaleného caretu zachováváme i aktivní formát psaní; jeho
+       vynulování dříve odhalilo podkladový explicitní font a toolbar skočil
+       např. ze základních 13 na 16. */
+    const formatPred = vyber.sbaleny
+      ? kopieFormatu(
+          (aktivniFormatPsani && aktivniFormatPozice === klicPozice(vyber.zacatek))
+            ? aktivniFormatPsani
+            : (formatZDomBodu() || formatNaPozici(dokument.bloky[vyber.zacatek.blok], vyber.zacatek.offset))
+        )
+      : null;
+    const zdrojFormatuPred = aktivniFormatZdroj;
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+
+    let zmenenoTypem = false;
+    textoveIndexy.forEach((index) => {
+      const blok = dokument.bloky[index];
+      const novyTyp = cilovyTyp === "off" ? "odstavec" : cilovyTyp;
+      if (blok.typ === novyTyp) return;
+      zmenenoTypem = true;
+      blok.typ = novyTyp;
+      if (cilovyTyp === "off") delete blok.uroven;
+      else blok.uroven = jeSeznamovyBlok(blok) ? normalizujUrovenBulletu(blok.uroven) : 0;
+    });
+
+    if (!zmenenoTypem) {
+      vykresli(vyber);
+      return false;
+    }
+
+    normalizujDokument();
+    const popis = cilovyTyp === "bullet"
+      ? "odrážkový seznam"
+      : (cilovyTyp === "ordered" ? "číslovaný seznam" : "zrušit seznam");
+    const zmeneno = ulozZmenuDoHistorie(snapshotPred, popis);
+
+    if (vyber.sbaleny && formatPred) {
+      aktivniFormatPsani = formatPred;
+      aktivniFormatPozice = klicPozice(vyber.zacatek);
+      aktivniFormatZdroj = zdrojFormatuPred || "zdedeny";
+    } else {
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+    }
+
+    vykresli(vyber);
+    nastavStav(
+      cilovyTyp === "bullet"
+        ? "Odrážkový seznam nastaven v modelu"
+        : (cilovyTyp === "ordered" ? "Číslovaný seznam nastaven v modelu" : "Seznam zrušen v modelu")
+    );
+    zapisDebug?.(`EDITOR V2 | list type=${cilovyTyp} | blocks=${textoveIndexy.join(",")}`);
+    return zmeneno;
+  }
+
+  function prepniBulletZToolbaru() {
+    const vyber = ziskejFormatovaciVyber();
+    const stav = stavSeznamuVeVyberu(vyber);
+    return nastavSeznamZToolbaru(stav === "bullet" ? "off" : "bullet");
+  }
+
   function zpracujBeforeInput(event) {
     if (event.inputType === "historyUndo") {
       event.preventDefault();
@@ -2627,6 +2845,16 @@
 
       if (!blokEl?.matches?.(".ln-v2-odstavec[data-ln-v2-blok]")) return `blok ${b}: neplatný element`;
       if (blokEl.dataset.lnV2Blok !== blok.id) return `blok ${b}: jiné id`;
+      if ((blokEl.dataset.typ || "odstavec") !== blok.typ) return `blok ${b}: jiný typ DOM/model`;
+      if (jeSeznamovyBlok(blok)) {
+        const ocekavanaTrida = jeCislovanyBlok(blok) ? "ln-v2-ordered" : "ln-v2-bullet";
+        if (!blokEl.classList.contains(ocekavanaTrida)) return `blok ${b}: chybí seznamová třída`;
+        if (blokEl.dataset.lnV2BulletUroven !== String(normalizujUrovenBulletu(blok.uroven))) {
+          return `blok ${b}: jiná úroveň seznamu DOM/model`;
+        }
+      } else if (blokEl.classList.contains("ln-v2-bullet") || blokEl.classList.contains("ln-v2-ordered")) {
+        return `blok ${b}: cizí seznamová třída`;
+      }
       const modelZarovnani = normalizujZarovnani(blok.zarovnani);
       const domZarovnani = normalizujZarovnani(blokEl.style.textAlign || "left");
       if (domZarovnani !== modelZarovnani) return `blok ${b}: jiné zarovnání DOM/model`;
@@ -2823,6 +3051,50 @@
     });
   }
 
+  function importujSeznamDoModelu(seznam, uroven, bloky, nepodporovane) {
+    if (!(seznam instanceof Element)) return;
+    const tagSeznamu = seznam.tagName.toLowerCase();
+    if (tagSeznamu !== "ul" && tagSeznamu !== "ol") return;
+    const typSeznamu = tagSeznamu === "ol" ? "ordered" : "bullet";
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br"]);
+
+    Array.from(seznam.children).forEach((li) => {
+      if (li.tagName?.toLowerCase() !== "li") {
+        nepodporovane.add(li.tagName?.toLowerCase?.() || "prvek v seznamu");
+        return;
+      }
+
+      const obsah = [];
+      const docasny = document.createElement("span");
+      Array.from(li.childNodes).forEach((uzel) => {
+        if (uzel.nodeType === Node.TEXT_NODE) {
+          docasny.appendChild(uzel.cloneNode(true));
+          return;
+        }
+        if (uzel.nodeType !== Node.ELEMENT_NODE) return;
+        const tag = uzel.tagName.toLowerCase();
+        if (tag === "ul" || tag === "ol") return;
+        if (tag === "figure" || tag === "img") {
+          nepodporovane.add("obrázek v seznamu");
+          return;
+        }
+        if (!povoleneInline.has(tag)) {
+          nepodporovane.add(`${tag} v seznamu`);
+          return;
+        }
+        docasny.appendChild(uzel.cloneNode(true));
+      });
+
+      importujInlineUzly(docasny, VYCHOZI_FORMAT, obsah, nepodporovane);
+      const zarovnani = normalizujZarovnani(li.style?.textAlign || li.getAttribute("align"));
+      bloky.push(vytvorSeznamovyBlokZObsahu(obsah, typSeznamu, uroven, zarovnani));
+
+      Array.from(li.children)
+        .filter((dite) => ["ul", "ol"].includes(dite.tagName?.toLowerCase()))
+        .forEach((vnoreny) => importujSeznamDoModelu(vnoreny, uroven + 1, bloky, nepodporovane));
+    });
+  }
+
   function vytvorObrazkovyBlokZHtml(element, nepodporovane) {
     if (!(element instanceof Element)) return null;
     const image = element.tagName?.toLowerCase() === "img"
@@ -2884,6 +3156,12 @@
 
       if (uzel.nodeType !== Node.ELEMENT_NODE) return;
       const tag = uzel.tagName.toLowerCase();
+
+      if (tag === "ul" || tag === "ol") {
+        flushRootInline();
+        importujSeznamDoModelu(uzel, 0, bloky, nepodporovane);
+        return;
+      }
 
       if (
         (tag === "figure" && uzel.classList.contains("lubaNoteImage"))
@@ -2955,9 +3233,129 @@
     };
   }
 
+  function vlozSegmentyDoExportElementu(cil, blok) {
+    const segmenty = Array.isArray(blok?.obsah) ? blok.obsah : [];
+    const maText = segmenty.some((cast) => String(cast?.text || "").length > 0);
+    if (!maText) {
+      cil.appendChild(document.createElement("br"));
+      return;
+    }
+
+    segmenty.forEach((cast) => {
+      const text = String(cast?.text ?? "");
+      if (!text) return;
+      const format = kopieFormatu(cast?.format);
+      const maFormat = Boolean(
+        format.tucne || format.kurziva || format.podtrzeni ||
+        format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz
+      );
+      if (!maFormat) {
+        cil.appendChild(document.createTextNode(text));
+        return;
+      }
+
+      const inline = document.createElement(format.odkaz ? "a" : "span");
+      if (format.odkaz) {
+        inline.classList.add("lubaNoteInternetLink");
+        inline.dataset.lubanoteLink = "true";
+        inline.href = format.odkaz;
+        inline.target = "_blank";
+        inline.rel = "noopener noreferrer";
+      }
+      if (format.velikost !== null) {
+        inline.dataset.velikostPisma = String(format.velikost);
+        inline.style.fontSize = `${format.velikost}px`;
+      }
+      if (format.tucne) inline.style.fontWeight = "700";
+      if (format.kurziva) inline.style.fontStyle = "italic";
+      if (format.podtrzeni) inline.style.textDecoration = "underline";
+      if (format.barva) inline.style.color = format.barva;
+      if (format.pozadi) inline.style.backgroundColor = format.pozadi;
+      if (format.stylTextu) inline.classList.add("editorNadpis", format.stylTextu);
+      inline.textContent = text;
+      cil.appendChild(inline);
+    });
+  }
+
+  function exportujBehSeznamu(obal, beh) {
+    if (!beh.length) return;
+
+    const stack = [];
+
+    const vytvorSeznam = (typ) => document.createElement(typ === "ordered" ? "ol" : "ul");
+
+    beh.forEach((blok) => {
+      let uroven = normalizujUrovenBulletu(blok.uroven);
+      const typ = jeCislovanyBlok(blok) ? "ordered" : "bullet";
+
+      if (!stack.length) {
+        const seznam = vytvorSeznam(typ);
+        obal.appendChild(seznam);
+        stack.push({ typ, seznam, posledniLi: null });
+        uroven = 0;
+      }
+
+      uroven = Math.min(uroven, stack.length);
+
+      while (stack.length - 1 > uroven) stack.pop();
+
+      while (stack.length - 1 < uroven) {
+        const rodic = stack[stack.length - 1];
+        if (!rodic?.posledniLi) {
+          uroven = stack.length - 1;
+          break;
+        }
+        const seznam = vytvorSeznam(typ);
+        rodic.posledniLi.appendChild(seznam);
+        stack.push({ typ, seznam, posledniLi: null });
+      }
+
+      let aktualni = stack[uroven];
+      if (!aktualni || aktualni.typ !== typ) {
+        const seznam = vytvorSeznam(typ);
+        if (uroven === 0) {
+          obal.appendChild(seznam);
+        } else {
+          const rodic = stack[uroven - 1];
+          if (!rodic?.posledniLi) {
+            uroven = 0;
+            obal.appendChild(seznam);
+          } else {
+            rodic.posledniLi.appendChild(seznam);
+          }
+        }
+        stack.length = uroven;
+        stack.push({ typ, seznam, posledniLi: null });
+        aktualni = stack[uroven];
+      }
+
+      const li = document.createElement("li");
+      const zarovnani = normalizujZarovnani(blok.zarovnani);
+      if (zarovnani !== "left") li.style.textAlign = zarovnani;
+      vlozSegmentyDoExportElementu(li, blok);
+      aktualni.seznam.appendChild(li);
+      aktualni.posledniLi = li;
+    });
+  }
+
   function exportujHtmlZModelu(doc = dokument) {
     const obal = document.createElement("div");
-    (doc?.bloky || []).forEach((blok) => {
+    const bloky = Array.isArray(doc?.bloky) ? doc.bloky : [];
+
+    for (let index = 0; index < bloky.length; index += 1) {
+      const blok = bloky[index];
+
+      if (jeSeznamovyBlok(blok)) {
+        const beh = [];
+        while (index < bloky.length && jeSeznamovyBlok(bloky[index])) {
+          beh.push(bloky[index]);
+          index += 1;
+        }
+        index -= 1;
+        exportujBehSeznamu(obal, beh);
+        continue;
+      }
+
       if (jeObrazkovyBlok(blok)) {
         const figure = document.createElement("figure");
         figure.className = "lubaNoteImage";
@@ -2977,55 +3375,15 @@
         image.dataset.zarovnani = figure.dataset.zarovnani;
         figure.appendChild(image);
         obal.appendChild(figure);
-        return;
+        continue;
       }
 
       const radek = document.createElement("div");
       const zarovnani = normalizujZarovnani(blok?.zarovnani);
       if (zarovnani !== "left") radek.style.textAlign = zarovnani;
-
-      const segmenty = Array.isArray(blok?.obsah) ? blok.obsah : [];
-      const maText = segmenty.some((cast) => String(cast?.text || "").length > 0);
-      if (!maText) {
-        radek.appendChild(document.createElement("br"));
-      } else {
-        segmenty.forEach((cast) => {
-          const text = String(cast?.text ?? "");
-          if (!text) return;
-          const format = kopieFormatu(cast?.format);
-          const maFormat = Boolean(
-            format.tucne || format.kurziva || format.podtrzeni ||
-            format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz
-          );
-          if (!maFormat) {
-            radek.appendChild(document.createTextNode(text));
-            return;
-          }
-
-          const inline = document.createElement(format.odkaz ? "a" : "span");
-          if (format.odkaz) {
-            inline.classList.add("lubaNoteInternetLink");
-            inline.dataset.lubanoteLink = "true";
-            inline.href = format.odkaz;
-            inline.target = "_blank";
-            inline.rel = "noopener noreferrer";
-          }
-          if (format.velikost !== null) {
-            inline.dataset.velikostPisma = String(format.velikost);
-            inline.style.fontSize = `${format.velikost}px`;
-          }
-          if (format.tucne) inline.style.fontWeight = "700";
-          if (format.kurziva) inline.style.fontStyle = "italic";
-          if (format.podtrzeni) inline.style.textDecoration = "underline";
-          if (format.barva) inline.style.color = format.barva;
-          if (format.pozadi) inline.style.backgroundColor = format.pozadi;
-          if (format.stylTextu) inline.classList.add("editorNadpis", format.stylTextu);
-          inline.textContent = text;
-          radek.appendChild(inline);
-        });
-      }
+      vlozSegmentyDoExportElementu(radek, blok);
       obal.appendChild(radek);
-    });
+    }
     return obal.innerHTML;
   }
 
@@ -3100,7 +3458,9 @@
       pozadi: pozadi.length === 1 ? pozadi[0] : "mix",
       zarovnani: zarovnani.length === 1 ? zarovnani[0] : "mix",
       stylTextu: stylyTextu.length === 1 ? stylyTextu[0] : "mix",
-      odkaz: odkazy.length === 1 ? odkazy[0] : "mix"
+      odkaz: odkazy.length === 1 ? odkazy[0] : "mix",
+      bullet: stavBulletVeVyberu(vyber),
+      seznam: stavSeznamuVeVyberu(vyber)
     };
   }
 
@@ -3111,7 +3471,7 @@
     lab.innerHTML = `
       <header class="ln-v2-hlavicka">
         <div>
-          <strong>Editor Core V2.10 · LAB</strong>
+          <strong>Editor Core V2.14b · LAB</strong>
           <small>Izolovaný test · nic se neukládá do poznámek</small>
         </div>
         <button type="button" class="ln-v2-zavrit" data-v2-akce="zavrit" aria-label="Zavřít Editor Core V2">×</button>
@@ -3161,7 +3521,7 @@
       </div>
 
       <footer class="ln-v2-paticka">
-        V2.13: obrázek je samostatný atomický blok modelu. Galerie/Fotoaparát, velikost, zarovnání, drag & move a ořez zapisují pouze do modelu; ořez mění zdroj obrázku jako jednu Undo/Redo operaci. TODO a IME zatím zůstávají vypnuté.
+        V2.14b: odrážky i číslovaný seznam jsou vlastní bloky modelu. Volba typu je přímo v toolbar popupu a značky seznamu jsou zarovnané na první textový řádek. Vnoření UI, drag seznamu, TODO a IME zatím zůstávají vypnuté.
       </footer>
     `;
 
@@ -3398,7 +3758,7 @@
     else vykresli(posledniVyber || posledniPozice);
 
     editor.focus({ preventScroll: true });
-    zapisDebug?.("EDITOR V2 LAB | OPEN V2.13 | produkční editor nedotčen");
+    zapisDebug?.("EDITOR V2 LAB | OPEN V2.14b | produkční editor nedotčen");
     return true;
   }
 
@@ -3487,7 +3847,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.13-IMAGE-CROP-385",
+    verze: "V2.14b-LISTS-388",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -3503,6 +3863,8 @@
     prepniFormat: prepniBooleanFormatZToolbaru,
     nastavBarvu: nastavBarvuZToolbaru,
     nastavZarovnani: nastavZarovnaniZToolbaru,
+    prepniBullet: prepniBulletZToolbaru,
+    nastavSeznam: nastavSeznamZToolbaru,
     nastavStylTextu: nastavStylTextuZToolbaru,
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
