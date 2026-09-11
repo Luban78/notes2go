@@ -386,12 +386,26 @@
 
       if (button === selectionVybratVse) {
         if (core()?.vyberVseProSelectionMenu?.()) {
-          queueMicrotask(() => {
+          const zobrazPoVyberuVse = () => {
+            if (!aktivni) return;
+            core()?.zachytAktualniVyber?.();
             const vyber = window.getSelection();
             const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-            if (range && !range.collapsed) zobrazV2SelectionMenuProOznaceni(range);
-          });
+            if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+              zobrazV2SelectionMenuProOznaceni(range);
+              return;
+            }
+            if (core()?.ziskejTextVyberuProSelectionMenu?.()) {
+              nastavV2SelectionMenuTlacitka(false);
+              v2SelectionMenuAktivni = true;
+              v2SelectionMenuKurzor = false;
+              pozicujV2SelectionMenu();
+            }
+          };
+          requestAnimationFrame(zobrazPoVyberuVse);
+          setTimeout(zobrazPoVyberuVse, 80);
         }
+        return;
       }
     } catch (error) {
       console.warn("Editor V2: selection menu akce selhala", error);
@@ -449,10 +463,17 @@
   }
 
   function vytvorZdrojovyOtisk(sourceHtml, todos) {
+    const html = String(sourceHtml || "");
+    const maSmisenyV2Obsah = html.includes("data-lubanote-v2-todo");
+    if (maSmisenyV2Obsah) {
+      let todoCast = "";
+      try { todoCast = JSON.stringify(Array.isArray(todos) ? todos : []); } catch (_error) { todoCast = String(todos?.length || 0); }
+      return `MIXED:${html}|TODO:${todoCast}`;
+    }
     if (Array.isArray(todos) && todos.length) {
       try { return `TODO:${JSON.stringify(todos)}`; } catch (_error) { return `TODO:${todos.length}`; }
     }
-    return String(sourceHtml || "");
+    return html;
   }
 
   function nactiTestKopii(noteId, sourceHtml) {
@@ -661,7 +682,9 @@
       todoButton.classList.toggle("active", todo === "on");
       todoButton.classList.toggle("lnV2Mixed", todo === "mix");
       todoButton.setAttribute("aria-pressed", todo === "mix" ? "mixed" : (todo === "on" ? "true" : "false"));
-      todoButton.title = todo === "on" ? "Přidat další TODO" : "Převést obsah na TODO";
+      todoButton.title = todo === "on"
+        ? "Vypnout TODO pro aktuální blok/výběr"
+        : "Převést aktuální blok/výběr na TODO";
     }
 
     document.querySelectorAll("#editorPanelSeznam [data-ln-v2-seznam]").forEach((button) => {
@@ -815,20 +838,29 @@
     }
 
     const model = api.ziskejModel?.();
+    const bloky = Array.isArray(model?.bloky) ? model.bloky : [];
     const todos = api.exportujTodos() || [];
-    const maTodo = Array.isArray(model?.bloky) &&
-      model.bloky.some((blok) => blok?.typ === "todo");
-    const maMedia = Array.isArray(model?.bloky) &&
-      model.bloky.some((blok) =>
-        blok?.typ === "obrazek" ||
-        (Array.isArray(blok?.obrazky) && blok.obrazky.length > 0)
-      );
+    const pocetTodo = bloky.filter((blok) => blok?.typ === "todo").length;
+    const pocetOstatnich = bloky.filter((blok) => blok?.typ !== "todo").length;
+    const maTodo = pocetTodo > 0;
+    const pouzeTodo = maTodo && pocetOstatnich === 0;
+    const maSmisenyObsah = maTodo && pocetOstatnich > 0;
+    const maMedia = bloky.some((blok) =>
+      blok?.typ === "obrazek" ||
+      (Array.isArray(blok?.obrazky) && blok.obrazky.length > 0)
+    );
 
+    /* 🔒 V2.21 – smíšený dokument je kanonicky uložen v richContent v přesném
+       pořadí bloků. note.todos zůstává jako kompatibilní zrcadlo pro Planner,
+       hledání a starší části aplikace. Pouze čisté TODO zachovává starý binární
+       formát s prázdným richContent. */
     return {
-      richContent: maTodo ? "" : String(api.exportujHtml() || ""),
-      note: maTodo ? "" : String(api.exportujProstyText() || ""),
+      richContent: pouzeTodo ? "" : String(api.exportujHtml() || ""),
+      note: pouzeTodo ? "" : String(api.exportujProstyText() || ""),
       todos: Array.isArray(todos) ? todos.map((todo) => ({ ...todo })) : [],
       maTodo,
+      pouzeTodo,
+      maSmisenyObsah,
       maMedia
     };
   }
@@ -852,8 +884,8 @@
 
       // Když uživatel nouzově přepne do legacy bez zavření editoru,
       // deaktivace musí odhalit správný typ produkčního editoru.
-      puvodniRichTextHidden = obsah.maTodo ? true : false;
-      puvodniTodoListHidden = obsah.maTodo ? false : true;
+      puvodniRichTextHidden = obsah.pouzeTodo ? true : false;
+      puvodniTodoListHidden = obsah.pouzeTodo ? false : true;
       return true;
     } catch (error) {
       console.error("Editor Core V2: synchronizace do produkční save vrstvy selhala.", error);
@@ -906,9 +938,12 @@
     const sourceHtml = modalRichText.innerHTML;
     const sourceTodos = ziskejZdrojoveTodos();
     const zdrojovyOtisk = vytvorZdrojovyOtisk(sourceHtml, sourceTodos);
-    const importVysledek = sourceTodos.length && api.importujTodos
-      ? api.importujTodos(sourceTodos)
-      : api.importujHtml(sourceHtml, modalRichText.innerText);
+    const maSmisenyV2Obsah = String(sourceHtml || "").includes("data-lubanote-v2-todo");
+    const importVysledek = maSmisenyV2Obsah
+      ? api.importujHtml(sourceHtml, modalRichText.innerText)
+      : (sourceTodos.length && api.importujTodos
+        ? api.importujTodos(sourceTodos)
+        : api.importujHtml(sourceHtml, modalRichText.innerText));
 
     if (!importVysledek?.ok) {
       const prvky = importVysledek?.nepodporovane?.join(", ") || "neznámý prvek";
@@ -1604,6 +1639,32 @@
     }
   }
 
+  function jeBodUvnitřRozsahu(range, x, y) {
+    try {
+      return Array.from(range?.getClientRects?.() || []).some((rect) =>
+        x >= rect.left - 4 && x <= rect.right + 4 && y >= rect.top - 4 && y <= rect.bottom + 4
+      );
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function zrusV2OznaceniKlikemMimo(event) {
+    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
+    if (jeV2MoveInterakce(event)) return;
+
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return;
+    if (jeBodUvnitřRozsahu(range, event.clientX, event.clientY)) return;
+
+    if (core()?.zrusVyberNaBoduProSelectionMenu?.(event.clientX, event.clientY)) {
+      skryjV2SelectionMenu();
+      obnovToolbar();
+    }
+  }
+
   function zpracujKlikNaV2Odkaz(event) {
     if (!aktivni || !hostitel?.contains(event.target)) return;
 
@@ -1741,6 +1802,7 @@
     }
   }, true);
 
+  document.addEventListener("click", zrusV2OznaceniKlikemMimo, true);
   document.addEventListener("click", zpracujKlikNaV2Odkaz, true);
   document.addEventListener("click", zpracujToolbarCapture, true);
 
@@ -1798,7 +1860,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.20b-ROW-LONGPRESS-396",
+    verze: "V2.21-MIXED-BLOCKS-399",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,

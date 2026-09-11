@@ -2852,6 +2852,33 @@
     return true;
   }
 
+  function zrusVyberNaBoduProSelectionMenu(clientX, clientY) {
+    if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
+
+    let node = null;
+    let offset = 0;
+    if (typeof document.caretPositionFromPoint === "function") {
+      const caret = document.caretPositionFromPoint(Number(clientX), Number(clientY));
+      node = caret?.offsetNode || null;
+      offset = caret?.offset ?? 0;
+    } else if (typeof document.caretRangeFromPoint === "function") {
+      const range = document.caretRangeFromPoint(Number(clientX), Number(clientY));
+      node = range?.startContainer || null;
+      offset = range?.startOffset ?? 0;
+    }
+
+    if (!node || !editor.contains(node)) return false;
+    const pozice = domBodNaModel(node, offset);
+    if (!pozice) return false;
+
+    nastavVyberModelu(pozice, pozice);
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = klicPozice(pozice);
+    aktivniFormatZdroj = "";
+    aktualizujToolbarVelikosti(posledniVyber);
+    return true;
+  }
+
   function ziskejPlanovaciKontext() {
     const vyber = ziskejFormatovaciVyber();
     if (!vyber) return { ok: false, duvod: "Nebyl nalezen výběr textu." };
@@ -3271,60 +3298,134 @@
     return blok;
   }
 
-  /* V2.16 – stejné UX jako produkční tlačítko TODO:
-     - pokud poznámka ještě TODO nemá, převede její obsah na checkboxy,
-     - pokud TODO režim už existuje, přidá nový prázdný checkbox na konec seznamu.
-     Originální note.todos se v TEST režimu nemění; vše žije jen ve V2 modelu. */
-  function pridejTodoZToolbaru() {
-    if (!dokument?.bloky?.length) return false;
-    const vyber = ziskejFormatovaciVyber() || vyberZPosledniPozice();
-    const snapshotPred = vytvorSnapshotHistorie(vyber);
-    const maTodo = dokument.bloky.some(jeTodoBlok);
-    let cilIndex = Math.max(0, Math.min(dokument.bloky.length - 1, vyber?.konec?.blok ?? 0));
+  /* ============================================================
+     🔒 V2.21 – TODO JE TYP BLOKU, NE REŽIM CELÉ POZNÁMKY
 
-    if (!maTodo) {
-      const noveBloky = [];
-      let posledniTodo = null;
-      let cilId = dokument.bloky[cilIndex]?.id || "";
-      dokument.bloky.forEach((blok) => {
-        if (jeObrazkovyBlok(blok)) {
-          if (!posledniTodo) {
-            posledniTodo = vytvorTodoZObsahu([vytvorSegment("")], false, "left");
-            noveBloky.push(posledniTodo);
-          }
-          posledniTodo.obrazky.push(klonDat(blok));
-          return;
-        }
-        if (!jeTextovyBlok(blok)) return;
-        prevedBlokNaTodo(blok);
-        noveBloky.push(blok);
-        posledniTodo = blok;
-      });
-      if (!noveBloky.length) noveBloky.push(vytvorTodoZObsahu([vytvorSegment("")], false, "left"));
-      dokument.bloky = noveBloky;
-      normalizujDokument();
-      cilIndex = Math.max(0, dokument.bloky.findIndex((blok) => blok.id === cilId));
-      if (cilIndex < 0) cilIndex = 0;
-    } else {
-      /* Produkční addTodoButton přidává nový checkbox na konec seznamu. */
-      let posledni = -1;
-      dokument.bloky.forEach((blok, index) => { if (jeTodoBlok(blok)) posledni = index; });
-      cilIndex = posledni >= 0 ? posledni : cilIndex;
-      const novy = vytvorTodoZObsahu([vytvorSegment("")], false, dokument.bloky[cilIndex]?.zarovnani || "left");
-      dokument.bloky.splice(cilIndex + 1, 0, novy);
-      cilIndex += 1;
+     Původní V2.16 ještě kopírovala starý binární režim: první klik na TODO
+     převedl celý dokument a další klik přidával checkbox na konec. To je v
+     rozporu s cílem Editor Core V2 – jedna poznámka smí libovolně kombinovat
+     běžný text, Bullet/číslovaný seznam, TODO i obrázky.
+
+     Pravidlo toolbaru je proto stejné jako u seznamu:
+       - caret = mění se pouze aktuální textový blok,
+       - výběr přes více bloků = mění se pouze vybrané textové bloky,
+       - jsou-li všechny vybrané bloky TODO, klik aktivní TODO vypne,
+       - jinak se vybrané bloky převedou na TODO.
+
+     TOTO PRAVIDLO NEMĚNIT zpět na "TODO režim celé poznámky".
+  ============================================================ */
+
+  function prevedTodoNaOdstavec(index) {
+    const blok = dokument?.bloky?.[index];
+    if (!jeTodoBlok(blok)) return 0;
+
+    const obrazky = Array.isArray(blok.obrazky) ? blok.obrazky.splice(0) : [];
+    blok.typ = "odstavec";
+    delete blok.hotovo;
+    delete blok.zvyrazneni;
+    delete blok.obrazky;
+
+    if (obrazky.length) dokument.bloky.splice(index + 1, 0, ...obrazky);
+    return obrazky.length;
+  }
+
+  function prevedPolozkuSeznamuNaTodo(index) {
+    const blok = dokument?.bloky?.[index];
+    if (!jeSeznamovyBlok(blok)) return false;
+
+    const uroven = normalizujUrovenBulletu(blok.uroven);
+    const rozsah = rozsahPodstromuSeznamu(index);
+
+    /* Odpojením rodiče nesmí jeho děti zůstat viset na neexistující úrovni.
+       Stejná normalizace se používá při převodu seznamu na běžný text, jen
+       obrázky zůstávají u položky a stávají se přílohami TODO. */
+    for (let i = index + 1; i <= rozsah.do; i += 1) {
+      const dite = dokument.bloky[i];
+      if (!jeSeznamovyBlok(dite)) continue;
+      dite.uroven = Math.max(0, normalizujUrovenBulletu(dite.uroven) - (uroven + 1));
     }
 
-    const novyVyber = { zacatek: { blok: cilIndex, offset: 0 }, konec: { blok: cilIndex, offset: 0 }, sbaleny: true };
-    posledniPozice = { ...novyVyber.zacatek };
-    posledniVyber = klonVyberu(novyVyber);
-    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    let i = rozsah.do + 1;
+    while (i < dokument.bloky.length && jeSeznamovyBlok(dokument.bloky[i])) {
+      const puvodni = normalizujUrovenBulletu(dokument.bloky[i].uroven);
+      if (uroven > 0 && puvodni < uroven) break;
+      if (uroven > 0) dokument.bloky[i].uroven = Math.max(0, puvodni - uroven);
+      i += 1;
+      if (uroven === 0 && puvodni === 0) break;
+    }
+
+    prevedBlokNaTodo(blok);
+    return true;
+  }
+
+  function pridejTodoZToolbaru() {
+    if (!dokument?.bloky?.length) return false;
+
+    const vyber = ziskejFormatovaciVyber() || vyberZPosledniPozice();
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber?.zacatek?.blok ?? 0));
+    const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber?.konec?.blok ?? od));
+    const textoveIndexy = [];
+    for (let index = od; index <= doBloku; index += 1) {
+      if (jeTextovyBlok(dokument.bloky[index])) textoveIndexy.push(index);
+    }
+    if (!textoveIndexy.length) return false;
+
+    const vseTodo = textoveIndexy.every((index) => jeTodoBlok(dokument.bloky[index]));
+    const cilTodo = !vseTodo;
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const startId = dokument.bloky[vyber.zacatek.blok]?.id || "";
+    const endId = dokument.bloky[vyber.konec.blok]?.id || startId;
+    let zmenenoTypem = false;
+
+    if (cilTodo) {
+      textoveIndexy.forEach((index) => {
+        const blok = dokument.bloky[index];
+        if (!blok || jeTodoBlok(blok)) return;
+        if (jeSeznamovyBlok(blok)) prevedPolozkuSeznamuNaTodo(index);
+        else prevedBlokNaTodo(blok);
+        zmenenoTypem = true;
+      });
+    } else {
+      /* Obrázky se při vypnutí TODO mění na top-level Image Blocky. Jdeme
+         odzadu, aby vložené obrázky neposunuly indexy dalších TODO položek. */
+      [...textoveIndexy].reverse().forEach((index) => {
+        if (!jeTodoBlok(dokument.bloky[index])) return;
+        prevedTodoNaOdstavec(index);
+        zmenenoTypem = true;
+      });
+    }
+
+    if (!zmenenoTypem) return false;
+
+    normalizujDokument();
+    let startIndex = najdiIndexBlokuPodleId(startId);
+    let endIndex = najdiIndexBlokuPodleId(endId);
+    if (startIndex < 0) startIndex = Math.max(0, Math.min(od, dokument.bloky.length - 1));
+    if (endIndex < 0) endIndex = startIndex;
+    if (endIndex < startIndex) [startIndex, endIndex] = [endIndex, startIndex];
+
+    const vyberPo = {
+      zacatek: {
+        blok: startIndex,
+        offset: Math.min(vyber.zacatek.offset, textBloku(dokument.bloky[startIndex]).length)
+      },
+      konec: {
+        blok: endIndex,
+        offset: Math.min(vyber.konec.offset, textBloku(dokument.bloky[endIndex]).length)
+      },
+      sbaleny: vyber.sbaleny && startIndex === endIndex && vyber.zacatek.offset === vyber.konec.offset
+    };
+
+    posledniVyber = klonVyberu(vyberPo);
+    posledniPozice = { ...vyberPo.konec };
+    ulozenyFormatovaciVyber = klonVyberu(vyberPo);
     aktivniFormatPsani = null;
-    aktivniFormatPozice = klicPozice(novyVyber.zacatek);
+    aktivniFormatPozice = klicPozice(vyberPo.konec);
     aktivniFormatZdroj = "";
-    const zmeneno = ulozZmenuDoHistorie(snapshotPred, maTodo ? "přidat TODO" : "převést poznámku na TODO");
-    vykresli(novyVyber);
-    nastavStav(maTodo ? "Nové TODO přidáno" : "Obsah převeden na TODO");
+
+    const zmeneno = ulozZmenuDoHistorie(snapshotPred, cilTodo ? "převést výběr na TODO" : "vypnout TODO");
+    vykresli(vyberPo);
+    nastavStav(cilTodo ? "Vybraný blok převeden na TODO" : "TODO vypnuto – pokračuj běžným textem");
     return zmeneno;
   }
 
@@ -3436,10 +3537,15 @@
         const blok = dokument.bloky[index];
         if (!blok || blok.typ === cilovyTyp) return;
         zmenenoTypem = true;
+        const bylTodo = jeTodoBlok(blok);
         blok.typ = cilovyTyp;
         blok.uroven = jeSeznamovyBlok(blok) ? normalizujUrovenBulletu(blok.uroven) : 0;
         blok.sbaleno = Boolean(blok.sbaleno);
         if (!Array.isArray(blok.obrazky)) blok.obrazky = [];
+        if (bylTodo) {
+          delete blok.hotovo;
+          delete blok.zvyrazneni;
+        }
       });
     }
 
@@ -4528,6 +4634,56 @@
     });
   }
 
+  function importujTodoElementDoModelu(element, bloky, nepodporovane) {
+    if (!(element instanceof Element)) return;
+
+    const obsah = [];
+    const obrazky = [];
+    const docasny = document.createElement("span");
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a", "br"]);
+
+    Array.from(element.childNodes).forEach((uzel) => {
+      if (uzel.nodeType === Node.TEXT_NODE) {
+        docasny.appendChild(uzel.cloneNode(true));
+        return;
+      }
+      if (uzel.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = uzel.tagName.toLowerCase();
+      if (tag === "figure" || tag === "img") {
+        const obrazek = vytvorObrazkovyBlokZHtml(uzel, nepodporovane);
+        if (obrazek) obrazky.push(obrazek);
+        return;
+      }
+      if (tag === "div" && (uzel.dataset?.bulletMediaLine === "true" || uzel.classList?.contains("lubaNoteBulletImageTextLine"))) {
+        if (String(uzel.textContent || "").length) {
+          docasny.appendChild(document.createElement("br"));
+          Array.from(uzel.childNodes).forEach((dite) => {
+            if (dite.nodeType === Node.ELEMENT_NODE && dite.tagName?.toLowerCase() === "br") return;
+            docasny.appendChild(dite.cloneNode(true));
+          });
+        }
+        return;
+      }
+      if (!povoleneInline.has(tag)) {
+        nepodporovane.add(`${tag} v TODO`);
+        return;
+      }
+      docasny.appendChild(uzel.cloneNode(true));
+    });
+
+    importujInlineUzly(docasny, VYCHOZI_FORMAT, obsah, nepodporovane);
+    if (!obsah.length) obsah.push(vytvorSegment("", VYCHOZI_FORMAT));
+    const blok = vytvorTodoZObsahu(
+      obsah,
+      element.dataset?.completed === "true",
+      normalizujZarovnani(element.style?.textAlign || element.getAttribute("align"))
+    );
+    blok.obrazky = obrazky;
+    blok.zvyrazneni = String(element.dataset?.highlightColor || "");
+    if (element.dataset?.todoId) blok.id = String(element.dataset.todoId);
+    bloky.push(blok);
+  }
+
   function vytvorModelZTodos(todos = []) {
     const nepodporovane = new Set();
     const bloky = [];
@@ -4627,6 +4783,12 @@
       if (tag === "ul" || tag === "ol") {
         flushRootInline();
         importujSeznamDoModelu(uzel, 0, bloky, nepodporovane);
+        return;
+      }
+
+      if (uzel.dataset?.lubanoteV2Todo === "true") {
+        flushRootInline();
+        importujTodoElementDoModelu(uzel, bloky, nepodporovane);
         return;
       }
 
@@ -4900,7 +5062,9 @@
       if (jeTodoBlok(blok)) {
         const radek = document.createElement("div");
         radek.dataset.lubanoteV2Todo = "true";
+        radek.dataset.todoId = blok.id;
         radek.dataset.completed = blok.hotovo ? "true" : "false";
+        if (blok.zvyrazneni) radek.dataset.highlightColor = String(blok.zvyrazneni);
         vlozSegmentyDoExportElementu(radek, blok);
         if (Array.isArray(blok.obrazky)) blok.obrazky.forEach((obrazek) => radek.appendChild(vytvorExportFigureObrazku(obrazek, true)));
         obal.appendChild(radek);
@@ -5485,7 +5649,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.20b-ROW-LONGPRESS-396",
+    verze: "V2.21-MIXED-BLOCKS-399",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -5520,6 +5684,7 @@
     vlozRichVyberProSelectionMenu,
     vlozTextProSelectionMenu,
     vyberVseProSelectionMenu,
+    zrusVyberNaBoduProSelectionMenu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,
     jeCilPresunuSeznamu: jeV2CilPresunuSeznamu,
     vlozObrazek: vlozObrazekZToolbaru,

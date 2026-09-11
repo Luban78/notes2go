@@ -4272,8 +4272,14 @@ function renderTasks() {
     loadedNoteText.classList.add("taskNoteText");
     
     const taskTodos = loadedTask.todos || [];
+    const jeV2SmisenaPoznamka =
+      typeof loadedTask.richContent === "string" &&
+      loadedTask.richContent.includes("data-lubanote-v2-todo");
     
-    if (taskTodos.length > 0) {
+    /* V2.21 – smíšená poznámka má pořadí Text/Bullet/TODO uložené v
+       richContent. TODO pole je u ní jen kompatibilní zrcadlo pro Planner.
+       Náhled proto nesmí zahodit normální text a ukázat jen checkboxy. */
+    if (taskTodos.length > 0 && !jeV2SmisenaPoznamka) {
       loadedNoteText.textContent = taskTodos
         .slice(0, 3)
         .map(todo => {
