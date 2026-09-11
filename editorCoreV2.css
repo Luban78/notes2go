@@ -1,4 +1,4 @@
-/* LubaNote Editor Core V2.14b – izolovaný LAB/Bridge. Všechny selektory mají ln-v2 prefix. */
+/* LubaNote Editor Core V2.15 – kompletní seznamový systém v izolovaném LAB/Bridge. Všechny selektory mají ln-v2 prefix. */
 
 body.ln-v2-lab-otevren {
   overflow: hidden !important;
@@ -135,7 +135,7 @@ body.ln-v2-lab-otevren {
   box-sizing: border-box;
 }
 
-/* V2.14b – značka seznamu sdílí stejný první line-box jako text.
+/* V2.15 – značka seznamu sdílí stejný první line-box jako text.
    Nepoužíváme flex + zmenšený font, protože čísla pak na Androidu opticky
    "plavou" nad/pod řádkem. 24 px sloupec + 6 px mezera dává stabilní osu. */
 .ln-v2-editor .ln-v2-bullet::before,
@@ -527,4 +527,124 @@ body.ln-v2-lab-otevren {
   visibility: visible;
   pointer-events: auto;
   transform: scale(1);
+}
+
+/* ==========================================
+   V2.15 – KOMPLETNÍ OVLÁDÁNÍ SEZNAMU
+========================================== */
+.ln-v2-editor .ln-v2-bullet[data-ln-v2-list-collapsed="1"]::before,
+.ln-v2-editor .ln-v2-ordered[data-ln-v2-list-collapsed="1"]::before {
+  content: "▸";
+  color: var(--color-accent, currentColor);
+  font-weight: 800;
+  text-align: center;
+}
+
+.ln-v2-editor .ln-v2-list-move-selected {
+  outline: 2px solid var(--color-accent, currentColor);
+  outline-offset: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-accent, currentColor) 10%, transparent);
+}
+
+.ln-v2-editor .ln-v2-list-dragging {
+  opacity: .28;
+}
+
+.ln-v2-editor.ln-v2-list-drag-mode {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ln-v2-list-drop-indicator {
+  position: fixed;
+  z-index: 2147483450;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-accent, #8958f6);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #8958f6) 32%, transparent);
+}
+
+.ln-v2-list-drop-indicator[hidden] {
+  display: none !important;
+}
+
+.ln-v2-list-drag-preview {
+  position: fixed;
+  z-index: 2147483460;
+  max-width: min(76vw, 360px);
+  padding: 9px 13px;
+  transform: translateX(-50%);
+  border: 2px solid var(--color-accent, #8958f6);
+  border-radius: 12px;
+  background: var(--color-surface, #211b29);
+  color: var(--color-text, #fff);
+  box-shadow: 0 10px 26px rgba(0,0,0,.24);
+  font-size: var(--font-size);
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.ln-v2-list-drag-preview[hidden] {
+  display: none !important;
+}
+
+.ln-v2-list-drag-preview.chce-zanorit::after,
+.ln-v2-list-drag-preview.chce-vysunout::after {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.ln-v2-list-drag-preview.chce-zanorit::after {
+  content: "→ zanořit";
+  background: var(--color-accent, #8958f6);
+  color: var(--color-accent-text, #fff);
+}
+
+.ln-v2-list-drag-preview.chce-vysunout {
+  border-style: dashed;
+}
+
+.ln-v2-list-drag-preview.chce-vysunout::after {
+  content: "← vysunout";
+  background: var(--color-surface, #211b29);
+  color: var(--color-text, #fff);
+  border: 1px solid var(--color-border, rgba(255,255,255,.2));
+}
+
+/* Obrázek uvnitř položky seznamu je příloha celé položky. Neobtéká text
+   a samostatně se nepřesouvá; při drag & move cestuje s rodičovskou položkou. */
+.ln-v2-editor .ln-v2-bullet > .ln-v2-list-image,
+.ln-v2-editor .ln-v2-ordered > .ln-v2-list-image {
+  float: none !important;
+  clear: both !important;
+  max-width: 100%;
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+
+.ln-v2-editor .ln-v2-list-image[data-zarovnani="vlevo"] {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.ln-v2-editor .ln-v2-list-image[data-zarovnani="vpravo"] {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+.ln-v2-editor .ln-v2-list-image[data-zarovnani="stred"] {
+  margin-left: auto !important;
+  margin-right: auto !important;
 }

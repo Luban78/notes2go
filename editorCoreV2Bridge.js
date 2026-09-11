@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.14b
+   FÁZE V2.15 – COMPLETE LISTS
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -1151,15 +1151,6 @@
       core()?.zachytAktualniVyber?.();
       zavriPanelyFormatu();
 
-      /* V2.14a zatím drží obrázek jako samostatný dokumentový blok.
-         Obrázek uvnitř jedné položky seznamu přijde jako samostatná další fáze;
-         do té doby raději akci zablokujeme, než abychom rozbili strukturu listu. */
-      const seznamStav = core()?.ziskejStavFormatu?.()?.seznam || "off";
-      if (seznamStav !== "off") {
-        zobrazToast("V2 TEST: obrázek uvnitř seznamu zatím není připojený", true);
-        return;
-      }
-
       if (typeof window.vlozObrazekDoPoznamky !== "function") {
         zobrazToast("V2 TEST: výběr obrázku není dostupný", true);
         return;
@@ -1309,7 +1300,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.14b-LISTS-388",
+    verze: "V2.15-COMPLETE-LISTS-389",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,
