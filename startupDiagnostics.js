@@ -18,6 +18,14 @@
   let poradiPozadavku = 0;
   let splashPripraven = false;
 
+  function maBytStartupVKonsole() {
+    try {
+      return localStorage.getItem("lubanote.startup.console") === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
   function cas() {
     return Math.round(performance.now() - startCas);
   }
@@ -51,7 +59,9 @@
       zaznamy.splice(0, zaznamy.length - MAX_ZAZNAMU);
     }
 
-    console.log(`[LubaNote STARTUP] ${radek}`);
+    if (maBytStartupVKonsole()) {
+      console.log(`[LubaNote STARTUP] ${radek}`);
+    }
 
     posluchaci.forEach((posluchac) => {
       try {

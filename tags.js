@@ -1535,6 +1535,20 @@ const OKRAJ_AUTO_SCROLL_STITKU = 72;
 const MAX_AUTO_SCROLL_STITKU = 16;
 const ODSAZENI_GHOSTU_NAD_PRSTEM = 18;
 
+function zapisTagDragDiag(text) {
+  try {
+    document.dispatchEvent(
+      new CustomEvent("lubanote:tag-drag-debug", {
+        detail: {
+          text: String(text || "")
+        }
+      })
+    );
+  } catch (_) {
+    // Diagnostika nikdy nesmí ovlivnit drag.
+  }
+}
+
 /*
  * Legacy štítky mohou existovat jen v poznámkách a nemít ještě vlastní
  * řádek v tabulce tags. Bez id/sort_order je nelze trvale přesouvat.
@@ -2076,6 +2090,11 @@ function zahajPresunHornihoStitku(
 async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
   const stav = presunHornihoStitku;
 
+  zapisTagDragDiag(
+    `FINISH_CALL drag=${Boolean(stav)} cancel=${zrusit} ` +
+    `id=${stav?.id ?? "NONE"} changed=${stav?.zmeneno ?? "NONE"}`
+  );
+
   if (!stav) {
     return;
   }
@@ -2086,6 +2105,9 @@ async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
 
   stav.button?.classList.remove("lubaTagDragSource");
   stav.ghost?.remove();
+  zapisTagDragDiag(
+    `CLEANUP id=${stav.id ?? "NONE"} ghostConnected=${Boolean(stav.ghost?.isConnected)}`
+  );
 
   /* Long-press/drop nesmí po puštění aktivovat filtr. */
   blokovatKlikHornihoStitkuDo = Date.now() + 650;
@@ -2132,6 +2154,11 @@ function vycistiDesktopPointerStitku() {
 }
 
 function pripravDesktopDragHornihoStitku(button, event) {
+  zapisTagDragDiag(
+    `DOWN name=${button?.dataset?.tagFilter || button?.textContent || "?"} ` +
+    `id=${event?.pointerId ?? "?"} buttons=${event?.buttons ?? "?"}`
+  );
+
   if (
     !button?.isConnected ||
     event.pointerType === "touch" ||
@@ -2159,8 +2186,15 @@ function pripravDesktopDragHornihoStitku(button, event) {
   };
 
   desktopStitekPointer = stav;
+  zapisTagDragDiag(
+    `ARM id=${stav.pointerId} @${Math.round(stav.startX)},${Math.round(stav.startY)}`
+  );
 
   stav.timer = setTimeout(async () => {
+    zapisTagDragDiag(
+      `TIMER id=${stav.pointerId} activePointer=${aktivniPointeryHornichStitku.has(stav.pointerId)} ` +
+      `sameState=${desktopStitekPointer === stav}`
+    );
     if (
       desktopStitekPointer !== stav ||
       !aktivniPointeryHornichStitku.has(stav.pointerId)
@@ -2174,6 +2208,11 @@ function pripravDesktopDragHornihoStitku(button, event) {
      * ani cloudovou práci navíc.
      */
     const zaznam = await zajistiZaznamHornihoStitkuProDrag(button);
+    zapisTagDragDiag(
+      `READY id=${stav.pointerId} tagId=${zaznam?.id || "NONE"} ` +
+      `activePointer=${aktivniPointeryHornichStitku.has(stav.pointerId)} ` +
+      `sameState=${desktopStitekPointer === stav}`
+    );
 
     if (
       desktopStitekPointer !== stav ||
@@ -2189,6 +2228,10 @@ function pripravDesktopDragHornihoStitku(button, event) {
       stav.y,
       stav.pointerType,
       stav.pointerId
+    );
+    zapisTagDragDiag(
+      `START id=${stav.pointerId} ok=${aktivovano} ` +
+      `drag=${Boolean(presunHornihoStitku)} @${Math.round(stav.x)},${Math.round(stav.y)}`
     );
 
     if (aktivovano) {
@@ -2235,6 +2278,14 @@ document.addEventListener(
       event.preventDefault();
       event.stopPropagation();
 
+      const tedDiag = performance.now();
+      if (!stav.posledniDiagMove || tedDiag - stav.posledniDiagMove > 250) {
+        stav.posledniDiagMove = tedDiag;
+        zapisTagDragDiag(
+          `MOVE id=${stav.pointerId} @${Math.round(stav.x)},${Math.round(stav.y)} buttons=${event.buttons}`
+        );
+      }
+
       /*
        * DESKTOP FAILSAFE:
        * Některé Chromium/WebView kombinace mohou při přesunu přes
@@ -2274,6 +2325,11 @@ document.addEventListener(
 
     const stav = desktopStitekPointer;
     const aktivniDrag = presunHornihoStitku;
+
+    zapisTagDragDiag(
+      `UP eventId=${event.pointerId} helperId=${stav?.pointerId ?? "NONE"} ` +
+      `dragId=${aktivniDrag?.id ?? "NONE"} drag=${Boolean(aktivniDrag)} buttons=${event.buttons}`
+    );
 
     /*
      * PC – KRITICKÝ FAILSAFE 422
@@ -2328,6 +2384,11 @@ document.addEventListener(
 
     const stav = desktopStitekPointer;
     const aktivniDrag = presunHornihoStitku;
+
+    zapisTagDragDiag(
+      `MOUSEUP helperId=${stav?.pointerId ?? "NONE"} ` +
+      `dragId=${aktivniDrag?.id ?? "NONE"} drag=${Boolean(aktivniDrag)} buttons=${event.buttons}`
+    );
 
     /* Druhá nezávislá pojistka pro browsery, kde se pointer stav rozpojí. */
     if (aktivniDrag && aktivniDrag.vstup !== "touch") {
