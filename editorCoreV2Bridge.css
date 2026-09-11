@@ -1,0 +1,121 @@
+/* LubaNote Editor Core V2.6 – Bridge TEST mode. */
+
+.modalRichTextV2Host[hidden] {
+  display: none !important;
+}
+
+.modalRichTextV2Host {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Stejný V2 engine jako LAB, ale vložený přímo do reálného fullscreen editoru. */
+.ln-v2-lab.ln-v2-vlozeny {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+}
+
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-hlavicka,
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-info,
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-akce,
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-model,
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-format,
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-paticka {
+  display: none !important;
+}
+
+.ln-v2-lab.ln-v2-vlozeny .ln-v2-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  padding: 18px 2px 14px;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--color-editor-text);
+  font-family: inherit;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.lnV2TestBadge {
+  position: absolute;
+  right: 10px;
+  top: 52px;
+  z-index: 40;
+  pointer-events: none;
+  padding: 4px 7px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-editor-background);
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  opacity: .92;
+}
+
+.lnV2BridgeToast {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 68px);
+  z-index: 2147483300;
+  transform: translateX(-50%);
+  max-width: min(90vw, 480px);
+  padding: 9px 13px;
+  border: 1px solid var(--color-accent, #8958f6);
+  border-radius: 12px;
+  background: var(--color-surface, #211b29);
+  color: var(--color-text, #fff);
+  box-shadow: 0 8px 28px rgba(0,0,0,.28);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+  pointer-events: none;
+}
+
+.lnV2BridgeToast[hidden] {
+  display: none !important;
+}
+
+.lnV2BridgeToast.chyba {
+  border-style: dashed;
+}
+
+.taskModal.editorV2TestMode #modalTitle[aria-readonly="true"] {
+  opacity: .88;
+}
+
+.taskModal.editorV2TestMode .editorQuickTool.lnV2Mixed {
+  border-style: dashed;
+}
+
+/* Ovladače přidané pouze pro V2 TEST do stávajících panelů LubaNote. */
+.lnV2OnlyControl {
+  display: none !important;
+}
+
+.taskModal.editorV2TestMode .lnV2OnlyControl {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.lnV2TextColorReset {
+  min-width: 42px;
+  min-height: 38px;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-editor-text);
+  font: inherit;
+  font-weight: 700;
+}

@@ -1,4 +1,4 @@
-/* LubaNote Editor Core V2 – izolovaný LAB. Všechny selektory mají ln-v2 prefix. */
+/* LubaNote Editor Core V2.5 – izolovaný LAB. Všechny selektory mají ln-v2 prefix. */
 
 body.ln-v2-lab-otevren {
   overflow: hidden !important;
@@ -97,10 +97,22 @@ body.ln-v2-lab-otevren {
   caret-color: var(--color-accent, currentColor);
   font-size: var(--font-size, 16px);
   line-height: 1.5;
-  white-space: normal;
+  /* V2.4a – mezery jsou součást modelu.
+     Po každém beforeinput překreslujeme DOM z modelu, proto nesmí browser
+     koncovou mezeru zkolabovat jako u white-space: normal. */
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   -webkit-user-select: text;
   user-select: text;
+}
+
+
+/* V2.4a – Android/WebView při nativním výběru jinak překreslí foreground
+   svou HighlightText barvou a uživatel změnu barvy textu vidí až po odkliknutí.
+   Výběr zůstává viditelný, ale barva znaku se bere z vykresleného V2 segmentu. */
+.ln-v2-editor ::selection {
+  color: inherit;
+  background-color: color-mix(in srgb, var(--color-accent, currentColor) 28%, transparent);
 }
 
 .ln-v2-odstavec {
@@ -210,4 +222,96 @@ body.ln-v2-lab-otevren {
 
 .ln-v2-format button {
   touch-action: manipulation;
+}
+
+
+/* V2.3 – B/I/U jsou pouze ovladače modelových atributů segmentu. */
+.ln-v2-format-biu {
+  min-width: 42px;
+  font-size: 18px !important;
+}
+
+.ln-v2-format-biu[data-v2-format="tucne"] strong {
+  font-weight: 800;
+}
+
+.ln-v2-format-biu[data-v2-format="kurziva"] em {
+  font-family: serif;
+  font-size: 20px;
+}
+
+.ln-v2-format-biu[data-v2-format="podtrzeni"] u {
+  text-underline-offset: 3px;
+}
+
+.ln-v2-format button.smisene {
+  border-style: dashed;
+  outline: 1px dashed var(--color-accent, currentColor);
+  outline-offset: -3px;
+}
+
+.ln-v2-format-oddeleni {
+  flex: 0 0 1px;
+  align-self: stretch;
+  min-height: 30px;
+  background: var(--color-border, rgba(255,255,255,.16));
+}
+
+
+/* V2.4 – barvy jsou modelové atributy. Paleta je záměrně jednoduchá LAB pomůcka. */
+.ln-v2-barva-popisek {
+  flex: 0 0 auto;
+  min-width: 105px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ln-v2-barva-popisek strong {
+  font-weight: 700;
+}
+
+.ln-v2-barva-vzorek,
+.ln-v2-barva-reset {
+  min-width: 38px !important;
+  width: 38px;
+  height: 38px;
+  padding: 5px !important;
+}
+
+.ln-v2-barva-vzorek > span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--ln-v2-vzorek);
+  border: 1px solid rgba(255,255,255,.55);
+}
+
+.ln-v2-barva-reset {
+  position: relative;
+  font-weight: 700 !important;
+  font-size: 18px !important;
+}
+
+.ln-v2-barva-reset::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 7px;
+  height: 2px;
+  background: currentColor;
+  opacity: .75;
+}
+
+.ln-v2-barva-reset-pozadi {
+  border-style: dashed !important;
+}
+
+
+/* V2.5 – Undo/Redo jsou stavové ovladače historie vlastního modelu. */
+.ln-v2-akce button:disabled {
+  opacity: .42;
+  cursor: default;
 }
