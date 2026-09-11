@@ -55,6 +55,10 @@ public class LubaNoteDocumentPlugin extends Plugin {
   private final Object pdfViewerLock = new Object();
   private ParcelFileDescriptor pdfViewerDescriptor = null;
   private PdfRenderer pdfViewerRenderer = null;
+  private Uri pdfViewerUri = null;
+
+  /* Zdroj PDF držený jen po dobu systémového dialogu „Uložit kopii“. */
+  private Uri cekajiciPdfZdrojUri = null;
 
   @PluginMethod
   public void otevriDokument(PluginCall call) {
@@ -173,6 +177,7 @@ public class LubaNoteDocumentPlugin extends Plugin {
 
         pdfViewerDescriptor = descriptor;
         pdfViewerRenderer = renderer;
+        pdfViewerUri = uri;
 
         JSObject odpoved = new JSObject();
         odpoved.put("canceled", false);
@@ -314,6 +319,126 @@ public class LubaNoteDocumentPlugin extends Plugin {
         // Descriptor už může být zavřený.
       }
       pdfViewerDescriptor = null;
+    }
+
+    pdfViewerUri = null;
+  }
+
+  @PluginMethod
+  public void ulozOtevrenePdf(PluginCall call) {
+    Uri zdroj;
+
+    synchronized (pdfViewerLock) {
+      zdroj = pdfViewerUri;
+    }
+
+    if (zdroj == null) {
+      call.reject("PDF není otevřené.");
+      return;
+    }
+
+    String nazev = call.getString(
+      "nazevSouboru",
+      "dokument.pdf"
+    );
+
+    if (!nazev.toLowerCase().endsWith(".pdf")) {
+      nazev = nazev + ".pdf";
+    }
+
+    cekajiciPdfZdrojUri = zdroj;
+
+    Intent zamer = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+    zamer.addCategory(Intent.CATEGORY_OPENABLE);
+    zamer.setType("application/pdf");
+    zamer.putExtra(Intent.EXTRA_TITLE, nazev);
+
+    startActivityForResult(
+      call,
+      zamer,
+      "dokonceniUlozeniOtevrenehoPdf"
+    );
+  }
+
+  @ActivityCallback
+  private void dokonceniUlozeniOtevrenehoPdf(
+    PluginCall call,
+    ActivityResult vysledek
+  ) {
+    if (call == null) {
+      cekajiciPdfZdrojUri = null;
+      return;
+    }
+
+    Intent dataZameru = vysledek.getData();
+
+    if (
+      vysledek.getResultCode() != Activity.RESULT_OK ||
+      dataZameru == null ||
+      dataZameru.getData() == null
+    ) {
+      cekajiciPdfZdrojUri = null;
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("saved", false);
+      odpoved.put("canceled", true);
+      call.resolve(odpoved);
+      return;
+    }
+
+    Uri zdroj = cekajiciPdfZdrojUri;
+    Uri cil = dataZameru.getData();
+
+    if (zdroj == null) {
+      cekajiciPdfZdrojUri = null;
+      call.reject("Zdroj otevřeného PDF už není dostupný.");
+      return;
+    }
+
+    if (zdroj.equals(cil)) {
+      cekajiciPdfZdrojUri = null;
+      call.reject("Otevřené PDF nelze přepsat samo sebou. Vyber jiný cílový soubor.");
+      return;
+    }
+
+    try (
+      InputStream vstup =
+        getContext()
+          .getContentResolver()
+          .openInputStream(zdroj);
+      OutputStream vystup =
+        getContext()
+          .getContentResolver()
+          .openOutputStream(cil, "wt")
+    ) {
+      if (vstup == null || vystup == null) {
+        call.reject("Android neotevřel PDF pro kopírování.");
+        return;
+      }
+
+      byte[] buffer = new byte[64 * 1024];
+      int nacteno;
+
+      while ((nacteno = vstup.read(buffer)) >= 0) {
+        if (nacteno > 0) {
+          vystup.write(buffer, 0, nacteno);
+        }
+      }
+
+      vystup.flush();
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("saved", true);
+      odpoved.put("canceled", false);
+      odpoved.put("uri", cil.toString());
+      call.resolve(odpoved);
+    } catch (IOException | SecurityException chyba) {
+      call.reject(
+        "PDF se nepodařilo uložit.",
+        chyba
+      );
+    } finally {
+      cekajiciPdfZdrojUri = null;
     }
   }
 

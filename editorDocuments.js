@@ -37,6 +37,9 @@
   let pdfViewerRenderToken = 0;
   let pdfViewerPrvky = null;
 
+  const PDF_ZOOM_MIN = 0.5;
+  const PDF_ZOOM_MAX = 3;
+
   function jeSecretEditor() {
     return (
       secretTaskEnabled === true ||
@@ -64,6 +67,40 @@
     );
   }
 
+  function omezPdfZoom(hodnota) {
+    return Math.max(
+      PDF_ZOOM_MIN,
+      Math.min(PDF_ZOOM_MAX, Number(hodnota) || 1)
+    );
+  }
+
+  function vzdalenostDotyku(a, b) {
+    return Math.hypot(
+      Number(a?.clientX || 0) - Number(b?.clientX || 0),
+      Number(a?.clientY || 0) - Number(b?.clientY || 0)
+    );
+  }
+
+  function stredDotyku(a, b) {
+    return {
+      x: (Number(a?.clientX || 0) + Number(b?.clientX || 0)) / 2,
+      y: (Number(a?.clientY || 0) + Number(b?.clientY || 0)) / 2
+    };
+  }
+
+  function ziskejPdfViewportWidth() {
+    if (!pdfViewerPrvky?.native) {
+      return 280;
+    }
+
+    const styl = getComputedStyle(pdfViewerPrvky.native);
+    const padding =
+      (parseFloat(styl.paddingLeft) || 0) +
+      (parseFloat(styl.paddingRight) || 0);
+
+    return Math.max(280, pdfViewerPrvky.native.clientWidth - padding);
+  }
+
   function zajistiPdfViewer() {
     if (pdfViewerPrvky) {
       return pdfViewerPrvky;
@@ -79,26 +116,35 @@
         <header class="pdfViewerHeader">
           <button type="button" class="pdfViewerClose" aria-label="Zavřít PDF">←</button>
           <div class="pdfViewerTitle" title=""></div>
-          <div class="pdfViewerZoom" hidden>
+          <button type="button" class="pdfViewerSave" aria-label="Uložit kopii PDF">Uložit</button>
+          <button type="button" class="pdfViewerFullscreen" aria-label="Maximální zobrazení PDF" title="Celá obrazovka">⛶</button>
+        </header>
+
+        <div class="pdfViewerPageBar" hidden>
+          <div class="pdfViewerPageGroup">
+            <button type="button" class="pdfViewerPrev" aria-label="Předchozí strana">‹</button>
+            <span class="pdfViewerPageValue">1 / 1</span>
+            <button type="button" class="pdfViewerNext" aria-label="Další strana">›</button>
+          </div>
+
+          <button type="button" class="pdfViewerFit" aria-label="Přizpůsobit PDF na šířku" title="Přizpůsobit na šířku">Fit</button>
+
+          <div class="pdfViewerZoom">
             <button type="button" class="pdfViewerZoomOut" aria-label="Zmenšit PDF">−</button>
             <span class="pdfViewerZoomValue">100 %</span>
             <button type="button" class="pdfViewerZoomIn" aria-label="Zvětšit PDF">+</button>
           </div>
-        </header>
-
-        <div class="pdfViewerPageBar" hidden>
-          <button type="button" class="pdfViewerPrev" aria-label="Předchozí strana">‹</button>
-          <span class="pdfViewerPageValue">1 / 1</span>
-          <button type="button" class="pdfViewerNext" aria-label="Další strana">›</button>
         </div>
 
         <div class="pdfViewerBody">
           <div class="pdfViewerLoading" hidden>Načítám PDF…</div>
           <div class="pdfViewerNative" hidden>
-            <img class="pdfViewerImage" alt="PDF strana">
+            <img class="pdfViewerImage" alt="PDF strana" draggable="false">
           </div>
           <iframe class="pdfViewerFrame" title="PDF dokument" hidden></iframe>
         </div>
+
+        <button type="button" class="pdfViewerFullscreenExit" aria-label="Opustit maximální zobrazení" hidden>←</button>
       </section>`;
 
     document.body.appendChild(overlay);
@@ -108,10 +154,14 @@
       panel: overlay.querySelector(".pdfViewerPanel"),
       close: overlay.querySelector(".pdfViewerClose"),
       title: overlay.querySelector(".pdfViewerTitle"),
+      save: overlay.querySelector(".pdfViewerSave"),
+      fullscreen: overlay.querySelector(".pdfViewerFullscreen"),
+      fullscreenExit: overlay.querySelector(".pdfViewerFullscreenExit"),
       zoom: overlay.querySelector(".pdfViewerZoom"),
       zoomOut: overlay.querySelector(".pdfViewerZoomOut"),
       zoomIn: overlay.querySelector(".pdfViewerZoomIn"),
       zoomValue: overlay.querySelector(".pdfViewerZoomValue"),
+      fit: overlay.querySelector(".pdfViewerFit"),
       pageBar: overlay.querySelector(".pdfViewerPageBar"),
       prev: overlay.querySelector(".pdfViewerPrev"),
       next: overlay.querySelector(".pdfViewerNext"),
@@ -125,6 +175,22 @@
 
     prvky.close.addEventListener("click", () => {
       zavriPdfViewer();
+    });
+
+    prvky.save.addEventListener("click", () => {
+      ulozPdfZVieweru();
+    });
+
+    prvky.fullscreen.addEventListener("click", () => {
+      nastavPdfFullscreen(true);
+    });
+
+    prvky.fullscreenExit.addEventListener("click", () => {
+      nastavPdfFullscreen(false);
+    });
+
+    prvky.fit.addEventListener("click", () => {
+      nastavPdfFit();
     });
 
     prvky.prev.addEventListener("click", () => {
@@ -143,6 +209,195 @@
       zmenPdfZoom(1);
     });
 
+    /*
+     * PDF – PINCH TO ZOOM
+     * ==========================================
+     * Během gesta NERENDERUJEME novou bitmapu na každý pohyb prstu.
+     * Mění se pouze CSS šířka již vykreslené stránky. Teprve po puštění
+     * prstů se z nativního PdfRendereru vyžádá ostrá varianta.
+     * Tohle pravidlo neměnit na render-per-touchmove – na mobilu by to
+     * bylo pomalé a mohlo by to přetížit paměť.
+     */
+    prvky.native.addEventListener(
+      "touchstart",
+      (event) => {
+        if (!pdfViewerStav?.native || event.touches.length !== 2) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const a = event.touches[0];
+        const b = event.touches[1];
+        const vzdalenost = vzdalenostDotyku(a, b);
+
+        if (vzdalenost < 10) {
+          return;
+        }
+
+        const stred = stredDotyku(a, b);
+        const rect = prvky.native.getBoundingClientRect();
+        const imageRect = prvky.image.getBoundingClientRect();
+        const sirka = Math.max(1, imageRect.width);
+        const vyska = Math.max(1, imageRect.height);
+
+        pdfViewerStav.pinch = {
+          vzdalenost,
+          zoom: pdfViewerStav.zoom,
+          aktualniZoom: pdfViewerStav.zoom,
+          lokalniX: stred.x - rect.left,
+          lokalniY: stred.y - rect.top,
+          bodX: Math.max(0, Math.min(1, (stred.x - imageRect.left) / sirka)),
+          bodY: Math.max(0, Math.min(1, (stred.y - imageRect.top) / vyska))
+        };
+
+        pdfViewerStav.posledniTap = null;
+        pdfViewerStav.blokujTapDo = performance.now() + 500;
+        prvky.native.classList.add("is-pinching");
+      },
+      { passive: false }
+    );
+
+    prvky.native.addEventListener(
+      "touchmove",
+      (event) => {
+        const pinch = pdfViewerStav?.pinch;
+
+        if (!pdfViewerStav?.native || !pinch || event.touches.length < 2) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const a = event.touches[0];
+        const b = event.touches[1];
+        const pomer = vzdalenostDotyku(a, b) / pinch.vzdalenost;
+        const zoom = omezPdfZoom(pinch.zoom * pomer);
+        const viewportWidth = ziskejPdfViewportWidth();
+
+        pinch.aktualniZoom = zoom;
+        prvky.image.style.width = `${Math.round(viewportWidth * zoom)}px`;
+        prvky.zoomValue.textContent = `${Math.round(zoom * 100)} %`;
+
+        /* Zachová bod PDF pod středem dvou prstů. */
+        const cilX =
+          prvky.image.offsetLeft +
+          pinch.bodX * prvky.image.offsetWidth;
+        const cilY =
+          prvky.image.offsetTop +
+          pinch.bodY * prvky.image.offsetHeight;
+
+        prvky.native.scrollLeft = Math.max(0, cilX - pinch.lokalniX);
+        prvky.native.scrollTop = Math.max(0, cilY - pinch.lokalniY);
+      },
+      { passive: false }
+    );
+
+    const dokoncitPinch = () => {
+      const pinch = pdfViewerStav?.pinch;
+
+      if (!pdfViewerStav?.native || !pinch) {
+        return;
+      }
+
+      pdfViewerStav.zoom = omezPdfZoom(pinch.aktualniZoom);
+      pdfViewerStav.pinch = null;
+      pdfViewerStav.blokujTapDo = performance.now() + 500;
+      prvky.native.classList.remove("is-pinching");
+      aktualizujPdfOvladani();
+
+      vykresliAktualniPdfStranku({ zachovatPozici: true })
+        .catch((error) => {
+          console.error("PDF pinch zoom selhal:", error);
+        });
+    };
+
+    prvky.native.addEventListener("touchend", (event) => {
+      if (pdfViewerStav?.pinch && event.touches.length < 2) {
+        dokoncitPinch();
+      }
+    });
+
+    prvky.native.addEventListener("touchcancel", dokoncitPinch);
+
+    /*
+     * 2× tap – maximalizace PDF.
+     * Jednoduchý tap nic nemění. Pohyb prstu nad 14 px se počítá jako
+     * scroll, ne jako tap, takže běžné posouvání stránky zůstává nedotčené.
+     */
+    let pointerTap = null;
+
+    prvky.native.addEventListener("pointerdown", (event) => {
+      if (!pdfViewerStav?.native || event.pointerType !== "touch") {
+        return;
+      }
+
+      pointerTap = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        cas: performance.now(),
+        pohyb: false
+      };
+    });
+
+    prvky.native.addEventListener("pointermove", (event) => {
+      if (!pointerTap || pointerTap.id !== event.pointerId) {
+        return;
+      }
+
+      if (
+        Math.hypot(
+          event.clientX - pointerTap.x,
+          event.clientY - pointerTap.y
+        ) > 14
+      ) {
+        pointerTap.pohyb = true;
+      }
+    });
+
+    prvky.native.addEventListener("pointercancel", () => {
+      pointerTap = null;
+    });
+
+    prvky.native.addEventListener("pointerup", (event) => {
+      if (
+        !pdfViewerStav?.native ||
+        !pointerTap ||
+        pointerTap.id !== event.pointerId ||
+        pointerTap.pohyb ||
+        performance.now() - pointerTap.cas > 320 ||
+        pdfViewerStav.pinch ||
+        performance.now() < Number(pdfViewerStav.blokujTapDo || 0)
+      ) {
+        pointerTap = null;
+        return;
+      }
+
+      const ted = performance.now();
+      const posledni = pdfViewerStav.posledniTap;
+      const jeDvojtap =
+        posledni &&
+        ted - posledni.cas <= 360 &&
+        Math.hypot(
+          event.clientX - posledni.x,
+          event.clientY - posledni.y
+        ) <= 38;
+
+      if (jeDvojtap) {
+        pdfViewerStav.posledniTap = null;
+        nastavPdfFullscreen(!pdfViewerStav.fullscreen);
+      } else {
+        pdfViewerStav.posledniTap = {
+          x: event.clientX,
+          y: event.clientY,
+          cas: ted
+        };
+      }
+
+      pointerTap = null;
+    });
+
     const zpracujKlavesyPdf = (event) => {
       if (!pdfViewerStav) {
         return;
@@ -151,7 +406,12 @@
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        zavriPdfViewer();
+
+        if (pdfViewerStav.fullscreen) {
+          nastavPdfFullscreen(false);
+        } else {
+          zavriPdfViewer();
+        }
         return;
       }
 
@@ -164,6 +424,16 @@
         event.preventDefault();
         prejdiNaPdfStranku(1);
       }
+
+      if (pdfViewerStav.native && (event.key === "+" || event.key === "=")) {
+        event.preventDefault();
+        zmenPdfZoom(1);
+      }
+
+      if (pdfViewerStav.native && event.key === "-") {
+        event.preventDefault();
+        zmenPdfZoom(-1);
+      }
     };
 
     document.addEventListener("keydown", zpracujKlavesyPdf, true);
@@ -172,7 +442,7 @@
     return prvky;
   }
 
-  function aktualizujPdfOvládani() {
+  function aktualizujPdfOvladani() {
     if (!pdfViewerStav || !pdfViewerPrvky) {
       return;
     }
@@ -190,11 +460,15 @@
     pdfViewerPrvky.next.disabled = pageIndex >= pageCount - 1;
     pdfViewerPrvky.zoomValue.textContent =
       `${Math.round(zoom * 100)} %`;
-    pdfViewerPrvky.zoomOut.disabled = zoom <= 0.75;
-    pdfViewerPrvky.zoomIn.disabled = zoom >= 2;
+    pdfViewerPrvky.zoomOut.disabled = zoom <= PDF_ZOOM_MIN + 0.01;
+    pdfViewerPrvky.zoomIn.disabled = zoom >= PDF_ZOOM_MAX - 0.01;
+    pdfViewerPrvky.fit.classList.toggle(
+      "active",
+      Math.abs(zoom - 1) < 0.01
+    );
   }
 
-  async function vykresliAktualniPdfStranku() {
+  async function vykresliAktualniPdfStranku({ zachovatPozici = false } = {}) {
     if (!pdfViewerStav?.native || !pdfViewerPrvky) {
       return;
     }
@@ -206,11 +480,14 @@
     }
 
     const token = ++pdfViewerRenderToken;
-    const viewportWidth = Math.max(280, pdfViewerPrvky.body.clientWidth - 24);
+    const viewportWidth = ziskejPdfViewportWidth();
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const targetWidth = Math.min(2600, Math.max(520,
       Math.round(viewportWidth * pdfViewerStav.zoom * pixelRatio)
     ));
+
+    const scrollLeft = pdfViewerPrvky.native.scrollLeft;
+    const scrollTop = pdfViewerPrvky.native.scrollTop;
 
     pdfViewerPrvky.loading.hidden = false;
     pdfViewerPrvky.image.classList.add("is-loading");
@@ -234,9 +511,10 @@
 
     pdfViewerPrvky.loading.hidden = true;
     pdfViewerPrvky.image.classList.remove("is-loading");
+
     pdfViewerPrvky.native.scrollTo({
-      top: 0,
-      left: 0,
+      top: zachovatPozici ? scrollTop : 0,
+      left: zachovatPozici ? scrollLeft : 0,
       behavior: "auto"
     });
   }
@@ -256,7 +534,7 @@
     }
 
     pdfViewerStav.pageIndex = dalsi;
-    aktualizujPdfOvládani();
+    aktualizujPdfOvladani();
 
     try {
       await vykresliAktualniPdfStranku();
@@ -266,28 +544,171 @@
     }
   }
 
+  async function nastavPdfZoom(zoom, { zachovatPozici = true } = {}) {
+    if (!pdfViewerStav?.native) {
+      return;
+    }
+
+    const novyZoom = omezPdfZoom(zoom);
+
+    if (Math.abs(novyZoom - pdfViewerStav.zoom) < 0.005) {
+      aktualizujPdfOvladani();
+      return;
+    }
+
+    pdfViewerStav.zoom = novyZoom;
+    aktualizujPdfOvladani();
+
+    try {
+      await vykresliAktualniPdfStranku({ zachovatPozici });
+    } catch (error) {
+      console.error("PDF zoom selhal:", error);
+    }
+  }
+
   async function zmenPdfZoom(smer) {
     if (!pdfViewerStav?.native) {
       return;
     }
 
-    const urovne = [0.75, 1, 1.25, 1.5, 2];
-    const aktualniIndex = urovne.findIndex(
-      (hodnota) => Math.abs(hodnota - pdfViewerStav.zoom) < 0.01
-    );
-    const zakladIndex = aktualniIndex >= 0 ? aktualniIndex : 1;
+    const urovne = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+    let nejblizsiIndex = 0;
+    let nejmensiRozdil = Infinity;
+
+    urovne.forEach((hodnota, index) => {
+      const rozdil = Math.abs(hodnota - pdfViewerStav.zoom);
+      if (rozdil < nejmensiRozdil) {
+        nejmensiRozdil = rozdil;
+        nejblizsiIndex = index;
+      }
+    });
+
     const novyIndex = Math.max(0, Math.min(
       urovne.length - 1,
-      zakladIndex + smer
+      nejblizsiIndex + smer
     ));
 
-    pdfViewerStav.zoom = urovne[novyIndex];
-    aktualizujPdfOvládani();
+    await nastavPdfZoom(urovne[novyIndex], {
+      zachovatPozici: true
+    });
+  }
+
+  async function nastavPdfFit() {
+    await nastavPdfZoom(1, { zachovatPozici: false });
+  }
+
+  async function nastavPdfFullscreen(ano) {
+    if (!pdfViewerStav || !pdfViewerPrvky) {
+      return;
+    }
+
+    const fullscreen = ano === true;
+    pdfViewerStav.fullscreen = fullscreen;
+    pdfViewerPrvky.overlay.classList.toggle("is-fullscreen", fullscreen);
+    pdfViewerPrvky.fullscreenExit.hidden = !fullscreen;
+    pdfViewerPrvky.fullscreen.setAttribute(
+      "aria-pressed",
+      fullscreen ? "true" : "false"
+    );
+
+    if (!pdfViewerStav.native) {
+      return;
+    }
+
+    /*
+     * Po změně dostupného prostoru přepočítáme bitmapu až v dalším frame,
+     * jinak by clientWidth ještě odpovídal starému layoutu.
+     */
+    await new Promise((resolve) => requestAnimationFrame(resolve));
 
     try {
-      await vykresliAktualniPdfStranku();
+      await vykresliAktualniPdfStranku({ zachovatPozici: false });
     } catch (error) {
-      console.error("PDF zoom selhal:", error);
+      console.error("PDF fullscreen render selhal:", error);
+    }
+  }
+
+  async function ulozPdfPresWebZVieweru(file, nazevSouboru) {
+    if (!(file instanceof Blob)) {
+      throw new Error("PDF data nejsou dostupná.");
+    }
+
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: nazevSouboru || "dokument.pdf",
+          types: [
+            {
+              description: "PDF dokument",
+              accept: {
+                "application/pdf": [".pdf"]
+              }
+            }
+          ]
+        });
+
+        const zapis = await handle.createWritable();
+        await zapis.write(file);
+        await zapis.close();
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return false;
+        }
+        throw error;
+      }
+    }
+
+    const url = URL.createObjectURL(file);
+    const odkaz = document.createElement("a");
+    odkaz.href = url;
+    odkaz.download = nazevSouboru || "dokument.pdf";
+    odkaz.hidden = true;
+    document.body.appendChild(odkaz);
+    odkaz.click();
+    odkaz.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    return true;
+  }
+
+  async function ulozPdfZVieweru() {
+    if (!pdfViewerStav || !pdfViewerPrvky || pdfViewerPrvky.save.disabled) {
+      return;
+    }
+
+    pdfViewerPrvky.save.disabled = true;
+    pdfViewerPrvky.save.classList.add("is-saving");
+
+    try {
+      let ulozeno = false;
+
+      if (pdfViewerStav.native) {
+        const plugin = ziskejNativniPlugin();
+
+        if (!plugin?.ulozOtevrenePdf) {
+          throw new Error("Nativní uložení otevřeného PDF není dostupné.");
+        }
+
+        const vysledek = await plugin.ulozOtevrenePdf({
+          nazevSouboru: pdfViewerStav.nazevSouboru || "dokument.pdf"
+        });
+        ulozeno = vysledek?.saved === true;
+      } else {
+        ulozeno = await ulozPdfPresWebZVieweru(
+          pdfViewerStav.file,
+          pdfViewerStav.nazevSouboru || "dokument.pdf"
+        );
+      }
+
+      if (ulozeno && typeof zobrazZpravuAplikace === "function") {
+        zobrazZpravuAplikace("PDF", "PDF bylo uloženo.");
+      }
+    } catch (error) {
+      console.error("Uložení otevřeného PDF selhalo:", error);
+      zobrazChybu("PDF", "PDF se nepodařilo uložit.");
+    } finally {
+      pdfViewerPrvky.save.disabled = false;
+      pdfViewerPrvky.save.classList.remove("is-saving");
     }
   }
 
@@ -298,6 +719,8 @@
     prvky.title.textContent = soubor.nazevSouboru || "PDF dokument";
     prvky.title.title = soubor.nazevSouboru || "PDF dokument";
     prvky.overlay.hidden = false;
+    prvky.overlay.classList.remove("is-fullscreen");
+    prvky.fullscreenExit.hidden = true;
     document.body.classList.add("pdfViewerOpen");
 
     if (soubor.native === true) {
@@ -305,14 +728,18 @@
         native: true,
         pageCount: Math.max(1, Number(soubor.pageCount) || 1),
         pageIndex: 0,
-        zoom: 1
+        zoom: 1,
+        fullscreen: false,
+        pinch: null,
+        posledniTap: null,
+        blokujTapDo: 0,
+        nazevSouboru: soubor.nazevSouboru || "dokument.pdf"
       };
 
       prvky.frame.hidden = true;
       prvky.native.hidden = false;
       prvky.pageBar.hidden = false;
-      prvky.zoom.hidden = false;
-      aktualizujPdfOvládani();
+      aktualizujPdfOvladani();
 
       try {
         await vykresliAktualniPdfStranku();
@@ -324,10 +751,14 @@
       return;
     }
 
-    pdfViewerStav = { native: false };
+    pdfViewerStav = {
+      native: false,
+      fullscreen: false,
+      file: soubor.file,
+      nazevSouboru: soubor.nazevSouboru || "dokument.pdf"
+    };
     prvky.native.hidden = true;
     prvky.pageBar.hidden = true;
-    prvky.zoom.hidden = true;
     prvky.loading.hidden = true;
     prvky.frame.hidden = false;
 
@@ -349,9 +780,13 @@
     pdfViewerStav = null;
 
     pdfViewerPrvky.overlay.hidden = true;
+    pdfViewerPrvky.overlay.classList.remove("is-fullscreen");
+    pdfViewerPrvky.fullscreenExit.hidden = true;
     pdfViewerPrvky.loading.hidden = true;
     pdfViewerPrvky.image.removeAttribute("src");
     pdfViewerPrvky.image.style.removeProperty("width");
+    pdfViewerPrvky.image.classList.remove("is-loading");
+    pdfViewerPrvky.native.classList.remove("is-pinching");
     pdfViewerPrvky.frame.src = "about:blank";
     document.body.classList.remove("pdfViewerOpen");
 
@@ -1364,7 +1799,11 @@
 
   window.LubaNoteZpracujAndroidZpet = function () {
     if (pdfViewerStav) {
-      zavriPdfViewer();
+      if (pdfViewerStav.fullscreen) {
+        nastavPdfFullscreen(false);
+      } else {
+        zavriPdfViewer();
+      }
       return true;
     }
 
