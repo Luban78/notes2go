@@ -2235,11 +2235,19 @@ function pripravDesktopDragHornihoStitku(button, event) {
     );
 
     if (aktivovano) {
-      try {
-        button.setPointerCapture?.(stav.pointerId);
-      } catch (_) {
-        /* Stejně jako u karet: capture je bonus, ne podmínka funkce. */
-      }
+      /*
+       * PC – KRITICKÝ FIX 424
+       * ======================
+       * Štítky při dragování fyzicky přesouváme v DOM pomocí insertBefore().
+       * Na desktopu proto NESMÍME držet pointer capture na samotném tlačítku:
+       * Chrome při prvním přerovnání zachyceného elementu vyvolá pointercancel.
+       * To přesně ukázal TAGDRAG report 423: START -> MOVE -> cancel=true.
+       *
+       * Karty pointer capture používat mohou, protože jejich zdrojová karta se
+       * během dragu nepřesouvá – přesouvá se placeholder. U štítků už máme
+       * globální document pointermove/up/cancel, takže capture nepotřebujeme.
+       */
+      zapisTagDragDiag(`NO_CAPTURE id=${stav.pointerId} reason=source-dom-reorder`);
     }
   }, CAS_LONG_PRESS_STITKU);
 }
@@ -2453,6 +2461,7 @@ document.addEventListener(
       presunHornihoStitku?.id === stav.pointerId;
 
     if (aktivni) {
+      zapisTagDragDiag(`CANCEL eventId=${event.pointerId} reason=pointercancel`);
       void dokoncitPresunHornihoStitku({ zrusit: true });
     }
 
@@ -2476,6 +2485,7 @@ window.addEventListener(
       presunHornihoStitku?.id === stav.pointerId;
 
     if (aktivni) {
+      zapisTagDragDiag(`CANCEL id=${stav.pointerId} reason=window-blur`);
       void dokoncitPresunHornihoStitku({ zrusit: true });
     }
 
