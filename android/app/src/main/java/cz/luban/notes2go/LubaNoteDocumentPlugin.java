@@ -6,21 +6,19 @@ import android.content.Context;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.pdf.PdfRenderer;
+import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.Build;
-import android.os.Bundle;
-import android.os.CancellationSignal;
 import android.os.Environment;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
-import android.print.PrintDocumentInfo;
-import android.print.PageRange;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
@@ -896,155 +894,160 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
 
     Uri cil = null;
-    ParcelFileDescriptor descriptor = null;
+    PdfDocument dokument = null;
+    OutputStream vystup = null;
 
     try {
       cil = vytvorPdfVeStazenych(pdfNazev);
-      descriptor = getContext()
-        .getContentResolver()
-        .openFileDescriptor(cil, "w");
 
-      if (descriptor == null) {
+      /*
+       * Android 10+ – PDF vytvoříme přímo z off-screen WebView.
+       * Nepoužíváme PrintManager ani jeho neveřejné callback konstruktory,
+       * takže se neotevře systémový tiskový náhled.
+       *
+       * A4: 595 × 842 bodů při 72 dpi. Okraj ~14 mm = 40 bodů.
+       * WebView vykreslujeme po svislých řezech a každý řez uložíme
+       * jako jednu PDF stránku.
+       */
+      final int sirkaPdf = 595;
+      final int vyskaPdf = 842;
+      final int okrajPdf = 40;
+      final int sirkaObsahuPdf = sirkaPdf - (okrajPdf * 2);
+      final int vyskaObsahuPdf = vyskaPdf - (okrajPdf * 2);
+
+      /*
+       * 182 mm tisknutelné šířky odpovídá přibližně 688 CSS px při 96 dpi.
+       * Tím zůstane zalomení textu blízko původnímu A4 print layoutu.
+       */
+      final int sirkaWeb = 688;
+      final float meritko =
+        sirkaObsahuPdf / (float) sirkaWeb;
+      final int vyskaWebNaStranku = Math.max(
+        1,
+        (int) Math.floor(vyskaObsahuPdf / meritko)
+      );
+
+      int sirkaSpec = android.view.View.MeasureSpec.makeMeasureSpec(
+        sirkaWeb,
+        android.view.View.MeasureSpec.EXACTLY
+      );
+      int vyskaSpec = android.view.View.MeasureSpec.makeMeasureSpec(
+        0,
+        android.view.View.MeasureSpec.UNSPECIFIED
+      );
+
+      pdfWebView.measure(sirkaSpec, vyskaSpec);
+
+      int celkovaVyska = Math.max(
+        1,
+        pdfWebView.getMeasuredHeight()
+      );
+
+      /*
+       * Některé WebView při UNSPECIFIED vrátí jen aktuální viewport.
+       * getContentHeight() proto použijeme jako bezpečné minimum.
+       */
+      int obsahovaVyska = Math.max(
+        1,
+        pdfWebView.getContentHeight()
+      );
+      celkovaVyska = Math.max(celkovaVyska, obsahovaVyska);
+
+      pdfWebView.layout(
+        0,
+        0,
+        sirkaWeb,
+        celkovaVyska
+      );
+
+      int pocetStran = Math.max(
+        1,
+        (int) Math.ceil(
+          celkovaVyska / (double) vyskaWebNaStranku
+        )
+      );
+
+      dokument = new PdfDocument();
+
+      for (int index = 0; index < pocetStran; index++) {
+        PdfDocument.PageInfo info =
+          new PdfDocument.PageInfo.Builder(
+            sirkaPdf,
+            vyskaPdf,
+            index + 1
+          ).create();
+
+        PdfDocument.Page stranka = dokument.startPage(info);
+        Canvas platno = stranka.getCanvas();
+        platno.drawColor(Color.WHITE);
+
+        platno.save();
+        platno.translate(okrajPdf, okrajPdf);
+        platno.clipRect(
+          0,
+          0,
+          sirkaObsahuPdf,
+          vyskaObsahuPdf
+        );
+        platno.scale(meritko, meritko);
+        platno.translate(
+          0,
+          -(index * vyskaWebNaStranku)
+        );
+        pdfWebView.draw(platno);
+        platno.restore();
+
+        dokument.finishPage(stranka);
+      }
+
+      vystup = getContext()
+        .getContentResolver()
+        .openOutputStream(cil, "w");
+
+      if (vystup == null) {
         throw new IOException(
           "Android neotevřel cílový PDF soubor."
         );
       }
 
-      final Uri cilFinal = cil;
-      final ParcelFileDescriptor descriptorFinal = descriptor;
-      final PrintDocumentAdapter adapter =
-        pdfWebView.createPrintDocumentAdapter(pdfNazev);
-      final PrintAttributes atributy =
-        new PrintAttributes.Builder()
-          .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-          .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-          .build();
-      final CancellationSignal zruseni = new CancellationSignal();
+      dokument.writeTo(vystup);
+      vystup.flush();
+      vystup.close();
+      vystup = null;
 
-      adapter.onLayout(
-        null,
-        atributy,
-        zruseni,
-        new PrintDocumentAdapter.LayoutResultCallback() {
-          @Override
-          public void onLayoutFinished(
-            PrintDocumentInfo info,
-            boolean changed
-          ) {
-            adapter.onWrite(
-              new PageRange[] { PageRange.ALL_PAGES },
-              descriptorFinal,
-              zruseni,
-              new PrintDocumentAdapter.WriteResultCallback() {
-                @Override
-                public void onWriteFinished(PageRange[] pages) {
-                  try {
-                    descriptorFinal.close();
-                    dokoncitPdfVeStazenych(cilFinal);
+      dokument.close();
+      dokument = null;
 
-                    JSObject odpoved =
-                      vytvorPdfUlozenoOdpoved(cilFinal);
-                    odpoved.put("started", false);
-                    call.resolve(odpoved);
-                  } catch (Exception chyba) {
-                    zrusPdfVeStazenych(cilFinal);
-                    call.reject(
-                      "PDF se nepodařilo dokončit.",
-                      chyba
-                    );
-                  } finally {
-                    vycistiPdfTisk();
-                  }
-                }
+      dokoncitPdfVeStazenych(cil);
 
-                @Override
-                public void onWriteFailed(CharSequence error) {
-                  try {
-                    descriptorFinal.close();
-                  } catch (Exception ignored) {
-                    // pokračujeme úklidem
-                  }
-
-                  zrusPdfVeStazenych(cilFinal);
-                  vycistiPdfTisk();
-                  call.reject(
-                    error == null
-                      ? "PDF se nepodařilo vytvořit."
-                      : error.toString()
-                  );
-                }
-
-                @Override
-                public void onWriteCancelled() {
-                  try {
-                    descriptorFinal.close();
-                  } catch (Exception ignored) {
-                    // pokračujeme úklidem
-                  }
-
-                  zrusPdfVeStazenych(cilFinal);
-                  vycistiPdfTisk();
-
-                  JSObject odpoved = new JSObject();
-                  odpoved.put("saved", false);
-                  odpoved.put("canceled", true);
-                  call.resolve(odpoved);
-                }
-              }
-            );
-          }
-
-          @Override
-          public void onLayoutFailed(CharSequence error) {
-            try {
-              descriptorFinal.close();
-            } catch (Exception ignored) {
-              // pokračujeme úklidem
-            }
-
-            zrusPdfVeStazenych(cilFinal);
-            vycistiPdfTisk();
-            call.reject(
-              error == null
-                ? "PDF layout se nepodařilo připravit."
-                : error.toString()
-            );
-          }
-
-          @Override
-          public void onLayoutCancelled() {
-            try {
-              descriptorFinal.close();
-            } catch (Exception ignored) {
-              // pokračujeme úklidem
-            }
-
-            zrusPdfVeStazenych(cilFinal);
-            vycistiPdfTisk();
-
-            JSObject odpoved = new JSObject();
-            odpoved.put("saved", false);
-            odpoved.put("canceled", true);
-            call.resolve(odpoved);
-          }
-        },
-        new Bundle()
-      );
+      JSObject odpoved = vytvorPdfUlozenoOdpoved(cil);
+      odpoved.put("started", false);
+      odpoved.put("pages", pocetStran);
+      call.resolve(odpoved);
     } catch (Exception chyba) {
-      if (descriptor != null) {
+      if (vystup != null) {
         try {
-          descriptor.close();
+          vystup.close();
+        } catch (Exception ignored) {
+          // pokračujeme úklidem
+        }
+      }
+
+      if (dokument != null) {
+        try {
+          dokument.close();
         } catch (Exception ignored) {
           // pokračujeme úklidem
         }
       }
 
       zrusPdfVeStazenych(cil);
-      vycistiPdfTisk();
       call.reject(
         "PDF se nepodařilo uložit do Stažené/LubaNote.",
         chyba
       );
+    } finally {
+      vycistiPdfTisk();
     }
   }
 
