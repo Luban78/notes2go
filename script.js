@@ -286,40 +286,10 @@ let puvodniOtiskEditoru = null;
  */
 let aktivniSdilenaEditace = null;
 
-function ziskejObsahEditoruProCteni() {
-  const bridge = window.LubaNoteEditorV2Bridge;
-
-  if (bridge?.jeAktivni?.()) {
-    const obsahV2 = bridge.ziskejObsahProProdukci?.();
-    if (obsahV2) {
-      return {
-        note: String(obsahV2.note || ""),
-        richContent: String(obsahV2.richContent || ""),
-        todos: Array.isArray(obsahV2.todos)
-          ? obsahV2.todos.map((todo) => ({ ...todo }))
-          : [],
-        maMedia: obsahV2.maMedia === true
-      };
-    }
-  }
-
-  return {
-    note: modalRichText?.innerText || "",
-    richContent: modalRichText?.innerHTML || "",
-    todos: Array.isArray(activeTodos)
-      ? activeTodos.map((todo) => ({ ...todo }))
-      : [],
-    maMedia:
-      window.LubaNoteEditorMedia?.maVlozenyObsah?.() === true
-  };
-}
-
 function vytvorOtiskEditoru() {
-  const obsahEditoru = ziskejObsahEditoruProCteni();
-
   return JSON.stringify({
     title: ziskejNazevPoznamkyZEditoru().trim(),
-    richContent: obsahEditoru.richContent,
+    richContent: modalRichText.innerHTML,
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled,
@@ -328,7 +298,7 @@ function vytvorOtiskEditoru() {
     area: activeArea,
     secret: secretTaskEnabled,
     tags: [...activeTags],
-    todos: obsahEditoru.todos,
+    todos: [...activeTodos],
     repeat: kopirujEditorRepeat(
       editorRepeat
     )
@@ -342,21 +312,6 @@ function bylEditorZmenen() {
     puvodniOtiskEditoru
   );
 }
-
-function aktualizujPuvodniOtiskEditoruProV2() {
-  /*
-   * Import HTML -> V2 model -> kanonický export může změnit technický tvar
-   * HTML bez změny obsahu. Po PRVNÍ produkční aktivaci V2 proto nastavíme
-   * baseline na kanonický V2 stav, jinak by se právě otevřená poznámka
-   * mylně tvářila jako změněná. Recovery a ruční legacy->V2 přepnutí tuto
-   * funkci záměrně nevolají, aby neztratily informaci o rozepsaných změnách.
-   */
-  puvodniOtiskEditoru = vytvorOtiskEditoru();
-  return puvodniOtiskEditoru;
-}
-
-window.LubaNoteAktualizujPuvodniOtiskEditoruProV2 =
-  aktualizujPuvodniOtiskEditoruProV2;
 
 
 function uvolniSdilenyLockPriZavreni(
@@ -826,9 +781,8 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
   }
   
   const title = ziskejNazevPoznamkyZEditoru().trim();
-  const obsahEditoru = ziskejObsahEditoruProCteni();
-  const note = obsahEditoru.note;
-  const richContent = obsahEditoru.richContent;
+  const note = modalRichText.innerText;
+  const richContent = modalRichText.innerHTML;
   const date =
     modalDate.value && modalTime.value ?
     `${modalDate.value}T${modalTime.value}` :
@@ -869,7 +823,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       pinned: currentTask.pinned === true,
       isSecret: true,
       tags: [...activeTags],
-      todos: obsahEditoru.todos,
+      todos: [...activeTodos],
       repeat: secretTaskEnabled ?
         null : kopirujEditorRepeat(editorRepeat)
     };
@@ -887,14 +841,13 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
     await updateTask(aktivni.index, savedNote);
   } else {
     const maVlozenyMediaObsah =
-      obsahEditoru.maMedia === true ||
       window.LubaNoteEditorMedia
-        ?.maVlozenyObsah?.() === true;
+      ?.maVlozenyObsah?.() === true;
     
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      obsahEditoru.todos.length === 0 &&
+      activeTodos.length === 0 &&
       !maVlozenyMediaObsah;
     
     if (!isEmpty) {
@@ -915,7 +868,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
         pinned: false,
         isSecret: true,
         tags: [...activeTags],
-        todos: obsahEditoru.todos,
+        todos: [...activeTodos],
         repeat: null
       };
       
@@ -2982,9 +2935,8 @@ async function ulozAZavriEditor(
     const closingTaskId = activeTaskId;
     
     const title = ziskejNazevPoznamkyZEditoru().trim();
-    const obsahEditoru = ziskejObsahEditoruProCteni();
-    const note = obsahEditoru.note;
-    const richContent = obsahEditoru.richContent;
+    const note = modalRichText.innerText;
+    const richContent = modalRichText.innerHTML;
     const date =
       modalDate.value && modalTime.value ?
       `${modalDate.value}T${modalTime.value}` :
@@ -3055,7 +3007,7 @@ async function ulozAZavriEditor(
         pinned: currentTask.pinned === true,
         isSecret: secretTaskEnabled,
         tags: [...stitkyProUlozeni],
-        todos: obsahEditoru.todos,
+        todos: [...activeTodos],
         repeat: secretTaskEnabled ?
           null :
           kopirujEditorRepeat(editorRepeat)
@@ -3090,14 +3042,13 @@ async function ulozAZavriEditor(
       ulozenaPoznamka = updatedTask;
     } else {
       const maVlozenyMediaObsah =
-        obsahEditoru.maMedia === true ||
         window.LubaNoteEditorMedia
-          ?.maVlozenyObsah?.() === true;
+        ?.maVlozenyObsah?.() === true;
       
       const isEmpty =
         title === "" &&
         note.trim() === "" &&
-        obsahEditoru.todos.length === 0 &&
+        activeTodos.length === 0 &&
         !maVlozenyMediaObsah;
       
       if (!isEmpty) {
@@ -3142,7 +3093,7 @@ async function ulozAZavriEditor(
           pinned: false,
           isSecret: secretTaskEnabled,
           tags: [...stitkyProUlozeni],
-          todos: obsahEditoru.todos,
+          todos: [...activeTodos],
           repeat: secretTaskEnabled ?
             null :
             kopirujEditorRepeat(editorRepeat)
@@ -4330,7 +4281,7 @@ function renderTasks() {
             window.LubaNoteNoteLinks
               ?.ziskejTextProNahledTodo?.(todo);
 
-          return `${todo.completed ? "☑" : "☐"} ${
+          return `${todo.completed ? "●" : "○"} ${
             aktualniTodoText ?? todo.text
           }`;
         })
@@ -6214,7 +6165,6 @@ function vytvorSnapshotNovehoDraftu() {
     return null;
   }
 
-  const obsahEditoru = ziskejObsahEditoruProCteni();
   const otisk = vytvorOtiskEditoru();
 
   if (
@@ -6242,7 +6192,7 @@ function vytvorSnapshotNovehoDraftu() {
     title:
       ziskejNazevPoznamkyZEditoru(),
     richContent:
-      obsahEditoru.richContent,
+      modalRichText.innerHTML,
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled === true,
@@ -6252,7 +6202,9 @@ function vytvorSnapshotNovehoDraftu() {
     tags: Array.isArray(activeTags)
       ? [...activeTags]
       : [],
-    todos: obsahEditoru.todos,
+    todos: Array.isArray(activeTodos)
+      ? activeTodos.map((todo) => ({ ...todo }))
+      : [],
     repeat:
       kopirujEditorRepeat(editorRepeat),
     secret: false
@@ -6462,9 +6414,6 @@ async function obnovDraftDoEditoru(draft) {
       posledniUlozenyOtiskDraftu =
         draft.otisk || null;
 
-      window.LubaNoteEditorV2Bridge
-        ?.obnovZProdukcnihoEditoru?.();
-
       return true;
     }
 
@@ -6553,9 +6502,6 @@ async function obnovDraftDoEditoru(draft) {
 
     posledniUlozenyOtiskDraftu =
       draft.otisk || null;
-
-    window.LubaNoteEditorV2Bridge
-      ?.obnovZProdukcnihoEditoru?.();
 
     return true;
   } finally {

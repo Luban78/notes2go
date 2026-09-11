@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2
-   FÁZE V2.18: produkční model + interní odkazy + Planner.
+   FÁZE V2.19: stabilizace selection / MOVE + produkční odkazy / Planner.
 
    🔒 FROZEN PRINCIPY CORE V2:
    - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
@@ -110,7 +110,7 @@
      Long-press pouze vybere položku, drop atomicky změní `dokument.bloky`.
      Přesouvá se vždy celý podstrom (rodič + jeho vnořené děti).
   ========================================== */
-  const DELKA_LONG_PRESS_SEZNAMU = 420;
+  const DELKA_LONG_PRESS_SEZNAMU = 650;
   const MAX_POHYB_LONG_PRESS_SEZNAMU = 20;
   const START_DRAG_SEZNAMU = 7;
   const PRAH_VNOR_SEZNAMU = 38;
@@ -3445,6 +3445,22 @@
     ));
   }
 
+  /*
+   * 🔒 V2.19 – TEXT SELECTION vs. MOVE
+   * Přesun seznamové/TODO položky NESMÍ soutěžit s Android výběrem textu.
+   * Drag proto začíná pouze z vizuální značky seznamu (• / 1.) nebo
+   * dlouhým stiskem TODO checkboxu. Samotný text řádku vždy patří selection.
+   * Tohle pravidlo neměnit zpět na „long-press kdekoliv v řádku“ – přesně to
+   * blokovalo 2× tap i dlouhý výběr textu.
+   */
+  function jeV2MoveZonaSeznamu(target, radek, clientX) {
+    if (!radek) return false;
+    if (radek.classList.contains("ln-v2-todo")) {
+      return Boolean(target?.closest?.("[data-v2-todo-check]"));
+    }
+    return jeV2KlikNaZnacceSeznamu(radek, clientX, true);
+  }
+
   function zrusVyberMoveSeznamuPokudMimo(target) {
     if (!vybranaPolozkaSeznamuId || !editor) return;
     const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
@@ -3709,7 +3725,7 @@
     posledniPozice = { ...pozice };
     posledniVyber = klonVyberu(vyber);
     ulozenyFormatovaciVyber = klonVyberu(vyber);
-    vybranaPolozkaSeznamuId = drag.blokId;
+    vybranaPolozkaSeznamuId = "";
     ulozZmenuDoHistorie(snapshotPred, "přesun položky seznamu");
     vykresli(vyber);
     nastavStav(`Položka přesunuta · úroveň ${normalizujUrovenBulletu(dokument.bloky[novyIndex]?.uroven)}`);
@@ -3724,9 +3740,8 @@
     let zmeneno = false;
     if (ulozit && aktivni) zmeneno = presunV2SeznamovyPodstrom(drag);
     if (aktivni) potlacKlikSeznamuDo = performance.now() + 500;
-    zrusV2DragSeznamu({ zachovatVyber: !aktivni });
+    zrusV2DragSeznamu({ zachovatVyber: false });
     if (aktivni && zmeneno) {
-      vybranaPolozkaSeznamuId = drag.blokId;
       vykresli(posledniVyber || vyberZPosledniPozice());
     }
     return aktivni;
@@ -3768,17 +3783,17 @@
     }
 
     if (v2DragSeznamu.pripraven) {
-      event.preventDefault();
-      const id = v2DragSeznamu.blokId;
-      zrusV2DragSeznamu({ zachovatVyber: true });
-      vybranaPolozkaSeznamuId = id;
-      vykresli(posledniVyber || vyberZPosledniPozice());
+      /* Long-press na značce bez pohybu není trvalý MOVE mód.
+         Po puštění se vše vrátí do běžné editace, aby další 1×/2× tap
+         nikdy nebyl blokovaný starým stavem přesunu. */
+      potlacKlikSeznamuDo = performance.now() + 350;
+      zrusV2DragSeznamu({ zachovatVyber: false });
       return;
     }
 
     /* Krátký tap je normální editace/selection. MOVE MODE vznikne až
-       skutečným long-pressem; tím zachováváme odladěné chování 1×/2× tap. */
-    zrusV2DragSeznamu({ zachovatVyber: true });
+       skutečným long-pressem na značce/checkboxu. */
+    zrusV2DragSeznamu({ zachovatVyber: false });
   }
 
   function zpracujV2ListPointerMove(event) {
@@ -3805,14 +3820,11 @@
       return;
     }
     if (v2DragSeznamu.pripraven) {
-      event.preventDefault();
-      const id = v2DragSeznamu.blokId;
-      zrusV2DragSeznamu({ zachovatVyber: true });
-      vybranaPolozkaSeznamuId = id;
-      vykresli(posledniVyber || vyberZPosledniPozice());
+      potlacKlikSeznamuDo = performance.now() + 350;
+      zrusV2DragSeznamu({ zachovatVyber: false });
       return;
     }
-    zrusV2DragSeznamu({ zachovatVyber: true });
+    zrusV2DragSeznamu({ zachovatVyber: false });
   }
 
   function zpracujBeforeInput(event) {
@@ -4916,12 +4928,12 @@
       if (event.touches?.length !== 1) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-      if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
+      if (!radek || !editor.contains(radek)) return;
       const dotyk = event.touches[0];
-      const jeVybrany = vybranaPolozkaSeznamuId === (radek.dataset.lnV2Blok || "");
-      if (jeVybrany) event.preventDefault();
+      if (!jeV2MoveZonaSeznamu(event.target, radek, dotyk.clientX)) return;
+      if (!radek.classList.contains("ln-v2-todo") && jePrvekMimoV2SeznamMove(event.target)) return;
       pripravV2LongPressSeznamu(
-        "touch", radek, dotyk.clientX, dotyk.clientY, null, dotyk.identifier, jeVybrany
+        "touch", radek, dotyk.clientX, dotyk.clientY, null, dotyk.identifier, false
       );
     }, { passive: false });
 
@@ -4952,10 +4964,10 @@
       if (event.pointerType === "mouse" && event.button !== 0) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-      if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
-      if (jeV2KlikNaZnacceSeznamu(radek, event.clientX, false)) return;
-      const jeVybrany = vybranaPolozkaSeznamuId === (radek.dataset.lnV2Blok || "");
-      pripravV2LongPressSeznamu("pointer", radek, event.clientX, event.clientY, event.pointerId, null, jeVybrany);
+      if (!radek || !editor.contains(radek)) return;
+      if (!jeV2MoveZonaSeznamu(event.target, radek, event.clientX)) return;
+      if (!radek.classList.contains("ln-v2-todo") && jePrvekMimoV2SeznamMove(event.target)) return;
+      pripravV2LongPressSeznamu("pointer", radek, event.clientX, event.clientY, event.pointerId, null, false);
     });
 
     poslouchej(editor, "pointerdown", (event) => {
@@ -5005,6 +5017,13 @@
     });
 
     poslouchej(editor, "click", (event) => {
+      const seznamRadek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
+      if (seznamRadek && editor.contains(seznamRadek) && performance.now() < potlacKlikSeznamuDo) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       const todoCheckbox = event.target.closest?.("[data-v2-todo-check]");
       if (todoCheckbox && editor.contains(todoCheckbox)) {
         event.preventDefault();
@@ -5013,13 +5032,7 @@
         return;
       }
 
-      const seznamRadek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
       if (seznamRadek && editor.contains(seznamRadek)) {
-        if (performance.now() < potlacKlikSeznamuDo) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
         const indexSeznamu = najdiIndexBlokuPodleId(seznamRadek.dataset.lnV2Blok || "");
         if (indexSeznamu >= 0 && jeSeznamovyBlok(dokument.bloky[indexSeznamu]) && jeV2KlikNaZnacceSeznamu(seznamRadek, event.clientX, true)) {
           const index = indexSeznamu;
@@ -5316,7 +5329,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.18-LINKS-PLANNER-392",
+    verze: "V2.19-STABILIZE-393",
     otevriLab,
     otevriLabPrimo,
     zavriLab,

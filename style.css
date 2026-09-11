@@ -1833,6 +1833,24 @@ button *,
   cursor: pointer;
 }
 
+/* V2.19 – sjednocení TODO checkboxů i v Legacy/PC fallbacku.
+   Nativní square checkbox se mezi platformami liší; LubaNote používá kruh. */
+.todoItem input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-editor-text);
+}
+
+.todoItem input[type="checkbox"]:checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  box-shadow: inset 0 0 0 6px var(--color-accent);
+}
+
 .todoTextDisplay {
   flex: 1;
   min-width: 0;
@@ -9008,7 +9026,8 @@ body.theme-darkg {
 
 #modalRichText .noteInternalLink,
 .todoRichTextInput .noteInternalLink,
-.todoTextValue .noteInternalLink {
+.todoTextValue .noteInternalLink,
+.ln-v2-editor .noteInternalLink {
   display: inline;
   padding: 1px 5px;
   border-radius: 7px;
@@ -9030,7 +9049,8 @@ body.theme-darkg {
 
 #modalRichText .noteInternalLink::before,
 .todoRichTextInput .noteInternalLink::before,
-.todoTextValue .noteInternalLink::before {
+.todoTextValue .noteInternalLink::before,
+.ln-v2-editor .noteInternalLink::before {
   content: "🔗";
   margin-right: 0.28em;
   font-size: 0.82em;
@@ -9039,11 +9059,21 @@ body.theme-darkg {
 
 /* V2 – TODO interní odkazy: klikatelné i mimo hlavní rich-text editor. */
 .todoRichTextInput .noteInternalLink,
-.todoTextValue .noteInternalLink {
+.todoTextValue .noteInternalLink,
+.ln-v2-editor .noteInternalLink {
   position: relative;
   z-index: 2;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+/* V2 interní odkaz je atomický modelový segment. Při tapu nesmí Android
+   krátce kreslit starý selection/tap highlight před přepnutím poznámky. */
+.ln-v2-editor .noteInternalLink {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .noteLinkAutocomplete[hidden] {
@@ -9429,7 +9459,8 @@ body.theme-darkg {
    ======================================== */
 #modalRichText .noteInternalLink.noteInternalLinkBroken,
 .todoRichTextInput .noteInternalLink.noteInternalLinkBroken,
-.todoTextValue .noteInternalLink.noteInternalLinkBroken {
+.todoTextValue .noteInternalLink.noteInternalLinkBroken,
+.ln-v2-editor .noteInternalLink.noteInternalLinkBroken {
   opacity: 0.78;
   text-decoration: line-through;
   text-decoration-thickness: 1px;
@@ -9438,7 +9469,8 @@ body.theme-darkg {
 
 #modalRichText .noteInternalLink.noteInternalLinkBroken::before,
 .todoRichTextInput .noteInternalLink.noteInternalLinkBroken::before,
-.todoTextValue .noteInternalLink.noteInternalLinkBroken::before {
+.todoTextValue .noteInternalLink.noteInternalLinkBroken::before,
+.ln-v2-editor .noteInternalLink.noteInternalLinkBroken::before {
   content: "⚠";
 }
 

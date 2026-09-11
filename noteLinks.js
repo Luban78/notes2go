@@ -1700,6 +1700,13 @@
     odfokusujEditorPredNavigaci();
     await openTaskEditorById(ciloveId);
 
+    /* V2.19 – Observer by V2 aktivoval v microtasku, ale mezi tím mohl být
+       na jeden snímek vidět skrytý Legacy obsah. Přepneme Core okamžitě. */
+    if (window.LubaNoteEditorV2Bridge?.jeTestRezimZapnuty?.() === true) {
+      window.LubaNoteEditorV2Bridge
+        ?.aktivujProOtevrenouPoznamku?.({ zachovatPuvodniOtisk: true });
+    }
+
     /*
      * Předání editoru mezi zařízeními může otevření záměrně
      * zastavit (uživatel dá Zrušit nebo bezpečný sync selže).
@@ -1728,6 +1735,8 @@
   async function pripravPrepnutiZAktualniPoznamky() {
     let jeEditorZmenen = true;
     const puvodniId = ziskejAktivniPoznamkuId();
+    const v2Bridge = window.LubaNoteEditorV2Bridge;
+    const v2Aktivni = v2Bridge?.jeAktivni?.() === true;
 
     if (typeof bylEditorZmenen === "function") {
       jeEditorZmenen = bylEditorZmenen();
@@ -1753,6 +1762,33 @@
         "Interní odkaz: ulozAZavriEditor není dostupné."
       );
       return false;
+    }
+
+    /*
+     * V2.19 – interní navigace ve V2 nesmí zavřít celý modal a hned ho
+     * znovu otevřít. To způsobovalo viditelný záblesk Legacy DOMu/selection.
+     * U již uložené V2 poznámky proto nejdřív bezpečně předáme model do
+     * produkční pipeline a uložíme BEZ zavření. Cíl se pak přepíše ve
+     * stejném otevřeném modalu. Starý editor zůstává fallback jen pro
+     * nové/Legacy případy, kde stabilní source ID ještě nemáme.
+     */
+    if (v2Aktivni && puvodniId) {
+      if (v2Bridge?.synchronizujDoProdukcnihoEditoru?.() !== true) {
+        return false;
+      }
+
+      const vysledek = await ulozAZavriEditor(
+        null,
+        { nezavirat: true, tichyRezim: true }
+      );
+
+      if (vysledek?.ok !== true) {
+        return false;
+      }
+
+      window.LubaNoteEditorHandoff
+        ?.uvolniEditorPoznamky?.(puvodniId);
+      return true;
     }
 
     await ulozAZavriEditor();

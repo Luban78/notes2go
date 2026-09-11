@@ -220,6 +220,68 @@ function savePlannedItems(items) {
 
 
 /*
+ * V2.19 – plánování je kritický zápis do DVOU kompatibilních vrstev:
+ * lokální `plannedItems` + `note.plannedItems` pro Supabase sync.
+ * Po uložení vždy ověříme obě. Pokud některá vrstva zápis nepřevzala,
+ * jednou ji opravíme čerstvým read-modify-write. Tím modal nemůže hlásit
+ * úspěch a přitom nechat Planner prázdný.
+ */
+async function overAOpravUlozeniPlanovanePolozky(plannedItem) {
+  if (!plannedItem?.id || !plannedItem?.sourceNoteId) return false;
+
+  const overStav = () => {
+    const lokalni = getLocalPlannedItems().some(
+      (item) => item?.id === plannedItem.id
+    );
+    const note = loadTask().find(
+      (task) => task?.id === plannedItem.sourceNoteId
+    );
+    const vPoznamce = Boolean(
+      note && Array.isArray(note.plannedItems) &&
+      note.plannedItems.some((item) => item?.id === plannedItem.id)
+    );
+    return { lokalni, vPoznamce, note };
+  };
+
+  let stav = overStav();
+  if (stav.lokalni && stav.vPoznamce) return true;
+
+  if (!stav.lokalni) {
+    const lokalni = getLocalPlannedItems()
+      .filter((item) => item?.id !== plannedItem.id);
+    lokalni.push(plannedItem);
+    savePlannedItems(lokalni);
+  }
+
+  if (!stav.vPoznamce) {
+    const tasks = loadTask();
+    const sourceNote = tasks.find(
+      (task) => task?.id === plannedItem.sourceNoteId
+    );
+    if (sourceNote) {
+      sourceNote.plannedItems = Array.isArray(sourceNote.plannedItems)
+        ? sourceNote.plannedItems
+        : [];
+      if (!sourceNote.plannedItems.some((item) => item?.id === plannedItem.id)) {
+        sourceNote.plannedItems.push(plannedItem);
+      }
+      sourceNote.updatedAt = new Date().toISOString();
+      if (window.LubaNoteSync?.provedLokalniZmenuASynchronizuj) {
+        await window.LubaNoteSync.provedLokalniZmenuASynchronizuj(
+          () => saveAllTasks(tasks)
+        );
+      } else {
+        await saveAllTasks(tasks);
+      }
+    }
+  }
+
+  stav = overStav();
+  return stav.lokalni && stav.vPoznamce;
+}
+
+
+/*
  * Úklid osiřelých Planner položek po dokončení synchronizace.
  * Pokud už zdrojová poznámka neexistuje, nemá položka v Plánu ani její
  * Android notifikace kam vést.
@@ -740,6 +802,12 @@ async function saveCurrentPlannedItem() {
         }, 0);
       }
     }
+    const overeno = await overAOpravUlozeniPlanovanePolozky(plannedItem);
+    if (!overeno) {
+      throw new Error(
+        `Planner položka po uložení nebyla nalezena v obou vrstvách: ${plannedItem.id}`
+      );
+    }
   } catch (error) {
     ukonciCekani();
     console.error(
@@ -768,11 +836,20 @@ async function saveCurrentPlannedItem() {
 
   closePlanner();
 
+  /* V2.19 – okamžitě obnovíme obě obrazovky nad právě ověřenými daty. */
+  if (typeof renderCalendar === "function") {
+    requestAnimationFrame(renderCalendar);
+  }
+
   if (typeof renderRemindersScreen === "function") {
     requestAnimationFrame(
       renderRemindersScreen
     );
   }
+
+  window.dispatchEvent(
+    new CustomEvent("lubanote:planner-changed", { detail: { id: plannedItem.id } })
+  );
 
   /*
    * Systémová notifikace se připraví až po návratu do aplikace.
