@@ -37,6 +37,9 @@ import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -58,6 +61,8 @@ public class LubaNoteDocumentPlugin extends Plugin {
   private String pdfNazev = "LubaNote-poznamka.pdf";
   private boolean pdfTiskSpusten = false;
   private boolean pdfVybratMisto = false;
+  private File cekajiciVygenerovanePdf = null;
+  private int cekajiciVygenerovanePdfStrany = 0;
 
   private final Object pdfViewerLock = new Object();
   private ParcelFileDescriptor pdfViewerDescriptor = null;
@@ -848,7 +853,7 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
 
     if (pdfVybratMisto) {
-      otevriVyberMistaProVygenerovanePdf(call);
+      pripravPdfPredVyberemMista(call);
       return;
     }
 
@@ -903,6 +908,184 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
   }
 
+  private void pripravPdfPredVyberemMista(PluginCall call) {
+    if (pdfWebView == null) {
+      vycistiPdfTisk();
+      call.reject("PDF WebView není připravený.");
+      return;
+    }
+
+    File docasnySoubor = null;
+
+    try {
+      docasnySoubor = File.createTempFile(
+        "lubanote-pdf-",
+        ".pdf",
+        getContext().getCacheDir()
+      );
+
+      int pocetStran;
+
+      try (
+        OutputStream vystup =
+          new FileOutputStream(docasnySoubor, false)
+      ) {
+        pocetStran = zapisPdfWebViewDoVystupu(vystup);
+        vystup.flush();
+      }
+
+      cekajiciVygenerovanePdf = docasnySoubor;
+      cekajiciVygenerovanePdfStrany = pocetStran;
+
+      /*
+       * DŮLEŽITÉ:
+       * Systémový picker spouští jinou Activity. Živý off-screen WebView
+       * přes tento přechod nedržíme. PDF je už hotové v cache a po návratu
+       * se pouze zkopíruje do vybraného cíle.
+       */
+      uvolniPdfWebView();
+      otevriVyberMistaProVygenerovanePdf(call);
+    } catch (Exception chyba) {
+      if (docasnySoubor != null) {
+        try {
+          docasnySoubor.delete();
+        } catch (Exception ignored) {
+          // pokračujeme úklidem
+        }
+      }
+
+      cekajiciVygenerovanePdf = null;
+      cekajiciVygenerovanePdfStrany = 0;
+      vycistiPdfTisk();
+      call.reject(
+        "PDF se nepodařilo připravit pro výběr umístění.",
+        chyba
+      );
+    }
+  }
+
+  private int zapisPdfWebViewDoVystupu(OutputStream vystup)
+    throws IOException {
+
+    if (pdfWebView == null) {
+      throw new IOException("PDF WebView není připravený.");
+    }
+
+    PdfDocument dokument = null;
+
+    try {
+      final int sirkaPdf = 595;
+      final int vyskaPdf = 842;
+      final int okrajPdf = 40;
+      final int sirkaObsahuPdf = sirkaPdf - (okrajPdf * 2);
+      final int vyskaObsahuPdf = vyskaPdf - (okrajPdf * 2);
+      final int sirkaWeb = 688;
+      final float meritko =
+        sirkaObsahuPdf / (float) sirkaWeb;
+      final int vyskaWebNaStranku = Math.max(
+        1,
+        (int) Math.floor(vyskaObsahuPdf / meritko)
+      );
+
+      int sirkaSpec = android.view.View.MeasureSpec.makeMeasureSpec(
+        sirkaWeb,
+        android.view.View.MeasureSpec.EXACTLY
+      );
+      int vyskaSpec = android.view.View.MeasureSpec.makeMeasureSpec(
+        0,
+        android.view.View.MeasureSpec.UNSPECIFIED
+      );
+
+      pdfWebView.measure(sirkaSpec, vyskaSpec);
+
+      int celkovaVyska = Math.max(
+        1,
+        pdfWebView.getMeasuredHeight()
+      );
+      int obsahovaVyska = Math.max(
+        1,
+        pdfWebView.getContentHeight()
+      );
+      celkovaVyska = Math.max(celkovaVyska, obsahovaVyska);
+
+      pdfWebView.layout(
+        0,
+        0,
+        sirkaWeb,
+        celkovaVyska
+      );
+
+      int pocetStran = Math.max(
+        1,
+        (int) Math.ceil(
+          celkovaVyska / (double) vyskaWebNaStranku
+        )
+      );
+
+      dokument = new PdfDocument();
+
+      for (int index = 0; index < pocetStran; index++) {
+        PdfDocument.PageInfo info =
+          new PdfDocument.PageInfo.Builder(
+            sirkaPdf,
+            vyskaPdf,
+            index + 1
+          ).create();
+
+        PdfDocument.Page stranka = dokument.startPage(info);
+        Canvas platno = stranka.getCanvas();
+        platno.drawColor(Color.WHITE);
+
+        platno.save();
+        platno.translate(okrajPdf, okrajPdf);
+        platno.clipRect(
+          0,
+          0,
+          sirkaObsahuPdf,
+          vyskaObsahuPdf
+        );
+        platno.scale(meritko, meritko);
+        platno.translate(
+          0,
+          -(index * vyskaWebNaStranku)
+        );
+        pdfWebView.draw(platno);
+        platno.restore();
+
+        dokument.finishPage(stranka);
+      }
+
+      dokument.writeTo(vystup);
+      return pocetStran;
+    } finally {
+      if (dokument != null) {
+        try {
+          dokument.close();
+        } catch (Exception ignored) {
+          // výstupní chybu nepřepisujeme úklidem
+        }
+      }
+    }
+  }
+
+  private void uvolniPdfWebView() {
+    if (pdfWebView == null) {
+      return;
+    }
+
+    try {
+      pdfWebView.stopLoading();
+      pdfWebView.loadUrl("about:blank");
+      pdfWebView.clearHistory();
+      pdfWebView.removeAllViews();
+      pdfWebView.destroy();
+    } catch (Exception ignored) {
+      // WebView už může být interně ukončený.
+    }
+
+    pdfWebView = null;
+  }
+
   private void otevriVyberMistaProVygenerovanePdf(PluginCall call) {
     Intent zamer = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     zamer.addCategory(Intent.CATEGORY_OPENABLE);
@@ -941,10 +1124,55 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
-    ulozPdfBezSystemovehoTiskuDoUri(
-      call,
-      dataZameru.getData()
-    );
+    File zdroj = cekajiciVygenerovanePdf;
+    Uri cil = dataZameru.getData();
+
+    if (zdroj == null || !zdroj.exists()) {
+      vycistiPdfTisk();
+      call.reject("Připravené PDF už není dostupné.");
+      return;
+    }
+
+    try (
+      InputStream vstup = new FileInputStream(zdroj);
+      OutputStream vystup =
+        getContext()
+          .getContentResolver()
+          .openOutputStream(cil, "w")
+    ) {
+      if (vystup == null) {
+        throw new IOException(
+          "Android neotevřel vybraný cílový soubor."
+        );
+      }
+
+      byte[] buffer = new byte[64 * 1024];
+      int nacteno;
+
+      while ((nacteno = vstup.read(buffer)) != -1) {
+        if (nacteno > 0) {
+          vystup.write(buffer, 0, nacteno);
+        }
+      }
+
+      vystup.flush();
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("saved", true);
+      odpoved.put("canceled", false);
+      odpoved.put("uri", cil.toString());
+      odpoved.put("location", "Vybrané místo");
+      odpoved.put("started", false);
+      odpoved.put("pages", cekajiciVygenerovanePdfStrany);
+      call.resolve(odpoved);
+    } catch (IOException | SecurityException chyba) {
+      call.reject(
+        "PDF se nepodařilo uložit do vybraného místa.",
+        chyba
+      );
+    } finally {
+      vycistiPdfTisk();
+    }
   }
 
   private void ulozPdfBezSystemovehoTisku(PluginCall call) {
@@ -1178,17 +1406,19 @@ public class LubaNoteDocumentPlugin extends Plugin {
   }
 
   private void vycistiPdfTisk() {
-    if (pdfWebView != null) {
+    uvolniPdfWebView();
+
+    if (cekajiciVygenerovanePdf != null) {
       try {
-        pdfWebView.stopLoading();
-        pdfWebView.destroy();
+        cekajiciVygenerovanePdf.delete();
       } catch (Exception ignored) {
-        // WebView už může být interně ukončený.
+        // Dočasný soubor je pouze cache.
       }
 
-      pdfWebView = null;
+      cekajiciVygenerovanePdf = null;
     }
 
+    cekajiciVygenerovanePdfStrany = 0;
     pdfPrintJob = null;
     pdfNazev = "LubaNote-poznamka.pdf";
     pdfTiskSpusten = false;
