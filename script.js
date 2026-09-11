@@ -3637,6 +3637,37 @@ function otevriSdilenouPoznamkuVEditoru(
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
 
+  /*
+   * 🔒 430 – SHARED → EDITOR CORE V2
+   *
+   * Shared editor má vlastní otevření přes sharingEditor.js. Nestačí proto
+   * spoléhat jen na obecný MutationObserver V2 Bridge, protože při přechodu
+   * read-only → Edit může observer proběhnout dřív, než je shared obsah
+   * kompletně naplněný a read-only vrstva zavřená. Výsledek byl editor, ve
+   * kterém se objevil kurzor, ale shared editace neběžela spolehlivě přes
+   * dnešní modelový Core V2.
+   *
+   * Aktivaci proto po dokončení shared hostu vyžádáme explicitně. Microtask
+   * proběhne až po návratu do sharingEditor.js, takže ten stihne zavřít
+   * read-only viewer. Bridge stále sám rozhodne o případném Legacy fallbacku
+   * pro nepodporovaný obsah. Lock/save logiku tímto blokem neměnit.
+   */
+  queueMicrotask(() => {
+    if (
+      taskModal.hidden ||
+      !taskModal.classList.contains("show") ||
+      !taskModal.classList.contains("sharingEditorMode") ||
+      String(taskModal.dataset.sharedTaskId || "") !== String(note.id)
+    ) {
+      return;
+    }
+
+    const bridge = window.LubaNoteEditorV2Bridge;
+    if (!bridge?.jeTestRezimZapnuty?.()) return;
+
+    bridge.aktivujProOtevrenouPoznamku?.();
+  });
+
   return true;
 }
 
