@@ -2107,20 +2107,238 @@ async function dokoncitPresunHornihoStitku({ zrusit = false } = {}) {
   await ulozPoradiStitku(novePoradi);
 }
 
+
+/*
+ * DESKTOP DRAG ŠTÍTKŮ – STEJNÝ INPUT LIFECYCLE JAKO KARTY
+ * ========================================================
+ * Karty používají jeden globální pointer lifecycle. Desktop štítků musí
+ * fungovat stejně: pointer sledujeme od DOWN až po UP/CANCEL na documentu,
+ * ne přes listenery přidávané až na konkrétním tlačítku po long-pressu.
+ * Tím se drag neztratí, když browser během držení změní event target.
+ */
+const aktivniPointeryHornichStitku = new Set();
+let desktopStitekPointer = null;
+
+function zrusDesktopTimerStitku() {
+  if (desktopStitekPointer?.timer) {
+    clearTimeout(desktopStitekPointer.timer);
+    desktopStitekPointer.timer = 0;
+  }
+}
+
+function vycistiDesktopPointerStitku() {
+  zrusDesktopTimerStitku();
+  desktopStitekPointer = null;
+}
+
+function pripravDesktopDragHornihoStitku(button, event) {
+  if (
+    !button?.isConnected ||
+    event.pointerType === "touch" ||
+    event.button !== 0 ||
+    presunHornihoStitku ||
+    poradiStitkuSeUklada
+  ) {
+    return;
+  }
+
+  /* Jeden desktop pointer = jeden drag pokus. */
+  if (desktopStitekPointer) {
+    vycistiDesktopPointerStitku();
+  }
+
+  const stav = {
+    button,
+    pointerId: event.pointerId,
+    pointerType: event.pointerType || "mouse",
+    startX: event.clientX,
+    startY: event.clientY,
+    x: event.clientX,
+    y: event.clientY,
+    timer: 0,
+    pripravZaznam: zajistiZaznamHornihoStitkuProDrag(button)
+  };
+
+  desktopStitekPointer = stav;
+
+  stav.timer = setTimeout(async () => {
+    if (
+      desktopStitekPointer !== stav ||
+      !aktivniPointeryHornichStitku.has(stav.pointerId)
+    ) {
+      return;
+    }
+
+    const zaznam = await stav.pripravZaznam;
+
+    if (
+      desktopStitekPointer !== stav ||
+      !aktivniPointeryHornichStitku.has(stav.pointerId) ||
+      !zaznam?.id
+    ) {
+      return;
+    }
+
+    const aktivovano = zahajPresunHornihoStitku(
+      button,
+      stav.x,
+      stav.y,
+      stav.pointerType,
+      stav.pointerId
+    );
+
+    if (aktivovano) {
+      try {
+        button.setPointerCapture?.(stav.pointerId);
+      } catch (_) {
+        /* Stejně jako u karet: capture je bonus, ne podmínka funkce. */
+      }
+    }
+  }, CAS_LONG_PRESS_STITKU);
+}
+
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (event.pointerType !== "touch") {
+      aktivniPointeryHornichStitku.add(event.pointerId);
+    }
+  },
+  true
+);
+
+document.addEventListener(
+  "pointermove",
+  (event) => {
+    const stav = desktopStitekPointer;
+
+    if (
+      !stav ||
+      event.pointerType === "touch" ||
+      event.pointerId !== stav.pointerId
+    ) {
+      return;
+    }
+
+    stav.x = event.clientX;
+    stav.y = event.clientY;
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      event.stopPropagation();
+      pohniGhostemHornihoStitku(stav.x, stav.y);
+      return;
+    }
+
+    if (
+      Math.hypot(
+        stav.x - stav.startX,
+        stav.y - stav.startY
+      ) > POHYB_PRED_LONG_PRESS_STITKU
+    ) {
+      zrusDesktopTimerStitku();
+    }
+  },
+  { capture: true, passive: false }
+);
+
+document.addEventListener(
+  "pointerup",
+  (event) => {
+    aktivniPointeryHornichStitku.delete(event.pointerId);
+
+    const stav = desktopStitekPointer;
+
+    if (
+      !stav ||
+      event.pointerType === "touch" ||
+      event.pointerId !== stav.pointerId
+    ) {
+      return;
+    }
+
+    stav.x = event.clientX;
+    stav.y = event.clientY;
+    zrusDesktopTimerStitku();
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      event.stopPropagation();
+      pohniGhostemHornihoStitku(stav.x, stav.y);
+      void dokoncitPresunHornihoStitku();
+    }
+
+    try {
+      if (stav.button?.hasPointerCapture?.(stav.pointerId)) {
+        stav.button.releasePointerCapture?.(stav.pointerId);
+      }
+    } catch (_) {}
+
+    vycistiDesktopPointerStitku();
+  },
+  { capture: true, passive: false }
+);
+
+document.addEventListener(
+  "pointercancel",
+  (event) => {
+    aktivniPointeryHornichStitku.delete(event.pointerId);
+
+    const stav = desktopStitekPointer;
+    if (!stav || event.pointerId !== stav.pointerId) {
+      return;
+    }
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    vycistiDesktopPointerStitku();
+  },
+  true
+);
+
+window.addEventListener(
+  "blur",
+  () => {
+    const stav = desktopStitekPointer;
+    if (!stav) {
+      return;
+    }
+
+    aktivniPointeryHornichStitku.delete(stav.pointerId);
+
+    const aktivni =
+      presunHornihoStitku?.button === stav.button &&
+      presunHornihoStitku?.id === stav.pointerId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    vycistiDesktopPointerStitku();
+  },
+  true
+);
+
 function nastavDragHornihoStitku(button) {
   if (!button || button.dataset.tagDragReady === "true") {
     return;
   }
 
   button.dataset.tagDragReady = "true";
-
-  let pointerId = null;
-  let pointerStartX = 0;
-  let pointerStartY = 0;
-  let pointerX = 0;
-  let pointerY = 0;
-  let pointerTimer = 0;
-  let pointerListenery = false;
 
   let touchId = null;
   let touchStartX = 0;
@@ -2130,13 +2348,6 @@ function nastavDragHornihoStitku(button) {
   let touchTimer = 0;
   let touchListenery = false;
   let touchAktivovan = false;
-
-  const zrusPointerTimer = () => {
-    if (pointerTimer) {
-      clearTimeout(pointerTimer);
-      pointerTimer = 0;
-    }
-  };
 
   const najdiTouch = (seznam) =>
     Array.from(seznam || []).find(
@@ -2323,219 +2534,8 @@ function nastavDragHornihoStitku(button) {
     { passive: true }
   );
 
-  const odeberPointerListenery = () => {
-    if (!pointerListenery) {
-      return;
-    }
-
-    document.removeEventListener(
-      "pointermove",
-      zpracujPointerMove,
-      true
-    );
-    document.removeEventListener(
-      "pointerup",
-      zpracujPointerUp,
-      true
-    );
-    document.removeEventListener(
-      "pointercancel",
-      zpracujPointerCancel,
-      true
-    );
-    window.removeEventListener(
-      "blur",
-      zpracujPointerBlur,
-      true
-    );
-    pointerListenery = false;
-  };
-
-  const vycistiPointer = () => {
-    zrusPointerTimer();
-    pointerId = null;
-    odeberPointerListenery();
-  };
-
-  function zpracujPointerMove(event) {
-    if (
-      event.pointerType === "touch" ||
-      pointerId === null ||
-      event.pointerId !== pointerId
-    ) {
-      return;
-    }
-
-    pointerX = event.clientX;
-    pointerY = event.clientY;
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      event.preventDefault();
-      event.stopPropagation();
-      pohniGhostemHornihoStitku(pointerX, pointerY);
-      return;
-    }
-
-    if (
-      Math.hypot(
-        pointerX - pointerStartX,
-        pointerY - pointerStartY
-      ) > POHYB_PRED_LONG_PRESS_STITKU
-    ) {
-      zrusPointerTimer();
-    }
-  }
-
-  function zpracujPointerUp(event) {
-    if (
-      event.pointerType === "touch" ||
-      pointerId === null ||
-      event.pointerId !== pointerId
-    ) {
-      return;
-    }
-
-    pointerX = event.clientX;
-    pointerY = event.clientY;
-    zrusPointerTimer();
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      /* Poslední pozice myši se promítne ještě před dropem. */
-      pohniGhostemHornihoStitku(pointerX, pointerY);
-      void dokoncitPresunHornihoStitku();
-    }
-
-    vycistiPointer();
-  }
-
-  function zpracujPointerCancel(event) {
-    if (
-      event.pointerType === "touch" ||
-      pointerId === null ||
-      event.pointerId !== pointerId
-    ) {
-      return;
-    }
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      void dokoncitPresunHornihoStitku({ zrusit: true });
-    }
-
-    vycistiPointer();
-  }
-
-  function zpracujPointerBlur() {
-    if (pointerId === null) {
-      return;
-    }
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      void dokoncitPresunHornihoStitku({ zrusit: true });
-    }
-
-    vycistiPointer();
-  }
-
   button.addEventListener("pointerdown", (event) => {
-    if (
-      event.pointerType === "touch" ||
-      event.button !== 0 ||
-      presunHornihoStitku ||
-      poradiStitkuSeUklada
-    ) {
-      return;
-    }
-
-    pointerId = event.pointerId;
-    pointerStartX = event.clientX;
-    pointerStartY = event.clientY;
-    pointerX = pointerStartX;
-    pointerY = pointerStartY;
-
-    const pripravZaznam =
-      zajistiZaznamHornihoStitkuProDrag(button);
-
-    /*
-     * DESKTOP GUARD:
-     * Pointer události posloucháme na documentu, ne jen na tlačítku.
-     * Browser proto může pointer capture odmítnout a drag přesto dál běží
-     * i mimo původní štítek. Tím ghost po dropu nezůstane viset nahoře.
-     */
-    if (!pointerListenery) {
-      document.addEventListener(
-        "pointermove",
-        zpracujPointerMove,
-        { passive: false, capture: true }
-      );
-      document.addEventListener(
-        "pointerup",
-        zpracujPointerUp,
-        { passive: false, capture: true }
-      );
-      document.addEventListener(
-        "pointercancel",
-        zpracujPointerCancel,
-        { passive: false, capture: true }
-      );
-      window.addEventListener(
-        "blur",
-        zpracujPointerBlur,
-        true
-      );
-      pointerListenery = true;
-    }
-
-    pointerTimer = setTimeout(async () => {
-      const puvodniPointerId = pointerId;
-
-      if (puvodniPointerId === null) {
-        return;
-      }
-
-      const zaznam = await pripravZaznam;
-
-      if (
-        pointerId !== puvodniPointerId ||
-        !zaznam?.id
-      ) {
-        return;
-      }
-
-      const aktivovano = zahajPresunHornihoStitku(
-        button,
-        pointerX,
-        pointerY,
-        event.pointerType || "pointer",
-        pointerId
-      );
-
-      if (aktivovano) {
-        try {
-          button.setPointerCapture(pointerId);
-        } catch (_) {
-          /* Document listenery jsou hlavní cesta; capture je jen bonus. */
-        }
-      }
-    }, CAS_LONG_PRESS_STITKU);
+    pripravDesktopDragHornihoStitku(button, event);
   });
 
   button.addEventListener("contextmenu", (event) => {
