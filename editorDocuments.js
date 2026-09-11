@@ -42,6 +42,7 @@
   const PDF_NASTAVENI_KLIC = "lubanote_pdf_nastaveni_v1";
 
   let pdfUlozeniPrvky = null;
+  let pdfUlozeniAkce = null;
   let pdfNastaveniPrvky = null;
 
   function vychoziPdfNastaveni() {
@@ -835,7 +836,7 @@
           <div class="pdfLubaDialogIcon" aria-hidden="true">💾</div>
           <div>
             <h3>Uložit PDF</h3>
-            <p>Vyber název souboru. V dalším kroku zvolíš místo v telefonu.</p>
+            <p class="pdfLubaSaveInfo">PDF se uloží přímo do <strong>Stažené/LubaNote</strong>.</p>
           </div>
         </div>
 
@@ -854,6 +855,7 @@
 
     const prvky = {
       modal,
+      info: modal.querySelector(".pdfLubaSaveInfo"),
       input: modal.querySelector(".pdfLubaFileName"),
       cancel: modal.querySelector(".pdfLubaCancel"),
       confirm: modal.querySelector(".pdfLubaConfirm")
@@ -861,6 +863,7 @@
 
     const zavrit = () => {
       modal.hidden = true;
+      pdfUlozeniAkce = null;
     };
 
     prvky.cancel.addEventListener("click", zavrit);
@@ -872,9 +875,15 @@
 
     prvky.confirm.addEventListener("click", async () => {
       const nazev = normalizujNazevPdf(prvky.input.value);
+      const akce = pdfUlozeniAkce;
+
       prvky.input.value = nazev;
       modal.hidden = true;
-      await ulozPdfZVieweru(nazev);
+      pdfUlozeniAkce = null;
+
+      if (typeof akce === "function") {
+        await akce(nazev);
+      }
     });
 
     prvky.input.addEventListener("keydown", (event) => {
@@ -892,15 +901,24 @@
     return prvky;
   }
 
-  function otevriPdfUlozeniModal() {
-    if (!pdfViewerStav) {
-      return;
-    }
+  function otevriPdfUlozeniModal({
+    nazevSouboru = "",
+    poPotvrzeni = null
+  } = {}) {
+    const vychoziNazev = nazevSouboru ||
+      pdfViewerStav?.nazevSouboru ||
+      "dokument.pdf";
 
     const prvky = zajistiPdfUlozeniModal();
-    prvky.input.value = normalizujNazevPdf(
-      pdfViewerStav.nazevSouboru || "dokument.pdf"
-    );
+    prvky.info.innerHTML = jeNativniAndroid()
+      ? 'PDF se uloží přímo do <strong>Stažené/LubaNote</strong>.'
+      : "Vyber název PDF souboru.";
+
+    pdfUlozeniAkce = typeof poPotvrzeni === "function"
+      ? poPotvrzeni
+      : async (nazev) => ulozPdfZVieweru(nazev);
+
+    prvky.input.value = normalizujNazevPdf(vychoziNazev);
     prvky.modal.hidden = false;
 
     requestAnimationFrame(() => {
@@ -1061,7 +1079,10 @@
       }
 
       if (ulozeno && typeof zobrazZpravuAplikace === "function") {
-        zobrazZpravuAplikace("PDF", "PDF bylo uloženo.");
+        zobrazZpravuAplikace(
+          "PDF",
+          "PDF bylo uloženo do Stažené/LubaNote."
+        );
       }
     } catch (error) {
       console.error("Uložení otevřeného PDF selhalo:", error);
@@ -1549,12 +1570,35 @@
       const html = vytvorPdfHtmlDokument(data);
 
       if (jeNativniAndroid() && plugin?.ulozPdf) {
-        const vysledek = await plugin.ulozPdf({
-          html,
-          nazevSouboru
+        otevriPdfUlozeniModal({
+          nazevSouboru,
+          poPotvrzeni: async (nazev) => {
+            try {
+              const vysledek = await plugin.ulozPdf({
+                html,
+                nazevSouboru: nazev
+              });
+
+              if (
+                vysledek?.saved === true &&
+                typeof zobrazZpravuAplikace === "function"
+              ) {
+                zobrazZpravuAplikace(
+                  "PDF",
+                  "PDF bylo uloženo do Stažené/LubaNote."
+                );
+              }
+            } catch (error) {
+              console.error("PDF se nepodařilo uložit:", error);
+              zobrazChybu(
+                "PDF",
+                "PDF se nepodařilo uložit."
+              );
+            }
+          }
         });
 
-        return vysledek?.saved === true;
+        return true;
       }
 
       return await ulozPdfPresWeb(data);

@@ -3,6 +3,7 @@ package cz.luban.notes2go;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -12,11 +13,18 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.CancellationSignal;
+import android.os.Environment;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
+import android.print.PrintDocumentInfo;
+import android.print.PageRange;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -324,6 +332,105 @@ public class LubaNoteDocumentPlugin extends Plugin {
     pdfViewerUri = null;
   }
 
+  private String normalizujPdfNazev(String nazev) {
+    String vysledek = nazev == null
+      ? "dokument.pdf"
+      : nazev.trim();
+
+    if (vysledek.isEmpty()) {
+      vysledek = "dokument.pdf";
+    }
+
+    vysledek = vysledek.replaceAll("[\\/:*?\"<>|]", " ")
+      .replaceAll("\\s+", " ")
+      .trim();
+
+    if (!vysledek.toLowerCase().endsWith(".pdf")) {
+      vysledek = vysledek + ".pdf";
+    }
+
+    return vysledek;
+  }
+
+  private Uri vytvorPdfVeStazenych(String nazev)
+    throws IOException {
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      throw new IOException(
+        "Přímé ukládání PDF vyžaduje Android 10 nebo novější."
+      );
+    }
+
+    ContentValues hodnoty = new ContentValues();
+    hodnoty.put(
+      MediaStore.MediaColumns.DISPLAY_NAME,
+      normalizujPdfNazev(nazev)
+    );
+    hodnoty.put(
+      MediaStore.MediaColumns.MIME_TYPE,
+      "application/pdf"
+    );
+    hodnoty.put(
+      MediaStore.MediaColumns.RELATIVE_PATH,
+      Environment.DIRECTORY_DOWNLOADS + "/LubaNote"
+    );
+    hodnoty.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+    Uri cil = getContext()
+      .getContentResolver()
+      .insert(
+        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+        hodnoty
+      );
+
+    if (cil == null) {
+      throw new IOException(
+        "Android nevytvořil cílový PDF soubor."
+      );
+    }
+
+    return cil;
+  }
+
+  private void dokoncitPdfVeStazenych(Uri uri) {
+    if (
+      uri == null ||
+      Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+    ) {
+      return;
+    }
+
+    ContentValues hodnoty = new ContentValues();
+    hodnoty.put(MediaStore.MediaColumns.IS_PENDING, 0);
+
+    getContext()
+      .getContentResolver()
+      .update(uri, hodnoty, null, null);
+  }
+
+  private void zrusPdfVeStazenych(Uri uri) {
+    if (uri == null) {
+      return;
+    }
+
+    try {
+      getContext()
+        .getContentResolver()
+        .delete(uri, null, null);
+    } catch (Exception ignored) {
+      // Neúspěšné čištění nesmí přepsat původní chybu.
+    }
+  }
+
+  private JSObject vytvorPdfUlozenoOdpoved(Uri uri) {
+    JSObject odpoved = new JSObject();
+    odpoved.put("saved", true);
+    odpoved.put("canceled", false);
+    odpoved.put("uri", uri == null ? "" : uri.toString());
+    odpoved.put("location", "Stažené/LubaNote");
+    return odpoved;
+  }
+
   @PluginMethod
   public void ulozOtevrenePdf(PluginCall call) {
     Uri zdroj;
@@ -337,15 +444,26 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
-    String nazev = call.getString(
-      "nazevSouboru",
-      "dokument.pdf"
+    String nazev = normalizujPdfNazev(
+      call.getString(
+        "nazevSouboru",
+        "dokument.pdf"
+      )
     );
 
-    if (!nazev.toLowerCase().endsWith(".pdf")) {
-      nazev = nazev + ".pdf";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      ulozOtevrenePdfDoStazenych(
+        call,
+        zdroj,
+        nazev
+      );
+      return;
     }
 
+    /*
+     * Starší Android ponechává původní systémový picker.
+     * Moderní Android 10+ ukládá přímo do Stažené/LubaNote.
+     */
     cekajiciPdfZdrojUri = zdroj;
 
     Intent zamer = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -358,6 +476,55 @@ public class LubaNoteDocumentPlugin extends Plugin {
       zamer,
       "dokonceniUlozeniOtevrenehoPdf"
     );
+  }
+
+  private void ulozOtevrenePdfDoStazenych(
+    PluginCall call,
+    Uri zdroj,
+    String nazev
+  ) {
+    Uri cil = null;
+
+    try {
+      cil = vytvorPdfVeStazenych(nazev);
+
+      try (
+        InputStream vstup =
+          getContext()
+            .getContentResolver()
+            .openInputStream(zdroj);
+        OutputStream vystup =
+          getContext()
+            .getContentResolver()
+            .openOutputStream(cil, "w")
+      ) {
+        if (vstup == null || vystup == null) {
+          throw new IOException(
+            "Android neotevřel PDF pro kopírování."
+          );
+        }
+
+        byte[] buffer = new byte[64 * 1024];
+        int nacteno;
+
+        while ((nacteno = vstup.read(buffer)) != -1) {
+          if (nacteno > 0) {
+            vystup.write(buffer, 0, nacteno);
+          }
+        }
+
+        vystup.flush();
+      }
+
+      dokoncitPdfVeStazenych(cil);
+      call.resolve(vytvorPdfUlozenoOdpoved(cil));
+    } catch (IOException | SecurityException chyba) {
+      zrusPdfVeStazenych(cil);
+      call.reject(
+        "PDF se nepodařilo uložit do Stažené/LubaNote.",
+        chyba
+      );
+    }
   }
 
   @ActivityCallback
@@ -566,9 +733,11 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
-    pdfNazev = call.getString(
-      "nazevSouboru",
-      "LubaNote-poznamka.pdf"
+    pdfNazev = normalizujPdfNazev(
+      call.getString(
+        "nazevSouboru",
+        "LubaNote-poznamka.pdf"
+      )
     );
     pdfTiskSpusten = false;
 
@@ -668,6 +837,15 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      ulozPdfBezSystemovehoTisku(call);
+      return;
+    }
+
+    /*
+     * Fallback pouze pro Android 9 a starší. Na Androidu 10+
+     * už se PrintManager UI vůbec neotevírá.
+     */
     try {
       PrintManager spravceTisku =
         (PrintManager) aktivita.getSystemService(
@@ -705,6 +883,166 @@ public class LubaNoteDocumentPlugin extends Plugin {
       vycistiPdfTisk();
       call.reject(
         "PDF tisk se nepodařilo spustit.",
+        chyba
+      );
+    }
+  }
+
+  private void ulozPdfBezSystemovehoTisku(PluginCall call) {
+    if (pdfWebView == null) {
+      vycistiPdfTisk();
+      call.reject("PDF WebView není připravený.");
+      return;
+    }
+
+    Uri cil = null;
+    ParcelFileDescriptor descriptor = null;
+
+    try {
+      cil = vytvorPdfVeStazenych(pdfNazev);
+      descriptor = getContext()
+        .getContentResolver()
+        .openFileDescriptor(cil, "w");
+
+      if (descriptor == null) {
+        throw new IOException(
+          "Android neotevřel cílový PDF soubor."
+        );
+      }
+
+      final Uri cilFinal = cil;
+      final ParcelFileDescriptor descriptorFinal = descriptor;
+      final PrintDocumentAdapter adapter =
+        pdfWebView.createPrintDocumentAdapter(pdfNazev);
+      final PrintAttributes atributy =
+        new PrintAttributes.Builder()
+          .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+          .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+          .build();
+      final CancellationSignal zruseni = new CancellationSignal();
+
+      adapter.onLayout(
+        null,
+        atributy,
+        zruseni,
+        new PrintDocumentAdapter.LayoutResultCallback() {
+          @Override
+          public void onLayoutFinished(
+            PrintDocumentInfo info,
+            boolean changed
+          ) {
+            adapter.onWrite(
+              new PageRange[] { PageRange.ALL_PAGES },
+              descriptorFinal,
+              zruseni,
+              new PrintDocumentAdapter.WriteResultCallback() {
+                @Override
+                public void onWriteFinished(PageRange[] pages) {
+                  try {
+                    descriptorFinal.close();
+                    dokoncitPdfVeStazenych(cilFinal);
+
+                    JSObject odpoved =
+                      vytvorPdfUlozenoOdpoved(cilFinal);
+                    odpoved.put("started", false);
+                    call.resolve(odpoved);
+                  } catch (Exception chyba) {
+                    zrusPdfVeStazenych(cilFinal);
+                    call.reject(
+                      "PDF se nepodařilo dokončit.",
+                      chyba
+                    );
+                  } finally {
+                    vycistiPdfTisk();
+                  }
+                }
+
+                @Override
+                public void onWriteFailed(CharSequence error) {
+                  try {
+                    descriptorFinal.close();
+                  } catch (Exception ignored) {
+                    // pokračujeme úklidem
+                  }
+
+                  zrusPdfVeStazenych(cilFinal);
+                  vycistiPdfTisk();
+                  call.reject(
+                    error == null
+                      ? "PDF se nepodařilo vytvořit."
+                      : error.toString()
+                  );
+                }
+
+                @Override
+                public void onWriteCancelled() {
+                  try {
+                    descriptorFinal.close();
+                  } catch (Exception ignored) {
+                    // pokračujeme úklidem
+                  }
+
+                  zrusPdfVeStazenych(cilFinal);
+                  vycistiPdfTisk();
+
+                  JSObject odpoved = new JSObject();
+                  odpoved.put("saved", false);
+                  odpoved.put("canceled", true);
+                  call.resolve(odpoved);
+                }
+              }
+            );
+          }
+
+          @Override
+          public void onLayoutFailed(CharSequence error) {
+            try {
+              descriptorFinal.close();
+            } catch (Exception ignored) {
+              // pokračujeme úklidem
+            }
+
+            zrusPdfVeStazenych(cilFinal);
+            vycistiPdfTisk();
+            call.reject(
+              error == null
+                ? "PDF layout se nepodařilo připravit."
+                : error.toString()
+            );
+          }
+
+          @Override
+          public void onLayoutCancelled() {
+            try {
+              descriptorFinal.close();
+            } catch (Exception ignored) {
+              // pokračujeme úklidem
+            }
+
+            zrusPdfVeStazenych(cilFinal);
+            vycistiPdfTisk();
+
+            JSObject odpoved = new JSObject();
+            odpoved.put("saved", false);
+            odpoved.put("canceled", true);
+            call.resolve(odpoved);
+          }
+        },
+        new Bundle()
+      );
+    } catch (Exception chyba) {
+      if (descriptor != null) {
+        try {
+          descriptor.close();
+        } catch (Exception ignored) {
+          // pokračujeme úklidem
+        }
+      }
+
+      zrusPdfVeStazenych(cil);
+      vycistiPdfTisk();
+      call.reject(
+        "PDF se nepodařilo uložit do Stažené/LubaNote.",
         chyba
       );
     }
