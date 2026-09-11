@@ -1,4 +1,4 @@
-/* LubaNote Editor Core V2.5 – izolovaný LAB. Všechny selektory mají ln-v2 prefix. */
+/* LubaNote Editor Core V2.9 – izolovaný LAB/Bridge. Všechny selektory mají ln-v2 prefix. */
 
 body.ln-v2-lab-otevren {
   overflow: hidden !important;
@@ -309,9 +309,35 @@ body.ln-v2-lab-otevren {
   border-style: dashed !important;
 }
 
+/* ==========================================
+   V2.8 – H1 / H2 / H3
 
-/* V2.5 – Undo/Redo jsou stavové ovladače historie vlastního modelu. */
-.ln-v2-akce button:disabled {
-  opacity: .42;
-  cursor: default;
+   Zachováváme vizuální chování současného LubaNote editoru:
+   nadpis je styl vybraného textového segmentu, ne vlastnost WebView DOMu.
+   Zdroj pravdy je format.stylTextu v modelu V2.
+========================================== */
+.ln-v2-cast.ln-v2-nadpis {
+  font-weight: 700;
+}
+
+.ln-v2-cast.ln-v2-h1 {
+  font-size: 2rem;
+}
+
+.ln-v2-cast.ln-v2-h2 {
+  font-size: 1.6rem;
+}
+
+.ln-v2-cast.ln-v2-h3 {
+  font-size: 1.3rem;
+}
+
+/* V2.9 – internetový odkaz je atribut segmentu v modelu.
+   V editačním DOMu zůstává záměrně inertní SPAN, aby tap při editaci
+   nespouštěl navigaci. Při exportu se převede na skutečný <a>. */
+.ln-v2-editor .ln-v2-odkaz {
+  color: var(--color-accent, currentColor);
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }

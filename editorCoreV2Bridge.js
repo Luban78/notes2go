@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / TEST MODE
-   FÁZE V2.6
+   FÁZE V2.9
 
    BEZPEČNOSTNÍ PRAVIDLA:
    - Produkční #modalRichText se NIKDY nepřepisuje V2 obsahem.
@@ -33,6 +33,9 @@
   let hostitel = null;
   let badge = null;
   let toast = null;
+  let odkazModal = null;
+  let odkazTextInput = null;
+  let odkazUrlInput = null;
   let observer = null;
   let posledniAktivaceToken = 0;
   let pozastavAktivaci = false;
@@ -46,10 +49,7 @@
   ]);
 
   const nepodporovaneAkce = new Set([
-    "tlacitkoNadpis",
-    "tlacitkoZarovnaniTextu",
     "tlacitkoVlozitObrazek",
-    "tlacitkoVlozitOdkaz",
     "tlacitkoOtevritDokument",
     "tlacitkoUlozitDokument",
     "tlacitkoBullet",
@@ -187,6 +187,132 @@
     }
   }
 
+  function vytvorV2OdkazModal() {
+    if (odkazModal) return;
+
+    odkazModal = document.createElement("div");
+    odkazModal.className = "editorLinkModal lnV2LinkModal";
+    odkazModal.hidden = true;
+
+    const dialog = document.createElement("div");
+    dialog.className = "editorLinkDialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "lnV2LinkTitle");
+
+    const title = document.createElement("h3");
+    title.id = "lnV2LinkTitle";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(title, "odkaz", "Internetový odkaz", ["editorLinkTitleIcon"]);
+    } else {
+      title.textContent = "Internetový odkaz";
+    }
+
+    const textLabel = document.createElement("label");
+    textLabel.textContent = "Text odkazu";
+    odkazTextInput = document.createElement("textarea");
+    odkazTextInput.rows = 1;
+    odkazTextInput.placeholder = "např. OpenAI";
+    odkazTextInput.autocomplete = "one-time-code";
+    odkazTextInput.setAttribute("data-form-type", "other");
+    odkazTextInput.setAttribute("data-lpignore", "true");
+    textLabel.append(odkazTextInput);
+
+    const urlLabel = document.createElement("label");
+    urlLabel.textContent = "Internetová adresa";
+    odkazUrlInput = document.createElement("textarea");
+    odkazUrlInput.rows = 1;
+    odkazUrlInput.placeholder = "https://example.com";
+    odkazUrlInput.autocomplete = "one-time-code";
+    odkazUrlInput.inputMode = "url";
+    odkazUrlInput.setAttribute("data-form-type", "other");
+    odkazUrlInput.setAttribute("data-lpignore", "true");
+    urlLabel.append(odkazUrlInput);
+
+    const actions = document.createElement("div");
+    actions.className = "editorLinkActions";
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.textContent = "Zrušit";
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.className = "primary lubaHasIcon";
+    if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+      window.LubaNoteIcons.nastavObsahSIkonou(saveButton, "odkaz", "Vložit", ["editorLinkActionIcon"]);
+    } else {
+      saveButton.textContent = "Vložit";
+    }
+
+    actions.append(cancelButton, saveButton);
+    dialog.append(title, textLabel, urlLabel, actions);
+    odkazModal.append(dialog);
+    document.body.append(odkazModal);
+
+    const zavri = () => {
+      odkazModal.hidden = true;
+    };
+
+    const uloz = () => {
+      const ok = core()?.nastavOdkaz?.(odkazUrlInput.value, odkazTextInput.value);
+      if (!ok) {
+        zobrazToast("V2 TEST: zadej platnou internetovou adresu", true);
+        return;
+      }
+      zavri();
+      obnovToolbar();
+    };
+
+    cancelButton.addEventListener("click", zavri);
+    saveButton.addEventListener("click", uloz);
+    odkazModal.addEventListener("click", (event) => {
+      if (event.target === odkazModal) zavri();
+    });
+    odkazTextInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        odkazUrlInput.focus();
+      }
+    });
+    odkazUrlInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        uloz();
+      }
+    });
+  }
+
+  function otevriV2OdkazModal() {
+    const api = core();
+    if (!api?.ziskejInfoOdkazu || !api?.nastavOdkaz) {
+      zobrazToast("V2 TEST: odkazy nejsou dostupné", true);
+      return;
+    }
+
+    api.zachytAktualniVyber?.();
+    const info = api.ziskejInfoOdkazu() || {};
+    if (info.viceBloku) {
+      zobrazToast("V2 TEST: odkaz zatím označ jen v jednom odstavci", true);
+      return;
+    }
+    vytvorV2OdkazModal();
+
+    const vybranyText = String(info.text || "");
+    odkazTextInput.value = vybranyText;
+    odkazUrlInput.value = String(info.url || "");
+
+    if (!odkazUrlInput.value && /^(https?:\/\/|www\.)/i.test(vybranyText.trim())) {
+      odkazUrlInput.value = vybranyText.trim();
+    }
+
+    odkazModal.hidden = false;
+    requestAnimationFrame(() => {
+      if (vybranyText) odkazUrlInput.focus();
+      else odkazTextInput.focus();
+    });
+  }
+
   function obnovToolbar() {
     if (!aktivni) return;
     const stav = core()?.ziskejStavFormatu?.();
@@ -208,12 +334,43 @@
       button.setAttribute("aria-pressed", hodnota === "mix" ? "mixed" : (hodnota === "on" ? "true" : "false"));
     });
 
+    const stylTextu = stav.stylTextu || "div";
+    const tlacitkoNadpis = document.getElementById("tlacitkoNadpis");
+    if (tlacitkoNadpis) {
+      tlacitkoNadpis.textContent = ["h1", "h2", "h3"].includes(stylTextu) ? stylTextu.toUpperCase() : "H";
+      tlacitkoNadpis.classList.toggle("active", ["h1", "h2", "h3"].includes(stylTextu));
+      tlacitkoNadpis.classList.toggle("lnV2Mixed", stylTextu === "mix");
+    }
+
+    document.querySelectorAll("#editorPanelStyl .editorStylTextu[data-styl]").forEach((button) => {
+      const aktivniStyl = stylTextu !== "mix" && button.dataset.styl === stylTextu;
+      button.classList.toggle("active", aktivniStyl);
+      button.classList.toggle("lnV2Mixed", stylTextu === "mix");
+      button.setAttribute("aria-pressed", stylTextu === "mix" ? "mixed" : (aktivniStyl ? "true" : "false"));
+    });
+
+    const odkazButton = document.getElementById("tlacitkoVlozitOdkaz");
+    if (odkazButton) {
+      const maOdkaz = Boolean(stav.odkaz && stav.odkaz !== "zaklad" && stav.odkaz !== "mix");
+      odkazButton.classList.toggle("active", maOdkaz);
+      odkazButton.classList.toggle("lnV2Mixed", stav.odkaz === "mix");
+      odkazButton.setAttribute("aria-pressed", stav.odkaz === "mix" ? "mixed" : (maOdkaz ? "true" : "false"));
+    }
+
     const textColorLine = document.querySelector("#textColorButton .textColorLine");
     if (textColorLine) {
       textColorLine.style.backgroundColor = stav.barva && stav.barva !== "mix" && stav.barva !== "zaklad"
         ? stav.barva
         : "";
     }
+
+    const zarovnani = stav.zarovnani || "left";
+    document.querySelectorAll("#editorPanelZarovnani .editorZarovnaniTextu[data-zarovnani]").forEach((button) => {
+      const aktivniZarovnani = zarovnani !== "mix" && button.dataset.zarovnani === zarovnani;
+      button.classList.toggle("active", aktivniZarovnani);
+      button.classList.toggle("lnV2Mixed", zarovnani === "mix");
+      button.setAttribute("aria-pressed", zarovnani === "mix" ? "mixed" : (aktivniZarovnani ? "true" : "false"));
+    });
   }
 
   function zavriPanelyFormatu() {
@@ -284,6 +441,7 @@
     if (badge) badge.hidden = true;
     nastavOchranuUi(false);
     zavriPanelyFormatu();
+    if (odkazModal) odkazModal.hidden = true;
   }
 
   function aktivujProOtevrenouPoznamku() {
@@ -407,6 +565,42 @@
       return;
     }
 
+    if (id === "tlacitkoNadpis") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      prepniPanel("editorPanelStyl");
+      obnovToolbar();
+      return;
+    }
+
+    if (cil.matches("#editorPanelStyl .editorStylTextu[data-styl]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.nastavStylTextu?.(cil.dataset.styl || "div");
+      document.getElementById("editorPanelStyl").hidden = true;
+      obnovToolbar();
+      return;
+    }
+
+    if (id === "tlacitkoZarovnaniTextu") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      prepniPanel("editorPanelZarovnani");
+      obnovToolbar();
+      return;
+    }
+
+    if (cil.matches("#editorPanelZarovnani .editorZarovnaniTextu[data-zarovnani]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.nastavZarovnani?.(cil.dataset.zarovnani || "left");
+      document.getElementById("editorPanelZarovnani").hidden = true;
+      obnovToolbar();
+      return;
+    }
+
     if (id === "textColorButton") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -450,6 +644,14 @@
       return;
     }
 
+    if (id === "tlacitkoVlozitOdkaz") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      zavriPanelyFormatu();
+      otevriV2OdkazModal();
+      return;
+    }
+
     if (podporovaneAkce.has(id)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -483,6 +685,10 @@
     if (!aktivni || event.key !== "Escape") return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (odkazModal && !odkazModal.hidden) {
+      odkazModal.hidden = true;
+      return;
+    }
     editorBackButton.click();
   }, true);
 
@@ -521,7 +727,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.6-BRIDGE-375",
+    verze: "V2.9-BRIDGE-LINKS-380",
     prepniTestRezim,
     jeTestRezimZapnuty,
     aktivujProOtevrenouPoznamku,

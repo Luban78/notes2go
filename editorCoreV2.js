@@ -1,6 +1,6 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 (LAB)
-   FÁZE V2.6: vlastní model + LubaNote Bridge TEST mode; produkční editor zůstává zdrojem dat mimo V2 TEST.
+   FÁZE V2.9: vlastní model + LubaNote Bridge TEST mode + internetové odkazy jako atribut segmentu.
 
    DŮLEŽITÉ:
    - Tento modul NESMÍ měnit produkční editor ani ukládat poznámky.
@@ -42,7 +42,9 @@
     podtrzeni: false,
     velikost: null,
     barva: null,
-    pozadi: null
+    pozadi: null,
+    stylTextu: null,
+    odkaz: null
   });
 
   let lab = null;
@@ -59,6 +61,7 @@
   let ulozenyFormatovaciVyber = null;
   let aktivniFormatPsani = null;
   let aktivniFormatPozice = "";
+  let aktivniFormatZdroj = ""; // "uzivatel" = výslovně zapnuto toolbar-em, "zdedeny" = např. delete-affinity
   let posluchace = [];
   let observerDomu = null;
   let casyRychlehoSpusteni = [];
@@ -89,7 +92,8 @@
       posledniVyber: selection,
       ulozenyFormatovaciVyber: klonVyberu(ulozenyFormatovaciVyber),
       aktivniFormatPsani: aktivniFormatPsani ? kopieFormatu(aktivniFormatPsani) : null,
-      aktivniFormatPozice: String(aktivniFormatPozice || "")
+      aktivniFormatPozice: String(aktivniFormatPozice || ""),
+      aktivniFormatZdroj: String(aktivniFormatZdroj || "")
     };
   }
 
@@ -134,6 +138,7 @@
     ulozenyFormatovaciVyber = klonVyberu(snapshot.ulozenyFormatovaciVyber) || klonVyberu(posledniVyber);
     aktivniFormatPsani = snapshot.aktivniFormatPsani ? kopieFormatu(snapshot.aktivniFormatPsani) : null;
     aktivniFormatPozice = String(snapshot.aktivniFormatPozice || "");
+    aktivniFormatZdroj = String(snapshot.aktivniFormatZdroj || "");
 
     vykresli(posledniVyber);
     aktualizujTlacitkaHistorie();
@@ -180,6 +185,27 @@
     return Number.isFinite(cislo) ? cislo : null;
   }
 
+  function normalizujStylTextu(hodnota) {
+    const styl = String(hodnota || "").trim().toLowerCase();
+    return ["h1", "h2", "h3"].includes(styl) ? styl : null;
+  }
+
+  function normalizujInternetovouAdresu(hodnota) {
+    const raw = String(hodnota || "").trim();
+    if (!raw) return null;
+
+    let kandidat = raw;
+    if (!/^https?:\/\//i.test(kandidat)) kandidat = `https://${kandidat}`;
+
+    try {
+      const url = new URL(kandidat);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+      return url.href;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function kopieFormatu(format = VYCHOZI_FORMAT) {
     return {
       tucne: Boolean(format?.tucne),
@@ -187,7 +213,9 @@
       podtrzeni: Boolean(format?.podtrzeni),
       velikost: cisloVelikosti(format?.velikost),
       barva: format?.barva ?? null,
-      pozadi: format?.pozadi ?? null
+      pozadi: format?.pozadi ?? null,
+      stylTextu: normalizujStylTextu(format?.stylTextu),
+      odkaz: normalizujInternetovouAdresu(format?.odkaz)
     };
   }
 
@@ -197,7 +225,9 @@
       && Boolean(a?.podtrzeni) === Boolean(b?.podtrzeni)
       && (a?.velikost ?? null) === (b?.velikost ?? null)
       && (a?.barva ?? null) === (b?.barva ?? null)
-      && (a?.pozadi ?? null) === (b?.pozadi ?? null);
+      && (a?.pozadi ?? null) === (b?.pozadi ?? null)
+      && normalizujStylTextu(a?.stylTextu) === normalizujStylTextu(b?.stylTextu)
+      && normalizujInternetovouAdresu(a?.odkaz) === normalizujInternetovouAdresu(b?.odkaz);
   }
 
   function vytvorSegment(text = "", format = VYCHOZI_FORMAT) {
@@ -314,7 +344,7 @@
       if (!blok.id) blok.id = noveIdBloku();
       if (!Array.isArray(blok.obsah)) blok.obsah = [vytvorSegment("")];
       blok.obsah = normalizujObsah(blok.obsah);
-      blok.zarovnani ||= "left";
+      blok.zarovnani = normalizujZarovnani(blok.zarovnani);
     });
   }
 
@@ -471,6 +501,18 @@
     if (format?.podtrzeni) span.style.textDecoration = "underline";
     if (format?.barva) span.style.color = format.barva;
     if (format?.pozadi) span.style.backgroundColor = format.pozadi;
+
+    const stylTextu = normalizujStylTextu(format?.stylTextu);
+    span.dataset.lnV2StylTextu = stylTextu || "text";
+    if (stylTextu) span.classList.add("ln-v2-nadpis", `ln-v2-${stylTextu}`);
+
+    const odkaz = normalizujInternetovouAdresu(format?.odkaz);
+    span.dataset.lnV2Odkaz = odkaz || "";
+    if (odkaz) {
+      span.classList.add("ln-v2-odkaz");
+      span.setAttribute("role", "link");
+      span.setAttribute("aria-label", `Internetový odkaz: ${odkaz}`);
+    }
   }
 
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
@@ -631,18 +673,77 @@
     return { ...zacatek };
   }
 
+  // V2.6b – aktivní formát má jasný původ.
+  // „uzivatel“ = uživatel jej výslovně zapnul tlačítkem a může psát více slov;
+  // „zdedeny“ = formát vznikl automaticky (např. delete-affinity po mazání).
+  // Mezerník zděděný formát UKONČÍ: samotná mezera se vloží bez zděděného
+  // formátu a další text už pokračuje normálně. Výslovně zapnutý formát
+  // mezerník neruší. Díky tomu se barva/B/I/U/velikost nemůže náhodně
+  // přenášet za formátované slovo, ale ručně zapnuté B/I/U může běžet přes větu.
+  function jeWhitespaceText(text) {
+    return typeof text === "string" && text.length > 0 && /^\s+$/u.test(text);
+  }
+
+  function jePoziceNaHraniciFormatu(blok, offset) {
+    if (!blok?.obsah?.length) return false;
+    const delka = textBloku(blok).length;
+    const cil = Math.max(0, Math.min(delka, offset));
+
+    // Začátek/konec formátovaného obsahu je také hranice vůči okolnímu
+    // základnímu textu – mezera tam nemá formát samovolně prodlužovat.
+    if (cil === 0 || cil === delka) return true;
+
+    let pozice = 0;
+    for (let i = 0; i < blok.obsah.length - 1; i += 1) {
+      pozice += String(blok.obsah[i]?.text ?? "").length;
+      if (cil === pozice) return true;
+    }
+    return false;
+  }
+
   function vlozText(text, vyber, formatVlozeni = null) {
+    const blokPredVlozenim = dokument.bloky[vyber.zacatek.blok];
+    const jeWhitespace = jeWhitespaceText(text);
+    const aktivniJeRucni = Boolean(
+      aktivniFormatPsani
+      && aktivniFormatPozice === klicPozice(vyber.zacatek)
+      && aktivniFormatZdroj === "uzivatel"
+    );
+    const aktivniJeZdedeny = Boolean(
+      aktivniFormatPsani
+      && aktivniFormatPozice === klicPozice(vyber.zacatek)
+      && aktivniFormatZdroj === "zdedeny"
+    );
+    const whitespaceNaHranici = Boolean(
+      !formatVlozeni
+      && !aktivniJeRucni
+      && vyber?.sbaleny
+      && jeWhitespace
+      && (aktivniJeZdedeny || jePoziceNaHraniciFormatu(blokPredVlozenim, vyber.zacatek.offset))
+    );
+
     const format = kopieFormatu(
       formatVlozeni
+      || (aktivniJeRucni ? aktivniFormatPsani : null)
+      || (whitespaceNaHranici ? VYCHOZI_FORMAT : null)
       || aktivniFormatPsani
       || formatZDomBodu()
-      || formatNaPozici(dokument.bloky[vyber.zacatek.blok], vyber.zacatek.offset)
+      || formatNaPozici(blokPredVlozenim, vyber.zacatek.offset)
     );
 
     const caret = smazVyber(vyber);
     const blok = dokument.bloky[caret.blok];
     const rez = rozdelObsah(blok, caret.offset);
     nastavObsahBloku(blok, [...rez.vlevo, vytvorSegment(text, format), ...rez.vpravo]);
+
+    // Zděděný formát končí prvním mezerníkem. Ručně zapnutý formát pokračuje.
+    if (jeWhitespace && aktivniJeZdedeny) {
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+      zapisDebug?.("EDITOR V2 LAB | SPACE RESET inherited-format");
+    }
+
     return { blok: caret.blok, offset: caret.offset + text.length };
   }
 
@@ -1146,6 +1247,7 @@
       aktivniFormatPsani = kopieFormatu(format);
       aktivniFormatPsani.velikost = velikost;
       aktivniFormatPozice = klicPozice(vyber.zacatek);
+      aktivniFormatZdroj = "uzivatel";
       aktualizujToolbarVelikosti(vyber);
       nastavStav(
         velikost === null
@@ -1163,6 +1265,7 @@
     ulozZmenuDoHistorie(snapshotPred, velikost === null ? "základní velikost" : `velikost ${velikost}`);
     aktivniFormatPsani = null;
     aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
     vykresli(vyber);
     nastavStav(
       velikost === null
@@ -1193,6 +1296,7 @@
       aktivniFormatPsani = kopieFormatu(format);
       aktivniFormatPsani[klic] = novaHodnota;
       aktivniFormatPozice = klicPozice(vyber.zacatek);
+      aktivniFormatZdroj = "uzivatel";
       aktualizujToolbarVelikosti(vyber);
       nastavStav(`${nazev} pro nově psaný text: ${novaHodnota || "výchozí"}`);
       zapisDebug?.(`EDITOR V2 LAB | typing-${klic}=${novaHodnota || "default"}`);
@@ -1206,6 +1310,7 @@
     ulozZmenuDoHistorie(snapshotPred, klic === "barva" ? "barva textu" : "pozadí textu");
     aktivniFormatPsani = null;
     aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
     vykresli(vyber);
     nastavStav(`${nazev} výběru: ${novaHodnota || "výchozí"}`);
     zapisDebug?.(
@@ -1235,6 +1340,7 @@
       aktivniFormatPsani = kopieFormatu(format);
       aktivniFormatPsani[klic] = !Boolean(aktivniFormatPsani[klic]);
       aktivniFormatPozice = klicPozice(vyber.zacatek);
+      aktivniFormatZdroj = "uzivatel";
       aktualizujToolbarVelikosti(vyber);
       nastavStav(`${nazvy[klic]} pro nově psaný text: ${aktivniFormatPsani[klic] ? 'zapnuto' : 'vypnuto'}`);
       zapisDebug?.(`EDITOR V2 LAB | typing-${klic}=${aktivniFormatPsani[klic] ? 'on' : 'off'}`);
@@ -1250,11 +1356,313 @@
     ulozZmenuDoHistorie(snapshotPred, `${nazvy[klic]} ${novaHodnota ? "zapnout" : "vypnout"}`);
     aktivniFormatPsani = null;
     aktivniFormatPozice = '';
+    aktivniFormatZdroj = '';
     vykresli(vyber);
     nastavStav(`${nazvy[klic]} výběru: ${novaHodnota ? 'zapnuto' : 'vypnuto'}`);
     zapisDebug?.(
       `EDITOR V2 LAB | selection-${klic}=${novaHodnota ? 'on' : 'off'} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
     );
+  }
+
+  function nastavOdkazVBloku(blok, od, doPozice, url) {
+    const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
+    const konecPozice = Math.max(odPozice, Math.min(textBloku(blok).length, doPozice));
+    if (odPozice === konecPozice) return;
+
+    const vystup = [];
+    let pozice = 0;
+
+    blok.obsah.forEach((cast) => {
+      const text = String(cast.text ?? "");
+      const konec = pozice + text.length;
+      const prekryvOd = Math.max(pozice, odPozice);
+      const prekryvDo = Math.min(konec, konecPozice);
+
+      if (prekryvOd >= prekryvDo) {
+        if (text) vystup.push(vytvorSegment(text, cast.format));
+      } else {
+        const pred = text.slice(0, prekryvOd - pozice);
+        const stred = text.slice(prekryvOd - pozice, prekryvDo - pozice);
+        const po = text.slice(prekryvDo - pozice);
+
+        if (pred) vystup.push(vytvorSegment(pred, cast.format));
+        if (stred) {
+          const novyFormat = kopieFormatu(cast.format);
+          novyFormat.odkaz = normalizujInternetovouAdresu(url);
+          vystup.push(vytvorSegment(stred, novyFormat));
+        }
+        if (po) vystup.push(vytvorSegment(po, cast.format));
+      }
+
+      pozice = konec;
+    });
+
+    nastavObsahBloku(blok, vystup);
+  }
+
+  function textVeVyberu(vyber) {
+    if (!vyber || vyber.sbaleny) return "";
+    const casti = [];
+
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      const text = textBloku(blok);
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : text.length;
+      casti.push(text.slice(od, doPozice));
+    }
+
+    return casti.join("\n");
+  }
+
+  function odkazyVeVyberu(vyber) {
+    const hodnoty = new Set();
+    if (!vyber) return hodnoty;
+
+    if (vyber.sbaleny) {
+      let format = null;
+      if (aktivniFormatPsani && aktivniFormatPozice === klicPozice(vyber.zacatek)) {
+        format = aktivniFormatPsani;
+      } else {
+        format = formatZDomBodu() || formatNaPozici(dokument.bloky[vyber.zacatek.blok], vyber.zacatek.offset);
+      }
+      hodnoty.add(normalizujInternetovouAdresu(format?.odkaz) || "zaklad");
+      return hodnoty;
+    }
+
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
+      let pozice = 0;
+
+      blok.obsah.forEach((cast) => {
+        const konec = pozice + String(cast.text ?? "").length;
+        if (Math.max(pozice, od) < Math.min(konec, doPozice)) {
+          hodnoty.add(normalizujInternetovouAdresu(cast.format?.odkaz) || "zaklad");
+        }
+        pozice = konec;
+      });
+    }
+
+    return hodnoty;
+  }
+
+  function ziskejInfoOdkazu() {
+    const vyber = ziskejFormatovaciVyber();
+    if (!vyber) return { text: "", url: "", sbaleny: true, mix: false };
+    const hodnoty = Array.from(odkazyVeVyberu(vyber));
+    return {
+      text: textVeVyberu(vyber),
+      url: hodnoty.length === 1 && hodnoty[0] !== "zaklad" ? hodnoty[0] : "",
+      sbaleny: Boolean(vyber.sbaleny),
+      mix: hodnoty.length > 1,
+      viceBloku: !vyber.sbaleny && vyber.zacatek.blok !== vyber.konec.blok
+    };
+  }
+
+  function nastavOdkazZToolbaru(urlHodnota, textHodnota = "") {
+    const url = normalizujInternetovouAdresu(urlHodnota);
+    const vyber = ziskejFormatovaciVyber();
+    if (!url || !vyber) {
+      nastavStav("Odkaz: neplatná internetová adresa", true);
+      return false;
+    }
+
+    if (!vyber.sbaleny && vyber.zacatek.blok !== vyber.konec.blok) {
+      nastavStav("Odkaz zatím označ jen v jednom odstavci.", true);
+      return false;
+    }
+
+    const puvodniText = textVeVyberu(vyber);
+    const pozadovanyText = String(textHodnota || "").trim() || puvodniText || url;
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+
+    if (!vyber.sbaleny && pozadovanyText === puvodniText) {
+      nastavOdkazVBloku(
+        dokument.bloky[vyber.zacatek.blok],
+        vyber.zacatek.offset,
+        vyber.konec.offset,
+        url
+      );
+      ulozZmenuDoHistorie(snapshotPred, "internetový odkaz");
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+      vykresli(vyber);
+      editor?.focus({ preventScroll: true });
+      nastavStav(`Odkaz nastaven: ${url}`);
+      zapisDebug?.(`EDITOR V2 LAB | link apply | ${url}`);
+      return true;
+    }
+
+    const formatZaklad = kopieFormatu(
+      aktivniFormatPsani
+      || formatZDomBodu()
+      || formatNaPozici(dokument.bloky[vyber.zacatek.blok], vyber.zacatek.offset)
+    );
+    const formatOdkazu = kopieFormatu(formatZaklad);
+    formatOdkazu.odkaz = url;
+    const formatMezery = kopieFormatu(formatZaklad);
+    formatMezery.odkaz = null;
+
+    let caret = smazVyber(vyber);
+    caret = vlozText(
+      pozadovanyText,
+      { zacatek: caret, konec: caret, sbaleny: true },
+      formatOdkazu
+    );
+    caret = vlozText(
+      " ",
+      { zacatek: caret, konec: caret, sbaleny: true },
+      formatMezery
+    );
+
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+    ulozZmenuDoHistorie(snapshotPred, "vložit internetový odkaz");
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+    vykresli(novyVyber);
+    editor?.focus({ preventScroll: true });
+    nastavStav(`Odkaz vložen: ${url}`);
+    zapisDebug?.(`EDITOR V2 LAB | link insert | ${url}`);
+    return true;
+  }
+
+  function nastavStylTextuVBloku(blok, od, doPozice, stylTextu) {
+    const odPozice = Math.max(0, Math.min(textBloku(blok).length, od));
+    const konecPozice = Math.max(odPozice, Math.min(textBloku(blok).length, doPozice));
+    if (odPozice === konecPozice) return;
+
+    const vystup = [];
+    let pozice = 0;
+
+    blok.obsah.forEach((cast) => {
+      const text = String(cast.text ?? "");
+      const konec = pozice + text.length;
+      const prekryvOd = Math.max(pozice, odPozice);
+      const prekryvDo = Math.min(konec, konecPozice);
+
+      if (prekryvOd >= prekryvDo) {
+        if (text) vystup.push(vytvorSegment(text, cast.format));
+      } else {
+        const pred = text.slice(0, prekryvOd - pozice);
+        const stred = text.slice(prekryvOd - pozice, prekryvDo - pozice);
+        const po = text.slice(prekryvDo - pozice);
+
+        if (pred) vystup.push(vytvorSegment(pred, cast.format));
+        if (stred) {
+          const novyFormat = kopieFormatu(cast.format);
+          novyFormat.stylTextu = normalizujStylTextu(stylTextu);
+          vystup.push(vytvorSegment(stred, novyFormat));
+        }
+        if (po) vystup.push(vytvorSegment(po, cast.format));
+      }
+
+      pozice = konec;
+    });
+
+    nastavObsahBloku(blok, vystup);
+  }
+
+  function aplikujStylTextuNaVyber(vyber, stylTextu) {
+    if (!vyber || vyber.sbaleny) return;
+
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
+      nastavStylTextuVBloku(blok, od, doPozice, stylTextu);
+    }
+  }
+
+  function hodnotyStyluTextuVeVyberu(vyber) {
+    const hodnoty = new Set();
+    if (!vyber) return hodnoty;
+
+    if (vyber.sbaleny) {
+      let format = null;
+      if (aktivniFormatPsani && aktivniFormatPozice === klicPozice(vyber.zacatek)) {
+        format = aktivniFormatPsani;
+      } else {
+        format = formatZDomBodu() || formatNaPozici(dokument.bloky[vyber.zacatek.blok], vyber.zacatek.offset);
+      }
+      hodnoty.add(normalizujStylTextu(format?.stylTextu) || "div");
+      return hodnoty;
+    }
+
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : textBloku(blok).length;
+      let pozice = 0;
+
+      blok.obsah.forEach((cast) => {
+        const konec = pozice + String(cast.text ?? "").length;
+        if (Math.max(pozice, od) < Math.min(konec, doPozice)) {
+          hodnoty.add(normalizujStylTextu(cast.format?.stylTextu) || "div");
+        }
+        pozice = konec;
+      });
+    }
+
+    return hodnoty;
+  }
+
+  function nastavStylTextuZToolbaru(hodnota) {
+    const vyber = ziskejFormatovaciVyber();
+    if (!vyber) return false;
+
+    if (vyber.sbaleny) {
+      nastavStav("Pro H1/H2/H3 nejdřív označ text.");
+      zapisDebug?.("EDITOR V2 LAB | heading blocked: collapsed selection");
+      return false;
+    }
+
+    const stylTextu = normalizujStylTextu(hodnota);
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    aplikujStylTextuNaVyber(vyber, stylTextu);
+    const zmeneno = ulozZmenuDoHistorie(snapshotPred, stylTextu ? `styl ${stylTextu.toUpperCase()}` : "styl Text");
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+    vykresli(vyber);
+    nastavStav(stylTextu ? `Styl výběru: ${stylTextu.toUpperCase()}` : "Styl výběru: Text");
+    zapisDebug?.(`EDITOR V2 LAB | text-style=${stylTextu || "div"} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`);
+    return zmeneno;
+  }
+
+  function blokyZarovnaniVeVyberu(vyber) {
+    const hodnoty = new Set();
+    if (!vyber || !dokument?.bloky?.length) return hodnoty;
+
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    for (let index = od; index <= doBloku; index += 1) {
+      hodnoty.add(normalizujZarovnani(dokument.bloky[index]?.zarovnani));
+    }
+    return hodnoty;
+  }
+
+  function nastavZarovnaniZToolbaru(hodnota) {
+    const vyber = ziskejFormatovaciVyber();
+    if (!vyber || !dokument?.bloky?.length) return false;
+
+    const zarovnani = normalizujZarovnani(hodnota);
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const doBloku = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+
+    for (let index = od; index <= doBloku; index += 1) {
+      dokument.bloky[index].zarovnani = zarovnani;
+    }
+
+    const zmeneno = ulozZmenuDoHistorie(snapshotPred, `zarovnání ${zarovnani}`);
+    vykresli(vyber);
+    nastavStav(`Zarovnání odstavce: ${zarovnani}`);
+    zapisDebug?.(`EDITOR V2 LAB | align=${zarovnani} | blocks=${od}-${doBloku}`);
+    return zmeneno;
   }
 
   function zpracujBeforeInput(event) {
@@ -1317,8 +1725,15 @@
     if (formatPoMazani) {
       aktivniFormatPsani = kopieFormatu(formatPoMazani);
       aktivniFormatPozice = klicPozice(caret);
+      aktivniFormatZdroj = "zdedeny";
       zapisDebug?.(`EDITOR V2 LAB | DELETE AFFINITY | ${event.inputType} | format=${JSON.stringify(aktivniFormatPsani)}`);
+    } else if (String(event.inputType || "").startsWith("delete")) {
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = klicPozice(caret);
+      aktivniFormatZdroj = "";
     } else {
+      // Psaní/Enter nesmí shodit ručně zapnutý formát. VlozText() sám
+      // zruší pouze zděděný formát, když narazí na první mezerník.
       aktivniFormatPozice = klicPozice(caret);
     }
     const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
@@ -1351,6 +1766,9 @@
       const blokEl = blokyDom[b];
       if (!blokEl?.matches?.(".ln-v2-odstavec[data-ln-v2-blok]")) return `blok ${b}: neplatný element`;
       if (blokEl.dataset.lnV2Blok !== blok.id) return `blok ${b}: jiné id`;
+      const modelZarovnani = normalizujZarovnani(blok.zarovnani);
+      const domZarovnani = normalizujZarovnani(blokEl.style.textAlign || "left");
+      if (domZarovnani !== modelZarovnani) return `blok ${b}: jiné zarovnání DOM/model`;
       if (blokEl.textContent !== textBloku(blok)) return `blok ${b}: jiný text`;
 
       if (!textBloku(blok)) {
@@ -1401,6 +1819,26 @@
         }
         if (span.style.backgroundColor !== modelPozadi) {
           return `blok ${b} segment ${s}: jiné pozadí textu DOM/model`;
+        }
+
+        const modelStylTextu = normalizujStylTextu(cast.format?.stylTextu);
+        if (span.dataset.lnV2StylTextu !== (modelStylTextu || "text")) {
+          return `blok ${b} segment ${s}: jiný styl textu DOM/model`;
+        }
+        if (modelStylTextu) {
+          if (!span.classList.contains("ln-v2-nadpis") || !span.classList.contains(`ln-v2-${modelStylTextu}`)) {
+            return `blok ${b} segment ${s}: chybí třída nadpisu`;
+          }
+        } else if (span.classList.contains("ln-v2-nadpis")) {
+          return `blok ${b} segment ${s}: cizí nadpisová třída`;
+        }
+
+        const modelOdkaz = normalizujInternetovouAdresu(cast.format?.odkaz) || "";
+        if ((span.dataset.lnV2Odkaz || "") !== modelOdkaz) {
+          return `blok ${b} segment ${s}: jiný odkaz DOM/model`;
+        }
+        if (span.classList.contains("ln-v2-odkaz") !== Boolean(modelOdkaz)) {
+          return `blok ${b} segment ${s}: jiný stav odkazu DOM/model`;
         }
       }
     }
@@ -1455,9 +1893,18 @@
     if (!(element instanceof Element)) return format;
 
     const tag = element.tagName.toLowerCase();
+    if (tag === "a") format.odkaz = normalizujInternetovouAdresu(element.getAttribute("href"));
     if (tag === "b" || tag === "strong") format.tucne = true;
     if (tag === "i" || tag === "em") format.kurziva = true;
     if (tag === "u") format.podtrzeni = true;
+
+    if (element.classList?.contains("editorTextNormalni")) {
+      format.stylTextu = null;
+    } else if (element.classList?.contains("editorNadpis")) {
+      if (element.classList.contains("h1")) format.stylTextu = "h1";
+      else if (element.classList.contains("h2")) format.stylTextu = "h2";
+      else if (element.classList.contains("h3")) format.stylTextu = "h3";
+    }
 
     const dataVelikost = cisloVelikosti(element.getAttribute("data-velikost-pisma"));
     const inlineText = String(element.style?.fontSize || "").trim();
@@ -1480,7 +1927,7 @@
   }
 
   function importujInlineUzly(rodic, zakladniFormat, vystup, nepodporovane) {
-    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark"]);
+    const povoleneInline = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a"]);
 
     Array.from(rodic?.childNodes || []).forEach((uzel) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
@@ -1501,6 +1948,15 @@
         return;
       }
 
+      if (tag === "a") {
+        const jeSpecialniInterni = uzel.classList.contains("noteInternalLink") || uzel.classList.contains("plannedTextLink");
+        const href = normalizujInternetovouAdresu(uzel.getAttribute("href"));
+        if (jeSpecialniInterni || !href) {
+          nepodporovane.add(jeSpecialniInterni ? "interní odkaz" : "a[href]");
+          return;
+        }
+      }
+
       const format = formatZInlineElementu(uzel, zakladniFormat);
       importujInlineUzly(uzel, format, vystup, nepodporovane);
     });
@@ -1519,8 +1975,8 @@
       bloky.push(vytvorOdstavecZObsahu(rootInline.splice(0), "left"));
     };
 
-    const blokoveTagy = new Set(["div", "p"]);
-    const inlineTagy = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark"]);
+    const blokoveTagy = new Set(["div", "p", "h1", "h2", "h3"]);
+    const inlineTagy = new Set(["span", "font", "b", "strong", "i", "em", "u", "mark", "a"]);
 
     Array.from(sablona.content.childNodes).forEach((uzel) => {
       if (uzel.nodeType === Node.TEXT_NODE) {
@@ -1540,6 +1996,14 @@
       }
 
       if (inlineTagy.has(tag)) {
+        if (tag === "a") {
+          const jeSpecialniInterni = uzel.classList.contains("noteInternalLink") || uzel.classList.contains("plannedTextLink");
+          const href = normalizujInternetovouAdresu(uzel.getAttribute("href"));
+          if (jeSpecialniInterni || !href) {
+            nepodporovane.add(jeSpecialniInterni ? "interní odkaz" : "a[href]");
+            return;
+          }
+        }
         importujInlineUzly(uzel, formatZInlineElementu(uzel, VYCHOZI_FORMAT), rootInline, nepodporovane);
         return;
       }
@@ -1552,7 +2016,9 @@
       }
 
       const obsah = [];
-      importujInlineUzly(uzel, VYCHOZI_FORMAT, obsah, nepodporovane);
+      const blokovyFormat = kopieFormatu(VYCHOZI_FORMAT);
+      if (["h1", "h2", "h3"].includes(tag)) blokovyFormat.stylTextu = tag;
+      importujInlineUzly(uzel, blokovyFormat, obsah, nepodporovane);
       if (obsah.length === 1 && obsah[0]?.text === "\n") obsah.length = 0;
       const zarovnani = normalizujZarovnani(uzel.style?.textAlign || uzel.getAttribute("align"));
       bloky.push(vytvorOdstavecZObsahu(obsah, zarovnani));
@@ -1601,25 +2067,33 @@
           const format = kopieFormatu(cast?.format);
           const maFormat = Boolean(
             format.tucne || format.kurziva || format.podtrzeni ||
-            format.velikost !== null || format.barva || format.pozadi
+            format.velikost !== null || format.barva || format.pozadi || format.stylTextu || format.odkaz
           );
           if (!maFormat) {
             radek.appendChild(document.createTextNode(text));
             return;
           }
 
-          const span = document.createElement("span");
-          if (format.velikost !== null) {
-            span.dataset.velikostPisma = String(format.velikost);
-            span.style.fontSize = `${format.velikost}px`;
+          const inline = document.createElement(format.odkaz ? "a" : "span");
+          if (format.odkaz) {
+            inline.classList.add("lubaNoteInternetLink");
+            inline.dataset.lubanoteLink = "true";
+            inline.href = format.odkaz;
+            inline.target = "_blank";
+            inline.rel = "noopener noreferrer";
           }
-          if (format.tucne) span.style.fontWeight = "700";
-          if (format.kurziva) span.style.fontStyle = "italic";
-          if (format.podtrzeni) span.style.textDecoration = "underline";
-          if (format.barva) span.style.color = format.barva;
-          if (format.pozadi) span.style.backgroundColor = format.pozadi;
-          span.textContent = text;
-          radek.appendChild(span);
+          if (format.velikost !== null) {
+            inline.dataset.velikostPisma = String(format.velikost);
+            inline.style.fontSize = `${format.velikost}px`;
+          }
+          if (format.tucne) inline.style.fontWeight = "700";
+          if (format.kurziva) inline.style.fontStyle = "italic";
+          if (format.podtrzeni) inline.style.textDecoration = "underline";
+          if (format.barva) inline.style.color = format.barva;
+          if (format.pozadi) inline.style.backgroundColor = format.pozadi;
+          if (format.stylTextu) inline.classList.add("editorNadpis", format.stylTextu);
+          inline.textContent = text;
+          radek.appendChild(inline);
         });
       }
       obal.appendChild(radek);
@@ -1639,6 +2113,7 @@
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     aktivniFormatPsani = null;
     aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
     historieZpet = [];
     historieVpred = [];
     vykresli(posledniVyber);
@@ -1683,13 +2158,19 @@
     const velikosti = Array.from(velikostiVeVyberu(vyber).hodnoty);
     const barvy = Array.from(hodnotyBarevVeVyberu(vyber, "barva"));
     const pozadi = Array.from(hodnotyBarevVeVyberu(vyber, "pozadi"));
+    const zarovnani = Array.from(blokyZarovnaniVeVyberu(vyber));
+    const stylyTextu = Array.from(hodnotyStyluTextuVeVyberu(vyber));
+    const odkazy = Array.from(odkazyVeVyberu(vyber));
     return {
       velikost: velikosti.length === 1 ? velikosti[0] : "mix",
       tucne: stavBooleanFormatuVeVyberu(vyber, "tucne"),
       kurziva: stavBooleanFormatuVeVyberu(vyber, "kurziva"),
       podtrzeni: stavBooleanFormatuVeVyberu(vyber, "podtrzeni"),
       barva: barvy.length === 1 ? barvy[0] : "mix",
-      pozadi: pozadi.length === 1 ? pozadi[0] : "mix"
+      pozadi: pozadi.length === 1 ? pozadi[0] : "mix",
+      zarovnani: zarovnani.length === 1 ? zarovnani[0] : "mix",
+      stylTextu: stylyTextu.length === 1 ? stylyTextu[0] : "mix",
+      odkaz: odkazy.length === 1 ? odkazy[0] : "mix"
     };
   }
 
@@ -1700,7 +2181,7 @@
     lab.innerHTML = `
       <header class="ln-v2-hlavicka">
         <div>
-          <strong>Editor Core V2.5a · LAB</strong>
+          <strong>Editor Core V2.9 · LAB</strong>
           <small>Izolovaný test · nic se neukládá do poznámek</small>
         </div>
         <button type="button" class="ln-v2-zavrit" data-v2-akce="zavrit" aria-label="Zavřít Editor Core V2">×</button>
@@ -1750,7 +2231,7 @@
       </div>
 
       <footer class="ln-v2-paticka">
-        V2.5a: Undo/Redo vrací snapshoty vlastního modelu a Backspace/Delete si navíc drží formát právě mazaného obsahu. Nový text tak na hranici segmentů nepřebírá omylem formát sousedního slova. Obrázky, TODO, odkazy, IME a ukládání zůstávají vypnuté.
+        V2.9: internetové odkazy jsou atribut segmentu modelu; v editačním DOMu jsou inertní a při exportu se převádějí na kompatibilní &lt;a&gt;. Obrázky, TODO a IME zatím zůstávají vypnuté.
       </footer>
     `;
 
@@ -1792,6 +2273,7 @@
       if (predchoziKlic && predchoziKlic !== novyKlic && aktivniFormatPozice !== novyKlic) {
         aktivniFormatPsani = null;
         aktivniFormatPozice = "";
+        aktivniFormatZdroj = "";
       }
       aktualizujToolbarVelikosti(modelovyVyber);
     });
@@ -1879,6 +2361,7 @@
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     aktivniFormatPsani = null;
     aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
     historieZpet = [];
     historieVpred = [];
     vykresli(posledniVyber);
@@ -1903,7 +2386,7 @@
     else vykresli(posledniVyber || posledniPozice);
 
     editor.focus({ preventScroll: true });
-    zapisDebug?.("EDITOR V2 LAB | OPEN V2.5a | produkční editor nedotčen");
+    zapisDebug?.("EDITOR V2 LAB | OPEN V2.9 | produkční editor nedotčen");
     return true;
   }
 
@@ -1941,6 +2424,7 @@
     ulozenyFormatovaciVyber = null;
     aktivniFormatPsani = null;
     aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
     zapisDebug = null;
     document.body.classList.remove("ln-v2-lab-otevren");
   }
@@ -1986,7 +2470,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.6-BRIDGE-375",
+    verze: "V2.9-LINKS-380",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -2001,6 +2485,10 @@
     nastavVelikost: nastavVelikostZToolbaru,
     prepniFormat: prepniBooleanFormatZToolbaru,
     nastavBarvu: nastavBarvuZToolbaru,
+    nastavZarovnani: nastavZarovnaniZToolbaru,
+    nastavStylTextu: nastavStylTextuZToolbaru,
+    nastavOdkaz: nastavOdkazZToolbaru,
+    ziskejInfoOdkazu,
     undo: vratHistoriiZpet,
     redo: vratHistoriiVpred,
     kontrolaDomu,
