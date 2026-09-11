@@ -2120,6 +2120,7 @@ function nastavDragHornihoStitku(button) {
   let pointerX = 0;
   let pointerY = 0;
   let pointerTimer = 0;
+  let pointerListenery = false;
 
   let touchId = null;
   let touchStartX = 0;
@@ -2322,6 +2323,138 @@ function nastavDragHornihoStitku(button) {
     { passive: true }
   );
 
+  const odeberPointerListenery = () => {
+    if (!pointerListenery) {
+      return;
+    }
+
+    document.removeEventListener(
+      "pointermove",
+      zpracujPointerMove,
+      true
+    );
+    document.removeEventListener(
+      "pointerup",
+      zpracujPointerUp,
+      true
+    );
+    document.removeEventListener(
+      "pointercancel",
+      zpracujPointerCancel,
+      true
+    );
+    window.removeEventListener(
+      "blur",
+      zpracujPointerBlur,
+      true
+    );
+    pointerListenery = false;
+  };
+
+  const vycistiPointer = () => {
+    zrusPointerTimer();
+    pointerId = null;
+    odeberPointerListenery();
+  };
+
+  function zpracujPointerMove(event) {
+    if (
+      event.pointerType === "touch" ||
+      pointerId === null ||
+      event.pointerId !== pointerId
+    ) {
+      return;
+    }
+
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      event.stopPropagation();
+      pohniGhostemHornihoStitku(pointerX, pointerY);
+      return;
+    }
+
+    if (
+      Math.hypot(
+        pointerX - pointerStartX,
+        pointerY - pointerStartY
+      ) > POHYB_PRED_LONG_PRESS_STITKU
+    ) {
+      zrusPointerTimer();
+    }
+  }
+
+  function zpracujPointerUp(event) {
+    if (
+      event.pointerType === "touch" ||
+      pointerId === null ||
+      event.pointerId !== pointerId
+    ) {
+      return;
+    }
+
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+    zrusPointerTimer();
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      /* Poslední pozice myši se promítne ještě před dropem. */
+      pohniGhostemHornihoStitku(pointerX, pointerY);
+      void dokoncitPresunHornihoStitku();
+    }
+
+    vycistiPointer();
+  }
+
+  function zpracujPointerCancel(event) {
+    if (
+      event.pointerType === "touch" ||
+      pointerId === null ||
+      event.pointerId !== pointerId
+    ) {
+      return;
+    }
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    vycistiPointer();
+  }
+
+  function zpracujPointerBlur() {
+    if (pointerId === null) {
+      return;
+    }
+
+    const aktivni =
+      presunHornihoStitku?.button === button &&
+      presunHornihoStitku?.id === pointerId;
+
+    if (aktivni) {
+      void dokoncitPresunHornihoStitku({ zrusit: true });
+    }
+
+    vycistiPointer();
+  }
+
   button.addEventListener("pointerdown", (event) => {
     if (
       event.pointerType === "touch" ||
@@ -2340,6 +2473,36 @@ function nastavDragHornihoStitku(button) {
 
     const pripravZaznam =
       zajistiZaznamHornihoStitkuProDrag(button);
+
+    /*
+     * DESKTOP GUARD:
+     * Pointer události posloucháme na documentu, ne jen na tlačítku.
+     * Browser proto může pointer capture odmítnout a drag přesto dál běží
+     * i mimo původní štítek. Tím ghost po dropu nezůstane viset nahoře.
+     */
+    if (!pointerListenery) {
+      document.addEventListener(
+        "pointermove",
+        zpracujPointerMove,
+        { passive: false, capture: true }
+      );
+      document.addEventListener(
+        "pointerup",
+        zpracujPointerUp,
+        { passive: false, capture: true }
+      );
+      document.addEventListener(
+        "pointercancel",
+        zpracujPointerCancel,
+        { passive: false, capture: true }
+      );
+      window.addEventListener(
+        "blur",
+        zpracujPointerBlur,
+        true
+      );
+      pointerListenery = true;
+    }
 
     pointerTimer = setTimeout(async () => {
       const puvodniPointerId = pointerId;
@@ -2369,75 +2532,10 @@ function nastavDragHornihoStitku(button) {
         try {
           button.setPointerCapture(pointerId);
         } catch (_) {
-          // Pointer capture není podmínkou funkce.
+          /* Document listenery jsou hlavní cesta; capture je jen bonus. */
         }
       }
     }, CAS_LONG_PRESS_STITKU);
-  });
-
-  button.addEventListener("pointermove", (event) => {
-    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
-      return;
-    }
-
-    pointerX = event.clientX;
-    pointerY = event.clientY;
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      event.preventDefault();
-      pohniGhostemHornihoStitku(pointerX, pointerY);
-      return;
-    }
-
-    if (
-      Math.hypot(
-        pointerX - pointerStartX,
-        pointerY - pointerStartY
-      ) > POHYB_PRED_LONG_PRESS_STITKU
-    ) {
-      zrusPointerTimer();
-    }
-  });
-
-  button.addEventListener("pointerup", (event) => {
-    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
-      return;
-    }
-
-    zrusPointerTimer();
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      event.preventDefault();
-      void dokoncitPresunHornihoStitku();
-    }
-
-    pointerId = null;
-  });
-
-  button.addEventListener("pointercancel", (event) => {
-    if (event.pointerType === "touch" || event.pointerId !== pointerId) {
-      return;
-    }
-
-    zrusPointerTimer();
-
-    const aktivni =
-      presunHornihoStitku?.button === button &&
-      presunHornihoStitku?.id === pointerId;
-
-    if (aktivni) {
-      void dokoncitPresunHornihoStitku({ zrusit: true });
-    }
-
-    pointerId = null;
   });
 
   button.addEventListener("contextmenu", (event) => {

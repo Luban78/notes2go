@@ -4728,6 +4728,77 @@
     });
   }
 
+  function importujWrapperSObrazkyDoModelu(element, bloky, nepodporovane, zakladniFormat = VYCHOZI_FORMAT) {
+    if (!(element instanceof Element)) return false;
+
+    const obsah = [];
+    const docasny = document.createElement("span");
+    const zarovnani = normalizujZarovnani(
+      element.style?.textAlign || element.getAttribute("align")
+    );
+
+    const flushText = () => {
+      if (!docasny.childNodes.length) return;
+
+      obsah.length = 0;
+      importujInlineUzly(
+        docasny,
+        zakladniFormat,
+        obsah,
+        nepodporovane
+      );
+      docasny.replaceChildren();
+
+      if (obsah.length === 1 && obsah[0]?.text === "\n") {
+        obsah.length = 0;
+      }
+
+      if (obsah.length) {
+        bloky.push(vytvorOdstavecZObsahu(obsah.splice(0), zarovnani));
+      }
+    };
+
+    const zpracuj = (uzel) => {
+      if (uzel.nodeType === Node.TEXT_NODE) {
+        docasny.appendChild(uzel.cloneNode(true));
+        return;
+      }
+
+      if (uzel.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = uzel.tagName.toLowerCase();
+
+      if (tag === "figure" || tag === "img") {
+        flushText();
+        const obrazek = vytvorObrazkovyBlokZHtml(uzel, nepodporovane);
+        if (obrazek) bloky.push(obrazek);
+        return;
+      }
+
+      if (
+        ["div", "p", "section", "article"].includes(tag) &&
+        uzel.querySelector?.("figure, img")
+      ) {
+        flushText();
+        const format = kopieFormatu(zakladniFormat);
+        if (["h1", "h2", "h3"].includes(tag)) format.stylTextu = tag;
+        importujWrapperSObrazkyDoModelu(
+          uzel,
+          bloky,
+          nepodporovane,
+          format
+        );
+        return;
+      }
+
+      docasny.appendChild(uzel.cloneNode(true));
+    };
+
+    Array.from(element.childNodes).forEach(zpracuj);
+    flushText();
+    return true;
+  }
+
   function importujTodoElementDoModelu(element, bloky, nepodporovane) {
     if (!(element instanceof Element)) return;
 
@@ -4954,9 +5025,26 @@
         return;
       }
 
-      const obsah = [];
       const blokovyFormat = kopieFormatu(VYCHOZI_FORMAT);
       if (["h1", "h2", "h3"].includes(tag)) blokovyFormat.stylTextu = tag;
+
+      /*
+       * Legacy poznámky mohou mít obrázek zabalený uvnitř DIV/P wrapperu.
+       * V2.21 původně uměl FIGURE jen na root úrovni, takže takový wrapper
+       * skončil ve fallbacku „figure“. Rozdělíme wrapper v pořadí
+       * text -> obrázek -> text a každý obrázek převedeme na V2 Image Block.
+       */
+      if (uzel.querySelector?.("figure, img")) {
+        importujWrapperSObrazkyDoModelu(
+          uzel,
+          bloky,
+          nepodporovane,
+          blokovyFormat
+        );
+        return;
+      }
+
+      const obsah = [];
       importujInlineUzly(uzel, blokovyFormat, obsah, nepodporovane);
       if (obsah.length === 1 && obsah[0]?.text === "\n") obsah.length = 0;
       const zarovnani = normalizujZarovnani(uzel.style?.textAlign || uzel.getAttribute("align"));
