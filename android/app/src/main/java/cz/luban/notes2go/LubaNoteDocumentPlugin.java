@@ -57,6 +57,7 @@ public class LubaNoteDocumentPlugin extends Plugin {
   private PrintJob pdfPrintJob = null;
   private String pdfNazev = "LubaNote-poznamka.pdf";
   private boolean pdfTiskSpusten = false;
+  private boolean pdfVybratMisto = false;
 
   private final Object pdfViewerLock = new Object();
   private ParcelFileDescriptor pdfViewerDescriptor = null;
@@ -449,7 +450,15 @@ public class LubaNoteDocumentPlugin extends Plugin {
       )
     );
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    String zpusobUlozeni = call.getString(
+      "zpusobUlozeni",
+      "stazene"
+    );
+
+    if (
+      !"vybrat".equalsIgnoreCase(zpusobUlozeni) &&
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+    ) {
       ulozOtevrenePdfDoStazenych(
         call,
         zdroj,
@@ -459,8 +468,8 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
 
     /*
-     * Starší Android ponechává původní systémový picker.
-     * Moderní Android 10+ ukládá přímo do Stažené/LubaNote.
+     * Picker se otevře jen pokud si ho uživatel výslovně vybere
+     * (na Androidu < 10 zůstává nutným fallbackem).
      */
     cekajiciPdfZdrojUri = zdroj;
 
@@ -737,6 +746,9 @@ public class LubaNoteDocumentPlugin extends Plugin {
         "LubaNote-poznamka.pdf"
       )
     );
+    pdfVybratMisto = "vybrat".equalsIgnoreCase(
+      call.getString("zpusobUlozeni", "stazene")
+    );
     pdfTiskSpusten = false;
 
     Activity aktivita = getActivity();
@@ -835,6 +847,11 @@ public class LubaNoteDocumentPlugin extends Plugin {
       return;
     }
 
+    if (pdfVybratMisto) {
+      otevriVyberMistaProVygenerovanePdf(call);
+      return;
+    }
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       ulozPdfBezSystemovehoTisku(call);
       return;
@@ -886,7 +903,74 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
   }
 
+  private void otevriVyberMistaProVygenerovanePdf(PluginCall call) {
+    Intent zamer = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+    zamer.addCategory(Intent.CATEGORY_OPENABLE);
+    zamer.setType("application/pdf");
+    zamer.putExtra(Intent.EXTRA_TITLE, pdfNazev);
+
+    startActivityForResult(
+      call,
+      zamer,
+      "dokonceniVyberuMistaProVygenerovanePdf"
+    );
+  }
+
+  @ActivityCallback
+  private void dokonceniVyberuMistaProVygenerovanePdf(
+    PluginCall call,
+    ActivityResult vysledek
+  ) {
+    if (call == null) {
+      vycistiPdfTisk();
+      return;
+    }
+
+    Intent dataZameru = vysledek.getData();
+
+    if (
+      vysledek.getResultCode() != Activity.RESULT_OK ||
+      dataZameru == null ||
+      dataZameru.getData() == null
+    ) {
+      JSObject odpoved = new JSObject();
+      odpoved.put("saved", false);
+      odpoved.put("canceled", true);
+      call.resolve(odpoved);
+      vycistiPdfTisk();
+      return;
+    }
+
+    ulozPdfBezSystemovehoTiskuDoUri(
+      call,
+      dataZameru.getData()
+    );
+  }
+
   private void ulozPdfBezSystemovehoTisku(PluginCall call) {
+    ulozPdfBezSystemovehoTiskuInterni(
+      call,
+      null,
+      true
+    );
+  }
+
+  private void ulozPdfBezSystemovehoTiskuDoUri(
+    PluginCall call,
+    Uri cil
+  ) {
+    ulozPdfBezSystemovehoTiskuInterni(
+      call,
+      cil,
+      false
+    );
+  }
+
+  private void ulozPdfBezSystemovehoTiskuInterni(
+    PluginCall call,
+    Uri vybranyCil,
+    boolean spravovatStazene
+  ) {
     if (pdfWebView == null) {
       vycistiPdfTisk();
       call.reject("PDF WebView není připravený.");
@@ -898,7 +982,9 @@ public class LubaNoteDocumentPlugin extends Plugin {
     OutputStream vystup = null;
 
     try {
-      cil = vytvorPdfVeStazenych(pdfNazev);
+      cil = vybranyCil != null
+        ? vybranyCil
+        : vytvorPdfVeStazenych(pdfNazev);
 
       /*
        * Android 10+ – PDF vytvoříme přímo z off-screen WebView.
@@ -1018,9 +1104,20 @@ public class LubaNoteDocumentPlugin extends Plugin {
       dokument.close();
       dokument = null;
 
-      dokoncitPdfVeStazenych(cil);
+      if (spravovatStazene) {
+        dokoncitPdfVeStazenych(cil);
+      }
 
-      JSObject odpoved = vytvorPdfUlozenoOdpoved(cil);
+      JSObject odpoved = spravovatStazene
+        ? vytvorPdfUlozenoOdpoved(cil)
+        : new JSObject();
+
+      if (!spravovatStazene) {
+        odpoved.put("saved", true);
+        odpoved.put("canceled", false);
+        odpoved.put("uri", cil == null ? "" : cil.toString());
+        odpoved.put("location", "Vybrané místo");
+      }
       odpoved.put("started", false);
       odpoved.put("pages", pocetStran);
       call.resolve(odpoved);
@@ -1041,9 +1138,13 @@ public class LubaNoteDocumentPlugin extends Plugin {
         }
       }
 
-      zrusPdfVeStazenych(cil);
+      if (spravovatStazene) {
+        zrusPdfVeStazenych(cil);
+      }
       call.reject(
-        "PDF se nepodařilo uložit do Stažené/LubaNote.",
+        spravovatStazene
+          ? "PDF se nepodařilo uložit do Stažené/LubaNote."
+          : "PDF se nepodařilo uložit do vybraného místa.",
         chyba
       );
     } finally {
@@ -1091,6 +1192,7 @@ public class LubaNoteDocumentPlugin extends Plugin {
     pdfPrintJob = null;
     pdfNazev = "LubaNote-poznamka.pdf";
     pdfTiskSpusten = false;
+    pdfVybratMisto = false;
   }
 
   private String nactiTextovySoubor(Uri uri)
