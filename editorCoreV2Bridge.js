@@ -446,9 +446,9 @@
   }
 
   function jeZakazanyKontext() {
-    if (taskModal.classList.contains("sharingEditorMode")) {
-      return "Sdílená poznámka zatím používá původní editor.";
-    }
+    /* 428 – Shared editor používá stejný Core V2 jako vlastní poznámky.
+       Serverový lock/save stále vlastní sharingEditor.js; Bridge pouze
+       poskytuje modelový editor a před uložením připraví kanonická data. */
     return "";
   }
 
@@ -1372,7 +1372,6 @@
 
   function obnovZProdukcnihoEditoru() {
     if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return false;
-    if (taskModal.classList.contains("sharingEditorMode")) return false;
 
     if (aktivni) deaktivuj();
     queueMicrotask(() =>
@@ -1888,7 +1887,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.22-DOCUMENT-OPEN-SAVE-401",
+    verze: "V2.23-SHARED-428",
     prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
     prepniLegacyRezim: prepniTestRezim,
     jeTestRezimZapnuty,

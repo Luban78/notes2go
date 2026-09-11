@@ -313,6 +313,27 @@ function bylEditorZmenen() {
   );
 }
 
+/*
+ * 428 – Core V2 drží kanonický obsah ve vlastním modelu.
+ * Při prvním připojení Bridge sjednotíme produkční zrcadla a teprve
+ * potom uložíme výchozí otisk editoru. Tím shared i běžná poznámka
+ * po pouhém otevření nevypadá jako změněná jen kvůli normalizaci HTML.
+ */
+window.LubaNoteAktualizujPuvodniOtiskEditoruProV2 = () => {
+  const bridge = window.LubaNoteEditorV2Bridge;
+
+  if (!bridge?.jeAktivni?.()) {
+    return false;
+  }
+
+  if (bridge.synchronizujDoProdukcnihoEditoru?.() !== true) {
+    return false;
+  }
+
+  puvodniOtiskEditoru = vytvorOtiskEditoru();
+  return true;
+};
+
 
 function uvolniSdilenyLockPriZavreni(
   noteId
@@ -343,6 +364,21 @@ function uvolniSdilenyLockPriZavreni(
 }
 
 function zpracujZavreniEditoru() {
+  /* 428 – Android Back / systémové zavření nejde přes capture handler
+     tlačítka ✓. Je-li aktivní V2, nejdřív zrcadlíme model do produkčních
+     polí, aby detekce změny i shared save pracovaly s aktuálním obsahem. */
+  if (
+    window.LubaNoteEditorV2Bridge?.jeAktivni?.() &&
+    window.LubaNoteEditorV2Bridge
+      ?.synchronizujDoProdukcnihoEditoru?.() !== true
+  ) {
+    zobrazZpravuAplikace(
+      "Editor",
+      "Zavření bylo zastaveno, protože obsah V2 se nepodařilo bezpečně připravit."
+    );
+    return;
+  }
+
   if (bylEditorZmenen()) {
     resetujAkceZpravyAplikace();
 
@@ -3607,6 +3643,16 @@ function otevriSdilenouPoznamkuVEditoru(
 
 function vytvorDataSdilenehoEditoru() {
   if (!aktivniSdilenaEditace) {
+    return null;
+  }
+
+  /* 428 – Shared save musí vždy číst aktuální Core V2 model, i když
+     uložení nespustil přímo klik na ✓ (např. budoucí handoff). */
+  if (
+    window.LubaNoteEditorV2Bridge?.jeAktivni?.() &&
+    window.LubaNoteEditorV2Bridge
+      ?.synchronizujDoProdukcnihoEditoru?.() !== true
+  ) {
     return null;
   }
 
