@@ -74,6 +74,8 @@ body {
 }
 
 .taskCard {
+  --luba-card-bg: var(--color-surface);
+
   display: inline-flex;
   flex-direction: column;
 
@@ -85,7 +87,7 @@ body {
 
   border-radius: 22px;
 
-  background: var(--color-surface);
+  background: var(--luba-card-bg);
   color: var(--color-text);
 
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
@@ -97,35 +99,43 @@ body {
 }
 
 .taskCard[data-barva-karty="cervena"] {
-  background: var(--card-cervena);
+  --luba-card-bg: var(--card-cervena);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="oranzova"] {
-  background: var(--card-oranzova);
+  --luba-card-bg: var(--card-oranzova);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="zluta"] {
-  background: var(--card-zluta);
+  --luba-card-bg: var(--card-zluta);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="zelena"] {
-  background: var(--card-zelena);
+  --luba-card-bg: var(--card-zelena);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="tyrkysova"] {
-  background: var(--card-tyrkysova);
+  --luba-card-bg: var(--card-tyrkysova);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="modra"] {
-  background: var(--card-modra);
+  --luba-card-bg: var(--card-modra);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="fialova"] {
-  background: var(--card-fialova);
+  --luba-card-bg: var(--card-fialova);
+  background: var(--luba-card-bg);
 }
 
 .taskCard[data-barva-karty="ruzova"] {
-  background: var(--card-ruzova);
+  --luba-card-bg: var(--card-ruzova);
+  background: var(--luba-card-bg);
 }
 
 .taskNoteText {
@@ -10881,12 +10891,36 @@ body:not(.secretModeActive) .trashModeTabs {
 
 /* Swipe akce karty / Planneru / Připomínek.
    Doprava = Hotovo / Vrátit, doleva = Smazat.
-   Pozadí zůstává na místě, obsah se posouvá nad ním. */
+   Pozadí akce zůstává na místě. U hlavní .taskCard se musí posouvat
+   CELÁ vizuální karta (barevná plocha + obsah), ne jen textové děti.
+   Důvod: při posunu samotného textu prosvítala akce skrz kartu.
+   Tento princip neměnit zpět bez regresního testu swipe + card drag. */
 .lubaSwipeDoneTarget {
   --luba-swipe-x: 0px;
   position: relative;
   overflow: hidden;
   touch-action: pan-y;
+}
+
+/* Hlavní karta potřebuje vlastní posuvnou barevnou plochu.
+ * Parent zůstává jako pevný clipping/gesture kontejner pro swipe pozadí,
+ * pseudo-element je samotné tělo karty a jede společně s jejím obsahem. */
+.taskCard.lubaSwipeDoneTarget {
+  background: transparent;
+  isolation: isolate;
+}
+
+.taskCard.lubaSwipeDoneTarget::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: var(--luba-card-bg);
+  pointer-events: none;
+  transform: translateX(var(--luba-swipe-x));
+  transition: transform 150ms ease;
+  will-change: transform;
 }
 
 .lubaSwipeDoneTarget > .lubaSwipeActionBackground {
@@ -10946,14 +10980,17 @@ body:not(.secretModeActive) .trashModeTabs {
 }
 
 .lubaSwipeDoneTarget.lubaSwipeDragging
-  > :not(.lubaSwipeActionBackground) {
+  > :not(.lubaSwipeActionBackground),
+.taskCard.lubaSwipeDoneTarget.lubaSwipeDragging::before {
   transition: none;
 }
 
 .lubaSwipeDoneTarget.lubaSwipeDoneCommitted
   > :not(.lubaSwipeActionBackground),
 .lubaSwipeDoneTarget.lubaSwipeDeleteCommitted
-  > :not(.lubaSwipeActionBackground) {
+  > :not(.lubaSwipeActionBackground),
+.taskCard.lubaSwipeDoneTarget.lubaSwipeDoneCommitted::before,
+.taskCard.lubaSwipeDoneTarget.lubaSwipeDeleteCommitted::before {
   transition: transform 120ms ease-out;
 }
 

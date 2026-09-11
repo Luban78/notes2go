@@ -8,6 +8,8 @@
   const DOBA_DVOJTAPU = 300;
   const OKRAJ_SYSTEMOVEHO_GESTA = 24;
   const DEBUG_SCROLL_INTERVAL_MS = 180;
+  const DRAG_TRACE_KEY = "lubaNoteCardDragTraceV1";
+  const DRAG_TRACE_MAX = 90;
   const MIN_POHYB_PO_PICKUP_PRED_AUTOSCROLL = 18;
   const MIN_POHYB_PRO_PRVNI_LOG = 3;
   const SOUBOR_NASTAVENI_APK = "./card-drag-settings-apk.txt";
@@ -426,7 +428,44 @@
   const pinnedRight = () =>
     document.getElementById("pinnedRight");
 
+  const DRAG_TRACE_TYPY = new Set([
+    "READY", "START", "PICKUP", "TARGET", "TARGET_CANCEL",
+    "TARGET_HOLD", "SLOT_LOCK", "REFREEZE", "LOOP_GUARD",
+    "RELEASE_TARGET", "RELEASE_ANIMATION_DONE", "DROP", "END",
+    "SAVE", "CANCEL", "POINTER_CANCEL", "SCROLL_START", "SCROLL_END"
+  ]);
+
+  function zkratDragTraceData(data = {}) {
+    const vysledek = {};
+    Object.entries(data).forEach(([klic, hodnota]) => {
+      if (hodnota == null || ["string", "number", "boolean"].includes(typeof hodnota)) {
+        vysledek[klic] = hodnota;
+      }
+    });
+    return vysledek;
+  }
+
+  function ulozDragTrace(typ, data = {}) {
+    if (!DRAG_TRACE_TYPY.has(typ)) return;
+    try {
+      const stare = JSON.parse(localStorage.getItem(DRAG_TRACE_KEY) || "[]");
+      const log = Array.isArray(stare) ? stare : [];
+      log.push({
+        t: new Date().toISOString(),
+        typ,
+        ...zkratDragTraceData(data)
+      });
+      if (log.length > DRAG_TRACE_MAX) {
+        log.splice(0, log.length - DRAG_TRACE_MAX);
+      }
+      localStorage.setItem(DRAG_TRACE_KEY, JSON.stringify(log));
+    } catch (_) {
+      // Trvalá diagnostika nesmí nikdy ovlivnit drag.
+    }
+  }
+
   function emitujDragDebug(typ, data = {}) {
+    ulozDragTrace(typ, data);
     try {
       window.dispatchEvent(
         new CustomEvent("luba:card-drag-debug", {
@@ -875,6 +914,17 @@
     const vysledek = sestavPoradiSeSlotem(stav, cilovyIndex);
     stav.skupinaAktualni = vysledek.celaSkupina;
     stav.poradiAktualni = vysledek.celePoradi;
+
+    /*
+     * 🔒 FROZEN – ochrana proti ping-pong smyčce v 2sloupcovém layoutu.
+     * Po SLOT_LOCK se karty fyzicky přeskupí. Stejný NEHYBNÝ bod prstu pak
+     * může po novém měření ležet nad jiným slotem a bez této brány by se
+     * mohl spustit další SLOT_LOCK bez jediného skutečného pohybu uživatele.
+     * Nový cíl proto povolíme až po reálném pohybu prstu od bodu locku.
+     */
+    stav.lockPointerX = stav.posledniX;
+    stav.lockPointerY = stav.posledniY;
+    stav.cekaNaPohybPoLocku = true;
     stav.lockAnimating = true;
     oznacPlaceholder(stav, true);
     rozmistitKarty(stav.poradiAktualni, stav.mapaPrvkuDrag, { animovat: true });
@@ -894,12 +944,33 @@
       stav.sloty = zmerSloty(stav, stav.skupinaAktualni);
       aktualizujHraniceSkupiny(stav);
       stav.lockAnimating = false;
+      const pohybPoLocku = Math.hypot(
+        stav.posledniX - (stav.lockPointerX ?? stav.posledniX),
+        stav.posledniY - (stav.lockPointerY ?? stav.posledniY)
+      );
+      const minimumPoLocku = Math.max(6, Math.min(14, nastaveni.jitterPx));
       emitujDragDebug("REFREEZE", {
         card: zkratKlic(stav.dragKlic),
         target: stav.cilovyIndexSkupiny,
-        slots: stav.sloty.length
+        slots: stav.sloty.length,
+        movedAfterLock: Math.round(pohybPoLocku),
+        minMove: minimumPoLocku
       });
-      if (!stav.autoScrollAktivni) aktualizujZamer(stav.posledniX, stav.posledniY);
+
+      if (
+        !stav.autoScrollAktivni &&
+        pohybPoLocku > minimumPoLocku
+      ) {
+        stav.cekaNaPohybPoLocku = false;
+        aktualizujZamer(stav.posledniX, stav.posledniY);
+      } else {
+        emitujDragDebug("LOOP_GUARD", {
+          card: zkratKlic(stav.dragKlic),
+          target: stav.cilovyIndexSkupiny,
+          moved: Math.round(pohybPoLocku),
+          minMove: minimumPoLocku
+        });
+      }
     }, nastaveni.reorderMs + 24);
 
     return true;
@@ -979,6 +1050,20 @@
       zrusKandidata(stav, "auto-scroll");
       return;
     }
+
+    if (stav.cekaNaPohybPoLocku) {
+      const pohyb = Math.hypot(
+        x - (stav.lockPointerX ?? x),
+        y - (stav.lockPointerY ?? y)
+      );
+      const minimum = Math.max(6, Math.min(14, nastaveni.jitterPx));
+      if (pohyb <= minimum) {
+        zrusKandidata(stav, "post-lock-still");
+        return;
+      }
+      stav.cekaNaPohybPoLocku = false;
+    }
+
     const kandidat = najdiPresnySlot(stav, x, y);
     nastavKandidata(stav, kandidat, x, y);
   }
@@ -1444,7 +1529,10 @@
       onAfterReorder: config.onAfterReorder,
       puvodniStylKarty,
       puvodniScale: new Map(),
-      lockAnimating: false
+      lockAnimating: false,
+      lockPointerX: null,
+      lockPointerY: null,
+      cekaNaPohybPoLocku: false
     };
     aktivniPresun = stav;
 
@@ -2242,6 +2330,17 @@
     otevriLadeni,
     zavriLadeni,
     ziskejNastaveni: () => ({ ...nastaveni }),
+    ziskejTrvalyLog: () => {
+      try {
+        const log = JSON.parse(localStorage.getItem(DRAG_TRACE_KEY) || "[]");
+        return Array.isArray(log) ? log : [];
+      } catch (_) {
+        return [];
+      }
+    },
+    vymazTrvalyLog: () => {
+      try { localStorage.removeItem(DRAG_TRACE_KEY); } catch (_) {}
+    },
     resetLadeni: () => {
       nastaveni = { ...vychoziNastaveniZeSouboru };
       ulozNastaveni();

@@ -1377,6 +1377,20 @@
     );
     const nast = window.LubaNoteCardDrag?.ziskejNastaveni?.();
     if (nast) zapis(`DRAG DEFAULTS | ${Object.entries(nast).map(([k,v]) => `${k}=${v}`).join(" | ")}`);
+
+    const trvalyLog = window.LubaNoteCardDrag?.ziskejTrvalyLog?.() || [];
+    if (trvalyLog.length) {
+      zapis(`DRAG PERSIST | posledních ${trvalyLog.length} událostí před otevřením VD`);
+      trvalyLog.slice(-45).forEach((radek) => {
+        const cas = String(radek.t || "").slice(11, 23);
+        const data = Object.entries(radek)
+          .filter(([klic]) => klic !== "t" && klic !== "typ")
+          .map(([klic, hodnota]) => `${klic}=${hodnota}`)
+          .join(" | ");
+        zapis(`PERSIST ${cas} ${radek.typ || "-"}${data ? ` | ${data}` : ""}`);
+      });
+    }
+
     window.LubaNoteCardDrag?.otevriLadeni?.();
 
     return () => {
