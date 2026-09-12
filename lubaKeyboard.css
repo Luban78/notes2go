@@ -685,6 +685,22 @@ body.ln-lk-old-android-nav .ln-lk-alt-key.is-slide-selected {
  * výšku klávesnice. Spodní lišta (včetně ✓ Uložit) tak zůstane součástí
  * editoru a sedí těsně NAD LubaKeyboard.
  */
+/*
+ * PATCH 461 – Android 12 / starý WebView + systémová klávesnice.
+ * Na WebView 103 je env(safe-area-inset-bottom) 0 i při tří-tlačítkové
+ * systémové navigaci. Celý editor proto končil o ~48 px níž a spodní
+ * editorBottomBar ležel přímo pod □ ○ ◁. Fallback už přesně detekuje
+ * lubaKeyboard.js třídou ln-lk-old-android-nav; prostor rezervujeme na
+ * modalContent, ne na jednotlivém toolbaru. Platí pro normální i Shared
+ * editor a jen tehdy, když vlastní LubaKeyboard není otevřená.
+ */
+@media (max-width: 899px) {
+  body.nativeApp.ln-lk-old-android-nav:not(.ln-luba-klavesnice-open)
+    .taskModal:not([hidden]) .modalContent {
+    padding-bottom: var(--ln-lk-nav-fallback, 48px);
+  }
+}
+
 @media (max-width: 899px) {
   body.ln-luba-klavesnice-open .taskModal:not([hidden]) .modalContent {
     /* PATCH 452 – LubaKeyboard už sama leží NAD systémovou navigací.

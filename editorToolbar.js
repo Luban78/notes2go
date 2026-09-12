@@ -1457,6 +1457,21 @@
   let rezimToolbaru = "cas";
 
   function nastavToolbar(rezim) {
+    const jeSdilenyEditor = Boolean(
+      modalUkolu?.classList.contains("sharingEditorMode")
+    );
+
+    /*
+     * PATCH 461 – Shared na mobilu nemá datum/čas/reminder stránku.
+     * Původní tříkrokový cyklus začínal v režimu "cas", ale shared CSS
+     * datum/čas správně skrývá. Výsledkem bylo osamocené Aa bez nástrojů
+     * a po druhém přepnutí nesmyslná ikona hodin. Shared proto používá jen
+     * dvě bezpečné stránky: další nástroje <-> formátování textu.
+     */
+    if (!jeDesktopEditor() && jeSdilenyEditor && rezim === "cas") {
+      rezim = "nastroje";
+    }
+
     /*
      * DESKTOP:
      * využijeme šířku a ukážeme vše najednou.
@@ -1547,20 +1562,28 @@
     }
 
     if (jsouNastroje) {
-      if (window.LubaNoteIcons?.nastavJenIkonu) {
-        window.LubaNoteIcons.nastavJenIkonu(
-          tlacitkoToolbar,
-          "hodiny",
-          ["editorModeSvgIcon"]
+      if (jeSdilenyEditor) {
+        tlacitkoToolbar.textContent = "Aa";
+        tlacitkoToolbar.setAttribute(
+          "aria-label",
+          "Otevřít textové nástroje"
         );
       } else {
-        tlacitkoToolbar.textContent = "Čas";
-      }
+        if (window.LubaNoteIcons?.nastavJenIkonu) {
+          window.LubaNoteIcons.nastavJenIkonu(
+            tlacitkoToolbar,
+            "hodiny",
+            ["editorModeSvgIcon"]
+          );
+        } else {
+          tlacitkoToolbar.textContent = "Čas";
+        }
 
-      tlacitkoToolbar.setAttribute(
-        "aria-label",
-        "Zobrazit datum a čas"
-      );
+        tlacitkoToolbar.setAttribute(
+          "aria-label",
+          "Zobrazit datum a čas"
+        );
+      }
     }
 
 
@@ -2870,6 +2893,15 @@ nahledTazenePolozky?.classList.toggle(
   tlacitkoToolbar.addEventListener(
     "click",
     () => {
+      if (modalUkolu?.classList.contains("sharingEditorMode")) {
+        nastavToolbar(
+          rezimToolbaru === "text"
+            ? "nastroje"
+            : "text"
+        );
+        return;
+      }
+
       if (rezimToolbaru === "cas") {
         nastavToolbar("text");
         return;

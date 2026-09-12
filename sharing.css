@@ -763,24 +763,6 @@ body.sharingReadOnlyOpen {
   display: inline-flex !important;
 }
 
-/*
- * PATCH 460 – Android 12 / WebView 103:
- * env(safe-area-inset-bottom) na starém nativním Androidu vrací 0, takže
- * spodní Shared akce (Uložit / zvýraznění / TODO) ležely přímo pod systémovou
- * tří-tlačítkovou navigací. LubaKeyboard už pro tento telefon nastavuje
- * --ln-lk-nav-fallback: 48px; stejný ověřený fallback použijeme pouze pro
- * Shared editor a pouze když vlastní LubaKeyboard není otevřená.
- *
- * Při LubaKeyboard se o spodní systémový prostor stará samotná klávesnice,
- * takže tam padding nepřidáváme podruhé.
- */
-@media (max-width: 899px) {
-  body.nativeApp.ln-lk-old-android-nav:not(.ln-luba-klavesnice-open)
-    #taskModal.sharingEditorMode .editorBottomBar {
-    padding-bottom: var(--ln-lk-nav-fallback, 48px);
-  }
-}
-
 .sharingReadOnlyHeaderText {
   min-width: 0;
   flex: 1 1 auto;

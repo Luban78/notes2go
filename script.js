@@ -335,6 +335,16 @@ window.LubaNoteAktualizujPuvodniOtiskEditoruProV2 = () => {
 };
 
 
+function ziskejIdZaviranehoEditoru() {
+  return (
+    aktivniSdilenaEditace?.noteId ||
+    activeTaskId ||
+    taskModal?.dataset?.taskId ||
+    null
+  );
+}
+
+
 function uvolniSdilenyLockPriZavreni(
   noteId
 ) {
@@ -402,7 +412,7 @@ function zpracujZavreniEditoru() {
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
 
-  const zaviranyTaskId = activeTaskId;
+  const zaviranyTaskId = ziskejIdZaviranehoEditoru();
 
   if (zaviranyTaskId) {
     void smazPersistovanyDraftPoznamky(
@@ -1133,7 +1143,7 @@ appMessageDiscardButton?.addEventListener(
     taskModal.classList.remove("show");
     document.body.classList.remove("noScroll");
 
-    const zahazovanyTaskId = activeTaskId;
+    const zahazovanyTaskId = ziskejIdZaviranehoEditoru();
     uvolniVzdalenouEditorSession(
       zahazovanyTaskId
     );
@@ -2814,7 +2824,7 @@ function zavriEditorPoLokalnimUlozeni(
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
 
-  const zaviranyTaskId = activeTaskId;
+  const zaviranyTaskId = ziskejIdZaviranehoEditoru();
   uvolniVzdalenouEditorSession(
     zaviranyTaskId
   );
