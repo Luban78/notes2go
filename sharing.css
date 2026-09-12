@@ -763,6 +763,24 @@ body.sharingReadOnlyOpen {
   display: inline-flex !important;
 }
 
+/*
+ * PATCH 460 – Android 12 / WebView 103:
+ * env(safe-area-inset-bottom) na starém nativním Androidu vrací 0, takže
+ * spodní Shared akce (Uložit / zvýraznění / TODO) ležely přímo pod systémovou
+ * tří-tlačítkovou navigací. LubaKeyboard už pro tento telefon nastavuje
+ * --ln-lk-nav-fallback: 48px; stejný ověřený fallback použijeme pouze pro
+ * Shared editor a pouze když vlastní LubaKeyboard není otevřená.
+ *
+ * Při LubaKeyboard se o spodní systémový prostor stará samotná klávesnice,
+ * takže tam padding nepřidáváme podruhé.
+ */
+@media (max-width: 899px) {
+  body.nativeApp.ln-lk-old-android-nav:not(.ln-luba-klavesnice-open)
+    #taskModal.sharingEditorMode .editorBottomBar {
+    padding-bottom: var(--ln-lk-nav-fallback, 48px);
+  }
+}
+
 .sharingReadOnlyHeaderText {
   min-width: 0;
   flex: 1 1 auto;
@@ -899,14 +917,28 @@ body.sharingReadOnlyOpen {
 }
 
 /*
- * Two balanced toolbar pages on mobile.
- * No horizontal scrolling is needed in shared mode.
+ * PATCH 460 – Shared toolbar musí být na telefonu skutečně posuvný.
+ * Původní S2D.1d ho natvrdo uzamkl přes overflow-x:hidden a snažil se všechny
+ * nástroje vměstnat do jedné šířky. Na menších displejích tak pravá část
+ * (zarovnání / obrázek / odkaz / Open / Save as / Bullet) zůstala mimo dosah.
+ *
+ * Každá úroveň toolbaru proto používá normální horizontální pan. Žádné kliky
+ * ani V2 handlery se nemění – jde pouze o geometrii a scroll kontejneru.
  */
 #taskModal.sharingEditorMode .editorQuickToolbar {
-  justify-content: space-evenly;
-  gap: 0;
+  justify-content: flex-start;
+  gap: 4px;
   padding-inline: 0;
-  overflow-x: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+#taskModal.sharingEditorMode .editorQuickToolbar::-webkit-scrollbar {
+  display: none;
 }
 
 #taskModal.sharingEditorMode .editorToolbarDivider {
@@ -915,10 +947,10 @@ body.sharingReadOnlyOpen {
 
 #taskModal.sharingEditorMode .editorQuickToolbar > .editorQuickTool,
 #taskModal.sharingEditorMode .editorQuickToolbar > .editorToolbarButton {
-  flex: 1 1 0;
-  width: auto;
-  min-width: 36px;
-  max-width: 44px;
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
 }
 
 #taskModal.sharingEditorMode #editorToolsToolbar #tlacitkoNadpis {
