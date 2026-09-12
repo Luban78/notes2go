@@ -30,6 +30,9 @@
   ];
   const PODPOROVANE_INPUTY = new Set([
     "insertText",
+    "insertCompositionText",
+    "insertFromComposition",
+    "deleteCompositionText",
     "insertParagraph",
     "insertLineBreak",
     "deleteContentBackward",
@@ -79,6 +82,20 @@
   let vlozenyRezim = false;
   let vybranyObrazekId = "";
   let ulozenyPlanovaciVyber = null;
+
+  /*
+   * 🔒 ANDROID IME / WEBVIEW 103 KOMPATIBILITA – FIX 432
+   *
+   * Starší Android WebView neposílá běžné `insertText`, ale při psaní přes
+   * softwarovou klávesnici používá `insertCompositionText` a v `event.data`
+   * často posílá CELÉ právě skládáné slovo (např. původní `abc` -> `abcd`).
+   *
+   * NIKDY proto nesmíme `event.data` pouze připojit k modelu – text by se
+   * duplikoval. Držíme vlastní modelový snapshot kompozice a každou další
+   * IME aktualizaci aplikujeme jako MINIMÁLNÍ rozdíl proti předchozímu stavu.
+   * DOM zůstává jen projekce modelu stejně jako u všech ostatních V2 vstupů.
+   */
+  let v2ImeKompozice = null;
 
   /* ==========================================
      V2.12 – MODEL DRAG & MOVE OBRÁZKU
@@ -4160,12 +4177,177 @@
     } catch (_error) {}
   }
 
+  function jeV2ImeInput(inputType = "") {
+    return inputType === "insertCompositionText"
+      || inputType === "insertFromComposition"
+      || inputType === "deleteCompositionText";
+  }
+
+  function zacniV2ImeKompozici() {
+    if (v2ImeKompozice?.aktivni) return v2ImeKompozice;
+
+    const vyber = aktualniVyberModelu();
+    if (!vyber || vyber.zacatek.blok !== vyber.konec.blok) return null;
+
+    const blokIndex = vyber.zacatek.blok;
+    const blok = dokument?.bloky?.[blokIndex];
+    if (!jeTextovyBlok(blok)) return null;
+
+    const celyText = textBloku(blok);
+    const zacatek = Math.max(0, Math.min(celyText.length, vyber.zacatek.offset));
+    const konec = Math.max(zacatek, Math.min(celyText.length, vyber.konec.offset));
+
+    v2ImeKompozice = {
+      aktivni: true,
+      blok: blokIndex,
+      zacatek,
+      text: celyText.slice(zacatek, konec),
+      puvodniCaret: konec,
+      snapshotPred: vytvorSnapshotHistorie(vyber),
+      zmeneno: false,
+      rozsahZImeDat: false
+    };
+    return v2ImeKompozice;
+  }
+
+  function zkusNajitV2ImeRozsahZDat(data) {
+    const stav = v2ImeKompozice;
+    if (!stav?.aktivni || stav.zmeneno || stav.text) return;
+
+    const hodnota = String(data ?? "");
+    if (!hodnota) return;
+
+    const blok = dokument?.bloky?.[stav.blok];
+    if (!jeTextovyBlok(blok)) return;
+
+    const text = textBloku(blok);
+    const caret = Math.max(0, Math.min(text.length, stav.puvodniCaret));
+    let zacatek = -1;
+
+    // Typický Android 12 / WebView 103: compositionupdate obsahuje celé slovo
+    // bezprostředně PŘED caretem. Tohle je případ potvrzený Debug Hubem 431.
+    const pred = caret - hodnota.length;
+    if (pred >= 0 && text.slice(pred, caret) === hodnota) {
+      zacatek = pred;
+    } else if (text.slice(caret, caret + hodnota.length) === hodnota) {
+      // Některé IME drží skládáný rozsah napravo od caretu.
+      zacatek = caret;
+    } else {
+      // Poslední bezpečný fallback: přijmeme jen výskyt, který se caretu dotýká.
+      const kandidat = text.lastIndexOf(hodnota, caret);
+      if (kandidat >= 0 && kandidat <= caret && kandidat + hodnota.length >= caret) {
+        zacatek = kandidat;
+      }
+    }
+
+    if (zacatek < 0) return;
+    stav.zacatek = zacatek;
+    stav.text = hodnota;
+    stav.rozsahZImeDat = true;
+    zapisV2ImeDiag("range", null, `blok=${stav.blok} start=${stav.zacatek} len=${stav.text.length}`);
+  }
+
+  function minimalniRozdilTextu(staryText, novyText) {
+    const stary = String(staryText ?? "");
+    const novy = String(novyText ?? "");
+    let prefix = 0;
+    const maxPrefix = Math.min(stary.length, novy.length);
+    while (prefix < maxPrefix && stary[prefix] === novy[prefix]) prefix += 1;
+
+    let suffix = 0;
+    const maxSuffix = Math.min(stary.length - prefix, novy.length - prefix);
+    while (
+      suffix < maxSuffix
+      && stary[stary.length - 1 - suffix] === novy[novy.length - 1 - suffix]
+    ) {
+      suffix += 1;
+    }
+
+    return {
+      prefix,
+      staryKonec: stary.length - suffix,
+      novyKonec: novy.length - suffix,
+      vlozit: novy.slice(prefix, novy.length - suffix)
+    };
+  }
+
+  function aplikujV2ImeText(data, inputType = "insertCompositionText") {
+    const stav = zacniV2ImeKompozici();
+    if (!stav) return false;
+
+    const novyText = inputType === "deleteCompositionText" ? "" : String(data ?? "");
+    const blok = dokument?.bloky?.[stav.blok];
+    if (!jeTextovyBlok(blok)) return false;
+
+    const rozdil = minimalniRozdilTextu(stav.text, novyText);
+    const zacatekZmeny = stav.zacatek + rozdil.prefix;
+    const konecZmeny = stav.zacatek + rozdil.staryKonec;
+
+    if (zacatekZmeny !== konecZmeny || rozdil.vlozit) {
+      const vyber = {
+        zacatek: { blok: stav.blok, offset: zacatekZmeny },
+        konec: { blok: stav.blok, offset: konecZmeny },
+        sbaleny: zacatekZmeny === konecZmeny
+      };
+
+      // Formát bereme přímo z modelu v místě skutečné změny. Nesmíme se zde
+      // spoléhat na DOM caret – Android IME jej během composition může přesouvat.
+      const format = formatNaPozici(blok, zacatekZmeny);
+      vlozText(rozdil.vlozit, vyber, format);
+      stav.zmeneno = true;
+    }
+
+    stav.text = novyText;
+    const caret = { blok: stav.blok, offset: stav.zacatek + novyText.length };
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+    posledniPozice = { ...caret };
+    posledniVyber = klonVyberu(novyVyber);
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    aktivniFormatPozice = klicPozice(caret);
+
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup(inputType);
+    nastavStav(`Řízeno modelem: ${inputType}`);
+    zapisDebug?.(`EDITOR V2 | IME ${inputType} | blok=${caret.blok} offset=${caret.offset}`);
+    return true;
+  }
+
+  function dokoncV2ImeKompozici(duvod = "compositionend") {
+    const stav = v2ImeKompozice;
+    if (!stav?.aktivni) return false;
+
+    if (stav.zmeneno) {
+      ulozZmenuDoHistorie(stav.snapshotPred, "IME psaní");
+    }
+
+    zapisV2ImeDiag(
+      "finalize",
+      null,
+      `reason=${duvod} changed=${stav.zmeneno} blok=${stav.blok} start=${stav.zacatek} len=${stav.text.length}`
+    );
+    v2ImeKompozice = null;
+    return true;
+  }
+
   function zpracujBeforeInput(event) {
     zapisV2ImeDiag(
       "beforeinput",
       event,
       PODPOROVANE_INPUTY.has(event.inputType) ? "supported=true" : "supported=false"
     );
+
+    if (jeV2ImeInput(event.inputType)) {
+      // FIX 432: Android IME je plnohodnotný modelový vstup, ne nepodporovaná
+      // DOM mutace. Browseru změnu DOM nepovolíme; provedeme ji atomicky v modelu.
+      event.preventDefault();
+      aplikujV2ImeText(event.data, event.inputType);
+      if (event.inputType === "insertFromComposition") dokoncV2ImeKompozici("insertFromComposition");
+      return;
+    }
+
+    // Pokud IME skončilo bez compositionend a přichází normální vstup, uzavřeme
+    // předchozí kompozici jako jednu Undo operaci ještě před další změnou.
+    if (v2ImeKompozice?.aktivni) dokoncV2ImeKompozici(`beforeinput:${event.inputType || "unknown"}`);
 
     if (event.inputType === "historyUndo") {
       event.preventDefault();
@@ -4261,6 +4443,7 @@
   }
 
   function zpracujPaste(event) {
+    if (v2ImeKompozice?.aktivni) dokoncV2ImeKompozici("paste");
     const text = event.clipboardData?.getData("text/plain");
     if (typeof text !== "string") return;
     event.preventDefault();
@@ -5687,9 +5870,27 @@
       nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
     });
 
-    poslouchej(editor, "compositionstart", (event) => zapisV2ImeDiag("compositionstart", event));
-    poslouchej(editor, "compositionupdate", (event) => zapisV2ImeDiag("compositionupdate", event));
-    poslouchej(editor, "compositionend", (event) => zapisV2ImeDiag("compositionend", event));
+    poslouchej(editor, "compositionstart", (event) => {
+      zapisV2ImeDiag("compositionstart", event);
+      zacniV2ImeKompozici();
+    });
+    poslouchej(editor, "compositionupdate", (event) => {
+      zapisV2ImeDiag("compositionupdate", event);
+      zacniV2ImeKompozici();
+      zkusNajitV2ImeRozsahZDat(event.data);
+    });
+    poslouchej(editor, "compositionend", (event) => {
+      zapisV2ImeDiag("compositionend", event);
+
+      // Pokud konkrétní WebView neposlal žádný beforeinput, použijeme data z
+      // compositionend. Jakmile už ale modelový IME vstup proběhl, data z END
+      // znovu NEAPLIKUJEME – Android 12/WebView 103 umí poslat starší hodnotu.
+      if (v2ImeKompozice?.aktivni && !v2ImeKompozice.zmeneno && event.data != null) {
+        zkusNajitV2ImeRozsahZDat(event.data);
+        aplikujV2ImeText(event.data, "insertCompositionText");
+      }
+      dokoncV2ImeKompozici("compositionend");
+    });
     poslouchej(editor, "beforeinput", zpracujBeforeInput);
     poslouchej(editor, "paste", zpracujPaste);
     poslouchej(editor, "keydown", (event) => {
@@ -5897,6 +6098,7 @@
     tlacitkoRedo = null;
     historieZpet = [];
     historieVpred = [];
+    v2ImeKompozice = null;
     dokument = null;
     posledniVyber = null;
     ulozenyFormatovaciVyber = null;
