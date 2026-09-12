@@ -294,6 +294,8 @@
   let navrhyBox = null;
   let jazykButton = null;
   let otevritButton = null;
+  let akcniPanelButton = null;
+  let akcniPanelOtevren = false;
   let chooser = null;
   let altPopup = null;
   let aktivniEditor = null;
@@ -1583,6 +1585,7 @@
           <button type="button" data-lk-action="redo" tabindex="-1" aria-label="Znovu">↷</button>
         </div>
         <button type="button" class="ln-lk-language" data-lk-action="chooser" tabindex="-1"></button>
+        <button type="button" class="ln-lk-actions-toggle" tabindex="-1" aria-label="Zobrazit akční panel editoru" aria-expanded="false">︿</button>
         <button type="button" class="ln-lk-hide" data-lk-action="hide" tabindex="-1" aria-label="Skrýt klávesnici">⌄</button>
       </div>
       <div class="ln-lk-suggestions" aria-label="Návrhy slov"></div>
@@ -1599,6 +1602,7 @@
     composeBox = panel.querySelector(".ln-lk-compose");
     candidates = panel.querySelector(".ln-lk-candidates");
     jazykButton = panel.querySelector(".ln-lk-language");
+    akcniPanelButton = panel.querySelector(".ln-lk-actions-toggle");
     chooser = panel.querySelector(".ln-lk-chooser");
 
     otevritButton = document.createElement("button");
@@ -1700,7 +1704,54 @@
       }
     });
 
+    akcniPanelButton?.addEventListener("pointerdown", (event) => {
+      /* Nenechat tlačítko vzít focus editoru ani spustit klávesovou akci. */
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+
+    akcniPanelButton?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      nastavAkcniPanel(!akcniPanelOtevren);
+    });
+
     vykresliKlavesnici();
+  }
+
+  /*
+   * PATCH 453 – KLÁVESNICE / AKČNÍ PANEL
+   * -------------------------------------
+   * Výchozí režim při psaní šetří výšku displeje: spodní editorový panel
+   * je schovaný. Tlačítko ︿ v horní řadě LubaKeyboard ho může kdykoli
+   * vysunout NAD klávesnici bez jejího zavření. Další tap ho zase sbalí.
+   * Po skrytí LubaKeyboard se akční panel vždy automaticky vrátí.
+   */
+  function nastavAkcniPanel(otevrit) {
+    akcniPanelOtevren = Boolean(otevrit);
+    const body = document.body;
+
+    if (panel && !panel.hidden) {
+      body.classList.toggle("ln-lk-actions-expanded", akcniPanelOtevren);
+      body.classList.toggle("ln-lk-actions-collapsed", !akcniPanelOtevren);
+    } else {
+      body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
+    }
+
+    if (akcniPanelButton) {
+      akcniPanelButton.textContent = akcniPanelOtevren ? "﹀" : "︿";
+      akcniPanelButton.setAttribute("aria-expanded", akcniPanelOtevren ? "true" : "false");
+      akcniPanelButton.setAttribute(
+        "aria-label",
+        akcniPanelOtevren ? "Skrýt akční panel editoru" : "Zobrazit akční panel editoru"
+      );
+    }
+
+    /* display:none editorBottomBar mění dostupnou výšku V2 hostu. Flex layout
+       si nový prostor dopočítá sám; do caret/selection/modelu nesaháme. */
+    requestAnimationFrame(() => {
+      vysliLayoutDiag(akcniPanelOtevren ? "actions-open" : "actions-close", true);
+    });
   }
 
   function zobraz() {
@@ -1715,6 +1766,7 @@
     panel.hidden = false;
     otevritButton.hidden = true;
     document.body.classList.add("ln-luba-klavesnice-open");
+    nastavAkcniPanel(false);
     vykresliKlavesnici();
     requestAnimationFrame(nastavVysku);
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+120", true); }, 120);
@@ -1751,6 +1803,13 @@
     zavriChooser();
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
+    document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
+    akcniPanelOtevren = false;
+    if (akcniPanelButton) {
+      akcniPanelButton.textContent = "︿";
+      akcniPanelButton.setAttribute("aria-expanded", "false");
+      akcniPanelButton.setAttribute("aria-label", "Zobrazit akční panel editoru");
+    }
     document.documentElement.style.removeProperty("--ln-lk-height");
     document.documentElement.style.removeProperty("--ln-lk-editor-height");
     document.documentElement.style.removeProperty("--ln-lk-base-height");
@@ -1778,6 +1837,7 @@
     if (!editor) {
       aktivniEditor = null;
       if (panel && !panel.hidden) skryj();
+      document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
       if (otevritButton) otevritButton.hidden = true;
       return;
     }

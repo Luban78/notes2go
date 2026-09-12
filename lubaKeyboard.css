@@ -49,7 +49,7 @@ body.ln-lk-old-android-nav {
 
 .ln-lk-top {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 7px;
   min-height: 31px;
@@ -80,6 +80,7 @@ body.ln-lk-old-android-nav {
 }
 
 .ln-lk-language,
+.ln-lk-actions-toggle,
 .ln-lk-hide,
 .ln-lk-history button {
   min-height: 29px;
@@ -120,6 +121,24 @@ body.ln-lk-old-android-nav {
   padding: 0;
   font-size: 21px;
   line-height: 1;
+}
+
+
+/* PATCH 453 – šipka pro vysunutí / sbalení editorového akčního panelu.
+   Je součástí existující horní řady klávesnice, takže nespotřebuje ani
+   jeden další pixel výšky editoru. */
+.ln-lk-actions-toggle {
+  min-width: 34px;
+  padding-inline: 7px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+/* Psaní = maximum prostoru. Bottom panel lze tlačítkem ︿ kdykoli znovu
+   vysunout, přičemž LubaKeyboard zůstane otevřená. */
+body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
+  .taskModal:not([hidden]) .editorBottomBar {
+  display: none !important;
 }
 
 /* ==========================================================
@@ -718,6 +737,7 @@ body.ln-lk-old-android-nav .ln-luba-keyboard {
 }
 body.ln-lk-old-android-nav .ln-lk-key,
 body.ln-lk-old-android-nav .ln-lk-language,
+body.ln-lk-old-android-nav .ln-lk-actions-toggle,
 body.ln-lk-old-android-nav .ln-lk-hide,
 body.ln-lk-old-android-nav .ln-lk-history button,
 body.ln-lk-old-android-nav .ln-lk-suggestion {
