@@ -58,7 +58,8 @@
   }
 
   function ziskejUserId() {
-    return aktualniUserId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
+    /* FIX 441 – lokální owner ID není aktivní serverová session. */
+    return aktualniUserId || null;
   }
 
   function cacheKey(userId = ziskejUserId()) {

@@ -13,7 +13,12 @@
   const CACHE_PREFIX = "lubanoteSharingProfileV1:";
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
 
-  let aktualniUserId = null;
+  /*
+   * Lokální owner ID smíme použít pro offline cache profilu,
+   * ale po auth-expired se aktualniUserId nastaví na null a serverové
+   * RPC se nesmí znovu odemknout fallbackem do localStorage.
+   */
+  let aktualniUserId = localStorage.getItem(LOCAL_OWNER_KEY) || null;
   let aktualniUsername = null;
   let startUiPripraven = false;
   let modal = null;
@@ -39,9 +44,8 @@
   }
 
   function zjistiUserId() {
-    return aktualniUserId ||
-      localStorage.getItem(LOCAL_OWNER_KEY) ||
-      null;
+    /* FIX 441 – po auth-expired respektuj null až do account-active. */
+    return aktualniUserId || null;
   }
 
   function cacheKey(userId = zjistiUserId()) {

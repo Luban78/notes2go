@@ -924,6 +924,10 @@
       if (jeTodoBlok(blok) && blok.hotovo) radek.classList.add("ln-v2-todo-hotovo");
       radek.dataset.lnV2Blok = blok.id;
       radek.dataset.typ = blok.typ;
+      /* Unicode/RTL: každý blok si směr určí podle prvního silného znaku.
+         Latinka zůstává LTR, arabština/hebrejština se vykreslí RTL. */
+      radek.setAttribute("dir", "auto");
+      radek.style.unicodeBidi = "plaintext";
       radek.style.textAlign = blok.zarovnani || "left";
       if (blok.legacyBlockquote === true) {
         radek.style.borderLeft = "3px solid currentColor";
@@ -4579,6 +4583,212 @@
     zapisDebug?.(`EDITOR V2 LAB | ${event.inputType} | blok=${caret.blok} offset=${caret.offset}`);
   }
 
+  /* ==========================================
+     LUBANOTE – VLASTNÍ KLÁVESNICE / UNICODE INPUT
+
+     Vlastní mobilní klávesnice neposílá text přes contenteditable/IME.
+     Každý příkaz jde přímo do modelu V2. Díky tomu je tato cesta stejná
+     pro Android, iOS i libovolné Unicode písmo.
+
+     OCHRANNÉ PRAVIDLO:
+     DOM se nikdy nesmí stát zdrojem dat pro vlastní klávesnici.
+     ========================================== */
+
+  function ziskejKontextVlastniKlavesnice() {
+    if (!dokument || !editor) return null;
+
+    const vyber =
+      aktualniVyberModelu() ||
+      posledniVyber ||
+      vyberZPosledniPozice();
+
+    if (!vyber || !vyber.sbaleny) return null;
+
+    const caret = { ...vyber.konec };
+    const blok = dokument.bloky[caret.blok];
+    if (!jeTextovyBlok(blok)) return null;
+
+    const text = textBloku(blok);
+    const predCaret = text.slice(0, caret.offset);
+    const poCaretu = text.slice(caret.offset);
+
+    let predMatch = null;
+    let poMatch = null;
+    let predchoziMatch = null;
+    try {
+      predMatch = predCaret.match(/([\p{L}\p{M}\p{N}'’\-]+)$/u);
+      poMatch = poCaretu.match(/^([\p{L}\p{M}\p{N}'’\-]+)/u);
+    } catch (_error) {
+      predMatch = predCaret.match(/([A-Za-zÀ-ž0-9'’\-]+)$/);
+      poMatch = poCaretu.match(/^([A-Za-zÀ-ž0-9'’\-]+)/);
+    }
+
+    const prefix = predMatch?.[1] || "";
+    const suffix = poMatch?.[1] || "";
+    const zacatek = Math.max(0, caret.offset - prefix.length);
+    const konec = Math.min(text.length, caret.offset + suffix.length);
+
+    const predSlovem = text.slice(0, zacatek);
+    try {
+      predchoziMatch = predSlovem.match(/([\p{L}\p{M}\p{N}'’\-]+)[^\p{L}\p{M}\p{N}'’\-]*$/u);
+    } catch (_error) {
+      predchoziMatch = predSlovem.match(/([A-Za-zÀ-ž0-9'’\-]+)[^A-Za-zÀ-ž0-9'’\-]*$/);
+    }
+
+    return {
+      blok: caret.blok,
+      offset: caret.offset,
+      zacatek,
+      konec,
+      prefix,
+      suffix,
+      celeSlovo: text.slice(zacatek, konec),
+      predchoziSlovo: predchoziMatch?.[1] || "",
+      textPredCaretem: predCaret
+    };
+  }
+
+  function provedPrikazVlastniKlavesnice(typ, data = "") {
+    if (!dokument || !editor) return false;
+
+    if (v2ImeKompozice?.aktivni) {
+      dokoncV2ImeKompozici("luba-keyboard");
+    }
+
+    if (typ === "undo") return vratHistoriiZpet();
+    if (typ === "redo") return vratHistoriiVpred();
+
+    let vyber =
+      aktualniVyberModelu() ||
+      posledniVyber ||
+      vyberZPosledniPozice();
+
+    if (!vyber) return false;
+
+    /* PATCH 445 – predikční lišta LubaKeyboard.
+       Přijetí návrhu nahrazuje celé rozepsané slovo jedním modelovým krokem,
+       takže nevznikne několik Undo záznamů za jednotlivé Backspace/znaky. */
+    if (typ === "suggestion") {
+      const navrh = String(data ?? "").trim();
+      const kontext = ziskejKontextVlastniKlavesnice();
+      if (!navrh || !kontext) return false;
+
+      const rozsah = {
+        zacatek: { blok: kontext.blok, offset: kontext.zacatek },
+        konec: { blok: kontext.blok, offset: kontext.konec },
+        sbaleny: kontext.zacatek === kontext.konec
+      };
+      const snapshotPred = vytvorSnapshotHistorie(rozsah);
+      const caret = vlozText(`${navrh} `, rozsah);
+
+      ulozZmenuDoHistorie(snapshotPred, "LubaKeyboard návrh slova");
+      aktivniFormatPozice = klicPozice(caret);
+
+      const novyVyber = { zacatek: { ...caret }, konec: { ...caret }, sbaleny: true };
+      posledniPozice = { ...caret };
+      posledniVyber = klonVyberu(novyVyber);
+      ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+
+      vykresli(novyVyber);
+      oznamModelovyTextovyVstup("insertReplacementText");
+      nastavStav("LubaKeyboard: návrh slova");
+      zapisDebug?.(`EDITOR V2 | LubaKeyboard | suggestion=${navrh} | blok=${caret.blok} offset=${caret.offset}`);
+      return true;
+    }
+
+    if (typ === "left" || typ === "right") {
+      let pozice;
+
+      if (!vyber.sbaleny) {
+        pozice = typ === "left" ? { ...vyber.zacatek } : { ...vyber.konec };
+      } else {
+        pozice = { ...vyber.konec };
+        const blok = dokument.bloky[pozice.blok];
+
+        if (jeTextovyBlok(blok)) {
+          const textBlokuAktualni = textBloku(blok);
+
+          if (typ === "left") {
+            if (pozice.offset > 0) {
+              pozice.offset = predchoziGraphem(textBlokuAktualni, pozice.offset);
+            } else {
+              const pred = najdiTextovyBlokOd(pozice.blok - 1, -1);
+              if (pred >= 0) {
+                pozice = { blok: pred, offset: textBloku(dokument.bloky[pred]).length };
+              }
+            }
+          } else if (pozice.offset < textBlokuAktualni.length) {
+            pozice.offset = dalsiGraphem(textBlokuAktualni, pozice.offset);
+          } else {
+            const dalsi = najdiTextovyBlokOd(pozice.blok + 1, 1);
+            if (dalsi >= 0) pozice = { blok: dalsi, offset: 0 };
+          }
+        }
+      }
+
+      nastavVyberModelu(pozice, pozice);
+      posledniPozice = { ...pozice };
+      posledniVyber = { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+      aktivniFormatPozice = klicPozice(pozice);
+      aktualizujToolbarVelikosti(posledniVyber);
+      return true;
+    }
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    let caret = { ...vyber.zacatek };
+    let formatPoMazani = null;
+    let inputType = "insertText";
+
+    if (typ === "text") {
+      const vlozenyText = String(data ?? "");
+      if (!vlozenyText) return false;
+      caret = vlozText(vlozenyText, vyber);
+      inputType = "insertText";
+    } else if (typ === "space") {
+      caret = vlozText(" ", vyber);
+      inputType = "insertText";
+    } else if (typ === "enter") {
+      caret = vlozOdstavec(vyber);
+      inputType = "insertParagraph";
+    } else if (typ === "backspace") {
+      formatPoMazani = formatMazanyZpet(vyber, false);
+      caret = smazZpet(vyber, false);
+      inputType = "deleteContentBackward";
+    } else if (typ === "delete") {
+      formatPoMazani = formatMazanyVpred(vyber, false);
+      caret = smazVpred(vyber, false);
+      inputType = "deleteContentForward";
+    } else {
+      return false;
+    }
+
+    ulozZmenuDoHistorie(snapshotPred, `LubaKeyboard ${inputType}`);
+
+    if (formatPoMazani) {
+      aktivniFormatPsani = kopieFormatu(formatPoMazani);
+      aktivniFormatPozice = klicPozice(caret);
+      aktivniFormatZdroj = "zdedeny";
+    } else if (typ === "backspace" || typ === "delete") {
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = klicPozice(caret);
+      aktivniFormatZdroj = "";
+    } else {
+      aktivniFormatPozice = klicPozice(caret);
+    }
+
+    const novyVyber = { zacatek: { ...caret }, konec: { ...caret }, sbaleny: true };
+    posledniPozice = { ...caret };
+    posledniVyber = klonVyberu(novyVyber);
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup(inputType);
+    nastavStav(`LubaKeyboard: ${inputType}`);
+    zapisDebug?.(`EDITOR V2 | LubaKeyboard | ${inputType} | blok=${caret.blok} offset=${caret.offset}`);
+    return true;
+  }
+
+
   function oznamModelovyTextovyVstup(inputType = "") {
     /*
      * V2 záměrně preventDefault()uje browserový beforeinput, takže Android
@@ -5738,6 +5948,12 @@
     lab.classList.add("otevreno");
     document.body.classList.remove("ln-v2-lab-otevren");
     nastavDokumentProHost(model);
+
+    /* LubaKeyboard musí mít možnost potlačit systémové IME ještě PŘED
+       prvním focusem editoru. Tím starý Android ani iOS nestihne otevřít
+       vlastní klávesnici mezi vytvořením editoru a MutationObserverem. */
+    window.LubaNoteKeyboard?.pripravEditor?.(editor);
+
     editor.focus({ preventScroll: true });
     return true;
   }
@@ -5745,6 +5961,12 @@
   function zavriVHostu() {
     if (!lab || !vlozenyRezim) return;
     zrusV2DragSeznamu();
+
+    /* PATCH 442 – LubaKeyboard žije mimo DOM editoru (přímo v body).
+       Při uložení/zavření V2 hostu ji proto zavřeme výslovně, jinak by po
+       zmizení editoru mohla zůstat viset nad seznamem poznámek. */
+    window.LubaNoteKeyboard?.skryj?.();
+
     lab.hidden = true;
     lab.classList.remove("otevreno", "ln-v2-vlozeny");
     document.body.appendChild(lab);
@@ -6388,6 +6610,9 @@
     ziskejStavFormatu,
     ziskejModel: () => (dokument ? structuredClone(dokument) : null),
     dokoncImePredExterniAkci,
-    jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni)
+    jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni),
+    provedPrikazVlastniKlavesnice,
+    ziskejKontextVlastniKlavesnice,
+    ziskejEditorElement: () => editor
   });
 })();

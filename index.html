@@ -33,6 +33,7 @@
   <!-- Editor Core V2 – izolovaný LAB + bezpečný Bridge TEST uvnitř reálného editoru -->
   <link rel="stylesheet" href="editorCoreV2.css?v=20260911-editor-core-v2-production-391">
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=20260911-editor-core-v2-production-391">
+  <link rel="stylesheet" href="lubaKeyboard.css?v=20260912-lubakeyboard-dot-3rows-448">
 </head>
 
 <body class="authPending">
@@ -1908,7 +1909,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=20260911-loop-guard-398"></script>
   
-  <script src="script.js?v=20260912-v2-stability-diag-435"></script>
+  <script src="script.js?v=20260911-shared-v2-430"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
@@ -1947,19 +1948,19 @@
   <script src="syncStatus.js?v=20260906-offline-pending-1"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260907-offline-tag-fix-303"></script>
+  <script src="supabaseClient.js?v=20260912-expired-splash-440"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
-  <script src="sharingIdentity.js?v=20260906-start-opt-1"></script>
+  <script src="sharingIdentity.js?v=20260912-auth-gate-441"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->
-  <script src="sharingInvitations.js?v=20260910-card-actions-349"></script>
+  <script src="sharingInvitations.js?v=20260912-auth-gate-441"></script>
   <!-- S2C: přijaté shared notes – oddělená cache + read-only karty/náhled. -->
-  <script src="sharingNotes.js?v=20260911-shared-owner-429"></script>
+  <script src="sharingNotes.js?v=20260912-auth-gate-441"></script>
   <!-- S3D: 1:1 chat mezi kontakty vzniklými ze sdílení. -->
-  <script src="chat.js?v=20260906-start-opt-1"></script>
+  <script src="chat.js?v=20260912-auth-gate-441"></script>
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=20260906-start-opt-1"></script>
+  <script src="adminDashboard.js?v=20260912-auth-gate-441"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260904-attachments-physical-delete-1"></script>
   <script src="sharingAttachments.js?v=20260904-sharing-s2e-1"></script>
@@ -1993,11 +1994,12 @@
   <script src="visualDebug.js"></script>
   
   <!-- Editor Core V2 – produkční výchozí engine; Bridge zachovává automatický legacy fallback. -->
-  <script src="editorCoreV2.js?v=20260912-v2-ime-native-434"></script>
-  <script src="editorCoreV2Bridge.js?v=20260912-v2-stability-diag-435"></script>
+  <script src="editorCoreV2.js?v=20260912-lubakeyboard-prediction-445"></script>
+  <script src="editorCoreV2Bridge.js?v=20260912-v2-ime-native-434"></script>
+  <script src="lubaKeyboard.js?v=20260912-lubakeyboard-dot-3rows-448"></script>
 
   <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
-  <script src="debugHub.js?v=20260912-v2-stability-diag-435"></script>
+  <script src="debugHub.js?v=20260912-v2-ime-diag-431"></script>
   
 </body>
 

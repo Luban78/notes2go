@@ -83,7 +83,12 @@
   }
 
   function ziskejAktualniUserId() {
-    return aktualniUserId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
+    /*
+     * FIX 441 – LOCAL_OWNER_KEY určuje vlastníka lokálních dat/cache,
+     * není to důkaz živé Supabase session. Po auth-expired musí online
+     * Shared RPC zůstat vypnuté až do lubanote:account-active.
+     */
+    return aktualniUserId || null;
   }
 
   function ziskejAktualniPoznamku(noteIdOverride = null) {

@@ -42,6 +42,7 @@
 
   let jeAdmin = false;
   let startUiPripraven = false;
+  let ucetAktivni = false;
   let uzivatele = [];
   let filtr = "pending";
   let nacitam = false;
@@ -913,7 +914,7 @@
   );
 
   window.addEventListener("online", () => {
-    if (startUiPripraven) {
+    if (startUiPripraven && ucetAktivni) {
       overAdmina();
     }
   });
@@ -921,6 +922,7 @@
   window.addEventListener(
     "lubanote:account-active",
     () => {
+      ucetAktivni = true;
       if (startUiPripraven) {
         overAdmina();
       }
@@ -933,7 +935,7 @@
       if (startUiPripraven) return;
       startUiPripraven = true;
 
-      if (navigator.onLine) {
+      if (navigator.onLine && ucetAktivni) {
         overAdmina();
       }
     }
@@ -941,7 +943,10 @@
 
   window.addEventListener(
     "lubanote:auth-expired",
-    () => nastavViditelnostAdmina(false)
+    () => {
+      ucetAktivni = false;
+      nastavViditelnostAdmina(false);
+    }
   );
 
   aktualizujTexty();

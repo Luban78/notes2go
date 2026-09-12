@@ -1070,6 +1070,14 @@ function zobrazVyprselePrihlaseni() {
     "Přihlášení vypršelo. Přihlas se znovu, aby mohla pokračovat synchronizace. Tvoje lokální data zůstala zachována.",
     true
   );
+
+  /*
+   * FIX 440 – pokud lokální instalace pamatuje předchozí účet, ale
+   * Supabase session už neexistuje, online startup skončí na loginu.
+   * V tomto stavu už není na co čekat: login je finální bezpečné UI.
+   * Bez splash-ready by splash zůstal až do 15s nouzové pojistky.
+   */
+  oznamSplashPripravenyBezCloudovehoStartu();
 }
 
 async function nactiStavPristupu() {
