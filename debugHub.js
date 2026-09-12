@@ -732,6 +732,14 @@
       true
     );
 
+    pridejPosluchac(
+      uklidy,
+      document,
+      "lubanote:v2-stability-debug",
+      event => zapis(`V2STAB | ${event.detail?.text || ""}`),
+      true
+    );
+
     zapis("START GESTURES");
 
     return () => {

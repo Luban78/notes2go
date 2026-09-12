@@ -3351,6 +3351,13 @@ window.addEventListener(
 editorBackButton.addEventListener(
   "click",
   async () => {
+    try {
+      document.dispatchEvent(new CustomEvent("lubanote:v2-stability-debug", {
+        detail: {
+          text: `SAVE_HANDLER_ENTER | shared=${Boolean(aktivniSdilenaEditace)} | changed=${bylEditorZmenen()}`
+        }
+      }));
+    } catch (_error) {}
     /*
      * Fajfka = „uložit změny a zavřít“.
      * Když se ale obsah od otevření vůbec nezměnil, není co
@@ -3362,7 +3369,14 @@ editorBackButton.addEventListener(
       return;
     }
 
-    await ulozAZavriEditor();
+    const vysledekUlozeni = await ulozAZavriEditor();
+    try {
+      document.dispatchEvent(new CustomEvent("lubanote:v2-stability-debug", {
+        detail: {
+          text: `SAVE_HANDLER_RESULT | ok=${vysledekUlozeni?.ok === true} | reason=${vysledekUlozeni?.reason || "-"}`
+        }
+      }));
+    } catch (_error) {}
   }
 );
 

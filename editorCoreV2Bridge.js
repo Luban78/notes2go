@@ -158,6 +158,26 @@
   }
 
   let toastTimer = null;
+
+  /* ==================================================
+     DIAG 435 – STARÝ ANDROID: SELECTION / TOOLBAR / SAVE
+
+     Pouze diagnostika. Nesmí měnit selection, IME ani save chování.
+     Výstup jde do Debug Hubu jako V2STAB.
+  ================================================== */
+  function zapisV2Stabilitu(faze, detail = "") {
+    try {
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      const text = vyber && !vyber.isCollapsed ? String(vyber.toString() || "") : "";
+      const vHostu = Boolean(range && hostitel && hostitel.contains(range.commonAncestorContainer));
+      document.dispatchEvent(new CustomEvent("lubanote:v2-stability-debug", {
+        detail: {
+          text: `${faze} | aktivni=${aktivni} | ime=${core()?.jeImeKompoziceAktivni?.() === true} | range=${range ? (range.collapsed ? "caret" : `sel:${text.length}`) : "none"} | host=${vHostu} | text=${JSON.stringify(text.slice(0, 60))}${detail ? ` | ${detail}` : ""}`
+        }
+      }));
+    } catch (_error) {}
+  }
   function zobrazToast(text, chyba = false) {
     vytvorPomocneUi();
     if (!toast) return;
@@ -388,7 +408,9 @@
       }
 
       if (button === selectionVybratVse) {
+        zapisV2Stabilitu("MENU_VSE_BEFORE");
         if (core()?.vyberVseProSelectionMenu?.()) {
+          zapisV2Stabilitu("MENU_VSE_AFTER");
           const zobrazPoVyberuVse = () => {
             if (!aktivni) return;
             core()?.zachytAktualniVyber?.();
@@ -1450,9 +1472,12 @@
     const id = cil.id || "";
 
     if (id === "editorBackButton") {
+      zapisV2Stabilitu("SAVE_CAPTURE_START", `type=${event.type}`);
       // Nezastavujeme původní save handler. Jen mu ještě v capture fázi
       // připravíme kanonický V2 obsah do produkční save vrstvy.
-      if (!synchronizujDoProdukcnihoEditoru()) {
+      const syncOk = synchronizujDoProdukcnihoEditoru();
+      zapisV2Stabilitu("SAVE_CAPTURE_SYNC", `ok=${syncOk}`);
+      if (!syncOk) {
         event.preventDefault();
         event.stopImmediatePropagation();
         zobrazToast("Uložení zastaveno: V2 obsah se nepodařilo bezpečně převést.", true);
@@ -1740,6 +1765,7 @@
 
   document.addEventListener("touchend", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    zapisV2Stabilitu("TOUCHEND", `target=${event.target?.className || event.target?.tagName || "-"}`);
     if (jeV2MoveInterakce(event)) {
       potlacSelectionMenuKvuliMove();
       return;
@@ -1760,6 +1786,7 @@
     if (ted - predchozi.cas > 360 || Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
 
     v2PosledniTapSelection = null;
+    zapisV2Stabilitu("DOUBLE_TAP_DETECTED", `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
     setTimeout(() => {
       if (!aktivni) return;
       const vyber = window.getSelection();
@@ -1774,6 +1801,7 @@
 
   document.addEventListener("dblclick", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    zapisV2Stabilitu("DBLCLICK", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event)) {
       potlacSelectionMenuKvuliMove();
       return;
@@ -1796,6 +1824,7 @@
 
   document.addEventListener("contextmenu", (event) => {
     if (!aktivni || !hostitel?.contains(event.target)) return;
+    zapisV2Stabilitu("CONTEXTMENU", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event, true)) {
       /* Long-press na řádku patří MOVE. Nativní/context selection zde nesmí
          přebít mobilní přesun, ale krátký/2× tap tím není dotčený. */
@@ -1845,6 +1874,18 @@
   document.addEventListener("click", zpracujKlikNaV2Odkaz, true);
   document.addEventListener("click", zpracujToolbarCapture, true);
 
+  /* DIAG 435 – zda starý WebView vůbec doručuje horizontální gesture toolbaru. */
+  [
+    document.getElementById("editorQuickToolbar"),
+    document.getElementById("editorToolsToolbar")
+  ].filter(Boolean).forEach((lista) => {
+    ["touchstart", "touchmove", "touchend", "scroll"].forEach((typ) => {
+      lista.addEventListener(typ, () => {
+        zapisV2Stabilitu(`TOOLBAR_${typ.toUpperCase()}`, `id=${lista.id} left=${Math.round(lista.scrollLeft)} cw=${lista.clientWidth} sw=${lista.scrollWidth}`);
+      }, { passive: true });
+    });
+  });
+
   document.addEventListener("keydown", (event) => {
     if (!aktivni || event.key !== "Escape") return;
     event.preventDefault();
@@ -1871,6 +1912,7 @@
 
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
+    zapisV2Stabilitu("SELECTIONCHANGE");
     if (core()?.jeImeKompoziceAktivni?.()) return;
     const vyber = window.getSelection();
     if (!vyber?.rangeCount) return;
