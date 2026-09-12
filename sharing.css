@@ -740,28 +740,41 @@ body.sharingReadOnlyOpen {
 #taskModal.sharingEditorMode .dateTimeInputs,
 #taskModal.sharingEditorMode #pinTaskButton,
 #taskModal.sharingEditorMode #reminderButton,
-#taskModal.sharingEditorMode #categoryTaskButton,
-#taskModal.sharingEditorMode #priorityTaskButton,
-#taskModal.sharingEditorMode #tagTaskButton,
-#taskModal.sharingEditorMode #planSelectionButton,
 #taskModal.sharingEditorMode #deleteTaskButton {
   display: none !important;
 }
 
 /*
- * S2D.1c – ve spodní liště zůstávají jen akce, které opravdu
- * mění společný obsah: uložit, zvýraznit text a TODO.
- * Osobní stav uživatele se sem nemíchá.
+ * PATCH 462 – Shared používá stejnou praktickou spodní lištu jako běžný V2
+ * editor. Uživatel musí mít při sdílené editaci po ruce oblast (domů/práce),
+ * oblíbené, barvu zvýraznění, štítky, TODO a plánování. Koš, Secret, připnutí
+ * a reminder zůstávají mimo Shared workflow.
+ *
+ * Pořadí je záměrně stabilní i na úzkém Androidu: Uložit, Oblast, Oblíbené,
+ * Barva, Štítky, TODO a úplně poslední Naplánovat.
  */
 #taskModal.sharingEditorMode .editorBottomBar {
   justify-content: space-between;
 }
 
 #taskModal.sharingEditorMode #editorBackButton,
+#taskModal.sharingEditorMode #categoryTaskButton,
+#taskModal.sharingEditorMode #priorityTaskButton,
 #taskModal.sharingEditorMode #colorTaskButton,
-#taskModal.sharingEditorMode #addTodoButton {
+#taskModal.sharingEditorMode #tagTaskButton,
+#taskModal.sharingEditorMode #addTodoButton,
+#taskModal.sharingEditorMode #planSelectionButton {
   display: inline-flex !important;
 }
+
+#taskModal.sharingEditorMode #editorBackButton { order: 1; }
+#taskModal.sharingEditorMode #categoryTaskButton { order: 2; }
+#taskModal.sharingEditorMode #priorityTaskButton { order: 3; }
+#taskModal.sharingEditorMode #colorTaskButton { order: 4; }
+#taskModal.sharingEditorMode #textColorPalette { order: 4; }
+#taskModal.sharingEditorMode #tagTaskButton { order: 5; }
+#taskModal.sharingEditorMode #addTodoButton { order: 6; }
+#taskModal.sharingEditorMode #planSelectionButton { order: 7; }
 
 .sharingReadOnlyHeaderText {
   min-width: 0;

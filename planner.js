@@ -1092,6 +1092,22 @@ async function zajistiUlozenouZdrojovouPoznamkuProPlanner() {
 planSelectionButton.addEventListener(
   "click",
   async () => {
+    /*
+     * PATCH 462 – Shared poznámka není součást private `savedTask`.
+     * Původní Planner fallback by u spolupracovníka mohl zkusit vytvořit
+     * novou soukromou kopii otevřené sdílené poznámky. To je zakázané.
+     * Ikona v Shared liště je už viditelná ve správném pořadí, ale dokud
+     * nebude Planner napojený na per-user Shared metadata, nesmí tato akce
+     * sahat do private storage ani vytvořit duplicitní poznámku.
+     */
+    if (document.getElementById("taskModal")?.classList.contains("sharingEditorMode")) {
+      window.zobrazZpravuAplikace?.(
+        "Plánování",
+        "Plánování ze sdílené poznámky ještě není bezpečně napojené na osobní Planner. Ostatní Shared nástroje můžeš používat normálně."
+      );
+      return;
+    }
+
     const v2Bridge = window.LubaNoteEditorV2Bridge;
     if (v2Bridge?.jeAktivni?.() === true) {
       const v2Kontext = v2Bridge.ziskejPlanovaciKontext?.();

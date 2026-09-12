@@ -115,6 +115,33 @@ body.ln-v2-lab-otevren {
   background-color: color-mix(in srgb, var(--color-accent, currentColor) 28%, transparent);
 }
 
+/*
+ * PATCH 462 – Android 12 / starší WebView umí držet skutečný Range a kreslit
+ * modré selection handles, ale někdy vůbec nevykreslí plochu označeného textu.
+ * Core V2 proto pouze na detekovaném starém Android WebView kreslí vlastní
+ * průsvitné obdélníky podle Range.getClientRects(). Overlay je čistě vizuální:
+ * nemění DOM modelu, selection ani dotykové události.
+ */
+.ln-v2-selection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ln-v2-selection-overlay[hidden] {
+  display: none !important;
+}
+
+.ln-v2-selection-rect {
+  position: fixed;
+  pointer-events: none;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: rgba(0, 188, 212, 0.34);
+}
+
 .ln-v2-odstavec {
   min-height: 1.5em;
   margin: 0 0 .35em;

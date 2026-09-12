@@ -85,6 +85,10 @@
   let vybranyObrazekId = "";
   let ulozenyPlanovaciVyber = null;
 
+  /* PATCH 462 – vizuální selection fallback pro starý Android/WebView. */
+  let v2SelectionOverlay = null;
+  let v2SelectionOverlayRaf = 0;
+
   /*
    * 🔒 ANDROID IME KOMPATIBILITA – FIX 432–434
    *
@@ -110,6 +114,108 @@
     const major = Number(shoda?.[1] || 0);
     return major > 0 && major <= 110;
   })();
+
+
+  function odstranV2SelectionOverlay() {
+    cancelAnimationFrame(v2SelectionOverlayRaf);
+    v2SelectionOverlayRaf = 0;
+
+    if (!v2SelectionOverlay) return;
+    v2SelectionOverlay.replaceChildren();
+    v2SelectionOverlay.hidden = true;
+  }
+
+  function zajistiV2SelectionOverlay() {
+    if (!v2ImeNativniStaryAndroid) return null;
+
+    if (!v2SelectionOverlay?.isConnected) {
+      v2SelectionOverlay = document.createElement("div");
+      v2SelectionOverlay.className = "ln-v2-selection-overlay";
+      v2SelectionOverlay.setAttribute("aria-hidden", "true");
+      v2SelectionOverlay.hidden = true;
+      document.body.appendChild(v2SelectionOverlay);
+    }
+
+    return v2SelectionOverlay;
+  }
+
+  function rangeZModelovehoVyberu(vyber) {
+    if (!editor || !vyber || vyber.sbaleny) return null;
+
+    const domZacatek = najdiDomBod(vyber.zacatek.blok, vyber.zacatek.offset);
+    const domKonec = najdiDomBod(vyber.konec.blok, vyber.konec.offset);
+    if (!domZacatek || !domKonec) return null;
+
+    try {
+      const range = document.createRange();
+      range.setStart(domZacatek.node, domZacatek.offset);
+      range.setEnd(domKonec.node, domKonec.offset);
+      return range;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function vykresliV2SelectionOverlay(vyber = posledniVyber) {
+    if (!v2ImeNativniStaryAndroid) return;
+
+    const overlay = zajistiV2SelectionOverlay();
+    if (!overlay) return;
+
+    if (
+      !lab ||
+      lab.hidden ||
+      !editor?.isConnected ||
+      !vyber ||
+      vyber.sbaleny
+    ) {
+      odstranV2SelectionOverlay();
+      return;
+    }
+
+    const range = rangeZModelovehoVyberu(vyber);
+    if (!range) {
+      odstranV2SelectionOverlay();
+      return;
+    }
+
+    const editorRect = editor.getBoundingClientRect();
+    const fragment = document.createDocumentFragment();
+    let pocet = 0;
+
+    for (const rect of Array.from(range.getClientRects())) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+
+      const left = Math.max(rect.left, editorRect.left);
+      const right = Math.min(rect.right, editorRect.right);
+      const top = Math.max(rect.top, editorRect.top);
+      const bottom = Math.min(rect.bottom, editorRect.bottom);
+      if (right <= left || bottom <= top) continue;
+
+      const znacka = document.createElement("span");
+      znacka.className = "ln-v2-selection-rect";
+      znacka.style.left = `${left}px`;
+      znacka.style.top = `${top}px`;
+      znacka.style.width = `${right - left}px`;
+      znacka.style.height = `${bottom - top}px`;
+      fragment.appendChild(znacka);
+      pocet += 1;
+    }
+
+    overlay.replaceChildren(fragment);
+    overlay.hidden = pocet === 0;
+  }
+
+  function naplanujV2SelectionOverlay(vyber = posledniVyber) {
+    if (!v2ImeNativniStaryAndroid) return;
+
+    cancelAnimationFrame(v2SelectionOverlayRaf);
+    const snapshot = klonVyberu(vyber);
+    v2SelectionOverlayRaf = requestAnimationFrame(() => {
+      v2SelectionOverlayRaf = 0;
+      vykresliV2SelectionOverlay(snapshot);
+    });
+  }
 
   /* ==========================================
      V2.12 – MODEL DRAG & MOVE OBRÁZKU
@@ -777,6 +883,7 @@
       sbaleny: zacatek.blok === konec.blok && zacatek.offset === konec.offset
     };
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+    naplanujV2SelectionOverlay(posledniVyber);
   }
 
   function ziskejFormatovaciVyber() {
@@ -6067,6 +6174,7 @@
        Při uložení/zavření V2 hostu ji proto zavřeme výslovně, jinak by po
        zmizení editoru mohla zůstat viset nad seznamem poznámek. */
     window.LubaNoteKeyboard?.skryj?.();
+    odstranV2SelectionOverlay();
 
     lab.hidden = true;
     lab.classList.remove("otevreno", "ln-v2-vlozeny");
@@ -6452,6 +6560,16 @@
         aktivniFormatZdroj = "";
       }
       aktualizujToolbarVelikosti(modelovyVyber);
+      naplanujV2SelectionOverlay(modelovyVyber);
+    });
+
+    /* Starý Android při scrollu posune text, ale nativní Range zůstane stejný.
+       Overlay proto pouze přepočítáme; model ani selection se nemění. */
+    poslouchej(document, "scroll", () => {
+      naplanujV2SelectionOverlay(posledniVyber);
+    }, true);
+    poslouchej(window, "resize", () => {
+      naplanujV2SelectionOverlay(posledniVyber);
     });
 
     // V2.3 – stabilní selection controller.
@@ -6575,6 +6693,7 @@
       zavriVHostu();
       return;
     }
+    odstranV2SelectionOverlay();
     lab.hidden = true;
     lab.classList.remove("otevreno");
     document.body.classList.remove("ln-v2-lab-otevren");
@@ -6599,6 +6718,9 @@
     });
     observerDomu?.disconnect();
     observerDomu = null;
+    odstranV2SelectionOverlay();
+    v2SelectionOverlay?.remove();
+    v2SelectionOverlay = null;
     lab?.remove();
     lab = null;
     editor = null;
