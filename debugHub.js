@@ -740,6 +740,14 @@
       true
     );
 
+    pridejPosluchac(
+      uklidy,
+      document,
+      "lubanote:keyboard-layout-debug",
+      event => zapis(`LKLAYOUT | ${event.detail?.text || ""}`),
+      true
+    );
+
     zapis("START GESTURES");
 
     return () => {

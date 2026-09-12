@@ -608,6 +608,58 @@
     editor.addEventListener("touchend", aktivuj, { capture: true, passive: true });
   }
 
+
+  let posledniLayoutDiag = "";
+  let posledniLayoutDiagCas = 0;
+
+  function rectText(rect) {
+    if (!rect) return "-";
+    return `${Math.round(rect.top)},${Math.round(rect.bottom)},${Math.round(rect.height)}`;
+  }
+
+  function vysliLayoutDiag(reason = "measure", force = false) {
+    try {
+      if (!panel || panel.hidden) return;
+      const now = performance.now();
+      if (!force && now - posledniLayoutDiagCas < 120) return;
+
+      const modal = document.querySelector(".taskModal:not([hidden]) .modalContent");
+      const bottomBar = document.querySelector(".taskModal:not([hidden]) .editorBottomBar");
+      const host = document.getElementById("modalRichTextV2Host");
+      const pr = panel?.getBoundingClientRect?.();
+      const mr = modal?.getBoundingClientRect?.();
+      const br = bottomBar?.getBoundingClientRect?.();
+      const hr = host?.getBoundingClientRect?.();
+      const root = getComputedStyle(document.documentElement);
+      const modalCss = modal ? getComputedStyle(modal) : null;
+      const barCss = bottomBar ? getComputedStyle(bottomBar) : null;
+      const vv = window.visualViewport;
+      const gap = pr && br ? Math.round(pr.top - br.bottom) : -999;
+      const text = [
+        `reason=${reason}`,
+        `gap=${gap}`,
+        `panel=${rectText(pr)}`,
+        `modal=${rectText(mr)}`,
+        `bar=${rectText(br)}`,
+        `host=${rectText(hr)}`,
+        `inner=${window.innerWidth}x${window.innerHeight}`,
+        `vv=${Math.round(vv?.width || 0)}x${Math.round(vv?.height || 0)}@${Math.round(vv?.offsetTop || 0)}`,
+        `vars:h=${root.getPropertyValue("--ln-lk-height").trim() || "-"},eh=${root.getPropertyValue("--ln-lk-editor-height").trim() || "-"},vh=${root.getPropertyValue("--visual-height").trim() || "-"},vt=${root.getPropertyValue("--visual-top").trim() || "-"}`,
+        `modalCss:h=${modalCss?.height || "-"},top=${modalCss?.top || "-"},pos=${modalCss?.position || "-"}`,
+        `barCss:pos=${barCss?.position || "-"},bottom=${barCss?.bottom || "-"},pb=${barCss?.paddingBottom || "-"}`,
+        `old=${jeStaryAndroidWebView() ? "Y" : "N"}`
+      ].join(" | ");
+
+      if (force || text !== posledniLayoutDiag) {
+        posledniLayoutDiag = text;
+        posledniLayoutDiagCas = now;
+        document.dispatchEvent(new CustomEvent("lubanote:keyboard-layout-debug", {
+          detail: { text }
+        }));
+      }
+    } catch (_error) {}
+  }
+
   function nastavVysku() {
     if (!panel || panel.hidden) return;
 
@@ -636,6 +688,8 @@
         document.documentElement.style.setProperty("--ln-lk-editor-height", `${editorHeight}px`);
       }
     }
+
+    requestAnimationFrame(() => vysliLayoutDiag("nastavVysku"));
   }
 
   function button(label, action, value = "", classes = "", aria = "") {
@@ -1663,6 +1717,8 @@
     document.body.classList.add("ln-luba-klavesnice-open");
     vykresliKlavesnici();
     requestAnimationFrame(nastavVysku);
+    setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+120", true); }, 120);
+    setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+500", true); }, 500);
   }
 
   function pozicujOtevritButton() {
