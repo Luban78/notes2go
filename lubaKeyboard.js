@@ -320,6 +320,8 @@
   let hangulState = { L: null, V: null, T: null };
   let observer = null;
   let systemovyEditor = null;
+  let zakladniViewportHeight = 0;
+  let zakladniViewportTop = 0;
   let recent = nactiRecent();
   let naucenaSlova = nactiNaucenaSlova();
 
@@ -534,6 +536,40 @@
     try { navigator.vibrate?.(7); } catch (_error) {}
   }
 
+  function jeStaryAndroidWebView() {
+    const ua = String(navigator.userAgent || "");
+    if (!/Android/i.test(ua)) return false;
+    if (!window.Capacitor?.isNativePlatform?.()) return false;
+    const match = ua.match(/(?:Chrome|Chromium)\/(\d+)/i);
+    const major = Number(match?.[1] || 0);
+    return major > 0 && major <= 110;
+  }
+
+  function ulozZakladniViewport() {
+    /*
+     * PATCH 449 – LubaKeyboard je vlastní fixed panel a NESMÍ počítat
+     * editor z visualViewportu, který může starý Android/WebView během
+     * focusu krátce zmenšit jako při systémové IME. To vedlo k dvojímu
+     * odečtení výšky a spodní editorový toolbar odskočil vysoko nad
+     * LubaKeyboard. Základ proto změříme ještě PŘED focusem editoru.
+     */
+    const vv = window.visualViewport;
+    const height = Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+    const top = Math.round(vv?.offsetTop || 0);
+    if (height > 0) {
+      zakladniViewportHeight = height;
+      zakladniViewportTop = top;
+      document.documentElement.style.setProperty("--ln-lk-base-height", `${height}px`);
+      document.documentElement.style.setProperty("--ln-lk-base-top", `${top}px`);
+    }
+
+    /* Chrome/WebView 103 na Androidu 12 neumí spolehlivě env(safe-area-
+       inset-bottom). U tří-tlačítkové navigace pak systémové □ ○ ◁ ležely
+       přímo přes spodní řadu LubaKeyboard. Fallback je omezen jen na
+       starý NATIVNÍ Android WebView; moderní Android/iOS se ho nedotkne. */
+    document.body.classList.toggle("ln-lk-old-android-nav", jeStaryAndroidWebView());
+  }
+
   function schovejSystemovou() {
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
   }
@@ -541,6 +577,10 @@
   function pripravEditor(editor) {
     if (!jeEditorV2(editor)) return;
     aktivniEditor = editor;
+
+    if (!document.body.classList.contains("ln-luba-klavesnice-open")) {
+      ulozZakladniViewport();
+    }
 
     /* Dočasný systémový režim platí do blur tohoto konkrétního editoru. */
     if (editor === systemovyEditor) return;
@@ -1590,6 +1630,9 @@
     const editor = aktivniEditor || najdiEditor();
     if (!editor) return;
     if (editor === systemovyEditor) return;
+    if (!document.body.classList.contains("ln-luba-klavesnice-open")) {
+      ulozZakladniViewport();
+    }
     pripravEditor(editor);
     panel.hidden = false;
     otevritButton.hidden = true;
@@ -1618,6 +1661,10 @@
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
     document.documentElement.style.removeProperty("--ln-lk-height");
+    document.documentElement.style.removeProperty("--ln-lk-base-height");
+    document.documentElement.style.removeProperty("--ln-lk-base-top");
+    zakladniViewportHeight = 0;
+    zakladniViewportTop = 0;
     if (otevritButton && najdiEditor()) {
       otevritButton.hidden = false;
       requestAnimationFrame(pozicujOtevritButton);
@@ -1698,7 +1745,7 @@
      ========================================================== */
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "SLIDE-ALT-446",
+    verze: "APK-INSETS-449",
     zobraz,
     skryj,
     nastavLayout,

@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – LUBAKBOARD AXIS ALT (PATCH 447)
+   LUBANOTE – LUBAKBOARD APK INSETS (PATCH 449)
    Vizuálně používá pouze barvy / povrchy aktuálního LubaNote motivu.
    ============================================================== */
 
@@ -21,7 +21,7 @@
   box-sizing: border-box;
   max-height: min(54vh, 430px);
   max-height: min(54dvh, 430px);
-  padding: 6px 6px max(7px, env(safe-area-inset-bottom));
+  padding: 6px 6px max(7px, env(safe-area-inset-bottom), var(--ln-lk-nav-fallback, 0px));
   overflow: hidden;
   border-top: 1px solid var(--color-border, #777);
   border-top: 1px solid color-mix(in srgb, var(--color-border, #777) 80%, transparent);
@@ -38,6 +38,13 @@
   -webkit-touch-callout: none;
   touch-action: manipulation;
   overscroll-behavior: contain;
+}
+
+/* PATCH 449 – Android 12 / WebView 103 v nativní APK nehlásí spodní
+   systémovou 3-button navigaci přes env(safe-area-inset-bottom). Bez
+   fallbacku ležely □ ○ ◁ přímo přes poslední řadu LubaKeyboard. */
+body.ln-lk-old-android-nav {
+  --ln-lk-nav-fallback: 48px;
 }
 
 .ln-lk-top {
@@ -617,8 +624,9 @@
  */
 @media (max-width: 899px) {
   body.ln-luba-klavesnice-open .taskModal:not([hidden]) .modalContent {
-    height: calc(var(--visual-height, 100dvh) - var(--ln-lk-height, 260px));
-    max-height: calc(var(--visual-height, 100dvh) - var(--ln-lk-height, 260px));
+    top: var(--ln-lk-base-top, var(--visual-top, 0px));
+    height: calc(var(--ln-lk-base-height, var(--visual-height, 100dvh)) - var(--ln-lk-height, 260px));
+    max-height: calc(var(--ln-lk-base-height, var(--visual-height, 100dvh)) - var(--ln-lk-height, 260px));
   }
 }
 
