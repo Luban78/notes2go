@@ -870,6 +870,14 @@
 
   function synchronizujDoProdukcnihoEditoru() {
     if (!aktivni) return true;
+
+    /* FIX 434: starší Android může při tapu na toolbar/Uložit ještě držet
+       otevřenou Gboard composition. Než exportujeme V2 model, necháme Core
+       dokončit právě rozpracovaný IME vstup. */
+    if (core()?.dokoncImePredExterniAkci?.() === false) {
+      return false;
+    }
+
     const obsah = ziskejObsahProProdukci();
     if (!obsah) return false;
 
@@ -1715,6 +1723,19 @@
     );
   }
 
+  /*
+   * FIX 434 – Android selection focus guard. Legacy panel tohle už dávno dělal:
+   * pointerdown na tlačítku nesmí přesunout focus z editoru na button, jinak
+   * WebView skryje modré označení a následný selectionchange panel zavře.
+   */
+  selectionMenu?.addEventListener("pointerdown", (event) => {
+    if (!aktivni || selectionMenu.dataset.lnV2Owner !== "1") return;
+    const button = event.target.closest?.("button");
+    if (!button || !selectionMenu.contains(button)) return;
+    core()?.zachytAktualniVyber?.();
+    event.preventDefault();
+  }, true);
+
   selectionMenu?.addEventListener("click", zpracujV2SelectionMenuAkci, true);
 
   document.addEventListener("touchend", (event) => {
@@ -1850,6 +1871,7 @@
 
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
+    if (core()?.jeImeKompoziceAktivni?.()) return;
     const vyber = window.getSelection();
     if (!vyber?.rangeCount) return;
     const range = vyber.getRangeAt(0);

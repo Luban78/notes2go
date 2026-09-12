@@ -8,8 +8,10 @@
    - 5× tap na Připomínky je nouzový přepínač V2 / Legacy, ne druhý datový režim.
    - Logická velikost písma se NIKDY neurčuje z fyzického getComputedStyle().fontSize.
      Android/WebView může text systémově škálovat; model si stále drží např. 13/20 px.
-   - Pro podporované beforeinput operace se vždy volá preventDefault(),
-     takže WebView nesmí svévolně měnit strukturu dokumentu.
+   - Pro podporované beforeinput operace se standardně volá preventDefault().
+     Jediná řízená výjimka je FIX 434 pro starý Android WebView během živé
+     composition; DOM Guard ji povolí jen do compositionend a změnu pak
+     atomicky převede zpět do modelu.
    - Modelové vlastnosti (formát, odkazy, plánované backlinky, seznamy, TODO, obrázky)
      se nesmí nahrazovat přímými DOM mutacemi mimo Core V2.
 ======================================== */
@@ -84,18 +86,30 @@
   let ulozenyPlanovaciVyber = null;
 
   /*
-   * 🔒 ANDROID IME / WEBVIEW 103 KOMPATIBILITA – FIX 432
+   * 🔒 ANDROID IME KOMPATIBILITA – FIX 432–434
    *
-   * Starší Android WebView neposílá běžné `insertText`, ale při psaní přes
-   * softwarovou klávesnici používá `insertCompositionText` a v `event.data`
-   * často posílá CELÉ právě skládáné slovo (např. původní `abc` -> `abcd`).
+   * Novější WebView zvládáme čistě modelově. Starší Android WebView (ověřeno
+   * na Chrome/WebView 103) ale po KAŽDÉM modelovém překreslení znovu restartuje
+   * composition. To vede k řetězci compositionstart -> input -> render ->
+   * compositionstart a výsledkem je nestabilní Gboard, ztracený click toolbaru
+   * i problémy se selection.
    *
-   * NIKDY proto nesmíme `event.data` pouze připojit k modelu – text by se
-   * duplikoval. Držíme vlastní modelový snapshot kompozice a každou další
-   * IME aktualizaci aplikujeme jako MINIMÁLNÍ rozdíl proti předchozímu stavu.
-   * DOM zůstává jen projekce modelu stejně jako u všech ostatních V2 vstupů.
+   * FIX 434 proto pro starší Android WebView používá omezenou "nativní IME
+   * transakci": během composition dovolíme WebView dočasně upravit DOM jen
+   * uvnitř aktuálního textového bloku, DOM Guard tuto chvíli nevrací změny a
+   * po compositionend převedeme JEDINÝ minimální rozdíl zpět do modelu. Potom
+   * DOM znovu vykreslíme z modelu. Zdroj pravdy tedy zůstává model, pouze během
+   * živé composition existuje krátké řízené okno DOM vstupu.
    */
   let v2ImeKompozice = null;
+
+  const v2ImeNativniStaryAndroid = (() => {
+    const ua = String(navigator.userAgent || "");
+    if (!/Android/i.test(ua) || !/;\s*wv\)/i.test(ua)) return false;
+    const shoda = ua.match(/Chrome\/(\d+)/i);
+    const major = Number(shoda?.[1] || 0);
+    return major > 0 && major <= 110;
+  })();
 
   /* ==========================================
      V2.12 – MODEL DRAG & MOVE OBRÁZKU
@@ -2895,6 +2909,10 @@
   }
 
   function vyberVseProSelectionMenu() {
+    /* FIX 434: na starém Androidu musí při programovém Vše zůstat fokus v
+       contenteditable. Jinak Range existuje, ale systém jej vizuálně nezvýrazní. */
+    try { editor?.focus({ preventScroll: true }); } catch (_error) {}
+
     const prvni = dokument.bloky.findIndex(jeTextovyBlok);
     let posledni = -1;
     for (let i = dokument.bloky.length - 1; i >= 0; i -= 1) {
@@ -4197,8 +4215,28 @@
     const zacatek = Math.max(0, Math.min(celyText.length, vyber.zacatek.offset));
     const konec = Math.max(zacatek, Math.min(celyText.length, vyber.konec.offset));
 
+    if (v2ImeNativniStaryAndroid) {
+      v2ImeKompozice = {
+        aktivni: true,
+        nativni: true,
+        blok: blokIndex,
+        blokId: String(blok.id || ""),
+        puvodniTextBloku: celyText,
+        puvodniVyber: klonVyberu(vyber),
+        snapshotPred: vytvorSnapshotHistorie(vyber),
+        zmeneno: false
+      };
+      zapisV2ImeDiag(
+        "native-start",
+        null,
+        `blok=${blokIndex} start=${zacatek} end=${konec}`
+      );
+      return v2ImeKompozice;
+    }
+
     v2ImeKompozice = {
       aktivni: true,
+      nativni: false,
       blok: blokIndex,
       zacatek,
       text: celyText.slice(zacatek, konec),
@@ -4209,6 +4247,7 @@
     };
     return v2ImeKompozice;
   }
+
 
   function zkusNajitV2ImeRozsahZDat(data) {
     const stav = v2ImeKompozice;
@@ -4269,6 +4308,89 @@
       novyKonec: novy.length - suffix,
       vlozit: novy.slice(prefix, novy.length - suffix)
     };
+  }
+
+  function ziskejV2ImeTextZDom(stav) {
+    if (!stav?.nativni || !editor || !stav.blokId) return null;
+    const radek = editor.querySelector(
+      `[data-ln-v2-blok="${CSS.escape(stav.blokId)}"]`
+    );
+    if (!radek) return null;
+
+    /*
+     * Text čteme z dočasného DOM řádku, ale ignorujeme ovládací prvky a
+     * obrázky. Bullet značky jsou CSS, TODO checkbox nemá text, takže tímto
+     * získáme přesně uživatelský text bloku i po zásahu starého WebView.
+     */
+    const kopie = radek.cloneNode(true);
+    kopie
+      .querySelectorAll('button, figure, [contenteditable="false"]')
+      .forEach((prvek) => prvek.remove());
+    return String(kopie.textContent || "").replace(/\r/g, "");
+  }
+
+  function dokoncV2ImeNativniKompozici(duvod = "compositionend") {
+    const stav = v2ImeKompozice;
+    if (!stav?.aktivni || !stav.nativni) return false;
+
+    const blok = dokument?.bloky?.[stav.blok];
+    const novyTextBloku = ziskejV2ImeTextZDom(stav);
+
+    if (!jeTextovyBlok(blok) || novyTextBloku === null) {
+      v2ImeKompozice = null;
+      vykresli(posledniVyber || posledniPozice);
+      zapisV2ImeDiag("native-finalize", null, `reason=${duvod} fallback=render`);
+      return false;
+    }
+
+    const puvodniText = String(stav.puvodniTextBloku || "");
+    const rozdil = minimalniRozdilTextu(puvodniText, novyTextBloku);
+    const zacatekZmeny = rozdil.prefix;
+    const konecZmeny = rozdil.staryKonec;
+    const maSkutecnouZmenu =
+      zacatekZmeny !== konecZmeny || Boolean(rozdil.vlozit);
+
+    if (!maSkutecnouZmenu) {
+      /*
+       * Stejný text = pouze IME echo / selection interakce. DOM nepřekreslujeme,
+       * protože by starý Android znovu schoval vizuální označení textu.
+       */
+      v2ImeKompozice = null;
+      zapisV2ImeDiag(
+        "native-finalize",
+        null,
+        `reason=${duvod} changed=false blok=${stav.blok}`
+      );
+      return true;
+    }
+
+    const vyber = {
+      zacatek: { blok: stav.blok, offset: zacatekZmeny },
+      konec: { blok: stav.blok, offset: konecZmeny },
+      sbaleny: zacatekZmeny === konecZmeny
+    };
+    const format = formatNaPozici(blok, zacatekZmeny);
+    const caret = vlozText(rozdil.vlozit, vyber, format);
+    stav.zmeneno = true;
+    ulozZmenuDoHistorie(stav.snapshotPred, "IME psaní");
+
+    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
+    posledniPozice = { ...caret };
+    posledniVyber = klonVyberu(novyVyber);
+    ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+    aktivniFormatPozice = klicPozice(caret);
+
+    /* Stav ukončíme PŘED renderem, aby DOM Guard zase normálně hlídal model. */
+    v2ImeKompozice = null;
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup("insertCompositionText");
+    nastavStav("Řízeno modelem: Android IME commit");
+    zapisV2ImeDiag(
+      "native-finalize",
+      null,
+      `reason=${duvod} changed=true blok=${stav.blok} start=${zacatekZmeny} del=${konecZmeny - zacatekZmeny} ins=${rozdil.vlozit.length}`
+    );
+    return true;
   }
 
   function aplikujV2ImeText(data, inputType = "insertCompositionText") {
@@ -4334,6 +4456,10 @@
     const stav = v2ImeKompozice;
     if (!stav?.aktivni) return false;
 
+    if (stav.nativni) {
+      return dokoncV2ImeNativniKompozici(duvod);
+    }
+
     if (stav.zmeneno) {
       ulozZmenuDoHistorie(stav.snapshotPred, "IME psaní");
     }
@@ -4355,8 +4481,17 @@
     );
 
     if (jeV2ImeInput(event.inputType)) {
-      // FIX 432: Android IME je plnohodnotný modelový vstup, ne nepodporovaná
-      // DOM mutace. Browseru změnu DOM nepovolíme; provedeme ji atomicky v modelu.
+      if (v2ImeNativniStaryAndroid) {
+        /*
+         * FIX 434: na starém Android WebView necháme živou composition projít
+         * nativně do DOM a model aktualizujeme jednou při jejím ukončení.
+         * PreventDefault zde úmyslně NENÍ.
+         */
+        zacniV2ImeKompozici();
+        return;
+      }
+
+      // Novější WebView: composition zůstává plně modelová.
       event.preventDefault();
       aplikujV2ImeText(event.data, event.inputType);
       if (event.inputType === "insertFromComposition") dokoncV2ImeKompozici("insertFromComposition");
@@ -4458,6 +4593,23 @@
         detail: { inputType: String(inputType || "") }
       }));
     });
+  }
+
+  function dokoncImePredExterniAkci() {
+    if (!v2ImeKompozice?.aktivni) return true;
+
+    /*
+     * Toolbar / Uložit může být na starém Androidu první prvek, na který
+     * uživatel sáhne během stále otevřené Gboard composition. Blur ji nechá
+     * WebView uzavřít; pokud ji neuzavře samo, převezmeme aktuální DOM stav
+     * synchronně, aby save nikdy neexportoval rozpracovanou hodnotu.
+     */
+    if (v2ImeKompozice.nativni && document.activeElement === editor) {
+      try { editor.blur(); } catch (_error) {}
+    }
+
+    if (!v2ImeKompozice?.aktivni) return true;
+    return dokoncV2ImeKompozici("external-action") !== false;
   }
 
   function zpracujPaste(event) {
@@ -5894,15 +6046,25 @@
     });
     poslouchej(editor, "compositionupdate", (event) => {
       zapisV2ImeDiag("compositionupdate", event);
-      zacniV2ImeKompozici();
-      zkusNajitV2ImeRozsahZDat(event.data);
+      const stav = zacniV2ImeKompozici();
+      if (!stav?.nativni) {
+        zkusNajitV2ImeRozsahZDat(event.data);
+      }
     });
     poslouchej(editor, "compositionend", (event) => {
       zapisV2ImeDiag("compositionend", event);
 
-      // Pokud konkrétní WebView neposlal žádný beforeinput, použijeme data z
-      // compositionend. Jakmile už ale modelový IME vstup proběhl, data z END
-      // znovu NEAPLIKUJEME – Android 12/WebView 103 umí poslat starší hodnotu.
+      if (v2ImeKompozice?.nativni) {
+        /*
+         * DOM finální hodnotu potvrzuje WebView až v rámci stejného eventového
+         * cyklu. Microtask mu nechá dokončit nativní commit a teprve potom
+         * převádíme změnu zpět do modelu.
+         */
+        queueMicrotask(() => dokoncV2ImeKompozici("compositionend"));
+        return;
+      }
+
+      // Modelový režim novějších WebView – fallback pro chybějící beforeinput.
       if (v2ImeKompozice?.aktivni && !v2ImeKompozice.zmeneno && event.data != null) {
         zkusNajitV2ImeRozsahZDat(event.data);
         aplikujV2ImeText(event.data, "insertCompositionText");
@@ -5942,11 +6104,13 @@
     });
     poslouchej(editor, "input", (event) => {
       zapisV2ImeDiag("input", event);
+      if (v2ImeKompozice?.nativni) return;
       kontrolaDomu();
     });
 
     poslouchej(document, "selectionchange", () => {
       if (!lab || lab.hidden || !editor) return;
+      if (v2ImeKompozice?.nativni) return;
       const vyber = window.getSelection();
       if (!vyber?.rangeCount) return;
       const range = vyber.getRangeAt(0);
@@ -5994,6 +6158,9 @@
 
     observerDomu = new MutationObserver((mutace) => {
       if (!editor || !mutace.length) return;
+      /* FIX 434: starý Android má během živé composition krátké povolené DOM
+         okno. Model jej převezme atomicky při compositionend. */
+      if (v2ImeKompozice?.nativni) return;
       const chyba = overDomProtiModelu();
       if (!chyba) return;
       nastavStav(`DOM GUARD: WebView změnil DOM mimo model · ${chyba} · vracím model`, true);
@@ -6219,6 +6386,8 @@
     redo: vratHistoriiVpred,
     kontrolaDomu,
     ziskejStavFormatu,
-    ziskejModel: () => (dokument ? structuredClone(dokument) : null)
+    ziskejModel: () => (dokument ? structuredClone(dokument) : null),
+    dokoncImePredExterniAkci,
+    jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni)
   });
 })();
