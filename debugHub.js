@@ -724,6 +724,14 @@
       true
     );
 
+    pridejPosluchac(
+      uklidy,
+      document,
+      "lubanote:v2-ime-debug",
+      event => zapis(`V2IME | ${event.detail?.text || ""}`),
+      true
+    );
+
     zapis("START GESTURES");
 
     return () => {

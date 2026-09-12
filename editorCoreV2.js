@@ -4132,7 +4132,41 @@
     zrusV2DragSeznamu({ zachovatVyber: false });
   }
 
+  function zapisV2ImeDiag(typ, event = null, stav = "") {
+    /*
+     * DIAG 431 – pouze diagnostika Android IME.
+     * NEMĚNÍ model, selection ani browserové chování. Záznam se posílá
+     * jako CustomEvent do Debug Hubu, takže nezahlcuje běžnou konzoli.
+     */
+    const data = event?.data == null
+      ? "-"
+      : JSON.stringify(String(event.data).replace(/\n/g, "\\n"));
+    const inputType = event?.inputType || "-";
+    const composing = Boolean(event?.isComposing);
+    const target = event?.target;
+    const targetPopis = target
+      ? `${target.tagName || target.nodeName || "?"}${target.id ? `#${target.id}` : ""}${target.classList?.length ? `.${Array.from(target.classList).slice(0, 3).join(".")}` : ""}`
+      : "-";
+    const editable = Boolean(editor?.isContentEditable);
+    const aktivni = Boolean(editor && (document.activeElement === editor || editor.contains(document.activeElement)));
+
+    try {
+      document.dispatchEvent(new CustomEvent("lubanote:v2-ime-debug", {
+        bubbles: false,
+        detail: {
+          text: `${typ} | inputType=${inputType} | data=${data} | composing=${composing} | editable=${editable} | activeInEditor=${aktivni} | target=${targetPopis}${stav ? ` | ${stav}` : ""}`
+        }
+      }));
+    } catch (_error) {}
+  }
+
   function zpracujBeforeInput(event) {
+    zapisV2ImeDiag(
+      "beforeinput",
+      event,
+      PODPOROVANE_INPUTY.has(event.inputType) ? "supported=true" : "supported=false"
+    );
+
     if (event.inputType === "historyUndo") {
       event.preventDefault();
       vratHistoriiZpet();
@@ -5653,6 +5687,9 @@
       nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
     });
 
+    poslouchej(editor, "compositionstart", (event) => zapisV2ImeDiag("compositionstart", event));
+    poslouchej(editor, "compositionupdate", (event) => zapisV2ImeDiag("compositionupdate", event));
+    poslouchej(editor, "compositionend", (event) => zapisV2ImeDiag("compositionend", event));
     poslouchej(editor, "beforeinput", zpracujBeforeInput);
     poslouchej(editor, "paste", zpracujPaste);
     poslouchej(editor, "keydown", (event) => {
@@ -5684,7 +5721,10 @@
         vratHistoriiVpred();
       }
     });
-    poslouchej(editor, "input", () => kontrolaDomu());
+    poslouchej(editor, "input", (event) => {
+      zapisV2ImeDiag("input", event);
+      kontrolaDomu();
+    });
 
     poslouchej(document, "selectionchange", () => {
       if (!lab || lab.hidden || !editor) return;
