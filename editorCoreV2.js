@@ -4283,7 +4283,9 @@
     const zacatekZmeny = stav.zacatek + rozdil.prefix;
     const konecZmeny = stav.zacatek + rozdil.staryKonec;
 
-    if (zacatekZmeny !== konecZmeny || rozdil.vlozit) {
+    const maSkutecnouZmenu = zacatekZmeny !== konecZmeny || Boolean(rozdil.vlozit);
+
+    if (maSkutecnouZmenu) {
       const vyber = {
         zacatek: { blok: stav.blok, offset: zacatekZmeny },
         konec: { blok: stav.blok, offset: konecZmeny },
@@ -4298,6 +4300,22 @@
     }
 
     stav.text = novyText;
+
+    /*
+     * FIX 433 – Android 12 / WebView 103 po označení textu často spustí
+     * composition cyklus jen jako IME echo a pošle STEJNÝ text, který už je
+     * v označeném rozsahu. To není editace.
+     *
+     * 🔒 Při nulové změně NESMÍME volat vykresli() ani
+     * oznamModelovyTextovyVstup(). Překreslení by sbalilo živý výběr na caret
+     * a produkční V2 Bridge by následně zavřel vlastní LubaNote selection menu.
+     * Stav composition si pouze zapamatujeme a čekáme na skutečný rozdíl.
+     */
+    if (!maSkutecnouZmenu) {
+      zapisDebug?.(`EDITOR V2 | IME ECHO NO-OP | ${inputType}`);
+      return true;
+    }
+
     const caret = { blok: stav.blok, offset: stav.zacatek + novyText.length };
     const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
     posledniPozice = { ...caret };
