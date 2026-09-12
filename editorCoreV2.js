@@ -1699,6 +1699,103 @@
     };
   }
 
+  /*
+   * PATCH 456 – PRÁZDNÉ ŘÁDKY VEDLE PLOVOUCÍHO OBRÁZKU
+   * ----------------------------------------------------
+   * V2 drží obrázek jako samostatný modelový blok. Pokud je obrázek na
+   * konci dokumentu a přepne se na 25/50/75 % + vlevo/vpravo, jediný
+   * prázdný odstavec za ním vytvoří jen JEDNU skutečnou caret pozici.
+   * Uživatel pak musí opakovaně mačkat Enter, aby mohl psát níže vedle
+   * obrázku. Legacy editor to řešil dynamickými bočními řádky.
+   *
+   * Tady děláme totéž MODELOVĚ: pouze pokud je obrázek na konci dokumentu
+   * a za ním jsou už jen prázdné normální odstavce, doplníme bezpečně tolik
+   * prázdných odstavců, kolik se podle reálné výšky obrázku vejde vedle něj.
+   * Pokud za obrázkem existuje skutečný text / TODO / Bullet / další obrázek,
+   * nic nevkládáme a obsah neposouváme.
+   */
+  function zajistiV2RadkyVedlePlovoucihoObrazku(obrazekId) {
+    const nalezeny = najdiObrazekVModelu(String(obrazekId || ""));
+    const blok = nalezeny?.obrazek;
+    if (!blok || !nalezeny.topLevel) return false;
+
+    const zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
+    const velikost = normalizujVelikostObrazku(blok.velikost);
+    const cisloVelikosti = Number.parseFloat(velikost);
+    if (
+      !["vlevo", "vpravo"].includes(zarovnani) ||
+      velikost === "prizpusobit" ||
+      !Number.isFinite(cisloVelikosti) ||
+      cisloVelikosti >= 100
+    ) {
+      return false;
+    }
+
+    const indexObrazku = nalezeny.blokIndex;
+    let konecPrazdnych = indexObrazku + 1;
+    let pocetPrazdnych = 0;
+
+    while (konecPrazdnych < dokument.bloky.length) {
+      const kandidat = dokument.bloky[konecPrazdnych];
+      if (kandidat?.typ !== "odstavec" || textBloku(kandidat).length !== 0) break;
+      pocetPrazdnych += 1;
+      konecPrazdnych += 1;
+    }
+
+    /* Jakmile za prázdnými řádky následuje skutečný obsah, necháváme ho být. */
+    if (konecPrazdnych < dokument.bloky.length) return false;
+
+    const figure = Array.from(
+      editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || []
+    ).find((prvek) => prvek.dataset.lnV2Obrazek === String(obrazekId || ""));
+    if (!figure) return false;
+
+    const rect = figure.getBoundingClientRect();
+    if (!(rect.height > 0)) return false;
+
+    const stylEditoru = getComputedStyle(editor);
+    const fontSize = Number.parseFloat(stylEditoru.fontSize) || 16;
+    let lineHeight = Number.parseFloat(stylEditoru.lineHeight);
+    if (!Number.isFinite(lineHeight) || lineHeight <= 0) lineHeight = fontSize * 1.5;
+
+    /* .ln-v2-odstavec má navíc malou spodní mezeru; lehce ji započteme. */
+    const vyskaRadku = Math.max(18, lineHeight + fontSize * 0.35);
+    const potreba = Math.max(2, Math.min(18, Math.ceil(rect.height / vyskaRadku)));
+    if (pocetPrazdnych >= potreba) return false;
+
+    const chybi = potreba - pocetPrazdnych;
+    const nove = Array.from({ length: chybi }, () => vytvorOdstavec(""));
+    dokument.bloky.splice(konecPrazdnych, 0, ...nove);
+
+    const vyber = klonVyberu(posledniVyber) || vyberZPosledniPozice();
+    vykresli(vyber);
+    zapisDebug?.(
+      `EDITOR V2 | image side rows | image=${obrazekId} | added=${chybi} | total=${potreba}`
+    );
+    return true;
+  }
+
+  function naplanujV2RadkyVedleObrazku(obrazekId) {
+    const id = String(obrazekId || "");
+    if (!id) return;
+
+    const zkus = () => {
+      const figure = Array.from(
+        editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || []
+      ).find((prvek) => prvek.dataset.lnV2Obrazek === id);
+      const image = figure?.querySelector?.("img");
+
+      if (image && !image.complete) {
+        image.addEventListener("load", () => zajistiV2RadkyVedlePlovoucihoObrazku(id), { once: true });
+        return;
+      }
+      zajistiV2RadkyVedlePlovoucihoObrazku(id);
+    };
+
+    requestAnimationFrame(zkus);
+    setTimeout(zkus, 120);
+  }
+
   function nastavOrezanyZdrojObrazku(obrazekId, novyZdroj) {
     const id = String(obrazekId || vybranyObrazekId || "");
     const nalezeny = najdiObrazekVModelu(id);
@@ -1741,7 +1838,10 @@
     const novaVelikost = normalizujVelikostObrazku(hodnoty.velikost ?? blok.velikost);
     const noveZarovnani = normalizujZarovnaniObrazku(hodnoty.zarovnani ?? blok.zarovnani);
 
-    if (novaVelikost === blok.velikost && noveZarovnani === blok.zarovnani) return true;
+    if (novaVelikost === blok.velikost && noveZarovnani === blok.zarovnani) {
+      naplanujV2RadkyVedleObrazku(id);
+      return true;
+    }
 
     const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
     blok.velikost = novaVelikost;
@@ -1750,6 +1850,7 @@
 
     ulozZmenuDoHistorie(snapshotPred, "nastavení obrázku");
     vykresli(posledniVyber || posledniPozice);
+    naplanujV2RadkyVedleObrazku(id);
 
     queueMicrotask(() => {
       const figure = Array.from(editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]") || [])
@@ -6030,8 +6131,12 @@
         contenteditable="true"
         role="textbox"
         aria-multiline="true"
-        spellcheck="true"
-        autocapitalize="sentences"
+        inputmode="none"
+        virtualkeyboardpolicy="manual"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
         data-ln-v2-editor
       ></div>
 

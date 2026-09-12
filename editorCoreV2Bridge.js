@@ -1227,6 +1227,13 @@
   }
 
   function otevriV2CropObrazku(obrazekId) {
+    /* FIX 455 – crop modal nesmí zůstat pod vlastní klávesnicí. */
+    try {
+      window.LubaNoteKeyboard?.skryj?.();
+      const otevritKlavesnici = document.getElementById("lubaKeyboardOpen");
+      if (otevritKlavesnici) otevritKlavesnici.hidden = true;
+      document.activeElement?.blur?.();
+    } catch (_error) {}
     const api = core();
     const data = api?.ziskejNastaveniObrazku?.(obrazekId);
     if (!data?.zdroj) {
@@ -1316,7 +1323,30 @@
     tlacitko.innerHTML = '<span class="choiceDialogSettingLabel">Oříznout</span><span class="choiceDialogSettingValue">Upravit výřez</span>';
     tlacitko.addEventListener("click", () => {
       const id = String(tlacitko.dataset.v2CropOpen || "");
+      if (!id) return;
+
+      /*
+       * PATCH 457 – OŘEZ MUSÍ NEJDŘÍV ULOŽIT ROZPRACOVANÉ NASTAVENÍ.
+       * -----------------------------------------------------------
+       * Nastavovací modal drží změnu velikosti/zarovnání jen ve své pracovní
+       * kopii, dokud uživatel nestiskne „Uložit“. Když se dřív rovnou kleplo
+       * na „Oříznout“, modal jsme zavřeli a crop běžel nad starým modelem.
+       * Po ořezu se proto velikost i zarovnání tvářily jako ztracené.
+       *
+       * Použijeme přímo existující Uložit tlačítko modalu – jeho closure má
+       * jediná správná aktuální pracovniHodnoty. Až po jeho dokončení (další
+       * task po async handleru) otevřeme crop nad už aktualizovaným modelem.
+       */
+      const ulozit = options.querySelector(".choiceDialogSave");
+      tlacitko.disabled = true;
       nastavovaciObrazekId = "";
+
+      if (ulozit) {
+        ulozit.click();
+        setTimeout(() => otevriV2CropObrazku(id), 0);
+        return;
+      }
+
       try { window.zavriVyberovyModal?.(); } catch (_error) {}
       otevriV2CropObrazku(id);
     });
@@ -1351,6 +1381,20 @@
 
     nastavovaciObrazekId = String(obrazekId || "");
     sledujV2NastaveniObrazku();
+
+    /*
+     * FIX 455 – nastavení obrázku je plnohodnotný LubaNote modal.
+     * LubaKeyboard je fixed nad aplikací a její z-index je vyšší než modal,
+     * takže bez explicitního skrytí zakryla spodní část včetně Uložit.
+     * Selection/model už obrázek drží podle ID, takže tady klávesnici můžeme
+     * bezpečně zavřít ještě před otevřením modalu.
+     */
+    try {
+      window.LubaNoteKeyboard?.skryj?.();
+      const otevritKlavesnici = document.getElementById("lubaKeyboardOpen");
+      if (otevritKlavesnici) otevritKlavesnici.hidden = true;
+      document.activeElement?.blur?.();
+    } catch (_error) {}
 
     window.otevriNastavovaciModal({
       nadpis: "Obrázek",
@@ -1620,10 +1664,33 @@
         return;
       }
 
-      /* Použijeme přesně současný LubaNote picker Galerie/Fotoaparát a jeho
-         kompresní pipeline. editorMedia.js na konci předá připravený obrázek
-         zpět sem místo zásahu do skrytého produkčního DOMu. */
-      window.vlozObrazekDoPoznamky();
+      /*
+       * FIX 454 – před plnoobrazovkovým LubaNote modalem Galerie/Fotoaparát
+       * schováme vlastní klávesnici. LubaKeyboard má záměrně extrémně vysoký
+       * z-index, takže bez toho překrývala choiceModal a modal vypadal
+       * useknutě. Současně editor blur-neme až PO zachycení modelového výběru,
+       * aby se klávesnice sama znovu neotevřela během systémového file pickeru.
+       *
+       * editorMedia.js pak po kompresi předá připravený obrázek přímo tomuto
+       * Bridge přes vlozPripravenyObrazek(), takže aktivní V2 model je jediný
+       * zdroj pravdy.
+       */
+      try {
+        window.LubaNoteKeyboard?.skryj?.();
+        const otevritKlavesnici =
+          document.getElementById("lubaKeyboardOpen");
+        if (otevritKlavesnici) {
+          otevritKlavesnici.hidden = true;
+        }
+      } catch (_error) {}
+
+      try {
+        document.activeElement?.blur?.();
+      } catch (_error) {}
+
+      requestAnimationFrame(() => {
+        window.vlozObrazekDoPoznamky();
+      });
       return;
     }
 

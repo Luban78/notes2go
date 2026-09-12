@@ -130,6 +130,7 @@
     ["#openThemeModalButton" , "theme.dark", null, "themeLabel"],
     ["#settingsModal .themeSetting:has(#openThemeModalButton) > span:first-child", "settings.theme"],
     ["#settingsModal .themeSetting:has(#openIconStyleModalButton) > span:first-child", "settings.iconStyle"],
+    ["#settingsKeyboardModeLabel", "settings.keyboard"],
     ["#settingsModal .settingsSection:nth-of-type(2) > h3", "settings.reminders"],
     ["#settingsModal .themeSetting:has(#openReminderDelaySettingsButton) > span:first-child", "settings.quickDelay"],
     ["#openReminderDelaySettingsButton span:first-child", "settings.configure"],

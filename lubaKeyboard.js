@@ -23,6 +23,7 @@
   const ULOZ_REZIM = "lubanote_lubakeyboard_mode_v1";
   const ULOZ_RECENT = "lubanote_lubakeyboard_recent_v1";
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
+  const ULOZ_ZDROJ = "lubanote_lubakeyboard_input_source_v1";
 
   /* PATCH 445 – základ predikčního řádku.
      Jádro je jazykově neutrální; jednotlivé jazyky mohou mít vlastní
@@ -109,6 +110,23 @@
     z: "žźż"
   });
 
+  const SLOVENSKE_ALT = Object.freeze({
+    a: "áäàâãåāæ",
+    c: "čćç",
+    d: "ď",
+    e: "éèêëēėę",
+    i: "íìîïīį",
+    l: "ľĺł",
+    n: "ňńñ",
+    o: "óôòöõøōœ",
+    r: "ŕř",
+    s: "šśß",
+    t: "ť",
+    u: "úùûüū",
+    y: "ýÿ",
+    z: "žźż"
+  });
+
   /* Dlouhý stisk tečky – kompaktní interpunkční paleta podle běžného
      mobilního vzoru. Uživatel ji chce jako systémovou 4×4 bublinu. */
   const TECKA_ALT = Object.freeze([
@@ -150,6 +168,11 @@
       id: "cs", skupina: "Latinka", nazev: "Čeština", badge: "CS", locale: "cs-CZ",
       rows: [radek("qwertzuiop"), radek("asdfghjkl"), radek("yxcvbnm")],
       alt: CESKE_ALT, shift: true, standardMobile: true
+    },
+    sk: {
+      id: "sk", skupina: "Latinka", nazev: "Slovenčina", badge: "SK", locale: "sk-SK",
+      rows: [radek("qwertzuiop"), radek("asdfghjkl"), radek("yxcvbnm")],
+      alt: SLOVENSKE_ALT, shift: true, standardMobile: true
     },
     en: {
       id: "en", skupina: "Latinka", nazev: "English", badge: "EN", locale: "en-US",
@@ -276,6 +299,16 @@
     }
   });
 
+  /*
+   * PATCH 458 – PRODUKČNÍ SCOPE LubaKeyboard V1.
+   * Jádro si ponechává připravené experimentální layouty pro budoucnost,
+   * ale v ostrém výběru ukazujeme jen jazyky, které chceme skutečně
+   * odladit napříč Android/iOS: CZ, SK, EN, DE, PL, ES.
+   * Tím z LubaKeyboard neděláme neotestovaný „vlastní Gboard pro celý svět“.
+   */
+  const PRODUKCNI_LAYOUTY = Object.freeze(["cs", "sk", "en", "de", "pl", "es"]);
+  const PRODUKCNI_LAYOUT_SET = new Set(PRODUKCNI_LAYOUTY);
+
   const PINYIN = Object.freeze({
     ni: "你妳尼呢泥逆拟", hao: "好号浩豪郝毫", wo: "我握窝卧沃", shi: "是时事十市使世式识师诗", de: "的得德地", bu: "不部步布补", zai: "在再载灾", ren: "人认任仁", zhong: "中种重众终钟", guo: "国过果锅郭", men: "们门闷", ta: "他她它塔", you: "有又友右由游", he: "和喝河合何核", le: "了乐勒", ma: "吗妈马嘛麻", shen: "什神深身", me: "么", yi: "一以已意衣易医义", ge: "个各歌哥格", zhe: "这着者折", na: "那哪拿纳", lai: "来赖莱", qu: "去取区曲", shang: "上商尚伤", xia: "下夏吓", da: "大达打", xiao: "小笑校晓", tian: "天田填甜", di: "地第低底", ai: "爱矮挨哎", xin: "心新信辛", shui: "水谁睡税", huo: "火或活货", mu: "木目母暮", jin: "今进金近", tu: "图土兔途", ri: "日", yue: "月越约", nian: "年念", ming: "明名命", zuo: "做作坐左", xie: "谢写些鞋", qing: "请情青清", wen: "问文闻温", kan: "看刊砍", chi: "吃持迟", xiang: "想向象香", yao: "要药摇", neng: "能", hui: "会回灰", hen: "很恨", dou: "都斗豆", ye: "也夜业", mei: "没美每妹", jia: "家加假价", xue: "学雪血", sheng: "生声省", gong: "工公功共", kai: "开凯", dian: "点电店", hua: "话花华画", che: "车彻", qian: "前钱千", hou: "后候", li: "里理力立", wai: "外", chang: "长常场唱", duan: "短段端", gao: "高告搞", kuai: "快块", man: "慢满", duo: "多", shao: "少", dui: "对队", cuo: "错", keyi: ["可以"], meiyou: ["没有"], nihao: ["你好"], xiexie: ["谢谢"], zaijian: ["再见"], zhongguo: ["中国"], women: ["我们"], nimen: ["你们"], shijie: ["世界"], pengyou: ["朋友"], jintian: ["今天"], mingtian: ["明天"]
   });
@@ -322,6 +355,10 @@
   let hangulState = { L: null, V: null, T: null };
   let observer = null;
   let systemovyEditor = null;
+  /* PATCH 456 – po ručním skrytí klávesnice nesmí pouhý focus/focusin
+     okamžitě znovu zavolat zobraz(). Znovu ji otevře až explicitní tap
+     do editoru nebo tlačítko ⌨. To je důležité i pro obrázkové modaly. */
+  let potlacAutomatickeOtevreni = false;
   let zakladniViewportHeight = 0;
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
@@ -331,28 +368,52 @@
     return window.LubaNoteEditorV2 || null;
   }
 
+  /* PATCH 459 – volba zdroje klávesnice je nastavení aplikace, ne
+     plovoucí přepínač uvnitř editoru. Výchozí zůstává LubaKeyboard. */
+  function ziskejZdrojKlavesnice() {
+    try {
+      return localStorage.getItem(ULOZ_ZDROJ) === "system" ? "system" : "luba";
+    } catch (_error) {
+      return "luba";
+    }
+  }
+
+  function nastavLubaAtributy(editor) {
+    if (!editor) return;
+    editor.setAttribute("inputmode", "none");
+    editor.setAttribute("autocorrect", "off");
+    editor.setAttribute("autocomplete", "off");
+    editor.setAttribute("autocapitalize", "off");
+    editor.setAttribute("spellcheck", "false");
+    editor.setAttribute("virtualkeyboardpolicy", "manual");
+    editor.dataset.lubaKeyboard = "universal-v1";
+  }
+
+  function nastavSystemoveAtributy(editor) {
+    if (!editor) return;
+    editor.setAttribute("inputmode", "text");
+    editor.removeAttribute("virtualkeyboardpolicy");
+    editor.setAttribute("autocorrect", "on");
+    editor.setAttribute("autocomplete", "on");
+    editor.setAttribute("autocapitalize", "sentences");
+    editor.setAttribute("spellcheck", "true");
+    delete editor.dataset.lubaKeyboard;
+  }
+
   function nactiLayout() {
     const saved = localStorage.getItem(ULOZ_LAYOUT);
-    if (saved && LAYOUTY[saved]) return saved;
+    if (saved && PRODUKCNI_LAYOUT_SET.has(saved)) return saved;
+    if (saved && !PRODUKCNI_LAYOUT_SET.has(saved)) {
+      /* Starý experimentální layout nesmí po upgradu obejít produkční výběr. */
+      try { localStorage.removeItem(ULOZ_LAYOUT); } catch (_error) {}
+    }
+
     const lang = String(navigator.language || "").toLowerCase();
-    if (lang.startsWith("cs") || lang.startsWith("sk")) return "cs";
+    if (lang.startsWith("cs")) return "cs";
+    if (lang.startsWith("sk")) return "sk";
     if (lang.startsWith("de")) return "de";
-    if (lang.startsWith("fr")) return "fr";
-    if (lang.startsWith("es")) return "es";
     if (lang.startsWith("pl")) return "pl";
-    if (lang.startsWith("tr")) return "tr";
-    if (lang.startsWith("vi")) return "vi";
-    if (lang.startsWith("ru")) return "ru";
-    if (lang.startsWith("uk")) return "uk";
-    if (lang.startsWith("el")) return "el";
-    if (lang.startsWith("ar")) return "ar";
-    if (lang.startsWith("fa")) return "fa";
-    if (lang.startsWith("he")) return "he";
-    if (lang.startsWith("hi")) return "hi";
-    if (lang.startsWith("th")) return "th";
-    if (lang.startsWith("ja")) return "ja";
-    if (lang.startsWith("ko")) return "ko";
-    if (lang.startsWith("zh")) return "zh";
+    if (lang.startsWith("es")) return "es";
     return "en";
   }
 
@@ -493,6 +554,20 @@
       .slice(0, 3);
   }
 
+  /* PATCH 455 – dlouhé návrhy zkracujeme UPROSTŘED, ne na konci.
+     Plná hodnota zůstává v data-lk-value, takže kliknutí vždy vloží celé
+     slovo; zkrácený je pouze text tlačítka. */
+  function zkratNavrhUprostred(text, maxZnaku = 13) {
+    const value = String(text || "");
+    const chars = Array.from(value);
+    if (chars.length <= maxZnaku) return value;
+
+    const body = Math.max(4, maxZnaku - 3);
+    const vlevo = Math.ceil(body / 2);
+    const vpravo = Math.floor(body / 2);
+    return `${chars.slice(0, vlevo).join("")}...${chars.slice(-vpravo).join("")}`;
+  }
+
   function aktualizujNavrhy() {
     if (!navrhyBox) return;
     const layout = aktualniLayout();
@@ -504,8 +579,10 @@
     const navrhy = vypocitejNavrhy();
     while (navrhy.length < 3) navrhy.push("");
     navrhy.slice(0, 3).forEach((value, index) => {
-      const b = button(value || " ", "suggestion", value, `ln-lk-suggestion ln-lk-suggestion-${index + 1}`,
+      const zobrazene = value ? zkratNavrhUprostred(value, window.innerWidth <= 390 ? 12 : 14) : " ";
+      const b = button(zobrazene, "suggestion", value, `ln-lk-suggestion ln-lk-suggestion-${index + 1}`,
         value ? `Návrh slova: ${value}` : "Prázdný návrh");
+      if (value) b.title = value;
       if (!value) b.disabled = true;
       navrhyBox.appendChild(b);
     });
@@ -573,6 +650,17 @@
   }
 
   function schovejSystemovou() {
+    /*
+     * PATCH 457 – obrana proti náhodnému otevření systémové IME v APK.
+     * Core V2 už vzniká s inputmode=none (viz editorCoreV2.js), ale při
+     * lifecycle/focus závodu některý WebView umí atribut přepsat/ignorovat.
+     * Před každým pokusem o hide proto bezpečně znovu potvrdíme režim
+     * vlastní klávesnice. Do explicitního „systémového režimu“ nesaháme.
+     */
+    const editor = aktivniEditor || najdiEditor();
+    if (editor && editor !== systemovyEditor && ziskejZdrojKlavesnice() !== "system") {
+      nastavLubaAtributy(editor);
+    }
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
   }
 
@@ -584,30 +672,47 @@
       ulozZakladniViewport();
     }
 
-    /* Dočasný systémový režim platí do blur tohoto konkrétního editoru. */
-    if (editor === systemovyEditor) return;
-    editor.setAttribute("inputmode", "none");
-    editor.setAttribute("autocorrect", "off");
-    editor.setAttribute("autocomplete", "off");
-    editor.setAttribute("autocapitalize", "off");
-    editor.setAttribute("spellcheck", "false");
-    editor.setAttribute("virtualkeyboardpolicy", "manual");
-    editor.dataset.lubaKeyboard = "universal-v1";
+    /* PATCH 459 – systémová klávesnice se volí trvale v Nastavení aplikace.
+       Musíme ji připravit ještě PŘED prvním editor.focus(), jinak by Core V2
+       se svým výchozím inputmode=none systémovou IME vůbec neotevřel. */
+    if (ziskejZdrojKlavesnice() === "system") {
+      systemovyEditor = editor;
+      nastavSystemoveAtributy(editor);
+      if (panel && !panel.hidden) skryj();
+      if (otevritButton) otevritButton.hidden = true;
+      return;
+    }
+
+    if (editor === systemovyEditor) systemovyEditor = null;
+    nastavLubaAtributy(editor);
 
     if (editor.dataset.lubaKeyboardEvents === "1") return;
     editor.dataset.lubaKeyboardEvents = "1";
 
-    const aktivuj = () => {
+    const aktivujFocusem = () => {
       aktivniEditor = editor;
+      if (ziskejZdrojKlavesnice() === "system") return;
+      if (potlacAutomatickeOtevreni) return;
       zobraz();
       requestAnimationFrame(schovejSystemovou);
       setTimeout(schovejSystemovou, 50);
       setTimeout(schovejSystemovou, 160);
     };
 
-    editor.addEventListener("focus", aktivuj, true);
-    editor.addEventListener("pointerup", aktivuj, true);
-    editor.addEventListener("touchend", aktivuj, { capture: true, passive: true });
+    const aktivujDotykem = () => {
+      aktivniEditor = editor;
+      if (ziskejZdrojKlavesnice() === "system") return;
+      /* Explicitní tap do editoru je vědomý požadavek znovu psát. */
+      potlacAutomatickeOtevreni = false;
+      zobraz();
+      requestAnimationFrame(schovejSystemovou);
+      setTimeout(schovejSystemovou, 50);
+      setTimeout(schovejSystemovou, 160);
+    };
+
+    editor.addEventListener("focus", aktivujFocusem, true);
+    editor.addEventListener("pointerup", aktivujDotykem, true);
+    editor.addEventListener("touchend", aktivujDotykem, { capture: true, passive: true });
   }
 
 
@@ -874,7 +979,10 @@
         row.appendChild(button("ABC", "symbols", "", "ln-lk-std-symbols", "Zpět na písmena"));
         row.appendChild(button(symbolPage === 0 ? "=\\<" : "?123", "symbols-more", "", "ln-lk-std-more", "Další symboly"));
       }
-      row.appendChild(button(",", "text", ",", "ln-lk-std-punct", "Čárka"));
+      const carka = button(",", "text", ",", "ln-lk-std-punct ln-lk-comma-settings",
+        "Čárka – podržením nastavení klávesnice");
+      carka.dataset.lkLongAction = "chooser";
+      row.appendChild(carka);
       row.appendChild(button("mezera", "space", "", "ln-lk-space ln-lk-std-space", "Mezera"));
       const tecka = button(".", "text", ".", "ln-lk-std-punct has-alt", "Tečka – podržením další znaky");
       tecka.dataset.lkAlt = JSON.stringify(TECKA_ALT);
@@ -975,7 +1083,7 @@
   }
 
   function nastavLayout(id) {
-    if (!LAYOUTY[id]) return;
+    if (!LAYOUTY[id] || !PRODUKCNI_LAYOUT_SET.has(id)) return;
     flushCompose("switch-layout", false);
     layoutId = id;
     mode = "letters";
@@ -988,7 +1096,9 @@
 
   function skupinyLayoutu() {
     const map = new Map();
-    Object.values(LAYOUTY).forEach((layout) => {
+    PRODUKCNI_LAYOUTY.forEach((id) => {
+      const layout = LAYOUTY[id];
+      if (!layout) return;
       if (!map.has(layout.skupina)) map.set(layout.skupina, []);
       map.get(layout.skupina).push(layout);
     });
@@ -1000,7 +1110,7 @@
     chooser.replaceChildren();
     const head = document.createElement("div");
     head.className = "ln-lk-chooser-head";
-    head.innerHTML = `<strong>Jazyk a písmo</strong><span>Unicode fallback zpřístupní libovolný znak.</span>`;
+    head.innerHTML = `<strong>Klávesnice a jazyk</strong><span>LubaKeyboard je výchozí · produkční jazyky V1</span>`;
     chooser.appendChild(head);
 
     for (const [name, layouts] of skupinyLayoutu()) {
@@ -1024,15 +1134,6 @@
       chooser.appendChild(section);
     }
 
-    const footer = document.createElement("div");
-    footer.className = "ln-lk-chooser-footer";
-    const system = document.createElement("button");
-    system.type = "button";
-    system.className = "ln-lk-system-choice";
-    system.dataset.lkSystem = "1";
-    system.textContent = "Dočasně použít systémovou klávesnici";
-    footer.appendChild(system);
-    chooser.appendChild(footer);
     chooser.hidden = false;
     requestAnimationFrame(nastavVysku);
   }
@@ -1041,24 +1142,48 @@
     if (chooser) chooser.hidden = true;
   }
 
-  function systemMode() {
+  function ukonciSystemMode(editor = systemovyEditor) {
+    if (!editor) return;
+    systemovyEditor = null;
+    nastavLubaAtributy(editor);
+    if (otevritButton) otevritButton.hidden = true;
+  }
+
+  function systemMode({ focus = false } = {}) {
     flushCompose("system-mode", false);
     zavriChooser();
-    skryj();
+    if (panel && !panel.hidden) skryj();
     const editor = aktivniEditor || najdiEditor();
-    if (!editor) return;
-    editor.setAttribute("inputmode", "text");
-    editor.setAttribute("autocorrect", "on");
-    editor.setAttribute("autocapitalize", "sentences");
-    editor.setAttribute("spellcheck", "true");
-    systemovyEditor = editor;
-    try { editor.focus({ preventScroll: true }); } catch (_error) {}
+    if (!editor) return false;
 
-    editor.addEventListener("blur", () => {
-      if (systemovyEditor !== editor) return;
-      systemovyEditor = null;
-      pripravEditor(editor);
-    }, { once: true });
+    systemovyEditor = editor;
+    nastavSystemoveAtributy(editor);
+    if (otevritButton) otevritButton.hidden = true;
+
+    if (focus) {
+      try { editor.focus({ preventScroll: true }); } catch (_error) {}
+    }
+    return true;
+  }
+
+  function nastavZdrojKlavesnice(zdroj) {
+    const novy = zdroj === "system" ? "system" : "luba";
+    try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
+
+    const editor = aktivniEditor || najdiEditor();
+    if (editor) {
+      if (novy === "system") {
+        systemMode({ focus: false });
+      } else {
+        ukonciSystemMode(editor);
+        potlacAutomatickeOtevreni = false;
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
+      detail: { source: novy }
+    }));
+    return novy;
   }
 
   function insertCore(text) {
@@ -1542,8 +1667,14 @@
     altAktivniRadek = "bottom";
     aktivniAltVolba = null;
     posledniAltVolba = null;
-    if (!buttonEl?.dataset.lkAlt) return;
+    const longAction = String(buttonEl?.dataset.lkLongAction || "");
+    if (!buttonEl?.dataset.lkAlt && !longAction) return;
     longPressTimer = setTimeout(() => {
+      if (longAction) {
+        longPressUsed = true;
+        provedAkci(longAction);
+        return;
+      }
       otevriAlt(buttonEl);
       haptic();
     }, 420);
@@ -1578,17 +1709,19 @@
     panel.hidden = true;
     panel.setAttribute("aria-label", "LubaNote vlastní klávesnice");
     panel.innerHTML = `
-      <div class="ln-lk-top">
-        <div class="ln-lk-brand"><span class="ln-lk-logo">L</span><strong>LubaKeyboard</strong></div>
-        <div class="ln-lk-history">
-          <button type="button" data-lk-action="undo" tabindex="-1" aria-label="Zpět">↶</button>
-          <button type="button" data-lk-action="redo" tabindex="-1" aria-label="Znovu">↷</button>
-        </div>
-        <button type="button" class="ln-lk-language" data-lk-action="chooser" tabindex="-1"></button>
-        <button type="button" class="ln-lk-actions-toggle" tabindex="-1" aria-label="Zobrazit akční panel editoru" aria-expanded="false">︿</button>
-        <button type="button" class="ln-lk-hide" data-lk-action="hide" tabindex="-1" aria-label="Skrýt klávesnici">⌄</button>
+      <!--
+        PATCH 454 – hlavní pracovní řádek LubaKeyboard.
+        Místo loga/Undo/Redo/jazyka držíme to, co je při psaní opravdu
+        potřeba: ✓ akce editoru + 3 návrhy + skrýt. Nastavení/jazyk je
+        od 455 na long-press čárky, takže návrhy dostaly více místa.
+      -->
+      <div class="ln-lk-smartbar">
+        <button type="button" class="ln-lk-actions-toggle" tabindex="-1"
+          aria-label="Zobrazit akční panel editoru" aria-expanded="false">✅</button>
+        <div class="ln-lk-suggestions" aria-label="Návrhy slov"></div>
+        <button type="button" class="ln-lk-hide" data-lk-action="hide" tabindex="-1"
+          aria-label="Skrýt klávesnici">⌄</button>
       </div>
-      <div class="ln-lk-suggestions" aria-label="Návrhy slov"></div>
       <div class="ln-lk-compose" hidden>
         <div class="ln-lk-compose-text"></div>
         <div class="ln-lk-candidates"></div>
@@ -1601,7 +1734,9 @@
     navrhyBox = panel.querySelector(".ln-lk-suggestions");
     composeBox = panel.querySelector(".ln-lk-compose");
     candidates = panel.querySelector(".ln-lk-candidates");
-    jazykButton = panel.querySelector(".ln-lk-language");
+    /* Jazyk se od 454 vybírá přes ⚙ Nastavení. Samostatné jazykové
+       tlačítko v hlavním řádku už zbytečně nebere místo návrhům. */
+    jazykButton = null;
     akcniPanelButton = panel.querySelector(".ln-lk-actions-toggle");
     chooser = panel.querySelector(".ln-lk-chooser");
 
@@ -1644,7 +1779,12 @@
       stopRepeat();
       if (longPressUsed) {
         event.preventDefault();
-        potvrditAltPrstem(event);
+        if (!potvrditAltPrstem(event)) {
+          /* Long-press akce bez alt popupu (např. Nastavení na čárce)
+             musí po uvolnění prstu jen potlačit běžný tap a uklidit stav. */
+          longPressUsed = false;
+          longPressPointerId = null;
+        }
         return;
       }
       longPressPointerId = null;
@@ -1671,11 +1811,6 @@
         nastavLayout(choice.dataset.lkLayout);
         return;
       }
-      const system = event.target.closest("button[data-lk-system]");
-      if (system) {
-        event.preventDefault();
-        systemMode();
-      }
     }, true);
 
     altPopup.addEventListener("pointerdown", (event) => event.preventDefault(), true);
@@ -1699,8 +1834,15 @@
     otevritButton.addEventListener("click", () => {
       aktivniEditor = najdiEditor();
       if (aktivniEditor) {
+        /* Tlačítko slouží jen k opětovnému otevření RUČNĚ skryté
+           LubaKeyboard. Přepínač systémové klávesnice je od 459 pouze
+           v Nastavení aplikace. */
+        if (ziskejZdrojKlavesnice() === "system") return;
+        potlacAutomatickeOtevreni = false;
         pripravEditor(aktivniEditor);
         zobraz();
+        try { aktivniEditor.focus({ preventScroll: true }); } catch (_error) {}
+        requestAnimationFrame(schovejSystemovou);
       }
     });
 
@@ -1727,6 +1869,26 @@
    * vysunout NAD klávesnici bez jejího zavření. Další tap ho zase sbalí.
    * Po skrytí LubaKeyboard se akční panel vždy automaticky vrátí.
    */
+  function nastavIkonuUlozeniAkcnihoPanelu(_otevreno) {
+    const tlacitko =
+      document.getElementById("editorBackButton");
+    const hostitel =
+      tlacitko?.querySelector?.("[data-luba-icon]");
+
+    if (!hostitel) return;
+
+    /*
+     * PATCH 457 – ✅ patří výhradně do smartbaru LubaKeyboard jako
+     * přepínač akčního panelu. V samotném editorBottomBar je první akce
+     * VŽDY 💾 Uložit a zavřít, bez ohledu na stav klávesnice/panelu.
+     * Nesmíme ji při skrytí klávesnice vracet na staré „hotovo“.
+     */
+    hostitel.dataset.lubaIcon = "zaloha";
+
+    window.LubaNoteIcons
+      ?.naplnDeklarovaneIkony?.(tlacitko);
+  }
+
   function nastavAkcniPanel(otevrit) {
     akcniPanelOtevren = Boolean(otevrit);
     const body = document.body;
@@ -1739,13 +1901,19 @@
     }
 
     if (akcniPanelButton) {
-      akcniPanelButton.textContent = akcniPanelOtevren ? "﹀" : "︿";
+      /* ✓ zůstává na stejném místě i po vysunutí panelu – uživatel tak
+         nemusí hledat jiný ovladač. Dalším tapem panel zase sbalí. */
+      akcniPanelButton.textContent = "✅";
       akcniPanelButton.setAttribute("aria-expanded", akcniPanelOtevren ? "true" : "false");
       akcniPanelButton.setAttribute(
         "aria-label",
         akcniPanelOtevren ? "Skrýt akční panel editoru" : "Zobrazit akční panel editoru"
       );
     }
+
+    nastavIkonuUlozeniAkcnihoPanelu(
+      Boolean(panel && !panel.hidden && akcniPanelOtevren)
+    );
 
     /* display:none editorBottomBar mění dostupnou výšku V2 hostu. Flex layout
        si nový prostor dopočítá sám; do caret/selection/modelu nesaháme. */
@@ -1755,10 +1923,15 @@
   }
 
   function zobraz() {
-    vytvorPanel();
+    potlacAutomatickeOtevreni = false;
     const editor = aktivniEditor || najdiEditor();
     if (!editor) return;
-    if (editor === systemovyEditor) return;
+    if (ziskejZdrojKlavesnice() === "system" || editor === systemovyEditor) {
+      systemovyEditor = editor;
+      nastavSystemoveAtributy(editor);
+      return;
+    }
+    vytvorPanel();
     if (!document.body.classList.contains("ln-luba-klavesnice-open")) {
       ulozZakladniViewport();
     }
@@ -1797,6 +1970,9 @@
   }
 
   function skryj() {
+    /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
+       jej nesmí hned přebít focusin událostí. */
+    potlacAutomatickeOtevreni = true;
     if (!panel) return;
     flushCompose("hide", false);
     panel.hidden = true;
@@ -1806,10 +1982,11 @@
     document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
     akcniPanelOtevren = false;
     if (akcniPanelButton) {
-      akcniPanelButton.textContent = "︿";
+      akcniPanelButton.textContent = "✅";
       akcniPanelButton.setAttribute("aria-expanded", "false");
       akcniPanelButton.setAttribute("aria-label", "Zobrazit akční panel editoru");
     }
+    nastavIkonuUlozeniAkcnihoPanelu(false);
     document.documentElement.style.removeProperty("--ln-lk-height");
     document.documentElement.style.removeProperty("--ln-lk-editor-height");
     document.documentElement.style.removeProperty("--ln-lk-base-height");
@@ -1819,6 +1996,10 @@
 
     const modal = document.querySelector(".taskModal:not([hidden])");
     const editor = najdiEditor();
+    if (ziskejZdrojKlavesnice() === "system") {
+      if (otevritButton) otevritButton.hidden = true;
+      return;
+    }
     if (otevritButton && modal && editor && modal.contains(editor)) {
       otevritButton.hidden = false;
       requestAnimationFrame(pozicujOtevritButton);
@@ -1867,8 +2048,14 @@
   document.addEventListener("focusin", (event) => {
     if (!jeEditorV2(event.target)) return;
     aktivniEditor = event.target;
-    if (event.target === systemovyEditor) return;
+    if (ziskejZdrojKlavesnice() === "system" || event.target === systemovyEditor) {
+      systemovyEditor = event.target;
+      nastavSystemoveAtributy(event.target);
+      if (otevritButton) otevritButton.hidden = true;
+      return;
+    }
     pripravEditor(event.target);
+    if (potlacAutomatickeOtevreni) return;
     zobraz();
   }, true);
 
@@ -1907,12 +2094,14 @@
      ========================================================== */
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "LAYOUT-STABILITY-450",
+    verze: "SETTINGS-SYSTEM-459",
     zobraz,
     skryj,
     nastavLayout,
     pripravEditor,
     ziskejLayout: () => layoutId,
+    ziskejZdroj: ziskejZdrojKlavesnice,
+    nastavZdroj: nastavZdrojKlavesnice,
     jeOtevrena: () => Boolean(panel && !panel.hidden),
     vlozUnicode: (codePoint) => {
       const cp = Number(codePoint);

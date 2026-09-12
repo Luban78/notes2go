@@ -3543,6 +3543,50 @@
           dataUrl,
           file
         );
+
+      /*
+       * FIX 454 – EDITOR CORE V2 MUSÍ DOSTAT OBRÁZEK PŘÍMO DO MODELU.
+       *
+       * Bridge má od V2.10 vlastní API `vlozPripravenyObrazek()`, ale
+       * editorMedia ho dosud po návratu z Galerie/Fotoaparátu vůbec
+       * nevolal. Obrázek se proto vložil do skrytého legacy
+       * #modalRichText, zatímco aktivní Core V2 dál držel svůj původní
+       * model. Výsledek byl náhodný: obrázek se po návratu někdy neukázal,
+       * při dalším přepočtu mohl zmizet a při opakovaných pokusech se mohly
+       * objevit vícenásobné legacy kopie.
+       *
+       * V aktivním V2 tedy po kompresi + attachment cache předáme hotová
+       * data rovnou modelu a legacy DOM se vůbec nedotkneme. Legacy editor
+       * zůstává beze změny jako fallback.
+       */
+      const v2Bridge =
+        window.LubaNoteEditorV2Bridge;
+
+      if (
+        v2Bridge?.jeAktivni?.() === true &&
+        typeof v2Bridge.vlozPripravenyObrazek ===
+          "function"
+      ) {
+        const vlozenoDoV2 =
+          v2Bridge.vlozPripravenyObrazek({
+            dataUrl,
+            fileName: file.name || "",
+            alt: file.name ?
+              `Obrázek: ${file.name}` :
+              "Obrázek v poznámce",
+            attachmentId: attachmentId || "",
+            velikost: "prizpusobit",
+            zarovnani: "stred"
+          });
+
+        if (!vlozenoDoV2) {
+          throw new Error(
+            "Editor V2 obrázek nepřevzal do modelu."
+          );
+        }
+
+        return;
+      }
       
       const figure = vytvorBlokObrazku(
         dataUrl,

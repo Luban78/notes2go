@@ -20,6 +20,15 @@
   const currentIconStyleLabel =
     document.getElementById("currentIconStyleLabel");
 
+  const openKeyboardModeSettingsButton =
+    document.getElementById("openKeyboardModeSettingsButton");
+
+  const currentKeyboardModeLabel =
+    document.getElementById("currentKeyboardModeLabel");
+
+  const LUBANOTE_KEYBOARD_SOURCE_KEY =
+    "lubanote_lubakeyboard_input_source_v1";
+
   const openReminderDelaySettingsButton =
   document.getElementById(
     "openReminderDelaySettingsButton"
@@ -695,6 +704,77 @@ openReminderDelaySettingsButton?.addEventListener(
       ziskejPopisekStyluIkon(hodnota);
   }
 
+  function ziskejZdrojKlavesniceProNastaveni() {
+    const api = window.LubaNoteKeyboard;
+    if (typeof api?.ziskejZdroj === "function") {
+      return api.ziskejZdroj();
+    }
+
+    try {
+      return localStorage.getItem(LUBANOTE_KEYBOARD_SOURCE_KEY) === "system"
+        ? "system"
+        : "luba";
+    } catch (_) {
+      return "luba";
+    }
+  }
+
+  function textNastaveniKlavesnice(klic, zaloha) {
+    return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha;
+  }
+
+  function nastavPopisekKlavesnice() {
+    if (!currentKeyboardModeLabel) return;
+    const zdroj = ziskejZdrojKlavesniceProNastaveni();
+    currentKeyboardModeLabel.textContent = zdroj === "system"
+      ? textNastaveniKlavesnice("settings.keyboardSystem", "Systémová")
+      : "LubaKeyboard";
+  }
+
+  function otevriModalKlavesnice() {
+    if (typeof window.otevriVyberovyModal !== "function") {
+      console.error("Chybí choiceModal.js – výběr klávesnice nelze otevřít.");
+      return;
+    }
+
+    window.otevriVyberovyModal({
+      nadpis: textNastaveniKlavesnice("settings.keyboardTitle", "Klávesnice editoru"),
+      moznosti: [
+        {
+          hodnota: "luba",
+          popisek: textNastaveniKlavesnice(
+            "settings.keyboardLuba",
+            "LubaKeyboard (výchozí)"
+          )
+        },
+        {
+          hodnota: "system",
+          popisek: textNastaveniKlavesnice(
+            "settings.keyboardSystemLong",
+            "Systémová klávesnice (Gboard / iOS)"
+          )
+        }
+      ],
+      vybranaHodnota: ziskejZdrojKlavesniceProNastaveni(),
+      poVyberu: (zdroj) => {
+        if (typeof window.LubaNoteKeyboard?.nastavZdroj === "function") {
+          window.LubaNoteKeyboard.nastavZdroj(zdroj);
+        } else {
+          try {
+            localStorage.setItem(
+              LUBANOTE_KEYBOARD_SOURCE_KEY,
+              zdroj === "system" ? "system" : "luba"
+            );
+          } catch (_) {}
+          window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
+            detail: { source: zdroj === "system" ? "system" : "luba" }
+          }));
+        }
+        nastavPopisekKlavesnice();
+      }
+    });
+  }
+
   function otevriModalStyluIkon() {
     if (
       typeof window.otevriVyberovyModal !==
@@ -768,6 +848,7 @@ openReminderDelaySettingsButton?.addEventListener(
     "auto";
 
   nastavPopisekStyluIkon(ulozenyStylIkon);
+  nastavPopisekKlavesnice();
 
   increaseFontButton.addEventListener("click", () => {
     currentFontSize = Math.min(
@@ -807,6 +888,16 @@ openReminderDelaySettingsButton?.addEventListener(
     otevriModalStyluIkon
   );
 
+  openKeyboardModeSettingsButton?.addEventListener(
+    "click",
+    otevriModalKlavesnice
+  );
+
+  window.addEventListener(
+    "lubanote:keyboard-source-change",
+    nastavPopisekKlavesnice
+  );
+
   window.addEventListener(
     "lubanote:icon-style-change",
     () => {
@@ -830,6 +921,8 @@ openReminderDelaySettingsButton?.addEventListener(
         window.LubaNoteIcons?.ziskejStylIkon?.() ||
         "auto"
       );
+
+      nastavPopisekKlavesnice();
     }
   );
 
