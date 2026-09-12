@@ -651,11 +651,17 @@ body.ln-lk-old-android-nav .ln-lk-alt-key.is-slide-selected {
  */
 @media (max-width: 899px) {
   body.ln-luba-klavesnice-open .taskModal:not([hidden]) .modalContent {
-    /* PATCH 450 – výšku dodává JS z reálné horní hrany LubaKeyboard.
-       Fallback zůstává jen pro jediný frame před prvním měřením. */
+    /* PATCH 452 – LubaKeyboard už sama leží NAD systémovou navigací.
+       Base .modalContent má padding-bottom: env(safe-area-inset-bottom).
+       Na Androidu 16 je tato hodnota ~48 px. Po zmenšení modalu přesně
+       k horní hraně vlastní klávesnice by se safe-area odečetla PODRUHÉ
+       a vytvořila přesně diagnostikovanou mezeru 49 px mezi toolbar-em
+       a LubaKeyboard. V režimu vlastní klávesnice proto bottom safe-area
+       patří klávesnici, ne editorovému modalu. */
     top: 0;
     height: var(--ln-lk-editor-height, calc(100dvh - var(--ln-lk-height, 260px)));
     max-height: var(--ln-lk-editor-height, calc(100dvh - var(--ln-lk-height, 260px)));
+    padding-bottom: 0;
   }
 }
 
