@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – LUBAKBOARD APK INSETS (PATCH 449)
+   LUBANOTE – LUBAKBOARD LAYOUT STABILITY (PATCH 450)
    Vizuálně používá pouze barvy / povrchy aktuálního LubaNote motivu.
    ============================================================== */
 
@@ -561,10 +561,16 @@ body.ln-lk-old-android-nav {
 
 .ln-lk-alt-key.is-preferred {
   border-color: var(--color-accent, #7444dc);
+  /* fallback pro Chrome/WebView 103, který neumí color-mix() */
+  background: var(--color-surface, #222);
   background: color-mix(in srgb, var(--color-accent, #7444dc) 18%, var(--color-surface, #222));
 }
 
 .ln-lk-alt-key.is-slide-selected {
+  /* PATCH 450 – WebView 103 neumí color-mix(). V 449 proto zůstala
+     vybraná varianta prakticky průhledná a nebylo vidět, co prst volí. */
+  border-color: var(--color-accent, #7444dc);
+  background: var(--color-accent, #7444dc);
   border-color: color-mix(in srgb, var(--color-accent, #7444dc) 70%, white 30%);
   background: color-mix(in srgb, var(--color-accent, #7444dc) 68%, var(--color-surface, #222));
   color: #fff;
@@ -593,6 +599,27 @@ body.ln-lk-old-android-nav {
 /* PATCH 448 – 3 řady tečky musí zůstat kompaktní i na úzkém telefonu. */
 .ln-lk-alt-popup.is-three-rows {
   max-width: min(270px, calc(100vw - 12px));
+}
+
+/* PATCH 450 – explicitní kompatibilita pro Android WebView <=110.
+   Žádný color-mix: popup i jednotlivé varianty musí být plně čitelné. */
+body.ln-lk-old-android-nav .ln-lk-alt-popup {
+  background: var(--color-surface, #211b29) !important;
+  border: 2px solid var(--color-accent, #7444dc) !important;
+}
+
+body.ln-lk-old-android-nav .ln-lk-alt-key {
+  opacity: 1 !important;
+  background: var(--color-editor-background, var(--color-surface, #211b29)) !important;
+  color: var(--color-editor-text, var(--color-text, #fff)) !important;
+  border: 1px solid var(--color-border, #777) !important;
+}
+
+body.ln-lk-old-android-nav .ln-lk-alt-key.is-slide-selected {
+  background: var(--color-accent, #7444dc) !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+  transform: scale(1.08);
 }
 
 /* PATCH 444 – tlačítko pro znovuotevření klávesnice nesmí překrývat
@@ -624,9 +651,11 @@ body.ln-lk-old-android-nav {
  */
 @media (max-width: 899px) {
   body.ln-luba-klavesnice-open .taskModal:not([hidden]) .modalContent {
-    top: var(--ln-lk-base-top, var(--visual-top, 0px));
-    height: calc(var(--ln-lk-base-height, var(--visual-height, 100dvh)) - var(--ln-lk-height, 260px));
-    max-height: calc(var(--ln-lk-base-height, var(--visual-height, 100dvh)) - var(--ln-lk-height, 260px));
+    /* PATCH 450 – výšku dodává JS z reálné horní hrany LubaKeyboard.
+       Fallback zůstává jen pro jediný frame před prvním měřením. */
+    top: 0;
+    height: var(--ln-lk-editor-height, calc(100dvh - var(--ln-lk-height, 260px)));
+    max-height: var(--ln-lk-editor-height, calc(100dvh - var(--ln-lk-height, 260px)));
   }
 }
 

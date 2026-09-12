@@ -610,8 +610,32 @@
 
   function nastavVysku() {
     if (!panel || panel.hidden) return;
-    const height = Math.ceil(panel.getBoundingClientRect().height || 0);
+
+    const panelRect = panel.getBoundingClientRect();
+    const height = Math.ceil(panelRect.height || 0);
     document.documentElement.style.setProperty("--ln-lk-height", `${height}px`);
+
+    /*
+     * PATCH 450 – EDITOR KONČÍ PŘESNĚ NA HORNÍ HRANĚ LUBAKEYBOARD.
+     * -----------------------------------------------------------
+     * 449 ještě odvozoval výšku editoru z dříve zapamatovaného viewportu.
+     * Na některých nových Android WebView se ale visualViewport může změnit
+     * už během focusu, takže uložená základní výška byla o desítky px menší
+     * a mezi editorBottomBar a klávesnicí vznikla viditelná mezera.
+     *
+     * Zdrojem pravdy je teď skutečná geometrie: modalContent a fixed panel
+     * jsou ve stejném viewportu, takže výška editoru = panel.top - modal.top.
+     * Tím je řešení nezávislé na verzi Androidu, gesture/3-button navigaci
+     * i na tom, jak konkrétní WebView reportuje visualViewport.
+     */
+    const modal = document.querySelector(".taskModal:not([hidden]) .modalContent");
+    if (modal) {
+      const modalRect = modal.getBoundingClientRect();
+      const editorHeight = Math.max(0, Math.floor(panelRect.top - modalRect.top));
+      if (editorHeight > 0) {
+        document.documentElement.style.setProperty("--ln-lk-editor-height", `${editorHeight}px`);
+      }
+    }
   }
 
   function button(label, action, value = "", classes = "", aria = "") {
@@ -1643,9 +1667,20 @@
 
   function pozicujOtevritButton() {
     if (!otevritButton || otevritButton.hidden) return;
-    const bottomBar = document.querySelector(".taskModal:not([hidden]) .editorBottomBar");
+
+    /* PATCH 450 – tlačítko ⌨ smí existovat pouze v OTEVŘENÉM editoru.
+       Při zavření V2 hostu je editor ještě pár ms připojený v DOM, takže
+       samotné najdiEditor() v 449 nestačilo a tlačítko uniklo na home. */
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    const editor = najdiEditor();
+    if (!modal || !editor || !modal.contains(editor)) {
+      otevritButton.hidden = true;
+      return;
+    }
+
+    const bottomBar = modal.querySelector(".editorBottomBar");
     if (!bottomBar) {
-      otevritButton.style.bottom = "72px";
+      otevritButton.hidden = true;
       return;
     }
     const rect = bottomBar.getBoundingClientRect();
@@ -1661,13 +1696,24 @@
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
     document.documentElement.style.removeProperty("--ln-lk-height");
+    document.documentElement.style.removeProperty("--ln-lk-editor-height");
     document.documentElement.style.removeProperty("--ln-lk-base-height");
     document.documentElement.style.removeProperty("--ln-lk-base-top");
     zakladniViewportHeight = 0;
     zakladniViewportTop = 0;
-    if (otevritButton && najdiEditor()) {
+
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    const editor = najdiEditor();
+    if (otevritButton && modal && editor && modal.contains(editor)) {
       otevritButton.hidden = false;
       requestAnimationFrame(pozicujOtevritButton);
+      /* zavriVHostu() volá skryj() ještě před odpojením editoru.
+         Po krátkém doběhu proto stav ověříme znovu a tlačítko případně
+         schováme dřív, než se může objevit na hlavní obrazovce. */
+      setTimeout(pozicujOtevritButton, 60);
+      setTimeout(pozicujOtevritButton, 220);
+    } else if (otevritButton) {
+      otevritButton.hidden = true;
     }
   }
 
@@ -1745,7 +1791,7 @@
      ========================================================== */
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "APK-INSETS-449",
+    verze: "LAYOUT-STABILITY-450",
     zobraz,
     skryj,
     nastavLayout,
