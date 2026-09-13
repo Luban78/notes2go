@@ -2079,6 +2079,155 @@
   window.visualViewport?.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));
 
   /* ==========================================================
+     PATCH 466 – LubaKeyboard po návratu aplikace z backgroundu
+     ----------------------------------------------------------
+     Android WebView umí při obnovení Activity znovu navázat starý
+     InputConnection dřív, než JavaScript dostane první focus/focusin.
+     Výsledek: i když editor používá inputmode=none, systémová IME se po
+     návratu z minimalizace někdy otevře místo LubaKeyboard.
+
+     Ochrana je záměrně pouze pro zdroj "luba":
+       1) při odchodu do backgroundu si zapamatujeme stav a editor blurujeme,
+          aby Android neměl aktivní editable InputConnection k obnovení;
+       2) před novým focusem znovu nastavíme inputmode=none + manual policy;
+       3) obnovíme LubaKeyboard jen tehdy, pokud byla před backgroundem
+          skutečně otevřená; ručně skrytá klávesnice zůstane skrytá;
+       4) selection Range se pokusíme vrátit, pokud jeho DOM uzly stále žijí;
+       5) systémovou IME po návratu ještě několikrát potlačíme kvůli závodu
+          starého WebView 103.
+
+     Explicitní systémový režim z Nastavení se tím NESMÍ měnit.
+     ========================================================== */
+  let navratLubaPoBackgroundu = null;
+  let navratLubaTimer = null;
+
+  function zachytRangePredBackgroundem(editor) {
+    try {
+      const vyber = window.getSelection?.();
+      if (!vyber?.rangeCount) return null;
+      const range = vyber.getRangeAt(0);
+      if (!editor?.contains(range.commonAncestorContainer)) return null;
+      return range.cloneRange();
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function obnovRangePoBackgroundu(editor, range) {
+    if (!editor || !range) return;
+    try {
+      if (!range.startContainer?.isConnected || !range.endContainer?.isConnected) return;
+      if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) return;
+      const vyber = window.getSelection?.();
+      if (!vyber) return;
+      vyber.removeAllRanges();
+      vyber.addRange(range);
+    } catch (_error) {}
+  }
+
+  function ulozLubaStavPredBackgroundem() {
+    if (ziskejZdrojKlavesnice() === "system") {
+      navratLubaPoBackgroundu = null;
+      return;
+    }
+
+    const editor = aktivniEditor || najdiEditor();
+    if (!jeEditorV2(editor)) {
+      navratLubaPoBackgroundu = null;
+      return;
+    }
+
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    if (!modal || !modal.contains(editor)) {
+      navratLubaPoBackgroundu = null;
+      return;
+    }
+
+    navratLubaPoBackgroundu = {
+      editor,
+      melFocus: document.activeElement === editor,
+      bylaOtevrena: Boolean(panel && !panel.hidden),
+      range: zachytRangePredBackgroundem(editor)
+    };
+
+    /* Nejdřív potvrdit vlastní režim, potom odpojit Android InputConnection. */
+    nastavLubaAtributy(editor);
+    if (document.activeElement === editor) {
+      try { editor.blur(); } catch (_error) {}
+    }
+    schovejSystemovou();
+  }
+
+  function obnovLubaPoBackgroundu() {
+    if (!navratLubaPoBackgroundu) return;
+    if (document.visibilityState === "hidden") return;
+
+    const stav = navratLubaPoBackgroundu;
+    navratLubaPoBackgroundu = null;
+
+    if (ziskejZdrojKlavesnice() === "system") return;
+
+    const editor = stav.editor?.isConnected ? stav.editor : najdiEditor();
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    if (!jeEditorV2(editor) || !modal || !modal.contains(editor)) return;
+
+    aktivniEditor = editor;
+    if (editor === systemovyEditor) systemovyEditor = null;
+    nastavLubaAtributy(editor);
+    pripravEditor(editor);
+
+    if (stav.bylaOtevrena) {
+      potlacAutomatickeOtevreni = false;
+      zobraz();
+    }
+
+    if (stav.melFocus) {
+      requestAnimationFrame(() => {
+        /* Focus musí vzniknout až PO inputmode=none, jinak WebView znovu
+           vytvoří systémový InputConnection. */
+        nastavLubaAtributy(editor);
+        try { editor.focus({ preventScroll: true }); } catch (_error) {
+          try { editor.focus(); } catch (_ignore) {}
+        }
+        obnovRangePoBackgroundu(editor, stav.range);
+        schovejSystemovou();
+      });
+    } else {
+      schovejSystemovou();
+    }
+
+    /* Starý WebView může IME obnovovat ještě během lifecycle animace. */
+    [60, 180, 420].forEach((ms) => {
+      setTimeout(() => {
+        if (ziskejZdrojKlavesnice() !== "system") {
+          nastavLubaAtributy(editor);
+          schovejSystemovou();
+        }
+      }, ms);
+    });
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      clearTimeout(navratLubaTimer);
+      navratLubaTimer = null;
+      ulozLubaStavPredBackgroundem();
+      return;
+    }
+
+    clearTimeout(navratLubaTimer);
+    navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
+  }, true);
+
+  /* Některé starší WebView vrátí focus oknu dřív než přepnou visibility.
+     Funkce je no-op, pokud předtím neproběhl skutečný background. */
+  window.addEventListener("focus", () => {
+    if (!navratLubaPoBackgroundu) return;
+    clearTimeout(navratLubaTimer);
+    navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
+  }, true);
+
+  /* ==========================================================
      PATCH 438 – STARTUP-SAFE LAZY INIT
 
      DŮLEŽITÉ OCHRANNÉ PRAVIDLO:

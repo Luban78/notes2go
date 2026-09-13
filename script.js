@@ -1,5 +1,16 @@
 if (window.Capacitor?.isNativePlatform?.()) {
   document.body.classList.add("nativeApp");
+
+  /* PATCH 465 – Android 12 / WebView 103 nehlásí spodní systémovou
+   * navigaci přes env(safe-area-inset-bottom). Třídu nastavíme už při
+   * startu aplikace, ne až při prvním otevření editoru, aby stejný
+   * 48px fallback mohl bezpečně použít i panel akcí karty na home. */
+  const ua = String(navigator.userAgent || "");
+  const match = ua.match(/(?:Chrome|Chromium)\/(\d+)/i);
+  const chromeMajor = Number(match?.[1] || 0);
+  if (/Android/i.test(ua) && chromeMajor > 0 && chromeMajor <= 110) {
+    document.body.classList.add("ln-lk-old-android-nav");
+  }
 }
 
 function updateVisualViewport() {
@@ -4340,6 +4351,18 @@ function renderTasks() {
         zobrazit: loadedTask.favorite === true,
         nazev: "oblibene",
         trida: "taskCardIconFavorite"
+      },
+      {
+        /* PATCH 465 – owner Shared poznámka zůstává kvůli Planneru v
+         * savedTask, proto ji renderuje běžná karta. Stav sdílení ale
+         * už zná shared vrstva; na kartě vlastníka ho ukážeme stejným
+         * symbolem, jaký používáme u akcí Sdílet. */
+        zobrazit:
+          Boolean(loadedTask.id) &&
+          window.LubaNoteSharingNotes
+            ?.jeVlastniSdilenaPoznamka?.(loadedTask.id) === true,
+        nazev: "odkaz",
+        trida: "taskCardIconSharing"
       },
       {
         zobrazit:
