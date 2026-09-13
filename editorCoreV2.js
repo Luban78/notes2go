@@ -5596,12 +5596,12 @@
         return;
       }
 
-      if (
-        ["div", "p", "section", "article"].includes(tag) &&
-        uzel.querySelector?.("figure, img")
-      ) {
+      if (uzel.querySelector?.("figure, img")) {
         flushText();
-        const format = kopieFormatu(zakladniFormat);
+        /* FIX 471 – recurse i přes inline wrappery. To je důležité pro
+           staré HTML typu <span><figure>…</figure></span>, které jinak
+           skončilo v importujInlineUzly() jako nepodporovaný FIGURE. */
+        const format = formatZInlineElementu(uzel, zakladniFormat);
         if (["h1", "h2", "h3"].includes(tag)) format.stylTextu = tag;
         importujWrapperSObrazkyDoModelu(
           uzel,
@@ -5822,6 +5822,27 @@
       if (tag === "br") {
         flushRootInline();
         bloky.push(vytvorOdstavec(""));
+        return;
+      }
+
+      /*
+       * FIX 471 – některé velmi staré poznámky mají FIGURE/IMG schovaný
+       * uvnitř inline wrapperu (typicky SPAN/FONT/A) místo přímo v rootu
+       * nebo blokovém DIV/P. Import inline obsahu neumí vytvořit blokový
+       * obrázek, takže taková poznámka dřív bezpečně spadla do legacy
+       * editoru s hláškou „figure“. Pokud wrapper skutečně obsahuje obrázek,
+       * rozdělíme ho stejnou již odladěnou cestou text -> obrázek -> text.
+       * Samotné formátování okolního textu zůstane zachované přes
+       * formatZInlineElementu().
+       */
+      if (uzel.querySelector?.("figure, img")) {
+        flushRootInline();
+        importujWrapperSObrazkyDoModelu(
+          uzel,
+          bloky,
+          nepodporovane,
+          formatZInlineElementu(uzel, VYCHOZI_FORMAT)
+        );
         return;
       }
 
