@@ -1705,10 +1705,29 @@ async function deleteTask(index) {
   zrusNotifikaceNaPozadi(notificationIds);
 
   /*
-   * Přesun do Koše není serverové smazání. Synchronizujeme celý nový
-   * stav poznámky, takže se Koš objeví stejně i na ostatních zařízeních.
+   * PATCH 488 – přesun do Koše je obsahová změna, ne tombstone.
+   * Jedna karta historicky volala uploadLocalNoteToSupabase() přímo,
+   * takže offline změna neměla persistentní retry a při centrálním
+   * wrapperu mohlo dojít i ke dvojímu zápisu stejné poznámky.
+   *
+   * Nově hotovou poznámku pouze zařadíme do targeted V2 fronty.
+   * Ta ji odešle jedním save_note_safe a po návratu internetu bezpečně
+   * dokončí stejnou změnu bez full snapshotu.
    */
+  let zarazenoDoTargetedV2 = false;
+
   if (
+    taskToDelete.id &&
+    typeof window.LubaNoteSync
+      ?.zaradCilenouPrivatePoznamku === "function"
+  ) {
+    zarazenoDoTargetedV2 =
+      window.LubaNoteSync
+        .zaradCilenouPrivatePoznamku(taskToDelete) === true;
+  }
+
+  if (
+    !zarazenoDoTargetedV2 &&
     taskToDelete.id &&
     typeof uploadLocalNoteToSupabase === "function"
   ) {

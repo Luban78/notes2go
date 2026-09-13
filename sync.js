@@ -1271,6 +1271,96 @@ function ulozCekajiciSmazani(zaznamy) {
   );
 }
 
+/*
+ * PATCH 488 – TARGETED DELETE / OFFLINE QUEUE
+ *
+ * Tombstone po úspěšném save_note_safe nemažeme z lokální fronty hned.
+ * Nejdřív si do stejného persistentního záznamu uložíme potvrzenou
+ * serverovou revizi. Pokud aplikace mezi zápisem a potvrzením change
+ * feedu spadne, po restartu už DELETE znovu neposíláme – pouze bezpečně
+ * dokončíme V2 cursor/fingerprint potvrzení.
+ */
+function maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam) {
+  return Number.isFinite(Number(zaznam?.uploadedRevision));
+}
+
+function nactiNeodeslanaCekajiciSmazani() {
+  return nactiCekajiciSmazani().filter(
+    (zaznam) =>
+      !maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam) &&
+      !zaznam?.blockedReason
+  );
+}
+
+function nactiBlokovanaCekajiciSmazani() {
+  return nactiCekajiciSmazani().filter(
+    (zaznam) => Boolean(zaznam?.blockedReason)
+  );
+}
+
+function oznacCekajiciSmazaniJakoOdeslane(
+  noteId,
+  uploadedRevision
+) {
+  const revize = Number(uploadedRevision);
+
+  if (!noteId || !Number.isFinite(revize)) {
+    return false;
+  }
+
+  const zaznamy = nactiCekajiciSmazani();
+  let zmeneno = false;
+
+  const nove = zaznamy.map((zaznam) => {
+    if (String(zaznam?.id || "") !== String(noteId)) {
+      return zaznam;
+    }
+
+    zmeneno = true;
+    return {
+      ...zaznam,
+      uploadedRevision: revize,
+      uploadedAt: new Date().toISOString(),
+      blockedReason: null
+    };
+  });
+
+  if (zmeneno) {
+    ulozCekajiciSmazani(nove);
+  }
+
+  return zmeneno;
+}
+
+function zablokujCekajiciSmazani(noteId, duvod, detail = null) {
+  if (!noteId) {
+    return false;
+  }
+
+  const zaznamy = nactiCekajiciSmazani();
+  let zmeneno = false;
+
+  const nove = zaznamy.map((zaznam) => {
+    if (String(zaznam?.id || "") !== String(noteId)) {
+      return zaznam;
+    }
+
+    zmeneno = true;
+    return {
+      ...zaznam,
+      blockedReason: duvod || "blocked",
+      blockedAt: new Date().toISOString(),
+      blockedDetail: detail || null
+    };
+  });
+
+  if (zmeneno) {
+    ulozCekajiciSmazani(nove);
+  }
+
+  return zmeneno;
+}
+
 function pridejCekajiciSmazani(
   noteId,
   deletedAt = new Date().toISOString(),
@@ -1373,9 +1463,36 @@ async function odesliCekajiciSmazaniDoSupabase() {
     return true;
   }
 
-  let vseOdeslano = true;
-
+  /*
+   * PATCH 488 – záznam, který už server přijal, znovu neposíláme.
+   * Po případném restartu pouze obnovíme in-memory mapu revizí a
+   * závěrečné V2 potvrzení dokončí cursor/fingerprint.
+   */
   for (const zaznam of cekajici) {
+    if (
+      zaznam?.id &&
+      maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam)
+    ) {
+      potvrzeneCileneRevizeV2.set(
+        String(zaznam.id),
+        Number(zaznam.uploadedRevision)
+      );
+    }
+  }
+
+  const blokovana = nactiBlokovanaCekajiciSmazani();
+
+  if (blokovana.length > 0) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET DELETE BLOCKED | count=${blokovana.length}`
+    );
+    return false;
+  }
+
+  const neodeslana = nactiNeodeslanaCekajiciSmazani();
+
+  for (const zaznam of neodeslana) {
     const deletedAt =
       zaznam.deletedAt ||
       new Date().toISOString();
@@ -1386,6 +1503,11 @@ async function odesliCekajiciSmazaniDoSupabase() {
       )
         ? Number(zaznam.expectedRevision)
         : 0;
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET DELETE UPLOAD | id=${zaznam.id}`
+    );
 
     const vysledek =
       await provedBezpecnyZapisPoznamky({
@@ -1398,10 +1520,7 @@ async function odesliCekajiciSmazaniDoSupabase() {
         deleteNote: true,
         deletedByDeviceId:
           zaznam.deviceId || getDeviceId(),
-        /*
-         * Čekající smazání řešíme zvlášť.
-         * Stará revize smazání nesmí vyvolat obecný konfliktový modal.
-         */
+        /* Delete konflikt má vlastní bezpečný režim níže. */
         oznamitKonflikt: false
       });
 
@@ -1409,35 +1528,81 @@ async function odesliCekajiciSmazaniDoSupabase() {
       const duvod =
         vysledek?.result?.reason || null;
 
-      /*
-       * Poznámka byla po našem posledním známém stavu změněná
-       * na jiném zařízení. Staré čekající smazání proto rušíme.
-       *
-       * Bezpečnější je zachovat novější cloudovou verzi než ji
-       * automaticky smazat. Hlavní merge ji v témže syncu stáhne
-       * zpět do tohoto zařízení. Pokud ji uživatel stále chce
-       * smazat, udělá to znovu nad aktuální revizí.
-       */
       if (duvod === "revision_mismatch") {
-        console.warn(
-          "LubaNote sync: čekající smazání bylo zrušeno, protože poznámka byla mezitím změněna na jiném zařízení:",
+        /*
+         * Starší zařízení NESMÍ automaticky smazat novější revizi.
+         * Frontu ponecháme persistentně zablokovanou a hlavně ji
+         * nezkoušíme každých 1,5 s znovu – tím chráníme data i egress.
+         * Samostatný targeted conflict recovery může později stáhnout
+         * pouze toto jedno ID; full snapshot se zde nikdy nespustí.
+         */
+        zablokujCekajiciSmazani(
           zaznam.id,
-          vysledek.result
+          "revision_mismatch",
+          {
+            expectedRevision,
+            serverRevision:
+              vysledek?.result?.revision ?? null
+          }
         );
 
-        odeberCekajiciSmazani(zaznam.id);
-        zrusKonfliktSynchronizace(zaznam.id);
-        continue;
+        oznamKonfliktSynchronizace(
+          zaznam.id,
+          "delete_revision_mismatch",
+          {
+            expectedRevision,
+            serverRevision:
+              vysledek?.result?.revision ?? null
+          }
+        );
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `TARGET DELETE CONFLICT | id=${zaznam.id}`
+        );
+        return false;
       }
 
-      vseOdeslano = false;
-      continue;
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `TARGET DELETE DEFER | id=${zaznam.id}`
+      );
+      return false;
     }
 
-    odeberCekajiciSmazani(zaznam.id);
+    const revize = Number(
+      vysledek?.result?.revision ??
+      ziskejCloudSyncMeta(zaznam.id)?.revision
+    );
+
+    if (!Number.isFinite(revize)) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `TARGET DELETE DEFER | revision-missing id=${zaznam.id}`
+      );
+      return false;
+    }
+
+    oznacCekajiciSmazaniJakoOdeslane(
+      zaznam.id,
+      revize
+    );
+
+    potvrzeneCileneRevizeV2.set(
+      String(zaznam.id),
+      revize
+    );
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET DELETE SAVED | id=${zaznam.id} rev=${revize}`
+    );
   }
 
-  return vseOdeslano;
+  return (
+    nactiNeodeslanaCekajiciSmazani().length === 0 &&
+    nactiBlokovanaCekajiciSmazani().length === 0
+  );
 }
 
 async function registerCurrentDevice() {
@@ -1778,9 +1943,10 @@ async function markNoteDeletedInSupabase(note) {
       : 0;
 
   /*
-   * Smazání nejdřív zapíšeme do lokální fronty.
-   * Fronta nese i revizi, ze které uživatel při smazání vycházel.
-   * Starší zařízení proto nemůže smazat novější cloudovou verzi.
+   * PATCH 488 – permanentní smazání je vždy nejdřív persistentní
+   * lokální tombstone fronta. UI tedy nečeká na síť a offline delete
+   * přežije i kill aplikace. Samotný save_note_safe provede centrální
+   * targeted V2 worker; žádný full snapshot zde není.
    */
   pridejCekajiciSmazani(
     note.id,
@@ -1788,29 +1954,16 @@ async function markNoteDeletedInSupabase(note) {
     expectedRevision
   );
 
-  const user = await getCurrentUser();
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET DELETE QUEUE | id=${note.id} rev=${expectedRevision}`
+  );
 
-  if (!user || !navigator.onLine) {
-    return false;
+  oznacLokalniZmenuCekajiciNaSync();
+
+  if (navigator.onLine) {
+    naplanujSynchronizaciPoLokalniZmene(120);
   }
-
-  const vysledek =
-    await provedBezpecnyZapisPoznamky({
-      id: note.id,
-      data: {
-        deleted: true
-      },
-      expectedRevision,
-      localUpdatedAt: deletedAt,
-      deleteNote: true,
-      deletedByDeviceId: getDeviceId()
-    });
-
-  if (!vysledek.ok) {
-    return false;
-  }
-
-  odeberCekajiciSmazani(note.id);
 
   return true;
 }
@@ -6217,6 +6370,62 @@ function zaregistrujExplicitniSecretZmenuV2(note) {
   return { podporovano: true, pocet: 1 };
 }
 
+/*
+ * PATCH 488 – přímé lokální změny, které historicky neprocházely
+ * wrapperem (hlavně přesun jedné karty do Koše), mohou předat hotovou
+ * private poznámku rovnou targeted frontě. Díky tomu offline změna
+ * přežije v lokálním obsahu a po návratu internetu se odešle jako
+ * jediný save_note_safe místo legacy/full fallbacku.
+ */
+function zaradKonkretniPrivatePoznamkuV2(note) {
+  if (!note?.id) {
+    return false;
+  }
+
+  if (jeVlastniSharedPoznamkaProPrivateV2(note.id)) {
+    return false;
+  }
+
+  let vysledek;
+
+  if (note.isSecret === true) {
+    vysledek = zaregistrujExplicitniSecretZmenuV2(note);
+  } else {
+    const bezpecna = klonujPoznamkuProCilenyV2(note);
+    const otisk = vytvorOtiskPoznamkyProCilenyV2(bezpecna);
+
+    if (!bezpecna || !otisk) {
+      return false;
+    }
+
+    cekajiciCilenePrivateV2.set(String(note.id), {
+      note: bezpecna,
+      otisk,
+      secret: false,
+      queuedAt: Date.now()
+    });
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET QUEUE DIRECT | id=${note.id}`
+    );
+
+    vysledek = { podporovano: true, pocet: 1 };
+  }
+
+  if (vysledek?.podporovano !== true) {
+    return false;
+  }
+
+  oznacLokalniZmenuCekajiciNaSync();
+
+  if (navigator.onLine) {
+    naplanujSynchronizaciPoLokalniZmene(180);
+  }
+
+  return true;
+}
+
 function jeVlastniSharedPoznamkaProPrivateV2(noteId) {
   if (!noteId) {
     return false;
@@ -6337,6 +6546,7 @@ function zaregistrujCileneZmenyPoLokalniAkciV2(
 function maCilenyPrivateV2Dluh() {
   return (
     cekajiciCilenePrivateV2.size > 0 ||
+    nactiCekajiciSmazani().length > 0 ||
     cileneV2CekaNaFastPotvrzeni === true ||
     Boolean(probihajiciCilenyPrivateV2)
   );
@@ -6347,7 +6557,8 @@ async function potvrdCilenePrivateZapisyV2(userId) {
     !userId ||
     !navigator.onLine ||
     cekajiciCilenePrivateV2.size > 0 ||
-    nactiCekajiciSmazani().length > 0 ||
+    nactiNeodeslanaCekajiciSmazani().length > 0 ||
+    nactiBlokovanaCekajiciSmazani().length > 0 ||
     aktivniKonfliktySyncu.size > 0
   ) {
     return false;
@@ -6424,14 +6635,83 @@ async function potvrdCilenePrivateZapisyV2(userId) {
     }
   }
 
-  for (const id of potvrzeneCileneRevizeV2.keys()) {
-    if (!videnePotvrzeneId.has(String(id))) {
-      window.LubaNoteStartupDiag?.zapis?.(
-        "V2",
-        `TARGET CONFIRM DEFER | own-event-missing | id=${id}`
+  const chybejiciPotvrzenaId = Array.from(
+    potvrzeneCileneRevizeV2.keys()
+  ).filter(
+    (id) => !videnePotvrzeneId.has(String(id))
+  );
+
+  if (chybejiciPotvrzenaId.length > 0) {
+    /*
+     * PATCH 488 – recovery úzkého crash okna:
+     * potvrdCilenePrivateZapisyV2 ukládá Fast stav + cursor a teprve
+     * potom maže persistentní tombstone frontu. Pokud aplikace spadne
+     * přesně mezi těmito kroky, po restartu už change feed správně nic
+     * nevrátí (cursor událost obsahuje), ale uploaded tombstone v queue
+     * ještě zůstane. Smíme ho uklidit pouze tehdy, když VŠECHNA chybějící
+     * ID jsou právě tyto uploaded tombstones a uložený Fast stav se stále
+     * shoduje s aktuálním serverovým fingerprintem, cursorem i lokální
+     * generací. Jinak nic nehádáme a potvrzení odložíme.
+     */
+    const uploadedDeleteIds = new Set(
+      nactiCekajiciSmazani()
+        .filter(maCekajiciSmazaniPotvrzenouServerovouRevizi)
+        .map((zaznam) => String(zaznam.id))
+    );
+
+    const jenUploadedDeletes =
+      chybejiciPotvrzenaId.every(
+        (id) => uploadedDeleteIds.has(String(id))
+      ) &&
+      Array.from(potvrzeneCileneRevizeV2.keys()).every(
+        (id) => uploadedDeleteIds.has(String(id))
       );
-      return false;
+
+    if (jenUploadedDeletes) {
+      const fast = nactiFastSyncStav(userId);
+      const localGeneration =
+        ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+      if (
+        fast &&
+        localGeneration !== null &&
+        Number(fast.localGeneration) === Number(localGeneration)
+      ) {
+        const [server, head] = await Promise.all([
+          ziskejServerovyPrivateFingerprint(),
+          ziskejPrivateSyncV2Head()
+        ]);
+
+        if (
+          server?.fingerprint &&
+          fast.serverFingerprint === server.fingerprint &&
+          head !== null &&
+          Number(head) === Number(cursor.lastSeq)
+        ) {
+          ulozCekajiciSmazani(
+            nactiCekajiciSmazani().filter(
+              (zaznam) =>
+                !maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam)
+            )
+          );
+          potvrzeneCileneRevizeV2.clear();
+          cileneV2CekaNaFastPotvrzeni = false;
+          synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            `TARGET DELETE CONFIRM RECOVER | seq=${cursor.lastSeq}`
+          );
+          return true;
+        }
+      }
     }
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET CONFIRM DEFER | own-event-missing | id=${chybejiciPotvrzenaId[0]}`
+    );
+    return false;
   }
 
   const headPredFingerprintem =
@@ -6489,9 +6769,25 @@ async function potvrdCilenePrivateZapisyV2(userId) {
     return false;
   }
 
-  ulozPrivateSyncV2Cursor(
+  const cursorUlozen = ulozPrivateSyncV2Cursor(
     userId,
     headPoFingerprintu
+  );
+
+  if (!cursorUlozen) {
+    /* Fast fingerprint bez odpovídajícího cursoru nesmí zůstat jako
+       potvrzený stav. Příští průchod raději znovu ověří malé V2 RPC. */
+    zrusFastSyncStav();
+    return false;
+  }
+
+  /* PATCH 488 – tombstone opouští persistentní frontu až poté, co je
+     jeho change-feed událost i nový fingerprint/cursor potvrzený. */
+  ulozCekajiciSmazani(
+    nactiCekajiciSmazani().filter(
+      (zaznam) =>
+        !maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam)
+    )
   );
 
   potvrzeneCileneRevizeV2.clear();
@@ -6532,6 +6828,18 @@ async function synchronizujCilenePrivateZmenyV2() {
       window.LubaNoteSyncTraffic?.zacniSync?.();
 
       try {
+        /*
+         * PATCH 488 – tombstones mají přednost před obsahovými uploady.
+         * Fronta je persistentní, takže tento krok bezpečně dokončí i
+         * smazání vytvořené offline nebo předchozí session.
+         */
+        const smazaniOk =
+          await odesliCekajiciSmazaniDoSupabase();
+
+        if (smazaniOk !== true) {
+          return false;
+        }
+
         const snapshot = Array.from(
           cekajiciCilenePrivateV2.entries()
         );
@@ -6755,6 +7063,11 @@ function spustKontroluNavratuInternetu() {
         return;
       }
 
+      if (nactiBlokovanaCekajiciSmazani().length > 0) {
+        zastavKontroluNavratuInternetu();
+        return;
+      }
+
       if (!navigator.onLine) {
         return;
       }
@@ -6795,6 +7108,12 @@ async function synchronizujCekajiciLokalniZmenu() {
     return true;
   }
 
+  if (nactiBlokovanaCekajiciSmazani().length > 0) {
+    zastavKontroluNavratuInternetu();
+    nastavStavSynchronizaceUI("conflict");
+    return false;
+  }
+
   if (!navigator.onLine) {
     nastavStavSynchronizaceUI("pending");
     spustKontroluNavratuInternetu();
@@ -6828,7 +7147,10 @@ async function synchronizujCekajiciLokalniZmenu() {
         return true;
       }
 
-      if (lokalniZmenaCekaNaPotvrzeniServerem) {
+      if (
+        lokalniZmenaCekaNaPotvrzeniServerem &&
+        nactiBlokovanaCekajiciSmazani().length === 0
+      ) {
         nastavStavSynchronizaceUI("pending");
         spustKontroluNavratuInternetu();
       }
@@ -7028,14 +7350,14 @@ async function spustRychlySyncPoznamekBezpecne() {
    * Pokud už lokální změna čeká na konkrétní save_note_safe zápis,
    * dokončíme jej místo fingerprint -> full-sync rozhodování.
    */
-  if (
-    lokalniZmenaCekaNaPotvrzeniServerem &&
-    maCilenyPrivateV2Dluh()
-  ) {
+  if (maCilenyPrivateV2Dluh()) {
     const targetedOk =
       await synchronizujCilenePrivateZmenyV2();
 
-    if (targetedOk === true) {
+    if (
+      targetedOk === true &&
+      lokalniZmenaCekaNaPotvrzeniServerem
+    ) {
       potvrzLokalniZmenuNaServeru();
     }
 
@@ -7214,6 +7536,32 @@ async function spustStartSyncBezpecne() {
 
   if (probihajiciStartSync) {
     return probihajiciStartSync;
+  }
+
+  /*
+   * PATCH 488 – offline tombstone přežije restart v localStorage.
+   * Ještě před běžným start flow proto zkusíme dokončit pouze tuto
+   * malou targeted frontu. Nevolá get_notes_safe a po úspěchu už Fast
+   * Sync uvidí potvrzený fingerprint/cursor.
+   */
+  if (
+    nactiCekajiciSmazani().length > 0 &&
+    nactiBlokovanaCekajiciSmazani().length === 0
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET DELETE RESUME | count=${nactiCekajiciSmazani().length}`
+    );
+
+    const resumedDeleteOk =
+      await synchronizujCilenePrivateZmenyV2();
+
+    if (
+      resumedDeleteOk === true &&
+      lokalniZmenaCekaNaPotvrzeniServerem
+    ) {
+      potvrzLokalniZmenuNaServeru();
+    }
   }
 
   probihajiciStartSync =
@@ -7440,6 +7788,8 @@ window.LubaNoteSync = {
     naplanujSynchronizaciPoLokalniZmene,
   provedLokalniZmenuBezKolizeSeSync,
   provedLokalniZmenuASynchronizuj,
+  zaradCilenouPrivatePoznamku:
+    zaradKonkretniPrivatePoznamkuV2,
   synchronizujPoznamkyTed,
   ziskejIdPoznamekEditovanychJinde,
   ziskejKonflikty: () =>
