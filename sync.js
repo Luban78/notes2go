@@ -365,6 +365,49 @@ function ulozFastSyncStavPoPlnemSyncu(snapshot) {
   });
 }
 
+/*
+ * EGRESS GUARD 477
+ *
+ * Běžný plný sync často sám zapíše jednu nebo více lokálních změn na
+ * server. Před-sync fingerprint pak už z principu neplatí a starší kód
+ * Fast Sync stav zrušil. Následný návrat do aplikace proto znovu stáhl
+ * celý get_notes_safe snapshot, i když se od posledního syncu nic
+ * nezměnilo.
+ *
+ * Po ÚSPĚŠNÉM plném syncu proto v takovém případě načteme pouze malý
+ * serverový fingerprint a potvrdíme jím právě dokončený lokální stav.
+ * Neobsahuje text poznámek ani přílohy a nijak neobchází revision merge.
+ */
+async function obnovFastSyncStavPoUspesnemPlnemSyncu(userId) {
+  if (
+    !userId ||
+    !navigator.onLine ||
+    nactiCekajiciSmazani().length > 0 ||
+    aktivniKonfliktySyncu.size > 0
+  ) {
+    return false;
+  }
+
+  const localGeneration =
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+  if (localGeneration === null) {
+    return false;
+  }
+
+  const server = await ziskejServerovyPrivateFingerprint();
+
+  if (!server?.fingerprint) {
+    return false;
+  }
+
+  return ulozFastSyncStav({
+    userId,
+    serverFingerprint: server.fingerprint,
+    localGeneration
+  });
+}
+
 const aktivniKonfliktySyncu = new Map();
 let konfliktSyncuUzOhlasen = false;
 
@@ -3577,7 +3620,26 @@ async function syncNotes(moznosti = {}) {
      */
     const diagFastState =
       window.LubaNoteStartupDiag?.zacni?.("PRIVATE FAST STATE SAVE");
-    ulozFastSyncStavPoPlnemSyncu(fastSnapshot);
+
+    const fastStavPotvrzenPredsyncTokenem =
+      ulozFastSyncStavPoPlnemSyncu(fastSnapshot);
+
+    if (!fastStavPotvrzenPredsyncTokenem) {
+      try {
+        await obnovFastSyncStavPoUspesnemPlnemSyncu(user.id);
+      } catch (error) {
+        /*
+         * Fast Sync je pouze optimalizace. Pokud malý fingerprint po
+         * úspěšném merge selže, data už jsou bezpečně synchronizovaná;
+         * příští pokus pouze použije konzervativní plný sync.
+         */
+        console.warn(
+          "Fast Sync: post-sync fingerprint se obnoví později:",
+          error
+        );
+      }
+    }
+
     window.LubaNoteStartupDiag?.konec?.(diagFastState, "OK");
 
     return true;
@@ -4275,7 +4337,36 @@ async function spustRychlySyncPoznamekBezpecne() {
   }
 
   try {
-    const vysledek = await syncNotes();
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return false;
+    }
+
+    /*
+     * EGRESS GUARD 477
+     *
+     * Tento "rychlý" sync se spouští mimo jiné při pageshow / návratu
+     * aplikace do popředí. Dříve pokaždé rovnou stáhl celý
+     * get_notes_safe snapshot. Teď nejprve ověříme malý fingerprint.
+     * Pokud se server ani lokální generace nezměnily, není co mergovat
+     * a několik MB stejného obsahu znovu nestahujeme.
+     */
+    const fastSync = await pripravFastSyncPriStartu(user);
+
+    let vysledek = true;
+
+    if (fastSync?.preskocit === true) {
+      nastavKoncovyStavSynchronizaceUI();
+      window.LubaNoteStartupDiag?.zapis?.(
+        "FAST",
+        "QUICK SYNC SKIP – fingerprint beze změny"
+      );
+    } else {
+      vysledek = await syncNotes({
+        fastSnapshot: fastSync?.snapshot || null
+      });
+    }
 
     if (vysledek !== true) {
       stitkyCekajiNaRefreshPoNavratuInternetu = true;
