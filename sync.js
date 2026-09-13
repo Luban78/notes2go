@@ -7453,7 +7453,12 @@ window.LubaNoteSync = {
     return Boolean(
       user?.id && nactiSafeBootstrapMarker(user.id)
     );
-  }
+  },
+  /* PATCH 487 – lehký synchronní signál pro pomocné moduly.
+     Chat / Shared / Invitations podle něj umí při čistém klientovi
+     vypnout pouze AUTOMATICKÝ polling. Ruční otevření funkcí zůstává. */
+  jeBootstrapPending: () =>
+    stavDiagnostiky === "BOOTSTRAP-PENDING"
 };
 
 let casovacSyncuPoAktivaci = null;
@@ -7481,6 +7486,23 @@ function naplanujSyncPoAktivaci(
         typeof document !== "undefined" &&
         document.visibilityState === "hidden"
       ) {
+        return;
+      }
+
+      /* PATCH 487 – Quota Saver. Čistý klient čekající na výslovný
+         Safe Bootstrap nemá při každém focus/pageshow znovu volat
+         fingerprint RPC. Server se stejně nesmí automaticky stáhnout
+         a explicitní bootstrap si udělá vlastní bezpečné kontroly. */
+      if (
+        stavDiagnostiky === "BOOTSTRAP-PENDING" &&
+        !maCilenyPrivateV2Dluh() &&
+        !lokalniZmenaCekaNaPotvrzeniServerem &&
+        nactiCekajiciSmazani().length === 0
+      ) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "QUOTA",
+          "FOREGROUND POLL SKIP | bootstrap-pending"
+        );
         return;
       }
 

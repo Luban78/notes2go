@@ -11,7 +11,8 @@
 
 (() => {
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_MS = 60_000;
+  const POLL_MS = 5 * 60_000;
+  const AUTO_REFRESH_MIN_MS = 60_000;
 
   const taskModal = document.getElementById("taskModal");
   const shareNoteButton = document.getElementById("shareNoteButton");
@@ -27,6 +28,23 @@
   let inviteBusy = false;
   let relationshipBusy = false;
   let pollTimer = null;
+  let posledniAutoRefreshAt = 0;
+
+  function jeQuotaBootstrapPending() {
+    return window.LubaNoteSync?.jeBootstrapPending?.() === true;
+  }
+
+  function muzeAutoRefresh() {
+    if (jeQuotaBootstrapPending()) return false;
+
+    const ted = Date.now();
+    if (ted - posledniAutoRefreshAt < AUTO_REFRESH_MIN_MS) {
+      return false;
+    }
+
+    posledniAutoRefreshAt = ted;
+    return true;
+  }
 
   function t(klic, zaloha, promenne = null) {
     const fn = window.LubaNoteI18n?.t;
@@ -1324,7 +1342,8 @@
         startUiPripraven &&
         !document.hidden &&
         navigator.onLine &&
-        ziskejAktualniUserId()
+        ziskejAktualniUserId() &&
+        muzeAutoRefresh()
       ) {
         nactiPrichoziPozvanky({ zobrazNacitani: false });
       }
@@ -1372,7 +1391,8 @@
     if (
       startUiPripraven &&
       navigator.onLine &&
-      ziskejAktualniUserId()
+      ziskejAktualniUserId() &&
+      muzeAutoRefresh()
     ) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
     }
@@ -1391,13 +1411,13 @@
     if (startUiPripraven) return;
     startUiPripraven = true;
 
-    if (navigator.onLine && ziskejAktualniUserId()) {
+    if (navigator.onLine && ziskejAktualniUserId() && muzeAutoRefresh()) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
     }
   });
 
   window.addEventListener("online", () => {
-    if (startUiPripraven && ziskejAktualniUserId()) {
+    if (startUiPripraven && ziskejAktualniUserId() && muzeAutoRefresh()) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
     }
   });
@@ -1407,7 +1427,8 @@
       startUiPripraven &&
       !document.hidden &&
       navigator.onLine &&
-      ziskejAktualniUserId()
+      ziskejAktualniUserId() &&
+      muzeAutoRefresh()
     ) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
       aktualizujShareButton();

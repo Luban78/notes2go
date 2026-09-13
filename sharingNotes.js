@@ -18,7 +18,10 @@
   const CACHE_DB_VERSION = 1;
   const CACHE_DB_STORE = "sharedNotes";
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_MS = 60_000;
+  const POLL_MS = 5 * 60_000;
+  const AUTO_REFRESH_MIN_MS = 60_000;
+  const SHARED_FORBIDDEN_COOLDOWN_MS = 30 * 60_000;
+  const SHARED_FORBIDDEN_UNTIL_KEY = "lubanoteSharedRpcForbiddenUntilV1";
   const DOUBLE_TAP_MS = 300;
 
   const pinnedCards = document.getElementById("pinnedCards");
@@ -36,7 +39,57 @@
   let puvodniRenderTasks = null;
   let puvodniAndroidZpet = null;
   let menuSdileneKartyNoteId = null;
+  let posledniAutoRefreshAt = 0;
   const opousteniSdileni = new Set();
+
+  function jeQuotaBootstrapPending() {
+    return window.LubaNoteSync?.jeBootstrapPending?.() === true;
+  }
+
+  function muzeAutoRefresh() {
+    if (jeQuotaBootstrapPending()) return false;
+
+    const ted = Date.now();
+    if (ted - posledniAutoRefreshAt < AUTO_REFRESH_MIN_MS) {
+      return false;
+    }
+
+    posledniAutoRefreshAt = ted;
+    return true;
+  }
+
+  function nactiSharedForbiddenUntil() {
+    const hodnota = Number(localStorage.getItem(SHARED_FORBIDDEN_UNTIL_KEY));
+    return Number.isFinite(hodnota) ? hodnota : 0;
+  }
+
+  function jeSharedRpcDocasneZtlumene() {
+    return Date.now() < nactiSharedForbiddenUntil();
+  }
+
+  function jeSharedPermissionDenied(error) {
+    const code = String(error?.code || "");
+    const status = Number(error?.status || 0);
+    const message = String(error?.message || "").toLowerCase();
+
+    return (
+      status === 403 ||
+      code === "42501" ||
+      message.includes("permission denied")
+    );
+  }
+
+  function ztlumSharedRpcPo403() {
+    localStorage.setItem(
+      SHARED_FORBIDDEN_UNTIL_KEY,
+      String(Date.now() + SHARED_FORBIDDEN_COOLDOWN_MS)
+    );
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "QUOTA",
+      "SHARED POLL MUTE | 403 cooldown 30m"
+    );
+  }
 
   /*
    * PATCH 474 – kratkodoby stav aktivniho editora znamy z autoritativniho
@@ -1198,6 +1251,14 @@
       return sdilenePoznamky;
     }
 
+    /* PATCH 487 – po známém permission-denied už půl hodiny znovu
+       neposíláme stejný Shared RPC. Cache zůstává nedotčená. */
+    if (jeSharedRpcDocasneZtlumene()) {
+      sdilenePoznamky = nactiCache();
+      if (vykreslit) vykresliSdileneKarty();
+      return sdilenePoznamky;
+    }
+
     if (probihajiciNacteni) {
       return probihajiciNacteni;
     }
@@ -1220,6 +1281,21 @@
         ]);
 
         if (prijate.error) {
+          if (jeSharedPermissionDenied(prijate.error)) {
+            ztlumSharedRpcPo403();
+            sdilenePoznamky = nactiCache();
+
+            if (vykreslit) {
+              if (typeof window.renderTasks === "function") {
+                window.renderTasks();
+              } else {
+                vykresliSdileneKarty();
+              }
+            }
+
+            return sdilenePoznamky;
+          }
+
           throw prijate.error;
         }
 
@@ -1331,7 +1407,8 @@
         startUiPripraven &&
         !document.hidden &&
         navigator.onLine &&
-        ziskejUserId()
+        ziskejUserId() &&
+        muzeAutoRefresh()
       ) {
         obnovZeServeru({ tichy: true, vykreslit: true });
       }
@@ -1353,7 +1430,8 @@
     if (
       startUiPripraven &&
       aktualniUserId &&
-      navigator.onLine
+      navigator.onLine &&
+      muzeAutoRefresh()
     ) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
@@ -1423,6 +1501,9 @@
   });
 
   window.addEventListener("lubanote:sharing-changed", () => {
+    localStorage.removeItem(SHARED_FORBIDDEN_UNTIL_KEY);
+    posledniAutoRefreshAt = 0;
+
     if (startUiPripraven) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
@@ -1432,13 +1513,13 @@
     if (startUiPripraven) return;
     startUiPripraven = true;
 
-    if (navigator.onLine && ziskejUserId()) {
+    if (navigator.onLine && ziskejUserId() && muzeAutoRefresh()) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
   });
 
   window.addEventListener("online", () => {
-    if (startUiPripraven) {
+    if (startUiPripraven && muzeAutoRefresh()) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
   });
@@ -1452,7 +1533,7 @@
         window.renderTasks();
       }
 
-      if (startUiPripraven && navigator.onLine) {
+      if (startUiPripraven && navigator.onLine && muzeAutoRefresh()) {
         obnovZeServeru({ tichy: true, vykreslit: true });
       }
     }

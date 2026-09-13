@@ -18,7 +18,8 @@
 
 (() => {
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_BADGE_MS = 10_000;
+  const POLL_BADGE_MS = 60_000;
+  const AUTO_GLOBAL_MIN_MS = 30_000;
   const POLL_THREAD_MS = 3_000;
 
   const chatButton = document.getElementById("chatButton");
@@ -38,6 +39,23 @@
   let odesilam = false;
   let mazu = false;
   let puvodniAndroidZpet = null;
+  let posledniAutoGlobalAt = 0;
+
+  function jeQuotaBootstrapPending() {
+    return window.LubaNoteSync?.jeBootstrapPending?.() === true;
+  }
+
+  function muzeAutoGlobalRefresh() {
+    if (jeQuotaBootstrapPending()) return false;
+
+    const ted = Date.now();
+    if (ted - posledniAutoGlobalAt < AUTO_GLOBAL_MIN_MS) {
+      return false;
+    }
+
+    posledniAutoGlobalAt = ted;
+    return true;
+  }
 
   /*
    * Scroll chatu:
@@ -1010,7 +1028,8 @@
         startUiPripraven &&
         !document.hidden &&
         navigator.onLine &&
-        ziskejUserId()
+        ziskejUserId() &&
+        muzeAutoGlobalRefresh()
       ) {
         obnovGlobalniStav({ tichy: true });
       }
@@ -1095,7 +1114,8 @@
     if (
       startUiPripraven &&
       aktualniUserId &&
-      navigator.onLine
+      navigator.onLine &&
+      muzeAutoGlobalRefresh()
     ) {
       obnovGlobalniStav({ tichy: true });
     }
@@ -1121,14 +1141,14 @@
     if (startUiPripraven) return;
     startUiPripraven = true;
 
-    if (navigator.onLine && ziskejUserId()) {
+    if (navigator.onLine && ziskejUserId() && muzeAutoGlobalRefresh()) {
       obnovGlobalniStav({ tichy: true });
     }
   });
 
   window.addEventListener("online", () => {
     nastavComposerStav();
-    if (startUiPripraven && ziskejUserId()) {
+    if (startUiPripraven && ziskejUserId() && muzeAutoGlobalRefresh()) {
       obnovGlobalniStav({ tichy: true });
     }
     if (otevrenyKontakt?.thread_id) nactiZpravy({ tichy: true, zachovatScroll: true });
@@ -1148,7 +1168,9 @@
       navigator.onLine &&
       ziskejUserId()
     ) {
-      obnovGlobalniStav({ tichy: true });
+      if (muzeAutoGlobalRefresh()) {
+        obnovGlobalniStav({ tichy: true });
+      }
       if (otevrenyKontakt?.thread_id) {
         nactiZpravy({ tichy: true, zachovatScroll: true });
       }
