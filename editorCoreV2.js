@@ -139,11 +139,11 @@
     return v2SelectionOverlay;
   }
 
-  function rangeZModelovehoVyberu(vyber) {
-    if (!editor || !vyber || vyber.sbaleny) return null;
+  function rangeVyberuVJednomBloku(blokIndex, od, doOffsetu) {
+    if (!editor || !Number.isInteger(blokIndex) || doOffsetu <= od) return null;
 
-    const domZacatek = najdiDomBod(vyber.zacatek.blok, vyber.zacatek.offset);
-    const domKonec = najdiDomBod(vyber.konec.blok, vyber.konec.offset);
+    const domZacatek = najdiDomBod(blokIndex, od);
+    const domKonec = najdiDomBod(blokIndex, doOffsetu);
     if (!domZacatek || !domKonec) return null;
 
     try {
@@ -173,33 +173,49 @@
       return;
     }
 
-    const range = rangeZModelovehoVyberu(vyber);
-    if (!range) {
-      odstranV2SelectionOverlay();
-      return;
-    }
-
     const editorRect = editor.getBoundingClientRect();
     const fragment = document.createDocumentFragment();
     let pocet = 0;
 
-    for (const rect of Array.from(range.getClientRects())) {
-      if (rect.width <= 0 || rect.height <= 0) continue;
+    /*
+     * PATCH 463 – nekreslit prázdný zbytek řádku.
+     *
+     * Range přes více blokových <div> může ve starém WebView vracet obdélník
+     * až k pravému okraji bloku, tedy i přes místo, kde žádný text není.
+     * Overlay proto měří každý modelový textový blok samostatně. Range tak
+     * začíná i končí přímo v textových nodech a getClientRects() odpovídá jen
+     * skutečně označeným znakům, ne mezi-blokovému / prázdnému prostoru.
+     */
+    for (let blokIndex = vyber.zacatek.blok; blokIndex <= vyber.konec.blok; blokIndex += 1) {
+      const blok = dokument.bloky[blokIndex];
+      if (!blok || !jeTextovyBlok(blok)) continue;
 
-      const left = Math.max(rect.left, editorRect.left);
-      const right = Math.min(rect.right, editorRect.right);
-      const top = Math.max(rect.top, editorRect.top);
-      const bottom = Math.min(rect.bottom, editorRect.bottom);
-      if (right <= left || bottom <= top) continue;
+      const delka = textBloku(blok).length;
+      const od = blokIndex === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doOffsetu = blokIndex === vyber.konec.blok ? vyber.konec.offset : delka;
+      if (doOffsetu <= od) continue;
 
-      const znacka = document.createElement("span");
-      znacka.className = "ln-v2-selection-rect";
-      znacka.style.left = `${left}px`;
-      znacka.style.top = `${top}px`;
-      znacka.style.width = `${right - left}px`;
-      znacka.style.height = `${bottom - top}px`;
-      fragment.appendChild(znacka);
-      pocet += 1;
+      const range = rangeVyberuVJednomBloku(blokIndex, od, doOffsetu);
+      if (!range) continue;
+
+      for (const rect of Array.from(range.getClientRects())) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        const left = Math.max(rect.left, editorRect.left);
+        const right = Math.min(rect.right, editorRect.right);
+        const top = Math.max(rect.top, editorRect.top);
+        const bottom = Math.min(rect.bottom, editorRect.bottom);
+        if (right <= left || bottom <= top) continue;
+
+        const znacka = document.createElement("span");
+        znacka.className = "ln-v2-selection-rect";
+        znacka.style.left = `${left}px`;
+        znacka.style.top = `${top}px`;
+        znacka.style.width = `${right - left}px`;
+        znacka.style.height = `${bottom - top}px`;
+        fragment.appendChild(znacka);
+        pocet += 1;
+      }
     }
 
     overlay.replaceChildren(fragment);
