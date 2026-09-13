@@ -342,6 +342,12 @@
       lock = await ziskejLock(note);
 
       if (lock?.acquired !== true) {
+        window.LubaNoteSharingNotes
+          ?.nastavAktivniEditor?.(
+            note.id,
+            lock?.editorUsername || "@?"
+          );
+
         zobrazZpravu(
           t("sharing.readOnlyTitle", "Sdílená poznámka"),
           t(
@@ -516,6 +522,12 @@
       const lock = await ziskejLock(note);
 
       if (lock?.acquired !== true) {
+        window.LubaNoteSharingNotes
+          ?.nastavAktivniEditor?.(
+            note.id,
+            lock?.editorUsername || "@?"
+          );
+
         /*
          * S2E.1: Pokud poznámku drží jiný editor, nesmíme uživatele
          * po zavření informačního dialogu nechat zpět na seznamu karet.
@@ -539,6 +551,9 @@
         );
         return false;
       }
+
+      window.LubaNoteSharingNotes
+        ?.zrusAktivniEditor?.(note.id);
 
       aktivniSession = {
         noteId: note.id,
@@ -864,6 +879,8 @@
 
     aktivniSession = null;
     zastavHeartbeat();
+    window.LubaNoteSharingNotes
+      ?.zrusAktivniEditor?.(session.noteId);
 
     if (!navigator.onLine) {
       return false;

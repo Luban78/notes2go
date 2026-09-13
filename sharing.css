@@ -1311,3 +1311,9 @@ body.sharingReadOnlyOpen {
   opacity: 0.62;
   text-decoration-line: line-through;
 }
+
+/* PATCH 474 – Shared stav muze mit druhy radek (Prave/Naposledy upravil). */
+.taskCard .sharingSharedCardMeta,
+.sharingReadOnlyHeaderText p {
+  white-space: pre-line;
+}

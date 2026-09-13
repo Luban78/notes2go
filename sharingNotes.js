@@ -37,6 +37,15 @@
   let puvodniAndroidZpet = null;
   let menuSdileneKartyNoteId = null;
 
+  /*
+   * PATCH 474 – kratkodoby stav aktivniho editora znamy z autoritativniho
+   * lock RPC. Neni to nova databazova pravda; plati jen po dobu serveroveho
+   * serverove odpovedi. Stav schvalne drzime jen kratce; bez samostatneho
+   * peek/realtime RPC nechceme zobrazovat zastarale "Prave upravuje".
+   */
+  const aktivniEditori = new Map();
+  const AKTIVNI_EDITOR_STAV_MS = 20_000;
+
   function t(klic, zaloha, promenne = null) {
     const fn = window.LubaNoteI18n?.t;
 
@@ -71,6 +80,94 @@
   function normalizujUsername(hodnota) {
     const text = String(hodnota || "").trim().replace(/^@+/, "");
     return text ? `@${text}` : "@?";
+  }
+
+  function formatujSharedCas(hodnota) {
+    const datum = new Date(hodnota || "");
+
+    if (Number.isNaN(datum.getTime())) {
+      return "";
+    }
+
+    return datum.toLocaleString(
+      window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+      {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }
+    );
+  }
+
+  function ziskejAktivnihoEditora(noteId) {
+    const stav = aktivniEditori.get(String(noteId || ""));
+
+    if (!stav) {
+      return null;
+    }
+
+    if (stav.expiresAt <= Date.now()) {
+      aktivniEditori.delete(String(noteId || ""));
+      return null;
+    }
+
+    return stav;
+  }
+
+  function vytvorSharedMetaText(note, { readOnly = false } = {}) {
+    const owner = note?.__lubanoteSharedOwnerUsername || "@?";
+    const aktivni = ziskejAktivnihoEditora(note?.id);
+
+    if (aktivni?.username) {
+      return `Sdíleno · ${owner}\nPrávě upravuje ${aktivni.username}`;
+    }
+
+    const posledniUsername = String(
+      note?.sharedLastEditorUsername || ""
+    ).trim();
+    const posledniCas = formatujSharedCas(
+      note?.sharedLastEditedAt || note?.updatedAt
+    );
+
+    if (posledniUsername) {
+      return `Sdíleno · ${owner}\nNaposledy upravil ${normalizujUsername(posledniUsername)}${
+        posledniCas ? ` · ${posledniCas}` : ""
+      }`;
+    }
+
+    return readOnly
+      ? `Sdíleno · ${owner} · pouze pro čtení`
+      : `Sdíleno · ${owner}`;
+  }
+
+  function nastavAktivniEditor(noteId, username) {
+    const id = String(noteId || "").trim();
+
+    if (!id) return;
+
+    aktivniEditori.set(id, {
+      username: normalizujUsername(username),
+      expiresAt: Date.now() + AKTIVNI_EDITOR_STAV_MS
+    });
+
+    if (viewerNoteId === id && viewer) {
+      const note = sdilenePoznamky.find((item) => item.id === id);
+      if (note) viewer.meta.textContent = vytvorSharedMetaText(note, { readOnly: true });
+    }
+  }
+
+  function zrusAktivniEditor(noteId) {
+    const id = String(noteId || "").trim();
+    if (!id) return;
+
+    aktivniEditori.delete(id);
+
+    if (viewerNoteId === id && viewer) {
+      const note = sdilenePoznamky.find((item) => item.id === id);
+      if (note) viewer.meta.textContent = vytvorSharedMetaText(note, { readOnly: true });
+    }
   }
 
   function normalizujCacheNotes(notes) {
@@ -583,11 +680,7 @@
 
     const meta = document.createElement("p");
     meta.className = "sharingSharedCardMeta";
-    meta.textContent = t(
-      "sharing.sharedCardMeta",
-      "Sdíleno · {owner} · pouze pro čtení",
-      { owner: note.__lubanoteSharedOwnerUsername || "@?" }
-    );
+    meta.textContent = vytvorSharedMetaText(note);
 
     const tags = document.createElement("div");
     tags.className = "taskTags";
@@ -823,10 +916,9 @@
     if (viewerNoteId) {
       const note = sdilenePoznamky.find((item) => item.id === viewerNoteId);
       if (note) {
-        viewer.meta.textContent = t(
-          "sharing.readOnlyMeta",
-          "{owner} · pouze pro čtení",
-          { owner: note.__lubanoteSharedOwnerUsername || "@?" }
+        viewer.meta.textContent = vytvorSharedMetaText(
+          note,
+          { readOnly: true }
         );
       }
     }
@@ -836,10 +928,9 @@
     const modal = vytvorViewer();
 
     modal.title.textContent = note.title || t("sharing.sharedUntitled", "Bez názvu");
-    modal.meta.textContent = t(
-      "sharing.readOnlyMeta",
-      "{owner} · pouze pro čtení",
-      { owner: note.__lubanoteSharedOwnerUsername || "@?" }
+    modal.meta.textContent = vytvorSharedMetaText(
+      note,
+      { readOnly: true }
     );
 
     const html = String(note.richContent || "").trim();
@@ -1266,6 +1357,8 @@
   }
 
   window.LubaNoteSharingNotes = {
+    nastavAktivniEditor,
+    zrusAktivniEditor,
     obnovZeServeru,
     vykresliSdileneKarty,
     ziskejSdilenePoznamky: () => [...sdilenePoznamky],

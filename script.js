@@ -3725,6 +3725,22 @@ function vytvorDataSdilenehoEditoru() {
   const base =
     aktivniSdilenaEditace.note || {};
 
+  /*
+   * PATCH 474 – posledni editor Shared poznamky.
+   * @username je verejna Shared identita, takze jej muzeme ulozit primo
+   * do canonical shared data spolu s casem posledni editace. Nejde o audit
+   * historii – jen o posledni znamy editor pro rychly stav v UI.
+   */
+  const casAktualizace = new Date().toISOString();
+  const rawUsernameEditora = String(
+    window.LubaNoteSharingIdentity?.ziskejUsername?.() || ""
+  )
+    .trim()
+    .replace(/^@+/, "");
+  const usernameEditora = rawUsernameEditora
+    ? `@${rawUsernameEditora}`
+    : String(base.sharedLastEditorUsername || "");
+
   const title =
     ziskejNazevPoznamkyZEditoru().trim();
 
@@ -3761,7 +3777,11 @@ function vytvorDataSdilenehoEditoru() {
       id:
         aktivniSdilenaEditace.noteId,
       updatedAt:
-        new Date().toISOString(),
+        casAktualizace,
+      sharedLastEditorUsername:
+        usernameEditora,
+      sharedLastEditedAt:
+        casAktualizace,
 
       title,
       note,
