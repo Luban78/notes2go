@@ -1,5 +1,6 @@
 package cz.luban.notes2go;
 
+import android.content.Context;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -7,6 +8,7 @@ import android.view.ActionMode;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.inputmethod.InputMethodManager;
 
 import androidx.activity.OnBackPressedCallback;
 
@@ -28,6 +30,10 @@ public class MainActivity extends BridgeActivity {
 
     registerPlugin(
       LubaNoteDocumentPlugin.class
+    );
+
+    registerPlugin(
+      LubaNoteKeyboardStatePlugin.class
     );
 
     super.onCreate(savedInstanceState);
@@ -120,9 +126,65 @@ public class MainActivity extends BridgeActivity {
   }
 
 
+  /*
+   * FIX 471 – LubaKeyboard používá vlastní panel a systémovou IME nechce.
+   * Starý WebView 103 si ale při minimalizaci umí zapamatovat InputConnection
+   * a při návratu na zlomek sekundy obnovit Gboard ještě PŘED JavaScriptem.
+   *
+   * Zásah je záměrně nativní a úzký:
+   * - pouze když je v LubaNote zvolená LubaKeyboard;
+   * - při odchodu Activity zrušíme focus WebView + schováme IME;
+   * - při návratu IME preventivně znovu schováme;
+   * - při explicitní volbě systémové klávesnice se nedělá NIC.
+   *
+   * Fullscreen logika níže zůstává beze změny.
+   */
+  private boolean pouzivaLubaKeyboard() {
+    return LubaNoteKeyboardStatePlugin.pouzivaLubaKeyboard(this);
+  }
+
+  private void schovejSystemovouImeProLubaKeyboard(boolean zrusitFocusWebView) {
+    if (!pouzivaLubaKeyboard()) {
+      return;
+    }
+
+    View decorView = getWindow().getDecorView();
+
+    if (zrusitFocusWebView && getBridge() != null && getBridge().getWebView() != null) {
+      getBridge().getWebView().clearFocus();
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      WindowInsetsController controller = getWindow().getInsetsController();
+      if (controller != null) {
+        controller.hide(WindowInsets.Type.ime());
+      }
+    }
+
+    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+    if (imm != null) {
+      imm.hideSoftInputFromWindow(decorView.getWindowToken(), 0);
+    }
+  }
+
+  @Override
+  protected void onPause() {
+    /* Zrušení focusu ještě před super.onPause() je důležité: WebView tak
+       nemá aktivní editor, který by Android při resume znovu připojil k IME. */
+    schovejSystemovouImeProLubaKeyboard(true);
+    super.onPause();
+  }
+
+  @Override
+  protected void onStop() {
+    schovejSystemovouImeProLubaKeyboard(true);
+    super.onStop();
+  }
+
   @Override
   public void onResume() {
     super.onResume();
+    schovejSystemovouImeProLubaKeyboard(false);
     obnovFullscreen();
   }
 
@@ -132,6 +194,7 @@ public class MainActivity extends BridgeActivity {
     super.onWindowFocusChanged(hasFocus);
 
     if (hasFocus) {
+      schovejSystemovouImeProLubaKeyboard(false);
       obnovFullscreen();
     }
   }
