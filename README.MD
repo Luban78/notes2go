@@ -1,1 +1,1 @@
-LubaNote last checkpoint 
+LubaNote last checkpoint 1
