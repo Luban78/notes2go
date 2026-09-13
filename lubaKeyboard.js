@@ -2131,6 +2131,19 @@
       return;
     }
 
+    /* PATCH 467 – window.blur může přijít ještě PŘED visibilitychange.
+       Pokud už jsme stav jednou zachytili, jen znovu potvrď odpojení a
+       nepřepiš původní selection/focus stav druhým průchodem. */
+    if (navratLubaPoBackgroundu?.editor?.isConnected) {
+      const ulozenyEditor = navratLubaPoBackgroundu.editor;
+      nastavLubaAtributy(ulozenyEditor);
+      ulozenyEditor.setAttribute("contenteditable", "false");
+      ulozenyEditor.setAttribute("tabindex", "-1");
+      try { ulozenyEditor.blur(); } catch (_error) {}
+      schovejSystemovou();
+      return;
+    }
+
     const editor = aktivniEditor || najdiEditor();
     if (!jeEditorV2(editor)) {
       navratLubaPoBackgroundu = null;
@@ -2147,14 +2160,22 @@
       editor,
       melFocus: document.activeElement === editor,
       bylaOtevrena: Boolean(panel && !panel.hidden),
-      range: zachytRangePredBackgroundem(editor)
+      range: zachytRangePredBackgroundem(editor),
+      contenteditable: editor.getAttribute("contenteditable"),
+      tabindex: editor.getAttribute("tabindex")
     };
 
-    /* Nejdřív potvrdit vlastní režim, potom odpojit Android InputConnection. */
+    /*
+     * PATCH 467 – samotný blur na WebView 103 nestačí. Android si umí
+     * ponechat EditorInfo/InputConnection a při obnovení Activity zobrazit
+     * systémovou IME ještě dřív, než dostaneme visibilitychange=visible.
+     * Dočasné contenteditable=false InputConnection zruší už při odchodu.
+     * Stav atributů je uložen a po návratu se přesně vrátí.
+     */
     nastavLubaAtributy(editor);
-    if (document.activeElement === editor) {
-      try { editor.blur(); } catch (_error) {}
-    }
+    editor.setAttribute("contenteditable", "false");
+    editor.setAttribute("tabindex", "-1");
+    try { editor.blur(); } catch (_error) {}
     schovejSystemovou();
   }
 
@@ -2173,6 +2194,14 @@
 
     aktivniEditor = editor;
     if (editor === systemovyEditor) systemovyEditor = null;
+
+    /* PATCH 467 – editor byl před backgroundem záměrně dočasně
+       zneeditovatelněn. Obnov původní atributy ještě PŘED pripravEditor/focus. */
+    if (stav.contenteditable == null) editor.removeAttribute("contenteditable");
+    else editor.setAttribute("contenteditable", stav.contenteditable);
+    if (stav.tabindex == null) editor.removeAttribute("tabindex");
+    else editor.setAttribute("tabindex", stav.tabindex);
+
     nastavLubaAtributy(editor);
     pripravEditor(editor);
 
@@ -2207,6 +2236,14 @@
     });
   }
 
+  /* PATCH 467 – blur okna přichází na Androidu typicky dřív než
+     visibilitychange=hidden. Tohle je klíčové: InputConnection odpojíme
+     ještě během odchodu Activity, ne až při jejím pozdějším uspání. */
+  window.addEventListener("blur", () => {
+    if (ziskejZdrojKlavesnice() === "system") return;
+    ulozLubaStavPredBackgroundem();
+  }, true);
+
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       clearTimeout(navratLubaTimer);
@@ -2219,9 +2256,20 @@
     navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
   }, true);
 
+  /* Page Lifecycle fallback – některé WebView používají pagehide/freeze
+     při přepnutí aplikace dřív nebo spolehlivěji než visibilitychange. */
+  window.addEventListener("pagehide", ulozLubaStavPredBackgroundem, true);
+  document.addEventListener("freeze", ulozLubaStavPredBackgroundem, true);
+
   /* Některé starší WebView vrátí focus oknu dřív než přepnou visibility.
      Funkce je no-op, pokud předtím neproběhl skutečný background. */
   window.addEventListener("focus", () => {
+    if (!navratLubaPoBackgroundu) return;
+    clearTimeout(navratLubaTimer);
+    navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
+  }, true);
+
+  window.addEventListener("pageshow", () => {
     if (!navratLubaPoBackgroundu) return;
     clearTimeout(navratLubaTimer);
     navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);

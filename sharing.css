@@ -606,6 +606,17 @@
 .sharingSharedCard {
   position: relative;
   cursor: pointer;
+
+  /* PATCH 467 – starý Android/WebView kreslí na kliknutelném DIVu vlastní
+     modrý tap-highlight přes kartu. Shared karta má vlastní 1x/2x tap UX,
+     takže nativní highlight je jen rušivý a není součást LubaNote UI. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.sharingSharedCard * {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sharingSharedCard::after {
