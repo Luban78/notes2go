@@ -1541,7 +1541,7 @@ function jeCloudSecretRow(row) {
     jeLegacyCloudSecretRow(row);
 }
 
-async function uploadLocalNoteToSupabase(note) {
+async function uploadLocalNoteToSupabase(note, moznosti = {}) {
   const user = await getCurrentUser();
 
   if (!user || !note?.id) {
@@ -1634,6 +1634,33 @@ async function uploadLocalNoteToSupabase(note) {
     vysledek.conflict &&
     note.isSecret !== true
   ) {
+    /*
+     * PATCH 483 – targeted upload.
+     *
+     * Běžná V2 změna už při revizním konfliktu nesmí spustit celý
+     * get_notes_safe snapshot. Stáhneme pouze konfliktující note_id
+     * přes RPC z patch 482 a použijeme stejná revision pravidla jako
+     * dosavadní bezpečný merge.
+     */
+    if (moznosti?.cilenyV2 === true) {
+      const cileneVyreseno =
+        await vyresCilenyKonfliktBeznePoznamkyV2(
+          note,
+          vysledek?.result || {}
+        );
+
+      if (moznosti?.vratitDetailV2 === true) {
+        return {
+          ok: cileneVyreseno === true,
+          wrote: false,
+          conflictResolved:
+            cileneVyreseno === true
+        };
+      }
+
+      return cileneVyreseno === true;
+    }
+
     naplanujVyreseniBeznehoReviznihoKonfliktu();
   }
 
@@ -1670,6 +1697,17 @@ async function uploadLocalNoteToSupabase(note) {
         error
       );
     }
+  }
+
+  if (moznosti?.vratitDetailV2 === true) {
+    return {
+      ok: vysledek.ok === true,
+      wrote: vysledek.ok === true,
+      revision:
+        vysledek?.result?.revision ??
+        ziskejCloudSyncMeta(note.id)?.revision ??
+        null
+    };
   }
 
   return vysledek.ok;
@@ -2683,6 +2721,223 @@ function ulozPrijateCloudMetaPoMerge(
       zrusKonfliktSynchronizace(row.id);
     });
 }
+
+/*
+ * SYNC V2.2 – TARGETED DOWNLOAD PRO KONFLIKT (PATCH 483)
+ *
+ * RPC z patch 482 vrací pouze konkrétně vyžádané note_id. Tato cesta
+ * se používá při konfliktu targeted uploadu, aby jedna kolidující
+ * poznámka nikdy nebyla důvodem stáhnout celý get_notes_safe snapshot.
+ */
+async function nactiCloudPoznamkyPodleIdV2(noteIds) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(noteIds) ? noteIds : [])
+        .filter(Boolean)
+        .map((id) => String(id))
+    )
+  ).slice(0, 200);
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_get_notes_by_ids_safe",
+    {
+      p_note_ids: ids
+    }
+  );
+
+  if (error) {
+    console.warn(
+      "Sync V2: targeted download selhal:",
+      error.message || error
+    );
+
+    if (jeChybaOdeprenehoPristupu(error)) {
+      oznamOdeprenyPristupUctu(error);
+    }
+
+    return null;
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+async function vyresCilenyKonfliktBeznePoznamkyV2(
+  lokalniPoznamka,
+  konfliktDetail = {}
+) {
+  const noteId = lokalniPoznamka?.id;
+
+  if (!noteId || lokalniPoznamka?.isSecret === true) {
+    return false;
+  }
+
+  /*
+   * Shared obsah nesmí private V2 merge převzít. Serverový guard
+   * save_note_safe je zde autoritativní a shared editor má vlastní
+   * lock/save cestu.
+   */
+  if (
+    konfliktDetail?.reason ===
+      "shared_note_requires_shared_save"
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET CONFLICT DEFER | shared | id=${noteId}`
+    );
+    return false;
+  }
+
+  const cloudRows =
+    await nactiCloudPoznamkyPodleIdV2([noteId]);
+
+  if (!cloudRows) {
+    return false;
+  }
+
+  const row = cloudRows.find(
+    (polozka) => String(polozka?.id) === String(noteId)
+  );
+
+  if (!row) {
+    oznamKonfliktSynchronizace(
+      noteId,
+      "targeted_note_missing",
+      {
+        expectedRevision:
+          ziskejCloudSyncMeta(noteId)?.revision ?? null,
+        serverReason:
+          konfliktDetail?.reason || null
+      }
+    );
+
+    return false;
+  }
+
+  const localRegular = getLocalNotesForSync();
+
+  const revizniMerge = pripravRevizniMerge(
+    localRegular,
+    [],
+    [],
+    [],
+    [row],
+    new Set(),
+    new Set(),
+    new Set()
+  );
+
+  const {
+    konfliktniId,
+    vynutitCloudId,
+    vynutitLocalId,
+    prijmoutCloudMetaId,
+    konfliktniKopie
+  } = revizniMerge;
+
+  if (konfliktniId.has(noteId)) {
+    return false;
+  }
+
+  /*
+   * Pokud server během prvního save opravdu změnil revizi, běžný
+   * moderní konflikt skončí zde: cloud zůstane pod původním ID a
+   * lokální verze se případně zachová jako konfliktní kopie s novým ID.
+   */
+  if (vynutitCloudId.has(noteId)) {
+    const aktualni =
+      getLocalNotesForSync().filter(
+        (note) => String(note?.id) !== String(noteId)
+      );
+
+    const cloudPoznamka =
+      vytvorCloudRegularNote(row);
+
+    if (cloudPoznamka) {
+      aktualni.push(cloudPoznamka);
+    }
+
+    for (const kopie of konfliktniKopie) {
+      if (kopie?.id) {
+        aktualni.push(kopie);
+      }
+    }
+
+    await ulozBeznePoznamkyPrimo(aktualni);
+
+    ulozPrijateCloudMetaPoMerge(
+      [row],
+      prijmoutCloudMetaId
+    );
+
+    /*
+     * Konfliktní kopie je nová běžná poznámka. Uložíme ji targeted
+     * cestou také samostatně; nikdy kvůli ní nepouštíme full snapshot.
+     */
+    for (const kopie of konfliktniKopie) {
+      const detailKopie =
+        await uploadLocalNoteToSupabase(
+          kopie,
+          {
+            cilenyV2: true,
+            vratitDetailV2: true
+          }
+        );
+
+      if (detailKopie?.ok !== true) {
+        return false;
+      }
+    }
+
+    if (
+      konfliktniKopie.length > 0 &&
+      typeof showToast === "function"
+    ) {
+      showToast("Obě verze poznámky byly zachovány");
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+
+    if (typeof renderRemindersScreen === "function") {
+      renderRemindersScreen();
+    }
+
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET CONFLICT RESOLVED | id=${noteId} copies=${konfliktniKopie.length}`
+    );
+
+    return true;
+  }
+
+  /*
+   * Teoretická větev: cloud se podle známé meta revize nezměnil, ale
+   * save přesto vrátil konflikt. Nic naslepo nepřepisujeme.
+   */
+  if (vynutitLocalId.has(noteId)) {
+    oznamKonfliktSynchronizace(
+      noteId,
+      "targeted_revision_state_uncertain",
+      {
+        expectedRevision:
+          ziskejCloudSyncMeta(noteId)?.revision ?? null,
+        cloudRevision: row?.revision ?? null
+      }
+    );
+  }
+
+  return false;
+}
+
 
 
 /*
@@ -4298,6 +4553,503 @@ let lokalniZmenaCekaNaPotvrzeniServerem = false;
 let casovacKontrolyNavratuInternetu = null;
 let probihajiciSyncCekajiciLokalniZmeny = null;
 
+
+/*
+ * SYNC V2.2 – TARGETED UPLOAD FRONTa (PATCH 483)
+ *
+ * Lokální akce si před/po uložení porovná pouze běžné private poznámky.
+ * Změněná ID se zařadí sem a síť pak odešle jen tyto konkrétní poznámky
+ * přes existující save_note_safe(expected_revision).
+ *
+ * Secret a shared cesty se tímto patchem záměrně nepřepisují.
+ */
+const cekajiciCilenePrivateV2 = new Map();
+let probihajiciCilenyPrivateV2 = null;
+let cileneV2CekaNaFastPotvrzeni = false;
+const potvrzeneCileneRevizeV2 = new Map();
+
+function klonujPoznamkuProCilenyV2(note) {
+  if (!note || typeof note !== "object") {
+    return null;
+  }
+
+  try {
+    return typeof structuredClone === "function"
+      ? structuredClone(note)
+      : JSON.parse(JSON.stringify(note));
+  } catch {
+    return null;
+  }
+}
+
+function vytvorOtiskPoznamkyProCilenyV2(note) {
+  if (!note || typeof note !== "object") {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(
+      seradJsonProSyncPorovnani(note)
+    );
+  } catch {
+    return "";
+  }
+}
+
+function nactiSnapshotBeznychPoznamekProCilenyV2() {
+  if (
+    window.LubaNoteRegularNotesStore
+      ?.chybiPlnaCacheProSync?.() === true
+  ) {
+    return null;
+  }
+
+  const mapa = new Map();
+
+  for (const note of getLocalNotesForSync()) {
+    if (!note?.id || note.isSecret === true) {
+      continue;
+    }
+
+    mapa.set(String(note.id), {
+      note: klonujPoznamkuProCilenyV2(note),
+      otisk: vytvorOtiskPoznamkyProCilenyV2(note)
+    });
+  }
+
+  return mapa;
+}
+
+function jeVlastniSharedPoznamkaProPrivateV2(noteId) {
+  if (!noteId) {
+    return false;
+  }
+
+  try {
+    return window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(noteId) === true;
+  } catch {
+    return false;
+  }
+}
+
+function zaregistrujCileneZmenyPoLokalniAkciV2(
+  snapshotPred
+) {
+  if (!(snapshotPred instanceof Map)) {
+    return {
+      podporovano: false,
+      pocet: 0,
+      duvod: "snapshot-pred-unavailable"
+    };
+  }
+
+  const snapshotPo =
+    nactiSnapshotBeznychPoznamekProCilenyV2();
+
+  if (!(snapshotPo instanceof Map)) {
+    return {
+      podporovano: false,
+      pocet: 0,
+      duvod: "snapshot-po-unavailable"
+    };
+  }
+
+  const vsechnaId = new Set([
+    ...snapshotPred.keys(),
+    ...snapshotPo.keys()
+  ]);
+
+  const zmenena = [];
+
+  for (const id of vsechnaId) {
+    const pred = snapshotPred.get(id);
+    const po = snapshotPo.get(id);
+
+    if ((pred?.otisk || "") === (po?.otisk || "")) {
+      continue;
+    }
+
+    /*
+     * Hard delete má vlastní tombstone frontu a targeted delete cestu.
+     * Tento patch řeší obsahový upload běžné poznámky.
+     */
+    if (!po?.note) {
+      return {
+        podporovano: false,
+        pocet: zmenena.length,
+        duvod: "regular-note-removed"
+      };
+    }
+
+    if (jeVlastniSharedPoznamkaProPrivateV2(id)) {
+      return {
+        podporovano: false,
+        pocet: zmenena.length,
+        duvod: "owned-shared"
+      };
+    }
+
+    if (!po.otisk) {
+      return {
+        podporovano: false,
+        pocet: zmenena.length,
+        duvod: "note-signature-missing"
+      };
+    }
+
+    zmenena.push({
+      id,
+      note: po.note,
+      otisk: po.otisk
+    });
+  }
+
+  if (zmenena.length === 0) {
+    return {
+      podporovano: false,
+      pocet: 0,
+      duvod: "no-regular-change"
+    };
+  }
+
+  for (const zmena of zmenena) {
+    cekajiciCilenePrivateV2.set(
+      zmena.id,
+      {
+        note: zmena.note,
+        otisk: zmena.otisk,
+        queuedAt: Date.now()
+      }
+    );
+  }
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET QUEUE | count=${zmenena.length}`
+  );
+
+  return {
+    podporovano: true,
+    pocet: zmenena.length,
+    duvod: null
+  };
+}
+
+function maCilenyPrivateV2Dluh() {
+  return (
+    cekajiciCilenePrivateV2.size > 0 ||
+    cileneV2CekaNaFastPotvrzeni === true ||
+    Boolean(probihajiciCilenyPrivateV2)
+  );
+}
+
+async function potvrdCilenePrivateZapisyV2(userId) {
+  if (
+    !userId ||
+    !navigator.onLine ||
+    cekajiciCilenePrivateV2.size > 0 ||
+    nactiCekajiciSmazani().length > 0 ||
+    aktivniKonfliktySyncu.size > 0
+  ) {
+    return false;
+  }
+
+  const cursor = nactiPrivateSyncV2Cursor(userId);
+
+  if (!cursor) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "TARGET CONFIRM DEFER | cursor-missing"
+    );
+    return false;
+  }
+
+  const zmeny = await ziskejPrivateSyncV2ZmenyOd(
+    cursor.lastSeq,
+    200
+  );
+
+  if (!zmeny) {
+    return false;
+  }
+
+  /*
+   * Limit 200 je záměrná bezpečnostní brzda. Pokud by feed byl tak
+   * dlouhý, nesmíme předpokládat, že jsme viděli jeho konec.
+   */
+  if (zmeny.length >= 200) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "TARGET CONFIRM DEFER | feed-limit"
+    );
+    return false;
+  }
+
+  let posledniSeq = cursor.lastSeq;
+  const videnePotvrzeneId = new Set();
+
+  for (const radek of zmeny) {
+    const id = String(radek?.note_id || "");
+    const revizeEventu = Number(radek?.revision);
+    const potvrzenaRevize =
+      Number(potvrzeneCileneRevizeV2.get(id));
+
+    /*
+     * Před 484 ještě neumíme obecné vzdálené delta aplikovat.
+     * Fast stav proto potvrdíme jen tehdy, když KAŽDÁ nová feed
+     * událost odpovídá targeted zápisu, který právě tento klient
+     * úspěšně dokončil.
+     */
+    if (
+      radek?.action !== "upsert" ||
+      !Number.isFinite(potvrzenaRevize) ||
+      !Number.isFinite(revizeEventu) ||
+      revizeEventu > potvrzenaRevize
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `TARGET CONFIRM DEFER | remote-delta | id=${id || "?"}`
+      );
+      return false;
+    }
+
+    videnePotvrzeneId.add(id);
+
+    const seq = Number(radek?.seq);
+
+    if (Number.isFinite(seq)) {
+      posledniSeq = Math.max(
+        posledniSeq,
+        Math.floor(seq)
+      );
+    }
+  }
+
+  for (const id of potvrzeneCileneRevizeV2.keys()) {
+    if (!videnePotvrzeneId.has(String(id))) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `TARGET CONFIRM DEFER | own-event-missing | id=${id}`
+      );
+      return false;
+    }
+  }
+
+  const headPredFingerprintem =
+    await ziskejPrivateSyncV2Head();
+
+  if (
+    headPredFingerprintem === null ||
+    headPredFingerprintem !== posledniSeq
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "TARGET CONFIRM DEFER | head-changed-before-fingerprint"
+    );
+    return false;
+  }
+
+  const localGeneration =
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+  if (localGeneration === null) {
+    return false;
+  }
+
+  const server =
+    await ziskejServerovyPrivateFingerprint();
+
+  if (!server?.fingerprint) {
+    return false;
+  }
+
+  const headPoFingerprintu =
+    await ziskejPrivateSyncV2Head();
+
+  if (
+    headPoFingerprintu === null ||
+    headPoFingerprintu !== headPredFingerprintem ||
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync() !==
+      localGeneration ||
+    cekajiciCilenePrivateV2.size > 0
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "TARGET CONFIRM DEFER | state-changed-during-confirm"
+    );
+    return false;
+  }
+
+  const fastUlozen = ulozFastSyncStav({
+    userId,
+    serverFingerprint: server.fingerprint,
+    localGeneration
+  });
+
+  if (!fastUlozen) {
+    return false;
+  }
+
+  ulozPrivateSyncV2Cursor(
+    userId,
+    headPoFingerprintu
+  );
+
+  potvrzeneCileneRevizeV2.clear();
+  cileneV2CekaNaFastPotvrzeni = false;
+  synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET CONFIRMED | seq=${headPoFingerprintu}`
+  );
+
+  return true;
+}
+
+async function synchronizujCilenePrivateZmenyV2() {
+  if (probihajiciCilenyPrivateV2) {
+    return probihajiciCilenyPrivateV2;
+  }
+
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  if (probihajiciStartSync || probihajiciSync) {
+    odlozOpakovaniSynchronizace();
+    return false;
+  }
+
+  probihajiciCilenyPrivateV2 =
+    (async () => {
+      const user = await getCurrentUser();
+
+      if (!user) {
+        return false;
+      }
+
+      nastavStavSynchronizaceUI("syncing");
+      window.LubaNoteSyncTraffic?.zacniSync?.();
+
+      try {
+        const snapshot = Array.from(
+          cekajiciCilenePrivateV2.entries()
+        );
+
+        for (const [id, zaznam] of snapshot) {
+          /*
+           * Během síťového await mohla stejná poznámka dostat novější
+           * lokální editaci. Starý snapshot pak nesmíme odeslat.
+           */
+          const aktualniFronta =
+            cekajiciCilenePrivateV2.get(id);
+
+          if (
+            !aktualniFronta ||
+            aktualniFronta.otisk !== zaznam.otisk
+          ) {
+            continue;
+          }
+
+          const aktualniSnapshot =
+            nactiSnapshotBeznychPoznamekProCilenyV2();
+
+          const aktualni =
+            aktualniSnapshot?.get(id);
+
+          if (
+            !aktualni?.note ||
+            aktualni.otisk !== zaznam.otisk
+          ) {
+            continue;
+          }
+
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            `TARGET UPLOAD | id=${id}`
+          );
+
+          const detail =
+            await uploadLocalNoteToSupabase(
+              aktualni.note,
+              {
+                cilenyV2: true,
+                vratitDetailV2: true
+              }
+            );
+
+          if (detail?.ok !== true) {
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2",
+              `TARGET UPLOAD DEFER | id=${id}`
+            );
+            return false;
+          }
+
+          /*
+           * Pro bezpečné potvrzení feedu evidujeme jen zápis, který
+           * opravdu provedl tento targeted save. Vyřešený konflikt
+           * může obsahovat vzdálenou událost a finální potvrzení proto
+           * necháme až na obecné delta fázi 484.
+           */
+          if (detail?.wrote === true) {
+            const revize = Number(
+              detail?.revision ??
+              ziskejCloudSyncMeta(id)?.revision
+            );
+
+            if (Number.isFinite(revize)) {
+              potvrzeneCileneRevizeV2.set(
+                String(id),
+                revize
+              );
+            }
+          } else {
+            cileneV2CekaNaFastPotvrzeni = true;
+          }
+
+          const frontaPoZapisu =
+            cekajiciCilenePrivateV2.get(id);
+
+          if (
+            frontaPoZapisu?.otisk === zaznam.otisk
+          ) {
+            cekajiciCilenePrivateV2.delete(id);
+          }
+        }
+
+        if (cekajiciCilenePrivateV2.size > 0) {
+          return false;
+        }
+
+        cileneV2CekaNaFastPotvrzeni = true;
+
+        const potvrzeno =
+          await potvrdCilenePrivateZapisyV2(user.id);
+
+        if (potvrzeno === true) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            "TARGET SYNC OK"
+          );
+          return true;
+        }
+
+        return false;
+      } finally {
+        window.LubaNoteSyncTraffic?.dokonciSync?.();
+      }
+    })();
+
+  try {
+    return await probihajiciCilenyPrivateV2;
+  } finally {
+    probihajiciCilenyPrivateV2 = null;
+  }
+}
+
 /*
  * Barvy karet závisejí na syncedTags. Při skutečně offline startu se
  * použije bezpečná lokální cache štítků, ale pokud Android WebView při
@@ -4461,8 +5213,19 @@ async function synchronizujCekajiciLokalniZmenu() {
 
   probihajiciSyncCekajiciLokalniZmeny =
     (async () => {
-      const uspesne =
-        await spustRychlySyncPoznamekBezpecne();
+      /*
+       * PATCH 483:
+       * Jakmile máme přesně identifikované běžné private změny, mají
+       * absolutní přednost targeted zápisy. Full sync je fallback pouze
+       * pro legacy/unsupported akce, které tento patch ještě neumí
+       * bezpečně identifikovat.
+       */
+      const pouzitCilenyV2 =
+        maCilenyPrivateV2Dluh();
+
+      const uspesne = pouzitCilenyV2
+        ? await synchronizujCilenePrivateZmenyV2()
+        : await spustRychlySyncPoznamekBezpecne();
 
       if (uspesne === true) {
         potvrzLokalniZmenuNaServeru();
@@ -4569,9 +5332,21 @@ async function provedLokalniZmenuBezKolizeSeSync(akce) {
  * následný sync se spustí z bezpečného aktuálního snapshotu.
  */
 async function provedLokalniZmenuASynchronizuj(akce) {
+  /*
+   * PATCH 483 – targeted upload.
+   * Snapshot je pouze lokální; neprovádí žádný síťový request.
+   */
+  const snapshotPredCilenymV2 =
+    nactiSnapshotBeznychPoznamekProCilenyV2();
+
   const vysledek =
     await provedLokalniZmenuBezKolizeSeSync(
       akce
+    );
+
+  const cilenaZmenaV2 =
+    zaregistrujCileneZmenyPoLokalniAkciV2(
+      snapshotPredCilenymV2
     );
 
   /*
@@ -4600,10 +5375,16 @@ async function provedLokalniZmenuASynchronizuj(akce) {
       }
 
       /*
-       * Síť běží výhradně na pozadí a krátce se debouncuje.
-       * Několik rychlých kliknutí tak nespustí několik synců za sebou.
+       * U podporované běžné private změny už časovač nevede na
+       * get_notes_safe. synchronizujCekajiciLokalniZmenu() nejprve
+       * zpracuje targeted frontu. Nepodporované/legacy cesty zůstávají
+       * beze změny a použijí dosavadní bezpečný sync.
        */
-      naplanujSynchronizaciPoLokalniZmene(350);
+      naplanujSynchronizaciPoLokalniZmene(
+        cilenaZmenaV2?.podporovano === true
+          ? 220
+          : 350
+      );
     }
   }
 
@@ -4625,6 +5406,25 @@ async function spustRychlySyncPoznamekBezpecne() {
 
   if (!navigator.onLine) {
     return false;
+  }
+
+  /*
+   * PATCH 483 – foreground / pageshow nesmí obejít targeted frontu.
+   * Pokud už lokální změna čeká na konkrétní save_note_safe zápis,
+   * dokončíme jej místo fingerprint -> full-sync rozhodování.
+   */
+  if (
+    lokalniZmenaCekaNaPotvrzeniServerem &&
+    maCilenyPrivateV2Dluh()
+  ) {
+    const targetedOk =
+      await synchronizujCilenePrivateZmenyV2();
+
+    if (targetedOk === true) {
+      potvrzLokalniZmenuNaServeru();
+    }
+
+    return targetedOk === true;
   }
 
   /*
@@ -4875,10 +5675,22 @@ async function spustStartSyncBezpecne() {
     ) {
       synchronizaceOdlozenaKvuliLokalniZmene = false;
 
-      setTimeout(
-        spustRychlySyncPoznamekBezpecne,
-        120
-      );
+      setTimeout(() => {
+        if (lokalniZmenaCekaNaPotvrzeniServerem) {
+          synchronizujCekajiciLokalniZmenu().catch(
+            (error) => {
+              console.warn(
+                "Odložený targeted sync po startu selhal:",
+                error
+              );
+            }
+          );
+          return;
+        }
+
+        spustRychlySyncPoznamekBezpecne()
+          .catch(() => {});
+      }, 120);
     }
   }
 }
@@ -4926,6 +5738,44 @@ async function synchronizujPoznamkyTed(
     await frontaLokalnichZmen;
   } catch {
     // Další sync rozhodne podle revize lokálního stavu.
+  }
+
+  /*
+   * PATCH 483 – editor handoff / "čekej na cloud".
+   *
+   * Pokud konkrétní noteId právě čeká v targeted V2 frontě, nesmí tato
+   * potvrzovací cesta spustit syncNotes() a tím celý get_notes_safe.
+   * Nejdřív dokončíme targeted upload. Pokud jej nelze bezpečně
+   * potvrdit, vrátíme false a nic hromadně nestahujeme.
+   */
+  if (
+    noteId &&
+    lokalniZmenaCekaNaPotvrzeniServerem &&
+    maCilenyPrivateV2Dluh()
+  ) {
+    for (let pokus = 0; pokus < 2; pokus += 1) {
+      const targetedOk =
+        await synchronizujCekajiciLokalniZmenu();
+
+      if (
+        targetedOk === true &&
+        !aktivniKonfliktySyncu.has(noteId)
+      ) {
+        return true;
+      }
+
+      if (!maCilenyPrivateV2Dluh()) {
+        break;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 120)
+      );
+    }
+
+    if (maCilenyPrivateV2Dluh()) {
+      return false;
+    }
   }
 
   /*
