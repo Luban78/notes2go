@@ -378,18 +378,6 @@
     }
   }
 
-  /* PATCH 468 – native Android musi znat zdroj klavesnice jeste pred
-     lifecycle navratem Activity. JavaScript uz nedokaze zabranit prvnimu
-     systemovemu IME framu, kdyz ho Android obnovi pred WebView eventy.
-     Malý Capacitor bridge proto synchronizuje jen jedinou informaci:
-     zda je explicitne zvolena systemova klavesnice. */
-  function oznamNativeZdrojKlavesnice(zdroj = ziskejZdrojKlavesnice()) {
-    try {
-      const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-      plugin?.nastavZdroj?.({ systemova: zdroj === "system" });
-    } catch (_error) {}
-  }
-
   function nastavLubaAtributy(editor) {
     if (!editor) return;
     editor.setAttribute("inputmode", "none");
@@ -679,7 +667,6 @@
   function pripravEditor(editor) {
     if (!jeEditorV2(editor)) return;
     aktivniEditor = editor;
-    oznamNativeZdrojKlavesnice();
 
     if (!document.body.classList.contains("ln-luba-klavesnice-open")) {
       ulozZakladniViewport();
@@ -1182,7 +1169,6 @@
   function nastavZdrojKlavesnice(zdroj) {
     const novy = zdroj === "system" ? "system" : "luba";
     try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
-    oznamNativeZdrojKlavesnice(novy);
 
     const editor = aktivniEditor || najdiEditor();
     if (editor) {
@@ -2303,10 +2289,6 @@
      vytvoří editor a zavolá pripravEditor(), případně přes focusin fallback.
      Do té doby LubaKeyboard pouze poskytuje API a na DOM aplikace nesahá.
      ========================================================== */
-
-  /* Synchronizace vychoziho/persistovaneho rezimu probehne i bez
-     otevreneho editoru, aby native lifecycle mel stav pripraven dopredu. */
-  oznamNativeZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
     verze: "SETTINGS-SYSTEM-459",
