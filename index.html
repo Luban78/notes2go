@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260913-sync-status-row-479">
+  <link rel="stylesheet" href="style.css?v=20260913-coldstart-compact-481">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css">
@@ -185,11 +185,11 @@
     
     <!-- DATOVÝ PROVOZ SYNCHRONIZACE – RX/TX + připravený bezpečný Egress údaj -->
     <div id="syncTrafficBar" class="syncTrafficBar" data-sync-active="0" aria-live="polite">
-      <span class="syncTrafficLabel">Sync</span>
+      <span class="syncTrafficLabel">S</span>
       <span id="syncTrafficRx" class="syncTrafficValue">↓ 0 B</span>
       <span id="syncTrafficTx" class="syncTrafficValue">↑ 0 B</span>
       <span class="syncTrafficDivider" aria-hidden="true">·</span>
-      <span id="syncTrafficEgress" class="syncTrafficEgress" title="Přesný zůstatek egressu zatím není dostupný.">Egress: —</span>
+      <span id="syncTrafficEgress" class="syncTrafficEgress" title="Přesný zůstatek egressu zatím není dostupný.">E —</span>
       <span id="syncStatusText" class="syncStatusText" hidden aria-hidden="true"></span>
     </div>
 
@@ -1967,10 +1967,10 @@
   <script src="syncStatus.js?v=20260906-offline-pending-1"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
-  <script src="syncTraffic.js?v=20260913-sync-traffic-478"></script>
+  <script src="syncTraffic.js?v=20260913-coldstart-compact-481"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260913-sync-traffic-478"></script>
+  <script src="supabaseClient.js?v=20260913-coldstart-compact-481"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
   <script src="sharingIdentity.js?v=20260912-auth-gate-441"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->
@@ -2004,7 +2004,7 @@
   <script src="syncRealtime.js?v=20260907-cross-device-notif-1"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260913-sync-traffic-478"></script>
+  <script src="sync.js?v=20260913-coldstart-compact-481"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260906-apk-same-device-restart-09275"></script>

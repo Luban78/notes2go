@@ -427,50 +427,90 @@ function zrusFastSyncStav() {
 }
 
 async function ziskejServerovyPrivateFingerprint() {
-  try {
-    const { data, error } = await supabaseClient.rpc(
-      "lubanote_get_private_sync_fingerprint"
-    );
+  /*
+   * PATCH 481 – STUDENÝ START / AUTH RACE
+   *
+   * Na Androidu se při studeném startu může stát, že lokální session už
+   * vrátí uživatele, ale první PostgREST RPC ještě běží se starým /
+   * neobnoveným tokenem a skončí 401. Dřívější fallback pak okamžitě
+   * spustil get_notes_safe a stáhl celý snapshot.
+   *
+   * Fingerprint proto jednou krátce zopakujeme. Pokud není dostupný ani
+   * potom, obsahový sync se NESMÍ spustit jen proto, že kontrolní RPC
+   * selhalo. Volající takový sync bezpečně odloží.
+   */
+  for (let pokus = 1; pokus <= 2; pokus += 1) {
+    try {
+      const { data, error } = await supabaseClient.rpc(
+        "lubanote_get_private_sync_fingerprint"
+      );
 
-    if (error) {
+      if (error) {
+        if (pokus === 1) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "FAST",
+            "FINGERPRINT RETRY – první RPC selhalo"
+          );
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 350)
+          );
+          continue;
+        }
+
+        console.warn(
+          "Fast Sync: serverový otisk není dostupný, sync se bezpečně odloží:",
+          error.message || error
+        );
+        return null;
+      }
+
+      const vysledek = Array.isArray(data)
+        ? data[0]
+        : data;
+
+      const fingerprint =
+        typeof vysledek === "string"
+          ? vysledek
+          : vysledek?.fingerprint;
+
+      if (
+        typeof fingerprint !== "string" ||
+        !fingerprint
+      ) {
+        console.warn(
+          "Fast Sync: server vrátil neplatný otisk, sync se bezpečně odloží."
+        );
+        return null;
+      }
+
+      return {
+        fingerprint,
+        noteCount: Number(vysledek?.note_count ?? 0),
+        maxRevision: Number(vysledek?.max_revision ?? 0)
+      };
+    } catch (error) {
+      if (pokus === 1) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "FAST",
+          "FINGERPRINT RETRY – výjimka při prvním RPC"
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, 350)
+        );
+        continue;
+      }
+
       console.warn(
-        "Fast Sync: serverový otisk není dostupný, použije se plný sync:",
-        error.message || error
+        "Fast Sync: kontrola serverového otisku selhala, sync se bezpečně odloží:",
+        error
       );
       return null;
     }
-
-    const vysledek = Array.isArray(data)
-      ? data[0]
-      : data;
-
-    const fingerprint =
-      typeof vysledek === "string"
-        ? vysledek
-        : vysledek?.fingerprint;
-
-    if (
-      typeof fingerprint !== "string" ||
-      !fingerprint
-    ) {
-      console.warn(
-        "Fast Sync: server vrátil neplatný otisk, použije se plný sync."
-      );
-      return null;
-    }
-
-    return {
-      fingerprint,
-      noteCount: Number(vysledek?.note_count ?? 0),
-      maxRevision: Number(vysledek?.max_revision ?? 0)
-    };
-  } catch (error) {
-    console.warn(
-      "Fast Sync: kontrola serverového otisku selhala, použije se plný sync:",
-      error
-    );
-    return null;
   }
+
+  return null;
 }
 
 async function pripravFastSyncPriStartu(user) {
@@ -498,9 +538,18 @@ async function pripravFastSyncPriStartu(user) {
       await ziskejServerovyPrivateFingerprint();
 
     if (!server) {
-      stavDiagnostiky = "NO-SERVER-TOKEN";
-      zrusFastSyncStav();
-      return { preskocit: false, snapshot: null };
+      /*
+       * PATCH 481 – selhání malého kontrolního RPC už nesmí být důvodem
+       * k plnému get_notes_safe snapshotu. Fast stav zachováme a sync
+       * odložíme; auth-valid / foreground / reconnect ho bezpečně zkusí
+       * znovu.
+       */
+      stavDiagnostiky = "SERVER-CHECK-DEFER";
+      return {
+        preskocit: false,
+        snapshot: null,
+        odlozit: true
+      };
     }
 
     const snapshot = {
@@ -3875,8 +3924,9 @@ async function syncNotes(moznosti = {}) {
       } catch (error) {
         /*
          * Fast Sync je pouze optimalizace. Pokud malý fingerprint po
-         * úspěšném merge selže, data už jsou bezpečně synchronizovaná;
-         * příští pokus pouze použije konzervativní plný sync.
+         * úspěšném merge selže, data už jsou bezpečně synchronizovaná.
+         * PATCH 481 navíc nedovolí, aby samotná chyba fingerprintu při
+         * dalším pokusu vyvolala plný snapshot.
          */
         console.warn(
           "Fast Sync: post-sync fingerprint se obnoví později:",
@@ -4018,6 +4068,15 @@ async function startSync() {
 
   try {
     const fastSync = await pripravFastSyncPriStartu(user);
+
+    if (fastSync?.odlozit === true) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "FAST",
+        "PRIVATE SYNC DEFER – fingerprint není potvrzen"
+      );
+      nastavStavSynchronizaceUI("restore");
+      return false;
+    }
 
     if (fastSync?.preskocit === true) {
       /*
@@ -4619,6 +4678,15 @@ async function spustRychlySyncPoznamekBezpecne() {
      * a několik MB stejného obsahu znovu nestahujeme.
      */
     const fastSync = await pripravFastSyncPriStartu(user);
+
+    if (fastSync?.odlozit === true) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "FAST",
+        "QUICK SYNC DEFER – fingerprint není potvrzen"
+      );
+      nastavStavSynchronizaceUI("restore");
+      return false;
+    }
 
     let vysledek = true;
 

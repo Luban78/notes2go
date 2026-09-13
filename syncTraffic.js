@@ -134,12 +134,12 @@
     if (egressEl) {
       if (Number.isFinite(egressZbyvaBajtu)) {
         egressEl.textContent =
-          `Egress: ${formatBajtu(egressZbyvaBajtu)}`;
+          `E ${formatBajtu(egressZbyvaBajtu)}`;
         egressEl.title = egressZdroj
           ? `Zbývající egress · ${egressZdroj}`
           : "Zbývající egress";
       } else {
-        egressEl.textContent = "Egress: —";
+        egressEl.textContent = "E —";
         egressEl.title =
           "Přesný zůstatek vyžaduje bezpečný serverový zdroj; Management API token nesmí být v APK/PWA.";
       }
