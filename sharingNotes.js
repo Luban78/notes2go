@@ -36,6 +36,7 @@
   let puvodniRenderTasks = null;
   let puvodniAndroidZpet = null;
   let menuSdileneKartyNoteId = null;
+  const opousteniSdileni = new Set();
 
   /*
    * PATCH 474 – kratkodoby stav aktivniho editora znamy z autoritativniho
@@ -617,6 +618,135 @@
     return String(aktualniNahled ?? note.note ?? "");
   }
 
+  function zobrazSharedZpravu(nadpis, text) {
+    if (typeof window.LubaNoteSharedEditorHost?.zobrazZpravu === "function") {
+      window.LubaNoteSharedEditorHost.zobrazZpravu(nadpis, text);
+      return;
+    }
+
+    console.warn(`${nadpis}: ${text}`);
+  }
+
+  function potvrditOpusteniSdileni(note) {
+    if (!note?.id || opousteniSdileni.has(note.id)) return;
+
+    if (typeof window.otevriVyberovyModal !== "function") {
+      zobrazSharedZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        t(
+          "sharing.manageModalUnavailable",
+          "Potvrzovací okno se nepodařilo otevřít."
+        )
+      );
+      return;
+    }
+
+    window.otevriVyberovyModal({
+      nadpis: t(
+        "sharing.leaveConfirm",
+        "Opustit sdílení této poznámky?"
+      ),
+      moznosti: [
+        {
+          hodnota: "cancel",
+          popisek: t("sharing.cancel", "Zrušit"),
+          ikona: "zavrit"
+        },
+        {
+          hodnota: "leave",
+          popisek: t("sharing.leaveSharedNote", "Opustit sdílení"),
+          ikona: "smazat"
+        }
+      ],
+      poVyberu: async (hodnota) => {
+        if (hodnota !== "leave") return;
+        await opustSdilenouPoznamku(note);
+      }
+    });
+  }
+
+  async function opustSdilenouPoznamku(note) {
+    const noteId = String(note?.id || "").trim();
+    if (!noteId || opousteniSdileni.has(noteId)) return false;
+
+    if (!navigator.onLine) {
+      zobrazSharedZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        t("sharing.shareOffline", "Sdílení vyžaduje připojení k internetu.")
+      );
+      return false;
+    }
+
+    opousteniSdileni.add(noteId);
+
+    try {
+      const klient = await zajistiSupabase();
+      if (!klient) throw new Error("supabase_unavailable");
+
+      const { data, error } = await klient.rpc(
+        "lubanote_leave_shared_note",
+        { p_note_id: noteId }
+      );
+
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.reason || "leave_failed");
+
+      if (viewerNoteId === noteId) {
+        zavriReadOnly();
+      }
+
+      sdilenePoznamky = sdilenePoznamky.filter(
+        (item) => String(item?.id || "") !== noteId
+      );
+      ulozCache(sdilenePoznamky);
+
+      if (typeof window.renderTasks === "function") {
+        window.renderTasks();
+      } else {
+        vykresliSdileneKarty();
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("lubanote:sharing-changed", {
+          detail: {
+            action: "left",
+            noteId
+          }
+        })
+      );
+
+      void obnovZeServeru({ tichy: true, vykreslit: true });
+
+      window.LubaNoteUI?.zobrazPotvrzeniAkce?.(
+        t("sharing.leaveSuccess", "Sdílení bylo opuštěno.")
+      );
+
+      return true;
+    } catch (error) {
+      console.error("Sdílení: opuštění sdílení selhalo.", error);
+
+      const duvod = String(
+        error?.message || error?.details || error || ""
+      ).toLowerCase();
+
+      zobrazSharedZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        duvod.includes("owner_cannot_leave")
+          ? t(
+              "sharing.ownerCannotLeave",
+              "Vlastník nemůže sdílení opustit. Nejprve musí předat vlastnictví."
+            )
+          : t(
+              "sharing.leaveFailed",
+              "Sdílení se nepodařilo opustit."
+            )
+      );
+      return false;
+    } finally {
+      opousteniSdileni.delete(noteId);
+    }
+  }
+
   function otevriMenuSdileneKarty(card, note) {
     const menu = document.getElementById("cardMenu");
     if (!menu || !note?.id) return;
@@ -633,6 +763,9 @@
       </button>
       <button type="button" class="lubaHasIcon" data-shared-card-action="chat">
         <span class="lubaActionIcon" data-luba-icon="odkaz" aria-hidden="true"></span><span>Napsat zprávu</span>
+      </button>
+      <button type="button" class="lubaHasIcon" data-shared-card-action="leave">
+        <span class="lubaActionIcon" data-luba-icon="smazat" aria-hidden="true"></span><span>Opustit sdílení</span>
       </button>
     `;
 
@@ -1258,6 +1391,11 @@
         ?.openChatWithUsername?.(
           note.__lubanoteSharedOwnerUsername || ""
         );
+      return;
+    }
+
+    if (action === "leave") {
+      potvrditOpusteniSdileni(note);
     }
   });
 

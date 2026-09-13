@@ -25,6 +25,7 @@
   let shareNoteId = null;
   let shareBusy = false;
   let inviteBusy = false;
+  let relationshipBusy = false;
   let pollTimer = null;
 
   function t(klic, zaloha, promenne = null) {
@@ -239,6 +240,135 @@
       "sharing.shareSendFailed",
       "Pozvánku se nepodařilo odeslat."
     );
+  }
+
+  function zpravaProRelationshipChybu(error) {
+    const text = chybaText(error);
+
+    if (text.includes("not_owner")) {
+      return t(
+        "sharing.manageNotOwner",
+        "Tuto akci může provést pouze vlastník poznámky."
+      );
+    }
+
+    if (
+      text.includes("not_collaborator") ||
+      text.includes("user_not_found")
+    ) {
+      return t(
+        "sharing.removeCollaboratorMissing",
+        "Tento uživatel už poznámku nesdílí."
+      );
+    }
+
+    return t(
+      "sharing.removeCollaboratorFailed",
+      "Spolupracovníka se nepodařilo odebrat."
+    );
+  }
+
+  function otevriPotvrzeniOdebrani(username, poPotvrzeni) {
+    if (typeof window.otevriVyberovyModal !== "function") {
+      nastavShareStatus(
+        t(
+          "sharing.manageModalUnavailable",
+          "Potvrzovací okno se nepodařilo otevřít."
+        ),
+        "error"
+      );
+      return;
+    }
+
+    window.otevriVyberovyModal({
+      nadpis: t(
+        "sharing.removeCollaboratorConfirm",
+        "Odebrat {username} ze sdílení?",
+        { username }
+      ),
+      moznosti: [
+        {
+          hodnota: "cancel",
+          popisek: t("sharing.cancel", "Zrušit"),
+          ikona: "zavrit"
+        },
+        {
+          hodnota: "remove",
+          popisek: t("sharing.removeCollaborator", "Odebrat"),
+          ikona: "smazat"
+        }
+      ],
+      poVyberu: async (hodnota) => {
+        if (hodnota !== "remove") return;
+        await poPotvrzeni?.();
+      }
+    });
+  }
+
+  async function odeberSpolupracovnika(username) {
+    if (!shareNoteId || relationshipBusy) return;
+
+    if (!navigator.onLine) {
+      nastavShareStatus(
+        t("sharing.shareOffline", "Sdílení vyžaduje připojení k internetu."),
+        "error"
+      );
+      return;
+    }
+
+    relationshipBusy = true;
+    nastavShareStatus(t("sharing.responding", "Zpracovávám…"));
+
+    try {
+      const klient = await zajistiSupabase();
+      if (!klient) throw new Error("supabase_unavailable");
+
+      const { data, error } = await klient.rpc(
+        "lubanote_remove_note_collaborator",
+        {
+          p_note_id: shareNoteId,
+          p_username: normalizujUsername(username)
+        }
+      );
+
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.reason || "remove_failed");
+
+      nastavShareStatus(
+        t(
+          "sharing.removeCollaboratorSuccess",
+          "Spolupracovník byl odebrán."
+        ),
+        "success"
+      );
+
+      await nactiShareData();
+
+      try {
+        await window.LubaNoteSharingNotes?.obnovZeServeru?.({
+          tichy: true,
+          vykreslit: true
+        });
+      } catch (_) {}
+
+      window.dispatchEvent(
+        new CustomEvent("lubanote:sharing-changed", {
+          detail: {
+            action: "collaborator-removed",
+            noteId: shareNoteId,
+            username: zobrazUsername(username)
+          }
+        })
+      );
+    } catch (error) {
+      console.error(
+        "Sdílení: spolupracovníka se nepodařilo odebrat.",
+        error
+      );
+      nastavShareStatus(zpravaProRelationshipChybu(error), "error");
+    } finally {
+      relationshipBusy = false;
+    }
   }
 
   function vytvorOverlay(trida) {
@@ -529,7 +659,33 @@
         await window.LubaNoteChat.openChatWithUsername(kontaktUsername);
       });
 
-      item.append(info, napsat);
+      const akce = document.createElement("div");
+      akce.className = "sharingPersonActions";
+      akce.append(napsat);
+
+      if (rawRole !== "owner") {
+        const odebrat = document.createElement("button");
+        odebrat.type = "button";
+        odebrat.className = "sharingSmallButton sharingDangerButton";
+        odebrat.textContent = t(
+          "sharing.removeCollaborator",
+          "Odebrat"
+        );
+
+        odebrat.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          otevriPotvrzeniOdebrani(
+            kontaktUsername,
+            () => odeberSpolupracovnika(kontaktUsername)
+          );
+        });
+
+        akce.append(odebrat);
+      }
+
+      item.append(info, akce);
       modal.collaboratorsList.append(item);
     }
   }

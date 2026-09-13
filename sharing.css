@@ -513,6 +513,30 @@
   font-size: calc(var(--font-size) - 3px);
 }
 
+.sharingPersonActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.sharingDangerButton {
+  border-color: rgba(255, 90, 103, 0.58);
+  color: #ff8b94;
+}
+
+@media (max-width: 520px) {
+  .sharingPersonRow {
+    align-items: flex-start;
+  }
+
+  .sharingPersonActions {
+    max-width: 54%;
+  }
+}
+
 .sharingEmptyState {
   margin: 0;
   padding: 12px;
