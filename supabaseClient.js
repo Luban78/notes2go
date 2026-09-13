@@ -429,6 +429,16 @@ function vytvorSupabaseClientPokudLze() {
       SUPABASE_URL,
       SUPABASE_PUBLISHABLE_KEY,
       {
+        global: {
+          /*
+           * PATCH 478 – centrální měření Supabase HTTP payloadů.
+           * Měření nesmí měnit chování klienta; pokud modul není
+           * dostupný, použije se beze změny nativní fetch.
+           */
+          fetch:
+            window.LubaNoteSyncTraffic?.fetch ||
+            window.fetch.bind(window)
+        },
         auth: {
           persistSession: true,
           autoRefreshToken: true,

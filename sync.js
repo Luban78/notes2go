@@ -3038,6 +3038,14 @@ async function syncNotes(moznosti = {}) {
     return probihajiciSync;
   }
 
+  /*
+   * PATCH 478 – měření notes syncu.
+   * Pokud sync spustil start/foreground wrapper, jde pouze o vnořený
+   * scope a počítadlo se neresetuje. Přímé syncNotes() si měření založí
+   * samo, takže žádná starší cesta synchronizace nezůstane slepá.
+   */
+  window.LubaNoteSyncTraffic?.zacniSync?.();
+
   const diagnostikaPrivateSync =
     window.LubaNoteStartupDiag?.zacni?.("PRIVATE SYNC");
   let diagnostikaPrivateSyncStav = "KONEC";
@@ -3678,6 +3686,7 @@ async function syncNotes(moznosti = {}) {
         : diagnostikaPrivateSyncStav
     );
     probihajiciSync = null;
+    window.LubaNoteSyncTraffic?.dokonciSync?.();
   }
 }
 
@@ -3754,26 +3763,32 @@ async function startSync() {
   const predchoziBezpecnyFastStav =
     nactiFastSyncStav(user.id);
 
-  const fastSync = await pripravFastSyncPriStartu(user);
-
   const lzeOdlozitServisStartu =
     Boolean(predchoziBezpecnyFastStav);
 
   let poznamkySynchronizovany = false;
 
-  if (fastSync?.preskocit === true) {
-    /*
-     * Lokální data už odpovídají potvrzenému serverovému otisku.
-     * Neprovádíme get_notes_safe ani revizní merge, protože by neměl
-     * co změnit. Všechny servisní kroky startu pod tímto blokem však
-     * zůstávají zachované.
-     */
-    nastavKoncovyStavSynchronizaceUI();
-    poznamkySynchronizovany = true;
-  } else {
-    poznamkySynchronizovany = await syncNotes({
-      fastSnapshot: fastSync?.snapshot || null
-    });
+  window.LubaNoteSyncTraffic?.zacniSync?.();
+
+  try {
+    const fastSync = await pripravFastSyncPriStartu(user);
+
+    if (fastSync?.preskocit === true) {
+      /*
+       * Lokální data už odpovídají potvrzenému serverovému otisku.
+       * Neprovádíme get_notes_safe ani revizní merge, protože by neměl
+       * co změnit. Všechny servisní kroky startu pod tímto blokem však
+       * zůstávají zachované.
+       */
+      nastavKoncovyStavSynchronizaceUI();
+      poznamkySynchronizovany = true;
+    } else {
+      poznamkySynchronizovany = await syncNotes({
+        fastSnapshot: fastSync?.snapshot || null
+      });
+    }
+  } finally {
+    window.LubaNoteSyncTraffic?.dokonciSync?.();
   }
 
   if (poznamkySynchronizovany !== true) {
@@ -4336,12 +4351,17 @@ async function spustRychlySyncPoznamekBezpecne() {
     return false;
   }
 
+  let mereniTrafficuSpusteno = false;
+
   try {
     const user = await getCurrentUser();
 
     if (!user) {
       return false;
     }
+
+    window.LubaNoteSyncTraffic?.zacniSync?.();
+    mereniTrafficuSpusteno = true;
 
     /*
      * EGRESS GUARD 477
@@ -4392,6 +4412,10 @@ async function spustRychlySyncPoznamekBezpecne() {
       error
     );
     return false;
+  } finally {
+    if (mereniTrafficuSpusteno) {
+      window.LubaNoteSyncTraffic?.dokonciSync?.();
+    }
   }
 }
 

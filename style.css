@@ -806,6 +806,53 @@ body {
   color: var(--color-text);
 }
 
+/* ---------- DATOVÝ PROVOZ SYNCHRONIZACE ---------- */
+
+.syncTrafficBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: -4px 0 7px;
+  padding: 3px 8px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.syncTrafficBar.syncTrafficBarActive {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.syncTrafficLabel {
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.syncTrafficValue,
+.syncTrafficEgress {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.syncTrafficDivider {
+  opacity: 0.55;
+}
+
 /* ---------- ŘÁDEK MODULŮ ---------- */
 
 .moduleBar {
@@ -1382,6 +1429,14 @@ body.lubaTagDragMode .categoryTabs {
   .homeHeader {
     padding-right: 12px;
     padding-left: 12px;
+  }
+
+  .syncTrafficBar {
+    gap: 4px;
+    margin-top: -5px;
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 10px;
   }
 
   .moduleBar {
