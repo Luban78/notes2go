@@ -4486,9 +4486,33 @@ function renderTasks() {
     
     
     const loadedTags = document.createElement("div");
+
+    /* PATCH 475 – owner musí vidět stejný Shared editor stav jako
+       collaborator. Shared vrstva je autoritativní; private savedTask
+       metadata do ní nekopírujeme. */
+    const loadedSharedEditorMeta = document.createElement("p");
+    loadedSharedEditorMeta.className = "sharingSharedCardMeta";
+
+    const jeOwnerSharedKarta =
+      Boolean(loadedTask.id) &&
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(loadedTask.id) === true;
+
+    if (jeOwnerSharedKarta) {
+      loadedSharedEditorMeta.dataset.sharedEditorStatusId =
+        String(loadedTask.id);
+      loadedSharedEditorMeta.textContent =
+        window.LubaNoteSharingNotes
+          ?.ziskejStavEditora?.(loadedTask.id) || "";
+    }
+
+    loadedSharedEditorMeta.hidden =
+      !loadedSharedEditorMeta.textContent;
+
     loadedCard.append(
       loadedHeading,
       loadedTags,
+      loadedSharedEditorMeta,
       loadedNoteText,
       loadedDateText
     );

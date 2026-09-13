@@ -116,12 +116,11 @@
     return stav;
   }
 
-  function vytvorSharedMetaText(note, { readOnly = false } = {}) {
-    const owner = note?.__lubanoteSharedOwnerUsername || "@?";
+  function vytvorSharedEditorStatusText(note) {
     const aktivni = ziskejAktivnihoEditora(note?.id);
 
     if (aktivni?.username) {
-      return `Sdíleno · ${owner}\nPrávě upravuje ${aktivni.username}`;
+      return `Právě upravuje ${aktivni.username}`;
     }
 
     const posledniUsername = String(
@@ -131,15 +130,44 @@
       note?.sharedLastEditedAt || note?.updatedAt
     );
 
-    if (posledniUsername) {
-      return `Sdíleno · ${owner}\nNaposledy upravil ${normalizujUsername(posledniUsername)}${
-        posledniCas ? ` · ${posledniCas}` : ""
-      }`;
+    if (!posledniUsername) {
+      return "";
+    }
+
+    return `Naposledy upravil ${normalizujUsername(posledniUsername)}${
+      posledniCas ? ` · ${posledniCas}` : ""
+    }`;
+  }
+
+  function vytvorSharedMetaText(note, { readOnly = false } = {}) {
+    const owner = note?.__lubanoteSharedOwnerUsername || "@?";
+    const editorStatus = vytvorSharedEditorStatusText(note);
+
+    if (editorStatus) {
+      return `Sdíleno · ${owner}\n${editorStatus}`;
     }
 
     return readOnly
       ? `Sdíleno · ${owner} · pouze pro čtení`
       : `Sdíleno · ${owner}`;
+  }
+
+  function aktualizujEditorStatusNaOwnerKartach(noteId) {
+    const id = String(noteId || "");
+    const note = sdilenePoznamky.find(
+      (item) => String(item?.id || "") === id
+    );
+    const text = note ? vytvorSharedEditorStatusText(note) : "";
+
+    document
+      .querySelectorAll("[data-shared-editor-status-id]")
+      .forEach((element) => {
+        if (String(element.dataset.sharedEditorStatusId || "") !== id) {
+          return;
+        }
+        element.textContent = text;
+        element.hidden = !text;
+      });
   }
 
   function nastavAktivniEditor(noteId, username) {
@@ -152,6 +180,8 @@
       expiresAt: Date.now() + AKTIVNI_EDITOR_STAV_MS
     });
 
+    aktualizujEditorStatusNaOwnerKartach(id);
+
     if (viewerNoteId === id && viewer) {
       const note = sdilenePoznamky.find((item) => item.id === id);
       if (note) viewer.meta.textContent = vytvorSharedMetaText(note, { readOnly: true });
@@ -163,6 +193,8 @@
     if (!id) return;
 
     aktivniEditori.delete(id);
+
+    aktualizujEditorStatusNaOwnerKartach(id);
 
     if (viewerNoteId === id && viewer) {
       const note = sdilenePoznamky.find((item) => item.id === id);
@@ -1367,6 +1399,12 @@
     zajistiAktualniSharedStav,
     jeVlastniSdilenaPoznamka,
     ziskejVlastniSdilenouPoznamku,
+    ziskejStavEditora: (noteId) => {
+      const note = sdilenePoznamky.find(
+        (item) => String(item?.id || "") === String(noteId || "")
+      );
+      return note ? vytvorSharedEditorStatusText(note) : "";
+    },
     otevriReadOnly,
     zavriReadOnly
   };
