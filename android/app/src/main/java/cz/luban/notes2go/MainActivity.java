@@ -168,7 +168,7 @@ public class MainActivity extends BridgeActivity {
   }
 
   @Override
-  protected void onPause() {
+  public void onPause() {
     /* Zrušení focusu ještě před super.onPause() je důležité: WebView tak
        nemá aktivní editor, který by Android při resume znovu připojil k IME. */
     schovejSystemovouImeProLubaKeyboard(true);
@@ -176,7 +176,7 @@ public class MainActivity extends BridgeActivity {
   }
 
   @Override
-  protected void onStop() {
+  public void onStop() {
     schovejSystemovouImeProLubaKeyboard(true);
     super.onStop();
   }
