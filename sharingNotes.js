@@ -19,6 +19,7 @@
   const CACHE_DB_STORE = "sharedNotes";
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
   const POLL_MS = 60_000;
+  const DOUBLE_TAP_MS = 300;
 
   const pinnedCards = document.getElementById("pinnedCards");
   const pinnedLeft = document.getElementById("pinnedLeft");
@@ -34,6 +35,7 @@
   let serverovyStavNacten = false;
   let puvodniRenderTasks = null;
   let puvodniAndroidZpet = null;
+  let menuSdileneKartyNoteId = null;
 
   function t(klic, zaloha, promenne = null) {
     const fn = window.LubaNoteI18n?.t;
@@ -455,10 +457,22 @@
     }
   }
 
+  function jeV2SmisenaPoznamka(note) {
+    return (
+      typeof note?.richContent === "string" &&
+      note.richContent.includes("data-lubanote-v2-todo")
+    );
+  }
+
   function vytvorNahledTextu(note) {
     const todos = Array.isArray(note.todos) ? note.todos : [];
 
-    if (todos.length > 0) {
+    /*
+     * PATCH 464 – u V2 mixed poznámky je TODO už součástí richContent/note.
+     * note.todos je pouze kompatibilní zrcadlo pro Planner a nesmí nahradit
+     * normální text karty. Stejné pravidlo už používají běžné karty v script.js.
+     */
+    if (todos.length > 0 && !jeV2SmisenaPoznamka(note)) {
       return todos
         .slice(0, 3)
         .map((todo) =>
@@ -467,7 +481,87 @@
         .join("\n");
     }
 
-    return String(note.note || "");
+    const aktualniNahled =
+      window.LubaNoteNoteLinks
+        ?.ziskejTextProNahledPoznamky?.(note);
+
+    return String(aktualniNahled ?? note.note ?? "");
+  }
+
+  function otevriMenuSdileneKarty(card, note) {
+    const menu = document.getElementById("cardMenu");
+    if (!menu || !note?.id) return;
+
+    menuSdileneKartyNoteId = note.id;
+    menu.classList.remove("selectionMode");
+
+    menu.innerHTML = `
+      <button type="button" class="lubaHasIcon" data-shared-card-action="open">
+        <span class="lubaActionIcon" data-luba-icon="dokument" aria-hidden="true"></span><span>Otevřít</span>
+      </button>
+      <button type="button" class="lubaHasIcon" data-shared-card-action="edit">
+        <span class="lubaActionIcon" data-luba-icon="upravit" aria-hidden="true"></span><span>Upravit</span>
+      </button>
+      <button type="button" class="lubaHasIcon" data-shared-card-action="chat">
+        <span class="lubaActionIcon" data-luba-icon="odkaz" aria-hidden="true"></span><span>Napsat zprávu</span>
+      </button>
+    `;
+
+    window.LubaNoteIcons?.naplnDeklarovaneIkony?.(menu);
+    menu.hidden = false;
+
+    if (window.innerWidth < 900) {
+      menu.classList.add("mobilePrimaryActions");
+      menu.style.top = "auto";
+      menu.style.bottom = "1px";
+      menu.style.visibility = "visible";
+      window.LubaNoteCardActionsMobile
+        ?.posunKartuNadPanel?.(card, menu);
+    } else {
+      menu.classList.remove("mobilePrimaryActions");
+      menu.style.top = "auto";
+      menu.style.bottom = "34px";
+      menu.style.visibility = "visible";
+    }
+  }
+
+  function pridejTapGestoSdileneKarty(card, note) {
+    let posledniTap = 0;
+    let timerJednohoTapu = null;
+
+    card.addEventListener("click", (event) => {
+      if (
+        typeof rezimVyberuKaret !== "undefined" &&
+        rezimVyberuKaret === true
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const ted = performance.now();
+      const jeDvojtap =
+        posledniTap > 0 &&
+        ted - posledniTap <= DOUBLE_TAP_MS;
+
+      if (jeDvojtap) {
+        posledniTap = 0;
+        clearTimeout(timerJednohoTapu);
+        timerJednohoTapu = null;
+        otevriMenuSdileneKarty(card, note);
+        return;
+      }
+
+      posledniTap = ted;
+      clearTimeout(timerJednohoTapu);
+      timerJednohoTapu = setTimeout(() => {
+        timerJednohoTapu = null;
+        posledniTap = 0;
+        if (!card.isConnected) return;
+        otevriReadOnly(note.id);
+      }, DOUBLE_TAP_MS);
+    });
   }
 
   function vytvorSharedKartu(note) {
@@ -535,16 +629,12 @@
       card.classList.add("completed");
     }
 
-    card.addEventListener("click", () => {
-      if (
-        typeof rezimVyberuKaret !== "undefined" &&
-        rezimVyberuKaret === true
-      ) {
-        return;
-      }
-
-      otevriReadOnly(note.id);
-    });
+    /*
+     * PATCH 464 – collaborator karta používá stejné tap UX jako běžné karty:
+     * jeden tap otevře čtení, dvojtap otevře vlastní bezpečné Shared menu.
+     * Frozen MOVE/drag normálních karet se tímto vůbec nemění.
+     */
+    pridejTapGestoSdileneKarty(card, note);
 
     return card;
   }
@@ -753,6 +843,12 @@
     );
 
     const html = String(note.richContent || "").trim();
+    const maSmisenyV2Obsah = jeV2SmisenaPoznamka(note);
+
+    modal.content.classList.toggle(
+      "sharingReadOnlyV2Mixed",
+      maSmisenyV2Obsah
+    );
 
     if (html) {
       modal.content.innerHTML = bezpecneHtml(html);
@@ -763,8 +859,19 @@
     modal.todoList.innerHTML = "";
 
     const todos = Array.isArray(note.todos) ? note.todos : [];
-    modal.todoSection.hidden = todos.length === 0;
+
+    /*
+     * PATCH 464 – V2.21 mixed richContent už obsahuje TODO bloky přímo na
+     * jejich skutečné pozici. note.todos je u něj jen Planner mirror. Druhé
+     * vykreslení samostatné sekce dříve způsobovalo přesně 2× obsah.
+     */
+    modal.todoSection.hidden =
+      maSmisenyV2Obsah || todos.length === 0;
     modal.todoTitle.textContent = t("sharing.readOnlyTodos", "Úkoly");
+
+    if (maSmisenyV2Obsah) {
+      return;
+    }
 
     for (const todo of todos) {
       const row = document.createElement("div");
@@ -995,6 +1102,41 @@
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
   }
+
+  const cardMenuShared = document.getElementById("cardMenu");
+
+  cardMenuShared?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-shared-card-action]");
+    if (!button || !cardMenuShared.contains(button)) return;
+
+    const note = sdilenePoznamky.find(
+      (item) => item?.id === menuSdileneKartyNoteId
+    );
+    const action = button.dataset.sharedCardAction;
+
+    cardMenuShared.hidden = true;
+    menuSdileneKartyNoteId = null;
+
+    if (!note || note.trashedAt) return;
+
+    if (action === "open") {
+      otevriReadOnly(note.id);
+      return;
+    }
+
+    if (action === "edit") {
+      await window.LubaNoteSharedEditor
+        ?.otevriSdilenouEditaci?.(note.id);
+      return;
+    }
+
+    if (action === "chat") {
+      await window.LubaNoteChat
+        ?.openChatWithUsername?.(
+          note.__lubanoteSharedOwnerUsername || ""
+        );
+    }
+  });
 
   obalRenderTasks();
   obalAndroidBack();

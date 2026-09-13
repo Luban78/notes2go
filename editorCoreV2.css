@@ -684,6 +684,13 @@ body.ln-v2-lab-otevren {
 ========================================== */
 .ln-v2-editor .ln-v2-todo {
   position: relative;
+  /*
+   * PATCH 464 – TODO je samostatný blok a nesmí obtékat předchozí
+   * standalone obrázek vlevo/vpravo. Jinak checkbox fyzicky leze do
+   * obrázku a text TODO se vykreslí napravo od něj. Běžné textové bloky
+   * mohou obrázek dál normálně obtékat.
+   */
+  clear: both;
   padding-left: 42px;
   box-sizing: border-box;
 }

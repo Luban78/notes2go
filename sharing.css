@@ -1243,3 +1243,60 @@ body.sharingReadOnlyOpen {
 #taskModal.sharingEditorMode .todoTextValue .lubaNoteImageRemove {
   display: none !important;
 }
+
+
+/* ============================================================
+   PATCH 464 – V2 MIXED TODO VE SHARED READ-ONLY
+   ------------------------------------------------------------
+   data-lubanote-v2-todo je už součást autoritativního richContent.
+   V čtecím režimu ho vykreslíme na jeho skutečné pozici a už ho
+   neduplikuje samostatná kompatibilní note.todos sekce.
+============================================================ */
+.sharingReadOnlyContent.sharingReadOnlyV2Mixed
+  [data-lubanote-v2-todo="true"] {
+  position: relative;
+  clear: both;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 2px 0 4px 40px;
+}
+
+.sharingReadOnlyContent.sharingReadOnlyV2Mixed
+  [data-lubanote-v2-todo="true"]::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.12em;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.sharingReadOnlyContent.sharingReadOnlyV2Mixed
+  [data-lubanote-v2-todo="true"][data-completed="true"]::before {
+  border-color: var(--color-accent, currentColor);
+  background: var(--color-accent, currentColor);
+}
+
+.sharingReadOnlyContent.sharingReadOnlyV2Mixed
+  [data-lubanote-v2-todo="true"][data-completed="true"]::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 0.43em;
+  width: 10px;
+  height: 5px;
+  box-sizing: border-box;
+  border-left: 3px solid var(--color-accent-text, #fff);
+  border-bottom: 3px solid var(--color-accent-text, #fff);
+  transform: rotate(-45deg);
+}
+
+.sharingReadOnlyContent.sharingReadOnlyV2Mixed
+  [data-lubanote-v2-todo="true"][data-completed="true"] {
+  opacity: 0.62;
+  text-decoration-line: line-through;
+}
