@@ -10466,41 +10466,34 @@ body.pdfViewerOpen {
 }
 
 /* =========================================
-   STAV SYNCHRONIZACE – HLAVNÍ MODULY
-   Stav je vizuálně NAD tlačítkem Připomínky,
-   nikoli uvnitř jeho plochy.
+   STAV SYNCHRONIZACE – DATOVÝ ŘÁDEK
+   PATCH 479: stav je ve stejném řádku jako RX/TX/Egress.
    ========================================= */
 
-/* Modulová lišta musí dovolit stav vykreslit do horního volného prostoru. */
-.moduleBar {
-  overflow: visible;
-}
-
-#remindersModuleButton {
-  position: relative;
-  overflow: visible;
-}
-
 .syncStatusText {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -15px;
-
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
+  position: static;
+  min-width: 0;
+  max-width: 42%;
 
   color: var(--color-text);
-  font-size: clamp(8px, calc(var(--font-size) * 0.5), 10px);
+  font-size: inherit;
   font-weight: 750;
-  line-height: 1;
+  line-height: inherit;
   letter-spacing: -0.12px;
-  text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   pointer-events: none;
   user-select: none;
+}
+
+.syncStatusText::before {
+  content: "·";
+  display: inline-block;
+  margin: 0 6px 0 0;
+  color: var(--color-text);
+  opacity: 0.55;
 }
 
 .syncStatusText[hidden] {
@@ -10514,6 +10507,10 @@ body.pdfViewerOpen {
 .syncStatusText[data-state="syncing"] {
   color: #73ccff;
   animation: lubaSyncStatusPulse 0.9s ease-in-out infinite alternate;
+}
+
+.syncStatusText[data-state="pending"] {
+  color: #ffc35f;
 }
 
 .syncStatusText[data-state="auth-expired"] {
@@ -10534,11 +10531,13 @@ body.pdfViewerOpen {
   }
 }
 
-/* Na velmi úzkém telefonu posuneme text o chlup blíž k tlačítku. */
 @media (max-width: 420px) {
   .syncStatusText {
-    top: -13px;
-    font-size: 8px;
+    max-width: 38%;
+  }
+
+  .syncStatusText::before {
+    margin-right: 4px;
   }
 }
 
