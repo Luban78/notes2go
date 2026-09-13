@@ -596,7 +596,7 @@ async function pripravFastSyncPriStartu(user) {
     }
 
     if (!ulozeny) {
-      stavDiagnostiky = "BOOTSTRAP-FULL";
+      stavDiagnostiky = "BOOTSTRAP-PENDING";
     } else if (maCekajiciSmazani) {
       stavDiagnostiky = "PENDING-DELETE";
     } else if (!shodnyLokalniStav) {
@@ -2805,6 +2805,936 @@ async function nactiCloudPoznamkyPodleIdV2(noteIds) {
   }
 
   return Array.isArray(data) ? data : [];
+}
+
+
+/*
+ * SYNC V2.4 – SAFE BOOTSTRAP NOVÉHO ZAŘÍZENÍ (PATCH 486)
+ *
+ * Čistý prohlížeč / nová instalace nemá lokální cache ani Fast Sync stav.
+ * PATCH 485 proto správně zablokoval automatický get_notes_safe snapshot.
+ * Tento patch doplňuje jedinou bezpečnou cestu prvního načtení:
+ *
+ *   1) uživatel musí stažení výslovně potvrdit v LubaNote modalu,
+ *   2) server vrátí jen malý manifest BEZ data jsonb,
+ *   3) živé poznámky se stáhnou po malých targeted dávkách přes RPC 482,
+ *   4) tombstones se podle manifestu zpracují bez stažení jejich obsahu,
+ *   5) po přerušení se při dalším pokusu podle revision + lokální meta
+ *      přeskočí vše, co už bylo bezpečně uloženo,
+ *   6) Fast Sync + V2 cursor se potvrdí až po úplném dokončení.
+ *
+ * Nikde v této cestě se nepovoluje get_notes_safe().
+ */
+const SAFE_BOOTSTRAP_PROGRESS_KEY =
+  "lubanotePrivateSafeBootstrapV2V1";
+const SAFE_BOOTSTRAP_MAX_IDS_V_DAVCE = 12;
+const SAFE_BOOTSTRAP_MAX_BAJTU_V_DAVCE = 180 * 1024;
+
+let safeBootstrapPraveBezi = false;
+let safeBootstrapNabidnutUserId = null;
+let safeBootstrapModalDokoncen = false;
+
+function nactiSafeBootstrapMarker(userId) {
+  if (!userId) return null;
+
+  try {
+    const raw = localStorage.getItem(
+      SAFE_BOOTSTRAP_PROGRESS_KEY
+    );
+
+    if (!raw) return null;
+
+    const stav = JSON.parse(raw);
+
+    if (String(stav?.userId || "") !== String(userId)) {
+      return null;
+    }
+
+    return stav;
+  } catch (error) {
+    console.warn(
+      "Safe Bootstrap: stav pokračování nebylo možné načíst:",
+      error
+    );
+    return null;
+  }
+}
+
+function ulozSafeBootstrapMarker(userId) {
+  if (!userId) return false;
+
+  try {
+    const puvodni =
+      nactiSafeBootstrapMarker(userId) || {};
+
+    localStorage.setItem(
+      SAFE_BOOTSTRAP_PROGRESS_KEY,
+      JSON.stringify({
+        userId: String(userId),
+        startedAt:
+          puvodni.startedAt || new Date().toISOString(),
+        lastAttemptAt: new Date().toISOString()
+      })
+    );
+
+    return true;
+  } catch (error) {
+    console.warn(
+      "Safe Bootstrap: stav pokračování nebylo možné uložit:",
+      error
+    );
+    return false;
+  }
+}
+
+function zrusSafeBootstrapMarker() {
+  try {
+    localStorage.removeItem(
+      SAFE_BOOTSTRAP_PROGRESS_KEY
+    );
+  } catch (_) {}
+}
+
+function formatBootstrapVelikost(bytes) {
+  const value = Number(bytes);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  if (value < 1024) {
+    return `${Math.round(value)} B`;
+  }
+
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} kB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function ziskejSafeBootstrapModalPrvky() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const modal = document.getElementById(
+    "safeBootstrapModal"
+  );
+  const title = document.getElementById(
+    "safeBootstrapTitle"
+  );
+  const text = document.getElementById(
+    "safeBootstrapText"
+  );
+  const start = document.getElementById(
+    "safeBootstrapStartButton"
+  );
+  const later = document.getElementById(
+    "safeBootstrapLaterButton"
+  );
+
+  if (!modal || !title || !text || !start || !later) {
+    return null;
+  }
+
+  return { modal, title, text, start, later };
+}
+
+function maLokalniDataProSafeBootstrap() {
+  try {
+    const regular =
+      typeof nactiBeznePoznamkyZUloziste === "function"
+        ? nactiBeznePoznamkyZUloziste()
+        : getLocalNotesForSync();
+
+    if (Array.isArray(regular) && regular.length > 0) {
+      return true;
+    }
+
+    if (
+      typeof nactiSifrovaneTajneZaznamy === "function" &&
+      nactiSifrovaneTajneZaznamy().length > 0
+    ) {
+      return true;
+    }
+
+    if (
+      typeof nactiStarePlaintextTajnePoznamky === "function" &&
+      nactiStarePlaintextTajnePoznamky().length > 0
+    ) {
+      return true;
+    }
+  } catch (error) {
+    /* Při nejistotě zařízení nepovažujeme za čisté. */
+    return true;
+  }
+
+  return false;
+}
+
+function nastavSafeBootstrapModal({
+  title,
+  text,
+  startText = "Načíst data",
+  laterText = "Později",
+  startHidden = false,
+  laterHidden = false,
+  disabled = false
+} = {}) {
+  const ui = ziskejSafeBootstrapModalPrvky();
+  if (!ui) return null;
+
+  ui.title.textContent = title || "Načíst data z cloudu";
+  ui.text.textContent = text || "";
+  ui.start.textContent = startText;
+  ui.later.textContent = laterText;
+  ui.start.hidden = Boolean(startHidden);
+  ui.later.hidden = Boolean(laterHidden);
+  ui.start.disabled = Boolean(disabled);
+  ui.later.disabled = Boolean(disabled);
+  ui.modal.hidden = false;
+
+  return ui;
+}
+
+function zavriSafeBootstrapModal() {
+  const ui = ziskejSafeBootstrapModalPrvky();
+  if (ui) ui.modal.hidden = true;
+}
+
+async function nactiSafeBootstrapManifestV2() {
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_get_private_bootstrap_manifest"
+  );
+
+  if (error) {
+    console.warn(
+      "Safe Bootstrap: manifest se nepodařilo načíst:",
+      error.message || error
+    );
+
+    if (jeChybaOdeprenehoPristupu(error)) {
+      oznamOdeprenyPristupUctu(error);
+    }
+
+    const chyba = new Error(
+      "Serverový bootstrap manifest není dostupný."
+    );
+    chyba.code = "LUBANOTE_BOOTSTRAP_MANIFEST_FAILED";
+    chyba.cause = error;
+    throw chyba;
+  }
+
+  return (Array.isArray(data) ? data : [])
+    .filter((row) => row?.id)
+    .map((row) => ({
+      id: String(row.id),
+      revision: Number(row.revision),
+      updated_at: row.updated_at || null,
+      deleted_at: row.deleted_at || null,
+      is_secret: row.is_secret === true,
+      approx_bytes: Math.max(
+        0,
+        Number(row.approx_bytes) || 0
+      )
+    }));
+}
+
+function ulozBootstrapCloudMetaRadky(rows) {
+  const mapa = nactiCloudSyncMetaMapu();
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row?.id || !Number.isFinite(Number(row.revision))) {
+      continue;
+    }
+
+    mapa[String(row.id)] = {
+      revision: Number(row.revision),
+      localUpdatedAt:
+        row.deleted_at
+          ? null
+          : row.updated_at || null,
+      serverUpdatedAt: row.updated_at || null
+    };
+
+    zrusKonfliktSynchronizace(String(row.id));
+  }
+
+  ulozCloudSyncMetaMapu(mapa);
+}
+
+function ziskejBootstrapLokalniId() {
+  const regularIds = new Set();
+  const secretIds = new Set();
+
+  try {
+    const regular =
+      typeof nactiBeznePoznamkyZUloziste === "function"
+        ? nactiBeznePoznamkyZUloziste()
+        : getLocalNotesForSync();
+
+    for (const note of Array.isArray(regular) ? regular : []) {
+      if (note?.id && note?.isSecret !== true) {
+        regularIds.add(String(note.id));
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof getSecretNoteIds === "function") {
+      for (const id of getSecretNoteIds()) {
+        if (id) secretIds.add(String(id));
+      }
+    } else if (
+      typeof nactiSifrovaneTajneZaznamy === "function"
+    ) {
+      for (const record of nactiSifrovaneTajneZaznamy()) {
+        if (record?.id) secretIds.add(String(record.id));
+      }
+    }
+  } catch (_) {}
+
+  return { regularIds, secretIds };
+}
+
+function jeBootstrapRadekJizBezpecneLokalne(
+  manifestRow,
+  lokalniIds
+) {
+  if (!manifestRow?.id || manifestRow.deleted_at) {
+    return false;
+  }
+
+  const meta = ziskejCloudSyncMeta(manifestRow.id);
+
+  if (
+    !meta ||
+    Number(meta.revision) !== Number(manifestRow.revision)
+  ) {
+    return false;
+  }
+
+  if (manifestRow.is_secret === true) {
+    return lokalniIds.secretIds.has(manifestRow.id);
+  }
+
+  return lokalniIds.regularIds.has(manifestRow.id);
+}
+
+function vytvorSafeBootstrapDavky(manifestRows) {
+  const vysledek = [];
+  let aktualni = [];
+  let aktualniBytes = 0;
+
+  for (const row of Array.isArray(manifestRows) ? manifestRows : []) {
+    const rowBytes = Math.max(
+      1,
+      Number(row?.approx_bytes) || 1
+    );
+
+    const prekrociPocet =
+      aktualni.length >= SAFE_BOOTSTRAP_MAX_IDS_V_DAVCE;
+    const prekrociVelikost =
+      aktualni.length > 0 &&
+      aktualniBytes + rowBytes >
+        SAFE_BOOTSTRAP_MAX_BAJTU_V_DAVCE;
+
+    if (prekrociPocet || prekrociVelikost) {
+      vysledek.push(aktualni);
+      aktualni = [];
+      aktualniBytes = 0;
+    }
+
+    aktualni.push(row);
+    aktualniBytes += rowBytes;
+  }
+
+  if (aktualni.length > 0) {
+    vysledek.push(aktualni);
+  }
+
+  return vysledek;
+}
+
+async function aplikujSafeBootstrapRadky(rows) {
+  const cloudRows = Array.isArray(rows) ? rows : [];
+
+  const regularMapa = new Map(
+    (
+      typeof nactiBeznePoznamkyZUloziste === "function"
+        ? nactiBeznePoznamkyZUloziste()
+        : getLocalNotesForSync()
+    )
+      .filter((note) => note?.id && note?.isSecret !== true)
+      .map((note) => [String(note.id), note])
+  );
+
+  const encryptedMapa = new Map(
+    (
+      typeof nactiSifrovaneTajneZaznamy === "function"
+        ? nactiSifrovaneTajneZaznamy()
+        : []
+    )
+      .filter((record) => record?.id)
+      .map((record) => [String(record.id), record])
+  );
+
+  const secretUnlocked = Boolean(
+    typeof tajnySifrovaciKlic !== "undefined" &&
+    tajnySifrovaciKlic &&
+    typeof tajnyRezimOdemceny !== "undefined" &&
+    tajnyRezimOdemceny === true
+  );
+
+  const decryptedMapa = new Map(
+    secretUnlocked &&
+    typeof getDesifrovaneTajnePoznamky === "function"
+      ? (getDesifrovaneTajnePoznamky() || [])
+          .filter((note) => note?.id)
+          .map((note) => [String(note.id), note])
+      : []
+  );
+
+  for (const row of cloudRows) {
+    const id = String(row?.id || "");
+    if (!id) continue;
+
+    if (row.deleted_at) {
+      regularMapa.delete(id);
+      encryptedMapa.delete(id);
+      decryptedMapa.delete(id);
+      continue;
+    }
+
+    if (jeLegacyCloudSecretRow(row)) {
+      const chyba = new Error(
+        "Cloud obsahuje starší Secret formát, který Safe Bootstrap nesmí uložit jako plaintext."
+      );
+      chyba.code = "LUBANOTE_BOOTSTRAP_LEGACY_SECRET";
+      throw chyba;
+    }
+
+    if (jeSifrovanyCloudSecretRow(row)) {
+      const record = vytvorCloudEncryptedRecord(row);
+
+      if (!record) {
+        throw new Error(
+          `Safe Bootstrap: neplatný Secret řádek ${id}`
+        );
+      }
+
+      regularMapa.delete(id);
+      encryptedMapa.set(id, record);
+
+      if (secretUnlocked) {
+        if (typeof desifrujTajnouPoznamku !== "function") {
+          throw new Error(
+            "Safe Bootstrap: Secret decrypt není dostupný."
+          );
+        }
+
+        const note = await desifrujTajnouPoznamku(
+          record.encrypted,
+          id
+        );
+
+        decryptedMapa.set(id, {
+          ...note,
+          id,
+          updatedAt: record.updatedAt || note?.updatedAt,
+          isSecret: true
+        });
+      }
+
+      continue;
+    }
+
+    const note = vytvorCloudRegularNote(row);
+
+    if (!note) {
+      throw new Error(
+        `Safe Bootstrap: nepodporovaný řádek ${id}`
+      );
+    }
+
+    encryptedMapa.delete(id);
+    decryptedMapa.delete(id);
+    regularMapa.set(id, note);
+  }
+
+  if (typeof ulozBeznePoznamkyPrimo !== "function") {
+    throw new Error(
+      "Safe Bootstrap: lokální úložiště běžných poznámek není dostupné."
+    );
+  }
+
+  const regularOk = await ulozBeznePoznamkyPrimo(
+    Array.from(regularMapa.values())
+  );
+
+  if (regularOk === false) {
+    throw new Error(
+      "Safe Bootstrap: uložení běžných poznámek selhalo."
+    );
+  }
+
+  if (typeof ulozSifrovaneTajneZaznamy === "function") {
+    ulozSifrovaneTajneZaznamy(
+      Array.from(encryptedMapa.values())
+    );
+  } else if (encryptedMapa.size > 0) {
+    throw new Error(
+      "Safe Bootstrap: lokální Secret úložiště není dostupné."
+    );
+  }
+
+  if (
+    secretUnlocked &&
+    typeof nastavDesifrovaneTajnePoznamky === "function"
+  ) {
+    nastavDesifrovaneTajnePoznamky(
+      Array.from(decryptedMapa.values())
+    );
+  }
+
+  ulozBootstrapCloudMetaRadky(cloudRows);
+}
+
+async function aplikujSafeBootstrapTombstones(
+  manifestRows
+) {
+  const tombstones = (Array.isArray(manifestRows) ? manifestRows : [])
+    .filter((row) => row?.id && row.deleted_at);
+
+  if (tombstones.length === 0) return;
+
+  const pseudoRows = tombstones.map((row) => ({
+    id: row.id,
+    revision: row.revision,
+    updated_at: row.updated_at,
+    deleted_at: row.deleted_at,
+    data: null
+  }));
+
+  await aplikujSafeBootstrapRadky(pseudoRows);
+}
+
+function aktualizujSafeBootstrapProgress(
+  hotovo,
+  celkem,
+  approxBytes
+) {
+  nastavSafeBootstrapModal({
+    title: "Načítám data z cloudu",
+    text:
+      `Připraveno ${hotovo} / ${celkem} poznámek. ` +
+      `Cloudový obsah je přibližně ${formatBootstrapVelikost(approxBytes)}. ` +
+      "Skutečný RX/TX vidíš průběžně nahoře.",
+    startText: "Načítám…",
+    laterHidden: true,
+    disabled: true
+  });
+}
+
+async function dokonciSafeBootstrapV2(userId, headStart) {
+  const headEnd = await ziskejPrivateSyncV2Head();
+
+  if (headEnd === null) {
+    return false;
+  }
+
+  if (!ulozPrivateSyncV2Cursor(userId, headStart)) {
+    return false;
+  }
+
+  if (headEnd > headStart) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      `DELTA AFTER BOOTSTRAP | ${headStart}->${headEnd}`
+    );
+
+    const deltaOk =
+      await synchronizujVzdalenePrivateDeltaV2(userId);
+
+    if (deltaOk !== true) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (headEnd < headStart) {
+    return false;
+  }
+
+  const server = await ziskejServerovyPrivateFingerprint();
+
+  if (!server?.fingerprint) {
+    return false;
+  }
+
+  /* Stejná ochrana jako u targeted uploadu: fingerprint nesmíme
+     potvrdit proti cursoru, pokud se mezi oběma malými RPC server
+     změnil. Druhý HEAD uzavírá tuto race bez full snapshotu. */
+  const headPoFingerprintu =
+    await ziskejPrivateSyncV2Head();
+
+  if (headPoFingerprintu !== headEnd) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      `CONFIRM RACE | head=${headEnd}->${headPoFingerprintu ?? "?"}`
+    );
+    return false;
+  }
+
+  const localGeneration =
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+
+  if (localGeneration === null) {
+    return false;
+  }
+
+  const fastOk = ulozFastSyncStav({
+    userId,
+    serverFingerprint: server.fingerprint,
+    localGeneration
+  });
+
+  if (!fastOk) return false;
+
+  return ulozPrivateSyncV2Cursor(
+    userId,
+    headPoFingerprintu
+  );
+}
+
+async function spustSafeBootstrapV2(userId) {
+  if (
+    safeBootstrapPraveBezi ||
+    !userId ||
+    !navigator.onLine
+  ) {
+    if (!navigator.onLine) {
+      nastavSafeBootstrapModal({
+        title: "Bez internetu",
+        text:
+          "Načtení dat se nespustilo. Po připojení klepni na Pokračovat.",
+        startText: "Pokračovat",
+        laterHidden: Boolean(
+          nactiSafeBootstrapMarker(userId)
+        )
+      });
+    }
+    return false;
+  }
+
+  safeBootstrapPraveBezi = true;
+  safeBootstrapModalDokoncen = false;
+  ulozSafeBootstrapMarker(userId);
+  nastavStavSynchronizaceUI("syncing");
+  window.LubaNoteSyncTraffic?.zacniSync?.();
+
+  const diag = window.LubaNoteStartupDiag?.zacni?.(
+    "SAFE BOOTSTRAP"
+  );
+  let diagStav = "CHYBA";
+
+  try {
+    if (
+      maCilenyPrivateV2Dluh() ||
+      nactiCekajiciSmazani().length > 0 ||
+      aktivniKonfliktySyncu.size > 0
+    ) {
+      const chyba = new Error(
+        "Safe Bootstrap: nejdřív je potřeba dokončit čekající lokální změny."
+      );
+      chyba.code = "LUBANOTE_BOOTSTRAP_LOCAL_DEBT";
+      throw chyba;
+    }
+
+    const generacePriStartu =
+      ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+    const revizeLokalnihoStavuPriStartu =
+      ziskejReviziLokalnichZmenProSync();
+
+    if (generacePriStartu === null) {
+      throw new Error(
+        "Safe Bootstrap: lokální generace není dostupná."
+      );
+    }
+
+    const headStart = await ziskejPrivateSyncV2Head();
+
+    if (headStart === null) {
+      throw new Error(
+        "Safe Bootstrap: serverový cursor není dostupný."
+      );
+    }
+
+    const manifest = await nactiSafeBootstrapManifestV2();
+    const liveRows = manifest.filter(
+      (row) => !row.deleted_at
+    );
+    const approxBytes = liveRows.reduce(
+      (sum, row) => sum + (Number(row.approx_bytes) || 0),
+      0
+    );
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      `MANIFEST | rows=${manifest.length} live=${liveRows.length} deleted=${manifest.length - liveRows.length} approx=${Math.round(approxBytes / 1024)}kB head=${headStart}`
+    );
+
+    /* Tombstones nepotřebují data jsonb – odstraníme je jen podle
+       malého manifestu a tím šetříme egress už při prvním načtení. */
+    await aplikujSafeBootstrapTombstones(manifest);
+
+    const lokalniIds = ziskejBootstrapLokalniId();
+    const pending = liveRows.filter(
+      (row) =>
+        !jeBootstrapRadekJizBezpecneLokalne(
+          row,
+          lokalniIds
+        )
+    );
+
+    let hotovo = liveRows.length - pending.length;
+    aktualizujSafeBootstrapProgress(
+      hotovo,
+      liveRows.length,
+      approxBytes
+    );
+
+    const davky = vytvorSafeBootstrapDavky(pending);
+
+    for (let i = 0; i < davky.length; i += 1) {
+      if (
+        ziskejTrvalouGeneraciLokalnichZmenProFastSync() !==
+          generacePriStartu ||
+        lokalniStavSeBehemSyncuZmenil(
+          revizeLokalnihoStavuPriStartu
+        )
+      ) {
+        const chyba = new Error(
+          "Safe Bootstrap: během načítání vznikla lokální změna; pokračování bylo zastaveno."
+        );
+        chyba.code = "LUBANOTE_BOOTSTRAP_LOCAL_CHANGED";
+        throw chyba;
+      }
+
+      const davka = davky[i];
+      const ids = davka.map((row) => row.id);
+      const cloudRows = await nactiCloudPoznamkyPodleIdV2(ids);
+
+      if (!cloudRows) {
+        throw new Error(
+          `Safe Bootstrap: dávku ${i + 1}/${davky.length} se nepodařilo stáhnout.`
+        );
+      }
+
+      const vraceneIds = new Set(
+        cloudRows
+          .filter((row) => row?.id)
+          .map((row) => String(row.id))
+      );
+      const chybejici = ids.filter(
+        (id) => !vraceneIds.has(String(id))
+      );
+
+      if (chybejici.length > 0) {
+        const headNow = await ziskejPrivateSyncV2Head();
+
+        if (headNow === null || headNow <= headStart) {
+          throw new Error(
+            `Safe Bootstrap: server nevrátil ${chybejici.length} očekávaných poznámek.`
+          );
+        }
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "BOOTSTRAP",
+          `ROW MOVED DURING DOWNLOAD | count=${chybejici.length}`
+        );
+      }
+
+      await aplikujSafeBootstrapRadky(cloudRows);
+
+      /* Za úspěšně vyřešené považujeme celou dávku. Chybějící ID
+         vzniklé souběžnou serverovou změnou zachytí závěrečný delta
+         průchod od headStart. */
+      hotovo += davka.length;
+
+      aktualizujSafeBootstrapProgress(
+        Math.min(hotovo, liveRows.length),
+        liveRows.length,
+        approxBytes
+      );
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "BOOTSTRAP",
+        `BATCH | ${Math.min(hotovo, liveRows.length)}/${liveRows.length} ids=${ids.length}`
+      );
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+    if (typeof renderRemindersScreen === "function") {
+      renderRemindersScreen();
+    }
+    if (typeof renderCalendar === "function") {
+      renderCalendar();
+    }
+
+    if (
+      ziskejTrvalouGeneraciLokalnichZmenProFastSync() !==
+        generacePriStartu ||
+      lokalniStavSeBehemSyncuZmenil(
+        revizeLokalnihoStavuPriStartu
+      )
+    ) {
+      const chyba = new Error(
+        "Safe Bootstrap: lokální data se během načítání změnila."
+      );
+      chyba.code = "LUBANOTE_BOOTSTRAP_LOCAL_CHANGED";
+      throw chyba;
+    }
+
+    const potvrzeno = await dokonciSafeBootstrapV2(
+      userId,
+      headStart
+    );
+
+    if (!potvrzeno) {
+      const chyba = new Error(
+        "Data se během načítání změnila. Další pokus naváže jen chybějícími změnami."
+      );
+      chyba.code = "LUBANOTE_BOOTSTRAP_CONFIRM_DEFER";
+      throw chyba;
+    }
+
+    zrusSafeBootstrapMarker();
+    nastavKoncovyStavSynchronizaceUI();
+    diagStav = "OK";
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      `COMPLETE | live=${liveRows.length} approx=${Math.round(approxBytes / 1024)}kB`
+    );
+
+    /* Úplně nový prázdný účet může až teď bezpečně vytvořit uvítací
+       kartu. Pokud vznikne, následující V2 průchod stáhne jen její ID. */
+    await provedOnboardingPoBezpecnemSyncu({
+      blokovatStart: false
+    });
+
+    try {
+      await spustRychlySyncPoznamekBezpecne();
+    } catch (_) {
+      /* Onboarding delta se může dokončit při příštím foregroundu. */
+    }
+
+    safeBootstrapModalDokoncen = true;
+    nastavSafeBootstrapModal({
+      title: "Data jsou načtená",
+      text:
+        `Hotovo. Na tomto zařízení je připraveno ${liveRows.length} cloudových poznámek. ` +
+        "Další běžná synchronizace už používá pouze malé V2 změny.",
+      startHidden: true,
+      laterText: "Zavřít"
+    });
+
+    return true;
+  } catch (error) {
+    console.warn(
+      "Safe Bootstrap byl bezpečně přerušen:",
+      error
+    );
+
+    nastavStavSynchronizaceUI("pending");
+
+    const legacySecret =
+      error?.code === "LUBANOTE_BOOTSTRAP_LEGACY_SECRET";
+
+    nastavSafeBootstrapModal({
+      title: legacySecret
+        ? "Starší Secret data"
+        : "Načítání je pozastavené",
+      text: legacySecret
+        ? "V cloudu je starší Secret formát. LubaNote ho z bezpečnostních důvodů neuloží jako plaintext. Nejdřív ho převeď na aktuální Secret formát na zařízení, kde Secret funguje."
+        : "Nic se nemaže a full snapshot se nespustí. Klepnutím na Pokračovat se příště stáhnou jen chybějící nebo změněné poznámky.",
+      startText: legacySecret
+        ? "Zkusit znovu"
+        : "Pokračovat",
+      laterHidden: true
+    });
+
+    return false;
+  } finally {
+    safeBootstrapPraveBezi = false;
+    window.LubaNoteStartupDiag?.konec?.(
+      diag,
+      diagStav
+    );
+    window.LubaNoteSyncTraffic?.dokonciSync?.();
+  }
+}
+
+function nabidniSafeBootstrapPokudJeTreba(userId) {
+  if (
+    !userId ||
+    safeBootstrapNabidnutUserId === String(userId)
+  ) {
+    return;
+  }
+
+  const marker = nactiSafeBootstrapMarker(userId);
+  const maLokalniData = maLokalniDataProSafeBootstrap();
+
+  /* Bez rozpracovaného bootstrapu nikdy nenabízíme přepis zařízení,
+     které už nějaká lokální data má. To je recovery problém, ne first
+     bootstrap, a musí se řešit zvlášť bez domněnek. */
+  if (!marker && maLokalniData) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      "OFFER BLOCKED | local-data-present"
+    );
+    return;
+  }
+
+  safeBootstrapNabidnutUserId = String(userId);
+
+  setTimeout(() => {
+    const ui = nastavSafeBootstrapModal({
+      title: marker
+        ? "Dokončit načítání dat"
+        : "Načíst data z cloudu?",
+      text: marker
+        ? "Předchozí načítání nebylo dokončeno. Pokračování stáhne jen chybějící nebo změněné poznámky; full snapshot zůstává zablokovaný."
+        : "Na tomto zařízení zatím nejsou poznámky. LubaNote nic velkého nestáhne bez tvého potvrzení. Data se načtou po malých dávkách a po přerušení lze bezpečně navázat.",
+      startText: marker ? "Pokračovat" : "Načíst data",
+      laterText: "Později",
+      laterHidden: Boolean(marker)
+    });
+
+    if (!ui) return;
+
+    ui.start.onclick = () => {
+      spustSafeBootstrapV2(userId).catch(() => {});
+    };
+
+    ui.later.onclick = () => {
+      if (safeBootstrapModalDokoncen) {
+        safeBootstrapModalDokoncen = false;
+      }
+      zavriSafeBootstrapModal();
+    };
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "BOOTSTRAP",
+      marker ? "OFFER | resume" : "OFFER | clean-client"
+    );
+  }, 80);
 }
 
 /*
@@ -5120,6 +6050,13 @@ async function startSync() {
     }, 1500);
   }
 
+  if (startPouzeLokalneKvuliEgressu) {
+    /* PATCH 486 – po zobrazení lokálního UI nabídneme bezpečný bootstrap
+       pouze čistému klientovi nebo dříve rozpracovanému bootstrapu.
+       Samotné zobrazení modalu nic nestahuje. */
+    nabidniSafeBootstrapPokudJeTreba(user.id);
+  }
+
   return true;
 }
 
@@ -6509,7 +7446,14 @@ window.LubaNoteSync = {
     Array.from(aktivniKonfliktySyncu.values()),
   ziskejCloudSyncMeta,
   zaradSmazaniHromadne:
-    pridejCekajiciSmazaniHromadne
+    pridejCekajiciSmazaniHromadne,
+  spustSafeBootstrap: spustSafeBootstrapV2,
+  maRozpracovanySafeBootstrap: async () => {
+    const user = await getCurrentUser();
+    return Boolean(
+      user?.id && nactiSafeBootstrapMarker(user.id)
+    );
+  }
 };
 
 let casovacSyncuPoAktivaci = null;

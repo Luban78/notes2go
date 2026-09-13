@@ -1726,6 +1726,32 @@
     </div>
   </div>
   
+  <!-- ========================================
+     SYNC V2 SAFE BOOTSTRAP – PATCH 486
+     Čistý klient nikdy nestahuje cloud automaticky.
+     Uživatel musí první načtení výslovně potvrdit.
+     ======================================== -->
+  <div id="safeBootstrapModal" class="appMessageModal" hidden>
+    <div class="appMessageDialog" role="dialog" aria-modal="true" aria-labelledby="safeBootstrapTitle">
+      <h3 id="safeBootstrapTitle">
+        Načíst data z cloudu?
+      </h3>
+
+      <p id="safeBootstrapText">
+      </p>
+
+      <div class="appMessageActions">
+        <button id="safeBootstrapLaterButton" type="button">
+          Později
+        </button>
+
+        <button id="safeBootstrapStartButton" type="button">
+          Načíst data
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="actionStatusModal" class="actionStatusModal" hidden>
     <div class="actionStatusDialog">
       <div class="actionStatusIcon">
@@ -2004,7 +2030,7 @@
   <script src="syncRealtime.js?v=20260907-cross-device-notif-1"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260913-egress-fuse-485"></script>
+  <script src="sync.js?v=20260913-safe-bootstrap-486"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260906-apk-same-device-restart-09275"></script>
