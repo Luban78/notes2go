@@ -89,6 +89,243 @@ const CLOUD_SYNC_META_STORAGE_KEY =
 const FAST_SYNC_STATE_STORAGE_KEY =
   "lubanotePrivateFastSyncStateV1";
 
+/*
+ * SYNC V2.1 – CHANGE FEED CURSOR (PATCH 480)
+ *
+ * Zatím jde pouze o bezpečný přechodový / pozorovací stav. Cursor se
+ * smí posunout jen tehdy, když už jsme jinou cestou potvrdili, že
+ * lokální data odpovídají serveru (Fast Sync fingerprint SKIP nebo
+ * úspěšně dokončený plný revizní merge).
+ *
+ * Tento blok NESTAHUJE obsah poznámek a NEMĚNÍ rozhodování V1 syncu.
+ * Pouze ověřuje nový serverový change feed a připravuje last_change_seq
+ * pro další fázi Sync V2.
+ */
+const PRIVATE_SYNC_V2_CURSOR_STORAGE_KEY =
+  "lubanotePrivateSyncV2CursorV1";
+
+function nactiPrivateSyncV2Cursor(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(
+      PRIVATE_SYNC_V2_CURSOR_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return null;
+    }
+
+    const stav = JSON.parse(raw);
+    const lastSeq = Number(stav?.lastSeq);
+
+    if (
+      String(stav?.userId || "") !== String(userId) ||
+      !Number.isFinite(lastSeq) ||
+      lastSeq < 0
+    ) {
+      return null;
+    }
+
+    return {
+      userId: String(stav.userId),
+      lastSeq: Math.floor(lastSeq),
+      savedAt: stav.savedAt || null
+    };
+  } catch (error) {
+    console.warn(
+      "Sync V2.1: change cursor nebylo možné načíst:",
+      error
+    );
+    return null;
+  }
+}
+
+function ulozPrivateSyncV2Cursor(userId, lastSeq) {
+  const bezpecneSeq = Number(lastSeq);
+
+  if (
+    !userId ||
+    !Number.isFinite(bezpecneSeq) ||
+    bezpecneSeq < 0
+  ) {
+    return false;
+  }
+
+  try {
+    localStorage.setItem(
+      PRIVATE_SYNC_V2_CURSOR_STORAGE_KEY,
+      JSON.stringify({
+        userId: String(userId),
+        lastSeq: Math.floor(bezpecneSeq),
+        savedAt: new Date().toISOString()
+      })
+    );
+    return true;
+  } catch (error) {
+    console.warn(
+      "Sync V2.1: change cursor nebylo možné uložit:",
+      error
+    );
+    return false;
+  }
+}
+
+async function ziskejPrivateSyncV2Head() {
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_get_note_change_head"
+  );
+
+  if (error) {
+    console.warn(
+      "Sync V2.1: change head není dostupný:",
+      error.message || error
+    );
+    return null;
+  }
+
+  const head = Number(
+    Array.isArray(data) ? data[0] : data
+  );
+
+  return Number.isFinite(head) && head >= 0
+    ? Math.floor(head)
+    : null;
+}
+
+async function ziskejPrivateSyncV2ZmenyOd(
+  afterSeq,
+  limit = 50
+) {
+  const safeAfter = Math.max(
+    0,
+    Math.floor(Number(afterSeq) || 0)
+  );
+
+  const safeLimit = Math.min(
+    200,
+    Math.max(1, Math.floor(Number(limit) || 50))
+  );
+
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_get_note_changes_since",
+    {
+      p_after_seq: safeAfter,
+      p_limit: safeLimit
+    }
+  );
+
+  if (error) {
+    console.warn(
+      "Sync V2.1: change feed není dostupný:",
+      error.message || error
+    );
+    return null;
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+async function potvrdPrivateSyncV2CursorPoShodnemStavu(
+  userId
+) {
+  if (!userId || !navigator.onLine) {
+    return false;
+  }
+
+  try {
+    const ulozeny = nactiPrivateSyncV2Cursor(userId);
+
+    /*
+     * První bezpečný bootstrap: aktuální lokální stav už byl ověřen
+     * fingerprintem nebo úspěšným plným merge, takže aktuální HEAD
+     * můžeme uložit jako výchozí cursor bez stahování jediné poznámky.
+     */
+    if (!ulozeny) {
+      const head = await ziskejPrivateSyncV2Head();
+
+      if (head === null) {
+        return false;
+      }
+
+      const ulozeno = ulozPrivateSyncV2Cursor(
+        userId,
+        head
+      );
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `CURSOR BOOTSTRAP | seq=${head}`
+      );
+
+      return ulozeno;
+    }
+
+    /*
+     * Pozorovací čtení nového feedu. Volá se jen po potvrzení shody
+     * lokálního a serverového stavu, takže případné historické metadata
+     * můžeme bezpečně přeskočit/odcursorovat. Obsah poznámek se zde
+     * nikdy nestahuje.
+     */
+    const zmeny = await ziskejPrivateSyncV2ZmenyOd(
+      ulozeny.lastSeq,
+      50
+    );
+
+    if (!zmeny) {
+      return false;
+    }
+
+    if (zmeny.length === 0) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `DELTA EMPTY | after=${ulozeny.lastSeq}`
+      );
+      return true;
+    }
+
+    let posledniSeq = ulozeny.lastSeq;
+
+    zmeny.forEach((radek) => {
+      const seq = Number(radek?.seq);
+
+      if (Number.isFinite(seq)) {
+        posledniSeq = Math.max(
+          posledniSeq,
+          Math.floor(seq)
+        );
+      }
+    });
+
+    if (posledniSeq > ulozeny.lastSeq) {
+      ulozPrivateSyncV2Cursor(
+        userId,
+        posledniSeq
+      );
+    }
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `DELTA OBSERVE | count=${zmeny.length} ` +
+        `seq=${ulozeny.lastSeq}->${posledniSeq}`
+    );
+
+    return true;
+  } catch (error) {
+    /*
+     * V2.1 je zatím pouze aditivní observér. Jeho chyba nesmí nikdy
+     * změnit nebo zablokovat současný bezpečný sync.
+     */
+    console.warn(
+      "Sync V2.1: cursor observér selhal, V1 zůstává beze změny:",
+      error
+    );
+    return false;
+  }
+}
+
 let pocetPotvrzenychServerovychZapisu = 0;
 
 function ziskejTrvalouGeneraciLokalnichZmenProFastSync() {
@@ -3650,6 +3887,15 @@ async function syncNotes(moznosti = {}) {
 
     window.LubaNoteStartupDiag?.konec?.(diagFastState, "OK");
 
+    /*
+     * PATCH 480 – po skutečně úspěšném plném merge je lokální stav
+     * potvrzený, takže V2 cursor lze bezpečně posunout na serverový HEAD.
+     * Jde jen o malé metadata RPC; obsah poznámek se zde nestahuje.
+     */
+    await potvrdPrivateSyncV2CursorPoShodnemStavu(
+      user.id
+    );
+
     return true;
   })();
 
@@ -4381,6 +4627,15 @@ async function spustRychlySyncPoznamekBezpecne() {
       window.LubaNoteStartupDiag?.zapis?.(
         "FAST",
         "QUICK SYNC SKIP – fingerprint beze změny"
+      );
+
+      /*
+       * PATCH 480 – fingerprint právě potvrdil, že lokální a serverový
+       * stav jsou shodné. Teprve teď smíme bezpečně bootstrapnout /
+       * posunout nový V2 change cursor.
+       */
+      await potvrdPrivateSyncV2CursorPoShodnemStavu(
+        user.id
       );
     } else {
       vysledek = await syncNotes({
