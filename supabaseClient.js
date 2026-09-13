@@ -1194,13 +1194,16 @@ async function povolAktivniUcet(
       ?.spustBezpecne === "function"
   ) {
     window.LubaNoteSync.spustBezpecne();
-  } else if (typeof syncNotes === "function") {
-    syncNotes().catch((error) => {
-      console.warn(
-        "Initial sync skipped:",
-        error
-      );
-    });
+  } else {
+    /*
+     * PATCH 485 – při chybě/pozdním načtení sync modulu už nesmíme
+     * obejít egress ochranu přímým legacy syncNotes(). Start se raději
+     * odloží a zopakuje po auth/foreground události.
+     */
+    window.LubaNoteStartupDiag?.zapis?.(
+      "EGRESS",
+      "INITIAL SYNC DEFER | safe-sync-module-not-ready"
+    );
   }
 
   return true;

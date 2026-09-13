@@ -867,8 +867,15 @@ async function dokonciOdemknutiTajnehoRezimuNaPozadi() {
      * úspěšného odemknutí. Lokální šifrovaný trezor je v tuto chvíli
      * už načtený a Secret režim je bezpečně aktivní.
      */
-    if (typeof syncNotes === "function") {
-      await syncNotes();
+    /*
+     * PATCH 485 – Secret unlock nesmí nikdy spustit full snapshot.
+     * Použijeme stejný bezpečný fingerprint/change-feed průchod jako
+     * foreground. Pokud něco nelze cíleně potvrdit, pouze se odloží.
+     */
+    if (
+      typeof window.LubaNoteSync?.spustRychle === "function"
+    ) {
+      await window.LubaNoteSync.spustRychle();
     }
 
     /*

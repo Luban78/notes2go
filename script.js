@@ -2762,7 +2762,10 @@ async function ulozPoznamkuLokalneASynchronizuj(
     ?.provedLokalniZmenuASynchronizuj
   ) {
     return await window.LubaNoteSync
-      .provedLokalniZmenuASynchronizuj(akce);
+      .provedLokalniZmenuASynchronizuj(
+        akce,
+        poznamkaProFallback
+      );
   }
   
   const vysledek = await akce();
