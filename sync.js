@@ -6924,6 +6924,81 @@ function jeTargetV2SitovaPauzaAktivni() {
 }
 
 /*
+ * PATCH 502 – ANDROID NATIVE NETWORK RESUME
+ *
+ * Browserový event "online" není v Android WebView spolehlivý. APK proto
+ * může dostat přes malý nativní plugin potvrzení ConnectivityManageru, že
+ * aktivní síť má skutečně VALIDATED internet. Není to HTTP probe a nemá
+ * žádný Supabase egress. Používáme ho pouze k okamžitému probuzení už
+ * existující targeted fronty z PATCH 500. Web/PWA beze změny používají
+ * browser online event + bezpečný backoff.
+ */
+let nativeNetworkBridgeV2Inicializovan = false;
+let nativeNetworkListenerV2 = null;
+
+function zpracujTargetV2NavratSite(duvod = "network") {
+  const melaPauzu = jeTargetV2SitovaPauzaAktivni();
+  const maDluh = maCilenyPrivateV2Dluh();
+
+  zrusTargetV2SitovouPauzu(duvod);
+
+  if (!melaPauzu && !maDluh) {
+    return;
+  }
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET NETWORK WAKE | ${duvod}`
+  );
+
+  setTimeout(() => {
+    Promise.resolve(
+      synchronizujCilenePrivateZmenyV2()
+    ).catch(() => {});
+  }, 0);
+}
+
+async function aktivujNativeNetworkBridgeV2() {
+  if (nativeNetworkBridgeV2Inicializovan) return;
+  nativeNetworkBridgeV2Inicializovan = true;
+
+  if (!window.Capacitor?.isNativePlatform?.()) return;
+
+  const plugin = window.Capacitor?.Plugins?.LubaNoteNetworkState;
+  if (!plugin?.addListener) return;
+
+  try {
+    nativeNetworkListenerV2 = await plugin.addListener(
+      "networkStatusChange",
+      (stav) => {
+        const connected = stav?.connected === true;
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `NATIVE NETWORK | ${connected ? "online" : "offline"}`
+        );
+
+        if (!connected) {
+          stitkyCekajiNaRefreshPoNavratuInternetu = true;
+          return;
+        }
+
+        zpracujTargetV2NavratSite("native-network");
+      }
+    );
+
+    if (plugin.getStatus) {
+      const stav = await plugin.getStatus();
+      if (stav?.connected === true && jeTargetV2SitovaPauzaAktivni()) {
+        zpracujTargetV2NavratSite("native-status");
+      }
+    }
+  } catch (_error) {
+    nativeNetworkListenerV2 = null;
+  }
+}
+
+/*
  * Permanentní delete je konečný stav stejného note_id. Jakmile existuje
  * tombstone, starší obsahový targeted upload tohoto ID už nesmí frontu
  * blokovat ani se po návratu internetu znovu posílat.
@@ -8637,7 +8712,7 @@ window.addEventListener(
 window.addEventListener(
   "online",
   () => {
-    zrusTargetV2SitovouPauzu("online-event");
+    zpracujTargetV2NavratSite("online-event");
 
     window.LubaNoteStartupDiag?.zapis?.(
       "TAG-VD",
@@ -8650,6 +8725,11 @@ window.addEventListener(
     );
   }
 );
+
+/* PATCH 502 – plugin je registrovaný nativně před načtením WebView.
+   setTimeout pouze oddělí inicializaci listeneru od synchronního načtení
+   modulu; žádný síťový request tím nevzniká. */
+setTimeout(aktivujNativeNetworkBridgeV2, 0);
 
 window.addEventListener(
   "focus",

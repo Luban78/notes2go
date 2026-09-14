@@ -40,6 +40,10 @@ public class MainActivity extends BridgeActivity {
       LubaNoteKeyboardStatePlugin.class
     );
 
+    registerPlugin(
+      LubaNoteNetworkStatePlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();
