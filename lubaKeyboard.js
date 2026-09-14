@@ -332,6 +332,7 @@
   let chooser = null;
   let altPopup = null;
   let aktivniEditor = null;
+  let aktivniCilPsani = "body";
   let layoutId = nactiLayout();
   let mode = "letters";
   let symbolPage = 0;
@@ -512,7 +513,9 @@
   }
 
   function naucAktualniSlovo() {
-    const kontext = core()?.ziskejKontextVlastniKlavesnice?.();
+    const kontext = jeAktivniNazev()
+      ? ziskejKontextNazvu()
+      : core()?.ziskejKontextVlastniKlavesnice?.();
     const slovo = kontext?.celeSlovo || kontext?.prefix || "";
     if (slovo) naucSlovo(slovo, 2);
   }
@@ -546,7 +549,9 @@
     const layout = aktualniLayout();
     if (mode !== "letters" || layout.compose || layout.id === "emoji" || layout.id === "unicode") return [];
 
-    const kontext = core()?.ziskejKontextVlastniKlavesnice?.();
+    const kontext = jeAktivniNazev()
+      ? ziskejKontextNazvu()
+      : core()?.ziskejKontextVlastniKlavesnice?.();
     const prefix = String(kontext?.prefix || "");
     if (!prefix) return vychoziNavrhy(layout);
 
@@ -648,6 +653,213 @@
       .find((el) => el.offsetParent !== null) || null;
   }
 
+  function jeNazevEditoru(el) {
+    if (!el || el.id !== "modalTitle" || !el.isConnected) return false;
+    const modal = el.closest(".taskModal");
+    return Boolean(modal && !modal.hidden);
+  }
+
+  function najdiNazevEditoru() {
+    const el = document.getElementById("modalTitle");
+    return jeNazevEditoru(el) ? el : null;
+  }
+
+  function jeAktivniNazev() {
+    return aktivniCilPsani === "title" && Boolean(najdiNazevEditoru());
+  }
+
+  function ziskejVyberNazvu() {
+    const title = najdiNazevEditoru();
+    if (!title) return null;
+
+    const text = String(title.textContent || "");
+    let start = text.length;
+    let end = text.length;
+    const selection = window.getSelection();
+
+    try {
+      if (selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (
+          title.contains(range.startContainer) &&
+          title.contains(range.endContainer)
+        ) {
+          const predStart = document.createRange();
+          predStart.selectNodeContents(title);
+          predStart.setEnd(range.startContainer, range.startOffset);
+          start = predStart.toString().length;
+
+          const predEnd = document.createRange();
+          predEnd.selectNodeContents(title);
+          predEnd.setEnd(range.endContainer, range.endOffset);
+          end = predEnd.toString().length;
+        }
+      }
+    } catch (_error) {}
+
+    start = Math.max(0, Math.min(text.length, start));
+    end = Math.max(0, Math.min(text.length, end));
+    if (end < start) [start, end] = [end, start];
+    return { title, text, start, end };
+  }
+
+  function nastavVyberNazvu(title, start, end = start) {
+    if (!title) return;
+    let textNode = title.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE || title.childNodes.length !== 1) {
+      const text = String(title.textContent || "");
+      title.textContent = "";
+      textNode = document.createTextNode(text);
+      title.appendChild(textNode);
+    }
+
+    const delka = textNode.nodeValue?.length || 0;
+    const a = Math.max(0, Math.min(delka, Number(start) || 0));
+    const b = Math.max(0, Math.min(delka, Number(end) || a));
+
+    try {
+      const range = document.createRange();
+      range.setStart(textNode, a);
+      range.setEnd(textNode, b);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    } catch (_error) {}
+  }
+
+  function nastavTextNazvu(title, text, caretStart, caretEnd = caretStart) {
+    if (!title) return false;
+    const clean = String(text ?? "").replace(/[\r\n]+/g, " ");
+    title.textContent = clean;
+    title.dataset.prazdny = clean.length ? "false" : "true";
+    nastavVyberNazvu(title, caretStart, caretEnd);
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+    queueMicrotask(aktualizujNavrhy);
+    return true;
+  }
+
+  function vlozDoNazvu(text) {
+    const state = ziskejVyberNazvu();
+    if (!state) return false;
+    const value = String(text ?? "").replace(/[\r\n]+/g, " ");
+    if (!value) return false;
+    const next = state.text.slice(0, state.start) + value + state.text.slice(state.end);
+    const caret = state.start + value.length;
+    return nastavTextNazvu(state.title, next, caret);
+  }
+
+  function predchoziPoziceNazvu(text, pos) {
+    if (pos <= 0) return 0;
+    const prefix = text.slice(0, pos);
+    const chars = Array.from(prefix);
+    const posledni = chars.at(-1) || "";
+    return Math.max(0, pos - posledni.length);
+  }
+
+  function dalsiPoziceNazvu(text, pos) {
+    if (pos >= text.length) return text.length;
+    const first = Array.from(text.slice(pos))[0] || "";
+    return Math.min(text.length, pos + first.length);
+  }
+
+  function provedPrikazNazvu(type, value = "") {
+    const state = ziskejVyberNazvu();
+    if (!state) return false;
+
+    if (type === "text") return vlozDoNazvu(value);
+    if (type === "space") return vlozDoNazvu(" ");
+
+    if (type === "suggestion") {
+      const navrh = String(value || "").trim();
+      if (!navrh) return false;
+      const left = state.text.slice(0, state.start);
+      const match = left.match(/[\p{L}\p{M}\p{N}_'-]+$/u);
+      const prefixLen = match?.[0]?.length || 0;
+      const zacatek = state.start - prefixLen;
+      const next = state.text.slice(0, zacatek) + `${navrh} ` + state.text.slice(state.end);
+      return nastavTextNazvu(state.title, next, zacatek + navrh.length + 1);
+    }
+
+    if (type === "backspace") {
+      if (state.start !== state.end) {
+        const next = state.text.slice(0, state.start) + state.text.slice(state.end);
+        return nastavTextNazvu(state.title, next, state.start);
+      }
+      if (state.start <= 0) return true;
+      const prev = predchoziPoziceNazvu(state.text, state.start);
+      const next = state.text.slice(0, prev) + state.text.slice(state.start);
+      return nastavTextNazvu(state.title, next, prev);
+    }
+
+    if (type === "delete") {
+      if (state.start !== state.end) {
+        const next = state.text.slice(0, state.start) + state.text.slice(state.end);
+        return nastavTextNazvu(state.title, next, state.start);
+      }
+      if (state.start >= state.text.length) return true;
+      const dalsi = dalsiPoziceNazvu(state.text, state.start);
+      const next = state.text.slice(0, state.start) + state.text.slice(dalsi);
+      return nastavTextNazvu(state.title, next, state.start);
+    }
+
+    if (type === "left" || type === "right") {
+      let pos;
+      if (state.start !== state.end) {
+        pos = type === "left" ? state.start : state.end;
+      } else {
+        pos = type === "left"
+          ? predchoziPoziceNazvu(state.text, state.start)
+          : dalsiPoziceNazvu(state.text, state.end);
+      }
+      nastavVyberNazvu(state.title, pos);
+      return true;
+    }
+
+    if (type === "enter") {
+      const editor = najdiEditor();
+      if (!editor) return false;
+      aktivniCilPsani = "body";
+      aktivniEditor = editor;
+      potlacAutomatickeOtevreni = false;
+      pripravEditor(editor);
+      try { editor.focus({ preventScroll: true }); } catch (_error) {
+        try { editor.focus(); } catch (_ignore) {}
+      }
+      if (!panel || panel.hidden) zobraz();
+      return true;
+    }
+
+    if (type === "undo" || type === "redo") {
+      try {
+        document.execCommand(type);
+        state.title.dataset.prazdny = String(state.title.textContent || "").length ? "false" : "true";
+        state.title.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  function ziskejKontextNazvu() {
+    const state = ziskejVyberNazvu();
+    if (!state) return null;
+    const left = state.text.slice(0, state.start);
+    const right = state.text.slice(state.end);
+    const leftMatch = left.match(/[\p{L}\p{M}\p{N}_'-]+$/u);
+    const rightMatch = right.match(/^[\p{L}\p{M}\p{N}_'-]+/u);
+    const prefix = leftMatch?.[0] || "";
+    const suffix = rightMatch?.[0] || "";
+    return {
+      prefix,
+      celeSlovo: `${prefix}${suffix}`,
+      zacatek: state.start - prefix.length,
+      konec: state.end + suffix.length
+    };
+  }
+
   function haptic() {
     try { navigator.vibrate?.(7); } catch (_error) {}
   }
@@ -695,8 +907,10 @@
      * vlastní klávesnice. Do explicitního „systémového režimu“ nesaháme.
      */
     const editor = aktivniEditor || najdiEditor();
-    if (editor && editor !== systemovyEditor && ziskejZdrojKlavesnice() !== "system") {
-      nastavLubaAtributy(editor);
+    const title = najdiNazevEditoru();
+    if (ziskejZdrojKlavesnice() !== "system") {
+      if (editor && editor !== systemovyEditor) nastavLubaAtributy(editor);
+      if (title) nastavLubaAtributy(title);
     }
     schovejSystemovouNativne();
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
@@ -1213,12 +1427,19 @@
     synchronizujNativniZdrojKlavesnice(novy);
 
     const editor = aktivniEditor || najdiEditor();
-    if (editor) {
-      if (novy === "system") {
-        systemMode({ focus: false });
-      } else {
-        ukonciSystemMode(editor);
-        potlacAutomatickeOtevreni = false;
+    const title = document.getElementById("modalTitle");
+    if (novy === "system") {
+      if (editor) systemMode({ focus: false });
+      if (title) nastavSystemoveAtributy(title);
+      if (panel && !panel.hidden) skryj();
+    } else {
+      if (editor) ukonciSystemMode(editor);
+      if (title) nastavLubaAtributy(title);
+      potlacAutomatickeOtevreni = false;
+      if (document.activeElement === title && jeNazevEditoru(title)) {
+        aktivniCilPsani = "title";
+        zobraz();
+        schovejSystemovou();
       }
     }
 
@@ -1226,20 +1447,27 @@
       detail: { source: novy }
     }));
     window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", {
-      detail: { open: novy === "luba" && Boolean(panel && !panel.hidden), source: novy }
+      detail: { open: novy === "luba" && Boolean(panel && !panel.hidden), source: novy, target: aktivniCilPsani }
     }));
     return novy;
   }
 
   function insertCore(text) {
+    if (!text) return false;
+    if (jeAktivniNazev()) {
+      const ok = provedPrikazNazvu("text", text);
+      if (ok) ulozRecent(text);
+      return ok;
+    }
     const api = core();
-    if (!api?.provedPrikazVlastniKlavesnice || !text) return false;
+    if (!api?.provedPrikazVlastniKlavesnice) return false;
     const ok = api.provedPrikazVlastniKlavesnice("text", text) !== false;
     if (ok) ulozRecent(text);
     return ok;
   }
 
   function commandCore(type, value = "") {
+    if (jeAktivniNazev()) return provedPrikazNazvu(type, value);
     const api = core();
     if (!api?.provedPrikazVlastniKlavesnice) return false;
     return api.provedPrikazVlastniKlavesnice(type, value) !== false;
@@ -1971,24 +2199,32 @@
   function zobraz() {
     potlacAutomatickeOtevreni = false;
     const editor = aktivniEditor || najdiEditor();
-    if (!editor) return;
-    if (ziskejZdrojKlavesnice() === "system" || editor === systemovyEditor) {
-      systemovyEditor = editor;
-      nastavSystemoveAtributy(editor);
+    const title = najdiNazevEditoru();
+    const cilJeNazev = jeAktivniNazev();
+    if (!editor && !(cilJeNazev && title)) return;
+
+    if (ziskejZdrojKlavesnice() === "system") {
+      if (editor) {
+        systemovyEditor = editor;
+        nastavSystemoveAtributy(editor);
+      }
+      if (title) nastavSystemoveAtributy(title);
       return;
     }
+
     vytvorPanel();
     if (!document.body.classList.contains("ln-luba-klavesnice-open")) {
       ulozZakladniViewport();
     }
-    pripravEditor(editor);
+    if (editor) pripravEditor(editor);
+    if (cilJeNazev && title) nastavLubaAtributy(title);
     panel.hidden = false;
     otevritButton.hidden = true;
     document.body.classList.add("ln-luba-klavesnice-open");
     nastavAkcniPanel(false);
     vykresliKlavesnici();
     schovejSystemovou();
-    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: true } }));
+    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: true, source: "luba", target: aktivniCilPsani } }));
     zapisStabilituKlavesnice("PANEL OPEN");
     requestAnimationFrame(nastavVysku);
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+120", true); }, 120);
@@ -2028,7 +2264,7 @@
     zavriChooser();
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
-    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: false } }));
+    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: false, source: ziskejZdrojKlavesnice(), target: aktivniCilPsani } }));
     zapisStabilituKlavesnice("PANEL HIDE");
     document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
     akcniPanelOtevren = false;
@@ -2082,9 +2318,15 @@
    * tabletu se překládá stejným modelovým API. Tím zůstává MODEL zdrojem pravdy.
    */
   document.addEventListener("beforeinput", (event) => {
-    const editor = aktivniEditor || najdiEditor();
-    if (!editor || event.target !== editor || !panel || panel.hidden) return;
+    if (!panel || panel.hidden || ziskejZdrojKlavesnice() === "system") return;
 
+    const editor = aktivniEditor || najdiEditor();
+    const title = najdiNazevEditoru();
+    const jeBody = Boolean(editor && event.target === editor);
+    const jeTitle = Boolean(title && event.target === title);
+    if (!jeBody && !jeTitle) return;
+
+    aktivniCilPsani = jeTitle ? "title" : "body";
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -2097,20 +2339,32 @@
   }, true);
 
   document.addEventListener("focusin", (event) => {
-    /* PATCH 497 – název poznámky je záměrně systémový vstup. Pokud uživatel
-       přejde z těla do #modalTitle, vlastní panel musí uhnout Gboardu. Tohle
-       NENÍ ruční skrytí klávesnice, takže další tap do těla ji smí znovu
-       automaticky otevřít. */
+    /* PATCH 498 – JEDNA KLÁVESNICE PRO CELÝ EDITOR.
+       Název i tělo respektují stejnou globální volbu z Nastavení.
+       V režimu LubaKeyboard se Gboard v názvu NESMÍ otevřít. */
     if (event.target?.id === "modalTitle") {
-      if (panel && !panel.hidden) {
-        skryj();
+      const title = event.target;
+      aktivniCilPsani = "title";
+
+      if (ziskejZdrojKlavesnice() === "system") {
+        nastavSystemoveAtributy(title);
+        if (panel && !panel.hidden) skryj();
         potlacAutomatickeOtevreni = false;
-        zapisStabilituKlavesnice("FOCUS TITLE", "system-ime-allowed");
+        zapisStabilituKlavesnice("FOCUS TITLE", "system");
+        return;
       }
+
+      nastavLubaAtributy(title);
+      potlacAutomatickeOtevreni = false;
+      zapisStabilituKlavesnice("FOCUS TITLE", "luba");
+      zobraz();
+      requestAnimationFrame(schovejSystemovou);
+      setTimeout(schovejSystemovou, 60);
       return;
     }
 
     if (!jeEditorV2(event.target)) return;
+    aktivniCilPsani = "body";
     aktivniEditor = event.target;
     zapisStabilituKlavesnice("FOCUS BODY", "custom-ime");
     if (ziskejZdrojKlavesnice() === "system" || event.target === systemovyEditor) {
@@ -2125,6 +2379,17 @@
   }, true);
 
   document.addEventListener("pointerdown", (event) => {
+    /* PATCH 498 – atributy názvu nastavujeme už v pointerdown capture,
+       tedy ještě PŘED tím, než WebView vytvoří InputConnection. */
+    if (event.target?.id === "modalTitle") {
+      if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributy(event.target);
+      else {
+        nastavLubaAtributy(event.target);
+        aktivniCilPsani = "title";
+        schovejSystemovouNativne();
+      }
+    }
+
     /*
      * FIX 439 – startup / běžné tapy před prvním otevřením LubaKeyboard.
      * altPopup vzniká až lazy v vytvorPanel(). Do té doby je null.
@@ -2384,8 +2649,17 @@
      proto srovnáme hned při načtení skriptu, nejen při dalším přepnutí. */
   synchronizujNativniZdrojKlavesnice();
 
+  /* PATCH 498 – modalTitle existuje už při načtení stránky. Nastavíme mu
+     správný inputmode hned, aby první automatický focus po otevření poznámky
+     nikdy nestihl vytvořit Gboard v režimu LubaKeyboard. */
+  const titlePriStartu = document.getElementById("modalTitle");
+  if (titlePriStartu) {
+    if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributy(titlePriStartu);
+    else nastavLubaAtributy(titlePriStartu);
+  }
+
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "STABLE-MODERN-WEBVIEW-497",
+    verze: "ONE-KEYBOARD-EDITOR-498",
     zobraz,
     skryj,
     nastavLayout,
@@ -2394,6 +2668,7 @@
     ziskejZdroj: ziskejZdrojKlavesnice,
     nastavZdroj: nastavZdrojKlavesnice,
     jeOtevrena: () => Boolean(panel && !panel.hidden),
+    ziskejCilPsani: () => aktivniCilPsani,
     vlozUnicode: (codePoint) => {
       const cp = Number(codePoint);
       if (!Number.isInteger(cp) || cp < 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return false;

@@ -103,7 +103,8 @@
       editor?.isConnected &&
       lab && !lab.hidden &&
       klavesnice?.ziskejZdroj?.() === "luba" &&
-      klavesnice?.jeOtevrena?.()
+      klavesnice?.jeOtevrena?.() &&
+      klavesnice?.ziskejCilPsani?.() === "body"
     );
   }
 
@@ -6965,7 +6966,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.21-MIXED-BLOCKS-497-STABLE-CARET",
+    verze: "V2.21-MIXED-BLOCKS-498-ONE-KEYBOARD",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
