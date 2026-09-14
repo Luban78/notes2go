@@ -87,6 +87,59 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
     call.resolve(result);
   }
 
+
+
+  /*
+   * FIX 490 – po přepnutí LubaKeyboard -> systémová klávesnice může mít
+   * WebView stále starý InputConnection vytvořený s inputmode=none.
+   * restartInput() donutí WebView znovu načíst aktuální editorové atributy
+   * a showSoftInput()/WindowInsetsController.show() pak otevřou IME bez
+   * restartu celé aplikace. Metoda je striktně no-op mimo source=system.
+   */
+  @PluginMethod
+  public void showIme(PluginCall call) {
+    if (pouzivaLubaKeyboard(getContext())) {
+      call.resolve();
+      return;
+    }
+
+    Activity activity = getActivity();
+    if (activity == null) {
+      call.resolve();
+      return;
+    }
+
+    activity.runOnUiThread(() -> {
+      try {
+        View webView =
+          getBridge() != null && getBridge().getWebView() != null
+            ? getBridge().getWebView()
+            : activity.getWindow().getDecorView();
+
+        webView.requestFocus();
+
+        InputMethodManager imm =
+          (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+
+        if (imm != null) {
+          imm.restartInput(webView);
+          imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          WindowInsetsController controller = activity.getWindow().getInsetsController();
+          if (controller != null) {
+            controller.show(WindowInsets.Type.ime());
+          }
+        }
+      } catch (Exception ignored) {
+        /* Přepínač klávesnice nesmí rozbít editor ani při chybě IME. */
+      }
+
+      call.resolve();
+    });
+  }
+
   /*
    * FIX 489 – přímá nativní brzda systémové IME.
    *

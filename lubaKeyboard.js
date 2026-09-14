@@ -385,12 +385,31 @@
      V PWA/iOS plugin neexistuje a funkce je záměrně no-op. */
   function synchronizujNativniZdrojKlavesnice(zdroj = ziskejZdrojKlavesnice()) {
     const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (!plugin?.setSource) return;
+    if (!plugin?.setSource) return Promise.resolve();
 
     try {
-      Promise.resolve(plugin.setSource({
+      return Promise.resolve(plugin.setSource({
         source: zdroj === "system" ? "system" : "luba"
       })).catch(() => {});
+    } catch (_error) {
+      return Promise.resolve();
+    }
+  }
+
+  /*
+   * FIX 490 – přepnutí z LubaKeyboard na systémovou IME za běhu.
+   * Pouhá změna inputmode z none -> text nestačí, pokud už contenteditable
+   * drží focus: Android/WebView si ponechá starý InputConnection a Gboard se
+   * neotevře až do nového focusu / restartu aplikace. Po potvrzení zdroje v
+   * nativním pluginu proto restartujeme InputConnection a IME explicitně
+   * zobrazíme. V PWA/iOS je to záměrně no-op.
+   */
+  function zobrazNativniSystemovouIme() {
+    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (!plugin?.showIme) return;
+
+    try {
+      Promise.resolve(plugin.showIme()).catch(() => {});
     } catch (_error) {}
   }
 
@@ -1217,16 +1236,32 @@
   function nastavZdrojKlavesnice(zdroj) {
     const novy = zdroj === "system" ? "system" : "luba";
     try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
-    synchronizujNativniZdrojKlavesnice(novy);
 
     const editor = aktivniEditor || najdiEditor();
     if (editor) {
       if (novy === "system") {
+        /* FIX 490 – atributy nastavíme okamžitě, ale samotnou Android IME
+           otevřeme až POTÉ, co native plugin přepíše source=system. Tím
+           MainActivity už nemůže nově otevřenou Gboard považovat za průsak
+           LubaKeyboard a hned ji znovu schovat. */
         systemMode({ focus: false });
       } else {
         ukonciSystemMode(editor);
         potlacAutomatickeOtevreni = false;
       }
+    }
+
+    const syncNativni = synchronizujNativniZdrojKlavesnice(novy);
+    if (novy === "system" && editor) {
+      Promise.resolve(syncNativni).finally(() => {
+        if (ziskejZdrojKlavesnice() !== "system") return;
+        const aktualniEditor = aktivniEditor || najdiEditor();
+        if (!aktualniEditor) return;
+        systemovyEditor = aktualniEditor;
+        nastavSystemoveAtributy(aktualniEditor);
+        try { aktualniEditor.focus({ preventScroll: true }); } catch (_error) {}
+        requestAnimationFrame(zobrazNativniSystemovouIme);
+      });
     }
 
     window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
@@ -2347,7 +2382,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "NATIVE-IME-GUARD-489",
+    verze: "SYSTEM-IME-SWITCH-490",
     zobraz,
     skryj,
     nastavLayout,
