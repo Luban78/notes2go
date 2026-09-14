@@ -1738,6 +1738,14 @@
     const v2Bridge = window.LubaNoteEditorV2Bridge;
     const v2Aktivni = v2Bridge?.jeAktivni?.() === true;
 
+    /* FIX 527 – V2 model je source of truth. Před kontrolou `bylEditorZmenen()`
+       MUSÍ být aktuální model zrcadlen do produkčních polí. Dříve se dirty
+       kontrola provedla nad starým DOMem, vyšla falešně jako „beze změny“ a
+       klik na [[interní odkaz]] mohl přepnout poznámku bez uložení nového textu. */
+    if (v2Aktivni && v2Bridge?.synchronizujDoProdukcnihoEditoru?.() !== true) {
+      return false;
+    }
+
     if (typeof bylEditorZmenen === "function") {
       jeEditorZmenen = bylEditorZmenen();
     }
@@ -1773,10 +1781,7 @@
      * nové/Legacy případy, kde stabilní source ID ještě nemáme.
      */
     if (v2Aktivni && puvodniId) {
-      if (v2Bridge?.synchronizujDoProdukcnihoEditoru?.() !== true) {
-        return false;
-      }
-
+      /* Model už byl synchronizován před dirty kontrolou výše. */
       const vysledek = await ulozAZavriEditor(
         null,
         { nezavirat: true, tichyRezim: true }
@@ -2219,6 +2224,41 @@
     true
   );
 
+  function otevriNabidkuInternihoOdkazu(link) {
+    if (!link) return;
+
+    /* V2 interní odkaz je atomický (contenteditable=false), takže jej nelze
+       běžným označením „odformátovat“. Tap proto nabídne dvě explicitní akce:
+       otevřít cíl, nebo odebrat jen vazbu a ponechat původní text. */
+    if (
+      link.closest?.(".ln-v2-editor") &&
+      typeof window.otevriVyberovyModal === "function"
+    ) {
+      const nazev = String(link.dataset?.noteTitle || link.textContent || "Interní odkaz").trim() || "Interní odkaz";
+      window.otevriVyberovyModal({
+        nadpis: nazev,
+        moznosti: [
+          { hodnota: "otevrit", popisek: "Otevřít poznámku" },
+          { hodnota: "odebrat", popisek: "Odebrat odkaz" }
+        ],
+        poVyberu: async (hodnota) => {
+          if (hodnota === "odebrat") {
+            const odebrano = window.LubaNoteEditorV2
+              ?.odeberInterniOdkazZElementu?.(link) === true;
+            if (!odebrano && typeof zobrazZpravuAplikace === "function") {
+              zobrazZpravuAplikace("Interní odkaz", "Odkaz se nepodařilo bezpečně odebrat.");
+            }
+            return;
+          }
+          await otevriInterniOdkaz(link);
+        }
+      });
+      return;
+    }
+
+    void otevriInterniOdkaz(link);
+  }
+
   noteBacklinksList?.addEventListener("click", (event) => {
     const polozka = event.target.closest?.(".noteBacklinkItem");
 
@@ -2249,7 +2289,7 @@
 
       event.preventDefault();
       event.stopPropagation();
-      void otevriInterniOdkaz(link);
+      otevriNabidkuInternihoOdkazu(link);
     },
     true
   );

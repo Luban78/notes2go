@@ -2027,17 +2027,33 @@
 
   document.addEventListener("keydown", (event) => {
     if (!aktivni || event.key !== "Escape") return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+
+    /* FIX 527 – ESC na PC znovu patří společnému zavíracímu toku aplikace:
+       beze změny zavře, se změnou zobrazí Uložit / Neukládat / Zrušit.
+       Bridge smí ESC spotřebovat jen pro svůj právě otevřený podmodal. */
     if (cropModal && !cropModal.hidden) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
       zavriV2CropModal();
       return;
     }
     if (odkazModal && !odkazModal.hidden) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
       odkazModal.hidden = true;
       return;
     }
-    editorBackButton.click();
+
+    const choiceModal = document.querySelector(".choiceModal:not([hidden])");
+    if (choiceModal) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      try { window.zavriVyberovyModal?.(); } catch (_error) {}
+      return;
+    }
+
+    /* Nic dalšího zde neděláme. Event pokračuje do script.js, kde
+       `zpracujZavreniEditoru()` drží jedinou správnou save/discard logiku. */
   }, true);
 
   /* Externí HTML/TXT se nejdřív vloží do produkčního editoru.

@@ -3271,6 +3271,45 @@
     return true;
   }
 
+  function odeberInterniOdkazZElementu(element) {
+    if (!element || !editor?.contains(element) || !element.classList?.contains("noteInternalLink")) return false;
+
+    const zacatek = domBodNaModel(element, 0);
+    const konec = domBodNaModel(element, element.childNodes?.length || 0);
+    if (!zacatek || !konec || zacatek.blok !== konec.blok || zacatek.offset >= konec.offset) return false;
+
+    const blok = dokument.bloky[zacatek.blok];
+    if (!jeTextovyBlok(blok)) return false;
+
+    const vyberPred = {
+      zacatek: { ...zacatek },
+      konec: { ...konec },
+      sbaleny: false
+    };
+    const snapshotPred = vytvorSnapshotHistorie(vyberPred);
+
+    /* Odebereme jen identitu interního odkazu. Viditelný text i ostatní
+       formátování zůstává beze změny – přesně jako „unlink“, ne smazání. */
+    aplikujSpecialniFormatNaRozsah(blok, zacatek.offset, konec.offset, (format) => {
+      format.interniOdkazId = null;
+      format.interniOdkazNazev = null;
+    });
+
+    const caret = { blok: konec.blok, offset: konec.offset };
+    const vyberPo = { zacatek: { ...caret }, konec: { ...caret }, sbaleny: true };
+    posledniPozice = { ...caret };
+    posledniVyber = klonVyberu(vyberPo);
+    ulozenyFormatovaciVyber = klonVyberu(vyberPo);
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+
+    ulozZmenuDoHistorie(snapshotPred, "odebrat interní odkaz");
+    vykresli(vyberPo);
+    nastavStav("Interní odkaz odebrán · text zůstal zachován");
+    return true;
+  }
+
   function absolutniOffsetPozice(pozice) {
     let soucet = 0;
     const cilBlok = Math.max(0, Math.min(dokument.bloky.length - 1, Number(pozice?.blok) || 0));
@@ -4354,11 +4393,20 @@
   function zrusVyberMoveSeznamuPokudMimo(target) {
     if (!vybranaPolozkaSeznamuId || !editor) return;
     const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-    if (radek?.dataset?.lnV2Blok === vybranaPolozkaSeznamuId) return;
+    const vybraneIdcka = idckaV2PresunovanehoPodstromu(vybranaPolozkaSeznamuId);
+    if (radek && vybraneIdcka.has(radek.dataset?.lnV2Blok || "")) return;
     Array.from(editor.querySelectorAll(".ln-v2-list-move-selected")).forEach((el) => {
       el.classList.remove("ln-v2-list-move-selected");
     });
     vybranaPolozkaSeznamuId = "";
+  }
+
+  /* FIX 527 – označení MOVE není trvalý režim. Kliknutí/tap mimo právě
+     označený řádek (u Bulletu mimo celý označený podstrom) jej pouze zruší.
+     Tohle NEMĚNÍ long-press, touch/pointer prahy ani vlastní drag engine. */
+  function zrusV2MoveVyberKlikemMimo(event) {
+    if (!vybranaPolozkaSeznamuId || !editor || jeV2InterakcePresunuSeznamu()) return;
+    zrusVyberMoveSeznamuPokudMimo(event?.target);
   }
 
   function zrusV2SeznamCasovac() {
@@ -6962,6 +7010,7 @@
      * než browser selection skutečně změní. Platí pro TODO, Bullet i Ordered.
      */
     poslouchej(document, "selectstart", zpracujV2ListSelectStart, { capture: true });
+    poslouchej(document, "click", zrusV2MoveVyberKlikemMimo, { capture: true });
 
     poslouchej(editor, "pointerdown", (event) => {
       if (event.pointerType === "touch") return;
@@ -7515,6 +7564,7 @@
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
     vlozInterniOdkazZAutocomplete,
+    odeberInterniOdkazZElementu,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
     ziskejTextVyberuProSelectionMenu,
