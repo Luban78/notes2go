@@ -1976,6 +1976,18 @@
     }, 0);
   }, true);
 
+  document.addEventListener("lubanote:v2-list-move-takeover", () => {
+    if (jeDesktopSelection || !aktivni) return;
+
+    /*
+     * FIX 521 – jakmile Core potvrdí skutečný long-press MOVE, mobilní
+     * selection vrstva končí. Žádné menu, žádný pending double-tap a žádná
+     * stará DOM selection nesmí po takeover znovu vstoupit do gesta.
+     */
+    potlacSelectionMenuKvuliMove(1000);
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+  }, true);
+
   document.addEventListener("lubanote:v2-model-input", () => {
     if (aktivni) skryjV2SelectionMenu();
   }, true);

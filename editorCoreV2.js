@@ -499,6 +499,15 @@
   const START_DRAG_SEZNAMU = 7;
 
   /*
+   * FIX 521 – Android/WebView může při long-pressu nad textem spustit
+   * nativní selection těsně před/okolo našeho 420ms timeru. `selectstart`
+   * je zrušitelný ještě PŘED změnou selection, takže právě tady můžeme
+   * rozhodnout: rychlý 2× tap zůstává výběr textu, skutečný dlouhý stisk
+   * na Bullet/TODO patří výhradně MOVE.
+   */
+  const MIN_CAS_PREVZETI_NATIVE_SELECTION = 300;
+
+  /*
    * VD 516 – pouze diagnostika produkčního V2 TODO/Bullet long-press dragu.
    * NEMĚNÍ gesto ani model. Debug Hub ji zapíná jen během modulu TODO.
    */
@@ -4377,6 +4386,17 @@
     v2DragSeznamu.radek.classList.add("ln-v2-list-move-selected");
 
     /*
+     * FIX 521 – od tohoto okamžiku je long-press výhradně MOVE. Bridge musí
+     * okamžitě zavřít případný mobilní selection panel a zapomenout pending
+     * double-tap, aby se dvě interakční vrstvy už nikdy nepraly o stejné gesto.
+     */
+    try {
+      document.dispatchEvent(new CustomEvent("lubanote:v2-list-move-takeover", {
+        detail: { blokId: v2DragSeznamu.blokId }
+      }));
+    } catch (_error) {}
+
+    /*
      * FIX 518 – Android/WebView native selection vs. TODO/Bullet MOVE.
      *
      * `ln-v2-list-drag-mode` uz v CSS obsahuje user-select:none +
@@ -4402,6 +4422,7 @@
     v2DragSeznamu = {
       typ, radek, blokId, pointerId, touchId,
       startX: clientX, startY: clientY, lastX: clientX, lastY: clientY,
+      startCas: performance.now(),
       pripraven: false, aktivni: false, cil: null
     };
     zapisV2TodoDragVD("PREPARE", {
@@ -4597,6 +4618,47 @@
 
   function najdiDotykV2Seznamu(dotyky, id) {
     return Array.from(dotyky || []).find((dotyk) => dotyk.identifier === id) || null;
+  }
+
+  function zpracujV2ListSelectStart(event) {
+    if (!v2DragSeznamu || v2DragSeznamu.typ !== "touch") return;
+    const radek = v2DragSeznamu.radek;
+    if (!radek?.isConnected) return;
+
+    const cil = event.target;
+    try {
+      if (cil && cil !== radek && !radek.contains(cil)) return;
+    } catch (_error) {
+      return;
+    }
+
+    const uplynulo = Math.max(0, performance.now() - Number(v2DragSeznamu.startCas || 0));
+
+    /*
+     * Rychlý selectstart patří 2× tapu / běžnému výběru textu. Long-press
+     * selection se naopak nesmí rozběhnout: právě v ten okamžik přebírá gesto
+     * MOVE. Tím neblokujeme krátký tap, caret ani double-tap selection.
+     */
+    if (uplynulo < MIN_CAS_PREVZETI_NATIVE_SELECTION) {
+      zapisV2TodoDragVD("SELECTSTART_FAST_ALLOW", { ms: Math.round(uplynulo) });
+      return;
+    }
+
+    if (event.cancelable) event.preventDefault();
+    event.stopImmediatePropagation?.();
+    zapisV2TodoDragVD("SELECTSTART_TAKEOVER", {
+      blok: v2DragSeznamu.blokId,
+      ms: Math.round(uplynulo),
+      pripraven: v2DragSeznamu.pripraven ? 1 : 0
+    });
+
+    if (!v2DragSeznamu.pripraven) {
+      zrusV2SeznamCasovac();
+      aktivujV2MoveSeznamu();
+    } else {
+      try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+      try { editor?.blur(); } catch (_error) {}
+    }
   }
 
   function zpracujV2ListTouchMove(event) {
@@ -6728,44 +6790,9 @@
         x: Math.round(dotyk.clientX), y: Math.round(dotyk.clientY),
         target: event.target?.className || event.target?.tagName || "-"
       });
-      const jeTodoMove = radek.classList.contains("ln-v2-todo");
-      const jeObnovaAktivnihoMove = jeTodoMove
-        && vybranaPolozkaSeznamuId === (radek.dataset.lnV2Blok || "")
-        && radek.classList.contains("ln-v2-list-move-selected");
-
       pripravV2LongPressSeznamu(
-        "touch",
-        radek,
-        dotyk.clientX,
-        dotyk.clientY,
-        null,
-        dotyk.identifier,
-        jeObnovaAktivnihoMove
+        "touch", radek, dotyk.clientX, dotyk.clientY, null, dotyk.identifier, false
       );
-
-      /*
-       * FIX 519 – Android/WebView musi vedet uz OD TOUCHSTARTU, ze TODO
-       * long-press patri LubaNote, jinak muze kolem systemoveho long-press
-       * prahu ukoncit proud pres touchcancel kvuli nativnimu vyberu textu.
-       *
-       * Dulezite: user-select:none NEBLOKUJE vertikalni scroll. Pri beznem
-       * swipu se kandidat po prekroceni puvodniho 20px prahu zrusi a trida
-       * se okamzite odstrani. Pri kratkem tapu se odstrani na touchend jeste
-       * pred naslednym clickem, takze normalni caret/2x tap zustava zachovan.
-       * Ochranu pouzivame pouze pro TODO – Bullet/Ordered tim nemenime.
-       */
-      if (jeTodoMove && v2DragSeznamu?.radek === radek) {
-        editor?.classList.add("ln-v2-list-drag-mode");
-        zapisV2TodoDragVD("NATIVE_GUARD_START", {
-          blok: radek.dataset.lnV2Blok || "-",
-          obnova: jeObnovaAktivnihoMove ? 1 : 0
-        });
-        if (jeObnovaAktivnihoMove) {
-          zapisV2TodoDragVD("RECOVERY_IMMEDIATE", {
-            blok: radek.dataset.lnV2Blok || "-"
-          });
-        }
-      }
     }, { passive: false });
 
     poslouchej(editor, "touchstart", (event) => {
@@ -6799,6 +6826,13 @@
       }
       zrusV2DragSeznamu({ zachovatVyber: true });
     }, { passive: false });
+
+    /*
+     * FIX 521 – capture `selectstart` je rozhodčí mezi nativním Android
+     * selection a naším list MOVE. Událost je zrušitelná ještě před tím,
+     * než browser selection skutečně změní. Platí pro TODO, Bullet i Ordered.
+     */
+    poslouchej(document, "selectstart", zpracujV2ListSelectStart, { capture: true });
 
     poslouchej(editor, "pointerdown", (event) => {
       if (event.pointerType === "touch") return;
