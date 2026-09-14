@@ -1138,6 +1138,8 @@ async function provedBezpecnyZapisPoznamky({
       error.message
     );
 
+    aktivujTargetV2SitovouPauzu(error);
+
     if (jeChybaOdeprenehoPristupu(error)) {
       oznamOdeprenyPristupUctu(error);
 
@@ -1195,6 +1197,8 @@ async function provedBezpecnyZapisPoznamky({
       result: vysledek
     };
   }
+
+  zrusTargetV2SitovouPauzu("write-ok");
 
   /*
    * Počítadlo slouží Fast Syncu pouze k bezpečnému poznání, zda plný
@@ -1377,6 +1381,8 @@ function pridejCekajiciSmazani(
     return;
   }
 
+  zrusObsahovyTargetKvuliSmazani(noteId);
+
   const meta = ziskejCloudSyncMeta(noteId);
 
   const bezpecnaExpectedRevision =
@@ -1427,6 +1433,8 @@ function pridejCekajiciSmazaniHromadne(
   const deviceId = getDeviceId();
 
   seznam.forEach((poznamka) => {
+    zrusObsahovyTargetKvuliSmazani(poznamka.id);
+
     const meta = ziskejCloudSyncMeta(poznamka.id);
     const expectedRevision =
       Number.isFinite(Number(meta?.revision))
@@ -1895,7 +1903,10 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
       revision:
         vysledek?.result?.revision ??
         ziskejCloudSyncMeta(note.id)?.revision ??
-        null
+        null,
+      error: vysledek?.error || null,
+      accessDenied: vysledek?.accessDenied === true,
+      limit: vysledek?.limit === true
     };
   }
 
@@ -6832,6 +6843,119 @@ let probihajiciCilenyPrivateV2 = null;
 let cileneV2CekaNaFastPotvrzeni = false;
 const potvrzeneCileneRevizeV2 = new Map();
 
+/*
+ * PATCH 500 – OFFLINE RETRY CIRCUIT BREAKER
+ *
+ * Android WebView může i bez skutečného internetu hlásit
+ * navigator.onLine=true. Původní reconnect timer pak po síťovém
+ * TypeError zkoušel save_note_safe každých 1,5 s. Data to nepoškodilo,
+ * ale vznikala zbytečná retry smyčka a UI zůstávalo ve "syncing".
+ * Po skutečné transportní chybě proto targeted V2 dostane postupný
+ * cooldown. Event "online" jej okamžitě zruší; jinak zůstává pomalý
+ * safety retry pro WebView, které online event někdy nevyšle.
+ */
+const TARGET_V2_SITOVE_BACKOFFY_MS = [5000, 15000, 30000, 60000];
+let targetV2SitovaPauzaDo = 0;
+let targetV2SitovyBackoffIndex = 0;
+
+function jeSitovaChybaTargetV2(error) {
+  if (!error) {
+    return navigator.onLine === false;
+  }
+
+  const text = String(
+    error?.message || error?.details || error?.hint || error || ""
+  ).toLowerCase();
+
+  return (
+    navigator.onLine === false ||
+    error?.name === "TypeError" ||
+    text.includes("failed to fetch") ||
+    text.includes("networkerror") ||
+    text.includes("network error") ||
+    text.includes("load failed") ||
+    text.includes("fetch failed")
+  );
+}
+
+function aktivujTargetV2SitovouPauzu(error = null) {
+  if (!jeSitovaChybaTargetV2(error)) {
+    return false;
+  }
+
+  const index = Math.min(
+    targetV2SitovyBackoffIndex,
+    TARGET_V2_SITOVE_BACKOFFY_MS.length - 1
+  );
+  const cekani = TARGET_V2_SITOVE_BACKOFFY_MS[index];
+
+  targetV2SitovyBackoffIndex = Math.min(
+    targetV2SitovyBackoffIndex + 1,
+    TARGET_V2_SITOVE_BACKOFFY_MS.length - 1
+  );
+  targetV2SitovaPauzaDo = Date.now() + cekani;
+
+  nastavStavSynchronizaceUI("pending");
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET NETWORK PAUSE | ${Math.round(cekani / 1000)}s`
+  );
+
+  return true;
+}
+
+function zrusTargetV2SitovouPauzu(duvod = null) {
+  const bylaPauza = targetV2SitovaPauzaDo > Date.now();
+
+  targetV2SitovaPauzaDo = 0;
+  targetV2SitovyBackoffIndex = 0;
+
+  if (bylaPauza && duvod) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET NETWORK RESUME | ${duvod}`
+    );
+  }
+}
+
+function jeTargetV2SitovaPauzaAktivni() {
+  return Date.now() < targetV2SitovaPauzaDo;
+}
+
+/*
+ * Permanentní delete je konečný stav stejného note_id. Jakmile existuje
+ * tombstone, starší obsahový targeted upload tohoto ID už nesmí frontu
+ * blokovat ani se po návratu internetu znovu posílat.
+ */
+function zrusObsahovyTargetKvuliSmazani(noteId) {
+  const id = String(noteId || "");
+
+  if (!id) {
+    return false;
+  }
+
+  const odstraneno = cekajiciCilenePrivateV2.delete(id);
+  potvrzeneCileneRevizeV2.delete(id);
+
+  if (odstraneno) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET CONTENT SUPERSEDED BY DELETE | id=${id}`
+    );
+  }
+
+  return odstraneno;
+}
+
+function zrusObsahoveTargetyPrekryteSmazanim() {
+  for (const zaznam of nactiCekajiciSmazani()) {
+    if (zaznam?.id) {
+      zrusObsahovyTargetKvuliSmazani(zaznam.id);
+    }
+  }
+}
+
 function klonujPoznamkuProCilenyV2(note) {
   if (!note || typeof note !== "object") {
     return null;
@@ -7380,7 +7504,11 @@ async function synchronizujCilenePrivateZmenyV2() {
     return probihajiciCilenyPrivateV2;
   }
 
-  if (!navigator.onLine) {
+  /* PATCH 500 – delete má přednost před starším obsahovým uploadem. */
+  zrusObsahoveTargetyPrekryteSmazanim();
+
+  if (!navigator.onLine || jeTargetV2SitovaPauzaAktivni()) {
+    nastavStavSynchronizaceUI("pending");
     return false;
   }
 
@@ -7641,7 +7769,7 @@ function spustKontroluNavratuInternetu() {
         return;
       }
 
-      if (!navigator.onLine) {
+      if (!navigator.onLine || jeTargetV2SitovaPauzaAktivni()) {
         return;
       }
 
@@ -8493,6 +8621,8 @@ window.addEventListener(
 window.addEventListener(
   "online",
   () => {
+    zrusTargetV2SitovouPauzu("online-event");
+
     window.LubaNoteStartupDiag?.zapis?.(
       "TAG-VD",
       `EVENT ONLINE | pending=${stitkyCekajiNaRefreshPoNavratuInternetu}`
