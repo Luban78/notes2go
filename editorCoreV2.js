@@ -1278,6 +1278,9 @@
     const cislovani = [];
     const typyCislovani = [];
     let skryvaUroven = null;
+    /* FIX 522 – MOVE vizuálně označuje přesně to, co se skutečně přesune.
+       U Bullet/Ordered je to celý podstrom, u TODO pouze samotná položka. */
+    const vybraneIdckaPresunu = idckaV2PresunovanehoPodstromu();
 
     dokument.bloky.forEach((blok, indexBloku) => {
       if (jeObrazkovyBlok(blok)) {
@@ -1295,6 +1298,7 @@
       if (jeTodoBlok(blok) && blok.hotovo) radek.classList.add("ln-v2-todo-hotovo");
       radek.dataset.lnV2Blok = blok.id;
       radek.dataset.typ = blok.typ;
+      if (vybraneIdckaPresunu.has(blok.id)) radek.classList.add("ln-v2-list-move-selected");
       /* Unicode/RTL: každý blok si směr určí podle prvního silného znaku.
          Latinka zůstává LTR, arabština/hebrejština se vykreslí RTL. */
       radek.setAttribute("dir", "auto");
@@ -1334,7 +1338,6 @@
         );
         radek.dataset.lnV2ListHasChildren = maDeti ? "1" : "0";
         radek.dataset.lnV2ListCollapsed = maDeti && blok.sbaleno ? "1" : "0";
-        if (vybranaPolozkaSeznamuId === blok.id) radek.classList.add("ln-v2-list-move-selected");
         if (maDeti && blok.sbaleno) skryvaUroven = uroven;
 
         cislovani.length = Math.min(cislovani.length, uroven + 1);
@@ -4277,6 +4280,77 @@
     return Boolean(radek && editor?.contains(radek) && jeV2MoveZonaSeznamu(target, radek));
   }
 
+  function idckaV2PresunovanehoPodstromu(blokId = vybranaPolozkaSeznamuId) {
+    const idcka = new Set();
+    if (!blokId || !dokument?.bloky?.length) return idcka;
+    const index = najdiIndexBlokuPodleId(blokId);
+    if (index < 0) return idcka;
+
+    const blok = dokument.bloky[index];
+    if (!jeSeznamovyBlok(blok)) {
+      idcka.add(blokId);
+      return idcka;
+    }
+
+    const rozsah = rozsahPodstromuSeznamu(index);
+    for (let i = rozsah.od; i <= rozsah.do; i += 1) {
+      const polozka = dokument.bloky[i];
+      if (jeSeznamovyBlok(polozka) && polozka?.id) idcka.add(polozka.id);
+    }
+    return idcka;
+  }
+
+  function aplikujV2OznaceniPresunovanehoPodstromu(blokId) {
+    if (!editor) return;
+    const idcka = idckaV2PresunovanehoPodstromu(blokId);
+    Array.from(editor.querySelectorAll(".ln-v2-list-move-selected")).forEach((el) => {
+      el.classList.remove("ln-v2-list-move-selected");
+    });
+    if (!idcka.size) return;
+    Array.from(editor.querySelectorAll("[data-ln-v2-blok]")).forEach((radek) => {
+      if (idcka.has(radek.dataset.lnV2Blok || "")) radek.classList.add("ln-v2-list-move-selected");
+    });
+  }
+
+  /* FIX 522 – přesun seznamu nesmí sám vytvářet nový caret na začátku řádku.
+     Před long-pressem si uložíme existující SBALENÝ modelový caret podle ID
+     bloku (ne podle indexu, protože index se při přesunu změní) a po dropu ho
+     vrátíme na stejné místo. Textový range se naopak po MOVE neobnovuje. */
+  function zachytV2CaretPredPresunem() {
+    const vyber = posledniVyber;
+    if (!vyber?.sbaleny || !vyber?.konec || !dokument?.bloky?.length) return null;
+    const blok = dokument.bloky[vyber.konec.blok];
+    if (!blok?.id || !jeTextovyBlok(blok)) return null;
+    return {
+      blokId: blok.id,
+      offset: Math.max(0, Number(vyber.konec.offset) || 0)
+    };
+  }
+
+  function obnovV2CaretPoPresunu(snapshot) {
+    if (!snapshot?.blokId) return null;
+    const index = najdiIndexBlokuPodleId(snapshot.blokId);
+    if (index < 0 || !jeTextovyBlok(dokument.bloky[index])) return null;
+    const pozice = {
+      blok: index,
+      offset: Math.min(textBloku(dokument.bloky[index]).length, Math.max(0, Number(snapshot.offset) || 0))
+    };
+    return { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+  }
+
+  function nastavV2CaretPoPresunu(vyber) {
+    if (vyber?.sbaleny) {
+      posledniVyber = klonVyberu(vyber);
+      posledniPozice = { ...vyber.konec };
+      ulozenyFormatovaciVyber = klonVyberu(vyber);
+      return;
+    }
+    posledniVyber = null;
+    ulozenyFormatovaciVyber = null;
+    skryjV2LubaCaret();
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+  }
+
   function zrusVyberMoveSeznamuPokudMimo(target) {
     if (!vybranaPolozkaSeznamuId || !editor) return;
     const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
@@ -4316,7 +4390,12 @@
     if (v2ListDropIndicator) v2ListDropIndicator.hidden = true;
     if (v2ListDragPreview) {
       v2ListDragPreview.hidden = true;
-      v2ListDragPreview.classList.remove("chce-zanorit", "chce-vysunout");
+      v2ListDragPreview.classList.remove(
+        "chce-zanorit",
+        "chce-vysunout",
+        "chce-todo-hotovo",
+        "chce-todo-smazat"
+      );
     }
   }
 
@@ -4383,7 +4462,7 @@
       y: Math.round(v2DragSeznamu.lastY)
     });
     vybranaPolozkaSeznamuId = v2DragSeznamu.blokId;
-    v2DragSeznamu.radek.classList.add("ln-v2-list-move-selected");
+    aplikujV2OznaceniPresunovanehoPodstromu(v2DragSeznamu.blokId);
 
     /*
      * FIX 521 – od tohoto okamžiku je long-press výhradně MOVE. Bridge musí
@@ -4423,7 +4502,8 @@
       typ, radek, blokId, pointerId, touchId,
       startX: clientX, startY: clientY, lastX: clientX, lastY: clientY,
       startCas: performance.now(),
-      pripraven: false, aktivni: false, cil: null
+      pripraven: false, aktivni: false, cil: null,
+      caretPredPresunem: zachytV2CaretPredPresunem()
     };
     zapisV2TodoDragVD("PREPARE", {
       blok: blokId, typ, touchId, pointerId,
@@ -4513,44 +4593,96 @@
     const dx = x - v2DragSeznamu.startX;
     const zdrojIndex = najdiIndexBlokuPodleId(v2DragSeznamu.blokId);
     const jeTodoDrag = zdrojIndex >= 0 && jeTodoBlok(dokument.bloky[zdrojIndex]);
+
+    /*
+     * FIX 526 – TODO nepoužívá žádný druhý swipe recognizer.
+     * Používá PŘESNĚ stejný už odladěný long-press MOVE jako Bullet.
+     * Stejný dx a stejný práh PRAH_VNOR_SEZNAMU (38 px):
+     *   Bullet doprava/doleva = zanořit/vysunout,
+     *   TODO   doprava/doleva = hotovo/smazat.
+     * Tím se nemění touchstart, long-press ani selection arbitráž z FIX 521.
+     */
     preview.classList.toggle("chce-zanorit", !jeTodoDrag && dx > PRAH_VNOR_SEZNAMU);
     preview.classList.toggle("chce-vysunout", !jeTodoDrag && dx < -PRAH_VNOR_SEZNAMU);
+    preview.classList.toggle("chce-todo-hotovo", jeTodoDrag && dx > PRAH_VNOR_SEZNAMU);
+    preview.classList.toggle("chce-todo-smazat", jeTodoDrag && dx < -PRAH_VNOR_SEZNAMU);
+
+    /* Při horizontální TODO akci nesmí modrá/fialová drop čára naznačovat
+       vertikální přesun. Uvnitř tolerance se vrátí běžný reorder. */
+    if (jeTodoDrag && Math.abs(dx) > PRAH_VNOR_SEZNAMU) {
+      indicator.hidden = true;
+    }
+
     if (riditAutoScroll) aktualizujV2ListAutoScroll(y);
   }
 
   function presunV2SeznamovyPodstrom(drag) {
-    if (!drag?.blokId || !drag?.cil) return false;
+    if (!drag?.blokId) return false;
     const zdroj = najdiIndexBlokuPodleId(drag.blokId);
     if (zdroj < 0) return false;
     const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
 
-    /* TODO je plochý seznam stejně jako v produkčním editoru. Používá stejné
-       long-press/ghost/drop UX, ale horizontální tažení nikdy nemění úroveň. */
+    /*
+     * FIX 526 – TODO používá stejnou horizontální osu a STEJNÝ práh jako
+     * Bullet zanořit/vysunout. Žádný samostatný swipe engine.
+     *   dx > +PRAH_VNOR_SEZNAMU => Hotovo / u hotového Vrátit
+     *   dx < -PRAH_VNOR_SEZNAMU => Smazat
+     *   jinak                       běžný vertikální přesun TODO
+     */
     if (jeTodoBlok(dokument.bloky[zdroj])) {
-      const puvodniOffset = posledniVyber?.konec?.blok === zdroj ? posledniVyber.konec.offset : 0;
+      const dx = drag.lastX - drag.startX;
+      const vyberPo = obnovV2CaretPoPresunu(drag.caretPredPresunem);
+
+      if (dx > PRAH_VNOR_SEZNAMU) {
+        const blok = dokument.bloky[zdroj];
+        blok.hotovo = !Boolean(blok.hotovo);
+        nastavV2CaretPoPresunu(vyberPo);
+        vybranaPolozkaSeznamuId = "";
+        const zmeneno = ulozZmenuDoHistorie(
+          snapshotPred,
+          blok.hotovo ? "TODO hotovo tažením" : "TODO vráceno tažením"
+        );
+        vykresli(vyberPo);
+        nastavStav(blok.hotovo ? "TODO hotovo" : "TODO vráceno");
+        return zmeneno;
+      }
+
+      if (dx < -PRAH_VNOR_SEZNAMU) {
+        dokument.bloky.splice(zdroj, 1);
+        normalizujDokument();
+        const vyberPoSmazani = obnovV2CaretPoPresunu(drag.caretPredPresunem);
+        nastavV2CaretPoPresunu(vyberPoSmazani);
+        vybranaPolozkaSeznamuId = "";
+        const zmeneno = ulozZmenuDoHistorie(snapshotPred, "smazat TODO tažením");
+        vykresli(vyberPoSmazani);
+        nastavStav("TODO smazáno · Undo jej může vrátit");
+        return zmeneno;
+      }
+
+      /* Bez vertikálního cíle stále fungují Hotovo/Smazat výše; pouze
+         samotný reorder potřebuje cíl. */
+      if (!drag.cil) return false;
+
       const [polozka] = dokument.bloky.splice(zdroj, 1);
       let cilIndex = dokument.bloky.findIndex((blok) => blok.id === drag.cil.id);
       if (cilIndex < 0) {
         dokument.bloky.splice(Math.min(zdroj, dokument.bloky.length), 0, polozka);
         return false;
       }
-      let vlozitNa = drag.cil.za ? cilIndex + 1 : cilIndex;
+      const vlozitNa = drag.cil.za ? cilIndex + 1 : cilIndex;
       dokument.bloky.splice(vlozitNa, 0, polozka);
       normalizujDokument();
-      const novyIndex = najdiIndexBlokuPodleId(drag.blokId);
-      const pozice = { blok: novyIndex, offset: Math.min(textBloku(dokument.bloky[novyIndex]).length, puvodniOffset) };
-      const vyber = { zacatek: pozice, konec: pozice, sbaleny: true };
-      posledniPozice = { ...pozice };
-      posledniVyber = klonVyberu(vyber);
-      ulozenyFormatovaciVyber = klonVyberu(vyber);
+      const vyberPoPresunu = obnovV2CaretPoPresunu(drag.caretPredPresunem);
+      nastavV2CaretPoPresunu(vyberPoPresunu);
       vybranaPolozkaSeznamuId = drag.blokId;
       const zmeneno = ulozZmenuDoHistorie(snapshotPred, "přesun TODO");
-      vykresli(vyber);
+      vykresli(vyberPoPresunu);
       nastavStav("TODO přesunuto");
       return zmeneno;
     }
+
+    if (!drag.cil) return false;
     const puvodniUroven = normalizujUrovenBulletu(dokument.bloky[zdroj].uroven);
-    const puvodniOffset = posledniVyber?.konec?.blok === zdroj ? posledniVyber.konec.offset : 0;
     const rozsah = rozsahPodstromuSeznamu(zdroj);
     const skupina = dokument.bloky.splice(rozsah.od, rozsah.do - rozsah.od + 1);
 
@@ -4589,14 +4721,11 @@
     normalizujDokument();
 
     const novyIndex = najdiIndexBlokuPodleId(drag.blokId);
-    const pozice = { blok: Math.max(0, novyIndex), offset: Math.max(0, Math.min(textBloku(dokument.bloky[novyIndex]).length, puvodniOffset)) };
-    const vyber = { zacatek: pozice, konec: pozice, sbaleny: true };
-    posledniPozice = { ...pozice };
-    posledniVyber = klonVyberu(vyber);
-    ulozenyFormatovaciVyber = klonVyberu(vyber);
+    const vyberPo = obnovV2CaretPoPresunu(drag.caretPredPresunem);
+    nastavV2CaretPoPresunu(vyberPo);
     vybranaPolozkaSeznamuId = "";
     ulozZmenuDoHistorie(snapshotPred, "přesun položky seznamu");
-    vykresli(vyber);
+    vykresli(vyberPo);
     nastavStav(`Položka přesunuta · úroveň ${normalizujUrovenBulletu(dokument.bloky[novyIndex]?.uroven)}`);
     return true;
   }
@@ -4611,7 +4740,7 @@
     if (aktivni) potlacKlikSeznamuDo = performance.now() + 500;
     zrusV2DragSeznamu({ zachovatVyber: false });
     if (aktivni && zmeneno) {
-      vykresli(posledniVyber || vyberZPosledniPozice());
+      vykresli(posledniVyber);
     }
     return aktivni;
   }

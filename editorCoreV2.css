@@ -599,11 +599,30 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   text-align: center;
 }
 
+/* FIX 525 – čistě vizuální seskupení MOVE výběru.
+   Gesture/longpress logiky se tento blok NEDOTÝKÁ. Pokud se přesouvá rodič
+   Bullet/Ordered spolu s potomky, sousední označené řádky tvoří jeden
+   souvislý rámeček bez vnitřních oddělovacích hran. */
 .ln-v2-editor .ln-v2-list-move-selected {
-  outline: 2px solid var(--color-accent, currentColor);
-  outline-offset: 3px;
+  outline: none;
+  border: 2px solid var(--color-accent, currentColor);
   border-radius: 8px;
   background: color-mix(in srgb, var(--color-accent, currentColor) 10%, transparent);
+}
+
+/* Všechny vybrané řádky kromě posledního navážou přímo na další. */
+.ln-v2-editor .ln-v2-list-move-selected:has(+ .ln-v2-list-move-selected) {
+  margin-bottom: 0;
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Druhý a další řádek skupiny nemá vlastní horní hranu. */
+.ln-v2-editor .ln-v2-list-move-selected + .ln-v2-list-move-selected {
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .ln-v2-editor .ln-v2-list-dragging {
@@ -654,7 +673,9 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 }
 
 .ln-v2-list-drag-preview.chce-zanorit::after,
-.ln-v2-list-drag-preview.chce-vysunout::after {
+.ln-v2-list-drag-preview.chce-vysunout::after,
+.ln-v2-list-drag-preview.chce-todo-hotovo::after,
+.ln-v2-list-drag-preview.chce-todo-smazat::after {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 7px);
@@ -677,6 +698,25 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 
 .ln-v2-list-drag-preview.chce-vysunout::after {
   content: "← vysunout";
+  background: var(--color-surface, #211b29);
+  color: var(--color-text, #fff);
+  border: 1px solid var(--color-border, rgba(255,255,255,.2));
+}
+
+
+/* FIX 526 – stejné horizontální gesto jako Bullet, jen jiný význam pro TODO. */
+.ln-v2-list-drag-preview.chce-todo-hotovo::after {
+  content: "→ Hotovo";
+  background: var(--color-accent, #8958f6);
+  color: var(--color-accent-text, #fff);
+}
+
+.ln-v2-list-drag-preview.chce-todo-smazat {
+  border-style: dashed;
+}
+
+.ln-v2-list-drag-preview.chce-todo-smazat::after {
+  content: "← Smazat";
   background: var(--color-surface, #211b29);
   color: var(--color-text, #fff);
   border: 1px solid var(--color-border, rgba(255,255,255,.2));
