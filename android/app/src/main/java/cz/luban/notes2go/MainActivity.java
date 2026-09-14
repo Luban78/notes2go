@@ -10,6 +10,9 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import androidx.activity.OnBackPressedCallback;
 
 import com.getcapacitor.BridgeActivity;
@@ -139,12 +142,31 @@ public class MainActivity extends BridgeActivity {
    *
    * Fullscreen logika níže zůstává beze změny.
    */
+  private int webViewChromeMajor() {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return 0;
+      String ua = getBridge().getWebView().getSettings().getUserAgentString();
+      Matcher matcher = Pattern.compile("(?:Chrome|Chromium)/(\\d+)").matcher(ua == null ? "" : ua);
+      if (matcher.find()) return Integer.parseInt(matcher.group(1));
+    } catch (Exception ignored) {}
+    return 0;
+  }
+
+  /* PATCH 497 – FIX 471 vznikl pro WebView 103. Na moderním WebView už
+     clearFocus() celého WebView při pause/blur ničí browserový caret a může
+     rozhazovat InputConnection. Starou cestu proto držíme jen pro <=110. */
+  private boolean pouzitLegacyLubaImeLifecycle() {
+    int major = webViewChromeMajor();
+    if (major > 0) return major <= 110;
+    return Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2;
+  }
+
   private boolean pouzivaLubaKeyboard() {
     return LubaNoteKeyboardStatePlugin.pouzivaLubaKeyboard(this);
   }
 
   private void schovejSystemovouImeProLubaKeyboard(boolean zrusitFocusWebView) {
-    if (!pouzivaLubaKeyboard()) {
+    if (!pouzivaLubaKeyboard() || !pouzitLegacyLubaImeLifecycle()) {
       return;
     }
 

@@ -2,6 +2,11 @@ package cz.luban.notes2go;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.inputmethod.InputMethodManager;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -48,5 +53,31 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
     JSObject result = new JSObject();
     result.put("source", normalized);
     call.resolve(result);
+  }
+
+  /* PATCH 497 – úzký native hide pro vlastní editorovou klávesnici.
+     NEMĚNÍ focus WebView, contenteditable ani InputConnection. Jen schová
+     případnou zbytkovou Gboard při přechodu z názvu poznámky do těla. */
+  @PluginMethod
+  public void hideIme(PluginCall call) {
+    if (SOURCE_SYSTEM.equals(prefs(getContext()).getString(PREF_SOURCE, SOURCE_LUBA))) {
+      call.resolve();
+      return;
+    }
+
+    getActivity().runOnUiThread(() -> {
+      try {
+        View decorView = getActivity().getWindow().getDecorView();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          WindowInsetsController controller = getActivity().getWindow().getInsetsController();
+          if (controller != null) controller.hide(WindowInsets.Type.ime());
+        }
+
+        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(decorView.getWindowToken(), 0);
+      } catch (Exception ignored) {}
+      call.resolve();
+    });
   }
 }

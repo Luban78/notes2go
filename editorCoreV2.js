@@ -89,6 +89,136 @@
   let v2SelectionOverlay = null;
   let v2SelectionOverlayRaf = 0;
 
+  /* PATCH 497 – modelový caret pro LubaKeyboard.
+     Core V2 záměrně při modelovém zápisu překresluje celý DOM. Nativní
+     browserový caret proto na Android WebView nemusí po replaceChildren()
+     zůstat viditelný, i když modelová pozice je správná. Tento overlay je
+     čistě vizuální a nic nemění v modelu, historii ani DOM obsahu. */
+  let v2LubaCaret = null;
+  let v2LubaCaretRaf = 0;
+
+  function lubaCaretMaBytViditelny() {
+    const klavesnice = window.LubaNoteKeyboard;
+    return Boolean(
+      editor?.isConnected &&
+      lab && !lab.hidden &&
+      klavesnice?.ziskejZdroj?.() === "luba" &&
+      klavesnice?.jeOtevrena?.()
+    );
+  }
+
+  function zajistiV2LubaCaret() {
+    if (!v2LubaCaret?.isConnected) {
+      v2LubaCaret = document.createElement("div");
+      v2LubaCaret.className = "ln-v2-luba-caret";
+      v2LubaCaret.hidden = true;
+      v2LubaCaret.setAttribute("aria-hidden", "true");
+      document.body.appendChild(v2LubaCaret);
+    }
+    return v2LubaCaret;
+  }
+
+  function skryjV2LubaCaret() {
+    cancelAnimationFrame(v2LubaCaretRaf);
+    v2LubaCaretRaf = 0;
+    if (v2LubaCaret) v2LubaCaret.hidden = true;
+  }
+
+  function rectV2LubaCaretu(pozice) {
+    if (!pozice || !editor || !dokument) return null;
+    const blok = dokument.bloky[pozice.blok];
+    if (!blok || !jeTextovyBlok(blok)) return null;
+    const blokEl = editor.querySelector(`[data-ln-v2-blok="${CSS.escape(blok.id)}"]`);
+    if (!blokEl) return null;
+
+    const text = textBloku(blok);
+    const offset = Math.max(0, Math.min(text.length, Number(pozice.offset) || 0));
+    let rect = null;
+
+    try {
+      /* Nejdřív použijeme geometrii přesně collapsed Range. Na moderním
+         Chromium umí správně rozlišit i caret na začátku zalomeného řádku,
+         což výpočet jen z předchozího znaku neumí. */
+      const bod = najdiDomBod(pozice.blok, offset);
+      if (bod) {
+        const collapsed = document.createRange();
+        collapsed.setStart(bod.node, bod.offset);
+        collapsed.collapse(true);
+        const collapsedRect = Array.from(collapsed.getClientRects())[0] || collapsed.getBoundingClientRect();
+        if (collapsedRect && collapsedRect.height > 0) {
+          rect = {
+            left: collapsedRect.left,
+            top: collapsedRect.top,
+            height: collapsedRect.height
+          };
+        }
+      }
+
+      /* WebView někdy collapsed Range geometrii nevrátí. Pak vezmeme sousední
+         znak a dopočítáme hranu, ale modelovou pozici nijak neměníme. */
+      if (!rect && text.length > 0) {
+        const od = offset > 0 ? offset - 1 : 0;
+        const doPozice = offset > 0 ? offset : Math.min(1, text.length);
+        const a = najdiDomBod(pozice.blok, od);
+        const b = najdiDomBod(pozice.blok, doPozice);
+        if (a && b) {
+          const range = document.createRange();
+          range.setStart(a.node, a.offset);
+          range.setEnd(b.node, b.offset);
+          const rects = Array.from(range.getClientRects());
+          const znakRect = rects[offset > 0 ? rects.length - 1 : 0] || range.getBoundingClientRect();
+          if (znakRect && znakRect.height > 0) {
+            rect = {
+              left: offset > 0 ? znakRect.right : znakRect.left,
+              top: znakRect.top,
+              height: znakRect.height
+            };
+          }
+        }
+      }
+    } catch (_error) {}
+
+    if (rect) return rect;
+
+    /* Prázdný odstavec / BR nemá spolehlivý collapsed Range rect. */
+    const r = blokEl.getBoundingClientRect();
+    const styl = getComputedStyle(blokEl);
+    const lineHeight = parseFloat(styl.lineHeight) || parseFloat(styl.fontSize) * 1.5 || 24;
+    const paddingLeft = parseFloat(styl.paddingLeft) || 0;
+    const checkbox = blokEl.querySelector(":scope > .ln-v2-todo-check");
+    const checkboxRight = checkbox ? Math.max(0, checkbox.getBoundingClientRect().right - r.left + 6) : 0;
+    return {
+      left: r.left + Math.max(paddingLeft, checkboxRight) + 1,
+      top: r.top + Math.max(0, (Math.min(r.height || lineHeight, lineHeight) - lineHeight) / 2),
+      height: lineHeight
+    };
+  }
+
+  function vykresliV2LubaCaret(vyber = posledniVyber) {
+    if (!lubaCaretMaBytViditelny() || !vyber?.sbaleny) {
+      skryjV2LubaCaret();
+      return;
+    }
+    const rect = rectV2LubaCaretu(vyber.konec);
+    if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) {
+      skryjV2LubaCaret();
+      return;
+    }
+    const caret = zajistiV2LubaCaret();
+    caret.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
+    caret.style.height = `${Math.max(12, Math.round(rect.height || 20))}px`;
+    caret.hidden = false;
+  }
+
+  function naplanujV2LubaCaret(vyber = posledniVyber) {
+    cancelAnimationFrame(v2LubaCaretRaf);
+    const snapshot = vyber ? klonVyberu(vyber) : null;
+    v2LubaCaretRaf = requestAnimationFrame(() => {
+      v2LubaCaretRaf = 0;
+      vykresliV2LubaCaret(snapshot);
+    });
+  }
+
   /*
    * 🔒 ANDROID IME KOMPATIBILITA – FIX 432–434
    *
@@ -900,6 +1030,7 @@
     };
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     naplanujV2SelectionOverlay(posledniVyber);
+    naplanujV2LubaCaret(posledniVyber);
   }
 
   function ziskejFormatovaciVyber() {
@@ -5029,44 +5160,6 @@
     });
   }
 
-  /* ==========================================================
-     PATCH 496 – CARET PRO LubaKeyboard
-     ----------------------------------------------------------
-     Vlastní klávesnice pracuje přímo s modelem a po každé akci znovu
-     vykreslí DOM. Android/WebView přitom může zachovat modelovou pozici,
-     ale po krátké ztrátě focusu už nenakreslí nativní caret.
-
-     Tato funkce NIC nemění v modelu ani v historii. Jen po návratu focusu
-     znovu promítne poslední modelový výběr do DOM Selection, aby byl caret
-     viditelný na stejné pozici, kam už model stejně zapisuje.
-     ========================================================== */
-  function obnovCaretVlastniKlavesnice() {
-    if (!editor?.isConnected || !dokument) return false;
-
-    const vyber = klonVyberu(
-      posledniVyber
-      || ulozenyFormatovaciVyber
-      || vyberZPosledniPozice()
-    );
-    if (!vyber?.zacatek || !vyber?.konec) return false;
-
-    try { editor.focus({ preventScroll: true }); }
-    catch (_error) { try { editor.focus(); } catch (_ignore) {} }
-
-    queueMicrotask(() => {
-      if (!editor?.isConnected) return;
-      try {
-        if (document.activeElement !== editor) {
-          try { editor.focus({ preventScroll: true }); }
-          catch (_error) { try { editor.focus(); } catch (_ignore) {} }
-        }
-        nastavVyberModelu(vyber.zacatek, vyber.konec);
-      } catch (_error) {}
-    });
-
-    return true;
-  }
-
   function dokoncImePredExterniAkci() {
     if (!v2ImeKompozice?.aktivni) return true;
 
@@ -6250,6 +6343,7 @@
        zmizení editoru mohla zůstat viset nad seznamem poznámek. */
     window.LubaNoteKeyboard?.skryj?.();
     odstranV2SelectionOverlay();
+    skryjV2LubaCaret();
 
     lab.hidden = true;
     lab.classList.remove("otevreno", "ln-v2-vlozeny");
@@ -6636,15 +6730,22 @@
       }
       aktualizujToolbarVelikosti(modelovyVyber);
       naplanujV2SelectionOverlay(modelovyVyber);
+      naplanujV2LubaCaret(modelovyVyber);
     });
 
     /* Starý Android při scrollu posune text, ale nativní Range zůstane stejný.
        Overlay proto pouze přepočítáme; model ani selection se nemění. */
     poslouchej(document, "scroll", () => {
       naplanujV2SelectionOverlay(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber);
     }, true);
     poslouchej(window, "resize", () => {
       naplanujV2SelectionOverlay(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber);
+    });
+    poslouchej(window, "lubanote:luba-keyboard-state", (event) => {
+      if (event?.detail?.open === false || event?.detail?.source === "system") skryjV2LubaCaret();
+      else naplanujV2LubaCaret(posledniVyber);
     });
 
     // V2.3 – stabilní selection controller.
@@ -6769,6 +6870,7 @@
       return;
     }
     odstranV2SelectionOverlay();
+    skryjV2LubaCaret();
     lab.hidden = true;
     lab.classList.remove("otevreno");
     document.body.classList.remove("ln-v2-lab-otevren");
@@ -6863,7 +6965,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.21-MIXED-BLOCKS-496-CARET",
+    verze: "V2.21-MIXED-BLOCKS-497-STABLE-CARET",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -6914,7 +7016,6 @@
     dokoncImePredExterniAkci,
     jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni),
     provedPrikazVlastniKlavesnice,
-    obnovCaretVlastniKlavesnice,
     ziskejKontextVlastniKlavesnice,
     ziskejEditorElement: () => editor
   });

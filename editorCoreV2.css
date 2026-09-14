@@ -142,6 +142,38 @@ body.ln-v2-lab-otevren {
   background: rgba(0, 188, 212, 0.34);
 }
 
+/* PATCH 497 – při otevřené LubaKeyboard používáme jediný, modelový caret.
+   Nativní WebView caret schováme pouze v těle Core V2; název poznámky a
+   systémový režim zůstávají beze změny. */
+body.ln-luba-klavesnice-open .ln-v2-editor {
+  caret-color: transparent;
+}
+
+/* PATCH 497 – modelový caret pro LubaKeyboard.
+   Je čistě vizuální; editorový model ani Selection nijak nemění. */
+.ln-v2-luba-caret {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 2px;
+  min-height: 12px;
+  z-index: 2147482300;
+  pointer-events: none;
+  background: var(--color-accent, #9b6cff);
+  border-radius: 2px;
+  transform-origin: top left;
+  animation: ln-v2-luba-caret-blink 1s steps(1, end) infinite;
+}
+
+.ln-v2-luba-caret[hidden] {
+  display: none !important;
+}
+
+@keyframes ln-v2-luba-caret-blink {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: 0; }
+}
+
 .ln-v2-odstavec {
   min-height: 1.5em;
   margin: 0 0 .35em;

@@ -394,6 +394,27 @@
     } catch (_error) {}
   }
 
+  /* PATCH 497 – moderní WebView: skutečné native hide bez zásahu do focusu.
+     navigator.virtualKeyboard.hide() není v Android WebView spolehlivý; native
+     hide používáme pouze ve chvíli, kdy je aktivní vlastní LubaKeyboard. */
+  function schovejSystemovouNativne() {
+    if (ziskejZdrojKlavesnice() === "system") return;
+    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (!plugin?.hideIme) return;
+    try { Promise.resolve(plugin.hideIme()).catch(() => {}); } catch (_error) {}
+  }
+
+  function zapisStabilituKlavesnice(udalost, detail = "") {
+    try {
+      const editor = aktivniEditor || najdiEditor();
+      const major = String(navigator.userAgent || "").match(/(?:Chrome|Chromium)\/(\d+)/i)?.[1] || "?";
+      window.LubaNoteStartupDiag?.zapis?.(
+        "LK497",
+        `${udalost} | chrome=${major} | legacy=${jeStaryAndroidWebView() ? "yes" : "no"} | source=${ziskejZdrojKlavesnice()} | panel=${panel && !panel.hidden ? "open" : "hidden"} | focus=${document.activeElement === editor ? "editor" : (document.activeElement?.id || document.activeElement?.tagName || "none")}${detail ? ` | ${detail}` : ""}`
+      );
+    } catch (_error) {}
+  }
+
   function nastavLubaAtributy(editor) {
     if (!editor) return;
     editor.setAttribute("inputmode", "none");
@@ -677,6 +698,7 @@
     if (editor && editor !== systemovyEditor && ziskejZdrojKlavesnice() !== "system") {
       nastavLubaAtributy(editor);
     }
+    schovejSystemovouNativne();
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
   }
 
@@ -701,6 +723,9 @@
 
     if (editor === systemovyEditor) systemovyEditor = null;
     nastavLubaAtributy(editor);
+    /* Při přechodu z názvu (Gboard) do těla poznámky schováme případnou
+       starou systémovou IME ještě PŘED prvním focusem contenteditable. */
+    schovejSystemovouNativne();
 
     if (editor.dataset.lubaKeyboardEvents === "1") return;
     editor.dataset.lubaKeyboardEvents = "1";
@@ -1200,27 +1225,10 @@
     window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
       detail: { source: novy }
     }));
+    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", {
+      detail: { open: novy === "luba" && Boolean(panel && !panel.hidden), source: novy }
+    }));
     return novy;
-  }
-
-  /* PATCH 496 – LubaKeyboard nesmí ztratit viditelný caret.
-     Model si pozici drží sám; tady jen po interakci klávesnice vrátíme
-     focus editoru a necháme Core V2 znovu promítnout uložený selection. */
-  function obnovCaretPoLubaInterakci() {
-    if (ziskejZdrojKlavesnice() === "system") return false;
-    const editor = aktivniEditor || najdiEditor();
-    const modal = document.querySelector(".taskModal:not([hidden])");
-    if (!jeEditorV2(editor) || !modal || !modal.contains(editor)) return false;
-
-    nastavLubaAtributy(editor);
-    const api = core();
-    if (api?.obnovCaretVlastniKlavesnice) {
-      return api.obnovCaretVlastniKlavesnice() !== false;
-    }
-
-    try { editor.focus({ preventScroll: true }); }
-    catch (_error) { try { editor.focus(); } catch (_ignore) {} }
-    return document.activeElement === editor;
   }
 
   function insertCore(text) {
@@ -1475,10 +1483,11 @@
       case "unicode-insert": unicodeInsert(); break;
       default: break;
     }
-    requestAnimationFrame(() => {
-      obnovCaretPoLubaInterakci();
-      schovejSystemovou();
-    });
+    /* PATCH 497 – po každé vlastní klávese už na moderním WebView
+       neděláme ani focus(), ani native hide IME. inputmode=none + panelový
+       pointerdown drží editor aktivní; opakované IME zásahy vytvářely další
+       lifecycle/viewport šum. Starý WebView si ponechá původní pojistku. */
+    if (jeStaryAndroidWebView()) requestAnimationFrame(schovejSystemovou);
   }
 
   function oznacAltVolbu(volba, vibruj = false) {
@@ -1978,17 +1987,10 @@
     document.body.classList.add("ln-luba-klavesnice-open");
     nastavAkcniPanel(false);
     vykresliKlavesnici();
-    requestAnimationFrame(() => {
-      /* Neobnovujeme zde modelový selection – první tap už mohl právě
-         nastavit novou pozici. Jen zajistíme, že caret má kde být kreslen. */
-      if (document.activeElement !== editor) {
-        nastavLubaAtributy(editor);
-        try { editor.focus({ preventScroll: true }); }
-        catch (_error) { try { editor.focus(); } catch (_ignore) {} }
-      }
-      schovejSystemovou();
-      nastavVysku();
-    });
+    schovejSystemovou();
+    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: true } }));
+    zapisStabilituKlavesnice("PANEL OPEN");
+    requestAnimationFrame(nastavVysku);
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+120", true); }, 120);
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+500", true); }, 500);
   }
@@ -2026,6 +2028,8 @@
     zavriChooser();
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
+    window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: false } }));
+    zapisStabilituKlavesnice("PANEL HIDE");
     document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
     akcniPanelOtevren = false;
     if (akcniPanelButton) {
@@ -2093,8 +2097,22 @@
   }, true);
 
   document.addEventListener("focusin", (event) => {
+    /* PATCH 497 – název poznámky je záměrně systémový vstup. Pokud uživatel
+       přejde z těla do #modalTitle, vlastní panel musí uhnout Gboardu. Tohle
+       NENÍ ruční skrytí klávesnice, takže další tap do těla ji smí znovu
+       automaticky otevřít. */
+    if (event.target?.id === "modalTitle") {
+      if (panel && !panel.hidden) {
+        skryj();
+        potlacAutomatickeOtevreni = false;
+        zapisStabilituKlavesnice("FOCUS TITLE", "system-ime-allowed");
+      }
+      return;
+    }
+
     if (!jeEditorV2(event.target)) return;
     aktivniEditor = event.target;
+    zapisStabilituKlavesnice("FOCUS BODY", "custom-ime");
     if (ziskejZdrojKlavesnice() === "system" || event.target === systemovyEditor) {
       systemovyEditor = event.target;
       nastavSystemoveAtributy(event.target);
@@ -2173,6 +2191,10 @@
   }
 
   function ulozLubaStavPredBackgroundem() {
+    /* PATCH 497 – destruktivní workaround 466/467 (contenteditable=false,
+       blur, tabindex=-1) byl napsán pro WebView <=110. Na moderním WebView
+       ničí caret/focus a není potřeba. */
+    if (!jeStaryAndroidWebView()) return;
     if (ziskejZdrojKlavesnice() === "system") {
       navratLubaPoBackgroundu = null;
       return;
@@ -2227,6 +2249,7 @@
   }
 
   function obnovLubaPoBackgroundu() {
+    if (!jeStaryAndroidWebView()) return;
     if (!navratLubaPoBackgroundu) return;
     if (document.visibilityState === "hidden") return;
 
@@ -2288,10 +2311,20 @@
      ještě během odchodu Activity, ne až při jejím pozdějším uspání. */
   window.addEventListener("blur", () => {
     if (ziskejZdrojKlavesnice() === "system") return;
-    ulozLubaStavPredBackgroundem();
+    if (jeStaryAndroidWebView()) ulozLubaStavPredBackgroundem();
+    else zapisStabilituKlavesnice("WINDOW BLUR", "modern-no-focus-reset");
   }, true);
 
   document.addEventListener("visibilitychange", () => {
+    if (!jeStaryAndroidWebView()) {
+      zapisStabilituKlavesnice(`VISIBILITY ${document.visibilityState}`, "modern-no-focus-reset");
+      /* Na moderním WebView při background/resume už NIKDY nerušíme focus.
+         Pokud ale vlastní panel zůstal otevřený, můžeme bezpečně schovat
+         případnou zbytkovou/restorovanou Gboard pouze přes native IME hide. */
+      if (panel && !panel.hidden) schovejSystemovouNativne();
+      return;
+    }
+
     if (document.visibilityState === "hidden") {
       clearTimeout(navratLubaTimer);
       navratLubaTimer = null;
@@ -2305,18 +2338,28 @@
 
   /* Page Lifecycle fallback – některé WebView používají pagehide/freeze
      při přepnutí aplikace dřív nebo spolehlivěji než visibilitychange. */
-  window.addEventListener("pagehide", ulozLubaStavPredBackgroundem, true);
-  document.addEventListener("freeze", ulozLubaStavPredBackgroundem, true);
+  window.addEventListener("pagehide", () => {
+    if (jeStaryAndroidWebView()) ulozLubaStavPredBackgroundem();
+  }, true);
+  document.addEventListener("freeze", () => {
+    if (jeStaryAndroidWebView()) ulozLubaStavPredBackgroundem();
+  }, true);
 
   /* Některé starší WebView vrátí focus oknu dřív než přepnou visibility.
-     Funkce je no-op, pokud předtím neproběhl skutečný background. */
+     Na moderním WebView pouze bez změny focusu schováme případnou obnovenou
+     systémovou IME, a to jen pokud vlastní LubaKeyboard zůstala otevřená. */
   window.addEventListener("focus", () => {
+    if (!jeStaryAndroidWebView()) {
+      if (panel && !panel.hidden) schovejSystemovouNativne();
+      return;
+    }
     if (!navratLubaPoBackgroundu) return;
     clearTimeout(navratLubaTimer);
     navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
   }, true);
 
   window.addEventListener("pageshow", () => {
+    if (!jeStaryAndroidWebView()) return;
     if (!navratLubaPoBackgroundu) return;
     clearTimeout(navratLubaTimer);
     navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
@@ -2342,7 +2385,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "CARET-RESTORE-496",
+    verze: "STABLE-MODERN-WEBVIEW-497",
     zobraz,
     skryj,
     nastavLayout,
