@@ -6937,6 +6937,26 @@ let nativeNetworkBridgeV2Inicializovan = false;
 let nativeNetworkListenerV2 = null;
 let nativeNetworkAutoritaV2 = false;
 let nativeNetworkPosledniConnectedV2 = null;
+/* PATCH 504 – browser offline může přijít dřív než Android callback.
+   Na APK smí browser stav pouze konzervativně ZABLOKOVAT síť.
+   Znovu ji povolí až nový native VALIDATED=true. Browser online ji
+   sám nikdy nepovoluje. */
+let nativeNetworkCekaNaNovePotvrzeniV2 = false;
+
+function jeTargetV2SitOpravduPouzitelna() {
+  if (!navigator.onLine) {
+    return false;
+  }
+
+  if (!pouzivaNativeNetworkAutorituV2()) {
+    return true;
+  }
+
+  return (
+    nativeNetworkPosledniConnectedV2 === true &&
+    nativeNetworkCekaNaNovePotvrzeniV2 !== true
+  );
+}
 
 function pouzivaNativeNetworkAutorituV2() {
   return nativeNetworkAutoritaV2 === true;
@@ -6995,10 +7015,12 @@ async function aktivujNativeNetworkBridgeV2() {
         );
 
         if (!connected) {
+          nativeNetworkCekaNaNovePotvrzeniV2 = true;
           stitkyCekajiNaRefreshPoNavratuInternetu = true;
           return;
         }
 
+        nativeNetworkCekaNaNovePotvrzeniV2 = false;
         zpracujTargetV2NavratSite("native-network");
 
         /* Initial status=true při startu nesmí vytvořit druhý start.
@@ -7018,6 +7040,7 @@ async function aktivujNativeNetworkBridgeV2() {
     nativeNetworkListenerV2 = null;
     nativeNetworkAutoritaV2 = false;
     nativeNetworkPosledniConnectedV2 = null;
+    nativeNetworkCekaNaNovePotvrzeniV2 = false;
     return;
   }
 
@@ -7027,11 +7050,14 @@ async function aktivujNativeNetworkBridgeV2() {
       const connected = stav?.connected === true;
       nativeNetworkPosledniConnectedV2 = connected;
 
-      if (connected && jeTargetV2SitovaPauzaAktivni()) {
-        zpracujTargetV2NavratSite("native-status");
-      }
+      if (connected) {
+        nativeNetworkCekaNaNovePotvrzeniV2 = false;
 
-      if (!connected) {
+        if (jeTargetV2SitovaPauzaAktivni()) {
+          zpracujTargetV2NavratSite("native-status");
+        }
+      } else {
+        nativeNetworkCekaNaNovePotvrzeniV2 = true;
         stitkyCekajiNaRefreshPoNavratuInternetu = true;
       }
     } catch (_error) {
@@ -7624,7 +7650,7 @@ async function synchronizujCilenePrivateZmenyV2() {
   /* PATCH 500 – delete má přednost před starším obsahovým uploadem. */
   zrusObsahoveTargetyPrekryteSmazanim();
 
-  if (!navigator.onLine || jeTargetV2SitovaPauzaAktivni()) {
+  if (!jeTargetV2SitOpravduPouzitelna() || jeTargetV2SitovaPauzaAktivni()) {
     nastavStavSynchronizaceUI("pending");
     return false;
   }
@@ -7886,7 +7912,7 @@ function spustKontroluNavratuInternetu() {
         return;
       }
 
-      if (!navigator.onLine || jeTargetV2SitovaPauzaAktivni()) {
+      if (!jeTargetV2SitOpravduPouzitelna() || jeTargetV2SitovaPauzaAktivni()) {
         return;
       }
 
@@ -7932,7 +7958,7 @@ async function synchronizujCekajiciLokalniZmenu() {
     return false;
   }
 
-  if (!navigator.onLine) {
+  if (!jeTargetV2SitOpravduPouzitelna()) {
     nastavStavSynchronizaceUI("pending");
     spustKontroluNavratuInternetu();
     return false;
@@ -8743,9 +8769,14 @@ window.addEventListener(
   "offline",
   () => {
     if (pouzivaNativeNetworkAutorituV2()) {
+      /* PATCH 504 – browser offline je pouze bezpečnostní veto.
+         Staré native=true už nesmí povolit žádný další targeted request.
+         Browser online tento latch nezruší; čekáme na nový VALIDATED=true. */
+      nativeNetworkCekaNaNovePotvrzeniV2 = true;
+
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
-        "BROWSER NETWORK IGNORE | offline | native-authority"
+        "BROWSER NETWORK VETO | offline | wait-native-revalidate"
       );
       return;
     }
