@@ -6935,6 +6935,12 @@ function jeTargetV2SitovaPauzaAktivni() {
  */
 let nativeNetworkBridgeV2Inicializovan = false;
 let nativeNetworkListenerV2 = null;
+let nativeNetworkAutoritaV2 = false;
+let nativeNetworkPosledniConnectedV2 = null;
+
+function pouzivaNativeNetworkAutorituV2() {
+  return nativeNetworkAutoritaV2 === true;
+}
 
 function zpracujTargetV2NavratSite(duvod = "network") {
   const melaPauzu = jeTargetV2SitovaPauzaAktivni();
@@ -6967,11 +6973,21 @@ async function aktivujNativeNetworkBridgeV2() {
   const plugin = window.Capacitor?.Plugins?.LubaNoteNetworkState;
   if (!plugin?.addListener) return;
 
+  /*
+   * PATCH 503 – NATIVE NETWORK AUTHORITY
+   *
+   * Jakmile je Android bridge opravdu připojený, browserové online/offline
+   * eventy už na APK nesmějí rozhodovat o synchronizaci. WebView je umí
+   * vyslat dřív, než má Android skutečně VALIDATED internet. WEB/PWA naopak
+   * zůstává na browserových eventech beze změny.
+   */
   try {
     nativeNetworkListenerV2 = await plugin.addListener(
       "networkStatusChange",
       (stav) => {
         const connected = stav?.connected === true;
+        const predchozi = nativeNetworkPosledniConnectedV2;
+        nativeNetworkPosledniConnectedV2 = connected;
 
         window.LubaNoteStartupDiag?.zapis?.(
           "V2",
@@ -6984,17 +7000,43 @@ async function aktivujNativeNetworkBridgeV2() {
         }
 
         zpracujTargetV2NavratSite("native-network");
+
+        /* Initial status=true při startu nesmí vytvořit druhý start.
+           Běžný start už spouští spustStartSyncBezpecne() níže. */
+        if (predchozi === false) {
+          setTimeout(
+            spustStartSyncBezpecne,
+            400
+          );
+        }
       }
     );
 
-    if (plugin.getStatus) {
-      const stav = await plugin.getStatus();
-      if (stav?.connected === true && jeTargetV2SitovaPauzaAktivni()) {
-        zpracujTargetV2NavratSite("native-status");
-      }
-    }
+    /* Autoritu zapínáme až po úspěšném připojení listeneru. */
+    nativeNetworkAutoritaV2 = true;
   } catch (_error) {
     nativeNetworkListenerV2 = null;
+    nativeNetworkAutoritaV2 = false;
+    nativeNetworkPosledniConnectedV2 = null;
+    return;
+  }
+
+  if (plugin.getStatus) {
+    try {
+      const stav = await plugin.getStatus();
+      const connected = stav?.connected === true;
+      nativeNetworkPosledniConnectedV2 = connected;
+
+      if (connected && jeTargetV2SitovaPauzaAktivni()) {
+        zpracujTargetV2NavratSite("native-status");
+      }
+
+      if (!connected) {
+        stitkyCekajiNaRefreshPoNavratuInternetu = true;
+      }
+    } catch (_error) {
+      /* Listener zůstává autoritativní i když jednorázové getStatus selže. */
+    }
   }
 }
 
@@ -8700,6 +8742,14 @@ window.addEventListener(
 window.addEventListener(
   "offline",
   () => {
+    if (pouzivaNativeNetworkAutorituV2()) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "BROWSER NETWORK IGNORE | offline | native-authority"
+      );
+      return;
+    }
+
     stitkyCekajiNaRefreshPoNavratuInternetu = true;
 
     window.LubaNoteStartupDiag?.zapis?.(
@@ -8712,6 +8762,14 @@ window.addEventListener(
 window.addEventListener(
   "online",
   () => {
+    if (pouzivaNativeNetworkAutorituV2()) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "BROWSER NETWORK IGNORE | online | native-authority"
+      );
+      return;
+    }
+
     zpracujTargetV2NavratSite("online-event");
 
     window.LubaNoteStartupDiag?.zapis?.(
