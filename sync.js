@@ -8245,38 +8245,54 @@ async function spustStartSyncBezpecne() {
     return false;
   }
 
-  if (probihajiciStartSync) {
-    return probihajiciStartSync;
-  }
-
   /*
-   * PATCH 488 – offline tombstone přežije restart v localStorage.
-   * Ještě před běžným start flow proto zkusíme dokončit pouze tuto
-   * malou targeted frontu. Nevolá get_notes_safe a po úspěchu už Fast
-   * Sync uvidí potvrzený fingerprint/cursor.
+   * PATCH 501 – START/RESUME REENTRY GATE
+   *
+   * Auth-valid, online, focus/pageshow a obnovení offline tombstonu se
+   * mohou sejít během několika milisekund. Celý start včetně TARGET
+   * DELETE RESUME proto vlastní JEDINÝ Promise. Další volající se k
+   * němu pouze připojí a nesmí rozjet druhý START SYNC FLOW.
+   *
+   * DŮLEŽITÉ: brána musí být nastavena PŘED prvním awaitem resume
+   * fronty. Ve verzi 500 byla až za ním, takže několik současných
+   * volání všechna stihla projít resume blokem a pak spustila start
+   * paralelně.
    */
-  if (
-    nactiCekajiciSmazani().length > 0 &&
-    nactiBlokovanaCekajiciSmazani().length === 0
-  ) {
+  if (probihajiciStartSync) {
     window.LubaNoteStartupDiag?.zapis?.(
       "V2",
-      `TARGET DELETE RESUME | count=${nactiCekajiciSmazani().length}`
+      "START JOIN | in-flight"
     );
-
-    const resumedDeleteOk =
-      await synchronizujCilenePrivateZmenyV2();
-
-    if (
-      resumedDeleteOk === true &&
-      lokalniZmenaCekaNaPotvrzeniServerem
-    ) {
-      potvrzLokalniZmenuNaServeru();
-    }
+    return probihajiciStartSync;
   }
 
   probihajiciStartSync =
     (async () => {
+      /*
+       * PATCH 488/500 – offline tombstone přežije restart v
+       * localStorage. Ještě před běžným start flow dokončíme pouze
+       * tuto malou targeted frontu. Nevolá get_notes_safe.
+       */
+      if (
+        nactiCekajiciSmazani().length > 0 &&
+        nactiBlokovanaCekajiciSmazani().length === 0
+      ) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `TARGET DELETE RESUME | count=${nactiCekajiciSmazani().length}`
+        );
+
+        const resumedDeleteOk =
+          await synchronizujCilenePrivateZmenyV2();
+
+        if (
+          resumedDeleteOk === true &&
+          lokalniZmenaCekaNaPotvrzeniServerem
+        ) {
+          potvrzLokalniZmenuNaServeru();
+        }
+      }
+
       const diagnostikaStartSync =
         window.LubaNoteStartupDiag?.zacni?.("START SYNC FLOW");
       let diagnostikaStartSyncStav = "KONEC";
