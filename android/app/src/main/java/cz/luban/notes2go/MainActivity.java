@@ -20,6 +20,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
+  private int lubaImeResumeGenerace = 0;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -166,39 +167,69 @@ public class MainActivity extends BridgeActivity {
   }
 
   private void schovejSystemovouImeProLubaKeyboard(boolean zrusitFocusWebView) {
-    if (!pouzivaLubaKeyboard() || !pouzitLegacyLubaImeLifecycle()) {
-      return;
-    }
+    if (!pouzivaLubaKeyboard()) return;
+
+    boolean legacy = pouzitLegacyLubaImeLifecycle();
+
+    /* PATCH 499 – na moderním WebView schováváme IME jen tehdy, když JS
+       potvrdil, že vlastní LubaKeyboard je skutečně otevřená. Nikdy tu
+       nemažeme focus ani InputConnection. */
+    if (!legacy && !LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) return;
 
     View decorView = getWindow().getDecorView();
 
-    if (zrusitFocusWebView && getBridge() != null && getBridge().getWebView() != null) {
+    if (legacy && zrusitFocusWebView && getBridge() != null && getBridge().getWebView() != null) {
       getBridge().getWebView().clearFocus();
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       WindowInsetsController controller = getWindow().getInsetsController();
-      if (controller != null) {
-        controller.hide(WindowInsets.Type.ime());
-      }
+      if (controller != null) controller.hide(WindowInsets.Type.ime());
     }
 
     InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
     if (imm != null) {
-      imm.hideSoftInputFromWindow(decorView.getWindowToken(), 0);
+      View tokenView =
+        getBridge() != null && getBridge().getWebView() != null
+          ? getBridge().getWebView()
+          : decorView;
+      imm.hideSoftInputFromWindow(tokenView.getWindowToken(), 0);
+    }
+  }
+
+  private void zrusNaplanovaneLubaImeHide() {
+    lubaImeResumeGenerace++;
+  }
+
+  private void naplanujModerniLubaImeHidePoNavratu() {
+    if (pouzitLegacyLubaImeLifecycle()) return;
+    if (!pouzivaLubaKeyboard() || !LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) return;
+
+    final int generace = ++lubaImeResumeGenerace;
+    final long[] zpozdeni = new long[] { 0L, 90L, 220L, 480L };
+    View decorView = getWindow().getDecorView();
+
+    for (long ms : zpozdeni) {
+      decorView.postDelayed(() -> {
+        if (generace != lubaImeResumeGenerace) return;
+        if (!pouzivaLubaKeyboard() || !LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) return;
+        schovejSystemovouImeProLubaKeyboard(false);
+      }, ms);
     }
   }
 
   @Override
   public void onPause() {
-    /* Zrušení focusu ještě před super.onPause() je důležité: WebView tak
-       nemá aktivní editor, který by Android při resume znovu připojil k IME. */
+    zrusNaplanovaneLubaImeHide();
+    /* Legacy <=110 dál ruší focus; moderní WebView pouze schová IME bez
+       zásahu do browserového caretu/InputConnection. */
     schovejSystemovouImeProLubaKeyboard(true);
     super.onPause();
   }
 
   @Override
   public void onStop() {
+    zrusNaplanovaneLubaImeHide();
     schovejSystemovouImeProLubaKeyboard(true);
     super.onStop();
   }
@@ -207,6 +238,7 @@ public class MainActivity extends BridgeActivity {
   public void onResume() {
     super.onResume();
     schovejSystemovouImeProLubaKeyboard(false);
+    naplanujModerniLubaImeHidePoNavratu();
     obnovFullscreen();
   }
 
@@ -217,7 +249,10 @@ public class MainActivity extends BridgeActivity {
 
     if (hasFocus) {
       schovejSystemovouImeProLubaKeyboard(false);
+      naplanujModerniLubaImeHidePoNavratu();
       obnovFullscreen();
+    } else {
+      zrusNaplanovaneLubaImeHide();
     }
   }
 

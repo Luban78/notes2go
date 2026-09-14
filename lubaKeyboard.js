@@ -395,6 +395,30 @@
     } catch (_error) {}
   }
 
+  /* PATCH 499 – native lifecycle smí po resume potlačovat Gboard pouze tehdy,
+     když je SKUTEČNĚ otevřená LubaKeyboard v editoru. Samotná globální volba
+     "LubaKeyboard" nestačí, protože mimo editor musí systémová IME dál
+     fungovat v loginu, hledání, chatu apod. */
+  function synchronizujNativniImeGuard(aktivni) {
+    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (!plugin?.setGuardActive) return;
+    try {
+      Promise.resolve(plugin.setGuardActive({ active: Boolean(aktivni) })).catch(() => {});
+    } catch (_error) {}
+  }
+
+  function potlacObnovenouImePoNavratu() {
+    if (ziskejZdrojKlavesnice() === "system" || !panel || panel.hidden) return;
+    synchronizujNativniImeGuard(true);
+    [0, 90, 220, 480].forEach((ms) => {
+      setTimeout(() => {
+        if (ziskejZdrojKlavesnice() !== "system" && panel && !panel.hidden) {
+          schovejSystemovouNativne();
+        }
+      }, ms);
+    });
+  }
+
   /* PATCH 497 – moderní WebView: skutečné native hide bez zásahu do focusu.
      navigator.virtualKeyboard.hide() není v Android WebView spolehlivý; native
      hide používáme pouze ve chvíli, kdy je aktivní vlastní LubaKeyboard. */
@@ -1425,6 +1449,7 @@
     const novy = zdroj === "system" ? "system" : "luba";
     try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
     synchronizujNativniZdrojKlavesnice(novy);
+    synchronizujNativniImeGuard(novy === "luba" && Boolean(panel && !panel.hidden));
 
     const editor = aktivniEditor || najdiEditor();
     const title = document.getElementById("modalTitle");
@@ -2223,6 +2248,7 @@
     document.body.classList.add("ln-luba-klavesnice-open");
     nastavAkcniPanel(false);
     vykresliKlavesnici();
+    synchronizujNativniImeGuard(true);
     schovejSystemovou();
     window.dispatchEvent(new CustomEvent("lubanote:luba-keyboard-state", { detail: { open: true, source: "luba", target: aktivniCilPsani } }));
     zapisStabilituKlavesnice("PANEL OPEN");
@@ -2258,6 +2284,7 @@
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
+    synchronizujNativniImeGuard(false);
     if (!panel) return;
     flushCompose("hide", false);
     panel.hidden = true;
@@ -2586,7 +2613,8 @@
       /* Na moderním WebView při background/resume už NIKDY nerušíme focus.
          Pokud ale vlastní panel zůstal otevřený, můžeme bezpečně schovat
          případnou zbytkovou/restorovanou Gboard pouze přes native IME hide. */
-      if (panel && !panel.hidden) schovejSystemovouNativne();
+      if (document.visibilityState === "visible") potlacObnovenouImePoNavratu();
+      else if (panel && !panel.hidden) schovejSystemovouNativne();
       return;
     }
 
@@ -2615,7 +2643,7 @@
      systémovou IME, a to jen pokud vlastní LubaKeyboard zůstala otevřená. */
   window.addEventListener("focus", () => {
     if (!jeStaryAndroidWebView()) {
-      if (panel && !panel.hidden) schovejSystemovouNativne();
+      potlacObnovenouImePoNavratu();
       return;
     }
     if (!navratLubaPoBackgroundu) return;
@@ -2659,7 +2687,7 @@
   }
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "ONE-KEYBOARD-EDITOR-498",
+    verze: "RESUME-IME-GUARD-499",
     zobraz,
     skryj,
     nastavLayout,

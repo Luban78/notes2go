@@ -30,6 +30,11 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
   private static final String SOURCE_SYSTEM = "system";
   private static final String SOURCE_LUBA = "luba";
 
+  /* PATCH 499 – procesní stav otevřené vlastní klávesnice.
+     Není to globální zákaz IME: true smí být jen po dobu, kdy je panel
+     LubaKeyboard skutečně otevřený v editoru. */
+  private static volatile boolean imeGuardAktivni = false;
+
   private static SharedPreferences prefs(Context context) {
     return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
   }
@@ -37,6 +42,10 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
   public static boolean pouzivaLubaKeyboard(Context context) {
     String source = prefs(context).getString(PREF_SOURCE, SOURCE_LUBA);
     return !SOURCE_SYSTEM.equals(source);
+  }
+
+  public static boolean jeImeGuardAktivni() {
+    return imeGuardAktivni;
   }
 
   @PluginMethod
@@ -50,8 +59,20 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
       .putString(PREF_SOURCE, normalized)
       .commit();
 
+    if (SOURCE_SYSTEM.equals(normalized)) imeGuardAktivni = false;
+
     JSObject result = new JSObject();
     result.put("source", normalized);
+    call.resolve(result);
+  }
+
+  @PluginMethod
+  public void setGuardActive(PluginCall call) {
+    boolean active = Boolean.TRUE.equals(call.getBoolean("active", false));
+    imeGuardAktivni = active && pouzivaLubaKeyboard(getContext());
+
+    JSObject result = new JSObject();
+    result.put("active", imeGuardAktivni);
     call.resolve(result);
   }
 
@@ -75,7 +96,13 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
         }
 
         InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(decorView.getWindowToken(), 0);
+        if (imm != null) {
+          View tokenView =
+            getBridge() != null && getBridge().getWebView() != null
+              ? getBridge().getWebView()
+              : decorView;
+          imm.hideSoftInputFromWindow(tokenView.getWindowToken(), 0);
+        }
       } catch (Exception ignored) {}
       call.resolve();
     });
