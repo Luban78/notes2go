@@ -221,6 +221,53 @@
   }
 
   /*
+   * HOTFIX 509 – automatické rolování NESMÍ být navázané na každé
+   * obnovení modelového selection. Core V2 po zápisu překreslí DOM a znovu
+   * obnoví selection; scroll na tomto místě pak může uživateli opakovaně
+   * přetahovat poznámku k caretu. Viditelnost řádku řešíme pouze jednou po
+   * skutečném textovém vstupu v oznamModelovyTextovyVstup().
+   */
+  function posunV2CaretPoVstupuDoViditelneOblasti(vyber = posledniVyber) {
+    if (
+      !lubaCaretMaBytViditelny() ||
+      !vyber?.sbaleny ||
+      !editor
+    ) {
+      return false;
+    }
+
+    const rectCaretu = rectV2LubaCaretu(vyber.konec);
+    const rectEditoru = editor.getBoundingClientRect();
+
+    if (
+      !rectCaretu ||
+      !Number.isFinite(rectCaretu.top) ||
+      !Number.isFinite(rectCaretu.height) ||
+      !Number.isFinite(rectEditoru.top) ||
+      !Number.isFinite(rectEditoru.bottom)
+    ) {
+      return false;
+    }
+
+    const horniMez = rectEditoru.top + 18;
+    const dolniMez = rectEditoru.bottom - 28;
+    const spodekCaretu = rectCaretu.top + rectCaretu.height;
+
+    let posun = 0;
+    if (spodekCaretu > dolniMez) {
+      posun = spodekCaretu - dolniMez;
+    } else if (rectCaretu.top < horniMez) {
+      posun = rectCaretu.top - horniMez;
+    }
+
+    if (Math.abs(posun) <= 1) return false;
+
+    const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
+    editor.scrollTop = Math.max(0, Math.min(maximum, editor.scrollTop + posun));
+    return true;
+  }
+
+  /*
    * 🔒 ANDROID IME KOMPATIBILITA – FIX 432–434
    *
    * Novější WebView zvládáme čistě modelově. Starší Android WebView (ověřeno
@@ -5158,6 +5205,14 @@
         bubbles: true,
         detail: { inputType: String(inputType || "") }
       }));
+
+      /* HOTFIX 509 – přesun řádku nad LubaKeyboard pouze JEDNOU po
+         skutečném modelovém vstupu. Scroll sám další vstup nevytvoří, takže
+         zde nevzniká řetězec render -> selection -> scroll -> ... */
+      const snapshot = posledniVyber ? klonVyberu(posledniVyber) : null;
+      requestAnimationFrame(() => {
+        posunV2CaretPoVstupuDoViditelneOblasti(snapshot);
+      });
     });
   }
 
@@ -6313,6 +6368,35 @@
     aktualizujTlacitkaHistorie();
   }
 
+  function nastavPoziciOtevreniVHostu(pozice = "start") {
+    if (!editor || !dokument) return false;
+
+    const naKonci = pozice === "end";
+
+    /*
+     * HOTFIX 509 – preference Začátek/Konec je pouze POZICE ZOBRAZENÍ.
+     * Nesmí přesouvat modelový caret ani selection. Patch 508 přesunul caret
+     * na poslední znak a Core V2 jej pak při dalších obnoveních selection mohl
+     * znovu přitahovat do viewportu. Výsledkem bylo zdánlivě nekonečné
+     * rolování a uživatel nemohl ručně najít konec.
+     *
+     * Tady jednorázově nastavíme pouze vlastní scroll .ln-v2-editor.
+     */
+    const nastavScroll = () => {
+      if (!editor?.isConnected) return;
+      const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
+      editor.scrollTop = naKonci ? maximum : 0;
+      naplanujV2LubaCaret(posledniVyber);
+    };
+
+    requestAnimationFrame(() => {
+      nastavScroll();
+      requestAnimationFrame(nastavScroll);
+    });
+
+    return true;
+  }
+
   function otevriVHostu(hostitel, model) {
     if (!(hostitel instanceof Element) || !model?.bloky) return false;
     if (!lab?.isConnected) vytvorLab();
@@ -6744,9 +6828,39 @@
       naplanujV2SelectionOverlay(posledniVyber);
       naplanujV2LubaCaret(posledniVyber);
     });
+
+    /*
+     * FIX 510 – otevření LubaKeyboard zmenší dostupnou výšku editoru.
+     * Uživatel po tapu do spodního řádku musí tento řádek stále vidět NAD
+     * klávesnicí. Nejde o průběžný scroll hook (ten způsobil regresi 508),
+     * ale o JEDNORÁZOVÉ dorovnání pouze při přechodu keyboard state -> open.
+     *
+     * Dvojitý rAF nechá WebView nejdřív aplikovat novou výšku modalContent
+     * a selection po tapu. Krátký timeout je pouze pojistka pro pomalejší
+     * Android WebView; oba průchody jsou idempotentní a nevytvářejí smyčku.
+     */
     poslouchej(window, "lubanote:luba-keyboard-state", (event) => {
-      if (event?.detail?.open === false || event?.detail?.source === "system") skryjV2LubaCaret();
-      else naplanujV2LubaCaret(posledniVyber);
+      const detail = event?.detail || {};
+
+      if (detail.open === false || detail.source === "system") {
+        skryjV2LubaCaret();
+        return;
+      }
+
+      naplanujV2LubaCaret(posledniVyber);
+      if (!detail.open || detail.source !== "luba" || detail.target !== "body") return;
+
+      const dorovnejPoOtevreni = () => {
+        if (!editor?.isConnected || !lubaCaretMaBytViditelny()) return;
+        const aktualni = aktualniVyberModelu();
+        posunV2CaretPoVstupuDoViditelneOblasti(aktualni);
+        naplanujV2LubaCaret(aktualni);
+      };
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(dorovnejPoOtevreni);
+      });
+      setTimeout(dorovnejPoOtevreni, 140);
     });
 
     // V2.3 – stabilní selection controller.
@@ -6979,6 +7093,7 @@
     exportujProstyText: () => exportujProstyTextZModelu(),
     otevriVHostu,
     zavriVHostu,
+    nastavPoziciOtevreni: nastavPoziciOtevreniVHostu,
     zachytAktualniVyber,
     nastavVelikost: nastavVelikostZToolbaru,
     prepniFormat: prepniBooleanFormatZToolbaru,

@@ -26,6 +26,15 @@
   const currentKeyboardModeLabel =
     document.getElementById("currentKeyboardModeLabel");
 
+  const openNoteOpenPositionButton =
+    document.getElementById("openNoteOpenPositionButton");
+
+  const currentNoteOpenPositionLabel =
+    document.getElementById("currentNoteOpenPositionLabel");
+
+  const NOTE_OPEN_POSITION_KEY =
+    "lubanoteNoteOpenPositionV1";
+
   const LUBANOTE_KEYBOARD_SOURCE_KEY =
     "lubanote_lubakeyboard_input_source_v1";
 
@@ -365,6 +374,83 @@ const motivy = nactenaTemata.map(tema => ({
     );
   }
 
+  function ziskejPoziciOtevreniPoznamky() {
+    try {
+      return localStorage.getItem(
+        NOTE_OPEN_POSITION_KEY
+      ) === "end"
+        ? "end"
+        : "start";
+    } catch (_) {
+      return "start";
+    }
+  }
+
+  function ziskejPopisekPoziceOtevreni(hodnota) {
+    return hodnota === "end"
+      ? prelozNastaveni(
+          "settings.noteOpenEnd",
+          "Konec"
+        )
+      : prelozNastaveni(
+          "settings.noteOpenStart",
+          "Začátek"
+        );
+  }
+
+  function nastavPopisekPoziceOtevreni() {
+    if (!currentNoteOpenPositionLabel) {
+      return;
+    }
+
+    currentNoteOpenPositionLabel.textContent =
+      ziskejPopisekPoziceOtevreni(
+        ziskejPoziciOtevreniPoznamky()
+      );
+  }
+
+  function otevriModalPoziceOtevreni() {
+    if (typeof window.otevriVyberovyModal !== "function") {
+      return;
+    }
+
+    window.otevriVyberovyModal({
+      nadpis: prelozNastaveni(
+        "settings.noteOpenPosition",
+        "Po otevření poznámky"
+      ),
+      moznosti: [
+        {
+          hodnota: "start",
+          popisek: ziskejPopisekPoziceOtevreni("start")
+        },
+        {
+          hodnota: "end",
+          popisek: ziskejPopisekPoziceOtevreni("end")
+        }
+      ],
+      vybranaHodnota: ziskejPoziciOtevreniPoznamky(),
+      poVyberu: (novaPozice) => {
+        const pozice = novaPozice === "end"
+          ? "end"
+          : "start";
+
+        try {
+          localStorage.setItem(
+            NOTE_OPEN_POSITION_KEY,
+            pozice
+          );
+        } catch (_) {}
+
+        nastavPopisekPoziceOtevreni();
+      }
+    });
+  }
+
+  window.LubaNoteEditorOpenPreferences = {
+    ziskejPozici: ziskejPoziciOtevreniPoznamky
+  };
+
   function nastavPopisekRetence() {
     if (!overdueRetentionValue) {
       return;
@@ -449,6 +535,7 @@ const motivy = nactenaTemata.map(tema => ({
 
   nastavPopisekRetence();
   nastavPopisekPlannerReminderu();
+  nastavPopisekPoziceOtevreni();
 
   openPlannerReminderDefaultButton
     ?.addEventListener("click", () => {
@@ -893,6 +980,11 @@ openReminderDelaySettingsButton?.addEventListener(
     otevriModalKlavesnice
   );
 
+  openNoteOpenPositionButton?.addEventListener(
+    "click",
+    otevriModalPoziceOtevreni
+  );
+
   window.addEventListener(
     "lubanote:keyboard-source-change",
     nastavPopisekKlavesnice
@@ -923,6 +1015,7 @@ openReminderDelaySettingsButton?.addEventListener(
       );
 
       nastavPopisekKlavesnice();
+      nastavPopisekPoziceOtevreni();
     }
   );
 

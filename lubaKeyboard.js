@@ -360,6 +360,22 @@
      okamžitě znovu zavolat zobraz(). Znovu ji otevře až explicitní tap
      do editoru nebo tlačítko ⌨. To je důležité i pro obrázkové modaly. */
   let potlacAutomatickeOtevreni = false;
+
+  /*
+   * FIX 510 – TAP != SWIPE.
+   *
+   * Vlastní LubaKeyboard se v těle poznámky smí otevřít jen po skutečném
+   * tapu/kliku. Samotný focus contenteditable nestačí: při touch scrollu
+   * WebView editor často focusne už během gesta a starý kód pak otevřel
+   * klávesnici i při obyčejném čtení/rolování.
+   *
+   * Gesto proto nejprve změříme. Pohyb větší než práh = swipe/drag a
+   * klávesnici NEOTEVÍRÁME. Toto je záměrně oddělené od
+   * potlacAutomatickeOtevreni, které řeší ruční skrytí klávesnice.
+   */
+  const LUBA_TAP_MAX_POHYB_PX = 12;
+  let lubaEditorGesto = null;
+
   let zakladniViewportHeight = 0;
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
@@ -971,27 +987,110 @@
     const aktivujFocusem = () => {
       aktivniEditor = editor;
       if (ziskejZdrojKlavesnice() === "system") return;
-      if (potlacAutomatickeOtevreni) return;
-      zobraz();
-      requestAnimationFrame(schovejSystemovou);
-      setTimeout(schovejSystemovou, 50);
-      setTimeout(schovejSystemovou, 160);
+
+      /* FIX 510 – focus těla není pokyn k otevření LubaKeyboard.
+         Focus vzniká i při swipe/scrollu a také programově při otevření
+         poznámky. Klávesnici otevře až potvrzený TAP níže. */
+      nastavLubaAtributy(editor);
+      schovejSystemovouNativne();
     };
 
-    const aktivujDotykem = () => {
+    const otevriPoSkutecnemTapu = () => {
+      if (!editor?.isConnected || ziskejZdrojKlavesnice() === "system") return;
       aktivniEditor = editor;
-      if (ziskejZdrojKlavesnice() === "system") return;
-      /* Explicitní tap do editoru je vědomý požadavek znovu psát. */
+      aktivniCilPsani = "body";
       potlacAutomatickeOtevreni = false;
-      zobraz();
-      requestAnimationFrame(schovejSystemovou);
-      setTimeout(schovejSystemovou, 50);
-      setTimeout(schovejSystemovou, 160);
+
+      /* Po pointerup/touchend necháme WebView nejdřív dokončit přirozené
+         umístění caretu. Teprve v dalším frame otevřeme vlastní klávesnici. */
+      requestAnimationFrame(() => {
+        if (!editor?.isConnected) return;
+        zobraz();
+        requestAnimationFrame(schovejSystemovou);
+        setTimeout(schovejSystemovou, 50);
+        setTimeout(schovejSystemovou, 160);
+      });
+    };
+
+    const jeTextovyCilTapu = (target) => {
+      if (!target || !editor.contains(target)) return false;
+      if (target.closest?.("button, a[href], .ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove")) return false;
+      return target === editor || Boolean(target.closest?.(".ln-v2-odstavec"));
+    };
+
+    const zacniPointerGesto = (event) => {
+      if (ziskejZdrojKlavesnice() === "system") return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (!jeTextovyCilTapu(event.target)) return;
+      lubaEditorGesto = {
+        editor,
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        presun: false
+      };
+    };
+
+    const pohniPointerGestem = (event) => {
+      const gesto = lubaEditorGesto;
+      if (!gesto || gesto.editor !== editor || gesto.pointerId !== event.pointerId) return;
+      if (Math.hypot(event.clientX - gesto.x, event.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX) {
+        gesto.presun = true;
+      }
+    };
+
+    const dokonciPointerGesto = (event) => {
+      const gesto = lubaEditorGesto;
+      if (!gesto || gesto.editor !== editor || gesto.pointerId !== event.pointerId) return;
+      const presun = gesto.presun ||
+        Math.hypot(event.clientX - gesto.x, event.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
+      lubaEditorGesto = null;
+      if (presun) return; // SWIPE/DRAG = pouze scroll/selection, žádná klávesnice.
+      otevriPoSkutecnemTapu();
+    };
+
+    const zrusPointerGesto = (event) => {
+      if (lubaEditorGesto?.editor === editor &&
+          (event?.pointerId == null || lubaEditorGesto.pointerId === event.pointerId)) {
+        lubaEditorGesto = null;
+      }
     };
 
     editor.addEventListener("focus", aktivujFocusem, true);
-    editor.addEventListener("pointerup", aktivujDotykem, true);
-    editor.addEventListener("touchend", aktivujDotykem, { capture: true, passive: true });
+
+    if (typeof window.PointerEvent === "function") {
+      editor.addEventListener("pointerdown", zacniPointerGesto, true);
+      editor.addEventListener("pointermove", pohniPointerGestem, true);
+      editor.addEventListener("pointerup", dokonciPointerGesto, true);
+      editor.addEventListener("pointercancel", zrusPointerGesto, true);
+    } else {
+      /* Fallback pro starší WebView bez Pointer Events. */
+      editor.addEventListener("touchstart", (event) => {
+        if (ziskejZdrojKlavesnice() === "system" || event.touches?.length !== 1) return;
+        if (!jeTextovyCilTapu(event.target)) return;
+        const t = event.touches[0];
+        lubaEditorGesto = { editor, touchId: t.identifier, x: t.clientX, y: t.clientY, presun: false };
+      }, { capture: true, passive: true });
+      editor.addEventListener("touchmove", (event) => {
+        const gesto = lubaEditorGesto;
+        if (!gesto || gesto.editor !== editor) return;
+        const t = Array.from(event.touches || []).find((x) => x.identifier === gesto.touchId);
+        if (!t) return;
+        if (Math.hypot(t.clientX - gesto.x, t.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX) gesto.presun = true;
+      }, { capture: true, passive: true });
+      editor.addEventListener("touchend", (event) => {
+        const gesto = lubaEditorGesto;
+        if (!gesto || gesto.editor !== editor) return;
+        const t = Array.from(event.changedTouches || []).find((x) => x.identifier === gesto.touchId);
+        if (!t) return;
+        const presun = gesto.presun || Math.hypot(t.clientX - gesto.x, t.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
+        lubaEditorGesto = null;
+        if (!presun) otevriPoSkutecnemTapu();
+      }, { capture: true, passive: true });
+      editor.addEventListener("touchcancel", () => {
+        if (lubaEditorGesto?.editor === editor) lubaEditorGesto = null;
+      }, { capture: true, passive: true });
+    }
   }
 
 
@@ -2401,8 +2500,11 @@
       return;
     }
     pripravEditor(event.target);
-    if (potlacAutomatickeOtevreni) return;
-    zobraz();
+
+    /* FIX 510 – body focus se může objevit i při swipe. Proto zde
+       LubaKeyboard už automaticky neotvíráme. Skutečný tap rozliší
+       pointer/touch gesture v pripravEditor(). Systémová klávesnice má
+       vlastní nativní focus cestu výše a tímto se nemění. */
   }, true);
 
   document.addEventListener("pointerdown", (event) => {
@@ -2687,7 +2789,7 @@
   }
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "RESUME-IME-GUARD-499",
+    verze: "TAP-SWIPE-510",
     zobraz,
     skryj,
     nastavLayout,

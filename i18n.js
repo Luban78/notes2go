@@ -136,6 +136,7 @@
     ["#openReminderDelaySettingsButton span:first-child", "settings.configure"],
     ["#overdueRetentionSettingLabel", "settings.overdueRetention"],
     ["#dataSettingsSection h3", "settings.data"],
+    ["#settingsNoteOpenPositionLabel", "settings.noteOpenPosition"],
     ["#settingsExportButton", "settings.export"],
     ["#settingsImportButton", "settings.import"],
     ["#settingsModal .settingsSection:last-of-type > h3", "settings.about"],

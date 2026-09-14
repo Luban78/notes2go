@@ -1531,6 +1531,15 @@
       <section id="dataSettingsSection" class="settingsSection">
         
         <h3>Data</h3>
+
+        <div class="themeSetting">
+          <span id="settingsNoteOpenPositionLabel">Po otevření poznámky</span>
+
+          <button id="openNoteOpenPositionButton" type="button" class="themeSelectButton">
+            <span id="currentNoteOpenPositionLabel">Začátek</span>
+            <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" data-luba-classic-icon="›" aria-hidden="true"></span>
+          </button>
+        </div>
         
         <button id="settingsExportButton" type="button">
           Export zálohy
@@ -1928,9 +1937,9 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=20260913-shared-relations-476"></script>
-  <script src="lang-en.js?v=20260913-shared-relations-476"></script>
-  <script src="i18n.js?v=20260912-keyboard-settings-459"></script>
+  <script src="lang-cs.js?v=20260914-note-open-position-507"></script>
+  <script src="lang-en.js?v=20260914-note-open-position-507"></script>
+  <script src="i18n.js?v=20260914-note-open-position-507"></script>
 
   <script src="lubaIcons.js?v=20260909-planner-type-icons-325"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
@@ -1944,7 +1953,7 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js"></script>
   <script src="themes.js"></script>
-  <script src="settings.js?v=20260912-keyboard-settings-459"></script>
+  <script src="settings.js?v=20260914-note-open-position-507"></script>
   
   <script src="todos.js?v=20260905-stabilizace-00h-undo-keyboard-1"></script>
   <script src="editorSelectionMenu.js?v=20260911-v2-selection-menu-394"></script>
@@ -1954,7 +1963,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=20260911-loop-guard-398"></script>
   
-  <script src="script.js?v=20260913-egress-fuse-485"></script>
+  <script src="script.js?v=20260914-note-open-scroll-508"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
@@ -2042,9 +2051,9 @@
   <script src="visualDebug.js?v=20260914-unified-debug-dock-506"></script>
   
   <!-- Editor Core V2 – produkční výchozí engine; Bridge zachovává automatický legacy fallback. -->
-  <script src="editorCoreV2.js?v=20260914-one-keyboard-editor-498"></script>
-  <script src="editorCoreV2Bridge.js?v=20260912-image-crop-settings-457"></script>
-  <script src="lubaKeyboard.js?v=20260914-resume-ime-guard-499"></script>
+  <script src="editorCoreV2.js?v=20260914-tap-swipe-caret-510"></script>
+  <script src="editorCoreV2Bridge.js?v=20260914-note-open-v2-508"></script>
+  <script src="lubaKeyboard.js?v=20260914-tap-swipe-caret-510"></script>
 
   <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
   <script src="debugHub.js?v=20260914-unified-debug-dock-506"></script>

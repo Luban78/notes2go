@@ -979,8 +979,39 @@
         : api.importujHtml(sourceHtml, modalRichText.innerText));
 
     if (!importVysledek?.ok) {
-      const prvky = importVysledek?.nepodporovane?.join(", ") || "neznámý prvek";
-      zobrazToast(`V2 tuto poznámku zatím neumí (${prvky}) – používám původní editor.`, true);
+      const nepodporovane =
+        Array.isArray(importVysledek?.nepodporovane)
+          ? importVysledek.nepodporovane
+          : [];
+      const prvky =
+        nepodporovane.join(", ") ||
+        "neznámý prvek";
+
+      /*
+       * FIX 508 – starší poznámka může obsahovat osiřelý IMG/FIGURE bez
+       * zdroje. V2 ji záměrně NESMÍ převést, protože by při uložení mohl
+       * ztratit původní strukturu; bezpečně proto zůstane v Legacy editoru.
+       * Není to ale chyba uživatele ani selhání aplikace, takže technický
+       * toast „V2 tuto poznámku neumí“ už při tomto jediném bezpečném
+       * fallbacku nezakrývá obsah. Diagnostika zůstává v logu.
+       */
+      if (
+        nepodporovane.length === 1 &&
+        nepodporovane[0] === "obrázek bez zdroje"
+      ) {
+        console.info(
+          "Editor Core V2: bezpečný Legacy fallback – obrázek bez zdroje."
+        );
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2 FALLBACK",
+          "obrázek bez zdroje"
+        );
+      } else {
+        zobrazToast(
+          `V2 tuto poznámku zatím neumí (${prvky}) – používám původní editor.`,
+          true
+        );
+      }
       return false;
     }
 
@@ -1005,6 +1036,21 @@
       zobrazToast("Editor V2 se nepodařilo připojit. Používám původní editor.", true);
       return false;
     }
+
+    /*
+     * FIX 508 – produkční V2 má vlastní .ln-v2-editor scroll a vlastní
+     * modelový caret. Preference Začátek/Konec proto musí být aplikovaná
+     * až po připojení V2 hostu, ne na skrytý Legacy #modalRichText.
+     */
+    const poziceOtevreni =
+      window.LubaNoteEditorOpenPreferences
+        ?.ziskejPozici?.() === "end"
+        ? "end"
+        : "start";
+
+    api.nastavPoziciOtevreni?.(
+      poziceOtevreni
+    );
 
     obnovToolbar();
 

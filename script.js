@@ -2556,15 +2556,71 @@ modalRichText.addEventListener("scroll", () => {
   }
 });
 
+function ziskejPoziciOtevreniPoznamky() {
+  try {
+    return window.LubaNoteEditorOpenPreferences
+      ?.ziskejPozici?.() === "end"
+      ? "end"
+      : "start";
+  } catch (_) {
+    return "start";
+  }
+}
+
+function aplikujPoziciOtevreniLegacyEditoru() {
+  const poziceOtevreni =
+    ziskejPoziciOtevreniPoznamky();
+
+  /*
+   * FIX 508 – Legacy poznámka nemá vždy stejný scroll kontejner.
+   * Běžný text roluje v #modalRichText, ale čisté TODO používá vlastní
+   * #todoList. Patch 507 posouval jen #modalRichText, takže TODO poznámka
+   * zůstala nahoře. V2 má vlastní scroll a řeší jej Editor Core V2 Bridge.
+   */
+  const nastavScroll = () => {
+    if (
+      window.LubaNoteEditorV2Bridge
+        ?.jeAktivni?.() === true
+    ) {
+      return;
+    }
+
+    const todoScroll =
+      document.getElementById("todoList");
+
+    const cil =
+      todoScroll && !todoScroll.hidden
+        ? todoScroll
+        : modalRichText;
+
+    if (!cil) {
+      return;
+    }
+
+    cil.scrollTop =
+      poziceOtevreni === "end"
+        ? cil.scrollHeight
+        : 0;
+  };
+
+  /*
+   * První frame proběhne až po taskModal.show + loadTodos(). Druhý frame
+   * dorovná výšku po finálním flex layoutu. Žádný timeout na stovky ms:
+   * uživatelský ruční scroll po otevření proto nikdy nepřepisujeme.
+   */
+  requestAnimationFrame(() => {
+    nastavScroll();
+    requestAnimationFrame(nastavScroll);
+  });
+}
+
 function resetujSbaleniNazvuEditoru() {
   taskModal.classList.remove("titleCollapsed");
   posledniPohybKZacatkuEditoru = 0;
   posledniPointerYEditoru = null;
   chranNazevPredAutomatickymSbalenimDo = 0;
-  
-  requestAnimationFrame(() => {
-    modalRichText.scrollTop = 0;
-  });
+
+  aplikujPoziciOtevreniLegacyEditoru();
 }
 
 modalRichText.addEventListener("focus", () => {
