@@ -663,6 +663,19 @@
       .find((el) => el.offsetParent !== null) || null;
   }
 
+  /*
+   * FIX 491 – samotná existence editoru v DOM nestačí k povolení systémové
+   * IME. LubaNote drží editorový element i mimo otevřenou poznámku a 490 jej
+   * proto při přepnutí volby v Nastavení omylem znovu focusnul. Výsledek:
+   * Gboard vyskočila už na HOME. Za skutečně aktivní editor považujeme jen
+   * V2 editor uvnitř právě otevřeného taskModal.
+   */
+  function jeEditorVOtevrenemModalu(editor) {
+    if (!jeEditorV2(editor) || editor.offsetParent === null) return false;
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    return Boolean(modal && modal.contains(editor));
+  }
+
   function haptic() {
     try { navigator.vibrate?.(7); } catch (_error) {}
   }
@@ -1240,11 +1253,12 @@
     const editor = aktivniEditor || najdiEditor();
     if (editor) {
       if (novy === "system") {
-        /* FIX 490 – atributy nastavíme okamžitě, ale samotnou Android IME
-           otevřeme až POTÉ, co native plugin přepíše source=system. Tím
-           MainActivity už nemůže nově otevřenou Gboard považovat za průsak
-           LubaKeyboard a hned ji znovu schovat. */
-        systemMode({ focus: false });
+        /* FIX 491 – změna volby pouze připraví atributy. Nesmí sama focusnout
+           skrytý/stale editor ani otevřít Gboard na HOME / v Nastavení. */
+        systemovyEditor = editor;
+        nastavSystemoveAtributy(editor);
+        if (panel && !panel.hidden) skryj();
+        if (otevritButton) otevritButton.hidden = true;
       } else {
         ukonciSystemMode(editor);
         potlacAutomatickeOtevreni = false;
@@ -1252,14 +1266,17 @@
     }
 
     const syncNativni = synchronizujNativniZdrojKlavesnice(novy);
-    if (novy === "system" && editor) {
+
+    /*
+     * FIX 491 – 490 volalo showIme() už při změně nastavení, protože
+     * `aktivniEditor` může ukazovat na editor ponechaný v DOM i po zavření
+     * poznámky. Systémovou IME smíme otevřít pouze tehdy, když je editor
+     * opravdu v otevřeném taskModal A současně drží focus.
+     */
+    if (novy === "system" && jeEditorVOtevrenemModalu(editor) && document.activeElement === editor) {
       Promise.resolve(syncNativni).finally(() => {
         if (ziskejZdrojKlavesnice() !== "system") return;
-        const aktualniEditor = aktivniEditor || najdiEditor();
-        if (!aktualniEditor) return;
-        systemovyEditor = aktualniEditor;
-        nastavSystemoveAtributy(aktualniEditor);
-        try { aktualniEditor.focus({ preventScroll: true }); } catch (_error) {}
+        if (!jeEditorVOtevrenemModalu(editor) || document.activeElement !== editor) return;
         requestAnimationFrame(zobrazNativniSystemovouIme);
       });
     }
@@ -2139,6 +2156,17 @@
       systemovyEditor = event.target;
       nastavSystemoveAtributy(event.target);
       if (otevritButton) otevritButton.hidden = true;
+
+      /* FIX 491 – systémovou IME otevírá až skutečný focus VIDITELNÉHO
+         editoru. Tím zůstává přepnutí v Nastavení pasivní, ale při vstupu
+         do poznámky není potřeba restart LubaNote. */
+      if (ziskejZdrojKlavesnice() === "system" && jeEditorVOtevrenemModalu(event.target)) {
+        requestAnimationFrame(() => {
+          if (ziskejZdrojKlavesnice() !== "system") return;
+          if (!jeEditorVOtevrenemModalu(event.target) || document.activeElement !== event.target) return;
+          zobrazNativniSystemovouIme();
+        });
+      }
       return;
     }
     pripravEditor(event.target);
@@ -2382,7 +2410,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "SYSTEM-IME-SWITCH-490",
+    verze: "SYSTEM-IME-FOCUS-491",
     zobraz,
     skryj,
     nastavLayout,
