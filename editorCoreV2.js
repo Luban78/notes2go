@@ -22,6 +22,17 @@
   const VERZE_MODELU = 8;
   const VELIKOSTI_PISMA = [12, 14, 16, 18, 20, 24, 28, 32];
   const LIMIT_HISTORIE = 100;
+
+  /*
+   * FIX 520 – FROZEN DESKTOP INPUT CONTRACT.
+   *
+   * PC s myší/trackpadem musí používat běžné desktopové chování výběru a
+   * fyzické klávesnice. Mobilní selection panel ani LubaKeyboard do této
+   * cesty nepatří. Core V2 ale zůstává zdrojem pravdy, takže mutační zkratky
+   * (Cut/Paste/BIU/Undo) musí skončit v modelu, ne v přímé DOM mutaci browseru.
+   */
+  const JE_DESKTOP_VSTUP =
+    window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
   const PALETA_BAREV = [
     { hodnota: "#ef4444", nazev: "červená" },
     { hodnota: "#f59e0b", nazev: "oranžová" },
@@ -486,6 +497,23 @@
   const DELKA_LONG_PRESS_SEZNAMU = 420;
   const MAX_POHYB_LONG_PRESS_SEZNAMU = 20;
   const START_DRAG_SEZNAMU = 7;
+
+  /*
+   * VD 516 – pouze diagnostika produkčního V2 TODO/Bullet long-press dragu.
+   * NEMĚNÍ gesto ani model. Debug Hub ji zapíná jen během modulu TODO.
+   */
+  function zapisV2TodoDragVD(faze, data = {}) {
+    if (!window.LUBANOTE_V2_TODO_DRAG_VD_ACTIVE) return;
+    const detaily = Object.entries(data)
+      .filter(([, hodnota]) => hodnota !== undefined)
+      .map(([klic, hodnota]) => `${klic}=${hodnota}`)
+      .join(" | ");
+    try {
+      document.dispatchEvent(new CustomEvent("lubanote:v2-todo-drag-vd", {
+        detail: { text: `${faze}${detaily ? ` | ${detaily}` : ""}` }
+      }));
+    } catch (_error) {}
+  }
   const PRAH_VNOR_SEZNAMU = 38;
   let v2DragSeznamu = null;
   let v2DragSeznamCasovac = null;
@@ -4316,6 +4344,14 @@
   }
 
   function zrusV2DragSeznamu({ zachovatVyber = false } = {}) {
+    if (v2DragSeznamu) {
+      zapisV2TodoDragVD("CLEAR", {
+        blok: v2DragSeznamu.blokId,
+        pripraven: v2DragSeznamu.pripraven ? 1 : 0,
+        aktivni: v2DragSeznamu.aktivni ? 1 : 0,
+        zachovat: zachovatVyber ? 1 : 0
+      });
+    }
     zrusV2SeznamCasovac();
     zastavV2ListAutoScroll();
     v2DragSeznamu?.radek?.classList?.remove("ln-v2-list-dragging");
@@ -4326,10 +4362,33 @@
   }
 
   function aktivujV2MoveSeznamu() {
-    if (!v2DragSeznamu?.radek?.isConnected) return;
+    if (!v2DragSeznamu?.radek?.isConnected) {
+      zapisV2TodoDragVD("LONGPRESS_ABORT_DISCONNECTED");
+      return;
+    }
     v2DragSeznamu.pripraven = true;
+    zapisV2TodoDragVD("LONGPRESS_READY", {
+      blok: v2DragSeznamu.blokId,
+      typ: v2DragSeznamu.typ,
+      x: Math.round(v2DragSeznamu.lastX),
+      y: Math.round(v2DragSeznamu.lastY)
+    });
     vybranaPolozkaSeznamuId = v2DragSeznamu.blokId;
     v2DragSeznamu.radek.classList.add("ln-v2-list-move-selected");
+
+    /*
+     * FIX 518 – Android/WebView native selection vs. TODO/Bullet MOVE.
+     *
+     * `ln-v2-list-drag-mode` uz v CSS obsahuje user-select:none +
+     * -webkit-touch-callout:none. Drive se zapinal az v DRAG_START, tedy az
+     * po prvnim pohybu. Android ale po skutecnem long-pressu stihl jeste
+     * pred pohybem spustit nativni vyber textu a poslal touchcancel.
+     *
+     * Zapiname ochranu PRESNE po LONGPRESS_READY – nikdy pri samotnem
+     * touchstartu. Tim zustava kratky tap / 2x tap a text selection beze
+     * zmeny, ale uz aktivovany MOVE patri vyhradne LubaNote.
+     */
+    editor?.classList.add("ln-v2-list-drag-mode");
     try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
     try { editor?.blur(); } catch (_error) {}
     try { navigator.vibrate?.(18); } catch (_error) {}
@@ -4345,12 +4404,17 @@
       startX: clientX, startY: clientY, lastX: clientX, lastY: clientY,
       pripraven: false, aktivni: false, cil: null
     };
+    zapisV2TodoDragVD("PREPARE", {
+      blok: blokId, typ, touchId, pointerId,
+      x: Math.round(clientX), y: Math.round(clientY), okamzite: okamzite ? 1 : 0
+    });
     if (okamzite) {
       aktivujV2MoveSeznamu();
       return;
     }
     v2DragSeznamCasovac = setTimeout(() => {
       v2DragSeznamCasovac = null;
+      zapisV2TodoDragVD("TIMER_FIRE", { blok: v2DragSeznamu?.blokId || "-" });
       aktivujV2MoveSeznamu();
     }, DELKA_LONG_PRESS_SEZNAMU);
   }
@@ -4363,6 +4427,11 @@
   function spustV2DragSeznamu(x, y) {
     if (!v2DragSeznamu?.pripraven || v2DragSeznamu.aktivni) return;
     v2DragSeznamu.aktivni = true;
+    zapisV2TodoDragVD("DRAG_START", {
+      blok: v2DragSeznamu.blokId,
+      dist: Math.round(vzdalenostV2ListDrag(x, y)),
+      x: Math.round(x), y: Math.round(y)
+    });
     v2DragSeznamu.radek.classList.add("ln-v2-list-dragging");
     editor?.classList.add("ln-v2-list-drag-mode");
     const preview = zajistiV2ListDragPreview();
@@ -4533,17 +4602,26 @@
   function zpracujV2ListTouchMove(event) {
     if (!v2DragSeznamu || v2DragSeznamu.typ !== "touch") return;
     const dotyk = najdiDotykV2Seznamu(event.touches, v2DragSeznamu.touchId);
-    if (!dotyk) return;
+    if (!dotyk) {
+      zapisV2TodoDragVD("MOVE_NO_TOUCH", { touchId: v2DragSeznamu.touchId });
+      return;
+    }
 
+    v2DragSeznamu.lastX = dotyk.clientX;
+    v2DragSeznamu.lastY = dotyk.clientY;
+    const dist = vzdalenostV2ListDrag(dotyk.clientX, dotyk.clientY);
     if (!v2DragSeznamu.pripraven) {
-      if (vzdalenostV2ListDrag(dotyk.clientX, dotyk.clientY) > MAX_POHYB_LONG_PRESS_SEZNAMU) {
+      zapisV2TodoDragVD("MOVE_WAIT", { dist: Math.round(dist), y: Math.round(dotyk.clientY) });
+      if (dist > MAX_POHYB_LONG_PRESS_SEZNAMU) {
+        zapisV2TodoDragVD("CANCEL_DISTANCE", { dist: Math.round(dist), limit: MAX_POHYB_LONG_PRESS_SEZNAMU });
         zrusV2DragSeznamu({ zachovatVyber: true });
       }
       return;
     }
 
+    zapisV2TodoDragVD("MOVE_READY", { dist: Math.round(dist), active: v2DragSeznamu.aktivni ? 1 : 0, y: Math.round(dotyk.clientY) });
     event.preventDefault();
-    if (!v2DragSeznamu.aktivni && vzdalenostV2ListDrag(dotyk.clientX, dotyk.clientY) >= START_DRAG_SEZNAMU) {
+    if (!v2DragSeznamu.aktivni && dist >= START_DRAG_SEZNAMU) {
       spustV2DragSeznamu(dotyk.clientX, dotyk.clientY);
     }
     if (v2DragSeznamu?.aktivni) aktualizujV2DragSeznamu(dotyk.clientX, dotyk.clientY);
@@ -4552,7 +4630,16 @@
   function zpracujV2ListTouchEnd(event) {
     if (!v2DragSeznamu || v2DragSeznamu.typ !== "touch") return;
     const dotyk = najdiDotykV2Seznamu(event.changedTouches, v2DragSeznamu.touchId);
-    if (!dotyk) return;
+    if (!dotyk) {
+      zapisV2TodoDragVD("END_NO_TOUCH", { touchId: v2DragSeznamu.touchId });
+      return;
+    }
+    zapisV2TodoDragVD("TOUCHEND", {
+      blok: v2DragSeznamu.blokId,
+      pripraven: v2DragSeznamu.pripraven ? 1 : 0,
+      aktivni: v2DragSeznamu.aktivni ? 1 : 0,
+      dist: Math.round(vzdalenostV2ListDrag(dotyk.clientX, dotyk.clientY))
+    });
     zrusV2SeznamCasovac();
 
     if (v2DragSeznamu.aktivni) {
@@ -5263,6 +5350,58 @@
 
     if (!v2ImeKompozice?.aktivni) return true;
     return dokoncV2ImeKompozici("external-action") !== false;
+  }
+
+  function zapisDesktopVyberDoClipboardu(event) {
+    if (!JE_DESKTOP_VSTUP || !editor || !dokument) return false;
+
+    const vyber = aktualniVyberModelu();
+    if (!vyber || vyber.sbaleny) return false;
+
+    const text = textVeVyberu(vyber);
+    if (!text) return false;
+
+    let zapsano = false;
+    try {
+      if (event?.clipboardData?.setData) {
+        event.clipboardData.setData("text/plain", text);
+        zapsano = true;
+      }
+    } catch (_error) {}
+
+    /* ClipboardEvent na desktopu má DataTransfer téměř vždy. Fallback je
+       pouze pojistka pro webview/browser, který jej neposkytne. */
+    if (!zapsano && navigator.clipboard?.writeText) {
+      try { Promise.resolve(navigator.clipboard.writeText(text)).catch(() => {}); } catch (_error) {}
+      zapsano = true;
+    }
+
+    return zapsano;
+  }
+
+  function zpracujDesktopCopy(event) {
+    if (!JE_DESKTOP_VSTUP) return;
+    if (zapisDesktopVyberDoClipboardu(event)) {
+      event.preventDefault();
+    }
+  }
+
+  function zpracujDesktopCut(event) {
+    if (!JE_DESKTOP_VSTUP) return;
+
+    const vyber = aktualniVyberModelu();
+    if (!vyber || vyber.sbaleny) return;
+
+    const text = textVeVyberu(vyber);
+    if (!text) return;
+
+    zapisDesktopVyberDoClipboardu(event);
+    event.preventDefault();
+
+    /* Nativní cut by zmutoval contenteditable DOM mimo model a DOM Guard by
+       ho následně vracel. Na PC proto kopii provede ClipboardEvent, ale samotné
+       smazání jde stejnou modelovou cestou jako mobilní Vyjmout. */
+    vyjmiVyberProSelectionMenu();
   }
 
   function zpracujPaste(event) {
@@ -6582,9 +6721,51 @@
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
       if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
       const dotyk = event.touches[0];
+      zapisV2TodoDragVD("TOUCHSTART", {
+        blok: radek.dataset.lnV2Blok || "-",
+        typBloku: radek.classList.contains("ln-v2-todo") ? "todo" : (radek.classList.contains("ln-v2-ordered") ? "ordered" : "bullet"),
+        touchId: dotyk.identifier,
+        x: Math.round(dotyk.clientX), y: Math.round(dotyk.clientY),
+        target: event.target?.className || event.target?.tagName || "-"
+      });
+      const jeTodoMove = radek.classList.contains("ln-v2-todo");
+      const jeObnovaAktivnihoMove = jeTodoMove
+        && vybranaPolozkaSeznamuId === (radek.dataset.lnV2Blok || "")
+        && radek.classList.contains("ln-v2-list-move-selected");
+
       pripravV2LongPressSeznamu(
-        "touch", radek, dotyk.clientX, dotyk.clientY, null, dotyk.identifier, false
+        "touch",
+        radek,
+        dotyk.clientX,
+        dotyk.clientY,
+        null,
+        dotyk.identifier,
+        jeObnovaAktivnihoMove
       );
+
+      /*
+       * FIX 519 – Android/WebView musi vedet uz OD TOUCHSTARTU, ze TODO
+       * long-press patri LubaNote, jinak muze kolem systemoveho long-press
+       * prahu ukoncit proud pres touchcancel kvuli nativnimu vyberu textu.
+       *
+       * Dulezite: user-select:none NEBLOKUJE vertikalni scroll. Pri beznem
+       * swipu se kandidat po prekroceni puvodniho 20px prahu zrusi a trida
+       * se okamzite odstrani. Pri kratkem tapu se odstrani na touchend jeste
+       * pred naslednym clickem, takze normalni caret/2x tap zustava zachovan.
+       * Ochranu pouzivame pouze pro TODO – Bullet/Ordered tim nemenime.
+       */
+      if (jeTodoMove && v2DragSeznamu?.radek === radek) {
+        editor?.classList.add("ln-v2-list-drag-mode");
+        zapisV2TodoDragVD("NATIVE_GUARD_START", {
+          blok: radek.dataset.lnV2Blok || "-",
+          obnova: jeObnovaAktivnihoMove ? 1 : 0
+        });
+        if (jeObnovaAktivnihoMove) {
+          zapisV2TodoDragVD("RECOVERY_IMMEDIATE", {
+            blok: radek.dataset.lnV2Blok || "-"
+          });
+        }
+      }
     }, { passive: false });
 
     poslouchej(editor, "touchstart", (event) => {
@@ -6607,7 +6788,17 @@
     poslouchej(document, "touchcancel", () => zrusV2Drag(), { passive: false });
     poslouchej(document, "touchmove", zpracujV2ListTouchMove, { passive: false });
     poslouchej(document, "touchend", zpracujV2ListTouchEnd, { passive: false });
-    poslouchej(document, "touchcancel", () => zrusV2DragSeznamu({ zachovatVyber: true }), { passive: false });
+    poslouchej(document, "touchcancel", (event) => {
+      if (v2DragSeznamu?.typ === "touch") {
+        zapisV2TodoDragVD("TOUCHCANCEL", {
+          blok: v2DragSeznamu.blokId,
+          pripraven: v2DragSeznamu.pripraven ? 1 : 0,
+          aktivni: v2DragSeznamu.aktivni ? 1 : 0,
+          changed: event.changedTouches?.length || 0
+        });
+      }
+      zrusV2DragSeznamu({ zachovatVyber: true });
+    }, { passive: false });
 
     poslouchej(editor, "pointerdown", (event) => {
       if (event.pointerType === "touch") return;
@@ -6793,6 +6984,8 @@
       dokoncV2ImeKompozici("compositionend");
     });
     poslouchej(editor, "beforeinput", zpracujBeforeInput);
+    poslouchej(editor, "copy", zpracujDesktopCopy);
+    poslouchej(editor, "cut", zpracujDesktopCut);
     poslouchej(editor, "paste", zpracujPaste);
     poslouchej(editor, "keydown", (event) => {
       if (event.key === "Tab") {
@@ -6814,7 +7007,23 @@
 
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const klavesa = String(event.key || "").toLowerCase();
-      if (klavesa === "z") {
+
+      /* FIX 520 – desktopové standardní zkratky musí řídit model V2,
+         ale vizuálně se chovat jako běžný editor. C/V necháváme ClipboardEventům;
+         X řeší `cut` listener výše. */
+      if (JE_DESKTOP_VSTUP && klavesa === "a") {
+        event.preventDefault();
+        vyberVseProSelectionMenu();
+      } else if (JE_DESKTOP_VSTUP && klavesa === "b") {
+        event.preventDefault();
+        prepniBooleanFormatZToolbaru("tucne");
+      } else if (JE_DESKTOP_VSTUP && klavesa === "i") {
+        event.preventDefault();
+        prepniBooleanFormatZToolbaru("kurziva");
+      } else if (JE_DESKTOP_VSTUP && klavesa === "u") {
+        event.preventDefault();
+        prepniBooleanFormatZToolbaru("podtrzeni");
+      } else if (klavesa === "z") {
         event.preventDefault();
         if (event.shiftKey) vratHistoriiVpred();
         else vratHistoriiZpet();

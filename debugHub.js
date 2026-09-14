@@ -366,6 +366,10 @@
     const selectionMenu = document.getElementById("selectionMenu");
     const uklidy = [];
 
+    /* VD 515: zapne interní stavové logy TODO long-press/drag jen během diagnostiky. */
+    window.LUBANOTE_TODO_DRAG_VD_ACTIVE = true;
+    window.LUBANOTE_V2_TODO_DRAG_VD_ACTIVE = true;
+
     if (!todoList || !selectionMenu) {
       zapis("CHYBA | chybí #todoList nebo #selectionMenu");
       return () => {};
@@ -481,8 +485,46 @@
       }, 80);
     }, true);
 
+    pridejPosluchac(uklidy, document, "lubanote:todo-drag-vd", event => {
+      zapis(`TODO_LEGACY_DRAG | ${event.detail?.text || "-"}`);
+    }, true);
+
+    pridejPosluchac(uklidy, document, "lubanote:v2-todo-drag-vd", event => {
+      zapis(`TODO_V2_DRAG | ${event.detail?.text || "-"}`);
+    }, true);
+
+    /* VD 516: raw capture sleduje, co WebView skutečně posílá během V2 gesta. */
+    let v2RawTouchId = null;
+    pridejPosluchac(uklidy, document, "touchstart", event => {
+      const radek = event.target?.closest?.(".ln-v2-odstavec.ln-v2-todo, .ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered");
+      if (!radek || event.touches?.length !== 1) return;
+      const t = event.touches[0];
+      v2RawTouchId = t.identifier;
+      zapis(`RAW_V2 touchstart | id=${t.identifier} | block=${radek.dataset.lnV2Blok || "-"} | @${Math.round(t.clientX)},${Math.round(t.clientY)} | target=${popisPrvku(event.target)}`);
+    }, true);
+    pridejPosluchac(uklidy, document, "touchmove", event => {
+      if (v2RawTouchId === null) return;
+      const t = Array.from(event.touches || []).find(x => x.identifier === v2RawTouchId);
+      if (!t) return;
+      zapis(`RAW_V2 touchmove | id=${t.identifier} | @${Math.round(t.clientX)},${Math.round(t.clientY)} | prevented=${event.defaultPrevented ? "Y" : "N"}`);
+    }, true);
+    ["touchend", "touchcancel"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => {
+        if (v2RawTouchId === null) return;
+        const t = Array.from(event.changedTouches || []).find(x => x.identifier === v2RawTouchId);
+        zapis(`RAW_V2 ${typ} | id=${v2RawTouchId} | ${t ? `@${Math.round(t.clientX)},${Math.round(t.clientY)}` : "touch=NONE"} | prevented=${event.defaultPrevented ? "Y" : "N"}`);
+        v2RawTouchId = null;
+      }, true);
+    });
+
     const observerMenu = new MutationObserver(() => {
-      zapis(`MENU MUTATION | ${infoMenuVyberu()}`);
+      /* 515 chrlila stovky identických MENU MUTATION řádků. Pro drag diagnózu
+         stačí zaznamenat pouze skutečnou změnu stavu menu. */
+      const stav = infoMenuVyberu();
+      if (observerMenu._posledni !== stav) {
+        observerMenu._posledni = stav;
+        zapis(`MENU MUTATION | ${stav}`);
+      }
     });
 
     observerMenu.observe(selectionMenu, {
@@ -493,9 +535,11 @@
 
     pridejObserver(uklidy, observerMenu);
 
-    zapis(`START TODO SELECTION | ${infoMenuVyberu()}`);
+    zapis(`START TODO SELECTION + V2 DRAG 516 | ${infoMenuVyberu()}`);
 
     return () => {
+      window.LUBANOTE_TODO_DRAG_VD_ACTIVE = false;
+      window.LUBANOTE_V2_TODO_DRAG_VD_ACTIVE = false;
       uklidy.forEach(uklid => uklid());
     };
   }

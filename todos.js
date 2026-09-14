@@ -144,6 +144,30 @@ const TODO_DRAG_START_DISTANCE = 8;
 const TODO_GHOST_LIFT = 92;
 const TODO_REZERVA_MEZERY_X = 10;
 
+/*
+ * VD 515 – cílená diagnostika TODO long-press → drag.
+ * V běžném provozu je úplně vypnutá; Debug Hub nastaví příznak jen při
+ * spuštění modulu „TODO – výběr / Vložit / Vše“.
+ */
+function zapisTodoDragVD(faze, data = {}) {
+  if (!window.LUBANOTE_TODO_DRAG_VD_ACTIVE) {
+    return;
+  }
+
+  const detaily = Object.entries(data)
+    .filter(([, hodnota]) => hodnota !== undefined)
+    .map(([klic, hodnota]) => `${klic}=${hodnota}`)
+    .join(" | ");
+
+  document.dispatchEvent(
+    new CustomEvent("lubanote:todo-drag-vd", {
+      detail: {
+        text: `${faze}${detaily ? ` | ${detaily}` : ""}`
+      }
+    })
+  );
+}
+
 
 /* ========================================
    ZÁKLADNÍ TODO FUNKCE
@@ -1618,17 +1642,35 @@ function beginPendingTodoMove(
   pendingStartY = clientY;
   pendingTodoMoveReady = moveModeReady;
 
+  zapisTodoDragVD("PENDING_START", {
+    type,
+    row: index,
+    x: Math.round(clientX),
+    y: Math.round(clientY),
+    touchId: touchIdentifier ?? "-",
+    ready: moveModeReady,
+    selected: todoMoveSelectedElement === todoItem
+  });
+
   if (moveModeReady) {
+    zapisTodoDragVD("MOVE_MODE_ALREADY_READY", { row: index });
     return;
   }
 
   todoLongPressTimer = setTimeout(() => {
     todoLongPressTimer = null;
 
+    zapisTodoDragVD("LONGPRESS_TIMER", {
+      row: pendingTodoIndex ?? "null",
+      hasElement: Boolean(pendingTodoElement),
+      type: pendingDragType ?? "null"
+    });
+
     if (
       pendingTodoIndex === null ||
       !pendingTodoElement
     ) {
+      zapisTodoDragVD("LONGPRESS_ABORT_NO_PENDING");
       return;
     }
 
@@ -1637,6 +1679,11 @@ function beginPendingTodoMove(
     );
 
     pendingTodoMoveReady = true;
+
+    zapisTodoDragVD("LONGPRESS_READY", {
+      row: pendingTodoIndex,
+      selected: todoMoveSelectedElement === pendingTodoElement
+    });
 
     /*
      * DŮLEŽITÉ – mobilní TODO drag:
@@ -1650,6 +1697,9 @@ function beginPendingTodoMove(
      * nic nepřesune a MOVE MODE zůstane aktivní jako dosud.
      */
     if (pendingDragType === "touch") {
+      zapisTodoDragVD("LONGPRESS_ACTIVATE_CALL", {
+        row: pendingTodoIndex
+      });
       activateTodoDrag(
         pendingTodoIndex,
         pendingTodoElement,
@@ -1674,6 +1724,16 @@ function prepareTodoTouchLongPress(event, index, todoItem) {
   const touch = event.touches[0];
   const uzJeVybrany =
     todoMoveSelectedElement === todoItem;
+
+  zapisTodoDragVD("TOUCHSTART", {
+    row: index,
+    x: Math.round(touch.clientX),
+    y: Math.round(touch.clientY),
+    touchId: touch.identifier,
+    selected: uzJeVybrany,
+    cancelable: event.cancelable,
+    scrollTop: Math.round(todoList?.scrollTop || 0)
+  });
 
   if (uzJeVybrany) {
     /* MOVE MODE už je aktivní – toto gesto patří přesunu. */
@@ -1735,6 +1795,10 @@ function handleTodoTouchMove(event) {
   const touch = findTrackedTouch(event.touches);
 
   if (!touch) {
+    zapisTodoDragVD("TOUCHMOVE_NO_TRACKED_TOUCH", {
+      touches: event.touches.length,
+      wanted: pendingTouchIdentifier ?? "null"
+    });
     return;
   }
 
@@ -1746,8 +1810,18 @@ function handleTodoTouchMove(event) {
   if (!pendingTodoMoveReady) {
     /* Uživatel začal scrollovat dřív, než doběhl long-press. */
     if (distance > TODO_LONG_PRESS_CANCEL_DISTANCE) {
+      zapisTodoDragVD("PRE_LONGPRESS_CANCEL_DISTANCE", {
+        d: Math.round(distance),
+        limit: TODO_LONG_PRESS_CANCEL_DISTANCE,
+        x: Math.round(touch.clientX),
+        y: Math.round(touch.clientY)
+      });
       clearPendingTodoDrag();
       removeTodoTouchListeners();
+    } else {
+      zapisTodoDragVD("PRE_LONGPRESS_MOVE", {
+        d: Math.round(distance)
+      });
     }
 
     return;
@@ -1757,10 +1831,25 @@ function handleTodoTouchMove(event) {
    * Long-press už vyhrál: od této chvíle dotyk patří pouze TODO dragu.
    * Nepustíme ho do scrollu/editoru, stejně jako u přesunu karet.
    */
+  const predPrevent = event.defaultPrevented;
   event.preventDefault();
   event.stopPropagation();
 
+  zapisTodoDragVD("READY_TOUCHMOVE", {
+    d: Math.round(distance),
+    active: todoDragActive,
+    moved: todoDragMoved,
+    cancelable: event.cancelable,
+    preventedBefore: predPrevent,
+    preventedAfter: event.defaultPrevented,
+    scrollTop: Math.round(todoList?.scrollTop || 0)
+  });
+
   if (distance < TODO_DRAG_START_DISTANCE) {
+    zapisTodoDragVD("READY_MOVE_TOO_SMALL", {
+      d: Math.round(distance),
+      limit: TODO_DRAG_START_DISTANCE
+    });
     return;
   }
 
@@ -1774,6 +1863,14 @@ function handleTodoTouchMove(event) {
   }
 
   todoDragMoved = true;
+
+  zapisTodoDragVD("DRAG_MOVE", {
+    d: Math.round(distance),
+    x: Math.round(touch.clientX),
+    y: Math.round(touch.clientY),
+    row: pendingTodoIndex,
+    active: todoDragActive
+  });
 
   updateActiveTodoDrag(
     touch.clientX,
@@ -1792,8 +1889,21 @@ function handleTodoTouchEnd(event) {
   );
 
   if (!endedTouch) {
+    zapisTodoDragVD("TOUCHEND_NO_TRACKED_TOUCH", {
+      changed: event.changedTouches.length,
+      wanted: pendingTouchIdentifier ?? "null"
+    });
     return;
   }
+
+  zapisTodoDragVD("TOUCHEND", {
+    active: todoDragActive,
+    moved: todoDragMoved,
+    ready: pendingTodoMoveReady,
+    x: Math.round(endedTouch.clientX),
+    y: Math.round(endedTouch.clientY),
+    cancelable: event.cancelable
+  });
 
   if (todoDragActive && todoDragMoved) {
     event.preventDefault();
@@ -1829,6 +1939,13 @@ function handleTodoTouchEnd(event) {
 
 
 function handleTodoTouchCancel(event) {
+  zapisTodoDragVD("TOUCHCANCEL", {
+    active: todoDragActive,
+    moved: todoDragMoved,
+    ready: pendingTodoMoveReady,
+    pendingType: pendingDragType ?? "null"
+  });
+
   if (todoDragActive || pendingTodoMoveReady) {
     event?.stopPropagation?.();
   }
@@ -2018,8 +2135,19 @@ function activateTodoDrag(index, todoItem, clientX, clientY) {
     !Number.isInteger(index) ||
     index < 0
   ) {
+    zapisTodoDragVD("ACTIVATE_REJECT", {
+      active: todoDragActive,
+      hasItem: Boolean(todoItem),
+      row: index
+    });
     return;
   }
+
+  zapisTodoDragVD("ACTIVATE", {
+    row: index,
+    x: Math.round(clientX),
+    y: Math.round(clientY)
+  });
 
   draggedTodoIndex = index;
   draggedTodoElement = todoItem;
@@ -2310,6 +2438,12 @@ function cleanupTodoDrag() {
 
 function finishTodoDrag(cancelled = false) {
   const fromIndex = draggedTodoIndex;
+
+  zapisTodoDragVD("FINISH", {
+    cancelled,
+    from: fromIndex ?? "null",
+    moved: todoDragMoved
+  });
 
   if (cancelled) {
     obnovPuvodniPoziciTodo();

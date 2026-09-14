@@ -29,6 +29,17 @@
   const selectionVlozit = document.getElementById("selectionVlozit");
   const selectionVybratVse = document.getElementById("selectionVybratVse");
 
+  /*
+   * FIX 520 – FROZEN DESKTOP SELECTION CONTRACT.
+   *
+   * #selectionMenu je mobilní UI. Na PC nesmí reagovat na dblclick, contextmenu
+   * ani selectionchange a nesmí programově skládat označený text. Desktop má
+   * nativní browser selection/context menu + Ctrl zkratky; Core V2 jen drží
+   * modelový snapshot a bezpečně provádí mutace.
+   */
+  const jeDesktopSelection =
+    window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
+
   if (!taskModal || !modalRichText || !modalTitle || !editorBackButton) {
     return;
   }
@@ -295,7 +306,7 @@
   }
 
   function zobrazV2SelectionMenuProOznaceni(rozsah = null) {
-    if (!aktivni || !selectionMenu) return false;
+    if (jeDesktopSelection || !aktivni || !selectionMenu) return false;
     const vyber = window.getSelection();
     const range = rozsah || (vyber?.rangeCount ? vyber.getRangeAt(0) : null);
     if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
@@ -310,7 +321,7 @@
   }
 
   function zobrazV2SelectionMenuProKurzor(bod = null) {
-    if (!aktivni || !selectionMenu) return false;
+    if (jeDesktopSelection || !aktivni || !selectionMenu) return false;
     core()?.zachytAktualniVyber?.();
     nastavV2SelectionMenuTlacitka(true);
     v2SelectionMenuAktivni = true;
@@ -439,7 +450,7 @@
   }
 
   function zpracujV2SelectionChangeProMenu() {
-    if (!aktivni || performance.now() < potlacV2SelectionMenuDo) return;
+    if (jeDesktopSelection || !aktivni || performance.now() < potlacV2SelectionMenuDo) return;
     if (jeV2MoveInterakce()) return;
     const vyber = window.getSelection();
     const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
@@ -1814,7 +1825,7 @@
   }
 
   function zrusV2OznaceniKlikemMimo(event) {
-    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
     if (jeV2MoveInterakce(event)) return;
 
@@ -1867,17 +1878,20 @@
    * WebView skryje modré označení a následný selectionchange panel zavře.
    */
   selectionMenu?.addEventListener("pointerdown", (event) => {
-    if (!aktivni || selectionMenu.dataset.lnV2Owner !== "1") return;
+    if (jeDesktopSelection || !aktivni || selectionMenu.dataset.lnV2Owner !== "1") return;
     const button = event.target.closest?.("button");
     if (!button || !selectionMenu.contains(button)) return;
     core()?.zachytAktualniVyber?.();
     event.preventDefault();
   }, true);
 
-  selectionMenu?.addEventListener("click", zpracujV2SelectionMenuAkci, true);
+  selectionMenu?.addEventListener("click", (event) => {
+    if (jeDesktopSelection) return;
+    zpracujV2SelectionMenuAkci(event);
+  }, true);
 
   document.addEventListener("touchend", (event) => {
-    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("TOUCHEND", `target=${event.target?.className || event.target?.tagName || "-"}`);
     if (jeV2MoveInterakce(event)) {
       potlacSelectionMenuKvuliMove();
@@ -1913,7 +1927,7 @@
   }, { passive: true, capture: true });
 
   document.addEventListener("dblclick", (event) => {
-    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("DBLCLICK", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event)) {
       potlacSelectionMenuKvuliMove();
@@ -1936,7 +1950,7 @@
   }, true);
 
   document.addEventListener("contextmenu", (event) => {
-    if (!aktivni || !hostitel?.contains(event.target)) return;
+    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("CONTEXTMENU", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event, true)) {
       /* Long-press na řádku patří MOVE. Nativní/context selection zde nesmí
@@ -2033,6 +2047,7 @@
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
     requestAnimationFrame(() => {
       obnovToolbar();
+      if (jeDesktopSelection) return;
       if (jeV2MoveInterakce() || performance.now() < potlacV2SelectionMenuDo) return;
       zpracujV2SelectionChangeProMenu();
     });
@@ -2076,7 +2091,7 @@
     vlozInterniOdkazZAutocomplete,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
-    spravujeSelectionMenu: () => aktivni,
+    spravujeSelectionMenu: () => aktivni && !jeDesktopSelection,
     jeProdukcniRezim: () => aktivni,
     jeAktivni: () => aktivni
   });
