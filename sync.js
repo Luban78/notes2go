@@ -6962,6 +6962,8 @@ function pouzivaNativeNetworkAutorituV2() {
   return nativeNetworkAutoritaV2 === true;
 }
 
+let probihajiciTargetNetworkResumeV2 = null;
+
 function zpracujTargetV2NavratSite(duvod = "network") {
   const melaPauzu = jeTargetV2SitovaPauzaAktivni();
   const maDluh = maCilenyPrivateV2Dluh();
@@ -6969,7 +6971,7 @@ function zpracujTargetV2NavratSite(duvod = "network") {
   zrusTargetV2SitovouPauzu(duvod);
 
   if (!melaPauzu && !maDluh) {
-    return;
+    return Promise.resolve(true);
   }
 
   window.LubaNoteStartupDiag?.zapis?.(
@@ -6977,11 +6979,52 @@ function zpracujTargetV2NavratSite(duvod = "network") {
     `TARGET NETWORK WAKE | ${duvod}`
   );
 
-  setTimeout(() => {
-    Promise.resolve(
-      synchronizujCilenePrivateZmenyV2()
-    ).catch(() => {});
-  }, 0);
+  /*
+   * PATCH 505 – QUEUE FIRST ON NETWORK RESUME
+   *
+   * Po návratu validované Android sítě má čekající targeted fronta
+   * absolutní prioritu před běžným START SYNC FLOW. V 504 mohl auth-valid
+   * rozjet start o pár ms dřív a targeted worker pak čekal několik sekund
+   * na jeho dokončení. Tady serializujeme reconnect do jedné Promise a
+   * po případném rychlém deferu startu dokončíme queue jako první.
+   */
+  if (probihajiciTargetNetworkResumeV2) {
+    return probihajiciTargetNetworkResumeV2;
+  }
+
+  probihajiciTargetNetworkResumeV2 =
+    (async () => {
+      if (probihajiciStartSync) {
+        try {
+          await probihajiciStartSync;
+        } catch {
+          // Start má vlastní error handling; reconnect queue pokračuje dál.
+        }
+      }
+
+      if (!jeTargetV2SitOpravduPouzitelna()) {
+        nastavStavSynchronizaceUI("pending");
+        return false;
+      }
+
+      if (!maCilenyPrivateV2Dluh()) {
+        return true;
+      }
+
+      const uspesne =
+        await synchronizujCekajiciLokalniZmenu();
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `TARGET NETWORK DRAIN | ${uspesne === true ? "OK" : "DEFER"} | ${duvod}`
+      );
+
+      return uspesne === true;
+    })();
+
+  return probihajiciTargetNetworkResumeV2.finally(() => {
+    probihajiciTargetNetworkResumeV2 = null;
+  });
 }
 
 async function aktivujNativeNetworkBridgeV2() {
@@ -7021,15 +7064,23 @@ async function aktivujNativeNetworkBridgeV2() {
         }
 
         nativeNetworkCekaNaNovePotvrzeniV2 = false;
-        zpracujTargetV2NavratSite("native-network");
 
-        /* Initial status=true při startu nesmí vytvořit druhý start.
-           Běžný start už spouští spustStartSyncBezpecne() níže. */
+        const drainPromise =
+          zpracujTargetV2NavratSite("native-network");
+
+        /*
+         * PATCH 505 – běžný start až PO queue drainu. Initial status=true
+         * při studeném startu stále nesmí vytvořit druhý start.
+         */
         if (predchozi === false) {
-          setTimeout(
-            spustStartSyncBezpecne,
-            400
-          );
+          Promise.resolve(drainPromise)
+            .catch(() => false)
+            .finally(() => {
+              setTimeout(
+                spustStartSyncBezpecne,
+                120
+              );
+            });
         }
       }
     );
@@ -8434,6 +8485,25 @@ async function spustStartSyncBezpecne() {
         ) {
           potvrzLokalniZmenuNaServeru();
         }
+      }
+
+      /*
+       * PATCH 505 – pokud máme targeted dluh, ale Android ještě nepotvrdil
+       * VALIDATED internet, běžný start nesmí queue předběhnout. Auth-valid
+       * může přijít z WebView o pár ms dříve než native callback; v takovém
+       * případě start rychle skončí jako pending a native reconnect queue ho
+       * po potvrzení sítě dokončí jako první.
+       */
+      if (
+        maCilenyPrivateV2Dluh() &&
+        !jeTargetV2SitOpravduPouzitelna()
+      ) {
+        nastavStavSynchronizaceUI("pending");
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          "START DEFER | targeted-wait-native"
+        );
+        return false;
       }
 
       const diagnostikaStartSync =
