@@ -364,53 +364,6 @@
   let recent = nactiRecent();
   let naucenaSlova = nactiNaucenaSlova();
 
-  /*
-   * DIAG 493 – pasivní trace LubaKeyboard.
-   * ----------------------------------------------------------
-   * Po několika náhodných průsacích systémové IME potřebujeme přesně vědět,
-   * PROČ se vlastní panel schoval. Tato diagnostika nesmí měnit focus, DOM,
-   * timing ani native stav. Jen zapisuje krátký snapshot do Debug Hubu.
-   */
-  function lkDiag(udalost, detail = "") {
-    try {
-      const modal = document.querySelector(".taskModal:not([hidden])");
-      const editor = aktivniEditor || najdiEditor();
-      const vv = window.visualViewport;
-      const focus = document.activeElement;
-      const focusPopis = focus === editor
-        ? "editor"
-        : (focus?.id || focus?.className || focus?.tagName || "none");
-      const stav = [
-        `event=${udalost}`,
-        `source=${ziskejZdrojKlavesnice()}`,
-        `panel=${panel ? (panel.hidden ? "hidden" : "open") : "none"}`,
-        `modal=${modal ? "open" : "closed"}`,
-        `editor=${editor ? "yes" : "no"}`,
-        `focus=${String(focusPopis).replace(/\s+/g, ".").slice(0, 48)}`,
-        `systEditor=${editor && editor === systemovyEditor ? "yes" : "no"}`,
-        `suppress=${potlacAutomatickeOtevreni ? "yes" : "no"}`,
-        `vis=${document.visibilityState}`,
-        `innerH=${window.innerHeight}`,
-        `vvH=${Math.round(vv?.height || 0)}`
-      ];
-      if (detail) stav.push(detail);
-      window.LubaNoteStartupDiag?.zapis?.("LK", stav.join(" | "));
-    } catch (_error) {}
-  }
-
-  function lkCaller() {
-    try {
-      const stack = String(new Error().stack || "")
-        .split("\n")
-        .slice(2, 5)
-        .map((radek) => radek.trim().replace(location.origin, ""))
-        .join(" <- ");
-      return `caller=${stack.slice(0, 220)}`;
-    } catch (_error) {
-      return "caller=?";
-    }
-  }
-
   function core() {
     return window.LubaNoteEditorV2 || null;
   }
@@ -432,63 +385,11 @@
      V PWA/iOS plugin neexistuje a funkce je záměrně no-op. */
   function synchronizujNativniZdrojKlavesnice(zdroj = ziskejZdrojKlavesnice()) {
     const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (!plugin?.setSource) return Promise.resolve();
+    if (!plugin?.setSource) return;
 
     try {
-      return Promise.resolve(plugin.setSource({
+      Promise.resolve(plugin.setSource({
         source: zdroj === "system" ? "system" : "luba"
-      })).catch(() => {});
-    } catch (_error) {
-      return Promise.resolve();
-    }
-  }
-
-  /*
-   * FIX 490 – přepnutí z LubaKeyboard na systémovou IME za běhu.
-   * Pouhá změna inputmode z none -> text nestačí, pokud už contenteditable
-   * drží focus: Android/WebView si ponechá starý InputConnection a Gboard se
-   * neotevře až do nového focusu / restartu aplikace. Po potvrzení zdroje v
-   * nativním pluginu proto restartujeme InputConnection a IME explicitně
-   * zobrazíme. V PWA/iOS je to záměrně no-op.
-   */
-  function zobrazNativniSystemovouIme() {
-    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (!plugin?.showIme) return;
-
-    try {
-      Promise.resolve(plugin.showIme()).catch(() => {});
-    } catch (_error) {}
-  }
-
-  /*
-   * FIX 492 – zrušení případných opožděných native showIme pokusů.
-   * Android 16 může InputConnection vytvořit až po prvním UI průchodu,
-   * takže native plugin krátce retryuje otevření systémové IME. Při
-   * zavření editoru / přepnutí na LubaKeyboard musíme retry generaci
-   * okamžitě zneplatnit, jinak by se Gboard mohla objevit později na HOME.
-   */
-  function zrusNativniSystemovouIme() {
-    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (!plugin?.hideIme) return;
-
-    try {
-      Promise.resolve(plugin.hideIme({ force: true })).catch(() => {});
-    } catch (_error) {}
-  }
-
-
-  /*
-   * FIX 489 – nativní pozdní-IME guard je aktivní jen po dobu, kdy je
-   * skutečně otevřená LubaKeyboard v editoru. Tím neblokuje systémovou
-   * klávesnici v hledání, loginu, chatu ani jiných běžných inputech.
-   */
-  function nastavNativniImeGuardAktivni(active) {
-    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (!plugin?.setGuardActive) return;
-
-    try {
-      Promise.resolve(plugin.setGuardActive({
-        active: Boolean(active) && ziskejZdrojKlavesnice() !== "system"
       })).catch(() => {});
     } catch (_error) {}
   }
@@ -726,19 +627,6 @@
       .find((el) => el.offsetParent !== null) || null;
   }
 
-  /*
-   * FIX 491 – samotná existence editoru v DOM nestačí k povolení systémové
-   * IME. LubaNote drží editorový element i mimo otevřenou poznámku a 490 jej
-   * proto při přepnutí volby v Nastavení omylem znovu focusnul. Výsledek:
-   * Gboard vyskočila už na HOME. Za skutečně aktivní editor považujeme jen
-   * V2 editor uvnitř právě otevřeného taskModal.
-   */
-  function jeEditorVOtevrenemModalu(editor) {
-    if (!jeEditorV2(editor) || editor.offsetParent === null) return false;
-    const modal = document.querySelector(".taskModal:not([hidden])");
-    return Boolean(modal && modal.contains(editor));
-  }
-
   function haptic() {
     try { navigator.vibrate?.(7); } catch (_error) {}
   }
@@ -789,21 +677,6 @@
     if (editor && editor !== systemovyEditor && ziskejZdrojKlavesnice() !== "system") {
       nastavLubaAtributy(editor);
     }
-
-    /*
-     * FIX 489 – Android 16 / moderní WebView umí znovu otevřít systémovou IME
-     * i několik sekund PO správném focusu editoru. `navigator.virtualKeyboard`
-     * v Android WebView není spolehlivá nativní brzda, proto při aktivní
-     * LubaKeyboard požádáme i malý Capacitor plugin o skutečné hide IME.
-     * V systémovém režimu se plugin sám okamžitě vypne.
-     */
-    const keyboardStatePlugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
-    if (ziskejZdrojKlavesnice() !== "system" && keyboardStatePlugin?.hideIme) {
-      try {
-        Promise.resolve(keyboardStatePlugin.hideIme()).catch(() => {});
-      } catch (_error) {}
-    }
-
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
   }
 
@@ -821,20 +694,8 @@
     if (ziskejZdrojKlavesnice() === "system") {
       systemovyEditor = editor;
       nastavSystemoveAtributy(editor);
-      if (panel && !panel.hidden) skryj("pripravEditor-system");
+      if (panel && !panel.hidden) skryj();
       if (otevritButton) otevritButton.hidden = true;
-
-      /*
-       * FIX 492 – otevriVHostu() volá pripravEditor() těsně PŘED
-       * editor.focus(). Microtask proto proběhne až po dokončení tohoto
-       * synchronního focusu a dává native vrstvě druhý, deterministický
-       * startovací bod i tehdy, když první focusin přišel příliš brzy.
-       */
-      queueMicrotask(() => {
-        if (ziskejZdrojKlavesnice() !== "system") return;
-        if (!jeEditorVOtevrenemModalu(editor) || document.activeElement !== editor) return;
-        zobrazNativniSystemovouIme();
-      });
       return;
     }
 
@@ -848,7 +709,7 @@
       aktivniEditor = editor;
       if (ziskejZdrojKlavesnice() === "system") return;
       if (potlacAutomatickeOtevreni) return;
-      zobraz("editor-focus");
+      zobraz();
       requestAnimationFrame(schovejSystemovou);
       setTimeout(schovejSystemovou, 50);
       setTimeout(schovejSystemovou, 160);
@@ -859,7 +720,7 @@
       if (ziskejZdrojKlavesnice() === "system") return;
       /* Explicitní tap do editoru je vědomý požadavek znovu psát. */
       potlacAutomatickeOtevreni = false;
-      zobraz("editor-pointer");
+      zobraz();
       requestAnimationFrame(schovejSystemovou);
       setTimeout(schovejSystemovou, 50);
       setTimeout(schovejSystemovou, 160);
@@ -1307,7 +1168,7 @@
   function systemMode({ focus = false } = {}) {
     flushCompose("system-mode", false);
     zavriChooser();
-    if (panel && !panel.hidden) skryj("systemMode");
+    if (panel && !panel.hidden) skryj();
     const editor = aktivniEditor || najdiEditor();
     if (!editor) return false;
 
@@ -1323,39 +1184,17 @@
 
   function nastavZdrojKlavesnice(zdroj) {
     const novy = zdroj === "system" ? "system" : "luba";
-    lkDiag("SOURCE REQUEST", `new=${novy}`);
     try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
+    synchronizujNativniZdrojKlavesnice(novy);
 
     const editor = aktivniEditor || najdiEditor();
     if (editor) {
       if (novy === "system") {
-        /* FIX 491 – změna volby pouze připraví atributy. Nesmí sama focusnout
-           skrytý/stale editor ani otevřít Gboard na HOME / v Nastavení. */
-        systemovyEditor = editor;
-        nastavSystemoveAtributy(editor);
-        if (panel && !panel.hidden) skryj("source-switch-system");
-        if (otevritButton) otevritButton.hidden = true;
+        systemMode({ focus: false });
       } else {
-        zrusNativniSystemovouIme();
         ukonciSystemMode(editor);
         potlacAutomatickeOtevreni = false;
       }
-    }
-
-    const syncNativni = synchronizujNativniZdrojKlavesnice(novy);
-
-    /*
-     * FIX 491 – 490 volalo showIme() už při změně nastavení, protože
-     * `aktivniEditor` může ukazovat na editor ponechaný v DOM i po zavření
-     * poznámky. Systémovou IME smíme otevřít pouze tehdy, když je editor
-     * opravdu v otevřeném taskModal A současně drží focus.
-     */
-    if (novy === "system" && jeEditorVOtevrenemModalu(editor) && document.activeElement === editor) {
-      Promise.resolve(syncNativni).finally(() => {
-        if (ziskejZdrojKlavesnice() !== "system") return;
-        if (!jeEditorVOtevrenemModalu(editor) || document.activeElement !== editor) return;
-        requestAnimationFrame(zobrazNativniSystemovouIme);
-      });
     }
 
     window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
@@ -1607,7 +1446,7 @@
       case "symbols": symbolsAction(); break;
       case "symbols-more": symbolsMoreAction(); break;
       case "chooser": chooser?.hidden ? otevriChooser() : zavriChooser(); break;
-      case "hide": skryj("keyboard-hide-button"); break;
+      case "hide": skryj(); break;
       case "candidate": candidateAction(value); break;
       case "suggestion": suggestionAction(value); break;
       case "unicode-hex": unicodeBuffer = (unicodeBuffer + value).slice(0, 6); aktualizujCompose(); break;
@@ -2018,7 +1857,7 @@
         if (ziskejZdrojKlavesnice() === "system") return;
         potlacAutomatickeOtevreni = false;
         pripravEditor(aktivniEditor);
-        zobraz("open-button");
+        zobraz();
         try { aktivniEditor.focus({ preventScroll: true }); } catch (_error) {}
         requestAnimationFrame(schovejSystemovou);
       }
@@ -2100,13 +1939,11 @@
     });
   }
 
-  function zobraz(reason = "api") {
-    lkDiag("SHOW REQUEST", `reason=${reason}`);
+  function zobraz() {
     potlacAutomatickeOtevreni = false;
     const editor = aktivniEditor || najdiEditor();
     if (!editor) return;
     if (ziskejZdrojKlavesnice() === "system" || editor === systemovyEditor) {
-      nastavNativniImeGuardAktivni(false);
       systemovyEditor = editor;
       nastavSystemoveAtributy(editor);
       return;
@@ -2119,8 +1956,6 @@
     panel.hidden = false;
     otevritButton.hidden = true;
     document.body.classList.add("ln-luba-klavesnice-open");
-    lkDiag("SHOW DONE", `reason=${reason}`);
-    nastavNativniImeGuardAktivni(true);
     nastavAkcniPanel(false);
     vykresliKlavesnici();
     requestAnimationFrame(nastavVysku);
@@ -2151,22 +1986,13 @@
     otevritButton.style.bottom = `${Math.round(bottom)}px`;
   }
 
-  function skryj(reason = "api") {
-    lkDiag("HIDE REQUEST", `reason=${reason} | ${lkCaller()}`);
+  function skryj() {
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
-    nastavNativniImeGuardAktivni(false);
-
-    /* FIX 492 – zruš i případné opožděné showIme retry. zavriVHostu()
-       volá skryj() také v režimu Systémová, takže tím zároveň zajistíme,
-       že se Gboard po zavření poznámky neobjeví až na HOME. */
-    zrusNativniSystemovouIme();
-
     if (!panel) return;
     flushCompose("hide", false);
     panel.hidden = true;
-    lkDiag("HIDE DONE", `reason=${reason}`);
     zavriChooser();
     zavriAlt();
     document.body.classList.remove("ln-luba-klavesnice-open");
@@ -2208,7 +2034,7 @@
     const editor = najdiEditor();
     if (!editor) {
       aktivniEditor = null;
-      if (panel && !panel.hidden) skryj("kontrolujEditor-no-editor");
+      if (panel && !panel.hidden) skryj();
       document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
       if (otevritButton) otevritButton.hidden = true;
       return;
@@ -2239,59 +2065,15 @@
   document.addEventListener("focusin", (event) => {
     if (!jeEditorV2(event.target)) return;
     aktivniEditor = event.target;
-    lkDiag("FOCUSIN EDITOR");
     if (ziskejZdrojKlavesnice() === "system" || event.target === systemovyEditor) {
       systemovyEditor = event.target;
       nastavSystemoveAtributy(event.target);
       if (otevritButton) otevritButton.hidden = true;
-
-      /* FIX 491 – systémovou IME otevírá až skutečný focus VIDITELNÉHO
-         editoru. Tím zůstává přepnutí v Nastavení pasivní, ale při vstupu
-         do poznámky není potřeba restart LubaNote. */
-      if (ziskejZdrojKlavesnice() === "system" && jeEditorVOtevrenemModalu(event.target)) {
-        requestAnimationFrame(() => {
-          if (ziskejZdrojKlavesnice() !== "system") return;
-          if (!jeEditorVOtevrenemModalu(event.target) || document.activeElement !== event.target) return;
-          zobrazNativniSystemovouIme();
-        });
-      }
       return;
     }
     pripravEditor(event.target);
     if (potlacAutomatickeOtevreni) return;
-    zobraz("focusin-global");
-  }, true);
-
-  document.addEventListener("focusout", (event) => {
-    if (!jeEditorV2(event.target)) return;
-    queueMicrotask(() => lkDiag("FOCUSOUT EDITOR"));
-  }, true);
-
-  /*
-   * FIX 492 – pokud je editor už fokusovaný, další tap do contenteditable
-   * nemusí vyvolat nový focusin. Pointerup je proto bezpečný explicitní
-   * retry pouze pro viditelný V2 editor v režimu Systémová. Nic neblokuje
-   * a nesahá do selection; native vrstva si sama ohlídá source=system.
-   */
-  document.addEventListener("pointerup", (event) => {
-    if (ziskejZdrojKlavesnice() !== "system") return;
-    const cil = event.target instanceof Element
-      ? event.target.closest(".ln-v2-editor[data-ln-v2-editor]")
-      : null;
-    if (!cil || !jeEditorVOtevrenemModalu(cil)) return;
-
-    aktivniEditor = cil;
-    systemovyEditor = cil;
-    nastavSystemoveAtributy(cil);
-
-    requestAnimationFrame(() => {
-      if (ziskejZdrojKlavesnice() !== "system") return;
-      if (!jeEditorVOtevrenemModalu(cil)) return;
-      if (document.activeElement !== cil) {
-        try { cil.focus({ preventScroll: true }); } catch (_error) {}
-      }
-      if (document.activeElement === cil) zobrazNativniSystemovouIme();
-    });
+    zobraz();
   }, true);
 
   document.addEventListener("pointerdown", (event) => {
@@ -2311,11 +2093,7 @@
   }, true);
 
   window.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));
-  window.visualViewport?.addEventListener("resize", () => requestAnimationFrame(() => {
-    nastavVysku();
-    pozicujOtevritButton();
-    lkDiag("VISUAL VIEWPORT RESIZE");
-  }));
+  window.visualViewport?.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));
 
   /* ==========================================================
      PATCH 466 – LubaKeyboard po návratu aplikace z backgroundu
@@ -2446,7 +2224,7 @@
 
     if (stav.bylaOtevrena) {
       potlacAutomatickeOtevreni = false;
-      zobraz("resume-restore");
+      zobraz();
     }
 
     if (stav.melFocus) {
@@ -2479,13 +2257,11 @@
      visibilitychange=hidden. Tohle je klíčové: InputConnection odpojíme
      ještě během odchodu Activity, ne až při jejím pozdějším uspání. */
   window.addEventListener("blur", () => {
-    lkDiag("WINDOW BLUR");
     if (ziskejZdrojKlavesnice() === "system") return;
     ulozLubaStavPredBackgroundem();
   }, true);
 
   document.addEventListener("visibilitychange", () => {
-    lkDiag("VISIBILITY", `state=${document.visibilityState}`);
     if (document.visibilityState === "hidden") {
       clearTimeout(navratLubaTimer);
       navratLubaTimer = null;
@@ -2505,7 +2281,6 @@
   /* Některé starší WebView vrátí focus oknu dřív než přepnou visibility.
      Funkce je no-op, pokud předtím neproběhl skutečný background. */
   window.addEventListener("focus", () => {
-    lkDiag("WINDOW FOCUS");
     if (!navratLubaPoBackgroundu) return;
     clearTimeout(navratLubaTimer);
     navratLubaTimer = setTimeout(obnovLubaPoBackgroundu, 0);
@@ -2537,7 +2312,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "KEYBOARD-TRACE-493",
+    verze: "SETTINGS-SYSTEM-459",
     zobraz,
     skryj,
     nastavLayout,
