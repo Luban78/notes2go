@@ -5029,6 +5029,44 @@
     });
   }
 
+  /* ==========================================================
+     PATCH 496 – CARET PRO LubaKeyboard
+     ----------------------------------------------------------
+     Vlastní klávesnice pracuje přímo s modelem a po každé akci znovu
+     vykreslí DOM. Android/WebView přitom může zachovat modelovou pozici,
+     ale po krátké ztrátě focusu už nenakreslí nativní caret.
+
+     Tato funkce NIC nemění v modelu ani v historii. Jen po návratu focusu
+     znovu promítne poslední modelový výběr do DOM Selection, aby byl caret
+     viditelný na stejné pozici, kam už model stejně zapisuje.
+     ========================================================== */
+  function obnovCaretVlastniKlavesnice() {
+    if (!editor?.isConnected || !dokument) return false;
+
+    const vyber = klonVyberu(
+      posledniVyber
+      || ulozenyFormatovaciVyber
+      || vyberZPosledniPozice()
+    );
+    if (!vyber?.zacatek || !vyber?.konec) return false;
+
+    try { editor.focus({ preventScroll: true }); }
+    catch (_error) { try { editor.focus(); } catch (_ignore) {} }
+
+    queueMicrotask(() => {
+      if (!editor?.isConnected) return;
+      try {
+        if (document.activeElement !== editor) {
+          try { editor.focus({ preventScroll: true }); }
+          catch (_error) { try { editor.focus(); } catch (_ignore) {} }
+        }
+        nastavVyberModelu(vyber.zacatek, vyber.konec);
+      } catch (_error) {}
+    });
+
+    return true;
+  }
+
   function dokoncImePredExterniAkci() {
     if (!v2ImeKompozice?.aktivni) return true;
 
@@ -6825,7 +6863,7 @@
   pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.21-MIXED-BLOCKS-399",
+    verze: "V2.21-MIXED-BLOCKS-496-CARET",
     otevriLab,
     otevriLabPrimo,
     zavriLab,
@@ -6876,6 +6914,7 @@
     dokoncImePredExterniAkci,
     jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni),
     provedPrikazVlastniKlavesnice,
+    obnovCaretVlastniKlavesnice,
     ziskejKontextVlastniKlavesnice,
     ziskejEditorElement: () => editor
   });

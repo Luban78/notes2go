@@ -1203,6 +1203,26 @@
     return novy;
   }
 
+  /* PATCH 496 – LubaKeyboard nesmí ztratit viditelný caret.
+     Model si pozici drží sám; tady jen po interakci klávesnice vrátíme
+     focus editoru a necháme Core V2 znovu promítnout uložený selection. */
+  function obnovCaretPoLubaInterakci() {
+    if (ziskejZdrojKlavesnice() === "system") return false;
+    const editor = aktivniEditor || najdiEditor();
+    const modal = document.querySelector(".taskModal:not([hidden])");
+    if (!jeEditorV2(editor) || !modal || !modal.contains(editor)) return false;
+
+    nastavLubaAtributy(editor);
+    const api = core();
+    if (api?.obnovCaretVlastniKlavesnice) {
+      return api.obnovCaretVlastniKlavesnice() !== false;
+    }
+
+    try { editor.focus({ preventScroll: true }); }
+    catch (_error) { try { editor.focus(); } catch (_ignore) {} }
+    return document.activeElement === editor;
+  }
+
   function insertCore(text) {
     const api = core();
     if (!api?.provedPrikazVlastniKlavesnice || !text) return false;
@@ -1456,7 +1476,7 @@
       default: break;
     }
     requestAnimationFrame(() => {
-      try { aktivniEditor?.focus({ preventScroll: true }); } catch (_error) {}
+      obnovCaretPoLubaInterakci();
       schovejSystemovou();
     });
   }
@@ -1958,7 +1978,17 @@
     document.body.classList.add("ln-luba-klavesnice-open");
     nastavAkcniPanel(false);
     vykresliKlavesnici();
-    requestAnimationFrame(nastavVysku);
+    requestAnimationFrame(() => {
+      /* Neobnovujeme zde modelový selection – první tap už mohl právě
+         nastavit novou pozici. Jen zajistíme, že caret má kde být kreslen. */
+      if (document.activeElement !== editor) {
+        nastavLubaAtributy(editor);
+        try { editor.focus({ preventScroll: true }); }
+        catch (_error) { try { editor.focus(); } catch (_ignore) {} }
+      }
+      schovejSystemovou();
+      nastavVysku();
+    });
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+120", true); }, 120);
     setTimeout(() => { nastavVysku(); vysliLayoutDiag("open+500", true); }, 500);
   }
@@ -2312,7 +2342,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "SETTINGS-SYSTEM-459",
+    verze: "CARET-RESTORE-496",
     zobraz,
     skryj,
     nastavLayout,
