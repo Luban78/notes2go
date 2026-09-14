@@ -118,6 +118,7 @@ let draggedTodoIndex = null;
 let draggedTodoElement = null;
 let todoDragGhost = null;
 let todoDragActive = false;
+let todoDragMoved = false;
 
 let todoLongPressTimer = null;
 let pendingDragType = null;
@@ -1636,6 +1637,26 @@ function beginPendingTodoMove(
     );
 
     pendingTodoMoveReady = true;
+
+    /*
+     * DŮLEŽITÉ – mobilní TODO drag:
+     * jakmile long-press skutečně doběhne, stejné gesto už musí být
+     * „chycené“ pro přesun. Dříve se drag aktivoval až při následném
+     * touchmove, takže Android někdy první pohyb ještě převzal jako scroll
+     * a uživatel musel položku chytat podruhé.
+     *
+     * Aktivujeme proto drag už při long-pressu, ale skutečný přesun DOM
+     * začne až po TODO_DRAG_START_DISTANCE. Pouhé podržení + puštění tedy
+     * nic nepřesune a MOVE MODE zůstane aktivní jako dosud.
+     */
+    if (pendingDragType === "touch") {
+      activateTodoDrag(
+        pendingTodoIndex,
+        pendingTodoElement,
+        pendingStartX,
+        pendingStartY
+      );
+    }
   }, TODO_LONG_PRESS_TIME);
 }
 
@@ -1669,22 +1690,28 @@ function prepareTodoTouchLongPress(event, index, todoItem) {
     uzJeVybrany
   );
 
+  /*
+   * DŮLEŽITÉ – stejný princip jako stabilní cardDrag:
+   * capture:true musí gesto zachytit dřív než nadřazený scroll/editor.
+   * Bez capture se po long-pressu občas první pohyb dostal nejprve do
+   * scrollu a TODO drag proto fungoval až na druhý pokus.
+   */
   document.addEventListener(
     "touchmove",
     handleTodoTouchMove,
-    { passive: false }
+    { passive: false, capture: true }
   );
 
   document.addEventListener(
     "touchend",
     handleTodoTouchEnd,
-    { passive: false }
+    { passive: false, capture: true }
   );
 
   document.addEventListener(
     "touchcancel",
     handleTodoTouchCancel,
-    { passive: false }
+    { passive: false, capture: true }
   );
 }
 
@@ -1726,13 +1753,18 @@ function handleTodoTouchMove(event) {
     return;
   }
 
+  /*
+   * Long-press už vyhrál: od této chvíle dotyk patří pouze TODO dragu.
+   * Nepustíme ho do scrollu/editoru, stejně jako u přesunu karet.
+   */
   event.preventDefault();
+  event.stopPropagation();
+
+  if (distance < TODO_DRAG_START_DISTANCE) {
+    return;
+  }
 
   if (!todoDragActive) {
-    if (distance < TODO_DRAG_START_DISTANCE) {
-      return;
-    }
-
     activateTodoDrag(
       pendingTodoIndex,
       pendingTodoElement,
@@ -1740,6 +1772,8 @@ function handleTodoTouchMove(event) {
       touch.clientY
     );
   }
+
+  todoDragMoved = true;
 
   updateActiveTodoDrag(
     touch.clientX,
@@ -1761,12 +1795,27 @@ function handleTodoTouchEnd(event) {
     return;
   }
 
-  if (todoDragActive) {
+  if (todoDragActive && todoDragMoved) {
     event.preventDefault();
+    event.stopPropagation();
     finishTodoDrag(false);
+  } else if (todoDragActive) {
+    event.stopPropagation();
+    /*
+     * Long-press řádek už chytil, ale prst se reálně neposunul.
+     * Neukládáme falešný drop; pouze uklidíme drag vizuál a necháme
+     * vybraný MOVE MODE aktivní pro případný další pokus.
+     */
+    event.preventDefault();
+    cleanupTodoDrag();
+    clearPendingTodoDrag();
+    draggedTodoIndex = null;
+    suppressTodoClickUntil =
+      performance.now() + 650;
   } else if (pendingTodoMoveReady) {
     /* Long-press pouze vybral řádek. MOVE MODE zůstává aktivní. */
     event.preventDefault();
+    event.stopPropagation();
     suppressTodoClickUntil =
       performance.now() + 650;
     clearPendingTodoDrag();
@@ -1779,7 +1828,11 @@ function handleTodoTouchEnd(event) {
 }
 
 
-function handleTodoTouchCancel() {
+function handleTodoTouchCancel(event) {
+  if (todoDragActive || pendingTodoMoveReady) {
+    event?.stopPropagation?.();
+  }
+
   if (todoDragActive) {
     finishTodoDrag(true);
   } else {
@@ -1793,17 +1846,20 @@ function handleTodoTouchCancel() {
 function removeTodoTouchListeners() {
   document.removeEventListener(
     "touchmove",
-    handleTodoTouchMove
+    handleTodoTouchMove,
+    true
   );
 
   document.removeEventListener(
     "touchend",
-    handleTodoTouchEnd
+    handleTodoTouchEnd,
+    true
   );
 
   document.removeEventListener(
     "touchcancel",
-    handleTodoTouchCancel
+    handleTodoTouchCancel,
+    true
   );
 }
 
@@ -2245,6 +2301,7 @@ function cleanupTodoDrag() {
   todoDragGhost = null;
   draggedTodoElement = null;
   todoDragActive = false;
+  todoDragMoved = false;
 
   todoList.classList.remove("todoDragActive");
   document.body.classList.remove("todoDragging");
