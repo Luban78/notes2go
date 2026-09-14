@@ -2475,6 +2475,11 @@
       return;
     }
 
+    /* FIX 511 – fullscreen obrázku má vždy celou obrazovku pro sebe.
+       Pokud je otevřená LubaKeyboard, zavřeme ji přes její veřejné API;
+       tím se zároveň korektně schová modelový V2 caret. */
+    try { window.LubaNoteKeyboard?.skryj?.(); } catch (_error) {}
+
     zavriNahledObrazku();
 
     const overlay = document.createElement("div");

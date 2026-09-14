@@ -205,9 +205,41 @@
       skryjV2LubaCaret();
       return;
     }
+    /* FIX 511 – caret je fixed overlay nad celou stránkou. Při scrollu může
+       jeho modelová pozice ležet mimo viditelný viewport editoru; v takovém
+       případě ho NESMÍME vykreslit nad titulkem/datovým panelem. Selection ani
+       scroll tím neměníme, jde pouze o ořez vizuálního caretu na editor. */
+    const rectEditoru = editor.getBoundingClientRect();
+    const vyskaCaretu = Math.max(12, Math.round(rect.height || 20));
+    const spodekCaretu = rect.top + vyskaCaretu;
+
+    /* FIX 512 – horní hranice musí začínat až ve SKUTEČNÉ textové ploše.
+       FIX 511 kontroloval jen průnik caretu s rectem editoru. Vysoký caret tak
+       mohl mít většinu těla už nad editorem a jediným spodním pixelem ještě
+       projít kontrolou – přesně proto se kreslil přes název poznámky.
+
+       Padding-top bereme dynamicky z CSS (produkční V2 má nyní 18 px), takže
+       fix není závislý na jednom telefonu ani na pevné výšce hlavičky. */
+    let horniBezpecnaMez = rectEditoru.top;
+    try {
+      const paddingTop = Number.parseFloat(getComputedStyle(editor).paddingTop) || 0;
+      horniBezpecnaMez += Math.max(0, paddingTop - 2);
+    } catch (_error) {}
+
+    const jeUvnitrEditoru = (
+      rect.top >= horniBezpecnaMez &&
+      spodekCaretu <= rectEditoru.bottom &&
+      rect.left >= rectEditoru.left - 2 &&
+      rect.left <= rectEditoru.right + 2
+    );
+    if (!jeUvnitrEditoru) {
+      skryjV2LubaCaret();
+      return;
+    }
+
     const caret = zajistiV2LubaCaret();
     caret.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
-    caret.style.height = `${Math.max(12, Math.round(rect.height || 20))}px`;
+    caret.style.height = `${vyskaCaretu}px`;
     caret.hidden = false;
   }
 
@@ -6821,6 +6853,10 @@
     /* Starý Android při scrollu posune text, ale nativní Range zůstane stejný.
        Overlay proto pouze přepočítáme; model ani selection se nemění. */
     poslouchej(document, "scroll", () => {
+      /* FIX 511 – během samotného swipe schováme fixed caret okamžitě.
+         V následujícím frame se vrátí jen tehdy, pokud jeho modelová pozice
+         opravdu zůstala uvnitř viditelné části editoru. */
+      skryjV2LubaCaret();
       naplanujV2SelectionOverlay(posledniVyber);
       naplanujV2LubaCaret(posledniVyber);
     }, true);
