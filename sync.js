@@ -513,6 +513,12 @@ async function ziskejServerovyPrivateFingerprint() {
   return null;
 }
 
+/* PATCH 495 – poslední výsledek malého Fast Sync rozhodnutí držíme
+ * i mimo lokální scope diagnostiky. Quota Saver i Existing Client
+ * Reconcile tak mohou bezpečně rozlišit BOOTSTRAP-PENDING /
+ * LOCAL-CHANGED bez dalšího fingerprint RPC. */
+let posledniFastSyncStav = "UNKNOWN";
+
 async function pripravFastSyncPriStartu(user) {
   const diagnostika =
     window.LubaNoteStartupDiag?.zacni?.("FAST SYNC CHECK");
@@ -629,6 +635,7 @@ async function pripravFastSyncPriStartu(user) {
       vzdaleneDeltaV2
     };
   } finally {
+    posledniFastSyncStav = stavDiagnostiky;
     window.LubaNoteStartupDiag?.konec?.(
       diagnostika,
       stavDiagnostiky
@@ -3890,6 +3897,552 @@ function nabidniSafeBootstrapPokudJeTreba(userId) {
   }, 80);
 }
 
+
+/*
+ * SYNC V2.5 – EXISTING CLIENT RECONCILE (PATCH 495)
+ *
+ * PATCH 485 záměrně zablokoval automatický full snapshot. Existující
+ * klient s lokálními daty ale mohl po změně localGeneration skončit ve
+ * stavu LOCAL-CHANGED a neměl bezpečnou cestu zpět do Fast Syncu.
+ *
+ * Reconcile proto používá pouze:
+ *   - malý bootstrap manifest bez data jsonb,
+ *   - targeted RPC 482 jen pro ID, jejichž cloudový obsah opravdu
+ *     potřebujeme porovnat/stáhnout,
+ *   - stejná revision/meta conflict pravidla jako původní bezpečný merge.
+ *
+ * get_notes_safe() se zde NIKDY nepovoluje.
+ */
+let existingClientReconcilePraveBezi = null;
+let existingClientReconcilePosledniPokus = 0;
+const EXISTING_RECONCILE_COOLDOWN_MS = 15000;
+/* Nouzový měsíční quota guard: automatický reconcile nikdy nesmí
+ * překvapit několika MB targeted downloadu při ztracené lokální meta.
+ * Manifest je malý; obsah nad tento rozpočet se pouze odloží. */
+const EXISTING_RECONCILE_AUTO_RX_BUDGET = 256 * 1024;
+
+function nactiLokalniSnapshotProExistingReconcile() {
+  const localRegular = getLocalNotesForSync();
+  const localEncrypted =
+    typeof nactiSifrovaneTajneZaznamy === "function"
+      ? nactiSifrovaneTajneZaznamy()
+      : [];
+  const localLegacySecret =
+    typeof nactiStarePlaintextTajnePoznamky === "function"
+      ? nactiStarePlaintextTajnePoznamky()
+      : [];
+  const localDecryptedSecret =
+    typeof getDesifrovaneTajnePoznamky === "function"
+      ? getDesifrovaneTajnePoznamky()
+      : [];
+
+  const { winners } = vytvorMapuVitezu(
+    localRegular,
+    localEncrypted,
+    localLegacySecret,
+    localDecryptedSecret,
+    []
+  );
+
+  return {
+    localRegular,
+    localEncrypted,
+    localLegacySecret,
+    localDecryptedSecret,
+    winners
+  };
+}
+
+function existingReconcileLokalniStavBezeZmeny(
+  generacePriStartu,
+  revizePriStartu
+) {
+  return (
+    ziskejTrvalouGeneraciLokalnichZmenProFastSync() ===
+      generacePriStartu &&
+    !lokalniStavSeBehemSyncuZmenil(revizePriStartu)
+  );
+}
+
+function jeExistingReconcileWinnerSecret(winner) {
+  return winner?.type === "secret";
+}
+
+function najdiAktualniWinnerProExistingReconcile(noteId) {
+  if (!noteId) return null;
+  return nactiLokalniSnapshotProExistingReconcile()
+    .winners.get(String(noteId)) || null;
+}
+
+async function uploadExistingReconcileWinnerV2(noteId) {
+  const winner = najdiAktualniWinnerProExistingReconcile(noteId);
+
+  if (!winner) {
+    return false;
+  }
+
+  if (winner.type === "regular" && winner.note) {
+    const detail = await uploadLocalNoteToSupabase(
+      winner.note,
+      {
+        cilenyV2: true,
+        vratitDetailV2: true
+      }
+    );
+
+    return detail?.ok === true;
+  }
+
+  if (winner.type === "secret") {
+    if (winner.note) {
+      const detail = await uploadLocalNoteToSupabase(
+        {
+          ...winner.note,
+          id: noteId,
+          isSecret: true
+        },
+        {
+          cilenyV2: true,
+          vratitDetailV2: true
+        }
+      );
+
+      return detail?.ok === true;
+    }
+
+    if (winner.record) {
+      return await uploadEncryptedSecretRecordToSupabase(
+        winner.record
+      );
+    }
+  }
+
+  return false;
+}
+
+async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
+  if (!userId || !navigator.onLine) {
+    return false;
+  }
+
+  if (existingClientReconcilePraveBezi) {
+    return existingClientReconcilePraveBezi;
+  }
+
+  const ted = Date.now();
+  if (
+    !force &&
+    ted - existingClientReconcilePosledniPokus <
+      EXISTING_RECONCILE_COOLDOWN_MS
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "RECONCILE DEFER | cooldown"
+    );
+    return false;
+  }
+
+  existingClientReconcilePosledniPokus = ted;
+
+  existingClientReconcilePraveBezi = (async () => {
+    if (
+      maCilenyPrivateV2Dluh() ||
+      nactiCekajiciSmazani().length > 0 ||
+      aktivniKonfliktySyncu.size > 0
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "RECONCILE DEFER | local-debt"
+      );
+      return false;
+    }
+
+    const diag = window.LubaNoteStartupDiag?.zacni?.(
+      "V2 EXISTING RECONCILE"
+    );
+    let diagStav = "CHYBA";
+
+    nastavStavSynchronizaceUI("syncing");
+    window.LubaNoteSyncTraffic?.zacniSync?.();
+
+    try {
+      const generacePriStartu =
+        ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+      const revizePriStartu =
+        ziskejReviziLokalnichZmenProSync();
+
+      if (generacePriStartu === null) {
+        return false;
+      }
+
+      const headStart = await ziskejPrivateSyncV2Head();
+      if (headStart === null) {
+        return false;
+      }
+
+      const [manifest, vlastniSdileneId, idEditovanychJinde] =
+        await Promise.all([
+          nactiSafeBootstrapManifestV2(),
+          ziskejVlastniSdileneIdProSync(),
+          ziskejIdPoznamekEditovanychJinde()
+        ]);
+
+      if (
+        !existingReconcileLokalniStavBezeZmeny(
+          generacePriStartu,
+          revizePriStartu
+        )
+      ) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          "RECONCILE DEFER | local-changed-during-manifest"
+        );
+        return false;
+      }
+
+      const lokalni = nactiLokalniSnapshotProExistingReconcile();
+      const manifestMapa = new Map(
+        manifest.map((row) => [String(row.id), row])
+      );
+
+      const fetchManifestRows = [];
+      const pseudoTombstones = [];
+      const localUploadIds = new Set();
+      const unresolvedIds = new Set();
+
+      for (const row of manifest) {
+        const id = String(row.id);
+        const winner = lokalni.winners.get(id);
+        const meta = ziskejCloudSyncMeta(id);
+
+        if (row.deleted_at) {
+          if (
+            winner ||
+            !meta ||
+            Number(meta.revision) !== Number(row.revision)
+          ) {
+            pseudoTombstones.push({
+              id,
+              revision: row.revision,
+              updated_at: row.updated_at,
+              deleted_at: row.deleted_at,
+              data: null
+            });
+          }
+          continue;
+        }
+
+        if (!winner) {
+          fetchManifestRows.push(row);
+          continue;
+        }
+
+        const typeMismatch =
+          Boolean(row.is_secret) !==
+          jeExistingReconcileWinnerSecret(winner);
+
+        if (!meta || typeMismatch) {
+          fetchManifestRows.push(row);
+          continue;
+        }
+
+        const cloudSeZmenil =
+          Number(meta.revision) !== Number(row.revision);
+        const localSeZmenil =
+          !jsouStejneCasoveZnacky(
+            winner.updatedAt,
+            meta.localUpdatedAt
+          );
+
+        if (cloudSeZmenil) {
+          fetchManifestRows.push(row);
+        } else if (localSeZmenil) {
+          if (vlastniSdileneId.has(id)) {
+            /* Shared obsah nikdy neposíláme private save_note_safe. */
+            unresolvedIds.add(id);
+          } else {
+            localUploadIds.add(id);
+          }
+        }
+      }
+
+      /* Lokální ID, které serverový owner manifest vůbec nezná.
+       * Bez cloud meta jde typicky o offline/legacy novou poznámku a
+       * bezpečně ji pošleme targeted. Známé ID chybějící ze serveru
+       * nehádáme – mohlo dojít k převodu vlastnictví. */
+      for (const [id] of lokalni.winners.entries()) {
+        if (manifestMapa.has(id)) continue;
+
+        if (
+          window.LubaNoteSharingNotes
+            ?.jeSdilenaPoznamka?.(id) === true
+        ) {
+          continue;
+        }
+
+        const meta = ziskejCloudSyncMeta(id);
+        if (meta) {
+          unresolvedIds.add(id);
+        } else {
+          localUploadIds.add(id);
+        }
+      }
+
+      const odhadFetchBytes = fetchManifestRows.reduce(
+        (sum, row) => sum + Math.max(0, Number(row?.approx_bytes) || 0),
+        0
+      );
+
+      if (
+        odhadFetchBytes > EXISTING_RECONCILE_AUTO_RX_BUDGET
+      ) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `RECONCILE DEFER | budget fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(EXISTING_RECONCILE_AUTO_RX_BUDGET / 1024)}kB`
+        );
+        nastavStavSynchronizaceUI("pending");
+        return false;
+      }
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `RECONCILE PLAN | manifest=${manifest.length} fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB upload=${localUploadIds.size} tombstones=${pseudoTombstones.length}`
+      );
+
+      const cloudRows = [...pseudoTombstones];
+      const davky = vytvorSafeBootstrapDavky(fetchManifestRows);
+
+      for (let i = 0; i < davky.length; i += 1) {
+        if (
+          !existingReconcileLokalniStavBezeZmeny(
+            generacePriStartu,
+            revizePriStartu
+          )
+        ) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            "RECONCILE DEFER | local-changed-during-download"
+          );
+          return false;
+        }
+
+        const ids = davky[i].map((row) => row.id);
+        const rows = await nactiCloudPoznamkyPodleIdV2(ids);
+
+        if (!rows) {
+          return false;
+        }
+
+        const returned = new Set(
+          rows.filter((row) => row?.id).map((row) => String(row.id))
+        );
+
+        for (const id of ids) {
+          if (!returned.has(String(id))) {
+            unresolvedIds.add(String(id));
+          }
+        }
+
+        cloudRows.push(...rows);
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `RECONCILE BATCH | ${i + 1}/${davky.length} ids=${ids.length}`
+        );
+      }
+
+      if (
+        !existingReconcileLokalniStavBezeZmeny(
+          generacePriStartu,
+          revizePriStartu
+        )
+      ) {
+        return false;
+      }
+
+      const shodneSecretId =
+        await ziskejShodneSecretIdProRevizniMerge(
+          lokalni.localDecryptedSecret,
+          cloudRows
+        );
+
+      const revizniMerge = pripravRevizniMerge(
+        lokalni.localRegular,
+        lokalni.localEncrypted,
+        lokalni.localLegacySecret,
+        lokalni.localDecryptedSecret,
+        cloudRows,
+        shodneSecretId,
+        idEditovanychJinde,
+        vlastniSdileneId
+      );
+
+      for (const id of revizniMerge.vynutitLocalId) {
+        if (!vlastniSdileneId.has(id)) {
+          localUploadIds.add(String(id));
+        }
+      }
+
+      for (const id of revizniMerge.konfliktniId) {
+        unresolvedIds.add(String(id));
+      }
+
+      for (const id of idEditovanychJinde) {
+        if (
+          cloudRows.some((row) => String(row?.id || "") === String(id))
+        ) {
+          unresolvedIds.add(String(id));
+        }
+      }
+
+      if (revizniMerge.konfliktniKopie.length > 0) {
+        const aktualniRegular = getLocalNotesForSync();
+        const existujiciIds = new Set(
+          aktualniRegular.filter((n) => n?.id).map((n) => String(n.id))
+        );
+        const noveKopie = revizniMerge.konfliktniKopie.filter(
+          (note) => note?.id && !existujiciIds.has(String(note.id))
+        );
+
+        if (noveKopie.length > 0) {
+          const ok = await ulozBeznePoznamkyPrimo([
+            ...aktualniRegular,
+            ...noveKopie
+          ]);
+
+          if (ok === false) {
+            return false;
+          }
+
+          for (const note of noveKopie) {
+            localUploadIds.add(String(note.id));
+          }
+        }
+      }
+
+      const cloudApplyRows = cloudRows.filter((row) =>
+        row?.id &&
+        revizniMerge.prijmoutCloudMetaId.has(String(row.id)) &&
+        !revizniMerge.konfliktniId.has(String(row.id)) &&
+        !idEditovanychJinde.has(String(row.id))
+      );
+
+      if (cloudApplyRows.length > 0) {
+        if (
+          !existingReconcileLokalniStavBezeZmeny(
+            generacePriStartu,
+            revizePriStartu
+          )
+        ) {
+          return false;
+        }
+
+        await aplikujSafeBootstrapRadky(cloudApplyRows);
+      }
+
+      for (const id of localUploadIds) {
+        if (
+          unresolvedIds.has(id) ||
+          vlastniSdileneId.has(id) ||
+          window.LubaNoteSharingNotes
+            ?.jeSdilenaPoznamka?.(id) === true
+        ) {
+          continue;
+        }
+
+        if (
+          !existingReconcileLokalniStavBezeZmeny(
+            generacePriStartu,
+            revizePriStartu
+          )
+        ) {
+          return false;
+        }
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `RECONCILE UPLOAD | id=${id}`
+        );
+
+        const ok = await uploadExistingReconcileWinnerV2(id);
+        if (ok !== true) {
+          unresolvedIds.add(id);
+          break;
+        }
+      }
+
+      if (unresolvedIds.size > 0) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `RECONCILE DEFER | unresolved=${unresolvedIds.size} id=${Array.from(unresolvedIds)[0]}`
+        );
+        nastavStavSynchronizaceUI("pending");
+        return false;
+      }
+
+      if (
+        !existingReconcileLokalniStavBezeZmeny(
+          generacePriStartu,
+          revizePriStartu
+        )
+      ) {
+        return false;
+      }
+
+      const potvrzeno = await dokonciSafeBootstrapV2(
+        userId,
+        headStart
+      );
+
+      if (potvrzeno !== true) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          "RECONCILE DEFER | confirm"
+        );
+        nastavStavSynchronizaceUI("pending");
+        return false;
+      }
+
+      if (typeof renderTasks === "function") {
+        renderTasks();
+      }
+      if (typeof renderRemindersScreen === "function") {
+        renderRemindersScreen();
+      }
+      if (typeof renderCalendar === "function") {
+        renderCalendar();
+      }
+
+      nastavKoncovyStavSynchronizaceUI();
+      posledniFastSyncStav = "SKIP";
+      diagStav = "OK";
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `RECONCILE COMPLETE | manifest=${manifest.length} fetch=${fetchManifestRows.length} cloudApply=${cloudApplyRows.length} upload=${localUploadIds.size}`
+      );
+
+      return true;
+    } catch (error) {
+      console.warn(
+        "Existing Client Reconcile byl bezpečně odložen:",
+        error
+      );
+      nastavStavSynchronizaceUI("pending");
+      return false;
+    } finally {
+      window.LubaNoteStartupDiag?.konec?.(diag, diagStav);
+      window.LubaNoteSyncTraffic?.dokonciSync?.();
+    }
+  })();
+
+  try {
+    return await existingClientReconcilePraveBezi;
+  } finally {
+    existingClientReconcilePraveBezi = null;
+  }
+}
+
 /*
  * SYNC V2.3 – VZDÁLENÝ TARGETED DOWNLOAD (PATCH 484)
  *
@@ -6008,6 +6561,17 @@ async function startSync() {
         );
         nastavStavSynchronizaceUI("restore");
       }
+    } else if (posledniFastSyncStav === "LOCAL-CHANGED") {
+      /* PATCH 495 – existující klient se starším / lokálně změněným
+       * stavem už nezůstane navždy viset v pending. UI pustíme hned
+       * z cache a po startu spustíme pouze manifest + targeted reconcile. */
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "RECONCILE SCHEDULE | start-local-changed"
+      );
+      poznamkySynchronizovany = true;
+      startPouzeLokalneKvuliEgressu = true;
+      nastavStavSynchronizaceUI("pending");
     } else {
       /*
        * PATCH 485 – čistý prohlížeč / ztracený Fast stav / legacy dluh
@@ -6204,10 +6768,19 @@ async function startSync() {
   }
 
   if (startPouzeLokalneKvuliEgressu) {
-    /* PATCH 486 – po zobrazení lokálního UI nabídneme bezpečný bootstrap
-       pouze čistému klientovi nebo dříve rozpracovanému bootstrapu.
-       Samotné zobrazení modalu nic nestahuje. */
-    nabidniSafeBootstrapPokudJeTreba(user.id);
+    if (posledniFastSyncStav === "LOCAL-CHANGED") {
+      /* PATCH 495 – UI už je použitelné; reconcile běží až teď, aby
+         případné targeted dávky nikdy nezdržely splash. */
+      setTimeout(() => {
+        spustExistingClientReconcileV2(user.id, { force: true })
+          .catch(() => {});
+      }, 0);
+    } else {
+      /* PATCH 486 – po zobrazení lokálního UI nabídneme bezpečný bootstrap
+         pouze čistému klientovi nebo dříve rozpracovanému bootstrapu.
+         Samotné zobrazení modalu nic nestahuje. */
+      nabidniSafeBootstrapPokudJeTreba(user.id);
+    }
   }
 
   return true;
@@ -7455,6 +8028,16 @@ async function spustRychlySyncPoznamekBezpecne() {
         );
         nastavStavSynchronizaceUI("restore");
       }
+    } else if (posledniFastSyncStav === "LOCAL-CHANGED") {
+      vysledek = await spustExistingClientReconcileV2(user.id);
+
+      if (vysledek !== true) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          "RECONCILE DEFER | quick"
+        );
+        nastavStavSynchronizaceUI("pending");
+      }
     } else {
       window.LubaNoteStartupDiag?.zapis?.(
         "EGRESS",
@@ -7808,7 +8391,14 @@ window.LubaNoteSync = {
      Chat / Shared / Invitations podle něj umí při čistém klientovi
      vypnout pouze AUTOMATICKÝ polling. Ruční otevření funkcí zůstává. */
   jeBootstrapPending: () =>
-    stavDiagnostiky === "BOOTSTRAP-PENDING"
+    posledniFastSyncStav === "BOOTSTRAP-PENDING",
+  spustExistingReconcile: async () => {
+    const user = await getCurrentUser();
+    return Boolean(
+      user?.id &&
+      await spustExistingClientReconcileV2(user.id, { force: true })
+    );
+  }
 };
 
 let casovacSyncuPoAktivaci = null;
@@ -7844,7 +8434,7 @@ function naplanujSyncPoAktivaci(
          fingerprint RPC. Server se stejně nesmí automaticky stáhnout
          a explicitní bootstrap si udělá vlastní bezpečné kontroly. */
       if (
-        stavDiagnostiky === "BOOTSTRAP-PENDING" &&
+        posledniFastSyncStav === "BOOTSTRAP-PENDING" &&
         !maCilenyPrivateV2Dluh() &&
         !lokalniZmenaCekaNaPotvrzeniServerem &&
         nactiCekajiciSmazani().length === 0
