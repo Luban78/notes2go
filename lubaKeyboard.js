@@ -413,6 +413,22 @@
     } catch (_error) {}
   }
 
+  /*
+   * FIX 492 – zrušení případných opožděných native showIme pokusů.
+   * Android 16 může InputConnection vytvořit až po prvním UI průchodu,
+   * takže native plugin krátce retryuje otevření systémové IME. Při
+   * zavření editoru / přepnutí na LubaKeyboard musíme retry generaci
+   * okamžitě zneplatnit, jinak by se Gboard mohla objevit později na HOME.
+   */
+  function zrusNativniSystemovouIme() {
+    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (!plugin?.hideIme) return;
+
+    try {
+      Promise.resolve(plugin.hideIme({ force: true })).catch(() => {});
+    } catch (_error) {}
+  }
+
 
   /*
    * FIX 489 – nativní pozdní-IME guard je aktivní jen po dobu, kdy je
@@ -760,6 +776,18 @@
       nastavSystemoveAtributy(editor);
       if (panel && !panel.hidden) skryj();
       if (otevritButton) otevritButton.hidden = true;
+
+      /*
+       * FIX 492 – otevriVHostu() volá pripravEditor() těsně PŘED
+       * editor.focus(). Microtask proto proběhne až po dokončení tohoto
+       * synchronního focusu a dává native vrstvě druhý, deterministický
+       * startovací bod i tehdy, když první focusin přišel příliš brzy.
+       */
+      queueMicrotask(() => {
+        if (ziskejZdrojKlavesnice() !== "system") return;
+        if (!jeEditorVOtevrenemModalu(editor) || document.activeElement !== editor) return;
+        zobrazNativniSystemovouIme();
+      });
       return;
     }
 
@@ -1260,6 +1288,7 @@
         if (panel && !panel.hidden) skryj();
         if (otevritButton) otevritButton.hidden = true;
       } else {
+        zrusNativniSystemovouIme();
         ukonciSystemMode(editor);
         potlacAutomatickeOtevreni = false;
       }
@@ -2077,6 +2106,12 @@
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
     nastavNativniImeGuardAktivni(false);
+
+    /* FIX 492 – zruš i případné opožděné showIme retry. zavriVHostu()
+       volá skryj() také v režimu Systémová, takže tím zároveň zajistíme,
+       že se Gboard po zavření poznámky neobjeví až na HOME. */
+    zrusNativniSystemovouIme();
+
     if (!panel) return;
     flushCompose("hide", false);
     panel.hidden = true;
@@ -2172,6 +2207,33 @@
     pripravEditor(event.target);
     if (potlacAutomatickeOtevreni) return;
     zobraz();
+  }, true);
+
+  /*
+   * FIX 492 – pokud je editor už fokusovaný, další tap do contenteditable
+   * nemusí vyvolat nový focusin. Pointerup je proto bezpečný explicitní
+   * retry pouze pro viditelný V2 editor v režimu Systémová. Nic neblokuje
+   * a nesahá do selection; native vrstva si sama ohlídá source=system.
+   */
+  document.addEventListener("pointerup", (event) => {
+    if (ziskejZdrojKlavesnice() !== "system") return;
+    const cil = event.target instanceof Element
+      ? event.target.closest(".ln-v2-editor[data-ln-v2-editor]")
+      : null;
+    if (!cil || !jeEditorVOtevrenemModalu(cil)) return;
+
+    aktivniEditor = cil;
+    systemovyEditor = cil;
+    nastavSystemoveAtributy(cil);
+
+    requestAnimationFrame(() => {
+      if (ziskejZdrojKlavesnice() !== "system") return;
+      if (!jeEditorVOtevrenemModalu(cil)) return;
+      if (document.activeElement !== cil) {
+        try { cil.focus({ preventScroll: true }); } catch (_error) {}
+      }
+      if (document.activeElement === cil) zobrazNativniSystemovouIme();
+    });
   }, true);
 
   document.addEventListener("pointerdown", (event) => {
@@ -2410,7 +2472,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "SYSTEM-IME-FOCUS-491",
+    verze: "SYSTEM-IME-HANDSHAKE-492",
     zobraz,
     skryj,
     nastavLayout,

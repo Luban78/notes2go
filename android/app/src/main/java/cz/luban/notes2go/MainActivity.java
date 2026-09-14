@@ -196,6 +196,12 @@ public class MainActivity extends BridgeActivity {
     View decorView = getWindow().getDecorView();
 
     decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+      /*
+       * FIX 492 – 489 už ukládal procesní `imeGuardAktivni`, ale MainActivity
+       * jej omylem nekontrolovala. Bez této podmínky by zvolená LubaKeyboard
+       * blokovala Gboard i v obyčejném hledání/loginu/chatu. Pozdní IME guard
+       * smí běžet jen po dobu skutečně otevřené vlastní klávesnice editoru.
+       */
       if (!pouzivaLubaKeyboard() || !LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) {
         return;
       }
@@ -213,10 +219,7 @@ public class MainActivity extends BridgeActivity {
       decorView.post(() -> {
         lubaImeHideNaplanovano = false;
 
-        if (
-          pouzivaLubaKeyboard()
-            && LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()
-        ) {
+        if (pouzivaLubaKeyboard() && LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) {
           schovejSystemovouImeProLubaKeyboard(false);
         }
       });

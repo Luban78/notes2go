@@ -9,6 +9,8 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -37,6 +39,13 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
    */
   private static volatile boolean imeGuardAktivni = false;
 
+  /*
+   * FIX 492 – každé show/hide/source přepnutí dostane vlastní generaci.
+   * Opožděný retry z předchozího editoru se tak nemůže "probudit" až
+   * po zavření poznámky a otevřít Gboard na HOME.
+   */
+  private static final AtomicInteger imeShowGeneration = new AtomicInteger(0);
+
   private static SharedPreferences prefs(Context context) {
     return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
   }
@@ -54,6 +63,9 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
   public void setSource(PluginCall call) {
     String source = call.getString("source", SOURCE_LUBA);
     String normalized = SOURCE_SYSTEM.equals(source) ? SOURCE_SYSTEM : SOURCE_LUBA;
+
+    /* Každá změna zdroje ruší případný rozběhnutý showIme handshake. */
+    imeShowGeneration.incrementAndGet();
 
     if (SOURCE_SYSTEM.equals(normalized)) {
       imeGuardAktivni = false;
@@ -90,11 +102,19 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
 
 
   /*
-   * FIX 490 – po přepnutí LubaKeyboard -> systémová klávesnice může mít
-   * WebView stále starý InputConnection vytvořený s inputmode=none.
-   * restartInput() donutí WebView znovu načíst aktuální editorové atributy
-   * a showSoftInput()/WindowInsetsController.show() pak otevřou IME bez
-   * restartu celé aplikace. Metoda je striktně no-op mimo source=system.
+   * FIX 492 – deterministický WebView ↔ native IME handshake.
+   *
+   * Android 16 / moderní WebView někdy ještě nemá nový InputConnection
+   * připravený ve stejném UI průchodu, ve kterém JS editor dostal focus.
+   * Jediné restartInput()+showSoftInput() proto fungovalo náhodně.
+   *
+   * Po skutečném JS focusu editoru provedeme krátký native handshake:
+   *   1) restartInput + show,
+   *   2) po layoutu ověříme WindowInsets,
+   *   3) pokud IME stále není vidět, zopakujeme pokus maximálně 2×.
+   *
+   * Každý pokus nese generation token. hideIme()/setSource() token změní,
+   * takže opožděný retry nikdy nesmí otevřít Gboard po zavření editoru.
    */
   @PluginMethod
   public void showIme(PluginCall call) {
@@ -109,35 +129,79 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
       return;
     }
 
+    final int generation = imeShowGeneration.incrementAndGet();
+
     activity.runOnUiThread(() -> {
-      try {
-        View webView =
-          getBridge() != null && getBridge().getWebView() != null
-            ? getBridge().getWebView()
-            : activity.getWindow().getDecorView();
+      View webView =
+        getBridge() != null && getBridge().getWebView() != null
+          ? getBridge().getWebView()
+          : activity.getWindow().getDecorView();
 
-        webView.requestFocus();
-
-        InputMethodManager imm =
-          (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-
-        if (imm != null) {
-          imm.restartInput(webView);
-          imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-          WindowInsetsController controller = activity.getWindow().getInsetsController();
-          if (controller != null) {
-            controller.show(WindowInsets.Type.ime());
-          }
-        }
-      } catch (Exception ignored) {
-        /* Přepínač klávesnice nesmí rozbít editor ani při chybě IME. */
-      }
-
+      /* post() zaručí, že první pokus proběhne až po aktuálním focus/layout
+         průchodu WebView, ne uvnitř stejného JS → native callbacku. */
+      webView.post(() -> zkusZobrazitIme(activity, webView, generation, 0));
       call.resolve();
     });
+  }
+
+  private void zkusZobrazitIme(
+    Activity activity,
+    View webView,
+    int generation,
+    int attempt
+  ) {
+    if (generation != imeShowGeneration.get()) {
+      return;
+    }
+
+    if (pouzivaLubaKeyboard(getContext())) {
+      return;
+    }
+
+    try {
+      webView.requestFocus();
+
+      InputMethodManager imm =
+        (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+
+      if (imm != null) {
+        imm.restartInput(webView);
+        imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        WindowInsetsController controller = activity.getWindow().getInsetsController();
+        if (controller != null) {
+          controller.show(WindowInsets.Type.ime());
+        }
+      }
+    } catch (Exception ignored) {
+      /* Další ověřovací pokus může stále uspět. */
+    }
+
+    if (attempt >= 2) {
+      return;
+    }
+
+    long delayMs = attempt == 0 ? 80L : 180L;
+    webView.postDelayed(() -> {
+      if (generation != imeShowGeneration.get()) {
+        return;
+      }
+
+      if (pouzivaLubaKeyboard(getContext())) {
+        return;
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        WindowInsets insets = activity.getWindow().getDecorView().getRootWindowInsets();
+        if (insets != null && insets.isVisible(WindowInsets.Type.ime())) {
+          return;
+        }
+      }
+
+      zkusZobrazitIme(activity, webView, generation, attempt + 1);
+    }, delayMs);
   }
 
   /*
@@ -150,7 +214,12 @@ public class LubaNoteKeyboardStatePlugin extends Plugin {
    */
   @PluginMethod
   public void hideIme(PluginCall call) {
-    if (!pouzivaLubaKeyboard(getContext())) {
+    boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
+
+    /* Zneplatni všechny rozběhnuté showIme retry ještě před další kontrolou. */
+    imeShowGeneration.incrementAndGet();
+
+    if (!force && !pouzivaLubaKeyboard(getContext())) {
       call.resolve();
       return;
     }
