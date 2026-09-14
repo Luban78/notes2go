@@ -394,6 +394,23 @@
     } catch (_error) {}
   }
 
+
+  /*
+   * FIX 489 – nativní pozdní-IME guard je aktivní jen po dobu, kdy je
+   * skutečně otevřená LubaKeyboard v editoru. Tím neblokuje systémovou
+   * klávesnici v hledání, loginu, chatu ani jiných běžných inputech.
+   */
+  function nastavNativniImeGuardAktivni(active) {
+    const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (!plugin?.setGuardActive) return;
+
+    try {
+      Promise.resolve(plugin.setGuardActive({
+        active: Boolean(active) && ziskejZdrojKlavesnice() !== "system"
+      })).catch(() => {});
+    } catch (_error) {}
+  }
+
   function nastavLubaAtributy(editor) {
     if (!editor) return;
     editor.setAttribute("inputmode", "none");
@@ -677,6 +694,21 @@
     if (editor && editor !== systemovyEditor && ziskejZdrojKlavesnice() !== "system") {
       nastavLubaAtributy(editor);
     }
+
+    /*
+     * FIX 489 – Android 16 / moderní WebView umí znovu otevřít systémovou IME
+     * i několik sekund PO správném focusu editoru. `navigator.virtualKeyboard`
+     * v Android WebView není spolehlivá nativní brzda, proto při aktivní
+     * LubaKeyboard požádáme i malý Capacitor plugin o skutečné hide IME.
+     * V systémovém režimu se plugin sám okamžitě vypne.
+     */
+    const keyboardStatePlugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+    if (ziskejZdrojKlavesnice() !== "system" && keyboardStatePlugin?.hideIme) {
+      try {
+        Promise.resolve(keyboardStatePlugin.hideIme()).catch(() => {});
+      } catch (_error) {}
+    }
+
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
   }
 
@@ -1944,6 +1976,7 @@
     const editor = aktivniEditor || najdiEditor();
     if (!editor) return;
     if (ziskejZdrojKlavesnice() === "system" || editor === systemovyEditor) {
+      nastavNativniImeGuardAktivni(false);
       systemovyEditor = editor;
       nastavSystemoveAtributy(editor);
       return;
@@ -1956,6 +1989,7 @@
     panel.hidden = false;
     otevritButton.hidden = true;
     document.body.classList.add("ln-luba-klavesnice-open");
+    nastavNativniImeGuardAktivni(true);
     nastavAkcniPanel(false);
     vykresliKlavesnici();
     requestAnimationFrame(nastavVysku);
@@ -1990,6 +2024,7 @@
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
+    nastavNativniImeGuardAktivni(false);
     if (!panel) return;
     flushCompose("hide", false);
     panel.hidden = true;
@@ -2312,7 +2347,7 @@
   synchronizujNativniZdrojKlavesnice();
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "SETTINGS-SYSTEM-459",
+    verze: "NATIVE-IME-GUARD-489",
     zobraz,
     skryj,
     nastavLayout,

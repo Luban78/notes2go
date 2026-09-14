@@ -18,6 +18,13 @@ public class MainActivity extends BridgeActivity {
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
 
+  /*
+   * FIX 489 – ochrana proti pozdnímu otevření systémové IME během psaní.
+   * Flag brání tomu, aby několik global-layout událostí během jedné animace
+   * naplánovalo desítky stejných hide operací.
+   */
+  private boolean lubaImeHideNaplanovano = false;
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     registerPlugin(
@@ -39,6 +46,7 @@ public class MainActivity extends BridgeActivity {
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();
+    nainstalujLubaImeGuard();
 
     getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
@@ -165,6 +173,54 @@ public class MainActivity extends BridgeActivity {
     if (imm != null) {
       imm.hideSoftInputFromWindow(decorView.getWindowToken(), 0);
     }
+  }
+
+
+  /*
+   * FIX 489 – Android 16 / moderní WebView může systémovou IME znovu otevřít
+   * až během aktivního psaní, tedy bez onResume/focus lifecycle události.
+   *
+   * Neinterceptujeme WindowInsets ani layout aplikace. Jen pasivně sledujeme
+   * global-layout a přes rootWindowInsets poznáme, že se skutečná Android IME
+   * právě stala viditelnou. Pokud je v LubaNote zvolená LubaKeyboard, IME
+   * okamžitě schováme, ale WebView focus NESMAŽEME – editor a caret zůstanou.
+   *
+   * Při explicitní volbě systémové klávesnice `pouzivaLubaKeyboard()` vrátí
+   * false a guard je úplně neaktivní.
+   */
+  private void nainstalujLubaImeGuard() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      return;
+    }
+
+    View decorView = getWindow().getDecorView();
+
+    decorView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+      if (!pouzivaLubaKeyboard() || !LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()) {
+        return;
+      }
+
+      WindowInsets insets = decorView.getRootWindowInsets();
+      if (insets == null || !insets.isVisible(WindowInsets.Type.ime())) {
+        return;
+      }
+
+      if (lubaImeHideNaplanovano) {
+        return;
+      }
+
+      lubaImeHideNaplanovano = true;
+      decorView.post(() -> {
+        lubaImeHideNaplanovano = false;
+
+        if (
+          pouzivaLubaKeyboard()
+            && LubaNoteKeyboardStatePlugin.jeImeGuardAktivni()
+        ) {
+          schovejSystemovouImeProLubaKeyboard(false);
+        }
+      });
+    });
   }
 
   @Override
