@@ -2174,6 +2174,11 @@
     }
 
     refs.fab.setAttribute("aria-expanded", String(state.panelOpen));
+    refs.dockVd?.classList.toggle("active", state.panelOpen);
+
+    document.dispatchEvent(new CustomEvent("lubanote:visual-debug-visibility", {
+      detail: { open: Boolean(state.panelOpen) }
+    }));
   }
 
   function centerPanel() {
@@ -2266,11 +2271,18 @@
   }
 
   function toggleMinimize() {
-    state.minimized = !state.minimized;
-    refs.panel.classList.toggle("ln-vd-minimized", state.minimized);
-    refs.minimize.setAttribute("aria-expanded", String(!state.minimized));
-    refs.minimize.textContent = state.minimized ? "▢" : "—";
-    savePanelState();
+    /*
+     * DEBUG DOCK 506:
+     * Sbalení Visual Debugu už nevytváří druhou plovoucí hlavičku.
+     * Celý panel se schová zpět do společného docku VD/DH. Pozice
+     * plného panelu zůstává v inline style, takže po opětovném otevření
+     * pokračuje přesně tam, kam si ho uživatel přesunul.
+     */
+    state.minimized = false;
+    refs.panel.classList.remove("ln-vd-minimized");
+    refs.minimize.setAttribute("aria-expanded", "false");
+    refs.minimize.textContent = "—";
+    togglePanel(false);
   }
 
   function activePropertyConfig() {
@@ -2449,8 +2461,12 @@
     quickbar.id = "ln-vd-quickbar";
     quickbar.hidden = true;
     quickbar.innerHTML = `
+      <div id="ln-vd-dock-tabs" role="group" aria-label="Diagnostické nástroje">
+        <button id="ln-vd-dock-vd" type="button" aria-label="Otevřít Visual Debug" title="Visual Debug">VD</button>
+        <button id="ln-vd-dock-dh" type="button" aria-label="Otevřít Debug Hub" title="Debug Hub">DH</button>
+      </div>
       <button id="ln-vd-quick-minus" type="button" aria-label="Zmenšit hodnotu">−</button>
-      <button id="ln-vd-fab" type="button" title="Otevřít nebo skrýt Visual Debug" aria-label="Visual Debug">🛠</button>
+      <button id="ln-vd-fab" type="button" title="Rychlé ladění / Visual Debug" aria-label="Rychlé ladění">🛠</button>
       <button id="ln-vd-quick-plus" type="button" aria-label="Zvětšit hodnotu">+</button>
       <span id="ln-vd-quick-status"><b id="ln-vd-quick-label">parametr</b><small id="ln-vd-quick-value">–</small></span>
     `;
@@ -2611,6 +2627,8 @@
       quickbar,
       quickMinus: quickbar.querySelector("#ln-vd-quick-minus"),
       quickPlus: quickbar.querySelector("#ln-vd-quick-plus"),
+      dockVd: quickbar.querySelector("#ln-vd-dock-vd"),
+      dockDh: quickbar.querySelector("#ln-vd-dock-dh"),
       quickLabel: quickbar.querySelector("#ln-vd-quick-label"),
       quickValue: quickbar.querySelector("#ln-vd-quick-value"),
       panel,
@@ -2716,6 +2734,20 @@
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) stopQuickPressRepeat();
     });
+    refs.dockVd?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePanel(true);
+    });
+    refs.dockDh?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.LubaNoteDebugHub?.open?.();
+    });
+    document.addEventListener("lubanote:debug-hub-visibility", event => {
+      refs.dockDh?.classList.toggle("active", Boolean(event.detail?.open));
+    });
+
     refs.close.addEventListener("click", () => togglePanel(false));
     refs.minimize.addEventListener("click", toggleMinimize);
     refs.panelOpacity.addEventListener("input", () => {

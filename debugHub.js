@@ -1997,9 +1997,20 @@ async function zkopirujTagVdReport(tlacitko) {
       }
 
       if (akce === "min") {
-        nastavHubMinimalizovany(
-          !hub.classList.contains("ln-dh-minimized")
-        );
+        /*
+         * DEBUG DOCK 506:
+         * Minimalizace už nenechává samostatnou 54px hlavičku. Debug Hub
+         * se celý schová do společného VD/DH docku; jeho geometrie plného
+         * okna zůstává zachovaná a po dalším otevření se obnoví.
+         */
+        nastavMenuModuluOtevrene(false);
+        if (hub.classList.contains("ln-dh-minimized")) {
+          nastavHubMinimalizovany(false);
+        }
+        hub.hidden = true;
+        document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
+          detail: { open: false }
+        }));
         return;
       }
 
@@ -2010,6 +2021,9 @@ async function zkopirujTagVdReport(tlacitko) {
          */
         nastavMenuModuluOtevrene(false);
         hub.hidden = true;
+        document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
+          detail: { open: false }
+        }));
       }
     });
 
@@ -2080,6 +2094,9 @@ async function zkopirujTagVdReport(tlacitko) {
     aktualizujStavHubu();
     srovnejHubDoViewportu();
     prekresli();
+    document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
+      detail: { open: true }
+    }));
   }
 
   function pripojKVisualDebugu(panel) {

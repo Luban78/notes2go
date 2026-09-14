@@ -657,7 +657,7 @@ body.ln-vd-picking {
   z-index: 2147483600 !important;
   display: grid !important;
   grid-template-columns: 46px 50px 46px !important;
-  grid-template-rows: 50px auto !important;
+  grid-template-rows: 30px 50px auto !important;
   align-items: center !important;
   gap: 4px !important;
   padding: 5px !important;
@@ -821,3 +821,57 @@ body.ln-vd-picking {
   padding-inline: 5px !important;
   white-space: nowrap !important;
 }
+
+
+/* =============================================================
+   VISUAL DEBUG 506 – SPOLEČNÝ DOCK VD / DH
+   Když jsou plná okna sbalená, zůstává jen tento jeden malý panel.
+   ============================================================= */
+#ln-vd-dock-tabs {
+  grid-column: 1 / -1 !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  width: 100% !important;
+  height: 28px !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(24, 239, 125, 0.52) !important;
+  border-radius: 10px !important;
+  background: rgba(2, 19, 21, 0.92) !important;
+}
+
+#ln-vd-dock-tabs > button {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: rgba(238, 248, 244, 0.82) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font: 850 12px/1 system-ui, sans-serif !important;
+  letter-spacing: 0.35px !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+}
+
+#ln-vd-dock-tabs > button + button {
+  border-left: 1px solid rgba(24, 239, 125, 0.36) !important;
+}
+
+#ln-vd-dock-tabs > button.active {
+  color: #06130e !important;
+  background: #18ef7d !important;
+}
+
+#ln-vd-dock-tabs > button:active {
+  filter: brightness(1.08) !important;
+}
+
+/* Tlačítka − / 🛠 / + zůstávají ve druhém řádku. */
+#ln-vd-quick-minus { grid-column: 1 !important; grid-row: 2 !important; }
+#ln-vd-fab { grid-column: 2 !important; grid-row: 2 !important; }
+#ln-vd-quick-plus { grid-column: 3 !important; grid-row: 2 !important; }
+#ln-vd-quick-status { grid-row: 3 !important; }
