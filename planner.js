@@ -412,12 +412,63 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
       });
   }
 
-  const plannedItemsVPoznamce =
+  let plannedItemsVPoznamce =
     Array.isArray(note.plannedItems)
       ? note.plannedItems
       : [];
 
-  const lokalniItems = getLocalPlannedItems();
+  let lokalniItems = getLocalPlannedItems();
+
+  /*
+   * PATCH 548 – Planner položka celé poznámky nesmí držet starou kopii
+   * názvu. Selection a TODO mají vlastní text a proto se jich nedotýkáme.
+   * Historické položky bez sourceType považujeme za starý typ "note".
+   */
+  const aktualniNazevPoznamky =
+    String(
+      note.title ||
+      note.note ||
+      "Bez názvu"
+    ).trim() || "Bez názvu";
+
+  let zmenenNazevVPoznamce = false;
+  let zmenenNazevLokalne = false;
+
+  const aktualizujNazevCelePoznamky = (item) => {
+    if (
+      !item ||
+      item.sourceNoteId !== note.id ||
+      ![undefined, null, "", "note"].includes(item.sourceType) ||
+      item.text === aktualniNazevPoznamky
+    ) {
+      return item;
+    }
+
+    return {
+      ...item,
+      text: aktualniNazevPoznamky
+    };
+  };
+
+  plannedItemsVPoznamce = plannedItemsVPoznamce.map((item) => {
+    const aktualizovany = aktualizujNazevCelePoznamky(item);
+    if (aktualizovany !== item) {
+      zmenenNazevVPoznamce = true;
+    }
+    return aktualizovany;
+  });
+
+  lokalniItems = lokalniItems.map((item) => {
+    const aktualizovany = aktualizujNazevCelePoznamky(item);
+    if (aktualizovany !== item) {
+      zmenenNazevLokalne = true;
+    }
+    return aktualizovany;
+  });
+
+  if (zmenenNazevVPoznamce) {
+    note.plannedItems = plannedItemsVPoznamce;
+  }
 
   /*
    * Starší data mohla mít Planner položku jen v lokálním seznamu.
@@ -470,6 +521,10 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
     });
 
   if (removedItems.length === 0) {
+    if (zmenenNazevLokalne) {
+      savePlannedItems(lokalniItems);
+    }
+
     return note;
   }
 

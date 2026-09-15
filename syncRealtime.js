@@ -17,6 +17,7 @@
   const KANAL_PREFIX = "lubanote-sync-signal";
   const UDALOST_ZAPISU = "lubanote:cloud-write-confirmed";
   const ZPOZDENI_ODESLANI_MS = 120;
+  const ZPOZDENI_REFRESH_STITKU_MS = 180;
   const ZPOZDENI_PRIJMU_MS = 260;
   const ZPOZDENI_BLOKOVANE_POZNAMKY_MS = 700;
   const ZPOZDENI_OPAKOVANI_PO_CHYBE_MS = 1200;
@@ -34,6 +35,7 @@
   let cekajiciVzdalenyId = new Map();
   let poradiVzdalenychSignalu = 0;
   let cekajiciGlobalniSignal = 0;
+  let casovacRefreshStitku = null;
 
   function ziskejDeviceId() {
     const zApi =
@@ -91,6 +93,37 @@
     } catch {
       // Starý kanál nesmí blokovat další připojení.
     }
+  }
+
+  function zpracujVzdalenouZmenuStitku(payload) {
+    const data = payload?.payload || payload || {};
+    const vlastniDeviceId = ziskejDeviceId();
+
+    if (
+      data.deviceId &&
+      vlastniDeviceId &&
+      data.deviceId === vlastniDeviceId
+    ) {
+      return;
+    }
+
+    clearTimeout(casovacRefreshStitku);
+    casovacRefreshStitku = setTimeout(() => {
+      casovacRefreshStitku = null;
+
+      if (
+        navigator.onLine &&
+        typeof loadTagsFromSupabase === "function"
+      ) {
+        Promise.resolve(loadTagsFromSupabase())
+          .catch((error) => {
+            console.warn(
+              "Realtime obnova štítků selhala:",
+              error
+            );
+          });
+      }
+    }, ZPOZDENI_REFRESH_STITKU_MS);
   }
 
   function zpracujVzdalenySignal(payload) {
@@ -178,6 +211,12 @@
         "broadcast",
         { event: "notes-changed" },
         zpracujVzdalenySignal
+      );
+
+      kanal.on(
+        "broadcast",
+        { event: "tags-changed" },
+        zpracujVzdalenouZmenuStitku
       );
 
       const prihlasen = await new Promise(
@@ -618,6 +657,32 @@
     return false;
   }
 
+  async function oznamZmenuStitku(detail = {}) {
+    if (!navigator.onLine) {
+      return false;
+    }
+
+    const kanalPripraven =
+      await pripravRealtimeKanal();
+
+    if (!kanalPripraven || !realtimeKanal) {
+      return false;
+    }
+
+    const vysledek = await realtimeKanal.send({
+      type: "broadcast",
+      event: "tags-changed",
+      payload: {
+        deviceId: ziskejDeviceId(),
+        tagId: detail?.tagId || null,
+        reason: detail?.reason || "update",
+        sentAt: new Date().toISOString()
+      }
+    });
+
+    return vysledek === "ok";
+  }
+
   window.addEventListener(
     UDALOST_ZAPISU,
     (event) => {
@@ -681,6 +746,7 @@
     pockejPredOtevrenim:
       pockejNaCerstvouPoznamkuPredOtevrenim,
     spustCekajiciSync: spustVzdalenySync,
+    oznamZmenuStitku,
     ziskejCekajiciId: () =>
       Array.from(cekajiciVzdalenyId.keys())
   };

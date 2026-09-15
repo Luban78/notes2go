@@ -3136,6 +3136,32 @@ async function zmenBarvuStitku(tag, novaBarva) {
     } :
     aktualniTag
   );
+
+  /*
+   * PATCH 548 – barva štítku se musí projevit okamžitě i bez reloadu.
+   * Současně obnovíme bezpečnou start cache a ostatním právě připojeným
+   * zařízením pošleme jen malý realtime signál; žádné poznámky se kvůli
+   * tomu nestahují. Přijímač obnoví pouze malou tabulku tags.
+   */
+  ulozStitkyDoStartCache(user.id, syncedTags);
+  renderTagFilters();
+
+  if (typeof renderTasks === "function") {
+    renderTasks();
+  }
+
+  Promise.resolve(
+    window.LubaNoteSyncRealtime
+      ?.oznamZmenuStitku?.({
+        tagId: tag.id,
+        reason: "color"
+      })
+  ).catch((error) => {
+    console.warn(
+      "Realtime oznámení změny štítku selhalo:",
+      error
+    );
+  });
   
   return true;
 }
@@ -4286,7 +4312,20 @@ categoryTaskButton.addEventListener("click", () => {
 areaFilterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     vypniFiltrSkrytych();
-    activeAreaFilter = button.dataset.areaFilter;
+
+    const vybranaOblast =
+      button.dataset.areaFilter || "all";
+
+    /*
+     * PATCH 548 – Home / Work fungují jako přepínače.
+     * Druhý klik na právě aktivní oblast vrátí hlavní seznam na Vše.
+     * Tlačítko Vše samotné zůstává idempotentní.
+     */
+    activeAreaFilter =
+      vybranaOblast !== "all" &&
+      activeAreaFilter === vybranaOblast
+        ? "all"
+        : vybranaOblast;
 
     /*
      * PATCH 541 – Home / Work / Vše jsou hlavní oblasti.
