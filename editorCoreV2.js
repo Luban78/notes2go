@@ -4662,7 +4662,14 @@
     editor?.classList?.remove("ln-v2-list-drag-mode");
     schovejV2ListDragPomucky();
     v2DragSeznamu = null;
-    if (!zachovatVyber) vybranaPolozkaSeznamuId = "";
+    if (!zachovatVyber) {
+      /* FIX 534 – MOVE žije jen po dobu jednoho longpress+drag gesta.
+         Po puštění prstu nestačí smazat pouze ID: musíme odstranit i
+         vizuální třídu, jinak řádek vypadá dál označený, i když engine už
+         žádný MOVE stav nemá. Prahy ani vlastní drag logiku neměníme. */
+      vybranaPolozkaSeznamuId = "";
+      aplikujV2OznaceniPresunovanehoPodstromu("");
+    }
   }
 
   function aktivujV2MoveSeznamu() {
