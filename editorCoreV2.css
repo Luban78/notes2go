@@ -217,13 +217,10 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   outline: none;
 }
 
-.ln-v2-editor .ln-v2-obrazek[data-velikost="prizpusobit"],
-.ln-v2-editor .ln-v2-obrazek[data-velikost="100"] {
-  float: none;
-  clear: both;
-  width: calc(100% - 8px);
-  margin: 14px auto;
-}
+/* FIX 537 – šířku figure nastavuje Core V2 v pixelech podle naturalWidth.
+   100 % = 100 % originálu, 50 % = 50 % originálu. max-width je pouze
+   bezpečnostní strop vůči editoru; žádná velikost nesmí malý obrázek
+   roztahovat jen proto, že má editor více místa. */
 
 .ln-v2-editor .ln-v2-obrazek[data-zarovnani="vlevo"] {
   float: left;
@@ -241,11 +238,6 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   float: none;
   clear: both;
   margin: 14px auto;
-}
-
-.ln-v2-editor .ln-v2-obrazek[data-velikost="50"][data-zarovnani="vlevo"],
-.ln-v2-editor .ln-v2-obrazek[data-velikost="50"][data-zarovnani="vpravo"] {
-  width: calc(50% - 8px);
 }
 
 /* V2.12 – stejné vizuální stavy jako produkční drag, ale bez přesunu DOMu. */

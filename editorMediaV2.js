@@ -27,6 +27,7 @@
   document.body.append(imageInput, cameraInput);
 
   let nahledObrazku = null;
+  let uklidPinchNahledu = null;
   let probihaVlozeni = false;
 
   function bridge() {
@@ -225,10 +226,128 @@
     otevriGalerii();
   }
 
+  /* ========================================
+     FIX 536 – FULLSCREEN PINCH-TO-ZOOM
+     Dvěma prsty lze obrázek plynule zvětšit/zmenšit. Po zvětšení jej lze
+     jedním prstem posouvat. Nejde o page zoom; mění se jen fullscreen img.
+  ======================================== */
+  function zapojPinchZoomNahledu(nahled) {
+    if (!nahled) return () => {};
+
+    const body = document.body;
+    const ukazatele = new Map();
+    let meritko = 1;
+    let posunX = 0;
+    let posunY = 0;
+    let pinchStart = null;
+    let panStart = null;
+
+    const omez = (hodnota, min, max) => Math.min(max, Math.max(min, hodnota));
+    const vzdalenost = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+    const stred = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+    const vykresli = () => {
+      nahled.style.transform = `translate3d(${posunX}px, ${posunY}px, 0) scale(${meritko})`;
+      nahled.classList.toggle("lubaNoteImagePreviewImgZoomed", meritko > 1.01);
+    };
+
+    const pripravPanZeZbyvajiciho = () => {
+      if (ukazatele.size !== 1 || meritko <= 1.01) {
+        panStart = null;
+        return;
+      }
+      const bod = Array.from(ukazatele.values())[0];
+      panStart = { x: bod.x, y: bod.y, posunX, posunY };
+    };
+
+    const pointerDown = (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      ukazatele.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      try { nahled.setPointerCapture?.(event.pointerId); } catch (_error) {}
+
+      if (ukazatele.size >= 2) {
+        const [a, b] = Array.from(ukazatele.values()).slice(0, 2);
+        pinchStart = {
+          vzdalenost: Math.max(1, vzdalenost(a, b)),
+          stred: stred(a, b),
+          meritko,
+          posunX,
+          posunY
+        };
+        panStart = null;
+        body.classList.add("lubaNoteImagePreviewPinching");
+      } else if (meritko > 1.01) {
+        pripravPanZeZbyvajiciho();
+      }
+    };
+
+    const pointerMove = (event) => {
+      if (!ukazatele.has(event.pointerId)) return;
+      ukazatele.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (ukazatele.size >= 2 && pinchStart) {
+        event.preventDefault();
+        const [a, b] = Array.from(ukazatele.values()).slice(0, 2);
+        const aktualniStred = stred(a, b);
+        const pomer = vzdalenost(a, b) / pinchStart.vzdalenost;
+        meritko = omez(pinchStart.meritko * pomer, 1, 6);
+        posunX = pinchStart.posunX + (aktualniStred.x - pinchStart.stred.x);
+        posunY = pinchStart.posunY + (aktualniStred.y - pinchStart.stred.y);
+        if (meritko <= 1.01) {
+          meritko = 1;
+          posunX = 0;
+          posunY = 0;
+        }
+        vykresli();
+        return;
+      }
+
+      if (ukazatele.size === 1 && meritko > 1.01 && panStart) {
+        event.preventDefault();
+        posunX = panStart.posunX + (event.clientX - panStart.x);
+        posunY = panStart.posunY + (event.clientY - panStart.y);
+        vykresli();
+      }
+    };
+
+    const pointerKonec = (event) => {
+      ukazatele.delete(event.pointerId);
+      try { nahled.releasePointerCapture?.(event.pointerId); } catch (_error) {}
+      if (ukazatele.size < 2) {
+        pinchStart = null;
+        body.classList.remove("lubaNoteImagePreviewPinching");
+      }
+      pripravPanZeZbyvajiciho();
+      if (ukazatele.size === 0 && meritko <= 1.01) {
+        meritko = 1;
+        posunX = 0;
+        posunY = 0;
+        vykresli();
+      }
+    };
+
+    nahled.addEventListener("pointerdown", pointerDown);
+    nahled.addEventListener("pointermove", pointerMove);
+    nahled.addEventListener("pointerup", pointerKonec);
+    nahled.addEventListener("pointercancel", pointerKonec);
+
+    return () => {
+      body.classList.remove("lubaNoteImagePreviewPinching");
+      nahled.removeEventListener("pointerdown", pointerDown);
+      nahled.removeEventListener("pointermove", pointerMove);
+      nahled.removeEventListener("pointerup", pointerKonec);
+      nahled.removeEventListener("pointercancel", pointerKonec);
+      ukazatele.clear();
+    };
+  }
+
   function zavriNahledObrazku() {
+    try { uklidPinchNahledu?.(); } catch (_error) {}
+    uklidPinchNahledu = null;
     nahledObrazku?.remove();
     nahledObrazku = null;
     document.body.classList.remove("lubaNoteImagePreviewOpen");
+    document.body.classList.remove("lubaNoteImagePreviewPinching");
   }
 
   function otevriNahledObrazku(image) {
@@ -258,6 +377,7 @@
     document.body.append(overlay);
     document.body.classList.add("lubaNoteImagePreviewOpen");
     nahledObrazku = overlay;
+    uklidPinchNahledu = zapojPinchZoomNahledu(nahled);
 
     zavrit.addEventListener("click", (event) => {
       event.preventDefault();

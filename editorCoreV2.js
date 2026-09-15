@@ -1206,6 +1206,44 @@
     }
   }
 
+  /*
+   * FIX 537 – PROCENTA OBRÁZKU JSOU PROCENTA ORIGINÁLU, NE EDITORU.
+   * ----------------------------------------------------------------
+   * 100 % = skutečná pixelová šířka vloženého obrázku.
+   * 50 %  = polovina skutečné pixelové šířky atd.
+   * „Přizpůsobit“ používá 100 % originálu. Existující max-width na figure
+   * je pouze bezpečnostní strop: příliš velký obrázek se zmenší tak, aby
+   * nepřetekl editor, ale malý obrázek se NIKDY automaticky nezvětší.
+   *
+   * Tohle je společná render cesta pro samostatný image blok i image
+   * uvnitř TODO/Bulletu. NEDĚLAT z procent znovu procenta šířky editoru.
+   */
+  function nastavSirkuV2ObrazkuPodleOriginalu(figure, image) {
+    if (!figure || !image) return;
+
+    const aplikuj = () => {
+      const prirozenaSirka = Math.max(0, Math.round(Number(image.naturalWidth || 0)));
+      if (!prirozenaSirka) return;
+
+      const velikost = normalizujVelikostObrazku(figure.dataset.velikost);
+      const procento = velikost === "prizpusobit"
+        ? 100
+        : Math.max(10, Math.min(100, Number.parseFloat(velikost) || 100));
+      const cilovaSirka = Math.max(1, Math.round(prirozenaSirka * procento / 100));
+
+      figure.style.setProperty("--ln-v2-obrazek-sirka", `${cilovaSirka}px`);
+      figure.dataset.prirozenaSirka = String(prirozenaSirka);
+      figure.dataset.cilovaSirka = String(cilovaSirka);
+    };
+
+    if (image.complete && image.naturalWidth > 0) {
+      queueMicrotask(aplikuj);
+      return;
+    }
+
+    image.addEventListener("load", aplikuj, { once: true });
+  }
+
   function vykresliObrazkovyBlok(blok, jeVSeznamu = false) {
     const figure = document.createElement("figure");
     figure.className = `ln-v2-obrazek lubaNoteImage${jeVSeznamu ? " ln-v2-list-image" : ""}`;
@@ -1214,10 +1252,9 @@
     if (jeVSeznamu) figure.dataset.bulletMedia = "true";
     figure.dataset.velikost = normalizujVelikostObrazku(blok.velikost);
     figure.dataset.zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
-    figure.style.setProperty(
-      "--ln-v2-obrazek-sirka",
-      figure.dataset.velikost === "prizpusobit" ? "100%" : `${figure.dataset.velikost}%`
-    );
+    /* FIX 537: finální šířku v px dopočítá naturalWidth po načtení image.
+       100 % zde NESMÍ znamenat šířku editoru. */
+    figure.style.setProperty("--ln-v2-obrazek-sirka", "100%");
     if (blok.attachmentId) figure.dataset.attachmentId = blok.attachmentId;
     figure.contentEditable = "false";
     figure.tabIndex = 0;
@@ -1230,6 +1267,7 @@
     image.tabIndex = -1;
     image.dataset.velikost = figure.dataset.velikost;
     image.dataset.zarovnani = figure.dataset.zarovnani;
+    nastavSirkuV2ObrazkuPodleOriginalu(figure, image);
 
     const settingsButton = document.createElement("button");
     settingsButton.type = "button";
