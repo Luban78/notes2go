@@ -1520,7 +1520,7 @@
      *    nejbližšího stabilního kontejneru.
      *
      *    Příklad bulletů v editoru:
-     *      #modalRichText li::before
+     *      .ln-v2-editor .ln-v2-radek::before
      *
      *    Díky tomu funguje tlačítko „Skupina ×N“ i pro ::before/::after.
      */

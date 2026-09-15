@@ -1076,7 +1076,7 @@
     if (aktivni instanceof HTMLElement) {
       aktivni.blur();
     }
-    modalRichText?.blur?.();
+    window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
 
     const muzeVybiratMisto =
       jeNativniAndroid() && povolitVolbuMista === true;
@@ -1300,7 +1300,7 @@
 
   async function otevriPdfViewer(soubor) {
     const prvky = zajistiPdfViewer();
-    modalRichText?.blur();
+    window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
 
     prvky.title.textContent = soubor.nazevSouboru || "PDF dokument";
     prvky.title.title = soubor.nazevSouboru || "PDF dokument";
@@ -1456,36 +1456,33 @@
   }
 
   function ziskejAktualniTodos() {
-    try {
-      blurSelectedTodoEditor?.();
-    } catch {
-      // TODO nemusí být právě aktivní.
-    }
-
-    return Array.isArray(activeTodos)
-      ? activeTodos.map((todo) => ({
-          ...todo,
-          text: String(todo?.text ?? ""),
-          html: String(todo?.html ?? ""),
-          completed: todo?.completed === true
-        }))
-      : [];
+    const bridge = window.LubaNoteEditorV2Bridge;
+    if (bridge?.jeAktivni?.() !== true) return [];
+    return (bridge.ziskejAktivniTodos?.() || []).map((todo) => ({
+      ...todo,
+      text: String(todo?.text ?? ""),
+      html: String(todo?.html ?? ""),
+      completed: todo?.completed === true
+    }));
   }
 
   function vytvorDataDokumentu() {
-    const title =
-      ziskejNazevPoznamkyZEditoru().trim();
+    const bridge = window.LubaNoteEditorV2Bridge;
+    if (bridge?.jeAktivni?.() !== true || bridge.dokoncModelPredExterniAkci?.() !== true) {
+      throw new Error("Editor Core V2 neposkytl bezpečný obsah pro export.");
+    }
+    const obsah = bridge.ziskejObsahProProdukci?.();
+    if (!obsah) throw new Error("Editor Core V2 neposkytl obsah pro export.");
 
-    const todos = ziskejAktualniTodos();
-
+    const title = ziskejNazevPoznamkyZEditoru().trim();
     return {
       format: FORMAT_LUBANOTE_DOKUMENTU,
       version: 1,
       exportedAt: new Date().toISOString(),
       title,
-      richContent: modalRichText.innerHTML,
-      plainText: modalRichText.innerText,
-      todos,
+      richContent: String(obsah.richContent || ""),
+      plainText: String(obsah.note || ""),
+      todos: Array.isArray(obsah.todos) ? obsah.todos.map((todo) => ({ ...todo })) : [],
       date: modalDate.value || "",
       time: modalTime.value || ""
     };
@@ -2185,10 +2182,10 @@
     secretTaskEnabled = false;
     favoriteEnabled = false;
     reminderEnabled = false;
+    plannedEnabled = false;
 
     priorityTaskButton?.classList.remove("active");
     secretTaskButton?.classList.remove("active");
-
     aktualizujIkonuTajnePoznamky?.();
     updateReminderButton?.(false);
 
@@ -2196,59 +2193,10 @@
     activeTags = [];
     updateTagMenuUI?.();
     closeTagMenu?.();
-
     editorRepeat = null;
-
     nastavNazevPoznamkyVEditoru("");
-    modalText.value = "";
-    modalRichText.innerHTML = "";
-    modalText.hidden = true;
-    modalRichText.hidden = false;
-
-    resetTodos?.();
-    RichTextColors?.reset?.();
-
-    document
-      .getElementById("plannedTextLinks")
-      ?.replaceChildren();
-
-    const planned =
-      document.getElementById("plannedTextLinks");
-
-    if (planned) {
-      planned.hidden = true;
-    }
 
     nastavAktualniDatumCasProNovyDokument();
-    aktualizujPopiskyDataCasu?.();
-    updateModalWeekday?.();
-
-    /*
-     * Otisk ukládáme ještě v prázdném stavu. Importovaný obsah pak
-     * bude správně považovaný za změnu a při zavření se nabídne uložení
-     * do LubaNote.
-     */
-    puvodniOtiskEditoru = vytvorOtiskEditoru();
-  }
-
-  function vlozDokumentDoNovehoEditoru(data) {
-    pripravPrazdnyNovyEditor();
-
-    nastavNazevPoznamkyVEditoru(data.title || "");
-    modalRichText.innerHTML = sanitizujHtml(
-      data.richContent || ""
-    );
-
-    loadTodos?.(data.todos || []);
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(data.date || "")) {
-      modalDate.value = data.date;
-    }
-
-    if (/^\d{2}:\d{2}$/.test(data.time || "")) {
-      modalTime.value = data.time;
-    }
-
     aktualizujPopiskyDataCasu?.();
     updateModalWeekday?.();
     resetujSbaleniNazvuEditoru?.();
@@ -2257,15 +2205,65 @@
     taskModal.classList.add("show");
     document.body.classList.add("noScroll");
 
-    /*
-     * Záměrně NEFOCUSUJEME editor. Otevření dokumentu tedy nevyvolá
-     * mobilní klávesnici, dokud uživatel sám neklepne do textu.
-     */
-    modalRichText.blur();
+    const bridge = window.LubaNoteEditorV2Bridge;
+    const otevreno = bridge?.otevriObsah?.({
+      noteId: taskModal.dataset.draftTaskId || "novy-dokument",
+      richContent: "",
+      note: "",
+      todos: [],
+      plannedItems: []
+    }) === true;
 
-    document.dispatchEvent(
-      new CustomEvent("lubanote:dokument-otevren")
-    );
+    if (!otevreno) {
+      taskModal.classList.remove("show");
+      taskModal.hidden = true;
+      document.body.classList.remove("noScroll");
+      return false;
+    }
+
+    /* Importovaný dokument má být proti prázdnému novému editoru změna. */
+    puvodniOtiskEditoru = vytvorOtiskEditoru();
+    return true;
+  }
+
+  function vlozDokumentDoNovehoEditoru(data) {
+    if (!pripravPrazdnyNovyEditor()) return false;
+
+    nastavNazevPoznamkyVEditoru(data.title || "");
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(data.date || "")) {
+      modalDate.value = data.date;
+    }
+    if (/^\d{2}:\d{2}$/.test(data.time || "")) {
+      modalTime.value = data.time;
+    }
+
+    aktualizujPopiskyDataCasu?.();
+    updateModalWeekday?.();
+    resetujSbaleniNazvuEditoru?.();
+
+    const bridge = window.LubaNoteEditorV2Bridge;
+    const otevreno = bridge?.otevriObsah?.({
+      noteId: taskModal.dataset.draftTaskId || "novy-dokument",
+      richContent: sanitizujHtml(data.richContent || ""),
+      note: String(data.plainText || ""),
+      todos: Array.isArray(data.todos) ? data.todos : [],
+      plannedItems: [],
+      zachovatPuvodniOtisk: true
+    }) === true;
+
+    if (!otevreno) {
+      window.zobrazZpravuAplikace?.(
+        "Otevřít dokument",
+        "Dokument obsahuje prvek, který Core V2 neumí bezpečně importovat. Data nebyla změněna."
+      );
+      return false;
+    }
+
+    /* Import nesmí sám vyvolat klávesnici. */
+    window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
+
+    return true;
   }
 
   async function otevriDokument() {

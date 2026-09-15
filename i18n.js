@@ -250,7 +250,6 @@
     ["#noteLinkBackButton", "aria-label", "editor.backLink"],
     ["#modalTitle", "aria-label", "editor.titleAria"],
     ["#modalTitle", "data-placeholder", "editor.titlePlaceholder"],
-    ["#modalText", "placeholder", "editor.notePlaceholder"],
     ["#newTagInput", "placeholder", "tags.name"],
     ["#newTagModalInput", "placeholder", "tags.name"],
     ["#secretTaskButton", "aria-label", "editor.secret"],

@@ -1266,18 +1266,11 @@ body.sharingReadOnlyOpen {
 }
 
 /* ============================================================
-   S2E.4 – OVLÁDÁNÍ OBRÁZKU = STEJNÉ JAKO V BĚŽNÉM EDITORU
+   S2E.4 – OVLÁDÁNÍ OBRÁZKU VE SHARED READ-ONLY
    ------------------------------------------------------------
-   Shared editor už nepřepisuje rozměry, barvu ani pozici ⚙ / ✕.
-   Autoritou je standardní style.css pro #modalRichText a
-   .todoRichTextInput. Důležité je pouze zabránit tomu, aby se
-   ovladače ukázaly v čtecí kopii TODO (.todoTextValue).
+   Shared čtecí kopie nikdy nezobrazuje editační ovladače obrázku.
+   Aktivní editaci a její ovladače řídí výhradně Core V2.
 ============================================================ */
-
-#taskModal.sharingEditorMode .todoTextValue .lubaNoteImageSettings,
-#taskModal.sharingEditorMode .todoTextValue .lubaNoteImageRemove {
-  display: none !important;
-}
 
 
 /* ============================================================

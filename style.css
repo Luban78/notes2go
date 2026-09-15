@@ -717,24 +717,7 @@ body {
    TEXT POZNÁMKY
 ================================================== */
 
-#modalText {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  padding: 6px 0 2px;
 
-  overflow-y: auto;
-  resize: none;
-
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--color-editor-text);
-
-  font-family: inherit;
-  font-size: var(--font-size);
-  line-height: 1.35;
-}
 
 /* ==================================================
    SPODNÍ LIŠTA
@@ -1661,18 +1644,12 @@ html {
 
 
 .app::-webkit-scrollbar,
-#modalText::-webkit-scrollbar,
-#modalRichText::-webkit-scrollbar,
-.todoList::-webkit-scrollbar,
 .settingsContent::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
 }
 
-#modalText,
-#modalRichText,
-.todoList,
 .settingsContent {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2236,143 +2213,26 @@ button *,
 
 
 
-.todoList {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 10px;
 
-  width: 100%;
-  min-height: 0;
-  padding-top: 12px;
 
-  overflow-y: auto;
-}
 
-.todoList[hidden] {
-  display: none !important;
-}
 
-.todoItem {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
 
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0 14px 0 24px;
 
-  border-radius: 12px;
 
-  color: var(--color-editor-text);
-  font-size: var(--font-size);
 
-  -webkit-tap-highlight-color: transparent;
-}
 
-.todoItem input[type="checkbox"] {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
 
-  margin: 1px 0 0;
-  cursor: pointer;
-}
 
-/* V2.19 – sjednocení TODO checkboxů i v Legacy/PC fallbacku.
-   Nativní square checkbox se mezi platformami liší; LubaNote používá kruh. */
-.todoItem input[type="checkbox"] {
-  -webkit-appearance: none;
-  appearance: none;
-  box-sizing: border-box;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-editor-text);
-}
 
-.todoItem input[type="checkbox"]:checked {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  box-shadow: inset 0 0 0 6px var(--color-accent);
-}
 
-.todoTextDisplay {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
 
-  margin: 0;
-  padding: 0 0 4px;
 
-  color: var(--color-editor-text);
-  font: inherit;
-  font-size: var(--font-size);
-  line-height: 1.35;
 
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-
-  /*
-   * Běžný režim TODO není editovací prvek. Android tak při
-   * long-pressu nezkouší označovat text a gesto patří přesunu.
-   */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  cursor: text;
-}
-
-.todoTextDisplay[hidden],
-.todoTextInput[hidden] {
-  display: none !important;
-}
-
-.todoTextInput {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-
-  margin: 0;
-  padding: 0 0 4px;
-
-  resize: none;
-  overflow: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--color-editor-text);
-
-  font: inherit;
-  font-size: var(--font-size);
-  line-height: 1.35;
-
-  /* V editaci musí zůstat nativní označení a kopírování textu. */
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.todoItem.todoCompleted .todoTextDisplay,
-.todoItem.todoCompleted .todoTextInput {
-  opacity: 0.55;
-  text-decoration: line-through;
-}
 
 
 /* Naplánovaný TODO řádek – stejná akcentní vazba jako plánovaný text. */
-.todoItem.todoPlanned .todoTextValue,
-.todoItem.todoPlanned .todoTextInput,
-.todoItem.todoPlanned .todoRichTextInput {
-  text-decoration-line: underline;
-  text-decoration-color: var(--color-accent);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-}
+
 
 
 /* ========================================
@@ -2380,24 +2240,9 @@ button *,
    Stejný princip jako nový bullet editor
 ======================================== */
 
-.todoItem.todoMoveSelected {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
 
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 12%,
-    transparent
-  );
 
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-}
 
-.todoList.todoMoveMode .todoItem.todoMoveSelected {
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
 
 .todoDragging,
 .todoDragging * {
@@ -2409,64 +2254,18 @@ button *,
  * Při dragování už řádek neschováváme. Stejně jako bullet se fyzicky
  * přesouvá v seznamu a na mobilu zůstává zeslabený pod plovoucím náhledem.
  */
-.todoList.todoDragActive > .todoItem {
-  transition:
-    transform 120ms ease,
-    margin 120ms ease,
-    background 120ms ease,
-    opacity 120ms ease;
-}
 
-.todoItem.todoDraggingItem {
-  position: relative;
-  z-index: 5;
 
-  margin-top: 4px;
-  margin-bottom: 4px;
 
-  transform: scale(1.015);
-
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 10%,
-    transparent
-  );
-
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.14);
-}
 
 /* Jasná cílová čára – stejný princip jako u bulletů. */
-.todoItem.todoDropBefore,
-.todoItem.todoDropAfter {
-  position: relative;
-}
 
-.todoItem.todoDropBefore::after,
-.todoItem.todoDropAfter::after {
-  content: "";
 
-  position: absolute;
-  z-index: 8;
 
-  left: 24px;
-  right: 14px;
 
-  height: 3px;
-  border-radius: 999px;
 
-  background: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-background);
 
-  pointer-events: none;
-}
 
-.todoItem.todoDropBefore::after {
-  top: -7px;
-}
-
-.todoItem.todoDropAfter::after {
-  bottom: -7px;
-}
 
 /* Kopie řádku nad prstem – mobilní princip shodný s bullet preview. */
 .todoDragGhost {
@@ -2550,14 +2349,9 @@ text-overflow: ellipsis;
 }
 
 @media (max-width: 899px) {
-  .todoItem.todoDraggingItem {
-    opacity: 0.28;
-  }
+  
 
-  .todoItem.todoDropBefore::after,
-  .todoItem.todoDropAfter::after {
-    height: 4px;
-  }
+  
 
   .todoDragGhost {
     min-width: 140px;
@@ -2574,11 +2368,7 @@ text-overflow: ellipsis;
  * Textarea existuje pouze v aktivní editaci. V tom okamžiku
  * necháváme Androidu nativní práci s kurzorem, výběrem a Copy.
  */
-.todoTextInput.todoEditing {
-  -webkit-user-select: text;
-  user-select: text;
-  -webkit-touch-callout: default;
-}
+
 
 .pinnedCards.listView {
   flex-direction: column;
@@ -3087,19 +2877,7 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
     font-size: calc(var(--font-size) + 8px);
   }
 
-  #modalText {
-    padding: 18px 2px 14px;
-    line-height: 1.5;
-  }
-
-  .todoList {
-    padding: 18px 0 10px;
-  }
-
-  .todoItem {
-    padding-right: 8px;
-    padding-left: 8px;
-  }
+  
 
   .editorBottomBar {
     position: static;
@@ -3572,94 +3350,22 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   display: none;
 }
 
-#modalText[hidden] {
-  display: none !important;
-}
 
-#modalRichText[hidden] {
-  display: none !important;
-}
 
-#modalRichText {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  padding: 18px 2px 14px;
 
-  overflow-y: auto;
 
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--color-editor-text);
 
-  font-family: inherit;
-  font-size: var(--font-size);
-  line-height: 1.5;
-
-  box-sizing: border-box;
-
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  -webkit-text-size-adjust: 100%;
-text-size-adjust: 100%;
-}
 
 /*
  * Text vložený ze schránky používá základní typografii LubaNote.
  * Záměrně bez !important: uživatel ho může později normálně označit
  * a změnit velikost / styl pomocí toolbaru editoru.
  */
-#modalRichText .lubaNoteVlozenyText,
-.todoRichTextInput .lubaNoteVlozenyText {
-  /*
-   * Ctrl+V v LubaNote znamená čistý text.
-   * Hodnoty jsou záměrně bez !important, aby šlo vložený text
-   * následně normálně formátovat naším editorem.
-   */
-  color: var(--color-editor-text);
 
-  background-color: var(
-    --luba-vlozeny-text-pozadi,
-    var(--color-editor-background)
-  );
 
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Arial,
-    sans-serif;
 
-  font-size: var(--font-size);
-  font-weight: 400;
-  font-style: normal;
-  font-variant: normal;
-  line-height: inherit;
-  letter-spacing: normal;
-  text-decoration: none;
-  text-transform: none;
-  text-shadow: none;
-  white-space: pre-wrap;
-}
 
-#modalRichText .richTextHighlight,
-.todoRichTextInput .richTextHighlight {
-  color: inherit;
-  font: inherit;
-  line-height: inherit;
-  white-space: inherit;
-  overflow-wrap: inherit;
-  word-break: inherit;
-  
-  padding: 0.08em 0.12em;
-}
 
-#modalRichText:focus {
-  outline: none;
-}
 
 .textColorPalette {
   position: absolute;
@@ -6512,7 +6218,6 @@ text-size-adjust: 100%;
 /* ========================================
    TODO – zvýraznění celé jedné položky
 ======================================== */
-.todoTextValue,
 .todoDragGhostText {
   border-radius: 4px;
   -webkit-box-decoration-break: clone;
@@ -6539,93 +6244,34 @@ text-size-adjust: 100%;
    EDITOR – OBRÁZKY A INTERNETOVÉ ODKAZY
 ================================================== */
 
-#modalRichText .lubaNoteInternetLink,
-.todoRichTextInput .lubaNoteInternetLink,
-.todoTextValue .lubaNoteInternetLink {
-  color: var(--color-accent);
-  text-decoration-line: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
 
-#modalRichText .lubaNoteImage {
-  position: relative;
-  container-type: inline-size;
-  width: min(100%, 720px);
-  max-width: 100%;
-  margin: 14px auto;
-  padding: 0;
-  overflow: hidden;
-  box-sizing: border-box;
 
-  /*
-   * Figure je jen technický nosič pro zarovnání, přesun a ovládací
-   * tlačítka. V editoru nesmí vypadat jako druhý obal kolem obrázku.
-   */
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
 
-#modalRichText,
-#modalRichText * {
-  -webkit-text-size-adjust: none;
-  text-size-adjust: none;
-}
 
-#modalRichText .lubaNoteImage[data-zarovnani="vlevo"] {
-  float: left;
-  margin-top: 2px;
-  margin-right: 4px !important;
-  margin-bottom: 6px;
-  margin-left: 0 !important;
-}
-#modalRichText .lubaNoteImage[data-zarovnani="vpravo"] {
-  float: right;
-  margin-top: 2px;
-  margin-right: 0 !important;
-  margin-bottom: 6px;
-  margin-left: 3px !important;
-}
+
+
+
+
 
 /*
  * Dva obrázky 50 % se musí vejít vedle sebe i s rámečkem
  * a malou mezerou uprostřed. Bez odečtení mezery přesahovala
  * dvojice 100 % šířky editoru a druhý obrázek spadl na další řádek.
  */
-#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"],
-#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"] {
-  width: calc(50% - 4px) !important;
-}
 
-#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vlevo"] {
-  margin-right: 4px !important;
-}
 
-#modalRichText .lubaNoteImage[data-velikost="50"][data-zarovnani="vpravo"] {
-  margin-left: 4px !important;
-}
+
+
+
 
 /*
  * Přizpůsobit editoru a 100 % jsou vždy samostatný plný řádek.
  * Zároveň tím ukončíme případnou předchozí dvojici plovoucích obrázků.
  */
-#modalRichText .lubaNoteImage[data-velikost="prizpusobit"],
-#modalRichText .lubaNoteImage[data-velikost="100"] {
-  float: none !important;
-  clear: both;
-  width: 100% !important;
-  max-width: 100%;
-  margin: 14px auto !important;
-}
+
 
 /* Plovoucí obrázky se započítají i do konce scrollovatelného editoru. */
-#modalRichText::after {
-  content: "";
-  display: block;
-  clear: both;
-}
+
 
 /*
  * Skutečný editovatelný řádek za obrázkem / dvojicí obrázků.
@@ -6633,64 +6279,27 @@ text-size-adjust: 100%;
  * obrázku není místo (100 % nebo dvojice 50 %), prohlížeč řádek sám
  * posune pod obrázek. Padding nechává text od média lehce odsazený.
  */
-#modalRichText .lubaNoteImageTextLine {
-  /*
-   * Řádek už záměrně NEMAŽE float pomocí clear: both.
-   * Díky tomu může text přirozeně začít vedle obrázku 50/25 %
-   * a po dosažení spodní hrany pokračuje pod ním. Dva 50% obrázky
-   * vyplní celý řádek, takže text se automaticky posune pod dvojici.
-   */
-  min-height: 1.6em;
-  margin: 0;
-  padding-top: 8px;
-  box-sizing: border-box;
-}
+
 
 /*
  * Když text skutečně obtéká obrázek vlevo/vpravo, nemá být odsazený
  * o celý "pod-obrázkový" rozestup. Tím odpadá potřeba mačkat druhý
  * Backspace jen kvůli vizuálnímu přitažení textu k horní hraně obrázku.
  */
-#modalRichText .lubaNoteImage[data-zarovnani="vlevo"] + .lubaNoteImageTextLine,
-#modalRichText .lubaNoteImage[data-zarovnani="vpravo"] + .lubaNoteImageTextLine {
-  padding-top: 2px;
-}
+
 
 /* Vizuální odezva během přesunu obrázku. */
 /*
  * Jeden klik obrázek označí pro zobrazení ovládání. Focus je pouze dočasný stav
  * pro editor – do uloženého richContent nepřidáváme žádnou selected třídu.
  */
-#modalRichText .lubaNoteImage:focus-within {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 3px;
-  box-shadow:
-    0 0 0 1px var(--color-background),
-    0 8px 22px rgba(0, 0, 0, 0.18);
-}
 
-#modalRichText .lubaNoteImage:focus-within img {
-  cursor: grab;
 
-  /*
-   * Označení obrázku je pouze vizuální / editační stav. Samo o sobě
-   * NESMÍ blokovat scroll. Přesun se aktivuje až dlouhým stiskem.
-   */
-  touch-action: pan-y;
-  outline: none;
-}
 
-#modalRichText .lubaNoteImage.lubaNoteImageDragging {
-  opacity: 0.58;
-  outline: 3px dashed var(--color-accent);
-  outline-offset: 3px;
-  pointer-events: none;
-}
 
-#modalRichText .lubaNoteImage.lubaNoteImageDragging img {
-  cursor: grabbing;
-  touch-action: none;
-}
+
+
+
 
 /*
  * Ukazatel místa vložení je overlay mimo contenteditable DOM, takže
@@ -6722,24 +6331,16 @@ text-size-adjust: 100%;
   display: none !important;
 }
 
-#modalRichText.lubaNoteImageDragMode {
-  cursor: grabbing;
-}
+
 
 /*
  * Po doběhnutí long-pressu uzamkneme scroll ještě před prvním pohybem.
  * Android WebView tak nemůže stejné gesto současně použít pro scroll
  * textu a pro přesun obrázku. Po puštění se třída ihned odstraní.
  */
-#modalRichText.lubaNoteImageMoveReady {
-  overflow-y: hidden !important;
-  overscroll-behavior: contain;
-}
 
-#modalRichText.lubaNoteImageMoveReady .lubaNoteImage img,
-#modalRichText.lubaNoteImageDragMode .lubaNoteImage img {
-  touch-action: none;
-}
+
+
 
 /* Malá značka u prstu / kurzoru: long-press je aktivní a obrázek lze táhnout. */
 .lubaNoteImageMoveHint {
@@ -6767,96 +6368,17 @@ text-size-adjust: 100%;
   display: none !important;
 }
 
-#modalRichText .lubaNoteImage img {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-width: 100%;
 
-  /*
-   * DŮLEŽITÉ PRO APK:
-   * Nepoužívat max-height v jednotkách vh. Android WebView při otevření
-   * a zavření klávesnice mění výšku viewportu, takže portrétní obrázek
-   * s max-height: 70vh se za běhu opticky zvětšoval a zmenšoval.
-   * Šířku teď určuje pouze nastavená velikost obrázku a poměr stran
-   * zůstává přirozený přes height: auto.
-   */
-  max-height: none;
-  object-fit: contain;
 
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 
-  /* Běžný tah přes obrázek je scroll editoru. */
-  touch-action: pan-y;
-}
 
-#modalRichText .lubaNoteImageSettings,
-#modalRichText .lubaNoteImageRemove {
-  position: absolute;
-  z-index: 4;
 
-  /* Pevné hodnoty jsou fallback pro starší WebView. */
-  top: 8px;
-  width: 34px;
-  height: 34px;
 
-  /* V podporovaných prohlížečích se ovládání přizpůsobí šířce obrázku. */
-  top: clamp(4px, 2cqi, 8px);
-  width: clamp(22px, 12cqi, 34px);
-  height: clamp(22px, 12cqi, 34px);
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
 
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 50%;
-  background: rgba(20, 20, 20, 0.76);
-  color: white;
 
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 
-  /*
-   * V běžném stavu je obrázek úplně čistý. ⚙ a ✕ se ukážou až po
-   * jednom kliknutí / focusu obrázku.
-   */
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: scale(0.88);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease,
-    visibility 120ms ease;
-}
 
-#modalRichText .lubaNoteImageRemove {
-  right: 8px;
-  right: clamp(4px, 2cqi, 8px);
-}
-
-#modalRichText .lubaNoteImageSettings {
-  /* Vedle křížku, ne přes něj. */
-  right: 48px;
-  right: clamp(30px, 16cqi, 48px);
-}
-
-#modalRichText .lubaNoteImage:focus-within .lubaNoteImageSettings,
-#modalRichText .lubaNoteImage:focus-within .lubaNoteImageRemove {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: scale(1);
-}
-
-#modalRichText .lubaNoteImageSettings:active,
-#modalRichText .lubaNoteImageRemove:active {
-  transform: scale(0.92);
-}
 
 
 .editorLinkModal {
@@ -7252,31 +6774,13 @@ text-size-adjust: 100%;
    NADPISY V EDITORU
 ========================================== */
 
-#modalRichText h1,
-#modalRichText h2,
-#modalRichText h3 {
-  color: inherit;
-  font-family: inherit;
-  font-weight: 700;
-}
 
-#modalRichText h1 {
-  margin: 0.55em 0 0.30em;
-  font-size: 1.60em;
-  line-height: 1.18;
-}
 
-#modalRichText h2 {
-  margin: 0.50em 0 0.28em;
-  font-size: 1.36em;
-  line-height: 1.22;
-}
 
-#modalRichText h3 {
-  margin: 0.45em 0 0.25em;
-  font-size: 1.18em;
-  line-height: 1.28;
-}
+
+
+
+
 
 /* ==========================================
    MOBIL
@@ -7479,19 +6983,11 @@ text-size-adjust: 100%;
   color: var(--color-text);
 }
 
-#modalRichText::selection,
-#modalRichText *::selection {
-  background: rgba(60, 160, 210, 0.35);
-  color: inherit;
-}
+
 
 /* TODO rich-text: při aktivním výběru musí být okamžitě vidět
    skutečná barva textu stejně jako v hlavním editoru. */
-.todoRichTextInput::selection,
-.todoRichTextInput *::selection {
-  background: rgba(60, 160, 210, 0.35);
-  color: inherit;
-}
+
 
 .recurringOverviewButton {
   width: 44px;
@@ -8059,266 +7555,6 @@ text-size-adjust: 100%;
 
 
 
-/* Editor bulety */
-
-.modalRichText ul {
-  list-style: none;
-  padding-left: 28px;
-}
-
-.modalRichText li {
-  position: relative;
-}
-
-.modalRichText li::before {
-  content: "•";
-
-  position: absolute;
-  left: -22px;
-  top: 0;
-
-  width: 18px;
-  height: 1.5em;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  font-size: 1.1em;
-  line-height: 1;
-
-  cursor: pointer;
-}
-
-.modalRichText li.bulletSbaleny::before {
-  content: "▸";
-}
-
-.modalRichText li:not(.bulletSbaleny)::before {
-  content: "•";
-}
-
-.modalRichText li.bulletMoveSelected {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 4px;
-
-  border-radius: 8px;
-
-  background: color-mix(
-    in srgb,
-    var(--color-accent) 12%,
-    transparent
-  );
-
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-}
-
-.modalRichText li.bulletMoveSelected::before {
-  color: var(--color-accent);
-  transform: scale(1.22);
-}
-
-.modalRichText.bulletMoveMode li.bulletMoveSelected {
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.modalRichText ul.bulletDragActive > li {
-  transition:
-    transform 120ms ease,
-    margin 120ms ease,
-    background 120ms ease;
-}
-
-.modalRichText li.bulletDragging {
-  position: relative;
-  z-index: 5;
-
-  margin-top: 6px;
-  margin-bottom: 6px;
-
-  transform: scale(1.03);
-
-  border-radius: 8px;
-
-  background:
-    color-mix(
-      in srgb,
-      var(--color-accent) 12%,
-      transparent
-    );
-
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.16);
-}
-
-.modalRichText li.bulletDragging::before {
-  color: var(--color-accent);
-  transform: scale(1.25);
-}
-
-.modalRichText ul.bulletDragActive {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.modalRichText li.bulletDropBefore::after,
-.modalRichText li.bulletDropAfter::after {
-  content: "";
-
-  position: absolute;
-
-  left: 0;
-  right: 0;
-
-  height: 3px;
-
-  border-radius: 999px;
-
-  background: var(--color-accent);
-
-  pointer-events: none;
-}
-
-.modalRichText li.bulletDropBefore::after {
-  top: -5px;
-}
-
-.modalRichText li.bulletDropAfter::after {
-  bottom: -5px;
-}
-.bulletDragPreview {
-  position: fixed;
-  z-index: 99999;
-
-  max-width: min(78vw, 360px);
-
-  padding: 10px 14px;
-
-  border: 2px solid var(--color-accent);
-  border-radius: 12px;
-
-  background: var(--color-surface);
-  color: var(--color-text);
-
-  box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.24);
-
-  font-size: var(--font-size);
-  font-weight: 600;
-
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  pointer-events: none;
-
-  transform: translateX(-50%);
-}
-
-@media (max-width: 899px) {
-  /*
-   * Větší neviditelná plocha kulky pro prst. Střed kulky zůstává
-   * prakticky na stejném místě, takže vzhled seznamu se nemění.
-   */
-  .modalRichText li::before {
-    left: -32px;
-    width: 36px;
-    height: 2em;
-
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  .modalRichText li.bulletDragging {
-    opacity: 0.28;
-  }
-
-  .modalRichText li.bulletDropBefore::after,
-  .modalRichText li.bulletDropAfter::after {
-    height: 4px;
-  }
-
-  .bulletDragPreview {
-    min-width: 140px;
-    max-width: 76vw;
-  }
-}
-
-.bulletDragPreview.bulletChceZanorit {
-  border-color: var(--color-accent);
-
-  box-shadow:
-    0 0 0 3px
-      color-mix(
-        in srgb,
-        var(--color-accent) 25%,
-        transparent
-      ),
-    0 10px 26px rgba(0, 0, 0, 0.24);
-}
-
-.bulletDragPreview.bulletChceZanorit,
-.bulletDragPreview.bulletChceVysunout {
-  overflow: visible;
-}
-
-
-.bulletDragPreview.bulletChceZanorit::after {
-  content: "→ zanořit";
-  
-  position: absolute;
-  
-  left: 50%;
-  bottom: calc(100% + 7px);
-  top: auto;
-  right: auto;
-  
-  transform: translateX(-50%);
-  
-  padding: 3px 8px;
-  
-  border-radius: 8px;
-  
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-
-.bulletDragPreview.bulletChceVysunout {
-  border-style: dashed;
-}
-
-
-.bulletDragPreview.bulletChceVysunout::after {
-  content: "← vysunout";
-  
-  position: absolute;
-  
-  left: 50%;
-  bottom: calc(100% + 7px);
-  top: auto;
-  right: auto;
-  
-  transform: translateX(-50%);
-  
-  padding: 3px 8px;
-  
-  border-radius: 8px;
-  
-  background: var(--color-surface);
-  color: var(--color-text);
-  
-  border: 1px solid var(--color-border);
-  
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .cardColorPalette {
   grid-column: 1 / -1;
 
@@ -8494,35 +7730,11 @@ body.theme-darkg {
   outline-offset: 3px;
 }
 
-#todoList.todoVyberVse .todoItem {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-  border-radius: 6px;
-}
 
-.todoRichTextInput {
-  flex: 1;
-  min-width: 0;
 
-  font: inherit;
-  line-height: inherit;
 
-  color: inherit;
-  background: transparent;
 
-  border: 0;
-  outline: 0;
 
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.todoRichTextInput[hidden] {
-  display: none;
-}
 
 /* ==================================================
    LUBANOTE – JEDNOTNÉ SVG IKONY / MOBIL + APK + PC
@@ -9440,62 +8652,32 @@ body.theme-darkg {
  * společně s ním. Float uvnitř seznamu vypínáme, aby se nerozbila
  * hierarchie a aby odrážka zůstala vizuálně čitelná.
  */
-#modalRichText li > .lubaNoteImage[data-bullet-media="true"] {
-  float: none !important;
-  clear: both;
 
-  max-width: 100%;
-  margin-top: 10px !important;
-  margin-bottom: 6px !important;
-}
 
-#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="vlevo"] {
-  margin-left: 0 !important;
-  margin-right: auto !important;
-}
 
-#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="stred"] {
-  margin-left: auto !important;
-  margin-right: auto !important;
-}
 
-#modalRichText li > .lubaNoteImage[data-bullet-media="true"][data-zarovnani="vpravo"] {
-  margin-left: auto !important;
-  margin-right: 0 !important;
-}
+
+
+
 
 /*
  * Obrázek uvnitř bulletu se nepřetahuje samostatně. Přesouvá se celý
  * bullet, což chrání strukturu <ul>/<li>. Nastavení velikosti, zarovnání
  * a odstranění obrázku zůstává dostupné po kliknutí na obrázek.
  */
-#modalRichText li > .lubaNoteImage[data-bullet-media="true"]:focus-within img {
-  cursor: default;
-  touch-action: auto;
-}
+
 
 /* Editovatelný řádek pod obrázkem zůstává součástí stejného bulletu. */
-#modalRichText li > .lubaNoteBulletImageTextLine {
-  min-height: 1.35em;
-  padding-top: 4px;
-  margin: 0;
-}
+
 
 /* Backlink v bulletu musí zůstat jednoznačně klikací i uvnitř listu. */
-#modalRichText li .plannedTextLink {
-  position: relative;
-  z-index: 1;
-  cursor: pointer;
-}
+
 
 /* ========================================
    INTERNÍ ODKAZY NA POZNÁMKY – V1
    [[ + AUTOCOMPLETE V HLAVNÍM EDITORU
    ======================================== */
 
-#modalRichText .noteInternalLink,
-.todoRichTextInput .noteInternalLink,
-.todoTextValue .noteInternalLink,
 .ln-v2-editor .noteInternalLink {
   display: inline;
   padding: 1px 5px;
@@ -9516,9 +8698,6 @@ body.theme-darkg {
   -webkit-box-decoration-break: clone;
 }
 
-#modalRichText .noteInternalLink::before,
-.todoRichTextInput .noteInternalLink::before,
-.todoTextValue .noteInternalLink::before,
 .ln-v2-editor .noteInternalLink::before {
   content: "🔗";
   margin-right: 0.28em;
@@ -9527,8 +8706,6 @@ body.theme-darkg {
 }
 
 /* V2 – TODO interní odkazy: klikatelné i mimo hlavní rich-text editor. */
-.todoRichTextInput .noteInternalLink,
-.todoTextValue .noteInternalLink,
 .ln-v2-editor .noteInternalLink {
   position: relative;
   z-index: 2;
@@ -9926,9 +9103,6 @@ body.theme-darkg {
 /* ========================================
    INTERNÍ ODKAZY V5 – SMAZANÝ / NEDOSTUPNÝ CÍL
    ======================================== */
-#modalRichText .noteInternalLink.noteInternalLinkBroken,
-.todoRichTextInput .noteInternalLink.noteInternalLinkBroken,
-.todoTextValue .noteInternalLink.noteInternalLinkBroken,
 .ln-v2-editor .noteInternalLink.noteInternalLinkBroken {
   opacity: 0.78;
   text-decoration: line-through;
@@ -9936,9 +9110,6 @@ body.theme-darkg {
   cursor: pointer;
 }
 
-#modalRichText .noteInternalLink.noteInternalLinkBroken::before,
-.todoRichTextInput .noteInternalLink.noteInternalLinkBroken::before,
-.todoTextValue .noteInternalLink.noteInternalLinkBroken::before,
 .ln-v2-editor .noteInternalLink.noteInternalLinkBroken::before {
   content: "⚠";
 }
@@ -9949,7 +9120,7 @@ body.theme-darkg {
 
 /*
  * V4: PC, web i APK používají JEDNU společnou procentní velikost.
- * Šířku aplikuje editorMedia.js inline podle data-velikost.
+ * Šířku aplikuje Core V2 media vrstva podle data-velikost.
  * Není zde žádné mobilní width: 100% pravidlo ani pixelová náhrada.
  */
 
@@ -10967,99 +10138,25 @@ body:not(.secretModeActive) .trashModeTabs {
    Stejný uložený formát .lubaNoteImage jako v hlavním editoru.
    Obrázek se přesouvá vždy společně s celým TODO řádkem.
 ======================================== */
-.todoRichTextInput .lubaNoteImage,
-.todoTextValue .lubaNoteImage {
-  position: relative;
-  container-type: inline-size;
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  margin: 10px auto 6px;
-  padding: 0;
-  overflow: hidden;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  clear: both;
-}
 
-.todoRichTextInput .lubaNoteImage img,
-.todoTextValue .lubaNoteImage img {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  max-height: none;
-  object-fit: contain;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  touch-action: pan-y;
-}
 
-/* Čtecí podoba TODO je bez editačních ovladačů. Po tapnutí se TODO otevře
-   k editaci a ovladače jsou dostupné přímo v .todoRichTextInput. */
-.todoTextValue .lubaNoteImageSettings,
-.todoTextValue .lubaNoteImageRemove {
-  display: none !important;
-}
 
-.todoRichTextInput .lubaNoteImageSettings,
-.todoRichTextInput .lubaNoteImageRemove {
-  position: absolute;
-  z-index: 4;
-  top: clamp(4px, 2cqi, 8px);
-  width: clamp(22px, 12cqi, 34px);
-  height: clamp(22px, 12cqi, 34px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 50%;
-  background: rgba(20, 20, 20, 0.76);
-  color: white;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: scale(0.88);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease,
-    visibility 120ms ease;
-}
 
-.todoRichTextInput .lubaNoteImageRemove {
-  right: clamp(4px, 2cqi, 8px);
-}
+/* Historická čtecí podoba TODO nemá vlastní editorové ovladače;
+   aktivní editaci dnes řídí výhradně Core V2. */
 
-.todoRichTextInput .lubaNoteImageSettings {
-  right: clamp(30px, 16cqi, 48px);
-}
 
-.todoRichTextInput .lubaNoteImage:focus-within {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 3px;
-  box-shadow:
-    0 0 0 1px var(--color-background),
-    0 8px 22px rgba(0, 0, 0, 0.18);
-}
 
-.todoRichTextInput .lubaNoteImage:focus-within .lubaNoteImageSettings,
-.todoRichTextInput .lubaNoteImage:focus-within .lubaNoteImageRemove {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: scale(1);
-}
 
-.todoRichTextInput .lubaNoteImageSettings:active,
-.todoRichTextInput .lubaNoteImageRemove:active {
-  transform: scale(0.92);
-}
+
+
+
+
+
+
+
+
+
 
 
 /* ========================================
@@ -11067,22 +10164,11 @@ body:not(.secretModeActive) .trashModeTabs {
    Samostatný obrázek v TODO nesmí vytvářet prázdné inline řádky
    pod figure. Následující checkbox tak sedí hned pod obrázkem.
 ======================================== */
-.todoItem.todoImageOnly .todoTextDisplay {
-  padding-bottom: 0;
-  line-height: 0;
-}
 
-.todoItem.todoImageOnly .todoTextValue {
-  display: block;
-  width: 100%;
-  line-height: 0;
-}
 
-.todoItem.todoImageOnly .todoTextValue > .lubaNoteImage {
-  margin-top: 4px !important;
-  margin-bottom: -80px !important;
-  vertical-align: top;
-}
+
+
+
 
 #trashConfirmModal {
   z-index: 3700;
@@ -11396,14 +10482,6 @@ body:not(.secretModeActive) .trashModeTabs {
 #adminDashboardButton[hidden],
 #desktopAdminDashboardButton[hidden] {
   display: none !important;
-}
-.modalRichText b,
-.modalRichText strong,
-.todoRichTextInput b,
-.todoRichTextInput strong,
-.todoTextValue b,
-.todoTextValue strong {
-  font-weight: 800;
 }
 /* =========================================
    PŘIPOMÍNKY – KOMPAKTNÍ MOBILNÍ TOOLBAR

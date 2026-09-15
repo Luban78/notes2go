@@ -2542,6 +2542,28 @@ function ziskejBezpecnyTypPlanovanePolozky(
 }
 
 
+function jePoznamkaOtevrenaVCoreV2(noteId) {
+  const modal = document.getElementById("taskModal");
+  return Boolean(
+    noteId &&
+    modal?.classList?.contains("show") &&
+    String(modal?.dataset?.taskId || "") === String(noteId) &&
+    window.LubaNoteEditorV2Bridge?.jeAktivni?.() === true
+  );
+}
+
+function aktualizujOtevreneTodoCoreV2(noteId, todoId, { hotovo, naplanovano } = {}) {
+  if (!jePoznamkaOtevrenaVCoreV2(noteId) || !todoId) return;
+  const bridge = window.LubaNoteEditorV2Bridge;
+  if (typeof hotovo === "boolean") bridge?.nastavTodoHotovo?.(todoId, hotovo);
+  if (typeof naplanovano === "boolean") bridge?.nastavTodoNaplanovane?.(todoId, naplanovano);
+}
+
+function aktualizujOtevrenyPlanLinkCoreV2(noteId, plannedItemId, akce) {
+  if (!jePoznamkaOtevrenaVCoreV2(noteId) || !plannedItemId) return;
+  window.LubaNoteEditorV2Bridge?.aktualizujPlanovanyOdkaz?.(plannedItemId, akce);
+}
+
 function updatePlannedLinkHtml(
   sourceNote,
   plannedItemId,
@@ -2667,11 +2689,6 @@ async function completeSelectedPlannedReminder() {
       bezpecnySourceType === "todo" &&
       item.sourceTodoId
     ) {
-      window.LubaNoteTodos
-        ?.nastavTodoJakoNaplanovane?.(
-          item.sourceTodoId,
-          false
-        );
 
       sourceNote.todos = Array.isArray(sourceNote.todos)
         ? sourceNote.todos.map(
@@ -2685,11 +2702,11 @@ async function completeSelectedPlannedReminder() {
           )
         : [];
 
-      window.LubaNoteTodos
-        ?.oznacTodoJakoHotove?.(
-          item.sourceTodoId,
-          true
-        );
+      aktualizujOtevreneTodoCoreV2(
+        sourceNote.id,
+        item.sourceTodoId,
+        { hotovo: true, naplanovano: false }
+      );
     }
 
     sourceNote.plannedItems =
@@ -2714,6 +2731,7 @@ async function completeSelectedPlannedReminder() {
         item.id,
         "complete"
       );
+      aktualizujOtevrenyPlanLinkCoreV2(sourceNote.id, item.id, "complete");
     }
 
     sourceNote.updatedAt =
@@ -2741,28 +2759,8 @@ async function completeSelectedPlannedReminder() {
 
     ukonciCekani();
 
-    if (
-      bezpecnySourceType === "selection" &&
-      typeof modalRichText !== "undefined" &&
-      (
-        (
-          typeof activeTaskId !== "undefined" &&
-          activeTaskId === sourceNote.id
-        ) ||
-        (
-          typeof activeTaskId === "undefined" &&
-          typeof activeTaskIndex !== "undefined" &&
-          activeTaskIndex === noteIndex
-        )
-      )
-    ) {
-      modalRichText
-        .querySelector(
-          `[data-planned-item-id="${item.id}"]`
-        )
-        ?.classList.add(
-          "plannedTextLinkCompleted"
-        );
+    if (bezpecnySourceType === "selection") {
+      aktualizujOtevrenyPlanLinkCoreV2(sourceNote.id, item.id, "complete");
     }
   }
 
@@ -2874,16 +2872,11 @@ async function restoreSelectedPlannedReminder() {
           )
         : [];
 
-      window.LubaNoteTodos
-        ?.oznacTodoJakoHotove?.(
-          item.sourceTodoId,
-          false
-        );
-      window.LubaNoteTodos
-        ?.nastavTodoJakoNaplanovane?.(
-          item.sourceTodoId,
-          true
-        );
+      aktualizujOtevreneTodoCoreV2(
+        sourceNote.id,
+        item.sourceTodoId,
+        { hotovo: false, naplanovano: true }
+      );
     }
 
     sourceNote.plannedItems =
@@ -2908,6 +2901,7 @@ async function restoreSelectedPlannedReminder() {
         item.id,
         "restore"
       );
+      aktualizujOtevrenyPlanLinkCoreV2(sourceNote.id, item.id, "restore");
     }
 
     sourceNote.updatedAt =
@@ -2957,29 +2951,8 @@ async function restoreSelectedPlannedReminder() {
     );
   }
 
-  if (
-    bezpecnySourceType === "selection" &&
-    typeof modalRichText !== "undefined" &&
-    sourceNote &&
-    (
-      (
-        typeof activeTaskId !== "undefined" &&
-        activeTaskId === sourceNote.id
-      ) ||
-      (
-        typeof activeTaskId === "undefined" &&
-        typeof activeTaskIndex !== "undefined" &&
-        activeTaskIndex === noteIndex
-      )
-    )
-  ) {
-    modalRichText
-      .querySelector(
-        `[data-planned-item-id="${item.id}"]`
-      )
-      ?.classList.remove(
-        "plannedTextLinkCompleted"
-      );
+  if (bezpecnySourceType === "selection" && sourceNote) {
+    aktualizujOtevrenyPlanLinkCoreV2(sourceNote.id, item.id, "restore");
   }
 
   if (typeof renderCalendar === "function") {
@@ -3029,11 +3002,6 @@ async function removeSelectedPlannedReminder(entry) {
       bezpecnySourceType === "todo" &&
       item.sourceTodoId
     ) {
-      window.LubaNoteTodos
-        ?.nastavTodoJakoNaplanovane?.(
-          item.sourceTodoId,
-          false
-        );
     }
 
     sourceNote.plannedItems =
@@ -3053,6 +3021,7 @@ async function removeSelectedPlannedReminder(entry) {
       item.id,
       "remove"
     );
+    aktualizujOtevrenyPlanLinkCoreV2(sourceNote.id, item.id, "remove");
 
     sourceNote.updatedAt =
       new Date().toISOString();
@@ -3777,10 +3746,8 @@ async function openPlannedSourceInEditor(itemId) {
 
   if (item.sourceType === "todo") {
     setTimeout(() => {
-      window.LubaNoteTodos
-        ?.zobrazTodoPodleId?.(
-          item.sourceTodoId
-        );
+      window.LubaNoteEditorV2Bridge
+        ?.zobrazTodoPodleId?.(item.sourceTodoId);
     }, 150);
 
     return;
@@ -3791,28 +3758,21 @@ async function openPlannedSourceInEditor(itemId) {
   }
 
   setTimeout(() => {
-    const plannedLink =
-      modalRichText?.querySelector(
-        `[data-planned-item-id="${item.id}"]`
-      );
+    const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.();
+    const plannedLink = editor?.querySelector(
+      `[data-planned-item-id="${item.id}"]`
+    );
+    if (!editor || !plannedLink) return;
 
-    if (!plannedLink) {
-      return;
-    }
-
-    const editorRect =
-      modalRichText.getBoundingClientRect();
-
-    const linkRect =
-      plannedLink.getBoundingClientRect();
-
+    const editorRect = editor.getBoundingClientRect();
+    const linkRect = plannedLink.getBoundingClientRect();
     const targetTop =
-      modalRichText.scrollTop +
+      editor.scrollTop +
       (linkRect.top - editorRect.top) -
-      (modalRichText.clientHeight / 2) +
+      (editor.clientHeight / 2) +
       (linkRect.height / 2);
 
-    modalRichText.scrollTo({
+    editor.scrollTo({
       top: Math.max(0, targetTop),
       behavior: "smooth"
     });
@@ -3952,11 +3912,11 @@ async function vycistiStarePripominkyPoTerminu(
             bezpecnyTyp === "todo" &&
             item?.sourceTodoId
           ) {
-            window.LubaNoteTodos
-              ?.nastavTodoJakoNaplanovane?.(
-                item.sourceTodoId,
-                false
-              );
+            aktualizujOtevreneTodoCoreV2(
+              task.id,
+              item.sourceTodoId,
+              { naplanovano: false }
+            );
           }
 
           updatePlannedLinkHtml(
@@ -3964,6 +3924,7 @@ async function vycistiStarePripominkyPoTerminu(
             item.id,
             "remove"
           );
+          aktualizujOtevrenyPlanLinkCoreV2(task.id, item.id, "remove");
         });
 
         task.plannedItems = task.plannedItems.filter(

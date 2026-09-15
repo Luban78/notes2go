@@ -1,4 +1,4 @@
-/* LubaNote Editor Core V2.14b – Bridge TEST mode. */
+/* LubaNote Editor Core V2 – produkční integrační vrstva. */
 
 .modalRichTextV2Host[hidden] {
   display: none !important;
@@ -12,8 +12,8 @@
   box-sizing: border-box;
 }
 
-/* Stejný V2 engine jako LAB, ale vložený přímo do reálného fullscreen editoru. */
-.ln-v2-lab.ln-v2-vlozeny {
+/* Jediný Core V2 engine vložený přímo do fullscreen editoru LubaNote. */
+.ln-v2-core.ln-v2-vlozeny {
   position: static;
   inset: auto;
   z-index: auto;
@@ -23,16 +23,8 @@
   background: transparent;
 }
 
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-hlavicka,
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-info,
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-akce,
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-model,
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-format,
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-paticka {
-  display: none !important;
-}
 
-.ln-v2-lab.ln-v2-vlozeny .ln-v2-editor {
+.ln-v2-core.ln-v2-vlozeny .ln-v2-editor {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -46,22 +38,6 @@
   text-size-adjust: 100%;
 }
 
-.lnV2TestBadge {
-  position: absolute;
-  right: 10px;
-  top: 105px;
-  z-index: 40;
-  pointer-events: none;
-  padding: 4px 7px;
-  border: 1px solid var(--color-accent);
-  border-radius: 999px;
-  background: var(--color-editor-background);
-  color: var(--color-accent);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .035em;
-  opacity: .92;
-}
 
 .lnV2BridgeToast {
   position: fixed;
@@ -90,20 +66,20 @@
   border-style: dashed;
 }
 
-.taskModal.editorV2TestMode #modalTitle[aria-readonly="true"] {
+.taskModal.editorCoreV2Mode #modalTitle[aria-readonly="true"] {
   opacity: .88;
 }
 
-.taskModal.editorV2TestMode .editorQuickTool.lnV2Mixed {
+.taskModal.editorCoreV2Mode .editorQuickTool.lnV2Mixed {
   border-style: dashed;
 }
 
-/* Ovladače přidané pouze pro V2 TEST do stávajících panelů LubaNote. */
+/* Ovladače Core V2 ve stávajících panelech LubaNote. */
 .lnV2OnlyControl {
   display: none !important;
 }
 
-.taskModal.editorV2TestMode .lnV2OnlyControl {
+.taskModal.editorCoreV2Mode .lnV2OnlyControl {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -122,7 +98,7 @@
 
 
 /* V2.9a – odkazy jsou v editačním DOMu SPAN, ale Bridge je na tap otevře. */
-.taskModal.editorV2TestMode .ln-v2-odkaz {
+.taskModal.editorCoreV2Mode .ln-v2-odkaz {
   cursor: pointer;
 }
 
@@ -287,32 +263,32 @@
    Aktivní seznam musí být na první pohled zřejmý i v tématech, kde samotné
    accent pozadí splývá. Typ seznamu zůstává pouze stavem V2 Bridge.
 ======================================== */
-.taskModal.editorV2TestMode #tlacitkoBullet.active,
-.taskModal.editorV2TestMode #tlacitkoBullet[aria-pressed="true"] {
+.taskModal.editorCoreV2Mode #tlacitkoBullet.active,
+.taskModal.editorCoreV2Mode #tlacitkoBullet[aria-pressed="true"] {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   box-shadow: inset 0 0 0 1px currentColor;
 }
 
-.taskModal.editorV2TestMode #tlacitkoBullet.lnV2Mixed {
+.taskModal.editorCoreV2Mode #tlacitkoBullet.lnV2Mixed {
   outline-style: dashed;
 }
 
 
 /* V2.14b – typ seznamu se vybírá přímo v kompaktním toolbar popupu,
    stejně jako H1/H2/H3 nebo zarovnání. Žádný samostatný modal. */
-.taskModal.editorV2TestMode .editorToolbarPanelSeznam {
+.taskModal.editorCoreV2Mode .editorToolbarPanelSeznam {
   width: auto;
   min-width: 164px;
   justify-content: center;
 }
 
-.taskModal.editorV2TestMode .editorToolbarPanelSeznam .editorPanelSeznamVolba {
+.taskModal.editorCoreV2Mode .editorToolbarPanelSeznam .editorPanelSeznamVolba {
   min-width: 46px;
   font-size: 19px;
 }
 
-.taskModal.editorV2TestMode .editorToolbarPanelSeznam .editorPanelSeznamText {
+.taskModal.editorCoreV2Mode .editorToolbarPanelSeznam .editorPanelSeznamText {
   min-width: 58px;
   font-size: 15px;
 }

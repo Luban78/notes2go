@@ -403,11 +403,8 @@ function zvyrazniAktualniVyhledavaniVEditoru() {
   const titleInput =
     document.getElementById("modalTitle");
 
-  const modalRichText =
-    document.getElementById("modalRichText");
-
-  const todoList =
-    document.getElementById("todoList");
+  const editorCoreV2 =
+    window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
 
   const hledanyTextLower =
     hledanyText.toLocaleLowerCase("cs-CZ");
@@ -436,24 +433,10 @@ function zvyrazniAktualniVyhledavaniVEditoru() {
 
   const ranges = [];
 
-  if (todoList && !todoList.hidden) {
-    todoList
-      .querySelectorAll(".todoTextValue")
-      .forEach(element => {
-        ranges.push(
-          ...najdiRozsahyTextuProVyhledavani(
-            element,
-            hledanyText
-          )
-        );
-      });
-  } else if (
-    modalRichText &&
-    !modalRichText.hidden
-  ) {
+  if (editorCoreV2) {
     ranges.push(
       ...najdiRozsahyTextuProVyhledavani(
-        modalRichText,
+        editorCoreV2,
         hledanyText
       )
     );

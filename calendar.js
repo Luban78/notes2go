@@ -1028,32 +1028,24 @@ function renderCalendarItems(targetElement) {
       }
 
       setTimeout(() => {
-        const plannedLink =
-          modalRichText.querySelector(
-            `[data-planned-item-id="${item.id}"]`
-          );
+        const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.();
+        const plannedLink = editor?.querySelector(
+          `[data-planned-item-id="${item.id}"]`
+        );
+        if (!editor || !plannedLink) return;
 
-        if (!plannedLink) {
-          return;
-        }
-
-        const editorRect =
-          modalRichText.getBoundingClientRect();
-
-        const linkRect =
-          plannedLink.getBoundingClientRect();
-
+        const editorRect = editor.getBoundingClientRect();
+        const linkRect = plannedLink.getBoundingClientRect();
         const targetTop =
-          modalRichText.scrollTop +
+          editor.scrollTop +
           (linkRect.top - editorRect.top) -
-          (modalRichText.clientHeight / 2) +
+          (editor.clientHeight / 2) +
           (linkRect.height / 2);
 
-        modalRichText.scrollTo({
+        editor.scrollTo({
           top: Math.max(0, targetTop),
           behavior: "smooth"
         });
-
       }, 150);
     });
 

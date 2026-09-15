@@ -297,10 +297,92 @@ let puvodniOtiskEditoru = null;
  */
 let aktivniSdilenaEditace = null;
 
+
+/* ==========================================
+   CORE V2 – JEDINÝ EDITOROVÝ KONTRAKT (528)
+
+   Všechny save/open/export cesty v script.js čtou a zapisují výhradně
+   model Editor Core V2. Neexistuje skryté DOM zrcadlo ani druhý editor.
+   ========================================== */
+function ziskejEditorCoreV2Bridge() {
+  return window.LubaNoteEditorV2Bridge || null;
+}
+
+function ziskejEditorCoreV2Element() {
+  return window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
+}
+
+function ziskejObsahCoreV2({ dokoncit = false } = {}) {
+  const bridge = ziskejEditorCoreV2Bridge();
+
+  if (!bridge?.jeAktivni?.()) {
+    return null;
+  }
+
+  if (dokoncit && bridge.dokoncModelPredExterniAkci?.() !== true) {
+    return null;
+  }
+
+  const obsah = bridge.ziskejObsahProProdukci?.();
+  if (!obsah) {
+    return null;
+  }
+
+  return {
+    richContent: String(obsah.richContent || ""),
+    note: String(obsah.note || ""),
+    todos: Array.isArray(obsah.todos)
+      ? obsah.todos.map((todo) => ({ ...todo }))
+      : [],
+    maTodo: obsah.maTodo === true,
+    pouzeTodo: obsah.pouzeTodo === true,
+    maSmisenyObsah: obsah.maSmisenyObsah === true,
+    maMedia: obsah.maMedia === true
+  };
+}
+
+function ziskejAktivniTodosCoreV2() {
+  return ziskejObsahCoreV2()?.todos || [];
+}
+
+function otevriObsahCoreV2({
+  noteId = "",
+  richContent = "",
+  note = "",
+  todos = [],
+  plannedItems = [],
+  zachovatPuvodniOtisk = false
+} = {}) {
+  const bridge = ziskejEditorCoreV2Bridge();
+  if (!bridge?.otevriObsah) {
+    return false;
+  }
+
+  return bridge.otevriObsah({
+    noteId,
+    richContent,
+    note,
+    todos: Array.isArray(todos) ? todos : [],
+    plannedItems: Array.isArray(plannedItems) ? plannedItems : [],
+    zachovatPuvodniOtisk
+  }) === true;
+}
+
+function fokusujEditorCoreV2() {
+  ziskejEditorCoreV2Element()?.focus?.();
+}
+
 function vytvorOtiskEditoru() {
+  const obsah = ziskejObsahCoreV2() || {
+    richContent: "",
+    note: "",
+    todos: []
+  };
+
   return JSON.stringify({
     title: ziskejNazevPoznamkyZEditoru().trim(),
-    richContent: modalRichText.innerHTML,
+    richContent: obsah.richContent,
+    note: obsah.note,
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled,
@@ -309,10 +391,8 @@ function vytvorOtiskEditoru() {
     area: activeArea,
     secret: secretTaskEnabled,
     tags: [...activeTags],
-    todos: [...activeTodos],
-    repeat: kopirujEditorRepeat(
-      editorRepeat
-    )
+    todos: obsah.todos,
+    repeat: kopirujEditorRepeat(editorRepeat)
   });
 }
 
@@ -337,7 +417,7 @@ window.LubaNoteAktualizujPuvodniOtiskEditoruProV2 = () => {
     return false;
   }
 
-  if (bridge.synchronizujDoProdukcnihoEditoru?.() !== true) {
+  if (bridge.dokoncModelPredExterniAkci?.() !== true) {
     return false;
   }
 
@@ -391,7 +471,7 @@ function zpracujZavreniEditoru() {
   if (
     window.LubaNoteEditorV2Bridge?.jeAktivni?.() &&
     window.LubaNoteEditorV2Bridge
-      ?.synchronizujDoProdukcnihoEditoru?.() !== true
+      ?.dokoncModelPredExterniAkci?.() !== true
   ) {
     zobrazZpravuAplikace(
       "Editor",
@@ -422,6 +502,7 @@ function zpracujZavreniEditoru() {
   
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
+  ziskejEditorCoreV2Bridge()?.zavri?.();
 
   const zaviranyTaskId = ziskejIdZaviranehoEditoru();
 
@@ -463,7 +544,6 @@ function zpracujZavreniEditoru() {
     }
   }, 250);
   
-  RichTextColors.reset();
 }
 
 
@@ -838,8 +918,12 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
   }
   
   const title = ziskejNazevPoznamkyZEditoru().trim();
-  const note = modalRichText.innerText;
-  const richContent = modalRichText.innerHTML;
+  const obsahCore = ziskejObsahCoreV2({ dokoncit: true });
+  if (!obsahCore) {
+    console.error("Uložení bylo zastaveno: Core V2 neposkytl kanonický obsah.");
+    return null;
+  }
+  const { note, richContent, todos } = obsahCore;
   const date =
     modalDate.value && modalTime.value ?
     `${modalDate.value}T${modalTime.value}` :
@@ -880,7 +964,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
       pinned: currentTask.pinned === true,
       isSecret: true,
       tags: [...activeTags],
-      todos: [...activeTodos],
+      todos: todos.map((todo) => ({ ...todo })),
       repeat: secretTaskEnabled ?
         null : kopirujEditorRepeat(editorRepeat)
     };
@@ -898,13 +982,13 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
     await updateTask(aktivni.index, savedNote);
   } else {
     const maVlozenyMediaObsah =
-      window.LubaNoteEditorMedia
+      window.LubaNoteEditorMediaV2
       ?.maVlozenyObsah?.() === true;
     
     const isEmpty =
       title === "" &&
       note.trim() === "" &&
-      activeTodos.length === 0 &&
+      todos.length === 0 &&
       !maVlozenyMediaObsah;
     
     if (!isEmpty) {
@@ -925,7 +1009,7 @@ async function ulozOtevrenouTajnouPoznamkuPredZamknutim() {
         pinned: false,
         isSecret: true,
         tags: [...activeTags],
-        todos: [...activeTodos],
+        todos: todos.map((todo) => ({ ...todo })),
         repeat: null
       };
       
@@ -971,17 +1055,10 @@ function zavriTajnyEditorPriZamknuti() {
    * Rozpracovaná tajná poznámka se při zamknutí zavře bez uložení.
    */
   nastavNazevPoznamkyVEditoru("");
-  modalText.value = "";
-  modalRichText.innerHTML = "";
+  ziskejEditorCoreV2Bridge()?.zavri?.();
   editorRepeat = null;
   modalDate.value = "";
   modalTime.value = "";
-  
-  if (typeof resetTodos === "function") {
-    resetTodos();
-  }
-  
-  document.getElementById("plannedTextLinks")?.replaceChildren();
   
   const zamykanyTaskId = activeTaskId;
   uvolniVzdalenouEditorSession(
@@ -1001,9 +1078,6 @@ function zavriTajnyEditorPriZamknuti() {
   aktualizujIkonuTajnePoznamky();
   secretTaskButton.classList.remove("active");
   
-  if (typeof RichTextColors !== "undefined") {
-    RichTextColors.reset();
-  }
 }
 
 
@@ -1191,8 +1265,7 @@ appMessageDiscardButton?.addEventListener(
       }
     }, 250);
     
-    RichTextColors.reset();
-  }
+    }
 );
 
 // ==========================================
@@ -2288,10 +2361,8 @@ importFile.addEventListener("change", () => {
 });
 
 const modalTitle = document.getElementById("modalTitle");
-const modalText = document.getElementById("modalText");
-
-const modalRichText =
-  document.getElementById("modalRichText");
+const modalRichTextV2Host =
+  document.getElementById("modalRichTextV2Host");
 
 function ziskejNazevPoznamkyZEditoru() {
   return String(
@@ -2351,7 +2422,7 @@ modalTitle?.addEventListener("keydown", (event) => {
   }
   
   event.preventDefault();
-  modalRichText?.focus();
+  fokusujEditorCoreV2();
 });
 
 modalTitle?.addEventListener("beforeinput", (event) => {
@@ -2364,7 +2435,7 @@ modalTitle?.addEventListener("beforeinput", (event) => {
   }
   
   event.preventDefault();
-  modalRichText?.focus();
+  fokusujEditorCoreV2();
 });
 
 modalTitle?.addEventListener("paste", (event) => {
@@ -2407,7 +2478,7 @@ modalTitle?.addEventListener("paste", (event) => {
   );
 });
 
-/* Barevné označování je oddělené v richTextColors.js. */
+/* Barevné označování obsluhuje přímo Core V2 toolbar/model. */
 
 /*
  * NÁZEV EDITORU – stabilní sbalení bez "třepání"
@@ -2453,113 +2524,83 @@ function oznacRolovaniKZacatkuEditoru() {
   posledniPohybKZacatkuEditoru = performance.now();
 }
 
-modalRichText.addEventListener(
+/* Core V2 vytváří svůj scroll kontejner až při otevření poznámky.
+   Poslechy proto držíme na stabilním hostu a aktuální editor si vždy
+   dohledáme z veřejného API Core V2. */
+modalRichTextV2Host?.addEventListener(
   "pointerdown",
   (event) => {
+    if (!ziskejEditorCoreV2Element()?.contains(event.target)) return;
     posledniPointerYEditoru = event.clientY;
-  }, { passive: true }
+  },
+  { passive: true }
 );
 
-modalRichText.addEventListener(
+modalRichTextV2Host?.addEventListener(
   "pointermove",
   (event) => {
-    if (posledniPointerYEditoru === null) {
-      return;
-    }
-    
-    const rozdilY =
-      event.clientY - posledniPointerYEditoru;
-    
-    /* Prst jde dolů -> obsah se vrací směrem k začátku. */
+    const editor = ziskejEditorCoreV2Element();
+    if (!editor?.contains(event.target) || posledniPointerYEditoru === null) return;
+
+    const rozdilY = event.clientY - posledniPointerYEditoru;
     if (rozdilY > 4) {
       oznacRolovaniKZacatkuEditoru();
-
-      /*
-       * Android WebView nemusí na úplném začátku vyvolat další scroll
-       * událost – scrollTop už totiž nemá kam klesnout. Starší logika
-       * proto někdy nechala nadpis sbalený navždy, i když uživatel na
-       * horním okraji dál táhl obsah dolů. Při jasném gestu směrem k
-       * začátku ho na horním okraji rozbalíme rovnou.
-       */
-      if (
-        modalRichText.scrollTop < 8 &&
-        taskModal.classList.contains(
-          "titleCollapsed"
-        )
-      ) {
-        taskModal.classList.remove(
-          "titleCollapsed"
-        );
+      if (editor.scrollTop < 8 && taskModal.classList.contains("titleCollapsed")) {
+        taskModal.classList.remove("titleCollapsed");
       }
     }
-    
-    if (Math.abs(rozdilY) > 2) {
-      posledniPointerYEditoru = event.clientY;
-    }
-  }, { passive: true }
+    if (Math.abs(rozdilY) > 2) posledniPointerYEditoru = event.clientY;
+  },
+  { passive: true }
 );
 
-["pointerup", "pointercancel"].forEach(
-  (nazevUdalosti) => {
-    modalRichText.addEventListener(
-      nazevUdalosti,
-      () => {
-        posledniPointerYEditoru = null;
-      }, { passive: true }
-    );
-  }
-);
+["pointerup", "pointercancel"].forEach((nazevUdalosti) => {
+  modalRichTextV2Host?.addEventListener(
+    nazevUdalosti,
+    () => { posledniPointerYEditoru = null; },
+    { passive: true }
+  );
+});
 
-modalRichText.addEventListener(
+modalRichTextV2Host?.addEventListener(
   "wheel",
   (event) => {
-    if (event.deltaY < 0) {
-      oznacRolovaniKZacatkuEditoru();
-    }
-  }, { passive: true }
+    if (event.deltaY < 0) oznacRolovaniKZacatkuEditoru();
+  },
+  { passive: true }
 );
 
-modalRichText.addEventListener("keydown", (event) => {
+modalRichTextV2Host?.addEventListener("keydown", (event) => {
   if (["ArrowUp", "PageUp", "Home"].includes(event.key)) {
     oznacRolovaniKZacatkuEditoru();
   }
 });
 
-modalRichText.addEventListener("scroll", () => {
-  const scrollTop = modalRichText.scrollTop;
-  const jeNazevSbaleny =
-    taskModal.classList.contains("titleCollapsed");
-  
-  if (!jeNazevSbaleny && scrollTop > 28) {
-    const jeNazevDocasneChraneny =
-      performance.now() <
-      chranNazevPredAutomatickymSbalenimDo;
+/* scroll nebublá; capture na hostu jej ale zachytí z .ln-v2-editor. */
+modalRichTextV2Host?.addEventListener(
+  "scroll",
+  (event) => {
+    const editor = ziskejEditorCoreV2Element();
+    if (!editor || event.target !== editor) return;
 
-    if (jeNazevDocasneChraneny) {
+    const scrollTop = editor.scrollTop;
+    const jeNazevSbaleny = taskModal.classList.contains("titleCollapsed");
+    if (!jeNazevSbaleny && scrollTop > 28) {
+      if (performance.now() < chranNazevPredAutomatickymSbalenimDo) return;
+      taskModal.classList.add("titleCollapsed");
       return;
     }
-
-    taskModal.classList.add("titleCollapsed");
-    return;
-  }
-  
-  if (!jeNazevSbaleny || scrollTop >= 8) {
-    return;
-  }
-  
-  const uzivatelRolujeKZacatku =
-    performance.now() - posledniPohybKZacatkuEditoru <
-    CAS_ZAMERU_ROLOVAT_K_ZACATKU;
-  
-  if (uzivatelRolujeKZacatku) {
-    taskModal.classList.remove("titleCollapsed");
-  }
-});
+    if (!jeNazevSbaleny || scrollTop >= 8) return;
+    if (performance.now() - posledniPohybKZacatkuEditoru < CAS_ZAMERU_ROLOVAT_K_ZACATKU) {
+      taskModal.classList.remove("titleCollapsed");
+    }
+  },
+  true
+);
 
 function ziskejPoziciOtevreniPoznamky() {
   try {
-    return window.LubaNoteEditorOpenPreferences
-      ?.ziskejPozici?.() === "end"
+    return window.LubaNoteEditorOpenPreferences?.ziskejPozici?.() === "end"
       ? "end"
       : "start";
   } catch (_) {
@@ -2567,68 +2608,27 @@ function ziskejPoziciOtevreniPoznamky() {
   }
 }
 
-function aplikujPoziciOtevreniLegacyEditoru() {
-  const poziceOtevreni =
-    ziskejPoziciOtevreniPoznamky();
-
-  /*
-   * FIX 508 – Legacy poznámka nemá vždy stejný scroll kontejner.
-   * Běžný text roluje v #modalRichText, ale čisté TODO používá vlastní
-   * #todoList. Patch 507 posouval jen #modalRichText, takže TODO poznámka
-   * zůstala nahoře. V2 má vlastní scroll a řeší jej Editor Core V2 Bridge.
-   */
-  const nastavScroll = () => {
-    if (
-      window.LubaNoteEditorV2Bridge
-        ?.jeAktivni?.() === true
-    ) {
-      return;
-    }
-
-    const todoScroll =
-      document.getElementById("todoList");
-
-    const cil =
-      todoScroll && !todoScroll.hidden
-        ? todoScroll
-        : modalRichText;
-
-    if (!cil) {
-      return;
-    }
-
-    cil.scrollTop =
-      poziceOtevreni === "end"
-        ? cil.scrollHeight
-        : 0;
-  };
-
-  /*
-   * První frame proběhne až po taskModal.show + loadTodos(). Druhý frame
-   * dorovná výšku po finálním flex layoutu. Žádný timeout na stovky ms:
-   * uživatelský ruční scroll po otevření proto nikdy nepřepisujeme.
-   */
-  requestAnimationFrame(() => {
-    nastavScroll();
-    requestAnimationFrame(nastavScroll);
-  });
-}
-
 function resetujSbaleniNazvuEditoru() {
   taskModal.classList.remove("titleCollapsed");
   posledniPohybKZacatkuEditoru = 0;
   posledniPointerYEditoru = null;
   chranNazevPredAutomatickymSbalenimDo = 0;
-
-  aplikujPoziciOtevreniLegacyEditoru();
+  window.LubaNoteEditorV2?.nastavPoziciOtevreni?.(
+    ziskejPoziciOtevreniPoznamky()
+  );
 }
 
-modalRichText.addEventListener("focus", () => {
-  taskModal.classList.add("editing");
+modalRichTextV2Host?.addEventListener("focusin", (event) => {
+  if (ziskejEditorCoreV2Element()?.contains(event.target)) {
+    taskModal.classList.add("editing");
+  }
 });
 
-modalRichText.addEventListener("blur", () => {
-  taskModal.classList.remove("editing");
+modalRichTextV2Host?.addEventListener("focusout", (event) => {
+  const editor = ziskejEditorCoreV2Element();
+  if (!editor || !editor.contains(event.relatedTarget)) {
+    taskModal.classList.remove("editing");
+  }
 });
 
 const modalDate = document.getElementById("modalDate");
@@ -2736,25 +2736,14 @@ secretTaskButton.classList.toggle(
   secretTaskEnabled
 );
   aktualizujIkonuTajnePoznamky();
-  secretTaskButton.classList.remove("active");
-  resetTodos();
+  secretTaskButton.classList.toggle("active", secretTaskEnabled);
   activeArea = "private";
   activeTags = [];
   updateTagMenuUI();
   closeTagMenu();
   
   nastavNazevPoznamkyVEditoru("");
-  modalText.value = "";
-  modalRichText.innerHTML = "";
   editorRepeat = null;
-  modalText.hidden = true;
-  modalRichText.hidden = false;
-  RichTextColors.reset();
-  document.getElementById("plannedTextLinks")?.replaceChildren();
-  if (document.getElementById("plannedTextLinks")) {
-    document.getElementById("plannedTextLinks").hidden = true;
-  }
-  
   /* Aktuální datum a čas při vytvoření nové poznámky */
   const now = new Date();
   
@@ -2774,16 +2763,32 @@ secretTaskButton.classList.toggle(
   reminderEnabled = false;
   plannedEnabled = false;
   updateReminderButton(false);
-  puvodniOtiskEditoru =
-    vytvorOtiskEditoru();
-  
-  
-  
+
   resetujSbaleniNazvuEditoru();
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-  
+
+  const otevrenoCore = otevriObsahCoreV2({
+    noteId: ziskejDraftIdPoznamky() || "nova-poznamka",
+    richContent: "",
+    note: "",
+    todos: [],
+    plannedItems: []
+  });
+
+  if (!otevrenoCore) {
+    taskModal.classList.remove("show");
+    taskModal.hidden = true;
+    document.body.classList.remove("noScroll");
+    zobrazZpravuAplikace(
+      "Editor Core V2",
+      "Novou poznámku se nepodařilo bezpečně otevřít."
+    );
+    return;
+  }
+
+  puvodniOtiskEditoru = vytvorOtiskEditoru();
   modalTitle.focus();
 });
 
@@ -2893,6 +2898,7 @@ function zavriEditorPoLokalnimUlozeni(
   
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
+  ziskejEditorCoreV2Bridge()?.zavri?.();
 
   const zaviranyTaskId = ziskejIdZaviranehoEditoru();
   uvolniVzdalenouEditorSession(
@@ -2927,7 +2933,6 @@ function zavriEditorPoLokalnimUlozeni(
     }
   }, 250);
   
-  RichTextColors.reset();
   
   /*
    * Nejdřív dovolíme prohlížeči vykreslit zavřený editor.
@@ -3051,8 +3056,11 @@ async function ulozAZavriEditor(
     const closingTaskId = activeTaskId;
     
     const title = ziskejNazevPoznamkyZEditoru().trim();
-    const note = modalRichText.innerText;
-    const richContent = modalRichText.innerHTML;
+    const obsahCore = ziskejObsahCoreV2({ dokoncit: true });
+    if (!obsahCore) {
+      throw new Error("Core V2 neposkytl kanonický obsah pro uložení.");
+    }
+    const { note, richContent, todos } = obsahCore;
     const date =
       modalDate.value && modalTime.value ?
       `${modalDate.value}T${modalTime.value}` :
@@ -3123,7 +3131,7 @@ async function ulozAZavriEditor(
         pinned: currentTask.pinned === true,
         isSecret: secretTaskEnabled,
         tags: [...stitkyProUlozeni],
-        todos: [...activeTodos],
+        todos: todos.map((todo) => ({ ...todo })),
         repeat: secretTaskEnabled ?
           null :
           kopirujEditorRepeat(editorRepeat)
@@ -3158,13 +3166,13 @@ async function ulozAZavriEditor(
       ulozenaPoznamka = updatedTask;
     } else {
       const maVlozenyMediaObsah =
-        window.LubaNoteEditorMedia
+        window.LubaNoteEditorMediaV2
         ?.maVlozenyObsah?.() === true;
       
       const isEmpty =
         title === "" &&
         note.trim() === "" &&
-        activeTodos.length === 0 &&
+        todos.length === 0 &&
         !maVlozenyMediaObsah;
       
       if (!isEmpty) {
@@ -3209,7 +3217,7 @@ async function ulozAZavriEditor(
           pinned: false,
           isSecret: secretTaskEnabled,
           tags: [...stitkyProUlozeni],
-          todos: [...activeTodos],
+          todos: todos.map((todo) => ({ ...todo })),
           repeat: secretTaskEnabled ?
             null :
             kopirujEditorRepeat(editorRepeat)
@@ -3683,18 +3691,6 @@ function otevriSdilenouPoznamkuVEditoru(
     note.title || ""
   );
 
-  modalText.value = note.note || "";
-
-  if (note.richContent) {
-    modalRichText.innerHTML = note.richContent;
-  } else {
-    modalRichText.textContent = note.note || "";
-  }
-
-  modalText.hidden = true;
-  modalRichText.hidden = false;
-  RichTextColors.reset();
-
   editorRepeat =
     kopirujEditorRepeat(note.repeat);
 
@@ -3718,50 +3714,27 @@ function otevriSdilenouPoznamkuVEditoru(
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
 
-  loadTodos(
-    note.todos,
-    note.plannedItems
-  );
-
-  /*
-   * Interní linky v S2D.1 pouze zachováme v uloženém HTML.
-   * Jejich sdílené přístupové/privacy chování napojíme samostatně.
-   */
-
-  puvodniOtiskEditoru =
-    vytvorOtiskEditoru();
-
-  /*
-   * 🔒 430 – SHARED → EDITOR CORE V2
-   *
-   * Shared editor má vlastní otevření přes sharingEditor.js. Nestačí proto
-   * spoléhat jen na obecný MutationObserver V2 Bridge, protože při přechodu
-   * read-only → Edit může observer proběhnout dřív, než je shared obsah
-   * kompletně naplněný a read-only vrstva zavřená. Výsledek byl editor, ve
-   * kterém se objevil kurzor, ale shared editace neběžela spolehlivě přes
-   * dnešní modelový Core V2.
-   *
-   * Aktivaci proto po dokončení shared hostu vyžádáme explicitně. Microtask
-   * proběhne až po návratu do sharingEditor.js, takže ten stihne zavřít
-   * read-only viewer. Bridge stále sám rozhodne o případném Legacy fallbacku
-   * pro nepodporovaný obsah. Lock/save logiku tímto blokem neměnit.
-   */
-  queueMicrotask(() => {
-    if (
-      taskModal.hidden ||
-      !taskModal.classList.contains("show") ||
-      !taskModal.classList.contains("sharingEditorMode") ||
-      String(taskModal.dataset.sharedTaskId || "") !== String(note.id)
-    ) {
-      return;
-    }
-
-    const bridge = window.LubaNoteEditorV2Bridge;
-    if (!bridge?.jeTestRezimZapnuty?.()) return;
-
-    bridge.aktivujProOtevrenouPoznamku?.();
+  const otevrenoCore = otevriObsahCoreV2({
+    noteId: note.id,
+    richContent: note.richContent || "",
+    note: note.note || "",
+    todos: note.todos,
+    plannedItems: note.plannedItems
   });
 
+  if (!otevrenoCore) {
+    taskModal.classList.remove("show");
+    taskModal.hidden = true;
+    document.body.classList.remove("noScroll");
+    aktivniSdilenaEditace = null;
+    taskModal.classList.remove("sharingEditorMode");
+    taskModal.removeAttribute("data-shared-task-id");
+    return false;
+  }
+
+  /* Interní odkazy zůstávají součástí kanonického Core V2 modelu. */
+  window.LubaNoteNoteLinks?.aktualizujOdkazyVEditoru?.();
+  puvodniOtiskEditoru = vytvorOtiskEditoru();
   return true;
 }
 
@@ -3776,7 +3749,7 @@ function vytvorDataSdilenehoEditoru() {
   if (
     window.LubaNoteEditorV2Bridge?.jeAktivni?.() &&
     window.LubaNoteEditorV2Bridge
-      ?.synchronizujDoProdukcnihoEditoru?.() !== true
+      ?.dokoncModelPredExterniAkci?.() !== true
   ) {
     return null;
   }
@@ -3803,11 +3776,11 @@ function vytvorDataSdilenehoEditoru() {
   const title =
     ziskejNazevPoznamkyZEditoru().trim();
 
-  const note =
-    modalRichText.innerText;
-
-  const richContent =
-    modalRichText.innerHTML;
+  const obsahCore = ziskejObsahCoreV2();
+  if (!obsahCore) {
+    return null;
+  }
+  const { note, richContent, todos } = obsahCore;
 
   const date =
     modalDate.value && modalTime.value
@@ -3866,9 +3839,7 @@ function vytvorDataSdilenehoEditoru() {
       tags:
         [...tags],
       todos:
-        activeTodos.map(
-          (todo) => ({ ...todo })
-        ),
+        todos.map((todo) => ({ ...todo })),
       repeat:
         kopirujEditorRepeat(editorRepeat),
       plannedItems:
@@ -3921,7 +3892,6 @@ function zavriSdilenyEditorPoZtrateLocku() {
     }
   }, 250);
 
-  RichTextColors.reset();
 
   requestAnimationFrame(() => {
     renderTasks();
@@ -4094,19 +4064,7 @@ async function openTaskEditorById(taskId) {
   nastavNazevPoznamkyVEditoru(
     currentTask.title || ""
   );
-  modalText.value = currentTask.note || "";
-  
-  if (currentTask.richContent) {
-    modalRichText.innerHTML = currentTask.richContent;
-  } else {
-    /* Staré plain-text poznámky načteme bezpečně jako text. */
-    modalRichText.textContent = currentTask.note || "";
-  }
-  
-  modalText.hidden = true;
-  modalRichText.hidden = false;
-  RichTextColors.reset();
-  
+
   editorRepeat =
     kopirujEditorRepeat(currentTask.repeat);
   
@@ -4128,8 +4086,26 @@ async function openTaskEditorById(taskId) {
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
-  
-  loadTodos(currentTask.todos, currentTask.plannedItems);
+
+  const otevrenoCore = otevriObsahCoreV2({
+    noteId: currentTask.id,
+    richContent: currentTask.richContent || "",
+    note: currentTask.note || "",
+    todos: currentTask.todos,
+    plannedItems: currentTask.plannedItems
+  });
+
+  if (!otevrenoCore) {
+    taskModal.classList.remove("show");
+    taskModal.hidden = true;
+    document.body.classList.remove("noScroll");
+    window.LubaNoteEditorHandoff?.uvolniEditorPoznamky?.(currentTask.id);
+    zobrazZpravuAplikace(
+      "Editor Core V2",
+      "Poznámka obsahuje prvek, který Core V2 neumí bezpečně otevřít. Data nebyla změněna."
+    );
+    return false;
+  }
 
   /*
    * Interní link drží cílovou poznámku podle stabilního ID.
@@ -6426,6 +6402,11 @@ function vytvorSnapshotNovehoDraftu() {
     return null;
   }
 
+  const obsahCore = ziskejObsahCoreV2({ dokoncit: true });
+  if (!obsahCore) {
+    return null;
+  }
+
   const otisk = vytvorOtiskEditoru();
 
   if (
@@ -6453,7 +6434,7 @@ function vytvorSnapshotNovehoDraftu() {
     title:
       ziskejNazevPoznamkyZEditoru(),
     richContent:
-      modalRichText.innerHTML,
+      obsahCore.richContent,
     date: modalDate.value,
     time: modalTime.value,
     reminder: reminderEnabled === true,
@@ -6463,9 +6444,7 @@ function vytvorSnapshotNovehoDraftu() {
     tags: Array.isArray(activeTags)
       ? [...activeTags]
       : [],
-    todos: Array.isArray(activeTodos)
-      ? activeTodos.map((todo) => ({ ...todo }))
-      : [],
+    todos: obsahCore.todos.map((todo) => ({ ...todo })),
     repeat:
       kopirujEditorRepeat(editorRepeat),
     secret: false
@@ -6638,13 +6617,6 @@ async function obnovDraftDoEditoru(draft) {
         draft.title || ""
       );
 
-      modalText.value = "";
-      modalRichText.innerHTML =
-        draft.richContent || "";
-      modalText.hidden = true;
-      modalRichText.hidden = false;
-      RichTextColors.reset();
-
       editorRepeat =
         kopirujEditorRepeat(draft.repeat);
 
@@ -6654,14 +6626,20 @@ async function obnovDraftDoEditoru(draft) {
       aktualizujPopiskyDataCasu();
       updateModalWeekday();
 
-      loadTodos(
-        Array.isArray(draft.todos)
-          ? draft.todos
-          : [],
-        Array.isArray(existujici.plannedItems)
+      const obnovenoCore = otevriObsahCoreV2({
+        noteId: draft.noteId,
+        richContent: draft.richContent || "",
+        note: "",
+        todos: Array.isArray(draft.todos) ? draft.todos : [],
+        plannedItems: Array.isArray(existujici.plannedItems)
           ? existujici.plannedItems
-          : []
-      );
+          : [],
+        zachovatPuvodniOtisk: true
+      });
+
+      if (!obnovenoCore) {
+        return false;
+      }
 
       resetujSbaleniNazvuEditoru();
 
@@ -6730,13 +6708,6 @@ async function obnovDraftDoEditoru(draft) {
       draft.title || ""
     );
 
-    modalText.value = "";
-    modalRichText.innerHTML =
-      draft.richContent || "";
-    modalText.hidden = true;
-    modalRichText.hidden = false;
-    RichTextColors.reset();
-
     editorRepeat =
       kopirujEditorRepeat(draft.repeat);
 
@@ -6746,17 +6717,26 @@ async function obnovDraftDoEditoru(draft) {
     aktualizujPopiskyDataCasu();
     updateModalWeekday();
 
-    loadTodos(
-      Array.isArray(draft.todos)
-        ? draft.todos
-        : [],
-      []
-    );
-
     resetujSbaleniNazvuEditoru();
     taskModal.hidden = false;
     taskModal.classList.add("show");
     document.body.classList.add("noScroll");
+
+    const obnovenoCore = otevriObsahCoreV2({
+      noteId: draft.draftId,
+      richContent: draft.richContent || "",
+      note: "",
+      todos: Array.isArray(draft.todos) ? draft.todos : [],
+      plannedItems: [],
+      zachovatPuvodniOtisk: true
+    });
+
+    if (!obnovenoCore) {
+      taskModal.classList.remove("show");
+      taskModal.hidden = true;
+      document.body.classList.remove("noScroll");
+      return false;
+    }
 
     puvodniOtiskEditoru =
       draft.puvodniOtiskEditoru || null;

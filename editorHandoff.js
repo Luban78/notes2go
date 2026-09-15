@@ -1308,7 +1308,7 @@ async function zpracujEditorSessionUpdate(row) {
   /*
    * Pokud byl nad editorem otevřen fullscreen obrázek nebo PDF,
    * handoff modal je překryje a tyto pomocné viewery bezpečně zavřeme.
-   * Samotného editorMedia.js ani jeho gest se nedotýkáme.
+   * Samotného Core V2 media modulu ani jeho gest se nedotýkáme.
    */
   document.querySelector(
     ".lubaNoteImagePreviewClose"

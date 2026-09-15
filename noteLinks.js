@@ -20,9 +20,9 @@
 (() => {
   "use strict";
 
-  const editor = document.getElementById("modalRichText");
+  const editorHost = document.getElementById("modalRichTextV2Host");
 
-  if (!editor) {
+  if (!editorHost) {
     return;
   }
 
@@ -336,12 +336,6 @@
     posledniSpoust = null;
   }
 
-  function jeTodoRichTextEditor(element) {
-    return Boolean(
-      element?.classList?.contains("todoRichTextInput")
-    );
-  }
-
   function jeV2Editor(element) {
     return Boolean(
       element?.classList?.contains("ln-v2-editor") &&
@@ -350,15 +344,7 @@
   }
 
   function jePodporovanyEditor(element) {
-    if (!element) {
-      return false;
-    }
-
-    return (
-      element === editor ||
-      jeTodoRichTextEditor(element) ||
-      jeV2Editor(element)
-    );
+    return jeV2Editor(element);
   }
 
   function ziskejEditorProNode(node) {
@@ -367,28 +353,8 @@
         ? node
         : node?.parentElement;
 
-    if (!element) {
-      return null;
-    }
-
-    const v2Editor = element.closest?.(".ln-v2-editor");
-    if (v2Editor && jePodporovanyEditor(v2Editor)) {
-      return v2Editor;
-    }
-
-    const todoEditor = element.closest?.(
-      ".todoRichTextInput"
-    );
-
-    if (todoEditor && jePodporovanyEditor(todoEditor)) {
-      return todoEditor;
-    }
-
-    if (editor.contains(element)) {
-      return editor;
-    }
-
-    return null;
+    const v2Editor = element?.closest?.(".ln-v2-editor") || null;
+    return v2Editor && jeV2Editor(v2Editor) ? v2Editor : null;
   }
 
   function jeVPodporovanemTextu(node, cilovyEditor) {
@@ -465,8 +431,8 @@
 
     /*
      * Při normálním psaní contenteditable drží právě psaný text
-     * v jednom textovém uzlu. To je pro V1 záměrně nejbezpečnější:
-     * nezasahujeme přes hranice formátovaných elementů.
+     * v jednom textovém uzlu. Pro Core V2 je nejbezpečnější držet trigger
+     * uvnitř tohoto uzlu a nezasahovat přes hranice formátovaných elementů.
      */
     if (range.startContainer.nodeType !== Node.TEXT_NODE) {
       return null;
@@ -544,7 +510,7 @@
     /* Poslední bezpečný fallback: levý horní roh skutečného řádku editoru. */
     const editorRect =
       spoust.editor?.getBoundingClientRect?.() ||
-      editor.getBoundingClientRect();
+      editorHost.getBoundingClientRect();
     return {
       left: editorRect.left + 16,
       right: editorRect.left + 16,
@@ -696,7 +662,7 @@
     const viewportBottom = viewportTop + viewportHeight;
 
     /*
-     * Mobilní V1: panel má přibližně polovinu viditelné šířky.
+     * Mobilní Core V2: panel má přibližně polovinu viditelné šířky.
      * Na velmi úzkém displeji držíme použitelné minimum, na tabletu/PC
      * ho nenecháme zbytečně široký.
      */
@@ -756,25 +722,6 @@
     requestAnimationFrame(umistiPanel);
   }
 
-  function vytvorInterniOdkaz(poznamka) {
-    const link = document.createElement("span");
-    link.className = "noteInternalLink";
-    link.dataset.noteId = String(poznamka.id);
-    link.dataset.noteTitle = ziskejNazevPoznamky(poznamka);
-    link.setAttribute("contenteditable", "false");
-    link.setAttribute("role", "link");
-    link.setAttribute(
-      "aria-label",
-      window.LubaNoteI18n?.t?.(
-        "noteLinks.ariaTarget",
-        `Interní odkaz na poznámku ${ziskejNazevPoznamky(poznamka)}`,
-        { value: ziskejNazevPoznamky(poznamka) }
-      ) || `Interní odkaz na poznámku ${ziskejNazevPoznamky(poznamka)}`
-    );
-    link.textContent = ziskejNazevPoznamky(poznamka);
-    return link;
-  }
-
   function vlozPoznamkuDoSpouste(poznamka, spoust) {
     if (!poznamka || !spoust) {
       return false;
@@ -782,57 +729,10 @@
 
     const cilovyEditor = spoust.editor;
 
-    if (jeV2Editor(cilovyEditor)) {
-      return window.LubaNoteEditorV2Bridge
-        ?.vlozInterniOdkazZAutocomplete?.(poznamka, spoust) === true;
-    }
+    if (!jeV2Editor(cilovyEditor)) return false;
 
-    if (
-      !spoust.textNode?.isConnected ||
-      !cilovyEditor?.isConnected ||
-      !cilovyEditor.contains(spoust.textNode)
-    ) {
-      return false;
-    }
-
-    const range = document.createRange();
-
-    try {
-      range.setStart(spoust.textNode, spoust.startOffset);
-      range.setEnd(spoust.textNode, spoust.endOffset);
-    } catch (_) {
-      return false;
-    }
-
-    const link = vytvorInterniOdkaz(poznamka);
-    const mezera = document.createTextNode(" ");
-
-    range.deleteContents();
-    range.insertNode(mezera);
-    range.insertNode(link);
-
-    const selection = window.getSelection();
-    const caretRange = document.createRange();
-    caretRange.setStartAfter(mezera);
-    caretRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(caretRange);
-
-    try {
-      cilovyEditor.focus({ preventScroll: true });
-    } catch (_) {
-      cilovyEditor.focus();
-    }
-
-    cilovyEditor.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        inputType: "insertText",
-        data: null
-      })
-    );
-
-    return true;
+    return window.LubaNoteEditorV2Bridge
+      ?.vlozInterniOdkazZAutocomplete?.(poznamka, spoust) === true;
   }
 
   function vytvorDatumCasProNovouPoznamku() {
@@ -1128,35 +1028,6 @@
     return false;
   }
 
-  /* ---------- HLAVNÍ EDITOR + BULLETY ---------- */
-
-  editor.addEventListener("input", () => {
-    otevriNeboAktualizujPanel(editor);
-  });
-
-  editor.addEventListener("keyup", (event) => {
-    if (
-      event.key === "ArrowUp" ||
-      event.key === "ArrowDown" ||
-      event.key === "Enter" ||
-      event.key === "Escape"
-    ) {
-      return;
-    }
-
-    if (!panel || panel.hidden) {
-      otevriNeboAktualizujPanel(editor);
-    }
-  });
-
-  editor.addEventListener(
-    "keydown",
-    (event) => {
-      obsluzKeydownAutocomplete(event, editor);
-    },
-    true
-  );
-
   /* ---------- EDITOR CORE V2 – dynamický editor ---------- */
 
   document.addEventListener(
@@ -1172,7 +1043,7 @@
   /*
    * Android/Gboard u modelově řízeného V2 vstupu nemusí po preventDefault()
    * poslat nativní input/keyup. Core proto po obnovení selection vyšle tento
-   * neutrální signál, aby [[ autocomplete reagoval stejně spolehlivě jako Legacy.
+   * neutrální signál, aby [[ autocomplete reagoval spolehlivě i v Android WebView.
    */
   document.addEventListener(
     "lubanote:v2-model-input",
@@ -1205,77 +1076,7 @@
     true
   );
 
-  /* ---------- TODO RICH-TEXT – dynamické editory ---------- */
-
-  document.addEventListener(
-    "input",
-    (event) => {
-      const todoEditor = event.target?.closest?.(
-        ".todoRichTextInput"
-      );
-
-      if (!todoEditor) {
-        return;
-      }
-
-      otevriNeboAktualizujPanel(todoEditor);
-    },
-    true
-  );
-
-  document.addEventListener(
-    "keyup",
-    (event) => {
-      const todoEditor = event.target?.closest?.(
-        ".todoRichTextInput"
-      );
-
-      if (!todoEditor) {
-        return;
-      }
-
-      if (
-        event.key === "ArrowUp" ||
-        event.key === "ArrowDown" ||
-        event.key === "Enter" ||
-        event.key === "Escape"
-      ) {
-        return;
-      }
-
-      if (!panel || panel.hidden) {
-        otevriNeboAktualizujPanel(todoEditor);
-      }
-    },
-    true
-  );
-
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      const todoEditor = event.target?.closest?.(
-        ".todoRichTextInput"
-      );
-
-      if (!todoEditor) {
-        return;
-      }
-
-      obsluzKeydownAutocomplete(
-        event,
-        todoEditor
-      );
-    },
-    true
-  );
-
   /* ---------- POZICE PANELU ---------- */
-
-  editor.addEventListener("scroll", () => {
-    if (panel && !panel.hidden) {
-      requestAnimationFrame(umistiPanel);
-    }
-  });
 
   document.addEventListener(
     "scroll",
@@ -1677,7 +1478,7 @@
 
   function odfokusujEditorPredNavigaci() {
     try {
-      editor.blur();
+      window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
       document.activeElement?.blur?.();
       window.getSelection()?.removeAllRanges();
     } catch (_) {
@@ -1699,13 +1500,6 @@
     aktivniInterniCilId = String(ciloveId);
     odfokusujEditorPredNavigaci();
     await openTaskEditorById(ciloveId);
-
-    /* V2.19 – Observer by V2 aktivoval v microtasku, ale mezi tím mohl být
-       na jeden snímek vidět skrytý Legacy obsah. Přepneme Core okamžitě. */
-    if (window.LubaNoteEditorV2Bridge?.jeTestRezimZapnuty?.() === true) {
-      window.LubaNoteEditorV2Bridge
-        ?.aktivujProOtevrenouPoznamku?.({ zachovatPuvodniOtisk: true });
-    }
 
     /*
      * Předání editoru mezi zařízeními může otevření záměrně
@@ -1739,10 +1533,10 @@
     const v2Aktivni = v2Bridge?.jeAktivni?.() === true;
 
     /* FIX 527 – V2 model je source of truth. Před kontrolou `bylEditorZmenen()`
-       MUSÍ být aktuální model zrcadlen do produkčních polí. Dříve se dirty
+       MUSÍ být aktuální model bezpečně dokončen před externí akcí. Dříve se dirty
        kontrola provedla nad starým DOMem, vyšla falešně jako „beze změny“ a
-       klik na [[interní odkaz]] mohl přepnout poznámku bez uložení nového textu. */
-    if (v2Aktivni && v2Bridge?.synchronizujDoProdukcnihoEditoru?.() !== true) {
+       klik na [[interní odkaz]] nesmí přepnout poznámku bez uložení nového textu. */
+    if (v2Aktivni && v2Bridge?.dokoncModelPredExterniAkci?.() !== true) {
       return false;
     }
 
@@ -1774,14 +1568,13 @@
 
     /*
      * V2.19 – interní navigace ve V2 nesmí zavřít celý modal a hned ho
-     * znovu otevřít. To způsobovalo viditelný záblesk Legacy DOMu/selection.
+     * znovu otevřít. To způsobovalo zbytečné zavření a nové otevření editoru.
      * U již uložené V2 poznámky proto nejdřív bezpečně předáme model do
      * produkční pipeline a uložíme BEZ zavření. Cíl se pak přepíše ve
-     * stejném otevřeném modalu. Starý editor zůstává fallback jen pro
-     * nové/Legacy případy, kde stabilní source ID ještě nemáme.
+     * stejném otevřeném modalu. U nové neuložené poznámky bez stabilního source ID navigaci raději zastavíme.
      */
     if (v2Aktivni && puvodniId) {
-      /* Model už byl synchronizován před dirty kontrolou výše. */
+      /* Model už byl bezpečně dokončen před dirty kontrolou výše. */
       const vysledek = await ulozAZavriEditor(
         null,
         { nezavirat: true, tichyRezim: true }
@@ -2212,10 +2005,7 @@
     (event) => {
       const aktivni = event.target;
       const jeEditor =
-        aktivni === editor ||
-        aktivni?.classList?.contains("ln-v2-editor") ||
-        aktivni?.classList?.contains("todoRichTextInput") ||
-        aktivni?.classList?.contains("todoTextInput");
+        aktivni?.classList?.contains("ln-v2-editor");
 
       if (jeEditor) {
         nastavBacklinkyRozbalene(false);

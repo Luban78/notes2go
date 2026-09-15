@@ -597,8 +597,7 @@ function closePlanner() {
     plannerTaskTitle.textContent = "";
   }
 
-  /* Starý výběr už nesmí ovlivnit další akci. */
-  RichTextColors.clearSelection();
+  window.getSelection()?.removeAllRanges();
 }
 
 
@@ -652,15 +651,18 @@ async function saveCurrentPlannedItem() {
     `${plannerDate.value}T${plannerTime.value}`;
 
   const v2Bridge = window.LubaNoteEditorV2Bridge;
-  const v2Obsah = v2Bridge?.jeAktivni?.() === true
-    ? v2Bridge.ziskejObsahProProdukci?.()
-    : null;
+  if (v2Bridge?.jeAktivni?.() !== true || v2Bridge.dokoncModelPredExterniAkci?.() !== true) {
+    console.error("Planner: Core V2 není připraven pro plánování.");
+    return;
+  }
+  const v2Obsah = v2Bridge.ziskejObsahProProdukci?.();
+  if (!v2Obsah) return;
 
   /*
    * Plánování je vědomá změna otevřené poznámky. Pokud běží V2, uložíme
    * spolu s Planner položkou i celý právě viditelný modelový stav (text,
    * richContent i TODO), aby Planner nikdy nevrátil do localStorage starší
-   * skrytou Legacy kopii otevřené poznámky.
+   * neaktuální kopii otevřené poznámky.
    */
   if (v2Obsah) {
     sourceNote.note = String(v2Obsah.note || "");
@@ -672,13 +674,10 @@ async function saveCurrentPlannedItem() {
 
   let sourceTodo = null;
 
-  if (
-    plannerSourceType === "todo" &&
-    window.LubaNoteTodos
-  ) {
+  if (plannerSourceType === "todo") {
     const currentTodos = Array.isArray(v2Obsah?.todos)
       ? v2Obsah.todos
-      : (window.LubaNoteTodos.ziskejAktivniTodos?.() || []);
+      : [];
 
     sourceTodo = currentTodos.find(
       todo => todo?.id === plannerSourceTodoId
@@ -730,9 +729,8 @@ async function saveCurrentPlannedItem() {
   plannedItem.id;
   
   if (plannerSourceType === "selection") {
-    const backlinkVytvoren = v2Bridge?.jeAktivni?.() === true
-      ? v2Bridge.obalPlanovaciVyber?.(plannedItem.id) === true
-      : wrapCurrentSelectionAsPlannedLink(plannedItem.id);
+    const backlinkVytvoren =
+      v2Bridge.obalPlanovaciVyber?.(plannedItem.id) === true;
 
     if (!backlinkVytvoren) {
       console.error(
@@ -757,11 +755,10 @@ async function saveCurrentPlannedItem() {
   }
 
   if (plannerSourceType === "selection") {
-    const aktualniV2Obsah = v2Bridge?.jeAktivni?.() === true
-      ? v2Bridge.ziskejObsahProProdukci?.()
-      : null;
-    sourceNote.note = aktualniV2Obsah ? String(aktualniV2Obsah.note || "") : modalRichText.innerText;
-    sourceNote.richContent = aktualniV2Obsah ? String(aktualniV2Obsah.richContent || "") : modalRichText.innerHTML;
+    const aktualniV2Obsah = v2Bridge.ziskejObsahProProdukci?.();
+    if (!aktualniV2Obsah) return;
+    sourceNote.note = String(aktualniV2Obsah.note || "");
+    sourceNote.richContent = String(aktualniV2Obsah.richContent || "");
     if (Array.isArray(aktualniV2Obsah?.todos)) {
       sourceNote.todos = aktualniV2Obsah.todos;
     }
@@ -827,11 +824,10 @@ async function saveCurrentPlannedItem() {
     plannerSourceType === "todo" &&
     plannerSourceTodoId
   ) {
-    window.LubaNoteTodos
-      ?.nastavTodoJakoNaplanovane?.(
-        plannerSourceTodoId,
-        true
-      );
+    v2Bridge.nastavTodoNaplanovane?.(
+      plannerSourceTodoId,
+      true
+    );
   }
 
   closePlanner();
@@ -1092,14 +1088,6 @@ async function zajistiUlozenouZdrojovouPoznamkuProPlanner() {
 planSelectionButton.addEventListener(
   "click",
   async () => {
-    /*
-     * PATCH 462 – Shared poznámka není součást private `savedTask`.
-     * Původní Planner fallback by u spolupracovníka mohl zkusit vytvořit
-     * novou soukromou kopii otevřené sdílené poznámky. To je zakázané.
-     * Ikona v Shared liště je už viditelná ve správném pořadí, ale dokud
-     * nebude Planner napojený na per-user Shared metadata, nesmí tato akce
-     * sahat do private storage ani vytvořit duplicitní poznámku.
-     */
     if (document.getElementById("taskModal")?.classList.contains("sharingEditorMode")) {
       window.zobrazZpravuAplikace?.(
         "Plánování",
@@ -1109,223 +1097,57 @@ planSelectionButton.addEventListener(
     }
 
     const v2Bridge = window.LubaNoteEditorV2Bridge;
-    if (v2Bridge?.jeAktivni?.() === true) {
-      const v2Kontext = v2Bridge.ziskejPlanovaciKontext?.();
-      if (!v2Kontext?.ok) {
-        if (v2Kontext?.duvod && typeof window.zobrazZpravuAplikace === "function") {
-          window.zobrazZpravuAplikace("Plánování", v2Kontext.duvod);
-        }
-        return;
-      }
-
-      let tasks = loadTask();
-      let sourceNote = najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
-      if (!sourceNote?.id) {
-        const zajisteno = await zajistiUlozenouZdrojovouPoznamkuProPlanner();
-        tasks = zajisteno?.tasks || loadTask();
-        sourceNote = zajisteno?.sourceNote || null;
-      }
-      if (!sourceNote?.id) {
-        console.error("Zdrojová V2 poznámka nebyla nalezena ani po bezpečném uložení.");
-        return;
-      }
-
-      plannerSourceNoteId = sourceNote.id;
-      selectedPlannerText = String(v2Kontext.text || "").trim();
-      plannerTaskTitle.textContent = selectedPlannerText;
-
-      if (v2Kontext.typ === "todo") {
-        v2Bridge.synchronizujDoProdukcnihoEditoru?.();
-        plannerSourceType = "todo";
-        plannerSourceTodoId = v2Kontext.todoId;
-        plannerSelectionStart = null;
-        plannerSelectionEnd = null;
-      } else {
-        plannerSourceType = "selection";
-        plannerSourceTodoId = null;
-        plannerSelectionStart = v2Kontext.start;
-        plannerSelectionEnd = v2Kontext.end;
-      }
-
-      const androidSelection = window.getSelection();
-      if (androidSelection) androidSelection.removeAllRanges();
-      document.querySelector(".ln-v2-editor")?.blur?.();
-
-      setPlannerDateTimeToNow();
-      nastavVychoziPlannerReminderProModal();
-      plannerModal.hidden = false;
-      return;
-    }
-    const todoModeActive =
-      window.LubaNoteTodos
-        ?.jeTodoRezimAktivni?.() === true;
-
-    const selectedTodo =
-      window.LubaNoteTodos?.ziskejVybraneTodo?.() || null;
-
-    if (todoModeActive) {
-      if (!selectedTodo) {
-        return;
-      }
-
-      const todoText =
-        String(selectedTodo.text || "").trim();
-
-      if (!todoText) {
-        return;
-      }
-
-      let tasks = loadTask();
-      let sourceNote =
-        najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
-
-      if (!sourceNote?.id) {
-        const zajisteno =
-          await zajistiUlozenouZdrojovouPoznamkuProPlanner();
-
-        tasks = zajisteno?.tasks || loadTask();
-        sourceNote = zajisteno?.sourceNote || null;
-      }
-
-      if (!sourceNote?.id) {
-        console.error(
-          "Zdrojová poznámka TODO nebyla nalezena ani po bezpečném uložení."
-        );
-        return;
-      }
-
-      plannerSourceNoteId = sourceNote.id;
-      plannerSourceType = "todo";
-      plannerSourceTodoId = selectedTodo.id;
-      plannerSelectionStart = null;
-      plannerSelectionEnd = null;
-      selectedPlannerText = todoText;
-
-      plannerTaskTitle.textContent = todoText;
-
-      window.LubaNoteTodos
-        ?.ukonciEditaciVybranehoTodo?.();
-
-      window.getSelection()
-        ?.removeAllRanges();
-
-      setPlannerDateTimeToNow();
-      nastavVychoziPlannerReminderProModal();
-      plannerModal.hidden = false;
-      return;
-    }
-
-    const snapshot =
-      RichTextColors.getSelectionSnapshot();
-
-    if (!snapshot) {
-      return;
-    }
-
-    const text = snapshot.text.trim();
-
-    if (!text) {
-      return;
-    }
-
-    const kontrolaBacklinku =
-      window.LubaNotePlannedTextLinks
-        ?.overVyberProBacklink?.(snapshot.range);
-
-    if (
-      kontrolaBacklinku &&
-      kontrolaBacklinku.ok === false
-    ) {
-      if (
-        typeof window.zobrazZpravuAplikace ===
-        "function"
-      ) {
-        window.zobrazZpravuAplikace(
-          "Backlink nelze vytvořit",
-          kontrolaBacklinku.duvod
-        );
-      } else {
-        console.warn(
-          "Backlink nelze vytvořit:",
-          kontrolaBacklinku.duvod
-        );
-      }
-
-      return;
-    }
-
-    let tasks = loadTask();
-    let sourceNote =
-      najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
-
-    if (!sourceNote?.id) {
-      const zajisteno =
-        await zajistiUlozenouZdrojovouPoznamkuProPlanner();
-
-      tasks = zajisteno?.tasks || loadTask();
-      sourceNote = zajisteno?.sourceNote || null;
-    }
-
-    if (!sourceNote) {
-      console.error(
-        "Zdrojová poznámka nebyla nalezena ani po bezpečném uložení."
+    if (v2Bridge?.jeAktivni?.() !== true) {
+      window.zobrazZpravuAplikace?.(
+        "Plánování",
+        "Editor Core V2 není aktivní."
       );
       return;
     }
 
-    /* Srovnáme všechny identity editoru s právě nalezenou poznámkou. */
-    if (sourceNote.id) {
-      const taskModal = document.getElementById("taskModal");
-
-      if (taskModal) {
-        taskModal.dataset.taskId = sourceNote.id;
-      }
-
-      if (typeof activeTaskId !== "undefined") {
-        activeTaskId = sourceNote.id;
-      }
-
-      if (typeof activeTaskIndex !== "undefined") {
-        activeTaskIndex = tasks.findIndex(
-          (task) => task?.id === sourceNote.id
-        );
-      }
+    if (v2Bridge.dokoncModelPredExterniAkci?.() !== true) {
+      return;
     }
 
-    /* Starším poznámkám doplníme stejné stabilní ID na všech zařízeních. */
-    if (!sourceNote.id) {
-      sourceNote.id =
-        typeof vytvorStabilniIdStarePoznamky === "function"
-          ? vytvorStabilniIdStarePoznamky(sourceNote)
-          : crypto.randomUUID();
+    const v2Kontext = v2Bridge.ziskejPlanovaciKontext?.();
+    if (!v2Kontext?.ok) {
+      if (v2Kontext?.duvod) {
+        window.zobrazZpravuAplikace?.("Plánování", v2Kontext.duvod);
+      }
+      return;
+    }
 
-      sourceNote.updatedAt =
-        new Date().toISOString();
+    let tasks = loadTask();
+    let sourceNote = najdiZdrojovouPoznamkuOtevrenehoEditoru(tasks);
+    if (!sourceNote?.id) {
+      const zajisteno = await zajistiUlozenouZdrojovouPoznamkuProPlanner();
+      tasks = zajisteno?.tasks || loadTask();
+      sourceNote = zajisteno?.sourceNote || null;
+    }
 
-      saveAllTasks(tasks);
-      uploadLocalNoteToSupabase(sourceNote);
+    if (!sourceNote?.id) {
+      console.error("Zdrojová Core V2 poznámka nebyla nalezena ani po bezpečném uložení.");
+      return;
     }
 
     plannerSourceNoteId = sourceNote.id;
-    plannerSourceType = "selection";
-    plannerSelectionStart = snapshot.start;
-    plannerSelectionEnd = snapshot.end;
-    selectedPlannerText = text;
+    selectedPlannerText = String(v2Kontext.text || "").trim();
+    plannerTaskTitle.textContent = selectedPlannerText;
 
-    plannerTaskTitle.textContent = text;
-    /*
- * Výběr už máme bezpečně uložený v RichTextColors.
- * Zrušíme pouze nativní Android označení, aby jeho
- * nabídka Vyjmout/Kopírovat/Vložit nelezla přes Planner.
- */
-const androidSelection =
-  window.getSelection();
+    if (v2Kontext.typ === "todo") {
+      plannerSourceType = "todo";
+      plannerSourceTodoId = v2Kontext.todoId;
+      plannerSelectionStart = null;
+      plannerSelectionEnd = null;
+    } else {
+      plannerSourceType = "selection";
+      plannerSourceTodoId = null;
+      plannerSelectionStart = v2Kontext.start;
+      plannerSelectionEnd = v2Kontext.end;
+    }
 
-if (androidSelection) {
-  androidSelection.removeAllRanges();
-}
-
-modalRichText.blur();
+    window.getSelection()?.removeAllRanges();
+    window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
 
     setPlannerDateTimeToNow();
     nastavVychoziPlannerReminderProModal();

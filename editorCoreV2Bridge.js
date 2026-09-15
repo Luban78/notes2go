@@ -1,27 +1,19 @@
 /* ========================================
    LUBANOTE – EDITOR CORE V2 BRIDGE / PRODUCTION
-   FÁZE V2.20b – ROW-WIDE LONG-PRESS + SELECTION ARBITRÁŽ
+   HARD CUT 528 – CORE V2 JE JEDINÝ EDITOR
 
-   🔒 FROZEN INTEGRAČNÍ PRAVIDLA:
-   - Editor Core V2 je výchozí engine pro vlastní podporované poznámky.
-   - Produkční save/sync stále vlastní stávající LubaNote pipeline; Bridge jí
-     před uložením předá kanonické HTML / plain text / TODO z V2 modelu.
-   - Sdílené a zatím nepodporované HTML se automaticky otevře starým editorem.
-   - 5× tap na Připomínky je nouzový LEGACY přepínač pro aktuální relaci.
-   - Starý editor zůstává v projektu jako rollback cesta; nemaž bez kompletní
-     migrace sdílení, dokumentů a regresních testů.
+   Pravidla:
+   - žádný druhý editor, fallback ani přepínač,
+   - Core V2 model je jediný zdroj pravdy,
+   - save/sync/export čtou kanonický obsah přímo z Core V2,
+   - staré uložené HTML/TODO se pouze importuje do modelu; není to druhý editor.
 ======================================== */
 
 (() => {
   "use strict";
 
-  const KLIC_LEGACY = "ln_editor_v2_legacy_mode";
-  const KLIC_KOPIE = "ln_editor_v2_test_copy:"; // jen kompatibilita se starými TEST daty
-
   const taskModal = document.getElementById("taskModal");
-  const modalRichText = document.getElementById("modalRichText");
   const modalTitle = document.getElementById("modalTitle");
-  const todoList = document.getElementById("todoList");
   const editorBackButton = document.getElementById("editorBackButton");
   const selectionMenu = document.getElementById("selectionMenu");
   const selectionVyjmout = document.getElementById("selectionVyjmout");
@@ -40,25 +32,20 @@
   const jeDesktopSelection =
     window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
 
-  if (!taskModal || !modalRichText || !modalTitle || !editorBackButton) {
+  if (!taskModal || !modalTitle || !editorBackButton) {
     return;
   }
 
   let aktivni = false;
   let aktivniNoteId = null;
-  let zdrojoveHtml = "";
   let puvodniTitleContenteditable = null;
-  let puvodniRichTextHidden = null;
-  let puvodniTodoListHidden = null;
   let preskocCaptureFajfky = false;
-  let hostitel = null;
-  let badge = null;
+  let hostitel = document.getElementById("modalRichTextV2Host");
   let toast = null;
   let odkazModal = null;
   let odkazTextInput = null;
   let odkazUrlInput = null;
   let observer = null;
-  let posledniAktivaceToken = 0;
   let pozastavAktivaci = false;
   let nastavovaciObrazekId = "";
   let observerNastaveniObrazku = null;
@@ -91,9 +78,6 @@
     "tlacitkoUlozitDokument"
   ]);
 
-  const nepodporovaneAkce = new Set([
-    "shareNoteButton"
-  ]);
 
   const moznostiVelikostiObrazku = [
     { hodnota: "prizpusobit", popisek: "Přizpůsobit editoru" },
@@ -125,38 +109,13 @@
     return window.LubaNoteEditorV2 || null;
   }
 
-  function jeTestRezimZapnuty() {
-    // Historický název funkce z LAB fáze. V produkci znamená „V2 je povolen“.
-    try {
-      return sessionStorage.getItem(KLIC_LEGACY) !== "1";
-    } catch (_error) {
-      return true;
-    }
-  }
-
-  function nastavTestRezim(zapnuto) {
-    try {
-      if (zapnuto) sessionStorage.removeItem(KLIC_LEGACY);
-      else sessionStorage.setItem(KLIC_LEGACY, "1");
-    } catch (_error) {}
-  }
-
   function vytvorPomocneUi() {
     if (!hostitel) {
       hostitel = document.createElement("div");
       hostitel.id = "modalRichTextV2Host";
       hostitel.className = "modalRichTextV2Host";
       hostitel.hidden = true;
-      modalRichText.insertAdjacentElement("afterend", hostitel);
-    }
-
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.id = "lnV2TestBadge";
-      badge.className = "lnV2TestBadge";
-      badge.textContent = "V2 TEST · KOPIE";
-      badge.hidden = true;
-      taskModal.querySelector(".modalContent")?.appendChild(badge);
+      document.querySelector("#taskModal .modalTitleRow")?.insertAdjacentElement("afterend", hostitel);
     }
 
     if (!toast) {
@@ -204,7 +163,7 @@
   /* ==========================================
      V2.20 – VLASTNÍ LUBANOTE SELECTION PANELY
 
-     Používáme stejné #selectionMenu jako Legacy, ale akce vedeme výhradně
+     Používáme společné #selectionMenu aplikace, ale akce vedeme výhradně
      přes Core V2 model. Tím vracíme oba odladěné režimy:
        - Vyjmout / Kopírovat / Vložit / Vše pro označený text
        - Vložit / Vše pro caret / prázdné místo
@@ -483,66 +442,6 @@
        Serverový lock/save stále vlastní sharingEditor.js; Bridge pouze
        poskytuje modelový editor a před uložením připraví kanonická data. */
     return "";
-  }
-
-  function klicKopie(noteId) {
-    return `${KLIC_KOPIE}${noteId}`;
-  }
-
-  function ziskejZdrojoveTodos() {
-    try {
-      const todos = window.LubaNoteTodos?.ziskejAktivniTodos?.();
-      return Array.isArray(todos) ? todos.map((todo) => ({ ...todo })) : [];
-    } catch (_error) {
-      return [];
-    }
-  }
-
-  function vytvorZdrojovyOtisk(sourceHtml, todos) {
-    const html = String(sourceHtml || "");
-    const maSmisenyV2Obsah = html.includes("data-lubanote-v2-todo");
-    if (maSmisenyV2Obsah) {
-      let todoCast = "";
-      try { todoCast = JSON.stringify(Array.isArray(todos) ? todos : []); } catch (_error) { todoCast = String(todos?.length || 0); }
-      return `MIXED:${html}|TODO:${todoCast}`;
-    }
-    if (Array.isArray(todos) && todos.length) {
-      try { return `TODO:${JSON.stringify(todos)}`; } catch (_error) { return `TODO:${todos.length}`; }
-    }
-    return html;
-  }
-
-  function nactiTestKopii(noteId, sourceHtml) {
-    try {
-      const raw = localStorage.getItem(klicKopie(noteId));
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (!data?.model || data.sourceHtml !== sourceHtml) return null;
-      return data;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function ulozTestKopii() {
-    if (!aktivni || !aktivniNoteId || !core()?.ziskejModel) return false;
-    try {
-      const model = core().ziskejModel();
-      localStorage.setItem(
-        klicKopie(aktivniNoteId),
-        JSON.stringify({
-          version: 1,
-          noteId: aktivniNoteId,
-          sourceHtml: zdrojoveHtml,
-          savedAt: new Date().toISOString(),
-          model
-        })
-      );
-      return true;
-    } catch (error) {
-      console.warn("Editor V2 TEST: testovací kopii se nepodařilo uložit.", error);
-      return false;
-    }
   }
 
   function vytvorV2OdkazModal() {
@@ -858,7 +757,7 @@
   }
 
   function nastavOchranuUi(_zapnout) {
-    // V produkční V2 zůstává název i metadata plně editovatelná starým UI.
+    // Název a metadata zůstávají editovatelná hlavním UI; textový obsah vlastní pouze Core V2.
     modalTitle.removeAttribute("aria-readonly");
     if (puvodniTitleContenteditable !== null) {
       modalTitle.setAttribute("contenteditable", puvodniTitleContenteditable);
@@ -901,174 +800,135 @@
     };
   }
 
-  function synchronizujDoProdukcnihoEditoru() {
-    if (!aktivni) return true;
-
-    /* FIX 434: starší Android může při tapu na toolbar/Uložit ještě držet
-       otevřenou Gboard composition. Než exportujeme V2 model, necháme Core
-       dokončit právě rozpracovaný IME vstup. */
-    if (core()?.dokoncImePredExterniAkci?.() === false) {
-      return false;
-    }
-
-    const obsah = ziskejObsahProProdukci();
-    if (!obsah) return false;
-
-    try {
-      modalRichText.innerHTML = obsah.richContent;
-
-      if (window.LubaNoteTodos?.obnovAktivniTodosZeSnapshot) {
-        window.LubaNoteTodos.obnovAktivniTodosZeSnapshot(obsah.todos, null);
-      }
-
-      // Dokud je V2 aktivní, produkční zrcadla zůstanou skrytá.
-      modalRichText.hidden = true;
-      if (todoList) todoList.hidden = true;
-      if (hostitel) hostitel.hidden = false;
-
-      // Když uživatel nouzově přepne do legacy bez zavření editoru,
-      // deaktivace musí odhalit správný typ produkčního editoru.
-      puvodniRichTextHidden = obsah.pouzeTodo ? true : false;
-      puvodniTodoListHidden = obsah.pouzeTodo ? false : true;
-      return true;
-    } catch (error) {
-      console.error("Editor Core V2: synchronizace do produkční save vrstvy selhala.", error);
-      return false;
-    }
+  function dokoncModelPredExterniAkci() {
+    if (!aktivni) return false;
+    if (core()?.dokoncImePredExterniAkci?.() === false) return false;
+    return Boolean(ziskejObsahProProdukci());
   }
 
-  function deaktivuj({ ulozitKopii = false } = {}) {
+  function deaktivuj() {
     if (!aktivni) return;
     skryjV2SelectionMenu();
-    if (ulozitKopii) ulozTestKopii();
-
     core()?.zavriVHostu?.();
     aktivni = false;
     aktivniNoteId = null;
-    zdrojoveHtml = "";
-    taskModal.classList.remove("editorV2TestMode");
-    modalRichText.hidden = puvodniRichTextHidden === null ? false : puvodniRichTextHidden;
-    if (todoList && puvodniTodoListHidden !== null) todoList.hidden = puvodniTodoListHidden;
-    puvodniRichTextHidden = null;
-    puvodniTodoListHidden = null;
+    taskModal.classList.remove("editorCoreV2Mode");
     if (hostitel) hostitel.hidden = true;
-    if (badge) badge.hidden = true;
     nastavOchranuUi(false);
     zavriPanelyFormatu();
     if (odkazModal) odkazModal.hidden = true;
     zavriV2CropModal();
   }
 
-  function aktivujProOtevrenouPoznamku(moznosti = {}) {
-    if (pozastavAktivaci) return false;
-    if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return false;
-    if (aktivni && aktivniNoteId === ziskejNoteId()) return true;
+  function importujObsahDoModelu({ richContent = "", note = "", todos = [] } = {}) {
+    const api = core();
+    if (!api?.importujHtml || !api?.importujTodos) return { ok: false, nepodporovane: ["Core V2 API"] };
 
-    const zakaz = jeZakazanyKontext();
-    if (zakaz) {
-      zobrazToast(zakaz, true);
-      return false;
+    const html = String(richContent || "");
+    const prostyText = String(note || "");
+    const todoData = Array.isArray(todos) ? todos : [];
+    const maSmisenyV2Obsah = html.includes("data-lubanote-v2-todo");
+
+    /*
+     * HARD-CUT 528 – jediný editor neznamená zahodit historická data.
+     * Starší LubaNote ukládala text/richContent a TODO ve dvou oddělených
+     * polích. Core V2 je teď jediný runtime, takže při prvním otevření
+     * musíme oba staré datové proudy převést do JEDNOHO V2 modelu.
+     *
+     * Pokud richContent už obsahuje V2 TODO bloky, `todos` je pouze
+     * kompatibilní zrcadlo a nesmí se přidat podruhé.
+     */
+    if (maSmisenyV2Obsah) return api.importujHtml(html, prostyText);
+
+    const maTextovyObsah = Boolean(html.trim() || prostyText.trim());
+    const maLegacyTodo = todoData.length > 0;
+
+    if (!maLegacyTodo) {
+      return api.importujHtml(html, prostyText);
     }
 
+    const todoVysledek = api.importujTodos(todoData);
+    if (!todoVysledek?.ok || !todoVysledek?.model) return todoVysledek;
+
+    if (!maTextovyObsah) {
+      return todoVysledek;
+    }
+
+    const textVysledek = api.importujHtml(html, prostyText);
+    if (!textVysledek?.ok || !textVysledek?.model) return textVysledek;
+
+    return {
+      ok: true,
+      nepodporovane: [],
+      model: {
+        ...textVysledek.model,
+        bloky: [
+          ...(Array.isArray(textVysledek.model.bloky) ? textVysledek.model.bloky : []),
+          ...(Array.isArray(todoVysledek.model.bloky) ? todoVysledek.model.bloky : [])
+        ]
+      }
+    };
+  }
+
+  function otevriObsah({
+    noteId = "",
+    richContent = "",
+    note = "",
+    todos = [],
+    plannedItems = [],
+    zachovatPuvodniOtisk = false
+  } = {}) {
+    if (pozastavAktivaci || !jeEditorOtevreny()) return false;
+
     const api = core();
-    if (!api?.importujHtml || !api?.otevriVHostu) {
+    if (!api?.otevriVHostu) {
       zobrazToast("Editor Core V2 není dostupný.", true);
       return false;
     }
 
     vytvorPomocneUi();
     zajistiV2VolbyToolbaru();
-    const noteId = ziskejNoteId();
-    const sourceHtml = modalRichText.innerHTML;
-    const sourceTodos = ziskejZdrojoveTodos();
-    const zdrojovyOtisk = vytvorZdrojovyOtisk(sourceHtml, sourceTodos);
-    const maSmisenyV2Obsah = String(sourceHtml || "").includes("data-lubanote-v2-todo");
-    const importVysledek = maSmisenyV2Obsah
-      ? api.importujHtml(sourceHtml, modalRichText.innerText)
-      : (sourceTodos.length && api.importujTodos
-        ? api.importujTodos(sourceTodos)
-        : api.importujHtml(sourceHtml, modalRichText.innerText));
 
-    if (!importVysledek?.ok) {
-      const nepodporovane =
-        Array.isArray(importVysledek?.nepodporovane)
-          ? importVysledek.nepodporovane
-          : [];
-      const prvky =
-        nepodporovane.join(", ") ||
-        "neznámý prvek";
-
-      /*
-       * FIX 508 – starší poznámka může obsahovat osiřelý IMG/FIGURE bez
-       * zdroje. V2 ji záměrně NESMÍ převést, protože by při uložení mohl
-       * ztratit původní strukturu; bezpečně proto zůstane v Legacy editoru.
-       * Není to ale chyba uživatele ani selhání aplikace, takže technický
-       * toast „V2 tuto poznámku neumí“ už při tomto jediném bezpečném
-       * fallbacku nezakrývá obsah. Diagnostika zůstává v logu.
-       */
-      if (
-        nepodporovane.length === 1 &&
-        nepodporovane[0] === "obrázek bez zdroje"
-      ) {
-        console.info(
-          "Editor Core V2: bezpečný Legacy fallback – obrázek bez zdroje."
-        );
-        window.LubaNoteStartupDiag?.zapis?.(
-          "V2 FALLBACK",
-          "obrázek bez zdroje"
-        );
-      } else {
-        zobrazToast(
-          `V2 tuto poznámku zatím neumí (${prvky}) – používám původní editor.`,
-          true
-        );
-      }
+    const importVysledek = importujObsahDoModelu({ richContent, note, todos });
+    if (!importVysledek?.ok || !importVysledek?.model) {
+      const prvky = Array.isArray(importVysledek?.nepodporovane) && importVysledek.nepodporovane.length
+        ? importVysledek.nepodporovane.join(", ")
+        : "neznámý obsah";
+      zobrazToast(`Core V2 odmítl obsah bez změny dat (${prvky}).`, true);
+      window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMPORT BLOCK", prvky);
       return false;
     }
-
-    const model = importVysledek.model;
 
     if (aktivni) deaktivuj();
 
     aktivni = true;
-    aktivniNoteId = noteId;
-    zdrojoveHtml = zdrojovyOtisk;
-    taskModal.classList.add("editorV2TestMode");
-    puvodniRichTextHidden = modalRichText.hidden;
-    puvodniTodoListHidden = todoList ? todoList.hidden : null;
-    modalRichText.hidden = true;
-    if (todoList) todoList.hidden = true;
+    aktivniNoteId = String(noteId || ziskejNoteId() || "nova-poznamka");
+    taskModal.classList.add("editorCoreV2Mode");
     hostitel.hidden = false;
-    badge.hidden = true;
     nastavOchranuUi(true);
 
-    if (!api.otevriVHostu(hostitel, model)) {
+    if (!api.otevriVHostu(hostitel, importVysledek.model)) {
       deaktivuj();
-      zobrazToast("Editor V2 se nepodařilo připojit. Používám původní editor.", true);
+      zobrazToast("Editor Core V2 se nepodařilo připojit.", true);
       return false;
     }
 
-    /*
-     * FIX 508 – produkční V2 má vlastní .ln-v2-editor scroll a vlastní
-     * modelový caret. Preference Začátek/Konec proto musí být aplikovaná
-     * až po připojení V2 hostu, ne na skrytý Legacy #modalRichText.
-     */
-    const poziceOtevreni =
-      window.LubaNoteEditorOpenPreferences
-        ?.ziskejPozici?.() === "end"
-        ? "end"
-        : "start";
-
-    api.nastavPoziciOtevreni?.(
-      poziceOtevreni
+    const naplanovaneTodo = new Set(
+      (Array.isArray(plannedItems) ? plannedItems : [])
+        .filter((item) => item?.sourceType === "todo" && item?.sourceTodoId)
+        .map((item) => String(item.sourceTodoId))
     );
-
-    obnovToolbar();
-
-    if (moznosti?.zachovatPuvodniOtisk !== true) {
-      window.LubaNoteAktualizujPuvodniOtiskEditoruProV2?.();
+    for (const todo of api.ziskejAktivniTodos?.() || []) {
+      api.nastavTodoNaplanovane?.(todo.id, naplanovaneTodo.has(String(todo.id)));
     }
 
+    const poziceOtevreni = window.LubaNoteEditorOpenPreferences?.ziskejPozici?.() === "end" ? "end" : "start";
+    api.nastavPoziciOtevreni?.(poziceOtevreni);
+    obnovToolbar();
+
+    if (!zachovatPuvodniOtisk) {
+      queueMicrotask(() => window.LubaNoteAktualizujPuvodniOtiskEditoruProV2?.());
+    }
     return true;
   }
 
@@ -1501,47 +1361,6 @@
     });
   }
 
-  function obnovZProdukcnihoEditoru() {
-    if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return false;
-
-    if (aktivni) deaktivuj();
-    queueMicrotask(() =>
-      aktivujProOtevrenouPoznamku({
-        zachovatPuvodniOtisk: true
-      })
-    );
-    return true;
-  }
-
-  function prepniTestRezim() {
-    // 5× Připomínky = nouzový přepínač V2 ↔ původní editor pro relaci.
-    const zapnoutV2 = !jeTestRezimZapnuty();
-
-    if (!zapnoutV2) {
-      if (aktivni) {
-        if (!synchronizujDoProdukcnihoEditoru()) {
-          zobrazToast("Legacy přepnutí zastaveno: obsah V2 se nepodařilo převést.", true);
-          return true;
-        }
-        deaktivuj();
-      }
-      nastavTestRezim(false);
-      zobrazToast("Nouzový původní editor zapnut pro tuto relaci");
-      return false;
-    }
-
-    nastavTestRezim(true);
-    zobrazToast("Editor Core V2 znovu zapnut");
-    if (jeEditorOtevreny()) {
-      queueMicrotask(() =>
-        aktivujProOtevrenouPoznamku({
-          zachovatPuvodniOtisk: true
-        })
-      );
-    }
-    return true;
-  }
-
   function vlozInterniOdkazZAutocomplete(poznamka, spoust) {
     if (!aktivni) return false;
     const vlozeno = core()?.vlozInterniOdkazZAutocomplete?.(poznamka, spoust);
@@ -1560,7 +1379,7 @@
     const ok = core()?.obalPlanovaciVyber?.(plannedItemId) === true;
     if (ok) {
       obnovToolbar();
-      synchronizujDoProdukcnihoEditoru();
+      dokoncModelPredExterniAkci();
     }
     return ok;
   }
@@ -1576,7 +1395,7 @@
       zapisV2Stabilitu("SAVE_CAPTURE_START", `type=${event.type}`);
       // Nezastavujeme původní save handler. Jen mu ještě v capture fázi
       // připravíme kanonický V2 obsah do produkční save vrstvy.
-      const syncOk = synchronizujDoProdukcnihoEditoru();
+      const syncOk = dokoncModelPredExterniAkci();
       zapisV2Stabilitu("SAVE_CAPTURE_SYNC", `ok=${syncOk}`);
       if (!syncOk) {
         event.preventDefault();
@@ -1590,7 +1409,7 @@
       return;
     }
 
-    /* V2.22 / 401 – Otevřít a Uložit jako už nejsou Legacy-only.
+    /* V2.22 / 401 – Otevřít a Uložit jako už nejsou Core V2.
        Před předáním akce dokumentovému modulu připravíme kanonický V2 obsah
        do produkční vrstvy, ale click NEZASTAVUJEME. editorDocuments.js pak
        normálně otevře systémový výběr souboru / nabídku Uložit jako. */
@@ -1598,7 +1417,7 @@
       core()?.zachytAktualniVyber?.();
       zavriPanelyFormatu();
 
-      if (!synchronizujDoProdukcnihoEditoru()) {
+      if (!dokoncModelPredExterniAkci()) {
         event.preventDefault();
         event.stopImmediatePropagation();
         zobrazToast("Dokumentová akce zastavena: V2 obsah se nepodařilo bezpečně převést.", true);
@@ -1728,7 +1547,7 @@
        * useknutě. Současně editor blur-neme až PO zachycení modelového výběru,
        * aby se klávesnice sama znovu neotevřela během systémového file pickeru.
        *
-       * editorMedia.js pak po kompresi předá připravený obrázek přímo tomuto
+       * editorMediaV2.js pak po kompresi předá připravený obrázek přímo tomuto
        * Bridge přes vlozPripravenyObrazek(), takže aktivní V2 model je jediný
        * zdroj pravdy.
        */
@@ -1807,11 +1626,6 @@
       return;
     }
 
-    if (nepodporovaneAkce.has(id) || cil.closest("#editorToolsToolbar")) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      zobrazToast("Tato funkce zatím používá původní editor – 5× Připomínky přepne Legacy režim.");
-    }
   }
 
   function jeBodUvnitřRozsahu(range, x, y) {
@@ -1873,7 +1687,7 @@
   }
 
   /*
-   * FIX 434 – Android selection focus guard. Legacy panel tohle už dávno dělal:
+   * FIX 434 – Android selection focus guard:
    * pointerdown na tlačítku nesmí přesunout focus z editoru na button, jinak
    * WebView skryje modré označení a následný selectionchange panel zavře.
    */
@@ -2013,7 +1827,7 @@
   document.addEventListener("click", zpracujKlikNaV2Odkaz, true);
   document.addEventListener("click", zpracujToolbarCapture, true);
 
-  /* DIAG 435 – zda starý WebView vůbec doručuje horizontální gesture toolbaru. */
+  /* DIAG 435 – zda Android WebView doručuje horizontální gesture toolbaru. */
   [
     document.getElementById("editorQuickToolbar"),
     document.getElementById("editorToolsToolbar")
@@ -2056,15 +1870,6 @@
        `zpracujZavreniEditoru()` drží jedinou správnou save/discard logiku. */
   }, true);
 
-  /* Externí HTML/TXT se nejdřív vloží do produkčního editoru.
-     I když otevíráme dokument nad novou poznámkou bez data-task-id, musíme
-     V2 explicitně znovu načíst – MutationObserver by v tomto okraji nemusel
-     dostat změnu atributu. */
-  document.addEventListener("lubanote:dokument-otevren", () => {
-    if (!jeTestRezimZapnuty() || !jeEditorOtevreny()) return;
-    obnovZProdukcnihoEditoru();
-  });
-
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
     zapisV2Stabilitu("SELECTIONCHANGE");
@@ -2083,23 +1888,11 @@
 
   function sledujEditor() {
     observer = new MutationObserver(() => {
-      if (pozastavAktivaci) return;
-      if (!jeEditorOtevreny()) {
-        if (aktivni) deaktivuj();
-        return;
-      }
-
-      if (!jeTestRezimZapnuty()) return;
-      const token = ++posledniAktivaceToken;
-      queueMicrotask(() => {
-        if (token !== posledniAktivaceToken) return;
-        aktivujProOtevrenouPoznamku();
-      });
+      if (!jeEditorOtevreny() && aktivni) deaktivuj();
     });
-
     observer.observe(taskModal, {
       attributes: true,
-      attributeFilter: ["class", "hidden", "data-task-id"]
+      attributeFilter: ["class", "hidden", "data-task-id", "data-shared-task-id"]
     });
   }
 
@@ -2107,20 +1900,24 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.23-SHARED-428",
-    prepniTestRezim, // kompatibilní alias: nyní V2 / nouzový Legacy přepínač
-    prepniLegacyRezim: prepniTestRezim,
-    jeTestRezimZapnuty,
-    aktivujProOtevrenouPoznamku,
+    verze: "V2.24-CORE-ONLY-528",
+    otevriObsah,
     ziskejObsahProProdukci,
-    synchronizujDoProdukcnihoEditoru,
-    obnovZProdukcnihoEditoru,
+    dokoncModelPredExterniAkci,
+    zavri: deaktivuj,
     vlozPripravenyObrazek,
     vlozInterniOdkazZAutocomplete,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
+    ziskejAktivniTodos: () => core()?.ziskejAktivniTodos?.() || [],
+    ziskejVybraneTodo: () => core()?.ziskejVybraneTodo?.() || null,
+    nastavTodoHotovo: (id, hotovo) => core()?.nastavTodoHotovo?.(id, hotovo) === true,
+    nastavTodoZvyrazneni: (id, barva) => core()?.nastavTodoZvyrazneni?.(id, barva) === true,
+    nastavTodoNaplanovane: (id, zapnuto) => core()?.nastavTodoNaplanovane?.(id, zapnuto) === true,
+    aktualizujPlanovanyOdkaz: (id, akce) => core()?.aktualizujPlanovanyOdkaz?.(id, akce) === true,
+    zobrazTodoPodleId: (id) => core()?.zobrazTodoPodleId?.(id) === true,
+    jeTodoRezimAktivni: () => core()?.jeTodoRezimAktivni?.() === true,
     spravujeSelectionMenu: () => aktivni && !jeDesktopSelection,
-    jeProdukcniRezim: () => aktivni,
     jeAktivni: () => aktivni
   });
 })();

@@ -166,12 +166,12 @@
 
   function vytvorTodoSeznam(pocet = 200) {
     const obal = document.createElement("div");
-    obal.className = "todoList";
+    obal.className = "ln-perf-todo-list";
     const fragment = document.createDocumentFragment();
 
     for (let i = 0; i < pocet; i += 1) {
       const item = document.createElement("div");
-      item.className = "todoItem";
+      item.className = "ln-perf-todo-item";
       item.dataset.todoId = `perf-todo-${i}`;
 
       const checkbox = document.createElement("input");
@@ -179,7 +179,7 @@
       checkbox.checked = i % 9 === 0;
 
       const text = document.createElement("div");
-      text.className = "todoTextDisplay";
+      text.className = "ln-perf-todo-text";
       text.innerHTML =
         `<span${i % 5 === 0 ? ' style="font-weight:700"' : ""}>` +
         `Benchmark TODO polozka ${i + 1}</span>`;

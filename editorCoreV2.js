@@ -5,7 +5,7 @@
    🔒 FROZEN PRINCIPY CORE V2:
    - Zdrojem pravdy je vždy `dokument`; DOM je pouze jeho projekce a vstupní vrstva.
    - Ukládání/synchronizaci vlastní produkční LubaNote pipeline přes Bridge.
-   - 5× tap na Připomínky je nouzový přepínač V2 / Legacy, ne druhý datový režim.
+   - Core V2 je jediný produkční editor; neexistuje druhý editor ani runtime přepínač.
    - Logická velikost písma se NIKDY neurčuje z fyzického getComputedStyle().fontSize.
      Android/WebView může text systémově škálovat; model si stále drží např. 13/20 px.
    - Pro podporované beforeinput operace se standardně volá preventDefault().
@@ -20,7 +20,6 @@
   "use strict";
 
   const VERZE_MODELU = 8;
-  const VELIKOSTI_PISMA = [12, 14, 16, 18, 20, 24, 28, 32];
   const LIMIT_HISTORIE = 100;
 
   /*
@@ -33,14 +32,6 @@
    */
   const JE_DESKTOP_VSTUP =
     window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches === true;
-  const PALETA_BAREV = [
-    { hodnota: "#ef4444", nazev: "červená" },
-    { hodnota: "#f59e0b", nazev: "oranžová" },
-    { hodnota: "#eab308", nazev: "žlutá" },
-    { hodnota: "#22c55e", nazev: "zelená" },
-    { hodnota: "#3b82f6", nazev: "modrá" },
-    { hodnota: "#a855f7", nazev: "fialová" }
-  ];
   const PODPOROVANE_INPUTY = new Set([
     "insertText",
     "insertCompositionText",
@@ -69,13 +60,13 @@
     kod: false
   });
 
-  let lab = null;
+  let jadroEditoru = null;
   let editor = null;
-  let modelPanel = null;
-  let stavEl = null;
-  let velikostEl = null;
-  let toolbarVelikosti = null;
-  let zapisDebug = null;
+  const modelPanel = null;
+  const stavEl = null;
+  const velikostEl = null;
+  const toolbarVelikosti = null;
+  const zapisDebug = null;
   let dokument = null;
   let dalsiIdBloku = 1;
   let posledniPozice = { blok: 0, offset: 0 };
@@ -86,11 +77,10 @@
   let aktivniFormatZdroj = ""; // "uzivatel" = výslovně zapnuto toolbar-em, "zdedeny" = např. delete-affinity
   let posluchace = [];
   let observerDomu = null;
-  let casyRychlehoSpusteni = [];
   let historieZpet = [];
   let historieVpred = [];
-  let tlacitkoUndo = null;
-  let tlacitkoRedo = null;
+  const tlacitkoUndo = null;
+  const tlacitkoRedo = null;
   let vlozenyHostitel = null;
   let vlozenyRezim = false;
   let vybranyObrazekId = "";
@@ -112,7 +102,7 @@
     const klavesnice = window.LubaNoteKeyboard;
     return Boolean(
       editor?.isConnected &&
-      lab && !lab.hidden &&
+      jadroEditoru && !jadroEditoru.hidden &&
       klavesnice?.ziskejZdroj?.() === "luba" &&
       klavesnice?.jeOtevrena?.() &&
       klavesnice?.ziskejCilPsani?.() === "body"
@@ -384,8 +374,8 @@
     if (!overlay) return;
 
     if (
-      !lab ||
-      lab.hidden ||
+      !jadroEditoru ||
+      jadroEditoru.hidden ||
       !editor?.isConnected ||
       !vyber ||
       vyber.sbaleny
@@ -480,8 +470,8 @@
 
   /*
    * V2 – 2× tap na obrázek používá STEJNÝ fullscreen náhled jako
-   * produkční Legacy editor. Nevytvářet druhý image viewer: zoom, zavření
-   * a safe-area chování mají zůstat na jednom místě v editorMedia.js.
+   * produkční editor. Nevytvářet druhý image viewer: zoom, zavření
+   * a safe-area chování mají zůstat na jednom místě v editorMediaV2.js.
    */
   const DVOJTAP_V2_OBRAZKU_MS = 430;
   const DVOJTAP_V2_OBRAZKU_VZDALENOST = 42;
@@ -618,7 +608,7 @@
 
     obnovSnapshotHistorie(cil);
     nastavStav(`Undo: ${cil.popis || "změna"}`);
-    zapisDebug?.(`EDITOR V2 LAB | UNDO | ${cil.popis || "zmena"} | undo=${historieZpet.length} redo=${historieVpred.length}`);
+    zapisDebug?.(`EDITOR CORE V2 | UNDO | ${cil.popis || "zmena"} | undo=${historieZpet.length} redo=${historieVpred.length}`);
     return true;
   }
 
@@ -635,7 +625,7 @@
 
     obnovSnapshotHistorie(cil);
     nastavStav(`Redo: ${cil.popis || "změna"}`);
-    zapisDebug?.(`EDITOR V2 LAB | REDO | ${cil.popis || "zmena"} | undo=${historieZpet.length} redo=${historieVpred.length}`);
+    zapisDebug?.(`EDITOR CORE V2 | REDO | ${cil.popis || "zmena"} | undo=${historieZpet.length} redo=${historieVpred.length}`);
     return true;
   }
 
@@ -883,7 +873,7 @@
       if (Number.isFinite(cislo) && cislo >= 8 && cislo <= 72) return cislo;
     }
 
-    // LAB fallback je pouze při chybějící globální proměnné. V produkčním V2
+    // Core fallback je pouze při chybějící globální proměnné. V produkčním V2
     // bude základní velikost součástí nastavení dokumentu/profilu.
     return 16;
   }
@@ -1358,6 +1348,7 @@
 
       if (jeTodoBlok(blok)) {
         radek.dataset.lnV2TodoCompleted = blok.hotovo ? "1" : "0";
+        radek.classList.toggle("ln-v2-todo-planned", blok.naplanovano === true);
         const checkbox = document.createElement("button");
         checkbox.type = "button";
         checkbox.className = "ln-v2-todo-check";
@@ -1425,7 +1416,7 @@
           nastavVyberModelu(vyberKOprave.zacatek, vyberKOprave.konec);
           aktualizujToolbarVelikosti(vyberKOprave);
         } catch (_error) {
-          // LAB nesmí ovlivnit produkční editor ani při chybě selection.
+          // Core V2 nesmí při chybě selection mutovat obsah mimo model.
         }
       });
     } else {
@@ -1596,7 +1587,7 @@
       aktivniFormatPsani = null;
       aktivniFormatPozice = "";
       aktivniFormatZdroj = "";
-      zapisDebug?.("EDITOR V2 LAB | SPACE RESET inherited-format");
+      zapisDebug?.("EDITOR CORE V2 | SPACE RESET inherited-format");
     }
 
     return { blok: caret.blok, offset: caret.offset + text.length };
@@ -2057,6 +2048,37 @@
     return true;
   }
 
+  function odpojAttachmentIds() {
+    if (!Array.isArray(dokument?.bloky)) return [];
+
+    const ids = [];
+    let zmena = false;
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+
+    for (const blok of dokument.bloky) {
+      if (jeObrazkovyBlok(blok) && blok.attachmentId) {
+        ids.push(String(blok.attachmentId));
+        blok.attachmentId = "";
+        zmena = true;
+      }
+      if ((jeSeznamovyBlok(blok) || jeTodoBlok(blok)) && Array.isArray(blok.obrazky)) {
+        for (const obrazek of blok.obrazky) {
+          if (!obrazek?.attachmentId) continue;
+          ids.push(String(obrazek.attachmentId));
+          obrazek.attachmentId = "";
+          zmena = true;
+        }
+      }
+    }
+
+    if (zmena) {
+      ulozZmenuDoHistorie(snapshotPred, "odpojit cloudové přílohy pro Secret");
+      vykresli(posledniVyber || vyberZPosledniPozice());
+    }
+
+    return [...new Set(ids.filter(Boolean))];
+  }
+
   function ziskejNastaveniObrazku(obrazekId = vybranyObrazekId) {
     const nalezeny = najdiObrazekVModelu(String(obrazekId || ""));
     const blok = nalezeny?.obrazek;
@@ -2080,7 +2102,7 @@
    * konci dokumentu a přepne se na 25/50/75 % + vlevo/vpravo, jediný
    * prázdný odstavec za ním vytvoří jen JEDNU skutečnou caret pozici.
    * Uživatel pak musí opakovaně mačkat Enter, aby mohl psát níže vedle
-   * obrázku. Legacy editor to řešil dynamickými bočními řádky.
+   * obrázku. Historická data mohla používat dynamické boční řádky.
    *
    * Tady děláme totéž MODELOVĚ: pouze pokud je obrázek na konci dokumentu
    * a za ním jsou už jen prázdné normální odstavce, doplníme bezpečně tolik
@@ -3088,7 +3110,7 @@
           ? `Nově psaný text: základ ${zakladniVelikost()}`
           : `Nově psaný text: ${velikost}`
       );
-      zapisDebug?.(`EDITOR V2 LAB | typing-size=${velikost ?? `base:${zakladniVelikost()}`}`);
+      zapisDebug?.(`EDITOR CORE V2 | typing-size=${velikost ?? `base:${zakladniVelikost()}`}`);
       editor.focus({ preventScroll: true });
       nastavVyberModelu(vyber.zacatek, vyber.konec);
       return;
@@ -3107,7 +3129,7 @@
         : `Velikost výběru nastavena na ${velikost}`
     );
     zapisDebug?.(
-      `EDITOR V2 LAB | selection-size=${velikost ?? `base:${zakladniVelikost()}`} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
+      `EDITOR CORE V2 | selection-size=${velikost ?? `base:${zakladniVelikost()}`} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
     );
   }
 
@@ -3133,7 +3155,7 @@
       aktivniFormatZdroj = "uzivatel";
       aktualizujToolbarVelikosti(vyber);
       nastavStav(`${nazev} pro nově psaný text: ${novaHodnota || "výchozí"}`);
-      zapisDebug?.(`EDITOR V2 LAB | typing-${klic}=${novaHodnota || "default"}`);
+      zapisDebug?.(`EDITOR CORE V2 | typing-${klic}=${novaHodnota || "default"}`);
       editor.focus({ preventScroll: true });
       nastavVyberModelu(vyber.zacatek, vyber.konec);
       return;
@@ -3148,7 +3170,7 @@
     vykresli(vyber);
     nastavStav(`${nazev} výběru: ${novaHodnota || "výchozí"}`);
     zapisDebug?.(
-      `EDITOR V2 LAB | selection-${klic}=${novaHodnota || "default"} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
+      `EDITOR CORE V2 | selection-${klic}=${novaHodnota || "default"} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
     );
   }
 
@@ -3177,7 +3199,7 @@
       aktivniFormatZdroj = "uzivatel";
       aktualizujToolbarVelikosti(vyber);
       nastavStav(`${nazvy[klic]} pro nově psaný text: ${aktivniFormatPsani[klic] ? 'zapnuto' : 'vypnuto'}`);
-      zapisDebug?.(`EDITOR V2 LAB | typing-${klic}=${aktivniFormatPsani[klic] ? 'on' : 'off'}`);
+      zapisDebug?.(`EDITOR CORE V2 | typing-${klic}=${aktivniFormatPsani[klic] ? 'on' : 'off'}`);
       editor.focus({ preventScroll: true });
       nastavVyberModelu(vyber.zacatek, vyber.konec);
       return;
@@ -3194,7 +3216,7 @@
     vykresli(vyber);
     nastavStav(`${nazvy[klic]} výběru: ${novaHodnota ? 'zapnuto' : 'vypnuto'}`);
     zapisDebug?.(
-      `EDITOR V2 LAB | selection-${klic}=${novaHodnota ? 'on' : 'off'} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
+      `EDITOR CORE V2 | selection-${klic}=${novaHodnota ? 'on' : 'off'} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`
     );
   }
 
@@ -3676,7 +3698,7 @@
       vykresli(vyber);
       editor?.focus({ preventScroll: true });
       nastavStav(`Odkaz nastaven: ${url}`);
-      zapisDebug?.(`EDITOR V2 LAB | link apply | ${url}`);
+      zapisDebug?.(`EDITOR CORE V2 | link apply | ${url}`);
       return true;
     }
 
@@ -3710,7 +3732,7 @@
     vykresli(novyVyber);
     editor?.focus({ preventScroll: true });
     nastavStav(`Odkaz vložen: ${url}`);
-    zapisDebug?.(`EDITOR V2 LAB | link insert | ${url}`);
+    zapisDebug?.(`EDITOR CORE V2 | link insert | ${url}`);
     return true;
   }
 
@@ -3802,7 +3824,7 @@
 
     if (vyber.sbaleny) {
       nastavStav("Pro H1/H2/H3 nejdřív označ text.");
-      zapisDebug?.("EDITOR V2 LAB | heading blocked: collapsed selection");
+      zapisDebug?.("EDITOR CORE V2 | heading blocked: collapsed selection");
       return false;
     }
 
@@ -3815,7 +3837,7 @@
     aktivniFormatZdroj = "";
     vykresli(vyber);
     nastavStav(stylTextu ? `Styl výběru: ${stylTextu.toUpperCase()}` : "Styl výběru: Text");
-    zapisDebug?.(`EDITOR V2 LAB | text-style=${stylTextu || "div"} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`);
+    zapisDebug?.(`EDITOR CORE V2 | text-style=${stylTextu || "div"} | ${vyber.zacatek.blok}:${vyber.zacatek.offset}-${vyber.konec.blok}:${vyber.konec.offset}`);
     return zmeneno;
   }
 
@@ -3850,7 +3872,7 @@
     const zmeneno = ulozZmenuDoHistorie(snapshotPred, `zarovnání ${zarovnani}`);
     vykresli(vyber);
     nastavStav(`Zarovnání odstavce: ${zarovnani}`);
-    zapisDebug?.(`EDITOR V2 LAB | align=${zarovnani} | blocks=${od}-${doBloku}`);
+    zapisDebug?.(`EDITOR CORE V2 | align=${zarovnani} | blocks=${od}-${doBloku}`);
     return zmeneno;
   }
 
@@ -3879,6 +3901,113 @@
     vykresli(posledniVyber || vyberZPosledniPozice());
     nastavStav(blok.hotovo ? "TODO označeno jako hotové" : "TODO označeno jako nehotové");
     return zmeneno;
+  }
+
+  function najdiTodoIndex(todoId) {
+    const id = String(todoId || "");
+    if (!id || !Array.isArray(dokument?.bloky)) return -1;
+    return dokument.bloky.findIndex((blok) => jeTodoBlok(blok) && blok.id === id);
+  }
+
+  function ziskejTodoPodleId(todoId) {
+    const index = najdiTodoIndex(todoId);
+    if (index < 0) return null;
+    const blok = dokument.bloky[index];
+    return {
+      id: blok.id,
+      text: textBloku(blok),
+      html: (() => {
+        const obal = document.createElement("div");
+        vlozSegmentyDoExportElementu(obal, blok);
+        if (obal.children.length === 1 && obal.firstElementChild?.tagName === "BR") obal.innerHTML = "";
+        if (Array.isArray(blok.obrazky)) blok.obrazky.forEach((obrazek) => obal.appendChild(vytvorExportFigureObrazku(obrazek, true)));
+        return obal.innerHTML;
+      })(),
+      completed: blok.hotovo === true,
+      highlightColor: String(blok.zvyrazneni || "")
+    };
+  }
+
+  function ziskejVybraneTodo() {
+    const vyber = posledniVyber || ziskejAktualniVyber();
+    const index = Number(vyber?.zacatek?.blok);
+    if (!Number.isInteger(index) || !jeTodoBlok(dokument?.bloky?.[index])) return null;
+    return ziskejTodoPodleId(dokument.bloky[index].id);
+  }
+
+  function nastavTodoHotovo(todoId, hotovo) {
+    const index = najdiTodoIndex(todoId);
+    if (index < 0) return false;
+    const novaHodnota = hotovo === true;
+    const blok = dokument.bloky[index];
+    if (blok.hotovo === novaHodnota) return true;
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    blok.hotovo = novaHodnota;
+    ulozZmenuDoHistorie(snapshotPred, novaHodnota ? "TODO hotovo" : "TODO znovu aktivní");
+    vykresli(posledniVyber || vyberZPosledniPozice());
+    return true;
+  }
+
+  function nastavTodoZvyrazneni(todoId, barva = "") {
+    const index = najdiTodoIndex(todoId);
+    if (index < 0) return false;
+    const blok = dokument.bloky[index];
+    const novaBarva = String(barva || "");
+    if (String(blok.zvyrazneni || "") === novaBarva) return true;
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    blok.zvyrazneni = novaBarva;
+    ulozZmenuDoHistorie(snapshotPred, novaBarva ? "barva TODO" : "odebrat barvu TODO");
+    vykresli(posledniVyber || vyberZPosledniPozice());
+    return true;
+  }
+
+  function aktualizujPlanovanyOdkaz(plannedItemId, akce = "refresh") {
+    const id = normalizujIdOdkazu(plannedItemId);
+    if (!id || !Array.isArray(dokument?.bloky)) return false;
+
+    let zmenaModelu = false;
+    const snapshotPred = akce === "remove"
+      ? vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice())
+      : null;
+
+    if (akce === "remove") {
+      for (const blok of dokument.bloky) {
+        if (!Array.isArray(blok?.obsah)) continue;
+        const nove = blok.obsah.map((segment) => {
+          if (normalizujIdOdkazu(segment?.format?.planOdkazId) !== id) return segment;
+          const kopie = klonDat(segment);
+          kopie.format = { ...(kopie.format || {}), planOdkazId: null };
+          zmenaModelu = true;
+          return kopie;
+        });
+        if (zmenaModelu) nastavObsahBloku(blok, nove);
+      }
+
+      if (zmenaModelu && snapshotPred) {
+        ulozZmenuDoHistorie(snapshotPred, "odebrat Planner odkaz");
+      }
+    }
+
+    /* complete/restore mění pouze odvozenou CSS třídu podle loadPlannedItems().
+       remove navíc odstraní planOdkazId z modelu. */
+    vykresli(posledniVyber || vyberZPosledniPozice());
+    return akce === "remove" ? zmenaModelu : true;
+  }
+
+  function nastavTodoNaplanovane(todoId, zapnuto = true) {
+    const index = najdiTodoIndex(todoId);
+    if (index < 0) return false;
+    dokument.bloky[index].naplanovano = zapnuto === true;
+    vykresli(posledniVyber || vyberZPosledniPozice());
+    return true;
+  }
+
+  function zobrazTodoPodleId(todoId) {
+    const id = String(todoId || "");
+    const radek = editor?.querySelector?.(`[data-ln-v2-blok="${CSS.escape(id)}"]`);
+    if (!radek) return false;
+    radek.scrollIntoView({ block: "center", behavior: "smooth" });
+    return true;
   }
 
   function prevedBlokNaTodo(blok) {
@@ -5280,7 +5409,7 @@
     }
 
     if (!PODPOROVANE_INPUTY.has(event.inputType)) {
-      // V2 LAB nikdy nepředá nepodporovaný zásah browseru.
+      // Core V2 nikdy nepředá nepodporovaný zásah browseru.
       // Jinak by DOM přestal odpovídat našemu modelu.
       event.preventDefault();
 
@@ -5293,7 +5422,7 @@
           : `V2.4 zablokoval nepodporovaný vstup: ${event.inputType || "neznámý"}`,
         true
       );
-      zapisDebug?.(`EDITOR V2 LAB | BLOCK INPUT | ${event.inputType || "unknown"}`);
+      zapisDebug?.(`EDITOR CORE V2 | BLOCK INPUT | ${event.inputType || "unknown"}`);
       return;
     }
 
@@ -5327,7 +5456,7 @@
       aktivniFormatPsani = kopieFormatu(formatPoMazani);
       aktivniFormatPozice = klicPozice(caret);
       aktivniFormatZdroj = "zdedeny";
-      zapisDebug?.(`EDITOR V2 LAB | DELETE AFFINITY | ${event.inputType} | format=${JSON.stringify(aktivniFormatPsani)}`);
+      zapisDebug?.(`EDITOR CORE V2 | DELETE AFFINITY | ${event.inputType} | format=${JSON.stringify(aktivniFormatPsani)}`);
     } else if (String(event.inputType || "").startsWith("delete")) {
       aktivniFormatPsani = null;
       aktivniFormatPozice = klicPozice(caret);
@@ -5341,7 +5470,7 @@
     vykresli(novyVyber);
     oznamModelovyTextovyVstup(event.inputType);
     nastavStav(`Řízeno modelem: ${event.inputType}`);
-    zapisDebug?.(`EDITOR V2 LAB | ${event.inputType} | blok=${caret.blok} offset=${caret.offset}`);
+    zapisDebug?.(`EDITOR CORE V2 | ${event.inputType} | blok=${caret.blok} offset=${caret.offset}`);
   }
 
   /* ==========================================
@@ -5656,7 +5785,7 @@
     vykresli(novyVyber);
     oznamModelovyTextovyVstup("insertFromPaste");
     nastavStav("Vložení prostého textu řídil model");
-    zapisDebug?.(`EDITOR V2 LAB | paste | chars=${text.length}`);
+    zapisDebug?.(`EDITOR CORE V2 | paste | chars=${text.length}`);
   }
 
   function overDomProtiModelu() {
@@ -5861,11 +5990,11 @@
     const chyba = overDomProtiModelu();
     if (chyba) {
       nastavStav(`DOM GUARD: ${chyba}`, true);
-      zapisDebug?.(`EDITOR V2 LAB | DOM GUARD FAIL | ${chyba}`);
+      zapisDebug?.(`EDITOR CORE V2 | DOM GUARD FAIL | ${chyba}`);
       return false;
     }
     nastavStav("DOM čistý: přesně odpovídá V2 modelu");
-    zapisDebug?.("EDITOR V2 LAB | DOM GUARD OK");
+    zapisDebug?.("EDITOR CORE V2 | DOM GUARD OK");
     return true;
   }
 
@@ -6426,7 +6555,7 @@
        * FIX 471 – některé velmi staré poznámky mají FIGURE/IMG schovaný
        * uvnitř inline wrapperu (typicky SPAN/FONT/A) místo přímo v rootu
        * nebo blokovém DIV/P. Import inline obsahu neumí vytvořit blokový
-       * obrázek, takže taková poznámka dřív bezpečně spadla do legacy
+       * obrázek, takže taková poznámka dřív vyžadovala kompatibilní import
        * editoru s hláškou „figure“. Pokud wrapper skutečně obsahuje obrázek,
        * rozdělíme ho stejnou již odladěnou cestou text -> obrázek -> text.
        * Samotné formátování okolního textu zůstane zachované přes
@@ -6468,7 +6597,7 @@
       if (["h1", "h2", "h3"].includes(tag)) blokovyFormat.stylTextu = tag;
 
       /*
-       * Legacy poznámky mohou mít obrázek zabalený uvnitř DIV/P wrapperu.
+       * Historicky uložené poznámky mohou mít obrázek zabalený uvnitř DIV/P wrapperu.
        * V2.21 původně uměl FIGURE jen na root úrovni, takže takový wrapper
        * skončil ve fallbacku „figure“. Rozdělíme wrapper v pořadí
        * text -> obrázek -> text a každý obrázek převedeme na V2 Image Block.
@@ -6809,15 +6938,14 @@
 
   function otevriVHostu(hostitel, model) {
     if (!(hostitel instanceof Element) || !model?.bloky) return false;
-    if (!lab?.isConnected) vytvorLab();
+    if (!jadroEditoru?.isConnected) vytvorJadroEditoru();
 
     vlozenyHostitel = hostitel;
     vlozenyRezim = true;
-    lab.classList.add("ln-v2-vlozeny");
-    hostitel.appendChild(lab);
-    lab.hidden = false;
-    lab.classList.add("otevreno");
-    document.body.classList.remove("ln-v2-lab-otevren");
+    jadroEditoru.classList.add("ln-v2-vlozeny");
+    hostitel.appendChild(jadroEditoru);
+    jadroEditoru.hidden = false;
+    jadroEditoru.classList.add("otevreno");
     nastavDokumentProHost(model);
 
     /* LubaKeyboard musí mít možnost potlačit systémové IME ještě PŘED
@@ -6830,7 +6958,7 @@
   }
 
   function zavriVHostu() {
-    if (!lab || !vlozenyRezim) return;
+    if (!jadroEditoru || !vlozenyRezim) return;
     zrusV2DragSeznamu();
 
     /* PATCH 442 – LubaKeyboard žije mimo DOM editoru (přímo v body).
@@ -6840,9 +6968,9 @@
     odstranV2SelectionOverlay();
     skryjV2LubaCaret();
 
-    lab.hidden = true;
-    lab.classList.remove("otevreno", "ln-v2-vlozeny");
-    document.body.appendChild(lab);
+    jadroEditoru.hidden = true;
+    jadroEditoru.classList.remove("otevreno", "ln-v2-vlozeny");
+    document.body.appendChild(jadroEditoru);
     vlozenyHostitel = null;
     vlozenyRezim = false;
     vybranyObrazekId = "";
@@ -6880,24 +7008,11 @@
     };
   }
 
-  function vytvorLab() {
-    lab = document.createElement("section");
-    lab.id = "ln-editor-v2-lab";
-    lab.className = "ln-v2-lab";
-    lab.innerHTML = `
-      <header class="ln-v2-hlavicka">
-        <div>
-          <strong>Editor Core V2.16 · LAB</strong>
-          <small>Izolovaný test · nic se neukládá do poznámek</small>
-        </div>
-        <button type="button" class="ln-v2-zavrit" data-v2-akce="zavrit" aria-label="Zavřít Editor Core V2">×</button>
-      </header>
-
-      <div class="ln-v2-info">
-        <span class="ln-v2-badge">MODEL = ZDROJ PRAVDY</span>
-        <span class="ln-v2-stav">Připraveno</span>
-      </div>
-
+  function vytvorJadroEditoru() {
+    jadroEditoru = document.createElement("section");
+    jadroEditoru.id = "ln-editor-v2-core";
+    jadroEditoru.className = "ln-v2-core";
+    jadroEditoru.innerHTML = `
       <div
         class="ln-v2-editor"
         contenteditable="true"
@@ -6911,48 +7026,10 @@
         spellcheck="false"
         data-ln-v2-editor
       ></div>
-
-      <div class="ln-v2-akce">
-        <button type="button" data-v2-akce="undo" data-v2-historie="undo" aria-label="Vrátit zpět" disabled>↶ Undo</button>
-        <button type="button" data-v2-akce="redo" data-v2-historie="redo" aria-label="Provést znovu" disabled>↷ Redo</button>
-        <button type="button" data-v2-akce="reset">Reset testu</button>
-        <button type="button" data-v2-akce="model">Zobrazit model</button>
-        <button type="button" data-v2-akce="dom">Kontrola DOM</button>
-      </div>
-
-      <pre class="ln-v2-model" hidden></pre>
-
-      <div class="ln-v2-format" data-v2-toolbar-velikosti>
-        <button type="button" class="ln-v2-format-biu" data-v2-format="tucne" aria-pressed="false" aria-label="Tučné"><strong>B</strong></button>
-        <button type="button" class="ln-v2-format-biu" data-v2-format="kurziva" aria-pressed="false" aria-label="Kurzíva"><em>I</em></button>
-        <button type="button" class="ln-v2-format-biu" data-v2-format="podtrzeni" aria-pressed="false" aria-label="Podtržení"><u>U</u></button>
-        <span class="ln-v2-format-oddeleni" aria-hidden="true"></span>
-        <span class="ln-v2-format-hodnota">Velikost: <strong data-v2-aktualni-velikost>–</strong></span>
-        <button type="button" data-v2-velikost="zaklad" aria-pressed="false">Základ</button>
-        ${VELIKOSTI_PISMA.map((velikost) => `<button type="button" data-v2-velikost="${velikost}" aria-pressed="false">${velikost}</button>`).join("")}
-        <span class="ln-v2-format-oddeleni" aria-hidden="true"></span>
-        <span class="ln-v2-barva-popisek">Text: <strong data-v2-barva-stav="barva">výchozí</strong></span>
-        <button type="button" class="ln-v2-barva-reset" data-v2-barva="barva" data-v2-hodnota="zaklad" aria-label="Výchozí barva textu" aria-pressed="false">A</button>
-        ${PALETA_BAREV.map(({ hodnota, nazev }) => `<button type="button" class="ln-v2-barva-vzorek" data-v2-barva="barva" data-v2-hodnota="${hodnota}" aria-label="Barva textu ${nazev}" aria-pressed="false"><span style="--ln-v2-vzorek:${hodnota}"></span></button>`).join("")}
-        <span class="ln-v2-format-oddeleni" aria-hidden="true"></span>
-        <span class="ln-v2-barva-popisek">Pozadí: <strong data-v2-barva-stav="pozadi">výchozí</strong></span>
-        <button type="button" class="ln-v2-barva-reset ln-v2-barva-reset-pozadi" data-v2-barva="pozadi" data-v2-hodnota="zaklad" aria-label="Výchozí pozadí textu" aria-pressed="false">A</button>
-        ${PALETA_BAREV.map(({ hodnota, nazev }) => `<button type="button" class="ln-v2-barva-vzorek" data-v2-barva="pozadi" data-v2-hodnota="${hodnota}" aria-label="Pozadí textu ${nazev}" aria-pressed="false"><span style="--ln-v2-vzorek:${hodnota}"></span></button>`).join("")}
-      </div>
-
-      <footer class="ln-v2-paticka">
-        V2.16: kompletní modelový TODO systém – checkbox, Hotovo, Enter/Backspace, rich text, obrázek, long-press drag, Undo/Redo a import existujících TODO. Planner zůstává v TEST režimu záměrně odpojený.
-      </footer>
     `;
 
-    document.body.appendChild(lab);
-    editor = lab.querySelector("[data-ln-v2-editor]");
-    modelPanel = lab.querySelector(".ln-v2-model");
-    stavEl = lab.querySelector(".ln-v2-stav");
-    velikostEl = lab.querySelector("[data-v2-aktualni-velikost]");
-    toolbarVelikosti = lab.querySelector("[data-v2-toolbar-velikosti]");
-    tlacitkoUndo = lab.querySelector('[data-v2-historie="undo"]');
-    tlacitkoRedo = lab.querySelector('[data-v2-historie="redo"]');
+    document.body.appendChild(jadroEditoru);
+    editor = jadroEditoru.querySelector("[data-ln-v2-editor]");
 
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
@@ -7144,7 +7221,7 @@
           event.stopPropagation();
           posledniTapV2Obrazku = null;
           vybranyObrazekId = "";
-          window.LubaNoteEditorMedia?.otevriNahledObrazku?.(obrazek);
+          window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(obrazek);
           return;
         }
 
@@ -7251,7 +7328,7 @@
     });
 
     poslouchej(document, "selectionchange", () => {
-      if (!lab || lab.hidden || !editor) return;
+      if (!jadroEditoru || jadroEditoru.hidden || !editor) return;
       if (v2ImeKompozice?.nativni) return;
       const vyber = window.getSelection();
       if (!vyber?.rangeCount) return;
@@ -7320,35 +7397,6 @@
       setTimeout(dorovnejPoOtevreni, 140);
     });
 
-    // V2.3 – stabilní selection controller.
-    // Před tapem na formátovací lištu zachytíme rozsah do našeho modelu.
-    // Android může následně zavřít svou nativní nabídku nebo přesunout focus;
-    // formátovací akce už nejsou závislé na živé DOM Selection.
-    poslouchej(toolbarVelikosti, "pointerdown", (event) => {
-      if (!event.target.closest("[data-v2-velikost], [data-v2-format], [data-v2-barva]")) return;
-      const vyber = aktualniVyberModelu();
-      if (vyber) ulozenyFormatovaciVyber = klonVyberu(vyber);
-    }, true);
-
-    poslouchej(toolbarVelikosti, "click", (event) => {
-      const tlacitkoVelikosti = event.target.closest("[data-v2-velikost]");
-      if (tlacitkoVelikosti) {
-        nastavVelikostZToolbaru(tlacitkoVelikosti.dataset.v2Velikost);
-        return;
-      }
-
-      const tlacitkoBarvy = event.target.closest("[data-v2-barva]");
-      if (tlacitkoBarvy) {
-        nastavBarvuZToolbaru(tlacitkoBarvy.dataset.v2Barva, tlacitkoBarvy.dataset.v2Hodnota);
-        return;
-      }
-
-      const tlacitkoFormatu = event.target.closest("[data-v2-format]");
-      if (tlacitkoFormatu) {
-        prepniBooleanFormatZToolbaru(tlacitkoFormatu.dataset.v2Format);
-      }
-    });
-
     observerDomu = new MutationObserver((mutace) => {
       if (!editor || !mutace.length) return;
       /* FIX 434: starý Android má během živé composition krátké povolené DOM
@@ -7357,7 +7405,7 @@
       const chyba = overDomProtiModelu();
       if (!chyba) return;
       nastavStav(`DOM GUARD: WebView změnil DOM mimo model · ${chyba} · vracím model`, true);
-      zapisDebug?.(`EDITOR V2 LAB | DOM MUTATION OUTSIDE MODEL | count=${mutace.length} | ${chyba}`);
+      zapisDebug?.(`EDITOR CORE V2 | DOM MUTATION OUTSIDE MODEL | count=${mutace.length} | ${chyba}`);
       vykresli(posledniVyber || posledniPozice);
     });
     observerDomu.observe(editor, {
@@ -7367,182 +7415,13 @@
       characterData: true
     });
 
-    poslouchej(lab, "click", (event) => {
-      const tlacitko = event.target.closest("[data-v2-akce]");
-      if (!tlacitko) return;
-
-      const akce = tlacitko.dataset.v2Akce;
-      if (akce === "undo") {
-        vratHistoriiZpet();
-      } else if (akce === "redo") {
-        vratHistoriiVpred();
-      } else if (akce === "zavrit") {
-        zavriLab();
-      } else if (akce === "reset") {
-        resetujTest();
-      } else if (akce === "model") {
-        modelPanel.hidden = !modelPanel.hidden;
-        tlacitko.textContent = modelPanel.hidden ? "Zobrazit model" : "Skrýt model";
-      } else if (akce === "dom") {
-        kontrolaDomu();
-      }
-    });
   }
 
-  function resetujTest() {
-    dokument = vytvorDokument([
-      "Toto je izolovaný Editor Core V2.",
-      "Označ slovo velikost a změň mu velikost písma.",
-      "Označ část textu a vyzkoušej tučné, kurzívu a podtržení.",
-      "Kombinuj B/I/U s různými velikostmi – vše musí zůstat v modelu.",
-      "Vyzkoušej barvu textu i pozadí a potom je vrať na výchozí."
-    ]);
-    posledniPozice = { blok: 1, offset: 0 };
-    posledniVyber = {
-      zacatek: { ...posledniPozice },
-      konec: { ...posledniPozice },
-      sbaleny: true
-    };
-    ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
-    aktivniFormatPsani = null;
-    aktivniFormatPozice = "";
-    aktivniFormatZdroj = "";
-    historieZpet = [];
-    historieVpred = [];
-    vykresli(posledniVyber);
-    aktualizujTlacitkaHistorie();
-    nastavStav(`Test resetován · základní velikost modelu = ${zakladniVelikost()}`);
-    editor.focus({ preventScroll: true });
-    zapisDebug?.(`EDITOR V2 LAB | reset | base-size=${zakladniVelikost()}`);
-  }
+  /* Core V2 je od hard-cutu 528 jediný produkční editor. */
 
-  function otevriLab(options = {}) {
-    zapisDebug = typeof options.zapis === "function" ? options.zapis : null;
-
-    if (!lab?.isConnected) vytvorLab();
-    if (vlozenyRezim) zavriVHostu();
-    if (lab.parentElement !== document.body) document.body.appendChild(lab);
-    lab.classList.remove("ln-v2-vlozeny");
-    lab.hidden = false;
-    lab.classList.add("otevreno");
-    document.body.classList.add("ln-v2-lab-otevren");
-
-    if (!dokument) resetujTest();
-    else vykresli(posledniVyber || posledniPozice);
-
-    editor.focus({ preventScroll: true });
-    zapisDebug?.("EDITOR V2 LAB | OPEN V2.16 COMPLETE TODO | produkční editor nedotčen");
-    return true;
-  }
-
-  function zavriLab() {
-    if (!lab) return;
-    if (vlozenyRezim) {
-      zavriVHostu();
-      return;
-    }
-    odstranV2SelectionOverlay();
-    skryjV2LubaCaret();
-    lab.hidden = true;
-    lab.classList.remove("otevreno");
-    document.body.classList.remove("ln-v2-lab-otevren");
-    zapisDebug?.("EDITOR V2 LAB | CLOSE | model zůstává jen v RAM do resetu stránky");
-  }
-
-  function znicLab() {
-    zrusV2Drag();
-    zrusV2DragSeznamu();
-    v2DropIndicator?.remove();
-    v2MoveHint?.remove();
-    v2DropIndicator = null;
-    v2MoveHint = null;
-    v2ListDropIndicator?.remove();
-    v2ListDragPreview?.remove();
-    v2ListDropIndicator = null;
-    v2ListDragPreview = null;
-    v2ListAutoScrollRaf = null;
-    vybranaPolozkaSeznamuId = "";
-    posluchace.splice(0).forEach((odpoj) => {
-      try { odpoj(); } catch (_error) {}
-    });
-    observerDomu?.disconnect();
-    observerDomu = null;
-    odstranV2SelectionOverlay();
-    v2SelectionOverlay?.remove();
-    v2SelectionOverlay = null;
-    lab?.remove();
-    lab = null;
-    editor = null;
-    modelPanel = null;
-    stavEl = null;
-    velikostEl = null;
-    toolbarVelikosti = null;
-    tlacitkoUndo = null;
-    tlacitkoRedo = null;
-    historieZpet = [];
-    historieVpred = [];
-    v2ImeKompozice = null;
-    dokument = null;
-    posledniVyber = null;
-    ulozenyFormatovaciVyber = null;
-    aktivniFormatPsani = null;
-    aktivniFormatPozice = "";
-    aktivniFormatZdroj = "";
-    zapisDebug = null;
-    document.body.classList.remove("ln-v2-lab-otevren");
-  }
-
-  function skryjDebugPanelyProPrimeSpusteni() {
-    // Přímý LAB launcher má být čistý: pokud byl předtím otevřen VD/Debug Hub,
-    // zavřeme pouze jejich UI. Produkční moduly ani data tím neměníme.
-    try { window.LubaNoteDebugHub?.stop?.(); } catch (_error) {}
-    try { window.LubaNoteVisualDebug?.close?.(); } catch (_error) {}
-
-    const debugHub = document.getElementById("ln-debug-hub");
-    if (debugHub) debugHub.hidden = true;
-  }
-
-  function otevriLabPrimo() {
-    skryjDebugPanelyProPrimeSpusteni();
-    return otevriLab();
-  }
-
-  function pripojRychlySpoustec() {
-    const tlacitko = document.getElementById("remindersModuleButton");
-    if (!tlacitko || tlacitko.dataset.lnV2LabLauncher === "1") return;
-
-    tlacitko.dataset.lnV2LabLauncher = "1";
-    tlacitko.addEventListener("click", () => {
-      const ted = performance.now();
-      casyRychlehoSpusteni = casyRychlehoSpusteni.filter((cas) => ted - cas < 2200);
-      casyRychlehoSpusteni.push(ted);
-
-      if (casyRychlehoSpusteni.length < 5) return;
-      casyRychlehoSpusteni = [];
-
-      queueMicrotask(() => {
-        if (typeof window.LubaNoteEditorV2Bridge?.prepniLegacyRezim === "function") {
-          window.LubaNoteEditorV2Bridge.prepniLegacyRezim();
-          return;
-        }
-        if (typeof window.LubaNoteEditorV2Bridge?.prepniTestRezim === "function") {
-          window.LubaNoteEditorV2Bridge.prepniTestRezim();
-          return;
-        }
-        otevriLabPrimo();
-      });
-    }, true);
-  }
-
-  pripojRychlySpoustec();
 
   window.LubaNoteEditorV2 = Object.freeze({
-    verze: "V2.21-MIXED-BLOCKS-498-ONE-KEYBOARD",
-    otevriLab,
-    otevriLabPrimo,
-    zavriLab,
-    znicLab,
-    resetujTest,
+    verze: "V2-CORE-ONLY-528",
     importujHtml: vytvorModelZHtml,
     importujTodos: vytvorModelZTodos,
     exportujHtml: () => exportujHtmlZModelu(),
@@ -7560,6 +7439,15 @@
     nastavSeznam: nastavSeznamZToolbaru,
     pridejTodo: pridejTodoZToolbaru,
     prepniTodoHotovo,
+    nastavTodoHotovo,
+    ziskejTodoPodleId,
+    ziskejVybraneTodo,
+    ziskejAktivniTodos: () => exportujTodosZModelu(),
+    jeTodoRezimAktivni: () => Boolean(dokument?.bloky?.some(jeTodoBlok)),
+    nastavTodoZvyrazneni,
+    nastavTodoNaplanovane,
+    aktualizujPlanovanyOdkaz,
+    zobrazTodoPodleId,
     nastavStylTextu: nastavStylTextuZToolbaru,
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
@@ -7578,6 +7466,7 @@
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,
     jeCilPresunuSeznamu: jeV2CilPresunuSeznamu,
     vlozObrazek: vlozObrazekZToolbaru,
+    odpojAttachmentIds,
     smazObrazek: smazObrazekZModelu,
     ziskejNastaveniObrazku,
     nastavOrezanyZdrojObrazku,

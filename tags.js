@@ -779,11 +779,8 @@ const secretFilterButton =
 const tagModalTitle =
   document.getElementById("modalTitle");
 
-const tagModalText =
-  document.getElementById("modalText");
-
-const tagModalRichText =
-  document.getElementById("modalRichText");
+const tagModalEditorHost =
+  document.getElementById("modalRichTextV2Host");
 
 const categoryTaskButton =
   document.getElementById("categoryTaskButton");
@@ -4237,9 +4234,8 @@ tagTaskButton.addEventListener("click", async () => {
   }
 });
 
-tagModalTitle.addEventListener("pointerdown", closeTagMenu);
-tagModalText.addEventListener("pointerdown", closeTagMenu);
-tagModalRichText.addEventListener("pointerdown", closeTagMenu);
+tagModalTitle?.addEventListener("pointerdown", closeTagMenu);
+tagModalEditorHost?.addEventListener("pointerdown", closeTagMenu);
 
 areaButtons.forEach((button) => {
   button.addEventListener("click", () => {
