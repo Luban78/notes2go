@@ -9743,6 +9743,24 @@ body.pdfViewerOpen {
   }
 }
 
+/* PATCH 554 – PC musí stav synchronizace číst jako text, ne jen jako
+   miniaturní symbol. Mobil zůstává kompaktní beze změny. */
+@media (min-width: 700px) {
+  .syncStatusText {
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .syncStatusText::before {
+    margin-right: 4px;
+    font-size: 11px;
+  }
+
+  .syncStatusText::after {
+    display: none;
+  }
+}
+
 @media (max-width: 420px) {
   .syncStatusText {
     max-width: none;

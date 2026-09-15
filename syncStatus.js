@@ -35,8 +35,11 @@
     }
   };
 
-  let aktualniStav = null;
-  let posledniStabilniStav = null;
+  /* PATCH 554 – od prvního vykreslení ukazujeme čekající stav.
+     Dříve mohl PC řádek zůstat úplně prázdný, dokud sync neposlal
+     první událost. */
+  let aktualniStav = "pending";
+  let posledniStabilniStav = "pending";
 
   function preloz(klic, fallback) {
     return (
@@ -121,6 +124,9 @@
       vykresli();
     }
   );
+
+  /* První stav musí být vidět i před prvním sync eventem. */
+  vykresli();
 
   window.LubaNoteSyncStatus = {
     nastav: nastavStav,
