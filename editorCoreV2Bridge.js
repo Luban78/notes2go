@@ -567,11 +567,15 @@
       odkazUrlInput.value = vybranyText.trim();
     }
 
+    /* FIX 530 – každý podmodal editoru se otevírá bez klávesnice.
+       Uživatel ji vyvolá až skutečným tapem do textového pole. Tím modal
+       nikdy nezůstane schovaný pod LubaKeyboard a současně se po API hide
+       nerozběhne systémová IME kvůli stále fokusovanému editoru. */
+    try {
+      window.LubaNoteKeyboard?.skryjProModal?.();
+    } catch (_error) {}
+
     odkazModal.hidden = false;
-    requestAnimationFrame(() => {
-      if (vybranyText) odkazUrlInput.focus();
-      else odkazTextInput.focus();
-    });
   }
 
   function obnovToolbar() {

@@ -2426,6 +2426,77 @@
     }
   }
 
+  /* ==========================================================
+     FIX 530 – MODAL KEYBOARD CONTRACT
+
+     Každý sekundární modal se musí otevřít bez klávesnice.
+     LubaKeyboard i systémovou IME schováme a editor/title odfokusujeme.
+     Klávesnice se smí znovu objevit až po skutečném tapu do pole modalu.
+     ========================================================== */
+  function skryjProModal() {
+    potlacAutomatickeOtevreni = true;
+    synchronizujNativniImeGuard(false);
+
+    if (panel && !panel.hidden) {
+      skryj();
+    } else {
+      document.body.classList.remove("ln-luba-klavesnice-open");
+    }
+
+    if (otevritButton) otevritButton.hidden = true;
+
+    try {
+      const aktivni = document.activeElement;
+      const editor = aktivniEditor || najdiEditor();
+      const title = najdiNazevEditoru();
+      if (aktivni && (aktivni === editor || aktivni === title || jeEditorV2(aktivni))) {
+        aktivni.blur?.();
+      }
+    } catch (_error) {}
+
+    /* Na rozdíl od běžného schovejSystemovouNativne() musí modal schovat
+       IME i tehdy, když má uživatel v Nastavení zvolenou systémovou
+       klávesnici. Po tapu do input/textarea se systémová IME otevře normálně. */
+    try {
+      const plugin = window.Capacitor?.Plugins?.LubaNoteKeyboardState;
+      if (plugin?.hideIme) Promise.resolve(plugin.hideIme()).catch(() => {});
+    } catch (_error) {}
+    try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
+
+    zapisStabilituKlavesnice("MODAL HIDE");
+  }
+
+  function jeViditelnyModalniDialog(element) {
+    if (!element || !element.isConnected) return false;
+    if (element.closest?.("[hidden]")) return false;
+    try {
+      const styl = getComputedStyle(element);
+      if (styl.display === "none" || styl.visibility === "hidden") return false;
+      return element.getClientRects().length > 0;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  let posledniViditelneModaly = new Set();
+  let modalGuardRaf = 0;
+
+  function zkontrolujNoveModaly() {
+    modalGuardRaf = 0;
+    const aktualni = new Set(
+      Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'))
+        .filter(jeViditelnyModalniDialog)
+    );
+    const pribylNovy = Array.from(aktualni).some((element) => !posledniViditelneModaly.has(element));
+    posledniViditelneModaly = aktualni;
+    if (pribylNovy) skryjProModal();
+  }
+
+  function naplanujKontroluModalu() {
+    if (modalGuardRaf) return;
+    modalGuardRaf = requestAnimationFrame(zkontrolujNoveModaly);
+  }
+
   function kontrolujEditor() {
     const editor = najdiEditor();
     if (!editor) {
@@ -2788,10 +2859,25 @@
     else nastavLubaAtributy(titlePriStartu);
   }
 
+  /* FIX 530 – globální pojistka i pro modaly mimo choiceModal/CoreV2 Bridge.
+     Sledujeme pouze skutečné aria-modal dialogy; hlavní taskModal není dialog
+     tohoto typu, takže běžné otevření editoru klávesnici nepotlačí. */
+  try {
+    const observerModalu = new MutationObserver(naplanujKontroluModalu);
+    observerModalu.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["hidden", "class", "style"]
+    });
+    naplanujKontroluModalu();
+  } catch (_error) {}
+
   window.LubaNoteKeyboard = Object.freeze({
     verze: "TAP-SWIPE-510",
     zobraz,
     skryj,
+    skryjProModal,
     nastavLayout,
     pripravEditor,
     ziskejLayout: () => layoutId,

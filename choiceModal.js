@@ -5,6 +5,14 @@
   let moznostiElement = null;
   let zavritTlacitko = null;
   let predchoziFokus = null;
+
+  /* FIX 530 – jednotný modalový kontrakt: modal se otevře bez klávesnice.
+     Uživatel ji vyvolá až tapem do konkrétního inputu/textarea. */
+  function pripravKlavesniciProModal() {
+    try {
+      window.LubaNoteKeyboard?.skryjProModal?.();
+    } catch (_error) {}
+  }
   
   function vytvorModalPokudChybi() {
     if (modal) {
@@ -174,6 +182,7 @@
       moznostiElement.append(tlacitko);
     });
     
+    pripravKlavesniciProModal();
     modal.hidden = false;
     
     requestAnimationFrame(() => {
@@ -343,12 +352,10 @@
       }
     });
 
+    pripravKlavesniciProModal();
     modal.hidden = false;
-
-    requestAnimationFrame(() => {
-      input.focus();
-      input.select();
-    });
+    /* FIX 530 – žádný autofocus. Tap do pole je jediný okamžik, kdy se má
+       po otevření modalu znovu objevit systémová klávesnice. */
   }
 
   function otevriNastavovaciModal({
@@ -518,6 +525,7 @@
       ulozitTlacitko
     );
 
+    pripravKlavesniciProModal();
     modal.hidden = false;
   }
 

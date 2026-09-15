@@ -3762,6 +3762,14 @@
         if (stred) {
           const novyFormat = kopieFormatu(cast.format);
           novyFormat.stylTextu = normalizujStylTextu(stylTextu);
+
+          /* FIX 530 – H1/H2/H3 musí být po zvolení skutečně vidět.
+             Pokud měl segment explicitní velikost písma, inline font-size
+             přebil CSS velikost nadpisu. Při zvolení H stylu proto vrátíme
+             velikost na výchozí a nadpis řídí jeho Core V2 třída.
+             U volby Text ponecháváme případnou ruční velikost nedotčenou. */
+          if (novyFormat.stylTextu) novyFormat.velikost = null;
+
           vystup.push(vytvorSegment(stred, novyFormat));
         }
         if (po) vystup.push(vytvorSegment(po, cast.format));
@@ -3819,16 +3827,47 @@
   }
 
   function nastavStylTextuZToolbaru(hodnota) {
-    const vyber = ziskejFormatovaciVyber();
+    let vyber = ziskejFormatovaciVyber();
     if (!vyber) return false;
 
+    const stylTextu = normalizujStylTextu(hodnota);
+
+    /* FIX 530 – H styl funguje i při samotném caret-u.
+       Ostatní formátování Core V2 lze používat bez ručního označení a H bylo
+       poslední výjimkou. Pokud je caret v neprázdném textovém bloku, použijeme
+       styl na celý aktuální blok. U prázdného bloku nastavíme styl pro nově
+       psaný text. */
     if (vyber.sbaleny) {
-      nastavStav("Pro H1/H2/H3 nejdřív označ text.");
-      zapisDebug?.("EDITOR CORE V2 | heading blocked: collapsed selection");
-      return false;
+      const blok = dokument.bloky[vyber.zacatek.blok];
+      if (!jeTextovyBlok(blok)) return false;
+
+      const delka = textBloku(blok).length;
+      if (delka === 0) {
+        let format = null;
+        if (aktivniFormatPsani && aktivniFormatPozice === klicPozice(vyber.zacatek)) {
+          format = aktivniFormatPsani;
+        } else {
+          format = formatZDomBodu() || formatNaPozici(blok, vyber.zacatek.offset);
+        }
+
+        aktivniFormatPsani = kopieFormatu(format);
+        aktivniFormatPsani.stylTextu = stylTextu;
+        if (stylTextu) aktivniFormatPsani.velikost = null;
+        aktivniFormatPozice = klicPozice(vyber.zacatek);
+        aktivniFormatZdroj = "uzivatel";
+        nastavStav(stylTextu ? `Styl pro nově psaný text: ${stylTextu.toUpperCase()}` : "Styl pro nově psaný text: Text");
+        editor?.focus({ preventScroll: true });
+        nastavVyberModelu(vyber.zacatek, vyber.konec);
+        return true;
+      }
+
+      vyber = {
+        zacatek: { blok: vyber.zacatek.blok, offset: 0 },
+        konec: { blok: vyber.zacatek.blok, offset: delka },
+        sbaleny: false
+      };
     }
 
-    const stylTextu = normalizujStylTextu(hodnota);
     const snapshotPred = vytvorSnapshotHistorie(vyber);
     aplikujStylTextuNaVyber(vyber, stylTextu);
     const zmeneno = ulozZmenuDoHistorie(snapshotPred, stylTextu ? `styl ${stylTextu.toUpperCase()}` : "styl Text");
