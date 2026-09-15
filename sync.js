@@ -6671,6 +6671,13 @@ async function startSync() {
 
   let poznamkySynchronizovany = false;
   let startPouzeLokalneKvuliEgressu = false;
+  /* PATCH 555 – EXISTING CLIENT CURSOR RECOVERY
+   * Starší existující klient může mít platný Fast Sync stav, ale ještě
+   * nemít V2 change cursor. Pokud se mezitím změnil server, nesmíme se
+   * pokusit o remote delta (nemáme bezpečný after_seq) ani spustit full
+   * snapshot. Po prvním vykreslení proto provedeme už existující malý
+   * manifest + targeted reconcile, který cursor bezpečně založí. */
+  let naplanovatExistingReconcileKvuliChybejicimuCursoru = false;
 
   window.LubaNoteSyncTraffic?.zacniSync?.();
 
@@ -6700,18 +6707,36 @@ async function startSync() {
        * PATCH 484 – změnil se pouze server. Nejdřív použijeme change
        * feed + targeted download. Při nejistotě zde ZÁMĚRNĚ nepadáme
        * zpět na get_notes_safe; sync se pouze odloží.
+       *
+       * PATCH 555 – pokud existující klient ještě nemá V2 cursor, delta
+       * nemá bezpečný výchozí bod. To není čistý klient a nesmí dostat
+       * Safe Bootstrap/full snapshot. UI pustíme z cache a po vykreslení
+       * spustíme Existing Client Reconcile (manifest + jen dotčená ID).
        */
-      poznamkySynchronizovany =
-        await synchronizujVzdalenePrivateDeltaV2(
-          user.id
-        );
+      const cursorV2 = nactiPrivateSyncV2Cursor(user.id);
 
-      if (poznamkySynchronizovany !== true) {
+      if (!cursorV2) {
         window.LubaNoteStartupDiag?.zapis?.(
           "V2",
-          "REMOTE DELTA DEFER | start-no-full-fallback"
+          "REMOTE DELTA RECOVER | cursor-missing -> reconcile"
         );
-        nastavStavSynchronizaceUI("restore");
+        poznamkySynchronizovany = true;
+        startPouzeLokalneKvuliEgressu = true;
+        naplanovatExistingReconcileKvuliChybejicimuCursoru = true;
+        nastavStavSynchronizaceUI("pending");
+      } else {
+        poznamkySynchronizovany =
+          await synchronizujVzdalenePrivateDeltaV2(
+            user.id
+          );
+
+        if (poznamkySynchronizovany !== true) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            "REMOTE DELTA DEFER | start-no-full-fallback"
+          );
+          nastavStavSynchronizaceUI("restore");
+        }
       }
     } else if (posledniFastSyncStav === "LOCAL-CHANGED") {
       /* PATCH 495 – existující klient se starším / lokálně změněným
@@ -6920,9 +6945,13 @@ async function startSync() {
   }
 
   if (startPouzeLokalneKvuliEgressu) {
-    if (posledniFastSyncStav === "LOCAL-CHANGED") {
-      /* PATCH 495 – UI už je použitelné; reconcile běží až teď, aby
-         případné targeted dávky nikdy nezdržely splash. */
+    if (
+      posledniFastSyncStav === "LOCAL-CHANGED" ||
+      naplanovatExistingReconcileKvuliChybejicimuCursoru
+    ) {
+      /* PATCH 495/555 – UI už je použitelné; reconcile běží až teď, aby
+         případné targeted dávky nikdy nezdržely splash. PATCH 555 sem
+         vede i existující klient s SERVER-CHANGED + chybějícím cursorem. */
       setTimeout(() => {
         spustExistingClientReconcileV2(user.id, { force: true })
           .catch(() => {});
@@ -8479,10 +8508,25 @@ async function spustRychlySyncPoznamekBezpecne() {
         user.id
       );
     } else if (fastSync?.vzdaleneDeltaV2 === true) {
-      /* PATCH 484 – server-only změna = delta, nikdy automatický full. */
-      vysledek = await synchronizujVzdalenePrivateDeltaV2(
-        user.id
-      );
+      /* PATCH 484 – server-only změna = delta, nikdy automatický full.
+       * PATCH 555 – existující klient bez cursoru použije bezpečný
+       * manifest reconcile místo nekonečného cursor-missing deferu. */
+      const cursorV2 = nactiPrivateSyncV2Cursor(user.id);
+
+      if (!cursorV2) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          "REMOTE DELTA RECOVER | quick cursor-missing -> reconcile"
+        );
+        vysledek = await spustExistingClientReconcileV2(
+          user.id,
+          { force: true }
+        );
+      } else {
+        vysledek = await synchronizujVzdalenePrivateDeltaV2(
+          user.id
+        );
+      }
 
       if (vysledek !== true) {
         window.LubaNoteStartupDiag?.zapis?.(
