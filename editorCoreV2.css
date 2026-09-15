@@ -548,6 +548,21 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   text-decoration-line: line-through;
 }
 
+/* PATCH 550 – naplánované TODO má stejnou vizuální vazbu jako
+   naplánovaný text: podtržení znamená, že položka vede do Planneru.
+   Je to pouze render styl nad existující třídou `ln-v2-todo-planned`;
+   Planner data ani TODO gesture logiku tímto NEMĚNIT. */
+.ln-v2-editor .ln-v2-todo-planned > .ln-v2-cast {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* Hotové a zároveň stále naplánované TODO musí zachovat oba významy. */
+.ln-v2-editor .ln-v2-todo-planned.ln-v2-todo-hotovo > .ln-v2-cast {
+  text-decoration-line: underline line-through;
+}
+
 .ln-v2-editor .ln-v2-todo > .ln-v2-list-image {
   float: none !important;
   clear: both !important;

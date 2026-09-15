@@ -420,53 +420,84 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
   let lokalniItems = getLocalPlannedItems();
 
   /*
-   * PATCH 548 – Planner položka celé poznámky nesmí držet starou kopii
-   * názvu. Selection a TODO mají vlastní text a proto se jich nedotýkáme.
-   * Historické položky bez sourceType považujeme za starý typ "note".
+   * PATCH 549 – TEXT PLANNER POLOŽKY SE ŘÍDÍ ŽIVÝM ZDROJEM, NE STARÝM SNAPSHOTEM.
+   * -----------------------------------------------------------------------------
+   * Planner si historicky ukládá `item.text`, aby položka fungovala i mimo editor.
+   * Při přejmenování TODO nebo naplánovaného podtrženého textu ale tento snapshot
+   * nesmí zůstat starý. Autoritou je stabilní vazba:
+   *   - TODO      -> sourceTodoId
+   *   - selection -> data-planned-item-id v aktuálním richContent
+   *
+   * DŮLEŽITÉ: richContent ani CoreV2 formát zde NEMĚNÍME. Tím zůstává zachovaný
+   * plannedTextLink / podtržení v editoru. Aktualizujeme pouze metadata Planneru.
    */
-  const aktualniNazevPoznamky =
-    String(
-      note.title ||
-      note.note ||
-      "Bez názvu"
-    ).trim() || "Bez názvu";
+  const textPlanovanehoVyberu = new Map();
 
-  let zmenenNazevVPoznamce = false;
-  let zmenenNazevLokalne = false;
+  if (typeof note.richContent === "string") {
+    const sablonaTextu = document.createElement("template");
+    sablonaTextu.innerHTML = note.richContent;
 
-  const aktualizujNazevCelePoznamky = (item) => {
-    if (
-      !item ||
-      item.sourceNoteId !== note.id ||
-      ![undefined, null, "", "note"].includes(item.sourceType) ||
-      item.text === aktualniNazevPoznamky
-    ) {
+    sablonaTextu.content
+      .querySelectorAll("[data-planned-item-id]")
+      .forEach((odkaz) => {
+        const id = String(odkaz.dataset?.plannedItemId || "").trim();
+        const text = String(odkaz.textContent || "").trim();
+        if (id && text) textPlanovanehoVyberu.set(id, text);
+      });
+  }
+
+  const todoPodleId = new Map(
+    (Array.isArray(note.todos) ? note.todos : [])
+      .filter((todo) => todo?.id)
+      .map((todo) => [String(todo.id), todo])
+  );
+
+  const aktualizujTextPlanovanePolozky = (item) => {
+    if (!item || item.sourceNoteId !== note.id || !item.id) {
+      return item;
+    }
+
+    let text = null;
+    let sourceType = item.sourceType;
+
+    const todoId = String(item.sourceTodoId || "").trim();
+    const todo = todoId ? todoPodleId.get(todoId) : null;
+
+    if (todo) {
+      text = String(todo.text || "").trim();
+      sourceType = "todo";
+    } else if (textPlanovanehoVyberu.has(String(item.id))) {
+      text = textPlanovanehoVyberu.get(String(item.id));
+      sourceType = "selection";
+    }
+
+    if (!text || (item.text === text && item.sourceType === sourceType)) {
       return item;
     }
 
     return {
       ...item,
-      text: aktualniNazevPoznamky
+      text,
+      sourceType
     };
   };
 
+  let zmenenyPlannerText = false;
+  let zmenenyLokalniPlannerText = false;
+
   plannedItemsVPoznamce = plannedItemsVPoznamce.map((item) => {
-    const aktualizovany = aktualizujNazevCelePoznamky(item);
-    if (aktualizovany !== item) {
-      zmenenNazevVPoznamce = true;
-    }
+    const aktualizovany = aktualizujTextPlanovanePolozky(item);
+    if (aktualizovany !== item) zmenenyPlannerText = true;
     return aktualizovany;
   });
 
   lokalniItems = lokalniItems.map((item) => {
-    const aktualizovany = aktualizujNazevCelePoznamky(item);
-    if (aktualizovany !== item) {
-      zmenenNazevLokalne = true;
-    }
+    const aktualizovany = aktualizujTextPlanovanePolozky(item);
+    if (aktualizovany !== item) zmenenyLokalniPlannerText = true;
     return aktualizovany;
   });
 
-  if (zmenenNazevVPoznamce) {
+  if (zmenenyPlannerText) {
     note.plannedItems = plannedItemsVPoznamce;
   }
 
@@ -521,7 +552,7 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
     });
 
   if (removedItems.length === 0) {
-    if (zmenenNazevLokalne) {
+    if (zmenenyLokalniPlannerText) {
       savePlannedItems(lokalniItems);
     }
 
