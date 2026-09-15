@@ -3790,11 +3790,23 @@ function taskMatchesHidden(task) {
   const jeSkryta = Boolean(task?.hiddenAt);
 
   /*
-   * Skryté je systémový mezisklad. V běžném seznamu skryté karty
-   * nikdy neukazujeme; po aktivaci oka naopak zobrazujeme jen je.
-   * Search se tak automaticky chová správně v aktuálním prostoru.
+   * PATCH 539 – Skryté je mezisklad, ne slepá ulička pro Search.
+   * - oko Skryté: zobrazujeme pouze skryté karty,
+   * - aktivní uživatelský Search: prohledává i skryté karty,
+   * - bez Search: skryté z běžného seznamu dál vůbec neukazujeme.
+   *
+   * Secret/oblast/štítky se filtrují samostatně dál v renderTasks(),
+   * takže tato výjimka neobchází žádnou bezpečnostní vrstvu.
    */
-  return hiddenFilterActive ? jeSkryta : !jeSkryta;
+  if (hiddenFilterActive) {
+    return jeSkryta;
+  }
+
+  if (window.LubaNoteSearch?.jeAktivniDotaz?.()) {
+    return true;
+  }
+
+  return !jeSkryta;
 }
 
 function taskMatchesFavorite(task) {

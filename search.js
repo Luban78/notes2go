@@ -101,6 +101,24 @@ function zajistiCisteNeaktivniVyhledavani() {
   aktualizujTlacitkoMazaniVyhledavani();
 }
 
+function jeAktivniVyhledavaciDotaz() {
+  return Boolean(
+    vyhledavaniAktivovaneUzivatelem &&
+    searchNotes &&
+    searchNotes.value.trim().length > 0
+  );
+}
+
+/*
+ * PATCH 539 – Skryté musí zůstat dohledatelné.
+ * Filtr Skryté se na tento malý veřejný kontrakt ptá místo toho,
+ * aby četl hodnotu inputu bez ochrany proti browser autofillu.
+ */
+window.LubaNoteSearch =
+  window.LubaNoteSearch || {};
+window.LubaNoteSearch.jeAktivniDotaz =
+  jeAktivniVyhledavaciDotaz;
+
 function taskMatchesSearch(task) {
   /*
    * Bez výslovné akce uživatele vyhledávání
