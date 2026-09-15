@@ -2650,7 +2650,7 @@
       const aktivni = document.activeElement;
       const editor = aktivniEditor || najdiEditor();
       const title = najdiNazevEditoru();
-      if (aktivni && (aktivni === editor || aktivni === title || jeEditorV2(aktivni) || jeLubaTextovePole(aktivni))) {
+      if (aktivni && (aktivni === editor || aktivni === title || jeEditorV2(aktivni) || aktivni.matches?.("input, textarea"))) {
         aktivni.blur?.();
       }
     } catch (_error) {}
@@ -2665,6 +2665,21 @@
     try { navigator.virtualKeyboard?.hide?.(); } catch (_error) {}
 
     zapisStabilituKlavesnice("MODAL HIDE");
+  }
+
+  /* FIX 533 – společný kontrakt pro KAŽDOU cestu zavření modalu.
+     Rozpracované skládání znaků ani opakování kláves nesmí po zavření
+     zapisovat do skrytého pole nebo do CoreV2. Nový tap zvolí nový cíl. */
+  function skryjPoZavreniModalu() {
+    stopLongPress();
+    stopRepeat();
+    pinyinBuffer = "";
+    unicodeBuffer = "";
+    hangulPrefix = "";
+    hangulState = { L: null, V: null, T: null };
+    skryjProModal();
+    aktivniTextovePole = null;
+    aktivniCilPsani = "body";
   }
 
   function jeViditelnyModalniDialog(element) {
@@ -2689,8 +2704,13 @@
         .filter(jeViditelnyModalniDialog)
     );
     const pribylNovy = Array.from(aktualni).some((element) => !posledniViditelneModaly.has(element));
+    const zavrelSeModal = Array.from(posledniViditelneModaly).some((element) => !aktualni.has(element));
+    /* Textové pole může být i v panelu bez aria-modal (Visual Debug,
+       nový štítek v editoru). Jeho skrytí/odpojení má stejný close kontrakt. */
+    const skryloSeTextovePole = aktivniCilPsani === "field" && aktivniTextovePole && !jeViditelnyModalniDialog(aktivniTextovePole);
     posledniViditelneModaly = aktualni;
-    if (pribylNovy) skryjProModal();
+    if (zavrelSeModal || skryloSeTextovePole) skryjPoZavreniModalu();
+    else if (pribylNovy) skryjProModal();
   }
 
   function naplanujKontroluModalu() {
@@ -3110,7 +3130,7 @@
     else nastavLubaAtributyTextovehoPole(pole);
   });
 
-  /* FIX 530 – globální pojistka i pro modaly mimo choiceModal/CoreV2 Bridge.
+  /* FIX 530/533 – globální otevření/zavření i mimo choiceModal/CoreV2 Bridge.
      Sledujeme pouze skutečné aria-modal dialogy; hlavní taskModal není dialog
      tohoto typu, takže běžné otevření editoru klávesnici nepotlačí. */
   try {
@@ -3125,10 +3145,11 @@
   } catch (_error) {}
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "GLOBAL-FIELDS-531",
+    verze: "MODAL-CLOSE-533",
     zobraz,
     skryj,
     skryjProModal,
+    skryjPoZavreniModalu,
     nastavLayout,
     pripravEditor,
     pripravTextovePole: (pole) => {

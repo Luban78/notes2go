@@ -100,6 +100,12 @@
       predchoziFokus.focus();
     }
     
+    /* FIX 533 – stejný close kontrakt jako globální modalový hlídač.
+       Až po návratu focusu, aby obnovené textové pole neotevřelo klávesnici. */
+    try {
+      window.LubaNoteKeyboard?.skryjPoZavreniModalu?.();
+    } catch (_error) {}
+
     predchoziFokus = null;
   }
   
