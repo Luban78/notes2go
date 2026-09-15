@@ -55,6 +55,10 @@
   let cropVyber = null;
   let cropStav = null;
 
+  /* FIX 529 – horní Aa přepínač už nesmí záviset na odstraněném
+     editorToolbar.js. Core V2 Bridge vlastní i obal toolbaru. */
+  let rezimToolbaruV2 = "cas";
+
   /* V2.20 – stav našeho vlastního selection menu. */
   let v2SelectionMenuAktivni = false;
   let v2SelectionMenuKurzor = false;
@@ -707,6 +711,103 @@
     });
   }
 
+  /* ==================================================
+     FIX 529 – CORE V2 VLASTNÍ I HLAVNÍ Aa CYKLUS TOOLBARU
+
+     Po hard-cutu 528 byl správně odstraněn editorToolbar.js, ale jeho
+     čistě UI role `Aa -> text -> další nástroje -> datum/čas` nebyla
+     převedena do Bridge. Proto tlačítko Aa fyzicky existovalo, ale click
+     neměl žádného vlastníka. Tady je pouze obal toolbaru; formátování
+     samotné dál obsluhuje výhradně Core V2.
+  ================================================== */
+  function jeDesktopToolbarV2() {
+    return window.innerWidth >= 900;
+  }
+
+  function nastavToolbarV2(rezim = "cas") {
+    const tlacitko = document.getElementById("editorToolbarToggle");
+    const textToolbar = document.getElementById("editorQuickToolbar");
+    const toolsToolbar = document.getElementById("editorToolsToolbar");
+    const datumCas = document.querySelector("#taskModal .dateTimeInputs");
+    const pripominka = document.getElementById("reminderButton");
+    if (!tlacitko || !textToolbar || !toolsToolbar || !datumCas) return false;
+
+    const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
+
+    if (jeDesktopToolbarV2()) {
+      datumCas.hidden = false;
+      textToolbar.hidden = false;
+      toolsToolbar.hidden = false;
+      tlacitko.hidden = true;
+      if (pripominka) pripominka.hidden = false;
+      zavriPanelyFormatu();
+      return true;
+    }
+
+    if (jeSdilenyEditor && rezim === "cas") rezim = "nastroje";
+    if (!["cas", "text", "nastroje"].includes(rezim)) rezim = "cas";
+    rezimToolbaruV2 = rezim;
+
+    const jeCas = rezim === "cas";
+    const jeText = rezim === "text";
+    const jsouNastroje = rezim === "nastroje";
+
+    tlacitko.hidden = false;
+    datumCas.hidden = !jeCas;
+    textToolbar.hidden = !jeText;
+    toolsToolbar.hidden = !jsouNastroje;
+    if (pripominka) pripominka.hidden = !jeCas;
+
+    tlacitko.classList.toggle("active", !jeCas);
+
+    if (jeCas) {
+      tlacitko.textContent = "Aa";
+      tlacitko.setAttribute("aria-label", "Otevřít textové nástroje");
+    } else if (jeText) {
+      if (window.LubaNoteIcons?.nastavJenIkonu) {
+        window.LubaNoteIcons.nastavJenIkonu(tlacitko, "odrazky", ["editorModeSvgIcon"]);
+      } else {
+        tlacitko.textContent = "Nástroje";
+      }
+      tlacitko.setAttribute("aria-label", "Otevřít další nástroje");
+    } else if (jeSdilenyEditor) {
+      tlacitko.textContent = "Aa";
+      tlacitko.setAttribute("aria-label", "Otevřít textové nástroje");
+    } else {
+      if (window.LubaNoteIcons?.nastavJenIkonu) {
+        window.LubaNoteIcons.nastavJenIkonu(tlacitko, "hodiny", ["editorModeSvgIcon"]);
+      } else {
+        tlacitko.textContent = "Čas";
+      }
+      tlacitko.setAttribute("aria-label", "Zobrazit datum a čas");
+    }
+
+    tlacitko.setAttribute("aria-expanded", String(!jeCas));
+    tlacitko.setAttribute("aria-pressed", String(!jeCas));
+
+    zavriPanelyFormatu();
+    if (!jeText) textToolbar.scrollLeft = 0;
+    if (!jsouNastroje) toolsToolbar.scrollLeft = 0;
+    return true;
+  }
+
+  function cyklujToolbarV2() {
+    const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
+    if (jeSdilenyEditor) {
+      nastavToolbarV2(rezimToolbaruV2 === "text" ? "nastroje" : "text");
+      return;
+    }
+    if (rezimToolbaruV2 === "cas") {
+      nastavToolbarV2("text");
+      return;
+    }
+    if (rezimToolbaruV2 === "text") {
+      nastavToolbarV2("nastroje");
+      return;
+    }
+    nastavToolbarV2("cas");
+  }
+
   function prepniPanel(id) {
     const panel = document.getElementById(id);
     if (!panel) return;
@@ -816,6 +917,7 @@
     if (hostitel) hostitel.hidden = true;
     nastavOchranuUi(false);
     zavriPanelyFormatu();
+    rezimToolbaruV2 = "cas";
     if (odkazModal) odkazModal.hidden = true;
     zavriV2CropModal();
   }
@@ -924,6 +1026,7 @@
 
     const poziceOtevreni = window.LubaNoteEditorOpenPreferences?.ziskejPozici?.() === "end" ? "end" : "start";
     api.nastavPoziciOtevreni?.(poziceOtevreni);
+    nastavToolbarV2("cas");
     obnovToolbar();
 
     if (!zachovatPuvodniOtisk) {
@@ -1406,6 +1509,10 @@
     }
 
     if (id === "editorToolbarToggle") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      cyklujToolbarV2();
       return;
     }
 
@@ -1809,7 +1916,7 @@
   document.addEventListener("pointerdown", (event) => {
     if (!aktivni) return;
     if (selectionMenu?.contains(event.target)) return;
-    if (event.target.closest?.(".editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
+    if (event.target.closest?.("#editorToolbarToggle, .editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
       potlacV2SelectionMenuDo = performance.now() + 350;
       return;
     }
@@ -1818,7 +1925,7 @@
 
   document.addEventListener("pointerdown", (event) => {
     if (!aktivni) return;
-    if (event.target.closest(".editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
+    if (event.target.closest("#editorToolbarToggle, .editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
       core()?.zachytAktualniVyber?.();
     }
   }, true);
@@ -1838,6 +1945,10 @@
       }, { passive: true });
     });
   });
+
+  window.addEventListener("resize", () => {
+    if (aktivni) nastavToolbarV2(rezimToolbaruV2);
+  }, { passive: true });
 
   document.addEventListener("keydown", (event) => {
     if (!aktivni || event.key !== "Escape") return;
@@ -1900,7 +2011,7 @@
   sledujEditor();
 
   window.LubaNoteEditorV2Bridge = Object.freeze({
-    verze: "V2.24-CORE-ONLY-528",
+    verze: "V2.24-CORE-ONLY-529",
     otevriObsah,
     ziskejObsahProProdukci,
     dokoncModelPredExterniAkci,
