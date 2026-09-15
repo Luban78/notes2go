@@ -2504,7 +2504,7 @@
         <section class="ln-vd-section">
           <div class="ln-vd-section-title"><span>Výběr prvku</span><span id="ln-vd-profile-badge"></span></div>
           <div class="ln-vd-target">
-            <textarea id="ln-vd-selector" class="ln-vd-selector" rows="1" placeholder="#id nebo .class" autocomplete="one-time-code" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+            <textarea id="ln-vd-selector" class="ln-vd-selector" rows="1" placeholder="#id nebo .class" autocomplete="one-time-code" data-luba-keyboard-field="visual-debug-selector" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
             <button id="ln-vd-resolve" class="ln-vd-btn" type="button">Použít</button>
           </div>
           <div class="ln-vd-actions" style="margin-top:8px !important">

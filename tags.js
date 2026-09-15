@@ -2960,6 +2960,7 @@ function vykresliSpravuStitku() {
         vstup.maxLength = 24;
         vstup.className = "manageTagRenameInput";
         vstup.autocomplete = "one-time-code";
+        vstup.setAttribute("data-luba-keyboard-field", "tag-rename");
         vstup.setAttribute("data-form-type", "other");
         vstup.setAttribute("data-lpignore", "true");
         vstup.setAttribute("data-1p-ignore", "true");
@@ -4015,7 +4016,7 @@ function renderTagFilters() {
     
     newTagModal.hidden = false;
     newTagModalInput.value = "";
-    newTagModalInput.focus();
+    /* FIX 532 – modal se otevírá bez focusu/klávesnice. Uživatel ji otevře až tapem do pole. */
   });
   
   tagFilterButtons.append(addTagButton);
@@ -4420,7 +4421,7 @@ createSecretTagButton?.addEventListener(
     
     newTagModal.hidden = false;
     newTagModalInput.value = "";
-    newTagModalInput.focus();
+    /* FIX 532 – modal se otevírá bez focusu/klávesnice. Uživatel ji otevře až tapem do pole. */
   }
 );
 

@@ -453,6 +453,7 @@
     input.autocomplete = "off";
     input.autocapitalize = "none";
     input.spellcheck = false;
+    input.setAttribute("data-luba-keyboard-field", "sharing-invite-username");
 
     pole.append(prefix, input);
 
@@ -591,7 +592,7 @@
     modal.overlay.hidden = false;
 
     aplikujPreklady();
-    requestAnimationFrame(() => modal.input.focus());
+    /* FIX 532 – modal se otevírá bez klávesnice; input se aktivuje až tapem. */
 
     await nactiShareData();
   }

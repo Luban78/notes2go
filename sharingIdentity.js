@@ -280,6 +280,7 @@
     modalInput.autocomplete = "off";
     modalInput.autocapitalize = "none";
     modalInput.spellcheck = false;
+    modalInput.setAttribute("data-luba-keyboard-field", "sharing-username");
 
     pole.append(prefix, modalInput);
 
@@ -391,11 +392,8 @@
 
     modalInput.value = aktualniUsername || "";
     modal.hidden = false;
-
-    requestAnimationFrame(() => {
-      modalInput.focus();
-      modalInput.select();
-    });
+    /* FIX 532 – sekundární modal se otevírá bez klávesnice.
+       Výběr textu/focus vznikne až po skutečném tapu do pole. */
   }
 
   function zavriUsernameModal() {

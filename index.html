@@ -1002,7 +1002,7 @@
         </div>
         
         <div id="newTagRow" class="newTagRow" hidden>
-          <textarea id="newTagInput" rows="1" maxlength="24" placeholder="Název štítku" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+          <textarea id="newTagInput" rows="1" maxlength="24" placeholder="Název štítku" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-luba-keyboard-field="tag-editor-new" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
           
           <button id="saveNewTagButton" type="button">
             Přidat
@@ -1608,10 +1608,10 @@
        ======================================== -->
   
   <div id="newTagModal" class="newTagModal" hidden>
-    <div class="newTagDialog">
+    <div class="newTagDialog" role="dialog" aria-modal="true" aria-labelledby="newTagModalTitle">
       <h3 id="newTagModalTitle">Nový štítek</h3>
       
-      <textarea id="newTagModalInput" rows="1" placeholder="Název štítku" maxlength="30" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+      <textarea id="newTagModalInput" rows="1" placeholder="Název štítku" maxlength="30" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" data-luba-keyboard-field="tag-modal-new" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
       
       <div class="newTagDialogActions">
         <button id="cancelNewTagModalButton" type="button">Zrušit</button>
@@ -1628,10 +1628,10 @@
      ======================================== -->
   
   <div id="manageTagsModal" class="manageTagsModal" hidden>
-    <div class="manageTagsContent">
+    <div class="manageTagsContent" role="dialog" aria-modal="true" aria-labelledby="manageTagsTitle">
       
       <div class="manageTagsHeader">
-        <h2>Správa štítků</h2>
+        <h2 id="manageTagsTitle">Správa štítků</h2>
         
         <button id="closeManageTagsButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít správu štítků">
           <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
@@ -1933,7 +1933,7 @@
   
   <script src="storage.js?v=20260913-targeted-delete-488"></script>
   
-  <script src="tags.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="tags.js?v=20260915-keyboard-contract-532"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-keyboard-530"></script>
@@ -1962,7 +1962,7 @@
   <!-- Obrázky a internetové odkazy v rich-text editoru -->
 
   <!-- Otevřít / Uložit jako – soubory přímo z editoru -->
-  <script src="editorDocuments.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="editorDocuments.js?v=20260915-keyboard-contract-532"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-core-v2-hardcut-528"></script>
@@ -1986,13 +1986,13 @@
   <!-- Supabase přihlášení / offline-first loader -->
   <script src="supabaseClient.js?v=20260913-egress-fuse-485"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
-  <script src="sharingIdentity.js?v=20260912-auth-gate-441"></script>
+  <script src="sharingIdentity.js?v=20260915-keyboard-contract-532"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->
-  <script src="sharingInvitations.js?v=20260913-quota-saver-487"></script>
+  <script src="sharingInvitations.js?v=20260915-keyboard-contract-532"></script>
   <!-- S2C: přijaté shared notes – oddělená cache + read-only karty/náhled. -->
   <script src="sharingNotes.js?v=20260913-quota-saver-487"></script>
   <!-- S3D: 1:1 chat mezi kontakty vzniklými ze sdílení. -->
-  <script src="chat.js?v=20260913-quota-saver-487"></script>
+  <script src="chat.js?v=20260915-keyboard-contract-532"></script>
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
@@ -2027,7 +2027,7 @@
   <script src="sharingEditor.js?v=20260913-shared-editor-status-474"></script>
   
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
-  <script src="visualDebug.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="visualDebug.js?v=20260915-keyboard-contract-532"></script>
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=20260915-heading-modal-530"></script>

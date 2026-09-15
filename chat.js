@@ -203,6 +203,8 @@
 
     const card = document.createElement("div");
     card.className = "chatContactsCard";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
 
     const header = document.createElement("header");
     header.className = "chatContactsHeader";
@@ -315,6 +317,8 @@
 
     const card = document.createElement("div");
     card.className = "chatThreadCard";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
 
     const header = document.createElement("header");
     header.className = "chatThreadHeader";
@@ -359,6 +363,7 @@
     input.placeholder = t("chat.messagePlaceholder", "Napsat zprávu…");
     input.setAttribute("aria-label", t("chat.messagePlaceholder", "Napsat zprávu…"));
     input.autocomplete = "off";
+    input.setAttribute("data-luba-keyboard-field", "chat-message");
 
     const send = document.createElement("button");
     send.type = "button";

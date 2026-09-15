@@ -886,7 +886,7 @@
 
         <label class="pdfLubaField">
           <span>Název souboru</span>
-          <input class="pdfLubaFileName" type="text" autocomplete="off" spellcheck="false" inputmode="text">
+          <input class="pdfLubaFileName" type="text" autocomplete="off" spellcheck="false" inputmode="text" data-luba-keyboard-field="pdf-file-name">
         </label>
 
         <div class="pdfLubaSaveMode" role="radiogroup" aria-label="Kam uložit PDF">
@@ -1117,17 +1117,8 @@
     prvky.input.value = normalizujNazevPdf(vychoziNazev);
     prvky.modal.hidden = false;
 
-    if (!jeNativniAndroid()) {
-      requestAnimationFrame(() => {
-        prvky.input.focus({ preventScroll: true });
-        const konec = prvky.input.value.replace(/\.pdf$/i, "").length;
-        try {
-          prvky.input.setSelectionRange(0, konec);
-        } catch {
-          prvky.input.select();
-        }
-      });
-    }
+    /* FIX 532 – stejně jako ostatní sekundární modaly se PDF modal otevře
+       bez focusu a bez klávesnice na všech platformách. Pole se aktivuje až tapem. */
   }
 
   function zajistiPdfNastaveniModal() {
