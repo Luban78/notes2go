@@ -1234,9 +1234,49 @@ window.addEventListener(
 );
 
 
+/* PATCH 543 – CoreV2 Planner backlink.
+   Po tapu na podtržený naplánovaný text otevřeme modul Plán rovnou na
+   dni dané Planner položky. Navigace přes plannerModuleButton zachová
+   jediný existující modulový flow; až potom přepíšeme výchozí dnešek
+   cílovým datem a překreslíme kalendář/agenda. */
+function otevriPlanovanouPolozkuVPlanu(plannedItemId) {
+  const id = String(plannedItemId || "").trim();
+  if (!id || typeof loadPlannedItems !== "function") {
+    return false;
+  }
+
+  const item = loadPlannedItems().find(
+    (polozka) => String(polozka?.id || "") === id
+  );
+
+  const datumText = String(item?.plannedAt || "").slice(0, 10);
+  const match = datumText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return false;
+  }
+
+  const rok = Number(match[1]);
+  const mesic = Number(match[2]) - 1;
+  const den = Number(match[3]);
+  const cilovyDen = new Date(rok, mesic, den);
+
+  if (Number.isNaN(cilovyDen.getTime())) {
+    return false;
+  }
+
+  document.getElementById("plannerModuleButton")?.click();
+
+  calendarCurrentDate = new Date(rok, mesic, 1);
+  calendarSelectedDay = cilovyDen;
+  renderCalendar();
+
+  return true;
+}
+
 window.LubaNoteCalendar = {
   ...(window.LubaNoteCalendar || {}),
   obnovPoZmene: () => {
     renderCalendar();
-  }
+  },
+  otevriPlanovanouPolozku: otevriPlanovanouPolozkuVPlanu
 };

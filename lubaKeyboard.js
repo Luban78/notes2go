@@ -380,48 +380,6 @@
   const LUBA_TAP_MAX_POHYB_PX = 12;
   let lubaEditorGesto = null;
 
-  /* FIX 534 – skutečný longpress Bullet/TODO přebírá celé gesto pro MOVE.
-     Core už při LONGPRESS_READY vysílá tento takeover event. LubaKeyboard
-     proto zahodí svůj původní TAP kandidát ještě PŘED pointerup/touchend;
-     samotné puštění prstu pak nesmí být vyhodnoceno jako tap do editoru.
-
-     🔒 FIX 535 – POJISTKA MOVE -> KLÁVESNICE.
-     Dokud je Bullet/TODO v aktivním longpress MOVE, LubaKeyboard se NESMÍ
-     otevřít žádnou cestou. Android WebView navíc umí po pointerup poslat
-     opožděný click/focus, proto po ukončení MOVE držíme ještě krátký guard.
-     Tohle záměrně NEMĚNÍ gesture engine ani jeho frozen prahy. */
-  let blokujKlavesniciKvuliV2Move = false;
-  let blokaceV2MoveDo = 0;
-  const V2_MOVE_KLAVESNICE_GUARD_MS = 450;
-
-  function jeBlokovanaKlavesniceV2Move() {
-    const aktivniV2Editor = aktivniEditor || najdiEditor();
-    const moveJeViditelneAktivni = Boolean(
-      aktivniV2Editor?.classList?.contains("ln-v2-list-drag-mode") ||
-      aktivniV2Editor?.querySelector?.(".ln-v2-list-move-selected")
-    );
-    return blokujKlavesniciKvuliV2Move ||
-      performance.now() < blokaceV2MoveDo ||
-      moveJeViditelneAktivni;
-  }
-
-  document.addEventListener("lubanote:v2-list-move-takeover", () => {
-    lubaEditorGesto = null;
-    blokujKlavesniciKvuliV2Move = true;
-    blokaceV2MoveDo = 0;
-  }, true);
-
-  const ukonciBlokaciKlavesnicePoV2Move = () => {
-    if (!blokujKlavesniciKvuliV2Move) return;
-    blokujKlavesniciKvuliV2Move = false;
-    blokaceV2MoveDo = performance.now() + V2_MOVE_KLAVESNICE_GUARD_MS;
-  };
-
-  document.addEventListener("pointerup", ukonciBlokaciKlavesnicePoV2Move, true);
-  document.addEventListener("pointercancel", ukonciBlokaciKlavesnicePoV2Move, true);
-  document.addEventListener("touchend", ukonciBlokaciKlavesnicePoV2Move, true);
-  document.addEventListener("touchcancel", ukonciBlokaciKlavesnicePoV2Move, true);
-
   let zakladniViewportHeight = 0;
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
@@ -1240,7 +1198,16 @@
 
     const jeTextovyCilTapu = (target) => {
       if (!target || !editor.contains(target)) return false;
-      if (target.closest?.("button, a[href], .ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove")) return false;
+
+      /* PATCH 543 – LINK NENÍ TAP DO TEXTU.
+         Interní [[link]], Planner backlink ani internetový odkaz jsou
+         samostatná navigační akce. Jejich pointerup proto nesmí otevřít
+         LubaKeyboard jen proto, že fyzicky leží uvnitř odstavce editoru. */
+      if (target.closest?.(
+        "button, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, " +
+        ".ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove"
+      )) return false;
+
       return target === editor || Boolean(target.closest?.(".ln-v2-odstavec"));
     };
 
@@ -2560,10 +2527,6 @@
   }
 
   function zobraz() {
-    /* 🔒 FIX 535 – centrální poslední pojistka. I kdyby některá budoucí
-       focus/click cesta obešla TAP filtr, během V2 MOVE klávesnici neotevře. */
-    if (jeBlokovanaKlavesniceV2Move()) return;
-
     potlacAutomatickeOtevreni = false;
     const editor = aktivniEditor || najdiEditor();
     const title = najdiNazevEditoru();
@@ -3191,7 +3154,7 @@
   } catch (_error) {}
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "MOVE-KEYBOARD-GUARD-535",
+    verze: "MODAL-CLOSE-533",
     zobraz,
     skryj,
     skryjProModal,

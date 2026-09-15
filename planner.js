@@ -1147,6 +1147,11 @@ planSelectionButton.addEventListener(
     }
 
     window.getSelection()?.removeAllRanges();
+
+    /* PATCH 543 – Planner je sekundární modal. Musí se otevřít bez
+       LubaKeyboard stejně jako datum/čas; jinak na malém displeji
+       zbytečně zmenší prostor ještě před otevřením pickeru. */
+    window.LubaNoteKeyboard?.skryjProModal?.();
     window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
 
     setPlannerDateTimeToNow();
@@ -1155,6 +1160,67 @@ planSelectionButton.addEventListener(
   }
 );
 
+
+/* ==================================================
+   PATCH 543 – PROKLIK PLÁNOVANÉHO TEXTU DO PLÁNU
+   Hard-cut 528 odstranil legacy plannedTextLinks.js. CoreV2 dál správně
+   vykresluje `.plannedTextLink`, ale chyběla mu čistá navigační obsluha.
+   Znovu ji držíme zde – v Planner vrstvě, ne ve frozen editor gesture enginu.
+   ================================================== */
+async function otevriPlanZPlanovanehoTextu(plannedItemId) {
+  const id = String(plannedItemId || "").trim();
+  if (!id) return false;
+
+  const existuje = loadPlannedItems().some(
+    (item) => String(item?.id || "") === id
+  );
+  if (!existuje) return false;
+
+  /* Navigace nesmí nechat za sebou aktivní caret ani klávesnici. */
+  window.LubaNoteKeyboard?.skryj?.();
+  try { document.activeElement?.blur?.(); } catch (_error) {}
+
+  const v2Bridge = window.LubaNoteEditorV2Bridge;
+  if (
+    v2Bridge?.jeAktivni?.() === true &&
+    v2Bridge.dokoncModelPredExterniAkci?.() !== true
+  ) {
+    return false;
+  }
+
+  /* Stejně jako interní link nesmíme při přechodu zahodit poslední editaci.
+     Změněnou poznámku bezpečně uložíme, beze změny ji jen zavřeme. */
+  if (typeof bylEditorZmenen === "function" && bylEditorZmenen()) {
+    if (typeof ulozAZavriEditor !== "function") return false;
+    const vysledek = await ulozAZavriEditor();
+    if (vysledek?.ok !== true) return false;
+  } else if (typeof zpracujZavreniEditoru === "function") {
+    zpracujZavreniEditoru();
+    if (document.getElementById("taskModal")?.classList.contains("show")) {
+      return false;
+    }
+  }
+
+  return window.LubaNoteCalendar
+    ?.otevriPlanovanouPolozku?.(id) === true;
+}
+
+document.getElementById("taskModal")?.addEventListener(
+  "click",
+  (event) => {
+    const link = event.target.closest?.(
+      ".plannedTextLink[data-planned-item-id]"
+    );
+    if (!link) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void otevriPlanZPlanovanehoTextu(
+      link.dataset.plannedItemId
+    );
+  },
+  true
+);
 
 window.LubaNotePlanner = {
   synchronizujPlanovaneTodoSPoznamkou

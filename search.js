@@ -218,7 +218,13 @@ clearSearchButton?.addEventListener("click", () => {
   vyhledavaniAktivovaneUzivatelem = false;
   searchNotes.readOnly = true;
   clearSearchButton.hidden = true;
+
+  // SEARCH CLOSE CONTRACT 540:
+  // Křížek ukončuje celé hledání, ne jen maže text.
+  // Proto musí zároveň vždy zavřít LubaKeyboard a zrušit focus pole.
+  window.LubaNoteKeyboard?.skryj?.();
   searchNotes.blur();
+
   prekresliVysledkyVyhledavani();
 });
 

@@ -1130,7 +1130,7 @@
      Nahrazuje systémový date picker.
      ======================================== -->
   
-  <div id="datePickerModal" class="datePickerModal" hidden>
+  <div id="datePickerModal" class="datePickerModal" role="dialog" aria-modal="true" aria-label="Vybrat datum" hidden>
     <div class="datePickerContent">
       
       <div class="datePickerHeader">
@@ -1183,7 +1183,7 @@
      Nahrazuje systémový time picker.
      ======================================== -->
   
-  <div id="timePickerModal" class="timePickerModal" hidden>
+  <div id="timePickerModal" class="timePickerModal" role="dialog" aria-modal="true" aria-label="Vybrat čas" hidden>
     <div class="timePickerContent">
       
       <div class="timePickerHeader">
@@ -1265,7 +1265,7 @@
      Celá poznámka používá datum + čas v editoru.
      ======================================== -->
   
-  <div id="plannerModal" class="plannerModal" hidden>
+  <div id="plannerModal" class="plannerModal" role="dialog" aria-modal="true" aria-label="Naplánovat" hidden>
     <div class="plannerBox">
       
       <div class="plannerHeader">
@@ -1935,7 +1935,7 @@
   
   <script src="storage.js?v=20260913-targeted-delete-488"></script>
   
-  <script src="tags.js?v=20260915-hidden-search-539"></script>
+  <script src="tags.js?v=20260915-area-clears-tag-541"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
@@ -1947,7 +1947,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=20260911-loop-guard-398"></script>
   
-  <script src="script.js?v=20260915-hidden-cards-538"></script>
+  <script src="script.js?v=20260915-planner-link-modal-keyboard-543"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
@@ -1967,16 +1967,16 @@
   <script src="editorDocuments.js?v=20260915-keyboard-contract-532"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
-  <script src="noteLinks.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>
   
-  <script src="planner.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="planner.js?v=20260915-planner-link-modal-keyboard-543"></script>
   
   
-  <script src="calendar.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="calendar.js?v=20260915-planner-link-modal-keyboard-543"></script>
   
   <script src="cardView.js?v=20260909-card-drag-order-326"></script>
   
-  <script src="search.js?v=20260915-hidden-search-539"></script>
+  <script src="search.js?v=20260915-search-close-keyboard-540"></script>
   
   
   <!-- Viditelný stav synchronizace nad ikonou Připomínky -->
@@ -2034,7 +2034,7 @@
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=20260915-image-percent-origin-537"></script>
   <script src="editorCoreV2Bridge.js?v=20260915-global-luba-fields-531"></script>
-  <script src="lubaKeyboard.js?v=20260915-move-keyboard-guard-535"></script>
+  <script src="lubaKeyboard.js?v=20260915-planner-link-modal-keyboard-543"></script>
 
   <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
   <script src="debugHub.js?v=20260915-core-v2-hardcut-528"></script>

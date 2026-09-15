@@ -2014,40 +2014,11 @@
     true
   );
 
-  function otevriNabidkuInternihoOdkazu(link) {
-    if (!link) return;
-
-    /* V2 interní odkaz je atomický (contenteditable=false), takže jej nelze
-       běžným označením „odformátovat“. Tap proto nabídne dvě explicitní akce:
-       otevřít cíl, nebo odebrat jen vazbu a ponechat původní text. */
-    if (
-      link.closest?.(".ln-v2-editor") &&
-      typeof window.otevriVyberovyModal === "function"
-    ) {
-      const nazev = String(link.dataset?.noteTitle || link.textContent || "Interní odkaz").trim() || "Interní odkaz";
-      window.otevriVyberovyModal({
-        nadpis: nazev,
-        moznosti: [
-          { hodnota: "otevrit", popisek: "Otevřít poznámku" },
-          { hodnota: "odebrat", popisek: "Odebrat odkaz" }
-        ],
-        poVyberu: async (hodnota) => {
-          if (hodnota === "odebrat") {
-            const odebrano = window.LubaNoteEditorV2
-              ?.odeberInterniOdkazZElementu?.(link) === true;
-            if (!odebrano && typeof zobrazZpravuAplikace === "function") {
-              zobrazZpravuAplikace("Interní odkaz", "Odkaz se nepodařilo bezpečně odebrat.");
-            }
-            return;
-          }
-          await otevriInterniOdkaz(link);
-        }
-      });
-      return;
-    }
-
-    void otevriInterniOdkaz(link);
-  }
+  /* FIX 542 – interní [[link]] se znovu otevírá přímo jedním tapem.
+   * Modal „Otevřít poznámku / Odebrat odkaz“ byl odstraněn z tap flow.
+   * DŮLEŽITÉ: samotné otevření stále vede přes `otevriInterniOdkaz()`,
+   * takže zůstává zachovaný FIX 527 – dokončení V2 modelu, dirty kontrola,
+   * bezpečné uložení a editor handoff před přechodem na cílovou poznámku. */
 
   noteBacklinksList?.addEventListener("click", (event) => {
     const polozka = event.target.closest?.(".noteBacklinkItem");
@@ -2079,7 +2050,7 @@
 
       event.preventDefault();
       event.stopPropagation();
-      otevriNabidkuInternihoOdkazu(link);
+      void otevriInterniOdkaz(link);
     },
     true
   );

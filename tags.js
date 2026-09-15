@@ -959,18 +959,24 @@ hiddenFilterButton?.addEventListener("click", () => {
 
   nastavFiltrSkrytych(novyStav);
 
+  /*
+   * PATCH 541 – systémová oblast vždy ruší běžný štítek.
+   * Skryté se nesmí nečekaně kombinovat s dříve zapnutým štítkem,
+   * a to ani při opětovném vypnutí oka.
+   */
+  activeTagFilter = null;
+
   if (novyStav) {
     /* Skryté je samostatná systémová oblast, ne kombinace běžných filtrů. */
     activeAreaFilter = "all";
-    activeTagFilter = null;
     favoriteFilterActive = false;
     filtrTajnychPoznamekAktivni = false;
 
     favoriteFilterButton?.classList.remove("active");
     secretFilterButton?.classList.remove("active");
-    updateTagFilterUI();
   }
 
+  updateTagFilterUI();
   updateAreaFilterUI();
   renderTasks();
 });
@@ -4281,11 +4287,13 @@ areaFilterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     vypniFiltrSkrytych();
     activeAreaFilter = button.dataset.areaFilter;
-    
-    if (activeAreaFilter === "all") {
-      activeTagFilter = null;
-    }
-    
+
+    /*
+     * PATCH 541 – Home / Work / Vše jsou hlavní oblasti.
+     * Přepnutí oblasti vždy ukončí předchozí filtrování běžným štítkem.
+     */
+    activeTagFilter = null;
+
     updateTagFilterUI();
     updateAreaFilterUI();
     renderTasks();
