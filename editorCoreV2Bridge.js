@@ -904,6 +904,11 @@
     return {
       richContent: pouzeTodo ? "" : String(api.exportujHtml() || ""),
       note: pouzeTodo ? "" : String(api.exportujProstyText() || ""),
+      txt: String(
+        typeof api.exportujTxt === "function"
+          ? api.exportujTxt()
+          : (api.exportujProstyText() || "")
+      ),
       todos: Array.isArray(todos) ? todos.map((todo) => ({ ...todo })) : [],
       maTodo,
       pouzeTodo,

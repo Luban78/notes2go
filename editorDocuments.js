@@ -1473,6 +1473,7 @@
       title,
       richContent: String(obsah.richContent || ""),
       plainText: String(obsah.note || ""),
+      txtContent: String(obsah.txt ?? obsah.note ?? ""),
       todos: Array.isArray(obsah.todos) ? obsah.todos.map((todo) => ({ ...todo })) : [],
       date: modalDate.value || "",
       time: modalTime.value || ""
@@ -1671,33 +1672,14 @@
   }
 
   function vytvorTxtDokument(data) {
-    const casti = [];
-
-    if (data.title) {
-      casti.push(data.title);
-      casti.push("=".repeat(Math.min(60, Math.max(3, data.title.length))));
-      casti.push("");
-    }
-
-    if (data.plainText.trim()) {
-      casti.push(data.plainText.trimEnd());
-    }
-
-    if (data.todos.length) {
-      if (casti.length) {
-        casti.push("");
-      }
-
-      casti.push("Úkoly:");
-
-      data.todos.forEach((todo) => {
-        casti.push(
-          `${todo.completed ? "[x]" : "[ ]"} ${todo.text || ""}`
-        );
-      });
-    }
-
-    return casti.join("\n");
+    /*
+     * TXT EXPORT 547
+     * Název poznámky patří pouze do názvu souboru. Do obsahu nepřidáváme
+     * žádnou hlavičku, podtržení ===== ani druhou sekci TODO. Řádky
+     * z Core V2 zachováváme bez trimování; pouze sjednotíme CRLF na LF.
+     */
+    return String(data?.txtContent ?? data?.plainText ?? "")
+      .replace(/\r\n?/g, "\n");
   }
 
   async function ulozPresWeb({ obsah, nazevSouboru, mimeType, pripona }) {

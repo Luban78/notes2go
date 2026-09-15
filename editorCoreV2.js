@@ -6975,6 +6975,27 @@
     return (doc?.bloky || []).map((blok) => textBloku(blok)).join("\n");
   }
 
+  /*
+   * TXT EXPORT 547
+   * Externí .txt je skutečný obsah poznámky bez generované hlavičky.
+   * TODO zůstává přesně na svém místě v toku dokumentu a nese pouze
+   * přenositelný textový stav [ ] / [x]. Produkční `note` tím neměníme.
+   */
+  function exportujTxtZModelu(doc = dokument) {
+    const bloky = Array.isArray(doc?.bloky) ? doc.bloky : [];
+
+    return bloky.map((blok) => {
+      const text = textBloku(blok);
+
+      if (jeTodoBlok(blok)) {
+        const znacka = blok?.hotovo === true ? "[x]" : "[ ]";
+        return text ? `${znacka} ${text}` : znacka;
+      }
+
+      return text;
+    }).join("\n");
+  }
+
   function nastavDokumentProHost(model) {
     dokument = klonDat(model);
     normalizujDokument();
@@ -7511,6 +7532,7 @@
     exportujHtml: () => exportujHtmlZModelu(),
     exportujTodos: () => exportujTodosZModelu(),
     exportujProstyText: () => exportujProstyTextZModelu(),
+    exportujTxt: () => exportujTxtZModelu(),
     otevriVHostu,
     zavriVHostu,
     nastavPoziciOtevreni: nastavPoziciOtevreniVHostu,
