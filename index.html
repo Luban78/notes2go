@@ -1959,7 +1959,7 @@
   <script src="attachmentsLocal.js?v=20260904-backup-v4-import-1"></script>
 
   <!-- Core V2 media služba: galerie/fotoaparát/komprese/náhled bez druhého DOM editoru. -->
-  <script src="editorMediaV2.js?v=20260915-image-natural-pinch-536"></script>
+  <script src="editorMediaV2.js?v=20260915-media-e2e-551"></script>
 
   <!-- Obrázky a internetové odkazy v rich-text editoru -->
 
@@ -2000,10 +2000,12 @@
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <script src="adminDashboard.js?v=20260912-auth-gate-441"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
-  <script src="attachmentsCloud.js?v=20260904-attachments-physical-delete-1"></script>
-  <script src="sharingAttachments.js?v=20260904-sharing-s2e-1"></script>
+  <script src="attachmentsCloud.js?v=20260915-media-e2e-551"></script>
+  <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
-  <script src="secret.js?v=20260913-secret-targeted-485"></script>
+  <script src="secret.js?v=20260915-media-e2e-551"></script>
+  <!-- E2E fotografie běžných poznámek – media klíč je odvozen ze stejného hlavního hesla jako Secret. -->
+  <script src="mediaCrypto.js?v=20260915-media-e2e-551"></script>
   <script src="secretBiometric.js?v=20260907-secret-fast-unlock-1"></script>
   
   <!-- Navigace modulů a servisní nabídka -->
@@ -2020,13 +2022,13 @@
   <script src="syncRealtime.js?v=20260915-small-consistency-548"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=20260914-queue-first-network-resume-505"></script>
+  <script src="sync.js?v=20260915-media-e2e-551"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260915-core-v2-hardcut-528"></script>
 
   <!-- S2D.1: shared editor lock + bezpečné uložení collaboratora. -->
-  <script src="sharingEditor.js?v=20260913-shared-editor-status-474"></script>
+  <script src="sharingEditor.js?v=20260915-media-e2e-551"></script>
   
   <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
   <script src="visualDebug.js?v=20260915-keyboard-contract-532"></script>

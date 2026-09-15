@@ -872,6 +872,20 @@ async function dokonciOdemknutiTajnehoRezimuNaPozadi() {
      * Použijeme stejný bezpečný fingerprint/change-feed průchod jako
      * foreground. Pokud něco nelze cíleně potvrdit, pouze se odloží.
      */
+    /* PATCH 551 – po úspěšném zadání hlavního Secret hesla je dostupný
+       i oddělený media klíč odvozený ze stejného hesla. Ještě před
+       rychlým syncem proto zařadíme starší běžné poznámky s fotografiemi
+       do cílené E2E migrace. Samotná
+       poznámka zůstává lokálně plaintext pro rychlý render; do cloudu
+       odchází pouze šifrovaný media payload. */
+    if (
+      window.LubaNoteMediaCrypto
+        ?.zaradMigraciExistujicichFotografii
+    ) {
+      await window.LubaNoteMediaCrypto
+        .zaradMigraciExistujicichFotografii();
+    }
+
     if (
       typeof window.LubaNoteSync?.spustRychle === "function"
     ) {
@@ -957,6 +971,22 @@ async function odemkniTajnyRezimSifrovacimKlicem(heslo) {
       nastaveni.salt,
       nastaveni.kdf_iterations
     );
+
+  /* PATCH 551 – stejné hlavní heslo zároveň odvodí oddělený media klíč.
+     Media klíč je jiný než Secret klíč (jiný PBKDF2 prefix), takže jeho
+     device-only non-extractable cache neoslabuje zamykání Secret poznámek.
+     Na novém zařízení stačí hlavní heslo zadat jednou při Secret unlocku. */
+  if (window.LubaNoteMediaCrypto?.nastavKlicZHesla) {
+    try {
+      await window.LubaNoteMediaCrypto
+        .nastavKlicZHesla(heslo, nastaveni);
+    } catch (error) {
+      console.warn(
+        "Media E2E klíč se na tomto zařízení nepodařilo připravit; Secret se odemkne normálně.",
+        error
+      );
+    }
+  }
 
   tajnyRezimOdemceny = true;
   spustSecretAutoLock();

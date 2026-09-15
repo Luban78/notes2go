@@ -32,6 +32,24 @@
     }
   }
 
+  function poznamkaObsahujeE2EInlineFotografii(note) {
+    try {
+      if (window.LubaNoteMediaCrypto?.maPlaintextFotografie) {
+        return window.LubaNoteMediaCrypto.maPlaintextFotografie(note) === true;
+      }
+    } catch (_error) {}
+
+    const html = [
+      note?.richContent,
+      ...(Array.isArray(note?.todos) ? note.todos.map((todo) => todo?.html) : [])
+    ];
+
+    return html.some((text) =>
+      typeof text === "string" &&
+      /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(text)
+    );
+  }
+
   function ziskejAttachmentIdsZPoznamky(note) {
     const ids = new Set();
 
@@ -421,6 +439,18 @@
       };
     }
 
+    /* PATCH 551 – tvrdá síťová pojistka. I kdyby tuto funkci zavolala
+       nějaká starší servisní cesta přímo, běžnou inline fotografii už
+       NESMÍ nahrát jako plaintext JPEG do Storage. */
+    if (poznamkaObsahujeE2EInlineFotografii(note)) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: "media_e2e_551",
+        count: 0
+      };
+    }
+
     const ids = ziskejAttachmentIdsZPoznamky(note);
 
     if (ids.length === 0) {
@@ -609,6 +639,14 @@
 
     for (const note of seznam) {
       if (!note?.id || note.isSecret === true) {
+        continue;
+      }
+
+      /* PATCH 551 – běžná fotografie je od této verze E2E payload v
+         JSONu poznámky. Starý cloud-shadow uploader ji NESMÍ znovu poslat
+         jako plaintext JPEG do Supabase Storage. Lokální IndexedDB stín
+         může zůstat jako device-only cache, ale síťová cesta je vypnutá. */
+      if (poznamkaObsahujeE2EInlineFotografii(note)) {
         continue;
       }
 

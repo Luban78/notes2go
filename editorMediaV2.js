@@ -154,9 +154,52 @@
     }
   }
 
+  function jeAktivniSdilenaPoznamka() {
+    const modal = document.getElementById("taskModal");
+    const noteId = ziskejNoteId();
+
+    if (modal?.classList?.contains("sharingEditorMode")) {
+      return true;
+    }
+
+    try {
+      return Boolean(
+        noteId &&
+        window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(noteId) === true
+      );
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function zajistiKlicProBeznyObrazek({ otevritModal = false } = {}) {
+    if (jeTajnaPoznamka()) return true;
+
+    if (jeAktivniSdilenaPoznamka()) {
+      window.zobrazZpravuAplikace?.(
+        "Šifrované fotografie",
+        "Fotografie ve sdílených poznámkách zatím nelze bezpečně vložit. Shared media dostanou vlastní E2E klíč v části Shared handoff."
+      );
+      return false;
+    }
+
+    const mediaCrypto = window.LubaNoteMediaCrypto;
+
+    if (mediaCrypto?.jeKlicDostupny?.() === true) {
+      return true;
+    }
+
+    mediaCrypto?.oznamNutneOdemceni?.(otevritModal);
+    return false;
+  }
+
   async function vlozSoubor(file) {
     if (!file || probihaVlozeni) return false;
     if (bridge()?.jeAktivni?.() !== true) return false;
+    /* PATCH 551: i po otevření pickeru mohl mezitím Secret auto-locknout.
+       Běžná fotografie se proto nesmí ani lokálně připravit k cloud syncu,
+       dokud není device media klíč odvozený z hlavního Secret hesla dostupný. */
+    if (!zajistiKlicProBeznyObrazek({ otevritModal: true })) return false;
 
     probihaVlozeni = true;
     const ukonciCekani = window.LubaNoteUI?.zacniCekaniAkce?.("Připravuji obrázek…", 250) || (() => {});
@@ -207,6 +250,12 @@
 
   function otevriVyberZdroje() {
     if (bridge()?.jeAktivni?.() !== true) return;
+
+    /* PATCH 551 – fotografie běžné poznámky používá media klíč odvozený
+       ze stejného hlavního hesla jako Secret. Pokud je zamčený, otevřeme odemknutí a uživatel po
+       úspěchu znovu klepne na vložení obrázku. File picker se tak nikdy
+       nespouští v režimu, který by později mohl vytvořit plaintext cloud. */
+    if (!zajistiKlicProBeznyObrazek({ otevritModal: true })) return;
 
     if (typeof window.otevriVyberovyModal === "function") {
       window.otevriVyberovyModal({

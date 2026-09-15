@@ -1745,18 +1745,102 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
     return false;
   }
 
+  let dataToStore = note;
+  let mediaChranenaE2E = false;
+
   /*
-   * FÁZE B ATTACHMENTS – cloudová stínová vrstva.
-   * Nové běžné JPEG přílohy se zkusí rezervovat a nahrát do
-   * privátního Storage ještě PŘED zápisem revize poznámky.
-   *
-   * Data URL ale zatím zůstává součástí poznámky, takže chyba
-   * Storage NESMÍ zastavit původní bezpečný revision sync.
-   * Tvrdou závislost zapneme až po ověření Storage, downloadu,
-   * backupu a migrace ve Fázi B2.
+   * PATCH 551 – E2E FOTOGRAFIE BĚŽNÝCH POZNÁMEK.
+   * ------------------------------------------------
+   * Jakmile poznámka obsahuje inline data:image, starý plaintext fallback
+   * je ZAKÁZANÝ. Fotografie se před serverovým zápisem vyjmou z HTML,
+   * zašifrují odděleným AES-GCM media klíčem odvozeným ze stejného
+   * hlavního hesla jako Secret a do JSONu se uloží jen ciphertext +
+   * reference. Bez device media klíče odvozeného ze stejného
+   * hlavního hesla se zápis raději odloží; nikdy nesmí pokračovat původní
+   * Data URL cestou.
+   */
+  if (note.isSecret !== true) {
+    const fallbackMaFotografii = [
+      note?.richContent,
+      ...(Array.isArray(note?.todos) ? note.todos.map((todo) => todo?.html) : [])
+    ].some((html) =>
+      typeof html === "string" &&
+      /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(html)
+    );
+
+    const mediaCrypto = window.LubaNoteMediaCrypto;
+    const maFotografii = mediaCrypto?.maPlaintextFotografie
+      ? mediaCrypto.maPlaintextFotografie(note) === true
+      : fallbackMaFotografii;
+
+    if (maFotografii) {
+      if (
+        mediaCrypto?.pripravMediaKlicZeZarizeni &&
+        mediaCrypto.jeKlicDostupny?.() !== true
+      ) {
+        await mediaCrypto.pripravMediaKlicZeZarizeni();
+      }
+
+      if (
+        !mediaCrypto?.pripravPoznamkuProCloud ||
+        mediaCrypto.jeKlicDostupny?.() !== true
+      ) {
+        mediaCrypto?.oznamNutneOdemceni?.(false);
+        console.warn(
+          `LubaNote media E2E: cloudový zápis ${note.id} byl odložen, protože media klíč není dostupný.`
+        );
+
+        if (moznosti?.vratitDetailV2 === true) {
+          return {
+            ok: false,
+            wrote: false,
+            reason: "media_key_locked"
+          };
+        }
+
+        return false;
+      }
+
+      try {
+        dataToStore = await mediaCrypto
+          .pripravPoznamkuProCloud(note);
+        mediaChranenaE2E =
+          mediaCrypto.maSifrovanaMedia?.(dataToStore) === true;
+      } catch (error) {
+        console.error(
+          "LubaNote media E2E: šifrování fotografie před syncem selhalo.",
+          error
+        );
+
+        if (moznosti?.vratitDetailV2 === true) {
+          return {
+            ok: false,
+            wrote: false,
+            reason: error?.code || "media_encrypt_failed",
+            error
+          };
+        }
+
+        return false;
+      }
+
+      if (!mediaChranenaE2E) {
+        console.error(
+          "LubaNote media E2E: ochranný guard zastavil zápis – fotografie nebyla převedena na ciphertext."
+        );
+        return false;
+      }
+    }
+  }
+
+  /*
+   * Starý cloud-shadow JPEG uploader smí běžet už jen pro obsah, který
+   * nepoužívá nový E2E media payload. U fotografie chráněné patchem 551
+   * je Storage plaintext upload výslovně zakázaný.
    */
   if (
     note.isSecret !== true &&
+    !mediaChranenaE2E &&
     window.LubaNoteAttachmentsCloud
       ?.zajistiStinovePrilohyPoznamkyVCloudu
   ) {
@@ -1767,19 +1851,17 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
 
       if (stavPriloh?.ok !== true) {
         console.warn(
-          "LubaNote attachments: některá stínová cloudová příloha zatím není nahraná. Poznámka se bezpečně synchronizuje původním Data URL způsobem.",
+          "LubaNote attachments: některá stínová cloudová příloha zatím není nahraná.",
           stavPriloh
         );
       }
     } catch (error) {
       console.warn(
-        "LubaNote attachments: příprava cloudové stínové přílohy selhala; původní sync pokračuje.",
+        "LubaNote attachments: příprava cloudové stínové přílohy selhala.",
         error
       );
     }
   }
-
-  let dataToStore = note;
 
   if (note.isSecret === true) {
     if (
@@ -1876,13 +1958,17 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
          * Chybějící dříve aktivní attachmenty se pouze označí jako
          * pending_delete; fyzický soubor se v této fázi nemaže.
          */
-        await cloud.synchronizujReferencePrilohPoznamky(note);
+        await cloud.synchronizujReferencePrilohPoznamky(
+          mediaChranenaE2E ? dataToStore : note
+        );
       } else if (cloud.oznacPrilohyPoznamkyJakoAktivni) {
         /*
          * Kompatibilní fallback pro případ, že klient krátce běží proti
          * starší serverové/JS vrstvě bez reconciliation RPC.
          */
-        await cloud.oznacPrilohyPoznamkyJakoAktivni(note);
+        await cloud.oznacPrilohyPoznamkyJakoAktivni(
+          mediaChranenaE2E ? dataToStore : note
+        );
       }
     } catch (error) {
       /*
@@ -1894,6 +1980,15 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
         error
       );
     }
+  }
+
+  if (
+    vysledek.ok &&
+    mediaChranenaE2E &&
+    note.isSecret !== true
+  ) {
+    window.LubaNoteMediaCrypto
+      ?.oznacMigrovano?.(note.id);
   }
 
   if (moznosti?.vratitDetailV2 === true) {
@@ -2143,6 +2238,15 @@ async function getCloudNotesForSync() {
     throw new Error(
       "Synchronizace byla zastavena: server vrátil neplatná data."
     );
+  }
+
+  /* PATCH 551 – cloudové běžné poznámky mohou obsahovat E2E media
+     trezor. Dešifrujeme jej ještě PŘED revision merge, aby všechny
+     existující porovnávací cesty dál pracovaly s kanonickým lokálním
+     plaintext modelem a nevytvářely falešné konflikty. */
+  if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
+    return await window.LubaNoteMediaCrypto
+      .pripravCloudRadkyProLokalniPouziti(data);
   }
 
   return data;
@@ -2975,7 +3079,22 @@ async function nactiCloudPoznamkyPodleIdV2(noteIds) {
     return null;
   }
 
-  return Array.isArray(data) ? data : [];
+  const radky = Array.isArray(data) ? data : [];
+
+  if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
+    try {
+      return await window.LubaNoteMediaCrypto
+        .pripravCloudRadkyProLokalniPouziti(radky);
+    } catch (error) {
+      console.warn(
+        "Sync V2: targeted download šifrovaných fotografií čeká na odemčení Secret.",
+        error
+      );
+      return null;
+    }
+  }
+
+  return radky;
 }
 
 
@@ -6402,6 +6521,28 @@ async function syncNotes(moznosti = {}) {
     await potvrdPrivateSyncV2CursorPoShodnemStavu(
       user.id
     );
+
+    /* PATCH 551 – nový/obnovený klient mohl právě stáhnout starší
+       plaintext fotografii z cloudové poznámky, která před odemknutím
+       Secret nebyla lokálně dostupná. Po úspěšném merge proto ještě
+       jednou projdeme lokální poznámky a takové fotografie zařadíme do
+       targeted E2E migrace. Už chráněné noteId mají lokální marker a
+       znovu se nefrontují. */
+    if (
+      window.LubaNoteMediaCrypto?.jeKlicDostupny?.() === true &&
+      window.LubaNoteMediaCrypto
+        ?.zaradMigraciExistujicichFotografii
+    ) {
+      try {
+        await window.LubaNoteMediaCrypto
+          .zaradMigraciExistujicichFotografii();
+      } catch (error) {
+        console.warn(
+          "LubaNote media E2E: post-sync migrace fotografií se dokončí později.",
+          error
+        );
+      }
+    }
 
     return true;
   })();

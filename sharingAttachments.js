@@ -385,6 +385,26 @@
       };
     }
 
+    /* PATCH 551 – osobní media klíč nelze bezpečně sdílet s jiným
+       uživatelem. Dokud Shared handoff nedostane vlastní E2E key wrapping,
+       nesmí shared save vytvořit nový plaintext JPEG v cloudu. EditorMedia
+       nové vložení blokuje už v UI; tohle je druhá serverová pojistka pro
+       import/starší cestu. */
+    const maInlineFotografii = [
+      note?.richContent,
+      ...(Array.isArray(note?.todos) ? note.todos.map((todo) => todo?.html) : [])
+    ].some((html) =>
+      typeof html === "string" &&
+      /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(html)
+    );
+
+    if (maInlineFotografii) {
+      return {
+        ok: false,
+        reason: "shared_media_e2e_pending"
+      };
+    }
+
     if (!navigator.onLine) {
       return {
         ok: false,

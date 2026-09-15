@@ -91,6 +91,25 @@
       ?.zobrazZpravu?.(nadpis, text);
   }
 
+  function obsahujeInlineFotografii(note) {
+    return [
+      note?.richContent,
+      ...(Array.isArray(note?.todos)
+        ? note.todos.map((todo) => todo?.html)
+        : [])
+    ].some((html) =>
+      typeof html === "string" &&
+      /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(html)
+    );
+  }
+
+  function oznamBlokovanouSharedFotografii() {
+    zobrazZpravu(
+      t("sharing.readOnlyTitle", "Sdílená poznámka"),
+      "Fotografie ve sdílených poznámkách zatím nelze bezpečně uložit. Shared media dostanou vlastní E2E klíč v části Shared handoff."
+    );
+  }
+
   function zastavHeartbeat() {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
@@ -374,6 +393,18 @@
       data.id = note.id;
       data.updatedAt = cas;
       data.isSecret = false;
+
+      /* PATCH 551 – metadata změna vlastní shared poznámky obchází
+         sharingAttachments, proto musí mít vlastní privacy guard.
+         Osobní media klíč vlastníka nelze použít pro spolupracovníka. */
+      if (obsahujeInlineFotografii(data)) {
+        oznamBlokovanouSharedFotografii();
+        return {
+          handled: true,
+          ok: false,
+          reason: "shared_media_e2e_pending"
+        };
+      }
 
       const { data: vysledek, error } = await klient.rpc(
         "lubanote_save_shared_note_safe",
@@ -666,6 +697,18 @@
 
       if (!snapshot?.data || !snapshot?.context) {
         throw new Error("shared_snapshot_missing");
+      }
+
+      /* PATCH 551 – defense-in-depth i pro případ, že by se
+         sharingAttachments nenačetl nebo byl obejit importem. Shared
+         fotografie nesmí odejít plaintext, dokud Shared handoff nemá
+         vlastní sdílený E2E key wrapping. */
+      if (obsahujeInlineFotografii(snapshot.data)) {
+        oznamBlokovanouSharedFotografii();
+        return {
+          ok: false,
+          reason: "shared_media_e2e_pending"
+        };
       }
 
       /*
