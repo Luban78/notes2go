@@ -773,6 +773,8 @@ const tagMenu =
 
 const favoriteFilterButton =
   document.getElementById("favoriteFilterButton");
+const hiddenFilterButton =
+  document.getElementById("hiddenFilterButton");
 const secretFilterButton =
   document.getElementById("secretFilterButton");
 
@@ -932,12 +934,55 @@ const closeManageTagsButton =
 const manageTagsList =
   document.getElementById("manageTagsList");
 
+let hiddenFilterActive = false;
+
+function vypniFiltrSkrytych() {
+  if (!hiddenFilterActive) {
+    return;
+  }
+
+  hiddenFilterActive = false;
+  hiddenFilterButton?.classList.remove("active");
+  updateAreaFilterUI();
+}
+
+function nastavFiltrSkrytych(aktivni) {
+  hiddenFilterActive = aktivni === true;
+  hiddenFilterButton?.classList.toggle(
+    "active",
+    hiddenFilterActive
+  );
+}
+
+hiddenFilterButton?.addEventListener("click", () => {
+  const novyStav = !hiddenFilterActive;
+
+  nastavFiltrSkrytych(novyStav);
+
+  if (novyStav) {
+    /* Skryté je samostatná systémová oblast, ne kombinace běžných filtrů. */
+    activeAreaFilter = "all";
+    activeTagFilter = null;
+    favoriteFilterActive = false;
+    filtrTajnychPoznamekAktivni = false;
+
+    favoriteFilterButton?.classList.remove("active");
+    secretFilterButton?.classList.remove("active");
+    updateTagFilterUI();
+  }
+
+  updateAreaFilterUI();
+  renderTasks();
+});
+
 secretFilterButton?.addEventListener(
   "click",
   () => {
     if (!tajnyRezimOdemceny) {
       return;
     }
+
+    vypniFiltrSkrytych();
     
     filtrTajnychPoznamekAktivni = !filtrTajnychPoznamekAktivni;
     
@@ -952,6 +997,7 @@ secretFilterButton?.addEventListener(
 let favoriteFilterActive = false;
 
 favoriteFilterButton?.addEventListener("click", () => {
+  vypniFiltrSkrytych();
   favoriteFilterActive = !favoriteFilterActive;
   
   favoriteFilterButton.classList.toggle(
@@ -1118,6 +1164,7 @@ function updateAreaFilterUI() {
   areaFilterButtons.forEach((button) => {
     button.classList.toggle(
       "active",
+      !hiddenFilterActive &&
       button.dataset.areaFilter === activeAreaFilter
     );
   });
@@ -3739,6 +3786,17 @@ function taskMatchesArea(task) {
   return (task.area || "private") === activeAreaFilter;
 }
 
+function taskMatchesHidden(task) {
+  const jeSkryta = Boolean(task?.hiddenAt);
+
+  /*
+   * Skryté je systémový mezisklad. V běžném seznamu skryté karty
+   * nikdy neukazujeme; po aktivaci oka naopak zobrazujeme jen je.
+   * Search se tak automaticky chová správně v aktuálním prostoru.
+   */
+  return hiddenFilterActive ? jeSkryta : !jeSkryta;
+}
+
 function taskMatchesFavorite(task) {
   if (!favoriteFilterActive) {
     return true;
@@ -4209,6 +4267,7 @@ categoryTaskButton.addEventListener("click", () => {
 
 areaFilterButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    vypniFiltrSkrytych();
     activeAreaFilter = button.dataset.areaFilter;
     
     if (activeAreaFilter === "all") {
@@ -4501,6 +4560,7 @@ tagFilterButtons.addEventListener("click", async (event) => {
   
   
   /* Normální filtrování štítků */
+  vypniFiltrSkrytych();
   activeTagFilter =
     activeTagFilter === vybranyStitek ?
     null :

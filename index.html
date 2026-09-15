@@ -332,19 +332,21 @@
       <button id="trashFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Koš">
         <span class="categoryTabIcon" data-luba-icon="smazat" data-luba-classic-icon="🗑️" aria-hidden="true"></span>
       </button>
+
+      <button id="hiddenFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Skryté" title="Skryté">
+        <span class="categoryTabIcon" data-luba-icon="skryte" data-luba-classic-icon="👁️" aria-hidden="true"></span>
+      </button>
       
       <button id="secretFilterButton" class="categoryTab categoryTabIconOnly" type="button" aria-label="Tajné poznámky" hidden>
         <span class="categoryTabIcon" data-luba-icon="odemceno" data-luba-classic-icon="🔓" aria-hidden="true"></span>
       </button>
       
-      <button class="categoryTab" type="button" data-area-filter="work">
+      <button class="categoryTab categoryTabIconOnly" type="button" data-area-filter="work" aria-label="Pracovní" title="Pracovní">
         <span class="categoryTabIcon" data-luba-icon="prace" data-luba-classic-icon="💼" aria-hidden="true"></span>
-        <span>Pracovní</span>
       </button>
       
-      <button class="categoryTab" type="button" data-area-filter="private">
+      <button class="categoryTab categoryTabIconOnly" type="button" data-area-filter="private" aria-label="Soukromé" title="Soukromé">
         <span class="categoryTabIcon" data-luba-icon="soukrome" data-luba-classic-icon="🏠" aria-hidden="true"></span>
-        <span>Soukromé</span>
       </button>
       
       <!-- Sem tags.js doplňuje vlastní štítky -->
@@ -1926,14 +1928,14 @@
   <script src="lang-en.js?v=20260915-core-v2-hardcut-528"></script>
   <script src="i18n.js?v=20260915-core-v2-hardcut-528"></script>
 
-  <script src="lubaIcons.js?v=20260909-planner-type-icons-325"></script>
+  <script src="lubaIcons.js?v=20260915-hidden-cards-538"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
   
   <script src="reminders.js?v=20260915-core-v2-hardcut-528"></script>
   
   <script src="storage.js?v=20260913-targeted-delete-488"></script>
   
-  <script src="tags.js?v=20260915-keyboard-contract-532"></script>
+  <script src="tags.js?v=20260915-hidden-cards-538"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
@@ -1945,7 +1947,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=20260911-loop-guard-398"></script>
   
-  <script src="script.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="script.js?v=20260915-hidden-cards-538"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
