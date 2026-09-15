@@ -2,7 +2,7 @@
 // TAJNÝ REŽIM LUBANOTE
 // Heslo, šifrování, odemykání a auto-lock.
 // Citlivá data se nesmí ukládat v plaintextu.
-// ==========================================
+// ================================== ========
 
 // ==========================================
 // TAJNÝ REŽIM – KONTROLA NASTAVENÍ
