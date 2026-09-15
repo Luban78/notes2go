@@ -475,6 +475,7 @@
     odkazTextInput.rows = 1;
     odkazTextInput.placeholder = "např. OpenAI";
     odkazTextInput.autocomplete = "one-time-code";
+    odkazTextInput.setAttribute("data-luba-keyboard-field", "link-text");
     odkazTextInput.setAttribute("data-form-type", "other");
     odkazTextInput.setAttribute("data-lpignore", "true");
     textLabel.append(odkazTextInput);
@@ -486,6 +487,7 @@
     odkazUrlInput.placeholder = "https://example.com";
     odkazUrlInput.autocomplete = "one-time-code";
     odkazUrlInput.inputMode = "url";
+    odkazUrlInput.setAttribute("data-luba-keyboard-field", "link-url");
     odkazUrlInput.setAttribute("data-form-type", "other");
     odkazUrlInput.setAttribute("data-lpignore", "true");
     urlLabel.append(odkazUrlInput);
@@ -512,6 +514,11 @@
     document.body.append(odkazModal);
 
     const zavri = () => {
+      /* FIX 531 – po zavření link modalu nesmí LubaKeyboard dál psát
+         do skrytého textarea. Zavřeme obě možné klávesnice a blurujeme
+         pole; další tap v editoru znovu aktivuje CoreV2 body. */
+      try { window.LubaNoteKeyboard?.skryjProModal?.(); } catch (_error) {}
+      try { document.activeElement?.blur?.(); } catch (_error) {}
       odkazModal.hidden = true;
     };
 

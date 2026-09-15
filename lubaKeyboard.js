@@ -333,6 +333,10 @@
   let altPopup = null;
   let aktivniEditor = null;
   let aktivniCilPsani = "body";
+  /* FIX 531 – LubaKeyboard není jen editorová klávesnice. Vyhledávání a
+     textová pole v podmodalech používají stejný vstupní engine. Aktivní
+     externí pole držíme zvlášť, aby se nikdy neposílaly znaky do CoreV2. */
+  let aktivniTextovePole = null;
   let layoutId = nactiLayout();
   let mode = "letters";
   let symbolPage = 0;
@@ -553,9 +557,11 @@
   }
 
   function naucAktualniSlovo() {
-    const kontext = jeAktivniNazev()
-      ? ziskejKontextNazvu()
-      : core()?.ziskejKontextVlastniKlavesnice?.();
+    const kontext = jeAktivniTextovePole()
+      ? ziskejKontextTextovehoPole()
+      : jeAktivniNazev()
+        ? ziskejKontextNazvu()
+        : core()?.ziskejKontextVlastniKlavesnice?.();
     const slovo = kontext?.celeSlovo || kontext?.prefix || "";
     if (slovo) naucSlovo(slovo, 2);
   }
@@ -589,9 +595,11 @@
     const layout = aktualniLayout();
     if (mode !== "letters" || layout.compose || layout.id === "emoji" || layout.id === "unicode") return [];
 
-    const kontext = jeAktivniNazev()
-      ? ziskejKontextNazvu()
-      : core()?.ziskejKontextVlastniKlavesnice?.();
+    const kontext = jeAktivniTextovePole()
+      ? ziskejKontextTextovehoPole()
+      : jeAktivniNazev()
+        ? ziskejKontextNazvu()
+        : core()?.ziskejKontextVlastniKlavesnice?.();
     const prefix = String(kontext?.prefix || "");
     if (!prefix) return vychoziNavrhy(layout);
 
@@ -706,6 +714,182 @@
 
   function jeAktivniNazev() {
     return aktivniCilPsani === "title" && Boolean(najdiNazevEditoru());
+  }
+
+  function jeLubaTextovePole(el) {
+    return Boolean(
+      el?.isConnected &&
+      el.matches?.('input[data-luba-keyboard-field], textarea[data-luba-keyboard-field]')
+    );
+  }
+
+  function jeAktivniTextovePole() {
+    return aktivniCilPsani === "field" && jeLubaTextovePole(aktivniTextovePole);
+  }
+
+  function ulozPuvodniAtributTextovehoPole(pole, nazev) {
+    if (!pole?.dataset) return;
+    const klic = `lubaOriginal${nazev}`;
+    if (Object.prototype.hasOwnProperty.call(pole.dataset, klic)) return;
+    const atribut = nazev === "Inputmode" ? "inputmode" : nazev.toLowerCase();
+    pole.dataset[klic] = pole.hasAttribute(atribut) ? String(pole.getAttribute(atribut) ?? "") : "__none__";
+  }
+
+  function obnovPuvodniAtributTextovehoPole(pole, nazev) {
+    if (!pole?.dataset) return;
+    const klic = `lubaOriginal${nazev}`;
+    if (!Object.prototype.hasOwnProperty.call(pole.dataset, klic)) return;
+    const atribut = nazev === "Inputmode" ? "inputmode" : nazev.toLowerCase();
+    const hodnota = pole.dataset[klic];
+    if (hodnota === "__none__") pole.removeAttribute(atribut);
+    else pole.setAttribute(atribut, hodnota);
+  }
+
+  function nastavLubaAtributyTextovehoPole(pole) {
+    if (!jeLubaTextovePole(pole)) return;
+    ulozPuvodniAtributTextovehoPole(pole, "Inputmode");
+    pole.setAttribute("inputmode", "none");
+    pole.setAttribute("virtualkeyboardpolicy", "manual");
+    pole.dataset.lubaKeyboardFieldActive = "1";
+  }
+
+  function nastavSystemoveAtributyTextovehoPole(pole) {
+    if (!jeLubaTextovePole(pole)) return;
+    obnovPuvodniAtributTextovehoPole(pole, "Inputmode");
+    pole.removeAttribute("virtualkeyboardpolicy");
+    delete pole.dataset.lubaKeyboardFieldActive;
+  }
+
+  function ziskejStavTextovehoPole() {
+    const pole = aktivniTextovePole;
+    if (!jeAktivniTextovePole()) return null;
+    const text = String(pole.value ?? "");
+    let start = Number.isFinite(pole.selectionStart) ? pole.selectionStart : text.length;
+    let end = Number.isFinite(pole.selectionEnd) ? pole.selectionEnd : start;
+    start = Math.max(0, Math.min(text.length, start));
+    end = Math.max(0, Math.min(text.length, end));
+    if (end < start) [start, end] = [end, start];
+    return { pole, text, start, end };
+  }
+
+  function vysliBeforeInputTextovehoPole(pole, inputType, data = null) {
+    try {
+      return pole.dispatchEvent(new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType,
+        data
+      }));
+    } catch (_error) {
+      return true;
+    }
+  }
+
+  function nastavTextTextovehoPole(pole, text, start, end = start, inputType = "insertText", data = null) {
+    if (!jeLubaTextovePole(pole)) return false;
+    if (!vysliBeforeInputTextovehoPole(pole, inputType, data)) return false;
+    pole.value = String(text ?? "");
+    try { pole.setSelectionRange(start, end); } catch (_error) {}
+    pole.dispatchEvent(new Event("input", { bubbles: true }));
+    queueMicrotask(aktualizujNavrhy);
+    return true;
+  }
+
+  function vlozDoTextovehoPole(text, inputType = "insertText") {
+    const state = ziskejStavTextovehoPole();
+    if (!state) return false;
+    const value = String(text ?? "");
+    if (!value) return false;
+    const next = state.text.slice(0, state.start) + value + state.text.slice(state.end);
+    const caret = state.start + value.length;
+    return nastavTextTextovehoPole(state.pole, next, caret, caret, inputType, value);
+  }
+
+  function ziskejKontextTextovehoPole() {
+    const state = ziskejStavTextovehoPole();
+    if (!state) return null;
+    const left = state.text.slice(0, state.start);
+    const right = state.text.slice(state.end);
+    const leftMatch = left.match(/[\p{L}\p{M}\p{N}_'-]+$/u);
+    const rightMatch = right.match(/^[\p{L}\p{M}\p{N}_'-]+/u);
+    const prefix = leftMatch?.[0] || "";
+    const suffix = rightMatch?.[0] || "";
+    return {
+      prefix,
+      celeSlovo: `${prefix}${suffix}`,
+      zacatek: state.start - prefix.length,
+      konec: state.end + suffix.length
+    };
+  }
+
+  function provedPrikazTextovehoPole(type, value = "") {
+    const state = ziskejStavTextovehoPole();
+    if (!state) return false;
+
+    if (type === "text") return vlozDoTextovehoPole(value, "insertText");
+    if (type === "space") return vlozDoTextovehoPole(" ", "insertText");
+
+    if (type === "suggestion") {
+      const navrh = String(value || "").trim();
+      if (!navrh) return false;
+      const left = state.text.slice(0, state.start);
+      const match = left.match(/[\p{L}\p{M}\p{N}_'-]+$/u);
+      const prefixLen = match?.[0]?.length || 0;
+      const zacatek = state.start - prefixLen;
+      const next = state.text.slice(0, zacatek) + `${navrh} ` + state.text.slice(state.end);
+      return nastavTextTextovehoPole(
+        state.pole, next, zacatek + navrh.length + 1, zacatek + navrh.length + 1,
+        "insertReplacementText", `${navrh} `
+      );
+    }
+
+    if (type === "backspace") {
+      if (state.start !== state.end) {
+        const next = state.text.slice(0, state.start) + state.text.slice(state.end);
+        return nastavTextTextovehoPole(state.pole, next, state.start, state.start, "deleteContentBackward");
+      }
+      if (state.start <= 0) return true;
+      const prev = predchoziPoziceNazvu(state.text, state.start);
+      const next = state.text.slice(0, prev) + state.text.slice(state.start);
+      return nastavTextTextovehoPole(state.pole, next, prev, prev, "deleteContentBackward");
+    }
+
+    if (type === "delete") {
+      if (state.start !== state.end) {
+        const next = state.text.slice(0, state.start) + state.text.slice(state.end);
+        return nastavTextTextovehoPole(state.pole, next, state.start, state.start, "deleteContentForward");
+      }
+      if (state.start >= state.text.length) return true;
+      const dalsi = dalsiPoziceNazvu(state.text, state.start);
+      const next = state.text.slice(0, state.start) + state.text.slice(dalsi);
+      return nastavTextTextovehoPole(state.pole, next, state.start, state.start, "deleteContentForward");
+    }
+
+    if (type === "left" || type === "right") {
+      let pos;
+      if (state.start !== state.end) pos = type === "left" ? state.start : state.end;
+      else pos = type === "left"
+        ? predchoziPoziceNazvu(state.text, state.start)
+        : dalsiPoziceNazvu(state.text, state.end);
+      try { state.pole.setSelectionRange(pos, pos); } catch (_error) {}
+      return true;
+    }
+
+    if (type === "enter") {
+      let event = null;
+      try {
+        event = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+        state.pole.dispatchEvent(event);
+      } catch (_error) {}
+      if (event?.defaultPrevented) return true;
+      return vlozDoTextovehoPole("\n", "insertLineBreak");
+    }
+
+    if (type === "undo" || type === "redo") {
+      try { return document.execCommand(type) !== false; } catch (_error) { return false; }
+    }
+
+    return false;
   }
 
   function ziskejVyberNazvu() {
@@ -1552,16 +1736,23 @@
 
     const editor = aktivniEditor || najdiEditor();
     const title = document.getElementById("modalTitle");
+    const textovePole = jeLubaTextovePole(aktivniTextovePole) ? aktivniTextovePole : null;
     if (novy === "system") {
       if (editor) systemMode({ focus: false });
       if (title) nastavSystemoveAtributy(title);
+      if (textovePole) nastavSystemoveAtributyTextovehoPole(textovePole);
       if (panel && !panel.hidden) skryj();
     } else {
       if (editor) ukonciSystemMode(editor);
       if (title) nastavLubaAtributy(title);
+      if (textovePole) nastavLubaAtributyTextovehoPole(textovePole);
       potlacAutomatickeOtevreni = false;
       if (document.activeElement === title && jeNazevEditoru(title)) {
         aktivniCilPsani = "title";
+        zobraz();
+        schovejSystemovou();
+      } else if (document.activeElement === textovePole) {
+        aktivniCilPsani = "field";
         zobraz();
         schovejSystemovou();
       }
@@ -1578,6 +1769,11 @@
 
   function insertCore(text) {
     if (!text) return false;
+    if (jeAktivniTextovePole()) {
+      const ok = provedPrikazTextovehoPole("text", text);
+      if (ok) ulozRecent(text);
+      return ok;
+    }
     if (jeAktivniNazev()) {
       const ok = provedPrikazNazvu("text", text);
       if (ok) ulozRecent(text);
@@ -1591,6 +1787,7 @@
   }
 
   function commandCore(type, value = "") {
+    if (jeAktivniTextovePole()) return provedPrikazTextovehoPole(type, value);
     if (jeAktivniNazev()) return provedPrikazNazvu(type, value);
     const api = core();
     if (!api?.provedPrikazVlastniKlavesnice) return false;
@@ -2325,7 +2522,9 @@
     const editor = aktivniEditor || najdiEditor();
     const title = najdiNazevEditoru();
     const cilJeNazev = jeAktivniNazev();
-    if (!editor && !(cilJeNazev && title)) return;
+    const cilJePole = jeAktivniTextovePole();
+    const textovePole = cilJePole ? aktivniTextovePole : null;
+    if (!editor && !(cilJeNazev && title) && !textovePole) return;
 
     if (ziskejZdrojKlavesnice() === "system") {
       if (editor) {
@@ -2333,6 +2532,7 @@
         nastavSystemoveAtributy(editor);
       }
       if (title) nastavSystemoveAtributy(title);
+      if (textovePole) nastavSystemoveAtributyTextovehoPole(textovePole);
       return;
     }
 
@@ -2342,6 +2542,7 @@
     }
     if (editor) pripravEditor(editor);
     if (cilJeNazev && title) nastavLubaAtributy(title);
+    if (textovePole) nastavLubaAtributyTextovehoPole(textovePole);
     panel.hidden = false;
     otevritButton.hidden = true;
     document.body.classList.add("ln-luba-klavesnice-open");
@@ -2449,7 +2650,7 @@
       const aktivni = document.activeElement;
       const editor = aktivniEditor || najdiEditor();
       const title = najdiNazevEditoru();
-      if (aktivni && (aktivni === editor || aktivni === title || jeEditorV2(aktivni))) {
+      if (aktivni && (aktivni === editor || aktivni === title || jeEditorV2(aktivni) || jeLubaTextovePole(aktivni))) {
         aktivni.blur?.();
       }
     } catch (_error) {}
@@ -2536,6 +2737,29 @@
   }, true);
 
   document.addEventListener("focusin", (event) => {
+    /* FIX 531 – stejná LubaKeyboard i mimo CoreV2: vyhledávání a explicitně
+       označená textová pole podmodalů. Systémová IME se použije jen tehdy,
+       když ji má uživatel globálně zvolenou v Nastavení. */
+    if (jeLubaTextovePole(event.target)) {
+      aktivniTextovePole = event.target;
+      aktivniCilPsani = "field";
+      potlacAutomatickeOtevreni = false;
+
+      if (ziskejZdrojKlavesnice() === "system") {
+        nastavSystemoveAtributyTextovehoPole(event.target);
+        if (panel && !panel.hidden) skryj();
+        zapisStabilituKlavesnice("FOCUS FIELD", "system");
+        return;
+      }
+
+      nastavLubaAtributyTextovehoPole(event.target);
+      zapisStabilituKlavesnice("FOCUS FIELD", "luba");
+      zobraz();
+      requestAnimationFrame(schovejSystemovou);
+      setTimeout(schovejSystemovou, 60);
+      return;
+    }
+
     /* PATCH 498 – JEDNA KLÁVESNICE PRO CELÝ EDITOR.
        Název i tělo respektují stejnou globální volbu z Nastavení.
        V režimu LubaKeyboard se Gboard v názvu NESMÍ otevřít. */
@@ -2579,6 +2803,25 @@
   }, true);
 
   document.addEventListener("pointerdown", (event) => {
+    /* FIX 531 – inputmode musíme přepnout ještě před vytvořením nativního
+       InputConnection. Stejný princip už používá název editoru od 498. */
+    if (jeLubaTextovePole(event.target)) {
+      const pole = event.target;
+      aktivniTextovePole = pole;
+      aktivniCilPsani = "field";
+      if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributyTextovehoPole(pole);
+      else {
+        nastavLubaAtributyTextovehoPole(pole);
+        schovejSystemovouNativne();
+        /* Když už pole focus má a uživatel LubaKeyboard předtím ručně
+           schoval, nový tap nevyvolá další focusin. Otevřeme ji proto
+           po dokončení skutečného tapu znovu. */
+        requestAnimationFrame(() => {
+          if (document.activeElement === pole && ziskejZdrojKlavesnice() !== "system") zobraz();
+        });
+      }
+    }
+
     /* PATCH 498 – atributy názvu nastavujeme už v pointerdown capture,
        tedy ještě PŘED tím, než WebView vytvoří InputConnection. */
     if (event.target?.id === "modalTitle") {
@@ -2859,6 +3102,14 @@
     else nastavLubaAtributy(titlePriStartu);
   }
 
+  /* FIX 531 – statická pole (hlavně hledání) připravíme už při startu,
+     aby WebView nestihl před prvním pointerdown vytvořit systémovou IME.
+     Dynamická pole podmodalů se připraví v pointerdown/focusin cestě. */
+  document.querySelectorAll('input[data-luba-keyboard-field], textarea[data-luba-keyboard-field]').forEach((pole) => {
+    if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributyTextovehoPole(pole);
+    else nastavLubaAtributyTextovehoPole(pole);
+  });
+
   /* FIX 530 – globální pojistka i pro modaly mimo choiceModal/CoreV2 Bridge.
      Sledujeme pouze skutečné aria-modal dialogy; hlavní taskModal není dialog
      tohoto typu, takže běžné otevření editoru klávesnici nepotlačí. */
@@ -2874,12 +3125,19 @@
   } catch (_error) {}
 
   window.LubaNoteKeyboard = Object.freeze({
-    verze: "TAP-SWIPE-510",
+    verze: "GLOBAL-FIELDS-531",
     zobraz,
     skryj,
     skryjProModal,
     nastavLayout,
     pripravEditor,
+    pripravTextovePole: (pole) => {
+      if (!jeLubaTextovePole(pole)) return false;
+      aktivniTextovePole = pole;
+      if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributyTextovehoPole(pole);
+      else nastavLubaAtributyTextovehoPole(pole);
+      return true;
+    },
     ziskejLayout: () => layoutId,
     ziskejZdroj: ziskejZdrojKlavesnice,
     nastavZdroj: nastavZdrojKlavesnice,

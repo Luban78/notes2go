@@ -219,7 +219,7 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" data-luba-icon="hledat" data-luba-classic-icon="⌕" aria-hidden="true"></span>
-        <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+        <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-luba-keyboard-field="search" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
         <button id="clearSearchButton" class="searchClearButton lubaIconOnlyButton" type="button" aria-label="Vymazat hledání" hidden>
           <span class="lubaActionIcon" data-luba-icon="zavrit" data-luba-classic-icon="×" aria-hidden="true"></span>
         </button>
@@ -2031,8 +2031,8 @@
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=20260915-heading-modal-530"></script>
-  <script src="editorCoreV2Bridge.js?v=20260915-heading-modal-530"></script>
-  <script src="lubaKeyboard.js?v=20260915-modal-keyboard-530"></script>
+  <script src="editorCoreV2Bridge.js?v=20260915-global-luba-fields-531"></script>
+  <script src="lubaKeyboard.js?v=20260915-global-luba-fields-531"></script>
 
   <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
   <script src="debugHub.js?v=20260915-core-v2-hardcut-528"></script>
