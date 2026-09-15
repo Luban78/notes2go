@@ -872,24 +872,46 @@ async function dokonciOdemknutiTajnehoRezimuNaPozadi() {
      * Použijeme stejný bezpečný fingerprint/change-feed průchod jako
      * foreground. Pokud něco nelze cíleně potvrdit, pouze se odloží.
      */
-    /* PATCH 551 – po úspěšném zadání hlavního Secret hesla je dostupný
-       i oddělený media klíč odvozený ze stejného hesla. Ještě před
-       rychlým syncem proto zařadíme starší běžné poznámky s fotografiemi
-       do cílené E2E migrace. Samotná
-       poznámka zůstává lokálně plaintext pro rychlý render; do cloudu
-       odchází pouze šifrovaný media payload. */
-    if (
-      window.LubaNoteMediaCrypto
-        ?.zaradMigraciExistujicichFotografii
-    ) {
-      await window.LubaNoteMediaCrypto
-        .zaradMigraciExistujicichFotografii();
-    }
+    /* PATCH 552 – KRITICKÉ POŘADÍ MEDIA MIGRACE / REMOTE DELTA.
+       -----------------------------------------------------------
+       Na druhém existujícím zařízení může být lokální kopie poznámky
+       starší než cloud. PATCH 551 ji po Secret unlocku omylem zařadil
+       do migrační TARGET fronty JEŠTĚ PŘED stažením remote delta, takže
+       targeted upload dluh dostal přednost a aktuální cloudová revize se
+       nemohla normálně stáhnout.
+
+       Proto je pořadí záměrně opačné a NESMÍ se vracet zpět:
+       1) nejdřív bezpečný Fast/Delta sync stáhne případné novější revize,
+       2) teprve po úspěšném potvrzení shody smíme lokální plaintext fotky
+          považovat za autoritativní kandidáty migrace,
+       3) pokud migrace něco zařadila, druhý rychlý průchod odešle pouze
+          cílené E2E zápisy. Nikdy se kvůli tomu nespouští full snapshot.
+
+       Dešifrování cloudové media-vault poznámky označí noteId jako už
+       migrované, takže stale druhé zařízení ji po stažení znovu neuploaduje. */
+    let rychlySyncPredMigraciOk = false;
 
     if (
       typeof window.LubaNoteSync?.spustRychle === "function"
     ) {
-      await window.LubaNoteSync.spustRychle();
+      rychlySyncPredMigraciOk =
+        await window.LubaNoteSync.spustRychle();
+    }
+
+    if (
+      rychlySyncPredMigraciOk === true &&
+      window.LubaNoteMediaCrypto
+        ?.zaradMigraciExistujicichFotografii
+    ) {
+      const migrace = await window.LubaNoteMediaCrypto
+        .zaradMigraciExistujicichFotografii();
+
+      if (
+        Number(migrace?.queued || 0) > 0 &&
+        typeof window.LubaNoteSync?.spustRychle === "function"
+      ) {
+        await window.LubaNoteSync.spustRychle();
+      }
     }
 
     /*
