@@ -65,7 +65,7 @@
     fotoaparat: "📷",
     odkaz: "🔗",
     todo: "☐",
-    ukol: "📋",
+    ukol: "✅",
     dokument: "📄",
     obnovit: "↻",
     zpet: "←",
@@ -348,13 +348,12 @@
 
     /*
      * Samostatný naplánovaný úkol.
-     * Clipboard + fajfka je záměrně jiný symbol než TODO checkbox,
-     * aby se v Planneru nepletly dva různé významy.
+     * Kolečko s fajfkou je záměrně jednoduché a výrazně odlišné
+     * od ikony poznámky i od TODO checkboxu uvnitř editoru.
      */
     ukol: [
-      ["rect", { x: "5", y: "5.6", width: "14", height: "15", rx: "2.2" }],
-      ["rect", { x: "8.5", y: "3.2", width: "7", height: "4.6", rx: "1.5" }],
-      ["path", { d: "m8.2 13.2 2.4 2.4 5.2-5.3" }]
+      ["circle", { cx: "12", cy: "12", r: "8.8" }],
+      ["path", { d: "m7.8 12.1 2.7 2.8 5.9-6" }]
     ],
 
     dokument: [

@@ -4304,17 +4304,19 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 
+  /* 545 – horní fade seznamu má zůstat jen jemný.
+     Původních 20 px zasahovalo do prvního řádku hned pod „týden“. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 20px,
+    black 10px,
     black 100%
   );
 
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 20px,
+    black 10px,
     black 100%
   );
 }
@@ -10880,4 +10882,156 @@ body.lubaCardDragMode .app {
 
 .pinnedCards.listView .lubaCardDragPlaceholder {
   width: 100%;
+}
+
+
+/* ==================================================
+   PATCH 544 – PLÁN / DETAIL DNE / PŘIPOMÍNKY
+   --------------------------------------------------
+   1. řádek = čas + ikony metadat + menu
+   2. řádek = název (jeden řádek, ellipsis)
+   3. řádek = preview pouze v Připomínkách
+   ================================================== */
+.calendarAgendaItem {
+  align-items: start;
+}
+
+.calendarAgendaTime {
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+.calendarAgendaText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.calendarAgendaMeta,
+.reminderItemMeta {
+  min-width: 0;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendarAgendaMetaIcon,
+.reminderItemMetaIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+}
+
+.calendarAgendaMetaIcon .lubaSvgIcon,
+.reminderItemMetaIcon .lubaSvgIcon {
+  width: 100%;
+  height: 100%;
+}
+
+/* 545 – v Připomínkách držíme ikony opticky stejně kompaktní
+   jako v řádcích Plánu. Emoji potřebují lehké optické zmenšení;
+   SVG dostanou stejný kompaktní box. */
+.reminderItemMetaIcon {
+  width: 17px;
+  height: 17px;
+}
+
+.reminderItemMetaIcon.lubaEmojiIcon {
+  font-size: 0.86em;
+}
+
+.calendarAgendaAreaIcon,
+.reminderItemAreaIcon {
+  color: color-mix(
+    in srgb,
+    var(--color-text-secondary) 72%,
+    var(--color-accent) 28%
+  );
+}
+
+.calendarAgendaTypeTask,
+.reminderItemTypeTask {
+  color: var(--color-accent);
+}
+
+.calendarAgendaTypeNote,
+.reminderItemTypeNote {
+  color: var(--color-text-secondary);
+}
+
+.calendarAgendaReminderIcon,
+.reminderItemReminderIcon {
+  color: var(--color-accent-text);
+}
+
+.calendarAgendaRepeatIcon,
+.reminderItemRepeatIcon {
+  color: var(--color-accent);
+}
+
+.calendarAgendaTitle,
+.reminderItemTitle,
+.reminderItemPreview {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendarAgendaTitle {
+  color: var(--color-text);
+  font-size: var(--font-size);
+  line-height: 1.25;
+}
+
+.reminderItemContent {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.reminderItemTitle {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--font-size);
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.reminderItemPreview {
+  margin-top: 0;
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1.3;
+}
+
+.reminderItemMenu,
+.calendarAgendaMenu {
+  align-self: start;
+}
+
+/* 544 – Planner i detail dne používají stejnou kompaktní kartu
+   jako schválený návrh, ne starý řádek s oddělovací čárou. */
+.calendarAgendaItem {
+  margin: 0 0 8px;
+  padding: 10px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background:
+    color-mix(in srgb,
+      var(--color-surface) 70%,
+      transparent);
+}
+
+.calendarAgendaTitle {
+  font-weight: 650;
 }

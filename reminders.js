@@ -4224,62 +4224,71 @@ function createReminderRow(
   content.className =
     "reminderItemContent";
 
-  const title =
+  /* 544 – první řádek jsou jen metadata, druhý název,
+     třetí volitelný preview. Díky tomu se významy nemíchají. */
+  const meta =
     document.createElement("div");
 
-  title.className =
-    "reminderItemTitle";
+  meta.className =
+    "reminderItemMeta";
 
-  const icon =
-    document.createElement("span");
-
-  icon.className =
-    "reminderItemArea";
-
-  const ikonaOblasti =
-    entry.area === "work" ? "prace" : "soukrome";
-
-  if (window.LubaNoteIcons?.vlozIkonu) {
-    window.LubaNoteIcons.vlozIkonu(
-      icon,
-      ikonaOblasti,
-      ["reminderItemAreaIcon"]
+  const areaIcon =
+    window.LubaNoteIcons?.vytvorHostitele?.(
+      entry.area === "work" ? "prace" : "soukrome",
+      ["reminderItemMetaIcon", "reminderItemAreaIcon"]
     );
+
+  if (areaIcon) {
+    meta.append(areaIcon);
   }
 
-  const titleText =
-    document.createElement("span");
+  const typeIcon =
+    window.LubaNoteIcons?.vytvorHostitele?.(
+      entry.kind === "planned" ? "ukol" : "poznamky",
+      [
+        "reminderItemMetaIcon",
+        "reminderItemTypeIcon",
+        entry.kind === "planned"
+          ? "reminderItemTypeTask"
+          : "reminderItemTypeNote"
+      ]
+    );
 
-  titleText.textContent =
-    entry.title || "Bez názvu";
+  if (typeIcon) {
+    meta.append(typeIcon);
+  }
 
-  title.append(icon, titleText);
+  const bellIcon =
+    window.LubaNoteIcons?.vytvorHostitele?.(
+      "zvonek",
+      ["reminderItemMetaIcon", "reminderItemReminderIcon"]
+    );
 
-  if (entry.kind === "planned") {
-    const planIcon =
-      window.LubaNoteIcons?.vytvorHostitele?.(
-        "kalendar",
-        ["reminderPlannedIcon"]
-      );
-
-    if (planIcon) {
-      title.append(planIcon);
-    }
+  if (bellIcon) {
+    meta.append(bellIcon);
   }
 
   if (entry.sourceType === "recurring-note") {
     const repeatIcon =
       window.LubaNoteIcons?.vytvorHostitele?.(
         "opakovat",
-        ["reminderRecurringIcon"]
+        ["reminderItemMetaIcon", "reminderItemRepeatIcon"]
       );
 
     if (repeatIcon) {
-      title.append(repeatIcon);
+      meta.append(repeatIcon);
     }
   }
 
-  content.append(title);
+  const title =
+    document.createElement("div");
+
+  title.className =
+    "reminderItemTitle";
+  title.textContent = entry.title || "Bez názvu";
+  title.title = entry.title || "Bez názvu";
+
+  content.append(meta, title);
 
   const preview =
     String(entry.preview || "")
@@ -4294,6 +4303,7 @@ function createReminderRow(
       "reminderItemPreview";
 
     previewElement.textContent = preview;
+    previewElement.title = preview;
     content.append(previewElement);
   }
 

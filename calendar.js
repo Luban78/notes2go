@@ -819,6 +819,15 @@ function renderCalendarItems(targetElement) {
           )
       );
 
+  /* 544 – jednotný dvouřádkový Planner layout.
+     Oblast bereme ze zdrojové poznámky, aby první řádek
+     obsahoval jen metadata a název měl celý vlastní řádek. */
+  const noteById = new Map(
+    loadTask()
+      .filter((note) => note?.id)
+      .map((note) => [note.id, note])
+  );
+
   if (items.length === 0) {
     targetElement.textContent =
       "Na tento den není nic naplánováno.";
@@ -863,10 +872,31 @@ function renderCalendarItems(targetElement) {
     text.className =
       "calendarAgendaText";
 
+    const meta =
+      document.createElement("div");
+
+    meta.className =
+      "calendarAgendaMeta";
+
+    const sourceNote =
+      noteById.get(item.sourceNoteId) || null;
+
+    const areaIcon =
+      window.LubaNoteIcons?.vytvorHostitele?.(
+        sourceNote?.area === "work"
+          ? "prace"
+          : "soukrome",
+        ["calendarAgendaMetaIcon", "calendarAgendaAreaIcon"]
+      );
+
+    if (areaIcon) {
+      meta.append(areaIcon);
+    }
+
     /*
-     * Typ je vidět ještě před názvem, aby uživatel před swipe přesně
-     * poznal, zda dokončuje celou poznámku, nebo jen její úkol.
-     * Samostatný úkol používá clipboard-check, nikoli TODO checkbox.
+     * Typ položky je nyní pouze v metadatech.
+     * Samostatný úkol používá kolečko s fajfkou (ikona `ukol`),
+     * aby se nepletl s poznámkou ani s TODO checkboxem v editoru.
      */
     const typovaIkona =
       window.LubaNoteIcons?.vytvorHostitele?.(
@@ -874,6 +904,7 @@ function renderCalendarItems(targetElement) {
           ? "poznamky"
           : "ukol",
         [
+          "calendarAgendaMetaIcon",
           "calendarAgendaTypeIcon",
           jeCelaPoznamka
             ? "calendarAgendaTypeNote"
@@ -882,15 +913,8 @@ function renderCalendarItems(targetElement) {
       );
 
     if (typovaIkona) {
-      text.append(
-        typovaIkona,
-        document.createTextNode(" ")
-      );
+      meta.append(typovaIkona);
     }
-
-    text.append(
-      document.createTextNode(item.text)
-    );
 
     const maPripominku =
       item.sourceType === "recurring-note" ||
@@ -904,33 +928,35 @@ function renderCalendarItems(targetElement) {
       const bellIcon =
         window.LubaNoteIcons?.vytvorHostitele?.(
           "zvonek",
-          ["calendarAgendaReminderIcon"]
+          ["calendarAgendaMetaIcon", "calendarAgendaReminderIcon"]
         );
 
       if (bellIcon) {
-        text.append(
-          document.createTextNode(" "),
-          bellIcon
-        );
+        meta.append(bellIcon);
       }
     }
 
-    if (
-      item.sourceType === "recurring-note"
-    ) {
+    if (item.sourceType === "recurring-note") {
       const repeatIcon =
         window.LubaNoteIcons?.vytvorHostitele?.(
           "opakovat",
-          ["calendarAgendaRepeatIcon"]
+          ["calendarAgendaMetaIcon", "calendarAgendaRepeatIcon"]
         );
 
       if (repeatIcon) {
-        text.append(
-          document.createTextNode(" "),
-          repeatIcon
-        );
+        meta.append(repeatIcon);
       }
     }
+
+    const title =
+      document.createElement("div");
+
+    title.className =
+      "calendarAgendaTitle";
+    title.textContent = item.text || "Bez názvu";
+    title.title = item.text || "Bez názvu";
+
+    text.append(meta, title);
 
     const menuButton =
       document.createElement("button");
