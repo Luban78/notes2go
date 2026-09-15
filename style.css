@@ -4305,18 +4305,18 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   overscroll-behavior: contain;
 
   /* 545 – horní fade seznamu má zůstat jen jemný.
-     Původních 20 px zasahovalo do prvního řádku hned pod „týden“. */
+     545: 20 px zasahovalo do prvního řádku. 546: fade stažen na téměř neznatelné 4 px. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 10px,
+    black 4px,
     black 100%
   );
 
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 10px,
+    black 4px,
     black 100%
   );
 }
@@ -11034,4 +11034,27 @@ body.lubaCardDragMode .app {
 
 .calendarAgendaTitle {
   font-weight: 650;
+}
+
+
+/* ========================================
+   546 – AREA FILTRY JEN IKONY
+   Work / Private nesmí prodlužovat řádek textovým popisem.
+   Pravidlo je záměrně odolné i proti textu doplněnému lokalizací.
+   ======================================== */
+.categoryTab[data-area-filter="work"],
+.categoryTab[data-area-filter="private"] {
+  font-size: 0 !important;
+  min-width: 42px;
+  width: 42px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.categoryTab[data-area-filter="work"] .categoryTabIcon,
+.categoryTab[data-area-filter="private"] .categoryTabIcon {
+  font-size: 18px !important;
+  width: 18px;
+  height: 18px;
+  margin: 0;
 }
