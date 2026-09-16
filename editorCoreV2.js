@@ -3469,107 +3469,23 @@
     return true;
   }
 
-  /*
-   * PATCH 572 – iOS CARET PODLE GEOMETRIE, NE PODLE WEBKIT API
-   * ----------------------------------------------------------
-   * Starý iOS Safari/PWA občas vrací z caretRangeFromPoint()/
-   * caretPositionFromPoint() začátek contenteditable bloku, i když uživatel
-   * klepl doprostřed nebo na konec věty. Core V2 pak správně přepočítal
-   * právě tuto CHYBNOU DOM pozici na modelový offset 0 a LubaKeyboard začala
-   * psát od začátku. Proto to působilo jako náhodné „skočení na začátek“.
-   *
-   * Na iOS tedy bod tapu mapujeme přímo na nejbližší MODELOVÝ caret pomocí
-   * geometrie všech caret pozic v konkrétním textovém bloku. Nezávisíme tím
-   * na nespolehlivém WebKit hit-testu. Android/desktop dál používají původní
-   * browserové API, aby se neměnilo jejich odladěné chování.
-   */
-  function jeIOSCoreV2() {
-    const ua = String(navigator.userAgent || "");
-    return /iPhone|iPad|iPod/i.test(ua);
-  }
-
-  function najdiTextovyBlokProBodV2(clientX, clientY) {
-    if (!editor) return -1;
-
-    const cil = document.elementFromPoint?.(clientX, clientY);
-    const primo = cil?.closest?.("[data-ln-v2-blok]");
-    if (primo && editor.contains(primo)) {
-      const index = dokument.bloky.findIndex((blok) => blok.id === primo.dataset.lnV2Blok);
-      if (index >= 0 && jeTextovyBlok(dokument.bloky[index])) return index;
-    }
-
-    let nejlepsi = -1;
-    let nejmensi = Number.POSITIVE_INFINITY;
-    editor.querySelectorAll(".ln-v2-odstavec[data-ln-v2-blok]").forEach((radek) => {
-      if (radek.hidden) return;
-      const index = dokument.bloky.findIndex((blok) => blok.id === radek.dataset.lnV2Blok);
-      if (index < 0 || !jeTextovyBlok(dokument.bloky[index])) return;
-      const rect = radek.getBoundingClientRect();
-      const dy = clientY < rect.top
-        ? rect.top - clientY
-        : (clientY > rect.bottom ? clientY - rect.bottom : 0);
-      if (dy < nejmensi) {
-        nejmensi = dy;
-        nejlepsi = index;
-      }
-    });
-    return nejlepsi;
-  }
-
-  function poziceModeluZBoduGeometriiV2(clientX, clientY) {
-    const blokIndex = najdiTextovyBlokProBodV2(clientX, clientY);
-    if (blokIndex < 0) return null;
-
-    const text = textBloku(dokument.bloky[blokIndex]);
-    let nejlepsi = null;
-    let nejlepsiSkore = Number.POSITIVE_INFINITY;
-
-    for (let offset = 0; offset <= text.length; offset += 1) {
-      const rect = rectV2LubaCaretu({ blok: blokIndex, offset });
-      if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) continue;
-
-      const spodek = rect.top + Math.max(1, rect.height || 0);
-      const dy = clientY < rect.top
-        ? rect.top - clientY
-        : (clientY > spodek ? clientY - spodek : 0);
-      const dx = Math.abs(clientX - rect.left);
-
-      /* Správný vizuální řádek má vždy mnohem vyšší prioritu než X. */
-      const skore = (dy * 10000) + dx;
-      if (skore < nejlepsiSkore) {
-        nejlepsiSkore = skore;
-        nejlepsi = { blok: blokIndex, offset };
-      }
-    }
-
-    return nejlepsi;
-  }
-
   function zrusVyberNaBoduProSelectionMenu(clientX, clientY) {
     if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
 
-    const x = Number(clientX);
-    const y = Number(clientY);
-    let pozice = null;
-
-    if (jeIOSCoreV2()) {
-      pozice = poziceModeluZBoduGeometriiV2(x, y);
-    } else {
-      let node = null;
-      let offset = 0;
-      if (typeof document.caretPositionFromPoint === "function") {
-        const caret = document.caretPositionFromPoint(x, y);
-        node = caret?.offsetNode || null;
-        offset = caret?.offset ?? 0;
-      } else if (typeof document.caretRangeFromPoint === "function") {
-        const range = document.caretRangeFromPoint(x, y);
-        node = range?.startContainer || null;
-        offset = range?.startOffset ?? 0;
-      }
-
-      if (node && editor.contains(node)) pozice = domBodNaModel(node, offset);
+    let node = null;
+    let offset = 0;
+    if (typeof document.caretPositionFromPoint === "function") {
+      const caret = document.caretPositionFromPoint(Number(clientX), Number(clientY));
+      node = caret?.offsetNode || null;
+      offset = caret?.offset ?? 0;
+    } else if (typeof document.caretRangeFromPoint === "function") {
+      const range = document.caretRangeFromPoint(Number(clientX), Number(clientY));
+      node = range?.startContainer || null;
+      offset = range?.startOffset ?? 0;
     }
 
+    if (!node || !editor.contains(node)) return false;
+    const pozice = domBodNaModel(node, offset);
     if (!pozice) return false;
 
     nastavVyberModelu(pozice, pozice);
