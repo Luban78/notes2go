@@ -2127,6 +2127,18 @@ accountStatusRefresh.addEventListener(
 accountStatusSignOut.addEventListener(
   "click",
   async () => {
+    /*
+     * PATCH 578 – pokud uživatel odhlašuje zařízení ze stavu
+     * „Účet není dostupný“, po návratu na login nabídneme EXISTUJÍCÍ
+     * bezpečný lokální reset z PATCH 563. Nic nemažeme automaticky.
+     *
+     * Stav musíme uložit PŘED zobrazPrihlaseni(), protože ta přes
+     * pripravLoginFormular() záměrně vynuluje aktualniStavUctu.
+     * Pending/rejected/suspended flow tímto zůstává beze změny.
+     */
+    const nabidnoutLokalniReset =
+      aktualniStavUctu?.account_status === "unavailable";
+
     accountStatusSignOut.disabled = true;
 
     try {
@@ -2141,6 +2153,10 @@ accountStatusSignOut.addEventListener(
       zrusPredchoziPrihlaseni();
       accountStatusSignOut.disabled = false;
       zobrazPrihlaseni();
+
+      if (nabidnoutLokalniReset && localOwnerResetActions) {
+        localOwnerResetActions.hidden = false;
+      }
     }
   }
 );
