@@ -33,7 +33,7 @@ jobs:
       - name: Prepare web
         run: |
           mkdir -p _site
-          cp index.html *.css *.js _site/
+          cp index.html local-reset.html *.css *.js _site/
           cp -r icons _site/
           touch _site/.nojekyll
 

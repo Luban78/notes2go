@@ -39,7 +39,7 @@ jobs:
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html *.css *.js www/
+          cp index.html local-reset.html *.css *.js www/
           cp -r icons www/
 
       - name: Sync Capacitor Android
