@@ -1,7 +1,7 @@
 if (window.Capacitor?.isNativePlatform?.()) {
   document.body.classList.add("nativeApp");
 
-  /* PATCH 465 – Android 12 / WebView 103 nehlásí spodní systémovou
+  /* PATCH 465  – Android 12 / WebView 103 nehlásí spodní systémovou
    * navigaci přes env(safe-area-inset-bottom). Třídu nastavíme už při
    * startu aplikace, ne až při prvním otevření editoru, aby stejný
    * 48px fallback mohl bezpečně použít i panel akcí karty na home. */
