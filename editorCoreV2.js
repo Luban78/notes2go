@@ -1206,44 +1206,6 @@
     }
   }
 
-  /*
-   * FIX 537 – PROCENTA OBRÁZKU JSOU PROCENTA ORIGINÁLU, NE EDITORU.
-   * ----------------------------------------------------------------
-   * 100 % = skutečná pixelová šířka vloženého obrázku.
-   * 50 %  = polovina skutečné pixelové šířky atd.
-   * „Přizpůsobit“ používá 100 % originálu. Existující max-width na figure
-   * je pouze bezpečnostní strop: příliš velký obrázek se zmenší tak, aby
-   * nepřetekl editor, ale malý obrázek se NIKDY automaticky nezvětší.
-   *
-   * Tohle je společná render cesta pro samostatný image blok i image
-   * uvnitř TODO/Bulletu. NEDĚLAT z procent znovu procenta šířky editoru.
-   */
-  function nastavSirkuV2ObrazkuPodleOriginalu(figure, image) {
-    if (!figure || !image) return;
-
-    const aplikuj = () => {
-      const prirozenaSirka = Math.max(0, Math.round(Number(image.naturalWidth || 0)));
-      if (!prirozenaSirka) return;
-
-      const velikost = normalizujVelikostObrazku(figure.dataset.velikost);
-      const procento = velikost === "prizpusobit"
-        ? 100
-        : Math.max(10, Math.min(100, Number.parseFloat(velikost) || 100));
-      const cilovaSirka = Math.max(1, Math.round(prirozenaSirka * procento / 100));
-
-      figure.style.setProperty("--ln-v2-obrazek-sirka", `${cilovaSirka}px`);
-      figure.dataset.prirozenaSirka = String(prirozenaSirka);
-      figure.dataset.cilovaSirka = String(cilovaSirka);
-    };
-
-    if (image.complete && image.naturalWidth > 0) {
-      queueMicrotask(aplikuj);
-      return;
-    }
-
-    image.addEventListener("load", aplikuj, { once: true });
-  }
-
   function vykresliObrazkovyBlok(blok, jeVSeznamu = false) {
     const figure = document.createElement("figure");
     figure.className = `ln-v2-obrazek lubaNoteImage${jeVSeznamu ? " ln-v2-list-image" : ""}`;
@@ -1252,9 +1214,10 @@
     if (jeVSeznamu) figure.dataset.bulletMedia = "true";
     figure.dataset.velikost = normalizujVelikostObrazku(blok.velikost);
     figure.dataset.zarovnani = normalizujZarovnaniObrazku(blok.zarovnani);
-    /* FIX 537: finální šířku v px dopočítá naturalWidth po načtení image.
-       100 % zde NESMÍ znamenat šířku editoru. */
-    figure.style.setProperty("--ln-v2-obrazek-sirka", "100%");
+    figure.style.setProperty(
+      "--ln-v2-obrazek-sirka",
+      figure.dataset.velikost === "prizpusobit" ? "100%" : `${figure.dataset.velikost}%`
+    );
     if (blok.attachmentId) figure.dataset.attachmentId = blok.attachmentId;
     figure.contentEditable = "false";
     figure.tabIndex = 0;
@@ -1267,7 +1230,6 @@
     image.tabIndex = -1;
     image.dataset.velikost = figure.dataset.velikost;
     image.dataset.zarovnani = figure.dataset.zarovnani;
-    nastavSirkuV2ObrazkuPodleOriginalu(figure, image);
 
     const settingsButton = document.createElement("button");
     settingsButton.type = "button";
@@ -3507,23 +3469,107 @@
     return true;
   }
 
+  /*
+   * PATCH 572 – iOS CARET PODLE GEOMETRIE, NE PODLE WEBKIT API
+   * ----------------------------------------------------------
+   * Starý iOS Safari/PWA občas vrací z caretRangeFromPoint()/
+   * caretPositionFromPoint() začátek contenteditable bloku, i když uživatel
+   * klepl doprostřed nebo na konec věty. Core V2 pak správně přepočítal
+   * právě tuto CHYBNOU DOM pozici na modelový offset 0 a LubaKeyboard začala
+   * psát od začátku. Proto to působilo jako náhodné „skočení na začátek“.
+   *
+   * Na iOS tedy bod tapu mapujeme přímo na nejbližší MODELOVÝ caret pomocí
+   * geometrie všech caret pozic v konkrétním textovém bloku. Nezávisíme tím
+   * na nespolehlivém WebKit hit-testu. Android/desktop dál používají původní
+   * browserové API, aby se neměnilo jejich odladěné chování.
+   */
+  function jeIOSCoreV2() {
+    const ua = String(navigator.userAgent || "");
+    return /iPhone|iPad|iPod/i.test(ua);
+  }
+
+  function najdiTextovyBlokProBodV2(clientX, clientY) {
+    if (!editor) return -1;
+
+    const cil = document.elementFromPoint?.(clientX, clientY);
+    const primo = cil?.closest?.("[data-ln-v2-blok]");
+    if (primo && editor.contains(primo)) {
+      const index = dokument.bloky.findIndex((blok) => blok.id === primo.dataset.lnV2Blok);
+      if (index >= 0 && jeTextovyBlok(dokument.bloky[index])) return index;
+    }
+
+    let nejlepsi = -1;
+    let nejmensi = Number.POSITIVE_INFINITY;
+    editor.querySelectorAll(".ln-v2-odstavec[data-ln-v2-blok]").forEach((radek) => {
+      if (radek.hidden) return;
+      const index = dokument.bloky.findIndex((blok) => blok.id === radek.dataset.lnV2Blok);
+      if (index < 0 || !jeTextovyBlok(dokument.bloky[index])) return;
+      const rect = radek.getBoundingClientRect();
+      const dy = clientY < rect.top
+        ? rect.top - clientY
+        : (clientY > rect.bottom ? clientY - rect.bottom : 0);
+      if (dy < nejmensi) {
+        nejmensi = dy;
+        nejlepsi = index;
+      }
+    });
+    return nejlepsi;
+  }
+
+  function poziceModeluZBoduGeometriiV2(clientX, clientY) {
+    const blokIndex = najdiTextovyBlokProBodV2(clientX, clientY);
+    if (blokIndex < 0) return null;
+
+    const text = textBloku(dokument.bloky[blokIndex]);
+    let nejlepsi = null;
+    let nejlepsiSkore = Number.POSITIVE_INFINITY;
+
+    for (let offset = 0; offset <= text.length; offset += 1) {
+      const rect = rectV2LubaCaretu({ blok: blokIndex, offset });
+      if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) continue;
+
+      const spodek = rect.top + Math.max(1, rect.height || 0);
+      const dy = clientY < rect.top
+        ? rect.top - clientY
+        : (clientY > spodek ? clientY - spodek : 0);
+      const dx = Math.abs(clientX - rect.left);
+
+      /* Správný vizuální řádek má vždy mnohem vyšší prioritu než X. */
+      const skore = (dy * 10000) + dx;
+      if (skore < nejlepsiSkore) {
+        nejlepsiSkore = skore;
+        nejlepsi = { blok: blokIndex, offset };
+      }
+    }
+
+    return nejlepsi;
+  }
+
   function zrusVyberNaBoduProSelectionMenu(clientX, clientY) {
     if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
 
-    let node = null;
-    let offset = 0;
-    if (typeof document.caretPositionFromPoint === "function") {
-      const caret = document.caretPositionFromPoint(Number(clientX), Number(clientY));
-      node = caret?.offsetNode || null;
-      offset = caret?.offset ?? 0;
-    } else if (typeof document.caretRangeFromPoint === "function") {
-      const range = document.caretRangeFromPoint(Number(clientX), Number(clientY));
-      node = range?.startContainer || null;
-      offset = range?.startOffset ?? 0;
+    const x = Number(clientX);
+    const y = Number(clientY);
+    let pozice = null;
+
+    if (jeIOSCoreV2()) {
+      pozice = poziceModeluZBoduGeometriiV2(x, y);
+    } else {
+      let node = null;
+      let offset = 0;
+      if (typeof document.caretPositionFromPoint === "function") {
+        const caret = document.caretPositionFromPoint(x, y);
+        node = caret?.offsetNode || null;
+        offset = caret?.offset ?? 0;
+      } else if (typeof document.caretRangeFromPoint === "function") {
+        const range = document.caretRangeFromPoint(x, y);
+        node = range?.startContainer || null;
+        offset = range?.startOffset ?? 0;
+      }
+
+      if (node && editor.contains(node)) pozice = domBodNaModel(node, offset);
     }
 
-    if (!node || !editor.contains(node)) return false;
-    const pozice = domBodNaModel(node, offset);
     if (!pozice) return false;
 
     nastavVyberModelu(pozice, pozice);
@@ -4700,14 +4746,7 @@
     editor?.classList?.remove("ln-v2-list-drag-mode");
     schovejV2ListDragPomucky();
     v2DragSeznamu = null;
-    if (!zachovatVyber) {
-      /* FIX 534 – MOVE žije jen po dobu jednoho longpress+drag gesta.
-         Po puštění prstu nestačí smazat pouze ID: musíme odstranit i
-         vizuální třídu, jinak řádek vypadá dál označený, i když engine už
-         žádný MOVE stav nemá. Prahy ani vlastní drag logiku neměníme. */
-      vybranaPolozkaSeznamuId = "";
-      aplikujV2OznaceniPresunovanehoPodstromu("");
-    }
+    if (!zachovatVyber) vybranaPolozkaSeznamuId = "";
   }
 
   function aktivujV2MoveSeznamu() {
@@ -6975,27 +7014,6 @@
     return (doc?.bloky || []).map((blok) => textBloku(blok)).join("\n");
   }
 
-  /*
-   * TXT EXPORT 547
-   * Externí .txt je skutečný obsah poznámky bez generované hlavičky.
-   * TODO zůstává přesně na svém místě v toku dokumentu a nese pouze
-   * přenositelný textový stav [ ] / [x]. Produkční `note` tím neměníme.
-   */
-  function exportujTxtZModelu(doc = dokument) {
-    const bloky = Array.isArray(doc?.bloky) ? doc.bloky : [];
-
-    return bloky.map((blok) => {
-      const text = textBloku(blok);
-
-      if (jeTodoBlok(blok)) {
-        const znacka = blok?.hotovo === true ? "[x]" : "[ ]";
-        return text ? `${znacka} ${text}` : znacka;
-      }
-
-      return text;
-    }).join("\n");
-  }
-
   function nastavDokumentProHost(model) {
     dokument = klonDat(model);
     normalizujDokument();
@@ -7532,7 +7550,6 @@
     exportujHtml: () => exportujHtmlZModelu(),
     exportujTodos: () => exportujTodosZModelu(),
     exportujProstyText: () => exportujProstyTextZModelu(),
-    exportujTxt: () => exportujTxtZModelu(),
     otevriVHostu,
     zavriVHostu,
     nastavPoziciOtevreni: nastavPoziciOtevreniVHostu,
