@@ -58,6 +58,12 @@
     return /Android|iPhone|iPad|iPod/i.test(ua) || (dotyk && coarse && Math.min(screen.width, screen.height) < 1200);
   })();
 
+  /* PATCH 571 – starší iOS Safari/PWA neumí při inputmode=none vždy spolehlivě
+     posunout nativní caret na místo krátkého tapu v contenteditable. LubaKeyboard
+     pak správně otevře klávesnici, ale Core V2 dál píše do staré modelové pozice.
+     Androidu se nedotýkáme; tam je nativní umístění caretu už odladěné. */
+  const JE_IOS = /iPhone|iPad|iPod/i.test(String(navigator.userAgent || ""));
+
   if (!JE_MOBILNI) return;
 
   const LATIN_ALT = Object.freeze({
@@ -1179,16 +1185,30 @@
       schovejSystemovouNativne();
     };
 
-    const otevriPoSkutecnemTapu = () => {
+    const otevriPoSkutecnemTapu = (clientX = null, clientY = null) => {
       if (!editor?.isConnected || ziskejZdrojKlavesnice() === "system") return;
       aktivniEditor = editor;
       aktivniCilPsani = "body";
       potlacAutomatickeOtevreni = false;
 
       /* Po pointerup/touchend necháme WebView nejdřív dokončit přirozené
-         umístění caretu. Teprve v dalším frame otevřeme vlastní klávesnici. */
+         umístění caretu. Teprve v dalším frame otevřeme vlastní klávesnici.
+
+         PATCH 571 – na starém iOS PWA nativní caret někdy zůstane na staré
+         pozici, hlavně při tapu na konec řádku. V tom případě převedeme bod
+         tapu přímo do modelového selection přes už existující Core V2 helper.
+         Děláme to až v requestAnimationFrame, aby WebKit svůj touch cyklus
+         nejdřív dokončil a naši pozici už následně nepřepsal. */
       requestAnimationFrame(() => {
         if (!editor?.isConnected) return;
+        if (JE_IOS && Number.isFinite(Number(clientX)) && Number.isFinite(Number(clientY))) {
+          try {
+            window.LubaNoteEditorCoreV2?.zrusVyberNaBoduProSelectionMenu?.(
+              Number(clientX),
+              Number(clientY)
+            );
+          } catch (_error) {}
+        }
         zobraz();
         requestAnimationFrame(schovejSystemovou);
         setTimeout(schovejSystemovou, 50);
@@ -1230,7 +1250,7 @@
         Math.hypot(event.clientX - gesto.x, event.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
       lubaEditorGesto = null;
       if (presun) return; // SWIPE/DRAG = pouze scroll/selection, žádná klávesnice.
-      otevriPoSkutecnemTapu();
+      otevriPoSkutecnemTapu(event.clientX, event.clientY);
     };
 
     const zrusPointerGesto = (event) => {
@@ -1269,7 +1289,7 @@
         if (!t) return;
         const presun = gesto.presun || Math.hypot(t.clientX - gesto.x, t.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
         lubaEditorGesto = null;
-        if (!presun) otevriPoSkutecnemTapu();
+        if (!presun) otevriPoSkutecnemTapu(t.clientX, t.clientY);
       }, { capture: true, passive: true });
       editor.addEventListener("touchcancel", () => {
         if (lubaEditorGesto?.editor === editor) lubaEditorGesto = null;
