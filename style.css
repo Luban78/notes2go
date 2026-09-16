@@ -2446,17 +2446,34 @@ body.authPending .addTaskButton {
  * pokud masterPasswordRequired NENÍ aktivní. Tím privacy lock zůstává stejně
  * přísný a výjimka platí jen pro povinný onboarding hlavního hesla.
  */
-body.authPending > :not(#appSplash):not(#loginScreen):not(#secretUnlockModal):not(script) {
+body.authPending > :not(#appSplash):not(#loginScreen):not(#secretUnlockModal):not(#appMessageModal):not(script) {
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
-body.authPending:not(.masterPasswordRequired) > #secretUnlockModal {
+body.authPending:not(.masterPasswordRequired) > #secretUnlockModal,
+body.authPending:not(.masterPasswordRequired) > #appMessageModal {
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
 body.authPending.masterPasswordRequired > #secretUnlockModal {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* PATCH 581 – CHYBNÉ HLAVNÍ HESLO NA NOVÉM ZAŘÍZENÍ
+ * --------------------------------------------------
+ * Během povinného master-password gate zůstává body.authPending aktivní.
+ * Obecný privacy lock proto dříve schoval i appMessageModal, takže kód
+ * správně rozpoznal chybné heslo a vytvořil zprávu „Hlavní heslo není
+ * správné.“, ale uživatel ji vůbec neviděl.
+ *
+ * appMessageModal povolujeme pouze při masterPasswordRequired. Mimo tento
+ * gate zůstává pod authPending nadále skrytý, takže login privacy lock se
+ * neoslabuje.
+ */
+body.authPending.masterPasswordRequired > #appMessageModal {
   visibility: visible !important;
   pointer-events: auto !important;
 }
