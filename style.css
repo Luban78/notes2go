@@ -2431,6 +2431,23 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   pointer-events: none !important;
 }
 
+/*
+ * PATCH 560 – POVINNÉ HLAVNÍ HESLO NAD LOGIN PRIVACY LOCKEM
+ * -----------------------------------------------------------
+ * Při prvním přihlášení zůstává body.authPending záměrně aktivní, aby
+ * lokální data nikdy neprosvitla. Povinný master-password gate ale používá
+ * Secret modal, který stejný privacy lock dříve skryl přes visibility:hidden.
+ * Proto byl účet po schválení/přihlášení zdánlivě zaseknutý na „Přihlašuji…“.
+ *
+ * Výjimku povolujeme VÝHRADNĚ tehdy, když tags.js nastaví
+ * body.masterPasswordRequired. Běžný Secret modal po odhlášení tedy privacy
+ * lock obejít nemůže.
+ */
+body.authPending.masterPasswordRequired > #secretUnlockModal {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
 #loginScreen {
   position: fixed;
   inset: 0;
@@ -4304,19 +4321,17 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 
-  /* 545 – horní fade seznamu má zůstat jen jemný.
-     545: 20 px zasahovalo do prvního řádku. 546: fade stažen na téměř neznatelné 4 px. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 4px,
+    black 20px,
     black 100%
   );
 
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    black 4px,
+    black 20px,
     black 100%
   );
 }
@@ -5881,14 +5896,6 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
 
 .secretUnlockModal[hidden] {
   display: none;
-}
-
-/* PATCH 556 – povinné hlavní heslo je jediná povolená vrstva nad
-   login privacy lockem. Ostatní lokální UI zůstává před dokončením
-   onboardingu stále skryté. */
-body.authPending.masterPasswordRequired > #secretUnlockModal {
-  visibility: visible !important;
-  pointer-events: auto !important;
 }
 
 .secretUnlockDialog {
@@ -9168,19 +9175,7 @@ body.lubaNoteImagePreviewOpen {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  /* FIX 536 – pinch řeší přímo fullscreen viewer, ne zoom celé stránky. */
-  touch-action: none;
-  transform: translate3d(0, 0, 0) scale(1);
-  transform-origin: center center;
-  will-change: transform;
-}
-
-.lubaNoteImagePreviewImg.lubaNoteImagePreviewImgZoomed {
-  cursor: grab;
-}
-
-body.lubaNoteImagePreviewPinching .lubaNoteImagePreviewImg {
-  cursor: grabbing;
+  touch-action: pinch-zoom;
 }
 
 .lubaNoteImagePreviewClose {
@@ -9748,24 +9743,6 @@ body.pdfViewerOpen {
 
   to {
     opacity: 1;
-  }
-}
-
-/* PATCH 554 – PC musí stav synchronizace číst jako text, ne jen jako
-   miniaturní symbol. Mobil zůstává kompaktní beze změny. */
-@media (min-width: 700px) {
-  .syncStatusText {
-    font-size: 11px;
-    font-weight: 800;
-  }
-
-  .syncStatusText::before {
-    margin-right: 4px;
-    font-size: 11px;
-  }
-
-  .syncStatusText::after {
-    display: none;
   }
 }
 
@@ -10908,179 +10885,4 @@ body.lubaCardDragMode .app {
 
 .pinnedCards.listView .lubaCardDragPlaceholder {
   width: 100%;
-}
-
-
-/* ==================================================
-   PATCH 544 – PLÁN / DETAIL DNE / PŘIPOMÍNKY
-   --------------------------------------------------
-   1. řádek = čas + ikony metadat + menu
-   2. řádek = název (jeden řádek, ellipsis)
-   3. řádek = preview pouze v Připomínkách
-   ================================================== */
-.calendarAgendaItem {
-  align-items: start;
-}
-
-.calendarAgendaTime {
-  padding-top: 1px;
-  white-space: nowrap;
-}
-
-.calendarAgendaText {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-}
-
-.calendarAgendaMeta,
-.reminderItemMeta {
-  min-width: 0;
-  min-height: 22px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.calendarAgendaMetaIcon,
-.reminderItemMetaIcon {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 19px;
-  height: 19px;
-}
-
-.calendarAgendaMetaIcon .lubaSvgIcon,
-.reminderItemMetaIcon .lubaSvgIcon {
-  width: 100%;
-  height: 100%;
-}
-
-/* 545 – v Připomínkách držíme ikony opticky stejně kompaktní
-   jako v řádcích Plánu. Emoji potřebují lehké optické zmenšení;
-   SVG dostanou stejný kompaktní box. */
-.reminderItemMetaIcon {
-  width: 17px;
-  height: 17px;
-}
-
-.reminderItemMetaIcon.lubaEmojiIcon {
-  font-size: 0.86em;
-}
-
-.calendarAgendaAreaIcon,
-.reminderItemAreaIcon {
-  color: color-mix(
-    in srgb,
-    var(--color-text-secondary) 72%,
-    var(--color-accent) 28%
-  );
-}
-
-.calendarAgendaTypeTask,
-.reminderItemTypeTask {
-  color: var(--color-accent);
-}
-
-.calendarAgendaTypeNote,
-.reminderItemTypeNote {
-  color: var(--color-text-secondary);
-}
-
-.calendarAgendaReminderIcon,
-.reminderItemReminderIcon {
-  color: var(--color-accent-text);
-}
-
-.calendarAgendaRepeatIcon,
-.reminderItemRepeatIcon {
-  color: var(--color-accent);
-}
-
-.calendarAgendaTitle,
-.reminderItemTitle,
-.reminderItemPreview {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.calendarAgendaTitle {
-  color: var(--color-text);
-  font-size: var(--font-size);
-  line-height: 1.25;
-}
-
-.reminderItemContent {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-}
-
-.reminderItemTitle {
-  display: block;
-  color: var(--color-text);
-  font-size: var(--font-size);
-  font-weight: 720;
-  line-height: 1.25;
-}
-
-.reminderItemPreview {
-  margin-top: 0;
-  display: block;
-  color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
-  line-height: 1.3;
-}
-
-.reminderItemMenu,
-.calendarAgendaMenu {
-  align-self: start;
-}
-
-/* 544 – Planner i detail dne používají stejnou kompaktní kartu
-   jako schválený návrh, ne starý řádek s oddělovací čárou. */
-.calendarAgendaItem {
-  margin: 0 0 8px;
-  padding: 10px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 15px;
-  background:
-    color-mix(in srgb,
-      var(--color-surface) 70%,
-      transparent);
-}
-
-.calendarAgendaTitle {
-  font-weight: 650;
-}
-
-
-/* ========================================
-   546 – AREA FILTRY JEN IKONY
-   Work / Private nesmí prodlužovat řádek textovým popisem.
-   Pravidlo je záměrně odolné i proti textu doplněnému lokalizací.
-   ======================================== */
-.categoryTab[data-area-filter="work"],
-.categoryTab[data-area-filter="private"] {
-  font-size: 0 !important;
-  min-width: 42px;
-  width: 42px;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.categoryTab[data-area-filter="work"] .categoryTabIcon,
-.categoryTab[data-area-filter="private"] .categoryTabIcon {
-  font-size: 18px !important;
-  width: 18px;
-  height: 18px;
-  margin: 0;
 }
