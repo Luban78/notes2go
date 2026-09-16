@@ -297,18 +297,14 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 .ln-v2-editor .ln-v2-obrazek .lubaNoteImageRemove {
   position: absolute;
   z-index: 4;
-  /* iOS 15 fallback – starý Safari nezná container-query jednotky cqi.
-     Bez těchto px hodnot skončí absolute tlačítka na statické pozici pod IMG
-     a figure je kvůli overflow:hidden úplně ořízne. */
+  /* FIX 577 – základ MUSÍ být bez cqi. Safari 15 umí výraz clamp()
+     syntakticky přijmout, ale nezná jednotku cqi; pozdější deklarace pak může
+     spadnout až při výpočtu hodnoty a přebít px fallback. Adaptivní cqi proto
+     patří výhradně do @supports bloku níže. */
   top: 6px;
   right: 6px;
   width: 32px;
   height: 32px;
-  top: clamp(4px, 2cqi, 8px);
-  right: 6px;
-  right: clamp(4px, 2cqi, 8px);
-  width: clamp(22px, 12cqi, 34px);
-  height: clamp(22px, 12cqi, 34px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,11 +322,27 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 
 .ln-v2-editor .ln-v2-obrazek .lubaNoteImageSettings {
   right: 44px;
-  right: clamp(30px, 16cqi, 48px);
 }
 
 .ln-v2-editor .ln-v2-obrazek .lubaNoteImageRemove {
-  right: clamp(4px, 2cqi, 8px);
+  right: 6px;
+}
+
+@supports (width: 1cqi) {
+  .ln-v2-editor .ln-v2-obrazek .lubaNoteImageSettings,
+  .ln-v2-editor .ln-v2-obrazek .lubaNoteImageRemove {
+    top: clamp(4px, 2cqi, 8px);
+    width: clamp(22px, 12cqi, 34px);
+    height: clamp(22px, 12cqi, 34px);
+  }
+
+  .ln-v2-editor .ln-v2-obrazek .lubaNoteImageSettings {
+    right: clamp(30px, 16cqi, 48px);
+  }
+
+  .ln-v2-editor .ln-v2-obrazek .lubaNoteImageRemove {
+    right: clamp(4px, 2cqi, 8px);
+  }
 }
 
 .ln-v2-editor .ln-v2-obrazek:focus-within .lubaNoteImageSettings,

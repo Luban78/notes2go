@@ -8017,8 +8017,16 @@ body.theme-darkg {
 }
 
 .editorImageControlSvgIcon {
-  width: clamp(12px, 5.3cqi, 17px);
-  height: clamp(12px, 5.3cqi, 17px);
+  /* FIX 577 – Safari 15 fallback. cqi pouze tam, kde jej browser opravdu podporuje. */
+  width: 16px;
+  height: 16px;
+}
+
+@supports (width: 1cqi) {
+  .editorImageControlSvgIcon {
+    width: clamp(12px, 5.3cqi, 17px);
+    height: clamp(12px, 5.3cqi, 17px);
+  }
 }
 
 .actionStatusSvgIcon {
