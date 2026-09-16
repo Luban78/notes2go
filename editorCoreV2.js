@@ -1209,6 +1209,9 @@
   function vykresliObrazkovyBlok(blok, jeVSeznamu = false) {
     const figure = document.createElement("figure");
     figure.className = `ln-v2-obrazek lubaNoteImage${jeVSeznamu ? " ln-v2-list-image" : ""}`;
+    if (vybranyObrazekId === blok.id) {
+      figure.classList.add("ln-v2-obrazek-vybrany");
+    }
     figure.dataset.lnV2Obrazek = blok.id;
     figure.dataset.lubanoteImage = "true";
     if (jeVSeznamu) figure.dataset.bulletMedia = "true";
@@ -1257,6 +1260,16 @@
 
     figure.append(image, settingsButton, removeButton);
     return figure;
+  }
+
+  function nastavVybranyV2Obrazek(obrazekId = "") {
+    vybranyObrazekId = String(obrazekId || "");
+    editor?.querySelectorAll?.(".ln-v2-obrazek[data-ln-v2-obrazek]")?.forEach?.((figure) => {
+      figure.classList.toggle(
+        "ln-v2-obrazek-vybrany",
+        Boolean(vybranyObrazekId) && figure.dataset.lnV2Obrazek === vybranyObrazekId
+      );
+    });
   }
 
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
@@ -7236,6 +7249,7 @@
       const figure = event.target.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
       if (!figure || !editor.contains(figure)) {
         posledniTapV2Obrazku = null;
+        nastavVybranyV2Obrazek("");
         return;
       }
 
@@ -7259,7 +7273,7 @@
           event.preventDefault();
           event.stopPropagation();
           posledniTapV2Obrazku = null;
-          vybranyObrazekId = "";
+          nastavVybranyV2Obrazek("");
           window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(obrazek);
           return;
         }
@@ -7275,7 +7289,7 @@
       }
 
       event.preventDefault();
-      vybranyObrazekId = figure.dataset.lnV2Obrazek || "";
+      nastavVybranyV2Obrazek(figure.dataset.lnV2Obrazek || "");
       figure.focus({ preventScroll: true });
       nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
     });
