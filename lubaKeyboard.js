@@ -1198,16 +1198,7 @@
 
     const jeTextovyCilTapu = (target) => {
       if (!target || !editor.contains(target)) return false;
-
-      /* PATCH 543 – LINK NENÍ TAP DO TEXTU.
-         Interní [[link]], Planner backlink ani internetový odkaz jsou
-         samostatná navigační akce. Jejich pointerup proto nesmí otevřít
-         LubaKeyboard jen proto, že fyzicky leží uvnitř odstavce editoru. */
-      if (target.closest?.(
-        "button, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, " +
-        ".ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove"
-      )) return false;
-
+      if (target.closest?.("button, a[href], .ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove")) return false;
       return target === editor || Boolean(target.closest?.(".ln-v2-odstavec"));
     };
 
@@ -2706,10 +2697,42 @@
   let posledniViditelneModaly = new Set();
   let modalGuardRaf = 0;
 
+  /* ==========================================================
+     FIX 570 – KAŽDÝ BLOKUJÍCÍ LUBANOTE MODAL SCHOVÁ KLÁVESNICI
+
+     FIX 530/533 původně sledoval jen elementy s
+     role="dialog" + aria-modal="true". Starší produkční modaly
+     (hlavně appMessageModal: "Soubor byl změněn", a část
+     deleteConfirmModalů: "Přesunout do koše?") ale tento ARIA
+     kontrakt historicky nemají. LubaKeyboard proto zůstala otevřená
+     NAD modalem a na malém iPhonu zakryla Zrušit/Uložit/Do koše.
+
+     Tady záměrně sledujeme pouze BLOKUJÍCÍ sekundární modaly.
+     taskModal (hlavní editor) v seznamu NENÍ – při jeho otevření se
+     LubaKeyboard samozřejmě schovávat nesmí. actionStatusModal také
+     není blokující dialog a nesmí při průběžném ukládání zavírat psaní.
+     ========================================================== */
+  const selektorBlokujicichModalu = [
+    '[role="dialog"][aria-modal="true"]',
+    '.appMessageModal:not([hidden])',
+    '.deleteConfirmModal:not([hidden])',
+    '.secretUnlockModal:not([hidden])',
+    '.localDeviceResetModal:not([hidden])',
+    '.choiceModal:not([hidden])',
+    '.datePickerModal:not([hidden])',
+    '.timePickerModal:not([hidden])',
+    '.plannerModal:not([hidden])',
+    '.settingsModal:not([hidden])',
+    '.aboutModal:not([hidden])',
+    '.newTagModal:not([hidden])',
+    '.manageTagsModal:not([hidden])',
+    '.adminDashboardModal:not([hidden])'
+  ].join(',');
+
   function zkontrolujNoveModaly() {
     modalGuardRaf = 0;
     const aktualni = new Set(
-      Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'))
+      Array.from(document.querySelectorAll(selektorBlokujicichModalu))
         .filter(jeViditelnyModalniDialog)
     );
     const pribylNovy = Array.from(aktualni).some((element) => !posledniViditelneModaly.has(element));
