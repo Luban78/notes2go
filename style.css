@@ -10977,3 +10977,83 @@ body.lubaCardDragMode .app {
 .pinnedCards.listView .lubaCardDragPlaceholder {
   width: 100%;
 }
+
+/* ==================================================
+   PATCH 564 – MOBILNÍ SYNC PANEL: ČITELNÝ RX/TX + CELÝ STAV
+   --------------------------------------------------
+   Spodní hrana panelu zůstává přibližně ve stejné Y pozici jako
+   předtím. Přidaná výška roste směrem nahoru, aby neposouvala moduly.
+   Na mobilu jsou data v prvním řádku a celý stav synchronizace ve
+   druhém řádku. PC si ponechává kompaktní jednořádkové provedení.
+   ================================================== */
+@media (max-width: 699px) {
+  .syncTrafficBar {
+    min-height: 46px;
+    margin-top: -34px;
+    margin-bottom: 6px;
+    padding: 4px 8px 3px;
+
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: center;
+    column-gap: 7px;
+    row-gap: 2px;
+
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 720;
+    line-height: 1.15;
+    letter-spacing: 0;
+    overflow: visible;
+  }
+
+  .syncTrafficLabel,
+  .syncTrafficValue,
+  .syncTrafficEgress,
+  .syncTrafficDivider {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .syncStatusText {
+    order: 20;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.1;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Text už sám obsahuje ✓ / ⟳ / ⏳ / ⚠, takže staré mini-pseudo
+     symboly by stav zdvojovaly. */
+  .syncStatusText::before,
+  .syncStatusText::after {
+    display: none !important;
+    content: none !important;
+  }
+}
+
+/* PATCH 554 se při pozdějších style mergech částečně ztratil.
+   Na PC znovu explicitně držíme celý text stavu synchronizace. */
+@media (min-width: 700px) {
+  .syncStatusText {
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .syncStatusText::before {
+    margin-right: 4px;
+    font-size: 11px;
+  }
+
+  .syncStatusText::after {
+    display: none;
+  }
+}

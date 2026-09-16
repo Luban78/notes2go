@@ -3699,13 +3699,16 @@ async function dokonciSafeBootstrapV2(userId, headStart) {
   );
 }
 
-async function spustSafeBootstrapV2(userId) {
+async function spustSafeBootstrapV2(
+  userId,
+  { automaticky = false } = {}
+) {
   if (
     safeBootstrapPraveBezi ||
     !userId ||
     !navigator.onLine
   ) {
-    if (!navigator.onLine) {
+    if (!navigator.onLine && !automaticky) {
       nastavSafeBootstrapModal({
         title: "Bez internetu",
         text:
@@ -3790,11 +3793,13 @@ async function spustSafeBootstrapV2(userId) {
     );
 
     let hotovo = liveRows.length - pending.length;
-    aktualizujSafeBootstrapProgress(
-      hotovo,
-      liveRows.length,
-      approxBytes
-    );
+    if (!automaticky) {
+      aktualizujSafeBootstrapProgress(
+        hotovo,
+        liveRows.length,
+        approxBytes
+      );
+    }
 
     const davky = vytvorSafeBootstrapDavky(pending);
 
@@ -3854,11 +3859,13 @@ async function spustSafeBootstrapV2(userId) {
          průchod od headStart. */
       hotovo += davka.length;
 
-      aktualizujSafeBootstrapProgress(
-        Math.min(hotovo, liveRows.length),
-        liveRows.length,
-        approxBytes
-      );
+      if (!automaticky) {
+        aktualizujSafeBootstrapProgress(
+          Math.min(hotovo, liveRows.length),
+          liveRows.length,
+          approxBytes
+        );
+      }
 
       window.LubaNoteStartupDiag?.zapis?.(
         "BOOTSTRAP",
@@ -3924,15 +3931,24 @@ async function spustSafeBootstrapV2(userId) {
       /* Onboarding delta se může dokončit při příštím foregroundu. */
     }
 
-    safeBootstrapModalDokoncen = true;
-    nastavSafeBootstrapModal({
-      title: "Data jsou načtená",
-      text:
-        `Hotovo. Na tomto zařízení je připraveno ${liveRows.length} cloudových poznámek. ` +
-        "Další běžná synchronizace už používá pouze malé V2 změny.",
-      startHidden: true,
-      laterText: "Zavřít"
-    });
+    if (automaticky) {
+      /* PATCH 564 – čisté nové zařízení už po přihlášení a odemčení
+         hlavního hesla nepotřebuje další potvrzovací modal. Safe
+         Bootstrap proběhne automaticky a UI skončí rovnou ve stavu
+         Synchronizováno. Interní targeted ochrany zůstávají zachované. */
+      safeBootstrapModalDokoncen = false;
+      zavriSafeBootstrapModal();
+    } else {
+      safeBootstrapModalDokoncen = true;
+      nastavSafeBootstrapModal({
+        title: "Data jsou načtená",
+        text:
+          `Hotovo. Na tomto zařízení je připraveno ${liveRows.length} cloudových poznámek. ` +
+          "Další běžná synchronizace už používá pouze malé V2 změny.",
+        startHidden: true,
+        laterText: "Zavřít"
+      });
+    }
 
     return true;
   } catch (error) {
@@ -3946,18 +3962,29 @@ async function spustSafeBootstrapV2(userId) {
     const legacySecret =
       error?.code === "LUBANOTE_BOOTSTRAP_LEGACY_SECRET";
 
-    nastavSafeBootstrapModal({
-      title: legacySecret
-        ? "Starší Secret data"
-        : "Načítání je pozastavené",
-      text: legacySecret
-        ? "V cloudu je starší Secret formát. LubaNote ho z bezpečnostních důvodů neuloží jako plaintext. Nejdřív ho převeď na aktuální Secret formát na zařízení, kde Secret funguje."
-        : "Nic se nemaže a full snapshot se nespustí. Klepnutím na Pokračovat se příště stáhnou jen chybějící nebo změněné poznámky.",
-      startText: legacySecret
-        ? "Zkusit znovu"
-        : "Pokračovat",
-      laterHidden: true
-    });
+    if (automaticky && !legacySecret) {
+      /* Automatický první start nesmí uživatele uvěznit v opakovaném
+         klikání na „Pokračovat“. Marker zůstává uložený a další běžný
+         foreground/start bezpečně naváže. */
+      zavriSafeBootstrapModal();
+      window.LubaNoteStartupDiag?.zapis?.(
+        "BOOTSTRAP",
+        "AUTO DEFER | resume-next-start"
+      );
+    } else {
+      nastavSafeBootstrapModal({
+        title: legacySecret
+          ? "Starší Secret data"
+          : "Načítání je pozastavené",
+        text: legacySecret
+          ? "V cloudu je starší Secret formát. LubaNote ho z bezpečnostních důvodů neuloží jako plaintext. Nejdřív ho převeď na aktuální Secret formát na zařízení, kde Secret funguje."
+          : "Načtení se bezpečně přerušilo. Nic se nemaže a při dalším pokusu LubaNote naváže pouze chybějícími změnami.",
+        startText: legacySecret
+          ? "Zkusit znovu"
+          : "Pokračovat",
+        laterHidden: true
+      });
+    }
 
     return false;
   } finally {
@@ -4001,7 +4028,7 @@ function nabidniSafeBootstrapPokudJeTreba(userId) {
         : "Načíst data z cloudu?",
       text: marker
         ? "Předchozí načítání nebylo dokončeno. Pokračování stáhne jen chybějící nebo změněné poznámky; full snapshot zůstává zablokovaný."
-        : "Na tomto zařízení zatím nejsou poznámky. LubaNote nic velkého nestáhne bez tvého potvrzení. Data se načtou po malých dávkách a po přerušení lze bezpečně navázat.",
+        : "Na tomto zařízení zatím nejsou poznámky. LubaNote bezpečně načte cloudová data a po případném přerušení dokáže navázat bez opakovaného stahování hotových změn.",
       startText: marker ? "Pokračovat" : "Načíst data",
       laterText: "Později",
       laterHidden: Boolean(marker)
@@ -6957,10 +6984,36 @@ async function startSync() {
           .catch(() => {});
       }, 0);
     } else {
-      /* PATCH 486 – po zobrazení lokálního UI nabídneme bezpečný bootstrap
-         pouze čistému klientovi nebo dříve rozpracovanému bootstrapu.
-         Samotné zobrazení modalu nic nestahuje. */
-      nabidniSafeBootstrapPokudJeTreba(user.id);
+      /* PATCH 564 – po úspěšném přihlášení + povinném hlavním hesle je
+         čisté zařízení už dostatečně autorizované. Další modal „Načíst
+         data z cloudu?“ je pro nový účet i nové zařízení zbytečný a u
+         prvního účtu navíc blokoval vytvoření uvítací karty.
+
+         Čistý klient (nebo rozpracovaný Safe Bootstrap) proto pokračuje
+         automaticky. Existující zařízení s lokálními daty se sem nikdy
+         automaticky nepřepisuje – pro něj zůstávají recovery ochrany. */
+      const bootstrapMarker =
+        nactiSafeBootstrapMarker(user.id);
+      const maLokalniData =
+        maLokalniDataProSafeBootstrap();
+
+      if (!maLokalniData || bootstrapMarker) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "BOOTSTRAP",
+          bootstrapMarker
+            ? "AUTO RESUME | clean-device"
+            : "AUTO START | clean-device"
+        );
+
+        setTimeout(() => {
+          spustSafeBootstrapV2(
+            user.id,
+            { automaticky: true }
+          ).catch(() => {});
+        }, 0);
+      } else {
+        nabidniSafeBootstrapPokudJeTreba(user.id);
+      }
     }
   }
 
