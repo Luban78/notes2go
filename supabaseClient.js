@@ -1228,17 +1228,42 @@ function vyzadujPovinneHlavniHeslo(
    */
   oznacBlokovanePrihlaseni();
 
-  window.dispatchEvent(
-    new CustomEvent(
-      "lubanote:master-password-required",
-      {
-        detail: {
-          userId: user?.id || null,
-          mode: bezpecnyRezim
+  /*
+   * PATCH 561 – aktivní účet už NESMÍ zůstat vizuálně ve starém PENDING
+   * panelu. Při schválení účtu byl serverový stav správně ACTIVE, ale
+   * aktualniStavUctu stále obsahoval předchozí pending snapshot. Následná
+   * kontrola pak mohla chybně vypsat „Účet stále čeká na schválení“.
+   */
+  aktualniStavUctu = null;
+  setLoginMessage();
+
+  /*
+   * Tags.js je načten před supabaseClient.js a vystavuje přímé API pro
+   * povinný master-password onboarding. Použijeme ho přednostně místo
+   * samotného eventu: modal se tak otevře synchronně v auth flow a nehrozí,
+   * že se první přihlášení ztratí na hraně pořadí eventů / repaintu iOS PWA.
+   * Login vrstvu můžeme bezpečně skrýt – body.authPending dál schovává
+   * lokální data a jedinou povolenou vrstvou je povinný Secret modal.
+   */
+  const onboarding =
+    window.LubaNoteMasterPasswordOnboarding;
+
+  if (typeof onboarding?.zobraz === "function") {
+    loginScreen.hidden = true;
+    onboarding.zobraz(bezpecnyRezim);
+  } else {
+    window.dispatchEvent(
+      new CustomEvent(
+        "lubanote:master-password-required",
+        {
+          detail: {
+            userId: user?.id || null,
+            mode: bezpecnyRezim
+          }
         }
-      }
-    )
-  );
+      )
+    );
+  }
 
   oznamSplashPripravenyBezCloudovehoStartu();
 }

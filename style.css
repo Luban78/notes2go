@@ -2426,23 +2426,28 @@ body.authPending .addTaskButton {
  * Supabase klient třídu authPending drží po celou dobu, kdy není aktivní
  * schválený účet.
  */
-body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
+/*
+ * PATCH 561 – MASTER PASSWORD GATE + LOGIN PRIVACY LOCK
+ * -----------------------------------------------------
+ * PATCH 560 správně chtěl povolit povinný Secret modal nad authPending,
+ * ale obecný privacy selector měl vyšší CSS specificitu (obsahoval dvě ID
+ * uvnitř :not()). Proto na iOS modal zůstal visibility:hidden i přes
+ * pozdější override a login vypadal zaseknutý na „Přihlašuji…“.
+ *
+ * Secret modal proto vyjmeme z obecného pravidla a schováme ho samostatně,
+ * pokud masterPasswordRequired NENÍ aktivní. Tím privacy lock zůstává stejně
+ * přísný a výjimka platí jen pro povinný onboarding hlavního hesla.
+ */
+body.authPending > :not(#appSplash):not(#loginScreen):not(#secretUnlockModal):not(script) {
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
-/*
- * PATCH 560 – POVINNÉ HLAVNÍ HESLO NAD LOGIN PRIVACY LOCKEM
- * -----------------------------------------------------------
- * Při prvním přihlášení zůstává body.authPending záměrně aktivní, aby
- * lokální data nikdy neprosvitla. Povinný master-password gate ale používá
- * Secret modal, který stejný privacy lock dříve skryl přes visibility:hidden.
- * Proto byl účet po schválení/přihlášení zdánlivě zaseknutý na „Přihlašuji…“.
- *
- * Výjimku povolujeme VÝHRADNĚ tehdy, když tags.js nastaví
- * body.masterPasswordRequired. Běžný Secret modal po odhlášení tedy privacy
- * lock obejít nemůže.
- */
+body.authPending:not(.masterPasswordRequired) > #secretUnlockModal {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 body.authPending.masterPasswordRequired > #secretUnlockModal {
   visibility: visible !important;
   pointer-events: auto !important;
