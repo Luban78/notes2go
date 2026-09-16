@@ -180,11 +180,104 @@
     return true;
   }
 
+  async function opravLokalniSifrovanaMediaPoZiskaniKlice() {
+    if (!jeKlicDostupny()) return { opraveno: 0, chyby: 0 };
+
+    /*
+     * PATCH 558 – LOCAL MEDIA REHYDRATE.
+     * -----------------------------------
+     * Zařízení, které během přechodu 551–555 uložilo cloudovou podobu
+     * poznámky přímo do lokální cache, může mít <img data-lubanote-media-ref>
+     * bez src + __lubanoteMediaVault. Core V2 takovou poznámku správně
+     * odmítne jako „obrázek bez zdroje“.
+     *
+     * Jakmile je na zařízení dostupný správný media klíč, opravíme POUZE
+     * lokální cache: ciphertext lokálně dešifrujeme zpět na Data URL,
+     * odstraníme vault a uložíme přes přímý storage zápis.
+     *
+     * DŮLEŽITÉ: tento repair NESMÍ vytvořit uživatelskou změnu, zvýšit
+     * revision ani zařadit TARGET upload. Cloud zůstává beze změny.
+     */
+    try {
+      if (window.LubaNoteRegularNotesStore?.priprav) {
+        await window.LubaNoteRegularNotesStore.priprav();
+      }
+
+      if (
+        typeof nactiBeznePoznamkyZUloziste !== "function" ||
+        typeof ulozBeznePoznamkyPrimo !== "function"
+      ) {
+        return { opraveno: 0, chyby: 0 };
+      }
+
+      const puvodni = nactiBeznePoznamkyZUloziste();
+      if (!Array.isArray(puvodni) || puvodni.length === 0) {
+        return { opraveno: 0, chyby: 0 };
+      }
+
+      let opraveno = 0;
+      let chyby = 0;
+      const vysledek = [];
+
+      for (const note of puvodni) {
+        if (!maTrezor(note)) {
+          vysledek.push(note);
+          continue;
+        }
+
+        try {
+          vysledek.push(await desifrujPoznamkuZCloudu(note));
+          opraveno += 1;
+        } catch (error) {
+          chyby += 1;
+          vysledek.push(note);
+          console.warn(
+            `LubaNote media E2E: lokální rehydrate selhal pro ${note?.id || "unknown"}.`,
+            error
+          );
+        }
+      }
+
+      if (opraveno > 0) {
+        await ulozBeznePoznamkyPrimo(vysledek);
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "MEDIA",
+          `LOCAL REHYDRATE | repaired=${opraveno} errors=${chyby}`
+        );
+
+        if (typeof renderTasks === "function") {
+          renderTasks();
+        }
+        if (typeof renderRemindersScreen === "function") {
+          renderRemindersScreen();
+        }
+      }
+
+      return { opraveno, chyby };
+    } catch (error) {
+      console.warn(
+        "LubaNote media E2E: lokální repair šifrovaných fotografií se nepodařil.",
+        error
+      );
+      return { opraveno: 0, chyby: 1 };
+    }
+  }
+
   async function pripravMediaKlicZeZarizeni() {
-    if (jeKlicDostupny()) return true;
+    if (jeKlicDostupny()) {
+      await opravLokalniSifrovanaMediaPoZiskaniKlice();
+      return true;
+    }
     if (pripravaMediaKlicePromise) return pripravaMediaKlicePromise;
 
     pripravaMediaKlicePromise = nactiMediaKlicZeZarizeni()
+      .then(async (ok) => {
+        if (ok === true) {
+          await opravLokalniSifrovanaMediaPoZiskaniKlice();
+        }
+        return ok;
+      })
       .catch((error) => {
         console.warn("LubaNote media E2E: device media key zatím není dostupný.", error);
         return false;
@@ -251,6 +344,10 @@
          znovu po příštím startu. */
       console.warn("LubaNote media E2E: non-extractable device key se nepodařilo uložit.", error);
     }
+
+    /* PATCH 558 – po ručním Secret unlocku okamžitě opravíme případné
+       lokální cloudové media-vault kopie z přechodného období 551–555. */
+    await opravLokalniSifrovanaMediaPoZiskaniKlice();
 
     return true;
   }
@@ -828,7 +925,7 @@
   }
 
   window.LubaNoteMediaCrypto = Object.freeze({
-    verze: "MEDIA-E2E-551",
+    verze: "MEDIA-E2E-558-LOCAL-REHYDRATE",
     jeKlicDostupny,
     pripravMediaKlicZeZarizeni,
     nastavKlicZHesla,
