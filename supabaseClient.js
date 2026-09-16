@@ -609,6 +609,21 @@ const loginButton =
 const loginMessage =
   document.getElementById("loginMessage");
 
+const localOwnerResetActions =
+  document.getElementById("localOwnerResetActions");
+
+const localOwnerResetButton =
+  document.getElementById("localOwnerResetButton");
+
+const localDeviceResetModal =
+  document.getElementById("localDeviceResetModal");
+
+const localDeviceResetCancel =
+  document.getElementById("localDeviceResetCancel");
+
+const localDeviceResetConfirm =
+  document.getElementById("localDeviceResetConfirm");
+
 const accountStatusPanel =
   document.getElementById("accountStatusPanel");
 
@@ -1029,6 +1044,13 @@ function pripravLoginFormular() {
   loginModeSwitch.hidden = false;
   loginCredentialsFields.hidden = false;
   accountStatusPanel.hidden = true;
+  if (localOwnerResetActions) {
+    localOwnerResetActions.hidden = true;
+  }
+  if (localDeviceResetModal) {
+    localDeviceResetModal.hidden = true;
+    localDeviceResetModal.setAttribute("aria-hidden", "true");
+  }
   aktualniStavUctu = null;
 
   loginScreen.hidden = false;
@@ -1115,6 +1137,66 @@ async function nactiStavPristupu() {
   };
 }
 
+function otevriModalVycisteniZarizeni() {
+  if (!localDeviceResetModal) {
+    return;
+  }
+
+  localDeviceResetModal.hidden = false;
+  localDeviceResetModal.setAttribute("aria-hidden", "false");
+  setTimeout(() => localDeviceResetCancel?.focus(), 0);
+}
+
+function zavriModalVycisteniZarizeni() {
+  if (!localDeviceResetModal) {
+    return;
+  }
+
+  localDeviceResetModal.hidden = true;
+  localDeviceResetModal.setAttribute("aria-hidden", "true");
+}
+
+async function vycistiTotoZarizeniProJinyUcet() {
+  if (!localDeviceResetConfirm) {
+    return;
+  }
+
+  const puvodniText = localDeviceResetConfirm.textContent;
+  localDeviceResetConfirm.disabled = true;
+  if (localDeviceResetCancel) {
+    localDeviceResetCancel.disabled = true;
+  }
+  localDeviceResetConfirm.textContent = "Připravuji…";
+
+  try {
+    /*
+     * PATCH 563 – mazání dělá samostatná čistá stránka local-reset.html.
+     * Tím nejsou otevřené žádné LubaNote IndexedDB handly a iOS může DB
+     * opravdu odstranit. Cloudová data se této cesty vůbec nedotknou.
+     */
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.warn("Local device reset sign-out skipped:", error);
+    }
+
+    window.location.assign("local-reset.html");
+  } catch (error) {
+    console.error("Local device reset start failed:", error);
+    setLoginMessage(
+      "Vyčištění zařízení se nepodařilo spustit. Zkus to znovu.",
+      true
+    );
+    localDeviceResetConfirm.disabled = false;
+    if (localDeviceResetCancel) {
+      localDeviceResetCancel.disabled = false;
+    }
+    localDeviceResetConfirm.textContent = puvodniText;
+  }
+}
+
 async function odhlasPoKonfliktuVlastnika() {
   try {
     await supabaseClient.auth.signOut();
@@ -1132,6 +1214,9 @@ async function odhlasPoKonfliktuVlastnika() {
     "Toto zařízení obsahuje lokální data jiného LubaNote účtu. Kvůli bezpečnosti se účty na stejné instalaci nesmí míchat.",
     true
   );
+  if (localOwnerResetActions) {
+    localOwnerResetActions.hidden = false;
+  }
   oznamSplashPripravenyBezCloudovehoStartu();
 }
 
@@ -2056,6 +2141,32 @@ accountStatusSignOut.addEventListener(
       zrusPredchoziPrihlaseni();
       accountStatusSignOut.disabled = false;
       zobrazPrihlaseni();
+    }
+  }
+);
+
+localOwnerResetButton?.addEventListener(
+  "click",
+  otevriModalVycisteniZarizeni
+);
+
+localDeviceResetCancel?.addEventListener(
+  "click",
+  zavriModalVycisteniZarizeni
+);
+
+localDeviceResetConfirm?.addEventListener(
+  "click",
+  () => {
+    void vycistiTotoZarizeniProJinyUcet();
+  }
+);
+
+localDeviceResetModal?.addEventListener(
+  "click",
+  (event) => {
+    if (event.target === localDeviceResetModal) {
+      zavriModalVycisteniZarizeni();
     }
   }
 );
