@@ -1,7 +1,7 @@
 if (window.Capacitor?.isNativePlatform?.()) {
   document.body.classList.add("nativeApp");
 
-  /* PATCH 465  – Android 12 / WebView 103 nehlásí spodní systémovou
+  /* PATCH 465 – Android 12 / WebView 103 nehlásí spodní systémovou
    * navigaci přes env(safe-area-inset-bottom). Třídu nastavíme už při
    * startu aplikace, ne až při prvním otevření editoru, aby stejný
    * 48px fallback mohl bezpečně použít i panel akcí karty na home. */
@@ -4346,6 +4346,19 @@ function renderTasks() {
     );
   let poradiVykresleneKarty = 0;
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
+    /*
+     * PATCH 567 – přesný návrat funkčního filtru Skryté z patche 538.
+     * Pozdější přepis script.js zachoval akci hiddenAt, ale omylem odstranil
+     * tuto podmínku z renderTasks(). Výsledek: karta se označila jako skrytá,
+     * ale dál se vykreslovala a filtr oka vizuálně nic neměnil.
+     */
+    if (
+      typeof taskMatchesHidden === "function" &&
+      !taskMatchesHidden(loadedTask)
+    ) {
+      return;
+    }
+
     if (!taskMatchesArea(loadedTask)) {
       return;
     }
