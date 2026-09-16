@@ -1375,6 +1375,27 @@ async function zpracujStavPrihlasenehoUzivatele(
     jeStavPristupuCasovePlatny(stav)
   ) {
     /*
+     * PATCH 562 – OWNER GATE MUSÍ BÝT PŘED MASTER-PASSWORD GATE.
+     * ----------------------------------------------------------
+     * MediaCrypto ověřuje, že lokální Secret nastavení patří stejnému
+     * účtu jako lokální owner instalace. Owner se ale dosud nastavoval
+     * až v povolAktivniUcet(), tedy AŽ PO vytvoření / odemčení hlavního
+     * hesla. Na čistém nebo znovu připraveném zařízení tak mohl media
+     * klíč vzniknout správně, ale následná kontrola jeKlicDostupny() ho
+     * odmítla kvůli ještě nenastavenému / starému owner kontextu.
+     *
+     * Proto autoritativní ochranu proti míchání účtů provedeme hned po
+     * potvrzení ACTIVE účtu a ještě PŘED Secret/media onboardingem.
+     * - prázdná instalace dostane owner = aktuální user.id,
+     * - instalace patřící jinému účtu se bezpečně odhlásí,
+     * - sync ani lokální data se před tímto rozhodnutím neotevřou.
+     */
+    if (!overNeboNastavVlastnikaLokalnichDat(user?.id)) {
+      await odhlasPoKonfliktuVlastnika();
+      return false;
+    }
+
+    /*
      * PATCH 556 – hlavní heslo je bezpečnostní prerequisite účtu.
      * Kontrolujeme autoritativní secret_settings na serveru ještě
      * PŘED otevřením lokální aplikace a PŘED startem synchronizace.
