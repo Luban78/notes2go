@@ -5883,6 +5883,14 @@ body.authPending > :not(#appSplash):not(#loginScreen):not(script) {
   display: none;
 }
 
+/* PATCH 556 – povinné hlavní heslo je jediná povolená vrstva nad
+   login privacy lockem. Ostatní lokální UI zůstává před dokončením
+   onboardingu stále skryté. */
+body.authPending.masterPasswordRequired > #secretUnlockModal {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
 .secretUnlockDialog {
   width: min(100%, 420px);
 

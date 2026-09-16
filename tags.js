@@ -863,6 +863,85 @@ const createSecretTagButton =
 const newTagModalTitle =
   document.getElementById("newTagModalTitle");
 
+/*
+ * PATCH 556 – POVINNÉ HLAVNÍ HESLO PO PRVNÍM PŘIHLÁŠENÍ
+ * ------------------------------------------------------
+ * Nový (nebo starší dosud nemigrovaný) účet bez secret_settings
+ * nesmí vstoupit do aplikace dřív, než vytvoří hlavní heslo.
+ * Používáme stejný modal a stejnou kryptografii jako Secret režim;
+ * nevzniká žádné druhé heslo ani druhý kryptosystém.
+ */
+let povinneHlavniHesloAktivni = false;
+
+function jePovinneHlavniHesloAktivni() {
+  return povinneHlavniHesloAktivni === true;
+}
+
+function nastavPovinneHlavniHeslo(aktivni) {
+  povinneHlavniHesloAktivni = aktivni === true;
+
+  document.body.classList.toggle(
+    "masterPasswordRequired",
+    povinneHlavniHesloAktivni
+  );
+
+  if (closeSecretUnlockButton) {
+    closeSecretUnlockButton.hidden =
+      povinneHlavniHesloAktivni;
+  }
+
+  if (cancelSecretUnlockButton) {
+    cancelSecretUnlockButton.hidden =
+      povinneHlavniHesloAktivni;
+  }
+
+  if (!povinneHlavniHesloAktivni) {
+    return;
+  }
+
+  secretUnlockInput.value = "";
+  secretUnlockConfirmInput.value = "";
+  secretUnlockConfirmInput.hidden = false;
+
+  if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+    window.LubaNoteIcons.nastavObsahSIkonou(
+      secretUnlockTitle,
+      "zamek",
+      "Vytvoř hlavní heslo"
+    );
+    window.LubaNoteIcons.nastavObsahSIkonou(
+      confirmSecretUnlockButton,
+      "zamek",
+      "Vytvořit a pokračovat"
+    );
+  } else {
+    secretUnlockTitle.textContent =
+      "Vytvoř hlavní heslo";
+    confirmSecretUnlockButton.textContent =
+      "Vytvořit a pokračovat";
+  }
+
+  secretUnlockDescription.textContent =
+    "Než začneš LubaNote používat, vytvoř hlavní heslo. Chrání Secret režim a E2E šifrované fotografie. Není to přihlašovací heslo a LubaNote ho neukládá do cloudu.";
+
+  secretUnlockModal.hidden = false;
+
+  requestAnimationFrame(() => {
+    secretUnlockInput?.focus?.();
+  });
+}
+
+window.LubaNoteMasterPasswordOnboarding = {
+  zobraz: () => nastavPovinneHlavniHeslo(true),
+  dokonceno: () => nastavPovinneHlavniHeslo(false),
+  jeAktivni: jePovinneHlavniHesloAktivni
+};
+
+window.addEventListener(
+  "lubanote:master-password-required",
+  () => nastavPovinneHlavniHeslo(true)
+);
+
 
 
 
@@ -886,6 +965,10 @@ const newTagModalTitle =
 closeSecretUnlockButton?.addEventListener(
   "click",
   () => {
+    if (jePovinneHlavniHesloAktivni()) {
+      return;
+    }
+
     secretUnlockModal.hidden = true;
     secretUnlockInput.value = "";
   }
@@ -903,6 +986,10 @@ lockSecretModeButton?.addEventListener(
 cancelSecretUnlockButton?.addEventListener(
   "click",
   () => {
+    if (jePovinneHlavniHesloAktivni()) {
+      return;
+    }
+
     secretUnlockModal.hidden = true;
     secretUnlockInput.value = "";
   }

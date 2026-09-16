@@ -2,7 +2,7 @@
 // TAJNÝ REŽIM LUBANOTE
 // Heslo, šifrování, odemykání a auto-lock.
 // Citlivá data se nesmí ukládat v plaintextu.
-// ================================== ========
+// ==========================================
 
 // ==========================================
 // TAJNÝ REŽIM – KONTROLA NASTAVENÍ
@@ -841,16 +841,18 @@ async function vytvorNoveTajneNastaveni(heslo) {
    * Volitelná biometrická kopie hesla patří výhradně do Android Keystore
    * vrstvy a vznikne až po samostatném biometrickém potvrzení uživatele.
    */
+  const noveNastaveni = {
+    salt,
+    verifier,
+    kdf_iterations: iterace
+  };
+
   ulozLokalniTajneNastaveni(
-    {
-      salt,
-      verifier,
-      kdf_iterations: iterace
-    },
+    noveNastaveni,
     user.id
   );
 
-  return true;
+  return noveNastaveni;
 }
 
 // ==========================================
@@ -1075,13 +1077,64 @@ async function vytvorHlavniHesloZModalu() {
     return;
   }
 
-  const uspesne =
+  const noveNastaveni =
     await vytvorNoveTajneNastaveni(heslo);
 
-  if (!uspesne) {
+  if (!noveNastaveni) {
     zobrazZpravuAplikace(
       "Tajný režim",
       "Hlavní heslo se nepodařilo vytvořit."
+    );
+
+    return;
+  }
+
+  const jePovinneOnboardingHesla =
+    window.LubaNoteMasterPasswordOnboarding
+      ?.jeAktivni?.() === true;
+
+  /*
+   * PATCH 556 – při prvním přihlášení potřebujeme vytvořit stejný
+   * hlavní Secret základ i media klíč, ale nechceme uživatele po
+   * onboardingu automaticky přepnout do odemčeného Secret režimu.
+   */
+  if (jePovinneOnboardingHesla) {
+    if (!window.LubaNoteMediaCrypto?.nastavKlicZHesla) {
+      throw new Error(
+        "MediaCrypto není dostupné pro povinné hlavní heslo."
+      );
+    }
+
+    await window.LubaNoteMediaCrypto.nastavKlicZHesla(
+      heslo,
+      noveNastaveni
+    );
+
+    if (
+      window.LubaNoteMediaCrypto
+        ?.jeKlicDostupny?.() !== true
+    ) {
+      throw new Error(
+        "Media klíč se po vytvoření hlavního hesla nepodařilo aktivovat."
+      );
+    }
+
+    secretUnlockInput.value = "";
+    secretUnlockConfirmInput.value = "";
+    secretUnlockModal.hidden = true;
+
+    window.LubaNoteMasterPasswordOnboarding
+      ?.dokonceno?.();
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "lubanote:master-password-created"
+      )
+    );
+
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Hlavní heslo bylo vytvořeno. Secret režim i fotografie jsou připravené na šifrování."
     );
 
     return;
@@ -1201,6 +1254,31 @@ confirmSecretUnlockButton?.addEventListener(
 
       secretUnlockInput.value = "";
       secretUnlockModal.hidden = true;
+
+      if (
+        window.LubaNoteMasterPasswordOnboarding
+          ?.jeAktivni?.() === true
+      ) {
+        if (
+          window.LubaNoteMediaCrypto
+            ?.jeKlicDostupny?.() !== true
+        ) {
+          zobrazZpravuAplikace(
+            "Zabezpečení LubaNote",
+            "Hlavní heslo je správné, ale šifrování fotografií se na tomto zařízení nepodařilo připravit. Zkus akci znovu."
+          );
+          return;
+        }
+
+        window.LubaNoteMasterPasswordOnboarding
+          ?.dokonceno?.();
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "lubanote:master-password-created"
+          )
+        );
+      }
 
       zobrazZpravuAplikace(
         "Tajný režim",

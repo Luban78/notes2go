@@ -632,6 +632,11 @@ let aktualniStavUctu = null;
 let aktualniPristupUctu = null;
 let posledniLimitModalAt = 0;
 
+/* PATCH 556 – aktivní účet bez hlavního šifrovacího hesla se
+   nepustí do aplikace. Kontext držíme jen v paměti do dokončení
+   povinného onboardingu. */
+let cekajiciPovinneHlavniHeslo = null;
+
 function tAuth(klic, zaloha = "") {
   return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha || klic;
 }
@@ -1130,6 +1135,61 @@ async function odhlasPoKonfliktuVlastnika() {
   oznamSplashPripravenyBezCloudovehoStartu();
 }
 
+async function maUcetNastaveneHlavniHeslo(userId) {
+  if (!userId || !navigator.onLine) {
+    return null;
+  }
+
+  const dotaz = supabaseClient
+    .from("secret_settings")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { data, error } =
+    await sCasovymLimitem(
+      dotaz,
+      5000,
+      "Ověření hlavního šifrovacího hesla"
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.user_id);
+}
+
+function vyzadujPovinneHlavniHeslo(
+  user,
+  { spustitSync = true, stav = null } = {}
+) {
+  cekajiciPovinneHlavniHeslo = {
+    user,
+    spustitSync,
+    stav
+  };
+
+  /*
+   * Dokud hlavní heslo nevznikne, nevytváříme offline-first AUTH_OK.
+   * Reload/Back tedy nemůže onboarding obejít.
+   */
+  oznacBlokovanePrihlaseni();
+
+  window.dispatchEvent(
+    new CustomEvent(
+      "lubanote:master-password-required",
+      {
+        detail: {
+          userId: user?.id || null
+        }
+      }
+    )
+  );
+
+  oznamSplashPripravenyBezCloudovehoStartu();
+}
+
 async function povolAktivniUcet(
   user,
   { spustitSync = true, stav = null } = {}
@@ -1236,6 +1296,22 @@ async function zpracujStavPrihlasenehoUzivatele(
     stav.data_access_active !== false &&
     jeStavPristupuCasovePlatny(stav)
   ) {
+    /*
+     * PATCH 556 – hlavní heslo je bezpečnostní prerequisite účtu.
+     * Kontrolujeme autoritativní secret_settings na serveru ještě
+     * PŘED otevřením lokální aplikace a PŘED startem synchronizace.
+     */
+    const maHlavniHeslo =
+      await maUcetNastaveneHlavniHeslo(user?.id);
+
+    if (maHlavniHeslo === false) {
+      vyzadujPovinneHlavniHeslo(user, {
+        spustitSync,
+        stav
+      });
+      return false;
+    }
+
     return povolAktivniUcet(user, {
       spustitSync,
       stav
@@ -1916,6 +1992,41 @@ window.addEventListener(
       console.warn(
         "Obnovení stavu účtu po odmítnutí přístupu selhalo:",
         error
+      );
+    }
+  }
+);
+
+window.addEventListener(
+  "lubanote:master-password-created",
+  async () => {
+    const cekajici = cekajiciPovinneHlavniHeslo;
+
+    if (!cekajici?.user?.id) {
+      return;
+    }
+
+    cekajiciPovinneHlavniHeslo = null;
+
+    try {
+      await povolAktivniUcet(
+        cekajici.user,
+        {
+          spustitSync: cekajici.spustitSync,
+          stav: cekajici.stav
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Dokončení vstupu po vytvoření hlavního hesla selhalo:",
+        error
+      );
+
+      /* Fail closed – session zůstává, ale aplikace se bez úspěšného
+         dokončení bezpečnostního gate neotevře. */
+      oznacBlokovanePrihlaseni();
+      zobrazPrihlaseni(
+        "Hlavní heslo bylo vytvořeno, ale dokončení přihlášení selhalo. Zkus se přihlásit znovu."
       );
     }
   }
