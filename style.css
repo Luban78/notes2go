@@ -686,7 +686,15 @@ body {
 
   max-height: 60px;
   overflow: hidden;
-  white-space: nowrap;
+
+  /*
+   * FIX 568 – iOS 15 / Safari v contenteditable názvu.
+   * `nowrap` dovolí WebKitu koncovou mezeru vizuálně sloučit a při
+   * dalším znaku může caret skončit před ní. Výsledek vypadal, jako by
+   * mezerník v názvu vůbec nefungoval. `pre` zachová obyčejné mezery i
+   * jejich pozici, přitom název zůstává jediný řádek (Enter blokuje JS).
+   */
+  white-space: pre;
   cursor: text;
   caret-color: var(--color-editor-text);
   -webkit-user-select: text;
