@@ -1179,16 +1179,51 @@
       schovejSystemovouNativne();
     };
 
-    const otevriPoSkutecnemTapu = () => {
+    const otevriPoSkutecnemTapu = (clientX = null, clientY = null) => {
       if (!editor?.isConnected || ziskejZdrojKlavesnice() === "system") return;
       aktivniEditor = editor;
       aktivniCilPsani = "body";
       potlacAutomatickeOtevreni = false;
 
-      /* Po pointerup/touchend necháme WebView nejdřív dokončit přirozené
-         umístění caretu. Teprve v dalším frame otevřeme vlastní klávesnici. */
+      /*
+       * FIX 574 – TAP DO TĚLA MUSÍ PŘEVZÍT FOCUS Z NÁZVU DŘÍV, NEŽ
+       * NASTAVÍME CARET.
+       *
+       * Visual Debug na iOS 15.8.8 prokázal dvě věci současně:
+       * 1) WebKit hit-test vrací správnou pozici tapu (např. offset 32),
+       * 2) když ale zůstane aktivní #modalTitle, DOM selection dál patří názvu
+       *    a Core V2 může zároveň kreslit vlastní caret v těle. Výsledek jsou
+       *    dva kurzory a první tap často skončí na offsetu 0.
+       *
+       * Pořadí je proto záměrně: title.blur -> editor.focus -> teprve potom
+       * převod přesného bodu tapu do modelového selection. Kdybychom selection
+       * nastavili před focusem (571), starý iOS ji focus() znovu přepsal.
+       * Fix běží jen po potvrzeném KRÁTKÉM TAPU; swipe/drag/longpress se nemění.
+       */
+      const x = Number(clientX);
+      const y = Number(clientY);
+      const maBod = Number.isFinite(x) && Number.isFinite(y);
+      const title = najdiNazevEditoru();
+
+      if (title && document.activeElement === title) {
+        try { title.blur(); } catch (_error) {}
+      }
+
+      try { editor.focus({ preventScroll: true }); } catch (_error) {
+        try { editor.focus(); } catch (_ignore) {}
+      }
+
       requestAnimationFrame(() => {
         if (!editor?.isConnected) return;
+
+        /* Focus už je definitivně v těle. Teď teprve nastav přesný caret
+           z bodu tapu přes existující Core V2 převod DOM -> model. */
+        if (maBod) {
+          try {
+            window.LubaNoteEditorCoreV2?.zrusVyberNaBoduProSelectionMenu?.(x, y);
+          } catch (_error) {}
+        }
+
         zobraz();
         requestAnimationFrame(schovejSystemovou);
         setTimeout(schovejSystemovou, 50);
@@ -1230,7 +1265,7 @@
         Math.hypot(event.clientX - gesto.x, event.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
       lubaEditorGesto = null;
       if (presun) return; // SWIPE/DRAG = pouze scroll/selection, žádná klávesnice.
-      otevriPoSkutecnemTapu();
+      otevriPoSkutecnemTapu(event.clientX, event.clientY);
     };
 
     const zrusPointerGesto = (event) => {
@@ -1269,7 +1304,7 @@
         if (!t) return;
         const presun = gesto.presun || Math.hypot(t.clientX - gesto.x, t.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
         lubaEditorGesto = null;
-        if (!presun) otevriPoSkutecnemTapu();
+        if (!presun) otevriPoSkutecnemTapu(t.clientX, t.clientY);
       }, { capture: true, passive: true });
       editor.addEventListener("touchcancel", () => {
         if (lubaEditorGesto?.editor === editor) lubaEditorGesto = null;
