@@ -1128,7 +1128,8 @@ async function vytvorHlavniHesloZModalu() {
 
     window.dispatchEvent(
       new CustomEvent(
-        "lubanote:master-password-created"
+        "lubanote:master-password-ready",
+        { detail: { mode: "vytvorit" } }
       )
     );
 
@@ -1162,6 +1163,97 @@ async function vytvorHlavniHesloZModalu() {
   );
 }
 
+/*
+ * PATCH 559 – DALŠÍ NOVÉ ZAŘÍZENÍ EXISTUJÍCÍHO ÚČTU
+ * ---------------------------------------------------
+ * Účet už secret_settings má, ale toto zařízení ještě nemá device-only
+ * media klíč. Hlavní heslo pouze ověříme, z něj odvodíme media klíč a
+ * uložíme ho jako non-extractable CryptoKey do IndexedDB. Secret režim
+ * tímto krokem automaticky NEODEMYKÁME. Sync se povolí až potom.
+ */
+async function pripravHlavniHesloNaNovemZarizeni(heslo) {
+  if (!heslo) {
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Zadej hlavní heslo."
+    );
+    return false;
+  }
+
+  const spravneHeslo =
+    await overHlavniHeslo(heslo);
+
+  if (spravneHeslo === null) {
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Toto zařízení ještě nemá údaje potřebné k ověření hlavního hesla. Připoj se k internetu a zkus to znovu."
+    );
+    return false;
+  }
+
+  if (!spravneHeslo) {
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Hlavní heslo není správné."
+    );
+    return false;
+  }
+
+  const nastaveni =
+    await ziskejTajneNastaveniProOdemknuti();
+
+  if (!nastaveni) {
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Šifrovací nastavení účtu se nepodařilo načíst."
+    );
+    return false;
+  }
+
+  if (!window.LubaNoteMediaCrypto?.nastavKlicZHesla) {
+    throw new Error(
+      "MediaCrypto není dostupné pro připojení nového zařízení."
+    );
+  }
+
+  await window.LubaNoteMediaCrypto.nastavKlicZHesla(
+    heslo,
+    nastaveni
+  );
+
+  if (
+    window.LubaNoteMediaCrypto
+      ?.jeKlicDostupny?.() !== true
+  ) {
+    zobrazZpravuAplikace(
+      "Zabezpečení LubaNote",
+      "Hlavní heslo je správné, ale šifrování fotografií se na tomto zařízení nepodařilo připravit. Zkus akci znovu."
+    );
+    return false;
+  }
+
+  secretUnlockInput.value = "";
+  secretUnlockConfirmInput.value = "";
+  secretUnlockModal.hidden = true;
+
+  window.LubaNoteMasterPasswordOnboarding
+    ?.dokonceno?.();
+
+  window.dispatchEvent(
+    new CustomEvent(
+      "lubanote:master-password-ready",
+      { detail: { mode: "zarizeni" } }
+    )
+  );
+
+  zobrazZpravuAplikace(
+    "Zabezpečení LubaNote",
+    "Zařízení bylo bezpečně připojeno. E2E fotografie jsou připravené a synchronizace může pokračovat."
+  );
+
+  return true;
+}
+
 
 confirmSecretUnlockButton?.addEventListener(
   "click",
@@ -1184,6 +1276,36 @@ confirmSecretUnlockButton?.addEventListener(
       ) || (() => {});
 
     try {
+      const onboardingAktivni =
+        window.LubaNoteMasterPasswordOnboarding
+          ?.jeAktivni?.() === true;
+      const onboardingRezim = onboardingAktivni
+        ? window.LubaNoteMasterPasswordOnboarding
+          ?.rezim?.()
+        : null;
+
+      /* Povinný gate má autoritativní režim ze serverového login flow.
+         Díky tomu nové zařízení nikdy omylem nenabídne vytvoření druhého
+         hlavního hesla a nový účet zase nezkouší odemykat něco, co ještě
+         neexistuje. */
+      if (
+        onboardingAktivni &&
+        onboardingRezim === "vytvorit"
+      ) {
+        await vytvorHlavniHesloZModalu();
+        return;
+      }
+
+      if (
+        onboardingAktivni &&
+        onboardingRezim === "zarizeni"
+      ) {
+        await pripravHlavniHesloNaNovemZarizeni(
+          secretUnlockInput.value
+        );
+        return;
+      }
+
       const maHeslo =
         await maNastaveneTajneHeslo();
 
@@ -1254,31 +1376,6 @@ confirmSecretUnlockButton?.addEventListener(
 
       secretUnlockInput.value = "";
       secretUnlockModal.hidden = true;
-
-      if (
-        window.LubaNoteMasterPasswordOnboarding
-          ?.jeAktivni?.() === true
-      ) {
-        if (
-          window.LubaNoteMediaCrypto
-            ?.jeKlicDostupny?.() !== true
-        ) {
-          zobrazZpravuAplikace(
-            "Zabezpečení LubaNote",
-            "Hlavní heslo je správné, ale šifrování fotografií se na tomto zařízení nepodařilo připravit. Zkus akci znovu."
-          );
-          return;
-        }
-
-        window.LubaNoteMasterPasswordOnboarding
-          ?.dokonceno?.();
-
-        window.dispatchEvent(
-          new CustomEvent(
-            "lubanote:master-password-created"
-          )
-        );
-      }
 
       zobrazZpravuAplikace(
         "Tajný režim",

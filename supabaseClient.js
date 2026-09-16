@@ -1160,14 +1160,66 @@ async function maUcetNastaveneHlavniHeslo(userId) {
   return Boolean(data?.user_id);
 }
 
+async function maZarizeniPripravenyMediaKlic() {
+  /*
+   * PATCH 559 – EXISTUJÍCÍ ÚČET NA NOVÉM ZAŘÍZENÍ.
+   * Než pustíme UI nebo sync, zkusíme obnovit device-only non-extractable
+   * media klíč z IndexedDB. Na známém zařízení je to rychlé a bez hesla.
+   * Na novém zařízení vrátí false a login flow vyžádá hlavní heslo.
+   *
+   * mediaCrypto.js se načítá hned za secret.js; auth síťový request je
+   * obvykle pomalejší, přesto krátce počkáme, aby pořadí scriptů nebylo
+   * zdrojem falešného „nové zařízení“ promptu.
+   */
+  const konecCekani = Date.now() + 2000;
+
+  while (
+    !window.LubaNoteMediaCrypto
+      ?.pripravMediaKlicZeZarizeni &&
+    Date.now() < konecCekani
+  ) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, 25)
+    );
+  }
+
+  const media = window.LubaNoteMediaCrypto;
+
+  if (!media?.pripravMediaKlicZeZarizeni) {
+    console.warn(
+      "Povinný media-key gate: MediaCrypto modul není dostupný."
+    );
+    return false;
+  }
+
+  try {
+    await media.pripravMediaKlicZeZarizeni();
+    return media.jeKlicDostupny?.() === true;
+  } catch (error) {
+    console.warn(
+      "Povinný media-key gate: device klíč se nepodařilo obnovit.",
+      error
+    );
+    return false;
+  }
+}
+
 function vyzadujPovinneHlavniHeslo(
   user,
-  { spustitSync = true, stav = null } = {}
+  {
+    spustitSync = true,
+    stav = null,
+    rezim = "vytvorit"
+  } = {}
 ) {
+  const bezpecnyRezim =
+    rezim === "zarizeni" ? "zarizeni" : "vytvorit";
+
   cekajiciPovinneHlavniHeslo = {
     user,
     spustitSync,
-    stav
+    stav,
+    rezim: bezpecnyRezim
   };
 
   /*
@@ -1181,7 +1233,8 @@ function vyzadujPovinneHlavniHeslo(
       "lubanote:master-password-required",
       {
         detail: {
-          userId: user?.id || null
+          userId: user?.id || null,
+          mode: bezpecnyRezim
         }
       }
     )
@@ -1307,9 +1360,30 @@ async function zpracujStavPrihlasenehoUzivatele(
     if (maHlavniHeslo === false) {
       vyzadujPovinneHlavniHeslo(user, {
         spustitSync,
-        stav
+        stav,
+        rezim: "vytvorit"
       });
       return false;
+    }
+
+    /*
+     * Účet hlavní heslo už má. Na KAŽDÉM dalším zařízení ale musí
+     * existovat device-only media klíč odvozený ze stejného hesla.
+     * Pokud ho IndexedDB tohoto zařízení neobsahuje, aplikaci ani sync
+     * ještě nepovolíme a vyžádáme jednorázové zadání hlavního hesla.
+     */
+    if (maHlavniHeslo === true) {
+      const mediaKlicPripraven =
+        await maZarizeniPripravenyMediaKlic();
+
+      if (!mediaKlicPripraven) {
+        vyzadujPovinneHlavniHeslo(user, {
+          spustitSync,
+          stav,
+          rezim: "zarizeni"
+        });
+        return false;
+      }
     }
 
     return povolAktivniUcet(user, {
@@ -1998,7 +2072,7 @@ window.addEventListener(
 );
 
 window.addEventListener(
-  "lubanote:master-password-created",
+  "lubanote:master-password-ready",
   async () => {
     const cekajici = cekajiciPovinneHlavniHeslo;
 
@@ -2018,7 +2092,7 @@ window.addEventListener(
       );
     } catch (error) {
       console.error(
-        "Dokončení vstupu po vytvoření hlavního hesla selhalo:",
+        "Dokončení vstupu po přípravě hlavního hesla selhalo:",
         error
       );
 
@@ -2026,7 +2100,7 @@ window.addEventListener(
          dokončení bezpečnostního gate neotevře. */
       oznacBlokovanePrihlaseni();
       zobrazPrihlaseni(
-        "Hlavní heslo bylo vytvořeno, ale dokončení přihlášení selhalo. Zkus se přihlásit znovu."
+        "Hlavní heslo bylo ověřeno, ale dokončení přihlášení selhalo. Zkus se přihlásit znovu."
       );
     }
   }

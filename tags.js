@@ -872,13 +872,21 @@ const newTagModalTitle =
  * nevzniká žádné druhé heslo ani druhý kryptosystém.
  */
 let povinneHlavniHesloAktivni = false;
+let povinneHlavniHesloRezim = null;
 
 function jePovinneHlavniHesloAktivni() {
   return povinneHlavniHesloAktivni === true;
 }
 
-function nastavPovinneHlavniHeslo(aktivni) {
+function ziskejRezimPovinnehoHlavnihoHesla() {
+  return povinneHlavniHesloRezim;
+}
+
+function nastavPovinneHlavniHeslo(aktivni, rezim = "vytvorit") {
   povinneHlavniHesloAktivni = aktivni === true;
+  povinneHlavniHesloRezim = povinneHlavniHesloAktivni
+    ? (rezim === "zarizeni" ? "zarizeni" : "vytvorit")
+    : null;
 
   document.body.classList.toggle(
     "masterPasswordRequired",
@@ -899,30 +907,56 @@ function nastavPovinneHlavniHeslo(aktivni) {
     return;
   }
 
+  /* PATCH 559 – povinný gate má dva režimy:
+     1) první zařízení nového účtu = vytvoření hlavního hesla,
+     2) další nové zařízení = jednorázové zadání EXISTUJÍCÍHO hesla.
+     Sync se v obou případech spustí až po úspěšném dokončení gate. */
+  const jeNoveZarizeni =
+    povinneHlavniHesloRezim === "zarizeni";
+
   secretUnlockInput.value = "";
   secretUnlockConfirmInput.value = "";
-  secretUnlockConfirmInput.hidden = false;
+  secretUnlockConfirmInput.hidden = jeNoveZarizeni;
+
+  /* Povinné připojení zařízení nikdy neobcházíme biometrikou.
+     Biometrie se může nastavit až později uvnitř Secret režimu. */
+  const biometricButton =
+    document.getElementById("secretBiometricUnlockButton");
+  const biometricStatus =
+    document.getElementById("secretBiometricStatus");
+  const biometricEnableRow =
+    document.getElementById("secretBiometricEnableRow");
+
+  if (biometricButton) biometricButton.hidden = true;
+  if (biometricStatus) biometricStatus.hidden = true;
+  if (biometricEnableRow) biometricEnableRow.hidden = true;
+
+  const nadpis = jeNoveZarizeni
+    ? "Odemkni toto zařízení"
+    : "Vytvoř hlavní heslo";
+  const textTlacitka = jeNoveZarizeni
+    ? "Odemknout a pokračovat"
+    : "Vytvořit a pokračovat";
 
   if (window.LubaNoteIcons?.nastavObsahSIkonou) {
     window.LubaNoteIcons.nastavObsahSIkonou(
       secretUnlockTitle,
       "zamek",
-      "Vytvoř hlavní heslo"
+      nadpis
     );
     window.LubaNoteIcons.nastavObsahSIkonou(
       confirmSecretUnlockButton,
       "zamek",
-      "Vytvořit a pokračovat"
+      textTlacitka
     );
   } else {
-    secretUnlockTitle.textContent =
-      "Vytvoř hlavní heslo";
-    confirmSecretUnlockButton.textContent =
-      "Vytvořit a pokračovat";
+    secretUnlockTitle.textContent = nadpis;
+    confirmSecretUnlockButton.textContent = textTlacitka;
   }
 
-  secretUnlockDescription.textContent =
-    "Než začneš LubaNote používat, vytvoř hlavní heslo. Chrání Secret režim a E2E šifrované fotografie. Není to přihlašovací heslo a LubaNote ho neukládá do cloudu.";
+  secretUnlockDescription.textContent = jeNoveZarizeni
+    ? "Tento účet už hlavní heslo má. Zadej ho jednou, aby LubaNote bezpečně připravila Secret režim a E2E fotografie na tomto zařízení. Teprve potom se spustí synchronizace."
+    : "Než začneš LubaNote používat, vytvoř hlavní heslo. Chrání Secret režim a E2E šifrované fotografie. Není to přihlašovací heslo a LubaNote ho neukládá do cloudu.";
 
   secretUnlockModal.hidden = false;
 
@@ -932,14 +966,21 @@ function nastavPovinneHlavniHeslo(aktivni) {
 }
 
 window.LubaNoteMasterPasswordOnboarding = {
-  zobraz: () => nastavPovinneHlavniHeslo(true),
+  zobraz: (rezim = "vytvorit") =>
+    nastavPovinneHlavniHeslo(true, rezim),
   dokonceno: () => nastavPovinneHlavniHeslo(false),
-  jeAktivni: jePovinneHlavniHesloAktivni
+  jeAktivni: jePovinneHlavniHesloAktivni,
+  rezim: ziskejRezimPovinnehoHlavnihoHesla
 };
 
 window.addEventListener(
   "lubanote:master-password-required",
-  () => nastavPovinneHlavniHeslo(true)
+  (event) => nastavPovinneHlavniHeslo(
+    true,
+    event?.detail?.mode === "zarizeni"
+      ? "zarizeni"
+      : "vytvorit"
+  )
 );
 
 
