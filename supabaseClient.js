@@ -1197,6 +1197,62 @@ async function vycistiTotoZarizeniProJinyUcet() {
   }
 }
 
+function zobrazAZviditelniLokalniReset() {
+  if (!localOwnerResetActions) {
+    return;
+  }
+
+  /*
+   * PATCH 579 – na malém iOS PWA je bezpečný reset pod foldem.
+   * Při owner konfliktu / smazaném účtu musí uživatel hlavní akci
+   * vidět bez hledání a ručního scrollování. Logiku resetu NEMĚNÍME.
+   *
+   * Aktivní login input nejdřív odfokusujeme, aby iOS mohl zavřít
+   * systémovou klávesnici. Posun zopakujeme po její animaci, ale jen
+   * pokud je reset stále mimo viditelný viewport.
+   */
+  localOwnerResetActions.hidden = false;
+
+  const aktivniPrvek = document.activeElement;
+  if (
+    aktivniPrvek instanceof HTMLElement &&
+    typeof aktivniPrvek.blur === "function"
+  ) {
+    aktivniPrvek.blur();
+  }
+
+  const posunResetDoZaberu = () => {
+    if (localOwnerResetActions.hidden) {
+      return;
+    }
+
+    const rect = localOwnerResetActions.getBoundingClientRect();
+    const vyskaViewportu =
+      window.visualViewport?.height || window.innerHeight;
+    const okraj = 12;
+    const jeViditelny =
+      rect.top >= okraj &&
+      rect.bottom <= vyskaViewportu - okraj;
+
+    if (jeViditelny) {
+      return;
+    }
+
+    try {
+      localOwnerResetActions.scrollIntoView({
+        block: "center",
+        inline: "nearest"
+      });
+    } catch (_error) {
+      /* Fallback pro starší Safari. */
+      localOwnerResetActions.scrollIntoView(false);
+    }
+  };
+
+  requestAnimationFrame(posunResetDoZaberu);
+  setTimeout(posunResetDoZaberu, 380);
+}
+
 async function odhlasPoKonfliktuVlastnika() {
   try {
     await supabaseClient.auth.signOut();
@@ -1214,9 +1270,7 @@ async function odhlasPoKonfliktuVlastnika() {
     "Toto zařízení obsahuje lokální data jiného LubaNote účtu. Kvůli bezpečnosti se účty na stejné instalaci nesmí míchat.",
     true
   );
-  if (localOwnerResetActions) {
-    localOwnerResetActions.hidden = false;
-  }
+  zobrazAZviditelniLokalniReset();
   oznamSplashPripravenyBezCloudovehoStartu();
 }
 
@@ -2154,8 +2208,8 @@ accountStatusSignOut.addEventListener(
       accountStatusSignOut.disabled = false;
       zobrazPrihlaseni();
 
-      if (nabidnoutLokalniReset && localOwnerResetActions) {
-        localOwnerResetActions.hidden = false;
+      if (nabidnoutLokalniReset) {
+        zobrazAZviditelniLokalniReset();
       }
     }
   }
