@@ -11057,3 +11057,38 @@ body.lubaCardDragMode .app {
     display: none;
   }
 }
+
+
+/* ==================================================
+   PATCH 565 – iOS PWA SAFE TOP + ČITELNÝ DATOVÝ ŘÁDEK
+   --------------------------------------------------
+   iOS standalone PWA neumí spolehlivě skrýt systémový status bar.
+   PATCH 564 vytáhl panel nahoru záporným marginem a na starším iPhonu
+   se první řádek dostal pod systémový čas/baterii. Na iOS proto panel
+   držíme pod systémovým řádkem. Android/PC zůstávají beze změny.
+   ================================================== */
+@media (max-width: 699px) {
+  @supports (-webkit-touch-callout: none) {
+    .homeHeader {
+      padding-top: 10px;
+    }
+
+    .syncTrafficBar {
+      min-height: 40px;
+      margin-top: -8px;
+      padding-top: 4px;
+      padding-bottom: 3px;
+    }
+
+    .syncTrafficLabel,
+    .syncTrafficValue,
+    .syncTrafficEgress,
+    .syncTrafficDivider {
+      font-size: 12px;
+    }
+
+    .syncStatusText {
+      font-size: 13px;
+    }
+  }
+}

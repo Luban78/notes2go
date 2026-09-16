@@ -139,9 +139,17 @@
           ? `Zbývající egress · ${egressZdroj}`
           : "Zbývající egress";
       } else {
-        egressEl.textContent = "E —";
+        /*
+         * PATCH 565 – bez Management API tokenu nesmíme v PWA/APK číst
+         * billing quota Supabase. Aby pole E nebylo navždy jen „—“,
+         * zobrazujeme bezpečný aplikační odhad egressu právě probíhající /
+         * poslední synchronizace. Pro naše sync requesty je to přijatý RX
+         * payload ze Supabase. Nejde o fakturační metriku – transportní
+         * hlavičky, komprese a Realtime mohou billing mírně změnit.
+         */
+        egressEl.textContent = `E≈ ${formatBajtu(rx)}`;
         egressEl.title =
-          "Přesný zůstatek vyžaduje bezpečný serverový zdroj; Management API token nesmí být v APK/PWA.";
+          "Odhad egressu této synchronizace podle RX ze Supabase; nejde o billing quota Supabase.";
       }
     }
   }
