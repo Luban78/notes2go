@@ -49,6 +49,20 @@ function jeNativniApkEditorHandoff() {
   );
 }
 
+function jeIosStandalonePwaEditorHandoff() {
+  /*
+   * iPhone/iPad PWA spuštěná z plochy má jednu samostatnou app instanci
+   * a při reloadu / ukončení WebKitu může server ještě držet lease staré
+   * session stejné instalace. Safari taby tuto zkratku NESMÍ použít,
+   * protože více tabů může sdílet stejné deviceId současně.
+   */
+  try {
+    return navigator.standalone === true;
+  } catch {
+    return false;
+  }
+}
+
 /* ==========================================
    PŘEDÁNÍ OTEVŘENÉHO EDITORU MEZI ZAŘÍZENÍMI – V1
 
@@ -788,14 +802,18 @@ async function zkusObnovitVlastniEditorPoRestartu(
   novaSessionId
 ) {
   /*
-   * Android APK má jednu živou WebView instanci. Po hard killu ale
-   * serverový lease může ještě desítky sekund ukazovat na starou
-   * session stejné instalace. To není "jiné zařízení".
+   * Android APK i iOS PWA spuštěná samostatně z plochy mají jednu
+   * app instanci. Po hard killu / reloadu ale serverový lease může
+   * ještě desítky sekund ukazovat na starou session STEJNÉ instalace.
+   * To není jiné zařízení a nesmí se zobrazit falešné předání.
    *
-   * Na web/PWA tuto zkratku záměrně nepoužíváme, protože dvě karty
-   * stejného prohlížeče mohou sdílet deviceId a přitom být obě živé.
+   * Běžný web/Safari tab tuto zkratku záměrně nepoužívá, protože dvě
+   * karty stejného prohlížeče mohou sdílet deviceId a přitom být obě živé.
    */
-  if (!jeNativniApkEditorHandoff()) {
+  if (
+    !jeNativniApkEditorHandoff() &&
+    !jeIosStandalonePwaEditorHandoff()
+  ) {
     return false;
   }
 
