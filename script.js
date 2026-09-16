@@ -5234,20 +5234,26 @@ function zobrazHlavniAkceKarty() {
       ? "Odepnout"
       : "Připnout";
 
-  const textHotovo =
-    selectedTask?.completed === true
-      ? "Vrátit"
-      : "Hotovo";
+  const jeSkrytaKarta = Boolean(selectedTask?.hiddenAt);
+  const textSkryti = jeSkrytaKarta
+    ? "Zobrazit"
+    : "Skrýt";
 
   const ikonaPripnuti =
     selectedTask?.pinned === true
       ? "odepnout"
       : "pripnout";
 
-  const ikonaHotovo =
-    selectedTask?.completed === true
-      ? "zpet"
-      : "hotovo";
+  /*
+   * PATCH 557 – vrací odladěnou akci Skryté z 538.
+   * Hotovo už je na kartě dostupné swipem doprava, takže akční panel
+   * nesmí znovu zabírat stejné místo duplicitní akcí Hotovo.
+   * Shared poznámku zatím nelze skrývat private příznakem hiddenAt.
+   */
+  const skrytiZakazano =
+    Boolean(selectedTask?.id) &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(selectedTask.id) === true;
 
   const sdileniZakazano =
     selectedTask?.isSecret === true;
@@ -5267,8 +5273,8 @@ function zobrazHlavniAkceKarty() {
           🕒 Termín
         </button>
 
-        <button type="button" data-card-action="complete">
-          ${selectedTask?.completed === true ? "↩️" : "✅"} ${textHotovo}
+        <button type="button" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+          👁️ ${textSkryti}
         </button>
 
         <button type="button" data-card-action="share" ${sdileniZakazano ? 'disabled aria-disabled="true"' : ""}>
@@ -5297,8 +5303,8 @@ function zobrazHlavniAkceKarty() {
           ☑️ Označit
         </button>
 
-        <button type="button" data-card-action="complete">
-          ✅ Hotovo
+        <button type="button" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+          👁️ ${textSkryti}
         </button>
 
         <button type="button" data-card-action="color">
@@ -5324,8 +5330,8 @@ function zobrazHlavniAkceKarty() {
         <span class="lubaActionIcon" data-luba-icon="hodiny" aria-hidden="true"></span><span>Termín</span>
       </button>
 
-      <button type="button" class="lubaHasIcon" data-card-action="complete">
-        <span class="lubaActionIcon" data-luba-icon="${ikonaHotovo}" aria-hidden="true"></span><span>${textHotovo}</span>
+      <button type="button" class="lubaHasIcon" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+        <span class="lubaActionIcon" data-luba-icon="skryte" aria-hidden="true"></span><span>${textSkryti}</span>
       </button>
 
       <button type="button" class="lubaHasIcon" data-card-action="share" ${sdileniZakazano ? 'disabled aria-disabled="true"' : ""}>
@@ -5356,8 +5362,8 @@ function zobrazHlavniAkceKarty() {
         <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span><span>Označit</span>
       </button>
 
-      <button type="button" class="lubaHasIcon" data-card-action="complete">
-        <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span><span>Hotovo</span>
+      <button type="button" class="lubaHasIcon" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+        <span class="lubaActionIcon" data-luba-icon="skryte" aria-hidden="true"></span><span>${textSkryti}</span>
       </button>
 
       <button type="button" class="lubaHasIcon" data-card-action="color">
@@ -5491,14 +5497,25 @@ function zobrazDalsiAkceKarty() {
     "selectionMode"
   );
 
+  const tasks = loadTask();
+  const selectedTask =
+    tasks[selectedCardIndex] || null;
+  const textSkryti = selectedTask?.hiddenAt
+    ? "Zobrazit"
+    : "Skrýt";
+  const skrytiZakazano =
+    Boolean(selectedTask?.id) &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(selectedTask.id) === true;
+
   if (!pouzivaSvgIkonyRozhrani()) {
     cardMenu.innerHTML = `
       <button type="button" data-card-action="select">
         ☑️ Označit
       </button>
 
-      <button type="button" data-card-action="complete">
-        ✅ Hotovo
+      <button type="button" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+        👁️ ${textSkryti}
       </button>
 
       <button type="button" data-card-action="color">
@@ -5518,8 +5535,8 @@ function zobrazDalsiAkceKarty() {
       <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span><span>Označit</span>
     </button>
 
-    <button type="button" class="lubaHasIcon" data-card-action="complete">
-      <span class="lubaActionIcon" data-luba-icon="hotovo" aria-hidden="true"></span><span>Hotovo</span>
+    <button type="button" class="lubaHasIcon" data-card-action="hide" ${skrytiZakazano ? 'disabled aria-disabled="true"' : ""}>
+      <span class="lubaActionIcon" data-luba-icon="skryte" aria-hidden="true"></span><span>${textSkryti}</span>
     </button>
 
     <button type="button" class="lubaHasIcon" data-card-action="color">
@@ -5958,11 +5975,85 @@ cardMenu.addEventListener("click", async (event) => {
     return;
   }
   
-  if (action === "complete") {
+  if (action === "hide") {
+    const tasks = loadTask();
+    const selectedTask = tasks[selectedCardIndex];
+
+    if (!selectedTask) {
+      return;
+    }
+
+    if (
+      selectedTask.id &&
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(selectedTask.id) === true
+    ) {
+      zobrazZpravuAplikace(
+        "Skryté",
+        "Skrytí sdílené poznámky doplníme až přes osobní metadata sdílení."
+      );
+      return;
+    }
+
+    const budeSkryta = !Boolean(selectedTask.hiddenAt);
+    const cas = new Date().toISOString();
+
+    const provedZmenu = async () => {
+      if (budeSkryta) {
+        selectedTask.hiddenAt = cas;
+      } else {
+        delete selectedTask.hiddenAt;
+      }
+
+      selectedTask.updatedAt = cas;
+
+      const ulozeno = await saveAllTasks(tasks);
+      return ulozeno === false ? null : selectedTask;
+    };
+
+    let vysledek = null;
+
+    if (
+      typeof window.LubaNoteSync
+        ?.provedLokalniZmenuASynchronizuj === "function"
+    ) {
+      vysledek = await window.LubaNoteSync
+        .provedLokalniZmenuASynchronizuj(
+          provedZmenu,
+          selectedTask.isSecret === true
+            ? selectedTask
+            : null
+        );
+    } else {
+      vysledek = await provedZmenu();
+
+      if (
+        vysledek &&
+        typeof uploadLocalNoteToSupabase === "function"
+      ) {
+        Promise.resolve(
+          uploadLocalNoteToSupabase(selectedTask)
+        ).catch((error) => {
+          console.warn(
+            "Synchronizace změny Skryté byla odložena:",
+            error
+          );
+        });
+      }
+    }
+
     cardMenu.hidden = true;
-    await dokoncitKartuPodleIndexu(
-      selectedCardIndex
-    );
+    renderTasks();
+
+    if (vysledek) {
+      zobrazPotvrzeniAkce(
+        budeSkryta
+          ? "Přesunuto do Skrytých"
+          : "Vráceno ze Skrytých"
+      );
+    }
+
+    return;
   }
   
   if (action === "pin") {
