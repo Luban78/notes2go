@@ -941,8 +941,23 @@ body {
   white-space: nowrap;
 }
 
-/* PATCH 586 – stav úložiště není součást textu tlačítka.
-   Samostatná ikona je díky tomu na mobilu výrazně čitelnější. */
+/* PATCH 587 – Poznámky: ikona modulu + stav úložiště v jednom řádku.
+   Mobilní moduleTab je sloupcový; bez wrapperu se třetí prvek skládal pod text
+   a nápis „Poznámky“ se mohl oříznout. */
+.notesModuleIconRow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
+  line-height: 1;
+}
+
+.notesModuleIconRow .moduleTabIcon {
+  flex: 0 0 auto;
+}
+
 .notesStorageScopeIcon {
   flex: 0 0 auto;
   font-size: 1.42em;
