@@ -497,7 +497,8 @@
     blob,
     mimeType = "image/jpeg",
     fileName = "",
-    storagePath = ""
+    storagePath = "",
+    pouzeLokalni = false
   } = {}) {
     if (!id || !noteId) {
       throw new Error(
@@ -523,6 +524,9 @@
 
     const ted = new Date().toISOString();
 
+    const jePouzeLokalni =
+      pouzeLokalni === true;
+
     const zaznam = {
       id,
       noteId,
@@ -532,9 +536,20 @@
       fileName: fileName || "",
       createdAt: ted,
       lastAccessAt: ted,
-      faze: "cloud_shadow_v1",
-      cloudState: "restore_staged",
-      storagePath: storagePath || "",
+      /*
+       * PATCH 597: obnovená LOCAL příloha zůstává device-only.
+       * Nesmí dostat restore_staged/pending stav, který je určený
+       * pouze pro následné nahrání cloudové přílohy.
+       */
+      faze: jePouzeLokalni
+        ? "shadow_v1"
+        : "cloud_shadow_v1",
+      cloudState: jePouzeLokalni
+        ? "disabled"
+        : "restore_staged",
+      storagePath: jePouzeLokalni
+        ? ""
+        : (storagePath || ""),
       uploadedAt: null,
       activatedAt: null,
       lastCloudError: ""

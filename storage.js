@@ -2234,6 +2234,11 @@ function vytvorMapuPrilohProZalohu(notes) {
       continue;
     }
 
+    const storageScope =
+      jePoznamkaPouzeLokalni(note)
+        ? NOTE_STORAGE_SCOPE_LOCAL
+        : NOTE_STORAGE_SCOPE_CLOUD;
+
     const ids =
       ziskejAttachmentIdsPoznamkyProZalohu(note);
 
@@ -2241,13 +2246,63 @@ function vytvorMapuPrilohProZalohu(notes) {
       if (!mapa.has(id)) {
         mapa.set(id, {
           id,
-          noteId: note.id
+          noteId: note.id,
+          storageScope
         });
       }
     }
   }
 
   return mapa;
+}
+
+
+function ziskejRozsahPrilohyProZalohu(
+  polozka,
+  backup
+) {
+  if (
+    polozka?.storageScope ===
+      NOTE_STORAGE_SCOPE_LOCAL
+  ) {
+    return NOTE_STORAGE_SCOPE_LOCAL;
+  }
+
+  const mapa = vytvorMapuPrilohProZalohu(
+    backup?.notes
+  );
+  const reference = mapa.get(polozka?.id);
+
+  return reference?.storageScope ===
+    NOTE_STORAGE_SCOPE_LOCAL
+    ? NOTE_STORAGE_SCOPE_LOCAL
+    : NOTE_STORAGE_SCOPE_CLOUD;
+}
+
+
+function spocitejPrilohyPodleRozsahu(
+  manifest,
+  backup
+) {
+  let cloud = 0;
+  let local = 0;
+
+  for (const polozka of Array.isArray(
+    manifest?.attachments
+  ) ? manifest.attachments : []) {
+    if (
+      ziskejRozsahPrilohyProZalohu(
+        polozka,
+        backup
+      ) === NOTE_STORAGE_SCOPE_LOCAL
+    ) {
+      local += 1;
+    } else {
+      cloud += 1;
+    }
+  }
+
+  return { cloud, local };
 }
 
 
@@ -2693,9 +2748,20 @@ async function vytvorAProvedKompletniArchivV4(
   const dataUrlMapa =
     vytvorMapuDataUrlPrilohProZalohu(backup.notes);
 
-  const ids = Array.from(mapaPriloh.keys());
+  const idsProCloud = Array.from(
+    mapaPriloh.values()
+  )
+    .filter(
+      (polozka) =>
+        polozka.storageScope !==
+          NOTE_STORAGE_SCOPE_LOCAL
+    )
+    .map((polozka) => polozka.id);
+
   const cloudMetadataMapa =
-    await nactiCloudMetadataPrilohProZalohu(ids);
+    await nactiCloudMetadataPrilohProZalohu(
+      idsProCloud
+    );
 
   const polozkyManifestu = [];
   let celkemBajtuPriloh = 0;
@@ -2721,14 +2787,23 @@ async function vytvorAProvedKompletniArchivV4(
         cloudMetadataMapa.get(attachmentId) || null;
 
       /*
-       * Staré shadow_v1 attachment ID je pouze diagnostická cache
-       * FÁZE A. Jeho obrázek zůstává uvnitř backup.json jako Data URL
-       * a není součástí nové Storage autority.
+       * U cloudové poznámky je staré shadow_v1 pořád jen diagnostická
+       * cache FÁZE A a do archivu V4 se samostatně nepřidává. U LOCAL
+       * poznámky je ale device Blob autorita, takže ho 597 musí zahrnout
+       * i po obnově, kdy má záměrně faze=shadow_v1/cloudState=disabled.
        */
       const jeNovaPriloha = Boolean(
-        cloudMetadata ||
-        lokalniZaznam?.faze ===
-          LUBANOTE_BACKUP_ATTACHMENT_PHASE
+        identita.storageScope ===
+          NOTE_STORAGE_SCOPE_LOCAL
+          ? (
+              lokalniZaznam?.blob instanceof Blob ||
+              dataUrlMapa.has(attachmentId)
+            )
+          : (
+              cloudMetadata ||
+              lokalniZaznam?.faze ===
+                LUBANOTE_BACKUP_ATTACHMENT_PHASE
+            )
       );
 
       if (!jeNovaPriloha) {
@@ -2788,14 +2863,24 @@ async function vytvorAProvedKompletniArchivV4(
           lokalniZaznam?.noteId ||
           identita.noteId ||
           null,
+        storageScope:
+          identita.storageScope ===
+            NOTE_STORAGE_SCOPE_LOCAL
+            ? NOTE_STORAGE_SCOPE_LOCAL
+            : NOTE_STORAGE_SCOPE_CLOUD,
         mimeType,
         sizeBytes: blob.size,
         sha256,
         archivePath: archivniCesta,
         storagePath:
-          cloudMetadata?.storage_path ||
-          lokalniZaznam?.storagePath ||
-          null
+          identita.storageScope ===
+            NOTE_STORAGE_SCOPE_LOCAL
+            ? null
+            : (
+                cloudMetadata?.storage_path ||
+                lokalniZaznam?.storagePath ||
+                null
+              )
       });
     }
 
@@ -2812,6 +2897,18 @@ async function vytvorAProvedKompletniArchivV4(
         version: backup.version
       },
       attachmentCount: polozkyManifestu.length,
+      cloudAttachmentCount:
+        polozkyManifestu.filter(
+          (polozka) =>
+            polozka.storageScope !==
+              NOTE_STORAGE_SCOPE_LOCAL
+        ).length,
+      localAttachmentCount:
+        polozkyManifestu.filter(
+          (polozka) =>
+            polozka.storageScope ===
+              NOTE_STORAGE_SCOPE_LOCAL
+        ).length,
       attachmentBytes: celkemBajtuPriloh,
       attachments: polozkyManifestu
     };
@@ -3385,6 +3482,44 @@ async function vytvorKompletniZalohu(moznosti = {}) {
     );
   }
 
+  let lokalniVerejneStitky = [];
+  let lokalniSecretTagRecords = [];
+
+  if (
+    typeof ziskejLokalniStitkyProKompletniZalohuV1 !==
+      "function"
+  ) {
+    throw vytvorChybuZalohy(
+      "Modul LOCAL štítků pro zálohu není dostupný.",
+      "Kompletní zálohu nelze vytvořit bez bezpečného exportu LOCAL štítků."
+    );
+  }
+
+  try {
+    const lokalniStitky =
+      ziskejLokalniStitkyProKompletniZalohuV1(
+        ownerUserId || ""
+      );
+
+    lokalniVerejneStitky = Array.isArray(
+      lokalniStitky?.publicTags
+    ) ? lokalniStitky.publicTags : [];
+
+    lokalniSecretTagRecords = Array.isArray(
+      lokalniStitky?.secretTagRecords
+    ) ? lokalniStitky.secretTagRecords : [];
+  } catch (error) {
+    const zprava = String(
+      error?.message || error || ""
+    );
+
+    throw vytvorChybuZalohy(
+      zprava,
+      zprava ||
+      "LOCAL štítky se nepodařilo bezpečně přidat do kompletní zálohy."
+    );
+  }
+
   const plannedItems =
     typeof loadPlannedItems === "function"
       ? loadPlannedItems()
@@ -3402,11 +3537,33 @@ async function vytvorKompletniZalohu(moznosti = {}) {
     manifest: {
       complete: true,
       regularNoteCount: notes.length,
+      cloudRegularNoteCount:
+        notes.filter(
+          (note) => !jePoznamkaPouzeLokalni(note)
+        ).length,
+      localRegularNoteCount:
+        notes.filter(jePoznamkaPouzeLokalni).length,
       secretNoteCount: secretNotes.length,
+      cloudSecretNoteCount:
+        secretNotes.filter(
+          (record) =>
+            record?.storageScope !==
+              NOTE_STORAGE_SCOPE_LOCAL
+        ).length,
+      localSecretNoteCount:
+        secretNotes.filter(
+          (record) =>
+            record?.storageScope ===
+              NOTE_STORAGE_SCOPE_LOCAL
+        ).length,
       publicTagCount: verejneStitky.length,
       secretTagCount: pouzitSifrovaneTajneStitkyV4 ?
         secretTagRecords.length :
         tajneStitky.length,
+      localPublicTagCount:
+        lokalniVerejneStitky.length,
+      localSecretTagCount:
+        lokalniSecretTagRecords.length,
       plannedItemCount:
         Array.isArray(plannedItems)
           ? plannedItems.length
@@ -3426,6 +3583,12 @@ async function vytvorKompletniZalohu(moznosti = {}) {
       pouzitSifrovaneTajneStitkyV4 ?
         secretTagRecords :
         undefined,
+    localTagEncoding:
+      "device-records-v1",
+    localTags:
+      lokalniVerejneStitky,
+    localSecretTagRecords:
+      lokalniSecretTagRecords,
     plannedItems:
       Array.isArray(plannedItems)
         ? plannedItems
@@ -3478,13 +3641,16 @@ async function pripravAProvedExportZalohy(
         typeof zobrazZpravuAplikace ===
         "function"
       ) {
-        const pocetPriloh = Number(
-          vysledek?.manifest?.attachmentCount || 0
+        const cloudPrilohy = Number(
+          vysledek?.manifest?.cloudAttachmentCount || 0
+        );
+        const localPrilohy = Number(
+          vysledek?.manifest?.localAttachmentCount || 0
         );
 
         zobrazZpravuAplikace(
           "Kompletní záloha",
-          `Kompletní záloha byla uložena. Archiv obsahuje ${pocetPriloh} cloudových příloh.`
+          `Kompletní záloha byla uložena. Archiv obsahuje ${cloudPrilohy} cloudových a ${localPrilohy} LOCAL příloh.`
         );
       }
     } else {
@@ -3618,6 +3784,59 @@ function jePlatnySifrovanyTajnyStitekV4(zaznam) {
 }
 
 
+function jePlatnyLokalniVerejnyStitekZalohy(
+  zaznam
+) {
+  return Boolean(
+    zaznam?.id &&
+    typeof zaznam?.name === "string" &&
+    zaznam.name.trim() &&
+    zaznam?.is_secret !== true
+  );
+}
+
+
+function jePlatnaLokalniCastStitkuZalohy(
+  zaloha
+) {
+  const maNekterePole =
+    zaloha?.localTagEncoding !== undefined ||
+    zaloha?.localTags !== undefined ||
+    zaloha?.localSecretTagRecords !== undefined ||
+    zaloha?.manifest?.localPublicTagCount !== undefined ||
+    zaloha?.manifest?.localSecretTagCount !== undefined;
+
+  /* Starší kompletní zálohy před 597 tuto sekci ještě nemají. */
+  if (!maNekterePole) {
+    return true;
+  }
+
+  if (
+    zaloha?.localTagEncoding !==
+      "device-records-v1" ||
+    !Array.isArray(zaloha.localTags) ||
+    !Array.isArray(zaloha.localSecretTagRecords) ||
+    !zaloha.localTags.every(
+      jePlatnyLokalniVerejnyStitekZalohy
+    ) ||
+    !zaloha.localSecretTagRecords.every(
+      jePlatnySifrovanyTajnyStitekV4
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    Number(
+      zaloha.manifest.localPublicTagCount
+    ) === zaloha.localTags.length &&
+    Number(
+      zaloha.manifest.localSecretTagCount
+    ) === zaloha.localSecretTagRecords.length
+  );
+}
+
+
 function jePlatnaKompletniZaloha(
   zaloha
 ) {
@@ -3679,6 +3898,10 @@ function jePlatnaKompletniZaloha(
     return false;
   }
 
+  if (!jePlatnaLokalniCastStitkuZalohy(zaloha)) {
+    return false;
+  }
+
   const manifest = zaloha.manifest;
   const pocetTajnychStitku = Number(
     manifest.secretTagCount
@@ -3703,6 +3926,36 @@ function jePlatnaKompletniZaloha(
     !zaloha.secretMetadata
   ) {
     return false;
+  }
+
+  const maScopePocty =
+    manifest.cloudRegularNoteCount !== undefined ||
+    manifest.localRegularNoteCount !== undefined ||
+    manifest.cloudSecretNoteCount !== undefined ||
+    manifest.localSecretNoteCount !== undefined;
+
+  if (maScopePocty) {
+    const localRegular = zaloha.notes.filter(
+      jePoznamkaPouzeLokalni
+    ).length;
+    const localSecret = zaloha.secretNotes.filter(
+      (record) =>
+        record?.storageScope ===
+          NOTE_STORAGE_SCOPE_LOCAL
+    ).length;
+
+    if (
+      Number(manifest.localRegularNoteCount) !==
+        localRegular ||
+      Number(manifest.cloudRegularNoteCount) !==
+        zaloha.notes.length - localRegular ||
+      Number(manifest.localSecretNoteCount) !==
+        localSecret ||
+      Number(manifest.cloudSecretNoteCount) !==
+        zaloha.secretNotes.length - localSecret
+    ) {
+      return false;
+    }
   }
 
   return (
@@ -3878,9 +4131,31 @@ async function obnovKompletniZalohu(
       )
   );
 
+  const cloudRegularNotes = regularNotes.filter(
+    (note) => !jePoznamkaPouzeLokalni(note)
+  );
+  const localRegularNotes = regularNotes.filter(
+    jePoznamkaPouzeLokalni
+  );
+  const cloudSecretNotes = imported.secretNotes.filter(
+    (record) =>
+      record?.storageScope !==
+        NOTE_STORAGE_SCOPE_LOCAL
+  );
+  const localSecretNotes = imported.secretNotes.filter(
+    (record) =>
+      record?.storageScope ===
+        NOTE_STORAGE_SCOPE_LOCAL
+  );
+
+  /*
+   * PATCH 597: cloudový restore plán smí obsahovat pouze cloudová ID.
+   * LOCAL poznámka ani LOCAL Secret record nesmí dostat restore-pending
+   * metadata, která by po reloadu vedla k uploadu do Supabase.
+   */
   const obnovovanaId = [
-    ...regularNotes.map((note) => note.id),
-    ...imported.secretNotes.map(
+    ...cloudRegularNotes.map((note) => note.id),
+    ...cloudSecretNotes.map(
       (record) => record.id
     )
   ];
@@ -3890,6 +4165,28 @@ async function obnovKompletniZalohu(
       obnovovanaId,
       importedAt
     );
+
+  const localRestoreIds = new Set([
+    ...localRegularNotes.map((note) => note.id),
+    ...localSecretNotes.map((record) => record.id)
+  ].filter(Boolean));
+
+  /*
+   * Defense-in-depth: staré cloud meta/tombstone z minulých verzí
+   * nesmí po obnově zůstat navázané na ID, které je teď LOCAL.
+   */
+  for (const id of localRestoreIds) {
+    delete plan.meta?.[id];
+  }
+
+  plan.cekajiciSmazani = (
+    Array.isArray(plan.cekajiciSmazani)
+      ? plan.cekajiciSmazani
+      : []
+  ).filter(
+    (zaznam) =>
+      !localRestoreIds.has(zaznam?.id)
+  );
 
   const ownerUserId =
     imported?.owner?.userId || null;
@@ -3910,6 +4207,10 @@ async function obnovKompletniZalohu(
     await moznosti.predObnovou({
       plan,
       regularNotes,
+      cloudRegularNotes,
+      localRegularNotes,
+      cloudSecretNotes,
+      localSecretNotes,
       ownerUserId
     });
   }
@@ -3963,6 +4264,29 @@ async function obnovKompletniZalohu(
     );
   }
 
+  const maLokalniStitkyVZaloze =
+    imported.localTagEncoding ===
+      "device-records-v1" &&
+    Array.isArray(imported.localTags) &&
+    Array.isArray(imported.localSecretTagRecords);
+
+  if (maLokalniStitkyVZaloze) {
+    if (
+      typeof obnovLokalniStitkyZKompletniZalohyV1 !==
+        "function" ||
+      !obnovLokalniStitkyZKompletniZalohyV1(
+        imported.localTags,
+        imported.localSecretTagRecords,
+        plan.user
+      )
+    ) {
+      throw vytvorChybuZalohy(
+        "Obnova LOCAL štítků selhala.",
+        "LOCAL štítky se nepodařilo bezpečně obnovit. Poznámky nebyly importovány."
+      );
+    }
+  }
+
   if (
     typeof moznosti.predLokalnimUlozenim ===
       "function"
@@ -3970,6 +4294,10 @@ async function obnovKompletniZalohu(
     await moznosti.predLokalnimUlozenim({
       plan,
       regularNotes,
+      cloudRegularNotes,
+      localRegularNotes,
+      cloudSecretNotes,
+      localSecretNotes,
       ownerUserId
     });
   }
@@ -4030,6 +4358,10 @@ async function obnovKompletniZalohu(
     await moznosti.predReload({
       plan,
       regularNotes,
+      cloudRegularNotes,
+      localRegularNotes,
+      cloudSecretNotes,
+      localSecretNotes,
       ownerUserId
     });
   }
@@ -4215,6 +4547,7 @@ function jePlatnyManifestArchivuV4(
     vytvorMapuPrilohProZalohu(backup.notes);
   const ids = new Set();
   let soucetBajtu = 0;
+  let pocetLocalPriloh = 0;
 
   for (const polozka of manifest.attachments) {
     const id = String(polozka?.id || "").trim();
@@ -4238,13 +4571,49 @@ function jePlatnyManifestArchivuV4(
         String(polozka?.sha256 || "")
       ) ||
       !reference ||
-      String(reference.noteId) !== noteId
+      String(reference.noteId) !== noteId ||
+      (
+        polozka?.storageScope !== undefined &&
+        polozka.storageScope !==
+          NOTE_STORAGE_SCOPE_CLOUD &&
+        polozka.storageScope !==
+          NOTE_STORAGE_SCOPE_LOCAL
+      ) ||
+      (
+        polozka?.storageScope !== undefined &&
+        polozka.storageScope !==
+          reference.storageScope
+      )
     ) {
       return false;
     }
 
     ids.add(id);
     soucetBajtu += velikost;
+
+    if (
+      reference.storageScope ===
+        NOTE_STORAGE_SCOPE_LOCAL
+    ) {
+      pocetLocalPriloh += 1;
+    }
+  }
+
+  const maScopePocty =
+    manifest.cloudAttachmentCount !== undefined ||
+    manifest.localAttachmentCount !== undefined;
+
+  if (
+    maScopePocty &&
+    (
+      Number(manifest.localAttachmentCount) !==
+        pocetLocalPriloh ||
+      Number(manifest.cloudAttachmentCount) !==
+        manifest.attachments.length -
+          pocetLocalPriloh
+    )
+  ) {
+    return false;
   }
 
   return (
@@ -4257,7 +4626,8 @@ function jePlatnyManifestArchivuV4(
 
 async function ulozPrilohyArchivuV4DoCache(
   BackupExport,
-  manifest
+  manifest,
+  backup
 ) {
   const lokalni =
     window.LubaNoteAttachmentsLocal;
@@ -4287,22 +4657,39 @@ async function ulozPrilohyArchivuV4DoCache(
       );
     }
 
+    const storageScope =
+      ziskejRozsahPrilohyProZalohu(
+        polozka,
+        backup
+      );
+
     await lokalni.ulozObnovenouPrilohuDoCache({
       id: polozka.id,
       noteId: polozka.noteId,
       blob,
       mimeType: "image/jpeg",
       fileName: `${polozka.id}.jpg`,
-      storagePath: ""
+      storagePath: "",
+      pouzeLokalni:
+        storageScope === NOTE_STORAGE_SCOPE_LOCAL
     });
   }
 }
 
 
 async function pripravCloudProObnovuPrilohV4(
-  manifest
+  manifest,
+  backup
 ) {
-  if (manifest.attachments.length === 0) {
+  const cloudAttachments = manifest.attachments.filter(
+    (polozka) =>
+      ziskejRozsahPrilohyProZalohu(
+        polozka,
+        backup
+      ) !== NOTE_STORAGE_SCOPE_LOCAL
+  );
+
+  if (cloudAttachments.length === 0) {
     return true;
   }
 
@@ -4313,7 +4700,7 @@ async function pripravCloudProObnovuPrilohV4(
     );
   }
 
-  const polozky = manifest.attachments.map(
+  const polozky = cloudAttachments.map(
     (polozka) => ({
       id: polozka.id,
       noteId: polozka.noteId,
@@ -4348,12 +4735,21 @@ async function pripravCloudProObnovuPrilohV4(
 
 
 async function zaradPrilohyArchivuV4PoObnove(
-  manifest
+  manifest,
+  backup
 ) {
   const lokalni =
     window.LubaNoteAttachmentsLocal;
 
   for (const polozka of manifest.attachments) {
+    if (
+      ziskejRozsahPrilohyProZalohu(
+        polozka,
+        backup
+      ) === NOTE_STORAGE_SCOPE_LOCAL
+    ) {
+      continue;
+    }
     await lokalni?.upravPrilohu?.(
       polozka.id,
       {
@@ -4507,6 +4903,12 @@ async function importTasksApk() {
 
   ukonciKontrolu();
 
+  const poctyPriloh =
+    spocitejPrilohyPodleRozsahu(
+      manifest,
+      imported
+    );
+
   const importedAt = new Date().toISOString();
   const provedObnovu = async () => {
     try {
@@ -4517,17 +4919,20 @@ async function importTasksApk() {
           predObnovou: async () => {
             await ulozPrilohyArchivuV4DoCache(
               BackupExport,
-              manifest
+              manifest,
+              imported
             );
           },
           predLokalnimUlozenim: async () => {
             await pripravCloudProObnovuPrilohV4(
-              manifest
+              manifest,
+              imported
             );
           },
           predReload: async () => {
             await zaradPrilohyArchivuV4PoObnove(
-              manifest
+              manifest,
+              imported
             );
           }
         }
@@ -4547,7 +4952,7 @@ async function importTasksApk() {
   ) {
     window.otevriVyberovyModal({
       nadpis:
-        `Obnovit kompletní zálohu V4? Archiv obsahuje ${manifest.attachmentCount} příloh. Obnovené verze se uloží také do cloudu.`,
+        `Obnovit kompletní zálohu V4? Archiv obsahuje ${poctyPriloh.cloud} cloudových a ${poctyPriloh.local} LOCAL příloh. Cloudová data se obnoví do cloudu, LOCAL data zůstanou pouze v zařízení.`,
       moznosti: [
         {
           hodnota: "obnovit",
@@ -4598,7 +5003,7 @@ function importTasks(file) {
         ) {
           window.otevriVyberovyModal({
             nadpis:
-              "Obnovit kompletní zálohu? Obnovené verze se uloží také do cloudu.",
+              "Obnovit kompletní zálohu? Cloudová data se obnoví do cloudu, LOCAL data zůstanou pouze v zařízení.",
             moznosti: [
               {
                 hodnota: "obnovit",

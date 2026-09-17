@@ -365,6 +365,196 @@ function ulozLokalniStitkyZPameti(userId = "") {
   );
 }
 
+/*
+ * PATCH 597 – kompletní záloha LOCAL štítků.
+ * -------------------------------------------
+ * Cloudové štítky zůstávají v publicTags / secretTagRecords.
+ * Device-only štítky se exportují samostatně a při obnově se nikdy
+ * neposílají do public.tags. Secret LOCAL názvy zůstávají AES-GCM.
+ */
+function ziskejLokalniStitkyProKompletniZalohuV1(
+  userId = ""
+) {
+  const ownerId = ziskejOwnerIdLokalnichStitku();
+  const ocekavanyOwner = String(userId || "").trim();
+
+  if (
+    ownerId &&
+    ocekavanyOwner &&
+    ownerId !== ocekavanyOwner
+  ) {
+    throw new Error(
+      "LOCAL štítky patří jinému účtu. Záloha byla bezpečně zastavena."
+    );
+  }
+
+  doplnLokalniLegacyStitkyZPoznamek();
+
+  const syrove = nactiSyroveLokalniStitky();
+  const publicTags = [];
+  const secretTagRecords = [];
+
+  for (const tag of syrove) {
+    const id = String(tag?.id || "").trim();
+    const poradi = Number(tag?.sort_order);
+
+    if (!id) {
+      continue;
+    }
+
+    if (tag.is_secret === true) {
+      const encryptedName = tag.encrypted_name;
+
+      if (
+        !encryptedName ||
+        typeof encryptedName !== "object" ||
+        encryptedName.algorithm !== "AES-GCM" ||
+        !encryptedName.iv ||
+        !encryptedName.ciphertext
+      ) {
+        throw new Error(
+          "Secret LOCAL štítek nemá platná šifrovaná data. Záloha byla bezpečně zastavena."
+        );
+      }
+
+      secretTagRecords.push({
+        id,
+        encrypted_name: encryptedName,
+        is_secret: true,
+        sort_order: Number.isFinite(poradi) ? poradi : 0,
+        color: String(tag?.color || "system"),
+        created_at: tag?.created_at || null
+      });
+      continue;
+    }
+
+    const name = String(tag?.name || "").trim();
+
+    if (!name) {
+      continue;
+    }
+
+    publicTags.push({
+      id,
+      name,
+      is_secret: false,
+      sort_order: Number.isFinite(poradi) ? poradi : 0,
+      color: String(tag?.color || "system"),
+      created_at: tag?.created_at || null
+    });
+  }
+
+  return {
+    publicTags,
+    secretTagRecords
+  };
+}
+
+
+function obnovLokalniStitkyZKompletniZalohyV1(
+  publicTags,
+  secretTagRecords,
+  user
+) {
+  const userId = String(user?.id || "").trim();
+
+  if (!userId) {
+    return false;
+  }
+
+  const existujiciOwner =
+    ziskejOwnerIdLokalnichStitku();
+
+  if (existujiciOwner && existujiciOwner !== userId) {
+    console.error(
+      "Obnova LOCAL štítků byla zastavena: vlastník zařízení nesouhlasí."
+    );
+    return false;
+  }
+
+  const verejne = Array.isArray(publicTags)
+    ? publicTags
+    : [];
+  const tajne = Array.isArray(secretTagRecords)
+    ? secretTagRecords
+    : [];
+
+  const ids = new Set();
+  const zaznamy = [];
+
+  for (const [index, tag] of verejne.entries()) {
+    const id = String(tag?.id || "").trim();
+    const name = String(tag?.name || "").trim();
+    const poradi = Number(tag?.sort_order);
+
+    if (
+      !id ||
+      !name ||
+      tag?.is_secret === true ||
+      ids.has(id)
+    ) {
+      return false;
+    }
+
+    ids.add(id);
+    zaznamy.push({
+      id,
+      user_id: userId,
+      name,
+      encrypted_name: null,
+      is_secret: false,
+      sort_order: Number.isFinite(poradi) ? poradi : index,
+      color: String(tag?.color || "system"),
+      created_at: tag?.created_at || null
+    });
+  }
+
+  for (const [index, tag] of tajne.entries()) {
+    const id = String(tag?.id || "").trim();
+    const encryptedName = tag?.encrypted_name;
+    const poradi = Number(tag?.sort_order);
+
+    if (
+      !id ||
+      ids.has(id) ||
+      tag?.is_secret !== true ||
+      !encryptedName ||
+      typeof encryptedName !== "object" ||
+      encryptedName.algorithm !== "AES-GCM" ||
+      !encryptedName.iv ||
+      !encryptedName.ciphertext
+    ) {
+      return false;
+    }
+
+    ids.add(id);
+    zaznamy.push({
+      id,
+      user_id: userId,
+      name: `__secret_tag_${id}`,
+      encrypted_name: encryptedName,
+      is_secret: true,
+      sort_order: Number.isFinite(poradi)
+        ? poradi
+        : verejne.length + index,
+      color: String(tag?.color || "system"),
+      created_at: tag?.created_at || null
+    });
+  }
+
+  if (!existujiciOwner) {
+    localStorage.setItem(
+      LOCAL_TAGS_OWNER_KEY,
+      userId
+    );
+  }
+
+  return ulozSyroveLokalniStitky(
+    zaznamy,
+    userId
+  );
+}
+
 async function vytvorLokalniStitek(
   nazev,
   {
