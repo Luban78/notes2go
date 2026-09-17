@@ -11237,26 +11237,25 @@ body.lubaCardDragMode .app {
 }
 
 /* ==========================================================
-   PATCH 592 – Správa štítků nad LubaKeyboard
+   PATCH 593 – Správa štítků těsně nad LubaKeyboard
 
-   Přejmenování štítku používá vlastní LubaKeyboard. Ta je fixed a na rozdíl
-   od systémové IME nezmenšuje visualViewport, takže centrovaný modal mohl
-   pokračovat pod klávesnici. Při otevřené LubaKeyboard proto využijeme její
-   skutečně změřenou --ln-lk-height, modal přesuneme do volného prostoru nad
-   klávesnicí a vnitřní seznam necháme scrollovat. Do logiky štítků ani do
-   keyboard handoffu 570/574 se tímto patchem nesahá.
+   PATCH 592 modal sice bezpečně dostal nad klávesnici, ale na vysokém
+   displeji ho přilepil až k hornímu okraji. Uživatel chce zachovat přirozenou
+   vazbu na právě otevřenou LubaKeyboard: spodní hrana modalu má být jen 5 px
+   nad klávesnicí. Výšku stále limitujeme podle skutečné --ln-lk-height, takže
+   při delším seznamu se scrolluje obsah a modal nikdy nevleze pod klávesnici.
    ========================================================== */
 @media (max-width: 899px) {
   body.ln-luba-klavesnice-open .manageTagsModal:not([hidden]) {
-    align-items: flex-start;
+    align-items: flex-end;
     padding-top: max(12px, env(safe-area-inset-top));
-    padding-bottom: calc(var(--ln-lk-height, 260px) + 12px);
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
   }
 
   body.ln-luba-klavesnice-open .manageTagsModal:not([hidden]) .manageTagsContent {
-    max-height: max(
-      180px,
-      calc(100dvh - var(--ln-lk-height, 260px) - max(24px, env(safe-area-inset-top)))
+    min-height: 0;
+    max-height: calc(
+      100dvh - var(--ln-lk-height, 260px) - 5px - max(12px, env(safe-area-inset-top))
     );
   }
 

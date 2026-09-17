@@ -893,3 +893,13 @@ body.ln-lk-old-android-nav .ln-lk-smartbar .ln-lk-suggestions {
   border-color: var(--color-border, #6f6678) !important;
   color: var(--color-text, #fff) !important;
 }
+
+/* ==========================================================
+   PATCH 593 – smartbar schránka pro název poznámky / štítku
+   ========================================================== */
+.ln-lk-smartbar .ln-lk-clipboard-action {
+  padding-inline: 2px;
+  font-size: clamp(10.5px, 3vw, 13px);
+  font-weight: 700;
+  white-space: nowrap;
+}

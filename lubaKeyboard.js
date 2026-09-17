@@ -658,8 +658,146 @@
     return `${chars.slice(0, vlevo).join("")}...${chars.slice(-vpravo).join("")}`;
   }
 
+  /* ==========================================================
+     PATCH 593 – schránka pro název poznámky a názvy štítků
+
+     Android selection toolbar není při vlastní LubaKeyboard spolehlivý:
+     WebView může text označit, ale systémové Kopírovat/Vložit se vůbec
+     neukáže. Pro dva konkrétní typy polí, kde to uživatel potřebuje, proto
+     používáme prostřední smartbar jako jisté ovládání schránky:
+       Vše | Kopírovat | Vložit
+
+     Tělo poznámky se NEMĚNÍ a dál používá vlastní V2 selection menu.
+     Vyhledávání ani jiná data-luba-keyboard-field pole se tím také nemění.
+     ========================================================== */
+  let lubaLokalniSchranka = "";
+
+  function jeTagNazevPole(pole) {
+    const typ = String(pole?.dataset?.lubaKeyboardField || "");
+    return typ === "tag-rename" || typ === "tag-editor-new" || typ === "tag-modal-new";
+  }
+
+  function jeSchrankaCil() {
+    return jeAktivniNazev() || (jeAktivniTextovePole() && jeTagNazevPole(aktivniTextovePole));
+  }
+
+  function vyberVseSchrankaCile() {
+    if (jeAktivniNazev()) {
+      const state = ziskejVyberNazvu();
+      if (!state) return false;
+      nastavVyberNazvu(state.title, 0, state.text.length);
+      return true;
+    }
+
+    if (jeAktivniTextovePole() && jeTagNazevPole(aktivniTextovePole)) {
+      const state = ziskejStavTextovehoPole();
+      if (!state) return false;
+      try { state.pole.setSelectionRange(0, state.text.length); } catch (_error) { return false; }
+      return true;
+    }
+
+    return false;
+  }
+
+  function ziskejTextSchrankaCile() {
+    if (jeAktivniNazev()) {
+      const state = ziskejVyberNazvu();
+      if (!state) return "";
+      return state.start !== state.end
+        ? state.text.slice(state.start, state.end)
+        : state.text;
+    }
+
+    if (jeAktivniTextovePole() && jeTagNazevPole(aktivniTextovePole)) {
+      const state = ziskejStavTextovehoPole();
+      if (!state) return "";
+      return state.start !== state.end
+        ? state.text.slice(state.start, state.end)
+        : state.text;
+    }
+
+    return "";
+  }
+
+  async function zapisDoSchrankyLuba(text) {
+    const hodnota = String(text || "");
+    if (!hodnota) return false;
+
+    const plugin = window.Capacitor?.Plugins?.Clipboard;
+    if (plugin?.write) {
+      try {
+        await plugin.write({ string: hodnota });
+        lubaLokalniSchranka = hodnota;
+        return true;
+      } catch (_error) {}
+    }
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(hodnota);
+        lubaLokalniSchranka = hodnota;
+        return true;
+      } catch (_error) {}
+    }
+
+    lubaLokalniSchranka = hodnota;
+    return true;
+  }
+
+  async function prectiZeSchrankyLuba() {
+    const plugin = window.Capacitor?.Plugins?.Clipboard;
+    if (plugin?.read) {
+      try {
+        const vysledek = await plugin.read();
+        const text = String(vysledek?.value || "");
+        if (text) lubaLokalniSchranka = text;
+        return text;
+      } catch (_error) {}
+    }
+
+    if (navigator.clipboard?.readText) {
+      try {
+        const text = String(await navigator.clipboard.readText() || "");
+        if (text) lubaLokalniSchranka = text;
+        return text;
+      } catch (_error) {}
+    }
+
+    return lubaLokalniSchranka;
+  }
+
+  async function kopirujSchrankaCil() {
+    return zapisDoSchrankyLuba(ziskejTextSchrankaCile());
+  }
+
+  async function vlozSchrankaCil() {
+    const text = String(await prectiZeSchrankyLuba() || "").replace(/[\r\n]+/g, " ");
+    if (!text) return false;
+
+    if (jeAktivniNazev()) return vlozDoNazvu(text);
+    if (jeAktivniTextovePole() && jeTagNazevPole(aktivniTextovePole)) {
+      return vlozDoTextovehoPole(text, "insertFromPaste");
+    }
+    return false;
+  }
+
+  function vykresliSchrankaAkce() {
+    if (!navrhyBox || !jeSchrankaCil()) return false;
+    navrhyBox.hidden = false;
+    navrhyBox.replaceChildren();
+
+    navrhyBox.append(
+      button("Vše", "clipboard-select-all", "", "ln-lk-suggestion ln-lk-clipboard-action", "Vybrat celý název"),
+      button("Kopírovat", "clipboard-copy", "", "ln-lk-suggestion ln-lk-clipboard-action", "Kopírovat název nebo označený text"),
+      button("Vložit", "clipboard-paste", "", "ln-lk-suggestion ln-lk-clipboard-action", "Vložit text ze schránky")
+    );
+    return true;
+  }
+
   function aktualizujNavrhy() {
     if (!navrhyBox) return;
+    if (vykresliSchrankaAkce()) return;
+
     const layout = aktualniLayout();
     const podporovano = mode === "letters" && !layout.compose && layout.id !== "emoji" && layout.id !== "unicode";
     navrhyBox.hidden = !podporovano;
@@ -2061,6 +2199,9 @@
       case "hide": skryj(); break;
       case "candidate": candidateAction(value); break;
       case "suggestion": suggestionAction(value); break;
+      case "clipboard-select-all": vyberVseSchrankaCile(); break;
+      case "clipboard-copy": void kopirujSchrankaCil(); break;
+      case "clipboard-paste": void vlozSchrankaCil(); break;
       case "unicode-hex": unicodeBuffer = (unicodeBuffer + value).slice(0, 6); aktualizujCompose(); break;
       case "unicode-back": unicodeBuffer = unicodeBuffer.slice(0, -1); aktualizujCompose(); break;
       case "unicode-clear": unicodeBuffer = ""; aktualizujCompose(); break;
