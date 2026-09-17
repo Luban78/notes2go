@@ -38,6 +38,7 @@
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     gestures: "Gesta – pointer / touch / click",
+    keyboardWatch: "Klávesnice – Gboard / focus watch",
     bulletDrag: "Bullet – drag / hierarchie",
     cardDrag: "Karty – reálný drag + tuning",
     cardDragLab: "Karty – Drag Lab (syntetický)",
@@ -599,6 +600,200 @@
     };
   }
 
+
+
+  /* ==========================================================
+     PATCH 582 – PASIVNÍ KEYBOARD WATCH
+     ----------------------------------------------------------
+     Sporadická systémová IME se může objevit jen několikrát denně.
+     Diagnostika proto drží malý kruhový buffer i se zavřeným Debug Hubem.
+     Nic neopravuje, nepřepíná focus a nevolá hide/show klávesnice.
+     Zachytí jen pořadí focus/pointer/viewport událostí a stav veřejného
+     LubaKeyboard API. Po problému stačí otevřít Debug Hub a spustit modul
+     „Klávesnice – Gboard / focus watch“; historie už v něm bude.
+     ========================================================== */
+  const KEYBOARD_WATCH_MAX = 180;
+  const keyboardWatchBuffer = [];
+  let keyboardWatchSelectionCas = 0;
+  let keyboardWatchSpusten = false;
+
+  function keyboardWatchCas() {
+    const ted = new Date();
+    return [
+      String(ted.getHours()).padStart(2, "0"),
+      String(ted.getMinutes()).padStart(2, "0"),
+      String(ted.getSeconds()).padStart(2, "0")
+    ].join(":") + `.${String(ted.getMilliseconds()).padStart(3, "0")}`;
+  }
+
+  function jeKeyboardWatchCil(prvek) {
+    if (!(prvek instanceof Element)) return false;
+
+    const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
+    if (editor && (prvek === editor || editor.contains(prvek))) return true;
+    if (prvek.id === "modalTitle") return true;
+    if (prvek.matches?.("input, textarea, [contenteditable='true'], [contenteditable='plaintext-only']")) return true;
+    if (prvek.closest?.("input, textarea, [contenteditable='true'], [contenteditable='plaintext-only']")) return true;
+    return false;
+  }
+
+  function jeEditorKeyboardWatchAktivni() {
+    const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
+    return Boolean(editor?.isConnected);
+  }
+
+  function keyboardWatchAtributy(prvek) {
+    if (!(prvek instanceof Element)) return "attrs=-";
+
+    const contenteditable = prvek.getAttribute("contenteditable");
+    return [
+      `inputmode=${prvek.getAttribute("inputmode") ?? "-"}`,
+      `ce=${contenteditable ?? (prvek.isContentEditable ? "true*" : "-")}`,
+      `vkp=${prvek.getAttribute("virtualkeyboardpolicy") ?? "-"}`,
+      `readonly=${prvek.hasAttribute("readonly") ? "Y" : "N"}`,
+      `disabled=${prvek.hasAttribute("disabled") ? "Y" : "N"}`
+    ].join(",");
+  }
+
+  function keyboardWatchStav(target = null) {
+    const luba = window.LubaNoteKeyboard;
+    const aktivni = document.activeElement;
+    const cil = target instanceof Element && jeKeyboardWatchCil(target)
+      ? target
+      : (aktivni instanceof Element ? aktivni : null);
+    const vv = window.visualViewport;
+
+    let zdroj = "?";
+    let otevrena = "?";
+    let cilPsani = "?";
+
+    try { zdroj = luba?.ziskejZdroj?.() || "?"; } catch (_chyba) {}
+    try { otevrena = luba?.jeOtevrena?.() ? "OPEN" : "hidden"; } catch (_chyba) {}
+    try { cilPsani = luba?.ziskejCilPsani?.() || "?"; } catch (_chyba) {}
+
+    return [
+      `source=${zdroj}`,
+      `luba=${otevrena}`,
+      `cil=${cilPsani}`,
+      `active=${popisPrvku(aktivni)}`,
+      `target=${popisPrvku(target)}`,
+      keyboardWatchAtributy(cil),
+      `inner=${Math.round(window.innerWidth)}x${Math.round(window.innerHeight)}`,
+      `vv=${vv ? `${Math.round(vv.width)}x${Math.round(vv.height)}@${Math.round(vv.offsetTop)}` : "N/A"}`,
+      `docFocus=${document.hasFocus() ? "Y" : "N"}`,
+      `visibility=${document.visibilityState}`
+    ].join(" | ");
+  }
+
+  function zapisKeyboardWatch(typ, target = null, detail = "") {
+    const radek = [
+      keyboardWatchCas(),
+      typ,
+      keyboardWatchStav(target),
+      detail
+    ].filter(Boolean).join(" | ");
+
+    keyboardWatchBuffer.push(radek);
+    if (keyboardWatchBuffer.length > KEYBOARD_WATCH_MAX) {
+      keyboardWatchBuffer.splice(0, keyboardWatchBuffer.length - KEYBOARD_WATCH_MAX);
+    }
+
+    document.dispatchEvent(new CustomEvent("lubanote:keyboard-watch-record", {
+      detail: { radek }
+    }));
+  }
+
+  function spustPasivniKeyboardWatch() {
+    if (keyboardWatchSpusten) return;
+    keyboardWatchSpusten = true;
+
+    const logPointer = (typ, event) => {
+      if (jeDebugPrvek(event.target)) return;
+      if (!jeEditorKeyboardWatchAktivni() && !jeKeyboardWatchCil(event.target)) return;
+      zapisKeyboardWatch(typ, event.target, event.pointerType ? `pointer=${event.pointerType}` : "");
+    };
+
+    document.addEventListener("pointerdown", event => logPointer("POINTERDOWN", event), true);
+    document.addEventListener("pointerup", event => logPointer("POINTERUP", event), true);
+    document.addEventListener("focusin", event => {
+      if (jeKeyboardWatchCil(event.target) || jeEditorKeyboardWatchAktivni()) {
+        zapisKeyboardWatch("FOCUSIN", event.target);
+      }
+    }, true);
+    document.addEventListener("focusout", event => {
+      if (jeKeyboardWatchCil(event.target) || jeEditorKeyboardWatchAktivni()) {
+        zapisKeyboardWatch("FOCUSOUT", event.target, `related=${popisPrvku(event.relatedTarget)}`);
+      }
+    }, true);
+    document.addEventListener("beforeinput", event => {
+      if (jeKeyboardWatchCil(event.target)) {
+        zapisKeyboardWatch(
+          "BEFOREINPUT",
+          event.target,
+          `inputType=${event.inputType || "-"} data=${zkratText(event.data, 16)}`
+        );
+      }
+    }, true);
+    document.addEventListener("selectionchange", () => {
+      const ted = performance.now();
+      if (ted - keyboardWatchSelectionCas < 120) return;
+      const aktivni = document.activeElement;
+      if (!jeKeyboardWatchCil(aktivni)) return;
+      keyboardWatchSelectionCas = ted;
+      zapisKeyboardWatch("SELECTION", aktivni);
+    }, true);
+
+    const zapisViewport = (typ) => zapisKeyboardWatch(typ, document.activeElement);
+    window.addEventListener("resize", () => zapisViewport("WINDOW RESIZE"), { passive: true });
+    window.visualViewport?.addEventListener("resize", () => zapisViewport("VV RESIZE"), { passive: true });
+    window.visualViewport?.addEventListener("scroll", () => zapisViewport("VV SCROLL"), { passive: true });
+    window.addEventListener("focus", () => zapisViewport("WINDOW FOCUS"), { passive: true });
+    window.addEventListener("blur", () => zapisViewport("WINDOW BLUR"), { passive: true });
+    window.addEventListener("pageshow", () => zapisViewport("PAGESHOW"), { passive: true });
+    window.addEventListener("pagehide", () => zapisViewport("PAGEHIDE"), { passive: true });
+    document.addEventListener("visibilitychange", () => zapisViewport("VISIBILITY"), true);
+
+    try {
+      const observer = new MutationObserver(zmeny => {
+        for (const zmena of zmeny) {
+          if (!jeKeyboardWatchCil(zmena.target)) continue;
+          zapisKeyboardWatch(
+            `ATTR ${zmena.attributeName}`,
+            zmena.target,
+            `old=${zmena.oldValue ?? "-"}`
+          );
+        }
+      });
+      observer.observe(document.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeOldValue: true,
+        attributeFilter: ["inputmode", "contenteditable", "virtualkeyboardpolicy", "readonly", "disabled"]
+      });
+    } catch (_chyba) {}
+
+    zapisKeyboardWatch("WATCH READY", document.activeElement);
+  }
+
+  function spustKeyboardWatch() {
+    const uklidy = [];
+    const historie = keyboardWatchBuffer.slice();
+
+    zapis(`START KEYBOARD WATCH | historie=${historie.length}/${KEYBOARD_WATCH_MAX}`);
+    historie.forEach(radek => zapis(`HIST | ${radek}`));
+
+    pridejPosluchac(
+      uklidy,
+      document,
+      "lubanote:keyboard-watch-record",
+      event => zapis(`LIVE | ${event.detail?.radek || ""}`),
+      true
+    );
+
+    return () => {
+      uklidy.forEach(uklid => uklid());
+    };
+  }
 
   function spustBulletDrag() {
     const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
@@ -1387,6 +1582,8 @@
       stopAktivnihoModulu = spustEditorSelection();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
+    } else if (aktivniModul === "keyboardWatch") {
+      stopAktivnihoModulu = spustKeyboardWatch();
     } else if (aktivniModul === "bulletDrag") {
       stopAktivnihoModulu = spustBulletDrag();
     } else if (aktivniModul === "cardDrag") {
@@ -1890,6 +2087,11 @@ async function zkopirujTagVdReport(tlacitko) {
       selectModulu.value = "gestures";
       spustModul();
     },
+    startKeyboardWatch: () => {
+      otevriHub();
+      selectModulu.value = "keyboardWatch";
+      spustModul();
+    },
     startDragLab: () => {
       otevriHub();
       selectModulu.value = "cardDragLab";
@@ -1903,5 +2105,15 @@ async function zkopirujTagVdReport(tlacitko) {
   };
   
 
+  window.LubaNoteKeyboardWatch = Object.freeze({
+    radky: () => keyboardWatchBuffer.slice(),
+    vymazat: () => {
+      keyboardWatchBuffer.length = 0;
+      zapisKeyboardWatch("WATCH RESET", document.activeElement);
+    },
+    stav: () => keyboardWatchStav(document.activeElement)
+  });
+
+  spustPasivniKeyboardWatch();
   spustStartupAutomatickyPokudJeTreba();
 })();
