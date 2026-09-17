@@ -131,6 +131,7 @@ window.LubaNoteLanguagePacks.push({
     "sync.synced": "✓ Synchronizováno",
     "sync.syncing": "⟳ Synchronizuji…",
     "sync.pending": "⏳ Čeká na synchronizaci",
+    "sync.localOnly": "📱 Pouze v zařízení",
     "sync.authExpired": "⚠ Přihlášení vypršelo",
     "sync.conflict": "⚠ Konflikt",
 

@@ -858,6 +858,80 @@ function nastavKoncovyStavSynchronizaceUI() {
   );
 }
 
+/* PATCH 586 – LOCAL MODE HARD GATE.
+   Aktivní prostor "Toto zařízení" nesmí spouštět obsahový notes sync.
+   Účet, Demo a plán dál ověřuje supabaseClient.js; tato brána se týká
+   pouze obsahu poznámek / targeted V2 / bootstrapu / reconcile. */
+function jeAktivniRezimPouzeTotoZarizeni() {
+  return (
+    window.LubaNoteStorageScope?.ziskejAktivni?.() ===
+    "local"
+  );
+}
+
+function nastavStavPouzeTotoZarizeni() {
+  nastavStavSynchronizaceUI("local");
+}
+
+let probihajiciLokalniStartBezObsahovehoSyncu = null;
+
+async function dokoncitLokalniStartBezObsahovehoSyncu() {
+  if (probihajiciLokalniStartBezObsahovehoSyncu) {
+    return probihajiciLokalniStartBezObsahovehoSyncu;
+  }
+
+  probihajiciLokalniStartBezObsahovehoSyncu =
+    (async () => {
+      nastavStavPouzeTotoZarizeni();
+
+      /* Lokální servisní kroky zachováme, ale žádný obsah neposíláme
+         ani nestahujeme ze Supabase. */
+      try {
+        if (
+          typeof window.LubaNoteRecurring
+            ?.migrujStareOpakovaniPlanneru === "function"
+        ) {
+          await window.LubaNoteRecurring
+            .migrujStareOpakovaniPlanneru();
+        }
+      } catch (error) {
+        console.warn(
+          "Local režim: migrace opakování se dokončí později:",
+          error
+        );
+      }
+
+      oznamObsahPripravenyProSplash();
+
+      try {
+        if (
+          typeof obnovNotifikaceOpakovanychPoznamek ===
+          "function"
+        ) {
+          await obnovNotifikaceOpakovanychPoznamek();
+        }
+      } catch (error) {
+        console.warn(
+          "Local režim: obnova lokálních notifikací se dokončí později:",
+          error
+        );
+      }
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "LOCAL",
+        "LOCAL MODE READY | content sync disabled"
+      );
+
+      return true;
+    })();
+
+  try {
+    return await probihajiciLokalniStartBezObsahovehoSyncu;
+  } finally {
+    probihajiciLokalniStartBezObsahovehoSyncu = null;
+  }
+}
+
 const frontyServerovychZapisu = new Map();
 let casovacVyreseniBeznehoReviznihoKonfliktu = null;
 
@@ -3772,6 +3846,15 @@ async function spustSafeBootstrapV2(
   userId,
   { automaticky = false } = {}
 ) {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    window.LubaNoteStartupDiag?.zapis?.(
+      "LOCAL",
+      "SAFE BOOTSTRAP SKIP | local mode"
+    );
+    return false;
+  }
+
   if (
     safeBootstrapPraveBezi ||
     !userId ||
@@ -4247,6 +4330,11 @@ async function uploadExistingReconcileWinnerV2(noteId) {
 }
 
 async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   if (!userId || !navigator.onLine) {
     return false;
   }
@@ -4683,6 +4771,11 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
  * get_notes_safe(). Full snapshot tak zůstává jen recovery cestou.
  */
 async function synchronizujVzdalenePrivateDeltaV2(userId) {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   if (!userId || !navigator.onLine) {
     return false;
   }
@@ -8028,6 +8121,11 @@ async function potvrdCilenePrivateZapisyV2(userId) {
 }
 
 async function synchronizujCilenePrivateZmenyV2() {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   if (probihajiciCilenyPrivateV2) {
     return probihajiciCilenyPrivateV2;
   }
@@ -8287,6 +8385,12 @@ function spustKontroluNavratuInternetu() {
 
   casovacKontrolyNavratuInternetu =
     setInterval(() => {
+      if (jeAktivniRezimPouzeTotoZarizeni()) {
+        zastavKontroluNavratuInternetu();
+        nastavStavPouzeTotoZarizeni();
+        return;
+      }
+
       if (!lokalniZmenaCekaNaPotvrzeniServerem) {
         zastavKontroluNavratuInternetu();
         return;
@@ -8333,6 +8437,12 @@ function potvrzLokalniZmenuNaServeru() {
 }
 
 async function synchronizujCekajiciLokalniZmenu() {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    zastavKontroluNavratuInternetu();
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   if (!lokalniZmenaCekaNaPotvrzeniServerem) {
     return true;
   }
@@ -8578,6 +8688,11 @@ async function provedLokalniZmenuASynchronizuj(
 }
 
 async function spustRychlySyncPoznamekBezpecne() {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   if (
     probihajiciLokalniZmena ||
     lokalniZmenaRezervovana ||
@@ -8770,6 +8885,27 @@ async function spustRychlySyncPoznamekBezpecne() {
 }
 
 async function spustStartSyncBezpecne() {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+
+    /* Splash pustíme až po skutečné kontrole účtu v tomto běhu.
+       Před ní se local režim pouze zdrží – nikdy kvůli tomu nespustí
+       obsahový sync ani neobejde Demo / account-status gate. */
+    if (
+      window.LubaNoteSupabase
+        ?.jeAktivniUcetPotvrzenProTentoBeh?.() !== true
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "LOCAL",
+        "LOCAL MODE WAIT | account gate"
+      );
+      return false;
+    }
+
+    synchronizaceOdlozenaKvuliLokalniZmene = false;
+    return dokoncitLokalniStartBezObsahovehoSyncu();
+  }
+
   if (
     probihajiciLokalniZmena ||
     lokalniZmenaRezervovana ||
@@ -8986,6 +9122,11 @@ async function spustStartSyncBezpecne() {
 async function synchronizujPoznamkyTed(
   noteId = null
 ) {
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    nastavStavPouzeTotoZarizeni();
+    return false;
+  }
+
   clearTimeout(
     casovacSynchronizacePoLokalniZmene
   );
@@ -9140,6 +9281,12 @@ function naplanujSyncPoAktivaci(
 ) {
   clearTimeout(casovacSyncuPoAktivaci);
 
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    casovacSyncuPoAktivaci = null;
+    nastavStavPouzeTotoZarizeni();
+    return;
+  }
+
   casovacSyncuPoAktivaci =
     setTimeout(() => {
       casovacSyncuPoAktivaci = null;
@@ -9181,6 +9328,36 @@ function naplanujSyncPoAktivaci(
         });
     }, Math.max(0, Number(zpozdeni) || 0));
 }
+
+/* PATCH 586 – přepnutí pracovního prostoru řídí i obsahový sync.
+   LOCAL: zrušíme pouze časovače/retry, dluhy nemažeme.
+   CLOUD: zachované dluhy se bezpečně dokončí standardním start flow. */
+window.addEventListener(
+  "lubanote:storage-scope-change",
+  (event) => {
+    const scope = event.detail?.scope;
+
+    if (scope === "local") {
+      clearTimeout(casovacSyncuPoAktivaci);
+      casovacSyncuPoAktivaci = null;
+      clearTimeout(casovacSynchronizacePoLokalniZmene);
+      casovacSynchronizacePoLokalniZmene = null;
+      zastavKontroluNavratuInternetu();
+      nastavStavPouzeTotoZarizeni();
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "LOCAL",
+        "LOCAL MODE ON | content sync timers stopped"
+      );
+      return;
+    }
+
+    nastavStavSynchronizaceUI("pending");
+    setTimeout(() => {
+      spustStartSyncBezpecne().catch(() => {});
+    }, 0);
+  }
+);
 
 /*
  * Offline start nikdy nečeká na síť.

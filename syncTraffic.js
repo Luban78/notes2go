@@ -116,6 +116,32 @@
   }
 
   function vykresli() {
+    const localAktivni =
+      window.LubaNoteStorageScope
+        ?.ziskejAktivni?.() === "local";
+
+    /* PATCH 586 – v LOCAL prostoru nesmí stará čísla z posledního
+       cloud syncu vypadat jako právě probíhající přenos. */
+    if (localAktivni) {
+      if (rxEl) rxEl.textContent = "↓ —";
+      if (txEl) txEl.textContent = "↑ —";
+      if (egressEl) {
+        egressEl.textContent = "E —";
+        egressEl.title = "Obsahový cloud sync je vypnutý.";
+      }
+
+      if (barEl) {
+        barEl.classList.remove("syncTrafficBarActive");
+        barEl.dataset.syncActive = "0";
+        barEl.dataset.storageScope = "local";
+      }
+      return;
+    }
+
+    if (barEl) {
+      delete barEl.dataset.storageScope;
+    }
+
     const rx = hloubkaSyncu > 0 ? aktualniRx : posledniRx;
     const tx = hloubkaSyncu > 0 ? aktualniTx : posledniTx;
 
@@ -287,6 +313,11 @@
       zdroj
     );
   }
+
+  window.addEventListener(
+    "lubanote:storage-scope-change",
+    () => vykresli()
+  );
 
   window.LubaNoteSyncTraffic = {
     fetch: mereneFetch,

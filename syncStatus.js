@@ -25,6 +25,10 @@
       klic: "sync.pending",
       fallback: "⏳ Čeká na synchronizaci"
     },
+    local: {
+      klic: "sync.localOnly",
+      fallback: "📱 Pouze v zařízení"
+    },
     "auth-expired": {
       klic: "sync.authExpired",
       fallback: "⚠ Přihlášení vypršelo"
@@ -71,6 +75,23 @@
   }
 
   function nastavStav(stav) {
+    const localAktivni =
+      window.LubaNoteStorageScope
+        ?.ziskejAktivni?.() === "local";
+
+    /* PATCH 586 – doběh staršího cloud requestu nesmí po přepnutí
+       přepsat LOCAL stav na „Synchronizováno“. Auth-expired zůstává
+       nadřazený, protože účet je povinný i v režimu pouze zařízení. */
+    if (
+      localAktivni &&
+      stav !== "auth-expired" &&
+      stav !== "local"
+    ) {
+      aktualniStav = "local";
+      vykresli();
+      return;
+    }
+
     if (stav === "restore") {
       aktualniStav = posledniStabilniStav;
       vykresli();
@@ -125,7 +146,26 @@
     }
   );
 
-  /* První stav musí být vidět i před prvním sync eventem. */
+  window.addEventListener(
+    "lubanote:storage-scope-change",
+    (event) => {
+      if (event.detail?.scope === "local") {
+        nastavStav("local");
+      } else {
+        nastavStav("pending");
+      }
+    }
+  );
+
+  /* První stav musí odpovídat i uloženému LOCAL prostoru. */
+  if (
+    window.LubaNoteStorageScope
+      ?.ziskejAktivni?.() === "local"
+  ) {
+    aktualniStav = "local";
+    posledniStabilniStav = "local";
+  }
+
   vykresli();
 
   window.LubaNoteSyncStatus = {

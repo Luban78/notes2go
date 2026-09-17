@@ -647,6 +647,11 @@ let aktualniStavUctu = null;
 let aktualniPristupUctu = null;
 let posledniLimitModalAt = 0;
 
+/* PATCH 586 – živý příznak, že účet prošel aktuální kontrolou přístupu.
+   Local režim ho používá jen jako bezpečnou bránu pro zobrazení appky
+   bez obsahového syncu. Nejde o náhradu serverové kontroly účtu. */
+let aktivniUcetPotvrzenProTentoBeh = false;
+
 /* PATCH 556 – aktivní účet bez hlavního šifrovacího hesla se
    nepustí do aplikace. Kontext držíme jen v paměti do dokončení
    povinného onboardingu. */
@@ -1025,6 +1030,8 @@ async function zobrazLokalniAplikaci() {
 }
 
 function pripravLoginFormular() {
+  aktivniUcetPotvrzenProTentoBeh = false;
+
   /*
    * PRIVACY LOCK:
    * Lokální poznámky zůstávají po odhlášení uložené kvůli offline-first
@@ -1074,6 +1081,7 @@ function zobrazPrihlaseni(
 }
 
 function zobrazStavUctu(stav) {
+  aktivniUcetPotvrzenProTentoBeh = false;
   aktualizujInfoPlanuVMenu(null);
 
   /* Stejný privacy lock platí i pro pending/rejected/suspended obrazovku. */
@@ -1419,6 +1427,7 @@ async function povolAktivniUcet(
   }
 
   aktualniPristupUctu = stav || aktualniPristupUctu;
+  aktivniUcetPotvrzenProTentoBeh = true;
 
   if (aktualniPristupUctu?.ok) {
     ulozLokalniCachePristupu(
@@ -2344,6 +2353,8 @@ window.LubaNoteSupabase = {
   nactiStavPristupu,
   ziskejAktualniPristup: () =>
     aktualniPristupUctu || nactiLokalniCachePristupu(),
+  jeAktivniUcetPotvrzenProTentoBeh: () =>
+    aktivniUcetPotvrzenProTentoBeh === true,
   zkontrolujLimitNovePoznamky
 };
 

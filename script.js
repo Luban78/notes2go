@@ -211,10 +211,22 @@ const storageScopeMenuIcon =
   document.getElementById("storageScopeMenuIcon");
 const storageScopeMenuLabel =
   document.getElementById("storageScopeMenuLabel");
+const notesModuleButton =
+  document.getElementById("notesModuleButton");
 const notesModuleText =
   document.querySelector(
     "#notesModuleButton .moduleTabText"
   );
+let notesStorageScopeIcon =
+  document.getElementById("notesStorageScopeIcon");
+
+if (notesModuleButton && !notesStorageScopeIcon) {
+  notesStorageScopeIcon = document.createElement("span");
+  notesStorageScopeIcon.id = "notesStorageScopeIcon";
+  notesStorageScopeIcon.className = "notesStorageScopeIcon";
+  notesStorageScopeIcon.setAttribute("aria-hidden", "true");
+  notesModuleButton.append(notesStorageScopeIcon);
+}
 
 const LOCAL_SCOPE_NOTICE_KEY =
   "lubanoteLocalScopeNoticeSeenV1";
@@ -282,10 +294,16 @@ function aktualizujUiRozsahuUlozeni() {
 
   if (notesModuleText) {
     notesModuleText.textContent =
-      `${prelozRozsahUlozeni(
+      prelozRozsahUlozeni(
         "modules.notes",
         "Poznámky"
-      )} ${ikona}`;
+      );
+  }
+
+  if (notesStorageScopeIcon) {
+    notesStorageScopeIcon.textContent = ikona;
+    notesStorageScopeIcon.dataset.scope =
+      lokalni ? "local" : "cloud";
   }
 
   storageScopeMenuButton?.setAttribute(

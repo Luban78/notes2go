@@ -941,6 +941,19 @@ body {
   white-space: nowrap;
 }
 
+/* PATCH 586 – stav úložiště není součást textu tlačítka.
+   Samostatná ikona je díky tomu na mobilu výrazně čitelnější. */
+.notesStorageScopeIcon {
+  flex: 0 0 auto;
+  font-size: 1.42em;
+  line-height: 1;
+  transform: translateY(-0.02em);
+}
+
+.notesStorageScopeIcon[data-scope="local"] {
+  font-size: 1.52em;
+}
+
 /* ---------- HLEDÁNÍ + AKCE ---------- */
 
 .searchRow {
@@ -9827,6 +9840,10 @@ body.pdfViewerOpen {
   content: "⏳";
 }
 
+.syncStatusText[data-state="local"]::after {
+  content: "📱";
+}
+
 .syncStatusText[data-state="auth-expired"]::after {
   content: "⚠ Auth";
 }
@@ -9850,6 +9867,10 @@ body.pdfViewerOpen {
 
 .syncStatusText[data-state="pending"] {
   color: #ffc35f;
+}
+
+.syncStatusText[data-state="local"] {
+  color: #73ccff;
 }
 
 .syncStatusText[data-state="auth-expired"] {

@@ -125,6 +125,7 @@ window.LubaNoteLanguagePacks.push({
     "sync.synced": "✓ Synced",
     "sync.syncing": "⟳ Syncing…",
     "sync.pending": "⏳ Waiting to sync",
+    "sync.localOnly": "📱 This device only",
     "sync.authExpired": "⚠ Sign-in expired",
     "sync.conflict": "⚠ Conflict",
 
