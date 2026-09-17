@@ -10,6 +10,473 @@ const DEFAULT_TAGS = ["code", "důležité", "projekt"];
 let syncedTags = [];
 
 /*
+ * PATCH 591 – LOCAL ŠTÍTKY JSOU SAMOSTATNÁ DEVICE-ONLY DATA.
+ * ----------------------------------------------------------
+ * V prostoru 📱 Toto zařízení nesmí vytvoření / přejmenování / barva /
+ * pořadí / smazání štítku volat tabulku public.tags. Lokální štítky mají
+ * vlastní malý registr v localStorage, svázaný se stejným ownerem jako
+ * lokální poznámky. Cloudové a lokální štítky se záměrně nemíchají.
+ *
+ * Secret LOCAL štítky se do registru NIKDY neukládají pod plaintext názvem.
+ * Ukládá se pouze AES-GCM encrypted_name a technické __secret_tag_<id>.
+ */
+const LOCAL_TAGS_STORAGE_KEY = "lubanoteLocalTagsV1";
+const LOCAL_TAGS_OWNER_KEY = "lubanoteLocalOwnerUserId";
+
+function jeAktivniLokalniProstorStitku() {
+  return (
+    window.LubaNoteStorageScope
+      ?.ziskejAktivni?.() === "local"
+  );
+}
+
+function jeLokalniStitek(tag) {
+  return (
+    tag?.local_only === true ||
+    tag?.storageScope === "local"
+  );
+}
+
+function jeLokalniPoznamkaProStitky(note) {
+  try {
+    if (
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(note) === true
+    ) {
+      return true;
+    }
+  } catch (_error) {}
+
+  return note?.storageScope === "local";
+}
+
+function patriPoznamkaKeStitkuPodleProstoru(note, tag) {
+  return (
+    jeLokalniPoznamkaProStitky(note) ===
+    jeLokalniStitek(tag)
+  );
+}
+
+function ziskejOwnerIdLokalnichStitku() {
+  return String(
+    localStorage.getItem(LOCAL_TAGS_OWNER_KEY) || ""
+  ).trim();
+}
+
+function nactiSyroveLokalniStitky() {
+  const ownerId = ziskejOwnerIdLokalnichStitku();
+
+  if (!ownerId) {
+    return [];
+  }
+
+  try {
+    const raw = localStorage.getItem(
+      LOCAL_TAGS_STORAGE_KEY
+    );
+
+    if (!raw) {
+      return [];
+    }
+
+    const payload = JSON.parse(raw);
+
+    if (
+      !payload ||
+      String(payload.userId || "") !== ownerId ||
+      !Array.isArray(payload.tags)
+    ) {
+      return [];
+    }
+
+    return payload.tags
+      .filter((tag) => tag && tag.id)
+      .map((tag, index) => {
+        const poradi = Number(tag.sort_order);
+        const jeTajny = tag.is_secret === true;
+        const id = String(tag.id);
+
+        return {
+          id,
+          user_id: ownerId,
+          name: jeTajny
+            ? `__secret_tag_${id}`
+            : String(tag.name || "").trim(),
+          encrypted_name:
+            tag.encrypted_name || null,
+          is_secret: jeTajny,
+          sort_order: Number.isFinite(poradi)
+            ? poradi
+            : index,
+          color: String(tag.color || "system"),
+          created_at: tag.created_at || null,
+          local_only: true
+        };
+      })
+      .filter((tag) =>
+        tag.is_secret === true || Boolean(tag.name)
+      )
+      .sort(
+        (a, b) =>
+          Number(a.sort_order || 0) -
+          Number(b.sort_order || 0)
+      );
+  } catch (error) {
+    console.warn(
+      "LOCAL registr štítků se nepodařilo načíst:",
+      error
+    );
+    return [];
+  }
+}
+
+function ulozSyroveLokalniStitky(
+  stitky,
+  userId = ""
+) {
+  const ownerId = String(
+    userId || ziskejOwnerIdLokalnichStitku()
+  ).trim();
+  const existujiciOwner =
+    ziskejOwnerIdLokalnichStitku();
+
+  if (
+    !ownerId ||
+    (existujiciOwner && existujiciOwner !== ownerId)
+  ) {
+    return false;
+  }
+
+  try {
+    localStorage.setItem(
+      LOCAL_TAGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        userId: ownerId,
+        savedAt: new Date().toISOString(),
+        tags: Array.isArray(stitky) ? stitky : []
+      })
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "LOCAL registr štítků se nepodařilo uložit:",
+      error
+    );
+    return false;
+  }
+}
+
+function doplnLokalniLegacyStitkyZPoznamek() {
+  const ownerId = ziskejOwnerIdLokalnichStitku();
+
+  if (
+    !ownerId ||
+    typeof loadTask !== "function"
+  ) {
+    return false;
+  }
+
+  let poznamky = [];
+
+  try {
+    poznamky = loadTask();
+  } catch (_error) {
+    return false;
+  }
+
+  const syrove = nactiSyroveLokalniStitky();
+  const znameNazvy = new Set(
+    syrove
+      .filter((tag) => tag.is_secret !== true)
+      .map((tag) =>
+        String(tag.name || "")
+          .trim()
+          .toLocaleLowerCase("cs-CZ")
+      )
+      .filter(Boolean)
+  );
+
+  let dalsiPoradi = syrove.reduce(
+    (maximum, tag) => {
+      const poradi = Number(tag?.sort_order);
+      return Number.isFinite(poradi)
+        ? Math.max(maximum, poradi + 1)
+        : maximum;
+    },
+    syrove.length
+  );
+  let zmeneno = false;
+
+  for (const poznamka of poznamky) {
+    /*
+     * Secret poznámka je záměrně vynechaná: její názvy štítků nesmíme
+     * nikdy migrovat jako plaintext do běžného LOCAL registru.
+     */
+    if (
+      !jeLokalniPoznamkaProStitky(poznamka) ||
+      poznamka?.isSecret === true
+    ) {
+      continue;
+    }
+
+    for (const nazev of (poznamka?.tags || [])) {
+      const cistyNazev = String(nazev || "")
+        .trim()
+        .replace(/\s+/g, " ");
+      const klic = cistyNazev
+        .toLocaleLowerCase("cs-CZ");
+
+      if (!cistyNazev || znameNazvy.has(klic)) {
+        continue;
+      }
+
+      const id = crypto.randomUUID();
+      syrove.push({
+        id,
+        user_id: ownerId,
+        name: cistyNazev,
+        encrypted_name: null,
+        is_secret: false,
+        sort_order: dalsiPoradi++,
+        color: "system",
+        created_at: new Date().toISOString()
+      });
+      znameNazvy.add(klic);
+      zmeneno = true;
+    }
+  }
+
+  if (!zmeneno) {
+    return false;
+  }
+
+  return ulozSyroveLokalniStitky(
+    syrove,
+    ownerId
+  );
+}
+
+async function pripravLokalniStitkyProPamet() {
+  const syrove = nactiSyroveLokalniStitky();
+  const vysledek = [];
+
+  for (const tag of syrove) {
+    if (tag.is_secret !== true) {
+      vysledek.push({
+        ...tag,
+        local_only: true
+      });
+      continue;
+    }
+
+    let skutecnyNazev = "";
+
+    if (
+      tajnyRezimOdemceny &&
+      tag.encrypted_name &&
+      typeof desifrujNazevTajnehoStitku ===
+        "function"
+    ) {
+      try {
+        skutecnyNazev =
+          await desifrujNazevTajnehoStitku(
+            tag.encrypted_name,
+            tag.id
+          );
+      } catch (error) {
+        console.warn(
+          "LOCAL Secret štítek se nepodařilo dešifrovat:",
+          tag.id,
+          error
+        );
+      }
+    }
+
+    vysledek.push({
+      ...tag,
+      name: String(skutecnyNazev || ""),
+      local_only: true
+    });
+  }
+
+  return vysledek;
+}
+
+async function aplikujLokalniStitkyDoPameti({
+  prekreslit = true
+} = {}) {
+  /* PATCH 591: jednorázově převezmi staré LOCAL názvy z běžných poznámek. */
+  doplnLokalniLegacyStitkyZPoznamek();
+  syncedTags = await pripravLokalniStitkyProPamet();
+
+  if (prekreslit) {
+    if (typeof renderTagFilters === "function") {
+      renderTagFilters();
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+  }
+
+  return syncedTags;
+}
+
+function pripravLokalniStitkyZUlozenePameti() {
+  const ownerId = ziskejOwnerIdLokalnichStitku();
+
+  return syncedTags
+    .filter((tag) => jeLokalniStitek(tag))
+    .map((tag, index) => {
+      const id = String(tag.id || "").trim();
+      const jeTajny = tag.is_secret === true;
+      const poradi = Number(tag.sort_order);
+
+      if (!id) {
+        return null;
+      }
+
+      return {
+        id,
+        user_id: ownerId,
+        name: jeTajny
+          ? `__secret_tag_${id}`
+          : String(tag.name || "").trim(),
+        encrypted_name:
+          jeTajny ? (tag.encrypted_name || null) : null,
+        is_secret: jeTajny,
+        sort_order: Number.isFinite(poradi)
+          ? poradi
+          : index,
+        color: String(tag.color || "system"),
+        created_at:
+          tag.created_at || new Date().toISOString()
+      };
+    })
+    .filter(Boolean);
+}
+
+function ulozLokalniStitkyZPameti(userId = "") {
+  return ulozSyroveLokalniStitky(
+    pripravLokalniStitkyZUlozenePameti(),
+    userId
+  );
+}
+
+async function vytvorLokalniStitek(
+  nazev,
+  {
+    tajny = false,
+    userId = "",
+    prekreslit = true
+  } = {}
+) {
+  const cistyNazev = String(nazev || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!cistyNazev) {
+    return null;
+  }
+
+  let ownerId = String(userId || "").trim();
+
+  if (!ownerId && typeof getCurrentUser === "function") {
+    const user = await getCurrentUser();
+    ownerId = String(user?.id || "").trim();
+  }
+
+  if (!ownerId) {
+    return null;
+  }
+
+  const existujiciOwner =
+    ziskejOwnerIdLokalnichStitku();
+
+  if (
+    existujiciOwner &&
+    existujiciOwner !== ownerId
+  ) {
+    console.warn(
+      "LOCAL štítek nebyl uložen: vlastník zařízení nesouhlasí."
+    );
+    return null;
+  }
+
+  const uzExistuje = syncedTags.find((tag) =>
+    String(tag?.name || "")
+      .trim()
+      .toLocaleLowerCase("cs-CZ") ===
+    cistyNazev.toLocaleLowerCase("cs-CZ")
+  );
+
+  if (uzExistuje) {
+    return uzExistuje;
+  }
+
+  const syrove = nactiSyroveLokalniStitky();
+  const tagId = crypto.randomUUID();
+  const dalsiPoradi = syrove.reduce(
+    (maximum, tag) => {
+      const poradi = Number(tag?.sort_order);
+      return Number.isFinite(poradi)
+        ? Math.max(maximum, poradi + 1)
+        : maximum;
+    },
+    syrove.length
+  );
+
+  let encryptedName = null;
+
+  if (tajny) {
+    if (
+      !tajnyRezimOdemceny ||
+      !tajnySifrovaciKlic ||
+      typeof zasifrujNazevTajnehoStitku !==
+        "function"
+    ) {
+      return null;
+    }
+
+    encryptedName =
+      await zasifrujNazevTajnehoStitku(
+        cistyNazev,
+        tagId
+      );
+  }
+
+  const novyZaznam = {
+    id: tagId,
+    user_id: ownerId,
+    name: tajny
+      ? `__secret_tag_${tagId}`
+      : cistyNazev,
+    encrypted_name: encryptedName,
+    is_secret: tajny,
+    sort_order: dalsiPoradi,
+    color: "system",
+    created_at: new Date().toISOString()
+  };
+
+  if (!ulozSyroveLokalniStitky(
+    [...syrove, novyZaznam],
+    ownerId
+  )) {
+    return null;
+  }
+
+  await aplikujLokalniStitkyDoPameti({
+    prekreslit
+  });
+
+  return syncedTags.find(
+    (tag) => String(tag?.id || "") === tagId
+  ) || null;
+}
+
+/*
  * Poslední štítek vytvořený přímo v editoru.
  * Editor má maximálně tři řádky štítků, proto ho po vytvoření
  * držíme hned za tlačítkem „+ Nový štítek“, aby nezapadl na konec.
@@ -1265,6 +1732,21 @@ saveNewTagModalButton.addEventListener("click", async () => {
     if (!user) {
       return;
     }
+
+    /* PATCH 591: nový běžný štítek v 📱 prostoru zůstává jen v zařízení. */
+    if (jeAktivniLokalniProstorStitku()) {
+      const lokalniStitek = await vytvorLokalniStitek(
+        name,
+        { userId: user.id }
+      );
+
+      if (!lokalniStitek) {
+        return;
+      }
+
+      newTagModal.hidden = true;
+      return;
+    }
     
     const { error } = await supabaseClient
       .from("tags")
@@ -1425,6 +1907,11 @@ function pripravBezpecneStitkyProStartCache(stitky) {
 }
 
 function ulozStitkyDoStartCache(userId, stitky = syncedTags) {
+  /* PATCH 591: LOCAL registry nikdy nesmí přepsat cloudovou start cache. */
+  if (jeAktivniLokalniProstorStitku()) {
+    return false;
+  }
+
   if (!userId) {
     return false;
   }
@@ -1449,6 +1936,30 @@ function ulozStitkyDoStartCache(userId, stitky = syncedTags) {
 function nactiStitkyZeStartCache(userId) {
   if (!userId) {
     return false;
+  }
+
+  /*
+   * PATCH 591: při startu v 📱 prostoru nesmíme ani na okamžik vložit
+   * cloudové štítky do LOCAL UI. Veřejné LOCAL štítky načteme hned;
+   * Secret názvy se doplní až po odemknutí přes loadTagsFromSupabase().
+   */
+  if (jeAktivniLokalniProstorStitku()) {
+    doplnLokalniLegacyStitkyZPoznamek();
+    syncedTags = nactiSyroveLokalniStitky().map((tag) => ({
+      ...tag,
+      name: tag.is_secret === true ? "" : tag.name,
+      local_only: true
+    }));
+
+    if (typeof renderTagFilters === "function") {
+      renderTagFilters();
+    }
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+
+    return true;
   }
 
   try {
@@ -1552,6 +2063,18 @@ async function loadTagsFromSupabase() {
     "LOAD START",
     `online=${navigator.onLine}`
   );
+
+  /*
+   * PATCH 591 – LOCAL prostor má vlastní autoritu štítků.
+   * Tato větev je záměrně PŘED getCurrentUser() a před jakýmkoliv
+   * Supabase dotazem. Background refresh ani Secret unlock tak v 📱
+   * prostoru nemůže sáhnout na public.tags.
+   */
+  if (jeAktivniLokalniProstorStitku()) {
+    await aplikujLokalniStitkyDoPameti();
+    zapisVdBarevStitku("LOAD LOCAL");
+    return true;
+  }
 
   const user = await getCurrentUser();
   
@@ -1800,6 +2323,36 @@ async function zajistiZaznamHornihoStitkuProDrag(button) {
     return zajisteniLegacyStitkuProDrag.get(klic);
   }
 
+  /*
+   * PATCH 591: legacy štítek z LOCAL poznámky se při long-pressu doplní
+   * pouze do lokálního registru. Původní cloudová cesta se vůbec nespustí.
+   */
+  if (jeAktivniLokalniProstorStitku()) {
+    const lokalniPromise = (async () => {
+      const user = await getCurrentUser();
+
+      if (!user?.id) {
+        return null;
+      }
+
+      return await vytvorLokalniStitek(
+        nazev,
+        {
+          userId: user.id,
+          prekreslit: false
+        }
+      );
+    })().finally(() => {
+      zajisteniLegacyStitkuProDrag.delete(klic);
+    });
+
+    zajisteniLegacyStitkuProDrag.set(
+      klic,
+      lokalniPromise
+    );
+    return lokalniPromise;
+  }
+
   const promise = (async () => {
     const user = await getCurrentUser();
 
@@ -1954,6 +2507,30 @@ async function ulozPoradiStitku(poradiViditelnychId) {
     );
 
   if (zmeny.length === 0) {
+    return true;
+  }
+
+  /* PATCH 591: pořadí LOCAL štítků se zapisuje jen do device registru. */
+  if (jeAktivniLokalniProstorStitku()) {
+    syncedTags = serazeneStitky.map(
+      (tag, index) => ({
+        ...tag,
+        sort_order: index,
+        local_only: true
+      })
+    );
+
+    if (!ulozLokalniStitkyZPameti()) {
+      syncedTags = puvodniStitky;
+      renderTagFilters();
+      zobrazZpravuAplikace(
+        "Štítky",
+        "Pořadí lokálních štítků se nepodařilo uložit."
+      );
+      return false;
+    }
+
+    renderTagFilters();
     return true;
   }
 
@@ -3232,6 +3809,35 @@ function vykresliSpravuStitku() {
 }
 
 async function zmenBarvuStitku(tag, novaBarva) {
+  /* PATCH 591: barva LOCAL štítku nikdy nevolá public.tags. */
+  if (jeLokalniStitek(tag)) {
+    const puvodniStitky = syncedTags.slice();
+
+    syncedTags = syncedTags.map(
+      (aktualniTag) =>
+      aktualniTag.id === tag.id ?
+      {
+        ...aktualniTag,
+        color: novaBarva,
+        local_only: true
+      } :
+      aktualniTag
+    );
+
+    if (!ulozLokalniStitkyZPameti()) {
+      syncedTags = puvodniStitky;
+      return false;
+    }
+
+    renderTagFilters();
+
+    if (typeof renderTasks === "function") {
+      renderTasks();
+    }
+
+    return true;
+  }
+
   const user = await getCurrentUser();
   
   if (!user) {
@@ -3383,53 +3989,93 @@ async function prejmenujStitek(tag, novyNazev) {
   
   let dataProUlozeni;
 
-if (tag.is_secret === true) {
-  if (
-    !tajnyRezimOdemceny ||
-    !tajnySifrovaciKlic
-  ) {
-    zobrazZpravuAplikace(
-      "Tajné štítky",
-      "Nejdřív odemkni tajný režim."
-    );
-    
-    return false;
-  }
-  
-  const zasifrovanyNazev =
-    await zasifrujNazevTajnehoStitku(
-      novyNazev,
-      tag.id
-    );
-  
-  dataProUlozeni = {
-    encrypted_name: zasifrovanyNazev
-  };
-} else {
-  dataProUlozeni = {
-    name: novyNazev
-  };
-}
+  if (tag.is_secret === true) {
+    if (
+      !tajnyRezimOdemceny ||
+      !tajnySifrovaciKlic
+    ) {
+      zobrazZpravuAplikace(
+        "Tajné štítky",
+        "Nejdřív odemkni tajný režim."
+      );
 
-const { error } = await supabaseClient
-  .from("tags")
-  .update(dataProUlozeni)
-  .eq("id", tag.id)
-  .eq("user_id", user.id);
-  
-  if (error) {
-    console.error(
-      "Přejmenování štítku se nepodařilo:",
-      error.message
-    );
+      return false;
+    }
     
-    return false;
+    const zasifrovanyNazev =
+      await zasifrujNazevTajnehoStitku(
+        novyNazev,
+        tag.id
+      );
+
+    dataProUlozeni = {
+      encrypted_name: zasifrovanyNazev
+    };
+  } else {
+    dataProUlozeni = {
+      name: novyNazev
+    };
+  }
+
+  const lokalniStitek = jeLokalniStitek(tag);
+
+  if (lokalniStitek) {
+    /*
+     * PATCH 591: LOCAL přejmenování mění pouze device registr.
+     * U Secret štítku zůstává v localStorage jen encrypted_name.
+     */
+    const puvodniStitky = syncedTags.slice();
+
+    syncedTags = syncedTags.map(
+      (aktualniTag) =>
+      aktualniTag.id === tag.id ?
+      {
+        ...aktualniTag,
+        name: novyNazev,
+        ...(tag.is_secret === true
+          ? { encrypted_name: dataProUlozeni.encrypted_name }
+          : {}),
+        local_only: true
+      } :
+      aktualniTag
+    );
+
+    if (!ulozLokalniStitkyZPameti(user.id)) {
+      syncedTags = puvodniStitky;
+      return false;
+    }
+  } else {
+    const { error } = await supabaseClient
+      .from("tags")
+      .update(dataProUlozeni)
+      .eq("id", tag.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(
+        "Přejmenování štítku se nepodařilo:",
+        error.message
+      );
+
+      return false;
+    }
   }
   
   const poznamky = loadTask();
   const zmenenePoznamky = [];
   
   poznamky.forEach((poznamka) => {
+    /*
+     * PATCH 591: stejnojmenný štítek v druhém prostoru je jiná entita.
+     * LOCAL správa proto nesmí měnit cloudovou poznámku a obráceně.
+     */
+    if (!patriPoznamkaKeStitkuPodleProstoru(
+      poznamka,
+      tag
+    )) {
+      return;
+    }
+
     const puvodniStitky =
       poznamka.tags || [];
     
@@ -3463,20 +4109,25 @@ const { error } = await supabaseClient
       poznamky
     );
   }
-  
-  syncedTags = syncedTags.map(
-    (aktualniTag) =>
-    aktualniTag.id === tag.id ?
-    {
-      ...aktualniTag,
-      name: novyNazev
-    } :
-    aktualniTag
-  );
+
+  if (!lokalniStitek) {
+    syncedTags = syncedTags.map(
+      (aktualniTag) =>
+      aktualniTag.id === tag.id ?
+      {
+        ...aktualniTag,
+        name: novyNazev
+      } :
+      aktualniTag
+    );
+  }
   
   renderTagFilters();
   requestAnimationFrame(renderTasks);
-  obnovStitkyNaPozadi();
+
+  if (!lokalniStitek) {
+    obnovStitkyNaPozadi();
+  }
   
   return true;
 }
@@ -3493,30 +4144,42 @@ async function smazStitek(tag) {
   if (!user) {
     return false;
   }
-  
-  const deletedAt = new Date().toISOString();
-  
-  const { error } = await supabaseClient
-    .from("tags")
-    .update({
-      deleted_at: deletedAt
-    })
-    .eq("id", tag.id)
-    .eq("user_id", user.id);
-  
-  if (error) {
-    console.error(
-      "Smazání štítku se nepodařilo:",
-      error.message
-    );
+
+  const lokalniStitek = jeLokalniStitek(tag);
+
+  if (!lokalniStitek) {
+    const deletedAt = new Date().toISOString();
     
-    return false;
+    const { error } = await supabaseClient
+      .from("tags")
+      .update({
+        deleted_at: deletedAt
+      })
+      .eq("id", tag.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(
+        "Smazání štítku se nepodařilo:",
+        error.message
+      );
+
+      return false;
+    }
   }
   
   const poznamky = loadTask();
   const zmenenePoznamky = [];
   
   poznamky.forEach((poznamka) => {
+    /* PATCH 591: mažeme štítek jen z poznámek stejného prostoru. */
+    if (!patriPoznamkaKeStitkuPodleProstoru(
+      poznamka,
+      tag
+    )) {
+      return;
+    }
+
     const puvodniStitky =
       poznamka.tags || [];
     
@@ -3547,20 +4210,40 @@ async function smazStitek(tag) {
     );
   }
   
+  const puvodniStitky = syncedTags.slice();
+
   syncedTags = syncedTags.filter(
     (aktualniTag) => aktualniTag.id !== tag.id
   );
+
+  if (
+    lokalniStitek &&
+    !ulozLokalniStitkyZPameti(user.id)
+  ) {
+    syncedTags = puvodniStitky;
+    return false;
+  }
   
   renderTagFilters();
   requestAnimationFrame(renderTasks);
-  obnovStitkyNaPozadi();
+
+  if (!lokalniStitek) {
+    obnovStitkyNaPozadi();
+  }
   
   return true;
 }
 
-
 function getAllTags() {
+  /*
+   * PATCH 591: horní lišta i editor berou legacy názvy jen z právě
+   * aktivního prostoru. Stejnojmenný cloud/LOCAL štítek se tak nemíchá.
+   */
+  const lokalniProstor = jeAktivniLokalniProstorStitku();
   const noteTags = loadTask()
+    .filter((task) =>
+      jeLokalniPoznamkaProStitky(task) === lokalniProstor
+    )
     .flatMap((task) => task.tags || []);
   
   const cloudTags = syncedTags
@@ -3723,6 +4406,20 @@ async function ziskejTajneStitkyProEditor() {
     !secretTaskEnabled
   ) {
     return [];
+  }
+
+  /* PATCH 591: Secret LOCAL editor čte pouze šifrovaný device registr. */
+  if (jeAktivniLokalniProstorStitku()) {
+    await aplikujLokalniStitkyDoPameti({
+      prekreslit: false
+    });
+
+    return syncedTags
+      .filter((tag) =>
+        tag.is_secret === true &&
+        Boolean(String(tag.name || "").trim())
+      )
+      .map((tag) => String(tag.name).trim());
   }
 
   const user = await getCurrentUser();
@@ -4325,6 +5022,26 @@ async function ulozBeznyStitekZeEditoru(nazev) {
     return null;
   }
 
+  /* PATCH 591: inline vytvoření štítku v LOCAL editoru nesmí do cloudu. */
+  if (jeAktivniLokalniProstorStitku()) {
+    const lokalniStitek = await vytvorLokalniStitek(
+      novyNazev,
+      { userId: user.id }
+    );
+
+    if (!lokalniStitek) {
+      zobrazZpravuAplikace(
+        "Štítky",
+        "Nový lokální štítek se nepodařilo uložit."
+      );
+      return null;
+    }
+
+    const ulozenyNazev = lokalniStitek.name || novyNazev;
+    posledniStitekVytvorenyVEditoru = ulozenyNazev;
+    return ulozenyNazev;
+  }
+
   const { error } = await supabaseClient
     .from("tags")
     .insert({
@@ -4812,6 +5529,20 @@ async function vytvorTajnyStitek(nazev) {
   }
 
   /*
+   * PATCH 591: Secret LOCAL štítek ukládáme pouze do device registru.
+   * Plaintext název se do localStorage nedostane; registr drží pouze
+   * AES-GCM encrypted_name + technické ID.
+   */
+  if (jeAktivniLokalniProstorStitku()) {
+    const lokalniStitek = await vytvorLokalniStitek(
+      novyNazev,
+      { tajny: true, userId: user.id }
+    );
+
+    return Boolean(lokalniStitek);
+  }
+
+  /*
    * ID vytvoříme ještě před šifrováním,
    * protože je součástí AES-GCM
    * additionalData.
@@ -4857,6 +5588,33 @@ async function vytvorTajnyStitek(nazev) {
 
   return true;
 }
+
+window.addEventListener(
+  "lubanote:storage-scope-change",
+  () => {
+    /*
+     * PATCH 591: každý prostor má vlastní seznam štítků. Filtr ani
+     * rozpracovaný výběr štítků se mezi ☁️ a 📱 nepřenáší.
+     */
+    activeTagFilter = null;
+    activeTags = [];
+    posledniStitekVytvorenyVEditoru = "";
+
+    /* Nedovolíme ani krátké promíchání seznamu mezi prostory. */
+    syncedTags = [];
+    if (typeof renderTagFilters === "function") {
+      renderTagFilters();
+    }
+
+    Promise.resolve(loadTagsFromSupabase())
+      .catch((error) => {
+        console.warn(
+          "Přepnutí registru štítků podle úložiště selhalo:",
+          error
+        );
+      });
+  }
+);
 
 window.addEventListener(
   "lubanote:language-change",
