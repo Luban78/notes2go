@@ -8,7 +8,8 @@
 .ln-lk-chooser[hidden],
 .ln-lk-compose[hidden],
 .ln-lk-suggestions[hidden],
-.ln-lk-alt-popup[hidden] {
+.ln-lk-alt-popup[hidden],
+.ln-title-clipboard-popup[hidden] {
   display: none !important;
 }
 
@@ -902,4 +903,59 @@ body.ln-lk-old-android-nav .ln-lk-smartbar .ln-lk-suggestions {
   font-size: clamp(10.5px, 3vw, 13px);
   font-weight: 700;
   white-space: nowrap;
+}
+
+
+/* ==========================================================
+   PATCH 596 – kontextová schránka názvu poznámky v Android APK
+   ========================================================== */
+.ln-title-clipboard-popup {
+  position: fixed;
+  z-index: 2147482700;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #777);
+  border: 1px solid color-mix(in srgb, var(--color-accent, #7444dc) 32%, var(--color-border, #777));
+  border-radius: 13px;
+  background: var(--color-surface, #211b29);
+  background: color-mix(in srgb, var(--color-surface, #211b29) 96%, white 4%);
+  color: var(--color-text, #fff);
+  box-shadow: 0 8px 24px rgba(0,0,0,.36);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.ln-title-clipboard-popup button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.ln-title-clipboard-popup button:active {
+  background: var(--color-accent, #7444dc);
+  color: #fff;
+}
+
+.ln-title-clipboard-popup button:disabled {
+  opacity: .38;
+}
+
+body.ln-lk-old-android-nav .ln-title-clipboard-popup {
+  background: var(--color-surface, #211b29) !important;
+  border-color: var(--color-accent, #7444dc) !important;
 }

@@ -331,6 +331,12 @@
   let akcniPanelOtevren = false;
   let chooser = null;
   let altPopup = null;
+  /* PATCH 596 – vlastní kontextová lišta názvu poznámky.
+     Android WebView v APK umí #modalTitle označit a vyšle contextmenu, ale
+     při inputmode=none + vlastní LubaKeyboard nezobrazí systémový ActionMode.
+     Držíme proto malý LubaNote popup pouze pro název poznámky. */
+  let titleClipboardPopup = null;
+  let titleClipboardSnapshot = null;
   let aktivniEditor = null;
   let aktivniCilPsani = "body";
   /* FIX 531 – LubaKeyboard není jen editorová klávesnice. Vyhledávání a
@@ -779,6 +785,163 @@
       return vlozDoTextovehoPole(text, "insertFromPaste");
     }
     return false;
+  }
+
+  /* ==========================================================
+     PATCH 596 – TITLE CLIPBOARD POPUP (APK + LubaKeyboard)
+     ----------------------------------------------------------
+     Debug 595 prokázal, že u #modalTitle nic nevolá preventDefault():
+     selectstart, selectionchange i contextmenu proběhnou a WebView vytvoří
+     skutečný range. Systémový Android ActionMode se ale přesto nezobrazí.
+     Nesnažíme se ho dál vynucovat; na contextmenu zobrazíme vlastní malou
+     lištu Vyjmout / Kopírovat / Vložit / Vše. Výběr držíme v DOM range a
+     tlačítka neberou focus názvu, takže vlastní LubaKeyboard zůstává stabilní.
+     ========================================================== */
+  function zajistiTitleClipboardPopup() {
+    if (titleClipboardPopup?.isConnected) return titleClipboardPopup;
+
+    const popup = document.createElement("div");
+    popup.className = "ln-title-clipboard-popup";
+    popup.hidden = true;
+    popup.setAttribute("role", "toolbar");
+    popup.setAttribute("aria-label", "Schránka názvu poznámky");
+    popup.innerHTML = `
+      <button type="button" data-title-clipboard="cut" tabindex="-1">Vyjmout</button>
+      <button type="button" data-title-clipboard="copy" tabindex="-1">Kopírovat</button>
+      <button type="button" data-title-clipboard="paste" tabindex="-1">Vložit</button>
+      <button type="button" data-title-clipboard="all" tabindex="-1">Vše</button>
+    `;
+
+    /* Pointerdown nesmí přesunout focus z #modalTitle ani zrušit selection. */
+    popup.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("button")) event.preventDefault();
+    }, true);
+
+    popup.addEventListener("pointerup", async (event) => {
+      const button = event.target.closest("button[data-title-clipboard]");
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const action = button.dataset.titleClipboard;
+      const snap = titleClipboardSnapshot;
+      const title = snap?.title?.isConnected ? snap.title : najdiNazevEditoru();
+      if (!title) { zavriTitleClipboardPopup(); return; }
+
+      const obnovVyber = () => {
+        const delka = String(title.textContent || "").length;
+        const start = Math.max(0, Math.min(delka, Number(titleClipboardSnapshot?.start) || 0));
+        const end = Math.max(start, Math.min(delka, Number(titleClipboardSnapshot?.end) || start));
+        nastavVyberNazvu(title, start, end);
+        return { start, end, text: String(title.textContent || "") };
+      };
+
+      if (action === "all") {
+        const text = String(title.textContent || "");
+        titleClipboardSnapshot = { title, text, start: 0, end: text.length };
+        nastavVyberNazvu(title, 0, text.length);
+        aktualizujStavTitleClipboardPopup();
+        return;
+      }
+
+      const state = obnovVyber();
+
+      if (action === "copy") {
+        const text = state.start !== state.end
+          ? state.text.slice(state.start, state.end)
+          : state.text;
+        await zapisDoSchrankyLuba(text);
+        zavriTitleClipboardPopup();
+        return;
+      }
+
+      if (action === "cut") {
+        if (state.start === state.end) return;
+        const vybrane = state.text.slice(state.start, state.end);
+        if (!vybrane) return;
+        await zapisDoSchrankyLuba(vybrane);
+        const next = state.text.slice(0, state.start) + state.text.slice(state.end);
+        nastavTextNazvu(title, next, state.start);
+        zavriTitleClipboardPopup();
+        return;
+      }
+
+      if (action === "paste") {
+        const text = String(await prectiZeSchrankyLuba() || "").replace(/[\r\n]+/g, " ");
+        if (!text) return;
+        /* Asynchronní Clipboard.read může mezitím pustit WebView selection;
+           před vložením proto snapshot explicitně obnovíme. */
+        obnovVyber();
+        vlozDoNazvu(text);
+        zavriTitleClipboardPopup();
+      }
+    });
+
+    document.body.appendChild(popup);
+    titleClipboardPopup = popup;
+    return popup;
+  }
+
+  function aktualizujStavTitleClipboardPopup() {
+    const popup = titleClipboardPopup;
+    if (!popup || popup.hidden) return;
+    const snap = titleClipboardSnapshot;
+    const maVyber = Boolean(snap && snap.start !== snap.end);
+    const cut = popup.querySelector('[data-title-clipboard="cut"]');
+    if (cut) cut.disabled = !maVyber;
+  }
+
+  function zavriTitleClipboardPopup() {
+    if (titleClipboardPopup) titleClipboardPopup.hidden = true;
+    titleClipboardSnapshot = null;
+  }
+
+  function pozicujTitleClipboardPopup(clientX) {
+    const popup = titleClipboardPopup;
+    const title = titleClipboardSnapshot?.title;
+    if (!popup || popup.hidden || !title?.isConnected) return;
+
+    const margin = 8;
+    const mezera = 7;
+    const titleRect = title.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const viewportW = window.visualViewport?.width || window.innerWidth;
+    const viewportH = window.visualViewport?.height || window.innerHeight;
+    const viewportTop = window.visualViewport?.offsetTop || 0;
+    const viewportLeft = window.visualViewport?.offsetLeft || 0;
+
+    let x = Number.isFinite(clientX) ? clientX - popupRect.width / 2 : titleRect.left;
+    x = Math.max(viewportLeft + margin, Math.min(x, viewportLeft + viewportW - popupRect.width - margin));
+
+    let y = titleRect.top - popupRect.height - mezera;
+    const minY = viewportTop + margin;
+    const maxY = viewportTop + viewportH - popupRect.height - margin;
+    if (y < minY) y = titleRect.bottom + mezera;
+    y = Math.max(minY, Math.min(y, maxY));
+
+    popup.style.left = `${Math.round(x)}px`;
+    popup.style.top = `${Math.round(y)}px`;
+  }
+
+  function otevriTitleClipboardPopup(event) {
+    const title = event.target?.closest?.("#modalTitle");
+    if (!title || ziskejZdrojKlavesnice() === "system") return false;
+    /* Tohle je cílený APK fallback. PWA/desktop necháváme jejich nativnímu
+       výběru a neměníme tam contextmenu. */
+    if (!document.body?.classList.contains("nativeApp")) return false;
+
+    const state = ziskejVyberNazvu();
+    if (!state) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    titleClipboardSnapshot = state;
+
+    const popup = zajistiTitleClipboardPopup();
+    popup.hidden = false;
+    aktualizujStavTitleClipboardPopup();
+    requestAnimationFrame(() => pozicujTitleClipboardPopup(event.clientX));
+    return true;
   }
 
   function vykresliSchrankaAkce() {
@@ -3086,6 +3249,32 @@
      */
     if (altPopup && !altPopup.hidden && !altPopup.contains(event.target)) zavriAlt();
   }, true);
+
+  /* PATCH 596 – contextmenu u názvu je spolehlivý signál z Android WebView
+     (Debug 595). Vlastní popup se otevírá až PO vytvoření selection range. */
+  document.addEventListener("contextmenu", (event) => {
+    otevriTitleClipboardPopup(event);
+  }, true);
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!titleClipboardPopup || titleClipboardPopup.hidden) return;
+    if (titleClipboardPopup.contains(event.target)) return;
+    if (event.target?.closest?.("#modalTitle")) return;
+    zavriTitleClipboardPopup();
+  }, true);
+
+  document.addEventListener("focusin", (event) => {
+    if (!titleClipboardPopup || titleClipboardPopup.hidden) return;
+    if (event.target?.id === "modalTitle") return;
+    if (titleClipboardPopup.contains(event.target)) return;
+    zavriTitleClipboardPopup();
+  }, true);
+
+  window.addEventListener("resize", () => {
+    if (titleClipboardPopup && !titleClipboardPopup.hidden) {
+      requestAnimationFrame(() => pozicujTitleClipboardPopup());
+    }
+  });
 
   document.addEventListener("lubanote:v2-model-input", () => {
     if (!panel || panel.hidden) return;
