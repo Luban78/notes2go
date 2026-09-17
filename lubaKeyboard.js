@@ -796,8 +796,13 @@
 
   function aktualizujNavrhy() {
     if (!navrhyBox) return;
-    if (vykresliSchrankaAkce()) return;
 
+    /*
+     * PATCH 594 – názvy poznámek/štítků znovu používají nativní Android
+     * selection toolbar stejně jako běžný text editoru. PATCH 593 smartbar
+     * Vše/Kopírovat/Vložit byl jen nouzový fallback a na WebView neřešil
+     * samotné zobrazení kontextového panelu, proto zde už návrhy nepřebíjí.
+     */
     const layout = aktualniLayout();
     const podporovano = mode === "letters" && !layout.compose && layout.id !== "emoji" && layout.id !== "unicode";
     navrhyBox.hidden = !podporovano;
@@ -3040,7 +3045,15 @@
       if (ziskejZdrojKlavesnice() === "system") nastavSystemoveAtributyTextovehoPole(pole);
       else {
         nastavLubaAtributyTextovehoPole(pole);
-        schovejSystemovouNativne();
+        /*
+         * PATCH 594 – na moderním Android WebView už při KAŽDÉM pointerdown
+         * nevoláme native hideIme(). Dlouhý stisk textu totiž začíná právě
+         * pointerdownem a zásah do IME v tomto okamžiku uměl shodit nativní
+         * selection ActionMode dřív, než se zobrazil Kopírovat/Vložit.
+         * inputmode=none + manual policy drží Gboard zavřený samy; legacy
+         * WebView <=110 si starou pojistku ponechává.
+         */
+        if (jeStaryAndroidWebView()) schovejSystemovouNativne();
         /* Když už pole focus má a uživatel LubaKeyboard předtím ručně
            schoval, nový tap nevyvolá další focusin. Otevřeme ji proto
            po dokončení skutečného tapu znovu. */
@@ -3057,7 +3070,10 @@
       else {
         nastavLubaAtributy(event.target);
         aktivniCilPsani = "title";
-        schovejSystemovouNativne();
+        /* PATCH 594 – viz pole štítků výše: moderní WebView při long-pressu
+           nesmíme rušit native hideIme(), jinak se Android ActionMode pro
+           výběr textu nemusí vůbec otevřít. */
+        if (jeStaryAndroidWebView()) schovejSystemovouNativne();
       }
     }
 

@@ -11264,3 +11264,21 @@ body.lubaCardDragMode .app {
     scroll-padding-bottom: 12px;
   }
 }
+
+/* ==================================================
+   PATCH 594 – NATIVNÍ VÝBĚR TEXTU V NÁZVU A ŠTÍTCÍCH
+   --------------------------------------------------
+   Ovládací prvky LubaNote mají globálně výběr textu vypnutý, ale skutečná
+   textová pole názvu poznámky a štítků musí na Androidu dostat stejný
+   selection ActionMode jako běžný text: Vyjmout / Kopírovat / Vložit / Vše.
+   Explicitní override je záměrný i pro dynamické pole přejmenování štítku.
+   ================================================== */
+#modalTitle,
+#newTagInput,
+#newTagModalInput,
+.manageTagRenameInput {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: auto;
+}
