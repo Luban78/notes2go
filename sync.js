@@ -8483,6 +8483,26 @@ async function provedLokalniZmenuASynchronizuj(
   konkretniPoznamka = null
 ) {
   /*
+   * LOCAL SCOPE 584 – explicitní lokální poznámka nesmí spustit
+   * obsahový cloud sync. Účet / Demo mohou dál používat server, ale
+   * samotný obsah této poznámky zůstává pouze v zařízení.
+   *
+   * Tato rychlá větev je záměrně pouze pro akce, které předají konkrétní
+   * poznámku (editor save). Hromadné/mixed operace budeme zapojovat až
+   * v další fázi, aby se cloudové a lokální poznámky nikdy nesmíchaly.
+   */
+  if (jePoznamkaPouzeLokalniProSync(konkretniPoznamka)) {
+    const vysledek =
+      await provedLokalniZmenuBezKolizeSeSync(akce);
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "LOCAL",
+      `LOCAL CONTENT SAVE | cloud sync skipped id=${konkretniPoznamka?.id || "?"}`
+    );
+
+    return vysledek;
+  }
+  /*
    * PATCH 483/485 – targeted upload.
    * Snapshot je pouze lokální; neprovádí žádný síťový request.
    * Editor může dodat konkrétní Secret poznámku, protože ta není

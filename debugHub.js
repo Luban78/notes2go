@@ -2023,6 +2023,112 @@ async function zkopirujTagVdReport(tlacitko) {
     }));
   }
 
+  async function vytvorLocalScopeTest584(tlacitko) {
+    const puvodniText = tlacitko?.textContent || "📱 Vytvořit LOCAL TEST 584";
+
+    if (tlacitko) {
+      tlacitko.disabled = true;
+      tlacitko.textContent = "Vytvářím…";
+    }
+
+    try {
+      if (typeof loadTask !== "function" || typeof saveTask !== "function") {
+        throw new Error("Storage API není dostupné.");
+      }
+
+      const existujici = loadTask().find((note) =>
+        String(note?.title || "").startsWith("📱 LOCAL TEST 584")
+      );
+
+      if (existujici) {
+        localStorage.setItem(
+          "lubanoteLocalScopeTest584Id",
+          String(existujici.id || "")
+        );
+
+        if (tlacitko) {
+          tlacitko.textContent = "LOCAL TEST už existuje ✓";
+        }
+
+        setTimeout(() => window.location.reload(), 500);
+        return;
+      }
+
+      const id = crypto.randomUUID();
+      const ted = new Date().toISOString();
+      const suffix = id.slice(-8);
+
+      const testovaciPoznamka = {
+        id,
+        updatedAt: ted,
+        title: `📱 LOCAL TEST 584 • ${suffix}`,
+        note: "Tato poznámka je test režimu Pouze toto zařízení.",
+        richContent: "",
+        date: "",
+        completed: false,
+        reminder: false,
+        planned: false,
+        favorite: false,
+        notificationId: Date.now() % 2147483647,
+        area: "",
+        pinned: false,
+        isSecret: false,
+        tags: [],
+        todos: [],
+        repeat: null,
+        storageScope: "local"
+      };
+
+      if (
+        window.LubaNoteSync
+          ?.provedLokalniZmenuASynchronizuj
+      ) {
+        await window.LubaNoteSync
+          .provedLokalniZmenuASynchronizuj(
+            () => saveTask(testovaciPoznamka),
+            testovaciPoznamka
+          );
+      } else {
+        await saveTask(testovaciPoznamka);
+      }
+
+      localStorage.setItem(
+        "lubanoteLocalScopeTest584Id",
+        id
+      );
+
+      console.info(
+        "LOCAL TEST 584 vytvořen pouze lokálně:",
+        id
+      );
+
+      if (tlacitko) {
+        tlacitko.textContent = "LOCAL TEST vytvořen ✓";
+      }
+
+      setTimeout(() => window.location.reload(), 500);
+    } catch (error) {
+      console.error("LOCAL TEST 584 se nepodařilo vytvořit:", error);
+
+      if (tlacitko) {
+        tlacitko.disabled = false;
+        tlacitko.textContent = "Chyba – zkus znovu";
+      }
+
+      try {
+        zobrazZpravuAplikace?.(
+          "Local Scope test",
+          error?.message || String(error)
+        );
+      } catch (_) {}
+
+      setTimeout(() => {
+        if (!tlacitko) return;
+        tlacitko.textContent = puvodniText;
+      }, 1800);
+    }
+  }
+
   function pripojKVisualDebugu(panel) {
     if (!panel || panel.querySelector("#ln-dh-launch-section")) {
       return;
@@ -2045,9 +2151,10 @@ async function zkopirujTagVdReport(tlacitko) {
       </div>
       <div class="ln-vd-actions">
         <button id="ln-dh-open" class="ln-vd-btn" type="button">🐞 Otevřít Debug Hub</button>
+        <button id="ln-local-scope-test-584" class="ln-vd-btn" type="button">📱 Vytvořit LOCAL TEST 584</button>
       </div>
       <small class="ln-dh-launch-note">
-        Logování se připojí až po spuštění konkrétního modulu. V normálním provozu neběží.
+        Logování se připojí až po spuštění konkrétního modulu. LOCAL TEST 584 vytvoří jednu běžnou poznámku s storageScope=local pro ověření, že se nikdy neodešle do Supabase.
       </small>
     `;
 
@@ -2058,6 +2165,10 @@ async function zkopirujTagVdReport(tlacitko) {
     }
 
     sekce.querySelector("#ln-dh-open")?.addEventListener("click", otevriHub);
+    sekce.querySelector("#ln-local-scope-test-584")?.addEventListener(
+      "click",
+      (event) => vytvorLocalScopeTest584(event.currentTarget)
+    );
   }
 
   document.addEventListener("lubanote:visual-debug-ready", event => {
