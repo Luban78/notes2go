@@ -11,6 +11,37 @@ const BACKUP_PENDING_DELETE_STORAGE_KEY =
   "lubanotePendingDeletes";
 
 /*
+ * LOKÁLNÍ REŽIM – DATOVÝ PŘÍZNAK (FÁZE L1).
+ * --------------------------------------------
+ * Stávající poznámky bez storageScope se vždy chovají jako cloudové.
+ * Teprve budoucí UI smí vytvořit poznámku se storageScope: "local".
+ * Tento příznak je záměrně součástí samotné poznámky, aby přežil export,
+ * lokální uložení i šifrování Secret poznámky.
+ */
+const NOTE_STORAGE_SCOPE_CLOUD = "cloud";
+const NOTE_STORAGE_SCOPE_LOCAL = "local";
+
+function ziskejRozsahUlozeniPoznamky(note) {
+  return note?.storageScope === NOTE_STORAGE_SCOPE_LOCAL
+    ? NOTE_STORAGE_SCOPE_LOCAL
+    : NOTE_STORAGE_SCOPE_CLOUD;
+}
+
+function jePoznamkaPouzeLokalni(note) {
+  return (
+    ziskejRozsahUlozeniPoznamky(note) ===
+    NOTE_STORAGE_SCOPE_LOCAL
+  );
+}
+
+window.LubaNoteStorageScope = {
+  CLOUD: NOTE_STORAGE_SCOPE_CLOUD,
+  LOCAL: NOTE_STORAGE_SCOPE_LOCAL,
+  ziskej: ziskejRozsahUlozeniPoznamky,
+  jePouzeLokalni: jePoznamkaPouzeLokalni
+};
+
+/*
  * Běžné poznámky zůstávají primárně v localStorage stejně jako dosud.
  * IndexedDB se aktivuje pouze jako bezpečný overflow režim v prohlížeči,
  * který už celý savedTask kvůli kvótě localStorage nepobere (typicky iOS).
@@ -1034,6 +1065,15 @@ async function ulozTajnePoznamkySifrovaneHned(tasks) {
     records.push({
       id: note.id,
       updatedAt: note.updatedAt || new Date().toISOString(),
+      /*
+       * Scope je i mimo ciphertext jen technický routing údaj.
+       * U běžných/cloudových Secret poznámek ho nepřidáváme, takže
+       * stávající formát zůstává beze změny. Lokální Secret ho potřebuje
+       * jako druhou pojistku proti cloud uploadu při zamčeném trezoru.
+       */
+      ...(jePoznamkaPouzeLokalni(note)
+        ? { storageScope: NOTE_STORAGE_SCOPE_LOCAL }
+        : {}),
       encrypted
     });
   }

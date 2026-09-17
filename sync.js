@@ -1,3 +1,27 @@
+/*
+ * LOKÁLNÍ REŽIM – HARD CLOUD GUARD (FÁZE L1).
+ * ---------------------------------------------
+ * Chybějící storageScope = dosavadní cloudové chování.
+ * I kdyby budoucí UI omylem poslalo lokální poznámku do sync cesty,
+ * tyto guardy ji nesmí pustit do Supabase.
+ */
+function jePoznamkaPouzeLokalniProSync(note) {
+  try {
+    if (
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(note) === true
+    ) {
+      return true;
+    }
+  } catch (_) {}
+
+  return note?.storageScope === "local";
+}
+
+function jeSecretRecordPouzeLokalniProSync(record) {
+  return record?.storageScope === "local";
+}
+
 function getLocalNotesForSync() {
   /*
    * Lehká localStorage kopie v overflow režimu nemá Data URL obrázky
@@ -1739,6 +1763,23 @@ function jeCloudSecretRow(row) {
 }
 
 async function uploadLocalNoteToSupabase(note, moznosti = {}) {
+  if (jePoznamkaPouzeLokalniProSync(note)) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "LOCAL",
+      `CLOUD WRITE BLOCKED | id=${note?.id || "?"}`
+    );
+
+    if (moznosti?.vratitDetailV2 === true) {
+      return {
+        ok: true,
+        wrote: false,
+        reason: "local_only"
+      };
+    }
+
+    return true;
+  }
+
   const user = await getCurrentUser();
 
   if (!user || !note?.id) {
@@ -2009,6 +2050,14 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
 }
 
 async function uploadEncryptedSecretRecordToSupabase(record) {
+  if (jeSecretRecordPouzeLokalniProSync(record)) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "LOCAL",
+      `SECRET CLOUD WRITE BLOCKED | id=${record?.id || "?"}`
+    );
+    return true;
+  }
+
   const user = await getCurrentUser();
 
   if (!user || !record?.id || !record?.encrypted) {
@@ -2046,6 +2095,14 @@ async function uploadEncryptedSecretRecordToSupabase(record) {
 async function markNoteDeletedInSupabase(note) {
   if (!note?.id) {
     return false;
+  }
+
+  if (jePoznamkaPouzeLokalniProSync(note)) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "LOCAL",
+      `CLOUD DELETE BLOCKED | id=${note.id}`
+    );
+    return true;
   }
 
   const deletedAt = new Date().toISOString();
@@ -3490,6 +3547,18 @@ async function aplikujSafeBootstrapRadky(rows) {
     const id = String(row?.id || "");
     if (!id) continue;
 
+    /* Lokální-only ID je pro cloud nedotknutelné. */
+    if (
+      jePoznamkaPouzeLokalniProSync(
+        regularMapa.get(id)
+      ) ||
+      jeSecretRecordPouzeLokalniProSync(
+        encryptedMapa.get(id)
+      )
+    ) {
+      continue;
+    }
+
     if (row.deleted_at) {
       regularMapa.delete(id);
       encryptedMapa.delete(id);
@@ -4869,11 +4938,21 @@ async function synchronizujVzdalenePrivateDeltaV2(userId) {
     );
 
     for (const row of secretRows) {
-      mapaRegular.delete(String(row.id));
+      const id = String(row.id);
+      const lokalni = mapaRegular.get(id);
+
+      if (!jePoznamkaPouzeLokalniProSync(lokalni)) {
+        mapaRegular.delete(id);
+      }
     }
 
     for (const row of regularRows) {
       const id = String(row.id);
+      const lokalni = mapaRegular.get(id);
+
+      if (jePoznamkaPouzeLokalniProSync(lokalni)) {
+        continue;
+      }
 
       if (row.deleted_at) {
         mapaRegular.delete(id);
@@ -4937,12 +5016,28 @@ async function synchronizujVzdalenePrivateDeltaV2(userId) {
     );
 
     for (const id of secretIdsKOdstraneniKvuliRegular) {
-      encryptedMapa.delete(String(id));
-      decryptedMapa.delete(String(id));
+      const klic = String(id);
+
+      if (
+        !jeSecretRecordPouzeLokalniProSync(
+          encryptedMapa.get(klic)
+        )
+      ) {
+        encryptedMapa.delete(klic);
+        decryptedMapa.delete(klic);
+      }
     }
 
     for (const row of secretRows) {
       const id = String(row.id);
+
+      if (
+        jeSecretRecordPouzeLokalniProSync(
+          encryptedMapa.get(id)
+        )
+      ) {
+        continue;
+      }
 
       if (row.deleted_at) {
         encryptedMapa.delete(id);
@@ -7412,7 +7507,11 @@ function nactiSnapshotBeznychPoznamekProCilenyV2() {
   const mapa = new Map();
 
   for (const note of getLocalNotesForSync()) {
-    if (!note?.id || note.isSecret === true) {
+    if (
+      !note?.id ||
+      note.isSecret === true ||
+      jePoznamkaPouzeLokalniProSync(note)
+    ) {
       continue;
     }
 
@@ -7457,6 +7556,14 @@ function zaregistrujExplicitniSecretZmenuV2(note) {
     return { podporovano: false, pocet: 0 };
   }
 
+  if (jePoznamkaPouzeLokalniProSync(note)) {
+    return {
+      podporovano: true,
+      pocet: 0,
+      duvod: "local_only"
+    };
+  }
+
   const aktualni =
     nactiAktualniSecretPoznamkuProCilenyV2(note.id);
 
@@ -7493,6 +7600,10 @@ function zaregistrujExplicitniSecretZmenuV2(note) {
  */
 function zaradKonkretniPrivatePoznamkuV2(note) {
   if (!note?.id) {
+    return false;
+  }
+
+  if (jePoznamkaPouzeLokalniProSync(note)) {
     return false;
   }
 
