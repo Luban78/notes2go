@@ -37,6 +37,7 @@
     startup: "Start / sync / síť",
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
+    titleTagSelection: "Název/štítek – Selection Watch",
     gestures: "Gesta – pointer / touch / click",
     keyboardWatch: "Klávesnice – Gboard / focus watch",
     bulletDrag: "Bullet – drag / hierarchie",
@@ -509,6 +510,241 @@
 
     return () => {
       uklidy.forEach(uklid => uklid());
+    };
+  }
+
+  /* PATCH 595 – čistá diagnostika nativního Android selection toolbaru.
+     Nic neopravuje a do výběru/focusu nezasahuje. Sleduje pouze název
+     poznámky a textová pole štítků, aby bylo vidět, zda WebView vytvoří
+     selection, zda přijde selectstart/contextmenu a kdo případně volá
+     preventDefault()/stopPropagation(). */
+  function spustTitleTagSelectionWatch() {
+    const uklidy = [];
+    const startPointeru = new Map();
+
+    const jeCil = target => {
+      const prvek = target instanceof Element
+        ? target
+        : target?.parentElement;
+
+      return Boolean(prvek?.closest?.(
+        '#modalTitle, #newTagInput, #newTagModalInput, .manageTagRenameInput, [data-luba-keyboard-field="tag-editor-new"], [data-luba-keyboard-field="tag-modal-new"], [data-luba-keyboard-field="tag-rename"]'
+      ));
+    };
+
+    const ziskejCil = target => {
+      const prvek = target instanceof Element
+        ? target
+        : target?.parentElement;
+
+      return prvek?.closest?.(
+        '#modalTitle, #newTagInput, #newTagModalInput, .manageTagRenameInput, [data-luba-keyboard-field="tag-editor-new"], [data-luba-keyboard-field="tag-modal-new"], [data-luba-keyboard-field="tag-rename"]'
+      ) || null;
+    };
+
+    const infoPole = prvek => {
+      if (!(prvek instanceof Element)) return 'field=N/A';
+
+      const styl = getComputedStyle(prvek);
+      const casti = [
+        `field=${popisPrvku(prvek)}`,
+        `active=${document.activeElement === prvek ? 'Y' : 'N'}`,
+        `contenteditable=${prvek.getAttribute('contenteditable') ?? '-'}`,
+        `inputmode=${prvek.getAttribute('inputmode') ?? '-'}`,
+        `vk=${prvek.getAttribute('virtualkeyboardpolicy') ?? '-'}`,
+        `readonly=${prvek.hasAttribute('readonly') ? 'Y' : 'N'}`,
+        `disabled=${prvek.hasAttribute('disabled') ? 'Y' : 'N'}`,
+        `userSelect=${styl.userSelect || '-'}`,
+        `webkitUserSelect=${styl.webkitUserSelect || '-'}`,
+        `touchAction=${styl.touchAction || '-'}`,
+        `pointerEvents=${styl.pointerEvents || '-'}`,
+        `callout=${styl.webkitTouchCallout || '-'}`
+      ];
+
+      if ('selectionStart' in prvek) {
+        const start = Number.isFinite(prvek.selectionStart) ? prvek.selectionStart : '-';
+        const end = Number.isFinite(prvek.selectionEnd) ? prvek.selectionEnd : '-';
+        const smer = prvek.selectionDirection || '-';
+        const hodnota = String(prvek.value ?? '');
+        const vyrez = Number.isFinite(prvek.selectionStart) && Number.isFinite(prvek.selectionEnd)
+          ? hodnota.slice(prvek.selectionStart, prvek.selectionEnd)
+          : '';
+        casti.push(`nativeSel=${start}→${end}/${smer}`);
+        casti.push(`selText="${zkratText(vyrez, 36)}"`);
+      } else {
+        casti.push(infoDomVyberu());
+      }
+
+      return casti.join(' | ');
+    };
+
+    const infoRodicu = prvek => {
+      const radky = [];
+      let aktualni = prvek;
+      let hloubka = 0;
+
+      while (aktualni instanceof Element && hloubka < 5) {
+        const styl = getComputedStyle(aktualni);
+        radky.push(
+          `${hloubka}:${popisPrvku(aktualni)}` +
+          `[us=${styl.userSelect || '-'},wus=${styl.webkitUserSelect || '-'},ta=${styl.touchAction || '-'},pe=${styl.pointerEvents || '-'}]`
+        );
+        aktualni = aktualni.parentElement;
+        hloubka += 1;
+      }
+
+      return radky.join(' > ');
+    };
+
+    const zapisEvent = (faze, typ, event) => {
+      const cil = ziskejCil(event.target);
+      if (!cil) return;
+
+      const bod = bodUdalosti(event);
+      const casti = [
+        `${faze} ${typ}`,
+        `target=${popisPrvku(event.target)}`,
+        `prevented=${event.defaultPrevented ? 'Y' : 'N'}`,
+        `cancelable=${event.cancelable ? 'Y' : 'N'}`,
+        `phase=${event.eventPhase}`
+      ];
+
+      if (event.pointerType) {
+        casti.push(`pointer=${event.pointerType}#${event.pointerId}`);
+      }
+
+      if (bod) {
+        casti.push(`@${Math.round(bod.x)},${Math.round(bod.y)}`);
+      }
+
+      if (typ === 'pointerdown' || typ === 'touchstart') {
+        const klic = event.pointerId ?? `touch-${event.changedTouches?.[0]?.identifier ?? 0}`;
+        startPointeru.set(klic, performance.now());
+      }
+
+      if (typ === 'pointerup' || typ === 'pointercancel' || typ === 'touchend' || typ === 'touchcancel') {
+        const klic = event.pointerId ?? `touch-${event.changedTouches?.[0]?.identifier ?? 0}`;
+        const zacatek = startPointeru.get(klic);
+        if (zacatek) {
+          casti.push(`hold=${Math.round(performance.now() - zacatek)}ms`);
+          startPointeru.delete(klic);
+        }
+      }
+
+      casti.push(infoPole(cil));
+      zapis(casti.join(' | '));
+    };
+
+    const typy = [
+      'pointerdown', 'pointerup', 'pointercancel',
+      'touchstart', 'touchend', 'touchcancel',
+      'mousedown', 'mouseup',
+      'selectstart', 'selectionchange',
+      'contextmenu', 'click', 'dblclick',
+      'focusin', 'focusout',
+      'beforeinput', 'input',
+      'copy', 'cut', 'paste'
+    ];
+
+    typy.forEach(typ => {
+      if (typ === 'selectionchange') return;
+      pridejPosluchac(uklidy, window, typ, event => zapisEvent('CAP-WIN', typ, event), true);
+      pridejPosluchac(uklidy, document, typ, event => zapisEvent('BUB-DOC', typ, event), false);
+    });
+
+    pridejPosluchac(uklidy, document, 'selectionchange', () => {
+      const aktivni = document.activeElement;
+      const cil = ziskejCil(aktivni) || (
+        window.getSelection()?.anchorNode
+          ? ziskejCil(window.getSelection().anchorNode)
+          : null
+      );
+      if (!cil) return;
+      zapis(`SELECTIONCHANGE | ${infoPole(cil)}`);
+    }, true);
+
+    /* MutationObserver ukáže, zda některý runtime po longpressu přepíše
+       inputmode/contenteditable/readonly/style/class. */
+    const observer = new MutationObserver(zmeny => {
+      zmeny.forEach(zmena => {
+        const cil = ziskejCil(zmena.target);
+        if (!cil) return;
+        zapis(`MUTATION ${zmena.attributeName || '?'} | ${infoPole(cil)}`);
+      });
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        'inputmode', 'contenteditable', 'virtualkeyboardpolicy',
+        'readonly', 'disabled', 'style', 'class'
+      ]
+    });
+    pridejObserver(uklidy, observer);
+
+    /* Dočasně pouze obalíme preventDefault/stop* a originál VŽDY zavoláme.
+       Tak zjistíme konkrétní JS stack, který nativní výběr případně ruší,
+       bez změny jeho chování. */
+    const prototyp = Event.prototype;
+    const puvodni = {
+      preventDefault: prototyp.preventDefault,
+      stopPropagation: prototyp.stopPropagation,
+      stopImmediatePropagation: prototyp.stopImmediatePropagation
+    };
+
+    const obal = (nazev, original) => function(...args) {
+      try {
+        if (aktivniModul === 'titleTagSelection' && jeCil(this.target)) {
+          const stack = String(new Error().stack || '')
+            .split('\n')
+            .slice(2, 7)
+            .map(radek => radek.trim())
+            .join(' <- ');
+          zapis(`CALL ${nazev} | event=${this.type} | target=${popisPrvku(this.target)} | ${stack || 'stack=N/A'}`);
+        }
+      } catch (_chyba) {}
+      return original.apply(this, args);
+    };
+
+    let obaleno = false;
+    try {
+      prototyp.preventDefault = obal('preventDefault', puvodni.preventDefault);
+      prototyp.stopPropagation = obal('stopPropagation', puvodni.stopPropagation);
+      prototyp.stopImmediatePropagation = obal('stopImmediatePropagation', puvodni.stopImmediatePropagation);
+      obaleno = true;
+    } catch (chyba) {
+      zapis(`WARN Event.prototype nelze obalit | ${chyba?.message || chyba}`);
+    }
+
+    const vypisAktivniCil = () => {
+      const cil = ziskejCil(document.activeElement);
+      if (!cil) return;
+      zapis(`SNAPSHOT | ${infoPole(cil)}`);
+      zapis(`ANCESTORS | ${infoRodicu(cil)}`);
+    };
+
+    pridejPosluchac(uklidy, document, 'focusin', () => {
+      requestAnimationFrame(vypisAktivniCil);
+    }, true);
+
+    zapis('START TITLE/TAG SELECTION WATCH');
+    const prvniCil = ziskejCil(document.activeElement);
+    if (prvniCil) {
+      zapis(`SNAPSHOT | ${infoPole(prvniCil)}`);
+      zapis(`ANCESTORS | ${infoRodicu(prvniCil)}`);
+    } else {
+      zapis('INFO | otevři poznámku nebo pole štítku a udělej dlouhý stisk');
+    }
+
+    return () => {
+      uklidy.forEach(uklid => uklid());
+      if (obaleno) {
+        try {
+          prototyp.preventDefault = puvodni.preventDefault;
+          prototyp.stopPropagation = puvodni.stopPropagation;
+          prototyp.stopImmediatePropagation = puvodni.stopImmediatePropagation;
+        } catch (_chyba) {}
+      }
     };
   }
 
@@ -1580,6 +1816,8 @@
       stopAktivnihoModulu = spustTodoSelection();
     } else if (aktivniModul === "editorSelection") {
       stopAktivnihoModulu = spustEditorSelection();
+    } else if (aktivniModul === "titleTagSelection") {
+      stopAktivnihoModulu = spustTitleTagSelectionWatch();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "keyboardWatch") {
@@ -2191,6 +2429,11 @@ async function zkopirujTagVdReport(tlacitko) {
     startEditorSelection: () => {
       otevriHub();
       selectModulu.value = "editorSelection";
+      spustModul();
+    },
+    startTitleTagSelection: () => {
+      otevriHub();
+      selectModulu.value = "titleTagSelection";
       spustModul();
     },
     startGestures: () => {
