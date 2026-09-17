@@ -15,6 +15,27 @@
 
   const probihajiciUploady = new Map();
 
+  /*
+   * LOCAL SCOPE 590 – TVRDÁ CLOUDOVÁ POJISTKA PRO PŘÍLOHY.
+   * ------------------------------------------------------
+   * Lokální poznámka smí mít obrázky/přílohy ve své device-only cache,
+   * ale žádná attachment servisní cesta kvůli ní nesmí volat RPC ani
+   * Supabase Storage. Tento guard je záměrně přímo v cloudové vrstvě,
+   * aby ochrana nezávisela na tom, odkud byla služba zavolána.
+   */
+  function jePoznamkaPouzeLokalni(note) {
+    try {
+      if (
+        window.LubaNoteStorageScope
+          ?.jePouzeLokalni?.(note) === true
+      ) {
+        return true;
+      }
+    } catch (_error) {}
+
+    return note?.storageScope === "local";
+  }
+
   function najdiAttachmentIdsVHtml(html, cil) {
     if (typeof html !== "string" || !html) {
       return;
@@ -439,6 +460,15 @@
       };
     }
 
+    if (jePoznamkaPouzeLokalni(note)) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: "local_only",
+        count: 0
+      };
+    }
+
     /* PATCH 551 – tvrdá síťová pojistka. I kdyby tuto funkci zavolala
        nějaká starší servisní cesta přímo, běžnou inline fotografii už
        NESMÍ nahrát jako plaintext JPEG do Storage. */
@@ -480,6 +510,10 @@
   }
 
   async function oznacPrilohyPoznamkyJakoAktivni(note) {
+    if (jePoznamkaPouzeLokalni(note)) {
+      return true;
+    }
+
     if (
       !note?.id ||
       note.isSecret === true ||
@@ -544,6 +578,14 @@
   }
 
   async function synchronizujReferencePrilohPoznamky(note) {
+    if (jePoznamkaPouzeLokalni(note)) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: "local_only"
+      };
+    }
+
     if (
       !note?.id ||
       note.isSecret === true ||
@@ -638,7 +680,11 @@
     let neuspesne = 0;
 
     for (const note of seznam) {
-      if (!note?.id || note.isSecret === true) {
+      if (
+        !note?.id ||
+        note.isSecret === true ||
+        jePoznamkaPouzeLokalni(note)
+      ) {
         continue;
       }
 
