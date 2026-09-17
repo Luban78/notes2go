@@ -11161,3 +11161,77 @@ body.lubaCardDragMode .app {
     }
   }
 }
+
+/* ==================================================
+   PATCH 588 – MOBIL: RX/TX/EGRESS VLEVO, STAV VPRAVO
+   --------------------------------------------------
+   OCHRANNÝ BLOK – neměnit logiku syncu.
+   Na telefonech necháváme střed horního panelu volný kvůli fyzické
+   kameře / průstřelu. Interní RX/TX/E hodnoty jsou vlevo ve dvou
+   řádcích, celý stav synchronizace je samostatně vpravo.
+   PC layout zůstává beze změny.
+   ================================================== */
+@media (max-width: 699px) {
+  .syncTrafficBar {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(12px, 1fr) minmax(0, max-content);
+    grid-template-rows: auto auto;
+    align-items: center;
+    justify-content: stretch;
+    align-content: center;
+    column-gap: 6px;
+    row-gap: 1px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* "S" není na mobilu potřeba; uvolní místo pro data vlevo. */
+  .syncTrafficLabel {
+    display: none !important;
+  }
+
+  #syncTrafficRx {
+    grid-column: 1 / 4;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  #syncTrafficTx {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .syncTrafficDivider {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  #syncTrafficEgress {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .syncStatusText {
+    grid-column: 5;
+    grid-row: 1 / 3;
+    align-self: center;
+    justify-self: end;
+
+    order: 0;
+    flex: none;
+    width: auto;
+    min-width: 0;
+    max-width: min(56vw, 240px);
+
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.1;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
