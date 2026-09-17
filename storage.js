@@ -20,6 +20,41 @@ const BACKUP_PENDING_DELETE_STORAGE_KEY =
  */
 const NOTE_STORAGE_SCOPE_CLOUD = "cloud";
 const NOTE_STORAGE_SCOPE_LOCAL = "local";
+const NOTE_ACTIVE_STORAGE_SCOPE_KEY =
+  "lubanoteActiveStorageScopeV1";
+
+function ziskejAktivniRozsahUlozeni() {
+  return localStorage.getItem(
+      NOTE_ACTIVE_STORAGE_SCOPE_KEY
+    ) === NOTE_STORAGE_SCOPE_LOCAL
+    ? NOTE_STORAGE_SCOPE_LOCAL
+    : NOTE_STORAGE_SCOPE_CLOUD;
+}
+
+function nastavAktivniRozsahUlozeni(scope) {
+  const dalsi =
+    scope === NOTE_STORAGE_SCOPE_LOCAL
+      ? NOTE_STORAGE_SCOPE_LOCAL
+      : NOTE_STORAGE_SCOPE_CLOUD;
+
+  const predchozi = ziskejAktivniRozsahUlozeni();
+
+  localStorage.setItem(
+    NOTE_ACTIVE_STORAGE_SCOPE_KEY,
+    dalsi
+  );
+
+  if (predchozi !== dalsi) {
+    window.dispatchEvent(
+      new CustomEvent(
+        "lubanote:storage-scope-change",
+        { detail: { scope: dalsi } }
+      )
+    );
+  }
+
+  return dalsi;
+}
 
 function ziskejRozsahUlozeniPoznamky(note) {
   return note?.storageScope === NOTE_STORAGE_SCOPE_LOCAL
@@ -38,7 +73,9 @@ window.LubaNoteStorageScope = {
   CLOUD: NOTE_STORAGE_SCOPE_CLOUD,
   LOCAL: NOTE_STORAGE_SCOPE_LOCAL,
   ziskej: ziskejRozsahUlozeniPoznamky,
-  jePouzeLokalni: jePoznamkaPouzeLokalni
+  jePouzeLokalni: jePoznamkaPouzeLokalni,
+  ziskejAktivni: ziskejAktivniRozsahUlozeni,
+  nastavAktivni: nastavAktivniRozsahUlozeni
 };
 
 /*

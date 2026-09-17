@@ -137,7 +137,9 @@
     const lzeSdilet =
       jeOtevrenyEditor &&
       !!task?.id &&
-      task.isSecret !== true;
+      task.isSecret !== true &&
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(task) !== true;
 
     shareNoteButton.hidden = !lzeSdilet;
     shareNoteButton.textContent = t("sharing.shareButton", "Sdílet");

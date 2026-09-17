@@ -111,6 +111,14 @@ window.LubaNoteLanguagePacks.push({
 
     "modules.aria": "Main LubaNote sections",
     "modules.notes": "Notes",
+    "storageScope.cloud": "Synced",
+    "storageScope.local": "This device",
+    "storageScope.menu": "Storage",
+    "storageScope.choose": "Where should notes be stored?",
+    "storageScope.localTitle": "This device only",
+    "storageScope.localWarning": "Notes in this space are not synced. If this device is lost or erased, they cannot be restored from the cloud. Regular backups are recommended.",
+    "storageScope.shareTitle": "This device only",
+    "storageScope.shareBlocked": "Sharing requires synced storage. This note remains only on this device.",
     "modules.planner": "Planner",
     "modules.reminders": "Reminders",
 

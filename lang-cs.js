@@ -117,6 +117,14 @@ window.LubaNoteLanguagePacks.push({
 
     "modules.aria": "Hlavní části LubaNote",
     "modules.notes": "Poznámky",
+    "storageScope.cloud": "Synchronizované",
+    "storageScope.local": "Toto zařízení",
+    "storageScope.menu": "Úložiště",
+    "storageScope.choose": "Kam ukládat poznámky?",
+    "storageScope.localTitle": "Pouze toto zařízení",
+    "storageScope.localWarning": "Poznámky v tomto prostoru se nesynchronizují. Při ztrátě nebo vymazání zařízení je nelze obnovit z cloudu. Doporučujeme pravidelnou zálohu.",
+    "storageScope.shareTitle": "Pouze toto zařízení",
+    "storageScope.shareBlocked": "Sdílení vyžaduje synchronizované uložení. Tato poznámka zůstává pouze v tomto zařízení.",
     "modules.planner": "Plán",
     "modules.reminders": "Připomínky",
 

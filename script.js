@@ -205,6 +205,202 @@ const pinnedCards = document.getElementById("pinnedCards");
 const pinnedLeft = document.getElementById("pinnedLeft");
 const pinnedRight = document.getElementById("pinnedRight");
 
+const storageScopeMenuButton =
+  document.getElementById("storageScopeMenuButton");
+const storageScopeMenuIcon =
+  document.getElementById("storageScopeMenuIcon");
+const storageScopeMenuLabel =
+  document.getElementById("storageScopeMenuLabel");
+const notesModuleText =
+  document.querySelector(
+    "#notesModuleButton .moduleTabText"
+  );
+
+const LOCAL_SCOPE_NOTICE_KEY =
+  "lubanoteLocalScopeNoticeSeenV1";
+
+/*
+ * LOCAL SCOPE 585 – AKTIVNÍ PRACOVNÍ PROSTOR.
+ * ---------------------------------------------
+ * Cloud a local poznámky mohou existovat vedle sebe v jednom účtu,
+ * ale v seznamu je vždy viditelný jen jeden prostor. Přepnutí nic
+ * nepřevádí ani nemaže. Chybějící storageScope zůstává cloud.
+ */
+function ziskejAktivniRozsahUlozeniUI() {
+  return (
+    window.LubaNoteStorageScope
+      ?.ziskejAktivni?.() || "cloud"
+  );
+}
+
+function jeAktivniLokalniProstor() {
+  return ziskejAktivniRozsahUlozeniUI() === "local";
+}
+
+function patriPoznamkaDoAktivnihoProstoru(note) {
+  const rozsah =
+    window.LubaNoteStorageScope
+      ?.ziskej?.(note) ||
+    (note?.storageScope === "local"
+      ? "local"
+      : "cloud");
+
+  return rozsah === ziskejAktivniRozsahUlozeniUI();
+}
+
+function prelozRozsahUlozeni(klic, fallback) {
+  return (
+    window.LubaNoteI18n?.t?.(klic, fallback) ||
+    fallback
+  );
+}
+
+function aktualizujUiRozsahuUlozeni() {
+  const lokalni = jeAktivniLokalniProstor();
+  const ikona = lokalni ? "📱" : "☁️";
+  const nazev = lokalni
+    ? prelozRozsahUlozeni(
+        "storageScope.local",
+        "Toto zařízení"
+      )
+    : prelozRozsahUlozeni(
+        "storageScope.cloud",
+        "Synchronizované"
+      );
+
+  if (storageScopeMenuIcon) {
+    storageScopeMenuIcon.textContent = ikona;
+  }
+
+  if (storageScopeMenuLabel) {
+    storageScopeMenuLabel.textContent =
+      `${prelozRozsahUlozeni(
+        "storageScope.menu",
+        "Úložiště"
+      )}: ${nazev}`;
+  }
+
+  if (notesModuleText) {
+    notesModuleText.textContent =
+      `${prelozRozsahUlozeni(
+        "modules.notes",
+        "Poznámky"
+      )} ${ikona}`;
+  }
+
+  storageScopeMenuButton?.setAttribute(
+    "aria-label",
+    `${prelozRozsahUlozeni(
+      "storageScope.menu",
+      "Úložiště"
+    )}: ${nazev}`
+  );
+}
+
+function zobrazUpozorneniLokalnihoProstoruPoprve() {
+  if (
+    localStorage.getItem(LOCAL_SCOPE_NOTICE_KEY) ===
+    "1"
+  ) {
+    return;
+  }
+
+  localStorage.setItem(LOCAL_SCOPE_NOTICE_KEY, "1");
+
+  setTimeout(() => {
+    zobrazZpravuAplikace?.(
+      prelozRozsahUlozeni(
+        "storageScope.localTitle",
+        "Pouze toto zařízení"
+      ),
+      prelozRozsahUlozeni(
+        "storageScope.localWarning",
+        "Poznámky v tomto prostoru se nesynchronizují. Při ztrátě nebo vymazání zařízení je nelze obnovit z cloudu. Doporučujeme pravidelnou zálohu."
+      )
+    );
+  }, 0);
+}
+
+function prepniRozsahUlozeniUI(scope) {
+  const dalsi =
+    window.LubaNoteStorageScope
+      ?.nastavAktivni?.(scope) ||
+    (scope === "local" ? "local" : "cloud");
+
+  aktualizujUiRozsahuUlozeni();
+
+  if (dalsi === "local") {
+    zobrazUpozorneniLokalnihoProstoruPoprve();
+  }
+
+  /*
+   * renderTasks může být později obalen sharingNotes.js. Voláme proto
+   * globální verzi, aby se při přepnutí zároveň správně schovaly nebo
+   * vrátily collaborator Shared karty.
+   */
+  if (typeof window.renderTasks === "function") {
+    window.renderTasks();
+  } else if (typeof renderTasks === "function") {
+    renderTasks();
+  }
+}
+
+function otevriVyberRozsahuUlozeni() {
+  mainMenu.hidden = true;
+  mainMenuButton.setAttribute(
+    "aria-expanded",
+    "false"
+  );
+
+  if (typeof window.otevriVyberovyModal !== "function") {
+    return;
+  }
+
+  window.otevriVyberovyModal({
+    nadpis: prelozRozsahUlozeni(
+      "storageScope.choose",
+      "Kam ukládat poznámky?"
+    ),
+    vybranaHodnota: ziskejAktivniRozsahUlozeniUI(),
+    moznosti: [
+      {
+        hodnota: "cloud",
+        popisek: `☁️ ${prelozRozsahUlozeni(
+          "storageScope.cloud",
+          "Synchronizované"
+        )}`
+      },
+      {
+        hodnota: "local",
+        popisek: `📱 ${prelozRozsahUlozeni(
+          "storageScope.local",
+          "Toto zařízení"
+        )}`
+      }
+    ],
+    poVyberu: async (hodnota) => {
+      prepniRozsahUlozeniUI(hodnota);
+    }
+  });
+}
+
+storageScopeMenuButton?.addEventListener(
+  "click",
+  otevriVyberRozsahuUlozeni
+);
+
+window.addEventListener(
+  "lubanote:storage-scope-change",
+  aktualizujUiRozsahuUlozeni
+);
+
+window.addEventListener(
+  "lubanote:language-change",
+  aktualizujUiRozsahuUlozeni
+);
+
+aktualizujUiRozsahuUlozeni();
+
 
 const modalTimeButton =
   document.getElementById("modalTimeButton");
@@ -593,9 +789,20 @@ let editorRepeat = null;
    STABILNÍ IDENTITA OTEVŘENÉ POZNÁMKY
    ========================================== */
 
+/*
+ * U nové poznámky držíme scope z okamžiku otevření editoru. Uživatel
+ * tak nemůže omylem změnit cíl uložení jen tím, že by se mezitím změnil
+ * globální aktivní prostor. Existující poznámka scope vždy dědí sama ze sebe.
+ */
+let rozsahUlozeniNovePoznamky = null;
+
 function zahajEditorSession(taskId = null) {
   editorSessionId += 1;
   activeTaskId = taskId || null;
+
+  if (taskId) {
+    rozsahUlozeniNovePoznamky = null;
+  }
 }
 
 function vytvorDraftIdPoznamky() {
@@ -609,6 +816,9 @@ function vytvorDraftIdPoznamky() {
 
 function zahajDraftNovePoznamky() {
   const draftId = vytvorDraftIdPoznamky();
+
+  rozsahUlozeniNovePoznamky =
+    ziskejAktivniRozsahUlozeniUI();
 
   taskModal?.setAttribute(
     "data-draft-task-id",
@@ -626,6 +836,7 @@ function ukonciDraftPoznamky() {
   taskModal?.removeAttribute(
     "data-draft-task-id"
   );
+  rozsahUlozeniNovePoznamky = null;
 }
 
 async function zahodLokalniPrilohyDraftu() {
@@ -655,6 +866,18 @@ function uvolniVzdalenouEditorSession(
   taskId = activeTaskId
 ) {
   if (!taskId) {
+    return;
+  }
+
+  const lokalniPoznamka =
+    loadTask().find(
+      (task) => task?.id === taskId
+    );
+
+  if (
+    window.LubaNoteStorageScope
+      ?.jePouzeLokalni?.(lokalniPoznamka) === true
+  ) {
     return;
   }
 
@@ -3212,6 +3435,9 @@ async function ulozAZavriEditor(
           id: ziskejDraftIdPoznamky() ||
             crypto.randomUUID(),
           updatedAt: new Date().toISOString(),
+          ...(rozsahUlozeniNovePoznamky === "local"
+            ? { storageScope: "local" }
+            : {}),
           title,
           note,
           richContent,
@@ -3248,7 +3474,9 @@ async function ulozAZavriEditor(
     
     if (
       cekejNaCloud &&
-      ulozenaPoznamka
+      ulozenaPoznamka &&
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(ulozenaPoznamka) !== true
     ) {
       const synchronizovano =
         await window.LubaNoteSync
@@ -3954,65 +4182,81 @@ window.LubaNoteSharedEditorHost = {
 
 async function openTaskEditorById(taskId) {
   /*
-   * 429 – VLASTNÍ SHARED POZNÁMKA NESMÍ OTEVŘÍT PRIVATE EDITOR.
-   *
-   * Owner shared karta žije kvůli Planneru stále i v savedTask, ale
-   * společný obsah je po přijetí collaboratora autoritativní na serveru.
-   * Kdyby vlastník otevřel tuto lokální kopii běžným editorem, private
-   * sync jeho změnu záměrně nepřijme a při dalším syncu stáhne cloud zpět.
-   * Přesně tím se dříve vracel smazaný obrázek i celá karta.
+   * LOCAL SCOPE 585 – lokální poznámka nesmí při pouhém otevření
+   * sahat na Shared stav, Realtime ani Editor Handoff. Účet může být
+   * online, ale obsah tohoto prostoru zůstává čistě v zařízení.
    */
-  try {
-    await window.LubaNoteSharingNotes
-      ?.zajistiAktualniSharedStav?.();
+  const predbezneTasks = loadTask();
+  const predbeznaPoznamka = predbezneTasks.find(
+    (task) => task?.id === taskId
+  );
+  const jePouzeLokalni =
+    window.LubaNoteStorageScope
+      ?.jePouzeLokalni?.(predbeznaPoznamka) === true;
+
+  if (!jePouzeLokalni) {
+    /*
+     * 429 – VLASTNÍ SHARED POZNÁMKA NESMÍ OTEVŘÍT PRIVATE EDITOR.
+     *
+     * Owner shared karta žije kvůli Planneru stále i v savedTask, ale
+     * společný obsah je po přijetí collaboratora autoritativní na serveru.
+     * Kdyby vlastník otevřel tuto lokální kopii běžným editorem, private
+     * sync jeho změnu záměrně nepřijme a při dalším syncu stáhne cloud zpět.
+     * Přesně tím se dříve vracel smazaný obrázek i celá karta.
+     */
+    try {
+      await window.LubaNoteSharingNotes
+        ?.zajistiAktualniSharedStav?.();
+
+      if (
+        window.LubaNoteSharingNotes
+          ?.jeVlastniSdilenaPoznamka?.(taskId)
+      ) {
+        return await window.LubaNoteSharedEditor
+          ?.otevriSdilenouEditaci?.(taskId);
+      }
+    } catch (error) {
+      console.warn(
+        "Sdílení: ověření owner shared editoru selhalo; private editor se z bezpečnostních důvodů neotevře.",
+        error
+      );
+      return false;
+    }
+
+    /*
+     * Pokud právě dorazil Realtime signál, že je v cloudu novější
+     * verze této poznámky, nejdřív bezpečně dokončíme její sync.
+     * Výjimka: poznámku stále vlastní editor na jiném zařízení;
+     * v takovém případě pokračuje standardní handoff modal.
+     */
+    if (
+      window.LubaNoteSyncRealtime
+        ?.pockejPredOtevrenim
+    ) {
+      const aktualni =
+        await window.LubaNoteSyncRealtime
+          .pockejPredOtevrenim(taskId);
+
+      if (aktualni !== true) {
+        return;
+      }
+    }
 
     if (
-      window.LubaNoteSharingNotes
-        ?.jeVlastniSdilenaPoznamka?.(taskId)
+      window.LubaNoteEditorHandoff
+        ?.pripravOtevreniEditoru
     ) {
-      return await window.LubaNoteSharedEditor
-        ?.otevriSdilenouEditaci?.(taskId);
-    }
-  } catch (error) {
-    console.warn(
-      "Sdílení: ověření owner shared editoru selhalo; private editor se z bezpečnostních důvodů neotevře.",
-      error
-    );
-    return false;
-  }
+      const povoleno =
+        await window.LubaNoteEditorHandoff
+          .pripravOtevreniEditoru(taskId);
 
-  /*
-   * Pokud právě dorazil Realtime signál, že je v cloudu novější
-   * verze této poznámky, nejdřív bezpečně dokončíme její sync.
-   * Výjimka: poznámku stále vlastní editor na jiném zařízení;
-   * v takovém případě pokračuje standardní handoff modal.
-   */
-  if (
-    window.LubaNoteSyncRealtime
-      ?.pockejPredOtevrenim
-  ) {
-    const aktualni =
-      await window.LubaNoteSyncRealtime
-        .pockejPredOtevrenim(taskId);
-
-    if (aktualni !== true) {
-      return;
+      if (povoleno !== true) {
+        return;
+      }
     }
   }
 
-  if (
-    window.LubaNoteEditorHandoff
-      ?.pripravOtevreniEditoru
-  ) {
-    const povoleno =
-      await window.LubaNoteEditorHandoff
-        .pripravOtevreniEditoru(taskId);
-
-    if (povoleno !== true) {
-      return;
-    }
-  }
-  
+  /* Cloud cesta mohla během kontrol přinést novější lokální snapshot. */
   const currentTasks = loadTask();
   
   const index = currentTasks.findIndex(
@@ -4021,8 +4265,12 @@ async function openTaskEditorById(taskId) {
   
   if (index === -1) {
     console.error("Poznámka nebyla nalezena:", taskId);
-    window.LubaNoteEditorHandoff
-      ?.uvolniEditorPoznamky?.(taskId);
+
+    if (!jePouzeLokalni) {
+      window.LubaNoteEditorHandoff
+        ?.uvolniEditorPoznamky?.(taskId);
+    }
+
     return;
   }
   
@@ -4107,7 +4355,10 @@ async function openTaskEditorById(taskId) {
     taskModal.classList.remove("show");
     taskModal.hidden = true;
     document.body.classList.remove("noScroll");
-    window.LubaNoteEditorHandoff?.uvolniEditorPoznamky?.(currentTask.id);
+    if (!jePouzeLokalni) {
+      window.LubaNoteEditorHandoff
+        ?.uvolniEditorPoznamky?.(currentTask.id);
+    }
     zobrazZpravuAplikace(
       "Editor Core V2",
       "Poznámka obsahuje prvek, který Core V2 neumí bezpečně otevřít. Data nebyla změněna."
@@ -4346,6 +4597,11 @@ function renderTasks() {
     );
   let poradiVykresleneKarty = 0;
   sortedTasks.forEach(({ task: loadedTask, originalIndex: index }) => {
+    /* LOCAL SCOPE 585 – oba prostory se v jednom seznamu nikdy nemíchají. */
+    if (!patriPoznamkaDoAktivnihoProstoru(loadedTask)) {
+      return;
+    }
+
     /*
      * PATCH 567 – přesný návrat funkčního filtru Skryté z patche 538.
      * Pozdější přepis script.js zachoval akci hiddenAt, ale omylem odstranil
@@ -5269,7 +5525,9 @@ function zobrazHlavniAkceKarty() {
       ?.jeVlastniSdilenaPoznamka?.(selectedTask.id) === true;
 
   const sdileniZakazano =
-    selectedTask?.isSecret === true;
+    selectedTask?.isSecret === true ||
+    window.LubaNoteStorageScope
+      ?.jePouzeLokalni?.(selectedTask) === true;
 
   if (!pouzivaSvgIkonyRozhrani()) {
     if (window.innerWidth < 900) {
@@ -5914,7 +6172,28 @@ cardMenu.addEventListener("click", async (event) => {
     const tasks = loadTask();
     const selectedTask = tasks[selectedCardIndex];
 
-    if (!selectedTask || selectedTask.isSecret === true) {
+    if (
+      !selectedTask ||
+      selectedTask.isSecret === true ||
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(selectedTask) === true
+    ) {
+      if (
+        selectedTask &&
+        window.LubaNoteStorageScope
+          ?.jePouzeLokalni?.(selectedTask) === true
+      ) {
+        zobrazZpravuAplikace?.(
+          prelozRozsahUlozeni(
+            "storageScope.shareTitle",
+            "Pouze toto zařízení"
+          ),
+          prelozRozsahUlozeni(
+            "storageScope.shareBlocked",
+            "Sdílení vyžaduje synchronizované uložení. Tato poznámka zůstává pouze v tomto zařízení."
+          )
+        );
+      }
       return;
     }
 
@@ -6542,6 +6821,12 @@ function vytvorSnapshotNovehoDraftu() {
     savedAt: new Date().toISOString(),
     puvodniOtiskEditoru,
     otisk,
+    storageScope:
+      existujiciTaskId
+        ? null
+        : (rozsahUlozeniNovePoznamky === "local"
+            ? "local"
+            : "cloud"),
 
     title:
       ziskejNazevPoznamkyZEditoru(),
@@ -6787,6 +7072,11 @@ async function obnovDraftDoEditoru(draft) {
 
     taskModal.dataset.draftTaskId =
       draft.draftId;
+
+    rozsahUlozeniNovePoznamky =
+      draft.storageScope === "local"
+        ? "local"
+        : "cloud";
 
     secretTaskEnabled = false;
     favoriteEnabled =

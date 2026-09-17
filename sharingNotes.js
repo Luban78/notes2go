@@ -959,6 +959,18 @@
       .querySelectorAll(".sharingSharedCard")
       .forEach((card) => card.remove());
 
+    /*
+     * LOCAL SCOPE 585 – collaborator Shared karty patří pouze do
+     * synchronizovaného prostoru. V lokálním prostoru je odstraníme,
+     * ale cache ani serverový stav nijak nemažeme.
+     */
+    if (
+      window.LubaNoteStorageScope
+        ?.ziskejAktivni?.() === "local"
+    ) {
+      return;
+    }
+
     const visible = seradSharedNotes(
       sdilenePoznamky.filter(
         (note) =>
