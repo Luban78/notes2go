@@ -3994,7 +3994,7 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
   if (
     !navigator.onLine ||
     typeof getCurrentUser !== "function" ||
-    typeof getCloudNotesForSync !== "function"
+    typeof nactiSafeBootstrapManifestV2 !== "function"
   ) {
     throw vytvorChybuZalohy(
       "Cloud není dostupný pro bezpečnou obnovu.",
@@ -4011,8 +4011,17 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
     );
   }
 
+  /*
+   * PATCH 599 – RESTORE NESMÍ OBEJÍT HARD EGRESS FUSE.
+   *
+   * Pro přípravu obnovy potřebujeme jen id + revision + updated_at.
+   * Full get_notes_safe() by stáhl celý obsah všech poznámek a PATCH 485
+   * ho správně blokuje. Použijeme proto malý bootstrap manifest bez data
+   * JSONB. Zachováme bezpečný restore-pending mechanismus, ale bez
+   * drahého full snapshotu. Tento blok nevracet na getCloudNotesForSync().
+   */
   const cloudRows =
-    await getCloudNotesForSync();
+    await nactiSafeBootstrapManifestV2();
 
   const cloudPodleId = new Map(
     (Array.isArray(cloudRows) ? cloudRows : [])
