@@ -4117,6 +4117,12 @@ async function obnovKompletniZalohu(
   importedAt,
   moznosti = {}
 ) {
+  const nastavFaziObnovy598 = (faze) => {
+    window.__lubaBackupRestoreStage598 = String(faze || "neznamá fáze");
+  };
+
+  nastavFaziObnovy598("01 · validace backup.json");
+
   if (!jePlatnaKompletniZaloha(imported)) {
     throw new Error(
       "Invalid complete backup format"
@@ -4160,6 +4166,8 @@ async function obnovKompletniZalohu(
     )
   ];
 
+  nastavFaziObnovy598("02 · příprava cloud sync plánu");
+
   const plan =
     await vytvorPlanCloudoveSynchronizacePoObnove(
       obnovovanaId,
@@ -4188,6 +4196,8 @@ async function obnovKompletniZalohu(
       !localRestoreIds.has(zaznam?.id)
   );
 
+  nastavFaziObnovy598("03 · kontrola vlastníka zálohy");
+
   const ownerUserId =
     imported?.owner?.userId || null;
 
@@ -4200,6 +4210,8 @@ async function obnovKompletniZalohu(
       "Tato kompletní záloha patří jinému účtu LubaNote. Obnova byla bezpečně zastavena."
     );
   }
+
+  nastavFaziObnovy598("04 · příprava příloh do lokální cache");
 
   if (
     typeof moznosti.predObnovou === "function"
@@ -4214,6 +4226,8 @@ async function obnovKompletniZalohu(
       ownerUserId
     });
   }
+
+  nastavFaziObnovy598("05 · obnova Secret nastavení");
 
   if (imported.secretSettings) {
     if (
@@ -4230,6 +4244,8 @@ async function obnovKompletniZalohu(
       );
     }
   }
+
+  nastavFaziObnovy598("06 · obnova cloudových štítků");
 
   const pouzivaSifrovaneTajneStitkyV4 =
     imported.secretTagEncoding ===
@@ -4264,6 +4280,8 @@ async function obnovKompletniZalohu(
     );
   }
 
+  nastavFaziObnovy598("07 · obnova LOCAL štítků");
+
   const maLokalniStitkyVZaloze =
     imported.localTagEncoding ===
       "device-records-v1" &&
@@ -4287,6 +4305,8 @@ async function obnovKompletniZalohu(
     }
   }
 
+  nastavFaziObnovy598("08 · příprava cloudových příloh na serveru");
+
   if (
     typeof moznosti.predLokalnimUlozenim ===
       "function"
@@ -4302,17 +4322,25 @@ async function obnovKompletniZalohu(
     });
   }
 
+  nastavFaziObnovy598("09 · uložení sync metadat");
+
   aplikujPlanCloudoveSynchronizacePoObnove(
     plan
   );
+
+  nastavFaziObnovy598("10 · uložení běžných poznámek");
 
   await ulozBeznePoznamkyPrimo(
     regularNotes,
     false
   );
+  nastavFaziObnovy598("11 · uložení Secret poznámek");
+
   ulozSifrovaneTajneZaznamy(
     imported.secretNotes
   );
+
+  nastavFaziObnovy598("12 · uložení Plánu a nastavení");
 
   localStorage.setItem(
     "plannedItems",
@@ -4336,6 +4364,8 @@ async function obnovKompletniZalohu(
   vycistiDesifrovaneTajnePoznamky();
   zvysReviziLokalnichZmenPoznamek();
 
+  nastavFaziObnovy598("13 · obnova systémových notifikací");
+
   if (
     typeof obnovSystemoveNotifikacePoKompletniObnove ===
     "function"
@@ -4352,6 +4382,8 @@ async function obnovKompletniZalohu(
     }
   }
 
+  nastavFaziObnovy598("14 · zařazení cloudových příloh k uploadu");
+
   if (
     typeof moznosti.predReload === "function"
   ) {
@@ -4366,6 +4398,7 @@ async function obnovKompletniZalohu(
     });
   }
 
+  nastavFaziObnovy598("15 · reload po obnově");
   location.reload();
 }
 
@@ -4408,10 +4441,21 @@ async function provedKompletniObnovuSeZpracovanimChyby(
       error
     );
 
+    const faze598 =
+      window.__lubaBackupRestoreStage598 ||
+      "nezjištěná fáze";
+
+    const technickeDetaily598 = [
+      error?.message,
+      error?.code ? `code=${error.code}` : "",
+      error?.details ? `details=${error.details}` : "",
+      error?.hint ? `hint=${error.hint}` : ""
+    ].filter(Boolean).join(" · ");
+
     zobrazZpravuAplikace(
-      "Záloha a obnova",
+      "Záloha a obnova · DIAG 598",
       error?.uzivatelskaZprava ||
-      "Soubor není platná kompletní záloha LubaNote."
+      `Obnova selhala ve fázi ${faze598}.${technickeDetaily598 ? `\n\n${technickeDetaily598}` : ""}`
     );
 
     return;
