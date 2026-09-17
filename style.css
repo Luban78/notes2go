@@ -11235,3 +11235,33 @@ body.lubaCardDragMode .app {
     text-overflow: ellipsis;
   }
 }
+
+/* ==========================================================
+   PATCH 592 – Správa štítků nad LubaKeyboard
+
+   Přejmenování štítku používá vlastní LubaKeyboard. Ta je fixed a na rozdíl
+   od systémové IME nezmenšuje visualViewport, takže centrovaný modal mohl
+   pokračovat pod klávesnici. Při otevřené LubaKeyboard proto využijeme její
+   skutečně změřenou --ln-lk-height, modal přesuneme do volného prostoru nad
+   klávesnicí a vnitřní seznam necháme scrollovat. Do logiky štítků ani do
+   keyboard handoffu 570/574 se tímto patchem nesahá.
+   ========================================================== */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .manageTagsModal:not([hidden]) {
+    align-items: flex-start;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 12px);
+  }
+
+  body.ln-luba-klavesnice-open .manageTagsModal:not([hidden]) .manageTagsContent {
+    max-height: max(
+      180px,
+      calc(100dvh - var(--ln-lk-height, 260px) - max(24px, env(safe-area-inset-top)))
+    );
+  }
+
+  body.ln-luba-klavesnice-open .manageTagsModal:not([hidden]) #manageTagsList {
+    scroll-padding-top: 12px;
+    scroll-padding-bottom: 12px;
+  }
+}
