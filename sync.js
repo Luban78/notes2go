@@ -4930,21 +4930,87 @@ async function synchronizujVzdalenePrivateDeltaV2(userId) {
     return false;
   }
 
-  const ids = Array.from(idsKeStazeni);
+  const vsechnaIds = Array.from(idsKeStazeni);
 
   /*
-   * Owned Shared poznámku nesmí private V2 přebrat. Její vlastní
-   * shared editor/sync zůstává autoritou.
+   * PATCH 628 – OWNED SHARED NESMÍ BLOKOVAT PRIVATE DELTA.
+   * -----------------------------------------------------
+   * Shared změna se může objevit ve společném note change feedu a tím
+   * změnit private fingerprint/head. Obsah vlastní sdílené poznámky ale
+   * patří výhradně shared subsystému, takže private V2 ji nesmí stáhnout
+   * ani mergovat. Staré chování odložilo CELOU delta dávku, jakmile v ní
+   * našlo jediné owned-shared ID; cursor se neposunul a start pak zůstal
+   * navždy v pending retry smyčce.
+   *
+   * Bezpečné pravidlo: owned-shared ID z private dávky pouze vyfiltruj,
+   * ale jeho seq se stále započítá do posledniSeq. Tím shared změnu
+   * obslouží sharingNotes/Realtime a private cursor může pokračovat dál.
    */
   const vlastniSdileneId =
     await ziskejVlastniSdileneIdProSync();
 
-  if (ids.some((id) => vlastniSdileneId.has(id))) {
+  const preskocenaOwnedSharedIds = vsechnaIds.filter((id) =>
+    vlastniSdileneId.has(id)
+  );
+
+  const ids = vsechnaIds.filter((id) =>
+    !vlastniSdileneId.has(id)
+  );
+
+  if (preskocenaOwnedSharedIds.length > 0) {
     window.LubaNoteStartupDiag?.zapis?.(
       "V2",
-      "REMOTE DELTA DEFER | owned-shared"
+      `REMOTE DELTA SKIP OWNED SHARED | count=${preskocenaOwnedSharedIds.length}`
     );
-    return false;
+  }
+
+  if (ids.length === 0) {
+    const server = await ziskejServerovyPrivateFingerprint();
+
+    if (!server?.fingerprint) {
+      return false;
+    }
+
+    const head = await ziskejPrivateSyncV2Head();
+
+    if (
+      head === null ||
+      head !== posledniSeq ||
+      lokalniStavSeBehemSyncuZmenil(
+        revizeLokalnihoStavuPriStartu
+      ) ||
+      ziskejTrvalouGeneraciLokalnichZmenProFastSync() !==
+        generacePriStartu
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `REMOTE DELTA DEFER | confirm-race head=${head ?? "?"} seq=${posledniSeq}`
+      );
+      return false;
+    }
+
+    const fastUlozen = ulozFastSyncStav({
+      userId,
+      serverFingerprint: server.fingerprint,
+      localGeneration: generacePriStartu
+    });
+
+    if (!fastUlozen) {
+      return false;
+    }
+
+    if (!ulozPrivateSyncV2Cursor(userId, posledniSeq)) {
+      return false;
+    }
+
+    nastavKoncovyStavSynchronizaceUI();
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `REMOTE DELTA APPLIED | notes=0 shared-skipped=${preskocenaOwnedSharedIds.length} seq=${cursor.lastSeq}->${posledniSeq}`
+    );
+
+    return true;
   }
 
   const cloudRows = await nactiCloudPoznamkyPodleIdV2(ids);
