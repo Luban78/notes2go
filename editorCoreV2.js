@@ -514,6 +514,14 @@
     } catch (_error) {}
   }
   const PRAH_VNOR_SEZNAMU = 38;
+
+  /*
+   * FIX 618 – destruktivní TODO akce musí vyžadovat zřetelně delší tah.
+   * Hotovo/Vrátit ponecháváme na odladěných 38 px, ale Smazat aktivujeme
+   * až po 88 px doleva. Tím se nesahá do long-pressu, vertikálního MOVE ani
+   * Bullet zanoření/vysunutí; mění se jen bezpečnostní práh TODO Smazat.
+   */
+  const PRAH_TODO_SMAZAT = 88;
   let v2DragSeznamu = null;
   let v2DragSeznamCasovac = null;
   let v2ListDropIndicator = null;
@@ -4831,14 +4839,17 @@
      *   TODO   doprava/doleva = hotovo/smazat.
      * Tím se nemění touchstart, long-press ani selection arbitráž z FIX 521.
      */
+    const chceTodoHotovo = jeTodoDrag && dx > PRAH_VNOR_SEZNAMU;
+    const chceTodoSmazat = jeTodoDrag && dx < -PRAH_TODO_SMAZAT;
+
     preview.classList.toggle("chce-zanorit", !jeTodoDrag && dx > PRAH_VNOR_SEZNAMU);
     preview.classList.toggle("chce-vysunout", !jeTodoDrag && dx < -PRAH_VNOR_SEZNAMU);
-    preview.classList.toggle("chce-todo-hotovo", jeTodoDrag && dx > PRAH_VNOR_SEZNAMU);
-    preview.classList.toggle("chce-todo-smazat", jeTodoDrag && dx < -PRAH_VNOR_SEZNAMU);
+    preview.classList.toggle("chce-todo-hotovo", chceTodoHotovo);
+    preview.classList.toggle("chce-todo-smazat", chceTodoSmazat);
 
-    /* Při horizontální TODO akci nesmí modrá/fialová drop čára naznačovat
-       vertikální přesun. Uvnitř tolerance se vrátí běžný reorder. */
-    if (jeTodoDrag && Math.abs(dx) > PRAH_VNOR_SEZNAMU) {
+    /* Při skutečně aktivované horizontální TODO akci nesmí drop čára
+       naznačovat vertikální přesun. U Smazat používáme záměrně větší práh. */
+    if (chceTodoHotovo || chceTodoSmazat) {
       indicator.hidden = true;
     }
 
@@ -4852,10 +4863,10 @@
     const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
 
     /*
-     * FIX 526 – TODO používá stejnou horizontální osu a STEJNÝ práh jako
-     * Bullet zanořit/vysunout. Žádný samostatný swipe engine.
+     * FIX 526 + 618 – TODO dál používá stejný long-press MOVE engine.
+     * Destruktivní Smazat má ale záměrně vyšší bezpečnostní práh:
      *   dx > +PRAH_VNOR_SEZNAMU => Hotovo / u hotového Vrátit
-     *   dx < -PRAH_VNOR_SEZNAMU => Smazat
+     *   dx < -PRAH_TODO_SMAZAT  => Smazat
      *   jinak                       běžný vertikální přesun TODO
      */
     if (jeTodoBlok(dokument.bloky[zdroj])) {
@@ -4876,7 +4887,7 @@
         return zmeneno;
       }
 
-      if (dx < -PRAH_VNOR_SEZNAMU) {
+      if (dx < -PRAH_TODO_SMAZAT) {
         dokument.bloky.splice(zdroj, 1);
         normalizujDokument();
         const vyberPoSmazani = obnovV2CaretPoPresunu(drag.caretPredPresunem);

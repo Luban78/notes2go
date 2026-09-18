@@ -471,22 +471,36 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 }
 
 
-/* FIX 526 – stejné horizontální gesto jako Bullet, jen jiný význam pro TODO. */
+/* FIX 526 + 618 – TODO akce mají jasnou sémantickou barvu a vysoký kontrast.
+   Nepoužíváme zde --color-accent-text, protože v některých tématech je
+   záměrně blízko barvě akcentu a na malém akčním štítku splývá. */
+.ln-v2-list-drag-preview.chce-todo-hotovo {
+  border-color: #20a464;
+}
+
 .ln-v2-list-drag-preview.chce-todo-hotovo::after {
   content: "→ Hotovo";
-  background: var(--color-accent, #8958f6);
-  color: var(--color-accent-text, #fff);
+  background: #168a52;
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,.34);
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(0,0,0,.28);
+  text-shadow: 0 1px 1px rgba(0,0,0,.38);
 }
 
 .ln-v2-list-drag-preview.chce-todo-smazat {
-  border-style: dashed;
+  border-color: #e05252;
+  border-style: solid;
 }
 
 .ln-v2-list-drag-preview.chce-todo-smazat::after {
   content: "← Smazat";
-  background: var(--color-surface, #211b29);
-  color: var(--color-text, #fff);
-  border: 1px solid var(--color-border, rgba(255,255,255,.2));
+  background: #c73535;
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,.34);
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(0,0,0,.28);
+  text-shadow: 0 1px 1px rgba(0,0,0,.38);
 }
 
 /* Obrázek uvnitř položky seznamu je příloha celé položky. Neobtéká text
