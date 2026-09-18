@@ -2366,23 +2366,24 @@
     if (event.button != null && event.button !== 0) return;
 
     /*
-     * PATCH 616 – PC DOCK BUTTONS:
-     * Na desktop Chrome nesmí drag handler převzít pointer z tlačítek VD/DH,
-     * kladívka ani +/-; jinak se klik jen vizuálně stiskne, ale click se
-     * nedoručí cílovému tlačítku. Tažení docku začíná pouze z prázdné plochy.
+     * PATCH 617 – DOCK CLICK + DRAG ARBITRACE:
+     * Pointer capture NESMÍ vzniknout hned při pointerdown, protože desktop
+     * Chrome pak může spolknout click tlačítek VD / DH / kladívka.
+     * Nejprve jen založíme kandidáta na drag. Capture převezmeme až ve chvíli,
+     * kdy se kurzor skutečně pohne o >= 7 px. Díky tomu krátký klik zůstane
+     * klikem a tažení může začít i přímo z VD / DH / kladívka nebo popisku.
+     * +/- si dál drží vlastní press-repeat a drag z nich záměrně nezačíná.
      */
-    if (event.target.closest("button, input, select, textarea, label, a")) return;
-
     const rect = refs.quickbar.getBoundingClientRect();
     state.quickDrag = {
       pointerId: event.pointerId ?? "mouse",
       x: event.clientX,
       y: event.clientY,
       left: rect.left,
-      top: rect.top
+      top: rect.top,
+      captured: false
     };
     state.quickMoved = false;
-    try { refs.quickbar.setPointerCapture?.(event.pointerId); } catch (_) {}
   }
 
   function moveQuickDrag(event) {
@@ -2391,7 +2392,17 @@
     const dx = event.clientX - state.quickDrag.x;
     const dy = event.clientY - state.quickDrag.y;
     if (Math.hypot(dx, dy) < 7 && !state.quickMoved) return;
-    state.quickMoved = true;
+
+    if (!state.quickMoved) {
+      state.quickMoved = true;
+      if (!state.quickDrag.captured) {
+        try {
+          refs.quickbar.setPointerCapture?.(event.pointerId);
+          state.quickDrag.captured = true;
+        } catch (_) {}
+      }
+    }
+
     const rect = refs.quickbar.getBoundingClientRect();
     const left = clamp(state.quickDrag.left + dx, 0, Math.max(0, window.innerWidth - rect.width));
     const top = clamp(state.quickDrag.top + dy, 0, Math.max(0, window.innerHeight - rect.height));
@@ -2723,6 +2734,7 @@
       if (document.hidden) stopQuickPressRepeat();
     });
     refs.dockVd?.addEventListener("click", event => {
+      if (state.quickMoved) return;
       event.preventDefault();
       event.stopPropagation();
       if (!jeAdminNastrojPovolen()) return;
@@ -2735,6 +2747,7 @@
       }
     });
     refs.dockDh?.addEventListener("click", event => {
+      if (state.quickMoved) return;
       event.preventDefault();
       event.stopPropagation();
       if (!jeAdminNastrojPovolen()) return;
