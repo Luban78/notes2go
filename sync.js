@@ -4423,6 +4423,15 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
       const pseudoTombstones = [];
       const localUploadIds = new Set();
       const unresolvedIds = new Set();
+      // DIAG 607: pouze vysvětluje, PROČ zůstalo ID unresolved.
+      // Nemění rozhodování reconcile, pořadí requestů ani obsah syncu.
+      const unresolvedDuvody = new Map();
+      const oznacUnresolved = (idRaw, duvod) => {
+        const id = String(idRaw);
+        unresolvedIds.add(id);
+        if (!unresolvedDuvody.has(id)) unresolvedDuvody.set(id, new Set());
+        unresolvedDuvody.get(id).add(String(duvod || "unknown"));
+      };
 
       for (const row of manifest) {
         const id = String(row.id);
@@ -4473,7 +4482,7 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
         } else if (localSeZmenil) {
           if (vlastniSdileneId.has(id)) {
             /* Shared obsah nikdy neposíláme private save_note_safe. */
-            unresolvedIds.add(id);
+            oznacUnresolved(id, "shared-owner-local-dirty");
           } else {
             localUploadIds.add(id);
           }
@@ -4496,7 +4505,7 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
 
         const meta = ziskejCloudSyncMeta(id);
         if (meta) {
-          unresolvedIds.add(id);
+          oznacUnresolved(id, "local-known-missing-from-owner-manifest");
         } else {
           localUploadIds.add(id);
         }
@@ -4553,7 +4562,7 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
 
         for (const id of ids) {
           if (!returned.has(String(id))) {
-            unresolvedIds.add(String(id));
+            oznacUnresolved(id, "targeted-fetch-missing");
           }
         }
 
@@ -4598,14 +4607,14 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
       }
 
       for (const id of revizniMerge.konfliktniId) {
-        unresolvedIds.add(String(id));
+        oznacUnresolved(id, "revision-merge-conflict");
       }
 
       for (const id of idEditovanychJinde) {
         if (
           cloudRows.some((row) => String(row?.id || "") === String(id))
         ) {
-          unresolvedIds.add(String(id));
+          oznacUnresolved(id, "remote-editor-active");
         }
       }
 
@@ -4680,7 +4689,7 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
 
         const ok = await uploadExistingReconcileWinnerV2(id);
         if (ok !== true) {
-          unresolvedIds.add(id);
+          oznacUnresolved(id, "upload-failed");
           break;
         }
       }
@@ -4690,6 +4699,20 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
           "V2",
           `RECONCILE DEFER | unresolved=${unresolvedIds.size} id=${Array.from(unresolvedIds)[0]}`
         );
+
+        // DIAG 607: vypsat každé problematické ID + důvod a bezpečná metadata.
+        // Žádný obsah poznámky ani title se neloguje.
+        for (const id of unresolvedIds) {
+          const meta = ziskejCloudSyncMeta(id);
+          const winner = lokalni.winners.get(id);
+          const row = manifestMapa.get(id);
+          const duvody = Array.from(unresolvedDuvody.get(id) || ["unknown"]).join(",");
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            `RECONCILE UNRESOLVED | id=${id} | reason=${duvody} | manifest=${row ? "Y" : "N"} | local=${winner ? "Y" : "N"} | ownShared=${vlastniSdileneId.has(id) ? "Y" : "N"} | shared=${window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(id) === true ? "Y" : "N"} | metaRev=${meta?.revision ?? "-"} | cloudRev=${row?.revision ?? "-"}`
+          );
+        }
+
         nastavStavSynchronizaceUI("pending");
         return false;
       }
