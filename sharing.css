@@ -1364,3 +1364,17 @@ body.sharingReadOnlyOpen {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ============================================================
+   PATCH 630 – povinné @username při prvním vstupu
+   ------------------------------------------------------------
+   Povinný modal nemá Zrušit / X. Jediná akce je vytvoření identity.
+   Geometrie nad LubaKeyboard z PATCH 623 zůstává beze změny.
+   ============================================================ */
+.sharingIdentityModalRequired .sharingIdentityActions {
+  grid-template-columns: 1fr;
+}
+
+.sharingIdentityModalRequired .sharingIdentityPrimary {
+  width: 100%;
+}

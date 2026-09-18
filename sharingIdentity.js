@@ -25,7 +25,15 @@
   let modalInput = null;
   let modalChyba = null;
   let modalPotvrdit = null;
+  let modalZavrit = null;
+  let modalZrusit = null;
   let hodnotaUsername = null;
+
+  /* PATCH 630 – povinné veřejné @username.
+     Gate se aktivuje až po autoritativním serverovém profilu bez username,
+     takže offline cache nikdy sama nerozhodne, že uživatel username nemá. */
+  let povinneUsernameAktivni = false;
+  let povinneUsernameUserId = null;
 
   function t(klic, zaloha) {
     return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha;
@@ -168,6 +176,60 @@
     modalChyba.hidden = !text;
   }
 
+  function aplikujRezimPovinnehoUsername() {
+    modal?.classList.toggle(
+      "sharingIdentityModalRequired",
+      povinneUsernameAktivni
+    );
+
+    document.body.classList.toggle(
+      "sharingUsernameRequired",
+      povinneUsernameAktivni
+    );
+
+    if (modalZavrit) {
+      modalZavrit.hidden = povinneUsernameAktivni;
+    }
+
+    if (modalZrusit) {
+      modalZrusit.hidden = povinneUsernameAktivni;
+    }
+  }
+
+  function nastavPovinneUsername(aktivni) {
+    const nove = aktivni === true;
+
+    povinneUsernameAktivni = nove;
+    povinneUsernameUserId = nove
+      ? zjistiUserId()
+      : null;
+
+    aplikujRezimPovinnehoUsername();
+    aplikujPrekladyUi();
+  }
+
+  function dokoncitPovinneUsername() {
+    const byloPovinne = povinneUsernameAktivni;
+
+    nastavPovinneUsername(false);
+
+    if (byloPovinne) {
+      zavriUsernameModal({ vynutit: true });
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "lubanote:username-ready",
+          {
+            detail: {
+              userId: zjistiUserId(),
+              username: aktualniUsername
+            }
+          }
+        )
+      );
+    }
+  }
+
   function vytvorNastaveni() {
     if (document.getElementById("sharingIdentitySettingsSection")) {
       hodnotaUsername =
@@ -249,6 +311,7 @@
     zavrit.type = "button";
     zavrit.className = "sharingIdentityClose lubaIconOnlyButton";
     zavrit.setAttribute("aria-label", "Zavřít");
+    modalZavrit = zavrit;
 
     if (window.LubaNoteIcons?.nastavJenIkonu) {
       window.LubaNoteIcons.nastavJenIkonu(
@@ -296,6 +359,7 @@
     zrusit.id = "sharingIdentityCancel";
     zrusit.type = "button";
     zrusit.className = "sharingIdentitySecondary";
+    modalZrusit = zrusit;
 
     modalPotvrdit = document.createElement("button");
     modalPotvrdit.id = "sharingIdentitySave";
@@ -329,6 +393,7 @@
       }
     });
 
+    aplikujRezimPovinnehoUsername();
     aplikujPrekladyUi();
   }
 
@@ -357,15 +422,27 @@
     }
 
     if (title) {
-      title.textContent =
-        t("sharing.usernameModalTitle", "Uživatelské jméno pro sdílení");
+      title.textContent = povinneUsernameAktivni
+        ? t(
+          "sharing.usernameRequiredTitle",
+          "Vytvoř @username"
+        )
+        : t(
+          "sharing.usernameModalTitle",
+          "Uživatelské jméno pro sdílení"
+        );
     }
 
     if (description) {
-      description.textContent = t(
-        "sharing.usernameDescription",
-        "Ostatní tě najdou pouze přes přesné @username. Tvůj e-mail se při sdílení nezobrazuje."
-      );
+      description.textContent = povinneUsernameAktivni
+        ? t(
+          "sharing.usernameRequiredDescription",
+          "Než začneš LubaNote používat, vytvoř si veřejné @username pro sdílení a chat. Ostatní tě najdou jen přes přesné @username; tvůj e-mail se nezobrazuje."
+        )
+        : t(
+          "sharing.usernameDescription",
+          "Ostatní tě najdou pouze přes přesné @username. Tvůj e-mail se při sdílení nezobrazuje."
+        );
     }
 
     if (modalInput) {
@@ -379,15 +456,25 @@
     }
 
     if (save) {
-      save.textContent =
-        t("sharing.usernameSave", "Uložit");
+      save.textContent = povinneUsernameAktivni
+        ? t(
+          "sharing.usernameRequiredSave",
+          "Vytvořit a pokračovat"
+        )
+        : t("sharing.usernameSave", "Uložit");
     }
 
+    aplikujRezimPovinnehoUsername();
     nastavUsernameDoUi(aktualniUsername);
   }
 
-  function otevriUsernameModal() {
+  function otevriUsernameModal({ povinne = false } = {}) {
     vytvorModal();
+
+    if (povinne) {
+      nastavPovinneUsername(true);
+    }
+
     nastavChybu();
 
     modalInput.value = aktualniUsername || "";
@@ -396,8 +483,12 @@
        Výběr textu/focus vznikne až po skutečném tapu do pole. */
   }
 
-  function zavriUsernameModal() {
+  function zavriUsernameModal({ vynutit = false } = {}) {
     if (!modal) {
+      return;
+    }
+
+    if (povinneUsernameAktivni && !vynutit) {
       return;
     }
 
@@ -441,6 +532,28 @@
       const username = ziskejUsernameZRpc(data);
       nastavUsernameDoUi(username);
       ulozCache(username);
+
+      /* PATCH 630 – povinnost vzniká pouze z úspěšné serverové odpovědi.
+         Chybějící cache nebo offline stav tedy existující účet nezablokuje. */
+      if (userId === zjistiUserId()) {
+        if (username) {
+          if (
+            povinneUsernameAktivni &&
+            (!povinneUsernameUserId ||
+              povinneUsernameUserId === userId)
+          ) {
+            dokoncitPovinneUsername();
+          }
+        } else if (
+          window.LubaNoteMasterPasswordOnboarding
+            ?.jeAktivni?.() !== true
+        ) {
+          /* Hlavní šifrovací heslo má vždy přednost. Při prvním vstupu
+             se @username zobrazí až po dokončení master-password gate;
+             následný account-active profil načte znovu. */
+          otevriUsernameModal({ povinne: true });
+        }
+      }
 
       return {
         userId,
@@ -523,7 +636,6 @@
     }
 
     modalPotvrdit.disabled = true;
-    const puvodniText = modalPotvrdit.textContent;
     modalPotvrdit.textContent =
       t("sharing.usernameSaving", "Ukládám…");
     nastavChybu();
@@ -568,15 +680,32 @@
       );
     } finally {
       modalPotvrdit.disabled = false;
-      modalPotvrdit.textContent =
-        puvodniText || t("sharing.usernameSave", "Uložit");
+      aplikujPrekladyUi();
     }
   }
 
   function resetProJinyUcet() {
     aktualniUsername = null;
+    nastavPovinneUsername(false);
+    zavriUsernameModal({ vynutit: true });
     nastavUsernameDoUi(null);
   }
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key === "Escape" &&
+        povinneUsernameAktivni &&
+        modal &&
+        !modal.hidden
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true
+  );
 
   vytvorNastaveni();
 
@@ -639,6 +768,7 @@
   window.LubaNoteSharingIdentity = {
     nactiProfil,
     otevriUsernameModal,
-    ziskejUsername: () => aktualniUsername
+    ziskejUsername: () => aktualniUsername,
+    jePovinneUsernameAktivni: () => povinneUsernameAktivni
   };
 })();
