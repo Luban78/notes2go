@@ -1,10 +1,10 @@
 /* ========================================
    LUBANOTE – DEBUG HUB
-   Trvale dostupná, ale běžně neaktivní diagnostika.
+   Trvale přítomná, ale běžně neaktivní diagnostika.
 
-   Aktivace:
-   1) 5× tap na logo otevře Visual Debug
-   2) v něm tlačítko „🐞 Diagnostika“
+   Aktivace od patche 615:
+   1) serverově ověřený Admin Dashboard
+   2) samostatné tlačítko „Debug Hub"
    3) konkrétní modul se začne logovat až po „Spustit"
 
    Diagnostický build může nastavit window.LUBANOTE_TAG_VD_AUTO = true.
@@ -32,6 +32,14 @@
   let geometrieHubuPredMinimalizaci = null;
 
   const MAX_ZAZNAMU = 700;
+
+  function jeAdminNastrojPovolen() {
+    try {
+      return window.LubaNoteAdminTools?.isAllowed?.() === true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   const MODULY = {
     startup: "Start / sync / síť",
@@ -1992,7 +2000,11 @@
   }
 
   function spustStartupAutomatickyPokudJeTreba() {
-    if (!window.LUBANOTE_TAG_VD_AUTO || aktivniModul) {
+    if (
+      !jeAdminNastrojPovolen() ||
+      !window.LUBANOTE_TAG_VD_AUTO ||
+      aktivniModul
+    ) {
       return;
     }
 
@@ -2466,6 +2478,10 @@ async function zkopirujTagVdReport(tlacitko) {
   }
 
   function otevriHub() {
+    if (!jeAdminNastrojPovolen()) {
+      return false;
+    }
+
     const panel = vytvorHub();
     panel.hidden = false;
 
@@ -2485,6 +2501,16 @@ async function zkopirujTagVdReport(tlacitko) {
     prekresli();
     document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
       detail: { open: true }
+    }));
+    return true;
+  }
+
+  function zavriHub() {
+    if (!hub) return;
+    nastavMenuModuluOtevrene(false);
+    hub.hidden = true;
+    document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
+      detail: { open: false }
     }));
   }
 
@@ -2594,100 +2620,31 @@ async function zkopirujTagVdReport(tlacitko) {
     }
   }
 
-  function pripojKVisualDebugu(panel) {
-    if (!panel || panel.querySelector("#ln-dh-launch-section")) {
-      return;
-    }
+  /*
+   * PATCH 615: Debug Hub je samostatný admin nástroj. Už se nevkládá
+   * jako spouštěcí sekce do Visual Debugu.
+   */
 
-    const telo = panel.querySelector(".ln-vd-body");
-    const prvniSekce = telo?.querySelector(".ln-vd-section");
-
-    if (!telo) {
-      return;
-    }
-
-    const sekce = document.createElement("section");
-    sekce.className = "ln-vd-section";
-    sekce.id = "ln-dh-launch-section";
-    sekce.innerHTML = `
-      <div class="ln-vd-section-title">
-        <span>Diagnostika</span>
-        <span>běžně vypnutá</span>
-      </div>
-      <div class="ln-vd-actions">
-        <button id="ln-dh-open" class="ln-vd-btn" type="button">🐞 Otevřít Debug Hub</button>
-        <button id="ln-local-scope-test-584" class="ln-vd-btn" type="button">📱 Vytvořit LOCAL TEST 584</button>
-      </div>
-      <small class="ln-dh-launch-note">
-        Logování se připojí až po spuštění konkrétního modulu. LOCAL TEST 584 vytvoří jednu běžnou poznámku s storageScope=local pro ověření, že se nikdy neodešle do Supabase.
-      </small>
-    `;
-
-    if (prvniSekce?.nextSibling) {
-      telo.insertBefore(sekce, prvniSekce.nextSibling);
-    } else {
-      telo.appendChild(sekce);
-    }
-
-    sekce.querySelector("#ln-dh-open")?.addEventListener("click", otevriHub);
-    sekce.querySelector("#ln-local-scope-test-584")?.addEventListener(
-      "click",
-      (event) => vytvorLocalScopeTest584(event.currentTarget)
-    );
+  function spustAdminModul(klic) {
+    if (!otevriHub()) return false;
+    selectModulu.value = klic;
+    spustModul();
+    return true;
   }
-
-  document.addEventListener("lubanote:visual-debug-ready", event => {
-    pripojKVisualDebugu(event.detail?.panel);
-  });
 
   window.LubaNoteDebugHub = {
     open: otevriHub,
+    close: zavriHub,
     stop: () => stopModulu(),
-    startStartup: () => {
-      otevriHub();
-      selectModulu.value = "startup";
-      spustModul();
-    },
-    startTodoSelection: () => {
-      otevriHub();
-      selectModulu.value = "todoSelection";
-      spustModul();
-    },
-    startEditorSelection: () => {
-      otevriHub();
-      selectModulu.value = "editorSelection";
-      spustModul();
-    },
-    startTitleTagSelection: () => {
-      otevriHub();
-      selectModulu.value = "titleTagSelection";
-      spustModul();
-    },
-    startOwnerIsolation: () => {
-      otevriHub();
-      selectModulu.value = "ownerIsolation";
-      spustModul();
-    },
-    startGestures: () => {
-      otevriHub();
-      selectModulu.value = "gestures";
-      spustModul();
-    },
-    startKeyboardWatch: () => {
-      otevriHub();
-      selectModulu.value = "keyboardWatch";
-      spustModul();
-    },
-    startDragLab: () => {
-      otevriHub();
-      selectModulu.value = "cardDragLab";
-      spustModul();
-    },
-    startPerformance: () => {
-      otevriHub();
-      selectModulu.value = "performance";
-      spustModul();
-    }
+    startStartup: () => spustAdminModul("startup"),
+    startTodoSelection: () => spustAdminModul("todoSelection"),
+    startEditorSelection: () => spustAdminModul("editorSelection"),
+    startTitleTagSelection: () => spustAdminModul("titleTagSelection"),
+    startOwnerIsolation: () => spustAdminModul("ownerIsolation"),
+    startGestures: () => spustAdminModul("gestures"),
+    startKeyboardWatch: () => spustAdminModul("keyboardWatch"),
+    startDragLab: () => spustAdminModul("cardDragLab"),
+    startPerformance: () => spustAdminModul("performance")
   };
   
 

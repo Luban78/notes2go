@@ -1912,37 +1912,7 @@
     resolveSelector();
   }
 
-  function unlockFromSecretClicks() {
-    const targets = [
-      /*
-       * Hlavní mobilní spouštěč po odstranění loga:
-       * 5× rychle klepnout na záložku „Poznámky“.
-       */
-      { element: document.getElementById("notesModuleButton"), clicks: 5 },
-
-      /* Staré spouštěče ponecháváme jako kompatibilní zálohu. */
-      { element: document.querySelector(".moduleLogo"), clicks: 5 },
-      { element: document.querySelector(".loginLogoImage"), clicks: 5 }
-    ].filter(item => item.element);
-
-    targets.forEach(({ element, clicks }) => {
-      element.addEventListener("click", () => {
-        const now = performance.now();
-        state.unlockClicks = state.unlockClicks.filter(time => now - time < 2200);
-        state.unlockClicks.push(now);
-
-        if (state.unlockClicks.length >= clicks) {
-          state.unlockClicks = [];
-          state.unlocked = true;
-          pripravVisualDebug();
-          setDebugUiVisible(true, true);
-          refreshElementList();
-          updateRuleInfo();
-          toast("Visual Debug odemčen");
-        }
-      }, true);
-    });
-  }
+  /* PATCH 615: tajné odemykání bylo odstraněno. */
 
   function syncControls() {
     propertyConfig.forEach(config => {
@@ -2690,8 +2660,8 @@
     wireEvents();
 
     /*
-     * Debug Hub se vytváří až po tajném odemčení Visual Debugu.
-     * Tím v běžném provozu neběží žádné diagnostické posluchače.
+     * Událost ponecháváme pro případné interní rozšíření. Debug Hub je od
+     * patche 615 samostatný admin nástroj a už se do panelu VD nevkládá.
      */
     document.dispatchEvent(
       new CustomEvent("lubanote:visual-debug-ready", {
@@ -2737,11 +2707,12 @@
     refs.dockVd?.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      togglePanel(true);
+      otevriVisualDebug();
     });
     refs.dockDh?.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
+      if (!jeAdminNastrojPovolen()) return;
       window.LubaNoteDebugHub?.open?.();
     });
     document.addEventListener("lubanote:debug-hub-visibility", event => {
@@ -2882,58 +2853,102 @@
     document.body.classList.remove("ln-vd-picking");
   }
 
+  function jeAdminNastrojPovolen() {
+    try {
+      return window.LubaNoteAdminTools?.isAllowed?.() === true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function otevriVisualDebug() {
+    if (!jeAdminNastrojPovolen()) {
+      return false;
+    }
+
     state.unlocked = true;
     pripravVisualDebug();
     togglePanel(true);
+    return true;
+  }
+
+  function zobrazAdminDock() {
+    if (!jeAdminNastrojPovolen()) {
+      return false;
+    }
+
+    state.unlocked = true;
+    pripravVisualDebug();
+    setDebugUiVisible(false, true);
+    return true;
+  }
+
+  function zamkniAdminNastroj() {
+    state.unlocked = false;
+    state.panelOpen = false;
+
+    if (!visualDebugPripraven) {
+      return;
+    }
+
+    setDebugUiVisible(false, false);
+    state.selected = null;
+    state.picking = false;
+    refs.highlight.hidden = true;
+    refs.measure.hidden = true;
+    document.body.classList.remove("ln-vd-picking");
   }
 
   function init() {
     clearOldStoredDebugData();
-    unlockFromSecretClicks();
 
-    /* Desktop: Ctrl+Shift+D. Mobil: 5× rychle klepnout na záložku Poznámky. */
-    document.addEventListener("keydown", event => {
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        otevriVisualDebug();
-      }
-    });
+    /*
+     * PATCH 615: tajné 5× tap odemčení i Ctrl+Shift+D jsou záměrně pryč.
+     * Visual Debug lze otevřít pouze přes serverově ověřený Admin Dashboard.
+     */
 
     window.LubaNoteVisualDebug = {
       open: otevriVisualDebug,
+      showDock: zobrazAdminDock,
+      lock: zamkniAdminNastroj,
       close: () => {
         if (!visualDebugPripraven) return;
         togglePanel(false);
       },
       select: selector => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         refs.selector.value = selector;
         resolveSelector();
+        return true;
       },
       exportCss: async () => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return "";
         return buildUpdatedDebugMobileCss();
       },
       setPanelOpacity: value => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         applyPanelOpacity(Number(value));
+        return true;
       },
       centerPanel: () => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         centerPanel();
+        return true;
       },
       resetPanelPosition: () => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         resetPanelPosition();
+        return true;
       },
       resetAll: () => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         resetAll();
+        return true;
       },
       quickMode: property => {
-        otevriVisualDebug();
+        if (!otevriVisualDebug()) return false;
         enterQuickMode(property);
+        return true;
       }
     };
   }

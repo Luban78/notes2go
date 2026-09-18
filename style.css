@@ -10513,7 +10513,7 @@ body:not(.secretModeActive) .trashModeTabs {
 
 .adminStats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -10555,7 +10555,7 @@ body:not(.secretModeActive) .trashModeTabs {
 .adminDashboardTabs {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 4px;
   border: 1px solid var(--color-border);
   border-radius: 16px;
@@ -10654,7 +10654,8 @@ body:not(.secretModeActive) .trashModeTabs {
 }
 
 .adminBadge.rejected,
-.adminBadge.suspended {
+.adminBadge.suspended,
+.adminBadge.expired {
   color: #d35c5c;
 }
 
@@ -10743,6 +10744,137 @@ body:not(.secretModeActive) .trashModeTabs {
 
   .adminUserActions {
     grid-template-columns: 1fr;
+  }
+}
+
+
+
+/* ==================================================
+   PATCH 615 – ADMIN DASHBOARD V2
+   První obrazovka = interní nástroje. Účty jsou samostatný pohled.
+================================================== */
+.adminDashboardHome[hidden],
+.adminAccountsView[hidden] {
+  display: none !important;
+}
+
+.adminDashboardIntro {
+  margin: -4px 0 18px;
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 1px);
+}
+
+.adminToolGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.adminToolCard {
+  width: 100%;
+  min-height: 84px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.10);
+}
+
+.adminToolCard:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+}
+
+.adminToolCard:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.adminToolIcon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-background));
+  font-size: 25px;
+}
+
+.adminToolText {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.adminToolText strong {
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 1px);
+}
+
+.adminToolText small {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 3px);
+  line-height: 1.35;
+}
+
+.adminToolArrow {
+  color: var(--color-accent);
+  font-size: calc(var(--font-size) + 15px);
+  line-height: 1;
+  text-align: right;
+}
+
+.adminAccountsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.adminAccountsBackButton {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 700;
+}
+
+.adminAccountsHeader strong {
+  color: var(--color-text);
+  font-size: calc(var(--font-size) + 1px);
+}
+
+.adminStatCardExpired .adminStatValue {
+  color: #d35c5c;
+}
+
+.adminDashboardTab {
+  min-width: 0;
+  font-size: calc(var(--font-size) - 3px);
+}
+
+@media (max-width: 640px) {
+  .adminStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adminDashboardToolbar {
+    align-items: stretch;
+  }
+
+  .adminDashboardTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

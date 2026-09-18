@@ -1,5 +1,5 @@
 /* ==================================================
-   LubaNote – Admin Dashboard V1
+   LubaNote – Admin Dashboard V2
    UI nikdy samo nerozhoduje o admin právech.
    Každé čtení i změnu znovu ověřuje SECURITY DEFINER RPC v Supabase.
 ================================================== */
@@ -13,8 +13,24 @@
     document.getElementById("adminDashboardModal");
   const zavritTlacitko =
     document.getElementById("closeAdminDashboardButton");
+  const domov =
+    document.getElementById("adminDashboardHome");
+  const uctyPohled =
+    document.getElementById("adminAccountsView");
+  const uctyTlacitko =
+    document.getElementById("adminAccountsToolButton");
+  const visualDebugTlacitko =
+    document.getElementById("adminVisualDebugToolButton");
+  const debugHubTlacitko =
+    document.getElementById("adminDebugHubToolButton");
+  const zpetNaNastrojeTlacitko =
+    document.getElementById("adminAccountsBackButton");
   const cekajiciTab =
     document.getElementById("adminPendingTab");
+  const aktivniTab =
+    document.getElementById("adminActiveTab");
+  const ukonceneDemoTab =
+    document.getElementById("adminExpiredTab");
   const vsichniTab =
     document.getElementById("adminAllTab");
   const obnovitTlacitko =
@@ -30,11 +46,24 @@
     document.getElementById("adminActiveCount");
   const demoPocet =
     document.getElementById("adminDemoCount");
+  const ukonceneDemoPocet =
+    document.getElementById("adminExpiredDemoCount");
 
   if (
     !menuTlacitko ||
     !modal ||
     !zavritTlacitko ||
+    !domov ||
+    !uctyPohled ||
+    !uctyTlacitko ||
+    !visualDebugTlacitko ||
+    !debugHubTlacitko ||
+    !zpetNaNastrojeTlacitko ||
+    !cekajiciTab ||
+    !aktivniTab ||
+    !ukonceneDemoTab ||
+    !vsichniTab ||
+    !ukonceneDemoPocet ||
     !seznam
   ) {
     return;
@@ -46,6 +75,15 @@
   let uzivatele = [];
   let filtr = "pending";
   let nacitam = false;
+
+  /*
+   * Jediná klientská brána pro interní nástroje. Samotné admin oprávnění
+   * stále určuje serverové RPC; Visual Debug ani Debug Hub se už neodemknou
+   * tajným tapem nebo klávesovou zkratkou.
+   */
+  window.LubaNoteAdminTools = {
+    isAllowed: () => jeAdmin === true
+  };
 
   function tAdmin(klic, vychozi, parametry = {}) {
     return (
@@ -90,6 +128,36 @@
     ).format(datum);
   }
 
+  function jeUkonceneDemo(uzivatel) {
+    if (
+      uzivatel?.account_status !== "active" ||
+      uzivatel?.plan_id !== "demo" ||
+      !uzivatel?.demo_until
+    ) {
+      return false;
+    }
+
+    const konec = new Date(uzivatel.demo_until).getTime();
+    return Number.isFinite(konec) && konec <= Date.now();
+  }
+
+  function jeAktivniUcet(uzivatel) {
+    return (
+      uzivatel?.account_status === "active" &&
+      !jeUkonceneDemo(uzivatel)
+    );
+  }
+
+  function zobrazDomov() {
+    domov.hidden = false;
+    uctyPohled.hidden = true;
+  }
+
+  function zobrazUcty() {
+    domov.hidden = true;
+    uctyPohled.hidden = false;
+  }
+
   function nastavStav(text = "", chyba = false) {
     stavText.textContent = text;
     stavText.classList.toggle("error", Boolean(chyba));
@@ -105,6 +173,9 @@
 
     if (!jeAdmin) {
       modal.hidden = true;
+      window.LubaNoteDebugHub?.stop?.();
+      window.LubaNoteDebugHub?.close?.();
+      window.LubaNoteVisualDebug?.lock?.();
     }
   }
 
@@ -538,26 +609,42 @@
   function vykresliUzivatele() {
     seznam.replaceChildren();
 
-    const zobrazovani =
-      filtr === "pending"
-        ? uzivatele.filter(
-            (u) => u.account_status === "pending"
-          )
-        : uzivatele;
+    let zobrazovani = uzivatele;
+
+    if (filtr === "pending") {
+      zobrazovani = uzivatele.filter(
+        (u) => u.account_status === "pending"
+      );
+    } else if (filtr === "active") {
+      zobrazovani = uzivatele.filter(jeAktivniUcet);
+    } else if (filtr === "expired") {
+      zobrazovani = uzivatele.filter(jeUkonceneDemo);
+    }
 
     if (!zobrazovani.length) {
       const prazdne = document.createElement("div");
       prazdne.className = "adminEmptyState";
-      prazdne.textContent =
-        filtr === "pending"
-          ? tAdmin(
-              "admin.noPending",
-              "Žádné registrace nečekají na schválení."
-            )
-          : tAdmin(
-              "admin.noUsers",
-              "Zatím nejsou žádní uživatelé."
-            );
+
+      const zpravy = {
+        pending: tAdmin(
+          "admin.noPending",
+          "Žádné registrace nečekají na schválení."
+        ),
+        active: tAdmin(
+          "admin.noActive",
+          "Nejsou zde žádné aktivní účty."
+        ),
+        expired: tAdmin(
+          "admin.noExpiredDemo",
+          "Nejsou zde žádná ukončená Dema."
+        ),
+        all: tAdmin(
+          "admin.noUsers",
+          "Zatím nejsou žádní uživatelé."
+        )
+      };
+
+      prazdne.textContent = zpravy[filtr] || zpravy.all;
       seznam.append(prazdne);
       return;
     }
@@ -589,12 +676,22 @@
 
       const badges = document.createElement("div");
       badges.className = "adminUserBadges";
-      badges.append(
-        vytvorBadge(
-          textStavu(uzivatel.account_status),
-          bezpecnyText(uzivatel.account_status)
-        )
-      );
+
+      if (jeUkonceneDemo(uzivatel)) {
+        badges.append(
+          vytvorBadge(
+            tAdmin("admin.demoExpired", "Demo skončilo"),
+            "expired"
+          )
+        );
+      } else {
+        badges.append(
+          vytvorBadge(
+            textStavu(uzivatel.account_status),
+            bezpecnyText(uzivatel.account_status)
+          )
+        );
+      }
 
       if (uzivatel.plan_id) {
         badges.append(
@@ -707,17 +804,17 @@
     );
 
     aktivniPocet.textContent = String(
-      uzivatele.filter(
-        (u) => u.account_status === "active"
-      ).length
+      uzivatele.filter(jeAktivniUcet).length
     );
 
     demoPocet.textContent = String(
       uzivatele.filter(
-        (u) =>
-          u.account_status === "active" &&
-          u.plan_id === "demo"
+        (u) => jeAktivniUcet(u) && u.plan_id === "demo"
       ).length
+    );
+
+    ukonceneDemoPocet.textContent = String(
+      uzivatele.filter(jeUkonceneDemo).length
     );
   }
 
@@ -778,25 +875,29 @@
   }
 
   function nastavFiltr(novyFiltr) {
-    filtr = novyFiltr === "all" ? "all" : "pending";
-
-    cekajiciTab.classList.toggle(
+    const povolene = new Set([
+      "pending",
       "active",
-      filtr === "pending"
-    );
-    cekajiciTab.setAttribute(
-      "aria-selected",
-      String(filtr === "pending")
-    );
+      "expired",
+      "all"
+    ]);
 
-    vsichniTab.classList.toggle(
-      "active",
-      filtr === "all"
-    );
-    vsichniTab.setAttribute(
-      "aria-selected",
-      String(filtr === "all")
-    );
+    filtr = povolene.has(novyFiltr)
+      ? novyFiltr
+      : "pending";
+
+    const taby = [
+      [cekajiciTab, "pending"],
+      [aktivniTab, "active"],
+      [ukonceneDemoTab, "expired"],
+      [vsichniTab, "all"]
+    ];
+
+    for (const [tlacitko, hodnota] of taby) {
+      const aktivni = filtr === hodnota;
+      tlacitko.classList.toggle("active", aktivni);
+      tlacitko.setAttribute("aria-selected", String(aktivni));
+    }
 
     vykresliUzivatele();
   }
@@ -815,15 +916,52 @@
     if (menuLabel) menuLabel.textContent = nazev;
     if (desktopLabel) desktopLabel.textContent = nazev;
 
+    const texty = {
+      adminDashboardIntro: [
+        "admin.toolsIntro",
+        "Správa účtů a interní nástroje LubaNote."
+      ],
+      adminAccountsToolTitle: ["admin.accountsTool", "Účty"],
+      adminAccountsToolDescription: [
+        "admin.accountsToolDescription",
+        "Registrace, Demo a správa uživatelů"
+      ],
+      adminVisualDebugToolDescription: [
+        "admin.visualDebugDescription",
+        "Vizuální ladění prvků aplikace"
+      ],
+      adminDebugHubToolDescription: [
+        "admin.debugHubDescription",
+        "Diagnostika, logy a testovací moduly"
+      ],
+      adminAccountsHeading: ["admin.accountsHeading", "Správa účtů"]
+    };
+
+    for (const [id, [klic, vychozi]] of Object.entries(texty)) {
+      const prvek = document.getElementById(id);
+      if (prvek) prvek.textContent = tAdmin(klic, vychozi);
+    }
+
+    zpetNaNastrojeTlacitko.textContent = `‹ ${tAdmin(
+      "admin.toolsBack",
+      "Nástroje"
+    )}`;
+
     document.getElementById("adminPendingLabel").textContent =
       tAdmin("admin.pending", "Čeká");
     document.getElementById("adminActiveLabel").textContent =
       tAdmin("admin.active", "Aktivní");
     document.getElementById("adminDemoLabel").textContent =
-      tAdmin("admin.demo", "Demo");
+      tAdmin("admin.demoActive", "Demo aktivní");
+    document.getElementById("adminExpiredDemoLabel").textContent =
+      tAdmin("admin.demoExpired", "Demo skončilo");
 
     cekajiciTab.textContent =
       tAdmin("admin.pendingTab", "Čekající");
+    aktivniTab.textContent =
+      tAdmin("admin.activeTab", "Aktivní");
+    ukonceneDemoTab.textContent =
+      tAdmin("admin.expiredTab", "Demo skončilo");
     vsichniTab.textContent =
       tAdmin("admin.allTab", "Všichni");
 
@@ -840,7 +978,7 @@
       )
     );
 
-    if (!modal.hidden) {
+    if (!modal.hidden && !uctyPohled.hidden) {
       vykresliUzivatele();
     }
   }
@@ -864,12 +1002,32 @@
     );
 
     modal.hidden = false;
-    nastavFiltr("pending");
-    await nactiUzivatele();
+    zobrazDomov();
   }
 
   function zavriDashboard() {
     modal.hidden = true;
+    zobrazDomov();
+  }
+
+  async function otevriUcty() {
+    if (!jeAdmin) return;
+    zobrazUcty();
+    nastavFiltr("pending");
+    await nactiUzivatele();
+  }
+
+  function otevriVisualDebugZAdmina() {
+    if (!jeAdmin) return;
+    zavriDashboard();
+    window.LubaNoteVisualDebug?.open?.();
+  }
+
+  function otevriDebugHubZAdmina() {
+    if (!jeAdmin) return;
+    zavriDashboard();
+    window.LubaNoteVisualDebug?.showDock?.();
+    window.LubaNoteDebugHub?.open?.();
   }
 
   menuTlacitko.addEventListener(
@@ -893,9 +1051,33 @@
     }
   });
 
+  uctyTlacitko.addEventListener("click", otevriUcty);
+  visualDebugTlacitko.addEventListener(
+    "click",
+    otevriVisualDebugZAdmina
+  );
+  debugHubTlacitko.addEventListener(
+    "click",
+    otevriDebugHubZAdmina
+  );
+  zpetNaNastrojeTlacitko.addEventListener(
+    "click",
+    zobrazDomov
+  );
+
   cekajiciTab.addEventListener(
     "click",
     () => nastavFiltr("pending")
+  );
+
+  aktivniTab.addEventListener(
+    "click",
+    () => nastavFiltr("active")
+  );
+
+  ukonceneDemoTab.addEventListener(
+    "click",
+    () => nastavFiltr("expired")
   );
 
   vsichniTab.addEventListener(

@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260918-pc-scrollbars-614">
+  <link rel="stylesheet" href="style.css?v=20260918-admin-tools-615">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -1418,33 +1418,79 @@
         </button>
       </div>
 
-      <div class="adminStats" aria-label="Přehled uživatelů">
-        <div class="adminStatCard">
-          <span id="adminPendingCount" class="adminStatValue">–</span>
-          <span id="adminPendingLabel" class="adminStatLabel">Čeká</span>
-        </div>
-        <div class="adminStatCard">
-          <span id="adminActiveCount" class="adminStatValue">–</span>
-          <span id="adminActiveLabel" class="adminStatLabel">Aktivní</span>
-        </div>
-        <div class="adminStatCard">
-          <span id="adminDemoCount" class="adminStatValue">–</span>
-          <span id="adminDemoLabel" class="adminStatLabel">Demo</span>
-        </div>
-      </div>
+      <section id="adminDashboardHome" class="adminDashboardHome">
+        <p id="adminDashboardIntro" class="adminDashboardIntro">Správa účtů a interní nástroje LubaNote.</p>
 
-      <div class="adminDashboardToolbar">
-        <div class="adminDashboardTabs" role="tablist" aria-label="Filtr uživatelů">
-          <button id="adminPendingTab" class="adminDashboardTab active" type="button" role="tab" aria-selected="true">Čekající</button>
-          <button id="adminAllTab" class="adminDashboardTab" type="button" role="tab" aria-selected="false">Všichni</button>
-        </div>
-        <button id="adminRefreshButton" class="adminRefreshButton lubaIconOnlyButton" type="button" aria-label="Obnovit uživatele" title="Obnovit">
-          <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
-        </button>
-      </div>
+        <div class="adminToolGrid" aria-label="Admin nástroje">
+          <button id="adminAccountsToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">👥</span>
+            <span class="adminToolText">
+              <strong id="adminAccountsToolTitle">Účty</strong>
+              <small id="adminAccountsToolDescription">Registrace, Demo a správa uživatelů</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
 
-      <p id="adminDashboardStatus" class="adminDashboardStatus" aria-live="polite"></p>
-      <div id="adminUsersList" class="adminUsersList"></div>
+          <button id="adminVisualDebugToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🛠️</span>
+            <span class="adminToolText">
+              <strong>Visual Debug</strong>
+              <small id="adminVisualDebugToolDescription">Vizuální ladění prvků aplikace</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminDebugHubToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🐞</span>
+            <span class="adminToolText">
+              <strong>Debug Hub</strong>
+              <small id="adminDebugHubToolDescription">Diagnostika, logy a testovací moduly</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="adminAccountsView" class="adminAccountsView" hidden>
+        <div class="adminAccountsHeader">
+          <button id="adminAccountsBackButton" class="adminAccountsBackButton" type="button">‹ Nástroje</button>
+          <strong id="adminAccountsHeading">Správa účtů</strong>
+        </div>
+
+        <div class="adminStats" aria-label="Přehled uživatelů">
+          <div class="adminStatCard">
+            <span id="adminPendingCount" class="adminStatValue">–</span>
+            <span id="adminPendingLabel" class="adminStatLabel">Čeká</span>
+          </div>
+          <div class="adminStatCard">
+            <span id="adminActiveCount" class="adminStatValue">–</span>
+            <span id="adminActiveLabel" class="adminStatLabel">Aktivní</span>
+          </div>
+          <div class="adminStatCard">
+            <span id="adminDemoCount" class="adminStatValue">–</span>
+            <span id="adminDemoLabel" class="adminStatLabel">Demo aktivní</span>
+          </div>
+          <div class="adminStatCard adminStatCardExpired">
+            <span id="adminExpiredDemoCount" class="adminStatValue">–</span>
+            <span id="adminExpiredDemoLabel" class="adminStatLabel">Demo skončilo</span>
+          </div>
+        </div>
+
+        <div class="adminDashboardToolbar">
+          <div class="adminDashboardTabs" role="tablist" aria-label="Filtr uživatelů">
+            <button id="adminPendingTab" class="adminDashboardTab active" type="button" role="tab" aria-selected="true">Čekající</button>
+            <button id="adminActiveTab" class="adminDashboardTab" type="button" role="tab" aria-selected="false">Aktivní</button>
+            <button id="adminExpiredTab" class="adminDashboardTab" type="button" role="tab" aria-selected="false">Demo skončilo</button>
+            <button id="adminAllTab" class="adminDashboardTab" type="button" role="tab" aria-selected="false">Všichni</button>
+          </div>
+          <button id="adminRefreshButton" class="adminRefreshButton lubaIconOnlyButton" type="button" aria-label="Obnovit uživatele" title="Obnovit">
+            <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <p id="adminDashboardStatus" class="adminDashboardStatus" aria-live="polite"></p>
+        <div id="adminUsersList" class="adminUsersList"></div>
+      </section>
     </div>
   </div>
 
@@ -2007,7 +2053,7 @@
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
   <script src="lang-cs.js?v=20260917-local-no-content-sync-586"></script>
-  <script src="lang-en.js?v=20260917-local-no-content-sync-586"></script>
+  <script src="lang-en.js?v=20260918-admin-tools-615"></script>
   <script src="i18n.js?v=20260915-core-v2-hardcut-528"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2080,7 +2126,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=20260912-auth-gate-441"></script>
+  <script src="adminDashboard.js?v=20260918-admin-tools-615"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2112,16 +2158,16 @@
   <!-- S2D.1: shared editor lock + bezpečné uložení collaboratora. -->
   <script src="sharingEditor.js?v=20260915-media-e2e-551"></script>
   
-  <!-- Vývojářský Visual Debug – normálně je úplně skrytý -->
-  <script src="visualDebug.js?v=20260915-keyboard-contract-532"></script>
+  <!-- Visual Debug – dostupný pouze přes serverově ověřený Admin Dashboard -->
+  <script src="visualDebug.js?v=20260918-admin-tools-615"></script>
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=20260918-pc-clipboard-image-609"></script>
   <script src="editorCoreV2Bridge.js?v=20260915-txt-clean-547"></script>
   <script src="lubaKeyboard.js?v=20260917-title-clipboard-popup-596"></script>
 
-  <!-- Debug Hub: panel se otevírá z Visual Debugu; diagnostika se zapíná jen na vyžádání. -->
-  <script src="debugHub.js?v=20260918-sync-rx-request-audit-606"></script>
+  <!-- Debug Hub – samostatný admin nástroj; diagnostika se zapíná jen na vyžádání. -->
+  <script src="debugHub.js?v=20260918-admin-tools-615"></script>
   
 </body>
 
