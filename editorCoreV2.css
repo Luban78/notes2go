@@ -456,7 +456,7 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 .ln-v2-list-drag-preview.chce-zanorit::after {
   content: "→ zanořit";
   background: var(--color-accent, #8958f6);
-  color: var(--color-accent-text, #fff);
+  color: var(--color-on-accent, #fff);
 }
 
 .ln-v2-list-drag-preview.chce-vysunout {
@@ -585,8 +585,8 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 }
 
 .ln-v2-editor .ln-v2-todo-hotovo .ln-v2-todo-check::before {
-  border-left-color: var(--color-accent-text, #fff);
-  border-bottom-color: var(--color-accent-text, #fff);
+  border-left-color: var(--color-on-accent, #fff);
+  border-bottom-color: var(--color-on-accent, #fff);
 }
 
 .ln-v2-editor .ln-v2-todo-hotovo > .ln-v2-cast {

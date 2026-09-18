@@ -11,6 +11,7 @@
   
   --color-accent: #7444dc;
   --color-accent-text: #5f32c9;
+  --color-on-accent: #ffffff;
   
   --color-border: rgba(35, 27, 51, 0.12);
   
@@ -27,6 +28,7 @@ body.theme-dark {
 
   --color-accent: #9b6cff;
   --color-accent-text: #c5a9ff;
+  --color-on-accent: #0b1014;
 
   --color-border: rgba(255, 255, 255, 0.12);
 
@@ -44,6 +46,7 @@ body.theme-cappuccino {
 
   --color-accent: #b77a52;
   --color-accent-text: #8b5838;
+  --color-on-accent: #0b1014;
 
   --color-border: rgba(58, 42, 34, 0.14);
 
@@ -73,6 +76,7 @@ body.theme-ocean {
 
   --color-accent: #19b7c9;
   --color-accent-text: #63e6f2;
+  --color-on-accent: #071a26;
 
   --color-border: rgba(125, 225, 240, 0.16);
 
@@ -114,6 +118,7 @@ body.secretModeActive {
 
   --color-accent: #871663;
   --color-accent-text: #FF8181;
+  --color-on-accent: #ffffff;
 
   --color-border: rgba(255, 220, 242, 0.18);
 
@@ -148,6 +153,7 @@ body.theme-darkg {
 
   --color-accent: #716969;
   --color-accent-text: #897373;
+  --color-on-accent: #ffffff;
 
   --color-border: #000000DB;
 

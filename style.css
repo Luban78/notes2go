@@ -168,7 +168,7 @@ body {
   border-radius: 50%;
   font-size: 1.9rem;
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
   border-color: var(--color-accent);
 
   /* Musí zůstat nad kartami a jejich swipe vrstvami. */
@@ -924,7 +924,7 @@ body {
 .moduleTab.active {
   border-color: transparent;
   background: linear-gradient(135deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 72%, white));
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
   box-shadow: 0 7px 18px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
@@ -1652,7 +1652,7 @@ body.lubaTagDragMode .categoryTabs {
 
 #reminderButton.active {
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ========================================
@@ -1865,7 +1865,7 @@ html {
 .areaOptions button.active,
 .tagOptions button.active {
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
   border-color: var(--color-accent);
 }
 
@@ -2646,7 +2646,7 @@ body.authPending.masterPasswordRequired > #appMessageModal {
 .loginCard button {
   border: none;
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
   font-weight: 700;
   cursor: pointer;
 }
@@ -3297,7 +3297,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 #savePlannerButton {
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ==========================================
@@ -3441,7 +3441,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   border-radius: 15px;
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
   font-size: calc(var(--font-size) + 3px);
   font-weight: 800;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--color-accent) 24%, transparent);
@@ -3489,7 +3489,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 .calendarDay.selected {
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .calendarDay.hasItems::after {
@@ -4024,7 +4024,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ========================================
@@ -4148,7 +4148,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 #saveNewTagButton {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ========================================
@@ -4356,7 +4356,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 .remindersStatusTab.active {
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
   border-color: var(--color-accent);
 }
 
@@ -4852,7 +4852,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   border-radius: 14px;
 
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 
   font: inherit;
   font-size: var(--font-size);
@@ -4875,7 +4875,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .choiceDialogOption.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .choiceDialogOption:disabled {
@@ -4884,7 +4884,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 #priorityTaskButton.active {
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ========================================
@@ -5453,7 +5453,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .datePickerGrid button.selected {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .datePickerGrid button.today {
@@ -5683,7 +5683,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 #timePickerSaveButton {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .timePickerClockNumber {
@@ -5727,7 +5727,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 .timePickerClockNumber.selected {
   background: var(--color-accent);
-  color: #ffffff !important;
+  color: var(--color-on-accent, #ffffff) !important;
   box-shadow:
     0 0 0 3px
     color-mix(in srgb, var(--color-accent) 18%, transparent);
@@ -6191,7 +6191,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 #confirmSecretUnlockButton {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ========================================
@@ -6372,7 +6372,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 #secretTaskButton.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 #secretTaskButton:active {
@@ -6681,7 +6681,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .editorLinkActions button.primary {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
 }
 
 /* ==========================================
@@ -6770,7 +6770,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .editorTopBar .editorQuickTool.active,
 .editorTopBar .editorQuickTool[aria-pressed="true"] {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .editorTopBar .editorQuickToolValue {
@@ -6837,7 +6837,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .editorTopBar #reminderButton.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .dateTimeInputs[hidden],
@@ -6939,7 +6939,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 .editorTopBar .editorToolbarPanel .editorPanelVolba.active {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .editorToolbarPanelStyl {
@@ -7330,7 +7330,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .timeRepeatWeekdays button.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .timeRepeatWeekdays {
@@ -7467,8 +7467,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 
 #appMessageSaveButton {
   background: var(--color-accent);
-  color: var(--color-accent-text);
-  color: #CBCBD2;
+  color: var(--color-on-accent, #ffffff);
   width: 133px !important;
 }
 
@@ -7584,7 +7583,7 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   border-radius: 50%;
 
   background: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-on-accent, #ffffff);
 
   font-size: 18px;
   font-weight: 700;
@@ -10171,7 +10170,7 @@ body:not(.secretModeActive) .trashModeTabs {
 .trashModeTab.active {
   border-color: var(--color-accent);
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .trashModeTab:active,
@@ -10697,7 +10696,7 @@ body:not(.secretModeActive) .trashModeTabs {
 
 .adminApproveButton {
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-on-accent, #ffffff);
 }
 
 .adminRejectButton {

@@ -29,15 +29,31 @@ function aktualizujTlacitkoMazaniVyhledavani() {
     searchNotes.value.length === 0;
 }
 
-function prekresliVysledkyVyhledavani() {
-  renderTasks();
+/* PATCH 619 – Empty-state je pouze stav skutečného hledání.
+ * Po syncu / změně filtrů se karta může překreslit mimo search.js, proto
+ * zprávu odvozujeme přímo z reálně vykreslených .taskCard. Tím se zároveň
+ * na PC nepočítají prázdné masonry sloupce jako výsledky hledání. */
+function aktualizujPrazdnyVysledekVyhledavani() {
+  if (!noSearchResults) {
+    return;
+  }
 
-  const visibleCardCount =
-    pinnedLeft.children.length +
-    pinnedRight.children.length;
+  const maAktivniDotaz =
+    jeAktivniVyhledavaciDotaz();
+
+  const pocetViditelnychKaret =
+    document.querySelectorAll(
+      "#pinnedCards .taskCard"
+    ).length;
 
   noSearchResults.hidden =
-    visibleCardCount !== 0;
+    !maAktivniDotaz ||
+    pocetViditelnychKaret > 0;
+}
+
+function prekresliVysledkyVyhledavani() {
+  renderTasks();
+  aktualizujPrazdnyVysledekVyhledavani();
 }
 
 function aktivujVyhledavaniUzivatelem() {
@@ -118,6 +134,25 @@ window.LubaNoteSearch =
   window.LubaNoteSearch || {};
 window.LubaNoteSearch.jeAktivniDotaz =
   jeAktivniVyhledavaciDotaz;
+window.LubaNoteSearch.aktualizujPrazdnyVysledek =
+  aktualizujPrazdnyVysledekVyhledavani;
+
+/* Render karet probíhá i ze sync/shared vrstev. MutationObserver zde pouze
+ * přepočítá zprávu; data ani render nikdy nespouští, takže nevytváří loop. */
+const kontejnerKaretProEmptyState =
+  document.getElementById("pinnedCards");
+
+if (
+  kontejnerKaretProEmptyState &&
+  typeof MutationObserver === "function"
+) {
+  new MutationObserver(() => {
+    aktualizujPrazdnyVysledekVyhledavani();
+  }).observe(kontejnerKaretProEmptyState, {
+    childList: true,
+    subtree: true
+  });
+}
 
 function taskMatchesSearch(task) {
   /*
