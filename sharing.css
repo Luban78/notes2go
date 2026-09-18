@@ -1334,3 +1334,33 @@ body.sharingReadOnlyOpen {
 .sharingReadOnlyHeaderText p {
   white-space: pre-line;
 }
+
+/* ============================================================
+   PATCH 623 – Sharing text modaly nad LubaKeyboard
+   ------------------------------------------------------------
+   LubaKeyboard je vlastni fixed panel, proto na rozdil od systemove IME
+   nezmensuje visualViewport. Mobilni @username modal byl zarovnany ke
+   spodnimu okraji a klavesnice ho po tapu do pole prekryla.
+
+   Zdrojem pravdy je skutecne zmerena --ln-lk-height z lubaKeyboard.js.
+   Spodni hrana Sharing modalu proto konci tesne nad klavesnici a pri
+   malem displeji se scrolluje karta, ne cely viewport.
+   ============================================================ */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .sharingIdentityModal:not([hidden]),
+  body.ln-luba-klavesnice-open .sharingModal:not([hidden]) {
+    align-items: flex-end;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
+  }
+
+  body.ln-luba-klavesnice-open .sharingIdentityModal:not([hidden]) .sharingIdentityCard,
+  body.ln-luba-klavesnice-open .sharingModal:not([hidden]) .sharingModalCard {
+    min-height: 0;
+    max-height: calc(
+      100dvh - var(--ln-lk-height, 260px) - 5px - max(10px, env(safe-area-inset-top))
+    );
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
