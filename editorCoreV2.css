@@ -587,24 +587,3 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   margin-top: 10px;
   margin-bottom: 6px;
 }
-
-/* ============================================================
-   PATCH 613 – PC editor: skryt systémový scrollbar
-
-   Jen vizuální úprava produkčního Core V2 na desktopu.
-   Overflow zůstává beze změny, takže kolečko myši, touchpad,
-   klávesnice i programové scrollování fungují dál.
-   Mobil / APK / dotyková zařízení toto pravidlo nedostanou.
-   ============================================================ */
-@media (hover: hover) and (pointer: fine) {
-  .taskModal.editorCoreV2Mode .ln-v2-editor {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .taskModal.editorCoreV2Mode .ln-v2-editor::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
-  }
-}

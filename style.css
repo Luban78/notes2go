@@ -11373,3 +11373,71 @@ body.lubaCardDragMode .app {
   -webkit-touch-callout: default !important;
   touch-action: auto;
 }
+
+/* ============================================================
+   PATCH 614 – PC: jednotný LubaNote scrollbar
+
+   Jen desktop / zařízení s přesným ukazatelem. Scrollování zůstává
+   nativní, mění se pouze vzhled posuvníků napříč aplikací.
+   Mobil / APK / dotykové ovládání se tím nemění.
+   ============================================================ */
+@media (hover: hover) and (pointer: fine) {
+  html,
+  body,
+  body * {
+    scrollbar-width: thin;
+    scrollbar-color:
+      color-mix(in srgb, var(--color-accent) 78%, var(--color-text) 22%)
+      color-mix(in srgb, var(--color-surface) 80%, transparent);
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  body *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  html::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track,
+  body *::-webkit-scrollbar-track {
+    margin: 3px;
+    border-radius: 999px;
+    background:
+      color-mix(in srgb, var(--color-surface) 82%, transparent);
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb,
+  body *::-webkit-scrollbar-thumb {
+    min-height: 34px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-accent) 88%, #ffffff 12%),
+        color-mix(in srgb, var(--color-accent) 68%, var(--color-background) 32%)
+      ) padding-box;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent),
+      0 0 10px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  html::-webkit-scrollbar-thumb:hover,
+  body::-webkit-scrollbar-thumb:hover,
+  body *::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-accent) 76%, #ffffff 24%),
+        color-mix(in srgb, var(--color-accent) 82%, var(--color-background) 18%)
+      ) padding-box;
+  }
+
+  html::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner,
+  body *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
