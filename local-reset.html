@@ -110,6 +110,9 @@
       const status = document.getElementById("status");
       const spinner = document.getElementById("spinner");
       const retry = document.getElementById("retry");
+      const cloudPurged =
+        new URLSearchParams(window.location.search)
+          .get("cloudPurged") === "1";
 
       function deleteDb(name) {
         return new Promise((resolve, reject) => {
@@ -171,7 +174,9 @@
         retry.hidden = true;
         spinner.hidden = false;
         status.classList.remove("error");
-        status.textContent = "Mažu pouze lokální data LubaNote. Data v cloudu zůstávají beze změny.";
+        status.textContent = cloudPurged
+          ? "Cloudová data jsou smazaná. Čistím lokální data tohoto zařízení…"
+          : "Mažu pouze lokální data LubaNote. Data v cloudu zůstávají beze změny.";
 
         try {
           for (const name of DB_NAMES) {
@@ -182,7 +187,9 @@
 
           try { sessionStorage.clear(); } catch (_) {}
 
-          status.textContent = "Hotovo. Otevírám čistou LubaNote…";
+          status.textContent = cloudPurged
+            ? "Hotovo. Data LubaNote byla odstraněna, přihlašovací účet zůstal zachovaný. Otevírám LubaNote…"
+            : "Hotovo. Otevírám čistou LubaNote…";
           setTimeout(() => {
             window.location.replace("./");
           }, 350);

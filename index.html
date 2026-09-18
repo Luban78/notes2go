@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260918-backup-progress-stable-601">
+  <link rel="stylesheet" href="style.css?v=20260918-post-demo-data-actions-612">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -106,6 +106,23 @@
 
       <div id="accountStatusPanel" class="accountStatusPanel" hidden>
         <p id="accountStatusText"></p>
+
+        <!-- PATCH 612 – po skončení Dema zůstává účet read-only, ale uživatel
+             musí mít možnost bezpečně stáhnout nebo odstranit vlastní data. -->
+        <div id="expiredDemoDataActions" class="expiredDemoDataActions" hidden>
+          <button id="accountStatusDownloadData" type="button">
+            Stáhnout moje data
+          </button>
+          <button id="accountStatusDeleteData" type="button" class="loginDangerButton">
+            Smazat moje data
+          </button>
+          <p>
+            Stažení vytvoří Kompletní zálohu LubaNote. Smazání odstraní
+            data LubaNote z cloudu i tohoto zařízení, ale přihlašovací účet
+            zůstane zachovaný.
+          </p>
+        </div>
+
         <div class="accountStatusActions">
           <button id="accountStatusRefresh" type="button">Zkontrolovat stav</button>
           <button id="accountStatusSignOut" class="loginSecondaryButton" type="button">Odhlásit se</button>
@@ -129,6 +146,27 @@
       </div>
       
     </form>
+
+    <div id="expiredDemoDeleteModal" class="localDeviceResetModal" hidden aria-hidden="true">
+      <div class="localDeviceResetDialog expiredDemoDeleteDialog" role="dialog" aria-modal="true" aria-labelledby="expiredDemoDeleteTitle">
+        <h2 id="expiredDemoDeleteTitle">Smazat moje data?</h2>
+        <p>
+          Tato akce odstraní tvoje poznámky, štítky, Secret nastavení,
+          přílohy a další LubaNote data z cloudu. Potom vyčistí i lokální
+          data v tomto zařízení.
+        </p>
+        <p class="localDeviceResetCloudNote">
+          <strong>⚠️ Tuto akci nejde vrátit.</strong><br>
+          Přihlašovací účet a e-mail zůstanou zachované. Pokud si chceš
+          data ponechat, nejdřív zvol „Stáhnout moje data“.
+        </p>
+        <p id="expiredDemoDeleteProgress" class="expiredDemoDeleteProgress" hidden aria-live="polite"></p>
+        <div class="localDeviceResetButtons">
+          <button id="expiredDemoDeleteCancel" type="button" class="loginSecondaryButton">Zrušit</button>
+          <button id="expiredDemoDeleteConfirm" type="button" class="loginDangerButton">Smazat moje data</button>
+        </div>
+      </div>
+    </div>
 
     <div id="localDeviceResetModal" class="localDeviceResetModal" hidden aria-hidden="true">
       <div class="localDeviceResetDialog" role="dialog" aria-modal="true" aria-labelledby="localDeviceResetTitle">
@@ -1977,7 +2015,7 @@
   
   <script src="reminders.js?v=20260915-agenda-layout-544"></script>
   
-  <script src="storage.js?v=20260918-backup-progress-stable-601"></script>
+  <script src="storage.js?v=20260918-post-demo-data-actions-612"></script>
   
   <script src="tags.js?v=20260917-local-backup-hardening-597"></script>
   
@@ -2030,7 +2068,7 @@
   <script src="syncTraffic.js?v=20260918-sync-rx-request-audit-606"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260918-server-provenance-gate-605"></script>
+  <script src="supabaseClient.js?v=20260918-post-demo-data-actions-612"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
   <script src="sharingIdentity.js?v=20260915-keyboard-contract-532"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->

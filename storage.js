@@ -3684,7 +3684,8 @@ function zacniPrubehKompletniZalohy(text) {
 
 
 async function pripravAProvedExportZalohy(
-  zpusobExportu
+  zpusobExportu,
+  moznosti = {}
 ) {
   const tlacitko =
     document.getElementById(
@@ -3698,6 +3699,9 @@ async function pripravAProvedExportZalohy(
   const jeApk =
     window.Capacitor
       ?.isNativePlatform?.() === true;
+
+  const jePostDemoExport =
+    moznosti?.postDemo === true;
 
   /*
    * PATCH 601 – export se spouští z choice modalu. choiceModal čeká
@@ -3715,7 +3719,7 @@ async function pripravAProvedExportZalohy(
     });
   }
 
-  const prubeh = jeApk
+  const prubeh = (jeApk || jePostDemoExport)
     ? zacniPrubehKompletniZalohy(
         "Připravuji data zálohy…"
       )
@@ -3734,7 +3738,13 @@ async function pripravAProvedExportZalohy(
 
     const backup =
       await vytvorKompletniZalohu({
-        sifrovaneTajneStitkyV4: jeApk
+        /*
+         * PATCH 612 – po skončení Dema nesmíme vyžadovat odemčený
+         * Secret jen kvůli exportu. V4 cesta zálohuje tajné štítky
+         * už v jejich bezpečně šifrovaném serverovém tvaru.
+         */
+        sifrovaneTajneStitkyV4:
+          jeApk || jePostDemoExport
       });
 
     if (jeApk) {
@@ -3807,7 +3817,21 @@ async function pripravAProvedExportZalohy(
         data,
         vytvorNazevSouboruZalohy()
       );
+
+      if (
+        jePostDemoExport &&
+        typeof zobrazZpravuAplikace ===
+          "function"
+      ) {
+        prubeh?.ukonci();
+        zobrazZpravuAplikace(
+          "Kompletní záloha",
+          "Tvoje data byla připravena ke stažení. Soubor si bezpečně ulož před případným smazáním dat."
+        );
+      }
     }
+
+    return true;
   } catch (error) {
     prubeh?.ukonci();
 
@@ -3840,6 +3864,8 @@ async function pripravAProvedExportZalohy(
           : "Zálohu se nepodařilo vytvořit. Zkus to prosím znovu.")
       );
     }
+
+    return false;
   } finally {
     prubeh?.ukonci();
 
@@ -3849,6 +3875,25 @@ async function pripravAProvedExportZalohy(
     }
   }
 }
+
+/* PATCH 612 – read-only export dostupný i na obrazovce „Demo skončilo“.
+ * Nepovoluje editor ani sync; pouze použije existující kompletní backup cestu. */
+window.LubaNoteBackup = Object.assign(
+  window.LubaNoteBackup || {},
+  {
+    exportujPoSkonceniDema: () => {
+      const jeApk =
+        window.Capacitor
+          ?.isNativePlatform?.() === true;
+
+      return pripravAProvedExportZalohy(
+        jeApk ? "ulozit" : "web",
+        { postDemo: true }
+      );
+    }
+  }
+);
+
 
 function exportTasks() {
   const jeApk =

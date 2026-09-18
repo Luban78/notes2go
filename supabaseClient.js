@@ -1221,6 +1221,27 @@ const accountStatusRefresh =
 const accountStatusSignOut =
   document.getElementById("accountStatusSignOut");
 
+const expiredDemoDataActions =
+  document.getElementById("expiredDemoDataActions");
+
+const accountStatusDownloadData =
+  document.getElementById("accountStatusDownloadData");
+
+const accountStatusDeleteData =
+  document.getElementById("accountStatusDeleteData");
+
+const expiredDemoDeleteModal =
+  document.getElementById("expiredDemoDeleteModal");
+
+const expiredDemoDeleteCancel =
+  document.getElementById("expiredDemoDeleteCancel");
+
+const expiredDemoDeleteConfirm =
+  document.getElementById("expiredDemoDeleteConfirm");
+
+const expiredDemoDeleteProgress =
+  document.getElementById("expiredDemoDeleteProgress");
+
 const accountPlanMenuInfo =
   document.getElementById("accountPlanMenuInfo");
 
@@ -1237,6 +1258,10 @@ let posledniLimitModalAt = 0;
    bez obsahového syncu. Nejde o náhradu serverové kontroly účtu. */
 let aktivniUcetPotvrzenProTentoBeh = false;
 
+/* PATCH 612 – přesný hlídač konce časově omezeného Dema. */
+let casovacKonceDema612 = null;
+let kontrolaKonceDemaBezi612 = false;
+
 /* PATCH 556 – aktivní účet bez hlavního šifrovacího hesla se
    nepustí do aplikace. Kontext držíme jen v paměti do dokončení
    povinného onboardingu. */
@@ -1244,6 +1269,130 @@ let cekajiciPovinneHlavniHeslo = null;
 
 function tAuth(klic, zaloha = "") {
   return window.LubaNoteI18n?.t?.(klic, zaloha) || zaloha || klic;
+}
+
+function jeVyprseleDemo612(stav) {
+  if (
+    stav?.account_status !== "active" ||
+    stav?.plan_id !== "demo"
+  ) {
+    return false;
+  }
+
+  const konec = new Date(stav.demo_until || 0).getTime();
+  return Number.isFinite(konec) && konec <= Date.now();
+}
+
+function aktualizujPostDemoAkce612(stav) {
+  const zobrazit = jeVyprseleDemo612(stav);
+
+  if (expiredDemoDataActions) {
+    expiredDemoDataActions.hidden = !zobrazit;
+  }
+
+  document.body.classList.toggle(
+    "demoExpiredReadOnly",
+    zobrazit
+  );
+
+  if (!zobrazit && expiredDemoDeleteModal) {
+    expiredDemoDeleteModal.hidden = true;
+    expiredDemoDeleteModal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function zrusCasovacKonceDema612() {
+  if (casovacKonceDema612 !== null) {
+    clearTimeout(casovacKonceDema612);
+    casovacKonceDema612 = null;
+  }
+}
+
+function zobrazVyprseniDemaBezReloadu612() {
+  if (!jeVyprseleDemo612(aktualniPristupUctu)) {
+    return false;
+  }
+
+  zrusCasovacKonceDema612();
+  aktivniUcetPotvrzenProTentoBeh = false;
+  oznacBlokovanePrihlaseni();
+
+  /*
+   * Stejný signál jako při vypršení auth session zastaví Realtime,
+   * chat/shared polling i sync UI. Auth session samotnou ale nemažeme –
+   * je potřeba pro read-only export a dobrovolné smazání vlastních dat.
+   */
+  window.dispatchEvent(
+    new CustomEvent("lubanote:auth-expired")
+  );
+
+  zobrazStavUctu({
+    ...aktualniPristupUctu,
+    account_status: "active"
+  });
+
+  oznamSplashPripravenyBezCloudovehoStartu();
+  return true;
+}
+
+function naplanujKonecDema612(stav = aktualniPristupUctu) {
+  zrusCasovacKonceDema612();
+
+  if (
+    stav?.account_status !== "active" ||
+    stav?.plan_id !== "demo"
+  ) {
+    return;
+  }
+
+  const konec = new Date(stav.demo_until || 0).getTime();
+
+  if (!Number.isFinite(konec)) {
+    return;
+  }
+
+  const zbyva = konec - Date.now();
+
+  if (zbyva <= 0) {
+    queueMicrotask(zobrazVyprseniDemaBezReloadu612);
+    return;
+  }
+
+  /* setTimeout má praktický strop ~24,8 dne; Demo je kratší, ale guard
+     zachová správné chování i kdyby se tarif později změnil. */
+  const dalsiKontrola = Math.min(zbyva + 80, 2147480000);
+
+  casovacKonceDema612 = setTimeout(() => {
+    if (!zobrazVyprseniDemaBezReloadu612()) {
+      naplanujKonecDema612(aktualniPristupUctu);
+    }
+  }, dalsiKontrola);
+}
+
+async function zkontrolujKonecDemaPriNavratu612() {
+  if (kontrolaKonceDemaBezi612) {
+    return;
+  }
+
+  if (!aktualniPristupUctu || aktualniPristupUctu.plan_id !== "demo") {
+    return;
+  }
+
+  if (zobrazVyprseniDemaBezReloadu612()) {
+    return;
+  }
+
+  /*
+   * Při návratu z backgroundu respektujeme lokální autoritativní deadline.
+   * Pokud ještě nevypršel, jen znovu naplánujeme přesný timer. Serverový
+   * stav se dál ověřuje běžnými account kontrolami – nevyrábíme extra egress.
+   */
+  kontrolaKonceDemaBezi612 = true;
+  try {
+    naplanujKonecDema612(aktualniPristupUctu);
+  } finally {
+    kontrolaKonceDemaBezi612 = false;
+  }
 }
 
 function aktualizujInfoPlanuVMenu(stav = aktualniPristupUctu) {
@@ -1616,6 +1765,8 @@ async function zobrazLokalniAplikaci() {
 
 function pripravLoginFormular() {
   aktivniUcetPotvrzenProTentoBeh = false;
+  zrusCasovacKonceDema612();
+  aktualizujPostDemoAkce612(null);
 
   /*
    * PRIVACY LOCK:
@@ -1667,6 +1818,7 @@ function zobrazPrihlaseni(
 
 function zobrazStavUctu(stav) {
   aktivniUcetPotvrzenProTentoBeh = false;
+  zrusCasovacKonceDema612();
   aktualizujInfoPlanuVMenu(null);
 
   /* Stejný privacy lock platí i pro pending/rejected/suspended obrazovku. */
@@ -1686,6 +1838,8 @@ function zobrazStavUctu(stav) {
   aktualniStavUctu = stav || {
     account_status: "unavailable"
   };
+
+  aktualizujPostDemoAkce612(aktualniStavUctu);
 
   setLoginMessage();
   aktualizujAuthTexty();
@@ -2013,6 +2167,8 @@ async function povolAktivniUcet(
 
   aktualniPristupUctu = stav || aktualniPristupUctu;
   aktivniUcetPotvrzenProTentoBeh = true;
+  aktualizujPostDemoAkce612(null);
+  naplanujKonecDema612(aktualniPristupUctu);
 
   if (aktualniPristupUctu?.ok) {
     ulozLokalniCachePristupu(
@@ -2913,6 +3069,178 @@ loginForm.addEventListener("submit", async (event) => {
   await provedPrihlaseni(email, password);
 });
 
+function otevriSmazaniDatPoDemu612() {
+  if (!jeVyprseleDemo612(aktualniStavUctu || aktualniPristupUctu)) {
+    return;
+  }
+
+  expiredDemoDeleteProgress.hidden = true;
+  expiredDemoDeleteProgress.textContent = "";
+  expiredDemoDeleteCancel.disabled = false;
+  expiredDemoDeleteConfirm.disabled = false;
+  expiredDemoDeleteModal.hidden = false;
+  expiredDemoDeleteModal.setAttribute("aria-hidden", "false");
+  setTimeout(() => expiredDemoDeleteCancel?.focus(), 0);
+}
+
+function zavriSmazaniDatPoDemu612() {
+  if (!expiredDemoDeleteModal || expiredDemoDeleteConfirm?.disabled) {
+    return;
+  }
+
+  expiredDemoDeleteModal.hidden = true;
+  expiredDemoDeleteModal.setAttribute("aria-hidden", "true");
+}
+
+function nastavPrubehSmazaniPoDemu612(text) {
+  if (!expiredDemoDeleteProgress) {
+    return;
+  }
+
+  expiredDemoDeleteProgress.hidden = false;
+  expiredDemoDeleteProgress.textContent = String(text || "");
+}
+
+async function smazCloudovaDataPoDemu612() {
+  if (!jeVyprseleDemo612(aktualniStavUctu || aktualniPristupUctu)) {
+    throw new Error("Demo není ve stavu, ve kterém lze data smazat.");
+  }
+
+  const pripraven = await pripravSupabaseClient();
+  if (!pripraven || !supabaseClient) {
+    throw new Error("Cloud není dostupný.");
+  }
+
+  nastavPrubehSmazaniPoDemu612("Připravuji bezpečné smazání…");
+
+  const { data: priprava, error: chybaPripravy } =
+    await supabaseClient.rpc(
+      "lubanote_prepare_my_demo_data_delete"
+    );
+
+  if (chybaPripravy || priprava?.ok !== true) {
+    throw chybaPripravy || new Error(
+      `Příprava smazání selhala: ${priprava?.reason || "unknown"}`
+    );
+  }
+
+  const celkemPriloh = Number(priprava?.attachment_count || 0);
+  let smazanoPriloh = 0;
+
+  for (let kolo = 0; kolo < 100; kolo += 1) {
+    nastavPrubehSmazaniPoDemu612(
+      celkemPriloh > 0
+        ? `Mažu přílohy… ${Math.min(smazanoPriloh, celkemPriloh)}/${celkemPriloh}`
+        : "Kontroluji přílohy…"
+    );
+
+    const cleanup =
+      await window.LubaNoteAttachmentsCloud
+        ?.vycistiCloudovePrilohyPoProdleve?.(100);
+
+    if (!cleanup || cleanup.ok !== true) {
+      throw new Error(
+        `Přílohy se nepodařilo bezpečně smazat: ${cleanup?.reason || "cleanup_failed"}`
+      );
+    }
+
+    smazanoPriloh += Number(cleanup.deleted || 0);
+
+    if (Number(cleanup.claimed || 0) === 0) {
+      break;
+    }
+
+    if (kolo === 99) {
+      throw new Error("Mazání příloh překročilo bezpečný počet kroků.");
+    }
+  }
+
+  nastavPrubehSmazaniPoDemu612("Mažu poznámky a ostatní data…");
+
+  const { data: finalizace, error: chybaFinalizace } =
+    await supabaseClient.rpc(
+      "lubanote_finalize_my_demo_data_delete"
+    );
+
+  if (chybaFinalizace || finalizace?.ok !== true) {
+    throw chybaFinalizace || new Error(
+      `Dokončení smazání selhalo: ${finalizace?.reason || "unknown"}`
+    );
+  }
+
+  nastavPrubehSmazaniPoDemu612("Cloudová data jsou smazaná. Čistím zařízení…");
+
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (error) {
+    console.warn("Post-Demo sign-out po smazání přeskočen:", error);
+  }
+
+  window.location.replace("./local-reset.html?cloudPurged=1");
+}
+
+accountStatusDownloadData?.addEventListener(
+  "click",
+  async () => {
+    if (!jeVyprseleDemo612(aktualniStavUctu || aktualniPristupUctu)) {
+      return;
+    }
+
+    accountStatusDownloadData.disabled = true;
+    accountStatusDeleteData.disabled = true;
+
+    try {
+      if (typeof window.LubaNoteBackup?.exportujPoSkonceniDema !== "function") {
+        throw new Error("Modul kompletní zálohy není dostupný.");
+      }
+
+      await window.LubaNoteBackup.exportujPoSkonceniDema();
+    } catch (error) {
+      console.error("Post-Demo export selhal:", error);
+      zobrazZpravuAplikace?.(
+        "Stáhnout moje data",
+        error?.message || "Zálohu se nepodařilo vytvořit."
+      );
+    } finally {
+      accountStatusDownloadData.disabled = false;
+      accountStatusDeleteData.disabled = false;
+    }
+  }
+);
+
+accountStatusDeleteData?.addEventListener(
+  "click",
+  otevriSmazaniDatPoDemu612
+);
+
+expiredDemoDeleteCancel?.addEventListener(
+  "click",
+  zavriSmazaniDatPoDemu612
+);
+
+expiredDemoDeleteConfirm?.addEventListener(
+  "click",
+  async () => {
+    expiredDemoDeleteCancel.disabled = true;
+    expiredDemoDeleteConfirm.disabled = true;
+    accountStatusDownloadData.disabled = true;
+    accountStatusDeleteData.disabled = true;
+
+    try {
+      await smazCloudovaDataPoDemu612();
+    } catch (error) {
+      console.error("Post-Demo smazání dat selhalo:", error);
+      nastavPrubehSmazaniPoDemu612(
+        `Smazání nebylo dokončeno: ${error?.message || "neznámá chyba"}`
+      );
+      expiredDemoDeleteCancel.disabled = false;
+      expiredDemoDeleteConfirm.disabled = false;
+      accountStatusDownloadData.disabled = false;
+      accountStatusDeleteData.disabled = false;
+    }
+  }
+);
+
 accountStatusRefresh.addEventListener(
   "click",
   async () => {
@@ -3168,3 +3496,20 @@ window.addEventListener("online", () => {
 
 aktualizujAuthTexty();
 updateLoginScreen();
+
+
+/* PATCH 612 – WebView/Chrome mohou background timer pozastavit. Při návratu
+ * proto deadline znovu vyhodnotíme bez čekání na reload nebo ruční tlačítko. */
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    void zkontrolujKonecDemaPriNavratu612();
+  }
+});
+
+window.addEventListener("focus", () => {
+  void zkontrolujKonecDemaPriNavratu612();
+});
+
+window.addEventListener("pageshow", () => {
+  void zkontrolujKonecDemaPriNavratu612();
+});

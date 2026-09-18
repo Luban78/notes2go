@@ -2821,6 +2821,47 @@ body.authPending.masterPasswordRequired > #appMessageModal {
   gap: 10px;
 }
 
+
+/* ==================================================
+   PATCH 612 – POST-DEMO DATA ACTIONS
+   ================================================== */
+.expiredDemoDataActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.expiredDemoDataActions[hidden] {
+  display: none;
+}
+
+.expiredDemoDataActions p {
+  margin: 2px 0 0;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: calc(var(--font-size) - 3px);
+  line-height: 1.42;
+}
+
+#expiredDemoDeleteProgress {
+  min-height: 1.45em;
+  margin-top: 4px;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/*
+ * Expired Demo je pořád pod privacy lockem – aplikace a karty musí
+ * zůstat skryté. Výjimku dostávají jen dva hotové systémové modaly,
+ * které potřebuje read-only export: průběh zálohy a závěrečná zpráva.
+ */
+body.authPending.demoExpiredReadOnly > #actionStatusModal,
+body.authPending.demoExpiredReadOnly > #appMessageModal {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
 .loginCard .loginSecondaryButton {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
