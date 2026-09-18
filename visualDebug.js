@@ -2364,6 +2364,15 @@
 
   function startQuickDrag(event) {
     if (event.button != null && event.button !== 0) return;
+
+    /*
+     * PATCH 616 – PC DOCK BUTTONS:
+     * Na desktop Chrome nesmí drag handler převzít pointer z tlačítek VD/DH,
+     * kladívka ani +/-; jinak se klik jen vizuálně stiskne, ale click se
+     * nedoručí cílovému tlačítku. Tažení docku začíná pouze z prázdné plochy.
+     */
+    if (event.target.closest("button, input, select, textarea, label, a")) return;
+
     const rect = refs.quickbar.getBoundingClientRect();
     state.quickDrag = {
       pointerId: event.pointerId ?? "mouse",
@@ -2436,7 +2445,7 @@
         <button id="ln-vd-dock-dh" type="button" aria-label="Otevřít Debug Hub" title="Debug Hub">DH</button>
       </div>
       <button id="ln-vd-quick-minus" type="button" aria-label="Zmenšit hodnotu">−</button>
-      <button id="ln-vd-fab" type="button" title="Rychlé ladění / Visual Debug" aria-label="Rychlé ladění">🛠</button>
+      <button id="ln-vd-fab" type="button" title="Zavřít diagnostický panel" aria-label="Zavřít diagnostický panel">🛠</button>
       <button id="ln-vd-quick-plus" type="button" aria-label="Zvětšit hodnotu">+</button>
       <span id="ln-vd-quick-status"><b id="ln-vd-quick-label">parametr</b><small id="ln-vd-quick-value">–</small></span>
     `;
@@ -2673,8 +2682,17 @@
   function wireEvents() {
     refs.fab.addEventListener("click", event => {
       if (state.quickMoved) return;
+      event.preventDefault();
       event.stopPropagation();
-      toggleQuickPanel();
+
+      /*
+       * PATCH 616 – kladívko už není třetí spouštěč Visual Debugu.
+       * VD a DH mají vlastní tlačítka, takže kladívko pouze schová malý dock.
+       * Otevřené diagnostické okno tím nezastavujeme ani nemažeme jeho stav.
+       * Dock se znovu ukáže při spuštění VD/DH z Admin Dashboardu.
+       */
+      refs.quickbar.hidden = true;
+      refs.quickbar.style.setProperty("display", "none", "important");
     });
     refs.quickMinus.addEventListener("pointerdown", event => startQuickPressRepeat(event, -1));
     refs.quickPlus.addEventListener("pointerdown", event => startQuickPressRepeat(event, 1));
@@ -2707,13 +2725,27 @@
     refs.dockVd?.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      otevriVisualDebug();
+      if (!jeAdminNastrojPovolen()) return;
+
+      /* Klik = otevřít, druhý klik = minimalizovat zpět do docku. */
+      if (state.panelOpen) {
+        togglePanel(false);
+      } else {
+        otevriVisualDebug();
+      }
     });
     refs.dockDh?.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
       if (!jeAdminNastrojPovolen()) return;
-      window.LubaNoteDebugHub?.open?.();
+
+      /* Debug Hub je samostatný nástroj: klik otevře, druhý klik ho schová. */
+      const debugHubPanel = document.getElementById("ln-debug-hub");
+      if (debugHubPanel && !debugHubPanel.hidden) {
+        window.LubaNoteDebugHub?.close?.();
+      } else {
+        window.LubaNoteDebugHub?.open?.();
+      }
     });
     document.addEventListener("lubanote:debug-hub-visibility", event => {
       refs.dockDh?.classList.toggle("active", Boolean(event.detail?.open));
