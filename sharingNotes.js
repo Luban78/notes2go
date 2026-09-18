@@ -18,7 +18,6 @@
   const CACHE_DB_VERSION = 1;
   const CACHE_DB_STORE = "sharedNotes";
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_MS = 5 * 60_000;
   const AUTO_REFRESH_MIN_MS = 60_000;
   const SHARED_FORBIDDEN_COOLDOWN_MS = 30 * 60_000;
   const SHARED_FORBIDDEN_UNTIL_KEY = "lubanoteSharedRpcForbiddenUntilV1";
@@ -33,13 +32,14 @@
   let sdilenePoznamky = [];
   let viewer = null;
   let viewerNoteId = null;
-  let pollTimer = null;
   let probihajiciNacteni = null;
   let serverovyStavNacten = false;
   let puvodniRenderTasks = null;
   let puvodniAndroidZpet = null;
   let menuSdileneKartyNoteId = null;
   let posledniAutoRefreshAt = 0;
+  let realtimeRefreshTimer = null;
+  let realtimeRefreshCeka = false;
   const opousteniSdileni = new Set();
 
   function jeQuotaBootstrapPending() {
@@ -1334,6 +1334,15 @@
         sdilenePoznamky = nove;
         ulozCache(nove);
 
+        if (viewer && !viewer.overlay.hidden && viewerNoteId) {
+          const otevrena = sdilenePoznamky.find((item) => item?.id === viewerNoteId);
+          if (otevrena && !otevrena.trashedAt) {
+            naplnViewer(otevrena);
+          } else {
+            zavriReadOnly();
+          }
+        }
+
         if (vykreslit) {
           if (typeof window.renderTasks === "function") {
             window.renderTasks();
@@ -1377,6 +1386,32 @@
     return probihajiciNacteni;
   }
 
+  /* PATCH 621 – serverový Realtime head nahradil 5min polling. */
+  function naplanujRealtimeObnovu(detail = {}) {
+    clearTimeout(realtimeRefreshTimer);
+
+    realtimeRefreshTimer = setTimeout(async () => {
+      realtimeRefreshTimer = null;
+
+      if (
+        !startUiPripraven ||
+        document.hidden ||
+        !navigator.onLine ||
+        !ziskejUserId()
+      ) {
+        realtimeRefreshCeka = true;
+        return;
+      }
+
+      realtimeRefreshCeka = false;
+
+      await obnovZeServeru({
+        tichy: true,
+        vykreslit: true
+      });
+    }, 140);
+  }
+
   function obalRenderTasks() {
     if (
       puvodniRenderTasks ||
@@ -1409,22 +1444,6 @@
 
       return puvodniAndroidZpet();
     };
-  }
-
-  function spustPolling() {
-    clearInterval(pollTimer);
-
-    pollTimer = setInterval(() => {
-      if (
-        startUiPripraven &&
-        !document.hidden &&
-        navigator.onLine &&
-        ziskejUserId() &&
-        muzeAutoRefresh()
-      ) {
-        obnovZeServeru({ tichy: true, vykreslit: true });
-      }
-    }, POLL_MS);
   }
 
   function nastavUcet(userId) {
@@ -1495,7 +1514,6 @@
   sdilenePoznamky = nactiCache();
   void doplnPlnouCachePokudJeAktualni(ziskejUserId());
   vykresliSdileneKarty();
-  spustPolling();
 
   window.addEventListener("lubanote:account-active", (event) => {
     nastavUcet(event.detail?.userId || null);
@@ -1521,9 +1539,18 @@
     }
   });
 
+  window.addEventListener("lubanote:shared-realtime-signal", (event) => {
+    naplanujRealtimeObnovu(event.detail || {});
+  });
+
   window.addEventListener("lubanote:splash-ready", () => {
     if (startUiPripraven) return;
     startUiPripraven = true;
+
+    if (realtimeRefreshCeka) {
+      naplanujRealtimeObnovu({ gap: 2 });
+      return;
+    }
 
     if (navigator.onLine && ziskejUserId() && muzeAutoRefresh()) {
       obnovZeServeru({ tichy: true, vykreslit: true });
@@ -1531,6 +1558,11 @@
   });
 
   window.addEventListener("online", () => {
+    if (realtimeRefreshCeka) {
+      naplanujRealtimeObnovu({ gap: 2 });
+      return;
+    }
+
     if (startUiPripraven && muzeAutoRefresh()) {
       obnovZeServeru({ tichy: true, vykreslit: true });
     }
@@ -1545,7 +1577,9 @@
         window.renderTasks();
       }
 
-      if (startUiPripraven && navigator.onLine && muzeAutoRefresh()) {
+      if (realtimeRefreshCeka) {
+        naplanujRealtimeObnovu({ gap: 2 });
+      } else if (startUiPripraven && navigator.onLine && muzeAutoRefresh()) {
         obnovZeServeru({ tichy: true, vykreslit: true });
       }
     }

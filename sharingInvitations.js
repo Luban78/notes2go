@@ -11,7 +11,6 @@
 
 (() => {
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_MS = 5 * 60_000;
   const AUTO_REFRESH_MIN_MS = 60_000;
 
   const taskModal = document.getElementById("taskModal");
@@ -27,8 +26,11 @@
   let shareBusy = false;
   let inviteBusy = false;
   let relationshipBusy = false;
-  let pollTimer = null;
   let posledniAutoRefreshAt = 0;
+  let realtimeRefreshTimer = null;
+  let realtimeRefreshCeka = false;
+  let shareRealtimeTimer = null;
+  let shareRealtimeCeka = false;
 
   function jeQuotaBootstrapPending() {
     return window.LubaNoteSync?.jeBootstrapPending?.() === true;
@@ -1338,19 +1340,76 @@
     aktualizujShareButton();
   }
 
-  function spustPolling() {
-    clearInterval(pollTimer);
-    pollTimer = setInterval(() => {
+  /* PATCH 621 – invitation/shared metadata se obnovují jen po Realtime signálu. */
+  function naplanujRealtimePozvanky(detail = {}) {
+    clearTimeout(realtimeRefreshTimer);
+
+    realtimeRefreshTimer = setTimeout(async () => {
+      realtimeRefreshTimer = null;
+
       if (
-        startUiPripraven &&
-        !document.hidden &&
-        navigator.onLine &&
-        ziskejAktualniUserId() &&
-        muzeAutoRefresh()
+        !startUiPripraven ||
+        document.hidden ||
+        !navigator.onLine ||
+        !ziskejAktualniUserId()
       ) {
-        nactiPrichoziPozvanky({ zobrazNacitani: false });
+        realtimeRefreshCeka = true;
+        return;
       }
-    }, POLL_MS);
+
+      realtimeRefreshCeka = false;
+      await nactiPrichoziPozvanky({ zobrazNacitani: false });
+
+      const signalNoteId = String(detail?.noteId || "");
+      const aktualniNoteId = String(shareNoteId || "");
+      const gap = Math.max(1, Number(detail?.gap) || 1);
+
+      if (
+        shareModal &&
+        !shareModal.overlay.hidden &&
+        (
+          !signalNoteId ||
+          signalNoteId === aktualniNoteId ||
+          gap > 1
+        )
+      ) {
+        await nactiShareData();
+      }
+    }, 140);
+  }
+
+  function naplanujRealtimeShareModal(detail = {}) {
+    clearTimeout(shareRealtimeTimer);
+
+    shareRealtimeTimer = setTimeout(() => {
+      shareRealtimeTimer = null;
+
+      if (
+        document.hidden ||
+        !navigator.onLine ||
+        !ziskejAktualniUserId()
+      ) {
+        if (shareModal && !shareModal.overlay.hidden) {
+          shareRealtimeCeka = true;
+        }
+        return;
+      }
+
+      if (!shareModal || shareModal.overlay.hidden) {
+        shareRealtimeCeka = false;
+        return;
+      }
+
+      shareRealtimeCeka = false;
+
+      const signalNoteId = String(detail?.noteId || "");
+      const aktualniNoteId = String(shareNoteId || "");
+      const gap = Math.max(1, Number(detail?.gap) || 1);
+
+      if (!signalNoteId || signalNoteId === aktualniNoteId || gap > 1) {
+        void nactiShareData();
+      }
+    }, 140);
   }
 
   shareNoteButton?.addEventListener("click", otevriShareModal);
@@ -1408,11 +1467,24 @@
     zavriInvitationsModal();
   });
 
+  window.addEventListener("lubanote:invitation-realtime-signal", (event) => {
+    naplanujRealtimePozvanky(event.detail || {});
+  });
+
+  window.addEventListener("lubanote:shared-realtime-signal", (event) => {
+    naplanujRealtimeShareModal(event.detail || {});
+  });
+
   window.addEventListener("lubanote:language-change", aplikujPreklady);
 
   window.addEventListener("lubanote:splash-ready", () => {
     if (startUiPripraven) return;
     startUiPripraven = true;
+
+    if (realtimeRefreshCeka) {
+      naplanujRealtimePozvanky({ gap: 2 });
+      return;
+    }
 
     if (navigator.onLine && ziskejAktualniUserId() && muzeAutoRefresh()) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
@@ -1420,6 +1492,15 @@
   });
 
   window.addEventListener("online", () => {
+    if (shareRealtimeCeka) {
+      naplanujRealtimeShareModal({ gap: 2 });
+    }
+
+    if (realtimeRefreshCeka) {
+      naplanujRealtimePozvanky({ gap: 2 });
+      return;
+    }
+
     if (startUiPripraven && ziskejAktualniUserId() && muzeAutoRefresh()) {
       nactiPrichoziPozvanky({ zobrazNacitani: false });
     }
@@ -1430,17 +1511,24 @@
       startUiPripraven &&
       !document.hidden &&
       navigator.onLine &&
-      ziskejAktualniUserId() &&
-      muzeAutoRefresh()
+      ziskejAktualniUserId()
     ) {
-      nactiPrichoziPozvanky({ zobrazNacitani: false });
+      if (shareRealtimeCeka) {
+        naplanujRealtimeShareModal({ gap: 2 });
+      }
+
+      if (realtimeRefreshCeka) {
+        naplanujRealtimePozvanky({ gap: 2 });
+      } else if (muzeAutoRefresh()) {
+        nactiPrichoziPozvanky({ zobrazNacitani: false });
+      }
+
       aktualizujShareButton();
     }
   });
 
   aplikujPreklady();
   aktualizujShareButton();
-  spustPolling();
 
   window.LubaNoteSharingInvitations = {
     obnovPozvanky: () => nactiPrichoziPozvanky({ zobrazNacitani: false }),

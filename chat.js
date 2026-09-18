@@ -10,7 +10,7 @@
    - 💬 badge nepřečtených zpráv
    - seznam důvěryhodných kontaktů
    - 1:1 chat
-   - polling bez zásahu do note syncu
+   - event-driven Realtime bez periodického pollingu
    - odesílání plain-text zpráv
    - read receipt
    - smazání vlastní zprávy pro oba přes LubaNote modal
@@ -18,9 +18,7 @@
 
 (() => {
   const LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
-  const POLL_BADGE_MS = 60_000;
   const AUTO_GLOBAL_MIN_MS = 30_000;
-  const POLL_THREAD_MS = 3_000;
 
   const chatButton = document.getElementById("chatButton");
   const chatBadge = document.getElementById("chatBadge");
@@ -32,14 +30,14 @@
   let threadModal = null;
   let deleteModal = null;
   let otevrenyKontakt = null;
-  let globalPollTimer = null;
-  let threadPollTimer = null;
   let probihajiciKontakty = null;
   let probihajiciZpravy = null;
   let odesilam = false;
   let mazu = false;
   let puvodniAndroidZpet = null;
   let posledniAutoGlobalAt = 0;
+  let realtimeRefreshTimer = null;
+  let realtimeRefreshCeka = false;
 
   function jeQuotaBootstrapPending() {
     return window.LubaNoteSync?.jeBootstrapPending?.() === true;
@@ -57,10 +55,7 @@
     return true;
   }
 
-  /*
-   * Scroll chatu:
-   * polling nesmí každé 3 s znovu skládat stejné DOM a shazovat gesto.
-   */
+  /* Stejný DOM znovu skládáme jen po skutečné změně / resume. */
   let posledniOtiskZprav = null;
 
   function t(klic, zaloha, promenne = null) {
@@ -746,6 +741,44 @@
     ]);
   }
 
+  /* PATCH 621 – skutečná serverová změna nahradila 3s/60s polling. */
+  function naplanujRealtimeObnovu(detail = {}) {
+    clearTimeout(realtimeRefreshTimer);
+
+    realtimeRefreshTimer = setTimeout(async () => {
+      realtimeRefreshTimer = null;
+
+      if (
+        !startUiPripraven ||
+        document.hidden ||
+        !navigator.onLine ||
+        !ziskejUserId()
+      ) {
+        realtimeRefreshCeka = true;
+        return;
+      }
+
+      realtimeRefreshCeka = false;
+
+      const signalThreadId = String(detail?.threadId || "");
+      const otevrenyThreadId = String(otevrenyKontakt?.thread_id || "");
+      const gap = Math.max(1, Number(detail?.gap) || 1);
+
+      if (
+        otevrenyThreadId &&
+        (
+          !signalThreadId ||
+          signalThreadId === otevrenyThreadId ||
+          gap > 1
+        )
+      ) {
+        await nactiZpravy({ tichy: true, zachovatScroll: true });
+      }
+
+      await obnovGlobalniStav({ tichy: true });
+    }, 120);
+  }
+
   async function otevriKontakty() {
     const modal = vytvorContactsModal();
     modal.overlay.hidden = false;
@@ -805,7 +838,6 @@
     document.body.classList.add("lubaFullscreenOpaqueOpen");
 
     await nactiZpravy({ tichy: false, zachovatScroll: false });
-    spustThreadPolling();
   }
 
   function zavriThread({ otevritKontakty = false } = {}) {
@@ -816,8 +848,6 @@
 
     otevrenyKontakt = null;
     posledniOtiskZprav = null;
-    clearInterval(threadPollTimer);
-    threadPollTimer = null;
     if (deleteModal && !deleteModal.overlay.hidden && !mazu) zavriDeleteModal();
 
     if (otevritKontakty) {
@@ -1011,36 +1041,6 @@
     return true;
   }
 
-  function spustThreadPolling() {
-    clearInterval(threadPollTimer);
-
-    threadPollTimer = setInterval(() => {
-      if (
-        !document.hidden &&
-        navigator.onLine &&
-        otevrenyKontakt?.thread_id
-      ) {
-        nactiZpravy({ tichy: true, zachovatScroll: true });
-      }
-    }, POLL_THREAD_MS);
-  }
-
-  function spustGlobalPolling() {
-    clearInterval(globalPollTimer);
-
-    globalPollTimer = setInterval(() => {
-      if (
-        startUiPripraven &&
-        !document.hidden &&
-        navigator.onLine &&
-        ziskejUserId() &&
-        muzeAutoGlobalRefresh()
-      ) {
-        obnovGlobalniStav({ tichy: true });
-      }
-    }, POLL_BADGE_MS);
-  }
-
   function aplikujPreklady() {
     if (chatButton) {
       const aria = t("chat.buttonAria", "Zprávy");
@@ -1140,11 +1140,20 @@
     }
   });
 
+  window.addEventListener("lubanote:chat-realtime-signal", (event) => {
+    naplanujRealtimeObnovu(event.detail || {});
+  });
+
   window.addEventListener("lubanote:language-change", aplikujPreklady);
 
   window.addEventListener("lubanote:splash-ready", () => {
     if (startUiPripraven) return;
     startUiPripraven = true;
+
+    if (realtimeRefreshCeka) {
+      naplanujRealtimeObnovu({ gap: 2 });
+      return;
+    }
 
     if (navigator.onLine && ziskejUserId() && muzeAutoGlobalRefresh()) {
       obnovGlobalniStav({ tichy: true });
@@ -1153,6 +1162,12 @@
 
   window.addEventListener("online", () => {
     nastavComposerStav();
+
+    if (realtimeRefreshCeka) {
+      naplanujRealtimeObnovu({ gap: 2 });
+      return;
+    }
+
     if (startUiPripraven && ziskejUserId() && muzeAutoGlobalRefresh()) {
       obnovGlobalniStav({ tichy: true });
     }
@@ -1173,6 +1188,11 @@
       navigator.onLine &&
       ziskejUserId()
     ) {
+      if (realtimeRefreshCeka) {
+        naplanujRealtimeObnovu({ gap: 2 });
+        return;
+      }
+
       if (muzeAutoGlobalRefresh()) {
         obnovGlobalniStav({ tichy: true });
       }
@@ -1212,7 +1232,6 @@
 
   obalAndroidBack();
   aplikujPreklady();
-  spustGlobalPolling();
 
   window.LubaNoteChat = {
     openContacts: otevriKontakty,
