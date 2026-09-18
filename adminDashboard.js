@@ -76,13 +76,28 @@
   let filtr = "pending";
   let nacitam = false;
 
+  /* PATCH 627A – DOČASNÝ VÝVOJOVÝ NOUZOVÝ DEBUG.
+   *
+   * Před veřejným vydáním odstranit / přepnout na false.
+   * Nezapisuje se do localStorage a po reloadu je znovu zamčený.
+   * 5× rychlý tap na „Poznámky“ ho odemkne jen pro aktuální relaci.
+   */
+  const POVOLIT_NOUZOVY_DEBUG_5X = true;
+  const NOUZOVY_DEBUG_OKNO_MS = 2200;
+  let nouzovyDevDebug = false;
+  let nouzoveKliky = [];
+
   /*
-   * Jediná klientská brána pro interní nástroje. Samotné admin oprávnění
-   * stále určuje serverové RPC; Visual Debug ani Debug Hub se už neodemknou
-   * tajným tapem nebo klávesovou zkratkou.
+   * Jediná klientská brána pro interní nástroje. Normálně rozhoduje
+   * serverové admin RPC. Během vývoje je navíc povolený dočasný 5× tap
+   * fallback, aby šel Debug Hub otevřít i při rozbitém startu/syncu.
    */
   window.LubaNoteAdminTools = {
-    isAllowed: () => jeAdmin === true
+    isAllowed: () =>
+      jeAdmin === true ||
+      (POVOLIT_NOUZOVY_DEBUG_5X && nouzovyDevDebug === true),
+    isEmergencyDevUnlock: () =>
+      POVOLIT_NOUZOVY_DEBUG_5X && nouzovyDevDebug === true
   };
 
   function tAdmin(klic, vychozi, parametry = {}) {
@@ -173,9 +188,18 @@
 
     if (!jeAdmin) {
       modal.hidden = true;
-      window.LubaNoteDebugHub?.stop?.();
-      window.LubaNoteDebugHub?.close?.();
-      window.LubaNoteVisualDebug?.lock?.();
+
+      /*
+       * Nouzový 5× debug je záměrně nezávislý na admin kontrole.
+       * Když právě diagnostikujeme rozbitý start/sync, pozdější neúspěšné
+       * admin ověření nám nesmí Debug Hub znovu zavřít. Po reloadu se
+       * nouzový stav automaticky ztratí.
+       */
+      if (!nouzovyDevDebug) {
+        window.LubaNoteDebugHub?.stop?.();
+        window.LubaNoteDebugHub?.close?.();
+        window.LubaNoteVisualDebug?.lock?.();
+      }
     }
   }
 
@@ -1145,6 +1169,60 @@
     window.LubaNoteDebugHub?.open?.();
   }
 
+  /* PATCH 627A – vývojový nouzový 5× tap.
+   *
+   * Přesně navazuje na původní gesto LubaNote: 5× rychle klepnout na
+   * záložku „Poznámky“. Záložní cíle jsou staré logo/login logo, pokud
+   * na dané obrazovce existují. Po odemčení rovnou zobrazíme společný
+   * debug dock a spustíme Start / sync / síť, aby šel problém okamžitě
+   * zkopírovat i tehdy, když Admin Dashboard kvůli startu vůbec nenaběhl.
+   */
+  function spustNouzovyDebug() {
+    if (!POVOLIT_NOUZOVY_DEBUG_5X) return false;
+
+    nouzovyDevDebug = true;
+    nouzoveKliky = [];
+
+    console.warn(
+      "DEV DEBUG 627A | EMERGENCY 5X UNLOCK | session only"
+    );
+
+    window.LubaNoteVisualDebug?.showDock?.();
+
+    if (window.LubaNoteDebugHub?.startStartup?.()) {
+      return true;
+    }
+
+    return Boolean(window.LubaNoteDebugHub?.open?.());
+  }
+
+  function registrujNouzovyDebug5x() {
+    if (!POVOLIT_NOUZOVY_DEBUG_5X) return;
+
+    const cile = [
+      document.getElementById("notesModuleButton"),
+      document.querySelector(".moduleLogo"),
+      document.querySelector(".loginLogoImage")
+    ].filter(Boolean);
+
+    const zpracujKlik = () => {
+      const ted = performance.now();
+
+      nouzoveKliky = nouzoveKliky.filter(
+        cas => ted - cas < NOUZOVY_DEBUG_OKNO_MS
+      );
+      nouzoveKliky.push(ted);
+
+      if (nouzoveKliky.length >= 5) {
+        spustNouzovyDebug();
+      }
+    };
+
+    cile.forEach(prvek => {
+      prvek.addEventListener("click", zpracujKlik, true);
+    });
+  }
+
   menuTlacitko.addEventListener(
     "click",
     otevriDashboard
@@ -1210,8 +1288,18 @@
     aktualizujTexty
   );
 
+  /* PATCH 627 – Admin diagnostika nesmí být závislá na dokončení syncu.
+   *
+   * Dříve se serverové ověření admina spustilo až po splash-ready.
+   * Když se startovní sync zasekl/selhal ještě před splash-ready, zmizel
+   * současně Admin Dashboard, Visual Debug i Debug Hub – tedy právě nástroje,
+   * které jsou potřeba k diagnostice problému.
+   *
+   * Bezpečnost se nemění: žádný lokální bypass. Admin nástroje se stále
+   * zobrazí jen po úspěšném RPC lubanote_admin_is_current_user = true.
+   */
   window.addEventListener("online", () => {
-    if (startUiPripraven && ucetAktivni) {
+    if (ucetAktivni) {
       overAdmina();
     }
   });
@@ -1220,9 +1308,7 @@
     "lubanote:account-active",
     () => {
       ucetAktivni = true;
-      if (startUiPripraven) {
-        overAdmina();
-      }
+      overAdmina();
     }
   );
 
@@ -1246,6 +1332,7 @@
     }
   );
 
+  registrujNouzovyDebug5x();
   aktualizujTexty();
 
   /*
