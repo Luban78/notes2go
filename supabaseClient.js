@@ -350,6 +350,134 @@ function doplnParametryTextu(text, parametry = {}) {
   );
 }
 
+/*
+ * PATCH 603 – FAIL-CLOSED OWNER GATE PRO STARÉ / NEÚPLNĚ OZNAČENÉ INSTALACE
+ * -------------------------------------------------------------------------
+ * Kritická zásada: chybějící lubanoteLocalOwnerUserId NIKDY neznamená,
+ * že už přihlášený účet smí automaticky převzít existující savedTask.
+ * Starší GitHub Pages / PWA instalace mohou obsahovat lokální karty ještě
+ * z doby před zavedením owner markeru. Kdybychom owner slepě nastavili na
+ * právě přihlášeného uživatele, lokální data jednoho účtu by se mohla
+ * zobrazit pod jiným účtem ještě před synchronizací.
+ *
+ * Proto nejdřív hledáme jednoznačný userId v již existujících, uživatelsky
+ * svázaných cache záznamech. Pokud se důkazy rozcházejí nebo žádný owner
+ * nelze určit a zařízení přitom obsahuje reálná lokální data, přihlášení
+ * se fail-closed zablokuje a nabídne se bezpečný reset zařízení.
+ */
+function nactiJsonLokalnihoKlice(klic) {
+  try {
+    const raw = localStorage.getItem(klic);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function ziskejDukazyVlastnikaLokalnichDat() {
+  const ids = new Set();
+
+  const pridej = (hodnota) => {
+    const id = String(hodnota || "").trim();
+    if (id) ids.add(id);
+  };
+
+  const access = nactiJsonLokalnihoKlice(
+    LUBANOTE_ACCESS_CACHE_KEY
+  );
+  pridej(access?.user_id);
+
+  const secret = nactiJsonLokalnihoKlice(
+    "lubanoteSecretSettingsV1"
+  );
+  pridej(secret?.userId || secret?.user_id);
+
+  const localTags = nactiJsonLokalnihoKlice(
+    "lubanoteLocalTagsV1"
+  );
+  pridej(localTags?.userId);
+
+  const fastSync = nactiJsonLokalnihoKlice(
+    "lubanotePrivateFastSyncStateV1"
+  );
+  pridej(fastSync?.userId);
+
+  const syncCursor = nactiJsonLokalnihoKlice(
+    "lubanotePrivateSyncV2CursorV1"
+  );
+  pridej(syncCursor?.userId);
+
+  const safeBootstrap = nactiJsonLokalnihoKlice(
+    "lubanotePrivateSafeBootstrapV2V1"
+  );
+  pridej(safeBootstrap?.userId);
+
+  return Array.from(ids);
+}
+
+function maNenulovaLokalniDataBezVlastnika() {
+  const maNeprazdnePole = (klic) => {
+    const hodnota = nactiJsonLokalnihoKlice(klic);
+    return Array.isArray(hodnota) && hodnota.length > 0;
+  };
+
+  if (
+    maNeprazdnePole("savedTask") ||
+    maNeprazdnePole("savedSecretTask") ||
+    maNeprazdnePole("plannedItems")
+  ) {
+    return true;
+  }
+
+  const localTags = nactiJsonLokalnihoKlice(
+    "lubanoteLocalTagsV1"
+  );
+  if (
+    Array.isArray(localTags?.tags) &&
+    localTags.tags.length > 0
+  ) {
+    return true;
+  }
+
+  const cloudMeta = nactiJsonLokalnihoKlice(
+    "lubanoteCloudSyncMetaV1"
+  );
+  if (
+    cloudMeta &&
+    typeof cloudMeta === "object" &&
+    Object.keys(cloudMeta).length > 0
+  ) {
+    return true;
+  }
+
+  const pendingDeletes = nactiJsonLokalnihoKlice(
+    "lubanotePendingDeletes"
+  );
+  if (
+    (Array.isArray(pendingDeletes) && pendingDeletes.length > 0) ||
+    (
+      pendingDeletes &&
+      typeof pendingDeletes === "object" &&
+      !Array.isArray(pendingDeletes) &&
+      Object.keys(pendingDeletes).length > 0
+    )
+  ) {
+    return true;
+  }
+
+  /* IndexedDB overflow znamená, že plná sada běžných poznámek může být
+     mimo localStorage. I samotný marker proto bereme jako reálná data. */
+  if (
+    localStorage.getItem(
+      "lubanoteRegularNotesStorageModeV1"
+    ) === "indexeddb"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function overNeboNastavVlastnikaLokalnichDat(userId) {
   const id = String(userId || "").trim();
 
@@ -360,27 +488,88 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
   const ulozeny = String(
     localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
   ).trim();
+  const dukazy = ziskejDukazyVlastnikaLokalnichDat();
 
-  if (!ulozeny) {
-    localStorage.setItem(
-      LUBANOTE_LOCAL_OWNER_KEY,
-      id
+  if (ulozeny) {
+    /* I existující owner marker nesmí přebít starší cache, která jasně
+       patří jinému účtu. Takový stav je považován za konflikt a UI se
+       nesmí otevřít. */
+    const konflikt = dukazy.some(
+      (dukaz) => dukaz !== ulozeny
     );
-    return true;
+
+    if (konflikt) {
+      console.error(
+        "LubaNote owner gate: konfliktní lokální provenance; aplikace zůstává zamčená.",
+        { owner: ulozeny, evidence: dukazy }
+      );
+      return false;
+    }
+
+    return ulozeny === id;
   }
 
-  return ulozeny === id;
+  if (dukazy.length > 1) {
+    console.error(
+      "LubaNote owner gate: lokální cache obsahují více různých vlastníků; aplikace zůstává zamčená.",
+      { evidence: dukazy }
+    );
+    return false;
+  }
+
+  if (dukazy.length === 1) {
+    const migrovanyOwner = dukazy[0];
+
+    localStorage.setItem(
+      LUBANOTE_LOCAL_OWNER_KEY,
+      migrovanyOwner
+    );
+
+    return migrovanyOwner === id;
+  }
+
+  if (maNenulovaLokalniDataBezVlastnika()) {
+    console.error(
+      "LubaNote owner gate: zařízení obsahuje lokální data bez jednoznačného vlastníka; automatické převzetí je zakázané."
+    );
+    return false;
+  }
+
+  /* Pouze skutečně prázdná instalace smí dostat owner = aktuální účet. */
+  localStorage.setItem(
+    LUBANOTE_LOCAL_OWNER_KEY,
+    id
+  );
+  return true;
 }
 
 function migrujVlastnikaZeStavajiciSession() {
-  if (
-    localStorage.getItem(LUBANOTE_AUTH_OK_KEY) !== "1" ||
-    localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY)
-  ) {
+  if (localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY)) {
     return;
   }
 
   try {
+    const dukazy = ziskejDukazyVlastnikaLokalnichDat();
+
+    if (dukazy.length === 1) {
+      localStorage.setItem(
+        LUBANOTE_LOCAL_OWNER_KEY,
+        dukazy[0]
+      );
+      return;
+    }
+
+    /* Konfliktní cache se nesmí "opravit" přepsáním ownera session ID. */
+    if (dukazy.length > 1) {
+      return;
+    }
+
+    if (
+      localStorage.getItem(LUBANOTE_AUTH_OK_KEY) !== "1"
+    ) {
+      return;
+    }
+
     const raw = localStorage.getItem(
       SUPABASE_AUTH_STORAGE_KEY
     );
@@ -396,7 +585,12 @@ function migrujVlastnikaZeStavajiciSession() {
       ""
     ).trim();
 
-    if (userId) {
+    /* Legacy session smí ownera doplnit jen tehdy, když zařízení nemá
+       žádná lokální data bez vlastníka. Jinak raději fail-closed. */
+    if (
+      userId &&
+      !maNenulovaLokalniDataBezVlastnika()
+    ) {
       localStorage.setItem(
         LUBANOTE_LOCAL_OWNER_KEY,
         userId
@@ -1507,10 +1701,17 @@ async function zpracujStavPrihlasenehoUzivatele(
     localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
   ).trim();
 
+  /*
+   * PATCH 603 – access cache se před owner gate NESMÍ přepsat právě
+   * přihlášeným účtem, pokud owner ještě chybí. Tato cache je jeden z
+   * důkazů, komu starší lokální data patřila. Zápis proběhne až po
+   * úspěšném owner gate v povolAktivniUcet().
+   */
   if (
     stav?.ok &&
     user?.id &&
-    (!vlastnik || vlastnik === String(user.id))
+    vlastnik &&
+    vlastnik === String(user.id)
   ) {
     ulozLokalniCachePristupu(stav, user.id);
   }
