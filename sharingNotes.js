@@ -1386,7 +1386,9 @@
     return probihajiciNacteni;
   }
 
-  /* PATCH 621 – serverový Realtime head nahradil 5min polling. */
+  window.LubaNoteStartupDiag?.zapis?.("RT", "SHARED NOTES 621A LOADED | POLLING DISABLED");
+
+  /* PATCH 621A – serverový Realtime head nahradil 5min polling. */
   function naplanujRealtimeObnovu(detail = {}) {
     clearTimeout(realtimeRefreshTimer);
 
@@ -1558,13 +1560,9 @@
   });
 
   window.addEventListener("online", () => {
+    /* 621A: reconnect catch-up řídí malý Realtime head. */
     if (realtimeRefreshCeka) {
       naplanujRealtimeObnovu({ gap: 2 });
-      return;
-    }
-
-    if (startUiPripraven && muzeAutoRefresh()) {
-      obnovZeServeru({ tichy: true, vykreslit: true });
     }
   });
 
@@ -1577,10 +1575,9 @@
         window.renderTasks();
       }
 
+      /* 621A: po resume už nestahujeme celé Shared; head-check rozhodne o změně. */
       if (realtimeRefreshCeka) {
         naplanujRealtimeObnovu({ gap: 2 });
-      } else if (startUiPripraven && navigator.onLine && muzeAutoRefresh()) {
-        obnovZeServeru({ tichy: true, vykreslit: true });
       }
     }
   });

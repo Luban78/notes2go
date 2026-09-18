@@ -741,7 +741,9 @@
     ]);
   }
 
-  /* PATCH 621 – skutečná serverová změna nahradila 3s/60s polling. */
+  window.LubaNoteStartupDiag?.zapis?.("RT", "CHAT 621A LOADED | POLLING DISABLED");
+
+  /* PATCH 621A – skutečná serverová změna nahradila 3s/60s polling. */
   function naplanujRealtimeObnovu(detail = {}) {
     clearTimeout(realtimeRefreshTimer);
 
@@ -1163,15 +1165,10 @@
   window.addEventListener("online", () => {
     nastavComposerStav();
 
+    /* 621A: reconnect catch-up řídí malý Realtime head, ne Chat RPC polling. */
     if (realtimeRefreshCeka) {
       naplanujRealtimeObnovu({ gap: 2 });
-      return;
     }
-
-    if (startUiPripraven && ziskejUserId() && muzeAutoGlobalRefresh()) {
-      obnovGlobalniStav({ tichy: true });
-    }
-    if (otevrenyKontakt?.thread_id) nactiZpravy({ tichy: true, zachovatScroll: true });
   });
 
   window.addEventListener("offline", () => {
@@ -1188,16 +1185,9 @@
       navigator.onLine &&
       ziskejUserId()
     ) {
+      /* 621A: po resume čekáme na head-check ze sharedChatRealtime.js. */
       if (realtimeRefreshCeka) {
         naplanujRealtimeObnovu({ gap: 2 });
-        return;
-      }
-
-      if (muzeAutoGlobalRefresh()) {
-        obnovGlobalniStav({ tichy: true });
-      }
-      if (otevrenyKontakt?.thread_id) {
-        nactiZpravy({ tichy: true, zachovatScroll: true });
       }
     }
   });

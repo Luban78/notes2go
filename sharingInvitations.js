@@ -1340,7 +1340,9 @@
     aktualizujShareButton();
   }
 
-  /* PATCH 621 – invitation/shared metadata se obnovují jen po Realtime signálu. */
+  window.LubaNoteStartupDiag?.zapis?.("RT", "INVITATIONS 621A LOADED | POLLING DISABLED");
+
+  /* PATCH 621A – invitation/shared metadata se obnovují jen po Realtime signálu. */
   function naplanujRealtimePozvanky(detail = {}) {
     clearTimeout(realtimeRefreshTimer);
 
@@ -1501,9 +1503,7 @@
       return;
     }
 
-    if (startUiPripraven && ziskejAktualniUserId() && muzeAutoRefresh()) {
-      nactiPrichoziPozvanky({ zobrazNacitani: false });
-    }
+    /* 621A: reconnect catch-up řídí malý Realtime head. */
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -1517,10 +1517,9 @@
         naplanujRealtimeShareModal({ gap: 2 });
       }
 
+      /* 621A: po resume pozvánky obnoví jen skutečná změna v headu. */
       if (realtimeRefreshCeka) {
         naplanujRealtimePozvanky({ gap: 2 });
-      } else if (muzeAutoRefresh()) {
-        nactiPrichoziPozvanky({ zobrazNacitani: false });
       }
 
       aktualizujShareButton();

@@ -13,6 +13,7 @@
   "use strict";
 
   const TABULKA = "lubanote_realtime_heads";
+  window.LubaNoteStartupDiag?.zapis?.("RT", "SHARED CHAT REALTIME 621A LOADED");
   const KANAL_PREFIX = "lubanote-shared-chat-head";
   const LOCAL_PREFIX = "lubanoteRealtimeHead621:";
 
@@ -306,7 +307,7 @@
 
       realtimeKanal = kanal;
       realtimeUserId = userId;
-      diagnostika("RT", "SHARED CHAT REALTIME | SUBSCRIBED");
+      diagnostika("RT", "SHARED CHAT REALTIME 621A | SUBSCRIBED");
       await zkontrolujHead();
       return true;
     })();
