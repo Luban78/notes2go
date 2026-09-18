@@ -90,6 +90,104 @@ const probihajiciUvolneniEditoru = new Map();
 const EDITOR_PENDING_RELEASE_STORAGE_KEY =
   "lubanotePendingEditorReleasesV1";
 
+/*
+ * PATCH 610 – WEB REFRESH RECOVERY TICKET
+ *
+ * Běžný web nesmí automaticky přebírat editor jen podle deviceId,
+ * protože dvě živé karty stejného prohlížeče mohou deviceId sdílet.
+ * Při skutečném reloadu ale původní dokument těsně před zánikem uloží
+ * do sessionStorage jednorázový důkaz konkrétní serverové session.
+ * Nový dokument smí starý lease převzít pouze tehdy, když:
+ * - jde o stejnou poznámku a stejný deviceId,
+ * - server stále vlastní přesně sessionId z reload ticketu,
+ * - ticket není starší než několik minut.
+ *
+ * Tím refresh stejné karty funguje bez falešného handoffu, zatímco
+ * druhá současně otevřená karta zůstává chráněná standardním předáním.
+ */
+const EDITOR_WEB_RELOAD_RECOVERY_KEY =
+  "lubanoteEditorWebReloadRecoveryV1";
+const EDITOR_WEB_RELOAD_RECOVERY_MAX_AGE_MS =
+  5 * 60 * 1000;
+
+function jeBeznyWebEditorHandoff() {
+  return (
+    !jeNativniApkEditorHandoff() &&
+    !jeIosStandalonePwaEditorHandoff()
+  );
+}
+
+function nactiWebReloadRecoveryTicket() {
+  if (!jeBeznyWebEditorHandoff()) {
+    return null;
+  }
+
+  try {
+    const raw = sessionStorage.getItem(
+      EDITOR_WEB_RELOAD_RECOVERY_KEY
+    );
+    const ticket = raw ? JSON.parse(raw) : null;
+
+    const age =
+      Date.now() - Number(ticket?.createdAt || 0);
+
+    if (
+      !ticket?.noteId ||
+      !ticket?.sessionId ||
+      !ticket?.deviceId ||
+      !Number.isFinite(age) ||
+      age < 0 ||
+      age > EDITOR_WEB_RELOAD_RECOVERY_MAX_AGE_MS
+    ) {
+      sessionStorage.removeItem(
+        EDITOR_WEB_RELOAD_RECOVERY_KEY
+      );
+      return null;
+    }
+
+    return ticket;
+  } catch {
+    return null;
+  }
+}
+
+function ulozWebReloadRecoveryTicket() {
+  if (!jeBeznyWebEditorHandoff()) {
+    return;
+  }
+
+  const session = aktivniVzdalenyEditor;
+
+  if (!session?.noteId || !session?.sessionId) {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(
+      EDITOR_WEB_RELOAD_RECOVERY_KEY,
+      JSON.stringify({
+        noteId: session.noteId,
+        sessionId: session.sessionId,
+        deviceId: ziskejDeviceIdEditoru(),
+        userId: editorRealtimeUserId || null,
+        createdAt: Date.now()
+      })
+    );
+  } catch {
+    // Recovery ticket je pouze doplňková ochrana; editor nesmí blokovat.
+  }
+}
+
+function smazWebReloadRecoveryTicket() {
+  try {
+    sessionStorage.removeItem(
+      EDITOR_WEB_RELOAD_RECOVERY_KEY
+    );
+  } catch {
+    // Bezpečně ignorovat nedostupné sessionStorage.
+  }
+}
+
 function nactiCekajiciUvolneniEditoru() {
   try {
     const raw = localStorage.getItem(
@@ -803,18 +901,41 @@ async function zkusObnovitVlastniEditorPoRestartu(
 ) {
   /*
    * Android APK i iOS PWA spuštěná samostatně z plochy mají jednu
-   * app instanci. Po hard killu / reloadu ale serverový lease může
-   * ještě desítky sekund ukazovat na starou session STEJNÉ instalace.
-   * To není jiné zařízení a nesmí se zobrazit falešné předání.
+   * app instanci. Po hard killu / reloadu může server ještě držet
+   * lease staré session stejné instalace.
    *
-   * Běžný web/Safari tab tuto zkratku záměrně nepoužívá, protože dvě
-   * karty stejného prohlížeče mohou sdílet deviceId a přitom být obě živé.
+   * PATCH 610: běžný web smí stejnou zkratku použít pouze s čerstvým
+   * sessionStorage reload ticketem, který obsahuje PŘESNÉ staré
+   * owner_session_id. Samotné deviceId na webu nikdy nestačí, protože
+   * ho mohou sdílet dvě živé karty.
    */
-  if (
-    !jeNativniApkEditorHandoff() &&
-    !jeIosStandalonePwaEditorHandoff()
-  ) {
-    return false;
+  const jeJednaAppInstance =
+    jeNativniApkEditorHandoff() ||
+    jeIosStandalonePwaEditorHandoff();
+
+  let webReloadTicket = null;
+
+  if (!jeJednaAppInstance) {
+    webReloadTicket =
+      nactiWebReloadRecoveryTicket();
+
+    if (
+      !webReloadTicket ||
+      webReloadTicket.noteId !== noteId ||
+      webReloadTicket.deviceId !==
+        ziskejDeviceIdEditoru()
+    ) {
+      return false;
+    }
+
+    const user = await getCurrentUser();
+
+    if (
+      webReloadTicket.userId &&
+      user?.id !== webReloadTicket.userId
+    ) {
+      return false;
+    }
   }
 
   const row =
@@ -826,6 +947,20 @@ async function zkusObnovitVlastniEditorPoRestartu(
       ziskejDeviceIdEditoru() ||
     !row.owner_session_id ||
     row.owner_session_id === novaSessionId
+  ) {
+    return false;
+  }
+
+  /*
+   * Na běžném webu je toto rozhodující bezpečnostní podmínka:
+   * server musí pořád vlastnit přesně session, kterou před reloadem
+   * zaznamenal zanikající dokument. Pokud ji mezitím převzala jiná
+   * karta/zařízení, recovery se NESMÍ provést.
+   */
+  if (
+    webReloadTicket &&
+    row.owner_session_id !==
+      webReloadTicket.sessionId
   ) {
     return false;
   }
@@ -865,6 +1000,10 @@ async function zkusObnovitVlastniEditorPoRestartu(
       noteId,
       novaSessionId
     );
+
+    if (webReloadTicket) {
+      smazWebReloadRecoveryTicket();
+    }
 
     return true;
   } catch (error) {
@@ -1978,6 +2117,25 @@ window.addEventListener(
 window.addEventListener(
   "pageshow",
   obnovKoordinaciEditoruPoNavratu
+);
+
+/*
+ * PATCH 610 – zapiš důkaz staré session až při skutečném zániku
+ * dokumentu. Druhá živá karta nic takového nevytváří, takže pouhé
+ * sdílení deviceId jí nedá právo automaticky převzít editor.
+ */
+window.addEventListener(
+  "beforeunload",
+  () => {
+    ulozWebReloadRecoveryTicket();
+  }
+);
+
+window.addEventListener(
+  "pagehide",
+  () => {
+    ulozWebReloadRecoveryTicket();
+  }
 );
 
 if (
