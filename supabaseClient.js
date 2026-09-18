@@ -374,6 +374,343 @@ function nactiJsonLokalnihoKlice(klic) {
   }
 }
 
+/*
+ * DIAG 604 – OWNER / ACCOUNT ISOLATION WATCH
+ * ------------------------------------------
+ * POUZE DIAGNOSTIKA. Tento blok nesmí měnit owner gate, sync ani obsah dat.
+ * Zapisuje jen malé technické snapshoty do sessionStorage, aby šlo po startu
+ * zjistit, proč se pod právě přihlášeným účtem zobrazila stará lokální cache.
+ * Nikdy neukládá auth tokeny, hesla ani obsah poznámek.
+ */
+const LUBANOTE_OWNER_DIAG_SESSION_KEY =
+  "lubanoteOwnerGateDiag604";
+const LUBANOTE_OWNER_DIAG_MAX = 120;
+let lubanoteOwnerDiagPamet = [];
+
+function nactiOwnerDiagHistorii() {
+  try {
+    const raw = sessionStorage.getItem(
+      LUBANOTE_OWNER_DIAG_SESSION_KEY
+    );
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data.slice(-LUBANOTE_OWNER_DIAG_MAX) : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+lubanoteOwnerDiagPamet = nactiOwnerDiagHistorii();
+
+function zapisOwnerDiag(typ, detail = {}) {
+  const zaznam = {
+    ts: new Date().toISOString(),
+    ms: Math.round(performance.now()),
+    typ: String(typ || "EVENT"),
+    detail
+  };
+
+  lubanoteOwnerDiagPamet.push(zaznam);
+  if (lubanoteOwnerDiagPamet.length > LUBANOTE_OWNER_DIAG_MAX) {
+    lubanoteOwnerDiagPamet.splice(
+      0,
+      lubanoteOwnerDiagPamet.length - LUBANOTE_OWNER_DIAG_MAX
+    );
+  }
+
+  try {
+    sessionStorage.setItem(
+      LUBANOTE_OWNER_DIAG_SESSION_KEY,
+      JSON.stringify(lubanoteOwnerDiagPamet)
+    );
+  } catch (_error) {
+    // Diagnostika nesmí ovlivnit běh aplikace.
+  }
+}
+
+function shrnPoleOwnerDiag(klic) {
+  const data = nactiJsonLokalnihoKlice(klic);
+  const pole = Array.isArray(data) ? data : [];
+  const ids = pole
+    .map((item) => String(item?.id || "").trim())
+    .filter(Boolean);
+
+  return {
+    count: pole.length,
+    cloudLike: pole.filter(
+      (item) => String(item?.storageScope || "cloud") !== "local"
+    ).length,
+    local: pole.filter(
+      (item) => String(item?.storageScope || "cloud") === "local"
+    ).length,
+    secret: pole.filter((item) => item?.isSecret === true).length,
+    idsSample: ids.slice(0, 12)
+  };
+}
+
+function ownerDiagZdrojovySnapshot() {
+  const access = nactiJsonLokalnihoKlice(
+    LUBANOTE_ACCESS_CACHE_KEY
+  );
+  const secret = nactiJsonLokalnihoKlice(
+    "lubanoteSecretSettingsV1"
+  );
+  const localTags = nactiJsonLokalnihoKlice(
+    "lubanoteLocalTagsV1"
+  );
+  const fastSync = nactiJsonLokalnihoKlice(
+    "lubanotePrivateFastSyncStateV1"
+  );
+  const syncCursor = nactiJsonLokalnihoKlice(
+    "lubanotePrivateSyncV2CursorV1"
+  );
+  const safeBootstrap = nactiJsonLokalnihoKlice(
+    "lubanotePrivateSafeBootstrapV2V1"
+  );
+  const authStorage = nactiJsonLokalnihoKlice(
+    SUPABASE_AUTH_STORAGE_KEY
+  );
+  const authUser =
+    authStorage?.user ||
+    authStorage?.currentSession?.user ||
+    null;
+  const cloudMeta = nactiJsonLokalnihoKlice(
+    "lubanoteCloudSyncMetaV1"
+  );
+  const pending = nactiJsonLokalnihoKlice(
+    "lubanotePendingDeletes"
+  );
+
+  return {
+    ownerKey: String(
+      localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
+    ).trim() || null,
+    authOk: localStorage.getItem(LUBANOTE_AUTH_OK_KEY),
+    authBlocked: localStorage.getItem(LUBANOTE_AUTH_BLOCKED_KEY),
+    authStorageUserId: String(authUser?.id || "").trim() || null,
+    authStorageEmail: String(authUser?.email || "").trim() || null,
+    accessCacheUserId: String(access?.user_id || "").trim() || null,
+    secretUserId: String(
+      secret?.userId || secret?.user_id || ""
+    ).trim() || null,
+    localTagsUserId: String(localTags?.userId || "").trim() || null,
+    fastSyncUserId: String(fastSync?.userId || "").trim() || null,
+    syncCursorUserId: String(syncCursor?.userId || "").trim() || null,
+    safeBootstrapUserId: String(safeBootstrap?.userId || "").trim() || null,
+    regularStorageMode:
+      localStorage.getItem("lubanoteRegularNotesStorageModeV1") || "localStorage",
+    savedTask: shrnPoleOwnerDiag("savedTask"),
+    savedSecretTask: shrnPoleOwnerDiag("savedSecretTask"),
+    localTagsCount: Array.isArray(localTags?.tags)
+      ? localTags.tags.length
+      : 0,
+    cloudMetaCount:
+      cloudMeta && typeof cloudMeta === "object" && !Array.isArray(cloudMeta)
+        ? Object.keys(cloudMeta).length
+        : 0,
+    pendingDeletesCount: Array.isArray(pending)
+      ? pending.length
+      : pending && typeof pending === "object"
+        ? Object.keys(pending).length
+        : 0
+  };
+}
+
+async function ownerDiagIndexedDbSnapshot() {
+  const dbName = "LubaNoteRegularNotesCache";
+  const storeName = "regularNotes";
+
+  try {
+    if (typeof indexedDB === "undefined") {
+      return { supported: false };
+    }
+
+    if (typeof indexedDB.databases !== "function") {
+      return {
+        supported: true,
+        databasesApi: false,
+        skipped: "Nelze bezpečně zjistit existenci DB bez jejího vytvoření."
+      };
+    }
+
+    const dbs = await indexedDB.databases();
+    const exists = dbs.some((db) => db?.name === dbName);
+
+    if (!exists) {
+      return { supported: true, databasesApi: true, exists: false };
+    }
+
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(dbName);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(
+        request.error || new Error("IndexedDB open failed")
+      );
+    });
+
+    try {
+      if (!db.objectStoreNames.contains(storeName)) {
+        return {
+          supported: true,
+          databasesApi: true,
+          exists: true,
+          storeExists: false
+        };
+      }
+
+      const rows = await new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const request = tx.objectStore(storeName).getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(
+          request.error || new Error("IndexedDB read failed")
+        );
+      });
+
+      return {
+        supported: true,
+        databasesApi: true,
+        exists: true,
+        storeExists: true,
+        rows: rows.map((row) => ({
+          ownerId: String(row?.ownerId || "").trim() || null,
+          savedAt: row?.savedAt || null,
+          noteCount: Array.isArray(row?.notes) ? row.notes.length : 0,
+          cloudLike: Array.isArray(row?.notes)
+            ? row.notes.filter(
+                (note) => String(note?.storageScope || "cloud") !== "local"
+              ).length
+            : 0,
+          local: Array.isArray(row?.notes)
+            ? row.notes.filter(
+                (note) => String(note?.storageScope || "cloud") === "local"
+              ).length
+            : 0,
+          idsSample: Array.isArray(row?.notes)
+            ? row.notes
+                .map((note) => String(note?.id || "").trim())
+                .filter(Boolean)
+                .slice(0, 12)
+            : []
+        }))
+      };
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    return {
+      supported: true,
+      error: String(error?.message || error)
+    };
+  }
+}
+
+async function ownerDiagServerSnapshot() {
+  try {
+    if (!supabaseClient) {
+      return { available: false, reason: "supabaseClient=null" };
+    }
+
+    const { data: sessionData, error: sessionError } =
+      await supabaseClient.auth.getSession();
+
+    if (sessionError) {
+      return {
+        available: false,
+        reason: `session-error: ${sessionError.message || sessionError}`
+      };
+    }
+
+    const user = sessionData?.session?.user || null;
+    if (!user?.id) {
+      return { available: false, reason: "no-session" };
+    }
+
+    const { data, error } = await supabaseClient.rpc(
+      "lubanote_get_private_bootstrap_manifest"
+    );
+
+    if (error) {
+      return {
+        available: true,
+        userId: user.id,
+        email: user.email || null,
+        manifestError: String(error.message || error)
+      };
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    const liveIds = new Set(
+      rows
+        .filter((row) => !row?.deleted_at)
+        .map((row) => String(row?.id || "").trim())
+        .filter(Boolean)
+    );
+    const saved = nactiJsonLokalnihoKlice("savedTask");
+    const notes = Array.isArray(saved) ? saved : [];
+    const cloudLikeIds = notes
+      .filter(
+        (note) => String(note?.storageScope || "cloud") !== "local"
+      )
+      .map((note) => String(note?.id || "").trim())
+      .filter(Boolean);
+    const localIds = notes
+      .filter(
+        (note) => String(note?.storageScope || "cloud") === "local"
+      )
+      .map((note) => String(note?.id || "").trim())
+      .filter(Boolean);
+    const cloudLikeOnServer = cloudLikeIds.filter((id) => liveIds.has(id));
+    const cloudLikeMissing = cloudLikeIds.filter((id) => !liveIds.has(id));
+    const localUnexpectedOnServer = localIds.filter((id) => liveIds.has(id));
+
+    return {
+      available: true,
+      userId: user.id,
+      email: user.email || null,
+      manifestRows: rows.length,
+      manifestLive: liveIds.size,
+      manifestDeleted: rows.filter((row) => row?.deleted_at).length,
+      savedCloudLike: cloudLikeIds.length,
+      savedLocal: localIds.length,
+      cloudLikeOnCurrentAccount: cloudLikeOnServer.length,
+      cloudLikeMissingFromCurrentAccount: cloudLikeMissing.length,
+      cloudLikeMissingSample: cloudLikeMissing.slice(0, 12),
+      localUnexpectedOnCurrentAccount: localUnexpectedOnServer.length,
+      localUnexpectedSample: localUnexpectedOnServer.slice(0, 12)
+    };
+  } catch (error) {
+    return {
+      available: false,
+      reason: String(error?.message || error)
+    };
+  }
+}
+
+async function vytvorOwnerDiagSnapshot() {
+  return {
+    local: ownerDiagZdrojovySnapshot(),
+    indexedDb: await ownerDiagIndexedDbSnapshot(),
+    server: await ownerDiagServerSnapshot(),
+    events: lubanoteOwnerDiagPamet.slice()
+  };
+}
+
+window.LubaNoteOwnerGateDiag = Object.freeze({
+  events: () => lubanoteOwnerDiagPamet.slice(),
+  localSnapshot: () => ownerDiagZdrojovySnapshot(),
+  snapshot: () => vytvorOwnerDiagSnapshot(),
+  clear: () => {
+    lubanoteOwnerDiagPamet.length = 0;
+    try {
+      sessionStorage.removeItem(
+        LUBANOTE_OWNER_DIAG_SESSION_KEY
+      );
+    } catch (_error) {
+      // Diagnostika nesmí ovlivnit běh aplikace.
+    }
+  }
+});
+
 function ziskejDukazyVlastnikaLokalnichDat() {
   const ids = new Set();
 
@@ -482,6 +819,11 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
   const id = String(userId || "").trim();
 
   if (!id) {
+    zapisOwnerDiag("OWNER_GATE_RESULT", {
+      result: false,
+      reason: "missing-user-id",
+      state: ownerDiagZdrojovySnapshot()
+    });
     return false;
   }
 
@@ -489,6 +831,13 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
     localStorage.getItem(LUBANOTE_LOCAL_OWNER_KEY) || ""
   ).trim();
   const dukazy = ziskejDukazyVlastnikaLokalnichDat();
+
+  zapisOwnerDiag("OWNER_GATE_CALL", {
+    currentUserId: id,
+    ownerBefore: ulozeny || null,
+    evidence: dukazy.slice(),
+    state: ownerDiagZdrojovySnapshot()
+  });
 
   if (ulozeny) {
     /* I existující owner marker nesmí přebít starší cache, která jasně
@@ -503,10 +852,25 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
         "LubaNote owner gate: konfliktní lokální provenance; aplikace zůstává zamčená.",
         { owner: ulozeny, evidence: dukazy }
       );
+      zapisOwnerDiag("OWNER_GATE_RESULT", {
+        result: false,
+        reason: "stored-owner-conflicts-with-evidence",
+        currentUserId: id,
+        owner: ulozeny,
+        evidence: dukazy.slice()
+      });
       return false;
     }
 
-    return ulozeny === id;
+    const shoda = ulozeny === id;
+    zapisOwnerDiag("OWNER_GATE_RESULT", {
+      result: shoda,
+      reason: shoda ? "stored-owner-matches-current" : "stored-owner-differs-current",
+      currentUserId: id,
+      owner: ulozeny,
+      evidence: dukazy.slice()
+    });
+    return shoda;
   }
 
   if (dukazy.length > 1) {
@@ -514,6 +878,12 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
       "LubaNote owner gate: lokální cache obsahují více různých vlastníků; aplikace zůstává zamčená.",
       { evidence: dukazy }
     );
+    zapisOwnerDiag("OWNER_GATE_RESULT", {
+      result: false,
+      reason: "multiple-evidence-owners",
+      currentUserId: id,
+      evidence: dukazy.slice()
+    });
     return false;
   }
 
@@ -525,13 +895,27 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
       migrovanyOwner
     );
 
-    return migrovanyOwner === id;
+    const shoda = migrovanyOwner === id;
+    zapisOwnerDiag("OWNER_GATE_RESULT", {
+      result: shoda,
+      reason: shoda ? "migrated-evidence-owner-matches-current" : "migrated-evidence-owner-differs-current",
+      currentUserId: id,
+      migratedOwner: migrovanyOwner,
+      evidence: dukazy.slice()
+    });
+    return shoda;
   }
 
   if (maNenulovaLokalniDataBezVlastnika()) {
     console.error(
       "LubaNote owner gate: zařízení obsahuje lokální data bez jednoznačného vlastníka; automatické převzetí je zakázané."
     );
+    zapisOwnerDiag("OWNER_GATE_RESULT", {
+      result: false,
+      reason: "local-data-without-owner-evidence",
+      currentUserId: id,
+      state: ownerDiagZdrojovySnapshot()
+    });
     return false;
   }
 
@@ -540,6 +924,11 @@ function overNeboNastavVlastnikaLokalnichDat(userId) {
     LUBANOTE_LOCAL_OWNER_KEY,
     id
   );
+  zapisOwnerDiag("OWNER_GATE_RESULT", {
+    result: true,
+    reason: "empty-install-owner-assigned-current",
+    currentUserId: id
+  });
   return true;
 }
 
@@ -604,7 +993,9 @@ function migrujVlastnikaZeStavajiciSession() {
   }
 }
 
+zapisOwnerDiag("BOOT_BEFORE_LEGACY_OWNER_MIGRATION", ownerDiagZdrojovySnapshot());
 migrujVlastnikaZeStavajiciSession();
+zapisOwnerDiag("BOOT_AFTER_LEGACY_OWNER_MIGRATION", ownerDiagZdrojovySnapshot());
 
 function vytvorSupabaseClientPokudLze() {
   if (supabaseClient) {
@@ -1633,7 +2024,17 @@ async function povolAktivniUcet(
   oznacPredchoziPrihlaseni();
   setLoginMessage();
   aktualizujInfoPlanuVMenu(aktualniPristupUctu);
+  zapisOwnerDiag("BEFORE_SHOW_LOCAL_APP", {
+    currentUserId: user?.id || null,
+    currentEmail: user?.email || null,
+    state: ownerDiagZdrojovySnapshot()
+  });
   await zobrazLokalniAplikaci();
+  zapisOwnerDiag("AFTER_SHOW_LOCAL_APP", {
+    currentUserId: user?.id || null,
+    currentEmail: user?.email || null,
+    state: ownerDiagZdrojovySnapshot()
+  });
 
   /*
    * C3 Admin Dashboard a další účetní UI dostanou signál až poté,
@@ -1739,10 +2140,26 @@ async function zpracujStavPrihlasenehoUzivatele(
      * - instalace patřící jinému účtu se bezpečně odhlásí,
      * - sync ani lokální data se před tímto rozhodnutím neotevřou.
      */
+    zapisOwnerDiag("AUTH_ACTIVE_BEFORE_OWNER_GATE", {
+      currentUserId: user?.id || null,
+      currentEmail: user?.email || null,
+      state: ownerDiagZdrojovySnapshot()
+    });
+
     if (!overNeboNastavVlastnikaLokalnichDat(user?.id)) {
+      zapisOwnerDiag("AUTH_ACTIVE_OWNER_GATE_BLOCKED", {
+        currentUserId: user?.id || null,
+        currentEmail: user?.email || null
+      });
       await odhlasPoKonfliktuVlastnika();
       return false;
     }
+
+    zapisOwnerDiag("AUTH_ACTIVE_OWNER_GATE_PASSED", {
+      currentUserId: user?.id || null,
+      currentEmail: user?.email || null,
+      state: ownerDiagZdrojovySnapshot()
+    });
 
     /*
      * PATCH 556 – hlavní heslo je bezpečnostní prerequisite účtu.

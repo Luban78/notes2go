@@ -38,6 +38,7 @@
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     titleTagSelection: "Název/štítek – Selection Watch",
+    ownerIsolation: "Účet / owner – izolace lokálních dat",
     gestures: "Gesta – pointer / touch / click",
     keyboardWatch: "Klávesnice – Gboard / focus watch",
     bulletDrag: "Bullet – drag / hierarchie",
@@ -1768,6 +1769,126 @@
     hub.style.top = `${Math.round(pozice.top)}px`;
   }
 
+  function ownerDiagHodnota(hodnota) {
+    if (hodnota === null || hodnota === undefined || hodnota === "") {
+      return "-";
+    }
+    return String(hodnota);
+  }
+
+  function ownerDiagIds(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return "-";
+    }
+    return ids.join(", ");
+  }
+
+  function spustOwnerIsolationWatch() {
+    zapis("START OWNER / ACCOUNT ISOLATION 604");
+    zapis("INFO | read-only diagnostika; nemění owner, data ani sync");
+
+    const api = window.LubaNoteOwnerGateDiag;
+
+    if (!api || typeof api.snapshot !== "function") {
+      zapis("ERROR | LubaNoteOwnerGateDiag není dostupný");
+      return () => {};
+    }
+
+    const local = api.localSnapshot?.();
+
+    if (local) {
+      zapis(
+        `LOCAL NOW | owner=${ownerDiagHodnota(local.ownerKey)} | authStorage=${ownerDiagHodnota(local.authStorageUserId)} | email=${ownerDiagHodnota(local.authStorageEmail)} | access=${ownerDiagHodnota(local.accessCacheUserId)}`
+      );
+      zapis(
+        `EVIDENCE NOW | secret=${ownerDiagHodnota(local.secretUserId)} | tags=${ownerDiagHodnota(local.localTagsUserId)} | fast=${ownerDiagHodnota(local.fastSyncUserId)} | cursor=${ownerDiagHodnota(local.syncCursorUserId)} | bootstrap=${ownerDiagHodnota(local.safeBootstrapUserId)}`
+      );
+      zapis(
+        `SAVEDTASK NOW | count=${local.savedTask?.count ?? 0} | cloudLike=${local.savedTask?.cloudLike ?? 0} | local=${local.savedTask?.local ?? 0} | mode=${ownerDiagHodnota(local.regularStorageMode)}`
+      );
+      zapis(
+        `SAVEDTASK IDS | ${ownerDiagIds(local.savedTask?.idsSample)}`
+      );
+      zapis(
+        `OTHER NOW | secretCount=${local.savedSecretTask?.count ?? 0} | localTags=${local.localTagsCount ?? 0} | cloudMeta=${local.cloudMetaCount ?? 0} | pendingDeletes=${local.pendingDeletesCount ?? 0} | authOk=${ownerDiagHodnota(local.authOk)} | authBlocked=${ownerDiagHodnota(local.authBlocked)}`
+      );
+    }
+
+    const historie = api.events?.() || [];
+    zapis(`BOOT EVENTS | count=${historie.length}`);
+
+    for (const event of historie.slice(-40)) {
+      const detail = event?.detail || {};
+      const state = detail.state || null;
+      const parts = [
+        event?.typ || "EVENT"
+      ];
+
+      if (detail.reason) parts.push(`reason=${detail.reason}`);
+      if (detail.result !== undefined) parts.push(`result=${detail.result ? "PASS" : "BLOCK"}`);
+      if (detail.currentUserId) parts.push(`current=${detail.currentUserId}`);
+      if (detail.currentEmail) parts.push(`email=${detail.currentEmail}`);
+      if (detail.owner) parts.push(`owner=${detail.owner}`);
+      if (detail.ownerBefore) parts.push(`ownerBefore=${detail.ownerBefore}`);
+      if (detail.migratedOwner) parts.push(`migratedOwner=${detail.migratedOwner}`);
+      if (Array.isArray(detail.evidence)) parts.push(`evidence=${detail.evidence.join(",") || "-"}`);
+      if (state?.ownerKey) parts.push(`stateOwner=${state.ownerKey}`);
+      if (state?.savedTask) parts.push(`saved=${state.savedTask.count}/cloud=${state.savedTask.cloudLike}/local=${state.savedTask.local}`);
+
+      zapis(`BOOT | ${parts.join(" | ")}`);
+    }
+
+    api.snapshot()
+      .then((snapshot) => {
+        const idb = snapshot?.indexedDb || {};
+        const server = snapshot?.server || {};
+
+        if (Array.isArray(idb.rows)) {
+          zapis(`IDB | exists=Y | rows=${idb.rows.length}`);
+          for (const row of idb.rows) {
+            zapis(
+              `IDB ROW | owner=${ownerDiagHodnota(row.ownerId)} | notes=${row.noteCount ?? 0} | cloudLike=${row.cloudLike ?? 0} | local=${row.local ?? 0} | savedAt=${ownerDiagHodnota(row.savedAt)}`
+            );
+            zapis(`IDB IDS | ${ownerDiagIds(row.idsSample)}`);
+          }
+        } else {
+          zapis(
+            `IDB | exists=${idb.exists === false ? "N" : "?"} | ${ownerDiagHodnota(idb.error || idb.skipped)}`
+          );
+        }
+
+        if (server.available) {
+          zapis(
+            `SERVER CURRENT ACCOUNT | user=${ownerDiagHodnota(server.userId)} | email=${ownerDiagHodnota(server.email)} | manifestLive=${server.manifestLive ?? "?"} | deleted=${server.manifestDeleted ?? "?"}`
+          );
+          if (server.manifestError) {
+            zapis(`SERVER ERROR | ${server.manifestError}`);
+          } else {
+            zapis(
+              `COMPARE | savedCloudLike=${server.savedCloudLike ?? 0} | onCurrentAccount=${server.cloudLikeOnCurrentAccount ?? 0} | MISSING_FROM_CURRENT=${server.cloudLikeMissingFromCurrentAccount ?? 0} | savedLocal=${server.savedLocal ?? 0} | localUnexpectedOnServer=${server.localUnexpectedOnCurrentAccount ?? 0}`
+            );
+            zapis(
+              `MISSING IDS | ${ownerDiagIds(server.cloudLikeMissingSample)}`
+            );
+            zapis(
+              `LOCAL ON SERVER IDS | ${ownerDiagIds(server.localUnexpectedSample)}`
+            );
+          }
+        } else {
+          zapis(
+            `SERVER CURRENT ACCOUNT | unavailable | ${ownerDiagHodnota(server.reason)}`
+          );
+        }
+
+        zapis("DONE OWNER / ACCOUNT ISOLATION 604");
+      })
+      .catch((error) => {
+        zapis(`ERROR SNAPSHOT | ${String(error?.message || error)}`);
+      });
+
+    return () => {};
+  }
+
   function spustStartupAutomatickyPokudJeTreba() {
     if (!window.LUBANOTE_TAG_VD_AUTO || aktivniModul) {
       return;
@@ -1818,6 +1939,8 @@
       stopAktivnihoModulu = spustEditorSelection();
     } else if (aktivniModul === "titleTagSelection") {
       stopAktivnihoModulu = spustTitleTagSelectionWatch();
+    } else if (aktivniModul === "ownerIsolation") {
+      stopAktivnihoModulu = spustOwnerIsolationWatch();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "keyboardWatch") {
@@ -2434,6 +2557,11 @@ async function zkopirujTagVdReport(tlacitko) {
     startTitleTagSelection: () => {
       otevriHub();
       selectModulu.value = "titleTagSelection";
+      spustModul();
+    },
+    startOwnerIsolation: () => {
+      otevriHub();
+      selectModulu.value = "ownerIsolation";
       spustModul();
     },
     startGestures: () => {
