@@ -120,8 +120,11 @@
           Vyčistit toto zařízení
         </button>
         <p>
-          Smaže pouze lokální data LubaNote v tomto zařízení.
-          Data uložená v cloudu zůstanou beze změny.
+          Smaže všechna lokální data LubaNote v tomto zařízení.
+          Cloudová data zůstanou beze změny. Poznámky 📱 „Pouze v zařízení“
+          ale v Supabase nejsou a vyčištěním budou nenávratně smazány.
+          Pokud je chceš zachovat, nejdřív se přihlas původním účtem
+          a vytvoř Kompletní zálohu.
         </p>
       </div>
       
@@ -135,12 +138,15 @@
           Secret nastavení, šifrovací klíče a přihlášení.
         </p>
         <p class="localDeviceResetCloudNote">
-          <strong>V Supabase se nic nemaže.</strong><br>
-          Pokračuj jen tehdy, když byl předchozí účet synchronizovaný.
+          <strong>⚠️ Poznámky 📱 „Pouze v zařízení“ nejsou v Supabase.</strong><br>
+          Vyčištěním je nenávratně smažeš. Pokud je chceš zachovat, zvol
+          Zrušit, přihlas se původním účtem a v „Záloha a obnova“ vytvoř
+          Kompletní zálohu.<br><br>
+          <strong>Cloudová data zůstanou beze změny.</strong>
         </p>
         <div class="localDeviceResetButtons">
           <button id="localDeviceResetCancel" type="button" class="loginSecondaryButton">Zrušit</button>
-          <button id="localDeviceResetConfirm" type="button" class="loginDangerButton">Vyčistit zařízení</button>
+          <button id="localDeviceResetConfirm" type="button" class="loginDangerButton">Vyčistit bez zálohy</button>
         </div>
       </div>
     </div>
