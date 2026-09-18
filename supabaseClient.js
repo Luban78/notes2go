@@ -2090,6 +2090,160 @@ async function povolAktivniUcet(
   return true;
 }
 
+/*
+ * PATCH 605 – SERVER PROVENANCE GATE PRO PRIVATE CLOUD CACHE
+ * ----------------------------------------------------------
+ * DIAG 604 prokázal stav, kdy owner/access/secret markery už byly
+ * přepsané na právě přihlášený účet, ale savedTask obsahoval cloudové
+ * karty jiného účtu. Samotný lokální owner marker tedy už nemůže být
+ * poslední autoritou.
+ *
+ * Před otevřením lokální aplikace proto při ONLINE přihlášení porovnáme
+ * ID lokálních CLOUD poznámek s malým bootstrap manifestem aktuálního
+ * účtu. Nestahuje se obsah poznámek, pouze manifest přes existující
+ * egress-safe RPC. Tento gate nic nemaže ani nepřepisuje.
+ */
+function nactiCloudCacheProvenance605() {
+  const saved = nactiJsonLokalnihoKlice("savedTask");
+  const notes = Array.isArray(saved) ? saved : [];
+  const cloudIds = notes
+    .filter((note) => String(note?.storageScope || "cloud") !== "local")
+    .map((note) => String(note?.id || "").trim())
+    .filter(Boolean);
+
+  const cloudMeta = nactiJsonLokalnihoKlice("lubanoteCloudSyncMetaV1");
+  const meta =
+    cloudMeta && typeof cloudMeta === "object" && !Array.isArray(cloudMeta)
+      ? cloudMeta
+      : {};
+
+  const serverBackedIds = cloudIds.filter((id) => {
+    const row = meta[id];
+    if (!row || typeof row !== "object") return false;
+    return (
+      (row.revision !== null &&
+        row.revision !== undefined &&
+        Number.isFinite(Number(row.revision))) ||
+      Boolean(row.serverUpdatedAt)
+    );
+  });
+
+  return { cloudIds, serverBackedIds };
+}
+
+async function overServerovouProvenanciCloudCache605(user) {
+  const userId = String(user?.id || "").trim();
+  const local = nactiCloudCacheProvenance605();
+
+  if (!userId || local.cloudIds.length === 0) {
+    zapisOwnerDiag("SERVER_PROVENANCE_605", {
+      result: "PASS",
+      reason: !userId ? "missing-user-id-no-check" : "no-local-cloud-cache",
+      currentUserId: userId || null,
+      localCloud: local.cloudIds.length,
+      serverBackedLocal: local.serverBackedIds.length
+    });
+    return true;
+  }
+
+  if (!navigator.onLine || !supabaseClient) {
+    zapisOwnerDiag("SERVER_PROVENANCE_605", {
+      result: "BLOCK",
+      reason: "cannot-verify-local-cloud-cache",
+      currentUserId: userId,
+      localCloud: local.cloudIds.length,
+      serverBackedLocal: local.serverBackedIds.length
+    });
+    return false;
+  }
+
+  try {
+    const dotaz = supabaseClient.rpc(
+      "lubanote_get_private_bootstrap_manifest"
+    );
+    const { data, error } =
+      typeof sCasovymLimitem === "function"
+        ? await sCasovymLimitem(
+            dotaz,
+            5000,
+            "Ověření vlastníka lokální cloud cache"
+          )
+        : await dotaz;
+
+    if (error) throw error;
+
+    const rows = Array.isArray(data) ? data : [];
+    const manifestIds = new Set(
+      rows
+        .map((row) => String(row?.id || "").trim())
+        .filter(Boolean)
+    );
+
+    const overlap = local.cloudIds.filter((id) => manifestIds.has(id));
+    const overlapServerBacked = local.serverBackedIds.filter((id) =>
+      manifestIds.has(id)
+    );
+
+    let blokovat = false;
+    let reason = "manifest-compatible";
+
+    if (
+      local.serverBackedIds.length > 0 &&
+      overlapServerBacked.length !== local.serverBackedIds.length
+    ) {
+      blokovat = true;
+      reason = "server-backed-local-cache-mismatch";
+    } else if (manifestIds.size > 0 && overlap.length === 0) {
+      blokovat = true;
+      reason = "zero-overlap-with-current-account";
+    } else if (
+      manifestIds.size === 0 &&
+      local.serverBackedIds.length > 0
+    ) {
+      blokovat = true;
+      reason = "current-account-empty-but-local-cache-was-synced";
+    }
+
+    zapisOwnerDiag("SERVER_PROVENANCE_605", {
+      result: blokovat ? "BLOCK" : "PASS",
+      reason,
+      currentUserId: userId,
+      localCloud: local.cloudIds.length,
+      serverBackedLocal: local.serverBackedIds.length,
+      manifest: manifestIds.size,
+      overlap: overlap.length,
+      overlapServerBacked: overlapServerBacked.length,
+      localSample: local.cloudIds.slice(0, 8),
+      manifestSample: Array.from(manifestIds).slice(0, 8)
+    });
+
+    if (blokovat) {
+      console.error(
+        "LubaNote security: lokální cloud cache nepatří aktuálnímu účtu; UI zůstává zamčené.",
+        {
+          currentUserId: userId,
+          localCloud: local.cloudIds.length,
+          manifest: manifestIds.size,
+          overlap: overlap.length
+        }
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    zapisOwnerDiag("SERVER_PROVENANCE_605", {
+      result: "BLOCK",
+      reason: "manifest-check-failed",
+      currentUserId: userId,
+      localCloud: local.cloudIds.length,
+      serverBackedLocal: local.serverBackedIds.length,
+      error: String(error?.message || error)
+    });
+    return false;
+  }
+}
+
 async function zpracujStavPrihlasenehoUzivatele(
   user,
   { spustitSync = true } = {}
@@ -2124,6 +2278,25 @@ async function zpracujStavPrihlasenehoUzivatele(
     stav.data_access_active !== false &&
     jeStavPristupuCasovePlatny(stav)
   ) {
+    /*
+     * PATCH 605 – ještě před lokálním owner markerem ověřujeme, že
+     * savedTask cloud cache je kompatibilní s autoritativním manifestem
+     * právě přihlášeného účtu. Owner marker mohl být starým bugem už
+     * nesprávně přepsaný, proto sám nestačí.
+     */
+    const provenanceOk =
+      await overServerovouProvenanciCloudCache605(user);
+
+    if (!provenanceOk) {
+      zapisOwnerDiag("AUTH_ACTIVE_SERVER_PROVENANCE_BLOCKED", {
+        currentUserId: user?.id || null,
+        currentEmail: user?.email || null,
+        state: ownerDiagZdrojovySnapshot()
+      });
+      await odhlasPoKonfliktuVlastnika();
+      return false;
+    }
+
     /*
      * PATCH 562 – OWNER GATE MUSÍ BÝT PŘED MASTER-PASSWORD GATE.
      * ----------------------------------------------------------
