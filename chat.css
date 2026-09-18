@@ -592,3 +592,21 @@
     width: auto;
   }
 }
+
+/* ============================================================
+   PATCH 626 – Chat composer nad LubaKeyboard
+   ------------------------------------------------------------
+   Chat fullscreen už správně kopíruje visualViewport pro systémovou IME.
+   LubaKeyboard je ale vlastní fixed panel a visualViewport nezmenšuje,
+   takže composer zůstal na spodním okraji a klávesnice ho překryla.
+
+   Při otevřené LubaKeyboard proto zmenšíme pouze vnitřní chat kartu
+   o skutečně změřenou výšku --ln-lk-height. Vnější overlay zůstává
+   fullscreen a neprůhledný, takže se nemění stabilní anti-flash chování.
+   ============================================================ */
+@media (max-width: 620px) {
+  body.ln-luba-klavesnice-open .chatThreadOverlay:not([hidden]) .chatThreadCard {
+    height: calc(100dvh - var(--ln-lk-height, 260px));
+    max-height: calc(100dvh - var(--ln-lk-height, 260px));
+  }
+}
