@@ -193,7 +193,35 @@
     return false;
   }
 
-  async function vlozSoubor(file) {
+  async function zjistiVelikostVlozenehoObrazku(dataUrl) {
+    /* PATCH 611 – PC clipboard nemá malý obrázek roztáhnout na 100 %.
+       Core V2 ukládá šířku jako procento editoru, proto z reálné šířky
+       připraveného obrázku odvodíme nejbližší procento. Obrázek větší
+       než editor se pouze bezpečně omezí na šířku editoru. */
+    try {
+      const image = await nactiObrazek(dataUrl);
+      const sirkaObrazku = Math.max(1, Number(image.naturalWidth || image.width || 1));
+      const editor = document.querySelector(
+        "#taskModal.show [data-ln-v2-editor], #taskModal:not([hidden]) [data-ln-v2-editor], [data-ln-v2-editor]"
+      );
+      const sirkaEditoru = Math.max(1, Number(editor?.clientWidth || editor?.getBoundingClientRect?.().width || 0) - 8);
+
+      if (!Number.isFinite(sirkaEditoru) || sirkaEditoru <= 1) {
+        return "prizpusobit";
+      }
+
+      if (sirkaObrazku >= sirkaEditoru) {
+        return "prizpusobit";
+      }
+
+      const procent = Math.round((sirkaObrazku / sirkaEditoru) * 100);
+      return String(Math.max(10, Math.min(100, procent)));
+    } catch (_error) {
+      return "prizpusobit";
+    }
+  }
+
+  async function vlozSoubor(file, { zachovatSkutecnouVelikost = false } = {}) {
     if (!file || probihaVlozeni) return false;
     if (bridge()?.jeAktivni?.() !== true) return false;
     /* PATCH 551: i po otevření pickeru mohl mezitím Secret auto-locknout.
@@ -206,13 +234,16 @@
 
     try {
       const dataUrl = await pripravObrazek(file);
+      const velikost = zachovatSkutecnouVelikost
+        ? await zjistiVelikostVlozenehoObrazku(dataUrl)
+        : "prizpusobit";
       const attachmentId = await ulozShadowAttachment(dataUrl, file);
       const vlozeno = bridge()?.vlozPripravenyObrazek?.({
         dataUrl,
         fileName: file.name || "",
         alt: file.name ? `Obrázek: ${file.name}` : "Obrázek v poznámce",
         attachmentId,
-        velikost: "prizpusobit",
+        velikost,
         zarovnani: "stred"
       }) === true;
 
@@ -469,7 +500,10 @@
        Ctrl+V z Core V2 nesmí obcházet media pipeline. Kopírovaný obrázek
        proto prochází stejnou kompresí, E2E kontrolou, shadow attachmentem
        a modelovým vložením jako Galerie/Fotoaparát. */
-    vlozObrazekZeSchranky: (file) => vlozSoubor(file),
+    vlozObrazekZeSchranky: (file) => vlozSoubor(
+      file,
+      { zachovatSkutecnouVelikost: true }
+    ),
 
     otevriNahledObrazku,
     zavriNahledObrazku

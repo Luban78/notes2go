@@ -117,8 +117,38 @@ function jeBeznyWebEditorHandoff() {
   );
 }
 
+/*
+ * PATCH 611 – samotný sessionStorage nestačí jako důkaz reloadu.
+ * Nová/duplicitní karta může v některých prohlížečích zdědit jeho obsah.
+ * Automatické obnovení vlastní editor session proto na běžném webu
+ * povolíme jen tehdy, když Navigation Timing potvrzuje skutečný reload
+ * stejné top-level karty.
+ */
+function jeWebReloadNavigace() {
+  if (!jeBeznyWebEditorHandoff()) return false;
+
+  try {
+    const nav = performance
+      ?.getEntriesByType?.("navigation")
+      ?.[0];
+    if (nav?.type) return nav.type === "reload";
+  } catch (_error) {}
+
+  try {
+    return performance?.navigation?.type === 1;
+  } catch (_error) {
+    return false;
+  }
+}
+
 function nactiWebReloadRecoveryTicket() {
   if (!jeBeznyWebEditorHandoff()) {
+    return null;
+  }
+
+  /* PATCH 611: ticket z jiné/duplikované karty nikdy nestačí. */
+  if (!jeWebReloadNavigace()) {
+    smazWebReloadRecoveryTicket();
     return null;
   }
 
@@ -715,6 +745,7 @@ async function obnovEditorLease() {
   if (data !== true) {
     zastavEditorHeartbeat();
     aktivniVzdalenyEditor = null;
+    smazWebReloadRecoveryTicket();
 
     window.dispatchEvent(
       new CustomEvent(
@@ -724,6 +755,11 @@ async function obnovEditorLease() {
 
     return false;
   }
+
+  /* PATCH 611 – ticket držíme čerstvý průběžně, ne až v pagehide.
+     Některé desktopové prohlížeče při F5/page reloadu ukončí JS dřív,
+     než se pozdní unload handler spolehlivě dostane k aktivní session. */
+  ulozWebReloadRecoveryTicket();
 
   return true;
 }
@@ -845,6 +881,12 @@ async function aktivujVzdalenyEditorSession(
     noteId,
     sessionId
   };
+
+  /* PATCH 611 – sessionStorage patří konkrétní kartě a přežije reload.
+     Ticket zapisujeme hned při získání editoru; nový dokument ho smí
+     použít pouze při NavigationTiming.type === "reload" a pouze pokud
+     server stále vlastní přesně tuto sessionId. */
+  ulozWebReloadRecoveryTicket();
 
   spustEditorHeartbeat();
 
@@ -2031,6 +2073,7 @@ async function uvolniEditorPoznamky(noteId) {
   }
 
   zastavEditorHeartbeat();
+  smazWebReloadRecoveryTicket();
   aktivniVzdalenyEditor = null;
 
   const releaseSession = {
@@ -2120,9 +2163,9 @@ window.addEventListener(
 );
 
 /*
- * PATCH 610 – zapiš důkaz staré session až při skutečném zániku
- * dokumentu. Druhá živá karta nic takového nevytváří, takže pouhé
- * sdílení deviceId jí nedá právo automaticky převzít editor.
+ * PATCH 611 – unload zápis zůstává jen jako poslední refresh timestampu.
+ * Hlavní ticket se už zapisuje při aktivaci/heartbeat. Bezpečnost proti
+ * jiné kartě zajišťuje NavigationTiming=reload + přesná serverová sessionId.
  */
 window.addEventListener(
   "beforeunload",
