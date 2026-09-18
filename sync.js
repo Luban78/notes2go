@@ -4481,8 +4481,28 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
           fetchManifestRows.push(row);
         } else if (localSeZmenil) {
           if (vlastniSdileneId.has(id)) {
-            /* Shared obsah nikdy neposíláme private save_note_safe. */
-            oznacUnresolved(id, "shared-owner-local-dirty");
+            /*
+             * PATCH 608 – OWNED SHARED JE SERVER-AUTORITATIVNÍ.
+             * -------------------------------------------------
+             * Vlastní sdílená poznámka nikdy nesmí skončit v private
+             * uploadu přes save_note_safe(). Zároveň ji ale nesmíme
+             * nechat jako unresolved jen proto, že lokální updatedAt
+             * vypadá "dirty" při stejné serverové revizi.
+             *
+             * Starý plný revision merge už má správné pravidlo:
+             * owned-shared => cloud/shared server vyhrává. V2 existing
+             * reconcile proto targeted stáhne právě tento jeden řádek
+             * a stejný merge ho bezpečně přijme do lokální cache.
+             *
+             * DŮLEŽITÉ: neuploadovat tuto větev a nevracet sem
+             * shared-owner-local-dirty unresolved. Jinak se sync zasekne
+             * na pending a opakovanými retry zbytečně vyrábí egress.
+             */
+            fetchManifestRows.push(row);
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2",
+              `RECONCILE OWNED SHARED REFRESH | id=${id}`
+            );
           } else {
             localUploadIds.add(id);
           }
