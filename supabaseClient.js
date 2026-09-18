@@ -3136,7 +3136,10 @@ async function smazCloudovaDataPoDemu612() {
 
     const cleanup =
       await window.LubaNoteAttachmentsCloud
-        ?.vycistiCloudovePrilohyPoProdleve?.(100);
+        ?.vycistiCloudovePrilohyPoProdleve?.(
+          100,
+          { postDemo: true }
+        );
 
     if (!cleanup || cleanup.ok !== true) {
       throw new Error(

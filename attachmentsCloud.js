@@ -719,7 +719,7 @@
     };
   }
 
-  async function vycistiCloudovePrilohyPoProdleve(limit = 20) {
+  async function vycistiCloudovePrilohyPoProdleve(limit = 20, moznosti = {}) {
     if (!navigator.onLine) {
       return {
         ok: false,
@@ -740,10 +740,27 @@
       Math.min(Number(limit) || 20, 100)
     );
 
+    /*
+     * PATCH 612A – expirace Dema nesmí oslabit běžný attachment cleanup.
+     * Standardní cesta proto zůstává beze změny. Pouze explicitní
+     * post-Demo smazání používá vlastní serverové RPC, které samo ověří,
+     * že přihlášený účet je opravdu expirované Demo.
+     */
+    const jePostDemoCleanup = moznosti?.postDemo === true;
+    const claimRpc = jePostDemoCleanup
+      ? "lubanote_claim_my_expired_demo_attachment_deletes"
+      : "lubanote_claim_pending_attachment_deletes";
+    const confirmRpc = jePostDemoCleanup
+      ? "lubanote_confirm_my_expired_demo_attachment_deleted"
+      : "lubanote_confirm_attachment_deleted";
+    const releaseRpc = jePostDemoCleanup
+      ? "lubanote_release_my_expired_demo_attachment_delete_claim"
+      : "lubanote_release_attachment_delete_claim";
+
     try {
       const { data, error } =
         await supabaseClient.rpc(
-          "lubanote_claim_pending_attachment_deletes",
+          claimRpc,
           { p_limit: bezpecnyLimit }
         );
 
@@ -794,7 +811,7 @@
 
           const { data: potvrzeni, error: chybaPotvrzeni } =
             await supabaseClient.rpc(
-              "lubanote_confirm_attachment_deleted",
+              confirmRpc,
               {
                 p_attachment_id: attachmentId,
                 p_claim_token: claimToken
@@ -826,7 +843,7 @@
         } catch (errorSmazani) {
           try {
             await supabaseClient.rpc(
-              "lubanote_release_attachment_delete_claim",
+              releaseRpc,
               {
                 p_attachment_id: attachmentId,
                 p_claim_token: claimToken
