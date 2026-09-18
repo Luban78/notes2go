@@ -470,6 +470,101 @@
     });
   }
 
+  /* PATCH 622 – Admin Extend Demo
+   * Prodloužení Dema jde výhradně přes serverové admin RPC.
+   * Klient nikdy nezapisuje přímo do lubanote_user_access.
+   */
+  function prodluzDemo(uzivatel) {
+    const email = bezpecnyText(uzivatel.email || "—");
+
+    if (typeof window.otevriVyberovyModal !== "function") {
+      nastavStav(
+        tAdmin(
+          "admin.actionFailed",
+          "Akci se nepodařilo dokončit."
+        ),
+        true
+      );
+      return;
+    }
+
+    window.otevriVyberovyModal({
+      nadpis: tAdmin(
+        "admin.extendDemo",
+        "Prodloužit Demo"
+      ),
+      moznosti: [7, 14, 30].map((dnu) => ({
+        hodnota: dnu,
+        popisek: `+${dnu} ${tAdmin("admin.days", "dní")}`
+      })),
+      poVyberu: async (dnu) => {
+        window.zavriVyberovyModal?.();
+
+        setTimeout(() => {
+          otevriAdminPotvrzeni({
+            nadpis: tAdmin(
+              "admin.extendDemo",
+              "Prodloužit Demo"
+            ),
+            zprava: tAdmin(
+              "admin.extendDemoConfirm",
+              `Prodloužit Demo účtu ${email} o ${dnu} dní?`,
+              { email, days: dnu }
+            ),
+            potvrditText: tAdmin(
+              "admin.extendDemo",
+              "Prodloužit Demo"
+            ),
+            poPotvrzeni: async () => {
+              nastavStav(
+                tAdmin(
+                  "admin.extendingDemo",
+                  "Prodlužuji Demo…"
+                )
+              );
+
+              try {
+                const { data, error } = await supabaseClient.rpc(
+                  "lubanote_admin_extend_demo",
+                  {
+                    p_user_id: uzivatel.user_id,
+                    p_days: dnu
+                  }
+                );
+
+                if (error) {
+                  throw error;
+                }
+
+                if (data?.ok === false) {
+                  throw new Error(data?.reason || "extend_failed");
+                }
+
+                await nactiUzivatele();
+                nastavStav(
+                  tAdmin(
+                    "admin.demoExtended",
+                    `Demo bylo prodlouženo o ${dnu} dní.`,
+                    { days: dnu }
+                  )
+                );
+              } catch (error) {
+                console.error("Admin extend Demo failed:", error);
+                nastavStav(
+                  tAdmin(
+                    "admin.actionFailed",
+                    "Akci se nepodařilo dokončit."
+                  ),
+                  true
+                );
+              }
+            }
+          });
+        }, 0);
+      }
+    });
+  }
+
   async function zamitniUzivatele(uzivatel) {
     const email = bezpecnyText(uzivatel.email || "—");
     const dotaz = tAdmin(
@@ -730,6 +825,26 @@
       }
 
       karta.append(meta);
+
+      if (jeUkonceneDemo(uzivatel)) {
+        const akce = document.createElement("div");
+        akce.className = "adminUserActions";
+
+        const prodlouzit = document.createElement("button");
+        prodlouzit.type = "button";
+        prodlouzit.className = "adminApproveButton";
+        prodlouzit.textContent = tAdmin(
+          "admin.extendDemo",
+          "Prodloužit Demo"
+        );
+        prodlouzit.addEventListener(
+          "click",
+          () => prodluzDemo(uzivatel)
+        );
+
+        akce.append(prodlouzit);
+        karta.append(akce);
+      }
 
       if (uzivatel.account_status === "pending") {
         const akce = document.createElement("div");
