@@ -2723,7 +2723,8 @@ async function pridejBlobDoNativnihoArchivu(
 async function vytvorAProvedKompletniArchivV4(
   backup,
   zpusobExportu,
-  tlacitko
+  tlacitko,
+  onProgress = () => {}
 ) {
   const BackupExport =
     window.Capacitor
@@ -2758,6 +2759,10 @@ async function vytvorAProvedKompletniArchivV4(
     )
     .map((polozka) => polozka.id);
 
+  onProgress(
+    `Kontroluji přílohy… 0/${mapaPriloh.size}`
+  );
+
   const cloudMetadataMapa =
     await nactiCloudMetadataPrilohProZalohu(
       idsProCloud
@@ -2770,15 +2775,24 @@ async function vytvorAProvedKompletniArchivV4(
   await BackupExport.zahajArchiv();
 
   try {
+    onProgress(
+      "Ukládám data poznámek…"
+    );
+
     await pridejTextDoNativnihoArchivu(
       BackupExport,
       "backup.json",
       JSON.stringify(backup)
     );
 
-    let poradoveCislo = 0;
+    let zkontrolovano = 0;
 
     for (const [attachmentId, identita] of mapaPriloh) {
+      zkontrolovano += 1;
+      onProgress(
+        `Zálohuji přílohy… ${zkontrolovano}/${mapaPriloh.size}`
+      );
+
       const lokalniZaznam =
         await window.LubaNoteAttachmentsLocal
           ?.nactiPrilohu?.(attachmentId);
@@ -2810,11 +2824,9 @@ async function vytvorAProvedKompletniArchivV4(
         continue;
       }
 
-      poradoveCislo += 1;
-
       if (tlacitko) {
         tlacitko.textContent =
-          `Přidávám přílohy… ${poradoveCislo}/${mapaPriloh.size}`;
+          `Přidávám přílohy… ${zkontrolovano}/${mapaPriloh.size}`;
       }
 
       const blob = await nactiBlobPrilohyProZalohu({
@@ -2913,6 +2925,10 @@ async function vytvorAProvedKompletniArchivV4(
       attachments: polozkyManifestu
     };
 
+    onProgress(
+      `Dokončuji archiv… ${polozkyManifestu.length} příloh`
+    );
+
     await pridejTextDoNativnihoArchivu(
       BackupExport,
       "manifest.json",
@@ -2937,6 +2953,10 @@ async function vytvorAProvedKompletniArchivV4(
       vytvorNazevSouboruZalohyArchivu();
 
     if (zpusobExportu === "sdilet") {
+      onProgress(
+        "Otevírám sdílení zálohy…"
+      );
+
       const Share =
         window.Capacitor?.Plugins?.Share;
 
@@ -2975,6 +2995,10 @@ async function vytvorAProvedKompletniArchivV4(
         manifest
       };
     }
+
+    onProgress(
+      "Připravuji uložení souboru…"
+    );
 
     const vysledek =
       await BackupExport.otevriUlozeniArchivu({
@@ -3599,6 +3623,34 @@ async function vytvorKompletniZalohu(moznosti = {}) {
 }
 
 
+function zacniPrubehKompletniZalohy(text) {
+  const ukonci =
+    window.LubaNoteUI?.zacniCekaniAkce?.(
+      text,
+      0
+    ) || (() => {});
+
+  const aktualizuj = (novyText) => {
+    const textPrvku =
+      document.getElementById(
+        "actionStatusText"
+      );
+
+    if (textPrvku) {
+      textPrvku.textContent =
+        String(novyText || "");
+    }
+  };
+
+  aktualizuj(text);
+
+  return {
+    aktualizuj,
+    ukonci
+  };
+}
+
+
 async function pripravAProvedExportZalohy(
   zpusobExportu
 ) {
@@ -3611,6 +3663,16 @@ async function pripravAProvedExportZalohy(
     tlacitko?.textContent ||
     "Export zálohy";
 
+  const jeApk =
+    window.Capacitor
+      ?.isNativePlatform?.() === true;
+
+  const prubeh = jeApk
+    ? zacniPrubehKompletniZalohy(
+        "Připravuji data zálohy…"
+      )
+    : null;
+
   if (tlacitko) {
     tlacitko.disabled = true;
     tlacitko.textContent =
@@ -3618,9 +3680,9 @@ async function pripravAProvedExportZalohy(
   }
 
   try {
-    const jeApk =
-      window.Capacitor
-        ?.isNativePlatform?.() === true;
+    prubeh?.aktualizuj(
+      "Připravuji poznámky a nastavení…"
+    );
 
     const backup =
       await vytvorKompletniZalohu({
@@ -3628,12 +3690,42 @@ async function pripravAProvedExportZalohy(
       });
 
     if (jeApk) {
+      const beznePoznamky =
+        Array.isArray(backup?.notes)
+          ? backup.notes
+          : [];
+      const tajnePoznamky =
+        Array.isArray(backup?.secretNotes)
+          ? backup.secretNotes
+          : [];
+      const vsechnyPoznamky = [
+        ...beznePoznamky,
+        ...tajnePoznamky
+      ];
+      const localPoznamky =
+        vsechnyPoznamky.filter(
+          (note) =>
+            note?.storageScope ===
+              NOTE_STORAGE_SCOPE_LOCAL
+        ).length;
+      const cloudPoznamky =
+        vsechnyPoznamky.length -
+        localPoznamky;
+
+      prubeh?.aktualizuj(
+        `Poznámky: ☁️ ${cloudPoznamky} · 📱 ${localPoznamky}`
+      );
+
       const vysledek =
         await vytvorAProvedKompletniArchivV4(
           backup,
           zpusobExportu,
-          tlacitko
+          tlacitko,
+          (text) =>
+            prubeh?.aktualizuj(text)
         );
+
+      prubeh?.ukonci();
 
       if (
         vysledek?.saved === true &&
@@ -3669,6 +3761,8 @@ async function pripravAProvedExportZalohy(
       );
     }
   } catch (error) {
+    prubeh?.ukonci();
+
     const zpravaChyby = String(
       error?.message || error || ""
     );
@@ -3699,13 +3793,14 @@ async function pripravAProvedExportZalohy(
       );
     }
   } finally {
+    prubeh?.ukonci();
+
     if (tlacitko) {
       tlacitko.disabled = false;
       tlacitko.textContent = puvodniText;
     }
   }
 }
-
 
 function exportTasks() {
   const jeApk =
@@ -4127,7 +4222,49 @@ async function obnovKompletniZalohu(
   moznosti = {}
 ) {
   const nastavFaziObnovy598 = (faze) => {
-    window.__lubaBackupRestoreStage598 = String(faze || "neznamá fáze");
+    const technickaFaze =
+      String(faze || "neznamá fáze");
+
+    window.__lubaBackupRestoreStage598 =
+      technickaFaze;
+
+    const textyPrubehu = {
+      "01 · validace backup.json":
+        "Kontroluji data zálohy…",
+      "02 · příprava cloud sync plánu":
+        "Připravuji cloudovou obnovu…",
+      "03 · kontrola vlastníka zálohy":
+        "Ověřuji účet zálohy…",
+      "04 · příprava příloh do lokální cache":
+        "Načítám přílohy ze zálohy…",
+      "05 · obnova Secret nastavení":
+        "Obnovuji Secret nastavení…",
+      "06 · obnova cloudových štítků":
+        "Obnovuji cloudové štítky…",
+      "07 · obnova LOCAL štítků":
+        "Obnovuji LOCAL štítky…",
+      "08 · příprava cloudových příloh na serveru":
+        "Připravuji cloudové přílohy…",
+      "09 · uložení sync metadat":
+        "Ukládám stav synchronizace…",
+      "10 · uložení běžných poznámek":
+        "Ukládám poznámky…",
+      "11 · uložení Secret poznámek":
+        "Ukládám Secret poznámky…",
+      "12 · uložení Plánu a nastavení":
+        "Obnovuji Plán a nastavení…",
+      "13 · obnova systémových notifikací":
+        "Obnovuji oznámení…",
+      "14 · zařazení cloudových příloh k uploadu":
+        "Připravuji cloudové přílohy k nahrání…",
+      "15 · reload po obnově":
+        "Hotovo · načítám LubaNote…"
+    };
+
+    moznosti.onProgress?.(
+      textyPrubehu[technickaFaze] ||
+      technickaFaze
+    );
   };
 
   nastavFaziObnovy598("01 · validace backup.json");
@@ -4232,7 +4369,9 @@ async function obnovKompletniZalohu(
       localRegularNotes,
       cloudSecretNotes,
       localSecretNotes,
-      ownerUserId
+      ownerUserId,
+      aktualizujPrubeh:
+        moznosti.onProgress || (() => {})
     });
   }
 
@@ -4327,7 +4466,9 @@ async function obnovKompletniZalohu(
       localRegularNotes,
       cloudSecretNotes,
       localSecretNotes,
-      ownerUserId
+      ownerUserId,
+      aktualizujPrubeh:
+        moznosti.onProgress || (() => {})
     });
   }
 
@@ -4403,7 +4544,9 @@ async function obnovKompletniZalohu(
       localRegularNotes,
       cloudSecretNotes,
       localSecretNotes,
-      ownerUserId
+      ownerUserId,
+      aktualizujPrubeh:
+        moznosti.onProgress || (() => {})
     });
   }
 
@@ -4419,11 +4562,13 @@ async function provedKompletniObnovuSeZpracovanimChyby(
 ) {
   window.zavriVyberovyModal?.();
 
+  const prubehObnovy =
+    zacniPrubehKompletniZalohy(
+      "Obnovuji kompletní zálohu…"
+    );
+
   const ukonciCekani =
-    window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Obnovuji kompletní zálohu…",
-      0
-    ) || (() => {});
+    prubehObnovy.ukonci;
 
   /*
    * Potvrzovací okno musí nejdřív zmizet a čekací stav se musí
@@ -4440,7 +4585,11 @@ async function provedKompletniObnovuSeZpracovanimChyby(
     await obnovKompletniZalohu(
       imported,
       importedAt,
-      moznosti
+      {
+        ...moznosti,
+        onProgress:
+          prubehObnovy.aktualizuj
+      }
     );
   } catch (error) {
     ukonciCekani();
@@ -4680,7 +4829,8 @@ function jePlatnyManifestArchivuV4(
 async function ulozPrilohyArchivuV4DoCache(
   BackupExport,
   manifest,
-  backup
+  backup,
+  onProgress = () => {}
 ) {
   const lokalni =
     window.LubaNoteAttachmentsLocal;
@@ -4694,7 +4844,15 @@ async function ulozPrilohyArchivuV4DoCache(
     );
   }
 
+  let poradiPrilohy = 0;
+  const celkemPriloh = manifest.attachments.length;
+
   for (const polozka of manifest.attachments) {
+    poradiPrilohy += 1;
+    onProgress(
+      `Načítám přílohy… ${poradiPrilohy}/${celkemPriloh}`
+    );
+
     const blob = await nactiPolozkuNativeZalohyV4(
       BackupExport,
       polozka.archivePath,
@@ -4732,7 +4890,8 @@ async function ulozPrilohyArchivuV4DoCache(
 
 async function pripravCloudProObnovuPrilohV4(
   manifest,
-  backup
+  backup,
+  onProgress = () => {}
 ) {
   const cloudAttachments = manifest.attachments.filter(
     (polozka) =>
@@ -4743,8 +4902,15 @@ async function pripravCloudProObnovuPrilohV4(
   );
 
   if (cloudAttachments.length === 0) {
+    onProgress(
+      "Cloudové přílohy nejsou potřeba."
+    );
     return true;
   }
+
+  onProgress(
+    `Připravuji cloudové přílohy… ${cloudAttachments.length}`
+  );
 
   if (!await pripravCloudProKompletniZalohu()) {
     throw vytvorChybuZalohy(
@@ -4789,10 +4955,21 @@ async function pripravCloudProObnovuPrilohV4(
 
 async function zaradPrilohyArchivuV4PoObnove(
   manifest,
-  backup
+  backup,
+  onProgress = () => {}
 ) {
   const lokalni =
     window.LubaNoteAttachmentsLocal;
+
+  const cloudAttachments =
+    manifest.attachments.filter(
+      (polozka) =>
+        ziskejRozsahPrilohyProZalohu(
+          polozka,
+          backup
+        ) !== NOTE_STORAGE_SCOPE_LOCAL
+    );
+  let poradiCloudPrilohy = 0;
 
   for (const polozka of manifest.attachments) {
     if (
@@ -4803,6 +4980,12 @@ async function zaradPrilohyArchivuV4PoObnove(
     ) {
       continue;
     }
+
+    poradiCloudPrilohy += 1;
+    onProgress(
+      `Připravuji upload příloh… ${poradiCloudPrilohy}/${cloudAttachments.length}`
+    );
+
     await lokalni?.upravPrilohu?.(
       polozka.id,
       {
@@ -4969,23 +5152,32 @@ async function importTasksApk() {
         imported,
         importedAt,
         {
-          predObnovou: async () => {
+          predObnovou: async ({
+            aktualizujPrubeh
+          }) => {
             await ulozPrilohyArchivuV4DoCache(
               BackupExport,
               manifest,
-              imported
+              imported,
+              aktualizujPrubeh
             );
           },
-          predLokalnimUlozenim: async () => {
+          predLokalnimUlozenim: async ({
+            aktualizujPrubeh
+          }) => {
             await pripravCloudProObnovuPrilohV4(
               manifest,
-              imported
+              imported,
+              aktualizujPrubeh
             );
           },
-          predReload: async () => {
+          predReload: async ({
+            aktualizujPrubeh
+          }) => {
             await zaradPrilohyArchivuV4PoObnove(
               manifest,
-              imported
+              imported,
+              aktualizujPrubeh
             );
           }
         }
