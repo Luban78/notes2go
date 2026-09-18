@@ -610,3 +610,18 @@
     max-height: calc(100dvh - var(--ln-lk-height, 260px));
   }
 }
+
+/* ============================================================
+   PATCH 629 – Chat composer jemne niz k LubaKeyboard
+   ------------------------------------------------------------
+   626 spravne drzi cely composer nad vlastni LubaKeyboard, ale v APK
+   zustavala pod polem zbytecne velka Android rezerva. Pri otevrene
+   LubaKeyboard uz systemovou navigaci resi sama klavesnice, proto zde
+   zmensujeme jen spodni padding composeru. Geometrie karty, Realtime,
+   scroll zprav ani systemova IME se nemeni.
+   ============================================================ */
+@media (max-width: 620px) {
+  body.nativeApp.ln-luba-klavesnice-open .chatThreadCard > .chatComposer {
+    padding-bottom: 8px;
+  }
+}
