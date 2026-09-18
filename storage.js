@@ -3624,11 +3624,30 @@ async function vytvorKompletniZalohu(moznosti = {}) {
 
 
 function zacniPrubehKompletniZalohy(text) {
-  const ukonci =
+  const modal =
+    document.getElementById(
+      "actionStatusModal"
+    );
+
+  /*
+   * PATCH 601 – BACKUP PROGRESS = JEDEN STABILNÍ MODAL.
+   * Běžný actionStatus je schválně malý toast, ale pro dlouhý
+   * export/import působil jako problikávající štítek: při každé změně
+   * textu měnil šířku/výšku. Třída níže mu pouze pro zálohu dá pevný
+   * LubaNote modalový rozměr a vlastní overlay. Ostatní čekací stavy
+   * aplikace zůstávají beze změny.
+   */
+  modal?.classList.add(
+    "actionStatusBackupProgress"
+  );
+
+  const ukonciPuvodni =
     window.LubaNoteUI?.zacniCekaniAkce?.(
       text,
       0
     ) || (() => {});
+
+  let posledniText = "";
 
   const aktualizuj = (novyText) => {
     const textPrvku =
@@ -3636,10 +3655,23 @@ function zacniPrubehKompletniZalohy(text) {
         "actionStatusText"
       );
 
-    if (textPrvku) {
-      textPrvku.textContent =
-        String(novyText || "");
+    const dalsiText =
+      String(novyText || "");
+
+    if (
+      textPrvku &&
+      dalsiText !== posledniText
+    ) {
+      textPrvku.textContent = dalsiText;
+      posledniText = dalsiText;
     }
+  };
+
+  const ukonci = () => {
+    ukonciPuvodni();
+    modal?.classList.remove(
+      "actionStatusBackupProgress"
+    );
   };
 
   aktualizuj(text);
@@ -3666,6 +3698,22 @@ async function pripravAProvedExportZalohy(
   const jeApk =
     window.Capacitor
       ?.isNativePlatform?.() === true;
+
+  /*
+   * PATCH 601 – export se spouští z choice modalu. choiceModal čeká
+   * na dokončení poVyberu(), takže by jinak zůstal po celou dobu nad
+   * průběhem exportu. Zavřeme ho před startem práce a necháme WebView
+   * dva snímky na skutečné překreslení.
+   */
+  if (jeApk) {
+    window.zavriVyberovyModal?.();
+
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+  }
 
   const prubeh = jeApk
     ? zacniPrubehKompletniZalohy(

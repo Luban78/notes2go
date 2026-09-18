@@ -7572,6 +7572,56 @@ body.authPending.masterPasswordRequired > #appMessageModal {
 }
 
 /* ========================================
+   PATCH 601 – ZÁLOHA / OBNOVA: STABILNÍ PRŮBĚH
+   actionStatus je jinde záměrně malý toast. Jen během kompletní
+   zálohy dostane plnohodnotný LubaNote modal s pevným rozměrem,
+   aby změny textu nepřeskakovaly a neproblikávaly.
+   ======================================== */
+.actionStatusModal.actionStatusBackupProgress {
+  z-index: 12050;
+  padding: 20px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.actionStatusModal.actionStatusBackupProgress .actionStatusDialog {
+  width: min(100%, 420px);
+  min-width: 0;
+  max-width: 420px;
+  height: 200px;
+  max-height: calc(100dvh - 40px);
+
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+
+  padding: 24px;
+  box-sizing: border-box;
+  border-radius: 24px;
+  text-align: center;
+}
+
+.actionStatusModal.actionStatusBackupProgress .actionStatusIcon {
+  width: 44px;
+  height: 44px;
+}
+
+.actionStatusModal.actionStatusBackupProgress #actionStatusText {
+  width: 100%;
+  min-height: 4.1em;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: calc(var(--font-size) + 2px);
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ========================================
    NASTAVENÍ – MODERNÍ VZHLED
    ======================================== */
 
