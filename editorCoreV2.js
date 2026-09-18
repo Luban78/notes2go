@@ -5824,9 +5824,53 @@
     vyjmiVyberProSelectionMenu();
   }
 
+  function najdiObrazekVeSchrance(clipboardData) {
+    if (!clipboardData) return null;
+
+    /* PATCH 609 – desktop clipboard může obrázek dodat přes DataTransferItem
+       nebo přímo přes files. Preferujeme image/* před text/html/text/plain,
+       jinak by Ctrl+V kopírovaného obrázku skončilo jako prázdný text. */
+    try {
+      for (const item of Array.from(clipboardData.items || [])) {
+        if (item?.kind !== "file" || !String(item.type || "").startsWith("image/")) continue;
+        const file = item.getAsFile?.();
+        if (file?.type?.startsWith("image/")) return file;
+      }
+    } catch (_error) {}
+
+    try {
+      for (const file of Array.from(clipboardData.files || [])) {
+        if (file?.type?.startsWith("image/")) return file;
+      }
+    } catch (_error) {}
+
+    return null;
+  }
+
   function zpracujPaste(event) {
     if (v2ImeKompozice?.aktivni) dokoncV2ImeKompozici("paste");
-    const text = event.clipboardData?.getData("text/plain");
+
+    const clipboardData = event.clipboardData || null;
+    const obrazek = JE_DESKTOP_VSTUP ? najdiObrazekVeSchrance(clipboardData) : null;
+
+    if (obrazek) {
+      event.preventDefault();
+
+      /* Vložení je asynchronní (komprese + případná attachment cache), ale
+         model/caret zůstává pod kontrolou Core V2. Vlastní media modul potom
+         používá stejnou bezpečnou cestu jako tlačítko Vložit obrázek. */
+      Promise.resolve(window.LubaNoteEditorMediaV2?.vlozObrazekZeSchranky?.(obrazek))
+        .then((vlozeno) => {
+          zapisDebug?.(`EDITOR CORE V2 | paste image | type=${obrazek.type || "?"} | size=${obrazek.size || 0} | inserted=${vlozeno === true ? "Y" : "N"}`);
+        })
+        .catch((error) => {
+          console.error("LubaNote Core V2: vložení obrázku ze schránky selhalo.", error);
+          window.zobrazZpravuAplikace?.("Obrázek", error?.message || "Obrázek ze schránky se nepodařilo vložit.");
+        });
+      return;
+    }
+
+    const text = clipboardData?.getData("text/plain");
     if (typeof text !== "string") return;
     event.preventDefault();
     const vyber = aktualniVyberModelu();

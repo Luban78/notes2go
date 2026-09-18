@@ -464,6 +464,13 @@
     vlozObrazek: otevriVyberZdroje,
     vlozObrazekZGalerie: otevriGalerii,
     vyfotObrazek: otevriFotoaparat,
+
+    /* PATCH 609 – PC clipboard image
+       Ctrl+V z Core V2 nesmí obcházet media pipeline. Kopírovaný obrázek
+       proto prochází stejnou kompresí, E2E kontrolou, shadow attachmentem
+       a modelovým vložením jako Galerie/Fotoaparát. */
+    vlozObrazekZeSchranky: (file) => vlozSoubor(file),
+
     otevriNahledObrazku,
     zavriNahledObrazku
   });
