@@ -31,6 +31,197 @@
   let egressZbyvaBajtu = null;
   let egressZdroj = "";
 
+  /*
+   * DIAG 606 – pasivní audit Supabase requestů.
+   *
+   * Kritický cíl: zjistit, odkud přesně pochází velký RX po přepnutí
+   * 📱 -> ☁️. Diagnostika NEMĚNÍ routing ani timing syncu, neukládá
+   * hlavičky, tokeny ani request body. Drží pouze metadata requestu,
+   * stav sync scope a skutečně přijaté/odeslané bajty.
+   */
+  const RX_DIAG_MAX_REQUESTU = 320;
+  const RX_DIAG_MAX_UDALOSTI = 180;
+  const rxDiagStart = performance.now();
+  const rxDiagRequesty = [];
+  const rxDiagUdalosti = [];
+  let rxDiagSekvence = 0;
+  let rxDiagCelkemRx = 0;
+  let rxDiagCelkemTx = 0;
+
+  function rxDiagCas() {
+    return Math.max(0, Math.round(performance.now() - rxDiagStart));
+  }
+
+  function rxDiagTrim(pole, max) {
+    if (pole.length > max) {
+      pole.splice(0, pole.length - max);
+    }
+  }
+
+  function rxDiagPopisUrl(input) {
+    try {
+      const raw =
+        typeof input === "string"
+          ? input
+          : input?.url;
+
+      const url = new URL(raw, window.location.href);
+      const casti = url.pathname.split("/").filter(Boolean);
+
+      const rpcIndex = casti.indexOf("rpc");
+      if (rpcIndex >= 0 && casti[rpcIndex + 1]) {
+        return `rpc:${casti[rpcIndex + 1]}`;
+      }
+
+      const restIndex = casti.indexOf("rest");
+      if (
+        restIndex >= 0 &&
+        casti[restIndex + 1] === "v1" &&
+        casti[restIndex + 2]
+      ) {
+        return `rest:${casti[restIndex + 2]}`;
+      }
+
+      const storageIndex = casti.indexOf("storage");
+      if (storageIndex >= 0) {
+        const objektIndex = casti.indexOf("object");
+        if (objektIndex >= 0) {
+          const bucket =
+            casti[objektIndex + 2] ||
+            casti[objektIndex + 1] ||
+            "?";
+          return `storage:${bucket}`;
+        }
+        return "storage";
+      }
+
+      const authIndex = casti.indexOf("auth");
+      if (authIndex >= 0) {
+        const v1Index = casti.indexOf("v1", authIndex);
+        return `auth:${casti[v1Index + 1] || "request"}`;
+      }
+
+      return url.pathname || "/";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  function rxDiagUdalost(text) {
+    rxDiagUdalosti.push({
+      t: rxDiagCas(),
+      text: String(text || "")
+    });
+    rxDiagTrim(rxDiagUdalosti, RX_DIAG_MAX_UDALOSTI);
+  }
+
+  function rxDiagZalozRequest(input, init, tx, syncId) {
+    const metoda = String(
+      init?.method ||
+      (input instanceof Request ? input.method : "") ||
+      "GET"
+    ).toUpperCase();
+
+    const zaznam = {
+      id: ++rxDiagSekvence,
+      t: rxDiagCas(),
+      route: rxDiagPopisUrl(input),
+      method: metoda,
+      syncId: Number(syncId) || 0,
+      syncDepth: hloubkaSyncu,
+      scope:
+        window.LubaNoteStorageScope?.ziskejAktivni?.() === "local"
+          ? "local"
+          : "cloud",
+      tx: Math.max(0, Number(tx) || 0),
+      rx: null,
+      status: null,
+      ms: null,
+      error: ""
+    };
+
+    rxDiagCelkemTx += zaznam.tx;
+    rxDiagRequesty.push(zaznam);
+    rxDiagTrim(rxDiagRequesty, RX_DIAG_MAX_REQUESTU);
+    return zaznam;
+  }
+
+  function rxDiagDokonciRequest(zaznam, { status, rx, ms, error } = {}) {
+    if (!zaznam) return;
+
+    if (Number.isFinite(Number(status))) {
+      zaznam.status = Number(status);
+    }
+
+    if (Number.isFinite(Number(ms))) {
+      zaznam.ms = Math.max(0, Math.round(Number(ms)));
+    }
+
+    if (Number.isFinite(Number(rx))) {
+      const novaRx = Math.max(0, Number(rx) || 0);
+      const melaRx =
+        zaznam.rx !== null &&
+        Number.isFinite(Number(zaznam.rx));
+
+      if (!melaRx) {
+        rxDiagCelkemRx += novaRx;
+      } else {
+        rxDiagCelkemRx += novaRx - Number(zaznam.rx || 0);
+      }
+      zaznam.rx = novaRx;
+    }
+
+    if (error) {
+      zaznam.error = String(error);
+    }
+  }
+
+  function rxDiagSnapshot() {
+    const podleRoute = new Map();
+
+    for (const row of rxDiagRequesty) {
+      const key = `${row.method} ${row.route}`;
+      const souhrn = podleRoute.get(key) || {
+        key,
+        count: 0,
+        rx: 0,
+        tx: 0,
+        pendingRx: 0
+      };
+
+      souhrn.count += 1;
+      souhrn.tx += Math.max(0, Number(row.tx) || 0);
+
+      if (
+        row.rx !== null &&
+        Number.isFinite(Number(row.rx))
+      ) {
+        souhrn.rx += Math.max(0, Number(row.rx) || 0);
+      } else {
+        souhrn.pendingRx += 1;
+      }
+
+      podleRoute.set(key, souhrn);
+    }
+
+    return {
+      sinceMs: rxDiagCas(),
+      totalRx: rxDiagCelkemRx,
+      totalTx: rxDiagCelkemTx,
+      activeSyncDepth: hloubkaSyncu,
+      activeSyncId: aktivniSyncId,
+      lastSyncId: posledniSyncId,
+      currentSyncRx: aktualniRx,
+      currentSyncTx: aktualniTx,
+      lastSyncRx: posledniRx,
+      lastSyncTx: posledniTx,
+      requests: rxDiagRequesty.map((row) => ({ ...row })),
+      events: rxDiagUdalosti.map((row) => ({ ...row })),
+      byRoute: Array.from(podleRoute.values())
+        .sort((a, b) => (b.rx - a.rx) || (b.count - a.count))
+    };
+  }
+
   function jeSupabasePozadavek(input) {
     try {
       const url =
@@ -185,6 +376,7 @@
       aktivniSyncId += 1;
       aktualniRx = 0;
       aktualniTx = 0;
+      rxDiagUdalost(`SYNC START | id=${aktivniSyncId}`);
     }
 
     hloubkaSyncu += 1;
@@ -204,6 +396,9 @@
       posledniSyncId = aktivniSyncId;
       posledniRx = aktualniRx;
       posledniTx = aktualniTx;
+      rxDiagUdalost(
+        `SYNC END | id=${posledniSyncId} | rx=${Math.round(posledniRx)} | tx=${Math.round(posledniTx)}`
+      );
     }
 
     vykresli();
@@ -252,43 +447,95 @@
         ? aktivniSyncId
         : 0;
 
-    if (syncId) {
-      const body =
-        init?.body !== undefined
-          ? init.body
-          : input instanceof Request
-            ? null
-            : null;
+    const body =
+      init?.body !== undefined
+        ? init.body
+        : input instanceof Request
+          ? null
+          : null;
 
-      pridejTx(odhadVelikostiTela(body), syncId);
+    const tx = merit
+      ? odhadVelikostiTela(body)
+      : 0;
+
+    const audit = merit
+      ? rxDiagZalozRequest(input, init, tx, syncId)
+      : null;
+
+    if (syncId && tx > 0) {
+      pridejTx(tx, syncId);
     }
 
-    const response = await puvodniFetch(input, init);
+    const zacatek = performance.now();
 
-    if (syncId) {
-      try {
-        const contentLengthHeader =
-          response.headers.get("content-length");
-        const contentLength =
-          contentLengthHeader !== null &&
-          contentLengthHeader !== ""
-            ? Number(contentLengthHeader)
-            : Number.NaN;
+    let response;
 
-        if (Number.isFinite(contentLength) && contentLength >= 0) {
+    try {
+      response = await puvodniFetch(input, init);
+    } catch (error) {
+      rxDiagDokonciRequest(audit, {
+        ms: performance.now() - zacatek,
+        error: error?.message || error
+      });
+      throw error;
+    }
+
+    if (!merit) {
+      return response;
+    }
+
+    try {
+      const contentLengthHeader =
+        response.headers.get("content-length");
+      const contentLength =
+        contentLengthHeader !== null &&
+        contentLengthHeader !== ""
+          ? Number(contentLengthHeader)
+          : Number.NaN;
+
+      if (Number.isFinite(contentLength) && contentLength >= 0) {
+        if (syncId) {
           pridejRx(contentLength, syncId);
-        } else {
-          response
-            .clone()
-            .arrayBuffer()
-            .then((buffer) => {
-              pridejRx(buffer.byteLength, syncId);
-            })
-            .catch(() => {});
         }
-      } catch {
-        // Měření nesmí nikdy ovlivnit vlastní Supabase request.
+
+        rxDiagDokonciRequest(audit, {
+          status: response.status,
+          rx: contentLength,
+          ms: performance.now() - zacatek
+        });
+      } else {
+        /*
+         * clone() NESTAHUJE odpověď znovu; pouze pasivně změří již přijaté
+         * tělo. Běží mimo await, takže diagnostika nezdržuje vlastní sync.
+         */
+        response
+          .clone()
+          .arrayBuffer()
+          .then((buffer) => {
+            if (syncId) {
+              pridejRx(buffer.byteLength, syncId);
+            }
+
+            rxDiagDokonciRequest(audit, {
+              status: response.status,
+              rx: buffer.byteLength,
+              ms: performance.now() - zacatek
+            });
+          })
+          .catch((error) => {
+            rxDiagDokonciRequest(audit, {
+              status: response.status,
+              ms: performance.now() - zacatek,
+              error: `measure:${error?.message || error}`
+            });
+          });
       }
+    } catch (error) {
+      rxDiagDokonciRequest(audit, {
+        status: response.status,
+        ms: performance.now() - zacatek,
+        error: `headers:${error?.message || error}`
+      });
     }
 
     return response;
@@ -316,8 +563,27 @@
 
   window.addEventListener(
     "lubanote:storage-scope-change",
-    () => vykresli()
+    (event) => {
+      rxDiagUdalost(
+        `SCOPE CHANGE | ${String(event.detail?.scope || "?")}`
+      );
+      vykresli();
+    }
   );
+
+  window.LubaNoteSyncRxDiag = {
+    snapshot: rxDiagSnapshot,
+    clear: () => {
+      rxDiagRequesty.length = 0;
+      rxDiagUdalosti.length = 0;
+      rxDiagCelkemRx = 0;
+      rxDiagCelkemTx = 0;
+      rxDiagSekvence = 0;
+      rxDiagUdalost("DIAG CLEAR");
+    }
+  };
+
+  rxDiagUdalost("DIAG 606 READY");
 
   window.LubaNoteSyncTraffic = {
     fetch: mereneFetch,

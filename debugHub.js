@@ -39,6 +39,7 @@
     editorSelection: "Editor – výběr textu",
     titleTagSelection: "Název/štítek – Selection Watch",
     ownerIsolation: "Účet / owner – izolace lokálních dat",
+    syncRxAudit: "Sync RX – request audit",
     gestures: "Gesta – pointer / touch / click",
     keyboardWatch: "Klávesnice – Gboard / focus watch",
     bulletDrag: "Bullet – drag / hierarchie",
@@ -1889,6 +1890,107 @@
     return () => {};
   }
 
+  function syncRxFormatBajtu(bytes) {
+    const hodnota = Math.max(0, Number(bytes) || 0);
+
+    if (hodnota < 1000) return `${Math.round(hodnota)} B`;
+    if (hodnota < 1000 * 1000) {
+      return `${(hodnota / 1000).toFixed(1).replace(".", ",")} kB`;
+    }
+    return `${(hodnota / 1000 / 1000).toFixed(2).replace(".", ",")} MB`;
+  }
+
+  function spustSyncRxAudit() {
+    zapis("START SYNC RX REQUEST AUDIT 606");
+    zapis("INFO | pasivní diagnostika; nemění sync ani síťové requesty");
+
+    const api = window.LubaNoteSyncRxDiag;
+
+    if (!api?.snapshot) {
+      zapis("ERROR | LubaNoteSyncRxDiag není dostupný");
+      return () => {};
+    }
+
+    let snapshot = null;
+
+    try {
+      snapshot = api.snapshot();
+    } catch (error) {
+      zapis(`ERROR SNAPSHOT | ${String(error?.message || error)}`);
+      return () => {};
+    }
+
+    const requesty = Array.isArray(snapshot?.requests)
+      ? snapshot.requests
+      : [];
+    const udalosti = Array.isArray(snapshot?.events)
+      ? snapshot.events
+      : [];
+    const route = Array.isArray(snapshot?.byRoute)
+      ? snapshot.byRoute
+      : [];
+
+    zapis(
+      `SUMMARY | since=${Math.round((Number(snapshot?.sinceMs) || 0) / 1000)}s | requests=${requesty.length} | totalRX=${syncRxFormatBajtu(snapshot?.totalRx)} | totalTX=${syncRxFormatBajtu(snapshot?.totalTx)} | activeDepth=${snapshot?.activeSyncDepth ?? "?"} | activeSync=${snapshot?.activeSyncId ?? "?"} | lastSync=${snapshot?.lastSyncId ?? "?"}`
+    );
+    zapis(
+      `SYNC COUNTERS | currentRX=${syncRxFormatBajtu(snapshot?.currentSyncRx)} | currentTX=${syncRxFormatBajtu(snapshot?.currentSyncTx)} | lastRX=${syncRxFormatBajtu(snapshot?.lastSyncRx)} | lastTX=${syncRxFormatBajtu(snapshot?.lastSyncTx)}`
+    );
+
+    zapis("ROUTES BY RX");
+    for (const row of route.slice(0, 60)) {
+      zapis(
+        `ROUTE | ${row.key} | count=${row.count} | rx=${syncRxFormatBajtu(row.rx)} | tx=${syncRxFormatBajtu(row.tx)} | pending=${row.pendingRx || 0}`
+      );
+    }
+
+    const top = requesty
+      .slice()
+      .sort((a, b) => (Number(b.rx) || 0) - (Number(a.rx) || 0))
+      .slice(0, 50);
+
+    zapis("TOP REQUESTS BY RX");
+    for (const row of top) {
+      zapis(
+        `REQ | #${row.id} t=${row.t}ms | ${row.method} ${row.route} | scope=${row.scope} | sync=${row.syncId || 0}/depth${row.syncDepth ?? 0} | status=${row.status ?? "?"} | rx=${row.rx == null ? "pending" : syncRxFormatBajtu(row.rx)} | tx=${syncRxFormatBajtu(row.tx)} | ${row.ms == null ? "?" : `${row.ms}ms`}${row.error ? ` | err=${zkratText(row.error, 100)}` : ""}`
+      );
+    }
+
+    zapis("RECENT REQUESTS");
+    for (const row of requesty.slice(-100)) {
+      zapis(
+        `REQ-RECENT | #${row.id} t=${row.t}ms | ${row.method} ${row.route} | scope=${row.scope} | sync=${row.syncId || 0} | status=${row.status ?? "?"} | rx=${row.rx == null ? "pending" : syncRxFormatBajtu(row.rx)} | tx=${syncRxFormatBajtu(row.tx)}`
+      );
+    }
+
+    zapis("SYNC EVENTS");
+    for (const row of udalosti.slice(-100)) {
+      zapis(`EVENT | t=${row.t}ms | ${row.text}`);
+    }
+
+    const startup = window.LubaNoteStartupDiag?.radky?.() || [];
+    const relevantni = startup.filter((radek) => {
+      const text = String(radek || "");
+      return (
+        text.includes("FAST") ||
+        text.includes("V2") ||
+        text.includes("BOOTSTRAP") ||
+        text.includes("RECONCILE") ||
+        text.includes("EGRESS") ||
+        text.includes("START SYNC FLOW") ||
+        text.includes("LOCAL MODE")
+      );
+    });
+
+    zapis("SYNC DECISIONS");
+    for (const row of relevantni.slice(-140)) {
+      zapis(`DECISION | ${row}`);
+    }
+
+    zapis("DONE SYNC RX REQUEST AUDIT 606");
+    return () => {};
+  }
+
   function spustStartupAutomatickyPokudJeTreba() {
     if (!window.LUBANOTE_TAG_VD_AUTO || aktivniModul) {
       return;
@@ -1941,6 +2043,8 @@
       stopAktivnihoModulu = spustTitleTagSelectionWatch();
     } else if (aktivniModul === "ownerIsolation") {
       stopAktivnihoModulu = spustOwnerIsolationWatch();
+    } else if (aktivniModul === "syncRxAudit") {
+      stopAktivnihoModulu = spustSyncRxAudit();
     } else if (aktivniModul === "gestures") {
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "keyboardWatch") {
