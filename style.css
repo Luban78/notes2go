@@ -11615,3 +11615,160 @@ body.lubaCardDragMode .app {
     background: transparent;
   }
 }
+
+/* =============================================================
+ * PATCH 632 – PDF SAVE MODAL COMPACT MOBILE
+ * Jen rozložení PDF modalu. Funkční export 631 se NEMĚNÍ.
+ * Cíl: na Androidu udržet celý modal v jednom viewportu a scroll
+ * ponechat pouze jako bezpečnostní zálohu pro extrémně malé displeje.
+ * ============================================================= */
+@media (max-width: 600px), (max-height: 900px) {
+  .pdfLubaModal {
+    align-items: flex-start;
+    padding: 6px;
+  }
+
+  .pdfLubaDialog {
+    width: min(100%, 430px);
+    max-height: calc(100dvh - 12px);
+    margin-top: 6px;
+    padding: 12px 12px 10px;
+    border-radius: 18px;
+  }
+
+  .pdfLubaDialogHeader {
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 10px;
+  }
+
+  .pdfLubaDialogIcon {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 20px;
+  }
+
+  .pdfLubaDialog h3 {
+    margin: 0 0 2px;
+    font-size: 1.08rem;
+  }
+
+  .pdfLubaDialog p {
+    font-size: 11.5px;
+    line-height: 1.25;
+  }
+
+  .pdfLubaField {
+    gap: 4px;
+  }
+
+  .pdfLubaField > span,
+  .pdfLubaSaveModeTitle {
+    font-size: 11px;
+  }
+
+  .pdfLubaFileName {
+    min-height: 40px;
+    padding: 0 11px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .pdfLubaSaveMode {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .pdfLubaSaveMode > .pdfLubaSaveModeTitle {
+    grid-column: 1 / -1;
+  }
+
+  .pdfLubaSaveModeRow {
+    min-height: 50px;
+    grid-template-columns: 26px minmax(0, 1fr) 18px;
+    gap: 6px;
+    padding: 6px 7px;
+    border-radius: 12px;
+  }
+
+  .pdfLubaSaveModeIcon {
+    font-size: 18px;
+  }
+
+  .pdfLubaSaveModeRow strong {
+    font-size: 12.25px;
+    line-height: 1.15;
+  }
+
+  .pdfLubaSaveModeRow small {
+    display: none;
+  }
+
+  .pdfLubaRadio {
+    width: 18px;
+    height: 18px;
+  }
+
+  .pdfLubaRadio i {
+    width: 8px;
+    height: 8px;
+  }
+
+  .pdfLubaExportOptions {
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .pdfLubaExportOption {
+    gap: 4px;
+  }
+
+  .pdfLubaExportOption > span {
+    font-size: 11px;
+  }
+
+  .pdfLubaSegments {
+    gap: 5px;
+  }
+
+  .pdfLubaSegments button {
+    min-height: 36px;
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .pdfLubaDirectTest {
+    gap: 8px;
+    margin-top: 8px;
+    padding: 7px 9px;
+    border-radius: 12px;
+  }
+
+  .pdfLubaDirectTest > span:first-child {
+    font-size: 18px;
+  }
+
+  .pdfLubaDirectTest strong {
+    font-size: 13px;
+  }
+
+  .pdfLubaDirectTest small {
+    display: none;
+  }
+
+  .pdfLubaActions {
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .pdfLubaActions button {
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 13px;
+  }
+}
