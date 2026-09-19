@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.1 MOVE LONGPRESS (PATCH 636B)
+   LUBANOTE – DOKUMENTY V1.2 FOLDER REORDER (PATCH 637)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
@@ -7,6 +7,7 @@
    - seznam souborů
    - otevření PDF ve stávajícím LubaNote PDF vieweru
    - bezpečný přesun souboru mezi složkami přes long-press + drag
+   - změna pořadí složek přes stejný long-press + drag vzor
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -37,6 +38,14 @@
   let dragCasovac = null;
   let dragNahled = null;
   let blokovatOtevreniDo = 0;
+
+  const DELKA_LONG_PRESS_SLOZKY = 420;
+  const MAX_POHYB_SLOZKY_PRED_LONGPRESS = 20;
+  const START_DRAG_SLOZKY_PO_LONGPRESS = 7;
+  let folderDragStav = null;
+  let folderDragCasovac = null;
+  let folderDragNahled = null;
+  let blokovatOtevreniSlozkyDo = 0;
 
   function jeAndroid() {
     try {
@@ -126,6 +135,60 @@
     const db = await otevriDb();
     const tx = db.transaction(storeName, 'readwrite');
     await requestPromise(tx.objectStore(storeName).put(value));
+  }
+
+  function hodnotaPoradiSlozky(folder, fallback = Number.MAX_SAFE_INTEGER) {
+    const poradi = Number(folder?.poradi);
+    return Number.isFinite(poradi) ? poradi : fallback;
+  }
+
+  async function zajistiPoradiSlozek(folders) {
+    const serazene = [...(folders || [])].sort((a, b) => {
+      const ap = hodnotaPoradiSlozky(a);
+      const bp = hodnotaPoradiSlozky(b);
+      if (ap !== bp) return ap - bp;
+
+      const ac = Number(a?.createdAt || 0);
+      const bc = Number(b?.createdAt || 0);
+      if (ac !== bc) return ac - bc;
+
+      return String(a?.name || '').localeCompare(String(b?.name || ''), 'cs');
+    });
+
+    let zmeneno = false;
+    for (let index = 0; index < serazene.length; index += 1) {
+      const folder = serazene[index];
+      if (Number(folder.poradi) === index) continue;
+      folder.poradi = index;
+      await ulozDoStore(STORE_FOLDERS, folder);
+      zmeneno = true;
+    }
+
+    return { folders: serazene, zmeneno };
+  }
+
+  async function ulozPoradiSlozek(ids) {
+    const podleId = new Map(posledniSlozky.map((folder) => [folder.id, folder]));
+    const novePoradi = [];
+
+    ids.forEach((folderId, index) => {
+      const folder = podleId.get(folderId);
+      if (!folder) return;
+      folder.poradi = index;
+      novePoradi.push(folder);
+    });
+
+    posledniSlozky.forEach((folder) => {
+      if (!novePoradi.includes(folder)) novePoradi.push(folder);
+    });
+
+    for (let index = 0; index < novePoradi.length; index += 1) {
+      const folder = novePoradi[index];
+      if (Number(folder.poradi) !== index) folder.poradi = index;
+      await ulozDoStore(STORE_FOLDERS, folder);
+    }
+
+    posledniSlozky = novePoradi;
   }
 
   async function nactiSoubor(idSouboru) {
@@ -448,6 +511,260 @@
     });
   }
 
+  function zrusFolderDragCasovac() {
+    if (folderDragCasovac !== null) clearTimeout(folderDragCasovac);
+    folderDragCasovac = null;
+  }
+
+  function zajistiFolderDragNahled() {
+    if (folderDragNahled?.isConnected) return folderDragNahled;
+
+    folderDragNahled = document.createElement('div');
+    folderDragNahled.className = 'documentsFolderDragPreview';
+    folderDragNahled.hidden = true;
+    folderDragNahled.innerHTML = `
+      <span class="documentsFolderDragPreviewIcon" aria-hidden="true">📁</span>
+      <span class="documentsFolderDragPreviewText">
+        <strong></strong>
+        <small>Táhni pro změnu pořadí</small>
+      </span>`;
+    document.body.appendChild(folderDragNahled);
+    return folderDragNahled;
+  }
+
+  function nastavPoziciFolderDragNahledu(x, y) {
+    const nahled = zajistiFolderDragNahled();
+    const sirka = nahled.offsetWidth || 240;
+    const pul = sirka / 2;
+    const safeX = Math.max(12 + pul, Math.min(window.innerWidth - 12 - pul, x));
+    const safeY = Math.max(86, y - 24);
+    nahled.style.left = `${Math.round(safeX)}px`;
+    nahled.style.top = `${Math.round(safeY)}px`;
+  }
+
+  function zobrazFolderDragNahled(button, x, y) {
+    const nahled = zajistiFolderDragNahled();
+    const nazev = button?.querySelector('.documentsFolderCardName')?.textContent?.trim() || 'Složka';
+    nahled.querySelector('strong').textContent = nazev;
+    nahled.hidden = false;
+    nahled.classList.remove('is-active');
+    nastavPoziciFolderDragNahledu(x, y);
+  }
+
+  function skryjFolderDragNahled() {
+    if (!folderDragNahled) return;
+    folderDragNahled.hidden = true;
+    folderDragNahled.classList.remove('is-active');
+  }
+
+  function vycistiFolderDropTarget() {
+    document.querySelectorAll('.documentsFolderCard.folder-drop-target')
+      .forEach((el) => el.classList.remove('folder-drop-target'));
+  }
+
+  function ukonciFolderDrag() {
+    zrusFolderDragCasovac();
+    vycistiFolderDropTarget();
+    skryjFolderDragNahled();
+    dokumentyPrvky?.screen?.classList.remove('documents-folder-drag-mode');
+
+    if (folderDragStav?.button) {
+      folderDragStav.button.classList.remove('folder-drag-ready', 'folder-dragging');
+    }
+
+    folderDragStav = null;
+  }
+
+  function aktivujLongPressSlozky() {
+    if (!folderDragStav || folderDragStav.pripraven) return;
+    folderDragStav.pripraven = true;
+    folderDragStav.button.classList.add('folder-drag-ready');
+    dokumentyPrvky?.screen?.classList.add('documents-folder-drag-mode');
+    zobrazFolderDragNahled(folderDragStav.button, folderDragStav.lastX, folderDragStav.lastY);
+    blokovatOtevreniSlozkyDo = Date.now() + 750;
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+    try { document.activeElement?.blur?.(); } catch (_error) {}
+    try { navigator.vibrate?.(18); } catch (_error) {}
+  }
+
+  function pripravLongPressSlozky(button, x, y, typ, touchId = null, pointerId = null) {
+    ukonciFolderDrag();
+    folderDragStav = {
+      button,
+      folderId: button.dataset.folderId,
+      typ,
+      touchId,
+      pointerId,
+      startX: x,
+      startY: y,
+      lastX: x,
+      lastY: y,
+      pripraven: false,
+      aktivni: false
+    };
+
+    folderDragCasovac = setTimeout(() => {
+      folderDragCasovac = null;
+      aktivujLongPressSlozky();
+    }, DELKA_LONG_PRESS_SLOZKY);
+  }
+
+  function vzdalenostFolderDrag(x, y) {
+    if (!folderDragStav) return 0;
+    return Math.hypot(x - folderDragStav.startX, y - folderDragStav.startY);
+  }
+
+  function najdiFolderReorderTarget(x, y) {
+    const grid = dokumentyPrvky?.folders;
+    if (!grid) return null;
+
+    const prime = document.elementFromPoint(x, y)?.closest?.('.documentsFolderCard');
+    if (prime && prime !== folderDragStav?.button) return prime;
+
+    let nejblizsi = null;
+    let nejmensi = Infinity;
+    grid.querySelectorAll('.documentsFolderCard').forEach((button) => {
+      if (button === folderDragStav?.button) return;
+      const rect = button.getBoundingClientRect();
+      const dx = x - (rect.left + rect.width / 2);
+      const dy = y - (rect.top + rect.height / 2);
+      const d = Math.hypot(dx, dy);
+      if (d < nejmensi && d <= Math.max(rect.width, rect.height) * .9) {
+        nejmensi = d;
+        nejblizsi = button;
+      }
+    });
+    return nejblizsi;
+  }
+
+  function presunFolderButtonVDomu(button, target, x, y) {
+    if (!button || !target || button === target) return;
+    const grid = dokumentyPrvky?.folders;
+    if (!grid) return;
+
+    vycistiFolderDropTarget();
+    target.classList.add('folder-drop-target');
+
+    const rect = target.getBoundingClientRect();
+    const jeZa = y > rect.top + rect.height / 2 || (
+      Math.abs(y - (rect.top + rect.height / 2)) < rect.height * .28 &&
+      x > rect.left + rect.width / 2
+    );
+
+    if (jeZa) {
+      grid.insertBefore(button, target.nextSibling);
+    } else {
+      grid.insertBefore(button, target);
+    }
+  }
+
+  function aktualizujFolderDrag(x, y) {
+    if (!folderDragStav?.pripraven) return;
+    folderDragStav.lastX = x;
+    folderDragStav.lastY = y;
+    nastavPoziciFolderDragNahledu(x, y);
+
+    if (!folderDragStav.aktivni && vzdalenostFolderDrag(x, y) >= START_DRAG_SLOZKY_PO_LONGPRESS) {
+      folderDragStav.aktivni = true;
+      folderDragStav.button.classList.remove('folder-drag-ready');
+      folderDragStav.button.classList.add('folder-dragging');
+      folderDragNahled?.classList.add('is-active');
+    }
+
+    if (!folderDragStav.aktivni) return;
+    const target = najdiFolderReorderTarget(x, y);
+    if (target) presunFolderButtonVDomu(folderDragStav.button, target, x, y);
+    else vycistiFolderDropTarget();
+  }
+
+  async function dokoncFolderDrag() {
+    if (!folderDragStav) return;
+    const stav = folderDragStav;
+    const bylLongPress = stav.pripraven;
+    const aktivni = stav.aktivni;
+    const grid = dokumentyPrvky?.folders;
+    const ids = aktivni && grid
+      ? [...grid.querySelectorAll('.documentsFolderCard[data-folder-id]')].map((el) => el.dataset.folderId)
+      : [];
+
+    if (bylLongPress) blokovatOtevreniSlozkyDo = Date.now() + 750;
+    ukonciFolderDrag();
+
+    if (!aktivni || ids.length < 1) return;
+    try {
+      await ulozPoradiSlozek(ids);
+      await refresh();
+      try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
+    } catch (error) {
+      console.error('Změna pořadí složek selhala:', error);
+      zobrazChybu('Dokumenty', 'Pořadí složek se nepodařilo uložit.');
+      await refresh();
+    }
+  }
+
+  function zapojLongPressSlozky(button) {
+    button.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    button.addEventListener('selectstart', (event) => event.preventDefault());
+
+    button.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 1) return;
+      const dotyk = event.touches[0];
+      pripravLongPressSlozky(button, dotyk.clientX, dotyk.clientY, 'touch', dotyk.identifier, null);
+    }, { passive: true });
+
+    button.addEventListener('touchmove', (event) => {
+      if (!folderDragStav || folderDragStav.typ !== 'touch') return;
+      const dotyk = Array.from(event.touches || []).find((t) => t.identifier === folderDragStav.touchId);
+      if (!dotyk) return;
+      const dist = vzdalenostFolderDrag(dotyk.clientX, dotyk.clientY);
+      if (!folderDragStav.pripraven) {
+        if (dist > MAX_POHYB_SLOZKY_PRED_LONGPRESS) ukonciFolderDrag();
+        return;
+      }
+      event.preventDefault();
+      aktualizujFolderDrag(dotyk.clientX, dotyk.clientY);
+    }, { passive: false });
+
+    button.addEventListener('touchend', (event) => {
+      if (!folderDragStav || folderDragStav.typ !== 'touch') return;
+      if (folderDragStav.pripraven) event.preventDefault();
+      void dokoncFolderDrag();
+    }, { passive: false });
+
+    button.addEventListener('touchcancel', () => ukonciFolderDrag(), { passive: true });
+
+    button.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch') return;
+      if (event.button !== undefined && event.button !== 0) return;
+      pripravLongPressSlozky(button, event.clientX, event.clientY, 'pointer', null, event.pointerId);
+    });
+
+    button.addEventListener('pointermove', (event) => {
+      if (!folderDragStav || folderDragStav.typ !== 'pointer' || folderDragStav.pointerId !== event.pointerId) return;
+      const dist = vzdalenostFolderDrag(event.clientX, event.clientY);
+      if (!folderDragStav.pripraven) {
+        if (dist > MAX_POHYB_SLOZKY_PRED_LONGPRESS) ukonciFolderDrag();
+        return;
+      }
+      event.preventDefault();
+      aktualizujFolderDrag(event.clientX, event.clientY);
+    });
+
+    button.addEventListener('pointerup', (event) => {
+      if (!folderDragStav || folderDragStav.typ !== 'pointer' || folderDragStav.pointerId !== event.pointerId) return;
+      if (folderDragStav.pripraven) event.preventDefault();
+      void dokoncFolderDrag();
+    });
+
+    button.addEventListener('pointercancel', () => {
+      if (folderDragStav?.typ === 'pointer') ukonciFolderDrag();
+    });
+  }
+
   function zobrazZpravu(nadpis, text) {
     if (typeof window.zobrazZpravuAplikace === 'function') {
       window.zobrazZpravuAplikace(nadpis, text);
@@ -539,7 +856,8 @@
           id: id(),
           name: nazev,
           createdAt: Date.now(),
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          poradi: posledniSlozky.length
         });
         zavrit();
         await refresh();
@@ -728,9 +1046,8 @@
     });
 
     const cards = posledniSlozky
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'cs'))
       .map((folder) => `
-        <button type="button" class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}">
+        <button type="button" class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" title="Dlouhý stisk a táhni pro změnu pořadí">
           <span class="documentsFolderCardIcon" aria-hidden="true">📁</span>
           <span class="documentsFolderCardName">${esc(folder.name)}</span>
           <small>${counts.get(folder.id) || 0} PDF</small>
@@ -741,9 +1058,11 @@
 
     prvky.folders.querySelectorAll('[data-folder-id]').forEach((button) => {
       button.addEventListener('click', () => {
+        if (Date.now() < blokovatOtevreniSlozkyDo) return;
         aktivniSlozkaId = button.dataset.folderId || null;
         render();
       });
+      zapojLongPressSlozky(button);
     });
 
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
@@ -814,6 +1133,9 @@
         vseZeStore(STORE_FILES)
       ]);
 
+      const poradi = await zajistiPoradiSlozek(posledniSlozky);
+      posledniSlozky = poradi.folders;
+
       if (
         aktivniSlozkaId !== null &&
         !posledniSlozky.some((folder) => folder.id === aktivniSlozkaId)
@@ -857,6 +1179,7 @@
   window.LubaNoteDocumentsHub = {
     refresh,
     pridatPdf,
-    presunSouborDoSlozky
+    presunSouborDoSlozky,
+    ulozPoradiSlozek
   };
 })();

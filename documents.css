@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.1 MOVE / PATCH 636B
+   LUBANOTE – DOKUMENTY V1.2 FOLDER REORDER / PATCH 637
    ============================================================ */
 
 .documentsV1 {
@@ -556,4 +556,112 @@
     max-height: calc(100dvh - var(--ln-lk-height, 260px) - 15px);
     overflow-y: auto;
   }
+}
+
+
+/* ============================================================
+   PATCH 637 – SLOŽKY: LONGPRESS + DRAG PRO ZMĚNU POŘADÍ
+   Stejný vizuální jazyk jako TODO/Bullet a přesun PDF.
+   ============================================================ */
+.documentsFolderCard {
+  -webkit-touch-callout: none;
+}
+
+.documentsV1.documents-folder-drag-mode,
+.documentsV1.documents-folder-drag-mode * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+.documentsFolderCard.folder-drag-ready {
+  position: relative;
+  z-index: 6;
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent),
+    0 10px 26px rgba(0,0,0,.2);
+  transform: translateY(-2px) scale(1.025);
+}
+
+.documentsFolderCard.folder-dragging {
+  opacity: .26;
+  border-style: dashed;
+  transform: scale(.97);
+}
+
+.documentsFolderCard.folder-drop-target {
+  position: relative;
+  z-index: 5;
+  border-color: var(--color-accent-text);
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface));
+  box-shadow: 0 10px 26px rgba(0,0,0,.22);
+  transform: scale(1.025);
+}
+
+.documentsFolderDragPreview {
+  position: fixed;
+  z-index: 2147483462;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  width: min(72vw, 280px);
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  padding: 9px 11px;
+  transform: translate(-50%, -100%) scale(.98);
+  border: 2px solid var(--color-accent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-background));
+  color: var(--color-text);
+  box-shadow: 0 14px 34px rgba(0,0,0,.34);
+  pointer-events: none;
+  transition: transform .1s ease, box-shadow .1s ease;
+}
+
+.documentsFolderDragPreview[hidden] {
+  display: none !important;
+}
+
+.documentsFolderDragPreview.is-active {
+  transform: translate(-50%, -100%) scale(1.04);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent),
+    0 18px 38px rgba(0,0,0,.4);
+}
+
+.documentsFolderDragPreviewIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 27px;
+}
+
+.documentsFolderDragPreviewText {
+  min-width: 0;
+}
+
+.documentsFolderDragPreviewText strong,
+.documentsFolderDragPreviewText small {
+  display: block;
+}
+
+.documentsFolderDragPreviewText strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsFolderDragPreviewText small {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
 }
