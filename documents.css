@@ -187,8 +187,8 @@
 
 .documentsFileRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   align-items: stretch;
   width: 100%;
   min-height: 60px;
@@ -198,7 +198,12 @@
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
   color: var(--color-text);
   overflow: hidden;
-  transition: border-color .12s ease, opacity .12s ease, transform .12s ease;
+  transition: border-color .12s ease, background .12s ease, opacity .12s ease, transform .12s ease;
+}
+
+.documentsFileRow.drag-ready {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
 }
 
 .documentsFileRow.dragging {
@@ -220,22 +225,6 @@
   text-align: left;
 }
 
-.documentsFileDrag {
-  touch-action: none;
-  border: 0;
-  border-left: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font: inherit;
-  font-size: 24px;
-  line-height: 1;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.documentsFileDrag:active {
-  color: var(--color-accent-text);
-}
 
 .documentsFolderCard.drag-target,
 .documentsFolderAll.drag-target {

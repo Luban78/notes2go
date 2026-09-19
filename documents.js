@@ -1,12 +1,12 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.1 MOVE (PATCH 636)
+   LUBANOTE – DOKUMENTY V1.1 MOVE LONGPRESS (PATCH 636A)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
    - import PDF
    - seznam souborů
    - otevření PDF ve stávajícím LubaNote PDF vieweru
-   - bezpečný přesun souboru mezi složkami přes drag handle
+   - bezpečný přesun souboru mezi složkami přes long-press + drag
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -28,7 +28,12 @@
   let dokumentyPrvky = null;
   let posledniSlozky = [];
   let posledniSoubory = [];
+  const DELKA_LONG_PRESS_SOUBORU = 420;
+  const MAX_POHYB_PRED_LONGPRESS = 20;
+  const START_DRAG_PO_LONGPRESS = 7;
+
   let dragStav = null;
+  let dragCasovac = null;
   let blokovatOtevreniDo = 0;
 
   function jeAndroid() {
@@ -165,82 +170,176 @@
     if (target) target.classList.add('drag-target');
   }
 
+  function zrusDragCasovac() {
+    if (dragCasovac !== null) clearTimeout(dragCasovac);
+    dragCasovac = null;
+  }
+
   function ukonciDrag() {
+    zrusDragCasovac();
     if (!dragStav) return;
-    dragStav.row?.classList.remove('dragging');
-    dragStav.handle?.releasePointerCapture?.(dragStav.pointerId);
+    dragStav.row?.classList.remove('drag-ready', 'dragging');
+    if (dragStav.pointerId !== null && dragStav.pointerId !== undefined) {
+      try { dragStav.row?.releasePointerCapture?.(dragStav.pointerId); } catch (_error) {}
+    }
     vycistiDragCil();
     dragStav = null;
   }
 
-  function zapojDragHandle(row, handle, idSouboru) {
-    handle.addEventListener('pointerdown', (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
+  function aktivujLongPressSouboru() {
+    if (!dragStav || dragStav.pripraven) return;
+    dragStav.pripraven = true;
+    dragStav.row?.classList.add('drag-ready');
+    blokovatOtevreniDo = Date.now() + 700;
+    try { navigator.vibrate?.(18); } catch (_error) {}
+  }
+
+  function pripravLongPressSouboru(row, idSouboru, x, y, typ, pointerId = null, touchId = null) {
+    ukonciDrag();
+    dragStav = {
+      fileId: idSouboru,
+      row,
+      typ,
+      pointerId,
+      touchId,
+      startX: x,
+      startY: y,
+      lastX: x,
+      lastY: y,
+      pripraven: false,
+      aktivni: false,
+      target: null
+    };
+
+    dragCasovac = setTimeout(() => {
+      dragCasovac = null;
+      aktivujLongPressSouboru();
+    }, DELKA_LONG_PRESS_SOUBORU);
+  }
+
+  function vzdalenostDragSouboru(x, y) {
+    if (!dragStav) return 0;
+    return Math.hypot(x - dragStav.startX, y - dragStav.startY);
+  }
+
+  function aktualizujDragSouboru(x, y) {
+    if (!dragStav?.pripraven) return;
+    dragStav.lastX = x;
+    dragStav.lastY = y;
+
+    if (!dragStav.aktivni && vzdalenostDragSouboru(x, y) >= START_DRAG_PO_LONGPRESS) {
+      dragStav.aktivni = true;
+      dragStav.row?.classList.remove('drag-ready');
+      dragStav.row?.classList.add('dragging');
+    }
+
+    if (!dragStav.aktivni) return;
+    const target = najdiDragCil(x, y);
+    dragStav.target = target;
+    nastavDragCil(target);
+  }
+
+  async function dokoncDragSouboru(x, y) {
+    if (!dragStav) return;
+
+    const stav = dragStav;
+    const bylLongPress = Boolean(stav.pripraven);
+    const aktivni = Boolean(stav.aktivni);
+    const target = stav.target || (aktivni ? najdiDragCil(x, y) : null);
+
+    if (bylLongPress) blokovatOtevreniDo = Date.now() + 700;
+    ukonciDrag();
+
+    if (!aktivni || !target) return;
+
+    const folderId = target.classList.contains('documentsFolderAll')
+      ? null
+      : target.dataset.folderId || null;
+
+    try {
+      const zmeneno = await presunSouborDoSlozky(stav.fileId, folderId);
+      if (!zmeneno) return;
+
+      await refresh();
+
+      const nazev = folderId
+        ? posledniSlozky.find((folder) => folder.id === folderId)?.name || 'složky'
+        : 'Všechny soubory';
+      zobrazZpravu('Dokumenty', `Soubor byl přesunut do „${nazev}“.`);
+    } catch (error) {
+      console.error('Přesun souboru selhal:', error);
+      zobrazChybu('Dokumenty', 'Soubor se nepodařilo přesunout.');
+    }
+  }
+
+  function zapojLongPressSouboru(row, idSouboru) {
+    /*
+     * PATCH 636A – stejné gesto jako jinde v LubaNote:
+     * krátký tap = otevřít, long-press 420 ms = připraveno k přesunu,
+     * potom táhnout na složku. Před long-pressem zůstává přirozený scroll.
+     */
+    row.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 1) return;
+      const dotyk = event.touches[0];
+      pripravLongPressSouboru(row, idSouboru, dotyk.clientX, dotyk.clientY, 'touch', null, dotyk.identifier);
+    }, { passive: true });
+
+    row.addEventListener('touchmove', (event) => {
+      if (!dragStav || dragStav.typ !== 'touch') return;
+      const dotyk = Array.from(event.touches || []).find((t) => t.identifier === dragStav.touchId);
+      if (!dotyk) return;
+
+      const dist = vzdalenostDragSouboru(dotyk.clientX, dotyk.clientY);
+      if (!dragStav.pripraven) {
+        if (dist > MAX_POHYB_PRED_LONGPRESS) ukonciDrag();
+        return;
+      }
 
       event.preventDefault();
-      event.stopPropagation();
+      aktualizujDragSouboru(dotyk.clientX, dotyk.clientY);
+    }, { passive: false });
 
-      dragStav = {
-        fileId: idSouboru,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        moved: false,
-        row,
-        handle,
-        target: null
-      };
+    row.addEventListener('touchend', (event) => {
+      if (!dragStav || dragStav.typ !== 'touch') return;
+      const dotyk = Array.from(event.changedTouches || []).find((t) => t.identifier === dragStav.touchId);
+      const x = dotyk?.clientX ?? dragStav.lastX;
+      const y = dotyk?.clientY ?? dragStav.lastY;
+      if (dragStav.pripraven) event.preventDefault();
+      void dokoncDragSouboru(x, y);
+    }, { passive: false });
 
-      handle.setPointerCapture?.(event.pointerId);
+    row.addEventListener('touchcancel', () => ukonciDrag(), { passive: true });
+
+    row.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch') return;
+      if (event.button !== undefined && event.button !== 0) return;
+      pripravLongPressSouboru(row, idSouboru, event.clientX, event.clientY, 'pointer', event.pointerId, null);
     });
 
-    handle.addEventListener('pointermove', (event) => {
-      if (!dragStav || dragStav.pointerId !== event.pointerId) return;
-
-      const dx = event.clientX - dragStav.startX;
-      const dy = event.clientY - dragStav.startY;
-      if (!dragStav.moved && Math.hypot(dx, dy) < 8) return;
-
-      dragStav.moved = true;
-      row.classList.add('dragging');
-
-      const target = najdiDragCil(event.clientX, event.clientY);
-      dragStav.target = target;
-      nastavDragCil(target);
-    });
-
-    handle.addEventListener('pointerup', async (event) => {
-      if (!dragStav || dragStav.pointerId !== event.pointerId) return;
-
-      const stav = dragStav;
-      const target = stav.target || najdiDragCil(event.clientX, event.clientY);
-      const moved = stav.moved;
-      ukonciDrag();
-
-      if (!moved || !target) return;
-
-      const folderId = target.classList.contains('documentsFolderAll')
-        ? null
-        : target.dataset.folderId || null;
-
-      try {
-        const zmeneno = await presunSouborDoSlozky(stav.fileId, folderId);
-        if (!zmeneno) return;
-
-        blokovatOtevreniDo = Date.now() + 350;
-        await refresh();
-
-        const nazev = folderId
-          ? posledniSlozky.find((folder) => folder.id === folderId)?.name || 'složky'
-          : 'Všechny soubory';
-        zobrazZpravu('Dokumenty', `Soubor byl přesunut do „${nazev}“.`);
-      } catch (error) {
-        console.error('Přesun souboru selhal:', error);
-        zobrazChybu('Dokumenty', 'Soubor se nepodařilo přesunout.');
+    row.addEventListener('pointermove', (event) => {
+      if (!dragStav || dragStav.typ !== 'pointer' || dragStav.pointerId !== event.pointerId) return;
+      const dist = vzdalenostDragSouboru(event.clientX, event.clientY);
+      if (!dragStav.pripraven) {
+        if (dist > MAX_POHYB_PRED_LONGPRESS) ukonciDrag();
+        return;
       }
+
+      event.preventDefault();
+      if (dragStav.pointerId !== null) {
+        try { row.setPointerCapture?.(dragStav.pointerId); } catch (_error) {}
+      }
+      aktualizujDragSouboru(event.clientX, event.clientY);
     });
 
-    handle.addEventListener('pointercancel', () => ukonciDrag());
+    row.addEventListener('pointerup', (event) => {
+      if (!dragStav || dragStav.typ !== 'pointer' || dragStav.pointerId !== event.pointerId) return;
+      if (dragStav.pripraven) event.preventDefault();
+      void dokoncDragSouboru(event.clientX, event.clientY);
+    });
+
+    row.addEventListener('pointercancel', () => {
+      if (dragStav?.typ === 'pointer') ukonciDrag();
+    });
   }
 
   function zobrazZpravu(nadpis, text) {
@@ -573,7 +672,7 @@
     prvky.files.innerHTML = soubory.map((soubor) => {
       const folderName = soubor.folderId ? folderMap.get(soubor.folderId) : '';
       return `
-        <div class="documentsFileRow" data-file-id="${esc(soubor.id)}">
+        <div class="documentsFileRow" data-file-id="${esc(soubor.id)}" title="Dlouhý stisk a táhni pro přesun">
           <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
             <span class="documentsFileIcon" aria-hidden="true">PDF</span>
             <span class="documentsFileMain">
@@ -582,7 +681,6 @@
             </span>
             <span class="documentsFileOpen" aria-hidden="true">›</span>
           </button>
-          <button type="button" class="documentsFileDrag" data-file-drag="${esc(soubor.id)}" aria-label="Přesunout ${esc(soubor.name)} do jiné složky" title="Přetáhnout do složky">⠿</button>
         </div>`;
     }).join('');
 
@@ -593,10 +691,8 @@
       });
     });
 
-    prvky.files.querySelectorAll('[data-file-drag]').forEach((handle) => {
-      const row = handle.closest('.documentsFileRow');
-      if (!row) return;
-      zapojDragHandle(row, handle, handle.dataset.fileDrag);
+    prvky.files.querySelectorAll('.documentsFileRow[data-file-id]').forEach((row) => {
+      zapojLongPressSouboru(row, row.dataset.fileId);
     });
   }
 
