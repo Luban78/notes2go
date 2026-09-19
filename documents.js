@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.2 FOLDER REORDER (PATCH 637)
+   LUBANOTE – DOKUMENTY V1.3 FOLDER ACTIONS (PATCH 638)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
@@ -8,6 +8,8 @@
    - otevření PDF ve stávajícím LubaNote PDF vieweru
    - bezpečný přesun souboru mezi složkami přes long-press + drag
    - změna pořadí složek přes stejný long-press + drag vzor
+   - přejmenování složky
+   - bezpečné smazání složky bez smazání PDF
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -135,6 +137,43 @@
     const db = await otevriDb();
     const tx = db.transaction(storeName, 'readwrite');
     await requestPromise(tx.objectStore(storeName).put(value));
+  }
+
+
+  function nazevSlozkyExistuje(nazev, ignorovatId = null) {
+    const cil = String(nazev || '').trim().toLocaleLowerCase('cs');
+    if (!cil) return false;
+    return posledniSlozky.some((folder) => (
+      folder.id !== ignorovatId &&
+      String(folder.name || '').trim().toLocaleLowerCase('cs') === cil
+    ));
+  }
+
+  async function smazSlozkuBezZtraty(folderId) {
+    const db = await otevriDb();
+
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_FOLDERS, STORE_FILES], 'readwrite');
+      const foldersStore = tx.objectStore(STORE_FOLDERS);
+      const filesStore = tx.objectStore(STORE_FILES);
+      const request = filesStore.getAll();
+
+      request.onerror = () => reject(request.error || new Error('Soubory složky nelze načíst.'));
+      request.onsuccess = () => {
+        const ted = Date.now();
+        for (const soubor of request.result || []) {
+          if ((soubor.folderId || null) !== folderId) continue;
+          soubor.folderId = null;
+          soubor.updatedAt = ted;
+          filesStore.put(soubor);
+        }
+        foldersStore.delete(folderId);
+      };
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error || new Error('Složku se nepodařilo smazat.'));
+      tx.onabort = () => reject(tx.error || new Error('Mazání složky bylo přerušeno.'));
+    });
   }
 
   function hodnotaPoradiSlozky(folder, fallback = Number.MAX_SAFE_INTEGER) {
@@ -711,6 +750,7 @@
     button.addEventListener('selectstart', (event) => event.preventDefault());
 
     button.addEventListener('touchstart', (event) => {
+      if (event.target.closest?.('.documentsFolderMenuButton')) return;
       if (event.touches.length !== 1) return;
       const dotyk = event.touches[0];
       pripravLongPressSlozky(button, dotyk.clientX, dotyk.clientY, 'touch', dotyk.identifier, null);
@@ -738,6 +778,7 @@
     button.addEventListener('touchcancel', () => ukonciFolderDrag(), { passive: true });
 
     button.addEventListener('pointerdown', (event) => {
+      if (event.target.closest?.('.documentsFolderMenuButton')) return;
       if (event.pointerType === 'touch') return;
       if (event.button !== undefined && event.button !== 0) return;
       pripravLongPressSlozky(button, event.clientX, event.clientY, 'pointer', null, event.pointerId);
@@ -815,7 +856,7 @@
       <section class="documentsFolderDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📁</div>
         <h3 id="documentsFolderTitle">Nová složka</h3>
-        <p>Složka je zatím pouze v tomto zařízení.</p>
+        <p id="documentsFolderHint">Složka je zatím pouze v tomto zařízení.</p>
         <label>
           <span>Název složky</span>
           <input id="documentsFolderName" type="text" maxlength="60" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-folder-name">
@@ -828,12 +869,16 @@
 
     document.body.appendChild(modal);
 
+    const title = modal.querySelector('#documentsFolderTitle');
+    const hint = modal.querySelector('#documentsFolderHint');
     const input = modal.querySelector('#documentsFolderName');
     const cancel = modal.querySelector('.documentsFolderCancel');
     const create = modal.querySelector('.documentsFolderCreate');
+    let editFolderId = null;
 
     const zavrit = () => {
       modal.hidden = true;
+      editFolderId = null;
       input.value = '';
       input.blur();
     };
@@ -843,37 +888,58 @@
       if (event.target === modal) zavrit();
     });
 
-    const vytvorit = async () => {
+    const ulozit = async () => {
       const nazev = input.value.trim().replace(/\s+/g, ' ');
       if (!nazev) {
         input.focus();
         return;
       }
 
+      if (nazevSlozkyExistuje(nazev, editFolderId)) {
+        zobrazChybu('Dokumenty', `Složka „${nazev}“ už existuje.`);
+        input.focus();
+        return;
+      }
+
       create.disabled = true;
+      const bylaEditace = Boolean(editFolderId);
       try {
-        await ulozDoStore(STORE_FOLDERS, {
-          id: id(),
-          name: nazev,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          poradi: posledniSlozky.length
-        });
+        if (editFolderId) {
+          const folder = posledniSlozky.find((item) => item.id === editFolderId);
+          if (!folder) throw new Error('Složka už není dostupná.');
+          folder.name = nazev;
+          folder.updatedAt = Date.now();
+          await ulozDoStore(STORE_FOLDERS, folder);
+        } else {
+          await ulozDoStore(STORE_FOLDERS, {
+            id: id(),
+            name: nazev,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            poradi: posledniSlozky.length
+          });
+        }
+
         zavrit();
         await refresh();
+        if (bylaEditace) {
+          try { navigator.vibrate?.(14); } catch (_error) {}
+        }
       } catch (error) {
-        console.error('Vytvoření složky selhalo:', error);
-        zobrazChybu('Dokumenty', 'Složku se nepodařilo vytvořit.');
+        console.error(bylaEditace ? 'Přejmenování složky selhalo:' : 'Vytvoření složky selhalo:', error);
+        zobrazChybu('Dokumenty', bylaEditace
+          ? 'Složku se nepodařilo přejmenovat.'
+          : 'Složku se nepodařilo vytvořit.');
       } finally {
         create.disabled = false;
       }
     };
 
-    create.addEventListener('click', vytvorit);
+    create.addEventListener('click', ulozit);
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        vytvorit();
+        ulozit();
       }
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -881,10 +947,156 @@
       }
     });
 
-    modal.otevrit = () => {
+    modal.otevrit = (options = {}) => {
+      editFolderId = options.folderId || null;
+      const folder = editFolderId
+        ? posledniSlozky.find((item) => item.id === editFolderId)
+        : null;
+
+      title.textContent = folder ? 'Přejmenovat složku' : 'Nová složka';
+      hint.textContent = folder
+        ? 'Změní se pouze název složky. PDF uvnitř zůstanou beze změny.'
+        : 'Složka je zatím pouze v tomto zařízení.';
+      create.textContent = folder ? 'Uložit' : 'Vytvořit';
+      input.value = folder?.name || '';
       modal.hidden = false;
-      input.value = '';
-      requestAnimationFrame(() => input.focus());
+
+      requestAnimationFrame(() => {
+        input.focus();
+        if (folder) input.select();
+      });
+    };
+
+    return modal;
+  }
+
+  function zajistiAkceSlozkyModal() {
+    let modal = document.getElementById('documentsFolderManageModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsFolderManageModal';
+    modal.className = 'documentsFolderModal documentsFolderManageModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsFolderManageDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderManageTitle">
+        <div class="documentsFolderIcon" aria-hidden="true">📁</div>
+        <h3 id="documentsFolderManageTitle">Složka</h3>
+        <p id="documentsFolderManageMeta"></p>
+        <div class="documentsFolderManageActions">
+          <button type="button" class="documentsFolderRenameAction">✏️ Přejmenovat</button>
+          <button type="button" class="documentsFolderDeleteAction">🗑️ Smazat složku</button>
+          <button type="button" class="documentsFolderManageCancel">Zrušit</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const title = modal.querySelector('#documentsFolderManageTitle');
+    const meta = modal.querySelector('#documentsFolderManageMeta');
+    const rename = modal.querySelector('.documentsFolderRenameAction');
+    const remove = modal.querySelector('.documentsFolderDeleteAction');
+    const cancel = modal.querySelector('.documentsFolderManageCancel');
+    let folderId = null;
+
+    const zavrit = () => {
+      modal.hidden = true;
+      folderId = null;
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    rename.addEventListener('click', () => {
+      const idSlozky = folderId;
+      zavrit();
+      if (idSlozky) zajistiModalSlozky().otevrit({ folderId: idSlozky });
+    });
+
+    remove.addEventListener('click', () => {
+      const idSlozky = folderId;
+      zavrit();
+      if (idSlozky) zajistiSmazaniSlozkyModal().otevrit(idSlozky);
+    });
+
+    modal.otevrit = (idSlozky) => {
+      const folder = posledniSlozky.find((item) => item.id === idSlozky);
+      if (!folder) return;
+      folderId = idSlozky;
+      const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
+      title.textContent = folder.name;
+      meta.textContent = `${count} ${count === 1 ? 'PDF' : 'PDF'} · lokálně v zařízení`;
+      modal.hidden = false;
+    };
+
+    return modal;
+  }
+
+  function zajistiSmazaniSlozkyModal() {
+    let modal = document.getElementById('documentsFolderDeleteModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsFolderDeleteModal';
+    modal.className = 'documentsFolderModal documentsFolderDeleteModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsFolderDeleteDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderDeleteTitle">
+        <div class="documentsFolderDeleteIcon" aria-hidden="true">🗑️</div>
+        <h3 id="documentsFolderDeleteTitle">Smazat složku?</h3>
+        <p id="documentsFolderDeleteText"></p>
+        <div class="documentsFolderActions">
+          <button type="button" class="documentsFolderDeleteCancel">Zrušit</button>
+          <button type="button" class="documentsFolderDeleteConfirm">Smazat složku</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const text = modal.querySelector('#documentsFolderDeleteText');
+    const cancel = modal.querySelector('.documentsFolderDeleteCancel');
+    const confirm = modal.querySelector('.documentsFolderDeleteConfirm');
+    let folderId = null;
+
+    const zavrit = () => {
+      modal.hidden = true;
+      folderId = null;
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    confirm.addEventListener('click', async () => {
+      if (!folderId) return;
+      const idSlozky = folderId;
+      confirm.disabled = true;
+      try {
+        await smazSlozkuBezZtraty(idSlozky);
+        zavrit();
+        if (aktivniSlozkaId === idSlozky) aktivniSlozkaId = null;
+        await refresh();
+        try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
+      } catch (error) {
+        console.error('Smazání složky selhalo:', error);
+        zobrazChybu('Dokumenty', 'Složku se nepodařilo bezpečně smazat.');
+      } finally {
+        confirm.disabled = false;
+      }
+    });
+
+    modal.otevrit = (idSlozky) => {
+      const folder = posledniSlozky.find((item) => item.id === idSlozky);
+      if (!folder) return;
+      folderId = idSlozky;
+      const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
+      text.textContent = count > 0
+        ? `Složka „${folder.name}“ obsahuje ${count} PDF. PDF se NESMAŽOU – přesunou se do „Všechny soubory“. Potom se smaže pouze složka.`
+        : `Složka „${folder.name}“ je prázdná. Smaže se pouze složka.`;
+      modal.hidden = false;
     };
 
     return modal;
@@ -1047,22 +1259,49 @@
 
     const cards = posledniSlozky
       .map((folder) => `
-        <button type="button" class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" title="Dlouhý stisk a táhni pro změnu pořadí">
+        <div class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" role="button" tabindex="0" title="Dlouhý stisk a táhni pro změnu pořadí">
           <span class="documentsFolderCardIcon" aria-hidden="true">📁</span>
           <span class="documentsFolderCardName">${esc(folder.name)}</span>
           <small>${counts.get(folder.id) || 0} PDF</small>
-        </button>`)
+          <button type="button" class="documentsFolderMenuButton" data-folder-menu="${esc(folder.id)}" aria-label="Akce složky ${esc(folder.name)}" title="Akce složky">⋮</button>
+        </div>`)
       .join('');
 
     prvky.folders.innerHTML = cards || '<div class="documentsFoldersEmpty">Zatím nemáš žádnou složku.</div>';
 
-    prvky.folders.querySelectorAll('[data-folder-id]').forEach((button) => {
-      button.addEventListener('click', () => {
+    prvky.folders.querySelectorAll('.documentsFolderCard[data-folder-id]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        if (event.target.closest?.('.documentsFolderMenuButton')) return;
         if (Date.now() < blokovatOtevreniSlozkyDo) return;
         aktivniSlozkaId = button.dataset.folderId || null;
         render();
       });
+
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (Date.now() < blokovatOtevreniSlozkyDo) return;
+        event.preventDefault();
+        aktivniSlozkaId = button.dataset.folderId || null;
+        render();
+      });
+
       zapojLongPressSlozky(button);
+    });
+
+    prvky.folders.querySelectorAll('.documentsFolderMenuButton[data-folder-menu]').forEach((menuButton) => {
+      for (const eventName of ['pointerdown', 'touchstart', 'mousedown', 'contextmenu']) {
+        menuButton.addEventListener(eventName, (event) => {
+          event.stopPropagation();
+          if (eventName === 'contextmenu') event.preventDefault();
+        }, eventName === 'touchstart' ? { passive: true } : undefined);
+      }
+
+      menuButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        ukonciFolderDrag();
+        zajistiAkceSlozkyModal().otevrit(menuButton.dataset.folderMenu);
+      });
     });
 
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
