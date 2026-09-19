@@ -1,19 +1,20 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.6 / DOCX READ-ONLY (PATCH 641)
+   LUBANOTE – DOKUMENTY V1.7 / DOC + DOUBLE-TAP FULLSCREEN (PATCH 642)
    ------------------------------------------------------------
    Lokální knihovna Dokumentů:
    - složky, řazení, long-press přesuny, Koš, hledání a filtry
    - PDF import + stávající LubaNote PDF viewer
-   - DOCX import do lokální IndexedDB
-   - DOCX viewer pouze ke čtení přímo v modulu Dokumenty
-   - základní DOCX obsah: nadpisy, odstavce, formát textu, tabulky,
-     odkazy a vložené obrázky
+   - DOCX import + čtecí viewer přímo v Dokumentech
+   - legacy Word 97–2003 DOC import + bezpečný lokální textový viewer
+   - 2× tap v DOCX/DOC vieweru přepne maximalizované zobrazení
+   - DOCX: nadpisy, odstavce, formát textu, tabulky, odkazy a obrázky
+   - DOC: čitelný text bez maker/OLE a bez garance původního layoutu
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
    - žádný cloud, Shared ani konverze
    - starý stabilní PDF tok se nemění
-   - DOCX se NEPŘEVÁDÍ na poznámku a editor se neotevírá
+   - DOCX ani DOC se NEPŘEVÁDÍ na poznámku a editor se neotevírá
    ============================================================ */
 
 (() => {
@@ -25,9 +26,11 @@
   const STORE_FILES = 'files';
   const MAX_PDF_BYTES = 100 * 1024 * 1024;
   const MAX_DOCX_BYTES = 20 * 1024 * 1024;
+  const MAX_DOC_BYTES = 24 * 1024 * 1024;
   const MAX_DOCX_PART_BYTES = 32 * 1024 * 1024;
   const MAX_DOCX_ZIP_ENTRIES = 5000;
   const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const DOC_MIME = 'application/msword';
   const TRASH_VIEW = '__documents_trash__';
 
   let dbPromise = null;
@@ -59,6 +62,7 @@
   let docxViewerOtevren = false;
   let docxViewerObjectUrls = [];
   let docxAndroidBackZapojen = false;
+  let docxViewerFullscreen = false;
 
   function jeAndroid() {
     try {
@@ -116,8 +120,15 @@
     return mime === DOCX_MIME || nazev.endsWith('.docx');
   }
 
+  function jeDocSoubor(soubor) {
+    const mime = String(soubor?.mime || '').toLowerCase();
+    const nazev = String(soubor?.name || '').toLowerCase();
+    return mime === DOC_MIME || nazev.endsWith('.doc');
+  }
+
   function typSouboru(soubor) {
     if (jeDocxSoubor(soubor)) return 'docx';
+    if (jeDocSoubor(soubor)) return 'doc';
     if (jePdfSoubor(soubor)) return 'pdf';
     return 'other';
   }
@@ -125,12 +136,16 @@
   function popisTypuSouboru(soubor) {
     const typ = typSouboru(soubor);
     if (typ === 'docx') return 'DOCX';
+    if (typ === 'doc') return 'DOC';
     if (typ === 'pdf') return 'PDF';
     return 'SOUBOR';
   }
 
   function priponaSouboru(soubor) {
-    return typSouboru(soubor) === 'docx' ? 'docx' : 'pdf';
+    const typ = typSouboru(soubor);
+    if (typ === 'docx') return 'docx';
+    if (typ === 'doc') return 'doc';
+    return 'pdf';
   }
 
   function pocetSouboruText(pocet) {
@@ -311,7 +326,7 @@
 
   function normalizujNazevSouboru(value, pripona = 'pdf') {
     let nazev = String(value || '').trim().replace(/\s+/g, ' ');
-    const ext = pripona === 'docx' ? 'docx' : 'pdf';
+    const ext = ['docx', 'doc'].includes(pripona) ? pripona : 'pdf';
     if (!nazev) return '';
 
     const regex = new RegExp(`\\.${ext}$`, 'i');
@@ -320,7 +335,7 @@
       return zaklad ? `${zaklad}.${ext}` : '';
     }
 
-    nazev = nazev.replace(/\.(pdf|docx)$/i, '').trim().slice(0, 116);
+    nazev = nazev.replace(/\.(pdf|docx|doc)$/i, '').trim().slice(0, 116);
     return nazev ? `${nazev}.${ext}` : '';
   }
 
@@ -463,6 +478,7 @@
     if (nahledIkony) {
       nahledIkony.textContent = zdrojIkony?.textContent?.trim() || 'DOC';
       nahledIkony.classList.toggle('is-docx', zdrojIkony?.classList.contains('is-docx') === true);
+      nahledIkony.classList.toggle('is-doc', zdrojIkony?.classList.contains('is-doc') === true);
     }
     nahled.classList.remove('is-active', 'has-target');
     nahled.hidden = false;
@@ -981,6 +997,7 @@
       filterAll: screen.querySelector('#documentsFilterAll'),
       filterPdf: screen.querySelector('#documentsFilterPdf'),
       filterDocx: screen.querySelector('#documentsFilterDocx'),
+      filterDoc: screen.querySelector('#documentsFilterDoc'),
       trash: screen.querySelector('#documentsTrashButton'),
       trashCount: screen.querySelector('#documentsTrashCount')
     };
@@ -1463,6 +1480,10 @@
             <span class="documentsAddFileType is-docx">DOCX</span>
             <span><strong>Word DOCX</strong><small>otevře se jen ke čtení v Dokumentech</small></span>
           </button>
+          <button type="button" class="documentsAddFileChoice documentsAddDocChoice">
+            <span class="documentsAddFileType is-doc">DOC</span>
+            <span><strong>Word 97–2003 DOC</strong><small>lokální čtení textu starého formátu</small></span>
+          </button>
         </div>
         <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">Zrušit</button>
       </section>`;
@@ -1470,6 +1491,7 @@
     document.body.appendChild(modal);
     const pdf = modal.querySelector('.documentsAddPdfChoice');
     const docx = modal.querySelector('.documentsAddDocxChoice');
+    const doc = modal.querySelector('.documentsAddDocChoice');
     const cancel = modal.querySelector('.documentsAddFileCancel');
 
     const zavrit = () => {
@@ -1489,6 +1511,11 @@
     docx.addEventListener('click', () => {
       zavrit();
       void pridatDocx();
+    });
+
+    doc.addEventListener('click', () => {
+      zavrit();
+      void pridatDoc();
     });
 
     modal.otevrit = () => {
@@ -1640,6 +1667,82 @@
     } catch (error) {
       console.error('Import DOCX selhal:', error);
       zobrazChybu('Dokumenty', 'DOCX se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
+  }
+
+  async function vyberDocWeb() {
+    return await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = `${DOC_MIME},.doc`;
+      input.hidden = true;
+
+      const uklid = () => input.remove();
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0] || null;
+        if (!file) {
+          uklid();
+          resolve(null);
+          return;
+        }
+
+        const jeDoc = /\.doc$/i.test(file.name || '') || file.type === DOC_MIME;
+        if (!jeDoc || /\.docx$/i.test(file.name || '')) {
+          uklid();
+          zobrazChybu('Dokumenty', 'Vybraný soubor není starý Word DOC.');
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_DOC_BYTES) {
+          uklid();
+          zobrazChybu('Dokumenty', 'DOC je příliš velký. Maximální velikost je 24 MB.');
+          resolve(null);
+          return;
+        }
+
+        const record = {
+          id: id(),
+          name: normalizujNazevSouboru(file.name || 'dokument.doc', 'doc') || 'dokument.doc',
+          mime: DOC_MIME,
+          size: file.size,
+          folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
+          storageMode: 'web',
+          blob: file,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        uklid();
+        resolve(record);
+      }, { once: true });
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function pridatDoc() {
+    const prvky = zajistiPrvky();
+    if (!prvky) return;
+
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+
+    try {
+      const record = await vyberDocWeb();
+      if (!record) return;
+
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      zobrazZpravu('Dokumenty', `DOC „${record.name}“ byl přidán.`);
+    } catch (error) {
+      console.error('Import DOC selhal:', error);
+      zobrazChybu('Dokumenty', 'DOC se nepodařilo přidat.');
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2116,37 +2219,124 @@
     overlay.hidden = true;
     overlay.innerHTML = `
       <header class="documentsDocxViewerHeader">
-        <button type="button" class="documentsDocxViewerClose" aria-label="Zavřít DOCX">‹</button>
+        <button type="button" class="documentsDocxViewerClose" aria-label="Zavřít dokument">‹</button>
         <div class="documentsDocxViewerTitle">
           <strong></strong>
-          <small>DOCX · pouze čtení</small>
+          <small>WORD · POUZE ČTENÍ</small>
         </div>
       </header>
+      <button type="button" class="documentsDocxViewerFullscreenExit" aria-label="Ukončit celou obrazovku" hidden>‹</button>
       <main class="documentsDocxViewerBody">
         <div class="documentsDocxViewerLoading" hidden>
           <span class="documentsDocxSpinner" aria-hidden="true"></span>
-          <strong>Otevírám DOCX…</strong>
+          <strong>Otevírám dokument…</strong>
         </div>
         <article class="documentsDocxViewerContent"></article>
       </main>`;
 
     document.body.appendChild(overlay);
     const close = overlay.querySelector('.documentsDocxViewerClose');
+    const fullscreenExit = overlay.querySelector('.documentsDocxViewerFullscreenExit');
     const title = overlay.querySelector('.documentsDocxViewerTitle strong');
+    const subtitle = overlay.querySelector('.documentsDocxViewerTitle small');
+    const body = overlay.querySelector('.documentsDocxViewerBody');
     const loading = overlay.querySelector('.documentsDocxViewerLoading');
+    const loadingText = overlay.querySelector('.documentsDocxViewerLoading strong');
     const content = overlay.querySelector('.documentsDocxViewerContent');
 
     close.addEventListener('click', zavriDocxViewer);
-    docxViewerPrvky = { overlay, close, title, loading, content };
+    fullscreenExit.addEventListener('click', () => nastavDocViewerFullscreen(false));
+
+    /*
+     * PATCH 642 – stejné gesto jako u PDF vieweru:
+     * 2× krátký tap bez scrollu přepne maximalizované zobrazení.
+     * Záměrně nepoužíváme browser Fullscreen API; v APK/WebView tak zůstává
+     * chování stejné jako u odladěného PDF vieweru.
+     */
+    let pointerTap = null;
+    let posledniTap = null;
+
+    body.addEventListener('pointerdown', (event) => {
+      if (!docxViewerOtevren || event.pointerType !== 'touch') return;
+      if (event.target.closest?.('a,button')) return;
+      pointerTap = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        cas: performance.now(),
+        pohyb: false
+      };
+    });
+
+    body.addEventListener('pointermove', (event) => {
+      if (!pointerTap || pointerTap.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - pointerTap.x, event.clientY - pointerTap.y) > 14) {
+        pointerTap.pohyb = true;
+      }
+    });
+
+    body.addEventListener('pointercancel', () => {
+      pointerTap = null;
+    });
+
+    body.addEventListener('pointerup', (event) => {
+      if (
+        !pointerTap ||
+        pointerTap.id !== event.pointerId ||
+        pointerTap.pohyb ||
+        performance.now() - pointerTap.cas > 320
+      ) {
+        pointerTap = null;
+        return;
+      }
+
+      const ted = performance.now();
+      const jeDvojtap = Boolean(
+        posledniTap &&
+        ted - posledniTap.cas <= 360 &&
+        Math.hypot(event.clientX - posledniTap.x, event.clientY - posledniTap.y) <= 38
+      );
+
+      if (jeDvojtap) {
+        posledniTap = null;
+        if (event.cancelable) event.preventDefault();
+        nastavDocViewerFullscreen(!docxViewerFullscreen);
+      } else {
+        posledniTap = { x: event.clientX, y: event.clientY, cas: ted };
+      }
+
+      pointerTap = null;
+    });
+
+    docxViewerPrvky = {
+      overlay,
+      close,
+      fullscreenExit,
+      title,
+      subtitle,
+      body,
+      loading,
+      loadingText,
+      content
+    };
     return docxViewerPrvky;
+  }
+
+  function nastavDocViewerFullscreen(ano) {
+    if (!docxViewerPrvky) return;
+    docxViewerFullscreen = ano === true;
+    docxViewerPrvky.overlay.classList.toggle('is-fullscreen', docxViewerFullscreen);
+    docxViewerPrvky.fullscreenExit.hidden = !docxViewerFullscreen;
   }
 
   function zavriDocxViewer() {
     if (!docxViewerPrvky) return;
     docxViewerOtevren = false;
+    nastavDocViewerFullscreen(false);
     docxViewerPrvky.overlay.hidden = true;
     docxViewerPrvky.loading.hidden = true;
     docxViewerPrvky.content.innerHTML = '';
+    docxViewerPrvky.content.classList.remove('is-legacy-doc');
     document.body.classList.remove('documents-docx-viewer-open');
     uvolniDocxObjectUrls();
   }
@@ -2158,7 +2348,11 @@
 
     const prvky = zajistiDocxViewer();
     uvolniDocxObjectUrls();
+    nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'dokument.docx';
+    prvky.subtitle.textContent = 'DOCX · POUZE ČTENÍ';
+    prvky.loadingText.textContent = 'Otevírám DOCX…';
+    prvky.content.classList.remove('is-legacy-doc');
     prvky.content.innerHTML = '';
     prvky.loading.hidden = false;
     prvky.overlay.hidden = false;
@@ -2171,7 +2365,44 @@
       docxViewerObjectUrls = vysledek.objectUrls;
       prvky.content.innerHTML = vysledek.html || '<p class="documentsDocxEmpty">Dokument neobsahuje zobrazitelný obsah.</p>';
       prvky.loading.hidden = true;
-      prvky.content.scrollTop = 0;
+      prvky.body.scrollTop = 0;
+    } catch (error) {
+      prvky.loading.hidden = true;
+      zavriDocxViewer();
+      throw error;
+    }
+  }
+
+  async function otevriDocViewer(record) {
+    if (!(record?.blob instanceof Blob)) {
+      throw new Error('DOC data nejsou dostupná.');
+    }
+    if (!window.LubaNoteLegacyDoc?.parse) {
+      throw new Error('Legacy DOC parser není načtený.');
+    }
+
+    const prvky = zajistiDocxViewer();
+    uvolniDocxObjectUrls();
+    nastavDocViewerFullscreen(false);
+    prvky.title.textContent = record.name || 'dokument.doc';
+    prvky.subtitle.textContent = 'DOC · POUZE ČTENÍ';
+    prvky.loadingText.textContent = 'Otevírám DOC…';
+    prvky.content.classList.add('is-legacy-doc');
+    prvky.content.innerHTML = '';
+    prvky.loading.hidden = false;
+    prvky.overlay.hidden = false;
+    docxViewerOtevren = true;
+    document.body.classList.add('documents-docx-viewer-open');
+
+    try {
+      const arrayBuffer = await record.blob.arrayBuffer();
+      const vysledek = await window.LubaNoteLegacyDoc.parse(arrayBuffer);
+      const text = String(vysledek?.text || '');
+      prvky.content.innerHTML = text
+        ? `<pre class="documentsLegacyDocText">${esc(text)}</pre>`
+        : '<p class="documentsDocxEmpty">Dokument neobsahuje čitelný text.</p>';
+      prvky.loading.hidden = true;
+      prvky.body.scrollTop = 0;
     } catch (error) {
       prvky.loading.hidden = true;
       zavriDocxViewer();
@@ -2185,7 +2416,11 @@
     const puvodniAndroidZpet = window.LubaNoteZpracujAndroidZpet;
     window.LubaNoteZpracujAndroidZpet = function () {
       if (docxViewerOtevren) {
-        zavriDocxViewer();
+        if (docxViewerFullscreen) {
+          nastavDocViewerFullscreen(false);
+        } else {
+          zavriDocxViewer();
+        }
         return true;
       }
       if (typeof puvodniAndroidZpet === 'function') return puvodniAndroidZpet();
@@ -2209,7 +2444,20 @@
         console.error('Otevření uloženého DOCX selhalo:', error);
         zobrazChybu(
           'Dokumenty',
-          'DOCX se nepodařilo otevřít. Soubor může být poškozený nebo používá prvek, který tento první viewer ještě neumí.'
+          'DOCX se nepodařilo otevřít. Soubor může být poškozený nebo používá prvek, který tento viewer ještě neumí.'
+        );
+      }
+      return;
+    }
+
+    if (typ === 'doc') {
+      try {
+        await otevriDocViewer(record);
+      } catch (error) {
+        console.error('Otevření uloženého DOC selhalo:', error);
+        zobrazChybu(
+          'Dokumenty',
+          error?.message || 'DOC se nepodařilo otevřít. Podporovaný je Word 97–2003 a první verze zachovává hlavně čitelný text.'
         );
       }
       return;
@@ -2327,6 +2575,7 @@
     prvky.filterAll?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'all');
     prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
     prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');
+    prvky.filterDoc?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'doc');
     prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
     if (prvky.trashCount) {
       const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
@@ -2348,9 +2597,10 @@
           if (jeSouborVKosi(soubor)) return false;
           if (aktivniSlozkaId !== null && soubor.folderId !== aktivniSlozkaId) return false;
 
-          // PATCH 640: typový filtr je připravený i pro budoucí DOCX/obrázky.
+          // Typové filtry jsou oddělené; Koš zůstává společný pro všechny dokumenty.
           if (aktivniTypFiltru === 'pdf' && !jePdfSoubor(soubor)) return false;
           if (aktivniTypFiltru === 'docx' && !jeDocxSoubor(soubor)) return false;
+          if (aktivniTypFiltru === 'doc' && !jeDocSoubor(soubor)) return false;
         }
 
         return souborOdpovidaHledani(soubor, folderMap);
@@ -2382,8 +2632,8 @@
       if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : 'Zatím tu není žádný dokument';
-      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF nebo DOCX. PDF používá stávající viewer, DOCX se otevře jen ke čtení.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : 'Zatím tu není žádný dokument';
+      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX nebo DOC. Word soubory se otevřou jen ke čtení.';
     }
 
     if (prvky.search && prvky.search.value !== hledaniDokumentu) {
@@ -2414,7 +2664,7 @@
         : folderName;
       const typ = typSouboru(soubor);
       const typText = popisTypuSouboru(soubor);
-      const ikonaTrida = typ === 'docx' ? ' is-docx' : '';
+      const ikonaTrida = typ === 'docx' ? ' is-docx' : typ === 'doc' ? ' is-doc' : '';
       return `
         <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'Dokument v koši' : 'Dlouhý stisk a táhni pro přesun'}">
           <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
@@ -2595,6 +2845,12 @@
       render();
     });
 
+    prvky.filterDoc?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'doc';
+      render();
+    });
+
     prvky.allFolder.addEventListener('click', () => {
       aktivniSlozkaId = null;
       render();
@@ -2619,7 +2875,9 @@
     refresh,
     pridatPdf,
     pridatDocx,
+    pridatDoc,
     otevriDocxViewer,
+    otevriDocViewer,
     zavriDocxViewer,
     presunSouborDoSlozky,
     ulozPoradiSlozek,

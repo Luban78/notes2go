@@ -1426,3 +1426,85 @@ body.documents-docx-viewer-open {
     font-size: 14px;
   }
 }
+
+/* ============================================================
+   PATCH 642 – LEGACY DOC + 2× TAP FULLSCREEN
+   DOC je textový read-only fallback pro Word 97–2003.
+   Fullscreen kopíruje princip stabilního PDF vieweru: žádné browser
+   Fullscreen API, pouze maximalizace LubaNote vieweru ve viewportu.
+   ============================================================ */
+
+.documentsFileIcon.is-doc,
+.documentsDragPreviewIcon.is-doc,
+.documentsAddFileType.is-doc {
+  background: #315f8f;
+}
+
+.documentsDocxViewerFullscreenExit {
+  position: absolute;
+  z-index: 8;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 4px 18px rgba(0,0,0,.34);
+  backdrop-filter: blur(8px);
+  font: inherit;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.documentsDocxViewerFullscreenExit[hidden] {
+  display: none !important;
+}
+
+.documentsDocxViewer.is-fullscreen {
+  background: #000;
+}
+
+.documentsDocxViewer.is-fullscreen .documentsDocxViewerHeader {
+  display: none !important;
+}
+
+.documentsDocxViewer.is-fullscreen .documentsDocxViewerBody {
+  padding: 0;
+  background: #111;
+}
+
+.documentsDocxViewer.is-fullscreen .documentsDocxViewerContent {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.documentsDocxViewerContent.is-legacy-doc {
+  padding: clamp(18px, 4.4vw, 38px);
+}
+
+.documentsLegacyDocText {
+  margin: 0;
+  color: #202124;
+  font: inherit;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  line-height: 1.58;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+/* Dvojtap obsluhuje LubaNote; nativní browser double-tap zoom proto vypínáme,
+   běžný scroll a pinch zoom zůstávají povolené. */
+.documentsDocxViewerBody {
+  touch-action: manipulation;
+}

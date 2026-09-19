@@ -17,7 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260919-main-nav-documents-633">
-  <link rel="stylesheet" href="documents.css?v=20260919-docx-readonly-641">
+  <link rel="stylesheet" href="documents.css?v=20260919-doc-viewer-642">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -580,6 +580,7 @@
           <button id="documentsFilterAll" class="documentsFileFilter active" type="button">Vše</button>
           <button id="documentsFilterPdf" class="documentsFileFilter" type="button">PDF</button>
           <button id="documentsFilterDocx" class="documentsFileFilter" type="button">DOCX</button>
+          <button id="documentsFilterDoc" class="documentsFileFilter" type="button">DOC</button>
           <button id="documentsTrashButton" class="documentsTrashButton documentsFileFilter" type="button">🗑️ Koš<span id="documentsTrashCount"></span></button>
         </div>
       </div>
@@ -2168,7 +2169,8 @@
 
   <!-- Otevřít / Uložit jako – soubory přímo z editoru -->
   <script src="editorDocuments.js?v=20260919-pdf-modal-balanced-632a"></script>
-  <script src="documents.js?v=20260919-docx-readonly-641"></script>
+  <script src="legacyDocReader.js?v=20260919-doc-viewer-642"></script>
+  <script src="documents.js?v=20260919-doc-viewer-642"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>
