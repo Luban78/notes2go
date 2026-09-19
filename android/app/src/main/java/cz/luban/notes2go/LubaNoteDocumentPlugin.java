@@ -19,6 +19,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
+import android.print.LubaNotePrimePdfBridge;
 import android.print.PrintJob;
 import android.print.PrintManager;
 import android.provider.OpenableColumns;
@@ -721,6 +722,286 @@ public class LubaNoteDocumentPlugin extends Plugin {
       );
     } finally {
       vycistiCekajiciUlozeni();
+    }
+  }
+
+  /*
+   * PATCH 631 – PARALELNI PDF TEST BEZ SYSTEMOVEHO NAHLEDU
+   *
+   * DULEZITE: stabilni ulozPdf() nize zustava beze zmeny a dal pouziva
+   * PrintManager. Tato TEST cesta pouziva stejny WebView
+   * createPrintDocumentAdapter(), ale adapter zapisuje primo do PDF souboru
+   * ve Stazene/LubaNote. Pokud TEST selze, produkcni export tim neni dotcen.
+   */
+  @PluginMethod
+  public void ulozPdfPrimeTest(PluginCall call) {
+    String html = call.getString("html");
+
+    if (html == null || html.trim().isEmpty()) {
+      call.reject("Chybí obsah PDF dokumentu.");
+      return;
+    }
+
+    byte[] bajty = html.getBytes(StandardCharsets.UTF_8);
+
+    if (bajty.length > MAX_VELIKOST_SOUBORU) {
+      call.reject("Dokument je příliš velký. Maximum je 20 MB.");
+      return;
+    }
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      call.reject("Přímý PDF TEST vyžaduje Android 10 nebo novější.");
+      return;
+    }
+
+    if (pdfWebView != null || pdfPrintJob != null) {
+      call.reject("Předchozí PDF operace ještě není dokončená.");
+      return;
+    }
+
+    pdfNazev = normalizujPdfNazev(
+      call.getString(
+        "nazevSouboru",
+        "LubaNote-poznamka-TEST.pdf"
+      )
+    );
+    pdfTiskSpusten = false;
+
+    Activity aktivita = getActivity();
+
+    if (aktivita == null) {
+      call.reject("Android Activity není dostupná.");
+      return;
+    }
+
+    aktivita.runOnUiThread(() -> {
+      try {
+        pdfWebView = new WebView(aktivita);
+        pdfWebView.getSettings().setJavaScriptEnabled(true);
+        pdfWebView.getSettings().setLoadsImagesAutomatically(true);
+
+        pdfWebView.setWebViewClient(new WebViewClient() {
+          @Override
+          public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            cekejNaPdfObrazkyPrimeTest(call, 0);
+          }
+        });
+
+        pdfWebView.loadDataWithBaseURL(
+          "https://localhost/",
+          html,
+          "text/html",
+          "UTF-8",
+          null
+        );
+      } catch (Exception chyba) {
+        vycistiPdfTisk();
+        call.reject(
+          "Přímý PDF TEST se nepodařilo připravit.",
+          chyba
+        );
+      }
+    });
+  }
+
+  private void cekejNaPdfObrazkyPrimeTest(
+    PluginCall call,
+    int pokus
+  ) {
+    if (pdfWebView == null || pdfTiskSpusten) {
+      return;
+    }
+
+    String skript =
+      "(function(){" +
+        "try{" +
+          "return Array.from(document.images||[]).every(function(i){" +
+            "return i.complete;" +
+          "});" +
+        "}catch(e){return true;}" +
+      "})()";
+
+    pdfWebView.evaluateJavascript(
+      skript,
+      hodnota -> {
+        if (pdfWebView == null || pdfTiskSpusten) {
+          return;
+        }
+
+        boolean obrazkyHotove = "true".equals(hodnota);
+
+        if (obrazkyHotove || pokus >= 50) {
+          spustPdfPrimeAdapterTest(call);
+          return;
+        }
+
+        pdfWebView.postDelayed(
+          () -> cekejNaPdfObrazkyPrimeTest(call, pokus + 1),
+          100
+        );
+      }
+    );
+  }
+
+  private void spustPdfPrimeAdapterTest(PluginCall call) {
+    if (pdfWebView == null || pdfTiskSpusten) {
+      return;
+    }
+
+    pdfTiskSpusten = true;
+
+    Uri pripravenyCil = null;
+    ParcelFileDescriptor pripravenyDescriptor = null;
+    PrintDocumentAdapter pripravenyAdapter = null;
+
+    boolean naSirku = "landscape".equalsIgnoreCase(
+      call.getString("orientace", "portrait")
+    );
+
+    PrintAttributes.MediaSize velikostPapiru = naSirku
+      ? PrintAttributes.MediaSize.ISO_A4.asLandscape()
+      : PrintAttributes.MediaSize.ISO_A4.asPortrait();
+
+    final PrintAttributes atributy =
+      new PrintAttributes.Builder()
+        .setMediaSize(velikostPapiru)
+        .setResolution(
+          new PrintAttributes.Resolution(
+            "lubanote_pdf_test",
+            "LubaNote PDF TEST",
+            300,
+            300
+          )
+        )
+        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+        .build();
+
+    try {
+      pripravenyCil = vytvorPdfVeStazenych(pdfNazev);
+      pripravenyDescriptor = getContext()
+        .getContentResolver()
+        .openFileDescriptor(pripravenyCil, "w");
+
+      if (pripravenyDescriptor == null) {
+        throw new IOException(
+          "Android neotevřel cílový PDF TEST soubor."
+        );
+      }
+
+      pripravenyAdapter =
+        pdfWebView.createPrintDocumentAdapter(pdfNazev);
+    } catch (Exception chyba) {
+      zavriPdfPrimeTestDescriptor(pripravenyDescriptor);
+      zrusPdfVeStazenych(pripravenyCil);
+      vycistiPdfTisk();
+      call.reject(
+        "Přímý PDF TEST se nepodařilo připravit.",
+        chyba
+      );
+      return;
+    }
+
+    final Uri cil = pripravenyCil;
+    final ParcelFileDescriptor descriptor = pripravenyDescriptor;
+    final PrintDocumentAdapter adapter = pripravenyAdapter;
+
+    try {
+      /*
+       * Android SDK schovává konstruktory LayoutResultCallback a
+       * WriteResultCallback před běžnou aplikací. TEST bridge je proto
+       * záměrně izolovaný v samostatné třídě a volá se pouze odsud.
+       * Pokud ho konkrétní Android zablokuje, selže jen TEST – stabilní
+       * ulozPdf() přes PrintManager zůstává nedotčené.
+       */
+      LubaNotePrimePdfBridge.zapis(
+        adapter,
+        atributy,
+        descriptor,
+        new LubaNotePrimePdfBridge.Vysledek() {
+          @Override
+          public void hotovo(int pocetStran) {
+            dokoncitPdfPrimeAdapterTestUspech(
+              call,
+              descriptor,
+              cil,
+              pocetStran
+            );
+          }
+
+          @Override
+          public void chyba(String zprava) {
+            dokoncitPdfPrimeAdapterTestChyba(
+              call,
+              descriptor,
+              cil,
+              zprava
+            );
+          }
+        }
+      );
+    } catch (Throwable chyba) {
+      dokoncitPdfPrimeAdapterTestChyba(
+        call,
+        descriptor,
+        cil,
+        "Android zablokoval přímý PDF TEST bridge."
+      );
+    }
+  }
+
+  private void dokoncitPdfPrimeAdapterTestUspech(
+    PluginCall call,
+    ParcelFileDescriptor descriptor,
+    Uri cil,
+    int pocetStran
+  ) {
+    pdfHandler.post(() -> {
+      zavriPdfPrimeTestDescriptor(descriptor);
+      dokoncitPdfVeStazenych(cil);
+
+      JSObject odpoved = vytvorPdfUlozenoOdpoved(cil);
+      odpoved.put("started", false);
+      odpoved.put("test", true);
+      odpoved.put(
+        "pages",
+        pocetStran > 0 ? pocetStran : 0
+      );
+      call.resolve(odpoved);
+      vycistiPdfTisk();
+    });
+  }
+
+  private void dokoncitPdfPrimeAdapterTestChyba(
+    PluginCall call,
+    ParcelFileDescriptor descriptor,
+    Uri cil,
+    String zprava
+  ) {
+    pdfHandler.post(() -> {
+      zavriPdfPrimeTestDescriptor(descriptor);
+      zrusPdfVeStazenych(cil);
+      call.reject(
+        zprava == null || zprava.trim().isEmpty()
+          ? "Přímý PDF TEST selhal."
+          : zprava
+      );
+      vycistiPdfTisk();
+    });
+  }
+
+  private void zavriPdfPrimeTestDescriptor(
+    ParcelFileDescriptor descriptor
+  ) {
+    if (descriptor == null) {
+      return;
+    }
+
+    try {
+      descriptor.close();
+    } catch (Exception ignored) {
+      // Descriptor je jen výstup TEST cesty.
     }
   }
 

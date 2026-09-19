@@ -43,6 +43,7 @@
 
   let pdfUlozeniPrvky = null;
   let pdfUlozeniAkce = null;
+  let pdfPrimeTestAkce = null;
   let pdfNastaveniPrvky = null;
 
   function vychoziPdfNastaveni() {
@@ -931,6 +932,14 @@
           </div>
         </div>
 
+        <button type="button" class="pdfLubaDirectTest" hidden>
+          <span aria-hidden="true">🧪</span>
+          <span>
+            <strong>Přímé PDF TEST</strong>
+            <small>Stejný Android tiskový engine, ale bez systémového náhledu.</small>
+          </span>
+        </button>
+
         <div class="pdfLubaActions">
           <button type="button" class="pdfLubaSecondary pdfLubaCancel">Zrušit</button>
           <button type="button" class="pdfLubaPrimary pdfLubaConfirm">Uložit PDF</button>
@@ -948,6 +957,7 @@
       exportOptions: modal.querySelector(".pdfLubaExportOptions"),
       orientationButtons: [...modal.querySelectorAll("[data-pdf-orientation]")],
       marginButtons: [...modal.querySelectorAll("[data-pdf-margins]")],
+      test: modal.querySelector(".pdfLubaDirectTest"),
       cancel: modal.querySelector(".pdfLubaCancel"),
       confirm: modal.querySelector(".pdfLubaConfirm"),
       zpusob: "stazene",
@@ -958,6 +968,7 @@
     const zavrit = () => {
       modal.hidden = true;
       pdfUlozeniAkce = null;
+      pdfPrimeTestAkce = null;
     };
 
     prvky.cancel.addEventListener("click", zavrit);
@@ -1015,6 +1026,43 @@
 
     prvky.nastavExportTlacitka = nastavExportTlacitka;
 
+    prvky.test.addEventListener("click", async () => {
+      const akce = pdfPrimeTestAkce;
+      if (typeof akce !== "function" || prvky.test.disabled) {
+        return;
+      }
+
+      const nazev = normalizujNazevPdf(prvky.input.value);
+      const exportVolby = {
+        orientace: prvky.exportOrientace === "landscape" ? "landscape" : "portrait",
+        okraje: prvky.exportOkraje === "narrow" ? "narrow" : "normal"
+      };
+
+      const nastaveni = nactiPdfNastaveni();
+      nastaveni.exportOrientace = exportVolby.orientace;
+      nastaveni.exportOkraje = exportVolby.okraje;
+      ulozPdfNastaveni(nastaveni);
+
+      const puvodniHtml = prvky.test.innerHTML;
+      prvky.test.disabled = true;
+      prvky.test.innerHTML = "<span aria-hidden=\"true\">⏳</span><span><strong>Generuji PDF TEST…</strong><small>Systémový náhled se nemá otevřít.</small></span>";
+
+      try {
+        const hotovo = await akce(nazev, exportVolby);
+        if (hotovo !== false) {
+          modal.hidden = true;
+          pdfUlozeniAkce = null;
+          pdfPrimeTestAkce = null;
+        }
+      } catch (error) {
+        console.error("Přímý PDF TEST selhal:", error);
+        zobrazChybu("PDF TEST", "Přímé PDF se nepodařilo vytvořit.");
+      } finally {
+        prvky.test.disabled = false;
+        prvky.test.innerHTML = puvodniHtml;
+      }
+    });
+
     prvky.confirm.addEventListener("click", async () => {
       const nazev = normalizujNazevPdf(prvky.input.value);
       const zpusob = prvky.zpusob === "vybrat" ? "vybrat" : "stazene";
@@ -1032,6 +1080,7 @@
       prvky.input.value = nazev;
       modal.hidden = true;
       pdfUlozeniAkce = null;
+      pdfPrimeTestAkce = null;
 
       if (typeof akce === "function") {
         await akce(nazev, zpusob, exportVolby);
@@ -1056,8 +1105,10 @@
   function otevriPdfUlozeniModal({
     nazevSouboru = "",
     poPotvrzeni = null,
+    poPrimePdfTest = null,
     povolitVolbuMista = true,
     povolitNastaveniExportu = false,
+    povolitPrimePdfTest = false,
     infoText = ""
   } = {}) {
     const vychoziNazev = nazevSouboru ||
@@ -1109,6 +1160,14 @@
     if (infoText) {
       prvky.info.textContent = infoText;
     }
+
+    prvky.test.hidden = !(
+      povolitPrimePdfTest === true &&
+      typeof poPrimePdfTest === "function"
+    );
+    pdfPrimeTestAkce = !prvky.test.hidden
+      ? poPrimePdfTest
+      : null;
 
     pdfUlozeniAkce = typeof poPotvrzeni === "function"
       ? poPotvrzeni
@@ -1752,7 +1811,32 @@
           nazevSouboru,
           povolitVolbuMista: false,
           povolitNastaveniExportu: true,
-          infoText: "Název a vzhled nastavíš tady. Cílové místo vybere Android v dalším kroku.",
+          povolitPrimePdfTest: typeof plugin.ulozPdfPrimeTest === "function",
+          infoText: "Stabilní Uložit PDF zůstává beze změny. TEST zkusí přímé uložení bez systémového náhledu.",
+          poPrimePdfTest: async (nazev, exportVolby) => {
+            const html = vytvorPdfHtmlDokument(data, exportVolby);
+            const nazevTest = /-TEST\.pdf$/i.test(nazev)
+              ? nazev
+              : nazev.replace(/\.pdf$/i, "-TEST.pdf");
+            const vysledek = await plugin.ulozPdfPrimeTest({
+              html,
+              nazevSouboru: nazevTest,
+              orientace: exportVolby.orientace
+            });
+
+            if (vysledek?.saved !== true) {
+              return false;
+            }
+
+            if (typeof zobrazZpravuAplikace === "function") {
+              zobrazZpravuAplikace(
+                "PDF TEST",
+                "PDF bylo vytvořeno bez systémového náhledu a uloženo do Stažené/LubaNote."
+              );
+            }
+
+            return true;
+          },
           poPotvrzeni: async (nazev, _zpusob, exportVolby) => {
             try {
               const html = vytvorPdfHtmlDokument(data, exportVolby);

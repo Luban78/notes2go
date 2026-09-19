@@ -473,6 +473,49 @@ body {
   background: var(--color-accent);
 }
 
+.pdfLubaDirectTest {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  color: var(--color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pdfLubaDirectTest > span:first-child {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.pdfLubaDirectTest > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pdfLubaDirectTest strong {
+  color: var(--color-accent-text);
+  font-size: 14px;
+}
+
+.pdfLubaDirectTest small {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pdfLubaDirectTest:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
 .pdfLubaActions {
   display: flex;
   justify-content: flex-end;
