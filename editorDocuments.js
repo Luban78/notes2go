@@ -1812,7 +1812,7 @@
           povolitVolbuMista: false,
           povolitNastaveniExportu: true,
           povolitPrimePdfTest: typeof plugin.ulozPdfPrimeTest === "function",
-          infoText: "Stabilní Uložit PDF zůstává beze změny. TEST zkusí přímé uložení bez systémového náhledu.",
+          infoText: "TEST uloží stejné PDF přímo, bez systémového náhledu.",
           poPrimePdfTest: async (nazev, exportVolby) => {
             const html = vytvorPdfHtmlDokument(data, exportVolby);
             const nazevTest = /-TEST\.pdf$/i.test(nazev)

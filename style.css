@@ -11617,90 +11617,91 @@ body.lubaCardDragMode .app {
 }
 
 /* =============================================================
- * PATCH 632 – PDF SAVE MODAL COMPACT MOBILE
- * Jen rozložení PDF modalu. Funkční export 631 se NEMĚNÍ.
- * Cíl: na Androidu udržet celý modal v jednom viewportu a scroll
- * ponechat pouze jako bezpečnostní zálohu pro extrémně malé displeje.
+ * PATCH 632A – PDF SAVE MODAL BALANCED MOBILE
+ * Funkční export 631 se NEMĚNÍ. Po 632 vracíme pohodlnější rozměry
+ * a místo mačkání dvou voleb ukládání vedle sebe je skládáme pod sebe.
+ * Cíl: čitelné ovládání + stále celý modal na běžném telefonu.
  * ============================================================= */
 @media (max-width: 600px), (max-height: 900px) {
   .pdfLubaModal {
     align-items: flex-start;
-    padding: 6px;
+    padding: 8px;
   }
 
   .pdfLubaDialog {
     width: min(100%, 430px);
-    max-height: calc(100dvh - 12px);
-    margin-top: 6px;
-    padding: 12px 12px 10px;
-    border-radius: 18px;
+    max-height: calc(100dvh - 16px);
+    margin-top: 8px;
+    padding: 15px 14px 13px;
+    border-radius: 20px;
   }
 
   .pdfLubaDialogHeader {
     align-items: center;
-    gap: 9px;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
   .pdfLubaDialogIcon {
-    flex-basis: 36px;
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
-    font-size: 20px;
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 22px;
   }
 
   .pdfLubaDialog h3 {
-    margin: 0 0 2px;
-    font-size: 1.08rem;
+    margin: 0 0 3px;
+    font-size: 1.2rem;
   }
 
   .pdfLubaDialog p {
-    font-size: 11.5px;
-    line-height: 1.25;
+    font-size: 12.5px;
+    line-height: 1.32;
   }
 
   .pdfLubaField {
-    gap: 4px;
+    gap: 5px;
   }
 
   .pdfLubaField > span,
   .pdfLubaSaveModeTitle {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .pdfLubaFileName {
-    min-height: 40px;
-    padding: 0 11px;
-    border-radius: 12px;
-    font-size: 14px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 13px;
+    font-size: 15px;
   }
 
+  /* Na úzkém mobilu necpeme dvě cílová umístění do půlky šířky. */
   .pdfLubaSaveMode {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 6px;
-    margin-top: 8px;
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-top: 10px;
   }
 
   .pdfLubaSaveMode > .pdfLubaSaveModeTitle {
-    grid-column: 1 / -1;
+    grid-column: 1;
   }
 
   .pdfLubaSaveModeRow {
-    min-height: 50px;
-    grid-template-columns: 26px minmax(0, 1fr) 18px;
-    gap: 6px;
-    padding: 6px 7px;
-    border-radius: 12px;
+    min-height: 52px;
+    grid-template-columns: 30px minmax(0, 1fr) 22px;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 13px;
   }
 
   .pdfLubaSaveModeIcon {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .pdfLubaSaveModeRow strong {
-    font-size: 12.25px;
-    line-height: 1.15;
+    font-size: 13.5px;
+    line-height: 1.2;
   }
 
   .pdfLubaSaveModeRow small {
@@ -11708,52 +11709,52 @@ body.lubaCardDragMode .app {
   }
 
   .pdfLubaRadio {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
   }
 
   .pdfLubaRadio i {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
   }
 
   .pdfLubaExportOptions {
-    gap: 7px;
-    margin-top: 8px;
+    gap: 8px;
+    margin-top: 10px;
   }
 
   .pdfLubaExportOption {
-    gap: 4px;
-  }
-
-  .pdfLubaExportOption > span {
-    font-size: 11px;
-  }
-
-  .pdfLubaSegments {
     gap: 5px;
   }
 
-  .pdfLubaSegments button {
-    min-height: 36px;
-    padding: 0 8px;
-    border-radius: 10px;
+  .pdfLubaExportOption > span {
     font-size: 12px;
   }
 
+  .pdfLubaSegments {
+    gap: 6px;
+  }
+
+  .pdfLubaSegments button {
+    min-height: 40px;
+    padding: 0 9px;
+    border-radius: 11px;
+    font-size: 13px;
+  }
+
   .pdfLubaDirectTest {
-    gap: 8px;
-    margin-top: 8px;
-    padding: 7px 9px;
-    border-radius: 12px;
+    gap: 9px;
+    margin-top: 10px;
+    padding: 9px 11px;
+    border-radius: 13px;
   }
 
   .pdfLubaDirectTest > span:first-child {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .pdfLubaDirectTest strong {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .pdfLubaDirectTest small {
@@ -11761,14 +11762,14 @@ body.lubaCardDragMode .app {
   }
 
   .pdfLubaActions {
-    gap: 7px;
-    margin-top: 10px;
+    gap: 8px;
+    margin-top: 12px;
   }
 
   .pdfLubaActions button {
-    min-height: 38px;
-    padding: 0 12px;
-    border-radius: 12px;
-    font-size: 13px;
+    min-height: 42px;
+    padding: 0 13px;
+    border-radius: 13px;
+    font-size: 14px;
   }
 }
