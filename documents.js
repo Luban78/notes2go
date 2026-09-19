@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.7 / DOC + DOUBLE-TAP FULLSCREEN (PATCH 642)
+   LUBANOTE – DOKUMENTY V1.8 / EPUB READER (PATCH 643)
    ------------------------------------------------------------
    Lokální knihovna Dokumentů:
    - složky, řazení, long-press přesuny, Koš, hledání a filtry
@@ -9,6 +9,7 @@
    - 2× tap v DOCX/DOC vieweru přepne maximalizované zobrazení
    - DOCX: nadpisy, odstavce, formát textu, tabulky, odkazy a obrázky
    - DOC: čitelný text bez maker/OLE a bez garance původního layoutu
+   - EPUB import + vlastní lokální LubaReader, kapitoly a zapamatování pozice
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -27,10 +28,12 @@
   const MAX_PDF_BYTES = 100 * 1024 * 1024;
   const MAX_DOCX_BYTES = 20 * 1024 * 1024;
   const MAX_DOC_BYTES = 24 * 1024 * 1024;
+  const MAX_EPUB_BYTES = 100 * 1024 * 1024;
   const MAX_DOCX_PART_BYTES = 32 * 1024 * 1024;
   const MAX_DOCX_ZIP_ENTRIES = 5000;
   const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const DOC_MIME = 'application/msword';
+  const EPUB_MIME = 'application/epub+zip';
   const TRASH_VIEW = '__documents_trash__';
 
   let dbPromise = null;
@@ -63,6 +66,16 @@
   let docxViewerObjectUrls = [];
   let docxAndroidBackZapojen = false;
   let docxViewerFullscreen = false;
+
+  let epubViewerPrvky = null;
+  let epubViewerOtevren = false;
+  let epubViewerFullscreen = false;
+  let epubAktualniKniha = null;
+  let epubAktualniRecordId = null;
+  let epubAktualniKapitola = 0;
+  let epubKapitolaObjectUrls = [];
+  let epubUlozPoziciTimer = null;
+  let epubListCoverUrls = [];
 
   function jeAndroid() {
     try {
@@ -126,9 +139,16 @@
     return mime === DOC_MIME || nazev.endsWith('.doc');
   }
 
+  function jeEpubSoubor(soubor) {
+    const mime = String(soubor?.mime || '').toLowerCase();
+    const nazev = String(soubor?.name || '').toLowerCase();
+    return mime === EPUB_MIME || nazev.endsWith('.epub');
+  }
+
   function typSouboru(soubor) {
     if (jeDocxSoubor(soubor)) return 'docx';
     if (jeDocSoubor(soubor)) return 'doc';
+    if (jeEpubSoubor(soubor)) return 'epub';
     if (jePdfSoubor(soubor)) return 'pdf';
     return 'other';
   }
@@ -137,6 +157,7 @@
     const typ = typSouboru(soubor);
     if (typ === 'docx') return 'DOCX';
     if (typ === 'doc') return 'DOC';
+    if (typ === 'epub') return 'EPUB';
     if (typ === 'pdf') return 'PDF';
     return 'SOUBOR';
   }
@@ -145,6 +166,7 @@
     const typ = typSouboru(soubor);
     if (typ === 'docx') return 'docx';
     if (typ === 'doc') return 'doc';
+    if (typ === 'epub') return 'epub';
     return 'pdf';
   }
 
@@ -173,7 +195,7 @@
         ? folderMap.get(soubor.trashFolderId) || ''
         : '';
 
-    return normalizujHledani(`${soubor.name || ''} ${slozka}`).includes(dotaz);
+    return normalizujHledani(`${soubor.name || ''} ${soubor.epubTitle || ''} ${soubor.epubAuthor || ''} ${slozka}`).includes(dotaz);
   }
 
   function requestPromise(request) {
@@ -326,7 +348,7 @@
 
   function normalizujNazevSouboru(value, pripona = 'pdf') {
     let nazev = String(value || '').trim().replace(/\s+/g, ' ');
-    const ext = ['docx', 'doc'].includes(pripona) ? pripona : 'pdf';
+    const ext = ['docx', 'doc', 'epub'].includes(pripona) ? pripona : 'pdf';
     if (!nazev) return '';
 
     const regex = new RegExp(`\\.${ext}$`, 'i');
@@ -335,7 +357,7 @@
       return zaklad ? `${zaklad}.${ext}` : '';
     }
 
-    nazev = nazev.replace(/\.(pdf|docx|doc)$/i, '').trim().slice(0, 116);
+    nazev = nazev.replace(/\.(pdf|docx|doc|epub)$/i, '').trim().slice(0, 116);
     return nazev ? `${nazev}.${ext}` : '';
   }
 
@@ -479,6 +501,8 @@
       nahledIkony.textContent = zdrojIkony?.textContent?.trim() || 'DOC';
       nahledIkony.classList.toggle('is-docx', zdrojIkony?.classList.contains('is-docx') === true);
       nahledIkony.classList.toggle('is-doc', zdrojIkony?.classList.contains('is-doc') === true);
+      nahledIkony.classList.toggle('is-epub', zdrojIkony?.classList.contains('is-epub') === true);
+      if (zdrojIkony?.classList.contains('is-epub')) nahledIkony.textContent = 'EPUB';
     }
     nahled.classList.remove('is-active', 'has-target');
     nahled.hidden = false;
@@ -998,6 +1022,7 @@
       filterPdf: screen.querySelector('#documentsFilterPdf'),
       filterDocx: screen.querySelector('#documentsFilterDocx'),
       filterDoc: screen.querySelector('#documentsFilterDoc'),
+      filterEpub: screen.querySelector('#documentsFilterEpub'),
       trash: screen.querySelector('#documentsTrashButton'),
       trashCount: screen.querySelector('#documentsTrashCount')
     };
@@ -1484,6 +1509,10 @@
             <span class="documentsAddFileType is-doc">DOC</span>
             <span><strong>Word 97–2003 DOC</strong><small>lokální čtení textu starého formátu</small></span>
           </button>
+          <button type="button" class="documentsAddFileChoice documentsAddEpubChoice">
+            <span class="documentsAddFileType is-epub">EPUB</span>
+            <span><strong>Elektronická kniha EPUB</strong><small>otevře se v lokálním LubaReaderu</small></span>
+          </button>
         </div>
         <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">Zrušit</button>
       </section>`;
@@ -1492,6 +1521,7 @@
     const pdf = modal.querySelector('.documentsAddPdfChoice');
     const docx = modal.querySelector('.documentsAddDocxChoice');
     const doc = modal.querySelector('.documentsAddDocChoice');
+    const epub = modal.querySelector('.documentsAddEpubChoice');
     const cancel = modal.querySelector('.documentsAddFileCancel');
 
     const zavrit = () => {
@@ -1516,6 +1546,11 @@
     doc.addEventListener('click', () => {
       zavrit();
       void pridatDoc();
+    });
+
+    epub.addEventListener('click', () => {
+      zavrit();
+      void pridatEpub();
     });
 
     modal.otevrit = () => {
@@ -1743,6 +1778,105 @@
     } catch (error) {
       console.error('Import DOC selhal:', error);
       zobrazChybu('Dokumenty', 'DOC se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
+  }
+
+  async function vyberEpubWeb() {
+    return await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = `${EPUB_MIME},.epub`;
+      input.hidden = true;
+
+      const uklid = () => input.remove();
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0] || null;
+        if (!file) {
+          uklid();
+          resolve(null);
+          return;
+        }
+
+        const jeEpub = /\.epub$/i.test(file.name || '') || file.type === EPUB_MIME;
+        if (!jeEpub) {
+          uklid();
+          zobrazChybu('Dokumenty', 'Vybraný soubor není EPUB.');
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_EPUB_BYTES) {
+          uklid();
+          zobrazChybu('Dokumenty', 'EPUB je příliš velký. Maximální velikost je 100 MB.');
+          resolve(null);
+          return;
+        }
+
+        if (!window.LubaNoteEpubReader?.inspect) {
+          uklid();
+          zobrazChybu('Dokumenty', 'EPUB čtečka není načtená.');
+          resolve(null);
+          return;
+        }
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const info = await window.LubaNoteEpubReader.inspect(arrayBuffer);
+          const record = {
+            id: id(),
+            name: normalizujNazevSouboru(file.name || 'kniha.epub', 'epub') || 'kniha.epub',
+            mime: EPUB_MIME,
+            size: file.size,
+            folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
+            storageMode: 'web',
+            blob: file,
+            epubTitle: String(info?.title || '').trim(),
+            epubAuthor: String(info?.author || '').trim(),
+            epubCoverBlob: info?.coverBlob instanceof Blob ? info.coverBlob : null,
+            epubChapterCount: Number(info?.chapterCount) || 0,
+            epubChapterIndex: 0,
+            epubScrollRatio: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+
+          uklid();
+          resolve(record);
+        } catch (error) {
+          uklid();
+          console.error('Kontrola EPUB selhala:', error);
+          zobrazChybu('Dokumenty', error?.message || 'EPUB se nepodařilo načíst.');
+          resolve(null);
+        }
+      }, { once: true });
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function pridatEpub() {
+    const prvky = zajistiPrvky();
+    if (!prvky) return;
+
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+
+    try {
+      const record = await vyberEpubWeb();
+      if (!record) return;
+
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      const titul = record.epubTitle || record.name;
+      zobrazZpravu('Dokumenty', `EPUB „${titul}“ byl přidán.`);
+    } catch (error) {
+      console.error('Import EPUB selhal:', error);
+      zobrazChybu('Dokumenty', 'EPUB se nepodařilo přidat.');
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2225,7 +2359,6 @@
           <small>WORD · POUZE ČTENÍ</small>
         </div>
       </header>
-      <button type="button" class="documentsDocxViewerFullscreenExit" aria-label="Ukončit celou obrazovku" hidden>‹</button>
       <main class="documentsDocxViewerBody">
         <div class="documentsDocxViewerLoading" hidden>
           <span class="documentsDocxSpinner" aria-hidden="true"></span>
@@ -2236,7 +2369,6 @@
 
     document.body.appendChild(overlay);
     const close = overlay.querySelector('.documentsDocxViewerClose');
-    const fullscreenExit = overlay.querySelector('.documentsDocxViewerFullscreenExit');
     const title = overlay.querySelector('.documentsDocxViewerTitle strong');
     const subtitle = overlay.querySelector('.documentsDocxViewerTitle small');
     const body = overlay.querySelector('.documentsDocxViewerBody');
@@ -2245,7 +2377,6 @@
     const content = overlay.querySelector('.documentsDocxViewerContent');
 
     close.addEventListener('click', zavriDocxViewer);
-    fullscreenExit.addEventListener('click', () => nastavDocViewerFullscreen(false));
 
     /*
      * PATCH 642 – stejné gesto jako u PDF vieweru:
@@ -2311,7 +2442,6 @@
     docxViewerPrvky = {
       overlay,
       close,
-      fullscreenExit,
       title,
       subtitle,
       body,
@@ -2326,7 +2456,6 @@
     if (!docxViewerPrvky) return;
     docxViewerFullscreen = ano === true;
     docxViewerPrvky.overlay.classList.toggle('is-fullscreen', docxViewerFullscreen);
-    docxViewerPrvky.fullscreenExit.hidden = !docxViewerFullscreen;
   }
 
   function zavriDocxViewer() {
@@ -2410,11 +2539,292 @@
     }
   }
 
+  function uvolniEpubKapitolaUrls() {
+    for (const url of epubKapitolaObjectUrls) {
+      try { URL.revokeObjectURL(url); } catch (_error) {}
+    }
+    epubKapitolaObjectUrls = [];
+  }
+
+  function nastavEpubFullscreen(ano) {
+    if (!epubViewerPrvky) return;
+    epubViewerFullscreen = ano === true;
+    epubViewerPrvky.overlay.classList.toggle('is-fullscreen', epubViewerFullscreen);
+  }
+
+  async function ulozEpubPoziciTed() {
+    if (!epubViewerOtevren || !epubAktualniRecordId || !epubViewerPrvky) return;
+    const recordId = epubAktualniRecordId;
+    const chapterIndex = epubAktualniKapitola;
+    const maxScroll = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
+    const scrollRatio = maxScroll > 0 ? epubViewerPrvky.body.scrollTop / maxScroll : 0;
+    try {
+      const record = await nactiSoubor(recordId);
+      if (!record || !jeEpubSoubor(record)) return;
+      record.epubChapterIndex = chapterIndex;
+      record.epubScrollRatio = Math.max(0, Math.min(1, Number(scrollRatio) || 0));
+      record.epubLastReadAt = Date.now();
+      await ulozDoStore(STORE_FILES, record);
+    } catch (error) {
+      console.warn('Uložení pozice EPUB selhalo:', error);
+    }
+  }
+
+  function naplanujUlozeniEpubPozice() {
+    clearTimeout(epubUlozPoziciTimer);
+    epubUlozPoziciTimer = setTimeout(() => {
+      epubUlozPoziciTimer = null;
+      void ulozEpubPoziciTed();
+    }, 420);
+  }
+
+  function zavriEpubViewer() {
+    if (!epubViewerPrvky) return;
+    clearTimeout(epubUlozPoziciTimer);
+    epubUlozPoziciTimer = null;
+    if (epubViewerOtevren) void ulozEpubPoziciTed();
+    epubViewerOtevren = false;
+    nastavEpubFullscreen(false);
+    epubViewerPrvky.overlay.hidden = true;
+    epubViewerPrvky.toc.hidden = true;
+    epubViewerPrvky.loading.hidden = true;
+    epubViewerPrvky.content.innerHTML = '';
+    document.body.classList.remove('documents-epub-viewer-open');
+    uvolniEpubKapitolaUrls();
+    epubAktualniKniha = null;
+    epubAktualniRecordId = null;
+    epubAktualniKapitola = 0;
+  }
+
+  async function zobrazEpubKapitolu(index, options = {}) {
+    if (!epubAktualniKniha || !epubViewerPrvky) return;
+    const pocet = epubAktualniKniha.chapters.length;
+    if (!pocet) return;
+    const cil = Math.max(0, Math.min(pocet - 1, Number(index) || 0));
+    const ratio = Math.max(0, Math.min(1, Number(options.ratio) || 0));
+    const fragment = String(options.fragment || '');
+
+    epubViewerPrvky.loading.hidden = false;
+    epubViewerPrvky.loadingText.textContent = 'Otevírám kapitolu…';
+    uvolniEpubKapitolaUrls();
+
+    const rendered = await epubAktualniKniha.renderChapter(cil);
+    epubAktualniKapitola = rendered.index;
+    epubKapitolaObjectUrls = rendered.objectUrls || [];
+    epubViewerPrvky.content.innerHTML = rendered.html || '<p class="documentsEpubEmpty">Kapitola neobsahuje zobrazitelný text.</p>';
+    epubViewerPrvky.chapter.textContent = rendered.chapter?.title || `Kapitola ${epubAktualniKapitola + 1}`;
+    epubViewerPrvky.counter.textContent = `${epubAktualniKapitola + 1} / ${pocet}`;
+    epubViewerPrvky.prev.disabled = epubAktualniKapitola <= 0;
+    epubViewerPrvky.next.disabled = epubAktualniKapitola >= pocet - 1;
+    epubViewerPrvky.loading.hidden = true;
+
+    requestAnimationFrame(() => {
+      if (!epubViewerPrvky || !epubViewerOtevren) return;
+      if (fragment) {
+        let cilovy = null;
+        try { cilovy = epubViewerPrvky.content.querySelector(`#${CSS.escape(fragment)}`); } catch (_error) {}
+        if (cilovy) {
+          cilovy.scrollIntoView({ block: 'start' });
+        } else {
+          epubViewerPrvky.body.scrollTop = 0;
+        }
+      } else if (ratio > 0) {
+        const nastav = () => {
+          const maxScroll = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
+          epubViewerPrvky.body.scrollTop = maxScroll * ratio;
+        };
+        nastav();
+        setTimeout(nastav, 120);
+      } else {
+        epubViewerPrvky.body.scrollTop = 0;
+      }
+    });
+
+    naplanujUlozeniEpubPozice();
+  }
+
+  function vykresliEpubObsah() {
+    if (!epubViewerPrvky || !epubAktualniKniha) return;
+    epubViewerPrvky.tocList.innerHTML = epubAktualniKniha.chapters.map((chapter, index) => `
+      <button type="button" class="documentsEpubTocItem${index === epubAktualniKapitola ? ' active' : ''}" data-epub-chapter="${index}">
+        <span>${index + 1}</span><strong>${esc(chapter.title || `Kapitola ${index + 1}`)}</strong>
+      </button>`).join('');
+
+    epubViewerPrvky.tocList.querySelectorAll('[data-epub-chapter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.epubChapter);
+        epubViewerPrvky.toc.hidden = true;
+        void zobrazEpubKapitolu(index, { ratio: 0 });
+      });
+    });
+  }
+
+  function zajistiEpubViewer() {
+    if (epubViewerPrvky) return epubViewerPrvky;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'documentsEpubViewer';
+    overlay.className = 'documentsEpubViewer';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <header class="documentsEpubHeader">
+        <button type="button" class="documentsEpubClose" aria-label="Zavřít knihu">‹</button>
+        <div class="documentsEpubTitle">
+          <strong></strong>
+          <small class="documentsEpubAuthor"></small>
+          <span class="documentsEpubChapter"></span>
+        </div>
+        <button type="button" class="documentsEpubTocButton" aria-label="Obsah knihy" title="Obsah">☰</button>
+      </header>
+      <main class="documentsEpubBody">
+        <div class="documentsEpubLoading" hidden>
+          <span class="documentsDocxSpinner" aria-hidden="true"></span>
+          <strong>Otevírám EPUB…</strong>
+        </div>
+        <article class="documentsEpubContent"></article>
+      </main>
+      <footer class="documentsEpubNav">
+        <button type="button" class="documentsEpubPrev">‹ Předchozí</button>
+        <span class="documentsEpubCounter"></span>
+        <button type="button" class="documentsEpubNext">Další ›</button>
+      </footer>
+      <div class="documentsEpubToc" hidden>
+        <section class="documentsEpubTocPanel" role="dialog" aria-modal="true" aria-label="Obsah knihy">
+          <div class="documentsEpubTocHeader"><strong>Obsah</strong><button type="button" class="documentsEpubTocClose" aria-label="Zavřít obsah">×</button></div>
+          <div class="documentsEpubTocList"></div>
+        </section>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    const close = overlay.querySelector('.documentsEpubClose');
+    const title = overlay.querySelector('.documentsEpubTitle strong');
+    const author = overlay.querySelector('.documentsEpubAuthor');
+    const chapter = overlay.querySelector('.documentsEpubChapter');
+    const tocButton = overlay.querySelector('.documentsEpubTocButton');
+    const body = overlay.querySelector('.documentsEpubBody');
+    const loading = overlay.querySelector('.documentsEpubLoading');
+    const loadingText = overlay.querySelector('.documentsEpubLoading strong');
+    const content = overlay.querySelector('.documentsEpubContent');
+    const prev = overlay.querySelector('.documentsEpubPrev');
+    const next = overlay.querySelector('.documentsEpubNext');
+    const counter = overlay.querySelector('.documentsEpubCounter');
+    const toc = overlay.querySelector('.documentsEpubToc');
+    const tocList = overlay.querySelector('.documentsEpubTocList');
+    const tocClose = overlay.querySelector('.documentsEpubTocClose');
+
+    close.addEventListener('click', zavriEpubViewer);
+    prev.addEventListener('click', () => void zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 0 }));
+    next.addEventListener('click', () => void zobrazEpubKapitolu(epubAktualniKapitola + 1, { ratio: 0 }));
+    tocButton.addEventListener('click', () => {
+      vykresliEpubObsah();
+      toc.hidden = false;
+    });
+    tocClose.addEventListener('click', () => { toc.hidden = true; });
+    toc.addEventListener('pointerdown', (event) => {
+      if (event.target === toc) toc.hidden = true;
+    });
+
+    body.addEventListener('scroll', naplanujUlozeniEpubPozice, { passive: true });
+
+    content.addEventListener('click', (event) => {
+      const link = event.target.closest?.('a[data-epub-link]');
+      if (!link || !epubAktualniKniha) return;
+      event.preventDefault();
+      const current = epubAktualniKniha.chapters[epubAktualniKapitola]?.href || '';
+      const cil = epubAktualniKniha.resolveLink(link.dataset.epubLink, current);
+      if (cil.index < 0) return;
+      if (cil.index === epubAktualniKapitola && cil.fragment) {
+        let el = null;
+        try { el = content.querySelector(`#${CSS.escape(cil.fragment)}`); } catch (_error) {}
+        el?.scrollIntoView?.({ block: 'start' });
+        return;
+      }
+      void zobrazEpubKapitolu(cil.index, { ratio: 0, fragment: cil.fragment });
+    });
+
+    // Stejný 2× tap fullscreen jako PDF/DOCX/DOC; ve fullscreenu není šipka.
+    let pointerTap = null;
+    let posledniTap = null;
+    body.addEventListener('pointerdown', (event) => {
+      if (!epubViewerOtevren || event.pointerType !== 'touch') return;
+      if (event.target.closest?.('a,button')) return;
+      pointerTap = { id: event.pointerId, x: event.clientX, y: event.clientY, cas: performance.now(), pohyb: false };
+    });
+    body.addEventListener('pointermove', (event) => {
+      if (!pointerTap || pointerTap.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - pointerTap.x, event.clientY - pointerTap.y) > 14) pointerTap.pohyb = true;
+    });
+    body.addEventListener('pointercancel', () => { pointerTap = null; });
+    body.addEventListener('pointerup', (event) => {
+      if (!pointerTap || pointerTap.id !== event.pointerId || pointerTap.pohyb || performance.now() - pointerTap.cas > 320) {
+        pointerTap = null;
+        return;
+      }
+      const ted = performance.now();
+      const jeDvojtap = Boolean(
+        posledniTap && ted - posledniTap.cas <= 360 && Math.hypot(event.clientX - posledniTap.x, event.clientY - posledniTap.y) <= 38
+      );
+      if (jeDvojtap) {
+        posledniTap = null;
+        if (event.cancelable) event.preventDefault();
+        nastavEpubFullscreen(!epubViewerFullscreen);
+      } else {
+        posledniTap = { x: event.clientX, y: event.clientY, cas: ted };
+      }
+      pointerTap = null;
+    });
+
+    epubViewerPrvky = { overlay, close, title, author, chapter, tocButton, body, loading, loadingText, content, prev, next, counter, toc, tocList, tocClose };
+    return epubViewerPrvky;
+  }
+
+  async function otevriEpubViewer(record) {
+    if (!(record?.blob instanceof Blob)) throw new Error('EPUB data nejsou dostupná.');
+    if (!window.LubaNoteEpubReader?.open) throw new Error('EPUB čtečka není načtená.');
+
+    const prvky = zajistiEpubViewer();
+    zavriDocxViewer();
+    uvolniEpubKapitolaUrls();
+    nastavEpubFullscreen(false);
+    prvky.overlay.hidden = false;
+    prvky.loading.hidden = false;
+    prvky.loadingText.textContent = 'Otevírám EPUB…';
+    prvky.content.innerHTML = '';
+    epubViewerOtevren = true;
+    epubAktualniRecordId = record.id;
+    document.body.classList.add('documents-epub-viewer-open');
+
+    try {
+      const arrayBuffer = await record.blob.arrayBuffer();
+      epubAktualniKniha = await window.LubaNoteEpubReader.open(arrayBuffer);
+      prvky.title.textContent = record.epubTitle || epubAktualniKniha.title || record.name || 'Kniha';
+      prvky.author.textContent = record.epubAuthor || epubAktualniKniha.author || 'EPUB · LubaReader';
+      vykresliEpubObsah();
+      const index = Math.max(0, Math.min(epubAktualniKniha.chapters.length - 1, Number(record.epubChapterIndex) || 0));
+      const ratio = Math.max(0, Math.min(1, Number(record.epubScrollRatio) || 0));
+      await zobrazEpubKapitolu(index, { ratio });
+    } catch (error) {
+      prvky.loading.hidden = true;
+      zavriEpubViewer();
+      throw error;
+    }
+  }
+
   function zapojDocxAndroidBack() {
     if (docxAndroidBackZapojen) return;
     docxAndroidBackZapojen = true;
     const puvodniAndroidZpet = window.LubaNoteZpracujAndroidZpet;
     window.LubaNoteZpracujAndroidZpet = function () {
+      if (epubViewerOtevren) {
+        if (epubViewerFullscreen) {
+          nastavEpubFullscreen(false);
+        } else if (epubViewerPrvky && !epubViewerPrvky.toc.hidden) {
+          epubViewerPrvky.toc.hidden = true;
+        } else {
+          zavriEpubViewer();
+        }
+        return true;
+      }
       if (docxViewerOtevren) {
         if (docxViewerFullscreen) {
           nastavDocViewerFullscreen(false);
@@ -2458,6 +2868,19 @@
         zobrazChybu(
           'Dokumenty',
           error?.message || 'DOC se nepodařilo otevřít. Podporovaný je Word 97–2003 a první verze zachovává hlavně čitelný text.'
+        );
+      }
+      return;
+    }
+
+    if (typ === 'epub') {
+      try {
+        await otevriEpubViewer(record);
+      } catch (error) {
+        console.error('Otevření uloženého EPUB selhalo:', error);
+        zobrazChybu(
+          'Dokumenty',
+          error?.message || 'EPUB se nepodařilo otevřít. Kniha může být poškozená nebo chráněná DRM.'
         );
       }
       return;
@@ -2576,6 +2999,7 @@
     prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
     prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');
     prvky.filterDoc?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'doc');
+    prvky.filterEpub?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'epub');
     prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
     if (prvky.trashCount) {
       const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
@@ -2586,6 +3010,11 @@
   function renderSoubory() {
     const prvky = zajistiPrvky();
     if (!prvky) return;
+
+    for (const url of epubListCoverUrls) {
+      try { URL.revokeObjectURL(url); } catch (_error) {}
+    }
+    epubListCoverUrls = [];
 
     const folderMap = new Map(posledniSlozky.map((folder) => [folder.id, folder.name]));
     const zobrazujiKos = aktivniSlozkaId === TRASH_VIEW;
@@ -2601,6 +3030,7 @@
           if (aktivniTypFiltru === 'pdf' && !jePdfSoubor(soubor)) return false;
           if (aktivniTypFiltru === 'docx' && !jeDocxSoubor(soubor)) return false;
           if (aktivniTypFiltru === 'doc' && !jeDocSoubor(soubor)) return false;
+          if (aktivniTypFiltru === 'epub' && !jeEpubSoubor(soubor)) return false;
         }
 
         return souborOdpovidaHledani(soubor, folderMap);
@@ -2632,8 +3062,8 @@
       if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : 'Zatím tu není žádný dokument';
-      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX nebo DOC. Word soubory se otevřou jen ke čtení.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : aktivniTypFiltru === 'epub' ? 'Zatím tu není žádná kniha EPUB' : 'Zatím tu není žádný dokument';
+      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX, DOC nebo EPUB. Knihy EPUB se otevřou v LubaReaderu.';
     }
 
     if (prvky.search && prvky.search.value !== hledaniDokumentu) {
@@ -2664,14 +3094,24 @@
         : folderName;
       const typ = typSouboru(soubor);
       const typText = popisTypuSouboru(soubor);
-      const ikonaTrida = typ === 'docx' ? ' is-docx' : typ === 'doc' ? ' is-doc' : '';
+      const ikonaTrida = typ === 'docx' ? ' is-docx' : typ === 'doc' ? ' is-doc' : typ === 'epub' ? ' is-epub' : '';
+      let ikonaObsah = typText;
+      if (typ === 'epub' && soubor.epubCoverBlob instanceof Blob) {
+        const coverUrl = URL.createObjectURL(soubor.epubCoverBlob);
+        epubListCoverUrls.push(coverUrl);
+        ikonaObsah = `<img class="documentsEpubCoverThumb" src="${docxEscAttr(coverUrl)}" alt="">`;
+      }
+      const zobrazenyNazev = typ === 'epub' && String(soubor.epubTitle || '').trim() ? String(soubor.epubTitle).trim() : soubor.name;
+      const epubMeta = typ === 'epub'
+        ? [soubor.epubAuthor, zobrazenyNazev !== soubor.name ? soubor.name : ''].filter(Boolean).join(' · ')
+        : '';
       return `
         <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'Dokument v koši' : 'Dlouhý stisk a táhni pro přesun'}">
-          <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
-            <span class="documentsFileIcon${ikonaTrida}" aria-hidden="true">${typText}</span>
+          <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(zobrazenyNazev)}">
+            <span class="documentsFileIcon${ikonaTrida}" aria-hidden="true">${ikonaObsah}</span>
             <span class="documentsFileMain">
-              <strong>${esc(soubor.name)}</strong>
-              <small>${esc(typText)} · ${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${metaFolder ? ` · ${esc(metaFolder)}` : ''}</small>
+              <strong>${esc(zobrazenyNazev)}</strong>
+              <small>${esc(typText)}${epubMeta ? ` · ${esc(epubMeta)}` : ''} · ${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${metaFolder ? ` · ${esc(metaFolder)}` : ''}</small>
             </span>
             <span class="documentsFileOpen" aria-hidden="true">›</span>
           </button>
@@ -2851,6 +3291,12 @@
       render();
     });
 
+    prvky.filterEpub?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'epub';
+      render();
+    });
+
     prvky.allFolder.addEventListener('click', () => {
       aktivniSlozkaId = null;
       render();
@@ -2876,7 +3322,9 @@
     pridatPdf,
     pridatDocx,
     pridatDoc,
+    pridatEpub,
     otevriDocxViewer,
+    otevriEpubViewer,
     otevriDocViewer,
     zavriDocxViewer,
     presunSouborDoSlozky,

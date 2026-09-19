@@ -1508,3 +1508,398 @@ body.documents-docx-viewer-open {
 .documentsDocxViewerBody {
   touch-action: manipulation;
 }
+
+/* ============================================================
+   PATCH 643 – EPUB / LUBAREADER V1
+   - lokální knihy EPUB bez cloudu
+   - obálka v knihovně, obsah kapitol, scroll a uložená pozice
+   - 2× tap fullscreen bez plovoucí šipky
+   ============================================================ */
+
+.documentsFileIcon.is-epub,
+.documentsDragPreviewIcon.is-epub,
+.documentsAddFileType.is-epub {
+  background: #7652b8;
+}
+
+.documentsFileIcon.is-epub {
+  overflow: hidden;
+}
+
+.documentsEpubCoverThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+body.documents-epub-viewer-open {
+  overflow: hidden !important;
+}
+
+.documentsEpubViewer[hidden] {
+  display: none !important;
+}
+
+.documentsEpubViewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100dvh;
+  background: #ece7dc;
+  color: #1f1d1a;
+}
+
+.documentsEpubHeader {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  gap: 9px;
+  align-items: center;
+  min-height: 62px;
+  box-sizing: border-box;
+  padding:
+    max(6px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    6px
+    max(10px, env(safe-area-inset-left));
+  border-bottom: 1px solid rgba(55, 47, 38, .16);
+  background: #f5f1e8;
+  box-shadow: 0 4px 14px rgba(45, 38, 30, .10);
+}
+
+.documentsEpubClose,
+.documentsEpubTocButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(55, 47, 38, .18);
+  border-radius: 13px;
+  background: transparent;
+  color: #29251f;
+  font: inherit;
+  line-height: 1;
+}
+
+.documentsEpubClose {
+  font-size: 32px;
+}
+
+.documentsEpubTocButton {
+  font-size: 21px;
+}
+
+.documentsEpubTitle {
+  min-width: 0;
+  text-align: center;
+}
+
+.documentsEpubTitle strong,
+.documentsEpubTitle small,
+.documentsEpubChapter {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsEpubTitle strong {
+  color: #211e19;
+  font-size: 15px;
+}
+
+.documentsEpubTitle small {
+  margin-top: 1px;
+  color: #6f685e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.documentsEpubChapter {
+  margin-top: 2px;
+  color: #8a5f2f;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.documentsEpubBody {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+  padding:
+    14px
+    max(8px, env(safe-area-inset-right))
+    18px
+    max(8px, env(safe-area-inset-left));
+  background: #e9e3d8;
+}
+
+.documentsEpubContent {
+  width: min(100%, 760px);
+  min-height: calc(100% - 8px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: clamp(24px, 6vw, 48px);
+  border: 1px solid rgba(55, 47, 38, .10);
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #26221d;
+  box-shadow: 0 8px 30px rgba(55, 47, 38, .12);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
+}
+
+.documentsEpubContent p {
+  margin: 0 0 1em;
+}
+
+.documentsEpubContent h1,
+.documentsEpubContent h2,
+.documentsEpubContent h3,
+.documentsEpubContent h4,
+.documentsEpubContent h5,
+.documentsEpubContent h6 {
+  margin: 1.2em 0 .6em;
+  color: #201c17;
+  line-height: 1.25;
+}
+
+.documentsEpubContent h1 { font-size: 1.72em; }
+.documentsEpubContent h2 { font-size: 1.45em; }
+.documentsEpubContent h3 { font-size: 1.25em; }
+
+.documentsEpubContent img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: .9em auto;
+  object-fit: contain;
+}
+
+.documentsEpubContent a {
+  color: #72502b;
+  text-decoration: underline;
+}
+
+.documentsEpubContent blockquote {
+  margin: 1em 1.2em;
+  padding-left: 1em;
+  border-left: 3px solid #c7b79e;
+  color: #5e554a;
+}
+
+.documentsEpubContent pre,
+.documentsEpubContent code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.documentsEpubContent table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.documentsEpubContent td,
+.documentsEpubContent th {
+  border: 1px solid #c8bfb3;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.documentsEpubNav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding:
+    7px
+    max(10px, env(safe-area-inset-right))
+    max(7px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  border-top: 1px solid rgba(55, 47, 38, .15);
+  background: #f5f1e8;
+}
+
+.documentsEpubPrev,
+.documentsEpubNext {
+  min-height: 38px;
+  border: 1px solid rgba(55, 47, 38, .18);
+  border-radius: 12px;
+  background: #fffaf1;
+  color: #2b261f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.documentsEpubPrev:disabled,
+.documentsEpubNext:disabled {
+  opacity: .35;
+}
+
+.documentsEpubCounter {
+  color: #756d62;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.documentsEpubLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(233, 227, 216, .93);
+  color: #2b261f;
+}
+
+.documentsEpubLoading[hidden] {
+  display: none !important;
+}
+
+.documentsEpubEmpty {
+  color: #746d63;
+  text-align: center;
+}
+
+.documentsEpubToc[hidden] {
+  display: none !important;
+}
+
+.documentsEpubToc {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  background: rgba(18, 16, 14, .48);
+}
+
+.documentsEpubTocPanel {
+  width: min(100%, 620px);
+  max-height: min(76dvh, 680px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(55, 47, 38, .16);
+  border-radius: 20px;
+  background: #fffdf8;
+  box-shadow: 0 18px 46px rgba(0,0,0,.28);
+}
+
+.documentsEpubTocHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid rgba(55, 47, 38, .12);
+  color: #211e19;
+}
+
+.documentsEpubTocClose {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #514a41;
+  font: inherit;
+  font-size: 28px;
+}
+
+.documentsEpubTocList {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+}
+
+.documentsEpubTocItem {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  padding: 6px 9px;
+  background: transparent;
+  color: #2a251f;
+  font: inherit;
+  text-align: left;
+}
+
+.documentsEpubTocItem span {
+  color: #948777;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.documentsEpubTocItem strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsEpubTocItem.active {
+  background: #efe4d3;
+  color: #6e4a27;
+}
+
+.documentsEpubViewer.is-fullscreen {
+  grid-template-rows: minmax(0, 1fr);
+  background: #111;
+}
+
+.documentsEpubViewer.is-fullscreen .documentsEpubHeader,
+.documentsEpubViewer.is-fullscreen .documentsEpubNav {
+  display: none !important;
+}
+
+.documentsEpubViewer.is-fullscreen .documentsEpubBody {
+  padding: 0;
+  background: #111;
+}
+
+.documentsEpubViewer.is-fullscreen .documentsEpubContent {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 520px) {
+  .documentsEpubContent {
+    min-height: 100%;
+    padding: 24px 18px 32px;
+    border-radius: 5px;
+    font-size: 16px;
+  }
+
+  .documentsEpubBody {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
