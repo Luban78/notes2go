@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.3 FOLDER ACTIONS (PATCH 638)
+   LUBANOTE – DOKUMENTY V1.4 FILE ACTIONS + TRASH (PATCH 639)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
@@ -10,6 +10,8 @@
    - změna pořadí složek přes stejný long-press + drag vzor
    - přejmenování složky
    - bezpečné smazání složky bez smazání PDF
+   - přejmenování PDF
+   - vlastní Koš Dokumentů + obnovení PDF
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -25,6 +27,7 @@
   const STORE_FOLDERS = 'folders';
   const STORE_FILES = 'files';
   const MAX_PDF_BYTES = 100 * 1024 * 1024;
+  const TRASH_VIEW = '__documents_trash__';
 
   let dbPromise = null;
   let aktivniSlozkaId = null;
@@ -234,6 +237,64 @@
     const db = await otevriDb();
     const tx = db.transaction(STORE_FILES, 'readonly');
     return await requestPromise(tx.objectStore(STORE_FILES).get(idSouboru));
+  }
+
+  function jeSouborVKosi(soubor) {
+    return Number(soubor?.deletedAt || 0) > 0;
+  }
+
+  function normalizujPdfNazev(value) {
+    let nazev = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!nazev) return '';
+
+    if (/\.pdf$/i.test(nazev)) {
+      const zaklad = nazev.slice(0, -4).trim().slice(0, 116);
+      return zaklad ? `${zaklad}.pdf` : '';
+    }
+
+    nazev = nazev.slice(0, 116);
+    return nazev ? `${nazev}.pdf` : '';
+  }
+
+  async function prejmenujSoubor(idSouboru, novyNazev) {
+    const record = await nactiSoubor(idSouboru);
+    if (!record) throw new Error('Soubor už není dostupný.');
+
+    const nazev = normalizujPdfNazev(novyNazev);
+    if (!nazev) throw new Error('Název souboru je prázdný.');
+
+    record.name = nazev;
+    record.updatedAt = Date.now();
+    await ulozDoStore(STORE_FILES, record);
+    return record;
+  }
+
+  async function presunSouborDoKose(idSouboru) {
+    const record = await nactiSoubor(idSouboru);
+    if (!record) throw new Error('Soubor už není dostupný.');
+    if (jeSouborVKosi(record)) return record;
+
+    record.trashFolderId = record.folderId || null;
+    record.folderId = null;
+    record.deletedAt = Date.now();
+    record.updatedAt = record.deletedAt;
+    await ulozDoStore(STORE_FILES, record);
+    return record;
+  }
+
+  async function obnovSouborZKose(idSouboru) {
+    const record = await nactiSoubor(idSouboru);
+    if (!record) throw new Error('Soubor už není dostupný.');
+    if (!jeSouborVKosi(record)) return record;
+
+    const puvodniSlozka = record.trashFolderId || null;
+    const slozkaExistuje = puvodniSlozka !== null && posledniSlozky.some((folder) => folder.id === puvodniSlozka);
+    record.folderId = slozkaExistuje ? puvodniSlozka : null;
+    delete record.deletedAt;
+    delete record.trashFolderId;
+    record.updatedAt = Date.now();
+    await ulozDoStore(STORE_FILES, record);
+    return record;
   }
 
 
@@ -487,6 +548,7 @@
     });
 
     row.addEventListener('touchstart', (event) => {
+      if (event.target.closest?.('.documentsFileMenuButton')) return;
       if (event.touches.length !== 1) return;
       const dotyk = event.touches[0];
       pripravLongPressSouboru(row, idSouboru, dotyk.clientX, dotyk.clientY, 'touch', null, dotyk.identifier);
@@ -519,6 +581,7 @@
     row.addEventListener('touchcancel', () => ukonciDrag(), { passive: true });
 
     row.addEventListener('pointerdown', (event) => {
+      if (event.target.closest?.('.documentsFileMenuButton')) return;
       if (event.pointerType === 'touch') return;
       if (event.button !== undefined && event.button !== 0) return;
       pripravLongPressSouboru(row, idSouboru, event.clientX, event.clientY, 'pointer', event.pointerId, null);
@@ -838,7 +901,9 @@
       addFolder: screen.querySelector('#documentsAddFolderButton'),
       addPdf: screen.querySelector('#documentsAddPdfButton'),
       addPdfFloating: screen.querySelector('#documentsFloatingAddButton'),
-      allFolder: screen.querySelector('#documentsAllFolderButton')
+      allFolder: screen.querySelector('#documentsAllFolderButton'),
+      trash: screen.querySelector('#documentsTrashButton'),
+      trashCount: screen.querySelector('#documentsTrashCount')
     };
 
     return dokumentyPrvky;
@@ -1102,6 +1167,194 @@
     return modal;
   }
 
+  function zajistiPrejmenovaniSouboruModal() {
+    let modal = document.getElementById('documentsFileRenameModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsFileRenameModal';
+    modal.className = 'documentsFolderModal documentsFileRenameModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsFileRenameDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileRenameTitle">
+        <div class="documentsFolderIcon" aria-hidden="true">📄</div>
+        <h3 id="documentsFileRenameTitle">Přejmenovat PDF</h3>
+        <p>Změní se pouze název v knihovně LubaNote. Obsah PDF zůstane beze změny.</p>
+        <label>
+          <span>Název souboru</span>
+          <input id="documentsFileRenameInput" type="text" maxlength="120" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-file-name">
+        </label>
+        <div class="documentsFolderActions">
+          <button type="button" class="documentsFolderCancel documentsFileRenameCancel">Zrušit</button>
+          <button type="button" class="documentsFolderCreate documentsFileRenameSave">Uložit</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+    const input = modal.querySelector('#documentsFileRenameInput');
+    const cancel = modal.querySelector('.documentsFileRenameCancel');
+    const save = modal.querySelector('.documentsFileRenameSave');
+    let fileId = null;
+
+    const zavrit = () => {
+      modal.hidden = true;
+      fileId = null;
+      input.value = '';
+      input.blur();
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    const ulozit = async () => {
+      if (!fileId) return;
+      const nazev = normalizujPdfNazev(input.value);
+      if (!nazev) {
+        input.focus();
+        return;
+      }
+
+      save.disabled = true;
+      try {
+        await prejmenujSoubor(fileId, nazev);
+        zavrit();
+        await refresh();
+        try { navigator.vibrate?.(14); } catch (_error) {}
+      } catch (error) {
+        console.error('Přejmenování PDF selhalo:', error);
+        zobrazChybu('Dokumenty', 'PDF se nepodařilo přejmenovat.');
+      } finally {
+        save.disabled = false;
+      }
+    };
+
+    save.addEventListener('click', ulozit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void ulozit();
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        zavrit();
+      }
+    });
+
+    modal.otevrit = (idSouboru) => {
+      const record = posledniSoubory.find((item) => item.id === idSouboru);
+      if (!record) return;
+      fileId = idSouboru;
+      input.value = record.name || '';
+      modal.hidden = false;
+      requestAnimationFrame(() => {
+        input.focus();
+        const tecka = input.value.toLowerCase().lastIndexOf('.pdf');
+        if (tecka > 0 && input.setSelectionRange) input.setSelectionRange(0, tecka);
+        else input.select();
+      });
+    };
+
+    return modal;
+  }
+
+  function zajistiAkceSouboruModal() {
+    let modal = document.getElementById('documentsFileManageModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsFileManageModal';
+    modal.className = 'documentsFolderModal documentsFileManageModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsFileManageDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileManageTitle">
+        <div class="documentsFolderIcon" aria-hidden="true">📄</div>
+        <h3 id="documentsFileManageTitle">PDF</h3>
+        <p id="documentsFileManageMeta"></p>
+        <div class="documentsFolderManageActions documentsFileManageActions">
+          <button type="button" class="documentsFileRenameAction">✏️ Přejmenovat</button>
+          <button type="button" class="documentsFileTrashAction">🗑️ Přesunout do koše</button>
+          <button type="button" class="documentsFileRestoreAction" hidden>↩️ Obnovit z koše</button>
+          <button type="button" class="documentsFolderManageCancel documentsFileManageCancel">Zrušit</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+    const title = modal.querySelector('#documentsFileManageTitle');
+    const meta = modal.querySelector('#documentsFileManageMeta');
+    const rename = modal.querySelector('.documentsFileRenameAction');
+    const trash = modal.querySelector('.documentsFileTrashAction');
+    const restore = modal.querySelector('.documentsFileRestoreAction');
+    const cancel = modal.querySelector('.documentsFileManageCancel');
+    let fileId = null;
+
+    const zavrit = () => {
+      modal.hidden = true;
+      fileId = null;
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    rename.addEventListener('click', () => {
+      const idSouboru = fileId;
+      zavrit();
+      if (idSouboru) zajistiPrejmenovaniSouboruModal().otevrit(idSouboru);
+    });
+
+    trash.addEventListener('click', async () => {
+      if (!fileId) return;
+      const idSouboru = fileId;
+      trash.disabled = true;
+      try {
+        await presunSouborDoKose(idSouboru);
+        zavrit();
+        await refresh();
+        try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
+      } catch (error) {
+        console.error('Přesun PDF do koše selhal:', error);
+        zobrazChybu('Dokumenty', 'PDF se nepodařilo přesunout do koše.');
+      } finally {
+        trash.disabled = false;
+      }
+    });
+
+    restore.addEventListener('click', async () => {
+      if (!fileId) return;
+      const idSouboru = fileId;
+      restore.disabled = true;
+      try {
+        await obnovSouborZKose(idSouboru);
+        zavrit();
+        await refresh();
+        try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
+      } catch (error) {
+        console.error('Obnovení PDF z koše selhalo:', error);
+        zobrazChybu('Dokumenty', 'PDF se nepodařilo obnovit.');
+      } finally {
+        restore.disabled = false;
+      }
+    });
+
+    modal.otevrit = (idSouboru) => {
+      const record = posledniSoubory.find((item) => item.id === idSouboru);
+      if (!record) return;
+      fileId = idSouboru;
+      const vKosi = jeSouborVKosi(record);
+      title.textContent = record.name || 'PDF';
+      meta.textContent = `${formatBytes(record.size)} · ${formatDate(record.updatedAt)}`;
+      rename.hidden = vKosi;
+      trash.hidden = vKosi;
+      restore.hidden = !vKosi;
+      modal.hidden = false;
+    };
+
+    return modal;
+  }
+
   async function importujPdfAndroid() {
     const plugin = ziskejNativniPlugin();
     if (!plugin?.importujPdfDokument) {
@@ -1116,7 +1369,7 @@
       name: vysledek.nazevSouboru || 'dokument.pdf',
       mime: 'application/pdf',
       size: Number(vysledek.sizeBytes) || 0,
-      folderId: aktivniSlozkaId,
+      folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
       storageMode: 'android',
       storageKey: vysledek.storageKey,
       createdAt: Date.now(),
@@ -1153,7 +1406,7 @@
           name: file.name || 'dokument.pdf',
           mime: file.type || 'application/pdf',
           size: file.size,
-          folderId: aktivniSlozkaId,
+          folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
           storageMode: 'web',
           blob: file,
           createdAt: Date.now(),
@@ -1252,6 +1505,7 @@
 
     const counts = new Map();
     posledniSoubory.forEach((soubor) => {
+      if (jeSouborVKosi(soubor)) return;
       if (soubor.folderId) {
         counts.set(soubor.folderId, (counts.get(soubor.folderId) || 0) + 1);
       }
@@ -1305,6 +1559,11 @@
     });
 
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
+    prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
+    if (prvky.trashCount) {
+      const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
+      prvky.trashCount.textContent = pocetVKosi > 0 ? ` (${pocetVKosi})` : '';
+    }
   }
 
   function renderSoubory() {
@@ -1312,18 +1571,44 @@
     if (!prvky) return;
 
     const folderMap = new Map(posledniSlozky.map((folder) => [folder.id, folder.name]));
+    const zobrazujiKos = aktivniSlozkaId === TRASH_VIEW;
     const soubory = posledniSoubory
-      .filter((soubor) => aktivniSlozkaId === null || soubor.folderId === aktivniSlozkaId)
+      .filter((soubor) => {
+        if (zobrazujiKos) return jeSouborVKosi(soubor);
+        if (jeSouborVKosi(soubor)) return false;
+        return aktivniSlozkaId === null || soubor.folderId === aktivniSlozkaId;
+      })
       .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 
-    const nazevSlozky = aktivniSlozkaId
-      ? folderMap.get(aktivniSlozkaId) || 'Složka'
-      : 'Všechny soubory';
+    const nazevSlozky = zobrazujiKos
+      ? 'Koš'
+      : aktivniSlozkaId
+        ? folderMap.get(aktivniSlozkaId) || 'Složka'
+        : 'Všechny soubory';
 
     prvky.activeFolder.textContent = nazevSlozky;
     prvky.status.textContent = jeAndroid()
       ? 'Lokálně v tomto Android zařízení'
       : 'Lokálně v tomto prohlížeči';
+
+    const prazdnyNadpis = prvky.empty.querySelector('strong');
+    const prazdnyText = prvky.empty.querySelector('p');
+    const prazdnaIkona = prvky.empty.querySelector('.documentsEmptyIcon');
+    if (zobrazujiKos) {
+      if (prazdnaIkona) prazdnaIkona.textContent = '🗑️';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Koš je prázdný';
+      if (prazdnyText) prazdnyText.textContent = 'PDF přesunutá do koše se zobrazí tady a půjdou obnovit.';
+    } else {
+      if (prazdnaIkona) prazdnaIkona.textContent = '📄';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Zatím tu není žádné PDF';
+      if (prazdnyText) prazdnyText.textContent = 'Přidej první soubor. Otevře se potom ve stávajícím LubaNote PDF vieweru.';
+    }
+
+    prvky.addPdf.disabled = zobrazujiKos;
+    if (prvky.addPdfFloating) {
+      prvky.addPdfFloating.disabled = zobrazujiKos;
+      prvky.addPdfFloating.hidden = zobrazujiKos;
+    }
 
     prvky.empty.hidden = soubory.length !== 0;
     prvky.files.hidden = soubory.length === 0;
@@ -1335,16 +1620,20 @@
 
     prvky.files.innerHTML = soubory.map((soubor) => {
       const folderName = soubor.folderId ? folderMap.get(soubor.folderId) : '';
+      const metaFolder = zobrazujiKos && soubor.trashFolderId
+        ? folderMap.get(soubor.trashFolderId) || 'Všechny soubory'
+        : folderName;
       return `
-        <div class="documentsFileRow" data-file-id="${esc(soubor.id)}" title="Dlouhý stisk a táhni pro přesun">
+        <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'PDF v koši' : 'Dlouhý stisk a táhni pro přesun'}">
           <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
             <span class="documentsFileIcon" aria-hidden="true">PDF</span>
             <span class="documentsFileMain">
               <strong>${esc(soubor.name)}</strong>
-              <small>${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${folderName ? ` · ${esc(folderName)}` : ''}</small>
+              <small>${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${metaFolder ? ` · ${esc(metaFolder)}` : ''}</small>
             </span>
             <span class="documentsFileOpen" aria-hidden="true">›</span>
           </button>
+          <button type="button" class="documentsFileMenuButton" data-file-menu="${esc(soubor.id)}" aria-label="Akce souboru ${esc(soubor.name)}" title="Akce souboru">⋮</button>
         </div>`;
     }).join('');
 
@@ -1355,9 +1644,27 @@
       });
     });
 
-    prvky.files.querySelectorAll('.documentsFileRow[data-file-id]').forEach((row) => {
-      zapojLongPressSouboru(row, row.dataset.fileId);
+    prvky.files.querySelectorAll('.documentsFileMenuButton[data-file-menu]').forEach((menuButton) => {
+      for (const eventName of ['pointerdown', 'touchstart', 'mousedown', 'contextmenu']) {
+        menuButton.addEventListener(eventName, (event) => {
+          event.stopPropagation();
+          if (eventName === 'contextmenu') event.preventDefault();
+        }, eventName === 'touchstart' ? { passive: true } : undefined);
+      }
+
+      menuButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        ukonciDrag();
+        zajistiAkceSouboruModal().otevrit(menuButton.dataset.fileMenu);
+      });
     });
+
+    if (!zobrazujiKos) {
+      prvky.files.querySelectorAll('.documentsFileRow[data-file-id]').forEach((row) => {
+        zapojLongPressSouboru(row, row.dataset.fileId);
+      });
+    }
   }
 
   function render() {
@@ -1377,6 +1684,7 @@
 
       if (
         aktivniSlozkaId !== null &&
+        aktivniSlozkaId !== TRASH_VIEW &&
         !posledniSlozky.some((folder) => folder.id === aktivniSlozkaId)
       ) {
         aktivniSlozkaId = null;
@@ -1405,6 +1713,11 @@
       render();
     });
 
+    prvky.trash?.addEventListener('click', () => {
+      aktivniSlozkaId = TRASH_VIEW;
+      render();
+    });
+
     document.getElementById('documentsModuleButton')?.addEventListener('click', refresh);
     refresh();
   }
@@ -1419,6 +1732,9 @@
     refresh,
     pridatPdf,
     presunSouborDoSlozky,
-    ulozPoradiSlozek
+    ulozPoradiSlozek,
+    prejmenujSoubor,
+    presunSouborDoKose,
+    obnovSouborZKose
   };
 })();
