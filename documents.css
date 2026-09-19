@@ -2666,3 +2666,115 @@ body.documents-epub-viewer-open {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* ============================================================
+   PATCH 647B – LUBAREADER UI V MOTIVU LUBANOTE
+   ------------------------------------------------------------
+   Aa volba Světlé / Sépie / Tmavé patří pouze ke stránce knihy.
+   Ovládací chrome LubaReaderu (horní lišta, panely, modaly, tlačítka)
+   používá stejně jako zbytek aplikace aktuální --color-* LubaNote motiv.
+   ============================================================ */
+.documentsEpubHeader,
+.documentsEpubNav {
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+.documentsEpubTitle strong,
+.documentsEpubClose,
+.documentsEpubTocButton,
+.documentsEpubSettingsButton,
+.documentsEpubMarksButton,
+.documentsEpubCounter {
+  color: var(--color-text) !important;
+}
+
+.documentsEpubTitle small {
+  color: var(--color-text-secondary) !important;
+}
+
+.documentsEpubChapter {
+  color: var(--color-accent-text) !important;
+}
+
+.documentsEpubPrev,
+.documentsEpubNext,
+.documentsEpubSettingChoices button,
+.documentsEpubFontSizeControl button,
+.documentsEpubSettingsReset,
+.documentsEpubAddBookmark,
+.documentsEpubMarkOpen,
+.documentsEpubMarkEditNote,
+.documentsEpubMarkDelete,
+.documentsEpubSelectionNote,
+.documentsEpubSelectionRemove,
+.documentsEpubNoteActions button {
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+.documentsEpubSettingsPanel,
+.documentsEpubTocPanel,
+.documentsEpubMarksPanel,
+.documentsEpubSelectionBar,
+.documentsEpubNotePanel {
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+.documentsEpubSettingsHeader,
+.documentsEpubTocHeader,
+.documentsEpubMarksHeader {
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+.documentsEpubSettingsClose,
+.documentsEpubTocClose,
+.documentsEpubMarksClose,
+.documentsEpubSelectionClose,
+.documentsEpubNoteClose {
+  color: var(--color-text) !important;
+}
+
+.documentsEpubSettingRow {
+  border-color: var(--color-border) !important;
+}
+
+.documentsEpubSettingLabel,
+.documentsEpubMarksList h4,
+.documentsEpubMarksEmpty,
+.documentsEpubMarkOpen span,
+.documentsEpubMarkType {
+  color: var(--color-text-secondary) !important;
+}
+
+.documentsEpubSettingChoices button.active,
+.documentsEpubTocItem.active {
+  border-color: var(--color-accent) !important;
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)) !important;
+  color: var(--color-accent-text) !important;
+}
+
+.documentsEpubFontSizeValue,
+.documentsEpubNoteQuote,
+.documentsEpubNoteInput {
+  border-color: var(--color-border) !important;
+  background: var(--color-background) !important;
+  color: var(--color-text) !important;
+}
+
+.documentsEpubMarkNote {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Primární akce musí mít vždy čitelný kontrast v každém tématu. */
+.documentsEpubNoteSave {
+  border-color: var(--color-accent) !important;
+  background: var(--color-accent) !important;
+  color: var(--color-on-accent) !important;
+}
