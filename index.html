@@ -17,7 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260919-main-nav-documents-633">
-  <link rel="stylesheet" href="documents.css?v=20260919-documents-file-actions-trash-639">
+  <link rel="stylesheet" href="documents.css?v=20260919-documents-search-filters-640">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -557,7 +557,6 @@
 
       <div class="documentsQuickFolders">
         <button id="documentsAllFolderButton" class="documentsFolderAll active" type="button">Všechny soubory</button>
-        <button id="documentsTrashButton" class="documentsTrashButton" type="button">🗑️ Koš<span id="documentsTrashCount"></span></button>
       </div>
       <div id="documentsFolders" class="documentsFoldersGrid"></div>
     </section>
@@ -565,8 +564,22 @@
     <section class="documentsV1Section" aria-labelledby="documentsFilesTitle">
       <div class="documentsV1SectionHeader">
         <div>
-          <h3 id="documentsFilesTitle">PDF soubory</h3>
+          <h3 id="documentsFilesTitle">Dokumenty</h3>
           <small id="documentsActiveFolder">Všechny soubory</small>
+        </div>
+      </div>
+
+      <div class="documentsSearchTools">
+        <div class="documentsSearchBox">
+          <span class="documentsSearchIcon" aria-hidden="true">⌕</span>
+          <input id="documentsSearchInput" type="search" placeholder="Hledat dokumenty…" aria-label="Hledat dokumenty" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-search">
+          <button id="documentsSearchClear" class="documentsSearchClear" type="button" aria-label="Vymazat hledání" hidden>×</button>
+        </div>
+
+        <div class="documentsFileFilters" role="group" aria-label="Filtr dokumentů">
+          <button id="documentsFilterAll" class="documentsFileFilter active" type="button">Vše</button>
+          <button id="documentsFilterPdf" class="documentsFileFilter" type="button">PDF</button>
+          <button id="documentsTrashButton" class="documentsTrashButton documentsFileFilter" type="button">🗑️ Koš<span id="documentsTrashCount"></span></button>
         </div>
       </div>
 
@@ -2154,7 +2167,7 @@
 
   <!-- Otevřít / Uložit jako – soubory přímo z editoru -->
   <script src="editorDocuments.js?v=20260919-pdf-modal-balanced-632a"></script>
-  <script src="documents.js?v=20260919-documents-file-actions-trash-639"></script>
+  <script src="documents.js?v=20260919-documents-search-filters-640"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>

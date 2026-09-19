@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.4 FILE ACTIONS + TRASH (PATCH 639)
+   LUBANOTE – DOKUMENTY V1.5 SEARCH + FILTERS (PATCH 640)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
@@ -12,6 +12,8 @@
    - bezpečné smazání složky bez smazání PDF
    - přejmenování PDF
    - vlastní Koš Dokumentů + obnovení PDF
+   - živé hledání podle názvu dokumentu / složky
+   - připravený typový filtr Vše / PDF + rychlý vstup do Koše
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -34,6 +36,8 @@
   let dokumentyPrvky = null;
   let posledniSlozky = [];
   let posledniSoubory = [];
+  let aktivniTypFiltru = 'all';
+  let hledaniDokumentu = '';
   const DELKA_LONG_PRESS_SOUBORU = 420;
   const MAX_POHYB_PRED_LONGPRESS = 20;
   const START_DRAG_PO_LONGPRESS = 7;
@@ -93,6 +97,27 @@
     const datum = new Date(value || Date.now());
     if (Number.isNaN(datum.getTime())) return '';
     return datum.toLocaleDateString('cs-CZ');
+  }
+
+  function normalizujHledani(value) {
+    return String(value ?? '')
+      .trim()
+      .toLocaleLowerCase('cs')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function souborOdpovidaHledani(soubor, folderMap) {
+    const dotaz = normalizujHledani(hledaniDokumentu);
+    if (!dotaz) return true;
+
+    const slozka = soubor.folderId
+      ? folderMap.get(soubor.folderId) || ''
+      : soubor.trashFolderId
+        ? folderMap.get(soubor.trashFolderId) || ''
+        : '';
+
+    return normalizujHledani(`${soubor.name || ''} ${slozka}`).includes(dotaz);
   }
 
   function requestPromise(request) {
@@ -902,6 +927,10 @@
       addPdf: screen.querySelector('#documentsAddPdfButton'),
       addPdfFloating: screen.querySelector('#documentsFloatingAddButton'),
       allFolder: screen.querySelector('#documentsAllFolderButton'),
+      search: screen.querySelector('#documentsSearchInput'),
+      searchClear: screen.querySelector('#documentsSearchClear'),
+      filterAll: screen.querySelector('#documentsFilterAll'),
+      filterPdf: screen.querySelector('#documentsFilterPdf'),
       trash: screen.querySelector('#documentsTrashButton'),
       trashCount: screen.querySelector('#documentsTrashCount')
     };
@@ -1559,6 +1588,8 @@
     });
 
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
+    prvky.filterAll?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'all');
+    prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
     prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
     if (prvky.trashCount) {
       const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
@@ -1574,9 +1605,21 @@
     const zobrazujiKos = aktivniSlozkaId === TRASH_VIEW;
     const soubory = posledniSoubory
       .filter((soubor) => {
-        if (zobrazujiKos) return jeSouborVKosi(soubor);
-        if (jeSouborVKosi(soubor)) return false;
-        return aktivniSlozkaId === null || soubor.folderId === aktivniSlozkaId;
+        if (zobrazujiKos) {
+          if (!jeSouborVKosi(soubor)) return false;
+        } else {
+          if (jeSouborVKosi(soubor)) return false;
+          if (aktivniSlozkaId !== null && soubor.folderId !== aktivniSlozkaId) return false;
+
+          // PATCH 640: typový filtr je připravený i pro budoucí DOCX/obrázky.
+          if (aktivniTypFiltru === 'pdf') {
+            const mime = String(soubor.mime || '').toLocaleLowerCase('en');
+            const nazev = String(soubor.name || '').toLocaleLowerCase('en');
+            if (mime !== 'application/pdf' && !nazev.endsWith('.pdf')) return false;
+          }
+        }
+
+        return souborOdpovidaHledani(soubor, folderMap);
       })
       .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 
@@ -1594,14 +1637,26 @@
     const prazdnyNadpis = prvky.empty.querySelector('strong');
     const prazdnyText = prvky.empty.querySelector('p');
     const prazdnaIkona = prvky.empty.querySelector('.documentsEmptyIcon');
-    if (zobrazujiKos) {
+    const maHledani = Boolean(normalizujHledani(hledaniDokumentu));
+    if (maHledani) {
+      if (prazdnaIkona) prazdnaIkona.textContent = '🔎';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Nic jsme nenašli';
+      if (prazdnyText) prazdnyText.textContent = `Pro „${hledaniDokumentu.trim()}“ tu není žádný odpovídající dokument.`;
+    } else if (zobrazujiKos) {
       if (prazdnaIkona) prazdnaIkona.textContent = '🗑️';
       if (prazdnyNadpis) prazdnyNadpis.textContent = 'Koš je prázdný';
       if (prazdnyText) prazdnyText.textContent = 'PDF přesunutá do koše se zobrazí tady a půjdou obnovit.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Zatím tu není žádné PDF';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : 'Zatím tu není žádný dokument';
       if (prazdnyText) prazdnyText.textContent = 'Přidej první soubor. Otevře se potom ve stávajícím LubaNote PDF vieweru.';
+    }
+
+    if (prvky.search && prvky.search.value !== hledaniDokumentu) {
+      prvky.search.value = hledaniDokumentu;
+    }
+    if (prvky.searchClear) {
+      prvky.searchClear.hidden = !maHledani;
     }
 
     prvky.addPdf.disabled = zobrazujiKos;
@@ -1707,6 +1762,32 @@
 
     prvky.addPdf.addEventListener('click', pridatPdf);
     prvky.addPdfFloating?.addEventListener('click', pridatPdf);
+
+    prvky.search?.addEventListener('input', () => {
+      hledaniDokumentu = prvky.search.value;
+      renderSoubory();
+    });
+
+    prvky.searchClear?.addEventListener('click', () => {
+      hledaniDokumentu = '';
+      if (prvky.search) {
+        prvky.search.value = '';
+        prvky.search.focus();
+      }
+      renderSoubory();
+    });
+
+    prvky.filterAll?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'all';
+      render();
+    });
+
+    prvky.filterPdf?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'pdf';
+      render();
+    });
 
     prvky.allFolder.addEventListener('click', () => {
       aktivniSlozkaId = null;
