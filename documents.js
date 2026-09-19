@@ -1695,6 +1695,17 @@
     prvky.files.querySelectorAll('[data-file-open]').forEach((button) => {
       button.addEventListener('click', () => {
         if (Date.now() < blokovatOtevreniDo) return;
+
+        // PATCH 640B – při otevření výsledku ukončíme vyhledávací režim
+        // a schováme vlastní klávesnici, aby PDF viewer nikdy neotevřel
+        // dokument pod stále viditelnou LubaKeyboard.
+        if (prvky.screen.classList.contains('documents-search-keyboard-active')) {
+          prvky.screen.classList.remove('documents-search-keyboard-active');
+          try {
+            window.LubaNoteKeyboard?.skryj?.();
+          } catch (_error) {}
+        }
+
         otevriSoubor(button.dataset.fileOpen);
       });
     });
@@ -1764,23 +1775,54 @@
     prvky.addPdfFloating?.addEventListener('click', pridatPdf);
 
     /*
-     * PATCH 640A – HLEDÁNÍ MUSÍ RESPEKTOVAT LubaKeyboard.
-     * Vlastní klávesnice nezmenšuje visualViewport jako systémová IME,
-     * proto se běžný input hluboko na stránce mohl celý schovat pod ní.
-     * Třída pouze zapne mobilní fixed "search dock" nad klávesnicí;
-     * po blur/opuštění pole se UI vrací přesně na původní místo.
+     * PATCH 640B – HLEDÁNÍ + VÝSLEDKY MUSÍ BÝT NAD LubaKeyboard.
+     * 640A správně vytáhl nad klávesnici samotné pole, ale výsledky zůstaly
+     * v původním toku stránky a tím pádem pod klávesnicí. Při aktivním
+     * hledání proto zvedáme jako jeden celek celou sekci Dokumenty: hlavičku,
+     * hledání, filtry i scrollovatelný seznam výsledků. Horní hranu počítáme
+     * podle skutečného spodku hlavních záložek, takže panel neleze přes navigaci.
      */
+    const aktualizujSearchKeyboardPanelTop = () => {
+      const tabs = document.querySelector('.moduleTabs');
+      const rect = tabs?.getBoundingClientRect?.();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const navBottom = Number(rect?.bottom);
+      const fallbackTop = 8;
+      const vypocitano = Number.isFinite(navBottom) ? navBottom + 8 : fallbackTop;
+      const rawKeyboardHeight = getComputedStyle(document.body).getPropertyValue('--ln-lk-height');
+      const keyboardHeight = Number.parseFloat(rawKeyboardHeight) || 260;
+      const panelBottom = viewportHeight > 0 ? viewportHeight - keyboardHeight - 6 : 0;
+      const maxTop = panelBottom > 0 ? Math.max(fallbackTop, panelBottom - 180) : vypocitano;
+      const top = Math.max(fallbackTop, Math.min(vypocitano, maxTop));
+      prvky.screen.style.setProperty('--documents-search-panel-top', `${Math.round(top)}px`);
+    };
+
     const nastavSearchKeyboardMode = (aktivni) => {
-      prvky.screen.classList.toggle('documents-search-keyboard-active', Boolean(aktivni));
+      const zapnout = Boolean(aktivni);
+      if (zapnout) aktualizujSearchKeyboardPanelTop();
+      prvky.screen.classList.toggle('documents-search-keyboard-active', zapnout);
     };
 
     prvky.search?.addEventListener('focus', () => {
       nastavSearchKeyboardMode(true);
+      requestAnimationFrame(aktualizujSearchKeyboardPanelTop);
     });
 
     prvky.search?.addEventListener('blur', () => {
-      nastavSearchKeyboardMode(false);
+      // Krátké zpoždění dovolí dokončit tap na nalezený soubor / filtr.
+      // Jinak by se fixed panel při pointerup přesunul zpět pod prstem.
+      setTimeout(() => {
+        if (document.activeElement !== prvky.search) {
+          nastavSearchKeyboardMode(false);
+        }
+      }, 140);
     });
+
+    window.addEventListener('resize', () => {
+      if (prvky.screen.classList.contains('documents-search-keyboard-active')) {
+        aktualizujSearchKeyboardPanelTop();
+      }
+    }, { passive: true });
 
     prvky.search?.addEventListener('input', () => {
       hledaniDokumentu = prvky.search.value;

@@ -995,3 +995,87 @@
   }
 }
 
+
+/* ============================================================
+   PATCH 640B – HLEDÁNÍ: VÝSLEDKY NAD LubaKeyboard
+   640A vytáhl jen toolbar. To nestačí: nalezené dokumenty zůstaly pod
+   fixed klávesnicí. Při aktivním hledání proto zvedáme celou sekci
+   Dokumenty jako samostatný panel mezi hlavní navigaci a LubaKeyboard.
+   Seznam výsledků má vlastní scroll a zůstává stále viditelný.
+   ============================================================ */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsV1Section[aria-labelledby="documentsFilesTitle"] {
+    position: fixed;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    top: var(--documents-search-panel-top, 8px);
+    bottom: calc(var(--ln-lk-height, 260px) + 6px);
+    z-index: 100039;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 0;
+    padding: 10px 12px;
+    border-color: color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+    background: var(--color-surface);
+    background: color-mix(in srgb, var(--color-surface) 98%, var(--color-background));
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, .28);
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsV1Section[aria-labelledby="documentsFilesTitle"]
+  .documentsV1SectionHeader {
+    flex: 0 0 auto;
+    margin-bottom: 7px;
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsV1Section[aria-labelledby="documentsFilesTitle"]
+  .documentsSearchTools {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsV1Section[aria-labelledby="documentsFilesTitle"]
+  .documentsFiles {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsV1Section[aria-labelledby="documentsFilesTitle"]
+  .documentsEmpty {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  > .documentsFloatingAdd {
+    display: none !important;
+  }
+}
