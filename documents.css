@@ -2334,14 +2334,19 @@ body.documents-epub-viewer-open {
   position: relative;
   min-height: 48px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 9px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
   text-align: left;
 }
 
+.documentsEpubMarkBody {
+  min-width: 0;
+}
+
 .documentsEpubMarkOpen strong {
+  display: block;
   min-width: 0;
   overflow: hidden;
   font-size: 12px;
@@ -2349,15 +2354,36 @@ body.documents-epub-viewer-open {
   white-space: nowrap;
 }
 
+.documentsEpubMarkMeta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 3px;
+}
+
 .documentsEpubMarkOpen span {
+  min-width: 0;
+  overflow: hidden;
   color: #8a8176;
   font-size: 10px;
   font-weight: 800;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.documentsEpubMarkDelete {
+.documentsEpubMarkDelete,
+.documentsEpubMarkEditNote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
   min-height: 42px;
+  padding: 0;
+}
+
+.documentsEpubMarkDelete {
   font-size: 24px;
 }
 
@@ -2366,20 +2392,15 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubMarkEditNote {
-  min-height: 42px;
   font-size: 17px;
 }
 
 .documentsEpubMarkType {
-  grid-column: 2 / 4;
+  flex: 0 0 auto;
   color: #8a8176;
   font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
-}
-
-.documentsEpubMarkNote {
-  grid-column: 2 / 4;
 }
 
 .documentsEpubMarksEmpty {
@@ -2419,7 +2440,8 @@ body.documents-epub-viewer-open {
 
 .documentsEpubMarkNote {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
   color: #725a3f;
   font-size: 11px;
   font-style: normal;
@@ -2505,6 +2527,18 @@ body.documents-epub-viewer-open {
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarksEmpty,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkOpen span,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkType { color: #aaa59d; }
+
+@media (max-width: 420px) {
+  .documentsEpubHighlightRow {
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
+  }
+
+  .documentsEpubMarkEditNote,
+  .documentsEpubMarkDelete {
+    width: 34px;
+    min-width: 34px;
+  }
+}
 .documentsEpubViewer.reader-theme-dark .documentsEpubAddBookmark,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkOpen,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkEditNote,
