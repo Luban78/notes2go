@@ -956,3 +956,42 @@
   border-radius: 999px;
   padding: 0 12px;
 }
+
+/* ============================================================
+   PATCH 640A – HLEDÁNÍ NAD LubaKeyboard
+   LubaKeyboard je fixed panel a na rozdíl od systémové IME nezmenšuje
+   visualViewport. Aktivní hledání proto na mobilu dostane dočasný dock
+   těsně NAD skutečně změřenou výšku klávesnice (--ln-lk-height).
+   Po zavření klávesnice / blur se toolbar vrátí do běžného toku stránky.
+   ============================================================ */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsSearchTools {
+    position: fixed;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(var(--ln-lk-height, 260px) + 6px);
+    z-index: 100040;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, .28);
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsSearchBox {
+    min-height: 44px;
+  }
+
+  body.ln-luba-klavesnice-open
+  #documentsScreen.documents-search-keyboard-active
+  .documentsSearchBox input {
+    height: 42px;
+    font-size: 16px;
+  }
+}
+

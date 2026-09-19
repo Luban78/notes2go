@@ -1763,6 +1763,25 @@
     prvky.addPdf.addEventListener('click', pridatPdf);
     prvky.addPdfFloating?.addEventListener('click', pridatPdf);
 
+    /*
+     * PATCH 640A – HLEDÁNÍ MUSÍ RESPEKTOVAT LubaKeyboard.
+     * Vlastní klávesnice nezmenšuje visualViewport jako systémová IME,
+     * proto se běžný input hluboko na stránce mohl celý schovat pod ní.
+     * Třída pouze zapne mobilní fixed "search dock" nad klávesnicí;
+     * po blur/opuštění pole se UI vrací přesně na původní místo.
+     */
+    const nastavSearchKeyboardMode = (aktivni) => {
+      prvky.screen.classList.toggle('documents-search-keyboard-active', Boolean(aktivni));
+    };
+
+    prvky.search?.addEventListener('focus', () => {
+      nastavSearchKeyboardMode(true);
+    });
+
+    prvky.search?.addEventListener('blur', () => {
+      nastavSearchKeyboardMode(false);
+    });
+
     prvky.search?.addEventListener('input', () => {
       hledaniDokumentu = prvky.search.value;
       renderSoubory();
