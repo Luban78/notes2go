@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.1 MOVE / PATCH 636
+   LUBANOTE – DOKUMENTY V1.1 MOVE / PATCH 636B
    ============================================================ */
 
 .documentsV1 {
@@ -198,17 +198,36 @@
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
   color: var(--color-text);
   overflow: hidden;
-  transition: border-color .12s ease, background .12s ease, opacity .12s ease, transform .12s ease;
+  -webkit-touch-callout: none;
+  transition:
+    border-color .12s ease,
+    background .12s ease,
+    opacity .12s ease,
+    transform .12s ease,
+    box-shadow .12s ease;
 }
 
 .documentsFileRow.drag-ready {
+  position: relative;
+  z-index: 3;
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent),
+    0 10px 24px rgba(0,0,0,.18);
+  transform: scale(1.018);
 }
 
 .documentsFileRow.dragging {
-  opacity: .58;
-  transform: scale(.99);
+  opacity: .24;
+  transform: scale(.985);
+}
+
+.documentsV1.documents-drag-mode,
+.documentsV1.documents-drag-mode * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
 .documentsFileOpenArea {
@@ -226,12 +245,118 @@
 }
 
 
+.documentsFolderCard,
+.documentsFolderAll {
+  transition:
+    transform .12s ease,
+    border-color .12s ease,
+    background .12s ease,
+    box-shadow .12s ease;
+}
+
 .documentsFolderCard.drag-target,
 .documentsFolderAll.drag-target {
+  position: relative;
+  z-index: 4;
   border-color: var(--color-accent);
-  outline: 2px solid color-mix(in srgb, var(--color-accent) 42%, transparent);
-  outline-offset: 2px;
-  background: color-mix(in srgb, var(--color-accent) 17%, var(--color-surface));
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 46%, transparent);
+  outline-offset: 3px;
+  background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--color-accent) 16%, transparent),
+    0 12px 28px rgba(0,0,0,.22);
+  transform: scale(1.035);
+}
+
+.documentsFolderCard.drag-target .documentsFolderCardName,
+.documentsFolderAll.drag-target {
+  color: var(--color-accent-text);
+}
+
+
+.documentsDragPreview {
+  position: fixed;
+  z-index: 2147483460;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: min(78vw, 330px);
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  padding: 9px 12px;
+  transform: translate(-50%, -100%) scale(.98);
+  border: 2px solid var(--color-accent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-background));
+  color: var(--color-text);
+  box-shadow: 0 14px 34px rgba(0,0,0,.34);
+  opacity: .96;
+  pointer-events: none;
+  transition:
+    border-color .1s ease,
+    background .1s ease,
+    transform .1s ease,
+    box-shadow .1s ease;
+}
+
+.documentsDragPreview[hidden] {
+  display: none !important;
+}
+
+.documentsDragPreview.is-active {
+  transform: translate(-50%, -100%) scale(1.035);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent),
+    0 18px 38px rgba(0,0,0,.4);
+}
+
+.documentsDragPreview.has-target {
+  border-color: var(--color-accent-text);
+  background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface));
+  transform: translate(-50%, -100%) scale(1.055);
+}
+
+.documentsDragPreviewIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 44px;
+  border-radius: 9px;
+  background: #d94545;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.documentsDragPreviewText {
+  min-width: 0;
+}
+
+.documentsDragPreviewText strong,
+.documentsDragPreviewText small {
+  display: block;
+}
+
+.documentsDragPreviewText strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsDragPreviewText small {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.documentsDragPreview.has-target .documentsDragPreviewText small {
+  color: var(--color-accent-text);
+  font-weight: 850;
 }
 
 .documentsFileIcon {

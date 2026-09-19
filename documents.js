@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.1 MOVE LONGPRESS (PATCH 636A)
+   LUBANOTE – DOKUMENTY V1.1 MOVE LONGPRESS (PATCH 636B)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
@@ -31,9 +31,11 @@
   const DELKA_LONG_PRESS_SOUBORU = 420;
   const MAX_POHYB_PRED_LONGPRESS = 20;
   const START_DRAG_PO_LONGPRESS = 7;
+  const MAGNET_CILE_PX = 42;
 
   let dragStav = null;
   let dragCasovac = null;
+  let dragNahled = null;
   let blokovatOtevreniDo = 0;
 
   function jeAndroid() {
@@ -159,15 +161,98 @@
       .forEach((el) => el.classList.remove('drag-target'));
   }
 
+  function vzdalenostOdObdelniku(x, y, rect) {
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    return Math.hypot(dx, dy);
+  }
+
   function najdiDragCil(x, y) {
     const el = document.elementFromPoint(x, y);
-    if (!el) return null;
-    return el.closest?.('.documentsFolderCard, .documentsFolderAll') || null;
+    const prime = el?.closest?.('.documentsFolderCard, .documentsFolderAll') || null;
+    if (prime) return prime;
+
+    let nejblizsi = null;
+    let nejmensi = Infinity;
+
+    document.querySelectorAll('.documentsFolderCard, .documentsFolderAll').forEach((target) => {
+      const rect = target.getBoundingClientRect();
+      const vzdalenost = vzdalenostOdObdelniku(x, y, rect);
+      if (vzdalenost <= MAGNET_CILE_PX && vzdalenost < nejmensi) {
+        nejmensi = vzdalenost;
+        nejblizsi = target;
+      }
+    });
+
+    return nejblizsi;
+  }
+
+  function nazevDragCile(target) {
+    if (!target) return '';
+    if (target.classList.contains('documentsFolderAll')) return 'Všechny soubory';
+    return target.querySelector('.documentsFolderCardName')?.textContent?.trim()
+      || target.dataset.folderId
+      || 'složka';
+  }
+
+  function zajistiDragNahled() {
+    if (dragNahled?.isConnected) return dragNahled;
+
+    dragNahled = document.createElement('div');
+    dragNahled.className = 'documentsDragPreview';
+    dragNahled.hidden = true;
+    dragNahled.innerHTML = `
+      <span class="documentsDragPreviewIcon" aria-hidden="true">PDF</span>
+      <span class="documentsDragPreviewText">
+        <strong></strong>
+        <small>Táhni na cílovou složku</small>
+      </span>`;
+
+    document.body.appendChild(dragNahled);
+    return dragNahled;
+  }
+
+  function nastavPoziciDragNahledu(x, y) {
+    const nahled = zajistiDragNahled();
+    const okraj = 12;
+    const polovina = Math.min(170, Math.max(110, (nahled.offsetWidth || 260) / 2));
+    const safeX = Math.max(okraj + polovina, Math.min(window.innerWidth - okraj - polovina, x));
+    const safeY = Math.max(96, y - 26);
+    nahled.style.left = `${Math.round(safeX)}px`;
+    nahled.style.top = `${Math.round(safeY)}px`;
+  }
+
+  function zobrazDragNahled(row, x, y) {
+    const nahled = zajistiDragNahled();
+    const nazev = row?.querySelector('.documentsFileMain strong')?.textContent?.trim() || 'PDF soubor';
+    nahled.querySelector('strong').textContent = nazev;
+    nahled.querySelector('small').textContent = 'Táhni na cílovou složku';
+    nahled.classList.remove('is-active', 'has-target');
+    nahled.hidden = false;
+    nastavPoziciDragNahledu(x, y);
+  }
+
+  function skryjDragNahled() {
+    if (!dragNahled) return;
+    dragNahled.hidden = true;
+    dragNahled.classList.remove('is-active', 'has-target');
   }
 
   function nastavDragCil(target) {
     vycistiDragCil();
     if (target) target.classList.add('drag-target');
+
+    const nahled = dragNahled;
+    if (!nahled || nahled.hidden) return;
+    const popis = nahled.querySelector('small');
+
+    if (target) {
+      nahled.classList.add('has-target');
+      if (popis) popis.textContent = `Pustit do „${nazevDragCile(target)}“`;
+    } else {
+      nahled.classList.remove('has-target');
+      if (popis) popis.textContent = 'Táhni na cílovou složku';
+    }
   }
 
   function zrusDragCasovac() {
@@ -177,12 +262,20 @@
 
   function ukonciDrag() {
     zrusDragCasovac();
-    if (!dragStav) return;
+    if (!dragStav) {
+      skryjDragNahled();
+      vycistiDragCil();
+      dokumentyPrvky?.screen?.classList.remove('documents-drag-mode');
+      return;
+    }
+
     dragStav.row?.classList.remove('drag-ready', 'dragging');
     if (dragStav.pointerId !== null && dragStav.pointerId !== undefined) {
       try { dragStav.row?.releasePointerCapture?.(dragStav.pointerId); } catch (_error) {}
     }
     vycistiDragCil();
+    skryjDragNahled();
+    dokumentyPrvky?.screen?.classList.remove('documents-drag-mode');
     dragStav = null;
   }
 
@@ -190,7 +283,11 @@
     if (!dragStav || dragStav.pripraven) return;
     dragStav.pripraven = true;
     dragStav.row?.classList.add('drag-ready');
+    dokumentyPrvky?.screen?.classList.add('documents-drag-mode');
+    zobrazDragNahled(dragStav.row, dragStav.lastX, dragStav.lastY);
     blokovatOtevreniDo = Date.now() + 700;
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+    try { document.activeElement?.blur?.(); } catch (_error) {}
     try { navigator.vibrate?.(18); } catch (_error) {}
   }
 
@@ -226,11 +323,13 @@
     if (!dragStav?.pripraven) return;
     dragStav.lastX = x;
     dragStav.lastY = y;
+    nastavPoziciDragNahledu(x, y);
 
     if (!dragStav.aktivni && vzdalenostDragSouboru(x, y) >= START_DRAG_PO_LONGPRESS) {
       dragStav.aktivni = true;
       dragStav.row?.classList.remove('drag-ready');
       dragStav.row?.classList.add('dragging');
+      dragNahled?.classList.add('is-active');
     }
 
     if (!dragStav.aktivni) return;
@@ -261,11 +360,7 @@
       if (!zmeneno) return;
 
       await refresh();
-
-      const nazev = folderId
-        ? posledniSlozky.find((folder) => folder.id === folderId)?.name || 'složky'
-        : 'Všechny soubory';
-      zobrazZpravu('Dokumenty', `Soubor byl přesunut do „${nazev}“.`);
+      try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
     } catch (error) {
       console.error('Přesun souboru selhal:', error);
       zobrazChybu('Dokumenty', 'Soubor se nepodařilo přesunout.');
@@ -274,10 +369,21 @@
 
   function zapojLongPressSouboru(row, idSouboru) {
     /*
-     * PATCH 636A – stejné gesto jako jinde v LubaNote:
-     * krátký tap = otevřít, long-press 420 ms = připraveno k přesunu,
-     * potom táhnout na složku. Před long-pressem zůstává přirozený scroll.
+     * PATCH 636B – stejné gesto jako TODO/Bullet:
+     * krátký tap = otevřít, long-press 420 ms = převzetí gesta pro MOVE.
+     * Android contextmenu/callout na souborovém řádku záměrně blokujeme,
+     * protože Debug Hub ukázal, že se spouštěl ~394 ms po touchstartu,
+     * tedy těsně PŘED naším 420ms long-pressem a přesun byl nespolehlivý.
      */
+    row.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    row.addEventListener('selectstart', (event) => {
+      event.preventDefault();
+    });
+
     row.addEventListener('touchstart', (event) => {
       if (event.touches.length !== 1) return;
       const dotyk = event.touches[0];
