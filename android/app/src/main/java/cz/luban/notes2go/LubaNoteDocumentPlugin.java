@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @CapacitorPlugin(name = "LubaNoteDocument")
 public class LubaNoteDocumentPlugin extends Plugin {
@@ -159,6 +160,196 @@ public class LubaNoteDocumentPlugin extends Plugin {
           : "Dokument se nepodařilo přečíst.",
         chyba
       );
+    }
+  }
+
+  /* ==========================================================
+     DOKUMENTY V1 / PATCH 634
+     PDF se při importu kopíruje do privátního úložiště aplikace.
+     Díky tomu není knihovna závislá na dočasném oprávnění původního
+     Android dokument pickeru a PDF lze otevřít i po restartu aplikace.
+     ========================================================== */
+
+  @PluginMethod
+  public void importujPdfDokument(PluginCall call) {
+    Intent zamer = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+    zamer.addCategory(Intent.CATEGORY_OPENABLE);
+    zamer.setType("application/pdf");
+
+    startActivityForResult(
+      call,
+      zamer,
+      "dokonceniImportuPdfDokument"
+    );
+  }
+
+  @ActivityCallback
+  private void dokonceniImportuPdfDokument(
+    PluginCall call,
+    ActivityResult vysledek
+  ) {
+    if (call == null) {
+      return;
+    }
+
+    Intent dataZameru = vysledek.getData();
+
+    if (
+      vysledek.getResultCode() != Activity.RESULT_OK ||
+      dataZameru == null ||
+      dataZameru.getData() == null
+    ) {
+      JSObject odpoved = new JSObject();
+      odpoved.put("canceled", true);
+      call.resolve(odpoved);
+      return;
+    }
+
+    Uri uri = dataZameru.getData();
+    String nazevSouboru = ziskejNazevSouboru(uri);
+    String mimeType = getContext().getContentResolver().getType(uri);
+
+    boolean jePdf =
+      "application/pdf".equalsIgnoreCase(mimeType) ||
+      (nazevSouboru != null && nazevSouboru.toLowerCase().endsWith(".pdf"));
+
+    if (!jePdf) {
+      call.reject("Vybraný soubor není PDF.");
+      return;
+    }
+
+    File slozka = new File(
+      getContext().getFilesDir(),
+      "lubanote-documents"
+    );
+
+    if (!slozka.exists() && !slozka.mkdirs()) {
+      call.reject("LubaNote nevytvořil lokální složku Dokumentů.");
+      return;
+    }
+
+    String storageKey = UUID.randomUUID().toString() + ".pdf";
+    File cil = new File(slozka, storageKey);
+    long celkem = 0L;
+    final long maxPdf = 100L * 1024L * 1024L;
+
+    try (
+      InputStream vstup =
+        getContext().getContentResolver().openInputStream(uri);
+      OutputStream vystup = new FileOutputStream(cil)
+    ) {
+      if (vstup == null) {
+        throw new IOException("Android neotevřel vybrané PDF.");
+      }
+
+      byte[] buffer = new byte[64 * 1024];
+      int nacteno;
+
+      while ((nacteno = vstup.read(buffer)) != -1) {
+        if (nacteno <= 0) {
+          continue;
+        }
+
+        celkem += nacteno;
+
+        if (celkem > maxPdf) {
+          throw new IOException("PDF je příliš velké. Maximum je 100 MB.");
+        }
+
+        vystup.write(buffer, 0, nacteno);
+      }
+
+      vystup.flush();
+
+      JSObject odpoved = new JSObject();
+      odpoved.put("canceled", false);
+      odpoved.put("storageKey", storageKey);
+      odpoved.put(
+        "nazevSouboru",
+        nazevSouboru == null || nazevSouboru.trim().isEmpty()
+          ? "dokument.pdf"
+          : nazevSouboru
+      );
+      odpoved.put("mimeType", "application/pdf");
+      odpoved.put("sizeBytes", celkem);
+      call.resolve(odpoved);
+    } catch (IOException | SecurityException chyba) {
+      try {
+        // Rozpracovaný soubor po chybě nesmí zůstat v knihovně.
+        //noinspection ResultOfMethodCallIgnored
+        cil.delete();
+      } catch (Exception ignored) {
+        // Čištění nesmí přepsat původní chybu.
+      }
+
+      call.reject("PDF se nepodařilo přidat do Dokumentů.", chyba);
+    }
+  }
+
+  @PluginMethod
+  public void otevriUlozenyPdf(PluginCall call) {
+    String storageKey = call.getString("storageKey");
+
+    if (
+      storageKey == null ||
+      !storageKey.matches("^[0-9a-fA-F-]{36}\\.pdf$")
+    ) {
+      call.reject("Neplatný identifikátor PDF.");
+      return;
+    }
+
+    File slozka = new File(
+      getContext().getFilesDir(),
+      "lubanote-documents"
+    );
+    File soubor = new File(slozka, storageKey);
+
+    if (!soubor.isFile()) {
+      call.reject("PDF už není v lokální knihovně dostupné.");
+      return;
+    }
+
+    synchronized (pdfViewerLock) {
+      zavriPdfViewerInterni();
+
+      ParcelFileDescriptor descriptor = null;
+
+      try {
+        descriptor = ParcelFileDescriptor.open(
+          soubor,
+          ParcelFileDescriptor.MODE_READ_ONLY
+        );
+
+        PdfRenderer renderer = new PdfRenderer(descriptor);
+
+        if (renderer.getPageCount() <= 0) {
+          renderer.close();
+          descriptor.close();
+          call.reject("PDF neobsahuje žádné stránky.");
+          return;
+        }
+
+        pdfViewerDescriptor = descriptor;
+        pdfViewerRenderer = renderer;
+        /* file:// URI funguje i pro existující kopírovací akci Uložit. */
+        pdfViewerUri = Uri.fromFile(soubor);
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("opened", true);
+        odpoved.put("pageCount", renderer.getPageCount());
+        odpoved.put("sizeBytes", soubor.length());
+        call.resolve(odpoved);
+      } catch (IOException | SecurityException chyba) {
+        if (descriptor != null) {
+          try {
+            descriptor.close();
+          } catch (Exception ignored) {
+            // Descriptor už může být zavřený.
+          }
+        }
+
+        call.reject("PDF se nepodařilo otevřít z Dokumentů.", chyba);
+      }
     }
   }
 

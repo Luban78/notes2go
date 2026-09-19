@@ -1,0 +1,386 @@
+/* ============================================================
+   LUBANOTE – DOKUMENTY V1.0 / PATCH 634
+   ============================================================ */
+
+.documentsV1 {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(100%, 900px);
+  min-height: 0;
+  margin: 0 auto;
+  padding: 14px 14px calc(96px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  color: var(--color-text);
+}
+
+.documentsV1Hero,
+.documentsV1Section {
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+}
+
+.documentsV1Hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 18px;
+  text-align: left;
+}
+
+.documentsV1HeroText {
+  min-width: 0;
+}
+
+.documentsV1Eyebrow {
+  margin-bottom: 3px;
+  color: var(--color-accent-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.documentsV1Hero h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(26px, 7vw, 34px);
+  line-height: 1.08;
+}
+
+.documentsV1Hero p {
+  margin: 5px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.documentsV1Primary,
+.documentsV1Secondary,
+.documentsFolderCancel,
+.documentsFolderCreate {
+  min-height: 46px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.documentsV1Primary,
+.documentsFolderCreate {
+  border-color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 78%, transparent);
+  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface));
+  color: var(--color-accent-text);
+}
+
+.documentsV1Section {
+  padding: 16px;
+  text-align: left;
+}
+
+.documentsV1SectionHeader {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.documentsV1SectionHeader h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 19px;
+}
+
+.documentsV1SectionHeader small {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.documentsFolderAll {
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-weight: 800;
+}
+
+.documentsFolderAll.active,
+.documentsFolderCard.active {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 -3px 0 var(--color-accent);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--color-accent) 85%, transparent);
+  color: var(--color-accent-text);
+}
+
+.documentsFoldersGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.documentsFolderCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  align-items: center;
+  min-width: 0;
+  min-height: 78px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  padding: 12px;
+  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+  color: var(--color-text);
+  text-align: left;
+}
+
+.documentsFolderCardIcon {
+  grid-row: 1 / 3;
+  font-size: 30px;
+}
+
+.documentsFolderCardName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsFolderCard small,
+.documentsFoldersEmpty {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.documentsFoldersEmpty {
+  grid-column: 1 / -1;
+  padding: 10px 2px;
+}
+
+.documentsFiles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.documentsFileRow {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+  color: var(--color-text);
+  text-align: left;
+}
+
+.documentsFileIcon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 50px;
+  border-radius: 10px;
+  background: #d94545;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.documentsFileMain {
+  min-width: 0;
+}
+
+.documentsFileMain strong,
+.documentsFileMain small {
+  display: block;
+}
+
+.documentsFileMain strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsFileMain small {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.documentsFileOpen {
+  color: var(--color-accent-text);
+  font-size: 32px;
+  line-height: 1;
+}
+
+.documentsEmpty {
+  padding: 26px 14px 20px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.documentsEmptyIcon {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 38px;
+}
+
+.documentsFloatingAdd {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 18px));
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--color-accent-text);
+  border-color: color-mix(in srgb, var(--color-accent-text) 72%, transparent);
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 34px;
+  font-weight: 500;
+  box-shadow: 0 10px 24px rgba(0,0,0,.22);
+}
+
+.documentsFolderModal[hidden] {
+  display: none !important;
+}
+
+.documentsFolderModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 18px;
+  background: rgba(0,0,0,.48);
+}
+
+.documentsFolderDialog {
+  width: min(100%, 430px);
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  padding: 20px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 18px 48px rgba(0,0,0,.3);
+  text-align: center;
+}
+
+.documentsFolderIcon {
+  font-size: 40px;
+}
+
+.documentsFolderDialog h3 {
+  margin: 4px 0;
+  font-size: 24px;
+}
+
+.documentsFolderDialog p {
+  margin: 0 0 16px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.documentsFolderDialog label {
+  display: block;
+  text-align: left;
+}
+
+.documentsFolderDialog label > span {
+  display: block;
+  margin: 0 0 6px 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.documentsFolderDialog input {
+  width: 100%;
+  height: 52px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 0 14px;
+  outline: none;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 18px;
+}
+
+.documentsFolderDialog input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.documentsFolderActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.documentsFolderCancel {
+  background: transparent;
+  color: var(--color-text);
+}
+
+@media (max-width: 520px) {
+  .documentsV1Hero {
+    grid-template-columns: 1fr;
+  }
+
+  .documentsV1Hero .documentsV1Primary {
+    width: 100%;
+  }
+
+  .documentsV1SectionHeader {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 380px) {
+  .documentsFoldersGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dokumenty modal stejně jako ostatní textové modaly zůstane nad LubaKeyboard. */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .documentsFolderModal:not([hidden]) {
+    align-items: flex-end;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
+  }
+
+  body.ln-luba-klavesnice-open .documentsFolderDialog {
+    max-height: calc(100dvh - var(--ln-lk-height, 260px) - 15px);
+    overflow-y: auto;
+  }
+}

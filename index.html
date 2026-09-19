@@ -17,6 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260919-main-nav-documents-633">
+  <link rel="stylesheet" href="documents.css?v=20260919-documents-v1-634">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -534,42 +535,48 @@
     
   </section>
   
-  <!-- DOKUMENTY – FÁZE 1 / navigační shell -->
-  <section id="documentsScreen" class="documentsScreen" hidden>
-    <div class="documentsScreenHeader">
-      <div>
-        <div class="documentsScreenEyebrow">Nový hlavní modul</div>
+  <!-- DOKUMENTY V1.0 – lokální složky + PDF knihovna -->
+  <section id="documentsScreen" class="documentsScreen documentsV1" hidden>
+    <div class="documentsV1Hero">
+      <div class="documentsV1HeroText">
+        <div class="documentsV1Eyebrow">Dokumenty V1</div>
         <h2>Dokumenty</h2>
-        <p>Soubory, složky, sdílení a převod mezi dokumenty a poznámkami.</p>
+        <p id="documentsLocalStatus">Lokálně v tomto zařízení</p>
       </div>
+      <button id="documentsAddPdfButton" class="documentsV1Primary" type="button">＋ Přidat PDF</button>
     </div>
 
-    <div class="documentsRoadmapGrid" aria-label="Připravované části Dokumentů">
-      <article class="documentsRoadmapCard">
-        <span class="documentsRoadmapIcon" aria-hidden="true">📁</span>
-        <strong>Složky</strong>
-        <span>Třídění a drag &amp; drop</span>
-      </article>
-      <article class="documentsRoadmapCard">
-        <span class="documentsRoadmapIcon" aria-hidden="true">📄</span>
-        <strong>Soubory</strong>
-        <span>PDF, DOCX, obrázky a další</span>
-      </article>
-      <article class="documentsRoadmapCard">
-        <span class="documentsRoadmapIcon" aria-hidden="true">👥</span>
-        <strong>Sdílení</strong>
-        <span>Přes stávající @username</span>
-      </article>
-      <article class="documentsRoadmapCard">
-        <span class="documentsRoadmapIcon" aria-hidden="true">🔄</span>
-        <strong>Konverze</strong>
-        <span>Dokument ↔ poznámka</span>
-      </article>
-    </div>
+    <section class="documentsV1Section" aria-labelledby="documentsFoldersTitle">
+      <div class="documentsV1SectionHeader">
+        <div>
+          <h3 id="documentsFoldersTitle">Složky</h3>
+          <small>První krok k vlastní ploše Dokumentů</small>
+        </div>
+        <button id="documentsAddFolderButton" class="documentsV1Secondary" type="button">＋ Nová složka</button>
+      </div>
 
-    <p class="documentsRoadmapNote">
-      Základ navigace je připraven. V dalším kroku napojíme první skutečný souborový tok.
-    </p>
+      <button id="documentsAllFolderButton" class="documentsFolderAll active" type="button">Všechny soubory</button>
+      <div id="documentsFolders" class="documentsFoldersGrid"></div>
+    </section>
+
+    <section class="documentsV1Section" aria-labelledby="documentsFilesTitle">
+      <div class="documentsV1SectionHeader">
+        <div>
+          <h3 id="documentsFilesTitle">PDF soubory</h3>
+          <small id="documentsActiveFolder">Všechny soubory</small>
+        </div>
+      </div>
+
+      <div id="documentsEmpty" class="documentsEmpty">
+        <span class="documentsEmptyIcon" aria-hidden="true">📄</span>
+        <strong>Zatím tu není žádné PDF</strong>
+        <p>Přidej první soubor. Otevře se potom ve stávajícím LubaNote PDF vieweru.</p>
+      </div>
+
+      <div id="documentsFiles" class="documentsFiles" hidden></div>
+    </section>
+
+    <button id="documentsFloatingAddButton" class="documentsFloatingAdd" type="button" aria-label="Přidat PDF">+</button>
   </section>
 
   <!-- ========================================
@@ -2144,6 +2151,7 @@
 
   <!-- Otevřít / Uložit jako – soubory přímo z editoru -->
   <script src="editorDocuments.js?v=20260919-pdf-modal-balanced-632a"></script>
+  <script src="documents.js?v=20260919-documents-v1-634"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>
