@@ -2581,3 +2581,28 @@ body.documents-epub-viewer-open {
 .documentsEpubViewer.reader-theme-dark .documentsEpubNoteQuote { background: #25292d; color: #c9c4bc; }
 .documentsEpubViewer.reader-theme-dark .documentsEpubNoteInput { background: #25292d; color: #f1efea; border-color: rgba(255,255,255,.13); }
 .documentsEpubViewer.reader-theme-dark .documentsEpubNoteActions button { background: #25292d; color: #eceae5; border-color: rgba(255,255,255,.13); }
+
+
+/* ============================================================
+   PATCH 646A – EPUB poznámka bezpečně NAD LubaKeyboard
+   ------------------------------------------------------------
+   Vlastní LubaKeyboard je fixed panel a nezmenšuje visualViewport.
+   Při psaní anotace proto rezervujeme její skutečně změřenou výšku,
+   stejně jako u ostatních textových modalů LubaNote.
+   ============================================================ */
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .documentsEpubNoteDialog:not([hidden]) {
+    place-items: end center;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
+  }
+
+  body.ln-luba-klavesnice-open .documentsEpubNotePanel {
+    min-height: 0;
+    max-height: calc(
+      100dvh - var(--ln-lk-height, 260px) - 5px - max(10px, env(safe-area-inset-top))
+    );
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

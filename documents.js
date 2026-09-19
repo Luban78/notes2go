@@ -2871,7 +2871,12 @@
     epubViewerPrvky.noteQuote.textContent = kratkyEpubCitace(polozka.quote);
     epubViewerPrvky.noteInput.value = polozka.note || '';
     epubViewerPrvky.noteDialog.hidden = false;
-    requestAnimationFrame(() => epubViewerPrvky.noteInput.focus());
+    /* PATCH 646A – LubaKeyboard: nový aria-modal nejdřív musí projít
+       společným modal guardem. Focus proto pustíme až v dalším frame;
+       jinak guard klávesnici otevřenou focusin eventem okamžitě schová. */
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => epubViewerPrvky.noteInput.focus());
+    });
   }
 
   function zavriEpubPoznamku() {
@@ -3151,7 +3156,7 @@
         <section class="documentsEpubNotePanel" role="dialog" aria-modal="true" aria-label="Poznámka k označení">
           <div class="documentsEpubNoteHeader"><strong>Poznámka k označení</strong><button type="button" class="documentsEpubNoteClose" aria-label="Zavřít">×</button></div>
           <p class="documentsEpubNoteQuote"></p>
-          <textarea class="documentsEpubNoteInput" maxlength="2000" rows="5" placeholder="Napiš vlastní poznámku…"></textarea>
+          <textarea class="documentsEpubNoteInput" maxlength="2000" rows="5" placeholder="Napiš vlastní poznámku…" autocomplete="off" spellcheck="true" data-luba-keyboard-field="epub-highlight-note"></textarea>
           <div class="documentsEpubNoteActions"><button type="button" class="documentsEpubNoteCancel">Zrušit</button><button type="button" class="documentsEpubNoteSave">Uložit</button></div>
         </section>
       </div>
