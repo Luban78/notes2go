@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.8 / EPUB READER (PATCH 643)
+   LUBANOTE – DOKUMENTY V1.9 / LUBAREADER SETTINGS (PATCH 644)
    ------------------------------------------------------------
    Lokální knihovna Dokumentů:
    - složky, řazení, long-press přesuny, Koš, hledání a filtry
@@ -10,6 +10,7 @@
    - DOCX: nadpisy, odstavce, formát textu, tabulky, odkazy a obrázky
    - DOC: čitelný text bez maker/OLE a bez garance původního layoutu
    - EPUB import + vlastní lokální LubaReader, kapitoly a zapamatování pozice
+   - LubaReader: globální nastavení čtení (Aa) – zarovnání, velikost, řádkování, okraje, pozadí a písmo
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -35,6 +36,15 @@
   const DOC_MIME = 'application/msword';
   const EPUB_MIME = 'application/epub+zip';
   const TRASH_VIEW = '__documents_trash__';
+  const EPUB_READER_SETTINGS_KEY = 'lubanote_epub_reader_settings_v1';
+  const EPUB_READER_DEFAULTS = Object.freeze({
+    align: 'book',
+    fontSize: 100,
+    lineHeight: 'normal',
+    margins: 'normal',
+    theme: 'sepia',
+    font: 'book'
+  });
 
   let dbPromise = null;
   let aktivniSlozkaId = null;
@@ -76,6 +86,7 @@
   let epubKapitolaObjectUrls = [];
   let epubUlozPoziciTimer = null;
   let epubListCoverUrls = [];
+  let epubReaderNastaveni = nactiEpubReaderNastaveni();
 
   function jeAndroid() {
     try {
@@ -2539,6 +2550,79 @@
     }
   }
 
+  function normalizujEpubReaderNastaveni(vstup = {}) {
+    const align = ['book', 'left', 'justify'].includes(vstup.align) ? vstup.align : EPUB_READER_DEFAULTS.align;
+    const lineHeight = ['compact', 'normal', 'airy'].includes(vstup.lineHeight) ? vstup.lineHeight : EPUB_READER_DEFAULTS.lineHeight;
+    const margins = ['narrow', 'normal', 'wide'].includes(vstup.margins) ? vstup.margins : EPUB_READER_DEFAULTS.margins;
+    const theme = ['light', 'sepia', 'dark'].includes(vstup.theme) ? vstup.theme : EPUB_READER_DEFAULTS.theme;
+    const font = ['book', 'sans', 'serif'].includes(vstup.font) ? vstup.font : EPUB_READER_DEFAULTS.font;
+    const fontSize = Math.max(75, Math.min(160, Math.round((Number(vstup.fontSize) || 100) / 5) * 5));
+    return { align, fontSize, lineHeight, margins, theme, font };
+  }
+
+  function nactiEpubReaderNastaveni() {
+    try {
+      const raw = localStorage.getItem(EPUB_READER_SETTINGS_KEY);
+      if (!raw) return { ...EPUB_READER_DEFAULTS };
+      return normalizujEpubReaderNastaveni(JSON.parse(raw));
+    } catch (_error) {
+      return { ...EPUB_READER_DEFAULTS };
+    }
+  }
+
+  function ulozEpubReaderNastaveni() {
+    try {
+      localStorage.setItem(EPUB_READER_SETTINGS_KEY, JSON.stringify(epubReaderNastaveni));
+    } catch (_error) {}
+  }
+
+  function aktualizujEpubReaderNastaveniUi() {
+    if (!epubViewerPrvky?.settings) return;
+    const settings = epubViewerPrvky.settings;
+    settings.querySelectorAll('[data-reader-setting][data-reader-value]').forEach((button) => {
+      const klic = button.dataset.readerSetting;
+      const hodnota = button.dataset.readerValue;
+      button.classList.toggle('active', String(epubReaderNastaveni[klic]) === hodnota);
+      button.setAttribute('aria-pressed', String(epubReaderNastaveni[klic]) === hodnota ? 'true' : 'false');
+    });
+    if (epubViewerPrvky.fontSizeValue) {
+      epubViewerPrvky.fontSizeValue.textContent = `${epubReaderNastaveni.fontSize} %`;
+    }
+  }
+
+  function aplikujEpubReaderNastaveni() {
+    if (!epubViewerPrvky) return;
+    const { overlay, content } = epubViewerPrvky;
+    const n = epubReaderNastaveni;
+
+    for (const trida of Array.from(overlay.classList)) {
+      if (/^reader-(align|line|margins|theme|font)-/.test(trida)) overlay.classList.remove(trida);
+    }
+
+    overlay.classList.add(`reader-align-${n.align}`);
+    overlay.classList.add(`reader-line-${n.lineHeight}`);
+    overlay.classList.add(`reader-margins-${n.margins}`);
+    overlay.classList.add(`reader-theme-${n.theme}`);
+    overlay.classList.add(`reader-font-${n.font}`);
+
+    const zaklad = window.innerWidth <= 520 ? 16 : 17;
+    content.style.setProperty('--epub-reader-font-size', `${(zaklad * n.fontSize / 100).toFixed(2)}px`);
+    aktualizujEpubReaderNastaveniUi();
+  }
+
+  function zmenEpubReaderNastaveni(klic, hodnota) {
+    epubReaderNastaveni = normalizujEpubReaderNastaveni({
+      ...epubReaderNastaveni,
+      [klic]: hodnota
+    });
+    ulozEpubReaderNastaveni();
+    aplikujEpubReaderNastaveni();
+  }
+
+  function zavriEpubReaderNastaveni() {
+    if (epubViewerPrvky?.settings) epubViewerPrvky.settings.hidden = true;
+  }
+
   function uvolniEpubKapitolaUrls() {
     for (const url of epubKapitolaObjectUrls) {
       try { URL.revokeObjectURL(url); } catch (_error) {}
@@ -2549,6 +2633,10 @@
   function nastavEpubFullscreen(ano) {
     if (!epubViewerPrvky) return;
     epubViewerFullscreen = ano === true;
+    if (epubViewerFullscreen) {
+      epubViewerPrvky.toc.hidden = true;
+      zavriEpubReaderNastaveni();
+    }
     epubViewerPrvky.overlay.classList.toggle('is-fullscreen', epubViewerFullscreen);
   }
 
@@ -2587,6 +2675,7 @@
     nastavEpubFullscreen(false);
     epubViewerPrvky.overlay.hidden = true;
     epubViewerPrvky.toc.hidden = true;
+    zavriEpubReaderNastaveni();
     epubViewerPrvky.loading.hidden = true;
     epubViewerPrvky.content.innerHTML = '';
     document.body.classList.remove('documents-epub-viewer-open');
@@ -2674,7 +2763,10 @@
           <small class="documentsEpubAuthor"></small>
           <span class="documentsEpubChapter"></span>
         </div>
-        <button type="button" class="documentsEpubTocButton" aria-label="Obsah knihy" title="Obsah">☰</button>
+        <div class="documentsEpubHeaderActions">
+          <button type="button" class="documentsEpubSettingsButton" aria-label="Nastavení čtení" title="Nastavení čtení">Aa</button>
+          <button type="button" class="documentsEpubTocButton" aria-label="Obsah knihy" title="Obsah">☰</button>
+        </div>
       </header>
       <main class="documentsEpubBody">
         <div class="documentsEpubLoading" hidden>
@@ -2693,6 +2785,62 @@
           <div class="documentsEpubTocHeader"><strong>Obsah</strong><button type="button" class="documentsEpubTocClose" aria-label="Zavřít obsah">×</button></div>
           <div class="documentsEpubTocList"></div>
         </section>
+      </div>
+      <div class="documentsEpubSettings" hidden>
+        <section class="documentsEpubSettingsPanel" role="dialog" aria-modal="true" aria-label="Nastavení čtení">
+          <div class="documentsEpubSettingsHeader"><strong>Nastavení čtení</strong><button type="button" class="documentsEpubSettingsClose" aria-label="Zavřít nastavení">×</button></div>
+          <div class="documentsEpubSettingsBody">
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Zarovnání</span>
+              <div class="documentsEpubSettingChoices">
+                <button type="button" data-reader-setting="align" data-reader-value="book">Kniha</button>
+                <button type="button" data-reader-setting="align" data-reader-value="left">Vlevo</button>
+                <button type="button" data-reader-setting="align" data-reader-value="justify">Do bloku</button>
+              </div>
+            </div>
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Velikost písma</span>
+              <div class="documentsEpubFontSizeControl">
+                <button type="button" class="documentsEpubFontMinus" aria-label="Zmenšit písmo">−</button>
+                <strong class="documentsEpubFontSizeValue">100 %</strong>
+                <button type="button" class="documentsEpubFontPlus" aria-label="Zvětšit písmo">+</button>
+              </div>
+            </div>
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Řádkování</span>
+              <div class="documentsEpubSettingChoices">
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="compact">Menší</button>
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="normal">Normální</button>
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="airy">Vzdušné</button>
+              </div>
+            </div>
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Okraje textu</span>
+              <div class="documentsEpubSettingChoices">
+                <button type="button" data-reader-setting="margins" data-reader-value="narrow">Úzké</button>
+                <button type="button" data-reader-setting="margins" data-reader-value="normal">Normální</button>
+                <button type="button" data-reader-setting="margins" data-reader-value="wide">Široké</button>
+              </div>
+            </div>
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Pozadí</span>
+              <div class="documentsEpubSettingChoices">
+                <button type="button" data-reader-setting="theme" data-reader-value="light">Světlé</button>
+                <button type="button" data-reader-setting="theme" data-reader-value="sepia">Sépie</button>
+                <button type="button" data-reader-setting="theme" data-reader-value="dark">Tmavé</button>
+              </div>
+            </div>
+            <div class="documentsEpubSettingRow">
+              <span class="documentsEpubSettingLabel">Písmo</span>
+              <div class="documentsEpubSettingChoices">
+                <button type="button" data-reader-setting="font" data-reader-value="book">Kniha</button>
+                <button type="button" data-reader-setting="font" data-reader-value="serif">Patkové</button>
+                <button type="button" data-reader-setting="font" data-reader-value="sans">Bezpatkové</button>
+              </div>
+            </div>
+            <button type="button" class="documentsEpubSettingsReset">Obnovit výchozí</button>
+          </div>
+        </section>
       </div>`;
 
     document.body.appendChild(overlay);
@@ -2700,6 +2848,7 @@
     const title = overlay.querySelector('.documentsEpubTitle strong');
     const author = overlay.querySelector('.documentsEpubAuthor');
     const chapter = overlay.querySelector('.documentsEpubChapter');
+    const settingsButton = overlay.querySelector('.documentsEpubSettingsButton');
     const tocButton = overlay.querySelector('.documentsEpubTocButton');
     const body = overlay.querySelector('.documentsEpubBody');
     const loading = overlay.querySelector('.documentsEpubLoading');
@@ -2711,11 +2860,39 @@
     const toc = overlay.querySelector('.documentsEpubToc');
     const tocList = overlay.querySelector('.documentsEpubTocList');
     const tocClose = overlay.querySelector('.documentsEpubTocClose');
+    const settings = overlay.querySelector('.documentsEpubSettings');
+    const settingsClose = overlay.querySelector('.documentsEpubSettingsClose');
+    const fontMinus = overlay.querySelector('.documentsEpubFontMinus');
+    const fontPlus = overlay.querySelector('.documentsEpubFontPlus');
+    const fontSizeValue = overlay.querySelector('.documentsEpubFontSizeValue');
+    const settingsReset = overlay.querySelector('.documentsEpubSettingsReset');
 
     close.addEventListener('click', zavriEpubViewer);
     prev.addEventListener('click', () => void zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 0 }));
     next.addEventListener('click', () => void zobrazEpubKapitolu(epubAktualniKapitola + 1, { ratio: 0 }));
+    settingsButton.addEventListener('click', () => {
+      toc.hidden = true;
+      aktualizujEpubReaderNastaveniUi();
+      settings.hidden = false;
+    });
+    settingsClose.addEventListener('click', zavriEpubReaderNastaveni);
+    settings.addEventListener('pointerdown', (event) => {
+      if (event.target === settings) zavriEpubReaderNastaveni();
+    });
+    settings.addEventListener('click', (event) => {
+      const volba = event.target.closest?.('[data-reader-setting][data-reader-value]');
+      if (!volba) return;
+      zmenEpubReaderNastaveni(volba.dataset.readerSetting, volba.dataset.readerValue);
+    });
+    fontMinus.addEventListener('click', () => zmenEpubReaderNastaveni('fontSize', epubReaderNastaveni.fontSize - 5));
+    fontPlus.addEventListener('click', () => zmenEpubReaderNastaveni('fontSize', epubReaderNastaveni.fontSize + 5));
+    settingsReset.addEventListener('click', () => {
+      epubReaderNastaveni = { ...EPUB_READER_DEFAULTS };
+      ulozEpubReaderNastaveni();
+      aplikujEpubReaderNastaveni();
+    });
     tocButton.addEventListener('click', () => {
+      settings.hidden = true;
       vykresliEpubObsah();
       toc.hidden = false;
     });
@@ -2774,7 +2951,12 @@
       pointerTap = null;
     });
 
-    epubViewerPrvky = { overlay, close, title, author, chapter, tocButton, body, loading, loadingText, content, prev, next, counter, toc, tocList, tocClose };
+    epubViewerPrvky = {
+      overlay, close, title, author, chapter, settingsButton, tocButton, body,
+      loading, loadingText, content, prev, next, counter, toc, tocList, tocClose,
+      settings, settingsClose, fontMinus, fontPlus, fontSizeValue, settingsReset
+    };
+    aplikujEpubReaderNastaveni();
     return epubViewerPrvky;
   }
 
@@ -2786,6 +2968,8 @@
     zavriDocxViewer();
     uvolniEpubKapitolaUrls();
     nastavEpubFullscreen(false);
+    prvky.settings.hidden = true;
+    aplikujEpubReaderNastaveni();
     prvky.overlay.hidden = false;
     prvky.loading.hidden = false;
     prvky.loadingText.textContent = 'Otevírám EPUB…';
@@ -2816,10 +3000,12 @@
     const puvodniAndroidZpet = window.LubaNoteZpracujAndroidZpet;
     window.LubaNoteZpracujAndroidZpet = function () {
       if (epubViewerOtevren) {
-        if (epubViewerFullscreen) {
-          nastavEpubFullscreen(false);
+        if (epubViewerPrvky && !epubViewerPrvky.settings.hidden) {
+          zavriEpubReaderNastaveni();
         } else if (epubViewerPrvky && !epubViewerPrvky.toc.hidden) {
           epubViewerPrvky.toc.hidden = true;
+        } else if (epubViewerFullscreen) {
+          nastavEpubFullscreen(false);
         } else {
           zavriEpubViewer();
         }
