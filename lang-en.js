@@ -120,6 +120,8 @@ window.LubaNoteLanguagePacks.push({
     "storageScope.shareTitle": "This device only",
     "storageScope.shareBlocked": "Sharing requires synced storage. This note remains only on this device.",
     "modules.planner": "Planner",
+    "modules.documents": "Documents",
+    "plannerTabs.calendar": "Calendar",
     "modules.reminders": "Reminders",
 
     "sync.synced": "✓ Synced",

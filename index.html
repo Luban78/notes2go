@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=20260919-pdf-modal-balanced-632a">
+  <link rel="stylesheet" href="style.css?v=20260919-main-nav-documents-633">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -57,7 +57,7 @@
     </div>
 
     <div class="appSplashSubtitle">
-      Poznámky • Plán • Připomínky
+      Poznámky • Plán • Dokumenty
     </div>
 
     <div class="appSplashLoader" aria-hidden="true">
@@ -284,9 +284,9 @@
           <span class="moduleTabText">Plán</span>
         </button>
         
-        <button id="remindersModuleButton" class="moduleTab" type="button" data-module="reminders">
-          <span class="moduleTabIcon" data-luba-icon="zvonek" data-luba-classic-icon="🔔" aria-hidden="true"></span>
-          <span class="moduleTabText">Připomínky</span>
+        <button id="documentsModuleButton" class="moduleTab" type="button" data-module="documents">
+          <span class="moduleTabIcon" data-luba-icon="dokument" data-luba-classic-icon="📁" aria-hidden="true"></span>
+          <span class="moduleTabText">Dokumenty</span>
         </button>
       </nav>
     </div>
@@ -466,6 +466,19 @@
      OBRAZOVKA PLÁN
      ======================================== -->
   
+  <!-- PLÁN – vnitřní přepínání; Připomínky zůstávají plnohodnotná obrazovka. -->
+  <nav id="plannerSubnav" class="plannerSubnav" aria-label="Části plánu" hidden>
+    <button id="plannerCalendarTabButton" class="plannerSubnavButton active" type="button" aria-current="page">
+      <span class="plannerSubnavIcon" data-luba-icon="kalendar" data-luba-classic-icon="📅" aria-hidden="true"></span>
+      <span>Kalendář</span>
+    </button>
+
+    <button id="remindersModuleButton" class="plannerSubnavButton" type="button">
+      <span class="plannerSubnavIcon" data-luba-icon="zvonek" data-luba-classic-icon="🔔" aria-hidden="true"></span>
+      <span class="moduleTabText">Připomínky</span>
+    </button>
+  </nav>
+
   <section id="calendarScreen" class="calendarScreen" hidden>
     
     <div class="calendarHeader">
@@ -521,6 +534,44 @@
     
   </section>
   
+  <!-- DOKUMENTY – FÁZE 1 / navigační shell -->
+  <section id="documentsScreen" class="documentsScreen" hidden>
+    <div class="documentsScreenHeader">
+      <div>
+        <div class="documentsScreenEyebrow">Nový hlavní modul</div>
+        <h2>Dokumenty</h2>
+        <p>Soubory, složky, sdílení a převod mezi dokumenty a poznámkami.</p>
+      </div>
+    </div>
+
+    <div class="documentsRoadmapGrid" aria-label="Připravované části Dokumentů">
+      <article class="documentsRoadmapCard">
+        <span class="documentsRoadmapIcon" aria-hidden="true">📁</span>
+        <strong>Složky</strong>
+        <span>Třídění a drag &amp; drop</span>
+      </article>
+      <article class="documentsRoadmapCard">
+        <span class="documentsRoadmapIcon" aria-hidden="true">📄</span>
+        <strong>Soubory</strong>
+        <span>PDF, DOCX, obrázky a další</span>
+      </article>
+      <article class="documentsRoadmapCard">
+        <span class="documentsRoadmapIcon" aria-hidden="true">👥</span>
+        <strong>Sdílení</strong>
+        <span>Přes stávající @username</span>
+      </article>
+      <article class="documentsRoadmapCard">
+        <span class="documentsRoadmapIcon" aria-hidden="true">🔄</span>
+        <strong>Konverze</strong>
+        <span>Dokument ↔ poznámka</span>
+      </article>
+    </div>
+
+    <p class="documentsRoadmapNote">
+      Základ navigace je připraven. V dalším kroku napojíme první skutečný souborový tok.
+    </p>
+  </section>
+
   <!-- ========================================
      DETAIL DNE
      ======================================== -->
@@ -2052,9 +2103,9 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=20260917-local-no-content-sync-586"></script>
-  <script src="lang-en.js?v=20260918-admin-extend-demo-622"></script>
-  <script src="i18n.js?v=20260915-core-v2-hardcut-528"></script>
+  <script src="lang-cs.js?v=20260919-main-nav-documents-633"></script>
+  <script src="lang-en.js?v=20260919-main-nav-documents-633"></script>
+  <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
   <script src="autofillGuard.js?v=20260904-registrace-c2-1"></script>
@@ -2138,10 +2189,10 @@
   <script src="secretBiometric.js?v=20260907-secret-fast-unlock-1"></script>
   
   <!-- Navigace modulů a servisní nabídka -->
-  <script src="navigation.js"></script>
+  <script src="navigation.js?v=20260919-main-nav-documents-633"></script>
 
   <!-- Desktop doplnění SVG ikon do levého panelu -->
-  <script src="desktopIcons.js"></script>
+  <script src="desktopIcons.js?v=20260919-main-nav-documents-633"></script>
 
   <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
   <script src="desktop.js"></script>

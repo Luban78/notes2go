@@ -40,7 +40,7 @@
   [
     document.querySelector("#notesModuleButton .moduleTabIcon"),
     document.querySelector("#plannerModuleButton .moduleTabIcon"),
-    document.querySelector("#remindersModuleButton .moduleTabIcon")
+    document.querySelector("#documentsModuleButton .moduleTabIcon")
   ].filter(Boolean).forEach((hostitel) => {
     hostitel.classList.add("desktopModuleIcon");
   });

@@ -11773,3 +11773,200 @@ body.lubaCardDragMode .app {
     font-size: 14px;
   }
 }
+
+
+/* ==================================================
+   PATCH 633 – HLAVNÍ NAVIGACE: POZNÁMKY / PLÁN / DOKUMENTY
+   Připomínky zůstávají jako plnohodnotná obrazovka uvnitř Plánu.
+   ================================================== */
+
+.plannerSubnav[hidden],
+.documentsScreen[hidden] {
+  display: none !important;
+}
+
+.plannerSubnav {
+  width: min(100%, 900px);
+  margin: 0 auto 8px;
+  padding: 0 14px;
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.plannerSubnavButton {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  font: inherit;
+  font-size: calc(var(--font-size) - 1px);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.plannerSubnavButton.active {
+  border-color: var(--color-accent);
+  background:
+    color-mix(in srgb,
+      var(--color-accent) 12%,
+      var(--color-surface));
+  color: var(--color-accent-text);
+  box-shadow:
+    inset 0 -3px 0 var(--color-accent);
+}
+
+.plannerSubnavIcon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plannerSubnavIcon .lubaSvgIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.documentsScreen {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: min(100%, 900px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 12px 14px max(96px, env(safe-area-inset-bottom));
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--color-background);
+  color: var(--color-text);
+  scrollbar-width: none;
+}
+
+.documentsScreen::-webkit-scrollbar {
+  display: none;
+}
+
+.documentsScreenHeader {
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-accent) 12%, var(--color-surface)),
+      var(--color-surface)
+    );
+}
+
+.documentsScreenEyebrow {
+  margin-bottom: 5px;
+  color: var(--color-accent-text);
+  font-size: calc(var(--font-size) - 3px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.documentsScreenHeader h2 {
+  margin: 0;
+  font-size: calc(var(--font-size) + 8px);
+}
+
+.documentsScreenHeader p {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.documentsRoadmapGrid {
+  margin-top: 12px;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.documentsRoadmapCard {
+  min-width: 0;
+  min-height: 116px;
+  padding: 14px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.documentsRoadmapIcon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.documentsRoadmapCard strong {
+  font-size: calc(var(--font-size) + 1px);
+}
+
+.documentsRoadmapCard > span:last-child {
+  color: var(--color-text-secondary);
+  font-size: calc(var(--font-size) - 2px);
+  line-height: 1.35;
+}
+
+.documentsRoadmapNote {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
+  border-radius: 16px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (max-width: 430px) {
+  .plannerSubnav {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 6px;
+  }
+
+  .plannerSubnavButton {
+    min-height: 42px;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: calc(var(--font-size) - 2px);
+  }
+
+  .documentsScreen {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .documentsRoadmapGrid {
+    gap: 8px;
+  }
+
+  .documentsRoadmapCard {
+    min-height: 104px;
+    padding: 12px;
+  }
+}

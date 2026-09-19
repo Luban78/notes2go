@@ -1,8 +1,8 @@
 /* ==================================================
    HLAVNÍ NAVIGACE LUBANOTE
-   - moduly Poznámky / Plán / Připomínky
+   - hlavní moduly Poznámky / Plán / Dokumenty
+   - Připomínky zůstávají samostatná obrazovka uvnitř Plánu
    - servisní menu pod třemi tečkami
-   - odhlášení a obrazovka O aplikaci
 ================================================== */
 
 (() => {
@@ -12,20 +12,25 @@
   const plannerButton =
     document.getElementById("plannerModuleButton");
 
+  const documentsButton =
+    document.getElementById("documentsModuleButton");
+
+  /* Kompatibilní ID zůstává zachované kvůli notifikacím
+     a openReminderCenterEntry() v reminders.js. */
   const remindersButton =
     document.getElementById("remindersModuleButton");
+
+  const plannerCalendarTabButton =
+    document.getElementById("plannerCalendarTabButton");
+
+  const plannerSubnav =
+    document.getElementById("plannerSubnav");
 
   const addTaskButton =
     document.getElementById("addTaskButton");
 
   const recurringOverviewScreen =
     document.getElementById("recurringOverviewScreen");
-
-
-  /* ==================================================
-   PŘEPÍNÁNÍ MODULŮ
-   Poznámky ↔ Plán
-================================================== */
 
   const notesScreen =
     document.querySelector(".app");
@@ -39,9 +44,13 @@
   const remindersScreen =
     document.getElementById("remindersScreen");
 
+  const documentsScreen =
+    document.getElementById("documentsScreen");
+
 
   function setActiveModule(activeButton) {
-    [notesButton, plannerButton, remindersButton]
+    [notesButton, plannerButton, documentsButton]
+      .filter(Boolean)
       .forEach((button) => {
         const isActive =
           button === activeButton;
@@ -65,6 +74,42 @@
   }
 
 
+  function setPlannerSubtab(activeButton) {
+    [plannerCalendarTabButton, remindersButton]
+      .filter(Boolean)
+      .forEach((button) => {
+        const isActive =
+          button === activeButton;
+
+        button.classList.toggle(
+          "active",
+          isActive
+        );
+
+        if (isActive) {
+          button.setAttribute(
+            "aria-current",
+            "page"
+          );
+        } else {
+          button.removeAttribute(
+            "aria-current"
+          );
+        }
+      });
+  }
+
+
+  function hideAllMainScreens() {
+    notesScreen.hidden = true;
+    calendarScreen.hidden = true;
+    remindersScreen.hidden = true;
+    documentsScreen.hidden = true;
+    dayDetailScreen.hidden = true;
+    recurringOverviewScreen.hidden = true;
+  }
+
+
   /* ------------------------------
      POZNÁMKY
   ------------------------------ */
@@ -72,42 +117,99 @@
   notesButton.addEventListener("click", () => {
     closeMainMenu();
 
+    hideAllMainScreens();
+
     notesScreen.hidden = false;
     searchRow.hidden = false;
     categoryTabs.hidden = false;
     addTaskButton.hidden = false;
-
-    calendarScreen.hidden = true;
-    remindersScreen.hidden = true;
-    dayDetailScreen.hidden = true;
-    recurringOverviewScreen.hidden = true;
+    plannerSubnav.hidden = true;
 
     setActiveModule(notesButton);
   });
 
+
   /* ------------------------------
-     PLÁN
+     PLÁN / KALENDÁŘ
   ------------------------------ */
 
-  plannerButton.addEventListener("click", () => {
+  function otevriPlannerKalendar() {
     closeMainMenu();
+
+    hideAllMainScreens();
 
     notesScreen.hidden = true;
     searchRow.hidden = true;
     categoryTabs.hidden = true;
     addTaskButton.hidden = true;
 
+    plannerSubnav.hidden = false;
     calendarScreen.hidden = false;
-    remindersScreen.hidden = true;
-    dayDetailScreen.hidden = true;
-    recurringOverviewScreen.hidden = true;
 
     calendarCurrentDate = new Date();
     calendarSelectedDay = new Date();
 
     setActiveModule(plannerButton);
+    setPlannerSubtab(plannerCalendarTabButton);
 
     renderCalendar();
+  }
+
+  plannerButton.addEventListener(
+    "click",
+    otevriPlannerKalendar
+  );
+
+  plannerCalendarTabButton?.addEventListener(
+    "click",
+    otevriPlannerKalendar
+  );
+
+
+  /* ------------------------------
+     PLÁN / PŘIPOMÍNKY
+     Stará obrazovka Připomínek zůstává beze změny.
+  ------------------------------ */
+
+  remindersButton?.addEventListener("click", () => {
+    closeMainMenu();
+
+    hideAllMainScreens();
+
+    notesScreen.hidden = true;
+    searchRow.hidden = true;
+    categoryTabs.hidden = true;
+    addTaskButton.hidden = true;
+
+    plannerSubnav.hidden = false;
+    remindersScreen.hidden = false;
+
+    setActiveModule(plannerButton);
+    setPlannerSubtab(remindersButton);
+
+    renderRemindersScreen();
+  });
+
+
+  /* ------------------------------
+     DOKUMENTY
+     FÁZE 1: pouze samostatný hlavní modul / shell.
+  ------------------------------ */
+
+  documentsButton?.addEventListener("click", () => {
+    closeMainMenu();
+
+    hideAllMainScreens();
+
+    notesScreen.hidden = true;
+    searchRow.hidden = true;
+    categoryTabs.hidden = true;
+    addTaskButton.hidden = true;
+    plannerSubnav.hidden = true;
+
+    documentsScreen.hidden = false;
+
+    setActiveModule(documentsButton);
   });
 
 
@@ -176,29 +278,6 @@
       toast.hidden = true;
     }, 1800);
   }
-
-  /* ------------------------------
-     PŘIPOMÍNKY
-  ------------------------------ */
-
-  remindersButton.addEventListener("click", () => {
-    closeMainMenu();
-
-    notesScreen.hidden = true;
-    searchRow.hidden = true;
-    categoryTabs.hidden = true;
-    addTaskButton.hidden = true;
-
-    calendarScreen.hidden = true;
-    remindersScreen.hidden = false;
-    dayDetailScreen.hidden = true;
-    recurringOverviewScreen.hidden = true;
-
-    setActiveModule(remindersButton);
-
-    renderRemindersScreen();
-  });
-
 
 
   /* script.js menu otevře/zavře; tady jen synchronizujeme aria stav. */

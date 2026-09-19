@@ -32,6 +32,8 @@
 
     ["#notesModuleButton .moduleTabText", "modules.notes"],
     ["#plannerModuleButton .moduleTabText", "modules.planner"],
+    ["#documentsModuleButton .moduleTabText", "modules.documents"],
+    ["#plannerCalendarTabButton span:last-child", "plannerTabs.calendar"],
     ["#remindersModuleButton .moduleTabText", "modules.reminders"],
 
     ["#fontSizeSettingsButton .mainMenuLabel", "nav.settings"],

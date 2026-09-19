@@ -126,6 +126,8 @@ window.LubaNoteLanguagePacks.push({
     "storageScope.shareTitle": "Pouze toto zařízení",
     "storageScope.shareBlocked": "Sdílení vyžaduje synchronizované uložení. Tato poznámka zůstává pouze v tomto zařízení.",
     "modules.planner": "Plán",
+    "modules.documents": "Dokumenty",
+    "plannerTabs.calendar": "Kalendář",
     "modules.reminders": "Připomínky",
 
     "sync.synced": "✓ Synchronizováno",
