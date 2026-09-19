@@ -2904,7 +2904,7 @@
       return `<div class="documentsEpubMarkRow"><button type="button" class="documentsEpubMarkOpen" data-epub-bookmark-open="${esc(polozka.id)}"><strong>${esc(polozka.chapterTitle || epubKapitolaNazev(polozka.chapterIndex))}</strong><span>${procenta} %</span></button><button type="button" class="documentsEpubMarkDelete" data-epub-bookmark-delete="${esc(polozka.id)}" aria-label="Smazat záložku">×</button></div>`;
     }).join('') : '<p class="documentsEpubMarksEmpty">Zatím žádná záložka.</p>';
     const zvyrazneniHtml = zvyrazneni.length ? zvyrazneni.map((polozka) => (
-      `<div class="documentsEpubMarkRow"><button type="button" class="documentsEpubMarkOpen" data-epub-highlight-open="${esc(polozka.id)}"><i class="documentsEpubMarkColor is-${esc(polozka.color)}" aria-hidden="true"></i><strong>${esc(kratkyEpubCitace(polozka.quote) || epubKapitolaNazev(polozka.chapterIndex))}</strong>${polozka.note ? `<em class="documentsEpubMarkNote">📝 ${esc(kratkyEpubPoznamka(polozka.note))}</em>` : ''}<span>${esc(epubKapitolaNazev(polozka.chapterIndex))}</span></button><button type="button" class="documentsEpubMarkDelete" data-epub-highlight-delete="${esc(polozka.id)}" aria-label="Smazat označení">×</button></div>`
+      `<div class="documentsEpubMarkRow documentsEpubHighlightRow"><button type="button" class="documentsEpubMarkOpen" data-epub-highlight-open="${esc(polozka.id)}"><i class="documentsEpubMarkColor is-${esc(polozka.color)}" aria-hidden="true"></i><strong>${esc(kratkyEpubCitace(polozka.quote) || epubKapitolaNazev(polozka.chapterIndex))}</strong><small class="documentsEpubMarkType">${polozka.note ? '📝 S poznámkou' : 'Označení'}</small>${polozka.note ? `<em class="documentsEpubMarkNote">${esc(kratkyEpubPoznamka(polozka.note))}</em>` : ''}<span>${esc(epubKapitolaNazev(polozka.chapterIndex))}</span></button><button type="button" class="documentsEpubMarkEditNote" data-epub-highlight-note="${esc(polozka.id)}" aria-label="${polozka.note ? 'Upravit poznámku' : 'Přidat poznámku'}">📝</button><button type="button" class="documentsEpubMarkDelete" data-epub-highlight-delete="${esc(polozka.id)}" aria-label="Smazat označení">×</button></div>`
     )).join('') : '<p class="documentsEpubMarksEmpty">Zatím žádné označení.</p>';
     epubViewerPrvky.marksList.innerHTML = `<section><h4>Záložky</h4>${zalozkyHtml}</section><section><h4>Označení</h4>${zvyrazneniHtml}</section>`;
   }
@@ -3281,6 +3281,11 @@
         if (!polozka) return;
         marks.hidden = true;
         void zobrazEpubKapitolu(polozka.chapterIndex, { highlightId: polozka.id });
+        return;
+      }
+      const upravitPoznamku = event.target.closest?.('[data-epub-highlight-note]');
+      if (upravitPoznamku) {
+        otevriEpubPoznamku(upravitPoznamku.dataset.epubHighlightNote);
         return;
       }
       const smazatZvyrazneni = event.target.closest?.('[data-epub-highlight-delete]');

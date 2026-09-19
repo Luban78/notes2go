@@ -2321,6 +2321,7 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubMarkOpen,
+.documentsEpubMarkEditNote,
 .documentsEpubMarkDelete {
   border: 1px solid rgba(55, 47, 38, .13);
   border-radius: 11px;
@@ -2360,6 +2361,27 @@ body.documents-epub-viewer-open {
   font-size: 24px;
 }
 
+.documentsEpubHighlightRow {
+  grid-template-columns: minmax(0, 1fr) 38px 38px;
+}
+
+.documentsEpubMarkEditNote {
+  min-height: 42px;
+  font-size: 17px;
+}
+
+.documentsEpubMarkType {
+  grid-column: 2 / 4;
+  color: #8a8176;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.documentsEpubMarkNote {
+  grid-column: 2 / 4;
+}
+
 .documentsEpubMarksEmpty {
   margin: 8px 0;
   color: #8a8176;
@@ -2377,7 +2399,9 @@ body.documents-epub-viewer-open {
   margin: 0;
   padding: 0;
   border-radius: 3px;
-  color: inherit;
+  /* PATCH 647 – barevné zvýraznění musí být čitelné i v tmavém režimu
+     a proti vlastní barvě textu z EPUB. */
+  color: #17120d !important;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   cursor: pointer;
@@ -2479,9 +2503,11 @@ body.documents-epub-viewer-open {
 .documentsEpubViewer.reader-theme-dark .documentsEpubSelectionClose { color: #d5d2cc; }
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarksList h4,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarksEmpty,
-.documentsEpubViewer.reader-theme-dark .documentsEpubMarkOpen span { color: #aaa59d; }
+.documentsEpubViewer.reader-theme-dark .documentsEpubMarkOpen span,
+.documentsEpubViewer.reader-theme-dark .documentsEpubMarkType { color: #aaa59d; }
 .documentsEpubViewer.reader-theme-dark .documentsEpubAddBookmark,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkOpen,
+.documentsEpubViewer.reader-theme-dark .documentsEpubMarkEditNote,
 .documentsEpubViewer.reader-theme-dark .documentsEpubMarkDelete,
 .documentsEpubViewer.reader-theme-dark .documentsEpubSelectionNote,
 .documentsEpubSelectionRemove {
