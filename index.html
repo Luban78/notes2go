@@ -17,7 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260919-main-nav-documents-633">
-  <link rel="stylesheet" href="documents.css?v=20260919-documents-search-results-keyboard-640B">
+  <link rel="stylesheet" href="documents.css?v=20260919-docx-readonly-641">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260915-core-v2-hardcut-528">
@@ -543,7 +543,7 @@
         <h2>Dokumenty</h2>
         <p id="documentsLocalStatus">Lokálně v tomto zařízení</p>
       </div>
-      <button id="documentsAddPdfButton" class="documentsV1Primary" type="button">＋ Přidat PDF</button>
+      <button id="documentsAddPdfButton" class="documentsV1Primary" type="button">＋ Přidat soubor</button>
     </div>
 
     <section class="documentsV1Section" aria-labelledby="documentsFoldersTitle">
@@ -579,6 +579,7 @@
         <div class="documentsFileFilters" role="group" aria-label="Filtr dokumentů">
           <button id="documentsFilterAll" class="documentsFileFilter active" type="button">Vše</button>
           <button id="documentsFilterPdf" class="documentsFileFilter" type="button">PDF</button>
+          <button id="documentsFilterDocx" class="documentsFileFilter" type="button">DOCX</button>
           <button id="documentsTrashButton" class="documentsTrashButton documentsFileFilter" type="button">🗑️ Koš<span id="documentsTrashCount"></span></button>
         </div>
       </div>
@@ -592,7 +593,7 @@
       <div id="documentsFiles" class="documentsFiles" hidden></div>
     </section>
 
-    <button id="documentsFloatingAddButton" class="documentsFloatingAdd" type="button" aria-label="Přidat PDF">+</button>
+    <button id="documentsFloatingAddButton" class="documentsFloatingAdd" type="button" aria-label="Přidat dokument">+</button>
   </section>
 
   <!-- ========================================
@@ -2167,7 +2168,7 @@
 
   <!-- Otevřít / Uložit jako – soubory přímo z editoru -->
   <script src="editorDocuments.js?v=20260919-pdf-modal-balanced-632a"></script>
-  <script src="documents.js?v=20260919-documents-search-results-keyboard-640B"></script>
+  <script src="documents.js?v=20260919-docx-readonly-641"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>

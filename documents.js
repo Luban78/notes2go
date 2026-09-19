@@ -1,24 +1,19 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.5 SEARCH + FILTERS (PATCH 640)
+   LUBANOTE – DOKUMENTY V1.6 / DOCX READ-ONLY (PATCH 641)
    ------------------------------------------------------------
-   První skutečný souborový tok modulu Dokumenty:
-   - lokální složky v samostatném IndexedDB
-   - import PDF
-   - seznam souborů
-   - otevření PDF ve stávajícím LubaNote PDF vieweru
-   - bezpečný přesun souboru mezi složkami přes long-press + drag
-   - změna pořadí složek přes stejný long-press + drag vzor
-   - přejmenování složky
-   - bezpečné smazání složky bez smazání PDF
-   - přejmenování PDF
-   - vlastní Koš Dokumentů + obnovení PDF
-   - živé hledání podle názvu dokumentu / složky
-   - připravený typový filtr Vše / PDF + rychlý vstup do Koše
+   Lokální knihovna Dokumentů:
+   - složky, řazení, long-press přesuny, Koš, hledání a filtry
+   - PDF import + stávající LubaNote PDF viewer
+   - DOCX import do lokální IndexedDB
+   - DOCX viewer pouze ke čtení přímo v modulu Dokumenty
+   - základní DOCX obsah: nadpisy, odstavce, formát textu, tabulky,
+     odkazy a vložené obrázky
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
    - žádný cloud, Shared ani konverze
-   - Poznámky, Sync a existující PDF export se nemění
+   - starý stabilní PDF tok se nemění
+   - DOCX se NEPŘEVÁDÍ na poznámku a editor se neotevírá
    ============================================================ */
 
 (() => {
@@ -29,6 +24,10 @@
   const STORE_FOLDERS = 'folders';
   const STORE_FILES = 'files';
   const MAX_PDF_BYTES = 100 * 1024 * 1024;
+  const MAX_DOCX_BYTES = 20 * 1024 * 1024;
+  const MAX_DOCX_PART_BYTES = 32 * 1024 * 1024;
+  const MAX_DOCX_ZIP_ENTRIES = 5000;
+  const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const TRASH_VIEW = '__documents_trash__';
 
   let dbPromise = null;
@@ -55,6 +54,11 @@
   let folderDragCasovac = null;
   let folderDragNahled = null;
   let blokovatOtevreniSlozkyDo = 0;
+
+  let docxViewerPrvky = null;
+  let docxViewerOtevren = false;
+  let docxViewerObjectUrls = [];
+  let docxAndroidBackZapojen = false;
 
   function jeAndroid() {
     try {
@@ -97,6 +101,43 @@
     const datum = new Date(value || Date.now());
     if (Number.isNaN(datum.getTime())) return '';
     return datum.toLocaleDateString('cs-CZ');
+  }
+
+
+  function jePdfSoubor(soubor) {
+    const mime = String(soubor?.mime || '').toLowerCase();
+    const nazev = String(soubor?.name || '').toLowerCase();
+    return mime === 'application/pdf' || nazev.endsWith('.pdf');
+  }
+
+  function jeDocxSoubor(soubor) {
+    const mime = String(soubor?.mime || '').toLowerCase();
+    const nazev = String(soubor?.name || '').toLowerCase();
+    return mime === DOCX_MIME || nazev.endsWith('.docx');
+  }
+
+  function typSouboru(soubor) {
+    if (jeDocxSoubor(soubor)) return 'docx';
+    if (jePdfSoubor(soubor)) return 'pdf';
+    return 'other';
+  }
+
+  function popisTypuSouboru(soubor) {
+    const typ = typSouboru(soubor);
+    if (typ === 'docx') return 'DOCX';
+    if (typ === 'pdf') return 'PDF';
+    return 'SOUBOR';
+  }
+
+  function priponaSouboru(soubor) {
+    return typSouboru(soubor) === 'docx' ? 'docx' : 'pdf';
+  }
+
+  function pocetSouboruText(pocet) {
+    const n = Math.max(0, Number(pocet) || 0);
+    if (n === 1) return '1 soubor';
+    if (n >= 2 && n <= 4) return `${n} soubory`;
+    return `${n} souborů`;
   }
 
   function normalizujHledani(value) {
@@ -268,24 +309,26 @@
     return Number(soubor?.deletedAt || 0) > 0;
   }
 
-  function normalizujPdfNazev(value) {
+  function normalizujNazevSouboru(value, pripona = 'pdf') {
     let nazev = String(value || '').trim().replace(/\s+/g, ' ');
+    const ext = pripona === 'docx' ? 'docx' : 'pdf';
     if (!nazev) return '';
 
-    if (/\.pdf$/i.test(nazev)) {
-      const zaklad = nazev.slice(0, -4).trim().slice(0, 116);
-      return zaklad ? `${zaklad}.pdf` : '';
+    const regex = new RegExp(`\\.${ext}$`, 'i');
+    if (regex.test(nazev)) {
+      const zaklad = nazev.slice(0, -(ext.length + 1)).trim().slice(0, 116);
+      return zaklad ? `${zaklad}.${ext}` : '';
     }
 
-    nazev = nazev.slice(0, 116);
-    return nazev ? `${nazev}.pdf` : '';
+    nazev = nazev.replace(/\.(pdf|docx)$/i, '').trim().slice(0, 116);
+    return nazev ? `${nazev}.${ext}` : '';
   }
 
   async function prejmenujSoubor(idSouboru, novyNazev) {
     const record = await nactiSoubor(idSouboru);
     if (!record) throw new Error('Soubor už není dostupný.');
 
-    const nazev = normalizujPdfNazev(novyNazev);
+    const nazev = normalizujNazevSouboru(novyNazev, priponaSouboru(record));
     if (!nazev) throw new Error('Název souboru je prázdný.');
 
     record.name = nazev;
@@ -412,9 +455,15 @@
 
   function zobrazDragNahled(row, x, y) {
     const nahled = zajistiDragNahled();
-    const nazev = row?.querySelector('.documentsFileMain strong')?.textContent?.trim() || 'PDF soubor';
+    const nazev = row?.querySelector('.documentsFileMain strong')?.textContent?.trim() || 'Dokument';
+    const zdrojIkony = row?.querySelector('.documentsFileIcon');
+    const nahledIkony = nahled.querySelector('.documentsDragPreviewIcon');
     nahled.querySelector('strong').textContent = nazev;
     nahled.querySelector('small').textContent = 'Táhni na cílovou složku';
+    if (nahledIkony) {
+      nahledIkony.textContent = zdrojIkony?.textContent?.trim() || 'DOC';
+      nahledIkony.classList.toggle('is-docx', zdrojIkony?.classList.contains('is-docx') === true);
+    }
     nahled.classList.remove('is-active', 'has-target');
     nahled.hidden = false;
     nastavPoziciDragNahledu(x, y);
@@ -931,6 +980,7 @@
       searchClear: screen.querySelector('#documentsSearchClear'),
       filterAll: screen.querySelector('#documentsFilterAll'),
       filterPdf: screen.querySelector('#documentsFilterPdf'),
+      filterDocx: screen.querySelector('#documentsFilterDocx'),
       trash: screen.querySelector('#documentsTrashButton'),
       trashCount: screen.querySelector('#documentsTrashCount')
     };
@@ -1049,7 +1099,7 @@
 
       title.textContent = folder ? 'Přejmenovat složku' : 'Nová složka';
       hint.textContent = folder
-        ? 'Změní se pouze název složky. PDF uvnitř zůstanou beze změny.'
+        ? 'Změní se pouze název složky. Dokumenty uvnitř zůstanou beze změny.'
         : 'Složka je zatím pouze v tomto zařízení.';
       create.textContent = folder ? 'Uložit' : 'Vytvořit';
       input.value = folder?.name || '';
@@ -1121,7 +1171,7 @@
       folderId = idSlozky;
       const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
       title.textContent = folder.name;
-      meta.textContent = `${count} ${count === 1 ? 'PDF' : 'PDF'} · lokálně v zařízení`;
+      meta.textContent = `${pocetSouboruText(count)} · lokálně v zařízení`;
       modal.hidden = false;
     };
 
@@ -1188,7 +1238,7 @@
       folderId = idSlozky;
       const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
       text.textContent = count > 0
-        ? `Složka „${folder.name}“ obsahuje ${count} PDF. PDF se NESMAŽOU – přesunou se do „Všechny soubory“. Potom se smaže pouze složka.`
+        ? `Složka „${folder.name}“ obsahuje ${pocetSouboruText(count)}. Dokumenty se NESMAŽOU – přesunou se do „Všechny soubory“. Potom se smaže pouze složka.`
         : `Složka „${folder.name}“ je prázdná. Smaže se pouze složka.`;
       modal.hidden = false;
     };
@@ -1207,8 +1257,8 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFileRenameDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileRenameTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📄</div>
-        <h3 id="documentsFileRenameTitle">Přejmenovat PDF</h3>
-        <p>Změní se pouze název v knihovně LubaNote. Obsah PDF zůstane beze změny.</p>
+        <h3 id="documentsFileRenameTitle">Přejmenovat dokument</h3>
+        <p id="documentsFileRenameHint">Změní se pouze název v knihovně LubaNote. Obsah dokumentu zůstane beze změny.</p>
         <label>
           <span>Název souboru</span>
           <input id="documentsFileRenameInput" type="text" maxlength="120" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-file-name">
@@ -1220,6 +1270,8 @@
       </section>`;
 
     document.body.appendChild(modal);
+    const title = modal.querySelector('#documentsFileRenameTitle');
+    const hint = modal.querySelector('#documentsFileRenameHint');
     const input = modal.querySelector('#documentsFileRenameInput');
     const cancel = modal.querySelector('.documentsFileRenameCancel');
     const save = modal.querySelector('.documentsFileRenameSave');
@@ -1239,7 +1291,8 @@
 
     const ulozit = async () => {
       if (!fileId) return;
-      const nazev = normalizujPdfNazev(input.value);
+      const record = posledniSoubory.find((item) => item.id === fileId);
+      const nazev = normalizujNazevSouboru(input.value, priponaSouboru(record));
       if (!nazev) {
         input.focus();
         return;
@@ -1252,8 +1305,8 @@
         await refresh();
         try { navigator.vibrate?.(14); } catch (_error) {}
       } catch (error) {
-        console.error('Přejmenování PDF selhalo:', error);
-        zobrazChybu('Dokumenty', 'PDF se nepodařilo přejmenovat.');
+        console.error('Přejmenování dokumentu selhalo:', error);
+        zobrazChybu('Dokumenty', 'Dokument se nepodařilo přejmenovat.');
       } finally {
         save.disabled = false;
       }
@@ -1275,11 +1328,15 @@
       const record = posledniSoubory.find((item) => item.id === idSouboru);
       if (!record) return;
       fileId = idSouboru;
+      const typ = popisTypuSouboru(record);
+      const pripona = `.${priponaSouboru(record)}`;
+      title.textContent = `Přejmenovat ${typ}`;
+      hint.textContent = `Změní se pouze název v knihovně LubaNote. Obsah ${typ} zůstane beze změny.`;
       input.value = record.name || '';
       modal.hidden = false;
       requestAnimationFrame(() => {
         input.focus();
-        const tecka = input.value.toLowerCase().lastIndexOf('.pdf');
+        const tecka = input.value.toLowerCase().lastIndexOf(pripona);
         if (tecka > 0 && input.setSelectionRange) input.setSelectionRange(0, tecka);
         else input.select();
       });
@@ -1299,7 +1356,7 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFileManageDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileManageTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📄</div>
-        <h3 id="documentsFileManageTitle">PDF</h3>
+        <h3 id="documentsFileManageTitle">Dokument</h3>
         <p id="documentsFileManageMeta"></p>
         <div class="documentsFolderManageActions documentsFileManageActions">
           <button type="button" class="documentsFileRenameAction">✏️ Přejmenovat</button>
@@ -1344,8 +1401,8 @@
         await refresh();
         try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
       } catch (error) {
-        console.error('Přesun PDF do koše selhal:', error);
-        zobrazChybu('Dokumenty', 'PDF se nepodařilo přesunout do koše.');
+        console.error('Přesun dokumentu do koše selhal:', error);
+        zobrazChybu('Dokumenty', 'Dokument se nepodařilo přesunout do koše.');
       } finally {
         trash.disabled = false;
       }
@@ -1361,8 +1418,8 @@
         await refresh();
         try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
       } catch (error) {
-        console.error('Obnovení PDF z koše selhalo:', error);
-        zobrazChybu('Dokumenty', 'PDF se nepodařilo obnovit.');
+        console.error('Obnovení dokumentu z koše selhalo:', error);
+        zobrazChybu('Dokumenty', 'Dokument se nepodařilo obnovit.');
       } finally {
         restore.disabled = false;
       }
@@ -1373,8 +1430,8 @@
       if (!record) return;
       fileId = idSouboru;
       const vKosi = jeSouborVKosi(record);
-      title.textContent = record.name || 'PDF';
-      meta.textContent = `${formatBytes(record.size)} · ${formatDate(record.updatedAt)}`;
+      title.textContent = record.name || 'Dokument';
+      meta.textContent = `${popisTypuSouboru(record)} · ${formatBytes(record.size)} · ${formatDate(record.updatedAt)}`;
       rename.hidden = vKosi;
       trash.hidden = vKosi;
       restore.hidden = !vKosi;
@@ -1382,6 +1439,68 @@
     };
 
     return modal;
+  }
+
+  function zajistiPridatSouborModal() {
+    let modal = document.getElementById('documentsAddFileModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsAddFileModal';
+    modal.className = 'documentsFolderModal documentsAddFileModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsAddFileDialog" role="dialog" aria-modal="true" aria-labelledby="documentsAddFileTitle">
+        <div class="documentsFolderIcon" aria-hidden="true">📄</div>
+        <h3 id="documentsAddFileTitle">Přidat dokument</h3>
+        <p>Vyber typ souboru. Dokument zůstane jen v tomto zařízení.</p>
+        <div class="documentsAddFileChoices">
+          <button type="button" class="documentsAddFileChoice documentsAddPdfChoice">
+            <span class="documentsAddFileType is-pdf">PDF</span>
+            <span><strong>PDF</strong><small>otevře se ve stávajícím PDF vieweru</small></span>
+          </button>
+          <button type="button" class="documentsAddFileChoice documentsAddDocxChoice">
+            <span class="documentsAddFileType is-docx">DOCX</span>
+            <span><strong>Word DOCX</strong><small>otevře se jen ke čtení v Dokumentech</small></span>
+          </button>
+        </div>
+        <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">Zrušit</button>
+      </section>`;
+
+    document.body.appendChild(modal);
+    const pdf = modal.querySelector('.documentsAddPdfChoice');
+    const docx = modal.querySelector('.documentsAddDocxChoice');
+    const cancel = modal.querySelector('.documentsAddFileCancel');
+
+    const zavrit = () => {
+      modal.hidden = true;
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    pdf.addEventListener('click', () => {
+      zavrit();
+      void pridatPdf();
+    });
+
+    docx.addEventListener('click', () => {
+      zavrit();
+      void pridatDocx();
+    });
+
+    modal.otevrit = () => {
+      modal.hidden = false;
+    };
+
+    return modal;
+  }
+
+  function otevriPridatSouborModal() {
+    if (aktivniSlozkaId === TRASH_VIEW) return;
+    zajistiPridatSouborModal().otevrit();
   }
 
   async function importujPdfAndroid() {
@@ -1451,6 +1570,82 @@
     });
   }
 
+  async function vyberDocxWeb() {
+    return await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = `${DOCX_MIME},.docx`;
+      input.hidden = true;
+
+      const uklid = () => input.remove();
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0] || null;
+        if (!file) {
+          uklid();
+          resolve(null);
+          return;
+        }
+
+        const jeDocx = /\.docx$/i.test(file.name || '') || file.type === DOCX_MIME;
+        if (!jeDocx) {
+          uklid();
+          zobrazChybu('Dokumenty', 'Vybraný soubor není DOCX.');
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_DOCX_BYTES) {
+          uklid();
+          zobrazChybu('Dokumenty', 'DOCX je příliš velký. Maximální velikost je 20 MB.');
+          resolve(null);
+          return;
+        }
+
+        const record = {
+          id: id(),
+          name: normalizujNazevSouboru(file.name || 'dokument.docx', 'docx') || 'dokument.docx',
+          mime: DOCX_MIME,
+          size: file.size,
+          folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
+          storageMode: 'web',
+          blob: file,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        uklid();
+        resolve(record);
+      }, { once: true });
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function pridatDocx() {
+    const prvky = zajistiPrvky();
+    if (!prvky) return;
+
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+
+    try {
+      const record = await vyberDocxWeb();
+      if (!record) return;
+
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      zobrazZpravu('Dokumenty', `DOCX „${record.name}“ byl přidán.`);
+    } catch (error) {
+      console.error('Import DOCX selhal:', error);
+      zobrazChybu('Dokumenty', 'DOCX se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
+  }
+
   async function pridatPdf() {
     const prvky = zajistiPrvky();
     if (!prvky) return;
@@ -1477,10 +1672,551 @@
     }
   }
 
+  function docxEscAttr(text) {
+    return esc(text).replaceAll('`', '&#096;');
+  }
+
+  function docxAttr(prvek, localName) {
+    if (!prvek?.attributes) return '';
+    for (const atribut of prvek.attributes) {
+      if (atribut.localName === localName || atribut.name === localName) {
+        return atribut.value || '';
+      }
+    }
+    return '';
+  }
+
+  function docxDeti(prvek, localName = null) {
+    return Array.from(prvek?.children || []).filter((dite) => (
+      !localName || dite.localName === localName
+    ));
+  }
+
+  function docxPrvniDite(prvek, localName) {
+    return docxDeti(prvek, localName)[0] || null;
+  }
+
+  function docxPotomci(prvek, localName) {
+    if (!prvek?.getElementsByTagNameNS) return [];
+    return Array.from(prvek.getElementsByTagNameNS('*', localName));
+  }
+
+  function docxXml(xml, popis) {
+    const dokument = new DOMParser().parseFromString(xml, 'application/xml');
+    if (dokument.getElementsByTagName('parsererror').length > 0) {
+      throw new Error(`${popis} není platné XML.`);
+    }
+    return dokument;
+  }
+
+  function najdiZipEocd(view) {
+    const minimum = Math.max(0, view.byteLength - 65557);
+    for (let pozice = view.byteLength - 22; pozice >= minimum; pozice -= 1) {
+      if (view.getUint32(pozice, true) === 0x06054b50) return pozice;
+    }
+    return -1;
+  }
+
+  function vytvorDocxZipIndex(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    const eocd = najdiZipEocd(view);
+    if (eocd < 0) throw new Error('DOCX nemá platnou ZIP strukturu.');
+
+    const pocetPolozek = view.getUint16(eocd + 10, true);
+    if (pocetPolozek > MAX_DOCX_ZIP_ENTRIES) {
+      throw new Error('DOCX obsahuje příliš mnoho částí.');
+    }
+
+    const centralOffset = view.getUint32(eocd + 16, true);
+    const decoder = new TextDecoder('utf-8');
+    const polozky = new Map();
+    let pozice = centralOffset;
+
+    for (let index = 0; index < pocetPolozek; index += 1) {
+      if (pozice + 46 > view.byteLength || view.getUint32(pozice, true) !== 0x02014b50) {
+        throw new Error('DOCX má poškozený centrální ZIP adresář.');
+      }
+
+      const metoda = view.getUint16(pozice + 10, true);
+      const komprimovanaVelikost = view.getUint32(pozice + 20, true);
+      const puvodniVelikost = view.getUint32(pozice + 24, true);
+      const delkaNazvu = view.getUint16(pozice + 28, true);
+      const delkaExtra = view.getUint16(pozice + 30, true);
+      const delkaKomentare = view.getUint16(pozice + 32, true);
+      const lokalniOffset = view.getUint32(pozice + 42, true);
+
+      const konecNazvu = pozice + 46 + delkaNazvu;
+      if (konecNazvu > view.byteLength) throw new Error('DOCX má neplatný název ZIP položky.');
+
+      const nazev = decoder.decode(new Uint8Array(arrayBuffer, pozice + 46, delkaNazvu));
+      polozky.set(nazev, {
+        nazev,
+        metoda,
+        komprimovanaVelikost,
+        puvodniVelikost,
+        lokalniOffset
+      });
+
+      pozice = konecNazvu + delkaExtra + delkaKomentare;
+    }
+
+    return { arrayBuffer, polozky };
+  }
+
+  async function nactiDocxZipPolozku(zip, nazev, povinna = false) {
+    const polozka = zip.polozky.get(nazev);
+    if (!polozka) {
+      if (povinna) throw new Error(`DOCX neobsahuje ${nazev}.`);
+      return null;
+    }
+
+    const view = new DataView(zip.arrayBuffer);
+    const offset = polozka.lokalniOffset;
+    if (offset + 30 > view.byteLength || view.getUint32(offset, true) !== 0x04034b50) {
+      throw new Error(`DOCX má poškozenou ZIP položku ${nazev}.`);
+    }
+
+    const delkaNazvu = view.getUint16(offset + 26, true);
+    const delkaExtra = view.getUint16(offset + 28, true);
+    const zacatekDat = offset + 30 + delkaNazvu + delkaExtra;
+    const konecDat = zacatekDat + polozka.komprimovanaVelikost;
+    if (konecDat > view.byteLength) throw new Error(`DOCX má neúplná data ${nazev}.`);
+
+    const komprimovana = new Uint8Array(zip.arrayBuffer, zacatekDat, polozka.komprimovanaVelikost);
+    if (polozka.metoda === 0) return new Uint8Array(komprimovana);
+
+    if (polozka.metoda !== 8) {
+      throw new Error(`DOCX používá nepodporovanou ZIP kompresi (${polozka.metoda}).`);
+    }
+
+    if (polozka.puvodniVelikost > MAX_DOCX_PART_BYTES) {
+      throw new Error(`DOCX část ${nazev} je příliš velká.`);
+    }
+
+    if (typeof DecompressionStream !== 'function') {
+      throw new Error('Tento WebView neumí rozbalit DOCX.');
+    }
+
+    const proud = new Blob([komprimovana])
+      .stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'));
+    const reader = proud.getReader();
+    const kusy = [];
+    let celkem = 0;
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value?.byteLength) continue;
+        celkem += value.byteLength;
+        if (celkem > MAX_DOCX_PART_BYTES) {
+          try { await reader.cancel(); } catch (_error) {}
+          throw new Error(`DOCX část ${nazev} je po rozbalení příliš velká.`);
+        }
+        kusy.push(value);
+      }
+    } finally {
+      try { reader.releaseLock(); } catch (_error) {}
+    }
+
+    if (polozka.puvodniVelikost > 0 && celkem !== polozka.puvodniVelikost) {
+      throw new Error(`DOCX část ${nazev} má neplatnou velikost.`);
+    }
+
+    const rozbalene = new Uint8Array(celkem);
+    let cursor = 0;
+    for (const kus of kusy) {
+      rozbalene.set(kus, cursor);
+      cursor += kus.byteLength;
+    }
+    return rozbalene;
+  }
+
+  async function nactiDocxXml(zip, nazev, povinna = false) {
+    const bytes = await nactiDocxZipPolozku(zip, nazev, povinna);
+    if (!bytes) return '';
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  function normalizujDocxCestu(zaklad, cil) {
+    const raw = String(cil || '').replace(/\\/g, '/');
+    if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return null;
+
+    const casti = (raw.startsWith('/') ? raw.slice(1) : `${zaklad}/${raw}`).split('/');
+    const vysledek = [];
+    for (const cast of casti) {
+      if (!cast || cast === '.') continue;
+      if (cast === '..') {
+        vysledek.pop();
+        continue;
+      }
+      vysledek.push(cast);
+    }
+    return vysledek.join('/');
+  }
+
+  function nactiDocxRelace(xml) {
+    const relace = new Map();
+    if (!xml) return relace;
+    const dokument = docxXml(xml, 'DOCX relace');
+    for (const rel of Array.from(dokument.getElementsByTagNameNS('*', 'Relationship'))) {
+      const idRelace = rel.getAttribute('Id') || '';
+      if (!idRelace) continue;
+      relace.set(idRelace, {
+        target: rel.getAttribute('Target') || '',
+        type: rel.getAttribute('Type') || '',
+        external: String(rel.getAttribute('TargetMode') || '').toLowerCase() === 'external'
+      });
+    }
+    return relace;
+  }
+
+  function docxMimeObrazku(cesta) {
+    const ext = String(cesta || '').split('.').pop()?.toLowerCase() || '';
+    if (ext === 'png') return 'image/png';
+    if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+    if (ext === 'gif') return 'image/gif';
+    if (ext === 'bmp') return 'image/bmp';
+    // SVG z cizího DOCX záměrně nevkládáme jako aktivní obsah.
+    if (ext === 'webp') return 'image/webp';
+    return '';
+  }
+
+  function docxBarvaZvyrazneni(value) {
+    const barvy = {
+      yellow: '#fff59d', green: '#b9f6ca', cyan: '#b2ebf2', magenta: '#f8bbd0',
+      blue: '#bbdefb', red: '#ffcdd2', darkBlue: '#90caf9', darkCyan: '#80cbc4',
+      darkGreen: '#a5d6a7', darkMagenta: '#ce93d8', darkRed: '#ef9a9a', darkYellow: '#ffe082',
+      lightGray: '#e0e0e0', darkGray: '#9e9e9e', black: '#616161'
+    };
+    return barvy[String(value || '')] || '';
+  }
+
+  function docxJeZapnuto(prvek) {
+    if (!prvek) return false;
+    const hodnota = String(docxAttr(prvek, 'val') || '').toLowerCase();
+    return !['0', 'false', 'off', 'none'].includes(hodnota);
+  }
+
+  async function vykresliDocxObrazek(prvek, kontext) {
+    const blip = docxPotomci(prvek, 'blip')[0] || docxPotomci(prvek, 'imagedata')[0] || null;
+    if (!blip) return '';
+
+    const rid = docxAttr(blip, 'embed') || docxAttr(blip, 'id');
+    const relace = kontext.relace.get(rid);
+    if (!relace || relace.external) return '';
+
+    const cesta = normalizujDocxCestu('word', relace.target);
+    if (!cesta) return '';
+
+    const mime = docxMimeObrazku(cesta);
+    if (!mime) return '<span class="documentsDocxUnsupported">[Obrázek v nepodporovaném formátu]</span>';
+
+    const bytes = await nactiDocxZipPolozku(kontext.zip, cesta, false);
+    if (!bytes) return '<span class="documentsDocxUnsupported">[Obrázek není dostupný]</span>';
+
+    const blob = new Blob([bytes], { type: mime });
+    const url = URL.createObjectURL(blob);
+    kontext.objectUrls.push(url);
+
+    const docPr = docxPotomci(prvek, 'docPr')[0] || null;
+    const alt = docPr?.getAttribute?.('descr') || docPr?.getAttribute?.('name') || 'Obrázek v dokumentu';
+    return `<img class="documentsDocxImage" src="${docxEscAttr(url)}" alt="${docxEscAttr(alt)}">`;
+  }
+
+  async function vykresliDocxRun(run, kontext) {
+    const rPr = docxPrvniDite(run, 'rPr');
+    const styly = [];
+
+    if (docxJeZapnuto(docxPrvniDite(rPr, 'b'))) styly.push('font-weight:700');
+    if (docxJeZapnuto(docxPrvniDite(rPr, 'i'))) styly.push('font-style:italic');
+    const dekorace = [];
+    if (docxJeZapnuto(docxPrvniDite(rPr, 'u'))) dekorace.push('underline');
+    if (docxJeZapnuto(docxPrvniDite(rPr, 'strike'))) dekorace.push('line-through');
+    if (dekorace.length) styly.push(`text-decoration:${dekorace.join(' ')}`);
+
+    const color = docxAttr(docxPrvniDite(rPr, 'color'), 'val');
+    if (/^[0-9a-f]{6}$/i.test(color)) styly.push(`color:#${color}`);
+
+    const velikostRaw = Number(docxAttr(docxPrvniDite(rPr, 'sz'), 'val'));
+    if (Number.isFinite(velikostRaw) && velikostRaw > 0) {
+      const pt = Math.max(7, Math.min(72, velikostRaw / 2));
+      styly.push(`font-size:${pt}pt`);
+    }
+
+    const zvyrazneni = docxBarvaZvyrazneni(docxAttr(docxPrvniDite(rPr, 'highlight'), 'val'));
+    if (zvyrazneni) styly.push(`background:${zvyrazneni}`);
+
+    let obsah = '';
+    for (const cast of docxDeti(run)) {
+      if (cast.localName === 'rPr') continue;
+      if (cast.localName === 't') {
+        obsah += esc(cast.textContent || '');
+      } else if (cast.localName === 'tab') {
+        obsah += '<span class="documentsDocxTab">\t</span>';
+      } else if (cast.localName === 'br' || cast.localName === 'cr') {
+        obsah += '<br>';
+      } else if (cast.localName === 'noBreakHyphen') {
+        obsah += '‑';
+      } else if (cast.localName === 'drawing' || cast.localName === 'pict' || cast.localName === 'object') {
+        obsah += await vykresliDocxObrazek(cast, kontext);
+      }
+    }
+
+    if (!obsah) return '';
+    const vert = String(docxAttr(docxPrvniDite(rPr, 'vertAlign'), 'val') || '').toLowerCase();
+    if (vert === 'superscript') obsah = `<sup>${obsah}</sup>`;
+    if (vert === 'subscript') obsah = `<sub>${obsah}</sub>`;
+
+    return styly.length
+      ? `<span style="${styly.join(';')}">${obsah}</span>`
+      : obsah;
+  }
+
+  async function vykresliDocxInline(prvek, kontext) {
+    let html = '';
+    for (const cast of docxDeti(prvek)) {
+      if (cast.localName === 'r') {
+        html += await vykresliDocxRun(cast, kontext);
+        continue;
+      }
+
+      if (cast.localName === 'hyperlink') {
+        let obsah = '';
+        for (const run of docxDeti(cast, 'r')) obsah += await vykresliDocxRun(run, kontext);
+        const rid = docxAttr(cast, 'id');
+        const relace = kontext.relace.get(rid);
+        const cil = relace?.external ? String(relace.target || '') : '';
+        if (obsah && /^(https?:|mailto:)/i.test(cil)) {
+          html += `<a href="${docxEscAttr(cil)}" target="_blank" rel="noopener noreferrer">${obsah}</a>`;
+        } else {
+          html += obsah;
+        }
+        continue;
+      }
+
+      if (cast.localName === 'del') {
+        continue;
+      }
+
+      if (cast.localName === 'fldSimple' || cast.localName === 'smartTag' || cast.localName === 'sdt' || cast.localName === 'ins') {
+        const runy = docxPotomci(cast, 'r');
+        for (const run of runy) html += await vykresliDocxRun(run, kontext);
+      }
+    }
+    return html;
+  }
+
+  async function vykresliDocxOdstavec(p, kontext) {
+    const pPr = docxPrvniDite(p, 'pPr');
+    const stylId = String(docxAttr(docxPrvniDite(pPr, 'pStyle'), 'val') || '');
+    const zarovnaniRaw = String(docxAttr(docxPrvniDite(pPr, 'jc'), 'val') || '').toLowerCase();
+    const maCislovani = Boolean(docxPrvniDite(pPr, 'numPr'));
+    const obsah = await vykresliDocxInline(p, kontext);
+
+    let tag = 'p';
+    if (/(heading|nadpis)\s*1/i.test(stylId)) tag = 'h1';
+    else if (/(heading|nadpis)\s*2/i.test(stylId)) tag = 'h2';
+    else if (/(heading|nadpis)\s*3/i.test(stylId)) tag = 'h3';
+
+    const styly = [];
+    const zarovnani = zarovnaniRaw === 'both' ? 'justify' : zarovnaniRaw;
+    if (['left', 'center', 'right', 'justify'].includes(zarovnani)) styly.push(`text-align:${zarovnani}`);
+
+    const style = styly.length ? ` style="${styly.join(';')}"` : '';
+    const vnitrni = obsah || '<br>';
+
+    if (maCislovani && tag === 'p') {
+      return `<div class="documentsDocxListItem"${style}><span class="documentsDocxBullet">•</span><div>${vnitrni}</div></div>`;
+    }
+
+    return `<${tag}${style}>${vnitrni}</${tag}>`;
+  }
+
+  async function vykresliDocxTabulku(tabulka, kontext) {
+    const radky = [];
+    for (const tr of docxDeti(tabulka, 'tr')) {
+      const bunky = [];
+      for (const tc of docxDeti(tr, 'tc')) {
+        const tcPr = docxPrvniDite(tc, 'tcPr');
+        const colspanRaw = Number(docxAttr(docxPrvniDite(tcPr, 'gridSpan'), 'val'));
+        const colspan = Number.isFinite(colspanRaw) && colspanRaw > 1 ? Math.min(20, colspanRaw) : 1;
+        let obsah = '';
+        for (const cast of docxDeti(tc)) {
+          if (cast.localName === 'p') obsah += await vykresliDocxOdstavec(cast, kontext);
+          if (cast.localName === 'tbl') obsah += await vykresliDocxTabulku(cast, kontext);
+        }
+        bunky.push(`<td${colspan > 1 ? ` colspan="${colspan}"` : ''}>${obsah || '<p><br></p>'}</td>`);
+      }
+      radky.push(`<tr>${bunky.join('')}</tr>`);
+    }
+    return `<div class="documentsDocxTableWrap"><table>${radky.join('')}</table></div>`;
+  }
+
+  async function vykresliDocxKontejner(prvek, kontext) {
+    let html = '';
+    for (const cast of docxDeti(prvek)) {
+      if (cast.localName === 'p') html += await vykresliDocxOdstavec(cast, kontext);
+      else if (cast.localName === 'tbl') html += await vykresliDocxTabulku(cast, kontext);
+      else if (cast.localName === 'sdt') {
+        const obsah = docxPotomci(cast, 'sdtContent')[0];
+        if (obsah) html += await vykresliDocxKontejner(obsah, kontext);
+      }
+    }
+    return html;
+  }
+
+  async function parsujDocx(arrayBuffer) {
+    if (!(arrayBuffer instanceof ArrayBuffer) || arrayBuffer.byteLength === 0) {
+      throw new Error('DOCX je prázdný.');
+    }
+    if (arrayBuffer.byteLength > MAX_DOCX_BYTES) {
+      throw new Error('DOCX překročil maximální velikost 20 MB.');
+    }
+
+    const zip = vytvorDocxZipIndex(arrayBuffer);
+    const dokumentXml = await nactiDocxXml(zip, 'word/document.xml', true);
+    const relaceXml = await nactiDocxXml(zip, 'word/_rels/document.xml.rels', false);
+    const dokument = docxXml(dokumentXml, 'DOCX dokument');
+    const body = docxPotomci(dokument, 'body')[0];
+    if (!body) throw new Error('DOCX neobsahuje tělo dokumentu.');
+
+    const objectUrls = [];
+    const kontext = {
+      zip,
+      relace: nactiDocxRelace(relaceXml),
+      objectUrls
+    };
+
+    try {
+      const html = await vykresliDocxKontejner(body, kontext);
+      return { html, objectUrls };
+    } catch (error) {
+      for (const url of objectUrls) {
+        try { URL.revokeObjectURL(url); } catch (_error) {}
+      }
+      throw error;
+    }
+  }
+
+  function uvolniDocxObjectUrls() {
+    for (const url of docxViewerObjectUrls) {
+      try { URL.revokeObjectURL(url); } catch (_error) {}
+    }
+    docxViewerObjectUrls = [];
+  }
+
+  function zajistiDocxViewer() {
+    if (docxViewerPrvky) return docxViewerPrvky;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'documentsDocxViewer';
+    overlay.className = 'documentsDocxViewer';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <header class="documentsDocxViewerHeader">
+        <button type="button" class="documentsDocxViewerClose" aria-label="Zavřít DOCX">‹</button>
+        <div class="documentsDocxViewerTitle">
+          <strong></strong>
+          <small>DOCX · pouze čtení</small>
+        </div>
+      </header>
+      <main class="documentsDocxViewerBody">
+        <div class="documentsDocxViewerLoading" hidden>
+          <span class="documentsDocxSpinner" aria-hidden="true"></span>
+          <strong>Otevírám DOCX…</strong>
+        </div>
+        <article class="documentsDocxViewerContent"></article>
+      </main>`;
+
+    document.body.appendChild(overlay);
+    const close = overlay.querySelector('.documentsDocxViewerClose');
+    const title = overlay.querySelector('.documentsDocxViewerTitle strong');
+    const loading = overlay.querySelector('.documentsDocxViewerLoading');
+    const content = overlay.querySelector('.documentsDocxViewerContent');
+
+    close.addEventListener('click', zavriDocxViewer);
+    docxViewerPrvky = { overlay, close, title, loading, content };
+    return docxViewerPrvky;
+  }
+
+  function zavriDocxViewer() {
+    if (!docxViewerPrvky) return;
+    docxViewerOtevren = false;
+    docxViewerPrvky.overlay.hidden = true;
+    docxViewerPrvky.loading.hidden = true;
+    docxViewerPrvky.content.innerHTML = '';
+    document.body.classList.remove('documents-docx-viewer-open');
+    uvolniDocxObjectUrls();
+  }
+
+  async function otevriDocxViewer(record) {
+    if (!(record?.blob instanceof Blob)) {
+      throw new Error('DOCX data nejsou dostupná.');
+    }
+
+    const prvky = zajistiDocxViewer();
+    uvolniDocxObjectUrls();
+    prvky.title.textContent = record.name || 'dokument.docx';
+    prvky.content.innerHTML = '';
+    prvky.loading.hidden = false;
+    prvky.overlay.hidden = false;
+    docxViewerOtevren = true;
+    document.body.classList.add('documents-docx-viewer-open');
+
+    try {
+      const arrayBuffer = await record.blob.arrayBuffer();
+      const vysledek = await parsujDocx(arrayBuffer);
+      docxViewerObjectUrls = vysledek.objectUrls;
+      prvky.content.innerHTML = vysledek.html || '<p class="documentsDocxEmpty">Dokument neobsahuje zobrazitelný obsah.</p>';
+      prvky.loading.hidden = true;
+      prvky.content.scrollTop = 0;
+    } catch (error) {
+      prvky.loading.hidden = true;
+      zavriDocxViewer();
+      throw error;
+    }
+  }
+
+  function zapojDocxAndroidBack() {
+    if (docxAndroidBackZapojen) return;
+    docxAndroidBackZapojen = true;
+    const puvodniAndroidZpet = window.LubaNoteZpracujAndroidZpet;
+    window.LubaNoteZpracujAndroidZpet = function () {
+      if (docxViewerOtevren) {
+        zavriDocxViewer();
+        return true;
+      }
+      if (typeof puvodniAndroidZpet === 'function') return puvodniAndroidZpet();
+      return false;
+    };
+  }
+
   async function otevriSoubor(idSouboru) {
     const record = await nactiSoubor(idSouboru);
     if (!record) {
       zobrazChybu('Dokumenty', 'Soubor už není dostupný.');
+      return;
+    }
+
+    const typ = typSouboru(record);
+
+    if (typ === 'docx') {
+      try {
+        await otevriDocxViewer(record);
+      } catch (error) {
+        console.error('Otevření uloženého DOCX selhalo:', error);
+        zobrazChybu(
+          'Dokumenty',
+          'DOCX se nepodařilo otevřít. Soubor může být poškozený nebo používá prvek, který tento první viewer ještě neumí.'
+        );
+      }
+      return;
+    }
+
+    if (typ !== 'pdf') {
+      zobrazChybu('Dokumenty', 'Tento typ souboru zatím neumím otevřít.');
       return;
     }
 
@@ -1545,7 +2281,7 @@
         <div class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" role="button" tabindex="0" title="Dlouhý stisk a táhni pro změnu pořadí">
           <span class="documentsFolderCardIcon" aria-hidden="true">📁</span>
           <span class="documentsFolderCardName">${esc(folder.name)}</span>
-          <small>${counts.get(folder.id) || 0} PDF</small>
+          <small>${pocetSouboruText(counts.get(folder.id) || 0)}</small>
           <button type="button" class="documentsFolderMenuButton" data-folder-menu="${esc(folder.id)}" aria-label="Akce složky ${esc(folder.name)}" title="Akce složky">⋮</button>
         </div>`)
       .join('');
@@ -1590,6 +2326,7 @@
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
     prvky.filterAll?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'all');
     prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
+    prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');
     prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
     if (prvky.trashCount) {
       const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
@@ -1612,11 +2349,8 @@
           if (aktivniSlozkaId !== null && soubor.folderId !== aktivniSlozkaId) return false;
 
           // PATCH 640: typový filtr je připravený i pro budoucí DOCX/obrázky.
-          if (aktivniTypFiltru === 'pdf') {
-            const mime = String(soubor.mime || '').toLocaleLowerCase('en');
-            const nazev = String(soubor.name || '').toLocaleLowerCase('en');
-            if (mime !== 'application/pdf' && !nazev.endsWith('.pdf')) return false;
-          }
+          if (aktivniTypFiltru === 'pdf' && !jePdfSoubor(soubor)) return false;
+          if (aktivniTypFiltru === 'docx' && !jeDocxSoubor(soubor)) return false;
         }
 
         return souborOdpovidaHledani(soubor, folderMap);
@@ -1645,11 +2379,11 @@
     } else if (zobrazujiKos) {
       if (prazdnaIkona) prazdnaIkona.textContent = '🗑️';
       if (prazdnyNadpis) prazdnyNadpis.textContent = 'Koš je prázdný';
-      if (prazdnyText) prazdnyText.textContent = 'PDF přesunutá do koše se zobrazí tady a půjdou obnovit.';
+      if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : 'Zatím tu není žádný dokument';
-      if (prazdnyText) prazdnyText.textContent = 'Přidej první soubor. Otevře se potom ve stávajícím LubaNote PDF vieweru.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : 'Zatím tu není žádný dokument';
+      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF nebo DOCX. PDF používá stávající viewer, DOCX se otevře jen ke čtení.';
     }
 
     if (prvky.search && prvky.search.value !== hledaniDokumentu) {
@@ -1678,13 +2412,16 @@
       const metaFolder = zobrazujiKos && soubor.trashFolderId
         ? folderMap.get(soubor.trashFolderId) || 'Všechny soubory'
         : folderName;
+      const typ = typSouboru(soubor);
+      const typText = popisTypuSouboru(soubor);
+      const ikonaTrida = typ === 'docx' ? ' is-docx' : '';
       return `
-        <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'PDF v koši' : 'Dlouhý stisk a táhni pro přesun'}">
+        <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'Dokument v koši' : 'Dlouhý stisk a táhni pro přesun'}">
           <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
-            <span class="documentsFileIcon" aria-hidden="true">PDF</span>
+            <span class="documentsFileIcon${ikonaTrida}" aria-hidden="true">${typText}</span>
             <span class="documentsFileMain">
               <strong>${esc(soubor.name)}</strong>
-              <small>${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${metaFolder ? ` · ${esc(metaFolder)}` : ''}</small>
+              <small>${esc(typText)} · ${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${metaFolder ? ` · ${esc(metaFolder)}` : ''}</small>
             </span>
             <span class="documentsFileOpen" aria-hidden="true">›</span>
           </button>
@@ -1697,7 +2434,7 @@
         if (Date.now() < blokovatOtevreniDo) return;
 
         // PATCH 640B – při otevření výsledku ukončíme vyhledávací režim
-        // a schováme vlastní klávesnici, aby PDF viewer nikdy neotevřel
+        // a schováme vlastní klávesnici, aby viewer nikdy neotevřel
         // dokument pod stále viditelnou LubaKeyboard.
         if (prvky.screen.classList.contains('documents-search-keyboard-active')) {
           prvky.screen.classList.remove('documents-search-keyboard-active');
@@ -1771,8 +2508,9 @@
       zajistiModalSlozky().otevrit();
     });
 
-    prvky.addPdf.addEventListener('click', pridatPdf);
-    prvky.addPdfFloating?.addEventListener('click', pridatPdf);
+    prvky.addPdf.addEventListener('click', otevriPridatSouborModal);
+    prvky.addPdfFloating?.addEventListener('click', otevriPridatSouborModal);
+    zapojDocxAndroidBack();
 
     /*
      * PATCH 640B – HLEDÁNÍ + VÝSLEDKY MUSÍ BÝT NAD LubaKeyboard.
@@ -1850,6 +2588,13 @@
       render();
     });
 
+
+    prvky.filterDocx?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'docx';
+      render();
+    });
+
     prvky.allFolder.addEventListener('click', () => {
       aktivniSlozkaId = null;
       render();
@@ -1873,6 +2618,9 @@
   window.LubaNoteDocumentsHub = {
     refresh,
     pridatPdf,
+    pridatDocx,
+    otevriDocxViewer,
+    zavriDocxViewer,
     presunSouborDoSlozky,
     ulozPoradiSlozek,
     prejmenujSoubor,

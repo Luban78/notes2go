@@ -1079,3 +1079,350 @@
     display: none !important;
   }
 }
+
+/* ============================================================
+   PATCH 641 – DOCX READ-ONLY
+   PDF zůstává v původním vieweru. DOCX dostává vlastní lokální,
+   pouze čtecí plochu; žádný editor ani převod na poznámku.
+   ============================================================ */
+
+.documentsFileIcon.is-docx,
+.documentsDragPreviewIcon.is-docx,
+.documentsAddFileType.is-docx {
+  background: #2f67c7;
+}
+
+.documentsAddFileDialog {
+  max-width: 420px;
+}
+
+.documentsAddFileChoices {
+  display: grid;
+  gap: 9px;
+  margin: 14px 0 10px;
+}
+
+.documentsAddFileChoice {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 68px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 9px 11px;
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+}
+
+.documentsAddFileChoice:active,
+.documentsAddFileChoice:focus-visible {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+  outline: none;
+}
+
+.documentsAddFileType {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 52px;
+  border-radius: 10px;
+  background: #d94545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.documentsAddFileChoice > span:last-child {
+  min-width: 0;
+}
+
+.documentsAddFileChoice strong,
+.documentsAddFileChoice small {
+  display: block;
+}
+
+.documentsAddFileChoice strong {
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.documentsAddFileChoice small {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.documentsAddFileCancel {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 800;
+}
+
+body.documents-docx-viewer-open {
+  overflow: hidden !important;
+}
+
+.documentsDocxViewer[hidden] {
+  display: none !important;
+}
+
+.documentsDocxViewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10070;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100dvh;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.documentsDocxViewerHeader {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 58px;
+  box-sizing: border-box;
+  padding:
+    max(6px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    6px
+    max(10px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+
+.documentsDocxViewerClose {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.documentsDocxViewerClose:active,
+.documentsDocxViewerClose:focus-visible {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+  outline: none;
+}
+
+.documentsDocxViewerTitle {
+  min-width: 0;
+}
+
+.documentsDocxViewerTitle strong,
+.documentsDocxViewerTitle small {
+  display: block;
+}
+
+.documentsDocxViewerTitle strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsDocxViewerTitle small {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.documentsDocxViewerBody {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    14px
+    max(10px, env(safe-area-inset-right))
+    max(22px, calc(env(safe-area-inset-bottom) + 12px))
+    max(10px, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--color-background) 88%, var(--color-surface));
+}
+
+.documentsDocxViewerContent {
+  width: min(100%, 780px);
+  min-height: calc(100% - 8px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 44px);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 8px;
+  background: #fff;
+  color: #202124;
+  box-shadow: 0 10px 34px rgba(0,0,0,.16);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  line-height: 1.52;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.documentsDocxViewerContent p {
+  margin: 0 0 .8em;
+  white-space: pre-wrap;
+}
+
+.documentsDocxViewerContent h1,
+.documentsDocxViewerContent h2,
+.documentsDocxViewerContent h3 {
+  margin: 1.05em 0 .55em;
+  color: #171717;
+  line-height: 1.2;
+}
+
+.documentsDocxViewerContent h1 {
+  font-size: 1.65em;
+}
+
+.documentsDocxViewerContent h2 {
+  font-size: 1.38em;
+}
+
+.documentsDocxViewerContent h3 {
+  font-size: 1.18em;
+}
+
+.documentsDocxViewerContent a {
+  color: #1558c0;
+  text-decoration: underline;
+}
+
+.documentsDocxImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: .65em auto;
+  object-fit: contain;
+}
+
+.documentsDocxUnsupported {
+  display: inline-block;
+  margin: .25em 0;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  color: #666;
+  font-size: .86em;
+}
+
+.documentsDocxListItem {
+  display: grid;
+  grid-template-columns: 1.2em minmax(0, 1fr);
+  gap: .2em;
+  margin: 0 0 .42em 1em;
+  white-space: pre-wrap;
+}
+
+.documentsDocxBullet {
+  font-weight: 800;
+  text-align: center;
+}
+
+.documentsDocxTableWrap {
+  max-width: 100%;
+  margin: .9em 0;
+  overflow-x: auto;
+}
+
+.documentsDocxViewerContent table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.documentsDocxViewerContent td,
+.documentsDocxViewerContent th {
+  min-width: 48px;
+  border: 1px solid #b8b8b8;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.documentsDocxViewerContent td > :first-child,
+.documentsDocxViewerContent th > :first-child {
+  margin-top: 0;
+}
+
+.documentsDocxViewerContent td > :last-child,
+.documentsDocxViewerContent th > :last-child {
+  margin-bottom: 0;
+}
+
+.documentsDocxTab {
+  white-space: pre;
+}
+
+.documentsDocxEmpty {
+  color: #666;
+  text-align: center;
+}
+
+.documentsDocxViewerLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  color: var(--color-text);
+}
+
+.documentsDocxViewerLoading[hidden] {
+  display: none !important;
+}
+
+.documentsDocxSpinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: documentsDocxSpin .75s linear infinite;
+}
+
+@keyframes documentsDocxSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .documentsDocxViewerBody {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+
+  .documentsDocxViewerContent {
+    min-height: 100%;
+    padding: 20px 16px 28px;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+}
