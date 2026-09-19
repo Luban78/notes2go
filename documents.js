@@ -1,11 +1,12 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.0 (PATCH 634)
+   LUBANOTE – DOKUMENTY V1.1 MOVE (PATCH 636)
    ------------------------------------------------------------
    První skutečný souborový tok modulu Dokumenty:
    - lokální složky v samostatném IndexedDB
    - import PDF
    - seznam souborů
    - otevření PDF ve stávajícím LubaNote PDF vieweru
+   - bezpečný přesun souboru mezi složkami přes drag handle
 
    DŮLEŽITÉ:
    - zatím pouze lokálně v zařízení / prohlížeči
@@ -27,6 +28,8 @@
   let dokumentyPrvky = null;
   let posledniSlozky = [];
   let posledniSoubory = [];
+  let dragStav = null;
+  let blokovatOtevreniDo = 0;
 
   function jeAndroid() {
     try {
@@ -122,6 +125,122 @@
     const db = await otevriDb();
     const tx = db.transaction(STORE_FILES, 'readonly');
     return await requestPromise(tx.objectStore(STORE_FILES).get(idSouboru));
+  }
+
+
+  async function presunSouborDoSlozky(idSouboru, folderId) {
+    const record = await nactiSoubor(idSouboru);
+    if (!record) {
+      zobrazChybu('Dokumenty', 'Soubor už není dostupný.');
+      return false;
+    }
+
+    const cil = folderId || null;
+    if ((record.folderId || null) === cil) return false;
+
+    if (cil !== null && !posledniSlozky.some((folder) => folder.id === cil)) {
+      zobrazChybu('Dokumenty', 'Cílová složka už není dostupná.');
+      return false;
+    }
+
+    record.folderId = cil;
+    record.updatedAt = Date.now();
+    await ulozDoStore(STORE_FILES, record);
+    return true;
+  }
+
+  function vycistiDragCil() {
+    document.querySelectorAll('.documentsFolderCard.drag-target, .documentsFolderAll.drag-target')
+      .forEach((el) => el.classList.remove('drag-target'));
+  }
+
+  function najdiDragCil(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    return el.closest?.('.documentsFolderCard, .documentsFolderAll') || null;
+  }
+
+  function nastavDragCil(target) {
+    vycistiDragCil();
+    if (target) target.classList.add('drag-target');
+  }
+
+  function ukonciDrag() {
+    if (!dragStav) return;
+    dragStav.row?.classList.remove('dragging');
+    dragStav.handle?.releasePointerCapture?.(dragStav.pointerId);
+    vycistiDragCil();
+    dragStav = null;
+  }
+
+  function zapojDragHandle(row, handle, idSouboru) {
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      dragStav = {
+        fileId: idSouboru,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+        row,
+        handle,
+        target: null
+      };
+
+      handle.setPointerCapture?.(event.pointerId);
+    });
+
+    handle.addEventListener('pointermove', (event) => {
+      if (!dragStav || dragStav.pointerId !== event.pointerId) return;
+
+      const dx = event.clientX - dragStav.startX;
+      const dy = event.clientY - dragStav.startY;
+      if (!dragStav.moved && Math.hypot(dx, dy) < 8) return;
+
+      dragStav.moved = true;
+      row.classList.add('dragging');
+
+      const target = najdiDragCil(event.clientX, event.clientY);
+      dragStav.target = target;
+      nastavDragCil(target);
+    });
+
+    handle.addEventListener('pointerup', async (event) => {
+      if (!dragStav || dragStav.pointerId !== event.pointerId) return;
+
+      const stav = dragStav;
+      const target = stav.target || najdiDragCil(event.clientX, event.clientY);
+      const moved = stav.moved;
+      ukonciDrag();
+
+      if (!moved || !target) return;
+
+      const folderId = target.classList.contains('documentsFolderAll')
+        ? null
+        : target.dataset.folderId || null;
+
+      try {
+        const zmeneno = await presunSouborDoSlozky(stav.fileId, folderId);
+        if (!zmeneno) return;
+
+        blokovatOtevreniDo = Date.now() + 350;
+        await refresh();
+
+        const nazev = folderId
+          ? posledniSlozky.find((folder) => folder.id === folderId)?.name || 'složky'
+          : 'Všechny soubory';
+        zobrazZpravu('Dokumenty', `Soubor byl přesunut do „${nazev}“.`);
+      } catch (error) {
+        console.error('Přesun souboru selhal:', error);
+        zobrazChybu('Dokumenty', 'Soubor se nepodařilo přesunout.');
+      }
+    });
+
+    handle.addEventListener('pointercancel', () => ukonciDrag());
   }
 
   function zobrazZpravu(nadpis, text) {
@@ -454,18 +573,30 @@
     prvky.files.innerHTML = soubory.map((soubor) => {
       const folderName = soubor.folderId ? folderMap.get(soubor.folderId) : '';
       return `
-        <button type="button" class="documentsFileRow" data-file-id="${esc(soubor.id)}">
-          <span class="documentsFileIcon" aria-hidden="true">PDF</span>
-          <span class="documentsFileMain">
-            <strong>${esc(soubor.name)}</strong>
-            <small>${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${folderName ? ` · ${esc(folderName)}` : ''}</small>
-          </span>
-          <span class="documentsFileOpen" aria-hidden="true">›</span>
-        </button>`;
+        <div class="documentsFileRow" data-file-id="${esc(soubor.id)}">
+          <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(soubor.name)}">
+            <span class="documentsFileIcon" aria-hidden="true">PDF</span>
+            <span class="documentsFileMain">
+              <strong>${esc(soubor.name)}</strong>
+              <small>${esc(formatBytes(soubor.size))} · ${esc(formatDate(soubor.updatedAt))}${folderName ? ` · ${esc(folderName)}` : ''}</small>
+            </span>
+            <span class="documentsFileOpen" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="documentsFileDrag" data-file-drag="${esc(soubor.id)}" aria-label="Přesunout ${esc(soubor.name)} do jiné složky" title="Přetáhnout do složky">⠿</button>
+        </div>`;
     }).join('');
 
-    prvky.files.querySelectorAll('[data-file-id]').forEach((button) => {
-      button.addEventListener('click', () => otevriSoubor(button.dataset.fileId));
+    prvky.files.querySelectorAll('[data-file-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (Date.now() < blokovatOtevreniDo) return;
+        otevriSoubor(button.dataset.fileOpen);
+      });
+    });
+
+    prvky.files.querySelectorAll('[data-file-drag]').forEach((handle) => {
+      const row = handle.closest('.documentsFileRow');
+      if (!row) return;
+      zapojDragHandle(row, handle, handle.dataset.fileDrag);
     });
   }
 
@@ -523,6 +654,7 @@
 
   window.LubaNoteDocumentsHub = {
     refresh,
-    pridatPdf
+    pridatPdf,
+    presunSouborDoSlozky
   };
 })();

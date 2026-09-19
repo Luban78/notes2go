@@ -1,5 +1,5 @@
 /* ============================================================
-   LUBANOTE – DOKUMENTY V1.0 / PATCH 634
+   LUBANOTE – DOKUMENTY V1.1 MOVE / PATCH 636
    ============================================================ */
 
 .documentsV1 {
@@ -187,18 +187,62 @@
 
 .documentsFileRow {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 2px;
+  align-items: stretch;
   width: 100%;
   min-height: 60px;
   border: 1px solid var(--color-border);
   border-radius: 15px;
-  padding: 8px 10px;
   background: var(--color-surface);
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
   color: var(--color-text);
+  overflow: hidden;
+  transition: border-color .12s ease, opacity .12s ease, transform .12s ease;
+}
+
+.documentsFileRow.dragging {
+  opacity: .58;
+  transform: scale(.99);
+}
+
+.documentsFileOpenArea {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  border: 0;
+  padding: 8px 6px 8px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   text-align: left;
+}
+
+.documentsFileDrag {
+  touch-action: none;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.documentsFileDrag:active {
+  color: var(--color-accent-text);
+}
+
+.documentsFolderCard.drag-target,
+.documentsFolderAll.drag-target {
+  border-color: var(--color-accent);
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 42%, transparent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--color-accent) 17%, var(--color-surface));
 }
 
 .documentsFileIcon {
