@@ -17,7 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260920-pdf-viewer-polish-652d">
-  <link rel="stylesheet" href="documents.css?v=20260920-documents-ui-655">
+  <link rel="stylesheet" href="documents.css?v=655A">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260920-planner-reminders-hotfix-650a">
@@ -550,9 +550,8 @@
       <div class="documentsV1SectionHeader">
         <div>
           <h3 id="documentsFoldersTitle">Složky</h3>
-          <small>První krok k vlastní ploše Dokumentů</small>
         </div>
-        <button id="documentsAddFolderButton" class="documentsV1Secondary" type="button">＋ Nová složka</button>
+        <button id="documentsAddFolderButton" class="documentsV1Secondary documentsFolderAddCompact" type="button" aria-label="Nová složka" title="Nová složka">＋</button>
       </div>
 
       <div id="documentsFolders" class="documentsFoldersGrid"></div>
@@ -561,7 +560,7 @@
     <section class="documentsV1Section" aria-labelledby="documentsFilesTitle">
       <div class="documentsV1SectionHeader documentsFilesSectionHeader">
         <div>
-          <h3 id="documentsFilesTitle">Dokumenty</h3>
+          <h3 id="documentsFilesTitle">Soubory</h3>
           <small id="documentsActiveFolder">Všechny soubory</small>
         </div>
         <button id="documentsAllFolderButton" class="documentsFolderAll documentsBackToAll" type="button" hidden>← Všechny soubory</button>
@@ -570,7 +569,7 @@
       <div class="documentsSearchTools">
         <div class="documentsSearchBox">
           <span class="documentsSearchIcon" aria-hidden="true">⌕</span>
-          <input id="documentsSearchInput" type="search" placeholder="Hledat dokumenty…" aria-label="Hledat dokumenty" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-search">
+          <input id="documentsSearchInput" type="search" placeholder="Hledat…" aria-label="Hledat soubory" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-search">
           <button id="documentsSearchClear" class="documentsSearchClear" type="button" aria-label="Vymazat hledání" hidden>×</button>
         </div>
 
@@ -2193,7 +2192,7 @@
   <script src="editorDocuments.js?v=20260920-pdf-zoom-calm-652e"></script>
   <script src="legacyDocReader.js?v=20260919-doc-viewer-642a"></script>
   <script src="epubReader.js?v=20260919-epub-reader-643"></script>
-  <script src="documents.js?v=20260920-documents-ui-655"></script>
+  <script src="documents.js?v=655A"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>

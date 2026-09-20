@@ -2975,3 +2975,204 @@ body.documents-epub-viewer-open {
     font-size: 13px;
   }
 }
+
+/* ============================================================
+   PATCH 655A – DOKUMENTY / VARIANTA D – KOMPAKTNÍ SEZNAM
+   Pouze UI. Logika Dokumentů, drag&drop a viewery se nemění.
+   ============================================================ */
+
+/* Aktivní horní záložka už jasně říká, kde jsme. Hero je proto
+   zbytečná duplicita; tlačítko zůstává v DOM kvůli stabilní JS vazbě. */
+.documentsV1Hero {
+  display: none !important;
+}
+
+.documentsV1 {
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.documentsV1Section {
+  padding: 10px 12px;
+  border-radius: 18px;
+}
+
+.documentsV1SectionHeader {
+  min-height: 34px;
+  margin-bottom: 7px;
+}
+
+.documentsV1SectionHeader h3 {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+/* Kompaktní + místo širokého tlačítka. */
+.documentsFolderAddCompact {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 23px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+/* Složky jako úsporný seznam místo velkých karet. */
+.documentsFoldersGrid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.documentsFolderCard {
+  min-height: 54px;
+  border: 0;
+  border-radius: 0;
+  padding: 7px 9px;
+  background: transparent;
+}
+
+.documentsFolderCard + .documentsFolderCard {
+  border-top: 1px solid var(--color-border);
+}
+
+.documentsFolderCard.active {
+  border-color: transparent;
+  box-shadow: inset 3px 0 0 var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.documentsFolderCardIcon {
+  font-size: 23px;
+}
+
+.documentsFolderCardName {
+  font-size: 14px;
+}
+
+.documentsFolderCard small {
+  font-size: 10.5px;
+}
+
+.documentsFolderMenuButton {
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
+}
+
+/* Hlavička souborů je jeden úsporný řádek: Soubory | aktuální pohled. */
+.documentsFilesSectionHeader > div {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.documentsFilesSectionHeader small {
+  flex: 0 1 auto;
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--color-accent-text);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsBackToAll {
+  margin-left: 4px;
+}
+
+.documentsSearchTools {
+  gap: 7px;
+}
+
+.documentsSearchBox {
+  min-height: 40px;
+}
+
+.documentsSearchBox input {
+  font-size: 14px;
+}
+
+.documentsFileFilters {
+  gap: 5px;
+  padding-bottom: 1px;
+}
+
+.documentsFileFilter,
+.documentsTrashButton {
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: 11px;
+}
+
+/* Soubory jako kompaktní řádky bez zbytečných mezer mezi kartami. */
+.documentsFiles {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.documentsFileRow {
+  min-height: 56px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.documentsFileRow + .documentsFileRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.documentsFileOpenArea {
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 9px;
+  padding: 7px 7px 7px 9px;
+}
+
+.documentsFileIcon {
+  width: 38px;
+  height: 42px;
+  border-radius: 8px;
+}
+
+.documentsFileMain strong {
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+
+.documentsFileMain small {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.25;
+  -webkit-line-clamp: 1;
+}
+
+.documentsFileMenuButton {
+  width: 34px;
+}
+
+@media (max-width: 520px) {
+  .documentsV1 {
+    padding-inline: 10px;
+  }
+
+  .documentsV1Section {
+    padding: 9px 10px;
+  }
+
+  .documentsV1SectionHeader h3 {
+    font-size: 17px;
+  }
+}
