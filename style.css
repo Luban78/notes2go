@@ -7999,19 +7999,74 @@ body.secretModeActive {
 }
 
 /* ==================================================
-   BARVY KARET – DARK GREY
-   V DarkG zůstávají všechny barevné varianty karet černé.
-   Uložená barva štítku se nemění a v ostatních tématech se použije normálně.
+   BARVY KARET – GRAFIT
+   Barevné varianty zůstávají rozlišitelné jen odstínem šedi.
 ================================================== */
 body.theme-darkg {
-  --card-cervena: #000000;
-  --card-oranzova: #000000;
-  --card-zluta: #000000;
-  --card-zelena: #000000;
-  --card-tyrkysova: #000000;
-  --card-modra: #000000;
-  --card-fialova: #000000;
-  --card-ruzova: #000000;
+  --card-cervena: #2a2a2a;
+  --card-oranzova: #303030;
+  --card-zluta: #363636;
+  --card-zelena: #292929;
+  --card-tyrkysova: #323232;
+  --card-modra: #2d2d2d;
+  --card-fialova: #383838;
+  --card-ruzova: #333333;
+}
+
+/* ==================================================
+   BARVY KARET – ARKTICKÝ
+================================================== */
+body.theme-arctic {
+  --card-cervena: #49343b;
+  --card-oranzova: #4a3c34;
+  --card-zluta: #4a4633;
+  --card-zelena: #34463c;
+  --card-tyrkysova: #31474b;
+  --card-modra: #344153;
+  --card-fialova: #43394f;
+  --card-ruzova: #493744;
+}
+
+/* ==================================================
+   BARVY KARET – NOČNÍ FIALOVÝ
+================================================== */
+body.theme-violetnight {
+  --card-cervena: #57343d;
+  --card-oranzova: #584132;
+  --card-zluta: #565033;
+  --card-zelena: #334c3a;
+  --card-tyrkysova: #304b50;
+  --card-modra: #34435a;
+  --card-fialova: #49385f;
+  --card-ruzova: #59364d;
+}
+
+/* ==================================================
+   BARVY KARET – SOLAR
+================================================== */
+body.theme-solar {
+  --card-cervena: #54343b;
+  --card-oranzova: #59402f;
+  --card-zluta: #56502c;
+  --card-zelena: #254b3e;
+  --card-tyrkysova: #174b50;
+  --card-modra: #23465a;
+  --card-fialova: #463957;
+  --card-ruzova: #54364b;
+}
+
+/* ==================================================
+   BARVY KARET – RETRO
+================================================== */
+body.theme-retro {
+  --card-cervena: #563936;
+  --card-oranzova: #5a422f;
+  --card-zluta: #5a4e2e;
+  --card-zelena: #3d4b33;
+  --card-tyrkysova: #354a45;
+  --card-modra: #394554;
+  --card-fialova: #4b3d52;
+  --card-ruzova: #553946;
 }
 
 

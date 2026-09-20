@@ -5,19 +5,20 @@
 :root {
   --color-background: #f7f4f2;
   --color-surface: #ffffff;
-  
+
   --color-text: #231b33;
   --color-text-secondary: #6d6878;
-  
+
   --color-accent: #7444dc;
   --color-accent-text: #5f32c9;
   --color-on-accent: #ffffff;
-  
+
   --color-border: rgba(35, 27, 51, 0.12);
-  
+
   --color-editor-background: #f0eded;
   --color-editor-text: #2e1515;
 }
+
 /* THEME: dark | Tmavý | selectable */
 body.theme-dark {
   --color-background: #100d18;
@@ -54,19 +55,7 @@ body.theme-cappuccino {
   --color-editor-text: #3a2a22;
 }
 
-
-body.theme-dark #modalDate,
-body.theme-dark #modalTime {
-  color-scheme: dark;
-}
-
-body.theme-dark #modalDate::-webkit-calendar-picker-indicator,
-body.theme-dark #modalTime::-webkit-calendar-picker-indicator {
-  filter: brightness(1.7);
-}
-
 /* THEME: ocean | Ocean | selectable */
-
 body.theme-ocean {
   --color-background: #071a26;
   --color-surface: #0d2a3a;
@@ -84,30 +73,145 @@ body.theme-ocean {
   --color-editor-text: #e8f8ff;
 }
 
-/* Nativní datum a čas pro tmavý Ocean */
+/* ==================================================
+   GRAFIT – NEUTRÁLNÍ ODSTÍNY ŠEDI
+   Zachovává původní ID darkg kvůli uloženému nastavení.
+================================================== */
+/* THEME: darkg | Grafit | selectable */
+body.theme-darkg {
+  --color-background: #121212;
+  --color-surface: #202020;
+
+  --color-text: #f1f1f1;
+  --color-text-secondary: #b5b5b5;
+
+  --color-accent: #a6a6a6;
+  --color-accent-text: #d8d8d8;
+  --color-on-accent: #111111;
+
+  --color-border: rgba(255, 255, 255, 0.14);
+
+  --color-editor-background: #181818;
+  --color-editor-text: #f1f1f1;
+}
+
+/* ==================================================
+   NOVÉ MOTIVY – 656
+   Vlastní LubaNote interpretace známých barevných směrů.
+================================================== */
+
+/* THEME: arctic | Arktický | selectable */
+body.theme-arctic {
+  --color-background: #242a35;
+  --color-surface: #2e3440;
+
+  --color-text: #eceff4;
+  --color-text-secondary: #aeb8c7;
+
+  --color-accent: #88c0d0;
+  --color-accent-text: #9ed6df;
+  --color-on-accent: #182129;
+
+  --color-border: rgba(216, 222, 233, 0.14);
+
+  --color-editor-background: #252b36;
+  --color-editor-text: #eceff4;
+}
+
+/* THEME: violetnight | Noční fialový | selectable */
+body.theme-violetnight {
+  --color-background: #1d1e2a;
+  --color-surface: #282a36;
+
+  --color-text: #f8f8f2;
+  --color-text-secondary: #b8bbcf;
+
+  --color-accent: #bd93f9;
+  --color-accent-text: #d5b6ff;
+  --color-on-accent: #1d1e2a;
+
+  --color-border: rgba(248, 248, 242, 0.13);
+
+  --color-editor-background: #22232f;
+  --color-editor-text: #f8f8f2;
+}
+
+/* THEME: solar | Solar | selectable */
+body.theme-solar {
+  --color-background: #002b36;
+  --color-surface: #073642;
+
+  --color-text: #eee8d5;
+  --color-text-secondary: #93a1a1;
+
+  --color-accent: #2aa198;
+  --color-accent-text: #62c8c0;
+  --color-on-accent: #001d24;
+
+  --color-border: rgba(147, 161, 161, 0.18);
+
+  --color-editor-background: #00252e;
+  --color-editor-text: #eee8d5;
+}
+
+/* THEME: retro | Retro | selectable */
+body.theme-retro {
+  --color-background: #282828;
+  --color-surface: #3c3836;
+
+  --color-text: #ebdbb2;
+  --color-text-secondary: #bdae93;
+
+  --color-accent: #fabd2f;
+  --color-accent-text: #ffd866;
+  --color-on-accent: #282828;
+
+  --color-border: rgba(235, 219, 178, 0.16);
+
+  --color-editor-background: #1d2021;
+  --color-editor-text: #ebdbb2;
+}
+
+/* Nativní datum a čas pro všechny tmavé motivy */
+body.theme-dark #modalDate,
+body.theme-dark #modalTime,
 body.theme-ocean #modalDate,
-body.theme-ocean #modalTime {
+body.theme-ocean #modalTime,
+body.theme-darkg #modalDate,
+body.theme-darkg #modalTime,
+body.theme-arctic #modalDate,
+body.theme-arctic #modalTime,
+body.theme-violetnight #modalDate,
+body.theme-violetnight #modalTime,
+body.theme-solar #modalDate,
+body.theme-solar #modalTime,
+body.theme-retro #modalDate,
+body.theme-retro #modalTime {
   color-scheme: dark;
 }
 
+body.theme-dark #modalDate::-webkit-calendar-picker-indicator,
+body.theme-dark #modalTime::-webkit-calendar-picker-indicator,
 body.theme-ocean #modalDate::-webkit-calendar-picker-indicator,
-body.theme-ocean #modalTime::-webkit-calendar-picker-indicator {
+body.theme-ocean #modalTime::-webkit-calendar-picker-indicator,
+body.theme-darkg #modalDate::-webkit-calendar-picker-indicator,
+body.theme-darkg #modalTime::-webkit-calendar-picker-indicator,
+body.theme-arctic #modalDate::-webkit-calendar-picker-indicator,
+body.theme-arctic #modalTime::-webkit-calendar-picker-indicator,
+body.theme-violetnight #modalDate::-webkit-calendar-picker-indicator,
+body.theme-violetnight #modalTime::-webkit-calendar-picker-indicator,
+body.theme-solar #modalDate::-webkit-calendar-picker-indicator,
+body.theme-solar #modalTime::-webkit-calendar-picker-indicator,
+body.theme-retro #modalDate::-webkit-calendar-picker-indicator,
+body.theme-retro #modalTime::-webkit-calendar-picker-indicator {
   filter: brightness(1.7);
 }
-
-
-
-/* ========================================
-   TAJNÝ REŽIM – BAREVNÉ POZADÍ
-   Funguje ve světlém i tmavém motivu.
-   ======================================== */
 
 /* ========================================
    SECRET REŽIM – VLASTNÍ PEVNÉ TÉMA
    Vždy stejné bez ohledu na běžné téma.
    Musí být až ZA ostatními tématy.
    ======================================== */
-   
 /* THEME: secret | Secret | internal */
 body.secretModeActive {
   --color-background: #4a203d;
@@ -128,35 +232,8 @@ body.secretModeActive {
   background: var(--color-background);
 }
 
-
-
-/*SECRET REZIM*/
 /* Celý vršek i oblast pod kartami */
 body.secretModeActive .homeHeader,
 body.secretModeActive .app {
   background: var(--color-background);
-}
-
-
-
-
-
-
-/* THEME: darkg | DarkG | selectable */
-
-body.theme-darkg {
-  --color-background: #071a26;
-  --color-surface: #000000;
-
-  --color-text: #e8f8ff;
-  --color-text-secondary: #F0EEEE;
-
-  --color-accent: #716969;
-  --color-accent-text: #897373;
-  --color-on-accent: #ffffff;
-
-  --color-border: #000000DB;
-
-  --color-editor-background: #0a2230;
-  --color-editor-text: #e8f8ff;
 }

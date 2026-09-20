@@ -1,5 +1,5 @@
 async function nactiTemata() {
-  const odpoved = await fetch("theme.css");
+  const odpoved = await fetch("theme.css?v=656-theme-pack");
   const cssText = await odpoved.text();
   
   //console.log(cssText);
