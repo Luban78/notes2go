@@ -2719,8 +2719,10 @@
       );
 
       if (text) {
-        const code = document.createElement('pre');
+        const code = document.createElement('div');
         code.className = 'documentsSqlCode';
+        code.setAttribute('role', 'textbox');
+        code.setAttribute('aria-readonly', 'true');
         code.textContent = text;
         prvky.content.replaceChildren(code);
 

@@ -2802,14 +2802,23 @@ body.documents-epub-viewer-open {
 }
 
 .documentsSqlCode {
-  min-width: max-content;
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
   margin: 0;
   padding: clamp(16px, 4vw, 30px);
-  color: inherit;
+  color: #eceff4 !important;
+  -webkit-text-fill-color: #eceff4;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
+  font-variant-ligatures: none;
   line-height: 1.55;
+  text-align: left;
+  direction: ltr;
   white-space: pre;
   tab-size: 2;
 }
