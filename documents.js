@@ -1969,6 +1969,10 @@
         let sqlText = '';
         try {
           sqlText = await prectiSqlText(file);
+          window.LubaNoteStartupDiag?.zapis?.(
+            'SQL',
+            `IMPORT | OK | bytes=${Number(file.size) || 0} chars=${sqlText.length}`
+          );
         } catch (error) {
           console.error('Čtení SQL při importu selhalo:', error);
           uklid();
@@ -2699,15 +2703,40 @@
     document.body.classList.add('documents-docx-viewer-open');
 
     try {
-      const text = typeof record.sqlText === 'string'
+      const maSqlText = typeof record.sqlText === 'string';
+      window.LubaNoteStartupDiag?.zapis?.(
+        'SQL',
+        `OPEN | record | blob=${record?.blob instanceof Blob ? 'yes' : 'no'} sqlText=${maSqlText ? 'yes' : 'no'} storedChars=${maSqlText ? record.sqlText.length : -1} bytes=${Number(record?.size) || Number(record?.blob?.size) || 0}`
+      );
+
+      const text = maSqlText
         ? record.sqlText
         : await prectiSqlText(record.blob);
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        'SQL',
+        `OPEN | text | source=${maSqlText ? 'sqlText' : 'blob'} chars=${text.length} head=${JSON.stringify(text.slice(0, 40))}`
+      );
 
       if (text) {
         const code = document.createElement('pre');
         code.className = 'documentsSqlCode';
         code.textContent = text;
         prvky.content.replaceChildren(code);
+
+        requestAnimationFrame(() => {
+          try {
+            const styl = getComputedStyle(code);
+            const rect = code.getBoundingClientRect();
+            const contentRect = prvky.content.getBoundingClientRect();
+            window.LubaNoteStartupDiag?.zapis?.(
+              'SQL',
+              `RENDER | chars=${code.textContent?.length || 0} children=${prvky.content.children.length} display=${styl.display} visibility=${styl.visibility} opacity=${styl.opacity} color=${styl.color} font=${styl.fontSize} rect=${Math.round(rect.width)}x${Math.round(rect.height)}@${Math.round(rect.left)},${Math.round(rect.top)} content=${Math.round(contentRect.width)}x${Math.round(contentRect.height)}`
+            );
+          } catch (error) {
+            window.LubaNoteStartupDiag?.zapis?.('SQL', `RENDER | DIAG ERROR | ${error?.message || 'unknown'}`);
+          }
+        });
       } else {
         const empty = document.createElement('p');
         empty.className = 'documentsDocxEmpty';
