@@ -842,6 +842,10 @@ body {
 
 /* ---------- DATOVÝ PROVOZ SYNCHRONIZACE ---------- */
 
+.syncTrafficBar[hidden] {
+  display: none !important;
+}
+
 .syncTrafficBar {
   display: flex;
   align-items: center;

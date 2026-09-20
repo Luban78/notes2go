@@ -1248,6 +1248,9 @@ const accountPlanMenuInfo =
 const accountPlanMenuText =
   document.getElementById("accountPlanMenuText");
 
+const syncTrafficBar =
+  document.getElementById("syncTrafficBar");
+
 let aktualniRezimAuth = "login";
 let aktualniStavUctu = null;
 let aktualniPristupUctu = null;
@@ -1396,6 +1399,17 @@ async function zkontrolujKonecDemaPriNavratu612() {
 }
 
 function aktualizujInfoPlanuVMenu(stav = aktualniPristupUctu) {
+  /* PATCH 648 – RX/TX/E je interní diagnostika, ne běžná součást UI.
+     Měření v syncTraffic.js běží dál pro Debug Hub, ale viditelný panel
+     dostane pouze aktivní INTERNAL účet. Default po startu/loginu je skrytý. */
+  if (syncTrafficBar) {
+    syncTrafficBar.hidden = !(
+      stav?.account_status === "active" &&
+      stav?.plan_id === "internal" &&
+      jeStavPristupuCasovePlatny(stav)
+    );
+  }
+
   if (!accountPlanMenuInfo || !accountPlanMenuText) {
     return;
   }
