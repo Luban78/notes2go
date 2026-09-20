@@ -90,6 +90,58 @@
     return canvas.toDataURL(mimeType, kvalita);
   }
 
+  function odhadniBajtyDataUrl(dataUrl) {
+    const text = String(dataUrl || "");
+    const comma = text.indexOf(",");
+    if (comma < 0) return text.length;
+    const base64 = text.slice(comma + 1);
+    const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+  }
+
+  function zapisSharedOptimalizaci(text) {
+    window.LubaNoteStartupDiag?.zapis?.("SHARED-MEDIA", text);
+  }
+
+  function pripravSdilenyObrazek(image) {
+    /* PATCH 653E – Shared E2E egress guard.
+       AES-GCM ciphertext už nejde smysluplně komprimovat, takže fotku
+       zmenšíme ještě před 653D šifrováním. Cíl ~260 KiB JPEG payloadu;
+       menší/lehčí fotky zůstávají ve vyšším rozlišení. */
+    const cilBajtu = 260 * 1024;
+    const pokusy = [
+      [1280, 0.62],
+      [1080, 0.58],
+      [960, 0.55],
+      [840, 0.52],
+      [720, 0.50]
+    ];
+
+    let vysledek = "";
+    let pouzityRozmer = 0;
+    let pouzitaKvalita = 0;
+    let bajtu = 0;
+
+    for (const [maxRozmer, kvalita] of pokusy) {
+      vysledek = vykresliDoDataUrl(image, {
+        maxRozmer,
+        mimeType: "image/jpeg",
+        kvalita
+      });
+      bajtu = odhadniBajtyDataUrl(vysledek);
+      pouzityRozmer = maxRozmer;
+      pouzitaKvalita = kvalita;
+      if (bajtu <= cilBajtu) break;
+    }
+
+    if (!vysledek) throw new Error("Obrázek se nepodařilo připravit.");
+
+    zapisSharedOptimalizaci(
+      `OPTIMIZE | OK | bytes=${bajtu} | max=${pouzityRozmer} | q=${pouzitaKvalita.toFixed(2)}`
+    );
+    return vysledek;
+  }
+
   async function pripravObrazek(file) {
     if (!file?.type?.startsWith("image/")) {
       throw new Error("Vybraný soubor není obrázek.");
@@ -99,6 +151,10 @@
     const image = await nactiObrazek(original);
 
     if (!jeTajnaPoznamka()) {
+      if (jeAktivniSdilenaPoznamka()) {
+        return pripravSdilenyObrazek(image);
+      }
+
       return vykresliDoDataUrl(image, {
         maxRozmer: 1280,
         mimeType: "image/jpeg",
