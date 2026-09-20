@@ -472,7 +472,10 @@
       prvky.native.classList.remove("is-pinching");
       aktualizujPdfOvladani();
 
-      vykresliAktualniPdfStranku({ zachovatPozici: true })
+      vykresliAktualniPdfStranku({
+        zachovatPozici: true,
+        zobrazitNacitani: false
+      })
         .catch((error) => {
           console.error("PDF pinch zoom selhal:", error);
         });
@@ -742,7 +745,10 @@
     );
   }
 
-  async function vykresliAktualniPdfStranku({ zachovatPozici = false } = {}) {
+  async function vykresliAktualniPdfStranku({
+    zachovatPozici = false,
+    zobrazitNacitani = true
+  } = {}) {
     if (!pdfViewerStav?.native || !pdfViewerPrvky) {
       return;
     }
@@ -763,8 +769,14 @@
     const scrollLeft = pdfViewerPrvky.native.scrollLeft;
     const scrollTop = pdfViewerPrvky.native.scrollTop;
 
-    pdfViewerPrvky.loading.hidden = false;
-    pdfViewerPrvky.image.classList.add("is-loading");
+    if (zobrazitNacitani) {
+      pdfViewerPrvky.loading.hidden = false;
+      pdfViewerPrvky.image.classList.add("is-loading");
+    } else {
+      /* 652E – při zoomu necháme současnou stránku klidně viditelnou. */
+      pdfViewerPrvky.loading.hidden = true;
+      pdfViewerPrvky.image.classList.remove("is-loading");
+    }
 
     const vysledek = await plugin.vykresliPdfStranku({
       index: pdfViewerStav.pageIndex,
@@ -786,8 +798,10 @@
     await pockejNaNacteniPdfObrazku();
     aktualizujPdfVycentrovani();
 
-    pdfViewerPrvky.loading.hidden = true;
-    pdfViewerPrvky.image.classList.remove("is-loading");
+    if (zobrazitNacitani) {
+      pdfViewerPrvky.loading.hidden = true;
+      pdfViewerPrvky.image.classList.remove("is-loading");
+    }
 
     pdfViewerPrvky.native.scrollTo({
       top: zachovatPozici ? scrollTop : 0,
@@ -838,7 +852,10 @@
     aktualizujPdfOvladani();
 
     try {
-      await vykresliAktualniPdfStranku({ zachovatPozici });
+      await vykresliAktualniPdfStranku({
+        zachovatPozici,
+        zobrazitNacitani: false
+      });
     } catch (error) {
       console.error("PDF zoom selhal:", error);
     }
