@@ -19,6 +19,10 @@
   let casovac = null;
   let posledniSyncAt = 0;
 
+  function diag(text) {
+    window.LubaNoteStartupDiag?.zapis?.("DICT", String(text || ""));
+  }
+
   const owner = () => String(localStorage.getItem(OWNER_KEY) || "").trim();
   const dirtyKey = (id) => `${PREFIX_DIRTY}${id}`;
   const cursorKey = (id) => `${PREFIX_CURSOR}${id}`;
@@ -113,13 +117,29 @@
     );
   }
 
-  async function synchronizuj({ force = false } = {}) {
-    if (probihajici) return probihajici;
+  async function synchronizuj({ force = false, userIdHint = "" } = {}) {
+    if (probihajici) {
+      diag("JOIN | sync already running");
+      return probihajici;
+    }
 
-    const id = owner();
-    if (!id || jeLocalMode()) return false;
-    if (!force && Date.now() - posledniSyncAt < 1500) return false;
-    if (!(await sitJeOpravduDostupna())) return false;
+    const id = String(userIdHint || owner()).trim();
+    if (!id) {
+      diag("SKIP | missing owner");
+      return false;
+    }
+    if (jeLocalMode()) {
+      diag("SKIP | local mode");
+      return false;
+    }
+    if (!force && Date.now() - posledniSyncAt < 1500) {
+      diag("SKIP | throttle");
+      return false;
+    }
+    if (!(await sitJeOpravduDostupna())) {
+      diag("SKIP | offline");
+      return false;
+    }
 
     const cloud = window.LubaNoteSupabase;
     const keyboard = window.LubaNoteKeyboard;
@@ -127,6 +147,7 @@
     /* Auth session sama nestačí. Stejně jako hlavní LubaNote čekáme, až
        server skutečně povolí aktivní účet / plán. */
     if (cloud?.jeAktivniUcetPotvrzenProTentoBeh?.() !== true) {
+      diag("SKIP | account gate");
       return false;
     }
 
@@ -135,10 +156,12 @@
       !cloud?.ulozZmenyOsobnihoSlovniku650 ||
       !keyboard?.aplikujCloudoveZmenySlovniku
     ) {
+      diag("SKIP | api unavailable");
       return false;
     }
 
     keyboard.nastavVlastnikaSlovniku?.(id);
+    diag(`START | cursor=${nactiCursor(id)} dirty=${Object.keys(nactiDirty(id)).length}`);
 
     probihajici = (async () => {
       try {
@@ -217,8 +240,10 @@
         }
 
         posledniSyncAt = Date.now();
+        diag(`OK | cursor=${nactiCursor(id)} dirty=${Object.keys(nactiDirty(id)).length}`);
         return true;
       } catch (error) {
+        diag(`ERROR | ${String(error?.message || error || "unknown")}`);
         console.warn("Synchronizace osobního slovníku byla odložena:", error);
         return false;
       } finally {
@@ -249,9 +274,18 @@
 
   window.addEventListener("lubanote:account-active", (event) => {
     const id = String(event?.detail?.userId || owner()).trim();
-    if (!id) return;
+    if (!id) {
+      diag("ACCOUNT ACTIVE | missing user id");
+      return;
+    }
     window.LubaNoteKeyboard?.nastavVlastnikaSlovniku?.(id);
-    naplanuj(300);
+
+    /* PATCH 650B – account-active už znamená, že serverový account gate
+       je otevřený. Spusť dictionary sync přímo a nespoléhej pouze na
+       odložený timer, který se na WEB/PC v 650 neprovedl. */
+    diag("ACCOUNT ACTIVE | direct sync");
+    clearTimeout(casovac);
+    void synchronizuj({ force: true, userIdHint: id });
   });
 
   window.addEventListener("lubanote:auth-valid", () => naplanuj(500));
