@@ -1806,51 +1806,41 @@
     if (format === "pdf") {
       const nazevSouboru = `${zaklad}.pdf`;
 
-      if (jeNativniAndroid() && plugin?.ulozPdf) {
+      if (jeNativniAndroid() && plugin?.ulozPdfPrimeTest) {
         otevriPdfUlozeniModal({
           nazevSouboru,
           povolitVolbuMista: false,
           povolitNastaveniExportu: true,
-          povolitPrimePdfTest: typeof plugin.ulozPdfPrimeTest === "function",
-          infoText: "TEST uloží stejné PDF přímo, bez systémového náhledu.",
-          poPrimePdfTest: async (nazev, exportVolby) => {
-            const html = vytvorPdfHtmlDokument(data, exportVolby);
-            const nazevTest = /-TEST\.pdf$/i.test(nazev)
-              ? nazev
-              : nazev.replace(/\.pdf$/i, "-TEST.pdf");
-            const vysledek = await plugin.ulozPdfPrimeTest({
-              html,
-              nazevSouboru: nazevTest,
-              orientace: exportVolby.orientace
-            });
-
-            if (vysledek?.saved !== true) {
-              return false;
-            }
-
-            if (typeof zobrazZpravuAplikace === "function") {
-              zobrazZpravuAplikace(
-                "PDF TEST",
-                "PDF bylo vytvořeno bez systémového náhledu a uloženo do Stažené/LubaNote."
-              );
-            }
-
-            return true;
-          },
+          povolitPrimePdfTest: false,
+          infoText: "PDF se uloží přímo do Stažené/LubaNote bez systémového tiskového náhledu.",
           poPotvrzeni: async (nazev, _zpusob, exportVolby) => {
             try {
               const html = vytvorPdfHtmlDokument(data, exportVolby);
-              await plugin.ulozPdf({
+              const vysledek = await plugin.ulozPdfPrimeTest({
                 html,
                 nazevSouboru: nazev,
-                zpusobUlozeni: "system"
+                orientace: exportVolby.orientace
               });
+
+              if (vysledek?.saved !== true) {
+                return false;
+              }
+
+              if (typeof zobrazZpravuAplikace === "function") {
+                zobrazZpravuAplikace(
+                  "PDF",
+                  "PDF bylo uloženo přímo do Stažené/LubaNote."
+                );
+              }
+
+              return true;
             } catch (error) {
-              console.error("PDF se nepodařilo uložit:", error);
+              console.error("Přímé PDF se nepodařilo uložit:", error);
               zobrazChybu(
                 "PDF",
                 "PDF se nepodařilo uložit."
               );
+              return false;
             }
           }
         });
