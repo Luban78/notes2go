@@ -1399,13 +1399,13 @@ async function zkontrolujKonecDemaPriNavratu612() {
 }
 
 function aktualizujInfoPlanuVMenu(stav = aktualniPristupUctu) {
-  /* PATCH 648 – RX/TX/E je interní diagnostika, ne běžná součást UI.
-     Měření v syncTraffic.js běží dál pro Debug Hub, ale viditelný panel
-     dostane pouze aktivní INTERNAL účet. Default po startu/loginu je skrytý. */
+  /* PATCH 653F – DO DOKONČENÍ V1 držíme RX/TX/E viditelné na každém
+     aktivním účtu. Jde pouze o zobrazení už existujícího měření ze
+     syncTraffic.js; tato změna sama nevytváří žádné další requesty ani
+     egress. Po uzavření V1 lze diagnostický panel znovu omezit. */
   if (syncTrafficBar) {
     syncTrafficBar.hidden = !(
       stav?.account_status === "active" &&
-      stav?.plan_id === "internal" &&
       jeStavPristupuCasovePlatny(stav)
     );
   }
