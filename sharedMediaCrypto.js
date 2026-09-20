@@ -700,6 +700,17 @@
   window.addEventListener("lubanote:auth-expired", resetPameti);
   window.addEventListener("lubanote:account-blocked", resetPameti);
 
+  /* 653H – po autoritativním online potvrzení ztráty Shared přístupu
+   * smažeme plaintext note_key z RAM a lokální ciphertext cache dané
+   * poznámky. Serverové RPC už současně vyžadují aktuální membership. */
+  window.addEventListener("lubanote:shared-access-removed", (event) => {
+    const eventUserId = String(event?.detail?.userId || "");
+    if (eventUserId && aktivniUserId && eventUserId !== String(aktivniUserId)) {
+      return;
+    }
+    void vycistiOdvolanySharedPristup(event?.detail?.noteIds || []);
+  });
+
 
   // 653G – Shared Media Egress V2.
   // Ciphertext obrázků už není součástí notes.data. Canonical shared note
@@ -890,6 +901,64 @@
       });
     } catch (error) {
       console.warn("Shared E2E: media cache write selhal.", error);
+    }
+  }
+
+  async function vycistiOdvolanySharedPristup(noteIds) {
+    const userId = aktivniUserId;
+    const ids = Array.from(new Set(
+      (Array.isArray(noteIds) ? noteIds : [noteIds])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean)
+    ));
+
+    if (!ids.length) return { ok: true, notes: 0, media: 0 };
+
+    for (const noteId of ids) {
+      noteKeyCache.delete(noteId);
+    }
+
+    if (!userId) {
+      diag(`REVOKE PURGE | OK | notes=${ids.length} media=0 | no-user`);
+      return { ok: true, notes: ids.length, media: 0 };
+    }
+
+    let deleted = 0;
+    try {
+      const db = await otevriDb();
+      const idSet = new Set(ids);
+
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(MEDIA_STORE, "readwrite");
+        const store = tx.objectStore(MEDIA_STORE);
+        const req = store.openCursor();
+
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) return;
+
+          const row = cursor.value;
+          if (
+            String(row?.userId || "") === String(userId) &&
+            idSet.has(String(row?.noteId || ""))
+          ) {
+            cursor.delete();
+            deleted += 1;
+          }
+          cursor.continue();
+        };
+        req.onerror = () => reject(req.error || new Error("shared_media_cache_cursor_failed"));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("shared_media_cache_purge_failed"));
+        tx.onabort = () => reject(tx.error || new Error("shared_media_cache_purge_aborted"));
+      });
+
+      diag(`REVOKE PURGE | OK | notes=${ids.length} media=${deleted}`);
+      return { ok: true, notes: ids.length, media: deleted };
+    } catch (error) {
+      console.warn("Shared E2E: revoke cache purge selhal.", error);
+      diag(`REVOKE PURGE | FAIL | notes=${ids.length}`);
+      return { ok: false, notes: ids.length, media: deleted };
     }
   }
 
@@ -1316,7 +1385,7 @@
   }
 
   window.LubaNoteSharedMediaCrypto = Object.freeze({
-    verze: "SHARED-MEDIA-EGRESS-V2-653G",
+    verze: "SHARED-MEDIA-EGRESS-V2-653H",
     zajistiIdentitu,
     jeIdentitaPripravena,
     ziskejVerejnyKlic,

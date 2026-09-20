@@ -1339,9 +1339,37 @@
           return sdilenePoznamky;
         }
 
+        /* 653H – autoritativní online refresh je jediný okamžik, kdy
+         * smíme považovat zmizení Shared poznámky za skutečnou ztrátu
+         * přístupu. Síťová chyba níže naopak cache nemaže. */
+        const predchoziSharedIds = new Set(
+          (Array.isArray(sdilenePoznamky) ? sdilenePoznamky : [])
+            .filter((item) => item?.__lubanoteSharedRole !== "owner")
+            .map((item) => String(item?.id || "").trim())
+            .filter(Boolean)
+        );
+        const noveSharedIds = new Set(
+          nove
+            .map((item) => String(item?.id || "").trim())
+            .filter(Boolean)
+        );
+        const odebraneSharedIds = Array.from(predchoziSharedIds)
+          .filter((id) => !noveSharedIds.has(id));
+
         serverovyStavNacten = true;
         sdilenePoznamky = nove;
         ulozCache(nove);
+
+        if (odebraneSharedIds.length) {
+          window.dispatchEvent(
+            new CustomEvent("lubanote:shared-access-removed", {
+              detail: {
+                noteIds: odebraneSharedIds,
+                userId
+              }
+            })
+          );
+        }
 
         if (viewer && !viewer.overlay.hidden && viewerNoteId) {
           const otevrena = sdilenePoznamky.find((item) => item?.id === viewerNoteId);
