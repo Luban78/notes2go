@@ -358,6 +358,121 @@
     return jeIdentitaPripravena() ? identita.privateKey : null;
   }
 
+
+  // ============================================================
+  // 653B – note_key crypto primitives
+  // Jeden náhodný 256bit klíč patří právě jedné sdílené poznámce.
+  // Tento krok ještě NEUKLÁDÁ obálky na server a nezapíná média.
+  // ============================================================
+
+  function bajtyNaBase64(bytes) {
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+
+  function base64NaBajty(text) {
+    const bin = atob(String(text || ""));
+    return Uint8Array.from(bin, ch => ch.charCodeAt(0));
+  }
+
+  function noteKeyKontext(noteId) {
+    return `lubanote:shared-note-key:${String(noteId)}:v1`;
+  }
+
+  async function importujVerejnyEcdhKlic(jwk) {
+    return crypto.subtle.importKey(
+      "jwk", jwk,
+      { name: "ECDH", namedCurve: "P-256" },
+      false, []
+    );
+  }
+
+  async function odvodWrapKlic(privateKey, publicKey, noteId) {
+    const secret = await crypto.subtle.deriveBits(
+      { name: "ECDH", public: publicKey },
+      privateKey,
+      256
+    );
+    const hkdfBase = await crypto.subtle.importKey(
+      "raw", secret, "HKDF", false, ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: new TextEncoder().encode("LubaNote Shared Media E2E 653B"),
+        info: new TextEncoder().encode(noteKeyKontext(noteId))
+      },
+      hkdfBase,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  function vytvorNoteKey() {
+    return crypto.getRandomValues(new Uint8Array(32));
+  }
+
+  async function zabalNoteKeyProUzivatele(noteId, noteKeyBytes, recipientPublicKeyJwk) {
+    if (!jeIdentitaPripravena()) throw new Error("shared_identity_not_ready");
+    if (!noteId || !(noteKeyBytes instanceof Uint8Array) || noteKeyBytes.length !== 32) {
+      throw new Error("invalid_shared_note_key");
+    }
+    const recipientPublicKey = await importujVerejnyEcdhKlic(recipientPublicKeyJwk);
+    const wrapKey = await odvodWrapKlic(identita.privateKey, recipientPublicKey, noteId);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const aad = new TextEncoder().encode(noteKeyKontext(noteId));
+    const cipher = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: aad },
+      wrapKey,
+      noteKeyBytes
+    );
+    return {
+      version: 1,
+      algorithm: "ECDH-P256+HKDF-SHA256+AES-256-GCM",
+      sender_public_key_jwk: ziskejVerejnyKlic(),
+      iv: bajtyNaBase64(iv),
+      ciphertext: bajtyNaBase64(new Uint8Array(cipher))
+    };
+  }
+
+  async function rozbalNoteKey(noteId, envelope) {
+    if (!jeIdentitaPripravena()) throw new Error("shared_identity_not_ready");
+    if (!noteId || !envelope?.sender_public_key_jwk || !envelope?.iv || !envelope?.ciphertext) {
+      throw new Error("invalid_shared_note_key_envelope");
+    }
+    const senderPublicKey = await importujVerejnyEcdhKlic(envelope.sender_public_key_jwk);
+    const wrapKey = await odvodWrapKlic(identita.privateKey, senderPublicKey, noteId);
+    const plain = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: base64NaBajty(envelope.iv),
+        additionalData: new TextEncoder().encode(noteKeyKontext(noteId))
+      },
+      wrapKey,
+      base64NaBajty(envelope.ciphertext)
+    );
+    const bytes = new Uint8Array(plain);
+    if (bytes.length !== 32) throw new Error("invalid_unwrapped_shared_note_key");
+    return bytes;
+  }
+
+  async function selfTestNoteKey() {
+    const ready = await zajistiIdentitu();
+    if (ready?.ok !== true || !jeIdentitaPripravena()) {
+      return { ok: false, reason: ready?.reason || "identity_not_ready" };
+    }
+    const noteId = `selftest-${identita.userId}`;
+    const original = vytvorNoteKey();
+    const envelope = await zabalNoteKeyProUzivatele(noteId, original, identita.publicKeyJwk);
+    const unwrapped = await rozbalNoteKey(noteId, envelope);
+    const ok = original.length === unwrapped.length && original.every((b, i) => b === unwrapped[i]);
+    diag(ok ? "NOTE KEY SELFTEST | OK" : "NOTE KEY SELFTEST | FAIL");
+    return { ok };
+  }
+
   function resetPameti() {
     aktivniUserId = null;
     identita = null;
@@ -365,7 +480,9 @@
 
   window.addEventListener("lubanote:account-active", (event) => {
     const userId = event?.detail?.userId || null;
-    void zajistiIdentitu(userId);
+    void zajistiIdentitu(userId).then((r) => {
+      if (r?.ok === true) void selfTestNoteKey();
+    });
   });
 
   window.addEventListener("lubanote:master-password-ready", () => {
@@ -380,10 +497,14 @@
   window.addEventListener("lubanote:account-blocked", resetPameti);
 
   window.LubaNoteSharedMediaCrypto = Object.freeze({
-    verze: "SHARED-MEDIA-E2E-IDENTITY-653A",
+    verze: "SHARED-MEDIA-E2E-NOTEKEY-653B",
     zajistiIdentitu,
     jeIdentitaPripravena,
     ziskejVerejnyKlic,
-    ziskejSoukromyKlicProShared
+    ziskejSoukromyKlicProShared,
+    vytvorNoteKey,
+    zabalNoteKeyProUzivatele,
+    rozbalNoteKey,
+    selfTestNoteKey
   });
 })();
