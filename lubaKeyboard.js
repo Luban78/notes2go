@@ -3624,7 +3624,7 @@
 
   function ziskejMujSlovnik(languageId = null) {
     const id = languageId || aktualniLayout().id || "cs";
-    const layout = LAYOUTS[id] || aktualniLayout();
+    const layout = LAYOUTY[id] || aktualniLayout();
 
     /* FIX 649B – správce musí ukázat opravdu CELÝ naučený slovník.
        649A omylem filtrovala část starších záznamů podle příznaku custom,
@@ -3642,7 +3642,7 @@
 
   function pridejSlovoDoMehoSlovniku(word, languageId = null) {
     const puvodni = layoutId;
-    if (languageId && LAYOUTS[languageId]) layoutId = languageId;
+    if (languageId && LAYOUTY[languageId]) layoutId = languageId;
     const ok = naucSlovo(word, 5, { rucni: true });
     layoutId = puvodni;
     renderSuggestions();
@@ -3651,7 +3651,7 @@
 
   function smazSlovoZMehoSlovniku(word, languageId = null) {
     const id = languageId || aktualniLayout().id || "cs";
-    const layout = LAYOUTS[id] || aktualniLayout();
+    const layout = LAYOUTY[id] || aktualniLayout();
     const key = lowerLocale(word, layout);
     if (!naucenaSlova[id]?.[key]) return false;
     delete naucenaSlova[id][key];
