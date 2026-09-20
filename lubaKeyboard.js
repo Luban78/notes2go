@@ -102,7 +102,212 @@
     return /Android|iPhone|iPad|iPod/i.test(ua) || (dotyk && coarse && Math.min(screen.width, screen.height) < 1200);
   })();
 
-  if (!JE_MOBILNI) return;
+  /* PATCH 650C – osobní slovník musí existovat i na desktopu.
+     LubaKeyboard samotná zůstává čistě mobilní, ale její slovníkové API
+     používá Nastavení i cloud sync také na PC. Původní časný return proto
+     na desktopu vystavil malé storage-only API a teprve potom modul ukončí. */
+  if (!JE_MOBILNI) {
+    const jazykLocale = (id) => id === "cs" ? "cs-CZ" : id === "en" ? "en-US" : undefined;
+
+    function desktopNormalizuj(word, languageId) {
+      try { return String(word || "").toLocaleLowerCase(jazykLocale(languageId)); }
+      catch (_error) { return String(word || "").toLowerCase(); }
+    }
+
+    function desktopJePlatneSlovo(value) {
+      const word = String(value || "").trim();
+      if (word.length < 2 || word.length > 40) return false;
+      try { return /^[\p{L}\p{M}][\p{L}\p{M}'’\-]*$/u.test(word); }
+      catch (_error) { return /^[A-Za-zÀ-ž][A-Za-zÀ-ž'’\-]*$/.test(word); }
+    }
+
+    function desktopNacti() {
+      try {
+        migrujLegacySlovnikProVlastnika();
+        const value = JSON.parse(localStorage.getItem(klicNaucenychSlov()) || "{}");
+        return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      } catch (_error) {
+        return {};
+      }
+    }
+
+    function desktopUloz(data) {
+      try { localStorage.setItem(klicNaucenychSlov(), JSON.stringify(data || {})); }
+      catch (_error) {}
+    }
+
+    function desktopSmazKandidata(languageId, normalizedWord) {
+      try {
+        const data = JSON.parse(localStorage.getItem(klicKandidatuSlov()) || "{}");
+        if (!data || typeof data !== "object" || !data[languageId]?.[normalizedWord]) return;
+        delete data[languageId][normalizedWord];
+        localStorage.setItem(klicKandidatuSlov(), JSON.stringify(data));
+      } catch (_error) {}
+    }
+
+    function desktopOznam(detail = {}) {
+      window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
+        detail: { source: "local", ...detail }
+      }));
+    }
+
+    function nastavVlastnikaSlovniku(userId) {
+      const dalsi = String(userId || "").trim();
+      if (!dalsi || dalsi === vlastnikOsobnihoSlovniku) return false;
+      vlastnikOsobnihoSlovniku = dalsi;
+      migrujLegacySlovnikProVlastnika();
+      window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
+        detail: { source: "owner", userId: dalsi }
+      }));
+      return true;
+    }
+
+    function ziskejMujSlovnik(languageId = "cs") {
+      const id = String(languageId || "cs");
+      const data = desktopNacti();
+      return Object.entries(data[id] || {})
+        .map(([key, entry]) => ({
+          word: String(entry?.word || key || "").trim(),
+          count: Number(entry?.count || 0)
+        }))
+        .filter((entry) => entry.word)
+        .sort((a, b) => a.word.localeCompare(b.word, jazykLocale(id)));
+    }
+
+    function pridejSlovoDoMehoSlovniku(word, languageId = "cs") {
+      const id = String(languageId || "cs");
+      const text = String(word || "").trim();
+      if (!desktopJePlatneSlovo(text)) return false;
+
+      const key = desktopNormalizuj(text, id);
+      const data = desktopNacti();
+      const mapa = data[id] && typeof data[id] === "object" ? data[id] : {};
+      mapa[key] = {
+        ...mapa[key],
+        word: text,
+        count: Math.min(9999, Number(mapa[key]?.count || 0) + 5),
+        custom: true
+      };
+      data[id] = Object.fromEntries(
+        Object.entries(mapa)
+          .sort((a, b) => Number(b[1]?.count || 0) - Number(a[1]?.count || 0))
+          .slice(0, 5000)
+      );
+      desktopUloz(data);
+      desktopOznam({
+        operation: "upsert",
+        language: id,
+        normalizedWord: key,
+        word: text,
+        count: Number(data[id]?.[key]?.count || 0)
+      });
+      return true;
+    }
+
+    function smazSlovoZMehoSlovniku(word, languageId = "cs") {
+      const id = String(languageId || "cs");
+      const key = desktopNormalizuj(String(word || "").trim(), id);
+      const data = desktopNacti();
+      if (!data[id]?.[key]) return false;
+      delete data[id][key];
+      desktopUloz(data);
+      desktopSmazKandidata(id, key);
+      desktopOznam({
+        operation: "delete",
+        language: id,
+        normalizedWord: key,
+        word: String(word || "").trim(),
+        count: 0
+      });
+      return true;
+    }
+
+    function upravSlovoVMehoSlovniku(oldWord, newWord, languageId = "cs") {
+      const id = String(languageId || "cs");
+      smazSlovoZMehoSlovniku(oldWord, id);
+      return pridejSlovoDoMehoSlovniku(newWord, id);
+    }
+
+    function exportujSlovnikProSync() {
+      const data = desktopNacti();
+      const rows = [];
+      Object.entries(data).forEach(([language, mapa]) => {
+        Object.entries(mapa || {}).forEach(([normalizedWord, entry]) => {
+          const word = String(entry?.word || normalizedWord || "").trim();
+          if (!word) return;
+          rows.push({
+            language: String(language || "cs"),
+            normalizedWord: String(normalizedWord || "").trim(),
+            word,
+            count: Math.max(0, Math.min(9999, Number(entry?.count || 0)))
+          });
+        });
+      });
+      return rows;
+    }
+
+    function aplikujCloudoveZmenySlovniku(rows = [], ignorovat = []) {
+      if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+      const skip = new Set(Array.isArray(ignorovat) ? ignorovat : []);
+      const data = desktopNacti();
+      let zmeneno = 0;
+
+      rows.forEach((row) => {
+        const language = String(row?.language || "").trim();
+        const normalizedWord = String(row?.normalized_word || row?.normalizedWord || "").trim();
+        const syncKey = `${language}|${normalizedWord}`;
+        if (!language || !normalizedWord || skip.has(syncKey)) return;
+
+        const mapa = data[language] && typeof data[language] === "object" ? data[language] : {};
+        if (row?.deleted === true) {
+          if (mapa[normalizedWord]) {
+            delete mapa[normalizedWord];
+            zmeneno += 1;
+          }
+          data[language] = mapa;
+          desktopSmazKandidata(language, normalizedWord);
+          return;
+        }
+
+        const word = String(row?.word || normalizedWord).trim();
+        if (!word) return;
+        const remoteCount = Math.max(0, Math.min(9999, Number(row?.usage_count ?? row?.count ?? 0)));
+        const local = mapa[normalizedWord];
+        const nextCount = Math.max(Number(local?.count || 0), remoteCount);
+        if (!local || String(local.word || "") !== word || Number(local.count || 0) !== nextCount) {
+          mapa[normalizedWord] = {
+            ...local,
+            word,
+            count: nextCount,
+            custom: local?.custom ?? true
+          };
+          data[language] = mapa;
+          zmeneno += 1;
+        }
+      });
+
+      if (zmeneno > 0) {
+        desktopUloz(data);
+        window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
+          detail: { source: "cloud", bulk: true, count: zmeneno }
+        }));
+      }
+      return zmeneno;
+    }
+
+    window.LubaNoteKeyboard = Object.freeze({
+      nastavVlastnikaSlovniku,
+      exportujSlovnikProSync,
+      aplikujCloudoveZmenySlovniku,
+      ziskejMujSlovnik,
+      pridejSlovoDoMehoSlovniku,
+      smazSlovoZMehoSlovniku,
+      upravSlovoVMehoSlovniku,
+      desktopDictionaryOnly: true
+    });
+    return;
+  }
 
   const LATIN_ALT = Object.freeze({
     a: "áàâäãåāăąǎạảấầẩẫậắằẳẵặæ",
