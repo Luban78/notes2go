@@ -3625,9 +3625,17 @@
   function ziskejMujSlovnik(languageId = null) {
     const id = languageId || aktualniLayout().id || "cs";
     const layout = LAYOUTS[id] || aktualniLayout();
-    return Object.values(naucenaSlova[id] || {})
-      .filter((entry) => entry?.custom === true || (entry?.custom == null && !jeVeVestavenemSlovniku(entry?.word, layout)))
-      .map((entry) => ({ word: String(entry.word || ""), count: Number(entry.count || 0) }))
+
+    /* FIX 649B – správce musí ukázat opravdu CELÝ naučený slovník.
+       649A omylem filtrovala část starších záznamů podle příznaku custom,
+       který původní naučená slova vůbec neměla. Tady proto čteme přímo
+       všechny uložené položky daného jazyka a pro starší data umíme jako
+       zálohu použít i jejich klíč. Nic se při čtení nemaže ani nepřepisuje. */
+    return Object.entries(naucenaSlova[id] || {})
+      .map(([key, entry]) => ({
+        word: String(entry?.word || key || "").trim(),
+        count: Number(entry?.count || 0)
+      }))
       .filter((entry) => entry.word)
       .sort((a, b) => a.word.localeCompare(b.word, layout.locale || undefined));
   }

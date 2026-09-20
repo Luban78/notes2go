@@ -846,7 +846,13 @@ openReminderDelaySettingsButton?.addEventListener(
     if (!personalDictionaryList) return;
     const api = apiSlovniku(); const lang = personalDictionaryLanguage?.value || "cs";
     const hledat = String(personalDictionarySearch?.value || "").trim().toLocaleLowerCase(lang);
-    const words = (api?.ziskejMujSlovnik?.(lang) || []).filter((entry) => !hledat || entry.word.toLocaleLowerCase(lang).includes(hledat));
+    const vsechnaSlova = api?.ziskejMujSlovnik?.(lang) || [];
+    /* FIX 649B – při zadání prvních písmen filtrujeme podle začátku slova.
+       Prázdné hledání ukáže celý naučený slovník, takže lze staré překlepy
+       také normálně procházet bez znalosti přesného názvu. */
+    const words = vsechnaSlova.filter((entry) =>
+      !hledat || entry.word.toLocaleLowerCase(lang).startsWith(hledat)
+    );
     personalDictionaryList.replaceChildren();
     words.forEach((entry) => {
       const row = document.createElement("div"); row.className = "personalDictionaryRow";
