@@ -839,9 +839,79 @@ openReminderDelaySettingsButton?.addEventListener(
   }
   function zrusEditaciSlova() {
     upravovaneSlovo = null;
-    if (personalDictionaryInput) { personalDictionaryInput.value = ""; personalDictionaryInput.placeholder = "Přidat vlastní slovo…"; }
+    if (personalDictionaryInput) {
+      personalDictionaryInput.value = "";
+      personalDictionaryInput.placeholder = "Přidat vlastní slovo…";
+      personalDictionaryInput.classList.remove("is-editing");
+    }
     if (personalDictionaryAddButton) personalDictionaryAddButton.textContent = "Přidat";
   }
+  function navazAkciSlovnikuNaPrvniTap(button, handler) {
+    let touchStart = null;
+    let posledniTouchAkce = -Infinity;
+
+    /* Android WebView: aktivní textarea + LubaKeyboard může při prvním tapu
+       změnit focus/layout a zrušit pointerup. Proto touch ovládáme přímo.
+       preventDefault na touchstart drží layout stabilní; pohyb > 12 px akci
+       zruší, takže při pokusu o scroll se nic nesmaže. */
+    button.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      touchStart = {
+        id: touch.identifier,
+        x: Number(touch.clientX || 0),
+        y: Number(touch.clientY || 0)
+      };
+      event.preventDefault();
+    }, { passive: false });
+
+    button.addEventListener("touchmove", (event) => {
+      if (!touchStart) return;
+      const touch = Array.from(event.changedTouches || [])
+        .find((item) => item.identifier === touchStart.id);
+      if (!touch) return;
+
+      const dx = Number(touch.clientX || 0) - touchStart.x;
+      const dy = Number(touch.clientY || 0) - touchStart.y;
+      if (Math.hypot(dx, dy) > 12) {
+        touchStart = null;
+      }
+    }, { passive: true });
+
+    button.addEventListener("touchcancel", () => {
+      touchStart = null;
+    }, { passive: true });
+
+    button.addEventListener("touchend", (event) => {
+      if (!touchStart) return;
+      const touch = Array.from(event.changedTouches || [])
+        .find((item) => item.identifier === touchStart.id);
+      if (!touch) {
+        touchStart = null;
+        return;
+      }
+
+      const dx = Number(touch.clientX || 0) - touchStart.x;
+      const dy = Number(touch.clientY || 0) - touchStart.y;
+      touchStart = null;
+      if (Math.hypot(dx, dy) > 12) return;
+
+      posledniTouchAkce = performance.now();
+      event.preventDefault();
+      handler();
+    }, { passive: false });
+
+    /* PC / klávesnice / WebView fallback. Po touch akci ignorujeme
+       syntetický click, aby se akce nespustila dvakrát. */
+    button.addEventListener("click", (event) => {
+      if (performance.now() - posledniTouchAkce < 700) {
+        event.preventDefault();
+        return;
+      }
+      handler();
+    });
+  }
+
   function vykresliMujSlovnik() {
     if (!personalDictionaryList) return;
     const api = apiSlovniku(); const lang = personalDictionaryLanguage?.value || "cs";
@@ -857,10 +927,34 @@ openReminderDelaySettingsButton?.addEventListener(
     words.forEach((entry) => {
       const row = document.createElement("div"); row.className = "personalDictionaryRow";
       const word = document.createElement("span"); word.className = "personalDictionaryWord"; word.textContent = entry.word;
-      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Upravit";
-      edit.addEventListener("click", () => { upravovaneSlovo = entry.word; personalDictionaryInput.value = entry.word; personalDictionaryAddButton.textContent = "Uložit"; personalDictionaryInput.focus(); });
-      const del = document.createElement("button"); del.type = "button"; del.textContent = "Smazat";
-      del.addEventListener("click", () => { api?.smazSlovoZMehoSlovniku?.(entry.word, lang); if (upravovaneSlovo === entry.word) zrusEditaciSlova(); vykresliMujSlovnik(); aktualizujPocetSlovniku(); });
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "personalDictionaryAction personalDictionaryEdit";
+      edit.textContent = "Upravit";
+      navazAkciSlovnikuNaPrvniTap(edit, () => {
+        upravovaneSlovo = entry.word;
+        personalDictionaryInput.value = entry.word;
+        personalDictionaryAddButton.textContent = "Uložit";
+        personalDictionaryInput.classList.add("is-editing");
+        requestAnimationFrame(() => {
+          personalDictionaryInput.focus();
+          personalDictionaryInput.setSelectionRange?.(
+            personalDictionaryInput.value.length,
+            personalDictionaryInput.value.length
+          );
+        });
+      });
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "personalDictionaryAction personalDictionaryDelete";
+      del.textContent = "Smazat";
+      navazAkciSlovnikuNaPrvniTap(del, () => {
+        api?.smazSlovoZMehoSlovniku?.(entry.word, lang);
+        if (upravovaneSlovo === entry.word) zrusEditaciSlova();
+        vykresliMujSlovnik();
+        aktualizujPocetSlovniku();
+      });
       row.append(word, edit, del); personalDictionaryList.append(row);
     });
     if (personalDictionaryEmpty) personalDictionaryEmpty.hidden = words.length > 0;
@@ -874,8 +968,25 @@ openReminderDelaySettingsButton?.addEventListener(
   personalDictionaryAddButton?.addEventListener("click", () => {
     const api = apiSlovniku(); const lang = personalDictionaryLanguage?.value || "cs"; const word = String(personalDictionaryInput?.value || "").trim();
     if (!word) return;
-    const ok = upravovaneSlovo ? api?.upravSlovoVMehoSlovniku?.(upravovaneSlovo, word, lang) : api?.pridejSlovoDoMehoSlovniku?.(word, lang);
-    if (!ok) return; zrusEditaciSlova(); vykresliMujSlovnik(); aktualizujPocetSlovniku();
+    const byloUpravovani = Boolean(upravovaneSlovo);
+    const ok = upravovaneSlovo
+      ? api?.upravSlovoVMehoSlovniku?.(upravovaneSlovo, word, lang)
+      : api?.pridejSlovoDoMehoSlovniku?.(word, lang);
+    if (!ok) return;
+
+    /* Jasná odezva po Uložit: upravené slovo z pole zmizí hned,
+       tlačítko se vrátí na Přidat a seznam se překreslí novou podobou. */
+    zrusEditaciSlova();
+    personalDictionaryInput?.blur();
+    vykresliMujSlovnik();
+    aktualizujPocetSlovniku();
+
+    if (byloUpravovani && personalDictionaryAddButton) {
+      personalDictionaryAddButton.textContent = "Uloženo ✓";
+      setTimeout(() => {
+        if (!upravovaneSlovo) personalDictionaryAddButton.textContent = "Přidat";
+      }, 650);
+    }
   });
   window.addEventListener("lubanote:dictionary-change", aktualizujPocetSlovniku);
   setTimeout(aktualizujPocetSlovniku, 0);
