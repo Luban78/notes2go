@@ -2805,8 +2805,8 @@ body.documents-epub-viewer-open {
   position: relative;
   z-index: 1;
   display: block;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   margin: 0;
   padding: clamp(16px, 4vw, 30px);
@@ -2819,7 +2819,9 @@ body.documents-epub-viewer-open {
   line-height: 1.55;
   text-align: left;
   direction: ltr;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
   tab-size: 2;
 }
 
