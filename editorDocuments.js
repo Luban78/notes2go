@@ -442,6 +442,7 @@
         pinch.aktualniZoom = zoom;
         prvky.image.style.width = `${Math.round(viewportWidth * zoom)}px`;
         prvky.zoomValue.textContent = `${Math.round(zoom * 100)} %`;
+        aktualizujPdfVycentrovani();
 
         /* Zachová bod PDF pod středem dvou prstů. */
         const cilX =
@@ -484,6 +485,111 @@
     });
 
     prvky.native.addEventListener("touchcancel", dokoncitPinch);
+
+    /*
+     * 652D – přirozené listování prstem.
+     * Na normálním zoomu už není nutné mířit na šipku nahoře:
+     * - tah nahoru na spodním okraji / u celé vešlé stránky = další strana
+     * - tah dolů na horním okraji / u celé vešlé stránky = předchozí strana
+     *
+     * Při přiblížení nad 100 % se gesto nepoužije pro změnu stránky,
+     * aby zůstal volný běžný pan po zvětšeném PDF.
+     */
+    let pdfPageSwipe = null;
+
+    prvky.native.addEventListener(
+      "touchstart",
+      (event) => {
+        if (
+          !pdfViewerStav?.native ||
+          pdfViewerStav.pinch ||
+          event.touches.length !== 1
+        ) {
+          pdfPageSwipe = null;
+          return;
+        }
+
+        const dotyk = event.touches[0];
+        const maxScrollTop = Math.max(
+          0,
+          prvky.native.scrollHeight - prvky.native.clientHeight
+        );
+
+        pdfPageSwipe = {
+          x: dotyk.clientX,
+          y: dotyk.clientY,
+          posledniX: dotyk.clientX,
+          posledniY: dotyk.clientY,
+          zoom: pdfViewerStav.zoom,
+          vejdeSeCela:
+            prvky.native.scrollHeight <= prvky.native.clientHeight + 4,
+          naHornimOkraji: prvky.native.scrollTop <= 4,
+          naSpodnimOkraji:
+            maxScrollTop <= 4 ||
+            prvky.native.scrollTop >= maxScrollTop - 4
+        };
+      },
+      { passive: true }
+    );
+
+    prvky.native.addEventListener(
+      "touchmove",
+      (event) => {
+        if (
+          !pdfPageSwipe ||
+          pdfViewerStav?.pinch ||
+          event.touches.length !== 1
+        ) {
+          return;
+        }
+
+        const dotyk = event.touches[0];
+        pdfPageSwipe.posledniX = dotyk.clientX;
+        pdfPageSwipe.posledniY = dotyk.clientY;
+      },
+      { passive: true }
+    );
+
+    prvky.native.addEventListener("touchend", (event) => {
+      const swipe = pdfPageSwipe;
+      pdfPageSwipe = null;
+
+      if (
+        !swipe ||
+        !pdfViewerStav?.native ||
+        pdfViewerStav.pinch ||
+        event.touches.length !== 0 ||
+        swipe.zoom > 1.05
+      ) {
+        return;
+      }
+
+      const dx = swipe.posledniX - swipe.x;
+      const dy = swipe.posledniY - swipe.y;
+
+      if (Math.abs(dy) < 56 || Math.abs(dy) < Math.abs(dx) * 1.15) {
+        return;
+      }
+
+      if (
+        dy < 0 &&
+        (swipe.vejdeSeCela || swipe.naSpodnimOkraji)
+      ) {
+        prejdiNaPdfStranku(1);
+        return;
+      }
+
+      if (
+        dy > 0 &&
+        (swipe.vejdeSeCela || swipe.naHornimOkraji)
+      ) {
+        prejdiNaPdfStranku(-1);
+      }
+    });
+
+    prvky.native.addEventListener("touchcancel", () => {
+      pdfPageSwipe = null;
+    });
 
     /*
      * 2× tap – maximalizace PDF.
@@ -1365,6 +1471,7 @@
     const nazev = normalizujNazevPdf(
       nazevSouboru || pdfViewerStav.nazevSouboru || "dokument.pdf"
     );
+    const jeExportNahled = pdfViewerStav.exportPreview === true;
 
     pdfViewerPrvky.save.disabled = true;
     pdfViewerPrvky.save.classList.add("is-saving");
@@ -1393,6 +1500,16 @@
           pdfViewerStav.file,
           nazev
         );
+      }
+
+      if (ulozeno && jeExportNahled && pdfViewerStav) {
+        /*
+         * 652D – po uložení z exportního náhledu je práce hotová.
+         * Zavřeme náhled i exportní modal a vrátíme uživatele do poznámky,
+         * aby nebylo možné omylem ukládat další stejné kopie bez odezvy.
+         */
+        pdfViewerStav.navratNaPdfExport = false;
+        await zavriPdfViewer();
       }
 
       if (ulozeno && typeof zobrazZpravuAplikace === "function") {
