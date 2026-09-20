@@ -70,6 +70,8 @@ public class LubaNoteDocumentPlugin extends Plugin {
   private ParcelFileDescriptor pdfViewerDescriptor = null;
   private PdfRenderer pdfViewerRenderer = null;
   private Uri pdfViewerUri = null;
+  /* 652C – dočasný PDF soubor používaný pouze pro vlastní náhled exportu. */
+  private File pdfNahledSoubor = null;
 
   /* Zdroj PDF držený jen po dobu systémového dialogu „Uložit kopii“. */
   private Uri cekajiciPdfZdrojUri = null;
@@ -525,6 +527,16 @@ public class LubaNoteDocumentPlugin extends Plugin {
       pdfViewerDescriptor = null;
     }
 
+    if (pdfNahledSoubor != null) {
+      try {
+        //noinspection ResultOfMethodCallIgnored
+        pdfNahledSoubor.delete();
+      } catch (Exception ignored) {
+        // Náhled je pouze dočasný cache soubor.
+      }
+      pdfNahledSoubor = null;
+    }
+
     pdfViewerUri = null;
   }
 
@@ -914,6 +926,293 @@ public class LubaNoteDocumentPlugin extends Plugin {
     } finally {
       vycistiCekajiciUlozeni();
     }
+  }
+
+  /*
+   * PATCH 652C – VLASTNI PDF NAHLED LUBANOTE
+   *
+   * Stejny WebView PrintDocumentAdapter jako primy export 652B, ale vystup
+   * jde pouze do docasneho cache souboru. Ten se ihned otevre pres stavajici
+   * PdfRenderer, takze nahled odpovida skutecnemu vyslednemu PDF 1:1.
+   * Do Stazene se nic nezapisuje, dokud uzivatel v nahledu nestiskne Ulozit.
+   */
+  @PluginMethod
+  public void vytvorPdfNahled(PluginCall call) {
+    String html = call.getString("html");
+
+    if (html == null || html.trim().isEmpty()) {
+      call.reject("Chybí obsah PDF dokumentu.");
+      return;
+    }
+
+    byte[] bajty = html.getBytes(StandardCharsets.UTF_8);
+
+    if (bajty.length > MAX_VELIKOST_SOUBORU) {
+      call.reject("Dokument je příliš velký. Maximum je 20 MB.");
+      return;
+    }
+
+    if (pdfWebView != null || pdfPrintJob != null) {
+      call.reject("Předchozí PDF operace ještě není dokončená.");
+      return;
+    }
+
+    pdfNazev = normalizujPdfNazev(
+      call.getString("nazevSouboru", "LubaNote-nahled.pdf")
+    );
+    pdfTiskSpusten = false;
+
+    Activity aktivita = getActivity();
+
+    if (aktivita == null) {
+      call.reject("Android Activity není dostupná.");
+      return;
+    }
+
+    aktivita.runOnUiThread(() -> {
+      try {
+        pdfWebView = new WebView(aktivita);
+        pdfWebView.getSettings().setJavaScriptEnabled(true);
+        pdfWebView.getSettings().setLoadsImagesAutomatically(true);
+
+        pdfWebView.setWebViewClient(new WebViewClient() {
+          @Override
+          public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            cekejNaPdfObrazkyNahledu(call, 0);
+          }
+        });
+
+        pdfWebView.loadDataWithBaseURL(
+          "https://localhost/",
+          html,
+          "text/html",
+          "UTF-8",
+          null
+        );
+      } catch (Exception chyba) {
+        vycistiPdfTisk();
+        call.reject("PDF náhled se nepodařilo připravit.", chyba);
+      }
+    });
+  }
+
+  private void cekejNaPdfObrazkyNahledu(
+    PluginCall call,
+    int pokus
+  ) {
+    if (pdfWebView == null || pdfTiskSpusten) {
+      return;
+    }
+
+    String skript =
+      "(function(){" +
+        "try{" +
+          "return Array.from(document.images||[]).every(function(i){" +
+            "return i.complete;" +
+          "});" +
+        "}catch(e){return true;}" +
+      "})()";
+
+    pdfWebView.evaluateJavascript(
+      skript,
+      hodnota -> {
+        if (pdfWebView == null || pdfTiskSpusten) {
+          return;
+        }
+
+        boolean obrazkyHotove = "true".equals(hodnota);
+
+        if (obrazkyHotove || pokus >= 50) {
+          spustPdfNahledAdapter(call);
+          return;
+        }
+
+        pdfWebView.postDelayed(
+          () -> cekejNaPdfObrazkyNahledu(call, pokus + 1),
+          100
+        );
+      }
+    );
+  }
+
+  private void spustPdfNahledAdapter(PluginCall call) {
+    if (pdfWebView == null || pdfTiskSpusten) {
+      return;
+    }
+
+    pdfTiskSpusten = true;
+
+    File nahled = null;
+    ParcelFileDescriptor descriptor = null;
+    PrintDocumentAdapter adapter = null;
+
+    boolean naSirku = "landscape".equalsIgnoreCase(
+      call.getString("orientace", "portrait")
+    );
+
+    PrintAttributes.MediaSize velikostPapiru = naSirku
+      ? PrintAttributes.MediaSize.ISO_A4.asLandscape()
+      : PrintAttributes.MediaSize.ISO_A4.asPortrait();
+
+    final PrintAttributes atributy =
+      new PrintAttributes.Builder()
+        .setMediaSize(velikostPapiru)
+        .setResolution(
+          new PrintAttributes.Resolution(
+            "lubanote_pdf_preview",
+            "LubaNote PDF Preview",
+            300,
+            300
+          )
+        )
+        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+        .build();
+
+    try {
+      nahled = File.createTempFile(
+        "lubanote-pdf-preview-",
+        ".pdf",
+        getContext().getCacheDir()
+      );
+
+      descriptor = ParcelFileDescriptor.open(
+        nahled,
+        ParcelFileDescriptor.MODE_READ_WRITE |
+          ParcelFileDescriptor.MODE_CREATE |
+          ParcelFileDescriptor.MODE_TRUNCATE
+      );
+
+      adapter = pdfWebView.createPrintDocumentAdapter(pdfNazev);
+    } catch (Exception chyba) {
+      zavriPdfPrimeTestDescriptor(descriptor);
+      if (nahled != null) {
+        //noinspection ResultOfMethodCallIgnored
+        nahled.delete();
+      }
+      vycistiPdfTisk();
+      call.reject("PDF náhled se nepodařilo připravit.", chyba);
+      return;
+    }
+
+    final File souborNahledu = nahled;
+    final ParcelFileDescriptor vystupniDescriptor = descriptor;
+    final PrintDocumentAdapter tiskovyAdapter = adapter;
+
+    try {
+      LubaNotePrimePdfBridge.zapis(
+        tiskovyAdapter,
+        atributy,
+        vystupniDescriptor,
+        new LubaNotePrimePdfBridge.Vysledek() {
+          @Override
+          public void hotovo(int pocetStran) {
+            dokoncitPdfNahledUspech(
+              call,
+              vystupniDescriptor,
+              souborNahledu,
+              pocetStran
+            );
+          }
+
+          @Override
+          public void chyba(String zprava) {
+            dokoncitPdfNahledChyba(
+              call,
+              vystupniDescriptor,
+              souborNahledu,
+              zprava
+            );
+          }
+        }
+      );
+    } catch (Throwable chyba) {
+      dokoncitPdfNahledChyba(
+        call,
+        vystupniDescriptor,
+        souborNahledu,
+        "Android zablokoval vytvoření PDF náhledu."
+      );
+    }
+  }
+
+  private void dokoncitPdfNahledUspech(
+    PluginCall call,
+    ParcelFileDescriptor vystupniDescriptor,
+    File souborNahledu,
+    int pocetStran
+  ) {
+    pdfHandler.post(() -> {
+      zavriPdfPrimeTestDescriptor(vystupniDescriptor);
+
+      ParcelFileDescriptor cteciDescriptor = null;
+
+      try {
+        cteciDescriptor = ParcelFileDescriptor.open(
+          souborNahledu,
+          ParcelFileDescriptor.MODE_READ_ONLY
+        );
+        PdfRenderer renderer = new PdfRenderer(cteciDescriptor);
+
+        if (renderer.getPageCount() <= 0) {
+          renderer.close();
+          cteciDescriptor.close();
+          throw new IOException("PDF náhled neobsahuje žádné stránky.");
+        }
+
+        synchronized (pdfViewerLock) {
+          zavriPdfViewerInterni();
+          pdfViewerDescriptor = cteciDescriptor;
+          pdfViewerRenderer = renderer;
+          pdfViewerUri = Uri.fromFile(souborNahledu);
+          pdfNahledSoubor = souborNahledu;
+        }
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("preview", true);
+        odpoved.put("saved", false);
+        odpoved.put("pageCount", renderer.getPageCount());
+        odpoved.put("pages", pocetStran > 0 ? pocetStran : renderer.getPageCount());
+        odpoved.put("sizeBytes", souborNahledu.length());
+        odpoved.put("nazevSouboru", pdfNazev);
+        call.resolve(odpoved);
+        vycistiPdfTisk();
+      } catch (Exception chyba) {
+        if (cteciDescriptor != null) {
+          try {
+            cteciDescriptor.close();
+          } catch (Exception ignored) {
+            // Descriptor už může být zavřený.
+          }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        souborNahledu.delete();
+        vycistiPdfTisk();
+        call.reject("PDF náhled se nepodařilo otevřít.", chyba);
+      }
+    });
+  }
+
+  private void dokoncitPdfNahledChyba(
+    PluginCall call,
+    ParcelFileDescriptor descriptor,
+    File souborNahledu,
+    String zprava
+  ) {
+    pdfHandler.post(() -> {
+      zavriPdfPrimeTestDescriptor(descriptor);
+      if (souborNahledu != null) {
+        //noinspection ResultOfMethodCallIgnored
+        souborNahledu.delete();
+      }
+      vycistiPdfTisk();
+      call.reject(
+        zprava == null || zprava.trim().isEmpty()
+          ? "PDF náhled se nepodařilo vytvořit."
+          : zprava
+      );
+    });
   }
 
   /*

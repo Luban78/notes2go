@@ -43,6 +43,7 @@
 
   let pdfUlozeniPrvky = null;
   let pdfUlozeniAkce = null;
+  let pdfNahledAkce = null;
   let pdfPrimeTestAkce = null;
   let pdfNastaveniPrvky = null;
 
@@ -328,7 +329,15 @@
       zavriPdfViewer();
     });
 
-    prvky.save.addEventListener("click", () => {
+    prvky.save.addEventListener("click", async () => {
+      if (pdfViewerStav?.exportPreview === true) {
+        await ulozPdfZVieweru(
+          pdfViewerStav.nazevSouboru || "dokument.pdf",
+          "stazene"
+        );
+        return;
+      }
+
       otevriPdfUlozeniModal();
     });
 
@@ -942,6 +951,7 @@
 
         <div class="pdfLubaActions">
           <button type="button" class="pdfLubaSecondary pdfLubaCancel">Zrušit</button>
+          <button type="button" class="pdfLubaSecondary pdfLubaPreview">Náhled</button>
           <button type="button" class="pdfLubaPrimary pdfLubaConfirm">Uložit PDF</button>
         </div>
       </section>`;
@@ -959,6 +969,7 @@
       marginButtons: [...modal.querySelectorAll("[data-pdf-margins]")],
       test: modal.querySelector(".pdfLubaDirectTest"),
       cancel: modal.querySelector(".pdfLubaCancel"),
+      preview: modal.querySelector(".pdfLubaPreview"),
       confirm: modal.querySelector(".pdfLubaConfirm"),
       zpusob: "stazene",
       exportOrientace: "portrait",
@@ -968,6 +979,7 @@
     const zavrit = () => {
       modal.hidden = true;
       pdfUlozeniAkce = null;
+      pdfNahledAkce = null;
       pdfPrimeTestAkce = null;
     };
 
@@ -1026,6 +1038,43 @@
 
     prvky.nastavExportTlacitka = nastavExportTlacitka;
 
+    prvky.preview.addEventListener("click", async () => {
+      const akce = pdfNahledAkce;
+      if (typeof akce !== "function" || prvky.preview.disabled) {
+        return;
+      }
+
+      const nazev = normalizujNazevPdf(prvky.input.value);
+      const exportVolby = {
+        orientace: prvky.exportOrientace === "landscape" ? "landscape" : "portrait",
+        okraje: prvky.exportOkraje === "narrow" ? "narrow" : "normal"
+      };
+
+      const nastaveni = nactiPdfNastaveni();
+      nastaveni.exportOrientace = exportVolby.orientace;
+      nastaveni.exportOkraje = exportVolby.okraje;
+      ulozPdfNastaveni(nastaveni);
+
+      const puvodniText = prvky.preview.textContent;
+      prvky.preview.disabled = true;
+      prvky.confirm.disabled = true;
+      prvky.preview.textContent = "Připravuji…";
+
+      try {
+        const hotovo = await akce(nazev, exportVolby);
+        if (hotovo !== false) {
+          prvky.modal.hidden = true;
+        }
+      } catch (error) {
+        console.error("PDF náhled selhal:", error);
+        zobrazChybu("PDF", "Náhled PDF se nepodařilo vytvořit.");
+      } finally {
+        prvky.preview.disabled = false;
+        prvky.confirm.disabled = false;
+        prvky.preview.textContent = puvodniText;
+      }
+    });
+
     prvky.test.addEventListener("click", async () => {
       const akce = pdfPrimeTestAkce;
       if (typeof akce !== "function" || prvky.test.disabled) {
@@ -1080,6 +1129,7 @@
       prvky.input.value = nazev;
       modal.hidden = true;
       pdfUlozeniAkce = null;
+      pdfNahledAkce = null;
       pdfPrimeTestAkce = null;
 
       if (typeof akce === "function") {
@@ -1105,9 +1155,11 @@
   function otevriPdfUlozeniModal({
     nazevSouboru = "",
     poPotvrzeni = null,
+    poNahledu = null,
     poPrimePdfTest = null,
     povolitVolbuMista = true,
     povolitNastaveniExportu = false,
+    povolitNahled = false,
     povolitPrimePdfTest = false,
     infoText = ""
   } = {}) {
@@ -1160,6 +1212,15 @@
     if (infoText) {
       prvky.info.textContent = infoText;
     }
+
+    prvky.preview.hidden = !(
+      povolitNahled === true &&
+      typeof poNahledu === "function"
+    );
+    prvky.preview.style.display = prvky.preview.hidden ? "none" : "";
+    pdfNahledAkce = !prvky.preview.hidden
+      ? poNahledu
+      : null;
 
     prvky.test.hidden = !(
       povolitPrimePdfTest === true &&
@@ -1355,8 +1416,16 @@
     const prvky = zajistiPdfViewer();
     window.LubaNoteEditorV2?.ziskejEditorElement?.()?.blur?.();
 
-    prvky.title.textContent = soubor.nazevSouboru || "PDF dokument";
+    const jeExportNahled = soubor.exportPreview === true;
+    prvky.title.textContent = jeExportNahled
+      ? `Náhled • ${soubor.nazevSouboru || "PDF dokument"}`
+      : (soubor.nazevSouboru || "PDF dokument");
     prvky.title.title = soubor.nazevSouboru || "PDF dokument";
+    prvky.save.textContent = jeExportNahled ? "Uložit PDF" : "Uložit";
+    prvky.save.setAttribute(
+      "aria-label",
+      jeExportNahled ? "Uložit náhled PDF" : "Uložit kopii PDF"
+    );
     prvky.overlay.hidden = false;
     prvky.overlay.classList.remove("is-fullscreen");
     prvky.fullscreenExit.hidden = true;
@@ -1376,7 +1445,9 @@
         pinch: null,
         posledniTap: null,
         blokujTapDo: 0,
-        nazevSouboru: soubor.nazevSouboru || "dokument.pdf"
+        nazevSouboru: soubor.nazevSouboru || "dokument.pdf",
+        exportPreview: soubor.exportPreview === true,
+        navratNaPdfExport: soubor.navratNaPdfExport === true
       };
 
       prvky.frame.hidden = true;
@@ -1421,11 +1492,14 @@
     }
 
     const byloNativni = pdfViewerStav.native === true;
+    const vratitPdfExport = pdfViewerStav.navratNaPdfExport === true;
     pdfViewerRenderToken += 1;
     pdfViewerStav = null;
 
     pdfViewerPrvky.overlay.hidden = true;
-    pdfUlozeniPrvky && (pdfUlozeniPrvky.modal.hidden = true);
+    if (pdfUlozeniPrvky) {
+      pdfUlozeniPrvky.modal.hidden = !vratitPdfExport;
+    }
     pdfNastaveniPrvky && (pdfNastaveniPrvky.modal.hidden = true);
     pdfViewerPrvky.overlay.classList.remove("is-fullscreen");
     pdfViewerPrvky.fullscreenExit.hidden = true;
@@ -1892,8 +1966,37 @@
           nazevSouboru,
           povolitVolbuMista: false,
           povolitNastaveniExportu: true,
+          povolitNahled: typeof plugin.vytvorPdfNahled === "function",
           povolitPrimePdfTest: false,
           infoText: "PDF se uloží přímo do Stažené/LubaNote bez systémového tiskového náhledu.",
+          poNahledu: async (nazev, exportVolby) => {
+            try {
+              const html = vytvorPdfHtmlDokument(data, exportVolby);
+              const vysledek = await plugin.vytvorPdfNahled({
+                html,
+                nazevSouboru: nazev,
+                orientace: exportVolby.orientace
+              });
+
+              if (vysledek?.preview !== true) {
+                return false;
+              }
+
+              await otevriPdfViewer({
+                native: true,
+                pageCount: Math.max(1, Number(vysledek.pageCount) || 1),
+                nazevSouboru: nazev,
+                exportPreview: true,
+                navratNaPdfExport: true
+              });
+
+              return true;
+            } catch (error) {
+              console.error("PDF náhled se nepodařilo vytvořit:", error);
+              zobrazChybu("PDF", "Náhled PDF se nepodařilo vytvořit.");
+              return false;
+            }
+          },
           poPotvrzeni: async (nazev, _zpusob, exportVolby) => {
             try {
               const html = vytvorPdfHtmlDokument(data, exportVolby);
