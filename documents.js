@@ -3893,6 +3893,7 @@
     });
 
     prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
+    prvky.allFolder.hidden = aktivniSlozkaId === null;
     prvky.filterAll?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'all');
     prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
     prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');

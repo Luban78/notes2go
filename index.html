@@ -17,7 +17,7 @@
   <title>LubaNote</title>
   
   <link rel="stylesheet" href="style.css?v=20260920-pdf-viewer-polish-652d">
-  <link rel="stylesheet" href="documents.css?v=20260920-sql-copy-654e">
+  <link rel="stylesheet" href="documents.css?v=20260920-documents-ui-655">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="desktop.css?v=20260920-planner-reminders-hotfix-650a">
@@ -541,7 +541,7 @@
       <div class="documentsV1HeroText">
         <div class="documentsV1Eyebrow">Dokumenty V1</div>
         <h2>Dokumenty</h2>
-        <p id="documentsLocalStatus">Lokálně v tomto zařízení</p>
+        <p id="documentsLocalStatus" hidden></p>
       </div>
       <button id="documentsAddPdfButton" class="documentsV1Primary" type="button">＋ Přidat soubor</button>
     </div>
@@ -555,18 +555,16 @@
         <button id="documentsAddFolderButton" class="documentsV1Secondary" type="button">＋ Nová složka</button>
       </div>
 
-      <div class="documentsQuickFolders">
-        <button id="documentsAllFolderButton" class="documentsFolderAll active" type="button">Všechny soubory</button>
-      </div>
       <div id="documentsFolders" class="documentsFoldersGrid"></div>
     </section>
 
     <section class="documentsV1Section" aria-labelledby="documentsFilesTitle">
-      <div class="documentsV1SectionHeader">
+      <div class="documentsV1SectionHeader documentsFilesSectionHeader">
         <div>
           <h3 id="documentsFilesTitle">Dokumenty</h3>
           <small id="documentsActiveFolder">Všechny soubory</small>
         </div>
+        <button id="documentsAllFolderButton" class="documentsFolderAll documentsBackToAll" type="button" hidden>← Všechny soubory</button>
       </div>
 
       <div class="documentsSearchTools">
@@ -2195,7 +2193,7 @@
   <script src="editorDocuments.js?v=20260920-pdf-zoom-calm-652e"></script>
   <script src="legacyDocReader.js?v=20260919-doc-viewer-642a"></script>
   <script src="epubReader.js?v=20260919-epub-reader-643"></script>
-  <script src="documents.js?v=20260920-sql-copy-654e"></script>
+  <script src="documents.js?v=20260920-documents-ui-655"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>

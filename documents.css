@@ -2865,3 +2865,113 @@ body.documents-epub-viewer-open {
 .documentsDocxViewer.is-fullscreen .documentsDocxViewerContent.is-sql {
   background: #111318;
 }
+
+
+/* ============================================================
+   PATCH 655 – DOKUMENTY / ANDROID UI POLISH
+   - bez pomocného "lokálně v tomto zařízení" v hero kartě
+   - "Nová složka" vždy na jeden řádek
+   - kořen "Všechny soubory" už není falešná složka; zobrazí se jen
+     jako návratový cíl v hlavičce Dokumentů, když je otevřená složka/Koš
+   - řádky dokumentů bez dekorativního chevronu
+   - kompaktnější typografie + bezpečné zalamování dlouhých metadat
+   ============================================================ */
+
+#documentsLocalStatus[hidden] {
+  display: none !important;
+}
+
+.documentsV1Secondary {
+  flex: 0 0 auto;
+  padding-inline: 11px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.documentsV1SectionHeader > div {
+  min-width: 0;
+}
+
+.documentsFolderCardName {
+  font-size: 14px;
+}
+
+.documentsFolderCard small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.documentsFilesSectionHeader {
+  align-items: center;
+}
+
+.documentsBackToAll {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.documentsBackToAll[hidden] {
+  display: none !important;
+}
+
+.documentsFileOpenArea {
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 9px;
+  padding-right: 8px;
+}
+
+.documentsFileOpen {
+  display: none !important;
+}
+
+.documentsFileMain {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.documentsFileMain strong {
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 1.22;
+}
+
+.documentsFileMain small {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.documentsFileMenuButton {
+  width: 36px;
+}
+
+@media (max-width: 520px) {
+  .documentsV1SectionHeader {
+    gap: 6px;
+  }
+
+  .documentsV1SectionHeader h3 {
+    font-size: 16px;
+  }
+
+  .documentsV1SectionHeader small {
+    font-size: 10.5px;
+  }
+
+  .documentsV1Hero .documentsV1Primary {
+    max-width: none;
+    padding-inline: 11px;
+    font-size: 13px;
+  }
+}
