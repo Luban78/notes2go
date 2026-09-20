@@ -582,8 +582,7 @@ function formatCalendarDate(date) {
     {
       weekday: "long",
       day: "numeric",
-      month: "long",
-      year: "numeric"
+      month: "numeric"
     }
   );
 }

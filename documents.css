@@ -3176,3 +3176,28 @@ body.documents-epub-viewer-open {
     font-size: 17px;
   }
 }
+
+
+/* ============================================================
+   PATCH 657 – DOKUMENTY / DLOUHÉ NÁZVY
+   Název souboru nesmí zasáhnout do menu ani mimo řádek.
+   ============================================================ */
+.documentsFileOpenArea {
+  overflow: hidden;
+}
+
+.documentsFileMain strong {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentsFileMain small {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
