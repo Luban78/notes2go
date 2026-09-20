@@ -1165,6 +1165,9 @@
       povolitPrimePdfTest === true &&
       typeof poPrimePdfTest === "function"
     );
+    /* 652B – author CSS měl display:flex a na některých WebView přebil
+       samotný atribut hidden. V produkčním toku proto stav vynutíme i inline. */
+    prvky.test.style.display = prvky.test.hidden ? "none" : "";
     pdfPrimeTestAkce = !prvky.test.hidden
       ? poPrimePdfTest
       : null;
@@ -1612,6 +1615,39 @@
 </html>`;
   }
 
+  function vytvorPdfCssVelikostiObrazku(data) {
+    /*
+     * Core V2 ukládá šířku obrázku do data-velikost. Editor ji při běžném
+     * zobrazení převádí na CSS proměnnou, exportované richContent ji ale
+     * záměrně neobsahuje. PDF proto musí stejnou šířku zrekonstruovat zde,
+     * jinak se např. 50% obrázek vytiskne téměř přes celou A4.
+     */
+    const htmlZdroj = [
+      String(data?.richContent || ""),
+      ...(Array.isArray(data?.todos)
+        ? data.todos.map((todo) => String(todo?.html || ""))
+        : [])
+    ].join("\n");
+
+    const velikosti = new Set();
+    const regex = /data-velikost\s*=\s*["']([0-9]+(?:\.[0-9]+)?)["']/gi;
+    let shoda;
+    while ((shoda = regex.exec(htmlZdroj))) {
+      const cislo = Number.parseFloat(shoda[1]);
+      if (!Number.isFinite(cislo)) continue;
+      velikosti.add(Math.max(10, Math.min(100, Math.round(cislo))));
+    }
+
+    return [...velikosti]
+      .sort((a, b) => a - b)
+      .map((velikost) =>
+        `.ln-doc-content .lubaNoteImage[data-velikost="${velikost}"], ` +
+        `.ln-doc-todo-text .lubaNoteImage[data-velikost="${velikost}"] ` +
+        `{ width: ${velikost}%; }`
+      )
+      .join("\n");
+  }
+
   function vytvorPdfHtmlDokument(data, exportVolby = {}) {
     /*
      * PDF se tiskne z čistého dokumentového HTML, nikoli z celé obrazovky
@@ -1622,12 +1658,57 @@
       ? "landscape"
       : "portrait";
     const okraj = exportVolby?.okraje === "narrow" ? "8mm" : "14mm";
+    const cssVelikostiObrazku = vytvorPdfCssVelikostiObrazku(data);
 
     const tiskCss = `
     @page { size: A4 ${orientace}; margin: ${okraj}; }
     html, body { background: #fff !important; color: #111; }
     body { max-width: none; margin: 0; padding: 0; }
     .ln-doc-content, .ln-doc-todos { break-inside: auto; }
+    .ln-doc-content::after, .ln-doc-todo-text::after { content: ""; display: block; clear: both; }
+    .ln-doc-content .lubaNoteImage, .ln-doc-todo-text .lubaNoteImage {
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+      margin: 14px auto;
+      padding: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+      border: 0;
+      background: transparent;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .ln-doc-content .lubaNoteImage[data-velikost="prizpusobit"],
+    .ln-doc-todo-text .lubaNoteImage[data-velikost="prizpusobit"] {
+      width: 100%;
+    }
+    ${cssVelikostiObrazku}
+    .ln-doc-content .lubaNoteImage[data-zarovnani="vlevo"],
+    .ln-doc-todo-text .lubaNoteImage[data-zarovnani="vlevo"] {
+      float: left;
+      clear: none;
+      margin: 2px 12px 6px 0;
+    }
+    .ln-doc-content .lubaNoteImage[data-zarovnani="vpravo"],
+    .ln-doc-todo-text .lubaNoteImage[data-zarovnani="vpravo"] {
+      float: right;
+      clear: none;
+      margin: 2px 0 6px 12px;
+    }
+    .ln-doc-content .lubaNoteImage[data-zarovnani="stred"],
+    .ln-doc-todo-text .lubaNoteImage[data-zarovnani="stred"] {
+      float: none;
+      clear: both;
+      margin: 14px auto;
+    }
+    .ln-doc-content .lubaNoteImage img, .ln-doc-todo-text .lubaNoteImage img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
     .ln-doc-content img, .ln-doc-content figure { break-inside: avoid; }
     .ln-doc-todo { break-inside: avoid; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
