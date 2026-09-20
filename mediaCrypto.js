@@ -486,6 +486,85 @@
     };
   }
 
+  async function zabalBajtyHlavnimKlicem(bajty, kontext) {
+    if (!jeKlicDostupny()) {
+      await pripravMediaKlicZeZarizeni();
+    }
+
+    if (!jeKlicDostupny()) {
+      const error = new Error(
+        "Pro ochranu sdílené identity chybí klíč odvozený z hlavního hesla."
+      );
+      error.code = "LUBANOTE_MEDIA_KEY_LOCKED";
+      throw error;
+    }
+
+    const data = bajty instanceof Uint8Array
+      ? bajty
+      : new Uint8Array(bajty || []);
+    const aad = new TextEncoder().encode(
+      `LubaNote-shared-wrap-v1:${String(kontext || "")}`
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData: aad
+      },
+      mediaSifrovaciKlic,
+      data
+    );
+
+    return {
+      version: 1,
+      algorithm: "AES-GCM",
+      iv: prevedBajtyNaBase64(iv),
+      ciphertext: prevedBajtyNaBase64(new Uint8Array(ciphertext))
+    };
+  }
+
+  async function rozbalBajtyHlavnimKlicem(record, kontext) {
+    if (!jeKlicDostupny()) {
+      await pripravMediaKlicZeZarizeni();
+    }
+
+    if (!jeKlicDostupny()) {
+      const error = new Error(
+        "Pro odemknutí sdílené identity chybí klíč odvozený z hlavního hesla."
+      );
+      error.code = "LUBANOTE_MEDIA_KEY_LOCKED";
+      throw error;
+    }
+
+    if (
+      !record ||
+      Number(record.version) !== 1 ||
+      record.algorithm !== "AES-GCM" ||
+      !record.iv ||
+      !record.ciphertext
+    ) {
+      const error = new Error("Zašifrovaná sdílená identita má neplatný formát.");
+      error.code = "LUBANOTE_SHARED_IDENTITY_INVALID";
+      throw error;
+    }
+
+    const aad = new TextEncoder().encode(
+      `LubaNote-shared-wrap-v1:${String(kontext || "")}`
+    );
+    const plaintext = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: prevedBase64NaBajty(record.iv),
+        additionalData: aad
+      },
+      mediaSifrovaciKlic,
+      prevedBase64NaBajty(record.ciphertext)
+    );
+
+    return new Uint8Array(plaintext);
+  }
+
   async function desifrujDataUrl(record, noteId, mediaId) {
     if (!jeKlicDostupny()) {
       await pripravMediaKlicZeZarizeni();
@@ -938,6 +1017,8 @@
     oznacMigrovano,
     jeMigrovano,
     oznamNutneOdemceni,
+    zabalBajtyHlavnimKlicem,
+    rozbalBajtyHlavnimKlicem,
     nazevPoleTrezoru: POLE_TREZORU
   });
 
