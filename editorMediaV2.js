@@ -142,6 +142,24 @@
     return vysledek;
   }
 
+  async function optimalizujSdilenyDataUrl(dataUrl) {
+    const text = String(dataUrl || "");
+    if (!text.startsWith("data:image/")) return text;
+
+    /* 653G migrace starého 653D vaultu: již dostatečně malý JPEG znovu
+       nepřekódujeme. Starší velké obrázky projdou stejným limitem jako
+       nové Shared fotografie ještě před externalizací ciphertextu. */
+    if (
+      text.startsWith("data:image/jpeg") &&
+      odhadniBajtyDataUrl(text) <= 260 * 1024
+    ) {
+      return text;
+    }
+
+    const image = await nactiObrazek(text);
+    return pripravSdilenyObrazek(image);
+  }
+
   async function pripravObrazek(file) {
     if (!file?.type?.startsWith("image/")) {
       throw new Error("Vybraný soubor není obrázek.");
@@ -558,6 +576,7 @@
     ),
 
     otevriNahledObrazku,
-    zavriNahledObrazku
+    zavriNahledObrazku,
+    optimalizujSdilenyDataUrl
   });
 })();
