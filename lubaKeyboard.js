@@ -3645,7 +3645,7 @@
     if (languageId && LAYOUTY[languageId]) layoutId = languageId;
     const ok = naucSlovo(word, 5, { rucni: true });
     layoutId = puvodni;
-    renderSuggestions();
+    aktualizujNavrhy();
     return ok;
   }
 
@@ -3656,7 +3656,7 @@
     if (!naucenaSlova[id]?.[key]) return false;
     delete naucenaSlova[id][key];
     if (kandidatiSlov[id]) delete kandidatiSlov[id][key];
-    ulozNaucenaSlova(); ulozKandidatySlov(); renderSuggestions();
+    ulozNaucenaSlova(); ulozKandidatySlov(); aktualizujNavrhy();
     window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", { detail: { language: id } }));
     return true;
   }
