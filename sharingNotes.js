@@ -1224,7 +1224,7 @@
     }
   }
 
-  function otevriReadOnly(noteId) {
+  async function otevriReadOnly(noteId) {
     const note = sdilenePoznamky.find((item) => item.id === noteId);
 
     if (!note || note.trashedAt) {
@@ -1233,7 +1233,16 @@
 
     viewerNoteId = noteId;
     const modal = vytvorViewer();
-    naplnViewer(note);
+    let noteProViewer = note;
+    try {
+      noteProViewer = await window.LubaNoteSharedMediaCrypto
+        ?.desifrujSdilenouPoznamkuZCloudu?.(note) || note;
+    } catch (error) {
+      console.warn("Shared E2E: fotografii se nepodařilo odemknout.", error);
+      window.zobrazZpravuAplikace?.("Sdílená poznámka", "Šifrovanou fotografii se nepodařilo odemknout.");
+      return;
+    }
+    naplnViewer(noteProViewer);
     modal.overlay.hidden = false;
     document.body.classList.add("sharingReadOnlyOpen");
   }

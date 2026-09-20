@@ -134,7 +134,7 @@
   }
 
   async function ulozShadowAttachment(dataUrl, file) {
-    if (jeTajnaPoznamka()) return "";
+    if (jeTajnaPoznamka() || jeAktivniSdilenaPoznamka()) return "";
 
     const api = window.LubaNoteAttachmentsLocal;
     if (!api?.ulozCloudovouStinovouPrilohuZDataUrl) return "";
@@ -176,11 +176,7 @@
     if (jeTajnaPoznamka()) return true;
 
     if (jeAktivniSdilenaPoznamka()) {
-      window.zobrazZpravuAplikace?.(
-        "Šifrované fotografie",
-        "Fotografie ve sdílených poznámkách zatím nelze bezpečně vložit. Shared media dostanou vlastní E2E klíč v části Shared handoff."
-      );
-      return false;
+      return window.LubaNoteSharedMediaCrypto?.jeIdentitaPripravena?.() === true;
     }
 
     const mediaCrypto = window.LubaNoteMediaCrypto;

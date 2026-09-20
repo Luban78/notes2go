@@ -697,8 +697,192 @@
   window.addEventListener("lubanote:auth-expired", resetPameti);
   window.addEventListener("lubanote:account-blocked", resetPameti);
 
+
+  // 653D – E2E fotografie uvnitř canonical Shared note payloadu.
+  // Plaintext Data URL existuje pouze v editoru; do notes.data jde jen AES-GCM ciphertext.
+  const SHARED_MEDIA_VAULT = "__lubanoteSharedMediaVault";
+  const SHARED_MEDIA_REF = "data-lubanote-shared-media-ref";
+  const SHARED_MEDIA_VERSION = 1;
+
+  function klonujNote(hodnota) {
+    if (typeof structuredClone === "function") return structuredClone(hodnota);
+    return JSON.parse(JSON.stringify(hodnota));
+  }
+
+  function bajtyNaBase64(bytes) {
+    let text = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(text);
+  }
+
+  function base64NaBajty(text) {
+    const raw = atob(String(text || ""));
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function dataUrlNaBajty(dataUrl) {
+    const text = String(dataUrl || "");
+    const comma = text.indexOf(",");
+    if (!text.startsWith("data:image/") || comma < 0) throw new Error("invalid_shared_media_data_url");
+    const head = text.slice(5, comma);
+    const mimeType = head.split(";")[0] || "image/jpeg";
+    const body = text.slice(comma + 1);
+    const bytes = head.includes(";base64")
+      ? base64NaBajty(body)
+      : new TextEncoder().encode(decodeURIComponent(body));
+    return { mimeType, bytes };
+  }
+
+  function bajtyNaDataUrl(mimeType, bytes) {
+    return `data:${mimeType};base64,${bajtyNaBase64(bytes)}`;
+  }
+
+  function sharedMediaAad(noteId, mediaId, mimeType) {
+    return new TextEncoder().encode(
+      `LubaNote-shared-media-v1:${String(noteId)}:${String(mediaId)}:${String(mimeType)}`
+    );
+  }
+
+  async function importujNoteKeyAes(noteKey) {
+    return crypto.subtle.importKey(
+      "raw",
+      noteKey,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function zasifrujSharedDataUrl(noteId, mediaId, dataUrl, noteKey) {
+    const { mimeType, bytes } = dataUrlNaBajty(dataUrl);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await importujNoteKeyAes(noteKey);
+    const cipher = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: sharedMediaAad(noteId, mediaId, mimeType) },
+      key,
+      bytes
+    );
+    return {
+      version: SHARED_MEDIA_VERSION,
+      algorithm: "AES-256-GCM",
+      mimeType,
+      iv: bajtyNaBase64(iv),
+      ciphertext: bajtyNaBase64(new Uint8Array(cipher))
+    };
+  }
+
+  async function desifrujSharedRecord(noteId, mediaId, record, noteKey) {
+    if (!record || Number(record.version) !== SHARED_MEDIA_VERSION || record.algorithm !== "AES-256-GCM") {
+      throw new Error("invalid_shared_media_record");
+    }
+    const key = await importujNoteKeyAes(noteKey);
+    const plain = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: base64NaBajty(record.iv),
+        additionalData: sharedMediaAad(noteId, mediaId, record.mimeType)
+      },
+      key,
+      base64NaBajty(record.ciphertext)
+    );
+    return bajtyNaDataUrl(record.mimeType, new Uint8Array(plain));
+  }
+
+  async function zasifrujSharedHtml(html, noteId, noteKey, items, idsPodleDataUrl) {
+    const text = String(html || "");
+    if (!/<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(text)) return text;
+    const template = document.createElement("template");
+    template.innerHTML = text;
+    for (const img of template.content.querySelectorAll("img[src^='data:image/']")) {
+      const dataUrl = String(img.getAttribute("src") || "");
+      if (!dataUrl.startsWith("data:image/")) continue;
+      let mediaId = idsPodleDataUrl.get(dataUrl);
+      if (!mediaId) {
+        mediaId = crypto.randomUUID?.() || `shared-media-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        idsPodleDataUrl.set(dataUrl, mediaId);
+      }
+      if (!items[mediaId]) items[mediaId] = await zasifrujSharedDataUrl(noteId, mediaId, dataUrl, noteKey);
+      img.removeAttribute("src");
+      img.removeAttribute("srcset");
+      img.removeAttribute("data-attachment-id");
+      img.closest?.("[data-attachment-id]")?.removeAttribute?.("data-attachment-id");
+      img.setAttribute(SHARED_MEDIA_REF, mediaId);
+    }
+    return template.innerHTML;
+  }
+
+  async function pripravSdilenouPoznamkuProCloud(note) {
+    if (!note?.id) return note;
+    const htmls = [note.richContent, ...(Array.isArray(note.todos) ? note.todos.map(t => t?.html) : [])];
+    if (!htmls.some(h => typeof h === "string" && /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i.test(h))) return note;
+
+    const keyResult = await nactiNoteKeyProPoznamku(note.id);
+    if (keyResult?.ok !== true || !(keyResult.noteKey instanceof Uint8Array)) {
+      throw new Error(keyResult?.reason || "shared_note_key_unavailable");
+    }
+
+    const copy = klonujNote(note);
+    const items = {};
+    const ids = new Map();
+    if (typeof copy.richContent === "string") {
+      copy.richContent = await zasifrujSharedHtml(copy.richContent, copy.id, keyResult.noteKey, items, ids);
+    }
+    if (Array.isArray(copy.todos)) {
+      for (const todo of copy.todos) {
+        if (todo && typeof todo.html === "string") {
+          todo.html = await zasifrujSharedHtml(todo.html, copy.id, keyResult.noteKey, items, ids);
+        }
+      }
+    }
+    if (Object.keys(items).length) {
+      copy[SHARED_MEDIA_VAULT] = { version: SHARED_MEDIA_VERSION, algorithm: "AES-256-GCM", items };
+      diag("SHARED-CRYPTO | MEDIA ENCRYPT | OK | note=" + copy.id + " | count=" + Object.keys(items).length);
+    }
+    return copy;
+  }
+
+  function vlozSharedDataUrlDoHtml(html, mapa) {
+    const text = String(html || "");
+    if (!text.includes(SHARED_MEDIA_REF)) return text;
+    const template = document.createElement("template");
+    template.innerHTML = text;
+    for (const img of template.content.querySelectorAll(`img[${SHARED_MEDIA_REF}]`)) {
+      const id = String(img.getAttribute(SHARED_MEDIA_REF) || "");
+      const dataUrl = mapa.get(id);
+      if (!dataUrl) throw new Error("shared_media_missing");
+      img.setAttribute("src", dataUrl);
+      img.removeAttribute(SHARED_MEDIA_REF);
+    }
+    return template.innerHTML;
+  }
+
+  async function desifrujSdilenouPoznamkuZCloudu(note) {
+    const vault = note?.[SHARED_MEDIA_VAULT];
+    if (!vault?.items || typeof vault.items !== "object") return note;
+    const keyResult = await nactiNoteKeyProPoznamku(note.id);
+    if (keyResult?.ok !== true || !(keyResult.noteKey instanceof Uint8Array)) {
+      throw new Error(keyResult?.reason || "shared_note_key_unavailable");
+    }
+    const copy = klonujNote(note);
+    const mapa = new Map();
+    for (const [mediaId, record] of Object.entries(vault.items)) {
+      mapa.set(mediaId, await desifrujSharedRecord(copy.id, mediaId, record, keyResult.noteKey));
+    }
+    if (typeof copy.richContent === "string") copy.richContent = vlozSharedDataUrlDoHtml(copy.richContent, mapa);
+    if (Array.isArray(copy.todos)) {
+      for (const todo of copy.todos) if (todo && typeof todo.html === "string") todo.html = vlozSharedDataUrlDoHtml(todo.html, mapa);
+    }
+    delete copy[SHARED_MEDIA_VAULT];
+    diag("SHARED-CRYPTO | MEDIA DECRYPT | OK | note=" + copy.id + " | count=" + mapa.size);
+    return copy;
+  }
+
   window.LubaNoteSharedMediaCrypto = Object.freeze({
-    verze: "SHARED-MEDIA-E2E-ENVELOPES-653C",
+    verze: "SHARED-MEDIA-E2E-PHOTOS-653D",
     zajistiIdentitu,
     jeIdentitaPripravena,
     ziskejVerejnyKlic,
@@ -708,6 +892,8 @@
     rozbalNoteKey,
     nactiNoteKeyProPoznamku,
     zajistiObalkyProPoznamku,
-    selfTestNoteKey
+    selfTestNoteKey,
+    pripravSdilenouPoznamkuProCloud,
+    desifrujSdilenouPoznamkuZCloudu
   });
 })();

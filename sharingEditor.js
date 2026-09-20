@@ -394,23 +394,14 @@
       data.updatedAt = cas;
       data.isSecret = false;
 
-      /* PATCH 551 – metadata změna vlastní shared poznámky obchází
-         sharingAttachments, proto musí mít vlastní privacy guard.
-         Osobní media klíč vlastníka nelze použít pro spolupracovníka. */
-      if (obsahujeInlineFotografii(data)) {
-        oznamBlokovanouSharedFotografii();
-        return {
-          handled: true,
-          ok: false,
-          reason: "shared_media_e2e_pending"
-        };
-      }
+      const dataProCloud = await window.LubaNoteSharedMediaCrypto
+        ?.pripravSdilenouPoznamkuProCloud?.(data) || data;
 
       const { data: vysledek, error } = await klient.rpc(
         "lubanote_save_shared_note_safe",
         {
           p_note_id: note.id,
-          p_data: data,
+          p_data: dataProCloud,
           p_expected_revision:
             Number(note.__lubanoteSharedRevision) || 0,
           p_device_id: lock.deviceId,
@@ -550,6 +541,9 @@
         return false;
       }
 
+      const noteProEditor = await window.LubaNoteSharedMediaCrypto
+        ?.desifrujSdilenouPoznamkuZCloudu?.(note) || note;
+
       const lock = await ziskejLock(note);
 
       if (lock?.acquired !== true) {
@@ -597,7 +591,7 @@
       const otevreno =
         window.LubaNoteSharedEditorHost
           .otevriSdilenouPoznamku(
-            note,
+            noteProEditor,
             {
               revision:
                 aktivniSession.revision,
@@ -699,49 +693,8 @@
         throw new Error("shared_snapshot_missing");
       }
 
-      /* PATCH 551 – defense-in-depth i pro případ, že by se
-         sharingAttachments nenačetl nebo byl obejit importem. Shared
-         fotografie nesmí odejít plaintext, dokud Shared handoff nemá
-         vlastní sdílený E2E key wrapping. */
-      if (obsahujeInlineFotografii(snapshot.data)) {
-        oznamBlokovanouSharedFotografii();
-        return {
-          ok: false,
-          reason: "shared_media_e2e_pending"
-        };
-      }
-
-      /*
-       * S2E – nové obrázky, které vložil tento uživatel, musí být
-       * před shared save bezpečně rezervované a uploadnuté pod jeho
-       * vlastním účtem. Cizí attachmenty se z lokální cache nečtou.
-       */
-      if (
-        typeof window.LubaNoteSharingAttachments
-          ?.pripravPredSharedSave === "function"
-      ) {
-        const pripravaPriloh =
-          await window.LubaNoteSharingAttachments
-            .pripravPredSharedSave(
-              snapshot.data,
-              session
-            );
-
-        if (pripravaPriloh?.ok !== true) {
-          zobrazZpravu(
-            t("sharing.readOnlyTitle", "Sdílená poznámka"),
-            "Obrázek se nepodařilo bezpečně uložit do cloudu. Editor zůstal otevřený; zkontroluj připojení a zkus Uložit znovu."
-          );
-
-          return {
-            ok: false,
-            reason:
-              pripravaPriloh?.reason ||
-              pripravaPriloh?.neuspesne?.[0]?.reason ||
-              "shared_attachment_prepare_failed"
-          };
-        }
-      }
+      const dataProCloud = await window.LubaNoteSharedMediaCrypto
+        ?.pripravSdilenouPoznamkuProCloud?.(snapshot.data) || snapshot.data;
 
       const klient = await zajistiSupabase();
 
@@ -753,7 +706,7 @@
         "lubanote_save_shared_note_safe",
         {
           p_note_id: session.noteId,
-          p_data: snapshot.data,
+          p_data: dataProCloud,
           p_expected_revision:
             snapshot.context.revision,
           p_device_id: session.deviceId,
