@@ -1921,6 +1921,20 @@
     }
   }
 
+  function prectiSqlText(blob) {
+    return new Promise((resolve, reject) => {
+      if (!(blob instanceof Blob)) {
+        reject(new Error('SQL data nejsou dostupná.'));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error || new Error('SQL se nepodařilo přečíst.'));
+      reader.readAsText(blob, 'UTF-8');
+    });
+  }
+
   async function vyberSqlWeb() {
     return await new Promise((resolve) => {
       const input = document.createElement('input');
@@ -1952,6 +1966,17 @@
           return;
         }
 
+        let sqlText = '';
+        try {
+          sqlText = await prectiSqlText(file);
+        } catch (error) {
+          console.error('Čtení SQL při importu selhalo:', error);
+          uklid();
+          zobrazChybu('Dokumenty', 'SQL se nepodařilo přečíst.');
+          resolve(null);
+          return;
+        }
+
         const record = {
           id: id(),
           name: normalizujNazevSouboru(file.name || 'skript.sql', 'sql') || 'skript.sql',
@@ -1960,6 +1985,7 @@
           folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
           storageMode: 'web',
           blob: file,
+          sqlText,
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
@@ -2673,13 +2699,27 @@
     document.body.classList.add('documents-docx-viewer-open');
 
     try {
-      const text = await record.blob.text();
-      prvky.content.innerHTML = text
-        ? `<pre class="documentsSqlCode">${esc(text)}</pre>`
-        : '<p class="documentsDocxEmpty">SQL soubor je prázdný.</p>';
+      const text = typeof record.sqlText === 'string'
+        ? record.sqlText
+        : await prectiSqlText(record.blob);
+
+      if (text) {
+        const code = document.createElement('pre');
+        code.className = 'documentsSqlCode';
+        code.textContent = text;
+        prvky.content.replaceChildren(code);
+      } else {
+        const empty = document.createElement('p');
+        empty.className = 'documentsDocxEmpty';
+        empty.textContent = 'SQL soubor je prázdný.';
+        prvky.content.replaceChildren(empty);
+      }
+
       prvky.loading.hidden = true;
       prvky.body.scrollTop = 0;
       prvky.body.scrollLeft = 0;
+      prvky.content.scrollTop = 0;
+      prvky.content.scrollLeft = 0;
     } catch (error) {
       prvky.loading.hidden = true;
       zavriDocxViewer();
