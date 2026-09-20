@@ -31,11 +31,13 @@
   const MAX_DOCX_BYTES = 20 * 1024 * 1024;
   const MAX_DOC_BYTES = 24 * 1024 * 1024;
   const MAX_EPUB_BYTES = 100 * 1024 * 1024;
+  const MAX_SQL_BYTES = 10 * 1024 * 1024;
   const MAX_DOCX_PART_BYTES = 32 * 1024 * 1024;
   const MAX_DOCX_ZIP_ENTRIES = 5000;
   const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const DOC_MIME = 'application/msword';
   const EPUB_MIME = 'application/epub+zip';
+  const SQL_MIME = 'application/sql';
   const TRASH_VIEW = '__documents_trash__';
   const EPUB_READER_SETTINGS_KEY = 'lubanote_epub_reader_settings_v1';
   const EPUB_READER_DEFAULTS = Object.freeze({
@@ -161,10 +163,16 @@
     return mime === EPUB_MIME || nazev.endsWith('.epub');
   }
 
+  function jeSqlSoubor(soubor) {
+    const nazev = String(soubor?.name || '').toLowerCase();
+    return nazev.endsWith('.sql');
+  }
+
   function typSouboru(soubor) {
     if (jeDocxSoubor(soubor)) return 'docx';
     if (jeDocSoubor(soubor)) return 'doc';
     if (jeEpubSoubor(soubor)) return 'epub';
+    if (jeSqlSoubor(soubor)) return 'sql';
     if (jePdfSoubor(soubor)) return 'pdf';
     return 'other';
   }
@@ -174,6 +182,7 @@
     if (typ === 'docx') return 'DOCX';
     if (typ === 'doc') return 'DOC';
     if (typ === 'epub') return 'EPUB';
+    if (typ === 'sql') return 'SQL';
     if (typ === 'pdf') return 'PDF';
     return 'SOUBOR';
   }
@@ -183,6 +192,7 @@
     if (typ === 'docx') return 'docx';
     if (typ === 'doc') return 'doc';
     if (typ === 'epub') return 'epub';
+    if (typ === 'sql') return 'sql';
     return 'pdf';
   }
 
@@ -364,7 +374,7 @@
 
   function normalizujNazevSouboru(value, pripona = 'pdf') {
     let nazev = String(value || '').trim().replace(/\s+/g, ' ');
-    const ext = ['docx', 'doc', 'epub'].includes(pripona) ? pripona : 'pdf';
+    const ext = ['docx', 'doc', 'epub', 'sql'].includes(pripona) ? pripona : 'pdf';
     if (!nazev) return '';
 
     const regex = new RegExp(`\\.${ext}$`, 'i');
@@ -373,7 +383,7 @@
       return zaklad ? `${zaklad}.${ext}` : '';
     }
 
-    nazev = nazev.replace(/\.(pdf|docx|doc|epub)$/i, '').trim().slice(0, 116);
+    nazev = nazev.replace(/\.(pdf|docx|doc|epub|sql)$/i, '').trim().slice(0, 116);
     return nazev ? `${nazev}.${ext}` : '';
   }
 
@@ -518,6 +528,7 @@
       nahledIkony.classList.toggle('is-docx', zdrojIkony?.classList.contains('is-docx') === true);
       nahledIkony.classList.toggle('is-doc', zdrojIkony?.classList.contains('is-doc') === true);
       nahledIkony.classList.toggle('is-epub', zdrojIkony?.classList.contains('is-epub') === true);
+      nahledIkony.classList.toggle('is-sql', zdrojIkony?.classList.contains('is-sql') === true);
       if (zdrojIkony?.classList.contains('is-epub')) nahledIkony.textContent = 'EPUB';
     }
     nahled.classList.remove('is-active', 'has-target');
@@ -1039,6 +1050,7 @@
       filterDocx: screen.querySelector('#documentsFilterDocx'),
       filterDoc: screen.querySelector('#documentsFilterDoc'),
       filterEpub: screen.querySelector('#documentsFilterEpub'),
+      filterSql: screen.querySelector('#documentsFilterSql'),
       trash: screen.querySelector('#documentsTrashButton'),
       trashCount: screen.querySelector('#documentsTrashCount')
     };
@@ -1529,6 +1541,10 @@
             <span class="documentsAddFileType is-epub">EPUB</span>
             <span><strong>Elektronická kniha EPUB</strong><small>otevře se v lokálním LubaReaderu</small></span>
           </button>
+          <button type="button" class="documentsAddFileChoice documentsAddSqlChoice">
+            <span class="documentsAddFileType is-sql">SQL</span>
+            <span><strong>SQL skript</strong><small>otevře se lokálně jen ke čtení jako zdrojový kód</small></span>
+          </button>
         </div>
         <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">Zrušit</button>
       </section>`;
@@ -1538,6 +1554,7 @@
     const docx = modal.querySelector('.documentsAddDocxChoice');
     const doc = modal.querySelector('.documentsAddDocChoice');
     const epub = modal.querySelector('.documentsAddEpubChoice');
+    const sql = modal.querySelector('.documentsAddSqlChoice');
     const cancel = modal.querySelector('.documentsAddFileCancel');
 
     const zavrit = () => {
@@ -1567,6 +1584,11 @@
     epub.addEventListener('click', () => {
       zavrit();
       void pridatEpub();
+    });
+
+    sql.addEventListener('click', () => {
+      zavrit();
+      void pridatSql();
     });
 
     modal.otevrit = () => {
@@ -1893,6 +1915,81 @@
     } catch (error) {
       console.error('Import EPUB selhal:', error);
       zobrazChybu('Dokumenty', 'EPUB se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
+  }
+
+  async function vyberSqlWeb() {
+    return await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.sql,text/plain,application/sql,text/x-sql';
+      input.hidden = true;
+
+      const uklid = () => input.remove();
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0] || null;
+        if (!file) {
+          uklid();
+          resolve(null);
+          return;
+        }
+
+        if (!/\.sql$/i.test(file.name || '')) {
+          uklid();
+          zobrazChybu('Dokumenty', 'Vybraný soubor není SQL.');
+          resolve(null);
+          return;
+        }
+
+        if (file.size > MAX_SQL_BYTES) {
+          uklid();
+          zobrazChybu('Dokumenty', 'SQL je příliš velký. Maximální velikost je 10 MB.');
+          resolve(null);
+          return;
+        }
+
+        const record = {
+          id: id(),
+          name: normalizujNazevSouboru(file.name || 'skript.sql', 'sql') || 'skript.sql',
+          mime: SQL_MIME,
+          size: file.size,
+          folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
+          storageMode: 'web',
+          blob: file,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        uklid();
+        resolve(record);
+      }, { once: true });
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function pridatSql() {
+    const prvky = zajistiPrvky();
+    if (!prvky) return;
+
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+
+    try {
+      const record = await vyberSqlWeb();
+      if (!record) return;
+
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      zobrazZpravu('Dokumenty', `SQL „${record.name}“ byl přidán.`);
+    } catch (error) {
+      console.error('Import SQL selhal:', error);
+      zobrazChybu('Dokumenty', 'SQL se nepodařilo přidat.');
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2481,7 +2578,7 @@
     docxViewerPrvky.overlay.hidden = true;
     docxViewerPrvky.loading.hidden = true;
     docxViewerPrvky.content.innerHTML = '';
-    docxViewerPrvky.content.classList.remove('is-legacy-doc');
+    docxViewerPrvky.content.classList.remove('is-legacy-doc', 'is-sql');
     document.body.classList.remove('documents-docx-viewer-open');
     uvolniDocxObjectUrls();
   }
@@ -2497,7 +2594,7 @@
     prvky.title.textContent = record.name || 'dokument.docx';
     prvky.subtitle.textContent = 'DOCX · POUZE ČTENÍ';
     prvky.loadingText.textContent = 'Otevírám DOCX…';
-    prvky.content.classList.remove('is-legacy-doc');
+    prvky.content.classList.remove('is-legacy-doc', 'is-sql');
     prvky.content.innerHTML = '';
     prvky.loading.hidden = false;
     prvky.overlay.hidden = false;
@@ -2532,6 +2629,7 @@
     prvky.title.textContent = record.name || 'dokument.doc';
     prvky.subtitle.textContent = 'DOC · POUZE ČTENÍ';
     prvky.loadingText.textContent = 'Otevírám DOC…';
+    prvky.content.classList.remove('is-sql');
     prvky.content.classList.add('is-legacy-doc');
     prvky.content.innerHTML = '';
     prvky.loading.hidden = false;
@@ -2548,6 +2646,40 @@
         : '<p class="documentsDocxEmpty">Dokument neobsahuje čitelný text.</p>';
       prvky.loading.hidden = true;
       prvky.body.scrollTop = 0;
+    } catch (error) {
+      prvky.loading.hidden = true;
+      zavriDocxViewer();
+      throw error;
+    }
+  }
+
+  async function otevriSqlViewer(record) {
+    if (!(record?.blob instanceof Blob)) {
+      throw new Error('SQL data nejsou dostupná.');
+    }
+
+    const prvky = zajistiDocxViewer();
+    uvolniDocxObjectUrls();
+    nastavDocViewerFullscreen(false);
+    prvky.title.textContent = record.name || 'skript.sql';
+    prvky.subtitle.textContent = 'SQL · POUZE ČTENÍ';
+    prvky.loadingText.textContent = 'Otevírám SQL…';
+    prvky.content.classList.remove('is-legacy-doc');
+    prvky.content.classList.add('is-sql');
+    prvky.content.innerHTML = '';
+    prvky.loading.hidden = false;
+    prvky.overlay.hidden = false;
+    docxViewerOtevren = true;
+    document.body.classList.add('documents-docx-viewer-open');
+
+    try {
+      const text = await record.blob.text();
+      prvky.content.innerHTML = text
+        ? `<pre class="documentsSqlCode">${esc(text)}</pre>`
+        : '<p class="documentsDocxEmpty">SQL soubor je prázdný.</p>';
+      prvky.loading.hidden = true;
+      prvky.body.scrollTop = 0;
+      prvky.body.scrollLeft = 0;
     } catch (error) {
       prvky.loading.hidden = true;
       zavriDocxViewer();
@@ -3510,6 +3642,16 @@
       return;
     }
 
+    if (typ === 'sql') {
+      try {
+        await otevriSqlViewer(record);
+      } catch (error) {
+        console.error('Otevření uloženého SQL selhalo:', error);
+        zobrazChybu('Dokumenty', error?.message || 'SQL se nepodařilo otevřít.');
+      }
+      return;
+    }
+
     if (typ !== 'pdf') {
       zobrazChybu('Dokumenty', 'Tento typ souboru zatím neumím otevřít.');
       return;
@@ -3624,6 +3766,7 @@
     prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');
     prvky.filterDoc?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'doc');
     prvky.filterEpub?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'epub');
+    prvky.filterSql?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'sql');
     prvky.trash?.classList.toggle('active', aktivniSlozkaId === TRASH_VIEW);
     if (prvky.trashCount) {
       const pocetVKosi = posledniSoubory.filter(jeSouborVKosi).length;
@@ -3655,6 +3798,7 @@
           if (aktivniTypFiltru === 'docx' && !jeDocxSoubor(soubor)) return false;
           if (aktivniTypFiltru === 'doc' && !jeDocSoubor(soubor)) return false;
           if (aktivniTypFiltru === 'epub' && !jeEpubSoubor(soubor)) return false;
+          if (aktivniTypFiltru === 'sql' && !jeSqlSoubor(soubor)) return false;
         }
 
         return souborOdpovidaHledani(soubor, folderMap);
@@ -3686,8 +3830,8 @@
       if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : aktivniTypFiltru === 'epub' ? 'Zatím tu není žádná kniha EPUB' : 'Zatím tu není žádný dokument';
-      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX, DOC nebo EPUB. Knihy EPUB se otevřou v LubaReaderu.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : aktivniTypFiltru === 'epub' ? 'Zatím tu není žádná kniha EPUB' : aktivniTypFiltru === 'sql' ? 'Zatím tu není žádný SQL soubor' : 'Zatím tu není žádný dokument';
+      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX, DOC, EPUB nebo SQL. SQL se otevře lokálně jen ke čtení.';
     }
 
     if (prvky.search && prvky.search.value !== hledaniDokumentu) {
@@ -3718,7 +3862,7 @@
         : folderName;
       const typ = typSouboru(soubor);
       const typText = popisTypuSouboru(soubor);
-      const ikonaTrida = typ === 'docx' ? ' is-docx' : typ === 'doc' ? ' is-doc' : typ === 'epub' ? ' is-epub' : '';
+      const ikonaTrida = typ === 'docx' ? ' is-docx' : typ === 'doc' ? ' is-doc' : typ === 'epub' ? ' is-epub' : typ === 'sql' ? ' is-sql' : '';
       let ikonaObsah = typText;
       if (typ === 'epub' && soubor.epubCoverBlob instanceof Blob) {
         const coverUrl = URL.createObjectURL(soubor.epubCoverBlob);
@@ -3918,6 +4062,12 @@
     prvky.filterEpub?.addEventListener('click', () => {
       if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
       aktivniTypFiltru = 'epub';
+      render();
+    });
+
+    prvky.filterSql?.addEventListener('click', () => {
+      if (aktivniSlozkaId === TRASH_VIEW) aktivniSlozkaId = null;
+      aktivniTypFiltru = 'sql';
       render();
     });
 

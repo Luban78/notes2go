@@ -2778,3 +2778,42 @@ body.documents-epub-viewer-open {
   background: var(--color-accent) !important;
   color: var(--color-on-accent) !important;
 }
+
+/* ============================================================
+   PATCH 654 – SQL READ-ONLY VIEWER
+   SQL zůstává pouze lokálně v Dokumentech. Viewer znovu používá
+   stabilní DOCX/DOC shell a zachovává mezery, tabulátory a zalomení kódu.
+   ============================================================ */
+
+.documentsFileIcon.is-sql,
+.documentsDragPreviewIcon.is-sql,
+.documentsAddFileType.is-sql {
+  background: #3f6b54;
+}
+
+.documentsDocxViewerContent.is-sql {
+  width: min(100%, 1100px);
+  min-height: 100%;
+  padding: 0;
+  overflow: auto;
+  background: #17191d;
+  color: #eceff4;
+  border-color: rgba(255,255,255,.10);
+}
+
+.documentsSqlCode {
+  min-width: max-content;
+  margin: 0;
+  padding: clamp(16px, 4vw, 30px);
+  color: inherit;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.documentsDocxViewer.is-fullscreen .documentsDocxViewerContent.is-sql {
+  background: #111318;
+}
