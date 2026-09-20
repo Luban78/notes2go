@@ -24,6 +24,7 @@
   const ULOZ_RECENT = "lubanote_lubakeyboard_recent_v1";
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
   const ULOZ_KANDIDATY = "lubanote_lubakeyboard_word_candidates_v1";
+  const ULOZ_KONTEXT = "lubanote_lubakeyboard_bigrams_v1";
   const ULOZ_OWNER = "lubanoteLocalOwnerUserId";
   let vlastnikOsobnihoSlovniku = String(localStorage.getItem(ULOZ_OWNER) || "").trim();
 
@@ -37,6 +38,12 @@
     return vlastnikOsobnihoSlovniku
       ? `${ULOZ_KANDIDATY}:${vlastnikOsobnihoSlovniku}`
       : ULOZ_KANDIDATY;
+  }
+
+  function klicKontextuSlov() {
+    return vlastnikOsobnihoSlovniku
+      ? `${ULOZ_KONTEXT}:${vlastnikOsobnihoSlovniku}`
+      : ULOZ_KONTEXT;
   }
 
   function migrujLegacySlovnikProVlastnika() {
@@ -640,6 +647,7 @@
   let recent = nactiRecent();
   let naucenaSlova = nactiNaucenaSlova();
   let kandidatiSlov = nactiKandidatySlov();
+  let nauceneDvojice = nactiNauceneDvojice();
 
   function core() {
     return window.LubaNoteEditorV2 || null;
@@ -790,6 +798,96 @@
     try { localStorage.setItem(klicKandidatuSlov(), JSON.stringify(kandidatiSlov)); } catch (_error) {}
   }
 
+  /* PATCH 651A – jednoduchý lokální kontextový model „předchozí → další“.
+     Nejde do Supabase a nezvyšuje egress. Učí se pouze na konkrétním zařízení
+     a až opakovaná vazba (2×) se smí objevit jako návrh. */
+  function nactiNauceneDvojice() {
+    try {
+      const value = JSON.parse(localStorage.getItem(klicKontextuSlov()) || "{}");
+      return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function ulozNauceneDvojice() {
+    try { localStorage.setItem(klicKontextuSlov(), JSON.stringify(nauceneDvojice)); } catch (_error) {}
+  }
+
+  function posledniSlovoZTextu(value) {
+    const text = String(value || "");
+    try { return text.match(/([\p{L}\p{M}\p{N}'’\-]+)[^\p{L}\p{M}\p{N}'’\-]*$/u)?.[1] || ""; }
+    catch (_error) { return text.match(/([A-Za-zÀ-ž0-9'’\-]+)[^A-Za-zÀ-ž0-9'’\-]*$/)?.[1] || ""; }
+  }
+
+  function naucDvojici(predchozi, dalsi, bonus = 1, layout = aktualniLayout()) {
+    const pred = String(predchozi || "").trim();
+    const next = String(dalsi || "").trim();
+    if (!jeSlovoProUceni(pred) || !jeSlovoProUceni(next)) return false;
+
+    const id = layout.id || "en";
+    const predKey = lowerLocale(pred, layout);
+    const nextKey = lowerLocale(next, layout);
+    if (!predKey || !nextKey) return false;
+
+    const jazyk = nauceneDvojice[id] && typeof nauceneDvojice[id] === "object"
+      ? nauceneDvojice[id]
+      : {};
+    const navaznosti = jazyk[predKey] && typeof jazyk[predKey] === "object"
+      ? jazyk[predKey]
+      : {};
+    const puvodni = navaznosti[nextKey];
+
+    navaznosti[nextKey] = {
+      word: next,
+      count: Math.min(9999, Number(puvodni?.count || 0) + Math.max(1, Number(bonus || 1)))
+    };
+
+    jazyk[predKey] = Object.fromEntries(
+      Object.entries(navaznosti)
+        .sort((a, b) => Number(b[1]?.count || 0) - Number(a[1]?.count || 0))
+        .slice(0, 8)
+    );
+
+    if (Object.keys(jazyk).length > 800) {
+      nauceneDvojice[id] = Object.fromEntries(
+        Object.entries(jazyk)
+          .sort((a, b) => {
+            const suma = (entry) => Object.values(entry || {})
+              .reduce((acc, item) => acc + Number(item?.count || 0), 0);
+            return suma(b[1]) - suma(a[1]);
+          })
+          .slice(0, 800)
+      );
+    } else {
+      nauceneDvojice[id] = jazyk;
+    }
+
+    ulozNauceneDvojice();
+    return true;
+  }
+
+  function kontextoveNavrhy(predchozi, layout = aktualniLayout(), prefix = "") {
+    const pred = String(predchozi || "").trim();
+    if (!pred) return [];
+    const predKey = lowerLocale(pred, layout);
+    const key = lowerLocale(prefix, layout);
+    const keyBez = bezDiakritiky(key);
+    const navaznosti = nauceneDvojice[layout.id]?.[predKey] || {};
+
+    return Object.values(navaznosti)
+      .filter((entry) => Number(entry?.count || 0) >= 2)
+      .filter((entry) => {
+        if (!key) return true;
+        const word = lowerLocale(entry?.word || "", layout);
+        return word.startsWith(key) || bezDiakritiky(word).startsWith(keyBez);
+      })
+      .sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0))
+      .map((entry) => String(entry?.word || "").trim())
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+
   function oznamZmenuSlovniku(detail = {}) {
     window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
       detail: { source: "local", ...detail }
@@ -896,7 +994,9 @@
         ? ziskejKontextNazvu()
         : core()?.ziskejKontextVlastniKlavesnice?.();
     const slovo = kontext?.celeSlovo || kontext?.prefix || "";
-    if (slovo) naucSlovo(slovo, 2);
+    if (!slovo) return;
+    naucSlovo(slovo, 2);
+    if (kontext?.predchoziSlovo) naucDvojici(kontext.predchoziSlovo, slovo, 1);
   }
 
   function zachovejVelikost(prefix, navrh, layout) {
@@ -914,14 +1014,17 @@
     return out;
   }
 
-  function vychoziNavrhy(layout) {
+  function vychoziNavrhy(layout, predchoziSlovo = "") {
+    const kontext = kontextoveNavrhy(predchoziSlovo, layout);
     const naucene = Object.values(naucenaSlova[layout.id] || {})
       .sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0))
       .map((x) => x?.word)
       .filter(Boolean);
     const fallback = layout.id === "cs" ? ["a", "je", "se"]
       : layout.id === "en" ? ["the", "and", "I"] : [];
-    return [...naucene, ...fallback].filter((x, i, arr) => arr.indexOf(x) === i).slice(0, 3);
+    return [...kontext, ...naucene, ...fallback]
+      .filter((x, i, arr) => arr.indexOf(x) === i)
+      .slice(0, 3);
   }
 
   function vypocitejNavrhy() {
@@ -934,7 +1037,8 @@
         ? ziskejKontextNazvu()
         : core()?.ziskejKontextVlastniKlavesnice?.();
     const prefix = String(kontext?.prefix || "");
-    if (!prefix) return vychoziNavrhy(layout);
+    const predchoziSlovo = String(kontext?.predchoziSlovo || "");
+    if (!prefix) return vychoziNavrhy(layout, predchoziSlovo);
 
     const key = lowerLocale(prefix, layout);
     const keyBez = bezDiakritiky(key);
@@ -957,6 +1061,10 @@
     /* První položka odpovídá systémovým klávesnicím: to, co uživatel
        skutečně napsal, zůstává vždy přijatelné i bez automatické opravy. */
     pridej(prefix, 100000);
+
+    kontextoveNavrhy(predchoziSlovo, layout, prefix).forEach((word, index) => {
+      pridej(word, 90000 - index * 10);
+    });
 
     Object.values(mapa).forEach((entry) => {
       const count = Number(entry?.count || 0);
@@ -1447,9 +1555,11 @@
     const rightMatch = right.match(/^[\p{L}\p{M}\p{N}_'-]+/u);
     const prefix = leftMatch?.[0] || "";
     const suffix = rightMatch?.[0] || "";
+    const predSlovem = left.slice(0, Math.max(0, left.length - prefix.length));
     return {
       prefix,
       celeSlovo: `${prefix}${suffix}`,
+      predchoziSlovo: posledniSlovoZTextu(predSlovem),
       zacatek: state.start - prefix.length,
       konec: state.end + suffix.length
     };
@@ -1709,9 +1819,11 @@
     const rightMatch = right.match(/^[\p{L}\p{M}\p{N}_'-]+/u);
     const prefix = leftMatch?.[0] || "";
     const suffix = rightMatch?.[0] || "";
+    const predSlovem = left.slice(0, Math.max(0, left.length - prefix.length));
     return {
       prefix,
       celeSlovo: `${prefix}${suffix}`,
+      predchoziSlovo: posledniSlovoZTextu(predSlovem),
       zacatek: state.start - prefix.length,
       konec: state.end + suffix.length
     };
@@ -2640,7 +2752,13 @@
   function suggestionAction(value) {
     const navrh = String(value || "").trim();
     if (!navrh) return;
+    const kontext = jeAktivniTextovePole()
+      ? ziskejKontextTextovehoPole()
+      : jeAktivniNazev()
+        ? ziskejKontextNazvu()
+        : core()?.ziskejKontextVlastniKlavesnice?.();
     naucSlovo(navrh, 4);
+    if (kontext?.predchoziSlovo) naucDvojici(kontext.predchoziSlovo, navrh, 4);
     commandCore("suggestion", navrh);
     aktualizujNavrhy();
   }
@@ -3943,6 +4061,7 @@
     migrujLegacySlovnikProVlastnika();
     naucenaSlova = nactiNaucenaSlova();
     kandidatiSlov = nactiKandidatySlov();
+    nauceneDvojice = nactiNauceneDvojice();
     aktualizujNavrhy();
 
     window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
