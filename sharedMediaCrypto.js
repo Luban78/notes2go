@@ -1,6 +1,6 @@
 /* ============================================================
    LubaNote – SHARED MEDIA E2E IDENTITY V1
-   PATCH 653A
+   PATCH 653A + 653B + 653C
    ------------------------------------------------------------
    - každý účet má jeden ECDH P-256 pár pro bezpečné předávání
      klíčů konkrétních sdílených poznámek,
@@ -26,6 +26,7 @@
   let identita = null;
   let otevrenaDbPromise = null;
   let pripravaPromise = null;
+  const noteKeyCache = new Map();
 
   function diag(text) {
     window.LubaNoteStartupDiag?.zapis?.("SHARED-CRYPTO", text);
@@ -459,6 +460,205 @@
     return bytes;
   }
 
+  async function nactiMojiObalkuZeServeru(noteId) {
+    const klient = await zajistiSupabase();
+    if (!klient) return { ok: false, reason: "cloud_unavailable" };
+
+    const { data, error } = await klient.rpc(
+      "lubanote_get_my_shared_note_key_envelope",
+      { p_note_id: noteId }
+    );
+
+    if (error) throw error;
+    if (data?.ok !== true) {
+      return { ok: false, reason: data?.reason || "shared_note_key_read_failed" };
+    }
+
+    return {
+      ok: true,
+      hasEnvelope: data?.has_envelope === true,
+      envelope: data?.envelope || null,
+      keyVersion: Number(data?.key_version) || 1
+    };
+  }
+
+  async function ulozObalkuNaServer(noteId, recipientUserId, envelope) {
+    const klient = await zajistiSupabase();
+    if (!klient) return { ok: false, reason: "cloud_unavailable" };
+
+    const { data, error } = await klient.rpc(
+      "lubanote_put_shared_note_key_envelope",
+      {
+        p_note_id: noteId,
+        p_recipient_user_id: recipientUserId,
+        p_key_version: 1,
+        p_envelope: envelope
+      }
+    );
+
+    if (error) throw error;
+    if (data?.ok !== true) {
+      return { ok: false, reason: data?.reason || "shared_note_key_write_failed" };
+    }
+
+    return {
+      ok: true,
+      inserted: data?.inserted === true
+    };
+  }
+
+  async function nactiPrijemceNoteKey(noteId) {
+    const klient = await zajistiSupabase();
+    if (!klient) return { ok: false, reason: "cloud_unavailable" };
+
+    const { data, error } = await klient.rpc(
+      "lubanote_get_shared_note_key_recipients",
+      { p_note_id: noteId }
+    );
+
+    if (error) throw error;
+    if (data?.ok !== true) {
+      return { ok: false, reason: data?.reason || "shared_note_key_recipients_failed" };
+    }
+
+    return {
+      ok: true,
+      ownerUserId: String(data?.owner_user_id || ""),
+      recipients: Array.isArray(data?.recipients) ? data.recipients : []
+    };
+  }
+
+  async function nactiNoteKeyProPoznamku(noteId) {
+    const id = String(noteId || "").trim();
+    if (!id) return { ok: false, reason: "note_id_required" };
+
+    const cached = noteKeyCache.get(id);
+    if (cached instanceof Uint8Array && cached.length === 32) {
+      return { ok: true, cached: true, noteKey: new Uint8Array(cached) };
+    }
+
+    const ready = await zajistiIdentitu();
+    if (ready?.ok !== true || !jeIdentitaPripravena()) {
+      return { ok: false, reason: ready?.reason || "identity_not_ready" };
+    }
+
+    const server = await nactiMojiObalkuZeServeru(id);
+    if (server?.ok !== true) return server;
+    if (!server.hasEnvelope || !server.envelope) {
+      diag(`NOTE KEY LOAD | MISSING | note=${id}`);
+      return { ok: false, reason: "shared_note_key_envelope_missing" };
+    }
+
+    const noteKey = await rozbalNoteKey(id, server.envelope);
+    noteKeyCache.set(id, new Uint8Array(noteKey));
+    diag(`NOTE KEY LOAD | OK | note=${id}`);
+
+    return { ok: true, noteKey: new Uint8Array(noteKey) };
+  }
+
+  async function zajistiObalkyProPoznamku(noteId) {
+    const id = String(noteId || "").trim();
+    if (!id) return { ok: false, reason: "note_id_required" };
+
+    const ready = await zajistiIdentitu();
+    if (ready?.ok !== true || !jeIdentitaPripravena()) {
+      return { ok: false, reason: ready?.reason || "identity_not_ready" };
+    }
+
+    const recipientsResult = await nactiPrijemceNoteKey(id);
+    if (recipientsResult?.ok !== true) return recipientsResult;
+
+    if (recipientsResult.ownerUserId !== identita.userId) {
+      return { ok: false, reason: "not_owner" };
+    }
+
+    let noteKey = null;
+    const moje = await nactiMojiObalkuZeServeru(id);
+    if (moje?.ok !== true) return moje;
+
+    if (moje.hasEnvelope && moje.envelope) {
+      noteKey = await rozbalNoteKey(id, moje.envelope);
+    } else {
+      const ownerRecipient = recipientsResult.recipients.find(
+        (item) => String(item?.user_id || "") === identita.userId
+      );
+
+      if (!ownerRecipient?.public_key_jwk) {
+        return { ok: false, reason: "owner_public_key_missing" };
+      }
+
+      const kandidat = vytvorNoteKey();
+      const selfEnvelope = await zabalNoteKeyProUzivatele(
+        id,
+        kandidat,
+        ownerRecipient.public_key_jwk
+      );
+      const ulozeni = await ulozObalkuNaServer(
+        id,
+        identita.userId,
+        selfEnvelope
+      );
+      if (ulozeni?.ok !== true) return ulozeni;
+
+      if (ulozeni.inserted === true) {
+        noteKey = kandidat;
+      } else {
+        // Souběh dvou owner zařízení: první self obálka je kanonická.
+        const kanonicka = await nactiMojiObalkuZeServeru(id);
+        if (!kanonicka?.hasEnvelope || !kanonicka.envelope) {
+          return { ok: false, reason: "canonical_owner_envelope_missing" };
+        }
+        noteKey = await rozbalNoteKey(id, kanonicka.envelope);
+      }
+    }
+
+    noteKeyCache.set(id, new Uint8Array(noteKey));
+
+    let added = 0;
+    let already = 0;
+    let missingIdentity = 0;
+
+    for (const recipient of recipientsResult.recipients) {
+      const recipientUserId = String(recipient?.user_id || "");
+      if (!recipientUserId || recipientUserId === identita.userId) continue;
+
+      if (recipient?.has_envelope === true) {
+        already += 1;
+        continue;
+      }
+
+      if (recipient?.identity_ready !== true || !recipient?.public_key_jwk) {
+        missingIdentity += 1;
+        continue;
+      }
+
+      const envelope = await zabalNoteKeyProUzivatele(
+        id,
+        noteKey,
+        recipient.public_key_jwk
+      );
+      const ulozeni = await ulozObalkuNaServer(id, recipientUserId, envelope);
+      if (ulozeni?.ok !== true) {
+        return ulozeni;
+      }
+      if (ulozeni.inserted === true) added += 1;
+      else already += 1;
+    }
+
+    diag(
+      `NOTE KEY SERVER | OK | note=${id} added=${added} already=${already} missingIdentity=${missingIdentity}`
+    );
+
+    return {
+      ok: true,
+      noteKey: new Uint8Array(noteKey),
+      added,
+      already,
+      missingIdentity,
+      recipients: recipientsResult.recipients.length
+    };
+  }
+
   async function selfTestNoteKey() {
     const ready = await zajistiIdentitu();
     if (ready?.ok !== true || !jeIdentitaPripravena()) {
@@ -476,6 +676,7 @@
   function resetPameti() {
     aktivniUserId = null;
     identita = null;
+    noteKeyCache.clear();
   }
 
   window.addEventListener("lubanote:account-active", (event) => {
@@ -497,7 +698,7 @@
   window.addEventListener("lubanote:account-blocked", resetPameti);
 
   window.LubaNoteSharedMediaCrypto = Object.freeze({
-    verze: "SHARED-MEDIA-E2E-NOTEKEY-653B",
+    verze: "SHARED-MEDIA-E2E-ENVELOPES-653C",
     zajistiIdentitu,
     jeIdentitaPripravena,
     ziskejVerejnyKlic,
@@ -505,6 +706,8 @@
     vytvorNoteKey,
     zabalNoteKeyProUzivatele,
     rozbalNoteKey,
+    nactiNoteKeyProPoznamku,
+    zajistiObalkyProPoznamku,
     selfTestNoteKey
   });
 })();

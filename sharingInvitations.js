@@ -835,6 +835,26 @@
       renderPending(
         ziskejRadky(pendingResponse.data, ["invitations", "pending"])
       );
+
+      /* PATCH 653C – owner po načtení vztahů připraví jednu E2E
+         note_key obálku pro sebe, aktivní collaboratory i pending
+         invitee s již vytvořenou Shared crypto identitou. */
+      try {
+        const cryptoResult = await window.LubaNoteSharedMediaCrypto
+          ?.zajistiObalkyProPoznamku?.(noteIdPriStartu);
+
+        if (cryptoResult?.ok === false && cryptoResult?.reason !== "not_owner") {
+          console.warn(
+            "Sdílení: Shared note_key obálky se nepodařilo připravit.",
+            cryptoResult
+          );
+        }
+      } catch (cryptoError) {
+        console.warn(
+          "Sdílení: Shared note_key obálky se nepodařilo připravit.",
+          cryptoError
+        );
+      }
     } catch (error) {
       console.error("Sdílení: Share modal data se nepodařilo načíst.", error);
       renderPrazdny(
@@ -1199,6 +1219,26 @@
               });
             } catch (_) {
               // Membership už je potvrzený serverem; cache se obnoví později.
+            }
+
+            /* 653C – pokud owner připravil obálku už při pozvánce,
+               příjemce ji po ACCEPT hned rozbalí a ověří skutečnou
+               serverovou cestu. Média se tím ještě nezapínají. */
+            try {
+              const keyResult = await window.LubaNoteSharedMediaCrypto
+                ?.nactiNoteKeyProPoznamku?.(invitationNoteId);
+
+              if (keyResult?.ok === false) {
+                console.warn(
+                  "Sdílení: Shared note_key zatím není pro příjemce dostupný.",
+                  keyResult
+                );
+              }
+            } catch (cryptoError) {
+              console.warn(
+                "Sdílení: Shared note_key se po přijetí nepodařilo načíst.",
+                cryptoError
+              );
             }
 
             window.dispatchEvent(
