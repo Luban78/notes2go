@@ -1189,7 +1189,7 @@ body.documents-docx-viewer-open {
 
 .documentsDocxViewerHeader {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 9px;
   align-items: center;
   min-height: 58px;
@@ -1222,6 +1222,31 @@ body.documents-docx-viewer-open {
 .documentsDocxViewerClose:focus-visible {
   border-color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+  outline: none;
+}
+
+.documentsDocxViewerCopy {
+  align-self: center;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.documentsDocxViewerCopy[hidden] {
+  display: none !important;
+}
+
+.documentsDocxViewerCopy:active,
+.documentsDocxViewerCopy:focus-visible {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface));
   outline: none;
 }
 
@@ -2823,6 +2848,18 @@ body.documents-epub-viewer-open {
   overflow-wrap: anywhere;
   word-break: normal;
   tab-size: 2;
+  cursor: text;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: auto;
+}
+
+.documentsDocxViewerContent.is-sql,
+.documentsDocxViewerContent.is-sql * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
 }
 
 .documentsDocxViewer.is-fullscreen .documentsDocxViewerContent.is-sql {

@@ -79,6 +79,7 @@
   let docxViewerObjectUrls = [];
   let docxAndroidBackZapojen = false;
   let docxViewerFullscreen = false;
+  let docxViewerSqlText = '';
 
   let epubViewerPrvky = null;
   let epubViewerOtevren = false;
@@ -2501,6 +2502,7 @@
           <strong></strong>
           <small>WORD · POUZE ČTENÍ</small>
         </div>
+        <button type="button" class="documentsDocxViewerCopy" aria-label="Kopírovat celý SQL skript" hidden>📋 Kopírovat</button>
       </header>
       <main class="documentsDocxViewerBody">
         <div class="documentsDocxViewerLoading" hidden>
@@ -2512,6 +2514,7 @@
 
     document.body.appendChild(overlay);
     const close = overlay.querySelector('.documentsDocxViewerClose');
+    const copy = overlay.querySelector('.documentsDocxViewerCopy');
     const title = overlay.querySelector('.documentsDocxViewerTitle strong');
     const subtitle = overlay.querySelector('.documentsDocxViewerTitle small');
     const body = overlay.querySelector('.documentsDocxViewerBody');
@@ -2520,6 +2523,7 @@
     const content = overlay.querySelector('.documentsDocxViewerContent');
 
     close.addEventListener('click', zavriDocxViewer);
+    copy.addEventListener('click', () => { void kopirujSqlViewer(); });
 
     /*
      * PATCH 642 – stejné gesto jako u PDF vieweru:
@@ -2585,6 +2589,7 @@
     docxViewerPrvky = {
       overlay,
       close,
+      copy,
       title,
       subtitle,
       body,
@@ -2593,6 +2598,51 @@
       content
     };
     return docxViewerPrvky;
+  }
+
+  async function kopirujSqlViewer() {
+    const text = String(docxViewerSqlText || '');
+    if (!text) {
+      zobrazChybu('SQL', 'Není co kopírovat.');
+      return;
+    }
+
+    let zkopirovano = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        zkopirovano = true;
+      }
+    } catch (_error) {}
+
+    if (!zkopirovano) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.setAttribute('aria-hidden', 'true');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus({ preventScroll: true });
+      textarea.select();
+      try {
+        zkopirovano = document.execCommand('copy') === true;
+      } catch (_error) {
+        zkopirovano = false;
+      }
+      textarea.remove();
+    }
+
+    window.getSelection?.()?.removeAllRanges?.();
+    if (zkopirovano) {
+      zobrazZpravu('SQL', 'Celý SQL skript byl zkopírován.');
+      window.LubaNoteStartupDiag?.zapis?.('SQL', `COPY | OK | chars=${text.length}`);
+    } else {
+      zobrazChybu('SQL', 'Kopírování se nepodařilo. Zkus označit text dlouhým stiskem.');
+      window.LubaNoteStartupDiag?.zapis?.('SQL', 'COPY | ERROR');
+    }
   }
 
   function nastavDocViewerFullscreen(ano) {
@@ -2607,6 +2657,8 @@
     nastavDocViewerFullscreen(false);
     docxViewerPrvky.overlay.hidden = true;
     docxViewerPrvky.loading.hidden = true;
+    docxViewerPrvky.copy.hidden = true;
+    docxViewerSqlText = '';
     docxViewerPrvky.content.innerHTML = '';
     docxViewerPrvky.content.classList.remove('is-legacy-doc', 'is-sql');
     document.body.classList.remove('documents-docx-viewer-open');
@@ -2623,6 +2675,8 @@
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'dokument.docx';
     prvky.subtitle.textContent = 'DOCX · POUZE ČTENÍ';
+    prvky.copy.hidden = true;
+    docxViewerSqlText = '';
     prvky.loadingText.textContent = 'Otevírám DOCX…';
     prvky.content.classList.remove('is-legacy-doc', 'is-sql');
     prvky.content.innerHTML = '';
@@ -2658,6 +2712,8 @@
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'dokument.doc';
     prvky.subtitle.textContent = 'DOC · POUZE ČTENÍ';
+    prvky.copy.hidden = true;
+    docxViewerSqlText = '';
     prvky.loadingText.textContent = 'Otevírám DOC…';
     prvky.content.classList.remove('is-sql');
     prvky.content.classList.add('is-legacy-doc');
@@ -2693,6 +2749,8 @@
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'skript.sql';
     prvky.subtitle.textContent = 'SQL · POUZE ČTENÍ';
+    prvky.copy.hidden = true;
+    docxViewerSqlText = '';
     prvky.loadingText.textContent = 'Otevírám SQL…';
     prvky.content.classList.remove('is-legacy-doc');
     prvky.content.classList.add('is-sql');
@@ -2717,6 +2775,9 @@
         'SQL',
         `OPEN | text | source=${maSqlText ? 'sqlText' : 'blob'} chars=${text.length} head=${JSON.stringify(text.slice(0, 40))}`
       );
+
+      docxViewerSqlText = text;
+      prvky.copy.hidden = !text;
 
       if (text) {
         const code = document.createElement('div');
