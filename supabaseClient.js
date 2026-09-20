@@ -3478,7 +3478,81 @@ window.addEventListener(
   }
 );
 
+async function nactiZmenyOsobnihoSlovniku650(afterRevision = 0, limit = 500) {
+  if (!navigator.onLine) {
+    return { ok: false, reason: "offline", rows: [] };
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.id || !supabaseClient) {
+    return { ok: false, reason: "no-session", rows: [] };
+  }
+
+  const safeRevision = Math.max(0, Number(afterRevision || 0));
+  const safeLimit = Math.max(1, Math.min(500, Number(limit || 500)));
+
+  const { data, error } = await supabaseClient
+    .from("lubanote_personal_dictionary")
+    .select("language,normalized_word,word,usage_count,deleted,revision,updated_at")
+    .eq("user_id", user.id)
+    .gt("revision", safeRevision)
+    .order("revision", { ascending: true })
+    .limit(safeLimit);
+
+  if (error) throw error;
+
+  return {
+    ok: true,
+    userId: user.id,
+    rows: Array.isArray(data) ? data : []
+  };
+}
+
+async function ulozZmenyOsobnihoSlovniku650(changes = []) {
+  if (!navigator.onLine) {
+    return { ok: false, reason: "offline", rows: [] };
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.id || !supabaseClient) {
+    return { ok: false, reason: "no-session", rows: [] };
+  }
+
+  const rows = (Array.isArray(changes) ? changes : [])
+    .slice(0, 200)
+    .map((row) => ({
+      user_id: user.id,
+      language: String(row?.language || "").trim().slice(0, 12),
+      normalized_word: String(row?.normalizedWord || row?.normalized_word || "").trim().slice(0, 80),
+      word: String(row?.word || row?.normalizedWord || row?.normalized_word || "").trim().slice(0, 80),
+      usage_count: Math.max(0, Math.min(9999, Number(row?.count ?? row?.usage_count ?? 0))),
+      deleted: row?.deleted === true
+    }))
+    .filter((row) => row.language && row.normalized_word && row.word);
+
+  if (rows.length === 0) {
+    return { ok: true, userId: user.id, rows: [] };
+  }
+
+  const { data, error } = await supabaseClient
+    .from("lubanote_personal_dictionary")
+    .upsert(rows, {
+      onConflict: "user_id,language,normalized_word"
+    })
+    .select("language,normalized_word,word,usage_count,deleted,revision,updated_at");
+
+  if (error) throw error;
+
+  return {
+    ok: true,
+    userId: user.id,
+    rows: Array.isArray(data) ? data : []
+  };
+}
+
 window.LubaNoteSupabase = {
+  nactiZmenyOsobnihoSlovniku650,
+  ulozZmenyOsobnihoSlovniku650,
   pripravClient: pripravSupabaseClient,
   jePripraven: () => Boolean(supabaseClient),
   maPredchoziPrihlaseni:
