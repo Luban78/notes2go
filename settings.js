@@ -818,6 +818,62 @@ openReminderDelaySettingsButton?.addEventListener(
       : "LubaKeyboard";
   }
 
+  const openPersonalDictionaryButton = document.getElementById("openPersonalDictionaryButton");
+  const personalDictionaryModal = document.getElementById("personalDictionaryModal");
+  const closePersonalDictionaryButton = document.getElementById("closePersonalDictionaryButton");
+  const personalDictionaryLanguage = document.getElementById("personalDictionaryLanguage");
+  const personalDictionaryInput = document.getElementById("personalDictionaryInput");
+  const personalDictionarySearch = document.getElementById("personalDictionarySearch");
+  const personalDictionaryAddButton = document.getElementById("personalDictionaryAddButton");
+  const personalDictionaryList = document.getElementById("personalDictionaryList");
+  const personalDictionaryEmpty = document.getElementById("personalDictionaryEmpty");
+  const personalDictionaryCount = document.getElementById("personalDictionaryCount");
+  let upravovaneSlovo = null;
+
+  function apiSlovniku() { return window.LubaNoteKeyboard || null; }
+  function aktualizujPocetSlovniku() {
+    if (!personalDictionaryCount) return;
+    const api = apiSlovniku();
+    const count = (api?.ziskejMujSlovnik?.("cs")?.length || 0) + (api?.ziskejMujSlovnik?.("en")?.length || 0);
+    personalDictionaryCount.textContent = count ? `${count} slov` : "Spravovat";
+  }
+  function zrusEditaciSlova() {
+    upravovaneSlovo = null;
+    if (personalDictionaryInput) { personalDictionaryInput.value = ""; personalDictionaryInput.placeholder = "Přidat vlastní slovo…"; }
+    if (personalDictionaryAddButton) personalDictionaryAddButton.textContent = "Přidat";
+  }
+  function vykresliMujSlovnik() {
+    if (!personalDictionaryList) return;
+    const api = apiSlovniku(); const lang = personalDictionaryLanguage?.value || "cs";
+    const hledat = String(personalDictionarySearch?.value || "").trim().toLocaleLowerCase(lang);
+    const words = (api?.ziskejMujSlovnik?.(lang) || []).filter((entry) => !hledat || entry.word.toLocaleLowerCase(lang).includes(hledat));
+    personalDictionaryList.replaceChildren();
+    words.forEach((entry) => {
+      const row = document.createElement("div"); row.className = "personalDictionaryRow";
+      const word = document.createElement("span"); word.className = "personalDictionaryWord"; word.textContent = entry.word;
+      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Upravit";
+      edit.addEventListener("click", () => { upravovaneSlovo = entry.word; personalDictionaryInput.value = entry.word; personalDictionaryAddButton.textContent = "Uložit"; personalDictionaryInput.focus(); });
+      const del = document.createElement("button"); del.type = "button"; del.textContent = "Smazat";
+      del.addEventListener("click", () => { api?.smazSlovoZMehoSlovniku?.(entry.word, lang); if (upravovaneSlovo === entry.word) zrusEditaciSlova(); vykresliMujSlovnik(); aktualizujPocetSlovniku(); });
+      row.append(word, edit, del); personalDictionaryList.append(row);
+    });
+    if (personalDictionaryEmpty) personalDictionaryEmpty.hidden = words.length > 0;
+  }
+  function otevriMujSlovnik() { if (!personalDictionaryModal) return; personalDictionaryModal.hidden = false; personalDictionarySearch.value = ""; zrusEditaciSlova(); vykresliMujSlovnik(); }
+  function zavriMujSlovnik() { if (personalDictionaryModal) personalDictionaryModal.hidden = true; window.LubaNoteKeyboard?.skryj?.(); }
+  openPersonalDictionaryButton?.addEventListener("click", otevriMujSlovnik);
+  closePersonalDictionaryButton?.addEventListener("click", zavriMujSlovnik);
+  personalDictionaryLanguage?.addEventListener("change", () => { zrusEditaciSlova(); vykresliMujSlovnik(); });
+  personalDictionarySearch?.addEventListener("input", vykresliMujSlovnik);
+  personalDictionaryAddButton?.addEventListener("click", () => {
+    const api = apiSlovniku(); const lang = personalDictionaryLanguage?.value || "cs"; const word = String(personalDictionaryInput?.value || "").trim();
+    if (!word) return;
+    const ok = upravovaneSlovo ? api?.upravSlovoVMehoSlovniku?.(upravovaneSlovo, word, lang) : api?.pridejSlovoDoMehoSlovniku?.(word, lang);
+    if (!ok) return; zrusEditaciSlova(); vykresliMujSlovnik(); aktualizujPocetSlovniku();
+  });
+  window.addEventListener("lubanote:dictionary-change", aktualizujPocetSlovniku);
+  setTimeout(aktualizujPocetSlovniku, 0);
+
   function otevriModalKlavesnice() {
     if (typeof window.otevriVyberovyModal !== "function") {
       console.error("Chybí choiceModal.js – výběr klávesnice nelze otevřít.");

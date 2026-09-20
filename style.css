@@ -11974,3 +11974,19 @@ body.lubaCardDragMode .app {
     padding: 12px;
   }
 }
+
+
+/* PATCH 649A – správa osobního slovníku LubaKeyboard */
+.personalDictionaryModal[hidden] { display:none !important; }
+.personalDictionaryModal { position:fixed; inset:0; z-index:12050; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.52); }
+.personalDictionaryContent { width:min(620px,100%); max-height:min(78vh,720px); display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+.personalDictionaryHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.personalDictionaryHeader h2 { margin:0; }
+.personalDictionaryToolbar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; }
+.personalDictionaryToolbar textarea, #personalDictionarySearch, .personalDictionaryToolbar select { min-width:0; border-radius:10px; padding:10px 12px; }
+.personalDictionaryList { min-height:80px; overflow:auto; display:flex; flex-direction:column; gap:6px; }
+.personalDictionaryRow { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; padding:8px 10px; border-radius:10px; background:rgba(127,127,127,.10); }
+.personalDictionaryWord { min-width:0; overflow-wrap:anywhere; font-weight:600; }
+.personalDictionaryRow button { padding:7px 9px; }
+.personalDictionaryEmpty { padding:18px 8px; text-align:center; opacity:.72; }
+@media (max-width:520px) { .personalDictionaryModal { align-items:flex-start; padding:10px; padding-bottom:calc(var(--luba-keyboard-height,0px) + 10px); } .personalDictionaryContent { max-height:calc(100dvh - var(--luba-keyboard-height,0px) - 20px); } .personalDictionaryToolbar { grid-template-columns:1fr auto; } .personalDictionaryToolbar select { grid-column:1/-1; } }

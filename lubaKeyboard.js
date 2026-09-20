@@ -23,6 +23,7 @@
   const ULOZ_REZIM = "lubanote_lubakeyboard_mode_v1";
   const ULOZ_RECENT = "lubanote_lubakeyboard_recent_v1";
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
+  const ULOZ_KANDIDATY = "lubanote_lubakeyboard_word_candidates_v1";
   const ULOZ_ZDROJ = "lubanote_lubakeyboard_input_source_v1";
 
   /* PATCH 445 – základ predikčního řádku.
@@ -390,6 +391,7 @@
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
   let naucenaSlova = nactiNaucenaSlova();
+  let kandidatiSlov = nactiKandidatySlov();
 
   function core() {
     return window.LubaNoteEditorV2 || null;
@@ -527,6 +529,50 @@
     try { localStorage.setItem(ULOZ_NAVRHY, JSON.stringify(naucenaSlova)); } catch (_error) {}
   }
 
+  function nactiKandidatySlov() {
+    try {
+      const value = JSON.parse(localStorage.getItem(ULOZ_KANDIDATY) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch (_error) { return {}; }
+  }
+
+  function ulozKandidatySlov() {
+    try { localStorage.setItem(ULOZ_KANDIDATY, JSON.stringify(kandidatiSlov)); } catch (_error) {}
+  }
+
+  function jeVeVestavenemSlovniku(slovo, layout = aktualniLayout()) {
+    const key = lowerLocale(slovo, layout);
+    return (SLOVNIK_NAVRHU[layout.id] || []).some((item) => lowerLocale(item, layout) === key);
+  }
+
+  function vzdalenostSlov(a, b, limit = 2) {
+    const aa = Array.from(bezDiakritiky(String(a || "").toLowerCase()));
+    const bb = Array.from(bezDiakritiky(String(b || "").toLowerCase()));
+    if (Math.abs(aa.length - bb.length) > limit) return limit + 1;
+    let prev = Array.from({ length: bb.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= aa.length; i += 1) {
+      const cur = [i]; let rowMin = cur[0];
+      for (let j = 1; j <= bb.length; j += 1) {
+        const cost = aa[i - 1] === bb[j - 1] ? 0 : 1;
+        cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+        rowMin = Math.min(rowMin, cur[j]);
+      }
+      if (rowMin > limit) return limit + 1;
+      prev = cur;
+    }
+    return prev[bb.length];
+  }
+
+  function vypadaJakoPreklep(slovo, layout = aktualniLayout()) {
+    const key = lowerLocale(slovo, layout);
+    if (key.length < 4) return false;
+    const limit = key.length >= 7 ? 2 : 1;
+    return (SLOVNIK_NAVRHU[layout.id] || []).some((item) => {
+      const other = lowerLocale(item, layout);
+      return other !== key && vzdalenostSlov(key, other, limit) <= limit;
+    });
+  }
+
   function lowerLocale(value, layout = aktualniLayout()) {
     try { return String(value || "").toLocaleLowerCase(layout.locale || undefined); }
     catch (_error) { return String(value || "").toLowerCase(); }
@@ -544,22 +590,41 @@
     catch (_error) { return /^[A-Za-zÀ-ž][A-Za-zÀ-ž'’\-]*$/.test(slovo); }
   }
 
-  function naucSlovo(value, bonus = 1) {
+  function naucSlovo(value, bonus = 1, options = {}) {
     const layout = aktualniLayout();
     const slovo = String(value || "").trim();
-    if (!jeSlovoProUceni(slovo)) return;
+    if (!jeSlovoProUceni(slovo)) return false;
     const key = lowerLocale(slovo, layout);
     const id = layout.id || "en";
     const mapa = naucenaSlova[id] && typeof naucenaSlova[id] === "object" ? naucenaSlova[id] : {};
+    const existuje = mapa[key];
+    const vestavene = jeVeVestavenemSlovniku(slovo, layout);
+    const rucni = options.rucni === true;
+
+    if (!existuje && !vestavene && !rucni) {
+      if (vypadaJakoPreklep(slovo, layout)) return false;
+      const kandidati = kandidatiSlov[id] && typeof kandidatiSlov[id] === "object" ? kandidatiSlov[id] : {};
+      const kandidat = kandidati[key] || { word: slovo, count: 0 };
+      kandidat.word = slovo;
+      kandidat.count = Math.min(3, Number(kandidat.count || 0) + 1);
+      kandidati[key] = kandidat;
+      kandidatiSlov[id] = kandidati;
+      ulozKandidatySlov();
+      if (kandidat.count < 3) return false;
+      delete kandidati[key];
+      ulozKandidatySlov();
+    }
+
     mapa[key] = {
       word: slovo,
-      count: Math.min(9999, Number(mapa[key]?.count || 0) + Math.max(1, Number(bonus || 1)))
+      count: Math.min(9999, Number(existuje?.count || 0) + Math.max(1, Number(bonus || 1))),
+      custom: rucni || (!vestavene && existuje?.custom !== false)
     };
-    const entries = Object.entries(mapa)
-      .sort((a, b) => Number(b[1]?.count || 0) - Number(a[1]?.count || 0))
-      .slice(0, 320);
-    naucenaSlova[id] = Object.fromEntries(entries);
+    naucenaSlova[id] = Object.fromEntries(Object.entries(mapa)
+      .sort((a, b) => Number(b[1]?.count || 0) - Number(a[1]?.count || 0)).slice(0, 5000));
     ulozNaucenaSlova();
+    window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", { detail: { language: id } }));
+    return true;
   }
 
   function naucAktualniSlovo() {
@@ -3557,7 +3622,48 @@
     naplanujKontroluModalu();
   } catch (_error) {}
 
+  function ziskejMujSlovnik(languageId = null) {
+    const id = languageId || aktualniLayout().id || "cs";
+    const layout = LAYOUTS[id] || aktualniLayout();
+    return Object.values(naucenaSlova[id] || {})
+      .filter((entry) => entry?.custom === true || (entry?.custom == null && !jeVeVestavenemSlovniku(entry?.word, layout)))
+      .map((entry) => ({ word: String(entry.word || ""), count: Number(entry.count || 0) }))
+      .filter((entry) => entry.word)
+      .sort((a, b) => a.word.localeCompare(b.word, layout.locale || undefined));
+  }
+
+  function pridejSlovoDoMehoSlovniku(word, languageId = null) {
+    const puvodni = layoutId;
+    if (languageId && LAYOUTS[languageId]) layoutId = languageId;
+    const ok = naucSlovo(word, 5, { rucni: true });
+    layoutId = puvodni;
+    renderSuggestions();
+    return ok;
+  }
+
+  function smazSlovoZMehoSlovniku(word, languageId = null) {
+    const id = languageId || aktualniLayout().id || "cs";
+    const layout = LAYOUTS[id] || aktualniLayout();
+    const key = lowerLocale(word, layout);
+    if (!naucenaSlova[id]?.[key]) return false;
+    delete naucenaSlova[id][key];
+    if (kandidatiSlov[id]) delete kandidatiSlov[id][key];
+    ulozNaucenaSlova(); ulozKandidatySlov(); renderSuggestions();
+    window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", { detail: { language: id } }));
+    return true;
+  }
+
+  function upravSlovoVMehoSlovniku(oldWord, newWord, languageId = null) {
+    const id = languageId || aktualniLayout().id || "cs";
+    smazSlovoZMehoSlovniku(oldWord, id);
+    return pridejSlovoDoMehoSlovniku(newWord, id);
+  }
+
   window.LubaNoteKeyboard = Object.freeze({
+    ziskejMujSlovnik,
+    pridejSlovoDoMehoSlovniku,
+    smazSlovoZMehoSlovniku,
+    upravSlovoVMehoSlovniku,
     verze: "MODAL-CLOSE-533",
     zobraz,
     skryj,
