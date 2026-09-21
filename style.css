@@ -12393,3 +12393,81 @@ body.lubaCardDragMode .app {
     justify-self: end;
   }
 }
+
+/* ============================================================
+   PATCH 657A – PLÁN / JEDNOTNÁ LIŠTA DNE + VZDUCH U IKON
+   Android: datum, týden a + tvoří jeden společný kompaktní řádek.
+   Datum už není široké samostatné tlačítko s prázdným prostorem.
+   ============================================================ */
+@media (max-width: 899px) {
+  .calendarAgendaHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 4px 5px 4px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+  }
+
+  .calendarSelectedDateButton {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100% - 132px);
+    height: 42px;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .calendarSelectedDateButton:active {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+
+  .calendarWeekNumber {
+    flex: 0 0 auto;
+    height: 42px;
+    margin: 0;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    transform: none;
+    white-space: nowrap;
+  }
+
+  .calendarAgendaHeader .plannerAddTaskButton {
+    flex: 0 0 44px;
+    margin: 0;
+  }
+
+  .calendarAgendaText {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .calendarAgendaMeta {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+  }
+
+  .calendarAgendaTitle {
+    margin-top: 4px;
+    line-height: 1.2;
+  }
+}
