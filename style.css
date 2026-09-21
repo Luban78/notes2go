@@ -12930,10 +12930,11 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 }
 
 @media (max-width: 720px) {
-  /* Na hlavní ploše Poznámek využijeme o 5 px více výšky.
-     Planner a Dokumenty zůstávají beze změny. */
-  body:has(#notesModuleButton.active) .homeHeader {
-    padding-top: 13px;
+  /* PATCH 658K – globální Y pozice hlavního headeru.
+     Stejný offset musí platit pro Poznámky, Plán i Dokumenty, jinak
+     horní modulová tlačítka při přepínání obrazovek poskakují. */
+  .homeHeader {
+    padding-top: calc(18px + var(--luba-notes-layout-offset-y)) !important;
   }
 
   /* Primární filtry vyplní celý dostupný řádek rovnoměrně. */
@@ -13219,7 +13220,6 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 @media (max-width: 720px) {
   /* Globální rozložení hlavního screenu Poznámky. */
   body:has(#notesModuleButton.active) .homeHeader {
-    padding-top: calc(18px + var(--luba-notes-layout-offset-y)) !important;
     /* 658H: homeHeader měl historicky 12px spodní padding. Ten leží
        mezi posledním řádkem štítků a <main>, takže slider mezery nemohl
        nikdy stáhnout skutečnou mezeru karet pod ~12px. Na Poznámkách
