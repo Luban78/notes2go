@@ -297,6 +297,60 @@
   box-shadow: 0 0 14px rgba(24, 239, 125, 0.25) !important;
 }
 
+
+.ln-dh-notes-export {
+  grid-column: 1 / -1 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 9px !important;
+  padding: 9px 10px !important;
+  border: 1px solid rgba(24, 239, 125, 0.2) !important;
+  border-radius: 12px !important;
+  background: rgba(5, 31, 28, 0.76) !important;
+}
+
+.ln-dh-notes-export-text {
+  min-width: 0 !important;
+}
+
+.ln-dh-notes-export-text strong,
+.ln-dh-notes-export-text small {
+  display: block !important;
+}
+
+.ln-dh-notes-export-text strong {
+  color: #18ef7d !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+.ln-dh-notes-export-text small {
+  margin-top: 2px !important;
+  color: rgba(232, 242, 239, 0.66) !important;
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+}
+
+.ln-dh-notes-export-button {
+  min-height: 38px !important;
+  padding: 7px 10px !important;
+  border-radius: 10px !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+@media (max-width: 520px) {
+  .ln-dh-notes-export {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ln-dh-notes-export-button {
+    width: 100% !important;
+  }
+}
+
 .ln-dh-summary {
   flex: 0 0 auto !important;
   margin: 8px 10px 0 !important;

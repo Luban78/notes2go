@@ -2155,6 +2155,67 @@ async function zkopirujTextRobustne(text) {
 }
 
 
+function vytvorNotesVisualLabExport() {
+  const api = window.LubaNoteNotesVisualTuning;
+
+  if (!api || typeof api.ziskejStav !== "function") {
+    return [
+      "LUBANOTE NOTES VISUAL LAB EXPORT",
+      `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+      `čas: ${new Date().toISOString()}`,
+      "stav: Notes Visual Lab API není dostupné"
+    ].join("\n");
+  }
+
+  let stav = null;
+
+  try {
+    stav = api.ziskejStav();
+  } catch (chyba) {
+    return [
+      "LUBANOTE NOTES VISUAL LAB EXPORT",
+      `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+      `čas: ${new Date().toISOString()}`,
+      `chyba: ${chyba?.message || String(chyba)}`
+    ].join("\n");
+  }
+
+  return [
+    "LUBANOTE NOTES VISUAL LAB EXPORT",
+    `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+    `prostředí: ${prostredi()}`,
+    `téma: ${aktivniTema()}`,
+    `čas: ${new Date().toISOString()}`,
+    "",
+    "AKTUÁLNÍ NASTAVENÍ:",
+    JSON.stringify(stav, null, 2)
+  ].join("\n");
+}
+
+async function zkopirujNotesVisualLab(tlacitko) {
+  const puvodni = tlacitko.textContent;
+  let zkopirovano = false;
+
+  try {
+    zkopirovano = await zkopirujTextRobustne(
+      vytvorNotesVisualLabExport()
+    );
+  } catch (chyba) {
+    console.warn(
+      "Debug Hub: kopírování Notes Visual Lab nastavení selhalo.",
+      chyba
+    );
+  }
+
+  tlacitko.textContent = zkopirovano
+    ? "Nastavení zkopírováno ✓"
+    : "Kopírování selhalo";
+
+  setTimeout(() => {
+    tlacitko.textContent = puvodni;
+  }, 1400);
+}
+
 async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
@@ -2311,6 +2372,14 @@ async function zkopirujTagVdReport(tlacitko) {
           <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
           <button type="button" data-dh="stop">Stop</button>
         </div>
+
+        <section class="ln-dh-notes-export" aria-label="Notes Visual Lab export">
+          <div class="ln-dh-notes-export-text">
+            <strong>Notes Visual Lab – export</strong>
+            <small>Zkopíruje pouze aktuální nastavení vzhledu Poznámek. Žádné účty, tokeny ani jiná data.</small>
+          </div>
+          <button type="button" class="ln-dh-copy ln-dh-notes-export-button" data-dh="copy-notes-visual">Kopírovat nastavení</button>
+        </section>
       </div>
 
       <div class="ln-dh-summary">modul: vypnutý</div>
@@ -2394,6 +2463,11 @@ async function zkopirujTagVdReport(tlacitko) {
 
       if (akce === "copy") {
         zkopirujReport(tlacitko);
+        return;
+      }
+
+      if (akce === "copy-notes-visual") {
+        zkopirujNotesVisualLab(tlacitko);
         return;
       }
 
