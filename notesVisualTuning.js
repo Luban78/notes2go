@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – živé ladění vzhledu hlavní plochy Poznámek
-   PATCH 658C
+   PATCH 658D
 
    Admin-only Visual Lab. Hodnoty jsou lokální pro zařízení.
    Nemění data, sync ani cloud. Po finálním odsouhlasení lze vybrané
@@ -117,7 +117,7 @@
     filtrMezera: [2, 14],
     stitkyMezera: [2, 16],
     radkyMezera: [0, 20],
-    kartySloupceMezera: [2, 20],
+    kartySloupceMezera: [0, 30],
     kartyRadkyMezera: [2, 24]
   };
 

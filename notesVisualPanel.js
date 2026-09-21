@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – plovoucí živé ladění hlavního screenu Poznámky
-   PATCH 658C
+   PATCH 658D
 
    Otevírá se z Admin Dashboardu a zůstává nad hlavním screenem,
    podobně jako Visual Debug. Hodnoty mění pouze lokální tuning API.
@@ -105,7 +105,7 @@
         ${rangeRadek({ id: "ln-nvt-filter-gap", label: "Mezera hlavních filtrů", min: 2, max: 14 })}
         ${rangeRadek({ id: "ln-nvt-row-gap", label: "Mezera filtry ↕ štítky", min: 0, max: 20 })}
         ${rangeRadek({ id: "ln-nvt-tags-gap", label: "Mezera mezi štítky", min: 2, max: 16 })}
-        ${rangeRadek({ id: "ln-nvt-card-col-gap", label: "Mezera sloupců karet", min: 2, max: 20 })}
+        ${rangeRadek({ id: "ln-nvt-card-col-gap", label: "Mezera sloupců karet", min: 0, max: 30 })}
         ${rangeRadek({ id: "ln-nvt-card-row-gap", label: "Mezera řádků karet", min: 2, max: 24 })}
 
         <div class="ln-nvt-actions ln-nvt-actions-bottom">
@@ -252,12 +252,26 @@
     event.preventDefault();
   }
 
+  function hranicePanelu() {
+    const sirka = panel?.offsetWidth || 0;
+    const vyska = panel?.offsetHeight || 0;
+    /* 658D: panel lze odsunout částečně mimo viewport, ale vždy
+       necháme viditelný kus hlavičky, aby šel bezpečně přitáhnout zpět. */
+    const viditelneX = Math.min(72, Math.max(52, Math.round(sirka * 0.2)));
+    const viditelneY = 48;
+    return {
+      minX: Math.min(0, viditelneX - sirka),
+      maxX: Math.max(0, window.innerWidth - viditelneX),
+      minY: 0,
+      maxY: Math.max(0, window.innerHeight - viditelneY)
+    };
+  }
+
   function tahni(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
-    const maxX = Math.max(0, window.innerWidth - panel.offsetWidth);
-    const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
-    const left = Math.min(maxX, Math.max(0, event.clientX - drag.dx));
-    const top = Math.min(maxY, Math.max(0, event.clientY - drag.dy));
+    const lim = hranicePanelu();
+    const left = Math.min(lim.maxX, Math.max(lim.minX, event.clientX - drag.dx));
+    const top = Math.min(lim.maxY, Math.max(lim.minY, event.clientY - drag.dy));
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
     panel.style.right = "auto";
@@ -297,8 +311,9 @@
   function omezDoViewportu() {
     if (!panel || panel.hidden) return;
     const rect = panel.getBoundingClientRect();
-    const left = Math.min(Math.max(0, rect.left), Math.max(0, window.innerWidth - rect.width));
-    const top = Math.min(Math.max(0, rect.top), Math.max(0, window.innerHeight - Math.min(rect.height, window.innerHeight)));
+    const lim = hranicePanelu();
+    const left = Math.min(lim.maxX, Math.max(lim.minX, rect.left));
+    const top = Math.min(lim.maxY, Math.max(lim.minY, rect.top));
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
     panel.style.right = "auto";

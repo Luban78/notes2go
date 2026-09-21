@@ -13186,6 +13186,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   }
 
   body:has(#notesModuleButton.active) .karty {
+    -webkit-column-gap: var(--luba-notes-layout-card-column-gap) !important;
     column-gap: var(--luba-notes-layout-card-column-gap) !important;
   }
 
