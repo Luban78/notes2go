@@ -14,6 +14,9 @@ const calendarMonthTitle =
 const calendarSelectedDate =
   document.getElementById("calendarSelectedDate");
 
+const calendarSelectedDateText =
+  document.getElementById("calendarSelectedDateText");
+
 const calendarDayItems =
   document.getElementById("calendarDayItems");
 
@@ -267,6 +270,7 @@ calendarSelectedDateButton?.addEventListener(
 
     if (dayDetailTitle) {
       dayDetailTitle.textContent =
+        calendarSelectedDateText?.textContent ||
         calendarSelectedDateButton.textContent;
     }
 
@@ -577,14 +581,19 @@ document.addEventListener("pointerdown", (event) => {
 
 
 function formatCalendarDate(date) {
-  return date.toLocaleDateString(
-    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
-    {
-      weekday: "long",
-      day: "numeric",
-      month: "numeric"
-    }
+  const locale =
+    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ";
+
+  const weekday = date.toLocaleDateString(
+    locale,
+    { weekday: "long" }
   );
+
+  const normalizedWeekday = weekday
+    ? weekday.charAt(0).toUpperCase() + weekday.slice(1)
+    : "";
+
+  return `${normalizedWeekday} ${date.getDate()}. ${date.getMonth() + 1}. ${date.getFullYear()}`;
 }
 
 
@@ -1079,10 +1088,13 @@ function renderCalendarItems(targetElement) {
 }
 
 function renderCalendarAgenda() {
-  calendarSelectedDate.textContent =
-    formatCalendarDate(
-      calendarSelectedDay
-    );
+  if (calendarSelectedDateText) {
+    calendarSelectedDateText.textContent =
+      formatCalendarDate(calendarSelectedDay);
+  } else if (calendarSelectedDate) {
+    calendarSelectedDate.textContent =
+      formatCalendarDate(calendarSelectedDay);
+  }
     if (calendarWeekNumber) {
   const cisloTydne =
     ziskejCisloTydne(calendarSelectedDay);

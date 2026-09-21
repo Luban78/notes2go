@@ -12471,3 +12471,168 @@ body.lubaCardDragMode .app {
     line-height: 1.2;
   }
 }
+
+
+/* ============================================================
+   PATCH 657B – PLÁN / LIŠTA 1:1 PODLE SCHVÁLENÉHO NÁVRHU
+   Jedna lišta: ikona + datum | týden | hranaté +.
+   ============================================================ */
+@media (max-width: 899px) {
+  .calendarAgenda {
+    margin-top: 14px;
+  }
+
+  .calendarAgendaHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 44px;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 62px;
+    padding: 8px 9px 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+  }
+
+  .calendarSelectedDateButton {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--color-text);
+    text-align: left;
+    justify-content: initial;
+    overflow: hidden;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+
+  .calendarSelectedDateButton::after {
+    display: none;
+  }
+
+  .calendarSelectedDateButton:active {
+    transform: none;
+    background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  }
+
+  .calendarSelectedDateIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    min-width: 22px;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .calendarSelectedDateText {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .calendarWeekNumber {
+    height: 44px;
+    margin: 0;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    transform: none;
+    white-space: nowrap;
+  }
+
+  .calendarAgendaHeader .plannerAddTaskButton {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+    color: var(--color-accent);
+  }
+}
+
+/* ============================================================
+   PATCH 657C – PLÁN / KOMPAKTNÍ LIŠTA BEZ PŘETEČENÍ
+   Jen rozměry schválené 657B lišty: nižší výška a border-box,
+   aby celý řádek včetně + zůstal uvnitř mobilního viewportu.
+   ============================================================ */
+@media (max-width: 899px) {
+  .calendarAgendaHeader {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    height: 52px;
+    padding: 4px 6px 4px 10px;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto 40px;
+    overflow: hidden;
+  }
+
+  .calendarSelectedDateButton {
+    box-sizing: border-box;
+    height: 40px;
+    min-height: 40px;
+    gap: 6px;
+    font-size: 0.80rem;
+  }
+
+  .calendarSelectedDateIcon {
+    width: 20px;
+    min-width: 20px;
+    font-size: 16px;
+  }
+
+  .calendarWeekNumber {
+    box-sizing: border-box;
+    height: 40px;
+    min-height: 40px;
+    font-size: 0.80rem;
+  }
+
+  .calendarAgendaHeader .plannerAddTaskButton {
+    box-sizing: border-box;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 11px;
+  }
+}
+
+/* ============================================================
+   PATCH 657D – PLÁN / ZÁKAZ SVISLÉHO SMRŠTĚNÍ LIŠTY
+   657C nastavilo správnou cílovou výšku 52 px, ale .calendarAgenda
+   je flex-column a hlavička měla povolené flex-shrink. Při menší
+   dostupné výšce ji WebView smrskl a overflow:hidden pak ořízl obsah.
+   Držíme proto schválených 52 px jako pevný flex-basis/min-height.
+   ============================================================ */
+@media (max-width: 899px) {
+  .calendarAgendaHeader {
+    flex: 0 0 52px;
+    min-height: 52px;
+    height: 52px;
+  }
+}

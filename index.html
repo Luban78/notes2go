@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=657a-planner-bar">
+  <link rel="stylesheet" href="style.css?v=657d-planner-noshrink">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -516,7 +516,8 @@
       <div class="calendarAgendaHeader">
         
         <button id="calendarSelectedDate" class="calendarSelectedDateButton" type="button">
-          Vybraný den
+          <span class="calendarSelectedDateIcon" aria-hidden="true">📅</span>
+          <span id="calendarSelectedDateText" class="calendarSelectedDateText">Vybraný den</span>
         </button>
         
         <div id="calendarWeekNumber" class="calendarWeekNumber">
@@ -2149,7 +2150,7 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=20260919-main-nav-documents-633"></script>
+  <script src="lang-cs.js?v=657b-planner-week-label"></script>
   <script src="lang-en.js?v=20260919-main-nav-documents-633"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
@@ -2200,7 +2201,7 @@
   <script src="planner.js?v=20260915-planner-live-text-549"></script>
   
   
-  <script src="calendar.js?v=657-planner-compact"></script>
+  <script src="calendar.js?v=657b-planner-mockup"></script>
   
   <script src="cardView.js?v=20260909-card-drag-order-326"></script>
   

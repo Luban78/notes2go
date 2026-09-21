@@ -168,7 +168,7 @@ window.LubaNoteLanguagePacks.push({
     "calendar.back": "Zpět na kalendář",
     "calendar.addDay": "Přidat úkol na tento den",
     "calendar.week": "týden",
-    "calendar.weekNumber": "{value}. týden",
+    "calendar.weekNumber": "Týden {value}",
     "weekday.mo": "Po",
     "weekday.tu": "Út",
     "weekday.we": "St",
