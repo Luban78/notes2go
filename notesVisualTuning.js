@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – živé ladění vzhledu hlavní plochy Poznámek
-   PATCH 658I
+   PATCH 658L
 
    Admin-only Visual Lab. Hodnoty jsou lokální pro zařízení.
    Nemění data, sync ani cloud. Po finálním odsouhlasení lze vybrané
@@ -48,7 +48,9 @@
         borderRezim: "legacy",
         borderSila: 18,
         radius: 15,
-        velikost: 42
+        velikost: 42,
+        ikonaVelikost: 22,
+        ikonaTloustka: 1.35
       },
       search: {
         borderZapnuty: true,
@@ -110,6 +112,8 @@
     cardsVelikost: [10, 26],
     tagsVelikost: [30, 56],
     primaryVelikost: [30, 56],
+    primaryIkonaVelikost: [14, 32],
+    primaryIkonaTloustka: [0.8, 2.2],
     searchVelikost: [34, 58],
     actionsVelikost: [34, 58],
     trafficVelikost: [40, 64],
@@ -202,7 +206,7 @@
   function normalizujPrvek(id, vstup, fallback) {
     const v = vstup && typeof vstup === "object" ? vstup : {};
     const limitVelikosti = LIMITY[`${id}Velikost`] || [20, 100];
-    return {
+    const vysledek = {
       borderZapnuty:
         typeof v.borderZapnuty === "boolean"
           ? v.borderZapnuty
@@ -231,6 +235,21 @@
         fallback.velikost
       )
     };
+
+    if (id === "primary") {
+      vysledek.ikonaVelikost = omezCislo(
+        v.ikonaVelikost,
+        ...LIMITY.primaryIkonaVelikost,
+        fallback.ikonaVelikost
+      );
+      vysledek.ikonaTloustka = omezCislo(
+        v.ikonaTloustka,
+        ...LIMITY.primaryIkonaTloustka,
+        fallback.ikonaTloustka
+      );
+    }
+
+    return vysledek;
   }
 
   function vytvorStav() {
@@ -331,6 +350,28 @@
       data.borderZapnuty ? "on" : "off";
   }
 
+  function aplikujPrimarySvgFiltry() {
+    const data = stav.prvky.primary;
+    const velikost = `${data.ikonaVelikost}px`;
+    const tloustka = `${data.ikonaTloustka}px`;
+
+    document
+      .querySelectorAll(".categoryTabs > button.categoryTabIconOnly .categoryTabIcon")
+      .forEach((hostitel) => {
+        const svg = hostitel.querySelector(".lubaSvgIcon");
+        if (!svg) return;
+
+        /* Inline !important záměrně: starší lokální Visual Debug mohl mít
+           uložené width/height s velmi vysokou specificitou. Nový Visual Lab
+           musí být pro tyto dvě hodnoty jediným zdrojem pravdy. */
+        hostitel.style.setProperty("width", velikost, "important");
+        hostitel.style.setProperty("height", velikost, "important");
+        svg.style.setProperty("width", velikost, "important");
+        svg.style.setProperty("height", velikost, "important");
+        svg.style.setProperty("stroke-width", tloustka, "important");
+      });
+  }
+
   function aplikuj({ oznamit = true } = {}) {
     const root = document.documentElement;
     const body = document.body;
@@ -339,6 +380,15 @@
     for (const id of PRVKY) {
       nastavCssPrvek(root, body, id, stav.prvky[id]);
     }
+
+    root.style.setProperty(
+      "--luba-notes-primary-icon-size",
+      `${stav.prvky.primary.ikonaVelikost}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-primary-icon-stroke",
+      `${stav.prvky.primary.ikonaTloustka}px`
+    );
 
     root.style.setProperty(
       "--luba-notes-layout-offset-y",
@@ -376,6 +426,8 @@
       "--luba-notes-layout-card-row-gap",
       `${stav.layout.kartyRadkyMezera}px`
     );
+
+    aplikujPrimarySvgFiltry();
 
     if (oznamit) {
       window.dispatchEvent(
@@ -441,6 +493,18 @@
         stav.prvky.search.velikost = novaVelikost;
         stav.prvky.actions.velikost = novaVelikost;
       }
+    } else if (id === "primary" && klic === "ikonaVelikost") {
+      cil[klic] = omezCislo(
+        hodnota,
+        ...LIMITY.primaryIkonaVelikost,
+        VYCHOZI.prvky.primary.ikonaVelikost
+      );
+    } else if (id === "primary" && klic === "ikonaTloustka") {
+      cil[klic] = omezCislo(
+        hodnota,
+        ...LIMITY.primaryIkonaTloustka,
+        VYCHOZI.prvky.primary.ikonaTloustka
+      );
     }
 
     uloz();
@@ -531,6 +595,10 @@
     uloz();
     return aplikuj();
   }
+
+  window.addEventListener("lubanote:icon-style-change", () => {
+    requestAnimationFrame(() => aplikuj({ oznamit: false }));
+  });
 
   window.LubaNoteNotesVisualTuning = {
     ziskejStav: () => kopie(stav),

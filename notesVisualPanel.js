@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – plovoucí živé ladění hlavního screenu Poznámky
-   PATCH 658I
+   PATCH 658L
 
    Otevírá se z Admin Dashboardu a zůstává nad hlavním screenem,
    podobně jako Visual Debug. Hodnoty mění pouze lokální tuning API.
@@ -42,7 +42,9 @@
 
   function formatCislo(hodnota, jednotka = "px") {
     const n = Number(hodnota ?? 0);
-    const text = Number.isInteger(n) ? String(n) : n.toFixed(1);
+    const text = Number.isInteger(n)
+      ? String(n)
+      : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
     return `${text} ${jednotka}`;
   }
 
@@ -100,6 +102,12 @@
         ${rangeRadek({ id: "ln-nvt-radius", label: "Zaoblení rohů", min: 0, max: 44 })}
         ${rangeRadek({ id: "ln-nvt-size", label: "Velikost prvku", min: 10, max: 88 })}
 
+        <div id="ln-nvt-primary-svg" hidden>
+          <div class="ln-nvt-section-title">SVG ikony hlavních filtrů</div>
+          ${rangeRadek({ id: "ln-nvt-primary-icon-size", label: "Velikost SVG ikony", min: 14, max: 32 })}
+          ${rangeRadek({ id: "ln-nvt-primary-icon-stroke", label: "Tloušťka SVG čáry", min: 0.8, max: 2.2, step: 0.05 })}
+        </div>
+
         <div class="ln-nvt-section-title">Rozložení hlavního screenu</div>
         ${rangeRadek({ id: "ln-nvt-offset", label: "Posun obsahu Y", min: -16, max: 16 })}
         ${rangeRadek({ id: "ln-nvt-actions-filters-gap", label: "Mezera akce ↕ filtry", min: 0, max: 20 })}
@@ -132,6 +140,9 @@
       radius: panel.querySelector("#ln-nvt-radius"),
       size: panel.querySelector("#ln-nvt-size"),
       sizeLabel: panel.querySelector('label[for="ln-nvt-size"] .ln-nvt-label'),
+      primarySvg: panel.querySelector("#ln-nvt-primary-svg"),
+      primaryIconSize: panel.querySelector("#ln-nvt-primary-icon-size"),
+      primaryIconStroke: panel.querySelector("#ln-nvt-primary-icon-stroke"),
       offset: panel.querySelector("#ln-nvt-offset"),
       actionsFiltersGap: panel.querySelector("#ln-nvt-actions-filters-gap"),
       filterGap: panel.querySelector("#ln-nvt-filter-gap"),
@@ -187,6 +198,22 @@
     nastavRange(refs.radius, prvek.radius, orig.radius);
     nastavRange(refs.size, prvek.velikost, orig.velikost);
 
+    if (refs.primarySvg) {
+      refs.primarySvg.hidden = id !== "primary";
+    }
+    if (id === "primary") {
+      nastavRange(
+        refs.primaryIconSize,
+        prvek.ikonaVelikost,
+        orig.ikonaVelikost
+      );
+      nastavRange(
+        refs.primaryIconStroke,
+        prvek.ikonaTloustka,
+        orig.ikonaTloustka
+      );
+    }
+
     nastavRange(refs.offset, stav.layout.offsetY, vychozi.layout.offsetY);
     nastavRange(refs.actionsFiltersGap, stav.layout.akceFiltryMezera, vychozi.layout.akceFiltryMezera);
     nastavRange(refs.filterGap, stav.layout.filtrMezera, vychozi.layout.filtrMezera);
@@ -227,6 +254,12 @@
     refs.strength.addEventListener("input", () => nastavPrvek("borderSila", refs.strength.value));
     refs.radius.addEventListener("input", () => nastavPrvek("radius", refs.radius.value));
     refs.size.addEventListener("input", () => nastavPrvek("velikost", refs.size.value));
+    refs.primaryIconSize.addEventListener("input", () =>
+      nastavPrvek("ikonaVelikost", refs.primaryIconSize.value)
+    );
+    refs.primaryIconStroke.addEventListener("input", () =>
+      nastavPrvek("ikonaTloustka", refs.primaryIconStroke.value)
+    );
     refs.offset.addEventListener("input", () => nastavLayout("offsetY", refs.offset.value));
     refs.actionsFiltersGap.addEventListener("input", () => nastavLayout("akceFiltryMezera", refs.actionsFiltersGap.value));
     refs.filterGap.addEventListener("input", () => nastavLayout("filtrMezera", refs.filterGap.value));

@@ -13090,6 +13090,8 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   --luba-notes-primary-border-base: 82%;
   --luba-notes-primary-radius: 15px;
   --luba-notes-primary-size: 42px;
+  --luba-notes-primary-icon-size: 22px;
+  --luba-notes-primary-icon-stroke: 1.35px;
 
   --luba-notes-search-border-width: 1px;
   --luba-notes-search-border-strength: 18%;
@@ -13374,6 +13376,30 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
   body:has(#notesModuleButton.active) .categoryTabs > button.categoryTab.active {
     --luba-notes-primary-bg: var(--color-accent);
+  }
+
+  /* 658L: velikost SVG hlavních filtrů a tloušťka jejich čáry jsou
+     nezávislé. Při zvětšení ikony se tedy čára už opticky nezvětšuje.
+     Klasické/emoji ikony nemají .lubaSvgIcon a toto pravidlo se jich netýká. */
+  body:has(#notesModuleButton.active)
+    .categoryTabs > button.categoryTabIconOnly
+    .categoryTabIcon:has(.lubaSvgIcon) {
+    width: var(--luba-notes-primary-icon-size) !important;
+    height: var(--luba-notes-primary-icon-size) !important;
+  }
+
+  body:has(#notesModuleButton.active)
+    .categoryTabs > button.categoryTabIconOnly
+    .categoryTabIcon .lubaSvgIcon {
+    width: var(--luba-notes-primary-icon-size) !important;
+    height: var(--luba-notes-primary-icon-size) !important;
+    stroke-width: var(--luba-notes-primary-icon-stroke) !important;
+  }
+
+  body:has(#notesModuleButton.active)
+    .categoryTabs > button.categoryTabIconOnly
+    .categoryTabIcon .lubaSvgIcon > * {
+    vector-effect: non-scaling-stroke;
   }
 
   body[data-luba-notes-primary-border="off"]:has(#notesModuleButton.active)
