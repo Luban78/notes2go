@@ -12332,6 +12332,47 @@ body.lubaCardDragMode .app {
 }
 
 
+/* ==========================================================
+   HOTFIX 650A – PLÁN / PŘIPOMÍNKY: METADATA SVG IKONY
+   ----------------------------------------------------------
+   Patch 544 přidal nové hostitele calendarAgendaMetaIcon /
+   reminderItemMetaIcon. Bez explicitní velikosti jejich SVG
+   na desktopu zdědilo 100% rozměr a roztáhlo celé položky.
+   ========================================================== */
+
+.calendarAgendaMeta,
+.reminderItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 18px;
+  margin: 0 0 4px;
+  line-height: 1;
+}
+
+.calendarAgendaMetaIcon,
+.reminderItemMetaIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+  line-height: 0;
+}
+
+.calendarAgendaMetaIcon .lubaSvgIcon,
+.reminderItemMetaIcon .lubaSvgIcon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+}
+
 /* ============================================================
    PATCH 657 – PLÁN / KOMPAKTNÍ VYBRANÝ DEN (ANDROID)
    Datum + týden + přidat jsou na jednom řádku.
@@ -13080,6 +13121,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   --luba-notes-layout-filter-gap: 6px;
   --luba-notes-layout-tags-gap: 7px;
   --luba-notes-layout-row-gap: 7px;
+  --luba-notes-layout-tags-cards-gap: 5px;
   --luba-notes-top-control-size: 42px;
   --luba-notes-layout-card-column-gap: 10px;
   --luba-notes-layout-card-row-gap: 12px;
@@ -13185,7 +13227,22 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
     gap: var(--luba-notes-layout-tags-gap) !important;
   }
 
+  /* 658F: skutečný kontejner hlavních karet je #pinnedCards.pinnedCards.
+     Starší .karty zde není používána, proto předchozí slidery měnily hodnotu,
+     ale na živém screenu nebyla změna vidět. */
+  body:has(#notesModuleButton.active) #pinnedCards.pinnedCards {
+    margin-top: var(--luba-notes-layout-tags-cards-gap) !important;
+  }
+
+  body:has(#notesModuleButton.active) #pinnedCards.pinnedCards:not(.listView) {
+    gap: var(--luba-notes-layout-card-column-gap) !important;
+    -webkit-column-gap: var(--luba-notes-layout-card-column-gap) !important;
+    column-gap: var(--luba-notes-layout-card-column-gap) !important;
+  }
+
+  /* Kompatibilita pro případ, že některý starší renderer použije .karty. */
   body:has(#notesModuleButton.active) .karty {
+    margin-top: var(--luba-notes-layout-tags-cards-gap) !important;
     -webkit-column-gap: var(--luba-notes-layout-card-column-gap) !important;
     column-gap: var(--luba-notes-layout-card-column-gap) !important;
   }

@@ -120,6 +120,7 @@ window.LubaNoteLanguagePacks.push({
     "admin.notesFilterGap": "Primary filter gap",
     "admin.notesTagsGap": "Gap between tags",
     "admin.notesRowsGap": "Filters ↕ tags row gap",
+    "admin.notesTagsCardsGap": "Tags ↕ cards gap",
     "admin.notesCardColumnGap": "Card column gap",
     "admin.notesCardRowGap": "Gap below cards",
     "admin.notesVisualHint": "Tip: card border width and radius can now be tuned independently; the swipe layer uses the matching inner radius so corners do not bleed through.",

@@ -105,6 +105,7 @@
         ${rangeRadek({ id: "ln-nvt-filter-gap", label: "Mezera hlavních filtrů", min: 2, max: 14 })}
         ${rangeRadek({ id: "ln-nvt-row-gap", label: "Mezera filtry ↕ štítky", min: 0, max: 20 })}
         ${rangeRadek({ id: "ln-nvt-tags-gap", label: "Mezera mezi štítky", min: 2, max: 16 })}
+        ${rangeRadek({ id: "ln-nvt-tags-cards-gap", label: "Mezera štítky ↕ karty", min: 0, max: 40 })}
         ${rangeRadek({ id: "ln-nvt-card-col-gap", label: "Mezera sloupců karet", min: 0, max: 30 })}
         ${rangeRadek({ id: "ln-nvt-card-row-gap", label: "Mezera řádků karet", min: 2, max: 24 })}
 
@@ -134,6 +135,7 @@
       filterGap: panel.querySelector("#ln-nvt-filter-gap"),
       rowGap: panel.querySelector("#ln-nvt-row-gap"),
       tagsGap: panel.querySelector("#ln-nvt-tags-gap"),
+      tagsCardsGap: panel.querySelector("#ln-nvt-tags-cards-gap"),
       cardColGap: panel.querySelector("#ln-nvt-card-col-gap"),
       cardRowGap: panel.querySelector("#ln-nvt-card-row-gap"),
       resetAll: panel.querySelector("#ln-nvt-reset-all"),
@@ -187,6 +189,7 @@
     nastavRange(refs.filterGap, stav.layout.filtrMezera, vychozi.layout.filtrMezera);
     nastavRange(refs.rowGap, stav.layout.radkyMezera, vychozi.layout.radkyMezera);
     nastavRange(refs.tagsGap, stav.layout.stitkyMezera, vychozi.layout.stitkyMezera);
+    nastavRange(refs.tagsCardsGap, stav.layout.stitkyKartyMezera, vychozi.layout.stitkyKartyMezera);
     nastavRange(refs.cardColGap, stav.layout.kartySloupceMezera, vychozi.layout.kartySloupceMezera);
     nastavRange(refs.cardRowGap, stav.layout.kartyRadkyMezera, vychozi.layout.kartyRadkyMezera);
   }
@@ -225,6 +228,7 @@
     refs.filterGap.addEventListener("input", () => nastavLayout("filtrMezera", refs.filterGap.value));
     refs.rowGap.addEventListener("input", () => nastavLayout("radkyMezera", refs.rowGap.value));
     refs.tagsGap.addEventListener("input", () => nastavLayout("stitkyMezera", refs.tagsGap.value));
+    refs.tagsCardsGap.addEventListener("input", () => nastavLayout("stitkyKartyMezera", refs.tagsCardsGap.value));
     refs.cardColGap.addEventListener("input", () => nastavLayout("kartySloupceMezera", refs.cardColGap.value));
     refs.cardRowGap.addEventListener("input", () => nastavLayout("kartyRadkyMezera", refs.cardRowGap.value));
     refs.resetAll.addEventListener("click", () => api()?.obnovVychozi?.());

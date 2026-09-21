@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658d-floating-lab">
+  <link rel="stylesheet" href="style.css?v=658g-pc-meta-icons-gap-default">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -1652,6 +1652,14 @@
             </div>
 
             <div class="adminNotesVisualRow">
+              <label id="adminNotesTagsCardsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsCardsGap">Mezera štítky ↕ karty</label>
+              <div class="adminNotesVisualRangeRow">
+                <input id="adminNotesTagsCardsGap" class="adminNotesVisualRange" type="range" min="0" max="40" step="1" value="14">
+                <output id="adminNotesTagsCardsGapValue" class="adminNotesVisualValue" for="adminNotesTagsCardsGap">14 px</output>
+              </div>
+            </div>
+
+            <div class="adminNotesVisualRow">
               <label id="adminNotesCardColumnGapLabel" class="adminNotesVisualLabel" for="adminNotesCardColumnGap">Mezera mezi sloupci karet</label>
               <div class="adminNotesVisualRangeRow">
                 <input id="adminNotesCardColumnGap" class="adminNotesVisualRange" type="range" min="0" max="30" step="1" value="10">
@@ -2295,8 +2303,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=658b-visual-lab"></script>
-  <script src="lang-en.js?v=658b-visual-lab"></script>
+  <script src="lang-cs.js?v=658e-notes-tags-cards-gap"></script>
+  <script src="lang-en.js?v=658e-notes-tags-cards-gap"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2311,8 +2319,8 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
-  <script src="notesVisualTuning.js?v=658d-floating-lab"></script>
-  <script src="notesVisualPanel.js?v=658d-floating-lab"></script>
+  <script src="notesVisualTuning.js?v=658g-gap-default"></script>
+  <script src="notesVisualPanel.js?v=658e-notes-tags-cards-gap"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2375,7 +2383,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658d-floating-lab"></script>
+  <script src="adminDashboard.js?v=658g-gap-default"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

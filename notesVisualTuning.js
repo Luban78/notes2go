@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – živé ladění vzhledu hlavní plochy Poznámek
-   PATCH 658D
+   PATCH 658G
 
    Admin-only Visual Lab. Hodnoty jsou lokální pro zařízení.
    Nemění data, sync ani cloud. Po finálním odsouhlasení lze vybrané
@@ -96,6 +96,7 @@
       filtrMezera: 6,
       stitkyMezera: 7,
       radkyMezera: 7,
+      stitkyKartyMezera: 5,
       kartySloupceMezera: 10,
       kartyRadkyMezera: 12
     }
@@ -117,6 +118,7 @@
     filtrMezera: [2, 14],
     stitkyMezera: [2, 16],
     radkyMezera: [0, 20],
+    stitkyKartyMezera: [0, 40],
     kartySloupceMezera: [0, 30],
     kartyRadkyMezera: [2, 24]
   };
@@ -269,6 +271,11 @@
       ...LIMITY.radkyMezera,
       VYCHOZI.layout.radkyMezera
     );
+    stav.layout.stitkyKartyMezera = omezCislo(
+      l.stitkyKartyMezera,
+      ...LIMITY.stitkyKartyMezera,
+      VYCHOZI.layout.stitkyKartyMezera
+    );
     stav.layout.kartySloupceMezera = omezCislo(
       l.kartySloupceMezera,
       ...LIMITY.kartySloupceMezera,
@@ -345,6 +352,10 @@
     root.style.setProperty(
       "--luba-notes-top-control-size",
       `${Math.max(stav.prvky.search.velikost, stav.prvky.actions.velikost)}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-layout-tags-cards-gap",
+      `${stav.layout.stitkyKartyMezera}px`
     );
     root.style.setProperty(
       "--luba-notes-layout-card-column-gap",

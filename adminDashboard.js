@@ -77,6 +77,10 @@
     document.getElementById("adminNotesRowsGap");
   const notesRowsGapHodnota =
     document.getElementById("adminNotesRowsGapValue");
+  const notesTagsCardsGap =
+    document.getElementById("adminNotesTagsCardsGap");
+  const notesTagsCardsGapHodnota =
+    document.getElementById("adminNotesTagsCardsGapValue");
   const notesCardColumnGap =
     document.getElementById("adminNotesCardColumnGap");
   const notesCardColumnGapHodnota =
@@ -462,6 +466,13 @@
       stav.layout.radkyMezera ?? 7,
       "px",
       vychozi.layout.radkyMezera
+    );
+    nastavRange(
+      notesTagsCardsGap,
+      notesTagsCardsGapHodnota,
+      stav.layout.stitkyKartyMezera ?? 5,
+      "px",
+      vychozi.layout.stitkyKartyMezera
     );
     nastavRange(
       notesCardColumnGap,
@@ -1487,6 +1498,10 @@
         "admin.notesRowsGap",
         "Mezera filtry ↕ štítky"
       ],
+      adminNotesTagsCardsGapLabel: [
+        "admin.notesTagsCardsGap",
+        "Mezera štítky ↕ karty"
+      ],
       adminNotesCardColumnGapLabel: [
         "admin.notesCardColumnGap",
         "Mezera mezi sloupci karet"
@@ -1813,6 +1828,12 @@
     window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
       "radkyMezera",
       notesRowsGap.value
+    );
+  });
+  notesTagsCardsGap?.addEventListener("input", () => {
+    window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
+      "stitkyKartyMezera",
+      notesTagsCardsGap.value
     );
   });
   notesCardColumnGap?.addEventListener("input", () => {

@@ -126,6 +126,7 @@ window.LubaNoteLanguagePacks.push({
     "admin.notesFilterGap": "Mezera hlavních filtrů",
     "admin.notesTagsGap": "Mezera mezi štítky",
     "admin.notesRowsGap": "Mezera filtry ↕ štítky",
+    "admin.notesTagsCardsGap": "Mezera štítky ↕ karty",
     "admin.notesCardColumnGap": "Mezera mezi sloupci karet",
     "admin.notesCardRowGap": "Mezera pod kartami",
     "admin.notesVisualHint": "Tip: u karet lze samostatně sladit šířku borderu a radius; swipe vrstva používá správný vnitřní radius, takže rohy neprosvítají.",
