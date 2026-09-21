@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – plovoucí živé ladění hlavního screenu Poznámky
-   PATCH 658D
+   PATCH 658I
 
    Otevírá se z Admin Dashboardu a zůstává nad hlavním screenem,
    podobně jako Visual Debug. Hodnoty mění pouze lokální tuning API.
@@ -102,6 +102,7 @@
 
         <div class="ln-nvt-section-title">Rozložení hlavního screenu</div>
         ${rangeRadek({ id: "ln-nvt-offset", label: "Posun obsahu Y", min: -16, max: 16 })}
+        ${rangeRadek({ id: "ln-nvt-actions-filters-gap", label: "Mezera akce ↕ filtry", min: 0, max: 20 })}
         ${rangeRadek({ id: "ln-nvt-filter-gap", label: "Mezera hlavních filtrů", min: 2, max: 14 })}
         ${rangeRadek({ id: "ln-nvt-row-gap", label: "Mezera filtry ↕ štítky", min: 0, max: 20 })}
         ${rangeRadek({ id: "ln-nvt-tags-gap", label: "Mezera mezi štítky", min: 2, max: 16 })}
@@ -132,6 +133,7 @@
       size: panel.querySelector("#ln-nvt-size"),
       sizeLabel: panel.querySelector('label[for="ln-nvt-size"] .ln-nvt-label'),
       offset: panel.querySelector("#ln-nvt-offset"),
+      actionsFiltersGap: panel.querySelector("#ln-nvt-actions-filters-gap"),
       filterGap: panel.querySelector("#ln-nvt-filter-gap"),
       rowGap: panel.querySelector("#ln-nvt-row-gap"),
       tagsGap: panel.querySelector("#ln-nvt-tags-gap"),
@@ -186,6 +188,7 @@
     nastavRange(refs.size, prvek.velikost, orig.velikost);
 
     nastavRange(refs.offset, stav.layout.offsetY, vychozi.layout.offsetY);
+    nastavRange(refs.actionsFiltersGap, stav.layout.akceFiltryMezera, vychozi.layout.akceFiltryMezera);
     nastavRange(refs.filterGap, stav.layout.filtrMezera, vychozi.layout.filtrMezera);
     nastavRange(refs.rowGap, stav.layout.radkyMezera, vychozi.layout.radkyMezera);
     nastavRange(refs.tagsGap, stav.layout.stitkyMezera, vychozi.layout.stitkyMezera);
@@ -225,6 +228,7 @@
     refs.radius.addEventListener("input", () => nastavPrvek("radius", refs.radius.value));
     refs.size.addEventListener("input", () => nastavPrvek("velikost", refs.size.value));
     refs.offset.addEventListener("input", () => nastavLayout("offsetY", refs.offset.value));
+    refs.actionsFiltersGap.addEventListener("input", () => nastavLayout("akceFiltryMezera", refs.actionsFiltersGap.value));
     refs.filterGap.addEventListener("input", () => nastavLayout("filtrMezera", refs.filterGap.value));
     refs.rowGap.addEventListener("input", () => nastavLayout("radkyMezera", refs.rowGap.value));
     refs.tagsGap.addEventListener("input", () => nastavLayout("stitkyMezera", refs.tagsGap.value));

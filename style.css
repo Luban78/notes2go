@@ -13120,14 +13120,15 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   --luba-notes-fab-radius: 35px;
   --luba-notes-fab-size: 70px;
 
-  --luba-notes-layout-offset-y: -5px;
-  --luba-notes-layout-filter-gap: 6px;
-  --luba-notes-layout-tags-gap: 7px;
-  --luba-notes-layout-row-gap: 7px;
+  --luba-notes-layout-offset-y: 13px;
+  --luba-notes-layout-actions-filters-gap: 5px;
+  --luba-notes-layout-filter-gap: 5px;
+  --luba-notes-layout-tags-gap: 5px;
+  --luba-notes-layout-row-gap: 5px;
   --luba-notes-layout-tags-cards-gap: 5px;
   --luba-notes-top-control-size: 42px;
-  --luba-notes-layout-card-column-gap: 10px;
-  --luba-notes-layout-card-row-gap: 12px;
+  --luba-notes-layout-card-column-gap: 5px;
+  --luba-notes-layout-card-row-gap: 5px;
 }
 
 /* Rozšířený Admin Visual Lab. */
@@ -13227,6 +13228,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   }
 
   body:has(#notesModuleButton.active) .categoryTabs {
+    margin-top: var(--luba-notes-layout-actions-filters-gap) !important;
     column-gap: var(--luba-notes-layout-filter-gap) !important;
     row-gap: var(--luba-notes-layout-row-gap) !important;
   }

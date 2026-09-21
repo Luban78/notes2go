@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – živé ladění vzhledu hlavní plochy Poznámek
-   PATCH 658G
+   PATCH 658I
 
    Admin-only Visual Lab. Hodnoty jsou lokální pro zařízení.
    Nemění data, sync ani cloud. Po finálním odsouhlasení lze vybrané
@@ -92,13 +92,14 @@
       }
     },
     layout: {
-      offsetY: -5,
-      filtrMezera: 6,
-      stitkyMezera: 7,
-      radkyMezera: 7,
+      offsetY: 13,
+      akceFiltryMezera: 5,
+      filtrMezera: 5,
+      stitkyMezera: 5,
+      radkyMezera: 5,
       stitkyKartyMezera: 5,
-      kartySloupceMezera: 10,
-      kartyRadkyMezera: 12
+      kartySloupceMezera: 5,
+      kartyRadkyMezera: 5
     }
   };
 
@@ -115,6 +116,7 @@
     modulesVelikost: [42, 68],
     fabVelikost: [48, 88],
     offsetY: [-16, 16],
+    akceFiltryMezera: [0, 20],
     filtrMezera: [2, 14],
     stitkyMezera: [2, 16],
     radkyMezera: [0, 20],
@@ -256,6 +258,11 @@
       ...LIMITY.offsetY,
       VYCHOZI.layout.offsetY
     );
+    stav.layout.akceFiltryMezera = omezCislo(
+      l.akceFiltryMezera,
+      ...LIMITY.akceFiltryMezera,
+      VYCHOZI.layout.akceFiltryMezera
+    );
     stav.layout.filtrMezera = omezCislo(
       l.filtrMezera,
       ...LIMITY.filtrMezera,
@@ -336,6 +343,10 @@
     root.style.setProperty(
       "--luba-notes-layout-offset-y",
       `${stav.layout.offsetY}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-layout-actions-filters-gap",
+      `${stav.layout.akceFiltryMezera}px`
     );
     root.style.setProperty(
       "--luba-notes-layout-filter-gap",

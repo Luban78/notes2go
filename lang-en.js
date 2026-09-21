@@ -117,6 +117,7 @@ window.LubaNoteLanguagePacks.push({
     "admin.notesLayoutTitle": "Main screen layout",
     "admin.notesLayoutHint": "Fine spacing and offsets without changing data or app logic.",
     "admin.notesOffsetY": "Move content up / down",
+    "admin.notesActionsFiltersGap": "Actions ↕ filters gap",
     "admin.notesFilterGap": "Primary filter gap",
     "admin.notesTagsGap": "Gap between tags",
     "admin.notesRowsGap": "Filters ↕ tags row gap",

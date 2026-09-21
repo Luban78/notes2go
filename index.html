@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658h-exact-tags-cards-gap-pc-guard">
+  <link rel="stylesheet" href="style.css?v=658i-notes-layout-defaults">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -1622,56 +1622,65 @@
             <div class="adminNotesVisualRow">
               <label id="adminNotesOffsetYLabel" class="adminNotesVisualLabel" for="adminNotesOffsetY">Posun obsahu nahoru / dolů</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesOffsetY" class="adminNotesVisualRange" type="range" min="-16" max="16" step="1" value="-5">
-                <output id="adminNotesOffsetYValue" class="adminNotesVisualValue" for="adminNotesOffsetY">-5 px</output>
+                <input id="adminNotesOffsetY" class="adminNotesVisualRange" type="range" min="-16" max="16" step="1" value="13">
+                <output id="adminNotesOffsetYValue" class="adminNotesVisualValue" for="adminNotesOffsetY">13 px</output>
+              </div>
+            </div>
+
+
+            <div class="adminNotesVisualRow">
+              <label id="adminNotesActionsFiltersGapLabel" class="adminNotesVisualLabel" for="adminNotesActionsFiltersGap">Mezera akce ↕ filtry</label>
+              <div class="adminNotesVisualRangeRow">
+                <input id="adminNotesActionsFiltersGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="5">
+                <output id="adminNotesActionsFiltersGapValue" class="adminNotesVisualValue" for="adminNotesActionsFiltersGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesFilterGapLabel" class="adminNotesVisualLabel" for="adminNotesFilterGap">Mezera hlavních filtrů</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesFilterGap" class="adminNotesVisualRange" type="range" min="2" max="14" step="1" value="6">
-                <output id="adminNotesFilterGapValue" class="adminNotesVisualValue" for="adminNotesFilterGap">6 px</output>
+                <input id="adminNotesFilterGap" class="adminNotesVisualRange" type="range" min="2" max="14" step="1" value="5">
+                <output id="adminNotesFilterGapValue" class="adminNotesVisualValue" for="adminNotesFilterGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesTagsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsGap">Mezera mezi štítky</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesTagsGap" class="adminNotesVisualRange" type="range" min="2" max="16" step="1" value="7">
-                <output id="adminNotesTagsGapValue" class="adminNotesVisualValue" for="adminNotesTagsGap">7 px</output>
+                <input id="adminNotesTagsGap" class="adminNotesVisualRange" type="range" min="2" max="16" step="1" value="5">
+                <output id="adminNotesTagsGapValue" class="adminNotesVisualValue" for="adminNotesTagsGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesRowsGapLabel" class="adminNotesVisualLabel" for="adminNotesRowsGap">Mezera filtry ↕ štítky</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesRowsGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="7">
-                <output id="adminNotesRowsGapValue" class="adminNotesVisualValue" for="adminNotesRowsGap">7 px</output>
+                <input id="adminNotesRowsGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="5">
+                <output id="adminNotesRowsGapValue" class="adminNotesVisualValue" for="adminNotesRowsGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesTagsCardsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsCardsGap">Mezera štítky ↕ karty</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesTagsCardsGap" class="adminNotesVisualRange" type="range" min="0" max="40" step="1" value="14">
-                <output id="adminNotesTagsCardsGapValue" class="adminNotesVisualValue" for="adminNotesTagsCardsGap">14 px</output>
+                <input id="adminNotesTagsCardsGap" class="adminNotesVisualRange" type="range" min="0" max="40" step="1" value="5">
+                <output id="adminNotesTagsCardsGapValue" class="adminNotesVisualValue" for="adminNotesTagsCardsGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesCardColumnGapLabel" class="adminNotesVisualLabel" for="adminNotesCardColumnGap">Mezera mezi sloupci karet</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesCardColumnGap" class="adminNotesVisualRange" type="range" min="0" max="30" step="1" value="10">
-                <output id="adminNotesCardColumnGapValue" class="adminNotesVisualValue" for="adminNotesCardColumnGap">10 px</output>
+                <input id="adminNotesCardColumnGap" class="adminNotesVisualRange" type="range" min="0" max="30" step="1" value="5">
+                <output id="adminNotesCardColumnGapValue" class="adminNotesVisualValue" for="adminNotesCardColumnGap">5 px</output>
               </div>
             </div>
 
             <div class="adminNotesVisualRow">
               <label id="adminNotesCardRowGapLabel" class="adminNotesVisualLabel" for="adminNotesCardRowGap">Mezera pod kartami</label>
               <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesCardRowGap" class="adminNotesVisualRange" type="range" min="2" max="24" step="1" value="12">
-                <output id="adminNotesCardRowGapValue" class="adminNotesVisualValue" for="adminNotesCardRowGap">12 px</output>
+                <input id="adminNotesCardRowGap" class="adminNotesVisualRange" type="range" min="2" max="24" step="1" value="5">
+                <output id="adminNotesCardRowGapValue" class="adminNotesVisualValue" for="adminNotesCardRowGap">5 px</output>
               </div>
             </div>
 
@@ -2303,8 +2312,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=658e-notes-tags-cards-gap"></script>
-  <script src="lang-en.js?v=658e-notes-tags-cards-gap"></script>
+  <script src="lang-cs.js?v=658i-notes-layout-defaults"></script>
+  <script src="lang-en.js?v=658i-notes-layout-defaults"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2319,8 +2328,8 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
-  <script src="notesVisualTuning.js?v=658g-gap-default"></script>
-  <script src="notesVisualPanel.js?v=658e-notes-tags-cards-gap"></script>
+  <script src="notesVisualTuning.js?v=658i-notes-layout-defaults"></script>
+  <script src="notesVisualPanel.js?v=658i-notes-layout-defaults"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2383,7 +2392,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658g-gap-default"></script>
+  <script src="adminDashboard.js?v=658i-notes-layout-defaults"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

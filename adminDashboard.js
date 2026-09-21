@@ -65,6 +65,10 @@
     document.getElementById("adminNotesOffsetY");
   const notesOffsetYHodnota =
     document.getElementById("adminNotesOffsetYValue");
+  const notesActionsFiltersGap =
+    document.getElementById("adminNotesActionsFiltersGap");
+  const notesActionsFiltersGapHodnota =
+    document.getElementById("adminNotesActionsFiltersGapValue");
   const notesFilterGap =
     document.getElementById("adminNotesFilterGap");
   const notesFilterGapHodnota =
@@ -442,28 +446,35 @@
     nastavRange(
       notesOffsetY,
       notesOffsetYHodnota,
-      stav.layout.offsetY ?? -5,
+      stav.layout.offsetY ?? 13,
       "px",
       vychozi.layout.offsetY
     );
     nastavRange(
+      notesActionsFiltersGap,
+      notesActionsFiltersGapHodnota,
+      stav.layout.akceFiltryMezera ?? 5,
+      "px",
+      vychozi.layout.akceFiltryMezera
+    );
+    nastavRange(
       notesFilterGap,
       notesFilterGapHodnota,
-      stav.layout.filtrMezera ?? 6,
+      stav.layout.filtrMezera ?? 5,
       "px",
       vychozi.layout.filtrMezera
     );
     nastavRange(
       notesTagsGap,
       notesTagsGapHodnota,
-      stav.layout.stitkyMezera ?? 7,
+      stav.layout.stitkyMezera ?? 5,
       "px",
       vychozi.layout.stitkyMezera
     );
     nastavRange(
       notesRowsGap,
       notesRowsGapHodnota,
-      stav.layout.radkyMezera ?? 7,
+      stav.layout.radkyMezera ?? 5,
       "px",
       vychozi.layout.radkyMezera
     );
@@ -477,14 +488,14 @@
     nastavRange(
       notesCardColumnGap,
       notesCardColumnGapHodnota,
-      stav.layout.kartySloupceMezera ?? 10,
+      stav.layout.kartySloupceMezera ?? 5,
       "px",
       vychozi.layout.kartySloupceMezera
     );
     nastavRange(
       notesCardRowGap,
       notesCardRowGapHodnota,
-      stav.layout.kartyRadkyMezera ?? 12,
+      stav.layout.kartyRadkyMezera ?? 5,
       "px",
       vychozi.layout.kartyRadkyMezera
     );
@@ -1486,6 +1497,10 @@
         "admin.notesOffsetY",
         "Posun obsahu nahoru / dolů"
       ],
+      adminNotesActionsFiltersGapLabel: [
+        "admin.notesActionsFiltersGap",
+        "Mezera akce ↕ filtry"
+      ],
       adminNotesFilterGapLabel: [
         "admin.notesFilterGap",
         "Mezera hlavních filtrů"
@@ -1810,6 +1825,12 @@
     window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
       "offsetY",
       notesOffsetY.value
+    );
+  });
+  notesActionsFiltersGap?.addEventListener("input", () => {
+    window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
+      "akceFiltryMezera",
+      notesActionsFiltersGap.value
     );
   });
   notesFilterGap?.addEventListener("input", () => {

@@ -123,6 +123,7 @@ window.LubaNoteLanguagePacks.push({
     "admin.notesLayoutTitle": "Rozložení hlavního screenu",
     "admin.notesLayoutHint": "Jemné mezery a posuny bez zásahu do dat nebo logiky aplikace.",
     "admin.notesOffsetY": "Posun obsahu nahoru / dolů",
+    "admin.notesActionsFiltersGap": "Mezera akce ↕ filtry",
     "admin.notesFilterGap": "Mezera hlavních filtrů",
     "admin.notesTagsGap": "Mezera mezi štítky",
     "admin.notesRowsGap": "Mezera filtry ↕ štítky",
