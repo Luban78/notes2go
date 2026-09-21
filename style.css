@@ -12834,10 +12834,17 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
 .adminNotesVisualRangeRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 62px;
+  grid-template-columns: 64px minmax(0, 1fr) 62px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   grid-column: 1 / -1;
+}
+
+.adminNotesVisualOriginalValue {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .adminNotesVisualRange {
@@ -13072,11 +13079,36 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   --luba-notes-layout-offset-y: -5px;
   --luba-notes-layout-filter-gap: 6px;
   --luba-notes-layout-tags-gap: 7px;
+  --luba-notes-layout-row-gap: 7px;
+  --luba-notes-top-control-size: 42px;
   --luba-notes-layout-card-column-gap: 10px;
   --luba-notes-layout-card-row-gap: 12px;
 }
 
 /* Rozšířený Admin Visual Lab. */
+.adminNotesVisualLaunchRow {
+  display: grid;
+  gap: 5px;
+  padding: 2px 0 8px;
+}
+
+.adminNotesVisualLaunchRow small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.adminNotesVisualLaunchButton {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+}
+
 .adminNotesVisualTargetRow,
 .adminNotesVisualSubheader {
   display: grid;
@@ -13146,6 +13178,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
   body:has(#notesModuleButton.active) .categoryTabs {
     column-gap: var(--luba-notes-layout-filter-gap) !important;
+    row-gap: var(--luba-notes-layout-row-gap) !important;
   }
 
   body:has(#notesModuleButton.active) #tagFilterButtons {
@@ -13303,7 +13336,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
   /* ---------- HLEDÁNÍ ---------- */
   body:has(#notesModuleButton.active) .searchBox {
-    height: var(--luba-notes-search-size) !important;
+    height: var(--luba-notes-top-control-size) !important;
     border-style: solid !important;
     border-width: var(--luba-notes-search-border-width) !important;
     border-radius: var(--luba-notes-search-radius) !important;
@@ -13311,7 +13344,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   }
 
   body:has(#notesModuleButton.active) #searchNotes {
-    height: calc(var(--luba-notes-search-size) - 2px) !important;
+    height: calc(var(--luba-notes-top-control-size) - 2px) !important;
   }
 
   body[data-luba-notes-search-border="off"]:has(#notesModuleButton.active)
@@ -13344,8 +13377,8 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
   /* ---------- HORNÍ AKČNÍ IKONY ---------- */
   body:has(#notesModuleButton.active) .searchActions > button {
-    width: var(--luba-notes-actions-size) !important;
-    height: var(--luba-notes-actions-size) !important;
+    width: var(--luba-notes-top-control-size) !important;
+    height: var(--luba-notes-top-control-size) !important;
     border-style: solid !important;
     border-width: var(--luba-notes-actions-border-width) !important;
     border-radius: var(--luba-notes-actions-radius) !important;
@@ -13497,5 +13530,208 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   body[data-luba-notes-fab-border-mode="legacy"]:has(#notesModuleButton.active)
     .addTaskButton {
     border-color: var(--color-accent) !important;
+  }
+}
+
+
+/* ==================================================
+   PATCH 658C – PLOVOUCÍ NOTES VISUAL LAB
+   Panel zůstává nad hlavním screenem podobně jako Visual Debug.
+   ================================================== */
+#ln-nvt-panel,
+#ln-nvt-panel * {
+  box-sizing: border-box;
+}
+
+#ln-nvt-panel {
+  position: fixed !important;
+  top: 96px;
+  right: 10px;
+  z-index: 2147483500 !important;
+  width: min(340px, calc(100vw - 20px));
+  max-height: min(62dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--color-accent) 76%, #fff 24%);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-background) 95%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+#ln-nvt-panel[hidden] {
+  display: none !important;
+}
+
+.ln-nvt-head {
+  flex: 0 0 auto;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 7px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-accent) 6%);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#ln-nvt-panel.ln-nvt-dragging .ln-nvt-head {
+  cursor: grabbing;
+}
+
+.ln-nvt-title {
+  min-width: 0;
+}
+
+.ln-nvt-title strong,
+.ln-nvt-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ln-nvt-title strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.ln-nvt-title small {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+
+.ln-nvt-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.ln-nvt-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 9px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+#ln-nvt-panel.ln-nvt-minimized {
+  max-height: 49px;
+}
+
+#ln-nvt-panel.ln-nvt-minimized .ln-nvt-body {
+  display: none;
+}
+
+.ln-nvt-row {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 8px;
+}
+
+.ln-nvt-label,
+.ln-nvt-section-title {
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ln-nvt-section-title {
+  margin: 12px 0 8px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ln-nvt-select {
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ln-nvt-range-line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 50px;
+  align-items: center;
+  gap: 7px;
+}
+
+.ln-nvt-range-line input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.ln-nvt-original,
+.ln-nvt-current {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.ln-nvt-current {
+  color: var(--color-text);
+  text-align: right;
+}
+
+.ln-nvt-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ln-nvt-actions button {
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ln-nvt-actions button[aria-pressed="false"] {
+  opacity: 0.62;
+}
+
+.ln-nvt-actions-bottom {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 430px) {
+  #ln-nvt-panel {
+    width: min(330px, calc(100vw - 16px));
+    right: 8px;
+    max-height: 58dvh;
   }
 }

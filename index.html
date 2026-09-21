@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658b-visual-lab">
+  <link rel="stylesheet" href="style.css?v=658c-floating-lab">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -1543,6 +1543,11 @@
               <button id="adminNotesVisualReset" class="adminNotesVisualReset" type="button">Vše výchozí</button>
             </div>
 
+            <div class="adminNotesVisualLaunchRow">
+              <button id="adminNotesVisualFloatingButton" class="adminNotesVisualLaunchButton" type="button">🎛️ Otevřít plovoucí ladění</button>
+              <small>Panel zůstane nad hlavní obrazovkou a můžeš s ním posouvat stejně jako s Visual Debugem.</small>
+            </div>
+
             <div class="adminNotesVisualTargetRow">
               <label id="adminNotesVisualTargetLabel" class="adminNotesVisualLabel" for="adminNotesVisualTarget">Prvek</label>
               <select id="adminNotesVisualTarget" class="adminNotesVisualTargetSelect">
@@ -1631,10 +1636,18 @@
             </div>
 
             <div class="adminNotesVisualRow">
-              <label id="adminNotesTagsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsGap">Mezera štítků</label>
+              <label id="adminNotesTagsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsGap">Mezera mezi štítky</label>
               <div class="adminNotesVisualRangeRow">
                 <input id="adminNotesTagsGap" class="adminNotesVisualRange" type="range" min="2" max="16" step="1" value="7">
                 <output id="adminNotesTagsGapValue" class="adminNotesVisualValue" for="adminNotesTagsGap">7 px</output>
+              </div>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <label id="adminNotesRowsGapLabel" class="adminNotesVisualLabel" for="adminNotesRowsGap">Mezera filtry ↕ štítky</label>
+              <div class="adminNotesVisualRangeRow">
+                <input id="adminNotesRowsGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="7">
+                <output id="adminNotesRowsGapValue" class="adminNotesVisualValue" for="adminNotesRowsGap">7 px</output>
               </div>
             </div>
 
@@ -2298,7 +2311,8 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
-  <script src="notesVisualTuning.js?v=658b-visual-lab"></script>
+  <script src="notesVisualTuning.js?v=658c-floating-lab"></script>
+  <script src="notesVisualPanel.js?v=658c-floating-lab"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2361,7 +2375,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658b-visual-lab"></script>
+  <script src="adminDashboard.js?v=658c-floating-lab"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

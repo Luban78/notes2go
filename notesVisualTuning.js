@@ -1,12 +1,13 @@
 /* ==================================================
    LubaNote – živé ladění vzhledu hlavní plochy Poznámek
-   PATCH 658B
+   PATCH 658C
 
    Admin-only Visual Lab. Hodnoty jsou lokální pro zařízení.
    Nemění data, sync ani cloud. Po finálním odsouhlasení lze vybrané
    hodnoty převést na pevný finální vzhled a panel zjednodušit.
 ================================================== */
 (() => {
+  const KLIC_V3 = "lubanoteNotesVisualTuningV3";
   const KLIC_V2 = "lubanoteNotesVisualTuningV2";
 
   const PRVKY = [
@@ -94,6 +95,7 @@
       offsetY: -5,
       filtrMezera: 6,
       stitkyMezera: 7,
+      radkyMezera: 7,
       kartySloupceMezera: 10,
       kartyRadkyMezera: 12
     }
@@ -114,6 +116,7 @@
     offsetY: [-16, 16],
     filtrMezera: [2, 14],
     stitkyMezera: [2, 16],
+    radkyMezera: [0, 20],
     kartySloupceMezera: [2, 20],
     kartyRadkyMezera: [2, 24]
   };
@@ -130,9 +133,16 @@
 
   function nactiJson() {
     try {
-      const raw = localStorage.getItem(KLIC_V2);
-      if (!raw) return null;
-      const data = JSON.parse(raw);
+      const rawV3 = localStorage.getItem(KLIC_V3);
+      if (rawV3) {
+        const data = JSON.parse(rawV3);
+        if (data && typeof data === "object") return data;
+      }
+
+      /* 658C: automatická migrace hodnot z Visual Lab 658B. */
+      const rawV2 = localStorage.getItem(KLIC_V2);
+      if (!rawV2) return null;
+      const data = JSON.parse(rawV2);
       return data && typeof data === "object" ? data : null;
     } catch (_error) {
       return null;
@@ -143,8 +153,10 @@
     /* Jednorázová kompatibilita: pokud uživatel v 658A něco ladil,
        převezmeme hodnoty do karet i štítků. */
     try {
-      const maV2 = localStorage.getItem(KLIC_V2) !== null;
-      if (maV2) return;
+      const maNove =
+        localStorage.getItem(KLIC_V3) !== null ||
+        localStorage.getItem(KLIC_V2) !== null;
+      if (maNove) return;
 
       const enabled = localStorage.getItem("lubanoteNotesBorderEnabledV1");
       const width = localStorage.getItem("lubanoteNotesBorderWidthV1");
@@ -252,6 +264,11 @@
       ...LIMITY.stitkyMezera,
       VYCHOZI.layout.stitkyMezera
     );
+    stav.layout.radkyMezera = omezCislo(
+      l.radkyMezera,
+      ...LIMITY.radkyMezera,
+      VYCHOZI.layout.radkyMezera
+    );
     stav.layout.kartySloupceMezera = omezCislo(
       l.kartySloupceMezera,
       ...LIMITY.kartySloupceMezera,
@@ -263,6 +280,15 @@
       VYCHOZI.layout.kartyRadkyMezera
     );
 
+    /* 658C: hledání a akční ikony jsou jeden vizuální řádek.
+       Při migraci starších hodnot sjednotíme jejich výšku na větší z nich. */
+    const horniVyska = Math.max(
+      stav.prvky.search.velikost,
+      stav.prvky.actions.velikost
+    );
+    stav.prvky.search.velikost = horniVyska;
+    stav.prvky.actions.velikost = horniVyska;
+
     return stav;
   }
 
@@ -270,7 +296,7 @@
 
   function uloz() {
     try {
-      localStorage.setItem(KLIC_V2, JSON.stringify(stav));
+      localStorage.setItem(KLIC_V3, JSON.stringify(stav));
     } catch (_error) {}
   }
 
@@ -311,6 +337,14 @@
     root.style.setProperty(
       "--luba-notes-layout-tags-gap",
       `${stav.layout.stitkyMezera}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-layout-row-gap",
+      `${stav.layout.radkyMezera}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-top-control-size",
+      `${Math.max(stav.prvky.search.velikost, stav.prvky.actions.velikost)}px`
     );
     root.style.setProperty(
       "--luba-notes-layout-card-column-gap",
@@ -372,11 +406,19 @@
       );
     } else if (klic === "velikost") {
       const lim = LIMITY[`${id}Velikost`] || [20, 100];
-      cil[klic] = omezCislo(
+      const novaVelikost = omezCislo(
         hodnota,
         ...lim,
         VYCHOZI.prvky[id].velikost
       );
+      cil[klic] = novaVelikost;
+
+      /* Hledání a akční tlačítka tvoří jeden řádek. Jejich výška se
+         proto ladí společně, aby při zvětšení ikon nevznikl schod. */
+      if (id === "search" || id === "actions") {
+        stav.prvky.search.velikost = novaVelikost;
+        stav.prvky.actions.velikost = novaVelikost;
+      }
     }
 
     uloz();
@@ -470,6 +512,7 @@
 
   window.LubaNoteNotesVisualTuning = {
     ziskejStav: () => kopie(stav),
+    ziskejVychozi: () => kopie(VYCHOZI),
     ziskejLimity: () => kopie(LIMITY),
     ziskejPrvky: () => [...PRVKY],
     nastavVybranyPrvek,

@@ -31,6 +31,8 @@
     document.getElementById("adminSyncTrafficToolState");
   const notesVisualPanel =
     document.getElementById("adminNotesVisualTuning");
+  const notesVisualFloatingTlacitko =
+    document.getElementById("adminNotesVisualFloatingButton");
   const notesVisualTarget =
     document.getElementById("adminNotesVisualTarget");
   const notesBorderTlacitko =
@@ -71,6 +73,10 @@
     document.getElementById("adminNotesTagsGap");
   const notesTagsGapHodnota =
     document.getElementById("adminNotesTagsGapValue");
+  const notesRowsGap =
+    document.getElementById("adminNotesRowsGap");
+  const notesRowsGapHodnota =
+    document.getElementById("adminNotesRowsGapValue");
   const notesCardColumnGap =
     document.getElementById("adminNotesCardColumnGap");
   const notesCardColumnGapHodnota =
@@ -285,13 +291,13 @@
     },
     search: {
       velikostKlic: "admin.notesSizeSearch",
-      velikostText: "Výška hledání",
+      velikostText: "Výška hledání + ikon",
       min: 34,
       max: 58
     },
     actions: {
       velikostKlic: "admin.notesSizeActions",
-      velikostText: "Velikost akčního tlačítka",
+      velikostText: "Výška hledání + ikon",
       min: 34,
       max: 58
     },
@@ -320,14 +326,33 @@
     return `${Number.isInteger(cislo) ? cislo : cislo.toFixed(1)} px`;
   }
 
-  function nastavRange(prvek, output, hodnota, jednotka = "px") {
-    if (prvek) prvek.value = String(hodnota);
-    if (!output) return;
+  function formatHodnota(hodnota, jednotka = "px") {
     if (jednotka === "%") {
-      output.textContent = `${Math.round(Number(hodnota ?? 0))} %`;
-      return;
+      return `${Math.round(Number(hodnota ?? 0))} %`;
     }
-    output.textContent = formatPx(hodnota);
+    return formatPx(hodnota);
+  }
+
+  function zajistiPuvodniHodnotu(prvek) {
+    const radek = prvek?.closest?.(".adminNotesVisualRangeRow");
+    if (!radek) return null;
+    let badge = radek.querySelector(".adminNotesVisualOriginalValue");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "adminNotesVisualOriginalValue";
+      badge.textContent = `${tAdmin("admin.notesVisualOriginal", "Pův.")} —`;
+      radek.prepend(badge);
+    }
+    return badge;
+  }
+
+  function nastavRange(prvek, output, hodnota, jednotka = "px", puvodni = null) {
+    if (prvek) prvek.value = String(hodnota);
+    if (output) output.textContent = formatHodnota(hodnota, jednotka);
+    const badge = zajistiPuvodniHodnotu(prvek);
+    if (badge && puvodni !== null && puvodni !== undefined) {
+      badge.textContent = `${tAdmin("admin.notesVisualOriginal", "Pův.")} ${formatHodnota(puvodni, jednotka)}`;
+    }
   }
 
   function aktualizujNotesVisualTuning() {
@@ -335,8 +360,9 @@
 
     const api = window.LubaNoteNotesVisualTuning;
     const stav = api?.ziskejStav?.();
+    const vychozi = api?.ziskejVychozi?.();
 
-    if (!stav?.prvky || !stav?.layout) {
+    if (!stav?.prvky || !stav?.layout || !vychozi?.prvky || !vychozi?.layout) {
       notesVisualPanel.hidden = true;
       return;
     }
@@ -345,6 +371,7 @@
 
     const id = stav.vybranyPrvek || "cards";
     const prvek = stav.prvky[id] || stav.prvky.cards;
+    const puvodniPrvek = vychozi.prvky[id] || vychozi.prvky.cards;
     const meta = NOTES_VISUAL_META[id] || NOTES_VISUAL_META.cards;
 
     if (notesVisualTarget) notesVisualTarget.value = id;
@@ -369,18 +396,23 @@
     nastavRange(
       notesBorderSirka,
       notesBorderSirkaHodnota,
-      prvek.borderSirka ?? 1
+      prvek.borderSirka ?? 1,
+      "px",
+      puvodniPrvek.borderSirka
     );
     nastavRange(
       notesBorderSila,
       notesBorderSilaHodnota,
       prvek.borderSila ?? 18,
-      "%"
+      "%",
+      puvodniPrvek.borderSila
     );
     nastavRange(
       notesBorderRadius,
       notesBorderRadiusHodnota,
-      prvek.radius ?? 14
+      prvek.radius ?? 14,
+      "px",
+      puvodniPrvek.radius
     );
 
     if (notesElementSize) {
@@ -391,7 +423,9 @@
     nastavRange(
       notesElementSize,
       notesElementSizeHodnota,
-      prvek.velikost ?? meta.min
+      prvek.velikost ?? meta.min,
+      "px",
+      puvodniPrvek.velikost
     );
 
     if (notesElementSizeLabel) {
@@ -404,27 +438,44 @@
     nastavRange(
       notesOffsetY,
       notesOffsetYHodnota,
-      stav.layout.offsetY ?? -5
+      stav.layout.offsetY ?? -5,
+      "px",
+      vychozi.layout.offsetY
     );
     nastavRange(
       notesFilterGap,
       notesFilterGapHodnota,
-      stav.layout.filtrMezera ?? 6
+      stav.layout.filtrMezera ?? 6,
+      "px",
+      vychozi.layout.filtrMezera
     );
     nastavRange(
       notesTagsGap,
       notesTagsGapHodnota,
-      stav.layout.stitkyMezera ?? 7
+      stav.layout.stitkyMezera ?? 7,
+      "px",
+      vychozi.layout.stitkyMezera
+    );
+    nastavRange(
+      notesRowsGap,
+      notesRowsGapHodnota,
+      stav.layout.radkyMezera ?? 7,
+      "px",
+      vychozi.layout.radkyMezera
     );
     nastavRange(
       notesCardColumnGap,
       notesCardColumnGapHodnota,
-      stav.layout.kartySloupceMezera ?? 10
+      stav.layout.kartySloupceMezera ?? 10,
+      "px",
+      vychozi.layout.kartySloupceMezera
     );
     nastavRange(
       notesCardRowGap,
       notesCardRowGapHodnota,
-      stav.layout.kartyRadkyMezera ?? 12
+      stav.layout.kartyRadkyMezera ?? 12,
+      "px",
+      vychozi.layout.kartyRadkyMezera
     );
   }
 
@@ -442,6 +493,14 @@
     const prvek = id ? stav?.prvky?.[id] : null;
     if (!id || !prvek || !api?.nastavPrvekHodnotu) return;
     api.nastavPrvekHodnotu(id, "borderZapnuty", !prvek.borderZapnuty);
+  }
+
+  function otevriPlovouciNotesTuning() {
+    if (!jeAdmin) return;
+    const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
+    if (otevreno) {
+      zavriDashboard();
+    }
   }
 
   function zobrazDomov() {
@@ -1368,6 +1427,10 @@
         "admin.notesVisualDescription",
         "Vyber prvek a laď ho živě. Hodnoty zůstávají jen v tomto zařízení."
       ],
+      adminNotesVisualFloatingButton: [
+        "admin.notesVisualFloatingButton",
+        "🎛️ Otevřít plovoucí ladění"
+      ],
       adminNotesVisualTargetLabel: [
         "admin.notesVisualTarget",
         "Prvek"
@@ -1418,7 +1481,11 @@
       ],
       adminNotesTagsGapLabel: [
         "admin.notesTagsGap",
-        "Mezera štítků"
+        "Mezera mezi štítky"
+      ],
+      adminNotesRowsGapLabel: [
+        "admin.notesRowsGap",
+        "Mezera filtry ↕ štítky"
       ],
       adminNotesCardColumnGapLabel: [
         "admin.notesCardColumnGap",
@@ -1670,6 +1737,10 @@
     "click",
     prepniSyncTrafficPanel
   );
+  notesVisualFloatingTlacitko?.addEventListener(
+    "click",
+    otevriPlovouciNotesTuning
+  );
   window.addEventListener(
     "lubanote:sync-traffic-visibility-change",
     aktualizujSyncTrafficNastroj
@@ -1736,6 +1807,12 @@
     window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
       "stitkyMezera",
       notesTagsGap.value
+    );
+  });
+  notesRowsGap?.addEventListener("input", () => {
+    window.LubaNoteNotesVisualTuning?.nastavLayoutHodnotu?.(
+      "radkyMezera",
+      notesRowsGap.value
     );
   });
   notesCardColumnGap?.addEventListener("input", () => {
