@@ -12333,11 +12333,14 @@ body.lubaCardDragMode .app {
 
 
 /* ==========================================================
-   HOTFIX 650A – PLÁN / PŘIPOMÍNKY: METADATA SVG IKONY
+   !!! FROZEN PC REGRESSION GUARD – 650A / 658G !!!
+   PLÁN / PŘIPOMÍNKY: METADATA SVG IKONY
    ----------------------------------------------------------
-   Patch 544 přidal nové hostitele calendarAgendaMetaIcon /
-   reminderItemMetaIcon. Bez explicitní velikosti jejich SVG
-   na desktopu zdědilo 100% rozměr a roztáhlo celé položky.
+   NEMAZAT ANI NENAHRAZOVAT OBECNÝM SVG PRAVIDLEM.
+   Patch 544 přidal hostitele calendarAgendaMetaIcon /
+   reminderItemMetaIcon. Bez explicitní velikosti níže jejich SVG
+   na desktopu zdědí 100% rozměr a znovu roztáhne celé položky.
+   Tento blok je párový desktop guard a musí zůstat 18×18 px.
    ========================================================== */
 
 .calendarAgendaMeta,
@@ -13216,6 +13219,11 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   /* Globální rozložení hlavního screenu Poznámky. */
   body:has(#notesModuleButton.active) .homeHeader {
     padding-top: calc(18px + var(--luba-notes-layout-offset-y)) !important;
+    /* 658H: homeHeader měl historicky 12px spodní padding. Ten leží
+       mezi posledním řádkem štítků a <main>, takže slider mezery nemohl
+       nikdy stáhnout skutečnou mezeru karet pod ~12px. Na Poznámkách
+       ho nulujeme a jediným zdrojem mezery je teď Visual Lab proměnná. */
+    padding-bottom: 0 !important;
   }
 
   body:has(#notesModuleButton.active) .categoryTabs {
@@ -13225,6 +13233,8 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
 
   body:has(#notesModuleButton.active) #tagFilterButtons {
     gap: var(--luba-notes-layout-tags-gap) !important;
+    /* Stejný princip jako výše: žádná skrytá spodní rezerva mimo slider. */
+    padding-bottom: 0 !important;
   }
 
   /* 658F: skutečný kontejner hlavních karet je #pinnedCards.pinnedCards.
