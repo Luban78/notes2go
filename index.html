@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658-notes-a">
+  <link rel="stylesheet" href="style.css?v=658a-notes-tuning">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -1533,6 +1533,51 @@
             </span>
             <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
           </button>
+
+          <div id="adminNotesVisualTuning" class="adminNotesVisualTuning">
+            <div class="adminNotesVisualHeader">
+              <span class="adminNotesVisualHeaderText">
+                <strong id="adminNotesVisualTitle">Poznámky – vzhled</strong>
+                <small id="adminNotesVisualDescription">Živé ladění hlavního screenu; hodnoty se ukládají jen v tomto zařízení.</small>
+              </span>
+              <button id="adminNotesVisualReset" class="adminNotesVisualReset" type="button">Výchozí</button>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <span id="adminNotesBorderToggleLabel" class="adminNotesVisualLabel">Border karet + štítků</span>
+              <button id="adminNotesBorderToggle" class="adminNotesVisualToggle" type="button" aria-pressed="true">Zapnuto</button>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <label id="adminNotesBorderModeLabel" class="adminNotesVisualLabel" for="adminNotesBorderMode">Odstín borderu</label>
+              <select id="adminNotesBorderMode" class="adminNotesVisualSelect">
+                <option id="adminNotesBorderModeDark" value="dark">Tmavší barva</option>
+                <option id="adminNotesBorderModeLight" value="light">Světlejší barva</option>
+                <option id="adminNotesBorderModeLegacy" value="legacy">Původní 658</option>
+              </select>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <label id="adminNotesBorderWidthLabel" class="adminNotesVisualLabel" for="adminNotesBorderWidth">Šířka borderu</label>
+              <div class="adminNotesVisualRangeRow">
+                <input id="adminNotesBorderWidth" class="adminNotesVisualRange" type="range" min="0.5" max="6" step="0.5" value="2">
+                <output id="adminNotesBorderWidthValue" class="adminNotesVisualValue" for="adminNotesBorderWidth">2 px</output>
+              </div>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <label id="adminNotesBorderStrengthLabel" class="adminNotesVisualLabel" for="adminNotesBorderStrength">Síla zesvětlení / ztmavení</label>
+              <div class="adminNotesVisualRangeRow">
+                <input id="adminNotesBorderStrength" class="adminNotesVisualRange" type="range" min="0" max="60" step="1" value="18">
+                <output id="adminNotesBorderStrengthValue" class="adminNotesVisualValue" for="adminNotesBorderStrength">18 %</output>
+              </div>
+            </div>
+
+            <div class="adminNotesVisualRow">
+              <span id="adminNotesControlsBorderLabel" class="adminNotesVisualLabel">Border hledání + horních ikon</span>
+              <button id="adminNotesControlsBorderToggle" class="adminNotesVisualToggle" type="button" aria-pressed="true">Zapnuto</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -2159,8 +2204,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=658-notes-a"></script>
-  <script src="lang-en.js?v=658-notes-a"></script>
+  <script src="lang-cs.js?v=658a-notes-tuning"></script>
+  <script src="lang-en.js?v=658a-notes-tuning"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2175,6 +2220,7 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
+  <script src="notesVisualTuning.js?v=658a-notes-tuning"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2237,7 +2283,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658-rx-panel-toggle"></script>
+  <script src="adminDashboard.js?v=658a-notes-tuning"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
