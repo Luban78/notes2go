@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=657d-planner-noshrink">
+  <link rel="stylesheet" href="style.css?v=658-notes-a">
   <link rel="stylesheet" href="documents.css?v=657-title-guard">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -296,7 +296,7 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" data-luba-icon="hledat" data-luba-classic-icon="⌕" aria-hidden="true"></span>
-        <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-luba-keyboard-field="search" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+        <textarea id="searchNotes" rows="1" placeholder="Hledat..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-luba-keyboard-field="search" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
         <button id="clearSearchButton" class="searchClearButton lubaIconOnlyButton" type="button" aria-label="Vymazat hledání" hidden>
           <span class="lubaActionIcon" data-luba-icon="zavrit" data-luba-classic-icon="×" aria-hidden="true"></span>
         </button>
@@ -1524,6 +1524,15 @@
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
+
+          <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">↕️</span>
+            <span class="adminToolText">
+              <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
+              <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
+            </span>
+            <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
         </div>
       </section>
 
@@ -2150,8 +2159,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=657b-planner-week-label"></script>
-  <script src="lang-en.js?v=20260919-main-nav-documents-633"></script>
+  <script src="lang-cs.js?v=658-notes-a"></script>
+  <script src="lang-en.js?v=658-notes-a"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2161,7 +2170,7 @@
   
   <script src="storage.js?v=20260918-post-demo-data-actions-612"></script>
   
-  <script src="tags.js?v=20260917-local-backup-hardening-597"></script>
+  <script src="tags.js?v=658-notes-a"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
@@ -2212,7 +2221,7 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
-  <script src="syncTraffic.js?v=20260918-sync-rx-request-audit-606"></script>
+  <script src="syncTraffic.js?v=658-rx-panel-toggle"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
   <script src="supabaseClient.js?v=20260920-sync-traffic-visible-653f"></script>
@@ -2228,7 +2237,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=20260918-admin-debug-emergency-627a"></script>
+  <script src="adminDashboard.js?v=658-rx-panel-toggle"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

@@ -23,6 +23,12 @@
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
     document.getElementById("adminDebugHubToolButton");
+  const syncTrafficTlacitko =
+    document.getElementById("adminSyncTrafficToolButton");
+  const syncTrafficPopis =
+    document.getElementById("adminSyncTrafficToolDescription");
+  const syncTrafficStav =
+    document.getElementById("adminSyncTrafficToolState");
   const zpetNaNastrojeTlacitko =
     document.getElementById("adminAccountsBackButton");
   const cekajiciTab =
@@ -58,6 +64,7 @@
     !uctyTlacitko ||
     !visualDebugTlacitko ||
     !debugHubTlacitko ||
+    !syncTrafficTlacitko ||
     !zpetNaNastrojeTlacitko ||
     !cekajiciTab ||
     !aktivniTab ||
@@ -163,9 +170,53 @@
     );
   }
 
+  function aktualizujSyncTrafficNastroj() {
+    const viditelny =
+      window.LubaNoteSyncTraffic
+        ?.jePanelViditelny?.() !== false;
+
+    syncTrafficTlacitko.setAttribute(
+      "aria-pressed",
+      String(viditelny)
+    );
+
+    if (syncTrafficStav) {
+      syncTrafficStav.textContent = tAdmin(
+        viditelny
+          ? "admin.syncTrafficOn"
+          : "admin.syncTrafficOff",
+        viditelny ? "Zapnuto" : "Vypnuto"
+      );
+    }
+
+    if (syncTrafficPopis) {
+      syncTrafficPopis.textContent = tAdmin(
+        viditelny
+          ? "admin.syncTrafficVisible"
+          : "admin.syncTrafficHidden",
+        viditelny
+          ? "Panel RX/TX/E je zobrazený"
+          : "Panel RX/TX/E je skrytý"
+      );
+    }
+  }
+
+  function prepniSyncTrafficPanel() {
+    const api = window.LubaNoteSyncTraffic;
+    if (!api?.nastavPanelViditelny) {
+      return;
+    }
+
+    api.nastavPanelViditelny(
+      !(api.jePanelViditelny?.() !== false)
+    );
+    aktualizujSyncTrafficNastroj();
+  }
+
   function zobrazDomov() {
     domov.hidden = false;
     uctyPohled.hidden = true;
+    aktualizujSyncTrafficNastroj();
   }
 
   function zobrazUcty() {
@@ -1073,6 +1124,10 @@
         "admin.debugHubDescription",
         "Diagnostika, logy a testovací moduly"
       ],
+      adminSyncTrafficToolTitle: [
+        "admin.syncTrafficTitle",
+        "RX/TX/E panel"
+      ],
       adminAccountsHeading: ["admin.accountsHeading", "Správa účtů"]
     };
 
@@ -1116,6 +1171,8 @@
         "Zavřít Admin Dashboard"
       )
     );
+
+    aktualizujSyncTrafficNastroj();
 
     if (!modal.hidden && !uctyPohled.hidden) {
       vykresliUzivatele();
@@ -1252,6 +1309,14 @@
   debugHubTlacitko.addEventListener(
     "click",
     otevriDebugHubZAdmina
+  );
+  syncTrafficTlacitko.addEventListener(
+    "click",
+    prepniSyncTrafficPanel
+  );
+  window.addEventListener(
+    "lubanote:sync-traffic-visibility-change",
+    aktualizujSyncTrafficNastroj
   );
   zpetNaNastrojeTlacitko.addEventListener(
     "click",

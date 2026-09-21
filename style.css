@@ -12636,3 +12636,106 @@ body.lubaCardDragMode .app {
     height: 52px;
   }
 }
+
+
+/* ==================================================
+   PATCH 658 – POZNÁMKY / VARIANTA A + ADMIN RX PANEL
+   Android-only vizuální úklid hlavní plochy Poznámek.
+   ================================================== */
+
+/* Uživatelské skrytí diagnostického RX/TX/E panelu nemění měření ani sync. */
+body.lubaSyncTrafficUserHidden #syncTrafficBar {
+  display: none !important;
+}
+
+.adminToolCard.adminToolCardToggle {
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+}
+
+.adminToolToggle {
+  min-width: 72px;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-background));
+  color: var(--color-accent-text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.adminToolCard[aria-pressed="false"] .adminToolToggle {
+  border-color: var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 720px) {
+  /* V modulu Poznámky necháváme jedinou hlavní ikonu; stav úložiště
+     zůstává dostupný v servisním menu a nemíchá se s ikonou modulu. */
+  #notesModuleButton .notesStorageScopeIcon {
+    display: none !important;
+  }
+
+  /* Primární filtry jsou vždy první řádek; uživatelské štítky mají
+     vlastní pohodlný horizontální řádek pod nimi. */
+  .categoryTabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px 6px;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .categoryTabs > .categoryTab {
+    flex: 0 0 auto;
+    height: 42px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .categoryTabs > .categoryTabIconOnly {
+    width: 38px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  #tagFilterButtons {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 1px 0 2px;
+  }
+
+  #tagFilterButtons::-webkit-scrollbar {
+    display: none;
+  }
+
+  #tagFilterButtons .categoryTab {
+    flex: 0 0 auto;
+  }
+
+  /* Výraznější obrys je odvozený přímo z barvy karty – jen tmavší. */
+  .taskCard {
+    border: 2px solid color-mix(
+      in srgb,
+      var(--luba-card-bg) 66%,
+      #000 34%
+    );
+  }
+}

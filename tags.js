@@ -2818,6 +2818,15 @@ async function ulozPoradiStitku(poradiViditelnychId) {
 }
 
 function ziskejHorniScrollStitku() {
+  /* PATCH 658 – na mobilu mají štítky vlastní druhý řádek a vlastní
+     horizontální scroll. Na desktopu zůstává původní scroll rodiče. */
+  if (
+    tagFilterButtons &&
+    tagFilterButtons.scrollWidth > tagFilterButtons.clientWidth + 1
+  ) {
+    return tagFilterButtons;
+  }
+
   return tagFilterButtons?.closest(".categoryTabs") || null;
 }
 

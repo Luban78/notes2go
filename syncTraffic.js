@@ -18,6 +18,52 @@
   const egressEl = document.getElementById("syncTrafficEgress");
   const barEl = document.getElementById("syncTrafficBar");
 
+  const SYNC_TRAFFIC_VISIBLE_KEY = "lubanoteSyncTrafficVisibleV1";
+  let panelViditelnyUzivatelem = true;
+
+  try {
+    panelViditelnyUzivatelem =
+      localStorage.getItem(SYNC_TRAFFIC_VISIBLE_KEY) !== "0";
+  } catch (_error) {}
+
+  function aplikujViditelnostPanelu() {
+    document.body?.classList.toggle(
+      "lubaSyncTrafficUserHidden",
+      !panelViditelnyUzivatelem
+    );
+
+    if (barEl) {
+      if (panelViditelnyUzivatelem) {
+        barEl.removeAttribute("aria-hidden");
+      } else {
+        barEl.setAttribute("aria-hidden", "true");
+      }
+    }
+  }
+
+  function nastavPanelViditelny(hodnota) {
+    panelViditelnyUzivatelem = Boolean(hodnota);
+
+    try {
+      localStorage.setItem(
+        SYNC_TRAFFIC_VISIBLE_KEY,
+        panelViditelnyUzivatelem ? "1" : "0"
+      );
+    } catch (_error) {}
+
+    aplikujViditelnostPanelu();
+
+    window.dispatchEvent(
+      new CustomEvent("lubanote:sync-traffic-visibility-change", {
+        detail: { visible: panelViditelnyUzivatelem }
+      })
+    );
+
+    return panelViditelnyUzivatelem;
+  }
+
+  aplikujViditelnostPanelu();
+
   const puvodniFetch = window.fetch.bind(window);
   const encoder = new TextEncoder();
 
@@ -591,6 +637,8 @@
     dokonciSync,
     nastavEgressZbyvaBajtu,
     nastavEgressZbyvaGB,
+    jePanelViditelny: () => panelViditelnyUzivatelem,
+    nastavPanelViditelny,
     stav: () => ({
       aktivni: hloubkaSyncu > 0,
       rx: hloubkaSyncu > 0 ? aktualniRx : posledniRx,
