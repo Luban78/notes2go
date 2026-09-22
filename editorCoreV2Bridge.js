@@ -244,17 +244,26 @@
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
 
+      // Selection menu nesmí překrýt horní editorovou lištu.
+      // Pokud se celé nevejde mezi lištu a označený text, zobrazíme ho pod výběrem.
+      const editorTopBar = document.querySelector("#taskModal .editorTopBar");
+      const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
+      const horniBezpecnaHrana = Math.max(
+        offsetTop + okraj,
+        editorTopBarRect ? editorTopBarRect.bottom + okraj : offsetTop + okraj
+      );
+
       let x;
       let y;
 
       if (bod) {
         x = Number(bod.x) - sirka / 2;
         y = Number(bod.y) - vyska - 14;
-        if (y < offsetTop + okraj) y = Number(bod.y) + 18;
+        if (y < horniBezpecnaHrana) y = Number(bod.y) + 18;
       } else if (rect) {
         x = rect.left + rect.width / 2 - sirka / 2;
         y = rect.top - vyska - 12;
-        if (y < offsetTop + okraj) y = rect.bottom + 12;
+        if (y < horniBezpecnaHrana) y = rect.bottom + 12;
       } else {
         x = (viewportW - sirka) / 2;
         y = offsetTop + 70;
