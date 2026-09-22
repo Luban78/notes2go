@@ -1576,6 +1576,21 @@ const reminderQuickDateTime =
 const saveReminderQuickDateButton =
   document.getElementById("saveReminderQuickDateButton");
 
+const rychleOpakovaniPravidlo =
+  document.getElementById("reminderQuickRepeatRule");
+
+const rychleOpakovaniDalsi =
+  document.getElementById("reminderQuickRepeatNext");
+
+const rychleOpakovaniPredchozi =
+  document.getElementById("reminderQuickRepeatPrevious");
+
+const rychleOpakovaniPredchoziPopisek =
+  document.getElementById("reminderQuickRepeatPreviousLabel");
+
+const rychleOpakovaniPredchoziHodnota =
+  document.getElementById("reminderQuickRepeatPreviousValue");
+
 const recurringDeleteConfirmModal =
   document.getElementById("recurringDeleteConfirmModal");
 
@@ -1601,6 +1616,199 @@ let cekajiciSmazaniOpakovanePoznamkyId = null;
 let cekajiciDokonceniOpakovanePoznamky = null;
 let preskocitPotvrzeniOpakovanehoDokonceniJednou = false;
 
+
+function formatujDatumCasRychlehoOpakovani(hodnota) {
+  const datum = hodnota instanceof Date
+    ? hodnota
+    : new Date(hodnota);
+
+  if (Number.isNaN(datum.getTime())) {
+    return "—";
+  }
+
+  const jazyk =
+    window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ";
+
+  const textData = datum.toLocaleDateString(jazyk, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    weekday: "short"
+  });
+
+  const textCasu = datum.toLocaleTimeString(jazyk, {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  return `${textData} v ${textCasu}`;
+}
+
+function najdiPredchoziTerminRychlehoOpakovani(
+  poznamka,
+  referencniHodnota
+) {
+  if (
+    poznamka?.repeat?.enabled !== true ||
+    !window.LubaNoteRecurring?.jeDatumVOpakovani
+  ) {
+    return null;
+  }
+
+  const referencniDatum = new Date(
+    referencniHodnota || poznamka.date
+  );
+
+  if (Number.isNaN(referencniDatum.getTime())) {
+    return null;
+  }
+
+  const zaklad = new Date(
+    poznamka.date || referencniDatum
+  );
+  const hodiny = Number.isNaN(zaklad.getTime())
+    ? referencniDatum.getHours()
+    : zaklad.getHours();
+  const minuty = Number.isNaN(zaklad.getTime())
+    ? referencniDatum.getMinutes()
+    : zaklad.getMinutes();
+
+  for (let i = 1; i <= 370; i++) {
+    const kandidat = new Date(
+      referencniDatum.getFullYear(),
+      referencniDatum.getMonth(),
+      referencniDatum.getDate() - i,
+      hodiny,
+      minuty,
+      0,
+      0
+    );
+
+    if (
+      window.LubaNoteRecurring.jeDatumVOpakovani(
+        kandidat,
+        poznamka.repeat
+      )
+    ) {
+      return kandidat;
+    }
+  }
+
+  return null;
+}
+
+function aktualizujSouhrnRychlehoOpakovani(
+  polozka,
+  zobrazeneDatum
+) {
+  if (!editReminderRepeatButton) {
+    return;
+  }
+
+  const poznamka =
+    polozka?.sourceNoteId && typeof loadTask === "function"
+      ? loadTask().find(
+          (kandidat) =>
+            kandidat?.id === polozka.sourceNoteId
+        ) || null
+      : null;
+
+  if (poznamka?.repeat?.enabled !== true) {
+    if (rychleOpakovaniPredchozi) {
+      rychleOpakovaniPredchozi.hidden = true;
+    }
+    return;
+  }
+
+  const pravidlo =
+    window.LubaNoteRecurring?.formatujPravidlo?.(
+      poznamka.repeat
+    ) || "Opakování";
+
+  const zakladniDatum = new Date(
+    poznamka.date || zobrazeneDatum
+  );
+  const textCasu = Number.isNaN(zakladniDatum.getTime())
+    ? ""
+    : zakladniDatum.toLocaleTimeString(
+        window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+        {
+          hour: "2-digit",
+          minute: "2-digit"
+        }
+      );
+
+  if (rychleOpakovaniPravidlo) {
+    rychleOpakovaniPravidlo.textContent = textCasu
+      ? `${pravidlo} v ${textCasu}`
+      : pravidlo;
+  }
+
+  if (rychleOpakovaniDalsi) {
+    const textDalsihoVyskytu =
+      formatujDatumCasRychlehoOpakovani(
+        zobrazeneDatum
+      );
+
+    rychleOpakovaniDalsi.textContent =
+      `Další výskyt: ${textDalsihoVyskytu}`;
+  }
+
+  const predchoziDatum =
+    najdiPredchoziTerminRychlehoOpakovani(
+      poznamka,
+      zobrazeneDatum
+    );
+
+  if (rychleOpakovaniPredchozi) {
+    rychleOpakovaniPredchozi.hidden = false;
+  }
+
+  if (predchoziDatum) {
+    if (rychleOpakovaniPredchoziPopisek) {
+      rychleOpakovaniPredchoziPopisek.textContent =
+        "Předchozí výskyt";
+    }
+
+    if (rychleOpakovaniPredchoziHodnota) {
+      rychleOpakovaniPredchoziHodnota.textContent =
+        formatujDatumCasRychlehoOpakovani(
+          predchoziDatum
+        );
+    }
+  } else {
+    const pocatecniDatum = poznamka.repeat?.startDate;
+    const pocatecniHodnota = pocatecniDatum
+      ? new Date(
+          `${pocatecniDatum}T${textCasu || "00:00"}:00`
+        )
+      : null;
+
+    if (rychleOpakovaniPredchoziPopisek) {
+      rychleOpakovaniPredchoziPopisek.textContent =
+        "Začátek opakování";
+    }
+
+    if (rychleOpakovaniPredchoziHodnota) {
+      rychleOpakovaniPredchoziHodnota.textContent =
+        pocatecniHodnota
+          ? formatujDatumCasRychlehoOpakovani(
+              pocatecniHodnota
+            )
+          : "—";
+    }
+  }
+
+  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(
+    editReminderRepeatButton
+  );
+
+  if (rychleOpakovaniPredchozi) {
+    window.LubaNoteIcons?.naplnDeklarovaneIkony?.(
+      rychleOpakovaniPredchozi
+    );
+  }
+}
 
 function closeReminderQuickMenu() {
   if (!reminderQuickMenu) {
@@ -1744,6 +1952,21 @@ function openReminderQuickMenu(
     entry.sourceType === "recurring-note";
   const pripominkaZapnuta =
     entry.reminder === true;
+
+  const panelRychlehoMenu =
+    reminderQuickMenu?.querySelector?.(
+      ".reminderQuickSheet"
+    );
+
+  panelRychlehoMenu?.classList.toggle(
+    "reminderQuickPlannerTask",
+    jePlanner
+  );
+  panelRychlehoMenu?.classList.toggle(
+    "reminderQuickRecurringTask",
+    jePlanner && jeOpakovana
+  );
+
   const lzeVratitPlanovanyUkol =
     jePlanner &&
     entry.kind === "planned" &&
@@ -1774,7 +1997,19 @@ function openReminderQuickMenu(
   if (saveReminderQuickDateButton) {
     saveReminderQuickDateButton.hidden =
       jePlanner && jeOpakovana;
-    saveReminderQuickDateButton.textContent = "Termín";
+
+    if (!saveReminderQuickDateButton.hidden) {
+      if (window.LubaNoteIcons?.nastavObsahSIkonou) {
+        window.LubaNoteIcons.nastavObsahSIkonou(
+          saveReminderQuickDateButton,
+          "kalendar",
+          "Termín"
+        );
+      } else {
+        saveReminderQuickDateButton.textContent =
+          "Termín";
+      }
+    }
   }
 
   if (editReminderRepeatButton) {
@@ -1782,15 +2017,12 @@ function openReminderQuickMenu(
       !(jePlanner && jeOpakovana);
 
     if (!editReminderRepeatButton.hidden) {
-      if (window.LubaNoteIcons?.nastavObsahSIkonou) {
-        window.LubaNoteIcons.nastavObsahSIkonou(
-          editReminderRepeatButton,
-          "opakovat",
-          "Opakování"
-        );
-      } else {
-        editReminderRepeatButton.textContent = "Opakování";
-      }
+      aktualizujSouhrnRychlehoOpakovani(
+        entry,
+        zobrazeneDatum
+      );
+    } else if (rychleOpakovaniPredchozi) {
+      rychleOpakovaniPredchozi.hidden = true;
     }
   }
 
@@ -1827,7 +2059,9 @@ function openReminderQuickMenu(
 
   if (disableReminderButton) {
     const popisek = pripominkaZapnuta
-      ? "Vypnout"
+      ? (jePlanner && jeOpakovana
+          ? "Vypnout opakování"
+          : "Vypnout")
       : "Připomenout";
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {

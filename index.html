@@ -765,9 +765,28 @@
         </label>
       </div>
       
-      <button id="saveReminderQuickDateButton" type="button" class="reminderQuickPrimary">
-        Uložit datum a čas
+      <button id="saveReminderQuickDateButton" type="button" class="reminderQuickPrimary lubaHasIcon">
+        <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
+        <span>Termín</span>
       </button>
+
+      <button id="editReminderRepeatButton" type="button" class="reminderQuickRepeatCard" hidden>
+        <span class="reminderQuickRepeatIcon lubaActionIcon" data-luba-icon="opakovat" aria-hidden="true"></span>
+        <span class="reminderQuickRepeatText">
+          <strong>Opakování</strong>
+          <span id="reminderQuickRepeatRule">Pravidlo opakování</span>
+          <small id="reminderQuickRepeatNext">Další výskyt</small>
+        </span>
+        <span class="reminderQuickRepeatArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
+      </button>
+
+      <div id="reminderQuickRepeatPrevious" class="reminderQuickRepeatPrevious" hidden>
+        <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
+        <span>
+          <small id="reminderQuickRepeatPreviousLabel">Předchozí výskyt</small>
+          <strong id="reminderQuickRepeatPreviousValue">—</strong>
+        </span>
+      </div>
       
       <div class="reminderQuickFooter">
         <button id="completeReminderButton" type="button" class="reminderQuickDone lubaHasIcon">
@@ -783,11 +802,6 @@
         <button id="openReminderNoteButton" type="button" class="lubaHasIcon">
           <span class="lubaActionIcon" data-luba-icon="poznamky" aria-hidden="true"></span>
           <span>Otevřít</span>
-        </button>
-
-        <button id="editReminderRepeatButton" type="button" class="lubaHasIcon" hidden>
-          <span class="lubaActionIcon" data-luba-icon="opakovat" aria-hidden="true"></span>
-          <span>Upravit opakování</span>
         </button>
         
         <button id="disableReminderButton" type="button" class="danger lubaHasIcon">
