@@ -811,6 +811,36 @@ function renderCalendarItems(targetElement) {
   const dateKey =
     `${year}-${month}-${day}`;
 
+  /*
+   * 658R – řazení agendy musí používat skutečný termín ve vybraném dni.
+   *
+   * Opakovaná poznámka si v `plannedAt` ponechává původní datum začátku
+   * opakování. Kdybychom řadili přímo podle `plannedAt`, opakované a běžné
+   * položky by se rozdělily podle různých kalendářních dnů a až potom by se
+   * u opakovaných zobrazil čas aktuálního výskytu. Výsledek pak mohl být
+   * např. 08:00 → 08:15 → 10:01 → 06:30.
+   *
+   * Pro opakovanou položku proto už PŘED sortem vytvoříme efektivní termín
+   * z právě vybraného data + jejího času. Stejnou hodnotu pak používáme i
+   * při renderu a otevření rychlého menu.
+   */
+  const ziskejEfektivniTerminProDen = (item) => {
+    const planovanyTermin =
+      typeof item?.plannedAt === "string"
+        ? item.plannedAt
+        : "";
+
+    if (item?.sourceType === "recurring-note") {
+      const cas =
+        planovanyTermin.slice(11, 16) ||
+        "00:00";
+
+      return `${dateKey}T${cas}`;
+    }
+
+    return planovanyTermin;
+  };
+
   const items =
     loadCalendarItems()
       .filter(
@@ -820,10 +850,10 @@ function renderCalendarItems(targetElement) {
             dateKey
           )
       )
-      .sort(
-        (a, b) =>
-          a.plannedAt.localeCompare(
-            b.plannedAt
+      .sort((a, b) =>
+        ziskejEfektivniTerminProDen(a)
+          .localeCompare(
+            ziskejEfektivniTerminProDen(b)
           )
       );
 
@@ -855,9 +885,7 @@ function renderCalendarItems(targetElement) {
     }
 
     const efektivniTermin =
-      item.sourceType === "recurring-note"
-        ? `${dateKey}T${item.plannedAt.slice(11, 16)}`
-        : item.plannedAt;
+      ziskejEfektivniTerminProDen(item);
 
     const time =
       document.createElement("div");
