@@ -49,8 +49,8 @@
         borderSila: 18,
         radius: 15,
         velikost: 42,
-        ikonaVelikost: 22,
-        ikonaTloustka: 1.35
+        ikonaVelikost: 27,
+        ikonaTloustka: 1.25
       },
       search: {
         borderZapnuty: true,

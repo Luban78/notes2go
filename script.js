@@ -3038,7 +3038,20 @@ secretTaskButton.classList.toggle(
   }
 
   puvodniOtiskEditoru = vytvorOtiskEditoru();
-  modalTitle.focus();
+
+  /* FIX 658N – nová poznámka musí začít v názvu.
+     Core V2 při otevření hostu ještě přes queueMicrotask obnovuje svůj
+     modelový selection do těla editoru. Původní synchronní focus názvu
+     proto tento pozdější krok přebil. Zařadíme focus názvu až ZA něj;
+     mění se pouze cesta nové poznámky, existující poznámky zůstávají beze změny. */
+  queueMicrotask(() => {
+    if (taskModal.hidden || taskModal.dataset.taskId) return;
+    try {
+      modalTitle.focus({ preventScroll: true });
+    } catch (_error) {
+      modalTitle.focus();
+    }
+  });
 });
 
 
