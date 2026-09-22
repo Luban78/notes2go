@@ -3201,3 +3201,65 @@ body.documents-epub-viewer-open {
   min-width: 0;
   max-width: 100%;
 }
+
+
+/* ============================================================
+   PATCH 658Q – DOKUMENTY / PŘETEČENÍ + TRVALÉ SMAZÁNÍ
+   ============================================================ */
+.documentsFileRow,
+.documentsFileOpenArea,
+.documentsFileMain {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.documentsFileOpenArea {
+  width: 100%;
+  overflow: hidden;
+}
+
+.documentsFileMain strong {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Čtyřpísmenné DOCX se v kompaktní 38px ikoně nesmí roztáhnout ven. */
+.documentsFileIcon.is-docx,
+.documentsDragPreviewIcon.is-docx {
+  overflow: hidden;
+  box-sizing: border-box;
+  padding-inline: 2px;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: -0.25px;
+  white-space: nowrap;
+}
+
+/* Dlouhý název v akčním/potvrzovacím modalu se naopak bezpečně zalomí. */
+.documentsFileManageDialog h3,
+.documentsFileRenameDialog h3,
+.documentsFileDeleteForeverDialog h3,
+#documentsFileDeleteForeverText {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.documentsFileDeleteForeverAction,
+.documentsFileDeleteForeverConfirm {
+  border: 1px solid color-mix(in srgb, #ef5350 78%, var(--color-border));
+  background: color-mix(in srgb, #ef5350 14%, var(--color-surface));
+  color: #ffb4b1;
+}
+
+.documentsFileDeleteForeverCancel {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}

@@ -288,6 +288,52 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
   }
 
+  /* PATCH 658Q – Dokumenty / Koš: fyzicky odstraní privátní kopii PDF.
+     Metoda přijímá pouze storageKey vytvořený importem LubaNote, takže se
+     nemůže dostat mimo privátní složku lubanote-documents. */
+  @PluginMethod
+  public void smazUlozenyPdf(PluginCall call) {
+    String storageKey = call.getString("storageKey");
+
+    if (
+      storageKey == null ||
+      !storageKey.matches("^[0-9a-fA-F-]{36}\\.pdf$")
+    ) {
+      call.reject("Neplatný identifikátor PDF.");
+      return;
+    }
+
+    File slozka = new File(
+      getContext().getFilesDir(),
+      "lubanote-documents"
+    );
+    File soubor = new File(slozka, storageKey);
+
+    JSObject odpoved = new JSObject();
+
+    if (!soubor.exists()) {
+      odpoved.put("deleted", false);
+      odpoved.put("missing", true);
+      call.resolve(odpoved);
+      return;
+    }
+
+    if (!soubor.isFile()) {
+      call.reject("Uložené PDF není platný soubor.");
+      return;
+    }
+
+    boolean smazano = soubor.delete();
+    if (!smazano && soubor.exists()) {
+      call.reject("PDF se nepodařilo odstranit z lokální knihovny.");
+      return;
+    }
+
+    odpoved.put("deleted", true);
+    odpoved.put("missing", false);
+    call.resolve(odpoved);
+  }
+
   @PluginMethod
   public void otevriUlozenyPdf(PluginCall call) {
     String storageKey = call.getString("storageKey");

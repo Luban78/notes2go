@@ -429,6 +429,33 @@
     return record;
   }
 
+  /* PATCH 658Q – dokumentový Koš musí umět skutečné trvalé smazání.
+     Android PDF je fyzicky uložené v privátní složce aplikace, takže nejdřív
+     smažeme tuto kopii a teprve potom záznam z IndexedDB. Ostatní typy jsou
+     uložené přímo v IndexedDB a stačí smazat jejich record. */
+  async function smazSouborTrvale(idSouboru) {
+    const record = await nactiSoubor(idSouboru);
+    if (!record) throw new Error('Soubor už není dostupný.');
+    if (!jeSouborVKosi(record)) throw new Error('Trvale mazat lze pouze dokument v koši.');
+
+    if (record.storageMode === 'android' && record.storageKey) {
+      const plugin = ziskejNativniPlugin();
+      if (!plugin?.smazUlozenyPdf) {
+        throw new Error('Android neumí bezpečně smazat uložené PDF.');
+      }
+
+      const vysledek = await plugin.smazUlozenyPdf({ storageKey: record.storageKey });
+      if (vysledek?.deleted !== true && vysledek?.missing !== true) {
+        throw new Error('Uložené PDF se nepodařilo fyzicky smazat.');
+      }
+    }
+
+    const db = await otevriDb();
+    const tx = db.transaction(STORE_FILES, 'readwrite');
+    await requestPromise(tx.objectStore(STORE_FILES).delete(idSouboru));
+    return true;
+  }
+
 
   async function presunSouborDoSlozky(idSouboru, folderId) {
     const record = await nactiSoubor(idSouboru);
@@ -1433,6 +1460,7 @@
           <button type="button" class="documentsFileRenameAction">✏️ Přejmenovat</button>
           <button type="button" class="documentsFileTrashAction">🗑️ Přesunout do koše</button>
           <button type="button" class="documentsFileRestoreAction" hidden>↩️ Obnovit z koše</button>
+          <button type="button" class="documentsFileDeleteForeverAction" hidden>🗑️ Trvale smazat</button>
           <button type="button" class="documentsFolderManageCancel documentsFileManageCancel">Zrušit</button>
         </div>
       </section>`;
@@ -1443,6 +1471,7 @@
     const rename = modal.querySelector('.documentsFileRenameAction');
     const trash = modal.querySelector('.documentsFileTrashAction');
     const restore = modal.querySelector('.documentsFileRestoreAction');
+    const deleteForever = modal.querySelector('.documentsFileDeleteForeverAction');
     const cancel = modal.querySelector('.documentsFileManageCancel');
     let fileId = null;
 
@@ -1496,6 +1525,12 @@
       }
     });
 
+    deleteForever.addEventListener('click', () => {
+      const idSouboru = fileId;
+      zavrit();
+      if (idSouboru) zajistiTrvaleSmazaniSouboruModal().otevrit(idSouboru);
+    });
+
     modal.otevrit = (idSouboru) => {
       const record = posledniSoubory.find((item) => item.id === idSouboru);
       if (!record) return;
@@ -1506,6 +1541,71 @@
       rename.hidden = vKosi;
       trash.hidden = vKosi;
       restore.hidden = !vKosi;
+      deleteForever.hidden = !vKosi;
+      modal.hidden = false;
+    };
+
+    return modal;
+  }
+
+  function zajistiTrvaleSmazaniSouboruModal() {
+    let modal = document.getElementById('documentsFileDeleteForeverModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'documentsFileDeleteForeverModal';
+    modal.className = 'documentsFolderModal documentsFileDeleteForeverModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="documentsFolderDialog documentsFileDeleteForeverDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileDeleteForeverTitle">
+        <div class="documentsFolderDeleteIcon" aria-hidden="true">🗑️</div>
+        <h3 id="documentsFileDeleteForeverTitle">Trvale smazat dokument?</h3>
+        <p id="documentsFileDeleteForeverText"></p>
+        <div class="documentsFolderActions">
+          <button type="button" class="documentsFileDeleteForeverCancel">Zrušit</button>
+          <button type="button" class="documentsFileDeleteForeverConfirm">Trvale smazat</button>
+        </div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const text = modal.querySelector('#documentsFileDeleteForeverText');
+    const cancel = modal.querySelector('.documentsFileDeleteForeverCancel');
+    const confirm = modal.querySelector('.documentsFileDeleteForeverConfirm');
+    let fileId = null;
+
+    const zavrit = () => {
+      modal.hidden = true;
+      fileId = null;
+    };
+
+    cancel.addEventListener('click', zavrit);
+    modal.addEventListener('pointerdown', (event) => {
+      if (event.target === modal) zavrit();
+    });
+
+    confirm.addEventListener('click', async () => {
+      if (!fileId) return;
+      const idSouboru = fileId;
+      confirm.disabled = true;
+      try {
+        await smazSouborTrvale(idSouboru);
+        zavrit();
+        await refresh();
+        try { navigator.vibrate?.([18, 28, 18]); } catch (_error) {}
+      } catch (error) {
+        console.error('Trvalé smazání dokumentu selhalo:', error);
+        zobrazChybu('Dokumenty', 'Dokument se nepodařilo trvale smazat.');
+      } finally {
+        confirm.disabled = false;
+      }
+    });
+
+    modal.otevrit = (idSouboru) => {
+      const record = posledniSoubory.find((item) => item.id === idSouboru);
+      if (!record || !jeSouborVKosi(record)) return;
+      fileId = idSouboru;
+      text.textContent = `„${record.name || 'Dokument'}“ bude trvale odstraněn z tohoto zařízení. Tuto akci nelze vrátit zpět.`;
       modal.hidden = false;
     };
 
@@ -3960,7 +4060,7 @@
     } else if (zobrazujiKos) {
       if (prazdnaIkona) prazdnaIkona.textContent = '🗑️';
       if (prazdnyNadpis) prazdnyNadpis.textContent = 'Koš je prázdný';
-      if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit.';
+      if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit nebo trvale smazat.';
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
       if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : aktivniTypFiltru === 'epub' ? 'Zatím tu není žádná kniha EPUB' : aktivniTypFiltru === 'sql' ? 'Zatím tu není žádný SQL soubor' : 'Zatím tu není žádný dokument';
