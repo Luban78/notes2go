@@ -62,6 +62,36 @@
     desktopBackupButton
   ].filter(Boolean);
 
+  /* PATCH 658X – desktop Poznámky / varianta A
+     První řádek: kratší hledání + systémové filtry + akce.
+     Druhý řádek: pouze uživatelské štítky přes celou šířku.
+     Přesouváme skutečné DOM uzly, takže jejich existující listenery zůstávají zachované. */
+  const searchRow = document.querySelector(".searchRow");
+  const searchActions = document.querySelector(".searchActions");
+  const categoryTabs = document.querySelector(".categoryTabs");
+
+  function sestavDesktopNotesToolbar() {
+    if (!searchRow || !searchActions || !categoryTabs) return;
+    if (searchRow.querySelector(".desktopCategoryActions")) return;
+
+    const desktopCategoryActions = document.createElement("div");
+    desktopCategoryActions.className = "desktopCategoryActions";
+    desktopCategoryActions.setAttribute("aria-label", "Rychlé filtry poznámek");
+
+    const kategorie = Array.from(
+      categoryTabs.querySelectorAll(":scope > .categoryTab")
+    );
+
+    kategorie.forEach((tlacitko) => {
+      desktopCategoryActions.appendChild(tlacitko);
+    });
+
+    searchRow.insertBefore(desktopCategoryActions, searchActions);
+    document.body.classList.add("desktopNotesToolbarA");
+  }
+
+  sestavDesktopNotesToolbar();
+
   function nastavAktivniSidebar(button) {
     sidebarButtons.forEach((polozka) => {
       polozka.classList.toggle(
