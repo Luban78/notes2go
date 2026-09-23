@@ -1369,3 +1369,19 @@
 #ln-dnvt-panel.ln-nvt-minimized { max-height: 49px; }
 #ln-dnvt-panel.ln-nvt-minimized .ln-nvt-body { display: none; }
 #ln-dnvt-panel.ln-nvt-dragging .ln-nvt-head { cursor: grabbing; }
+
+/* ==========================================================
+   PATCH 658AA – DESKTOP NOTES TOOLBAR / MODULE ISOLATION
+   ----------------------------------------------------------
+   Navigation uses the native [hidden] attribute to hide the
+   Notes search/filter rows outside the Notes module. Desktop
+   Visual Lab rules set display:flex, so explicitly preserve
+   [hidden] with higher priority. This keeps variant A strictly
+   on the Notes screen and leaves Planner/Documents untouched.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body.desktopNotesToolbarA .searchRow[hidden],
+  body.desktopNotesToolbarA .categoryTabs[hidden] {
+    display: none !important;
+  }
+}
