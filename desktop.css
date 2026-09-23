@@ -1586,3 +1586,23 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* ============================================================
+   PATCH 658AD – PC sidebar: odstranit duplicitní navigaci Poznámek
+   Domů / Všechny poznámky / Oblíbené / Štítky jsou na desktopu
+   dostupné v horní Notes liště, proto je v levém panelu nezobrazujeme.
+   Logika a mobilní UI zůstávají beze změny.
+   ============================================================ */
+@media (min-width: 900px) {
+  #desktopHomeButton,
+  #desktopAllNotesButton,
+  #desktopFavoriteButton,
+  #desktopTagsButton {
+    display: none !important;
+  }
+
+  .desktopSidebar > .desktopSidebarNav:not(.desktopSidebarNavSecondary),
+  .desktopSidebar > .desktopSidebarDivider {
+    display: none !important;
+  }
+}
+
