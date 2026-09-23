@@ -5,11 +5,11 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteDesktopPlannerVisualTuningV1";
+  const KLIC = "lubanoteDesktopPlannerVisualTuningV2";
   const VYCHOZI = {
     kalendar: {
-      sirkaScreenu: 1160,
-      podilKalendare: 60,
+      sirkaScreenu: 1240,
+      podilKalendare: 55,
       sirkaMrizky: 620,
       vyskaDne: 54,
       mezeraDni: 5,
@@ -22,13 +22,15 @@
       radius: 14,
       pismo: 15,
       paddingRadku: 7,
+      minVyskaRadku: 48,
       mezeraRadku: 9,
       sirkaCasu: 62
     },
     subnav: {
-      vyska: 50,
-      radius: 12,
-      mezera: 10
+      vyska: 54,
+      radius: 13,
+      mezera: 12,
+      pismo: 16
     }
   };
 
@@ -44,11 +46,13 @@
     agendaRadius: [0, 28],
     agendaPismo: [12, 21],
     agendaPaddingRadku: [2, 16],
+    agendaMinVyskaRadku: [38, 76],
     agendaMezeraRadku: [4, 18],
     sirkaCasu: [48, 90],
     subnavVyska: [38, 68],
     subnavRadius: [0, 24],
-    subnavMezera: [0, 24]
+    subnavMezera: [0, 24],
+    subnavPismo: [12, 22]
   };
 
   const kopie = (o) => JSON.parse(JSON.stringify(o));
@@ -76,11 +80,13 @@
       stav.agenda.radius = omez(a.radius, ...LIMITY.agendaRadius, stav.agenda.radius);
       stav.agenda.pismo = omez(a.pismo, ...LIMITY.agendaPismo, stav.agenda.pismo);
       stav.agenda.paddingRadku = omez(a.paddingRadku, ...LIMITY.agendaPaddingRadku, stav.agenda.paddingRadku);
+      stav.agenda.minVyskaRadku = omez(a.minVyskaRadku, ...LIMITY.agendaMinVyskaRadku, stav.agenda.minVyskaRadku);
       stav.agenda.mezeraRadku = omez(a.mezeraRadku, ...LIMITY.agendaMezeraRadku, stav.agenda.mezeraRadku);
       stav.agenda.sirkaCasu = omez(a.sirkaCasu, ...LIMITY.sirkaCasu, stav.agenda.sirkaCasu);
       stav.subnav.vyska = omez(s.vyska, ...LIMITY.subnavVyska, stav.subnav.vyska);
       stav.subnav.radius = omez(s.radius, ...LIMITY.subnavRadius, stav.subnav.radius);
       stav.subnav.mezera = omez(s.mezera, ...LIMITY.subnavMezera, stav.subnav.mezera);
+      stav.subnav.pismo = omez(s.pismo, ...LIMITY.subnavPismo, stav.subnav.pismo);
     } catch (_error) {}
     return stav;
   }
@@ -104,11 +110,13 @@
     root.style.setProperty("--ln-dpv-agenda-radius", px(stav.agenda.radius));
     root.style.setProperty("--ln-dpv-item-font", px(stav.agenda.pismo));
     root.style.setProperty("--ln-dpv-item-pad-y", px(stav.agenda.paddingRadku));
+    root.style.setProperty("--ln-dpv-item-min-height", px(stav.agenda.minVyskaRadku));
     root.style.setProperty("--ln-dpv-item-gap", px(stav.agenda.mezeraRadku));
     root.style.setProperty("--ln-dpv-time-width", px(stav.agenda.sirkaCasu));
     root.style.setProperty("--ln-dpv-subnav-height", px(stav.subnav.vyska));
     root.style.setProperty("--ln-dpv-subnav-radius", px(stav.subnav.radius));
     root.style.setProperty("--ln-dpv-subnav-gap", px(stav.subnav.mezera));
+    root.style.setProperty("--ln-dpv-subnav-font", px(stav.subnav.pismo));
   }
 
   function oznam() {
@@ -127,7 +135,9 @@
         mezeraDni: LIMITY.mezeraDni, radiusDne: LIMITY.radiusDne,
         pismoDne: LIMITY.pismoDne, padding: LIMITY.agendaPadding,
         radius: sekce === "agenda" ? LIMITY.agendaRadius : LIMITY.subnavRadius,
-        pismo: LIMITY.agendaPismo, paddingRadku: LIMITY.agendaPaddingRadku,
+        pismo: sekce === "subnav" ? LIMITY.subnavPismo : LIMITY.agendaPismo,
+        paddingRadku: LIMITY.agendaPaddingRadku,
+        minVyskaRadku: LIMITY.agendaMinVyskaRadku,
         mezeraRadku: LIMITY.agendaMezeraRadku, sirkaCasu: LIMITY.sirkaCasu,
         vyska: LIMITY.subnavVyska, mezera: LIMITY.subnavMezera
       };

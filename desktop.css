@@ -1542,3 +1542,179 @@
 #ln-dpvt-panel.ln-nvt-minimized .ln-nvt-body { display: none; }
 #ln-dpvt-panel.ln-nvt-dragging .ln-nvt-head { cursor: grabbing; }
 #ln-dpvt-panel .ln-nvt-body { overflow-y: auto; min-height: 0; }
+
+
+/* ==========================================================
+   PATCH 658AG – PC PLANNER / ČITELNÁ AGENDA + JEDNOTNÉ LIŠTY
+   ----------------------------------------------------------
+   - Kalendář / Připomínky: stejná výška a typografie jako horní moduly.
+   - Agenda: datum + týden + plus tvoří jednu společnou lištu jako na mobilu.
+   - Seznam úkolů se už nesmršťuje; má vlastní svislý scroll.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Dvě podzáložky mají na PC rozměr jednoho horního modulu, ne půl obrazovky. */
+  .plannerSubnav {
+    width: min(100%, 560px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--ln-dpv-subnav-gap, 12px);
+    margin-bottom: 14px;
+    padding-inline: 0;
+  }
+
+  .plannerSubnavButton {
+    width: 100%;
+    min-height: 0;
+    height: var(--ln-dpv-subnav-height, 54px);
+    padding: 0 18px;
+    border-radius: var(--ln-dpv-subnav-radius, 13px);
+    gap: 8px;
+    font-size: var(--ln-dpv-subnav-font, 16px);
+    font-weight: 720;
+  }
+
+  .plannerSubnavIcon,
+  .plannerSubnavIcon .lubaSvgIcon {
+    width: 1.2em;
+    height: 1.2em;
+  }
+
+  /* Využít na širokém PC víc plochy pro pravou agendu. */
+  #calendarScreen:not([hidden]) {
+    grid-template-columns:
+      minmax(0, var(--ln-dpv-calendar-share, 55%))
+      minmax(0, 1fr);
+    width: min(var(--ln-dpv-screen-width, 1240px), calc(100% - 28px));
+  }
+
+  /* Jedna lišta jako na mobilu: datum | týden | + */
+  .calendarAgenda {
+    overflow: hidden;
+  }
+
+  .calendarAgendaHeader {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 46px;
+    align-items: center;
+    gap: var(--ln-dpv-agenda-head-gap, 10px);
+    width: 100%;
+    min-height: 58px;
+    box-sizing: border-box;
+    margin: 0 0 8px;
+    padding: 5px 6px 5px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+  }
+
+  .calendarSelectedDateButton {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    height: 46px;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 15px;
+    font-weight: 720;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .calendarSelectedDateButton::after,
+  .calendarSelectedDateIcon {
+    display: none !important;
+  }
+
+  .calendarSelectedDateText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .calendarWeekNumber {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 46px;
+    margin: 0;
+    padding: 0 4px;
+    color: var(--color-text);
+    font-size: 15px;
+    font-weight: 720;
+    line-height: 1;
+    white-space: nowrap;
+    transform: none;
+  }
+
+  .calendarAgendaHeader .plannerAddTaskButton {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    min-height: 46px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--color-accent);
+  }
+
+  /* Kritická oprava: úkoly se nesmí smrštit, ale rolovat. */
+  #calendarDayItems {
+    display: flex !important;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+    scrollbar-color:
+      color-mix(in srgb, var(--color-border) 88%, transparent)
+      transparent;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  #calendarDayItems::-webkit-scrollbar {
+    display: block;
+    width: 7px;
+    height: 7px;
+  }
+
+  #calendarDayItems::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #calendarDayItems::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-border) 88%, transparent);
+  }
+
+  .calendarAgendaItem {
+    flex: 0 0 auto;
+    min-height: var(--ln-dpv-item-min-height, 48px);
+    box-sizing: border-box;
+    align-items: center;
+    padding: var(--ln-dpv-item-pad-y, 7px) 0;
+    line-height: 1.25;
+  }
+
+  .calendarAgendaText,
+  .calendarAgendaTitle {
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
+}
