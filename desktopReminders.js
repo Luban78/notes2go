@@ -269,18 +269,25 @@
     const badges = document.createElement("span");
     badges.className = "desktopReminderBadges";
 
+    const repeatSlot = document.createElement("span");
+    repeatSlot.className = "desktopReminderBadgeSlot desktopReminderBadgeRepeatSlot";
     if (entry.sourceType === "recurring-note") {
       const repeat = document.createElement("span");
       repeat.className = "desktopReminderRepeatBadge";
       repeat.textContent = "Opakované";
-      badges.appendChild(repeat);
+      repeatSlot.appendChild(repeat);
+    } else {
+      repeatSlot.classList.add("is-empty");
     }
 
+    const areaSlot = document.createElement("span");
+    areaSlot.className = "desktopReminderBadgeSlot desktopReminderBadgeAreaSlot";
     const badge = document.createElement("span");
     badge.className = `desktopReminderAreaBadge ${entry.area === "work" ? "is-work" : "is-private"}`;
     badge.textContent = entry.area === "work" ? "Práce" : "Domov";
-    badges.appendChild(badge);
+    areaSlot.appendChild(badge);
 
+    badges.append(repeatSlot, areaSlot);
     row.insertBefore(badges, row.querySelector(".reminderItemMenu"));
     return row;
   }
@@ -370,6 +377,15 @@
     todayButton.title = "Kliknutím přejít na dnešek";
   }
 
+  let programovyPosun = false;
+  let programovyPosunTimer = 0;
+
+  function ukonciProgramovyPosun() {
+    clearTimeout(programovyPosunTimer);
+    programovyPosun = false;
+    aktualizujAktivniDen(STAV.aktivniSkupina);
+  }
+
   function prejdiNaSkupinu(index) {
     const seznam = skupiny();
     if (!seznam.length) return;
@@ -378,8 +394,14 @@
     const scrollRect = scroll.getBoundingClientRect();
     const cilRect = cil.getBoundingClientRect();
     const top = scroll.scrollTop + (cilRect.top - scrollRect.top) - 2;
-    scroll.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+
+    // PATCH 658AJ: během smooth scrollu nepřepisovat label přes všechny
+    // mezilehlé dny. Cílový den se ukáže okamžitě a zůstane stabilní.
+    programovyPosun = true;
+    clearTimeout(programovyPosunTimer);
     aktualizujAktivniDen(STAV.aktivniSkupina);
+    scroll.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    programovyPosunTimer = window.setTimeout(ukonciProgramovyPosun, 420);
   }
 
   function prejdiNaDatum(value) {
@@ -503,6 +525,7 @@
 
   let scrollRaf = 0;
   scroll.addEventListener("scroll", () => {
+    if (programovyPosun) return;
     if (scrollRaf) cancelAnimationFrame(scrollRaf);
     scrollRaf = requestAnimationFrame(() => {
       const seznam = skupiny();
@@ -515,6 +538,12 @@
       if (aktivni !== STAV.aktivniSkupina) aktualizujAktivniDen(aktivni);
     });
   }, { passive: true });
+
+  if ("onscrollend" in scroll) {
+    scroll.addEventListener("scrollend", () => {
+      if (programovyPosun) ukonciProgramovyPosun();
+    }, { passive: true });
+  }
 
   remindersModuleButton?.addEventListener("click", () => requestAnimationFrame(vykresli));
 

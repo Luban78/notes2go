@@ -2226,3 +2226,62 @@
     font-size: 18px;
   }
 }
+
+
+/* ==========================================================
+   PATCH 658AJ – PC PŘIPOMÍNKY / NAV + SAFE AREA + BADGE GRID
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .desktopRemindersFilterPanel {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain;
+  }
+
+  .desktopReminderFilterList {
+    flex: 0 0 auto;
+    padding-bottom: 8px;
+  }
+
+  .desktopReminderTimelineRow.reminderItem {
+    grid-template-columns: 76px minmax(0, 1fr) 214px 30px;
+  }
+
+  .desktopReminderBadges {
+    display: grid;
+    grid-template-columns: 118px 82px;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+    width: 208px;
+    min-width: 208px;
+  }
+
+  .desktopReminderBadgeSlot {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .desktopReminderBadgeRepeatSlot {
+    justify-content: flex-end;
+  }
+
+  .desktopReminderBadgeAreaSlot {
+    justify-content: center;
+  }
+
+  .desktopReminderBadgeSlot.is-empty {
+    visibility: hidden;
+  }
+
+  .desktopReminderRepeatBadge {
+    width: 112px;
+    box-sizing: border-box;
+  }
+
+  .desktopReminderAreaBadge {
+    width: 78px;
+    box-sizing: border-box;
+  }
+}
