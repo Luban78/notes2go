@@ -124,11 +124,25 @@
         <button id="desktopReminderPrev" type="button" aria-label="Předchozí den">‹</button>
         <button id="desktopReminderToday" type="button">Dnes</button>
         <button id="desktopReminderNext" type="button" aria-label="Další den">›</button>
-        <button id="desktopReminderDateButton" type="button" aria-label="Vybrat datum">
+        <button id="desktopReminderDateButton" class="desktopReminderCalendarButton" type="button" aria-label="Vybrat datum" aria-expanded="false">
           <span data-luba-icon="kalendar" aria-hidden="true"></span>
         </button>
-        <input id="desktopReminderDateInput" class="desktopReminderDateInput" type="date" tabindex="-1" aria-hidden="true">
         <button id="desktopReminderAdd" class="desktopReminderAdd" type="button"><span aria-hidden="true">＋</span> Přidat</button>
+        <div id="desktopReminderCalendarPopover" class="desktopReminderCalendarPopover" hidden>
+          <div class="desktopReminderCalendarHead">
+            <button id="desktopReminderCalendarPrev" type="button" aria-label="Předchozí měsíc">‹</button>
+            <strong id="desktopReminderCalendarTitle"></strong>
+            <button id="desktopReminderCalendarNext" type="button" aria-label="Další měsíc">›</button>
+          </div>
+          <div class="desktopReminderCalendarWeekdays" aria-hidden="true">
+            <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+          </div>
+          <div id="desktopReminderCalendarGrid" class="desktopReminderCalendarGrid"></div>
+          <div class="desktopReminderCalendarFoot">
+            <button id="desktopReminderCalendarToday" type="button">Dnes</button>
+            <button id="desktopReminderCalendarClose" type="button">Zavřít</button>
+          </div>
+        </div>
       </div>
     </header>
     <div id="desktopReminderTimelineScroll" class="desktopReminderTimelineScroll"></div>`;
@@ -143,8 +157,15 @@
   const todayButton = timeline.querySelector("#desktopReminderToday");
   const nextButton = timeline.querySelector("#desktopReminderNext");
   const dateButton = timeline.querySelector("#desktopReminderDateButton");
-  const dateInput = timeline.querySelector("#desktopReminderDateInput");
+  const calendarPopover = timeline.querySelector("#desktopReminderCalendarPopover");
+  const calendarTitle = timeline.querySelector("#desktopReminderCalendarTitle");
+  const calendarGrid = timeline.querySelector("#desktopReminderCalendarGrid");
+  const calendarPrev = timeline.querySelector("#desktopReminderCalendarPrev");
+  const calendarNext = timeline.querySelector("#desktopReminderCalendarNext");
+  const calendarToday = timeline.querySelector("#desktopReminderCalendarToday");
+  const calendarClose = timeline.querySelector("#desktopReminderCalendarClose");
   const addButton = timeline.querySelector("#desktopReminderAdd");
+  let calendarMonth = dnes();
 
   function vsechnyPolozky() {
     try {
@@ -245,18 +266,22 @@
     row.classList.add("desktopReminderTimelineRow");
     row.dataset.desktopReminderDate = klicDne(new Date(entry.date));
 
-    const badge = document.createElement("span");
-    badge.className = `desktopReminderAreaBadge ${entry.area === "work" ? "is-work" : "is-private"}`;
-    badge.textContent = entry.area === "work" ? "Práce" : "Domov";
+    const badges = document.createElement("span");
+    badges.className = "desktopReminderBadges";
 
     if (entry.sourceType === "recurring-note") {
       const repeat = document.createElement("span");
       repeat.className = "desktopReminderRepeatBadge";
       repeat.textContent = "Opakované";
-      row.insertBefore(repeat, row.querySelector(".reminderItemMenu"));
+      badges.appendChild(repeat);
     }
 
-    row.insertBefore(badge, row.querySelector(".reminderItemMenu"));
+    const badge = document.createElement("span");
+    badge.className = `desktopReminderAreaBadge ${entry.area === "work" ? "is-work" : "is-private"}`;
+    badge.textContent = entry.area === "work" ? "Práce" : "Domov";
+    badges.appendChild(badge);
+
+    row.insertBefore(badges, row.querySelector(".reminderItemMenu"));
     return row;
   }
 
@@ -303,17 +328,58 @@
       section.appendChild(rows);
       scroll.appendChild(section);
     }
+
+    requestAnimationFrame(() => aktualizujAktivniDen(0));
   }
 
   function skupiny() {
     return Array.from(scroll.querySelectorAll(".desktopReminderDayGroup"));
   }
 
+  function datumSkupiny(group) {
+    if (!group?.dataset?.dayKey) return null;
+    const d = new Date(`${group.dataset.dayKey}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function textAktivnihoDne(group) {
+    const d = datumSkupiny(group);
+    if (!d) return "Dnes";
+    const ds = dnes();
+    const zitra = new Date(ds); zitra.setDate(zitra.getDate() + 1);
+    const vcera = new Date(ds); vcera.setDate(vcera.getDate() - 1);
+    if (klicDne(d) === klicDne(ds)) return "Dnes";
+    if (klicDne(d) === klicDne(zitra)) return "Zítra";
+    if (klicDne(d) === klicDne(vcera)) return "Včera";
+    const text = d.toLocaleDateString(
+      window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
+      { weekday: "short", day: "numeric", month: "numeric" }
+    );
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function aktualizujAktivniDen(index = STAV.aktivniSkupina) {
+    const seznam = skupiny();
+    if (!seznam.length) {
+      todayButton.textContent = "Dnes";
+      return;
+    }
+    STAV.aktivniSkupina = Math.min(seznam.length - 1, Math.max(0, index));
+    const group = seznam[STAV.aktivniSkupina];
+    todayButton.textContent = textAktivnihoDne(group);
+    todayButton.title = "Kliknutím přejít na dnešek";
+  }
+
   function prejdiNaSkupinu(index) {
     const seznam = skupiny();
     if (!seznam.length) return;
     STAV.aktivniSkupina = Math.min(seznam.length - 1, Math.max(0, index));
-    seznam[STAV.aktivniSkupina].scrollIntoView({ behavior: "smooth", block: "start" });
+    const cil = seznam[STAV.aktivniSkupina];
+    const scrollRect = scroll.getBoundingClientRect();
+    const cilRect = cil.getBoundingClientRect();
+    const top = scroll.scrollTop + (cilRect.top - scrollRect.top) - 2;
+    scroll.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    aktualizujAktivniDen(STAV.aktivniSkupina);
   }
 
   function prejdiNaDatum(value) {
@@ -331,7 +397,7 @@
       requestAnimationFrame(() => {
         const nove = skupiny();
         const i = nove.findIndex((g) => g.dataset.dayKey >= value);
-        prejdiNaSkupinu(i >= 0 ? i : nove.length - 1);
+        prejdiNaSkupinu(i >= 0 ? i : Math.max(0, nove.length - 1));
       });
     }
   }
@@ -353,16 +419,102 @@
     vykresli();
   });
 
+  function vybraneDatumTimeline() {
+    const seznam = skupiny();
+    return datumSkupiny(seznam[STAV.aktivniSkupina]) || dnes();
+  }
+
+  function zavriKalendar() {
+    if (!calendarPopover) return;
+    calendarPopover.hidden = true;
+    dateButton?.setAttribute("aria-expanded", "false");
+  }
+
+  function vykresliKalendar() {
+    if (!calendarGrid || !calendarTitle) return;
+    const locale = window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ";
+    const rok = calendarMonth.getFullYear();
+    const mesic = calendarMonth.getMonth();
+    calendarTitle.textContent = new Date(rok, mesic, 1).toLocaleDateString(locale, {
+      month: "long",
+      year: "numeric"
+    });
+    calendarGrid.innerHTML = "";
+
+    const prvni = new Date(rok, mesic, 1);
+    const posun = (prvni.getDay() + 6) % 7;
+    const start = new Date(rok, mesic, 1 - posun);
+    const vybrane = vybraneDatumTimeline();
+    const dnesni = dnes();
+
+    for (let i = 0; i < 42; i += 1) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "desktopReminderCalendarDay";
+      button.textContent = String(d.getDate());
+      button.dataset.date = klicDne(d);
+      if (d.getMonth() !== mesic) button.classList.add("is-outside");
+      if (klicDne(d) === klicDne(dnesni)) button.classList.add("is-today");
+      if (klicDne(d) === klicDne(vybrane)) button.classList.add("is-selected");
+      button.addEventListener("click", () => {
+        zavriKalendar();
+        prejdiNaDatum(button.dataset.date);
+      });
+      calendarGrid.appendChild(button);
+    }
+  }
+
+  function otevriKalendar() {
+    const aktivni = vybraneDatumTimeline();
+    calendarMonth = new Date(aktivni.getFullYear(), aktivni.getMonth(), 1);
+    vykresliKalendar();
+    calendarPopover.hidden = false;
+    dateButton?.setAttribute("aria-expanded", "true");
+  }
+
   prevButton.addEventListener("click", () => prejdiNaSkupinu(STAV.aktivniSkupina - 1));
   nextButton.addEventListener("click", () => prejdiNaSkupinu(STAV.aktivniSkupina + 1));
   todayButton.addEventListener("click", () => prejdiNaDatum(klicDne(dnes())));
   dateButton.addEventListener("click", () => {
-    dateInput.value = klicDne(dnes());
-    if (typeof dateInput.showPicker === "function") dateInput.showPicker();
-    else dateInput.click();
+    if (calendarPopover?.hidden) otevriKalendar();
+    else zavriKalendar();
   });
-  dateInput.addEventListener("change", () => prejdiNaDatum(dateInput.value));
+  calendarPrev?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    vykresliKalendar();
+  });
+  calendarNext?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    vykresliKalendar();
+  });
+  calendarToday?.addEventListener("click", () => {
+    zavriKalendar();
+    prejdiNaDatum(klicDne(dnes()));
+  });
+  calendarClose?.addEventListener("click", zavriKalendar);
+  document.addEventListener("pointerdown", (event) => {
+    if (calendarPopover?.hidden) return;
+    if (calendarPopover.contains(event.target) || dateButton?.contains(event.target)) return;
+    zavriKalendar();
+  });
   addButton.addEventListener("click", () => plannerAddTaskButton?.click());
+
+  let scrollRaf = 0;
+  scroll.addEventListener("scroll", () => {
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    scrollRaf = requestAnimationFrame(() => {
+      const seznam = skupiny();
+      if (!seznam.length) return;
+      const scrollTop = scroll.getBoundingClientRect().top + 8;
+      let aktivni = 0;
+      seznam.forEach((group, index) => {
+        if (group.getBoundingClientRect().top <= scrollTop) aktivni = index;
+      });
+      if (aktivni !== STAV.aktivniSkupina) aktualizujAktivniDen(aktivni);
+    });
+  }, { passive: true });
 
   remindersModuleButton?.addEventListener("click", () => requestAnimationFrame(vykresli));
 

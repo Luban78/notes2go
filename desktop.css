@@ -1926,12 +1926,120 @@
     height: 18px;
   }
 
-  .desktopReminderDateInput {
+  .desktopReminderCalendarButton {
+    order: 4;
+  }
+
+  .desktopReminderTimelineActions .desktopReminderAdd {
+    order: 5;
+  }
+
+  .desktopReminderCalendarPopover {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 2147483400;
+    width: 286px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--color-surface) 98%, var(--color-background));
+    color: var(--color-text);
+    box-shadow: 0 16px 42px rgba(0,0,0,.22);
+  }
+
+  .desktopReminderCalendarPopover[hidden] {
+    display: none !important;
+  }
+
+  .desktopReminderCalendarHead {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .desktopReminderCalendarHead strong {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 780;
+    text-transform: capitalize;
+  }
+
+  .desktopReminderCalendarHead button,
+  .desktopReminderCalendarFoot button {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .desktopReminderCalendarWeekdays,
+  .desktopReminderCalendarGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .desktopReminderCalendarWeekdays {
+    margin-bottom: 4px;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .desktopReminderCalendarDay {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    min-width: 0;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .desktopReminderCalendarDay:hover {
+    background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface));
+  }
+
+  .desktopReminderCalendarDay.is-outside {
+    color: var(--color-text-secondary);
+    opacity: .52;
+  }
+
+  .desktopReminderCalendarDay.is-today {
+    border-color: color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
+    font-weight: 800;
+  }
+
+  .desktopReminderCalendarDay.is-selected {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast, #fff);
+    font-weight: 850;
+  }
+
+  .desktopReminderCalendarFoot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .desktopReminderCalendarFoot button {
+    flex: 1;
+    padding: 0 10px;
   }
 
   .desktopReminderTimelineScroll {
@@ -1987,7 +2095,7 @@
 
   .desktopReminderTimelineRow.reminderItem {
     display: grid;
-    grid-template-columns: 76px minmax(0, 1fr) auto auto 30px;
+    grid-template-columns: 76px minmax(0, 1fr) minmax(170px, auto) 30px;
     gap: 10px;
     align-items: center;
     min-height: var(--ln-dpr-row-min-height, 54px);
@@ -2049,6 +2157,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     -webkit-line-clamp: unset;
+  }
+
+  .desktopReminderBadges {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+    white-space: nowrap;
   }
 
   .desktopReminderAreaBadge,
