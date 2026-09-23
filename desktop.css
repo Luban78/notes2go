@@ -1428,3 +1428,117 @@
     border-color: color-mix(in srgb, #ff6d6d 18%, transparent);
   }
 }
+
+
+/* ==========================================================
+   PATCH 658AF – DESKTOP SIDEBAR SCROLL + PLANNER VISUAL LAB
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Brand a footer zůstávají na místě, dlouhý seznam nástrojů se roluje kolečkem. */
+  .desktopSidebarNavSecondary {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-border) 85%, transparent) transparent;
+    padding-right: 3px;
+  }
+
+  .desktopSidebarNavSecondary::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .desktopSidebarNavSecondary::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .desktopSidebarNavSecondary::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-border) 82%, transparent);
+  }
+
+  /* Planner desktop – hodnoty řídí nový PC Visual Lab. */
+  #calendarScreen:not([hidden]) {
+    grid-template-columns:
+      minmax(0, var(--ln-dpv-calendar-share, 60%))
+      minmax(0, 1fr);
+    column-gap: var(--ln-dpv-column-gap, 20px);
+    width: min(var(--ln-dpv-screen-width, 1160px), calc(100% - 28px));
+    padding-top: var(--ln-dpv-screen-top, 8px);
+  }
+
+  .calendarWeekdays,
+  .calendarGrid {
+    width: min(var(--ln-dpv-grid-width, 620px), 100%);
+  }
+
+  .calendarGrid {
+    gap: var(--ln-dpv-day-gap, 5px);
+  }
+
+  .calendarDay {
+    min-height: var(--ln-dpv-day-height, 54px);
+    border-radius: var(--ln-dpv-day-radius, 10px);
+    font-size: var(--ln-dpv-day-font, 16px);
+  }
+
+  .calendarAgenda {
+    padding: var(--ln-dpv-agenda-pad, 12px);
+    border-radius: var(--ln-dpv-agenda-radius, 14px);
+    max-height: calc(100dvh - var(--ln-dpv-agenda-vspace, 170px));
+  }
+
+  .calendarAgendaHeader {
+    gap: var(--ln-dpv-agenda-head-gap, 8px);
+  }
+
+  .calendarAgendaItem {
+    grid-template-columns: var(--ln-dpv-time-width, 62px) minmax(0, 1fr) 34px;
+    gap: var(--ln-dpv-item-gap, 9px);
+    padding: var(--ln-dpv-item-pad-y, 7px) 0;
+    font-size: var(--ln-dpv-item-font, 15px);
+  }
+
+  #calendarDayItems {
+    display: grid !important;
+    grid-template-columns: repeat(var(--ln-dpv-agenda-columns, 1), minmax(0, 1fr)) !important;
+    column-gap: var(--ln-dpv-agenda-column-gap, 16px);
+    align-content: start;
+  }
+
+  .plannerSubnav {
+    gap: var(--ln-dpv-subnav-gap, 10px);
+  }
+
+  .plannerSubnavButton {
+    min-height: var(--ln-dpv-subnav-height, 50px);
+    border-radius: var(--ln-dpv-subnav-radius, 12px);
+  }
+}
+
+#ln-dpvt-panel {
+  position: fixed !important;
+  top: 86px;
+  right: 18px;
+  z-index: 2147483500 !important;
+  width: min(390px, calc(100vw - 30px));
+  max-height: min(80vh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--color-accent) 76%, #fff 24%);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-background) 95%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 16px 56px rgba(0,0,0,.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+#ln-dpvt-panel[hidden] { display: none !important; }
+#ln-dpvt-panel.ln-nvt-minimized { max-height: 49px; }
+#ln-dpvt-panel.ln-nvt-minimized .ln-nvt-body { display: none; }
+#ln-dpvt-panel.ln-nvt-dragging .ln-nvt-head { cursor: grabbing; }
+#ln-dpvt-panel .ln-nvt-body { overflow-y: auto; min-height: 0; }

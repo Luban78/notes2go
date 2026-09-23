@@ -589,6 +589,7 @@
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
     window.LubaNotePlannerVisualPanel?.close?.();
+    window.LubaNoteDesktopPlannerVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("notesModuleButton")?.click?.();
 
@@ -612,7 +613,16 @@
     window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("plannerModuleButton")?.click?.();
-    const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
+
+    let otevreno = false;
+    if (jeDesktopVisualRezim()) {
+      window.LubaNotePlannerVisualPanel?.close?.();
+      otevreno = window.LubaNoteDesktopPlannerVisualPanel?.open?.() === true;
+    } else {
+      window.LubaNoteDesktopPlannerVisualPanel?.close?.();
+      otevreno = window.LubaNotePlannerVisualPanel?.open?.() === true;
+    }
+
     if (otevreno) {
       zavriDashboard();
     }
@@ -623,6 +633,7 @@
     window.LubaNoteNotesVisualPanel?.close?.();
     window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNotePlannerVisualPanel?.close?.();
+    window.LubaNoteDesktopPlannerVisualPanel?.close?.();
     document.getElementById("documentsModuleButton")?.click?.();
     const otevreno = window.LubaNoteDocumentsVisualPanel?.open?.();
     if (otevreno) {

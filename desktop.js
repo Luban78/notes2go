@@ -313,7 +313,7 @@
 
   const desktopStorageButton = vytvorSidebarTlacitko(
     "desktopStorageButton",
-    "cloud",
+    "obnovit",
     sourceStorageLabel?.textContent?.trim() || "Úložiště: Synchronizované"
   );
 
@@ -349,6 +349,11 @@
   poradi.forEach((node) => {
     desktopSidebarSecondary.appendChild(node);
   });
+
+  // Dynamické položky vznikají až po startu lubaIcons.js, proto je
+  // po vložení do sidebaru explicitně naplníme. Bez toho zůstávaly
+  // jejich ikony na PC prázdné.
+  window.LubaNoteIcons?.naplnDeklarovaneIkony?.(desktopSidebarSecondary);
 
   function synchronizujDynamickePopisky() {
     nastavLabel(
