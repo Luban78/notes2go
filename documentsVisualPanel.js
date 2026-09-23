@@ -16,9 +16,9 @@
       gap: "Mezera mezi bloky", gapMin: 0, gapMax: 24
     },
     folderCards: {
-      label: "Karty složek",
+      label: "Seznam složek",
       size: "Výška karty", sizeMin: 48, sizeMax: 96,
-      radius: "Zaoblení karty", radiusMin: 0, radiusMax: 28,
+      radius: "Zaoblení seznamu", radiusMin: 0, radiusMax: 28,
       gap: "Mezera mezi kartami", gapMin: 0, gapMax: 18
     },
     searchBox: {
@@ -34,9 +34,9 @@
       gap: "Mezera filtrů", gapMin: 0, gapMax: 18
     },
     fileRows: {
-      label: "Řádky souborů",
+      label: "Seznam souborů",
       size: "Svislé odsazení řádku", sizeMin: 2, sizeMax: 18,
-      radius: "Zaoblení řádku", radiusMin: 0, radiusMax: 26,
+      radius: "Zaoblení seznamu", radiusMin: 0, radiusMax: 26,
       gap: "Mezera mezi řádky", gapMin: 0, gapMax: 18
     }
   };

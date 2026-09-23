@@ -5,7 +5,7 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteDocumentsVisualTuningV1";
+  const KLIC = "lubanoteDocumentsVisualTuningV2";
   const PRVKY = [
     "sectionBlocks",
     "folderCards",
@@ -17,11 +17,11 @@
   const VYCHOZI = {
     vybranyPrvek: "fileRows",
     prvky: {
-      sectionBlocks: { velikost: 12, radius: 20, mezera: 10 },
-      folderCards: { velikost: 64, radius: 15, mezera: 6 },
+      sectionBlocks: { velikost: 10, radius: 18, mezera: 8 },
+      folderCards: { velikost: 54, radius: 14, mezera: 0 },
       searchBox: { velikost: 40, radius: 13, mezera: 7 },
-      fileFilters: { velikost: 32, radius: 999, mezera: 6 },
-      fileRows: { velikost: 8, radius: 15, mezera: 8 }
+      fileFilters: { velikost: 30, radius: 999, mezera: 5 },
+      fileRows: { velikost: 7, radius: 14, mezera: 0 }
     }
   };
 
