@@ -119,6 +119,7 @@
         ${rangeRadek({ id: "ln-nvt-card-row-gap", label: "Mezera řádků karet", min: 2, max: 24 })}
 
         <div class="ln-nvt-actions ln-nvt-actions-bottom">
+          <button id="ln-nvt-copy" type="button">Kopírovat nastavení</button>
           <button id="ln-nvt-reset-all" type="button">Vše výchozí</button>
           <button id="ln-nvt-center" type="button">Panel doprostřed</button>
         </div>
@@ -151,6 +152,7 @@
       tagsCardsGap: panel.querySelector("#ln-nvt-tags-cards-gap"),
       cardColGap: panel.querySelector("#ln-nvt-card-col-gap"),
       cardRowGap: panel.querySelector("#ln-nvt-card-row-gap"),
+      copy: panel.querySelector("#ln-nvt-copy"),
       resetAll: panel.querySelector("#ln-nvt-reset-all"),
       center: panel.querySelector("#ln-nvt-center")
     };
@@ -234,6 +236,73 @@
     api()?.nastavLayoutHodnotu?.(klic, hodnota);
   }
 
+  function prostredi() {
+    try {
+      if (window.Capacitor?.isNativePlatform?.()) return "APK/WebView";
+    } catch (_error) {}
+    return "WEB";
+  }
+
+  function tema() {
+    return Array.from(document.body?.classList || [])
+      .find((x) => x.startsWith("theme-")) || "theme-neznámé";
+  }
+
+  function vytvorExport() {
+    return [
+      "LUBANOTE NOTES VISUAL LAB EXPORT",
+      `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+      `prostředí: ${prostredi()}`,
+      `téma: ${tema()}`,
+      `čas: ${new Date().toISOString()}`,
+      "",
+      "AKTUÁLNÍ NASTAVENÍ:",
+      JSON.stringify(api()?.ziskejStav?.() || {}, null, 2)
+    ].join("\n");
+  }
+
+  function fallbackKopie(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_error) { ok = false; }
+    textarea.remove();
+    return ok;
+  }
+
+  async function zkopirujText(text) {
+    const cap = window.Capacitor?.Plugins?.Clipboard;
+    if (cap?.write) {
+      try {
+        await cap.write({ string: text });
+        return true;
+      } catch (_error) {}
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_error) {}
+    return fallbackKopie(text);
+  }
+
+  async function zkopirujNastaveni() {
+    const ok = await zkopirujText(vytvorExport());
+    if (!refs.copy) return;
+    const puvodni = refs.copy.textContent;
+    refs.copy.textContent = ok ? "Zkopírováno ✓" : "Kopírování selhalo";
+    setTimeout(() => {
+      if (refs.copy) refs.copy.textContent = puvodni;
+    }, 1400);
+  }
+
   function registrujUdalosti() {
     refs.close.addEventListener("click", zavri);
     refs.minimize.addEventListener("click", () => {
@@ -268,6 +337,7 @@
     refs.tagsCardsGap.addEventListener("input", () => nastavLayout("stitkyKartyMezera", refs.tagsCardsGap.value));
     refs.cardColGap.addEventListener("input", () => nastavLayout("kartySloupceMezera", refs.cardColGap.value));
     refs.cardRowGap.addEventListener("input", () => nastavLayout("kartyRadkyMezera", refs.cardRowGap.value));
+    refs.copy?.addEventListener("click", zkopirujNastaveni);
     refs.resetAll.addEventListener("click", () => api()?.obnovVychozi?.());
     refs.center.addEventListener("click", vycentruj);
 

@@ -14090,3 +14090,151 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
     padding: 10px 12px;
   }
 }
+
+/* ==================================================
+   PATCH 658S – PLANNER VISUAL LAB / APK
+   Živé lokální ladění Plánu a Připomínek.
+   Desktopový FROZEN guard 18×18 px (650A/658G) zůstává nedotčený:
+   veškeré dynamické SVG sizing pravidlo je jen do 899 px.
+   ================================================== */
+
+#ln-pvt-panel,
+#ln-pvt-panel * {
+  box-sizing: border-box;
+}
+
+#ln-pvt-panel {
+  position: fixed !important;
+  top: 96px;
+  right: 10px;
+  z-index: 2147483500 !important;
+  width: min(340px, calc(100vw - 20px));
+  max-height: min(62dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--color-accent) 76%, #fff 24%);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-background) 95%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+#ln-pvt-panel[hidden] {
+  display: none !important;
+}
+
+#ln-pvt-panel.ln-nvt-dragging .ln-nvt-head {
+  cursor: grabbing;
+}
+
+#ln-pvt-panel.ln-nvt-minimized {
+  max-height: 49px;
+}
+
+#ln-pvt-panel.ln-nvt-minimized .ln-nvt-body {
+  display: none;
+}
+
+@media (max-width: 430px) {
+  #ln-pvt-panel {
+    width: min(330px, calc(100vw - 16px));
+    right: 8px;
+    max-height: 58dvh;
+  }
+}
+
+@media (max-width: 899px) {
+  .plannerSubnav {
+    gap: var(--ln-pv-subnav-gap, 6px);
+  }
+
+  .plannerSubnavButton {
+    min-height: var(--ln-pv-subnav-height, 42px);
+    border-radius: var(--ln-pv-subnav-radius, 14px);
+  }
+
+  .calendarGrid {
+    gap: var(--ln-pv-day-gap, 4px);
+  }
+
+  .calendarDay {
+    height: var(--ln-pv-day-height, 40px);
+    border-radius: var(--ln-pv-day-radius, 12px);
+  }
+
+  .calendarAgendaHeader {
+    flex-basis: var(--ln-pv-agenda-header-height, 52px);
+    height: var(--ln-pv-agenda-header-height, 52px);
+    min-height: var(--ln-pv-agenda-header-height, 52px);
+    border-radius: var(--ln-pv-agenda-header-radius, 14px);
+    gap: var(--ln-pv-agenda-header-gap, 8px);
+  }
+
+  #calendarDayItems .calendarAgendaItem {
+    padding-top: var(--ln-pv-agenda-item-pad-y, 8px);
+    padding-bottom: var(--ln-pv-agenda-item-pad-y, 8px);
+    margin-bottom: var(--ln-pv-agenda-item-gap, 0px);
+    border-radius: var(--ln-pv-agenda-item-radius, 0px);
+  }
+
+  .remindersFilters {
+    gap: var(--ln-pv-rem-area-gap, 10px);
+  }
+
+  .remindersFilter {
+    min-height: var(--ln-pv-rem-area-height, 42px);
+    border-radius: var(--ln-pv-rem-area-radius, 14px);
+  }
+
+  .remindersStatusTabs {
+    gap: var(--ln-pv-rem-status-gap, 8px);
+  }
+
+  .remindersStatusTab {
+    padding-top: var(--ln-pv-rem-status-pad-y, 7px);
+    padding-bottom: var(--ln-pv-rem-status-pad-y, 7px);
+    border-radius: var(--ln-pv-rem-status-radius, 10px);
+  }
+
+  .reminderItem {
+    padding-top: var(--ln-pv-rem-item-pad-y, 10px);
+    padding-bottom: var(--ln-pv-rem-item-pad-y, 10px);
+    margin-bottom: var(--ln-pv-rem-item-gap, 8px);
+    border-radius: var(--ln-pv-rem-item-radius, 15px);
+  }
+
+  .calendarAgendaMetaIcon,
+  .reminderItemMetaIcon {
+    width: var(--ln-pv-icon-size, 18px);
+    height: var(--ln-pv-icon-size, 18px);
+    min-width: var(--ln-pv-icon-size, 18px);
+    min-height: var(--ln-pv-icon-size, 18px);
+    flex-basis: var(--ln-pv-icon-size, 18px);
+    font-size: var(--ln-pv-icon-size, 18px);
+  }
+
+  .calendarAgendaMetaIcon .lubaSvgIcon,
+  .reminderItemMetaIcon .lubaSvgIcon {
+    width: var(--ln-pv-icon-size, 18px) !important;
+    height: var(--ln-pv-icon-size, 18px) !important;
+    max-width: var(--ln-pv-icon-size, 18px) !important;
+    max-height: var(--ln-pv-icon-size, 18px) !important;
+    stroke-width: var(--ln-pv-icon-stroke, 1.85) !important;
+  }
+
+}
+
+/* 658S – viditelnost metadata ikon je samostatný uživatelský přepínač.
+   Platí i mimo mobil; sizing/tloušťka výše zůstávají APK-only kvůli PC guardu. */
+body.ln-pv-hide-plan-icons .calendarAgendaMeta {
+  display: none !important;
+}
+body.ln-pv-hide-plan-icons .calendarAgendaTitle {
+  margin-top: 0 !important;
+}
+body.ln-pv-hide-reminder-icons .reminderItemMeta {
+  display: none !important;
+}

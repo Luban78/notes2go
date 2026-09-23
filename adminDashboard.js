@@ -29,6 +29,22 @@
     document.getElementById("adminSyncTrafficToolDescription");
   const syncTrafficStav =
     document.getElementById("adminSyncTrafficToolState");
+  const notesVisualToolTlacitko =
+    document.getElementById("adminNotesVisualToolButton");
+  const plannerVisualToolTlacitko =
+    document.getElementById("adminPlannerVisualToolButton");
+  const plannerIconsToolTlacitko =
+    document.getElementById("adminPlannerIconsToolButton");
+  const plannerIconsToolStav =
+    document.getElementById("adminPlannerIconsToolState");
+  const plannerIconsToolPopis =
+    document.getElementById("adminPlannerIconsToolDescription");
+  const reminderIconsToolTlacitko =
+    document.getElementById("adminReminderIconsToolButton");
+  const reminderIconsToolStav =
+    document.getElementById("adminReminderIconsToolState");
+  const reminderIconsToolPopis =
+    document.getElementById("adminReminderIconsToolDescription");
   const notesVisualPanel =
     document.getElementById("adminNotesVisualTuning");
   const notesVisualFloatingTlacitko =
@@ -277,6 +293,47 @@
     aktualizujSyncTrafficNastroj();
   }
 
+  /* PATCH 658S – samostatné Visual Lab nástroje Poznámky / Plán. */
+  function aktualizujPlannerVisualNastroje() {
+    const stav = window.LubaNotePlannerVisualTuning?.ziskejStav?.();
+    if (!stav?.ikony) return;
+
+    const planZapnuty = stav.ikony.plan === true;
+    const pripominkyZapnute = stav.ikony.pripominky === true;
+
+    if (plannerIconsToolTlacitko) {
+      plannerIconsToolTlacitko.setAttribute("aria-pressed", String(planZapnuty));
+    }
+    if (plannerIconsToolStav) {
+      plannerIconsToolStav.textContent = planZapnuty ? "Zapnuto" : "Vypnuto";
+    }
+    if (plannerIconsToolPopis) {
+      plannerIconsToolPopis.textContent = planZapnuty
+        ? "Metadata ikony v agendě jsou zobrazené"
+        : "Agenda je bez metadata ikon";
+    }
+
+    if (reminderIconsToolTlacitko) {
+      reminderIconsToolTlacitko.setAttribute("aria-pressed", String(pripominkyZapnute));
+    }
+    if (reminderIconsToolStav) {
+      reminderIconsToolStav.textContent = pripominkyZapnute ? "Zapnuto" : "Vypnuto";
+    }
+    if (reminderIconsToolPopis) {
+      reminderIconsToolPopis.textContent = pripominkyZapnute
+        ? "Metadata ikony v kartách jsou zobrazené"
+        : "Připomínky jsou bez metadata ikon";
+    }
+  }
+
+  function prepniPlannerIkony(klic) {
+    const api = window.LubaNotePlannerVisualTuning;
+    const stav = api?.ziskejStav?.();
+    if (!stav?.ikony || !api?.nastavIkony) return;
+    api.nastavIkony(klic, !(stav.ikony[klic] === true));
+    aktualizujPlannerVisualNastroje();
+  }
+
   /* PATCH 658B – Visual Lab pro celý hlavní screen Poznámky. */
   const NOTES_VISUAL_META = {
     cards: {
@@ -519,7 +576,19 @@
 
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
+    window.LubaNotePlannerVisualPanel?.close?.();
+    document.getElementById("notesModuleButton")?.click?.();
     const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
+    if (otevreno) {
+      zavriDashboard();
+    }
+  }
+
+  function otevriPlovouciPlannerTuning() {
+    if (!jeAdmin) return;
+    window.LubaNoteNotesVisualPanel?.close?.();
+    document.getElementById("plannerModuleButton")?.click?.();
+    const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -530,6 +599,7 @@
     uctyPohled.hidden = true;
     aktualizujSyncTrafficNastroj();
     aktualizujNotesVisualTuning();
+    aktualizujPlannerVisualNastroje();
   }
 
   function zobrazUcty() {
@@ -1767,6 +1837,22 @@
     "click",
     prepniSyncTrafficPanel
   );
+  notesVisualToolTlacitko?.addEventListener(
+    "click",
+    otevriPlovouciNotesTuning
+  );
+  plannerVisualToolTlacitko?.addEventListener(
+    "click",
+    otevriPlovouciPlannerTuning
+  );
+  plannerIconsToolTlacitko?.addEventListener(
+    "click",
+    () => prepniPlannerIkony("plan")
+  );
+  reminderIconsToolTlacitko?.addEventListener(
+    "click",
+    () => prepniPlannerIkony("pripominky")
+  );
   notesVisualFloatingTlacitko?.addEventListener(
     "click",
     otevriPlovouciNotesTuning
@@ -1872,6 +1958,10 @@
   window.addEventListener(
     "lubanote:notes-visual-tuning-change",
     aktualizujNotesVisualTuning
+  );
+  window.addEventListener(
+    "lubanote:planner-visual-tuning-change",
+    aktualizujPlannerVisualNastroje
   );
   zpetNaNastrojeTlacitko.addEventListener(
     "click",

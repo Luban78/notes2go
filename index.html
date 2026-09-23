@@ -16,7 +16,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658l-primary-svg-tuning">
+  <link rel="stylesheet" href="style.css?v=658s-planner-visual-lab">
   <link rel="stylesheet" href="documents.css?v=658Q-trash-overflow">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
@@ -1521,6 +1521,42 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
 
+          <button id="adminNotesVisualToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">📝</span>
+            <span class="adminToolText">
+              <strong>Poznámky</strong>
+              <small>Živé ladění hlavní plochy + kopírování nastavení</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminPlannerVisualToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">📅</span>
+            <span class="adminToolText">
+              <strong>Plán</strong>
+              <small>Kalendář, data, agenda a Připomínky + kopírování nastavení</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminPlannerIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">◫</span>
+            <span class="adminToolText">
+              <strong>Ikony položek Plánu</strong>
+              <small id="adminPlannerIconsToolDescription">Metadata ikony v agendě jsou zobrazené</small>
+            </span>
+            <span id="adminPlannerIconsToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
+
+          <button id="adminReminderIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">☷</span>
+            <span class="adminToolText">
+              <strong>Ikony položek Připomínek</strong>
+              <small id="adminReminderIconsToolDescription">Metadata ikony v kartách jsou zobrazené</small>
+            </span>
+            <span id="adminReminderIconsToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
+
           <button id="adminVisualDebugToolButton" class="adminToolCard" type="button">
             <span class="adminToolIcon" aria-hidden="true">🛠️</span>
             <span class="adminToolText">
@@ -1547,159 +1583,6 @@
             </span>
             <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
           </button>
-
-          <div id="adminNotesVisualTuning" class="adminNotesVisualTuning">
-            <div class="adminNotesVisualHeader">
-              <span class="adminNotesVisualHeaderText">
-                <strong id="adminNotesVisualTitle">Poznámky – vzhled</strong>
-                <small id="adminNotesVisualDescription">Vyber prvek a laď ho živě. Hodnoty zůstávají jen v tomto zařízení.</small>
-              </span>
-              <button id="adminNotesVisualReset" class="adminNotesVisualReset" type="button">Vše výchozí</button>
-            </div>
-
-            <div class="adminNotesVisualLaunchRow">
-              <button id="adminNotesVisualFloatingButton" class="adminNotesVisualLaunchButton" type="button">🎛️ Otevřít plovoucí ladění</button>
-              <small>Panel zůstane nad hlavní obrazovkou a můžeš s ním posouvat stejně jako s Visual Debugem.</small>
-            </div>
-
-            <div class="adminNotesVisualTargetRow">
-              <label id="adminNotesVisualTargetLabel" class="adminNotesVisualLabel" for="adminNotesVisualTarget">Prvek</label>
-              <select id="adminNotesVisualTarget" class="adminNotesVisualTargetSelect">
-                <option id="adminNotesTargetCards" value="cards">Karty poznámek</option>
-                <option id="adminNotesTargetTags" value="tags">Vlastní štítky</option>
-                <option id="adminNotesTargetPrimary" value="primary">Hlavní filtry</option>
-                <option id="adminNotesTargetSearch" value="search">Hledání</option>
-                <option id="adminNotesTargetActions" value="actions">Horní akční ikony</option>
-                <option id="adminNotesTargetTraffic" value="traffic">RX/TX/E panel</option>
-                <option id="adminNotesTargetModules" value="modules">Poznámky / Plán / Dokumenty</option>
-                <option id="adminNotesTargetFab" value="fab">Plovoucí +</option>
-              </select>
-            </div>
-
-            <div class="adminNotesVisualSubheader">
-              <strong id="adminNotesSelectedSectionTitle">Vybraný prvek</strong>
-              <button id="adminNotesVisualResetSelected" class="adminNotesVisualMiniButton" type="button">Reset prvku</button>
-              <small id="adminNotesSelectedSectionHint">Border, barva, radius a velikost se mění pouze u vybraného prvku.</small>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <span id="adminNotesBorderToggleLabel" class="adminNotesVisualLabel">Border</span>
-              <button id="adminNotesBorderToggle" class="adminNotesVisualToggle" type="button" aria-pressed="true">Zapnuto</button>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesBorderModeLabel" class="adminNotesVisualLabel" for="adminNotesBorderMode">Odstín borderu</label>
-              <select id="adminNotesBorderMode" class="adminNotesVisualSelect">
-                <option id="adminNotesBorderModeDark" value="dark">Tmavší barva</option>
-                <option id="adminNotesBorderModeLight" value="light">Světlejší barva</option>
-                <option id="adminNotesBorderModeLegacy" value="legacy">Původní</option>
-              </select>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesBorderWidthLabel" class="adminNotesVisualLabel" for="adminNotesBorderWidth">Šířka borderu</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesBorderWidth" class="adminNotesVisualRange" type="range" min="0.5" max="8" step="0.5" value="2">
-                <output id="adminNotesBorderWidthValue" class="adminNotesVisualValue" for="adminNotesBorderWidth">2 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesBorderStrengthLabel" class="adminNotesVisualLabel" for="adminNotesBorderStrength">Síla zesvětlení / ztmavení</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesBorderStrength" class="adminNotesVisualRange" type="range" min="0" max="70" step="1" value="18">
-                <output id="adminNotesBorderStrengthValue" class="adminNotesVisualValue" for="adminNotesBorderStrength">18 %</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesBorderRadiusLabel" class="adminNotesVisualLabel" for="adminNotesBorderRadius">Zaoblení rohů</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesBorderRadius" class="adminNotesVisualRange" type="range" min="0" max="44" step="1" value="22">
-                <output id="adminNotesBorderRadiusValue" class="adminNotesVisualValue" for="adminNotesBorderRadius">22 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesElementSizeLabel" class="adminNotesVisualLabel" for="adminNotesElementSize">Velikost prvku</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesElementSize" class="adminNotesVisualRange" type="range" min="10" max="88" step="1" value="18">
-                <output id="adminNotesElementSizeValue" class="adminNotesVisualValue" for="adminNotesElementSize">18 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualSubheader">
-              <strong id="adminNotesLayoutTitle">Rozložení hlavního screenu</strong>
-              <small id="adminNotesLayoutHint">Jemné mezery a posuny bez zásahu do dat nebo logiky aplikace.</small>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesOffsetYLabel" class="adminNotesVisualLabel" for="adminNotesOffsetY">Posun obsahu nahoru / dolů</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesOffsetY" class="adminNotesVisualRange" type="range" min="-16" max="16" step="1" value="13">
-                <output id="adminNotesOffsetYValue" class="adminNotesVisualValue" for="adminNotesOffsetY">13 px</output>
-              </div>
-            </div>
-
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesActionsFiltersGapLabel" class="adminNotesVisualLabel" for="adminNotesActionsFiltersGap">Mezera akce ↕ filtry</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesActionsFiltersGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="5">
-                <output id="adminNotesActionsFiltersGapValue" class="adminNotesVisualValue" for="adminNotesActionsFiltersGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesFilterGapLabel" class="adminNotesVisualLabel" for="adminNotesFilterGap">Mezera hlavních filtrů</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesFilterGap" class="adminNotesVisualRange" type="range" min="2" max="14" step="1" value="5">
-                <output id="adminNotesFilterGapValue" class="adminNotesVisualValue" for="adminNotesFilterGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesTagsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsGap">Mezera mezi štítky</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesTagsGap" class="adminNotesVisualRange" type="range" min="2" max="16" step="1" value="5">
-                <output id="adminNotesTagsGapValue" class="adminNotesVisualValue" for="adminNotesTagsGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesRowsGapLabel" class="adminNotesVisualLabel" for="adminNotesRowsGap">Mezera filtry ↕ štítky</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesRowsGap" class="adminNotesVisualRange" type="range" min="0" max="20" step="1" value="5">
-                <output id="adminNotesRowsGapValue" class="adminNotesVisualValue" for="adminNotesRowsGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesTagsCardsGapLabel" class="adminNotesVisualLabel" for="adminNotesTagsCardsGap">Mezera štítky ↕ karty</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesTagsCardsGap" class="adminNotesVisualRange" type="range" min="0" max="40" step="1" value="5">
-                <output id="adminNotesTagsCardsGapValue" class="adminNotesVisualValue" for="adminNotesTagsCardsGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesCardColumnGapLabel" class="adminNotesVisualLabel" for="adminNotesCardColumnGap">Mezera mezi sloupci karet</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesCardColumnGap" class="adminNotesVisualRange" type="range" min="0" max="30" step="1" value="5">
-                <output id="adminNotesCardColumnGapValue" class="adminNotesVisualValue" for="adminNotesCardColumnGap">5 px</output>
-              </div>
-            </div>
-
-            <div class="adminNotesVisualRow">
-              <label id="adminNotesCardRowGapLabel" class="adminNotesVisualLabel" for="adminNotesCardRowGap">Mezera pod kartami</label>
-              <div class="adminNotesVisualRangeRow">
-                <input id="adminNotesCardRowGap" class="adminNotesVisualRange" type="range" min="2" max="24" step="1" value="5">
-                <output id="adminNotesCardRowGapValue" class="adminNotesVisualValue" for="adminNotesCardRowGap">5 px</output>
-              </div>
-            </div>
-
-            <p id="adminNotesVisualHint" class="adminNotesVisualHint">Tip: u karet lze nyní samostatně sladit šířku borderu a radius; swipe vrstva používá automaticky správný vnitřní radius, takže rohy už neprosvítají.</p>
-          </div>
         </div>
       </section>
 
@@ -2343,7 +2226,9 @@
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
   <script src="notesVisualTuning.js?v=658l-primary-svg-tuning"></script>
-  <script src="notesVisualPanel.js?v=658l-primary-svg-tuning"></script>
+  <script src="notesVisualPanel.js?v=658s-direct-export"></script>
+  <script src="plannerVisualTuning.js?v=658s-planner-visual-lab"></script>
+  <script src="plannerVisualPanel.js?v=658s-planner-visual-lab"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2406,7 +2291,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658i-notes-layout-defaults"></script>
+  <script src="adminDashboard.js?v=658s-visual-lab-buttons"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
