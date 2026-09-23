@@ -20,21 +20,21 @@
   ];
 
   const VYCHOZI = {
-    vybranyPrvek: "subnav",
+    vybranyPrvek: "reminderItems",
     ikony: {
-      plan: true,
-      pripominky: true,
+      plan: false,
+      pripominky: false,
       velikost: 18,
       tloustka: 1.85
     },
     prvky: {
-      subnav: { velikost: 42, radius: 14, mezera: 6 },
+      subnav: { velikost: 42, radius: 10, mezera: 9 },
       days: { velikost: 40, radius: 12, mezera: 4 },
       agendaHeader: { velikost: 52, radius: 14, mezera: 8 },
-      agendaItems: { velikost: 8, radius: 0, mezera: 0 },
-      reminderAreaFilters: { velikost: 42, radius: 14, mezera: 10 },
-      reminderStatus: { velikost: 7, radius: 10, mezera: 8 },
-      reminderItems: { velikost: 10, radius: 15, mezera: 8 }
+      agendaItems: { velikost: 2, radius: 0, mezera: 0 },
+      reminderAreaFilters: { velikost: 42, radius: 15, mezera: 14 },
+      reminderStatus: { velikost: 7, radius: 10, mezera: 18 },
+      reminderItems: { velikost: 10, radius: 10, mezera: 5 }
     }
   };
 

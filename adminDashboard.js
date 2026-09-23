@@ -33,6 +33,8 @@
     document.getElementById("adminNotesVisualToolButton");
   const plannerVisualToolTlacitko =
     document.getElementById("adminPlannerVisualToolButton");
+  const documentsVisualToolTlacitko =
+    document.getElementById("adminDocumentsVisualToolButton");
   const plannerIconsToolTlacitko =
     document.getElementById("adminPlannerIconsToolButton");
   const plannerIconsToolStav =
@@ -577,6 +579,7 @@
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
     window.LubaNotePlannerVisualPanel?.close?.();
+    window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("notesModuleButton")?.click?.();
     const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
     if (otevreno) {
@@ -587,8 +590,20 @@
   function otevriPlovouciPlannerTuning() {
     if (!jeAdmin) return;
     window.LubaNoteNotesVisualPanel?.close?.();
+    window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("plannerModuleButton")?.click?.();
     const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
+    if (otevreno) {
+      zavriDashboard();
+    }
+  }
+
+  function otevriPlovouciDocumentsTuning() {
+    if (!jeAdmin) return;
+    window.LubaNoteNotesVisualPanel?.close?.();
+    window.LubaNotePlannerVisualPanel?.close?.();
+    document.getElementById("documentsModuleButton")?.click?.();
+    const otevreno = window.LubaNoteDocumentsVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -1844,6 +1859,10 @@
   plannerVisualToolTlacitko?.addEventListener(
     "click",
     otevriPlovouciPlannerTuning
+  );
+  documentsVisualToolTlacitko?.addEventListener(
+    "click",
+    otevriPlovouciDocumentsTuning
   );
   plannerIconsToolTlacitko?.addEventListener(
     "click",

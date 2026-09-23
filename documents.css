@@ -5,7 +5,7 @@
 .documentsV1 {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--ln-dv-section-gap, 10px);
   width: min(100%, 900px);
   min-height: 0;
   margin: 0 auto;
@@ -17,7 +17,7 @@
 .documentsV1Hero,
 .documentsV1Section {
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--ln-dv-section-radius, 20px);
   background: var(--color-surface);
   background: color-mix(in srgb, var(--color-surface) 96%, transparent);
 }
@@ -27,7 +27,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 13px 14px;
+  padding: calc(var(--ln-dv-section-pad, 12px) + 1px) 14px;
   text-align: left;
 }
 
@@ -89,7 +89,7 @@
 }
 
 .documentsV1Section {
-  padding: 12px 14px;
+  padding: var(--ln-dv-section-pad, 12px) 14px;
   text-align: left;
 }
 
@@ -134,7 +134,7 @@
 .documentsFoldersGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--ln-dv-folder-gap, 6px);
 }
 
 .documentsFolderCard {
@@ -144,9 +144,9 @@
   gap: 2px 10px;
   align-items: center;
   min-width: 0;
-  min-height: 64px;
+  min-height: var(--ln-dv-folder-height, 64px);
   border: 1px solid var(--color-border);
-  border-radius: 15px;
+  border-radius: var(--ln-dv-folder-radius, 15px);
   padding: 9px 10px;
   background: var(--color-surface);
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
@@ -209,7 +209,7 @@
 .documentsFiles {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ln-dv-file-gap, 8px);
 }
 
 .documentsFileRow {
@@ -220,7 +220,7 @@
   width: 100%;
   min-height: 60px;
   border: 1px solid var(--color-border);
-  border-radius: 15px;
+  border-radius: var(--ln-dv-file-radius, 15px);
   background: var(--color-surface);
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
   color: var(--color-text);
@@ -264,7 +264,7 @@
   align-items: center;
   min-width: 0;
   border: 0;
-  padding: 8px 6px 8px 10px;
+  padding: var(--ln-dv-file-pad-y, 8px) 6px var(--ln-dv-file-pad-y, 8px) 10px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -842,7 +842,7 @@
    ============================================================ */
 .documentsSearchTools {
   display: grid;
-  gap: 7px;
+  gap: var(--ln-dv-search-gap, 7px);
   margin: -1px 0 10px;
 }
 
@@ -851,9 +851,9 @@
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) 34px;
   align-items: center;
-  min-height: 40px;
+  min-height: var(--ln-dv-search-height, 40px);
   border: 1px solid var(--color-border);
-  border-radius: 13px;
+  border-radius: var(--ln-dv-search-radius, 13px);
   background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
   overflow: hidden;
 }
@@ -873,7 +873,7 @@
 
 .documentsSearchBox input {
   min-width: 0;
-  height: 38px;
+  height: calc(var(--ln-dv-search-height, 40px) - 2px);
   border: 0;
   outline: 0;
   padding: 0 4px;
@@ -920,7 +920,7 @@
 
 .documentsFileFilters {
   display: flex;
-  gap: 6px;
+  gap: var(--ln-dv-filter-gap, 6px);
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -932,9 +932,9 @@
 
 .documentsFileFilter {
   flex: 0 0 auto;
-  min-height: 32px;
+  min-height: var(--ln-dv-filter-height, 32px);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--ln-dv-filter-radius, 999px);
   padding: 0 12px;
   background: transparent;
   color: var(--color-text-secondary);
@@ -952,8 +952,8 @@
 }
 
 .documentsFileFilters .documentsTrashButton {
-  min-height: 32px;
-  border-radius: 999px;
+  min-height: var(--ln-dv-filter-height, 32px);
+  border-radius: var(--ln-dv-filter-radius, 999px);
   padding: 0 12px;
 }
 
@@ -3200,66 +3200,4 @@ body.documents-epub-viewer-open {
   display: block;
   min-width: 0;
   max-width: 100%;
-}
-
-
-/* ============================================================
-   PATCH 658Q – DOKUMENTY / PŘETEČENÍ + TRVALÉ SMAZÁNÍ
-   ============================================================ */
-.documentsFileRow,
-.documentsFileOpenArea,
-.documentsFileMain {
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.documentsFileOpenArea {
-  width: 100%;
-  overflow: hidden;
-}
-
-.documentsFileMain strong {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Čtyřpísmenné DOCX se v kompaktní 38px ikoně nesmí roztáhnout ven. */
-.documentsFileIcon.is-docx,
-.documentsDragPreviewIcon.is-docx {
-  overflow: hidden;
-  box-sizing: border-box;
-  padding-inline: 2px;
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: -0.25px;
-  white-space: nowrap;
-}
-
-/* Dlouhý název v akčním/potvrzovacím modalu se naopak bezpečně zalomí. */
-.documentsFileManageDialog h3,
-.documentsFileRenameDialog h3,
-.documentsFileDeleteForeverDialog h3,
-#documentsFileDeleteForeverText {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.documentsFileDeleteForeverAction,
-.documentsFileDeleteForeverConfirm {
-  border: 1px solid color-mix(in srgb, #ef5350 78%, var(--color-border));
-  background: color-mix(in srgb, #ef5350 14%, var(--color-surface));
-  color: #ffb4b1;
-}
-
-.documentsFileDeleteForeverCancel {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
 }
