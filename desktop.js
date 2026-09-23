@@ -92,6 +92,41 @@
 
   sestavDesktopNotesToolbar();
 
+  /* PATCH 658AB – PC: vodorovné rolování uživatelských štítků kolečkem.
+     Scrollbar zůstává vizuálně skrytý, ale běžné kolečko / touchpad
+     posune řádek štítků do stran. Na krajích necháme událost projít dál,
+     aby se stránka mohla normálně svisle rolovat. */
+  const tagFilterButtons = document.getElementById("tagFilterButtons");
+
+  tagFilterButtons?.addEventListener(
+    "wheel",
+    (event) => {
+      if (!document.body.classList.contains("desktopNotesToolbarA")) return;
+      if (tagFilterButtons.hidden) return;
+
+      const maxScroll = Math.max(
+        0,
+        tagFilterButtons.scrollWidth - tagFilterButtons.clientWidth
+      );
+      if (maxScroll <= 1) return;
+
+      const delta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.deltaY;
+      if (!delta) return;
+
+      const pred = tagFilterButtons.scrollLeft;
+      const cil = Math.min(maxScroll, Math.max(0, pred + delta));
+
+      if (Math.abs(cil - pred) < 0.5) return;
+
+      tagFilterButtons.scrollLeft = cil;
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
   function nastavAktivniSidebar(button) {
     sidebarButtons.forEach((polozka) => {
       polozka.classList.toggle(
