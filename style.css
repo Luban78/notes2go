@@ -14099,11 +14099,14 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
    ================================================== */
 
 #ln-pvt-panel,
-#ln-pvt-panel * {
+#ln-pvt-panel *,
+#ln-dvt-panel,
+#ln-dvt-panel * {
   box-sizing: border-box;
 }
 
-#ln-pvt-panel {
+#ln-pvt-panel,
+#ln-dvt-panel {
   position: fixed !important;
   top: 96px;
   right: 10px;
@@ -14122,24 +14125,29 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   -webkit-backdrop-filter: blur(14px);
 }
 
-#ln-pvt-panel[hidden] {
+#ln-pvt-panel[hidden],
+#ln-dvt-panel[hidden] {
   display: none !important;
 }
 
-#ln-pvt-panel.ln-nvt-dragging .ln-nvt-head {
+#ln-pvt-panel.ln-nvt-dragging .ln-nvt-head,
+#ln-dvt-panel.ln-nvt-dragging .ln-nvt-head {
   cursor: grabbing;
 }
 
-#ln-pvt-panel.ln-nvt-minimized {
+#ln-pvt-panel.ln-nvt-minimized,
+#ln-dvt-panel.ln-nvt-minimized {
   max-height: 49px;
 }
 
-#ln-pvt-panel.ln-nvt-minimized .ln-nvt-body {
+#ln-pvt-panel.ln-nvt-minimized .ln-nvt-body,
+#ln-dvt-panel.ln-nvt-minimized .ln-nvt-body {
   display: none;
 }
 
 @media (max-width: 430px) {
-  #ln-pvt-panel {
+  #ln-pvt-panel,
+  #ln-dvt-panel {
     width: min(330px, calc(100vw - 16px));
     right: 8px;
     max-height: 58dvh;
