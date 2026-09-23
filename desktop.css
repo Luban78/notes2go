@@ -1718,3 +1718,394 @@
     line-height: 1.25;
   }
 }
+
+/* ==========================================================
+   PATCH 658AH – PC PŘIPOMÍNKY / ČASOVÁ OSA – NÁVRH 3
+   ----------------------------------------------------------
+   Samostatný desktop layout. Mobilní Připomínky zůstávají
+   beze změny. Původní toolbar + Dnes/Zítra/Později zůstávají
+   v DOM jako funkční fallback, na PC je nahrazuje časová osa.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body.desktopRemindersTimelineReady #remindersScreen:not([hidden]) {
+    display: block;
+    width: min(100%, 1180px);
+    height: calc(100dvh - 242px);
+    min-height: 430px;
+    margin: 0 auto;
+    padding: 0 14px 12px;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  body.desktopRemindersTimelineReady #remindersScreen > .remindersToolbar,
+  body.desktopRemindersTimelineReady #remindersScreen > .remindersGroups {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap !important;
+  }
+
+  .desktopRemindersLayout {
+    display: grid;
+    grid-template-columns: var(--ln-dpr-filter-width, 232px) minmax(0, 1fr);
+    gap: 14px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .desktopRemindersFilterPanel,
+  .desktopRemindersTimelinePanel {
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-background));
+  }
+
+  .desktopRemindersFilterPanel {
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .desktopRemindersFilterPanel h2,
+  .desktopRemindersTimelineHeader h2 {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 20px;
+    font-weight: 780;
+  }
+
+  .desktopReminderSearch {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    min-height: 42px;
+    margin: 12px 0 10px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-background);
+    color: var(--color-text-secondary);
+  }
+
+  .desktopReminderSearch > span,
+  .desktopReminderSearch .lubaSvgIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .desktopReminderSearch input {
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+    padding: 0 4px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 14px;
+  }
+
+  .desktopReminderFilterList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .desktopReminderFilterButton {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    min-height: 42px;
+    padding: 0 11px;
+    border: 1px solid var(--color-border);
+    border-radius: 11px;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .desktopReminderFilterButton:hover {
+    background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
+  }
+
+  .desktopReminderFilterButton.active {
+    border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
+    background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+    color: var(--color-accent-text);
+    box-shadow: inset 3px 0 0 var(--color-accent);
+  }
+
+  .desktopReminderFilterIcon,
+  .desktopReminderFilterIcon .lubaSvgIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .desktopReminderFilterCount {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .desktopReminderFilterSecondary {
+    margin-top: 7px;
+  }
+
+  .desktopRemindersTimelinePanel {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px 14px;
+    overflow: hidden;
+  }
+
+  .desktopRemindersTimelineHeader {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 48px;
+    margin: 0 0 10px;
+  }
+
+  .desktopReminderTimelineActions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .desktopReminderTimelineActions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 11px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .desktopReminderTimelineActions > button:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 54%, var(--color-border));
+  }
+
+  .desktopReminderTimelineActions .desktopReminderAdd {
+    min-width: 104px;
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast, #fff);
+  }
+
+  .desktopReminderTimelineActions .lubaSvgIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .desktopReminderDateInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .desktopReminderTimelineScroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 4px 12px 0;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-border) 88%, transparent) transparent;
+  }
+
+  .desktopReminderTimelineScroll::-webkit-scrollbar {
+    display: block;
+    width: 7px;
+  }
+
+  .desktopReminderTimelineScroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-border) 88%, transparent);
+  }
+
+  .desktopReminderDayGroup {
+    margin: 0 0 var(--ln-dpr-group-gap, 17px);
+    scroll-margin-top: 4px;
+  }
+
+  .desktopReminderDayTitle {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin: 0 8px 7px;
+    color: var(--color-text);
+    font-size: var(--ln-dpr-group-font, 17px);
+    font-weight: 780;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .desktopReminderDayTitle small {
+    color: var(--color-text-secondary);
+    font-size: .82em;
+    font-weight: 600;
+  }
+
+  .desktopReminderDayRows {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--ln-dpr-row-radius, 11px);
+    background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+  }
+
+  .desktopReminderTimelineRow.reminderItem {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) auto auto 30px;
+    gap: 10px;
+    align-items: center;
+    min-height: var(--ln-dpr-row-min-height, 54px);
+    margin: 0;
+    padding: 7px 9px;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: var(--ln-dpr-row-font, 16px);
+  }
+
+  .desktopReminderTimelineRow.reminderItem:last-child {
+    border-bottom: 0;
+  }
+
+  .desktopReminderTimelineRow.reminderItem:hover {
+    background: color-mix(in srgb, var(--color-accent) 5%, var(--color-surface));
+  }
+
+  .desktopReminderTimelineRow .reminderItemTime {
+    display: block;
+    padding: 0;
+    color: var(--color-accent-text);
+    font-size: var(--ln-dpr-time-font, 16px);
+    font-weight: 780;
+    line-height: 1.2;
+  }
+
+  .desktopReminderTimelineRow .reminderItemDateLine,
+  .desktopReminderTimelineRow .reminderItemMeta {
+    display: none !important;
+  }
+
+  .desktopReminderTimelineRow .reminderItemContent {
+    min-width: 0;
+  }
+
+  .desktopReminderTimelineRow .reminderItemTitle {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: var(--ln-dpr-row-font, 16px);
+    font-weight: 620;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .desktopReminderTimelineRow .reminderItemPreview {
+    max-width: 100%;
+    margin-top: 3px;
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-size: calc(var(--ln-dpr-row-font, 16px) - 2px);
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-line-clamp: unset;
+  }
+
+  .desktopReminderAreaBadge,
+  .desktopReminderRepeatBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 720;
+  }
+
+  .desktopReminderAreaBadge.is-work {
+    background: color-mix(in srgb, #4f7cff 13%, var(--color-surface));
+    color: color-mix(in srgb, #4f7cff 82%, var(--color-text));
+  }
+
+  .desktopReminderAreaBadge.is-private {
+    background: color-mix(in srgb, #ff8b5f 13%, var(--color-surface));
+    color: color-mix(in srgb, #e56d42 86%, var(--color-text));
+  }
+
+  .desktopReminderRepeatBadge {
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+    color: var(--color-accent-text);
+  }
+
+  .desktopReminderTimelineRow .reminderItemMenu {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 34px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .desktopReminderTimelineRow .reminderMenuSvgIcon,
+  .desktopReminderTimelineRow .reminderItemMenu .lubaSvgIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .desktopRemindersEmpty {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    min-height: 220px;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+
+  .desktopRemindersEmpty strong {
+    color: var(--color-text);
+    font-size: 18px;
+  }
+}

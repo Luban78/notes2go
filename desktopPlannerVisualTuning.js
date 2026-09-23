@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – PC Planner Visual Lab
-   PATCH 658AF
+   PATCH 658AH
 ================================================== */
 (() => {
   "use strict";
@@ -31,6 +31,15 @@
       radius: 13,
       mezera: 12,
       pismo: 16
+    },
+    pripominky: {
+      sirkaFiltru: 232,
+      vyskaRadku: 54,
+      pismoRadku: 16,
+      pismoCasu: 16,
+      pismoSkupiny: 17,
+      mezeraSkupin: 17,
+      radiusRadku: 11
     }
   };
 
@@ -52,7 +61,14 @@
     subnavVyska: [38, 68],
     subnavRadius: [0, 24],
     subnavMezera: [0, 24],
-    subnavPismo: [12, 22]
+    subnavPismo: [12, 22],
+    reminderSirkaFiltru: [190, 320],
+    reminderVyskaRadku: [44, 82],
+    reminderPismoRadku: [13, 22],
+    reminderPismoCasu: [13, 22],
+    reminderPismoSkupiny: [14, 24],
+    reminderMezeraSkupin: [8, 30],
+    reminderRadiusRadku: [0, 22]
   };
 
   const kopie = (o) => JSON.parse(JSON.stringify(o));
@@ -68,6 +84,7 @@
       const k = raw.kalendar || {};
       const a = raw.agenda || {};
       const s = raw.subnav || {};
+      const r = raw.pripominky || {};
       stav.kalendar.sirkaScreenu = omez(k.sirkaScreenu, ...LIMITY.sirkaScreenu, stav.kalendar.sirkaScreenu);
       stav.kalendar.podilKalendare = omez(k.podilKalendare, ...LIMITY.podilKalendare, stav.kalendar.podilKalendare);
       stav.kalendar.sirkaMrizky = omez(k.sirkaMrizky, ...LIMITY.sirkaMrizky, stav.kalendar.sirkaMrizky);
@@ -87,6 +104,13 @@
       stav.subnav.radius = omez(s.radius, ...LIMITY.subnavRadius, stav.subnav.radius);
       stav.subnav.mezera = omez(s.mezera, ...LIMITY.subnavMezera, stav.subnav.mezera);
       stav.subnav.pismo = omez(s.pismo, ...LIMITY.subnavPismo, stav.subnav.pismo);
+      stav.pripominky.sirkaFiltru = omez(r.sirkaFiltru, ...LIMITY.reminderSirkaFiltru, stav.pripominky.sirkaFiltru);
+      stav.pripominky.vyskaRadku = omez(r.vyskaRadku, ...LIMITY.reminderVyskaRadku, stav.pripominky.vyskaRadku);
+      stav.pripominky.pismoRadku = omez(r.pismoRadku, ...LIMITY.reminderPismoRadku, stav.pripominky.pismoRadku);
+      stav.pripominky.pismoCasu = omez(r.pismoCasu, ...LIMITY.reminderPismoCasu, stav.pripominky.pismoCasu);
+      stav.pripominky.pismoSkupiny = omez(r.pismoSkupiny, ...LIMITY.reminderPismoSkupiny, stav.pripominky.pismoSkupiny);
+      stav.pripominky.mezeraSkupin = omez(r.mezeraSkupin, ...LIMITY.reminderMezeraSkupin, stav.pripominky.mezeraSkupin);
+      stav.pripominky.radiusRadku = omez(r.radiusRadku, ...LIMITY.reminderRadiusRadku, stav.pripominky.radiusRadku);
     } catch (_error) {}
     return stav;
   }
@@ -117,6 +141,13 @@
     root.style.setProperty("--ln-dpv-subnav-radius", px(stav.subnav.radius));
     root.style.setProperty("--ln-dpv-subnav-gap", px(stav.subnav.mezera));
     root.style.setProperty("--ln-dpv-subnav-font", px(stav.subnav.pismo));
+    root.style.setProperty("--ln-dpr-filter-width", px(stav.pripominky.sirkaFiltru));
+    root.style.setProperty("--ln-dpr-row-min-height", px(stav.pripominky.vyskaRadku));
+    root.style.setProperty("--ln-dpr-row-font", px(stav.pripominky.pismoRadku));
+    root.style.setProperty("--ln-dpr-time-font", px(stav.pripominky.pismoCasu));
+    root.style.setProperty("--ln-dpr-group-font", px(stav.pripominky.pismoSkupiny));
+    root.style.setProperty("--ln-dpr-group-gap", px(stav.pripominky.mezeraSkupin));
+    root.style.setProperty("--ln-dpr-row-radius", px(stav.pripominky.radiusRadku));
   }
 
   function oznam() {
@@ -139,7 +170,14 @@
         paddingRadku: LIMITY.agendaPaddingRadku,
         minVyskaRadku: LIMITY.agendaMinVyskaRadku,
         mezeraRadku: LIMITY.agendaMezeraRadku, sirkaCasu: LIMITY.sirkaCasu,
-        vyska: LIMITY.subnavVyska, mezera: LIMITY.subnavMezera
+        vyska: LIMITY.subnavVyska, mezera: LIMITY.subnavMezera,
+        sirkaFiltru: LIMITY.reminderSirkaFiltru,
+        vyskaRadku: LIMITY.reminderVyskaRadku,
+        pismoRadku: LIMITY.reminderPismoRadku,
+        pismoCasu: LIMITY.reminderPismoCasu,
+        pismoSkupiny: LIMITY.reminderPismoSkupiny,
+        mezeraSkupin: LIMITY.reminderMezeraSkupin,
+        radiusRadku: LIMITY.reminderRadiusRadku
       };
       const lim = mapa[klic];
       if (!lim) return false;
