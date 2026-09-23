@@ -1202,21 +1202,170 @@
     border: 1px solid rgba(0, 0, 0, 0.28) !important;
   }
 }
-\n\n/* ==========================================================\n   PATCH 658X – POZNÁMKY DESKTOP / VARIANTA A\n   Hledání + systémové filtry + akce v 1. řádku.\n   Uživatelské štítky mají vlastní celý 2. řádek.\n   Pouze desktop; mobilní layout zůstává beze změny.\n   ========================================================== */\n@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {\n  body.desktopNotesToolbarA .searchRow {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    width: 100%;\n  }\n\n  body.desktopNotesToolbarA .searchRow .searchBox {\n    flex: 1 1 360px;\n    width: auto;\n    min-width: 220px;\n    max-width: 420px;\n  }\n\n  body.desktopNotesToolbarA .desktopCategoryActions {\n    display: flex;\n    flex: 0 0 auto;\n    align-items: center;\n    gap: 7px;\n    min-width: 0;\n  }\n\n  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    flex: 0 0 auto;\n    min-width: 46px;\n    height: 50px;\n    min-height: 50px;\n    padding: 0 12px;\n    border-radius: 13px;\n  }\n\n  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIconOnly {\n    width: 50px;\n    min-width: 50px;\n    padding: 0;\n  }\n\n  body.desktopNotesToolbarA .searchActions {\n    flex: 0 0 auto;\n    width: auto;\n    margin-left: auto;\n    gap: 8px;\n  }\n\n  body.desktopNotesToolbarA .categoryTabs {\n    display: flex;\n    align-items: center;\n    width: 100%;\n    min-width: 0;\n    margin-top: 9px;\n    padding-bottom: 4px;\n    overflow: visible;\n  }\n\n  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons {\n    display: flex;\n    flex: 1 1 100%;\n    width: 100%;\n    min-width: 0;\n    gap: 8px;\n    overflow-x: auto;\n    overflow-y: hidden;\n    scrollbar-width: none;\n    -webkit-overflow-scrolling: touch;\n  }\n\n  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons::-webkit-scrollbar {\n    display: none;\n  }\n\n  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons:empty {\n    min-height: 0;\n  }\n\n  /* Kompaktnější varianta pro užší desktop okna. */\n  @media (max-width: 1399px) {\n    body.desktopNotesToolbarA .searchRow .searchBox {\n      flex-basis: 250px;\n      min-width: 190px;\n      max-width: 300px;\n    }\n\n    body.desktopNotesToolbarA .desktopCategoryActions {\n      gap: 5px;\n    }\n\n    body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {\n      min-width: 42px;\n      height: 46px;\n      min-height: 46px;\n      padding: 0 9px;\n    }\n\n    body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIconOnly {\n      width: 46px;\n      min-width: 46px;\n      padding: 0;\n    }\n\n    body.desktopNotesToolbarA .searchActions > button {\n      width: 46px;\n      height: 46px;\n    }\n  }\n}\n
+
 /* ==========================================================
-   PATCH 658Y – DESKTOP NOTES / SROVNANI VYSKY KATEGORII
-   Presunute systemove filtry se na desktopu protahnou na
-   stejnou vysku jako search panel / akcni tlacitka v radku.
+   PATCH 658Z – DESKTOP POZNÁMKY / VARIANTA A + PC VISUAL LAB
+   Pouze desktop. Mobilní layout není dotčen.
    ========================================================== */
 @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --ln-dnv-toolbar-height: 50px;
+    --ln-dnv-toolbar-radius: 13px;
+    --ln-dnv-toolbar-gap: 8px;
+    --ln-dnv-search-width: 420px;
+    --ln-dnv-search-radius: 13px;
+    --ln-dnv-search-pad-x: 15px;
+    --ln-dnv-filter-width: 50px;
+    --ln-dnv-filter-radius: 13px;
+    --ln-dnv-filter-gap: 7px;
+    --ln-dnv-tag-height: 38px;
+    --ln-dnv-tag-radius: 11px;
+    --ln-dnv-tag-gap: 8px;
+    --ln-dnv-card-padding: 16px;
+    --ln-dnv-card-radius: 17px;
+    --ln-dnv-card-gap: 14px;
+  }
+
+  body.desktopNotesToolbarA .searchRow {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: var(--ln-dnv-toolbar-gap);
+  }
+
+  body.desktopNotesToolbarA .searchRow .searchBox {
+    flex: 0 1 var(--ln-dnv-search-width);
+    width: var(--ln-dnv-search-width);
+    min-width: 190px;
+    max-width: var(--ln-dnv-search-width);
+    height: var(--ln-dnv-toolbar-height) !important;
+    padding-left: var(--ln-dnv-search-pad-x);
+    padding-right: var(--ln-dnv-search-pad-x);
+    border-radius: var(--ln-dnv-search-radius) !important;
+  }
+
+  body.desktopNotesToolbarA #searchNotes {
+    height: calc(var(--ln-dnv-toolbar-height) - 2px) !important;
+  }
+
   body.desktopNotesToolbarA .desktopCategoryActions {
-    align-self: stretch;
+    display: flex;
+    flex: 0 0 auto;
     align-items: stretch;
+    height: var(--ln-dnv-toolbar-height);
+    gap: var(--ln-dnv-filter-gap);
+    min-width: 0;
   }
 
   body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {
-    height: auto;
-    min-height: 0;
-    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 var(--ln-dnv-filter-width);
+    width: var(--ln-dnv-filter-width);
+    min-width: var(--ln-dnv-filter-width);
+    height: var(--ln-dnv-toolbar-height) !important;
+    min-height: var(--ln-dnv-toolbar-height) !important;
+    padding: 0 8px;
+    border-radius: var(--ln-dnv-filter-radius) !important;
+  }
+
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIconOnly {
+    padding: 0;
+  }
+
+  body.desktopNotesToolbarA .searchActions {
+    display: flex;
+    flex: 0 0 auto;
+    width: auto;
+    margin-left: auto;
+    gap: var(--ln-dnv-toolbar-gap);
+  }
+
+  body.desktopNotesToolbarA .searchActions > button {
+    width: var(--ln-dnv-toolbar-height) !important;
+    height: var(--ln-dnv-toolbar-height) !important;
+    border-radius: var(--ln-dnv-toolbar-radius) !important;
+  }
+
+  body.desktopNotesToolbarA .categoryTabs {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    margin-top: var(--ln-dnv-toolbar-gap);
+    padding-bottom: 4px;
+    overflow: visible;
+  }
+
+  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons {
+    display: flex;
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    gap: var(--ln-dnv-tag-gap);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
+    height: var(--ln-dnv-tag-height) !important;
+    min-height: var(--ln-dnv-tag-height) !important;
+    border-radius: var(--ln-dnv-tag-radius) !important;
+  }
+
+  body.desktopNotesToolbarA .pinnedCards:not(.listView) #pinnedLeft,
+  body.desktopNotesToolbarA .pinnedCards.listView #pinnedLeft,
+  body.desktopNotesToolbarA .desktopMasonryColumn {
+    gap: var(--ln-dnv-card-gap) !important;
+  }
+
+  body.desktopNotesToolbarA .taskCard {
+    border-radius: var(--ln-dnv-card-radius) !important;
+    padding: var(--ln-dnv-card-padding) !important;
+  }
+
+  @media (max-width: 1399px) {
+    body.desktopNotesToolbarA .searchRow .searchBox {
+      min-width: 180px;
+      width: min(var(--ln-dnv-search-width), 300px);
+      max-width: min(var(--ln-dnv-search-width), 300px);
+      flex-basis: min(var(--ln-dnv-search-width), 300px);
+    }
   }
 }
+
+/* Samostatný plovoucí PC Visual Lab používá stejné vnitřní třídy jako ostatní Lab panely. */
+#ln-dnvt-panel,
+#ln-dnvt-panel * {
+  box-sizing: border-box;
+}
+
+#ln-dnvt-panel {
+  position: fixed !important;
+  top: 96px;
+  right: 18px;
+  z-index: 2147483500 !important;
+  width: min(360px, calc(100vw - 30px));
+  max-height: min(72vh, 690px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid color-mix(in srgb, var(--color-accent) 76%, #fff 24%);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-background) 95%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 16px 56px rgba(0,0,0,.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+#ln-dnvt-panel[hidden] { display: none !important; }
+#ln-dnvt-panel.ln-nvt-minimized { max-height: 49px; }
+#ln-dnvt-panel.ln-nvt-minimized .ln-nvt-body { display: none; }
+#ln-dnvt-panel.ln-nvt-dragging .ln-nvt-head { cursor: grabbing; }

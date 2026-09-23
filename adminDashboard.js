@@ -576,12 +576,31 @@
     api.nastavPrvekHodnotu(id, "borderZapnuty", !prvek.borderZapnuty);
   }
 
+  function jeDesktopVisualRezim() {
+    try {
+      return window.matchMedia(
+        "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+      ).matches;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
     window.LubaNotePlannerVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("notesModuleButton")?.click?.();
-    const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
+
+    let otevreno = false;
+    if (jeDesktopVisualRezim()) {
+      window.LubaNoteNotesVisualPanel?.close?.();
+      otevreno = window.LubaNoteDesktopNotesVisualPanel?.open?.() === true;
+    } else {
+      window.LubaNoteDesktopNotesVisualPanel?.close?.();
+      otevreno = window.LubaNoteNotesVisualPanel?.open?.() === true;
+    }
+
     if (otevreno) {
       zavriDashboard();
     }
@@ -590,6 +609,7 @@
   function otevriPlovouciPlannerTuning() {
     if (!jeAdmin) return;
     window.LubaNoteNotesVisualPanel?.close?.();
+    window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("plannerModuleButton")?.click?.();
     const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
@@ -601,6 +621,7 @@
   function otevriPlovouciDocumentsTuning() {
     if (!jeAdmin) return;
     window.LubaNoteNotesVisualPanel?.close?.();
+    window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNotePlannerVisualPanel?.close?.();
     document.getElementById("documentsModuleButton")?.click?.();
     const otevreno = window.LubaNoteDocumentsVisualPanel?.open?.();
