@@ -1386,223 +1386,45 @@
   }
 }
 
+
 /* ==========================================================
-   PATCH 658AC – DESKTOP NOTES VISUAL LAB / FULL CONTROLS
+   PATCH 658AE – DESKTOP SIDEBAR / MAIN MENU MERGE
    ----------------------------------------------------------
-   Plnohodnotné PC ladění po vzoru APK Visual Labu.
-   Pouze desktop; mobilní layout není dotčen.
+   PC: první duplicitní blok vlevo je skrytý, funkce z tlačítka
+   ⋮ jsou přesunuty do levého panelu a samotné ⋮ je skryté.
+   Mobil / APK beze změny.
    ========================================================== */
 @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
-  :root {
-    --ln-dnv-layout-offsetY: 0px;
-    --ln-dnv-layout-toolbarVyska: 50px;
-    --ln-dnv-layout-toolbarMezera: 8px;
-    --ln-dnv-layout-filtryMezera: 7px;
-    --ln-dnv-layout-toolbarStitkyMezera: 8px;
-    --ln-dnv-layout-stitkyMezera: 8px;
-    --ln-dnv-layout-stitkyKartyMezera: 10px;
-    --ln-dnv-layout-kartySloupceMezera: 14px;
-    --ln-dnv-layout-kartyRadkyMezera: 14px;
-  }
-
-  /* Border barvy podle stejného principu jako mobilní Visual Lab. */
-  body[data-ln-dnv-modules-mode="legacy"] { --ln-dnv-modules-border-color: var(--color-border); }
-  body[data-ln-dnv-modules-mode="dark"] { --ln-dnv-modules-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-modules-border-base,82%), #000 var(--ln-dnv-modules-border-strength,18%)); }
-  body[data-ln-dnv-modules-mode="light"] { --ln-dnv-modules-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-modules-border-base,82%), #fff var(--ln-dnv-modules-border-strength,18%)); }
-  body[data-ln-dnv-traffic-mode="legacy"] { --ln-dnv-traffic-border-color: var(--color-border); }
-  body[data-ln-dnv-traffic-mode="dark"] { --ln-dnv-traffic-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-traffic-border-base,82%), #000 var(--ln-dnv-traffic-border-strength,18%)); }
-  body[data-ln-dnv-traffic-mode="light"] { --ln-dnv-traffic-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-traffic-border-base,82%), #fff var(--ln-dnv-traffic-border-strength,18%)); }
-  body[data-ln-dnv-search-mode="legacy"] { --ln-dnv-search-border-color: var(--color-border); }
-  body[data-ln-dnv-search-mode="dark"] { --ln-dnv-search-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-search-border-base,82%), #000 var(--ln-dnv-search-border-strength,18%)); }
-  body[data-ln-dnv-search-mode="light"] { --ln-dnv-search-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-search-border-base,82%), #fff var(--ln-dnv-search-border-strength,18%)); }
-  body[data-ln-dnv-primary-mode="legacy"] { --ln-dnv-primary-border-color: var(--color-border); }
-  body[data-ln-dnv-primary-mode="dark"] { --ln-dnv-primary-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base,82%), #000 var(--ln-dnv-primary-border-strength,18%)); }
-  body[data-ln-dnv-primary-mode="light"] { --ln-dnv-primary-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base,82%), #fff var(--ln-dnv-primary-border-strength,18%)); }
-  body[data-ln-dnv-actions-mode="legacy"] { --ln-dnv-actions-border-color: var(--color-border); }
-  body[data-ln-dnv-actions-mode="dark"] { --ln-dnv-actions-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-actions-border-base,82%), #000 var(--ln-dnv-actions-border-strength,18%)); }
-  body[data-ln-dnv-actions-mode="light"] { --ln-dnv-actions-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-actions-border-base,82%), #fff var(--ln-dnv-actions-border-strength,18%)); }
-  body[data-ln-dnv-tags-mode="legacy"] { --ln-dnv-tags-border-color: var(--color-border); }
-  body[data-ln-dnv-tags-mode="dark"] { --ln-dnv-tags-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-tags-border-base,82%), #000 var(--ln-dnv-tags-border-strength,18%)); }
-  body[data-ln-dnv-tags-mode="light"] { --ln-dnv-tags-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-tags-border-base,82%), #fff var(--ln-dnv-tags-border-strength,18%)); }
-  body[data-ln-dnv-cards-mode="legacy"] { --ln-dnv-cards-border-color: var(--color-border); }
-  body[data-ln-dnv-cards-mode="dark"] { --ln-dnv-cards-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-cards-border-base,82%), #000 var(--ln-dnv-cards-border-strength,18%)); }
-  body[data-ln-dnv-cards-mode="light"] { --ln-dnv-cards-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-cards-border-base,82%), #fff var(--ln-dnv-cards-border-strength,18%)); }
-  body[data-ln-dnv-fab-mode="legacy"] { --ln-dnv-fab-border-color: var(--color-border); }
-  body[data-ln-dnv-fab-mode="dark"] { --ln-dnv-fab-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-fab-border-base,82%), #000 var(--ln-dnv-fab-border-strength,18%)); }
-  body[data-ln-dnv-fab-mode="light"] { --ln-dnv-fab-border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-fab-border-base,82%), #fff var(--ln-dnv-fab-border-strength,18%)); }
-
-  body[data-ln-dnv-modules-border="off"] { --ln-dnv-modules-border-width: 0px !important; }
-  body[data-ln-dnv-traffic-border="off"] { --ln-dnv-traffic-border-width: 0px !important; }
-  body[data-ln-dnv-search-border="off"] { --ln-dnv-search-border-width: 0px !important; }
-  body[data-ln-dnv-primary-border="off"] { --ln-dnv-primary-border-width: 0px !important; }
-  body[data-ln-dnv-actions-border="off"] { --ln-dnv-actions-border-width: 0px !important; }
-  body[data-ln-dnv-tags-border="off"] { --ln-dnv-tags-border-width: 0px !important; }
-  body[data-ln-dnv-cards-border="off"] { --ln-dnv-cards-border-width: 0px !important; }
-  body[data-ln-dnv-fab-border="off"] { --ln-dnv-fab-border-width: 0px !important; }
-
-  /* Moduly a datový panel. */
-  .moduleTab {
-    height: var(--ln-dnv-modules-size,54px) !important;
-    border-width: var(--ln-dnv-modules-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-modules-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-modules-radius,13px) !important;
-  }
-  #syncTrafficBar {
-    min-height: var(--ln-dnv-traffic-size,22px) !important;
-    border-width: var(--ln-dnv-traffic-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-traffic-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-traffic-radius,12px) !important;
-  }
-
-  /* Varianta A – první řádek Poznámek. */
-  body.desktopNotesToolbarA:has(#notesModuleButton.active) .homeHeader {
-    transform: translateY(var(--ln-dnv-layout-offsetY,0px));
-  }
-  body.desktopNotesToolbarA .searchRow {
-    gap: var(--ln-dnv-layout-toolbarMezera,8px) !important;
-  }
-  body.desktopNotesToolbarA .searchRow .searchBox {
-    flex-basis: var(--ln-dnv-search-size,420px) !important;
-    width: var(--ln-dnv-search-size,420px) !important;
-    max-width: var(--ln-dnv-search-size,420px) !important;
-    height: var(--ln-dnv-layout-toolbarVyska,50px) !important;
-    border-width: var(--ln-dnv-search-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-search-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-search-radius,13px) !important;
-  }
-  body.desktopNotesToolbarA #searchNotes {
-    height: calc(var(--ln-dnv-layout-toolbarVyska,50px) - 2px) !important;
-  }
-  body.desktopNotesToolbarA .desktopCategoryActions {
-    height: var(--ln-dnv-layout-toolbarVyska,50px) !important;
-    gap: var(--ln-dnv-layout-filtryMezera,7px) !important;
-  }
-  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {
-    flex-basis: var(--ln-dnv-primary-size,50px) !important;
-    width: var(--ln-dnv-primary-size,50px) !important;
-    min-width: var(--ln-dnv-primary-size,50px) !important;
-    height: var(--ln-dnv-layout-toolbarVyska,50px) !important;
-    min-height: var(--ln-dnv-layout-toolbarVyska,50px) !important;
-    border-width: var(--ln-dnv-primary-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-primary-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-primary-radius,13px) !important;
-  }
-  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon,
-  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon svg,
-  body.desktopNotesToolbarA .desktopCategoryActions .lubaSvgIcon {
-    width: var(--ln-dnv-primary-icon-size,22px) !important;
-    height: var(--ln-dnv-primary-icon-size,22px) !important;
-    font-size: var(--ln-dnv-primary-icon-size,22px) !important;
-    stroke-width: var(--ln-dnv-primary-icon-stroke,1.5) !important;
-  }
-  body.desktopNotesToolbarA .searchActions {
-    gap: var(--ln-dnv-layout-toolbarMezera,8px) !important;
-  }
-  body.desktopNotesToolbarA .searchActions > button {
-    width: var(--ln-dnv-actions-size,50px) !important;
-    height: var(--ln-dnv-layout-toolbarVyska,50px) !important;
-    border-width: var(--ln-dnv-actions-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-actions-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-actions-radius,13px) !important;
-  }
-  body.desktopNotesToolbarA .searchActions .searchActionIcon,
-  body.desktopNotesToolbarA .searchActions .searchActionIcon svg,
-  body.desktopNotesToolbarA .searchActions .sharingInvitationsIcon,
-  body.desktopNotesToolbarA .searchActions .chatHeaderIcon,
-  body.desktopNotesToolbarA .searchActions .lubaSvgIcon {
-    width: var(--ln-dnv-actions-icon-size,22px) !important;
-    height: var(--ln-dnv-actions-icon-size,22px) !important;
-    font-size: var(--ln-dnv-actions-icon-size,22px) !important;
-    stroke-width: var(--ln-dnv-actions-icon-stroke,1.5) !important;
-  }
-
-  /* Druhý řádek – štítky. */
-  body.desktopNotesToolbarA .categoryTabs {
-    margin-top: var(--ln-dnv-layout-toolbarStitkyMezera,8px) !important;
-  }
-  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons {
-    gap: var(--ln-dnv-layout-stitkyMezera,8px) !important;
-  }
-  body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
-    height: var(--ln-dnv-tags-size,38px) !important;
-    min-height: var(--ln-dnv-tags-size,38px) !important;
-    border-width: var(--ln-dnv-tags-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-tags-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-tags-radius,11px) !important;
-  }
-
-  /* Karty a jejich rozestupy. */
-  body.desktopNotesToolbarA:has(#notesModuleButton.active) .app {
-    padding-top: var(--ln-dnv-layout-stitkyKartyMezera,10px) !important;
-  }
-  body.desktopNotesToolbarA .pinnedCards:not(.listView) #pinnedLeft,
-  body.desktopNotesToolbarA .pinnedCards.listView #pinnedLeft {
-    column-gap: var(--ln-dnv-layout-kartySloupceMezera,14px) !important;
-    row-gap: var(--ln-dnv-layout-kartyRadkyMezera,14px) !important;
-  }
-  body.desktopNotesToolbarA .desktopMasonryColumn {
-    gap: var(--ln-dnv-layout-kartyRadkyMezera,14px) !important;
-  }
-  body.desktopNotesToolbarA .taskCard {
-    padding: var(--ln-dnv-cards-size,16px) !important;
-    border-width: var(--ln-dnv-cards-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-cards-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-cards-radius,17px) !important;
-  }
-
-  /* Plovoucí +. */
-  .addTaskButton {
-    width: var(--ln-dnv-fab-size,60px) !important;
-    height: var(--ln-dnv-fab-size,60px) !important;
-    border-width: var(--ln-dnv-fab-border-width,1px) !important;
-    border-style: solid !important;
-    border-color: var(--ln-dnv-fab-border-color,var(--color-border)) !important;
-    border-radius: var(--ln-dnv-fab-radius,30px) !important;
-  }
-
-  /* Na menším notebooku zůstává hledání nastavitelné, jen nesmí spolknout celý řádek. */
-  @media (max-width: 1399px) {
-    body.desktopNotesToolbarA .searchRow .searchBox {
-      width: min(var(--ln-dnv-search-size,420px), 38vw) !important;
-      max-width: min(var(--ln-dnv-search-size,420px), 38vw) !important;
-      flex-basis: min(var(--ln-dnv-search-size,420px), 38vw) !important;
-    }
-  }
-}
-
-/* PC Lab je obsahově delší stejně jako APK Lab – body proto roluje. */
-#ln-dnvt-panel {
-  width: min(390px, calc(100vw - 30px));
-  max-height: min(82vh, 820px);
-}
-#ln-dnvt-panel .ln-nvt-body {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-/* ============================================================
-   PATCH 658AD – PC sidebar: odstranit duplicitní navigaci Poznámek
-   Domů / Všechny poznámky / Oblíbené / Štítky jsou na desktopu
-   dostupné v horní Notes liště, proto je v levém panelu nezobrazujeme.
-   Logika a mobilní UI zůstávají beze změny.
-   ============================================================ */
-@media (min-width: 900px) {
-  #desktopHomeButton,
-  #desktopAllNotesButton,
-  #desktopFavoriteButton,
-  #desktopTagsButton {
+  .desktopSidebarNav:not(.desktopSidebarNavSecondary) {
     display: none !important;
   }
 
-  .desktopSidebar > .desktopSidebarNav:not(.desktopSidebarNavSecondary),
-  .desktopSidebar > .desktopSidebarDivider {
+  .desktopSidebar > .desktopSidebarDivider:first-of-type {
     display: none !important;
   }
-}
 
+  #mainMenuButton,
+  #mainMenu {
+    display: none !important;
+  }
+
+  .desktopSidebarNavSecondary {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .desktopSidebarDividerCompact {
+    margin: 12px 6px 4px;
+  }
+
+  .desktopSidebarButtonDanger {
+    color: color-mix(in srgb, #ff6d6d 78%, var(--color-text) 22%);
+  }
+
+  .desktopSidebarButtonDanger:hover {
+    color: #ff8888;
+    background: color-mix(in srgb, #ff6d6d 9%, var(--color-surface));
+    border-color: color-mix(in srgb, #ff6d6d 18%, transparent);
+  }
+}

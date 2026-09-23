@@ -213,3 +213,215 @@
     }
   });
 })();
+
+
+/* ==================================================
+   PATCH 658AE – DESKTOP SIDEBAR / MAIN MENU MERGE
+   --------------------------------------------------
+   PC only: schová horní tlačítko ⋮ a přesune zbývající
+   položky z hlavní nabídky do levého sidebaru.
+   Duplicitní první blok Domů/Všechny/Oblíbené/Štítky
+   zůstává na PC skrytý. Admin Dashboard je vždy poslední.
+================================================== */
+
+(() => {
+  const desktopRezim = window.matchMedia(
+    "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+  );
+
+  if (!desktopRezim.matches) {
+    return;
+  }
+
+  const notesModuleButton = document.getElementById("notesModuleButton");
+  const desktopSidebarSecondary = document.querySelector(
+    ".desktopSidebarNavSecondary"
+  );
+  const mainMenuButton = document.getElementById("mainMenuButton");
+  const mainMenu = document.getElementById("mainMenu");
+
+  const sourceCardSortButton = document.getElementById("cardSortButton");
+  const sourceCardSortLabel = document.getElementById("cardSortMenuLabel");
+  const sourceStorageButton = document.getElementById("storageScopeMenuButton");
+  const sourceStorageLabel = document.getElementById("storageScopeMenuLabel");
+  const sourceManageTagsButton = document.getElementById("manageTagsMenuButton");
+  const sourceAboutButton = document.getElementById("aboutAppButton");
+  const sourceLogoutButton = document.getElementById("logoutButton");
+  const sourceSettingsButton = document.getElementById("fontSizeSettingsButton");
+  const sourceBackupButton = document.getElementById("backupRestoreButton");
+  const sourceAdminButton = document.getElementById("adminDashboardButton");
+
+  const desktopSettingsButton = document.getElementById("desktopSettingsButton");
+  const desktopBackupButton = document.getElementById("desktopBackupButton");
+  const desktopAdminDashboardButton = document.getElementById(
+    "desktopAdminDashboardButton"
+  );
+
+  if (!desktopSidebarSecondary) return;
+
+  function otevriPoznamkyNaPozadi() {
+    if (!notesModuleButton?.classList.contains("active")) {
+      notesModuleButton.click();
+    }
+  }
+
+  function vytvorSidebarTlacitko(id, iconName, labelText, extraClass = "") {
+    let button = document.getElementById(id);
+    if (button) return button;
+
+    button = document.createElement("button");
+    button.id = id;
+    button.type = "button";
+    button.className = `desktopSidebarButton ${extraClass}`.trim();
+
+    const icon = document.createElement("span");
+    icon.className = "desktopSidebarIcon";
+    icon.setAttribute("data-luba-icon", iconName);
+    icon.setAttribute("aria-hidden", "true");
+
+    const label = document.createElement("span");
+    label.textContent = labelText;
+
+    button.append(icon, label);
+    return button;
+  }
+
+  function nastavLabel(button, text) {
+    const label = button?.querySelector("span:last-child");
+    if (label) {
+      label.textContent = text || "";
+    }
+  }
+
+  const desktopManageTagsButton = vytvorSidebarTlacitko(
+    "desktopManageTagsButton",
+    "stitky",
+    "Správa štítků"
+  );
+
+  const desktopAboutButton = vytvorSidebarTlacitko(
+    "desktopAboutButton",
+    "info",
+    "O aplikaci"
+  );
+
+  const desktopCardSortButton = vytvorSidebarTlacitko(
+    "desktopCardSortButton",
+    "razeni",
+    sourceCardSortLabel?.textContent?.trim() || "Nové karty: nahoře"
+  );
+
+  const desktopStorageButton = vytvorSidebarTlacitko(
+    "desktopStorageButton",
+    "cloud",
+    sourceStorageLabel?.textContent?.trim() || "Úložiště: Synchronizované"
+  );
+
+  const desktopLogoutButton = vytvorSidebarTlacitko(
+    "desktopLogoutButton",
+    "odhlasit",
+    "Odhlásit se",
+    "desktopSidebarButtonDanger"
+  );
+
+  const divider = document.getElementById("desktopSidebarMergedDivider") || (() => {
+    const el = document.createElement("div");
+    el.id = "desktopSidebarMergedDivider";
+    el.className = "desktopSidebarDivider desktopSidebarDividerCompact";
+    el.setAttribute("aria-hidden", "true");
+    return el;
+  })();
+
+  // Poskládat kompletní desktop nástroje do levého panelu.
+  // Admin Dashboard zůstává schválně úplně poslední.
+  const poradi = [
+    desktopSettingsButton,
+    desktopManageTagsButton,
+    desktopBackupButton,
+    desktopAboutButton,
+    desktopCardSortButton,
+    desktopStorageButton,
+    divider,
+    desktopLogoutButton,
+    desktopAdminDashboardButton
+  ].filter(Boolean);
+
+  poradi.forEach((node) => {
+    desktopSidebarSecondary.appendChild(node);
+  });
+
+  function synchronizujDynamickePopisky() {
+    nastavLabel(
+      desktopCardSortButton,
+      sourceCardSortLabel?.textContent?.trim() || "Nové karty: nahoře"
+    );
+    nastavLabel(
+      desktopStorageButton,
+      sourceStorageLabel?.textContent?.trim() || "Úložiště: Synchronizované"
+    );
+  }
+
+  synchronizujDynamickePopisky();
+
+  const observerOptions = { childList: true, characterData: true, subtree: true };
+  if (sourceCardSortLabel) {
+    new MutationObserver(synchronizujDynamickePopisky).observe(
+      sourceCardSortLabel,
+      observerOptions
+    );
+  }
+  if (sourceStorageLabel) {
+    new MutationObserver(synchronizujDynamickePopisky).observe(
+      sourceStorageLabel,
+      observerOptions
+    );
+  }
+
+  function synchronizujAdminViditelnost() {
+    if (!desktopAdminDashboardButton) return;
+    desktopAdminDashboardButton.hidden = !!sourceAdminButton?.hidden;
+  }
+
+  synchronizujAdminViditelnost();
+  if (sourceAdminButton) {
+    new MutationObserver(synchronizujAdminViditelnost).observe(
+      sourceAdminButton,
+      { attributes: true, attributeFilter: ["hidden"] }
+    );
+  }
+
+  desktopManageTagsButton?.addEventListener("click", () => {
+    otevriPoznamkyNaPozadi();
+    sourceManageTagsButton?.click();
+  });
+
+  desktopAboutButton?.addEventListener("click", () => {
+    sourceAboutButton?.click();
+  });
+
+  desktopCardSortButton?.addEventListener("click", () => {
+    otevriPoznamkyNaPozadi();
+    sourceCardSortButton?.click();
+    synchronizujDynamickePopisky();
+  });
+
+  desktopStorageButton?.addEventListener("click", () => {
+    otevriPoznamkyNaPozadi();
+    sourceStorageButton?.click();
+    synchronizujDynamickePopisky();
+  });
+
+  desktopLogoutButton?.addEventListener("click", () => {
+    sourceLogoutButton?.click();
+  });
+
+  if (mainMenuButton) {
+    mainMenuButton.hidden = true;
+    mainMenuButton.setAttribute("aria-hidden", "true");
+    mainMenuButton.setAttribute("tabindex", "-1");
+  }
+  if (mainMenu) {
+    mainMenu.hidden = true;
+    mainMenu.setAttribute("aria-hidden", "true");
+  }
+})();
