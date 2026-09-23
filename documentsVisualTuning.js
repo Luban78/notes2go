@@ -17,11 +17,11 @@
   const VYCHOZI = {
     vybranyPrvek: "fileRows",
     prvky: {
-      sectionBlocks: { velikost: 10, radius: 18, mezera: 8 },
-      folderCards: { velikost: 54, radius: 14, mezera: 0 },
-      searchBox: { velikost: 40, radius: 13, mezera: 7 },
-      fileFilters: { velikost: 30, radius: 999, mezera: 5 },
-      fileRows: { velikost: 7, radius: 14, mezera: 0 }
+      sectionBlocks: { velikost: 9, radius: 15, mezera: 7 },
+      folderCards: { velikost: 70, radius: 13, mezera: 0 },
+      searchBox: { velikost: 40, radius: 13, mezera: 8 },
+      fileFilters: { velikost: 30, radius: 7, mezera: 5 },
+      fileRows: { velikost: 4, radius: 9, mezera: 3 }
     }
   };
 
