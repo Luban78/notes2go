@@ -14246,3 +14246,133 @@ body.ln-pv-hide-plan-icons .calendarAgendaTitle {
 body.ln-pv-hide-reminder-icons .reminderItemMeta {
   display: none !important;
 }
+
+/* ============================================================
+   PATCH 658AK – MOBILE/APK THEME-AWARE TAG + CARD PALETTES
+   ------------------------------------------------------------
+   Stored tag color IDs stay unchanged (cervena, oranzova, ...).
+   Only their rendered shades change on mobile so colored tags/cards
+   remain visually integrated with the active LubaNote theme.
+   Desktop keeps its existing palette unchanged.
+   ============================================================ */
+@media (max-width: 1099px) {
+  /* Světlý – jemné teplé pastely s lehkým fialovým podtónem. */
+  :root {
+    --card-cervena: #ead7da;
+    --card-oranzova: #eadccf;
+    --card-zluta: #e8e1c9;
+    --card-zelena: #d7e2d5;
+    --card-tyrkysova: #d3e2df;
+    --card-modra: #d7dfea;
+    --card-fialova: #ded6ea;
+    --card-ruzova: #e6d6df;
+  }
+
+  /* Tmavý – tlumené hluboké tóny navázané na fialový surface. */
+  body.theme-dark {
+    --card-cervena: #3a2a34;
+    --card-oranzova: #3b302f;
+    --card-zluta: #39352b;
+    --card-zelena: #2b3731;
+    --card-tyrkysova: #29383b;
+    --card-modra: #2d3441;
+    --card-fialova: #352f43;
+    --card-ruzova: #3b2c3a;
+  }
+
+  /* Cappuccino – teplá, krémová, nízko saturovaná paleta. */
+  body.theme-cappuccino {
+    --card-cervena: #e2c8c0;
+    --card-oranzova: #e1cbb7;
+    --card-zluta: #ded2ad;
+    --card-zelena: #cbd5bd;
+    --card-tyrkysova: #c6d5cd;
+    --card-modra: #c9d0d4;
+    --card-fialova: #d3cad5;
+    --card-ruzova: #dcc6cc;
+  }
+
+  /* Ocean – všechny barvy stažené do chladné námořní palety. */
+  body.theme-ocean {
+    --card-cervena: #3a3039;
+    --card-oranzova: #3a352f;
+    --card-zluta: #383a30;
+    --card-zelena: #293d38;
+    --card-tyrkysova: #224047;
+    --card-modra: #253b4d;
+    --card-fialova: #33364b;
+    --card-ruzova: #3b3141;
+  }
+
+  /* Grafit – pouze neutrální odstíny, žádný barevný výkřik. */
+  body.theme-darkg {
+    --card-cervena: #242424;
+    --card-oranzova: #282828;
+    --card-zluta: #2c2c2c;
+    --card-zelena: #262626;
+    --card-tyrkysova: #2a2a2a;
+    --card-modra: #272727;
+    --card-fialova: #303030;
+    --card-ruzova: #2d2d2d;
+  }
+
+  /* Arktický – studené šedo-modré odstíny Nord směru. */
+  body.theme-arctic {
+    --card-cervena: #44363e;
+    --card-oranzova: #443c38;
+    --card-zluta: #414039;
+    --card-zelena: #35433d;
+    --card-tyrkysova: #32464a;
+    --card-modra: #354252;
+    --card-fialova: #403b4e;
+    --card-ruzova: #453945;
+  }
+
+  /* Noční fialový – barevné varianty zůstávají v noční fialovo-šedé rodině. */
+  body.theme-violetnight {
+    --card-cervena: #42323b;
+    --card-oranzova: #413738;
+    --card-zluta: #403d35;
+    --card-zelena: #303c35;
+    --card-tyrkysova: #2e3d40;
+    --card-modra: #313846;
+    --card-fialova: #3b344b;
+    --card-ruzova: #433344;
+  }
+
+  /* Solar – tlumené solarized odstíny nad petrolejovým základem. */
+  body.theme-solar {
+    --card-cervena: #3a3338;
+    --card-oranzova: #3b362f;
+    --card-zluta: #37392f;
+    --card-zelena: #243d37;
+    --card-tyrkysova: #1f3e40;
+    --card-modra: #24394a;
+    --card-fialova: #343548;
+    --card-ruzova: #3a3240;
+  }
+
+  /* Retro – teplé, zemitější Gruvbox tóny. */
+  body.theme-retro {
+    --card-cervena: #4b3835;
+    --card-oranzova: #4d3f34;
+    --card-zluta: #4c4532;
+    --card-zelena: #3d4535;
+    --card-tyrkysova: #394541;
+    --card-modra: #3d4147;
+    --card-fialova: #463b48;
+    --card-ruzova: #4a3940;
+  }
+
+  /* Secret – pevné tajné téma má vlastní vínovo-fialovou rodinu. */
+  body.secretModeActive {
+    --card-cervena: #583344;
+    --card-oranzova: #53383e;
+    --card-zluta: #50403d;
+    --card-zelena: #3b3c40;
+    --card-tyrkysova: #373e45;
+    --card-modra: #3b394b;
+    --card-fialova: #4b324f;
+    --card-ruzova: #553447;
+  }
+}
