@@ -2261,18 +2261,19 @@
     telo.classList.toggle("is-standard", standard);
     telo.classList.toggle("is-standard-symbols", standard);
 
-    /* PATCH 444 – pořadí znaků vychází z Android Czech keyboard mapy
-       Unicode CLDR. Stránka 1 = běžné symboly, stránka 2 = rozšířené. */
+    /* PATCH 658AR – standardní mobilní symbolová vrstva.
+       Zachováváme tři známé úrovně: ABC → ?123 → =\<, ale samotné
+       symboly už nejsou rozdrobené do čtyř nestejných řádků. Stejně jako
+       na běžné Android klávesnici mají obě symbolové stránky tři řádky;
+       čárka a tečka zůstávají ve spodní funkční řadě. */
     const rows = symbolPage === 0 ? [
       znaky("1234567890"),
-      ["@", "#", "$", "%", "&", "-", "+", "(", ")"],
-      ["*", '"', "'", ":", ";", "!", "?"],
-      ["_", "/", ",", "."]
+      ["@", "#", "$", "%", "&", "-", "+", "(", ")", "/"],
+      ["*", '"', "'", ":", ";", "!", "?", "_"]
     ] : [
       ["~", "`", "|", "•", "√", "Π", "÷", "×", "¶", "∆"],
-      ["£", "¢", "€", "¥", "^", "°", "=", "{", "}"],
-      ["\\", "©", "®", "™", "℅", "[", "]"],
-      ["<", ">", ",", "."]
+      ["£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\"],
+      ["©", "®", "™", "℅", "[", "]", "<", ">"]
     ];
 
     rows.forEach((values, rowIndex) => {
@@ -3101,10 +3102,10 @@
       -->
       <div class="ln-lk-smartbar">
         <button type="button" class="ln-lk-actions-toggle" tabindex="-1"
-          aria-label="Zobrazit akční panel editoru" aria-expanded="false">✅</button>
+          aria-label="Zobrazit akční panel editoru" aria-expanded="false"></button>
         <div class="ln-lk-suggestions" aria-label="Návrhy slov"></div>
         <button type="button" class="ln-lk-hide" data-lk-action="hide" tabindex="-1"
-          aria-label="Skrýt klávesnici">⌄</button>
+          aria-label="Skrýt klávesnici"></button>
       </div>
       <div class="ln-lk-compose" hidden>
         <div class="ln-lk-compose-text"></div>
@@ -3285,9 +3286,11 @@
     }
 
     if (akcniPanelButton) {
-      /* ✓ zůstává na stejném místě i po vysunutí panelu – uživatel tak
-         nemusí hledat jiný ovladač. Dalším tapem panel zase sbalí. */
-      akcniPanelButton.textContent = "✅";
+      /* PATCH 658AR – vlevo je čistý chevron: nahoru = vysunout nástroje,
+         dolů = znovu je sbalit. Samotnou ikonu kreslí CSS, takže nepoužíváme
+         barevné emoji ani znak „v“. */
+      akcniPanelButton.textContent = "";
+      akcniPanelButton.classList.toggle("is-expanded", akcniPanelOtevren);
       akcniPanelButton.setAttribute("aria-expanded", akcniPanelOtevren ? "true" : "false");
       akcniPanelButton.setAttribute(
         "aria-label",
@@ -3304,6 +3307,65 @@
     requestAnimationFrame(() => {
       vysliLayoutDiag(akcniPanelOtevren ? "actions-open" : "actions-close", true);
     });
+  }
+
+  /* ==========================================================
+     PATCH 658AR – SELECTION SAFE ZÓNA NAD SPODNÍM TOOLBAREM
+     ----------------------------------------------------------
+     Android kreslí nativní selection handle mimo vlastní DOM. Když je
+     editorBottomBar vysunutý, kapka handle může vizuálně zasahovat do jeho
+     ikon. Selection ani handle nepřepisujeme; pouze při změně selection
+     jemně posuneme scroll editoru, pokud je aktivní range příliš nízko.
+     ========================================================== */
+  let selectionSafeRaf = 0;
+
+  function posunVyberNadSpodniToolbar() {
+    selectionSafeRaf = 0;
+    if (!akcniPanelOtevren || !panel || panel.hidden) return;
+    if (!document.body?.classList.contains("ln-luba-klavesnice-open")) return;
+
+    const editor = najdiEditor();
+    const bottomBar = document.querySelector(
+      ".taskModal:not([hidden]) .editorBottomBar"
+    );
+    const vyber = window.getSelection?.();
+    if (!editor || !bottomBar || !vyber?.rangeCount) return;
+
+    let range;
+    try {
+      range = vyber.getRangeAt(0);
+    } catch (_error) {
+      return;
+    }
+
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    let rect = null;
+    try {
+      rect = range.getBoundingClientRect?.();
+      if ((!rect || (!rect.width && !rect.height)) && range.getClientRects) {
+        const rects = range.getClientRects();
+        rect = rects?.length ? rects[rects.length - 1] : rect;
+      }
+    } catch (_error) {
+      return;
+    }
+    if (!rect) return;
+
+    const toolbarRect = bottomBar.getBoundingClientRect();
+    /* ~32 px je prostor pro kapku Android selection handle + malá rezerva. */
+    const bezpecneDno = toolbarRect.top - 34;
+    if (rect.bottom <= bezpecneDno) return;
+
+    const posun = Math.ceil(rect.bottom - bezpecneDno + 8);
+    if (posun > 0) {
+      editor.scrollTop += posun;
+    }
+  }
+
+  function naplanujSelectionSafeScroll() {
+    if (selectionSafeRaf) cancelAnimationFrame(selectionSafeRaf);
+    selectionSafeRaf = requestAnimationFrame(posunVyberNadSpodniToolbar);
   }
 
   function zobraz() {
@@ -3385,7 +3447,8 @@
     document.body.classList.remove("ln-lk-actions-expanded", "ln-lk-actions-collapsed");
     akcniPanelOtevren = false;
     if (akcniPanelButton) {
-      akcniPanelButton.textContent = "✅";
+      akcniPanelButton.textContent = "";
+      akcniPanelButton.classList.remove("is-expanded");
       akcniPanelButton.setAttribute("aria-expanded", "false");
       akcniPanelButton.setAttribute("aria-label", "Zobrazit akční panel editoru");
     }
@@ -3724,6 +3787,11 @@
   document.addEventListener("lubanote:v2-model-input", () => {
     if (!panel || panel.hidden) return;
     queueMicrotask(aktualizujNavrhy);
+  }, true);
+
+  document.addEventListener("selectionchange", () => {
+    if (!akcniPanelOtevren || !panel || panel.hidden) return;
+    naplanujSelectionSafeScroll();
   }, true);
 
   window.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));

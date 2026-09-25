@@ -959,3 +959,53 @@ body.ln-lk-old-android-nav .ln-title-clipboard-popup {
   background: var(--color-surface, #211b29) !important;
   border-color: var(--color-accent, #7444dc) !important;
 }
+
+
+/* ==========================================================
+   PATCH 658AR – SMARTBAR CHEVRONY + STANDARDNÍ SYMBOLY
+   ----------------------------------------------------------
+   Barevnou fajfku a textové „v“ nahrazují čisté CSS chevrony.
+   Vlevo: nahoru = vysunout nástroje, po otevření dolů = sbalit.
+   Vpravo: dolů = skrýt LubaKeyboard.
+   ========================================================== */
+.ln-lk-smartbar .ln-lk-actions-toggle,
+.ln-lk-smartbar .ln-lk-hide {
+  position: relative;
+  font-size: 0;
+}
+
+.ln-lk-smartbar .ln-lk-actions-toggle::before,
+.ln-lk-smartbar .ln-lk-hide::before {
+  content: "";
+  display: block;
+  width: 11px;
+  height: 11px;
+  border: solid currentColor;
+  border-width: 0 3px 3px 0;
+  border-radius: 1px;
+  transform-origin: 50% 50%;
+}
+
+.ln-lk-smartbar .ln-lk-actions-toggle::before {
+  transform: translateY(3px) rotate(-135deg);
+}
+
+.ln-lk-smartbar .ln-lk-actions-toggle.is-expanded::before,
+.ln-lk-smartbar .ln-lk-hide::before {
+  transform: translateY(-3px) rotate(45deg);
+}
+
+/* Symbolová vrstva má po 658AR vždy tři plné řádky. Řádky s osmi
+   znaky zůstávají centrované stejně jako písmenový A–L řádek. */
+.ln-lk-body.is-standard-symbols .ln-lk-symbol-row {
+  justify-content: center;
+}
+
+/* Selection-safe prostor: vlastní editor dostane při vysunutém spodním
+   toolbaru malou rezervu pro nativní Android handle. Automatický scroll
+   v JS pak používá stejnou hranici a selection modelu se nedotýká. */
+body.ln-luba-klavesnice-open.ln-lk-actions-expanded
+  .ln-v2-core.ln-v2-vlozeny .ln-v2-editor {
+  padding-bottom: 34px;
+  scroll-padding-bottom: 72px;
+}
