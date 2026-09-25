@@ -1699,9 +1699,199 @@
     return modal;
   }
 
+  async function vytvorRecordZVybranehoDokumentu(file) {
+    if (!(file instanceof Blob)) return null;
+
+    const nazev = String(file.name || '').trim();
+    const typ = typSouboru({
+      name: nazev,
+      mime: file.type || ''
+    });
+
+    const zaklad = {
+      id: id(),
+      size: Number(file.size) || 0,
+      folderId: aktivniSlozkaId === TRASH_VIEW ? null : aktivniSlozkaId,
+      storageMode: 'web',
+      blob: file,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    if (typ === 'pdf') {
+      if (file.size > MAX_PDF_BYTES) {
+        zobrazChybu('Dokumenty', 'PDF je příliš velké. Maximální velikost je 100 MB.');
+        return null;
+      }
+
+      return {
+        ...zaklad,
+        name: nazev || 'dokument.pdf',
+        mime: 'application/pdf'
+      };
+    }
+
+    if (typ === 'docx') {
+      if (file.size > MAX_DOCX_BYTES) {
+        zobrazChybu('Dokumenty', 'DOCX je příliš velký. Maximální velikost je 20 MB.');
+        return null;
+      }
+
+      return {
+        ...zaklad,
+        name: normalizujNazevSouboru(nazev || 'dokument.docx', 'docx') || 'dokument.docx',
+        mime: DOCX_MIME
+      };
+    }
+
+    if (typ === 'doc') {
+      if (file.size > MAX_DOC_BYTES) {
+        zobrazChybu('Dokumenty', 'DOC je příliš velký. Maximální velikost je 24 MB.');
+        return null;
+      }
+
+      return {
+        ...zaklad,
+        name: normalizujNazevSouboru(nazev || 'dokument.doc', 'doc') || 'dokument.doc',
+        mime: DOC_MIME
+      };
+    }
+
+    if (typ === 'epub') {
+      if (file.size > MAX_EPUB_BYTES) {
+        zobrazChybu('Dokumenty', 'EPUB je příliš velký. Maximální velikost je 100 MB.');
+        return null;
+      }
+
+      if (!window.LubaNoteEpubReader?.inspect) {
+        zobrazChybu('Dokumenty', 'EPUB čtečka není načtená.');
+        return null;
+      }
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const info = await window.LubaNoteEpubReader.inspect(arrayBuffer);
+
+        return {
+          ...zaklad,
+          name: normalizujNazevSouboru(nazev || 'kniha.epub', 'epub') || 'kniha.epub',
+          mime: EPUB_MIME,
+          epubTitle: String(info?.title || '').trim(),
+          epubAuthor: String(info?.author || '').trim(),
+          epubCoverBlob: info?.coverBlob instanceof Blob ? info.coverBlob : null,
+          epubChapterCount: Number(info?.chapterCount) || 0,
+          epubChapterIndex: 0,
+          epubScrollRatio: 0
+        };
+      } catch (error) {
+        console.error('Kontrola EPUB při automatickém importu selhala:', error);
+        zobrazChybu('Dokumenty', error?.message || 'EPUB se nepodařilo načíst.');
+        return null;
+      }
+    }
+
+    if (typ === 'sql') {
+      if (file.size > MAX_SQL_BYTES) {
+        zobrazChybu('Dokumenty', 'SQL je příliš velký. Maximální velikost je 10 MB.');
+        return null;
+      }
+
+      try {
+        const sqlText = await prectiSqlText(file);
+        window.LubaNoteStartupDiag?.zapis?.(
+          'SQL',
+          `IMPORT AUTO | OK | bytes=${Number(file.size) || 0} chars=${sqlText.length}`
+        );
+
+        return {
+          ...zaklad,
+          name: normalizujNazevSouboru(nazev || 'skript.sql', 'sql') || 'skript.sql',
+          mime: SQL_MIME,
+          sqlText
+        };
+      } catch (error) {
+        console.error('Čtení SQL při automatickém importu selhalo:', error);
+        zobrazChybu('Dokumenty', 'SQL se nepodařilo přečíst.');
+        return null;
+      }
+    }
+
+    zobrazChybu(
+      'Dokumenty',
+      'Tento typ souboru zatím není podporovaný. Vyber PDF, DOCX, DOC, EPUB nebo SQL.'
+    );
+    return null;
+  }
+
+  async function vyberDokumentAutomaticky() {
+    return await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = [
+        'application/pdf', '.pdf',
+        DOCX_MIME, '.docx',
+        DOC_MIME, '.doc',
+        EPUB_MIME, '.epub',
+        SQL_MIME, 'text/x-sql', '.sql'
+      ].join(',');
+      input.hidden = true;
+
+      const uklid = () => input.remove();
+
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0] || null;
+        if (!file) {
+          uklid();
+          resolve(null);
+          return;
+        }
+
+        try {
+          const record = await vytvorRecordZVybranehoDokumentu(file);
+          uklid();
+          resolve(record);
+        } catch (error) {
+          uklid();
+          console.error('Automatický import dokumentu selhal:', error);
+          zobrazChybu('Dokumenty', 'Dokument se nepodařilo načíst.');
+          resolve(null);
+        }
+      }, { once: true });
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function pridatDokumentAutomaticky() {
+    const prvky = zajistiPrvky();
+    if (!prvky || aktivniSlozkaId === TRASH_VIEW) return;
+
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+
+    try {
+      const record = await vyberDokumentAutomaticky();
+      if (!record) return;
+
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+
+      const typ = typSouboru(record).toUpperCase();
+      const nazev = record.epubTitle || record.name || 'Dokument';
+      zobrazZpravu('Dokumenty', `${typ} „${nazev}“ byl přidán.`);
+    } catch (error) {
+      console.error('Přidání dokumentu selhalo:', error);
+      zobrazChybu('Dokumenty', 'Dokument se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
+  }
+
   function otevriPridatSouborModal() {
     if (aktivniSlozkaId === TRASH_VIEW) return;
-    zajistiPridatSouborModal().otevrit();
+    void pridatDokumentAutomaticky();
   }
 
   async function importujPdfAndroid() {

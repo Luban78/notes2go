@@ -14813,3 +14813,111 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     box-sizing: border-box;
   }
 }
+
+/* ==========================================================
+   PATCH 658BG – FONT SCALE GUARDS: PŘIPOMÍNKY + PLANNER SUBNAV
+   ----------------------------------------------------------
+   Globální root rem po 658BE nesmí slepit čas s názvem ani
+   ořezávat text Připomínek. Pouze mobilní layout.
+   ========================================================== */
+@media (max-width: 899px) {
+  .plannerSubnavButton {
+    height: auto !important;
+    min-height: max(
+      var(--ln-pv-subnav-height, 42px),
+      calc(1.25rem + 20px)
+    ) !important;
+    padding-left: max(8px, 0.5rem) !important;
+    padding-right: max(8px, 0.5rem) !important;
+    line-height: 1.12;
+  }
+
+  .plannerSubnavButton .moduleTabText {
+    min-width: 0;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    line-height: 1.12 !important;
+    text-align: center;
+  }
+
+  .plannerSubnavIcon {
+    width: 1.2em;
+    height: 1.2em;
+    min-width: 1.2em;
+    min-height: 1.2em;
+  }
+
+  .plannerSubnavIcon .lubaSvgIcon {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Aktivní / Po termínu / opakování drží čitelnou společnou řadu
+     i při větším root rem. */
+  .remindersStatusTabs {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr) auto;
+    align-items: stretch;
+    width: 100%;
+    gap: max(8px, 0.5rem);
+  }
+
+  .remindersStatusTab {
+    min-width: 0;
+    height: auto !important;
+    min-height: max(42px, calc(1.15rem + 16px));
+    padding-left: max(8px, 0.5rem) !important;
+    padding-right: max(8px, 0.5rem) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .remindersRecurringButton {
+    width: max(44px, calc(1.15rem + 20px)) !important;
+    min-width: max(44px, calc(1.15rem + 20px)) !important;
+  }
+
+  /* Hlavní řádky Připomínek – čas/datum si vezme jen tolik místa,
+     kolik opravdu potřebuje. Název má vždy bezpečný odstup. */
+  .reminderItem {
+    grid-template-columns: max-content minmax(0, 1fr) max(30px, 1.9rem) !important;
+    column-gap: max(12px, 0.75rem) !important;
+    row-gap: 0;
+    align-items: start;
+  }
+
+  .reminderItemTime {
+    min-width: max-content;
+    width: max-content;
+    padding-right: 0.08rem;
+    box-sizing: border-box;
+  }
+
+  .reminderItemContent {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .reminderItemTitle {
+    display: block;
+    min-width: 0;
+    line-height: 1.22;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .reminderItemPreview {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .reminderItemMenu {
+    justify-self: end;
+    align-self: start;
+  }
+}
