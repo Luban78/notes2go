@@ -8,7 +8,7 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteTextVisualTuningV1";
+  const KLIC = "lubanoteTextVisualTuningV2";
   const STYLE_ID = "ln-text-visual-style";
   const DESKTOP_MEDIA = "(min-width: 1100px) and (hover: hover) and (pointer: fine)";
   const desktopMql = window.matchMedia(DESKTOP_MEDIA);
@@ -317,6 +317,13 @@
     return Math.min(max, Math.max(min, n));
   }
 
+  function maCiselnouHodnotu(value) {
+    return value !== null &&
+      value !== undefined &&
+      value !== "" &&
+      Number.isFinite(Number(value));
+  }
+
   function nactiStav() {
     const base = vychoziStav();
     try {
@@ -334,7 +341,7 @@
         for (const group of KONFIG[platform].groups) {
           for (const item of group.items) {
             const value = saved?.values?.[platform]?.[item.id];
-            base.values[platform][item.id] = Number.isFinite(Number(value))
+            base.values[platform][item.id] = maCiselnouHodnotu(value)
               ? clamp(value, item.min, item.max, item.vychozi)
               : null;
           }
@@ -390,7 +397,7 @@
       for (const group of KONFIG[platform].groups) {
         for (const item of group.items) {
           const value = stav.values[platform][item.id];
-          if (!Number.isFinite(Number(value))) continue;
+          if (!maCiselnouHodnotu(value)) continue;
           css.push(
             `${prefixSelector(item.selector, scopes[platform])} { font-size: ${Number(value).toFixed(2)}rem !important; }`
           );
@@ -486,7 +493,7 @@
       for (const group of KONFIG[platform].groups) {
         for (const item of group.items) {
           const value = stav.values[platform][item.id];
-          out[platform][item.id] = Number.isFinite(Number(value))
+          out[platform][item.id] = maCiselnouHodnotu(value)
             ? Number(value)
             : item.vychozi;
         }
