@@ -14710,3 +14710,27 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     opacity: 0.92;
   }
 }
+
+
+/* ==========================================================
+   PATCH 658BD – MOBILE MAIN MENU VISIBLE TOUCH FEEDBACK
+   ----------------------------------------------------------
+   Android/WebView system blue highlight remains disabled.
+   JS holds this class for a minimum perceptible interval so
+   quick taps still have visible LubaNote feedback.
+   ========================================================== */
+@media (max-width: 1099px) {
+  #mainMenu button.luba-menu-touch-feedback {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 14%,
+      var(--color-surface) 86%
+    ) !important;
+    transform: scale(0.985) !important;
+    opacity: 0.94 !important;
+    transition:
+      background-color 85ms ease,
+      transform 85ms ease,
+      opacity 85ms ease !important;
+  }
+}

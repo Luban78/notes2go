@@ -7368,3 +7368,74 @@ window.LubaNoteDraftRecovery = {
   nabidniObnovu:
     nabidniObnovuDraftuPokudExistuje
 };
+
+
+/* ==========================================================
+   PATCH 658BD – MOBILE MAIN MENU MINIMUM TOUCH FEEDBACK
+   ----------------------------------------------------------
+   Keeps the visual press state visible for at least 190 ms on
+   quick taps. Click/action timing is not delayed.
+   ========================================================== */
+(() => {
+  "use strict";
+
+  const MEDIA = window.matchMedia("(max-width: 1099px)");
+  const MIN_VISIBLE_MS = 190;
+  const CLASS_NAME = "luba-menu-touch-feedback";
+  const timers = new WeakMap();
+  const startedAt = new WeakMap();
+
+  function menuButtonFromEvent(event) {
+    if (!MEDIA.matches) return null;
+    const target = event.target;
+    if (!(target instanceof Element)) return null;
+    return target.closest("#mainMenu button");
+  }
+
+  function clearTimer(button) {
+    const timer = timers.get(button);
+    if (timer) {
+      clearTimeout(timer);
+      timers.delete(button);
+    }
+  }
+
+  function startFeedback(button) {
+    clearTimer(button);
+    startedAt.set(button, performance.now());
+    button.classList.add(CLASS_NAME);
+  }
+
+  function finishFeedback(button) {
+    clearTimer(button);
+    const start = startedAt.get(button) ?? performance.now();
+    const elapsed = performance.now() - start;
+    const wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
+    const timer = setTimeout(() => {
+      button.classList.remove(CLASS_NAME);
+      timers.delete(button);
+      startedAt.delete(button);
+    }, wait);
+    timers.set(button, timer);
+  }
+
+  document.addEventListener("pointerdown", (event) => {
+    const button = menuButtonFromEvent(event);
+    if (button) startFeedback(button);
+  }, true);
+
+  for (const type of ["pointerup", "pointercancel"]) {
+    document.addEventListener(type, (event) => {
+      const button = menuButtonFromEvent(event);
+      if (button) finishFeedback(button);
+    }, true);
+  }
+
+  // Keyboard/programmatic activation still receives visible feedback.
+  document.addEventListener("click", (event) => {
+    const button = menuButtonFromEvent(event);
+    if (!button || startedAt.has(button)) return;
+    startFeedback(button);
+    finishFeedback(button);
+  }, true);
+})();
