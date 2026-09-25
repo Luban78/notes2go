@@ -2285,3 +2285,250 @@
     box-sizing: border-box;
   }
 }
+
+/* ==========================================================
+   PATCH 658AS – PC VISUAL LAB AUDIT / AUTHORITATIVE LAYER
+   ----------------------------------------------------------
+   Opravuje napojení PC Notes Visual Labu na dnešní desktop UI.
+   Tato vrstva je záměrně až na konci souboru, aby nebyla
+   přepsána historickými desktop styly.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* ---------- Layout Poznámek ---------- */
+  body.desktopNotesToolbarA:has(#notesModuleButton.active) .homeHeader {
+    padding-top: calc(20px + var(--ln-dnv-layout-offsetY, 0px)) !important;
+  }
+
+  body.desktopNotesToolbarA .searchRow {
+    gap: var(--ln-dnv-layout-toolbarMezera, 8px) !important;
+  }
+
+  body.desktopNotesToolbarA .searchRow .searchBox {
+    width: var(--ln-dnv-search-size, 420px) !important;
+    max-width: var(--ln-dnv-search-size, 420px) !important;
+    flex-basis: var(--ln-dnv-search-size, 420px) !important;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    border-radius: var(--ln-dnv-search-radius, 13px) !important;
+  }
+
+  body.desktopNotesToolbarA #searchNotes {
+    height: calc(var(--ln-dnv-layout-toolbarVyska, 50px) - 2px) !important;
+  }
+
+  body.desktopNotesToolbarA .desktopCategoryActions {
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    gap: var(--ln-dnv-layout-filtryMezera, 7px) !important;
+  }
+
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {
+    width: var(--ln-dnv-primary-size, 50px) !important;
+    min-width: var(--ln-dnv-primary-size, 50px) !important;
+    flex-basis: var(--ln-dnv-primary-size, 50px) !important;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    min-height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    border-radius: var(--ln-dnv-primary-radius, 13px) !important;
+  }
+
+  body.desktopNotesToolbarA .searchActions {
+    gap: var(--ln-dnv-layout-toolbarMezera, 8px) !important;
+  }
+
+  body.desktopNotesToolbarA .searchActions > button {
+    width: var(--ln-dnv-actions-size, 50px) !important;
+    min-width: var(--ln-dnv-actions-size, 50px) !important;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    border-radius: var(--ln-dnv-actions-radius, 13px) !important;
+  }
+
+  body.desktopNotesToolbarA .categoryTabs {
+    margin-top: var(--ln-dnv-layout-toolbarStitkyMezera, 8px) !important;
+  }
+
+  body.desktopNotesToolbarA .categoryTabs #tagFilterButtons {
+    gap: var(--ln-dnv-layout-stitkyMezera, 8px) !important;
+  }
+
+  body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
+    height: var(--ln-dnv-tags-size, 38px) !important;
+    min-height: var(--ln-dnv-tags-size, 38px) !important;
+    border-radius: var(--ln-dnv-tags-radius, 11px) !important;
+  }
+
+  body.desktopNotesToolbarA #pinnedCards {
+    margin-top: var(--ln-dnv-layout-stitkyKartyMezera, 10px) !important;
+  }
+
+  body.desktopNotesToolbarA .pinnedCards:not(.listView) #pinnedLeft,
+  body.desktopNotesToolbarA .pinnedCards.listView #pinnedLeft {
+    column-gap: var(--ln-dnv-layout-kartySloupceMezera, 14px) !important;
+    row-gap: var(--ln-dnv-layout-kartyRadkyMezera, 14px) !important;
+  }
+
+  body.desktopNotesToolbarA .desktopMasonryColumn {
+    gap: var(--ln-dnv-layout-kartyRadkyMezera, 14px) !important;
+  }
+
+  body.desktopNotesToolbarA .taskCard {
+    padding: var(--ln-dnv-cards-size, 16px) !important;
+    border-radius: var(--ln-dnv-cards-radius, 17px) !important;
+  }
+
+  body:has(#notesModuleButton.active) .moduleTab {
+    height: var(--ln-dnv-modules-size, 54px) !important;
+    border-radius: var(--ln-dnv-modules-radius, 13px) !important;
+  }
+
+  body:has(#notesModuleButton.active) .syncTrafficBar {
+    min-height: var(--ln-dnv-traffic-size, 22px) !important;
+    border-radius: var(--ln-dnv-traffic-radius, 12px) !important;
+  }
+
+  body:has(#notesModuleButton.active) .addTaskButton {
+    width: var(--ln-dnv-fab-size, 60px) !important;
+    height: var(--ln-dnv-fab-size, 60px) !important;
+    border-radius: var(--ln-dnv-fab-radius, 30px) !important;
+  }
+
+  /* ---------- Ikony: běžné/emoji i SVG ---------- */
+  body:has(#notesModuleButton.active) .moduleTabIcon {
+    font-size: var(--ln-dnv-modules-classic-icon-size, 24px) !important;
+  }
+  body:has(#notesModuleButton.active) .moduleTabIcon .lubaSvgIcon {
+    width: var(--ln-dnv-modules-icon-size, 24px) !important;
+    height: var(--ln-dnv-modules-icon-size, 24px) !important;
+    stroke-width: var(--ln-dnv-modules-icon-stroke, 1.5) !important;
+  }
+
+  body.desktopNotesToolbarA .searchIcon {
+    font-size: var(--ln-dnv-search-classic-icon-size, 22px) !important;
+  }
+  body.desktopNotesToolbarA .searchIcon .lubaSvgIcon {
+    width: var(--ln-dnv-search-icon-size, 22px) !important;
+    height: var(--ln-dnv-search-icon-size, 22px) !important;
+    stroke-width: var(--ln-dnv-search-icon-stroke, 1.5) !important;
+  }
+
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon {
+    font-size: var(--ln-dnv-primary-classic-icon-size, 22px) !important;
+  }
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon .lubaSvgIcon {
+    width: var(--ln-dnv-primary-icon-size, 22px) !important;
+    height: var(--ln-dnv-primary-icon-size, 22px) !important;
+    stroke-width: var(--ln-dnv-primary-icon-stroke, 1.5) !important;
+  }
+
+  body.desktopNotesToolbarA .searchActions .searchActionIcon,
+  body.desktopNotesToolbarA .searchActions .lubaActionIcon {
+    font-size: var(--ln-dnv-actions-classic-icon-size, 22px) !important;
+  }
+  body.desktopNotesToolbarA .searchActions .searchActionIcon .lubaSvgIcon,
+  body.desktopNotesToolbarA .searchActions .lubaActionIcon .lubaSvgIcon,
+  body.desktopNotesToolbarA .searchActions .sharingInvitationsIcon,
+  body.desktopNotesToolbarA .searchActions .chatHeaderIcon {
+    width: var(--ln-dnv-actions-icon-size, 22px) !important;
+    height: var(--ln-dnv-actions-icon-size, 22px) !important;
+    stroke-width: var(--ln-dnv-actions-icon-stroke, 1.5) !important;
+  }
+
+  /* ---------- Border Visual Lab ---------- */
+  body[data-ln-dnv-modules-border="off"]:has(#notesModuleButton.active) .moduleTab,
+  body[data-ln-dnv-traffic-border="off"]:has(#notesModuleButton.active) .syncTrafficBar,
+  body[data-ln-dnv-search-border="off"].desktopNotesToolbarA .searchBox,
+  body[data-ln-dnv-primary-border="off"].desktopNotesToolbarA .desktopCategoryActions .categoryTab,
+  body[data-ln-dnv-actions-border="off"].desktopNotesToolbarA .searchActions > button,
+  body[data-ln-dnv-tags-border="off"].desktopNotesToolbarA #tagFilterButtons .categoryTab,
+  body[data-ln-dnv-cards-border="off"].desktopNotesToolbarA .taskCard,
+  body[data-ln-dnv-fab-border="off"]:has(#notesModuleButton.active) .addTaskButton {
+    border-width: 0 !important;
+  }
+
+  body[data-ln-dnv-modules-border="on"]:has(#notesModuleButton.active) .moduleTab { border-width: var(--ln-dnv-modules-border-width, 1px) !important; }
+  body[data-ln-dnv-traffic-border="on"]:has(#notesModuleButton.active) .syncTrafficBar { border-width: var(--ln-dnv-traffic-border-width, 1px) !important; }
+  body[data-ln-dnv-search-border="on"].desktopNotesToolbarA .searchBox { border-width: var(--ln-dnv-search-border-width, 1px) !important; }
+  body[data-ln-dnv-primary-border="on"].desktopNotesToolbarA .desktopCategoryActions .categoryTab { border-width: var(--ln-dnv-primary-border-width, 1px) !important; }
+  body[data-ln-dnv-actions-border="on"].desktopNotesToolbarA .searchActions > button { border-width: var(--ln-dnv-actions-border-width, 1px) !important; }
+  body[data-ln-dnv-tags-border="on"].desktopNotesToolbarA #tagFilterButtons .categoryTab { border-width: var(--ln-dnv-tags-border-width, 1px) !important; }
+  body[data-ln-dnv-cards-border="on"].desktopNotesToolbarA .taskCard { border-width: var(--ln-dnv-cards-border-width, 1px) !important; }
+  body[data-ln-dnv-fab-border="on"]:has(#notesModuleButton.active) .addTaskButton { border-width: var(--ln-dnv-fab-border-width, 1px) !important; }
+
+  /* tmavý / světlý odstín; legacy nechává původní theme border */
+  body[data-ln-dnv-modules-mode="dark"]:has(#notesModuleButton.active) .moduleTab,
+  body[data-ln-dnv-traffic-mode="dark"]:has(#notesModuleButton.active) .syncTrafficBar,
+  body[data-ln-dnv-search-mode="dark"].desktopNotesToolbarA .searchBox,
+  body[data-ln-dnv-primary-mode="dark"].desktopNotesToolbarA .desktopCategoryActions .categoryTab,
+  body[data-ln-dnv-actions-mode="dark"].desktopNotesToolbarA .searchActions > button,
+  body[data-ln-dnv-tags-mode="dark"].desktopNotesToolbarA #tagFilterButtons .categoryTab,
+  body[data-ln-dnv-cards-mode="dark"].desktopNotesToolbarA .taskCard,
+  body[data-ln-dnv-fab-mode="dark"]:has(#notesModuleButton.active) .addTaskButton {
+    border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base, 82%), #000 var(--ln-dnv-primary-border-strength, 18%)) !important;
+  }
+
+  body[data-ln-dnv-modules-mode="light"]:has(#notesModuleButton.active) .moduleTab,
+  body[data-ln-dnv-traffic-mode="light"]:has(#notesModuleButton.active) .syncTrafficBar,
+  body[data-ln-dnv-search-mode="light"].desktopNotesToolbarA .searchBox,
+  body[data-ln-dnv-primary-mode="light"].desktopNotesToolbarA .desktopCategoryActions .categoryTab,
+  body[data-ln-dnv-actions-mode="light"].desktopNotesToolbarA .searchActions > button,
+  body[data-ln-dnv-tags-mode="light"].desktopNotesToolbarA #tagFilterButtons .categoryTab,
+  body[data-ln-dnv-cards-mode="light"].desktopNotesToolbarA .taskCard,
+  body[data-ln-dnv-fab-mode="light"]:has(#notesModuleButton.active) .addTaskButton {
+    border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base, 82%), #fff var(--ln-dnv-primary-border-strength, 18%)) !important;
+  }
+
+  /* ---------- Levý panel ---------- */
+  body {
+    padding-left: var(--ln-dnv-sidebar-width, 236px) !important;
+  }
+
+  .desktopSidebar {
+    width: var(--ln-dnv-sidebar-width, 236px) !important;
+    padding-left: var(--ln-dnv-sidebar-pad-x, 16px) !important;
+    padding-right: var(--ln-dnv-sidebar-pad-x, 16px) !important;
+  }
+
+  .desktopSidebarNavSecondary {
+    gap: var(--ln-dnv-sidebar-gap, 7px) !important;
+  }
+
+  .desktopSidebarButton {
+    min-height: var(--ln-dnv-sidebar-item-height, 46px) !important;
+    border-radius: var(--ln-dnv-sidebar-radius, 11px) !important;
+    font-size: var(--ln-dnv-sidebar-text-size, 15px) !important;
+    grid-template-columns: calc(var(--ln-dnv-sidebar-icon-size, 20px) + 14px) minmax(0, 1fr) !important;
+  }
+
+  .desktopSidebarButton > .desktopSidebarIcon {
+    font-size: var(--ln-dnv-sidebar-classic-icon-size, 20px) !important;
+  }
+
+  .desktopSidebarIcon .lubaSvgIcon {
+    width: var(--ln-dnv-sidebar-icon-size, 20px) !important;
+    height: var(--ln-dnv-sidebar-icon-size, 20px) !important;
+  }
+
+  .desktopSidebarLogo {
+    width: var(--ln-dnv-sidebar-logo-size, 50px) !important;
+    height: var(--ln-dnv-sidebar-logo-size, 50px) !important;
+    flex-basis: var(--ln-dnv-sidebar-logo-size, 50px) !important;
+  }
+}
+
+/* 658AS – každý prvek používá vlastní sílu odstínu borderu. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body[data-ln-dnv-modules-mode="dark"]:has(#notesModuleButton.active) .moduleTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-modules-border-base,82%), #000 var(--ln-dnv-modules-border-strength,18%)) !important; }
+  body[data-ln-dnv-traffic-mode="dark"]:has(#notesModuleButton.active) .syncTrafficBar { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-traffic-border-base,82%), #000 var(--ln-dnv-traffic-border-strength,18%)) !important; }
+  body[data-ln-dnv-search-mode="dark"].desktopNotesToolbarA .searchBox { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-search-border-base,82%), #000 var(--ln-dnv-search-border-strength,18%)) !important; }
+  body[data-ln-dnv-primary-mode="dark"].desktopNotesToolbarA .desktopCategoryActions .categoryTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base,82%), #000 var(--ln-dnv-primary-border-strength,18%)) !important; }
+  body[data-ln-dnv-actions-mode="dark"].desktopNotesToolbarA .searchActions > button { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-actions-border-base,82%), #000 var(--ln-dnv-actions-border-strength,18%)) !important; }
+  body[data-ln-dnv-tags-mode="dark"].desktopNotesToolbarA #tagFilterButtons .categoryTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-tags-border-base,82%), #000 var(--ln-dnv-tags-border-strength,18%)) !important; }
+  body[data-ln-dnv-cards-mode="dark"].desktopNotesToolbarA .taskCard { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-cards-border-base,82%), #000 var(--ln-dnv-cards-border-strength,18%)) !important; }
+  body[data-ln-dnv-fab-mode="dark"]:has(#notesModuleButton.active) .addTaskButton { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-fab-border-base,82%), #000 var(--ln-dnv-fab-border-strength,18%)) !important; }
+
+  body[data-ln-dnv-modules-mode="light"]:has(#notesModuleButton.active) .moduleTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-modules-border-base,82%), #fff var(--ln-dnv-modules-border-strength,18%)) !important; }
+  body[data-ln-dnv-traffic-mode="light"]:has(#notesModuleButton.active) .syncTrafficBar { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-traffic-border-base,82%), #fff var(--ln-dnv-traffic-border-strength,18%)) !important; }
+  body[data-ln-dnv-search-mode="light"].desktopNotesToolbarA .searchBox { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-search-border-base,82%), #fff var(--ln-dnv-search-border-strength,18%)) !important; }
+  body[data-ln-dnv-primary-mode="light"].desktopNotesToolbarA .desktopCategoryActions .categoryTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-primary-border-base,82%), #fff var(--ln-dnv-primary-border-strength,18%)) !important; }
+  body[data-ln-dnv-actions-mode="light"].desktopNotesToolbarA .searchActions > button { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-actions-border-base,82%), #fff var(--ln-dnv-actions-border-strength,18%)) !important; }
+  body[data-ln-dnv-tags-mode="light"].desktopNotesToolbarA #tagFilterButtons .categoryTab { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-tags-border-base,82%), #fff var(--ln-dnv-tags-border-strength,18%)) !important; }
+  body[data-ln-dnv-cards-mode="light"].desktopNotesToolbarA .taskCard { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-cards-border-base,82%), #fff var(--ln-dnv-cards-border-strength,18%)) !important; }
+  body[data-ln-dnv-fab-mode="light"]:has(#notesModuleButton.active) .addTaskButton { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-fab-border-base,82%), #fff var(--ln-dnv-fab-border-strength,18%)) !important; }
+}

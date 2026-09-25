@@ -103,8 +103,8 @@
         ${rangeRadek({ id: "ln-nvt-size", label: "Velikost prvku", min: 10, max: 88 })}
 
         <div id="ln-nvt-primary-svg" hidden>
-          <div class="ln-nvt-section-title">SVG ikony hlavních filtrů</div>
-          ${rangeRadek({ id: "ln-nvt-primary-icon-size", label: "Velikost SVG ikony", min: 14, max: 32 })}
+          <div class="ln-nvt-section-title">Ikony hlavních filtrů</div>
+          ${rangeRadek({ id: "ln-nvt-primary-icon-size", label: "Velikost ikony (běžné + SVG)", min: 14, max: 32 })}
           ${rangeRadek({ id: "ln-nvt-primary-icon-stroke", label: "Tloušťka SVG čáry", min: 0.8, max: 2.2, step: 0.05 })}
         </div>
 

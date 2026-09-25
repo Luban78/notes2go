@@ -13,11 +13,11 @@
   const VYCHOZI = {
     vybranyPrvek: "search",
     prvky: {
-      modules: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 54 },
+      modules: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 54, ikonaVelikost: 24, ikonaTloustka: 1.5, klasickaIkonaVelikost: 24 },
       traffic: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 12, velikost: 22 },
-      search: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 420 },
-      primary: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 50, ikonaVelikost: 22, ikonaTloustka: 1.5 },
-      actions: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 50, ikonaVelikost: 22, ikonaTloustka: 1.5 },
+      search: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 420, ikonaVelikost: 22, ikonaTloustka: 1.5, klasickaIkonaVelikost: 22 },
+      primary: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 50, ikonaVelikost: 22, ikonaTloustka: 1.5, klasickaIkonaVelikost: 22 },
+      actions: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 50, ikonaVelikost: 22, ikonaTloustka: 1.5, klasickaIkonaVelikost: 22 },
       tags: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 11, velikost: 38 },
       cards: { borderZapnuty: true, borderSirka: 1, borderRezim: "dark", borderSila: 18, radius: 17, velikost: 16 },
       fab: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 30, velikost: 60 }
@@ -31,7 +31,16 @@
       stitkyMezera: 8,
       stitkyKartyMezera: 10,
       kartySloupceMezera: 14,
-      kartyRadkyMezera: 14
+      kartyRadkyMezera: 14,
+      sidebarSirka: 236,
+      sidebarPolozkaVyska: 46,
+      sidebarIkonaVelikost: 20,
+      sidebarKlasikIkonaVelikost: 20,
+      sidebarTextVelikost: 15,
+      sidebarMezera: 7,
+      sidebarRadius: 11,
+      sidebarLogoVelikost: 50,
+      sidebarPaddingX: 16
     }
   };
 
@@ -39,11 +48,17 @@
     borderSirka: [0.5, 8], borderSila: [0, 70], radius: [0, 44],
     modulesVelikost: [42, 76], trafficVelikost: [16, 42], searchVelikost: [220, 700],
     primaryVelikost: [38, 76], actionsVelikost: [38, 76], tagsVelikost: [28, 58],
-    cardsVelikost: [8, 30], fabVelikost: [48, 88], ikonaVelikost: [14, 32], ikonaTloustka: [0.8, 2.4],
+    cardsVelikost: [8, 30], fabVelikost: [48, 88], ikonaVelikost: [14, 36], ikonaTloustka: [0.8, 2.4], klasickaIkonaVelikost: [14, 36],
     offsetY: [-20, 30], toolbarVyska: [38, 72], toolbarMezera: [0, 22], filtryMezera: [0, 18],
     toolbarStitkyMezera: [0, 24], stitkyMezera: [0, 20], stitkyKartyMezera: [0, 36],
-    kartySloupceMezera: [0, 36], kartyRadkyMezera: [0, 36]
+    kartySloupceMezera: [0, 36], kartyRadkyMezera: [0, 36],
+    sidebarSirka: [190, 320], sidebarPolozkaVyska: [34, 66], sidebarIkonaVelikost: [14, 32],
+    sidebarKlasikIkonaVelikost: [14, 34], sidebarTextVelikost: [12, 21], sidebarMezera: [0, 18],
+    sidebarRadius: [0, 22], sidebarLogoVelikost: [36, 72], sidebarPaddingX: [8, 28]
   };
+
+  const SVG_IKONY_PRVKY = new Set(["modules", "search", "primary", "actions"]);
+  const KLASICKE_IKONY_PRVKY = new Set(["modules", "search", "primary", "actions"]);
 
   function kopie(o) { return JSON.parse(JSON.stringify(o)); }
   function omezCislo(v, min, max, fallback) {
@@ -61,9 +76,12 @@
       radius: omezCislo(v.radius, ...LIMITY.radius, fallback.radius),
       velikost: omezCislo(v.velikost, ...limitVelikosti(id), fallback.velikost)
     };
-    if (id === "primary" || id === "actions") {
+    if (SVG_IKONY_PRVKY.has(id)) {
       out.ikonaVelikost = omezCislo(v.ikonaVelikost, ...LIMITY.ikonaVelikost, fallback.ikonaVelikost);
       out.ikonaTloustka = omezCislo(v.ikonaTloustka, ...LIMITY.ikonaTloustka, fallback.ikonaTloustka);
+    }
+    if (KLASICKE_IKONY_PRVKY.has(id)) {
+      out.klasickaIkonaVelikost = omezCislo(v.klasickaIkonaVelikost, ...LIMITY.klasickaIkonaVelikost, fallback.klasickaIkonaVelikost);
     }
     return out;
   }
@@ -130,9 +148,12 @@
     root.style.setProperty(`${p}-size`, px(d.velikost));
     body.dataset[`lnDnv${id[0].toUpperCase()}${id.slice(1)}Border`] = d.borderZapnuty ? "on" : "off";
     body.dataset[`lnDnv${id[0].toUpperCase()}${id.slice(1)}Mode`] = d.borderRezim;
-    if (id === "primary" || id === "actions") {
+    if (SVG_IKONY_PRVKY.has(id)) {
       root.style.setProperty(`${p}-icon-size`, px(d.ikonaVelikost));
       root.style.setProperty(`${p}-icon-stroke`, String(d.ikonaTloustka));
+    }
+    if (KLASICKE_IKONY_PRVKY.has(id)) {
+      root.style.setProperty(`${p}-classic-icon-size`, px(d.klasickaIkonaVelikost));
     }
   }
 
@@ -141,6 +162,31 @@
     if (!root || !body) return kopie(stav);
     for (const id of PRVKY) borderVars(root, body, id, stav.prvky[id]);
     for (const [k,v] of Object.entries(stav.layout)) root.style.setProperty(`--ln-dnv-layout-${k}`, px(v));
+
+    /* 658AS: kompatibilita s existujícím desktop CSS + jediný zdroj pravdy. */
+    root.style.setProperty("--ln-dnv-toolbar-height", px(stav.layout.toolbarVyska));
+    root.style.setProperty("--ln-dnv-toolbar-gap", px(stav.layout.toolbarMezera));
+    root.style.setProperty("--ln-dnv-filter-gap", px(stav.layout.filtryMezera));
+    root.style.setProperty("--ln-dnv-search-width", px(stav.prvky.search.velikost));
+    root.style.setProperty("--ln-dnv-filter-width", px(stav.prvky.primary.velikost));
+    root.style.setProperty("--ln-dnv-tag-height", px(stav.prvky.tags.velikost));
+    root.style.setProperty("--ln-dnv-tag-gap", px(stav.layout.stitkyMezera));
+    root.style.setProperty("--ln-dnv-card-padding", px(stav.prvky.cards.velikost));
+    root.style.setProperty("--ln-dnv-card-radius", px(stav.prvky.cards.radius));
+    root.style.setProperty("--ln-dnv-tag-radius", px(stav.prvky.tags.radius));
+    root.style.setProperty("--ln-dnv-search-radius", px(stav.prvky.search.radius));
+    root.style.setProperty("--ln-dnv-filter-radius", px(stav.prvky.primary.radius));
+    root.style.setProperty("--ln-dnv-toolbar-radius", px(stav.prvky.actions.radius));
+
+    root.style.setProperty("--ln-dnv-sidebar-width", px(stav.layout.sidebarSirka));
+    root.style.setProperty("--ln-dnv-sidebar-item-height", px(stav.layout.sidebarPolozkaVyska));
+    root.style.setProperty("--ln-dnv-sidebar-icon-size", px(stav.layout.sidebarIkonaVelikost));
+    root.style.setProperty("--ln-dnv-sidebar-classic-icon-size", px(stav.layout.sidebarKlasikIkonaVelikost));
+    root.style.setProperty("--ln-dnv-sidebar-text-size", px(stav.layout.sidebarTextVelikost));
+    root.style.setProperty("--ln-dnv-sidebar-gap", px(stav.layout.sidebarMezera));
+    root.style.setProperty("--ln-dnv-sidebar-radius", px(stav.layout.sidebarRadius));
+    root.style.setProperty("--ln-dnv-sidebar-logo-size", px(stav.layout.sidebarLogoVelikost));
+    root.style.setProperty("--ln-dnv-sidebar-pad-x", px(stav.layout.sidebarPaddingX));
     return kopie(stav);
   }
 
@@ -155,8 +201,9 @@
     else if (klic === "borderSila") d[klic] = omezCislo(hodnota, ...LIMITY.borderSila, d[klic]);
     else if (klic === "radius") d[klic] = omezCislo(hodnota, ...LIMITY.radius, d[klic]);
     else if (klic === "velikost") d[klic] = omezCislo(hodnota, ...limitVelikosti(id), d[klic]);
-    else if ((id === "primary" || id === "actions") && klic === "ikonaVelikost") d[klic] = omezCislo(hodnota, ...LIMITY.ikonaVelikost, d[klic]);
-    else if ((id === "primary" || id === "actions") && klic === "ikonaTloustka") d[klic] = omezCislo(hodnota, ...LIMITY.ikonaTloustka, d[klic]);
+    else if (SVG_IKONY_PRVKY.has(id) && klic === "ikonaVelikost") d[klic] = omezCislo(hodnota, ...LIMITY.ikonaVelikost, d[klic]);
+    else if (SVG_IKONY_PRVKY.has(id) && klic === "ikonaTloustka") d[klic] = omezCislo(hodnota, ...LIMITY.ikonaTloustka, d[klic]);
+    else if (KLASICKE_IKONY_PRVKY.has(id) && klic === "klasickaIkonaVelikost") d[klic] = omezCislo(hodnota, ...LIMITY.klasickaIkonaVelikost, d[klic]);
     else return false;
     oznam(); return true;
   }

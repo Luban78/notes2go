@@ -358,6 +358,11 @@
     document
       .querySelectorAll(".categoryTabs > button.categoryTabIconOnly .categoryTabIcon")
       .forEach((hostitel) => {
+        /* 658AS: stejný slider řídí i klasickou/emoji variantu ikony.
+           Pokud se používá SVG, font-size nemá vliv; pokud je aktivní
+           classic fallback, velikost se mění okamžitě stejně jako SVG. */
+        hostitel.style.setProperty("font-size", velikost, "important");
+
         const svg = hostitel.querySelector(".lubaSvgIcon");
         if (!svg) return;
 

@@ -164,7 +164,7 @@
         ${rangeRadek({ id: "ln-pvt-gap", label: "Mezera", min: 0, max: 20 })}
 
         <div class="ln-nvt-section-title">SVG metadata ikon</div>
-        ${rangeRadek({ id: "ln-pvt-icon-size", label: "Velikost SVG ikony", min: 12, max: 28 })}
+        ${rangeRadek({ id: "ln-pvt-icon-size", label: "Velikost ikony (běžné + SVG)", min: 12, max: 28 })}
         ${rangeRadek({ id: "ln-pvt-icon-stroke", label: "Tloušťka SVG čáry", min: 0.8, max: 2.4, step: 0.05 })}
 
         <div class="ln-nvt-actions ln-nvt-actions-bottom">
