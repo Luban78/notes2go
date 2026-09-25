@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – PC Planner Visual Lab
-   PATCH 658AH
+   PATCH 658BI
 ================================================== */
 (() => {
   "use strict";
@@ -155,6 +155,29 @@
     window.dispatchEvent(new CustomEvent("lubanote:desktop-planner-visual-change", { detail: kopie(stav) }));
   }
 
+  function synchronizujTextVisual(sekce, klic, pxHodnota) {
+    const mapa = {
+      "kalendar:pismoDne": "pcCalendarDay",
+      "agenda:pismo": "pcAgendaItem",
+      "subnav:pismo": "pcPlannerTabs",
+      "pripominky:pismoRadku": "pcReminderTitle",
+      "pripominky:pismoCasu": "pcReminderTime",
+      "pripominky:pismoSkupiny": "pcReminderGroup"
+    };
+    const textId = mapa[`${sekce}:${klic}`];
+    if (!textId) return;
+    const rootPx = Number.parseFloat(
+      window.getComputedStyle(document.documentElement).fontSize
+    ) || 16;
+    const rem = Number(pxHodnota) / rootPx;
+    if (!Number.isFinite(rem)) return;
+    window.LubaNoteTextVisualTuning?.nastavHodnotu?.(
+      "desktop",
+      textId,
+      Number(rem.toFixed(4))
+    );
+  }
+
   function nastav(sekce, klic, hodnota) {
     if (!stav[sekce] || !(klic in stav[sekce])) return false;
     if (sekce === "agenda" && klic === "sloupce") {
@@ -183,6 +206,7 @@
       if (!lim) return false;
       stav[sekce][klic] = omez(hodnota, ...lim, stav[sekce][klic]);
     }
+    synchronizujTextVisual(sekce, klic, stav[sekce][klic]);
     oznam(); return true;
   }
 

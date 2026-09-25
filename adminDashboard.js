@@ -578,12 +578,28 @@
     api.nastavPrvekHodnotu(id, "borderZapnuty", !prvek.borderZapnuty);
   }
 
+  function jeDesktopVisualRezim() {
+    return window.matchMedia?.(
+      "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+    )?.matches === true;
+  }
+
+  function zavriVsechnyVisualPanely() {
+    window.LubaNoteNotesVisualPanel?.close?.();
+    window.LubaNoteDesktopNotesVisualPanel?.close?.();
+    window.LubaNotePlannerVisualPanel?.close?.();
+    window.LubaNoteDesktopPlannerVisualPanel?.close?.();
+    window.LubaNoteDocumentsVisualPanel?.close?.();
+    window.LubaNoteTextVisualPanel?.close?.();
+  }
+
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
-    window.LubaNotePlannerVisualPanel?.close?.();
-    window.LubaNoteDocumentsVisualPanel?.close?.();
+    zavriVsechnyVisualPanely();
     document.getElementById("notesModuleButton")?.click?.();
-    const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
+    const otevreno = jeDesktopVisualRezim()
+      ? window.LubaNoteDesktopNotesVisualPanel?.open?.()
+      : window.LubaNoteNotesVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -591,10 +607,11 @@
 
   function otevriPlovouciPlannerTuning() {
     if (!jeAdmin) return;
-    window.LubaNoteNotesVisualPanel?.close?.();
-    window.LubaNoteDocumentsVisualPanel?.close?.();
+    zavriVsechnyVisualPanely();
     document.getElementById("plannerModuleButton")?.click?.();
-    const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
+    const otevreno = jeDesktopVisualRezim()
+      ? window.LubaNoteDesktopPlannerVisualPanel?.open?.()
+      : window.LubaNotePlannerVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -602,8 +619,7 @@
 
   function otevriPlovouciDocumentsTuning() {
     if (!jeAdmin) return;
-    window.LubaNoteNotesVisualPanel?.close?.();
-    window.LubaNotePlannerVisualPanel?.close?.();
+    zavriVsechnyVisualPanely();
     document.getElementById("documentsModuleButton")?.click?.();
     const otevreno = window.LubaNoteDocumentsVisualPanel?.open?.();
     if (otevreno) {
