@@ -7,6 +7,8 @@
 (() => {
   const menuTlacitko =
     document.getElementById("adminDashboardButton");
+  const hlavniMenuTlacitko =
+    document.getElementById("mainMenuButton");
   const desktopTlacitko =
     document.getElementById("desktopAdminDashboardButton");
   const modal =
@@ -576,32 +578,12 @@
     api.nastavPrvekHodnotu(id, "borderZapnuty", !prvek.borderZapnuty);
   }
 
-  function jeDesktopVisualRezim() {
-    try {
-      return window.matchMedia(
-        "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
-      ).matches;
-    } catch (_error) {
-      return false;
-    }
-  }
-
   function otevriPlovouciNotesTuning() {
     if (!jeAdmin) return;
     window.LubaNotePlannerVisualPanel?.close?.();
-    window.LubaNoteDesktopPlannerVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("notesModuleButton")?.click?.();
-
-    let otevreno = false;
-    if (jeDesktopVisualRezim()) {
-      window.LubaNoteNotesVisualPanel?.close?.();
-      otevreno = window.LubaNoteDesktopNotesVisualPanel?.open?.() === true;
-    } else {
-      window.LubaNoteDesktopNotesVisualPanel?.close?.();
-      otevreno = window.LubaNoteNotesVisualPanel?.open?.() === true;
-    }
-
+    const otevreno = window.LubaNoteNotesVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -610,19 +592,9 @@
   function otevriPlovouciPlannerTuning() {
     if (!jeAdmin) return;
     window.LubaNoteNotesVisualPanel?.close?.();
-    window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNoteDocumentsVisualPanel?.close?.();
     document.getElementById("plannerModuleButton")?.click?.();
-
-    let otevreno = false;
-    if (jeDesktopVisualRezim()) {
-      window.LubaNotePlannerVisualPanel?.close?.();
-      otevreno = window.LubaNoteDesktopPlannerVisualPanel?.open?.() === true;
-    } else {
-      window.LubaNoteDesktopPlannerVisualPanel?.close?.();
-      otevreno = window.LubaNotePlannerVisualPanel?.open?.() === true;
-    }
-
+    const otevreno = window.LubaNotePlannerVisualPanel?.open?.();
     if (otevreno) {
       zavriDashboard();
     }
@@ -631,9 +603,7 @@
   function otevriPlovouciDocumentsTuning() {
     if (!jeAdmin) return;
     window.LubaNoteNotesVisualPanel?.close?.();
-    window.LubaNoteDesktopNotesVisualPanel?.close?.();
     window.LubaNotePlannerVisualPanel?.close?.();
-    window.LubaNoteDesktopPlannerVisualPanel?.close?.();
     document.getElementById("documentsModuleButton")?.click?.();
     const otevreno = window.LubaNoteDocumentsVisualPanel?.open?.();
     if (otevreno) {
@@ -2079,7 +2049,10 @@
       if (startUiPripraven) return;
       startUiPripraven = true;
 
-      if (navigator.onLine && ucetAktivni) {
+      /* PATCH 658AU – admin check nesmí záviset na pořadí
+       * account-active vs splash-ready. RPC samo bezpečně ověří,
+       * zda je aktuální relace skutečně admin. */
+      if (navigator.onLine) {
         overAdmina();
       }
     }
@@ -2092,6 +2065,15 @@
       nastavViditelnostAdmina(false);
     }
   );
+
+  /* PATCH 658AU – při otevření servisního menu vždy obnovit serverové
+   * ověření admina. Opravuje stav, kdy UI zůstalo hidden po změně
+   * pořadí startovacích událostí. Bez lokálního bypassu oprávnění. */
+  hlavniMenuTlacitko?.addEventListener("click", () => {
+    if (navigator.onLine) {
+      overAdmina();
+    }
+  });
 
   registrujNouzovyDebug5x();
   aktualizujTexty();
