@@ -12,15 +12,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#ffffff">
   <link rel="manifest" href="manifest.webmanifest?v=20260911-console-clean-426">
-  <link rel="apple-touch-icon" href="icons/lubanote.png">
+  <link rel="icon" type="image/png" href="icons/lubanote.png?v=658af-graphite">
+  <link rel="apple-touch-icon" href="icons/lubanote.png?v=658af-graphite">
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=657d-planner-noshrink">
-  <link rel="stylesheet" href="documents.css?v=657-title-guard">
+  <link rel="stylesheet" href="style.css?v=658at-icon-size-split">
+  <link rel="stylesheet" href="documents.css?v=658v-documents-visual-live">
   <link rel="stylesheet" href="cardActionsMobile.css?v=20260913-old-android-panel-465">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
-  <link rel="stylesheet" href="desktop.css?v=20260920-planner-reminders-hotfix-650a">
+  <link rel="stylesheet" href="desktop.css?v=658as-visual-lab-audit">
   <link rel="stylesheet" href="iconPreference.css">
   <link rel="stylesheet" href="sharing.css?v=20260919-required-username-630">
   <link rel="stylesheet" href="chat.css?v=20260918-chat-composer-lower-629">
@@ -30,12 +31,11 @@
   <link rel="stylesheet" href="debugTabletGenerated.css">
   <link rel="stylesheet" href="debugDesktopGenerated.css?v=20260915-core-v2-hardcut-528">
   <link rel="stylesheet" href="visualDebug.css?v=20260914-unified-debug-dock-506">
-  <link rel="stylesheet" href="debugHub.css?v=20260907-debug-hub-ux-303">
+  <link rel="stylesheet" href="debugHub.css?v=658j-notes-visual-export">
   <!-- Editor Core V2 – jediný produkční editor -->
   <link rel="stylesheet" href="editorCoreV2.css?v=20260918-contrast-empty-619">
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=20260915-core-v2-hardcut-528">
-  <link rel="stylesheet" href="lubaKeyboard.css?v=20260917-title-clipboard-popup-596">
-  <link rel="stylesheet" href="style.css?v=658at-icon-size-split">
+  <link rel="stylesheet" href="lubaKeyboard.css?v=658ar-toolbar-symbols-selection">
 </head>
 
 <body class="authPending">
@@ -297,7 +297,7 @@
     <div class="searchRow">
       <div class="searchBox">
         <span class="searchIcon" data-luba-icon="hledat" data-luba-classic-icon="⌕" aria-hidden="true"></span>
-        <textarea id="searchNotes" rows="1" placeholder="Hledat poznámky..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-luba-keyboard-field="search" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
+        <textarea id="searchNotes" rows="1" placeholder="Hledat..." aria-label="Hledat poznámky" aria-autocomplete="none" autocomplete="one-time-code" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" enterkeyhint="search" readonly data-luba-keyboard-field="search" data-form-type="other" data-lpignore="true" data-1p-ignore="true" data-bwignore="true"></textarea>
         <button id="clearSearchButton" class="searchClearButton lubaIconOnlyButton" type="button" aria-label="Vymazat hledání" hidden>
           <span class="lubaActionIcon" data-luba-icon="zavrit" data-luba-classic-icon="×" aria-hidden="true"></span>
         </button>
@@ -436,7 +436,7 @@
       <!-- Sem tags.js doplňuje vlastní štítky -->
       <div id="tagFilterButtons"></div>
     </nav>
-    
+
   </header>
   
   
@@ -766,9 +766,28 @@
         </label>
       </div>
       
-      <button id="saveReminderQuickDateButton" type="button" class="reminderQuickPrimary">
-        Uložit datum a čas
+      <button id="saveReminderQuickDateButton" type="button" class="reminderQuickPrimary lubaHasIcon">
+        <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
+        <span>Termín</span>
       </button>
+
+      <button id="editReminderRepeatButton" type="button" class="reminderQuickRepeatCard" hidden>
+        <span class="reminderQuickRepeatIcon lubaActionIcon" data-luba-icon="opakovat" aria-hidden="true"></span>
+        <span class="reminderQuickRepeatText">
+          <strong>Opakování</strong>
+          <span id="reminderQuickRepeatRule">Pravidlo opakování</span>
+          <small id="reminderQuickRepeatNext">Další výskyt</small>
+        </span>
+        <span class="reminderQuickRepeatArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
+      </button>
+
+      <div id="reminderQuickRepeatPrevious" class="reminderQuickRepeatPrevious" hidden>
+        <span class="lubaActionIcon" data-luba-icon="kalendar" aria-hidden="true"></span>
+        <span>
+          <small id="reminderQuickRepeatPreviousLabel">Předchozí výskyt</small>
+          <strong id="reminderQuickRepeatPreviousValue">—</strong>
+        </span>
+      </div>
       
       <div class="reminderQuickFooter">
         <button id="completeReminderButton" type="button" class="reminderQuickDone lubaHasIcon">
@@ -784,11 +803,6 @@
         <button id="openReminderNoteButton" type="button" class="lubaHasIcon">
           <span class="lubaActionIcon" data-luba-icon="poznamky" aria-hidden="true"></span>
           <span>Otevřít</span>
-        </button>
-
-        <button id="editReminderRepeatButton" type="button" class="lubaHasIcon" hidden>
-          <span class="lubaActionIcon" data-luba-icon="opakovat" aria-hidden="true"></span>
-          <span>Upravit opakování</span>
         </button>
         
         <button id="disableReminderButton" type="button" class="danger lubaHasIcon">
@@ -1508,6 +1522,51 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
 
+          <button id="adminNotesVisualToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">📝</span>
+            <span class="adminToolText">
+              <strong>Poznámky</strong>
+              <small>Živé ladění hlavní plochy + kopírování nastavení</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminPlannerVisualToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">📅</span>
+            <span class="adminToolText">
+              <strong>Plán</strong>
+              <small>Kalendář, data, agenda a Připomínky + kopírování nastavení</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminDocumentsVisualToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">📁</span>
+            <span class="adminToolText">
+              <strong>Dokumenty</strong>
+              <small>Složky, hledání, filtry a řádky souborů + kopírování nastavení</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminPlannerIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">◫</span>
+            <span class="adminToolText">
+              <strong>Ikony položek Plánu</strong>
+              <small id="adminPlannerIconsToolDescription">Metadata ikony v agendě jsou zobrazené</small>
+            </span>
+            <span id="adminPlannerIconsToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
+
+          <button id="adminReminderIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">☷</span>
+            <span class="adminToolText">
+              <strong>Ikony položek Připomínek</strong>
+              <small id="adminReminderIconsToolDescription">Metadata ikony v kartách jsou zobrazené</small>
+            </span>
+            <span id="adminReminderIconsToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
+
           <button id="adminVisualDebugToolButton" class="adminToolCard" type="button">
             <span class="adminToolIcon" aria-hidden="true">🛠️</span>
             <span class="adminToolText">
@@ -1524,6 +1583,15 @@
               <small id="adminDebugHubToolDescription">Diagnostika, logy a testovací moduly</small>
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">↕️</span>
+            <span class="adminToolText">
+              <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
+              <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
+            </span>
+            <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
           </button>
         </div>
       </section>
@@ -2151,8 +2219,8 @@
   <script src="build-version.js"></script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
-  <script src="lang-cs.js?v=657b-planner-week-label"></script>
-  <script src="lang-en.js?v=20260919-main-nav-documents-633"></script>
+  <script src="lang-cs.js?v=658i-notes-layout-defaults"></script>
+  <script src="lang-en.js?v=658i-notes-layout-defaults"></script>
   <script src="i18n.js?v=20260919-main-nav-documents-633"></script>
 
   <script src="lubaIcons.js?v=20260915-agenda-layout-544"></script>
@@ -2162,11 +2230,21 @@
   
   <script src="storage.js?v=20260918-post-demo-data-actions-612"></script>
   
-  <script src="tags.js?v=20260917-local-backup-hardening-597"></script>
+  <script src="tags.js?v=658-notes-a"></script>
   
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
+  <script src="notesVisualTuning.js?v=658at-icon-size-split"></script>
+  <script src="notesVisualPanel.js?v=658at-icon-size-split"></script>
+  <script src="desktopNotesVisualTuning.js?v=658as-visual-lab-audit"></script>
+  <script src="desktopNotesVisualPanel.js?v=658as-visual-lab-audit"></script>
+  <script src="plannerVisualTuning.js?v=658at-icon-size-split"></script>
+  <script src="plannerVisualPanel.js?v=658at-icon-size-split"></script>
+  <script src="desktopPlannerVisualTuning.js?v=658ah-reminders-timeline"></script>
+  <script src="desktopPlannerVisualPanel.js?v=658ah-reminders-timeline"></script>
+  <script src="documentsVisualTuning.js?v=658v-documents-visual-live"></script>
+  <script src="documentsVisualPanel.js?v=658v-documents-visual-live"></script>
   <script src="settings.js?v=20260920-personal-dictionary-649g"></script>
   
   
@@ -2194,7 +2272,7 @@
   <script src="editorDocuments.js?v=20260920-pdf-zoom-calm-652e"></script>
   <script src="legacyDocReader.js?v=20260919-doc-viewer-642a"></script>
   <script src="epubReader.js?v=20260919-epub-reader-643"></script>
-  <script src="documents.js?v=655A"></script>
+  <script src="documents.js?v=658Q-trash-overflow"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>
@@ -2213,7 +2291,7 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
-  <script src="syncTraffic.js?v=20260918-sync-rx-request-audit-606"></script>
+  <script src="syncTraffic.js?v=658-rx-panel-toggle"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
   <script src="supabaseClient.js?v=20260920-sync-traffic-visible-653f"></script>
@@ -2229,7 +2307,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=658au-admin-visibility-refresh"></script>
+  <script src="adminDashboard.js?v=658av-admin-dashboard-restore"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2248,7 +2326,8 @@
   <script src="desktopIcons.js?v=20260919-main-nav-documents-633"></script>
 
   <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
-  <script src="desktop.js"></script>
+  <script src="desktop.js?v=658af-sidebar-icons-scroll"></script>
+  <script src="desktopReminders.js?v=658aj-reminders-stability"></script>
   
   
   <!-- Realtime signál musí poslouchat ještě před prvním startovním syncem -->
@@ -2269,11 +2348,11 @@
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=20260918-todo-safe-actions-618"></script>
   <script src="editorCoreV2Bridge.js?v=20260915-txt-clean-547"></script>
-  <script src="lubaKeyboard.js?v=20260920-context-prediction-651a"></script>
+  <script src="lubaKeyboard.js?v=658ar-toolbar-symbols-selection"></script>
   <script src="dictionarySync.js?v=20260920-dictionary-sync-650b"></script>
 
   <!-- Debug Hub – samostatný admin nástroj; diagnostika se zapíná jen na vyžádání. -->
-  <script src="debugHub.js?v=20260918-admin-tools-615"></script>
+  <script src="debugHub.js?v=658j-notes-visual-export"></script>
   
 </body>
 
