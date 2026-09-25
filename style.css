@@ -14669,3 +14669,25 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   height: 49px !important;
   max-height: 49px !important;
 }
+
+
+/* ==========================================================
+   PATCH 658BB – MOBILE MAIN MENU NO TOUCH/HOVER HIGHLIGHT
+   ----------------------------------------------------------
+   Android/WebView po tapnutí drží :hover/:focus a vytváří
+   modrý obdélník přes celý řádek. Na mobilu servisního menu
+   necháváme položky bez barevného zvýraznění.
+   PC hover zůstává beze změny.
+   ========================================================== */
+@media (max-width: 1099px) {
+  #mainMenu button,
+  #mainMenu button:hover,
+  #mainMenu button:active,
+  #mainMenu button:focus,
+  #mainMenu button:focus-visible {
+    background: transparent !important;
+    -webkit-tap-highlight-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+}
