@@ -3322,3 +3322,18 @@ body.documents-epub-viewer-open {
   padding-top: var(--ln-dv-file-pad-y, 7px) !important;
   padding-bottom: var(--ln-dv-file-pad-y, 7px) !important;
 }
+
+
+/* ==========================================================
+   PATCH 658BA – MOBILNÍ DOKUMENTY: + STEJNĚ JAKO POZNÁMKY
+   ========================================================== */
+@media (max-width: 1099px) {
+  #documentsScreen > .documentsFloatingAdd {
+    right: 20px !important;
+    bottom: 100px !important;
+    width: var(--luba-notes-fab-size, 70px) !important;
+    height: var(--luba-notes-fab-size, 70px) !important;
+    border-radius: var(--luba-notes-fab-radius, 35px) !important;
+    font-size: calc(var(--luba-notes-fab-size, 70px) * 0.44) !important;
+  }
+}

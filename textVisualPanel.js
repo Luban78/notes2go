@@ -7,9 +7,11 @@
 
   const PANEL_ID = "ln-tvt-panel";
   const STORAGE_POS = "lubanoteTextVisualPanelPosV1";
+  const STORAGE_SIZE = "lubanoteTextVisualPanelSizeV1";
   let panel = null;
   let refs = {};
   let drag = null;
+  let resize = null;
   let jeOtevreny = false;
   let jeMinimalizovany = false;
 
@@ -88,7 +90,8 @@
           <button id="ln-tvt-reset-all" type="button">Vše výchozí</button>
           <button id="ln-tvt-center" type="button">Panel doprostřed</button>
         </div>
-      </div>`;
+      </div>
+      <div id="ln-tvt-resize" class="ln-tvt-resize-handle" role="button" aria-label="Změnit velikost panelu" title="Táhni pro změnu velikosti">⌟</div>`;
 
     document.body.appendChild(panel);
 
@@ -105,11 +108,13 @@
       resetPlatform: panel.querySelector("#ln-tvt-reset-platform"),
       copy: panel.querySelector("#ln-tvt-copy"),
       resetAll: panel.querySelector("#ln-tvt-reset-all"),
-      center: panel.querySelector("#ln-tvt-center")
+      center: panel.querySelector("#ln-tvt-center"),
+      resize: panel.querySelector("#ln-tvt-resize")
     };
 
     registrujUdalosti();
     obnovPozici();
+    obnovVelikost();
     render();
     return panel;
   }
@@ -320,9 +325,13 @@
     refs.center.addEventListener("click", vycentruj);
 
     refs.head.addEventListener("pointerdown", zacniDrag);
+    refs.resize?.addEventListener("pointerdown", zacniResize);
     window.addEventListener("pointermove", tahni);
+    window.addEventListener("pointermove", menVelikost);
     window.addEventListener("pointerup", ukonciDrag);
+    window.addEventListener("pointerup", ukonciResize);
     window.addEventListener("pointercancel", ukonciDrag);
+    window.addEventListener("pointercancel", ukonciResize);
     window.addEventListener("resize", () => {
       renderPlatformNote();
       omezDoViewportu();
@@ -409,6 +418,66 @@
     ulozPozici();
   }
 
+  function zacniResize(event) {
+    if (!panel || (event.button !== undefined && event.button !== 0)) return;
+    const rect = panel.getBoundingClientRect();
+    resize = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      width: rect.width,
+      height: rect.height
+    };
+    panel.classList.add("ln-tvt-resizing", "ln-tvt-custom-size");
+    refs.resize?.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function menVelikost(event) {
+    if (!resize || event.pointerId !== resize.pointerId || !panel) return;
+    const rect = panel.getBoundingClientRect();
+    const minWidth = Math.min(300, Math.max(260, window.innerWidth - 16));
+    const maxWidth = Math.max(minWidth, window.innerWidth - Math.max(8, rect.left));
+    const minHeight = 210;
+    const maxHeight = Math.max(minHeight, window.innerHeight - Math.max(8, rect.top));
+    const width = Math.max(minWidth, Math.min(maxWidth, resize.width + event.clientX - resize.startX));
+    const height = Math.max(minHeight, Math.min(maxHeight, resize.height + event.clientY - resize.startY));
+    panel.style.width = `${Math.round(width)}px`;
+    panel.style.height = `${Math.round(height)}px`;
+    panel.style.maxHeight = "none";
+    event.preventDefault();
+  }
+
+  function ukonciResize(event) {
+    if (!resize || (event && event.pointerId !== resize.pointerId)) return;
+    resize = null;
+    panel?.classList.remove("ln-tvt-resizing");
+    ulozVelikost();
+  }
+
+  function ulozVelikost() {
+    if (!panel || !panel.classList.contains("ln-tvt-custom-size")) return;
+    try {
+      const rect = panel.getBoundingClientRect();
+      localStorage.setItem(STORAGE_SIZE, JSON.stringify({ width: rect.width, height: rect.height }));
+    } catch (_error) {}
+  }
+
+  function obnovVelikost() {
+    if (!panel) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_SIZE);
+      if (!raw) return;
+      const size = JSON.parse(raw);
+      if (!Number.isFinite(size?.width) || !Number.isFinite(size?.height)) return;
+      panel.classList.add("ln-tvt-custom-size");
+      panel.style.width = `${Math.round(size.width)}px`;
+      panel.style.height = `${Math.round(size.height)}px`;
+      panel.style.maxHeight = "none";
+    } catch (_error) {}
+  }
+
   function ulozPozici() {
     if (!panel) return;
     try {
@@ -434,7 +503,14 @@
 
   function omezDoViewportu() {
     if (!panel || panel.hidden) return;
-    const rect = panel.getBoundingClientRect();
+    let rect = panel.getBoundingClientRect();
+    if (panel.classList.contains("ln-tvt-custom-size")) {
+      const maxWidth = Math.max(260, window.innerWidth - 16);
+      const maxHeight = Math.max(210, window.innerHeight - 16);
+      if (rect.width > maxWidth) panel.style.width = `${Math.round(maxWidth)}px`;
+      if (rect.height > maxHeight) panel.style.height = `${Math.round(maxHeight)}px`;
+      rect = panel.getBoundingClientRect();
+    }
     const lim = hranicePanelu();
     panel.style.left = `${Math.min(lim.maxX, Math.max(lim.minX, rect.left))}px`;
     panel.style.top = `${Math.min(lim.maxY, Math.max(lim.minY, rect.top))}px`;

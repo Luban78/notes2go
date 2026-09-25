@@ -136,7 +136,7 @@
           label: "LubaKeyboard",
           items: [
             E("keyboardTop", "Klávesnice – horní lišta", ".ln-lk-brand, .ln-lk-language", 0.75),
-            E("keyboardSuggestions", "Klávesnice – predikce", ".ln-lk-suggestion", 0.94),
+            E("keyboardSuggestions", "Klávesnice – predikce", "#lubaKeyboard .ln-lk-smartbar .ln-lk-suggestion", 0.94),
             E("keyboardKeys", "Klávesnice – písmena", ".ln-lk-key", 1.06),
             E("keyboardNumbers", "Klávesnice – číselná řada", ".ln-lk-standard-number-row .ln-lk-key", 0.94),
             E("keyboardBottom", "Klávesnice – spodní funkční řada", ".ln-lk-bottom-standard .ln-lk-key, .ln-lk-fn, .ln-lk-nav, .ln-lk-back, .ln-lk-enter", 1),

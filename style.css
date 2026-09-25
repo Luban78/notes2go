@@ -14609,3 +14609,63 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     gap: 8px;
   }
 }
+
+
+/* ==========================================================
+   PATCH 658BA – MENU CLEANUP + TEXT VISUAL RESIZE
+   ========================================================== */
+@media (max-width: 1099px) {
+  /* Hlavní servisní menu: bez barevných TouchView dlaždic a bez šipek. */
+  .mainMenu button {
+    grid-template-columns: 30px minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .mainMenuIcon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  .mainMenuArrow {
+    display: none !important;
+  }
+}
+
+#ln-tvt-panel.ln-tvt-custom-size {
+  max-height: none !important;
+}
+
+#ln-tvt-panel.ln-tvt-resizing {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.ln-tvt-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: end;
+  padding: 0 4px 2px 0;
+  color: color-mix(in srgb, var(--color-accent) 82%, var(--color-text) 18%);
+  font-size: 20px;
+  line-height: 1;
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#ln-tvt-panel.ln-nvt-minimized .ln-tvt-resize-handle {
+  display: none;
+}
+
+#ln-tvt-panel.ln-tvt-custom-size.ln-nvt-minimized {
+  height: 49px !important;
+  max-height: 49px !important;
+}
