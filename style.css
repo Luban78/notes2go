@@ -14389,10 +14389,15 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   body:has(#notesModuleButton.active) #tagFilterButtons {
     padding-bottom: 3px !important;
     box-shadow:
-      0 7px 10px -10px color-mix(
+      0 5px 7px -5px color-mix(
         in srgb,
-        var(--color-border) 76%,
-        var(--color-accent) 24%
+        var(--color-border) 68%,
+        transparent
+      ),
+      0 10px 16px -9px color-mix(
+        in srgb,
+        var(--color-accent) 26%,
+        transparent
       );
   }
 }
