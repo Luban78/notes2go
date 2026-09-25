@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – TEXTY / živé ladění typografie
-   PATCH 658AZ
+   PATCH 658BH
    - oddělené hodnoty Mobil / PC
    - všechny hodnoty v rem
    - žádný zásah do dat, syncu ani editorové logiky
@@ -8,7 +8,7 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteTextVisualTuningV3";
+  const KLIC = "lubanoteTextVisualTuningV4";
   const STYLE_ID = "ln-text-visual-style";
   const DESKTOP_MEDIA = "(min-width: 1100px) and (hover: hover) and (pointer: fine)";
   const desktopMql = window.matchMedia(DESKTOP_MEDIA);
@@ -180,20 +180,20 @@
           id: "desktopNavigation",
           label: "PC – horní navigace",
           items: [
-            E("pcModules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 1),
-            E("pcSearch", "Hledání", "#searchNotes", 1),
+            E("pcModules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 1.2),
+            E("pcSearch", "Hledání", "#searchNotes", 1.1),
             E("pcPrimaryFilter", "Rychlé filtry", ".desktopCategoryActions .categoryTab:not(.categoryTabIconOnly), .categoryTabs > .categoryTab:not(.categoryTabIconOnly)", 0.95),
-            E("pcTags", "Vlastní štítky", "#tagFilterButtons .categoryTab", 0.95),
-            E("pcTraffic", "RX / TX / E panel", ".syncTrafficBar", 0.63)
+            E("pcTags", "Vlastní štítky", "#tagFilterButtons .categoryTab", 1),
+            E("pcTraffic", "RX / TX / E panel", ".syncTrafficBar", 0.7)
           ]
         },
         {
           id: "desktopSidebar",
           label: "PC – levý panel",
           items: [
-            E("pcSidebarBrand", "Logo – text LubaNote", ".desktopSidebarBrandText", 1.28),
+            E("pcSidebarBrand", "Logo – text LubaNote", ".desktopSidebarBrandText", 1.35),
             E("pcSidebarItems", "Položky levého menu", ".desktopSidebarButton > span:last-child", 0.95),
-            E("pcSidebarFooter", "Levý panel – spodní stav", ".desktopSidebarFooter", 0.78),
+            E("pcSidebarFooter", "Levý panel – spodní stav", ".desktopSidebarFooter", 0.85),
             E("pcSidebarAdmin", "Admin Dashboard v levém menu", "#desktopAdminDashboardButton > span:last-child", 0.95)
           ]
         },
@@ -201,11 +201,11 @@
           id: "desktopNotes",
           label: "PC – Poznámky a karty",
           items: [
-            E("pcCardTitle", "Karta – název", ".taskCard h3", 1.13),
-            E("pcCardBody", "Karta – text", ".taskCard .taskNoteText", 1),
-            E("pcCardMeta", "Karta – datum / metadata", ".taskCard p:not(.taskNoteText)", 0.81),
-            E("pcCardTag", "Karta – štítek", ".taskTag", 0.81),
-            E("pcMainMenu", "Menu / dialog – položky", ".mainMenuLabel", 0.94)
+            E("pcCardTitle", "Karta – název", ".taskCard h3", 1.15),
+            E("pcCardBody", "Karta – text", ".taskCard .taskNoteText", 1.05),
+            E("pcCardMeta", "Karta – datum / metadata", ".taskCard p:not(.taskNoteText)", 0.9),
+            E("pcCardTag", "Karta – štítek", ".taskTag", 0.85),
+            E("pcMainMenu", "Menu / dialog – položky", ".mainMenuLabel", 0.95)
           ]
         },
         {
@@ -213,19 +213,19 @@
           label: "PC – Editor",
           items: [
             E("pcEditorTitle", "Editor – název", "#modalTitle", 1.5),
-            E("pcEditorBody", "Editor – běžný text", ".ln-v2-editor", 1),
+            E("pcEditorBody", "Editor – běžný text", ".ln-v2-editor", 1.2),
             E("pcEditorToolbar", "Editor – panel nástrojů", ".editorToolbarPanel .editorPanelVolba", 1),
-            E("pcSelectionMenu", "Výběr textu", ".selectionMenu button", 0.81)
+            E("pcSelectionMenu", "Výběr textu", ".selectionMenu button", 0.85)
           ]
         },
         {
           id: "desktopPlanner",
           label: "PC – Plán / Kalendář",
           items: [
-            E("pcPlannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1),
+            E("pcPlannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1.05),
             E("pcCalendarMonth", "Kalendář – měsíc", ".calendarHeader h2", 1.4),
-            E("pcCalendarWeekdays", "Kalendář – Po / Út / St…", ".calendarWeekdays", 0.95),
-            E("pcCalendarDay", "Kalendář – čísla dnů", ".calendarDay", 1),
+            E("pcCalendarWeekdays", "Kalendář – Po / Út / St…", ".calendarWeekdays", 1.05),
+            E("pcCalendarDay", "Kalendář – čísla dnů", ".calendarDay", 1.1),
             E("pcAgendaHeading", "Agenda – nadpis", ".calendarAgenda h3", 0.98),
             E("pcAgendaItem", "Agenda – úkol", ".calendarAgendaItem", 0.94),
             E("pcSelectedDate", "Agenda – datum dne", ".calendarSelectedDateButton", 0.94),
@@ -236,12 +236,12 @@
           id: "desktopReminders",
           label: "PC – Připomínky",
           items: [
-            E("pcReminderPanelTitle", "Připomínky – nadpis panelu", ".desktopRemindersFilterPanel h2, .desktopRemindersTimelineHeader h2", 1.25),
-            E("pcReminderSearch", "Připomínky – hledání", ".desktopReminderSearch input", 0.88),
-            E("pcReminderFilters", "Připomínky – levé filtry", ".desktopReminderFilterButton", 0.88),
-            E("pcReminderCount", "Připomínky – počty ve filtrech", ".desktopReminderFilterCount", 0.75),
+            E("pcReminderPanelTitle", "Připomínky – nadpis panelu", ".desktopRemindersFilterPanel h2, .desktopRemindersTimelineHeader h2", 1.3),
+            E("pcReminderSearch", "Připomínky – hledání", ".desktopReminderSearch input", 0.9),
+            E("pcReminderFilters", "Připomínky – levé filtry", ".desktopReminderFilterButton", 0.95),
+            E("pcReminderCount", "Připomínky – počty ve filtrech", ".desktopReminderFilterCount", 0.8),
             E("pcReminderToolbar", "Připomínky – horní ovládání", ".desktopReminderTimelineActions > button", 0.88),
-            E("pcReminderGroup", "Připomínky – datum skupiny", ".desktopReminderDayTitle", 1.06),
+            E("pcReminderGroup", "Připomínky – datum skupiny", ".desktopReminderDayTitle", 1.1),
             E("pcReminderTime", "Připomínky – čas", ".desktopReminderTimelineRow .reminderItemTime", 1),
             E("pcReminderTitle", "Připomínky – název", ".desktopReminderTimelineRow .reminderItemTitle", 1),
             E("pcReminderPreview", "Připomínky – náhled", ".desktopReminderTimelineRow .reminderItemPreview", 0.88),
@@ -252,10 +252,10 @@
           id: "desktopDocuments",
           label: "PC – Dokumenty",
           items: [
-            E("pcDocumentsHeading", "Dokumenty – nadpis sekce", ".documentsV1SectionHeader h3", 1.13),
+            E("pcDocumentsHeading", "Dokumenty – nadpis sekce", ".documentsV1SectionHeader h3", 1.2),
             E("pcDocumentsFolder", "Složky – název", ".documentsFolderCardName", 0.88),
             E("pcDocumentsSearch", "Dokumenty – hledání", ".documentsSearchBox input", 0.88),
-            E("pcDocumentsFilters", "Dokumenty – filtry", ".documentsFileFilter, .documentsTrashButton", 0.69),
+            E("pcDocumentsFilters", "Dokumenty – filtry", ".documentsFileFilter, .documentsTrashButton", 0.95),
             E("pcDocumentsFile", "Soubor – název", ".documentsFileMain strong", 0.88),
             E("pcDocumentsMeta", "Soubor – metadata", ".documentsFileMain small", 0.69),
             E("pcReaderBody", "Reader / EPUB – text", ".documentsEpubContent", 1.06, 0.7, 2.4)
@@ -265,14 +265,14 @@
           id: "desktopSettings",
           label: "PC – Nastavení / Admin / Dialogy",
           items: [
-            E("pcSettingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.5),
-            E("pcSettingsSection", "Nastavení – nadpis sekce", ".settingsSection h3", 0.81),
-            E("pcSettingsButtons", "Nastavení – položky", ".settingsSection button", 1),
-            E("pcAdminTitle", "Admin Dashboard – nadpis", ".adminDashboardHeader h2", 1.35),
-            E("pcAdminToolTitle", "Admin Dashboard – nástroje", ".adminToolText strong", 1),
-            E("pcAdminToolDesc", "Admin Dashboard – popisy", ".adminToolText small", 0.78),
+            E("pcSettingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.6),
+            E("pcSettingsSection", "Nastavení – nadpis sekce", ".settingsSection h3", 1.1),
+            E("pcSettingsButtons", "Nastavení – položky", ".settingsSection button", 1.2),
+            E("pcAdminTitle", "Admin Dashboard – nadpis", ".adminDashboardHeader h2", 1.5),
+            E("pcAdminToolTitle", "Admin Dashboard – nástroje", ".adminToolText strong", 1.25),
+            E("pcAdminToolDesc", "Admin Dashboard – popisy", ".adminToolText small", 1.1),
             E("pcDialogTitle", "Dialogy – nadpis", ".appMessageDialog h3, .choiceDialogTitle", 1.25),
-            E("pcDialogBody", "Dialogy – text", ".appMessageDialog p, .choiceDialogOption", 1)
+            E("pcDialogBody", "Dialogy – text", ".appMessageDialog p, .choiceDialogOption", 1.15)
           ]
         }
       ]
