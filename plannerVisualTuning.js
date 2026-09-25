@@ -25,6 +25,7 @@
       plan: false,
       pripominky: false,
       velikost: 18,
+      klasickaVelikost: 18,
       tloustka: 1.85
     },
     prvky: {
@@ -47,6 +48,7 @@
     reminderStatus: { velikost: [2, 14], radius: [0, 20], mezera: [0, 18] },
     reminderItems: { velikost: [4, 20], radius: [0, 26], mezera: [0, 18] },
     ikonaVelikost: [12, 28],
+    klasickaIkonaVelikost: [12, 26],
     ikonaTloustka: [0.8, 2.4]
   };
 
@@ -105,6 +107,11 @@
         ...LIMITY.ikonaVelikost,
         VYCHOZI.ikony.velikost
       );
+      stav.ikony.klasickaVelikost = omezCislo(
+        ikony.klasickaVelikost,
+        ...LIMITY.klasickaIkonaVelikost,
+        VYCHOZI.ikony.klasickaVelikost
+      );
       stav.ikony.tloustka = omezCislo(
         ikony.tloustka,
         ...LIMITY.ikonaTloustka,
@@ -162,6 +169,7 @@
     root.style.setProperty("--ln-pv-rem-item-gap", px(stav.prvky.reminderItems.mezera));
 
     root.style.setProperty("--ln-pv-icon-size", px(stav.ikony.velikost));
+    root.style.setProperty("--ln-pv-classic-icon-size", px(stav.ikony.klasickaVelikost));
     root.style.setProperty("--ln-pv-icon-stroke", String(stav.ikony.tloustka));
 
     if (document.body) {
@@ -213,6 +221,12 @@
         hodnota,
         ...LIMITY.ikonaVelikost,
         stav.ikony.velikost
+      );
+    } else if (klic === "klasickaVelikost") {
+      stav.ikony.klasickaVelikost = omezCislo(
+        hodnota,
+        ...LIMITY.klasickaIkonaVelikost,
+        stav.ikony.klasickaVelikost
       );
     } else if (klic === "tloustka") {
       stav.ikony.tloustka = omezCislo(

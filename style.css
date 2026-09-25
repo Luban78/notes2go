@@ -13091,6 +13091,7 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   --luba-notes-primary-radius: 15px;
   --luba-notes-primary-size: 42px;
   --luba-notes-primary-icon-size: 22px;
+  --luba-notes-primary-classic-icon-size: 20px;
   --luba-notes-primary-icon-stroke: 1.35px;
 
   --luba-notes-search-border-width: 1px;
@@ -13381,6 +13382,14 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
   /* 658L: velikost SVG hlavních filtrů a tloušťka jejich čáry jsou
      nezávislé. Při zvětšení ikony se tedy čára už opticky nezvětšuje.
      Klasické/emoji ikony nemají .lubaSvgIcon a toto pravidlo se jich netýká. */
+  body:has(#notesModuleButton.active)
+    .categoryTabs > button.categoryTabIconOnly
+    .categoryTabIcon:not(:has(.lubaSvgIcon)) {
+    width: var(--luba-notes-primary-classic-icon-size) !important;
+    height: var(--luba-notes-primary-classic-icon-size) !important;
+    font-size: var(--luba-notes-primary-classic-icon-size) !important;
+  }
+
   body:has(#notesModuleButton.active)
     .categoryTabs > button.categoryTabIconOnly
     .categoryTabIcon:has(.lubaSvgIcon) {
@@ -14214,14 +14223,23 @@ body.lubaSyncTrafficUserHidden #syncTrafficBar {
     border-radius: var(--ln-pv-rem-item-radius, 15px);
   }
 
-  .calendarAgendaMetaIcon,
-  .reminderItemMetaIcon {
+  .calendarAgendaMetaIcon:not(:has(.lubaSvgIcon)),
+  .reminderItemMetaIcon:not(:has(.lubaSvgIcon)) {
+    width: var(--ln-pv-classic-icon-size, 18px);
+    height: var(--ln-pv-classic-icon-size, 18px);
+    min-width: var(--ln-pv-classic-icon-size, 18px);
+    min-height: var(--ln-pv-classic-icon-size, 18px);
+    flex-basis: var(--ln-pv-classic-icon-size, 18px);
+    font-size: var(--ln-pv-classic-icon-size, 18px);
+  }
+
+  .calendarAgendaMetaIcon:has(.lubaSvgIcon),
+  .reminderItemMetaIcon:has(.lubaSvgIcon) {
     width: var(--ln-pv-icon-size, 18px);
     height: var(--ln-pv-icon-size, 18px);
     min-width: var(--ln-pv-icon-size, 18px);
     min-height: var(--ln-pv-icon-size, 18px);
     flex-basis: var(--ln-pv-icon-size, 18px);
-    font-size: var(--ln-pv-icon-size, 18px);
   }
 
   .calendarAgendaMetaIcon .lubaSvgIcon,

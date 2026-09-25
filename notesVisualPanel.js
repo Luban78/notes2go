@@ -104,7 +104,8 @@
 
         <div id="ln-nvt-primary-svg" hidden>
           <div class="ln-nvt-section-title">Ikony hlavních filtrů</div>
-          ${rangeRadek({ id: "ln-nvt-primary-icon-size", label: "Velikost ikony (běžné + SVG)", min: 14, max: 32 })}
+          ${rangeRadek({ id: "ln-nvt-primary-icon-size", label: "Velikost SVG ikony", min: 14, max: 32 })}
+          ${rangeRadek({ id: "ln-nvt-primary-classic-icon-size", label: "Velikost běžné / emoji ikony", min: 14, max: 28 })}
           ${rangeRadek({ id: "ln-nvt-primary-icon-stroke", label: "Tloušťka SVG čáry", min: 0.8, max: 2.2, step: 0.05 })}
         </div>
 
@@ -143,6 +144,7 @@
       sizeLabel: panel.querySelector('label[for="ln-nvt-size"] .ln-nvt-label'),
       primarySvg: panel.querySelector("#ln-nvt-primary-svg"),
       primaryIconSize: panel.querySelector("#ln-nvt-primary-icon-size"),
+      primaryClassicIconSize: panel.querySelector("#ln-nvt-primary-classic-icon-size"),
       primaryIconStroke: panel.querySelector("#ln-nvt-primary-icon-stroke"),
       offset: panel.querySelector("#ln-nvt-offset"),
       actionsFiltersGap: panel.querySelector("#ln-nvt-actions-filters-gap"),
@@ -208,6 +210,11 @@
         refs.primaryIconSize,
         prvek.ikonaVelikost,
         orig.ikonaVelikost
+      );
+      nastavRange(
+        refs.primaryClassicIconSize,
+        prvek.klasickaIkonaVelikost,
+        orig.klasickaIkonaVelikost
       );
       nastavRange(
         refs.primaryIconStroke,
@@ -325,6 +332,9 @@
     refs.size.addEventListener("input", () => nastavPrvek("velikost", refs.size.value));
     refs.primaryIconSize.addEventListener("input", () =>
       nastavPrvek("ikonaVelikost", refs.primaryIconSize.value)
+    );
+    refs.primaryClassicIconSize.addEventListener("input", () =>
+      nastavPrvek("klasickaIkonaVelikost", refs.primaryClassicIconSize.value)
     );
     refs.primaryIconStroke.addEventListener("input", () =>
       nastavPrvek("ikonaTloustka", refs.primaryIconStroke.value)

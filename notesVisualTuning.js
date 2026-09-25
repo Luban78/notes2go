@@ -50,6 +50,7 @@
         radius: 15,
         velikost: 42,
         ikonaVelikost: 27,
+        klasickaIkonaVelikost: 20,
         ikonaTloustka: 1.25
       },
       search: {
@@ -113,6 +114,7 @@
     tagsVelikost: [30, 56],
     primaryVelikost: [30, 56],
     primaryIkonaVelikost: [14, 32],
+    primaryKlasickaIkonaVelikost: [14, 28],
     primaryIkonaTloustka: [0.8, 2.2],
     searchVelikost: [34, 58],
     actionsVelikost: [34, 58],
@@ -242,6 +244,11 @@
         ...LIMITY.primaryIkonaVelikost,
         fallback.ikonaVelikost
       );
+      vysledek.klasickaIkonaVelikost = omezCislo(
+        v.klasickaIkonaVelikost,
+        ...LIMITY.primaryKlasickaIkonaVelikost,
+        fallback.klasickaIkonaVelikost
+      );
       vysledek.ikonaTloustka = omezCislo(
         v.ikonaTloustka,
         ...LIMITY.primaryIkonaTloustka,
@@ -352,27 +359,27 @@
 
   function aplikujPrimarySvgFiltry() {
     const data = stav.prvky.primary;
-    const velikost = `${data.ikonaVelikost}px`;
+    const svgVelikost = `${data.ikonaVelikost}px`;
+    const klasickaVelikost = `${data.klasickaIkonaVelikost}px`;
     const tloustka = `${data.ikonaTloustka}px`;
 
     document
       .querySelectorAll(".categoryTabs > button.categoryTabIconOnly .categoryTabIcon")
       .forEach((hostitel) => {
-        /* 658AS: stejný slider řídí i klasickou/emoji variantu ikony.
-           Pokud se používá SVG, font-size nemá vliv; pokud je aktivní
-           classic fallback, velikost se mění okamžitě stejně jako SVG. */
-        hostitel.style.setProperty("font-size", velikost, "important");
-
         const svg = hostitel.querySelector(".lubaSvgIcon");
-        if (!svg) return;
 
-        /* Inline !important záměrně: starší lokální Visual Debug mohl mít
-           uložené width/height s velmi vysokou specificitou. Nový Visual Lab
-           musí být pro tyto dvě hodnoty jediným zdrojem pravdy. */
-        hostitel.style.setProperty("width", velikost, "important");
-        hostitel.style.setProperty("height", velikost, "important");
-        svg.style.setProperty("width", velikost, "important");
-        svg.style.setProperty("height", velikost, "important");
+        if (!svg) {
+          hostitel.style.setProperty("font-size", klasickaVelikost, "important");
+          hostitel.style.setProperty("width", klasickaVelikost, "important");
+          hostitel.style.setProperty("height", klasickaVelikost, "important");
+          return;
+        }
+
+        hostitel.style.removeProperty("font-size");
+        hostitel.style.setProperty("width", svgVelikost, "important");
+        hostitel.style.setProperty("height", svgVelikost, "important");
+        svg.style.setProperty("width", svgVelikost, "important");
+        svg.style.setProperty("height", svgVelikost, "important");
         svg.style.setProperty("stroke-width", tloustka, "important");
       });
   }
@@ -389,6 +396,10 @@
     root.style.setProperty(
       "--luba-notes-primary-icon-size",
       `${stav.prvky.primary.ikonaVelikost}px`
+    );
+    root.style.setProperty(
+      "--luba-notes-primary-classic-icon-size",
+      `${stav.prvky.primary.klasickaIkonaVelikost}px`
     );
     root.style.setProperty(
       "--luba-notes-primary-icon-stroke",
@@ -503,6 +514,12 @@
         hodnota,
         ...LIMITY.primaryIkonaVelikost,
         VYCHOZI.prvky.primary.ikonaVelikost
+      );
+    } else if (id === "primary" && klic === "klasickaIkonaVelikost") {
+      cil[klic] = omezCislo(
+        hodnota,
+        ...LIMITY.primaryKlasickaIkonaVelikost,
+        VYCHOZI.prvky.primary.klasickaIkonaVelikost
       );
     } else if (id === "primary" && klic === "ikonaTloustka") {
       cil[klic] = omezCislo(

@@ -163,8 +163,9 @@
         ${rangeRadek({ id: "ln-pvt-radius", label: "Zaoblení", min: 0, max: 26 })}
         ${rangeRadek({ id: "ln-pvt-gap", label: "Mezera", min: 0, max: 20 })}
 
-        <div class="ln-nvt-section-title">SVG metadata ikon</div>
-        ${rangeRadek({ id: "ln-pvt-icon-size", label: "Velikost ikony (běžné + SVG)", min: 12, max: 28 })}
+        <div class="ln-nvt-section-title">Metadata ikony</div>
+        ${rangeRadek({ id: "ln-pvt-icon-size", label: "Velikost SVG ikony", min: 12, max: 28 })}
+        ${rangeRadek({ id: "ln-pvt-classic-icon-size", label: "Velikost běžné / emoji ikony", min: 12, max: 26 })}
         ${rangeRadek({ id: "ln-pvt-icon-stroke", label: "Tloušťka SVG čáry", min: 0.8, max: 2.4, step: 0.05 })}
 
         <div class="ln-nvt-actions ln-nvt-actions-bottom">
@@ -191,6 +192,7 @@
       gap: panel.querySelector("#ln-pvt-gap"),
       gapLabel: panel.querySelector('label[for="ln-pvt-gap"] .ln-nvt-label'),
       iconSize: panel.querySelector("#ln-pvt-icon-size"),
+      classicIconSize: panel.querySelector("#ln-pvt-classic-icon-size"),
       iconStroke: panel.querySelector("#ln-pvt-icon-stroke"),
       resetTarget: panel.querySelector("#ln-pvt-reset-target"),
       copy: panel.querySelector("#ln-pvt-copy"),
@@ -241,6 +243,7 @@
     nastavRange(refs.radius, prvek.radius, orig.radius);
     nastavRange(refs.gap, prvek.mezera, orig.mezera);
     nastavRange(refs.iconSize, stav.ikony.velikost, vychozi.ikony.velikost);
+    nastavRange(refs.classicIconSize, stav.ikony.klasickaVelikost, vychozi.ikony.klasickaVelikost);
     nastavRange(refs.iconStroke, stav.ikony.tloustka, vychozi.ikony.tloustka);
 
     refs.planIcons.textContent = `Ikony Plán: ${stav.ikony.plan ? "Zapnuto" : "Vypnuto"}`;
@@ -342,6 +345,7 @@
     refs.radius.addEventListener("input", () => nastavPrvek("radius", refs.radius.value));
     refs.gap.addEventListener("input", () => nastavPrvek("mezera", refs.gap.value));
     refs.iconSize.addEventListener("input", () => api()?.nastavIkony?.("velikost", refs.iconSize.value));
+    refs.classicIconSize.addEventListener("input", () => api()?.nastavIkony?.("klasickaVelikost", refs.classicIconSize.value));
     refs.iconStroke.addEventListener("input", () => api()?.nastavIkony?.("tloustka", refs.iconStroke.value));
     refs.resetTarget.addEventListener("click", () => api()?.obnovVybranyPrvek?.());
     refs.copy.addEventListener("click", zkopirujNastaveni);
