@@ -14377,39 +14377,34 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   }
 }
 
-
 /* ============================================================
-   PATCH 658AN – POZNÁMKY / VIDITELNÝ SOFT FADE POD ŠTÍTKY
+   PATCH 658AO – POZNÁMKY / STEJNÝ SOFT EDGE JAKO V PLÁNU
    ------------------------------------------------------------
-   Samostatný dekorativní prvek mezi štítky a kartami. Nechytá
-   dotyky, nezasahuje do drag/scroll logiky a na desktopu je skrytý.
+   Nepoužíváme box-shadow ani dekorativní překryv. Karty dostanou
+   stejnou horní masku jako #calendarDayItems v Plánu, takže obsah
+   plynule přechází z průhledna bez barevného fleku. Drag/scroll
+   štítků zůstává beze změny.
    ============================================================ */
-#notesTagsSoftFade {
-  display: none;
-  pointer-events: none;
-}
-
 @media (max-width: 720px) {
   body:has(#notesModuleButton.active) #tagFilterButtons {
-    /* Zachovat potvrzený 3px vzduch z 658AL. */
+    /* Jen malý vzduch pod posledním řádkem štítků. */
     padding-bottom: 3px !important;
-    /* Starý neviditelný stín už nepoužíváme. */
     box-shadow: none !important;
   }
 
-  body:has(#notesModuleButton.active) #notesTagsSoftFade {
-    display: block;
-    width: 100%;
-    height: 5px;
-    margin: -1px 0 0;
-    background: linear-gradient(
+  body:has(#notesModuleButton.active) #pinnedCards.pinnedCards {
+    /* 1:1 princip z mobilního Plánu (#calendarDayItems). */
+    -webkit-mask-image: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--color-border) 62%, transparent) 0%,
-      color-mix(in srgb, var(--color-accent) 18%, transparent) 46%,
-      transparent 100%
+      transparent 0,
+      black 20px,
+      black 100%
     );
-    filter: blur(1.6px);
-    opacity: 0.82;
-    pointer-events: none;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black 20px,
+      black 100%
+    );
   }
 }
