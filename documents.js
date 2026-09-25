@@ -3164,8 +3164,12 @@
     overlay.classList.add(`reader-theme-${n.theme}`);
     overlay.classList.add(`reader-font-${n.font}`);
 
-    const zaklad = window.innerWidth <= 520 ? 16 : 17;
-    content.style.setProperty('--epub-reader-font-size', `${(zaklad * n.fontSize / 100).toFixed(2)}px`);
+    // Reader ma dve nezavisle vrstvy velikosti:
+    // 1) zaklad 100 % z Text Visual Labu / CSS v rem,
+    // 2) lokalni uzivatelske procento 75–160 % v Nastaveni cteni.
+    // Stara absolutni px promenna by prebijela globalni REM scaling, proto ji odstran.
+    content.style.removeProperty('--epub-reader-font-size');
+    content.style.setProperty('--epub-reader-font-scale', (n.fontSize / 100).toFixed(3));
     aktualizujEpubReaderNastaveniUi();
   }
 

@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – TEXTY / živé ladění typografie
-   PATCH 658BH
+   PATCH 658BK
    - oddělené hodnoty Mobil / PC
    - všechny hodnoty v rem
    - žádný zásah do dat, syncu ani editorové logiky
@@ -13,14 +13,15 @@
   const DESKTOP_MEDIA = "(min-width: 1100px) and (hover: hover) and (pointer: fine)";
   const desktopMql = window.matchMedia(DESKTOP_MEDIA);
 
-  const E = (id, label, selector, vychozi, min = 0.5, max = 2.8, step = 0.05) => ({
+  const E = (id, label, selector, vychozi, min = 0.5, max = 2.8, step = 0.05, property = "font-size") => ({
     id,
     label,
     selector,
     vychozi,
     min,
     max,
-    step
+    step,
+    property
   });
 
   const KONFIG = {
@@ -113,7 +114,7 @@
             E("documentsFilters", "Dokumenty – filtry PDF / DOCX / EPUB…", ".documentsFileFilter, .documentsTrashButton", 0.8),
             E("documentsFileName", "Soubor – název", ".documentsFileMain strong", 0.85),
             E("documentsFileMeta", "Soubor – metadata", ".documentsFileMain small", 0.65),
-            E("readerBody", "Reader / EPUB – text", ".documentsEpubContent", 1.4, 0.7, 2.4),
+            E("readerBody", "Reader / EPUB – základ 100 %", ".documentsEpubContent", 1.4, 0.7, 2.4, 0.05, "--epub-reader-base-size"),
             E("sqlCode", "SQL Reader – kód", ".documentsSqlCode", 0.81)
           ]
         },
@@ -258,7 +259,7 @@
             E("pcDocumentsFilters", "Dokumenty – filtry", ".documentsFileFilter, .documentsTrashButton", 0.95),
             E("pcDocumentsFile", "Soubor – název", ".documentsFileMain strong", 0.88),
             E("pcDocumentsMeta", "Soubor – metadata", ".documentsFileMain small", 0.69),
-            E("pcReaderBody", "Reader / EPUB – text", ".documentsEpubContent", 1.06, 0.7, 2.4)
+            E("pcReaderBody", "Reader / EPUB – základ 100 %", ".documentsEpubContent", 1.06, 0.7, 2.4, 0.05, "--epub-reader-base-size")
           ]
         },
         {
@@ -398,8 +399,9 @@
         for (const item of group.items) {
           const value = stav.values[platform][item.id];
           if (!maCiselnouHodnotu(value)) continue;
+          const property = item.property || "font-size";
           css.push(
-            `${prefixSelector(item.selector, scopes[platform])} { font-size: ${Number(value).toFixed(2)}rem !important; }`
+            `${prefixSelector(item.selector, scopes[platform])} { ${property}: ${Number(value).toFixed(2)}rem !important; }`
           );
         }
       }

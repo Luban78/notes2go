@@ -2089,9 +2089,15 @@ body.documents-epub-viewer-open {
   background: transparent;
 }
 
-/* Velikost a řádkování běžného čtecího textu. */
+/* Velikost a řádkování běžného čtecího textu.
+   658BK: Text Visual Lab určuje základ 100 % v rem a EPUB nastavení
+   čtení ho nezávisle násobí lokálním procentem 75–160 %. */
 .documentsEpubContent {
-  font-size: var(--epub-reader-font-size, 1.0625rem);
+  --epub-reader-default-base: 1.0625rem;
+  font-size: calc(
+    var(--epub-reader-base-size, var(--epub-reader-default-base))
+    * var(--epub-reader-font-scale, 1)
+  );
 }
 
 .documentsEpubViewer.reader-line-compact .documentsEpubContent { line-height: 1.45; }
@@ -2218,7 +2224,7 @@ body.documents-epub-viewer-open {
 
 @media (max-width: 520px) {
   .documentsEpubContent {
-    font-size: var(--epub-reader-font-size, 1rem);
+    --epub-reader-default-base: 1rem;
   }
 
   .documentsEpubHeaderActions {
