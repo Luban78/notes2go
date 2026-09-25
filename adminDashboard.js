@@ -2043,6 +2043,19 @@
     }
   );
 
+  /* PATCH 658AW – auth-valid je definitivní signál, že Supabase session
+   * i serverem povolený účet jsou připravené. Admin kontrolu proto
+   * opakujeme i zde; stále bez lokálního bypassu, rozhoduje pouze RPC. */
+  window.addEventListener(
+    "lubanote:auth-valid",
+    () => {
+      ucetAktivni = true;
+      if (navigator.onLine) {
+        overAdmina();
+      }
+    }
+  );
+
   window.addEventListener(
     "lubanote:splash-ready",
     () => {
