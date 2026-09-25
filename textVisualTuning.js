@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – TEXTY / živé ladění typografie
-   PATCH 658AX
+   PATCH 658AZ
    - oddělené hodnoty Mobil / PC
    - všechny hodnoty v rem
    - žádný zásah do dat, syncu ani editorové logiky
@@ -8,7 +8,7 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteTextVisualTuningV2";
+  const KLIC = "lubanoteTextVisualTuningV3";
   const STYLE_ID = "ln-text-visual-style";
   const DESKTOP_MEDIA = "(min-width: 1100px) and (hover: hover) and (pointer: fine)";
   const desktopMql = window.matchMedia(DESKTOP_MEDIA);
@@ -31,11 +31,11 @@
           id: "navigation",
           label: "Navigace a hlavní plocha",
           items: [
-            E("modules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 0.80),
-            E("search", "Hledání", "#searchNotes", 1.00),
-            E("primaryFilter", "Hlavní filtr – Vše", ".categoryTabs > .categoryTab:not(.categoryTabIconOnly)", 0.94),
+            E("modules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 0.85),
+            E("search", "Hledání", "#searchNotes", 0.95),
+            E("primaryFilter", "Hlavní filtr – Vše", ".categoryTabs > .categoryTab:not(.categoryTabIconOnly)", 1.1),
             E("tags", "Vlastní štítky", "#tagFilterButtons .categoryTab", 0.94),
-            E("mainMenu", "Hlavní menu – položky", ".mainMenuLabel", 0.94),
+            E("mainMenu", "Hlavní menu – položky", ".mainMenuLabel", 0.9),
             E("mainMenuInfo", "Hlavní menu – pomocný text", ".accountPlanMenuInfo, .accountPlanMenuBadge", 0.78),
             E("traffic", "RX / TX / E panel", ".syncTrafficBar", 0.63),
             E("toast", "Krátké hlášky / toast", ".appToast", 0.88)
@@ -45,12 +45,12 @@
           id: "notes",
           label: "Poznámky a karty",
           items: [
-            E("cardTitle", "Karta – název", ".taskCard h3", 1.13),
-            E("cardBody", "Karta – text", ".taskCard .taskNoteText", 1.00),
+            E("cardTitle", "Karta – název", ".taskCard h3", 0.9),
+            E("cardBody", "Karta – text", ".taskCard .taskNoteText", 1),
             E("cardMeta", "Karta – datum / metadata", ".taskCard p:not(.taskNoteText)", 0.81),
             E("cardTag", "Karta – štítek", ".taskTag", 0.81),
-            E("cardMenu", "Menu karty", ".cardMenu button", 1.00),
-            E("noResults", "Prázdný výsledek hledání", "#noSearchResults", 1.00),
+            E("cardMenu", "Menu karty", ".cardMenu button", 1),
+            E("noResults", "Prázdný výsledek hledání", "#noSearchResults", 1),
             E("backlinksTitle", "Odkazy – nadpis", ".noteBacklinksTitle", 0.82),
             E("backlinksName", "Odkazy – název poznámky", ".noteBacklinkName", 0.88)
           ]
@@ -59,29 +59,29 @@
           id: "editor",
           label: "Editor",
           items: [
-            E("editorTitle", "Editor – název poznámky", "#modalTitle", 1.50, 0.8, 3.2),
-            E("editorBody", "Editor – běžný text", ".ln-v2-editor", 1.00, 0.7, 2.4),
+            E("editorTitle", "Editor – název poznámky", "#modalTitle", 1.5, 0.8, 3.2),
+            E("editorBody", "Editor – běžný text", ".ln-v2-editor", 1.15, 0.7, 2.4),
             E("editorDateTime", "Editor – datum / čas", ".editorTopBar .dateTimePickerButton > span:last-child", 0.88),
-            E("editorToolbar", "Editor – text tlačítek panelu", ".editorTopBar .editorToolbarPanel .editorPanelVolba", 1.00),
+            E("editorToolbar", "Editor – text tlačítek panelu", ".editorTopBar .editorToolbarPanel .editorPanelVolba", 1),
             E("selectionMenu", "Výběr textu – Vyjmout / Kopírovat / Vložit", ".selectionMenu button", 0.81),
-            E("heading1", "Editor – Nadpis H1", ".editorNadpis.h1", 2.00, 1.0, 3.5),
-            E("heading2", "Editor – Nadpis H2", ".editorNadpis.h2", 1.60, 0.9, 3.2),
-            E("heading3", "Editor – Nadpis H3", ".editorNadpis.h3", 1.30, 0.8, 2.8),
-            E("editorLinkDialog", "Editor – dialog odkazu", ".editorLinkDialog input, .editorLinkDialog textarea, .editorLinkActions button", 1.00)
+            E("heading1", "Editor – Nadpis H1", ".editorNadpis.h1", 2, 1.0, 3.5),
+            E("heading2", "Editor – Nadpis H2", ".editorNadpis.h2", 1.6, 0.9, 3.2),
+            E("heading3", "Editor – Nadpis H3", ".editorNadpis.h3", 1.3, 0.8, 2.8),
+            E("editorLinkDialog", "Editor – dialog odkazu", ".editorLinkDialog input, .editorLinkDialog textarea, .editorLinkActions button", 1)
           ]
         },
         {
           id: "planner",
           label: "Plán / Kalendář",
           items: [
-            E("plannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1.00),
-            E("calendarMonth", "Kalendář – měsíc", ".calendarHeader h2", 1.19),
+            E("plannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1),
+            E("calendarMonth", "Kalendář – měsíc", ".calendarHeader h2", 1.1),
             E("calendarWeekdays", "Kalendář – Po / Út / St…", ".calendarWeekdays", 0.81),
-            E("calendarDay", "Kalendář – čísla dnů", ".calendarDay", 1.00),
-            E("calendarSelectedDate", "Plán – datum vybraného dne", ".calendarSelectedDateButton", 0.80),
-            E("calendarWeek", "Plán – číslo týdne", ".calendarWeekNumber", 0.80),
+            E("calendarDay", "Kalendář – čísla dnů", ".calendarDay", 0.9),
+            E("calendarSelectedDate", "Plán – datum vybraného dne", ".calendarSelectedDateButton", 0.9),
+            E("calendarWeek", "Plán – číslo týdne", ".calendarWeekNumber", 0.9),
             E("agendaHeading", "Agenda – nadpis", ".calendarAgenda h3", 1.06),
-            E("agendaItem", "Agenda – úkoly", ".calendarAgendaItem", 1.00),
+            E("agendaItem", "Agenda – úkoly", ".calendarAgendaItem", 1),
             E("plannerQuickTitle", "Rychlý panel úkolu – nadpis", ".reminderQuickPlannerTask .reminderQuickHeader h3", 1.18),
             E("plannerQuickButtons", "Rychlý panel úkolu – tlačítka", ".reminderQuickPlannerTask button", 0.95)
           ]
@@ -94,26 +94,26 @@
             E("reminderStatus", "Aktivní / Po termínu", ".remindersStatusTab", 0.88),
             E("reminderGroup", "Nadpis skupiny – Dnes / Zítra", ".remindersGroup h3", 0.88),
             E("reminderTime", "Připomínka – čas", ".reminderItemTime", 0.94),
-            E("reminderTitle", "Připomínka – název", ".reminderItemTitle", 1.00),
+            E("reminderTitle", "Připomínka – název", ".reminderItemTitle", 1),
             E("reminderPreview", "Připomínka – náhled textu", ".reminderItemPreview", 0.88),
             E("reminderQuickTitle", "Rychlá připomínka – nadpis", ".reminderQuickHeader h3", 1.05),
             E("reminderQuickLabels", "Rychlá připomínka – popisky", ".reminderQuickLabel, .reminderQuickDateTime label", 0.78),
-            E("reminderQuickButtons", "Rychlá připomínka – tlačítka", ".reminderDelayGrid button, .reminderQuickPrimary, .reminderQuickFooter button", 0.90)
+            E("reminderQuickButtons", "Rychlá připomínka – tlačítka", ".reminderDelayGrid button, .reminderQuickPrimary, .reminderQuickFooter button", 0.9)
           ]
         },
         {
           id: "documents",
           label: "Dokumenty",
           items: [
-            E("documentsHeading", "Dokumenty – nadpis sekce", ".documentsV1SectionHeader h3", 1.06),
-            E("documentsSubtext", "Dokumenty – pomocný text sekce", ".documentsV1SectionHeader small, .documentsFilesSectionHeader small", 0.66),
-            E("documentsFolder", "Složky – název", ".documentsFolderCardName", 0.88),
-            E("documentsFolderMeta", "Složky – metadata", ".documentsFolderCard small", 0.66),
-            E("documentsSearch", "Dokumenty – hledání", ".documentsSearchBox input", 0.88),
-            E("documentsFilters", "Dokumenty – filtry PDF / DOCX / EPUB…", ".documentsFileFilter, .documentsTrashButton", 0.69),
-            E("documentsFileName", "Soubor – název", ".documentsFileMain strong", 0.84),
-            E("documentsFileMeta", "Soubor – metadata", ".documentsFileMain small", 0.66),
-            E("readerBody", "Reader / EPUB – text", ".documentsEpubContent", 1.00, 0.7, 2.4),
+            E("documentsHeading", "Dokumenty – nadpis sekce", ".documentsV1SectionHeader h3", 1),
+            E("documentsSubtext", "Dokumenty – pomocný text sekce", ".documentsV1SectionHeader small, .documentsFilesSectionHeader small", 0.8),
+            E("documentsFolder", "Složky – název", ".documentsFolderCardName", 0.95),
+            E("documentsFolderMeta", "Složky – metadata", ".documentsFolderCard small", 0.8),
+            E("documentsSearch", "Dokumenty – hledání", ".documentsSearchBox input", 0.85),
+            E("documentsFilters", "Dokumenty – filtry PDF / DOCX / EPUB…", ".documentsFileFilter, .documentsTrashButton", 0.8),
+            E("documentsFileName", "Soubor – název", ".documentsFileMain strong", 0.85),
+            E("documentsFileMeta", "Soubor – metadata", ".documentsFileMain small", 0.65),
+            E("readerBody", "Reader / EPUB – text", ".documentsEpubContent", 1.4, 0.7, 2.4),
             E("sqlCode", "SQL Reader – kód", ".documentsSqlCode", 0.81)
           ]
         },
@@ -121,14 +121,14 @@
           id: "settings",
           label: "Nastavení a dialogy",
           items: [
-            E("settingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.50),
+            E("settingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.5),
             E("settingsSection", "Nastavení – nadpis sekce", ".settingsSection h3", 0.81),
-            E("settingsButtons", "Nastavení – položky / tlačítka", ".settingsSection button, .fontSizeSetting", 1.00),
+            E("settingsButtons", "Nastavení – položky / tlačítka", ".settingsSection button, .fontSizeSetting", 1),
             E("choiceTitle", "Výběrový dialog – nadpis", ".choiceDialogTitle", 1.25),
             E("choiceOption", "Výběrový dialog – položky", ".choiceDialogOption", 1.06),
-            E("manageTag", "Správa štítků – názvy", ".manageTagName", 1.00),
+            E("manageTag", "Správa štítků – názvy", ".manageTagName", 1),
             E("dialogTitle", "Obecný dialog – nadpis", ".appMessageDialog h3, .deleteConfirmBox h3", 1.25),
-            E("dialogBody", "Obecný dialog – text", ".appMessageDialog p, .deleteConfirmBox p", 1.00)
+            E("dialogBody", "Obecný dialog – text", ".appMessageDialog p, .deleteConfirmBox p", 1)
           ]
         },
         {
@@ -139,7 +139,7 @@
             E("keyboardSuggestions", "Klávesnice – predikce", ".ln-lk-suggestion", 0.94),
             E("keyboardKeys", "Klávesnice – písmena", ".ln-lk-key", 1.06),
             E("keyboardNumbers", "Klávesnice – číselná řada", ".ln-lk-standard-number-row .ln-lk-key", 0.94),
-            E("keyboardBottom", "Klávesnice – spodní funkční řada", ".ln-lk-bottom-standard .ln-lk-key, .ln-lk-fn, .ln-lk-nav, .ln-lk-back, .ln-lk-enter", 1.00),
+            E("keyboardBottom", "Klávesnice – spodní funkční řada", ".ln-lk-bottom-standard .ln-lk-key, .ln-lk-fn, .ln-lk-nav, .ln-lk-back, .ln-lk-enter", 1),
             E("keyboardCandidate", "Klávesnice – kandidáti / diakritika", ".ln-lk-candidate", 1.06)
           ]
         },
@@ -150,9 +150,9 @@
             E("sharingTitle", "Sdílení – nadpisy", ".sharingModalHeader h3, .sharingIdentityHeader h3", 1.19),
             E("sharingBody", "Sdílení – popis", ".sharingModalDescription, .sharingIdentityDescription", 0.88),
             E("sharingButtons", "Sdílení – malá tlačítka", ".sharingSmallButton", 0.88),
-            E("chatContact", "Chat – kontakt / název", ".chatContactText strong, .chatThreadTitleWrap strong", 1.00),
+            E("chatContact", "Chat – kontakt / název", ".chatContactText strong, .chatThreadTitleWrap strong", 1),
             E("chatMeta", "Chat – stav / náhled", ".chatContactText span, .chatStatus, .chatThreadStatus", 0.81),
-            E("chatMessage", "Chat – text zprávy", ".chatMessageBody", 1.00),
+            E("chatMessage", "Chat – text zprávy", ".chatMessageBody", 1),
             E("chatMessageMeta", "Chat – čas zprávy", ".chatMessageMeta", 0.63)
           ]
         },
@@ -160,11 +160,11 @@
           id: "admin",
           label: "Login / Admin / Debug",
           items: [
-            E("loginBrand", "Login – LubaNote", ".loginBrand", 1.50),
+            E("loginBrand", "Login – LubaNote", ".loginBrand", 1.5),
             E("loginTitle", "Login – nadpis", ".loginCard h2", 1.75),
-            E("loginFields", "Login – pole a tlačítka", ".loginCard input, .loginCard button", 1.00),
+            E("loginFields", "Login – pole a tlačítka", ".loginCard input, .loginCard button", 1),
             E("adminTitle", "Admin Dashboard – nadpis", ".adminDashboardHeader h2", 1.35),
-            E("adminToolTitle", "Admin Dashboard – názvy nástrojů", ".adminToolText strong", 1.00),
+            E("adminToolTitle", "Admin Dashboard – názvy nástrojů", ".adminToolText strong", 1),
             E("adminToolDesc", "Admin Dashboard – popisy", ".adminToolText small", 0.78),
             E("debugHub", "Debug Hub – základní text", "#ln-debug-hub", 0.75),
             E("visualDebug", "Visual Debug – pole a ovládání", ".ln-vd-field, .ln-vd-select, .ln-vd-number, .ln-vd-selector", 0.75)
@@ -180,8 +180,8 @@
           id: "desktopNavigation",
           label: "PC – horní navigace",
           items: [
-            E("pcModules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 1.00),
-            E("pcSearch", "Hledání", "#searchNotes", 1.00),
+            E("pcModules", "Horní moduly – Poznámky / Plán / Dokumenty", ".moduleTabText", 1),
+            E("pcSearch", "Hledání", "#searchNotes", 1),
             E("pcPrimaryFilter", "Rychlé filtry", ".desktopCategoryActions .categoryTab:not(.categoryTabIconOnly), .categoryTabs > .categoryTab:not(.categoryTabIconOnly)", 0.95),
             E("pcTags", "Vlastní štítky", "#tagFilterButtons .categoryTab", 0.95),
             E("pcTraffic", "RX / TX / E panel", ".syncTrafficBar", 0.63)
@@ -202,7 +202,7 @@
           label: "PC – Poznámky a karty",
           items: [
             E("pcCardTitle", "Karta – název", ".taskCard h3", 1.13),
-            E("pcCardBody", "Karta – text", ".taskCard .taskNoteText", 1.00),
+            E("pcCardBody", "Karta – text", ".taskCard .taskNoteText", 1),
             E("pcCardMeta", "Karta – datum / metadata", ".taskCard p:not(.taskNoteText)", 0.81),
             E("pcCardTag", "Karta – štítek", ".taskTag", 0.81),
             E("pcMainMenu", "Menu / dialog – položky", ".mainMenuLabel", 0.94)
@@ -212,9 +212,9 @@
           id: "desktopEditor",
           label: "PC – Editor",
           items: [
-            E("pcEditorTitle", "Editor – název", "#modalTitle", 1.50),
-            E("pcEditorBody", "Editor – běžný text", ".ln-v2-editor", 1.00),
-            E("pcEditorToolbar", "Editor – panel nástrojů", ".editorToolbarPanel .editorPanelVolba", 1.00),
+            E("pcEditorTitle", "Editor – název", "#modalTitle", 1.5),
+            E("pcEditorBody", "Editor – běžný text", ".ln-v2-editor", 1),
+            E("pcEditorToolbar", "Editor – panel nástrojů", ".editorToolbarPanel .editorPanelVolba", 1),
             E("pcSelectionMenu", "Výběr textu", ".selectionMenu button", 0.81)
           ]
         },
@@ -222,10 +222,10 @@
           id: "desktopPlanner",
           label: "PC – Plán / Kalendář",
           items: [
-            E("pcPlannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1.00),
-            E("pcCalendarMonth", "Kalendář – měsíc", ".calendarHeader h2", 1.40),
+            E("pcPlannerTabs", "Kalendář / Připomínky", ".plannerSubnavButton > span:last-child", 1),
+            E("pcCalendarMonth", "Kalendář – měsíc", ".calendarHeader h2", 1.4),
             E("pcCalendarWeekdays", "Kalendář – Po / Út / St…", ".calendarWeekdays", 0.95),
-            E("pcCalendarDay", "Kalendář – čísla dnů", ".calendarDay", 1.00),
+            E("pcCalendarDay", "Kalendář – čísla dnů", ".calendarDay", 1),
             E("pcAgendaHeading", "Agenda – nadpis", ".calendarAgenda h3", 0.98),
             E("pcAgendaItem", "Agenda – úkol", ".calendarAgendaItem", 0.94),
             E("pcSelectedDate", "Agenda – datum dne", ".calendarSelectedDateButton", 0.94),
@@ -242,8 +242,8 @@
             E("pcReminderCount", "Připomínky – počty ve filtrech", ".desktopReminderFilterCount", 0.75),
             E("pcReminderToolbar", "Připomínky – horní ovládání", ".desktopReminderTimelineActions > button", 0.88),
             E("pcReminderGroup", "Připomínky – datum skupiny", ".desktopReminderDayTitle", 1.06),
-            E("pcReminderTime", "Připomínky – čas", ".desktopReminderTimelineRow .reminderItemTime", 1.00),
-            E("pcReminderTitle", "Připomínky – název", ".desktopReminderTimelineRow .reminderItemTitle", 1.00),
+            E("pcReminderTime", "Připomínky – čas", ".desktopReminderTimelineRow .reminderItemTime", 1),
+            E("pcReminderTitle", "Připomínky – název", ".desktopReminderTimelineRow .reminderItemTitle", 1),
             E("pcReminderPreview", "Připomínky – náhled", ".desktopReminderTimelineRow .reminderItemPreview", 0.88),
             E("pcReminderBadges", "Připomínky – Opakované / Domov / Práce", ".desktopReminderAreaBadge, .desktopReminderRepeatBadge", 0.75)
           ]
@@ -265,14 +265,14 @@
           id: "desktopSettings",
           label: "PC – Nastavení / Admin / Dialogy",
           items: [
-            E("pcSettingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.50),
+            E("pcSettingsTitle", "Nastavení – hlavní nadpis", ".settingsHeader h2", 1.5),
             E("pcSettingsSection", "Nastavení – nadpis sekce", ".settingsSection h3", 0.81),
-            E("pcSettingsButtons", "Nastavení – položky", ".settingsSection button", 1.00),
+            E("pcSettingsButtons", "Nastavení – položky", ".settingsSection button", 1),
             E("pcAdminTitle", "Admin Dashboard – nadpis", ".adminDashboardHeader h2", 1.35),
-            E("pcAdminToolTitle", "Admin Dashboard – nástroje", ".adminToolText strong", 1.00),
+            E("pcAdminToolTitle", "Admin Dashboard – nástroje", ".adminToolText strong", 1),
             E("pcAdminToolDesc", "Admin Dashboard – popisy", ".adminToolText small", 0.78),
             E("pcDialogTitle", "Dialogy – nadpis", ".appMessageDialog h3, .choiceDialogTitle", 1.25),
-            E("pcDialogBody", "Dialogy – text", ".appMessageDialog p, .choiceDialogOption", 1.00)
+            E("pcDialogBody", "Dialogy – text", ".appMessageDialog p, .choiceDialogOption", 1)
           ]
         }
       ]
@@ -297,7 +297,7 @@
     for (const platform of ["mobile", "desktop"]) {
       for (const group of KONFIG[platform].groups) {
         for (const item of group.items) {
-          values[platform][item.id] = null;
+          values[platform][item.id] = item.vychozi;
         }
       }
     }
@@ -343,7 +343,7 @@
             const value = saved?.values?.[platform]?.[item.id];
             base.values[platform][item.id] = maCiselnouHodnotu(value)
               ? clamp(value, item.min, item.max, item.vychozi)
-              : null;
+              : item.vychozi;
           }
         }
       }
@@ -444,7 +444,7 @@
   function resetPolozky(platform, id) {
     const item = najdiPolozku(platform, id);
     if (!item) return false;
-    stav.values[platform][id] = null;
+    stav.values[platform][id] = item.vychozi;
     oznam();
     return true;
   }
@@ -453,7 +453,7 @@
     const group = KONFIG?.[platform]?.groups?.find((g) => g.id === groupId);
     if (!group) return false;
     for (const item of group.items) {
-      stav.values[platform][item.id] = null;
+      stav.values[platform][item.id] = item.vychozi;
     }
     oznam();
     return true;
@@ -463,7 +463,7 @@
     const groups = KONFIG?.[platform]?.groups || [];
     for (const group of groups) {
       for (const item of group.items) {
-        stav.values[platform][item.id] = null;
+        stav.values[platform][item.id] = item.vychozi;
       }
     }
     oznam();
