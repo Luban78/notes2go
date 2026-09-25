@@ -14378,22 +14378,25 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }
 
 /* ============================================================
-   PATCH 658AO – POZNÁMKY / STEJNÝ SOFT EDGE JAKO V PLÁNU
+   PATCH 658AP – POZNÁMKY / SOFT EDGE JEN PŘI SCROLLU
    ------------------------------------------------------------
-   Nepoužíváme box-shadow ani dekorativní překryv. Karty dostanou
-   stejnou horní masku jako #calendarDayItems v Plánu, takže obsah
-   plynule přechází z průhledna bez barevného fleku. Drag/scroll
-   štítků zůstává beze změny.
+   Stejný princip horní masky jako v Plánu, ale na správné vrstvě:
+   scrollovacím viewportu <main class="app">. Na úplném začátku je
+   obsah bez masky. Jakmile uživatel začne karty rolovat pod štítky,
+   JS přidá .lubaNotesScrolled a horních 20 px se plynule ztratí.
    ============================================================ */
 @media (max-width: 720px) {
   body:has(#notesModuleButton.active) #tagFilterButtons {
-    /* Jen malý vzduch pod posledním řádkem štítků. */
     padding-bottom: 3px !important;
     box-shadow: none !important;
   }
 
-  body:has(#notesModuleButton.active) #pinnedCards.pinnedCards {
-    /* 1:1 princip z mobilního Plánu (#calendarDayItems). */
+  body:has(#notesModuleButton.active) main.app {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  body:has(#notesModuleButton.active) main.app.lubaNotesScrolled {
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0,
