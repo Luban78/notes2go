@@ -14378,12 +14378,11 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }
 
 /* ============================================================
-   PATCH 658AP – POZNÁMKY / SOFT EDGE JEN PŘI SCROLLU
+   PATCH 658AQ – POZNÁMKY / STÁLÝ JEMNÝ SOFT EDGE
    ------------------------------------------------------------
-   Stejný princip horní masky jako v Plánu, ale na správné vrstvě:
-   scrollovacím viewportu <main class="app">. Na úplném začátku je
-   obsah bez masky. Jakmile uživatel začne karty rolovat pod štítky,
-   JS přidá .lubaNotesScrolled a horních 20 px se plynule ztratí.
+   Stejný princip horní masky jako v Plánu, ale bez JS přepínání.
+   Maska je aktivní už od startu, takže při prvním scrollu nic
+   neproblikne. Výška fade je zmenšená z 20 px na jemných 10 px.
    ============================================================ */
 @media (max-width: 720px) {
   body:has(#notesModuleButton.active) #tagFilterButtons {
@@ -14392,21 +14391,16 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   }
 
   body:has(#notesModuleButton.active) main.app {
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-
-  body:has(#notesModuleButton.active) main.app.lubaNotesScrolled {
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 20px,
+      black 10px,
       black 100%
     );
     mask-image: linear-gradient(
       to bottom,
       transparent 0,
-      black 20px,
+      black 10px,
       black 100%
     );
   }
