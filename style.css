@@ -14376,3 +14376,23 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     --card-ruzova: #553447;
   }
 }
+
+
+/* ============================================================
+   PATCH 658AL – POZNÁMKY / JEMNÁ HRANA POD VLASTNÍMI ŠTÍTKY
+   ------------------------------------------------------------
+   Mobilní polish: 3 px vzduchu pod řadou vlastních štítků +
+   velmi jemný theme-aware soft shadow. Bez pseudo-elementu,
+   takže horizontální scroll / drag štítků zůstává nedotčený.
+   ============================================================ */
+@media (max-width: 720px) {
+  body:has(#notesModuleButton.active) #tagFilterButtons {
+    padding-bottom: 3px !important;
+    box-shadow:
+      0 7px 10px -10px color-mix(
+        in srgb,
+        var(--color-border) 76%,
+        var(--color-accent) 24%
+      );
+  }
+}
