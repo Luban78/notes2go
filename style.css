@@ -14672,22 +14672,41 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 
 
 /* ==========================================================
-   PATCH 658BB – MOBILE MAIN MENU NO TOUCH/HOVER HIGHLIGHT
+   PATCH 658BC – MOBILE MAIN MENU LUBANOTE TOUCH FEEDBACK
    ----------------------------------------------------------
-   Android/WebView po tapnutí drží :hover/:focus a vytváří
-   modrý obdélník přes celý řádek. Na mobilu servisního menu
-   necháváme položky bez barevného zvýraznění.
-   PC hover zůstává beze změny.
+   Systémový Android/WebView highlight zůstává vypnutý.
+   Mobilní menu ale při fyzickém stisku dostane vlastní krátkou
+   theme-aware odezvu a lehké stlačení. Hover/focus nesmí po
+   tapnutí zůstat viset. PC hover zůstává beze změny.
    ========================================================== */
 @media (max-width: 1099px) {
-  #mainMenu button,
-  #mainMenu button:hover,
-  #mainMenu button:active,
-  #mainMenu button:focus,
-  #mainMenu button:focus-visible {
+  #mainMenu button {
     background: transparent !important;
     -webkit-tap-highlight-color: transparent !important;
     outline: none !important;
     box-shadow: none !important;
+    transition:
+      background-color 70ms ease,
+      transform 70ms ease,
+      opacity 70ms ease;
+    transform-origin: center;
+  }
+
+  #mainMenu button:hover,
+  #mainMenu button:focus,
+  #mainMenu button:focus-visible {
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  #mainMenu button:active {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 11%,
+      var(--color-surface) 89%
+    ) !important;
+    transform: scale(0.985);
+    opacity: 0.92;
   }
 }
