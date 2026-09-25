@@ -14736,3 +14736,80 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
       opacity 85ms ease !important;
   }
 }
+
+/* ==========================================================
+   PATCH 658BF – GLOBAL FONT SCALE LAYOUT GUARDS
+   ----------------------------------------------------------
+   Po 658BE se UI skutečně škáluje přes root rem. Tyto prvky
+   proto nesmí zůstat svázané pevnou px výškou/šířkou:
+   - horní moduly musí růst s textem,
+   - vlastní štítky musí zůstat vertikálně vycentrované,
+   - čas v mobilní agendě musí mít vlastní šířku podle obsahu.
+   ========================================================== */
+
+/* Vlastní štítky – společné centrování pro APK i web/PC.
+   Nezasahuje do hlavních filtrů Vše / ikony. */
+#tagFilterButtons .categoryTab {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box;
+  line-height: 1.1 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+@media (max-width: 899px) {
+  /* Horní Poznámky / Plán / Dokumenty:
+     52 px zůstává minimem, ale při větším globálním fontu
+     se tlačítko samo zvětší a text už se neodřízne. */
+  .moduleTab {
+    height: auto !important;
+    min-height: max(52px, calc(2.15rem + 22px)) !important;
+    padding-top: max(5px, 0.28rem) !important;
+    padding-bottom: max(5px, 0.28rem) !important;
+    box-sizing: border-box;
+  }
+
+  .moduleTabText {
+    line-height: 1.12 !important;
+    padding-bottom: 0.04em;
+  }
+
+  /* Notes Visual Lab může nastavovat vlastní výšku modulů.
+     Ta je nově minimální výška, nikoli tvrdý strop pro text. */
+  body:has(#notesModuleButton.active) .moduleTab {
+    height: auto !important;
+    min-height: max(
+      var(--luba-notes-modules-size, 52px),
+      calc(2.15rem + 22px)
+    ) !important;
+  }
+
+  /* Stejná ochrana pro vlastní štítky: při velkém textu mohou
+     nepatrně vyrůst místo oříznutí, text zůstává uprostřed. */
+  body:has(#notesModuleButton.active) #tagFilterButtons .categoryTab {
+    height: max(
+      var(--luba-notes-tags-size, 43px),
+      calc(1.1em + 12px)
+    ) !important;
+    min-height: max(
+      var(--luba-notes-tags-size, 43px),
+      calc(1.1em + 12px)
+    ) !important;
+  }
+
+  /* Mobilní agenda – pevný 58px časový sloupec byl po zvětšení
+     root rem příliš úzký a čas se lepil na název úkolu. */
+  #calendarDayItems .calendarAgendaItem {
+    grid-template-columns: max-content minmax(0, 1fr) 42px !important;
+    column-gap: max(10px, 0.7rem) !important;
+  }
+
+  #calendarDayItems .calendarAgendaTime {
+    min-width: 4.5ch;
+    white-space: nowrap;
+    padding-right: 0.12rem;
+    box-sizing: border-box;
+  }
+}

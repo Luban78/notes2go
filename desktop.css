@@ -2532,3 +2532,24 @@
   body[data-ln-dnv-cards-mode="light"].desktopNotesToolbarA .taskCard { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-cards-border-base,82%), #fff var(--ln-dnv-cards-border-strength,18%)) !important; }
   body[data-ln-dnv-fab-mode="light"]:has(#notesModuleButton.active) .addTaskButton { border-color: color-mix(in srgb, var(--color-border) var(--ln-dnv-fab-border-base,82%), #fff var(--ln-dnv-fab-border-strength,18%)) !important; }
 }
+
+/* ==========================================================
+   PATCH 658BF – DESKTOP TAG VERTICAL ALIGNMENT
+   ----------------------------------------------------------
+   Vlastní štítky mají pevnou výšku z PC Visual Labu. Při změně
+   globálního rem musí text zůstat skutečně uprostřed a případně
+   může tlačítko nepatrně vyrůst místo oříznutí.
+   ========================================================== */
+@media (min-width: 900px) {
+  body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box;
+    line-height: 1.1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    height: max(var(--ln-dnv-tag-height, 43px), calc(1.1em + 12px)) !important;
+    min-height: max(var(--ln-dnv-tag-height, 43px), calc(1.1em + 12px)) !important;
+  }
+}
