@@ -147,7 +147,7 @@
   margin-top: 12px;
   margin-bottom: 5px;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 4px);
+  font-size: calc(1rem - 0.25rem);
   font-weight: 750;
   text-align: center;
 }
@@ -161,7 +161,7 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
 }
 
 .cardQuickTermGrid button.today {
@@ -204,13 +204,13 @@
   display: block;
   margin-bottom: 2px;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 4px);
+  font-size: calc(1rem - 0.25rem);
   font-weight: 700;
 }
 
 .cardQuickTermSwitch strong {
   display: block;
-  font-size: calc(var(--font-size) - 1px);
+  font-size: calc(1rem - 0.0625rem);
   font-weight: 800;
 }
 
@@ -253,7 +253,7 @@
   min-height: 1.1em;
   margin: 8px 2px 0;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 4px);
+  font-size: calc(1rem - 0.25rem);
   line-height: 1.3;
   text-align: center;
 }

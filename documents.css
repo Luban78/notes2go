@@ -38,7 +38,7 @@
 .documentsV1Eyebrow {
   margin-bottom: 2px;
   color: var(--color-accent-text);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 900;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -47,14 +47,14 @@
 .documentsV1Hero h2 {
   margin: 0;
   color: var(--color-text);
-  font-size: clamp(23px, 6vw, 30px);
+  font-size: clamp(1.4375rem, 6vw, 1.875rem);
   line-height: 1.05;
 }
 
 .documentsV1Hero p {
   margin: 3px 0 0;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
 }
 
@@ -104,12 +104,12 @@
 .documentsV1SectionHeader h3 {
   margin: 0;
   color: var(--color-text);
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .documentsV1SectionHeader small {
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .documentsFolderAll {
@@ -156,13 +156,13 @@
 
 .documentsFolderCardIcon {
   grid-row: 1 / 3;
-  font-size: 26px;
+  font-size: 1.625rem;
 }
 
 .documentsFolderCardName {
   min-width: 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -183,7 +183,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -198,7 +198,7 @@
 
 .documentsFoldersEmpty {
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .documentsFoldersEmpty {
@@ -352,7 +352,7 @@
   border-radius: 9px;
   background: #d94545;
   color: #fff;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 950;
 }
 
@@ -368,7 +368,7 @@
 .documentsDragPreviewText strong {
   overflow: hidden;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -377,7 +377,7 @@
 .documentsDragPreviewText small {
   margin-top: 3px;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.25;
 }
 
@@ -394,7 +394,7 @@
   border-radius: 9px;
   background: #d94545;
   color: #fff;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 950;
 }
 
@@ -410,7 +410,7 @@
 .documentsFileMain strong {
   overflow: hidden;
   color: var(--color-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -418,12 +418,12 @@
 .documentsFileMain small {
   margin-top: 2px;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .documentsFileOpen {
   color: var(--color-accent-text);
-  font-size: 26px;
+  font-size: 1.625rem;
   line-height: 1;
 }
 
@@ -436,7 +436,7 @@
 .documentsEmptyIcon {
   display: block;
   margin-bottom: 6px;
-  font-size: 32px;
+  font-size: 2rem;
 }
 
 .documentsFloatingAdd {
@@ -453,7 +453,7 @@
   border-radius: 50%;
   background: var(--color-accent);
   color: var(--color-on-accent);
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 500;
   box-shadow: 0 10px 24px rgba(0,0,0,.22);
 }
@@ -486,18 +486,18 @@
 }
 
 .documentsFolderIcon {
-  font-size: 40px;
+  font-size: 2.5rem;
 }
 
 .documentsFolderDialog h3 {
   margin: 4px 0;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 .documentsFolderDialog p {
   margin: 0 0 16px;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .documentsFolderDialog label {
@@ -509,7 +509,7 @@
   display: block;
   margin: 0 0 6px 4px;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 850;
   text-transform: uppercase;
 }
@@ -524,7 +524,7 @@
   outline: none;
   background: var(--color-background);
   color: var(--color-text);
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .documentsFolderDialog input:focus {
@@ -589,7 +589,7 @@
 }
 
 .documentsFolderDeleteIcon {
-  font-size: 36px;
+  font-size: 2.25rem;
 }
 
 .documentsFolderDeleteDialog p {
@@ -604,7 +604,7 @@
   .documentsV1Hero .documentsV1Primary {
     width: auto;
     max-width: 142px;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .documentsV1SectionHeader {
@@ -717,7 +717,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  font-size: 27px;
+  font-size: 1.6875rem;
 }
 
 .documentsFolderDragPreviewText {
@@ -732,7 +732,7 @@
 .documentsFolderDragPreviewText strong {
   overflow: hidden;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -741,7 +741,7 @@
 .documentsFolderDragPreviewText small {
   margin-top: 2px;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 /* ============================================================
@@ -787,7 +787,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -867,7 +867,7 @@
   display: grid;
   place-items: center;
   color: var(--color-text-secondary);
-  font-size: 21px;
+  font-size: 1.3125rem;
   line-height: 1;
 }
 
@@ -880,7 +880,7 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .documentsSearchBox input::placeholder {
@@ -903,7 +903,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1;
 }
 
@@ -939,7 +939,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 850;
   white-space: nowrap;
 }
@@ -991,7 +991,7 @@
   #documentsScreen.documents-search-keyboard-active
   .documentsSearchBox input {
     height: 42px;
-    font-size: 16px;
+    font-size: 1rem;
   }
 }
 
@@ -1134,7 +1134,7 @@
   border-radius: 10px;
   background: #d94545;
   color: #fff;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 950;
 }
 
@@ -1149,13 +1149,13 @@
 
 .documentsAddFileChoice strong {
   color: var(--color-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .documentsAddFileChoice small {
   margin-top: 3px;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.3;
 }
 
@@ -1214,7 +1214,7 @@ body.documents-docx-viewer-open {
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: 32px;
+  font-size: 2rem;
   line-height: 1;
 }
 
@@ -1234,7 +1234,7 @@ body.documents-docx-viewer-open {
   background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   color: var(--color-text);
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1262,7 +1262,7 @@ body.documents-docx-viewer-open {
 .documentsDocxViewerTitle strong {
   overflow: hidden;
   color: var(--color-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1270,7 +1270,7 @@ body.documents-docx-viewer-open {
 .documentsDocxViewerTitle small {
   margin-top: 2px;
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 800;
   letter-spacing: .035em;
   text-transform: uppercase;
@@ -1302,7 +1302,7 @@ body.documents-docx-viewer-open {
   color: #202124;
   box-shadow: 0 10px 34px rgba(0,0,0,.16);
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.52;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -1448,7 +1448,7 @@ body.documents-docx-viewer-open {
     min-height: 100%;
     padding: 20px 16px 28px;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 }
 
@@ -1481,7 +1481,7 @@ body.documents-docx-viewer-open {
   box-shadow: 0 4px 18px rgba(0,0,0,.34);
   backdrop-filter: blur(8px);
   font: inherit;
-  font-size: 34px;
+  font-size: 2.125rem;
   line-height: 1;
 }
 
@@ -1521,7 +1521,7 @@ body.documents-docx-viewer-open {
   color: #202124;
   font: inherit;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.58;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1609,11 +1609,11 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubClose {
-  font-size: 32px;
+  font-size: 2rem;
 }
 
 .documentsEpubTocButton {
-  font-size: 21px;
+  font-size: 1.3125rem;
 }
 
 .documentsEpubTitle {
@@ -1632,20 +1632,20 @@ body.documents-epub-viewer-open {
 
 .documentsEpubTitle strong {
   color: #211e19;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .documentsEpubTitle small {
   margin-top: 1px;
   color: #6f685e;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 
 .documentsEpubChapter {
   margin-top: 2px;
   color: #8a5f2f;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 800;
 }
 
@@ -1676,7 +1676,7 @@ body.documents-epub-viewer-open {
   color: #26221d;
   box-shadow: 0 8px 30px rgba(55, 47, 38, .12);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.68;
   overflow-wrap: anywhere;
 }
@@ -1761,7 +1761,7 @@ body.documents-epub-viewer-open {
   background: #fffaf1;
   color: #2b261f;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
@@ -1772,7 +1772,7 @@ body.documents-epub-viewer-open {
 
 .documentsEpubCounter {
   color: #756d62;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1845,7 +1845,7 @@ body.documents-epub-viewer-open {
   background: transparent;
   color: #514a41;
   font: inherit;
-  font-size: 28px;
+  font-size: 1.75rem;
 }
 
 .documentsEpubTocList {
@@ -1873,14 +1873,14 @@ body.documents-epub-viewer-open {
 
 .documentsEpubTocItem span {
   color: #948777;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
   text-align: center;
 }
 
 .documentsEpubTocItem strong {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1920,7 +1920,7 @@ body.documents-epub-viewer-open {
     min-height: 100%;
     padding: 24px 18px 32px;
     border-radius: 5px;
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .documentsEpubBody {
@@ -1962,7 +1962,7 @@ body.documents-epub-viewer-open {
 
 .documentsEpubSettingsButton {
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 800;
 }
 
@@ -2012,7 +2012,7 @@ body.documents-epub-viewer-open {
   background: transparent;
   color: #514a41;
   font: inherit;
-  font-size: 28px;
+  font-size: 1.75rem;
 }
 
 .documentsEpubSettingsBody {
@@ -2031,7 +2031,7 @@ body.documents-epub-viewer-open {
 
 .documentsEpubSettingLabel {
   color: #746b60;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
 }
 
@@ -2050,7 +2050,7 @@ body.documents-epub-viewer-open {
   background: #f7f2e9;
   color: #2d2822;
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
 }
 
@@ -2069,7 +2069,7 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubFontSizeControl button {
-  font-size: 22px;
+  font-size: 1.375rem;
   line-height: 1;
 }
 
@@ -2080,7 +2080,7 @@ body.documents-epub-viewer-open {
   border-radius: 11px;
   background: #f4eee4;
   color: #302a23;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .documentsEpubSettingsReset {
@@ -2091,7 +2091,7 @@ body.documents-epub-viewer-open {
 
 /* Velikost a řádkování běžného čtecího textu. */
 .documentsEpubContent {
-  font-size: var(--epub-reader-font-size, 17px);
+  font-size: var(--epub-reader-font-size, 1.0625rem);
 }
 
 .documentsEpubViewer.reader-line-compact .documentsEpubContent { line-height: 1.45; }
@@ -2218,7 +2218,7 @@ body.documents-epub-viewer-open {
 
 @media (max-width: 520px) {
   .documentsEpubContent {
-    font-size: var(--epub-reader-font-size, 16px);
+    font-size: var(--epub-reader-font-size, 1rem);
   }
 
   .documentsEpubHeaderActions {
@@ -2249,7 +2249,7 @@ body.documents-epub-viewer-open {
   background: transparent;
   color: #29251f;
   font: inherit;
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1;
 }
 
@@ -2303,7 +2303,7 @@ body.documents-epub-viewer-open {
   background: transparent;
   color: #514a41;
   font: inherit;
-  font-size: 28px;
+  font-size: 1.75rem;
 }
 
 .documentsEpubMarksBody {
@@ -2321,7 +2321,7 @@ body.documents-epub-viewer-open {
   background: #efe4d3;
   color: #6d4722;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 900;
 }
 
@@ -2332,7 +2332,7 @@ body.documents-epub-viewer-open {
 .documentsEpubMarksList h4 {
   margin: 0 0 7px;
   color: #746b60;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: .04em;
 }
@@ -2374,7 +2374,7 @@ body.documents-epub-viewer-open {
   display: block;
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2391,7 +2391,7 @@ body.documents-epub-viewer-open {
   min-width: 0;
   overflow: hidden;
   color: #8a8176;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2409,7 +2409,7 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubMarkDelete {
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 .documentsEpubHighlightRow {
@@ -2417,13 +2417,13 @@ body.documents-epub-viewer-open {
 }
 
 .documentsEpubMarkEditNote {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .documentsEpubMarkType {
   flex: 0 0 auto;
   color: #8a8176;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -2431,7 +2431,7 @@ body.documents-epub-viewer-open {
 .documentsEpubMarksEmpty {
   margin: 8px 0;
   color: #8a8176;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -2468,7 +2468,7 @@ body.documents-epub-viewer-open {
   margin-top: 4px;
   overflow-wrap: anywhere;
   color: #725a3f;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-style: normal;
   line-height: 1.3;
 }
@@ -2519,7 +2519,7 @@ body.documents-epub-viewer-open {
   background: #f7f2e9;
   color: #6f3c31;
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 900;
 }
 
@@ -2531,7 +2531,7 @@ body.documents-epub-viewer-open {
   background: transparent;
   color: #5c554d;
   font: inherit;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 .documentsEpubViewer.is-fullscreen .documentsEpubSelectionBar {
@@ -2621,7 +2621,7 @@ body.documents-epub-viewer-open {
   border-radius: 10px;
   background: transparent;
   font: inherit;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 .documentsEpubNoteQuote {
   margin: 0 0 10px;
@@ -2629,7 +2629,7 @@ body.documents-epub-viewer-open {
   border-radius: 11px;
   background: #f4eee3;
   color: #62584c;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 .documentsEpubNoteInput {
@@ -2839,7 +2839,7 @@ body.documents-epub-viewer-open {
   -webkit-text-fill-color: #eceff4;
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-variant-ligatures: none;
   line-height: 1.55;
   text-align: left;
@@ -2884,7 +2884,7 @@ body.documents-epub-viewer-open {
 .documentsV1Secondary {
   flex: 0 0 auto;
   padding-inline: 11px;
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -2893,12 +2893,12 @@ body.documents-epub-viewer-open {
 }
 
 .documentsFolderCardName {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .documentsFolderCard small {
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.25;
 }
 
@@ -2910,7 +2910,7 @@ body.documents-epub-viewer-open {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -2936,7 +2936,7 @@ body.documents-epub-viewer-open {
 
 .documentsFileMain strong {
   max-width: 100%;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.22;
 }
 
@@ -2944,7 +2944,7 @@ body.documents-epub-viewer-open {
   display: -webkit-box;
   max-width: 100%;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -2962,17 +2962,17 @@ body.documents-epub-viewer-open {
   }
 
   .documentsV1SectionHeader h3 {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .documentsV1SectionHeader small {
-    font-size: 10.5px;
+    font-size: 0.6562rem;
   }
 
   .documentsV1Hero .documentsV1Primary {
     max-width: none;
     padding-inline: 11px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
@@ -3003,7 +3003,7 @@ body.documents-epub-viewer-open {
 }
 
 .documentsV1SectionHeader h3 {
-  font-size: 18px;
+  font-size: 1.125rem;
   line-height: 1.15;
 }
 
@@ -3017,7 +3017,7 @@ body.documents-epub-viewer-open {
   min-height: 34px;
   padding: 0;
   border-radius: 12px;
-  font-size: 23px;
+  font-size: 1.4375rem;
   line-height: 1;
   font-weight: 700;
 }
@@ -3050,21 +3050,21 @@ body.documents-epub-viewer-open {
 }
 
 .documentsFolderCardIcon {
-  font-size: 23px;
+  font-size: 1.4375rem;
 }
 
 .documentsFolderCardName {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .documentsFolderCard small {
-  font-size: 10.5px;
+  font-size: 0.6562rem;
 }
 
 .documentsFolderMenuButton {
   width: 30px;
   height: 30px;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 /* Hlavička souborů je jeden úsporný řádek: Soubory | aktuální pohled. */
@@ -3082,7 +3082,7 @@ body.documents-epub-viewer-open {
   max-width: 55%;
   overflow: hidden;
   color: var(--color-accent-text);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3101,7 +3101,7 @@ body.documents-epub-viewer-open {
 }
 
 .documentsSearchBox input {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .documentsFileFilters {
@@ -3113,7 +3113,7 @@ body.documents-epub-viewer-open {
 .documentsTrashButton {
   min-height: 30px;
   padding-inline: 10px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 /* Soubory jako kompaktní řádky bez zbytečných mezer mezi kartami. */
@@ -3148,13 +3148,13 @@ body.documents-epub-viewer-open {
 }
 
 .documentsFileMain strong {
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   line-height: 1.2;
 }
 
 .documentsFileMain small {
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: 0.6562rem;
   line-height: 1.25;
   -webkit-line-clamp: 1;
 }
@@ -3173,7 +3173,7 @@ body.documents-epub-viewer-open {
   }
 
   .documentsV1SectionHeader h3 {
-    font-size: 17px;
+    font-size: 1.0625rem;
   }
 }
 
@@ -3235,7 +3235,7 @@ body.documents-epub-viewer-open {
   overflow: hidden;
   box-sizing: border-box;
   padding-inline: 2px;
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1;
   letter-spacing: -0.25px;
   white-space: nowrap;
@@ -3334,6 +3334,6 @@ body.documents-epub-viewer-open {
     width: var(--luba-notes-fab-size, 70px) !important;
     height: var(--luba-notes-fab-size, 70px) !important;
     border-radius: var(--luba-notes-fab-radius, 35px) !important;
-    font-size: calc(var(--luba-notes-fab-size, 70px) * 0.44) !important;
+    font-size: calc(var(--luba-notes-fab-size, 4.375rem) * 0.44) !important;
   }
 }

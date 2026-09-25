@@ -95,7 +95,7 @@
 
       #ln-card-drag-lab .ln-cdl-head strong {
         display: block !important;
-        font-size: 17px !important;
+        font-size: 1.0625rem !important;
         line-height: 1.1 !important;
       }
 
@@ -103,7 +103,7 @@
         display: block !important;
         margin-top: 2px !important;
         opacity: .72 !important;
-        font-size: 10px !important;
+        font-size: 0.625rem !important;
       }
 
       #ln-card-drag-lab .ln-cdl-actions {
@@ -119,7 +119,7 @@
         background: var(--color-surface, #0b2635) !important;
         color: var(--color-text, #eef8ff) !important;
         font: inherit !important;
-        font-size: 12px !important;
+        font-size: 0.75rem !important;
         touch-action: manipulation !important;
       }
 
@@ -130,14 +130,14 @@
       }
 
       #ln-card-drag-lab .ln-cdl-test-title {
-        font-size: 14px !important;
+        font-size: 0.875rem !important;
         font-weight: 900 !important;
         line-height: 1.25 !important;
       }
 
       #ln-card-drag-lab .ln-cdl-test-text {
         margin-top: 3px !important;
-        font-size: 10.5px !important;
+        font-size: 0.6562rem !important;
         line-height: 1.3 !important;
         opacity: .82 !important;
       }
@@ -148,7 +148,7 @@
         justify-content: space-between !important;
         gap: 8px !important;
         margin-top: 4px !important;
-        font-size: 10px !important;
+        font-size: 0.625rem !important;
       }
 
       #ln-card-drag-lab .ln-cdl-status {
@@ -207,7 +207,7 @@
         position: absolute !important;
         right: 5px !important;
         bottom: 2px !important;
-        font-size: 7.5px !important;
+        font-size: 0.4688rem !important;
         opacity: .38 !important;
         pointer-events: none !important;
       }
@@ -230,7 +230,7 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 10px !important;
+        font-size: 0.625rem !important;
         font-weight: 900 !important;
         color: var(--color-accent, #20c7d9) !important;
         pointer-events: none !important;
@@ -249,7 +249,7 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 10px !important;
+        font-size: 0.625rem !important;
         font-weight: 900 !important;
         color: var(--color-accent, #20c7d9) !important;
         pointer-events: none !important;
@@ -295,7 +295,7 @@
         border-radius: 11px !important;
         background: var(--color-accent, #20c7d9) !important;
         color: var(--color-accent-text, #001014) !important;
-        font-size: 19px !important;
+        font-size: 1.1875rem !important;
         font-weight: 950 !important;
         font-variant-numeric: tabular-nums !important;
       }
@@ -350,7 +350,7 @@
         margin-bottom: 7px !important;
       }
 
-      #ln-card-drag-lab .ln-cdl-tune-top strong { font-size: 14px !important; }
+      #ln-card-drag-lab .ln-cdl-tune-top strong { font-size: 0.875rem !important; }
 
       #ln-card-drag-lab .ln-cdl-tune-buttons {
         display: flex !important;
@@ -375,13 +375,13 @@
 
       #ln-card-drag-lab .ln-cdl-tune-label {
         min-width: 0 !important;
-        font-size: 11px !important;
+        font-size: 0.6875rem !important;
         font-weight: 750 !important;
       }
 
       #ln-card-drag-lab .ln-cdl-tune-value {
         text-align: right !important;
-        font-size: 11px !important;
+        font-size: 0.6875rem !important;
         font-weight: 900 !important;
         font-variant-numeric: tabular-nums !important;
         white-space: nowrap !important;
@@ -390,7 +390,7 @@
       #ln-card-drag-lab .ln-cdl-tune-row button {
         min-height: 31px !important;
         padding: 2px !important;
-        font-size: 18px !important;
+        font-size: 1.125rem !important;
         line-height: 1 !important;
       }
 
@@ -403,7 +403,7 @@
 
       #ln-card-drag-lab .ln-cdl-tune-hint {
         margin-top: 6px !important;
-        font-size: 9.5px !important;
+        font-size: 0.5938rem !important;
         line-height: 1.3 !important;
         opacity: .72 !important;
       }
@@ -414,7 +414,7 @@
         padding: 7px 10px calc(7px + env(safe-area-inset-bottom)) !important;
         border-top: 1px solid var(--color-border, rgba(255,255,255,.15)) !important;
         background: var(--color-surface, #0b2635) !important;
-        font-size: 10.5px !important;
+        font-size: 0.6562rem !important;
         line-height: 1.3 !important;
       }
     `;

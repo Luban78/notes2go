@@ -230,7 +230,7 @@
         justify-content: center;
         color: var(--color-accent);
         font-weight: 800;
-        font-size: 12px;
+        font-size: 0.75rem;
       }
       .lubaCardDropMarker.lubaCardDropMarkerCandidate::after {
         content: "DRŽ";
@@ -241,7 +241,7 @@
         justify-content: center;
         color: var(--color-accent);
         font-weight: 800;
-        font-size: 12px;
+        font-size: 0.75rem;
       }
       #ln-card-drag-tuning,
       #ln-card-drag-tuning * { box-sizing: border-box; }
@@ -287,7 +287,7 @@
         gap: 8px;
       }
       #ln-card-drag-tuning .ln-cdr-top { grid-template-columns: 1fr auto auto; margin-bottom: 10px; }
-      #ln-card-drag-tuning .ln-cdr-top strong { font-size: 17px; }
+      #ln-card-drag-tuning .ln-cdr-top strong { font-size: 1.0625rem; }
       #ln-card-drag-tuning .ln-cdr-row {
         grid-template-columns: minmax(0,1fr) 82px 52px 52px;
         min-height: 52px;
@@ -305,7 +305,7 @@
         background: var(--color-surface);
         color: var(--color-text);
         font: inherit;
-        font-size: 16px;
+        font-size: 1rem;
       }
       #ln-card-drag-tuning .ln-cdr-foot { grid-template-columns: 1fr 1fr; margin-top: 10px; }
       #ln-card-drag-tuning small { display:block; margin-top:10px; opacity:.72; line-height:1.3; text-align:center; }

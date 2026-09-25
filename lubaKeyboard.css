@@ -62,7 +62,7 @@ body.ln-lk-old-android-nav {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: .01em;
 }
 
@@ -102,7 +102,7 @@ body.ln-lk-old-android-nav {
 .ln-lk-history button {
   width: 31px;
   padding: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 750;
 }
 
@@ -113,14 +113,14 @@ body.ln-lk-old-android-nav {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 720;
 }
 
 .ln-lk-hide {
   width: 38px;
   padding: 0;
-  font-size: 21px;
+  font-size: 1.3125rem;
   line-height: 1;
 }
 
@@ -131,7 +131,7 @@ body.ln-lk-old-android-nav {
 .ln-lk-actions-toggle {
   min-width: 34px;
   padding-inline: 7px;
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 700;
 }
 
@@ -172,7 +172,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   text-overflow: ellipsis;
   white-space: nowrap;
   font: inherit;
-  font-size: clamp(11.5px, 3.25vw, 15px);
+  font-size: clamp(0.7188rem, 3.25vw, 0.9375rem);
   font-weight: 560;
   touch-action: manipulation;
 }
@@ -216,7 +216,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   opacity: .86;
 }
 
@@ -275,7 +275,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   color: var(--color-text, #fff);
   box-shadow: inset 0 1px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.2);
   font: inherit;
-  font-size: clamp(14px, 4.3vw, 19px);
+  font-size: clamp(0.875rem, 4.3vw, 1.1875rem);
   font-weight: 620;
   line-height: 1;
   touch-action: none;
@@ -324,7 +324,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
 
 .ln-lk-body.is-standard .ln-lk-standard-number-row .ln-lk-key {
   height: 35px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 520;
 }
 
@@ -364,11 +364,11 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   height: 44px;
 }
 
-.ln-lk-bottom-standard .ln-lk-std-symbols { flex: 1.28 1 0; font-size: 13px; }
-.ln-lk-bottom-standard .ln-lk-std-more    { flex: 1.05 1 0; font-size: 12px; }
-.ln-lk-bottom-standard .ln-lk-std-punct   { flex: .96 1 0; font-size: 18px; }
-.ln-lk-bottom-standard .ln-lk-std-space   { flex: 4.22 1 0; font-size: 13px; }
-.ln-lk-bottom-standard .ln-lk-std-enter   { flex: 1.12 1 0; font-size: 18px; }
+.ln-lk-bottom-standard .ln-lk-std-symbols { flex: 1.28 1 0; font-size: 0.8125rem; }
+.ln-lk-bottom-standard .ln-lk-std-more    { flex: 1.05 1 0; font-size: 0.75rem; }
+.ln-lk-bottom-standard .ln-lk-std-punct   { flex: .96 1 0; font-size: 1.125rem; }
+.ln-lk-bottom-standard .ln-lk-std-space   { flex: 4.22 1 0; font-size: 0.8125rem; }
+.ln-lk-bottom-standard .ln-lk-std-enter   { flex: 1.12 1 0; font-size: 1.125rem; }
 
 
 /* PATCH 455 – čárka zůstává normální klávesou; malá ozubená značka
@@ -382,7 +382,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   position: absolute;
   right: 3px;
   top: 3px;
-  font-size: 8px;
+  font-size: 0.5rem;
   line-height: 1;
   opacity: .72;
   pointer-events: none;
@@ -406,12 +406,12 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
 .ln-lk-small {
   flex: 0 0 34px;
   height: 34px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .ln-lk-body.is-dense .ln-lk-key {
   height: 36px;
-  font-size: clamp(13px, 3.7vw, 17px);
+  font-size: clamp(0.8125rem, 3.7vw, 1.0625rem);
 }
 
 .ln-lk-body.is-grid .ln-lk-row:not(.ln-lk-bottom) {
@@ -441,12 +441,12 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   flex: 1.15 1 0;
   background: var(--color-surface, #222);
   background: color-mix(in srgb, var(--color-surface, #222) 72%, var(--color-accent, #7444dc) 18%);
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .ln-lk-space {
   flex: 3.8 1 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ln-lk-wide { flex: 1.8 1 0; }
@@ -456,7 +456,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   height: 29px;
   border-color: var(--color-accent, #7444dc);
   border-color: color-mix(in srgb, var(--color-accent, #7444dc) 36%, var(--color-border, #777));
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 
 .ln-lk-chooser {
@@ -481,14 +481,14 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   text-align: left;
 }
 
-.ln-lk-chooser-head strong { font-size: 15px; }
-.ln-lk-chooser-head span { font-size: 11px; opacity: .68; }
+.ln-lk-chooser-head strong { font-size: 0.9375rem; }
+.ln-lk-chooser-head span { font-size: 0.6875rem; opacity: .68; }
 
 .ln-lk-layout-group { margin: 0 0 9px; }
 .ln-lk-layout-group-title {
   margin: 0 0 5px;
   text-align: left;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 750;
   opacity: .62;
   text-transform: uppercase;
@@ -516,7 +516,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   color: inherit;
   text-align: left;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ln-lk-layout-choice.is-active {
@@ -593,7 +593,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   width: 44px;
   height: 42px;
   border-radius: 12px;
-  font-size: 19px;
+  font-size: 1.1875rem;
 }
 
 .ln-lk-alt-key.is-preferred {
@@ -630,7 +630,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
 .ln-lk-alt-popup.is-punctuation .ln-lk-alt-key {
   width: 38px;
   height: 36px;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 /* PATCH 448 – 3 řady tečky musí zůstat kompaktní i na úzkém telefonu. */
@@ -676,7 +676,7 @@ body.ln-lk-old-android-nav .ln-lk-alt-key.is-slide-selected {
   background: color-mix(in srgb, var(--color-surface, #18131f) 86%, var(--color-accent, #7444dc) 14%);
   color: var(--color-text, #fff);
   box-shadow: 0 6px 18px rgba(0,0,0,.26);
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 /*
@@ -738,7 +738,7 @@ body.ln-luba-klavesnice-open #modalRichTextV2Host {
 
 @media (orientation: landscape) and (max-height: 560px) {
   .ln-luba-keyboard { max-height: 66vh; max-height: 66dvh; }
-  .ln-lk-key { height: 33px; font-size: 14px; }
+  .ln-lk-key { height: 33px; font-size: 0.875rem; }
   .ln-lk-bottom .ln-lk-key { height: 35px; }
   .ln-lk-body.is-grid .ln-lk-row:not(.ln-lk-bottom) .ln-lk-key { height: 30px; }
   .ln-lk-top { min-height: 27px; }
@@ -780,12 +780,12 @@ body.ln-lk-old-android-nav .ln-lk-suggestion {
   color: var(--color-editor-text, var(--color-text, #fff));
 }
 body.ln-lk-old-android-nav .ln-lk-key {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 500;
   box-shadow: inset 0 1px rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.24);
 }
 body.ln-lk-old-android-nav .ln-lk-standard-number-row .ln-lk-key {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 500;
 }
 body.ln-lk-old-android-nav .ln-lk-standard-side,
@@ -838,21 +838,21 @@ body.ln-lk-old-android-nav .ln-lk-key.has-alt::after {
   background: color-mix(in srgb, var(--color-surface, #222) 84%, var(--color-accent, #7444dc) 10%);
   color: var(--color-text, #fff);
   font: inherit;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1;
   touch-action: manipulation;
 }
 
 .ln-lk-smartbar .ln-lk-actions-toggle {
-  font-size: 23px;
+  font-size: 1.4375rem;
 }
 
 .ln-lk-smartbar .ln-lk-settings {
-  font-size: 21px;
+  font-size: 1.3125rem;
 }
 
 .ln-lk-smartbar .ln-lk-hide {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .ln-lk-smartbar .ln-lk-suggestions {
@@ -869,7 +869,7 @@ body.ln-lk-old-android-nav .ln-lk-key.has-alt::after {
 .ln-lk-smartbar .ln-lk-suggestion {
   height: 40px;
   padding-inline: 3px;
-  font-size: clamp(11.5px, 3.25vw, 15px);
+  font-size: clamp(0.7188rem, 3.25vw, 0.9375rem);
   text-overflow: clip;
 }
 
@@ -900,7 +900,7 @@ body.ln-lk-old-android-nav .ln-lk-smartbar .ln-lk-suggestions {
    ========================================================== */
 .ln-lk-smartbar .ln-lk-clipboard-action {
   padding-inline: 2px;
-  font-size: clamp(10.5px, 3vw, 13px);
+  font-size: clamp(0.6562rem, 3vw, 0.8125rem);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -941,7 +941,7 @@ body.ln-lk-old-android-nav .ln-lk-smartbar .ln-lk-suggestions {
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   white-space: nowrap;
 }

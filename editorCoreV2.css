@@ -22,7 +22,7 @@
   padding: 18px 16px 80px;
   outline: none;
   caret-color: var(--color-accent, currentColor);
-  font-size: var(--font-size, 16px);
+  font-size: var(--font-size, 1rem);
   line-height: 1.5;
   /* V2.4a – mezery jsou součást modelu.
      Po každém beforeinput překreslujeme DOM z modelu, proto nesmí browser
@@ -427,7 +427,7 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   background: var(--color-surface, #211b29);
   color: var(--color-text, #fff);
   box-shadow: 0 10px 26px rgba(0,0,0,.24);
-  font-size: var(--font-size);
+  font-size: 1rem;
   font-weight: 650;
   white-space: nowrap;
   overflow: visible;
@@ -450,7 +450,7 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   padding: 3px 8px;
   border-radius: 8px;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ln-v2-list-drag-preview.chce-zanorit::after {

@@ -327,10 +327,18 @@ const motivy = nactenaTemata.map(tema => ({
   );
 
   function applyFontSize() {
+    const hodnota = `${currentFontSize}px`;
+
+    /*
+     * Globalni meritko typografie.
+     * --font-size zustava kvuli starsim layoutovym vypoctum, ale root
+     * font-size je zdroj pro 1rem v cele aplikaci (APK i PC).
+     */
     document.documentElement.style.setProperty(
       "--font-size",
-      `${currentFontSize}px`
+      hodnota
     );
+    document.documentElement.style.fontSize = hodnota;
 
     fontSizeValue.textContent =
       `${currentFontSize} px`;

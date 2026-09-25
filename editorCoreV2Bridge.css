@@ -52,7 +52,7 @@
   background: var(--color-surface, #211b29);
   color: var(--color-text, #fff);
   box-shadow: 0 8px 28px rgba(0,0,0,.28);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 650;
   text-align: center;
   pointer-events: none;
@@ -147,7 +147,7 @@
 
 .lnV2CropHeader h3 {
   margin: 0;
-  font-size: calc(var(--font-size) + 4px);
+  font-size: calc(1rem + 0.25rem);
 }
 
 .lnV2CropClose {
@@ -159,14 +159,14 @@
   background: var(--color-background);
   color: var(--color-text);
   font: inherit;
-  font-size: 28px;
+  font-size: 1.75rem;
   line-height: 1;
 }
 
 .lnV2CropHelp,
 .lnV2CropStatus {
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 1px);
+  font-size: calc(1rem - 0.0625rem);
 }
 
 .lnV2CropHelp {
@@ -285,10 +285,10 @@
 
 .taskModal.editorCoreV2Mode .editorToolbarPanelSeznam .editorPanelSeznamVolba {
   min-width: 46px;
-  font-size: 19px;
+  font-size: 1.1875rem;
 }
 
 .taskModal.editorCoreV2Mode .editorToolbarPanelSeznam .editorPanelSeznamText {
   min-width: 58px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }

@@ -331,7 +331,7 @@
   align-items: center;
   justify-content: center;
 
-  font-size: 34px;
+  font-size: 2.125rem;
   line-height: 1;
 
   border-radius: 14px;
@@ -374,7 +374,7 @@
   background: transparent;
   color: var(--color-text);
 
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 
@@ -1481,7 +1481,7 @@
   .calendarDay {
     min-height: var(--ln-dpv-day-height, 54px);
     border-radius: var(--ln-dpv-day-radius, 10px);
-    font-size: var(--ln-dpv-day-font, 16px);
+    font-size: var(--ln-dpv-day-font, 1rem);
   }
 
   .calendarAgenda {
@@ -1498,7 +1498,7 @@
     grid-template-columns: var(--ln-dpv-time-width, 62px) minmax(0, 1fr) 34px;
     gap: var(--ln-dpv-item-gap, 9px);
     padding: var(--ln-dpv-item-pad-y, 7px) 0;
-    font-size: var(--ln-dpv-item-font, 15px);
+    font-size: var(--ln-dpv-item-font, 0.9375rem);
   }
 
   #calendarDayItems {
@@ -1568,7 +1568,7 @@
     padding: 0 18px;
     border-radius: var(--ln-dpv-subnav-radius, 13px);
     gap: 8px;
-    font-size: var(--ln-dpv-subnav-font, 16px);
+    font-size: var(--ln-dpv-subnav-font, 1rem);
     font-weight: 720;
   }
 
@@ -1621,7 +1621,7 @@
     border-radius: 10px;
     background: transparent;
     color: var(--color-text);
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 720;
     text-align: left;
     overflow: hidden;
@@ -1647,7 +1647,7 @@
     margin: 0;
     padding: 0 4px;
     color: var(--color-text);
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 720;
     line-height: 1;
     white-space: nowrap;
@@ -1781,7 +1781,7 @@
   .desktopRemindersTimelineHeader h2 {
     margin: 0;
     color: var(--color-text);
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 780;
   }
 
@@ -1814,7 +1814,7 @@
     background: transparent;
     color: var(--color-text);
     font: inherit;
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .desktopReminderFilterList {
@@ -1835,7 +1835,7 @@
     background: transparent;
     color: var(--color-text);
     font: inherit;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 650;
     text-align: left;
     cursor: pointer;
@@ -1860,7 +1860,7 @@
 
   .desktopReminderFilterCount {
     color: var(--color-text-secondary);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 650;
   }
 
@@ -1905,7 +1905,7 @@
     background: var(--color-surface);
     color: var(--color-text);
     font: inherit;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 700;
     cursor: pointer;
   }
@@ -1962,7 +1962,7 @@
 
   .desktopReminderCalendarHead strong {
     text-align: center;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 780;
     text-transform: capitalize;
   }
@@ -1990,7 +1990,7 @@
   .desktopReminderCalendarWeekdays {
     margin-bottom: 4px;
     color: var(--color-text-secondary);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 700;
     text-align: center;
   }
@@ -2005,7 +2005,7 @@
     background: transparent;
     color: var(--color-text);
     font: inherit;
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
   }
 
@@ -2074,7 +2074,7 @@
     gap: 7px;
     margin: 0 8px 7px;
     color: var(--color-text);
-    font-size: var(--ln-dpr-group-font, 17px);
+    font-size: var(--ln-dpr-group-font, 1.0625rem);
     font-weight: 780;
     letter-spacing: 0;
     text-transform: none;
@@ -2106,7 +2106,7 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    font-size: var(--ln-dpr-row-font, 16px);
+    font-size: var(--ln-dpr-row-font, 1rem);
   }
 
   .desktopReminderTimelineRow.reminderItem:last-child {
@@ -2121,7 +2121,7 @@
     display: block;
     padding: 0;
     color: var(--color-accent-text);
-    font-size: var(--ln-dpr-time-font, 16px);
+    font-size: var(--ln-dpr-time-font, 1rem);
     font-weight: 780;
     line-height: 1.2;
   }
@@ -2140,7 +2140,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--color-text);
-    font-size: var(--ln-dpr-row-font, 16px);
+    font-size: var(--ln-dpr-row-font, 1rem);
     font-weight: 620;
     line-height: 1.25;
     text-overflow: ellipsis;
@@ -2152,7 +2152,7 @@
     margin-top: 3px;
     overflow: hidden;
     color: var(--color-text-secondary);
-    font-size: calc(var(--ln-dpr-row-font, 16px) - 2px);
+    font-size: calc(var(--ln-dpr-row-font, 1rem) - 0.125rem);
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2177,7 +2177,7 @@
     padding: 0 10px;
     border-radius: 999px;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 720;
   }
 
@@ -2223,7 +2223,7 @@
 
   .desktopRemindersEmpty strong {
     color: var(--color-text);
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -2391,7 +2391,7 @@
 
   /* ---------- Ikony: běžné/emoji i SVG ---------- */
   body:has(#notesModuleButton.active) .moduleTabIcon {
-    font-size: var(--ln-dnv-modules-classic-icon-size, 24px) !important;
+    font-size: var(--ln-dnv-modules-classic-icon-size, 1.5rem) !important;
   }
   body:has(#notesModuleButton.active) .moduleTabIcon .lubaSvgIcon {
     width: var(--ln-dnv-modules-icon-size, 24px) !important;
@@ -2400,7 +2400,7 @@
   }
 
   body.desktopNotesToolbarA .searchIcon {
-    font-size: var(--ln-dnv-search-classic-icon-size, 22px) !important;
+    font-size: var(--ln-dnv-search-classic-icon-size, 1.375rem) !important;
   }
   body.desktopNotesToolbarA .searchIcon .lubaSvgIcon {
     width: var(--ln-dnv-search-icon-size, 22px) !important;
@@ -2409,7 +2409,7 @@
   }
 
   body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon {
-    font-size: var(--ln-dnv-primary-classic-icon-size, 22px) !important;
+    font-size: var(--ln-dnv-primary-classic-icon-size, 1.375rem) !important;
   }
   body.desktopNotesToolbarA .desktopCategoryActions .categoryTabIcon .lubaSvgIcon {
     width: var(--ln-dnv-primary-icon-size, 22px) !important;
@@ -2419,7 +2419,7 @@
 
   body.desktopNotesToolbarA .searchActions .searchActionIcon,
   body.desktopNotesToolbarA .searchActions .lubaActionIcon {
-    font-size: var(--ln-dnv-actions-classic-icon-size, 22px) !important;
+    font-size: var(--ln-dnv-actions-classic-icon-size, 1.375rem) !important;
   }
   body.desktopNotesToolbarA .searchActions .searchActionIcon .lubaSvgIcon,
   body.desktopNotesToolbarA .searchActions .lubaActionIcon .lubaSvgIcon,
@@ -2492,12 +2492,12 @@
   .desktopSidebarButton {
     min-height: var(--ln-dnv-sidebar-item-height, 46px) !important;
     border-radius: var(--ln-dnv-sidebar-radius, 11px) !important;
-    font-size: var(--ln-dnv-sidebar-text-size, 15px) !important;
+    font-size: var(--ln-dnv-sidebar-text-size, 0.9375rem) !important;
     grid-template-columns: calc(var(--ln-dnv-sidebar-icon-size, 20px) + 14px) minmax(0, 1fr) !important;
   }
 
   .desktopSidebarButton > .desktopSidebarIcon {
-    font-size: var(--ln-dnv-sidebar-classic-icon-size, 20px) !important;
+    font-size: var(--ln-dnv-sidebar-classic-icon-size, 1.25rem) !important;
   }
 
   .desktopSidebarIcon .lubaSvgIcon {

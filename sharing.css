@@ -69,7 +69,7 @@
 
 .sharingIdentityHeader h3 {
   margin: 0;
-  font-size: calc(var(--font-size) + 3px);
+  font-size: calc(1rem + 0.1875rem);
 }
 
 .sharingIdentityClose {
@@ -88,7 +88,7 @@
   margin: 0 0 16px;
 
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   line-height: 1.45;
 }
 
@@ -110,7 +110,7 @@
 
 .sharingIdentityPrefix {
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) + 2px);
+  font-size: calc(1rem + 0.125rem);
   font-weight: 800;
 }
 
@@ -136,7 +136,7 @@
   margin: 8px 2px 0;
 
   color: #d44;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   line-height: 1.35;
 }
 
@@ -227,7 +227,7 @@
 
   background: #d84c57;
   color: #fff;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 900;
   line-height: 1;
 }
@@ -256,7 +256,7 @@
   color: var(--color-editor-text);
 
   font: inherit;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
@@ -317,7 +317,7 @@
 
 .sharingModalHeader h3 {
   margin: 0;
-  font-size: calc(var(--font-size) + 3px);
+  font-size: calc(1rem + 0.1875rem);
 }
 
 .sharingModalClose {
@@ -333,7 +333,7 @@
   color: var(--color-text);
 
   font: inherit;
-  font-size: 28px;
+  font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -351,7 +351,7 @@
 .sharingModalDescription {
   margin: 0 0 14px;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   line-height: 1.45;
 }
 
@@ -430,7 +430,7 @@
 .sharingSmallButton {
   min-height: 34px;
   padding: 0 10px;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
 }
 
 .sharingPrimaryButton:disabled,
@@ -445,7 +445,7 @@
   margin: 8px 2px 0;
 
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   line-height: 1.35;
 }
 
@@ -469,7 +469,7 @@
 .sharingListSection h4 {
   margin: 0 0 8px;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -510,7 +510,7 @@
 
 .sharingPersonInfo span {
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 3px);
+  font-size: calc(1rem - 0.1875rem);
 }
 
 .sharingPersonActions {
@@ -546,7 +546,7 @@
 
   color: var(--color-text-secondary);
   text-align: center;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
 }
 
 .sharingIncomingToolbar {
@@ -575,7 +575,7 @@
 
 .sharingInvitationInviter {
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
 }
 
 .sharingInvitationActions {
@@ -664,7 +664,7 @@
   padding: 0 !important;
   border: 0 !important;
   color: var(--color-accent) !important;
-  font-size: calc(var(--font-size) - 4px) !important;
+  font-size: calc(1rem - 0.25rem) !important;
   font-weight: 750;
   line-height: 1.25;
 }
@@ -716,7 +716,7 @@ body.sharingReadOnlyOpen {
   background: var(--color-background);
   color: var(--color-editor-text);
   font: inherit;
-  font-size: 29px;
+  font-size: 1.8125rem;
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
@@ -742,7 +742,7 @@ body.sharingReadOnlyOpen {
   );
   color: var(--color-editor-text);
   font: inherit;
-  font-size: calc(var(--font-size) - 2px);
+  font-size: calc(1rem - 0.125rem);
   font-weight: 800;
   cursor: pointer;
   touch-action: manipulation;
@@ -820,14 +820,14 @@ body.sharingReadOnlyOpen {
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--color-editor-text);
-  font-size: calc(var(--font-size) + 5px);
+  font-size: calc(1rem + 0.3125rem);
   line-height: 1.2;
 }
 
 .sharingReadOnlyHeaderText p {
   margin: 5px 0 0;
   color: var(--color-accent);
-  font-size: calc(var(--font-size) - 3px);
+  font-size: calc(1rem - 0.1875rem);
   font-weight: 750;
 }
 
@@ -848,7 +848,7 @@ body.sharingReadOnlyOpen {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   color: var(--color-editor-text);
-  font-size: var(--font-size);
+  font-size: 1rem;
   line-height: 1.5;
 }
 
@@ -880,7 +880,7 @@ body.sharingReadOnlyOpen {
 .sharingReadOnlyTodos h3 {
   margin: 0 0 10px;
   color: var(--color-text-secondary);
-  font-size: calc(var(--font-size) - 1px);
+  font-size: calc(1rem - 0.0625rem);
 }
 
 .sharingReadOnlyTodoList {
@@ -1042,7 +1042,7 @@ body.sharingReadOnlyOpen {
   white-space: pre-wrap;
   overflow-wrap: break-word;
   font-family: inherit;
-  font-size: var(--font-size);
+  font-size: 1rem;
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -1064,7 +1064,7 @@ body.sharingReadOnlyOpen {
     Roboto,
     Arial,
     sans-serif;
-  font-size: var(--font-size);
+  font-size: 1rem;
   font-weight: 400;
   font-style: normal;
   font-variant: normal;
@@ -1200,7 +1200,7 @@ body.sharingReadOnlyOpen {
   background: transparent;
 
   color: var(--color-editor-text);
-  font-size: var(--font-size);
+  font-size: 1rem;
 }
 
 .sharingReadOnlyTodo input[type="checkbox"] {
@@ -1218,7 +1218,7 @@ body.sharingReadOnlyOpen {
 
   color: var(--color-editor-text);
   font: inherit;
-  font-size: var(--font-size);
+  font-size: 1rem;
   line-height: 1.35;
 
   white-space: pre-wrap;
