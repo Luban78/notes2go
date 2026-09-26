@@ -691,14 +691,61 @@
     } catch (_error) {}
   }
 
+  /* PATCH 658BL – moderní WebView + dlouhý background.
+     Native IME guard nesmí být svázaný jen s VIDITELNÝM panelem LubaKeyboard.
+     Když uživatel vlastní klávesnici ručně schová, ale editor/title zůstane
+     fokusovaný, Android stále drží editable InputConnection. Po dlouhém resume
+     jej WebView umí obnovit jako systémovou IME. V režimu source=luba proto
+     guard držíme aktivní i pro skutečně fokusovaný Luba cíl; mimo tyto cíle se
+     zase vypne, aby běžná systémová pole zůstala nedotčená. */
+  function jeAktivniLubaCilProImeGuard() {
+    if (ziskejZdrojKlavesnice() === "system") return false;
+    const aktivni = document.activeElement;
+    if (!aktivni) return false;
+
+    const editor = aktivniEditor || najdiEditor();
+    const title = najdiNazevEditoru();
+    const modal = document.querySelector(".taskModal:not([hidden])");
+
+    if (modal && editor && modal.contains(editor) && aktivni === editor) return true;
+    if (modal && title && modal.contains(title) && aktivni === title) return true;
+    if (jeLubaTextovePole(aktivni)) return true;
+    return false;
+  }
+
+  function maAktivniLubaImeGuard() {
+    if (ziskejZdrojKlavesnice() === "system") return false;
+    return Boolean(panel && !panel.hidden) || jeAktivniLubaCilProImeGuard();
+  }
+
+  function aktualizujNativniImeGuardPodleKontextu() {
+    synchronizujNativniImeGuard(maAktivniLubaImeGuard());
+  }
+
   function potlacObnovenouImePoNavratu() {
-    if (ziskejZdrojKlavesnice() === "system" || !panel || panel.hidden) return;
+    if (!maAktivniLubaImeGuard()) return;
+
+    /* Po resume znovu potvrď inputmode=none ještě před případným obnovením
+       starého InputConnection. Panel přitom záměrně NEOTVÍRÁME – ručně
+       schovaná LubaKeyboard zůstává schovaná. */
+    const editor = aktivniEditor || najdiEditor();
+    const title = najdiNazevEditoru();
+    const aktivni = document.activeElement;
+    if (editor && aktivni === editor) nastavLubaAtributy(editor);
+    if (title && aktivni === title) nastavLubaAtributy(title);
+    if (jeLubaTextovePole(aktivni)) nastavLubaAtributyTextovehoPole(aktivni);
+
     synchronizujNativniImeGuard(true);
-    [0, 90, 220, 480].forEach((ms) => {
+    [0, 90, 220, 480, 900, 1600].forEach((ms) => {
       setTimeout(() => {
-        if (ziskejZdrojKlavesnice() !== "system" && panel && !panel.hidden) {
-          schovejSystemovouNativne();
-        }
+        if (!maAktivniLubaImeGuard()) return;
+        const aktualniEditor = aktivniEditor || najdiEditor();
+        const aktualniTitle = najdiNazevEditoru();
+        const aktualniFocus = document.activeElement;
+        if (aktualniEditor && aktualniFocus === aktualniEditor) nastavLubaAtributy(aktualniEditor);
+        if (aktualniTitle && aktualniFocus === aktualniTitle) nastavLubaAtributy(aktualniTitle);
+        if (jeLubaTextovePole(aktualniFocus)) nastavLubaAtributyTextovehoPole(aktualniFocus);
+        schovejSystemovouNativne();
       }, ms);
     });
   }
@@ -2513,7 +2560,6 @@
     const novy = zdroj === "system" ? "system" : "luba";
     try { localStorage.setItem(ULOZ_ZDROJ, novy); } catch (_error) {}
     synchronizujNativniZdrojKlavesnice(novy);
-    synchronizujNativniImeGuard(novy === "luba" && Boolean(panel && !panel.hidden));
 
     const editor = aktivniEditor || najdiEditor();
     const title = document.getElementById("modalTitle");
@@ -2538,6 +2584,8 @@
         schovejSystemovou();
       }
     }
+
+    aktualizujNativniImeGuardPodleKontextu();
 
     window.dispatchEvent(new CustomEvent("lubanote:keyboard-source-change", {
       detail: { source: novy }
@@ -3435,8 +3483,10 @@
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
-    synchronizujNativniImeGuard(false);
-    if (!panel) return;
+    if (!panel) {
+      aktualizujNativniImeGuardPodleKontextu();
+      return;
+    }
     flushCompose("hide", false);
     panel.hidden = true;
     zavriChooser();
@@ -3464,6 +3514,7 @@
     const editor = najdiEditor();
     if (ziskejZdrojKlavesnice() === "system") {
       if (otevritButton) otevritButton.hidden = true;
+      aktualizujNativniImeGuardPodleKontextu();
       return;
     }
     if (otevritButton && modal && editor && modal.contains(editor)) {
@@ -3477,6 +3528,10 @@
     } else if (otevritButton) {
       otevritButton.hidden = true;
     }
+
+    /* Panel může být schovaný, ale fokusovaný editor v režimu Luba stále
+       nesmí dovolit Androidu obnovit systémovou IME při lifecycle resume. */
+    aktualizujNativniImeGuardPodleKontextu();
   }
 
   /* ==========================================================
@@ -3506,6 +3561,10 @@
         aktivni.blur?.();
       }
     } catch (_error) {}
+
+    /* Sekundární modal je explicitní výjimka: po odfokusování editoru guard
+       vypneme, aby jeho vlastní systémová pole mohla IME otevřít normálně. */
+    synchronizujNativniImeGuard(false);
 
     /* Na rozdíl od běžného schovejSystemovouNativne() musí modal schovat
        IME i tehdy, když má uživatel v Nastavení zvolenou systémovou
@@ -3756,6 +3815,16 @@
      * Na SPCK/WebView pak každý pointerdown házel TypeError.
      */
     if (altPopup && !altPopup.hidden && !altPopup.contains(event.target)) zavriAlt();
+  }, true);
+
+  /* PATCH 658BL – drž native guard synchronní s reálným focusem.
+     Focusin/out mění pouze native ochranu; nikdy samy neotevřou LubaKeyboard
+     ani neposunou caret. */
+  document.addEventListener("focusin", () => {
+    queueMicrotask(aktualizujNativniImeGuardPodleKontextu);
+  }, true);
+  document.addEventListener("focusout", () => {
+    setTimeout(aktualizujNativniImeGuardPodleKontextu, 0);
   }, true);
 
   /* PATCH 596 – contextmenu u názvu je spolehlivý signál z Android WebView
