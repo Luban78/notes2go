@@ -3224,6 +3224,14 @@
       const b = event.target.closest("button[data-lk-action]");
       if (!b) return;
       event.preventDefault();
+
+      /* 658BT – hide odstraní celý fixed panel už v pointerup. WebView pak
+         někdy pošle následný syntetický click na kartu, která se tím odkryla
+         pod prstem. Shield v script.js spotřebuje právě jen tento click. */
+      if (b.dataset.lkAction === "hide") {
+        window.LubaNoteClickShield?.(700);
+      }
+
       provedAkci(b.dataset.lkAction, b.dataset.lkValue || "");
     }, true);
 
@@ -3407,19 +3415,33 @@
         const rects = range.getClientRects();
         rect = rects?.length ? rects[rects.length - 1] : rect;
       }
+
+      /* 658BT – collapsed Range na Androidu často vrátí 0×0 rect, takže
+         starý guard vůbec nevěděl, kde caret skutečně je. Core V2 už má
+         vlastní modelový caret; jeho rect je pro tuto čistě vizuální
+         kontrolu spolehlivý fallback. */
+      if (!rect || ((!rect.width && !rect.height) || rect.bottom <= 0)) {
+        const modelovyCaret = document.querySelector(
+          ".taskModal:not([hidden]) .ln-v2-luba-caret:not([hidden])"
+        );
+        const caretRect = modelovyCaret?.getBoundingClientRect?.();
+        if (caretRect && caretRect.height > 0) rect = caretRect;
+      }
     } catch (_error) {
       return;
     }
     if (!rect) return;
 
     const toolbarRect = bottomBar.getBoundingClientRect();
-    /* ~32 px je prostor pro kapku Android selection handle + malá rezerva. */
-    const bezpecneDno = toolbarRect.top - 52;
+    /* Android insertion/selection handle sahá výrazně POD samotný caret.
+       Držíme proto caret zhruba 80 px nad horní hranou toolbaru. */
+    const bezpecneDno = toolbarRect.top - 82;
     if (rect.bottom <= bezpecneDno) return;
 
-    const posun = Math.ceil(rect.bottom - bezpecneDno + 8);
+    const pred = editor.scrollTop;
+    const posun = Math.ceil(rect.bottom - bezpecneDno + 12);
     if (posun > 0) {
-      editor.scrollTop += posun;
+      editor.scrollTop = pred + posun;
     }
   }
 
@@ -3874,6 +3896,9 @@
   document.addEventListener("selectionchange", () => {
     if (!akcniPanelOtevren || !panel || panel.hidden) return;
     naplanujSelectionSafeScroll();
+    /* Native handle dopočítává pozici o frame později než Range. */
+    setTimeout(naplanujSelectionSafeScroll, 45);
+    setTimeout(naplanujSelectionSafeScroll, 120);
   }, true);
 
   document.addEventListener("pointerup", (event) => {
@@ -3881,6 +3906,7 @@
     const editor = najdiEditor();
     if (!editor || !editor.contains(event.target)) return;
     requestAnimationFrame(naplanujSelectionSafeScroll);
+    setTimeout(naplanujSelectionSafeScroll, 70);
   }, true);
 
   window.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));

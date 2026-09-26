@@ -3859,6 +3859,30 @@ function oznacKartuPanelu(card) {
 let blokovatKlikKartyDo = 0;
 let blokovatKlikPoZavreniMainMenu = false;
 
+/* PATCH 658BT – ochrana proti propadlému clicku po zavření překryvu.
+   Android/WebView může po pointerup ještě vytvořit syntetický click už na
+   prvku, který se mezitím odkryl pod klávesnicí nebo panelem. Jednorázový
+   capture shield tenhle click spotřebuje, aniž by zpomaloval samotnou akci. */
+let blokovatPropadlyKlikDo = 0;
+
+function zablokujNasledujiciPropadlyKlik(ms = 650) {
+  const doKdy = Date.now() + Math.max(120, Number(ms) || 0);
+  blokovatPropadlyKlikDo = Math.max(blokovatPropadlyKlikDo, doKdy);
+  blokovatKlikKartyDo = Math.max(blokovatKlikKartyDo, doKdy);
+}
+
+window.LubaNoteClickShield = zablokujNasledujiciPropadlyKlik;
+
+document.addEventListener(
+  "click",
+  (event) => {
+    if (Date.now() >= blokovatPropadlyKlikDo) return;
+    blokovatPropadlyKlikDo = 0;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  },
+  true
+);
 
 let rezimVyberuKaret = false;
 let vybraneKarty = new Set();
@@ -6436,8 +6460,7 @@ document.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     event.stopPropagation();
 
-    blokovatKlikKartyDo =
-      Date.now() + 400;
+    zablokujNasledujiciPropadlyKlik(650);
     cardMenu.hidden = true;
   }
 }, true);

@@ -14951,3 +14951,61 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     min-height: 28px !important;
   }
 }
+
+
+/* ==========================================================
+   PATCH 658BT – EDITOR TOOLBAR POLISH / SELECTION LAYER
+   ----------------------------------------------------------
+   - SVG akce +2 px proti 658BS
+   - opticky menší oblast Domů/Práce dostává vlastní větší box
+   - toolbar je nad DOM caret/selection vrstvami, ale pod LubaKeyboard
+   - ikony dostávají theme-aware accent; aktivní Oblíbené drží kontrast
+   ========================================================== */
+@media (max-width: 899px) {
+  .taskModal:not([hidden]) .editorBottomBar {
+    z-index: 2147482400 !important;
+  }
+
+  .taskModal:not([hidden]) .editorBottomBar button {
+    z-index: 3;
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) .editorBottomBar .lubaActionIcon {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    color: color-mix(
+      in srgb,
+      var(--color-accent, #35b9ca) 78%,
+      var(--color-editor-text, #fff) 22%
+    );
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) #categoryTaskButton .lubaActionIcon {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) #editorBackButton .lubaActionIcon {
+    width: 31px !important;
+    height: 31px !important;
+    min-width: 31px !important;
+    min-height: 31px !important;
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) #deleteTaskButton .lubaActionIcon {
+    color: var(--color-danger-text, #e56b6f);
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) #priorityTaskButton.active .lubaActionIcon {
+    color: var(--color-on-accent, #fff) !important;
+  }
+}
