@@ -3351,7 +3351,12 @@ body.documents-epub-viewer-open {
    Pouze desktopové rozložení; mobil zůstává beze změny.
    ============================================================ */
 @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
-  #documentsScreen.documentsV1 {
+  /* 658BQ: nikdy nepřebíjet HTML hidden. Varianta C existuje jen na aktivním screen Dokumenty. */
+  #documentsScreen.documentsV1[hidden] {
+    display: none !important;
+  }
+
+  #documentsScreen.documentsV1:not([hidden]) {
     display: grid !important;
     grid-template-columns: minmax(320px, 34%) minmax(0, 1fr) !important;
     grid-template-areas: "folders files" !important;
@@ -3455,7 +3460,7 @@ body.documents-epub-viewer-open {
 
   /* Na užším desktopu zachováme variantu C, jen levý panel trochu zúžíme. */
   @media (max-width: 1280px) {
-    #documentsScreen.documentsV1 {
+    #documentsScreen.documentsV1:not([hidden]) {
       grid-template-columns: minmax(290px, 32%) minmax(0, 1fr) !important;
       gap: 12px !important;
     }
