@@ -39,6 +39,7 @@
     stitky: "🏷️",
     nastaveni: "⚙️",
     zaloha: "💾",
+    ulozit: "💾",
     prace: "💼",
     soukrome: "🏠",
     pripnout: "📌",
@@ -187,6 +188,16 @@
       ["path", { d: "M12 13v4.2" }],
       ["path", { d: "m9.8 15.2 2.2 2.2 2.2-2.2" }],
       ["path", { d: "M8 5V3.2h8V5" }]
+    ],
+
+    /* 658BS – samostatná a jednoznačná ikona Uložit.
+       Záloha používá motiv zásobníku/šipky, takže v editoru působila
+       spíš jako archiv. Disketa je zde schválně klasická „save“ metafora. */
+    ulozit: [
+      ["path", { d: "M5 3.5h10.6L19 6.9v13.6H5z" }],
+      ["path", { d: "M8 3.5v6h7.5v-6" }],
+      ["rect", { x: "8", y: "13", width: "8", height: "5", rx: "1" }],
+      ["path", { d: "M13.8 5.8h1.2" }]
     ],
 
     prace: [

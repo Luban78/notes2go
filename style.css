@@ -14921,3 +14921,33 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     align-self: start;
   }
 }
+
+
+/* ==========================================================
+   PATCH 658BS – EDITOR / VĚTŠÍ SVG IKONY + TOOLBAR VRSTVA
+   ----------------------------------------------------------
+   Globální font scale zmenšil obecné .lubaActionIcon na mobilu.
+   Editorový spodní toolbar má vlastní optickou velikost SVG.
+   Toolbar zároveň zůstává nad DOM overlay vrstvami; nativní Android
+   selection handle řeší selection-safe scroll v lubaKeyboard.js.
+   ========================================================== */
+@media (max-width: 899px) {
+  .taskModal:not([hidden]) .editorBottomBar {
+    z-index: 40;
+    isolation: isolate;
+    background: var(--color-editor-background);
+  }
+
+  .taskModal:not([hidden]) .editorBottomBar button {
+    position: relative;
+    z-index: 2;
+  }
+
+  html[data-icon-style="svg"]
+    .taskModal:not([hidden]) .editorBottomBar .lubaActionIcon {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+  }
+}

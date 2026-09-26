@@ -3313,10 +3313,10 @@
     /*
      * PATCH 457 – ✅ patří výhradně do smartbaru LubaKeyboard jako
      * přepínač akčního panelu. V samotném editorBottomBar je první akce
-     * VŽDY 💾 Uložit a zavřít, bez ohledu na stav klávesnice/panelu.
+     * VŽDY Uložit a zavřít, bez ohledu na stav klávesnice/panelu.
      * Nesmíme ji při skrytí klávesnice vracet na staré „hotovo“.
      */
-    hostitel.dataset.lubaIcon = "zaloha";
+    hostitel.dataset.lubaIcon = "ulozit";
 
     window.LubaNoteIcons
       ?.naplnDeklarovaneIkony?.(tlacitko);
@@ -3354,7 +3354,19 @@
        si nový prostor dopočítá sám; do caret/selection/modelu nesaháme. */
     requestAnimationFrame(() => {
       vysliLayoutDiag(akcniPanelOtevren ? "actions-open" : "actions-close", true);
+      if (akcniPanelOtevren) {
+        naplanujSelectionSafeScroll();
+      }
     });
+
+    /* 658BS – po vysunutí toolbaru se jeho výška ustálí až v dalších
+       framech (Android + visualViewport). Selection se přitom nemusí změnit,
+       takže samotný selectionchange nestačí. Krátké opakování pouze dorovná
+       scroll editoru; selection/model se nemění. */
+    if (akcniPanelOtevren) {
+      setTimeout(naplanujSelectionSafeScroll, 80);
+      setTimeout(naplanujSelectionSafeScroll, 180);
+    }
   }
 
   /* ==========================================================
@@ -3402,7 +3414,7 @@
 
     const toolbarRect = bottomBar.getBoundingClientRect();
     /* ~32 px je prostor pro kapku Android selection handle + malá rezerva. */
-    const bezpecneDno = toolbarRect.top - 34;
+    const bezpecneDno = toolbarRect.top - 52;
     if (rect.bottom <= bezpecneDno) return;
 
     const posun = Math.ceil(rect.bottom - bezpecneDno + 8);
@@ -3856,11 +3868,19 @@
   document.addEventListener("lubanote:v2-model-input", () => {
     if (!panel || panel.hidden) return;
     queueMicrotask(aktualizujNavrhy);
+    if (akcniPanelOtevren) queueMicrotask(naplanujSelectionSafeScroll);
   }, true);
 
   document.addEventListener("selectionchange", () => {
     if (!akcniPanelOtevren || !panel || panel.hidden) return;
     naplanujSelectionSafeScroll();
+  }, true);
+
+  document.addEventListener("pointerup", (event) => {
+    if (!akcniPanelOtevren || !panel || panel.hidden) return;
+    const editor = najdiEditor();
+    if (!editor || !editor.contains(event.target)) return;
+    requestAnimationFrame(naplanujSelectionSafeScroll);
   }, true);
 
   window.addEventListener("resize", () => requestAnimationFrame(() => { nastavVysku(); pozicujOtevritButton(); }));

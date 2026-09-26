@@ -1006,6 +1006,6 @@ body.ln-lk-old-android-nav .ln-title-clipboard-popup {
    v JS pak používá stejnou hranici a selection modelu se nedotýká. */
 body.ln-luba-klavesnice-open.ln-lk-actions-expanded
   .ln-v2-core.ln-v2-vlozeny .ln-v2-editor {
-  padding-bottom: 34px;
-  scroll-padding-bottom: 72px;
+  padding-bottom: 56px;
+  scroll-padding-bottom: 96px;
 }
