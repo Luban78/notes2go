@@ -2553,3 +2553,38 @@
     min-height: max(var(--ln-dnv-tag-height, 43px), calc(1.1em + 12px)) !important;
   }
 }
+
+/* ==========================================================
+   PATCH 658BN – PC PŘIPOMÍNKY / PLNÁ ŠÍŘKA + BEZ SCROLLU FILTRŮ
+   ----------------------------------------------------------
+   - využije celou dostupnou šířku desktopového obsahu
+   - odstraní starou 76px safe-area rezervu z levého filtru
+   - levý filtr už nemá vlastní scrollbar
+   - pravá časová osa si ponechává vlastní scroll
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body.desktopRemindersTimelineReady #remindersScreen:not([hidden]) {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .desktopRemindersFilterPanel {
+    overflow-y: hidden;
+    padding-bottom: 14px;
+    scroll-padding-bottom: 0;
+    overscroll-behavior: auto;
+    scrollbar-width: none;
+  }
+
+  .desktopRemindersFilterPanel::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .desktopReminderFilterList {
+    padding-bottom: 0;
+  }
+}
