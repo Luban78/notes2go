@@ -3471,3 +3471,105 @@ body.documents-epub-viewer-open {
     }
   }
 }
+
+/* ============================================================
+   PATCH 658BR – PC DOKUMENTY / KOMPAKTNÍ SLOŽKY + VNITŘNÍ SCROLL
+   - Varianta C zůstává pouze na aktivním desktop screen Dokumenty.
+   - Karty složek mají přibližně poloviční výšku proti 658BP.
+   - Panel Složky má 5px odstup od levého desktop menu a o 5px
+     větší podíl na úkor panelu Soubory.
+   - Složky i soubory scrollují uvnitř svých panelů; nadpisy,
+     hledání a filtry zůstávají statické.
+   ============================================================ */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  #documentsScreen.documentsV1[hidden] {
+    display: none !important;
+  }
+
+  #documentsScreen.documentsV1:not([hidden]) {
+    grid-template-columns: minmax(325px, calc(34% + 5px)) minmax(0, 1fr) !important;
+    margin-left: 5px !important;
+    width: calc(100% - 5px) !important;
+    height: calc(100dvh - 128px) !important;
+    max-height: calc(100dvh - 128px) !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 8px !important;
+    overflow: hidden !important;
+    align-items: stretch !important;
+  }
+
+  #documentsScreen > .documentsV1Section[aria-labelledby="documentsFoldersTitle"],
+  #documentsScreen > .documentsV1Section[aria-labelledby="documentsFilesTitle"] {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  #documentsScreen .documentsV1SectionHeader,
+  #documentsScreen .documentsSearchTools {
+    flex: 0 0 auto !important;
+  }
+
+  /* Složky: krátké karty a vlastní scroll pouze uvnitř mřížky. */
+  #documentsScreen .documentsFoldersGrid {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable;
+    align-content: start !important;
+    grid-auto-rows: minmax(0, auto) !important;
+    padding-right: 2px !important;
+  }
+
+  #documentsScreen .documentsFolderCard {
+    min-height: 60px !important;
+    padding: 7px 9px !important;
+    gap: 2px 8px !important;
+  }
+
+  #documentsScreen .documentsFolderCardIcon {
+    font-size: 1.625rem !important;
+  }
+
+  #documentsScreen .documentsFolderMenuButton {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  /* Soubory: statická hlavička + hledání + filtry; scrolluje jen seznam. */
+  #documentsScreen .documentsFiles {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable;
+  }
+
+  #documentsScreen .documentsEmpty {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* Starší 658BP pravidlo pro užší desktop nesmí znovu zvětšit karty. */
+  @media (max-width: 1280px) {
+    #documentsScreen.documentsV1:not([hidden]) {
+      grid-template-columns: minmax(295px, calc(32% + 5px)) minmax(0, 1fr) !important;
+    }
+
+    #documentsScreen .documentsFolderCard {
+      min-height: 60px !important;
+      padding: 7px 9px !important;
+    }
+  }
+}
