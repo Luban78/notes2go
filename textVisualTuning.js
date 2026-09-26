@@ -8,7 +8,7 @@
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteTextVisualTuningV4";
+  const KLIC = "lubanoteTextVisualTuningV5";
   const STYLE_ID = "ln-text-visual-style";
   const DESKTOP_MEDIA = "(min-width: 1100px) and (hover: hover) and (pointer: fine)";
   const desktopMql = window.matchMedia(DESKTOP_MEDIA);
@@ -138,8 +138,8 @@
           items: [
             E("keyboardTop", "Klávesnice – horní lišta", ".ln-lk-brand, .ln-lk-language", 0.75),
             E("keyboardSuggestions", "Klávesnice – predikce", "#lubaKeyboard .ln-lk-smartbar .ln-lk-suggestion", 0.94),
-            E("keyboardKeys", "Klávesnice – písmena", ".ln-lk-key", 1.06),
-            E("keyboardNumbers", "Klávesnice – číselná řada", ".ln-lk-standard-number-row .ln-lk-key", 0.94),
+            E("keyboardKeys", "Klávesnice – písmena", ".ln-lk-key", 1.25),
+            E("keyboardNumbers", "Klávesnice – číselná řada", ".ln-lk-standard-number-row .ln-lk-key", 1.20),
             E("keyboardBottom", "Klávesnice – spodní funkční řada", ".ln-lk-bottom-standard .ln-lk-key, .ln-lk-fn, .ln-lk-nav, .ln-lk-back, .ln-lk-enter", 1),
             E("keyboardCandidate", "Klávesnice – kandidáti / diakritika", ".ln-lk-candidate", 1.06)
           ]
