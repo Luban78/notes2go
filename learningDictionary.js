@@ -1,22 +1,68 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CF)
+   LUBANOTE – VÝUKA JAZYKŮ / STUDIJNÍ SLOVNÍK (PATCH 658CG)
    --------------------------------------------------------------
-   - samostatná data od osobního slovníku LubaKeyboard,
-   - ukládání slov/frází z LubaReaderu včetně věty, knihy a kapitoly,
-   - jednoduché kartičkové procvičování a statistika,
-   - online překlad EN -> CS posílá pouze právě vybraný text,
-   - žádný zásah do predikce LubaKeyboard ani dictionarySync.
+   - studijní slovník je oddělený od osobního slovníku LubaKeyboard,
+   - podporované výukové jazyky kopírují produkční jazyky LubaKeyboard V1,
+   - každý jazyk má vlastní balíček slovíček, trénink a statistiky,
+   - překlad se řídí aktivním výukovým jazykem a jazykem aplikace,
+   - slovíčka lze přidat z LubaReaderu, z poznámky i ručně,
+   - nativní Android TTS používá locale aktivního výukového jazyka.
    ============================================================== */
 (() => {
   'use strict';
 
   const OWNER_KEY = 'lubanoteLocalOwnerUserId';
-  const STORAGE_PREFIX = 'lubanote_english_learning_v1:';
+  const STORAGE_PREFIX = 'lubanote_language_learning_v2:';
+  const LEGACY_EN_STORAGE_PREFIX = 'lubanote_english_learning_v1:';
+  const LANGUAGE_KEY_PREFIX = 'lubanote_language_learning_active_v1:';
+  const SEED_KEY_PREFIX = 'lubanote_language_learning_seed_658cg:';
+  const MIGRATION_KEY_PREFIX = 'lubanote_language_learning_migrated_en_v2:';
   const MAX_ITEMS = 3000;
   const REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30];
 
+  const JAZYKY = Object.freeze({
+    cs: { id: 'cs', nazev: 'Čeština', badge: 'CS', locale: 'cs-CZ' },
+    sk: { id: 'sk', nazev: 'Slovenčina', badge: 'SK', locale: 'sk-SK' },
+    en: { id: 'en', nazev: 'English', badge: 'EN', locale: 'en-US' },
+    de: { id: 'de', nazev: 'Deutsch', badge: 'DE', locale: 'de-DE' },
+    pl: { id: 'pl', nazev: 'Polski', badge: 'PL', locale: 'pl-PL' },
+    es: { id: 'es', nazev: 'Español', badge: 'ES', locale: 'es-ES' }
+  });
+  const PORADI_JAZYKU = Object.freeze(['cs', 'sk', 'en', 'de', 'pl', 'es']);
+
+  /* Testovací startovní sada – přesně 10 položek pro každý produkční jazyk.
+     U cizích jazyků jsou překlady do češtiny; u češtiny do angličtiny,
+     aby byla i česká sada skutečně použitelná k procvičování. */
+  const TESTOVACI_SLOVA = Object.freeze({
+    cs: [
+      ['dům', 'house'], ['práce', 'work'], ['kniha', 'book'], ['čas', 'time'], ['rodina', 'family'],
+      ['voda', 'water'], ['cesta', 'journey'], ['přítel', 'friend'], ['učit se', 'to learn'], ['rozumět', 'to understand']
+    ],
+    sk: [
+      ['dom', 'dům'], ['práca', 'práce'], ['kniha', 'kniha'], ['čas', 'čas'], ['rodina', 'rodina'],
+      ['voda', 'voda'], ['cesta', 'cesta'], ['priateľ', 'přítel'], ['učiť sa', 'učit se'], ['rozumieť', 'rozumět']
+    ],
+    en: [
+      ['habit', 'zvyk'], ['difficult', 'obtížný'], ['improve', 'zlepšit'], ['effort', 'úsilí'], ['journey', 'cesta'],
+      ['choose', 'vybrat'], ['remember', 'pamatovat si'], ['achieve', 'dosáhnout'], ['change', 'změna'], ['focus', 'soustředit se']
+    ],
+    de: [
+      ['Gewohnheit', 'zvyk'], ['schwierig', 'obtížný'], ['verbessern', 'zlepšit'], ['Anstrengung', 'úsilí'], ['Reise', 'cesta'],
+      ['wählen', 'vybrat'], ['erinnern', 'pamatovat si'], ['erreichen', 'dosáhnout'], ['Veränderung', 'změna'], ['konzentrieren', 'soustředit se']
+    ],
+    pl: [
+      ['nawyk', 'zvyk'], ['trudny', 'obtížný'], ['poprawić', 'zlepšit'], ['wysiłek', 'úsilí'], ['podróż', 'cesta'],
+      ['wybierać', 'vybrat'], ['pamiętać', 'pamatovat si'], ['osiągnąć', 'dosáhnout'], ['zmiana', 'změna'], ['skupiać się', 'soustředit se']
+    ],
+    es: [
+      ['hábito', 'zvyk'], ['difícil', 'obtížný'], ['mejorar', 'zlepšit'], ['esfuerzo', 'úsilí'], ['viaje', 'cesta'],
+      ['elegir', 'vybrat'], ['recordar', 'pamatovat si'], ['lograr', 'dosáhnout'], ['cambio', 'změna'], ['concentrarse', 'soustředit se']
+    ]
+  });
+
   const prvky = {};
   let aktivniTab = 'words';
+  let aktivniJazyk = 'en';
   let aktivniKartaId = null;
   let prekladOdhalen = false;
   let trenink = null;
@@ -26,6 +72,7 @@
   let aktivniUtterance = null;
   let aktivniAudio = null;
   let audioContext = null;
+  let dialogStav = null;
   const audioUrlCache = new Map();
   const audioUrlPromises = new Map();
   const audioBufferCache = new Map();
@@ -35,8 +82,25 @@
     return String(localStorage.getItem(OWNER_KEY) || 'local').trim() || 'local';
   }
 
-  function storageKey() {
-    return `${STORAGE_PREFIX}${ownerId()}`;
+  function platnyJazyk(id) {
+    const key = String(id || '').toLowerCase();
+    return JAZYKY[key] ? key : 'en';
+  }
+
+  function storageKey(jazyk = aktivniJazyk) {
+    return `${STORAGE_PREFIX}${ownerId()}:${platnyJazyk(jazyk)}`;
+  }
+
+  function languageKey() {
+    return `${LANGUAGE_KEY_PREFIX}${ownerId()}`;
+  }
+
+  function seedKey() {
+    return `${SEED_KEY_PREFIX}${ownerId()}`;
+  }
+
+  function migrationKey() {
+    return `${MIGRATION_KEY_PREFIX}${ownerId()}`;
   }
 
   function uid() {
@@ -54,38 +118,69 @@
       .trim();
   }
 
-  function klicVyrazu(value) {
-    return normalizujVyraz(value).toLocaleLowerCase('en-US');
+  function klicVyrazu(value, jazyk = aktivniJazyk) {
+    const locale = JAZYKY[platnyJazyk(jazyk)]?.locale || 'en-US';
+    return normalizujVyraz(value).toLocaleLowerCase(locale);
   }
 
-  function nacti() {
+  function jazykAplikace() {
+    const app = String(window.LubaNoteI18n?.ziskejJazyk?.() || 'cs').toLowerCase();
+    return JAZYKY[app] ? app : 'cs';
+  }
+
+  function prekladovyJazykPro(jazyk = aktivniJazyk) {
+    const source = platnyJazyk(jazyk);
+    const app = jazykAplikace();
+    if (app !== source) return app;
+    return source === 'en' ? 'cs' : 'en';
+  }
+
+  function jazykInfo(id = aktivniJazyk) {
+    return JAZYKY[platnyJazyk(id)];
+  }
+
+  function popisJazykovehoSmeru(jazyk = aktivniJazyk, cil = prekladovyJazykPro(jazyk)) {
+    const source = jazykInfo(jazyk);
+    const target = jazykInfo(cil);
+    return `${source.badge} ${source.nazev} → ${target.badge} ${target.nazev}`;
+  }
+
+  function parseItems(raw, jazyk = aktivniJazyk) {
+    if (!Array.isArray(raw)) return [];
+    const source = platnyJazyk(jazyk);
+    return raw.map((item) => ({
+      id: String(item?.id || uid()),
+      language: platnyJazyk(item?.language || source),
+      translationLanguage: platnyJazyk(item?.translationLanguage || prekladovyJazykPro(source)),
+      term: normalizujVyraz(item?.term),
+      translation: normalizujText(item?.translation, 240),
+      context: normalizujText(item?.context, 480),
+      bookTitle: normalizujText(item?.bookTitle, 180),
+      chapterTitle: normalizujText(item?.chapterTitle, 180),
+      sourceType: normalizujText(item?.sourceType, 40) || 'manual',
+      createdAt: Number(item?.createdAt) || Date.now(),
+      updatedAt: Number(item?.updatedAt) || Number(item?.createdAt) || Date.now(),
+      level: Math.max(0, Math.min(5, Number(item?.level) || 0)),
+      reviews: Math.max(0, Number(item?.reviews) || 0),
+      correct: Math.max(0, Number(item?.correct) || 0),
+      wrong: Math.max(0, Number(item?.wrong) || 0),
+      nextReviewAt: Math.max(0, Number(item?.nextReviewAt) || 0),
+      lastReviewedAt: Math.max(0, Number(item?.lastReviewedAt) || 0)
+    })).filter((item) => item.term && item.translation);
+  }
+
+  function nacti(jazyk = aktivniJazyk) {
     try {
-      const raw = JSON.parse(localStorage.getItem(storageKey()) || '[]');
-      if (!Array.isArray(raw)) return [];
-      return raw.map((item) => ({
-        id: String(item?.id || uid()),
-        term: normalizujVyraz(item?.term),
-        translation: normalizujText(item?.translation, 240),
-        context: normalizujText(item?.context, 480),
-        bookTitle: normalizujText(item?.bookTitle, 180),
-        chapterTitle: normalizujText(item?.chapterTitle, 180),
-        createdAt: Number(item?.createdAt) || Date.now(),
-        updatedAt: Number(item?.updatedAt) || Number(item?.createdAt) || Date.now(),
-        level: Math.max(0, Math.min(5, Number(item?.level) || 0)),
-        reviews: Math.max(0, Number(item?.reviews) || 0),
-        correct: Math.max(0, Number(item?.correct) || 0),
-        wrong: Math.max(0, Number(item?.wrong) || 0),
-        nextReviewAt: Math.max(0, Number(item?.nextReviewAt) || 0),
-        lastReviewedAt: Math.max(0, Number(item?.lastReviewedAt) || 0)
-      })).filter((item) => item.term && item.translation);
+      const raw = JSON.parse(localStorage.getItem(storageKey(jazyk)) || '[]');
+      return parseItems(raw, jazyk);
     } catch (_error) {
       return [];
     }
   }
 
-  function uloz(items) {
+  function uloz(items, jazyk = aktivniJazyk) {
     try {
-      localStorage.setItem(storageKey(), JSON.stringify((items || []).slice(0, MAX_ITEMS)));
+      localStorage.setItem(storageKey(jazyk), JSON.stringify((items || []).slice(0, MAX_ITEMS)));
       return true;
     } catch (error) {
       console.warn('Výukový slovník se nepodařilo uložit:', error);
@@ -93,54 +188,126 @@
     }
   }
 
+  function migrujAnglickySlovnik() {
+    if (localStorage.getItem(migrationKey()) === '1') return;
+
+    const legacyKey = `${LEGACY_EN_STORAGE_PREFIX}${ownerId()}`;
+    let legacy = [];
+    try { legacy = JSON.parse(localStorage.getItem(legacyKey) || '[]'); } catch (_error) {}
+
+    if (Array.isArray(legacy) && legacy.length) {
+      const current = nacti('en');
+      const existing = new Set(current.map((item) => klicVyrazu(item.term, 'en')));
+      const merged = [...current];
+      parseItems(legacy, 'en').forEach((item) => {
+        const key = klicVyrazu(item.term, 'en');
+        if (!key || existing.has(key)) return;
+        existing.add(key);
+        merged.push({ ...item, language: 'en', translationLanguage: 'cs', sourceType: item.sourceType || 'reader' });
+      });
+      if (merged.length !== current.length) uloz(merged, 'en');
+    }
+
+    // Migrace je jednorázová. Starý 658BZ/CF storage zůstává jen jako bezpečná záloha,
+    // ale po smazání slovíčka už se nesmí při dalším startu znovu přidat.
+    localStorage.setItem(migrationKey(), '1');
+  }
+
+  function vlozTestovaciSadu() {
+    if (localStorage.getItem(seedKey()) === '1') return;
+    const now = Date.now();
+
+    PORADI_JAZYKU.forEach((jazyk) => {
+      const items = nacti(jazyk);
+      const existing = new Set(items.map((item) => klicVyrazu(item.term, jazyk)));
+      const target = jazyk === 'cs' ? 'en' : 'cs';
+      (TESTOVACI_SLOVA[jazyk] || []).forEach(([term, translation], index) => {
+        const key = klicVyrazu(term, jazyk);
+        if (!key || existing.has(key)) return;
+        existing.add(key);
+        items.push({
+          id: uid(),
+          language: jazyk,
+          translationLanguage: target,
+          term,
+          translation,
+          context: '',
+          bookTitle: 'Testovací sada LubaNote',
+          chapterTitle: '',
+          sourceType: 'seed',
+          createdAt: now - index,
+          updatedAt: now - index,
+          level: 0,
+          reviews: 0,
+          correct: 0,
+          wrong: 0,
+          nextReviewAt: 0,
+          lastReviewedAt: 0
+        });
+      });
+      uloz(items, jazyk);
+    });
+
+    localStorage.setItem(seedKey(), '1');
+  }
+
   function oznamZmenu(detail = {}) {
     window.dispatchEvent(new CustomEvent('lubanote:learning-dictionary-change', {
-      detail: { ownerId: ownerId(), ...detail }
+      detail: { ownerId: ownerId(), language: detail.language || aktivniJazyk, ...detail }
     }));
   }
 
-  function vse() {
-    return nacti().sort((a, b) => b.updatedAt - a.updatedAt);
+  function vse(jazyk = aktivniJazyk) {
+    return nacti(jazyk).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  function najdiPodleVyrazu(term) {
-    const key = klicVyrazu(term);
+  function najdiPodleVyrazu(term, jazyk = aktivniJazyk) {
+    const source = platnyJazyk(jazyk);
+    const key = klicVyrazu(term, source);
     if (!key) return null;
-    return nacti().find((item) => klicVyrazu(item.term) === key) || null;
+    return nacti(source).find((item) => klicVyrazu(item.term, source) === key) || null;
   }
 
   function ulozPolozku(vstup = {}) {
+    const language = platnyJazyk(vstup.language || aktivniJazyk);
+    const translationLanguage = platnyJazyk(vstup.translationLanguage || prekladovyJazykPro(language));
     const term = normalizujVyraz(vstup.term);
     const translation = normalizujText(vstup.translation, 240);
     if (!term || !translation) return { ok: false, reason: 'missing' };
 
-    const items = nacti();
-    const key = klicVyrazu(term);
-    const index = items.findIndex((item) => klicVyrazu(item.term) === key);
+    const items = nacti(language);
+    const key = klicVyrazu(term, language);
+    const index = items.findIndex((item) => klicVyrazu(item.term, language) === key);
     const now = Date.now();
 
     if (index >= 0) {
       items[index] = {
         ...items[index],
+        language,
+        translationLanguage,
         term,
         translation,
         context: normalizujText(vstup.context || items[index].context, 480),
         bookTitle: normalizujText(vstup.bookTitle || items[index].bookTitle, 180),
         chapterTitle: normalizujText(vstup.chapterTitle || items[index].chapterTitle, 180),
+        sourceType: normalizujText(vstup.sourceType || items[index].sourceType, 40) || 'manual',
         updatedAt: now
       };
-      if (!uloz(items)) return { ok: false, reason: 'storage' };
-      oznamZmenu({ operation: 'update', id: items[index].id });
+      if (!uloz(items, language)) return { ok: false, reason: 'storage' };
+      oznamZmenu({ operation: 'update', id: items[index].id, language });
       return { ok: true, item: { ...items[index] }, updated: true };
     }
 
     const item = {
       id: uid(),
+      language,
+      translationLanguage,
       term,
       translation,
       context: normalizujText(vstup.context, 480),
       bookTitle: normalizujText(vstup.bookTitle, 180),
       chapterTitle: normalizujText(vstup.chapterTitle, 180),
+      sourceType: normalizujText(vstup.sourceType, 40) || 'manual',
       createdAt: now,
       updatedAt: now,
       level: 0,
@@ -152,18 +319,19 @@
     };
 
     items.unshift(item);
-    if (!uloz(items)) return { ok: false, reason: 'storage' };
-    oznamZmenu({ operation: 'insert', id: item.id });
+    if (!uloz(items, language)) return { ok: false, reason: 'storage' };
+    oznamZmenu({ operation: 'insert', id: item.id, language });
     return { ok: true, item: { ...item }, updated: false };
   }
 
-  function smazPolozku(id) {
-    const before = nacti();
+  function smazPolozku(id, jazyk = aktivniJazyk) {
+    const source = platnyJazyk(jazyk);
+    const before = nacti(source);
     const after = before.filter((item) => item.id !== String(id || ''));
     if (after.length === before.length) return false;
-    if (!uloz(after)) return false;
-    if (aktivniKartaId === id) aktivniKartaId = null;
-    oznamZmenu({ operation: 'delete', id: String(id || '') });
+    if (!uloz(after, source)) return false;
+    if (source === aktivniJazyk && aktivniKartaId === id) aktivniKartaId = null;
+    oznamZmenu({ operation: 'delete', id: String(id || ''), language: source });
     return true;
   }
 
@@ -173,16 +341,20 @@
     return el.value;
   }
 
-  async function prelozEnCs(text) {
+  async function preloz(text, sourceLanguage = aktivniJazyk, targetLanguage = prekladovyJazykPro(sourceLanguage)) {
     const vyraz = normalizujVyraz(text);
+    const source = platnyJazyk(sourceLanguage);
+    const target = platnyJazyk(targetLanguage);
     if (!vyraz) return { ok: false, error: 'Vyber slovo nebo frázi.' };
     if (vyraz.length > 160) return { ok: false, error: 'Pro překlad vyber kratší slovo nebo frázi.' };
+    if (source === target) return { ok: false, error: 'Zdrojový a cílový jazyk musí být rozdílný.' };
     if (navigator.onLine === false) return { ok: false, error: 'Překlad potřebuje připojení k internetu.' };
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 9000);
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(vyraz)}&langpair=en%7Ccs`;
+      const pair = `${source}|${target}`;
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(vyraz)}&langpair=${encodeURIComponent(pair)}`;
       const response = await fetch(url, {
         method: 'GET',
         credentials: 'omit',
@@ -195,11 +367,11 @@
         bezpecnePrevedHtmlEntity(data?.responseData?.translatedText || ''),
         240
       );
-      if (!translated || translated.toLocaleLowerCase('en-US') === vyraz.toLocaleLowerCase('en-US')) {
+      if (!translated || translated.toLocaleLowerCase(JAZYKY[target].locale) === vyraz.toLocaleLowerCase(JAZYKY[source].locale)) {
         return { ok: false, error: 'Automatický překlad se nepodařilo získat. Překlad můžeš dopsat ručně.' };
       }
-      return { ok: true, translation: translated };
-    } catch (error) {
+      return { ok: true, translation: translated, sourceLanguage: source, targetLanguage: target };
+    } catch (_error) {
       const offline = navigator.onLine === false;
       return {
         ok: false,
@@ -212,12 +384,18 @@
     }
   }
 
-  function anglickyHlas() {
+  async function prelozEnCs(text) {
+    return preloz(text, 'en', 'cs');
+  }
+
+  function hlasProJazyk(jazyk = aktivniJazyk) {
     try {
+      const source = platnyJazyk(jazyk);
+      const locale = JAZYKY[source].locale;
       const voices = window.speechSynthesis?.getVoices?.() || [];
-      return voices.find((voice) => /^en-GB$/i.test(voice.lang))
-        || voices.find((voice) => /^en-US$/i.test(voice.lang))
-        || voices.find((voice) => /^en[-_]/i.test(voice.lang))
+      return voices.find((voice) => String(voice.lang || '').toLowerCase() === locale.toLowerCase())
+        || voices.find((voice) => String(voice.lang || '').toLowerCase().startsWith(`${source}-`))
+        || voices.find((voice) => String(voice.lang || '').toLowerCase() === source)
         || null;
     } catch (_error) {
       return null;
@@ -262,7 +440,8 @@
     return promise;
   }
 
-  function pripravVyslovnost(text) {
+  function pripravVyslovnost(text, jazyk = aktivniJazyk) {
+    if (platnyJazyk(jazyk) !== 'en') return;
     const slova = normalizujVyraz(text).match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
     slova.slice(0, 8).forEach((slovo) => { void najdiAudioUrlSlova(slovo); });
   }
@@ -402,17 +581,18 @@
     }
   }
 
-  function zkusSpeechSynthesis(vyraz, button = null) {
+  function zkusSpeechSynthesis(vyraz, button = null, jazyk = aktivniJazyk) {
     const synth = window.speechSynthesis;
     if (!synth || typeof SpeechSynthesisUtterance !== 'function') return false;
 
     try {
+      const source = platnyJazyk(jazyk);
       synth.cancel();
       synth.resume?.();
       const utterance = new SpeechSynthesisUtterance(vyraz);
       aktivniUtterance = utterance;
-      const voice = anglickyHlas();
-      utterance.lang = voice?.lang || 'en-GB';
+      const voice = hlasProJazyk(source);
+      utterance.lang = voice?.lang || JAZYKY[source].locale;
       if (voice) utterance.voice = voice;
       utterance.rate = 0.9;
       utterance.pitch = 1;
@@ -461,56 +641,62 @@
     }
   }
 
-  function vyslov(text, button = null) {
+  function vyslov(text, button = null, jazyk = aktivniJazyk) {
     const vyraz = normalizujVyraz(text);
     if (!vyraz) return false;
+    const source = platnyJazyk(jazyk);
+    const locale = JAZYKY[source].locale;
 
-    // 658CE – APK používá nativní Android TextToSpeech. WebView speechSynthesis
-    // na některých zařízeních existuje, ale reálně nevydá zvuk. Nativní plugin
-    // proto dostává přednost a webové cesty zůstávají jen jako fallback pro PWA/PC.
+    // APK: nativní Android TextToSpeech – stejný bridge jako v 658CE,
+    // pouze locale už není natvrdo angličtina.
     const nativeTts = window.Capacitor?.Plugins?.LubaNoteTts;
     if (nativeTts?.speak) {
       signalizujVyslovnost(button, 'start');
       void nativeTts.speak({
         text: vyraz,
-        language: 'en-GB',
+        language: locale,
         rate: 0.90,
         pitch: 1.0
       }).then(() => {
         signalizujVyslovnost(button, 'done');
       }).catch((error) => {
-        console.warn('[LubaNote English] Nativní Android TTS selhal:', error);
-
-        // Když telefon nemá použitelný anglický TTS hlas, zkusíme dosavadní
-        // webovou cestu. AudioContext odemykáme ještě v návaznosti na tap.
-        odemkniAudioContext();
-        void prehrajAudioFallback(vyraz).then((ok) => {
-          if (ok) {
-            signalizujVyslovnost(button, 'done');
-            return;
-          }
-          if (!zkusSpeechSynthesis(vyraz, button)) signalizujVyslovnost(button, 'error');
-        });
+        console.warn(`[LubaNote Learning] Nativní TTS (${source}) selhal:`, error);
+        if (source === 'en') {
+          odemkniAudioContext();
+          void prehrajAudioFallback(vyraz).then((ok) => {
+            if (ok) signalizujVyslovnost(button, 'done');
+            else if (!zkusSpeechSynthesis(vyraz, button, source)) signalizujVyslovnost(button, 'error');
+          });
+        } else if (!zkusSpeechSynthesis(vyraz, button, source)) {
+          signalizujVyslovnost(button, 'error');
+        }
       });
       return true;
     }
 
-    // PC/PWA fallback – zachovává předchozí webovou výslovnost.
-    const ctx = odemkniAudioContext();
-    signalizujVyslovnost(button, 'start');
-    void prehrajAudioFallback(vyraz).then((ok) => {
-      if (ok) {
-        signalizujVyslovnost(button, 'done');
-        return;
-      }
-      if (!zkusSpeechSynthesis(vyraz, button)) signalizujVyslovnost(button, 'error');
-    });
+    // PC/PWA: pro angličtinu zachováme kvalitní audio slovníku, ostatní
+    // jazyky používají speechSynthesis se správným locale.
+    if (source === 'en') {
+      const ctx = odemkniAudioContext();
+      signalizujVyslovnost(button, 'start');
+      void prehrajAudioFallback(vyraz).then((ok) => {
+        if (ok) signalizujVyslovnost(button, 'done');
+        else if (!zkusSpeechSynthesis(vyraz, button, source)) signalizujVyslovnost(button, 'error');
+      });
+      return Boolean(ctx || window.speechSynthesis);
+    }
 
-    return Boolean(ctx || window.speechSynthesis);
+    signalizujVyslovnost(button, 'start');
+    if (!zkusSpeechSynthesis(vyraz, button, source)) signalizujVyslovnost(button, 'error');
+    return Boolean(window.speechSynthesis);
   }
 
-  function pocetSlov() {
-    return nacti().length;
+  function pocetSlov(jazyk = aktivniJazyk) {
+    return nacti(jazyk).length;
+  }
+
+  function pocetSlovCelkem() {
+    return PORADI_JAZYKU.reduce((sum, jazyk) => sum + pocetSlov(jazyk), 0);
   }
 
   function popisekPoctuSlov(count) {
@@ -520,14 +706,220 @@
     return `${n} slov`;
   }
 
+  function vykresliJazykovyStav() {
+    const source = jazykInfo(aktivniJazyk);
+    const targetId = prekladovyJazykPro(aktivniJazyk);
+    const target = jazykInfo(targetId);
+
+    prvky.languageButtons?.querySelectorAll?.('[data-learning-language]').forEach((button) => {
+      const active = button.dataset.learningLanguage === aktivniJazyk;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      const count = button.querySelector('.learningLanguageCount');
+      if (count) count.textContent = String(pocetSlov(button.dataset.learningLanguage));
+    });
+
+    if (prvky.languageMeta) {
+      prvky.languageMeta.textContent = `Učím se: ${source.nazev} · překlad: ${target.nazev}`;
+    }
+    if (prvky.practiceLanguage) {
+      prvky.practiceLanguage.textContent = `${source.badge} ${source.nazev}`;
+    }
+    if (prvky.manualAdd) {
+      prvky.manualAdd.title = `Přidat slovíčko – ${source.nazev}`;
+    }
+  }
+
+  function nastavAktivniJazyk(jazyk, { ulozitVolbu = true } = {}) {
+    const novy = platnyJazyk(jazyk);
+    if (novy === aktivniJazyk) {
+      vykresliJazykovyStav();
+      return novy;
+    }
+
+    aktivniJazyk = novy;
+    if (ulozitVolbu) localStorage.setItem(languageKey(), aktivniJazyk);
+    trenink = null;
+    aktivniKartaId = null;
+    prekladOdhalen = false;
+    if (prvky.search) prvky.search.value = '';
+    vykresliJazykovyStav();
+
+    if (!prvky.modal?.hidden) {
+      if (aktivniTab === 'words') vykresliSlova();
+      if (aktivniTab === 'practice') {
+        zahajTrenink('all');
+        vykresliProcvičování();
+      }
+      if (aktivniTab === 'stats') vykresliStatistiky();
+    }
+    return novy;
+  }
+
+  function vykresliJazyky() {
+    if (!prvky.languageButtons) return;
+    prvky.languageButtons.replaceChildren();
+    PORADI_JAZYKU.forEach((jazyk) => {
+      const info = jazykInfo(jazyk);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'learningLanguageButton';
+      button.dataset.learningLanguage = jazyk;
+      button.innerHTML = `<span class="learningLanguageBadge">${info.badge}</span><span class="learningLanguageName">${info.nazev}</span><small class="learningLanguageCount">${pocetSlov(jazyk)}</small>`;
+      button.addEventListener('click', () => nastavAktivniJazyk(jazyk));
+      prvky.languageButtons.append(button);
+    });
+    vykresliJazykovyStav();
+  }
+
   function nastavCount() {
     if (!prvky.count) return;
-    const count = pocetSlov();
-    prvky.count.textContent = count ? popisekPoctuSlov(count) : 'Otevřít';
+    const count = pocetSlovCelkem();
+    prvky.count.textContent = count ? `${count} slov` : 'Otevřít';
+    vykresliJazykovyStav();
   }
 
   function formatSource(item) {
     return [item.bookTitle, item.chapterTitle].filter(Boolean).join(' · ');
+  }
+
+  function zavriPolozkuDialog() {
+    if (!prvky.entryModal) return;
+    prvky.entryModal.hidden = true;
+    dialogStav = null;
+    window.LubaNoteKeyboard?.skryj?.();
+  }
+
+  function nastavDialogStatus(text, typ = '') {
+    if (!prvky.entryStatus) return;
+    prvky.entryStatus.textContent = String(text || '');
+    prvky.entryStatus.dataset.state = String(typ || '');
+  }
+
+  async function spustDialogPreklad({ autoSave = false } = {}) {
+    if (!dialogStav || !prvky.entryTerm || !prvky.entryTranslation) return;
+    const term = normalizujVyraz(prvky.entryTerm.value);
+    if (!term) {
+      nastavDialogStatus('Nejdřív napiš nebo vyber slovo či frázi.', 'error');
+      prvky.entryTerm.focus?.();
+      return;
+    }
+
+    const language = platnyJazyk(dialogStav.language || aktivniJazyk);
+    const target = prekladovyJazykPro(language);
+    dialogStav.language = language;
+    dialogStav.translationLanguage = target;
+    prvky.entryTranslate.disabled = true;
+    prvky.entrySave.disabled = true;
+    nastavDialogStatus(`Překládám · ${popisJazykovehoSmeru(language, target)}…`, 'loading');
+
+    const result = await preloz(term, language, target);
+    if (!dialogStav || dialogStav.language !== language) return;
+    prvky.entryTranslate.disabled = false;
+    prvky.entrySave.disabled = false;
+
+    if (!result?.ok || !result.translation) {
+      nastavDialogStatus(result?.error || 'Překlad se nepodařilo získat.', 'error');
+      return;
+    }
+
+    prvky.entryTranslation.value = result.translation;
+    nastavDialogStatus('Překlad můžeš před uložením upravit.', 'ok');
+    if (autoSave) ulozDialogPolozku({ automaticky: true });
+  }
+
+  function ulozDialogPolozku({ automaticky = false } = {}) {
+    if (!dialogStav || !prvky.entryTerm || !prvky.entryTranslation) return null;
+    const term = normalizujVyraz(prvky.entryTerm.value);
+    const translation = normalizujText(prvky.entryTranslation.value, 240);
+    if (!term) {
+      nastavDialogStatus('Doplň slovo nebo frázi.', 'error');
+      prvky.entryTerm.focus?.();
+      return null;
+    }
+    if (!translation) {
+      nastavDialogStatus('Doplň překlad nebo klepni na Přeložit.', 'error');
+      prvky.entryTranslation.focus?.();
+      return null;
+    }
+
+    const language = platnyJazyk(dialogStav.language || aktivniJazyk);
+    const translationLanguage = platnyJazyk(dialogStav.translationLanguage || prekladovyJazykPro(language));
+    const result = ulozPolozku({
+      term,
+      translation,
+      language,
+      translationLanguage,
+      context: prvky.entryContext?.value || dialogStav.context || '',
+      bookTitle: dialogStav.bookTitle || '',
+      chapterTitle: dialogStav.chapterTitle || '',
+      sourceType: dialogStav.sourceType || 'manual'
+    });
+
+    if (!result?.ok) {
+      nastavDialogStatus('Slovíčko se nepodařilo uložit.', 'error');
+      return result;
+    }
+
+    prvky.entrySave.textContent = result.updated ? 'Aktualizováno ✓' : 'Uloženo ✓';
+    nastavDialogStatus(
+      automaticky
+        ? `Automaticky uloženo · ${jazykInfo(language).nazev}`
+        : (result.updated ? 'Slovíčko bylo aktualizováno.' : `Uloženo · ${jazykInfo(language).nazev}`),
+      'ok'
+    );
+    nastavCount();
+    if (!prvky.modal?.hidden && aktivniTab === 'words' && language === aktivniJazyk) vykresliSlova();
+    return result;
+  }
+
+  function otevriPolozkuDialog(options = {}) {
+    if (!prvky.entryModal) return false;
+    const language = platnyJazyk(options.language || aktivniJazyk);
+    const translationLanguage = platnyJazyk(options.translationLanguage || prekladovyJazykPro(language));
+    const term = normalizujVyraz(options.term || '');
+    const existing = term ? najdiPodleVyrazu(term, language) : null;
+
+    dialogStav = {
+      language,
+      translationLanguage,
+      context: normalizujText(options.context, 480),
+      bookTitle: normalizujText(options.bookTitle, 180),
+      chapterTitle: normalizujText(options.chapterTitle, 180),
+      sourceType: normalizujText(options.sourceType, 40) || 'manual'
+    };
+
+    if (prvky.entryTitle) {
+      prvky.entryTitle.textContent = options.title || (term ? 'Překlad a slovník' : 'Přidat slovíčko');
+    }
+    if (prvky.entryLanguage) prvky.entryLanguage.textContent = popisJazykovehoSmeru(language, translationLanguage);
+    if (prvky.entryTerm) {
+      prvky.entryTerm.value = term;
+      prvky.entryTerm.readOnly = Boolean(options.lockTerm);
+    }
+    if (prvky.entryTranslation) prvky.entryTranslation.value = existing?.translation || normalizujText(options.translation, 240);
+    if (prvky.entryContext) prvky.entryContext.value = dialogStav.context;
+    if (prvky.entrySave) {
+      prvky.entrySave.disabled = false;
+      prvky.entrySave.textContent = existing ? 'Aktualizovat' : '＋ Uložit do slovníku';
+    }
+    if (prvky.entryTranslate) prvky.entryTranslate.disabled = false;
+
+    prvky.entryModal.hidden = false;
+    if (existing) {
+      nastavDialogStatus(`Toto slovíčko už máš v balíčku ${jazykInfo(language).nazev}.`, 'ok');
+    } else {
+      nastavDialogStatus(`Studijní balíček · ${popisJazykovehoSmeru(language, translationLanguage)}`, '');
+    }
+
+    if (options.autoTranslate && !existing) {
+      requestAnimationFrame(() => { void spustDialogPreklad({ autoSave: Boolean(options.autoSave) }); });
+    } else if (options.autoSave && existing) {
+      nastavDialogStatus(`Už je uložené · ${jazykInfo(language).nazev}`, 'ok');
+    } else if (!term) {
+      setTimeout(() => prvky.entryTerm?.focus?.(), 40);
+    }
+    return true;
   }
 
   function vykresliSlova() {
@@ -553,7 +945,7 @@
       speaker.textContent = '🔊';
       speaker.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
       speaker.addEventListener('pointerdown', (event) => event.stopPropagation());
-      speaker.addEventListener('click', (event) => { event.stopPropagation(); vyslov(item.term, speaker); });
+      speaker.addEventListener('click', (event) => { event.stopPropagation(); vyslov(item.term, speaker, item.language || aktivniJazyk); });
       top.append(term, speaker);
 
       const translation = document.createElement('div');
@@ -571,7 +963,7 @@
       const footer = document.createElement('div');
       footer.className = 'learningDictionaryRowFooter';
       const source = document.createElement('small');
-      source.textContent = formatSource(item) || 'LubaReader';
+      source.textContent = formatSource(item) || (item.sourceType === 'note' ? 'Poznámka' : item.sourceType === 'seed' ? 'Testovací sada LubaNote' : 'Ručně přidáno');
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'learningDictionaryDelete';
@@ -667,7 +1059,7 @@
     if (!item) {
       if (prvky.practiceEmpty) {
         if (!maSlova) {
-          prvky.practiceEmpty.textContent = 'Nejdřív si ulož alespoň jedno slovíčko z LubaReaderu.';
+          prvky.practiceEmpty.textContent = `Nejdřív si přidej alespoň jedno slovíčko pro ${jazykInfo(aktivniJazyk).nazev}.`;
         } else if (hotovo && trenink.nok > 0) {
           prvky.practiceEmpty.textContent = `Trénink hotový 💪 ${trenink.ok} OK · ${trenink.nok} NOK. Klepni nahoře na červené NOK a projedou jen chyby.`;
         } else if (hotovo) {
@@ -695,7 +1087,7 @@
         : 'Klepni nebo přejeď kartou – nejdřív ukážu odpověď';
     }
     if (prvky.practiceSpeak) prvky.practiceSpeak.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
-    pripravVyslovnost(item.term);
+    pripravVyslovnost(item.term, item.language || aktivniJazyk);
   }
 
   function ohodnotKartu(vysledek) {
@@ -755,7 +1147,7 @@
     potlacKlikDo = Date.now() + 360;
 
     // První gesto odpověď pouze odkryje. Hodnocení se zapíše až druhým gestem,
-    // takže uživatel vždy vidí český význam dřív, než karta zmizí.
+    // takže uživatel vždy vidí překlad dřív, než karta zmizí.
     if (!prekladOdhalen) {
       odhalOdpoved();
       prvky.practiceCard.style.transition = 'transform 155ms ease-out';
@@ -901,17 +1293,24 @@
   }
 
   function init() {
+    aktivniJazyk = platnyJazyk(localStorage.getItem(languageKey()) || 'en');
+    migrujAnglickySlovnik();
+    vlozTestovaciSadu();
+
     Object.assign(prvky, {
       open: document.getElementById('openEnglishLearningButton'),
       headerOpen: document.getElementById('englishLearningHeaderButton'),
       count: document.getElementById('englishLearningCount'),
       modal: document.getElementById('englishLearningModal'),
       close: document.getElementById('closeEnglishLearningButton'),
+      languageButtons: document.getElementById('englishLearningLanguageButtons'),
+      languageMeta: document.getElementById('englishLearningLanguageMeta'),
       tabs: document.getElementById('englishLearningTabs'),
       wordsPanel: document.getElementById('englishLearningWordsPanel'),
       practicePanel: document.getElementById('englishLearningPracticePanel'),
       statsPanel: document.getElementById('englishLearningStatsPanel'),
       search: document.getElementById('englishLearningSearch'),
+      manualAdd: document.getElementById('englishLearningManualAdd'),
       list: document.getElementById('englishLearningList'),
       empty: document.getElementById('englishLearningEmpty'),
       practiceCard: document.getElementById('englishLearningPracticeCard'),
@@ -929,11 +1328,24 @@
       practiceOk: document.getElementById('englishLearningPracticeOk'),
       practiceNok: document.getElementById('englishLearningPracticeNok'),
       practiceHint: document.getElementById('englishLearningPracticeHint'),
+      practiceLanguage: document.getElementById('englishLearningPracticeLanguage'),
       statsTotal: document.getElementById('englishLearningStatsTotal'),
       statsMastered: document.getElementById('englishLearningStatsMastered'),
       statsDue: document.getElementById('englishLearningStatsDue'),
-      statsReviews: document.getElementById('englishLearningStatsReviews')
+      statsReviews: document.getElementById('englishLearningStatsReviews'),
+      entryModal: document.getElementById('languageLearningEntryModal'),
+      entryTitle: document.getElementById('languageLearningEntryTitle'),
+      entryLanguage: document.getElementById('languageLearningEntryLanguage'),
+      entryClose: document.getElementById('languageLearningEntryClose'),
+      entryTerm: document.getElementById('languageLearningEntryTerm'),
+      entryTranslation: document.getElementById('languageLearningEntryTranslation'),
+      entryContext: document.getElementById('languageLearningEntryContext'),
+      entryStatus: document.getElementById('languageLearningEntryStatus'),
+      entryTranslate: document.getElementById('languageLearningEntryTranslate'),
+      entrySave: document.getElementById('languageLearningEntrySave')
     });
+
+    vykresliJazyky();
 
     prvky.open?.addEventListener('click', () => otevri('words'));
     prvky.headerOpen?.addEventListener('click', () => otevri('practice'));
@@ -946,6 +1358,27 @@
       if (button) nastavTab(button.dataset.learningTab);
     });
     prvky.search?.addEventListener('input', vykresliSlova);
+    prvky.manualAdd?.addEventListener('click', () => {
+      otevriPolozkuDialog({
+        language: aktivniJazyk,
+        sourceType: 'manual',
+        title: `Přidat slovíčko · ${jazykInfo(aktivniJazyk).nazev}`
+      });
+    });
+
+    prvky.entryClose?.addEventListener('click', zavriPolozkuDialog);
+    prvky.entryModal?.addEventListener('pointerdown', (event) => {
+      if (event.target === prvky.entryModal) zavriPolozkuDialog();
+    });
+    prvky.entryTranslate?.addEventListener('click', () => { void spustDialogPreklad(); });
+    prvky.entrySave?.addEventListener('click', () => { ulozDialogPolozku(); });
+    prvky.entryTerm?.addEventListener('input', () => {
+      if (prvky.entrySave) prvky.entrySave.textContent = '＋ Uložit do slovníku';
+    });
+    prvky.entryTranslation?.addEventListener('input', () => {
+      if (prvky.entrySave) prvky.entrySave.textContent = '＋ Uložit do slovníku';
+    });
+
     prvky.practiceReveal?.addEventListener('click', () => {
       odhalOdpoved();
     });
@@ -953,7 +1386,7 @@
     prvky.practiceSpeak?.addEventListener('click', (event) => {
       event.stopPropagation();
       const item = vyberKartu();
-      if (item) vyslov(item.term, prvky.practiceSpeak);
+      if (item) vyslov(item.term, prvky.practiceSpeak, item.language || aktivniJazyk);
     });
     prvky.practiceNok?.addEventListener('click', () => {
       const ids = [...(trenink?.wrongIds || [])];
@@ -966,25 +1399,37 @@
 
     window.addEventListener('lubanote:learning-dictionary-change', () => {
       nastavCount();
+      vykresliJazykovyStav();
       if (!prvky.modal?.hidden) {
         if (aktivniTab === 'words') vykresliSlova();
         if (aktivniTab === 'practice') vykresliTreninkBar();
         if (aktivniTab === 'stats') vykresliStatistiky();
       }
     });
+    window.addEventListener('lubanote:language-change', vykresliJazykovyStav);
     nastavCount();
   }
 
   window.LubaNoteLearningDictionary = Object.freeze({
     vse,
     pocetSlov,
+    pocetSlovCelkem,
     najdiPodleVyrazu,
     ulozPolozku,
     smazPolozku,
+    preloz,
     prelozEnCs,
     vyslov,
     otevri,
-    zavri
+    zavri,
+    otevriPolozkuDialog,
+    zavriPolozkuDialog,
+    ziskejAktivniJazyk: () => aktivniJazyk,
+    nastavAktivniJazyk,
+    ziskejJazyky: () => PORADI_JAZYKU.map((id) => ({ ...JAZYKY[id] })),
+    ziskejJazykInfo: (id) => ({ ...jazykInfo(id) }),
+    ziskejPrekladovyJazyk: (id = aktivniJazyk) => prekladovyJazykPro(id),
+    popisJazykovehoSmeru
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

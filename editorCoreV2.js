@@ -3384,6 +3384,40 @@
     return vyber && !vyber.sbaleny ? textVeVyberu(vyber) : "";
   }
 
+  function ziskejKontextVyberuProSelectionMenu() {
+    const vyber = ziskejVyberProSelectionMenu();
+    if (!vyber || vyber.sbaleny) return "";
+
+    if (vyber.zacatek.blok !== vyber.konec.blok) {
+      return textVeVyberu(vyber).replace(/\s+/g, " ").trim().slice(0, 480);
+    }
+
+    const blok = dokument?.bloky?.[vyber.zacatek.blok];
+    const text = textBloku(blok);
+    if (!text) return "";
+
+    let left = Math.max(0, vyber.zacatek.offset);
+    let right = Math.min(text.length, vyber.konec.offset);
+    let kroku = 0;
+
+    while (left > 0 && kroku < 220) {
+      const ch = text[left - 1];
+      if (/[.!?…\n]/.test(ch)) break;
+      left -= 1;
+      kroku += 1;
+    }
+
+    kroku = 0;
+    while (right < text.length && kroku < 260) {
+      const ch = text[right];
+      right += 1;
+      kroku += 1;
+      if (/[.!?…\n]/.test(ch)) break;
+    }
+
+    return text.slice(left, right).replace(/\s+/g, " ").trim().slice(0, 480);
+  }
+
   function ziskejRichVyberProSelectionMenu() {
     const vyber = ziskejVyberProSelectionMenu();
     if (!vyber || vyber.sbaleny || vyber.zacatek.blok !== vyber.konec.blok) return null;
@@ -7564,6 +7598,7 @@
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
     ziskejTextVyberuProSelectionMenu,
+    ziskejKontextVyberuProSelectionMenu,
     ziskejRichVyberProSelectionMenu,
     sklapniVyberNaKonecProSelectionMenu,
     vyjmiVyberProSelectionMenu,

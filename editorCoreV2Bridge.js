@@ -20,6 +20,8 @@
   const selectionKopirovat = document.getElementById("selectionKopirovat");
   const selectionVlozit = document.getElementById("selectionVlozit");
   const selectionVybratVse = document.getElementById("selectionVybratVse");
+  const selectionPrelozit = document.getElementById("selectionPrelozit");
+  const selectionDoSlovniku = document.getElementById("selectionDoSlovniku");
 
   /*
    * FIX 520 – FROZEN DESKTOP SELECTION CONTRACT.
@@ -220,6 +222,8 @@
     if (selectionKopirovat) selectionKopirovat.hidden = kurzor;
     if (selectionVlozit) selectionVlozit.hidden = false;
     if (selectionVybratVse) selectionVybratVse.hidden = false;
+    if (selectionPrelozit) selectionPrelozit.hidden = kurzor;
+    if (selectionDoSlovniku) selectionDoSlovniku.hidden = kurzor;
   }
 
   function pozicujV2SelectionMenu({ rozsah = null, bod = null } = {}) {
@@ -351,6 +355,32 @@
     potlacV2SelectionMenuDo = performance.now() + 300;
 
     try {
+      if (button === selectionPrelozit || button === selectionDoSlovniku) {
+        const text = String(core()?.ziskejTextVyberuProSelectionMenu?.() || "").trim();
+        if (!text) return;
+        const context = String(core()?.ziskejKontextVyberuProSelectionMenu?.() || "").trim();
+        const noteTitle = String(modalTitle?.textContent || "").replace(/\s+/g, " ").trim();
+        const learning = window.LubaNoteLearningDictionary;
+        if (!learning?.otevriPolozkuDialog) {
+          zobrazToast("Výuka jazyků není dostupná.", true);
+          skryjV2SelectionMenu();
+          return;
+        }
+
+        skryjV2SelectionMenu();
+        learning.otevriPolozkuDialog({
+          term: text,
+          context,
+          bookTitle: noteTitle ? `Poznámka · ${noteTitle}` : "Poznámka",
+          sourceType: "note",
+          lockTerm: true,
+          autoTranslate: true,
+          autoSave: button === selectionDoSlovniku,
+          title: button === selectionDoSlovniku ? "Uložit do slovníku" : "Přeložit výběr"
+        });
+        return;
+      }
+
       if (button === selectionKopirovat) {
         const text = core()?.ziskejTextVyberuProSelectionMenu?.() || "";
         const rich = core()?.ziskejRichVyberProSelectionMenu?.() || null;

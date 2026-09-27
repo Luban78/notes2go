@@ -598,3 +598,263 @@ body.learning-dictionary-open {
   border-color: color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
   box-shadow: 0 12px 30px rgba(0,0,0,.12), 0 0 0 2px color-mix(in srgb, var(--color-accent) 16%, transparent);
 }
+
+/* ==========================================================
+   658CG – VÝUKA JAZYKŮ: 6 PRODUKČNÍCH JAZYKŮ + RUČNÍ VKLÁDÁNÍ
+   ========================================================== */
+.languageLearningEntryModal[hidden] {
+  display: none !important;
+}
+
+.learningLanguagePickerWrap {
+  flex: 0 0 auto;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-background));
+}
+
+.learningLanguagePicker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.learningLanguageButton {
+  min-width: 0;
+  min-height: 46px;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+}
+
+.learningLanguageButton.active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--color-accent) 75%, transparent);
+}
+
+.learningLanguageBadge {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  color: var(--color-accent-text);
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.learningLanguageName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .86rem;
+  font-weight: 760;
+}
+
+.learningLanguageCount {
+  color: var(--color-text-secondary);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.learningLanguageMeta {
+  display: block;
+  margin-top: 7px;
+  color: var(--color-text-secondary);
+  font-size: .76rem;
+  text-align: center;
+}
+
+.learningWordsToolbar {
+  flex: 0 0 50px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.learningWordsToolbar #englishLearningSearch {
+  min-width: 0;
+  width: 100%;
+}
+
+.learningManualAdd {
+  min-width: 94px;
+  height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  color: var(--color-accent-text);
+  font: inherit;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.englishLearningPracticeLanguage {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-accent-text);
+  font-size: .75rem;
+  font-weight: 800;
+}
+
+.languageLearningEntryModal {
+  position: fixed;
+  inset: 0;
+  z-index: 12160;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, #000 58%, transparent);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.languageLearningEntryPanel {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 24px 70px rgba(0,0,0,.38);
+}
+
+.languageLearningEntryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.languageLearningEntryHeader > div {
+  min-width: 0;
+}
+
+.languageLearningEntryHeader strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.languageLearningEntryHeader small {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+}
+
+#languageLearningEntryClose {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-background));
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.55rem;
+}
+
+.languageLearningEntryField {
+  display: block;
+  margin-top: 11px;
+}
+
+.languageLearningEntryField > span {
+  display: block;
+  margin: 0 0 6px 3px;
+  color: var(--color-text-secondary);
+  font-size: .84rem;
+  font-weight: 760;
+}
+
+.languageLearningEntryField textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  outline: none;
+  background: color-mix(in srgb, var(--color-background) 68%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.35;
+}
+
+.languageLearningEntryField textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.languageLearningEntryStatus {
+  min-height: 1.3em;
+  margin: 12px 2px 0;
+  color: var(--color-text-secondary);
+  font-size: .82rem;
+  line-height: 1.35;
+}
+
+.languageLearningEntryStatus[data-state="ok"] { color: #228159; }
+.languageLearningEntryStatus[data-state="error"] { color: var(--color-danger-text, #d15b5b); }
+
+.languageLearningEntryActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.languageLearningEntryActions button {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+}
+
+#languageLearningEntrySave {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+}
+
+@media (max-width: 520px) {
+  .learningLanguagePicker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .learningLanguagePickerWrap { padding-left: 8px; padding-right: 8px; }
+  .learningWordsToolbar { grid-template-columns: minmax(0, 1fr) 88px; }
+  .learningManualAdd { min-width: 0; padding: 0 10px; font-size: .82rem; }
+  .languageLearningEntryModal { padding-left: 8px; padding-right: 8px; }
+  .languageLearningEntryPanel { border-radius: 20px; padding: 15px; }
+}
+
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .languageLearningEntryModal:not([hidden]) {
+    align-items: flex-end;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
+  }
+
+  body.ln-luba-klavesnice-open .languageLearningEntryPanel {
+    max-height: calc(100dvh - var(--ln-lk-height, 260px) - 13px - max(8px, env(safe-area-inset-top)));
+  }
+}

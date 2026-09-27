@@ -15039,3 +15039,16 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     color: var(--color-on-accent, #fff) !important;
   }
 }
+
+/* 658CG – rozšířená selection nabídka: překlad + studijní slovník */
+@media (max-width: 899px) {
+  .selectionMenu[data-ln-v2-owner="1"] {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: min(360px, calc(100vw - 16px));
+  }
+
+  .selectionMenu[data-ln-v2-owner="1"] button {
+    flex: 0 0 auto;
+  }
+}
