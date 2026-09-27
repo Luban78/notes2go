@@ -73,6 +73,7 @@
   let aktivniAudio = null;
   let audioContext = null;
   let dialogStav = null;
+  let dialogAutoCloseTimer = null;
   const audioUrlCache = new Map();
   const audioUrlPromises = new Map();
   const audioBufferCache = new Map();
@@ -785,6 +786,8 @@
 
   function zavriPolozkuDialog() {
     if (!prvky.entryModal) return;
+    clearTimeout(dialogAutoCloseTimer);
+    dialogAutoCloseTimer = null;
     prvky.entryModal.hidden = true;
     dialogStav = null;
     window.LubaNoteKeyboard?.skryj?.();
@@ -870,11 +873,23 @@
     );
     nastavCount();
     if (!prvky.modal?.hidden && aktivniTab === 'words' && language === aktivniJazyk) vykresliSlova();
+
+    // 658CH – po úspěšném uložení necháme potvrzení jednu sekundu čitelné
+    // a dialog potom automaticky zavřeme. Platí i pro auto-save ze selection menu.
+    const stavPoUlozeni = dialogStav;
+    clearTimeout(dialogAutoCloseTimer);
+    dialogAutoCloseTimer = setTimeout(() => {
+      if (dialogStav === stavPoUlozeni && prvky.entryModal && !prvky.entryModal.hidden) {
+        zavriPolozkuDialog();
+      }
+    }, 1000);
     return result;
   }
 
   function otevriPolozkuDialog(options = {}) {
     if (!prvky.entryModal) return false;
+    clearTimeout(dialogAutoCloseTimer);
+    dialogAutoCloseTimer = null;
     const language = platnyJazyk(options.language || aktivniJazyk);
     const translationLanguage = platnyJazyk(options.translationLanguage || prekladovyJazykPro(language));
     const term = normalizujVyraz(options.term || '');

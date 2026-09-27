@@ -15040,15 +15040,55 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   }
 }
 
-/* 658CG – rozšířená selection nabídka: překlad + studijní slovník */
+/* 658CH – kompaktní mobilní selection panel se třemi hlavními akcemi + overflow. */
 @media (max-width: 899px) {
   .selectionMenu[data-ln-v2-owner="1"] {
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: min(360px, calc(100vw - 16px));
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    max-width: calc(100vw - 24px);
+    padding: 5px;
+    border: 1.5px solid color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26);
   }
 
-  .selectionMenu[data-ln-v2-owner="1"] button {
+  .selectionMenu[data-ln-v2-owner="1"] > button {
     flex: 0 0 auto;
+  }
+
+  .selectionMenu[data-ln-v2-owner="1"] .selectionMenuMore {
+    min-width: 40px;
+    padding-inline: 10px;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .selectionMenuOverflow {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: 0;
+    z-index: 2;
+    display: grid;
+    min-width: 150px;
+    padding: 5px;
+    border: 1.5px solid color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+    border-radius: 13px;
+    background: var(--color-surface);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  }
+
+  .selectionMenuOverflow[hidden] {
+    display: none !important;
+  }
+
+  .selectionMenuOverflow button {
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
+  }
+
+  .selectionMenu.selectionOverflowNahoru .selectionMenuOverflow {
+    top: auto;
+    bottom: calc(100% + 7px);
   }
 }

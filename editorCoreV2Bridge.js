@@ -22,6 +22,8 @@
   const selectionVybratVse = document.getElementById("selectionVybratVse");
   const selectionPrelozit = document.getElementById("selectionPrelozit");
   const selectionDoSlovniku = document.getElementById("selectionDoSlovniku");
+  const selectionVice = document.getElementById("selectionVice");
+  const selectionOverflow = document.getElementById("selectionOverflow");
 
   /*
    * FIX 520 – FROZEN DESKTOP SELECTION CONTRACT.
@@ -205,8 +207,41 @@
     skryjV2SelectionMenu();
   }
 
+  function skryjV2SelectionOverflow() {
+    if (selectionOverflow) selectionOverflow.hidden = true;
+    if (selectionVice) selectionVice.setAttribute("aria-expanded", "false");
+    selectionMenu?.classList.remove("selectionOverflowNahoru");
+  }
+
+  function prepniV2SelectionOverflow() {
+    if (!selectionOverflow || !selectionVice || !selectionMenu) return;
+    const otevrit = selectionOverflow.hidden;
+    if (!otevrit) {
+      skryjV2SelectionOverflow();
+      return;
+    }
+
+    selectionOverflow.hidden = false;
+    selectionVice.setAttribute("aria-expanded", "true");
+    selectionMenu.classList.remove("selectionOverflowNahoru");
+
+    requestAnimationFrame(() => {
+      if (selectionOverflow.hidden || selectionMenu.hidden) return;
+      const menuRect = selectionMenu.getBoundingClientRect();
+      const overflowRect = selectionOverflow.getBoundingClientRect();
+      const viewportH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+      const offsetTop = window.visualViewport?.offsetTop || 0;
+      const doleMisto = offsetTop + viewportH - menuRect.bottom;
+      const nahoreMisto = menuRect.top - offsetTop;
+      if (doleMisto < overflowRect.height + 12 && nahoreMisto > doleMisto) {
+        selectionMenu.classList.add("selectionOverflowNahoru");
+      }
+    });
+  }
+
   function skryjV2SelectionMenu() {
     if (!selectionMenu) return;
+    skryjV2SelectionOverflow();
     if (selectionMenu.dataset.lnV2Owner === "1") {
       selectionMenu.hidden = true;
       selectionMenu.removeAttribute("data-ln-v2-owner");
@@ -218,12 +253,14 @@
 
   function nastavV2SelectionMenuTlacitka(kurzor = false) {
     if (!selectionMenu) return;
+    skryjV2SelectionOverflow();
     if (selectionVyjmout) selectionVyjmout.hidden = kurzor;
     if (selectionKopirovat) selectionKopirovat.hidden = kurzor;
     if (selectionVlozit) selectionVlozit.hidden = false;
     if (selectionVybratVse) selectionVybratVse.hidden = false;
     if (selectionPrelozit) selectionPrelozit.hidden = kurzor;
     if (selectionDoSlovniku) selectionDoSlovniku.hidden = kurzor;
+    if (selectionVice) selectionVice.hidden = false;
   }
 
   function pozicujV2SelectionMenu({ rozsah = null, bod = null } = {}) {
@@ -354,6 +391,12 @@
     event.stopImmediatePropagation();
     potlacV2SelectionMenuDo = performance.now() + 300;
 
+    if (button === selectionVice) {
+      prepniV2SelectionOverflow();
+      return;
+    }
+    skryjV2SelectionOverflow();
+
     try {
       if (button === selectionPrelozit || button === selectionDoSlovniku) {
         const text = String(core()?.ziskejTextVyberuProSelectionMenu?.() || "").trim();
@@ -367,7 +410,9 @@
           return;
         }
 
+        potlacV2SelectionMenuDo = performance.now() + 1400;
         skryjV2SelectionMenu();
+        core()?.skryjVyberProExterniModal?.();
         learning.otevriPolozkuDialog({
           term: text,
           context,

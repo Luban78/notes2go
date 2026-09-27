@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658cg-language-learning">
+  <link rel="stylesheet" href="style.css?v=658ch-selection-polish">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cg-language-learning">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -2168,12 +2168,15 @@
   </div>
   <!--nas panel-->
   <div id="selectionMenu" class="selectionMenu" hidden>
-    <button id="selectionVyjmout" type="button">Vyjmout</button>
     <button id="selectionKopirovat" type="button">Kopírovat</button>
-    <button id="selectionVlozit" type="button">Vložit</button>
-    <button id="selectionVybratVse" type="button">Vše</button>
     <button id="selectionPrelozit" type="button">Přeložit</button>
     <button id="selectionDoSlovniku" type="button">＋ Slovník</button>
+    <button id="selectionVice" class="selectionMenuMore" type="button" aria-label="Další možnosti" aria-expanded="false">⋮</button>
+    <div id="selectionOverflow" class="selectionMenuOverflow" hidden>
+      <button id="selectionVyjmout" type="button">Vyjmout</button>
+      <button id="selectionVlozit" type="button">Vložit</button>
+      <button id="selectionVybratVse" type="button">Vše</button>
+    </div>
   </div>
   
   <!-- ========================================
@@ -2406,7 +2409,7 @@
   <script src="editorDocuments.js?v=20260920-pdf-zoom-calm-652e"></script>
   <script src="legacyDocReader.js?v=20260919-doc-viewer-642a"></script>
   <script src="epubReader.js?v=658by-continuous-book-flow"></script>
-  <script src="learningDictionary.js?v=658cg-language-learning"></script>
+  <script src="learningDictionary.js?v=658ch-selection-polish"></script>
   <script src="documents.js?v=658cg-language-learning"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
@@ -2481,8 +2484,8 @@
   <script src="visualDebug.js?v=20260918-dock-drag-click-617"></script>
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
-  <script src="editorCoreV2.js?v=658cg-language-learning"></script>
-  <script src="editorCoreV2Bridge.js?v=658cg-language-learning"></script>
+  <script src="editorCoreV2.js?v=658ch-selection-polish"></script>
+  <script src="editorCoreV2Bridge.js?v=658ch-selection-polish"></script>
   <script src="lubaKeyboard.js?v=658bt-editor-selection-safe"></script>
   <script src="dictionarySync.js?v=20260920-dictionary-sync-650b"></script>
 

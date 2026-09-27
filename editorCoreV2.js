@@ -7124,6 +7124,18 @@
     return klonVyberu(vyber);
   }
 
+  /* 658CH – externí modal (Překlad / Slovník) potřebuje schovat pouze
+     VIDITELNOU DOM selection a staro-Android overlay. Modelový snapshot
+     ponecháváme nedotčený, aby se kvůli zavření handle neměnil obsah editoru. */
+  function skryjVyberProExterniModal() {
+    const vyber = ziskejVyberProSelectionMenu();
+    if (vyber) ulozenyFormatovaciVyber = klonVyberu(vyber);
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+    odstranV2SelectionOverlay();
+    skryjV2LubaCaret();
+    return true;
+  }
+
   function ziskejStavFormatu() {
     if (!dokument) return null;
     const vyber = ziskejFormatovaciVyber() || vyberZPosledniPozice();
@@ -7573,6 +7585,7 @@
     zavriVHostu,
     nastavPoziciOtevreni: nastavPoziciOtevreniVHostu,
     zachytAktualniVyber,
+    skryjVyberProExterniModal,
     nastavVelikost: nastavVelikostZToolbaru,
     prepniFormat: prepniBooleanFormatZToolbaru,
     nastavBarvu: nastavBarvuZToolbaru,
