@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658ch-selection-polish">
+  <link rel="stylesheet" href="style.css?v=658cj-selection-popup-anchor">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cg-language-learning">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -2168,14 +2168,17 @@
   </div>
   <!--nas panel-->
   <div id="selectionMenu" class="selectionMenu" hidden>
-    <button id="selectionKopirovat" type="button">Kopírovat</button>
-    <button id="selectionPrelozit" type="button">Přeložit</button>
-    <button id="selectionDoSlovniku" type="button">＋ Slovník</button>
-    <button id="selectionVice" class="selectionMenuMore" type="button" aria-label="Další možnosti" aria-expanded="false">⋮</button>
-    <div id="selectionOverflow" class="selectionMenuOverflow" hidden>
+    <div id="selectionPrimary" class="selectionMenuPrimary">
+      <button id="selectionKopirovat" type="button">Kopírovat</button>
       <button id="selectionVyjmout" type="button">Vyjmout</button>
       <button id="selectionVlozit" type="button">Vložit</button>
       <button id="selectionVybratVse" type="button">Vše</button>
+      <button id="selectionVice" class="selectionMenuMore" type="button" aria-label="Další možnosti" aria-expanded="false">⋮</button>
+    </div>
+    <div id="selectionOverflow" class="selectionMenuOverflow" hidden>
+      <button id="selectionDoSlovniku" type="button">＋ Slovník</button>
+      <button id="selectionPrelozit" type="button">Přeložit</button>
+      <button id="selectionZpet" class="selectionMenuBack" type="button" aria-label="Zpět na hlavní nabídku">←</button>
     </div>
   </div>
   
@@ -2485,7 +2488,7 @@
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=658ch-selection-polish"></script>
-  <script src="editorCoreV2Bridge.js?v=658ch-selection-polish"></script>
+  <script src="editorCoreV2Bridge.js?v=658cj-selection-popup-anchor"></script>
   <script src="lubaKeyboard.js?v=658bt-editor-selection-safe"></script>
   <script src="dictionarySync.js?v=20260920-dictionary-sync-650b"></script>
 

@@ -16,6 +16,7 @@
   const modalTitle = document.getElementById("modalTitle");
   const editorBackButton = document.getElementById("editorBackButton");
   const selectionMenu = document.getElementById("selectionMenu");
+  const selectionPrimary = document.getElementById("selectionPrimary");
   const selectionVyjmout = document.getElementById("selectionVyjmout");
   const selectionKopirovat = document.getElementById("selectionKopirovat");
   const selectionVlozit = document.getElementById("selectionVlozit");
@@ -24,6 +25,7 @@
   const selectionDoSlovniku = document.getElementById("selectionDoSlovniku");
   const selectionVice = document.getElementById("selectionVice");
   const selectionOverflow = document.getElementById("selectionOverflow");
+  const selectionZpet = document.getElementById("selectionZpet");
 
   /*
    * FIX 520 – FROZEN DESKTOP SELECTION CONTRACT.
@@ -67,6 +69,7 @@
   let v2SelectionMenuAktivni = false;
   let v2SelectionMenuKurzor = false;
   let v2SelectionMenuBod = null;
+  let v2SelectionOverflowKotva = null;
   let v2LokalniSchranka = "";
   let v2RichSchranka = null;
   let potlacV2SelectionMenuDo = 0;
@@ -209,34 +212,85 @@
 
   function skryjV2SelectionOverflow() {
     if (selectionOverflow) selectionOverflow.hidden = true;
+    if (selectionPrimary) selectionPrimary.hidden = false;
     if (selectionVice) selectionVice.setAttribute("aria-expanded", "false");
-    selectionMenu?.classList.remove("selectionOverflowNahoru");
+    selectionMenu?.classList.remove("selectionMenuRozsirene");
+    v2SelectionOverflowKotva = null;
+  }
+
+  function prepozicujAktualniV2SelectionMenu() {
+    if (!selectionMenu || selectionMenu.hidden) return;
+    if (v2SelectionMenuKurzor) {
+      pozicujV2SelectionMenu({ bod: v2SelectionMenuBod });
+      return;
+    }
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+      pozicujV2SelectionMenu({ rozsah: range });
+      return;
+    }
+    pozicujV2SelectionMenu();
+  }
+
+  function pozicujV2SelectionOverflowKeTreckam(kotva = null) {
+    if (!selectionMenu || selectionMenu.hidden || !kotva) return;
+
+    requestAnimationFrame(() => {
+      if (!aktivni || selectionMenu.hidden || !selectionMenu.classList.contains("selectionMenuRozsirene")) return;
+
+      const sirka = selectionMenu.offsetWidth || 140;
+      const vyska = selectionMenu.offsetHeight || 180;
+      const viewportW = window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth;
+      const viewportH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+      const offsetLeft = window.visualViewport?.offsetLeft || 0;
+      const offsetTop = window.visualViewport?.offsetTop || 0;
+      const okraj = 8;
+
+      /* 658CJ – rozšířený panel vyrůstá přímo z tlačítka ⋮.
+         Pravý horní roh nabídky kotvíme k pravému dolnímu rohu tří teček;
+         když dole není místo, otevře se stejným způsobem nad nimi. */
+      let x = Number(kotva.right) - sirka;
+      let y = Number(kotva.bottom) + 5;
+
+      if (y + vyska > offsetTop + viewportH - okraj) {
+        y = Number(kotva.top) - vyska - 5;
+      }
+
+      x = Math.max(offsetLeft + okraj, Math.min(x, offsetLeft + viewportW - sirka - okraj));
+      y = Math.max(offsetTop + okraj, Math.min(y, offsetTop + viewportH - vyska - okraj));
+
+      selectionMenu.style.left = `${Math.round(x)}px`;
+      selectionMenu.style.top = `${Math.round(y)}px`;
+    });
   }
 
   function prepniV2SelectionOverflow() {
-    if (!selectionOverflow || !selectionVice || !selectionMenu) return;
+    if (!selectionOverflow || !selectionPrimary || !selectionVice || !selectionMenu) return;
     const otevrit = selectionOverflow.hidden;
     if (!otevrit) {
       skryjV2SelectionOverflow();
+      v2SelectionOverflowKotva = null;
+      requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
       return;
     }
 
+    /* Rect musíme vzít ještě před skrytím primárního panelu. */
+    const rectVice = selectionVice.getBoundingClientRect?.();
+    v2SelectionOverflowKotva = rectVice
+      ? { left: rectVice.left, right: rectVice.right, top: rectVice.top, bottom: rectVice.bottom }
+      : null;
+
+    selectionPrimary.hidden = true;
     selectionOverflow.hidden = false;
     selectionVice.setAttribute("aria-expanded", "true");
-    selectionMenu.classList.remove("selectionOverflowNahoru");
+    selectionMenu.classList.add("selectionMenuRozsirene");
 
-    requestAnimationFrame(() => {
-      if (selectionOverflow.hidden || selectionMenu.hidden) return;
-      const menuRect = selectionMenu.getBoundingClientRect();
-      const overflowRect = selectionOverflow.getBoundingClientRect();
-      const viewportH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
-      const offsetTop = window.visualViewport?.offsetTop || 0;
-      const doleMisto = offsetTop + viewportH - menuRect.bottom;
-      const nahoreMisto = menuRect.top - offsetTop;
-      if (doleMisto < overflowRect.height + 12 && nahoreMisto > doleMisto) {
-        selectionMenu.classList.add("selectionOverflowNahoru");
-      }
-    });
+    if (v2SelectionOverflowKotva) {
+      pozicujV2SelectionOverflowKeTreckam(v2SelectionOverflowKotva);
+    } else {
+      requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
+    }
   }
 
   function skryjV2SelectionMenu() {
@@ -252,15 +306,42 @@
   }
 
   function nastavV2SelectionMenuTlacitka(kurzor = false) {
-    if (!selectionMenu) return;
+    if (!selectionMenu || !selectionPrimary || !selectionOverflow) return;
     skryjV2SelectionOverflow();
-    if (selectionVyjmout) selectionVyjmout.hidden = kurzor;
-    if (selectionKopirovat) selectionKopirovat.hidden = kurzor;
+
+    if (kurzor) {
+      /* Caret / prázdné místo: zachováme jednoduché Vložit + Vše. */
+      selectionPrimary.append(selectionVlozit, selectionVybratVse);
+      if (selectionKopirovat) selectionKopirovat.hidden = true;
+      if (selectionVyjmout) selectionVyjmout.hidden = true;
+      if (selectionVlozit) selectionVlozit.hidden = false;
+      if (selectionVybratVse) selectionVybratVse.hidden = false;
+      if (selectionVice) selectionVice.hidden = true;
+      if (selectionDoSlovniku) selectionDoSlovniku.hidden = true;
+      if (selectionPrelozit) selectionPrelozit.hidden = true;
+      return;
+    }
+
+    /* 658CI – označený text: hlavní panel je přesně Kopírovat / Vyjmout / ⋮.
+       V rozšířeném pohledu se původní panel neschovává pod druhý popup, ale
+       celý se nahradí nabídkou Vše / Slovník / Přeložit / Vložit / ←. */
+    selectionPrimary.append(selectionKopirovat, selectionVyjmout, selectionVice);
+    selectionOverflow.replaceChildren(
+      selectionVybratVse,
+      selectionDoSlovniku,
+      selectionPrelozit,
+      selectionVlozit,
+      selectionZpet
+    );
+
+    if (selectionKopirovat) selectionKopirovat.hidden = false;
+    if (selectionVyjmout) selectionVyjmout.hidden = false;
+    if (selectionVice) selectionVice.hidden = false;
     if (selectionVlozit) selectionVlozit.hidden = false;
     if (selectionVybratVse) selectionVybratVse.hidden = false;
-    if (selectionPrelozit) selectionPrelozit.hidden = kurzor;
-    if (selectionDoSlovniku) selectionDoSlovniku.hidden = kurzor;
-    if (selectionVice) selectionVice.hidden = false;
+    if (selectionDoSlovniku) selectionDoSlovniku.hidden = false;
+    if (selectionPrelozit) selectionPrelozit.hidden = false;
+    if (selectionZpet) selectionZpet.hidden = false;
   }
 
   function pozicujV2SelectionMenu({ rozsah = null, bod = null } = {}) {
@@ -393,6 +474,11 @@
 
     if (button === selectionVice) {
       prepniV2SelectionOverflow();
+      return;
+    }
+    if (button === selectionZpet) {
+      skryjV2SelectionOverflow();
+      requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
       return;
     }
     skryjV2SelectionOverflow();
