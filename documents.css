@@ -1523,6 +1523,7 @@ body.documents-docx-viewer-open {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.9375rem;
   line-height: 1.58;
+  text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 4;
@@ -2104,20 +2105,89 @@ body.documents-epub-viewer-open {
 .documentsEpubViewer.reader-line-normal .documentsEpubContent { line-height: 1.68; }
 .documentsEpubViewer.reader-line-airy .documentsEpubContent { line-height: 1.92; }
 
-/* Zarovnání přebíjí jen typické textové bloky; nadpisy, obálky a obrázky necháváme knize. */
-.documentsEpubViewer.reader-align-left .documentsEpubContent :is(p, li, blockquote) {
-  text-align: left !important;
-}
-
-.documentsEpubViewer.reader-align-justify .documentsEpubContent :is(p, li, blockquote) {
+/* 658BY – "Kniha" je čtečkový režim, ne slepé převzetí text-align z EPUB.
+   Běžné odstavce jsou jako v klasické čtečce do bloku, kapitoly/nadpisy vlevo. */
+.documentsEpubViewer.reader-align-book .documentsEpubContent .documentsEpubReadingBlock:not(.documentsEpubBookHeading) {
   text-align: justify !important;
   text-justify: inter-word;
 }
 
-/* Okraje stránky / šířka čtecího sloupce. */
-.documentsEpubViewer.reader-margins-narrow .documentsEpubContent { padding-inline: 12px; }
-.documentsEpubViewer.reader-margins-normal .documentsEpubContent { padding-inline: clamp(18px, 5vw, 42px); }
-.documentsEpubViewer.reader-margins-wide .documentsEpubContent { padding-inline: clamp(28px, 8vw, 70px); }
+.documentsEpubViewer.reader-align-book .documentsEpubContent p.documentsEpubReadingBlock:not(.documentsEpubBookHeading) {
+  text-indent: 1.25em !important;
+}
+
+.documentsEpubViewer.reader-align-left .documentsEpubContent .documentsEpubReadingBlock {
+  text-align: left !important;
+}
+
+.documentsEpubViewer.reader-align-justify .documentsEpubContent .documentsEpubReadingBlock {
+  text-align: justify !important;
+  text-justify: inter-word;
+}
+
+.documentsEpubViewer .documentsEpubContent .documentsEpubBookHeading {
+  text-align: left !important;
+  text-indent: 0 !important;
+}
+
+/* Okraje stránky / šířka čtecího sloupce. Proměnnou používají i předěly
+   kapitol/stran, aby jejich čára mohla běžet přes celý čtecí list. */
+.documentsEpubContent { --epub-reader-inline-padding: clamp(18px, 5vw, 42px); }
+.documentsEpubViewer.reader-margins-narrow .documentsEpubContent { --epub-reader-inline-padding: 12px; padding-inline: var(--epub-reader-inline-padding); }
+.documentsEpubViewer.reader-margins-normal .documentsEpubContent { --epub-reader-inline-padding: clamp(18px, 5vw, 42px); padding-inline: var(--epub-reader-inline-padding); }
+.documentsEpubViewer.reader-margins-wide .documentsEpubContent { --epub-reader-inline-padding: clamp(28px, 8vw, 70px); padding-inline: var(--epub-reader-inline-padding); }
+
+/* 658BY – jedna souvislá kniha: kapitoly už nejsou samostatné obrazovky.
+   Přechod je obyčejný nativní scroll oběma směry, bez výměny DOM a probliknutí. */
+.documentsEpubChapterSection {
+  position: relative;
+  min-width: 0;
+}
+
+.documentsEpubChapterSection + .documentsEpubChapterSection {
+  margin-top: 2.4em;
+  margin-left: calc(0px - var(--epub-reader-inline-padding));
+  margin-right: calc(0px - var(--epub-reader-inline-padding));
+  padding-top: 8em;
+  padding-inline: var(--epub-reader-inline-padding);
+  border-top: 1px solid rgba(128, 128, 128, .62);
+}
+
+.documentsEpubChapterBody {
+  min-width: 0;
+}
+
+/* Nadpis kapitoly zůstává vizuálně odlišný i při volbě bezpatkového textu. */
+.documentsEpubContent .documentsEpubBookHeading {
+  margin-top: 0.9em;
+  margin-bottom: 0.75em;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: .012em;
+}
+
+.documentsEpubContent .documentsEpubBookHeading strong,
+.documentsEpubContent .documentsEpubBookHeading b {
+  font-weight: 800;
+}
+
+/* EPUB pagebreak (epub:type=pagebreak / doc-pagebreak) může být i uprostřed
+   odstavce. V plynulém čtení ho ukážeme jako tenkou čáru přes stránku. */
+.documentsEpubPageBreak,
+.documentsEpubContent hr.documentsEpubPageRule {
+  display: block !important;
+  width: calc(100% + var(--epub-reader-inline-padding) + var(--epub-reader-inline-padding));
+  height: 0;
+  box-sizing: border-box;
+  margin: 1.15em calc(0px - var(--epub-reader-inline-padding));
+  padding: 0;
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: .8;
+  clear: both;
+  text-indent: 0 !important;
+}
 
 /* Volba písma; code/pre zůstávají monospace. */
 .documentsEpubViewer.reader-font-serif .documentsEpubContent,
@@ -2128,6 +2198,13 @@ body.documents-epub-viewer-open {
 .documentsEpubViewer.reader-font-sans .documentsEpubContent,
 .documentsEpubViewer.reader-font-sans .documentsEpubContent :not(code):not(pre) {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* Nadpis kapitoly má vlastní knižní řez bez ohledu na zvolené písmo těla. */
+.documentsEpubViewer.reader-font-book .documentsEpubContent .documentsEpubBookHeading,
+.documentsEpubViewer.reader-font-serif .documentsEpubContent .documentsEpubBookHeading,
+.documentsEpubViewer.reader-font-sans .documentsEpubContent .documentsEpubBookHeading {
+  font-family: Georgia, 'Times New Roman', serif !important;
 }
 
 /* Pozadí LubaReaderu. Sépie je výchozí a zachovává vzhled patch 643. */

@@ -360,7 +360,7 @@
 
   function povolenyStyl(styleText) {
     const povolene = new Set([
-      'text-align', 'font-weight', 'font-style', 'text-decoration',
+      'font-weight', 'font-style', 'text-decoration',
       'color', 'background-color', 'margin-left', 'margin-right',
       'text-indent', 'white-space'
     ]);
@@ -375,6 +375,31 @@
       vysledek.push(`${klic}:${hodnota}`);
     }
     return vysledek.join(';');
+  }
+
+  function jeEpubPageBreak(node) {
+    if (!node?.getAttribute) return false;
+    const epubType = String(node.getAttribute('epub:type') || node.getAttribute('type') || '').toLowerCase();
+    const role = String(node.getAttribute('role') || '').toLowerCase();
+    const cls = String(node.getAttribute('class') || '').toLowerCase();
+    return (
+      /(^|\s)pagebreak(\s|$)/.test(epubType) ||
+      role === 'doc-pagebreak' ||
+      /(^|[\s_-])(pagebreak|page-break|page_break|mbp_pagebreak)([\s_-]|$)/.test(cls)
+    );
+  }
+
+  function jeEpubNadpis(node, tag) {
+    if (/^h[1-6]$/.test(tag)) return true;
+    if (!node?.getAttribute || !['p', 'div', 'span'].includes(tag)) return false;
+    const cls = String(node.getAttribute('class') || '').toLowerCase();
+    const epubType = String(node.getAttribute('epub:type') || '').toLowerCase();
+    const role = String(node.getAttribute('role') || '').toLowerCase();
+    return (
+      role === 'heading' ||
+      /(^|[\s_-])(chapter[-_ ]?(title|name|number)|chaptertitle|chapterhead|heading|title)([\s_-]|$)/.test(cls) ||
+      /(^|\s)(title|chapter)(\s|$)/.test(epubType)
+    );
   }
 
   async function sanitizujKapitolu(balicek, chapterPath) {
@@ -397,6 +422,17 @@
       if (node.nodeType !== Node.ELEMENT_NODE) return null;
 
       const tag = node.tagName.toLowerCase();
+
+      // 658BY: EPUB pagebreak je semantická značka stránky, ne obsah.
+      // V plynulém LubaReaderu ji zobrazíme jako vodorovný předěl stejně
+      // jako klasické čtečky, a to i u markeru uprostřed odstavce.
+      if (jeEpubPageBreak(node)) {
+        const oddelovac = document.createElement('span');
+        oddelovac.className = 'documentsEpubPageBreak';
+        oddelovac.setAttribute('aria-hidden', 'true');
+        return oddelovac;
+      }
+
       if (zakazane.has(tag)) return null;
 
       if (!povoleneTagy.has(tag)) {
@@ -411,6 +447,9 @@
       const el = document.createElement(tag);
       const id = node.getAttribute('id');
       if (id) el.id = id.slice(0, 160);
+      if (jeEpubNadpis(node, tag)) el.classList.add('documentsEpubBookHeading');
+      if (['p', 'li', 'blockquote'].includes(tag)) el.classList.add('documentsEpubReadingBlock');
+      if (tag === 'hr') el.classList.add('documentsEpubPageRule');
       const safeStyle = povolenyStyl(node.getAttribute('style'));
       if (safeStyle) el.setAttribute('style', safeStyle);
 
@@ -435,7 +474,7 @@
           objectUrls.push(url);
           el.src = url;
           el.alt = String(node.getAttribute('alt') || '');
-          el.loading = 'lazy';
+          el.loading = 'eager';
         } catch (_error) {
           return null;
         }
