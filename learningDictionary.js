@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CA)
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CB)
    --------------------------------------------------------------
    - samostatná data od osobního slovníku LubaKeyboard,
    - ukládání slov/frází z LubaReaderu včetně věty, knihy a kapitoly,
@@ -26,6 +26,7 @@
   let aktivniUtterance = null;
   let aktivniAudio = null;
   const audioUrlCache = new Map();
+  const audioUrlPromises = new Map();
 
   function ownerId() {
     return String(localStorage.getItem(OWNER_KEY) || 'local').trim() || 'local';
@@ -224,26 +225,38 @@
     const key = normalizujVyraz(slovo).toLocaleLowerCase('en-US');
     if (!key || /\s/.test(key)) return '';
     if (audioUrlCache.has(key)) return audioUrlCache.get(key) || '';
-    audioUrlCache.set(key, '');
-    try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`, {
-        method: 'GET',
-        credentials: 'omit',
-        cache: 'force-cache'
-      });
-      if (!response.ok) return '';
-      const data = await response.json();
-      const entries = Array.isArray(data) ? data : [];
-      const urls = entries.flatMap((entry) => Array.isArray(entry?.phonetics) ? entry.phonetics : [])
-        .map((phonetic) => String(phonetic?.audio || '').trim())
-        .filter(Boolean);
-      const preferred = urls.find((url) => /-uk\.|_uk\.|-gb\.|_gb\./i.test(url)) || urls[0] || '';
-      const url = preferred.startsWith('//') ? `https:${preferred}` : preferred;
-      audioUrlCache.set(key, url);
-      return url;
-    } catch (_error) {
-      return '';
-    }
+    if (audioUrlPromises.has(key)) return audioUrlPromises.get(key);
+
+    const promise = (async () => {
+      try {
+        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`, {
+          method: 'GET',
+          credentials: 'omit',
+          cache: 'force-cache'
+        });
+        if (!response.ok) {
+          audioUrlCache.set(key, '');
+          return '';
+        }
+        const data = await response.json();
+        const entries = Array.isArray(data) ? data : [];
+        const urls = entries.flatMap((entry) => Array.isArray(entry?.phonetics) ? entry.phonetics : [])
+          .map((phonetic) => String(phonetic?.audio || '').trim())
+          .filter(Boolean);
+        const preferred = urls.find((url) => /-uk\.|_uk\.|-gb\.|_gb\./i.test(url)) || urls[0] || '';
+        const url = preferred.startsWith('//') ? `https:${preferred}` : preferred;
+        audioUrlCache.set(key, url);
+        return url;
+      } catch (_error) {
+        audioUrlCache.set(key, '');
+        return '';
+      } finally {
+        audioUrlPromises.delete(key);
+      }
+    })();
+
+    audioUrlPromises.set(key, promise);
+    return promise;
   }
 
   function pripravVyslovnost(text) {
@@ -282,21 +295,39 @@
     return prehrajAudioUrlSekvenci(urls);
   }
 
-  function vyslov(text) {
+  function signalizujVyslovnost(button, stav = 'start') {
+    if (!button) return;
+    clearTimeout(button._learningSpeakTimer);
+    button.classList.toggle('is-speaking', stav === 'start');
+    button.classList.toggle('is-unavailable', stav === 'error');
+    button.textContent = stav === 'error' ? '🔇' : '🔊';
+    if (stav !== 'start') {
+      button._learningSpeakTimer = setTimeout(() => {
+        button.classList.remove('is-speaking', 'is-unavailable');
+        button.textContent = '🔊';
+      }, stav === 'error' ? 1100 : 350);
+    }
+  }
+
+  function vyslov(text, button = null) {
     const vyraz = normalizujVyraz(text);
     if (!vyraz) return false;
+    signalizujVyslovnost(button, 'start');
+
     const slova = vyraz.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
     const cachedUrls = slova.slice(0, 8).map((slovo) => audioUrlCache.get(slovo.toLocaleLowerCase('en-US')) || '');
     if (slova.length && cachedUrls.length === slova.length && cachedUrls.every(Boolean)) {
-      // Pokud je výslovnost už přednačtená, audio.play() proběhne přímo z tapnutí uživatele.
-      void prehrajAudioUrlSekvenci(cachedUrls);
+      void prehrajAudioUrlSekvenci(cachedUrls).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
       return true;
     }
+
+    // Začni přednačítat skutečné slovníkové audio hned. Promise cache zabrání tomu,
+    // aby druhý tap během načítání omylem dostal prázdný výsledek.
     pripravVyslovnost(vyraz);
 
     const synth = window.speechSynthesis;
     if (!synth || typeof SpeechSynthesisUtterance !== 'function') {
-      void prehrajAudioFallback(vyraz);
+      void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
       return true;
     }
 
@@ -306,33 +337,41 @@
       synth.cancel();
       synth.resume?.();
 
-      // Android WebView umí po cancel() spolknout okamžitý speak().
-      // Krátké odložení + držená reference na utterance je výrazně spolehlivější.
+      let started = false;
+      const utterance = new SpeechSynthesisUtterance(vyraz);
+      aktivniUtterance = utterance;
+      const voice = anglickyHlas();
+      utterance.lang = voice?.lang || 'en-GB';
+      if (voice) utterance.voice = voice;
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      utterance.onstart = () => {
+        started = true;
+        signalizujVyslovnost(button, 'start');
+      };
+      utterance.onend = () => {
+        if (aktivniUtterance === utterance) aktivniUtterance = null;
+        signalizujVyslovnost(button, 'done');
+      };
+      utterance.onerror = () => {
+        if (aktivniUtterance === utterance) aktivniUtterance = null;
+        void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
+      };
+
+      // speak() běží přímo v click handleru. To je na Androidu spolehlivější než
+      // původní setTimeout, který ztrácel uživatelské gesto.
+      synth.speak(utterance);
       setTimeout(() => {
-        let started = false;
-        const utterance = new SpeechSynthesisUtterance(vyraz);
-        aktivniUtterance = utterance;
-        utterance.lang = anglickyHlas()?.lang || 'en-GB';
-        const voice = anglickyHlas();
-        if (voice) utterance.voice = voice;
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        utterance.onstart = () => { started = true; };
-        utterance.onend = () => { if (aktivniUtterance === utterance) aktivniUtterance = null; };
-        utterance.onerror = () => {
-          if (aktivniUtterance === utterance) aktivniUtterance = null;
-          void prehrajAudioFallback(vyraz);
-        };
-        synth.speak(utterance);
-        setTimeout(() => {
-          if (synth.paused) synth.resume?.();
-          if (!started && !synth.speaking) void prehrajAudioFallback(vyraz);
-        }, 900);
-      }, 80);
+        if (synth.paused) synth.resume?.();
+        if (!started && !synth.speaking) {
+          try { synth.cancel(); } catch (_error) {}
+          void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
+        }
+      }, 650);
       return true;
     } catch (_error) {
-      void prehrajAudioFallback(vyraz);
+      void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
       return true;
     }
   }
@@ -380,7 +419,8 @@
       speaker.className = 'learningDictionarySpeak';
       speaker.textContent = '🔊';
       speaker.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
-      speaker.addEventListener('click', () => vyslov(item.term));
+      speaker.addEventListener('pointerdown', (event) => event.stopPropagation());
+      speaker.addEventListener('click', (event) => { event.stopPropagation(); vyslov(item.term, speaker); });
       top.append(term, speaker);
 
       const translation = document.createElement('div');
@@ -513,7 +553,15 @@
     prvky.practiceReveal.hidden = prekladOdhalen;
     prvky.practiceSource.textContent = formatSource(item);
     prvky.practiceSource.hidden = !prekladOdhalen || !formatSource(item);
-    if (prvky.practiceHint) prvky.practiceHint.hidden = false;
+    prvky.practiceCard.classList.toggle('answer-hidden', !prekladOdhalen);
+    prvky.practiceCard.classList.toggle('answer-shown', prekladOdhalen);
+    if (prvky.practiceHint) {
+      prvky.practiceHint.hidden = false;
+      prvky.practiceHint.textContent = prekladOdhalen
+        ? '← Neumím   ·   přejeď kartou   ·   Umím →'
+        : 'Klepni nebo přejeď kartou – nejdřív ukážu odpověď';
+    }
+    if (prvky.practiceSpeak) prvky.practiceSpeak.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
     pripravVyslovnost(item.term);
   }
 
@@ -552,6 +600,13 @@
     vykresliStatistiky();
   }
 
+  function odhalOdpoved() {
+    if (prekladOdhalen || !aktivniKartaId) return false;
+    prekladOdhalen = true;
+    vykresliProcvičování();
+    return true;
+  }
+
   function resetSwipeVzhled() {
     if (!prvky.practiceCard) return;
     prvky.practiceCard.classList.remove('is-swiping', 'swipe-right', 'swipe-left');
@@ -564,11 +619,26 @@
   function dokonciSwipe(vysledek, smer) {
     if (swipeZamek || !prvky.practiceCard || !aktivniKartaId) return;
     swipeZamek = true;
+    potlacKlikDo = Date.now() + 360;
+
+    // První gesto odpověď pouze odkryje. Hodnocení se zapíše až druhým gestem,
+    // takže uživatel vždy vidí český význam dřív, než karta zmizí.
+    if (!prekladOdhalen) {
+      odhalOdpoved();
+      prvky.practiceCard.style.transition = 'transform 155ms ease-out';
+      prvky.practiceCard.style.transform = '';
+      prvky.practiceCard.classList.remove('swipe-right', 'swipe-left');
+      setTimeout(() => {
+        resetSwipeVzhled();
+        swipeZamek = false;
+      }, 160);
+      return;
+    }
+
     const width = Math.max(window.innerWidth, prvky.practiceCard.getBoundingClientRect().width) + 120;
     prvky.practiceCard.style.transition = 'transform 170ms ease-out, opacity 170ms ease-out';
     prvky.practiceCard.style.transform = `translateX(${smer * width}px) rotate(${smer * 7}deg)`;
     prvky.practiceCard.style.opacity = '0.18';
-    potlacKlikDo = Date.now() + 350;
     setTimeout(() => {
       resetSwipeVzhled();
       ohodnotKartu(vysledek);
@@ -582,8 +652,14 @@
 
     card.addEventListener('pointerdown', (event) => {
       if (swipeZamek || !aktivniKartaId || event.button > 0 || event.target.closest('button')) return;
-      swipeStav = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
-      card.setPointerCapture?.(event.pointerId);
+      swipeStav = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        dx: 0,
+        dy: 0,
+        horizontal: false
+      };
       card.classList.add('is-swiping');
     });
 
@@ -593,32 +669,54 @@
       swipeStav.dy = event.clientY - swipeStav.y;
       const ax = Math.abs(swipeStav.dx);
       const ay = Math.abs(swipeStav.dy);
-      if (ax < 7 || ax <= ay * 1.15) return;
+
+      if (!swipeStav.horizontal) {
+        if (ax < 8 && ay < 8) return;
+        if (ay > ax * 1.15) return;
+        if (ax >= 8 && ax >= ay * 0.9) {
+          swipeStav.horizontal = true;
+          try { card.setPointerCapture?.(event.pointerId); } catch (_error) {}
+        } else {
+          return;
+        }
+      }
+
       event.preventDefault();
       const rotate = Math.max(-7, Math.min(7, swipeStav.dx / 18));
       card.style.transform = `translateX(${swipeStav.dx}px) rotate(${rotate}deg)`;
-      card.classList.toggle('swipe-right', swipeStav.dx > 24);
-      card.classList.toggle('swipe-left', swipeStav.dx < -24);
+      card.classList.toggle('swipe-right', swipeStav.dx > 18);
+      card.classList.toggle('swipe-left', swipeStav.dx < -18);
     });
 
     const konec = (event) => {
       if (!swipeStav || swipeStav.id !== event.pointerId || swipeZamek) return;
-      const { dx, dy } = swipeStav;
+      const { dx, dy, horizontal: horizontalLock } = swipeStav;
       swipeStav = null;
-      const threshold = Math.max(58, card.getBoundingClientRect().width * 0.16);
-      const horizontal = Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.15;
+      const width = card.getBoundingClientRect().width;
+      const threshold = Math.max(44, Math.min(68, width * 0.12));
+      const horizontal = horizontalLock && Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 0.95;
       if (horizontal) {
         event.preventDefault();
         dokonciSwipe(dx > 0 ? 'know' : 'wrong', dx > 0 ? 1 : -1);
       } else {
-        card.style.transition = 'transform 150ms ease-out';
+        card.style.transition = 'transform 145ms ease-out';
         card.style.transform = '';
         card.classList.remove('swipe-right', 'swipe-left');
-        setTimeout(resetSwipeVzhled, 155);
+        setTimeout(resetSwipeVzhled, 150);
       }
     };
+
     card.addEventListener('pointerup', konec);
-    card.addEventListener('pointercancel', konec);
+    card.addEventListener('pointercancel', (event) => {
+      if (!swipeStav || swipeStav.id !== event.pointerId) return;
+      swipeStav = null;
+      resetSwipeVzhled();
+    });
+
+    card.addEventListener('click', (event) => {
+      if (event.target.closest('button') || Date.now() < potlacKlikDo) return;
+      if (!prekladOdhalen) odhalOdpoved();
+    });
   }
 
   function vykresliStatistiky() {
@@ -685,6 +783,7 @@
       practiceCard: document.getElementById('englishLearningPracticeCard'),
       practiceEmpty: document.getElementById('englishLearningPracticeEmpty'),
       practiceTerm: document.getElementById('englishLearningPracticeTerm'),
+      practiceSpeak: document.getElementById('englishLearningPracticeSpeak'),
       practiceTranslation: document.getElementById('englishLearningPracticeTranslation'),
       practiceContext: document.getElementById('englishLearningPracticeContext'),
       practiceSource: document.getElementById('englishLearningPracticeSource'),
@@ -713,13 +812,13 @@
     });
     prvky.search?.addEventListener('input', vykresliSlova);
     prvky.practiceReveal?.addEventListener('click', () => {
-      prekladOdhalen = true;
-      vykresliProcvičování();
+      odhalOdpoved();
     });
-    prvky.practiceTerm?.addEventListener('click', () => {
-      if (Date.now() < potlacKlikDo) return;
+    prvky.practiceSpeak?.addEventListener('pointerdown', (event) => event.stopPropagation());
+    prvky.practiceSpeak?.addEventListener('click', (event) => {
+      event.stopPropagation();
       const item = vyberKartu();
-      if (item) vyslov(item.term);
+      if (item) vyslov(item.term, prvky.practiceSpeak);
     });
     prvky.practiceNok?.addEventListener('click', () => {
       const ids = [...(trenink?.wrongIds || [])];

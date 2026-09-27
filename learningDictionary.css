@@ -401,7 +401,7 @@ body.learning-dictionary-open {
 
 
 /* ==========================================================
-   658CA – swipe procvičování + průběh aktuálního tréninku
+   658CB – spolehlivý dvoukrokový swipe + skutečné tlačítko výslovnosti
    ========================================================== */
 .englishLearningPracticeSummary {
   width: min(520px, 100%);
@@ -544,4 +544,57 @@ body.learning-dictionary-open {
   .englishLearningPracticeSummary { margin-bottom: 8px; }
   .englishLearningPracticeCard { margin-top: 0; padding: 18px; }
   .englishLearningPracticeHint { font-size: .72rem; }
+}
+
+
+/* 658CB – odpověď se vždy odkryje před hodnocením + skutečné audio tlačítko */
+.englishLearningPracticeTermRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.englishLearningPracticeTerm {
+  cursor: default;
+}
+
+.englishLearningPracticeTerm::after {
+  content: none !important;
+}
+
+.englishLearningPracticeSpeak {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  font-size: 1.32rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.learningDictionarySpeak.is-speaking {
+  transform: scale(.9);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+}
+
+.learningDictionarySpeak.is-unavailable {
+  border-color: color-mix(in srgb, #d15b5b 60%, var(--color-border));
+}
+
+.englishLearningPracticeCard.answer-hidden.swipe-right::before,
+.englishLearningPracticeCard.answer-hidden.swipe-left::before {
+  content: 'UKÁZAT';
+  left: 50%;
+  right: auto;
+  color: var(--color-accent-text);
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+.englishLearningPracticeCard.answer-hidden.swipe-right,
+.englishLearningPracticeCard.answer-hidden.swipe-left {
+  border-color: color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
+  box-shadow: 0 12px 30px rgba(0,0,0,.12), 0 0 0 2px color-mix(in srgb, var(--color-accent) 16%, transparent);
 }
