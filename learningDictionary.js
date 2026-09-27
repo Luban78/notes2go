@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CC)
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CF)
    --------------------------------------------------------------
    - samostatná data od osobního slovníku LubaKeyboard,
    - ukládání slov/frází z LubaReaderu včetně věty, knihy a kapitoly,
@@ -903,6 +903,7 @@
   function init() {
     Object.assign(prvky, {
       open: document.getElementById('openEnglishLearningButton'),
+      headerOpen: document.getElementById('englishLearningHeaderButton'),
       count: document.getElementById('englishLearningCount'),
       modal: document.getElementById('englishLearningModal'),
       close: document.getElementById('closeEnglishLearningButton'),
@@ -935,6 +936,7 @@
     });
 
     prvky.open?.addEventListener('click', () => otevri('words'));
+    prvky.headerOpen?.addEventListener('click', () => otevri('practice'));
     prvky.close?.addEventListener('click', zavri);
     prvky.modal?.addEventListener('pointerdown', (event) => {
       if (event.target === prvky.modal) zavri();

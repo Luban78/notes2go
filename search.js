@@ -7,6 +7,33 @@ const noSearchResults =
 const clearSearchButton =
   document.getElementById("clearSearchButton");
 
+const searchRow =
+  searchNotes?.closest(".searchRow") || null;
+
+function jeVyhledavaniRozsirene() {
+  return Boolean(
+    searchRow?.classList.contains("searchExpanded")
+  );
+}
+
+function nastavRozsireneVyhledavani(rozsirene) {
+  if (!searchRow) {
+    return;
+  }
+
+  searchRow.classList.toggle(
+    "searchExpanded",
+    Boolean(rozsirene)
+  );
+
+  searchNotes?.setAttribute(
+    "aria-expanded",
+    rozsirene ? "true" : "false"
+  );
+
+  aktualizujTlacitkoMazaniVyhledavani();
+}
+
 // ==========================================
 // OCHRANA VYHLEDÁVÁNÍ PROTI AUTOFILLU
 //
@@ -26,6 +53,7 @@ function aktualizujTlacitkoMazaniVyhledavani() {
   }
 
   clearSearchButton.hidden =
+    !jeVyhledavaniRozsirene() &&
     searchNotes.value.length === 0;
 }
 
@@ -77,6 +105,12 @@ function pripravVyhledavaniPoKliknuti() {
   if (!searchNotes) {
     return;
   }
+
+  /*
+   * PATCH 658CF – na mobilu se hledání po klepnutí roztáhne
+   * přes celou dostupnou šířku a dočasně překryje akční ikony.
+   */
+  nastavRozsireneVyhledavani(true);
 
   /*
    * Kliknutí pouze připraví input pro psaní.
@@ -252,6 +286,7 @@ clearSearchButton?.addEventListener("click", () => {
   searchNotes.value = "";
   vyhledavaniAktivovaneUzivatelem = false;
   searchNotes.readOnly = true;
+  nastavRozsireneVyhledavani(false);
   clearSearchButton.hidden = true;
 
   // SEARCH CLOSE CONTRACT 540:
@@ -275,10 +310,12 @@ searchNotes.addEventListener("blur", () => {
 
   vyhledavaniAktivovaneUzivatelem = false;
   searchNotes.readOnly = true;
+  nastavRozsireneVyhledavani(false);
 });
 
 window.addEventListener("pageshow", () => {
   vyhledavaniAktivovaneUzivatelem = false;
+  nastavRozsireneVyhledavani(false);
   zajistiCisteNeaktivniVyhledavani();
   prekresliVysledkyVyhledavani();
 });
@@ -311,6 +348,7 @@ function vycistiVyhledavaniPoZamknutiTajnehoRezimu() {
   searchNotes.value = "";
   searchNotes.readOnly = true;
   vyhledavaniAktivovaneUzivatelem = false;
+  nastavRozsireneVyhledavani(false);
 
   if (noSearchResults) {
     noSearchResults.hidden = true;

@@ -1140,6 +1140,15 @@ body {
   transform: scale(0.94);
 }
 
+.englishLearningHeaderShortcutIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.28rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 .mainMenuIcon {
   display: inline-block;
   transform: translate(0px, -2px);
@@ -8603,8 +8612,29 @@ body.theme-retro {
 
 
   .searchRow {
+    position: relative;
     gap: 5px;
     margin-top: 7px;
+  }
+
+  /*
+   * PATCH 658CF – kompaktní pole + plná šířka při aktivním hledání.
+   * Akční tlačítka zůstávají v layoutu, ale pod roztaženým polem
+   * jsou dočasně skrytá a nedají se stisknout.
+   */
+  .searchRow.searchExpanded .searchBox {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 40;
+    width: 100% !important;
+    max-width: none !important;
+    flex: 0 0 100% !important;
+    box-shadow: 0 8px 22px rgba(23, 19, 47, 0.12);
+  }
+
+  .searchRow.searchExpanded .searchActions {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .searchBox {
