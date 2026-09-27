@@ -4824,10 +4824,16 @@ async function updateTagMenuUI() {
   });
 
   if (window.LubaNoteIcons?.nastavJenIkonu) {
+    /* PATCH 658BU – Oblast v editorovém toolbaru se po každém přepnutí
+     * skládá znovu přes nastavJenIkonu(). Tím vznikal nový hostitel pouze
+     * s třídou editorBottomSvgIcon, zatímco 658BS/658BT velikost a barvu
+     * záměrně řídí přes .lubaActionIcon. Proto kufr/domeček jako jediné
+     * zůstávaly malé a bílé. Přidáním stejné základní třídy se zapojí do
+     * existujícího editorového stylu bez zásahu do ikon jinde v aplikaci. */
     window.LubaNoteIcons.nastavJenIkonu(
       categoryTaskButton,
       activeArea === "work" ? "prace" : "soukrome",
-      ["editorBottomSvgIcon"]
+      ["lubaActionIcon", "editorBottomSvgIcon"]
     );
   }
 
