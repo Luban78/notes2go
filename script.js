@@ -3780,6 +3780,15 @@ function zpracujAndroidZpet() {
     return true;
   }
 
+  /* 658CO – Výuka jazyků je samostatná vrstva nad Poznámkami.
+     Systémové Zpět ji musí nejdřív zavřít, ne ukončit aplikaci. */
+  if (
+    window.LubaNoteLearningDictionary
+      ?.zpracujSystemoveZpet?.() === true
+  ) {
+    return true;
+  }
+
   const handoffModal =
     document.getElementById(
       "editorHandoffModal"

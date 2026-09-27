@@ -707,10 +707,29 @@
     return `${n} slov`;
   }
 
+  function jeDesktopTrainer() {
+    try {
+      return Boolean(window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function zavriJazykoveMenu() {
+    if (!prvky.languageButtons || !prvky.languageCurrent) return;
+    prvky.languageButtons.hidden = true;
+    prvky.languageCurrent.setAttribute('aria-expanded', 'false');
+  }
+
+  function prepniJazykoveMenu() {
+    if (!prvky.languageButtons || !prvky.languageCurrent) return;
+    const otevrit = prvky.languageButtons.hidden;
+    prvky.languageButtons.hidden = !otevrit;
+    prvky.languageCurrent.setAttribute('aria-expanded', otevrit ? 'true' : 'false');
+  }
+
   function vykresliJazykovyStav() {
     const source = jazykInfo(aktivniJazyk);
-    const targetId = prekladovyJazykPro(aktivniJazyk);
-    const target = jazykInfo(targetId);
 
     prvky.languageButtons?.querySelectorAll?.('[data-learning-language]').forEach((button) => {
       const active = button.dataset.learningLanguage === aktivniJazyk;
@@ -720,11 +739,11 @@
       if (count) count.textContent = String(pocetSlov(button.dataset.learningLanguage));
     });
 
-    if (prvky.languageMeta) {
-      prvky.languageMeta.textContent = `Učím se: ${source.nazev} · překlad: ${target.nazev}`;
-    }
-    if (prvky.practiceLanguage) {
-      prvky.practiceLanguage.textContent = `${source.badge} ${source.nazev}`;
+    if (prvky.languageCurrentBadge) prvky.languageCurrentBadge.textContent = source.badge;
+    if (prvky.languageCurrentName) prvky.languageCurrentName.textContent = source.nazev;
+    if (prvky.languageCurrent) {
+      prvky.languageCurrent.title = `Změnit jazyk – ${source.nazev}`;
+      prvky.languageCurrent.setAttribute('aria-label', `Jazyk k procvičování: ${source.nazev}. Klepnutím změnit.`);
     }
     if (prvky.manualAdd) {
       prvky.manualAdd.title = `Přidat slovíčko – ${source.nazev}`;
@@ -735,6 +754,7 @@
     const novy = platnyJazyk(jazyk);
     if (novy === aktivniJazyk) {
       vykresliJazykovyStav();
+      zavriJazykoveMenu();
       return novy;
     }
 
@@ -767,7 +787,10 @@
       button.className = 'learningLanguageButton';
       button.dataset.learningLanguage = jazyk;
       button.innerHTML = `<span class="learningLanguageBadge">${info.badge}</span><span class="learningLanguageName">${info.nazev}</span><small class="learningLanguageCount">${pocetSlov(jazyk)}</small>`;
-      button.addEventListener('click', () => nastavAktivniJazyk(jazyk));
+      button.addEventListener('click', () => {
+        nastavAktivniJazyk(jazyk);
+        zavriJazykoveMenu();
+      });
       prvky.languageButtons.append(button);
     });
     vykresliJazykovyStav();
@@ -1095,11 +1118,19 @@
     prvky.practiceSource.hidden = !prekladOdhalen || !formatSource(item);
     prvky.practiceCard.classList.toggle('answer-hidden', !prekladOdhalen);
     prvky.practiceCard.classList.toggle('answer-shown', prekladOdhalen);
+    const desktop = jeDesktopTrainer();
+    if (prvky.practiceDesktopActions) {
+      prvky.practiceDesktopActions.hidden = !(desktop && prekladOdhalen);
+    }
     if (prvky.practiceHint) {
       prvky.practiceHint.hidden = false;
-      prvky.practiceHint.textContent = prekladOdhalen
-        ? '← Neumím   ·   přejeď kartou   ·   Umím →'
-        : 'Klepni nebo přejeď kartou – nejdřív ukážu odpověď';
+      prvky.practiceHint.textContent = desktop
+        ? (prekladOdhalen
+          ? 'Klikni na kartu nebo Umím pro další slovo · Neumím vrátí slovo do NOK'
+          : 'Klikni na kartu – nejdřív ukážu odpověď')
+        : (prekladOdhalen
+          ? '← Neumím   ·   přejeď kartou   ·   Umím →'
+          : 'Klepni nebo přejeď kartou – nejdřív ukážu odpověď');
     }
     if (prvky.practiceSpeak) prvky.practiceSpeak.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
     pripravVyslovnost(item.term, item.language || aktivniJazyk);
@@ -1191,6 +1222,7 @@
     if (!card) return;
 
     card.addEventListener('pointerdown', (event) => {
+      if (jeDesktopTrainer()) return;
       if (swipeZamek || !aktivniKartaId || event.button > 0 || event.target.closest('button')) return;
       swipeStav = {
         id: event.pointerId,
@@ -1255,7 +1287,11 @@
 
     card.addEventListener('click', (event) => {
       if (event.target.closest('button') || Date.now() < potlacKlikDo) return;
-      if (!prekladOdhalen) odhalOdpoved();
+      if (!prekladOdhalen) {
+        odhalOdpoved();
+        return;
+      }
+      if (jeDesktopTrainer()) ohodnotKartu('know');
     });
   }
 
@@ -1294,6 +1330,7 @@
 
   function otevri(tab = 'words') {
     if (!prvky.modal) return;
+    zavriJazykoveMenu();
     prvky.modal.hidden = false;
     document.body.classList.add('learning-dictionary-open');
     nastavTab(tab);
@@ -1302,9 +1339,26 @@
 
   function zavri() {
     if (!prvky.modal) return;
+    zavriJazykoveMenu();
     prvky.modal.hidden = true;
     document.body.classList.remove('learning-dictionary-open');
     window.LubaNoteKeyboard?.skryj?.();
+  }
+
+  function zpracujSystemoveZpet() {
+    if (prvky.entryModal && !prvky.entryModal.hidden) {
+      zavriPolozkuDialog();
+      return true;
+    }
+    if (prvky.languageButtons && !prvky.languageButtons.hidden) {
+      zavriJazykoveMenu();
+      return true;
+    }
+    if (prvky.modal && !prvky.modal.hidden) {
+      zavri();
+      return true;
+    }
+    return false;
   }
 
   function init() {
@@ -1318,8 +1372,10 @@
       count: document.getElementById('englishLearningCount'),
       modal: document.getElementById('englishLearningModal'),
       close: document.getElementById('closeEnglishLearningButton'),
+      languageCurrent: document.getElementById('englishLearningLanguageCurrent'),
+      languageCurrentBadge: document.getElementById('englishLearningLanguageCurrentBadge'),
+      languageCurrentName: document.getElementById('englishLearningLanguageCurrentName'),
       languageButtons: document.getElementById('englishLearningLanguageButtons'),
-      languageMeta: document.getElementById('englishLearningLanguageMeta'),
       tabs: document.getElementById('englishLearningTabs'),
       wordsPanel: document.getElementById('englishLearningWordsPanel'),
       practicePanel: document.getElementById('englishLearningPracticePanel'),
@@ -1343,7 +1399,9 @@
       practiceOk: document.getElementById('englishLearningPracticeOk'),
       practiceNok: document.getElementById('englishLearningPracticeNok'),
       practiceHint: document.getElementById('englishLearningPracticeHint'),
-      practiceLanguage: document.getElementById('englishLearningPracticeLanguage'),
+      practiceDesktopActions: document.getElementById('englishLearningPracticeDesktopActions'),
+      practiceWrong: document.getElementById('englishLearningPracticeWrong'),
+      practiceKnow: document.getElementById('englishLearningPracticeKnow'),
       statsTotal: document.getElementById('englishLearningStatsTotal'),
       statsMastered: document.getElementById('englishLearningStatsMastered'),
       statsDue: document.getElementById('englishLearningStatsDue'),
@@ -1365,8 +1423,18 @@
     prvky.open?.addEventListener('click', () => otevri('words'));
     prvky.headerOpen?.addEventListener('click', () => otevri('practice'));
     prvky.close?.addEventListener('click', zavri);
+    prvky.languageCurrent?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      prepniJazykoveMenu();
+    });
     prvky.modal?.addEventListener('pointerdown', (event) => {
-      if (event.target === prvky.modal) zavri();
+      if (event.target === prvky.modal) {
+        zavri();
+        return;
+      }
+      if (!prvky.languageButtons?.hidden && !event.target.closest?.('.learningLanguagePickerWrap')) {
+        zavriJazykoveMenu();
+      }
     });
     prvky.tabs?.addEventListener('click', (event) => {
       const button = event.target.closest?.('[data-learning-tab]');
@@ -1409,6 +1477,12 @@
       zahajTrenink('wrong', ids);
       vykresliProcvičování();
     });
+    prvky.practiceWrong?.addEventListener('click', () => {
+      if (prekladOdhalen && aktivniKartaId) ohodnotKartu('wrong');
+    });
+    prvky.practiceKnow?.addEventListener('click', () => {
+      if (prekladOdhalen && aktivniKartaId) ohodnotKartu('know');
+    });
     initSwipe();
     try { window.speechSynthesis?.getVoices?.(); } catch (_error) {}
 
@@ -1439,6 +1513,7 @@
     zavri,
     otevriPolozkuDialog,
     zavriPolozkuDialog,
+    zpracujSystemoveZpet,
     ziskejAktivniJazyk: () => aktivniJazyk,
     nastavAktivniJazyk,
     ziskejJazyky: () => PORADI_JAZYKU.map((id) => ({ ...JAZYKY[id] })),

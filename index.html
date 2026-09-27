@@ -19,7 +19,7 @@
   
   <link rel="stylesheet" href="style.css?v=658cm-selection-popup-near-anchor">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
-  <link rel="stylesheet" href="learningDictionary.css?v=658cg-language-learning">
+  <link rel="stylesheet" href="learningDictionary.css?v=658co-compact-language-ui">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
   <link rel="stylesheet" href="desktop.css?v=658bn-reminders-fullwidth">
@@ -2256,14 +2256,20 @@
       <header class="englishLearningHeader">
         <div class="englishLearningHeaderTitle">
           <h2 id="englishLearningTitle">Výuka jazyků</h2>
-          <small>LubaReader · poznámky · vlastní studijní slovník</small>
         </div>
         <button id="closeEnglishLearningButton" type="button" aria-label="Zavřít výuku jazyků">×</button>
       </header>
 
       <div class="learningLanguagePickerWrap">
-        <div id="englishLearningLanguageButtons" class="learningLanguagePicker" aria-label="Jazyk k procvičování"></div>
-        <small id="englishLearningLanguageMeta" class="learningLanguageMeta"></small>
+        <div class="learningLanguageQuickRow">
+          <button id="englishLearningLanguageCurrent" class="learningLanguageCurrent" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="englishLearningLanguageButtons">
+            <span id="englishLearningLanguageCurrentBadge" class="learningLanguageBadge">EN</span>
+            <span id="englishLearningLanguageCurrentName" class="learningLanguageCurrentName">English</span>
+            <span class="learningLanguageChevron" aria-hidden="true">⌄</span>
+          </button>
+          <button id="englishLearningManualAdd" class="learningManualAdd" type="button">＋ Přidat slovo</button>
+        </div>
+        <div id="englishLearningLanguageButtons" class="learningLanguagePicker" aria-label="Jazyk k procvičování" hidden></div>
       </div>
 
       <nav id="englishLearningTabs" class="englishLearningTabs" role="tablist" aria-label="Výuka jazyků">
@@ -2276,7 +2282,6 @@
         <section id="englishLearningWordsPanel" class="englishLearningPanel">
           <div class="learningWordsToolbar">
             <textarea id="englishLearningSearch" rows="1" placeholder="Hledat slovíčko nebo překlad…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-luba-keyboard-field="language-learning-search"></textarea>
-            <button id="englishLearningManualAdd" class="learningManualAdd" type="button">＋ Přidat</button>
           </div>
           <div id="englishLearningList" class="englishLearningList"></div>
           <div id="englishLearningEmpty" class="englishLearningEmpty">Zatím tu nic není. Slovíčko můžeš přidat ručně, z LubaReaderu nebo přímo z označeného textu poznámky.</div>
@@ -2288,7 +2293,6 @@
               <strong id="englishLearningPracticeTotal">Učím se 0 slov</strong>
               <span id="englishLearningPracticePosition">0 / 0</span>
             </div>
-            <small id="englishLearningPracticeLanguage" class="englishLearningPracticeLanguage"></small>
             <div class="englishLearningPracticeProgressTrack" aria-hidden="true">
               <span id="englishLearningPracticeProgress"></span>
             </div>
@@ -2307,6 +2311,10 @@
             <p id="englishLearningPracticeContext" class="englishLearningPracticeContext" hidden></p>
             <small id="englishLearningPracticeSource" class="englishLearningPracticeSource" hidden></small>
             <button id="englishLearningPracticeReveal" class="englishLearningPracticeReveal" type="button">Ukázat překlad</button>
+            <div id="englishLearningPracticeDesktopActions" class="englishLearningPracticeDesktopActions" hidden>
+              <button id="englishLearningPracticeWrong" type="button">Neumím</button>
+              <button id="englishLearningPracticeKnow" type="button">Umím</button>
+            </div>
             <div id="englishLearningPracticeHint" class="englishLearningPracticeHint">← Neumím &nbsp; · &nbsp; přejeď kartou &nbsp; · &nbsp; Umím →</div>
           </article>
         </section>
@@ -2392,7 +2400,7 @@
   <script src="swipeActions.js?v=20260909-card-drag-finger-lock-331"></script>
   <script src="cardDrag.js?v=658be-global-rem-font-scale"></script>
   
-  <script src="script.js?v=658bt-click-through-guard"></script>
+  <script src="script.js?v=658co-learning-back"></script>
   <script src="cardActionsMobile.js?v=20260910-card-actions-351"></script>
 
   <!-- Koš – obnova, trvalé smazání a 30denní úklid -->
@@ -2412,7 +2420,7 @@
   <script src="editorDocuments.js?v=20260920-pdf-zoom-calm-652e"></script>
   <script src="legacyDocReader.js?v=20260919-doc-viewer-642a"></script>
   <script src="epubReader.js?v=658by-continuous-book-flow"></script>
-  <script src="learningDictionary.js?v=658ch-selection-polish"></script>
+  <script src="learningDictionary.js?v=658co-compact-language-ui"></script>
   <script src="documents.js?v=658cg-language-learning"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
