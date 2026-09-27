@@ -246,8 +246,8 @@
     const top = Math.min(...rects.map((r) => r.top));
     const bottom = Math.max(...rects.map((r) => r.bottom));
 
-    /* Nativní Android selection handles sahají výrazně pod samotný text.
-       Rezerva proto není jen kolem glyphů, ale i kolem obou úchytů. */
+    /* Vlastní LubaNote úchyty přesahují pod označený text. Oblast používáme
+       jen pro jemné lokální odsunutí menu; úchyty jsou vrstvou POD menu. */
     return {
       left: left - 22,
       right: right + 22,
@@ -274,7 +274,8 @@
       const offsetLeft = window.visualViewport?.offsetLeft || 0;
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
-      const mezeraOdVyberu = 10;
+      const mezeraOdVyberu = 8;
+      const maxJemnyPosun = 84;
 
       const editorTopBar = document.querySelector("#taskModal .editorTopBar");
       const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
@@ -283,8 +284,6 @@
         editorTopBarRect ? editorTopBarRect.bottom + okraj : offsetTop + okraj
       );
 
-      /* LubaKeyboard je samostatná fixed vrstva. Overflow menu se nesmí schovat
-         pod ni, takže spodní hranici viewportu zkrátíme o skutečný vršek klávesnice. */
       const klavesnice = document.querySelector(".ln-luba-keyboard:not([hidden])");
       const klavesniceRect = klavesnice?.getBoundingClientRect?.() || null;
       const spodniBezpecnaHrana = Math.min(
@@ -294,9 +293,10 @@
           : offsetTop + viewportH - okraj
       );
 
-      /* 658CL – výchozí bod stále přesně vychází z ⋮. Pokud by ale takto
-         rozšířený panel zakryl označené slovo / nativní handles nebo vjel
-         do LubaKeyboard, přesuneme ho celý nad nebo pod výběr. */
+      /* 658CM – panel zůstává vizuálně přivázaný ke ⋮.
+         Když by vjel do LubaKeyboard, posuneme ho pouze o NEJMENŠÍ nutnou
+         vzdálenost nahoru. Už ho neposíláme celý nad označené slovo, což v CL
+         způsobovalo velký odskok od ⋮. */
       let x = Number(kotva.left);
       let y = Number(kotva.top);
 
@@ -309,28 +309,35 @@
         Math.min(x, offsetLeft + viewportW - sirka - okraj)
       );
 
+      /* Nejdřív respektujeme horní lištu a LubaKeyboard. Při kolizi s
+         klávesnicí panel jen přirazíme těsně nad ni – žádný velký skok. */
+      y = Math.max(horniBezpecnaHrana, y);
+      if (y + vyska > spodniBezpecnaHrana) {
+        y = Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
+      }
+
+      /* Když panel zasahuje do označeného slova/našich úchytů, zkusíme pouze
+         MALÝ lokální posun nad nebo pod výběr. Pokud by bezpečné odsunutí
+         znamenalo velký odskok od ⋮, necháme panel u ⋮ – jeho z-index je vyšší
+         než text i naše úchyty, takže nic neprosvítá skrz panel. */
       const oblastVyberu = ziskejV2SelectionBezpecnouOblast();
       const kandidat = () => ({ left: x, right: x + sirka, top: y, bottom: y + vyska });
 
-      const nevejdeSeDolu = y + vyska > spodniBezpecnaHrana;
-      const prekryvaVyber = oblastVyberu && prekryvaV2Rect(kandidat(), oblastVyberu);
+      if (oblastVyberu && prekryvaV2Rect(kandidat(), oblastVyberu)) {
+        const moznosti = [];
+        const nad = oblastVyberu.top - vyska - mezeraOdVyberu;
+        const pod = oblastVyberu.bottom + mezeraOdVyberu;
 
-      if (nevejdeSeDolu || prekryvaVyber) {
-        const nad = oblastVyberu ? oblastVyberu.top - vyska - mezeraOdVyberu : Number(kotva.bottom) - vyska;
-        const pod = oblastVyberu ? oblastVyberu.bottom + mezeraOdVyberu : Number(kotva.bottom) + mezeraOdVyberu;
-        const vejdeSeNad = nad >= horniBezpecnaHrana;
-        const vejdeSePod = pod + vyska <= spodniBezpecnaHrana;
+        if (nad >= horniBezpecnaHrana && nad + vyska <= spodniBezpecnaHrana) {
+          moznosti.push({ y: nad, posun: Math.abs(nad - y) });
+        }
+        if (pod >= horniBezpecnaHrana && pod + vyska <= spodniBezpecnaHrana) {
+          moznosti.push({ y: pod, posun: Math.abs(pod - y) });
+        }
 
-        if (vejdeSeNad && vejdeSePod) {
-          /* Zachováme pocit, že menu vyjelo z ⋮: zvolíme bližší bezpečnou stranu. */
-          y = Math.abs(nad - Number(kotva.top)) <= Math.abs(pod - Number(kotva.top)) ? nad : pod;
-        } else if (vejdeSeNad) {
-          y = nad;
-        } else if (vejdeSePod) {
-          y = pod;
-        } else {
-          /* Extrémně málo prostoru: držíme panel v prostoru mezi horní lištou a klávesnicí. */
-          y = Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
+        moznosti.sort((a, b) => a.posun - b.posun);
+        if (moznosti[0] && moznosti[0].posun <= maxJemnyPosun) {
+          y = moznosti[0].y;
         }
       }
 
