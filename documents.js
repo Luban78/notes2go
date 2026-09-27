@@ -97,6 +97,7 @@
   let epubZvyrazneni = [];
   let epubVyberTextu = null;
   let epubVybraneZvyrazneniId = null;
+  let epubSlovnikVyber = null;
 
   function jeAndroid() {
     try {
@@ -3313,6 +3314,8 @@
     epubViewerPrvky.selectionColors.hidden = false;
     epubViewerPrvky.selectionNote.hidden = true;
     epubViewerPrvky.selectionRemove.hidden = true;
+    if (epubViewerPrvky.selectionTranslate) epubViewerPrvky.selectionTranslate.hidden = false;
+    if (epubViewerPrvky.selectionLearn) epubViewerPrvky.selectionLearn.hidden = false;
   }
 
   function zavriEpubAnotacePanel() {
@@ -3371,7 +3374,171 @@
     epubViewerPrvky.selectionColors.hidden = false;
     epubViewerPrvky.selectionNote.hidden = true;
     epubViewerPrvky.selectionRemove.hidden = true;
+    epubViewerPrvky.selectionTranslate.hidden = false;
+    epubViewerPrvky.selectionLearn.hidden = false;
     epubViewerPrvky.selectionBar.hidden = false;
+  }
+
+  function normalizujEpubStudijniVyraz(value) {
+    return String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^[\s“”„"'‘’.,;:!?()[\]{}]+|[\s“”„"'‘’.,;:!?()[\]{}]+$/g, '')
+      .trim();
+  }
+
+  function epubKontextProVyber(vyber) {
+    const root = epubTeloKapitoly(vyber?.chapterIndex);
+    if (!root) return '';
+    const text = String(root.textContent || '');
+    if (!text) return '';
+
+    const start = Math.max(0, Math.min(text.length, Number(vyber?.start) || 0));
+    const end = Math.max(start, Math.min(text.length, Number(vyber?.end) || start));
+    let left = start;
+    let right = end;
+    let kroku = 0;
+
+    while (left > 0 && kroku < 220) {
+      const ch = text[left - 1];
+      if (/[.!?…\n]/.test(ch)) break;
+      left -= 1;
+      kroku += 1;
+    }
+
+    kroku = 0;
+    while (right < text.length && kroku < 260) {
+      const ch = text[right];
+      right += 1;
+      kroku += 1;
+      if (/[.!?…\n]/.test(ch)) break;
+    }
+
+    const context = text.slice(left, right).replace(/\s+/g, ' ').trim();
+    return context.slice(0, 480);
+  }
+
+  function zavriEpubPreklad({ obnovitVyber = false } = {}) {
+    if (!epubViewerPrvky?.translateDialog) return;
+    epubViewerPrvky.translateDialog.hidden = true;
+    epubViewerPrvky.translateStatus.textContent = '';
+    epubViewerPrvky.translateInput.value = '';
+    epubViewerPrvky.translateSave.disabled = false;
+    epubViewerPrvky.translateFetch.disabled = false;
+    epubSlovnikVyber = null;
+    if (obnovitVyber && epubVyberTextu) {
+      epubViewerPrvky.selectionBar.hidden = false;
+    } else {
+      epubVyberTextu = null;
+      window.getSelection?.()?.removeAllRanges?.();
+    }
+  }
+
+  function nastavEpubPrekladStatus(text, typ = '') {
+    if (!epubViewerPrvky?.translateStatus) return;
+    epubViewerPrvky.translateStatus.textContent = String(text || '');
+    epubViewerPrvky.translateStatus.dataset.state = String(typ || '');
+  }
+
+  async function spustEpubPreklad() {
+    const api = window.LubaNoteLearningDictionary;
+    const vyber = epubSlovnikVyber;
+    if (!api?.prelozEnCs || !vyber?.term) return;
+
+    epubViewerPrvky.translateFetch.disabled = true;
+    epubViewerPrvky.translateSave.disabled = true;
+    nastavEpubPrekladStatus('Překládám…', 'loading');
+
+    const snapshotTerm = vyber.term;
+    const result = await api.prelozEnCs(snapshotTerm);
+    if (!epubSlovnikVyber || epubSlovnikVyber.term !== snapshotTerm) return;
+
+    epubViewerPrvky.translateFetch.disabled = false;
+    epubViewerPrvky.translateSave.disabled = false;
+    if (result?.ok && result.translation) {
+      epubViewerPrvky.translateInput.value = result.translation;
+      nastavEpubPrekladStatus('Překlad můžeš před uložením upravit.', 'ok');
+    } else {
+      nastavEpubPrekladStatus(result?.error || 'Překlad teď není dostupný. Doplň ho ručně.', 'error');
+    }
+  }
+
+  function otevriEpubStudijniKartu({ prelozit = false } = {}) {
+    if (!epubVyberTextu || !epubViewerPrvky?.translateDialog) return;
+    const api = window.LubaNoteLearningDictionary;
+    if (!api) {
+      console.warn('Výukový slovník není načtený.');
+      return;
+    }
+
+    const term = normalizujEpubStudijniVyraz(epubVyberTextu.quote);
+    if (!term) return;
+    if (term.length > 160) {
+      nastavEpubPrekladStatus('Vyber kratší slovo nebo frázi.', 'error');
+      return;
+    }
+
+    epubSlovnikVyber = {
+      ...epubVyberTextu,
+      term,
+      context: epubKontextProVyber(epubVyberTextu),
+      bookTitle: String(epubAktualniKniha?.title || epubViewerPrvky.title?.textContent || '').trim(),
+      chapterTitle: epubKapitolaNazev(epubVyberTextu.chapterIndex)
+    };
+
+    const existing = api.najdiPodleVyrazu?.(term);
+    epubViewerPrvky.translateTerm.textContent = term;
+    epubViewerPrvky.translateInput.value = existing?.translation || '';
+    epubViewerPrvky.translateContext.textContent = epubSlovnikVyber.context
+      ? `“${epubSlovnikVyber.context}”`
+      : '';
+    epubViewerPrvky.translateSource.textContent = [
+      epubSlovnikVyber.bookTitle,
+      epubSlovnikVyber.chapterTitle
+    ].filter(Boolean).join(' · ');
+    epubViewerPrvky.translateSave.textContent = existing ? 'Aktualizovat ve slovníku' : '＋ Uložit do slovníku';
+    epubViewerPrvky.translateDialog.hidden = false;
+    epubViewerPrvky.selectionBar.hidden = true;
+    window.getSelection?.()?.removeAllRanges?.();
+
+    if (existing) {
+      nastavEpubPrekladStatus('Toto slovo už ve studijním slovníku máš.', 'ok');
+    } else if (prelozit) {
+      nastavEpubPrekladStatus('Online překlad EN → CS · odesílá se jen vybraný výraz.', '');
+      void spustEpubPreklad();
+    } else {
+      nastavEpubPrekladStatus('Doplň český překlad nebo klepni na Přeložit.', '');
+    }
+  }
+
+  function ulozEpubStudijniVyraz() {
+    const api = window.LubaNoteLearningDictionary;
+    const vyber = epubSlovnikVyber;
+    if (!api?.ulozPolozku || !vyber?.term) return;
+    const translation = String(epubViewerPrvky?.translateInput?.value || '').replace(/\s+/g, ' ').trim();
+    if (!translation) {
+      nastavEpubPrekladStatus('Nejdřív doplň český překlad.', 'error');
+      epubViewerPrvky.translateInput?.focus?.();
+      return;
+    }
+
+    const result = api.ulozPolozku({
+      term: vyber.term,
+      translation,
+      context: vyber.context,
+      bookTitle: vyber.bookTitle,
+      chapterTitle: vyber.chapterTitle
+    });
+
+    if (!result?.ok) {
+      nastavEpubPrekladStatus('Slovíčko se nepodařilo uložit.', 'error');
+      return;
+    }
+
+    epubViewerPrvky.translateSave.textContent = 'Uloženo ✓';
+    epubViewerPrvky.translateSave.disabled = true;
+    nastavEpubPrekladStatus(result.updated ? 'Slovíčko bylo aktualizováno.' : 'Uloženo do Výuky angličtiny.', 'ok');
+    setTimeout(() => zavriEpubPreklad({ obnovitVyber: false }), 650);
   }
 
   function rozbalEpubZvyrazneniDom() {
@@ -3605,6 +3772,7 @@
     zavriEpubReaderNastaveni();
     zavriEpubAnotacePanel();
     zavriEpubPoznamku();
+    zavriEpubPreklad({ obnovitVyber: false });
     skryjEpubVyberBar();
     epubViewerPrvky.loading.hidden = true;
     epubViewerPrvky.content.innerHTML = '';
@@ -3877,7 +4045,30 @@
           <div class="documentsEpubNoteActions"><button type="button" class="documentsEpubNoteCancel">Zrušit</button><button type="button" class="documentsEpubNoteSave">Uložit</button></div>
         </section>
       </div>
+      <div class="documentsEpubTranslateDialog" hidden>
+        <section class="documentsEpubTranslatePanel" role="dialog" aria-modal="true" aria-label="Překlad do studijního slovníku">
+          <div class="documentsEpubTranslateHeader">
+            <div><strong>Překlad 🇬🇧 → 🇨🇿</strong><small>Výuka angličtiny</small></div>
+            <button type="button" class="documentsEpubTranslateClose" aria-label="Zavřít překlad">×</button>
+          </div>
+          <div class="documentsEpubTranslateTermRow">
+            <strong class="documentsEpubTranslateTerm"></strong>
+            <button type="button" class="documentsEpubTranslateSpeak" aria-label="Přehrát anglickou výslovnost">🔊</button>
+          </div>
+          <textarea class="documentsEpubTranslateInput" rows="2" maxlength="240" placeholder="Český překlad…" data-luba-keyboard-field="epub-learning-translation" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+          <button type="button" class="documentsEpubTranslateFetch">🌐 Přeložit</button>
+          <p class="documentsEpubTranslateStatus" aria-live="polite"></p>
+          <p class="documentsEpubTranslateContext"></p>
+          <small class="documentsEpubTranslateSource"></small>
+          <div class="documentsEpubTranslateActions">
+            <button type="button" class="documentsEpubTranslateCancel">Zrušit</button>
+            <button type="button" class="documentsEpubTranslateSave">＋ Uložit do slovníku</button>
+          </div>
+        </section>
+      </div>
       <div class="documentsEpubSelectionBar" hidden>
+        <button type="button" class="documentsEpubSelectionTranslate">🌐 Přeložit</button>
+        <button type="button" class="documentsEpubSelectionLearn">＋ Slovník</button>
         <div class="documentsEpubSelectionColors" aria-label="Barva označení">
           <button type="button" data-epub-highlight-color="yellow" aria-label="Žluté označení"></button>
           <button type="button" data-epub-highlight-color="green" aria-label="Zelené označení"></button>
@@ -3924,10 +4115,23 @@
     const noteCancel = overlay.querySelector('.documentsEpubNoteCancel');
     const noteSave = overlay.querySelector('.documentsEpubNoteSave');
     const selectionBar = overlay.querySelector('.documentsEpubSelectionBar');
+    const selectionTranslate = overlay.querySelector('.documentsEpubSelectionTranslate');
+    const selectionLearn = overlay.querySelector('.documentsEpubSelectionLearn');
     const selectionColors = overlay.querySelector('.documentsEpubSelectionColors');
     const selectionNote = overlay.querySelector('.documentsEpubSelectionNote');
     const selectionRemove = overlay.querySelector('.documentsEpubSelectionRemove');
     const selectionClose = overlay.querySelector('.documentsEpubSelectionClose');
+    const translateDialog = overlay.querySelector('.documentsEpubTranslateDialog');
+    const translateClose = overlay.querySelector('.documentsEpubTranslateClose');
+    const translateTerm = overlay.querySelector('.documentsEpubTranslateTerm');
+    const translateSpeak = overlay.querySelector('.documentsEpubTranslateSpeak');
+    const translateInput = overlay.querySelector('.documentsEpubTranslateInput');
+    const translateFetch = overlay.querySelector('.documentsEpubTranslateFetch');
+    const translateStatus = overlay.querySelector('.documentsEpubTranslateStatus');
+    const translateContext = overlay.querySelector('.documentsEpubTranslateContext');
+    const translateSource = overlay.querySelector('.documentsEpubTranslateSource');
+    const translateCancel = overlay.querySelector('.documentsEpubTranslateCancel');
+    const translateSave = overlay.querySelector('.documentsEpubTranslateSave');
 
     close.addEventListener('click', zavriEpubViewer);
     prev.addEventListener('click', () => void zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 0 }));
@@ -4028,6 +4232,21 @@
       window.getSelection?.()?.removeAllRanges?.();
       skryjEpubVyberBar();
     });
+    selectionTranslate.addEventListener('click', () => otevriEpubStudijniKartu({ prelozit: true }));
+    selectionLearn.addEventListener('click', () => otevriEpubStudijniKartu({ prelozit: false }));
+    translateClose.addEventListener('click', () => zavriEpubPreklad({ obnovitVyber: false }));
+    translateCancel.addEventListener('click', () => zavriEpubPreklad({ obnovitVyber: false }));
+    translateDialog.addEventListener('pointerdown', (event) => {
+      if (event.target === translateDialog) zavriEpubPreklad({ obnovitVyber: false });
+    });
+    translateFetch.addEventListener('click', () => void spustEpubPreklad());
+    translateSave.addEventListener('click', ulozEpubStudijniVyraz);
+    translateSpeak.addEventListener('click', () => {
+      if (epubSlovnikVyber?.term) window.LubaNoteLearningDictionary?.vyslov?.(epubSlovnikVyber.term);
+    });
+    translateInput.addEventListener('input', () => {
+      translateSave.disabled = !String(translateInput.value || '').trim();
+    });
 
     body.addEventListener('scroll', () => {
       naplanujUlozeniEpubPozice();
@@ -4046,6 +4265,8 @@
         selectionColors.hidden = true;
         selectionNote.hidden = false;
         selectionRemove.hidden = false;
+        selectionTranslate.hidden = true;
+        selectionLearn.hidden = true;
         selectionBar.hidden = false;
         return;
       }
@@ -4103,7 +4324,10 @@
       overlay, close, title, author, chapter, settingsButton, marksButton, tocButton, body,
       loading, loadingText, content, prev, next, counter, toc, tocList, tocClose,
       settings, settingsClose, fontMinus, fontPlus, fontSizeValue, settingsReset,
-      marks, marksClose, marksList, addBookmark, noteDialog, noteQuote, noteInput, selectionBar, selectionColors, selectionNote, selectionRemove, selectionClose
+      marks, marksClose, marksList, addBookmark, noteDialog, noteQuote, noteInput,
+      selectionBar, selectionTranslate, selectionLearn, selectionColors, selectionNote, selectionRemove, selectionClose,
+      translateDialog, translateClose, translateTerm, translateSpeak, translateInput, translateFetch,
+      translateStatus, translateContext, translateSource, translateCancel, translateSave
     };
     aplikujEpubReaderNastaveni();
     return epubViewerPrvky;
@@ -4119,6 +4343,8 @@
     nastavEpubFullscreen(false);
     prvky.settings.hidden = true;
     prvky.marks.hidden = true;
+    prvky.translateDialog.hidden = true;
+    epubSlovnikVyber = null;
     skryjEpubVyberBar();
     epubZalozky = normalizujEpubZalozky(record.epubBookmarks);
     epubZvyrazneni = normalizujEpubZvyrazneni(record.epubHighlights);
@@ -4157,7 +4383,9 @@
     const puvodniAndroidZpet = window.LubaNoteZpracujAndroidZpet;
     window.LubaNoteZpracujAndroidZpet = function () {
       if (epubViewerOtevren) {
-        if (epubViewerPrvky && !epubViewerPrvky.selectionBar.hidden) {
+        if (epubViewerPrvky && !epubViewerPrvky.translateDialog.hidden) {
+          zavriEpubPreklad({ obnovitVyber: false });
+        } else if (epubViewerPrvky && !epubViewerPrvky.selectionBar.hidden) {
           window.getSelection?.()?.removeAllRanges?.();
           skryjEpubVyberBar();
         } else if (epubViewerPrvky && !epubViewerPrvky.marks.hidden) {

@@ -1,0 +1,402 @@
+/* ==========================================================
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (658BZ)
+   ========================================================== */
+.englishLearningModal[hidden],
+.englishLearningPanel[hidden],
+.englishLearningPracticeCard[hidden],
+.englishLearningPracticeEmpty[hidden],
+.englishLearningPracticeTranslation[hidden],
+.englishLearningPracticeContext[hidden],
+.englishLearningPracticeSource[hidden],
+.englishLearningPracticeReveal[hidden],
+.englishLearningPracticeActions[hidden],
+.englishLearningEmpty[hidden] {
+  display: none !important;
+}
+
+.englishLearningModal {
+  position: fixed;
+  inset: 0;
+  z-index: 12120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, #000 58%, transparent);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.englishLearningContent {
+  width: min(720px, 100%);
+  height: min(820px, calc(100dvh - 24px));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 24px 70px rgba(0,0,0,.35);
+}
+
+.englishLearningHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.englishLearningHeaderTitle {
+  min-width: 0;
+}
+
+.englishLearningHeaderTitle h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 6vw, 2rem);
+  line-height: 1.08;
+}
+
+.englishLearningHeaderTitle small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: .82rem;
+}
+
+#closeEnglishLearningButton {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-background));
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.55rem;
+}
+
+.englishLearningTabs {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.englishLearningTabs button {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 750;
+}
+
+.englishLearningTabs button.active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
+  color: var(--color-accent-text);
+}
+
+.englishLearningBody {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.englishLearningPanel {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+#englishLearningWordsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+#englishLearningSearch {
+  flex: 0 0 50px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
+  margin: 0;
+  padding: 12px 14px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  outline: none;
+  background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+}
+
+#englishLearningSearch:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.englishLearningList {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 1px 8px;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+.englishLearningList::-webkit-scrollbar { display: none; }
+
+.learningDictionaryRow {
+  flex: 0 0 auto;
+  padding: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-surface) 89%, var(--color-background));
+}
+
+.learningDictionaryRowTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.learningDictionaryRowTop strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.2rem;
+}
+
+.learningDictionarySpeak {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-size: 1.08rem;
+}
+
+.learningDictionaryTranslation {
+  margin-top: 5px;
+  color: var(--color-accent-text);
+  font-weight: 800;
+}
+
+.learningDictionaryContext {
+  margin: 9px 0 0;
+  color: var(--color-text-secondary);
+  font-size: .92rem;
+  line-height: 1.45;
+}
+
+.learningDictionaryRowFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.learningDictionaryRowFooter small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+}
+
+.learningDictionaryDelete {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--color-danger-text, #d15b5b) 45%, var(--color-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-danger-text, #d15b5b) 10%, var(--color-surface));
+  color: var(--color-danger-text, #d15b5b);
+  font: inherit;
+  font-weight: 750;
+}
+
+.englishLearningEmpty,
+.englishLearningPracticeEmpty {
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+#englishLearningPracticePanel {
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.englishLearningPracticeCard {
+  width: min(520px, 100%);
+  min-height: 390px;
+  margin: 10px auto 0;
+  padding: 22px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-background));
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+}
+
+.englishLearningPracticeTerm {
+  margin: 0;
+  cursor: pointer;
+  font-size: clamp(2rem, 10vw, 3.4rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.englishLearningPracticeTerm::after {
+  content: '  🔊';
+  font-size: .42em;
+  vertical-align: middle;
+}
+
+.englishLearningPracticeTranslation {
+  margin-top: 24px;
+  color: var(--color-accent-text);
+  font-size: 1.55rem;
+  font-weight: 850;
+}
+
+.englishLearningPracticeContext {
+  margin: 16px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.englishLearningPracticeSource {
+  margin-top: 12px;
+  color: var(--color-text-secondary);
+}
+
+.englishLearningPracticeReveal {
+  align-self: center;
+  min-height: 50px;
+  margin-top: 28px;
+  padding: 0 22px;
+  border: 1px solid var(--color-accent);
+  border-radius: 15px;
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+  font: inherit;
+  font-weight: 800;
+}
+
+.englishLearningPracticeActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.englishLearningPracticeActions button {
+  min-height: 52px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 780;
+}
+
+#englishLearningPracticeWrong { color: var(--color-danger-text, #d15b5b); }
+#englishLearningPracticeKnow {
+  border-color: color-mix(in srgb, #2b9b68 55%, var(--color-border));
+  color: #228159;
+}
+
+#englishLearningStatsPanel {
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+
+.englishLearningStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.englishLearningStat {
+  min-height: 120px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-background));
+}
+
+.englishLearningStat strong {
+  color: var(--color-accent-text);
+  font-size: 2rem;
+}
+
+.englishLearningStat span {
+  color: var(--color-text-secondary);
+  font-size: .9rem;
+}
+
+@media (max-width: 520px) {
+  .englishLearningModal { padding-left: 7px; padding-right: 7px; }
+  .englishLearningContent { border-radius: 20px; }
+  .englishLearningHeader { padding-left: 13px; padding-right: 13px; }
+  .englishLearningTabs { padding-left: 8px; padding-right: 8px; gap: 5px; }
+  .englishLearningTabs button { font-size: .84rem; }
+  .englishLearningPracticeActions { grid-template-columns: 1fr; }
+  .englishLearningStatsGrid { gap: 8px; }
+}
+
+body.learning-dictionary-open {
+  overflow: hidden !important;
+}
+
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .englishLearningModal:not([hidden]) {
+    align-items: flex-end;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: calc(var(--ln-lk-height, 260px) + 5px);
+  }
+
+  body.ln-luba-klavesnice-open .englishLearningContent {
+    height: auto;
+    max-height: calc(
+      100dvh - var(--ln-lk-height, 260px) - 5px - max(8px, env(safe-area-inset-top))
+    );
+  }
+}
