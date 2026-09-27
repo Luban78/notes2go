@@ -464,25 +464,45 @@
   function vyslov(text, button = null) {
     const vyraz = normalizujVyraz(text);
     if (!vyraz) return false;
-    // 658CD DIAGNOSTIKA APK: tlačítko 🔊 teď záměrně přehraje pouze lokální testovací pípnutí.
-    // Tím oddělíme audio výstup APK/WebView od TTS, internetu a slovníkového MP3.
-    void diagnostickyZvuk(button);
-    return true;
 
-    // DŮLEŽITÉ: odemknutí zvukového kontextu musí proběhnout přímo v click handleru.
-    // Předchozí verze spouštěla online audio až po await/setTimeout, kdy Android WebView
-    // už ztratil uživatelské gesto a play() mohl být potichu zablokovaný.
+    // 658CE – APK používá nativní Android TextToSpeech. WebView speechSynthesis
+    // na některých zařízeních existuje, ale reálně nevydá zvuk. Nativní plugin
+    // proto dostává přednost a webové cesty zůstávají jen jako fallback pro PWA/PC.
+    const nativeTts = window.Capacitor?.Plugins?.LubaNoteTts;
+    if (nativeTts?.speak) {
+      signalizujVyslovnost(button, 'start');
+      void nativeTts.speak({
+        text: vyraz,
+        language: 'en-GB',
+        rate: 0.90,
+        pitch: 1.0
+      }).then(() => {
+        signalizujVyslovnost(button, 'done');
+      }).catch((error) => {
+        console.warn('[LubaNote English] Nativní Android TTS selhal:', error);
+
+        // Když telefon nemá použitelný anglický TTS hlas, zkusíme dosavadní
+        // webovou cestu. AudioContext odemykáme ještě v návaznosti na tap.
+        odemkniAudioContext();
+        void prehrajAudioFallback(vyraz).then((ok) => {
+          if (ok) {
+            signalizujVyslovnost(button, 'done');
+            return;
+          }
+          if (!zkusSpeechSynthesis(vyraz, button)) signalizujVyslovnost(button, 'error');
+        });
+      });
+      return true;
+    }
+
+    // PC/PWA fallback – zachovává předchozí webovou výslovnost.
     const ctx = odemkniAudioContext();
-
-    // Na Android/SPCK preferujeme skutečné slovníkové MP3 přes odemčený Web Audio.
-    // Je to spolehlivější než speechSynthesis, který může v některých WebView existovat,
-    // ale přesto nic nepřehrát.
+    signalizujVyslovnost(button, 'start');
     void prehrajAudioFallback(vyraz).then((ok) => {
       if (ok) {
         signalizujVyslovnost(button, 'done');
         return;
       }
-      // Poslední záloha pro desktop/prohlížeče, kde Web Speech funguje.
       if (!zkusSpeechSynthesis(vyraz, button)) signalizujVyslovnost(button, 'error');
     });
 
