@@ -1079,3 +1079,90 @@ body.learning-dictionary-open {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* ==========================================================
+   658CR – editace slovíčka: pevná pole + scroll nad LubaKeyboard
+           + bezpečné zalamování dlouhého textu v kartách
+   ========================================================== */
+.languageLearningEntryPanel {
+  min-height: 0;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scroll-padding-top: 10px;
+  scroll-padding-bottom: 88px;
+}
+
+.languageLearningEntryField {
+  flex: 0 0 auto;
+}
+
+#languageLearningEntryTerm,
+#languageLearningEntryTranslation,
+#languageLearningEntryContext {
+  display: block;
+  height: 82px;
+  min-height: 82px;
+  max-height: none;
+  flex: none;
+  overflow-y: auto;
+}
+
+#languageLearningEntrySource {
+  display: block;
+  height: 52px;
+  min-height: 52px;
+  max-height: none;
+  flex: none;
+  overflow-y: auto;
+}
+
+@media (max-width: 899px) {
+  body.ln-luba-klavesnice-open .languageLearningEntryPanel {
+    min-height: 0;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Dlouhé technické výrazy (URL, RPC názvy, podtržítka...) nesmí utéct z karty. */
+.englishLearningPracticeCard {
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+}
+
+.englishLearningPracticeTermRow,
+.englishLearningPracticeTerm,
+.englishLearningPracticeTranslation,
+.englishLearningPracticeContext,
+.englishLearningPracticeSource {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.englishLearningPracticeTerm,
+.englishLearningPracticeTranslation,
+.englishLearningPracticeContext,
+.englishLearningPracticeSource {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Ve výpisu slovníku necháme zdroj na vlastním řádku, aby se název knihy
+   nemačkal do úzkého sloupce vedle tlačítek Upravit / Smazat. */
+.learningDictionaryRowFooter {
+  flex-wrap: wrap;
+}
+
+.learningDictionaryRowFooter > small {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.learningDictionaryRowActions {
+  margin-left: auto;
+}

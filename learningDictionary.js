@@ -1569,6 +1569,23 @@
       if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? 'Uložit změny' : '＋ Uložit do slovníku';
     });
 
+    // 658CR – při otevřené LubaKeyboard udržíme právě upravované pole
+    // viditelné uvnitř scrollovatelného dialogu. Druhý průchod počká, až se
+    // klávesnice definitivně změří a modal dostane finální výšku.
+    [prvky.entryTerm, prvky.entryTranslation, prvky.entryContext, prvky.entrySource]
+      .filter(Boolean)
+      .forEach((pole) => {
+        pole.addEventListener('focus', () => {
+          const zobrazPole = () => {
+            if (!prvky.entryModal || prvky.entryModal.hidden) return;
+            const radek = pole.closest?.('.languageLearningEntryField') || pole;
+            try { radek.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); } catch (_error) {}
+          };
+          setTimeout(zobrazPole, 70);
+          setTimeout(zobrazPole, 260);
+        });
+      });
+
     prvky.practiceReveal?.addEventListener('click', () => {
       odhalOdpoved();
     });
