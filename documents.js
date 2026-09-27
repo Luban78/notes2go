@@ -3514,11 +3514,39 @@
     }, 420);
   }
 
+  function jeEpubScrollNaZacatku() {
+    if (!epubViewerPrvky) return false;
+    return epubViewerPrvky.body.scrollTop <= 28;
+  }
+
   function jeEpubScrollNaKonci() {
     if (!epubViewerPrvky) return false;
     const body = epubViewerPrvky.body;
     const maxScroll = Math.max(0, body.scrollHeight - body.clientHeight);
     return maxScroll <= 1 || body.scrollTop >= maxScroll - 28;
+  }
+
+  async function pokracujEpubPredchoziKapitolouScroll() {
+    if (
+      epubPlynulyPrechodBezi ||
+      !epubViewerOtevren ||
+      !epubViewerFullscreen ||
+      !epubAktualniKniha ||
+      !epubViewerPrvky ||
+      !jeEpubScrollNaZacatku() ||
+      epubAktualniKapitola <= 0
+    ) return;
+
+    epubPlynulyPrechodBezi = true;
+    try {
+      // Při návratu otevřeme konec předchozí kapitoly, aby čtení
+      // pokračovalo přirozeně opačným směrem bez skoku na její začátek.
+      await zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 1 });
+    } catch (error) {
+      console.warn('Plynulý přechod EPUB na předchozí kapitolu selhal:', error);
+    } finally {
+      setTimeout(() => { epubPlynulyPrechodBezi = false; }, 180);
+    }
   }
 
   async function pokracujEpubDalsiKapitolouScroll() {
@@ -3908,13 +3936,16 @@
     body.addEventListener('scroll', () => {
       const scrollTop = body.scrollTop;
       const smerDolu = scrollTop > epubPosledniScrollTop + 0.5;
+      const smerNahoru = scrollTop < epubPosledniScrollTop - 0.5;
       epubPosledniScrollTop = scrollTop;
       naplanujUlozeniEpubPozice();
 
-      // 658BV: ve fullscreen LubaReaderu se na konci kapitoly pokračuje
-      // dalším oddílem automaticky, takže není nutné vracet spodní tlačítka.
+      // 658BW: fullscreen LubaReader navazuje kapitolami oběma směry.
+      // Dole pokračuje další kapitolou, nahoře se vrátí na konec předchozí.
       if (smerDolu && epubViewerFullscreen && jeEpubScrollNaKonci()) {
         void pokracujEpubDalsiKapitolouScroll();
+      } else if (smerNahoru && epubViewerFullscreen && jeEpubScrollNaZacatku()) {
+        void pokracujEpubPredchoziKapitolouScroll();
       }
     }, { passive: true });
 
@@ -3971,10 +4002,17 @@
       }
 
       const dobaGesta = performance.now() - pointerTap.cas;
-      const tahNahoru = pointerTap.pohyb && (event.clientY - pointerTap.y) < -36 && dobaGesta <= 700;
+      const posunY = event.clientY - pointerTap.y;
+      const tahNahoru = pointerTap.pohyb && posunY < -36 && dobaGesta <= 700;
+      const tahDolu = pointerTap.pohyb && posunY > 36 && dobaGesta <= 700;
       if (tahNahoru && epubViewerFullscreen && jeEpubScrollNaKonci()) {
         pointerTap = null;
         void pokracujEpubDalsiKapitolouScroll();
+        return;
+      }
+      if (tahDolu && epubViewerFullscreen && jeEpubScrollNaZacatku()) {
+        pointerTap = null;
+        void pokracujEpubPredchoziKapitolouScroll();
         return;
       }
 
