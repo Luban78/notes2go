@@ -89,6 +89,8 @@
   let epubAktualniKapitola = 0;
   let epubKapitolaObjectUrls = [];
   let epubUlozPoziciTimer = null;
+  let epubPlynulyPrechodBezi = false;
+  let epubPosledniScrollTop = 0;
   let epubListCoverUrls = [];
   let epubReaderNastaveni = nactiEpubReaderNastaveni();
   let epubZalozky = [];
@@ -3512,6 +3514,36 @@
     }, 420);
   }
 
+  function jeEpubScrollNaKonci() {
+    if (!epubViewerPrvky) return false;
+    const body = epubViewerPrvky.body;
+    const maxScroll = Math.max(0, body.scrollHeight - body.clientHeight);
+    return maxScroll <= 1 || body.scrollTop >= maxScroll - 28;
+  }
+
+  async function pokracujEpubDalsiKapitolouScroll() {
+    if (
+      epubPlynulyPrechodBezi ||
+      !epubViewerOtevren ||
+      !epubViewerFullscreen ||
+      !epubAktualniKniha ||
+      !epubViewerPrvky ||
+      !jeEpubScrollNaKonci() ||
+      epubAktualniKapitola >= epubAktualniKniha.chapters.length - 1
+    ) return;
+
+    epubPlynulyPrechodBezi = true;
+    try {
+      await zobrazEpubKapitolu(epubAktualniKapitola + 1, { ratio: 0 });
+    } catch (error) {
+      console.warn('Plynulý přechod EPUB na další kapitolu selhal:', error);
+    } finally {
+      // Krátký zámek zabrání tomu, aby setrvačný scroll / stejný dotyk
+      // spustil bezprostředně ještě jeden přechod.
+      setTimeout(() => { epubPlynulyPrechodBezi = false; }, 180);
+    }
+  }
+
   function zavriEpubViewer() {
     if (!epubViewerPrvky) return;
     clearTimeout(epubUlozPoziciTimer);
@@ -3532,6 +3564,8 @@
     epubAktualniKniha = null;
     epubAktualniRecordId = null;
     epubAktualniKapitola = 0;
+    epubPlynulyPrechodBezi = false;
+    epubPosledniScrollTop = 0;
     epubZalozky = [];
     epubZvyrazneni = [];
   }
@@ -3557,6 +3591,7 @@
     epubViewerPrvky.counter.textContent = `${epubAktualniKapitola + 1} / ${pocet}`;
     epubViewerPrvky.prev.disabled = epubAktualniKapitola <= 0;
     epubViewerPrvky.next.disabled = epubAktualniKapitola >= pocet - 1;
+    epubPosledniScrollTop = 0;
     aplikujEpubZvyrazneni();
     skryjEpubVyberBar();
     epubViewerPrvky.loading.hidden = true;
@@ -3870,7 +3905,18 @@
       skryjEpubVyberBar();
     });
 
-    body.addEventListener('scroll', naplanujUlozeniEpubPozice, { passive: true });
+    body.addEventListener('scroll', () => {
+      const scrollTop = body.scrollTop;
+      const smerDolu = scrollTop > epubPosledniScrollTop + 0.5;
+      epubPosledniScrollTop = scrollTop;
+      naplanujUlozeniEpubPozice();
+
+      // 658BV: ve fullscreen LubaReaderu se na konci kapitoly pokračuje
+      // dalším oddílem automaticky, takže není nutné vracet spodní tlačítka.
+      if (smerDolu && epubViewerFullscreen && jeEpubScrollNaKonci()) {
+        void pokracujEpubDalsiKapitolouScroll();
+      }
+    }, { passive: true });
 
     content.addEventListener('click', (event) => {
       const highlight = event.target.closest?.('.documentsEpubHighlight[data-epub-highlight-id]');
@@ -3919,7 +3965,20 @@
     });
     body.addEventListener('pointercancel', () => { pointerTap = null; });
     body.addEventListener('pointerup', (event) => {
-      if (!pointerTap || pointerTap.id !== event.pointerId || pointerTap.pohyb || performance.now() - pointerTap.cas > 320) {
+      if (!pointerTap || pointerTap.id !== event.pointerId) {
+        pointerTap = null;
+        return;
+      }
+
+      const dobaGesta = performance.now() - pointerTap.cas;
+      const tahNahoru = pointerTap.pohyb && (event.clientY - pointerTap.y) < -36 && dobaGesta <= 700;
+      if (tahNahoru && epubViewerFullscreen && jeEpubScrollNaKonci()) {
+        pointerTap = null;
+        void pokracujEpubDalsiKapitolouScroll();
+        return;
+      }
+
+      if (pointerTap.pohyb || dobaGesta > 320) {
         pointerTap = null;
         return;
       }

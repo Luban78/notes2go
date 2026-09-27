@@ -1975,7 +1975,7 @@ body.documents-epub-viewer-open {
   inset: 0;
   z-index: 13;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   padding: 16px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   box-sizing: border-box;
