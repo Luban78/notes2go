@@ -1069,3 +1069,13 @@ body.learning-dictionary-open {
     right: 12px;
   }
 }
+
+
+/* ==========================================================
+   658CQ – kratší kontext + editovatelný zdroj + užší tréninková karta
+   ========================================================== */
+.englishLearningPracticeCard {
+  width: min(460px, calc(100% - 20px));
+  margin-left: auto;
+  margin-right: auto;
+}

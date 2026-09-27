@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA JAZYKŮ / STUDIJNÍ SLOVNÍK (PATCH 658CG)
+   LUBANOTE – VÝUKA JAZYKŮ / STUDIJNÍ SLOVNÍK (PATCH 658CQ)
    --------------------------------------------------------------
    - studijní slovník je oddělený od osobního slovníku LubaKeyboard,
    - podporované výukové jazyky kopírují produkční jazyky LubaKeyboard V1,
@@ -117,6 +117,39 @@
     return normalizujText(value, 160)
       .replace(/^[\s“”„\"'‘’.,;:!?()[\]{}]+|[\s“”„\"'‘’.,;:!?()[\]{}]+$/g, '')
       .trim();
+  }
+
+  function zkratKontext(value, term = '', maxWords = 18, maxChars = 190) {
+    const text = normalizujText(value, 1600);
+    if (!text) return '';
+
+    const termKey = normalizujVyraz(term).toLocaleLowerCase('cs-CZ');
+    const sentences = text.match(/[^.!?…]+(?:[.!?…]+|$)/g)?.map((part) => part.trim()).filter(Boolean) || [text];
+    let chosen = sentences.find((part) => termKey && part.toLocaleLowerCase('cs-CZ').includes(termKey)) || sentences[0] || text;
+    chosen = normalizujText(chosen, 1200);
+
+    const words = chosen.split(/\s+/).filter(Boolean);
+    if (words.length <= maxWords && chosen.length <= maxChars) return chosen;
+
+    let center = -1;
+    if (termKey) {
+      const lowerWords = words.map((word) => normalizujVyraz(word).toLocaleLowerCase('cs-CZ'));
+      center = lowerWords.findIndex((word, index) => {
+        if (word === termKey || word.includes(termKey) || termKey.includes(word)) return true;
+        const phrase = normalizujVyraz(words.slice(index, index + 4).join(' ')).toLocaleLowerCase('cs-CZ');
+        return phrase.includes(termKey);
+      });
+    }
+    if (center < 0) center = Math.floor(words.length / 2);
+
+    let start = Math.max(0, center - Math.floor(maxWords / 2));
+    let end = Math.min(words.length, start + maxWords);
+    start = Math.max(0, end - maxWords);
+    let short = words.slice(start, end).join(' ');
+    if (short.length > maxChars) short = short.slice(0, maxChars).trimEnd();
+    if (start > 0) short = `…${short}`;
+    if (end < words.length || short.length < chosen.length - 1) short = `${short}…`;
+    return short;
   }
 
   function klicVyrazu(value, jazyk = aktivniJazyk) {
@@ -288,7 +321,7 @@
         translationLanguage,
         term,
         translation,
-        context: normalizujText(vstup.context || items[index].context, 480),
+        context: zkratKontext(vstup.context || items[index].context, term),
         bookTitle: normalizujText(vstup.bookTitle || items[index].bookTitle, 180),
         chapterTitle: normalizujText(vstup.chapterTitle || items[index].chapterTitle, 180),
         sourceType: normalizujText(vstup.sourceType || items[index].sourceType, 40) || 'manual',
@@ -305,7 +338,7 @@
       translationLanguage,
       term,
       translation,
-      context: normalizujText(vstup.context, 480),
+      context: zkratKontext(vstup.context, term),
       bookTitle: normalizujText(vstup.bookTitle, 180),
       chapterTitle: normalizujText(vstup.chapterTitle, 180),
       sourceType: normalizujText(vstup.sourceType, 40) || 'manual',
@@ -804,7 +837,7 @@
   }
 
   function formatSource(item) {
-    return [item.bookTitle, item.chapterTitle].filter(Boolean).join(' · ');
+    return normalizujText(item?.bookTitle, 180);
   }
 
   function zavriPolozkuDialog() {
@@ -887,8 +920,8 @@
           translationLanguage,
           term,
           translation,
-          context: normalizujText(prvky.entryContext?.value || '', 480),
-          bookTitle: dialogStav.bookTitle || items[index].bookTitle || '',
+          context: zkratKontext(prvky.entryContext?.value || '', term),
+          bookTitle: normalizujText(prvky.entrySource?.value ?? dialogStav.bookTitle ?? items[index].bookTitle, 180),
           chapterTitle: dialogStav.chapterTitle || items[index].chapterTitle || '',
           sourceType: dialogStav.sourceType || items[index].sourceType || 'manual',
           updatedAt: Date.now()
@@ -908,8 +941,8 @@
         translation,
         language,
         translationLanguage,
-        context: prvky.entryContext?.value || dialogStav.context || '',
-        bookTitle: dialogStav.bookTitle || '',
+        context: zkratKontext(prvky.entryContext?.value || dialogStav.context || '', term),
+        bookTitle: normalizujText(prvky.entrySource?.value ?? dialogStav.bookTitle ?? '', 180),
         chapterTitle: dialogStav.chapterTitle || '',
         sourceType: dialogStav.sourceType || 'manual'
       });
@@ -958,7 +991,7 @@
       language,
       translationLanguage,
       editingId: existing?.id || editingId || '',
-      context: normalizujText(options.context ?? existing?.context, 480),
+      context: zkratKontext(options.context ?? existing?.context, term),
       bookTitle: normalizujText(options.bookTitle ?? existing?.bookTitle, 180),
       chapterTitle: normalizujText(options.chapterTitle ?? existing?.chapterTitle, 180),
       sourceType: normalizujText(options.sourceType ?? existing?.sourceType, 40) || 'manual'
@@ -973,7 +1006,8 @@
       prvky.entryTerm.readOnly = Boolean(options.lockTerm);
     }
     if (prvky.entryTranslation) prvky.entryTranslation.value = normalizujText(options.translation ?? existing?.translation, 240);
-    if (prvky.entryContext) prvky.entryContext.value = normalizujText(options.context ?? existing?.context ?? dialogStav.context, 480);
+    if (prvky.entryContext) prvky.entryContext.value = zkratKontext(options.context ?? existing?.context ?? dialogStav.context, term);
+    if (prvky.entrySource) prvky.entrySource.value = normalizujText(options.bookTitle ?? existing?.bookTitle ?? dialogStav.bookTitle, 180);
     if (prvky.entrySave) {
       prvky.entrySave.disabled = false;
       prvky.entrySave.textContent = editingId ? 'Uložit změny' : (existing ? 'Aktualizovat' : '＋ Uložit do slovníku');
@@ -1033,7 +1067,7 @@
       if (item.context) {
         const context = document.createElement('p');
         context.className = 'learningDictionaryContext';
-        context.textContent = `“${item.context}”`;
+        context.textContent = `“${zkratKontext(item.context, item.term)}”`;
         row.append(context);
       }
 
@@ -1173,8 +1207,9 @@
     prvky.practiceTerm.textContent = item.term;
     prvky.practiceTranslation.textContent = item.translation;
     prvky.practiceTranslation.hidden = !prekladOdhalen;
-    prvky.practiceContext.textContent = item.context ? `“${item.context}”` : '';
-    prvky.practiceContext.hidden = !prekladOdhalen || !item.context;
+    const kratkyKontext = zkratKontext(item.context, item.term);
+    prvky.practiceContext.textContent = kratkyKontext ? `“${kratkyKontext}”` : '';
+    prvky.practiceContext.hidden = !prekladOdhalen || !kratkyKontext;
     prvky.practiceReveal.hidden = prekladOdhalen;
     prvky.practiceSource.textContent = formatSource(item);
     prvky.practiceSource.hidden = !prekladOdhalen || !formatSource(item);
@@ -1477,6 +1512,7 @@
       entryTerm: document.getElementById('languageLearningEntryTerm'),
       entryTranslation: document.getElementById('languageLearningEntryTranslation'),
       entryContext: document.getElementById('languageLearningEntryContext'),
+      entrySource: document.getElementById('languageLearningEntrySource'),
       entryStatus: document.getElementById('languageLearningEntryStatus'),
       entryTranslate: document.getElementById('languageLearningEntryTranslate'),
       entrySave: document.getElementById('languageLearningEntrySave')
@@ -1524,6 +1560,13 @@
     });
     prvky.entryTranslation?.addEventListener('input', () => {
       if (prvky.entrySave) prvky.entrySave.textContent = '＋ Uložit do slovníku';
+    });
+
+    prvky.entryContext?.addEventListener('input', () => {
+      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? 'Uložit změny' : '＋ Uložit do slovníku';
+    });
+    prvky.entrySource?.addEventListener('input', () => {
+      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? 'Uložit změny' : '＋ Uložit do slovníku';
     });
 
     prvky.practiceReveal?.addEventListener('click', () => {
