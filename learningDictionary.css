@@ -1,5 +1,5 @@
 /* ==========================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (658BZ)
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (658CA)
    ========================================================== */
 .englishLearningModal[hidden],
 .englishLearningPanel[hidden],
@@ -9,7 +9,6 @@
 .englishLearningPracticeContext[hidden],
 .englishLearningPracticeSource[hidden],
 .englishLearningPracticeReveal[hidden],
-.englishLearningPracticeActions[hidden],
 .englishLearningEmpty[hidden] {
   display: none !important;
 }
@@ -378,7 +377,6 @@
   .englishLearningHeader { padding-left: 13px; padding-right: 13px; }
   .englishLearningTabs { padding-left: 8px; padding-right: 8px; gap: 5px; }
   .englishLearningTabs button { font-size: .84rem; }
-  .englishLearningPracticeActions { grid-template-columns: 1fr; }
   .englishLearningStatsGrid { gap: 8px; }
 }
 
@@ -399,4 +397,151 @@ body.learning-dictionary-open {
       100dvh - var(--ln-lk-height, 260px) - 5px - max(8px, env(safe-area-inset-top))
     );
   }
+}
+
+
+/* ==========================================================
+   658CA – swipe procvičování + průběh aktuálního tréninku
+   ========================================================== */
+.englishLearningPracticeSummary {
+  width: min(520px, 100%);
+  margin: 0 auto 10px;
+  padding: 10px 12px 9px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-background));
+}
+
+.englishLearningPracticeSummary[hidden] { display: none !important; }
+
+.englishLearningPracticeSummaryTop,
+.englishLearningPracticeScore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.englishLearningPracticeSummaryTop strong {
+  min-width: 0;
+  font-size: .94rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.englishLearningPracticeSummaryTop span {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: .82rem;
+  font-weight: 750;
+}
+
+.englishLearningPracticeProgressTrack {
+  height: 7px;
+  margin: 8px 0 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 75%, transparent);
+}
+
+#englishLearningPracticeProgress {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 180ms ease-out;
+}
+
+.englishLearningPracticeScore {
+  justify-content: flex-end;
+  font-size: .86rem;
+  font-weight: 850;
+}
+
+.practiceScoreOk { color: #228159; }
+
+.practiceScoreNok {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-danger-text, #d15b5b);
+  font: inherit;
+  font-weight: 850;
+}
+
+.practiceScoreNok:not(:disabled) {
+  cursor: pointer;
+  background: color-mix(in srgb, #d15b5b 10%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.practiceScoreNok:disabled { opacity: .55; }
+
+.englishLearningPracticeCard {
+  position: relative;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform, opacity;
+}
+
+.englishLearningPracticeCard.is-swiping { transition: none !important; }
+
+.englishLearningPracticeCard::before {
+  position: absolute;
+  top: 18px;
+  z-index: 2;
+  padding: 7px 10px;
+  border: 2px solid currentColor;
+  border-radius: 11px;
+  opacity: 0;
+  font-size: .9rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+
+.englishLearningPracticeCard.swipe-right::before {
+  content: 'UMÍM ✓';
+  left: 18px;
+  color: #228159;
+  opacity: 1;
+  transform: rotate(-5deg);
+}
+
+.englishLearningPracticeCard.swipe-left::before {
+  content: 'NEUMÍM ✕';
+  right: 18px;
+  color: var(--color-danger-text, #d15b5b);
+  opacity: 1;
+  transform: rotate(5deg);
+}
+
+.englishLearningPracticeCard.swipe-right {
+  border-color: color-mix(in srgb, #2b9b68 70%, var(--color-border));
+  box-shadow: 0 12px 30px rgba(0,0,0,.12), 0 0 0 2px color-mix(in srgb, #2b9b68 18%, transparent);
+}
+
+.englishLearningPracticeCard.swipe-left {
+  border-color: color-mix(in srgb, #d15b5b 70%, var(--color-border));
+  box-shadow: 0 12px 30px rgba(0,0,0,.12), 0 0 0 2px color-mix(in srgb, #d15b5b 16%, transparent);
+}
+
+.englishLearningPracticeHint {
+  margin-top: 22px;
+  color: var(--color-text-secondary);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  #englishLearningPracticePanel { padding: 10px 12px 14px; }
+  .englishLearningPracticeSummary { margin-bottom: 8px; }
+  .englishLearningPracticeCard { margin-top: 0; padding: 18px; }
+  .englishLearningPracticeHint { font-size: .72rem; }
 }

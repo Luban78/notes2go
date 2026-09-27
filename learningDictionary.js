@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658BZ)
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CA)
    --------------------------------------------------------------
    - samostatná data od osobního slovníku LubaKeyboard,
    - ukládání slov/frází z LubaReaderu včetně věty, knihy a kapitoly,
@@ -19,6 +19,13 @@
   let aktivniTab = 'words';
   let aktivniKartaId = null;
   let prekladOdhalen = false;
+  let trenink = null;
+  let swipeStav = null;
+  let swipeZamek = false;
+  let potlacKlikDo = 0;
+  let aktivniUtterance = null;
+  let aktivniAudio = null;
+  const audioUrlCache = new Map();
 
   function ownerId() {
     return String(localStorage.getItem(OWNER_KEY) || 'local').trim() || 'local';
@@ -201,18 +208,132 @@
     }
   }
 
-  function vyslov(text) {
-    const vyraz = normalizujVyraz(text);
-    if (!vyraz || !window.speechSynthesis || typeof SpeechSynthesisUtterance !== 'function') return false;
+  function anglickyHlas() {
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(vyraz);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.88;
-      window.speechSynthesis.speak(utterance);
+      const voices = window.speechSynthesis?.getVoices?.() || [];
+      return voices.find((voice) => /^en-GB$/i.test(voice.lang))
+        || voices.find((voice) => /^en-US$/i.test(voice.lang))
+        || voices.find((voice) => /^en[-_]/i.test(voice.lang))
+        || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function najdiAudioUrlSlova(slovo) {
+    const key = normalizujVyraz(slovo).toLocaleLowerCase('en-US');
+    if (!key || /\s/.test(key)) return '';
+    if (audioUrlCache.has(key)) return audioUrlCache.get(key) || '';
+    audioUrlCache.set(key, '');
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`, {
+        method: 'GET',
+        credentials: 'omit',
+        cache: 'force-cache'
+      });
+      if (!response.ok) return '';
+      const data = await response.json();
+      const entries = Array.isArray(data) ? data : [];
+      const urls = entries.flatMap((entry) => Array.isArray(entry?.phonetics) ? entry.phonetics : [])
+        .map((phonetic) => String(phonetic?.audio || '').trim())
+        .filter(Boolean);
+      const preferred = urls.find((url) => /-uk\.|_uk\.|-gb\.|_gb\./i.test(url)) || urls[0] || '';
+      const url = preferred.startsWith('//') ? `https:${preferred}` : preferred;
+      audioUrlCache.set(key, url);
+      return url;
+    } catch (_error) {
+      return '';
+    }
+  }
+
+  function pripravVyslovnost(text) {
+    const slova = normalizujVyraz(text).match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
+    slova.slice(0, 8).forEach((slovo) => { void najdiAudioUrlSlova(slovo); });
+  }
+
+  async function prehrajAudioUrlSekvenci(urls) {
+    const seznam = (urls || []).filter(Boolean);
+    if (!seznam.length) return false;
+    try {
+      aktivniAudio?.pause?.();
+      for (const url of seznam) {
+        await new Promise((resolve) => {
+          const audio = new Audio(url);
+          aktivniAudio = audio;
+          audio.preload = 'auto';
+          audio.onended = resolve;
+          audio.onerror = resolve;
+          const promise = audio.play();
+          if (promise?.catch) promise.catch(resolve);
+        });
+      }
+      aktivniAudio = null;
       return true;
     } catch (_error) {
+      aktivniAudio = null;
       return false;
+    }
+  }
+
+  async function prehrajAudioFallback(text) {
+    const slova = normalizujVyraz(text).match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
+    if (!slova.length) return false;
+    const urls = (await Promise.all(slova.slice(0, 8).map(najdiAudioUrlSlova))).filter(Boolean);
+    return prehrajAudioUrlSekvenci(urls);
+  }
+
+  function vyslov(text) {
+    const vyraz = normalizujVyraz(text);
+    if (!vyraz) return false;
+    const slova = vyraz.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
+    const cachedUrls = slova.slice(0, 8).map((slovo) => audioUrlCache.get(slovo.toLocaleLowerCase('en-US')) || '');
+    if (slova.length && cachedUrls.length === slova.length && cachedUrls.every(Boolean)) {
+      // Pokud je výslovnost už přednačtená, audio.play() proběhne přímo z tapnutí uživatele.
+      void prehrajAudioUrlSekvenci(cachedUrls);
+      return true;
+    }
+    pripravVyslovnost(vyraz);
+
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance !== 'function') {
+      void prehrajAudioFallback(vyraz);
+      return true;
+    }
+
+    try {
+      aktivniAudio?.pause?.();
+      aktivniAudio = null;
+      synth.cancel();
+      synth.resume?.();
+
+      // Android WebView umí po cancel() spolknout okamžitý speak().
+      // Krátké odložení + držená reference na utterance je výrazně spolehlivější.
+      setTimeout(() => {
+        let started = false;
+        const utterance = new SpeechSynthesisUtterance(vyraz);
+        aktivniUtterance = utterance;
+        utterance.lang = anglickyHlas()?.lang || 'en-GB';
+        const voice = anglickyHlas();
+        if (voice) utterance.voice = voice;
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        utterance.onstart = () => { started = true; };
+        utterance.onend = () => { if (aktivniUtterance === utterance) aktivniUtterance = null; };
+        utterance.onerror = () => {
+          if (aktivniUtterance === utterance) aktivniUtterance = null;
+          void prehrajAudioFallback(vyraz);
+        };
+        synth.speak(utterance);
+        setTimeout(() => {
+          if (synth.paused) synth.resume?.();
+          if (!started && !synth.speaking) void prehrajAudioFallback(vyraz);
+        }, 900);
+      }, 80);
+      return true;
+    } catch (_error) {
+      void prehrajAudioFallback(vyraz);
+      return true;
     }
   }
 
@@ -296,25 +417,92 @@
     if (prvky.empty) prvky.empty.hidden = items.length > 0;
   }
 
-  function vyberKartu() {
-    const items = nacti();
-    if (!items.length) return null;
+  function seradKarty(items) {
     const now = Date.now();
-    const sorted = [...items].sort((a, b) => {
+    return [...items].sort((a, b) => {
       const aDue = !a.nextReviewAt || a.nextReviewAt <= now ? 0 : 1;
       const bDue = !b.nextReviewAt || b.nextReviewAt <= now ? 0 : 1;
       return aDue - bDue || a.level - b.level || a.nextReviewAt - b.nextReviewAt || a.updatedAt - b.updatedAt;
     });
-    const current = sorted.find((item) => item.id === aktivniKartaId);
-    return current || sorted[0];
+  }
+
+  function zahajTrenink(mode = 'all', ids = null) {
+    const items = seradKarty(nacti());
+    const povolene = new Set(items.map((item) => item.id));
+    const queue = Array.isArray(ids)
+      ? ids.filter((id, index, all) => povolene.has(id) && all.indexOf(id) === index)
+      : items.map((item) => item.id);
+
+    trenink = {
+      mode: mode === 'wrong' ? 'wrong' : 'all',
+      ids: queue,
+      index: 0,
+      ok: 0,
+      nok: 0,
+      wrongIds: []
+    };
+    aktivniKartaId = queue[0] || null;
+    prekladOdhalen = false;
+  }
+
+  function vyberKartu() {
+    const items = nacti();
+    if (!items.length) return null;
+    if (!trenink) zahajTrenink('all');
+    if (!trenink?.ids?.length || trenink.index >= trenink.ids.length) return null;
+    const id = trenink.ids[trenink.index];
+    const item = items.find((entry) => entry.id === id) || null;
+    aktivniKartaId = item?.id || null;
+    return item;
+  }
+
+  function vykresliTreninkBar() {
+    if (!prvky.practiceSummary) return;
+    const totalWords = pocetSlov();
+    const sessionTotal = trenink?.ids?.length || 0;
+    const done = Math.min(sessionTotal, (trenink?.ok || 0) + (trenink?.nok || 0));
+    prvky.practiceSummary.hidden = totalWords === 0;
+    if (prvky.practiceTotal) {
+      prvky.practiceTotal.textContent = trenink?.mode === 'wrong'
+        ? `Opakuji ${sessionTotal} NOK`
+        : `Učím se ${popisekPoctuSlov(totalWords)}`;
+    }
+    if (prvky.practicePosition) prvky.practicePosition.textContent = `${done} / ${sessionTotal}`;
+    if (prvky.practiceProgress) {
+      const pct = sessionTotal ? Math.round((done / sessionTotal) * 100) : 0;
+      prvky.practiceProgress.style.width = `${pct}%`;
+    }
+    if (prvky.practiceOk) prvky.practiceOk.textContent = `${trenink?.ok || 0} OK`;
+    if (prvky.practiceNok) {
+      prvky.practiceNok.textContent = `${trenink?.nok || 0} NOK`;
+      prvky.practiceNok.disabled = !(trenink?.wrongIds?.length);
+      prvky.practiceNok.title = trenink?.wrongIds?.length ? 'Procvičit jen slovíčka, která neumím' : 'Zatím žádná chyba';
+    }
   }
 
   function vykresliProcvičování() {
     if (!prvky.practiceCard) return;
+    if (!trenink && nacti().length) zahajTrenink('all');
     const item = vyberKartu();
+    vykresliTreninkBar();
+
+    const maSlova = pocetSlov() > 0;
+    const hotovo = maSlova && trenink && trenink.index >= trenink.ids.length;
     prvky.practiceEmpty.hidden = Boolean(item);
     prvky.practiceCard.hidden = !item;
-    if (!item) return;
+
+    if (!item) {
+      if (prvky.practiceEmpty) {
+        if (!maSlova) {
+          prvky.practiceEmpty.textContent = 'Nejdřív si ulož alespoň jedno slovíčko z LubaReaderu.';
+        } else if (hotovo && trenink.nok > 0) {
+          prvky.practiceEmpty.textContent = `Trénink hotový 💪 ${trenink.ok} OK · ${trenink.nok} NOK. Klepni nahoře na červené NOK a projedou jen chyby.`;
+        } else if (hotovo) {
+          prvky.practiceEmpty.textContent = 'Trénink hotový 🥳 Všechna slovíčka byla OK.';
+        }
+      }
+      return;
+    }
 
     aktivniKartaId = item.id;
     prvky.practiceTerm.textContent = item.term;
@@ -323,15 +511,16 @@
     prvky.practiceContext.textContent = item.context ? `“${item.context}”` : '';
     prvky.practiceContext.hidden = !prekladOdhalen || !item.context;
     prvky.practiceReveal.hidden = prekladOdhalen;
-    prvky.practiceActions.hidden = !prekladOdhalen;
     prvky.practiceSource.textContent = formatSource(item);
     prvky.practiceSource.hidden = !prekladOdhalen || !formatSource(item);
+    if (prvky.practiceHint) prvky.practiceHint.hidden = false;
+    pripravVyslovnost(item.term);
   }
 
   function ohodnotKartu(vysledek) {
     const items = nacti();
     const index = items.findIndex((item) => item.id === aktivniKartaId);
-    if (index < 0) return;
+    if (index < 0 || !trenink) return;
     const item = { ...items[index] };
     const now = Date.now();
     item.reviews += 1;
@@ -340,14 +529,14 @@
     if (vysledek === 'know') {
       item.level = Math.min(5, item.level + 1);
       item.correct += 1;
+      trenink.ok += 1;
       const days = REVIEW_INTERVALS[item.level] || 30;
       item.nextReviewAt = now + days * 24 * 60 * 60 * 1000;
-    } else if (vysledek === 'again') {
-      item.level = Math.max(0, item.level - 1);
-      item.nextReviewAt = now + 12 * 60 * 60 * 1000;
     } else {
       item.level = 0;
       item.wrong += 1;
+      trenink.nok += 1;
+      if (!trenink.wrongIds.includes(item.id)) trenink.wrongIds.push(item.id);
       item.nextReviewAt = now + 10 * 60 * 1000;
     }
 
@@ -356,13 +545,80 @@
     uloz(items);
     oznamZmenu({ operation: 'review', id: item.id, result: vysledek });
 
-    const ostatni = items
-      .filter((x) => x.id !== item.id)
-      .sort((a, b) => a.level - b.level || a.nextReviewAt - b.nextReviewAt || a.updatedAt - b.updatedAt);
-    aktivniKartaId = ostatni[0]?.id || item.id;
+    trenink.index += 1;
+    aktivniKartaId = trenink.ids[trenink.index] || null;
     prekladOdhalen = false;
     vykresliProcvičování();
     vykresliStatistiky();
+  }
+
+  function resetSwipeVzhled() {
+    if (!prvky.practiceCard) return;
+    prvky.practiceCard.classList.remove('is-swiping', 'swipe-right', 'swipe-left');
+    prvky.practiceCard.style.transition = 'none';
+    prvky.practiceCard.style.transform = '';
+    prvky.practiceCard.style.opacity = '';
+    requestAnimationFrame(() => { if (prvky.practiceCard) prvky.practiceCard.style.transition = ''; });
+  }
+
+  function dokonciSwipe(vysledek, smer) {
+    if (swipeZamek || !prvky.practiceCard || !aktivniKartaId) return;
+    swipeZamek = true;
+    const width = Math.max(window.innerWidth, prvky.practiceCard.getBoundingClientRect().width) + 120;
+    prvky.practiceCard.style.transition = 'transform 170ms ease-out, opacity 170ms ease-out';
+    prvky.practiceCard.style.transform = `translateX(${smer * width}px) rotate(${smer * 7}deg)`;
+    prvky.practiceCard.style.opacity = '0.18';
+    potlacKlikDo = Date.now() + 350;
+    setTimeout(() => {
+      resetSwipeVzhled();
+      ohodnotKartu(vysledek);
+      swipeZamek = false;
+    }, 175);
+  }
+
+  function initSwipe() {
+    const card = prvky.practiceCard;
+    if (!card) return;
+
+    card.addEventListener('pointerdown', (event) => {
+      if (swipeZamek || !aktivniKartaId || event.button > 0 || event.target.closest('button')) return;
+      swipeStav = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0 };
+      card.setPointerCapture?.(event.pointerId);
+      card.classList.add('is-swiping');
+    });
+
+    card.addEventListener('pointermove', (event) => {
+      if (!swipeStav || swipeStav.id !== event.pointerId || swipeZamek) return;
+      swipeStav.dx = event.clientX - swipeStav.x;
+      swipeStav.dy = event.clientY - swipeStav.y;
+      const ax = Math.abs(swipeStav.dx);
+      const ay = Math.abs(swipeStav.dy);
+      if (ax < 7 || ax <= ay * 1.15) return;
+      event.preventDefault();
+      const rotate = Math.max(-7, Math.min(7, swipeStav.dx / 18));
+      card.style.transform = `translateX(${swipeStav.dx}px) rotate(${rotate}deg)`;
+      card.classList.toggle('swipe-right', swipeStav.dx > 24);
+      card.classList.toggle('swipe-left', swipeStav.dx < -24);
+    });
+
+    const konec = (event) => {
+      if (!swipeStav || swipeStav.id !== event.pointerId || swipeZamek) return;
+      const { dx, dy } = swipeStav;
+      swipeStav = null;
+      const threshold = Math.max(58, card.getBoundingClientRect().width * 0.16);
+      const horizontal = Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.15;
+      if (horizontal) {
+        event.preventDefault();
+        dokonciSwipe(dx > 0 ? 'know' : 'wrong', dx > 0 ? 1 : -1);
+      } else {
+        card.style.transition = 'transform 150ms ease-out';
+        card.style.transform = '';
+        card.classList.remove('swipe-right', 'swipe-left');
+        setTimeout(resetSwipeVzhled, 155);
+      }
+    };
+    card.addEventListener('pointerup', konec);
+    card.addEventListener('pointercancel', konec);
   }
 
   function vykresliStatistiky() {
@@ -379,6 +635,7 @@
   }
 
   function nastavTab(tab) {
+    const predchoziTab = aktivniTab;
     aktivniTab = ['words', 'practice', 'stats'].includes(tab) ? tab : 'words';
     prvky.tabs?.querySelectorAll?.('[data-learning-tab]').forEach((button) => {
       const active = button.dataset.learningTab === aktivniTab;
@@ -390,6 +647,7 @@
     if (prvky.statsPanel) prvky.statsPanel.hidden = aktivniTab !== 'stats';
     if (aktivniTab === 'words') vykresliSlova();
     if (aktivniTab === 'practice') {
+      if (!trenink || predchoziTab !== 'practice' && trenink.ids.length === 0) zahajTrenink('all');
       prekladOdhalen = false;
       vykresliProcvičování();
     }
@@ -431,7 +689,13 @@
       practiceContext: document.getElementById('englishLearningPracticeContext'),
       practiceSource: document.getElementById('englishLearningPracticeSource'),
       practiceReveal: document.getElementById('englishLearningPracticeReveal'),
-      practiceActions: document.getElementById('englishLearningPracticeActions'),
+      practiceSummary: document.getElementById('englishLearningPracticeSummary'),
+      practiceTotal: document.getElementById('englishLearningPracticeTotal'),
+      practicePosition: document.getElementById('englishLearningPracticePosition'),
+      practiceProgress: document.getElementById('englishLearningPracticeProgress'),
+      practiceOk: document.getElementById('englishLearningPracticeOk'),
+      practiceNok: document.getElementById('englishLearningPracticeNok'),
+      practiceHint: document.getElementById('englishLearningPracticeHint'),
       statsTotal: document.getElementById('englishLearningStatsTotal'),
       statsMastered: document.getElementById('englishLearningStatsMastered'),
       statsDue: document.getElementById('englishLearningStatsDue'),
@@ -453,17 +717,24 @@
       vykresliProcvičování();
     });
     prvky.practiceTerm?.addEventListener('click', () => {
+      if (Date.now() < potlacKlikDo) return;
       const item = vyberKartu();
       if (item) vyslov(item.term);
     });
-    document.getElementById('englishLearningPracticeWrong')?.addEventListener('click', () => ohodnotKartu('wrong'));
-    document.getElementById('englishLearningPracticeAgain')?.addEventListener('click', () => ohodnotKartu('again'));
-    document.getElementById('englishLearningPracticeKnow')?.addEventListener('click', () => ohodnotKartu('know'));
+    prvky.practiceNok?.addEventListener('click', () => {
+      const ids = [...(trenink?.wrongIds || [])];
+      if (!ids.length) return;
+      zahajTrenink('wrong', ids);
+      vykresliProcvičování();
+    });
+    initSwipe();
+    try { window.speechSynthesis?.getVoices?.(); } catch (_error) {}
 
     window.addEventListener('lubanote:learning-dictionary-change', () => {
       nastavCount();
       if (!prvky.modal?.hidden) {
         if (aktivniTab === 'words') vykresliSlova();
+        if (aktivniTab === 'practice') vykresliTreninkBar();
         if (aktivniTab === 'stats') vykresliStatistiky();
       }
     });
