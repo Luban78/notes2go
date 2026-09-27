@@ -3541,7 +3541,7 @@
     try {
       // Při návratu otevřeme konec předchozí kapitoly, aby čtení
       // pokračovalo přirozeně opačným směrem bez skoku na její začátek.
-      await zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 1 });
+      await zobrazEpubKapitolu(epubAktualniKapitola - 1, { ratio: 1, plynulyPrechod: true });
     } catch (error) {
       console.warn('Plynulý přechod EPUB na předchozí kapitolu selhal:', error);
     } finally {
@@ -3562,7 +3562,7 @@
 
     epubPlynulyPrechodBezi = true;
     try {
-      await zobrazEpubKapitolu(epubAktualniKapitola + 1, { ratio: 0 });
+      await zobrazEpubKapitolu(epubAktualniKapitola + 1, { ratio: 0, plynulyPrechod: true });
     } catch (error) {
       console.warn('Plynulý přechod EPUB na další kapitolu selhal:', error);
     } finally {
@@ -3606,10 +3606,17 @@
     const ratio = Math.max(0, Math.min(1, Number(options.ratio) || 0));
     const fragment = String(options.fragment || '');
     const highlightId = String(options.highlightId || '');
+    const plynulyPrechod = options.plynulyPrechod === true;
 
-    epubViewerPrvky.loading.hidden = false;
-    epubViewerPrvky.loadingText.textContent = 'Otevírám kapitolu…';
-    uvolniEpubKapitolaUrls();
+    // 658BX: při automatickém fullscreen navazování necháme starou kapitolu
+    // viditelnou po dobu renderu. Loading overlay ani předčasné revoke URL tak
+    // nemohou způsobit bílé/tmavé probliknutí mezi kapitolami.
+    const predchoziObjectUrls = plynulyPrechod ? [...epubKapitolaObjectUrls] : [];
+    if (!plynulyPrechod) {
+      epubViewerPrvky.loading.hidden = false;
+      epubViewerPrvky.loadingText.textContent = 'Otevírám kapitolu…';
+      uvolniEpubKapitolaUrls();
+    }
 
     const rendered = await epubAktualniKniha.renderChapter(cil);
     epubAktualniKapitola = rendered.index;
@@ -3619,37 +3626,67 @@
     epubViewerPrvky.counter.textContent = `${epubAktualniKapitola + 1} / ${pocet}`;
     epubViewerPrvky.prev.disabled = epubAktualniKapitola <= 0;
     epubViewerPrvky.next.disabled = epubAktualniKapitola >= pocet - 1;
-    epubPosledniScrollTop = 0;
     aplikujEpubZvyrazneni();
     skryjEpubVyberBar();
-    epubViewerPrvky.loading.hidden = true;
 
-    requestAnimationFrame(() => {
-      if (!epubViewerPrvky || !epubViewerOtevren) return;
-      if (highlightId) {
-        const cilovy = epubViewerPrvky.content.querySelector(`[data-epub-highlight-id="${CSS.escape(highlightId)}"]`);
-        if (cilovy) cilovy.scrollIntoView({ block: 'center' });
-        else epubViewerPrvky.body.scrollTop = 0;
-      } else if (fragment) {
-        let cilovy = null;
-        try { cilovy = epubViewerPrvky.content.querySelector(`#${CSS.escape(fragment)}`); } catch (_error) {}
-        if (cilovy) {
-          cilovy.scrollIntoView({ block: 'start' });
+    // U čistého přechodu mezi sousedními kapitolami nastavíme cílovou pozici
+    // ještě ve stejném snímku jako výměnu HTML. Prohlížeč tedy nemá šanci
+    // vykreslit novou kapitolu nejdřív na špatném místě a až potom odskočit.
+    if (plynulyPrechod && !highlightId && !fragment) {
+      const maxScroll = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
+      epubViewerPrvky.body.scrollTop = ratio > 0 ? maxScroll * ratio : 0;
+      epubPosledniScrollTop = epubViewerPrvky.body.scrollTop;
+
+      // Pokud kapitola obsahuje obrázky, po jejich načtení znovu držíme spodní
+      // hranu při návratu zpět. Neděláme kvůli tomu žádný viditelný overlay.
+      if (ratio > 0) {
+        const dorovnejKonec = () => {
+          if (!epubViewerPrvky || !epubViewerOtevren || !epubViewerFullscreen) return;
+          const konec = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
+          epubViewerPrvky.body.scrollTop = konec;
+          epubPosledniScrollTop = konec;
+        };
+        requestAnimationFrame(dorovnejKonec);
+        epubViewerPrvky.content.querySelectorAll('img').forEach((img) => {
+          if (!img.complete) img.addEventListener('load', dorovnejKonec, { once: true });
+        });
+      }
+    } else {
+      requestAnimationFrame(() => {
+        if (!epubViewerPrvky || !epubViewerOtevren) return;
+        if (highlightId) {
+          const cilovy = epubViewerPrvky.content.querySelector(`[data-epub-highlight-id="${CSS.escape(highlightId)}"]`);
+          if (cilovy) cilovy.scrollIntoView({ block: 'center' });
+          else epubViewerPrvky.body.scrollTop = 0;
+        } else if (fragment) {
+          let cilovy = null;
+          try { cilovy = epubViewerPrvky.content.querySelector(`#${CSS.escape(fragment)}`); } catch (_error) {}
+          if (cilovy) {
+            cilovy.scrollIntoView({ block: 'start' });
+          } else {
+            epubViewerPrvky.body.scrollTop = 0;
+          }
+        } else if (ratio > 0) {
+          const nastav = () => {
+            const maxScroll = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
+            epubViewerPrvky.body.scrollTop = maxScroll * ratio;
+            epubPosledniScrollTop = epubViewerPrvky.body.scrollTop;
+          };
+          nastav();
+          setTimeout(nastav, 120);
         } else {
           epubViewerPrvky.body.scrollTop = 0;
+          epubPosledniScrollTop = 0;
         }
-      } else if (ratio > 0) {
-        const nastav = () => {
-          const maxScroll = Math.max(0, epubViewerPrvky.body.scrollHeight - epubViewerPrvky.body.clientHeight);
-          epubViewerPrvky.body.scrollTop = maxScroll * ratio;
-        };
-        nastav();
-        setTimeout(nastav, 120);
-      } else {
-        epubViewerPrvky.body.scrollTop = 0;
-      }
-    });
+      });
+    }
 
+    if (plynulyPrechod) {
+      for (const url of predchoziObjectUrls) {
+        try { URL.revokeObjectURL(url); } catch (_error) {}
+      }
+    }
+    epubViewerPrvky.loading.hidden = true;
     naplanujUlozeniEpubPozice();
   }
 
@@ -3988,11 +4025,36 @@
     body.addEventListener('pointerdown', (event) => {
       if (!epubViewerOtevren || event.pointerType !== 'touch') return;
       if (event.target.closest?.('a,button,.documentsEpubHighlight')) return;
-      pointerTap = { id: event.pointerId, x: event.clientX, y: event.clientY, cas: performance.now(), pohyb: false };
+      pointerTap = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        cas: performance.now(),
+        pohyb: false,
+        zacalNaHornimOkraji: epubViewerFullscreen && jeEpubScrollNaZacatku()
+      };
     });
     body.addEventListener('pointermove', (event) => {
       if (!pointerTap || pointerTap.id !== event.pointerId) return;
-      if (Math.hypot(event.clientX - pointerTap.x, event.clientY - pointerTap.y) > 14) pointerTap.pohyb = true;
+      const posunX = event.clientX - pointerTap.x;
+      const posunY = event.clientY - pointerTap.y;
+      if (Math.hypot(posunX, posunY) > 14) pointerTap.pohyb = true;
+
+      // 658BX: když jsme po přechodu na novou kapitolu přímo na scrollTop=0,
+      // běžný scroll už nemá kam klesnout a nevznikne scroll event. Krátký
+      // přirozený tah dolů proto zachytíme už během pohybu prstu, ne až po
+      // nepohodlném dlouhém gestu/pointerup. Vodorovný pohyb ignorujeme.
+      if (
+        pointerTap.zacalNaHornimOkraji &&
+        epubViewerFullscreen &&
+        jeEpubScrollNaZacatku() &&
+        posunY > 18 &&
+        Math.abs(posunY) > Math.abs(posunX) * 1.15
+      ) {
+        pointerTap = null;
+        posledniTap = null;
+        void pokracujEpubPredchoziKapitolouScroll();
+      }
     });
     body.addEventListener('pointercancel', () => { pointerTap = null; });
     body.addEventListener('pointerup', (event) => {
@@ -4004,7 +4066,7 @@
       const dobaGesta = performance.now() - pointerTap.cas;
       const posunY = event.clientY - pointerTap.y;
       const tahNahoru = pointerTap.pohyb && posunY < -36 && dobaGesta <= 700;
-      const tahDolu = pointerTap.pohyb && posunY > 36 && dobaGesta <= 700;
+      const tahDolu = pointerTap.pohyb && posunY > 18;
       if (tahNahoru && epubViewerFullscreen && jeEpubScrollNaKonci()) {
         pointerTap = null;
         void pokracujEpubDalsiKapitolouScroll();
