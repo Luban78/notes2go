@@ -274,8 +274,7 @@
       const offsetLeft = window.visualViewport?.offsetLeft || 0;
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
-      const mezeraOdVyberu = 8;
-      const maxJemnyPosun = 84;
+      const mezeraOdVyberu = 10;
 
       const editorTopBar = document.querySelector("#taskModal .editorTopBar");
       const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
@@ -293,12 +292,26 @@
           : offsetTop + viewportH - okraj
       );
 
-      /* 658CM – panel zůstává vizuálně přivázaný ke ⋮.
-         Když by vjel do LubaKeyboard, posuneme ho pouze o NEJMENŠÍ nutnou
-         vzdálenost nahoru. Už ho neposíláme celý nad označené slovo, což v CL
-         způsobovalo velký odskok od ⋮. */
+      /* 658CN – rozsirena nabidka se uz neotevira slepe smerem dolu.
+         Primarni panel je normalne NAD nebo POD oznacenym slovem. Podle toho,
+         na ktere strane vyberu lezi tlacitko tri tecky, nechame druhy panel
+         vyrust OPAcNYM smerem: kdyz jsou tecky nad slovem, panel roste nahoru;
+         kdyz jsou pod slovem, roste dolu. Tim zustava vizualne ukotveny ke
+         treckam, ale nelezi pres oznaceny text ani pres selection uchyty. */
       let x = Number(kotva.left);
+      const oblastVyberu = ziskejV2SelectionBezpecnouOblast();
+      const stredKotvyY = (Number(kotva.top) + Number(kotva.bottom)) / 2;
       let y = Number(kotva.top);
+
+      if (oblastVyberu) {
+        if (stredKotvyY <= oblastVyberu.top) {
+          /* Tecky jsou nad vyberem -> rozbalit nahoru, spodkem u kotevniho bodu. */
+          y = Number(kotva.bottom) - vyska;
+        } else if (stredKotvyY >= oblastVyberu.bottom) {
+          /* Tecky jsou pod vyberem -> rozbalit dolu, vrskem u kotevniho bodu. */
+          y = Number(kotva.top);
+        }
+      }
 
       if (x + sirka > offsetLeft + viewportW - okraj) {
         x = Number(kotva.right) - sirka;
@@ -309,35 +322,42 @@
         Math.min(x, offsetLeft + viewportW - sirka - okraj)
       );
 
-      /* Nejdřív respektujeme horní lištu a LubaKeyboard. Při kolizi s
-         klávesnicí panel jen přirazíme těsně nad ni – žádný velký skok. */
+      /* Nejdřív držíme panel uvnitř editoru a nad LubaKeyboard. */
       y = Math.max(horniBezpecnaHrana, y);
       if (y + vyska > spodniBezpecnaHrana) {
         y = Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
       }
 
-      /* Když panel zasahuje do označeného slova/našich úchytů, zkusíme pouze
-         MALÝ lokální posun nad nebo pod výběr. Pokud by bezpečné odsunutí
-         znamenalo velký odskok od ⋮, necháme panel u ⋮ – jeho z-index je vyšší
-         než text i naše úchyty, takže nic neprosvítá skrz panel. */
-      const oblastVyberu = ziskejV2SelectionBezpecnouOblast();
+      /* Po clampu ještě jednou ověříme skutečnou kolizi s výběrem. Pokud by
+         panel stále zasahoval do slova/úchytů, zvolíme nejbližší stranu, kam
+         se CELÝ vejde. Tady už není limit malého posunu z CM – právě ten byl
+         důvod, proč bez vysunuté klávesnice panel zůstal přes výběr. */
       const kandidat = () => ({ left: x, right: x + sirka, top: y, bottom: y + vyska });
 
       if (oblastVyberu && prekryvaV2Rect(kandidat(), oblastVyberu)) {
-        const moznosti = [];
         const nad = oblastVyberu.top - vyska - mezeraOdVyberu;
         const pod = oblastVyberu.bottom + mezeraOdVyberu;
+        const moznosti = [];
 
         if (nad >= horniBezpecnaHrana && nad + vyska <= spodniBezpecnaHrana) {
-          moznosti.push({ y: nad, posun: Math.abs(nad - y) });
+          moznosti.push({ y: nad, vzdalenost: Math.abs(nad - y) });
         }
         if (pod >= horniBezpecnaHrana && pod + vyska <= spodniBezpecnaHrana) {
-          moznosti.push({ y: pod, posun: Math.abs(pod - y) });
+          moznosti.push({ y: pod, vzdalenost: Math.abs(pod - y) });
         }
 
-        moznosti.sort((a, b) => a.posun - b.posun);
-        if (moznosti[0] && moznosti[0].posun <= maxJemnyPosun) {
+        moznosti.sort((a, b) => a.vzdalenost - b.vzdalenost);
+
+        if (moznosti.length) {
           y = moznosti[0].y;
+        } else {
+          /* Když se celý panel nevejde ani na jednu stranu, zvolíme stranu
+             s větším volným prostorem a stále respektujeme viewport/keyboard. */
+          const prostorNad = Math.max(0, oblastVyberu.top - mezeraOdVyberu - horniBezpecnaHrana);
+          const prostorPod = Math.max(0, spodniBezpecnaHrana - oblastVyberu.bottom - mezeraOdVyberu);
+          y = prostorNad >= prostorPod
+            ? horniBezpecnaHrana
+            : Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
         }
       }
 
