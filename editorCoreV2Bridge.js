@@ -247,14 +247,18 @@
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
 
-      /* 658CJ – rozšířený panel vyrůstá přímo z tlačítka ⋮.
-         Pravý horní roh nabídky kotvíme k pravému dolnímu rohu tří teček;
-         když dole není místo, otevře se stejným způsobem nad nimi. */
-      let x = Number(kotva.right) - sirka;
-      let y = Number(kotva.bottom) + 5;
+      /* 658CK – druhá nabídka opravdu začíná v místě tlačítka ⋮.
+         Výchozí kotva je jeho levý horní roh: menu tedy vizuálně „vyroste“
+         z teček místo toho, aby se objevilo pod celým primárním panelem.
+         Jen pokud by se nevešlo, překlápíme ho doleva / nahoru. */
+      let x = Number(kotva.left);
+      let y = Number(kotva.top);
 
+      if (x + sirka > offsetLeft + viewportW - okraj) {
+        x = Number(kotva.right) - sirka;
+      }
       if (y + vyska > offsetTop + viewportH - okraj) {
-        y = Number(kotva.top) - vyska - 5;
+        y = Number(kotva.bottom) - vyska;
       }
 
       x = Math.max(offsetLeft + okraj, Math.min(x, offsetLeft + viewportW - sirka - okraj));

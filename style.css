@@ -15040,8 +15040,9 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   }
 }
 
-/* 658CJ – dvoustupňový mobilní selection panel.
-   Rozšířená nabídka je kompaktní podle nejdelší položky a vyrůstá z ⋮. */
+/* 658CK – dvoustupňový mobilní selection panel.
+   Rozšířená nabídka má skutečnou obsahovou šířku a její levý horní roh
+   navazuje přímo na tlačítko ⋮. */
 @media (max-width: 899px) {
   .selectionMenu[data-ln-v2-owner="1"] {
     display: block;
@@ -15071,19 +15072,24 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     line-height: 1;
   }
 
+  .selectionMenu[data-ln-v2-owner="1"].selectionMenuRozsirene {
+    width: fit-content;
+    min-width: 0;
+  }
+
   .selectionMenuOverflow {
     display: grid;
-    width: max-content;
+    width: fit-content;
     min-width: 0;
     max-width: calc(100vw - 36px);
     gap: 1px;
   }
 
   .selectionMenuOverflow button {
-    width: 100%;
-    min-width: 0;
+    width: auto;
+    min-width: max-content;
     text-align: left;
-    padding: 10px 14px;
+    padding: 9px 11px;
     border-radius: 9px;
     white-space: nowrap;
   }
