@@ -1,5 +1,5 @@
 /* ==============================================================
-   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CB)
+   LUBANOTE – VÝUKA ANGLIČTINY / STUDIJNÍ SLOVNÍK (PATCH 658CC)
    --------------------------------------------------------------
    - samostatná data od osobního slovníku LubaKeyboard,
    - ukládání slov/frází z LubaReaderu včetně věty, knihy a kapitoly,
@@ -25,8 +25,11 @@
   let potlacKlikDo = 0;
   let aktivniUtterance = null;
   let aktivniAudio = null;
+  let audioContext = null;
   const audioUrlCache = new Map();
   const audioUrlPromises = new Map();
+  const audioBufferCache = new Map();
+  const audioBufferPromises = new Map();
 
   function ownerId() {
     return String(localStorage.getItem(OWNER_KEY) || 'local').trim() || 'local';
@@ -264,18 +267,106 @@
     slova.slice(0, 8).forEach((slovo) => { void najdiAudioUrlSlova(slovo); });
   }
 
+  function odemkniAudioContext() {
+    try {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) return null;
+      if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContextCtor();
+      if (audioContext.state === 'suspended') {
+        const resumePromise = audioContext.resume();
+        if (resumePromise?.catch) resumePromise.catch(() => {});
+      }
+      return audioContext;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function nactiAudioBuffer(url) {
+    const key = String(url || '').trim();
+    if (!key) return null;
+    if (audioBufferCache.has(key)) return audioBufferCache.get(key) || null;
+    if (audioBufferPromises.has(key)) return audioBufferPromises.get(key);
+
+    const promise = (async () => {
+      try {
+        const ctx = audioContext || odemkniAudioContext();
+        if (!ctx) return null;
+        const response = await fetch(key, {
+          method: 'GET',
+          credentials: 'omit',
+          cache: 'force-cache',
+          mode: 'cors'
+        });
+        if (!response.ok) return null;
+        const bytes = await response.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(bytes.slice(0));
+        audioBufferCache.set(key, buffer);
+        return buffer;
+      } catch (error) {
+        console.warn('[LubaNote English] WebAudio decode selhal:', error);
+        return null;
+      } finally {
+        audioBufferPromises.delete(key);
+      }
+    })();
+
+    audioBufferPromises.set(key, promise);
+    return promise;
+  }
+
+  async function prehrajPresWebAudio(urls) {
+    const seznam = (urls || []).filter(Boolean);
+    const ctx = audioContext || odemkniAudioContext();
+    if (!ctx || !seznam.length) return false;
+
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      const buffers = (await Promise.all(seznam.map(nactiAudioBuffer))).filter(Boolean);
+      if (!buffers.length) return false;
+
+      let startAt = ctx.currentTime + 0.025;
+      let posledniKonec = startAt;
+      for (const buffer of buffers) {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(startAt);
+        posledniKonec = startAt + buffer.duration;
+        startAt = posledniKonec + 0.055;
+      }
+
+      await new Promise((resolve) => {
+        const delay = Math.max(40, Math.ceil((posledniKonec - ctx.currentTime) * 1000) + 40);
+        setTimeout(resolve, delay);
+      });
+      return true;
+    } catch (error) {
+      console.warn('[LubaNote English] WebAudio playback selhal:', error);
+      return false;
+    }
+  }
+
   async function prehrajAudioUrlSekvenci(urls) {
     const seznam = (urls || []).filter(Boolean);
     if (!seznam.length) return false;
+
+    // Primárně používáme Web Audio. AudioContext je odemčen přímo tapnutím na 🔊,
+    // takže skutečný zvuk může začít i po asynchronním stažení MP3 bez blokace autoplay.
+    if (await prehrajPresWebAudio(seznam)) return true;
+
+    // Záloha pro prohlížeče/WebView bez použitelného Web Audio.
     try {
       aktivniAudio?.pause?.();
       for (const url of seznam) {
         await new Promise((resolve) => {
-          const audio = new Audio(url);
+          const audio = aktivniAudio || new Audio();
           aktivniAudio = audio;
           audio.preload = 'auto';
           audio.onended = resolve;
           audio.onerror = resolve;
+          audio.src = url;
+          audio.currentTime = 0;
           const promise = audio.play();
           if (promise?.catch) promise.catch(resolve);
         });
@@ -291,8 +382,10 @@
   async function prehrajAudioFallback(text) {
     const slova = normalizujVyraz(text).match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
     if (!slova.length) return false;
-    const urls = (await Promise.all(slova.slice(0, 8).map(najdiAudioUrlSlova))).filter(Boolean);
-    return prehrajAudioUrlSekvenci(urls);
+    const urls = await Promise.all(slova.slice(0, 8).map(najdiAudioUrlSlova));
+    // Když pro některé slovo výslovnost chybí, přehrajeme dostupná slova;
+    // u běžných anglických výrazů dictionaryapi vrací audio pro většinu položek.
+    return prehrajAudioUrlSekvenci(urls.filter(Boolean));
   }
 
   function signalizujVyslovnost(button, stav = 'start') {
@@ -309,35 +402,13 @@
     }
   }
 
-  function vyslov(text, button = null) {
-    const vyraz = normalizujVyraz(text);
-    if (!vyraz) return false;
-    signalizujVyslovnost(button, 'start');
-
-    const slova = vyraz.match(/[A-Za-z]+(?:['’\-][A-Za-z]+)*/g) || [];
-    const cachedUrls = slova.slice(0, 8).map((slovo) => audioUrlCache.get(slovo.toLocaleLowerCase('en-US')) || '');
-    if (slova.length && cachedUrls.length === slova.length && cachedUrls.every(Boolean)) {
-      void prehrajAudioUrlSekvenci(cachedUrls).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
-      return true;
-    }
-
-    // Začni přednačítat skutečné slovníkové audio hned. Promise cache zabrání tomu,
-    // aby druhý tap během načítání omylem dostal prázdný výsledek.
-    pripravVyslovnost(vyraz);
-
+  function zkusSpeechSynthesis(vyraz, button = null) {
     const synth = window.speechSynthesis;
-    if (!synth || typeof SpeechSynthesisUtterance !== 'function') {
-      void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
-      return true;
-    }
+    if (!synth || typeof SpeechSynthesisUtterance !== 'function') return false;
 
     try {
-      aktivniAudio?.pause?.();
-      aktivniAudio = null;
       synth.cancel();
       synth.resume?.();
-
-      let started = false;
       const utterance = new SpeechSynthesisUtterance(vyraz);
       aktivniUtterance = utterance;
       const voice = anglickyHlas();
@@ -346,34 +417,45 @@
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 1;
-      utterance.onstart = () => {
-        started = true;
-        signalizujVyslovnost(button, 'start');
-      };
+      utterance.onstart = () => signalizujVyslovnost(button, 'start');
       utterance.onend = () => {
         if (aktivniUtterance === utterance) aktivniUtterance = null;
         signalizujVyslovnost(button, 'done');
       };
       utterance.onerror = () => {
         if (aktivniUtterance === utterance) aktivniUtterance = null;
-        void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
+        signalizujVyslovnost(button, 'error');
       };
-
-      // speak() běží přímo v click handleru. To je na Androidu spolehlivější než
-      // původní setTimeout, který ztrácel uživatelské gesto.
       synth.speak(utterance);
-      setTimeout(() => {
-        if (synth.paused) synth.resume?.();
-        if (!started && !synth.speaking) {
-          try { synth.cancel(); } catch (_error) {}
-          void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
-        }
-      }, 650);
       return true;
     } catch (_error) {
-      void prehrajAudioFallback(vyraz).then((ok) => signalizujVyslovnost(button, ok ? 'done' : 'error'));
-      return true;
+      return false;
     }
+  }
+
+  function vyslov(text, button = null) {
+    const vyraz = normalizujVyraz(text);
+    if (!vyraz) return false;
+    signalizujVyslovnost(button, 'start');
+
+    // DŮLEŽITÉ: odemknutí zvukového kontextu musí proběhnout přímo v click handleru.
+    // Předchozí verze spouštěla online audio až po await/setTimeout, kdy Android WebView
+    // už ztratil uživatelské gesto a play() mohl být potichu zablokovaný.
+    const ctx = odemkniAudioContext();
+
+    // Na Android/SPCK preferujeme skutečné slovníkové MP3 přes odemčený Web Audio.
+    // Je to spolehlivější než speechSynthesis, který může v některých WebView existovat,
+    // ale přesto nic nepřehrát.
+    void prehrajAudioFallback(vyraz).then((ok) => {
+      if (ok) {
+        signalizujVyslovnost(button, 'done');
+        return;
+      }
+      // Poslední záloha pro desktop/prohlížeče, kde Web Speech funguje.
+      if (!zkusSpeechSynthesis(vyraz, button)) signalizujVyslovnost(button, 'error');
+    });
+
+    return Boolean(ctx || window.speechSynthesis);
   }
 
   function pocetSlov() {
