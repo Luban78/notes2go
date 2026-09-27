@@ -871,16 +871,49 @@
 
     const language = platnyJazyk(dialogStav.language || aktivniJazyk);
     const translationLanguage = platnyJazyk(dialogStav.translationLanguage || prekladovyJazykPro(language));
-    const result = ulozPolozku({
-      term,
-      translation,
-      language,
-      translationLanguage,
-      context: prvky.entryContext?.value || dialogStav.context || '',
-      bookTitle: dialogStav.bookTitle || '',
-      chapterTitle: dialogStav.chapterTitle || '',
-      sourceType: dialogStav.sourceType || 'manual'
-    });
+    let result = null;
+    if (dialogStav.editingId) {
+      const items = nacti(language);
+      const index = items.findIndex((item) => item.id === dialogStav.editingId);
+      if (index >= 0) {
+        const duplicateIndex = items.findIndex((item, i) => i !== index && klicVyrazu(item.term, language) === klicVyrazu(term, language));
+        if (duplicateIndex >= 0) {
+          nastavDialogStatus('Takové slovíčko už v tomto jazyku máš.', 'error');
+          return { ok: false, reason: 'duplicate' };
+        }
+        items[index] = {
+          ...items[index],
+          language,
+          translationLanguage,
+          term,
+          translation,
+          context: normalizujText(prvky.entryContext?.value || '', 480),
+          bookTitle: dialogStav.bookTitle || items[index].bookTitle || '',
+          chapterTitle: dialogStav.chapterTitle || items[index].chapterTitle || '',
+          sourceType: dialogStav.sourceType || items[index].sourceType || 'manual',
+          updatedAt: Date.now()
+        };
+        if (!uloz(items, language)) {
+          nastavDialogStatus('Slovíčko se nepodařilo uložit.', 'error');
+          return { ok: false, reason: 'storage' };
+        }
+        oznamZmenu({ operation: 'update', id: items[index].id, language });
+        result = { ok: true, item: { ...items[index] }, updated: true };
+      }
+    }
+
+    if (!result) {
+      result = ulozPolozku({
+        term,
+        translation,
+        language,
+        translationLanguage,
+        context: prvky.entryContext?.value || dialogStav.context || '',
+        bookTitle: dialogStav.bookTitle || '',
+        chapterTitle: dialogStav.chapterTitle || '',
+        sourceType: dialogStav.sourceType || 'manual'
+      });
+    }
 
     if (!result?.ok) {
       nastavDialogStatus('Slovíčko se nepodařilo uložit.', 'error');
@@ -916,35 +949,41 @@
     const language = platnyJazyk(options.language || aktivniJazyk);
     const translationLanguage = platnyJazyk(options.translationLanguage || prekladovyJazykPro(language));
     const term = normalizujVyraz(options.term || '');
-    const existing = term ? najdiPodleVyrazu(term, language) : null;
+    const editingId = String(options.editingId || '');
+    const existing = editingId
+      ? nacti(language).find((item) => item.id === editingId) || null
+      : (term ? najdiPodleVyrazu(term, language) : null);
 
     dialogStav = {
       language,
       translationLanguage,
-      context: normalizujText(options.context, 480),
-      bookTitle: normalizujText(options.bookTitle, 180),
-      chapterTitle: normalizujText(options.chapterTitle, 180),
-      sourceType: normalizujText(options.sourceType, 40) || 'manual'
+      editingId: existing?.id || editingId || '',
+      context: normalizujText(options.context ?? existing?.context, 480),
+      bookTitle: normalizujText(options.bookTitle ?? existing?.bookTitle, 180),
+      chapterTitle: normalizujText(options.chapterTitle ?? existing?.chapterTitle, 180),
+      sourceType: normalizujText(options.sourceType ?? existing?.sourceType, 40) || 'manual'
     };
 
     if (prvky.entryTitle) {
-      prvky.entryTitle.textContent = options.title || (term ? 'Překlad a slovník' : 'Přidat slovíčko');
+      prvky.entryTitle.textContent = options.title || (editingId ? 'Upravit slovíčko' : (term ? 'Překlad a slovník' : 'Přidat slovíčko'));
     }
     if (prvky.entryLanguage) prvky.entryLanguage.textContent = popisJazykovehoSmeru(language, translationLanguage);
     if (prvky.entryTerm) {
       prvky.entryTerm.value = term;
       prvky.entryTerm.readOnly = Boolean(options.lockTerm);
     }
-    if (prvky.entryTranslation) prvky.entryTranslation.value = existing?.translation || normalizujText(options.translation, 240);
-    if (prvky.entryContext) prvky.entryContext.value = dialogStav.context;
+    if (prvky.entryTranslation) prvky.entryTranslation.value = normalizujText(options.translation ?? existing?.translation, 240);
+    if (prvky.entryContext) prvky.entryContext.value = normalizujText(options.context ?? existing?.context ?? dialogStav.context, 480);
     if (prvky.entrySave) {
       prvky.entrySave.disabled = false;
-      prvky.entrySave.textContent = existing ? 'Aktualizovat' : '＋ Uložit do slovníku';
+      prvky.entrySave.textContent = editingId ? 'Uložit změny' : (existing ? 'Aktualizovat' : '＋ Uložit do slovníku');
     }
     if (prvky.entryTranslate) prvky.entryTranslate.disabled = false;
 
     prvky.entryModal.hidden = false;
-    if (existing) {
+    if (editingId && existing) {
+      nastavDialogStatus(`Upravuješ položku · ${jazykInfo(language).nazev}`, '');
+    } else if (existing) {
       nastavDialogStatus(`Toto slovíčko už máš v balíčku ${jazykInfo(language).nazev}.`, 'ok');
     } else {
       nastavDialogStatus(`Studijní balíček · ${popisJazykovehoSmeru(language, translationLanguage)}`, '');
@@ -1002,6 +1041,28 @@
       footer.className = 'learningDictionaryRowFooter';
       const source = document.createElement('small');
       source.textContent = formatSource(item) || (item.sourceType === 'note' ? 'Poznámka' : item.sourceType === 'seed' ? 'Testovací sada LubaNote' : 'Ručně přidáno');
+      const actions = document.createElement('div');
+      actions.className = 'learningDictionaryRowActions';
+
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'learningDictionaryEdit';
+      edit.textContent = 'Upravit';
+      edit.addEventListener('click', () => {
+        otevriPolozkuDialog({
+          editingId: item.id,
+          language: item.language || aktivniJazyk,
+          translationLanguage: item.translationLanguage || prekladovyJazykPro(item.language || aktivniJazyk),
+          term: item.term,
+          translation: item.translation,
+          context: item.context || '',
+          bookTitle: item.bookTitle || '',
+          chapterTitle: item.chapterTitle || '',
+          sourceType: item.sourceType || 'manual',
+          title: 'Upravit slovíčko'
+        });
+      });
+
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'learningDictionaryDelete';
@@ -1012,7 +1073,8 @@
         vykresliStatistiky();
         nastavCount();
       });
-      footer.append(source, del);
+      actions.append(edit, del);
+      footer.append(source, actions);
       row.append(footer);
       prvky.list.append(row);
     });
@@ -1223,7 +1285,7 @@
 
     card.addEventListener('pointerdown', (event) => {
       if (jeDesktopTrainer()) return;
-      if (swipeZamek || !aktivniKartaId || event.button > 0 || event.target.closest('button')) return;
+      if (swipeZamek || !aktivniKartaId || event.button > 0 || event.target.closest('.learningDictionarySpeak, .englishLearningPracticeDesktopActions button')) return;
       swipeStav = {
         id: event.pointerId,
         x: event.clientX,
@@ -1232,6 +1294,7 @@
         dy: 0,
         horizontal: false
       };
+      try { card.setPointerCapture?.(event.pointerId); } catch (_error) {}
       card.classList.add('is-swiping');
     });
 
@@ -1243,11 +1306,12 @@
       const ay = Math.abs(swipeStav.dy);
 
       if (!swipeStav.horizontal) {
-        if (ax < 8 && ay < 8) return;
-        if (ay > ax * 1.15) return;
-        if (ax >= 8 && ax >= ay * 0.9) {
+        if (ax < 5 && ay < 5) return;
+        // Mobilní gesto bývá lehce šikmé. Upřednostníme vodorovný swipe,
+        // jakmile je vodorovná složka zřetelná, ale čistý vertikální scroll necháme být.
+        if (ay > ax * 1.7 && ay > 12) return;
+        if (ax >= 6 && ax >= ay * 0.68) {
           swipeStav.horizontal = true;
-          try { card.setPointerCapture?.(event.pointerId); } catch (_error) {}
         } else {
           return;
         }
@@ -1256,8 +1320,8 @@
       event.preventDefault();
       const rotate = Math.max(-7, Math.min(7, swipeStav.dx / 18));
       card.style.transform = `translateX(${swipeStav.dx}px) rotate(${rotate}deg)`;
-      card.classList.toggle('swipe-right', swipeStav.dx > 18);
-      card.classList.toggle('swipe-left', swipeStav.dx < -18);
+      card.classList.toggle('swipe-right', swipeStav.dx > 14);
+      card.classList.toggle('swipe-left', swipeStav.dx < -14);
     });
 
     const konec = (event) => {
@@ -1265,8 +1329,8 @@
       const { dx, dy, horizontal: horizontalLock } = swipeStav;
       swipeStav = null;
       const width = card.getBoundingClientRect().width;
-      const threshold = Math.max(44, Math.min(68, width * 0.12));
-      const horizontal = horizontalLock && Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 0.95;
+      const threshold = Math.max(30, Math.min(48, width * 0.085));
+      const horizontal = horizontalLock && Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 0.7;
       if (horizontal) {
         event.preventDefault();
         dokonciSwipe(dx > 0 ? 'know' : 'wrong', dx > 0 ? 1 : -1);

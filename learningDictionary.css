@@ -223,16 +223,33 @@
   color: var(--color-text-secondary);
 }
 
+.learningDictionaryRowActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.learningDictionaryEdit,
 .learningDictionaryDelete {
   flex: 0 0 auto;
   min-height: 38px;
   padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--color-danger-text, #d15b5b) 45%, var(--color-border));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--color-danger-text, #d15b5b) 10%, var(--color-surface));
-  color: var(--color-danger-text, #d15b5b);
   font: inherit;
   font-weight: 750;
+}
+
+.learningDictionaryEdit {
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.learningDictionaryDelete {
+  border: 1px solid color-mix(in srgb, var(--color-danger-text, #d15b5b) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger-text, #d15b5b) 10%, var(--color-surface));
+  color: var(--color-danger-text, #d15b5b);
 }
 
 .englishLearningEmpty,
@@ -248,10 +265,10 @@
 }
 
 .englishLearningPracticeCard {
-  width: min(520px, 100%);
-  min-height: 390px;
-  margin: 10px auto 0;
-  padding: 22px;
+  width: min(480px, 100%);
+  min-height: 310px;
+  margin: 8px auto 0;
+  padding: 18px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -267,7 +284,7 @@
 .englishLearningPracticeTerm {
   margin: 0;
   cursor: pointer;
-  font-size: clamp(2rem, 10vw, 3.4rem);
+  font-size: clamp(1.9rem, 9vw, 3.05rem);
   line-height: 1.08;
   overflow-wrap: anywhere;
 }
@@ -299,8 +316,8 @@
 .englishLearningPracticeReveal {
   align-self: center;
   min-height: 50px;
-  margin-top: 28px;
-  padding: 0 22px;
+  margin-top: 22px;
+  padding: 0 20px;
   border: 1px solid var(--color-accent);
   border-radius: 15px;
   background: var(--color-accent);
@@ -372,8 +389,8 @@
 }
 
 @media (max-width: 520px) {
-  .englishLearningModal { padding-left: 7px; padding-right: 7px; }
-  .englishLearningContent { border-radius: 20px; }
+  .englishLearningModal { padding: 0; }
+  .englishLearningContent { border-radius: 0; }
   .englishLearningHeader { padding-left: 13px; padding-right: 13px; }
   .englishLearningTabs { padding-left: 8px; padding-right: 8px; gap: 5px; }
   .englishLearningTabs button { font-size: .84rem; }
@@ -385,6 +402,24 @@ body.learning-dictionary-open {
 }
 
 @media (max-width: 899px) {
+  /* 658CP – na mobilu je Výuka jazyků plnohodnotná obrazovka, ne modalové okno. */
+  .englishLearningModal {
+    padding: 0;
+    background: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .englishLearningContent {
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   body.ln-luba-klavesnice-open .englishLearningModal:not([hidden]) {
     align-items: flex-end;
     padding-top: max(8px, env(safe-area-inset-top));
@@ -533,7 +568,7 @@ body.learning-dictionary-open {
 }
 
 .englishLearningPracticeHint {
-  margin-top: 22px;
+  margin-top: 16px;
   color: var(--color-text-secondary);
   font-size: .78rem;
   font-weight: 700;
@@ -542,7 +577,7 @@ body.learning-dictionary-open {
 @media (max-width: 520px) {
   #englishLearningPracticePanel { padding: 10px 12px 14px; }
   .englishLearningPracticeSummary { margin-bottom: 8px; }
-  .englishLearningPracticeCard { margin-top: 0; padding: 18px; }
+  .englishLearningPracticeCard { margin-top: 0; min-height: 285px; padding: 16px; }
   .englishLearningPracticeHint { font-size: .72rem; }
 }
 
@@ -923,17 +958,6 @@ body.learning-dictionary-open {
   white-space: nowrap;
 }
 
-.learningLanguageChevron {
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  font-size: 1rem;
-  line-height: 1;
-  transition: transform 140ms ease;
-}
-
-.learningLanguageCurrent[aria-expanded="true"] .learningLanguageChevron {
-  transform: rotate(180deg);
-}
 
 .learningLanguagePicker {
   position: absolute;
