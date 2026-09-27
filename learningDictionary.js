@@ -433,10 +433,41 @@
     }
   }
 
+  async function diagnostickyZvuk(button = null) {
+    signalizujVyslovnost(button, 'start');
+    try {
+      const ctx = odemkniAudioContext();
+      if (!ctx) throw new Error('AudioContext není dostupný');
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      // Čistě lokální tón: žádný internet, TTS ani MP3. Ověří samotný audio výstup APK/WebView.
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(660, ctx.currentTime);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.32);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.34);
+      oscillator.onended = () => signalizujVyslovnost(button, 'done');
+      return true;
+    } catch (error) {
+      console.warn('[LubaNote English] Diagnostický tón selhal:', error);
+      signalizujVyslovnost(button, 'error');
+      return false;
+    }
+  }
+
   function vyslov(text, button = null) {
     const vyraz = normalizujVyraz(text);
     if (!vyraz) return false;
-    signalizujVyslovnost(button, 'start');
+    // 658CD DIAGNOSTIKA APK: tlačítko 🔊 teď záměrně přehraje pouze lokální testovací pípnutí.
+    // Tím oddělíme audio výstup APK/WebView od TTS, internetu a slovníkového MP3.
+    void diagnostickyZvuk(button);
+    return true;
 
     // DŮLEŽITÉ: odemknutí zvukového kontextu musí proběhnout přímo v click handleru.
     // Předchozí verze spouštěla online audio až po await/setTimeout, kdy Android WebView
