@@ -233,6 +233,34 @@
     pozicujV2SelectionMenu();
   }
 
+  function ziskejV2SelectionBezpecnouOblast() {
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return null;
+
+    const rects = Array.from(range.getClientRects?.() || []).filter((r) => r.width || r.height);
+    if (!rects.length) return null;
+
+    const left = Math.min(...rects.map((r) => r.left));
+    const right = Math.max(...rects.map((r) => r.right));
+    const top = Math.min(...rects.map((r) => r.top));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+
+    /* Nativní Android selection handles sahají výrazně pod samotný text.
+       Rezerva proto není jen kolem glyphů, ale i kolem obou úchytů. */
+    return {
+      left: left - 22,
+      right: right + 22,
+      top: top - 18,
+      bottom: bottom + 44
+    };
+  }
+
+  function prekryvaV2Rect(a, b) {
+    if (!a || !b) return false;
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+
   function pozicujV2SelectionOverflowKeTreckam(kotva = null) {
     if (!selectionMenu || selectionMenu.hidden || !kotva) return;
 
@@ -246,23 +274,70 @@
       const offsetLeft = window.visualViewport?.offsetLeft || 0;
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
+      const mezeraOdVyberu = 10;
 
-      /* 658CK – druhá nabídka opravdu začíná v místě tlačítka ⋮.
-         Výchozí kotva je jeho levý horní roh: menu tedy vizuálně „vyroste“
-         z teček místo toho, aby se objevilo pod celým primárním panelem.
-         Jen pokud by se nevešlo, překlápíme ho doleva / nahoru. */
+      const editorTopBar = document.querySelector("#taskModal .editorTopBar");
+      const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
+      const horniBezpecnaHrana = Math.max(
+        offsetTop + okraj,
+        editorTopBarRect ? editorTopBarRect.bottom + okraj : offsetTop + okraj
+      );
+
+      /* LubaKeyboard je samostatná fixed vrstva. Overflow menu se nesmí schovat
+         pod ni, takže spodní hranici viewportu zkrátíme o skutečný vršek klávesnice. */
+      const klavesnice = document.querySelector(".ln-luba-keyboard:not([hidden])");
+      const klavesniceRect = klavesnice?.getBoundingClientRect?.() || null;
+      const spodniBezpecnaHrana = Math.min(
+        offsetTop + viewportH - okraj,
+        klavesniceRect && klavesniceRect.height > 0
+          ? klavesniceRect.top - okraj
+          : offsetTop + viewportH - okraj
+      );
+
+      /* 658CL – výchozí bod stále přesně vychází z ⋮. Pokud by ale takto
+         rozšířený panel zakryl označené slovo / nativní handles nebo vjel
+         do LubaKeyboard, přesuneme ho celý nad nebo pod výběr. */
       let x = Number(kotva.left);
       let y = Number(kotva.top);
 
       if (x + sirka > offsetLeft + viewportW - okraj) {
         x = Number(kotva.right) - sirka;
       }
-      if (y + vyska > offsetTop + viewportH - okraj) {
-        y = Number(kotva.bottom) - vyska;
+
+      x = Math.max(
+        offsetLeft + okraj,
+        Math.min(x, offsetLeft + viewportW - sirka - okraj)
+      );
+
+      const oblastVyberu = ziskejV2SelectionBezpecnouOblast();
+      const kandidat = () => ({ left: x, right: x + sirka, top: y, bottom: y + vyska });
+
+      const nevejdeSeDolu = y + vyska > spodniBezpecnaHrana;
+      const prekryvaVyber = oblastVyberu && prekryvaV2Rect(kandidat(), oblastVyberu);
+
+      if (nevejdeSeDolu || prekryvaVyber) {
+        const nad = oblastVyberu ? oblastVyberu.top - vyska - mezeraOdVyberu : Number(kotva.bottom) - vyska;
+        const pod = oblastVyberu ? oblastVyberu.bottom + mezeraOdVyberu : Number(kotva.bottom) + mezeraOdVyberu;
+        const vejdeSeNad = nad >= horniBezpecnaHrana;
+        const vejdeSePod = pod + vyska <= spodniBezpecnaHrana;
+
+        if (vejdeSeNad && vejdeSePod) {
+          /* Zachováme pocit, že menu vyjelo z ⋮: zvolíme bližší bezpečnou stranu. */
+          y = Math.abs(nad - Number(kotva.top)) <= Math.abs(pod - Number(kotva.top)) ? nad : pod;
+        } else if (vejdeSeNad) {
+          y = nad;
+        } else if (vejdeSePod) {
+          y = pod;
+        } else {
+          /* Extrémně málo prostoru: držíme panel v prostoru mezi horní lištou a klávesnicí. */
+          y = Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
+        }
       }
 
-      x = Math.max(offsetLeft + okraj, Math.min(x, offsetLeft + viewportW - sirka - okraj));
-      y = Math.max(offsetTop + okraj, Math.min(y, offsetTop + viewportH - vyska - okraj));
+      y = Math.max(
+        horniBezpecnaHrana,
+        Math.min(y, Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska))
+      );
 
       selectionMenu.style.left = `${Math.round(x)}px`;
       selectionMenu.style.top = `${Math.round(y)}px`;
