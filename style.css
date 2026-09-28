@@ -15105,3 +15105,269 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     line-height: 1;
   }
 }
+
+/* ==================================================
+   BACKEND INDEPENDENCE V1 / BI-1B
+   Read-only diagnostika aktivního backendu.
+================================================== */
+.backendDiagnosticsModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3650;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.backendDiagnosticsModal[hidden] {
+  display: none !important;
+}
+
+.backendDiagnosticsContent {
+  width: min(100%, 680px);
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 22px 18px 34px;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.backendDiagnosticsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.backendDiagnosticsEyebrow {
+  margin-bottom: 3px;
+  color: var(--color-accent);
+  font-size: calc(1rem - 0.1875rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.backendDiagnosticsHeader h2 {
+  margin: 0;
+  font-size: calc(1rem + 0.5rem);
+}
+
+#backendDiagnosticsCloseButton {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+}
+
+.backendDiagnosticsProfile,
+.backendDiagnosticsFuture {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 15px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.backendDiagnosticsProfileMain {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.backendDiagnosticsProfileMain > span,
+.backendDiagnosticsFuture > span {
+  color: var(--color-text-secondary);
+  font-size: calc(1rem - 0.1875rem);
+}
+
+.backendDiagnosticsProfileMain strong,
+.backendDiagnosticsFuture strong {
+  color: var(--color-text);
+}
+
+.backendDiagnosticsProfileMain small {
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+}
+
+.backendDiagnosticsLocked {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
+  color: var(--color-text-secondary);
+  font-size: calc(1rem - 0.25rem);
+  font-weight: 700;
+}
+
+.backendDiagnosticsOverall {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-background));
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.backendDiagnosticsOverall[data-state="ok"] {
+  border-color: color-mix(in srgb, #2fa96f 58%, var(--color-border));
+  color: #2fa96f;
+}
+
+.backendDiagnosticsOverall[data-state="warning"] {
+  border-color: color-mix(in srgb, #d79a2d 58%, var(--color-border));
+  color: #d79a2d;
+}
+
+.backendDiagnosticsOverall[data-state="fail"] {
+  border-color: color-mix(in srgb, #d85b5b 58%, var(--color-border));
+  color: #d85b5b;
+}
+
+.backendDiagnosticsList {
+  display: grid;
+  gap: 9px;
+}
+
+.backendDiagRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.backendDiagIcon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-background));
+  font-size: 1.25rem;
+}
+
+.backendDiagText {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.backendDiagText strong {
+  color: var(--color-text);
+}
+
+.backendDiagText small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  line-height: 1.3;
+}
+
+.backendDiagMeta {
+  min-width: 76px;
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.backendDiagBadge {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
+  color: var(--color-text-secondary);
+  font-size: calc(1rem - 0.25rem);
+  font-weight: 800;
+}
+
+.backendDiagTime {
+  min-height: 1em;
+  color: var(--color-text-secondary);
+  font-size: calc(1rem - 0.3125rem);
+}
+
+.backendDiagRow[data-state="running"] .backendDiagBadge {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.backendDiagRow[data-state="ok"] .backendDiagBadge {
+  background: color-mix(in srgb, #2fa96f 14%, transparent);
+  color: #2fa96f;
+}
+
+.backendDiagRow[data-state="warning"] .backendDiagBadge {
+  background: color-mix(in srgb, #d79a2d 14%, transparent);
+  color: #d79a2d;
+}
+
+.backendDiagRow[data-state="fail"] .backendDiagBadge {
+  background: color-mix(in srgb, #d85b5b 14%, transparent);
+  color: #d85b5b;
+}
+
+.backendDiagnosticsRunButton {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 800;
+}
+
+.backendDiagnosticsRunButton:disabled {
+  opacity: 0.62;
+}
+
+.backendDiagnosticsFuture {
+  margin-top: 14px;
+  align-items: flex-start;
+  display: grid;
+  gap: 5px;
+}
+
+.backendDiagnosticsFuture strong[data-state="ok"] {
+  color: #2fa96f;
+}
+
+.backendDiagnosticsFuture small {
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+@media (max-width: 560px) {
+  .backendDiagRow {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .backendDiagMeta {
+    grid-column: 2;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .backendDiagnosticsProfile {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

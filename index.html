@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=658cm-selection-popup-near-anchor">
+  <link rel="stylesheet" href="style.css?v=659b-backend-diagnostics-bi1b">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -1600,6 +1600,15 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
 
+          <button id="adminBackendToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🗄️</span>
+            <span class="adminToolText">
+              <strong>Backend</strong>
+              <small>BI-1B · read-only kontrola Auth, DB, RPC, Storage a Realtime</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
           <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
             <span class="adminToolIcon" aria-hidden="true">↕️</span>
             <span class="adminToolText">
@@ -1650,6 +1659,77 @@
 
         <p id="adminDashboardStatus" class="adminDashboardStatus" aria-live="polite"></p>
         <div id="adminUsersList" class="adminUsersList"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ========================================
+       BACKEND INDEPENDENCE V1 / BI-1B
+       Read-only diagnostika aktivního backendu.
+       ======================================== -->
+  <div id="backendDiagnosticsModal" class="backendDiagnosticsModal" hidden>
+    <div class="backendDiagnosticsContent" role="dialog" aria-modal="true" aria-labelledby="backendDiagnosticsTitle">
+      <div class="backendDiagnosticsHeader">
+        <div>
+          <div class="backendDiagnosticsEyebrow">Backend Independence V1</div>
+          <h2 id="backendDiagnosticsTitle">Backend diagnostika</h2>
+        </div>
+        <button id="backendDiagnosticsCloseButton" class="lubaIconOnlyButton" type="button" aria-label="Zavřít diagnostiku backendu">
+          <span class="lubaActionIcon" data-luba-icon="zavrit" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <section class="backendDiagnosticsProfile" aria-label="Aktivní backend">
+        <div class="backendDiagnosticsProfileMain">
+          <span>Aktivní backend</span>
+          <strong id="backendDiagnosticsProfileName">—</strong>
+          <small id="backendDiagnosticsProfileUrl">—</small>
+        </div>
+        <span class="backendDiagnosticsLocked">Přepínání zamčeno</span>
+      </section>
+
+      <div id="backendDiagnosticsOverall" class="backendDiagnosticsOverall" data-state="idle" role="status" aria-live="polite">
+        Diagnostika ještě nebyla spuštěna.
+      </div>
+
+      <div class="backendDiagnosticsList" aria-label="Kontroly backendu">
+        <div id="backendDiagAuth" class="backendDiagRow" data-state="idle">
+          <span class="backendDiagIcon" aria-hidden="true">🔐</span>
+          <span class="backendDiagText"><strong>Auth</strong><small class="backendDiagDetail">Připraveno k testu.</small></span>
+          <span class="backendDiagMeta"><span class="backendDiagBadge">Čeká</span><small class="backendDiagTime"></small></span>
+        </div>
+
+        <div id="backendDiagDb" class="backendDiagRow" data-state="idle">
+          <span class="backendDiagIcon" aria-hidden="true">🗃️</span>
+          <span class="backendDiagText"><strong>DB / RLS</strong><small class="backendDiagDetail">Připraveno k testu.</small></span>
+          <span class="backendDiagMeta"><span class="backendDiagBadge">Čeká</span><small class="backendDiagTime"></small></span>
+        </div>
+
+        <div id="backendDiagRpc" class="backendDiagRow" data-state="idle">
+          <span class="backendDiagIcon" aria-hidden="true">⚙️</span>
+          <span class="backendDiagText"><strong>RPC</strong><small class="backendDiagDetail">Připraveno k testu.</small></span>
+          <span class="backendDiagMeta"><span class="backendDiagBadge">Čeká</span><small class="backendDiagTime"></small></span>
+        </div>
+
+        <div id="backendDiagStorage" class="backendDiagRow" data-state="idle">
+          <span class="backendDiagIcon" aria-hidden="true">📦</span>
+          <span class="backendDiagText"><strong>Storage</strong><small class="backendDiagDetail">Připraveno k testu.</small></span>
+          <span class="backendDiagMeta"><span class="backendDiagBadge">Čeká</span><small class="backendDiagTime"></small></span>
+        </div>
+
+        <div id="backendDiagRealtime" class="backendDiagRow" data-state="idle">
+          <span class="backendDiagIcon" aria-hidden="true">⚡</span>
+          <span class="backendDiagText"><strong>Realtime</strong><small class="backendDiagDetail">Připraveno k testu.</small></span>
+          <span class="backendDiagMeta"><span class="backendDiagBadge">Čeká</span><small class="backendDiagTime"></small></span>
+        </div>
+      </div>
+
+      <button id="backendDiagnosticsRunButton" class="backendDiagnosticsRunButton" type="button">Spustit diagnostiku</button>
+
+      <section class="backendDiagnosticsFuture">
+        <span>Budoucí profil</span>
+        <strong id="backendDiagnosticsFutureProfile" data-state="idle">LubaNote Server · čeká na BI-2</strong>
+        <small>BI-1B nic nepřepíná ani nezapisuje. Tohle je pouze kontrolní panel před stavbou vlastního serveru.</small>
       </section>
     </div>
   </div>
@@ -2450,6 +2530,8 @@
 
   <!-- Supabase přihlášení / offline-first loader -->
   <script src="supabaseClient.js?v=659a-backend-independence-bi1a"></script>
+  <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
+  <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
   <script src="sharingIdentity.js?v=20260919-required-username-630"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->
