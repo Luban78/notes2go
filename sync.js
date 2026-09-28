@@ -4813,7 +4813,10 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
  * nejistotě se delta ODLOŽÍ a tato cesta sama nikdy nespustí
  * get_notes_safe(). Full snapshot tak zůstává jen recovery cestou.
  */
-async function synchronizujVzdalenePrivateDeltaV2(userId) {
+async function synchronizujVzdalenePrivateDeltaV2(
+  userId,
+  moznosti = {}
+) {
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
     return false;
@@ -4823,11 +4826,33 @@ async function synchronizujVzdalenePrivateDeltaV2(userId) {
     return false;
   }
 
-  if (
-    maCilenyPrivateV2Dluh() ||
-    nactiCekajiciSmazani().length > 0 ||
-    aktivniKonfliktySyncu.size > 0
-  ) {
+  /*
+   * PATCH 659 – TARGET CONFIRM / REMOTE DELTA RACE
+   *
+   * Po úspěšném targeted uploadu může change feed obsahovat i cizí
+   * upsert (jiné zařízení / owned-shared housekeeping). Běžně je
+   * správné vzdálenou deltu při lokálním targeted dluhu nepustit.
+   * Jediná výjimka je recovery přímo z potvrzovací fáze, kdy už je
+   * obsahová fronta prázdná a zbývá pouze potvrdit právě zapsané revize.
+   * V tom případě smíme bezpečně použít existující targeted delta engine
+   * nad stejným cursorem – nikdy full snapshot.
+   */
+  const jeTargetConfirmRecovery =
+    moznosti?.targetConfirmRecovery === true;
+
+  const maBlokujiciLokalniDluh = jeTargetConfirmRecovery
+    ? (
+        cekajiciCilenePrivateV2.size > 0 ||
+        nactiCekajiciSmazani().length > 0 ||
+        aktivniKonfliktySyncu.size > 0
+      )
+    : (
+        maCilenyPrivateV2Dluh() ||
+        nactiCekajiciSmazani().length > 0 ||
+        aktivniKonfliktySyncu.size > 0
+      );
+
+  if (maBlokujiciLokalniDluh) {
     window.LubaNoteStartupDiag?.zapis?.(
       "V2",
       "REMOTE DELTA DEFER | local-debt"
@@ -8047,6 +8072,39 @@ async function potvrdCilenePrivateZapisyV2(userId) {
         "V2",
         `TARGET CONFIRM DEFER | remote-delta | id=${id || "?"}`
       );
+
+      /*
+       * PATCH 659 – pokud je to běžný vzdálený upsert, nečekáme na
+       * restart aplikace. Targeted upload už skončil a jeho fronta je
+       * prázdná, takže stejný bezpečný V2 delta engine může zpracovat
+       * smíšený feed (včetně našeho právě zapsaného ID) a posunout
+       * cursor. Delete / neznámá akce zůstává konzervativně odložená.
+       */
+      if (radek?.action === "upsert") {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `TARGET CONFIRM RECOVER | remote-delta id=${id || "?"}`
+        );
+
+        const deltaPotvrzena =
+          await synchronizujVzdalenePrivateDeltaV2(
+            userId,
+            { targetConfirmRecovery: true }
+          );
+
+        if (deltaPotvrzena === true) {
+          potvrzeneCileneRevizeV2.clear();
+          cileneV2CekaNaFastPotvrzeni = false;
+          synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            "TARGET CONFIRM RECOVERED | remote-delta"
+          );
+          return true;
+        }
+      }
+
       return false;
     }
 
