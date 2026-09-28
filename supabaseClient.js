@@ -3569,9 +3569,87 @@ async function ulozZmenyOsobnihoSlovniku650(changes = []) {
   };
 }
 
+async function nactiZmenyStudijnihoSlovniku660(afterRevision = 0, limit = 500) {
+  if (!navigator.onLine) {
+    return { ok: false, reason: "offline", rows: [] };
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.id || !supabaseClient) {
+    return { ok: false, reason: "no-session", rows: [] };
+  }
+
+  const safeRevision = Math.max(0, Number(afterRevision || 0));
+  const safeLimit = Math.max(1, Math.min(500, Number(limit || 500)));
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_learning_dictionary_pull_v1",
+    { p_after_revision: safeRevision, p_limit: safeLimit }
+  );
+  if (error) throw error;
+
+  return {
+    ok: true,
+    userId: user.id,
+    rows: Array.isArray(data) ? data : []
+  };
+}
+
+async function ulozZmenyStudijnihoSlovniku660(changes = []) {
+  if (!navigator.onLine) {
+    return { ok: false, reason: "offline", rows: [] };
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.id || !supabaseClient) {
+    return { ok: false, reason: "no-session", rows: [] };
+  }
+
+  const payload = (Array.isArray(changes) ? changes : [])
+    .slice(0, 200)
+    .map((row) => ({
+      item_id: String(row?.itemId || row?.item_id || "").trim().slice(0, 160),
+      language: String(row?.language || "").trim().slice(0, 12),
+      translation_language: String(row?.translationLanguage || row?.translation_language || "").trim().slice(0, 12),
+      term: String(row?.term || "").slice(0, 160),
+      translation: String(row?.translation || "").slice(0, 240),
+      context: String(row?.context || "").slice(0, 480),
+      book_title: String(row?.bookTitle ?? row?.book_title ?? "").slice(0, 180),
+      chapter_title: String(row?.chapterTitle ?? row?.chapter_title ?? "").slice(0, 180),
+      source_type: String(row?.sourceType ?? row?.source_type ?? "manual").slice(0, 40),
+      created_at_ms: Math.max(0, Number(row?.createdAt ?? row?.created_at_ms ?? 0)),
+      client_updated_at_ms: Math.max(0, Number(row?.updatedAt ?? row?.client_updated_at_ms ?? 0)),
+      level: Math.max(0, Math.min(5, Number(row?.level || 0))),
+      reviews: Math.max(0, Number(row?.reviews || 0)),
+      correct: Math.max(0, Number(row?.correct || 0)),
+      wrong: Math.max(0, Number(row?.wrong || 0)),
+      next_review_at_ms: Math.max(0, Number(row?.nextReviewAt ?? row?.next_review_at_ms ?? 0)),
+      last_reviewed_at_ms: Math.max(0, Number(row?.lastReviewedAt ?? row?.last_reviewed_at_ms ?? 0)),
+      deleted: row?.deleted === true
+    }))
+    .filter((row) => row.item_id && row.language && row.translation_language);
+
+  if (!payload.length) {
+    return { ok: true, userId: user.id, rows: [] };
+  }
+
+  const { data, error } = await supabaseClient.rpc(
+    "lubanote_learning_dictionary_push_v1",
+    { p_changes: payload }
+  );
+  if (error) throw error;
+
+  return {
+    ok: true,
+    userId: user.id,
+    rows: Array.isArray(data) ? data : []
+  };
+}
+
 window.LubaNoteSupabase = {
   nactiZmenyOsobnihoSlovniku650,
   ulozZmenyOsobnihoSlovniku650,
+  nactiZmenyStudijnihoSlovniku660,
+  ulozZmenyStudijnihoSlovniku660,
   pripravClient: pripravSupabaseClient,
   jePripraven: () => Boolean(supabaseClient),
   maPredchoziPrihlaseni:

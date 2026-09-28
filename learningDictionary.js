@@ -17,6 +17,7 @@
   const LANGUAGE_KEY_PREFIX = 'lubanote_language_learning_active_v1:';
   const SEED_KEY_PREFIX = 'lubanote_language_learning_seed_658cg:';
   const MIGRATION_KEY_PREFIX = 'lubanote_language_learning_migrated_en_v2:';
+  const SEED_SYNC_MIGRATION_PREFIX = 'lubanote_language_learning_seed_sync_660b:';
   const MAX_ITEMS = 3000;
   const REVIEW_INTERVALS = [0, 1, 3, 7, 14, 30];
 
@@ -102,6 +103,10 @@
 
   function migrationKey() {
     return `${MIGRATION_KEY_PREFIX}${ownerId()}`;
+  }
+
+  function seedSyncMigrationKey() {
+    return `${SEED_SYNC_MIGRATION_PREFIX}${ownerId()}`;
   }
 
   function uid() {
@@ -247,9 +252,68 @@
     localStorage.setItem(migrationKey(), '1');
   }
 
+  function stabilniSeedId(jazyk, term) {
+    const source = platnyJazyk(jazyk);
+    const key = klicVyrazu(term, source);
+    return `seed:${source}:${key}`.slice(0, 160);
+  }
+
+  /* PATCH 660B – testovací sada musí mít na všech zařízeních stejné ID.
+     Jinak by první cloudový bootstrap vytvořil stejné výrazy několikrát.
+     U dosud netrénovaných seedů používáme stabilní čas 1, aby čerstvě
+     vytvořený seed na novém zařízení nepřepsal starší skutečný pokrok
+     stažený z cloudu. */
+  function migrujSeedIdProSync() {
+    if (localStorage.getItem(seedSyncMigrationKey()) === '1') return;
+
+    PORADI_JAZYKU.forEach((jazyk) => {
+      const allowed = new Map(
+        (TESTOVACI_SLOVA[jazyk] || []).map(([term]) => [
+          klicVyrazu(term, jazyk),
+          stabilniSeedId(jazyk, term)
+        ])
+      );
+      const items = nacti(jazyk);
+      let zmena = false;
+      const seen = new Set();
+      const next = [];
+
+      items.forEach((item) => {
+        const key = klicVyrazu(item.term, jazyk);
+        const stableId = item.sourceType === 'seed' ? allowed.get(key) : '';
+        let copy = item;
+        if (stableId) {
+          copy = { ...item, id: stableId };
+          const bezPokroku =
+            Number(copy.reviews || 0) === 0 &&
+            Number(copy.correct || 0) === 0 &&
+            Number(copy.wrong || 0) === 0 &&
+            Number(copy.level || 0) === 0 &&
+            Number(copy.lastReviewedAt || 0) === 0;
+          if (bezPokroku) {
+            copy.createdAt = 1;
+            copy.updatedAt = 1;
+          }
+          if (copy.id !== item.id || copy.createdAt !== item.createdAt || copy.updatedAt !== item.updatedAt) zmena = true;
+        }
+
+        const dedupeKey = `${copy.language}|${copy.id}`;
+        if (seen.has(dedupeKey)) {
+          zmena = true;
+          return;
+        }
+        seen.add(dedupeKey);
+        next.push(copy);
+      });
+
+      if (zmena) uloz(next, jazyk);
+    });
+
+    localStorage.setItem(seedSyncMigrationKey(), '1');
+  }
+
   function vlozTestovaciSadu() {
     if (localStorage.getItem(seedKey()) === '1') return;
-    const now = Date.now();
 
     PORADI_JAZYKU.forEach((jazyk) => {
       const items = nacti(jazyk);
@@ -260,7 +324,7 @@
         if (!key || existing.has(key)) return;
         existing.add(key);
         items.push({
-          id: uid(),
+          id: stabilniSeedId(jazyk, term),
           language: jazyk,
           translationLanguage: target,
           term,
@@ -269,8 +333,8 @@
           bookTitle: 'Testovací sada LubaNote',
           chapterTitle: '',
           sourceType: 'seed',
-          createdAt: now - index,
-          updatedAt: now - index,
+          createdAt: 1,
+          updatedAt: 1,
           level: 0,
           reviews: 0,
           correct: 0,
@@ -287,7 +351,7 @@
 
   function oznamZmenu(detail = {}) {
     window.dispatchEvent(new CustomEvent('lubanote:learning-dictionary-change', {
-      detail: { ownerId: ownerId(), language: detail.language || aktivniJazyk, ...detail }
+      detail: { ownerId: ownerId(), language: detail.language || aktivniJazyk, source: 'local', ...detail }
     }));
   }
 
@@ -367,6 +431,70 @@
     if (source === aktivniJazyk && aktivniKartaId === id) aktivniKartaId = null;
     oznamZmenu({ operation: 'delete', id: String(id || ''), language: source });
     return true;
+  }
+
+  /* PATCH 660B – aplikuje serverové delta řádky přímo do lokálního
+     studijního slovníku bez vytvoření nové lokální dirty změny. */
+  function aplikujCloudoveZmenyProSync(rows = [], dirtyIds = []) {
+    const dirty = new Set((Array.isArray(dirtyIds) ? dirtyIds : []).map((id) => String(id || '')));
+    const cache = new Map();
+    const touched = new Set();
+    let changed = false;
+
+    const itemsFor = (jazyk) => {
+      const source = platnyJazyk(jazyk);
+      if (!cache.has(source)) cache.set(source, nacti(source));
+      return cache.get(source);
+    };
+
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const id = String(row?.item_id || row?.itemId || '').trim();
+      const language = platnyJazyk(row?.language || 'en');
+      if (!id || dirty.has(id)) return;
+
+      const items = itemsFor(language);
+      const index = items.findIndex((item) => item.id === id);
+      if (row?.deleted === true) {
+        if (index >= 0) {
+          items.splice(index, 1);
+          if (aktivniKartaId === id) aktivniKartaId = null;
+          changed = true;
+          touched.add(language);
+        }
+        return;
+      }
+
+      const remote = {
+        id,
+        language,
+        translationLanguage: platnyJazyk(row?.translation_language || row?.translationLanguage || prekladovyJazykPro(language)),
+        term: normalizujVyraz(row?.term),
+        translation: normalizujText(row?.translation, 240),
+        context: normalizujText(row?.context, 480),
+        bookTitle: normalizujText(row?.book_title ?? row?.bookTitle, 180),
+        chapterTitle: normalizujText(row?.chapter_title ?? row?.chapterTitle, 180),
+        sourceType: normalizujText(row?.source_type ?? row?.sourceType, 40) || 'manual',
+        createdAt: Math.max(0, Number(row?.created_at_ms ?? row?.createdAt) || 0),
+        updatedAt: Math.max(0, Number(row?.client_updated_at_ms ?? row?.updatedAt) || 0),
+        level: Math.max(0, Math.min(5, Number(row?.level) || 0)),
+        reviews: Math.max(0, Number(row?.reviews) || 0),
+        correct: Math.max(0, Number(row?.correct) || 0),
+        wrong: Math.max(0, Number(row?.wrong) || 0),
+        nextReviewAt: Math.max(0, Number(row?.next_review_at_ms ?? row?.nextReviewAt) || 0),
+        lastReviewedAt: Math.max(0, Number(row?.last_reviewed_at_ms ?? row?.lastReviewedAt) || 0)
+      };
+
+      if (!remote.term || !remote.translation) return;
+
+      if (index >= 0) items[index] = remote;
+      else items.push(remote);
+      changed = true;
+      touched.add(language);
+    });
+
+    touched.forEach((jazyk) => uloz(cache.get(jazyk), jazyk));
+    if (changed) oznamZmenu({ operation: 'cloud-apply', source: 'cloud' });
+    return changed;
   }
 
   function bezpecnePrevedHtmlEntity(text) {
@@ -1463,6 +1591,7 @@
   function init() {
     aktivniJazyk = platnyJazyk(localStorage.getItem(languageKey()) || 'en');
     migrujAnglickySlovnik();
+    migrujSeedIdProSync();
     vlozTestovaciSadu();
 
     Object.assign(prvky, {
@@ -1643,7 +1772,8 @@
     ziskejJazyky: () => PORADI_JAZYKU.map((id) => ({ ...JAZYKY[id] })),
     ziskejJazykInfo: (id) => ({ ...jazykInfo(id) }),
     ziskejPrekladovyJazyk: (id = aktivniJazyk) => prekladovyJazykPro(id),
-    popisJazykovehoSmeru
+    popisJazykovehoSmeru,
+    aplikujCloudoveZmenyProSync
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
