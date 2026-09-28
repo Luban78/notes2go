@@ -291,27 +291,42 @@
     return probihajici;
   }
 
-  window.addEventListener("lubanote:learning-dictionary-change", (event) => {
-    const detail = event?.detail || {};
-    if (detail.source === "cloud") return;
+  function zpracujLokalniZmenu(detail = {}) {
+    if (detail.source === "cloud") return false;
 
     const id = owner();
     const itemId = String(detail.id || "").trim();
     const language = String(detail.language || "en");
-    if (!id || !itemId) return;
+    const operation = String(detail.operation || "update");
 
-    if (detail.operation === "delete") {
+    if (!id || !itemId) {
+      diag(`QUEUE SKIP | op=${operation} owner=${id ? "yes" : "no"} item=${itemId ? "yes" : "no"}`);
+      return false;
+    }
+
+    if (operation === "delete") {
       zaradZmenu(id, normalizujPolozku(
         { id: itemId, language, translationLanguage: prekladovyJazyk(language), updatedAt: Date.now() },
         { deleted: true, fallbackLanguage: language, deletedAt: Date.now() }
       ));
     } else {
       const item = najdiLokalniPolozku(itemId, language);
-      if (!item) return;
+      if (!item) {
+        diag(`QUEUE SKIP | op=${operation} local-item-missing`);
+        return false;
+      }
       zaradZmenu(id, normalizujPolozku(item, { fallbackLanguage: language }));
     }
 
+    diag(`QUEUE | op=${operation} dirty=${Object.keys(nactiDirty(id)).length}`);
     naplanuj(1800);
+    return true;
+  }
+
+  window.addEventListener("lubanote:learning-dictionary-change", (event) => {
+    const detail = event?.detail || {};
+    if (detail.learningSyncQueued === true) return;
+    zpracujLokalniZmenu(detail);
   });
 
   window.addEventListener("lubanote:account-active", (event) => {
@@ -334,6 +349,7 @@
   if (owner()) naplanuj(1400);
 
   window.LubaNoteLearningDictionarySync = Object.freeze({
+    zaradLokalniZmenu: (detail = {}) => zpracujLokalniZmenu(detail),
     synchronizujTed: () => synchronizuj({ force: true }),
     maCekajiciZmeny: () => {
       const id = owner();

@@ -350,8 +350,22 @@
   }
 
   function oznamZmenu(detail = {}) {
+    const eventDetail = {
+      ownerId: ownerId(),
+      language: detail.language || aktivniJazyk,
+      source: 'local',
+      ...detail
+    };
+
+    try {
+      eventDetail.learningSyncQueued =
+        window.LubaNoteLearningDictionarySync?.zaradLokalniZmenu?.(eventDetail) === true;
+    } catch (_error) {
+      eventDetail.learningSyncQueued = false;
+    }
+
     window.dispatchEvent(new CustomEvent('lubanote:learning-dictionary-change', {
-      detail: { ownerId: ownerId(), language: detail.language || aktivniJazyk, source: 'local', ...detail }
+      detail: eventDetail
     }));
   }
 
