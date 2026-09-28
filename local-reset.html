@@ -63,6 +63,7 @@
     <button id="retry" type="button" hidden>Zkusit znovu</button>
   </main>
 
+  <script src="backendConfig.js?v=659a-backend-independence-bi1a"></script>
   <script>
     (() => {
       "use strict";
@@ -75,12 +76,16 @@
         "lubanoteSharedNotesCache"
       ];
 
+      const BACKEND_AUTH_KEYS =
+        window.LubaNoteBackendConfig?.nactiZnameAuthStorageKeys?.() ||
+        ["sb-nwdacgigplofksexssws-auth-token"];
+
       const EXACT_KEYS = [
         "lubanoteAuthOk",
         "lubanoteAuthBlocked",
         "lubanoteLocalOwnerUserId",
         "lubanoteAccessCacheV1",
-        "sb-nwdacgigplofksexssws-auth-token",
+        ...BACKEND_AUTH_KEYS,
         "savedTask",
         "savedSecretTask",
         "plannedItems",

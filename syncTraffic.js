@@ -277,6 +277,15 @@
 
       if (!url) return false;
 
+      if (
+        window.LubaNoteBackendConfig?.jeBackendPozadavek
+      ) {
+        return window.LubaNoteBackendConfig.jeBackendPozadavek(
+          url
+        );
+      }
+
+      /* Fallback pro případ staré cache bez backendConfig.js. */
       const parsed = new URL(url, window.location.href);
       return parsed.hostname.endsWith(".supabase.co");
     } catch {

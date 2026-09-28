@@ -2442,11 +2442,14 @@
   <!-- Viditelný stav synchronizace nad ikonou Připomínky -->
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
+  <!-- Backend Independence V1 / BI-1A: jediný zdroj endpointu backendu. -->
+  <script src="backendConfig.js?v=659a-backend-independence-bi1a"></script>
+
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
-  <script src="syncTraffic.js?v=658-rx-panel-toggle"></script>
+  <script src="syncTraffic.js?v=659a-backend-independence-bi1a"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=20260920-sync-traffic-visible-653f"></script>
+  <script src="supabaseClient.js?v=659a-backend-independence-bi1a"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
   <script src="sharingIdentity.js?v=20260919-required-username-630"></script>
   <!-- S2B: Share modal + příjem a vyřízení pozvánek ke sdílení. -->

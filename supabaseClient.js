@@ -1,8 +1,20 @@
-const SUPABASE_URL =
-  "https://nwdacgigplofksexssws.supabase.co/";
+/*
+ * BI-1A: backend endpoint už není vlastnictvím tohoto modulu.
+ * Aktivní profil dodává backendConfig.js. Fallback zachovává dnešní
+ * produkční chování i při chybě cache / načtení konfiguračního souboru.
+ */
+const LUBANOTE_BACKEND =
+  window.LubaNoteBackendConfig?.nactiAktivniProfil?.() || {
+    url: "https://nwdacgigplofksexssws.supabase.co/",
+    publishableKey:
+      "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
+    projectRef: "nwdacgigplofksexssws",
+    authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
+  };
 
+const SUPABASE_URL = LUBANOTE_BACKEND.url;
 const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c";
+  LUBANOTE_BACKEND.publishableKey;
 
 /*
  * OFFLINE-FIRST START LUBANOTE
@@ -16,8 +28,10 @@ const LUBANOTE_AUTH_OK_KEY = "lubanoteAuthOk";
 const LUBANOTE_AUTH_BLOCKED_KEY = "lubanoteAuthBlocked";
 const LUBANOTE_LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
 const LUBANOTE_ACCESS_CACHE_KEY = "lubanoteAccessCacheV1";
-const SUPABASE_PROJECT_REF = "nwdacgigplofksexssws";
+const SUPABASE_PROJECT_REF =
+  LUBANOTE_BACKEND.projectRef || "nwdacgigplofksexssws";
 const SUPABASE_AUTH_STORAGE_KEY =
+  LUBANOTE_BACKEND.authStorageKey ||
   `sb-${SUPABASE_PROJECT_REF}-auth-token`;
 const SUPABASE_LIBRARY_URL =
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8/dist/umd/supabase.js";
@@ -1025,6 +1039,11 @@ function vytvorSupabaseClientPokudLze() {
             window.fetch.bind(window)
         },
         auth: {
+          /*
+           * Explicitní storageKey je dnes shodný s dosavadním Supabase
+           * klíčem. BI tím pouze odstraňuje skrytou vazbu na hostname.
+           */
+          storageKey: SUPABASE_AUTH_STORAGE_KEY,
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: false
