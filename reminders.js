@@ -4580,11 +4580,22 @@ function createReminderRow(
     }
   });
 
-  item.append(
-    time,
-    content,
-    menuButton
-  );
+  /* PATCH 661G – na mobilu/tabletu musí být celý vizuální obsah
+     Připomínky jediný přímý swipe blok. Desktop timeline ponecháváme
+     beze změny, aby se nenarušilo jeho samostatné rozložení. */
+  const pouzitJednovrstvySwipe =
+    !window.matchMedia?.(
+      "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+    )?.matches;
+
+  if (pouzitJednovrstvySwipe) {
+    const swipeContent = document.createElement("div");
+    swipeContent.className = "reminderItemSwipeContent";
+    swipeContent.append(time, content, menuButton);
+    item.append(swipeContent);
+  } else {
+    item.append(time, content, menuButton);
+  }
 
   window.LubaNoteSwipe?.pridejHotovo?.(
     item,
