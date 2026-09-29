@@ -15561,5 +15561,4 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   .reminderItemSwipeContent {
     column-gap: calc(max(12px, 0.75rem) + 4px) !important;
   }
-}
-
+}\n\n/* ==========================================================\n   PATCH 661K – AKTIVNÍ PŘIPOMÍNKY / POZDĚJI\n   ----------------------------------------------------------\n   Dnešek a Zítra zůstávají přesně podle 661J. Pouze řádky\n   POZDĚJI s datumem dostanou širší pevný sloupec odvozený od\n   velikosti písma. Datum proto nepřetéká do názvu a všechny\n   názvy začínají na stejném X i při větším globálním fontu.\n   ========================================================== */\n@media (max-width: 1099px) {\n  .reminderItemLaterDate .reminderItemSwipeContent {\n    grid-template-columns: 9.5ch minmax(0, 1fr) max(30px, 1.9rem) !important;\n  }\n\n  .reminderItemLaterDate .reminderItemTime {\n    min-width: 0 !important;\n    width: auto !important;\n    padding-right: 0 !important;\n  }\n}\n

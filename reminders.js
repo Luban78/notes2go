@@ -4407,6 +4407,12 @@ function createReminderRow(
     item.classList.add("overdue");
   }
 
+  /* PATCH 661K – pouze aktivní položky ve skupině POZDĚJI.
+     Dnešek/Zítra ani Po termínu tímto cílením neměníme. */
+  if (showDate && !overdue) {
+    item.classList.add("reminderItemLaterDate");
+  }
+
   if (entry.kind === "planned") {
     item.classList.add("plannedReminderItem");
   }
@@ -4425,7 +4431,7 @@ function createReminderRow(
     dateLine.className =
       "reminderItemDateLine";
 
-    dateLine.textContent =
+    let textDatumu =
       date.toLocaleDateString(
         window.LubaNoteI18n?.ziskejLocale?.() || "cs-CZ",
         {
@@ -4435,6 +4441,16 @@ function createReminderRow(
         }
       );
 
+    /* 661K – v aktivní skupině POZDĚJI zkrátíme český číselný
+       zápis 22. 10. -> 22.10. Ostatní locale se nemění. */
+    if (showDate && !overdue) {
+      textDatumu = textDatumu.replace(
+        /(\d+)\.\s+(\d+)\./u,
+        "$1.$2."
+      );
+    }
+
+    dateLine.textContent = textDatumu;
     time.append(dateLine);
   }
 
