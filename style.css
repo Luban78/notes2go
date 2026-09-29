@@ -15549,3 +15549,17 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   }
 }
 
+/* ==========================================================
+   PATCH 661J – PŘIPOMÍNKY / +4 PX MEZI DATEM A TEXTEM
+   ----------------------------------------------------------
+   Zachovává pevný X začátek názvů z 661I, pouze přidává
+   o 4 px větší vodorovný odstup mezi sloupcem datum/čas
+   a obsahem připomínky.
+   ========================================================== */
+@media (max-width: 1099px) {
+  .reminderItem,
+  .reminderItemSwipeContent {
+    column-gap: calc(max(12px, 0.75rem) + 4px) !important;
+  }
+}
+
