@@ -1,6 +1,6 @@
 # LubaNote -- český slovník kódu
 
-> **Účel tohoto souboru:** bezpečná studijní pomůcka.\
+> **Účel tohoto  souboru:** bezpečná studijní pomůcka.\
 > Stávající funkční kód se **nepřejmenovává**. Tento dokument pouze
 > vysvětluje anglické názvy česky a navrhuje české názvosloví pro **nový
 > kód od této chvíle**.
