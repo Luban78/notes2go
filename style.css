@@ -11254,29 +11254,34 @@ body:not(.secretModeActive) .trashModeTabs {
 }
 
 
-/* Planner / agenda řádek používá při swipe také vlastní posuvnou plochu,
- * aby se text během tahu nemíchal se sousedním obsahem a akcemi pod ním. */
+/* Planner / agenda: neposouváme samostatný pseudo-obdélník.
+ * Jedinou posuvnou vrstvou je obsah řádku a každý jeho přímý prvek
+ * dostane stejný neprůhledný podklad. Pozadí tak jede přesně s textem. */
 .calendarAgendaItem.lubaSwipeDoneTarget {
   background: transparent;
   isolation: isolate;
+  column-gap: 0 !important;
 }
 
-.calendarAgendaItem.lubaSwipeDoneTarget::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: inherit;
-  background: color-mix(
-    in srgb,
-    var(--color-surface) 94%,
-    var(--color-background)
-  );
-  box-shadow: inset 0 -1px 0 var(--color-border);
-  pointer-events: none;
-  transform: translateX(var(--luba-swipe-x));
-  transition: transform 150ms ease;
-  will-change: transform;
+.calendarAgendaItem.lubaSwipeDoneTarget
+  > :not(.lubaSwipeActionBackground) {
+  background: var(--color-background);
+  align-self: stretch;
+}
+
+.calendarAgendaItem.lubaSwipeDoneTarget > .calendarAgendaTime {
+  display: flex;
+  align-items: center;
+}
+
+.calendarAgendaItem.lubaSwipeDoneTarget > .calendarAgendaText {
+  display: block;
+  padding-left: 10px;
+  box-sizing: border-box;
+}
+
+.calendarAgendaItem.lubaSwipeDoneTarget > .calendarAgendaMenu {
+  display: inline-flex;
 }
 
 .lubaSwipeDoneTarget > .lubaSwipeActionBackground {
