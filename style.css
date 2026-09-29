@@ -11336,8 +11336,22 @@ body:not(.secretModeActive) .trashModeTabs {
     background: color-mix(
       in srgb,
       var(--color-surface) 70%,
-      transparent
+      var(--color-background)
     );
+  }
+
+
+  /* 661H – datum v Připomínkách má stejnou typografickou výšku jako název,
+     aby první řádek datum + název seděl na jedné optické ose. */
+  .reminderItemSwipeContent .reminderItemTime {
+    padding-top: 0;
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  .reminderItemSwipeContent .reminderItemDateLine {
+    font-size: 1rem;
+    line-height: 1.25;
   }
 }
 
@@ -15518,3 +15532,20 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   width: 18px;
   height: 18px;
 }
+
+/* ==========================================================
+   PATCH 661I – PŘIPOMÍNKY / PEVNÝ X ZAČÁTEK TEXTU
+   ----------------------------------------------------------
+   Aktivní Připomínky mají někdy jen čas a jindy datum + čas.
+   max-content proto měnil šířku levého sloupce kus od kusu a
+   název začínal pokaždé jinde. Vracíme původní stabilní 58px
+   časový/datový sloupec. Swipe wrapper i běžný řádek používají
+   stejnou geometrii; Po termínu tím zůstává opticky beze změny.
+   ========================================================== */
+@media (max-width: 1099px) {
+  .reminderItem,
+  .reminderItemSwipeContent {
+    grid-template-columns: 58px minmax(0, 1fr) max(30px, 1.9rem) !important;
+  }
+}
+
