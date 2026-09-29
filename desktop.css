@@ -2605,3 +2605,96 @@
     padding-bottom: 0;
   }
 }
+
+/* ==========================================================
+   PATCH 661L – PC PLANNER / FINAL VISUAL LAB EXPORT + FULL MONTH
+   ----------------------------------------------------------
+   Finální hodnoty podle exportu 29. 9. 2026.
+   Kalendář má pevnou kompaktní výšku dne 51 px a 5px mezery,
+   aby se na PC zobrazil celý měsíc i na nižším viewportu.
+   Visual Lab zůstává živý: CSS proměnné nastavené JS mají nad
+   těmito fallback hodnotami přednost.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  #calendarScreen:not([hidden]) {
+    grid-template-columns:
+      minmax(0, var(--ln-dpv-calendar-share, 49%))
+      minmax(0, 1fr) !important;
+    width: min(var(--ln-dpv-screen-width, 1248px), calc(100% - 28px)) !important;
+    align-content: start !important;
+    overflow: visible !important;
+  }
+
+  .calendarWeekdays,
+  .calendarGrid {
+    width: min(var(--ln-dpv-grid-width, 570px), 100%) !important;
+  }
+
+  .calendarGrid {
+    gap: var(--ln-dpv-day-gap, 5px) !important;
+    grid-auto-rows: var(--ln-dpv-day-height, 51px);
+    align-content: start;
+  }
+
+  .calendarDay {
+    height: var(--ln-dpv-day-height, 51px) !important;
+    min-height: var(--ln-dpv-day-height, 51px) !important;
+    border-radius: var(--ln-dpv-day-radius, 10px) !important;
+    font-size: var(--ln-dpv-day-font, 17px) !important;
+  }
+
+  .calendarAgenda {
+    padding: var(--ln-dpv-agenda-pad, 12px) !important;
+    border-radius: var(--ln-dpv-agenda-radius, 14px) !important;
+  }
+
+  .calendarAgendaItem {
+    grid-template-columns:
+      var(--ln-dpv-time-width, 62px)
+      minmax(0, 1fr)
+      34px !important;
+    gap: var(--ln-dpv-item-gap, 9px) !important;
+    min-height: var(--ln-dpv-item-min-height, 48px) !important;
+    padding-top: var(--ln-dpv-item-pad-y, 7px) !important;
+    padding-bottom: var(--ln-dpv-item-pad-y, 7px) !important;
+    font-size: var(--ln-dpv-item-font, 15px) !important;
+  }
+
+  .plannerSubnav {
+    gap: var(--ln-dpv-subnav-gap, 12px) !important;
+  }
+
+  .plannerSubnavButton {
+    height: var(--ln-dpv-subnav-height, 54px) !important;
+    border-radius: var(--ln-dpv-subnav-radius, 13px) !important;
+    font-size: var(--ln-dpv-subnav-font, 16px) !important;
+  }
+
+  .desktopRemindersLayout {
+    grid-template-columns:
+      var(--ln-dpr-filter-width, 310px)
+      minmax(0, 1fr) !important;
+  }
+
+  .desktopReminderTimelineRow.reminderItem {
+    min-height: var(--ln-dpr-row-min-height, 44px) !important;
+    border-radius: var(--ln-dpr-row-radius, 10px) !important;
+    font-size: var(--ln-dpr-row-font, 16px) !important;
+  }
+
+  .desktopReminderTimelineRow .reminderTime,
+  .desktopReminderTimelineRow .reminderDateTime,
+  .desktopReminderTimelineRow .desktopReminderTime {
+    font-size: var(--ln-dpr-time-font, 16px) !important;
+  }
+
+  .desktopReminderGroupTitle,
+  .desktopReminderTimelineGroupTitle {
+    font-size: var(--ln-dpr-group-font, 17px) !important;
+  }
+
+  .desktopReminderTimelineGroup {
+    margin-bottom: var(--ln-dpr-group-gap, 17px) !important;
+  }
+}
+

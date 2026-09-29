@@ -1,20 +1,20 @@
 /* ==================================================
    LubaNote – PC Planner Visual Lab
-   PATCH 658BO
+   PATCH 661L – final PC Planner baseline
 ================================================== */
 (() => {
   "use strict";
 
-  const KLIC = "lubanoteDesktopPlannerVisualTuningV4";
+  const KLIC = "lubanoteDesktopPlannerVisualTuningV5";
   const VYCHOZI = {
     kalendar: {
       sirkaScreenu: 1248,
-      podilKalendare: 51,
+      podilKalendare: 49,
       sirkaMrizky: 570,
-      vyskaDne: 64,
-      mezeraDni: 9,
+      vyskaDne: 51,
+      mezeraDni: 5,
       radiusDne: 10,
-      pismoDne: 20
+      pismoDne: 17
     },
     agenda: {
       sloupce: 1,
@@ -34,12 +34,12 @@
     },
     pripominky: {
       sirkaFiltru: 310,
-      vyskaRadku: 54,
+      vyskaRadku: 44,
       pismoRadku: 16,
       pismoCasu: 16,
       pismoSkupiny: 17,
       mezeraSkupin: 17,
-      radiusRadku: 11
+      radiusRadku: 10
     }
   };
 
