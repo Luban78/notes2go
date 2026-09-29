@@ -6719,6 +6719,22 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   overflow: hidden;
 }
 
+
+/* PATCH 661B – dlouhé internetové adresy v link modalu se nesmí
+   soft-wrapovat do druhého řádku. Pole zůstává jednorádkové a při dlouhé
+   URL se obsah posouvá vodorovně spolu s caret position. */
+.editorLinkDialog textarea[data-luba-keyboard-field="link-url"] {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+.editorLinkDialog textarea[data-luba-keyboard-field="link-url"]::-webkit-scrollbar {
+  display: none;
+}
+
 .editorLinkDialog input:focus,
 .editorLinkDialog textarea:focus {
   border-color: var(--color-accent);

@@ -760,6 +760,10 @@
     urlLabel.textContent = "Internetová adresa";
     odkazUrlInput = document.createElement("textarea");
     odkazUrlInput.rows = 1;
+    /* PATCH 661B – URL je vždy jednorádková. Dlouhá adresa se má
+       vodorovně posouvat, ne zalomit do druhého řádku, který se v pevné
+       výšce textarea na Androidu vykresloval oříznutý nahoře. */
+    odkazUrlInput.wrap = "off";
     odkazUrlInput.placeholder = "https://example.com";
     odkazUrlInput.autocomplete = "one-time-code";
     odkazUrlInput.inputMode = "url";
