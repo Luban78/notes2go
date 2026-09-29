@@ -444,8 +444,10 @@
   right: max(16px, env(safe-area-inset-right));
   bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
   z-index: 12;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   width: 56px;
   height: 56px;
   border: 2px solid var(--color-accent-text);
@@ -455,6 +457,8 @@
   color: var(--color-on-accent);
   font-size: 1.875rem;
   font-weight: 500;
+  line-height: 1;
+  text-align: center;
   box-shadow: 0 10px 24px rgba(0,0,0,.22);
 }
 
@@ -945,10 +949,12 @@
 }
 
 .documentsFileFilter.active {
-  border-color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 82%, var(--color-border));
   background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
   color: var(--color-accent-text);
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--color-accent) 78%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 22%, transparent),
+    inset 0 -2px 0 color-mix(in srgb, var(--color-accent) 82%, transparent);
 }
 
 .documentsFileFilters .documentsTrashButton {
@@ -3574,6 +3580,19 @@ body.documents-epub-viewer-open {
     padding-bottom: 8px !important;
     overflow: hidden !important;
     align-items: stretch !important;
+  }
+
+
+  #documentsScreen > .documentsFloatingAdd {
+    right: 28px !important;
+    bottom: 24px !important;
+    width: 70px !important;
+    height: 70px !important;
+    min-width: 70px !important;
+    min-height: 70px !important;
+    border-radius: 35px !important;
+    font-size: 2rem !important;
+    line-height: 1 !important;
   }
 
   #documentsScreen > .documentsV1Section[aria-labelledby="documentsFoldersTitle"],

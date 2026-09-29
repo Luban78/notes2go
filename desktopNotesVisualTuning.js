@@ -20,7 +20,7 @@
       actions: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 13, velikost: 50, ikonaVelikost: 22, ikonaTloustka: 1.5, klasickaIkonaVelikost: 22 },
       tags: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 11, velikost: 38 },
       cards: { borderZapnuty: true, borderSirka: 1, borderRezim: "dark", borderSila: 18, radius: 17, velikost: 16 },
-      fab: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 30, velikost: 60 }
+      fab: { borderZapnuty: true, borderSirka: 1, borderRezim: "legacy", borderSila: 18, radius: 35, velikost: 70 }
     },
     layout: {
       offsetY: 0,

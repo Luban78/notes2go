@@ -164,11 +164,18 @@ body {
   right: 20px;
   bottom: 100px;
 
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
   width: 70px;
   height: 70px;
 
   border-radius: 50%;
   font-size: 1.9rem;
+  line-height: 1;
+  text-align: center;
   background: var(--color-accent);
   color: var(--color-on-accent, #ffffff);
   border-color: var(--color-accent);
@@ -1365,9 +1372,12 @@ body {
 }
 
 .categoryTab.active {
-  border-color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 82%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
   color: var(--color-accent-text);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 13%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 22%, transparent),
+    inset 0 -2px 0 color-mix(in srgb, var(--color-accent) 82%, transparent);
 }
 
 .categoryTab[data-tag-color="cervena"] {
@@ -5343,13 +5353,14 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 .editorTopBar .dateTimePickerButton {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  gap: 0;
 
   width: auto;
   min-width: 0;
   height: calc(var(--font-size) + 24px);
   padding: 4px 10px;
+  text-align: center;
 
   border: 1px solid var(--color-border);
   border-radius: 14px;
@@ -5371,10 +5382,12 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 }
 
 .editorTopBar .dateTimePickerButton > span:first-child {
+  width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .editorTopBar .dateTimePickerButton > span:last-child {
@@ -5386,11 +5399,11 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 }
 
 #modalDateButton {
-  flex: 1.25;
+  flex: 0 0 clamp(108px, 30vw, 144px);
 }
 
 #modalTimeButton {
-  flex: 0.55;
+  flex: 0 0 clamp(72px, 22vw, 98px);
 }
 
 
@@ -5960,11 +5973,11 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   }
 
   #modalDateButton {
-    flex: 1.35 1 0;
+    flex: 0 0 clamp(104px, 32vw, 128px);
   }
 
   #modalTimeButton {
-    flex: 0.8 1 0;
+    flex: 0 0 clamp(68px, 22vw, 84px);
   }
 
   .editorTopBar .dateTimePickerButton > span:first-child {
@@ -6896,6 +6909,21 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: var(--color-on-accent, #ffffff);
+}
+
+
+@media (min-width: 900px) {
+  .editorTopBar .dateTimeInputs {
+    flex: 0 0 auto;
+  }
+
+  #modalDateButton {
+    flex: 0 0 150px;
+  }
+
+  #modalTimeButton {
+    flex: 0 0 96px;
+  }
 }
 
 .dateTimeInputs[hidden],
@@ -9551,7 +9579,7 @@ body.lubaNoteImagePreviewOpen {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  touch-action: pinch-zoom;
+  touch-action: none;
 }
 
 .lubaNoteImagePreviewClose {

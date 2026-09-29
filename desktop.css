@@ -767,9 +767,13 @@
   .addTaskButton {
     right: 28px;
     bottom: 24px;
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
+    min-width: 70px;
+    min-height: 70px;
     border-radius: 50%;
+    font-size: 2rem;
+    line-height: 1;
     box-shadow:
       0 12px 30px color-mix(
         in srgb,
@@ -2354,6 +2358,15 @@
     border-radius: var(--ln-dnv-tags-radius, 11px) !important;
   }
 
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab.active,
+  body.desktopNotesToolbarA #tagFilterButtons .categoryTab.active {
+    border-color: color-mix(in srgb, var(--color-accent) 84%, var(--color-border)) !important;
+    background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)) !important;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 26%, transparent),
+      inset 0 -2px 0 color-mix(in srgb, var(--color-accent) 84%, transparent) !important;
+  }
+
   body.desktopNotesToolbarA #pinnedCards {
     margin-top: var(--ln-dnv-layout-stitkyKartyMezera, 10px) !important;
   }
@@ -2384,9 +2397,13 @@
   }
 
   body:has(#notesModuleButton.active) .addTaskButton {
-    width: var(--ln-dnv-fab-size, 60px) !important;
-    height: var(--ln-dnv-fab-size, 60px) !important;
-    border-radius: var(--ln-dnv-fab-radius, 30px) !important;
+    width: max(var(--ln-dnv-fab-size, 60px), 70px) !important;
+    height: max(var(--ln-dnv-fab-size, 60px), 70px) !important;
+    min-width: 70px !important;
+    min-height: 70px !important;
+    border-radius: max(var(--ln-dnv-fab-radius, 30px), 35px) !important;
+    font-size: 2rem !important;
+    line-height: 1 !important;
   }
 
   /* ---------- Ikony: běžné/emoji i SVG ---------- */
