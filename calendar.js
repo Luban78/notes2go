@@ -1030,7 +1030,12 @@ function renderCalendarItems(targetElement) {
       }
     );
 
-    row.append(time, text, menuButton);
+    /* PATCH 661E – celý vizuální obsah řádku je jeden swipe blok.
+       Swipe engine tak neposouvá čas, text a menu jako tři samostatné vrstvy. */
+    const swipeContent = document.createElement("div");
+    swipeContent.className = "calendarAgendaSwipeContent";
+    swipeContent.append(time, text, menuButton);
+    row.append(swipeContent);
 
     window.LubaNoteSwipe?.pridejHotovo?.(
       row,
