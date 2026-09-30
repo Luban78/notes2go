@@ -696,3 +696,82 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   }
 }
 
+
+
+/* ==========================================
+   PATCH 663F – PC BULLET MOVE HANDLE / VISUAL POLISH
+
+   Pouze zařízení s myší/trackpadem. Mobilní 663E zůstává beze změny.
+   Značka Bullet/šipka je viditelnější a kurzor "grab" říká, že ji lze
+   přidržet a táhnout. Žádná geometrie zanoření ani MOVE model se nemění.
+========================================== */
+@media (hover: hover) and (pointer: fine) {
+  /* List marker je skutečná hover zóna pro myš. */
+  .ln-v2-editor .ln-v2-bullet::before {
+    pointer-events: auto;
+    cursor: grab;
+  }
+
+  .ln-v2-editor.ln-v2-list-drag-mode .ln-v2-bullet::before {
+    cursor: grabbing;
+  }
+
+  /* Obyčejná bulletka na PC o něco větší. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"]::before {
+    font-size: 1.14em;
+    opacity: .98;
+  }
+
+  /* Rodič: stejná šipka jako na mobilu, ale o chlup větší pro myš/monitor. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"]::before {
+    content: "›";
+    top: 0;
+    height: 1.5em;
+    display: block;
+    color: var(--color-accent, currentColor);
+    font-size: 1em;
+    font-weight: 850;
+    line-height: 1.5em;
+    text-align: center;
+    opacity: .98;
+    transform: translateY(2px) scale(1.62) rotate(90deg);
+    transform-origin: 50% 50%;
+  }
+
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::before {
+    transform: translateY(-2px) scale(1.62);
+  }
+
+  /* Badge na PC nesmí spadnout do výchozího bílého browser buttonu. */
+  .ln-v2-editor .ln-v2-list-child-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px;
+    height: 22px;
+    margin-left: 8px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 7px;
+    background: color-mix(in srgb, currentColor 11%, transparent);
+    color: color-mix(in srgb, currentColor 82%, transparent);
+    font: inherit;
+    font-size: .72em;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+  }
+
+  .ln-v2-editor .ln-v2-list-child-badge:hover {
+    background: color-mix(in srgb, currentColor 17%, transparent);
+  }
+
+  .ln-v2-editor .ln-v2-list-child-badge:focus,
+  .ln-v2-editor .ln-v2-list-child-badge:focus-visible,
+  .ln-v2-editor .ln-v2-list-child-badge:active {
+    outline: none;
+    box-shadow: none;
+  }
+}

@@ -7360,9 +7360,10 @@
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
       if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
-      /* Desktop pointer zachovává klik na značku pro sbalení větve; mobilní
-         touch má odladěný long-press kdekoliv na řádku. */
-      if (jeV2KlikNaZnacceSeznamu(radek, event.clientX, false)) return;
+      /* PATCH 663F – PC: značka Bullet/šipka je znovu plnohodnotný MOVE handle.
+         Krátký klik se dál zpracuje až v click handleru (u rodiče sbalí/rozbalí),
+         ale přidržení + pohyb musí stejně jako dřív spustit MOVE, zanoření
+         a vynoření. Mobilní touch cesta se tímto blokem vůbec nemění. */
       pripravV2LongPressSeznamu("pointer", radek, event.clientX, event.clientY, event.pointerId, null, false);
     });
 
