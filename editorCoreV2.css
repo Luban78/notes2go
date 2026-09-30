@@ -611,22 +611,28 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
    pořadí ani pravidla zanoření/vynoření.
 ========================================== */
 @media (max-width: 899px) {
-  /* Rodič: místo nenápadné tečky jasná šipka ve stejném původním sloupci. */
+  /* Rodič: ponecháme stejnou šipku jako ve sbaleném stavu, jen ji po
+     rozbalení otočíme dolů. Tvar tedy zůstane konzistentní. */
   .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"]::before {
-    content: "⌄";
+    content: "›";
+    top: .76em;
+    height: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--color-accent, currentColor);
-    font-size: 1.32em;
+    font-size: 1.5em;
     font-weight: 850;
-    line-height: 1.08em;
+    line-height: 1;
     text-align: center;
     opacity: .98;
+    transform: translateY(-50%) rotate(90deg);
+    transform-origin: center center;
     text-shadow: 0 0 10px color-mix(in srgb, var(--color-accent, currentColor) 22%, transparent);
   }
 
   .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::before {
-    content: "›";
-    font-size: 1.5em;
-    line-height: .98em;
+    transform: translateY(-50%);
   }
 
   /* Parent je typograficky o chlup silnější, bez zásahu do jeho obsahu/modelu. */
@@ -646,29 +652,17 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
     background: color-mix(in srgb, var(--color-accent, currentColor) 3.5%, transparent);
   }
 
-  /* Úroveň je čitelná i bez čar: hlubší bullet je menší a klidnější. */
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="0"]::before {
-    font-size: 1.08em;
-    opacity: .96;
+  /* Děti necháme stejně velkou odrážku; ztratí se dojem, že jsou „menší“
+     nebo méně důležité. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"]::before {
+    font-size: 1em;
+    opacity: .94;
+    text-align: center;
   }
 
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="1"]::before {
-    font-size: .92em;
-    opacity: .76;
-  }
-
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="2"]::before,
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="3"]::before,
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="4"]::before,
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="5"]::before,
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="6"]::before {
-    font-size: .82em;
-    opacity: .62;
-  }
-
-  /* Po sbalení zůstane vidět, kolik přímých položek se schovalo. */
-  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::after {
-    content: attr(data-ln-v2-list-child-count);
+  /* Po sbalení zůstane vidět počet přímých potomků jako skutečné tlačítko.
+     Díky tomu lze na číslo přímo kliknout a větev rozbalit. */
+  .ln-v2-editor .ln-v2-list-child-badge {
     display: inline-grid;
     place-items: center;
     min-width: 20px;
@@ -676,15 +670,20 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
     margin-left: 8px;
     padding: 0 5px;
     box-sizing: border-box;
+    border: 0;
     border-radius: 7px;
     background: color-mix(in srgb, currentColor 10%, transparent);
     color: color-mix(in srgb, currentColor 78%, transparent);
+    font: inherit;
     font-size: .72em;
     font-weight: 700;
     line-height: 1;
     vertical-align: .08em;
-    pointer-events: none;
+    cursor: pointer;
+    touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 }
+

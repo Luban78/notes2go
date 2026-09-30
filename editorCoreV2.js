@@ -1305,6 +1305,8 @@
       }
 
       const radek = document.createElement("div");
+      let seznamMaDeti = false;
+      let seznamPocetPrimychDeti = 0;
       const seznamovaTrida = jeBulletBlok(blok)
         ? " ln-v2-bullet"
         : (jeCislovanyBlok(blok) ? " ln-v2-ordered" : (jeTodoBlok(blok) ? " ln-v2-todo" : ""));
@@ -1358,10 +1360,11 @@
           jeSeznamovyBlok(dalsi) &&
           normalizujUrovenBulletu(dalsi.uroven) > uroven
         );
+        seznamMaDeti = maDeti;
         radek.dataset.lnV2ListHasChildren = maDeti ? "1" : "0";
         radek.dataset.lnV2ListCollapsed = maDeti && blok.sbaleno ? "1" : "0";
 
-        /* 663A: počet přímých potomků pro malý badge u sbaleného rodiče.
+        /* 663A/663B: počet přímých potomků pro badge u rodiče.
            Jde jen o odvozenou DOM informaci; dokument se nijak neupravuje. */
         if (maDeti) {
           let pocetPrimychDeti = 0;
@@ -1372,6 +1375,7 @@
             if (urovenKandidata <= uroven) break;
             if (urovenKandidata === uroven + 1) pocetPrimychDeti += 1;
           }
+          seznamPocetPrimychDeti = pocetPrimychDeti;
           radek.dataset.lnV2ListChildCount = String(pocetPrimychDeti);
           if (!blok.sbaleno) {
             radek.dataset.lnV2OpenBranchParent = "1";
@@ -1426,6 +1430,17 @@
         const br = document.createElement("br");
         br.dataset.lnV2Prazdny = "1";
         radek.appendChild(br);
+      }
+
+      if (jeBulletBlok(blok) && seznamMaDeti && blok.sbaleno && seznamPocetPrimychDeti > 0) {
+        const badge = document.createElement("button");
+        badge.type = "button";
+        badge.className = "ln-v2-list-child-badge";
+        badge.dataset.v2ListToggle = blok.id;
+        badge.contentEditable = "false";
+        badge.setAttribute("aria-label", "Rozbalit větev seznamu");
+        badge.textContent = String(seznamPocetPrimychDeti);
+        radek.appendChild(badge);
       }
 
       if ((jeSeznamovyBlok(blok) || jeTodoBlok(blok)) && Array.isArray(blok.obrazky)) {
@@ -7343,6 +7358,14 @@
         event.preventDefault();
         event.stopPropagation();
         prepniTodoHotovo(todoCheckbox.dataset.v2TodoCheck);
+        return;
+      }
+
+      const listToggleBadge = event.target.closest?.("[data-v2-list-toggle]");
+      if (listToggleBadge && editor.contains(listToggleBadge)) {
+        event.preventDefault();
+        event.stopPropagation();
+        prepniSbaleniSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
         return;
       }
 
