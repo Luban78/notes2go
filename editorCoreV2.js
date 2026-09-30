@@ -86,6 +86,13 @@
   let vybranyObrazekId = "";
   let ulozenyPlanovaciVyber = null;
 
+  /* PATCH 663G – Paste mode. Ctrl+Shift+V na PC vynutí prostý text,
+     běžné externí vložení nabídne LubaNote modal. Interní LubaNote kopie
+     používá vlastní clipboard marker/model a modal obchází. */
+  let v2VynutitProstyPasteDo = 0;
+  const V2_CLIPBOARD_TYP = "application/x-lubanote-v2";
+  const V2_CLIPBOARD_MARKER = "data-lubanote-internal=\"v2\"";
+
   /* PATCH 462 – vizuální selection fallback pro starý Android/WebView. */
   let v2SelectionOverlay = null;
   let v2SelectionOverlayRaf = 0;
@@ -3463,25 +3470,55 @@
     return text.slice(left, right).replace(/\s+/g, " ").trim().slice(0, 480);
   }
 
+  function vyrezObsahuBloku(blok, od, doPozice) {
+    if (!jeTextovyBlok(blok)) return [];
+    const delka = textBloku(blok).length;
+    const zacatek = Math.max(0, Math.min(delka, Number(od) || 0));
+    const konec = Math.max(zacatek, Math.min(delka, Number(doPozice) || 0));
+    const prvniRez = rozdelObsah(blok, zacatek);
+    const docasny = { ...blok, obsah: prvniRez.vpravo };
+    return rozdelObsah(docasny, konec - zacatek).vlevo;
+  }
+
   function ziskejRichVyberProSelectionMenu() {
     const vyber = ziskejVyberProSelectionMenu();
-    if (!vyber || vyber.sbaleny || vyber.zacatek.blok !== vyber.konec.blok) return null;
+    if (!vyber || vyber.sbaleny) return null;
 
-    const blok = dokument.bloky[vyber.zacatek.blok];
-    if (!jeTextovyBlok(blok)) return null;
+    const bloky = [];
+    const texty = [];
+    for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
+      const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
 
-    const prvniRez = rozdelObsah(blok, vyber.zacatek.offset);
-    const docasnyBlok = { ...blok, obsah: prvniRez.vpravo };
-    const druhaDelka = Math.max(0, vyber.konec.offset - vyber.zacatek.offset);
-    const druhyRez = rozdelObsah(docasnyBlok, druhaDelka);
-    const obsah = normalizujObsah(druhyRez.vlevo).filter((cast) => String(cast.text || "").length);
-    const text = obsah.map((cast) => String(cast.text || "")).join("");
-    if (!text) return null;
+      const delka = textBloku(blok).length;
+      const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
+      const doPozice = index === vyber.konec.blok ? vyber.konec.offset : delka;
+      const obsah = vyrezObsahuBloku(blok, od, doPozice);
+      const jeMezilehly = index > vyber.zacatek.blok && index < vyber.konec.blok;
+      if (!obsah.length && !jeMezilehly && doPozice <= od) continue;
+
+      const kopie = klonDat(blok);
+      /* Fragment je zatím jen clipboard payload; skutečné nové ID dostane až při vložení. */
+      kopie.obsah = obsah.length ? obsah : [vytvorSegment("")];
+      /* Textový clipboard nesmí omylem duplikovat připojené obrázky/TODO media. */
+      if (Array.isArray(kopie.obrazky)) kopie.obrazky = [];
+      bloky.push(kopie);
+      texty.push(obsah.map((cast) => String(cast.text || "")).join(""));
+    }
+
+    if (!bloky.length) return null;
+    const text = texty.join("\n");
+    if (!text && bloky.length === 1) return null;
 
     return {
-      verze: 1,
+      verze: 2,
       text,
-      obsah: obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format))
+      model: {
+        verze: VERZE_MODELU,
+        typ: "lubanote-dokument",
+        nastaveni: { zakladniVelikost: zakladniVelikost() },
+        bloky
+      }
     };
   }
 
@@ -3510,27 +3547,118 @@
     return { ok: true, text };
   }
 
-  function vlozRichVyberProSelectionMenu(fragment) {
-    if (!fragment || fragment.verze !== 1 || !Array.isArray(fragment.obsah) || !fragment.obsah.length) return false;
-    const vyber = ziskejVyberProSelectionMenu();
-    if (!vyber) return false;
+  function pripravBlokyFragmentu(model) {
+    const vstup = Array.isArray(model?.bloky) ? model.bloky : [];
+    return vstup
+      .filter((blok) => blok && jeTextovyBlok(blok))
+      .map((blok) => {
+        const kopie = klonDat(blok);
+        kopie.id = noveIdBloku();
+        kopie.obsah = normalizujObsah(kopie.obsah);
+        if (Array.isArray(kopie.obrazky)) kopie.obrazky = [];
+        return kopie;
+      });
+  }
 
+  function vlozModelovyFragmentNaVyber(model, vyberOverride = null, popis = "vložit formátovaný obsah") {
+    const blokyFragmentu = pripravBlokyFragmentu(model);
+    if (!blokyFragmentu.length) return false;
+
+    const vyber = klonVyberu(vyberOverride || ziskejVyberProSelectionMenu());
+    if (!vyber) return false;
     const snapshotPred = vytvorSnapshotHistorie(vyber);
     const caret = smazVyber(vyber);
-    const blok = dokument.bloky[caret.blok];
-    if (!jeTextovyBlok(blok)) return false;
+    const cilovyBlok = dokument.bloky[caret.blok];
+    if (!jeTextovyBlok(cilovyBlok)) return false;
 
-    const rez = rozdelObsah(blok, caret.offset);
-    const vlozene = fragment.obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format));
-    nastavObsahBloku(blok, [...rez.vlevo, ...vlozene, ...rez.vpravo]);
-    const delka = vlozene.reduce((soucet, cast) => soucet + String(cast.text || "").length, 0);
-    const novaPozice = { blok: caret.blok, offset: caret.offset + delka };
-    ulozZmenuDoHistorie(snapshotPred, "vložit formátovaný text");
+    const jediny = blokyFragmentu.length === 1 ? blokyFragmentu[0] : null;
+    const jeJednoduchyInline = Boolean(
+      jediny && jediny.typ === "odstavec" &&
+      jediny.legacyPre !== true && jediny.legacyBlockquote !== true && jediny.legacyHr !== true
+    );
+
+    let novaPozice = null;
+    if (jeJednoduchyInline) {
+      const rez = rozdelObsah(cilovyBlok, caret.offset);
+      const vlozene = jediny.obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format));
+      nastavObsahBloku(cilovyBlok, [...rez.vlevo, ...vlozene, ...rez.vpravo]);
+      const delka = vlozene.reduce((soucet, cast) => soucet + String(cast.text || "").length, 0);
+      novaPozice = { blok: caret.blok, offset: caret.offset + delka };
+    } else {
+      /* Strukturovaný paste (více odstavců / seznam / PRE) je bezpečný pouze
+         v běžném odstavci. U TODO/Bulletu necháme zachovanou jeho identitu a
+         vložíme formátovaný obsah jako textové řádky, ne jako nové semantické bloky. */
+      if (cilovyBlok.typ !== "odstavec") {
+        const text = blokyFragmentu.map((blok) => textBloku(blok)).join("\n");
+        const vlozena = vlozViceRadku(text, {
+          zacatek: { ...caret }, konec: { ...caret }, sbaleny: true
+        });
+        novaPozice = vlozena;
+      } else {
+        const rez = rozdelObsah(cilovyBlok, caret.offset);
+        const maPred = rez.vlevo.some((cast) => String(cast.text || "").length > 0);
+        const maPo = rez.vpravo.some((cast) => String(cast.text || "").length > 0);
+        const nove = [];
+
+        if (maPred) {
+          const pred = klonDat(cilovyBlok);
+          pred.obsah = rez.vlevo;
+          nove.push(pred);
+        }
+
+        const prvniIndexFragmentu = caret.blok + nove.length;
+        blokyFragmentu.forEach((blok) => nove.push(blok));
+
+        if (maPo) {
+          const po = klonDat(cilovyBlok);
+          po.id = noveIdBloku();
+          po.obsah = rez.vpravo;
+          nove.push(po);
+        }
+
+        dokument.bloky.splice(caret.blok, 1, ...nove);
+        normalizujDokument();
+
+        let posledniTextovy = prvniIndexFragmentu + blokyFragmentu.length - 1;
+        while (posledniTextovy >= prvniIndexFragmentu && !jeTextovyBlok(dokument.bloky[posledniTextovy])) {
+          posledniTextovy -= 1;
+        }
+        if (posledniTextovy < prvniIndexFragmentu) {
+          const vlozitNa = prvniIndexFragmentu + blokyFragmentu.length;
+          dokument.bloky.splice(vlozitNa, 0, vytvorOdstavec(""));
+          posledniTextovy = vlozitNa;
+        }
+        novaPozice = {
+          blok: posledniTextovy,
+          offset: textBloku(dokument.bloky[posledniTextovy]).length
+        };
+      }
+    }
+
+    ulozZmenuDoHistorie(snapshotPred, popis);
     aktivniFormatPozice = klicPozice(novaPozice);
-    const novyVyber = { zacatek: novaPozice, konec: novaPozice, sbaleny: true };
+    const novyVyber = { zacatek: { ...novaPozice }, konec: { ...novaPozice }, sbaleny: true };
     vykresli(novyVyber);
     oznamModelovyTextovyVstup("insertFromPaste");
     return true;
+  }
+
+  function vlozRichVyberProSelectionMenu(fragment, vyberOverride = null) {
+    if (!fragment) return false;
+
+    if (fragment.verze === 2 && fragment.model) {
+      return vlozModelovyFragmentNaVyber(fragment.model, vyberOverride, "vložit formátovaný text");
+    }
+
+    /* Kompatibilita se starší V2.20 rich schránkou v paměti Bridge. */
+    if (fragment.verze !== 1 || !Array.isArray(fragment.obsah) || !fragment.obsah.length) return false;
+    const model = {
+      verze: VERZE_MODELU,
+      bloky: [vytvorOdstavecZObsahu(
+        fragment.obsah.map((cast) => vytvorSegment(String(cast.text || ""), cast.format))
+      )]
+    };
+    return vlozModelovyFragmentNaVyber(model, vyberOverride, "vložit formátovaný text");
   }
 
   function vlozTextProSelectionMenu(text) {
@@ -5887,13 +6015,21 @@
     const vyber = aktualniVyberModelu();
     if (!vyber || vyber.sbaleny) return false;
 
-    const text = textVeVyberu(vyber);
+    const rich = ziskejRichVyberProSelectionMenu();
+    const text = rich?.text || textVeVyberu(vyber);
     if (!text) return false;
 
     let zapsano = false;
     try {
       if (event?.clipboardData?.setData) {
         event.clipboardData.setData("text/plain", text);
+        if (rich?.model) {
+          const html = exportujHtmlZModelu(rich.model);
+          event.clipboardData.setData("text/html", `<div data-lubanote-internal="v2">${html}</div>`);
+          try {
+            event.clipboardData.setData(V2_CLIPBOARD_TYP, JSON.stringify(rich));
+          } catch (_error) {}
+        }
         zapsano = true;
       }
     } catch (_error) {}
@@ -5956,6 +6092,286 @@
     return null;
   }
 
+
+  function jeInterniLubaNoteHtml(html) {
+    return String(html || "").includes(V2_CLIPBOARD_MARKER);
+  }
+
+  function rozbalInterniLubaNoteHtml(html) {
+    const sablona = document.createElement("template");
+    sablona.innerHTML = String(html || "");
+    const obal = sablona.content.querySelector('[data-lubanote-internal="v2"]');
+    return obal ? obal.innerHTML : String(html || "");
+  }
+
+  function zkusNacistInterniClipboardFragment(clipboardData) {
+    if (!clipboardData) return null;
+    try {
+      const raw = clipboardData.getData(V2_CLIPBOARD_TYP);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.verze === 2 && parsed?.model && Array.isArray(parsed.model.bloky)) return parsed;
+      }
+    } catch (_error) {}
+    return null;
+  }
+
+  function vypadaJakoMarkdown(text) {
+    const hodnota = String(text || "");
+    if (!hodnota.trim()) return false;
+    return Boolean(
+      /(^|\n)\s*```/.test(hodnota) ||
+      /(^|\n)\s{0,3}#{1,6}\s+\S/.test(hodnota) ||
+      /(^|\n)\s*[-+*]\s+\S/.test(hodnota) ||
+      /(^|\n)\s*\d+[.)]\s+\S/.test(hodnota) ||
+      /(^|\n)\s*>\s+\S/.test(hodnota) ||
+      /\*\*[^*\n]+\*\*/.test(hodnota) ||
+      /`[^`\n]+`/.test(hodnota)
+    );
+  }
+
+  function escapeHtmlProPaste(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function markdownInlineNaHtml(text) {
+    let html = escapeHtmlProPaste(text);
+    html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
+    html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+    html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
+    return html;
+  }
+
+  function markdownNaHtmlProPaste(text) {
+    const radky = String(text || "").replace(/\r\n?/g, "\n").split("\n");
+    const vystup = [];
+    let seznam = null;
+    let odstavec = [];
+    let vKodu = false;
+    let kod = [];
+
+    const zavriSeznam = () => {
+      if (!seznam) return;
+      vystup.push(`</${seznam}>`);
+      seznam = null;
+    };
+    const flushOdstavec = () => {
+      if (!odstavec.length) return;
+      zavriSeznam();
+      vystup.push(`<p>${odstavec.map(markdownInlineNaHtml).join("<br>")}</p>`);
+      odstavec = [];
+    };
+
+    for (const radek of radky) {
+      if (/^\s*```/.test(radek)) {
+        if (vKodu) {
+          vystup.push(`<pre><code>${escapeHtmlProPaste(kod.join("\n"))}</code></pre>`);
+          kod = [];
+          vKodu = false;
+        } else {
+          flushOdstavec();
+          zavriSeznam();
+          vKodu = true;
+        }
+        continue;
+      }
+
+      if (vKodu) {
+        kod.push(radek);
+        continue;
+      }
+
+      if (!radek.trim()) {
+        flushOdstavec();
+        zavriSeznam();
+        continue;
+      }
+
+      const nadpis = radek.match(/^\s{0,3}(#{1,6})\s+(.+)$/);
+      if (nadpis) {
+        flushOdstavec();
+        zavriSeznam();
+        const uroven = Math.min(3, nadpis[1].length);
+        vystup.push(`<h${uroven}>${markdownInlineNaHtml(nadpis[2])}</h${uroven}>`);
+        continue;
+      }
+
+      if (/^\s{0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/.test(radek)) {
+        flushOdstavec();
+        zavriSeznam();
+        vystup.push("<hr>");
+        continue;
+      }
+
+      const odrazka = radek.match(/^\s*[-+*]\s+(.+)$/);
+      const cislo = radek.match(/^\s*\d+[.)]\s+(.+)$/);
+      if (odrazka || cislo) {
+        flushOdstavec();
+        const typ = cislo ? "ol" : "ul";
+        if (seznam !== typ) {
+          zavriSeznam();
+          seznam = typ;
+          vystup.push(`<${typ}>`);
+        }
+        vystup.push(`<li>${markdownInlineNaHtml((cislo || odrazka)[1])}</li>`);
+        continue;
+      }
+
+      const citace = radek.match(/^\s*>\s?(.*)$/);
+      if (citace) {
+        flushOdstavec();
+        zavriSeznam();
+        vystup.push(`<blockquote>${markdownInlineNaHtml(citace[1])}</blockquote>`);
+        continue;
+      }
+
+      odstavec.push(radek);
+    }
+
+    if (vKodu) {
+      vystup.push(`<pre><code>${escapeHtmlProPaste(kod.join("\n"))}</code></pre>`);
+    }
+    flushOdstavec();
+    zavriSeznam();
+    return vystup.join("");
+  }
+
+  function vycistiExterniHtmlProPaste(html) {
+    const zdroj = document.createElement("template");
+    zdroj.innerHTML = String(html || "");
+    const cil = document.createElement("div");
+    const povolene = new Set([
+      "div", "p", "h1", "h2", "h3", "ul", "ol", "li", "blockquote", "pre",
+      "hr", "br", "span", "font", "b", "strong", "i", "em", "u", "mark", "a", "code"
+    ]);
+    const zahoditCele = new Set([
+      "script", "style", "iframe", "object", "embed", "svg", "math", "form", "input",
+      "button", "textarea", "select", "video", "audio", "canvas", "img", "figure"
+    ]);
+
+    const preved = (uzel, rodic) => {
+      if (uzel.nodeType === Node.TEXT_NODE) {
+        rodic.appendChild(document.createTextNode(String(uzel.nodeValue || "")));
+        return;
+      }
+      if (uzel.nodeType !== Node.ELEMENT_NODE) return;
+
+      let tag = String(uzel.tagName || "").toLowerCase();
+      if (zahoditCele.has(tag)) return;
+      if (["h4", "h5", "h6"].includes(tag)) tag = "h3";
+
+      if (!povolene.has(tag)) {
+        Array.from(uzel.childNodes || []).forEach((dite) => preved(dite, rodic));
+        return;
+      }
+
+      let novy = document.createElement(tag);
+      if (tag === "a") {
+        const href = String(uzel.getAttribute("href") || "").trim();
+        if (/^https?:\/\//i.test(href)) novy.setAttribute("href", href);
+        else novy = document.createElement("span");
+      }
+
+      const styl = uzel.style || {};
+      ["fontWeight", "fontStyle", "textDecoration", "color", "backgroundColor", "fontSize", "textAlign", "fontFamily"]
+        .forEach((klic) => {
+          const hodnota = String(styl[klic] || "").trim();
+          if (hodnota) novy.style[klic] = hodnota;
+        });
+
+      Array.from(uzel.childNodes || []).forEach((dite) => preved(dite, novy));
+      rodic.appendChild(novy);
+    };
+
+    Array.from(zdroj.content.childNodes || []).forEach((uzel) => preved(uzel, cil));
+    return cil.innerHTML;
+  }
+
+  function vlozProstyTextNaVyber(text, vyberOverride = null) {
+    if (typeof text !== "string" || !text.length) return false;
+    const vyber = klonVyberu(vyberOverride || ziskejVyberProSelectionMenu());
+    if (!vyber) return false;
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const caret = vlozViceRadku(text, vyber);
+    ulozZmenuDoHistorie(snapshotPred, "vložit prostý text");
+    aktivniFormatPozice = klicPozice(caret);
+    const novyVyber = { zacatek: { ...caret }, konec: { ...caret }, sbaleny: true };
+    vykresli(novyVyber);
+    oznamModelovyTextovyVstup("insertFromPaste");
+    nastavStav("Vložen prostý text");
+    return true;
+  }
+
+  function vlozHtmlNaVyber(html, plainText, vyberOverride = null, popis = "vložit formátovaný obsah", interni = false) {
+    const vycistene = interni ? String(html || "") : vycistiExterniHtmlProPaste(html);
+    const importVysledek = vytvorModelZHtml(vycistene, plainText);
+    if (!importVysledek?.ok || !importVysledek.model) {
+      zapisDebug?.(`EDITOR CORE V2 | paste rich fallback | unsupported=${(importVysledek?.nepodporovane || []).join(",")}`);
+      return vlozProstyTextNaVyber(String(plainText || ""), vyberOverride);
+    }
+    const ok = vlozModelovyFragmentNaVyber(importVysledek.model, vyberOverride, popis);
+    if (ok) nastavStav("Vložení se zachovaným formátováním");
+    return ok;
+  }
+
+  function otevriExterniPasteModal({ text, html, vyber }) {
+    const prostyText = String(text || "");
+    const htmlText = String(html || "");
+    const maHtml = Boolean(htmlText.trim());
+    const maMarkdown = vypadaJakoMarkdown(prostyText);
+
+    if (typeof window.otevriVyberovyModal !== "function") {
+      return vlozProstyTextNaVyber(prostyText, vyber);
+    }
+
+    /* Choice modal si pamatuje předchozí fokus. Vrátíme jej proto na editor,
+       ne na právě schovávané tlačítko selection menu. Modelový výběr už je
+       bezpečně uložený v `vyber`. */
+    try { editor?.focus({ preventScroll: true }); } catch (_error) {}
+
+    const moznosti = [];
+    if (maHtml) moznosti.push({ hodnota: "format", popisek: "Zachovat formátování" });
+    moznosti.push({ hodnota: "plain", popisek: "Prostý text" });
+    if (maMarkdown) moznosti.push({ hodnota: "markdown", popisek: "Markdown → formátovaný text" });
+
+    window.otevriVyberovyModal({
+      nadpis: "Vložit obsah",
+      moznosti,
+      poVyberu: (hodnota) => {
+        if (hodnota === "format") {
+          vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
+        } else if (hodnota === "markdown") {
+          vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
+        } else {
+          vlozProstyTextNaVyber(prostyText, vyber);
+        }
+      }
+    });
+    return true;
+  }
+
+  function vlozExterniObsahZeSchranky({ text = "", html = "" } = {}) {
+    let prostyText = String(text || "");
+    const htmlText = String(html || "");
+    if (!prostyText && htmlText) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = htmlText;
+      prostyText = String(tmp.textContent || "");
+    }
+    if (!prostyText) return false;
+    const vyber = klonVyberu(ziskejVyberProSelectionMenu());
+    if (!vyber) return false;
+    return otevriExterniPasteModal({ text: prostyText, html: htmlText, vyber });
+  }
+
   function zpracujPaste(event) {
     if (v2ImeKompozice?.aktivni) dokoncV2ImeKompozici("paste");
 
@@ -5979,18 +6395,55 @@
       return;
     }
 
-    const text = clipboardData?.getData("text/plain");
-    if (typeof text !== "string") return;
+    const text = String(clipboardData?.getData("text/plain") || "");
+    const html = String(clipboardData?.getData("text/html") || "");
+    if (!text && !html) return;
+
     event.preventDefault();
-    const vyber = aktualniVyberModelu();
-    const snapshotPred = vytvorSnapshotHistorie(vyber);
-    const caret = vlozViceRadku(text, vyber);
-    ulozZmenuDoHistorie(snapshotPred, "vložit text");
-    const novyVyber = { zacatek: caret, konec: caret, sbaleny: true };
-    vykresli(novyVyber);
-    oznamModelovyTextovyVstup("insertFromPaste");
-    nastavStav("Vložení prostého textu řídil model");
-    zapisDebug?.(`EDITOR CORE V2 | paste | chars=${text.length}`);
+    const vyber = klonVyberu(aktualniVyberModelu() || ziskejVyberProSelectionMenu());
+    if (!vyber) return;
+
+    /* Interní desktop copy nese vlastní modelový fragment. Ten je nejpřesnější
+       a nikdy neotvírá externí Paste modal. */
+    const interniFragment = zkusNacistInterniClipboardFragment(clipboardData);
+    if (interniFragment) {
+      const ok = vlozRichVyberProSelectionMenu(interniFragment, vyber);
+      zapisDebug?.(`EDITOR CORE V2 | paste internal-model | chars=${text.length} | ok=${ok ? "Y" : "N"}`);
+      return;
+    }
+
+    /* Fallback pro prohlížeče, které vlastní MIME typ zahodí, ale zachovají
+       text/html. Marker se do modelu nikdy nevkládá. */
+    if (jeInterniLubaNoteHtml(html)) {
+      const vnitrniHtml = rozbalInterniLubaNoteHtml(html);
+      vlozHtmlNaVyber(vnitrniHtml, text, vyber, "vložit interní formátovaný obsah", true);
+      zapisDebug?.(`EDITOR CORE V2 | paste internal-html | chars=${text.length}`);
+      return;
+    }
+
+    /* PC standard: Ctrl+Shift+V = prostý text bez modalu. Krátké časové okno
+       se nastaví v keydown těsně před ClipboardEventem. */
+    if (JE_DESKTOP_VSTUP && performance.now() <= v2VynutitProstyPasteDo) {
+      v2VynutitProstyPasteDo = 0;
+      vlozProstyTextNaVyber(text || (() => {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        return tmp.textContent || "";
+      })(), vyber);
+      zapisDebug?.(`EDITOR CORE V2 | paste plain shortcut | chars=${text.length}`);
+      return;
+    }
+    v2VynutitProstyPasteDo = 0;
+
+    const fallbackText = text || (() => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      return tmp.textContent || "";
+    })();
+    if (!fallbackText) return;
+
+    otevriExterniPasteModal({ text: fallbackText, html, vyber });
+    zapisDebug?.(`EDITOR CORE V2 | paste external | chars=${fallbackText.length} | html=${html ? "Y" : "N"} | markdown=${vypadaJakoMarkdown(fallbackText) ? "Y" : "N"}`);
   }
 
   function overDomProtiModelu() {
@@ -7576,6 +8029,13 @@
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const klavesa = String(event.key || "").toLowerCase();
 
+      /* PATCH 663G – Ctrl+Shift+V zůstává nativní paste gesture, ale nejbližší
+         ClipboardEvent přepne přímo na prostý text bez LubaNote modalu. */
+      if (JE_DESKTOP_VSTUP && klavesa === "v" && event.shiftKey) {
+        v2VynutitProstyPasteDo = performance.now() + 1500;
+        return;
+      }
+
       /* FIX 520 – desktopové standardní zkratky musí řídit model V2,
          ale vizuálně se chovat jako běžný editor. C/V necháváme ClipboardEventům;
          X řeší `cut` listener výše. */
@@ -7742,6 +8202,7 @@
     vyjmiVyberProSelectionMenu,
     vlozRichVyberProSelectionMenu,
     vlozTextProSelectionMenu,
+    vlozExterniObsahZeSchranky,
     vyberVseProSelectionMenu,
     zrusVyberNaBoduProSelectionMenu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,

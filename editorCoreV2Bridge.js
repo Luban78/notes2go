@@ -75,6 +75,13 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
+  /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
+     přestává být důvěryhodným důkazem původu. Externí aplikace mohla mezitím
+     zkopírovat stejný text. Po návratu proto external paste vždy projde modem. */
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) v2RichSchranka = null;
+  });
+
   const podporovaneAkce = new Set([
     "tlacitkoZpet",
     "tlacitkoZnovu",
@@ -551,22 +558,64 @@
     return true;
   }
 
-  async function prectiV2ZeSchranky() {
+  async function prectiV2ObsahSchranky() {
+    /* PATCH 663G – při explicitním tapu na Vložit zkusíme nejdřív web Clipboard
+       API, protože umí text/html. Capacitor Clipboard zůstává bezpečný fallback. */
+    if (navigator.clipboard?.read) {
+      try {
+        const polozky = await navigator.clipboard.read();
+        let text = "";
+        let html = "";
+        for (const polozka of polozky || []) {
+          if (!html && polozka.types?.includes?.("text/html")) {
+            const blob = await polozka.getType("text/html");
+            html = String(await blob.text() || "");
+          }
+          if (!text && polozka.types?.includes?.("text/plain")) {
+            const blob = await polozka.getType("text/plain");
+            text = String(await blob.text() || "");
+          }
+        }
+        if (!text && html) {
+          const tmp = document.createElement("div");
+          tmp.innerHTML = html;
+          text = String(tmp.textContent || "");
+        }
+        if (text || html) {
+          if (text) v2LokalniSchranka = text;
+          return { text, html };
+        }
+      } catch (_error) {}
+    }
+
     const plugin = window.Capacitor?.Plugins?.Clipboard;
     if (plugin?.read) {
-      const vysledek = await plugin.read();
-      const text = String(vysledek?.value || "");
-      if (text) v2LokalniSchranka = text;
-      return text;
+      try {
+        const vysledek = await plugin.read();
+        const hodnota = String(vysledek?.value || "");
+        const typ = String(vysledek?.type || "").toLowerCase();
+        let text = hodnota;
+        let html = "";
+        if (typ.includes("text/html")) {
+          html = hodnota;
+          const tmp = document.createElement("div");
+          tmp.innerHTML = html;
+          text = String(tmp.textContent || "");
+        }
+        if (text) v2LokalniSchranka = text;
+        return { text, html };
+      } catch (_error) {}
     }
+
     if (navigator.clipboard?.readText) {
       try {
         const text = String(await navigator.clipboard.readText() || "");
         if (text) v2LokalniSchranka = text;
-        return text;
+        return { text, html: "" };
       } catch (_error) {}
     }
-    return v2LokalniSchranka;
+
+    return { text: v2LokalniSchranka, html: "" };
   }
 
   async function zpracujV2SelectionMenuAkci(event) {
@@ -642,14 +691,19 @@
       }
 
       if (button === selectionVlozit) {
-        const text = await prectiV2ZeSchranky();
-        if (text) {
+        const obsahSchranky = await prectiV2ObsahSchranky();
+        const text = String(obsahSchranky?.text || "");
+        const html = String(obsahSchranky?.html || "");
+        if (text || html) {
           const vlozenoRich = Boolean(
-            v2RichSchranka?.text === text
+            text
+            && v2RichSchranka?.text === text
             && core()?.vlozRichVyberProSelectionMenu?.(v2RichSchranka)
           );
           if (!vlozenoRich) {
-            core()?.vlozTextProSelectionMenu?.(text);
+            /* Externí obsah vždy projde novým Paste mode. Core rozhodne, zda
+               nabídne HTML formátování, Markdown, nebo pouze prostý text. */
+            core()?.vlozExterniObsahZeSchranky?.({ text, html });
           }
           obnovToolbar();
         }
