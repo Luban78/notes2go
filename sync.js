@@ -1,4 +1,5 @@
-/* PATCH 662B – FOREGROUND TARGET SYNC RACE FIX
+/* PATCH 662C – ANDROID FOREGROUND NATIVE NETWORK REVALIDATION
+ * navazuje na 662B – FOREGROUND TARGET SYNC RACE FIX
  * Oprava: targeted V2 dluh nesmí být přeskočen ani potvrzen jako hotový
  * starším foreground/start snapshotem.
  */
@@ -7512,6 +7513,55 @@ function pouzivaNativeNetworkAutorituV2() {
   return nativeNetworkAutoritaV2 === true;
 }
 
+/*
+ * PATCH 662C – Android WebView po dlouhém uspání umí vyslat krátký
+ * browser offline/online pár. PATCH 504 správně browser offline použije
+ * jako bezpečnostní veto, ale ConnectivityManager nemusí následně vyslat
+ * nový callback, pokud se skutečná aktivní síť nezměnila. Targeted V2 pak
+ * zůstane čekat na native potvrzení, přestože internet už reálně funguje.
+ *
+ * getStatus() je pouze lokální dotaz do Android ConnectivityManageru
+ * (žádný HTTP request / žádný Supabase egress). Použijeme jej jen tehdy,
+ * když native autorita existuje a targeted gate je právě zavřená.
+ */
+async function revalidujNativeNetworkV2(duvod = "target") {
+  if (!pouzivaNativeNetworkAutorituV2()) {
+    return navigator.onLine;
+  }
+
+  const plugin = window.Capacitor?.Plugins?.LubaNoteNetworkState;
+
+  if (!plugin?.getStatus) {
+    return jeTargetV2SitOpravduPouzitelna();
+  }
+
+  try {
+    const stav = await plugin.getStatus();
+    const connected = stav?.connected === true;
+
+    nativeNetworkPosledniConnectedV2 = connected;
+    nativeNetworkCekaNaNovePotvrzeniV2 = !connected;
+
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `NATIVE REVALIDATE | ${connected ? "online" : "offline"} | ${duvod}`
+    );
+
+    if (!connected) {
+      stitkyCekajiNaRefreshPoNavratuInternetu = true;
+    }
+
+    return connected;
+  } catch (_error) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `NATIVE REVALIDATE DEFER | ${duvod}`
+    );
+
+    return jeTargetV2SitOpravduPouzitelna();
+  }
+}
+
 let probihajiciTargetNetworkResumeV2 = null;
 
 function zpracujTargetV2NavratSite(duvod = "network") {
@@ -8305,6 +8355,17 @@ async function synchronizujCilenePrivateZmenyV2() {
   /* PATCH 500 – delete má přednost před starším obsahovým uploadem. */
   zrusObsahoveTargetyPrekryteSmazanim();
 
+  /* PATCH 662C – stale browser veto po Android resume nesmí držet
+     targeted frontu zamčenou, pokud native ConnectivityManager už
+     potvrzuje VALIDATED internet. */
+  if (
+    !jeTargetV2SitOpravduPouzitelna() &&
+    pouzivaNativeNetworkAutorituV2() &&
+    navigator.onLine
+  ) {
+    await revalidujNativeNetworkV2("target-entry");
+  }
+
   if (!jeTargetV2SitOpravduPouzitelna() || jeTargetV2SitovaPauzaAktivni()) {
     nastavStavSynchronizaceUI("pending");
     return false;
@@ -8636,6 +8697,14 @@ async function synchronizujCekajiciLokalniZmenu() {
     zastavKontroluNavratuInternetu();
     nastavStavSynchronizaceUI("conflict");
     return false;
+  }
+
+  if (
+    !jeTargetV2SitOpravduPouzitelna() &&
+    pouzivaNativeNetworkAutorituV2() &&
+    navigator.onLine
+  ) {
+    await revalidujNativeNetworkV2("pending-worker");
   }
 
   if (!jeTargetV2SitOpravduPouzitelna()) {
@@ -9193,6 +9262,15 @@ async function spustStartSyncBezpecne() {
        * případě start rychle skončí jako pending a native reconnect queue ho
        * po potvrzení sítě dokončí jako první.
        */
+      if (
+        maCilenyPrivateV2Dluh() &&
+        !jeTargetV2SitOpravduPouzitelna() &&
+        pouzivaNativeNetworkAutorituV2() &&
+        navigator.onLine
+      ) {
+        await revalidujNativeNetworkV2("start-target");
+      }
+
       if (
         maCilenyPrivateV2Dluh() &&
         !jeTargetV2SitOpravduPouzitelna()
