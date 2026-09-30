@@ -7347,6 +7347,18 @@
 
     poslouchej(editor, "click", (event) => {
       const seznamRadek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
+
+      /* PATCH 663C – badge musí mít přednost před obecným potlačením kliku
+         seznamu. Jinak WebView po touch sekvenci klik vizuálně provede, ale
+         větev se kvůli potlacKlikSeznamuDo nerozbalí. MOVE logiky se nedotýkáme. */
+      const listToggleBadge = event.target.closest?.("[data-v2-list-toggle]");
+      if (listToggleBadge && editor.contains(listToggleBadge)) {
+        event.preventDefault();
+        event.stopPropagation();
+        prepniSbaleniSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
+        return;
+      }
+
       if (seznamRadek && editor.contains(seznamRadek) && performance.now() < potlacKlikSeznamuDo) {
         event.preventDefault();
         event.stopPropagation();
@@ -7358,14 +7370,6 @@
         event.preventDefault();
         event.stopPropagation();
         prepniTodoHotovo(todoCheckbox.dataset.v2TodoCheck);
-        return;
-      }
-
-      const listToggleBadge = event.target.closest?.("[data-v2-list-toggle]");
-      if (listToggleBadge && editor.contains(listToggleBadge)) {
-        event.preventDefault();
-        event.stopPropagation();
-        prepniSbaleniSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
         return;
       }
 

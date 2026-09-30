@@ -615,7 +615,7 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
      rozbalení otočíme dolů. Tvar tedy zůstane konzistentní. */
   .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"]::before {
     content: "›";
-    top: .76em;
+    top: .66em;
     height: 1em;
     display: flex;
     align-items: center;
@@ -684,6 +684,17 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    box-shadow: none;
+  }
+
+  .ln-v2-editor .ln-v2-list-child-badge:focus,
+  .ln-v2-editor .ln-v2-list-child-badge:focus-visible,
+  .ln-v2-editor .ln-v2-list-child-badge:active {
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
