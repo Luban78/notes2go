@@ -615,24 +615,22 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
      rozbalení otočíme dolů. Tvar tedy zůstane konzistentní. */
   .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"]::before {
     content: "›";
-    top: .66em;
-    height: 1em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: 0;
+    height: 1.5em;
+    display: block;
     color: var(--color-accent, currentColor);
-    font-size: 1.5em;
+    font-size: 1em;
     font-weight: 850;
-    line-height: 1;
+    line-height: 1.5em;
     text-align: center;
     opacity: .98;
-    transform: translateY(-50%) rotate(90deg);
-    transform-origin: center center;
+    transform: translateY(2px) scale(1.48) rotate(90deg);
+    transform-origin: 50% 50%;
     text-shadow: 0 0 10px color-mix(in srgb, var(--color-accent, currentColor) 22%, transparent);
   }
 
   .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::before {
-    transform: translateY(-50%);
+    transform: translateY(-2px) scale(1.48);
   }
 
   /* Parent je typograficky o chlup silnější, bez zásahu do jeho obsahu/modelu. */

@@ -4494,6 +4494,25 @@
     return true;
   }
 
+  /* PATCH 663D – badge počtu potomků má vlastní akci: rozbalí celý podstrom.
+     Hlavní šipka dál používá původní prepniSbaleniSeznamuPodleId(), takže
+     stabilní sbalení/rozbalení a MOVE engine zůstávají oddělené. */
+  function rozbalPodstromSeznamuPodleId(id) {
+    const index = najdiIndexBlokuPodleId(String(id || ""));
+    if (index < 0 || !maPolozkaSeznamuDeti(index)) return false;
+
+    const rozsah = rozsahPodstromuSeznamu(index);
+    for (let i = rozsah.od; i <= rozsah.do; i += 1) {
+      if (!jeSeznamovyBlok(dokument.bloky[i])) continue;
+      if (maPolozkaSeznamuDeti(i)) dokument.bloky[i].sbaleno = false;
+    }
+
+    vybranaPolozkaSeznamuId = "";
+    vykresli(posledniVyber || vyberZPosledniPozice());
+    nastavStav("Větev seznamu rozbalena");
+    return true;
+  }
+
   function predchoziSourozenecSeznamu(index) {
     const blok = dokument?.bloky?.[index];
     if (!jeSeznamovyBlok(blok)) return -1;
@@ -7081,7 +7100,11 @@
     dokument = klonDat(model);
     normalizujDokument();
     const prvniTextovy = dokument.bloky.findIndex(jeTextovyBlok);
-    posledniPozice = { blok: prvniTextovy >= 0 ? prvniTextovy : 0, offset: 0 };
+    const prvniIndex = prvniTextovy >= 0 ? prvniTextovy : 0;
+    posledniPozice = {
+      blok: prvniIndex,
+      offset: textBloku(dokument.bloky[prvniIndex]).length
+    };
     posledniVyber = { zacatek: { ...posledniPozice }, konec: { ...posledniPozice }, sbaleny: true };
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     aktivniFormatPsani = null;
@@ -7089,7 +7112,14 @@
     aktivniFormatZdroj = "";
     historieZpet = [];
     historieVpred = [];
-    vykresli(posledniVyber);
+
+    /* PATCH 663E – při pouhém otevření poznámky nevytváříme DOM selection.
+       Uživatel zatím nezačal editovat, takže v textu nemá svítit browserový
+       ani Luba caret. Modelová fallback pozice zůstává bezpečně na KONCI
+       první věty/bloku pro případ, že se klávesnice otevře bez tapu do textu. */
+    vykresli(null);
+    skryjV2LubaCaret();
+    odstranV2SelectionOverlay();
     aktualizujTlacitkaHistorie();
   }
 
@@ -7099,19 +7129,42 @@
     const naKonci = pozice === "end";
 
     /*
-     * HOTFIX 509 – preference Začátek/Konec je pouze POZICE ZOBRAZENÍ.
-     * Nesmí přesouvat modelový caret ani selection. Patch 508 přesunul caret
-     * na poslední znak a Core V2 jej pak při dalších obnoveních selection mohl
-     * znovu přitahovat do viewportu. Výsledkem bylo zdánlivě nekonečné
-     * rolování a uživatel nemohl ručně najít konec.
-     *
-     * Tady jednorázově nastavíme pouze vlastní scroll .ln-v2-editor.
+     * HOTFIX 509 + PATCH 663E:
+     * Začátek/Konec dál řídí jednorázově pouze SCROLL a nesmí vytvořit DOM
+     * selection, která by editor znovu přitahovala k caretu. Současně ale
+     * držíme neviditelnou modelovou fallback pozici vždy na KONCI textového
+     * bloku: u Začátku na konci prvního textového bloku, u Konce na konci
+     * posledního textového bloku. Pokud uživatel do textu tapne, přesný bod
+     * tapu tuto fallback pozici normálně přepíše.
      */
+    let cilovyIndex = -1;
+    if (naKonci) {
+      for (let i = dokument.bloky.length - 1; i >= 0; i -= 1) {
+        if (jeTextovyBlok(dokument.bloky[i])) {
+          cilovyIndex = i;
+          break;
+        }
+      }
+    } else {
+      cilovyIndex = dokument.bloky.findIndex(jeTextovyBlok);
+    }
+
+    if (cilovyIndex >= 0) {
+      const fallback = {
+        blok: cilovyIndex,
+        offset: textBloku(dokument.bloky[cilovyIndex]).length
+      };
+      posledniPozice = { ...fallback };
+      posledniVyber = { zacatek: { ...fallback }, konec: { ...fallback }, sbaleny: true };
+      ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+    }
+
     const nastavScroll = () => {
       if (!editor?.isConnected) return;
       const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
       editor.scrollTop = naKonci ? maximum : 0;
-      naplanujV2LubaCaret(posledniVyber);
+      /* Bez tapu do textu žádný caret nekreslíme. */
+      skryjV2LubaCaret();
     };
 
     requestAnimationFrame(() => {
@@ -7134,12 +7187,13 @@
     jadroEditoru.classList.add("otevreno");
     nastavDokumentProHost(model);
 
-    /* LubaKeyboard musí mít možnost potlačit systémové IME ještě PŘED
-       prvním focusem editoru. Tím starý Android ani iOS nestihne otevřít
-       vlastní klávesnici mezi vytvořením editoru a MutationObserverem. */
+    /* LubaKeyboard musí mít atributy připravené PŘED prvním skutečným tapem.
+       PATCH 663E ale editor při pouhém otevření poznámky automaticky nefokusuje:
+       bez uživatelské editace tedy není vidět caret a neotvírá se IME. */
     window.LubaNoteKeyboard?.pripravEditor?.(editor);
-
-    editor.focus({ preventScroll: true });
+    try { editor.blur(); } catch (_error) {}
+    skryjV2LubaCaret();
+    odstranV2SelectionOverlay();
     return true;
   }
 
@@ -7262,6 +7316,19 @@
       );
     }, { passive: false });
 
+    /* PATCH 663D – Android WebView může u tlačítka uvnitř contenteditable
+       vizuálně provést tap, ale syntetický click nedoručit spolehlivě. Badge
+       proto obsloužíme přímo na touchend. Je to samostatné tlačítko a je už
+       vyloučeno z MOVE zóny, takže long-press/drag logika zůstává nedotčená. */
+    poslouchej(editor, "touchend", (event) => {
+      const badge = event.target.closest?.("[data-v2-list-toggle]");
+      if (!badge || !editor.contains(badge)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const id = badge.dataset.v2ListToggle || "";
+      rozbalPodstromSeznamuPodleId(id);
+    }, { passive: false });
+
     poslouchej(document, "touchmove", zpracujV2TouchMove, { passive: false });
     poslouchej(document, "touchend", zpracujV2TouchEnd, { passive: false });
     poslouchej(document, "touchcancel", () => zrusV2Drag(), { passive: false });
@@ -7355,7 +7422,7 @@
       if (listToggleBadge && editor.contains(listToggleBadge)) {
         event.preventDefault();
         event.stopPropagation();
-        prepniSbaleniSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
+        rozbalPodstromSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
         return;
       }
 
