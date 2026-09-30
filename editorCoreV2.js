@@ -1289,6 +1289,9 @@
     const cislovani = [];
     const typyCislovani = [];
     let skryvaUroven = null;
+    /* PATCH 663A – pouze render metadata pro vizuální hierarchii Bulletů.
+       Nezasahuje do MOVE/long-press/drag ani do modelu zanoření. */
+    const otevrenaVetevPodleUrovne = [];
     /* FIX 522 – MOVE vizuálně označuje přesně to, co se skutečně přesune.
        U Bullet/Ordered je to celý podstrom, u TODO pouze samotná položka. */
     const vybraneIdckaPresunu = idckaV2PresunovanehoPodstromu();
@@ -1337,6 +1340,14 @@
         radek.dataset.lnV2BulletUroven = String(uroven);
         radek.style.setProperty("--ln-v2-bullet-indent", `${30 + (uroven * 24)}px`);
 
+        /* 663A: označíme pouze vizuální vztah k právě otevřenému přímému
+           rodiči. Data používá jen CSS; pořadí a úrovně modelu se nemění. */
+        otevrenaVetevPodleUrovne.length = Math.min(otevrenaVetevPodleUrovne.length, uroven + 1);
+        if (uroven > 0 && otevrenaVetevPodleUrovne[uroven - 1]) {
+          radek.dataset.lnV2OpenBranchChild = "1";
+        }
+        otevrenaVetevPodleUrovne[uroven] = "";
+
         if (skryvaUroven !== null) {
           if (uroven > skryvaUroven) radek.hidden = true;
           else skryvaUroven = null;
@@ -1349,6 +1360,25 @@
         );
         radek.dataset.lnV2ListHasChildren = maDeti ? "1" : "0";
         radek.dataset.lnV2ListCollapsed = maDeti && blok.sbaleno ? "1" : "0";
+
+        /* 663A: počet přímých potomků pro malý badge u sbaleného rodiče.
+           Jde jen o odvozenou DOM informaci; dokument se nijak neupravuje. */
+        if (maDeti) {
+          let pocetPrimychDeti = 0;
+          for (let i = indexBloku + 1; i < dokument.bloky.length; i += 1) {
+            const kandidat = dokument.bloky[i];
+            if (!jeSeznamovyBlok(kandidat)) break;
+            const urovenKandidata = normalizujUrovenBulletu(kandidat.uroven);
+            if (urovenKandidata <= uroven) break;
+            if (urovenKandidata === uroven + 1) pocetPrimychDeti += 1;
+          }
+          radek.dataset.lnV2ListChildCount = String(pocetPrimychDeti);
+          if (!blok.sbaleno) {
+            radek.dataset.lnV2OpenBranchParent = "1";
+            otevrenaVetevPodleUrovne[uroven] = blok.id;
+          }
+        }
+
         if (maDeti && blok.sbaleno) skryvaUroven = uroven;
 
         cislovani.length = Math.min(cislovani.length, uroven + 1);

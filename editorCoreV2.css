@@ -601,3 +601,90 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   margin-top: 10px;
   margin-bottom: 6px;
 }
+
+
+/* ==========================================
+   PATCH 663A – BULLET HYBRID V5 / MOBILE
+
+   ČISTĚ VIZUÁLNÍ vrstva nad stabilním MOVE enginem 526.
+   Nemění hitbox značky, --ln-v2-bullet-indent, long-press, drag,
+   pořadí ani pravidla zanoření/vynoření.
+========================================== */
+@media (max-width: 899px) {
+  /* Rodič: místo nenápadné tečky jasná šipka ve stejném původním sloupci. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"]::before {
+    content: "⌄";
+    color: var(--color-accent, currentColor);
+    font-size: 1.32em;
+    font-weight: 850;
+    line-height: 1.08em;
+    text-align: center;
+    opacity: .98;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--color-accent, currentColor) 22%, transparent);
+  }
+
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::before {
+    content: "›";
+    font-size: 1.5em;
+    line-height: .98em;
+  }
+
+  /* Parent je typograficky o chlup silnější, bez zásahu do jeho obsahu/modelu. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"] {
+    font-weight: 620;
+  }
+
+  /* Otevřený rodič – jemná plocha, ne stromová čára. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-open-branch-parent="1"]:not(.ln-v2-list-move-selected) {
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-accent, currentColor) 9%, transparent);
+  }
+
+  /* Přímí potomci otevřené větve dostanou jen lehký tón stejné plochy. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-open-branch-child="1"]:not(.ln-v2-list-move-selected) {
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-accent, currentColor) 3.5%, transparent);
+  }
+
+  /* Úroveň je čitelná i bez čar: hlubší bullet je menší a klidnější. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="0"]::before {
+    font-size: 1.08em;
+    opacity: .96;
+  }
+
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="1"]::before {
+    font-size: .92em;
+    opacity: .76;
+  }
+
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="2"]::before,
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="3"]::before,
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="4"]::before,
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="5"]::before,
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="0"][data-ln-v2-bullet-uroven="6"]::before {
+    font-size: .82em;
+    opacity: .62;
+  }
+
+  /* Po sbalení zůstane vidět, kolik přímých položek se schovalo. */
+  .ln-v2-editor .ln-v2-bullet[data-ln-v2-list-has-children="1"][data-ln-v2-list-collapsed="1"]::after {
+    content: attr(data-ln-v2-list-child-count);
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    margin-left: 8px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: color-mix(in srgb, currentColor 78%, transparent);
+    font-size: .72em;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: .08em;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
