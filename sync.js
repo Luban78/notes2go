@@ -1,3 +1,7 @@
+/* PATCH 662B – FOREGROUND TARGET SYNC RACE FIX
+ * Oprava: targeted V2 dluh nesmí být přeskočen ani potvrzen jako hotový
+ * starším foreground/start snapshotem.
+ */
 /*
  * LOKÁLNÍ REŽIM – HARD CLOUD GUARD (FÁZE L1).
  * ---------------------------------------------
@@ -8611,13 +8615,6 @@ async function synchronizujCekajiciLokalniZmenu() {
     return false;
   }
 
-  /* PATCH 662A – FOREGROUND TARGET DEBT RACE
-   * Úspěšný START SYNC mohl dříve zrušit pouze boolean pending příznak
-   * právě ve chvíli, kdy se během návratu z backgroundu teprve vytvořila
-   * targeted V2 fronta. Časovač lokální změny pak zde chybně skončil jako
-   * hotový a queue zůstala viset až do dalšího foregroundu.
-   * Targeted dluh je autoritativní: dokud existuje, worker jej musí zkusit
-   * dokončit bez ohledu na pomocný boolean příznak. */
   if (
     !lokalniZmenaCekaNaPotvrzeniServerem &&
     !maCilenyPrivateV2Dluh()
@@ -9267,10 +9264,6 @@ async function spustStartSyncBezpecne() {
       await obnovStitkyPoNavratuInternetuPokudJeTreba();
     }
 
-    /* PATCH 662A – start flow nesmí potvrdit novou lokální změnu jen proto,
-     * že jeho vlastní starší snapshot doběhl úspěšně. Pokud mezitím vznikl
-     * targeted V2 dluh, pending stav musí zůstat aktivní a následný worker
-     * jej dokončí ještě v tomto foreground cyklu. */
     if (
       vysledek === true &&
       lokalniZmenaCekaNaPotvrzeniServerem &&
