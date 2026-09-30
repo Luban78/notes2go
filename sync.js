@@ -611,7 +611,8 @@ async function pripravFastSyncPriStartu(user) {
       shodnyLokalniStav &&
       shodnyServer &&
       !maCekajiciSmazani &&
-      aktivniKonfliktySyncu.size === 0
+      aktivniKonfliktySyncu.size === 0 &&
+      !maCilenyPrivateV2Dluh()
     ) {
       stavDiagnostiky = "SKIP";
       window.LubaNoteStartupDiag?.zapis?.(
@@ -8610,8 +8611,28 @@ async function synchronizujCekajiciLokalniZmenu() {
     return false;
   }
 
-  if (!lokalniZmenaCekaNaPotvrzeniServerem) {
+  /* PATCH 662A – FOREGROUND TARGET DEBT RACE
+   * Úspěšný START SYNC mohl dříve zrušit pouze boolean pending příznak
+   * právě ve chvíli, kdy se během návratu z backgroundu teprve vytvořila
+   * targeted V2 fronta. Časovač lokální změny pak zde chybně skončil jako
+   * hotový a queue zůstala viset až do dalšího foregroundu.
+   * Targeted dluh je autoritativní: dokud existuje, worker jej musí zkusit
+   * dokončit bez ohledu na pomocný boolean příznak. */
+  if (
+    !lokalniZmenaCekaNaPotvrzeniServerem &&
+    !maCilenyPrivateV2Dluh()
+  ) {
     return true;
+  }
+
+  if (
+    !lokalniZmenaCekaNaPotvrzeniServerem &&
+    maCilenyPrivateV2Dluh()
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      "FG TARGET DEBT RECOVER | pending-flag=false"
+    );
   }
 
   if (nactiBlokovanaCekajiciSmazani().length > 0) {
@@ -9030,9 +9051,18 @@ async function spustRychlySyncPoznamekBezpecne() {
 
     if (
       vysledek === true &&
-      lokalniZmenaCekaNaPotvrzeniServerem
+      lokalniZmenaCekaNaPotvrzeniServerem &&
+      !maCilenyPrivateV2Dluh()
     ) {
       potvrzLokalniZmenuNaServeru();
+    } else if (
+      vysledek === true &&
+      maCilenyPrivateV2Dluh()
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "FG TARGET PENDING | quick-finished-with-debt"
+      );
     }
 
     return vysledek === true;
@@ -9237,11 +9267,24 @@ async function spustStartSyncBezpecne() {
       await obnovStitkyPoNavratuInternetuPokudJeTreba();
     }
 
+    /* PATCH 662A – start flow nesmí potvrdit novou lokální změnu jen proto,
+     * že jeho vlastní starší snapshot doběhl úspěšně. Pokud mezitím vznikl
+     * targeted V2 dluh, pending stav musí zůstat aktivní a následný worker
+     * jej dokončí ještě v tomto foreground cyklu. */
     if (
       vysledek === true &&
-      lokalniZmenaCekaNaPotvrzeniServerem
+      lokalniZmenaCekaNaPotvrzeniServerem &&
+      !maCilenyPrivateV2Dluh()
     ) {
       potvrzLokalniZmenuNaServeru();
+    } else if (
+      vysledek === true &&
+      maCilenyPrivateV2Dluh()
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "FG TARGET PENDING | start-finished-with-debt"
+      );
     }
 
     return vysledek;
