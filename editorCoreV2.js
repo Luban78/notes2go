@@ -6328,13 +6328,34 @@
     const maHtml = Boolean(htmlText.trim());
     const maMarkdown = vypadaJakoMarkdown(prostyText);
 
-    if (typeof window.otevriVyberovyModal !== "function") {
+    const provedVolbu = (hodnota) => {
+      if (hodnota === "format") {
+        return vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
+      }
+      if (hodnota === "markdown") {
+        return vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
+      }
       return vlozProstyTextNaVyber(prostyText, vyber);
+    };
+
+    /* PATCH 663K – mobilní CoreV2 selection menu dostává vlastní 3. panel,
+       ale SAMOTNÉ vložení zůstává přesně v této už ověřené Core closure.
+       Tím neukládáme výběr ani paste callback do nové modelové cesty. */
+    const bridgePastePanel = window.LubaNoteEditorV2Bridge?.otevriExterniPastePanel;
+    if (typeof bridgePastePanel === "function") {
+      const otevreno = bridgePastePanel({
+        maHtml,
+        maMarkdown,
+        poVyberu: provedVolbu
+      });
+      if (otevreno === true) return "panel";
     }
 
-    /* Choice modal si pamatuje předchozí fokus. Vrátíme jej proto na editor,
-       ne na právě schovávané tlačítko selection menu. Modelový výběr už je
-       bezpečně uložený v `vyber`. */
+    if (typeof window.otevriVyberovyModal !== "function") {
+      return provedVolbu("plain");
+    }
+
+    /* Desktop / fallback: původní Choice modal zůstává zachovaný. */
     try { editor?.focus({ preventScroll: true }); } catch (_error) {}
 
     const moznosti = [];
@@ -6345,24 +6366,12 @@
     window.otevriVyberovyModal({
       nadpis: "Vložit obsah",
       moznosti,
-      poVyberu: (hodnota) => {
-        if (hodnota === "format") {
-          vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
-        } else if (hodnota === "markdown") {
-          vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
-        } else {
-          vlozProstyTextNaVyber(prostyText, vyber);
-        }
-      }
+      poVyberu: provedVolbu
     });
     return true;
   }
 
-  /* PATCH 663J – mobilní Vložit už neotevírá velký Choice modal.
-     Bridge si nejdřív připraví clipboard payload + bezpečný modelový výběr
-     a zobrazí třetí úroveň našeho selection panelu. Samotné vložení pořád
-     provádí výhradně Core V2, takže selection/model contract zůstává stejný. */
-  function pripravExterniPasteProSelectionMenu({ text = "", html = "" } = {}) {
+  function vlozExterniObsahZeSchranky({ text = "", html = "" } = {}) {
     let prostyText = String(text || "");
     const htmlText = String(html || "");
     if (!prostyText && htmlText) {
@@ -6370,42 +6379,10 @@
       tmp.innerHTML = htmlText;
       prostyText = String(tmp.textContent || "");
     }
-    if (!prostyText) return null;
-
+    if (!prostyText) return false;
     const vyber = klonVyberu(ziskejVyberProSelectionMenu());
-    if (!vyber) return null;
-
-    return {
-      text: prostyText,
-      html: htmlText,
-      maHtml: Boolean(htmlText.trim()),
-      maMarkdown: vypadaJakoMarkdown(prostyText),
-      vyber
-    };
-  }
-
-  function vlozPripravenyExterniPasteProSelectionMenu(priprava, rezim = "plain") {
-    if (!priprava?.text || !priprava?.vyber) return false;
-    const prostyText = String(priprava.text || "");
-    const htmlText = String(priprava.html || "");
-    const vyber = klonVyberu(priprava.vyber);
     if (!vyber) return false;
-
-    if (rezim === "format" && htmlText.trim()) {
-      return vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
-    }
-    if (rezim === "markdown" && vypadaJakoMarkdown(prostyText)) {
-      return vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
-    }
-    return vlozProstyTextNaVyber(prostyText, vyber);
-  }
-
-  function vlozExterniObsahZeSchranky({ text = "", html = "" } = {}) {
-    const priprava = pripravExterniPasteProSelectionMenu({ text, html });
-    if (!priprava) return false;
-    /* Desktop/ClipboardEvent zatím používá původní Choice modal. Mobilní
-       selection panel volá přímo dvě nové API funkce výše. */
-    return otevriExterniPasteModal({ text: priprava.text, html: priprava.html, vyber: priprava.vyber });
+    return otevriExterniPasteModal({ text: prostyText, html: htmlText, vyber });
   }
 
   function zpracujPaste(event) {
@@ -8239,8 +8216,6 @@
     vlozRichVyberProSelectionMenu,
     vlozTextProSelectionMenu,
     vlozExterniObsahZeSchranky,
-    pripravExterniPasteProSelectionMenu,
-    vlozPripravenyExterniPasteProSelectionMenu,
     vyberVseProSelectionMenu,
     zrusVyberNaBoduProSelectionMenu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,
