@@ -6358,7 +6358,11 @@
     return true;
   }
 
-  function vlozExterniObsahZeSchranky({ text = "", html = "" } = {}) {
+  /* PATCH 663J – mobilní Vložit už neotevírá velký Choice modal.
+     Bridge si nejdřív připraví clipboard payload + bezpečný modelový výběr
+     a zobrazí třetí úroveň našeho selection panelu. Samotné vložení pořád
+     provádí výhradně Core V2, takže selection/model contract zůstává stejný. */
+  function pripravExterniPasteProSelectionMenu({ text = "", html = "" } = {}) {
     let prostyText = String(text || "");
     const htmlText = String(html || "");
     if (!prostyText && htmlText) {
@@ -6366,10 +6370,42 @@
       tmp.innerHTML = htmlText;
       prostyText = String(tmp.textContent || "");
     }
-    if (!prostyText) return false;
+    if (!prostyText) return null;
+
     const vyber = klonVyberu(ziskejVyberProSelectionMenu());
+    if (!vyber) return null;
+
+    return {
+      text: prostyText,
+      html: htmlText,
+      maHtml: Boolean(htmlText.trim()),
+      maMarkdown: vypadaJakoMarkdown(prostyText),
+      vyber
+    };
+  }
+
+  function vlozPripravenyExterniPasteProSelectionMenu(priprava, rezim = "plain") {
+    if (!priprava?.text || !priprava?.vyber) return false;
+    const prostyText = String(priprava.text || "");
+    const htmlText = String(priprava.html || "");
+    const vyber = klonVyberu(priprava.vyber);
     if (!vyber) return false;
-    return otevriExterniPasteModal({ text: prostyText, html: htmlText, vyber });
+
+    if (rezim === "format" && htmlText.trim()) {
+      return vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
+    }
+    if (rezim === "markdown" && vypadaJakoMarkdown(prostyText)) {
+      return vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
+    }
+    return vlozProstyTextNaVyber(prostyText, vyber);
+  }
+
+  function vlozExterniObsahZeSchranky({ text = "", html = "" } = {}) {
+    const priprava = pripravExterniPasteProSelectionMenu({ text, html });
+    if (!priprava) return false;
+    /* Desktop/ClipboardEvent zatím používá původní Choice modal. Mobilní
+       selection panel volá přímo dvě nové API funkce výše. */
+    return otevriExterniPasteModal({ text: priprava.text, html: priprava.html, vyber: priprava.vyber });
   }
 
   function zpracujPaste(event) {
@@ -8203,6 +8239,8 @@
     vlozRichVyberProSelectionMenu,
     vlozTextProSelectionMenu,
     vlozExterniObsahZeSchranky,
+    pripravExterniPasteProSelectionMenu,
+    vlozPripravenyExterniPasteProSelectionMenu,
     vyberVseProSelectionMenu,
     zrusVyberNaBoduProSelectionMenu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,

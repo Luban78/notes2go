@@ -72,6 +72,17 @@
   let v2SelectionOverflowKotva = null;
   let v2LokalniSchranka = "";
   let v2RichSchranka = null;
+
+  /* PATCH 663J – třetí úroveň selection panelu pro externí paste.
+     Vzniká dynamicky uvnitř stejného #selectionMenu, takže nepřidáváme
+     další fullscreen/modal vrstvu a zůstáváme ve stejném UX jako ⋮ panel. */
+  let v2PastePanel = null;
+  let v2PasteProsty = null;
+  let v2PasteMarkdown = null;
+  let v2PasteFormat = null;
+  let v2PasteZpet = null;
+  let v2PastePriprava = null;
+  let v2PasteNavrat = "primary";
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
@@ -217,8 +228,93 @@
     skryjV2SelectionMenu();
   }
 
+  function zajistiV2PastePanel() {
+    if (v2PastePanel || !selectionMenu) return;
+
+    v2PastePanel = document.createElement("div");
+    v2PastePanel.className = "selectionMenuOverflow";
+    v2PastePanel.hidden = true;
+    v2PastePanel.dataset.lnV2PastePanel = "1";
+
+    const vytvorTlacitko = (text, rezim = "") => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      if (rezim) button.dataset.lnV2PasteMode = rezim;
+      return button;
+    };
+
+    v2PasteFormat = vytvorTlacitko("Zachovat formátování", "format");
+    v2PasteProsty = vytvorTlacitko("Prostý text", "plain");
+    v2PasteMarkdown = vytvorTlacitko("Markdown → formátovaný text", "markdown");
+    v2PasteZpet = vytvorTlacitko("←");
+    v2PasteZpet.className = "selectionMenuBack";
+    v2PasteZpet.setAttribute("aria-label", "Zpět");
+
+    v2PastePanel.append(v2PasteFormat, v2PasteProsty, v2PasteMarkdown, v2PasteZpet);
+    selectionMenu.appendChild(v2PastePanel);
+  }
+
+  function skryjV2PastePanel({ vycistit = true } = {}) {
+    if (v2PastePanel) v2PastePanel.hidden = true;
+    if (vycistit) {
+      v2PastePriprava = null;
+      v2PasteNavrat = "primary";
+    }
+  }
+
+  function prepozicujV2RozsirenyPanel() {
+    if (v2SelectionOverflowKotva) {
+      pozicujV2SelectionOverflowKeTreckam(v2SelectionOverflowKotva);
+    } else {
+      requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
+    }
+  }
+
+  function otevriV2PastePanel(priprava, navrat = "primary") {
+    if (!priprava || !selectionMenu || !selectionPrimary || !selectionOverflow) return false;
+    zajistiV2PastePanel();
+    if (!v2PastePanel) return false;
+
+    v2PastePriprava = priprava;
+    v2PasteNavrat = navrat === "overflow" ? "overflow" : "primary";
+
+    if (v2PasteFormat) v2PasteFormat.hidden = !priprava.maHtml;
+    if (v2PasteMarkdown) v2PasteMarkdown.hidden = !priprava.maMarkdown;
+    if (v2PasteProsty) v2PasteProsty.hidden = false;
+    if (v2PasteZpet) v2PasteZpet.hidden = false;
+
+    selectionPrimary.hidden = true;
+    selectionOverflow.hidden = true;
+    v2PastePanel.hidden = false;
+    selectionMenu.classList.add("selectionMenuRozsirene");
+    prepozicujV2RozsirenyPanel();
+    return true;
+  }
+
+  function vratSeZV2PastePanelu() {
+    const navrat = v2PasteNavrat;
+    skryjV2PastePanel();
+
+    if (navrat === "overflow") {
+      selectionPrimary.hidden = true;
+      selectionOverflow.hidden = false;
+      selectionMenu.classList.add("selectionMenuRozsirene");
+      if (selectionVice) selectionVice.setAttribute("aria-expanded", "true");
+      prepozicujV2RozsirenyPanel();
+      return;
+    }
+
+    selectionOverflow.hidden = true;
+    selectionPrimary.hidden = false;
+    selectionMenu.classList.remove("selectionMenuRozsirene");
+    if (selectionVice) selectionVice.setAttribute("aria-expanded", "false");
+    requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
+  }
+
   function skryjV2SelectionOverflow() {
     if (selectionOverflow) selectionOverflow.hidden = true;
+    skryjV2PastePanel();
     if (selectionPrimary) selectionPrimary.hidden = false;
     if (selectionVice) selectionVice.setAttribute("aria-expanded", "false");
     selectionMenu?.classList.remove("selectionMenuRozsirene");
@@ -627,6 +723,22 @@
     event.stopImmediatePropagation();
     potlacV2SelectionMenuDo = performance.now() + 300;
 
+    if (button === v2PasteZpet) {
+      vratSeZV2PastePanelu();
+      return;
+    }
+
+    if (button === v2PasteFormat || button === v2PasteProsty || button === v2PasteMarkdown) {
+      const rezim = String(button.dataset.lnV2PasteMode || "plain");
+      const priprava = v2PastePriprava;
+      if (priprava) {
+        core()?.vlozPripravenyExterniPasteProSelectionMenu?.(priprava, rezim);
+        obnovToolbar();
+      }
+      skryjV2SelectionMenu();
+      return;
+    }
+
     if (button === selectionVice) {
       prepniV2SelectionOverflow();
       return;
@@ -636,6 +748,37 @@
       requestAnimationFrame(prepozicujAktualniV2SelectionMenu);
       return;
     }
+
+    /* Vložit musí znát, jestli bylo otevřeno z 1. nebo 2. panelu. Proto jej
+       obsloužíme ještě PŘED společným zavřením overflow panelu. */
+    if (button === selectionVlozit) {
+      const navrat = selectionOverflow && !selectionOverflow.hidden ? "overflow" : "primary";
+      const obsahSchranky = await prectiV2ObsahSchranky();
+      const text = String(obsahSchranky?.text || "");
+      const html = String(obsahSchranky?.html || "");
+      if (text || html) {
+        const vlozenoRich = Boolean(
+          text
+          && v2RichSchranka?.text === text
+          && core()?.vlozRichVyberProSelectionMenu?.(v2RichSchranka)
+        );
+        if (vlozenoRich) {
+          obnovToolbar();
+          skryjV2SelectionMenu();
+          return;
+        }
+
+        const priprava = core()?.pripravExterniPasteProSelectionMenu?.({ text, html });
+        if (priprava && otevriV2PastePanel(priprava, navrat)) return;
+
+        /* Bezpečný fallback pouze pokud nové API není dostupné. */
+        core()?.vlozExterniObsahZeSchranky?.({ text, html });
+        obnovToolbar();
+      }
+      skryjV2SelectionMenu();
+      return;
+    }
+
     skryjV2SelectionOverflow();
 
     try {
@@ -687,27 +830,6 @@
         core()?.vyjmiVyberProSelectionMenu?.();
         skryjV2SelectionMenu();
         obnovToolbar();
-        return;
-      }
-
-      if (button === selectionVlozit) {
-        const obsahSchranky = await prectiV2ObsahSchranky();
-        const text = String(obsahSchranky?.text || "");
-        const html = String(obsahSchranky?.html || "");
-        if (text || html) {
-          const vlozenoRich = Boolean(
-            text
-            && v2RichSchranka?.text === text
-            && core()?.vlozRichVyberProSelectionMenu?.(v2RichSchranka)
-          );
-          if (!vlozenoRich) {
-            /* Externí obsah vždy projde novým Paste mode. Core rozhodne, zda
-               nabídne HTML formátování, Markdown, nebo pouze prostý text. */
-            core()?.vlozExterniObsahZeSchranky?.({ text, html });
-          }
-          obnovToolbar();
-        }
-        skryjV2SelectionMenu();
         return;
       }
 
