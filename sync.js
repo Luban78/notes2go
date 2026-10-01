@@ -1519,7 +1519,8 @@ function pridejCekajiciSmazani(
  */
 function pridejCekajiciSmazaniHromadne(
   poznamky,
-  deletedAt = new Date().toISOString()
+  deletedAt = new Date().toISOString(),
+  expectedRevisionById = null
 ) {
   const seznam = (Array.isArray(poznamky) ? poznamky : [])
     .filter((poznamka) => poznamka?.id);
@@ -1540,10 +1541,21 @@ function pridejCekajiciSmazaniHromadne(
     zrusObsahovyTargetKvuliSmazani(poznamka.id);
 
     const meta = ziskejCloudSyncMeta(poznamka.id);
+    const explicitniRevision =
+      expectedRevisionById instanceof Map
+        ? expectedRevisionById.get(poznamka.id)
+        : expectedRevisionById?.[poznamka.id];
+    const maExplicitniRevizi =
+      explicitniRevision !== null &&
+      explicitniRevision !== undefined &&
+      explicitniRevision !== "" &&
+      Number.isFinite(Number(explicitniRevision));
     const expectedRevision =
-      Number.isFinite(Number(meta?.revision))
-        ? Number(meta.revision)
-        : 0;
+      maExplicitniRevizi
+        ? Number(explicitniRevision)
+        : Number.isFinite(Number(meta?.revision))
+          ? Number(meta.revision)
+          : 0;
 
     mapa.set(poznamka.id, {
       id: poznamka.id,
@@ -2172,7 +2184,10 @@ async function uploadEncryptedSecretRecordToSupabase(record) {
   return vysledek.ok;
 }
 
-async function markNoteDeletedInSupabase(note) {
+async function markNoteDeletedInSupabase(
+  note,
+  expectedRevisionOverride = null
+) {
   if (!note?.id) {
     return false;
   }
@@ -2187,10 +2202,17 @@ async function markNoteDeletedInSupabase(note) {
 
   const deletedAt = new Date().toISOString();
   const meta = ziskejCloudSyncMeta(note.id);
+  const maOverrideRevizi =
+    expectedRevisionOverride !== null &&
+    expectedRevisionOverride !== undefined &&
+    expectedRevisionOverride !== "" &&
+    Number.isFinite(Number(expectedRevisionOverride));
   const expectedRevision =
-    Number.isFinite(Number(meta?.revision))
-      ? Number(meta.revision)
-      : 0;
+    maOverrideRevizi
+      ? Number(expectedRevisionOverride)
+      : Number.isFinite(Number(meta?.revision))
+        ? Number(meta.revision)
+        : 0;
 
   /*
    * PATCH 488 – permanentní smazání je vždy nejdřív persistentní

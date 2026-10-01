@@ -473,6 +473,286 @@
     }
   }
 
+  /* ============================================================
+     PATCH 668B – TRVALÉ SMAZÁNÍ VLASTNÍ SHARED POZNÁMKY
+     ------------------------------------------------------------
+     „Trvale smazat“ používá v celé LubaNote serverový tombstone.
+     U vlastní Shared poznámky ale před tombstonem musíme nejdřív
+     autoritativně ukončit všechny vztahy sdílení. Jinak by private
+     delete správně narazil na serverový shared guard a poznámka by
+     se po syncu mohla znovu objevit.
+
+     Bezpečné pořadí:
+       1) zrušit pending invitations,
+       2) odebrat všechny collaboratory (server zároveň revoke-ne
+          jejich key envelope),
+       3) znovu ověřit, že nezůstal žádný vztah,
+       4) refreshnout Shared cache a ověřit Shared -> Private,
+       5) načíst aktuální private revision pro následný tombstone.
+
+     Při jakékoli nejistotě se delete NEPROVEDE a poznámka zůstane
+     v Koši. Částečně provedený revoke je bezpečný – pouze zúží
+     přístup, nikdy nemaže obsah poznámky.
+  ============================================================ */
+  function ziskejRadkyProSharedDelete(data, klice = []) {
+    if (!data) {
+      return [];
+    }
+
+    if (Array.isArray(data)) {
+      if (
+        data.length === 1 &&
+        data[0] &&
+        typeof data[0] === "object"
+      ) {
+        for (const klic of klice) {
+          if (Array.isArray(data[0][klic])) {
+            return data[0][klic];
+          }
+        }
+      }
+
+      return data;
+    }
+
+    if (typeof data === "object") {
+      for (const klic of klice) {
+        if (Array.isArray(data[klic])) {
+          return data[klic];
+        }
+      }
+    }
+
+    return [];
+  }
+
+  function normalizujUsernameProSharedDelete(hodnota) {
+    return String(hodnota || "")
+      .trim()
+      .replace(/^@+/, "");
+  }
+
+  async function nactiVztahyProSharedDelete(klient, noteId) {
+    const [collabResponse, pendingResponse] = await Promise.all([
+      klient.rpc(
+        "lubanote_get_note_collaborators",
+        { p_note_id: noteId }
+      ),
+      klient.rpc(
+        "lubanote_get_note_pending_invitations",
+        { p_note_id: noteId }
+      )
+    ]);
+
+    if (collabResponse.error) {
+      throw collabResponse.error;
+    }
+
+    if (pendingResponse.error) {
+      throw pendingResponse.error;
+    }
+
+    return {
+      collaborators: ziskejRadkyProSharedDelete(
+        collabResponse.data,
+        ["collaborators", "users"]
+      ),
+      pending: ziskejRadkyProSharedDelete(
+        pendingResponse.data,
+        ["invitations", "pending"]
+      )
+    };
+  }
+
+  async function odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim(
+    noteId
+  ) {
+    if (!noteId) {
+      return {
+        handled: false,
+        ok: false,
+        reason: "missing_note_id"
+      };
+    }
+
+    if (!navigator.onLine) {
+      zobrazZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        "Trvalé smazání sdílené poznámky vyžaduje připojení k internetu."
+      );
+
+      return {
+        handled: true,
+        ok: false,
+        reason: "offline"
+      };
+    }
+
+    let note = null;
+
+    try {
+      note = await nactiAktualniSdilenouPoznamku(noteId);
+
+      if (!note || note.__lubanoteSharedRole !== "owner") {
+        return {
+          handled: false,
+          ok: false,
+          reason: "not_owned_shared"
+        };
+      }
+
+      const klient = await zajistiSupabase();
+      if (!klient) {
+        throw new Error("supabase_unavailable");
+      }
+
+      const vztahy = await nactiVztahyProSharedDelete(
+        klient,
+        noteId
+      );
+
+      /* Nejdřív zavřeme všechny dosud nepřijaté cesty ke sdílení. */
+      for (const row of vztahy.pending) {
+        const invitationId = row?.invitation_id ?? row?.id;
+
+        if (!invitationId) {
+          throw new Error("shared_delete_invitation_id_missing");
+        }
+
+        const { data, error } = await klient.rpc(
+          "lubanote_cancel_note_invitation",
+          { p_invitation_id: invitationId }
+        );
+
+        if (error) {
+          throw error;
+        }
+
+        if (data?.ok === false) {
+          throw new Error(
+            data.reason || "shared_delete_cancel_invitation_failed"
+          );
+        }
+      }
+
+      /* Potom revoke všech aktivních collaboratorů. Owner se nikdy nemaže. */
+      for (const row of vztahy.collaborators) {
+        const role = String(row?.role || "editor").toLowerCase();
+        if (role === "owner") {
+          continue;
+        }
+
+        const username = normalizujUsernameProSharedDelete(
+          row?.username ?? row?.user_name
+        );
+
+        if (!username) {
+          throw new Error("shared_delete_collaborator_username_missing");
+        }
+
+        const { data, error } = await klient.rpc(
+          "lubanote_remove_note_collaborator",
+          {
+            p_note_id: noteId,
+            p_username: username
+          }
+        );
+
+        if (error) {
+          throw error;
+        }
+
+        if (data?.ok === false) {
+          throw new Error(
+            data.reason || "shared_delete_remove_collaborator_failed"
+          );
+        }
+      }
+
+      /* Autoritativní kontrola po revoke – nic nesmíme pouze předpokládat. */
+      const kontrola = await nactiVztahyProSharedDelete(
+        klient,
+        noteId
+      );
+
+      const zbyvajiciCollaboratori = kontrola.collaborators.filter(
+        (row) => String(row?.role || "editor").toLowerCase() !== "owner"
+      );
+
+      if (
+        zbyvajiciCollaboratori.length > 0 ||
+        kontrola.pending.length > 0
+      ) {
+        throw new Error("shared_delete_relationships_remain");
+      }
+
+      await window.LubaNoteSharingNotes
+        ?.obnovZeServeru?.({
+          tichy: true,
+          vykreslit: false
+        });
+
+      if (
+        window.LubaNoteSharingNotes
+          ?.jeVlastniSdilenaPoznamka?.(noteId) === true
+      ) {
+        throw new Error("shared_delete_still_classified_as_shared");
+      }
+
+      /*
+       * Po Shared -> Private načteme přesnou aktuální serverovou revizi.
+       * Shared save se záměrně nepromítá do private sync meta, takže
+       * stará lokální revize by mohla způsobit delete_revision_mismatch.
+       */
+      const { data: privateRows, error: privateError } =
+        await klient.rpc(
+          "lubanote_get_notes_by_ids_safe",
+          { p_note_ids: [noteId] }
+        );
+
+      if (privateError) {
+        throw privateError;
+      }
+
+      const privateRow = (Array.isArray(privateRows) ? privateRows : [])
+        .find((row) => String(row?.id || row?.note_id || "") === String(noteId));
+
+      const expectedRevision = Number(privateRow?.revision);
+
+      if (
+        !privateRow ||
+        privateRow?.deleted_at ||
+        !Number.isFinite(expectedRevision)
+      ) {
+        throw new Error("shared_delete_private_revision_unavailable");
+      }
+
+      return {
+        handled: true,
+        ok: true,
+        noteId,
+        expectedRevision
+      };
+    } catch (error) {
+      console.error(
+        "Sdílení: příprava Shared poznámky na trvalé smazání selhala:",
+        error
+      );
+
+      zobrazZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        "Sdílení se nepodařilo bezpečně ukončit. Poznámka zůstala v Koši."
+      );
+
+      return {
+        handled: !!note && note.__lubanoteSharedRole === "owner",
+        ok: false,
+        reason:
+          error?.message || "shared_delete_detach_failed"
+      };
+    }
+  }
+
   async function presunVlastniSdilenouPoznamkuDoKose(noteId) {
     return await ulozVlastniSharedZmenuBezEditoru(
       noteId,
@@ -945,6 +1225,7 @@
     uvolniSdilenyEditor,
     presunVlastniSdilenouPoznamkuDoKose,
     obnovVlastniSdilenouPoznamkuZKose,
+    odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim,
     jeAktivni: () => !!aktivniSession,
     ziskejSession: () => aktivniSession
       ? { ...aktivniSession }

@@ -2032,18 +2032,6 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
     return false;
   }
 
-  if (
-    !tajne &&
-    window.LubaNoteSharingNotes
-      ?.jeVlastniSdilenaPoznamka?.(noteId)
-  ) {
-    window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
-      "Sdílená poznámka",
-      "Trvalé smazání sdílené poznámky ještě není zapojené do serverové shared vrstvy. Poznámka zůstává bezpečně v Koši místo toho, aby se po syncu znovu objevila."
-    );
-    return false;
-  }
-
   const zdroj = tajne
     ? [...desifrovaneTajnePoznamky]
     : nactiBeznePoznamkyZUloziste();
@@ -2054,6 +2042,48 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
 
   if (!poznamka) {
     return false;
+  }
+
+  let bylaVlastniShared = false;
+  let sharedExpectedRevision = null;
+
+  /*
+   * PATCH 668B – vlastní Shared poznámku nejdřív bezpečně odpojíme
+   * od invitations/collaboratorů. Teprve potom smí pokračovat stejnou
+   * tombstone cestou jako každá jiná běžná poznámka.
+   */
+  if (
+    !tajne &&
+    window.LubaNoteSharingNotes
+      ?.jeVlastniSdilenaPoznamka?.(noteId)
+  ) {
+    if (
+      typeof window.LubaNoteSharedEditor
+        ?.odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim !== "function" ||
+      typeof markNoteDeletedInSupabase !== "function"
+    ) {
+      window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
+        "Sdílená poznámka",
+        "Trvalé smazání sdílené poznámky není připravené. Poznámka zůstala v Koši."
+      );
+      return false;
+    }
+
+    const sharedVysledek =
+      await window.LubaNoteSharedEditor
+        .odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim(
+          noteId
+        );
+
+    if (sharedVysledek?.ok !== true) {
+      return false;
+    }
+
+    bylaVlastniShared = true;
+    sharedExpectedRevision =
+      Number.isFinite(Number(sharedVysledek.expectedRevision))
+        ? Number(sharedVysledek.expectedRevision)
+        : null;
   }
 
   zvysReviziLokalnichZmenPoznamek();
@@ -2079,7 +2109,21 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
   if (
     typeof markNoteDeletedInSupabase === "function"
   ) {
-    await markNoteDeletedInSupabase(poznamka);
+    await markNoteDeletedInSupabase(
+      poznamka,
+      sharedExpectedRevision
+    );
+  }
+
+  if (bylaVlastniShared) {
+    /* Reuse 653H purge: smaže note_key z RAM a lokální Shared media cache. */
+    window.dispatchEvent(
+      new CustomEvent("lubanote:shared-access-removed", {
+        detail: {
+          noteIds: [noteId]
+        }
+      })
+    );
   }
 
   return true;
@@ -2087,20 +2131,18 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
 
 
 /* ==================================================
-   PATCH 668 – KOŠ / HROMADNÉ TRVALÉ SMAZÁNÍ
+   PATCH 668B – KOŠ / HROMADNÉ TRVALÉ SMAZÁNÍ + SHARED
    --------------------------------------------------
-   trash.js od patch 360 volá smazPoznamkyZKoseTrvale(), ale tato
-   dávková storage funkce se při pozdějších sync úpravách ztratila.
-   Jednotlivé trvalé smazání proto dál fungovalo, zatímco potvrzení
-   „Trvale smazat (N)“ skončilo na chybějící funkci.
+   668 obnovil ztracenou dávkovou storage funkci. 668B doplňuje
+   správný owner-Shared lifecycle: před tombstonem zruší pending
+   invitations, revoke-ne collaboratory, ověří Shared -> Private a
+   do delete fronty vloží přesnou aktuální serverovou revision.
 
-   Bezpečnostní pravidla původního bulk Koše:
-   - pracovat pouze s právě zvoleným (Normal / Secret) košem,
-   - lokální storage přepsat jen jednou,
-   - cloud tombstony zařadit dávkově jedním zápisem fronty,
-   - LOCAL poznámky do cloud tombstone fronty vůbec neposílat,
-   - při selhání tombstone fronty lokální smazání vrátit zpět,
-   - Shared permanent delete dál neobcházet.
+   Důležité:
+   - žádný nový serverový hard-delete RPC se nevymýšlí,
+   - používáme stejný bezpečný tombstone model jako zbytek LubaNote,
+   - LOCAL poznámky se do cloudu neposílají,
+   - při nejistotě se obsah z Koše nemaže.
 ================================================== */
 async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
   const ids = Array.from(
@@ -2153,22 +2195,23 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     };
   }
 
+  const cloudMazani = mazane.filter(
+    (task) => !jePoznamkaPouzeLokalni(task)
+  );
+  const zaradHromadne =
+    window.LubaNoteSync?.zaradSmazaniHromadne;
+
   /*
-   * Shared permanent delete má vlastní serverovou vrstvu. Stejně jako
-   * jednotlivé smazání ho bulk akce nesmí obejít ani částečně.
+   * U cloudových položek musí být persistentní tombstone fronta
+   * dostupná ještě PŘED případným revoke Shared vztahů.
    */
   if (
-    !tajne &&
-    mazane.some((task) =>
-      window.LubaNoteSharingNotes
-        ?.jeVlastniSdilenaPoznamka?.(task.id)
-    )
+    cloudMazani.length > 0 &&
+    typeof zaradHromadne !== "function"
   ) {
-    window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
-      "Sdílená poznámka",
-      "Trvalé smazání sdílené poznámky ještě není zapojené do serverové shared vrstvy. Poznámka zůstává bezpečně v Koši místo toho, aby se po syncu znovu objevila."
+    console.error(
+      "Chybí hromadná tombstone fronta LubaNoteSync."
     );
-
     return {
       lokalneUlozeno: false,
       pocet: 0,
@@ -2176,14 +2219,66 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     };
   }
 
+  const sharedMazani = !tajne
+    ? mazane.filter((task) =>
+        window.LubaNoteSharingNotes
+          ?.jeVlastniSdilenaPoznamka?.(task.id)
+      )
+    : [];
+
+  const sharedExpectedRevisionById = {};
+
+  if (sharedMazani.length > 0) {
+    const odpojShared =
+      window.LubaNoteSharedEditor
+        ?.odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim;
+
+    if (typeof odpojShared !== "function") {
+      window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
+        "Sdílená poznámka",
+        "Trvalé smazání sdílených poznámek není připravené. Položky zůstaly v Koši."
+      );
+      return {
+        lokalneUlozeno: false,
+        pocet: 0,
+        tombstones: 0
+      };
+    }
+
+    /*
+     * Fáze 1: nejdřív bezpečně odpojíme všechny Shared vztahy.
+     * Obsah zatím z Koše nemažeme. Když některý revoke selže,
+     * operace se zastaví bez ztráty poznámek.
+     */
+    for (const task of sharedMazani) {
+      const vysledek = await odpojShared(task.id);
+
+      if (vysledek?.ok !== true) {
+        return {
+          lokalneUlozeno: false,
+          pocet: 0,
+          tombstones: 0
+        };
+      }
+
+      if (!Number.isFinite(Number(vysledek.expectedRevision))) {
+        return {
+          lokalneUlozeno: false,
+          pocet: 0,
+          tombstones: 0
+        };
+      }
+
+      sharedExpectedRevisionById[task.id] =
+        Number(vysledek.expectedRevision);
+    }
+  }
+
   const mazanaId = new Set(
     mazane.map((task) => String(task.id))
   );
   const zbyvajici = zdroj.filter(
     (task) => !mazanaId.has(String(task?.id || ""))
-  );
-  const cloudMazani = mazane.filter(
-    (task) => !jePoznamkaPouzeLokalni(task)
   );
 
   let lokalneUlozeno = false;
@@ -2215,19 +2310,11 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     let tombstones = 0;
 
     if (cloudMazani.length > 0) {
-      const zaradHromadne =
-        window.LubaNoteSync?.zaradSmazaniHromadne;
-
-      if (typeof zaradHromadne !== "function") {
-        throw new Error(
-          "Chybí hromadná tombstone fronta LubaNoteSync."
-        );
-      }
-
       tombstones = Number(
         zaradHromadne(
           cloudMazani,
-          new Date().toISOString()
+          new Date().toISOString(),
+          sharedExpectedRevisionById
         )
       ) || 0;
 
@@ -2236,6 +2323,16 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
           `Hromadná tombstone fronta přijala ${tombstones}/${cloudMazani.length} položek.`
         );
       }
+    }
+
+    if (sharedMazani.length > 0) {
+      window.dispatchEvent(
+        new CustomEvent("lubanote:shared-access-removed", {
+          detail: {
+            noteIds: sharedMazani.map((task) => task.id)
+          }
+        })
+      );
     }
 
     return {
@@ -2250,9 +2347,10 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     );
 
     /*
-     * Dávková tombstone fronta zapisuje všechny položky najednou.
-     * Když její zápis selže, nesmí lokálně zmizet nic, co by cloud při
-     * dalším syncu mohl znovu oživit. Vrátíme tedy původní snapshot.
+     * Tombstone batch se zapisuje jedním persistentním zápisem. Když
+     * selže před potvrzením, vrátíme lokální snapshot. Případný již
+     * provedený Shared revoke se z bezpečnostních důvodů nevrací –
+     * pouze zúžil přístup a poznámka dál zůstává v Koši jako Private.
      */
     try {
       if (lokalneUlozeno !== false) {
