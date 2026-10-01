@@ -4339,6 +4339,71 @@ async function openTaskEditorById(taskId) {
   }
   
   const currentTask = currentTasks[index];
+
+  /*
+   * PATCH 664 – SHARED MEDIA PO REVOKE POSLEDNIHO SPOLUPRACOVNIKA.
+   * -----------------------------------------------------------------
+   * Po odebrani posledniho collaboratora se owner poznamka znovu otevira
+   * beznym private editorem. Jeji posledni cloudovy snapshot ale muze stale
+   * obsahovat bezpecnou Shared E2E referenci:
+   *
+   *   <img data-lubanote-shared-media-ref="UUID">
+   *
+   * Tato cloudova podoba zamerne nema src. Core V2 ji proto spravne odmita
+   * jako "obrazek bez zdroje". Pred vstupem do private editoru pouzijeme
+   * pouze pro takovy obsah existujici Shared Media Crypto rehydrataci.
+   * Core V2 ani jeho bezpecnostni kontrolu tim neuvolnujeme.
+   */
+  const maPozustatekSharedMedia =
+    String(currentTask.richContent || "")
+      .includes("data-lubanote-shared-media-ref") ||
+    (Array.isArray(currentTask.todos) &&
+      currentTask.todos.some((todo) =>
+        String(todo?.html || "")
+          .includes("data-lubanote-shared-media-ref")
+      ));
+
+  let currentTaskProEditor = currentTask;
+
+  if (!jePouzeLokalni && maPozustatekSharedMedia) {
+    try {
+      const desifrujSharedMedia =
+        window.LubaNoteSharedMediaCrypto
+          ?.desifrujSdilenouPoznamkuZCloudu;
+
+      if (typeof desifrujSharedMedia !== "function") {
+        throw new Error("shared_media_crypto_unavailable");
+      }
+
+      currentTaskProEditor =
+        await desifrujSharedMedia(currentTask);
+
+      if (!currentTaskProEditor) {
+        throw new Error("shared_media_rehydrate_failed");
+      }
+
+      window.LubaNoteStartupDiag?.zapis?.(
+        "SHARED MEDIA REHYDRATE PRIVATE",
+        `note=${currentTask.id}`
+      );
+    } catch (error) {
+      console.warn(
+        "Shared E2E: fotografii z dříve sdílené poznámky se nepodařilo připravit pro private editor.",
+        error
+      );
+
+      if (!jePouzeLokalni) {
+        window.LubaNoteEditorHandoff
+          ?.uvolniEditorPoznamky?.(currentTask.id);
+      }
+
+      zobrazZpravuAplikace(
+        "Editor Core V2",
+        "Šifrovanou fotografii z dříve sdílené poznámky se nepodařilo odemknout. Data nebyla změněna."
+      );
+      return false;
+    }
+  }
   
   reminderEnabled = currentTask.reminder === true;
   plannedEnabled =
@@ -4409,10 +4474,10 @@ async function openTaskEditorById(taskId) {
 
   const otevrenoCore = otevriObsahCoreV2({
     noteId: currentTask.id,
-    richContent: currentTask.richContent || "",
-    note: currentTask.note || "",
-    todos: currentTask.todos,
-    plannedItems: currentTask.plannedItems
+    richContent: currentTaskProEditor.richContent || "",
+    note: currentTaskProEditor.note || "",
+    todos: currentTaskProEditor.todos,
+    plannedItems: currentTaskProEditor.plannedItems
   });
 
   if (!otevrenoCore) {
