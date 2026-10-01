@@ -2085,6 +2085,199 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
   return true;
 }
 
+
+/* ==================================================
+   PATCH 668 – KOŠ / HROMADNÉ TRVALÉ SMAZÁNÍ
+   --------------------------------------------------
+   trash.js od patch 360 volá smazPoznamkyZKoseTrvale(), ale tato
+   dávková storage funkce se při pozdějších sync úpravách ztratila.
+   Jednotlivé trvalé smazání proto dál fungovalo, zatímco potvrzení
+   „Trvale smazat (N)“ skončilo na chybějící funkci.
+
+   Bezpečnostní pravidla původního bulk Koše:
+   - pracovat pouze s právě zvoleným (Normal / Secret) košem,
+   - lokální storage přepsat jen jednou,
+   - cloud tombstony zařadit dávkově jedním zápisem fronty,
+   - LOCAL poznámky do cloud tombstone fronty vůbec neposílat,
+   - při selhání tombstone fronty lokální smazání vrátit zpět,
+   - Shared permanent delete dál neobcházet.
+================================================== */
+async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(noteIds) ? noteIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (ids.length === 0) {
+    return {
+      lokalneUlozeno: false,
+      pocet: 0,
+      tombstones: 0
+    };
+  }
+
+  if (
+    tajne &&
+    (
+      typeof tajnyRezimOdemceny === "undefined" ||
+      tajnyRezimOdemceny !== true
+    )
+  ) {
+    return {
+      lokalneUlozeno: false,
+      pocet: 0,
+      tombstones: 0
+    };
+  }
+
+  const zdroj = tajne
+    ? [...desifrovaneTajnePoznamky]
+    : nactiBeznePoznamkyZUloziste();
+
+  const idSet = new Set(ids);
+  const mazane = zdroj.filter(
+    (task) =>
+      task?.id &&
+      idSet.has(String(task.id)) &&
+      jePoznamkaVKosi(task)
+  );
+
+  if (mazane.length === 0) {
+    return {
+      lokalneUlozeno: false,
+      pocet: 0,
+      tombstones: 0
+    };
+  }
+
+  /*
+   * Shared permanent delete má vlastní serverovou vrstvu. Stejně jako
+   * jednotlivé smazání ho bulk akce nesmí obejít ani částečně.
+   */
+  if (
+    !tajne &&
+    mazane.some((task) =>
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(task.id)
+    )
+  ) {
+    window.LubaNoteSharedEditorHost?.zobrazZpravu?.(
+      "Sdílená poznámka",
+      "Trvalé smazání sdílené poznámky ještě není zapojené do serverové shared vrstvy. Poznámka zůstává bezpečně v Koši místo toho, aby se po syncu znovu objevila."
+    );
+
+    return {
+      lokalneUlozeno: false,
+      pocet: 0,
+      tombstones: 0
+    };
+  }
+
+  const mazanaId = new Set(
+    mazane.map((task) => String(task.id))
+  );
+  const zbyvajici = zdroj.filter(
+    (task) => !mazanaId.has(String(task?.id || ""))
+  );
+  const cloudMazani = mazane.filter(
+    (task) => !jePoznamkaPouzeLokalni(task)
+  );
+
+  let lokalneUlozeno = false;
+
+  try {
+    zvysReviziLokalnichZmenPoznamek();
+
+    if (tajne) {
+      nastavDesifrovaneTajnePoznamky(zbyvajici);
+      lokalneUlozeno =
+        await ulozTajnePoznamkySifrovaneHned(zbyvajici);
+    } else {
+      lokalneUlozeno =
+        await ulozBeznePoznamkyPrimo(zbyvajici);
+    }
+
+    if (lokalneUlozeno === false) {
+      if (tajne) {
+        nastavDesifrovaneTajnePoznamky(zdroj);
+      }
+
+      return {
+        lokalneUlozeno: false,
+        pocet: 0,
+        tombstones: 0
+      };
+    }
+
+    let tombstones = 0;
+
+    if (cloudMazani.length > 0) {
+      const zaradHromadne =
+        window.LubaNoteSync?.zaradSmazaniHromadne;
+
+      if (typeof zaradHromadne !== "function") {
+        throw new Error(
+          "Chybí hromadná tombstone fronta LubaNoteSync."
+        );
+      }
+
+      tombstones = Number(
+        zaradHromadne(
+          cloudMazani,
+          new Date().toISOString()
+        )
+      ) || 0;
+
+      if (tombstones !== cloudMazani.length) {
+        throw new Error(
+          `Hromadná tombstone fronta přijala ${tombstones}/${cloudMazani.length} položek.`
+        );
+      }
+    }
+
+    return {
+      lokalneUlozeno: true,
+      pocet: mazane.length,
+      tombstones
+    };
+  } catch (error) {
+    console.error(
+      "Hromadné trvalé smazání z Koše selhalo, vracím lokální stav:",
+      error
+    );
+
+    /*
+     * Dávková tombstone fronta zapisuje všechny položky najednou.
+     * Když její zápis selže, nesmí lokálně zmizet nic, co by cloud při
+     * dalším syncu mohl znovu oživit. Vrátíme tedy původní snapshot.
+     */
+    try {
+      if (lokalneUlozeno !== false) {
+        if (tajne) {
+          nastavDesifrovaneTajnePoznamky(zdroj);
+          await ulozTajnePoznamkySifrovaneHned(zdroj);
+        } else {
+          await ulozBeznePoznamkyPrimo(zdroj);
+        }
+      }
+    } catch (rollbackError) {
+      console.error(
+        "Rollback hromadného mazání Koše selhal:",
+        rollbackError
+      );
+    }
+
+    return {
+      lokalneUlozeno: false,
+      pocet: 0,
+      tombstones: 0
+    };
+  }
+}
+
 async function uklidPoznamkyVKosiPo30Dnech() {
   const LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
   const hranice = Date.now() - LIMIT_MS;
