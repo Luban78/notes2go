@@ -1270,7 +1270,7 @@
   }
 
   /* ==========================================================
-     PATCH 596 – TITLE CLIPBOARD POPUP (APK + LubaKeyboard)
+     PATCH 596/666 – TITLE CLIPBOARD POPUP (mobil + LubaKeyboard)
      ----------------------------------------------------------
      Debug 595 prokázal, že u #modalTitle nic nevolá preventDefault():
      selectstart, selectionchange i contextmenu proběhnou a WebView vytvoří
@@ -1408,9 +1408,11 @@
   function otevriTitleClipboardPopup(event) {
     const title = event.target?.closest?.("#modalTitle");
     if (!title || ziskejZdrojKlavesnice() === "system") return false;
-    /* Tohle je cílený APK fallback. PWA/desktop necháváme jejich nativnímu
-       výběru a neměníme tam contextmenu. */
-    if (!document.body?.classList.contains("nativeApp")) return false;
+    /* PATCH 666 – stejné LubaNote schránkové menu používáme i v mobilní
+       PWA/browser verzi, pokud je aktivní LubaKeyboard. Modul je už sám
+       omezený na JE_MOBILNI, takže desktopový nativní selection tím neměníme.
+       V APK se čtení schránky dál řeší přednostně Capacitor pluginem; na webu
+       zůstávají zachována bezpečnostní pravidla prohlížeče pro externí schránku. */
 
     const state = ziskejVyberNazvu();
     if (!state) return false;

@@ -6338,6 +6338,15 @@
       return vlozProstyTextNaVyber(prostyText, vyber);
     };
 
+    /* PATCH 666 – pokud schránka obsahuje opravdu jen prostý text, není co
+       vybírat. Jediná volba „Prostý text“ se proto nevykresluje a obsah se
+       vloží rovnou. Panel zůstává jen tam, kde existují alespoň dvě smysluplné
+       možnosti (HTML nebo Markdown). */
+    if (!maHtml && !maMarkdown) {
+      provedVolbu("plain");
+      return true;
+    }
+
     /* PATCH 663K – mobilní CoreV2 selection menu dostává vlastní 3. panel,
        ale SAMOTNÉ vložení zůstává přesně v této už ověřené Core closure.
        Tím neukládáme výběr ani paste callback do nové modelové cesty. */

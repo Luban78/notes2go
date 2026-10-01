@@ -276,6 +276,11 @@
     if (jeDesktopSelection || !aktivni || !selectionMenu || selectionMenu.dataset.lnV2Owner !== "1") return false;
     if (typeof poVyberu !== "function") return false;
 
+    /* PATCH 666 – třetí paste panel je volba, ne potvrzovací krok. Pokud není
+       HTML ani Markdown, existoval by v něm jen „Prostý text“, takže se
+       vůbec neotvírá. Core v takovém případě vloží plain text rovnou. */
+    if (!maHtml && !maMarkdown) return false;
+
     zajistiV2PastePanel();
     if (!v2PastePanel) return false;
 
