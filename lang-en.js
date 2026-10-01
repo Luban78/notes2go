@@ -551,7 +551,15 @@ window.LubaNoteLanguagePacks.push({
     "trash.clearSelection": "Clear selection",
     "trash.deleteSelected": "Delete forever ({count})",
     "trash.deleteManyNormalConfirm": "Permanently delete {count} items from normal Trash? This action cannot be undone.",
-    "trash.deleteManySecretConfirm": "Permanently delete {count} items from Secret Trash? This action cannot be undone."
+    "trash.deleteManySecretConfirm": "Permanently delete {count} items from Secret Trash? This action cannot be undone.",
+    "trash.bulkDeletePreparing": "Preparing deletion…",
+    "trash.bulkDeleting": "Deleting…",
+    "trash.bulkDeleteProgress": "Deleting items… {done} / {total}",
+    "trash.bulkDeleteSyncing": "Syncing changes…",
+    "trash.bulkDeleteDoneAction": "Done",
+    "trash.bulkDeletePending": "Deleted on this device. Sync will finish automatically.",
+    "trash.bulkDeleteOffline": "Deleted on this device. Sync will run when you are back online.",
+    "trash.bulkDeleteFailed": "Deletion could not be completed safely. The items stayed in Trash."
   },
 
   texty: {

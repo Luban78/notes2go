@@ -557,7 +557,15 @@ window.LubaNoteLanguagePacks.push({
     "trash.clearSelection": "Zrušit označení",
     "trash.deleteSelected": "Trvale smazat ({count})",
     "trash.deleteManyNormalConfirm": "Opravdu chceš trvale smazat {count} položek z normálního koše? Tuto akci nepůjde vrátit.",
-    "trash.deleteManySecretConfirm": "Opravdu chceš trvale smazat {count} položek z tajného koše? Tuto akci nepůjde vrátit."
+    "trash.deleteManySecretConfirm": "Opravdu chceš trvale smazat {count} položek z tajného koše? Tuto akci nepůjde vrátit.",
+    "trash.bulkDeletePreparing": "Připravuji mazání…",
+    "trash.bulkDeleting": "Mažu…",
+    "trash.bulkDeleteProgress": "Mažu položky… {done} / {total}",
+    "trash.bulkDeleteSyncing": "Synchronizuji změny…",
+    "trash.bulkDeleteDoneAction": "Hotovo",
+    "trash.bulkDeletePending": "Smazáno v zařízení. Synchronizace se dokončí automaticky.",
+    "trash.bulkDeleteOffline": "Smazáno v zařízení. Synchronizace proběhne po připojení k internetu.",
+    "trash.bulkDeleteFailed": "Smazání se nepodařilo bezpečně dokončit. Položky zůstaly v Koši."
   },
 
   /*

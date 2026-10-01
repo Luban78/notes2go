@@ -519,6 +519,44 @@
     }
   }
 
+  function pockej(ms) {
+    return new Promise((resolve) =>
+      setTimeout(resolve, Math.max(0, Number(ms) || 0))
+    );
+  }
+
+  function nastavPrubehHromadnehoMazani(hotovo, celkem) {
+    if (!trashConfirmText) {
+      return;
+    }
+
+    trashConfirmText.textContent = t(
+      "trash.bulkDeleteProgress",
+      "Mažu položky… {done} / {total}",
+      { done: hotovo, total: celkem }
+    );
+  }
+
+  function nastavTextMazani(text) {
+    if (trashConfirmDeleteText) {
+      trashConfirmDeleteText.textContent = text;
+    }
+  }
+
+  function obnovTlacitkaPotvrzeni() {
+    if (trashConfirmCancel) {
+      trashConfirmCancel.disabled = false;
+    }
+
+    if (trashConfirmDelete) {
+      trashConfirmDelete.disabled = false;
+    }
+
+    nastavTextMazani(
+      t("trash.deleteForever", "Smazat trvale")
+    );
+  }
+
   function otevriPotvrzeniTrvalehoSmazani(
     ids,
     hromadne
@@ -612,10 +650,24 @@
     potvrzujeHromadneSmazani = false;
     trashConfirmDelete.disabled = true;
 
+    if (hromadne && trashConfirmCancel) {
+      trashConfirmCancel.disabled = true;
+    }
+
     try {
       let uspesne = false;
 
       if (hromadne) {
+        const celkemPozadovano = ids.length;
+
+        trashConfirmText.textContent = t(
+          "trash.bulkDeletePreparing",
+          "Připravuji mazání…"
+        );
+        nastavTextMazani(
+          t("trash.bulkDeleting", "Mažu…")
+        );
+
         const vysledek =
           await smazPoznamkyZKoseTrvale(
             ids,
@@ -626,12 +678,97 @@
           vysledek?.lokalneUlozeno &&
           vysledek?.pocet > 0
         );
-      } else {
-        uspesne = await smazPoznamkuZKoseTrvale(
-          ids[0],
-          zobrazenTajnyKos
+
+        if (!uspesne) {
+          /* Umožni bezpečný retry stejné dávky; ID jsme na začátku
+             handleru záměrně vyčistili kvůli dvojkliku. */
+          idProTrvaleSmazani = [...ids];
+          potvrzujeHromadneSmazani = true;
+
+          trashConfirmText.textContent = t(
+            "trash.bulkDeleteFailed",
+            "Smazání se nepodařilo bezpečně dokončit. Položky zůstaly v Koši."
+          );
+          obnovTlacitkaPotvrzeni();
+          return;
+        }
+
+        const celkem = Number(vysledek.pocet) || celkemPozadovano;
+        const cloudIds = Array.isArray(vysledek.cloudIds)
+          ? vysledek.cloudIds.map((id) => String(id))
+          : [];
+        const lokalniPocet = Math.max(
+          0,
+          Number(vysledek.lokalniPocet) || (celkem - cloudIds.length)
         );
+
+        nastavPrubehHromadnehoMazani(
+          lokalniPocet,
+          celkem
+        );
+
+        let syncOk = cloudIds.length === 0;
+
+        if (cloudIds.length > 0) {
+          const synchronizuj =
+            window.LubaNoteSync?.synchronizujHromadneSmazaniTed;
+
+          if (typeof synchronizuj === "function" && navigator.onLine) {
+            syncOk = await synchronizuj(
+              cloudIds,
+              (detail = {}) => {
+                if (detail.stav === "saved") {
+                  nastavPrubehHromadnehoMazani(
+                    Math.min(
+                      celkem,
+                      lokalniPocet + (Number(detail.hotovo) || 0)
+                    ),
+                    celkem
+                  );
+                  return;
+                }
+
+                if (detail.stav === "confirming") {
+                  trashConfirmText.textContent = t(
+                    "trash.bulkDeleteSyncing",
+                    "Synchronizuji změny…"
+                  );
+                }
+              }
+            );
+          }
+        }
+
+        vybranaId.clear();
+        await poZmeneKose({ synchronizovat: false });
+
+        if (syncOk) {
+          nastavPrubehHromadnehoMazani(celkem, celkem);
+          nastavTextMazani(t("trash.bulkDeleteDoneAction", "Hotovo"));
+          await pockej(550);
+        } else {
+          trashConfirmText.textContent = navigator.onLine
+            ? t(
+                "trash.bulkDeletePending",
+                "Smazáno v zařízení. Synchronizace se dokončí automaticky."
+              )
+            : t(
+                "trash.bulkDeleteOffline",
+                "Smazáno v zařízení. Synchronizace proběhne po připojení k internetu."
+              );
+          nastavTextMazani(t("trash.bulkDeleteDoneAction", "Hotovo"));
+          await pockej(900);
+        }
+
+        trashConfirmModal.hidden = true;
+        obnovTlacitkaPotvrzeni();
+        return;
       }
+
+      uspesne = await smazPoznamkuZKoseTrvale(
+        ids[0],
+        zobrazenTajnyKos
+      );
 
       if (uspesne) {
         vybranaId.clear();
@@ -639,7 +776,9 @@
         await poZmeneKose();
       }
     } finally {
-      trashConfirmDelete.disabled = false;
+      if (!hromadne || trashConfirmModal.hidden) {
+        obnovTlacitkaPotvrzeni();
+      }
     }
   });
 

@@ -1566,7 +1566,63 @@ function pridejCekajiciSmazaniHromadne(
   });
 
   ulozCekajiciSmazani(Array.from(mapa.values()));
+
+  /* PATCH 668C – bulk delete musí stejně jako jednotlivé smazání
+     okamžitě označit targeted dluh a naplánovat jeho odeslání.
+     Dříve se batch pouze uložil do persistentní fronty a mohl čekat
+     až na další foreground/resume událost. */
+  oznacLokalniZmenuCekajiciNaSync();
+
+  if (navigator.onLine) {
+    naplanujSynchronizaciPoLokalniZmene(120);
+  }
+
   return seznam.length;
+}
+
+/* PATCH 668C – transientní pozorovatel průběhu jednoho bulk delete.
+   Není persistentní a nemění sync protokol; pouze hlásí UI, kolik
+   konkrétních tombstonů už server skutečně přijal. */
+let aktivniPrubehHromadnehoSmazani = null;
+
+function oznamPrubehHromadnehoSmazani(noteId) {
+  const stav = aktivniPrubehHromadnehoSmazani;
+  const id = String(noteId || "");
+
+  if (!stav || !stav.ids.has(id) || stav.hotova.has(id)) {
+    return;
+  }
+
+  stav.hotova.add(id);
+
+  try {
+    stav.onProgress?.({
+      stav: "saved",
+      hotovo: stav.hotova.size,
+      celkem: stav.ids.size,
+      noteId: id
+    });
+  } catch (error) {
+    console.warn("Koš: progress callback selhal:", error);
+  }
+}
+
+function oznamStavHromadnehoSmazani(novyStav) {
+  const stav = aktivniPrubehHromadnehoSmazani;
+
+  if (!stav) {
+    return;
+  }
+
+  try {
+    stav.onProgress?.({
+      stav: novyStav,
+      hotovo: stav.hotova.size,
+      celkem: stav.ids.size
+    });
+  } catch (error) {
+    console.warn("Koš: progress callback selhal:", error);
+  }
 }
 
 function odeberCekajiciSmazani(noteId) {
@@ -1608,6 +1664,7 @@ async function odesliCekajiciSmazaniDoSupabase() {
         String(zaznam.id),
         Number(zaznam.uploadedRevision)
       );
+      oznamPrubehHromadnehoSmazani(zaznam.id);
     }
   }
 
@@ -1728,6 +1785,12 @@ async function odesliCekajiciSmazaniDoSupabase() {
       "V2",
       `TARGET DELETE SAVED | id=${zaznam.id} rev=${revize}`
     );
+
+    oznamPrubehHromadnehoSmazani(zaznam.id);
+  }
+
+  if (aktivniPrubehHromadnehoSmazani) {
+    oznamStavHromadnehoSmazani("confirming");
   }
 
   return (
@@ -9533,6 +9596,90 @@ async function synchronizujPoznamkyTed(
 }
 
 
+/* PATCH 668C – explicitní potvrzení právě spuštěného bulk delete.
+   Používá existující targeted V2 worker; žádný nový síťový protokol,
+   snapshot ani polling nepřidává. UI tak může zůstat na modalu do
+   skutečného TARGET CONFIRMED místo čekání na resume aplikace. */
+async function synchronizujHromadneSmazaniTed(
+  noteIds,
+  onProgress = null
+) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(noteIds) ? noteIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (ids.length === 0) {
+    return true;
+  }
+
+  if (!navigator.onLine) {
+    try {
+      onProgress?.({ stav: "pending", hotovo: 0, celkem: ids.length });
+    } catch (_) {}
+    return false;
+  }
+
+  clearTimeout(casovacSynchronizacePoLokalniZmene);
+  casovacSynchronizacePoLokalniZmene = null;
+
+  const predchoziPozorovatel = aktivniPrubehHromadnehoSmazani;
+  const mojeIds = new Set(ids);
+
+  aktivniPrubehHromadnehoSmazani = {
+    ids: mojeIds,
+    hotova: new Set(),
+    onProgress
+  };
+
+  try {
+    /* Když byl některý tombstone odeslán těsně před převzetím UI,
+       dopočítáme ho z persistentní fronty a progress nezačne znovu 0. */
+    for (const zaznam of nactiCekajiciSmazani()) {
+      if (
+        mojeIds.has(String(zaznam?.id || "")) &&
+        maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam)
+      ) {
+        oznamPrubehHromadnehoSmazani(zaznam.id);
+      }
+    }
+
+    for (let pokus = 0; pokus < 3; pokus += 1) {
+      const ok = await synchronizujCekajiciLokalniZmenu();
+
+      const cekajiciIds = new Set(
+        nactiCekajiciSmazani().map((zaznam) => String(zaznam?.id || ""))
+      );
+      const blokovanaIds = new Set(
+        nactiBlokovanaCekajiciSmazani().map((zaznam) => String(zaznam?.id || ""))
+      );
+
+      const staleCeka = ids.some((id) => cekajiciIds.has(id));
+      const jeBlok = ids.some((id) => blokovanaIds.has(id));
+
+      if (ok === true && !staleCeka && !jeBlok) {
+        aktivniPrubehHromadnehoSmazani.hotova = new Set(ids);
+        oznamStavHromadnehoSmazani("confirmed");
+        return true;
+      }
+
+      if (jeBlok || !navigator.onLine) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    }
+
+    oznamStavHromadnehoSmazani("pending");
+    return false;
+  } finally {
+    aktivniPrubehHromadnehoSmazani = predchoziPozorovatel;
+  }
+}
+
 window.LubaNoteSync = {
   spustBezpecne: spustStartSyncBezpecne,
   ziskejDeviceId: getDeviceId,
@@ -9550,6 +9697,7 @@ window.LubaNoteSync = {
   ziskejCloudSyncMeta,
   zaradSmazaniHromadne:
     pridejCekajiciSmazaniHromadne,
+  synchronizujHromadneSmazaniTed,
   spustSafeBootstrap: spustSafeBootstrapV2,
   maRozpracovanySafeBootstrap: async () => {
     const user = await getCurrentUser();

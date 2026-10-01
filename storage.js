@@ -2338,7 +2338,9 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     return {
       lokalneUlozeno: true,
       pocet: mazane.length,
-      tombstones
+      tombstones,
+      cloudIds: cloudMazani.map((task) => String(task.id)),
+      lokalniPocet: mazane.length - cloudMazani.length
     };
   } catch (error) {
     console.error(
