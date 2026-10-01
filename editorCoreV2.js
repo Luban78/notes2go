@@ -6211,6 +6211,22 @@
         continue;
       }
 
+      /* PATCH 667 – Markdown task list se při volbě „Markdown → formátovaný text“
+         převádí rovnou na nativní Core V2 TODO blok. Tím `- [ ]` a `- [x]`
+         nezůstanou jen jako textová odrážka, ale jsou po vložení skutečně
+         odškrtávací. Běžné Markdown odrážky zůstávají beze změny. */
+      const markdownTodo = radek.match(/^\s*[-+*]\s+\[([ xX])\](?:\s+(.*))?$/);
+      if (markdownTodo) {
+        flushOdstavec();
+        zavriSeznam();
+        const hotovo = markdownTodo[1].toLowerCase() === "x";
+        const textTodo = markdownTodo[2] || "";
+        vystup.push(
+          `<div data-lubanote-v2-todo="true" data-completed="${hotovo ? "true" : "false"}">${markdownInlineNaHtml(textTodo)}</div>`
+        );
+        continue;
+      }
+
       const odrazka = radek.match(/^\s*[-+*]\s+(.+)$/);
       const cislo = radek.match(/^\s*\d+[.)]\s+(.+)$/);
       if (odrazka || cislo) {
@@ -6333,7 +6349,10 @@
         return vlozHtmlNaVyber(htmlText, prostyText, vyber, "vložit externí formátovaný obsah");
       }
       if (hodnota === "markdown") {
-        return vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown");
+        /* PATCH 667 – HTML vzniká výhradně naším Markdown převodníkem, který
+           uživatelský text escapuje. Interní cesta proto bezpečně zachová pouze
+           náš data-lubanote-v2-todo marker pro následný import do Core V2 modelu. */
+        return vlozHtmlNaVyber(markdownNaHtmlProPaste(prostyText), prostyText, vyber, "vložit Markdown", true);
       }
       return vlozProstyTextNaVyber(prostyText, vyber);
     };
