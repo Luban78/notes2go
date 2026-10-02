@@ -87,12 +87,13 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
-  /* PATCH 673G15 – plynulý selection scroll + Android-match vizuál.
+  /* PATCH 673G16 – plynulý selection scroll + menší Android-match úchyty + vlastní edge auto-scroll.
      Po prvním scrollu používáme vlastní zlatý CSS Highlight a vlastní LubaNote
      handles; nativní Android selection už znovu nevytváříme. Výběr proto při
      scrollu zůstává viditelný, další scroll je compositorový a po zastavení lze
-     rozsah dál upravovat vlastními úchyty. Edge auto-scroll rychlost zatím
-     záměrně neřešíme. */
+     rozsah dál upravovat vlastními úchyty. Při tažení našeho úchytu k hornímu/spodnímu
+     okraji editoru běží vlastní plynulý edge auto-scroll; nativní Android auto-scroll
+     do toho nevstupuje. */
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
@@ -2534,6 +2535,7 @@
     }
     .ln-v2-selection-handle-custom {
       position: fixed;
+      /* 44px zůstává jen neviditelná dotyková plocha. Samotný úchyt je menší. */
       width: 44px;
       height: 44px;
       z-index: 2147483200;
@@ -2543,14 +2545,14 @@
       -webkit-user-select: none;
       background: transparent;
     }
-    /* Android 16 / WebView: selection handle má cca 39 × 39 px,
-       #80CBC4 a kapkovitý tvar bez bílé obruby a bez stopky. */
+    /* 673G16 – vizuál cca jako nativní Android 16 handle. Na screenshotu byl
+       39px CSS G15 zhruba dvojnásobný; vizuál proto 22px, hitbox zůstává 44px. */
     .ln-v2-selection-handle-custom::before {
       content: "";
       position: absolute;
       top: 0;
-      width: 39px;
-      height: 39px;
+      width: 22px;
+      height: 22px;
       background: rgb(128, 203, 196);
       border: 0;
       box-shadow: none;
@@ -2564,14 +2566,14 @@
     }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"]::before {
       right: 0;
-      border-radius: 20px 0 20px 20px;
+      border-radius: 11px 0 11px 11px;
     }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"] {
       transform: translate(0, 0);
     }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"]::before {
       left: 0;
-      border-radius: 0 20px 20px 20px;
+      border-radius: 0 11px 11px 11px;
     }`;
     document.head.appendChild(styl);
   }
@@ -2726,7 +2728,93 @@
     return core()?.ulozDomRangeProSelectionMenu?.(range.cloneRange?.() || range) === true;
   }
 
+  function zastavV2HandleAutoScroll(stav, duvod = "stop") {
+    const drag = stav?.handleDrag;
+    if (!drag) return;
+    if (drag.autoRaf) {
+      cancelAnimationFrame(drag.autoRaf);
+      drag.autoRaf = 0;
+    }
+    drag.autoCas = 0;
+    if (drag.autoSmer) {
+      zapisSelectionScrollDiag("G16_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+      drag.autoSmer = 0;
+    }
+  }
+
+  function aktualizujV2HandleRangeZeSouradnic(stav, clientX, clientY) {
+    if (!stav?.handleDrag || !stav.editor) return false;
+    const rect = stav.editor.getBoundingClientRect();
+    const x = Math.max(rect.left + 2, Math.min(rect.right - 2, Number(clientX)));
+    const y = Math.max(rect.top + 2, Math.min(rect.bottom - 2, Number(clientY)));
+    const bod = domBodV2ZBodu(x, y, stav.editor);
+    if (!bod) return false;
+    const novyRange = rangeV2MeziBody(stav.handleDrag.pevnyBod, bod);
+    if (!novyRange) return false;
+    stav.range = novyRange;
+    nastavV2SelectionScrollHighlight(stav.range);
+    ulozV2VizualniRangeDoCore(stav.range);
+    zobrazV2SelectionHandles(stav.range);
+    return true;
+  }
+
+  function naplanujV2HandleAutoScroll(stav) {
+    const drag = stav?.handleDrag;
+    if (!drag || drag.autoRaf) return;
+
+    const krok = (cas) => {
+      const aktualniDrag = stav?.handleDrag;
+      if (!aktualniDrag || v2SelectionScroll !== stav || !aktivni || !stav.editor) return;
+      aktualniDrag.autoRaf = 0;
+
+      const rect = stav.editor.getBoundingClientRect();
+      const zona = Math.max(52, Math.min(78, rect.height * 0.14));
+      const y = Number(aktualniDrag.lastY);
+      let faktor = 0;
+      if (y < rect.top + zona) {
+        faktor = -Math.min(1, Math.max(0, (rect.top + zona - y) / zona));
+      } else if (y > rect.bottom - zona) {
+        faktor = Math.min(1, Math.max(0, (y - (rect.bottom - zona)) / zona));
+      }
+
+      const smer = faktor < 0 ? -1 : (faktor > 0 ? 1 : 0);
+      if (smer !== aktualniDrag.autoSmer) {
+        aktualniDrag.autoSmer = smer;
+        zapisSelectionScrollDiag(
+          "G16_HANDLE_AUTOSCROLL",
+          null,
+          `dir=${smer < 0 ? "up" : (smer > 0 ? "down" : "off")} top=${Math.round(stav.editor.scrollTop || 0)}`
+        );
+      }
+
+      if (!smer) {
+        aktualniDrag.autoCas = 0;
+        return;
+      }
+
+      const predchoziCas = aktualniDrag.autoCas || cas;
+      const dt = Math.max(0, Math.min(34, cas - predchoziCas));
+      aktualniDrag.autoCas = cas;
+
+      /* Záměrně konzervativní základ. Rychlost budeme ladit až po potvrzení,
+         že edge-scroll s našimi úchyty vůbec funguje správně. */
+      const pxZaSekundu = 220;
+      const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
+      const pred = Number(stav.editor.scrollTop || 0);
+      const dalsi = Math.max(0, Math.min(maximum, pred + faktor * pxZaSekundu * (dt / 1000)));
+      if (Math.abs(dalsi - pred) > 0.05) {
+        stav.editor.scrollTop = dalsi;
+        aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY);
+      }
+
+      aktualniDrag.autoRaf = requestAnimationFrame(krok);
+    };
+
+    drag.autoRaf = requestAnimationFrame(krok);
+  }
+
   function zrusV2SelectionScrollStav(stav = v2SelectionScroll) {
+    zastavV2HandleAutoScroll(stav, "state-reset");
     if (stav?.obnovTimer) {
       clearTimeout(stav.obnovTimer);
       stav.obnovTimer = null;
@@ -2806,10 +2894,10 @@
     return true;
   }
 
-  /* 673G14 – nativní Android Selection po prvním scrollu už znovu
-     nevytváříme. Výběr drží CSS Highlight a dva vlastní LubaNote handles.
-     Díky tomu není dvojité prokreslení, další scroll zůstává compositorový
-     a po zastavení jsou k dispozici úchyty pro další rozšíření výběru. */
+  /* 673G16 – po prvním scrollu drží výběr CSS Highlight a naše LubaNote handles.
+     Běžný scroll zůstává compositorový. Vlastní handle drag má nově bezpečný
+     edge auto-scroll, protože celý pohyb i Range řídíme sami a nebojujeme s
+     nativním Android selection enginem. */
   document.addEventListener("touchstart", (event) => {
     const handle = event.target?.closest?.(`[${V2_SELECTION_HANDLE_ATTR}]`);
     if (handle && v2SelectionScroll?.range && event.touches?.length === 1) {
@@ -2823,7 +2911,16 @@
       const pevnyBod = strana === "start"
         ? { node: stav.range.endContainer, offset: stav.range.endOffset }
         : { node: stav.range.startContainer, offset: stav.range.startOffset };
-      stav.handleDrag = { touchId: dotyk.identifier, strana, pevnyBod };
+      stav.handleDrag = {
+        touchId: dotyk.identifier,
+        strana,
+        pevnyBod,
+        lastX: dotyk.clientX,
+        lastY: dotyk.clientY,
+        autoRaf: 0,
+        autoCas: 0,
+        autoSmer: 0
+      };
       stav.touchEnded = false;
       skryjV2SelectionMenu();
       potlacV2SelectionMenuDo = performance.now() + 900;
@@ -2874,16 +2971,10 @@
     if (stav.handleDrag) {
       const dotyk = Array.from(event.touches || []).find((item) => item.identifier === stav.handleDrag.touchId);
       if (!dotyk) return;
-      const bod = domBodV2ZBodu(dotyk.clientX, dotyk.clientY, stav.editor);
-      if (bod) {
-        const novyRange = rangeV2MeziBody(stav.handleDrag.pevnyBod, bod);
-        if (novyRange) {
-          stav.range = novyRange;
-          nastavV2SelectionScrollHighlight(stav.range);
-          ulozV2VizualniRangeDoCore(stav.range);
-          zobrazV2SelectionHandles(stav.range);
-        }
-      }
+      stav.handleDrag.lastX = dotyk.clientX;
+      stav.handleDrag.lastY = dotyk.clientY;
+      aktualizujV2HandleRangeZeSouradnic(stav, dotyk.clientX, dotyk.clientY);
+      naplanujV2HandleAutoScroll(stav);
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -2919,6 +3010,7 @@
       event.stopPropagation();
       ulozV2VizualniRangeDoCore(stav.range);
       const strana = stav.handleDrag.strana;
+      zastavV2HandleAutoScroll(stav, "touchend");
       stav.handleDrag = null;
       stav.touchEnded = true;
       zobrazV2VizualniSelectionPoScrollu(stav, "handle-end");
@@ -2965,6 +3057,7 @@
     const stav = v2SelectionScroll;
     if (!stav) return;
     if (stav.handleDrag) {
+      zastavV2HandleAutoScroll(stav, "touchcancel");
       stav.handleDrag = null;
       stav.touchEnded = true;
       zobrazV2VizualniSelectionPoScrollu(stav, "handle-cancel");
