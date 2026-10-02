@@ -4216,126 +4216,6 @@ function aktualizujRevisionSdilenehoEditoru(
 }
 
 
-/* PATCH 673 – jemná zpětná vazba při pomalejším otevření poznámky.
- * Zobrazuje se až po krátké prodlevě, takže rychlé otevření neproblikne.
- */
-let casovacOteviraniPoznamky = null;
-let pocetAktivnichOtevreniPoznamky = 0;
-let casZahajeniOteviraniPoznamky = 0;
-
-function zajistiIndikatorOteviraniPoznamky() {
-  let indikator = document.getElementById("noteOpeningIndicator");
-
-  if (indikator) {
-    return indikator;
-  }
-
-  indikator = document.createElement("div");
-  indikator.id = "noteOpeningIndicator";
-  indikator.className = "noteOpeningIndicator";
-  indikator.hidden = true;
-  indikator.setAttribute("role", "status");
-  indikator.setAttribute("aria-live", "polite");
-  indikator.innerHTML = '<span class="noteOpeningIndicatorSpin" aria-hidden="true">⟳</span><span>Otevírám</span>';
-  document.body.append(indikator);
-
-  return indikator;
-}
-
-function zahajIndikatorOteviraniPoznamky() {
-  if (pocetAktivnichOtevreniPoznamky === 0) {
-    casZahajeniOteviraniPoznamky = performance.now();
-  }
-
-  pocetAktivnichOtevreniPoznamky += 1;
-
-  if (casovacOteviraniPoznamky) {
-    clearTimeout(casovacOteviraniPoznamky);
-  }
-
-  casovacOteviraniPoznamky = setTimeout(() => {
-    casovacOteviraniPoznamky = null;
-
-    if (pocetAktivnichOtevreniPoznamky <= 0) {
-      return;
-    }
-
-    const indikator = zajistiIndikatorOteviraniPoznamky();
-    indikator.hidden = false;
-    requestAnimationFrame(() => {
-      indikator.classList.add("show");
-    });
-  }, 260);
-}
-
-async function zajistiViditelnyIndikatorPredNarocnymOtevrenim(poznamka) {
-  const uplynulo = performance.now() - casZahajeniOteviraniPoznamky;
-  const rich = String(poznamka?.richContent || "");
-  const plain = String(poznamka?.note || "");
-  const todos = Array.isArray(poznamka?.todos) ? poznamka.todos : [];
-  const planned = Array.isArray(poznamka?.plannedItems) ? poznamka.plannedItems : [];
-
-  let velikostTodo = 0;
-  for (const todo of todos) {
-    velikostTodo += String(todo?.text || todo?.html || "").length;
-  }
-
-  const odhadObsahu = rich.length + plain.length + velikostTodo;
-  const jeNarocnejsi =
-    uplynulo >= 220 ||
-    odhadObsahu >= 6000 ||
-    todos.length + planned.length >= 30 ||
-    rich.includes("<img");
-
-  if (!jeNarocnejsi || pocetAktivnichOtevreniPoznamky <= 0) {
-    return;
-  }
-
-  if (casovacOteviraniPoznamky) {
-    clearTimeout(casovacOteviraniPoznamky);
-    casovacOteviraniPoznamky = null;
-  }
-
-  const indikator = zajistiIndikatorOteviraniPoznamky();
-  indikator.hidden = false;
-  indikator.classList.add("show");
-
-  await new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(resolve);
-    });
-  });
-}
-
-function ukonciIndikatorOteviraniPoznamky() {
-  pocetAktivnichOtevreniPoznamky = Math.max(
-    0,
-    pocetAktivnichOtevreniPoznamky - 1
-  );
-
-  if (pocetAktivnichOtevreniPoznamky > 0) {
-    return;
-  }
-
-  if (casovacOteviraniPoznamky) {
-    clearTimeout(casovacOteviraniPoznamky);
-    casovacOteviraniPoznamky = null;
-  }
-
-  const indikator = document.getElementById("noteOpeningIndicator");
-
-  if (!indikator) {
-    return;
-  }
-
-  indikator.classList.remove("show");
-  setTimeout(() => {
-    if (pocetAktivnichOtevreniPoznamky === 0) {
-      indikator.hidden = true;
-    }
-  }, 120);
-}
-
 window.LubaNoteSharedEditorHost = {
   otevriSdilenouPoznamku:
     otevriSdilenouPoznamkuVEditoru,
@@ -4365,9 +4245,6 @@ window.LubaNoteSharedEditorHost = {
 
 
 async function openTaskEditorById(taskId) {
-  zahajIndikatorOteviraniPoznamky();
-
-  try {
   /*
    * LOCAL SCOPE 585 – lokální poznámka nesmí při pouhém otevření
    * sahat na Shared stav, Realtime ani Editor Handoff. Účet může být
@@ -4573,9 +4450,6 @@ async function openTaskEditorById(taskId) {
     currentTask.title || ""
   );
 
-  /* PATCH 673A – dlouhý synchronní Core V2 render nesmí spolknout loader. */
-  await zajistiViditelnyIndikatorPredNarocnymOtevrenim(currentTaskProEditor);
-
   editorRepeat =
     kopirujEditorRepeat(currentTask.repeat);
   
@@ -4648,9 +4522,6 @@ async function openTaskEditorById(taskId) {
   });
   
   //renderPlannedTextLinks(currentTask.id);
-  } finally {
-    ukonciIndikatorOteviraniPoznamky();
-  }
 }
 
 
