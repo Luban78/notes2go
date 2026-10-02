@@ -111,6 +111,15 @@
      compositor-friendly režimu a navíc umí přímo převzít i touchstart, který
      ještě trefí nativní Android handle. */
 
+  /* PATCH 673G22 – polish vlastního selection enginu podle APK 0.9.699:
+     1) po handle dragu držíme panel u skutečně taženého konce i přes
+        následný scroll-settle (release nad LubaKeyboard ho už nesmí odnést
+        zpět k prvnímu viditelnému řádku),
+     2) panel je nad handlem o dalších 20 px výš,
+     3) edge auto-scroll při nižší rychlosti nedělá každý frame drahé
+        getClientRects/core-save a Debug Hub neloguje každý jednotlivý
+        scroll event. Tím odstraňujeme hlavní zdroj mikrocukání. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -214,6 +223,7 @@
      Nesmí volat preventDefault, měnit Range, focus, scroll ani panel.
   ================================================== */
   let diagSelectionMoveCas = 0;
+  let diagSelectionAutoScrollCas = 0;
 
   function ziskejDiagSelectionStav(event = null) {
     try {
@@ -2853,6 +2863,8 @@
       drag.autoRaf = 0;
     }
     drag.autoCas = 0;
+    drag.autoPozice = null;
+    drag.autoRangeCas = 0;
     nastavV2SelectionHandlesAutoScrollSkryti(false);
     if (drag.autoSmer) {
       zapisSelectionScrollDiag("G21_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
@@ -2861,7 +2873,7 @@
     }
   }
 
-  function aktualizujV2HandleRangeZeSouradnic(stav, clientX, clientY) {
+  function aktualizujV2HandleRangeZeSouradnic(stav, clientX, clientY, lehkyRezim = false) {
     if (!stav?.handleDrag || !stav.editor) return false;
     const rect = stav.editor.getBoundingClientRect();
     const x = Math.max(rect.left + 2, Math.min(rect.right - 2, Number(clientX)));
@@ -2872,8 +2884,14 @@
     if (!novyRange) return false;
     stav.range = novyRange;
     nastavV2SelectionScrollHighlight(stav.range);
-    ulozV2VizualniRangeDoCore(stav.range);
-    zobrazV2SelectionHandles(stav.range);
+
+    /* 673G22 – během edge auto-scrollu jsou handles stejně skryté.
+       Nevoláme proto každý RAF getClientRects + core-save + jejich přepozicování.
+       Tyto drahé kroky provedeme až při ručním pohybu / ukončení dragu. */
+    if (!lehkyRezim) {
+      ulozV2VizualniRangeDoCore(stav.range);
+      zobrazV2SelectionHandles(stav.range);
+    }
     return true;
   }
 
@@ -2895,6 +2913,9 @@
 
       if (smer !== aktualniDrag.autoSmer) {
         aktualniDrag.autoSmer = smer;
+        aktualniDrag.autoPozice = Number(stav.editor.scrollTop || 0);
+        aktualniDrag.autoRangeCas = 0;
+        aktualniDrag.autoCas = cas;
         nastavV2SelectionHandlesAutoScrollSkryti(!!smer);
         // 673G20 – během handle dragu je panel tvrdě zakázaný. Nestačí jen
         // `hidden`, protože selectionchange/toolbar hooky ho uměly znovu otevřít.
@@ -2915,28 +2936,43 @@
 
       if (!smer) {
         aktualniDrag.autoCas = 0;
+        aktualniDrag.autoPozice = null;
+        aktualniDrag.autoRangeCas = 0;
         return;
       }
 
       const predchoziCas = aktualniDrag.autoCas || cas;
-      const dt = Math.max(0, Math.min(34, cas - predchoziCas));
+      const dt = Math.max(0, Math.min(80, cas - predchoziCas));
       aktualniDrag.autoCas = cas;
 
       // 673G19 – po vstupu do edge zóny je rychlost konstantní.
-      // Dřívější faktor podle vzdálenosti od hrany způsobil, že stejná
-      // hodnota v Debug Hubu jednou působila rychle a jindy velmi pomalu.
       const pxZaSekundu = ziskejV2SelectionEdgeScrollRychlostLive();
       if (aktualniDrag.posledniSpeed !== pxZaSekundu) {
         aktualniDrag.posledniSpeed = pxZaSekundu;
         zapisSelectionScrollDiag("G21_SPEED_APPLY", null, `speed=${pxZaSekundu}`);
         ohlasV2SelectionEngineStav({ speedApplied: pxZaSekundu, auto: smer });
       }
+
+      /* 673G22 – počítáme plynulou desetinnou cílovou pozici nezávisle na
+         zaokrouhleném scrollTop WebView. Jinak se u nízkých rychlostí chyba
+         zaokrouhlení každý frame znovu nasčítá a pohyb působí jako 2–3px schody. */
       const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
       const pred = Number(stav.editor.scrollTop || 0);
-      const dalsi = Math.max(0, Math.min(maximum, pred + smer * pxZaSekundu * (dt / 1000)));
+      if (!Number.isFinite(aktualniDrag.autoPozice)) aktualniDrag.autoPozice = pred;
+      aktualniDrag.autoPozice = Math.max(0, Math.min(
+        maximum,
+        Number(aktualniDrag.autoPozice) + smer * pxZaSekundu * (dt / 1000)
+      ));
+      const dalsi = aktualniDrag.autoPozice;
       if (Math.abs(dalsi - pred) > 0.05) {
         stav.editor.scrollTop = dalsi;
-        aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY);
+
+        // Highlight stačí přepočítat přibližně 20×/s. Samotný scroll běží
+        // dál každý RAF, takže text se pohybuje plynule a výběr stále roste.
+        if (!aktualniDrag.autoRangeCas || cas - aktualniDrag.autoRangeCas >= 48) {
+          aktualniDrag.autoRangeCas = cas;
+          aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY, true);
+        }
       }
 
       aktualniDrag.autoRaf = requestAnimationFrame(krok);
@@ -2972,18 +3008,20 @@
     nastavV2SelectionScrollHighlight(stav.range);
     ulozV2VizualniRangeDoCore(stav.range);
     zobrazV2SelectionHandles(stav.range);
-    const strana = preferovanyKonec === "start" ? "start" : (preferovanyKonec === "end" ? "end" : null);
+    const explicitniStrana = preferovanyKonec === "start" ? "start" : (preferovanyKonec === "end" ? "end" : null);
+    const strana = explicitniStrana || (stav.menuKotvaStrana === "start" || stav.menuKotvaStrana === "end" ? stav.menuKotvaStrana : null);
     const bodHandle = strana ? ziskejV2SelectionHandleBodProMenu(stav.range, strana) : null;
     zobrazV2SelectionMenuProOznaceni(stav.range, {
       bod: bodHandle,
-      odsazeniNad: 12,
+      // 673G22 – po handle/multiscroll výběru ještě cca o 20 px výš.
+      odsazeniNad: strana ? 32 : 12,
       preferovanyKonec: strana
     });
     obnovToolbar();
     zapisSelectionScrollDiag(
-      "G19_VISUAL_READY",
+      "G22_VISUAL_READY",
       null,
-      `reason=${duvod} menu=range${preferovanyKonec ? `-${preferovanyKonec}` : ""} top=${Math.round(stav.editor?.scrollTop || 0)}`
+      `reason=${duvod} menu=range${strana ? `-${strana}` : ""} top=${Math.round(stav.editor?.scrollTop || 0)}`
     );
     return true;
   }
@@ -3010,7 +3048,8 @@
       moved: false,
       touchEnded: false,
       obnovTimer: null,
-      handleDrag: null
+      handleDrag: null,
+      menuKotvaStrana: null
     };
     v2SelectionScroll = stav;
     v2PosledniTapSelection = null;
@@ -3044,7 +3083,8 @@
       moved: false,
       touchEnded: true,
       obnovTimer: null,
-      handleDrag: null
+      handleDrag: null,
+      menuKotvaStrana: null
     };
     v2SelectionScroll = stav;
     ulozV2VizualniRangeDoCore(kopie);
@@ -3078,6 +3118,8 @@
     stav.startScrollTop = Number(stav.editor?.scrollTop || 0);
     stav.moved = false;
     stav.touchEnded = false;
+    // Nový běžný scroll už není pokračováním předchozího handle dragu.
+    stav.menuKotvaStrana = null;
     skryjV2SelectionHandles();
     skryjV2SelectionMenu();
     potlacV2SelectionMenuDo = performance.now() + 900;
@@ -3111,11 +3153,15 @@
         autoRaf: 0,
         autoCas: 0,
         autoSmer: 0,
+        autoPozice: null,
+        autoRangeCas: 0,
         melMultiscroll: false,
         posledniSpeed: null
       };
       nastavV2SelectionHandlesAutoScrollSkryti(false);
+      stav.touchId = null;
       stav.touchEnded = false;
+      stav.menuKotvaStrana = strana;
       nastavV2SelectionMenuNuceneSkryti(true);
       skryjV2SelectionMenu();
       potlacV2SelectionMenuDo = performance.now() + 900;
@@ -3170,9 +3216,13 @@
           autoRaf: 0,
           autoCas: 0,
           autoSmer: 0,
+          autoPozice: null,
+          autoRangeCas: 0,
           melMultiscroll: false,
           posledniSpeed: null
         };
+        stav.touchId = null;
+        stav.menuKotvaStrana = strana;
         nastavV2SelectionMenuNuceneSkryti(true);
         skryjV2SelectionMenu();
         event.preventDefault();
@@ -3238,13 +3288,17 @@
       if (!dotyk) return;
       event.preventDefault();
       event.stopPropagation();
-      ulozV2VizualniRangeDoCore(stav.range);
       const dragDokoncen = stav.handleDrag;
       const strana = dragDokoncen.strana;
       const bylMultiscroll = !!dragDokoncen.melMultiscroll;
       zastavV2HandleAutoScroll(stav, "touchend");
       stav.handleDrag = null;
+      stav.touchId = null;
       stav.touchEnded = true;
+      stav.menuKotvaStrana = strana;
+      // lehký auto-scroll šetří core/handle layout; při konci vše jednou dorovnáme.
+      ulozV2VizualniRangeDoCore(stav.range);
+      zobrazV2SelectionHandles(stav.range);
       nastavV2SelectionMenuNuceneSkryti(false);
       // Po puštění se panel vrací NAD SKUTEČNÝ právě tažený úchyt.
       // Ne nad prst, ne staticky nahoru a ne k opačnému konci výběru.
@@ -3256,6 +3310,10 @@
 
     const dotyk = Array.from(event.changedTouches || []).find((item) => item.identifier === stav.touchId);
     if (!dotyk) return;
+    // 673G22 – touch.identifier (typicky 0) se v Androidu recykluje. Kdyby
+    // zde zůstal uložený, pozdější TOUCHEND na LubaKeyboard/DH buttonu se
+    // mohl mylně tvářit jako konec selection-scrollu a přepozicovat panel.
+    stav.touchId = null;
     const x = dotyk.clientX;
     const y = dotyk.clientY;
     const posunScrollu = Math.abs(Number(stav.editor?.scrollTop || 0) - Number(stav.startScrollTop || 0));
@@ -3296,11 +3354,18 @@
       const strana = stav.handleDrag.strana;
       zastavV2HandleAutoScroll(stav, "touchcancel");
       stav.handleDrag = null;
+      stav.touchId = null;
       stav.touchEnded = true;
+      stav.menuKotvaStrana = strana;
+      ulozV2VizualniRangeDoCore(stav.range);
+      zobrazV2SelectionHandles(stav.range);
       nastavV2SelectionMenuNuceneSkryti(false);
       zobrazV2VizualniSelectionPoScrollu(stav, "handle-cancel", strana);
       return;
     }
+    const dotyk = Array.from(event.changedTouches || []).find((item) => item.identifier === stav.touchId);
+    if (!dotyk) return;
+    stav.touchId = null;
     stav.touchEnded = true;
     const posunScrollu = Math.abs(Number(stav.editor?.scrollTop || 0) - Number(stav.startScrollTop || 0));
     if (stav.moved || posunScrollu > 2) {
@@ -3346,6 +3411,17 @@
       if (Math.abs(Number(stav.editor.scrollTop || 0) - Number(stav.startScrollTop || 0)) > 2) stav.moved = true;
       skryjV2SelectionHandles();
       if (stav.touchEnded) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+    }
+
+    /* 673G22 – při custom edge-scrollu nelogovat každý 2–20px krok.
+       Debug Hub sám jinak zatěžuje hlavní thread a vytváří viditelné třepání. */
+    if (stav?.handleDrag?.autoSmer && target === stav.editor) {
+      const ted = performance.now();
+      if (ted - diagSelectionAutoScrollCas >= 240) {
+        diagSelectionAutoScrollCas = ted;
+        zapisSelectionScrollDiag("G22_SCROLL_SAMPLE", event, `speed=${ziskejV2SelectionEdgeScrollRychlostLive()}`);
+      }
+      return;
     }
     zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
