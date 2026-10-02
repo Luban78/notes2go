@@ -69,13 +69,6 @@
   let v2SelectionMenuAktivni = false;
   let v2SelectionMenuKurzor = false;
   let v2SelectionMenuBod = null;
-
-  /* PATCH 673G3 – Android WebView má při viditelném vlastním selection panelu
-     odlišné touch chování než Chrome/SPCK. Během obyčejného posunu editoru
-     panel dočasně schováme a po dokončeném scroll gestu ho vrátíme nad stále
-     aktivní DOM selection. Selection samotnou ani scroll nikdy neměníme. */
-  let v2SelectionScrollGesto = null;
-  let potlacV2KlikPoSelectionScrollDo = 0;
   let v2SelectionOverflowKotva = null;
   let v2LokalniSchranka = "";
   let v2RichSchranka = null;
@@ -185,6 +178,53 @@
       }));
     } catch (_error) {}
   }
+  /* ==================================================
+     DIAG 673G4D – APK: SCROLL PŘI AKTIVNÍM TEXTOVÉM VÝBĚRU
+
+     Pouze diagnostika. Vrací selection chování na stabilní 673F a jen
+     zapisuje do Start / sync / síť, co Android WebView skutečně posílá.
+     Nesmí volat preventDefault, měnit Range, focus, scroll ani panel.
+  ================================================== */
+  let diagSelectionMoveCas = 0;
+
+  function ziskejDiagSelectionStav(event = null) {
+    try {
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      const text = range && !range.collapsed ? String(vyber.toString() || "") : "";
+      const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+      const target = event?.target;
+      const targetText = target instanceof Element
+        ? `${target.tagName}.${String(target.className || "").replace(/\s+/g, ".").slice(0, 70)}`
+        : (target?.nodeName || "-");
+      const menu = selectionMenu
+        ? `${selectionMenu.hidden ? "hidden" : "open"}/${selectionMenu.dataset.lnV2Owner === "1" ? "v2" : "other"}`
+        : "none";
+      const host = Boolean(range && hostitel && hostitel.contains(range.commonAncestorContainer));
+      return [
+        `target=${targetText}`,
+        `range=${range ? (range.collapsed ? "caret" : `sel:${text.length}`) : "none"}`,
+        `host=${host ? "Y" : "N"}`,
+        `menu=${menu}`,
+        `aktivniMenu=${v2SelectionMenuAktivni ? "Y" : "N"}`,
+        `scroll=${Math.round(Number(editor?.scrollTop || 0))}`,
+        event ? `cancelable=${event.cancelable ? "Y" : "N"}` : "",
+        event ? `prevented=${event.defaultPrevented ? "Y" : "N"}` : ""
+      ].filter(Boolean).join(" | ");
+    } catch (error) {
+      return `diag-error=${error?.message || error}`;
+    }
+  }
+
+  function zapisSelectionScrollDiag(typ, event = null, extra = "") {
+    try {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "SEL673D",
+        `${typ} | ${ziskejDiagSelectionStav(event)}${extra ? ` | ${extra}` : ""}`
+      );
+    } catch (_error) {}
+  }
+
   function zobrazToast(text, chyba = false) {
     vytvorPomocneUi();
     if (!toast) return;
@@ -2313,7 +2353,6 @@
 
   function zrusV2OznaceniKlikemMimo(event) {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
-    if (performance.now() < potlacV2KlikPoSelectionScrollDo) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
     if (jeV2MoveInterakce(event)) return;
 
@@ -2378,72 +2417,31 @@
     zpracujV2SelectionMenuAkci(event);
   }, true);
 
-  document.addEventListener("touchstart", (event) => {
-    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
-    if (selectionMenu?.contains(event.target)) return;
-    if (event.target.closest?.("#editorToolbarToggle, .editorQuickToolbar, .editorToolbarPanel, .editorBottomBar, button, figure")) return;
+  ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel"].forEach((typ) => {
+    document.addEventListener(typ, (event) => {
+      if (!aktivni || !hostitel?.contains(event.target)) return;
+      zapisSelectionScrollDiag(typ.toUpperCase(), event);
+    }, { passive: true, capture: true });
+  });
 
-    const vyber = window.getSelection();
-    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) {
-      v2SelectionScrollGesto = null;
-      return;
-    }
+  ["pointermove", "touchmove"].forEach((typ) => {
+    document.addEventListener(typ, (event) => {
+      if (!aktivni || !hostitel?.contains(event.target)) return;
+      const ted = performance.now();
+      if (ted - diagSelectionMoveCas < 90) return;
+      diagSelectionMoveCas = ted;
+      zapisSelectionScrollDiag(typ.toUpperCase(), event);
+    }, { passive: true, capture: true });
+  });
 
-    const dotyk = event.touches?.[0];
-    if (!dotyk) return;
-
-    v2SelectionScrollGesto = {
-      x: Number(dotyk.clientX),
-      y: Number(dotyk.clientY),
-      scrollTop: Number(core()?.ziskejScrollTop?.() ?? hostitel?.querySelector?.(".ln-v2-editor")?.scrollTop ?? 0),
-      posun: false
-    };
-
-    /* V APK je právě viditelný fixed panel to, co WebView drží v selection
-       touch režimu. Schování panelu zde obnoví nativní pan-y; DOM Range
-       zůstává nedotčený. */
-    if (v2SelectionMenuAktivni) skryjV2SelectionMenu();
+  document.addEventListener("scroll", (event) => {
+    if (!aktivni) return;
+    const target = event.target;
+    if (!(target instanceof Element) || (!hostitel?.contains(target) && target !== hostitel)) return;
+    zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
-
-  document.addEventListener("touchmove", (event) => {
-    const gesto = v2SelectionScrollGesto;
-    if (!gesto || jeDesktopSelection || !aktivni) return;
-    const dotyk = event.touches?.[0];
-    if (!dotyk) return;
-    const dx = Number(dotyk.clientX) - gesto.x;
-    const dy = Number(dotyk.clientY) - gesto.y;
-    if (Math.hypot(dx, dy) >= 7) gesto.posun = true;
-  }, { passive: true, capture: true });
-
-  function dokoncV2SelectionScrollGesto() {
-    const gesto = v2SelectionScrollGesto;
-    v2SelectionScrollGesto = null;
-    if (!gesto || jeDesktopSelection || !aktivni) return;
-
-    const aktualniScrollTop = Number(core()?.ziskejScrollTop?.() ?? hostitel?.querySelector?.(".ln-v2-editor")?.scrollTop ?? 0);
-    const bylScroll = gesto.posun || Math.abs(aktualniScrollTop - gesto.scrollTop) >= 2;
-    if (!bylScroll) return;
-
-    /* Některé WebView po touch-scroll ještě pošlou syntetický click. Ten nesmí
-       zrušit selection, kterou si uživatel právě schválně zachoval. */
-    potlacV2KlikPoSelectionScrollDo = performance.now() + 300;
-
-    const obnov = () => {
-      if (!aktivni) return;
-      const vyber = window.getSelection();
-      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-      if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
-        zobrazV2SelectionMenuProOznaceni(range);
-      }
-    };
-
-    requestAnimationFrame(obnov);
-    setTimeout(obnov, 80);
-  }
 
   document.addEventListener("touchend", (event) => {
-    dokoncV2SelectionScrollGesto();
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("TOUCHEND", `target=${event.target?.className || event.target?.tagName || "-"}`);
     if (jeV2MoveInterakce(event)) {
@@ -2477,10 +2475,6 @@
         zobrazV2SelectionMenuProKurzor({ x: aktualni.x, y: aktualni.y });
       }
     }, 70);
-  }, { passive: true, capture: true });
-
-  document.addEventListener("touchcancel", () => {
-    v2SelectionScrollGesto = null;
   }, { passive: true, capture: true });
 
   document.addEventListener("dblclick", (event) => {
@@ -2556,23 +2550,6 @@
       potlacV2SelectionMenuDo = performance.now() + 350;
       return;
     }
-
-    /* PATCH 673G3 – pri aktivnim textovem vyberu nesmi pouhy pointerdown
-       uvnitr editoru panel hned schovat. Uživatel tak muze po oznaceni pustit
-       uchyt, normalne jednim prstem posunout obsah a pak znovu chytit selection
-       handle. Zde selection ani scroll nijak nemenime: zadny snapshot,
-       preventDefault ani prepozicovani behem gesta. Skutecny tap mimo vyber
-       zustava obslouzen az existujicim click handlerem zrusV2OznaceniKlikemMimo. */
-    const vyber = window.getSelection();
-    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-    const maAktivniV2Vyber = Boolean(
-      range &&
-      !range.collapsed &&
-      jeV2SelectionRozsah(range)
-    );
-
-    if (maAktivniV2Vyber && hostitel?.contains(event.target)) return;
-
     if (v2SelectionMenuAktivni) skryjV2SelectionMenu();
   }, true);
 
@@ -2636,6 +2613,7 @@
 
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
+    zapisSelectionScrollDiag("SELECTIONCHANGE");
     zapisV2Stabilitu("SELECTIONCHANGE");
     if (core()?.jeImeKompoziceAktivni?.()) return;
     const vyber = window.getSelection();
