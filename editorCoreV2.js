@@ -1077,6 +1077,52 @@
   function spocitejOffsetVBloku(blokEl, node, offset) {
     if (!blokEl || !node) return 0;
 
+    /* PATCH 669B – code block obsahuje pomocné contenteditable=false tlačítko
+       Kopírovat. Jeho SVG/template whitespace nesmí vstupovat do mapování
+       DOM selection -> modelový offset. Jinak Android drží nativní handle na
+       konci textu, ale modelový LubaKeyboard caret spadne na začátek bloku.
+       U code blocku proto počítáme výhradně přímé .ln-v2-cast segmenty. */
+    if (blokEl.classList?.contains("ln-v2-code-block")) {
+      const segmenty = Array.from(blokEl.querySelectorAll(":scope > span.ln-v2-cast[data-ln-v2-segment]"));
+      let soucet = 0;
+      for (const span of segmenty) {
+        const textNode = span.firstChild?.nodeType === Node.TEXT_NODE ? span.firstChild : null;
+        const delka = textNode?.nodeValue?.length || 0;
+        if (node === textNode) {
+          return soucet + Math.max(0, Math.min(delka, Number(offset) || 0));
+        }
+        if (node === span) {
+          const lokalni = Number(offset) > 0 ? delka : 0;
+          return soucet + lokalni;
+        }
+        if (span.contains?.(node)) {
+          try {
+            const range = document.createRange();
+            range.setStart(span, 0);
+            range.setEnd(node, offset);
+            return soucet + Math.max(0, Math.min(delka, range.toString().length));
+          } catch (_error) {
+            return soucet;
+          }
+        }
+        soucet += delka;
+      }
+
+      /* Tap na samotný obal code blocku: child offset převedeme jen přes
+         modelové segmenty před daným bodem a helper tlačítko ignorujeme. */
+      if (node === blokEl) {
+        const limit = Math.max(0, Math.min(blokEl.childNodes.length, Number(offset) || 0));
+        let vysledek = 0;
+        for (let i = 0; i < limit; i += 1) {
+          const dite = blokEl.childNodes[i];
+          if (dite?.nodeType === Node.ELEMENT_NODE && dite.matches?.("span.ln-v2-cast[data-ln-v2-segment]")) {
+            vysledek += dite.textContent?.length || 0;
+          }
+        }
+        return vysledek;
+      }
+    }
+
     const range = document.createRange();
     try {
       range.setStart(blokEl, 0);
@@ -1166,6 +1212,28 @@
     if (!blokEl) return null;
 
     const cil = Math.max(0, Math.min(textBloku(blok).length, modelOffset));
+
+    /* PATCH 669B – opačný směr stejného mapování. V code blocku hledáme
+       caret jen v modelových textových segmentech a úplně ignorujeme
+       absolutně pozicované tlačítko Kopírovat i jeho SVG whitespace. */
+    if (jeKodovyBlok(blok)) {
+      const segmenty = Array.from(blokEl.querySelectorAll(":scope > span.ln-v2-cast[data-ln-v2-segment]"));
+      let soucet = 0;
+      for (const span of segmenty) {
+        const textNode = span.firstChild?.nodeType === Node.TEXT_NODE ? span.firstChild : null;
+        const delka = textNode?.nodeValue?.length || 0;
+        if (textNode && cil <= soucet + delka) {
+          return { node: textNode, offset: Math.max(0, cil - soucet) };
+        }
+        soucet += delka;
+      }
+      const posledniText = segmenty.at(-1)?.firstChild;
+      if (posledniText?.nodeType === Node.TEXT_NODE) {
+        return { node: posledniText, offset: posledniText.nodeValue?.length || 0 };
+      }
+      return { node: blokEl, offset: blokEl.childNodes.length };
+    }
+
     const walker = document.createTreeWalker(blokEl, NodeFilter.SHOW_TEXT);
     let soucet = 0;
     let node = walker.nextNode();
