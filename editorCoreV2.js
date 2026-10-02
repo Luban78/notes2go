@@ -4661,6 +4661,29 @@
     return true;
   }
 
+  /* PATCH 673E – při otevření poznámky aplikujeme Planner stav všech TODO
+     jedním průchodem modelem a maximálně jedním renderem. Původní cesta
+     nastavTodoNaplanovane() zůstává beze změny pro jednotlivé runtime akce. */
+  function nastavTodosNaplanovaneHromadne(todoIds = []) {
+    const naplanovane = new Set(
+      (Array.isArray(todoIds) ? todoIds : Array.from(todoIds || []))
+        .map((id) => String(id || ""))
+        .filter(Boolean)
+    );
+
+    let zmena = false;
+    for (const blok of Array.isArray(dokument?.bloky) ? dokument.bloky : []) {
+      if (!jeTodoBlok(blok)) continue;
+      const novyStav = naplanovane.has(String(blok.id || ""));
+      if (blok.naplanovano === novyStav) continue;
+      blok.naplanovano = novyStav;
+      zmena = true;
+    }
+
+    if (zmena) vykresli(posledniVyber || vyberZPosledniPozice());
+    return true;
+  }
+
   function zobrazTodoPodleId(todoId) {
     const id = String(todoId || "");
     const radek = editor?.querySelector?.(`[data-ln-v2-blok="${CSS.escape(id)}"]`);
@@ -8965,6 +8988,7 @@
     jeTodoRezimAktivni: () => Boolean(dokument?.bloky?.some(jeTodoBlok)),
     nastavTodoZvyrazneni,
     nastavTodoNaplanovane,
+    nastavTodosNaplanovaneHromadne,
     aktualizujPlanovanyOdkaz,
     zobrazTodoPodleId,
     nastavStylTextu: nastavStylTextuZToolbaru,

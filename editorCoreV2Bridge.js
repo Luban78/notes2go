@@ -1526,8 +1526,13 @@
         .map((item) => String(item.sourceTodoId))
     );
     const tokenPlanned = window.LubaNoteStartupDiag?.zacni?.("CORE APPLY PLANNED TODO");
-    for (const todo of api.ziskejAktivniTodos?.() || []) {
-      api.nastavTodoNaplanovane?.(todo.id, naplanovaneTodo.has(String(todo.id)));
+    if (typeof api.nastavTodosNaplanovaneHromadne === "function") {
+      api.nastavTodosNaplanovaneHromadne(Array.from(naplanovaneTodo));
+    } else {
+      /* Bezpečný fallback pro případ smíšené cache starého Core V2. */
+      for (const todo of api.ziskejAktivniTodos?.() || []) {
+        api.nastavTodoNaplanovane?.(todo.id, naplanovaneTodo.has(String(todo.id)));
+      }
     }
     window.LubaNoteStartupDiag?.konec?.(tokenPlanned);
 
@@ -2581,6 +2586,7 @@
     nastavTodoHotovo: (id, hotovo) => core()?.nastavTodoHotovo?.(id, hotovo) === true,
     nastavTodoZvyrazneni: (id, barva) => core()?.nastavTodoZvyrazneni?.(id, barva) === true,
     nastavTodoNaplanovane: (id, zapnuto) => core()?.nastavTodoNaplanovane?.(id, zapnuto) === true,
+    nastavTodosNaplanovaneHromadne: (ids) => core()?.nastavTodosNaplanovaneHromadne?.(ids) === true,
     aktualizujPlanovanyOdkaz: (id, akce) => core()?.aktualizujPlanovanyOdkaz?.(id, akce) === true,
     zobrazTodoPodleId: (id) => core()?.zobrazTodoPodleId?.(id) === true,
     jeTodoRezimAktivni: () => core()?.jeTodoRezimAktivni?.() === true,
