@@ -8208,8 +8208,13 @@
   }
 
   function nastavDokumentProHost(model) {
+    const tokenSetDoc = window.LubaNoteStartupDiag?.zacni?.("CORE SET DOCUMENT");
+    const tokenClone = window.LubaNoteStartupDiag?.zacni?.("CORE CLONE MODEL");
     dokument = klonDat(model);
+    window.LubaNoteStartupDiag?.konec?.(tokenClone);
+    const tokenNormalize = window.LubaNoteStartupDiag?.zacni?.("CORE NORMALIZE MODEL");
     normalizujDokument();
+    window.LubaNoteStartupDiag?.konec?.(tokenNormalize);
     const prvniTextovy = dokument.bloky.findIndex(jeTextovyBlok);
     const prvniIndex = prvniTextovy >= 0 ? prvniTextovy : 0;
     posledniPozice = {
@@ -8228,10 +8233,13 @@
        Uživatel zatím nezačal editovat, takže v textu nemá svítit browserový
        ani Luba caret. Modelová fallback pozice zůstává bezpečně na KONCI
        první věty/bloku pro případ, že se klávesnice otevře bez tapu do textu. */
+    const tokenRender = window.LubaNoteStartupDiag?.zacni?.("CORE RENDER DOCUMENT");
     vykresli(null);
+    window.LubaNoteStartupDiag?.konec?.(tokenRender, `blocks=${dokument?.bloky?.length || 0}`);
     skryjV2LubaCaret();
     odstranV2SelectionOverlay();
     aktualizujTlacitkaHistorie();
+    window.LubaNoteStartupDiag?.konec?.(tokenSetDoc);
   }
 
   function nastavPoziciOtevreniVHostu(pozice = "start") {
@@ -8278,18 +8286,34 @@
       skryjV2LubaCaret();
     };
 
+    window.LubaNoteStartupDiag?.zapis?.("OPEN", `SCROLL SCHEDULED | ${pozice}`);
     requestAnimationFrame(() => {
+      const tokenScroll1 = window.LubaNoteStartupDiag?.zacni?.("OPEN SCROLL RAF1");
       nastavScroll();
-      requestAnimationFrame(nastavScroll);
+      window.LubaNoteStartupDiag?.konec?.(tokenScroll1, `top=${Math.round(editor?.scrollTop || 0)}`);
+      requestAnimationFrame(() => {
+        const tokenScroll2 = window.LubaNoteStartupDiag?.zacni?.("OPEN SCROLL RAF2");
+        nastavScroll();
+        window.LubaNoteStartupDiag?.konec?.(tokenScroll2, `top=${Math.round(editor?.scrollTop || 0)}`);
+      });
     });
 
     return true;
   }
 
   function otevriVHostu(hostitel, model) {
-    if (!(hostitel instanceof Element) || !model?.bloky) return false;
-    if (!jadroEditoru?.isConnected) vytvorJadroEditoru();
+    const tokenHost = window.LubaNoteStartupDiag?.zacni?.("CORE OPEN IN HOST");
+    if (!(hostitel instanceof Element) || !model?.bloky) {
+      window.LubaNoteStartupDiag?.konec?.(tokenHost, "INVALID");
+      return false;
+    }
+    if (!jadroEditoru?.isConnected) {
+      const tokenCreate = window.LubaNoteStartupDiag?.zacni?.("CORE CREATE DOM");
+      vytvorJadroEditoru();
+      window.LubaNoteStartupDiag?.konec?.(tokenCreate);
+    }
 
+    const tokenAttach = window.LubaNoteStartupDiag?.zacni?.("CORE ATTACH DOM");
     vlozenyHostitel = hostitel;
     vlozenyRezim = true;
     jadroEditoru.classList.add("ln-v2-vlozeny");
@@ -8297,15 +8321,19 @@
     jadroEditoru.hidden = false;
     jadroEditoru.classList.add("otevreno");
     zrusV2TodoMultiSelect();
+    window.LubaNoteStartupDiag?.konec?.(tokenAttach);
     nastavDokumentProHost(model);
 
     /* LubaKeyboard musí mít atributy připravené PŘED prvním skutečným tapem.
        PATCH 663E ale editor při pouhém otevření poznámky automaticky nefokusuje:
        bez uživatelské editace tedy není vidět caret a neotvírá se IME. */
+    const tokenKeyboard = window.LubaNoteStartupDiag?.zacni?.("CORE KEYBOARD PREP");
     window.LubaNoteKeyboard?.pripravEditor?.(editor);
     try { editor.blur(); } catch (_error) {}
     skryjV2LubaCaret();
     odstranV2SelectionOverlay();
+    window.LubaNoteStartupDiag?.konec?.(tokenKeyboard);
+    window.LubaNoteStartupDiag?.konec?.(tokenHost);
     return true;
   }
 

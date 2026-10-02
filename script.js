@@ -4283,12 +4283,19 @@ window.LubaNoteSharedEditorHost = {
 
 
 async function openTaskEditorById(taskId) {
+  const tokenOpenCele = window.LubaNoteStartupDiag?.zacni?.(
+    `NOTE OPEN TOTAL | id=${taskId}`
+  );
+  window.LubaNoteStartupDiag?.zapis?.("OPEN", `ENTER openTaskEditorById | id=${taskId}`);
+
   /*
    * LOCAL SCOPE 585 – lokální poznámka nesmí při pouhém otevření
    * sahat na Shared stav, Realtime ani Editor Handoff. Účet může být
    * online, ale obsah tohoto prostoru zůstává čistě v zařízení.
    */
+  const tokenPredLoad = window.LubaNoteStartupDiag?.zacni?.("OPEN PRELOAD LOADTASK");
   const predbezneTasks = loadTask();
+  window.LubaNoteStartupDiag?.konec?.(tokenPredLoad);
   const predbeznaPoznamka = predbezneTasks.find(
     (task) => task?.id === taskId
   );
@@ -4307,15 +4314,21 @@ async function openTaskEditorById(taskId) {
      * Přesně tím se dříve vracel smazaný obrázek i celá karta.
      */
     try {
+      const tokenSharedState = window.LubaNoteStartupDiag?.zacni?.("OPEN SHARED STATE");
       await window.LubaNoteSharingNotes
         ?.zajistiAktualniSharedStav?.();
+      window.LubaNoteStartupDiag?.konec?.(tokenSharedState);
 
       if (
         window.LubaNoteSharingNotes
           ?.jeVlastniSdilenaPoznamka?.(taskId)
       ) {
-        return await window.LubaNoteSharedEditor
+        const tokenSharedOpen = window.LubaNoteStartupDiag?.zacni?.("OPEN OWNER SHARED EDITOR");
+        const vysledekSharedOpen = await window.LubaNoteSharedEditor
           ?.otevriSdilenouEditaci?.(taskId);
+        window.LubaNoteStartupDiag?.konec?.(tokenSharedOpen, String(vysledekSharedOpen));
+        window.LubaNoteStartupDiag?.konec?.(tokenOpenCele, "OWNER SHARED");
+        return vysledekSharedOpen;
       }
     } catch (error) {
       console.warn(
@@ -4335,9 +4348,11 @@ async function openTaskEditorById(taskId) {
       window.LubaNoteSyncRealtime
         ?.pockejPredOtevrenim
     ) {
+      const tokenRealtime = window.LubaNoteStartupDiag?.zacni?.("OPEN REALTIME GATE");
       const aktualni =
         await window.LubaNoteSyncRealtime
           .pockejPredOtevrenim(taskId);
+      window.LubaNoteStartupDiag?.konec?.(tokenRealtime, String(aktualni));
 
       if (aktualni !== true) {
         return;
@@ -4348,9 +4363,11 @@ async function openTaskEditorById(taskId) {
       window.LubaNoteEditorHandoff
         ?.pripravOtevreniEditoru
     ) {
+      const tokenHandoff = window.LubaNoteStartupDiag?.zacni?.("OPEN HANDOFF GATE");
       const povoleno =
         await window.LubaNoteEditorHandoff
           .pripravOtevreniEditoru(taskId);
+      window.LubaNoteStartupDiag?.konec?.(tokenHandoff, String(povoleno));
 
       if (povoleno !== true) {
         return;
@@ -4359,7 +4376,9 @@ async function openTaskEditorById(taskId) {
   }
 
   /* Cloud cesta mohla během kontrol přinést novější lokální snapshot. */
+  const tokenCurrentLoad = window.LubaNoteStartupDiag?.zacni?.("OPEN FINAL LOADTASK");
   const currentTasks = loadTask();
+  window.LubaNoteStartupDiag?.konec?.(tokenCurrentLoad);
   
   const index = currentTasks.findIndex(
     task => task.id === taskId
@@ -4413,8 +4432,10 @@ async function openTaskEditorById(taskId) {
         throw new Error("shared_media_crypto_unavailable");
       }
 
+      const tokenRehydrate = window.LubaNoteStartupDiag?.zacni?.("OPEN SHARED MEDIA REHYDRATE");
       currentTaskProEditor =
         await desifrujSharedMedia(currentTask);
+      window.LubaNoteStartupDiag?.konec?.(tokenRehydrate);
 
       if (!currentTaskProEditor) {
         throw new Error("shared_media_rehydrate_failed");
@@ -4443,6 +4464,7 @@ async function openTaskEditorById(taskId) {
     }
   }
   
+  const tokenUiPrep = window.LubaNoteStartupDiag?.zacni?.("OPEN UI PREP");
   reminderEnabled = currentTask.reminder === true;
   plannedEnabled =
     currentTask.planned === true ||
@@ -4509,7 +4531,10 @@ async function openTaskEditorById(taskId) {
   taskModal.hidden = false;
   taskModal.classList.add("show");
   document.body.classList.add("noScroll");
+  window.LubaNoteStartupDiag?.konec?.(tokenUiPrep);
+  window.LubaNoteStartupDiag?.zapis?.("OPEN", "MODAL SHOW");
 
+  const tokenCoreOpen = window.LubaNoteStartupDiag?.zacni?.("OPEN CORE V2");
   const otevrenoCore = otevriObsahCoreV2({
     noteId: currentTask.id,
     richContent: currentTaskProEditor.richContent || "",
@@ -4517,6 +4542,7 @@ async function openTaskEditorById(taskId) {
     todos: currentTaskProEditor.todos,
     plannedItems: currentTaskProEditor.plannedItems
   });
+  window.LubaNoteStartupDiag?.konec?.(tokenCoreOpen, String(otevrenoCore));
 
   if (!otevrenoCore) {
     taskModal.classList.remove("show");
@@ -4539,11 +4565,16 @@ async function openTaskEditorById(taskId) {
    * Děláme to PŘED otiskem editoru, aby samotné přejmenování cíle
    * nevypadalo jako ruční změna této zdrojové poznámky.
    */
+  const tokenLinks = window.LubaNoteStartupDiag?.zacni?.("OPEN NOTE LINKS");
   window.LubaNoteNoteLinks
     ?.aktualizujOdkazyVEditoru?.();
+  window.LubaNoteStartupDiag?.konec?.(tokenLinks);
 
+  const tokenOtisk = window.LubaNoteStartupDiag?.zacni?.("OPEN EDITOR FINGERPRINT");
   puvodniOtiskEditoru =
     vytvorOtiskEditoru();
+  window.LubaNoteStartupDiag?.konec?.(tokenOtisk);
+  window.LubaNoteStartupDiag?.zapis?.("OPEN", "EDITOR READY SYNC PHASE");
   
   /*
    * Pokud byla karta otevřena z aktivního vyhledávání,
@@ -4551,13 +4582,20 @@ async function openTaskEditorById(taskId) {
    * Zvýraznění nemění uložený HTML obsah poznámky ani TODO data.
    */
   requestAnimationFrame(() => {
+    window.LubaNoteStartupDiag?.zapis?.("OPEN", "FIRST RAF AFTER OPEN");
     if (
       typeof window.zvyrazniAktualniVyhledavaniVEditoru ===
       "function"
     ) {
+      const tokenSearchHighlight = window.LubaNoteStartupDiag?.zacni?.("OPEN SEARCH HIGHLIGHT");
       window.zvyrazniAktualniVyhledavaniVEditoru();
+      window.LubaNoteStartupDiag?.konec?.(tokenSearchHighlight);
     }
+    requestAnimationFrame(() => {
+      window.LubaNoteStartupDiag?.zapis?.("OPEN", "SECOND RAF AFTER OPEN");
+    });
   });
+  window.LubaNoteStartupDiag?.konec?.(tokenOpenCele);
   
   //renderPlannedTextLinks(currentTask.id);
 }
@@ -5197,7 +5235,16 @@ function renderTasks() {
         return;
       }
       
+      window.LubaNoteStartupDiag?.zapis?.(
+        "OPEN",
+        `NOTE TAP | index=${index}`
+      );
+
+      const tokenCardLoad = window.LubaNoteStartupDiag?.zacni?.(
+        "OPEN CARD LOADTASK"
+      );
       const currentTasks = loadTask();
+      window.LubaNoteStartupDiag?.konec?.(tokenCardLoad);
       const currentTask = currentTasks[index];
       
       if (!currentTask) {

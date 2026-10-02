@@ -1470,7 +1470,11 @@
     plannedItems = [],
     zachovatPuvodniOtisk = false
   } = {}) {
-    if (pozastavAktivaci || !jeEditorOtevreny()) return false;
+    const tokenBridgeOpen = window.LubaNoteStartupDiag?.zacni?.(`CORE BRIDGE TOTAL | id=${noteId}`);
+    if (pozastavAktivaci || !jeEditorOtevreny()) {
+      window.LubaNoteStartupDiag?.konec?.(tokenBridgeOpen, "BLOCKED");
+      return false;
+    }
 
     const api = core();
     if (!api?.otevriVHostu) {
@@ -1478,10 +1482,14 @@
       return false;
     }
 
+    const tokenHelperUi = window.LubaNoteStartupDiag?.zacni?.("CORE BRIDGE HELPER UI");
     vytvorPomocneUi();
     zajistiV2VolbyToolbaru();
+    window.LubaNoteStartupDiag?.konec?.(tokenHelperUi);
 
+    const tokenImport = window.LubaNoteStartupDiag?.zacni?.("CORE BRIDGE IMPORT");
     const importVysledek = importujObsahDoModelu({ richContent, note, todos });
+    window.LubaNoteStartupDiag?.konec?.(tokenImport, importVysledek?.ok ? "OK" : "FAIL");
     if (!importVysledek?.ok || !importVysledek?.model) {
       const prvky = Array.isArray(importVysledek?.nepodporovane) && importVysledek.nepodporovane.length
         ? importVysledek.nepodporovane.join(", ")
@@ -1491,7 +1499,11 @@
       return false;
     }
 
-    if (aktivni) deaktivuj();
+    if (aktivni) {
+      const tokenDeactivate = window.LubaNoteStartupDiag?.zacni?.("CORE BRIDGE DEACTIVATE OLD");
+      deaktivuj();
+      window.LubaNoteStartupDiag?.konec?.(tokenDeactivate);
+    }
 
     aktivni = true;
     aktivniNoteId = String(noteId || ziskejNoteId() || "nova-poznamka");
@@ -1499,7 +1511,10 @@
     hostitel.hidden = false;
     nastavOchranuUi(true);
 
-    if (!api.otevriVHostu(hostitel, importVysledek.model)) {
+    const tokenHostOpen = window.LubaNoteStartupDiag?.zacni?.("CORE HOST OPEN");
+    const hostOpenOk = api.otevriVHostu(hostitel, importVysledek.model);
+    window.LubaNoteStartupDiag?.konec?.(tokenHostOpen, String(hostOpenOk));
+    if (!hostOpenOk) {
       deaktivuj();
       zobrazToast("Editor Core V2 se nepodařilo připojit.", true);
       return false;
@@ -1510,18 +1525,29 @@
         .filter((item) => item?.sourceType === "todo" && item?.sourceTodoId)
         .map((item) => String(item.sourceTodoId))
     );
+    const tokenPlanned = window.LubaNoteStartupDiag?.zacni?.("CORE APPLY PLANNED TODO");
     for (const todo of api.ziskejAktivniTodos?.() || []) {
       api.nastavTodoNaplanovane?.(todo.id, naplanovaneTodo.has(String(todo.id)));
     }
+    window.LubaNoteStartupDiag?.konec?.(tokenPlanned);
 
+    const tokenPosition = window.LubaNoteStartupDiag?.zacni?.("CORE OPEN POSITION REQUEST");
     const poziceOtevreni = window.LubaNoteEditorOpenPreferences?.ziskejPozici?.() === "end" ? "end" : "start";
     api.nastavPoziciOtevreni?.(poziceOtevreni);
+    window.LubaNoteStartupDiag?.konec?.(tokenPosition, poziceOtevreni);
+    const tokenToolbar = window.LubaNoteStartupDiag?.zacni?.("CORE TOOLBAR REFRESH");
     nastavToolbarV2("cas");
     obnovToolbar();
+    window.LubaNoteStartupDiag?.konec?.(tokenToolbar);
 
     if (!zachovatPuvodniOtisk) {
-      queueMicrotask(() => window.LubaNoteAktualizujPuvodniOtiskEditoruProV2?.());
+      queueMicrotask(() => {
+        const tokenBridgeFingerprint = window.LubaNoteStartupDiag?.zacni?.("CORE BRIDGE QUEUED FINGERPRINT");
+        window.LubaNoteAktualizujPuvodniOtiskEditoruProV2?.();
+        window.LubaNoteStartupDiag?.konec?.(tokenBridgeFingerprint);
+      });
     }
+    window.LubaNoteStartupDiag?.konec?.(tokenBridgeOpen);
     return true;
   }
 
