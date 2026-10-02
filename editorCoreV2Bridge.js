@@ -97,36 +97,92 @@
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
-  /* PATCH 673G8 – při běžném scrollování s collapsed caretem Android WebView
-     umí kreslit blikající kurzor mezi řádky tak, že vizuálně „plave“ s obsahem.
-     Range ani focus kvůli tomu neměníme: během skutečného scrollu pouze dočasně
-     skryjeme caret přes CSS a po zklidnění scrollu vrátíme původní caret-color. */
+  /* PATCH 673G9 – G8 schoval jen CSS caret-color, ale Android WebView kreslí
+     vlastní nativní insertion handle v oddělené compositor vrstvě. Log ukázal,
+     že DOM Range při scrollu zůstává pořád stejný (range=caret), zatímco handle
+     vizuálně „plave“ o několik řádků podle rychlosti scrollu. Proto během
+     skutečného scrollu collapsed caret dočasně odpojíme z DOM Selection,
+     uložený Range necháme beze změny a po zklidnění scrollu ho vrátíme přesně
+     na původní textovou pozici. Focus editoru neměníme, takže klávesnice ani
+     editace nemají dostat blur/focus cyklus. */
   let v2CaretScrollTimer = null;
   let v2CaretScrollEditor = null;
   let v2CaretScrollPuvodniBarva = "";
+  let v2CaretScrollRange = null;
+  let v2CaretScrollTouchAktivni = false;
+
+  function naplanujV2CaretPoScrollu() {
+    clearTimeout(v2CaretScrollTimer);
+    v2CaretScrollTimer = setTimeout(() => {
+      if (v2CaretScrollTouchAktivni) {
+        naplanujV2CaretPoScrollu();
+        return;
+      }
+
+      const editor = v2CaretScrollEditor;
+      const range = v2CaretScrollRange;
+      if (editor) editor.style.caretColor = v2CaretScrollPuvodniBarva;
+
+      try {
+        if (aktivni && editor?.isConnected && range && range.collapsed && jeV2SelectionRozsah(range)) {
+          const vyber = window.getSelection();
+          /* Pokud už uživatel mezitím vytvořil nový caret / selection, má
+             přednost nová interakce a starý Range nesmíme přepsat. */
+          if (vyber && vyber.rangeCount === 0) {
+            vyber.addRange(range);
+            zapisSelectionScrollDiag("G9_CARET_RESTORE", null, `scroll=${Math.round(editor.scrollTop)}`);
+          }
+        }
+      } catch (_error) {}
+
+      v2CaretScrollEditor = null;
+      v2CaretScrollPuvodniBarva = "";
+      v2CaretScrollRange = null;
+      v2CaretScrollTimer = null;
+    }, 160);
+  }
 
   function skryjV2CaretBehemScrollu(editor) {
     if (!jeAndroidApkSelectionScroll() || !editor) return;
-    const vyber = window.getSelection();
-    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-    if (!range || !range.collapsed || !jeV2SelectionRozsah(range)) return;
 
-    if (v2CaretScrollEditor !== editor) {
-      if (v2CaretScrollEditor) v2CaretScrollEditor.style.caretColor = v2CaretScrollPuvodniBarva;
+    const vyber = window.getSelection();
+    if (!v2CaretScrollRange) {
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (!range || !range.collapsed || !jeV2SelectionRozsah(range)) return;
+
       v2CaretScrollEditor = editor;
       v2CaretScrollPuvodniBarva = editor.style.caretColor || "";
+      v2CaretScrollRange = range.cloneRange?.() || null;
+      editor.style.caretColor = "transparent";
+
+      try {
+        vyber?.removeAllRanges?.();
+        zapisSelectionScrollDiag("G9_CARET_DETACH", null, `scroll=${Math.round(editor.scrollTop)}`);
+      } catch (_error) {}
+    } else {
+      /* WebView si během kinetického scrollu někdy zkusí nativní caret znovu
+         vytvořit. Dokud máme uložený původní Range, držíme Selection prázdnou. */
+      try {
+        if (vyber?.rangeCount) vyber.removeAllRanges();
+      } catch (_error) {}
     }
-    editor.style.caretColor = "transparent";
-    clearTimeout(v2CaretScrollTimer);
-    v2CaretScrollTimer = setTimeout(() => {
-      if (v2CaretScrollEditor === editor) {
-        editor.style.caretColor = v2CaretScrollPuvodniBarva;
-        v2CaretScrollEditor = null;
-        v2CaretScrollPuvodniBarva = "";
-      }
-      v2CaretScrollTimer = null;
-    }, 140);
+
+    naplanujV2CaretPoScrollu();
   }
+
+  document.addEventListener("touchstart", () => {
+    if (jeAndroidApkSelectionScroll()) v2CaretScrollTouchAktivni = true;
+  }, { passive: true, capture: true });
+
+  document.addEventListener("touchend", () => {
+    v2CaretScrollTouchAktivni = false;
+    if (v2CaretScrollRange) naplanujV2CaretPoScrollu();
+  }, { passive: true, capture: true });
+
+  document.addEventListener("touchcancel", () => {
+    v2CaretScrollTouchAktivni = false;
+    if (v2CaretScrollRange) naplanujV2CaretPoScrollu();
+  }, { passive: true, capture: true });
 
 
   /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
