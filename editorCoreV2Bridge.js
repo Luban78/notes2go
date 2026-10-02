@@ -3546,14 +3546,13 @@
       if (stav.touchEnded && !stav.keyboardDorovnani) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
     }
 
-    /* 673G22 – při custom edge-scrollu nelogovat každý 2–20px krok.
-       Debug Hub sám jinak zatěžuje hlavní thread a vytváří viditelné třepání. */
+    /* 673G25 – během custom edge-scrollu NEZAPISOVAT do Debug Hubu vůbec.
+       G24 log ukázal pravidelný G23_SCROLL_SAMPLE zhruba každých 500 ms přesně
+       v okamžicích, kdy uživatel viděl větší periodický zásek. Samotný zápis
+       diagnostiky skládá stav selection/getSelection a aktualizuje Debug Hub,
+       takže i půlsekundový sampling zasahoval hlavní UI thread. Start/směr/
+       rychlost/konec zůstávají logované mimo hot scroll path. */
     if (stav?.handleDrag?.autoSmer && target === stav.editor) {
-      const ted = performance.now();
-      if (ted - diagSelectionAutoScrollCas >= 500) {
-        diagSelectionAutoScrollCas = ted;
-        zapisSelectionScrollDiag("G23_SCROLL_SAMPLE", event, `speed=${ziskejV2SelectionEdgeScrollRychlostLive()}`);
-      }
       return;
     }
     zapisSelectionScrollDiag("SCROLL", event);
