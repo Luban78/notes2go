@@ -1506,7 +1506,23 @@
     }
   }
 
-  shareNoteButton?.addEventListener("click", otevriShareModal);
+  /* PATCH 671C1 – title ikona spravy sdileni musi predat skutecne ID
+     otevrene poznamky. Prime predani otevriShareModal jako event handleru
+     posilalo jako prvni argument MouseEvent, coz je zbytecne nejednoznacne
+     a v Android WebView mohlo skoncit bez otevreni spravy Shared note. */
+  async function otevriSpravuSdileniZTitulku(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    const task = ziskejAktualniPoznamku();
+    if (!task?.id || task.isSecret === true) return;
+    if (window.LubaNoteStorageScope?.jePouzeLokalni?.(task) === true) return;
+    if (window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(task.id) !== true) return;
+
+    await otevriShareModal(task.id);
+  }
+
+  shareNoteButton?.addEventListener("click", otevriSpravuSdileniZTitulku);
   shareEditorToolButton?.addEventListener("click", otevriSdileniZEditorNastroju);
   invitationsButton?.addEventListener("click", otevriInvitationsModal);
 

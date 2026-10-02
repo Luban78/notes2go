@@ -5389,6 +5389,13 @@
      Long-press, drag/MOVE, checkbox ani textová selection logika se nemění. */
   function zrusV2MoveVyberKlikemMimo(event) {
     if (!editor || !maV2VyberPolozkySeznamu() || jeV2InterakcePresunuSeznamu()) return;
+
+    /* PATCH 671C1 – contextual TODO toolbar je zamerne presunuty mimo
+       samotny editor do .modalTitleRow. Document capture click z 671A
+       proto nesmi jeho tlacitka povazovat za "klik mimo vyber"; jinak
+       se vybranaTodoIdcka vycisti jeste pred click handlerem akce. */
+    if (event?.target?.closest?.("[data-ln-v2-todo-multiselect]")) return;
+
     zrusVyberMoveSeznamuPokudMimo(event?.target);
   }
 
