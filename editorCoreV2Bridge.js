@@ -87,8 +87,8 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
-  /* PATCH 673G16 – plynulý selection scroll + menší Android-match úchyty + vlastní edge auto-scroll.
-     Po prvním scrollu používáme vlastní zlatý CSS Highlight a vlastní LubaNote
+  /* PATCH 673G17 – selection-scroll UX: Android-match úchyty + vlastní edge auto-scroll.
+     Po prvním scrollu používáme vlastní CSS Highlight a vlastní LubaNote
      handles; nativní Android selection už znovu nevytváříme. Výběr proto při
      scrollu zůstává viditelný, další scroll je compositorový a po zastavení lze
      rozsah dál upravovat vlastními úchyty. Při tažení našeho úchytu k hornímu/spodnímu
@@ -663,11 +663,15 @@
       let x;
       let y;
 
-      if (rozsah && !rozsah.collapsed) {
-        /* 673G6 – označený text má na mobilu vždy jedno stabilní místo.
-           Panel už neskáče podle začátku/konce Range. Držíme ho uprostřed
-           hned pod horní částí editoru (stejná oblast, kde se ukazují krátká
-           editorová oznámení). Caret/paste panel zůstává beze změny u bodu. */
+      const statickeMenuProHromadnyScroll = !!(
+        rozsah && !rozsah.collapsed &&
+        v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed
+      );
+
+      if (statickeMenuProHromadnyScroll) {
+        /* 673G17 – pevná horní pozice patří jen režimu hromadného selection-scrollu.
+           Při obyčejném označení jednoho slova / krátkého úseku se panel znovu
+           chová jako běžné selection menu a kotví se k označenému textu. */
         const titleRow = document.querySelector("#taskModal .modalTitleRow");
         const titleRect = titleRow?.getBoundingClientRect?.() || null;
         const pevnaHorniHrana = Math.max(
@@ -2561,6 +2565,11 @@
     .ln-v2-selection-handle-custom::after {
       content: none;
     }
+    /* 673G17 – při edge auto-scrollu zůstává hitbox pod prstem aktivní,
+       ale vizuální úchyty zmizí stejně jako při nativním Android scrollu. */
+    .ln-v2-selection-handle-custom.ln-v2-handle-autoscroll-hidden {
+      opacity: 0;
+    }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
       transform: translate(-100%, 0);
     }
@@ -2635,6 +2644,12 @@
   function skryjV2SelectionHandles() {
     if (v2SelectionHandleStart) v2SelectionHandleStart.hidden = true;
     if (v2SelectionHandleEnd) v2SelectionHandleEnd.hidden = true;
+  }
+
+  function nastavV2SelectionHandlesAutoScrollSkryti(skryt) {
+    const metoda = skryt ? "add" : "remove";
+    v2SelectionHandleStart?.classList?.[metoda]?.("ln-v2-handle-autoscroll-hidden");
+    v2SelectionHandleEnd?.classList?.[metoda]?.("ln-v2-handle-autoscroll-hidden");
   }
 
   function zobrazV2SelectionHandles(range) {
@@ -2736,8 +2751,9 @@
       drag.autoRaf = 0;
     }
     drag.autoCas = 0;
+    nastavV2SelectionHandlesAutoScrollSkryti(false);
     if (drag.autoSmer) {
-      zapisSelectionScrollDiag("G16_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+      zapisSelectionScrollDiag("G17_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
       drag.autoSmer = 0;
     }
   }
@@ -2780,8 +2796,10 @@
       const smer = faktor < 0 ? -1 : (faktor > 0 ? 1 : 0);
       if (smer !== aktualniDrag.autoSmer) {
         aktualniDrag.autoSmer = smer;
+        nastavV2SelectionHandlesAutoScrollSkryti(!!smer);
+        if (!smer) zobrazV2SelectionHandles(stav.range);
         zapisSelectionScrollDiag(
-          "G16_HANDLE_AUTOSCROLL",
+          "G17_HANDLE_AUTOSCROLL",
           null,
           `dir=${smer < 0 ? "up" : (smer > 0 ? "down" : "off")} top=${Math.round(stav.editor.scrollTop || 0)}`
         );
@@ -2921,6 +2939,7 @@
         autoCas: 0,
         autoSmer: 0
       };
+      nastavV2SelectionHandlesAutoScrollSkryti(false);
       stav.touchEnded = false;
       skryjV2SelectionMenu();
       potlacV2SelectionMenuDo = performance.now() + 900;
