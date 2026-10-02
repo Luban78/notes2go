@@ -136,19 +136,26 @@
 
     const task = ziskejAktualniPoznamku();
     const jeOtevrenyEditor = !!taskModal && !taskModal.hidden;
-    const lzeSdilet =
-      jeOtevrenyEditor &&
+
+    /* PATCH 671B1 – private note už nemá duplicitní velké Sdílet v editoru.
+       Tlačítko je pouze kompaktní správa již existující OWNER Shared note.
+       Nové sdílení se dál spouští z rychlých akcí hlavní karty. */
+    const jeVlastniSdilena =
       !!task?.id &&
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(task.id) === true;
+
+    const zobrazitSpravuSdileni =
+      jeOtevrenyEditor &&
+      jeVlastniSdilena &&
       task.isSecret !== true &&
       window.LubaNoteStorageScope
         ?.jePouzeLokalni?.(task) !== true;
 
-    shareNoteButton.hidden = !lzeSdilet;
-    shareNoteButton.textContent = t("sharing.shareButton", "Sdílet");
-    shareNoteButton.setAttribute(
-      "aria-label",
-      t("sharing.shareButton", "Sdílet")
-    );
+    shareNoteButton.hidden = !zobrazitSpravuSdileni;
+    const popisek = t("sharing.manageShareButton", "Spravovat sdílení");
+    shareNoteButton.setAttribute("aria-label", popisek);
+    shareNoteButton.title = popisek;
   }
 
   function nastavBadge(pocet) {
@@ -1333,7 +1340,9 @@
 
   function aplikujPreklady() {
     if (shareNoteButton) {
-      shareNoteButton.textContent = t("sharing.shareButton", "Sdílet");
+      const popisek = t("sharing.manageShareButton", "Spravovat sdílení");
+      shareNoteButton.setAttribute("aria-label", popisek);
+      shareNoteButton.title = popisek;
     }
 
     if (invitationsButton) {
@@ -1461,7 +1470,7 @@
     const observer = new MutationObserver(aktualizujShareButton);
     observer.observe(taskModal, {
       attributes: true,
-      attributeFilter: ["hidden", "class", "data-task-id", "data-draft-task-id"]
+      attributeFilter: ["hidden", "class", "data-task-id", "data-draft-task-id", "data-shared-task-id"]
     });
   }
 
@@ -1518,6 +1527,8 @@
   });
 
   window.addEventListener("lubanote:language-change", aplikujPreklady);
+  window.addEventListener("lubanote:shared-notes-updated", aktualizujShareButton);
+  window.addEventListener("lubanote:shared-access-removed", aktualizujShareButton);
 
   window.addEventListener("lubanote:splash-ready", () => {
     if (startUiPripraven) return;

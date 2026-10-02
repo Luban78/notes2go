@@ -5203,6 +5203,14 @@
       v2TodoMultiBar.hidden = pocet === 0;
       v2TodoMultiBar.setAttribute("aria-hidden", pocet === 0 ? "true" : "false");
     }
+
+    /* PATCH 671B1 – selection bar je contextual title bar. Když běží TODO
+       multiselect, nahradí řádek názvu poznámky místo přidávání dalšího řádku. */
+    const radekNazvu =
+      v2TodoMultiBar?.closest?.(".modalTitleRow") ||
+      document.querySelector(".modalTitleRow");
+    radekNazvu?.classList.toggle("todoMultiSelectActive", pocet > 0);
+
     if (v2TodoMultiCount) v2TodoMultiCount.textContent = `TODO · ${pocet}`;
 
     if (!editor) return;
@@ -8295,6 +8303,13 @@
     v2TodoMultiBar = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect]");
     v2TodoMultiCount = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-count]");
     const v2TodoMultiCancel = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-cancel]");
+
+    /* PATCH 671B1 – panel multiselectu patří do titulkového řádku editoru.
+       Přesun DOM uzlu nemění jeho event listenery ani Core V2 model. */
+    const radekNazvu = document.querySelector(".modalTitleRow");
+    if (radekNazvu && v2TodoMultiBar) {
+      radekNazvu.appendChild(v2TodoMultiBar);
+    }
     poslouchej(v2TodoMultiCancel, "click", (event) => {
       event.preventDefault();
       event.stopPropagation();
