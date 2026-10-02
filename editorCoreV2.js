@@ -837,6 +837,44 @@
     return blok?.typ === "odstavec" || jeSeznamovyBlok(blok) || jeTodoBlok(blok);
   }
 
+  /* PATCH 669 – code block je záměrně stále obyčejný V2 odstavec.
+     Používá už existující a dlouhodobě podporovaný legacyPre příznak,
+     takže save/import/export nepotřebuje nový typ modelového bloku. */
+  function jeKodovyBlok(blok) {
+    return blok?.typ === "odstavec" && blok?.legacyPre === true;
+  }
+
+  function nastavKodFormatObsahu(obsah, zapnout = true) {
+    const vstup = Array.isArray(obsah) ? obsah : [vytvorSegment("")];
+    const vysledek = normalizujObsah(vstup.map((cast) => {
+      const format = kopieFormatu(cast?.format);
+      format.kod = zapnout === true;
+      return vytvorSegment(String(cast?.text ?? ""), format);
+    }));
+    /* normalizujObsah() záměrně zahazuje prázdné segmenty. U prázdného
+       code blocku ale musí i budoucí první znak zdědit monospace formát. */
+    if (vysledek.length === 1 && String(vysledek[0]?.text || "") === "") {
+      vysledek[0].format = kopieFormatu(vysledek[0].format);
+      vysledek[0].format.kod = zapnout === true;
+    }
+    return vysledek;
+  }
+
+  function vytvorKodovyBlokZObsahu(obsah) {
+    const blok = vytvorOdstavecZObsahu(obsah, "left");
+    blok.legacyPre = true;
+    blok.legacyBlockquote = false;
+    blok.legacyHr = false;
+    blok.obsah = nastavKodFormatObsahu(blok.obsah, true);
+    return blok;
+  }
+
+  function vytvorKodovyBlok(text = "") {
+    const format = kopieFormatu(VYCHOZI_FORMAT);
+    format.kod = true;
+    return vytvorKodovyBlokZObsahu([vytvorSegment(String(text ?? ""), format)]);
+  }
+
   function jeObrazkovyBlok(blok) {
     return blok?.typ === "obrazek";
   }
@@ -997,6 +1035,10 @@
         blok.legacyBlockquote = blok.legacyBlockquote === true;
         blok.legacyPre = blok.legacyPre === true;
         blok.legacyHr = blok.legacyHr === true;
+        if (blok.legacyPre) {
+          blok.obsah = nastavKodFormatObsahu(blok.obsah, true);
+          blok.zarovnani = "left";
+        }
         if (blok.legacyHr && textBloku(blok).trim()) blok.legacyHr = false;
       }
     });
@@ -1333,11 +1375,15 @@
         radek.style.opacity = "0.92";
       }
       if (blok.legacyPre === true) {
-        radek.style.whiteSpace = "pre-wrap";
-        radek.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-        radek.style.padding = "8px 10px";
-        radek.style.borderRadius = "8px";
-        radek.style.background = "color-mix(in srgb, currentColor 7%, transparent)";
+        radek.classList.add("ln-v2-code-block");
+        const kopirovatKod = document.createElement("button");
+        kopirovatKod.type = "button";
+        kopirovatKod.className = "ln-v2-code-copy";
+        kopirovatKod.dataset.v2CodeCopy = blok.id;
+        kopirovatKod.contentEditable = "false";
+        kopirovatKod.setAttribute("aria-label", "Kopírovat kód");
+        kopirovatKod.title = "Kopírovat";
+        radek.appendChild(kopirovatKod);
       }
       if (blok.legacyHr === true) {
         radek.style.borderTop = "1px solid currentColor";
@@ -1674,6 +1720,24 @@
     );
     const caret = smazVyber(vyber);
     const blok = dokument.bloky[caret.blok];
+
+    /* PATCH 669 – Enter uvnitř code blocku je znak nového řádku uvnitř
+       stejného obdélníku. Druhý Enter na úplném konci vytvoří nový běžný
+       odstavec, takže uživatel nemusí code block vypínat přes toolbar. */
+    if (jeKodovyBlok(blok)) {
+      const text = textBloku(blok);
+      if (caret.offset === text.length && text.endsWith("\n")) {
+        const bezPoslednihoEnteru = rozdelObsah(blok, Math.max(0, text.length - 1)).vlevo;
+        nastavObsahBloku(blok, bezPoslednihoEnteru);
+        const novy = vytvorOdstavec("");
+        dokument.bloky.splice(caret.blok + 1, 0, novy);
+        return { blok: caret.blok + 1, offset: 0 };
+      }
+
+      const kodFormat = kopieFormatu(format);
+      kodFormat.kod = true;
+      return vlozText("\n", { zacatek: caret, konec: caret, sbaleny: true }, kodFormat);
+    }
 
     /* V2.16 – TODO je samostatná položka stejně jako v produkčním LubaNote.
        Enter vždy rozdělí aktuální TODO na dvě položky; nový checkbox začíná
@@ -4052,6 +4116,151 @@
     }
 
     return hodnoty;
+  }
+
+  function stavKodovehoBlokuVeVyberu(vyber) {
+    if (!vyber || !dokument?.bloky?.length) return "off";
+    const od = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const doIndex = Math.max(od, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    let ano = false;
+    let ne = false;
+
+    for (let index = od; index <= doIndex; index += 1) {
+      const blok = dokument.bloky[index];
+      if (!jeTextovyBlok(blok)) continue;
+      if (jeKodovyBlok(blok)) ano = true;
+      else ne = true;
+    }
+
+    if (ano && ne) return "mix";
+    return ano ? "on" : "off";
+  }
+
+  function prepniKodovyBlokZToolbaru() {
+    if (!dokument?.bloky?.length) return false;
+    const vyber = ziskejFormatovaciVyber() || vyberZPosledniPozice();
+    if (!vyber) return false;
+
+    const prvniIndex = Math.max(0, Math.min(dokument.bloky.length - 1, vyber.zacatek.blok));
+    const posledniIndex = Math.max(prvniIndex, Math.min(dokument.bloky.length - 1, vyber.konec.blok));
+    const prvniBlok = dokument.bloky[prvniIndex];
+
+    /* Klik uvnitř existujícího code blocku funguje jako skutečný toggle. */
+    if (prvniIndex === posledniIndex && jeKodovyBlok(prvniBlok)) {
+      const snapshotPred = vytvorSnapshotHistorie(vyber);
+      prvniBlok.legacyPre = false;
+      prvniBlok.obsah = nastavKodFormatObsahu(prvniBlok.obsah, false);
+      const pozice = {
+        blok: prvniIndex,
+        offset: Math.max(0, Math.min(textBloku(prvniBlok).length, vyber.konec.offset))
+      };
+      const vyberPo = { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+      posledniPozice = { ...pozice };
+      posledniVyber = klonVyberu(vyberPo);
+      ulozenyFormatovaciVyber = klonVyberu(vyberPo);
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+      ulozZmenuDoHistorie(snapshotPred, "vypnout blok kódu");
+      vykresli(vyberPo);
+      nastavStav("Blok kódu vypnut");
+      return true;
+    }
+
+    /* Bez označení vložíme NOVÝ prázdný code block přesně na caret.
+       U běžného odstavce jej bezpečně rozdělíme na text před / code / text po. */
+    if (vyber.sbaleny) {
+      if (prvniBlok?.typ !== "odstavec" || prvniBlok.legacyBlockquote || prvniBlok.legacyHr) {
+        nastavStav("Blok kódu vlož do běžného textového řádku", true);
+        return false;
+      }
+
+      const snapshotPred = vytvorSnapshotHistorie(vyber);
+      const text = textBloku(prvniBlok);
+      const caretOffset = Math.max(0, Math.min(text.length, vyber.zacatek.offset));
+      const rez = rozdelObsah(prvniBlok, caretOffset);
+      const noveBloky = [];
+      let kodIndex = prvniIndex;
+
+      if (text.length === 0) {
+        noveBloky.push(vytvorKodovyBlok(""));
+      } else {
+        if (rez.vlevo.length && rez.vlevo.some((cast) => String(cast.text || "").length)) {
+          noveBloky.push(vytvorOdstavecZObsahu(rez.vlevo, prvniBlok.zarovnani || "left"));
+          kodIndex += 1;
+        }
+        noveBloky.push(vytvorKodovyBlok(""));
+        if (rez.vpravo.length && rez.vpravo.some((cast) => String(cast.text || "").length)) {
+          noveBloky.push(vytvorOdstavecZObsahu(rez.vpravo, prvniBlok.zarovnani || "left"));
+        }
+      }
+
+      dokument.bloky.splice(prvniIndex, 1, ...noveBloky);
+      const pozice = { blok: kodIndex, offset: 0 };
+      const vyberPo = { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+      posledniPozice = { ...pozice };
+      posledniVyber = klonVyberu(vyberPo);
+      ulozenyFormatovaciVyber = klonVyberu(vyberPo);
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+      ulozZmenuDoHistorie(snapshotPred, "vložit blok kódu");
+      vykresli(vyberPo);
+      editor?.focus({ preventScroll: true });
+      nastavStav("Blok kódu vložen");
+      return true;
+    }
+
+    /* Označený text smíme převést pouze z obyčejných odstavců. Seznam/TODO
+       by jinak ztratil vlastní modelovou strukturu a obrázky. */
+    for (let index = prvniIndex; index <= posledniIndex; index += 1) {
+      const blok = dokument.bloky[index];
+      if (blok?.typ !== "odstavec" || blok.legacyBlockquote || blok.legacyHr || blok.legacyPre) {
+        nastavStav("Blok kódu: označ běžný text bez TODO/seznamu", true);
+        return false;
+      }
+    }
+
+    const kodText = textVeVyberu(vyber);
+    if (!kodText.length) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const prvniRez = rozdelObsah(dokument.bloky[prvniIndex], vyber.zacatek.offset);
+    const posledniRez = rozdelObsah(dokument.bloky[posledniIndex], vyber.konec.offset);
+    const noveBloky = [];
+    let kodIndex = prvniIndex;
+
+    if (prvniRez.vlevo.length && prvniRez.vlevo.some((cast) => String(cast.text || "").length)) {
+      noveBloky.push(vytvorOdstavecZObsahu(prvniRez.vlevo, dokument.bloky[prvniIndex].zarovnani || "left"));
+      kodIndex += 1;
+    }
+
+    noveBloky.push(vytvorKodovyBlok(kodText));
+
+    if (posledniRez.vpravo.length && posledniRez.vpravo.some((cast) => String(cast.text || "").length)) {
+      noveBloky.push(vytvorOdstavecZObsahu(posledniRez.vpravo, dokument.bloky[posledniIndex].zarovnani || "left"));
+    }
+
+    dokument.bloky.splice(prvniIndex, posledniIndex - prvniIndex + 1, ...noveBloky);
+    const pozice = { blok: kodIndex, offset: kodText.length };
+    const vyberPo = { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+    posledniPozice = { ...pozice };
+    posledniVyber = klonVyberu(vyberPo);
+    ulozenyFormatovaciVyber = klonVyberu(vyberPo);
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+    ulozZmenuDoHistorie(snapshotPred, "převést výběr na blok kódu");
+    vykresli(vyberPo);
+    editor?.focus({ preventScroll: true });
+    nastavStav("Označený text převeden na blok kódu");
+    return true;
+  }
+
+  function ziskejTextKodovehoBloku(blokId) {
+    const id = String(blokId || "");
+    const blok = dokument?.bloky?.find((polozka) => polozka?.id === id);
+    return jeKodovyBlok(blok) ? textBloku(blok) : "";
   }
 
   function nastavStylTextuZToolbaru(hodnota) {
@@ -6559,9 +6768,19 @@
       const todoCheckboxy = primeDeti.filter((dite) =>
         dite.matches?.("button.ln-v2-todo-check[data-v2-todo-check]")
       );
-      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy]);
+      const codeCopyTlacitka = primeDeti.filter((dite) =>
+        dite.matches?.("button.ln-v2-code-copy[data-v2-code-copy]")
+      );
+      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka]);
       if (primeDeti.some((dite) => !povoleneDeti.has(dite))) {
         return `blok ${b}: cizí přímý DOM prvek`;
+      }
+      if (jeKodovyBlok(blok)) {
+        if (codeCopyTlacitka.length !== 1 || codeCopyTlacitka[0].dataset.v2CodeCopy !== blok.id) {
+          return `blok ${b}: chybí tlačítko Kopírovat u code blocku`;
+        }
+      } else if (codeCopyTlacitka.length) {
+        return `blok ${b}: cizí code-copy tlačítko`;
       }
 
       const domText = segmentyDom.map((span) => span.textContent || "").join("");
@@ -7750,7 +7969,8 @@
       odkaz: odkazy.length === 1 ? odkazy[0] : "mix",
       bullet: stavBulletVeVyberu(vyber),
       seznam: stavSeznamuVeVyberu(vyber),
-      todo: stavTodoVeVyberu(vyber)
+      todo: stavTodoVeVyberu(vyber),
+      kodovyBlok: stavKodovehoBlokuVeVyberu(vyber)
     };
   }
 
@@ -8230,6 +8450,8 @@
     aktualizujPlanovanyOdkaz,
     zobrazTodoPodleId,
     nastavStylTextu: nastavStylTextuZToolbaru,
+    prepniKodovyBlok: prepniKodovyBlokZToolbaru,
+    ziskejKodovyBlokText: ziskejTextKodovehoBloku,
     nastavOdkaz: nastavOdkazZToolbaru,
     ziskejInfoOdkazu,
     vlozInterniOdkazZAutocomplete,

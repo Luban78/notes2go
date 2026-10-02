@@ -1098,6 +1098,14 @@
         : "Převést aktuální blok/výběr na TODO";
     }
 
+    const kodovyBlokButton = document.getElementById("tlacitkoKodovyBlok");
+    if (kodovyBlokButton) {
+      const kodovyBlok = stav.kodovyBlok || "off";
+      kodovyBlokButton.classList.toggle("active", kodovyBlok === "on");
+      kodovyBlokButton.classList.toggle("lnV2Mixed", kodovyBlok === "mix");
+      kodovyBlokButton.setAttribute("aria-pressed", kodovyBlok === "mix" ? "mixed" : (kodovyBlok === "on" ? "true" : "false"));
+    }
+
     document.querySelectorAll("#editorPanelSeznam [data-ln-v2-seznam]").forEach((button) => {
       const seznam = stav.seznam || "off";
       const aktivniVolba = seznam !== "mix" && button.dataset.lnV2Seznam === seznam;
@@ -1990,6 +1998,31 @@
       event.stopImmediatePropagation();
       core()?.zachytAktualniVyber?.();
       cyklujToolbarV2();
+      return;
+    }
+
+    if (cil.matches("[data-v2-code-copy]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const text = core()?.ziskejKodovyBlokText?.(cil.dataset.v2CodeCopy || "") || "";
+      if (!text) {
+        zobrazToast("Blok kódu je prázdný");
+        return;
+      }
+      void zapisV2DoSchranky(text)
+        .then((ok) => zobrazToast(ok ? "Kód zkopírován" : "Kód se nepodařilo zkopírovat", !ok))
+        .catch(() => zobrazToast("Kód se nepodařilo zkopírovat", true));
+      return;
+    }
+
+    if (id === "tlacitkoKodovyBlok") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      core()?.zachytAktualniVyber?.();
+      zavriPanelyFormatu();
+      const ok = core()?.prepniKodovyBlok?.() === true;
+      if (!ok) zobrazToast("Blok kódu lze vytvořit z běžného textu", true);
+      obnovToolbar();
       return;
     }
 

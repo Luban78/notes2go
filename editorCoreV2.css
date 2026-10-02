@@ -775,3 +775,67 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
     box-shadow: none;
   }
 }
+
+/* ==========================================
+   PATCH 669 – CODE BLOCK
+   Využívá stávající legacyPre model: žádný nový typ dokumentového bloku.
+========================================== */
+.ln-v2-editor .ln-v2-code-block {
+  position: relative;
+  box-sizing: border-box;
+  margin: .45em 0 .7em;
+  padding: 42px 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border, currentColor) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface, #202020) 90%, var(--color-editor-background, #111));
+  color: var(--color-editor-text, var(--color-text, #f5f2f8));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .92em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  text-align: left !important;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+/* Rich metadata v modelu zachováme, aby šel blok bezpečně vypnout zpět,
+   ale code block se vizuálně chová jako jednotný kód. */
+.ln-v2-editor .ln-v2-code-block > .ln-v2-cast {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  color: inherit !important;
+  background: transparent !important;
+}
+
+.ln-v2-editor .ln-v2-code-copy {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 2;
+  min-width: 88px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border, currentColor);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface, #202020) 86%, transparent);
+  color: inherit;
+  font: 600 .78rem/1 system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+
+.ln-v2-editor .ln-v2-code-copy::before {
+  content: "Kopírovat";
+}
+
+.ln-v2-editor .ln-v2-code-copy:active {
+  transform: scale(.97);
+  background: color-mix(in srgb, var(--color-accent, currentColor) 18%, var(--color-surface, #202020));
+}
