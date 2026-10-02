@@ -7573,12 +7573,23 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   width: 133px !important;
 }
 
-.cardSelected {
+/* PATCH 670 – jasny stav viceenasobneho vyberu hlavni karty.
+ * Logiku vyberu nemenime; pouze existujici .cardSelected dostane
+ * zretelne sedy/ztlumeny stav cele karty. Zachovava i barevne karty. */
+.taskCard.cardSelected {
   outline: none;
-
-  box-shadow:
-    inset 0 0 0 2px var(--color-accent),
-    0 6px 18px rgba(0, 0, 0, 0.08);
+  background: color-mix(
+    in srgb,
+    var(--luba-card-bg) 54%,
+    #7a7a7a 46%
+  ) !important;
+  filter: saturate(0.32);
+  opacity: 0.82;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition:
+    background 110ms ease,
+    filter 110ms ease,
+    opacity 110ms ease;
 }
 
 /* Karta, pro kterou je prave otevreny panel akci po 2x tapu.
