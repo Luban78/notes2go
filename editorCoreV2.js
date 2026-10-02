@@ -3666,6 +3666,28 @@
     );
   }
 
+  function ulozDomRangeProSelectionMenu(range) {
+    if (!editor || !range || range.collapsed) return false;
+    try {
+      if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) return false;
+      const zacatek = domBodNaModel(range.startContainer, range.startOffset);
+      const konec = domBodNaModel(range.endContainer, range.endOffset);
+      if (!zacatek || !konec) return false;
+
+      posledniPozice = { ...konec };
+      posledniVyber = {
+        zacatek: { ...zacatek },
+        konec: { ...konec },
+        sbaleny: false
+      };
+      ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+      aktualizujToolbarVelikosti(posledniVyber);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function ziskejTextVyberuProSelectionMenu() {
     const vyber = ziskejVyberProSelectionMenu();
     return vyber && !vyber.sbaleny ? textVeVyberu(vyber) : "";
@@ -9038,6 +9060,7 @@
     odeberInterniOdkazZElementu,
     ziskejPlanovaciKontext,
     obalPlanovaciVyber,
+    ulozDomRangeProSelectionMenu,
     ziskejTextVyberuProSelectionMenu,
     ziskejKontextVyberuProSelectionMenu,
     ziskejRichVyberProSelectionMenu,
