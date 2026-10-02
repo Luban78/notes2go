@@ -7573,18 +7573,20 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   width: 133px !important;
 }
 
-/* PATCH 670 – jasny stav viceenasobneho vyberu hlavni karty.
- * Logiku vyberu nemenime; pouze existujici .cardSelected dostane
- * zretelne sedy/ztlumeny stav cele karty. Zachovava i barevne karty. */
+/* PATCH 670A – vybrana karta musi byt poznat i na barevnych kartach.
+ * 670 pouze stahoval saturaci a cast puvodni barvy proto zustavala.
+ * Ted dostane vybrana karta jednotne neutralni pozadi a grayscale filtr
+ * na CELEM elementu, tedy vcetne textu, stitku, ikon a dalsiho obsahu.
+ * Logika multi-selectu zustava beze zmeny. */
 .taskCard.cardSelected {
   outline: none;
   background: color-mix(
     in srgb,
-    var(--luba-card-bg) 54%,
-    #7a7a7a 46%
+    var(--color-surface) 58%,
+    #777777 42%
   ) !important;
-  filter: saturate(0.32);
-  opacity: 0.82;
+  filter: grayscale(1) saturate(0) brightness(0.78);
+  opacity: 0.74;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
   transition:
     background 110ms ease,
