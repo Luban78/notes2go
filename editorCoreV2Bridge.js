@@ -97,6 +97,19 @@
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
+  /* PATCH 673G7 – nativní Android selection-handle auto-scroll je ve WebView
+     výrazně rychlejší než běžný ruční scroll. Ruční pan s aktivním výběrem
+     zůstává 1:1 jako v G5; zvlášť hlídáme jen nativní auto-scroll vznikající
+     při tažení modrého úchytu u horní/spodní hrany viewportu. */
+  let v2NativeSelectionAutoScroll = {
+    aktivniDo: 0,
+    posledniDelka: 0,
+    posledniTop: null,
+    posledniCas: 0,
+    opravnyTop: null,
+    opravnyDo: 0
+  };
+
   /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
      přestává být důvěryhodným důkazem původu. Externí aplikace mohla mezitím
      zkopírovat stejný text. Po návratu proto external paste vždy projde modem. */
@@ -2373,9 +2386,53 @@
 
   function jeBodUvnitřRozsahu(range, x, y) {
     try {
-      return Array.from(range?.getClientRects?.() || []).some((rect) =>
-        x >= rect.left - 4 && x <= rect.right + 4 && y >= rect.top - 4 && y <= rect.bottom + 4
-      );
+      if (!range || range.collapsed) return false;
+
+      /* 673G7 – Range.getClientRects() může přes více bloků vracet i velké
+         spojovací obdélníky. Pak tap ve volném místě VEDLE zvýrazněného textu
+         vypadá jako tap uvnitř selection. Proto hit-testujeme jen skutečné
+         glyph recty jednotlivých vybraných textových uzlů. */
+      const koren = range.commonAncestorContainer?.nodeType === Node.TEXT_NODE
+        ? range.commonAncestorContainer.parentNode
+        : range.commonAncestorContainer;
+      if (!koren) return false;
+
+      const uzly = [];
+      if (range.commonAncestorContainer?.nodeType === Node.TEXT_NODE) {
+        uzly.push(range.commonAncestorContainer);
+      } else {
+        const walker = document.createTreeWalker(koren, NodeFilter.SHOW_TEXT);
+        let uzel;
+        let pocet = 0;
+        while ((uzel = walker.nextNode()) && pocet < 1200) {
+          pocet += 1;
+          if (!uzel.nodeValue?.length) continue;
+          try {
+            if (range.intersectsNode(uzel)) uzly.push(uzel);
+          } catch (_error) {}
+        }
+      }
+
+      for (const uzel of uzly) {
+        const delka = uzel.nodeValue?.length || 0;
+        if (!delka) continue;
+        let start = 0;
+        let konec = delka;
+        if (uzel === range.startContainer) start = Math.max(0, Math.min(delka, range.startOffset));
+        if (uzel === range.endContainer) konec = Math.max(0, Math.min(delka, range.endOffset));
+        if (konec <= start) continue;
+
+        const cast = document.createRange();
+        cast.setStart(uzel, start);
+        cast.setEnd(uzel, konec);
+        const trefa = Array.from(cast.getClientRects?.() || []).some((rect) =>
+          rect.width > 0 && rect.height > 0 &&
+          x >= rect.left - 3 && x <= rect.right + 3 &&
+          y >= rect.top - 3 && y <= rect.bottom + 3
+        );
+        if (trefa) return true;
+      }
+      return false;
     } catch (_error) {
       return false;
     }
@@ -2499,7 +2556,7 @@
 
     const dotyk = event.touches[0];
     if (jeBodUSelectionHandle(range, dotyk.clientX, dotyk.clientY)) {
-      zapisSelectionScrollDiag("G6_HANDLE_PASS", event);
+      zapisSelectionScrollDiag("G7_HANDLE_PASS", event);
       return;
     }
 
@@ -2520,7 +2577,7 @@
       range: range.cloneRange?.() || null
     };
     v2PosledniTapSelection = null;
-    zapisSelectionScrollDiag("G6_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
+    zapisSelectionScrollDiag("G7_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
   }, { passive: false, capture: true });
 
   document.addEventListener("touchmove", (event) => {
@@ -2536,7 +2593,6 @@
     if (!dotyk) return;
     const dx = dotyk.clientX - stav.startX;
     const dy = dotyk.clientY - stav.startY;
-    const krokY = dotyk.clientY - stav.lastY;
 
     if (!stav.moved) {
       const vzdalenost = Math.hypot(dx, dy);
@@ -2554,18 +2610,16 @@
       }
       stav.moved = true;
       skryjV2SelectionMenu();
-      zapisSelectionScrollDiag("G6_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
+      zapisSelectionScrollDiag("G7_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
     }
 
     if (event.cancelable) event.preventDefault();
 
-    /* 673G6 – selection scroll je záměrně pomalejší a bez „utržení“.
-       Nepoužíváme celkovou vzdálenost od začátku gesta, ale jen přírůstek
-       mezi dvěma touchmove. Jeden event je navíc omezen na 20 px a převod
-       prst→obsah je 0.48×. Rychlý swipe proto nemůže přeskočit velký kus textu. */
-    const omezenyKrok = Math.max(-20, Math.min(20, krokY));
+    /* 673G7 – obyčejný RUČNÍ scroll při aktivním selection nezpomalujeme.
+       Prst a obsah se hýbou 1:1 stejně jako v G5. Zpomalení níže patří pouze
+       nativnímu edge auto-scrollu při tažení modrého selection úchytu. */
     const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
-    const novyTop = Math.max(0, Math.min(maximum, stav.editor.scrollTop - (omezenyKrok * 0.48)));
+    const novyTop = Math.max(0, Math.min(maximum, stav.startScrollTop - dy));
     stav.editor.scrollTop = novyTop;
     stav.lastX = dotyk.clientX;
     stav.lastY = dotyk.clientY;
@@ -2588,7 +2642,7 @@
     if (byloScroll) {
       if (event.cancelable) event.preventDefault();
       potlacV2SelectionScrollClickDo = performance.now() + 450;
-      zapisSelectionScrollDiag("G6_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
+      zapisSelectionScrollDiag("G7_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!aktivni) return;
@@ -2596,7 +2650,7 @@
           const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
           if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
             zobrazV2SelectionMenuProOznaceni(range);
-            zapisSelectionScrollDiag("G6_MENU_RESTORE");
+            zapisSelectionScrollDiag("G7_MENU_RESTORE");
           }
         });
       });
@@ -2624,7 +2678,7 @@
       skryjV2SelectionMenu();
       obnovToolbar();
       potlacV2SelectionScrollClickDo = performance.now() + 350;
-      zapisSelectionScrollDiag("G6_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
+      zapisSelectionScrollDiag("G7_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
     }
   }, { passive: false, capture: true });
 
@@ -2662,6 +2716,63 @@
     if (!aktivni) return;
     const target = event.target;
     if (!(target instanceof Element) || (!hostitel?.contains(target) && target !== hostitel)) return;
+
+    /* 673G7 – limitujeme pouze nativní WebView auto-scroll selection handle.
+       Běžný ruční scroll má v2SelectionScroll != null a jde bez omezení. */
+    if (jeAndroidApkSelectionScroll() && !v2SelectionScroll) {
+      const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+      const ted = performance.now();
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      const aktivniRange = Boolean(range && !range.collapsed && jeV2SelectionRozsah(range));
+
+      if (target === editor && aktivniRange && ted < v2NativeSelectionAutoScroll.aktivniDo) {
+        const aktualniTop = Number(editor.scrollTop || 0);
+
+        if (
+          v2NativeSelectionAutoScroll.opravnyTop != null &&
+          ted < v2NativeSelectionAutoScroll.opravnyDo &&
+          Math.abs(aktualniTop - v2NativeSelectionAutoScroll.opravnyTop) <= 2
+        ) {
+          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
+          v2NativeSelectionAutoScroll.posledniCas = ted;
+          v2NativeSelectionAutoScroll.opravnyTop = null;
+          zapisSelectionScrollDiag("G7_HANDLE_SCROLL_APPLY", event, `top=${Math.round(aktualniTop)}`);
+          return;
+        }
+
+        if (v2NativeSelectionAutoScroll.posledniTop == null || ted - v2NativeSelectionAutoScroll.posledniCas > 350) {
+          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
+          v2NativeSelectionAutoScroll.posledniCas = ted;
+        } else {
+          const dt = Math.max(16, Math.min(120, ted - v2NativeSelectionAutoScroll.posledniCas));
+          /* cca 280 px/s, ale nikdy víc než 34 px v jednom scroll eventu. */
+          const povolenyKrok = Math.max(5, Math.min(34, dt * 0.28));
+          const rozdil = aktualniTop - v2NativeSelectionAutoScroll.posledniTop;
+          if (Math.abs(rozdil) > povolenyKrok) {
+            const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
+            const opravenyTop = Math.max(0, Math.min(
+              maximum,
+              v2NativeSelectionAutoScroll.posledniTop + Math.sign(rozdil) * povolenyKrok
+            ));
+            v2NativeSelectionAutoScroll.opravnyTop = opravenyTop;
+            v2NativeSelectionAutoScroll.opravnyDo = ted + 80;
+            editor.scrollTop = opravenyTop;
+            v2NativeSelectionAutoScroll.posledniTop = opravenyTop;
+            v2NativeSelectionAutoScroll.posledniCas = ted;
+            zapisSelectionScrollDiag(
+              "G7_HANDLE_SCROLL_LIMIT",
+              event,
+              `wanted=${Math.round(aktualniTop)} limited=${Math.round(opravenyTop)} dt=${Math.round(dt)}`
+            );
+            return;
+          }
+          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
+          v2NativeSelectionAutoScroll.posledniCas = ted;
+        }
+      }
+    }
+
     zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
 
@@ -2844,6 +2955,28 @@
     if (!vyber?.rangeCount) return;
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
+
+    /* 673G7 – rychlé změny délky selection bez našeho ručního scroll stavu
+       jsou signál nativního tažení modrého úchytu. Krátce tím ozbrojíme pouze
+       limiter edge auto-scrollu; samotný Range nijak neměníme. */
+    if (jeAndroidApkSelectionScroll()) {
+      const ted = performance.now();
+      const delka = !range.collapsed ? String(vyber.toString() || "").length : 0;
+      if (delka > 0 && delka !== v2NativeSelectionAutoScroll.posledniDelka && !v2SelectionScroll) {
+        const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+        if (v2NativeSelectionAutoScroll.posledniTop == null || ted - v2NativeSelectionAutoScroll.posledniCas > 350) {
+          v2NativeSelectionAutoScroll.posledniTop = Number(editor?.scrollTop || 0);
+          v2NativeSelectionAutoScroll.posledniCas = ted;
+        }
+        v2NativeSelectionAutoScroll.aktivniDo = ted + 260;
+      } else if (delka === 0) {
+        v2NativeSelectionAutoScroll.aktivniDo = 0;
+        v2NativeSelectionAutoScroll.posledniTop = null;
+        v2NativeSelectionAutoScroll.opravnyTop = null;
+      }
+      v2NativeSelectionAutoScroll.posledniDelka = delka;
+    }
+
     requestAnimationFrame(() => {
       obnovToolbar();
       if (jeDesktopSelection) return;
