@@ -213,6 +213,13 @@ body {
   display: none;
 }
 
+/* PATCH 671B – zabraneni jedn frame probliknuti spodního toolbaru pri
+   zavreni editoru. Shell se vizualne schova driv, nez se odpoji Core V2. */
+.taskModal.editorClosing {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .modalContent {
   display: flex;
   flex-direction: column;
@@ -6418,6 +6425,26 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   min-width: 0;
 }
 
+/* PATCH 671C – kompaktní ikona správy Shared note na konci názvu. */
+#shareNoteButton {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#shareNoteButton:active {
+  transform: scale(0.96);
+}
+
 #secretTaskButton {
   flex-shrink: 0;
 
@@ -7573,12 +7600,25 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   width: 133px !important;
 }
 
-.cardSelected {
+/* PATCH 670A – vybrana karta musi byt poznat i na barevnych kartach.
+ * 670 pouze stahoval saturaci a cast puvodni barvy proto zustavala.
+ * Ted dostane vybrana karta jednotne neutralni pozadi a grayscale filtr
+ * na CELEM elementu, tedy vcetne textu, stitku, ikon a dalsiho obsahu.
+ * Logika multi-selectu zustava beze zmeny. */
+.taskCard.cardSelected {
   outline: none;
-
-  box-shadow:
-    inset 0 0 0 2px var(--color-accent),
-    0 6px 18px rgba(0, 0, 0, 0.08);
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 58%,
+    #777777 42%
+  ) !important;
+  filter: grayscale(1) saturate(0) brightness(0.78);
+  opacity: 0.74;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  transition:
+    background 110ms ease,
+    filter 110ms ease,
+    opacity 110ms ease;
 }
 
 /* Karta, pro kterou je prave otevreny panel akci po 2x tapu.
