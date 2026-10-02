@@ -69,6 +69,13 @@
   let v2SelectionMenuAktivni = false;
   let v2SelectionMenuKurzor = false;
   let v2SelectionMenuBod = null;
+
+  /* PATCH 673G3 – Android WebView má při viditelném vlastním selection panelu
+     odlišné touch chování než Chrome/SPCK. Během obyčejného posunu editoru
+     panel dočasně schováme a po dokončeném scroll gestu ho vrátíme nad stále
+     aktivní DOM selection. Selection samotnou ani scroll nikdy neměníme. */
+  let v2SelectionScrollGesto = null;
+  let potlacV2KlikPoSelectionScrollDo = 0;
   let v2SelectionOverflowKotva = null;
   let v2LokalniSchranka = "";
   let v2RichSchranka = null;
@@ -2306,6 +2313,7 @@
 
   function zrusV2OznaceniKlikemMimo(event) {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
+    if (performance.now() < potlacV2KlikPoSelectionScrollDo) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
     if (jeV2MoveInterakce(event)) return;
 
@@ -2370,7 +2378,72 @@
     zpracujV2SelectionMenuAkci(event);
   }, true);
 
+  document.addEventListener("touchstart", (event) => {
+    if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
+    if (selectionMenu?.contains(event.target)) return;
+    if (event.target.closest?.("#editorToolbarToggle, .editorQuickToolbar, .editorToolbarPanel, .editorBottomBar, button, figure")) return;
+
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) {
+      v2SelectionScrollGesto = null;
+      return;
+    }
+
+    const dotyk = event.touches?.[0];
+    if (!dotyk) return;
+
+    v2SelectionScrollGesto = {
+      x: Number(dotyk.clientX),
+      y: Number(dotyk.clientY),
+      scrollTop: Number(core()?.ziskejScrollTop?.() ?? hostitel?.querySelector?.(".ln-v2-editor")?.scrollTop ?? 0),
+      posun: false
+    };
+
+    /* V APK je právě viditelný fixed panel to, co WebView drží v selection
+       touch režimu. Schování panelu zde obnoví nativní pan-y; DOM Range
+       zůstává nedotčený. */
+    if (v2SelectionMenuAktivni) skryjV2SelectionMenu();
+  }, { passive: true, capture: true });
+
+  document.addEventListener("touchmove", (event) => {
+    const gesto = v2SelectionScrollGesto;
+    if (!gesto || jeDesktopSelection || !aktivni) return;
+    const dotyk = event.touches?.[0];
+    if (!dotyk) return;
+    const dx = Number(dotyk.clientX) - gesto.x;
+    const dy = Number(dotyk.clientY) - gesto.y;
+    if (Math.hypot(dx, dy) >= 7) gesto.posun = true;
+  }, { passive: true, capture: true });
+
+  function dokoncV2SelectionScrollGesto() {
+    const gesto = v2SelectionScrollGesto;
+    v2SelectionScrollGesto = null;
+    if (!gesto || jeDesktopSelection || !aktivni) return;
+
+    const aktualniScrollTop = Number(core()?.ziskejScrollTop?.() ?? hostitel?.querySelector?.(".ln-v2-editor")?.scrollTop ?? 0);
+    const bylScroll = gesto.posun || Math.abs(aktualniScrollTop - gesto.scrollTop) >= 2;
+    if (!bylScroll) return;
+
+    /* Některé WebView po touch-scroll ještě pošlou syntetický click. Ten nesmí
+       zrušit selection, kterou si uživatel právě schválně zachoval. */
+    potlacV2KlikPoSelectionScrollDo = performance.now() + 300;
+
+    const obnov = () => {
+      if (!aktivni) return;
+      const vyber = window.getSelection();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+        zobrazV2SelectionMenuProOznaceni(range);
+      }
+    };
+
+    requestAnimationFrame(obnov);
+    setTimeout(obnov, 80);
+  }
+
   document.addEventListener("touchend", (event) => {
+    dokoncV2SelectionScrollGesto();
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("TOUCHEND", `target=${event.target?.className || event.target?.tagName || "-"}`);
     if (jeV2MoveInterakce(event)) {
@@ -2404,6 +2477,10 @@
         zobrazV2SelectionMenuProKurzor({ x: aktualni.x, y: aktualni.y });
       }
     }, 70);
+  }, { passive: true, capture: true });
+
+  document.addEventListener("touchcancel", () => {
+    v2SelectionScrollGesto = null;
   }, { passive: true, capture: true });
 
   document.addEventListener("dblclick", (event) => {
@@ -2480,7 +2557,7 @@
       return;
     }
 
-    /* PATCH 673G2 – pri aktivnim textovem vyberu nesmi pouhy touch/pointerdown
+    /* PATCH 673G3 – pri aktivnim textovem vyberu nesmi pouhy pointerdown
        uvnitr editoru panel hned schovat. Uživatel tak muze po oznaceni pustit
        uchyt, normalne jednim prstem posunout obsah a pak znovu chytit selection
        handle. Zde selection ani scroll nijak nemenime: zadny snapshot,
