@@ -131,6 +131,12 @@
      - kotva panelu po handle dragu se zachová i při každém pozdějším
        reposition hooku (keyboard/viewport/overflow), takže panel neskočí nahoru. */
 
+  /* PATCH 673G24 – dokončení dragu pod LubaKeyboard:
+     pokud uživatel pustí tažený selection handle v prostoru zakrytém vlastní
+     klávesnicí, editor se jednorázově posune tak, aby aktivní konec výběru
+     vyjel těsně NAD horní hranu klávesnice. Výběr, highlight i menu zůstávají
+     ukotvené ke stejnému konci; nejde o změnu edge-scroll rychlosti G23. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -2786,6 +2792,42 @@
     return bod ? { x: Number(bod.x), y: Number(bod.y) } : null;
   }
 
+  function dorovnejV2SelectionHandleNadLubaKeyboard(stav, strana = "end") {
+    if (!stav?.editor || !stav?.range || stav.range.collapsed) return false;
+
+    const klavesnice = document.querySelector(".ln-luba-keyboard:not([hidden])");
+    const klavesniceRect = klavesnice?.getBoundingClientRect?.() || null;
+    if (!klavesniceRect || klavesniceRect.height <= 0) return false;
+
+    const bod = ziskejV2SelectionHandleBodProMenu(stav.range, strana);
+    if (!bod || !Number.isFinite(bod.y)) return false;
+
+    /* Bod selection handle je na spodní hraně řádku a samotná kapka má 22 px.
+       Necháme ještě 8 px rezervu nad klávesnicí, aby byl celý úchyt vidět. */
+    const cilY = Number(klavesniceRect.top) - 30;
+    if (bod.y <= cilY + 1) return false;
+
+    const aktualniTop = Number(stav.editor.scrollTop || 0);
+    const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
+    const pozadovanyPosun = Math.max(0, bod.y - cilY);
+    const novyTop = Math.max(0, Math.min(maximum, aktualniTop + pozadovanyPosun));
+    const skutecnyPosun = novyTop - aktualniTop;
+    if (skutecnyPosun <= 1) return false;
+
+    stav.keyboardDorovnani = true;
+    nastavV2SelectionMenuNuceneSkryti(true);
+    skryjV2SelectionMenu();
+    skryjV2SelectionHandles();
+    stav.editor.scrollTop = novyTop;
+
+    zapisSelectionScrollDiag(
+      "G24_KEYBOARD_REVEAL",
+      null,
+      `side=${strana} by=${Math.round(skutecnyPosun)} handleY=${Math.round(bod.y)} keyboardTop=${Math.round(klavesniceRect.top)} top=${Math.round(novyTop)}`
+    );
+    return true;
+  }
+
   function zajistiV2SelectionHandles() {
     zajistiV2SelectionScrollHighlightStyl();
     if (!v2SelectionHandleStart?.isConnected) {
@@ -3363,12 +3405,27 @@
       stav.menuKotvaStrana = strana;
       // lehký auto-scroll šetří core/handle layout; při konci vše jednou dorovnáme.
       ulozV2VizualniRangeDoCore(stav.range);
-      zobrazV2SelectionHandles(stav.range);
-      nastavV2SelectionMenuNuceneSkryti(false);
-      // Po puštění se panel vrací NAD SKUTEČNÝ právě tažený úchyt.
-      // Ne nad prst, ne staticky nahoru a ne k opačnému konci výběru.
-      zobrazV2VizualniSelectionPoScrollu(stav, "handle-end", strana);
-      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"}`);
+
+      /* 673G24 – pokud aktivní konec skončil schovaný pod LubaKeyboard,
+         neposílat panel/úchyty nejdřív do neviditelného místa. Nejdřív celý
+         editor jednorázově posuneme, pak teprve po dvou RAF vykreslíme finální
+         handle + menu. Tím vyjede i příslušný text nad klávesnici. */
+      const dorovnanoNadKlavesnici = dorovnejV2SelectionHandleNadLubaKeyboard(stav, strana);
+      if (dorovnanoNadKlavesnici) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (v2SelectionScroll !== stav || !aktivni || !stav.range || stav.range.collapsed) return;
+          stav.keyboardDorovnani = false;
+          nastavV2SelectionMenuNuceneSkryti(false);
+          zobrazV2VizualniSelectionPoScrollu(stav, "handle-end-keyboard-reveal", strana);
+        }));
+      } else {
+        zobrazV2SelectionHandles(stav.range);
+        nastavV2SelectionMenuNuceneSkryti(false);
+        // Po puštění se panel vrací NAD SKUTEČNÝ právě tažený úchyt.
+        // Ne nad prst, ne staticky nahoru a ne k opačnému konci výběru.
+        zobrazV2VizualniSelectionPoScrollu(stav, "handle-end", strana);
+      }
+      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"} keyboardReveal=${dorovnanoNadKlavesnici ? "Y" : "N"}`);
       ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: false, side: strana, auto: 0 });
       return;
     }
@@ -3423,9 +3480,19 @@
       stav.touchEnded = true;
       stav.menuKotvaStrana = strana;
       ulozV2VizualniRangeDoCore(stav.range);
-      zobrazV2SelectionHandles(stav.range);
-      nastavV2SelectionMenuNuceneSkryti(false);
-      zobrazV2VizualniSelectionPoScrollu(stav, "handle-cancel", strana);
+      const dorovnanoNadKlavesnici = dorovnejV2SelectionHandleNadLubaKeyboard(stav, strana);
+      if (dorovnanoNadKlavesnici) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (v2SelectionScroll !== stav || !aktivni || !stav.range || stav.range.collapsed) return;
+          stav.keyboardDorovnani = false;
+          nastavV2SelectionMenuNuceneSkryti(false);
+          zobrazV2VizualniSelectionPoScrollu(stav, "handle-cancel-keyboard-reveal", strana);
+        }));
+      } else {
+        zobrazV2SelectionHandles(stav.range);
+        nastavV2SelectionMenuNuceneSkryti(false);
+        zobrazV2VizualniSelectionPoScrollu(stav, "handle-cancel", strana);
+      }
       return;
     }
     const dotyk = Array.from(event.changedTouches || []).find((item) => item.identifier === stav.touchId);
@@ -3476,7 +3543,7 @@
     if (stav && target === stav.editor && !stav.handleDrag) {
       if (Math.abs(Number(stav.editor.scrollTop || 0) - Number(stav.startScrollTop || 0)) > 2) stav.moved = true;
       skryjV2SelectionHandles();
-      if (stav.touchEnded) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+      if (stav.touchEnded && !stav.keyboardDorovnani) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
     }
 
     /* 673G22 – při custom edge-scrollu nelogovat každý 2–20px krok.
