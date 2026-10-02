@@ -2406,6 +2406,8 @@ async function zkopirujTagVdReport(tlacitko) {
             <small style="opacity:.72">Live rychlost při držení úchytu u okraje</small>
           </div>
           <output data-dh-selection-speed-value style="font-weight:700;white-space:nowrap">${nactiV2SelectionEdgeSpeed()} px/s</output>
+          <div data-dh-selection-engine style="grid-column:1 / -1;font-size:12px;opacity:.82">Engine: čekám na výběr</div>
+          <div data-dh-selection-applied style="grid-column:1 / -1;font-size:12px;opacity:.82">Použito: —</div>
           <input
             data-dh-selection-speed
             type="range"
@@ -2463,6 +2465,22 @@ async function zkopirujTagVdReport(tlacitko) {
     };
     selectionSpeedInput?.addEventListener("input", aplikujSelectionSpeed);
     selectionSpeedInput?.addEventListener("change", aplikujSelectionSpeed);
+
+    const selectionEngineEl = hub.querySelector("[data-dh-selection-engine]");
+    const selectionAppliedEl = hub.querySelector("[data-dh-selection-applied]");
+    const vykresliSelectionDiag = (stav = {}) => {
+      const engine = String(stav.engine || "-");
+      const drag = stav.dragging ? ` · drag ${stav.side || "?"}` : "";
+      const auto = Number(stav.auto) < 0 ? " · auto ↑" : (Number(stav.auto) > 0 ? " · auto ↓" : "");
+      if (selectionEngineEl) selectionEngineEl.textContent = `Engine: ${engine}${drag}${auto}`;
+      const set = Number(stav.speedSet) || nactiV2SelectionEdgeSpeed();
+      const applied = Number(stav.speedApplied) || 0;
+      if (selectionAppliedEl) selectionAppliedEl.textContent = `Nastaveno: ${set} px/s · použito enginem: ${applied ? `${applied} px/s` : "—"}`;
+    };
+    vykresliSelectionDiag(window.LUBANOTE_V2_SELECTION_DIAG || { engine: "-", speedSet: nactiV2SelectionEdgeSpeed() });
+    document.addEventListener("lubanote:v2-selection-debug-state", (event) => {
+      vykresliSelectionDiag(event?.detail || {});
+    });
 
     if (aktivniModul && MODULY[aktivniModul]) {
       selectModulu.value = aktivniModul;

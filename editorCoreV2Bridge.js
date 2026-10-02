@@ -101,6 +101,15 @@
      do toho nevstupuje. */
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
+  let v2SelectionPrevodTimer = null;
+
+  /* PATCH 673G21 – Debug Hub v G20 prokázal, že slider hodnotu opravdu
+     zapisoval (G20_SPEED_SET), ale během problematického scrollu se nikdy
+     neobjevil G20_SPEED_APPLY ani custom handle start. Android tedy stále
+     táhl svůj NATIVNÍ selection handle a náš regulátor vůbec neběžel.
+     G21 proto po ustálení každého mobilního výběru přepne selection do našeho
+     compositor-friendly režimu a navíc umí přímo převzít i touchstart, který
+     ještě trefí nativní Android handle. */
 
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
@@ -241,6 +250,23 @@
         "SEL673D",
         `${typ} | ${ziskejDiagSelectionStav(event)}${extra ? ` | ${extra}` : ""}`
       );
+    } catch (_error) {}
+  }
+
+  function ohlasV2SelectionEngineStav(extra = {}) {
+    try {
+      const drag = v2SelectionScroll?.handleDrag || null;
+      const detail = {
+        engine: v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed ? "CUSTOM" : "NATIVE",
+        speedSet: Number(window.LUBANOTE_V2_SELECTION_EDGE_SPEED) || 0,
+        speedApplied: Number(drag?.posledniSpeed) || 0,
+        dragging: Boolean(drag),
+        side: drag?.strana || "",
+        auto: Number(drag?.autoSmer) || 0,
+        ...extra
+      };
+      window.LUBANOTE_V2_SELECTION_DIAG = detail;
+      document.dispatchEvent(new CustomEvent("lubanote:v2-selection-debug-state", { detail }));
     } catch (_error) {}
   }
 
@@ -2569,7 +2595,8 @@
     if (ulozit) {
       try { localStorage.setItem(V2_SELECTION_EDGE_SPEED_KEY, String(cislo)); } catch (_error) {}
     }
-    zapisSelectionScrollDiag("G20_SPEED_SET", null, `speed=${cislo}`);
+    zapisSelectionScrollDiag("G21_SPEED_SET", null, `speed=${cislo}`);
+    ohlasV2SelectionEngineStav({ speedSet: cislo });
     return cislo;
   }
 
@@ -2828,7 +2855,8 @@
     drag.autoCas = 0;
     nastavV2SelectionHandlesAutoScrollSkryti(false);
     if (drag.autoSmer) {
-      zapisSelectionScrollDiag("G17_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+      zapisSelectionScrollDiag("G21_HANDLE_AUTOSCROLL", null, `dir=off reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+      ohlasV2SelectionEngineStav({ engine: "CUSTOM", auto: 0 });
       drag.autoSmer = 0;
     }
   }
@@ -2878,10 +2906,11 @@
           zobrazV2SelectionHandles(stav.range);
         }
         zapisSelectionScrollDiag(
-          "G19_HANDLE_AUTOSCROLL",
+          "G21_HANDLE_AUTOSCROLL",
           null,
           `dir=${smer < 0 ? "up" : (smer > 0 ? "down" : "off")} speed=${ziskejV2SelectionEdgeScrollRychlostLive()} top=${Math.round(stav.editor.scrollTop || 0)}`
         );
+        ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: true, side: aktualniDrag.strana, auto: smer });
       }
 
       if (!smer) {
@@ -2899,7 +2928,8 @@
       const pxZaSekundu = ziskejV2SelectionEdgeScrollRychlostLive();
       if (aktualniDrag.posledniSpeed !== pxZaSekundu) {
         aktualniDrag.posledniSpeed = pxZaSekundu;
-        zapisSelectionScrollDiag("G20_SPEED_APPLY", null, `speed=${pxZaSekundu}`);
+        zapisSelectionScrollDiag("G21_SPEED_APPLY", null, `speed=${pxZaSekundu}`);
+        ohlasV2SelectionEngineStav({ speedApplied: pxZaSekundu, auto: smer });
       }
       const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
       const pred = Number(stav.editor.scrollTop || 0);
@@ -2916,6 +2946,10 @@
   }
 
   function zrusV2SelectionScrollStav(stav = v2SelectionScroll) {
+    if (v2SelectionPrevodTimer) {
+      clearTimeout(v2SelectionPrevodTimer);
+      v2SelectionPrevodTimer = null;
+    }
     zastavV2HandleAutoScroll(stav, "state-reset");
     if (stav?.obnovTimer) {
       clearTimeout(stav.obnovTimer);
@@ -2988,6 +3022,50 @@
     return stav;
   }
 
+  function prevedV2NativeSelectionNaVlastni(duvod = "settle") {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) return false;
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+    if (!editor) return false;
+    if (!nastavV2SelectionScrollHighlight(range)) return false;
+
+    core()?.zachytAktualniVyber?.();
+    const kopie = range.cloneRange?.() || null;
+    if (!kopie || kopie.collapsed) return false;
+    const stav = {
+      editor,
+      range: kopie,
+      touchId: null,
+      startX: 0,
+      startY: 0,
+      startScrollTop: Number(editor.scrollTop || 0),
+      moved: false,
+      touchEnded: true,
+      obnovTimer: null,
+      handleDrag: null
+    };
+    v2SelectionScroll = stav;
+    ulozV2VizualniRangeDoCore(kopie);
+    try { vyber.removeAllRanges(); } catch (_error) {}
+    nastavV2SelectionMenuNuceneSkryti(false);
+    zobrazV2SelectionHandles(kopie);
+    zobrazV2SelectionMenuProOznaceni(kopie);
+    zapisSelectionScrollDiag("G21_CUSTOM_READY", null, `reason=${duvod} top=${Math.round(editor.scrollTop || 0)}`);
+    ohlasV2SelectionEngineStav({ engine: "CUSTOM" });
+    return true;
+  }
+
+  function naplanujV2PrevodNativeSelection(duvod = "selectionchange") {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) return;
+    if (v2SelectionPrevodTimer) clearTimeout(v2SelectionPrevodTimer);
+    v2SelectionPrevodTimer = setTimeout(() => {
+      v2SelectionPrevodTimer = null;
+      prevedV2NativeSelectionNaVlastni(duvod);
+    }, 90);
+  }
+
   function pripravV2DalsiScrollVizualnihoVyberu(stav, dotyk) {
     if (!stav || !stav.range || stav.range.collapsed) return false;
     if (stav.obnovTimer) {
@@ -3043,7 +3121,8 @@
       potlacV2SelectionMenuDo = performance.now() + 900;
       event.preventDefault();
       event.stopPropagation();
-      zapisSelectionScrollDiag("G14_HANDLE_DRAG_START", event, `side=${strana}`);
+      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_START", event, `side=${strana} speed=${ziskejV2SelectionEdgeScrollRychlostLive()}`);
+      ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: true, side: strana });
       return;
     }
 
@@ -3067,9 +3146,40 @@
     if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return;
 
     const body = ziskejV2SelectionHandleBody(range);
-    const uNativnihoHandle = body.some((bod) => Math.hypot(Number(dotyk.clientX) - bod.x, Number(dotyk.clientY) - bod.y) <= 38);
+    const vzdStart = body[0] ? Math.hypot(Number(dotyk.clientX) - body[0].x, Number(dotyk.clientY) - body[0].y) : Infinity;
+    const vzdEnd = body[1] ? Math.hypot(Number(dotyk.clientX) - body[1].x, Number(dotyk.clientY) - body[1].y) : Infinity;
+    const uNativnihoHandle = Math.min(vzdStart, vzdEnd) <= 38;
     if (uNativnihoHandle) {
-      zapisSelectionScrollDiag("G14_NATIVE_HANDLE_PASS", event);
+      // 673G21 – zásadní změna: nativní handle už NEPOUŠTÍME WebView.
+      // G20 log ukázal, že právě tato větev způsobovala celý nekontrolovaný
+      // auto-scroll a proto na ni slider nemohl mít žádný vliv. Převezmeme
+      // gesto v capture fázi a pokračujeme naším handle enginem.
+      const strana = vzdStart <= vzdEnd ? "start" : "end";
+      const stav = pripravV2VizualniSelectionZNative(range, vyber, editor, dotyk);
+      if (stav?.range) {
+        ulozV2VizualniRangeDoCore(stav.range);
+        const pevnyBod = strana === "start"
+          ? { node: stav.range.endContainer, offset: stav.range.endOffset }
+          : { node: stav.range.startContainer, offset: stav.range.startOffset };
+        stav.handleDrag = {
+          touchId: dotyk.identifier,
+          strana,
+          pevnyBod,
+          lastX: dotyk.clientX,
+          lastY: dotyk.clientY,
+          autoRaf: 0,
+          autoCas: 0,
+          autoSmer: 0,
+          melMultiscroll: false,
+          posledniSpeed: null
+        };
+        nastavV2SelectionMenuNuceneSkryti(true);
+        skryjV2SelectionMenu();
+        event.preventDefault();
+        event.stopPropagation();
+        zapisSelectionScrollDiag("G21_NATIVE_HANDLE_TAKEOVER", event, `side=${strana} speed=${ziskejV2SelectionEdgeScrollRychlostLive()}`);
+        ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: true, side: strana });
+      }
       return;
     }
 
@@ -3139,7 +3249,8 @@
       // Po puštění se panel vrací NAD SKUTEČNÝ právě tažený úchyt.
       // Ne nad prst, ne staticky nahoru a ne k opačnému konci výběru.
       zobrazV2VizualniSelectionPoScrollu(stav, "handle-end", strana);
-      zapisSelectionScrollDiag("G20_HANDLE_DRAG_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"}`);
+      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"}`);
+      ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: false, side: strana, auto: 0 });
       return;
     }
 
@@ -3419,6 +3530,10 @@
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
 
+    if (!jeDesktopSelection && !range.collapsed && !v2SelectionScroll?.range) {
+      naplanujV2PrevodNativeSelection("selectionchange-stable");
+      ohlasV2SelectionEngineStav({ engine: "NATIVE" });
+    }
 
     requestAnimationFrame(() => {
       obnovToolbar();
