@@ -148,6 +148,41 @@
     const offset = Math.max(0, Math.min(text.length, Number(pozice.offset) || 0));
     let rect = null;
 
+    /* PATCH 669C – WebView neumí spolehlivě vrátit collapsed Range rect
+       bezprostředně ZA koncovým \n v PRE/code blocku. Model už přitom caret
+       správně posunul na nový řádek; pouze náš tyrkysový LubaCaret zůstane
+       opticky na konci předchozího řádku až do napsání dalšího znaku.
+       Pro jediný povolený koncový newline proto geometrii dalšího řádku
+       dopočítáme přímo z posledního skutečného znaku / paddingu bloku. */
+    if (jeKodovyBlok(blok) && offset === text.length && text.endsWith("\n")) {
+      const r = blokEl.getBoundingClientRect();
+      const styl = getComputedStyle(blokEl);
+      const lineHeight = parseFloat(styl.lineHeight) || parseFloat(styl.fontSize) * 1.5 || 24;
+      const paddingLeft = parseFloat(styl.paddingLeft) || 0;
+      const paddingTop = parseFloat(styl.paddingTop) || 0;
+      let predchoziRadekTop = r.top + paddingTop + 2;
+
+      if (text.length > 1) {
+        try {
+          const a = najdiDomBod(pozice.blok, text.length - 2);
+          const b = najdiDomBod(pozice.blok, text.length - 1);
+          if (a && b) {
+            const range = document.createRange();
+            range.setStart(a.node, a.offset);
+            range.setEnd(b.node, b.offset);
+            const znakRect = Array.from(range.getClientRects()).at(-1) || range.getBoundingClientRect();
+            if (znakRect && znakRect.height > 0) predchoziRadekTop = znakRect.top;
+          }
+        } catch (_error) {}
+      }
+
+      return {
+        left: r.left + paddingLeft + 1,
+        top: predchoziRadekTop + lineHeight,
+        height: lineHeight
+      };
+    }
+
     try {
       /* Nejdřív použijeme geometrii přesně collapsed Range. Na moderním
          Chromium umí správně rozlišit i caret na začátku zalomeného řádku,
@@ -1554,6 +1589,13 @@
       }
 
       const text = textBloku(blok);
+      /* PATCH 669C – samotný koncový newline v PRE/WebView často nezvětší
+         viditelnou výšku bloku, dokud uživatel nenapíše první znak nového
+         řádku. Třída rezervuje přesně jednu prázdnou code řádku. Druhý Enter
+         ji okamžitě zruší, protože stávající 669 logika code block ukončí. */
+      if (jeKodovyBlok(blok) && text.endsWith("\n")) {
+        radek.classList.add("ln-v2-code-trailing-newline");
+      }
       if (text) {
         blok.obsah.forEach((cast, index) => {
           if (!cast.text) return;

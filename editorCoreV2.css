@@ -801,6 +801,13 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   unicode-bidi: plaintext;
 }
 
+/* PATCH 669C – WebView koncový newline v PRE vizuálně "schová", dokud
+   na nový řádek nepřijde první znak. Rezervujeme proto jednu skutečnou
+   prázdnou řádku jen po prvním Enteru na konci code blocku. */
+.ln-v2-editor .ln-v2-code-block.ln-v2-code-trailing-newline {
+  padding-bottom: calc(12px + 1.5em);
+}
+
 /* Rich metadata v modelu zachováme, aby šel blok bezpečně vypnout zpět,
    ale code block se vizuálně chová jako jednotný kód. */
 .ln-v2-editor .ln-v2-code-block > .ln-v2-cast {
