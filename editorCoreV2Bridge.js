@@ -87,6 +87,16 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
+  /* PATCH 673G5 – Android APK/WebView neumí při aktivní nativní textové
+     selection spolehlivě přepnout obyčejný tah prstem na scroll editoru.
+     G4D potvrdil: Range zůstává aktivní, přijdou TOUCHMOVE, ale nevznikne
+     jediný SCROLL a scrollTop se nepohne. Proto pouze v Android APK přebíráme
+     tah ZAČATÝ MIMO okolí nativních selection handles a posouváme scrollTop
+     editoru sami. Dotyk u handles necháváme WebView beze změny, aby šlo dál
+     normálně rozšiřovat/zkracovat selection. */
+  let v2SelectionScroll = null;
+  let potlacV2SelectionScrollClickDo = 0;
+
   /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
      přestává být důvěryhodným důkazem původu. Externí aplikace mohla mezitím
      zkopírovat stejný text. Po návratu proto external paste vždy projde modem. */
@@ -2415,6 +2425,173 @@
   selectionMenu?.addEventListener("click", (event) => {
     if (jeDesktopSelection) return;
     zpracujV2SelectionMenuAkci(event);
+  }, true);
+
+  function jeAndroidApkSelectionScroll() {
+    try {
+      return !jeDesktopSelection && window.Capacitor?.getPlatform?.() === "android";
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function ziskejV2SelectionHandleBody(range) {
+    try {
+      const rects = Array.from(range?.getClientRects?.() || []).filter((rect) => rect.width || rect.height);
+      if (!rects.length) return [];
+      const prvni = rects[0];
+      const posledni = rects[rects.length - 1];
+      return [
+        { x: prvni.left, y: prvni.bottom },
+        { x: posledni.right, y: posledni.bottom }
+      ];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function jeBodUSelectionHandle(range, x, y) {
+    const body = ziskejV2SelectionHandleBody(range);
+    /* Android handle má vizuálně kolem 20–25 px; 38 px rezerva chrání i
+       nepřesný prst a přitom nechává zbytek editoru k běžnému scrollu. */
+    return body.some((bod) => Math.hypot(Number(x) - bod.x, Number(y) - bod.y) <= 38);
+  }
+
+  function zrusV2SelectionScrollStav() {
+    v2SelectionScroll = null;
+  }
+
+  /* 673G5 – capture touchstart musí rozhodnout ještě v okamžiku, kdy je
+     událost cancelable. G4D ukázal, že první TOUCHMOVE už WebView hlásí jako
+     cancelable=N, protože si gesto mezitím zabral nativní selection režim. */
+  document.addEventListener("touchstart", (event) => {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || event.touches?.length !== 1) return;
+    if (!hostitel?.contains(event.target) || selectionMenu?.contains(event.target)) return;
+    if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select")) return;
+    if (jeV2MoveInterakce(event)) return;
+
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+    if (!editor || !editor.contains(event.target)) return;
+
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return;
+
+    const dotyk = event.touches[0];
+    if (jeBodUSelectionHandle(range, dotyk.clientX, dotyk.clientY)) {
+      zapisSelectionScrollDiag("G5_HANDLE_PASS", event);
+      return;
+    }
+
+    /* Běžný tap mimo selection i scroll začínají stejně. Převzetím touchstartu
+       zabráníme WebView, aby gesto uzamkl jako selection. Pokud se prst nakonec
+       nepohne, touchend níže emuluje původní tap/caret chování. */
+    if (event.cancelable) event.preventDefault();
+    core()?.zachytAktualniVyber?.();
+    v2SelectionScroll = {
+      touchId: dotyk.identifier,
+      editor,
+      startX: dotyk.clientX,
+      startY: dotyk.clientY,
+      lastX: dotyk.clientX,
+      lastY: dotyk.clientY,
+      startScrollTop: editor.scrollTop,
+      moved: false,
+      range: range.cloneRange?.() || null
+    };
+    v2PosledniTapSelection = null;
+    zapisSelectionScrollDiag("G5_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
+  }, { passive: false, capture: true });
+
+  document.addEventListener("touchmove", (event) => {
+    const stav = v2SelectionScroll;
+    if (!stav || !aktivni) return;
+    if (jeV2MoveInterakce(event)) {
+      zapisSelectionScrollDiag("G5_SCROLL_ABORT_MOVE", event);
+      zrusV2SelectionScrollStav();
+      return;
+    }
+
+    const dotyk = Array.from(event.touches || []).find((item) => item.identifier === stav.touchId);
+    if (!dotyk) return;
+    const dx = dotyk.clientX - stav.startX;
+    const dy = dotyk.clientY - stav.startY;
+    stav.lastX = dotyk.clientX;
+    stav.lastY = dotyk.clientY;
+
+    if (!stav.moved) {
+      const vzdalenost = Math.hypot(dx, dy);
+      if (vzdalenost < 7) return;
+      /* Horizontální pohyb bez jasné vertikální složky necháme jako tap/caret;
+         vlastní scroll zapínáme jen pro gesto, které skutečně vypadá jako pan. */
+      if (Math.abs(dy) < Math.abs(dx) * 0.65) return;
+      stav.moved = true;
+      skryjV2SelectionMenu();
+      zapisSelectionScrollDiag("G5_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
+    }
+
+    if (event.cancelable) event.preventDefault();
+    const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
+    const novyTop = Math.max(0, Math.min(maximum, stav.startScrollTop - dy));
+    stav.editor.scrollTop = novyTop;
+  }, { passive: false, capture: true });
+
+  document.addEventListener("touchend", (event) => {
+    const stav = v2SelectionScroll;
+    if (!stav || !aktivni) return;
+    const dotyk = Array.from(event.changedTouches || []).find((item) => item.identifier === stav.touchId);
+    if (!dotyk) return;
+
+    const byloScroll = stav.moved;
+    const x = dotyk.clientX;
+    const y = dotyk.clientY;
+    zrusV2SelectionScrollStav();
+    v2PosledniTapSelection = null;
+
+    if (jeV2MoveInterakce(event)) return;
+
+    if (byloScroll) {
+      if (event.cancelable) event.preventDefault();
+      potlacV2SelectionScrollClickDo = performance.now() + 450;
+      zapisSelectionScrollDiag("G5_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!aktivni) return;
+          const vyber = window.getSelection();
+          const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+          if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+            zobrazV2SelectionMenuProOznaceni(range);
+            zapisSelectionScrollDiag("G5_MENU_RESTORE");
+          }
+        });
+      });
+      return;
+    }
+
+    /* Nebyl to scroll, ale obyčejný tap mimo selection. Protože jsme museli
+       preventDefaultnout touchstart, provedeme původní V2 chování sami. */
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (range && !range.collapsed && jeV2SelectionRozsah(range) && !jeBodUvnitřRozsahu(range, x, y)) {
+      core()?.zrusVyberNaBoduProSelectionMenu?.(x, y);
+      skryjV2SelectionMenu();
+      obnovToolbar();
+      potlacV2SelectionScrollClickDo = performance.now() + 350;
+      zapisSelectionScrollDiag("G5_TAP_COLLAPSE", event);
+    }
+  }, { passive: false, capture: true });
+
+  document.addEventListener("touchcancel", (event) => {
+    if (!v2SelectionScroll) return;
+    zapisSelectionScrollDiag("G5_SCROLL_CANCEL", event);
+    zrusV2SelectionScrollStav();
+  }, { passive: true, capture: true });
+
+  document.addEventListener("click", (event) => {
+    if (performance.now() >= potlacV2SelectionScrollClickDo) return;
+    zapisSelectionScrollDiag("G5_CLICK_SUPPRESSED", event);
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }, true);
 
   ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel"].forEach((typ) => {
