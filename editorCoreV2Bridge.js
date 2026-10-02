@@ -86,6 +86,7 @@
 
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
+  let v2SelectionScrollRaf = 0;
 
   /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
      přestává být důvěryhodným důkazem původu. Externí aplikace mohla mezitím
@@ -2479,6 +2480,26 @@
       potlacV2SelectionMenuDo = performance.now() + 350;
       return;
     }
+
+    /* PATCH 673G – pri roztahovani nativniho Android vyberu muze WebView
+       dorucit pointerdown do editoru (typicky pri tazeni selection handle nebo
+       pri auto-scrollu). Stary obecny handler v tu chvili LubaNote panel hned
+       schoval, i kdyz platny nekolabovany vyber stale existoval. Pri aktivnim
+       oznaceni uvnitr Core V2 proto pointerdown panel neshazuje; bezny tap mimo
+       vyber zustava obslouzen zrusV2OznaceniKlikemMimo po clicku. */
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    const maAktivniV2Vyber = Boolean(
+      range &&
+      !range.collapsed &&
+      jeV2SelectionRozsah(range)
+    );
+
+    if (maAktivniV2Vyber && hostitel?.contains(event.target)) {
+      core()?.zachytAktualniVyber?.();
+      return;
+    }
+
     if (v2SelectionMenuAktivni) skryjV2SelectionMenu();
   }, true);
 
@@ -2539,6 +2560,37 @@
     /* Nic dalšího zde neděláme. Event pokračuje do script.js, kde
        `zpracujZavreniEditoru()` drží jedinou správnou save/discard logiku. */
   }, true);
+
+  function prepozicujV2SelectionMenuPriScrollu(event = null) {
+    if (jeDesktopSelection || !aktivni || !v2SelectionMenuAktivni || selectionMenu?.hidden) return;
+
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return;
+
+    /* Scroll muze prijit z libovolneho vnitrniho scrolleru Core V2. Capture
+       posluchac tedy prijme jen dokument/viewport nebo prvek uvnitr hostitele. */
+    const cil = event?.target || null;
+    const souvisiSEditorem =
+      !cil ||
+      cil === document ||
+      cil === document.documentElement ||
+      cil === document.body ||
+      cil === window ||
+      hostitel?.contains?.(cil);
+
+    if (!souvisiSEditorem) return;
+    if (v2SelectionScrollRaf) cancelAnimationFrame(v2SelectionScrollRaf);
+    v2SelectionScrollRaf = requestAnimationFrame(() => {
+      v2SelectionScrollRaf = 0;
+      if (!aktivni || selectionMenu?.hidden) return;
+      prepozicujAktualniV2SelectionMenu();
+    });
+  }
+
+  document.addEventListener("scroll", prepozicujV2SelectionMenuPriScrollu, true);
+  window.visualViewport?.addEventListener("scroll", prepozicujV2SelectionMenuPriScrollu, { passive: true });
+  window.visualViewport?.addEventListener("resize", prepozicujV2SelectionMenuPriScrollu, { passive: true });
 
   document.addEventListener("selectionchange", () => {
     if (!aktivni) return;
