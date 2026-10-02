@@ -87,7 +87,7 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
-  /* PATCH 673G17 – selection-scroll UX: Android-match úchyty + vlastní edge auto-scroll.
+  /* PATCH 673G18 – selection-scroll UX: menu bez statické horní pozice + live speed tuning.
      Po prvním scrollu používáme vlastní CSS Highlight a vlastní LubaNote
      handles; nativní Android selection už znovu nevytváříme. Výběr proto při
      scrollu zůstává viditelný, další scroll je compositorový a po zastavení lze
@@ -629,7 +629,7 @@
     if (selectionZpet) selectionZpet.hidden = false;
   }
 
-  function pozicujV2SelectionMenu({ rozsah = null, bod = null } = {}) {
+  function pozicujV2SelectionMenu({ rozsah = null, bod = null, odsazeniNad = 14 } = {}) {
     if (!selectionMenu) return;
 
     selectionMenu.hidden = false;
@@ -638,21 +638,30 @@
     requestAnimationFrame(() => {
       if (!aktivni || selectionMenu.hidden) return;
 
-      let rect = null;
-      if (rozsah && !rozsah.collapsed) {
-        const rects = Array.from(rozsah.getClientRects?.() || []).filter((r) => r.width || r.height);
-        rect = rects[0] || rozsah.getBoundingClientRect?.() || null;
-      }
-
-      const sirka = selectionMenu.offsetWidth || 240;
-      const vyska = selectionMenu.offsetHeight || 44;
       const viewportW = window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth;
       const viewportH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
+      const sirka = selectionMenu.offsetWidth || 240;
+      const vyska = selectionMenu.offsetHeight || 44;
 
-      // Selection menu nesmí překrýt horní editorovou lištu.
-      // Pokud se celé nevejde mezi lištu a označený text, zobrazíme ho pod výběrem.
+      // 673G18 – selection menu už NIKDY nemá pevnou horní pozici.
+      // Krátký výběr se kotví k označenému textu. Při multiscrollu se kotví
+      // k prstu, přibližně 50 px nad něj.
+      let rect = null;
+      if (rozsah && !rozsah.collapsed) {
+        const rects = Array.from(rozsah.getClientRects?.() || []).filter((r) => r.width || r.height);
+        if (rects.length) {
+          const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+          const editorRect = editor?.getBoundingClientRect?.() || null;
+          const viditelne = editorRect
+            ? rects.filter((r) => r.bottom >= editorRect.top && r.top <= editorRect.bottom)
+            : rects;
+          rect = viditelne[0] || rects[0] || null;
+        }
+        rect ||= rozsah.getBoundingClientRect?.() || null;
+      }
+
       const editorTopBar = document.querySelector("#taskModal .editorTopBar");
       const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
       const horniBezpecnaHrana = Math.max(
@@ -663,45 +672,29 @@
       let x;
       let y;
 
-      const statickeMenuProHromadnyScroll = !!(
-        rozsah && !rozsah.collapsed &&
-        v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed
-      );
-
-      if (statickeMenuProHromadnyScroll) {
-        /* 673G17 – pevná horní pozice patří jen režimu hromadného selection-scrollu.
-           Při obyčejném označení jednoho slova / krátkého úseku se panel znovu
-           chová jako běžné selection menu a kotví se k označenému textu. */
-        const titleRow = document.querySelector("#taskModal .modalTitleRow");
-        const titleRect = titleRow?.getBoundingClientRect?.() || null;
-        const pevnaHorniHrana = Math.max(
-          horniBezpecnaHrana,
-          titleRect && titleRect.height > 0 ? titleRect.bottom + 8 : horniBezpecnaHrana
-        );
-        x = (viewportW - sirka) / 2;
-        y = pevnaHorniHrana;
-      } else if (bod) {
+      if (bod) {
         x = Number(bod.x) - sirka / 2;
-        y = Number(bod.y) - vyska - 14;
+        y = Number(bod.y) - vyska - Math.max(8, Number(odsazeniNad) || 14);
         if (y < horniBezpecnaHrana) y = Number(bod.y) + 18;
       } else if (rect) {
         x = rect.left + rect.width / 2 - sirka / 2;
         y = rect.top - vyska - 12;
         if (y < horniBezpecnaHrana) y = rect.bottom + 12;
       } else {
+        // Fallback není statická horní lišta – použije střed viditelné editorové plochy.
         x = (viewportW - sirka) / 2;
-        y = offsetTop + 70;
+        y = offsetTop + Math.max(horniBezpecnaHrana - offsetTop, (viewportH - vyska) / 2);
       }
 
       x = Math.max(okraj, Math.min(x, viewportW - sirka - okraj));
-      y = Math.max(offsetTop + okraj, Math.min(y, offsetTop + viewportH - vyska - okraj));
+      y = Math.max(horniBezpecnaHrana, Math.min(y, offsetTop + viewportH - vyska - okraj));
 
       selectionMenu.style.left = `${Math.round(x)}px`;
       selectionMenu.style.top = `${Math.round(y)}px`;
     });
   }
 
-  function zobrazV2SelectionMenuProOznaceni(rozsah = null) {
+  function zobrazV2SelectionMenuProOznaceni(rozsah = null, moznosti = {}) {
     if (jeDesktopSelection || !aktivni || !selectionMenu) return false;
     const vyber = window.getSelection();
     const range = rozsah || (vyber?.rangeCount ? vyber.getRangeAt(0) : null);
@@ -711,8 +704,14 @@
     nastavV2SelectionMenuTlacitka(false);
     v2SelectionMenuAktivni = true;
     v2SelectionMenuKurzor = false;
-    v2SelectionMenuBod = null;
-    pozicujV2SelectionMenu({ rozsah: range });
+    v2SelectionMenuBod = moznosti?.bod
+      ? { x: Number(moznosti.bod.x), y: Number(moznosti.bod.y) }
+      : null;
+    pozicujV2SelectionMenu({
+      rozsah: range,
+      bod: v2SelectionMenuBod,
+      odsazeniNad: Number(moznosti?.odsazeniNad || 14)
+    });
     return true;
   }
 
@@ -2515,8 +2514,57 @@
 
   const V2_SELECTION_SCROLL_HIGHLIGHT = "lubanote-selection-scroll";
   const V2_SELECTION_HANDLE_ATTR = "data-ln-v2-selection-handle";
+  const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
+  const V2_SELECTION_EDGE_SPEED_DEFAULT = 220;
   let v2SelectionHandleStart = null;
   let v2SelectionHandleEnd = null;
+  let v2SelectionEdgeScrollPxS = (() => {
+    try {
+      const ulozene = Number(localStorage.getItem(V2_SELECTION_EDGE_SPEED_KEY));
+      return Number.isFinite(ulozene) ? Math.max(60, Math.min(900, ulozene)) : V2_SELECTION_EDGE_SPEED_DEFAULT;
+    } catch (_error) {
+      return V2_SELECTION_EDGE_SPEED_DEFAULT;
+    }
+  })();
+
+  function nastavV2SelectionEdgeScrollRychlost(hodnota, ulozit = true) {
+    const cislo = Math.round(Math.max(60, Math.min(900, Number(hodnota) || V2_SELECTION_EDGE_SPEED_DEFAULT)));
+    v2SelectionEdgeScrollPxS = cislo;
+    if (ulozit) {
+      try { localStorage.setItem(V2_SELECTION_EDGE_SPEED_KEY, String(cislo)); } catch (_error) {}
+    }
+    const panel = document.querySelector('[data-ln-v2-selection-speed-debug]');
+    const input = panel?.querySelector?.('input[type="range"]');
+    const vystup = panel?.querySelector?.('[data-ln-v2-selection-speed-value]');
+    if (input && Number(input.value) !== cislo) input.value = String(cislo);
+    if (vystup) vystup.textContent = `${cislo} px/s`;
+    return cislo;
+  }
+
+  function zajistiV2SelectionScrollDebugControl() {
+    const debugHub = document.getElementById("ln-debug-hub");
+    if (!debugHub || debugHub.querySelector('[data-ln-v2-selection-speed-debug]')) return;
+    const controls = debugHub.querySelector(".ln-dh-controls") || debugHub;
+    const panel = document.createElement("section");
+    panel.setAttribute("data-ln-v2-selection-speed-debug", "1");
+    panel.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:10px 12px;border:1px solid rgba(127,203,196,.25);border-radius:12px;margin-top:8px;";
+    panel.innerHTML = `
+      <div style="min-width:0">
+        <strong style="display:block">Výběr – rychlost scrollu</strong>
+        <small style="opacity:.72">Tažení vlastního úchytu u horního/dolního okraje</small>
+      </div>
+      <strong data-ln-v2-selection-speed-value style="white-space:nowrap">${v2SelectionEdgeScrollPxS} px/s</strong>
+      <input type="range" min="60" max="900" step="10" value="${v2SelectionEdgeScrollPxS}" aria-label="Rychlost selection edge scrollu" style="grid-column:1 / -1;width:100%">
+    `;
+    const input = panel.querySelector('input[type="range"]');
+    input?.addEventListener("input", () => nastavV2SelectionEdgeScrollRychlost(input.value, true));
+    controls.appendChild(panel);
+  }
+
+  document.addEventListener("lubanote:debug-hub-visibility", () => {
+    requestAnimationFrame(zajistiV2SelectionScrollDebugControl);
+  });
+  requestAnimationFrame(zajistiV2SelectionScrollDebugControl);
 
   function podporujeV2SelectionScrollHighlight() {
     try {
@@ -2797,11 +2845,21 @@
       if (smer !== aktualniDrag.autoSmer) {
         aktualniDrag.autoSmer = smer;
         nastavV2SelectionHandlesAutoScrollSkryti(!!smer);
-        if (!smer) zobrazV2SelectionHandles(stav.range);
+        if (smer) {
+          aktualniDrag.melMultiscroll = true;
+          aktualniDrag.menuBod = { x: aktualniDrag.lastX, y: aktualniDrag.lastY };
+          zobrazV2SelectionMenuProOznaceni(stav.range, {
+            bod: aktualniDrag.menuBod,
+            odsazeniNad: 50
+          });
+        } else {
+          skryjV2SelectionMenu();
+          zobrazV2SelectionHandles(stav.range);
+        }
         zapisSelectionScrollDiag(
-          "G17_HANDLE_AUTOSCROLL",
+          "G18_HANDLE_AUTOSCROLL",
           null,
-          `dir=${smer < 0 ? "up" : (smer > 0 ? "down" : "off")} top=${Math.round(stav.editor.scrollTop || 0)}`
+          `dir=${smer < 0 ? "up" : (smer > 0 ? "down" : "off")} speed=${v2SelectionEdgeScrollPxS} top=${Math.round(stav.editor.scrollTop || 0)}`
         );
       }
 
@@ -2814,15 +2872,23 @@
       const dt = Math.max(0, Math.min(34, cas - predchoziCas));
       aktualniDrag.autoCas = cas;
 
-      /* Záměrně konzervativní základ. Rychlost budeme ladit až po potvrzení,
-         že edge-scroll s našimi úchyty vůbec funguje správně. */
-      const pxZaSekundu = 220;
+      /* 673G18 – rychlost lze živě doladit v Debug Hubu. */
+      const pxZaSekundu = v2SelectionEdgeScrollPxS;
       const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
       const pred = Number(stav.editor.scrollTop || 0);
       const dalsi = Math.max(0, Math.min(maximum, pred + faktor * pxZaSekundu * (dt / 1000)));
       if (Math.abs(dalsi - pred) > 0.05) {
         stav.editor.scrollTop = dalsi;
         aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY);
+      }
+
+      aktualniDrag.menuBod = { x: aktualniDrag.lastX, y: aktualniDrag.lastY };
+      if (selectionMenu && !selectionMenu.hidden) {
+        pozicujV2SelectionMenu({
+          rozsah: stav.range,
+          bod: aktualniDrag.menuBod,
+          odsazeniNad: 50
+        });
       }
 
       aktualniDrag.autoRaf = requestAnimationFrame(krok);
@@ -2843,7 +2909,7 @@
     if (v2SelectionScroll === stav) v2SelectionScroll = null;
   }
 
-  function zobrazV2VizualniSelectionPoScrollu(stav, duvod = "settle") {
+  function zobrazV2VizualniSelectionPoScrollu(stav, duvod = "settle", menuBod = null) {
     if (!stav || v2SelectionScroll !== stav || !aktivni || !stav.range || stav.range.collapsed) return false;
     if (stav.obnovTimer) {
       clearTimeout(stav.obnovTimer);
@@ -2853,9 +2919,12 @@
     nastavV2SelectionScrollHighlight(stav.range);
     ulozV2VizualniRangeDoCore(stav.range);
     zobrazV2SelectionHandles(stav.range);
-    zobrazV2SelectionMenuProOznaceni(stav.range);
+    zobrazV2SelectionMenuProOznaceni(stav.range, menuBod ? {
+      bod: menuBod,
+      odsazeniNad: 50
+    } : {});
     obnovToolbar();
-    zapisSelectionScrollDiag("G14_VISUAL_READY", null, `reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+    zapisSelectionScrollDiag("G18_VISUAL_READY", null, `reason=${duvod} menu=${menuBod ? "finger" : "range"} top=${Math.round(stav.editor?.scrollTop || 0)}`);
     return true;
   }
 
@@ -2937,7 +3006,9 @@
         lastY: dotyk.clientY,
         autoRaf: 0,
         autoCas: 0,
-        autoSmer: 0
+        autoSmer: 0,
+        melMultiscroll: false,
+        menuBod: null
       };
       nastavV2SelectionHandlesAutoScrollSkryti(false);
       stav.touchEnded = false;
@@ -2992,6 +3063,21 @@
       if (!dotyk) return;
       stav.handleDrag.lastX = dotyk.clientX;
       stav.handleDrag.lastY = dotyk.clientY;
+      if (stav.handleDrag.autoSmer) {
+        stav.handleDrag.menuBod = { x: dotyk.clientX, y: dotyk.clientY };
+        if (!selectionMenu || selectionMenu.hidden) {
+          zobrazV2SelectionMenuProOznaceni(stav.range, {
+            bod: stav.handleDrag.menuBod,
+            odsazeniNad: 50
+          });
+        } else {
+          pozicujV2SelectionMenu({
+            rozsah: stav.range,
+            bod: stav.handleDrag.menuBod,
+            odsazeniNad: 50
+          });
+        }
+      }
       aktualizujV2HandleRangeZeSouradnic(stav, dotyk.clientX, dotyk.clientY);
       naplanujV2HandleAutoScroll(stav);
       event.preventDefault();
@@ -3028,12 +3114,16 @@
       event.preventDefault();
       event.stopPropagation();
       ulozV2VizualniRangeDoCore(stav.range);
-      const strana = stav.handleDrag.strana;
+      const dragDokoncen = stav.handleDrag;
+      const strana = dragDokoncen.strana;
+      const menuBod = dragDokoncen.melMultiscroll
+        ? { x: dragDokoncen.lastX, y: dragDokoncen.lastY }
+        : null;
       zastavV2HandleAutoScroll(stav, "touchend");
       stav.handleDrag = null;
       stav.touchEnded = true;
-      zobrazV2VizualniSelectionPoScrollu(stav, "handle-end");
-      zapisSelectionScrollDiag("G14_HANDLE_DRAG_END", event, `side=${strana}`);
+      zobrazV2VizualniSelectionPoScrollu(stav, "handle-end", menuBod);
+      zapisSelectionScrollDiag("G18_HANDLE_DRAG_END", event, `side=${strana} multiscroll=${menuBod ? "Y" : "N"}`);
       return;
     }
 
