@@ -1244,8 +1244,13 @@
       tlacitko.textContent = "Aa";
       tlacitko.setAttribute("aria-label", "Otevřít textové nástroje");
     } else if (jeText) {
-      if (window.LubaNoteIcons?.nastavJenIkonu) {
-        window.LubaNoteIcons.nastavJenIkonu(tlacitko, "odrazky", ["editorModeSvgIcon"]);
+      const ikonaNastroju = window.LubaNoteIcons?.vytvorSvgIkonu?.(
+        "nastroje",
+        ["editorModeSvgIcon"]
+      );
+
+      if (ikonaNastroju) {
+        tlacitko.replaceChildren(ikonaNastroju);
       } else {
         tlacitko.textContent = "Nástroje";
       }

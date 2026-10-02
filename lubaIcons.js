@@ -76,7 +76,8 @@
     sipkaVlevo: "‹",
     sipkaVpravo: "›",
     minus: "−",
-    odrazky: "•"
+    odrazky: "•",
+    nastroje: "☷"
   };
 
   function jeDesktop() {
@@ -423,6 +424,15 @@
       ["path", { d: "M9 7h10" }],
       ["path", { d: "M9 12h10" }],
       ["path", { d: "M9 17h10" }]
+    ],
+
+    nastroje: [
+      ["path", { d: "M4 7h16" }],
+      ["circle", { cx: "9", cy: "7", r: "2", fill: "var(--bg, #fff)" }],
+      ["path", { d: "M4 12h16" }],
+      ["circle", { cx: "15", cy: "12", r: "2", fill: "var(--bg, #fff)" }],
+      ["path", { d: "M4 17h16" }],
+      ["circle", { cx: "11", cy: "17", r: "2", fill: "var(--bg, #fff)" }]
     ]
   };
 
