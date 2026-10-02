@@ -87,7 +87,7 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
-  /* PATCH 673G14 – plynulý selection scroll bez dvojitého prokreslení.
+  /* PATCH 673G15 – plynulý selection scroll + Android-match vizuál.
      Po prvním scrollu používáme vlastní zlatý CSS Highlight a vlastní LubaNote
      handles; nativní Android selection už znovu nevytváříme. Výběr proto při
      scrollu zůstává viditelný, další scroll je compositorový a po zastavení lze
@@ -2527,44 +2527,51 @@
     styl.id = "ln-v2-selection-scroll-highlight-style";
     styl.textContent = `::highlight(${V2_SELECTION_SCROLL_HIGHLIGHT}) {
       color: inherit;
-      background-color: rgba(255, 179, 71, 0.30);
+      /* 673G15 – vizuálně stejné jako Android/WebView selection v APK.
+         Opaque barva brání tmavšímu "dvojitému" překryvu při přechodu
+         z nativního selection na náš compositor-friendly highlight. */
+      background-color: rgb(14, 76, 91);
     }
     .ln-v2-selection-handle-custom {
       position: fixed;
-      width: 42px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       z-index: 2147483200;
-      transform: translate(-50%, 0);
       pointer-events: auto;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+      background: transparent;
     }
+    /* Android 16 / WebView: selection handle má cca 39 × 39 px,
+       #80CBC4 a kapkovitý tvar bez bílé obruby a bez stopky. */
     .ln-v2-selection-handle-custom::before {
       content: "";
       position: absolute;
-      left: 50%;
       top: 0;
-      width: 2px;
-      height: 13px;
-      transform: translateX(-50%);
-      background: #4fd6ff;
-      border-radius: 2px;
-      box-shadow: 0 0 0 1px rgba(4, 35, 46, .55);
+      width: 39px;
+      height: 39px;
+      background: rgb(128, 203, 196);
+      border: 0;
+      box-shadow: none;
+      box-sizing: border-box;
     }
     .ln-v2-selection-handle-custom::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 10px;
-      width: 17px;
-      height: 17px;
-      transform: translateX(-50%);
-      border-radius: 50%;
-      background: #4fd6ff;
-      border: 2px solid rgba(255,255,255,.92);
-      box-shadow: 0 2px 7px rgba(0,0,0,.45);
-      box-sizing: border-box;
+      content: none;
+    }
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
+      transform: translate(-100%, 0);
+    }
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"]::before {
+      right: 0;
+      border-radius: 20px 0 20px 20px;
+    }
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"] {
+      transform: translate(0, 0);
+    }
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"]::before {
+      left: 0;
+      border-radius: 0 20px 20px 20px;
     }`;
     document.head.appendChild(styl);
   }
