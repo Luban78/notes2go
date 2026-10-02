@@ -104,6 +104,36 @@
      čistě vizuální a nic nemění v modelu, historii ani DOM obsahu. */
   let v2LubaCaret = null;
   let v2LubaCaretRaf = 0;
+
+  /* PATCH 673G11 – skutečný „plovoucí kurzor“ nebyl nativní WebView caret,
+     ale náš vlastní fixed overlay .ln-v2-luba-caret z PATCH 497. Původní
+     scroll hook jej na každém SCROLL schoval a hned v dalším rAF znovu
+     vykreslil. Při rychlém scrollu tak fixed overlay o několik frame zaostával
+     za obsahem a opticky cestoval přes řádky. Během probíhajícího scrollu jej
+     proto držíme skrytý a vrátíme jej až po úplném zklidnění pohybu. */
+  let v2LubaCaretScrollAktivni = false;
+  let v2LubaCaretScrollTimer = 0;
+  let v2LubaCaretTouchAktivni = false;
+
+  function naplanujV2LubaCaretPoScrollu() {
+    clearTimeout(v2LubaCaretScrollTimer);
+    v2LubaCaretScrollTimer = setTimeout(() => {
+      if (v2LubaCaretTouchAktivni) {
+        naplanujV2LubaCaretPoScrollu();
+        return;
+      }
+      v2LubaCaretScrollAktivni = false;
+      v2LubaCaretScrollTimer = 0;
+      naplanujV2LubaCaret(posledniVyber);
+    }, 140);
+  }
+
+  function skryjV2LubaCaretProScroll() {
+    v2LubaCaretScrollAktivni = true;
+    skryjV2LubaCaret();
+    naplanujV2LubaCaretPoScrollu();
+  }
+
   /* PATCH 669A – pamatujeme si code block před tapem do prázdné plochy.
      Selectionchange může proběhnout ještě před click, proto index zachytíme
      už na pointerdown. */
@@ -114,6 +144,7 @@
     return Boolean(
       editor?.isConnected &&
       jadroEditoru && !jadroEditoru.hidden &&
+      !v2LubaCaretScrollAktivni &&
       klavesnice?.ziskejZdroj?.() === "luba" &&
       klavesnice?.jeOtevrena?.() &&
       klavesnice?.ziskejCilPsani?.() === "body"
@@ -8889,16 +8920,23 @@
       naplanujV2LubaCaret(modelovyVyber);
     });
 
-    /* Starý Android při scrollu posune text, ale nativní Range zůstane stejný.
-       Overlay proto pouze přepočítáme; model ani selection se nemění. */
+    /* PATCH 673G11 – selection overlay při scrollu dál sleduje Range, ale
+       modelový LubaCaret (fixed overlay) se během pohybu NESMÍ překreslovat.
+       Jinak kvůli zpoždění rAF opticky plave o několik řádků. */
     poslouchej(document, "scroll", () => {
-      /* FIX 511 – během samotného swipe schováme fixed caret okamžitě.
-         V následujícím frame se vrátí jen tehdy, pokud jeho modelová pozice
-         opravdu zůstala uvnitř viditelné části editoru. */
-      skryjV2LubaCaret();
+      skryjV2LubaCaretProScroll();
       naplanujV2SelectionOverlay(posledniVyber);
-      naplanujV2LubaCaret(posledniVyber);
     }, true);
+
+    poslouchej(editor, "touchstart", () => {
+      v2LubaCaretTouchAktivni = true;
+    }, { passive: true });
+    const ukonciV2LubaCaretTouch = () => {
+      v2LubaCaretTouchAktivni = false;
+      if (v2LubaCaretScrollAktivni) naplanujV2LubaCaretPoScrollu();
+    };
+    poslouchej(document, "touchend", ukonciV2LubaCaretTouch, { passive: true });
+    poslouchej(document, "touchcancel", ukonciV2LubaCaretTouch, { passive: true });
     poslouchej(window, "resize", () => {
       naplanujV2SelectionOverlay(posledniVyber);
       naplanujV2LubaCaret(posledniVyber);
