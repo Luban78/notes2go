@@ -158,15 +158,23 @@
        - collaborator/Secret/LOCAL/new-draft: žádná chybná sdílecí akce. */
     if (shareNoteButton) {
       shareNoteButton.hidden = !(muzeSdilet && jeVlastniSdilena);
+      shareNoteButton.dataset.noteId = muzeSdilet && jeVlastniSdilena ? String(task.id) : "";
       const popisek = t("sharing.manageShareButton", "Spravovat sdílení");
       shareNoteButton.setAttribute("aria-label", popisek);
       shareNoteButton.title = popisek;
     }
 
     if (shareEditorToolButton) {
-      shareEditorToolButton.hidden = !(muzeSdilet && !jeSdilena);
+      /* PATCH 671C2 – horní share ikona funguje i u OWNER Shared note:
+         private = vytvořit sdílení, owner Shared = otevřít správu.
+         Collaborator Shared ji nadále nevidí. */
+      const zobrazitEditorShare = muzeSdilet && (!jeSdilena || jeVlastniSdilena);
+      shareEditorToolButton.hidden = !zobrazitEditorShare;
+      shareEditorToolButton.dataset.noteId = zobrazitEditorShare ? String(task.id) : "";
       shareEditorToolButton.disabled = false;
-      const popisek = t("sharing.shareButton", "Sdílet poznámku");
+      const popisek = jeVlastniSdilena
+        ? t("sharing.manageShareButton", "Spravovat sdílení")
+        : t("sharing.shareButton", "Sdílet poznámku");
       shareEditorToolButton.setAttribute("aria-label", popisek);
       shareEditorToolButton.title = popisek;
     }
@@ -1490,10 +1498,20 @@
     const task = ziskejAktualniPoznamku();
     if (!task?.id || task.isSecret === true) return;
     if (window.LubaNoteStorageScope?.jePouzeLokalni?.(task) === true) return;
-    if (window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(task.id) === true) return;
+
+    const jeVlastniSdilena =
+      window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(task.id) === true;
+    const jeCiziSdilena =
+      window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(task.id) === true && !jeVlastniSdilena;
+    if (jeCiziSdilena) return;
 
     if (shareEditorToolButton) shareEditorToolButton.disabled = true;
     try {
+      if (jeVlastniSdilena) {
+        await otevriShareModal(task.id);
+        return;
+      }
+
       const uloz = window.LubaNoteEditorAkce?.ulozExistujiciBezZavreni;
       if (typeof uloz === "function") {
         const vysledek = await uloz(task.id);
@@ -1515,11 +1533,11 @@
     event?.stopPropagation?.();
 
     const task = ziskejAktualniPoznamku();
-    if (!task?.id || task.isSecret === true) return;
-    if (window.LubaNoteStorageScope?.jePouzeLokalni?.(task) === true) return;
-    if (window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(task.id) !== true) return;
+    const noteId = String(shareNoteButton?.dataset?.noteId || task?.id || "");
+    if (!noteId || task?.isSecret === true) return;
+    if (task && window.LubaNoteStorageScope?.jePouzeLokalni?.(task) === true) return;
 
-    await otevriShareModal(task.id);
+    await otevriShareModal(noteId);
   }
 
   shareNoteButton?.addEventListener("click", otevriSpravuSdileniZTitulku);

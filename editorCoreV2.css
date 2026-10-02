@@ -429,8 +429,8 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 }
 
 .ln-v2-todo-multiselect-bar button {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -448,8 +448,8 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
 }
 
 .ln-v2-todo-multiselect-bar button svg {
-  width: 21px;
-  height: 21px;
+  width: 23px;
+  height: 23px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

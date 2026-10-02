@@ -585,6 +585,10 @@
   const vybranaTodoIdcka = new Set();
   let v2TodoMultiBar = null;
   let v2TodoMultiCount = null;
+  let v2TodoMultiDone = null;
+  let v2TodoMultiUndone = null;
+  let v2TodoMultiDelete = null;
+  let v2TodoMultiCancel = null;
   let potlacKlikSeznamuDo = 0;
 
   function noveIdBloku() {
@@ -5213,6 +5217,21 @@
 
     if (v2TodoMultiCount) v2TodoMultiCount.textContent = `TODO · ${pocet}`;
 
+    /* PATCH 671C2 – akce Hotovo/Nehotovo jsou kontextové.
+       Nehotovo se nezobrazuje u aktivních TODO, kde by jen zrušilo výběr
+       bez viditelné změny. U smíšeného výběru se zobrazí obě akce. */
+    let maAktivniTodo = false;
+    let maHotoveTodo = false;
+    vybranaTodoIdcka.forEach((id) => {
+      const index = najdiTodoIndex(id);
+      const blok = index >= 0 ? dokument.bloky[index] : null;
+      if (!jeTodoBlok(blok)) return;
+      if (blok.hotovo === true) maHotoveTodo = true;
+      else maAktivniTodo = true;
+    });
+    if (v2TodoMultiDone) v2TodoMultiDone.hidden = pocet === 0 || !maAktivniTodo;
+    if (v2TodoMultiUndone) v2TodoMultiUndone.hidden = pocet === 0 || !maHotoveTodo;
+
     if (!editor) return;
     Array.from(editor.querySelectorAll(".ln-v2-odstavec.ln-v2-todo[data-ln-v2-blok]")).forEach((radek) => {
       radek.classList.toggle(
@@ -8366,8 +8385,8 @@
           <button type="button" data-ln-v2-todo-multiselect-done aria-label="Označit vybrané TODO jako hotové" title="Hotovo">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"></path></svg>
           </button>
-          <button type="button" data-ln-v2-todo-multiselect-undone aria-label="Vrátit vybrané TODO mezi aktivní" title="Nehotovo">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h6a6 6 0 1 1-5.2 9"></path><path d="M7 7V3L3 7l4 4V7"></path></svg>
+          <button type="button" data-ln-v2-todo-multiselect-undone aria-label="Označit vybrané TODO jako nehotové" title="Nehotovo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"></circle></svg>
           </button>
           <button type="button" data-ln-v2-todo-multiselect-delete aria-label="Smazat vybrané TODO" title="Smazat">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="m7 7 1 13h8l1-13"></path><path d="M10 11v5M14 11v5"></path></svg>
@@ -8396,10 +8415,10 @@
     editor = jadroEditoru.querySelector("[data-ln-v2-editor]");
     v2TodoMultiBar = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect]");
     v2TodoMultiCount = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-count]");
-    const v2TodoMultiCancel = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-cancel]");
-    const v2TodoMultiDone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-done]");
-    const v2TodoMultiUndone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-undone]");
-    const v2TodoMultiDelete = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-delete]");
+    v2TodoMultiCancel = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-cancel]");
+    v2TodoMultiDone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-done]");
+    v2TodoMultiUndone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-undone]");
+    v2TodoMultiDelete = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-delete]");
 
     /* PATCH 671B1 – panel multiselectu patří do titulkového řádku editoru.
        Přesun DOM uzlu nemění jeho event listenery ani Core V2 model. */
