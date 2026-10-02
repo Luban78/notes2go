@@ -15569,7 +15569,7 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   position: fixed;
   left: 50%;
   top: 50%;
-  z-index: 12050;
+  z-index: 2147483400;
   display: inline-flex;
   align-items: center;
   gap: 8px;

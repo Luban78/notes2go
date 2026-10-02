@@ -4221,6 +4221,7 @@ function aktualizujRevisionSdilenehoEditoru(
  */
 let casovacOteviraniPoznamky = null;
 let pocetAktivnichOtevreniPoznamky = 0;
+let casZahajeniOteviraniPoznamky = 0;
 
 function zajistiIndikatorOteviraniPoznamky() {
   let indikator = document.getElementById("noteOpeningIndicator");
@@ -4242,6 +4243,10 @@ function zajistiIndikatorOteviraniPoznamky() {
 }
 
 function zahajIndikatorOteviraniPoznamky() {
+  if (pocetAktivnichOtevreniPoznamky === 0) {
+    casZahajeniOteviraniPoznamky = performance.now();
+  }
+
   pocetAktivnichOtevreniPoznamky += 1;
 
   if (casovacOteviraniPoznamky) {
@@ -4261,6 +4266,45 @@ function zahajIndikatorOteviraniPoznamky() {
       indikator.classList.add("show");
     });
   }, 260);
+}
+
+async function zajistiViditelnyIndikatorPredNarocnymOtevrenim(poznamka) {
+  const uplynulo = performance.now() - casZahajeniOteviraniPoznamky;
+  const rich = String(poznamka?.richContent || "");
+  const plain = String(poznamka?.note || "");
+  const todos = Array.isArray(poznamka?.todos) ? poznamka.todos : [];
+  const planned = Array.isArray(poznamka?.plannedItems) ? poznamka.plannedItems : [];
+
+  let velikostTodo = 0;
+  for (const todo of todos) {
+    velikostTodo += String(todo?.text || todo?.html || "").length;
+  }
+
+  const odhadObsahu = rich.length + plain.length + velikostTodo;
+  const jeNarocnejsi =
+    uplynulo >= 220 ||
+    odhadObsahu >= 6000 ||
+    todos.length + planned.length >= 30 ||
+    rich.includes("<img");
+
+  if (!jeNarocnejsi || pocetAktivnichOtevreniPoznamky <= 0) {
+    return;
+  }
+
+  if (casovacOteviraniPoznamky) {
+    clearTimeout(casovacOteviraniPoznamky);
+    casovacOteviraniPoznamky = null;
+  }
+
+  const indikator = zajistiIndikatorOteviraniPoznamky();
+  indikator.hidden = false;
+  indikator.classList.add("show");
+
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
 }
 
 function ukonciIndikatorOteviraniPoznamky() {
@@ -4528,6 +4572,9 @@ async function openTaskEditorById(taskId) {
   nastavNazevPoznamkyVEditoru(
     currentTask.title || ""
   );
+
+  /* PATCH 673A – dlouhý synchronní Core V2 render nesmí spolknout loader. */
+  await zajistiViditelnyIndikatorPredNarocnymOtevrenim(currentTaskProEditor);
 
   editorRepeat =
     kopirujEditorRepeat(currentTask.repeat);
