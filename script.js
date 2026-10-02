@@ -2873,9 +2873,13 @@ function resetujSbaleniNazvuEditoru() {
   posledniPohybKZacatkuEditoru = 0;
   posledniPointerYEditoru = null;
   chranNazevPredAutomatickymSbalenimDo = 0;
-  window.LubaNoteEditorV2?.nastavPoziciOtevreni?.(
-    ziskejPoziciOtevreniPoznamky()
-  );
+
+  /*
+   * PATCH 673F – pozici otevreni nastavuje jen Core V2 Bridge AZ po
+   * nahrani aktualniho modelu. Drive ji tento reset posilal i do stareho
+   * editoru z predchoziho otevreni, proto se pri druhem otevreni planoval
+   * scroll dvakrat (2x RAF1 + 2x RAF2). Reset nazvu nema ridit scroll.
+   */
 }
 
 modalRichTextV2Host?.addEventListener("focusin", (event) => {
@@ -5240,30 +5244,42 @@ function renderTasks() {
         `NOTE TAP | index=${index}`
       );
 
-      const tokenCardLoad = window.LubaNoteStartupDiag?.zacni?.(
-        "OPEN CARD LOADTASK"
-      );
-      const currentTasks = loadTask();
-      window.LubaNoteStartupDiag?.konec?.(tokenCardLoad);
-      const currentTask = currentTasks[index];
-      
-      if (!currentTask) {
-        return;
-      }
-      
-      /* Starší lokální poznámce doplníme stejné stabilní ID na všech zařízeních. */
-      if (!currentTask.id) {
-        currentTask.id =
-          typeof vytvorStabilniIdStarePoznamky === "function" ?
-          vytvorStabilniIdStarePoznamky(currentTask) :
-          crypto.randomUUID();
+      /*
+       * PATCH 673F – okamzita hmatova/vizualni odezva po tapu.
+       * Karta zustane lehce zamacknuta po dobu open pipeline a vrati se
+       * i kdyz otevreni selze nebo skonci handoffem. Nezasahuje do dat,
+       * syncu ani do poradi otevreni editoru.
+       */
+      loadedCard.classList.add("cardOpening");
+
+      try {
+        const tokenCardLoad = window.LubaNoteStartupDiag?.zacni?.(
+          "OPEN CARD LOADTASK"
+        );
+        const currentTasks = loadTask();
+        window.LubaNoteStartupDiag?.konec?.(tokenCardLoad);
+        const currentTask = currentTasks[index];
         
-        currentTask.updatedAt = new Date().toISOString();
-        saveAllTasks(currentTasks);
-        uploadLocalNoteToSupabase(currentTask);
+        if (!currentTask) {
+          return;
+        }
+        
+        /* Starší lokální poznámce doplníme stejné stabilní ID na všech zařízeních. */
+        if (!currentTask.id) {
+          currentTask.id =
+            typeof vytvorStabilniIdStarePoznamky === "function" ?
+            vytvorStabilniIdStarePoznamky(currentTask) :
+            crypto.randomUUID();
+          
+          currentTask.updatedAt = new Date().toISOString();
+          saveAllTasks(currentTasks);
+          uploadLocalNoteToSupabase(currentTask);
+        }
+        
+        await openTaskEditorById(currentTask.id);
+      } finally {
+        loadedCard.classList.remove("cardOpening");
       }
-      
-      await openTaskEditorById(currentTask.id);
     });
     
   });

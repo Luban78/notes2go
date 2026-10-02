@@ -23,7 +23,10 @@
   display: flex !important;
   flex-direction: column !important;
   width: auto;
-  max-height: min(58dvh, 520px);
+  /* PATCH 673F – na mobilu otevrit Debug Hub rovnou dost vysoko, aby
+     footer vcetne tlacitka Kopirovat cely report nebyl schovany. */
+  height: min(72dvh, 620px);
+  max-height: min(72dvh, 620px);
   min-width: 260px;
   min-height: 190px;
 

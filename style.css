@@ -7621,6 +7621,21 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
     opacity 110ms ease;
 }
 
+/* PATCH 673F – vizualni potvrzeni tapu pri otevirani poznamky.
+ * Transform nereflowuje masonry layout a po dokonceni/selhani open cesty
+ * se trida cardOpening vzdy odstrani v script.js. */
+.taskCard.cardOpening {
+  transform: translateY(3px) scale(0.98);
+  filter: brightness(0.84);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent),
+    0 2px 7px rgba(0, 0, 0, 0.16);
+  transition:
+    transform 70ms ease,
+    filter 70ms ease,
+    box-shadow 70ms ease;
+}
+
 /* Karta, pro kterou je prave otevreny panel akci po 2x tapu.
  * Inset ramecek nemeni rozmery masonry layoutu. */
 .taskCard.cardActionTarget {
