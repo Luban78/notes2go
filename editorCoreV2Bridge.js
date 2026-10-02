@@ -137,6 +137,14 @@
      vyjel těsně NAD horní hranu klávesnice. Výběr, highlight i menu zůstávají
      ukotvené ke stejnému konci; nejde o změnu edge-scroll rychlosti G23. */
 
+  /* PATCH 673G26 – micro-stutter / repaint / menu anchor polish:
+     - CSS Highlight používá jeden živý Range místo clone+clear+add každý frame,
+       čímž se při dlouhém scrollu nevyrábí stovky krátkodobých Range objektů,
+     - selection endpoint čteme PŘED zápisem nového scrollTop (bez read-after-write
+       layout thrash); při puštění uděláme jeden finální catch-up update,
+     - scroll-settle po handle-end už nesmí podruhé přepozicovat panel, pokud je
+       ukotvený ke konkrétnímu start/end handle. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -2626,6 +2634,7 @@
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
   const V2_SELECTION_EDGE_SPEED_DEFAULT = 220;
   let v2SelectionScrollHighlightObj = null;
+  let v2SelectionScrollHighlightRange = null;
   let v2SelectionHandleStart = null;
   let v2SelectionHandleEnd = null;
   let v2SelectionEdgeScrollPxS = (() => {
@@ -2738,29 +2747,30 @@
     if (!range || range.collapsed || !podporujeV2SelectionScrollHighlight()) return false;
     try {
       zajistiV2SelectionScrollHighlightStyl();
-      const kopie = range.cloneRange();
 
-      /* 673G23 – nepřepisovat registry delete -> new -> set při každém kroku.
-         Android WebView pak mezi dvěma paint cykly nestihne na okamžik výběr
-         ztratit a hlavní thread nealokuje nový Highlight ~20–60× za sekundu. */
-      if (
-        v2SelectionScrollHighlightObj
-        && typeof v2SelectionScrollHighlightObj.clear === "function"
-        && typeof v2SelectionScrollHighlightObj.add === "function"
-      ) {
-        v2SelectionScrollHighlightObj.clear();
-        v2SelectionScrollHighlightObj.add(kopie);
-        if (window.CSS.highlights.get(V2_SELECTION_SCROLL_HIGHLIGHT) !== v2SelectionScrollHighlightObj) {
-          window.CSS.highlights.set(V2_SELECTION_SCROLL_HIGHLIGHT, v2SelectionScrollHighlightObj);
-        }
+      /* 673G26 – jeden ŽIVÝ Range po celou dobu výběru. G23 drželo persistentní
+         Highlight objekt, ale stále každý frame cloneRange + clear + add. Při
+         dlouhém dragu to vyrábělo stovky krátkodobých Range objektů a Android
+         WebView občas udělal GC/repaint zásek. Změna hranic stejného Range se
+         v CSS Highlight promítne bez výměny registry položky. */
+      if (v2SelectionScrollHighlightRange) {
+        v2SelectionScrollHighlightRange.setStart(range.startContainer, range.startOffset);
+        v2SelectionScrollHighlightRange.setEnd(range.endContainer, range.endOffset);
       } else {
-        v2SelectionScrollHighlightObj = new window.Highlight(kopie);
+        v2SelectionScrollHighlightRange = range.cloneRange();
+      }
+
+      if (!v2SelectionScrollHighlightObj) {
+        v2SelectionScrollHighlightObj = new window.Highlight(v2SelectionScrollHighlightRange);
+        window.CSS.highlights.set(V2_SELECTION_SCROLL_HIGHLIGHT, v2SelectionScrollHighlightObj);
+      } else if (window.CSS.highlights.get(V2_SELECTION_SCROLL_HIGHLIGHT) !== v2SelectionScrollHighlightObj) {
         window.CSS.highlights.set(V2_SELECTION_SCROLL_HIGHLIGHT, v2SelectionScrollHighlightObj);
       }
       return true;
     } catch (_error) {
       try { window.CSS?.highlights?.delete?.(V2_SELECTION_SCROLL_HIGHLIGHT); } catch (_error2) {}
       v2SelectionScrollHighlightObj = null;
+      v2SelectionScrollHighlightRange = null;
       return false;
     }
   }
@@ -2768,6 +2778,7 @@
   function zrusV2SelectionScrollHighlight() {
     try { window.CSS?.highlights?.delete?.(V2_SELECTION_SCROLL_HIGHLIGHT); } catch (_error) {}
     v2SelectionScrollHighlightObj = null;
+    v2SelectionScrollHighlightRange = null;
   }
 
   function ziskejV2SelectionHandleBody(range) {
@@ -3063,15 +3074,17 @@
       ));
       const dalsi = aktualniDrag.autoPozice;
       if (Math.abs(dalsi - pred) > 0.05) {
-        stav.editor.scrollTop = dalsi;
-
-        /* 673G23 – persistentní CSS Highlight je levný, proto rozsah
-           aktualizujeme prakticky každý frame. Text se tak dobarvuje současně
-           se scrollem místo viditelných skoků o několik řádků. */
+        /* 673G26 – nejdřív čteme selection endpoint nad layoutem předchozího
+           frame a až potom zapisujeme scrollTop. G23 dělalo write -> layout
+           read ve stejném RAF, což ve WebView občas vynutilo synchronní layout
+           a drobný viditelný zásek. */
         if (!aktualniDrag.autoRangeCas || cas - aktualniDrag.autoRangeCas >= 14) {
           aktualniDrag.autoRangeCas = cas;
-          aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY, true);
+          if (!aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY, true)) {
+            aktualniDrag.rangeMiss = Number(aktualniDrag.rangeMiss || 0) + 1;
+          }
         }
+        stav.editor.scrollTop = dalsi;
       }
 
       aktualniDrag.autoRaf = requestAnimationFrame(krok);
@@ -3255,7 +3268,8 @@
         autoPozice: null,
         autoRangeCas: 0,
         melMultiscroll: false,
-        posledniSpeed: null
+        posledniSpeed: null,
+        rangeMiss: 0
       };
       nastavV2SelectionHandlesAutoScrollSkryti(false);
       stav.touchId = null;
@@ -3318,7 +3332,8 @@
           autoPozice: null,
           autoRangeCas: 0,
           melMultiscroll: false,
-          posledniSpeed: null
+          posledniSpeed: null,
+          rangeMiss: 0
         };
         stav.touchId = null;
         stav.menuKotvaStrana = strana;
@@ -3399,6 +3414,11 @@
       const strana = dragDokoncen.strana;
       const bylMultiscroll = !!dragDokoncen.melMultiscroll;
       zastavV2HandleAutoScroll(stav, "touchend");
+      /* 673G26 – po posledním scroll frame jednou přesně dorovnáme endpoint,
+         aby nikdy nezůstal poslední řádek nedobarvený. */
+      if (!aktualizujV2HandleRangeZeSouradnic(stav, dotyk.clientX, dotyk.clientY, true)) {
+        dragDokoncen.rangeMiss = Number(dragDokoncen.rangeMiss || 0) + 1;
+      }
       stav.handleDrag = null;
       stav.touchId = null;
       stav.touchEnded = true;
@@ -3425,7 +3445,7 @@
         // Ne nad prst, ne staticky nahoru a ne k opačnému konci výběru.
         zobrazV2VizualniSelectionPoScrollu(stav, "handle-end", strana);
       }
-      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"} keyboardReveal=${dorovnanoNadKlavesnici ? "Y" : "N"}`);
+      zapisSelectionScrollDiag("G21_CUSTOM_HANDLE_END", event, `side=${strana} multiscroll=${bylMultiscroll ? "Y" : "N"} keyboardReveal=${dorovnanoNadKlavesnici ? "Y" : "N"} rangeMiss=${Number(dragDokoncen.rangeMiss || 0)}`);
       ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: false, side: strana, auto: 0 });
       return;
     }
@@ -3473,8 +3493,10 @@
     const stav = v2SelectionScroll;
     if (!stav) return;
     if (stav.handleDrag) {
-      const strana = stav.handleDrag.strana;
+      const dragDokoncen = stav.handleDrag;
+      const strana = dragDokoncen.strana;
       zastavV2HandleAutoScroll(stav, "touchcancel");
+      aktualizujV2HandleRangeZeSouradnic(stav, dragDokoncen.lastX, dragDokoncen.lastY, true);
       stav.handleDrag = null;
       stav.touchId = null;
       stav.touchEnded = true;
@@ -3543,7 +3565,12 @@
     if (stav && target === stav.editor && !stav.handleDrag) {
       if (Math.abs(Number(stav.editor.scrollTop || 0) - Number(stav.startScrollTop || 0)) > 2) stav.moved = true;
       skryjV2SelectionHandles();
-      if (stav.touchEnded && !stav.keyboardDorovnani) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+      /* 673G26 – po handle-end už panel dostal přesnou kotvu start/end.
+         Dojezdový SCROLL ji nesmí podruhé přepočítat. Při běžném scrollu
+         se menuKotvaStrana v touchstartu nulí, takže standardní obnova zůstává. */
+      if (stav.touchEnded && !stav.keyboardDorovnani && !stav.menuKotvaStrana) {
+        naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+      }
     }
 
     /* 673G25 – během custom edge-scrollu NEZAPISOVAT do Debug Hubu vůbec.
