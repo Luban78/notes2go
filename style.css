@@ -213,6 +213,13 @@ body {
   display: none;
 }
 
+/* PATCH 671B – zabraneni jedn frame probliknuti spodního toolbaru pri
+   zavreni editoru. Shell se vizualne schova driv, nez se odpoji Core V2. */
+.taskModal.editorClosing {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .modalContent {
   display: flex;
   flex-direction: column;

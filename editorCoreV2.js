@@ -579,6 +579,12 @@
   let v2ListDragPreview = null;
   let v2ListAutoScrollRaf = null;
   let vybranaPolozkaSeznamuId = "";
+  /* PATCH 671B – TODO multiselect je samostatna vrstva nad MOVE enginem.
+     MOVE dal pouziva jeden zdrojovy blok; multiselect drzi pouze ID TODO,
+     aby se tyto dva rezimy nikdy neslily do jednoho neprehledneho stavu. */
+  const vybranaTodoIdcka = new Set();
+  let v2TodoMultiBar = null;
+  let v2TodoMultiCount = null;
   let potlacKlikSeznamuDo = 0;
 
   function noveIdBloku() {
@@ -1476,6 +1482,9 @@
       radek.dataset.lnV2Blok = blok.id;
       radek.dataset.typ = blok.typ;
       if (vybraneIdckaPresunu.has(blok.id)) radek.classList.add("ln-v2-list-move-selected");
+      if (jeTodoBlok(blok) && vybranaTodoIdcka.has(blok.id)) {
+        radek.classList.add("ln-v2-todo-multi-selected");
+      }
       /* Unicode/RTL: každý blok si směr určí podle prvního silného znaku.
          Latinka zůstává LTR, arabština/hebrejština se vykreslí RTL. */
       radek.setAttribute("dir", "auto");
@@ -5184,6 +5193,63 @@
     try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
   }
 
+  /* PATCH 671B – TODO MULTISELECT.
+     Long-press bez pohybu vybere prvni TODO, dalsi kratke tapy pridavaji/odebiraji.
+     Long-press + drag dal patri puvodnimu MOVE enginu. */
+  function aktualizujV2TodoMultiSelectUI() {
+    const pocet = vybranaTodoIdcka.size;
+
+    if (v2TodoMultiBar) {
+      v2TodoMultiBar.hidden = pocet === 0;
+      v2TodoMultiBar.setAttribute("aria-hidden", pocet === 0 ? "true" : "false");
+    }
+    if (v2TodoMultiCount) v2TodoMultiCount.textContent = `TODO · ${pocet}`;
+
+    if (!editor) return;
+    Array.from(editor.querySelectorAll(".ln-v2-odstavec.ln-v2-todo[data-ln-v2-blok]")).forEach((radek) => {
+      radek.classList.toggle(
+        "ln-v2-todo-multi-selected",
+        vybranaTodoIdcka.has(radek.dataset.lnV2Blok || "")
+      );
+    });
+  }
+
+  function zrusV2TodoMultiSelect() {
+    const melVyber = vybranaTodoIdcka.size > 0;
+    vybranaTodoIdcka.clear();
+    aktualizujV2TodoMultiSelectUI();
+    return melVyber;
+  }
+
+  function pridejV2TodoDoMultivyberu(blokId) {
+    const id = String(blokId || "");
+    if (!id || najdiTodoIndex(id) < 0) return false;
+
+    vybranaTodoIdcka.add(id);
+    /* docasne MOVE oznaceni z long-pressu nesmi zustat pod multiselectem */
+    vybranaPolozkaSeznamuId = "";
+    aplikujV2OznaceniPresunovanehoPodstromu("");
+
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+    try { editor?.blur(); } catch (_error) {}
+    try { window.LubaNoteKeyboard?.skryj?.(); } catch (_error) {}
+    skryjV2LubaCaret();
+
+    aktualizujV2TodoMultiSelectUI();
+    return true;
+  }
+
+  function prepniV2TodoVMultivyberu(blokId) {
+    const id = String(blokId || "");
+    if (!id || najdiTodoIndex(id) < 0) return false;
+
+    if (vybranaTodoIdcka.has(id)) vybranaTodoIdcka.delete(id);
+    else vybranaTodoIdcka.add(id);
+
+    aktualizujV2TodoMultiSelectUI();
+    return true;
+  }
+
   /* PATCH 671A – selection TODO/Bullet musí jít spolehlivě zrušit.
      Starší FIX 527 kontroloval jen vybranaPolozkaSeznamuId. Po některých
      mobilních touch sekvencích ale ID už bylo prázdné, zatímco vizuální
@@ -5192,8 +5258,9 @@
   function maV2VyberPolozkySeznamu() {
     if (!editor) return false;
     return Boolean(
+      vybranaTodoIdcka.size ||
       vybranaPolozkaSeznamuId ||
-      editor.querySelector(".ln-v2-list-move-selected")
+      editor.querySelector(".ln-v2-list-move-selected, .ln-v2-todo-multi-selected")
     );
   }
 
@@ -5201,6 +5268,8 @@
     if (!editor || jeV2InterakcePresunuSeznamu()) return false;
     const melVyber = maV2VyberPolozkySeznamu();
     if (!melVyber) return false;
+
+    zrusV2TodoMultiSelect();
     Array.from(editor.querySelectorAll(".ln-v2-list-move-selected")).forEach((el) => {
       el.classList.remove("ln-v2-list-move-selected");
     });
@@ -5210,6 +5279,14 @@
 
   function zrusVyberMoveSeznamuPokudMimo(target) {
     if (!editor || !maV2VyberPolozkySeznamu()) return false;
+
+    /* V TODO multiselectu tap na libovolne TODO patri toggle logice v click
+       handleru. Tap mimo TODO naopak zrusi cely multiselect. */
+    if (vybranaTodoIdcka.size) {
+      const todoRadek = target?.closest?.(".ln-v2-odstavec.ln-v2-todo");
+      if (todoRadek && editor.contains(todoRadek)) return false;
+      return zrusV2VyberPolozkySeznamu();
+    }
 
     /* Pokud tap míří přímo do některého vizuálně označeného řádku, výběr
        zachováme. Funguje to i v případě, kdy už interní ID bylo po touchend
@@ -5399,6 +5476,9 @@
 
   function spustV2DragSeznamu(x, y) {
     if (!v2DragSeznamu?.pripraven || v2DragSeznamu.aktivni) return;
+    /* Long-press + pohyb vzdy znamena puvodni single-item MOVE. Pokud uz
+       bezel TODO multiselect, ukoncime jej bez zasahu do zdrojoveho MOVE ID. */
+    if (vybranaTodoIdcka.size) zrusV2TodoMultiSelect();
     v2DragSeznamu.aktivni = true;
     zapisV2TodoDragVD("DRAG_START", {
       blok: v2DragSeznamu.blokId,
@@ -5715,11 +5795,16 @@
     }
 
     if (v2DragSeznamu.pripraven) {
-      /* Long-press na značce bez pohybu není trvalý MOVE mód.
-         Po puštění se vše vrátí do běžné editace, aby další 1×/2× tap
-         nikdy nebyl blokovaný starým stavem přesunu. */
+      const blokId = String(v2DragSeznamu.blokId || "");
+      const index = najdiIndexBlokuPodleId(blokId);
+      const jeTodo = index >= 0 && jeTodoBlok(dokument.bloky[index]);
+
+      /* 671B: TODO long-press bez pohybu vstupuje do multiselectu. Bullet a
+         Ordered zachovavaji puvodni MOVE-only chovani. */
       potlacKlikSeznamuDo = performance.now() + 350;
       zrusV2DragSeznamu({ zachovatVyber: false });
+      aplikujV2OznaceniPresunovanehoPodstromu("");
+      if (jeTodo) pridejV2TodoDoMultivyberu(blokId);
       return;
     }
 
@@ -5752,8 +5837,13 @@
       return;
     }
     if (v2DragSeznamu.pripraven) {
+      const blokId = String(v2DragSeznamu.blokId || "");
+      const index = najdiIndexBlokuPodleId(blokId);
+      const jeTodo = index >= 0 && jeTodoBlok(dokument.bloky[index]);
       potlacKlikSeznamuDo = performance.now() + 350;
       zrusV2DragSeznamu({ zachovatVyber: false });
+      aplikujV2OznaceniPresunovanehoPodstromu("");
+      if (jeTodo) pridejV2TodoDoMultivyberu(blokId);
       return;
     }
     zrusV2DragSeznamu({ zachovatVyber: false });
@@ -8098,6 +8188,7 @@
     hostitel.appendChild(jadroEditoru);
     jadroEditoru.hidden = false;
     jadroEditoru.classList.add("otevreno");
+    zrusV2TodoMultiSelect();
     nastavDokumentProHost(model);
 
     /* LubaKeyboard musí mít atributy připravené PŘED prvním skutečným tapem.
@@ -8112,6 +8203,7 @@
 
   function zavriVHostu() {
     if (!jadroEditoru || !vlozenyRezim) return;
+    zrusV2TodoMultiSelect();
     zrusV2DragSeznamu();
 
     /* PATCH 442 – LubaKeyboard žije mimo DOM editoru (přímo v body).
@@ -8179,6 +8271,10 @@
     jadroEditoru.id = "ln-editor-v2-core";
     jadroEditoru.className = "ln-v2-core";
     jadroEditoru.innerHTML = `
+      <div class="ln-v2-todo-multiselect-bar" data-ln-v2-todo-multiselect hidden aria-hidden="true">
+        <strong data-ln-v2-todo-multiselect-count>TODO · 0</strong>
+        <button type="button" data-ln-v2-todo-multiselect-cancel aria-label="Zrušit výběr TODO">×</button>
+      </div>
       <div
         class="ln-v2-editor"
         contenteditable="true"
@@ -8196,6 +8292,14 @@
 
     document.body.appendChild(jadroEditoru);
     editor = jadroEditoru.querySelector("[data-ln-v2-editor]");
+    v2TodoMultiBar = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect]");
+    v2TodoMultiCount = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-count]");
+    const v2TodoMultiCancel = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-cancel]");
+    poslouchej(v2TodoMultiCancel, "click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      zrusV2VyberPolozkySeznamu();
+    });
 
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
@@ -8330,7 +8434,11 @@
 
     poslouchej(editor, "contextmenu", (event) => {
       const seznamRadek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-      if (seznamRadek && (v2DragSeznamu?.radek === seznamRadek || vybranaPolozkaSeznamuId === seznamRadek.dataset.lnV2Blok)) {
+      if (seznamRadek && (
+        v2DragSeznamu?.radek === seznamRadek ||
+        vybranaPolozkaSeznamuId === seznamRadek.dataset.lnV2Blok ||
+        vybranaTodoIdcka.has(seznamRadek.dataset.lnV2Blok || "")
+      )) {
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -8368,6 +8476,19 @@
         event.preventDefault();
         event.stopPropagation();
         return;
+      }
+
+      /* 671B – jakmile multiselect bezi, kratky tap na TODO uz needituje
+         text ani neprepina checkbox; pouze prida/odebere cely TODO radek. */
+      if (vybranaTodoIdcka.size && seznamRadek && editor.contains(seznamRadek)) {
+        const id = String(seznamRadek.dataset.lnV2Blok || "");
+        const index = najdiIndexBlokuPodleId(id);
+        if (index >= 0 && jeTodoBlok(dokument.bloky[index])) {
+          event.preventDefault();
+          event.stopPropagation();
+          prepniV2TodoVMultivyberu(id);
+          return;
+        }
       }
 
       const todoCheckbox = event.target.closest?.("[data-v2-todo-check]");

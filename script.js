@@ -678,6 +678,23 @@ function uvolniSdilenyLockPriZavreni(
   });
 }
 
+/* PATCH 671B – pri skutecnem zavreni editoru musi fullscreen shell zmizet
+   vizualne driv, nez Core V2 schova obsah a WebView prepocita flex layout.
+   Jinak editorBottomBar na jeden frame vyskoci nahoru. Plati pro Save, Back
+   i Zahodit; save logiku ani 250ms cleanup nemenime. */
+function zahajVizualniZavreniEditoru() {
+  taskModal?.classList.add("editorClosing");
+}
+
+function dokoncVizualniZavreniEditoru() {
+  setTimeout(() => {
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
+    taskModal.classList.remove("editorClosing");
+  }, 250);
+}
+
 function zpracujZavreniEditoru() {
   /* 428 – Android Back / systémové zavření nejde přes capture handler
      tlačítka ✓. Je-li aktivní V2, nejdřív zrcadlíme model do produkčních
@@ -714,6 +731,7 @@ function zpracujZavreniEditoru() {
     return;
   }
   
+  zahajVizualniZavreniEditoru();
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
   ziskejEditorCoreV2Bridge()?.zavri?.();
@@ -752,11 +770,7 @@ function zpracujZavreniEditoru() {
   ukonciDraftPoznamky();
   editorSessionId += 1;
   
-  setTimeout(() => {
-    if (!taskModal.classList.contains("show")) {
-      taskModal.hidden = true;
-    }
-  }, 250);
+  dokoncVizualniZavreniEditoru();
   
 }
 
@@ -1466,6 +1480,7 @@ appMessageDiscardButton?.addEventListener(
     
     closeAppMessageButton.textContent = "OK";
     
+    zahajVizualniZavreniEditoru();
     taskModal.classList.remove("show");
     document.body.classList.remove("noScroll");
 
@@ -1500,11 +1515,7 @@ appMessageDiscardButton?.addEventListener(
     ukonciDraftPoznamky();
     editorSessionId += 1;
     
-    setTimeout(() => {
-      if (!taskModal.classList.contains("show")) {
-        taskModal.hidden = true;
-      }
-    }, 250);
+    dokoncVizualniZavreniEditoru();
     
     }
 );
@@ -3158,6 +3169,7 @@ function zavriEditorPoLokalnimUlozeni(
     return false;
   }
   
+  zahajVizualniZavreniEditoru();
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
   ziskejEditorCoreV2Bridge()?.zavri?.();
@@ -3189,11 +3201,7 @@ function zavriEditorPoLokalnimUlozeni(
   ukonciDraftPoznamky();
   editorSessionId += 1;
   
-  setTimeout(() => {
-    if (!taskModal.classList.contains("show")) {
-      taskModal.hidden = true;
-    }
-  }, 250);
+  dokoncVizualniZavreniEditoru();
   
   
   /*
