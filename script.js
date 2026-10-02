@@ -3823,11 +3823,17 @@ function zpracujAndroidZpet() {
     return true;
   }
   
-  /*
-   * V editoru použijeme stejnou logiku jako Esc na PC:
-   * beze změny rovnou zavřít, po změně nabídnout uložení.
-   */
+  /* PATCH 671A – Android Back má při aktivním TODO/Bullet selection nejdřív
+     zrušit samotný výběr. Editor se zavře až případným dalším stiskem Back.
+     Tím se Back chová stejně přirozeně jako zrušení selection tapem mimo. */
   if (taskModal && !taskModal.hidden) {
+    if (
+      window.LubaNoteEditorV2Bridge?.jeAktivni?.() === true &&
+      window.LubaNoteEditorV2Bridge?.zrusVyberPolozkySeznamu?.() === true
+    ) {
+      return true;
+    }
+
     zpracujZavreniEditoru();
     return true;
   }

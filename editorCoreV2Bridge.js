@@ -2545,6 +2545,8 @@
     obalPlanovaciVyber,
     ziskejAktivniTodos: () => core()?.ziskejAktivniTodos?.() || [],
     ziskejVybraneTodo: () => core()?.ziskejVybraneTodo?.() || null,
+    maVyberPolozkySeznamu: () => core()?.maVyberPolozkySeznamu?.() === true,
+    zrusVyberPolozkySeznamu: () => core()?.zrusVyberPolozkySeznamu?.() === true,
     nastavTodoHotovo: (id, hotovo) => core()?.nastavTodoHotovo?.(id, hotovo) === true,
     nastavTodoZvyrazneni: (id, barva) => core()?.nastavTodoZvyrazneni?.(id, barva) === true,
     nastavTodoNaplanovane: (id, zapnuto) => core()?.nastavTodoNaplanovane?.(id, zapnuto) === true,

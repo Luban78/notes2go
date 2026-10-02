@@ -5184,22 +5184,52 @@
     try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
   }
 
-  function zrusVyberMoveSeznamuPokudMimo(target) {
-    if (!vybranaPolozkaSeznamuId || !editor) return;
-    const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
-    const vybraneIdcka = idckaV2PresunovanehoPodstromu(vybranaPolozkaSeznamuId);
-    if (radek && vybraneIdcka.has(radek.dataset?.lnV2Blok || "")) return;
+  /* PATCH 671A – selection TODO/Bullet musí jít spolehlivě zrušit.
+     Starší FIX 527 kontroloval jen vybranaPolozkaSeznamuId. Po některých
+     mobilních touch sekvencích ale ID už bylo prázdné, zatímco vizuální
+     třída ln-v2-list-move-selected zůstala v DOM. Výsledek: řádek vypadal
+     stále vybraný a tap mimo něj už neměl co zrušit. */
+  function maV2VyberPolozkySeznamu() {
+    if (!editor) return false;
+    return Boolean(
+      vybranaPolozkaSeznamuId ||
+      editor.querySelector(".ln-v2-list-move-selected")
+    );
+  }
+
+  function zrusV2VyberPolozkySeznamu() {
+    if (!editor || jeV2InterakcePresunuSeznamu()) return false;
+    const melVyber = maV2VyberPolozkySeznamu();
+    if (!melVyber) return false;
     Array.from(editor.querySelectorAll(".ln-v2-list-move-selected")).forEach((el) => {
       el.classList.remove("ln-v2-list-move-selected");
     });
     vybranaPolozkaSeznamuId = "";
+    return true;
   }
 
-  /* FIX 527 – označení MOVE není trvalý režim. Kliknutí/tap mimo právě
-     označený řádek (u Bulletu mimo celý označený podstrom) jej pouze zruší.
-     Tohle NEMĚNÍ long-press, touch/pointer prahy ani vlastní drag engine. */
+  function zrusVyberMoveSeznamuPokudMimo(target) {
+    if (!editor || !maV2VyberPolozkySeznamu()) return false;
+
+    /* Pokud tap míří přímo do některého vizuálně označeného řádku, výběr
+       zachováme. Funguje to i v případě, kdy už interní ID bylo po touchend
+       vyčištěné, ale DOM selection ještě zůstala viditelná. */
+    const oznacenyRadek = target?.closest?.(".ln-v2-list-move-selected");
+    if (oznacenyRadek && editor.contains(oznacenyRadek)) return false;
+
+    const radek = target?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
+    if (vybranaPolozkaSeznamuId) {
+      const vybraneIdcka = idckaV2PresunovanehoPodstromu(vybranaPolozkaSeznamuId);
+      if (radek && vybraneIdcka.has(radek.dataset?.lnV2Blok || "")) return false;
+    }
+
+    return zrusV2VyberPolozkySeznamu();
+  }
+
+  /* PATCH 671A – tap mimo aktivní TODO/Bullet selection jej pouze zruší.
+     Long-press, drag/MOVE, checkbox ani textová selection logika se nemění. */
   function zrusV2MoveVyberKlikemMimo(event) {
-    if (!vybranaPolozkaSeznamuId || !editor || jeV2InterakcePresunuSeznamu()) return;
+    if (!editor || !maV2VyberPolozkySeznamu() || jeV2InterakcePresunuSeznamu()) return;
     zrusVyberMoveSeznamuPokudMimo(event?.target);
   }
 
@@ -8661,6 +8691,8 @@
     vlozExterniObsahZeSchranky,
     vyberVseProSelectionMenu,
     zrusVyberNaBoduProSelectionMenu,
+    maVyberPolozkySeznamu: maV2VyberPolozkySeznamu,
+    zrusVyberPolozkySeznamu: zrusV2VyberPolozkySeznamu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,
     jeCilPresunuSeznamu: jeV2CilPresunuSeznamu,
     vlozObrazek: vlozObrazekZToolbaru,
