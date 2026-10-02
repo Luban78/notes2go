@@ -2010,7 +2010,20 @@
         return;
       }
       void zapisV2DoSchranky(text)
-        .then((ok) => zobrazToast(ok ? "Kód zkopírován" : "Kód se nepodařilo zkopírovat", !ok))
+        .then((ok) => {
+          if (ok) {
+            cil.classList.add("ln-v2-code-copy-ok");
+            cil.setAttribute("aria-label", "Kód zkopírován");
+            cil.title = "Zkopírováno";
+            window.setTimeout(() => {
+              if (!cil?.isConnected) return;
+              cil.classList.remove("ln-v2-code-copy-ok");
+              cil.setAttribute("aria-label", "Kopírovat kód");
+              cil.title = "Kopírovat";
+            }, 1200);
+          }
+          zobrazToast(ok ? "Kód zkopírován" : "Kód se nepodařilo zkopírovat", !ok);
+        })
         .catch(() => zobrazToast("Kód se nepodařilo zkopírovat", true));
       return;
     }

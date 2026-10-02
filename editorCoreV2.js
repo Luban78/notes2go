@@ -104,6 +104,10 @@
      čistě vizuální a nic nemění v modelu, historii ani DOM obsahu. */
   let v2LubaCaret = null;
   let v2LubaCaretRaf = 0;
+  /* PATCH 669A – pamatujeme si code block před tapem do prázdné plochy.
+     Selectionchange může proběhnout ještě před click, proto index zachytíme
+     už na pointerdown. */
+  let v2KodovyBlokPredKlikemMimo = -1;
 
   function lubaCaretMaBytViditelny() {
     const klavesnice = window.LubaNoteKeyboard;
@@ -194,11 +198,16 @@
     const styl = getComputedStyle(blokEl);
     const lineHeight = parseFloat(styl.lineHeight) || parseFloat(styl.fontSize) * 1.5 || 24;
     const paddingLeft = parseFloat(styl.paddingLeft) || 0;
+    const paddingTop = parseFloat(styl.paddingTop) || 0;
     const checkbox = blokEl.querySelector(":scope > .ln-v2-todo-check");
     const checkboxRight = checkbox ? Math.max(0, checkbox.getBoundingClientRect().right - r.left + 6) : 0;
+    /* PATCH 669A – prázdný code block používá fallback geometrii. Původně
+       ignorovala jeho padding-top, takže modelový caret visel u horního borderu.
+       U code blocku jej posadíme do první textové řádky a o 2 px níž. */
+    const codeCaretPosun = jeKodovyBlok(blok) ? 2 : 0;
     return {
       left: r.left + Math.max(paddingLeft, checkboxRight) + 1,
-      top: r.top + Math.max(0, (Math.min(r.height || lineHeight, lineHeight) - lineHeight) / 2),
+      top: r.top + paddingTop + codeCaretPosun + Math.max(0, (Math.min(r.height || lineHeight, lineHeight) - lineHeight) / 2),
       height: lineHeight
     };
   }
@@ -1383,6 +1392,14 @@
         kopirovatKod.contentEditable = "false";
         kopirovatKod.setAttribute("aria-label", "Kopírovat kód");
         kopirovatKod.title = "Kopírovat";
+        kopirovatKod.innerHTML = `
+          <svg class="ln-v2-code-copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+            <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"></path>
+          </svg>
+          <svg class="ln-v2-code-copy-check" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12.5 10 17 19 7"></path>
+          </svg>`;
         radek.appendChild(kopirovatKod);
       }
       if (blok.legacyHr === true) {
@@ -4261,6 +4278,49 @@
     const id = String(blokId || "");
     const blok = dokument?.bloky?.find((polozka) => polozka?.id === id);
     return jeKodovyBlok(blok) ? textBloku(blok) : "";
+  }
+
+  /* PATCH 669A – tap do prázdné plochy editoru mimo aktivní code block
+     ukončí psaní kódu stejně přirozeně jako 2× Enter. Pokud už za blokem
+     existuje běžný odstavec, pouze do něj přesuneme caret; jinak vložíme
+     jeden prázdný odstavec. */
+  function ukonciKodovyBlokKlikemMimo(indexBloku) {
+    const index = Number(indexBloku);
+    if (!Number.isInteger(index) || index < 0 || index >= dokument.bloky.length) return false;
+    if (!jeKodovyBlok(dokument.bloky[index])) return false;
+
+    let cilIndex = index + 1;
+    const dalsi = dokument.bloky[cilIndex];
+    const jeBeznyOdstavec = Boolean(
+      dalsi?.typ === "odstavec" &&
+      !dalsi?.legacyPre &&
+      !dalsi?.legacyBlockquote &&
+      !dalsi?.legacyHr
+    );
+
+    if (!jeBeznyOdstavec) {
+      const vyberPred = posledniVyber || {
+        zacatek: { blok: index, offset: textBloku(dokument.bloky[index]).length },
+        konec: { blok: index, offset: textBloku(dokument.bloky[index]).length },
+        sbaleny: true
+      };
+      const snapshotPred = vytvorSnapshotHistorie(vyberPred);
+      dokument.bloky.splice(cilIndex, 0, vytvorOdstavec(""));
+      ulozZmenuDoHistorie(snapshotPred, "ukončit blok kódu klikem mimo");
+    }
+
+    const pozice = { blok: cilIndex, offset: 0 };
+    const vyberPo = { zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true };
+    posledniPozice = { ...pozice };
+    posledniVyber = klonVyberu(vyberPo);
+    ulozenyFormatovaciVyber = klonVyberu(vyberPo);
+    aktivniFormatPsani = null;
+    aktivniFormatPozice = "";
+    aktivniFormatZdroj = "";
+    vykresli(vyberPo);
+    try { editor?.focus({ preventScroll: true }); } catch (_error) { editor?.focus(); }
+    nastavStav("Blok kódu ukončen");
+    return true;
   }
 
   function nastavStylTextuZToolbaru(hodnota) {
@@ -8068,6 +8128,19 @@
     poslouchej(document, "selectstart", zpracujV2ListSelectStart, { capture: true });
     poslouchej(document, "click", zrusV2MoveVyberKlikemMimo, { capture: true });
 
+    /* PATCH 669A – tap do skutečně prázdné plochy editoru je explicitní
+       požadavek opustit aktivní code block. Zaznamenáme jej před tím, než
+       WebView přepíše DOM selection. */
+    poslouchej(editor, "pointerdown", (event) => {
+      v2KodovyBlokPredKlikemMimo = -1;
+      if (event.target !== editor) return;
+      const vyber = posledniVyber || vyberZPosledniPozice();
+      const index = Number(vyber?.konec?.blok);
+      if (Number.isInteger(index) && jeKodovyBlok(dokument?.bloky?.[index])) {
+        v2KodovyBlokPredKlikemMimo = index;
+      }
+    }, { capture: true });
+
     poslouchej(editor, "pointerdown", (event) => {
       if (event.pointerType === "touch") return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -8128,6 +8201,16 @@
     });
 
     poslouchej(editor, "click", (event) => {
+      if (event.target === editor && v2KodovyBlokPredKlikemMimo >= 0) {
+        const index = v2KodovyBlokPredKlikemMimo;
+        v2KodovyBlokPredKlikemMimo = -1;
+        event.preventDefault();
+        event.stopPropagation();
+        ukonciKodovyBlokKlikemMimo(index);
+        return;
+      }
+      v2KodovyBlokPredKlikemMimo = -1;
+
       const seznamRadek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
 
       /* PATCH 663C – badge musí mít přednost před obecným potlačením kliku
