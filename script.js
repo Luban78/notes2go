@@ -678,23 +678,6 @@ function uvolniSdilenyLockPriZavreni(
   });
 }
 
-/* PATCH 671B – pri skutecnem zavreni editoru musi fullscreen shell zmizet
-   vizualne driv, nez Core V2 schova obsah a WebView prepocita flex layout.
-   Jinak editorBottomBar na jeden frame vyskoci nahoru. Plati pro Save, Back
-   i Zahodit; save logiku ani 250ms cleanup nemenime. */
-function zahajVizualniZavreniEditoru() {
-  taskModal?.classList.add("editorClosing");
-}
-
-function dokoncVizualniZavreniEditoru() {
-  setTimeout(() => {
-    if (!taskModal.classList.contains("show")) {
-      taskModal.hidden = true;
-    }
-    taskModal.classList.remove("editorClosing");
-  }, 250);
-}
-
 function zpracujZavreniEditoru() {
   /* 428 – Android Back / systémové zavření nejde přes capture handler
      tlačítka ✓. Je-li aktivní V2, nejdřív zrcadlíme model do produkčních
@@ -731,7 +714,6 @@ function zpracujZavreniEditoru() {
     return;
   }
   
-  zahajVizualniZavreniEditoru();
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
   ziskejEditorCoreV2Bridge()?.zavri?.();
@@ -770,7 +752,11 @@ function zpracujZavreniEditoru() {
   ukonciDraftPoznamky();
   editorSessionId += 1;
   
-  dokoncVizualniZavreniEditoru();
+  setTimeout(() => {
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
+  }, 250);
   
 }
 
@@ -1480,7 +1466,6 @@ appMessageDiscardButton?.addEventListener(
     
     closeAppMessageButton.textContent = "OK";
     
-    zahajVizualniZavreniEditoru();
     taskModal.classList.remove("show");
     document.body.classList.remove("noScroll");
 
@@ -1515,7 +1500,11 @@ appMessageDiscardButton?.addEventListener(
     ukonciDraftPoznamky();
     editorSessionId += 1;
     
-    dokoncVizualniZavreniEditoru();
+    setTimeout(() => {
+      if (!taskModal.classList.contains("show")) {
+        taskModal.hidden = true;
+      }
+    }, 250);
     
     }
 );
@@ -3169,7 +3158,6 @@ function zavriEditorPoLokalnimUlozeni(
     return false;
   }
   
-  zahajVizualniZavreniEditoru();
   taskModal.classList.remove("show");
   document.body.classList.remove("noScroll");
   ziskejEditorCoreV2Bridge()?.zavri?.();
@@ -3201,7 +3189,11 @@ function zavriEditorPoLokalnimUlozeni(
   ukonciDraftPoznamky();
   editorSessionId += 1;
   
-  dokoncVizualniZavreniEditoru();
+  setTimeout(() => {
+    if (!taskModal.classList.contains("show")) {
+      taskModal.hidden = true;
+    }
+  }, 250);
   
   
   /*
@@ -3684,30 +3676,6 @@ window.LubaNoteEditorPredani = {
   zavriAktivniEditorPoPredani
 };
 
-/* PATCH 671C – pomocná bezpečná cesta pro akce spuštěné přímo z editoru
-   (např. Sdílet). U EXISTUJÍCÍ poznámky uloží změny bez zavření editoru;
-   pokud změny nejsou, nevytváří zbytečnou novou revizi. */
-async function ulozExistujiciEditorBezZavreniProAkci(noteId) {
-  const id = String(noteId || "");
-  if (!id || taskModal.hidden || activeTaskId !== id) {
-    return { ok: false, reason: "editor_note_mismatch" };
-  }
-
-  if (!bylEditorZmenen()) {
-    return { ok: true, noteId: id, unchanged: true };
-  }
-
-  return ulozAZavriEditor(null, {
-    cekejNaCloud: true,
-    nezavirat: true,
-    tichyRezim: false
-  });
-}
-
-window.LubaNoteEditorAkce = Object.freeze({
-  ulozExistujiciBezZavreni: ulozExistujiciEditorBezZavreniProAkci
-});
-
 window.addEventListener(
   "lubanote:editor-ownership-lost",
   () => {
@@ -3855,17 +3823,11 @@ function zpracujAndroidZpet() {
     return true;
   }
   
-  /* PATCH 671A – Android Back má při aktivním TODO/Bullet selection nejdřív
-     zrušit samotný výběr. Editor se zavře až případným dalším stiskem Back.
-     Tím se Back chová stejně přirozeně jako zrušení selection tapem mimo. */
+  /*
+   * V editoru použijeme stejnou logiku jako Esc na PC:
+   * beze změny rovnou zavřít, po změně nabídnout uložení.
+   */
   if (taskModal && !taskModal.hidden) {
-    if (
-      window.LubaNoteEditorV2Bridge?.jeAktivni?.() === true &&
-      window.LubaNoteEditorV2Bridge?.zrusVyberPolozkySeznamu?.() === true
-    ) {
-      return true;
-    }
-
     zpracujZavreniEditoru();
     return true;
   }
@@ -4254,6 +4216,82 @@ function aktualizujRevisionSdilenehoEditoru(
 }
 
 
+/* PATCH 673 – jemná zpětná vazba při pomalejším otevření poznámky.
+ * Zobrazuje se až po krátké prodlevě, takže rychlé otevření neproblikne.
+ */
+let casovacOteviraniPoznamky = null;
+let pocetAktivnichOtevreniPoznamky = 0;
+
+function zajistiIndikatorOteviraniPoznamky() {
+  let indikator = document.getElementById("noteOpeningIndicator");
+
+  if (indikator) {
+    return indikator;
+  }
+
+  indikator = document.createElement("div");
+  indikator.id = "noteOpeningIndicator";
+  indikator.className = "noteOpeningIndicator";
+  indikator.hidden = true;
+  indikator.setAttribute("role", "status");
+  indikator.setAttribute("aria-live", "polite");
+  indikator.innerHTML = '<span class="noteOpeningIndicatorSpin" aria-hidden="true">⟳</span><span>Otevírám</span>';
+  document.body.append(indikator);
+
+  return indikator;
+}
+
+function zahajIndikatorOteviraniPoznamky() {
+  pocetAktivnichOtevreniPoznamky += 1;
+
+  if (casovacOteviraniPoznamky) {
+    clearTimeout(casovacOteviraniPoznamky);
+  }
+
+  casovacOteviraniPoznamky = setTimeout(() => {
+    casovacOteviraniPoznamky = null;
+
+    if (pocetAktivnichOtevreniPoznamky <= 0) {
+      return;
+    }
+
+    const indikator = zajistiIndikatorOteviraniPoznamky();
+    indikator.hidden = false;
+    requestAnimationFrame(() => {
+      indikator.classList.add("show");
+    });
+  }, 260);
+}
+
+function ukonciIndikatorOteviraniPoznamky() {
+  pocetAktivnichOtevreniPoznamky = Math.max(
+    0,
+    pocetAktivnichOtevreniPoznamky - 1
+  );
+
+  if (pocetAktivnichOtevreniPoznamky > 0) {
+    return;
+  }
+
+  if (casovacOteviraniPoznamky) {
+    clearTimeout(casovacOteviraniPoznamky);
+    casovacOteviraniPoznamky = null;
+  }
+
+  const indikator = document.getElementById("noteOpeningIndicator");
+
+  if (!indikator) {
+    return;
+  }
+
+  indikator.classList.remove("show");
+  setTimeout(() => {
+    if (pocetAktivnichOtevreniPoznamky === 0) {
+      indikator.hidden = true;
+    }
+  }, 120);
+}
+
 window.LubaNoteSharedEditorHost = {
   otevriSdilenouPoznamku:
     otevriSdilenouPoznamkuVEditoru,
@@ -4283,6 +4321,9 @@ window.LubaNoteSharedEditorHost = {
 
 
 async function openTaskEditorById(taskId) {
+  zahajIndikatorOteviraniPoznamky();
+
+  try {
   /*
    * LOCAL SCOPE 585 – lokální poznámka nesmí při pouhém otevření
    * sahat na Shared stav, Realtime ani Editor Handoff. Účet může být
@@ -4560,6 +4601,9 @@ async function openTaskEditorById(taskId) {
   });
   
   //renderPlannedTextLinks(currentTask.id);
+  } finally {
+    ukonciIndikatorOteviraniPoznamky();
+  }
 }
 
 
