@@ -432,6 +432,13 @@
   function pozicujV2SelectionOverflowKeTreckam(kotva = null) {
     if (!selectionMenu || selectionMenu.hidden || !kotva) return;
 
+    /* 673G6 – rozšířený panel po ⋮ nesmí odskočit jinam. Primární i rozšířená
+       nabídka sdílí stejné stabilní místo nahoře. */
+    if (v2SelectionMenuAktivni && !v2SelectionMenuKurzor) {
+      pozicujV2SelectionMenu({ rozsah: window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null });
+      return;
+    }
+
     requestAnimationFrame(() => {
       if (!aktivni || selectionMenu.hidden || !selectionMenu.classList.contains("selectionMenuRozsirene")) return;
 
@@ -652,7 +659,20 @@
       let x;
       let y;
 
-      if (bod) {
+      if (rozsah && !rozsah.collapsed) {
+        /* 673G6 – označený text má na mobilu vždy jedno stabilní místo.
+           Panel už neskáče podle začátku/konce Range. Držíme ho uprostřed
+           hned pod horní částí editoru (stejná oblast, kde se ukazují krátká
+           editorová oznámení). Caret/paste panel zůstává beze změny u bodu. */
+        const titleRow = document.querySelector("#taskModal .modalTitleRow");
+        const titleRect = titleRow?.getBoundingClientRect?.() || null;
+        const pevnaHorniHrana = Math.max(
+          horniBezpecnaHrana,
+          titleRect && titleRect.height > 0 ? titleRect.bottom + 8 : horniBezpecnaHrana
+        );
+        x = (viewportW - sirka) / 2;
+        y = pevnaHorniHrana;
+      } else if (bod) {
         x = Number(bod.x) - sirka / 2;
         y = Number(bod.y) - vyska - 14;
         if (y < horniBezpecnaHrana) y = Number(bod.y) + 18;
@@ -2479,7 +2499,7 @@
 
     const dotyk = event.touches[0];
     if (jeBodUSelectionHandle(range, dotyk.clientX, dotyk.clientY)) {
-      zapisSelectionScrollDiag("G5_HANDLE_PASS", event);
+      zapisSelectionScrollDiag("G6_HANDLE_PASS", event);
       return;
     }
 
@@ -2500,7 +2520,7 @@
       range: range.cloneRange?.() || null
     };
     v2PosledniTapSelection = null;
-    zapisSelectionScrollDiag("G5_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
+    zapisSelectionScrollDiag("G6_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
   }, { passive: false, capture: true });
 
   document.addEventListener("touchmove", (event) => {
@@ -2516,24 +2536,39 @@
     if (!dotyk) return;
     const dx = dotyk.clientX - stav.startX;
     const dy = dotyk.clientY - stav.startY;
-    stav.lastX = dotyk.clientX;
-    stav.lastY = dotyk.clientY;
+    const krokY = dotyk.clientY - stav.lastY;
 
     if (!stav.moved) {
       const vzdalenost = Math.hypot(dx, dy);
-      if (vzdalenost < 7) return;
+      if (vzdalenost < 7) {
+        stav.lastX = dotyk.clientX;
+        stav.lastY = dotyk.clientY;
+        return;
+      }
       /* Horizontální pohyb bez jasné vertikální složky necháme jako tap/caret;
          vlastní scroll zapínáme jen pro gesto, které skutečně vypadá jako pan. */
-      if (Math.abs(dy) < Math.abs(dx) * 0.65) return;
+      if (Math.abs(dy) < Math.abs(dx) * 0.65) {
+        stav.lastX = dotyk.clientX;
+        stav.lastY = dotyk.clientY;
+        return;
+      }
       stav.moved = true;
       skryjV2SelectionMenu();
-      zapisSelectionScrollDiag("G5_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
+      zapisSelectionScrollDiag("G6_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
     }
 
     if (event.cancelable) event.preventDefault();
+
+    /* 673G6 – selection scroll je záměrně pomalejší a bez „utržení“.
+       Nepoužíváme celkovou vzdálenost od začátku gesta, ale jen přírůstek
+       mezi dvěma touchmove. Jeden event je navíc omezen na 20 px a převod
+       prst→obsah je 0.48×. Rychlý swipe proto nemůže přeskočit velký kus textu. */
+    const omezenyKrok = Math.max(-20, Math.min(20, krokY));
     const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
-    const novyTop = Math.max(0, Math.min(maximum, stav.startScrollTop - dy));
+    const novyTop = Math.max(0, Math.min(maximum, stav.editor.scrollTop - (omezenyKrok * 0.48)));
     stav.editor.scrollTop = novyTop;
+    stav.lastX = dotyk.clientX;
+    stav.lastY = dotyk.clientY;
   }, { passive: false, capture: true });
 
   document.addEventListener("touchend", (event) => {
@@ -2553,7 +2588,7 @@
     if (byloScroll) {
       if (event.cancelable) event.preventDefault();
       potlacV2SelectionScrollClickDo = performance.now() + 450;
-      zapisSelectionScrollDiag("G5_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
+      zapisSelectionScrollDiag("G6_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!aktivni) return;
@@ -2561,23 +2596,35 @@
           const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
           if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
             zobrazV2SelectionMenuProOznaceni(range);
-            zapisSelectionScrollDiag("G5_MENU_RESTORE");
+            zapisSelectionScrollDiag("G6_MENU_RESTORE");
           }
         });
       });
       return;
     }
 
-    /* Nebyl to scroll, ale obyčejný tap mimo selection. Protože jsme museli
-       preventDefaultnout touchstart, provedeme původní V2 chování sami. */
-    const vyber = window.getSelection();
-    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-    if (range && !range.collapsed && jeV2SelectionRozsah(range) && !jeBodUvnitřRozsahu(range, x, y)) {
-      core()?.zrusVyberNaBoduProSelectionMenu?.(x, y);
+    /* Nebyl to scroll, ale obyčejný tap. Rozhodujeme podle Range uloženého
+       už při touchstartu – Android WebView může mezitím DOM selection změnit.
+       Tap mimo původně označený text musí selection vždy ukončit. */
+    const puvodniRange = stav.range;
+    if (puvodniRange && !puvodniRange.collapsed && !jeBodUvnitřRozsahu(puvodniRange, x, y)) {
+      let zruseno = core()?.zrusVyberNaBoduProSelectionMenu?.(x, y) === true;
+
+      /* Bezpečný DOM fallback pro WebView: pokud caretPositionFromPoint uvnitř
+         Core helperu selže, alespoň zrušíme vizuální Range. Následující
+         selectionchange synchronizuje toolbar stejně jako běžný tap. */
+      if (!zruseno) {
+        try {
+          const vyber = window.getSelection();
+          vyber?.removeAllRanges?.();
+          zruseno = true;
+        } catch (_error) {}
+      }
+
       skryjV2SelectionMenu();
       obnovToolbar();
       potlacV2SelectionScrollClickDo = performance.now() + 350;
-      zapisSelectionScrollDiag("G5_TAP_COLLAPSE", event);
+      zapisSelectionScrollDiag("G6_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
     }
   }, { passive: false, capture: true });
 
