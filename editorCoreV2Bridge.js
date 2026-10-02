@@ -97,19 +97,33 @@
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
-  /* PATCH 673G9 – G8 schoval jen CSS caret-color, ale Android WebView kreslí
-     vlastní nativní insertion handle v oddělené compositor vrstvě. Log ukázal,
-     že DOM Range při scrollu zůstává pořád stejný (range=caret), zatímco handle
-     vizuálně „plave“ o několik řádků podle rychlosti scrollu. Proto během
-     skutečného scrollu collapsed caret dočasně odpojíme z DOM Selection,
-     uložený Range necháme beze změny a po zklidnění scrollu ho vrátíme přesně
-     na původní textovou pozici. Focus editoru neměníme, takže klávesnice ani
-     editace nemají dostat blur/focus cyklus. */
+  /* PATCH 673G10 – G9 prokázal, že samotné removeAllRanges() nestačí:
+     Debug Hub během scrollu ukazuje range=none + host=N, ale Android WebView
+     přesto dál vykresluje starý nativní insertion handle v compositor vrstvě.
+     Ten je tedy svázaný hlavně s focusem contenteditable prvku, ne jen s DOM
+     Selection. Při prvním skutečném scrollu proto collapsed caret uložíme,
+     editor dočasně BLURneme a DOM Selection vyprázdníme. LubaKeyboard se tím
+     neskrývá – jeho focusout handler jen aktualizuje native guard. Po úplném
+     zklidnění scrollu editor vrátíme do focusu přes preventScroll a obnovíme
+     původní Range. Pokud už mezitím uživatel vytvořil nový caret/selection nebo
+     focus přešel jinam, starý caret neobnovujeme. */
   let v2CaretScrollTimer = null;
   let v2CaretScrollEditor = null;
   let v2CaretScrollPuvodniBarva = "";
   let v2CaretScrollRange = null;
   let v2CaretScrollTouchAktivni = false;
+  let v2CaretScrollMelFocus = false;
+
+  function zahodV2CaretScrollStav() {
+    clearTimeout(v2CaretScrollTimer);
+    const editor = v2CaretScrollEditor;
+    if (editor) editor.style.caretColor = v2CaretScrollPuvodniBarva;
+    v2CaretScrollEditor = null;
+    v2CaretScrollPuvodniBarva = "";
+    v2CaretScrollRange = null;
+    v2CaretScrollTimer = null;
+    v2CaretScrollMelFocus = false;
+  }
 
   function naplanujV2CaretPoScrollu() {
     clearTimeout(v2CaretScrollTimer);
@@ -121,25 +135,59 @@
 
       const editor = v2CaretScrollEditor;
       const range = v2CaretScrollRange;
-      if (editor) editor.style.caretColor = v2CaretScrollPuvodniBarva;
+      const melFocus = v2CaretScrollMelFocus;
+      if (!editor || !range) {
+        zahodV2CaretScrollStav();
+        return;
+      }
 
       try {
-        if (aktivni && editor?.isConnected && range && range.collapsed && jeV2SelectionRozsah(range)) {
-          const vyber = window.getSelection();
-          /* Pokud už uživatel mezitím vytvořil nový caret / selection, má
-             přednost nová interakce a starý Range nesmíme přepsat. */
-          if (vyber && vyber.rangeCount === 0) {
-            vyber.addRange(range);
-            zapisSelectionScrollDiag("G9_CARET_RESTORE", null, `scroll=${Math.round(editor.scrollTop)}`);
-          }
+        const vyber = window.getSelection();
+        const aktivniPrvek = document.activeElement;
+        const vzniklNovyVyber = Boolean(vyber?.rangeCount);
+        const focusJeJinde = Boolean(
+          aktivniPrvek &&
+          aktivniPrvek !== document.body &&
+          aktivniPrvek !== document.documentElement &&
+          aktivniPrvek !== editor
+        );
+
+        /* Nová interakce už vytvořila vlastní caret/selection nebo odvedla
+           focus jinam – v takovém případě starou pozici nesmíme vracet. */
+        if (!aktivni || !editor.isConnected || !range.collapsed ||
+            !jeV2SelectionRozsah(range) || vzniklNovyVyber || focusJeJinde) {
+          zapisSelectionScrollDiag(
+            "G10_CARET_RESTORE_SKIP",
+            null,
+            `new=${vzniklNovyVyber ? "Y" : "N"} focusElse=${focusJeJinde ? "Y" : "N"}`
+          );
+          zahodV2CaretScrollStav();
+          return;
         }
-      } catch (_error) {}
+
+        if (melFocus && document.activeElement !== editor) {
+          try { editor.focus({ preventScroll: true }); }
+          catch (_error) { try { editor.focus(); } catch (_ignore) {} }
+        }
+
+        /* focus() může WebView vytvořit svůj collapsed Range. Ten před
+           návratem uložené pozice zrušíme a nastavíme jediný zdroj pravdy. */
+        const poFocusVyber = window.getSelection();
+        try { poFocusVyber?.removeAllRanges?.(); } catch (_error) {}
+        try { poFocusVyber?.addRange?.(range); } catch (_error) {}
+
+        editor.style.caretColor = v2CaretScrollPuvodniBarva;
+        zapisSelectionScrollDiag("G10_CARET_RESTORE", null, `scroll=${Math.round(editor.scrollTop)}`);
+      } catch (_error) {
+        try { editor.style.caretColor = v2CaretScrollPuvodniBarva; } catch (_ignore) {}
+      }
 
       v2CaretScrollEditor = null;
       v2CaretScrollPuvodniBarva = "";
       v2CaretScrollRange = null;
       v2CaretScrollTimer = null;
-    }, 160);
+      v2CaretScrollMelFocus = false;
+    }, 180);
   }
 
   function skryjV2CaretBehemScrollu(editor) {
@@ -153,17 +201,27 @@
       v2CaretScrollEditor = editor;
       v2CaretScrollPuvodniBarva = editor.style.caretColor || "";
       v2CaretScrollRange = range.cloneRange?.() || null;
+      v2CaretScrollMelFocus = document.activeElement === editor;
       editor.style.caretColor = "transparent";
 
-      try {
-        vyber?.removeAllRanges?.();
-        zapisSelectionScrollDiag("G9_CARET_DETACH", null, `scroll=${Math.round(editor.scrollTop)}`);
-      } catch (_error) {}
+      /* Kritický rozdíl proti G9: blur zruší nativní Android insertion
+         controller/handle, který přežíval i při prázdném DOM Selection. */
+      if (v2CaretScrollMelFocus) {
+        try { editor.blur(); } catch (_error) {}
+      }
+      try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+
+      zapisSelectionScrollDiag(
+        "G10_CARET_BLUR",
+        null,
+        `scroll=${Math.round(editor.scrollTop)} hadFocus=${v2CaretScrollMelFocus ? "Y" : "N"}`
+      );
     } else {
-      /* WebView si během kinetického scrollu někdy zkusí nativní caret znovu
-         vytvořit. Dokud máme uložený původní Range, držíme Selection prázdnou. */
+      /* Během kinetického scrollu držíme Selection prázdnou. Pokud by WebView
+         po blur nějaký Range znovu založil, ihned jej odstraníme. */
       try {
-        if (vyber?.rangeCount) vyber.removeAllRanges();
+        const aktualniVyber = window.getSelection();
+        if (aktualniVyber?.rangeCount) aktualniVyber.removeAllRanges();
       } catch (_error) {}
     }
 
