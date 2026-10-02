@@ -87,13 +87,13 @@
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
 
-  /* PATCH 673G5 – Android APK/WebView neumí při aktivní nativní textové
-     selection spolehlivě přepnout obyčejný tah prstem na scroll editoru.
-     G4D potvrdil: Range zůstává aktivní, přijdou TOUCHMOVE, ale nevznikne
-     jediný SCROLL a scrollTop se nepohne. Proto pouze v Android APK přebíráme
-     tah ZAČATÝ MIMO okolí nativních selection handles a posouváme scrollTop
-     editoru sami. Dotyk u handles necháváme WebView beze změny, aby šlo dál
-     normálně rozšiřovat/zkracovat selection. */
+  /* PATCH 673G12 – po 673G8 je už jasné, že ruční přepis scrollTop sice
+     udrží selection, ale zahodí nativní compositor scroll a na Androidu pak
+     gesto viditelně cuká po malých krocích. G12 proto při tahu ZAČATÉM MIMO
+     modré selection handles jen bezpečně uloží Range, dočasně odstraní jeho
+     nativní vizuální vrstvu a samotný pohyb nechá plně WebView. Po skončení
+     nativního scrollu se stejný výběr obnoví. Handles samotné zůstávají zcela
+     v režii WebView a jejich rychlost zatím neměníme. */
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
@@ -2525,18 +2525,108 @@
     return body.some((bod) => Math.hypot(Number(x) - bod.x, Number(y) - bod.y) <= 38);
   }
 
-  function zrusV2SelectionScrollStav() {
-    v2SelectionScroll = null;
+  function zrusV2SelectionScrollStav(stav = v2SelectionScroll) {
+    if (stav?.obnovTimer) {
+      clearTimeout(stav.obnovTimer);
+      stav.obnovTimer = null;
+    }
+    if (v2SelectionScroll === stav) v2SelectionScroll = null;
   }
 
-  /* 673G5 – capture touchstart musí rozhodnout ještě v okamžiku, kdy je
-     událost cancelable. G4D ukázal, že první TOUCHMOVE už WebView hlásí jako
-     cancelable=N, protože si gesto mezitím zabral nativní selection režim. */
+  function vratV2SelectionPoNativnimScrollu(stav, duvod = "settle") {
+    if (!stav || stav.obnoveno || !aktivni) {
+      zrusV2SelectionScrollStav(stav);
+      return false;
+    }
+
+    stav.obnoveno = true;
+    if (stav.obnovTimer) {
+      clearTimeout(stav.obnovTimer);
+      stav.obnovTimer = null;
+    }
+
+    const puvodniRange = stav.range;
+    const anchorNode = stav.anchorNode;
+    const focusNode = stav.focusNode;
+    const rozsahZije = !!(
+      puvodniRange &&
+      puvodniRange.startContainer?.isConnected &&
+      puvodniRange.endContainer?.isConnected &&
+      hostitel?.contains(puvodniRange.commonAncestorContainer)
+    );
+
+    if (!rozsahZije) {
+      zapisSelectionScrollDiag("G12_SELECTION_RESTORE_SKIP", null, `reason=${duvod}`);
+      zrusV2SelectionScrollStav(stav);
+      return false;
+    }
+
+    let obnoveno = false;
+    try {
+      const vyber = window.getSelection();
+      vyber?.removeAllRanges?.();
+
+      if (
+        vyber?.setBaseAndExtent &&
+        anchorNode?.isConnected &&
+        focusNode?.isConnected &&
+        hostitel?.contains(anchorNode) &&
+        hostitel?.contains(focusNode)
+      ) {
+        vyber.setBaseAndExtent(anchorNode, stav.anchorOffset, focusNode, stav.focusOffset);
+        obnoveno = true;
+      } else if (vyber?.addRange) {
+        vyber.addRange(puvodniRange.cloneRange());
+        obnoveno = true;
+      }
+    } catch (_error) {
+      obnoveno = false;
+    }
+
+    if (obnoveno) {
+      core()?.zachytAktualniVyber?.();
+      requestAnimationFrame(() => {
+        if (!aktivni) return;
+        const vyber = window.getSelection();
+        const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+        if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+          zobrazV2SelectionMenuProOznaceni(range);
+          obnovToolbar();
+          zapisSelectionScrollDiag("G12_SELECTION_RESTORE", null, `reason=${duvod} top=${Math.round(stav.editor?.scrollTop || 0)}`);
+        }
+      });
+    } else {
+      zapisSelectionScrollDiag("G12_SELECTION_RESTORE_FAIL", null, `reason=${duvod}`);
+    }
+
+    zrusV2SelectionScrollStav(stav);
+    return obnoveno;
+  }
+
+  function naplanujV2SelectionRestorePoScrollu(stav, duvod = "settle") {
+    if (!stav || stav.obnoveno || !stav.touchEnded) return;
+    if (stav.obnovTimer) clearTimeout(stav.obnovTimer);
+    stav.obnovTimer = setTimeout(() => {
+      if (!stav.touchEnded || stav.obnoveno) return;
+      vratV2SelectionPoNativnimScrollu(stav, duvod);
+    }, 140);
+  }
+
+  /* 673G12 – zásadní rozdíl proti G8: touchstart už NEpreventujeme a
+     touchmove už nikdy nepřepisuje scrollTop. Výběr si na začátku uložíme,
+     vizuální DOM Selection dočasně odstraníme a scroll tedy zůstane plně
+     nativní/kompozitorový. */
   document.addEventListener("touchstart", (event) => {
     if (!jeAndroidApkSelectionScroll() || !aktivni || event.touches?.length !== 1) return;
     if (!hostitel?.contains(event.target) || selectionMenu?.contains(event.target)) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select")) return;
     if (jeV2MoveInterakce(event)) return;
+
+    /* Pokud už dobíhá předchozí nativní fling a uživatel sáhne znovu,
+       nejprve vrátíme uložený selection a stejné gesto může pokračovat dál. */
+    if (v2SelectionScroll && !v2SelectionScroll.obnoveno) {
+      vratV2SelectionPoNativnimScrollu(v2SelectionScroll, "retouch");
+    }
 
     const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
     if (!editor || !editor.contains(event.target)) return;
@@ -2547,16 +2637,12 @@
 
     const dotyk = event.touches[0];
     if (jeBodUSelectionHandle(range, dotyk.clientX, dotyk.clientY)) {
-      zapisSelectionScrollDiag("G7_HANDLE_PASS", event);
+      zapisSelectionScrollDiag("G12_HANDLE_PASS", event);
       return;
     }
 
-    /* Běžný tap mimo selection i scroll začínají stejně. Převzetím touchstartu
-       zabráníme WebView, aby gesto uzamkl jako selection. Pokud se prst nakonec
-       nepohne, touchend níže emuluje původní tap/caret chování. */
-    if (event.cancelable) event.preventDefault();
     core()?.zachytAktualniVyber?.();
-    v2SelectionScroll = {
+    const stav = {
       touchId: dotyk.identifier,
       editor,
       startX: dotyk.clientX,
@@ -2565,18 +2651,33 @@
       lastY: dotyk.clientY,
       startScrollTop: editor.scrollTop,
       moved: false,
-      range: range.cloneRange?.() || null
+      touchEnded: false,
+      obnoveno: false,
+      obnovTimer: null,
+      range: range.cloneRange?.() || null,
+      anchorNode: vyber.anchorNode || null,
+      anchorOffset: Number(vyber.anchorOffset || 0),
+      focusNode: vyber.focusNode || null,
+      focusOffset: Number(vyber.focusOffset || 0)
     };
+
+    v2SelectionScroll = stav;
     v2PosledniTapSelection = null;
-    zapisSelectionScrollDiag("G8_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
-  }, { passive: false, capture: true });
+    skryjV2SelectionMenu();
+    potlacV2SelectionMenuDo = performance.now() + 900;
+
+    try {
+      vyber.removeAllRanges();
+    } catch (_error) {}
+
+    zapisSelectionScrollDiag("G12_NATIVE_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)} top=${Math.round(editor.scrollTop)}`);
+  }, { passive: true, capture: true });
 
   document.addEventListener("touchmove", (event) => {
     const stav = v2SelectionScroll;
-    if (!stav || !aktivni) return;
+    if (!stav || !aktivni || stav.obnoveno) return;
     if (jeV2MoveInterakce(event)) {
-      zapisSelectionScrollDiag("G5_SCROLL_ABORT_MOVE", event);
-      zrusV2SelectionScrollStav();
+      vratV2SelectionPoNativnimScrollu(stav, "move-abort");
       return;
     }
 
@@ -2584,101 +2685,83 @@
     if (!dotyk) return;
     const dx = dotyk.clientX - stav.startX;
     const dy = dotyk.clientY - stav.startY;
+    stav.lastX = dotyk.clientX;
+    stav.lastY = dotyk.clientY;
 
     if (!stav.moved) {
       const vzdalenost = Math.hypot(dx, dy);
-      if (vzdalenost < 7) {
-        stav.lastX = dotyk.clientX;
-        stav.lastY = dotyk.clientY;
-        return;
-      }
-      /* Horizontální pohyb bez jasné vertikální složky necháme jako tap/caret;
-         vlastní scroll zapínáme jen pro gesto, které skutečně vypadá jako pan. */
-      if (Math.abs(dy) < Math.abs(dx) * 0.65) {
-        stav.lastX = dotyk.clientX;
-        stav.lastY = dotyk.clientY;
-        return;
-      }
+      if (vzdalenost < 7) return;
+      if (Math.abs(dy) < Math.abs(dx) * 0.65) return;
       stav.moved = true;
-      skryjV2SelectionMenu();
-      zapisSelectionScrollDiag("G8_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
+      zapisSelectionScrollDiag("G12_NATIVE_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
     }
 
-    if (event.cancelable) event.preventDefault();
-
-    /* 673G8 – obyčejný RUČNÍ scroll při aktivním selection zůstává 1:1.
-       Nativní tažení modrého úchytu už níže nijak nelimitujeme. */
-    const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
-    const novyTop = Math.max(0, Math.min(maximum, stav.startScrollTop - dy));
-    stav.editor.scrollTop = novyTop;
-    stav.lastX = dotyk.clientX;
-    stav.lastY = dotyk.clientY;
-  }, { passive: false, capture: true });
+    /* ZÁMĚRNĚ bez preventDefault() a bez zápisu do editor.scrollTop.
+       WebView si celý pan/fling vykresluje nativně. */
+  }, { passive: true, capture: true });
 
   document.addEventListener("touchend", (event) => {
     const stav = v2SelectionScroll;
-    if (!stav || !aktivni) return;
+    if (!stav || !aktivni || stav.obnoveno) return;
     const dotyk = Array.from(event.changedTouches || []).find((item) => item.identifier === stav.touchId);
     if (!dotyk) return;
 
-    const byloScroll = stav.moved;
     const x = dotyk.clientX;
     const y = dotyk.clientY;
-    zrusV2SelectionScrollStav();
+    const posunScrollu = Math.abs(Number(stav.editor?.scrollTop || 0) - Number(stav.startScrollTop || 0));
+    const byloScroll = stav.moved || posunScrollu > 2;
+    stav.touchEnded = true;
     v2PosledniTapSelection = null;
 
-    if (jeV2MoveInterakce(event)) return;
-
-    if (byloScroll) {
-      if (event.cancelable) event.preventDefault();
-      potlacV2SelectionScrollClickDo = performance.now() + 450;
-      zapisSelectionScrollDiag("G8_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!aktivni) return;
-          const vyber = window.getSelection();
-          const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-          if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
-            zobrazV2SelectionMenuProOznaceni(range);
-            zapisSelectionScrollDiag("G8_MENU_RESTORE");
-          }
-        });
-      });
+    if (jeV2MoveInterakce(event)) {
+      vratV2SelectionPoNativnimScrollu(stav, "move-end");
       return;
     }
 
-    /* Nebyl to scroll, ale obyčejný tap. Rozhodujeme podle Range uloženého
-       už při touchstartu – Android WebView může mezitím DOM selection změnit.
-       Tap mimo původně označený text musí selection vždy ukončit. */
+    if (byloScroll) {
+      stav.moved = true;
+      potlacV2SelectionScrollClickDo = performance.now() + 450;
+      zapisSelectionScrollDiag("G12_NATIVE_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
+      naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+      return;
+    }
+
     const puvodniRange = stav.range;
     if (puvodniRange && !puvodniRange.collapsed && !jeBodUvnitřRozsahu(puvodniRange, x, y)) {
       let zruseno = core()?.zrusVyberNaBoduProSelectionMenu?.(x, y) === true;
-
-      /* Bezpečný DOM fallback pro WebView: pokud caretPositionFromPoint uvnitř
-         Core helperu selže, alespoň zrušíme vizuální Range. Následující
-         selectionchange synchronizuje toolbar stejně jako běžný tap. */
       if (!zruseno) {
         try {
-          const vyber = window.getSelection();
-          vyber?.removeAllRanges?.();
+          window.getSelection()?.removeAllRanges?.();
           zruseno = true;
         } catch (_error) {}
       }
 
       skryjV2SelectionMenu();
-      /* Po zrušení selection nechceme, aby následný Android selectionchange
-         okamžitě otevřel caret/paste panel na místě tapu. */
       potlacV2SelectionMenuDo = performance.now() + 450;
       obnovToolbar();
       potlacV2SelectionScrollClickDo = performance.now() + 350;
-      zapisSelectionScrollDiag("G8_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
+      zapisSelectionScrollDiag("G12_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
+      zrusV2SelectionScrollStav(stav);
+      return;
     }
-  }, { passive: false, capture: true });
+
+    /* Tap uvnitř původního označení: selection jsme jen technicky schovali,
+       takže jej hned vrátíme i s panelem. */
+    vratV2SelectionPoNativnimScrollu(stav, "tap-inside");
+  }, { passive: true, capture: true });
 
   document.addEventListener("touchcancel", (event) => {
-    if (!v2SelectionScroll) return;
-    zapisSelectionScrollDiag("G5_SCROLL_CANCEL", event);
-    zrusV2SelectionScrollStav();
+    const stav = v2SelectionScroll;
+    if (!stav || stav.obnoveno) return;
+    stav.touchEnded = true;
+    const posunScrollu = Math.abs(Number(stav.editor?.scrollTop || 0) - Number(stav.startScrollTop || 0));
+    if (stav.moved || posunScrollu > 2) {
+      stav.moved = true;
+      zapisSelectionScrollDiag("G12_NATIVE_SCROLL_CANCEL", event, `top=${Math.round(stav.editor?.scrollTop || 0)}`);
+      naplanujV2SelectionRestorePoScrollu(stav, "scroll-cancel-settle");
+    } else {
+      vratV2SelectionPoNativnimScrollu(stav, "touchcancel");
+    }
   }, { passive: true, capture: true });
 
   document.addEventListener("click", (event) => {
@@ -2710,9 +2793,16 @@
     const target = event.target;
     if (!(target instanceof Element) || (!hostitel?.contains(target) && target !== hostitel)) return;
 
-    /* 673G8 – do nativního WebView auto-scrollu selection handle už vůbec
-       nesaháme. G7 prokázal, že přepis scrollTop proti WebView způsobuje
-       zpětné skoky, škubání po řádcích a boj dvou scroll enginů. */
+    /* 673G12 – scroll samotný je plně nativní. Pokud jsme kvůli běžnému
+       panu dočasně schovali selection, každý další compositor scroll (včetně
+       flingu po puštění prstu) pouze posune čas jeho bezpečného obnovení. */
+    const stav = v2SelectionScroll;
+    if (stav && !stav.obnoveno && target === stav.editor) {
+      if (Math.abs(Number(stav.editor.scrollTop || 0) - Number(stav.startScrollTop || 0)) > 2) {
+        stav.moved = true;
+      }
+      if (stav.touchEnded) naplanujV2SelectionRestorePoScrollu(stav, "scroll-settle");
+    }
     zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
 
