@@ -420,6 +420,14 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   font-weight: 700;
 }
 
+.ln-v2-todo-multiselect-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
 .ln-v2-todo-multiselect-bar button {
   width: 34px;
   height: 34px;
@@ -431,8 +439,27 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   background: transparent;
   color: var(--color-accent, currentColor);
   font: inherit;
-  font-size: 1.55rem;
   line-height: 1;
+}
+
+.ln-v2-todo-multiselect-bar button:active {
+  background: color-mix(in srgb, var(--color-accent, #35b9ca) 18%, transparent);
+  transform: scale(.94);
+}
+
+.ln-v2-todo-multiselect-bar button svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.ln-v2-todo-multiselect-bar [data-ln-v2-todo-multiselect-delete] {
+  color: #d86c73;
 }
 
 .ln-v2-editor .ln-v2-todo.ln-v2-todo-multi-selected {

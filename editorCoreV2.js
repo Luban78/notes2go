@@ -5258,6 +5258,80 @@
     return true;
   }
 
+  /* PATCH 671C – hromadné TODO akce pracují jedním snapshotem historie.
+     MOVE engine, drag ani checkbox logika se tímto blokem nemění. */
+  function nastavV2VybranaTodoHotovo(hotovo) {
+    const idcka = new Set(
+      Array.from(vybranaTodoIdcka).filter((id) => najdiTodoIndex(id) >= 0)
+    );
+    if (!idcka.size) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    const cil = hotovo === true;
+    let zmenenoPolozek = 0;
+
+    dokument.bloky.forEach((blok) => {
+      if (!jeTodoBlok(blok) || !idcka.has(blok.id)) return;
+      if (blok.hotovo === cil) return;
+      blok.hotovo = cil;
+      zmenenoPolozek += 1;
+    });
+
+    vybranaTodoIdcka.clear();
+    vybranaPolozkaSeznamuId = "";
+    posledniVyber = null;
+    ulozenyFormatovaciVyber = null;
+    skryjV2LubaCaret();
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+
+    if (zmenenoPolozek > 0) {
+      ulozZmenuDoHistorie(
+        snapshotPred,
+        cil ? `TODO hromadně hotovo (${idcka.size})` : `TODO hromadně nehotovo (${idcka.size})`
+      );
+    }
+
+    vykresli(null);
+    aktualizujV2TodoMultiSelectUI();
+    nastavStav(
+      cil
+        ? `${idcka.size} TODO označeno jako hotové`
+        : `${idcka.size} TODO vráceno mezi aktivní`
+    );
+    return true;
+  }
+
+  function smazV2VybranaTodo() {
+    const idcka = new Set(
+      Array.from(vybranaTodoIdcka).filter((id) => najdiTodoIndex(id) >= 0)
+    );
+    if (!idcka.size) return false;
+
+    const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+    let smazano = 0;
+    for (let index = dokument.bloky.length - 1; index >= 0; index -= 1) {
+      const blok = dokument.bloky[index];
+      if (!jeTodoBlok(blok) || !idcka.has(blok.id)) continue;
+      dokument.bloky.splice(index, 1);
+      smazano += 1;
+    }
+
+    if (!smazano) return false;
+    normalizujDokument();
+    vybranaTodoIdcka.clear();
+    vybranaPolozkaSeznamuId = "";
+    posledniVyber = null;
+    ulozenyFormatovaciVyber = null;
+    skryjV2LubaCaret();
+    try { window.getSelection()?.removeAllRanges(); } catch (_error) {}
+
+    ulozZmenuDoHistorie(snapshotPred, `smazat TODO hromadně (${smazano})`);
+    vykresli(null);
+    aktualizujV2TodoMultiSelectUI();
+    nastavStav(`${smazano} TODO smazáno · Undo je může vrátit`);
+    return true;
+  }
+
   /* PATCH 671A – selection TODO/Bullet musí jít spolehlivě zrušit.
      Starší FIX 527 kontroloval jen vybranaPolozkaSeznamuId. Po některých
      mobilních touch sekvencích ale ID už bylo prázdné, zatímco vizuální
@@ -8281,7 +8355,20 @@
     jadroEditoru.innerHTML = `
       <div class="ln-v2-todo-multiselect-bar" data-ln-v2-todo-multiselect hidden aria-hidden="true">
         <strong data-ln-v2-todo-multiselect-count>TODO · 0</strong>
-        <button type="button" data-ln-v2-todo-multiselect-cancel aria-label="Zrušit výběr TODO">×</button>
+        <div class="ln-v2-todo-multiselect-actions" role="toolbar" aria-label="Hromadné akce TODO">
+          <button type="button" data-ln-v2-todo-multiselect-done aria-label="Označit vybrané TODO jako hotové" title="Hotovo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"></path></svg>
+          </button>
+          <button type="button" data-ln-v2-todo-multiselect-undone aria-label="Vrátit vybrané TODO mezi aktivní" title="Nehotovo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h6a6 6 0 1 1-5.2 9"></path><path d="M7 7V3L3 7l4 4V7"></path></svg>
+          </button>
+          <button type="button" data-ln-v2-todo-multiselect-delete aria-label="Smazat vybrané TODO" title="Smazat">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="m7 7 1 13h8l1-13"></path><path d="M10 11v5M14 11v5"></path></svg>
+          </button>
+          <button type="button" data-ln-v2-todo-multiselect-cancel aria-label="Zrušit výběr TODO" title="Konec výběru">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+          </button>
+        </div>
       </div>
       <div
         class="ln-v2-editor"
@@ -8303,6 +8390,9 @@
     v2TodoMultiBar = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect]");
     v2TodoMultiCount = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-count]");
     const v2TodoMultiCancel = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-cancel]");
+    const v2TodoMultiDone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-done]");
+    const v2TodoMultiUndone = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-undone]");
+    const v2TodoMultiDelete = jadroEditoru.querySelector("[data-ln-v2-todo-multiselect-delete]");
 
     /* PATCH 671B1 – panel multiselectu patří do titulkového řádku editoru.
        Přesun DOM uzlu nemění jeho event listenery ani Core V2 model. */
@@ -8310,6 +8400,21 @@
     if (radekNazvu && v2TodoMultiBar) {
       radekNazvu.appendChild(v2TodoMultiBar);
     }
+    poslouchej(v2TodoMultiDone, "click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      nastavV2VybranaTodoHotovo(true);
+    });
+    poslouchej(v2TodoMultiUndone, "click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      nastavV2VybranaTodoHotovo(false);
+    });
+    poslouchej(v2TodoMultiDelete, "click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      smazV2VybranaTodo();
+    });
     poslouchej(v2TodoMultiCancel, "click", (event) => {
       event.preventDefault();
       event.stopPropagation();

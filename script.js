@@ -3684,6 +3684,30 @@ window.LubaNoteEditorPredani = {
   zavriAktivniEditorPoPredani
 };
 
+/* PATCH 671C – pomocná bezpečná cesta pro akce spuštěné přímo z editoru
+   (např. Sdílet). U EXISTUJÍCÍ poznámky uloží změny bez zavření editoru;
+   pokud změny nejsou, nevytváří zbytečnou novou revizi. */
+async function ulozExistujiciEditorBezZavreniProAkci(noteId) {
+  const id = String(noteId || "");
+  if (!id || taskModal.hidden || activeTaskId !== id) {
+    return { ok: false, reason: "editor_note_mismatch" };
+  }
+
+  if (!bylEditorZmenen()) {
+    return { ok: true, noteId: id, unchanged: true };
+  }
+
+  return ulozAZavriEditor(null, {
+    cekejNaCloud: true,
+    nezavirat: true,
+    tichyRezim: false
+  });
+}
+
+window.LubaNoteEditorAkce = Object.freeze({
+  ulozExistujiciBezZavreni: ulozExistujiciEditorBezZavreniProAkci
+});
+
 window.addEventListener(
   "lubanote:editor-ownership-lost",
   () => {

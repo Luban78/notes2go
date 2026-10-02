@@ -15,6 +15,7 @@
 
   const taskModal = document.getElementById("taskModal");
   const shareNoteButton = document.getElementById("shareNoteButton");
+  const shareEditorToolButton = document.getElementById("shareEditorToolButton");
   const invitationsButton = document.getElementById("sharingInvitationsButton");
   const invitationsBadge = document.getElementById("sharingInvitationsBadge");
 
@@ -130,32 +131,45 @@
   }
 
   function aktualizujShareButton() {
-    if (!shareNoteButton) {
-      return;
-    }
-
     const task = ziskejAktualniPoznamku();
     const jeOtevrenyEditor = !!taskModal && !taskModal.hidden;
-
-    /* PATCH 671B1 – private note už nemá duplicitní velké Sdílet v editoru.
-       Tlačítko je pouze kompaktní správa již existující OWNER Shared note.
-       Nové sdílení se dál spouští z rychlých akcí hlavní karty. */
+    const maId = !!task?.id;
+    const jeLokalni =
+      !!task &&
+      window.LubaNoteStorageScope
+        ?.jePouzeLokalni?.(task) === true;
+    const jeSdilena =
+      maId &&
+      window.LubaNoteSharingNotes
+        ?.jeSdilenaPoznamka?.(task.id) === true;
     const jeVlastniSdilena =
-      !!task?.id &&
+      maId &&
       window.LubaNoteSharingNotes
         ?.jeVlastniSdilenaPoznamka?.(task.id) === true;
-
-    const zobrazitSpravuSdileni =
+    const muzeSdilet =
       jeOtevrenyEditor &&
-      jeVlastniSdilena &&
+      maId &&
       task.isSecret !== true &&
-      window.LubaNoteStorageScope
-        ?.jePouzeLokalni?.(task) !== true;
+      !jeLokalni;
 
-    shareNoteButton.hidden = !zobrazitSpravuSdileni;
-    const popisek = t("sharing.manageShareButton", "Spravovat sdílení");
-    shareNoteButton.setAttribute("aria-label", popisek);
-    shareNoteButton.title = popisek;
+    /* PATCH 671C:
+       - OWNER Shared note: kompaktní správa sdílení na konci názvu.
+       - běžná private note: ikona Sdílet v nástrojové sekci Otevřít/Uložit.
+       - collaborator/Secret/LOCAL/new-draft: žádná chybná sdílecí akce. */
+    if (shareNoteButton) {
+      shareNoteButton.hidden = !(muzeSdilet && jeVlastniSdilena);
+      const popisek = t("sharing.manageShareButton", "Spravovat sdílení");
+      shareNoteButton.setAttribute("aria-label", popisek);
+      shareNoteButton.title = popisek;
+    }
+
+    if (shareEditorToolButton) {
+      shareEditorToolButton.hidden = !(muzeSdilet && !jeSdilena);
+      shareEditorToolButton.disabled = false;
+      const popisek = t("sharing.shareButton", "Sdílet poznámku");
+      shareEditorToolButton.setAttribute("aria-label", popisek);
+      shareEditorToolButton.title = popisek;
+    }
   }
 
   function nastavBadge(pocet) {
@@ -1345,6 +1359,12 @@
       shareNoteButton.title = popisek;
     }
 
+    if (shareEditorToolButton) {
+      const popisek = t("sharing.shareButton", "Sdílet poznámku");
+      shareEditorToolButton.setAttribute("aria-label", popisek);
+      shareEditorToolButton.title = popisek;
+    }
+
     if (invitationsButton) {
       invitationsButton.setAttribute(
         "aria-label",
@@ -1463,7 +1483,31 @@
     }, 140);
   }
 
+  async function otevriSdileniZEditorNastroju(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    const task = ziskejAktualniPoznamku();
+    if (!task?.id || task.isSecret === true) return;
+    if (window.LubaNoteStorageScope?.jePouzeLokalni?.(task) === true) return;
+    if (window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(task.id) === true) return;
+
+    if (shareEditorToolButton) shareEditorToolButton.disabled = true;
+    try {
+      const uloz = window.LubaNoteEditorAkce?.ulozExistujiciBezZavreni;
+      if (typeof uloz === "function") {
+        const vysledek = await uloz(task.id);
+        if (vysledek?.ok !== true) return;
+      }
+      await otevriShareModal(task.id);
+    } finally {
+      if (shareEditorToolButton) shareEditorToolButton.disabled = false;
+      aktualizujShareButton();
+    }
+  }
+
   shareNoteButton?.addEventListener("click", otevriShareModal);
+  shareEditorToolButton?.addEventListener("click", otevriSdileniZEditorNastroju);
   invitationsButton?.addEventListener("click", otevriInvitationsModal);
 
   if (taskModal) {
