@@ -32,6 +32,28 @@
   let geometrieHubuPredMinimalizaci = null;
 
   const MAX_ZAZNAMU = 700;
+  const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
+  const V2_SELECTION_EDGE_SPEED_DEFAULT = 220;
+
+  function nactiV2SelectionEdgeSpeed() {
+    const globalni = Number(window.LUBANOTE_V2_SELECTION_EDGE_SPEED);
+    if (Number.isFinite(globalni)) return Math.round(Math.max(40, Math.min(900, globalni)));
+    try {
+      const ulozene = Number(localStorage.getItem(V2_SELECTION_EDGE_SPEED_KEY));
+      if (Number.isFinite(ulozene)) return Math.round(Math.max(40, Math.min(900, ulozene)));
+    } catch (_) {}
+    return V2_SELECTION_EDGE_SPEED_DEFAULT;
+  }
+
+  function nastavV2SelectionEdgeSpeed(hodnota) {
+    const cislo = Math.round(Math.max(40, Math.min(900, Number(hodnota) || V2_SELECTION_EDGE_SPEED_DEFAULT)));
+    window.LUBANOTE_V2_SELECTION_EDGE_SPEED = cislo;
+    try { localStorage.setItem(V2_SELECTION_EDGE_SPEED_KEY, String(cislo)); } catch (_) {}
+    document.dispatchEvent(new CustomEvent("lubanote:v2-selection-edge-speed", {
+      detail: { value: cislo }
+    }));
+    return cislo;
+  }
 
   function jeAdminNastrojPovolen() {
     try {
@@ -2373,6 +2395,29 @@ async function zkopirujTagVdReport(tlacitko) {
           <button type="button" data-dh="stop">Stop</button>
         </div>
 
+        <section
+          class="ln-dh-selection-speed"
+          data-dh-selection-speed-panel
+          aria-label="Rychlost výběru při scrollu"
+          style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:10px 12px;border:1px solid rgba(127,203,196,.32);border-radius:12px;"
+        >
+          <div style="min-width:0">
+            <strong style="display:block">Výběr – rychlost scrollu</strong>
+            <small style="opacity:.72">Live rychlost při držení úchytu u okraje</small>
+          </div>
+          <output data-dh-selection-speed-value style="font-weight:700;white-space:nowrap">${nactiV2SelectionEdgeSpeed()} px/s</output>
+          <input
+            data-dh-selection-speed
+            type="range"
+            min="40"
+            max="900"
+            step="10"
+            value="${nactiV2SelectionEdgeSpeed()}"
+            aria-label="Rychlost selection edge scrollu"
+            style="grid-column:1 / -1;width:100%"
+          >
+        </section>
+
         <section class="ln-dh-notes-export" aria-label="Notes Visual Lab export">
           <div class="ln-dh-notes-export-text">
             <strong>Notes Visual Lab – export</strong>
@@ -2408,6 +2453,16 @@ async function zkopirujTagVdReport(tlacitko) {
     startTlacitko = hub.querySelector('[data-dh="start"]');
     moduleLabel = hub.querySelector(".ln-dh-module-label");
     moduleMenu = hub.querySelector(".ln-dh-module-menu");
+
+    const selectionSpeedInput = hub.querySelector("[data-dh-selection-speed]");
+    const selectionSpeedValue = hub.querySelector("[data-dh-selection-speed-value]");
+    const aplikujSelectionSpeed = () => {
+      const cislo = nastavV2SelectionEdgeSpeed(selectionSpeedInput?.value);
+      if (selectionSpeedInput) selectionSpeedInput.value = String(cislo);
+      if (selectionSpeedValue) selectionSpeedValue.textContent = `${cislo} px/s`;
+    };
+    selectionSpeedInput?.addEventListener("input", aplikujSelectionSpeed);
+    selectionSpeedInput?.addEventListener("change", aplikujSelectionSpeed);
 
     if (aktivniModul && MODULY[aktivniModul]) {
       selectModulu.value = aktivniModul;
