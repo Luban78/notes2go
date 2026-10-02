@@ -97,18 +97,37 @@
   let v2SelectionScroll = null;
   let potlacV2SelectionScrollClickDo = 0;
 
-  /* PATCH 673G7 – nativní Android selection-handle auto-scroll je ve WebView
-     výrazně rychlejší než běžný ruční scroll. Ruční pan s aktivním výběrem
-     zůstává 1:1 jako v G5; zvlášť hlídáme jen nativní auto-scroll vznikající
-     při tažení modrého úchytu u horní/spodní hrany viewportu. */
-  let v2NativeSelectionAutoScroll = {
-    aktivniDo: 0,
-    posledniDelka: 0,
-    posledniTop: null,
-    posledniCas: 0,
-    opravnyTop: null,
-    opravnyDo: 0
-  };
+  /* PATCH 673G8 – při běžném scrollování s collapsed caretem Android WebView
+     umí kreslit blikající kurzor mezi řádky tak, že vizuálně „plave“ s obsahem.
+     Range ani focus kvůli tomu neměníme: během skutečného scrollu pouze dočasně
+     skryjeme caret přes CSS a po zklidnění scrollu vrátíme původní caret-color. */
+  let v2CaretScrollTimer = null;
+  let v2CaretScrollEditor = null;
+  let v2CaretScrollPuvodniBarva = "";
+
+  function skryjV2CaretBehemScrollu(editor) {
+    if (!jeAndroidApkSelectionScroll() || !editor) return;
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || !range.collapsed || !jeV2SelectionRozsah(range)) return;
+
+    if (v2CaretScrollEditor !== editor) {
+      if (v2CaretScrollEditor) v2CaretScrollEditor.style.caretColor = v2CaretScrollPuvodniBarva;
+      v2CaretScrollEditor = editor;
+      v2CaretScrollPuvodniBarva = editor.style.caretColor || "";
+    }
+    editor.style.caretColor = "transparent";
+    clearTimeout(v2CaretScrollTimer);
+    v2CaretScrollTimer = setTimeout(() => {
+      if (v2CaretScrollEditor === editor) {
+        editor.style.caretColor = v2CaretScrollPuvodniBarva;
+        v2CaretScrollEditor = null;
+        v2CaretScrollPuvodniBarva = "";
+      }
+      v2CaretScrollTimer = null;
+    }, 140);
+  }
+
 
   /* PATCH 663G – pokud LubaNote opustí foreground, interní rich clipboard
      přestává být důvěryhodným důkazem původu. Externí aplikace mohla mezitím
@@ -2577,7 +2596,7 @@
       range: range.cloneRange?.() || null
     };
     v2PosledniTapSelection = null;
-    zapisSelectionScrollDiag("G7_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
+    zapisSelectionScrollDiag("G8_SCROLL_ARM", event, `x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
   }, { passive: false, capture: true });
 
   document.addEventListener("touchmove", (event) => {
@@ -2610,14 +2629,13 @@
       }
       stav.moved = true;
       skryjV2SelectionMenu();
-      zapisSelectionScrollDiag("G7_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
+      zapisSelectionScrollDiag("G8_SCROLL_START", event, `dx=${Math.round(dx)} dy=${Math.round(dy)}`);
     }
 
     if (event.cancelable) event.preventDefault();
 
-    /* 673G7 – obyčejný RUČNÍ scroll při aktivním selection nezpomalujeme.
-       Prst a obsah se hýbou 1:1 stejně jako v G5. Zpomalení níže patří pouze
-       nativnímu edge auto-scrollu při tažení modrého selection úchytu. */
+    /* 673G8 – obyčejný RUČNÍ scroll při aktivním selection zůstává 1:1.
+       Nativní tažení modrého úchytu už níže nijak nelimitujeme. */
     const maximum = Math.max(0, stav.editor.scrollHeight - stav.editor.clientHeight);
     const novyTop = Math.max(0, Math.min(maximum, stav.startScrollTop - dy));
     stav.editor.scrollTop = novyTop;
@@ -2642,7 +2660,7 @@
     if (byloScroll) {
       if (event.cancelable) event.preventDefault();
       potlacV2SelectionScrollClickDo = performance.now() + 450;
-      zapisSelectionScrollDiag("G7_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
+      zapisSelectionScrollDiag("G8_SCROLL_END", event, `top=${Math.round(stav.editor.scrollTop)}`);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!aktivni) return;
@@ -2650,7 +2668,7 @@
           const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
           if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
             zobrazV2SelectionMenuProOznaceni(range);
-            zapisSelectionScrollDiag("G7_MENU_RESTORE");
+            zapisSelectionScrollDiag("G8_MENU_RESTORE");
           }
         });
       });
@@ -2676,9 +2694,12 @@
       }
 
       skryjV2SelectionMenu();
+      /* Po zrušení selection nechceme, aby následný Android selectionchange
+         okamžitě otevřel caret/paste panel na místě tapu. */
+      potlacV2SelectionMenuDo = performance.now() + 450;
       obnovToolbar();
       potlacV2SelectionScrollClickDo = performance.now() + 350;
-      zapisSelectionScrollDiag("G7_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
+      zapisSelectionScrollDiag("G8_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
     }
   }, { passive: false, capture: true });
 
@@ -2717,61 +2738,11 @@
     const target = event.target;
     if (!(target instanceof Element) || (!hostitel?.contains(target) && target !== hostitel)) return;
 
-    /* 673G7 – limitujeme pouze nativní WebView auto-scroll selection handle.
-       Běžný ruční scroll má v2SelectionScroll != null a jde bez omezení. */
-    if (jeAndroidApkSelectionScroll() && !v2SelectionScroll) {
-      const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
-      const ted = performance.now();
-      const vyber = window.getSelection();
-      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-      const aktivniRange = Boolean(range && !range.collapsed && jeV2SelectionRozsah(range));
-
-      if (target === editor && aktivniRange && ted < v2NativeSelectionAutoScroll.aktivniDo) {
-        const aktualniTop = Number(editor.scrollTop || 0);
-
-        if (
-          v2NativeSelectionAutoScroll.opravnyTop != null &&
-          ted < v2NativeSelectionAutoScroll.opravnyDo &&
-          Math.abs(aktualniTop - v2NativeSelectionAutoScroll.opravnyTop) <= 2
-        ) {
-          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
-          v2NativeSelectionAutoScroll.posledniCas = ted;
-          v2NativeSelectionAutoScroll.opravnyTop = null;
-          zapisSelectionScrollDiag("G7_HANDLE_SCROLL_APPLY", event, `top=${Math.round(aktualniTop)}`);
-          return;
-        }
-
-        if (v2NativeSelectionAutoScroll.posledniTop == null || ted - v2NativeSelectionAutoScroll.posledniCas > 350) {
-          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
-          v2NativeSelectionAutoScroll.posledniCas = ted;
-        } else {
-          const dt = Math.max(16, Math.min(120, ted - v2NativeSelectionAutoScroll.posledniCas));
-          /* cca 280 px/s, ale nikdy víc než 34 px v jednom scroll eventu. */
-          const povolenyKrok = Math.max(5, Math.min(34, dt * 0.28));
-          const rozdil = aktualniTop - v2NativeSelectionAutoScroll.posledniTop;
-          if (Math.abs(rozdil) > povolenyKrok) {
-            const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
-            const opravenyTop = Math.max(0, Math.min(
-              maximum,
-              v2NativeSelectionAutoScroll.posledniTop + Math.sign(rozdil) * povolenyKrok
-            ));
-            v2NativeSelectionAutoScroll.opravnyTop = opravenyTop;
-            v2NativeSelectionAutoScroll.opravnyDo = ted + 80;
-            editor.scrollTop = opravenyTop;
-            v2NativeSelectionAutoScroll.posledniTop = opravenyTop;
-            v2NativeSelectionAutoScroll.posledniCas = ted;
-            zapisSelectionScrollDiag(
-              "G7_HANDLE_SCROLL_LIMIT",
-              event,
-              `wanted=${Math.round(aktualniTop)} limited=${Math.round(opravenyTop)} dt=${Math.round(dt)}`
-            );
-            return;
-          }
-          v2NativeSelectionAutoScroll.posledniTop = aktualniTop;
-          v2NativeSelectionAutoScroll.posledniCas = ted;
-        }
-      }
-    }
+    /* 673G8 – do nativního WebView auto-scrollu selection handle už vůbec
+       nesaháme. G7 prokázal, že přepis scrollTop proti WebView způsobuje
+       zpětné skoky, škubání po řádcích a boj dvou scroll enginů. */
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+    if (target === editor) skryjV2CaretBehemScrollu(editor);
 
     zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
@@ -2956,26 +2927,6 @@
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
 
-    /* 673G7 – rychlé změny délky selection bez našeho ručního scroll stavu
-       jsou signál nativního tažení modrého úchytu. Krátce tím ozbrojíme pouze
-       limiter edge auto-scrollu; samotný Range nijak neměníme. */
-    if (jeAndroidApkSelectionScroll()) {
-      const ted = performance.now();
-      const delka = !range.collapsed ? String(vyber.toString() || "").length : 0;
-      if (delka > 0 && delka !== v2NativeSelectionAutoScroll.posledniDelka && !v2SelectionScroll) {
-        const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
-        if (v2NativeSelectionAutoScroll.posledniTop == null || ted - v2NativeSelectionAutoScroll.posledniCas > 350) {
-          v2NativeSelectionAutoScroll.posledniTop = Number(editor?.scrollTop || 0);
-          v2NativeSelectionAutoScroll.posledniCas = ted;
-        }
-        v2NativeSelectionAutoScroll.aktivniDo = ted + 260;
-      } else if (delka === 0) {
-        v2NativeSelectionAutoScroll.aktivniDo = 0;
-        v2NativeSelectionAutoScroll.posledniTop = null;
-        v2NativeSelectionAutoScroll.opravnyTop = null;
-      }
-      v2NativeSelectionAutoScroll.posledniDelka = delka;
-    }
 
     requestAnimationFrame(() => {
       obnovToolbar();
