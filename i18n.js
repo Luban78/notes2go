@@ -16,12 +16,22 @@
   let aktualniJazykId = null;
 
   const textoveVazby = [
+    [".appSplashSubtitle", "login.splashSubtitle"],
     ["#loginTitle", "login.title"],
     ["#loginButton", "login.submit"],
     ["#loginModeSignIn", "login.modeSignIn"],
     ["#loginModeRegister", "login.modeRegister"],
     ["#accountStatusRefresh", "login.checkStatus"],
     ["#accountStatusSignOut", "menu.logout"],
+    ["#accountStatusDownloadData", "login.downloadMyData"],
+    ["#accountStatusDeleteData", "login.deleteMyData"],
+    ["#localOwnerResetButton", "login.clearThisDevice"],
+    ["#expiredDemoDeleteTitle", "login.deleteMyDataTitle"],
+    ["#expiredDemoDeleteCancel", "actions.cancel"],
+    ["#expiredDemoDeleteConfirm", "login.deleteMyData"],
+    ["#localDeviceResetTitle", "login.clearThisDeviceTitle"],
+    ["#localDeviceResetCancel", "actions.cancel"],
+    ["#localDeviceResetConfirm", "login.clearWithoutBackup"],
 
     ["#desktopHomeButton span:last-child", "nav.home"],
     ["#desktopAllNotesButton span:last-child", "nav.allNotes"],
@@ -188,6 +198,7 @@
     ["#loginEmail", "placeholder", "login.email"],
     ["#loginPassword", "placeholder", "login.password"],
     ["#loginPasswordConfirm", "placeholder", "login.passwordAgain"],
+    ["#loginModeSwitch", "aria-label", "login.modeAria"],
     ["#desktopSidebar", "aria-label", "nav.quick"],
     [".desktopSidebarNav:first-of-type", "aria-label", "nav.quick"],
     [".desktopSidebarNavSecondary", "aria-label", "nav.tools"],
@@ -266,6 +277,17 @@
     ["#planSelectionButton", "aria-label", "editor.planSelection"],
     ["#addTodoButton", "aria-label", "editor.addTodo"],
     ["#deleteTaskButton", "aria-label", "editor.deleteNote"],
+    ["#editorFindButton", "aria-label", "editor.findInNote"],
+    ["#editorFindButton", "title", "editor.findInNote"],
+    ["#editorFindBar", "aria-label", "editor.findInNote"],
+    ["#editorFindInput", "placeholder", "editor.find"],
+    ["#editorFindInput", "aria-label", "editor.findInNote"],
+    ["#editorFindPrev", "aria-label", "editor.findPrevious"],
+    ["#editorFindPrev", "title", "editor.findPrevious"],
+    ["#editorFindNext", "aria-label", "editor.findNext"],
+    ["#editorFindNext", "title", "editor.findNext"],
+    ["#editorFindClose", "aria-label", "editor.findClose"],
+    ["#editorFindClose", "title", "editor.findClose"],
 
     ["#closeTimePickerButton", "aria-label", "timePicker.close"],
     ["#timePickerClock", "aria-label", "timePicker.clock"],
@@ -307,10 +329,12 @@
 
   function t(klic, zaloha = "", hodnoty = {}) {
     const balicek = ziskejBalicek();
+    const anglicky = balicky.get("en");
     const cesky = balicky.get("cs");
 
     const text =
       balicek?.preklady?.[klic] ??
+      (balicek?.id === "cs" ? null : anglicky?.preklady?.[klic]) ??
       cesky?.preklady?.[klic] ??
       zaloha ??
       klic;
@@ -324,7 +348,12 @@
     }
 
     const balicek = ziskejBalicek();
-    return balicek?.texty?.[String(text)] ?? String(text);
+    const anglicky = balicky.get("en");
+    return (
+      balicek?.texty?.[String(text)] ??
+      (balicek?.id === "cs" ? null : anglicky?.texty?.[String(text)]) ??
+      String(text)
+    );
   }
 
   function aplikujTextoveVazby() {
@@ -508,10 +537,43 @@
 
     picker.replaceChildren();
 
+    const aktualni = ziskejBalicek();
+    if (!aktualni) {
+      return;
+    }
+
+    // PATCH 676A – login zůstává čistý: zobrazí se jen aktuální jazyk
+    // a všech šest voleb se rozbalí až po klepnutí.
+    const details = document.createElement("details");
+    details.className = "loginLanguageDetails";
+
+    const summary = document.createElement("summary");
+    summary.className = "loginLanguageCurrent";
+    summary.setAttribute("aria-label", t("language.choose", "Vyber jazyk"));
+
+    const vlajka = document.createElement("span");
+    vlajka.className = "loginLanguageFlag";
+    vlajka.textContent = aktualni.vlajka || "🌐";
+    vlajka.setAttribute("aria-hidden", "true");
+
+    const nazev = document.createElement("span");
+    nazev.className = "loginLanguageCurrentName";
+    nazev.textContent = aktualni.nazev;
+
+    const sipka = document.createElement("span");
+    sipka.className = "loginLanguageChevron";
+    sipka.textContent = "⌄";
+    sipka.setAttribute("aria-hidden", "true");
+
+    summary.append(vlajka, nazev, sipka);
+
+    const menu = document.createElement("div");
+    menu.className = "loginLanguageMenu";
+
     [...balicky.values()].forEach((balicek) => {
       const tlacitko = document.createElement("button");
       tlacitko.type = "button";
-      tlacitko.className = "loginLanguageButton";
+      tlacitko.className = "loginLanguageOption";
       tlacitko.dataset.language = balicek.id;
       tlacitko.setAttribute(
         "aria-pressed",
@@ -522,23 +584,25 @@
         tlacitko.classList.add("active");
       }
 
-      const vlajka = document.createElement("span");
-      vlajka.className = "loginLanguageFlag";
-      vlajka.textContent = balicek.vlajka || "🌐";
-      vlajka.setAttribute("aria-hidden", "true");
+      const optionVlajka = document.createElement("span");
+      optionVlajka.className = "loginLanguageFlag";
+      optionVlajka.textContent = balicek.vlajka || "🌐";
+      optionVlajka.setAttribute("aria-hidden", "true");
 
-      const nazev = document.createElement("span");
-      nazev.textContent = balicek.nazev;
+      const optionNazev = document.createElement("span");
+      optionNazev.textContent = balicek.nazev;
 
-      tlacitko.append(vlajka, nazev);
-
+      tlacitko.append(optionVlajka, optionNazev);
       tlacitko.addEventListener("click", () => {
+        details.open = false;
         nastavJazyk(balicek.id);
       });
 
-      picker.append(tlacitko);
+      menu.append(tlacitko);
     });
 
+    details.append(summary, menu);
+    picker.append(details);
     picker.setAttribute("aria-label", t("language.choose", "Vyber jazyk"));
   }
 

@@ -238,6 +238,8 @@
     smazHighlighty();
     vysledky = [];
     aktualniIndex = -1;
+    // PATCH 676A – nové otevření hledání začíná vždy prázdným dotazem.
+    vstup.value = "";
     aktualizujPocitadlo();
     observerEditoru?.disconnect();
     observerEditoru = null;

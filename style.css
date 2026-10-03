@@ -10086,46 +10086,122 @@ body.pdfViewerOpen {
 ================================================== */
 
 .loginLanguagePicker {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  width: 100%;
+  z-index: 6;
 }
 
-.loginLanguageButton {
-  display: inline-flex;
+.loginLanguageDetails {
+  position: relative;
+  width: min(100%, 15.5rem);
+}
+
+.loginLanguageDetails > summary {
+  list-style: none;
+}
+
+.loginLanguageDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.loginLanguageCurrent {
+  min-height: 3rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  gap: 0.55rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
 
-  width: auto !important;
-  min-width: 118px;
-  min-height: 42px !important;
-  padding: 0 13px;
+.loginLanguageDetails[open] .loginLanguageCurrent,
+.loginLanguageCurrent:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 24%, transparent);
+  outline: none;
+}
 
+.loginLanguageCurrentName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loginLanguageChevron {
+  color: var(--color-text-secondary);
+  font-size: 1.25rem;
+  line-height: 1;
+  transform: translateY(-0.08rem);
+  transition: transform 140ms ease;
+}
+
+.loginLanguageDetails[open] .loginLanguageChevron {
+  transform: rotate(180deg) translateY(0.08rem);
+}
+
+.loginLanguageMenu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(20rem, calc(100vw - 3.5rem));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding: 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  box-shadow: 0 0.9rem 2.1rem rgba(0, 0, 0, 0.18);
+}
+
+.loginLanguageOption {
+  width: 100% !important;
+  min-width: 0;
+  min-height: 2.75rem !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding: 0 0.7rem !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: 999px !important;
+  border-radius: 0.8rem !important;
   background: var(--color-background) !important;
   color: var(--color-text) !important;
-  font-size: calc(1rem - 0.0625rem) !important;
+  font-size: 0.92rem !important;
   font-weight: 650 !important;
+  white-space: nowrap;
 }
 
-.loginLanguageButton.active {
+.loginLanguageOption.active {
   border-color: var(--color-accent) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-background)) !important;
   color: var(--color-accent) !important;
 }
 
 .loginLanguageFlag {
-  font-size: 1.25rem;
+  flex: 0 0 auto;
+  font-size: 1.35rem;
   line-height: 1;
 }
 
-@media (max-width: 420px) {
-  .loginLanguageButton {
-    min-width: 0;
-    flex: 1 1 0;
+@media (max-width: 380px) {
+  .loginLanguageMenu {
+    width: min(18.5rem, calc(100vw - 2rem));
+  }
+
+  .loginLanguageOption {
+    font-size: 0.86rem !important;
+    padding-inline: 0.55rem !important;
   }
 }
 
