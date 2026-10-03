@@ -626,43 +626,46 @@ openReminderDelaySettingsButton?.addEventListener(
         : hodnota;
     };
 
+    const snoozeMin = (count) => prelozNastaveni("settings.snoozeMinutes", `${count} minut`, { count });
+    const snoozeHours = (count) => prelozNastaveni("settings.snoozeHours", `${count} hodiny`, { count });
+
     const moznostiVolba1 = [
-      { hodnota: "5", popisek: "5 minut" },
-      { hodnota: "10", popisek: "10 minut" },
-      { hodnota: "15", popisek: "15 minut" },
-      { hodnota: "30", popisek: "30 minut" },
-      { hodnota: "60", popisek: "1 hodina" }
+      { hodnota: "5", popisek: snoozeMin(5) },
+      { hodnota: "10", popisek: snoozeMin(10) },
+      { hodnota: "15", popisek: snoozeMin(15) },
+      { hodnota: "30", popisek: snoozeMin(30) },
+      { hodnota: "60", popisek: snoozeHours(1) }
     ];
 
     const moznostiVolba2 = [
-      { hodnota: "5", popisek: "5 minut" },
-      { hodnota: "10", popisek: "10 minut" },
-      { hodnota: "15", popisek: "15 minut" },
-      { hodnota: "30", popisek: "30 minut" },
-      { hodnota: "60", popisek: "1 hodina" }
+      { hodnota: "5", popisek: snoozeMin(5) },
+      { hodnota: "10", popisek: snoozeMin(10) },
+      { hodnota: "15", popisek: snoozeMin(15) },
+      { hodnota: "30", popisek: snoozeMin(30) },
+      { hodnota: "60", popisek: snoozeHours(1) }
     ];
 
     const moznostiVolba3 = [
-      { hodnota: "15", popisek: "15 minut" },
-      { hodnota: "30", popisek: "30 minut" },
-      { hodnota: "60", popisek: "1 hodina" },
-      { hodnota: "120", popisek: "2 hodiny" },
-      { hodnota: "180", popisek: "3 hodiny" }
+      { hodnota: "15", popisek: snoozeMin(15) },
+      { hodnota: "30", popisek: snoozeMin(30) },
+      { hodnota: "60", popisek: snoozeHours(1) },
+      { hodnota: "120", popisek: snoozeHours(2) },
+      { hodnota: "180", popisek: snoozeHours(3) }
     ];
 
     const moznostiVolba4 = [
-      { hodnota: "tomorrow", popisek: "Zítra 8:00" },
-      { hodnota: "120", popisek: "2 hodiny" },
-      { hodnota: "180", popisek: "3 hodiny" }
+      { hodnota: "tomorrow", popisek: prelozNastaveni("reminders.tomorrow8", "Zítra 8:00") },
+      { hodnota: "120", popisek: snoozeHours(2) },
+      { hodnota: "180", popisek: snoozeHours(3) }
     ];
 
     otevriNastavovaciModal({
-      nadpis: "Rychlé odložení",
+      nadpis: prelozNastaveni("settings.quickDelay", "Rychlé odložení"),
 
       polozky: [
         {
           klic: "volba1",
-          popisek: "1. volba",
+          popisek: prelozNastaveni("settings.choice1", "1. volba"),
           hodnota:
             ulozeneRychleOdlozeni.volba1,
           zobrazeni: ziskejPopisek(
@@ -674,7 +677,7 @@ openReminderDelaySettingsButton?.addEventListener(
 
         {
           klic: "volba2",
-          popisek: "2. volba",
+          popisek: prelozNastaveni("settings.choice2", "2. volba"),
           hodnota:
             ulozeneRychleOdlozeni.volba2,
           zobrazeni: ziskejPopisek(
@@ -686,7 +689,7 @@ openReminderDelaySettingsButton?.addEventListener(
 
         {
           klic: "volba3",
-          popisek: "3. volba",
+          popisek: prelozNastaveni("settings.choice3", "3. volba"),
           hodnota:
             ulozeneRychleOdlozeni.volba3,
           zobrazeni: ziskejPopisek(
@@ -698,7 +701,7 @@ openReminderDelaySettingsButton?.addEventListener(
 
         {
           klic: "volba4",
-          popisek: "4. volba",
+          popisek: prelozNastaveni("settings.choice4", "4. volba"),
           hodnota:
             ulozeneRychleOdlozeni.volba4,
           zobrazeni: ziskejPopisek(
@@ -756,11 +759,11 @@ openReminderDelaySettingsButton?.addEventListener(
   const stylyIkon = [
     {
       hodnota: "classic",
-      popisek: "Původní ikony"
+      popisek: prelozNastaveni("icons.classic", "Původní ikony")
     },
     {
       hodnota: "svg",
-      popisek: "SVG ikony"
+      popisek: prelozNastaveni("icons.svg", "SVG ikony")
     }
   ];
 
@@ -866,10 +869,10 @@ openReminderDelaySettingsButton?.addEventListener(
     upravovaneSlovo = null;
     if (personalDictionaryInput) {
       personalDictionaryInput.value = "";
-      personalDictionaryInput.placeholder = "Přidat vlastní slovo…";
+      personalDictionaryInput.placeholder = prelozNastaveni("dictionary.addOwn", "Přidat vlastní slovo…");
       personalDictionaryInput.classList.remove("is-editing");
     }
-    if (personalDictionaryAddButton) personalDictionaryAddButton.textContent = "Přidat";
+    if (personalDictionaryAddButton) personalDictionaryAddButton.textContent = prelozNastaveni("dictionary.add", "Přidat");
   }
   function navazAkciSlovnikuNaPrvniTap(button, handler) {
     let touchStart = null;
@@ -955,11 +958,11 @@ openReminderDelaySettingsButton?.addEventListener(
       const edit = document.createElement("button");
       edit.type = "button";
       edit.className = "personalDictionaryAction personalDictionaryEdit";
-      edit.textContent = "Upravit";
+      edit.textContent = prelozNastaveni("actions.edit", "Upravit");
       navazAkciSlovnikuNaPrvniTap(edit, () => {
         upravovaneSlovo = entry.word;
         personalDictionaryInput.value = entry.word;
-        personalDictionaryAddButton.textContent = "Uložit";
+        personalDictionaryAddButton.textContent = prelozNastaveni("actions.save", "Uložit");
         personalDictionaryInput.classList.add("is-editing");
         requestAnimationFrame(() => {
           personalDictionaryInput.focus();
@@ -973,7 +976,7 @@ openReminderDelaySettingsButton?.addEventListener(
       const del = document.createElement("button");
       del.type = "button";
       del.className = "personalDictionaryAction personalDictionaryDelete";
-      del.textContent = "Smazat";
+      del.textContent = prelozNastaveni("actions.delete", "Smazat");
       navazAkciSlovnikuNaPrvniTap(del, () => {
         api?.smazSlovoZMehoSlovniku?.(entry.word, lang);
         if (upravovaneSlovo === entry.word) zrusEditaciSlova();
@@ -1007,9 +1010,9 @@ openReminderDelaySettingsButton?.addEventListener(
     aktualizujPocetSlovniku();
 
     if (byloUpravovani && personalDictionaryAddButton) {
-      personalDictionaryAddButton.textContent = "Uloženo ✓";
+      personalDictionaryAddButton.textContent = prelozNastaveni("status.saved", "Uloženo ✓");
       setTimeout(() => {
-        if (!upravovaneSlovo) personalDictionaryAddButton.textContent = "Přidat";
+        if (!upravovaneSlovo) personalDictionaryAddButton.textContent = prelozNastaveni("dictionary.add", "Přidat");
       }, 650);
     }
   });
@@ -1078,7 +1081,7 @@ openReminderDelaySettingsButton?.addEventListener(
       );
 
     window.otevriVyberovyModal({
-      nadpis: "Styl ikon",
+      nadpis: prelozNastaveni("settings.iconStyle", "Styl ikon"),
       moznosti: stylyIkon,
       vybranaHodnota: vybranyStyl,
       poVyberu: (novyStyl) => {
@@ -1106,7 +1109,7 @@ openReminderDelaySettingsButton?.addEventListener(
       localStorage.getItem("theme") || "light";
 
     window.otevriVyberovyModal({
-      nadpis: "Barevný motiv",
+      nadpis: prelozNastaveni("settings.theme", "Barevný motiv"),
       moznosti: motivy,
       vybranaHodnota: ulozenyMotiv,
       poVyberu: (novyMotiv) => {

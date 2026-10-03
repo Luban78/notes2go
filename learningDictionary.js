@@ -11,6 +11,9 @@
 (() => {
   'use strict';
 
+  const learningT = (klic, zaloha, hodnoty = {}) =>
+    window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
   const OWNER_KEY = 'lubanoteLocalOwnerUserId';
   const STORAGE_PREFIX = 'lubanote_language_learning_v2:';
   const LEGACY_EN_STORAGE_PREFIX = 'lubanote_english_learning_v1:';
@@ -330,7 +333,7 @@
           term,
           translation,
           context: '',
-          bookTitle: 'Testovací sada LubaNote',
+          bookTitle: learningT('learning.sourceSeed', 'Testovací sada LubaNote'),
           chapterTitle: '',
           sourceType: 'seed',
           createdAt: 1,
@@ -521,10 +524,10 @@
     const vyraz = normalizujVyraz(text);
     const source = platnyJazyk(sourceLanguage);
     const target = platnyJazyk(targetLanguage);
-    if (!vyraz) return { ok: false, error: 'Vyber slovo nebo frázi.' };
-    if (vyraz.length > 160) return { ok: false, error: 'Pro překlad vyber kratší slovo nebo frázi.' };
-    if (source === target) return { ok: false, error: 'Zdrojový a cílový jazyk musí být rozdílný.' };
-    if (navigator.onLine === false) return { ok: false, error: 'Překlad potřebuje připojení k internetu.' };
+    if (!vyraz) return { ok: false, error: learningT('learning.errorSelectTerm', 'Vyber slovo nebo frázi.') };
+    if (vyraz.length > 160) return { ok: false, error: learningT('learning.errorShorterTerm', 'Pro překlad vyber kratší slovo nebo frázi.') };
+    if (source === target) return { ok: false, error: learningT('learning.errorDifferentLanguages', 'Zdrojový a cílový jazyk musí být rozdílný.') };
+    if (navigator.onLine === false) return { ok: false, error: learningT('learning.errorOnlineRequired', 'Překlad potřebuje připojení k internetu.') };
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 9000);
@@ -544,7 +547,7 @@
         240
       );
       if (!translated || translated.toLocaleLowerCase(JAZYKY[target].locale) === vyraz.toLocaleLowerCase(JAZYKY[source].locale)) {
-        return { ok: false, error: 'Automatický překlad se nepodařilo získat. Překlad můžeš dopsat ručně.' };
+        return { ok: false, error: learningT('learning.errorTranslateAuto', 'Automatický překlad se nepodařilo získat. Překlad můžeš dopsat ručně.') };
       }
       return { ok: true, translation: translated, sourceLanguage: source, targetLanguage: target };
     } catch (_error) {
@@ -552,8 +555,8 @@
       return {
         ok: false,
         error: offline
-          ? 'Překlad potřebuje připojení k internetu.'
-          : 'Online překlad teď není dostupný. Překlad můžeš dopsat ručně.'
+          ? learningT('learning.errorOnlineRequired', 'Překlad potřebuje připojení k internetu.')
+          : learningT('learning.errorTranslateUnavailable', 'Online překlad teď není dostupný. Překlad můžeš dopsat ručně.')
       };
     } finally {
       clearTimeout(timeout);
@@ -925,11 +928,11 @@
     if (prvky.languageCurrentBadge) prvky.languageCurrentBadge.textContent = source.badge;
     if (prvky.languageCurrentName) prvky.languageCurrentName.textContent = source.nazev;
     if (prvky.languageCurrent) {
-      prvky.languageCurrent.title = `Změnit jazyk – ${source.nazev}`;
-      prvky.languageCurrent.setAttribute('aria-label', `Jazyk k procvičování: ${source.nazev}. Klepnutím změnit.`);
+      prvky.languageCurrent.title = learningT('learning.changeLanguage', `Změnit jazyk – ${source.nazev}`, { language: source.nazev });
+      prvky.languageCurrent.setAttribute('aria-label', learningT('learning.practiceLanguageAria', `Jazyk k procvičování: ${source.nazev}. Klepnutím změnit.`, { language: source.nazev }));
     }
     if (prvky.manualAdd) {
-      prvky.manualAdd.title = `Přidat slovíčko – ${source.nazev}`;
+      prvky.manualAdd.title = learningT('learning.addWordLanguage', `Přidat slovíčko – ${source.nazev}`, { language: source.nazev });
     }
   }
 
@@ -1011,7 +1014,7 @@
     if (!dialogStav || !prvky.entryTerm || !prvky.entryTranslation) return;
     const term = normalizujVyraz(prvky.entryTerm.value);
     if (!term) {
-      nastavDialogStatus('Nejdřív napiš nebo vyber slovo či frázi.', 'error');
+      nastavDialogStatus(learningT('learning.enterOrSelectTerm', 'Nejdřív napiš nebo vyber slovo či frázi.'), 'error');
       prvky.entryTerm.focus?.();
       return;
     }
@@ -1022,7 +1025,7 @@
     dialogStav.translationLanguage = target;
     prvky.entryTranslate.disabled = true;
     prvky.entrySave.disabled = true;
-    nastavDialogStatus(`Překládám · ${popisJazykovehoSmeru(language, target)}…`, 'loading');
+    nastavDialogStatus(learningT('learning.translating', `Překládám · ${popisJazykovehoSmeru(language, target)}…`, { direction: popisJazykovehoSmeru(language, target) }), 'loading');
 
     const result = await preloz(term, language, target);
     if (!dialogStav || dialogStav.language !== language) return;
@@ -1030,12 +1033,12 @@
     prvky.entrySave.disabled = false;
 
     if (!result?.ok || !result.translation) {
-      nastavDialogStatus(result?.error || 'Překlad se nepodařilo získat.', 'error');
+      nastavDialogStatus(result?.error || learningT('learning.translateFailed', 'Překlad se nepodařilo získat.'), 'error');
       return;
     }
 
     prvky.entryTranslation.value = result.translation;
-    nastavDialogStatus('Překlad můžeš před uložením upravit.', 'ok');
+    nastavDialogStatus(learningT('learning.translationEditable', 'Překlad můžeš před uložením upravit.'), 'ok');
     if (autoSave) ulozDialogPolozku({ automaticky: true });
   }
 
@@ -1044,12 +1047,12 @@
     const term = normalizujVyraz(prvky.entryTerm.value);
     const translation = normalizujText(prvky.entryTranslation.value, 240);
     if (!term) {
-      nastavDialogStatus('Doplň slovo nebo frázi.', 'error');
+      nastavDialogStatus(learningT('learning.fillTerm', 'Doplň slovo nebo frázi.'), 'error');
       prvky.entryTerm.focus?.();
       return null;
     }
     if (!translation) {
-      nastavDialogStatus('Doplň překlad nebo klepni na Přeložit.', 'error');
+      nastavDialogStatus(learningT('learning.fillTranslation', 'Doplň překlad nebo klepni na Přeložit.'), 'error');
       prvky.entryTranslation.focus?.();
       return null;
     }
@@ -1063,7 +1066,7 @@
       if (index >= 0) {
         const duplicateIndex = items.findIndex((item, i) => i !== index && klicVyrazu(item.term, language) === klicVyrazu(term, language));
         if (duplicateIndex >= 0) {
-          nastavDialogStatus('Takové slovíčko už v tomto jazyku máš.', 'error');
+          nastavDialogStatus(learningT('learning.duplicate', 'Takové slovíčko už v tomto jazyku máš.'), 'error');
           return { ok: false, reason: 'duplicate' };
         }
         items[index] = {
@@ -1079,7 +1082,7 @@
           updatedAt: Date.now()
         };
         if (!uloz(items, language)) {
-          nastavDialogStatus('Slovíčko se nepodařilo uložit.', 'error');
+          nastavDialogStatus(learningT('learning.saveFailed', 'Slovíčko se nepodařilo uložit.'), 'error');
           return { ok: false, reason: 'storage' };
         }
         oznamZmenu({ operation: 'update', id: items[index].id, language });
@@ -1101,15 +1104,15 @@
     }
 
     if (!result?.ok) {
-      nastavDialogStatus('Slovíčko se nepodařilo uložit.', 'error');
+      nastavDialogStatus(learningT('learning.saveFailed', 'Slovíčko se nepodařilo uložit.'), 'error');
       return result;
     }
 
-    prvky.entrySave.textContent = result.updated ? 'Aktualizováno ✓' : 'Uloženo ✓';
+    prvky.entrySave.textContent = result.updated ? learningT('status.updated', 'Aktualizováno ✓') : learningT('status.saved', 'Uloženo ✓');
     nastavDialogStatus(
       automaticky
         ? `Automaticky uloženo · ${jazykInfo(language).nazev}`
-        : (result.updated ? 'Slovíčko bylo aktualizováno.' : `Uloženo · ${jazykInfo(language).nazev}`),
+        : (result.updated ? learningT('learning.wordUpdated', 'Slovíčko bylo aktualizováno.') : `Uloženo · ${jazykInfo(language).nazev}`),
       'ok'
     );
     nastavCount();
@@ -1150,7 +1153,7 @@
     };
 
     if (prvky.entryTitle) {
-      prvky.entryTitle.textContent = options.title || (editingId ? 'Upravit slovíčko' : (term ? 'Překlad a slovník' : 'Přidat slovíčko'));
+      prvky.entryTitle.textContent = options.title || (editingId ? learningT('learning.editWord', 'Upravit slovíčko') : (term ? learningT('learning.translationDictionary', 'Překlad a slovník') : learningT('learning.addWord', 'Přidat slovíčko')));
     }
     if (prvky.entryLanguage) prvky.entryLanguage.textContent = popisJazykovehoSmeru(language, translationLanguage);
     if (prvky.entryTerm) {
@@ -1162,7 +1165,7 @@
     if (prvky.entrySource) prvky.entrySource.value = normalizujText(options.bookTitle ?? existing?.bookTitle ?? dialogStav.bookTitle, 180);
     if (prvky.entrySave) {
       prvky.entrySave.disabled = false;
-      prvky.entrySave.textContent = editingId ? 'Uložit změny' : (existing ? 'Aktualizovat' : '＋ Uložit do slovníku');
+      prvky.entrySave.textContent = editingId ? learningT('learning.saveChanges', 'Uložit změny') : (existing ? learningT('actions.update', 'Aktualizovat') : learningT('learning.saveToDictionary', '＋ Uložit do slovníku'));
     }
     if (prvky.entryTranslate) prvky.entryTranslate.disabled = false;
 
@@ -1206,7 +1209,7 @@
       speaker.type = 'button';
       speaker.className = 'learningDictionarySpeak';
       speaker.textContent = '🔊';
-      speaker.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
+      speaker.setAttribute('aria-label', learningT('learning.playPronunciationTerm', `Přehrát výslovnost ${item.term}`, { term: item.term }));
       speaker.addEventListener('pointerdown', (event) => event.stopPropagation());
       speaker.addEventListener('click', (event) => { event.stopPropagation(); vyslov(item.term, speaker, item.language || aktivniJazyk); });
       top.append(term, speaker);
@@ -1226,14 +1229,14 @@
       const footer = document.createElement('div');
       footer.className = 'learningDictionaryRowFooter';
       const source = document.createElement('small');
-      source.textContent = formatSource(item) || (item.sourceType === 'note' ? 'Poznámka' : item.sourceType === 'seed' ? 'Testovací sada LubaNote' : 'Ručně přidáno');
+      source.textContent = formatSource(item) || (item.sourceType === 'note' ? learningT('learning.sourceNote', 'Poznámka') : item.sourceType === 'seed' ? learningT('learning.sourceSeed', 'Testovací sada LubaNote') : learningT('learning.sourceManual', 'Ručně přidáno'));
       const actions = document.createElement('div');
       actions.className = 'learningDictionaryRowActions';
 
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'learningDictionaryEdit';
-      edit.textContent = 'Upravit';
+      edit.textContent = learningT('actions.edit', 'Upravit');
       edit.addEventListener('click', () => {
         otevriPolozkuDialog({
           editingId: item.id,
@@ -1245,14 +1248,14 @@
           bookTitle: item.bookTitle || '',
           chapterTitle: item.chapterTitle || '',
           sourceType: item.sourceType || 'manual',
-          title: 'Upravit slovíčko'
+          title: learningT('learning.editWord', 'Upravit slovíčko')
         });
       });
 
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'learningDictionaryDelete';
-      del.textContent = 'Smazat';
+      del.textContent = learningT('actions.delete', 'Smazat');
       del.addEventListener('click', () => {
         if (!smazPolozku(item.id)) return;
         vykresliSlova();
@@ -1327,7 +1330,7 @@
     if (prvky.practiceNok) {
       prvky.practiceNok.textContent = `${trenink?.nok || 0} NOK`;
       prvky.practiceNok.disabled = !(trenink?.wrongIds?.length);
-      prvky.practiceNok.title = trenink?.wrongIds?.length ? 'Procvičit jen slovíčka, která neumím' : 'Zatím žádná chyba';
+      prvky.practiceNok.title = trenink?.wrongIds?.length ? learningT('learning.practiceWrongOnly', 'Procvičit jen slovíčka, která neumím') : learningT('learning.noMistakesYet', 'Zatím žádná chyba');
     }
   }
 
@@ -1349,7 +1352,7 @@
         } else if (hotovo && trenink.nok > 0) {
           prvky.practiceEmpty.textContent = `Trénink hotový 💪 ${trenink.ok} OK · ${trenink.nok} NOK. Klepni nahoře na červené NOK a projedou jen chyby.`;
         } else if (hotovo) {
-          prvky.practiceEmpty.textContent = 'Trénink hotový 🥳 Všechna slovíčka byla OK.';
+          prvky.practiceEmpty.textContent = learningT('learning.trainingAllOk', 'Trénink hotový 🥳 Všechna slovíčka byla OK.');
         }
       }
       return;
@@ -1381,7 +1384,7 @@
           ? '← Neumím   ·   přejeď kartou   ·   Umím →'
           : 'Klepni nebo přejeď kartou – nejdřív ukážu odpověď');
     }
-    if (prvky.practiceSpeak) prvky.practiceSpeak.setAttribute('aria-label', `Přehrát výslovnost ${item.term}`);
+    if (prvky.practiceSpeak) prvky.practiceSpeak.setAttribute('aria-label', learningT('learning.playPronunciationTerm', `Přehrát výslovnost ${item.term}`, { term: item.term }));
     pripravVyslovnost(item.term, item.language || aktivniJazyk);
   }
 
@@ -1698,7 +1701,7 @@
       otevriPolozkuDialog({
         language: aktivniJazyk,
         sourceType: 'manual',
-        title: `Přidat slovíčko · ${jazykInfo(aktivniJazyk).nazev}`
+        title: learningT('learning.addWordLanguageDot', `Přidat slovíčko · ${jazykInfo(aktivniJazyk).nazev}`, { language: jazykInfo(aktivniJazyk).nazev })
       });
     });
 
@@ -1709,17 +1712,17 @@
     prvky.entryTranslate?.addEventListener('click', () => { void spustDialogPreklad(); });
     prvky.entrySave?.addEventListener('click', () => { ulozDialogPolozku(); });
     prvky.entryTerm?.addEventListener('input', () => {
-      if (prvky.entrySave) prvky.entrySave.textContent = '＋ Uložit do slovníku';
+      if (prvky.entrySave) prvky.entrySave.textContent = learningT('learning.saveToDictionary', '＋ Uložit do slovníku');
     });
     prvky.entryTranslation?.addEventListener('input', () => {
-      if (prvky.entrySave) prvky.entrySave.textContent = '＋ Uložit do slovníku';
+      if (prvky.entrySave) prvky.entrySave.textContent = learningT('learning.saveToDictionary', '＋ Uložit do slovníku');
     });
 
     prvky.entryContext?.addEventListener('input', () => {
-      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? 'Uložit změny' : '＋ Uložit do slovníku';
+      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? learningT('learning.saveChanges', 'Uložit změny') : learningT('learning.saveToDictionary', '＋ Uložit do slovníku');
     });
     prvky.entrySource?.addEventListener('input', () => {
-      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? 'Uložit změny' : '＋ Uložit do slovníku';
+      if (prvky.entrySave) prvky.entrySave.textContent = dialogStav?.editingId ? learningT('learning.saveChanges', 'Uložit změny') : learningT('learning.saveToDictionary', '＋ Uložit do slovníku');
     });
 
     // 658CR – při otevřené LubaKeyboard udržíme právě upravované pole

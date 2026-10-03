@@ -471,7 +471,7 @@
   async function presunSouborDoSlozky(idSouboru, folderId) {
     const record = await nactiSoubor(idSouboru);
     if (!record) {
-      zobrazChybu('Dokumenty', 'Soubor už není dostupný.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.fileUnavailable', 'Soubor už není dostupný.'));
       return false;
     }
 
@@ -479,7 +479,7 @@
     if ((record.folderId || null) === cil) return false;
 
     if (cil !== null && !posledniSlozky.some((folder) => folder.id === cil)) {
-      zobrazChybu('Dokumenty', 'Cílová složka už není dostupná.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.targetFolderUnavailable', 'Cílová složka už není dostupná.'));
       return false;
     }
 
@@ -538,7 +538,7 @@
       <span class="documentsDragPreviewIcon" aria-hidden="true">PDF</span>
       <span class="documentsDragPreviewText">
         <strong></strong>
-        <small>Táhni na cílovou složku</small>
+        <small>${docT('documents.dragToFolder', 'Táhni na cílovou složku')}</small>
       </span>`;
 
     document.body.appendChild(dragNahled);
@@ -557,11 +557,11 @@
 
   function zobrazDragNahled(row, x, y) {
     const nahled = zajistiDragNahled();
-    const nazev = row?.querySelector('.documentsFileMain strong')?.textContent?.trim() || 'Dokument';
+    const nazev = row?.querySelector('.documentsFileMain strong')?.textContent?.trim() || docT('documents.document', 'Dokument');
     const zdrojIkony = row?.querySelector('.documentsFileIcon');
     const nahledIkony = nahled.querySelector('.documentsDragPreviewIcon');
     nahled.querySelector('strong').textContent = nazev;
-    nahled.querySelector('small').textContent = 'Táhni na cílovou složku';
+    nahled.querySelector('small').textContent = docT('documents.dragToFolder', 'Táhni na cílovou složku');
     if (nahledIkony) {
       nahledIkony.textContent = zdrojIkony?.textContent?.trim() || 'DOC';
       nahledIkony.classList.toggle('is-docx', zdrojIkony?.classList.contains('is-docx') === true);
@@ -591,10 +591,10 @@
 
     if (target) {
       nahled.classList.add('has-target');
-      if (popis) popis.textContent = `Pustit do „${nazevDragCile(target)}“`;
+      if (popis) popis.textContent = docT('documents.dropInto', 'Pustit do „{name}“', { name: nazevDragCile(target) });
     } else {
       nahled.classList.remove('has-target');
-      if (popis) popis.textContent = 'Táhni na cílovou složku';
+      if (popis) popis.textContent = docT('documents.dragToFolder', 'Táhni na cílovou složku');
     }
   }
 
@@ -706,7 +706,7 @@
       try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
     } catch (error) {
       console.error('Přesun souboru selhal:', error);
-      zobrazChybu('Dokumenty', 'Soubor se nepodařilo přesunout.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.moveFailed', 'Soubor se nepodařilo přesunout.'));
     }
   }
 
@@ -808,7 +808,7 @@
       <span class="documentsFolderDragPreviewIcon" aria-hidden="true">📁</span>
       <span class="documentsFolderDragPreviewText">
         <strong></strong>
-        <small>Táhni pro změnu pořadí</small>
+        <small>${docT('documents.dragReorder', 'Táhni pro změnu pořadí')}</small>
       </span>`;
     document.body.appendChild(folderDragNahled);
     return folderDragNahled;
@@ -826,7 +826,7 @@
 
   function zobrazFolderDragNahled(button, x, y) {
     const nahled = zajistiFolderDragNahled();
-    const nazev = button?.querySelector('.documentsFolderCardName')?.textContent?.trim() || 'Složka';
+    const nazev = button?.querySelector('.documentsFolderCardName')?.textContent?.trim() || docT('documents.folderFallback', 'Složka');
     nahled.querySelector('strong').textContent = nazev;
     nahled.hidden = false;
     nahled.classList.remove('is-active');
@@ -979,7 +979,7 @@
       try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
     } catch (error) {
       console.error('Změna pořadí složek selhala:', error);
-      zobrazChybu('Dokumenty', 'Pořadí složek se nepodařilo uložit.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.folderOrderFailed', 'Pořadí složek se nepodařilo uložit.'));
       await refresh();
     }
   }
@@ -1108,15 +1108,15 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📁</div>
-        <h3 id="documentsFolderTitle">Nová složka</h3>
-        <p id="documentsFolderHint">Složka je zatím pouze v tomto zařízení.</p>
+        <h3 id="documentsFolderTitle">${docT('documents.newFolder', 'Nová složka')}</h3>
+        <p id="documentsFolderHint">${docT('documents.folderLocalHint', 'Složka je zatím pouze v tomto zařízení.')}</p>
         <label>
-          <span>Název složky</span>
+          <span>${docT('documents.folderName', 'Název složky')}</span>
           <input id="documentsFolderName" type="text" maxlength="60" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-folder-name">
         </label>
         <div class="documentsFolderActions">
-          <button type="button" class="documentsFolderCancel">Zrušit</button>
-          <button type="button" class="documentsFolderCreate">Vytvořit</button>
+          <button type="button" class="documentsFolderCancel">${docT('actions.cancel', 'Zrušit')}</button>
+          <button type="button" class="documentsFolderCreate">${docT('actions.create', 'Vytvořit')}</button>
         </div>
       </section>`;
 
@@ -1149,7 +1149,7 @@
       }
 
       if (nazevSlozkyExistuje(nazev, editFolderId)) {
-        zobrazChybu('Dokumenty', `Složka „${nazev}“ už existuje.`);
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.folderExists', 'Složka „{name}“ už existuje.', { name: nazev }));
         input.focus();
         return;
       }
@@ -1180,9 +1180,9 @@
         }
       } catch (error) {
         console.error(bylaEditace ? 'Přejmenování složky selhalo:' : 'Vytvoření složky selhalo:', error);
-        zobrazChybu('Dokumenty', bylaEditace
-          ? 'Složku se nepodařilo přejmenovat.'
-          : 'Složku se nepodařilo vytvořit.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), bylaEditace
+          ? docT('documents.renameFolderFailed', 'Složku se nepodařilo přejmenovat.')
+          : docT('documents.createFolderFailed', 'Složku se nepodařilo vytvořit.'));
       } finally {
         create.disabled = false;
       }
@@ -1206,11 +1206,11 @@
         ? posledniSlozky.find((item) => item.id === editFolderId)
         : null;
 
-      title.textContent = folder ? 'Přejmenovat složku' : 'Nová složka';
+      title.textContent = folder ? docT('documents.renameFolder', 'Přejmenovat složku') : docT('documents.newFolder', 'Nová složka');
       hint.textContent = folder
-        ? 'Změní se pouze název složky. Dokumenty uvnitř zůstanou beze změny.'
-        : 'Složka je zatím pouze v tomto zařízení.';
-      create.textContent = folder ? 'Uložit' : 'Vytvořit';
+        ? docT('documents.renameFolderHint', 'Změní se pouze název složky. Dokumenty uvnitř zůstanou beze změny.')
+        : docT('documents.folderLocalHint', 'Složka je zatím pouze v tomto zařízení.');
+      create.textContent = folder ? docT('actions.save', 'Uložit') : docT('actions.create', 'Vytvořit');
       input.value = folder?.name || '';
       modal.hidden = false;
 
@@ -1234,12 +1234,12 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFolderManageDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderManageTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📁</div>
-        <h3 id="documentsFolderManageTitle">Složka</h3>
+        <h3 id="documentsFolderManageTitle">${docT('documents.folderFallback', 'Složka')}</h3>
         <p id="documentsFolderManageMeta"></p>
         <div class="documentsFolderManageActions">
-          <button type="button" class="documentsFolderRenameAction">✏️ Přejmenovat</button>
-          <button type="button" class="documentsFolderDeleteAction">🗑️ Smazat složku</button>
-          <button type="button" class="documentsFolderManageCancel">Zrušit</button>
+          <button type="button" class="documentsFolderRenameAction">✏️ ${docT('actions.rename', 'Přejmenovat')}</button>
+          <button type="button" class="documentsFolderDeleteAction">🗑️ ${docT('documents.deleteFolder', 'Smazat složku')}</button>
+          <button type="button" class="documentsFolderManageCancel">${docT('actions.cancel', 'Zrušit')}</button>
         </div>
       </section>`;
 
@@ -1280,7 +1280,7 @@
       folderId = idSlozky;
       const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
       title.textContent = folder.name;
-      meta.textContent = `${pocetSouboruText(count)} · lokálně v zařízení`;
+      meta.textContent = docT('documents.folderLocalMeta', '{count} · lokálně v zařízení', { count: pocetSouboruText(count) });
       modal.hidden = false;
     };
 
@@ -1298,11 +1298,11 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFolderDeleteDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFolderDeleteTitle">
         <div class="documentsFolderDeleteIcon" aria-hidden="true">🗑️</div>
-        <h3 id="documentsFolderDeleteTitle">Smazat složku?</h3>
+        <h3 id="documentsFolderDeleteTitle">${docT('documents.deleteFolderTitle', 'Smazat složku?')}</h3>
         <p id="documentsFolderDeleteText"></p>
         <div class="documentsFolderActions">
-          <button type="button" class="documentsFolderDeleteCancel">Zrušit</button>
-          <button type="button" class="documentsFolderDeleteConfirm">Smazat složku</button>
+          <button type="button" class="documentsFolderDeleteCancel">${docT('actions.cancel', 'Zrušit')}</button>
+          <button type="button" class="documentsFolderDeleteConfirm">${docT('documents.deleteFolder', 'Smazat složku')}</button>
         </div>
       </section>`;
 
@@ -1335,7 +1335,7 @@
         try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
       } catch (error) {
         console.error('Smazání složky selhalo:', error);
-        zobrazChybu('Dokumenty', 'Složku se nepodařilo bezpečně smazat.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.deleteFolderFailed', 'Složku se nepodařilo bezpečně smazat.'));
       } finally {
         confirm.disabled = false;
       }
@@ -1347,8 +1347,8 @@
       folderId = idSlozky;
       const count = posledniSoubory.filter((soubor) => soubor.folderId === idSlozky).length;
       text.textContent = count > 0
-        ? `Složka „${folder.name}“ obsahuje ${pocetSouboruText(count)}. Dokumenty se NESMAŽOU – přesunou se do „Všechny soubory“. Potom se smaže pouze složka.`
-        : `Složka „${folder.name}“ je prázdná. Smaže se pouze složka.`;
+        ? docT('documents.deleteFolderWithFiles', 'Složka „{name}“ obsahuje {count}. Dokumenty se NESMAŽOU – přesunou se do „Všechny soubory“. Potom se smaže pouze složka.', { name: folder.name, count: pocetSouboruText(count) })
+        : docT('documents.deleteEmptyFolder', 'Složka „{name}“ je prázdná. Smaže se pouze složka.', { name: folder.name });
       modal.hidden = false;
     };
 
@@ -1366,15 +1366,15 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFileRenameDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileRenameTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📄</div>
-        <h3 id="documentsFileRenameTitle">Přejmenovat dokument</h3>
-        <p id="documentsFileRenameHint">Změní se pouze název v knihovně LubaNote. Obsah dokumentu zůstane beze změny.</p>
+        <h3 id="documentsFileRenameTitle">${docT('documents.renameDocument', 'Přejmenovat dokument')}</h3>
+        <p id="documentsFileRenameHint">${docT('documents.renameDocumentHint', 'Změní se pouze název v knihovně LubaNote. Obsah dokumentu zůstane beze změny.')}</p>
         <label>
-          <span>Název souboru</span>
+          <span>${docT('documents.fileName', 'Název souboru')}</span>
           <input id="documentsFileRenameInput" type="text" maxlength="120" autocomplete="off" spellcheck="false" data-luba-keyboard-field="documents-file-name">
         </label>
         <div class="documentsFolderActions">
-          <button type="button" class="documentsFolderCancel documentsFileRenameCancel">Zrušit</button>
-          <button type="button" class="documentsFolderCreate documentsFileRenameSave">Uložit</button>
+          <button type="button" class="documentsFolderCancel documentsFileRenameCancel">${docT('actions.cancel', 'Zrušit')}</button>
+          <button type="button" class="documentsFolderCreate documentsFileRenameSave">${docT('actions.save', 'Uložit')}</button>
         </div>
       </section>`;
 
@@ -1415,7 +1415,7 @@
         try { navigator.vibrate?.(14); } catch (_error) {}
       } catch (error) {
         console.error('Přejmenování dokumentu selhalo:', error);
-        zobrazChybu('Dokumenty', 'Dokument se nepodařilo přejmenovat.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.renameFailed', 'Dokument se nepodařilo přejmenovat.'));
       } finally {
         save.disabled = false;
       }
@@ -1439,8 +1439,8 @@
       fileId = idSouboru;
       const typ = popisTypuSouboru(record);
       const pripona = `.${priponaSouboru(record)}`;
-      title.textContent = `Přejmenovat ${typ}`;
-      hint.textContent = `Změní se pouze název v knihovně LubaNote. Obsah ${typ} zůstane beze změny.`;
+      title.textContent = docT('documents.renameType', 'Přejmenovat {type}', { type: typ });
+      hint.textContent = docT('documents.renameTypeHint', 'Změní se pouze název v knihovně LubaNote. Obsah {type} zůstane beze změny.', { type: typ });
       input.value = record.name || '';
       modal.hidden = false;
       requestAnimationFrame(() => {
@@ -1465,14 +1465,14 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFileManageDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileManageTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📄</div>
-        <h3 id="documentsFileManageTitle">Dokument</h3>
+        <h3 id="documentsFileManageTitle">${docT('documents.document', 'Dokument')}</h3>
         <p id="documentsFileManageMeta"></p>
         <div class="documentsFolderManageActions documentsFileManageActions">
-          <button type="button" class="documentsFileRenameAction">✏️ Přejmenovat</button>
-          <button type="button" class="documentsFileTrashAction">🗑️ Přesunout do koše</button>
-          <button type="button" class="documentsFileRestoreAction" hidden>↩️ Obnovit z koše</button>
-          <button type="button" class="documentsFileDeleteForeverAction" hidden>🗑️ Trvale smazat</button>
-          <button type="button" class="documentsFolderManageCancel documentsFileManageCancel">Zrušit</button>
+          <button type="button" class="documentsFileRenameAction">✏️ ${docT('actions.rename', 'Přejmenovat')}</button>
+          <button type="button" class="documentsFileTrashAction">🗑️ ${docT('trash.moveAction', 'Do koše')}</button>
+          <button type="button" class="documentsFileRestoreAction" hidden>↩️ ${docT('documents.restoreFromTrash', 'Obnovit z koše')}</button>
+          <button type="button" class="documentsFileDeleteForeverAction" hidden>🗑️ ${docT('trash.deleteForever', 'Smazat trvale')}</button>
+          <button type="button" class="documentsFolderManageCancel documentsFileManageCancel">${docT('actions.cancel', 'Zrušit')}</button>
         </div>
       </section>`;
 
@@ -1513,7 +1513,7 @@
         try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
       } catch (error) {
         console.error('Přesun dokumentu do koše selhal:', error);
-        zobrazChybu('Dokumenty', 'Dokument se nepodařilo přesunout do koše.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.trashMoveFailed', 'Dokument se nepodařilo přesunout do koše.'));
       } finally {
         trash.disabled = false;
       }
@@ -1530,7 +1530,7 @@
         try { navigator.vibrate?.([12, 28, 12]); } catch (_error) {}
       } catch (error) {
         console.error('Obnovení dokumentu z koše selhalo:', error);
-        zobrazChybu('Dokumenty', 'Dokument se nepodařilo obnovit.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.restoreFailed', 'Dokument se nepodařilo obnovit.'));
       } finally {
         restore.disabled = false;
       }
@@ -1547,7 +1547,7 @@
       if (!record) return;
       fileId = idSouboru;
       const vKosi = jeSouborVKosi(record);
-      title.textContent = record.name || 'Dokument';
+      title.textContent = record.name || docT('documents.document', 'Dokument');
       meta.textContent = `${popisTypuSouboru(record)} · ${formatBytes(record.size)} · ${formatDate(record.updatedAt)}`;
       rename.hidden = vKosi;
       trash.hidden = vKosi;
@@ -1570,11 +1570,11 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsFileDeleteForeverDialog" role="dialog" aria-modal="true" aria-labelledby="documentsFileDeleteForeverTitle">
         <div class="documentsFolderDeleteIcon" aria-hidden="true">🗑️</div>
-        <h3 id="documentsFileDeleteForeverTitle">Trvale smazat dokument?</h3>
+        <h3 id="documentsFileDeleteForeverTitle">${docT('documents.deleteForeverTitle', 'Trvale smazat dokument?')}</h3>
         <p id="documentsFileDeleteForeverText"></p>
         <div class="documentsFolderActions">
-          <button type="button" class="documentsFileDeleteForeverCancel">Zrušit</button>
-          <button type="button" class="documentsFileDeleteForeverConfirm">Trvale smazat</button>
+          <button type="button" class="documentsFileDeleteForeverCancel">${docT('actions.cancel', 'Zrušit')}</button>
+          <button type="button" class="documentsFileDeleteForeverConfirm">${docT('trash.deleteForever', 'Smazat trvale')}</button>
         </div>
       </section>`;
 
@@ -1606,7 +1606,7 @@
         try { navigator.vibrate?.([18, 28, 18]); } catch (_error) {}
       } catch (error) {
         console.error('Trvalé smazání dokumentu selhalo:', error);
-        zobrazChybu('Dokumenty', 'Dokument se nepodařilo trvale smazat.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.deleteForeverFailed', 'Dokument se nepodařilo trvale smazat.'));
       } finally {
         confirm.disabled = false;
       }
@@ -1616,7 +1616,7 @@
       const record = posledniSoubory.find((item) => item.id === idSouboru);
       if (!record || !jeSouborVKosi(record)) return;
       fileId = idSouboru;
-      text.textContent = `„${record.name || 'Dokument'}“ bude trvale odstraněn z tohoto zařízení. Tuto akci nelze vrátit zpět.`;
+      text.textContent = docT('documents.deleteForeverMessage', '„{name}“ bude trvale odstraněn z tohoto zařízení. Tuto akci nelze vrátit zpět.', { name: record.name || docT('documents.document', 'Dokument') });
       modal.hidden = false;
     };
 
@@ -1634,31 +1634,31 @@
     modal.innerHTML = `
       <section class="documentsFolderDialog documentsAddFileDialog" role="dialog" aria-modal="true" aria-labelledby="documentsAddFileTitle">
         <div class="documentsFolderIcon" aria-hidden="true">📄</div>
-        <h3 id="documentsAddFileTitle">Přidat dokument</h3>
-        <p>Vyber typ souboru. Dokument zůstane jen v tomto zařízení.</p>
+        <h3 id="documentsAddFileTitle">${docT('documents.addDocument', 'Přidat dokument')}</h3>
+        <p>${docT('documents.chooseFileType', 'Vyber typ souboru. Dokument zůstane jen v tomto zařízení.')}</p>
         <div class="documentsAddFileChoices">
           <button type="button" class="documentsAddFileChoice documentsAddPdfChoice">
             <span class="documentsAddFileType is-pdf">PDF</span>
-            <span><strong>PDF</strong><small>otevře se ve stávajícím PDF vieweru</small></span>
+            <span><strong>PDF</strong><small>${docT('documents.pdfDescription', 'otevře se ve stávajícím PDF vieweru')}</small></span>
           </button>
           <button type="button" class="documentsAddFileChoice documentsAddDocxChoice">
             <span class="documentsAddFileType is-docx">DOCX</span>
-            <span><strong>Word DOCX</strong><small>otevře se jen ke čtení v Dokumentech</small></span>
+            <span><strong>Word DOCX</strong><small>${docT('documents.docxDescription', 'otevře se jen ke čtení v Dokumentech')}</small></span>
           </button>
           <button type="button" class="documentsAddFileChoice documentsAddDocChoice">
             <span class="documentsAddFileType is-doc">DOC</span>
-            <span><strong>Word 97–2003 DOC</strong><small>lokální čtení textu starého formátu</small></span>
+            <span><strong>Word 97–2003 DOC</strong><small>${docT('documents.docDescription', 'lokální čtení textu starého formátu')}</small></span>
           </button>
           <button type="button" class="documentsAddFileChoice documentsAddEpubChoice">
             <span class="documentsAddFileType is-epub">EPUB</span>
-            <span><strong>Elektronická kniha EPUB</strong><small>otevře se v lokálním LubaReaderu</small></span>
+            <span><strong>${docT('documents.epubBook', 'Elektronická kniha EPUB')}</strong><small>${docT('documents.epubDescription', 'otevře se v lokálním LubaReaderu')}</small></span>
           </button>
           <button type="button" class="documentsAddFileChoice documentsAddSqlChoice">
             <span class="documentsAddFileType is-sql">SQL</span>
-            <span><strong>SQL skript</strong><small>otevře se lokálně jen ke čtení jako zdrojový kód</small></span>
+            <span><strong>${docT('documents.sqlScript', 'SQL skript')}</strong><small>${docT('documents.sqlDescription', 'otevře se lokálně jen ke čtení jako zdrojový kód')}</small></span>
           </button>
         </div>
-        <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">Zrušit</button>
+        <button type="button" class="documentsFolderManageCancel documentsAddFileCancel">${docT('actions.cancel', 'Zrušit')}</button>
       </section>`;
 
     document.body.appendChild(modal);
@@ -1731,7 +1731,7 @@
 
     if (typ === 'pdf') {
       if (file.size > MAX_PDF_BYTES) {
-        zobrazChybu('Dokumenty', 'PDF je příliš velké. Maximální velikost je 100 MB.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.pdfTooLarge', 'PDF je příliš velké. Maximální velikost je 100 MB.'));
         return null;
       }
 
@@ -1744,7 +1744,7 @@
 
     if (typ === 'docx') {
       if (file.size > MAX_DOCX_BYTES) {
-        zobrazChybu('Dokumenty', 'DOCX je příliš velký. Maximální velikost je 20 MB.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.docxTooLarge', 'DOCX je příliš velký. Maximální velikost je 20 MB.'));
         return null;
       }
 
@@ -1757,7 +1757,7 @@
 
     if (typ === 'doc') {
       if (file.size > MAX_DOC_BYTES) {
-        zobrazChybu('Dokumenty', 'DOC je příliš velký. Maximální velikost je 24 MB.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.docTooLarge24', 'DOC je příliš velký. Maximální velikost je 24 MB.'));
         return null;
       }
 
@@ -1770,12 +1770,12 @@
 
     if (typ === 'epub') {
       if (file.size > MAX_EPUB_BYTES) {
-        zobrazChybu('Dokumenty', 'EPUB je příliš velký. Maximální velikost je 100 MB.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubTooLarge100', 'EPUB je příliš velký. Maximální velikost je 100 MB.'));
         return null;
       }
 
       if (!window.LubaNoteEpubReader?.inspect) {
-        zobrazChybu('Dokumenty', 'EPUB čtečka není načtená.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubReaderMissing', 'EPUB čtečka není načtená.'));
         return null;
       }
 
@@ -1796,14 +1796,14 @@
         };
       } catch (error) {
         console.error('Kontrola EPUB při automatickém importu selhala:', error);
-        zobrazChybu('Dokumenty', error?.message || 'EPUB se nepodařilo načíst.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubOpenFailed', 'EPUB se nepodařilo otevřít. Kniha může být poškozená nebo chráněná DRM.'));
         return null;
       }
     }
 
     if (typ === 'sql') {
       if (file.size > MAX_SQL_BYTES) {
-        zobrazChybu('Dokumenty', 'SQL je příliš velký. Maximální velikost je 10 MB.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlTooLarge', 'SQL je příliš velký. Maximální velikost je 10 MB.'));
         return null;
       }
 
@@ -1822,14 +1822,14 @@
         };
       } catch (error) {
         console.error('Čtení SQL při automatickém importu selhalo:', error);
-        zobrazChybu('Dokumenty', 'SQL se nepodařilo přečíst.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlReadFailed', 'SQL se nepodařilo přečíst.'));
         return null;
       }
     }
 
     zobrazChybu(
       'Dokumenty',
-      'Tento typ souboru zatím není podporovaný. Vyber PDF, DOCX, DOC, EPUB nebo SQL.'
+      docT('documents.unsupportedType', 'Tento typ souboru zatím není podporovaný. Vyber PDF, DOCX, DOC, EPUB nebo SQL.')
     );
     return null;
   }
@@ -1864,7 +1864,7 @@
         } catch (error) {
           uklid();
           console.error('Automatický import dokumentu selhal:', error);
-          zobrazChybu('Dokumenty', 'Dokument se nepodařilo načíst.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.loadFailed', 'Dokument se nepodařilo načíst.'));
           resolve(null);
         }
       }, { once: true });
@@ -1889,11 +1889,11 @@
       await refresh();
 
       const typ = typSouboru(record).toUpperCase();
-      const nazev = record.epubTitle || record.name || 'Dokument';
-      zobrazZpravu('Dokumenty', `${typ} „${nazev}“ byl přidán.`);
+      const nazev = record.epubTitle || record.name || docT('documents.document', 'Dokument');
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: typ, name: nazev }));
     } catch (error) {
       console.error('Přidání dokumentu selhalo:', error);
-      zobrazChybu('Dokumenty', 'Dokument se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailed', 'Dokument se nepodařilo přidat.'));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -1946,7 +1946,7 @@
 
         if (file.size > MAX_PDF_BYTES) {
           uklid();
-          zobrazChybu('Dokumenty', 'PDF je příliš velké. Maximální velikost je 100 MB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.pdfTooLarge', 'PDF je příliš velké. Maximální velikost je 100 MB.'));
           resolve(null);
           return;
         }
@@ -1992,14 +1992,14 @@
         const jeDocx = /\.docx$/i.test(file.name || '') || file.type === DOCX_MIME;
         if (!jeDocx) {
           uklid();
-          zobrazChybu('Dokumenty', 'Vybraný soubor není DOCX.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.selectedNotType', 'Vybraný soubor není {type}.', { type: 'DOCX' }));
           resolve(null);
           return;
         }
 
         if (file.size > MAX_DOCX_BYTES) {
           uklid();
-          zobrazChybu('Dokumenty', 'DOCX je příliš velký. Maximální velikost je 20 MB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.docxTooLarge', 'DOCX je příliš velký. Maximální velikost je 20 MB.'));
           resolve(null);
           return;
         }
@@ -2038,10 +2038,10 @@
 
       await ulozDoStore(STORE_FILES, record);
       await refresh();
-      zobrazZpravu('Dokumenty', `DOCX „${record.name}“ byl přidán.`);
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: 'DOCX', name: record.name }));
     } catch (error) {
       console.error('Import DOCX selhal:', error);
-      zobrazChybu('Dokumenty', 'DOCX se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailedType', '{type} se nepodařilo přidat.', { type: 'DOCX' }));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2068,14 +2068,14 @@
         const jeDoc = /\.doc$/i.test(file.name || '') || file.type === DOC_MIME;
         if (!jeDoc || /\.docx$/i.test(file.name || '')) {
           uklid();
-          zobrazChybu('Dokumenty', 'Vybraný soubor není starý Word DOC.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.selectedNotLegacyDoc', 'Vybraný soubor není starý Word DOC.'));
           resolve(null);
           return;
         }
 
         if (file.size > MAX_DOC_BYTES) {
           uklid();
-          zobrazChybu('Dokumenty', 'DOC je příliš velký. Maximální velikost je 24 MB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.docTooLarge24', 'DOC je příliš velký. Maximální velikost je 24 MB.'));
           resolve(null);
           return;
         }
@@ -2114,10 +2114,10 @@
 
       await ulozDoStore(STORE_FILES, record);
       await refresh();
-      zobrazZpravu('Dokumenty', `DOC „${record.name}“ byl přidán.`);
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: 'DOC', name: record.name }));
     } catch (error) {
       console.error('Import DOC selhal:', error);
-      zobrazChybu('Dokumenty', 'DOC se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailedType', '{type} se nepodařilo přidat.', { type: 'DOC' }));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2144,21 +2144,21 @@
         const jeEpub = /\.epub$/i.test(file.name || '') || file.type === EPUB_MIME;
         if (!jeEpub) {
           uklid();
-          zobrazChybu('Dokumenty', 'Vybraný soubor není EPUB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.selectedNotType', 'Vybraný soubor není {type}.', { type: 'EPUB' }));
           resolve(null);
           return;
         }
 
         if (file.size > MAX_EPUB_BYTES) {
           uklid();
-          zobrazChybu('Dokumenty', 'EPUB je příliš velký. Maximální velikost je 100 MB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubTooLarge100', 'EPUB je příliš velký. Maximální velikost je 100 MB.'));
           resolve(null);
           return;
         }
 
         if (!window.LubaNoteEpubReader?.inspect) {
           uklid();
-          zobrazChybu('Dokumenty', 'EPUB čtečka není načtená.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubReaderMissing', 'EPUB čtečka není načtená.'));
           resolve(null);
           return;
         }
@@ -2189,7 +2189,7 @@
         } catch (error) {
           uklid();
           console.error('Kontrola EPUB selhala:', error);
-          zobrazChybu('Dokumenty', error?.message || 'EPUB se nepodařilo načíst.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.epubOpenFailed', 'EPUB se nepodařilo otevřít. Kniha může být poškozená nebo chráněná DRM.'));
           resolve(null);
         }
       }, { once: true });
@@ -2213,10 +2213,10 @@
       await ulozDoStore(STORE_FILES, record);
       await refresh();
       const titul = record.epubTitle || record.name;
-      zobrazZpravu('Dokumenty', `EPUB „${titul}“ byl přidán.`);
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: 'EPUB', name: titul }));
     } catch (error) {
       console.error('Import EPUB selhal:', error);
-      zobrazChybu('Dokumenty', 'EPUB se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailedType', '{type} se nepodařilo přidat.', { type: 'EPUB' }));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2256,14 +2256,14 @@
 
         if (!/\.sql$/i.test(file.name || '')) {
           uklid();
-          zobrazChybu('Dokumenty', 'Vybraný soubor není SQL.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.selectedNotType', 'Vybraný soubor není {type}.', { type: 'SQL' }));
           resolve(null);
           return;
         }
 
         if (file.size > MAX_SQL_BYTES) {
           uklid();
-          zobrazChybu('Dokumenty', 'SQL je příliš velký. Maximální velikost je 10 MB.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlTooLarge', 'SQL je příliš velký. Maximální velikost je 10 MB.'));
           resolve(null);
           return;
         }
@@ -2278,7 +2278,7 @@
         } catch (error) {
           console.error('Čtení SQL při importu selhalo:', error);
           uklid();
-          zobrazChybu('Dokumenty', 'SQL se nepodařilo přečíst.');
+          zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlReadFailed', 'SQL se nepodařilo přečíst.'));
           resolve(null);
           return;
         }
@@ -2318,10 +2318,10 @@
 
       await ulozDoStore(STORE_FILES, record);
       await refresh();
-      zobrazZpravu('Dokumenty', `SQL „${record.name}“ byl přidán.`);
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: 'SQL', name: record.name }));
     } catch (error) {
       console.error('Import SQL selhal:', error);
-      zobrazChybu('Dokumenty', 'SQL se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailedType', '{type} se nepodařilo přidat.', { type: 'SQL' }));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2344,10 +2344,10 @@
 
       await ulozDoStore(STORE_FILES, record);
       await refresh();
-      zobrazZpravu('Dokumenty', `PDF „${record.name}“ bylo přidáno.`);
+      zobrazZpravu(docT('documents.title', 'Dokumenty'), docT('documents.addedType', 'Přidáno: {type} „{name}“.', { type: 'PDF', name: record.name }));
     } catch (error) {
       console.error('Import PDF selhal:', error);
-      zobrazChybu('Dokumenty', 'PDF se nepodařilo přidat.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.addFailedType', '{type} se nepodařilo přidat.', { type: 'PDF' }));
     } finally {
       prvky.addPdf.disabled = false;
       if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
@@ -2803,17 +2803,17 @@
     overlay.hidden = true;
     overlay.innerHTML = `
       <header class="documentsDocxViewerHeader">
-        <button type="button" class="documentsDocxViewerClose" aria-label="Zavřít dokument">‹</button>
+        <button type="button" class="documentsDocxViewerClose" aria-label="${docT('documents.closeDocument', 'Zavřít dokument')}">‹</button>
         <div class="documentsDocxViewerTitle">
           <strong></strong>
-          <small>WORD · POUZE ČTENÍ</small>
+          <small>${docT('documents.wordReadOnly', 'WORD · POUZE ČTENÍ')}</small>
         </div>
-        <button type="button" class="documentsDocxViewerCopy" aria-label="Kopírovat celý SQL skript" hidden>📋 Kopírovat</button>
+        <button type="button" class="documentsDocxViewerCopy" aria-label="${docT('documents.copySqlAria', 'Kopírovat celý SQL skript')}" hidden>📋 ${docT('selection.copy', 'Kopírovat')}</button>
       </header>
       <main class="documentsDocxViewerBody">
         <div class="documentsDocxViewerLoading" hidden>
           <span class="documentsDocxSpinner" aria-hidden="true"></span>
-          <strong>Otevírám dokument…</strong>
+          <strong>${docT('documents.openingDocument', 'Otevírám dokument…')}</strong>
         </div>
         <article class="documentsDocxViewerContent"></article>
       </main>`;
@@ -2909,7 +2909,7 @@
   async function kopirujSqlViewer() {
     const text = String(docxViewerSqlText || '');
     if (!text) {
-      zobrazChybu('SQL', 'Není co kopírovat.');
+      zobrazChybu('SQL', docT('documents.nothingToCopy', 'Není co kopírovat.'));
       return;
     }
 
@@ -2943,10 +2943,10 @@
 
     window.getSelection?.()?.removeAllRanges?.();
     if (zkopirovano) {
-      zobrazZpravu('SQL', 'Celý SQL skript byl zkopírován.');
+      zobrazZpravu('SQL', docT('documents.sqlCopied', 'Celý SQL skript byl zkopírován.'));
       window.LubaNoteStartupDiag?.zapis?.('SQL', `COPY | OK | chars=${text.length}`);
     } else {
-      zobrazChybu('SQL', 'Kopírování se nepodařilo. Zkus označit text dlouhým stiskem.');
+      zobrazChybu('SQL', docT('documents.copyFailedLongPress', 'Kopírování se nepodařilo. Zkus označit text dlouhým stiskem.'));
       window.LubaNoteStartupDiag?.zapis?.('SQL', 'COPY | ERROR');
     }
   }
@@ -2980,10 +2980,10 @@
     uvolniDocxObjectUrls();
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'dokument.docx';
-    prvky.subtitle.textContent = 'DOCX · POUZE ČTENÍ';
+    prvky.subtitle.textContent = docT('documents.docxReadOnly', 'DOCX · POUZE ČTENÍ');
     prvky.copy.hidden = true;
     docxViewerSqlText = '';
-    prvky.loadingText.textContent = 'Otevírám DOCX…';
+    prvky.loadingText.textContent = docT('documents.openingDocx', 'Otevírám DOCX…');
     prvky.content.classList.remove('is-legacy-doc', 'is-sql');
     prvky.content.innerHTML = '';
     prvky.loading.hidden = false;
@@ -2995,7 +2995,7 @@
       const arrayBuffer = await record.blob.arrayBuffer();
       const vysledek = await parsujDocx(arrayBuffer);
       docxViewerObjectUrls = vysledek.objectUrls;
-      prvky.content.innerHTML = vysledek.html || '<p class="documentsDocxEmpty">Dokument neobsahuje zobrazitelný obsah.</p>';
+      prvky.content.innerHTML = vysledek.html || `<p class="documentsDocxEmpty">${docT('documents.noDisplayableContent', 'Dokument neobsahuje zobrazitelný obsah.')}</p>`;
       prvky.loading.hidden = true;
       prvky.body.scrollTop = 0;
     } catch (error) {
@@ -3017,10 +3017,10 @@
     uvolniDocxObjectUrls();
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'dokument.doc';
-    prvky.subtitle.textContent = 'DOC · POUZE ČTENÍ';
+    prvky.subtitle.textContent = docT('documents.docReadOnly', 'DOC · POUZE ČTENÍ');
     prvky.copy.hidden = true;
     docxViewerSqlText = '';
-    prvky.loadingText.textContent = 'Otevírám DOC…';
+    prvky.loadingText.textContent = docT('documents.openingDoc', 'Otevírám DOC…');
     prvky.content.classList.remove('is-sql');
     prvky.content.classList.add('is-legacy-doc');
     prvky.content.innerHTML = '';
@@ -3035,7 +3035,7 @@
       const text = String(vysledek?.text || '');
       prvky.content.innerHTML = text
         ? `<pre class="documentsLegacyDocText">${esc(text)}</pre>`
-        : '<p class="documentsDocxEmpty">Dokument neobsahuje čitelný text.</p>';
+        : `<p class="documentsDocxEmpty">${docT('documents.noReadableText', 'Dokument neobsahuje čitelný text.')}</p>`;
       prvky.loading.hidden = true;
       prvky.body.scrollTop = 0;
     } catch (error) {
@@ -3054,10 +3054,10 @@
     uvolniDocxObjectUrls();
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'skript.sql';
-    prvky.subtitle.textContent = 'SQL · POUZE ČTENÍ';
+    prvky.subtitle.textContent = docT('documents.sqlReadOnly', 'SQL · POUZE ČTENÍ');
     prvky.copy.hidden = true;
     docxViewerSqlText = '';
-    prvky.loadingText.textContent = 'Otevírám SQL…';
+    prvky.loadingText.textContent = docT('documents.openingSql', 'Otevírám SQL…');
     prvky.content.classList.remove('is-legacy-doc');
     prvky.content.classList.add('is-sql');
     prvky.content.innerHTML = '';
@@ -3109,7 +3109,7 @@
       } else {
         const empty = document.createElement('p');
         empty.className = 'documentsDocxEmpty';
-        empty.textContent = 'SQL soubor je prázdný.';
+        empty.textContent = docT('documents.sqlEmpty', 'SQL soubor je prázdný.');
         prvky.content.replaceChildren(empty);
       }
 
@@ -3310,7 +3310,7 @@
   }
 
   function epubKapitolaNazev(index = epubAktualniKapitola) {
-    return String(epubAktualniKniha?.chapters?.[index]?.title || `Kapitola ${Number(index) + 1}`);
+    return String(epubAktualniKniha?.chapters?.[index]?.title || docT('reader.chapterNumber', 'Kapitola {count}', { count: Number(index) + 1 }));
   }
 
   function skryjEpubVyberBar() {
@@ -3457,7 +3457,7 @@
     const target = api.ziskejPrekladovyJazyk?.(language) || 'cs';
     epubViewerPrvky.translateFetch.disabled = true;
     epubViewerPrvky.translateSave.disabled = true;
-    nastavEpubPrekladStatus(`Překládám · ${api.popisJazykovehoSmeru?.(language, target) || ''}…`, 'loading');
+    nastavEpubPrekladStatus(docT('learning.translatingDirection', 'Překládám · {direction}…', { direction: api.popisJazykovehoSmeru?.(language, target) || '' }), 'loading');
 
     const snapshotTerm = vyber.term;
     const result = await api.preloz(snapshotTerm, language, target);
@@ -3467,9 +3467,9 @@
     epubViewerPrvky.translateSave.disabled = false;
     if (result?.ok && result.translation) {
       epubViewerPrvky.translateInput.value = result.translation;
-      nastavEpubPrekladStatus('Překlad můžeš před uložením upravit.', 'ok');
+      nastavEpubPrekladStatus(docT('learning.translationEditable', 'Překlad můžeš před uložením upravit.'), 'ok');
     } else {
-      nastavEpubPrekladStatus(result?.error || 'Překlad teď není dostupný. Doplň ho ručně.', 'error');
+      nastavEpubPrekladStatus(result?.error || docT('learning.errorTranslateUnavailable', 'Překlad teď není dostupný. Doplň ho ručně.'), 'error');
     }
   }
 
@@ -3484,7 +3484,7 @@
     const term = normalizujEpubStudijniVyraz(epubVyberTextu.quote);
     if (!term) return;
     if (term.length > 160) {
-      nastavEpubPrekladStatus('Vyber kratší slovo nebo frázi.', 'error');
+      nastavEpubPrekladStatus(docT('learning.errorShorterTerm', 'Vyber kratší slovo nebo frázi.'), 'error');
       return;
     }
 
@@ -3503,9 +3503,9 @@
     epubSlovnikVyber.translationLanguage = target;
     epubViewerPrvky.translateTerm.textContent = term;
     epubViewerPrvky.translateInput.value = existing?.translation || '';
-    if (epubViewerPrvky.translateHeaderTitle) epubViewerPrvky.translateHeaderTitle.textContent = `Překlad · ${api.popisJazykovehoSmeru?.(language, target) || ''}`;
-    if (epubViewerPrvky.translateHeaderSmall) epubViewerPrvky.translateHeaderSmall.textContent = `Výuka jazyků · ${api.ziskejJazykInfo?.(language)?.nazev || language}`;
-    if (epubViewerPrvky.translateSpeak) epubViewerPrvky.translateSpeak.setAttribute('aria-label', `Přehrát výslovnost · ${api.ziskejJazykInfo?.(language)?.nazev || language}`);
+    if (epubViewerPrvky.translateHeaderTitle) epubViewerPrvky.translateHeaderTitle.textContent = docT('learning.translationDirection', 'Překlad · {direction}', { direction: api.popisJazykovehoSmeru?.(language, target) || '' });
+    if (epubViewerPrvky.translateHeaderSmall) epubViewerPrvky.translateHeaderSmall.textContent = docT('learning.languageLearningLanguage', 'Výuka jazyků · {language}', { language: api.ziskejJazykInfo?.(language)?.nazev || language });
+    if (epubViewerPrvky.translateSpeak) epubViewerPrvky.translateSpeak.setAttribute('aria-label', docT('learning.playPronunciationLanguage', 'Přehrát výslovnost · {language}', { language: api.ziskejJazykInfo?.(language)?.nazev || language }));
     epubViewerPrvky.translateContext.textContent = epubSlovnikVyber.context
       ? `“${epubSlovnikVyber.context}”`
       : '';
@@ -3513,18 +3513,18 @@
       epubSlovnikVyber.bookTitle,
       epubSlovnikVyber.chapterTitle
     ].filter(Boolean).join(' · ');
-    epubViewerPrvky.translateSave.textContent = existing ? 'Aktualizovat ve slovníku' : '＋ Uložit do slovníku';
+    epubViewerPrvky.translateSave.textContent = existing ? docT('learning.updateInDictionary', 'Aktualizovat ve slovníku') : docT('learning.saveToDictionary', '＋ Uložit do slovníku');
     epubViewerPrvky.translateDialog.hidden = false;
     epubViewerPrvky.selectionBar.hidden = true;
     window.getSelection?.()?.removeAllRanges?.();
 
     if (existing) {
-      nastavEpubPrekladStatus('Toto slovo už ve studijním slovníku máš.', 'ok');
+      nastavEpubPrekladStatus(docT('learning.alreadyInDictionary', 'Toto slovo už ve studijním slovníku máš.'), 'ok');
     } else if (prelozit) {
-      nastavEpubPrekladStatus(`Online překlad · ${api.popisJazykovehoSmeru?.(language, target) || ''} · odesílá se jen vybraný výraz.`, '');
+      nastavEpubPrekladStatus(docT('learning.onlineTranslationPrivacy', 'Online překlad · {direction} · odesílá se jen vybraný výraz.', { direction: api.popisJazykovehoSmeru?.(language, target) || '' }), '');
       void spustEpubPreklad();
     } else {
-      nastavEpubPrekladStatus('Doplň překlad nebo klepni na Přeložit.', '');
+      nastavEpubPrekladStatus(docT('learning.fillOrTranslate', 'Doplň překlad nebo klepni na Přeložit.'), '');
     }
   }
 
@@ -3534,7 +3534,7 @@
     if (!api?.ulozPolozku || !vyber?.term) return;
     const translation = String(epubViewerPrvky?.translateInput?.value || '').replace(/\s+/g, ' ').trim();
     if (!translation) {
-      nastavEpubPrekladStatus('Nejdřív doplň překlad.', 'error');
+      nastavEpubPrekladStatus(docT('learning.fillTranslationFirst', 'Nejdřív doplň překlad.'), 'error');
       epubViewerPrvky.translateInput?.focus?.();
       return;
     }
@@ -3551,13 +3551,13 @@
     });
 
     if (!result?.ok) {
-      nastavEpubPrekladStatus('Slovíčko se nepodařilo uložit.', 'error');
+      nastavEpubPrekladStatus(docT('learning.saveFailed', 'Slovíčko se nepodařilo uložit.'), 'error');
       return;
     }
 
-    epubViewerPrvky.translateSave.textContent = 'Uloženo ✓';
+    epubViewerPrvky.translateSave.textContent = docT('status.savedCheck', 'Uloženo ✓');
     epubViewerPrvky.translateSave.disabled = true;
-    nastavEpubPrekladStatus(result.updated ? 'Slovíčko bylo aktualizováno.' : 'Uloženo do Výuky jazyků.', 'ok');
+    nastavEpubPrekladStatus(result.updated ? docT('learning.wordUpdated', 'Slovíčko bylo aktualizováno.') : docT('learning.savedToLearning', 'Uloženo do Výuky jazyků.'), 'ok');
     setTimeout(() => zavriEpubPreklad({ obnovitVyber: false }), 650);
   }
 
@@ -3600,7 +3600,7 @@
     const mark = document.createElement('mark');
     mark.className = `documentsEpubHighlight is-${polozka.color}`;
     mark.dataset.epubHighlightId = polozka.id;
-    mark.title = 'Klepnutím lze označení odstranit';
+    mark.title = docT('reader.tapRemoveHighlight', 'Klepnutím lze označení odstranit');
     node.parentNode.insertBefore(mark, node);
     mark.appendChild(node);
   }
@@ -3724,12 +3724,12 @@
     const zvyrazneni = [...epubZvyrazneni].sort((a, b) => a.chapterIndex - b.chapterIndex || a.start - b.start);
     const zalozkyHtml = zalozky.length ? zalozky.map((polozka) => {
       const procenta = Math.round((Number(polozka.scrollRatio) || 0) * 100);
-      return `<div class="documentsEpubMarkRow"><button type="button" class="documentsEpubMarkOpen" data-epub-bookmark-open="${esc(polozka.id)}"><strong>${esc(polozka.chapterTitle || epubKapitolaNazev(polozka.chapterIndex))}</strong><span>${procenta} %</span></button><button type="button" class="documentsEpubMarkDelete" data-epub-bookmark-delete="${esc(polozka.id)}" aria-label="Smazat záložku">×</button></div>`;
-    }).join('') : '<p class="documentsEpubMarksEmpty">Zatím žádná záložka.</p>';
+      return `<div class="documentsEpubMarkRow"><button type="button" class="documentsEpubMarkOpen" data-epub-bookmark-open="${esc(polozka.id)}"><strong>${esc(polozka.chapterTitle || epubKapitolaNazev(polozka.chapterIndex))}</strong><span>${procenta} %</span></button><button type="button" class="documentsEpubMarkDelete" data-epub-bookmark-delete="${esc(polozka.id)}" aria-label="${esc(docT('reader.deleteBookmark', 'Smazat záložku'))}">×</button></div>`;
+    }).join('') : `<p class="documentsEpubMarksEmpty">${docT('reader.noBookmarks', 'Zatím žádná záložka.')}</p>`;
     const zvyrazneniHtml = zvyrazneni.length ? zvyrazneni.map((polozka) => (
-      `<div class="documentsEpubMarkRow documentsEpubHighlightRow"><button type="button" class="documentsEpubMarkOpen" data-epub-highlight-open="${esc(polozka.id)}"><i class="documentsEpubMarkColor is-${esc(polozka.color)}" aria-hidden="true"></i><div class="documentsEpubMarkBody"><strong>${esc(kratkyEpubCitace(polozka.quote) || epubKapitolaNazev(polozka.chapterIndex))}</strong><div class="documentsEpubMarkMeta"><small class="documentsEpubMarkType">${polozka.note ? '📝 S poznámkou' : 'Označení'}</small><span>${esc(epubKapitolaNazev(polozka.chapterIndex))}</span></div>${polozka.note ? `<em class="documentsEpubMarkNote">${esc(kratkyEpubPoznamka(polozka.note))}</em>` : ''}</div></button><button type="button" class="documentsEpubMarkEditNote" data-epub-highlight-note="${esc(polozka.id)}" aria-label="${polozka.note ? 'Upravit poznámku' : 'Přidat poznámku'}">📝</button><button type="button" class="documentsEpubMarkDelete" data-epub-highlight-delete="${esc(polozka.id)}" aria-label="Smazat označení">×</button></div>`
-    )).join('') : '<p class="documentsEpubMarksEmpty">Zatím žádné označení.</p>';
-    epubViewerPrvky.marksList.innerHTML = `<section><h4>Záložky</h4>${zalozkyHtml}</section><section><h4>Označení</h4>${zvyrazneniHtml}</section>`;
+      `<div class="documentsEpubMarkRow documentsEpubHighlightRow"><button type="button" class="documentsEpubMarkOpen" data-epub-highlight-open="${esc(polozka.id)}"><i class="documentsEpubMarkColor is-${esc(polozka.color)}" aria-hidden="true"></i><div class="documentsEpubMarkBody"><strong>${esc(kratkyEpubCitace(polozka.quote) || epubKapitolaNazev(polozka.chapterIndex))}</strong><div class="documentsEpubMarkMeta"><small class="documentsEpubMarkType">${polozka.note ? `📝 ${docT('reader.withNote', 'S poznámkou')}` : docT('reader.highlight', 'Označení')}</small><span>${esc(epubKapitolaNazev(polozka.chapterIndex))}</span></div>${polozka.note ? `<em class="documentsEpubMarkNote">${esc(kratkyEpubPoznamka(polozka.note))}</em>` : ''}</div></button><button type="button" class="documentsEpubMarkEditNote" data-epub-highlight-note="${esc(polozka.id)}" aria-label="${esc(polozka.note ? docT('reader.editNote', 'Upravit poznámku') : docT('reader.addNote', 'Přidat poznámku'))}">📝</button><button type="button" class="documentsEpubMarkDelete" data-epub-highlight-delete="${esc(polozka.id)}" aria-label="${esc(docT('reader.deleteHighlight', 'Smazat označení'))}">×</button></div>`
+    )).join('') : `<p class="documentsEpubMarksEmpty">${docT('reader.noHighlights', 'Zatím žádné označení.')}</p>`;
+    epubViewerPrvky.marksList.innerHTML = `<section><h4>${docT('reader.bookmarks', 'Záložky')}</h4>${zalozkyHtml}</section><section><h4>${docT('reader.highlights', 'Označení')}</h4>${zvyrazneniHtml}</section>`;
   }
 
   function uvolniEpubKapitolaUrls() {
@@ -3851,8 +3851,8 @@
         }
 
         epubViewerPrvky.loadingText.textContent = pocet > 1
-          ? `Připravuji knihu… ${index + 1} / ${pocet}`
-          : 'Připravuji knihu…';
+          ? docT('reader.preparingBookCount', 'Připravuji knihu… {current} / {total}', { current: index + 1, total: pocet })
+          : docT('reader.preparingBook', 'Připravuji knihu…');
 
         const rendered = await epubAktualniKniha.renderChapter(index);
         if (generation !== epubRenderGeneration || !epubViewerOtevren) {
@@ -3868,11 +3868,11 @@
         sekce.className = 'documentsEpubChapterSection';
         sekce.dataset.epubChapterIndex = String(index);
         sekce.dataset.epubChapterPath = String(rendered.chapter?.href || '');
-        sekce.setAttribute('aria-label', rendered.chapter?.title || `Kapitola ${index + 1}`);
+        sekce.setAttribute('aria-label', rendered.chapter?.title || docT('reader.chapterNumber', 'Kapitola {count}', { count: index + 1 }));
 
         const telo = document.createElement('div');
         telo.className = 'documentsEpubChapterBody';
-        telo.innerHTML = rendered.html || '<p class="documentsEpubEmpty">Kapitola neobsahuje zobrazitelný text.</p>';
+        telo.innerHTML = rendered.html || `<p class="documentsEpubEmpty">${docT('reader.chapterEmpty', 'Kapitola neobsahuje zobrazitelný text.')}</p>`;
         oznacEpubNadpisyKapitoly(telo);
         sekce.appendChild(telo);
         fragmentKnihy.appendChild(sekce);
@@ -3941,7 +3941,7 @@
     if (!epubViewerPrvky || !epubAktualniKniha) return;
     epubViewerPrvky.tocList.innerHTML = epubAktualniKniha.chapters.map((chapter, index) => `
       <button type="button" class="documentsEpubTocItem${index === epubAktualniKapitola ? ' active' : ''}" data-epub-chapter="${index}">
-        <span>${index + 1}</span><strong>${esc(chapter.title || `Kapitola ${index + 1}`)}</strong>
+        <span>${index + 1}</span><strong>${esc(chapter.title || docT('reader.chapterNumber', 'Kapitola {count}', { count: index + 1 }))}</strong>
       </button>`).join('');
 
     epubViewerPrvky.tocList.querySelectorAll('[data-epub-chapter]').forEach((button) => {
@@ -3962,142 +3962,142 @@
     overlay.hidden = true;
     overlay.innerHTML = `
       <header class="documentsEpubHeader">
-        <button type="button" class="documentsEpubClose" aria-label="Zavřít knihu">‹</button>
+        <button type="button" class="documentsEpubClose" aria-label="${docT('reader.closeBook', 'Zavřít knihu')}">‹</button>
         <div class="documentsEpubTitle">
           <strong></strong>
           <small class="documentsEpubAuthor"></small>
           <span class="documentsEpubChapter"></span>
         </div>
         <div class="documentsEpubHeaderActions">
-          <button type="button" class="documentsEpubSettingsButton" aria-label="Nastavení čtení" title="Nastavení čtení">Aa</button>
-          <button type="button" class="documentsEpubMarksButton" aria-label="Záložky a označení" title="Záložky a označení">🔖</button>
-          <button type="button" class="documentsEpubTocButton" aria-label="Obsah knihy" title="Obsah">☰</button>
+          <button type="button" class="documentsEpubSettingsButton" aria-label="${docT('reader.settings', 'Nastavení čtení')}" title="${docT('reader.settings', 'Nastavení čtení')}">Aa</button>
+          <button type="button" class="documentsEpubMarksButton" aria-label="${docT('reader.bookmarksHighlights', 'Záložky a označení')}" title="${docT('reader.bookmarksHighlights', 'Záložky a označení')}">🔖</button>
+          <button type="button" class="documentsEpubTocButton" aria-label="${docT('reader.contentsAria', 'Obsah knihy')}" title="${docT('reader.contents', 'Obsah')}">☰</button>
         </div>
       </header>
       <main class="documentsEpubBody">
         <div class="documentsEpubLoading" hidden>
           <span class="documentsDocxSpinner" aria-hidden="true"></span>
-          <strong>Otevírám EPUB…</strong>
+          <strong>${docT('reader.openingEpub', 'Otevírám EPUB…')}</strong>
         </div>
         <article class="documentsEpubContent"></article>
       </main>
       <footer class="documentsEpubNav">
-        <button type="button" class="documentsEpubPrev">‹ Předchozí</button>
+        <button type="button" class="documentsEpubPrev">‹ ${docT('actions.previous', 'Předchozí')}</button>
         <span class="documentsEpubCounter"></span>
-        <button type="button" class="documentsEpubNext">Další ›</button>
+        <button type="button" class="documentsEpubNext">${docT('actions.next', 'Další')} ›</button>
       </footer>
       <div class="documentsEpubToc" hidden>
-        <section class="documentsEpubTocPanel" role="dialog" aria-modal="true" aria-label="Obsah knihy">
-          <div class="documentsEpubTocHeader"><strong>Obsah</strong><button type="button" class="documentsEpubTocClose" aria-label="Zavřít obsah">×</button></div>
+        <section class="documentsEpubTocPanel" role="dialog" aria-modal="true" aria-label="${docT('reader.contentsAria', 'Obsah knihy')}">
+          <div class="documentsEpubTocHeader"><strong>${docT('reader.contents', 'Obsah')}</strong><button type="button" class="documentsEpubTocClose" aria-label="${docT('reader.closeContents', 'Zavřít obsah')}">×</button></div>
           <div class="documentsEpubTocList"></div>
         </section>
       </div>
       <div class="documentsEpubSettings" hidden>
-        <section class="documentsEpubSettingsPanel" role="dialog" aria-modal="true" aria-label="Nastavení čtení">
-          <div class="documentsEpubSettingsHeader"><strong>Nastavení čtení</strong><button type="button" class="documentsEpubSettingsClose" aria-label="Zavřít nastavení">×</button></div>
+        <section class="documentsEpubSettingsPanel" role="dialog" aria-modal="true" aria-label="${docT('reader.settings', 'Nastavení čtení')}">
+          <div class="documentsEpubSettingsHeader"><strong>${docT('reader.settings', 'Nastavení čtení')}</strong><button type="button" class="documentsEpubSettingsClose" aria-label="${docT('reader.closeSettings', 'Zavřít nastavení')}">×</button></div>
           <div class="documentsEpubSettingsBody">
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Zarovnání</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.alignment', 'Zarovnání')}</span>
               <div class="documentsEpubSettingChoices">
-                <button type="button" data-reader-setting="align" data-reader-value="book">Kniha</button>
-                <button type="button" data-reader-setting="align" data-reader-value="left">Vlevo</button>
-                <button type="button" data-reader-setting="align" data-reader-value="justify">Do bloku</button>
+                <button type="button" data-reader-setting="align" data-reader-value="book">${docT('reader.book', 'Kniha')}</button>
+                <button type="button" data-reader-setting="align" data-reader-value="left">${docT('reader.left', 'Vlevo')}</button>
+                <button type="button" data-reader-setting="align" data-reader-value="justify">${docT('reader.justify', 'Do bloku')}</button>
               </div>
             </div>
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Velikost písma</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.fontSize', 'Velikost písma')}</span>
               <div class="documentsEpubFontSizeControl">
-                <button type="button" class="documentsEpubFontMinus" aria-label="Zmenšit písmo">−</button>
+                <button type="button" class="documentsEpubFontMinus" aria-label="${docT('reader.decreaseFont', 'Zmenšit písmo')}">−</button>
                 <strong class="documentsEpubFontSizeValue">100 %</strong>
-                <button type="button" class="documentsEpubFontPlus" aria-label="Zvětšit písmo">+</button>
+                <button type="button" class="documentsEpubFontPlus" aria-label="${docT('reader.increaseFont', 'Zvětšit písmo')}">+</button>
               </div>
             </div>
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Řádkování</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.lineHeight', 'Řádkování')}</span>
               <div class="documentsEpubSettingChoices">
-                <button type="button" data-reader-setting="lineHeight" data-reader-value="compact">Menší</button>
-                <button type="button" data-reader-setting="lineHeight" data-reader-value="normal">Normální</button>
-                <button type="button" data-reader-setting="lineHeight" data-reader-value="airy">Vzdušné</button>
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="compact">${docT('reader.smaller', 'Menší')}</button>
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="normal">${docT('reader.normal', 'Normální')}</button>
+                <button type="button" data-reader-setting="lineHeight" data-reader-value="airy">${docT('reader.airy', 'Vzdušné')}</button>
               </div>
             </div>
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Okraje textu</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.margins', 'Okraje textu')}</span>
               <div class="documentsEpubSettingChoices">
-                <button type="button" data-reader-setting="margins" data-reader-value="narrow">Úzké</button>
-                <button type="button" data-reader-setting="margins" data-reader-value="normal">Normální</button>
-                <button type="button" data-reader-setting="margins" data-reader-value="wide">Široké</button>
+                <button type="button" data-reader-setting="margins" data-reader-value="narrow">${docT('reader.narrow', 'Úzké')}</button>
+                <button type="button" data-reader-setting="margins" data-reader-value="normal">${docT('reader.normal', 'Normální')}</button>
+                <button type="button" data-reader-setting="margins" data-reader-value="wide">${docT('reader.wide', 'Široké')}</button>
               </div>
             </div>
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Pozadí</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.background', 'Pozadí')}</span>
               <div class="documentsEpubSettingChoices">
-                <button type="button" data-reader-setting="theme" data-reader-value="light">Světlé</button>
-                <button type="button" data-reader-setting="theme" data-reader-value="sepia">Sépie</button>
-                <button type="button" data-reader-setting="theme" data-reader-value="dark">Tmavé</button>
+                <button type="button" data-reader-setting="theme" data-reader-value="light">${docT('reader.light', 'Světlé')}</button>
+                <button type="button" data-reader-setting="theme" data-reader-value="sepia">${docT('reader.sepia', 'Sépie')}</button>
+                <button type="button" data-reader-setting="theme" data-reader-value="dark">${docT('reader.dark', 'Tmavé')}</button>
               </div>
             </div>
             <div class="documentsEpubSettingRow">
-              <span class="documentsEpubSettingLabel">Písmo</span>
+              <span class="documentsEpubSettingLabel">${docT('reader.font', 'Písmo')}</span>
               <div class="documentsEpubSettingChoices">
-                <button type="button" data-reader-setting="font" data-reader-value="book">Kniha</button>
-                <button type="button" data-reader-setting="font" data-reader-value="serif">Patkové</button>
-                <button type="button" data-reader-setting="font" data-reader-value="sans">Bezpatkové</button>
+                <button type="button" data-reader-setting="font" data-reader-value="book">${docT('reader.book', 'Kniha')}</button>
+                <button type="button" data-reader-setting="font" data-reader-value="serif">${docT('reader.serif', 'Patkové')}</button>
+                <button type="button" data-reader-setting="font" data-reader-value="sans">${docT('reader.sans', 'Bezpatkové')}</button>
               </div>
             </div>
-            <button type="button" class="documentsEpubSettingsReset">Obnovit výchozí</button>
+            <button type="button" class="documentsEpubSettingsReset">${docT('reader.resetDefaults', 'Obnovit výchozí')}</button>
           </div>
         </section>
       </div>
       <div class="documentsEpubMarks" hidden>
-        <section class="documentsEpubMarksPanel" role="dialog" aria-modal="true" aria-label="Záložky a označení">
-          <div class="documentsEpubMarksHeader"><strong>Záložky a označení</strong><button type="button" class="documentsEpubMarksClose" aria-label="Zavřít">×</button></div>
+        <section class="documentsEpubMarksPanel" role="dialog" aria-modal="true" aria-label="${docT('reader.bookmarksHighlights', 'Záložky a označení')}">
+          <div class="documentsEpubMarksHeader"><strong>${docT('reader.bookmarksHighlights', 'Záložky a označení')}</strong><button type="button" class="documentsEpubMarksClose" aria-label="${docT('actions.close', 'Zavřít')}">×</button></div>
           <div class="documentsEpubMarksBody">
-            <button type="button" class="documentsEpubAddBookmark">＋ Přidat záložku tady</button>
+            <button type="button" class="documentsEpubAddBookmark">＋ ${docT('reader.addBookmarkHere', 'Přidat záložku tady')}</button>
             <div class="documentsEpubMarksList"></div>
           </div>
         </section>
       </div>
       <div class="documentsEpubNoteDialog" hidden>
-        <section class="documentsEpubNotePanel" role="dialog" aria-modal="true" aria-label="Poznámka k označení">
-          <div class="documentsEpubNoteHeader"><strong>Poznámka k označení</strong><button type="button" class="documentsEpubNoteClose" aria-label="Zavřít">×</button></div>
+        <section class="documentsEpubNotePanel" role="dialog" aria-modal="true" aria-label="${docT('reader.highlightNote', 'Poznámka k označení')}">
+          <div class="documentsEpubNoteHeader"><strong>${docT('reader.highlightNote', 'Poznámka k označení')}</strong><button type="button" class="documentsEpubNoteClose" aria-label="${docT('actions.close', 'Zavřít')}">×</button></div>
           <p class="documentsEpubNoteQuote"></p>
-          <textarea class="documentsEpubNoteInput" maxlength="2000" rows="5" placeholder="Napiš vlastní poznámku…" autocomplete="off" spellcheck="true" data-luba-keyboard-field="epub-highlight-note"></textarea>
-          <div class="documentsEpubNoteActions"><button type="button" class="documentsEpubNoteCancel">Zrušit</button><button type="button" class="documentsEpubNoteSave">Uložit</button></div>
+          <textarea class="documentsEpubNoteInput" maxlength="2000" rows="5" placeholder="${docT('reader.notePlaceholder', 'Napiš vlastní poznámku…')}" autocomplete="off" spellcheck="true" data-luba-keyboard-field="epub-highlight-note"></textarea>
+          <div class="documentsEpubNoteActions"><button type="button" class="documentsEpubNoteCancel">${docT('actions.cancel', 'Zrušit')}</button><button type="button" class="documentsEpubNoteSave">${docT('actions.save', 'Uložit')}</button></div>
         </section>
       </div>
       <div class="documentsEpubTranslateDialog" hidden>
-        <section class="documentsEpubTranslatePanel" role="dialog" aria-modal="true" aria-label="Překlad do studijního slovníku">
+        <section class="documentsEpubTranslatePanel" role="dialog" aria-modal="true" aria-label="${docT('learning.translationDictionary', 'Překlad do studijního slovníku')}">
           <div class="documentsEpubTranslateHeader">
-            <div><strong class="documentsEpubTranslateHeaderTitle">Překlad</strong><small class="documentsEpubTranslateHeaderSmall">Výuka jazyků</small></div>
-            <button type="button" class="documentsEpubTranslateClose" aria-label="Zavřít překlad">×</button>
+            <div><strong class="documentsEpubTranslateHeaderTitle">${docT('learning.translation', 'Překlad')}</strong><small class="documentsEpubTranslateHeaderSmall">${docT('settings.languageLearning', 'Výuka jazyků')}</small></div>
+            <button type="button" class="documentsEpubTranslateClose" aria-label="${docT('learning.closeTranslation', 'Zavřít překlad')}">×</button>
           </div>
           <div class="documentsEpubTranslateTermRow">
             <strong class="documentsEpubTranslateTerm"></strong>
-            <button type="button" class="documentsEpubTranslateSpeak" aria-label="Přehrát výslovnost">🔊</button>
+            <button type="button" class="documentsEpubTranslateSpeak" aria-label="${docT('learning.playPronunciation', 'Přehrát výslovnost')}">🔊</button>
           </div>
-          <textarea class="documentsEpubTranslateInput" rows="2" maxlength="240" placeholder="Překlad…" data-luba-keyboard-field="epub-learning-translation" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-          <button type="button" class="documentsEpubTranslateFetch">🌐 Přeložit</button>
+          <textarea class="documentsEpubTranslateInput" rows="2" maxlength="240" placeholder="${docT('learning.translationPlaceholder', 'Překlad…')}" data-luba-keyboard-field="epub-learning-translation" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+          <button type="button" class="documentsEpubTranslateFetch">🌐 ${docT('learning.translate', 'Přeložit')}</button>
           <p class="documentsEpubTranslateStatus" aria-live="polite"></p>
           <p class="documentsEpubTranslateContext"></p>
           <small class="documentsEpubTranslateSource"></small>
           <div class="documentsEpubTranslateActions">
-            <button type="button" class="documentsEpubTranslateCancel">Zrušit</button>
-            <button type="button" class="documentsEpubTranslateSave">＋ Uložit do slovníku</button>
+            <button type="button" class="documentsEpubTranslateCancel">${docT('actions.cancel', 'Zrušit')}</button>
+            <button type="button" class="documentsEpubTranslateSave">${docT('learning.saveToDictionary', '＋ Uložit do slovníku')}</button>
           </div>
         </section>
       </div>
       <div class="documentsEpubSelectionBar" hidden>
-        <button type="button" class="documentsEpubSelectionTranslate">🌐 Přeložit</button>
-        <button type="button" class="documentsEpubSelectionLearn">＋ Slovník</button>
-        <div class="documentsEpubSelectionColors" aria-label="Barva označení">
-          <button type="button" data-epub-highlight-color="yellow" aria-label="Žluté označení"></button>
-          <button type="button" data-epub-highlight-color="green" aria-label="Zelené označení"></button>
-          <button type="button" data-epub-highlight-color="blue" aria-label="Modré označení"></button>
-          <button type="button" data-epub-highlight-color="violet" aria-label="Fialové označení"></button>
+        <button type="button" class="documentsEpubSelectionTranslate">🌐 ${docT('learning.translate', 'Přeložit')}</button>
+        <button type="button" class="documentsEpubSelectionLearn">＋ ${docT('learning.dictionary', 'Slovník')}</button>
+        <div class="documentsEpubSelectionColors" aria-label="${docT('reader.highlightColor', 'Barva označení')}">
+          <button type="button" data-epub-highlight-color="yellow" aria-label="${docT('reader.highlightYellow', 'Žluté označení')}"></button>
+          <button type="button" data-epub-highlight-color="green" aria-label="${docT('reader.highlightGreen', 'Zelené označení')}"></button>
+          <button type="button" data-epub-highlight-color="blue" aria-label="${docT('reader.highlightBlue', 'Modré označení')}"></button>
+          <button type="button" data-epub-highlight-color="violet" aria-label="${docT('reader.highlightViolet', 'Fialové označení')}"></button>
         </div>
-        <button type="button" class="documentsEpubSelectionNote" hidden>📝 Poznámka</button>
-        <button type="button" class="documentsEpubSelectionRemove" hidden>Odstranit označení</button>
-        <button type="button" class="documentsEpubSelectionClose" aria-label="Zavřít">×</button>
+        <button type="button" class="documentsEpubSelectionNote" hidden>📝 ${docT('reader.note', 'Poznámka')}</button>
+        <button type="button" class="documentsEpubSelectionRemove" hidden>${docT('reader.removeHighlight', 'Odstranit označení')}</button>
+        <button type="button" class="documentsEpubSelectionClose" aria-label="${docT('actions.close', 'Zavřít')}">×</button>
       </div>`;
 
     document.body.appendChild(overlay);
@@ -4378,7 +4378,7 @@
     aplikujEpubReaderNastaveni();
     prvky.overlay.hidden = false;
     prvky.loading.hidden = false;
-    prvky.loadingText.textContent = 'Otevírám EPUB…';
+    prvky.loadingText.textContent = docT('reader.openingEpub', 'Otevírám EPUB…');
     prvky.content.innerHTML = '';
     epubViewerOtevren = true;
     epubAktualniRecordId = record.id;
@@ -4388,7 +4388,7 @@
       const generation = ++epubRenderGeneration;
       const arrayBuffer = await record.blob.arrayBuffer();
       epubAktualniKniha = await window.LubaNoteEpubReader.open(arrayBuffer);
-      prvky.title.textContent = record.epubTitle || epubAktualniKniha.title || record.name || 'Kniha';
+      prvky.title.textContent = record.epubTitle || epubAktualniKniha.title || record.name || docT('reader.book', 'Kniha');
       prvky.author.textContent = record.epubAuthor || epubAktualniKniha.author || 'EPUB · LubaReader';
       vykresliEpubObsah();
       const vykresleno = await vykresliCelouEpubKnihu(generation);
@@ -4444,7 +4444,7 @@
   async function otevriSoubor(idSouboru) {
     const record = await nactiSoubor(idSouboru);
     if (!record) {
-      zobrazChybu('Dokumenty', 'Soubor už není dostupný.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.fileUnavailable', 'Soubor už není dostupný.'));
       return;
     }
 
@@ -4457,7 +4457,7 @@
         console.error('Otevření uloženého DOCX selhalo:', error);
         zobrazChybu(
           'Dokumenty',
-          'DOCX se nepodařilo otevřít. Soubor může být poškozený nebo používá prvek, který tento viewer ještě neumí.'
+          docT('documents.docxOpenFailed', 'DOCX se nepodařilo otevřít. Soubor může být poškozený nebo používá prvek, který tento viewer ještě neumí.')
         );
       }
       return;
@@ -4470,7 +4470,7 @@
         console.error('Otevření uloženého DOC selhalo:', error);
         zobrazChybu(
           'Dokumenty',
-          error?.message || 'DOC se nepodařilo otevřít. Podporovaný je Word 97–2003 a první verze zachovává hlavně čitelný text.'
+          docT('documents.docOpenFailed', 'DOC se nepodařilo otevřít. Podporovaný je Word 97–2003 a první verze zachovává hlavně čitelný text.')
         );
       }
       return;
@@ -4483,7 +4483,7 @@
         console.error('Otevření uloženého EPUB selhalo:', error);
         zobrazChybu(
           'Dokumenty',
-          error?.message || 'EPUB se nepodařilo otevřít. Kniha může být poškozená nebo chráněná DRM.'
+          docT('documents.epubOpenFailed', 'EPUB se nepodařilo otevřít. Kniha může být poškozená nebo chráněná DRM.')
         );
       }
       return;
@@ -4494,19 +4494,19 @@
         await otevriSqlViewer(record);
       } catch (error) {
         console.error('Otevření uloženého SQL selhalo:', error);
-        zobrazChybu('Dokumenty', error?.message || 'SQL se nepodařilo otevřít.');
+        zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlOpenFailed', 'SQL se nepodařilo otevřít.'));
       }
       return;
     }
 
     if (typ !== 'pdf') {
-      zobrazChybu('Dokumenty', 'Tento typ souboru zatím neumím otevřít.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.cannotOpenType', 'Tento typ souboru zatím neumím otevřít.'));
       return;
     }
 
     const viewer = window.LubaNoteDocuments?.otevriPdfViewer;
     if (typeof viewer !== 'function') {
-      zobrazChybu('Dokumenty', 'PDF prohlížeč není dostupný.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.pdfViewerUnavailable', 'PDF prohlížeč není dostupný.'));
       return;
     }
 
@@ -4544,7 +4544,7 @@
       });
     } catch (error) {
       console.error('Otevření uloženého PDF selhalo:', error);
-      zobrazChybu('Dokumenty', 'PDF se nepodařilo otevřít.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.pdfOpenFailed', 'PDF se nepodařilo otevřít.'));
     }
   }
 
@@ -4562,15 +4562,15 @@
 
     const cards = posledniSlozky
       .map((folder) => `
-        <div class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" role="button" tabindex="0" title="Dlouhý stisk a táhni pro změnu pořadí">
+        <div class="documentsFolderCard${aktivniSlozkaId === folder.id ? ' active' : ''}" data-folder-id="${esc(folder.id)}" role="button" tabindex="0" title="${docT('documents.longPressReorderTitle', 'Dlouhý stisk a táhni pro změnu pořadí')}">
           <span class="documentsFolderCardIcon" aria-hidden="true">📁</span>
           <span class="documentsFolderCardName">${esc(folder.name)}</span>
           <small>${pocetSouboruText(counts.get(folder.id) || 0)}</small>
-          <button type="button" class="documentsFolderMenuButton" data-folder-menu="${esc(folder.id)}" aria-label="Akce složky ${esc(folder.name)}" title="Akce složky">⋮</button>
+          <button type="button" class="documentsFolderMenuButton" data-folder-menu="${esc(folder.id)}" aria-label="${esc(docT('documents.folderActionsNamed', 'Akce složky {name}', { name: folder.name }))}" title="${esc(docT('documents.folderActions', 'Akce složky'))}">⋮</button>
         </div>`)
       .join('');
 
-    prvky.folders.innerHTML = cards || '<div class="documentsFoldersEmpty">Zatím nemáš žádnou složku.</div>';
+    prvky.folders.innerHTML = cards || `<div class="documentsFoldersEmpty">${docT('documents.noFolders', 'Zatím nemáš žádnou složku.')}</div>`;
 
     prvky.folders.querySelectorAll('.documentsFolderCard[data-folder-id]').forEach((button) => {
       button.addEventListener('click', (event) => {
@@ -4677,16 +4677,16 @@
     const maHledani = Boolean(normalizujHledani(hledaniDokumentu));
     if (maHledani) {
       if (prazdnaIkona) prazdnaIkona.textContent = '🔎';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Nic jsme nenašli';
-      if (prazdnyText) prazdnyText.textContent = `Pro „${hledaniDokumentu.trim()}“ tu není žádný odpovídající dokument.`;
+      if (prazdnyNadpis) prazdnyNadpis.textContent = docT('documents.nothingFound', 'Nic jsme nenašli');
+      if (prazdnyText) prazdnyText.textContent = docT('documents.searchEmpty', 'Pro „{query}“ tu není žádný odpovídající dokument.', { query: hledaniDokumentu.trim() });
     } else if (zobrazujiKos) {
       if (prazdnaIkona) prazdnaIkona.textContent = '🗑️';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = 'Koš je prázdný';
-      if (prazdnyText) prazdnyText.textContent = 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit nebo trvale smazat.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = docT('documents.trashEmpty', 'Koš je prázdný');
+      if (prazdnyText) prazdnyText.textContent = docT('documents.trashEmptyHint', 'Dokumenty přesunuté do koše se zobrazí tady a půjdou obnovit nebo trvale smazat.');
     } else {
       if (prazdnaIkona) prazdnaIkona.textContent = '📄';
-      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? 'Zatím tu není žádné PDF' : aktivniTypFiltru === 'docx' ? 'Zatím tu není žádný DOCX' : aktivniTypFiltru === 'doc' ? 'Zatím tu není žádný DOC' : aktivniTypFiltru === 'epub' ? 'Zatím tu není žádná kniha EPUB' : aktivniTypFiltru === 'sql' ? 'Zatím tu není žádný SQL soubor' : 'Zatím tu není žádný dokument';
-      if (prazdnyText) prazdnyText.textContent = 'Přidej první PDF, DOCX, DOC, EPUB nebo SQL. SQL se otevře lokálně jen ke čtení.';
+      if (prazdnyNadpis) prazdnyNadpis.textContent = aktivniTypFiltru === 'pdf' ? docT('documents.emptyPdf', 'Zatím tu není žádné PDF') : aktivniTypFiltru === 'docx' ? docT('documents.emptyDocx', 'Zatím tu není žádný DOCX') : aktivniTypFiltru === 'doc' ? docT('documents.emptyDoc', 'Zatím tu není žádný DOC') : aktivniTypFiltru === 'epub' ? docT('documents.emptyEpub', 'Zatím tu není žádná kniha EPUB') : aktivniTypFiltru === 'sql' ? docT('documents.emptySql', 'Zatím tu není žádný SQL soubor') : docT('documents.emptyDocument', 'Zatím tu není žádný dokument');
+      if (prazdnyText) prazdnyText.textContent = docT('documents.emptyHint', 'Přidej první PDF, DOCX, DOC, EPUB nebo SQL. SQL se otevře lokálně jen ke čtení.');
     }
 
     if (prvky.search && prvky.search.value !== hledaniDokumentu) {
@@ -4713,7 +4713,7 @@
     prvky.files.innerHTML = soubory.map((soubor) => {
       const folderName = soubor.folderId ? folderMap.get(soubor.folderId) : '';
       const metaFolder = zobrazujiKos && soubor.trashFolderId
-        ? folderMap.get(soubor.trashFolderId) || 'Všechny soubory'
+        ? folderMap.get(soubor.trashFolderId) || docT('documents.allFiles', 'Všechny soubory')
         : folderName;
       const typ = typSouboru(soubor);
       const typText = popisTypuSouboru(soubor);
@@ -4729,8 +4729,8 @@
         ? [soubor.epubAuthor, zobrazenyNazev !== soubor.name ? soubor.name : ''].filter(Boolean).join(' · ')
         : '';
       return `
-        <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? 'Dokument v koši' : 'Dlouhý stisk a táhni pro přesun'}">
-          <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="Otevřít ${esc(zobrazenyNazev)}">
+        <div class="documentsFileRow${zobrazujiKos ? ' is-trash' : ''}" data-file-id="${esc(soubor.id)}" title="${zobrazujiKos ? docT('documents.inTrashTitle', 'Dokument v koši') : docT('documents.longPressMoveTitle', 'Dlouhý stisk a táhni pro přesun')}">
+          <button type="button" class="documentsFileOpenArea" data-file-open="${esc(soubor.id)}" aria-label="${esc(docT('documents.openNamed', 'Otevřít {name}', { name: zobrazenyNazev }))}">
             <span class="documentsFileIcon${ikonaTrida}" aria-hidden="true">${ikonaObsah}</span>
             <span class="documentsFileMain">
               <strong>${esc(zobrazenyNazev)}</strong>
@@ -4738,7 +4738,7 @@
             </span>
             <span class="documentsFileOpen" aria-hidden="true">›</span>
           </button>
-          <button type="button" class="documentsFileMenuButton" data-file-menu="${esc(soubor.id)}" aria-label="Akce souboru ${esc(soubor.name)}" title="Akce souboru">⋮</button>
+          <button type="button" class="documentsFileMenuButton" data-file-menu="${esc(soubor.id)}" aria-label="${esc(docT('documents.fileActionsNamed', 'Akce souboru {name}', { name: soubor.name }))}" title="${esc(docT('documents.fileActions', 'Akce souboru'))}">⋮</button>
         </div>`;
     }).join('');
 
@@ -4809,7 +4809,7 @@
       render();
     } catch (error) {
       console.error('Dokumenty nelze načíst:', error);
-      zobrazChybu('Dokumenty', 'Lokální knihovnu dokumentů se nepodařilo načíst.');
+      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.libraryLoadFailed', 'Lokální knihovnu dokumentů se nepodařilo načíst.'));
     }
   }
 

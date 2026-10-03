@@ -1,4 +1,7 @@
 (() => {
+  const choiceT = (klic, zaloha, hodnoty = {}) =>
+    window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
   let modal = null;
   let dialog = null;
   let nadpisElement = null;
@@ -37,7 +40,7 @@
     zavritTlacitko = document.createElement("button");
     zavritTlacitko.type = "button";
     zavritTlacitko.className = "choiceDialogClose";
-    zavritTlacitko.setAttribute("aria-label", "Zavřít");
+    zavritTlacitko.setAttribute("aria-label", choiceT("actions.close", "Zavřít"));
 
     if (window.LubaNoteIcons?.nastavJenIkonu) {
       window.LubaNoteIcons.nastavJenIkonu(
@@ -110,7 +113,7 @@
   }
   
   function otevriVyberovyModal({
-    nadpis = "Vyberte možnost",
+    nadpis = choiceT("choice.selectOption", "Vyberte možnost"),
     moznosti = [],
     vybranaHodnota = null,
     poVyberu = null,
@@ -217,8 +220,8 @@
   
   
   function otevriCiselnyModal({
-    nadpis = "Zadejte hodnotu",
-    popisek = "Hodnota",
+    nadpis = choiceT("choice.enterValue", "Zadejte hodnotu"),
+    popisek = choiceT("choice.value", "Hodnota"),
     hodnota = "",
     min = null,
     max = null,
@@ -267,12 +270,12 @@
     const zrusitTlacitko = document.createElement("button");
     zrusitTlacitko.type = "button";
     zrusitTlacitko.className = "choiceDialogSecondary";
-    zrusitTlacitko.textContent = "Zrušit";
+    zrusitTlacitko.textContent = choiceT("actions.cancel", "Zrušit");
 
     const potvrditTlacitko = document.createElement("button");
     potvrditTlacitko.type = "button";
     potvrditTlacitko.className = "choiceDialogSave";
-    potvrditTlacitko.textContent = "Použít";
+    potvrditTlacitko.textContent = choiceT("actions.apply", "Použít");
 
     akce.append(
       zrusitTlacitko,
@@ -299,21 +302,21 @@
       );
 
       if (!Number.isFinite(cislo)) {
-        chyba.textContent = "Zadej platné číslo.";
+        chyba.textContent = choiceT("choice.validNumber", "Zadej platné číslo.");
         chyba.hidden = false;
         input.focus();
         return;
       }
 
       if (min !== null && cislo < Number(min)) {
-        chyba.textContent = `Minimum je ${min}.`;
+        chyba.textContent = choiceT("choice.minimum", `Minimum je ${min}.`, { value: min });
         chyba.hidden = false;
         input.focus();
         return;
       }
 
       if (max !== null && cislo > Number(max)) {
-        chyba.textContent = `Maximum je ${max}.`;
+        chyba.textContent = choiceT("choice.maximum", `Maximum je ${max}.`, { value: max });
         chyba.hidden = false;
         input.focus();
         return;
@@ -365,7 +368,7 @@
   }
 
   function otevriNastavovaciModal({
-    nadpis = "Nastavení",
+    nadpis = choiceT("settings.title", "Nastavení"),
     polozky = [],
     poUlozeni = null
   } = {}) {
@@ -436,7 +439,7 @@
                   polozka.popisek,
                 popisek:
                   vlastniVstup.popisek ||
-                  "Hodnota",
+                  choiceT("choice.value", "Hodnota"),
                 hodnota: vychoziHodnota,
                 min: vlastniVstup.min,
                 max: vlastniVstup.max,
@@ -507,7 +510,7 @@
     ulozitTlacitko.className =
       "choiceDialogSave";
 
-    ulozitTlacitko.textContent = "Uložit";
+    ulozitTlacitko.textContent = choiceT("actions.save", "Uložit");
 
     ulozitTlacitko.addEventListener(
       "click",

@@ -5,6 +5,9 @@
    ========================================== */
 
 (() => {
+  const recurringT = (klic, zaloha, hodnoty = {}) =>
+    window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
   const MILISEKUND_ZA_DEN = 86400000;
   const MAX_HLEDANYCH_DNU = 3660;
 
@@ -307,7 +310,7 @@
 
   function formatujPravidlo(repeat) {
     if (!repeat?.enabled) {
-      return "Neopakovat";
+      return recurringT("repeat.none", "Neopakovat");
     }
 
     const interval = Math.max(1, Number(repeat.interval) || 1);
@@ -360,7 +363,7 @@
       return `${zaklad} • ${den}. den`;
     }
 
-    return "Opakování";
+    return recurringT("recurring.repeat", "Opakování");
   }
 
   function kopirujRepeat(repeat) {

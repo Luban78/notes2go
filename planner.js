@@ -47,8 +47,8 @@ function nastavPlannerReminderToggle(enabled) {
   if (plannerReminderToggleLabel) {
     plannerReminderToggleLabel.textContent =
       plannerReminderEnabled
-        ? "Připomenout: zapnuto"
-        : "Připomenout: vypnuto";
+        ? (window.LubaNoteI18n?.t?.("planner.reminderOn", "Připomenout: zapnuto") || "Připomenout: zapnuto")
+        : (window.LubaNoteI18n?.t?.("planner.reminderOff", "Připomenout: vypnuto") || "Připomenout: vypnuto");
   }
 
   if (window.LubaNoteIcons?.nastavObsahSIkonou) {
@@ -56,8 +56,8 @@ function nastavPlannerReminderToggle(enabled) {
       plannerReminderToggle,
       plannerReminderEnabled ? "zvonek" : "vypnoutZvonek",
       plannerReminderEnabled
-        ? "Připomenout: zapnuto"
-        : "Připomenout: vypnuto"
+        ? (window.LubaNoteI18n?.t?.("planner.reminderOn", "Připomenout: zapnuto") || "Připomenout: zapnuto")
+        : (window.LubaNoteI18n?.t?.("planner.reminderOff", "Připomenout: vypnuto") || "Připomenout: vypnuto")
     );
   }
 }
@@ -85,13 +85,13 @@ function aktualizujPopiskyPlanovanehoTerminu() {
       plannerDateLabel.textContent =
         `${den}.${mesic}.${rok}`;
     } else {
-      plannerDateLabel.textContent = "Datum";
+      plannerDateLabel.textContent = window.LubaNoteI18n?.t?.("editor.date", "Datum") || "Datum";
     }
   }
 
   if (plannerTimeLabel) {
     plannerTimeLabel.textContent =
-      plannerTime?.value || "Čas";
+      plannerTime?.value || (window.LubaNoteI18n?.t?.("editor.time", "Čas") || "Čas");
   }
 }
 
@@ -1311,3 +1311,8 @@ document.getElementById("taskModal")?.addEventListener(
 window.LubaNotePlanner = {
   synchronizujPlanovaneTodoSPoznamkou
 };
+
+window.addEventListener("lubanote:language-change", () => {
+  nastavPlannerReminderToggle(plannerReminderEnabled);
+  aktualizujPopiskyPlanovanehoTerminu();
+});

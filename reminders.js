@@ -7,6 +7,9 @@
    - rychlé odložení, změna času, dokončení
 ================================================== */
 
+const remindersT = (klic, zaloha, hodnoty = {}) =>
+  window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
 async function requestNotificationPermission() {
   const LocalNotifications =
     window.Capacitor?.Plugins?.LocalNotifications;
@@ -54,8 +57,8 @@ async function requestNotificationPermission() {
           typeof zobrazZpravuAplikace === "function"
         ) {
           zobrazZpravuAplikace(
-            "Přesné připomínky",
-            "Povol v Androidu přesné alarmy, jinak může systém upozornění zpozdit."
+            remindersT("reminders.exactTitle", "Přesné připomínky"),
+            remindersT("reminders.exactMessage", "Povol v Androidu přesné alarmy, jinak může systém upozornění zpozdit.")
           );
         }
         
@@ -85,8 +88,8 @@ async function createReminderChannel() {
 
   await LocalNotifications.createChannel({
     id: "reminders",
-    name: "Připomínky LubaNote",
-    description: "Upozornění na naplánované poznámky a úkoly",
+    name: remindersT("reminders.channelName", "Připomínky LubaNote"),
+    description: remindersT("reminders.channelDescription", "Upozornění na naplánované poznámky a úkoly"),
     importance: 5,
     visibility: 1,
     vibration: true
@@ -1723,7 +1726,7 @@ function aktualizujSouhrnRychlehoOpakovani(
   const pravidlo =
     window.LubaNoteRecurring?.formatujPravidlo?.(
       poznamka.repeat
-    ) || "Opakování";
+    ) || remindersT("recurring.repeat", "Opakování");
 
   const zakladniDatum = new Date(
     poznamka.date || zobrazeneDatum
@@ -1740,7 +1743,7 @@ function aktualizujSouhrnRychlehoOpakovani(
 
   if (rychleOpakovaniPravidlo) {
     rychleOpakovaniPravidlo.textContent = textCasu
-      ? `${pravidlo} v ${textCasu}`
+      ? remindersT("recurring.ruleAt", `${pravidlo} v ${textCasu}`, { rule: pravidlo, time: textCasu })
       : pravidlo;
   }
 
@@ -1751,7 +1754,7 @@ function aktualizujSouhrnRychlehoOpakovani(
       );
 
     rychleOpakovaniDalsi.textContent =
-      `Další výskyt: ${textDalsihoVyskytu}`;
+      remindersT("recurring.nextOccurrence", `Další výskyt: ${textDalsihoVyskytu}`, { value: textDalsihoVyskytu });
   }
 
   const predchoziDatum =
@@ -1767,7 +1770,7 @@ function aktualizujSouhrnRychlehoOpakovani(
   if (predchoziDatum) {
     if (rychleOpakovaniPredchoziPopisek) {
       rychleOpakovaniPredchoziPopisek.textContent =
-        "Předchozí výskyt";
+        remindersT("recurring.previousOccurrence", "Předchozí výskyt");
     }
 
     if (rychleOpakovaniPredchoziHodnota) {
@@ -1786,7 +1789,7 @@ function aktualizujSouhrnRychlehoOpakovani(
 
     if (rychleOpakovaniPredchoziPopisek) {
       rychleOpakovaniPredchoziPopisek.textContent =
-        "Začátek opakování";
+        remindersT("recurring.start", "Začátek opakování");
     }
 
     if (rychleOpakovaniPredchoziHodnota) {
@@ -2030,7 +2033,7 @@ function openReminderQuickMenu(
     document.getElementById("openReminderNoteButton");
 
   if (openReminderNoteButton) {
-    const popisekOtevrit = "Otevřít";
+    const popisekOtevrit = remindersT("actions.open", "Otevřít");
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
@@ -2044,7 +2047,7 @@ function openReminderQuickMenu(
   }
 
   if (deleteReminderButton) {
-    const popisekSmazat = "Smazat";
+    const popisekSmazat = remindersT("actions.delete", "Smazat");
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
@@ -2060,9 +2063,9 @@ function openReminderQuickMenu(
   if (disableReminderButton) {
     const popisek = pripominkaZapnuta
       ? (jePlanner && jeOpakovana
-          ? "Vypnout opakování"
-          : "Vypnout")
-      : "Připomenout";
+          ? remindersT("recurring.turnOff", "Vypnout opakování")
+          : remindersT("reminders.turnOffShort", "Vypnout"))
+      : remindersT("reminders.remind", "Připomenout");
 
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
@@ -2606,11 +2609,11 @@ async function saveCustomReminderDate() {
   if (newDate <= new Date()) {
     zobrazZpravuAplikace(
       selectedReminderContext === "planner"
-        ? "Plán"
-        : "Připomínky",
+        ? remindersT("modules.planner", "Plán")
+        : remindersT("modules.reminders", "Připomínky"),
       selectedReminderContext === "planner"
-        ? "Termín musí být nastaven do budoucna."
-        : "Připomínka musí být nastavena do budoucna."
+        ? remindersT("planner.futureRequired", "Termín musí být nastaven do budoucna.")
+        : remindersT("reminders.futureRequired", "Připomínka musí být nastavena do budoucna.")
     );
     return;
   }
@@ -2659,7 +2662,7 @@ async function disableSelectedNoteReminder(entry) {
 
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Vypínám připomínku…",
+      remindersT("reminders.turningOff", "Vypínám připomínku…"),
       300
     ) || (() => {});
 
@@ -2675,8 +2678,8 @@ async function disableSelectedNoteReminder(entry) {
       error
     );
     zobrazZpravuAplikace(
-      "Připomínky",
-      "Připomínku se nepodařilo bezpečně vypnout."
+      remindersT("modules.reminders", "Připomínky"),
+      remindersT("reminders.turnOffFailed", "Připomínku se nepodařilo bezpečně vypnout.")
     );
     return false;
   }
@@ -3315,8 +3318,8 @@ async function nastavPripominkuPlanovanePolozky(
     new Date(item.plannedAt) <= new Date()
   ) {
     zobrazZpravuAplikace(
-      "Plán",
-      "Nejdřív změň termín úkolu do budoucna."
+      remindersT("modules.planner", "Plán"),
+      remindersT("planner.changeFutureFirst", "Nejdřív změň termín úkolu do budoucna.")
     );
     return false;
   }
@@ -3401,8 +3404,8 @@ async function nastavPripominkuPlanovanePolozky(
 
   zobrazPotvrzeniPripominky(
     enabled
-      ? "Připomenutí zapnuto"
-      : "Připomenutí vypnuto"
+      ? remindersT("reminders.enabled", "Připomenutí zapnuto")
+      : remindersT("reminders.disabled", "Připomenutí vypnuto")
   );
 
   return true;
@@ -3422,8 +3425,8 @@ async function zapniSelectedNoteReminder(entry) {
 
   if (new Date(currentTask.date) <= new Date()) {
     zobrazZpravuAplikace(
-      "Plán",
-      "Nejdřív změň termín úkolu do budoucna."
+      remindersT("modules.planner", "Plán"),
+      remindersT("planner.changeFutureFirst", "Nejdřív změň termín úkolu do budoucna.")
     );
     return false;
   }
@@ -3458,7 +3461,7 @@ async function zapniSelectedNoteReminder(entry) {
   );
 
   zobrazPotvrzeniPripominky(
-    "Připomenutí zapnuto"
+    remindersT("reminders.enabled", "Připomenutí zapnuto")
   );
   return true;
 }
@@ -4332,13 +4335,13 @@ function otevriSmazaniPolozkyGestem(
   const nadpis = jePlanner
     ? (
         entry.kind === "planned"
-          ? "Smazat úkol z plánu?"
-          : "Odebrat poznámku z plánu?"
+          ? remindersT("reminders.deletePlannerTaskTitle", "Smazat úkol z plánu?")
+          : remindersT("reminders.removeNoteFromPlanTitle", "Odebrat poznámku z plánu?")
       )
     : (
         entry.kind === "planned"
-          ? "Smazat naplánovaný úkol?"
-          : "Smazat připomínku?"
+          ? remindersT("reminders.deletePlannedTitle", "Smazat naplánovaný úkol?")
+          : remindersT("reminders.deleteReminderTitle", "Smazat připomínku?")
       );
 
   if (typeof window.otevriVyberovyModal !== "function") {
@@ -4361,12 +4364,12 @@ function otevriSmazaniPolozkyGestem(
     moznosti: [
       {
         hodnota: "cancel",
-        popisek: "Zrušit",
+        popisek: remindersT("actions.cancel", "Zrušit"),
         ikona: "zavrit"
       },
       {
         hodnota: "delete",
-        popisek: "Smazat",
+        popisek: remindersT("actions.delete", "Smazat"),
         ikona: "smazat"
       }
     ],
@@ -5128,8 +5131,8 @@ completeReminderButton?.addEventListener(
       zobrazPotvrzeniPripominky(
         jeOpakovanaPoznamka &&
         dalsiOpakovanyTermin
-          ? "Další opakování naplánováno"
-          : "Poznámka dokončena"
+          ? remindersT("recurring.nextScheduled", "Další opakování naplánováno")
+          : remindersT("reminders.noteCompleted", "Poznámka dokončena")
       );
 
       if (

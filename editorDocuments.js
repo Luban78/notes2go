@@ -23,6 +23,10 @@
     return;
   }
 
+  function editorDocT(klic, zaloha, hodnoty = {}) {
+    return window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+  }
+
   const FORMAT_LUBANOTE_DOKUMENTU =
     "lubanote-document-v1";
 
@@ -262,40 +266,40 @@
     overlay.hidden = true;
 
     overlay.innerHTML = `
-      <section class="pdfViewerPanel" role="dialog" aria-modal="true" aria-label="PDF prohlížeč">
+      <section class="pdfViewerPanel" role="dialog" aria-modal="true" aria-label="${editorDocT('pdf.viewer', 'PDF prohlížeč')}">
         <header class="pdfViewerHeader">
-          <button type="button" class="pdfViewerClose" aria-label="Zavřít PDF">←</button>
+          <button type="button" class="pdfViewerClose" aria-label="${editorDocT('pdf.close', 'Zavřít PDF')}">←</button>
           <div class="pdfViewerTitle" title=""></div>
-          <button type="button" class="pdfViewerSave" aria-label="Uložit kopii PDF">Uložit</button>
-          <button type="button" class="pdfViewerSettings" aria-label="Nastavení PDF" title="Nastavení PDF">⚙</button>
-          <button type="button" class="pdfViewerFullscreen" aria-label="Maximální zobrazení PDF" title="Celá obrazovka">⛶</button>
+          <button type="button" class="pdfViewerSave" aria-label="${editorDocT('pdf.saveCopy', 'Uložit kopii PDF')}">${editorDocT('actions.save', 'Uložit')}</button>
+          <button type="button" class="pdfViewerSettings" aria-label="${editorDocT('pdf.settings', 'Nastavení PDF')}" title="${editorDocT('pdf.settings', 'Nastavení PDF')}">⚙</button>
+          <button type="button" class="pdfViewerFullscreen" aria-label="${editorDocT('pdf.maxView', 'Maximální zobrazení PDF')}" title="${editorDocT('pdf.fullscreen', 'Celá obrazovka')}">⛶</button>
         </header>
 
         <div class="pdfViewerPageBar" hidden>
           <div class="pdfViewerPageGroup">
-            <button type="button" class="pdfViewerPrev" aria-label="Předchozí strana">‹</button>
+            <button type="button" class="pdfViewerPrev" aria-label="${editorDocT('pdf.previousPage', 'Předchozí strana')}">‹</button>
             <span class="pdfViewerPageValue">1 / 1</span>
-            <button type="button" class="pdfViewerNext" aria-label="Další strana">›</button>
+            <button type="button" class="pdfViewerNext" aria-label="${editorDocT('pdf.nextPage', 'Další strana')}">›</button>
           </div>
 
-          <button type="button" class="pdfViewerFit" aria-label="Přizpůsobit PDF na šířku" title="Přizpůsobit na šířku">Fit</button>
+          <button type="button" class="pdfViewerFit" aria-label="${editorDocT('pdf.fitWidthAria', 'Přizpůsobit PDF na šířku')}" title="${editorDocT('pdf.fitWidth', 'Přizpůsobit na šířku')}">Fit</button>
 
           <div class="pdfViewerZoom">
-            <button type="button" class="pdfViewerZoomOut" aria-label="Zmenšit PDF">−</button>
+            <button type="button" class="pdfViewerZoomOut" aria-label="${editorDocT('pdf.zoomOut', 'Zmenšit PDF')}">−</button>
             <span class="pdfViewerZoomValue">100 %</span>
-            <button type="button" class="pdfViewerZoomIn" aria-label="Zvětšit PDF">+</button>
+            <button type="button" class="pdfViewerZoomIn" aria-label="${editorDocT('pdf.zoomIn', 'Zvětšit PDF')}">+</button>
           </div>
         </div>
 
         <div class="pdfViewerBody">
-          <div class="pdfViewerLoading" hidden>Načítám PDF…</div>
+          <div class="pdfViewerLoading" hidden>${editorDocT('pdf.loading', 'Načítám PDF…')}</div>
           <div class="pdfViewerNative" hidden>
             <img class="pdfViewerImage" alt="PDF strana" draggable="false">
           </div>
           <iframe class="pdfViewerFrame" title="PDF dokument" hidden></iframe>
         </div>
 
-        <button type="button" class="pdfViewerFullscreenExit" aria-label="Opustit maximální zobrazení" hidden>←</button>
+        <button type="button" class="pdfViewerFullscreenExit" aria-label="${editorDocT('pdf.exitMaxView', 'Opustit maximální zobrazení')}" hidden>←</button>
       </section>`;
 
     document.body.appendChild(overlay);
@@ -831,7 +835,7 @@
       await vykresliAktualniPdfStranku();
     } catch (error) {
       console.error("PDF stránku se nepodařilo vykreslit:", error);
-      zobrazChybu("PDF", "Stránku se nepodařilo zobrazit.");
+      zobrazChybu("PDF", editorDocT("pdf.pageDisplayFailed", "Stránku se nepodařilo zobrazit."));
     }
   }
 
@@ -992,10 +996,10 @@
 
     if (jeNativniAndroid()) {
       prvky.info.innerHTML = hodnota === "vybrat"
-        ? "Po potvrzení vybereš cílové místo v Androidu."
-        : 'PDF se uloží bez dalšího okna do <strong>Stažené/LubaNote</strong>.';
+        ? editorDocT("pdf.chooseAndroidDestination", "Po potvrzení vybereš cílové místo v Androidu.")
+        : editorDocT("pdf.directDownloadInfoHtml", "PDF se uloží bez dalšího okna do <strong>Stažené/LubaNote</strong>.");
     } else {
-      prvky.info.textContent = "Vyber název PDF souboru.";
+      prvky.info.textContent = editorDocT("pdf.chooseFileName", "Vyber název PDF souboru.");
     }
   }
 
@@ -1008,28 +1012,28 @@
     modal.className = "pdfLubaModal";
     modal.hidden = true;
     modal.innerHTML = `
-      <section class="pdfLubaDialog" role="dialog" aria-modal="true" aria-label="Uložit PDF">
+      <section class="pdfLubaDialog" role="dialog" aria-modal="true" aria-label="${editorDocT('pdf.savePdf', 'Uložit PDF')}">
         <div class="pdfLubaDialogHeader">
           <div class="pdfLubaDialogIcon" aria-hidden="true">💾</div>
           <div>
-            <h3>Uložit PDF</h3>
+            <h3>${editorDocT('pdf.savePdf', 'Uložit PDF')}</h3>
             <p class="pdfLubaSaveInfo"></p>
           </div>
         </div>
 
         <label class="pdfLubaField">
-          <span>Název souboru</span>
+          <span>${editorDocT('documents.fileName', 'Název souboru')}</span>
           <input class="pdfLubaFileName" type="text" autocomplete="off" spellcheck="false" inputmode="text" data-luba-keyboard-field="pdf-file-name">
         </label>
 
-        <div class="pdfLubaSaveMode" role="radiogroup" aria-label="Kam uložit PDF">
-          <span class="pdfLubaSaveModeTitle">Kam uložit</span>
+        <div class="pdfLubaSaveMode" role="radiogroup" aria-label="${editorDocT('pdf.whereSave', 'Kam uložit PDF')}">
+          <span class="pdfLubaSaveModeTitle">${editorDocT('pdf.whereSaveShort', 'Kam uložit')}</span>
 
           <button type="button" class="pdfLubaSaveModeRow" data-save-mode="stazene" role="radio" aria-checked="true">
             <span class="pdfLubaSaveModeIcon" aria-hidden="true">⚡</span>
             <span>
               <strong>Stažené/LubaNote</strong>
-              <small>Uloží se hned, bez dalšího systémového okna.</small>
+              <small>${editorDocT('pdf.directSaveHint', 'Uloží se hned, bez dalšího systémového okna.')}</small>
             </span>
             <span class="pdfLubaRadio" aria-hidden="true"><i></i></span>
           </button>
@@ -1037,29 +1041,29 @@
           <button type="button" class="pdfLubaSaveModeRow" data-save-mode="vybrat" role="radio" aria-checked="false">
             <span class="pdfLubaSaveModeIcon" aria-hidden="true">📁</span>
             <span>
-              <strong>Vybrat jiné místo…</strong>
-              <small>Android otevře pouze výběr cílového souboru.</small>
+              <strong>${editorDocT('pdf.chooseOtherLocation', 'Vybrat jiné místo…')}</strong>
+              <small>${editorDocT('pdf.androidPickerHint', 'Android otevře pouze výběr cílového souboru.')}</small>
             </span>
             <span class="pdfLubaRadio" aria-hidden="true"><i></i></span>
           </button>
         </div>
 
         <div class="pdfLubaExportOptions" hidden>
-          <span class="pdfLubaSaveModeTitle">Nastavení PDF</span>
+          <span class="pdfLubaSaveModeTitle">${editorDocT('pdf.settings', 'Nastavení PDF')}</span>
 
           <div class="pdfLubaExportOption">
             <span>Orientace</span>
             <div class="pdfLubaSegments" role="radiogroup" aria-label="Orientace PDF">
-              <button type="button" data-pdf-orientation="portrait" role="radio">Na výšku</button>
-              <button type="button" data-pdf-orientation="landscape" role="radio">Na šířku</button>
+              <button type="button" data-pdf-orientation="portrait" role="radio">${editorDocT('pdf.portrait', 'Na výšku')}</button>
+              <button type="button" data-pdf-orientation="landscape" role="radio">${editorDocT('pdf.landscape', 'Na šířku')}</button>
             </div>
           </div>
 
           <div class="pdfLubaExportOption">
             <span>Okraje</span>
             <div class="pdfLubaSegments" role="radiogroup" aria-label="Okraje PDF">
-              <button type="button" data-pdf-margins="normal" role="radio">Normální</button>
-              <button type="button" data-pdf-margins="narrow" role="radio">Úzké</button>
+              <button type="button" data-pdf-margins="normal" role="radio">${editorDocT('reader.normal', 'Normální')}</button>
+              <button type="button" data-pdf-margins="narrow" role="radio">${editorDocT('reader.narrow', 'Úzké')}</button>
             </div>
           </div>
         </div>
@@ -1067,15 +1071,15 @@
         <button type="button" class="pdfLubaDirectTest" hidden>
           <span aria-hidden="true">🧪</span>
           <span>
-            <strong>Přímé PDF TEST</strong>
-            <small>Stejný Android tiskový engine, ale bez systémového náhledu.</small>
+            <strong>${editorDocT('pdf.directTest', 'Přímé PDF TEST')}</strong>
+            <small>${editorDocT('pdf.directTestHint', 'Stejný Android tiskový engine, ale bez systémového náhledu.')}</small>
           </span>
         </button>
 
         <div class="pdfLubaActions">
-          <button type="button" class="pdfLubaSecondary pdfLubaCancel">Zrušit</button>
-          <button type="button" class="pdfLubaSecondary pdfLubaPreview">Náhled</button>
-          <button type="button" class="pdfLubaPrimary pdfLubaConfirm">Uložit PDF</button>
+          <button type="button" class="pdfLubaSecondary pdfLubaCancel">${editorDocT('actions.cancel', 'Zrušit')}</button>
+          <button type="button" class="pdfLubaSecondary pdfLubaPreview">${editorDocT('pdf.preview', 'Náhled')}</button>
+          <button type="button" class="pdfLubaPrimary pdfLubaConfirm">${editorDocT('pdf.savePdf', 'Uložit PDF')}</button>
         </div>
       </section>`;
 
@@ -1181,7 +1185,7 @@
       const puvodniText = prvky.preview.textContent;
       prvky.preview.disabled = true;
       prvky.confirm.disabled = true;
-      prvky.preview.textContent = "Připravuji…";
+      prvky.preview.textContent = editorDocT("status.preparing", "Připravuji…");
 
       try {
         const hotovo = await akce(nazev, exportVolby);
@@ -1190,7 +1194,7 @@
         }
       } catch (error) {
         console.error("PDF náhled selhal:", error);
-        zobrazChybu("PDF", "Náhled PDF se nepodařilo vytvořit.");
+        zobrazChybu("PDF", editorDocT("pdf.previewFailed", "Náhled PDF se nepodařilo vytvořit."));
       } finally {
         prvky.preview.disabled = false;
         prvky.confirm.disabled = false;
@@ -1217,7 +1221,7 @@
 
       const puvodniHtml = prvky.test.innerHTML;
       prvky.test.disabled = true;
-      prvky.test.innerHTML = "<span aria-hidden=\"true\">⏳</span><span><strong>Generuji PDF TEST…</strong><small>Systémový náhled se nemá otevřít.</small></span>";
+      prvky.test.innerHTML = `<span aria-hidden="true">⏳</span><span><strong>${editorDocT("pdf.generatingTest", "Generuji PDF TEST…")}</strong><small>${editorDocT("pdf.systemPreviewShouldNotOpen", "Systémový náhled se nemá otevřít.")}</small></span>`;
 
       try {
         const hotovo = await akce(nazev, exportVolby);
@@ -1228,7 +1232,7 @@
         }
       } catch (error) {
         console.error("Přímý PDF TEST selhal:", error);
-        zobrazChybu("PDF TEST", "Přímé PDF se nepodařilo vytvořit.");
+        zobrazChybu("PDF TEST", editorDocT("pdf.directCreateFailed", "Přímé PDF se nepodařilo vytvořit."));
       } finally {
         prvky.test.disabled = false;
         prvky.test.innerHTML = puvodniHtml;
@@ -1376,28 +1380,28 @@
     modal.className = "pdfLubaModal";
     modal.hidden = true;
     modal.innerHTML = `
-      <section class="pdfLubaDialog pdfLubaSettingsDialog" role="dialog" aria-modal="true" aria-label="Nastavení PDF">
+      <section class="pdfLubaDialog pdfLubaSettingsDialog" role="dialog" aria-modal="true" aria-label="${editorDocT('pdf.settings', 'Nastavení PDF')}">
         <div class="pdfLubaDialogHeader">
           <div class="pdfLubaDialogIcon" aria-hidden="true">⚙️</div>
           <div>
-            <h3>Nastavení PDF</h3>
-            <p>Platí pro PDF prohlížeč v LubaNote.</p>
+            <h3>${editorDocT('pdf.settings', 'Nastavení PDF')}</h3>
+            <p>${editorDocT('pdf.settingsHint', 'Platí pro PDF prohlížeč v LubaNote.')}</p>
           </div>
         </div>
 
         <div class="pdfLubaSettingsList">
           <button type="button" class="pdfLubaSettingRow" data-setting="dvojtapFullscreen" role="switch" aria-checked="true">
             <span>
-              <strong>2× tap → celá obrazovka</strong>
-              <small>Dvojtap přepne maximální zobrazení PDF.</small>
+              <strong>${editorDocT('pdf.doubleTapFullscreen', '2× tap → celá obrazovka')}</strong>
+              <small>${editorDocT('pdf.doubleTapFullscreenHint', 'Dvojtap přepne maximální zobrazení PDF.')}</small>
             </span>
             <span class="pdfLubaSwitch" aria-hidden="true"><i></i></span>
           </button>
 
           <button type="button" class="pdfLubaSettingRow" data-setting="pamatovatZoom" role="switch" aria-checked="false">
             <span>
-              <strong>Zapamatovat poslední zoom</strong>
-              <small>Další PDF se otevře se stejným přiblížením.</small>
+              <strong>${editorDocT('pdf.rememberZoom', 'Zapamatovat poslední zoom')}</strong>
+              <small>${editorDocT('pdf.rememberZoomHint', 'Další PDF se otevře se stejným přiblížením.')}</small>
             </span>
             <span class="pdfLubaSwitch" aria-hidden="true"><i></i></span>
           </button>
@@ -1533,13 +1537,13 @@
         zobrazZpravuAplikace(
           "PDF",
           zpusobUlozeni === "vybrat"
-            ? "PDF bylo uloženo do vybraného místa."
-            : "PDF bylo uloženo do Stažené/LubaNote."
+            ? editorDocT("pdf.savedChosenLocation", "PDF bylo uloženo do vybraného místa.")
+            : editorDocT("pdf.savedDownloads", "PDF bylo uloženo do Stažené/LubaNote.")
         );
       }
     } catch (error) {
       console.error("Uložení otevřeného PDF selhalo:", error);
-      zobrazChybu("PDF", "PDF se nepodařilo uložit.");
+      zobrazChybu("PDF", editorDocT("pdf.saveFailed", editorDocT("pdf.saveFailed", "PDF se nepodařilo uložit.")));
     } finally {
       pdfViewerPrvky.save.disabled = false;
       pdfViewerPrvky.save.classList.remove("is-saving");
@@ -1552,13 +1556,13 @@
 
     const jeExportNahled = soubor.exportPreview === true;
     prvky.title.textContent = jeExportNahled
-      ? `Náhled • ${soubor.nazevSouboru || "PDF dokument"}`
+      ? editorDocT("pdf.previewNamed", "Náhled • {name}", { name: soubor.nazevSouboru || editorDocT("pdf.document", "PDF dokument") })
       : (soubor.nazevSouboru || "PDF dokument");
     prvky.title.title = soubor.nazevSouboru || "PDF dokument";
-    prvky.save.textContent = jeExportNahled ? "Uložit PDF" : "Uložit";
+    prvky.save.textContent = jeExportNahled ? editorDocT("pdf.savePdf", "Uložit PDF") : editorDocT("actions.save", "Uložit");
     prvky.save.setAttribute(
       "aria-label",
-      jeExportNahled ? "Uložit náhled PDF" : "Uložit kopii PDF"
+      jeExportNahled ? editorDocT("pdf.savePreview", "Uložit náhled PDF") : editorDocT("pdf.saveCopy", "Uložit kopii PDF")
     );
     prvky.overlay.hidden = false;
     prvky.overlay.classList.remove("is-fullscreen");
@@ -1764,7 +1768,7 @@
   }
 
   function vytvorHtmlDokument(data) {
-    const nazev = data.title || "LubaNote poznámka";
+    const nazev = data.title || editorDocT("documents.lubanoteNote", "LubaNote poznámka");
     const datum = [data.date, data.time]
       .filter(Boolean)
       .join(" ");
@@ -1772,7 +1776,7 @@
     const todoSekce = data.todos.length
       ? `
         <section class="ln-doc-todos">
-          <h2>Úkoly</h2>
+          <h2>${editorDocT('editor.tasks', 'Úkoly')}</h2>
           <ul>
             ${data.todos.map(vytvorTodoHtmlProDokument).join("")}
           </ul>
@@ -2039,7 +2043,7 @@
             {
               description: pripona === ".html"
                 ? "HTML dokument"
-                : "Textový dokument",
+                : editorDocT("documents.textDocument", "Textový dokument"),
               accept: {
                 [mimeType]: [pripona]
               }
@@ -2082,8 +2086,8 @@
   async function ulozDokument(format) {
     if (jeSecretEditor()) {
       zobrazChybu(
-        "Uložit jako",
-        "Secret poznámku nelze ukládat do externího dokumentu. Secret režim zůstává oddělený."
+        editorDocT("documents.saveAs", "Uložit jako"),
+        editorDocT("documents.secretExternalSaveBlocked", "Secret poznámku nelze ukládat do externího dokumentu. Secret režim zůstává oddělený.")
       );
       return;
     }
@@ -2102,7 +2106,7 @@
           povolitNastaveniExportu: true,
           povolitNahled: typeof plugin.vytvorPdfNahled === "function",
           povolitPrimePdfTest: false,
-          infoText: "PDF se uloží přímo do Stažené/LubaNote bez systémového tiskového náhledu.",
+          infoText: editorDocT("pdf.directSaveNoPreview", "PDF se uloží přímo do Stažené/LubaNote bez systémového tiskového náhledu."),
           poNahledu: async (nazev, exportVolby) => {
             try {
               const html = vytvorPdfHtmlDokument(data, exportVolby);
@@ -2127,7 +2131,7 @@
               return true;
             } catch (error) {
               console.error("PDF náhled se nepodařilo vytvořit:", error);
-              zobrazChybu("PDF", "Náhled PDF se nepodařilo vytvořit.");
+              zobrazChybu("PDF", editorDocT("pdf.previewFailed", "Náhled PDF se nepodařilo vytvořit."));
               return false;
             }
           },
@@ -2147,7 +2151,7 @@
               if (typeof zobrazZpravuAplikace === "function") {
                 zobrazZpravuAplikace(
                   "PDF",
-                  "PDF bylo uloženo přímo do Stažené/LubaNote."
+                  editorDocT("pdf.savedDirect", "PDF bylo uloženo přímo do Stažené/LubaNote.")
                 );
               }
 
@@ -2156,7 +2160,7 @@
               console.error("Přímé PDF se nepodařilo uložit:", error);
               zobrazChybu(
                 "PDF",
-                "PDF se nepodařilo uložit."
+                editorDocT("pdf.saveFailed", "PDF se nepodařilo uložit.")
               );
               return false;
             }
@@ -2234,10 +2238,10 @@
           if (file.size > limit) {
             uklid();
             zobrazChybu(
-              "Otevřít dokument",
+              editorDocT("documents.openDocument", "Otevřít dokument"),
               pdf
-                ? "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB."
-                : "Soubor je příliš velký. Maximální velikost je 20 MB."
+                ? editorDocT("documents.pdfTooLargeWeb", "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB.")
+                : editorDocT("documents.fileTooLarge20", "Soubor je příliš velký. Maximální velikost je 20 MB.")
             );
             resolve(null);
             return;
@@ -2310,10 +2314,10 @@
 
         if (file.size > limit) {
           zobrazChybu(
-            "Otevřít dokument",
+            editorDocT("documents.openDocument", "Otevřít dokument"),
             pdf
-              ? "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB."
-              : "Soubor je příliš velký. Maximální velikost je 20 MB."
+              ? editorDocT("documents.pdfTooLargeWeb", "PDF je příliš velké. Maximální velikost ve webové verzi je 100 MB.")
+              : editorDocT("documents.fileTooLarge20", "Soubor je příliš velký. Maximální velikost je 20 MB.")
           );
           return null;
         }
@@ -2467,7 +2471,7 @@
 
     if (!jeHtml) {
       return {
-        title: nazevBezPripony(nazevSouboru) || "Nový dokument",
+        title: nazevBezPripony(nazevSouboru) || editorDocT("documents.newDocument", "Nový dokument"),
         richContent: textNaHtml(obsah),
         todos: [],
         date: "",
@@ -2496,7 +2500,7 @@
         }
       } catch (error) {
         console.warn(
-          "Metadata LubaNote dokumentu nešla načíst, použiji běžný HTML import.",
+          editorDocT("documents.metadataFallback", "Metadata LubaNote dokumentu nešla načíst, použiji běžný HTML import."),
           error
         );
       }
@@ -2511,7 +2515,7 @@
       String(doc.title || "").trim() ||
       String(prvniH1?.textContent || "").trim() ||
       nazevBezPripony(nazevSouboru) ||
-      "Nový dokument";
+      editorDocT("documents.newDocument", "Nový dokument");
 
     if (prvniH1) {
       prvniH1.remove();
@@ -2619,8 +2623,8 @@
 
     if (!otevreno) {
       window.zobrazZpravuAplikace?.(
-        "Otevřít dokument",
-        "Dokument obsahuje prvek, který Core V2 neumí bezpečně importovat. Data nebyla změněna."
+        editorDocT("documents.openDocument", "Otevřít dokument"),
+        editorDocT("documents.unsafeElement", "Dokument obsahuje prvek, který Core V2 neumí bezpečně importovat. Data nebyla změněna.")
       );
       return false;
     }
@@ -2634,8 +2638,8 @@
   async function otevriDokument() {
     if (jeSecretEditor()) {
       zobrazChybu(
-        "Otevřít dokument",
-        "Externí dokumenty nejsou v Secret režimu dostupné. Secret zůstává oddělený."
+        editorDocT("documents.openDocument", "Otevřít dokument"),
+        editorDocT("documents.secretExternalOpenBlocked", "Externí dokumenty nejsou v Secret režimu dostupné. Secret zůstává oddělený.")
       );
       return;
     }
@@ -2647,8 +2651,8 @@
     } catch (error) {
       console.error("Otevření dokumentu selhalo:", error);
       zobrazChybu(
-        "Otevřít dokument",
-        "Soubor se nepodařilo otevřít."
+        editorDocT("documents.openDocument", "Otevřít dokument"),
+        editorDocT("documents.openFailed", "Soubor se nepodařilo otevřít.")
       );
       return;
     }
@@ -2663,8 +2667,8 @@
       } catch (error) {
         console.error("PDF se nepodařilo otevřít:", error);
         zobrazChybu(
-          "Otevřít PDF",
-          "PDF se nepodařilo zobrazit. Soubor může být poškozený nebo chráněný heslem."
+          editorDocT("documents.openPdf", "Otevřít PDF"),
+          editorDocT("documents.pdfDisplayFailed", "PDF se nepodařilo zobrazit. Soubor může být poškozený nebo chráněný heslem.")
         );
       }
       return;
@@ -2677,8 +2681,8 @@
     } catch (error) {
       console.error("Čtení dokumentu selhalo:", error);
       zobrazChybu(
-        "Otevřít dokument",
-        "Obsah souboru není možné bezpečně načíst."
+        editorDocT("documents.openDocument", "Otevřít dokument"),
+        editorDocT("documents.contentUnsafe", "Obsah souboru není možné bezpečně načíst.")
       );
       return;
     }
@@ -2702,27 +2706,27 @@
   function otevriVolbuUlozeni() {
     if (jeSecretEditor()) {
       zobrazChybu(
-        "Uložit jako",
-        "Secret poznámku nelze ukládat do externího dokumentu."
+        editorDocT("documents.saveAs", "Uložit jako"),
+        editorDocT("documents.secretExternalSaveBlockedShort", "Secret poznámku nelze ukládat do externího dokumentu.")
       );
       return;
     }
 
     if (typeof window.otevriVyberovyModal === "function") {
       window.otevriVyberovyModal({
-        nadpis: "Uložit jako",
+        nadpis: editorDocT("documents.saveAs", "Uložit jako"),
         moznosti: [
           {
             hodnota: "html",
-            popisek: "HTML – zachovat formátování"
+            popisek: editorDocT("documents.saveHtml", "HTML – zachovat formátování")
           },
           {
             hodnota: "txt",
-            popisek: "TXT – prostý text"
+            popisek: editorDocT("documents.saveTxt", "TXT – prostý text")
           },
           {
             hodnota: "pdf",
-            popisek: "PDF – hotový dokument"
+            popisek: editorDocT("documents.savePdf", "PDF – hotový dokument")
           }
         ],
         poVyberu: async (format) => {
@@ -2731,8 +2735,8 @@
           } catch (error) {
             console.error("Uložení dokumentu selhalo:", error);
             zobrazChybu(
-              "Uložit jako",
-              "Dokument se nepodařilo uložit."
+              editorDocT("documents.saveAs", "Uložit jako"),
+              editorDocT("documents.saveFailed", "Dokument se nepodařilo uložit.")
             );
           }
         }
@@ -2743,8 +2747,8 @@
     ulozDokument("html").catch((error) => {
       console.error("Uložení dokumentu selhalo:", error);
       zobrazChybu(
-        "Uložit jako",
-        "Dokument se nepodařilo uložit."
+        editorDocT("documents.saveAs", "Uložit jako"),
+        editorDocT("documents.saveFailed", "Dokument se nepodařilo uložit.")
       );
     });
   }

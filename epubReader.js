@@ -11,6 +11,9 @@
 (() => {
   'use strict';
 
+  const epubT = (klic, zaloha, hodnoty = {}) =>
+    window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
   const MAX_EPUB_PART_BYTES = 32 * 1024 * 1024;
   const MAX_EPUB_ZIP_ENTRIES = 12000;
 
@@ -104,7 +107,7 @@
     }
 
     if ((polozka.flags & 0x1) !== 0) {
-      throw new Error('Zašifrovaný EPUB není podporovaný.');
+      throw new Error(epubT('documents.epubEncryptedUnsupported', 'Zašifrovaný EPUB není podporovaný.'));
     }
 
     if (polozka.puvodniVelikost > MAX_EPUB_PART_BYTES) {
@@ -131,7 +134,7 @@
     }
 
     if (typeof DecompressionStream !== 'function') {
-      throw new Error('Tento WebView neumí rozbalit EPUB.');
+      throw new Error(epubT('documents.epubWebViewUnsupported', 'Tento WebView neumí rozbalit EPUB.'));
     }
 
     const proud = new Blob([komprimovana]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
@@ -223,14 +226,14 @@
     const zip = vytvorZipIndex(arrayBuffer);
     const mimetype = await nactiText(zip, 'mimetype', false);
     if (mimetype && mimetype.trim() !== 'application/epub+zip') {
-      throw new Error('Soubor není platný EPUB.');
+      throw new Error(epubT('documents.epubInvalid', 'Soubor není platný EPUB.'));
     }
 
     const containerText = await nactiText(zip, 'META-INF/container.xml', true);
     const container = xml(containerText, 'EPUB container');
     const rootfile = potomci(container, 'rootfile')[0];
     const packagePath = normalizujCestu(attr(rootfile, 'full-path'));
-    if (!packagePath) throw new Error('EPUB neobsahuje cestu k OPF balíčku.');
+    if (!packagePath) throw new Error(epubT('documents.epubMissingPackage', 'EPUB neobsahuje cestu k OPF balíčku.'));
 
     const opfText = await nactiText(zip, packagePath, true);
     const opf = xml(opfText, 'EPUB OPF');
@@ -266,7 +269,7 @@
       spine.push({ ...item, linear: attr(itemref, 'linear') !== 'no' });
     }
 
-    if (!spine.length) throw new Error('EPUB nemá čitelnou posloupnost kapitol.');
+    if (!spine.length) throw new Error(epubT('documents.epubNoChapters', 'EPUB nemá čitelnou posloupnost kapitol.'));
 
     const tocMap = await nactiObsah(zip, packagePath, opf, manifest, spineNode);
     const chapters = spine.map((item, index) => ({

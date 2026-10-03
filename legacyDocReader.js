@@ -12,6 +12,9 @@
 (() => {
   'use strict';
 
+  const docReaderT = (klic, zaloha, hodnoty = {}) =>
+    window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
   const MAX_DOC_BYTES = 24 * 1024 * 1024;
   const MAX_STREAM_BYTES = 64 * 1024 * 1024;
   const MAX_CHAIN_SECTORS = 160000;
@@ -109,8 +112,8 @@
   class CfbReader {
     constructor(buffer) {
       if (!(buffer instanceof ArrayBuffer)) chyba('DOC data nejsou dostupná.');
-      if (buffer.byteLength < 512) chyba('Soubor není platný Word DOC.');
-      if (buffer.byteLength > MAX_DOC_BYTES) chyba('DOC je příliš velký. Maximální velikost je 24 MB.');
+      if (buffer.byteLength < 512) chyba(docReaderT('documents.docInvalid', 'Soubor není platný Word DOC.'));
+      if (buffer.byteLength > MAX_DOC_BYTES) chyba(docReaderT('documents.docTooLarge', 'DOC je příliš velký. Maximální velikost je 24 MB.'));
 
       this.bytes = new Uint8Array(buffer);
       this.view = new DataView(buffer);
@@ -130,7 +133,7 @@
     _parseHeaderAndFat() {
       const sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
       for (let i = 0; i < sig.length; i += 1) {
-        if (this.bytes[i] !== sig[i]) chyba('Soubor není starý Word DOC (OLE/CFB).');
+        if (this.bytes[i] !== sig[i]) chyba(docReaderT('documents.docNotLegacy', 'Soubor není starý Word DOC (OLE/CFB).'));
       }
 
       const sectorShift = u16(this.view, 0x1E);
@@ -302,11 +305,11 @@
   function parsujFib(wordBytes) {
     if (!(wordBytes instanceof Uint8Array) || wordBytes.byteLength < 160) chyba('DOC nemá platný WordDocument stream.');
     const view = new DataView(wordBytes.buffer, wordBytes.byteOffset, wordBytes.byteLength);
-    if (u16(view, 0) !== 0xA5EC) chyba('Soubor není podporovaný Word DOC.');
+    if (u16(view, 0) !== 0xA5EC) chyba(docReaderT('documents.docUnsupported', 'Soubor není podporovaný Word DOC.'));
 
     const nFib = u16(view, 2);
     if (nFib < 0x00C1) {
-      chyba('Tento první DOC viewer podporuje Word 97–2003. Starší Word 6/95 zatím ne.');
+      chyba(docReaderT('documents.docOldUnsupported', 'Tento první DOC viewer podporuje Word 97–2003. Starší Word 6/95 zatím ne.'));
     }
 
     const lid = u16(view, 6);
@@ -465,7 +468,7 @@
       text = vytahniTextZPieceTable(word, table, fib);
     }
     if (!text) text = vytahniJednoduchyText(word, fib);
-    if (!text) chyba('DOC neobsahuje čitelný text nebo používá variantu, kterou viewer zatím neumí.');
+    if (!text) chyba(docReaderT('documents.docNoReadableText', 'DOC neobsahuje čitelný text nebo používá variantu, kterou viewer zatím neumí.'));
 
     return {
       text,

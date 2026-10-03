@@ -528,7 +528,10 @@ if (calendarMonthTitle) {
   if (RYCHLY_VYBER_MESICE_AKTIVNI) {
     calendarMonthTitle.setAttribute("role", "button");
     calendarMonthTitle.setAttribute("tabindex", "0");
-    calendarMonthTitle.setAttribute("aria-label", "Vybrat měsíc");
+    calendarMonthTitle.setAttribute(
+      "aria-label",
+      window.LubaNoteI18n?.t?.("calendar.chooseMonth", "Vybrat měsíc") || "Vybrat měsíc"
+    );
   } else {
     calendarMonthTitle.removeAttribute("role");
     calendarMonthTitle.removeAttribute("tabindex");

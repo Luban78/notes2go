@@ -1,3 +1,6 @@
+const tagsT = (klic, zaloha, hodnoty = {}) =>
+  window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+
 let activeArea = "private";
 let activeTags = [];
 let activeAreaFilter = "all";
@@ -1589,11 +1592,11 @@ function nastavPovinneHlavniHeslo(aktivni, rezim = "vytvorit") {
   if (biometricEnableRow) biometricEnableRow.hidden = true;
 
   const nadpis = jeNoveZarizeni
-    ? "Odemkni toto zařízení"
-    : "Vytvoř hlavní heslo";
+    ? tagsT("secret.deviceUnlockTitle", "Odemkni toto zařízení")
+    : tagsT("secret.createMainTitle", "Vytvoř hlavní heslo");
   const textTlacitka = jeNoveZarizeni
-    ? "Odemknout a pokračovat"
-    : "Vytvořit a pokračovat";
+    ? tagsT("secret.unlockContinue", "Odemknout a pokračovat")
+    : tagsT("secret.createContinue", "Vytvořit a pokračovat");
 
   if (window.LubaNoteIcons?.nastavObsahSIkonou) {
     window.LubaNoteIcons.nastavObsahSIkonou(
@@ -1612,8 +1615,8 @@ function nastavPovinneHlavniHeslo(aktivni, rezim = "vytvorit") {
   }
 
   secretUnlockDescription.textContent = jeNoveZarizeni
-    ? "Tento účet už hlavní heslo má. Zadej ho jednou, aby LubaNote bezpečně připravila Secret režim a E2E fotografie na tomto zařízení. Teprve potom se spustí synchronizace."
-    : "Než začneš LubaNote používat, vytvoř hlavní heslo. Chrání Secret režim a E2E šifrované fotografie. Není to přihlašovací heslo a LubaNote ho neukládá do cloudu.";
+    ? tagsT("secret.deviceUnlockDescription", "Tento účet už hlavní heslo má. Zadej ho jednou, aby LubaNote bezpečně připravila Secret režim a E2E fotografie na tomto zařízení. Teprve potom se spustí synchronizace.")
+    : tagsT("secret.createMainDescription", "Než začneš LubaNote používat, vytvoř hlavní heslo. Chrání Secret režim a E2E šifrované fotografie. Není to přihlašovací heslo a LubaNote ho neukládá do cloudu.");
 
   secretUnlockModal.hidden = false;
 
@@ -1814,7 +1817,7 @@ confirmDeleteTagButton?.addEventListener("click", async () => {
   
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Mažu štítek…",
+      tagsT("tags.deleting", "Mažu štítek…"),
       300
     ) || (() => {});
   
@@ -1877,10 +1880,10 @@ saveNewTagModalButton.addEventListener("click", async () => {
     newTagModal.hidden = true;
     
     zobrazZpravuAplikace(
-      vytvarimeTajnyStitek ?
-      "Tajné štítky" :
-      "Štítky",
-      "Štítek s tímto názvem už existuje."
+      vytvarimeTajnyStitek
+        ? tagsT("secret.tags", "Tajné štítky")
+        : tagsT("editor.tags", "Štítky"),
+      tagsT("tags.duplicate", "Štítek s tímto názvem už existuje.")
     );
     
     vytvarimeTajnyStitek = false;
@@ -1893,11 +1896,11 @@ saveNewTagModalButton.addEventListener("click", async () => {
     saveNewTagModalButton.textContent;
   
   saveNewTagModalButton.textContent =
-    "Ukládám…";
+    tagsT("tags.savingShort", "Ukládám…");
   
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Ukládám štítek…",
+      tagsT("tags.saving", "Ukládám štítek…"),
       300
     ) || (() => {});
   
@@ -2040,9 +2043,9 @@ function aktualizujSipkuRolovaniStitku() {
 
   tagScrollButton.setAttribute(
     "aria-label",
-    jsmeDole ?
-      "Posunout štítky nahoru" :
-      "Posunout štítky dolů"
+    jsmeDole
+      ? tagsT("tags.moveUp", "Posunout štítky nahoru")
+      : tagsT("tags.moveDown", "Posunout štítky dolů")
   );
 }
 
@@ -2714,8 +2717,8 @@ async function ulozPoradiStitku(poradiViditelnychId) {
       syncedTags = puvodniStitky;
       renderTagFilters();
       zobrazZpravuAplikace(
-        "Štítky",
-        "Pořadí lokálních štítků se nepodařilo uložit."
+        tagsT("editor.tags", "Štítky"),
+        tagsT("tags.orderSaveFailed", "Pořadí lokálních štítků se nepodařilo uložit.")
       );
       return false;
     }
@@ -2735,7 +2738,7 @@ async function ulozPoradiStitku(poradiViditelnychId) {
 
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Ukládám pořadí štítků…",
+      tagsT("tags.savingOrder", "Ukládám pořadí štítků…"),
       350
     ) || (() => {});
 
@@ -2791,8 +2794,8 @@ async function ulozPoradiStitku(poradiViditelnychId) {
       renderTagFilters();
 
       zobrazZpravuAplikace(
-        "Štítky",
-        "Pořadí štítků se nepodařilo uložit."
+        tagsT("editor.tags", "Štítky"),
+        tagsT("tags.orderSaveFailed", "Pořadí štítků se nepodařilo uložit.")
       );
 
       return false;
@@ -3829,7 +3832,7 @@ function vykresliSpravuStitku() {
     
     barvaTlacitko.setAttribute(
       "aria-label",
-      `Barva štítku ${tag.name}`
+      tagsT("tags.colorAria", "Barva štítku {name}", { name: tag.name })
     );
     barvaTlacitko.addEventListener("click", () => {
       const staraPaleta =
@@ -3867,9 +3870,10 @@ function vykresliSpravuStitku() {
         volba.className = "manageTagColorOption";
         volba.dataset.tagColor = barva;
         
+        const popisBarvy = tagsT(`tags.color.${barva}`, barva);
         volba.setAttribute(
           "aria-label",
-          `Nastavit barvu štítku na ${barva}`
+          tagsT("tags.setColorAria", "Nastavit barvu štítku na {color}", { color: popisBarvy })
         );
         
         volba.addEventListener("click", async () => {
@@ -3904,8 +3908,7 @@ function vykresliSpravuStitku() {
     }
     upravitTlacitko.setAttribute(
       "aria-label",
-      
-      `Přejmenovat štítek ${tag.name}`
+      tagsT("tags.renameAria", "Přejmenovat štítek {name}", { name: tag.name })
     );
     let vstup = null;
     
@@ -3950,7 +3953,7 @@ function vykresliSpravuStitku() {
       
       const ukonciCekani =
         window.LubaNoteUI?.zacniCekaniAkce?.(
-          "Přejmenovávám štítek…",
+          tagsT("tags.renaming", "Přejmenovávám štítek…"),
           300
         ) || (() => {});
       
@@ -3980,14 +3983,14 @@ function vykresliSpravuStitku() {
     }
     smazatTlacitko.setAttribute(
       "aria-label",
-      `Smazat štítek ${tag.name}`
+      tagsT("tags.deleteAria", "Smazat štítek {name}", { name: tag.name })
     );
     
     smazatTlacitko.addEventListener("click", () => {
       tagKeSmazani = tag;
       
       deleteTagConfirmText.textContent =
-        `Opravdu chceš smazat štítek „${tag.name}“?`;
+        tagsT("tags.deleteConfirm", "Opravdu chceš smazat štítek „{name}“?", { name: tag.name });
       
       deleteTagConfirmModal.hidden = false;
     });
@@ -4179,8 +4182,8 @@ async function prejmenujStitek(tag, novyNazev) {
   
   if (uzExistuje) {
     zobrazZpravuAplikace(
-      "Štítky",
-      "Štítek s tímto názvem už existuje."
+      tagsT("editor.tags", "Štítky"),
+      tagsT("tags.duplicate", "Štítek s tímto názvem už existuje.")
     );
     
     return false;
@@ -4194,8 +4197,8 @@ async function prejmenujStitek(tag, novyNazev) {
       !tajnySifrovaciKlic
     ) {
       zobrazZpravuAplikace(
-        "Tajné štítky",
-        "Nejdřív odemkni tajný režim."
+        tagsT("secret.tags", "Tajné štítky"),
+        tagsT("tags.unlockFirst", "Nejdřív odemkni tajný režim.")
       );
 
       return false;
@@ -4952,15 +4955,15 @@ async function otevriTajneStitky() {
       window.LubaNoteIcons.nastavObsahSIkonou(
         secretUnlockTitle,
         "zamek",
-        "Odemknout tajný režim"
+        tagsT("secret.unlockMode", "Odemknout tajný režim")
       );
     } else {
       secretUnlockTitle.textContent =
-        "Odemknout tajný režim";
+        tagsT("secret.unlockMode", "Odemknout tajný režim");
     }
     
     secretUnlockDescription.textContent =
-      "Zadej hlavní heslo.";
+      tagsT("secret.enterMain", "Zadej hlavní heslo.");
     
     secretUnlockConfirmInput.hidden = true;
     
@@ -4968,26 +4971,26 @@ async function otevriTajneStitky() {
       window.LubaNoteIcons.nastavObsahSIkonou(
         confirmSecretUnlockButton,
         "odemceno",
-        "Odemknout"
+        tagsT("secret.unlock", "Odemknout")
       );
     } else {
       confirmSecretUnlockButton.textContent =
-        "Odemknout";
+        tagsT("secret.unlock", "Odemknout");
     }
   } else {
     if (window.LubaNoteIcons?.nastavObsahSIkonou) {
       window.LubaNoteIcons.nastavObsahSIkonou(
         secretUnlockTitle,
         "zamek",
-        "Vytvořit hlavní heslo"
+        tagsT("secret.createMainTitle", "Vytvořit hlavní heslo")
       );
     } else {
       secretUnlockTitle.textContent =
-        "Vytvořit hlavní heslo";
+        tagsT("secret.createMainTitle", "Vytvořit hlavní heslo");
     }
     
     secretUnlockDescription.textContent =
-      "Vytvoř hlavní heslo pro tajné poznámky.";
+      tagsT("secret.createMainForNotes", "Vytvoř hlavní heslo pro tajné poznámky.");
     
     secretUnlockConfirmInput.hidden = false;
     
@@ -4995,11 +4998,11 @@ async function otevriTajneStitky() {
       window.LubaNoteIcons.nastavObsahSIkonou(
         confirmSecretUnlockButton,
         "zamek",
-        "Vytvořit heslo"
+        tagsT("secret.createPassword", "Vytvořit heslo")
       );
     } else {
       confirmSecretUnlockButton.textContent =
-        "Vytvořit heslo";
+        tagsT("secret.createPassword", "Vytvořit heslo");
     }
   }
   
@@ -5174,8 +5177,8 @@ function updateTagFilterUI() {
 function openNewTagEditor() {
   if (activeTags.length >= 2) {
     zobrazZpravuAplikace(
-      "Štítky",
-      "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+      tagsT("editor.tags", "Štítky"),
+      tagsT("tags.maxTwo", "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.")
     );
     return;
   }
@@ -5221,8 +5224,8 @@ async function ulozBeznyStitekZeEditoru(nazev) {
 
   if (!user) {
     zobrazZpravuAplikace(
-      "Štítky",
-      "Nový štítek se nepodařilo uložit."
+      tagsT("editor.tags", "Štítky"),
+      tagsT("tags.newSaveFailed", "Nový štítek se nepodařilo uložit.")
     );
     return null;
   }
@@ -5236,8 +5239,8 @@ async function ulozBeznyStitekZeEditoru(nazev) {
 
     if (!lokalniStitek) {
       zobrazZpravuAplikace(
-        "Štítky",
-        "Nový lokální štítek se nepodařilo uložit."
+        tagsT("editor.tags", "Štítky"),
+        tagsT("tags.newLocalSaveFailed", "Nový lokální štítek se nepodařilo uložit.")
       );
       return null;
     }
@@ -5263,8 +5266,8 @@ async function ulozBeznyStitekZeEditoru(nazev) {
     );
 
     zobrazZpravuAplikace(
-      "Štítky",
-      "Nový štítek se nepodařilo uložit. Zkontroluj připojení a zkus to znovu."
+      tagsT("editor.tags", "Štítky"),
+      tagsT("tags.newSaveFailedConnection", "Nový štítek se nepodařilo uložit. Zkontroluj připojení a zkus to znovu.")
     );
     return null;
   }
@@ -5301,8 +5304,8 @@ async function createNewTag() {
   ) {
     if (activeTags.length >= 2) {
       zobrazZpravuAplikace(
-        "Štítky",
-        "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+        tagsT("editor.tags", "Štítky"),
+        tagsT("tags.maxTwo", "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.")
       );
       closeNewTagEditor();
     }
@@ -5320,7 +5323,7 @@ async function createNewTag() {
 
   const ukonciCekani =
     window.LubaNoteUI?.zacniCekaniAkce?.(
-      "Ukládám štítek…",
+      tagsT("tags.saving", "Ukládám štítek…"),
       300
     ) || (() => {});
 
@@ -5474,8 +5477,8 @@ if (
     activeTags.length >= 2
   ) {
     zobrazZpravuAplikace(
-      "Štítky",
-      "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber."
+      tagsT("editor.tags", "Štítky"),
+      tagsT("tags.maxTwo", "Poznámka může mít maximálně 2 štítky. Nejdřív jeden odeber.")
     );
     
     return;
@@ -5511,8 +5514,8 @@ createTagButton.addEventListener("pointerdown", (event) => {
     tajnyLongPressSpusten = true;
     
     zobrazZpravuAplikace(
-      "Tajné štítky",
-      "Dlouhý stisk funguje."
+      tagsT("secret.tags", "Tajné štítky"),
+      tagsT("tags.longPressWorks", "Dlouhý stisk funguje.")
     );
   }, CAS_TAJNEHO_STISKU);
 });
@@ -5661,7 +5664,10 @@ tagFilterButtons.addEventListener("click", async (event) => {
     ukonciRezimVyberuKaret();
     
     zobrazPotvrzeniAkce(
-      `Štítek „${vybranyStitek}“ přiřazen ${pocetOznacenych} kartám`
+      tagsT("tags.assignedMany", "Štítek „{name}“ přiřazen {count} kartám", {
+        name: vybranyStitek,
+        count: pocetOznacenych
+      })
     );
     
     return;
@@ -5702,8 +5708,8 @@ async function vytvorTajnyStitek(nazev) {
     !tajnySifrovaciKlic
   ) {
     zobrazZpravuAplikace(
-      "Tajné štítky",
-      "Nejdřív odemkni tajný režim."
+      tagsT("secret.tags", "Tajné štítky"),
+      tagsT("tags.unlockFirst", "Nejdřív odemkni tajný režim.")
     );
 
     return false;
@@ -5726,8 +5732,8 @@ async function vytvorTajnyStitek(nazev) {
 
   if (uzExistuje) {
     zobrazZpravuAplikace(
-      "Tajné štítky",
-      "Štítek s tímto názvem už existuje."
+      tagsT("secret.tags", "Tajné štítky"),
+      tagsT("tags.duplicate", "Štítek s tímto názvem už existuje.")
     );
 
     return false;
