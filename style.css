@@ -15617,3 +15617,143 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     column-gap: calc(max(12px, 0.75rem) + 4px) !important;
   }
 }\n\n/* ==========================================================\n   PATCH 661K – AKTIVNÍ PŘIPOMÍNKY / POZDĚJI\n   ----------------------------------------------------------\n   Dnešek a Zítra zůstávají přesně podle 661J. Pouze řádky\n   POZDĚJI s datumem dostanou širší pevný sloupec odvozený od\n   velikosti písma. Datum proto nepřetéká do názvu a všechny\n   názvy začínají na stejném X i při větším globálním fontu.\n   ========================================================== */\n@media (max-width: 1099px) {\n  .reminderItemLaterDate .reminderItemSwipeContent {\n    grid-template-columns: 9.5ch minmax(0, 1fr) max(30px, 1.9rem) !important;\n  }\n\n  .reminderItemLaterDate .reminderItemTime {\n    min-width: 0 !important;\n    width: auto !important;\n    padding-right: 0 !important;\n  }\n}\n
+
+/* ==================================================
+   PATCH 675 – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
+   Non-destructive CSS Highlight API; obsah editoru se nemění.
+================================================== */
+.editorTopBar .editorFindButton {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-editor-background) 88%, var(--color-surface));
+  color: var(--color-editor-text);
+}
+
+.editorTopBar .editorFindButton[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-editor-background));
+  color: var(--color-accent);
+}
+
+.editorFindBar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  margin: 2px 0 6px;
+  padding: 3px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-editor-background) 94%, var(--color-surface));
+}
+
+.editorFindBar[hidden] {
+  display: none !important;
+}
+
+.editorFindInputWrap {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  height: 38px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
+  border-radius: 10px;
+  background: var(--color-editor-background);
+}
+
+.editorFindMagnifier,
+.editorFindMagnifier svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+#editorFindInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  margin: 0;
+  padding: 5px 0 3px;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-editor-text);
+  font: inherit;
+  font-size: 0.94rem;
+  line-height: 1.25;
+}
+
+.editorFindCount {
+  flex: 0 0 auto;
+  min-width: 42px;
+  text-align: right;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.editorFindNav,
+.editorFindClose {
+  display: inline-flex;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-editor-text);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.editorFindNav:disabled {
+  opacity: 0.28;
+}
+
+.editorFindClose {
+  font-size: 1.55rem;
+  font-weight: 400;
+}
+
+::highlight(lubanote-find-all) {
+  background: color-mix(in srgb, var(--color-accent) 34%, transparent);
+}
+
+::highlight(lubanote-find-current) {
+  background: color-mix(in srgb, var(--color-accent) 72%, transparent);
+  color: var(--color-editor-text);
+}
+
+@media (max-width: 600px) {
+  .editorFindBar {
+    gap: 3px;
+    padding-inline: 2px;
+  }
+
+  .editorFindNav,
+  .editorFindClose {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .editorFindCount {
+    min-width: 38px;
+    font-size: 0.74rem;
+  }
+}

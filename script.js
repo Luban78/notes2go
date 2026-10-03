@@ -3859,6 +3859,16 @@ function zpracujAndroidZpet() {
     return true;
   }
   
+  /* PATCH 675 – při otevřeném hledání v aktuální poznámce Back nejdřív
+     zavře hledací řádek. Editor samotný zůstane otevřený. */
+  if (
+    taskModal &&
+    !taskModal.hidden &&
+    window.LubaNoteEditorFind?.zpracujSystemoveZpet?.() === true
+  ) {
+    return true;
+  }
+
   /* PATCH 671A – Android Back má při aktivním TODO/Bullet selection nejdřív
      zrušit samotný výběr. Editor se zavře až případným dalším stiskem Back.
      Tím se Back chová stejně přirozeně jako zrušení selection tapem mimo. */
