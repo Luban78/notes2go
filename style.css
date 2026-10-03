@@ -15619,7 +15619,7 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }\n\n/* ==========================================================\n   PATCH 661K – AKTIVNÍ PŘIPOMÍNKY / POZDĚJI\n   ----------------------------------------------------------\n   Dnešek a Zítra zůstávají přesně podle 661J. Pouze řádky\n   POZDĚJI s datumem dostanou širší pevný sloupec odvozený od\n   velikosti písma. Datum proto nepřetéká do názvu a všechny\n   názvy začínají na stejném X i při větším globálním fontu.\n   ========================================================== */\n@media (max-width: 1099px) {\n  .reminderItemLaterDate .reminderItemSwipeContent {\n    grid-template-columns: 9.5ch minmax(0, 1fr) max(30px, 1.9rem) !important;\n  }\n\n  .reminderItemLaterDate .reminderItemTime {\n    min-width: 0 !important;\n    width: auto !important;\n    padding-right: 0 !important;\n  }\n}\n
 
 /* ==================================================
-   PATCH 675C – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
+   PATCH 675D – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
    Jeden kompaktní panel: pole + počet + šipky + zavřít.
    Non-destructive CSS Highlight API; obsah editoru se nemění.
 ================================================== */
@@ -15733,6 +15733,37 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 .editorFindClose {
   font-size: 1.82rem;
   font-weight: 400;
+}
+
+
+/* 675D – optické doladění hledání.
+   Vyšší specificita je záměrná: původní .editorTopBar .editorQuickTool svg
+   jinak omezuje lupu v Tools na 22 px. */
+.editorTopBar .editorQuickTool.editorFindButton .lubaActionIcon,
+.editorTopBar .editorQuickTool.editorFindButton .lubaActionIcon svg {
+  width: 2.05rem;
+  height: 2.05rem;
+  min-width: 2.05rem;
+  min-height: 2.05rem;
+}
+
+.editorFindMagnifier,
+.editorFindMagnifier svg {
+  flex-basis: 1.95rem;
+  width: 1.95rem;
+  height: 1.95rem;
+  min-width: 1.95rem;
+  min-height: 1.95rem;
+}
+
+#editorFindInput {
+  font-size: 1.14rem;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  line-height: normal;
+  transform: translateY(0.11rem);
 }
 
 ::highlight(lubanote-find-all) {
