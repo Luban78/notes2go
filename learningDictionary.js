@@ -877,9 +877,17 @@
 
   function popisekPoctuSlov(count) {
     const n = Math.max(0, Number(count) || 0);
-    if (n === 1) return '1 slovo';
-    if (n >= 2 && n <= 4) return `${n} slova`;
-    return `${n} slov`;
+    let kategorie = 'other';
+    try {
+      kategorie = new Intl.PluralRules(
+        window.LubaNoteI18n?.ziskejLocale?.() || document.documentElement.lang || 'cs'
+      ).select(n);
+    } catch (_error) {}
+    return window.LubaNoteI18n?.t?.(
+      `settings.wordsCount.${kategorie}`,
+      `${n} slov`,
+      { count: n }
+    ) || `${n} slov`;
   }
 
   function jeDesktopTrainer() {
@@ -974,7 +982,9 @@
   function nastavCount() {
     if (!prvky.count) return;
     const count = pocetSlovCelkem();
-    prvky.count.textContent = count ? `${count} slov` : 'Otevřít';
+    prvky.count.textContent = count
+      ? popisekPoctuSlov(count)
+      : (window.LubaNoteI18n?.t?.('settings.openLearning', 'Otevřít') || 'Otevřít');
     vykresliJazykovyStav();
   }
 
@@ -1762,7 +1772,7 @@
         if (aktivniTab === 'stats') vykresliStatistiky();
       }
     });
-    window.addEventListener('lubanote:language-change', vykresliJazykovyStav);
+    window.addEventListener('lubanote:language-change', nastavCount);
     nastavCount();
   }
 

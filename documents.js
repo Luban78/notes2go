@@ -200,11 +200,19 @@
     return 'pdf';
   }
 
+  function docT(klic, zaloha, hodnoty = {}) {
+    return window.LubaNoteI18n?.t?.(klic, zaloha, hodnoty) || zaloha;
+  }
+
   function pocetSouboruText(pocet) {
     const n = Math.max(0, Number(pocet) || 0);
-    if (n === 1) return '1 soubor';
-    if (n >= 2 && n <= 4) return `${n} soubory`;
-    return `${n} souborů`;
+    let kategorie = 'other';
+    try {
+      kategorie = new Intl.PluralRules(
+        window.LubaNoteI18n?.ziskejLocale?.() || document.documentElement.lang || 'cs'
+      ).select(n);
+    } catch (_error) {}
+    return docT(`documents.fileCount.${kategorie}`, `${n} souborů`, { count: n });
   }
 
   function normalizujHledani(value) {
@@ -514,10 +522,10 @@
 
   function nazevDragCile(target) {
     if (!target) return '';
-    if (target.classList.contains('documentsFolderAll')) return 'Všechny soubory';
+    if (target.classList.contains('documentsFolderAll')) return docT('documents.allFiles', 'Všechny soubory');
     return target.querySelector('.documentsFolderCardName')?.textContent?.trim()
       || target.dataset.folderId
-      || 'složka';
+      || docT('documents.folderFallback', 'Složka');
   }
 
   function zajistiDragNahled() {
@@ -4599,8 +4607,15 @@
       });
     });
 
-    prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
-    prvky.allFolder.hidden = aktivniSlozkaId === null;
+    if (prvky.allFolder) {
+      prvky.allFolder.textContent = `← ${docT('documents.allFiles', 'Všechny soubory')}`;
+      prvky.allFolder.classList.toggle('active', aktivniSlozkaId === null);
+      prvky.allFolder.hidden = aktivniSlozkaId === null;
+    }
+    if (prvky.trash) {
+      const textovyUzel = [...prvky.trash.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
+      if (textovyUzel) textovyUzel.nodeValue = `🗑️ ${docT('documents.trash', 'Koš')}`;
+    }
     prvky.filterAll?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'all');
     prvky.filterPdf?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'pdf');
     prvky.filterDocx?.classList.toggle('active', aktivniSlozkaId !== TRASH_VIEW && aktivniTypFiltru === 'docx');
@@ -4646,15 +4661,15 @@
       .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 
     const nazevSlozky = zobrazujiKos
-      ? 'Koš'
+      ? docT('documents.trash', 'Koš')
       : aktivniSlozkaId
-        ? folderMap.get(aktivniSlozkaId) || 'Složka'
-        : 'Všechny soubory';
+        ? folderMap.get(aktivniSlozkaId) || docT('documents.folderFallback', 'Složka')
+        : docT('documents.allFiles', 'Všechny soubory');
 
     prvky.activeFolder.textContent = nazevSlozky;
     prvky.status.textContent = jeAndroid()
-      ? 'Lokálně v tomto Android zařízení'
-      : 'Lokálně v tomto prohlížeči';
+      ? docT('documents.localAndroid', 'Lokálně v tomto Android zařízení')
+      : docT('documents.localBrowser', 'Lokálně v tomto prohlížeči');
 
     const prazdnyNadpis = prvky.empty.querySelector('strong');
     const prazdnyText = prvky.empty.querySelector('p');
@@ -4922,6 +4937,7 @@
     });
 
     document.getElementById('documentsModuleButton')?.addEventListener('click', refresh);
+    window.addEventListener('lubanote:language-change', () => render());
     refresh();
   }
 

@@ -134,8 +134,8 @@
 
     plannerReminderDefaultValue.textContent =
       ziskejVychoziPlannerReminder()
-        ? "Zapnuto"
-        : "Vypnuto";
+        ? prelozNastaveni("settings.enabled", "Zapnuto")
+        : prelozNastaveni("settings.disabled", "Vypnuto");
   }
 
   async function synchronizujPlannerPreference() {
@@ -553,19 +553,19 @@ const motivy = nactenaTemata.map(tema => ({
           : "off";
 
       otevriNastavovaciModal({
-        nadpis: "Plánování",
+        nadpis: prelozNastaveni("settings.planning", "Plánování"),
         polozky: [
           {
             klic: "plannerReminder",
-            popisek: "Automaticky připomenout",
+            popisek: prelozNastaveni("settings.automaticReminder", "Automaticky připomenout"),
             hodnota: aktualni,
             zobrazeni:
               aktualni === "on"
-                ? "Zapnuto"
-                : "Vypnuto",
+                ? prelozNastaveni("settings.enabled", "Zapnuto")
+                : prelozNastaveni("settings.disabled", "Vypnuto"),
             moznosti: [
-              { hodnota: "off", popisek: "Vypnuto" },
-              { hodnota: "on", popisek: "Zapnuto" }
+              { hodnota: "off", popisek: prelozNastaveni("settings.disabled", "Vypnuto") },
+              { hodnota: "on", popisek: prelozNastaveni("settings.enabled", "Zapnuto") }
             ]
           }
         ],
@@ -839,11 +839,28 @@ openReminderDelaySettingsButton?.addEventListener(
   let upravovaneSlovo = null;
 
   function apiSlovniku() { return window.LubaNoteKeyboard || null; }
+  function popisekPoctuSlovNastaveni(count) {
+    const n = Math.max(0, Number(count) || 0);
+    let kategorie = "other";
+    try {
+      kategorie = new Intl.PluralRules(
+        window.LubaNoteI18n?.ziskejLocale?.() || document.documentElement.lang || "cs"
+      ).select(n);
+    } catch (_) {}
+    return prelozNastaveni(
+      `settings.wordsCount.${kategorie}`,
+      `${n} slov`,
+      { count: n }
+    );
+  }
+
   function aktualizujPocetSlovniku() {
     if (!personalDictionaryCount) return;
     const api = apiSlovniku();
     const count = (api?.ziskejMujSlovnik?.("cs")?.length || 0) + (api?.ziskejMujSlovnik?.("en")?.length || 0);
-    personalDictionaryCount.textContent = count ? `${count} slov` : "Spravovat";
+    personalDictionaryCount.textContent = count
+      ? popisekPoctuSlovNastaveni(count)
+      : prelozNastaveni("settings.manageDictionary", "Spravovat");
   }
   function zrusEditaciSlova() {
     upravovaneSlovo = null;
@@ -1197,6 +1214,9 @@ openReminderDelaySettingsButton?.addEventListener(
 
       nastavPopisekKlavesnice();
       nastavPopisekPoziceOtevreni();
+      nastavPopisekRetence();
+      nastavPopisekPlannerReminderu();
+      aktualizujPocetSlovniku();
     }
   );
 
