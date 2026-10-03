@@ -15619,21 +15619,29 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }\n\n/* ==========================================================\n   PATCH 661K – AKTIVNÍ PŘIPOMÍNKY / POZDĚJI\n   ----------------------------------------------------------\n   Dnešek a Zítra zůstávají přesně podle 661J. Pouze řádky\n   POZDĚJI s datumem dostanou širší pevný sloupec odvozený od\n   velikosti písma. Datum proto nepřetéká do názvu a všechny\n   názvy začínají na stejném X i při větším globálním fontu.\n   ========================================================== */\n@media (max-width: 1099px) {\n  .reminderItemLaterDate .reminderItemSwipeContent {\n    grid-template-columns: 9.5ch minmax(0, 1fr) max(30px, 1.9rem) !important;\n  }\n\n  .reminderItemLaterDate .reminderItemTime {\n    min-width: 0 !important;\n    width: auto !important;\n    padding-right: 0 !important;\n  }\n}\n
 
 /* ==================================================
-   PATCH 675 – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
+   PATCH 675B – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
+   Jeden kompaktní panel: pole + počet + šipky + zavřít.
    Non-destructive CSS Highlight API; obsah editoru se nemění.
 ================================================== */
-/* PATCH 675A – Hledat je běžný nástroj v Tools toolbaru.
-   Aktivní stav řeší společné .editorQuickTool[aria-pressed="true"]. */
+.editorFindButton .lubaActionIcon {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+}
+
 .editorFindBar {
-  display: flex;
-  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px 42px 42px;
   align-items: center;
-  gap: 5px;
-  min-height: 44px;
-  margin: 2px 0 6px;
-  padding: 3px 4px;
+  column-gap: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  margin: 3px 0 7px;
+  padding: 5px 6px;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--color-editor-background) 94%, var(--color-surface));
 }
 
@@ -15643,33 +15651,42 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 
 .editorFindInputWrap {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
+  height: 46px;
   align-items: center;
-  gap: 5px;
-  height: 38px;
-  padding: 0 8px;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--color-editor-background);
 }
 
-.editorFindMagnifier,
+.editorFindMagnifier {
+  display: inline-flex;
+  flex: 0 0 23px;
+  width: 23px;
+  height: 23px;
+  align-items: center;
+  justify-content: center;
+}
+
 .editorFindMagnifier svg {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
+  display: block;
+  width: 23px;
+  height: 23px;
 }
 
 #editorFindInput {
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  box-sizing: border-box;
   margin: 0;
-  padding: 5px 0 3px;
+  padding: 0;
   resize: none;
   overflow: hidden;
   border: 0;
@@ -15677,33 +15694,36 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   background: transparent;
   color: var(--color-editor-text);
   font: inherit;
-  font-size: 0.94rem;
-  line-height: 1.25;
+  font-size: 1.08rem;
+  line-height: 44px;
+  text-align: left;
+  vertical-align: middle;
 }
 
 .editorFindCount {
   flex: 0 0 auto;
-  min-width: 42px;
+  min-width: 46px;
   text-align: right;
   color: var(--color-text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .editorFindNav,
 .editorFindClose {
   display: inline-flex;
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   padding: 0;
   border: 0;
   border-radius: 10px;
   background: transparent;
   color: var(--color-editor-text);
-  font-size: 1.25rem;
+  font-size: 1.55rem;
   line-height: 1;
 }
 
@@ -15712,7 +15732,7 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }
 
 .editorFindClose {
-  font-size: 1.55rem;
+  font-size: 1.82rem;
   font-weight: 400;
 }
 
@@ -15725,21 +15745,26 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   color: var(--color-editor-text);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 420px) {
   .editorFindBar {
-    gap: 3px;
-    padding-inline: 2px;
+    grid-template-columns: minmax(0, 1fr) 40px 40px 40px;
+    column-gap: 3px;
+    padding-inline: 4px;
   }
 
   .editorFindNav,
   .editorFindClose {
-    flex-basis: 36px;
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .editorFindInputWrap {
+    gap: 6px;
+    padding-inline: 8px;
   }
 
   .editorFindCount {
-    min-width: 38px;
-    font-size: 0.74rem;
+    min-width: 42px;
+    font-size: 0.84rem;
   }
 }
