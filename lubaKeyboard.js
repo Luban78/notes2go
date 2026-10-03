@@ -1270,14 +1270,17 @@
   }
 
   /* ==========================================================
-     PATCH 596/666 – TITLE CLIPBOARD POPUP (mobil + LubaKeyboard)
+     PATCH 596/666/674D – SHARED CLIPBOARD POPUP
      ----------------------------------------------------------
-     Debug 595 prokázal, že u #modalTitle nic nevolá preventDefault():
-     selectstart, selectionchange i contextmenu proběhnou a WebView vytvoří
-     skutečný range. Systémový Android ActionMode se ale přesto nezobrazí.
-     Nesnažíme se ho dál vynucovat; na contextmenu zobrazíme vlastní malou
-     lištu Vyjmout / Kopírovat / Vložit / Vše. Výběr držíme v DOM range a
-     tlačítka neberou focus názvu, takže vlastní LubaKeyboard zůstává stabilní.
+     Android WebView při inputmode=none + vlastní LubaKeyboard nemusí
+     zobrazit systémový ActionMode. Původně jsme proto vlastní lištu
+     Vyjmout / Kopírovat / Vložit / Vše používali jen pro #modalTitle.
+
+     PATCH 674D rozšiřuje STEJNÉ chování na všechna explicitní textová
+     pole LubaKeyboard (input/textarea[data-luba-keyboard-field]). Tím
+     mají Learning Dictionary, hledání, názvy dokumentů, EPUB poznámky,
+     osobní slovník atd. jednotný clipboard UX bez závislosti na Android
+     ActionMode. Nezasahuje to do CoreV2 selection/handle enginu.
      ========================================================== */
   function zajistiTitleClipboardPopup() {
     if (titleClipboardPopup?.isConnected) return titleClipboardPopup;
@@ -1286,7 +1289,7 @@
     popup.className = "ln-title-clipboard-popup";
     popup.hidden = true;
     popup.setAttribute("role", "toolbar");
-    popup.setAttribute("aria-label", "Schránka názvu poznámky");
+    popup.setAttribute("aria-label", "Schránka LubaNote");
     popup.innerHTML = `
       <button type="button" data-title-clipboard="cut" tabindex="-1">Vyjmout</button>
       <button type="button" data-title-clipboard="copy" tabindex="-1">Kopírovat</button>
@@ -1294,7 +1297,7 @@
       <button type="button" data-title-clipboard="all" tabindex="-1">Vše</button>
     `;
 
-    /* Pointerdown nesmí přesunout focus z #modalTitle ani zrušit selection. */
+    /* Pointerdown nesmí přesunout focus ani zrušit selection aktivního cíle. */
     popup.addEventListener("pointerdown", (event) => {
       if (event.target.closest("button")) event.preventDefault();
     }, true);
@@ -1307,10 +1310,24 @@
 
       const action = button.dataset.titleClipboard;
       const snap = titleClipboardSnapshot;
-      const title = snap?.title?.isConnected ? snap.title : najdiNazevEditoru();
-      if (!title) { zavriTitleClipboardPopup(); return; }
+      const title = snap?.title?.isConnected ? snap.title : null;
+      const pole = snap?.pole?.isConnected && jeLubaTextovePole(snap.pole) ? snap.pole : null;
+      if (!title && !pole) { zavriTitleClipboardPopup(); return; }
 
       const obnovVyber = () => {
+        if (pole) {
+          const text = String(pole.value ?? "");
+          const start = Math.max(0, Math.min(text.length, Number(titleClipboardSnapshot?.start) || 0));
+          const end = Math.max(start, Math.min(text.length, Number(titleClipboardSnapshot?.end) || start));
+          try { pole.focus({ preventScroll: true }); } catch (_error) {
+            try { pole.focus(); } catch (_ignore) {}
+          }
+          try { pole.setSelectionRange(start, end); } catch (_error) {}
+          aktivniTextovePole = pole;
+          aktivniCilPsani = "field";
+          return { start, end, text };
+        }
+
         const delka = String(title.textContent || "").length;
         const start = Math.max(0, Math.min(delka, Number(titleClipboardSnapshot?.start) || 0));
         const end = Math.max(start, Math.min(delka, Number(titleClipboardSnapshot?.end) || start));
@@ -1319,9 +1336,15 @@
       };
 
       if (action === "all") {
-        const text = String(title.textContent || "");
-        titleClipboardSnapshot = { title, text, start: 0, end: text.length };
-        nastavVyberNazvu(title, 0, text.length);
+        if (pole) {
+          const text = String(pole.value ?? "");
+          titleClipboardSnapshot = { pole, text, start: 0, end: text.length };
+          try { pole.setSelectionRange(0, text.length); } catch (_error) {}
+        } else {
+          const text = String(title.textContent || "");
+          titleClipboardSnapshot = { title, text, start: 0, end: text.length };
+          nastavVyberNazvu(title, 0, text.length);
+        }
         aktualizujStavTitleClipboardPopup();
         return;
       }
@@ -1343,18 +1366,24 @@
         if (!vybrane) return;
         await zapisDoSchrankyLuba(vybrane);
         const next = state.text.slice(0, state.start) + state.text.slice(state.end);
-        nastavTextNazvu(title, next, state.start);
+        if (pole) {
+          nastavTextTextovehoPole(pole, next, state.start, state.start, "deleteByCut");
+        } else {
+          nastavTextNazvu(title, next, state.start);
+        }
         zavriTitleClipboardPopup();
         return;
       }
 
       if (action === "paste") {
-        const text = String(await prectiZeSchrankyLuba() || "").replace(/[\r\n]+/g, " ");
+        let text = String(await prectiZeSchrankyLuba() || "");
         if (!text) return;
-        /* Asynchronní Clipboard.read může mezitím pustit WebView selection;
-           před vložením proto snapshot explicitně obnovíme. */
+        /* Název a jednorádkový input držíme na jednom řádku. Textarea může
+           zachovat řádky ze schránky stejně jako běžný systémový editor. */
+        if (title || pole?.tagName === "INPUT") text = text.replace(/[\r\n]+/g, " ");
         obnovVyber();
-        vlozDoNazvu(text);
+        if (pole) vlozDoTextovehoPole(text, "insertFromPaste");
+        else vlozDoNazvu(text);
         zavriTitleClipboardPopup();
       }
     });
@@ -1380,25 +1409,27 @@
 
   function pozicujTitleClipboardPopup(clientX) {
     const popup = titleClipboardPopup;
-    const title = titleClipboardSnapshot?.title;
-    if (!popup || popup.hidden || !title?.isConnected) return;
+    const cil = titleClipboardSnapshot?.pole?.isConnected
+      ? titleClipboardSnapshot.pole
+      : titleClipboardSnapshot?.title;
+    if (!popup || popup.hidden || !cil?.isConnected) return;
 
     const margin = 8;
     const mezera = 7;
-    const titleRect = title.getBoundingClientRect();
+    const cilRect = cil.getBoundingClientRect();
     const popupRect = popup.getBoundingClientRect();
     const viewportW = window.visualViewport?.width || window.innerWidth;
     const viewportH = window.visualViewport?.height || window.innerHeight;
     const viewportTop = window.visualViewport?.offsetTop || 0;
     const viewportLeft = window.visualViewport?.offsetLeft || 0;
 
-    let x = Number.isFinite(clientX) ? clientX - popupRect.width / 2 : titleRect.left;
+    let x = Number.isFinite(clientX) ? clientX - popupRect.width / 2 : cilRect.left;
     x = Math.max(viewportLeft + margin, Math.min(x, viewportLeft + viewportW - popupRect.width - margin));
 
-    let y = titleRect.top - popupRect.height - mezera;
+    let y = cilRect.top - popupRect.height - mezera;
     const minY = viewportTop + margin;
     const maxY = viewportTop + viewportH - popupRect.height - margin;
-    if (y < minY) y = titleRect.bottom + mezera;
+    if (y < minY) y = cilRect.bottom + mezera;
     y = Math.max(minY, Math.min(y, maxY));
 
     popup.style.left = `${Math.round(x)}px`;
@@ -1406,15 +1437,26 @@
   }
 
   function otevriTitleClipboardPopup(event) {
-    const title = event.target?.closest?.("#modalTitle");
-    if (!title || ziskejZdrojKlavesnice() === "system") return false;
-    /* PATCH 666 – stejné LubaNote schránkové menu používáme i v mobilní
-       PWA/browser verzi, pokud je aktivní LubaKeyboard. Modul je už sám
-       omezený na JE_MOBILNI, takže desktopový nativní selection tím neměníme.
-       V APK se čtení schránky dál řeší přednostně Capacitor pluginem; na webu
-       zůstávají zachována bezpečnostní pravidla prohlížeče pro externí schránku. */
+    if (ziskejZdrojKlavesnice() === "system") return false;
 
-    const state = ziskejVyberNazvu();
+    const title = event.target?.closest?.("#modalTitle");
+    const pole = event.target?.closest?.('input[data-luba-keyboard-field], textarea[data-luba-keyboard-field]');
+    if (!title && !pole) return false;
+
+    let state = null;
+    if (pole && jeLubaTextovePole(pole)) {
+      aktivniTextovePole = pole;
+      aktivniCilPsani = "field";
+      const text = String(pole.value ?? "");
+      let start = Number.isFinite(pole.selectionStart) ? pole.selectionStart : text.length;
+      let end = Number.isFinite(pole.selectionEnd) ? pole.selectionEnd : start;
+      start = Math.max(0, Math.min(text.length, start));
+      end = Math.max(0, Math.min(text.length, end));
+      if (end < start) [start, end] = [end, start];
+      state = { pole, text, start, end };
+    } else if (title) {
+      state = ziskejVyberNazvu();
+    }
     if (!state) return false;
 
     event.preventDefault();
@@ -3863,8 +3905,9 @@
     setTimeout(aktualizujNativniImeGuardPodleKontextu, 0);
   }, true);
 
-  /* PATCH 596 – contextmenu u názvu je spolehlivý signál z Android WebView
-     (Debug 595). Vlastní popup se otevírá až PO vytvoření selection range. */
+  /* PATCH 596/674D – contextmenu je na Android WebView spolehlivý signál
+     po dlouhém stisku. Vlastní popup obslouží název i všechna explicitní
+     textová pole LubaKeyboard. */
   document.addEventListener("contextmenu", (event) => {
     otevriTitleClipboardPopup(event);
   }, true);
@@ -3872,13 +3915,16 @@
   document.addEventListener("pointerdown", (event) => {
     if (!titleClipboardPopup || titleClipboardPopup.hidden) return;
     if (titleClipboardPopup.contains(event.target)) return;
+    const cil = titleClipboardSnapshot?.pole || titleClipboardSnapshot?.title;
+    if (cil && event.target === cil) return;
     if (event.target?.closest?.("#modalTitle")) return;
     zavriTitleClipboardPopup();
   }, true);
 
   document.addEventListener("focusin", (event) => {
     if (!titleClipboardPopup || titleClipboardPopup.hidden) return;
-    if (event.target?.id === "modalTitle") return;
+    const cil = titleClipboardSnapshot?.pole || titleClipboardSnapshot?.title;
+    if (event.target === cil || event.target?.id === "modalTitle") return;
     if (titleClipboardPopup.contains(event.target)) return;
     zavriTitleClipboardPopup();
   }, true);
@@ -4347,7 +4393,7 @@
     pridejSlovoDoMehoSlovniku,
     smazSlovoZMehoSlovniku,
     upravSlovoVMehoSlovniku,
-    verze: "MODAL-CLOSE-533",
+    verze: "GLOBAL-FIELD-CLIPBOARD-674D",
     zobraz,
     skryj,
     skryjProModal,
