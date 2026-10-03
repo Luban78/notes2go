@@ -15707,6 +15707,7 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   font-size: 0.88rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  transform: translateY(0.14rem);
 }
 
 .editorFindNav,
