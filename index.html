@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=675-editor-find">
+  <link rel="stylesheet" href="style.css?v=675a-editor-find-nav">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -945,6 +945,11 @@
         <!-- třetí úroveň nástroje -->
         
         <div id="editorToolsToolbar" class="editorQuickToolbar" role="toolbar" aria-label="Další nástroje poznámky" hidden>
+          <!-- PATCH 675A – hledání patří mezi nástroje, před Otevřít dokument. -->
+          <button id="editorFindButton" type="button" class="editorQuickTool editorQuickToolIcon editorFindButton" aria-label="Hledat v této poznámce" title="Hledat v této poznámce" aria-pressed="false">
+            <span class="lubaActionIcon" data-luba-icon="hledat" aria-hidden="true"></span>
+          </button>
+
           <button id="tlacitkoOtevritDokument" type="button" class="editorQuickTool editorQuickToolIcon" aria-label="Otevřít dokument" title="Otevřít dokument">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3.5 7.5h6l2-2h9v13h-17z"></path>
@@ -1087,12 +1092,6 @@
         
         <!-- Akce editoru -->
         <div class="editorTopActions">
-
-          <!-- PATCH 675 – hledání přímo v právě otevřené poznámce. -->
-          <button id="editorFindButton" type="button" class="lubaIconOnlyButton editorFindButton" aria-label="Hledat v této poznámce" title="Hledat v této poznámce" aria-pressed="false">
-            <span class="lubaActionIcon" data-luba-icon="hledat" aria-hidden="true"></span>
-          </button>
-          
           <button id="pinTaskButton" type="button" class="lubaIconOnlyButton" aria-label="Připnout poznámku">
             <span class="lubaActionIcon" data-luba-icon="pripnout" aria-hidden="true"></span>
           </button>
@@ -2619,7 +2618,7 @@
   <script src="editorCoreV2.js?v=673G18-selection-menu-speed"></script>
   <script src="editorCoreV2Bridge.js?v=674C-selection-speed-450"></script>
   <script src="lubaKeyboard.js?v=674D-global-field-clipboard"></script>
-  <script src="editorFind.js?v=675-editor-find"></script>
+  <script src="editorFind.js?v=675a-editor-find-nav"></script>
   <script src="dictionarySync.js?v=20260920-dictionary-sync-650b"></script>
   <script src="learningDictionarySync.js?v=660b-learning-dictionary-sync-v1"></script>
 

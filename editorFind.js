@@ -104,8 +104,9 @@
     }
 
     pocitadlo.textContent = `${aktualniIndex + 1} / ${vysledky.length}`;
-    predchozi.disabled = false;
-    dalsi.disabled = false;
+    const lzeNavigovat = vysledky.length > 1;
+    predchozi.disabled = !lzeNavigovat;
+    dalsi.disabled = !lzeNavigovat;
   }
 
   function vykresliHighlighty() {
@@ -129,17 +130,21 @@
 
     requestAnimationFrame(() => {
       const rect = range.getBoundingClientRect();
-      const scroller = taskModal.querySelector(".modalContent");
+      // PATCH 675A – skutečný scroll vlastní Core V2 editor.
+      // .modalContent má overflow:hidden, proto na něm scrollTo nic nedělal.
+      const scroller = editor();
       if (!scroller || !rect || (!rect.width && !rect.height)) return;
 
       const scrollerRect = scroller.getBoundingClientRect();
-      const horniBezpecnaZona = Math.max(118, panel.getBoundingClientRect().bottom + 12 - scrollerRect.top);
-      const dolniBezpecnaZona = 88;
-      const viditelnyTop = scrollerRect.top + horniBezpecnaZona;
-      const viditelnyBottom = scrollerRect.bottom - dolniBezpecnaZona;
+      const odsazeniNahore = 18;
+      const odsazeniDole = 24;
+      const viditelnyTop = scrollerRect.top + odsazeniNahore;
+      const viditelnyBottom = scrollerRect.bottom - odsazeniDole;
 
       if (rect.top < viditelnyTop || rect.bottom > viditelnyBottom) {
-        const cil = rect.top - scrollerRect.top + scroller.scrollTop - (scroller.clientHeight * 0.46);
+        const cil = scroller.scrollTop
+          + (rect.top - scrollerRect.top)
+          - Math.max(odsazeniNahore, scroller.clientHeight * 0.38);
         scroller.scrollTo({ top: Math.max(0, cil), behavior: "smooth" });
       }
     });

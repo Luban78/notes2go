@@ -15622,22 +15622,8 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
    PATCH 675 – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
    Non-destructive CSS Highlight API; obsah editoru se nemění.
 ================================================== */
-.editorTopBar .editorFindButton {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-editor-background) 88%, var(--color-surface));
-  color: var(--color-editor-text);
-}
-
-.editorTopBar .editorFindButton[aria-pressed="true"] {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-editor-background));
-  color: var(--color-accent);
-}
-
+/* PATCH 675A – Hledat je běžný nástroj v Tools toolbaru.
+   Aktivní stav řeší společné .editorQuickTool[aria-pressed="true"]. */
 .editorFindBar {
   display: flex;
   flex: 0 0 auto;
