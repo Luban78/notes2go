@@ -2278,6 +2278,16 @@
       zavriPanelyFormatu();
       const ok = core()?.prepniKodovyBlok?.() === true;
       if (!ok) zobrazToast("Blok kódu lze vytvořit z běžného textu", true);
+
+      /* PATCH 674A – převod označeného textu na code block překreslí Core V2
+         a výběr záměrně sklopí na konec nového bloku. Bridge ale ještě držel
+         starý vizuální selection stav, takže po renderu zůstaly na obrazovce
+         vlastní modré handles z původního rozsahu. Reset děláme až PO akci,
+         aby se zachycený výběr mohl normálně použít pro samotný převod. */
+      if (ok) {
+        zrusV2SelectionScrollStav();
+        skryjV2SelectionMenu();
+      }
       obnovToolbar();
       return;
     }
