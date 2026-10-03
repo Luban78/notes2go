@@ -15619,15 +15619,15 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }\n\n/* ==========================================================\n   PATCH 661K – AKTIVNÍ PŘIPOMÍNKY / POZDĚJI\n   ----------------------------------------------------------\n   Dnešek a Zítra zůstávají přesně podle 661J. Pouze řádky\n   POZDĚJI s datumem dostanou širší pevný sloupec odvozený od\n   velikosti písma. Datum proto nepřetéká do názvu a všechny\n   názvy začínají na stejném X i při větším globálním fontu.\n   ========================================================== */\n@media (max-width: 1099px) {\n  .reminderItemLaterDate .reminderItemSwipeContent {\n    grid-template-columns: 9.5ch minmax(0, 1fr) max(30px, 1.9rem) !important;\n  }\n\n  .reminderItemLaterDate .reminderItemTime {\n    min-width: 0 !important;\n    width: auto !important;\n    padding-right: 0 !important;\n  }\n}\n
 
 /* ==================================================
-   PATCH 675B – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
+   PATCH 675C – HLEDÁNÍ V OTEVŘENÉ POZNÁMCE
    Jeden kompaktní panel: pole + počet + šipky + zavřít.
    Non-destructive CSS Highlight API; obsah editoru se nemění.
 ================================================== */
 .editorFindButton .lubaActionIcon {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
+  width: 1.95rem;
+  height: 1.95rem;
+  min-width: 1.95rem;
+  min-height: 1.95rem;
 }
 
 .editorFindBar {
@@ -15664,40 +15664,39 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 
 .editorFindMagnifier {
   display: inline-flex;
-  flex: 0 0 23px;
-  width: 23px;
-  height: 23px;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
   align-items: center;
   justify-content: center;
 }
 
 .editorFindMagnifier svg {
   display: block;
-  width: 23px;
-  height: 23px;
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 #editorFindInput {
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
-  height: 44px;
-  min-height: 44px;
-  max-height: 44px;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  max-height: 2.75rem;
   box-sizing: border-box;
   margin: 0;
-  padding: 0;
-  resize: none;
-  overflow: hidden;
+  padding: 0.125rem 0 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--color-editor-text);
+  caret-color: var(--color-accent);
+  cursor: text;
   font: inherit;
-  font-size: 1.08rem;
-  line-height: 44px;
+  font-size: 1.20rem;
+  line-height: 1.25;
   text-align: left;
-  vertical-align: middle;
 }
 
 .editorFindCount {
