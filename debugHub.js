@@ -33,7 +33,7 @@
 
   const MAX_ZAZNAMU = 700;
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
-  const V2_SELECTION_EDGE_SPEED_DEFAULT = 220;
+  const V2_SELECTION_EDGE_SPEED_DEFAULT = 450; /* PATCH 674C – final V1 tuning */
 
   function nactiV2SelectionEdgeSpeed() {
     const globalni = Number(window.LUBANOTE_V2_SELECTION_EDGE_SPEED);

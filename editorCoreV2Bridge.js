@@ -2653,7 +2653,7 @@
   const V2_SELECTION_SCROLL_HIGHLIGHT = "lubanote-selection-scroll";
   const V2_SELECTION_HANDLE_ATTR = "data-ln-v2-selection-handle";
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
-  const V2_SELECTION_EDGE_SPEED_DEFAULT = 220;
+  const V2_SELECTION_EDGE_SPEED_DEFAULT = 450; /* PATCH 674C – final V1 tuning */
   let v2SelectionScrollHighlightObj = null;
   let v2SelectionScrollHighlightRange = null;
   let v2SelectionHandleStart = null;
