@@ -104,6 +104,15 @@
   let potlacV2SelectionScrollClickDo = 0;
   let v2SelectionPrevodTimer = null;
 
+  /* PATCH 674B – vlastní selection handles jsou DOM prvky s velmi vysokým
+     z-indexem. Na rozdíl od nativních Android handles proto samy nevědí, že
+     nad editorem právě vznikl blokující LubaNote modal. Stav držíme centrálně:
+     selection/range může zůstat zachovaný pro akci (např. vložení odkazu),
+     ale naše ovládací UI musí po dobu každého sekundárního modalu zmizet. */
+  let v2SelectionPrekryvAktivni = false;
+  let v2SelectionPrekryvRaf = 0;
+  let v2SelectionPrekryvObserver = null;
+
   /* PATCH 673G21 – Debug Hub v G20 prokázal, že slider hodnotu opravdu
      zapisoval (G20_SPEED_SET), ale během problematického scrollu se nikdy
      neobjevil G20_SPEED_APPLY ani custom handle start. Android tedy stále
@@ -663,7 +672,9 @@
   }
 
   function nastavV2SelectionMenuNuceneSkryti(skryt) {
-    v2SelectionMenuNuceneSkryty = !!skryt;
+    /* 674B – modalový guard má vyšší prioritu než běžné restore hooky.
+       Žádný scroll-settle/selectionchange nesmí panel znovu otevřít nad dialogem. */
+    v2SelectionMenuNuceneSkryty = !!skryt || v2SelectionPrekryvAktivni;
     if (!selectionMenu) return;
     if (v2SelectionMenuNuceneSkryty) {
       selectionMenu.style.setProperty("visibility", "hidden", "important");
@@ -2736,6 +2747,15 @@
     .ln-v2-selection-handle-custom.ln-v2-handle-autoscroll-hidden {
       opacity: 0;
     }
+    /* 674B – poslední pojistka proti prosvítání přes sekundární modaly.
+       Script zároveň nastaví hidden; tato vrstva chrání i proti pozdějšímu
+       selection restore hooku ve stejném frame. */
+    body.ln-v2-selection-ui-blocked .ln-v2-selection-handle-custom {
+      display: none !important;
+    }
+    body.ln-v2-selection-ui-blocked #selectionMenu[data-ln-v2-owner="1"] {
+      display: none !important;
+    }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
       transform: translate(-100%, 0);
     }
@@ -2881,6 +2901,10 @@
   }
 
   function zobrazV2SelectionHandles(range) {
+    if (v2SelectionPrekryvAktivni) {
+      skryjV2SelectionHandles();
+      return false;
+    }
     if (!range || range.collapsed) {
       skryjV2SelectionHandles();
       return false;
@@ -2916,6 +2940,99 @@
       return false;
     }
   }
+
+  /* PATCH 674B – JEDEN globální kontrakt pro blokující UI.
+     Audit aktuální V1 našel modaly v editoru i mimo něj (odkaz, crop,
+     datum/čas/plán, tagy, potvrzení, dokumenty/PDF, slovník/výuka, chat,
+     sharing, settings/admin a další). Většina novějších dialogů má správné
+     role="dialog" + aria-modal="true"; starší vrstvy doplňujeme explicitně.
+     #taskModal (hlavní editor) a actionStatusModal sem záměrně nepatří. */
+  const V2_SELECTION_BLOKUJICI_UI_SELECTOR = [
+    '[role="dialog"][aria-modal="true"]',
+    '.appMessageModal:not([hidden])',
+    '.deleteConfirmModal:not([hidden])',
+    '.deleteTagConfirmModal:not([hidden])',
+    '.secretUnlockModal:not([hidden])',
+    '.localDeviceResetModal:not([hidden])',
+    '.settingsModal:not([hidden])',
+    '.aboutModal:not([hidden])',
+    '.adminDashboardModal:not([hidden])',
+    '.backendDiagnosticsModal:not([hidden])',
+    '.manageTagsModal:not([hidden])',
+    '.newTagModal:not([hidden])',
+    '.personalDictionaryModal:not([hidden])',
+    '.englishLearningModal:not([hidden])',
+    '.languageLearningEntryModal:not([hidden])',
+    '.sharingIdentityModal:not([hidden])',
+    '.documentsFolderModal:not([hidden])',
+    '.pdfLubaModal:not([hidden])',
+    '.pdfViewerOverlay:not([hidden])',
+    '.chatContactsModal:not([hidden])',
+    '.chatDeleteModal:not([hidden])',
+    '.chatThreadOverlay:not([hidden])',
+    '.cardQuickTermModal:not([hidden])'
+  ].join(',');
+
+  function jeV2SelectionBlokujiciUiViditelne(element) {
+    if (!element || !element.isConnected) return false;
+    if (element.id === 'taskModal' || element.id === 'actionStatusModal') return false;
+    if (element.closest?.('#taskModal') === element) return false;
+    if (element.closest?.('[hidden]')) return false;
+    try {
+      const styl = getComputedStyle(element);
+      if (styl.display === 'none' || styl.visibility === 'hidden') return false;
+      return element.getClientRects().length > 0;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function zkontrolujV2SelectionPrekryv() {
+    v2SelectionPrekryvRaf = 0;
+    if (!aktivni) {
+      if (v2SelectionPrekryvAktivni) {
+        v2SelectionPrekryvAktivni = false;
+        document.body?.classList?.remove('ln-v2-selection-ui-blocked');
+        nastavV2SelectionMenuNuceneSkryti(false);
+      }
+      return;
+    }
+
+    const blokovano = Array.from(document.querySelectorAll(V2_SELECTION_BLOKUJICI_UI_SELECTOR))
+      .some(jeV2SelectionBlokujiciUiViditelne);
+    if (blokovano === v2SelectionPrekryvAktivni) return;
+
+    v2SelectionPrekryvAktivni = blokovano;
+    document.body?.classList?.toggle('ln-v2-selection-ui-blocked', blokovano);
+    if (blokovano) {
+      /* Logický range/highlight NERUŠÍME – modal odkazu ho potřebuje pro akci.
+         Mizí pouze handles + menu, tedy stejně jako systémové ovládací prvky. */
+      nastavV2SelectionMenuNuceneSkryti(true);
+      skryjV2SelectionMenu();
+      skryjV2SelectionHandles();
+    } else {
+      /* Po zavření nic násilně neobnovujeme. Pokud akce výběr spotřebovala,
+         žádné ghost handles se nevrátí; pokud výběr stále žije, další běžný
+         selection hook ho může znovu zobrazit. */
+      nastavV2SelectionMenuNuceneSkryti(false);
+    }
+  }
+
+  function naplanujV2SelectionPrekryvKontrolu() {
+    if (v2SelectionPrekryvRaf) return;
+    v2SelectionPrekryvRaf = requestAnimationFrame(zkontrolujV2SelectionPrekryv);
+  }
+
+  try {
+    v2SelectionPrekryvObserver = new MutationObserver(naplanujV2SelectionPrekryvKontrolu);
+    v2SelectionPrekryvObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['hidden', 'class', 'style', 'aria-hidden']
+    });
+    naplanujV2SelectionPrekryvKontrolu();
+  } catch (_error) {}
 
   function domBodV2ZBodu(clientX, clientY, editor) {
     try {
