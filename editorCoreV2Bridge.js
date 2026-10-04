@@ -162,6 +162,14 @@
      - během dragu běží vlastní LubaNote lupa nad prstem; Android selection se
        nevrací a stávající highlight/autoscroll/menu kontrakt zůstává zachovaný. */
 
+  /* PATCH 677C – deterministic magnifier:
+     - lupa se zobrazí vždy až po skutečném pohybu selection handle (ne po tapu),
+     - dotyk těsně vedle vizuální kapky převezme stejný custom drag, takže start
+       lupy není závislý na přesném trefení DOM hitboxu,
+     - text lupy se bere z aktuálního blokového kontextu kolem přesného DOM bodu
+       a oba směry jsou ukotvené ke středové čáře; už se neposouvají uvnitř
+       dvou pevných 64px boxů. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -2662,6 +2670,8 @@
   const V2_SELECTION_HANDLE_ATTR = "data-ln-v2-selection-handle";
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
   const V2_SELECTION_EDGE_SPEED_DEFAULT = 450; /* PATCH 674C – final V1 tuning */
+  const V2_SELECTION_LUPA_DRAG_PRAH = 4; /* PATCH 677C – px prstu před zobrazením lupy */
+  const V2_SELECTION_HANDLE_NEAR_PRAH = 30; /* PATCH 677C – tolerantní převzetí kapky */
   let v2SelectionScrollHighlightObj = null;
   let v2SelectionScrollHighlightRange = null;
   let v2SelectionHandleStart = null;
@@ -2792,11 +2802,11 @@
     }
     .ln-v2-selection-magnifier {
       position: fixed;
-      width: 136px;
-      height: 58px;
+      width: 148px;
+      height: 60px;
       z-index: 2147483300;
       overflow: hidden;
-      border-radius: 30px;
+      border-radius: 31px;
       border: 2px solid rgba(128, 203, 196, .96);
       background: var(--color-surface, #082533);
       box-shadow: 0 8px 24px rgba(0, 0, 0, .34);
@@ -2811,10 +2821,11 @@
     .ln-v2-selection-magnifier-text {
       position: absolute;
       top: 50%;
-      width: 64px;
-      overflow: hidden;
+      width: max-content;
+      max-width: none;
+      overflow: visible;
       color: var(--color-text, #eef7fa);
-      font-size: 25px;
+      font-size: 26px;
       font-weight: 500;
       line-height: 1.1;
       white-space: pre;
@@ -2823,11 +2834,11 @@
       pointer-events: none;
     }
     .ln-v2-selection-magnifier-before {
-      right: calc(50% + 3px);
+      right: calc(50% + 4px);
       text-align: right;
     }
     .ln-v2-selection-magnifier-after {
-      left: calc(50% + 3px);
+      left: calc(50% + 4px);
       text-align: left;
     }
     .ln-v2-selection-magnifier-caret {
@@ -2835,7 +2846,7 @@
       left: 50%;
       top: 12px;
       width: 2px;
-      height: 34px;
+      height: 36px;
       margin-left: -1px;
       border-radius: 2px;
       background: rgb(128, 203, 196);
@@ -3041,8 +3052,52 @@
     return null;
   }
 
+  function ziskejV2LupaTextKontext(stav) {
+    const textBod = ziskejV2LupaTextBod(stav);
+    const editor = stav?.editor;
+    if (!textBod?.node || !editor?.contains?.(textBod.node)) return { pred: "", po: "" };
+
+    const node = textBod.node;
+    const offset = Math.max(0, Math.min(
+      Number(textBod.offset || 0),
+      node.nodeType === Node.TEXT_NODE ? String(node.nodeValue || "").length : Number(node.childNodes?.length || 0)
+    ));
+
+    /* 677C – kontext bereme jen z nejbližšího blokového řádku/odstavce.
+       Díky Range.toString() se správně slepí i text rozdělený do inline spanů
+       (B/I/U, odkazy atd.), ale neprochází se při každém touchmove celá poznámka. */
+    let blok = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    const blokoveTagy = new Set(["DIV", "P", "LI", "PRE", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6", "TD", "TH"]);
+    while (blok && blok !== editor && !blokoveTagy.has(blok.tagName)) blok = blok.parentElement;
+    if (!blok || !editor.contains(blok)) blok = editor;
+
+    const ocisti = (text) => String(text || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/ {2,}/g, " ");
+
+    try {
+      const predRange = document.createRange();
+      predRange.selectNodeContents(blok);
+      predRange.setEnd(node, offset);
+      const poRange = document.createRange();
+      poRange.selectNodeContents(blok);
+      poRange.setStart(node, offset);
+      return {
+        pred: ocisti(predRange.toString()).slice(-24),
+        po: ocisti(poRange.toString()).slice(0, 24)
+      };
+    } catch (_error) {
+      const text = node.nodeType === Node.TEXT_NODE ? String(node.nodeValue || "") : "";
+      return {
+        pred: ocisti(text.slice(Math.max(0, offset - 24), offset)),
+        po: ocisti(text.slice(offset, Math.min(text.length, offset + 24)))
+      };
+    }
+  }
+
   function zobrazV2SelectionLupu(stav, touchX, touchY, cilX, cilY) {
-    if (!stav?.editor || !stav.handleDrag || v2SelectionPrekryvAktivni) {
+    if (!stav?.editor || !stav.handleDrag || !stav.handleDrag.lupaAktivni || v2SelectionPrekryvAktivni) {
       skryjV2SelectionLupu();
       return false;
     }
@@ -3054,19 +3109,12 @@
     const yCile = Number(cilY);
     if (![xPrstu, yPrstu, xCile, yCile].every(Number.isFinite)) return false;
 
-    const textBod = ziskejV2LupaTextBod(stav);
-    if (textBod?.node) {
-      const text = String(textBod.node.nodeValue || "");
-      const offset = Math.max(0, Math.min(Number(textBod.offset || 0), text.length));
-      v2SelectionLupaPred.textContent = text.slice(Math.max(0, offset - 10), offset).replace(/[\r\n\t]/g, " ");
-      v2SelectionLupaPo.textContent = text.slice(offset, Math.min(text.length, offset + 10)).replace(/[\r\n\t]/g, " ");
-    } else {
-      v2SelectionLupaPred.textContent = "";
-      v2SelectionLupaPo.textContent = "";
-    }
+    const kontext = ziskejV2LupaTextKontext(stav);
+    v2SelectionLupaPred.textContent = kontext.pred;
+    v2SelectionLupaPo.textContent = kontext.po;
 
-    const sirka = 136;
-    const vyska = 58;
+    const sirka = 148;
+    const vyska = 60;
     const okraj = 8;
     const viewportW = Number(window.innerWidth || document.documentElement?.clientWidth || 360);
     const viewportH = Number(window.innerHeight || document.documentElement?.clientHeight || 640);
@@ -3106,6 +3154,9 @@
       lastY: presny.y,
       lastTouchX: Number(dotyk.clientX),
       lastTouchY: Number(dotyk.clientY),
+      startTouchX: Number(dotyk.clientX),
+      startTouchY: Number(dotyk.clientY),
+      lupaAktivni: false,
       autoRaf: 0,
       autoCas: 0,
       autoSmer: 0,
@@ -3628,13 +3679,9 @@
          vykreslit vlastní třetí selection handle. caretPositionFromPoint funguje
          i při user-select:none, takže přesnost po znacích tím neztrácíme. */
       nastavV2CustomSelectionAktivni(stav.editor, true);
-      zobrazV2SelectionLupu(
-        stav,
-        dotyk.clientX,
-        dotyk.clientY,
-        stav.handleDrag.lastX,
-        stav.handleDrag.lastY
-      );
+      /* 677C – prostý tap na handle lupu neukazuje. Objeví se až po
+         skutečném posunu prstu v touchmove. */
+      skryjV2SelectionLupu();
       nastavV2SelectionHandlesAutoScrollSkryti(false);
       stav.touchId = null;
       stav.touchEnded = false;
@@ -3659,7 +3706,40 @@
     const dotyk = event.touches[0];
 
     if (v2SelectionScroll?.range && !v2SelectionScroll.handleDrag) {
-      pripravV2DalsiScrollVizualnihoVyberu(v2SelectionScroll, dotyk);
+      /* PATCH 677C – pokud prst mine samotný 44px DOM hitbox kapky jen o pár
+         pixelů, nepřepneme náhodně do scrollu. Podle skutečných endpointů Range
+         převezmeme nejbližší handle a spustíme úplně stejný custom drag. */
+      const stavAktivni = v2SelectionScroll;
+      const bodyAktivni = ziskejV2SelectionHandleBody(stavAktivni.range);
+      const vzdStartAktivni = bodyAktivni[0]
+        ? Math.hypot(Number(dotyk.clientX) - bodyAktivni[0].x, Number(dotyk.clientY) - bodyAktivni[0].y)
+        : Infinity;
+      const vzdEndAktivni = bodyAktivni[1]
+        ? Math.hypot(Number(dotyk.clientX) - bodyAktivni[1].x, Number(dotyk.clientY) - bodyAktivni[1].y)
+        : Infinity;
+      if (Math.min(vzdStartAktivni, vzdEndAktivni) <= V2_SELECTION_HANDLE_NEAR_PRAH) {
+        const strana = vzdStartAktivni <= vzdEndAktivni ? "start" : "end";
+        const pevnyBod = strana === "start"
+          ? { node: stavAktivni.range.endContainer, offset: stavAktivni.range.endOffset }
+          : { node: stavAktivni.range.startContainer, offset: stavAktivni.range.startOffset };
+        stavAktivni.handleDrag = vytvorV2HandleDrag(stavAktivni, strana, dotyk, pevnyBod);
+        nastavV2CustomSelectionAktivni(stavAktivni.editor, true);
+        skryjV2SelectionLupu();
+        nastavV2SelectionHandlesAutoScrollSkryti(false);
+        stavAktivni.touchId = null;
+        stavAktivni.touchEnded = false;
+        stavAktivni.menuKotvaStrana = strana;
+        nastavV2SelectionMenuNuceneSkryti(true);
+        skryjV2SelectionMenu();
+        potlacV2SelectionMenuDo = performance.now() + 900;
+        event.preventDefault();
+        event.stopPropagation();
+        zapisSelectionScrollDiag("G27C_NEAR_HANDLE_START", event, `side=${strana} dist=${Math.round(Math.min(vzdStartAktivni, vzdEndAktivni))}`);
+        ohlasV2SelectionEngineStav({ engine: "CUSTOM", dragging: true, side: strana });
+        return;
+      }
+
+      pripravV2DalsiScrollVizualnihoVyberu(stavAktivni, dotyk);
       zapisSelectionScrollDiag("G14_NATIVE_SCROLL_ARM", event, `visual=Y x=${Math.round(dotyk.clientX)} y=${Math.round(dotyk.clientY)}`);
       return;
     }
@@ -3688,13 +3768,8 @@
         /* PATCH 677A – native-handle takeover nesmí ani na jediný frame
            znovu povolit WebView selection; jinak vznikne třetí ghost handle. */
         nastavV2CustomSelectionAktivni(stav.editor, true);
-        zobrazV2SelectionLupu(
-          stav,
-          dotyk.clientX,
-          dotyk.clientY,
-          stav.handleDrag.lastX,
-          stav.handleDrag.lastY
-        );
+        /* 677C – stejně i při převzetí nativního endpointu: lupa až po drag prahu. */
+        skryjV2SelectionLupu();
         stav.touchId = null;
         stav.menuKotvaStrana = strana;
         nastavV2SelectionMenuNuceneSkryti(true);
@@ -3736,6 +3811,13 @@
       const smerTed = ziskejV2HandleAutoSmer(stav.editor, dotyk.clientY);
       if (!stav.handleDrag.autoSmer || !smerTed) {
         aktualizujV2HandleRangeZeSouradnic(stav, presny.x, presny.y);
+      }
+      if (!stav.handleDrag.lupaAktivni) {
+        const posunLupy = Math.hypot(
+          Number(dotyk.clientX) - Number(stav.handleDrag.startTouchX),
+          Number(dotyk.clientY) - Number(stav.handleDrag.startTouchY)
+        );
+        if (posunLupy >= V2_SELECTION_LUPA_DRAG_PRAH) stav.handleDrag.lupaAktivni = true;
       }
       zobrazV2SelectionLupu(stav, dotyk.clientX, dotyk.clientY, presny.x, presny.y);
       naplanujV2HandleAutoScroll(stav);
