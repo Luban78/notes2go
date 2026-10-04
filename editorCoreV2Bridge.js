@@ -154,6 +154,14 @@
      - scroll-settle po handle-end už nesmí podruhé přepozicovat panel, pokud je
        ukotvený ke konkrétnímu start/end handle. */
 
+  /* PATCH 677 – selection precision + magnifier polish:
+     - po převodu na custom engine je nativní WebView selection po celou dobu
+       explicitně vypnutá, aby nezůstal třetí ghost handle,
+     - drag si při prvním dotyku pamatuje přesný offset mezi prstem a hrotem
+       úchytu, takže IP/URL/e-mail lze ladit po jednotlivých znacích,
+     - během dragu běží vlastní LubaNote lupa nad prstem; Android selection se
+       nevrací a stávající highlight/autoscroll/menu kontrakt zůstává zachovaný. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -2658,6 +2666,10 @@
   let v2SelectionScrollHighlightRange = null;
   let v2SelectionHandleStart = null;
   let v2SelectionHandleEnd = null;
+  let v2SelectionLupa = null;
+  let v2SelectionLupaPred = null;
+  let v2SelectionLupaPo = null;
+  const V2_SELECTION_CUSTOM_ACTIVE_CLASS = "ln-v2-selection-custom-active";
   let v2SelectionEdgeScrollPxS = (() => {
     try {
       const globalni = Number(window.LUBANOTE_V2_SELECTION_EDGE_SPEED);
@@ -2769,6 +2781,66 @@
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"]::before {
       left: 0;
       border-radius: 0 11px 11px 11px;
+    }
+    /* PATCH 677 – jakmile selection převezme náš engine, WebView už nesmí
+       vykreslovat vlastní selection/handles. CSS Highlight + naše handles dál
+       fungují nezávisle na user-select. */
+    .ln-v2-editor.${V2_SELECTION_CUSTOM_ACTIVE_CLASS} {
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      -webkit-touch-callout: none !important;
+    }
+    .ln-v2-selection-magnifier {
+      position: fixed;
+      width: 136px;
+      height: 58px;
+      z-index: 2147483300;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 2px solid rgba(128, 203, 196, .96);
+      background: var(--color-surface, #082533);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .34);
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      contain: layout paint;
+    }
+    .ln-v2-selection-magnifier[hidden] {
+      display: none !important;
+    }
+    .ln-v2-selection-magnifier-text {
+      position: absolute;
+      top: 50%;
+      width: 64px;
+      overflow: hidden;
+      color: var(--color-text, #eef7fa);
+      font-size: 25px;
+      font-weight: 500;
+      line-height: 1.1;
+      white-space: pre;
+      text-overflow: clip;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .ln-v2-selection-magnifier-before {
+      right: calc(50% + 3px);
+      text-align: right;
+    }
+    .ln-v2-selection-magnifier-after {
+      left: calc(50% + 3px);
+      text-align: left;
+    }
+    .ln-v2-selection-magnifier-caret {
+      position: absolute;
+      left: 50%;
+      top: 12px;
+      width: 2px;
+      height: 34px;
+      margin-left: -1px;
+      border-radius: 2px;
+      background: rgb(128, 203, 196);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .18);
+      pointer-events: none;
     }`;
     document.head.appendChild(styl);
   }
@@ -2894,6 +2966,157 @@
     if (v2SelectionHandleEnd) v2SelectionHandleEnd.hidden = true;
   }
 
+  function nastavV2CustomSelectionAktivni(editor, zapnout) {
+    const cil = editor || v2SelectionScroll?.editor || null;
+    if (!cil) return;
+    cil.classList?.toggle?.(V2_SELECTION_CUSTOM_ACTIVE_CLASS, !!zapnout);
+    if (!zapnout) return;
+
+    /* PATCH 677 – class zapneme DRIVE, než smažeme DOM selection. Android
+       WebView tak nedostane příležitost znovu vykreslit původní systémový
+       handle mezi removeAllRanges a prvním custom frame. */
+    try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+    requestAnimationFrame(() => {
+      if (v2SelectionScroll?.editor !== cil) return;
+      try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+    });
+  }
+
+  function skryjV2SelectionLupu() {
+    if (v2SelectionLupa) v2SelectionLupa.hidden = true;
+  }
+
+  function zajistiV2SelectionLupu() {
+    zajistiV2SelectionScrollHighlightStyl();
+    if (v2SelectionLupa?.isConnected) return true;
+
+    v2SelectionLupa = document.createElement("div");
+    v2SelectionLupa.className = "ln-v2-selection-magnifier";
+    v2SelectionLupa.setAttribute("aria-hidden", "true");
+    v2SelectionLupa.hidden = true;
+
+    v2SelectionLupaPred = document.createElement("span");
+    v2SelectionLupaPred.className = "ln-v2-selection-magnifier-text ln-v2-selection-magnifier-before";
+    v2SelectionLupaPo = document.createElement("span");
+    v2SelectionLupaPo.className = "ln-v2-selection-magnifier-text ln-v2-selection-magnifier-after";
+    const caret = document.createElement("div");
+    caret.className = "ln-v2-selection-magnifier-caret";
+    v2SelectionLupa.append(v2SelectionLupaPred, v2SelectionLupaPo, caret);
+    document.body.appendChild(v2SelectionLupa);
+    return true;
+  }
+
+  function ziskejV2LupaTextBod(stav) {
+    const range = stav?.range;
+    const strana = stav?.handleDrag?.strana === "start" ? "start" : "end";
+    if (!range || range.collapsed) return null;
+
+    const posledniBod = stav?.handleDrag?.posledniBod || null;
+    const node = posledniBod?.node || (strana === "start" ? range.startContainer : range.endContainer);
+    const offset = Number.isFinite(posledniBod?.offset)
+      ? posledniBod.offset
+      : (strana === "start" ? range.startOffset : range.endOffset);
+    if (!node) return null;
+    if (node.nodeType === Node.TEXT_NODE) {
+      return { node, offset: Math.max(0, Math.min(Number(offset || 0), String(node.nodeValue || "").length)) };
+    }
+
+    const deti = Array.from(node.childNodes || []);
+    const index = Math.max(0, Math.min(deti.length, Number(offset || 0)));
+    const pred = index > 0 ? deti[index - 1] : null;
+    const po = index < deti.length ? deti[index] : null;
+    const najdiText = (uzel, odKonce = false) => {
+      if (!uzel) return null;
+      if (uzel.nodeType === Node.TEXT_NODE) return uzel;
+      const walker = document.createTreeWalker(uzel, NodeFilter.SHOW_TEXT);
+      if (!odKonce) return walker.nextNode();
+      let posledni = null;
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) posledni = n;
+      return posledni;
+    };
+    const predText = najdiText(pred, true);
+    if (predText) return { node: predText, offset: String(predText.nodeValue || "").length };
+    const poText = najdiText(po, false);
+    if (poText) return { node: poText, offset: 0 };
+    return null;
+  }
+
+  function zobrazV2SelectionLupu(stav, touchX, touchY, cilX, cilY) {
+    if (!stav?.editor || !stav.handleDrag || v2SelectionPrekryvAktivni) {
+      skryjV2SelectionLupu();
+      return false;
+    }
+    if (!zajistiV2SelectionLupu()) return false;
+
+    const xPrstu = Number(touchX);
+    const yPrstu = Number(touchY);
+    const xCile = Number(cilX);
+    const yCile = Number(cilY);
+    if (![xPrstu, yPrstu, xCile, yCile].every(Number.isFinite)) return false;
+
+    const textBod = ziskejV2LupaTextBod(stav);
+    if (textBod?.node) {
+      const text = String(textBod.node.nodeValue || "");
+      const offset = Math.max(0, Math.min(Number(textBod.offset || 0), text.length));
+      v2SelectionLupaPred.textContent = text.slice(Math.max(0, offset - 10), offset).replace(/[\r\n\t]/g, " ");
+      v2SelectionLupaPo.textContent = text.slice(offset, Math.min(text.length, offset + 10)).replace(/[\r\n\t]/g, " ");
+    } else {
+      v2SelectionLupaPred.textContent = "";
+      v2SelectionLupaPo.textContent = "";
+    }
+
+    const sirka = 136;
+    const vyska = 58;
+    const okraj = 8;
+    const viewportW = Number(window.innerWidth || document.documentElement?.clientWidth || 360);
+    const viewportH = Number(window.innerHeight || document.documentElement?.clientHeight || 640);
+    let left = xPrstu - sirka / 2;
+    let top = yPrstu - 94;
+    if (top < okraj) top = yPrstu + 38;
+    left = Math.max(okraj, Math.min(viewportW - sirka - okraj, left));
+    top = Math.max(okraj, Math.min(viewportH - vyska - okraj, top));
+    v2SelectionLupa.style.left = `${Math.round(left)}px`;
+    v2SelectionLupa.style.top = `${Math.round(top)}px`;
+    v2SelectionLupa.hidden = false;
+    return true;
+  }
+
+  function presneV2DragSouradnice(drag, touchX, touchY) {
+    return {
+      x: Number(touchX) + Number(drag?.posunX || 0),
+      y: Number(touchY) + Number(drag?.posunY || 0)
+    };
+  }
+
+  function vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod) {
+    const bodHandle = ziskejV2SelectionHandleBodProMenu(stav?.range, strana);
+    const posunX = bodHandle && Number.isFinite(bodHandle.x) ? Number(bodHandle.x) - Number(dotyk.clientX) : 0;
+    const posunY = bodHandle && Number.isFinite(bodHandle.y) ? Number(bodHandle.y) - Number(dotyk.clientY) : 0;
+    const presny = { x: Number(dotyk.clientX) + posunX, y: Number(dotyk.clientY) + posunY };
+    return {
+      touchId: dotyk.identifier,
+      strana,
+      pevnyBod,
+      posunX,
+      posunY,
+      posledniBod: strana === "start"
+        ? { node: stav.range.startContainer, offset: stav.range.startOffset }
+        : { node: stav.range.endContainer, offset: stav.range.endOffset },
+      lastX: presny.x,
+      lastY: presny.y,
+      lastTouchX: Number(dotyk.clientX),
+      lastTouchY: Number(dotyk.clientY),
+      autoRaf: 0,
+      autoCas: 0,
+      autoSmer: 0,
+      autoPozice: null,
+      autoRangeCas: 0,
+      melMultiscroll: false,
+      posledniSpeed: null,
+      rangeMiss: 0
+    };
+  }
+
   function nastavV2SelectionHandlesAutoScrollSkryti(skryt) {
     const metoda = skryt ? "add" : "remove";
     v2SelectionHandleStart?.classList?.[metoda]?.("ln-v2-handle-autoscroll-hidden");
@@ -3010,6 +3233,7 @@
       nastavV2SelectionMenuNuceneSkryti(true);
       skryjV2SelectionMenu();
       skryjV2SelectionHandles();
+      skryjV2SelectionLupu();
     } else {
       /* Po zavření nic násilně neobnovujeme. Pokud akce výběr spotřebovala,
          žádné ghost handles se nevrátí; pokud výběr stále žije, další běžný
@@ -3113,6 +3337,7 @@
     const y = Math.max(rect.top + 2, Math.min(rect.bottom - 2, Number(clientY)));
     const bod = domBodV2ZBodu(x, y, stav.editor);
     if (!bod) return false;
+    stav.handleDrag.posledniBod = { node: bod.node, offset: bod.offset };
     const novyRange = rangeV2MeziBody(stav.handleDrag.pevnyBod, bod);
     if (!novyRange) return false;
     stav.range = novyRange;
@@ -3145,7 +3370,10 @@
       if (!aktualniDrag || v2SelectionScroll !== stav || !aktivni || !stav.editor) return;
       aktualniDrag.autoRaf = 0;
 
-      const smer = ziskejV2HandleAutoSmer(stav.editor, aktualniDrag.lastY);
+      const smer = ziskejV2HandleAutoSmer(
+        stav.editor,
+        Number.isFinite(aktualniDrag.lastTouchY) ? aktualniDrag.lastTouchY : aktualniDrag.lastY
+      );
 
       if (smer !== aktualniDrag.autoSmer) {
         aktualniDrag.autoSmer = smer;
@@ -3212,6 +3440,13 @@
           }
         }
         stav.editor.scrollTop = dalsi;
+        zobrazV2SelectionLupu(
+          stav,
+          Number.isFinite(aktualniDrag.lastTouchX) ? aktualniDrag.lastTouchX : aktualniDrag.lastX,
+          Number.isFinite(aktualniDrag.lastTouchY) ? aktualniDrag.lastTouchY : aktualniDrag.lastY,
+          aktualniDrag.lastX,
+          aktualniDrag.lastY
+        );
       }
 
       aktualniDrag.autoRaf = requestAnimationFrame(krok);
@@ -3231,6 +3466,8 @@
       stav.obnovTimer = null;
     }
     if (stav?.handleDrag) stav.handleDrag = null;
+    skryjV2SelectionLupu();
+    nastavV2CustomSelectionAktivni(stav?.editor, false);
     zrusV2SelectionScrollHighlight();
     skryjV2SelectionHandles();
     nastavV2SelectionMenuNuceneSkryti(false);
@@ -3292,6 +3529,7 @@
     };
     v2SelectionScroll = stav;
     v2PosledniTapSelection = null;
+    nastavV2CustomSelectionAktivni(editor, true);
     skryjV2SelectionMenu();
     skryjV2SelectionHandles();
     potlacV2SelectionMenuDo = performance.now() + 900;
@@ -3326,6 +3564,7 @@
       menuKotvaStrana: null
     };
     v2SelectionScroll = stav;
+    nastavV2CustomSelectionAktivni(editor, true);
     ulozV2VizualniRangeDoCore(kopie);
     try { vyber.removeAllRanges(); } catch (_error) {}
     nastavV2SelectionMenuNuceneSkryti(false);
@@ -3383,21 +3622,18 @@
       const pevnyBod = strana === "start"
         ? { node: stav.range.endContainer, offset: stav.range.endOffset }
         : { node: stav.range.startContainer, offset: stav.range.startOffset };
-      stav.handleDrag = {
-        touchId: dotyk.identifier,
-        strana,
-        pevnyBod,
-        lastX: dotyk.clientX,
-        lastY: dotyk.clientY,
-        autoRaf: 0,
-        autoCas: 0,
-        autoSmer: 0,
-        autoPozice: null,
-        autoRangeCas: 0,
-        melMultiscroll: false,
-        posledniSpeed: null,
-        rangeMiss: 0
-      };
+      stav.handleDrag = vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod);
+      /* PATCH 677 – během našeho handle dragu může být user-select znovu
+         zapnutý: gesto už vlastníme přes preventDefault a DOM selection je prázdná.
+         caretPositionFromPoint tak zůstane maximálně přesný po znacích. */
+      nastavV2CustomSelectionAktivni(stav.editor, false);
+      zobrazV2SelectionLupu(
+        stav,
+        dotyk.clientX,
+        dotyk.clientY,
+        stav.handleDrag.lastX,
+        stav.handleDrag.lastY
+      );
       nastavV2SelectionHandlesAutoScrollSkryti(false);
       stav.touchId = null;
       stav.touchEnded = false;
@@ -3447,21 +3683,15 @@
         const pevnyBod = strana === "start"
           ? { node: stav.range.endContainer, offset: stav.range.endOffset }
           : { node: stav.range.startContainer, offset: stav.range.startOffset };
-        stav.handleDrag = {
-          touchId: dotyk.identifier,
-          strana,
-          pevnyBod,
-          lastX: dotyk.clientX,
-          lastY: dotyk.clientY,
-          autoRaf: 0,
-          autoCas: 0,
-          autoSmer: 0,
-          autoPozice: null,
-          autoRangeCas: 0,
-          melMultiscroll: false,
-          posledniSpeed: null,
-          rangeMiss: 0
-        };
+        stav.handleDrag = vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod);
+        nastavV2CustomSelectionAktivni(stav.editor, false);
+        zobrazV2SelectionLupu(
+          stav,
+          dotyk.clientX,
+          dotyk.clientY,
+          stav.handleDrag.lastX,
+          stav.handleDrag.lastY
+        );
         stav.touchId = null;
         stav.menuKotvaStrana = strana;
         nastavV2SelectionMenuNuceneSkryti(true);
@@ -3489,20 +3719,22 @@
     if (stav.handleDrag) {
       const dotyk = Array.from(event.touches || []).find((item) => item.identifier === stav.handleDrag.touchId);
       if (!dotyk) return;
-      stav.handleDrag.lastX = dotyk.clientX;
-      stav.handleDrag.lastY = dotyk.clientY;
+      const presny = presneV2DragSouradnice(stav.handleDrag, dotyk.clientX, dotyk.clientY);
+      stav.handleDrag.lastTouchX = Number(dotyk.clientX);
+      stav.handleDrag.lastTouchY = Number(dotyk.clientY);
+      stav.handleDrag.lastX = presny.x;
+      stav.handleDrag.lastY = presny.y;
       // 673G20 – během handle dragu panel nesmí existovat vizuálně ani na frame.
       nastavV2SelectionMenuNuceneSkryti(true);
       skryjV2SelectionMenu();
 
-      /* 673G23 – v edge zóně je jediným vlastníkem range update RAF loop.
-         G22 zde současně dělalo plný touchmove update (core-save + recty) A
-         lehký RAF update, což přesně vytvářelo mikrotřepání. Mimo edge zónu
-         zůstává přímý update beze změny pro přesné ruční tažení handlem. */
+      /* PATCH 677 – range sleduje přesný hrot handle, ne libovolné místo
+         uvnitř 44px hitboxu, na kterém prst drag zahájil. */
       const smerTed = ziskejV2HandleAutoSmer(stav.editor, dotyk.clientY);
       if (!stav.handleDrag.autoSmer || !smerTed) {
-        aktualizujV2HandleRangeZeSouradnic(stav, dotyk.clientX, dotyk.clientY);
+        aktualizujV2HandleRangeZeSouradnic(stav, presny.x, presny.y);
       }
+      zobrazV2SelectionLupu(stav, dotyk.clientX, dotyk.clientY, presny.x, presny.y);
       naplanujV2HandleAutoScroll(stav);
       event.preventDefault();
       event.stopPropagation();
@@ -3541,11 +3773,14 @@
       const strana = dragDokoncen.strana;
       const bylMultiscroll = !!dragDokoncen.melMultiscroll;
       zastavV2HandleAutoScroll(stav, "touchend");
-      /* 673G26 – po posledním scroll frame jednou přesně dorovnáme endpoint,
-         aby nikdy nezůstal poslední řádek nedobarvený. */
-      if (!aktualizujV2HandleRangeZeSouradnic(stav, dotyk.clientX, dotyk.clientY, true)) {
+      /* PATCH 677 – i finální endpoint používá stejný kalibrovaný hrot jako
+         celý drag. Jinak by poslední touchend mohl výběr o znak posunout. */
+      const presnyKonec = presneV2DragSouradnice(dragDokoncen, dotyk.clientX, dotyk.clientY);
+      if (!aktualizujV2HandleRangeZeSouradnic(stav, presnyKonec.x, presnyKonec.y, true)) {
         dragDokoncen.rangeMiss = Number(dragDokoncen.rangeMiss || 0) + 1;
       }
+      skryjV2SelectionLupu();
+      nastavV2CustomSelectionAktivni(stav.editor, true);
       stav.handleDrag = null;
       stav.touchId = null;
       stav.touchEnded = true;
@@ -3624,6 +3859,8 @@
       const strana = dragDokoncen.strana;
       zastavV2HandleAutoScroll(stav, "touchcancel");
       aktualizujV2HandleRangeZeSouradnic(stav, dragDokoncen.lastX, dragDokoncen.lastY, true);
+      skryjV2SelectionLupu();
+      nastavV2CustomSelectionAktivni(stav.editor, true);
       stav.handleDrag = null;
       stav.touchId = null;
       stav.touchEnded = true;
