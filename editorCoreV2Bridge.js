@@ -3623,10 +3623,11 @@
         ? { node: stav.range.endContainer, offset: stav.range.endOffset }
         : { node: stav.range.startContainer, offset: stav.range.startOffset };
       stav.handleDrag = vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod);
-      /* PATCH 677 – během našeho handle dragu může být user-select znovu
-         zapnutý: gesto už vlastníme přes preventDefault a DOM selection je prázdná.
-         caretPositionFromPoint tak zůstane maximálně přesný po znacích. */
-      nastavV2CustomSelectionAktivni(stav.editor, false);
+      /* PATCH 677A – během custom handle dragu MUSÍ zůstat user-select vypnutý.
+         677 jej zde omylem znovu zapnul; Android WebView pak během dragu mohl
+         vykreslit vlastní třetí selection handle. caretPositionFromPoint funguje
+         i při user-select:none, takže přesnost po znacích tím neztrácíme. */
+      nastavV2CustomSelectionAktivni(stav.editor, true);
       zobrazV2SelectionLupu(
         stav,
         dotyk.clientX,
@@ -3684,7 +3685,9 @@
           ? { node: stav.range.endContainer, offset: stav.range.endOffset }
           : { node: stav.range.startContainer, offset: stav.range.startOffset };
         stav.handleDrag = vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod);
-        nastavV2CustomSelectionAktivni(stav.editor, false);
+        /* PATCH 677A – native-handle takeover nesmí ani na jediný frame
+           znovu povolit WebView selection; jinak vznikne třetí ghost handle. */
+        nastavV2CustomSelectionAktivni(stav.editor, true);
         zobrazV2SelectionLupu(
           stav,
           dotyk.clientX,
