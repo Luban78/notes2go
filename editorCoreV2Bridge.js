@@ -3850,6 +3850,15 @@
       return;
     }
 
+    /* PATCH 677B – tap UVNITŘ už aktivního custom výběru nesmí propadnout
+       do contenteditable/WebView. Android jinak po touchend vygeneruje ještě
+       syntetický click/caret a vykreslí třetí (caret) handle mezi našimi dvěma.
+       Vertikální scroll zůstává nedotčený: preventDefault děláme až zde, když
+       už víme, že nešlo o scroll a bod skončil uvnitř existujícího výběru. */
+    event.preventDefault();
+    event.stopPropagation();
+    potlacV2SelectionScrollClickDo = performance.now() + 450;
+    nastavV2CustomSelectionAktivni(stav.editor, true);
     try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
     zobrazV2VizualniSelectionPoScrollu(stav, "tap-inside");
   }, { passive: false, capture: true });
