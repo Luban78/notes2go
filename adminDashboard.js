@@ -1074,11 +1074,32 @@
         zprava: "Lokální frontu obrázků/příloh se nepodařilo bezpečně ověřit. Přepnutí je blokované."
       };
     }
-    if (Number(attachmentDiag?.cekajiciUploady || 0) > 0) {
-      return {
-        ok: false,
-        zprava: `Ještě čeká ${Number(attachmentDiag.cekajiciUploady)} obrázků/příloh na cloudový upload. Nejdřív nech synchronizaci doběhnout.`
-      };
+    const cekajiciStinoveUploady = Number(
+      attachmentDiag?.cekajiciUploady || 0
+    );
+
+    /*
+     * 677L: attachment cloud-shadow fronta NENÍ synchronizační dluh.
+     * V aktuální V1 je autoritou obrázku Data URL / media vault uvnitř
+     * synchronizované poznámky; Storage shadow je pouze doplňková vrstva.
+     * Proto cloud_shadow pending položky nesmí blokovat bezpečný přechod
+     * tohoto zařízení na TEST backend. Reset je může zahodit, ale obsah
+     * poznámky už musí být před přepnutím ve stavu Synchronizováno.
+     * Pokud by se režim příloh někdy změnil na jiný než cloud_shadow,
+     * raději přepnutí znovu zablokujeme.
+     */
+    if (cekajiciStinoveUploady > 0) {
+      if (attachmentDiag?.rezim !== "cloud_shadow") {
+        return {
+          ok: false,
+          zprava: `Ještě čeká ${cekajiciStinoveUploady} obrázků/příloh v neznámém režimu. Přepnutí je pro jistotu blokované.`
+        };
+      }
+
+      console.info(
+        "Backend switch: pending cloud-shadow uploads are non-authoritative and will not block TEST switch:",
+        cekajiciStinoveUploady
+      );
     }
 
     const dluhKlice = [
