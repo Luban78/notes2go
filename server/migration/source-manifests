@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+BASE="$HOME/luba-server/migration-manager"
+CFG="$BASE/config/source-cloud.env"
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: source-manifests /cesta/k/run-dir"
+OUT="$(readlink -m "$1")"
+[ -d "$OUT" ] || fail "Run dir neexistuje: $OUT"
+[ -f "$CFG" ] || fail "Chybi $CFG"
+set -a
+. "$CFG"
+set +a
+for V in SOURCE_DB_HOST SOURCE_DB_PORT SOURCE_DB_NAME SOURCE_DB_USER SOURCE_DB_PASSWORD PGSSLMODE; do
+  [ -n "${!V:-}" ] || fail "Chybi $V"
+done
+export PGPASSWORD="$SOURCE_DB_PASSWORD"
+PSQL=(docker run --rm -i -e PGPASSWORD -e PGSSLMODE postgres:17-alpine psql \
+  --host="$SOURCE_DB_HOST" --port="$SOURCE_DB_PORT" --username="$SOURCE_DB_USER" --dbname="$SOURCE_DB_NAME" \
+  -X -v ON_ERROR_STOP=1 -At -F $'\t')
+
+echo "[manifest] public table fingerprints..."
+cat <<'SQL' | "${PSQL[@]}" > "$OUT/public-fingerprints.tsv"
+CREATE TEMP TABLE _ln_fp(table_name text, row_count bigint, digest text);
+DO $$
+DECLARE r record; c bigint; d text;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename LOOP
+    EXECUTE format(
+      'SELECT count(*)::bigint, md5(COALESCE(string_agg(h, '''' ORDER BY h), '''')) FROM (SELECT md5(to_jsonb(t)::text) h FROM public.%I t) s',
+      r.tablename
+    ) INTO c, d;
+    INSERT INTO _ln_fp VALUES (r.tablename, c, d);
+  END LOOP;
+END $$;
+SELECT table_name,row_count,digest FROM _ln_fp ORDER BY table_name;
+SQL
+
+echo "[manifest] public sequences..."
+"${PSQL[@]}" -c "SELECT schemaname||'.'||sequencename, COALESCE(last_value::text,'NULL') FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename;" \
+  > "$OUT/public-sequences.tsv"
+
+echo "[manifest] auth stable fingerprints..."
+"${PSQL[@]}" -c "
+SELECT 'users', count(*)::bigint,
+       md5(COALESCE(string_agg(md5(jsonb_build_object(
+         'id',id,'aud',aud,'role',role,'email',email,'encrypted_password',encrypted_password,
+         'phone',phone,'raw_app_meta_data',raw_app_meta_data,'raw_user_meta_data',raw_user_meta_data,
+         'is_sso_user',is_sso_user,'is_anonymous',is_anonymous
+       )::text), '' ORDER BY md5(jsonb_build_object(
+         'id',id,'aud',aud,'role',role,'email',email,'encrypted_password',encrypted_password,
+         'phone',phone,'raw_app_meta_data',raw_app_meta_data,'raw_user_meta_data',raw_user_meta_data,
+         'is_sso_user',is_sso_user,'is_anonymous',is_anonymous
+       )::text)), ''))
+FROM auth.users
+UNION ALL
+SELECT 'identities', count(*)::bigint,
+       md5(COALESCE(string_agg(md5(jsonb_build_object(
+         'id',id,'user_id',user_id,'provider',provider,'identity_data',identity_data
+       )::text), '' ORDER BY md5(jsonb_build_object(
+         'id',id,'user_id',user_id,'provider',provider,'identity_data',identity_data
+       )::text)), ''))
+FROM auth.identities
+ORDER BY 1;" > "$OUT/auth-stable.tsv"
+
+echo "[manifest] storage buckets/objects..."
+"${PSQL[@]}" -c "SELECT id,name,public,COALESCE(file_size_limit::text,''),COALESCE(allowed_mime_types::text,'') FROM storage.buckets ORDER BY id;" \
+  > "$OUT/storage-buckets.tsv"
+"${PSQL[@]}" -c "SELECT bucket_id,name FROM storage.objects ORDER BY bucket_id,name;" \
+  > "$OUT/storage-objects.tsv"
+
+# pg_restore list pro pouze public TABLE DATA + SEQUENCE SET
+grep -E ' TABLE DATA public | SEQUENCE SET public ' "$OUT/source-db.toc" > "$OUT/public-data.list"
+[ -s "$OUT/public-data.list" ] || fail "V source-db.toc nebyla nalezena public TABLE DATA/SEQUENCE SET."
+
+unset PGPASSWORD SOURCE_DB_PASSWORD SOURCE_SERVICE_ROLE_KEY
+printf 'PASS: source manifests pripraveny (%s public tabulek).\n' "$(wc -l < "$OUT/public-fingerprints.tsv")"

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+CFG="$HOME/luba-server/migration-manager/config/source-cloud.env"
+echo "=== LubaNote Source Adapter / PRE-FLIGHT ==="
+if [ ! -f "$CFG" ]; then
+  echo "FAIL: chybi $CFG"
+  exit 1
+fi
+PERM="$(stat -c '%a' "$CFG")"
+if [ "$PERM" != "600" ]; then
+  echo "FAIL: source-cloud.env musi mit prava 600, aktualne $PERM"
+  exit 1
+fi
+set -a
+# shellcheck disable=SC1090
+source "$CFG"
+set +a
+chybi=0
+for v in \
+  SOURCE_DB_HOST \
+  SOURCE_DB_PORT \
+  SOURCE_DB_NAME \
+  SOURCE_DB_USER \
+  SOURCE_DB_PASSWORD \
+  SOURCE_API_URL \
+  SOURCE_SERVICE_ROLE_KEY
+do
+  if [ -z "${!v:-}" ]; then
+    echo "CHYBI: $v"
+    chybi=1
+  else
+    echo "OK:    $v"
+  fi
+done
+echo
+echo "=== DOCKER ==="
+docker version --format 'Docker {{.Server.Version}}' 2>/dev/null || {
+  echo "FAIL: Docker neni dostupny."
+  exit 1
+}
+echo
+echo "=== LOCAL DESTINATION DB ==="
+docker exec supabase-db pg_isready 2>/dev/null || {
+  echo "FAIL: lokalni supabase-db neni pripraven."
+  exit 1
+}
+if [ "$chybi" -ne 0 ]; then
+  echo "PRE-FLIGHT: CONFIG INCOMPLETE"
+  echo "Zadne pripojeni ke Cloudu nebylo provedeno."
+  exit 2
+fi
+echo "PRE-FLIGHT: CONFIG COMPLETE"
+echo "Zadne produkcni data zatim nebyla stazena ani zmenena."
+unset SOURCE_DB_PASSWORD SOURCE_SERVICE_ROLE_KEY

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+BASE="$HOME/luba-server/migration-manager"
+CFG="$BASE/config/source-cloud.env"
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: source-db-snapshot /cesta/k/run-dir"
+[ -f "$CFG" ] || fail "Chybi $CFG"
+MODE="$(stat -c '%a' "$CFG")"
+[ "$MODE" = "600" ] || fail "source-cloud.env musi mit chmod 600, aktualne $MODE"
+set -a
+. "$CFG"
+set +a
+for V in SOURCE_DB_HOST SOURCE_DB_PORT SOURCE_DB_NAME SOURCE_DB_USER SOURCE_DB_PASSWORD PGSSLMODE; do
+  [ -n "${!V:-}" ] || fail "Chybi $V"
+done
+case "$SOURCE_DB_HOST" in
+  *"@"*|*":"*|*"/"*) fail "SOURCE_DB_HOST nema byt connection string, jen hostname" ;;
+esac
+OUT="$(readlink -m "$1")"
+mkdir -p "$OUT"
+chmod 700 "$OUT"
+[ ! -e "$OUT/source-db.dump" ] || fail "source-db.dump uz existuje: $OUT"
+export PGPASSWORD="$SOURCE_DB_PASSWORD"
+echo "=== LubaNote SOURCE DB SNAPSHOT ==="
+echo "SOURCE: Supabase Cloud"
+echo "HOST:   $SOURCE_DB_HOST"
+echo "DB:     $SOURCE_DB_NAME"
+echo "MODE:   READ ONLY"
+echo
+echo "[1/4] pg_dump..."
+docker run --rm \
+  -e PGPASSWORD \
+  -e PGSSLMODE \
+  -v "$OUT:/out" \
+  postgres:17-alpine \
+  pg_dump \
+    --host="$SOURCE_DB_HOST" \
+    --port="$SOURCE_DB_PORT" \
+    --username="$SOURCE_DB_USER" \
+    --dbname="$SOURCE_DB_NAME" \
+    --format=custom \
+    --no-owner \
+    --no-privileges \
+    --no-subscriptions \
+    --file=/out/source-db.dump
+
+echo "[2/4] Kontrola obsahu dumpu..."
+docker run --rm -v "$OUT:/out:ro" postgres:17-alpine \
+  pg_restore -l /out/source-db.dump > "$OUT/source-db.toc"
+
+echo "[3/4] Source counts..."
+printf 'notes,auth_users,buckets,storage_objects\n' > "$OUT/source-counts.csv"
+docker run --rm \
+  -e PGPASSWORD \
+  -e PGSSLMODE \
+  postgres:17-alpine \
+  psql \
+    --host="$SOURCE_DB_HOST" \
+    --port="$SOURCE_DB_PORT" \
+    --username="$SOURCE_DB_USER" \
+    --dbname="$SOURCE_DB_NAME" \
+    -X -v ON_ERROR_STOP=1 -At -F',' \
+    -c "SELECT
+          (SELECT count(*) FROM public.notes),
+          (SELECT count(*) FROM auth.users),
+          (SELECT count(*) FROM storage.buckets),
+          (SELECT count(*) FROM storage.objects);" \
+  >> "$OUT/source-counts.csv"
+
+echo "[4/4] SHA-256..."
+sha256sum "$OUT/source-db.dump" > "$OUT/SHA256SUMS"
+unset PGPASSWORD SOURCE_DB_PASSWORD SOURCE_SERVICE_ROLE_KEY
+echo
+echo "PASS: SOURCE DB snapshot pripraven."
+echo "Soubor: $OUT/source-db.dump"
+echo "Velikost: $(stat -c '%s' "$OUT/source-db.dump") B"
+cat "$OUT/source-counts.csv"

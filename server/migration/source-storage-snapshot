@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+BASE="$HOME/luba-server/migration-manager"
+CFG="$BASE/config/source-cloud.env"
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: source-storage-snapshot /cesta/k/run-dir"
+OUT="$(readlink -m "$1")"
+[ -f "$OUT/storage-objects.tsv" ] || fail "Chybi storage-objects.tsv"
+[ -f "$CFG" ] || fail "Chybi $CFG"
+set -a
+. "$CFG"
+set +a
+for V in SOURCE_API_URL SOURCE_SERVICE_ROLE_KEY; do [ -n "${!V:-}" ] || fail "Chybi $V"; done
+STORAGE="$OUT/storage"
+mkdir -p "$STORAGE"
+chmod 700 "$STORAGE"
+count=0
+while IFS=$'\t' read -r bucket object; do
+  [ -n "$bucket" ] || continue
+  dest="$STORAGE/$bucket/$object"
+  mkdir -p "$(dirname "$dest")"
+  encoded_bucket="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$bucket")"
+  encoded_object="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$object")"
+  url="${SOURCE_API_URL%/}/storage/v1/object/authenticated/$encoded_bucket/$encoded_object"
+  curl --fail --silent --show-error --location \
+    -H "Authorization: Bearer $SOURCE_SERVICE_ROLE_KEY" \
+    -H "apikey: $SOURCE_SERVICE_ROLE_KEY" \
+    "$url" -o "$dest"
+  count=$((count+1))
+done < "$OUT/storage-objects.tsv"
+(
+  cd "$OUT"
+  find storage -type f -print0 | sort -z | xargs -0 -r sha256sum > storage-SHA256SUMS
+  sha256sum -c storage-SHA256SUMS >/dev/null
+)
+unset SOURCE_SERVICE_ROLE_KEY SOURCE_DB_PASSWORD
+printf 'PASS: SOURCE Storage %s objektu, %s B.\n' "$count" "$(du -sb "$STORAGE" | awk '{print $1}')"

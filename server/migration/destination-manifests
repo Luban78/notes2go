@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 2 ] || fail "Pouziti: destination-manifests /run-dir /out-dir"
+RUN="$(readlink -m "$1")"
+OUT="$(readlink -m "$2")"
+[ -f "$RUN/public-fingerprints.tsv" ] || fail "Chybi source public-fingerprints.tsv"
+mkdir -p "$OUT"
+chmod 700 "$OUT"
+PSQL=(docker exec -i supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -At -F $'\t')
+
+echo "[destination] public fingerprints..."
+: > "$OUT/public-fingerprints.tsv"
+while IFS=$'\t' read -r table _count _digest; do
+  [[ "$table" =~ ^[a-zA-Z0-9_]+$ ]] || fail "Neocekavany nazev tabulky: $table"
+  "${PSQL[@]}" -c "SELECT '$table', count(*)::bigint, md5(COALESCE(string_agg(h, '' ORDER BY h), '')) FROM (SELECT md5(to_jsonb(t)::text) h FROM public.\"$table\" t) s;" \
+    >> "$OUT/public-fingerprints.tsv"
+done < "$RUN/public-fingerprints.tsv"
+
+"${PSQL[@]}" -c "SELECT schemaname||'.'||sequencename, COALESCE(last_value::text,'NULL') FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename;" \
+  | grep -Fxf <(cut -f1 "$RUN/public-sequences.tsv") -m 999999 2>/dev/null > "$OUT/public-sequences.raw.tsv" || true
+# Zachovej poradi source a vyber konkretni sekvence.
+: > "$OUT/public-sequences.tsv"
+while IFS=$'\t' read -r seq _; do
+  q=${seq#public.}
+  [[ "$q" =~ ^[a-zA-Z0-9_]+$ ]] || fail "Neocekavana sekvence: $q"
+  "${PSQL[@]}" -c "SELECT 'public.$q', COALESCE(last_value::text,'NULL') FROM pg_sequences WHERE schemaname='public' AND sequencename='$q';" \
+    >> "$OUT/public-sequences.tsv"
+done < "$RUN/public-sequences.tsv"
+rm -f "$OUT/public-sequences.raw.tsv"
+
+"${PSQL[@]}" -c "
+SELECT 'users', count(*)::bigint,
+       md5(COALESCE(string_agg(md5(jsonb_build_object(
+         'id',id,'aud',aud,'role',role,'email',email,'encrypted_password',encrypted_password,
+         'phone',phone,'raw_app_meta_data',raw_app_meta_data,'raw_user_meta_data',raw_user_meta_data,
+         'is_sso_user',is_sso_user,'is_anonymous',is_anonymous
+       )::text), '' ORDER BY md5(jsonb_build_object(
+         'id',id,'aud',aud,'role',role,'email',email,'encrypted_password',encrypted_password,
+         'phone',phone,'raw_app_meta_data',raw_app_meta_data,'raw_user_meta_data',raw_user_meta_data,
+         'is_sso_user',is_sso_user,'is_anonymous',is_anonymous
+       )::text)), ''))
+FROM auth.users
+UNION ALL
+SELECT 'identities', count(*)::bigint,
+       md5(COALESCE(string_agg(md5(jsonb_build_object(
+         'id',id,'user_id',user_id,'provider',provider,'identity_data',identity_data
+       )::text), '' ORDER BY md5(jsonb_build_object(
+         'id',id,'user_id',user_id,'provider',provider,'identity_data',identity_data
+       )::text)), ''))
+FROM auth.identities
+ORDER BY 1;" > "$OUT/auth-stable.tsv"
+
+"${PSQL[@]}" -c "SELECT id,name,public,COALESCE(file_size_limit::text,''),COALESCE(allowed_mime_types::text,'') FROM storage.buckets ORDER BY id;" \
+  > "$OUT/storage-buckets.tsv"
+"${PSQL[@]}" -c "SELECT bucket_id,name FROM storage.objects ORDER BY bucket_id,name;" \
+  > "$OUT/storage-objects.tsv"

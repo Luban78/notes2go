@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: apply-public /run-dir"
+RUN="$(readlink -m "$1")"
+[ -f "$RUN/source-db.dump" ] || fail "Chybi source-db.dump"
+[ -f "$RUN/public-data.list" ] || fail "Chybi public-data.list"
+mapfile -t TABLES < <(awk '$4=="TABLE" && $5=="DATA" && $6=="public" {print $7}' "$RUN/public-data.list" | sort -u)
+[ "${#TABLES[@]}" -gt 0 ] || fail "Nenalezeny public tabulky."
+TRUNC=""
+for t in "${TABLES[@]}"; do
+  [[ "$t" =~ ^[a-zA-Z0-9_]+$ ]] || fail "Neocekavany nazev tabulky: $t"
+  if [ -n "$TRUNC" ]; then TRUNC+=", "; fi
+  TRUNC+="public.\"$t\""
+done
+
+echo "[apply] public data: ${#TABLES[@]} tabulek"
+{
+  echo 'BEGIN;'
+  echo 'SET LOCAL session_replication_role = replica;'
+  printf 'TRUNCATE TABLE %s RESTART IDENTITY CASCADE;\n' "$TRUNC"
+  docker run --rm -v "$RUN:/in:ro" postgres:17-alpine \
+    pg_restore --use-list=/in/public-data.list --data-only --no-owner --no-privileges --file=- /in/source-db.dump
+  echo 'COMMIT;'
+} | docker exec -i supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1
+
+echo "[apply] Storage ownership repair (jen validni UUID prefixy)..."
+docker exec -i supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 <<'SQL'
+UPDATE storage.objects o
+SET owner = split_part(o.name,'/',1)::uuid,
+    owner_id = split_part(o.name,'/',1)
+WHERE o.bucket_id = 'lubanote-attachments'
+  AND split_part(o.name,'/',1) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  AND EXISTS (
+    SELECT 1 FROM auth.users u
+    WHERE u.id = split_part(o.name,'/',1)::uuid
+  );
+SQL
+
+echo "PASS: public data aplikovana bez --clean; Auth/Storage schema nebyla obnovovana."

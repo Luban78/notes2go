@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+fail() { echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: destination-checkpoint RUN_ID"
+RUN_ID="$1"
+CP="$HOME/luba-server/checkpoints/pre-production-prepare-$RUN_ID"
+STORAGE_SRC="$HOME/luba-server/luba-supabase/volumes/storage"
+[ ! -e "$CP" ] || fail "Checkpoint uz existuje: $CP"
+mkdir -p "$CP"
+chmod 700 "$CP"
+
+echo "[checkpoint] LubaServer DB..."
+docker exec supabase-db pg_dump -U postgres -d postgres -Fc -f /tmp/lubaserver-before-production-prepare.dump
+docker cp supabase-db:/tmp/lubaserver-before-production-prepare.dump "$CP/lubaserver-db.dump" >/dev/null
+docker exec supabase-db rm -f /tmp/lubaserver-before-production-prepare.dump
+
+echo "[checkpoint] kontrola DB dumpu..."
+docker run --rm -v "$CP:/checkpoint:ro" postgres:17-alpine \
+  pg_restore -l /checkpoint/lubaserver-db.dump > "$CP/lubaserver-db.toc"
+
+echo "[checkpoint] Storage..."
+[ -d "$STORAGE_SRC" ] || fail "Storage dir neexistuje: $STORAGE_SRC"
+tar -C "$(dirname "$STORAGE_SRC")" -czf "$CP/lubaserver-storage.tar.gz" "$(basename "$STORAGE_SRC")"
+(
+  cd "$CP"
+  sha256sum lubaserver-db.dump lubaserver-storage.tar.gz > SHA256SUMS
+  sha256sum -c SHA256SUMS
+)
+printf '%s\n' "$CP"

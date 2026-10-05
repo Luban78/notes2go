@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+BASE="$HOME/luba-server/migration-manager"
+STATE_DIR="$BASE/state"
+RUNS_DIR="$BASE/runs"
+BIN="$BASE/bin"
+STATE_FILE="$STATE_DIR/state"
+CURRENT_RUN_FILE="$STATE_DIR/current_run"
+mkdir -p "$STATE_DIR" "$RUNS_DIR"
+[ -f "$STATE_FILE" ] || printf 'IDLE\n' > "$STATE_FILE"
+stav() { cat "$STATE_FILE"; }
+set_state() { printf '%s\n' "$1" > "$STATE_FILE"; }
+current_run() { [ -f "$CURRENT_RUN_FILE" ] && cat "$CURRENT_RUN_FILE" || true; }
+latest_run() { find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n 1 || true; }
+
+status() {
+  echo "=== LubaNote Migration Manager V2 ==="
+  echo "State: $(stav)"
+  echo
+  echo "=== BACKENDY ==="
+  echo "SOURCE:      Supabase Cloud"
+  echo "DESTINATION: LubaServer"
+  echo
+  echo "=== CUTOVER ==="
+  echo "LOCKED (V2: zamerne deaktivovan)"
+  echo
+  echo "=== AKTUALNI RUN ==="
+  r="$(current_run)"
+  if [ -n "$r" ]; then echo "$r"; else echo "zadny"; fi
+  echo
+  echo "=== POSLEDNI RUN ==="
+  l="$(latest_run)"
+  if [ -n "$l" ]; then basename "$l"; else echo "zadny"; fi
+  if [ -n "$r" ] && [ -f "$RUNS_DIR/$r/verify-report.txt" ]; then
+    echo
+    echo "=== VERIFY REPORT ==="
+    cat "$RUNS_DIR/$r/verify-report.txt"
+  fi
+}
+
+prepare() {
+  current="$(stav)"
+  if [ "$current" != "IDLE" ]; then
+    echo "CHYBA: PREPARE lze spustit pouze ze stavu IDLE."
+    echo "Aktualni stav: $current"
+    exit 1
+  fi
+  run_id="prepare-$(date -u +%Y%m%dT%H%M%SZ)"
+  run_dir="$RUNS_DIR/$run_id"
+  mkdir -p "$run_dir"
+  chmod 700 "$run_dir"
+  printf '%s\n' "$run_id" > "$CURRENT_RUN_FILE"
+  set_state PREPARING
+  {
+    echo "run_id=$run_id"
+    echo "created_utc=$(date -u +%FT%TZ)"
+    echo "source=supabase-cloud"
+    echo "destination=lubaserver"
+    echo "manager=v2"
+  } > "$run_dir/manifest"
+
+  on_error() {
+    rc=$?
+    echo "failed_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest" || true
+    echo "exit_code=$rc" >> "$run_dir/manifest" || true
+    if [ -f "$run_dir/MUTATION_STARTED" ]; then
+      set_state PREPARE_FAILED
+      echo "PREPARE selhal PO zahajeni mutace. Stav=PREPARE_FAILED. Automaticky rollback se zamerne nespousti." >&2
+    else
+      set_state IDLE
+      echo "PREPARE byl zastaven pred mutaci. Stav vracen na IDLE." >&2
+    fi
+    exit "$rc"
+  }
+  trap on_error ERR
+
+  echo "=== PREPARE V2 / 1: source preflight ==="
+  "$BIN/source-preflight"
+  echo "=== PREPARE V2 / 2: source DB snapshot ==="
+  "$BIN/source-db-snapshot" "$run_dir"
+  echo "=== PREPARE V2 / 3: source manifests ==="
+  "$BIN/source-manifests" "$run_dir"
+  echo "=== PREPARE V2 / 4: source Storage snapshot ==="
+  "$BIN/source-storage-snapshot" "$run_dir"
+  echo "=== PREPARE V2 / 5: destination precheck ==="
+  pre="$run_dir/destination-before"
+  "$BIN/destination-manifests" "$run_dir" "$pre"
+  if ! cmp -s "$run_dir/auth-stable.tsv" "$pre/auth-stable.tsv"; then
+    echo "BLOKACE: Auth stable fingerprint se lisi. Auth nebude automaticky prepisovan." >&2
+    return 20
+  fi
+  if ! cmp -s "$run_dir/storage-buckets.tsv" "$pre/storage-buckets.tsv"; then
+    echo "BLOKACE: Storage bucket konfigurace se lisi." >&2
+    return 21
+  fi
+  if ! cmp -s "$run_dir/storage-objects.tsv" "$pre/storage-objects.tsv"; then
+    echo "BLOKACE: Storage object list se lisi. V2 nema automaticky Storage delta adapter." >&2
+    return 22
+  fi
+  echo "PASS: Auth + Storage metadata precheck"
+
+  echo "=== PREPARE V2 / 6: rollback checkpoint ==="
+  cp_path="$($BIN/destination-checkpoint "$run_id" | tee "$run_dir/checkpoint.log" | tail -n 1)"
+  printf '%s\n' "$cp_path" > "$run_dir/checkpoint-path"
+
+  echo "=== PREPARE V2 / 7: public data apply ==="
+  touch "$run_dir/MUTATION_STARTED"
+  "$BIN/apply-public" "$run_dir"
+  printf 'PREPARED\n' > "$STATE_FILE"
+  echo "prepared_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest"
+  trap - ERR
+  echo
+  echo "PREPARE: PASS"
+  echo "State: PREPARED"
+  echo "Run: $run_id"
+  echo "Rollback: $cp_path"
+  echo "CUTOVER zustava LOCKED. Dalsi krok: lubanote-migrate verify"
+}
+
+verify() {
+  current="$(stav)"
+  [ "$current" = "PREPARED" ] || { echo "CHYBA: VERIFY vyzaduje PREPARED. Aktualni stav: $current"; exit 1; }
+  run_id="$(current_run)"
+  [ -n "$run_id" ] || { echo "CHYBA: chybi current_run"; exit 1; }
+  run_dir="$RUNS_DIR/$run_id"
+  set_state VERIFYING
+  if "$BIN/verify-run" "$run_dir"; then
+    set_state VERIFIED
+    echo "verified_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest"
+    echo
+    echo "VERIFY: PASS"
+    echo "State: VERIFIED"
+    echo "CUTOVER zustava LOCKED v Migration Manager V2."
+  else
+    set_state PREPARED
+    echo
+    echo "VERIFY: FAIL"
+    echo "State vracen na PREPARED; CUTOVER zustava LOCKED."
+    exit 1
+  fi
+}
+
+cutover() {
+  echo "CUTOVER ODMÍTNUT."
+  echo "Migration Manager V2 umyslne nema aktivni produkcni cutover adapter."
+  echo "Nejprve musi byt VERIFIED a nasledne bude CUTOVER implementovan jako samostatny krok s finalni deltou a rollbackem."
+  exit 1
+}
+
+case "${1:-status}" in
+  status) status ;;
+  prepare) prepare ;;
+  verify) verify ;;
+  cutover) cutover ;;
+  *)
+    echo "Pouziti:"
+    echo "  lubanote-migrate status"
+    echo "  lubanote-migrate prepare"
+    echo "  lubanote-migrate verify"
+    echo "  lubanote-migrate cutover"
+    exit 1
+    ;;
+esac
