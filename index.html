@@ -1652,16 +1652,15 @@
               <span class="adminServerEyebrow">Migrace / produkce</span>
               <strong>PREPARE → VERIFY → CUTOVER</strong>
             </div>
-            <span class="adminToolMiniState" data-state="warning">ZAMČENO</span>
+            <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
-          <p>
-            Ovládání migrace z APK bude připojeno až přes samostatný bezpečný serverový bridge.
-            CUTOVER zůstává záměrně zamčený.
+          <p id="adminMigrationMessage" aria-live="polite">
+            Načítám stav bezpečného Migration Bridge…
           </p>
           <div class="adminMigrationActions" aria-label="Stav kroků migrace">
-            <button type="button" disabled>PREPARE</button>
-            <button type="button" disabled>VERIFY</button>
-            <button type="button" disabled>CUTOVER</button>
+            <button id="adminMigrationPrepareButton" type="button" disabled>PREPARE</button>
+            <button id="adminMigrationVerifyButton" type="button" disabled>VERIFY</button>
+            <button id="adminMigrationCutoverButton" type="button" disabled>CUTOVER</button>
           </div>
         </section>
 

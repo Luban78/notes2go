@@ -73,6 +73,16 @@
     document.getElementById("adminUseLubaServerButton");
   const useCloudTlacitko =
     document.getElementById("adminUseCloudButton");
+  const migrationStav =
+    document.getElementById("adminMigrationState");
+  const migrationZprava =
+    document.getElementById("adminMigrationMessage");
+  const migrationPrepareTlacitko =
+    document.getElementById("adminMigrationPrepareButton");
+  const migrationVerifyTlacitko =
+    document.getElementById("adminMigrationVerifyButton");
+  const migrationCutoverTlacitko =
+    document.getElementById("adminMigrationCutoverButton");
   const visualDebugTlacitko =
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
@@ -226,6 +236,8 @@
   let nacitam = false;
   let serverStatusNacitam = false;
   let serverStatusTimer = null;
+  let migrationStatusNacitam = false;
+  const MIGRATION_CONTROL_BASE = "https://api.lubanote.com/migration/v1";
 
   /* PATCH 677J – Android/WebView systémové Zpět uvnitř Admin Dashboardu.
    * Dashboard dostane vlastní lehkou history vrstvu: Server/UI/Účty ->
@@ -735,10 +747,12 @@
     aktualizujSyncTrafficNastroj();
     aktualizujBackendZarizeniUi();
     nactiServerStatus();
+    nactiMigrationStatus();
     zastavServerStatusAutoRefresh();
     serverStatusTimer = setInterval(() => {
       if (!serverPohled.hidden && !modal.hidden) {
         nactiServerStatus({ tichy: true });
+        nactiMigrationStatus({ tichy: true });
       }
     }, 15000);
   }
@@ -888,6 +902,121 @@
     } finally {
       serverStatusNacitam = false;
       if (serverObnovitTlacitko) serverObnovitTlacitko.disabled = false;
+    }
+  }
+
+  /* PATCH 677Q – READ-ONLY Migration Bridge STATUS.
+   * Prvni klientsky krok je zamerne jen cteni. PREPARE/VERIFY/CUTOVER
+   * zustavaji disabled, dokud nepotvrdime autentizaci a stav z APK.
+   * Bridge overuje stejny LubaServer admin Bearer token; proto se STATUS
+   * vola jen kdyz je toto zarizeni prihlasene v TEST LubaServer profilu.
+   */
+  function nastavMigrationStav(stav, text) {
+    if (!migrationStav) return;
+    migrationStav.dataset.state = stav;
+    migrationStav.textContent = text;
+  }
+
+  function nastavMigrationTlacitkaZamcena() {
+    if (migrationPrepareTlacitko) migrationPrepareTlacitko.disabled = true;
+    if (migrationVerifyTlacitko) migrationVerifyTlacitko.disabled = true;
+    if (migrationCutoverTlacitko) migrationCutoverTlacitko.disabled = true;
+  }
+
+  function mapujMigrationStav(managerState) {
+    const stav = String(managerState || "UNKNOWN").trim().toUpperCase();
+    if (stav === "VERIFIED") return { ui: "ok", text: "VERIFIED" };
+    if (stav === "PREPARED") return { ui: "ok", text: "PREPARED" };
+    if (stav === "PREPARING" || stav === "VERIFYING") {
+      return { ui: "warning", text: stav };
+    }
+    if (stav === "FAILED" || stav === "ERROR") {
+      return { ui: "fail", text: stav };
+    }
+    if (stav === "IDLE") return { ui: "idle", text: "IDLE" };
+    return { ui: "warning", text: stav || "UNKNOWN" };
+  }
+
+  async function nactiMigrationStatus({ tichy = false } = {}) {
+    if (!jeAdmin || migrationStatusNacitam) return;
+    nastavMigrationTlacitkaZamcena();
+
+    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    if (profil?.id !== "lubanoteServer") {
+      nastavMigrationStav("warning", "ČEKÁ");
+      if (migrationZprava && !tichy) {
+        migrationZprava.textContent =
+          "Migration Bridge se z bezpečnostních důvodů ověřuje účtem na LubaServeru. Přepni nejdřív toto zařízení do TEST LubaServeru.";
+      }
+      return;
+    }
+
+    migrationStatusNacitam = true;
+    if (!tichy) {
+      nastavMigrationStav("idle", "NAČÍTÁM");
+      if (migrationZprava) {
+        migrationZprava.textContent = "Ověřuji bezpečný Migration Bridge…";
+      }
+    }
+
+    try {
+      const pripraven = await pripravClient();
+      if (!pripraven || !supabaseClient?.auth) {
+        throw new Error("LubaServer klient není dostupný.");
+      }
+
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) throw error;
+
+      const token = data?.session?.access_token;
+      if (!token) {
+        throw new Error("LubaServer přihlášení nemá aktivní session.");
+      }
+
+      const odpoved = await fetch(`${MIGRATION_CONTROL_BASE}/status`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        cache: "no-store"
+      });
+
+      let vysledek = null;
+      try {
+        vysledek = await odpoved.json();
+      } catch (_) {}
+
+      if (!odpoved.ok || vysledek?.ok !== true) {
+        const kod = vysledek?.error || `HTTP_${odpoved.status}`;
+        throw new Error(`Migration Bridge odmítl požadavek (${kod}).`);
+      }
+
+      const mapovany = mapujMigrationStav(vysledek.manager_state);
+      nastavMigrationStav(mapovany.ui, mapovany.text);
+
+      if (migrationZprava) {
+        const job = vysledek.job;
+        if (job?.status === "running") {
+          const akce = String(job.action || "migrace").toUpperCase();
+          migrationZprava.textContent =
+            `Bridge ONLINE · ${akce} právě běží · CUTOVER je zamčený.`;
+        } else if (job?.status === "failed") {
+          migrationZprava.textContent =
+            "Bridge ONLINE · poslední migrační úloha skončila chybou · CUTOVER je zamčený.";
+        } else {
+          migrationZprava.textContent =
+            `Bridge ONLINE · Migration Manager ${mapovany.text} · PREPARE/VERIFY jsou v patchi 677Q ještě záměrně zamčené.`;
+        }
+      }
+    } catch (error) {
+      console.warn("Migration status unavailable:", error?.message || error);
+      nastavMigrationStav("fail", "NEDOSTUPNÉ");
+      if (migrationZprava) {
+        migrationZprava.textContent =
+          `Migration Bridge není dostupný nebo admin ověření selhalo: ${error?.message || "neznámá chyba"}`;
+      }
+    } finally {
+      migrationStatusNacitam = false;
     }
   }
 
@@ -2558,7 +2687,10 @@
   });
   serverZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
   uiZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
-  serverObnovitTlacitko?.addEventListener("click", () => nactiServerStatus());
+  serverObnovitTlacitko?.addEventListener("click", () => {
+    nactiServerStatus();
+    nactiMigrationStatus();
+  });
   useLubaServerTlacitko?.addEventListener(
     "click",
     () => prepniBackendZarizeni("lubanoteServer")
