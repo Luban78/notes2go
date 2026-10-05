@@ -664,19 +664,89 @@
     return spocitejSklad(SKLAD_PRILOH);
   }
 
+  async function ziskejSkutecneCekajiciUploady() {
+    const databaze = await otevriDatabazi();
+
+    return new Promise((resolve, reject) => {
+      const transakce = databaze.transaction(
+        [SKLAD_FRONTY, SKLAD_PRILOH],
+        "readonly"
+      );
+      const fronta = transakce.objectStore(SKLAD_FRONTY);
+      const prilohy = transakce.objectStore(SKLAD_PRILOH);
+      const request = fronta.index("stav").getAll("pending_upload");
+
+      request.onsuccess = async () => {
+        try {
+          const polozky = Array.isArray(request.result)
+            ? request.result
+            : [];
+          let skutecne = 0;
+          let stale = 0;
+
+          for (const polozka of polozky) {
+            const attachmentId = polozka?.attachmentId;
+            if (!attachmentId) {
+              stale += 1;
+              continue;
+            }
+
+            const zaznam = await new Promise((resolveGet, rejectGet) => {
+              const getRequest = prilohy.get(attachmentId);
+              getRequest.onsuccess = () => resolveGet(getRequest.result || null);
+              getRequest.onerror = (udalost) => rejectGet(
+                vytvorChybuDatabaze(
+                  "Lokální přílohu se nepodařilo ověřit.",
+                  udalost
+                )
+              );
+            });
+
+            if (!zaznam) {
+              stale += 1;
+              continue;
+            }
+
+            const stav = String(zaznam.cloudState || "");
+            const maBlob = zaznam.blob instanceof Blob;
+            const skutecneCeka = maBlob && [
+              "pending_upload",
+              "reserving",
+              "uploading",
+              "restore_staged"
+            ].includes(stav);
+
+            if (skutecneCeka) {
+              skutecne += 1;
+            } else {
+              stale += 1;
+            }
+          }
+
+          resolve({ skutecne, stale });
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      request.onerror = (udalost) => reject(
+        vytvorChybuDatabaze(
+          "Frontu lokálních příloh se nepodařilo ověřit.",
+          udalost
+        )
+      );
+    });
+  }
+
   async function ziskejDiagnostiku() {
     try {
       const [
         pocetPriloh,
-        cekajiciUploady,
+        pendingKontrola,
         nahraneUploady
       ] = await Promise.all([
         spocitejSklad(SKLAD_PRILOH),
-        spocitejSklad(
-          SKLAD_FRONTY,
-          "stav",
-          "pending_upload"
-        ),
+        ziskejSkutecneCekajiciUploady(),
         spocitejSklad(
           SKLAD_FRONTY,
           "stav",
@@ -689,7 +759,8 @@
         databaze: NAZEV_DB,
         verze: VERZE_DB,
         pocetPriloh,
-        cekajiciUploady,
+        cekajiciUploady: pendingKontrola.skutecne,
+        staleCekajiciUploady: pendingKontrola.stale,
         nahraneUploady,
         frontaUploaduAktivni: true,
         rezim: "cloud_shadow"
@@ -701,6 +772,7 @@
         verze: VERZE_DB,
         pocetPriloh: 0,
         cekajiciUploady: 0,
+        staleCekajiciUploady: 0,
         nahraneUploady: 0,
         frontaUploaduAktivni: true,
         rezim: "cloud_shadow",
