@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=677n-initial-download-progress">
+  <link rel="stylesheet" href="style.css?v=677u-control-point-admin">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -1646,6 +1646,36 @@
           </div>
         </section>
 
+        <section class="adminControlCard" aria-label="Produkční režim LubaNote">
+          <div class="adminControlHead">
+            <div>
+              <span class="adminServerEyebrow">Produkční režim</span>
+              <strong>Control Point · Cloud klienti</strong>
+            </div>
+            <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
+          </div>
+
+          <p id="adminControlMessage" aria-live="polite">
+            Načítám veřejný Control Point…
+          </p>
+
+          <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
+            <button id="adminControlMaintenanceButton" type="button" disabled>
+              <strong>Zapnout údržbu</strong>
+              <small>Drain Cloud klientů</small>
+            </button>
+            <button id="adminControlNormalButton" type="button" disabled>
+              <strong>Vrátit NORMAL</strong>
+              <small>Odemknout klienty</small>
+            </button>
+          </div>
+
+          <div class="adminControlSafety">
+            <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
+            <span>active_backend = Cloud · CUTOVER zamčený · DB write-freeze ještě není součástí tohoto kroku.</span>
+          </div>
+        </section>
+
         <section class="adminMigrationCard" aria-label="Migrace a produkční přepnutí">
           <div class="adminMigrationHead">
             <div>
@@ -2753,7 +2783,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=677J-safe-backend-switch"></script>
+  <script src="adminDashboard.js?v=677u-control-point-admin"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

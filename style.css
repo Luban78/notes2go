@@ -16686,3 +16686,110 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 #adminMigrationProgressBarFill[data-state="fail"] {
   background: #ef8a8a;
 }
+
+
+/* ==================================================
+   PATCH 677U – CONTROL POINT V2 / ADMIN MAINTENANCE
+   Ovládání NORMAL <-> MAINTENANCE přes autorizovaný Bridge.
+================================================== */
+.adminControlCard {
+  margin-top: 14px;
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, #e8b44f 24%, var(--color-border));
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, #e8b44f 5%, transparent),
+      transparent 38%),
+    var(--color-surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.10);
+}
+
+.adminControlHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminControlHead > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.adminControlHead strong {
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+#adminControlMessage {
+  min-height: 2.7em;
+  margin: 12px 2px 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.adminControlActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adminControlActions > button {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  min-height: 52px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+  color: var(--color-text);
+  text-align: left;
+  font: inherit;
+}
+
+.adminControlActions > button > strong {
+  font-size: 0.79rem;
+}
+
+.adminControlActions > button > small {
+  color: var(--color-text-secondary);
+  font-size: 0.63rem;
+  line-height: 1.2;
+}
+
+.adminControlActions > button:not(:disabled) {
+  border-color: color-mix(in srgb, #e8b44f 48%, var(--color-border));
+  background: color-mix(in srgb, #e8b44f 9%, var(--color-surface));
+  cursor: pointer;
+}
+
+.adminControlActions > button:disabled {
+  opacity: 0.46;
+  cursor: default;
+}
+
+.adminControlSafety {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 11px;
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 520px) {
+  .adminControlCard {
+    padding: 13px;
+  }
+
+  .adminControlActions {
+    grid-template-columns: 1fr;
+  }
+}

@@ -111,6 +111,14 @@
     document.getElementById("adminMigrationConfirmCancel");
   const migrationConfirmClose =
     document.getElementById("adminMigrationConfirmClose");
+  const controlStav =
+    document.getElementById("adminControlState");
+  const controlZprava =
+    document.getElementById("adminControlMessage");
+  const controlMaintenanceTlacitko =
+    document.getElementById("adminControlMaintenanceButton");
+  const controlNormalTlacitko =
+    document.getElementById("adminControlNormalButton");
   const visualDebugTlacitko =
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
@@ -269,7 +277,11 @@
   let migrationLiveTimer = null;
   let migrationPosledniStatus = null;
   let migrationConfirmResolve = null;
+  let controlStatusNacitam = false;
+  let controlAkceBezi = false;
+  let controlPosledniStatus = null;
   const MIGRATION_CONTROL_BASE = "https://api.lubanote.com/migration/v1";
+  const CONTROL_POINT_BASE = "https://api.lubanote.com/control/v1";
   const MIGRATION_LIVE_INTERVAL_MS = 1200;
 
   /* PATCH 677J – Android/WebView systémové Zpět uvnitř Admin Dashboardu.
@@ -782,11 +794,13 @@
     aktualizujBackendZarizeniUi();
     nactiServerStatus();
     nactiMigrationStatus();
+    nactiControlStatus();
     zastavServerStatusAutoRefresh();
     serverStatusTimer = setInterval(() => {
       if (!serverPohled.hidden && !modal.hidden) {
         nactiServerStatus({ tichy: true });
         nactiMigrationStatus({ tichy: true });
+        nactiControlStatus({ tichy: true });
       }
     }, 15000);
   }
@@ -1075,6 +1089,227 @@
       migrationVerifyTlacitko
     ) {
       migrationVerifyTlacitko.disabled = false;
+    }
+  }
+
+  /* PATCH 677U – produkcni Control Point v Admin Dashboardu.
+   * Status je verejny read-only. Zmenu NORMAL/MAINTENANCE smi poslat jen
+   * admin prihlaseny na TEST LubaServeru; Bridge znovu overi Bearer session.
+   * Tento krok NENI DB write-freeze a nikdy nemeni active_backend/CUTOVER. */
+  function nastavControlStav(stav, text) {
+    if (!controlStav) return;
+    controlStav.dataset.state = stav;
+    controlStav.textContent = text;
+  }
+
+  function zamkniControlTlacitka() {
+    if (controlMaintenanceTlacitko) controlMaintenanceTlacitko.disabled = true;
+    if (controlNormalTlacitko) controlNormalTlacitko.disabled = true;
+  }
+
+  function nastavControlOvladani(vysledek) {
+    zamkniControlTlacitka();
+    if (!jeAdmin || controlAkceBezi) return;
+
+    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    if (profil?.id !== "lubanoteServer") return;
+
+    const mode = String(vysledek?.mode || "").trim().toUpperCase();
+    if (mode === "NORMAL" && controlMaintenanceTlacitko) {
+      controlMaintenanceTlacitko.disabled = false;
+    }
+    if (mode === "MAINTENANCE" && controlNormalTlacitko) {
+      controlNormalTlacitko.disabled = false;
+    }
+  }
+
+  function vykresliControlStatus(vysledek, { tichy = false } = {}) {
+    const mode = String(vysledek?.mode || "UNKNOWN").trim().toUpperCase();
+    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    const jeTest = profil?.id === "lubanoteServer";
+
+    controlPosledniStatus = vysledek || null;
+
+    if (mode === "NORMAL") {
+      nastavControlStav("ok", "NORMAL");
+    } else if (mode === "MAINTENANCE") {
+      nastavControlStav("warning", "ÚDRŽBA");
+    } else {
+      nastavControlStav("fail", "NEZNÁMÝ");
+    }
+
+    nastavControlOvladani(vysledek || {});
+
+    if (!controlZprava) return;
+
+    if (!jeTest) {
+      controlZprava.textContent =
+        `Control Point: ${mode || "UNKNOWN"} · aktivní backend ${String(vysledek?.active_backend || "—")} · pro změnu režimu přepni toto zařízení do TEST LubaServeru.`;
+      return;
+    }
+
+    if (mode === "MAINTENANCE") {
+      controlZprava.textContent =
+        "MAINTENANCE je aktivní pro Cloud klienty. Ti dokončí existující Sync V2 dluh a zůstanou zamčení. SOURCE DB write-freeze ještě není aktivní.";
+    } else if (mode === "NORMAL") {
+      controlZprava.textContent =
+        "NORMAL · Cloud klienti jsou odemčení. Ovládání mění pouze klientský Maintenance/Drain; SOURCE DB write-freeze je samostatný další krok.";
+    } else {
+      controlZprava.textContent =
+        "Control Point vrátil neznámý stav. Produkční režim neměň, dokud nebude stav ověřen.";
+    }
+  }
+
+  async function nactiControlStatus({ tichy = false } = {}) {
+    if (!jeAdmin || controlStatusNacitam) return controlPosledniStatus;
+    controlStatusNacitam = true;
+
+    if (!tichy) {
+      zamkniControlTlacitka();
+      nastavControlStav("idle", "NAČÍTÁM");
+      if (controlZprava) controlZprava.textContent = "Načítám veřejný Control Point…";
+    }
+
+    try {
+      const odpoved = await fetch(`${CONTROL_POINT_BASE}/status`, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "omit",
+        headers: { Accept: "application/json" }
+      });
+
+      let vysledek = null;
+      try {
+        vysledek = await odpoved.json();
+      } catch (_) {}
+
+      const validni =
+        odpoved.ok &&
+        vysledek?.ok === true &&
+        Number(vysledek?.version) === 1 &&
+        ["NORMAL", "MAINTENANCE"].includes(String(vysledek?.mode || "").toUpperCase()) &&
+        String(vysledek?.active_backend || "") === "cloud" &&
+        vysledek?.cutover_enabled === false;
+
+      if (!validni) {
+        const kod = vysledek?.error || `HTTP_${odpoved.status}`;
+        throw new Error(`Control Point odmítl nebo vrátil nebezpečný stav (${kod}).`);
+      }
+
+      vykresliControlStatus(vysledek, { tichy });
+      return vysledek;
+    } catch (error) {
+      console.warn("Control Point unavailable:", error?.message || error);
+      nastavControlStav("fail", "NEDOSTUPNÉ");
+      zamkniControlTlacitka();
+      if (controlZprava && !tichy) {
+        controlZprava.textContent =
+          `Control Point není bezpečně dostupný: ${error?.message || "neznámá chyba"}`;
+      }
+      return null;
+    } finally {
+      controlStatusNacitam = false;
+    }
+  }
+
+  function potvrdControlAkci(cilovyMode) {
+    if (!jeAdmin || controlAkceBezi) return;
+
+    const jeMaintenance = cilovyMode === "MAINTENANCE";
+    otevriAdminPotvrzeni({
+      nadpis: jeMaintenance
+        ? "Zapnout bezpečnou údržbu?"
+        : "Ukončit bezpečnou údržbu?",
+      zprava: jeMaintenance
+        ? "Cloud klienti přestanou přijímat nové uživatelské zápisy, dokončí existující Sync V2 frontu a zůstanou zamčení. TEST LubaServer zůstane ovladatelný. Toto ještě není databázový write-freeze a CUTOVER zůstává zamčený."
+        : "Control Point se vrátí do NORMAL a Cloud klienti se po další kontrole odemknou. Aktivní backend zůstává Cloud a CUTOVER zůstává zamčený.",
+      potvrditText: jeMaintenance ? "Zapnout údržbu" : "Vrátit NORMAL",
+      nebezpecne: jeMaintenance,
+      poPotvrzeni: () => provedControlAkci(cilovyMode)
+    });
+  }
+
+  async function provedControlAkci(cilovyMode) {
+    if (!jeAdmin || controlAkceBezi) return;
+
+    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    if (profil?.id !== "lubanoteServer") {
+      zamkniControlTlacitka();
+      nastavControlStav("warning", "ČEKÁ");
+      if (controlZprava) {
+        controlZprava.textContent =
+          "Produkční režim lze měnit jen z TEST LubaServer profilu, protože Bridge ověřuje LubaServer admin session.";
+      }
+      return;
+    }
+
+    const aktualni = await nactiControlStatus({ tichy: true });
+    const aktualniMode = String(aktualni?.mode || "").trim().toUpperCase();
+    if (!["NORMAL", "MAINTENANCE"].includes(aktualniMode)) {
+      zamkniControlTlacitka();
+      nastavControlStav("fail", "NEDOSTUPNÉ");
+      if (controlZprava) {
+        controlZprava.textContent =
+          "Režim neměním: před změnou se nepodařilo čerstvě ověřit Control Point.";
+      }
+      return;
+    }
+    if (aktualniMode === cilovyMode) {
+      vykresliControlStatus(aktualni || {}, { tichy: false });
+      return;
+    }
+
+    controlAkceBezi = true;
+    zamkniControlTlacitka();
+    nastavControlStav("warning", cilovyMode === "MAINTENANCE" ? "ZAPÍNÁM" : "UKONČUJI");
+    if (controlZprava) {
+      controlZprava.textContent = cilovyMode === "MAINTENANCE"
+        ? "Odesílám autorizovaný požadavek MAINTENANCE…"
+        : "Odesílám autorizovaný požadavek NORMAL…";
+    }
+
+    try {
+      const token = await ziskejMigrationBearerToken();
+      const endpoint = cilovyMode === "MAINTENANCE" ? "maintenance" : "normal";
+      const odpoved = await fetch(`${CONTROL_POINT_BASE}/${endpoint}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        cache: "no-store"
+      });
+
+      let vysledek = null;
+      try {
+        vysledek = await odpoved.json();
+      } catch (_) {}
+
+      const validni =
+        odpoved.ok &&
+        vysledek?.ok === true &&
+        String(vysledek?.mode || "").toUpperCase() === cilovyMode &&
+        String(vysledek?.active_backend || "") === "cloud" &&
+        vysledek?.cutover_enabled === false;
+
+      if (!validni) {
+        const kod = vysledek?.error || `HTTP_${odpoved.status}`;
+        throw new Error(`Bridge změnu režimu odmítl (${kod}).`);
+      }
+
+      vykresliControlStatus(vysledek, { tichy: false });
+      void window.LubaNoteMaintenance?.zkontrolujTed?.();
+    } catch (error) {
+      console.warn("Control Point action failed:", error?.message || error);
+      nastavControlStav("fail", "CHYBA");
+      zamkniControlTlacitka();
+      if (controlZprava) {
+        controlZprava.textContent =
+          `Režim se nepodařilo změnit: ${error?.message || "neznámá chyba"}`;
+      }
+    } finally {
+      controlAkceBezi = false;
+      window.setTimeout(() => nactiControlStatus(), 300);
     }
   }
 
@@ -3267,7 +3502,16 @@
   serverObnovitTlacitko?.addEventListener("click", () => {
     nactiServerStatus();
     nactiMigrationStatus();
+    nactiControlStatus();
   });
+  controlMaintenanceTlacitko?.addEventListener(
+    "click",
+    () => potvrdControlAkci("MAINTENANCE")
+  );
+  controlNormalTlacitko?.addEventListener(
+    "click",
+    () => potvrdControlAkci("NORMAL")
+  );
   migrationPrepareTlacitko?.addEventListener(
     "click",
     spustMigrationPrepare
