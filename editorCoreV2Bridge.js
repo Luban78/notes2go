@@ -186,6 +186,14 @@
        konec výběru; explicitně tažený start/end má stále absolutní prioritu,
      - z-index panelu je nad custom handles, takže kapky už přes panel neprosvítají. */
 
+  /* PATCH 677F – deterministic double-tap + stable expanded menu:
+     - mobilní double-tap už není odkázaný jen na to, zda Android WebView sám
+       stihne vytvořit native word selection; pokud po 70 ms zůstane caret/none,
+       vybere slovo přímo náš engine přes caretPositionFromPoint + Intl.Segmenter,
+     - rozšířený ⋮ panel už nehledá pokaždé novou pozici kolem celého selection.
+       Vyrůstá ze stejné kotvy jako kompaktní panel: stejný střed X a stejná
+       hrana u aktivního handle; jinam uhne jen když se fyzicky nevejde do viewportu. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -561,13 +569,11 @@
   function pozicujV2SelectionOverflowKeTreckam(kotva = null) {
     if (!selectionMenu || selectionMenu.hidden || !kotva) return;
 
-    /* 673G6 – rozšířený panel po ⋮ nesmí odskočit jinam. Primární i rozšířená
-       nabídka sdílí stejné stabilní místo nahoře. */
-    if (v2SelectionMenuAktivni && !v2SelectionMenuKurzor) {
-      pozicujV2SelectionMenu({ rozsah: window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null });
-      return;
-    }
-
+    /* PATCH 677F – rozšířený panel má jednu předvídatelnou kotvu. Nehledá
+       pokaždé "nejlepší" místo kolem celého dlouhého výběru. Zachová střed X
+       kompaktního panelu a roste od stejné hrany směrem OD selection handle.
+       Clamp/flip nastane jen tehdy, když se celý panel na zvolené straně
+       fyzicky nevejde mezi topbar a LubaKeyboard. */
     requestAnimationFrame(() => {
       if (!aktivni || selectionMenu.hidden || !selectionMenu.classList.contains("selectionMenuRozsirene")) return;
 
@@ -578,7 +584,6 @@
       const offsetLeft = window.visualViewport?.offsetLeft || 0;
       const offsetTop = window.visualViewport?.offsetTop || 0;
       const okraj = 8;
-      const mezeraOdVyberu = 10;
 
       const editorTopBar = document.querySelector("#taskModal .editorTopBar");
       const editorTopBarRect = editorTopBar?.getBoundingClientRect?.() || null;
@@ -596,74 +601,25 @@
           : offsetTop + viewportH - okraj
       );
 
-      /* 658CN – rozsirena nabidka se uz neotevira slepe smerem dolu.
-         Primarni panel je normalne NAD nebo POD oznacenym slovem. Podle toho,
-         na ktere strane vyberu lezi tlacitko tri tecky, nechame druhy panel
-         vyrust OPAcNYM smerem: kdyz jsou tecky nad slovem, panel roste nahoru;
-         kdyz jsou pod slovem, roste dolu. Tim zustava vizualne ukotveny ke
-         treckam, ale nelezi pres oznaceny text ani pres selection uchyty. */
-      let x = Number(kotva.left);
-      const oblastVyberu = ziskejV2SelectionBezpecnouOblast();
-      const stredKotvyY = (Number(kotva.top) + Number(kotva.bottom)) / 2;
-      let y = Number(kotva.top);
+      const stredX = Number.isFinite(Number(kotva.centerX))
+        ? Number(kotva.centerX)
+        : (Number(kotva.left || 0) + Number(kotva.right || 0)) / 2;
+      const puvodniTop = Number(kotva.top || horniBezpecnaHrana);
+      const puvodniBottom = Number(kotva.bottom || puvodniTop);
+      const rustNahoru = kotva.smer !== "down";
 
-      if (oblastVyberu) {
-        if (stredKotvyY <= oblastVyberu.top) {
-          /* Tecky jsou nad vyberem -> rozbalit nahoru, spodkem u kotevniho bodu. */
-          y = Number(kotva.bottom) - vyska;
-        } else if (stredKotvyY >= oblastVyberu.bottom) {
-          /* Tecky jsou pod vyberem -> rozbalit dolu, vrskem u kotevniho bodu. */
-          y = Number(kotva.top);
-        }
-      }
-
-      if (x + sirka > offsetLeft + viewportW - okraj) {
-        x = Number(kotva.right) - sirka;
-      }
+      let x = stredX - sirka / 2;
+      let y = rustNahoru ? puvodniBottom - vyska : puvodniTop;
 
       x = Math.max(
         offsetLeft + okraj,
         Math.min(x, offsetLeft + viewportW - sirka - okraj)
       );
 
-      /* Nejdřív držíme panel uvnitř editoru a nad LubaKeyboard. */
-      y = Math.max(horniBezpecnaHrana, y);
-      if (y + vyska > spodniBezpecnaHrana) {
-        y = Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
-      }
-
-      /* Po clampu ještě jednou ověříme skutečnou kolizi s výběrem. Pokud by
-         panel stále zasahoval do slova/úchytů, zvolíme nejbližší stranu, kam
-         se CELÝ vejde. Tady už není limit malého posunu z CM – právě ten byl
-         důvod, proč bez vysunuté klávesnice panel zůstal přes výběr. */
-      const kandidat = () => ({ left: x, right: x + sirka, top: y, bottom: y + vyska });
-
-      if (oblastVyberu && prekryvaV2Rect(kandidat(), oblastVyberu)) {
-        const nad = oblastVyberu.top - vyska - mezeraOdVyberu;
-        const pod = oblastVyberu.bottom + mezeraOdVyberu;
-        const moznosti = [];
-
-        if (nad >= horniBezpecnaHrana && nad + vyska <= spodniBezpecnaHrana) {
-          moznosti.push({ y: nad, vzdalenost: Math.abs(nad - y) });
-        }
-        if (pod >= horniBezpecnaHrana && pod + vyska <= spodniBezpecnaHrana) {
-          moznosti.push({ y: pod, vzdalenost: Math.abs(pod - y) });
-        }
-
-        moznosti.sort((a, b) => a.vzdalenost - b.vzdalenost);
-
-        if (moznosti.length) {
-          y = moznosti[0].y;
-        } else {
-          /* Když se celý panel nevejde ani na jednu stranu, zvolíme stranu
-             s větším volným prostorem a stále respektujeme viewport/keyboard. */
-          const prostorNad = Math.max(0, oblastVyberu.top - mezeraOdVyberu - horniBezpecnaHrana);
-          const prostorPod = Math.max(0, spodniBezpecnaHrana - oblastVyberu.bottom - mezeraOdVyberu);
-          y = prostorNad >= prostorPod
-            ? horniBezpecnaHrana
-            : Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska);
-        }
-      }
+      const vejdeNahoru = puvodniBottom - vyska >= horniBezpecnaHrana;
+      const vejdeDolu = puvodniTop + vyska <= spodniBezpecnaHrana;
+      if (rustNahoru && !vejdeNahoru && vejdeDolu) y = puvodniTop;
+      if (!rustNahoru && !vejdeDolu && vejdeNahoru) y = puvodniBottom - vyska;
 
       y = Math.max(
         horniBezpecnaHrana,
@@ -685,11 +641,29 @@
       return;
     }
 
-    /* Rect musíme vzít ještě před skrytím primárního panelu. */
-    const rectVice = selectionVice.getBoundingClientRect?.();
-    v2SelectionOverflowKotva = rectVice
-      ? { left: rectVice.left, right: rectVice.right, top: rectVice.top, bottom: rectVice.bottom }
-      : null;
+    /* PATCH 677F – kotvou není samotné tlačítko ⋮, ale celý kompaktní panel.
+       Rozšířená nabídka tak vizuálně vyroste přesně z místa, které uživatel
+       právě vidí, místo aby po změně rozměrů znovu hledala náhodný bod. */
+    const rectPanelu = selectionMenu.getBoundingClientRect?.();
+    if (rectPanelu) {
+      const kotvaY = Number(v2SelectionMenuBod?.y);
+      let smer = "up";
+      if (Number.isFinite(kotvaY)) {
+        if (rectPanelu.top >= kotvaY) smer = "down";
+        else if (rectPanelu.bottom <= kotvaY) smer = "up";
+        else smer = (rectPanelu.top + rectPanelu.height / 2) < kotvaY ? "up" : "down";
+      }
+      v2SelectionOverflowKotva = {
+        left: rectPanelu.left,
+        right: rectPanelu.right,
+        top: rectPanelu.top,
+        bottom: rectPanelu.bottom,
+        centerX: rectPanelu.left + rectPanelu.width / 2,
+        smer
+      };
+    } else {
+      v2SelectionOverflowKotva = null;
+    }
 
     selectionPrimary.hidden = true;
     selectionOverflow.hidden = false;
@@ -3440,6 +3414,100 @@
     return null;
   }
 
+  function vytvorV2RangeSlovaVBodu(clientX, clientY, editor) {
+    const bod = domBodV2ZBodu(clientX, clientY, editor);
+    if (!bod?.node) return null;
+
+    let node = bod.node;
+    let offset = Number(bod.offset || 0);
+
+    /* caretPositionFromPoint může vrátit elementový bod mezi childNodes.
+       Pro double-tap potřebujeme konkrétní textový uzel nejblíž dotyku. */
+    if (node.nodeType !== Node.TEXT_NODE) {
+      const deti = Array.from(node.childNodes || []);
+      const kandidati = [];
+      const index = Math.max(0, Math.min(deti.length, offset));
+      if (index < deti.length) kandidati.push(deti[index]);
+      if (index > 0) kandidati.push(deti[index - 1]);
+
+      const najdiText = (koren, odKonce = false) => {
+        if (!koren) return null;
+        if (koren.nodeType === Node.TEXT_NODE && koren.nodeValue?.length) return koren;
+        const walker = document.createTreeWalker(koren, NodeFilter.SHOW_TEXT);
+        const vse = [];
+        let textovy;
+        while ((textovy = walker.nextNode())) {
+          if (textovy.nodeValue?.length) vse.push(textovy);
+        }
+        return odKonce ? (vse[vse.length - 1] || null) : (vse[0] || null);
+      };
+
+      let textNode = null;
+      for (let i = 0; i < kandidati.length && !textNode; i += 1) {
+        textNode = najdiText(kandidati[i], i > 0);
+      }
+      if (!textNode) return null;
+      node = textNode;
+      offset = Math.min(String(node.nodeValue || "").length, Math.max(0, offset));
+    }
+
+    const text = String(node.nodeValue || "");
+    if (!text) return null;
+    const maxIndex = Math.max(0, text.length - 1);
+    const indexy = Array.from(new Set([
+      Math.max(0, Math.min(maxIndex, offset)),
+      Math.max(0, Math.min(maxIndex, offset - 1))
+    ]));
+
+    let start = -1;
+    let end = -1;
+
+    /* Chrome/WebView 154 má Intl.Segmenter; tím dostaneme přirozené hranice
+       českých i ostatních slov bez ručního seznamu diakritiky. */
+    try {
+      if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+        const segmenter = new Intl.Segmenter(document.documentElement.lang || navigator.language || "cs", { granularity: "word" });
+        const segmenty = Array.from(segmenter.segment(text));
+        for (const indexZnaku of indexy) {
+          const segment = segmenty.find((cast) => {
+            const od = Number(cast.index || 0);
+            const textSegmentu = String(cast.segment || "");
+            const doIndex = od + textSegmentu.length;
+            const jeSlovo = cast.isWordLike === true
+              || (cast.isWordLike == null && /[\p{L}\p{N}_]/u.test(textSegmentu));
+            return jeSlovo && indexZnaku >= od && indexZnaku < doIndex;
+          });
+          if (segment) {
+            start = Number(segment.index || 0);
+            end = start + String(segment.segment || "").length;
+            break;
+          }
+        }
+      }
+    } catch (_error) {}
+
+    /* Fallback pro případ, že Segmenter selže. */
+    if (start < 0 || end <= start) {
+      const jeSlovniZnak = (znak) => /[\p{L}\p{N}_]/u.test(String(znak || ""));
+      let indexZnaku = indexy.find((index) => jeSlovniZnak(text[index]));
+      if (!Number.isFinite(indexZnaku)) return null;
+      start = indexZnaku;
+      end = indexZnaku + 1;
+      while (start > 0 && jeSlovniZnak(text[start - 1])) start -= 1;
+      while (end < text.length && jeSlovniZnak(text[end])) end += 1;
+    }
+
+    if (end <= start) return null;
+    try {
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      return range.collapsed ? null : range;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function porovnejV2DomBody(a, b) {
     try {
       const ra = document.createRange();
@@ -3701,6 +3769,51 @@
     try { vyber.removeAllRanges(); } catch (_error) {}
     zapisSelectionScrollDiag("G14_HIGHLIGHT_ON", null, `top=${Math.round(editor.scrollTop)}`);
     return stav;
+  }
+
+  function aktivujV2SlovoZDoubleTap(clientX, clientY, duvod = "double-tap-fallback") {
+    if (!jeAndroidApkSelectionScroll() || !aktivni) return false;
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+    if (!editor) return false;
+    const range = vytvorV2RangeSlovaVBodu(clientX, clientY, editor);
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+
+    if (v2SelectionPrevodTimer) {
+      clearTimeout(v2SelectionPrevodTimer);
+      v2SelectionPrevodTimer = null;
+    }
+    if (v2SelectionScroll) zrusV2SelectionScrollStav(v2SelectionScroll);
+    try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+    if (!nastavV2SelectionScrollHighlight(range)) return false;
+
+    const kopie = range.cloneRange?.() || range;
+    const stav = {
+      editor,
+      range: kopie,
+      touchId: null,
+      startX: Number(clientX),
+      startY: Number(clientY),
+      startScrollTop: Number(editor.scrollTop || 0),
+      moved: false,
+      touchEnded: true,
+      obnovTimer: null,
+      handleDrag: null,
+      menuKotvaStrana: null
+    };
+    v2SelectionScroll = stav;
+    nastavV2CustomSelectionAktivni(editor, true);
+    ulozV2VizualniRangeDoCore(kopie);
+    nastavV2SelectionMenuNuceneSkryti(false);
+    zobrazV2SelectionHandles(kopie);
+    zobrazV2SelectionMenuProOznaceni(kopie);
+    obnovToolbar();
+    zapisSelectionScrollDiag(
+      "G27F_DOUBLE_TAP_FALLBACK",
+      null,
+      `reason=${duvod} chars=${String(kopie.toString?.() || "").length} top=${Math.round(editor.scrollTop || 0)}`
+    );
+    ohlasV2SelectionEngineStav({ engine: "CUSTOM", source: "double-tap-fallback" });
+    return true;
   }
 
   function prevedV2NativeSelectionNaVlastni(duvod = "settle") {
@@ -4192,7 +4305,15 @@
       const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
       if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
         zobrazV2SelectionMenuProOznaceni(range);
-      } else if (range && jeV2SelectionRozsah(range)) {
+        return;
+      }
+
+      /* PATCH 677F – WebView občas po double-tapu nechá jen caret (typicky
+         po předchozím custom selection cyklu) a žádný selectionchange sel:N
+         už nepřijde. V tom případě slovo vybere přímo LubaNote engine. */
+      if (aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "touchend")) return;
+
+      if (range && jeV2SelectionRozsah(range)) {
         zobrazV2SelectionMenuProKurzor({ x: aktualni.x, y: aktualni.y });
       }
     }, 70);
@@ -4215,9 +4336,11 @@
       const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
       if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
         zobrazV2SelectionMenuProOznaceni(range);
-      } else if (range && jeV2SelectionRozsah(range)) {
-        zobrazV2SelectionMenuProKurzor({ x, y });
+        return;
       }
+      /* Pokud WebView native range nevytvořil, neděláme zde caret panel.
+         Deterministický fallback provede jediná touchend double-tap cesta po
+         70 ms; tím nevyrábíme dva po sobě jdoucí custom selection cykly. */
     }, 0);
   }, true);
 
