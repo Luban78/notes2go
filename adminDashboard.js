@@ -21,6 +21,46 @@
     document.getElementById("adminAccountsView");
   const uctyTlacitko =
     document.getElementById("adminAccountsToolButton");
+  const serverPohled =
+    document.getElementById("adminServerView");
+  const serverTlacitko =
+    document.getElementById("adminServerToolButton");
+  const serverZpetTlacitko =
+    document.getElementById("adminServerBackButton");
+  const uiPohled =
+    document.getElementById("adminUiView");
+  const uiTlacitko =
+    document.getElementById("adminUiToolButton");
+  const uiZpetTlacitko =
+    document.getElementById("adminUiBackButton");
+  const serverToolStav =
+    document.getElementById("adminServerToolState");
+  const serverObnovitTlacitko =
+    document.getElementById("adminServerRefreshButton");
+  const serverOverall =
+    document.getElementById("adminServerOverall");
+  const serverUpdated =
+    document.getElementById("adminServerUpdated");
+  const serverUptime =
+    document.getElementById("adminServerUptime");
+  const serverCpu =
+    document.getElementById("adminServerCpu");
+  const serverRam =
+    document.getElementById("adminServerRam");
+  const serverDisk =
+    document.getElementById("adminServerDisk");
+  const serverDiskFree =
+    document.getElementById("adminServerDiskFree");
+  const serverBattery =
+    document.getElementById("adminServerBattery");
+  const serverSupabase =
+    document.getElementById("adminServerSupabase");
+  const serverDocker =
+    document.getElementById("adminServerDocker");
+  const serverCloudflare =
+    document.getElementById("adminServerCloudflare");
+  const serverStatusMessage =
+    document.getElementById("adminServerStatusMessage");
   const visualDebugTlacitko =
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
@@ -146,6 +186,12 @@
     !domov ||
     !uctyPohled ||
     !uctyTlacitko ||
+    !serverPohled ||
+    !serverTlacitko ||
+    !serverZpetTlacitko ||
+    !uiPohled ||
+    !uiTlacitko ||
+    !uiZpetTlacitko ||
     !visualDebugTlacitko ||
     !debugHubTlacitko ||
     !syncTrafficTlacitko ||
@@ -166,6 +212,8 @@
   let uzivatele = [];
   let filtr = "pending";
   let nacitam = false;
+  let serverStatusNacitam = false;
+  let serverStatusTimer = null;
 
   /* PATCH 677G – GLOBÁLNÍ VÝVOJOVÝ 5× TAP PRO DEBUG.
    *
@@ -633,9 +681,19 @@
     }
   }
 
+  function zastavServerStatusAutoRefresh() {
+    if (serverStatusTimer) {
+      clearInterval(serverStatusTimer);
+      serverStatusTimer = null;
+    }
+  }
+
   function zobrazDomov() {
     domov.hidden = false;
     uctyPohled.hidden = true;
+    serverPohled.hidden = true;
+    uiPohled.hidden = true;
+    zastavServerStatusAutoRefresh();
     aktualizujSyncTrafficNastroj();
     aktualizujNotesVisualTuning();
     aktualizujPlannerVisualNastroje();
@@ -644,6 +702,173 @@
   function zobrazUcty() {
     domov.hidden = true;
     uctyPohled.hidden = false;
+    serverPohled.hidden = true;
+    uiPohled.hidden = true;
+    zastavServerStatusAutoRefresh();
+  }
+
+  function zobrazServer() {
+    if (!jeAdmin) return;
+    domov.hidden = true;
+    uctyPohled.hidden = true;
+    serverPohled.hidden = false;
+    uiPohled.hidden = true;
+    aktualizujSyncTrafficNastroj();
+    nactiServerStatus();
+    zastavServerStatusAutoRefresh();
+    serverStatusTimer = setInterval(() => {
+      if (!serverPohled.hidden && !modal.hidden) {
+        nactiServerStatus({ tichy: true });
+      }
+    }, 15000);
+  }
+
+  function zobrazUi() {
+    if (!jeAdmin) return;
+    domov.hidden = true;
+    uctyPohled.hidden = true;
+    serverPohled.hidden = true;
+    uiPohled.hidden = false;
+    zastavServerStatusAutoRefresh();
+    aktualizujNotesVisualTuning();
+    aktualizujPlannerVisualNastroje();
+  }
+
+  function formatBajty(hodnota) {
+    const n = Number(hodnota);
+    if (!Number.isFinite(n) || n < 0) return "—";
+    const gb = n / (1024 ** 3);
+    return `${gb.toLocaleString(locale(), { maximumFractionDigits: 1 })} GB`;
+  }
+
+  function formatUptime(sekundy) {
+    const celkem = Math.max(0, Math.floor(Number(sekundy) || 0));
+    const dny = Math.floor(celkem / 86400);
+    const hodiny = Math.floor((celkem % 86400) / 3600);
+    const minuty = Math.floor((celkem % 3600) / 60);
+    if (dny > 0) return `${dny} d ${hodiny} h`;
+    if (hodiny > 0) return `${hodiny} h ${minuty} min`;
+    return `${minuty} min`;
+  }
+
+  function nastavServerOverall(stav, text) {
+    if (serverOverall) {
+      serverOverall.dataset.state = stav;
+      serverOverall.textContent = text;
+    }
+    if (serverToolStav) {
+      serverToolStav.dataset.state = stav;
+      serverToolStav.textContent =
+        stav === "ok" ? "ONLINE" :
+        stav === "warning" ? "POZOR" :
+        stav === "fail" ? "OFFLINE" : "—";
+    }
+  }
+
+  function vycistiServerStatus(text = "Načítám…") {
+    nastavServerOverall("idle", text);
+    if (serverUpdated) serverUpdated.textContent = "—";
+    [serverUptime, serverCpu, serverRam, serverDisk, serverDiskFree,
+      serverBattery, serverSupabase, serverDocker, serverCloudflare]
+      .forEach((prvek) => { if (prvek) prvek.textContent = "—"; });
+  }
+
+  async function nactiServerStatus({ tichy = false } = {}) {
+    if (!jeAdmin || serverStatusNacitam) return;
+    serverStatusNacitam = true;
+    if (serverObnovitTlacitko) serverObnovitTlacitko.disabled = true;
+    if (!tichy) {
+      vycistiServerStatus();
+      if (serverStatusMessage) serverStatusMessage.textContent = "Načítám stav LubaServeru…";
+    }
+
+    try {
+      const aktivniProfil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+      const pripraven = await pripravClient();
+      if (!pripraven || !supabaseClient) {
+        throw new Error("Backend klient není dostupný.");
+      }
+
+      const { data: statusRows, error } = await supabaseClient.rpc(
+        "lubanote_admin_get_server_status"
+      );
+
+      if (error) throw error;
+      const data = Array.isArray(statusRows) ? statusRows[0] : statusRows;
+      if (!data) throw new Error("LubaServer status zatím nemá data.");
+
+      const aktualizovano = data.updated_at ? new Date(data.updated_at) : null;
+      const vekMs = aktualizovano && Number.isFinite(aktualizovano.getTime())
+        ? Date.now() - aktualizovano.getTime()
+        : Infinity;
+      const supabaseOk = Number(data.supabase_total) > 0 &&
+        Number(data.supabase_healthy) === Number(data.supabase_total);
+      const kritickeOk = data.docker_active === true &&
+        data.cloudflared_active === true && supabaseOk;
+
+      let stav = "ok";
+      let text = "ONLINE";
+      if (vekMs > 180000 || !kritickeOk) {
+        stav = "fail";
+        text = vekMs > 180000 ? "STALE / OFFLINE" : "PROBLÉM";
+      } else if (vekMs > 75000 || Number(data.disk_used_percent) >= 75) {
+        stav = "warning";
+        text = "POZOR";
+      }
+      nastavServerOverall(stav, text);
+
+      if (serverUpdated) {
+        const cas = aktualizovano?.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" }) || "—";
+        const profil = aktivniProfil?.nazev || "Backend";
+        serverUpdated.textContent = `${profil} · aktualizováno ${cas}`;
+      }
+      if (serverUptime) serverUptime.textContent = formatUptime(data.uptime_seconds);
+      if (serverCpu) {
+        const load = Number(data.load_1);
+        serverCpu.textContent = Number.isFinite(load) ? `load ${load.toLocaleString(locale(), { maximumFractionDigits: 2 })}` : "—";
+      }
+      if (serverRam) serverRam.textContent = `${formatBajty(data.memory_used_bytes)} / ${formatBajty(data.memory_total_bytes)}`;
+      if (serverDisk) {
+        const pct = Number(data.disk_used_percent);
+        serverDisk.textContent = `${formatBajty(data.disk_used_bytes)} / ${formatBajty(data.disk_total_bytes)}${Number.isFinite(pct) ? ` · ${Math.round(pct)} %` : ""}`;
+      }
+      if (serverDiskFree) serverDiskFree.textContent = formatBajty(data.disk_available_bytes);
+      if (serverBattery) {
+        const pct = Number(data.battery_percentage);
+        const stavRaw = String(data.battery_state || "").trim();
+        const stavMapa = {
+          Full: "nabito",
+          Charging: "nabíjí se",
+          Discharging: "vybíjí se",
+          "Not charging": "nenabíjí se",
+          Unknown: "neznámý stav"
+        };
+        const napajeni = data.ac_online === true ? "AC" : "baterie";
+        const stavBaterie = stavMapa[stavRaw] || stavRaw || napajeni;
+        serverBattery.textContent = Number.isFinite(pct)
+          ? `${Math.round(pct)} % · ${stavBaterie}`
+          : `— · ${stavBaterie}`;
+      }
+      if (serverSupabase) serverSupabase.textContent = `${Number(data.supabase_healthy) || 0} / ${Number(data.supabase_total) || 0} healthy`;
+      if (serverDocker) serverDocker.textContent = data.docker_active === true ? "🟢 aktivní" : "🔴 neaktivní";
+      if (serverCloudflare) serverCloudflare.textContent = data.cloudflared_active === true ? "🟢 aktivní" : "🔴 neaktivní";
+      if (serverStatusMessage) {
+        serverStatusMessage.textContent = kritickeOk
+          ? `Host ${data.hostname || "luba-server"} · stavový agent odpovídá.`
+          : "Jedna nebo více kritických serverových služeb není v pořádku.";
+      }
+    } catch (error) {
+      console.warn("LubaServer status unavailable:", error?.message || error);
+      nastavServerOverall("idle", "NEDOSTUPNÉ");
+      if (serverUpdated) serverUpdated.textContent = "Server status bridge není dostupný";
+      if (serverStatusMessage) {
+        serverStatusMessage.textContent =
+          "Na tomto backendu zatím není dostupný bezpečný serverový status. Backend diagnostika a RX/TX/E fungují dál.";
+      }
+    } finally {
+      serverStatusNacitam = false;
+      if (serverObnovitTlacitko) serverObnovitTlacitko.disabled = false;
+    }
   }
 
   function nastavStav(text = "", chyba = false) {
@@ -1765,6 +1990,7 @@
 
   function zavriDashboard() {
     modal.hidden = true;
+    zastavServerStatusAutoRefresh();
     zobrazDomov();
   }
 
@@ -1941,6 +2167,11 @@
   });
 
   uctyTlacitko.addEventListener("click", otevriUcty);
+  serverTlacitko.addEventListener("click", zobrazServer);
+  uiTlacitko.addEventListener("click", zobrazUi);
+  serverZpetTlacitko.addEventListener("click", zobrazDomov);
+  uiZpetTlacitko.addEventListener("click", zobrazDomov);
+  serverObnovitTlacitko?.addEventListener("click", () => nactiServerStatus());
   visualDebugTlacitko.addEventListener(
     "click",
     otevriVisualDebugZAdmina
@@ -2129,6 +2360,9 @@
    * zobrazí jen po úspěšném RPC lubanote_admin_is_current_user = true.
    */
   window.addEventListener("online", () => {
+    if (!serverPohled.hidden && !modal.hidden) {
+      nactiServerStatus();
+    }
     if (ucetAktivni) {
       overAdmina();
     }

@@ -1548,7 +1548,7 @@
       </div>
 
       <section id="adminDashboardHome" class="adminDashboardHome">
-        <p id="adminDashboardIntro" class="adminDashboardIntro">Správa účtů a interní nástroje LubaNote.</p>
+        <p id="adminDashboardIntro" class="adminDashboardIntro">Správa LubaNote – účty, server, UI a diagnostika.</p>
 
         <div class="adminToolGrid" aria-label="Admin nástroje">
           <button id="adminAccountsToolButton" class="adminToolCard" type="button">
@@ -1556,6 +1556,105 @@
             <span class="adminToolText">
               <strong id="adminAccountsToolTitle">Účty</strong>
               <small id="adminAccountsToolDescription">Registrace, Demo a správa uživatelů</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminServerToolButton" class="adminToolCard adminToolCardState" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🖥️</span>
+            <span class="adminToolText">
+              <strong>Server</strong>
+              <small id="adminServerToolDescription">LubaServer, backend a RX/TX/E panel</small>
+            </span>
+            <span id="adminServerToolState" class="adminToolMiniState" data-state="idle">—</span>
+          </button>
+
+          <button id="adminUiToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🎨</span>
+            <span class="adminToolText">
+              <strong>UI</strong>
+              <small>Visual Debug a všechna živá ladění rozhraní</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminDebugHubToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🐞</span>
+            <span class="adminToolText">
+              <strong>Debug Hub</strong>
+              <small id="adminDebugHubToolDescription">Diagnostika, logy, WebView Watch a testovací moduly</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="adminServerView" class="adminDashboardSubView" hidden>
+        <div class="adminAccountsHeader">
+          <button id="adminServerBackButton" class="adminAccountsBackButton" type="button">‹ Dashboard</button>
+          <strong>Server</strong>
+        </div>
+
+        <section class="adminServerStatusCard" aria-label="Stav LubaServeru">
+          <div class="adminServerStatusHead">
+            <div>
+              <span class="adminServerEyebrow">LubaServer</span>
+              <strong id="adminServerOverall">Načítám…</strong>
+              <small id="adminServerUpdated">—</small>
+            </div>
+            <button id="adminServerRefreshButton" class="adminRefreshButton lubaIconOnlyButton" type="button" aria-label="Obnovit stav serveru" title="Obnovit">
+              <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
+            </button>
+          </div>
+
+          <div class="adminServerMetrics">
+            <div class="adminServerMetric"><span>Běží</span><strong id="adminServerUptime">—</strong></div>
+            <div class="adminServerMetric"><span>CPU</span><strong id="adminServerCpu">—</strong></div>
+            <div class="adminServerMetric"><span>RAM</span><strong id="adminServerRam">—</strong></div>
+            <div class="adminServerMetric"><span>Disk</span><strong id="adminServerDisk">—</strong></div>
+            <div class="adminServerMetric"><span>Volné místo</span><strong id="adminServerDiskFree">—</strong></div>
+            <div class="adminServerMetric"><span>Baterie</span><strong id="adminServerBattery">—</strong></div>
+            <div class="adminServerMetric"><span>Supabase</span><strong id="adminServerSupabase">—</strong></div>
+            <div class="adminServerMetric"><span>Docker</span><strong id="adminServerDocker">—</strong></div>
+            <div class="adminServerMetric"><span>Cloudflare</span><strong id="adminServerCloudflare">—</strong></div>
+          </div>
+
+          <p id="adminServerStatusMessage" class="adminServerStatusMessage" aria-live="polite"></p>
+        </section>
+
+        <div class="adminToolGrid adminSubToolGrid" aria-label="Server nástroje">
+          <button id="adminBackendToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🗄️</span>
+            <span class="adminToolText">
+              <strong>Backend</strong>
+              <small>Read-only kontrola Auth, DB, RPC, Storage a Realtime</small>
+            </span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
+
+          <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+            <span class="adminToolIcon" aria-hidden="true">↕️</span>
+            <span class="adminToolText">
+              <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
+              <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
+            </span>
+            <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="adminUiView" class="adminDashboardSubView" hidden>
+        <div class="adminAccountsHeader">
+          <button id="adminUiBackButton" class="adminAccountsBackButton" type="button">‹ Dashboard</button>
+          <strong>UI</strong>
+        </div>
+
+        <div class="adminToolGrid" aria-label="UI nástroje">
+          <button id="adminVisualDebugToolButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">🛠️</span>
+            <span class="adminToolText">
+              <strong>Visual Debug</strong>
+              <small id="adminVisualDebugToolDescription">Vizuální diagnostika prvků aplikace</small>
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
@@ -1591,7 +1690,7 @@
             <span class="adminToolIcon" aria-hidden="true">🔤</span>
             <span class="adminToolText">
               <strong>Texty</strong>
-              <small>Kompletní živé ladění velikostí textů pro Mobil i PC v rem</small>
+              <small>Živé ladění velikostí textů pro Mobil i PC v rem</small>
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
@@ -1612,42 +1711,6 @@
               <small id="adminReminderIconsToolDescription">Metadata ikony v kartách jsou zobrazené</small>
             </span>
             <span id="adminReminderIconsToolState" class="adminToolToggle">Zapnuto</span>
-          </button>
-
-          <button id="adminVisualDebugToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">🛠️</span>
-            <span class="adminToolText">
-              <strong>Visual Debug</strong>
-              <small id="adminVisualDebugToolDescription">Vizuální ladění prvků aplikace</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminDebugHubToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">🐞</span>
-            <span class="adminToolText">
-              <strong>Debug Hub</strong>
-              <small id="adminDebugHubToolDescription">Diagnostika, logy a testovací moduly</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminBackendToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">🗄️</span>
-            <span class="adminToolText">
-              <strong>Backend</strong>
-              <small>BI-1B · read-only kontrola Auth, DB, RPC, Storage a Realtime</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
-            <span class="adminToolIcon" aria-hidden="true">↕️</span>
-            <span class="adminToolText">
-              <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
-              <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
-            </span>
-            <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
           </button>
         </div>
       </section>
@@ -2580,7 +2643,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=677G-global-debug-5tap"></script>
+  <script src="adminDashboard.js?v=677H-dashboard-server-status"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

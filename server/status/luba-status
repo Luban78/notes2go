@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DB_CONTAINER="${LUBA_DB_CONTAINER:-supabase-db}"
+
+row="$(docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -At -F '|' -c "
+SELECT
+  COALESCE(hostname,'luba-server'),
+  COALESCE(uptime_seconds,0),
+  COALESCE(load_1,0),
+  COALESCE(memory_used_bytes,0),
+  COALESCE(memory_total_bytes,0),
+  COALESCE(disk_used_bytes,0),
+  COALESCE(disk_total_bytes,0),
+  COALESCE(disk_available_bytes,0),
+  COALESCE(disk_used_percent,0),
+  COALESCE(battery_percentage::text,'-'),
+  COALESCE(battery_state,'-'),
+  COALESCE(supabase_healthy,0),
+  COALESCE(supabase_total,0),
+  COALESCE(docker_active,false),
+  COALESCE(cloudflared_active,false),
+  COALESCE(EXTRACT(EPOCH FROM (now()-updated_at))::bigint,999999)
+FROM public.lubanote_server_status
+WHERE id='main';")"
+
+IFS='|' read -r HOST UPTIME LOAD1 MEM_USED MEM_TOTAL DISK_USED DISK_TOTAL DISK_FREE DISK_PCT BAT_PCT BAT_STATE SB_OK SB_TOTAL DOCKER_OK CF_OK AGE <<< "$row"
+
+gb() { awk -v b="${1:-0}" 'BEGIN {printf "%.1f", b/1073741824}'; }
+days=$((UPTIME / 86400)); hours=$(((UPTIME % 86400) / 3600));
+
+ok_icon() { [[ "$1" == "t" || "$1" == "true" ]] && printf '🟢' || printf '🔴'; }
+if [[ "$AGE" -le 90 && "$DOCKER_OK" == "t" && "$CF_OK" == "t" && "$SB_OK" -eq "$SB_TOTAL" && "$SB_TOTAL" -gt 0 ]]; then SERVER_STATE='🟢 ONLINE'; else SERVER_STATE='🟠 CHECK'; fi
+
+printf '%s\n' '╔════════ LUBASERVER STATUS ════════╗'
+printf ' Server       %-22s\n' "$SERVER_STATE"
+printf ' Host         %-22s\n' "$HOST"
+printf ' Běží         %s d %s h\n' "$days" "$hours"
+printf ' CPU          🟢 load %s\n' "$LOAD1"
+printf ' RAM          🟢 %s / %s GB\n' "$(gb "$MEM_USED")" "$(gb "$MEM_TOTAL")"
+printf ' Disk         🟢 %s / %s GB (%s%%)\n' "$(gb "$DISK_USED")" "$(gb "$DISK_TOTAL")" "$DISK_PCT"
+printf ' Volno        %s GB\n' "$(gb "$DISK_FREE")"
+printf ' Baterie      %s%% · %s\n' "$BAT_PCT" "$BAT_STATE"
+printf ' Supabase     %s %s / %s healthy\n' "$([[ "$SB_OK" -eq "$SB_TOTAL" && "$SB_TOTAL" -gt 0 ]] && printf '🟢' || printf '🔴')" "$SB_OK" "$SB_TOTAL"
+printf ' Docker       %s %s\n' "$(ok_icon "$DOCKER_OK")" "$DOCKER_OK"
+printf ' Cloudflare   %s %s\n' "$(ok_icon "$CF_OK")" "$CF_OK"
+printf ' Data age     %s s\n' "$AGE"
+printf '%s\n' '╚════════════════════════════════════╝'
