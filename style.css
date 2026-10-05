@@ -16028,3 +16028,125 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 .adminToolCard.adminToolCardState {
   grid-template-columns: 52px minmax(0, 1fr) auto;
 }
+
+/* ==================================================
+   PATCH 677I – TEST BACKEND SWITCH + VÝRAZNÉ TEST OZNAČENÍ
+================================================== */
+.adminBackendSwitchCard,
+.adminMigrationCard {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+
+.adminBackendSwitchHead,
+.adminMigrationHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminBackendSwitchHead > div,
+.adminMigrationHead > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+#adminDeviceBackendName,
+.adminMigrationHead strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+#adminDeviceBackendMode {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.adminBackendSwitchMessage,
+.adminMigrationCard p {
+  margin: 12px 2px 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.adminBackendSwitchMessage[data-error="1"] {
+  color: #ef8a8a;
+}
+
+.adminBackendSwitchActions,
+.adminMigrationActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adminBackendSwitchButton,
+.adminMigrationActions button {
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.adminBackendSwitchButton:active {
+  transform: scale(0.98);
+}
+
+.adminMigrationActions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.adminMigrationActions button:disabled {
+  opacity: 0.46;
+}
+
+.lubaTestBackendBadge {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 3590;
+  max-width: calc(100vw - 20px);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 197, 84, 0.72);
+  border-radius: 999px;
+  background: rgba(48, 31, 7, 0.90);
+  color: #ffd57a;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.28);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  text-transform: uppercase;
+}
+
+.lubaTestBackendBadge[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 430px) {
+  .adminBackendSwitchActions {
+    grid-template-columns: 1fr;
+  }
+
+  .adminMigrationActions button {
+    min-width: 0;
+    padding-inline: 6px;
+    font-size: 0.76rem;
+  }
+}

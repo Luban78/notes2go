@@ -61,6 +61,18 @@
     document.getElementById("adminServerCloudflare");
   const serverStatusMessage =
     document.getElementById("adminServerStatusMessage");
+  const deviceBackendName =
+    document.getElementById("adminDeviceBackendName");
+  const deviceBackendMode =
+    document.getElementById("adminDeviceBackendMode");
+  const deviceBackendBadge =
+    document.getElementById("adminDeviceBackendBadge");
+  const deviceBackendMessage =
+    document.getElementById("adminDeviceBackendMessage");
+  const useLubaServerTlacitko =
+    document.getElementById("adminUseLubaServerButton");
+  const useCloudTlacitko =
+    document.getElementById("adminUseCloudButton");
   const visualDebugTlacitko =
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
@@ -714,6 +726,7 @@
     serverPohled.hidden = false;
     uiPohled.hidden = true;
     aktualizujSyncTrafficNastroj();
+    aktualizujBackendZarizeniUi();
     nactiServerStatus();
     zastavServerStatusAutoRefresh();
     serverStatusTimer = setInterval(() => {
@@ -869,6 +882,179 @@
       serverStatusNacitam = false;
       if (serverObnovitTlacitko) serverObnovitTlacitko.disabled = false;
     }
+  }
+
+  function nactiJsonPoleProBackendSwitch(klic) {
+    try {
+      const raw = localStorage.getItem(klic);
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      return Array.isArray(data) ? data : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function maJsonDluhProBackendSwitch(klic) {
+    try {
+      const raw = localStorage.getItem(klic);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data.length > 0;
+      if (data && typeof data === "object") return Object.keys(data).length > 0;
+      return Boolean(data);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function spocitejLocalPoznamkyProBackendSwitch() {
+    const regular = nactiJsonPoleProBackendSwitch("savedTask");
+    const secret = nactiJsonPoleProBackendSwitch("savedSecretTask");
+
+    return regular.filter((note) => note?.storageScope === "local").length +
+      secret.filter((note) => note?.storageScope === "local").length;
+  }
+
+  function zkontrolujCloudPredTestBackendem() {
+    if (!navigator.onLine) {
+      return {
+        ok: false,
+        zprava: "Nejdřív se připoj k internetu. Do TEST LubaServeru přepneme jen ze synchronizovaného Cloud stavu."
+      };
+    }
+
+    const syncStav = window.LubaNoteSyncStatus?.ziskejStav?.();
+    if (syncStav !== "synced") {
+      return {
+        ok: false,
+        zprava: "Cloud ještě není ve stavu „Synchronizováno“. Počkej na dokončení synchronizace a zkus přepnutí znovu."
+      };
+    }
+
+    if (
+      localStorage.getItem("lubanoteRegularNotesStorageModeV1") ===
+      "indexeddb"
+    ) {
+      return {
+        ok: false,
+        zprava: "Toto zařízení používá IndexedDB overflow cache. Automatické přepnutí proto raději blokujeme, aby se neztratila LOCAL data."
+      };
+    }
+
+    const localPocet = spocitejLocalPoznamkyProBackendSwitch();
+    if (localPocet > 0) {
+      return {
+        ok: false,
+        zprava: `Na zařízení je ${localPocet} LOCAL poznámek. Přepnutí je záměrně blokované, protože bezpečný reset by je smazal.`
+      };
+    }
+
+    const dluhKlice = [
+      "lubanotePendingDeletes",
+      "lubanotePendingEditorReleasesV1",
+      "lubanotePendingSecretBackupMetadataV1"
+    ];
+
+    if (dluhKlice.some(maJsonDluhProBackendSwitch)) {
+      return {
+        ok: false,
+        zprava: "Na zařízení je ještě čekající synchronizační dluh. Nejdřív nech LubaNote dokončit synchronizaci."
+      };
+    }
+
+    return { ok: true, zprava: "" };
+  }
+
+  function aktualizujBackendZarizeniUi() {
+    const config = window.LubaNoteBackendConfig;
+    const profil = config?.nactiAktivniProfil?.();
+    const jeTest = profil?.id === "lubanoteServer";
+
+    if (deviceBackendName) {
+      deviceBackendName.textContent = profil?.nazev || "—";
+    }
+
+    if (deviceBackendMode) {
+      deviceBackendMode.textContent = jeTest
+        ? "TEST backend · pouze toto zařízení"
+        : "Produkční backend · výchozí";
+    }
+
+    if (deviceBackendBadge) {
+      deviceBackendBadge.textContent = jeTest ? "TEST" : "PRODUKCE";
+      deviceBackendBadge.dataset.state = jeTest ? "warning" : "ok";
+    }
+
+    if (deviceBackendMessage) {
+      deviceBackendMessage.textContent = jeTest
+        ? "Jsi v TEST LubaServeru. Návrat na Cloud znovu vyčistí lokální testovací cache, takže se data obou backendů nesmíchají."
+        : "Přepnutí do TEST LubaServeru je pouze pro toto zařízení. Před změnou musí být Cloud plně synchronizovaný; lokální cache se bezpečně vyčistí.";
+    }
+
+    if (useLubaServerTlacitko) {
+      useLubaServerTlacitko.hidden = jeTest;
+    }
+    if (useCloudTlacitko) {
+      useCloudTlacitko.hidden = !jeTest;
+    }
+  }
+
+  function zobrazBackendSwitchChybu(zprava) {
+    if (!deviceBackendMessage) return;
+    deviceBackendMessage.textContent = zprava;
+    deviceBackendMessage.dataset.error = "1";
+    setTimeout(() => {
+      deviceBackendMessage.removeAttribute("data-error");
+      aktualizujBackendZarizeniUi();
+    }, 7000);
+  }
+
+  function prepniBackendZarizeni(cilId) {
+    const config = window.LubaNoteBackendConfig;
+    if (!config?.prepinaniPovoleno || !config?.nastavAktivniProfil) {
+      zobrazBackendSwitchChybu("Přepínání backendu v této verzi není dostupné.");
+      return;
+    }
+
+    const aktualni = config.nactiAktivniProfil?.();
+    const cil = config.nactiProfil?.(cilId);
+
+    if (!aktualni || !cil || aktualni.id === cil.id) {
+      aktualizujBackendZarizeniUi();
+      return;
+    }
+
+    if (aktualni.id === "supabaseCloud" && cil.id === "lubanoteServer") {
+      const kontrola = zkontrolujCloudPredTestBackendem();
+      if (!kontrola.ok) {
+        zobrazBackendSwitchChybu(kontrola.zprava);
+        return;
+      }
+
+      otevriAdminPotvrzeni({
+        nadpis: "Přepnout do TEST LubaServeru?",
+        zprava:
+          "Cloud je synchronizovaný. LubaNote teď přepne pouze toto zařízení na test.lubanote.com, vyčistí lokální cloudovou cache a bude vyžadovat nové přihlášení. Produkční Supabase Cloud se nezmění.",
+        potvrditText: "Přepnout do TEST",
+        poPotvrzeni: async () => {
+          config.nastavAktivniProfil("lubanoteServer");
+          window.location.replace("./local-reset.html?backendSwitch=1");
+        }
+      });
+      return;
+    }
+
+    otevriAdminPotvrzeni({
+      nadpis: "Vrátit toto zařízení na Cloud?",
+      zprava:
+        "Lokální TEST cache se smaže a zařízení se vrátí na produkční Supabase Cloud. Změny, které ještě nejsou uložené na TEST LubaServeru, se zahodí. Produkční Cloud data se před resetem nemažou.",
+      potvrditText: "Vrátit na Cloud",
+      poPotvrzeni: async () => {
+        config.nastavAktivniProfil("supabaseCloud");
+        window.location.replace("./local-reset.html?backendSwitch=1");
+      }
+    });
   }
 
   function nastavStav(text = "", chyba = false) {
@@ -2172,6 +2358,14 @@
   serverZpetTlacitko.addEventListener("click", zobrazDomov);
   uiZpetTlacitko.addEventListener("click", zobrazDomov);
   serverObnovitTlacitko?.addEventListener("click", () => nactiServerStatus());
+  useLubaServerTlacitko?.addEventListener(
+    "click",
+    () => prepniBackendZarizeni("lubanoteServer")
+  );
+  useCloudTlacitko?.addEventListener(
+    "click",
+    () => prepniBackendZarizeni("supabaseCloud")
+  );
   visualDebugTlacitko.addEventListener(
     "click",
     otevriVisualDebugZAdmina

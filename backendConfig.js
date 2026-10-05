@@ -2,19 +2,22 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / BI-1A
-   * --------------------------------
-   * Jediné místo, které zná adresu a veřejný klíč produkčního backendu.
-   * V této první bezpečné fázi je aktivní výhradně stávající Supabase Cloud.
-   * Přepínání backendu se záměrně ještě nepovoluje.
+   * BACKEND INDEPENDENCE V1 / BI-1B / PATCH 677I
+   * -------------------------------------------------
+   * Produkční výchozí profil zůstává Supabase Cloud.
+   * Admin může na jednom zařízení dočasně přepnout do odděleného
+   * TEST LubaServer profilu. Přepnutí vždy probíhá přes lokální reset,
+   * aby se nemíchala cache Cloud ↔ LubaServer.
    */
   const VYCHOZI_PROFIL_ID = "supabaseCloud";
+  const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
 
   const PROFILY = Object.freeze({
     supabaseCloud: Object.freeze({
       id: "supabaseCloud",
       nazev: "Supabase Cloud",
       typ: "supabase-cloud",
+      prostredi: "production",
       povolen: true,
       url: "https://nwdacgigplofksexssws.supabase.co/",
       publishableKey:
@@ -23,17 +26,15 @@
       authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
     }),
 
-    /*
-     * Rezervované místo pro budoucí vlastní server.
-     * Dokud BI-2 až BI-6 neprojdou auditem, profil je vypnutý a bez endpointu.
-     */
     lubanoteServer: Object.freeze({
       id: "lubanoteServer",
       nazev: "LubaNote Server",
       typ: "supabase-selfhosted",
-      povolen: false,
-      url: "",
-      publishableKey: "",
+      prostredi: "test",
+      povolen: true,
+      url: "https://test.lubanote.com/",
+      publishableKey:
+        "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
       projectRef: "lubanote-server",
       authStorageKey: "sb-lubanote-server-auth-token"
     })
@@ -43,12 +44,44 @@
     return PROFILY[String(id || "").trim()] || null;
   }
 
+  function nactiUlozenyProfilId() {
+    try {
+      const id = String(
+        localStorage.getItem(AKTIVNI_PROFIL_STORAGE_KEY) || ""
+      ).trim();
+      const profil = nactiProfil(id);
+      if (profil?.povolen) return profil.id;
+    } catch (_) {}
+    return VYCHOZI_PROFIL_ID;
+  }
+
   function nactiAktivniProfil() {
-    const profil = nactiProfil(VYCHOZI_PROFIL_ID);
+    const profil = nactiProfil(nactiUlozenyProfilId());
     if (!profil || !profil.povolen || !profil.url || !profil.publishableKey) {
       throw new Error("LubaNote backend config: aktivní profil není připraven.");
     }
     return profil;
+  }
+
+  function nastavAktivniProfil(id) {
+    const profil = nactiProfil(id);
+    if (!profil || !profil.povolen || !profil.url || !profil.publishableKey) {
+      throw new Error("LubaNote backend config: požadovaný profil není připraven.");
+    }
+
+    localStorage.setItem(AKTIVNI_PROFIL_STORAGE_KEY, profil.id);
+    aktualizujTestBadge();
+    return profil;
+  }
+
+  function jeTestovaciRezim() {
+    return nactiAktivniProfil().prostredi === "test";
+  }
+
+  function aktualizujTestBadge() {
+    const badge = document.getElementById("lubaTestBackendBadge");
+    if (!badge) return;
+    badge.hidden = !jeTestovaciRezim();
   }
 
   function jeBackendPozadavek(input) {
@@ -83,12 +116,24 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1A",
-    prepinaniPovoleno: false,
+    verze: "BI-1B-677I",
+    prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
+    aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,
     nactiProfil,
     nactiAktivniProfil,
+    nactiAktivniProfilId: nactiUlozenyProfilId,
+    nastavAktivniProfil,
+    jeTestovaciRezim,
     jeBackendPozadavek,
     nactiZnameAuthStorageKeys
   });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", aktualizujTestBadge, {
+      once: true
+    });
+  } else {
+    aktualizujTestBadge();
+  }
 })();
