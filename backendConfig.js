@@ -2,7 +2,7 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / BI-1B / PATCH 677I
+   * BACKEND INDEPENDENCE V1 / BI-1B / PATCH 677M
    * -------------------------------------------------
    * Produkční výchozí profil zůstává Supabase Cloud.
    * Admin může na jednom zařízení dočasně přepnout do odděleného
@@ -32,9 +32,9 @@
       typ: "supabase-selfhosted",
       prostredi: "test",
       povolen: true,
-      url: "https://test.lubanote.com/",
+      url: "https://test.lubanote.com",
       publishableKey:
-        "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
       projectRef: "lubanote-server",
       authStorageKey: "sb-lubanote-server-auth-token"
     })
@@ -116,7 +116,7 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1B-677I",
+    verze: "BI-1B-677M",
     prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
     aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,
