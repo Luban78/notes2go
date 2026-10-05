@@ -170,6 +170,15 @@
        a oba směry jsou ukotvené ke středové čáře; už se neposouvají uvnitř
        dvou pevných 64px boxů. */
 
+  /* PATCH 677D – magnifier exclusivity + handle dedupe:
+     - lupa a Copy/Cut panel se vzájemně vylučují; během aktivní lupy je menu
+       tvrdě skryté i proti pozdějším selectionchange/toolbar hookům,
+     - během dragu s lupou jsou vizuální handles skryté a vrátí se až po puštění,
+     - každé vykreslení selection drží právě jeden start + jeden end custom handle
+       a průběžně zahazuje případné stale/duplicitní DOM handles,
+     - pokud Android WebView během custom selection zkusí znovu vytvořit vlastní
+       DOM Selection, okamžitě jej scrubneme bez zásahu do modelového Range. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -2679,6 +2688,7 @@
   let v2SelectionLupa = null;
   let v2SelectionLupaPred = null;
   let v2SelectionLupaPo = null;
+  let v2SelectionScrubujeNative = false;
   const V2_SELECTION_CUSTOM_ACTIVE_CLASS = "ln-v2-selection-custom-active";
   let v2SelectionEdgeScrollPxS = (() => {
     try {
@@ -2777,6 +2787,13 @@
     }
     body.ln-v2-selection-ui-blocked #selectionMenu[data-ln-v2-owner="1"] {
       display: none !important;
+    }
+    /* 677D – magnifier je jediný aktivní drag UI. Panel se nesmí objevit
+       ani na jediný frame přes selectionchange/reposition hook. */
+    body.ln-v2-selection-magnifier-active #selectionMenu[data-ln-v2-owner="1"] {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
     }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
       transform: translate(-100%, 0);
@@ -2954,27 +2971,51 @@
 
   function zajistiV2SelectionHandles() {
     zajistiV2SelectionScrollHighlightStyl();
-    if (!v2SelectionHandleStart?.isConnected) {
-      v2SelectionHandleStart = document.createElement("div");
-      v2SelectionHandleStart.className = "ln-v2-selection-handle-custom";
-      v2SelectionHandleStart.setAttribute(V2_SELECTION_HANDLE_ATTR, "start");
-      v2SelectionHandleStart.setAttribute("aria-hidden", "true");
-      v2SelectionHandleStart.hidden = true;
-      document.body.appendChild(v2SelectionHandleStart);
-    }
-    if (!v2SelectionHandleEnd?.isConnected) {
-      v2SelectionHandleEnd = document.createElement("div");
-      v2SelectionHandleEnd.className = "ln-v2-selection-handle-custom";
-      v2SelectionHandleEnd.setAttribute(V2_SELECTION_HANDLE_ATTR, "end");
-      v2SelectionHandleEnd.setAttribute("aria-hidden", "true");
-      v2SelectionHandleEnd.hidden = true;
-      document.body.appendChild(v2SelectionHandleEnd);
-    }
+
+    /* PATCH 677D – DOM singleton. Pokud po předchozím selection cyklu/WebView
+       repaintu zůstane stale custom kapka, nesmí vzniknout druhý pár. Vždy
+       ponecháme právě jeden start a jeden end element a ostatní odstraníme. */
+    const sjednotHandle = (strana, aktualni) => {
+      const selektor = `.ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="${strana}"]`;
+      const nalezene = Array.from(document.querySelectorAll(selektor));
+      let kanonicky = aktualni?.isConnected ? aktualni : (nalezene[0] || null);
+      if (!kanonicky) {
+        kanonicky = document.createElement("div");
+        kanonicky.className = "ln-v2-selection-handle-custom";
+        kanonicky.setAttribute(V2_SELECTION_HANDLE_ATTR, strana);
+        kanonicky.setAttribute("aria-hidden", "true");
+        kanonicky.hidden = true;
+        document.body.appendChild(kanonicky);
+      }
+      for (const element of nalezene) {
+        if (element !== kanonicky) element.remove();
+      }
+      return kanonicky;
+    };
+
+    v2SelectionHandleStart = sjednotHandle("start", v2SelectionHandleStart);
+    v2SelectionHandleEnd = sjednotHandle("end", v2SelectionHandleEnd);
   }
 
   function skryjV2SelectionHandles() {
-    if (v2SelectionHandleStart) v2SelectionHandleStart.hidden = true;
-    if (v2SelectionHandleEnd) v2SelectionHandleEnd.hidden = true;
+    /* 677D – schovej i případný stale element, nejen dvě lokální reference. */
+    document.querySelectorAll(`.ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}]`)
+      .forEach((element) => { element.hidden = true; });
+  }
+
+  function potlacV2NativeSelection() {
+    if (v2SelectionScrubujeNative) return false;
+    const vyber = window.getSelection?.();
+    if (!vyber?.rangeCount) return false;
+    v2SelectionScrubujeNative = true;
+    try {
+      vyber.removeAllRanges();
+      return true;
+    } catch (_error) {
+      return false;
+    } finally {
+      queueMicrotask(() => { v2SelectionScrubujeNative = false; });
+    }
   }
 
   function nastavV2CustomSelectionAktivni(editor, zapnout) {
@@ -2995,6 +3036,7 @@
 
   function skryjV2SelectionLupu() {
     if (v2SelectionLupa) v2SelectionLupa.hidden = true;
+    document.body?.classList?.remove("ln-v2-selection-magnifier-active");
   }
 
   function zajistiV2SelectionLupu() {
@@ -3123,6 +3165,14 @@
     if (top < okraj) top = yPrstu + 38;
     left = Math.max(okraj, Math.min(viewportW - sirka - okraj, left));
     top = Math.max(okraj, Math.min(viewportH - vyska - okraj, top));
+    /* PATCH 677D – magnifier a panel jsou vzájemně exkluzivní. Body class
+       je CSS pojistka i proti jinému pozdnímu menu hooku. Zároveň během drag
+       fáze schováme kapky; přesný Range/highlight zůstává plně aktivní. */
+    nastavV2SelectionMenuNuceneSkryti(true);
+    skryjV2SelectionMenu();
+    potlacV2NativeSelection();
+    skryjV2SelectionHandles();
+    document.body?.classList?.add("ln-v2-selection-magnifier-active");
     v2SelectionLupa.style.left = `${Math.round(left)}px`;
     v2SelectionLupa.style.top = `${Math.round(top)}px`;
     v2SelectionLupa.hidden = false;
@@ -3399,7 +3449,8 @@
        Tyto drahé kroky provedeme až při ručním pohybu / ukončení dragu. */
     if (!lehkyRezim) {
       ulozV2VizualniRangeDoCore(stav.range);
-      zobrazV2SelectionHandles(stav.range);
+      if (stav.handleDrag?.lupaAktivni) skryjV2SelectionHandles();
+      else zobrazV2SelectionHandles(stav.range);
     }
     return true;
   }
@@ -3806,18 +3857,23 @@
       nastavV2SelectionMenuNuceneSkryti(true);
       skryjV2SelectionMenu();
 
-      /* PATCH 677 – range sleduje přesný hrot handle, ne libovolné místo
-         uvnitř 44px hitboxu, na kterém prst drag zahájil. */
-      const smerTed = ziskejV2HandleAutoSmer(stav.editor, dotyk.clientY);
-      if (!stav.handleDrag.autoSmer || !smerTed) {
-        aktualizujV2HandleRangeZeSouradnic(stav, presny.x, presny.y);
-      }
       if (!stav.handleDrag.lupaAktivni) {
         const posunLupy = Math.hypot(
           Number(dotyk.clientX) - Number(stav.handleDrag.startTouchX),
           Number(dotyk.clientY) - Number(stav.handleDrag.startTouchY)
         );
-        if (posunLupy >= V2_SELECTION_LUPA_DRAG_PRAH) stav.handleDrag.lupaAktivni = true;
+        if (posunLupy >= V2_SELECTION_LUPA_DRAG_PRAH) {
+          stav.handleDrag.lupaAktivni = true;
+          potlacV2NativeSelection();
+        }
+      }
+
+      /* PATCH 677 – range sleduje přesný hrot handle, ne libovolné místo
+         uvnitř 44px hitboxu, na kterém prst drag zahájil. 677D nastaví stav
+         lupy ještě před renderem, aby se handles ani na jeden frame nevrátily. */
+      const smerTed = ziskejV2HandleAutoSmer(stav.editor, dotyk.clientY);
+      if (!stav.handleDrag.autoSmer || !smerTed) {
+        aktualizujV2HandleRangeZeSouradnic(stav, presny.x, presny.y);
       }
       zobrazV2SelectionLupu(stav, dotyk.clientX, dotyk.clientY, presny.x, presny.y);
       naplanujV2HandleAutoScroll(stav);
@@ -4219,6 +4275,19 @@
     zapisV2Stabilitu("SELECTIONCHANGE");
     if (core()?.jeImeKompoziceAktivni?.()) return;
     const vyber = window.getSelection();
+
+    /* PATCH 677D – custom Range žije mimo DOM Selection. Pokud WebView během
+       dragu/tapu zkusí znovu vytvořit nativní selection, okamžitě jej smažeme.
+       Modelový range/highlight tím není dotčen. */
+    if (!jeDesktopSelection && v2SelectionScroll?.range && vyber?.rangeCount) {
+      potlacV2NativeSelection();
+      if (v2SelectionScroll?.handleDrag || document.body?.classList?.contains("ln-v2-selection-magnifier-active")) {
+        nastavV2SelectionMenuNuceneSkryti(true);
+        skryjV2SelectionMenu();
+      }
+      return;
+    }
+
     if (!vyber?.rangeCount) return;
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
