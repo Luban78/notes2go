@@ -8959,9 +8959,27 @@ function naplanujSynchronizaciPoLokalniZmene(
     }, Math.max(0, Number(zpozdeni) || 0));
 }
 
+function jeMaintenanceWriteFreezeAktivni() {
+  return (
+    window.LubaNoteMaintenance
+      ?.jeWriteFreezeAktivni?.() === true
+  );
+}
+
 async function provedLokalniZmenuBezKolizeSeSync(akce) {
   if (typeof akce !== "function") {
     return null;
+  }
+
+  /* PATCH 677T – klientský MAINTENANCE write-freeze.
+   * Jakmile Control Point oznámí údržbu pro právě aktivní backend,
+   * nové lokální změny už nesmějí vznikat. Rozpracovaná změna, která
+   * touto branou prošla ještě před aktivací maintenance, může bezpečně
+   * doběhnout a následný drain ji odešle na SOURCE. */
+  if (jeMaintenanceWriteFreezeAktivni()) {
+    const error = new Error("LUBANOTE_MAINTENANCE_WRITE_FREEZE");
+    error.code = "LUBANOTE_MAINTENANCE_WRITE_FREEZE";
+    throw error;
   }
 
   let uvolniFrontu;
@@ -9771,6 +9789,124 @@ async function synchronizujHromadneSmazaniTed(
   }
 }
 
+/* PATCH 677T – Maintenance/Drain V1.
+ * Čeká na lokální frontu, potom znovu používá existující Sync V2 worker.
+ * Nevytváří druhý sync engine a nikdy nepřepíná backend. */
+async function vyprazdniFrontuProMaintenance() {
+  if (!navigator.onLine) {
+    return {
+      ok: false,
+      duvod: "offline",
+      syncStav: window.LubaNoteSyncStatus?.ziskejStav?.() || null
+    };
+  }
+
+  /* Rozpracovaná lokální změna z okamžiku aktivace maintenance musí
+   * nejprve doběhnout. Nové změny už blokuje write-freeze výše. */
+  try {
+    await frontaLokalnichZmen;
+    if (probihajiciLokalniZmena) {
+      await probihajiciLokalniZmena;
+    }
+  } catch (error) {
+    console.warn("Maintenance: čekání na lokální změnu selhalo:", error);
+    return { ok: false, duvod: "local-change-failed" };
+  }
+
+  /* LOCAL scope nemá běžný obsahový Cloud sync. Pokud ale z doby před
+   * přepnutím scope zůstal starý Cloud dluh, nesmíme ho prohlásit za drained. */
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    const pendingDeletes = nactiCekajiciSmazani().length;
+    const blockedDeletes = nactiBlokovanaCekajiciSmazani().length;
+    const targetedDebt = maCilenyPrivateV2Dluh();
+    const cekaLokalni = lokalniZmenaCekaNaPotvrzeniServerem === true;
+    const konflikty = aktivniKonfliktySyncu.size;
+    const ok = (
+      pendingDeletes === 0 &&
+      blockedDeletes === 0 &&
+      targetedDebt === false &&
+      cekaLokalni === false &&
+      konflikty === 0
+    );
+
+    return {
+      ok,
+      duvod: ok ? "local-scope" : "local-scope-cloud-debt",
+      syncStav: "local",
+      pendingDeletes,
+      blockedDeletes,
+      targetedDebt,
+      cekaLokalni,
+      konflikty
+    };
+  }
+
+  /* Pokud právě dobíhá startovní / jiný notes sync, nejdřív ho necháme
+   * skončit. Maintenance potom ověří čerstvý stav jedním rychlým syncem. */
+  try {
+    if (probihajiciStartSync) await probihajiciStartSync;
+    if (probihajiciSync) await probihajiciSync;
+  } catch (_) {}
+
+  for (let pokus = 0; pokus < 4; pokus += 1) {
+    const pendingDeletes = nactiCekajiciSmazani().length;
+    const targetedDebt = maCilenyPrivateV2Dluh();
+    const cekaLokalni = lokalniZmenaCekaNaPotvrzeniServerem === true;
+
+    if (!pendingDeletes && !targetedDebt && !cekaLokalni) {
+      break;
+    }
+
+    const ok = await synchronizujCekajiciLokalniZmenu();
+    if (ok !== true && !navigator.onLine) {
+      return { ok: false, duvod: "offline" };
+    }
+
+    if (pokus < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    }
+  }
+
+  /* Finální lehké ověření používá existující fingerprint/reconcile cestu.
+   * Tím zachytíme i starší přímou lokální změnu, která nevytvořila
+   * targeted flag, ale změnila lokální snapshot. */
+  let finalniSyncOk = false;
+  try {
+    finalniSyncOk = await spustRychlySyncPoznamekBezpecne();
+  } catch (_) {
+    finalniSyncOk = false;
+  }
+
+  const pendingDeletes = nactiCekajiciSmazani().length;
+  const blockedDeletes = nactiBlokovanaCekajiciSmazani().length;
+  const targetedDebt = maCilenyPrivateV2Dluh();
+  const cekaLokalni = lokalniZmenaCekaNaPotvrzeniServerem === true;
+  const syncStav = window.LubaNoteSyncStatus?.ziskejStav?.() || null;
+  const konflikty = aktivniKonfliktySyncu.size;
+
+  const ok = (
+    finalniSyncOk === true &&
+    pendingDeletes === 0 &&
+    blockedDeletes === 0 &&
+    targetedDebt === false &&
+    cekaLokalni === false &&
+    konflikty === 0 &&
+    syncStav === "synced"
+  );
+
+  return {
+    ok,
+    duvod: ok ? "drained" : "sync-debt",
+    syncStav,
+    pendingDeletes,
+    blockedDeletes,
+    targetedDebt,
+    cekaLokalni,
+    konflikty,
+    finalniSyncOk
+  };
+}
+
 window.LubaNoteSync = {
   spustBezpecne: spustStartSyncBezpecne,
   ziskejDeviceId: getDeviceId,
@@ -9789,6 +9925,7 @@ window.LubaNoteSync = {
   zaradSmazaniHromadne:
     pridejCekajiciSmazaniHromadne,
   synchronizujHromadneSmazaniTed,
+  vyprazdniFrontuProMaintenance,
   spustSafeBootstrap: spustSafeBootstrapV2,
   maRozpracovanySafeBootstrap: async () => {
     const user = await getCurrentUser();
