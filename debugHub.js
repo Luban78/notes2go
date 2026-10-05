@@ -2,10 +2,12 @@
    LUBANOTE – DEBUG HUB
    Trvale přítomná, ale běžně neaktivní diagnostika.
 
-   Aktivace od patche 615:
+   Aktivace:
    1) serverově ověřený Admin Dashboard
    2) samostatné tlačítko „Debug Hub"
-   3) konkrétní modul se začne logovat až po „Spustit"
+   3) vývojový globální 5× tap (patch 677G, session-only)
+   4) konkrétní modul se začne logovat až po „Spustit"; 5× tap
+      automaticky spustí WebView Watch.
 
    Diagnostický build může nastavit window.LUBANOTE_TAG_VD_AUTO = true.
    V tom případě se modul Start / sync / síť připojí automaticky na
@@ -67,6 +69,7 @@
     startup: "Start / sync / síť",
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
+    webviewWatch: "WebView – touch / selection / viewport",
     titleTagSelection: "Název/štítek – Selection Watch",
     ownerIsolation: "Účet / owner – izolace lokálních dat",
     syncRxAudit: "Sync RX – request audit",
@@ -177,6 +180,40 @@
     return jeCapacitor ? "APK/WebView" : "WEB";
   }
 
+  /* PATCH 677G – WebView fingerprint je součástí každého reportu.
+     Nestačí znát jen UA; u sporadických Android regresí potřebujeme hned vidět
+     Chromium engine, dostupné caret/selection API, Pointer Events a reálný
+     visualViewport v okamžiku problému. */
+  function webviewFingerprint() {
+    const ua = String(navigator.userAgent || "");
+    const chrome = ua.match(/Chrome\/([0-9.]+)/)?.[1] || "-";
+    const android = ua.match(/Android\s+([^;]+)/)?.[1]?.trim() || "-";
+    const vv = window.visualViewport;
+    const vvText = vv
+      ? `${Math.round(vv.width)}x${Math.round(vv.height)}@${Math.round(vv.offsetLeft)},${Math.round(vv.offsetTop)} scale=${Number(vv.scale || 1).toFixed(2)}`
+      : "N/A";
+
+    return {
+      zaklad: `webview=${prostredi() === "APK/WebView" ? "Y" : "N"} | android=${android} | chromium=${chrome} | dpr=${Number(window.devicePixelRatio || 1).toFixed(2)} | touch=${navigator.maxTouchPoints || 0}`,
+      api: `PointerEvent=${window.PointerEvent ? "Y" : "N"} | TouchEvent=${window.TouchEvent ? "Y" : "N"} | caretPositionFromPoint=${typeof document.caretPositionFromPoint === "function" ? "Y" : "N"} | caretRangeFromPoint=${typeof document.caretRangeFromPoint === "function" ? "Y" : "N"} | CSS.highlights=${window.CSS?.highlights ? "Y" : "N"} | visualViewport=${vv ? "Y" : "N"}`,
+      viewport: vvText
+    };
+  }
+
+  function webviewSelectionStav() {
+    const customEditor = document.querySelector(".ln-v2-editor.ln-v2-selection-custom-active");
+    const magnifier = document.body?.classList?.contains("ln-v2-selection-magnifier-active");
+    const vyber = window.getSelection();
+    const nativeRange = Boolean(vyber?.rangeCount && !vyber.getRangeAt(0).collapsed);
+    return [
+      `custom=${customEditor ? "Y" : "N"}`,
+      `nativeRange=${nativeRange ? "Y" : "N"}`,
+      `magnifier=${magnifier ? "Y" : "N"}`,
+      infoUchytuVyberu(),
+      infoMenuVyberu()
+    ].join(" | ");
+  }
+
   function hlavickaReportu() {
     return [
       "LUBANOTE DEBUG HUB",
@@ -184,6 +221,9 @@
       `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
       `prostředí: ${prostredi()}`,
       `UA: ${navigator.userAgent}`,
+      `webview: ${webviewFingerprint().zaklad}`,
+      `webview API: ${webviewFingerprint().api}`,
+      `visualViewport: ${webviewFingerprint().viewport}`,
       `viewport: ${window.innerWidth}x${window.innerHeight}`,
       `téma: ${aktivniTema()}`,
       `hlavní modul: ${aktivniHlavniModul()}`,
@@ -777,6 +817,140 @@
           prototyp.stopImmediatePropagation = puvodni.stopImmediatePropagation;
         } catch (_chyba) {}
       }
+    };
+  }
+
+  /* PATCH 677G – samostatný WebView Watch.
+     Je záměrně globální, takže lze problém reprodukovat přímo na obrazovce,
+     kde vzniká. Sleduje raw Pointer/Touch pořadí, pointercancel, selection,
+     visualViewport a CSS vlastnosti cíle, které Android WebView používá při
+     rozhodování o native selection/calloutu. Nic nepreventuje a nic nemění. */
+  function spustWebViewWatch() {
+    const uklidy = [];
+    const aktivniPointery = new Map();
+    let posledniMoveLog = 0;
+
+    const infoCile = target => {
+      const prvek = target instanceof Element ? target : target?.parentElement;
+      if (!prvek) return "css=N/A";
+      let styl;
+      try { styl = getComputedStyle(prvek); } catch (_) { return "css=ERR"; }
+      return [
+        `us=${styl.userSelect || "-"}`,
+        `wus=${styl.webkitUserSelect || "-"}`,
+        `ta=${styl.touchAction || "-"}`,
+        `pe=${styl.pointerEvents || "-"}`,
+        `callout=${styl.webkitTouchCallout || "-"}`
+      ].join(",");
+    };
+
+    const zapisUdalost = (typ, event, extra = "") => {
+      if (jeDebugPrvek(event?.target)) return;
+      const bod = event ? bodUdalosti(event) : null;
+      const casti = [
+        `WV ${typ}`,
+        `target=${popisPrvku(event?.target)}`,
+        `active=${popisPrvku(document.activeElement)}`
+      ];
+
+      if (event?.pointerType) {
+        casti.push(`pointer=${event.pointerType}#${event.pointerId}`);
+        const cil = event.target;
+        if (cil?.hasPointerCapture && Number.isFinite(event.pointerId)) {
+          let captured = false;
+          try { captured = cil.hasPointerCapture(event.pointerId); } catch (_) {}
+          casti.push(`capture=${captured ? "Y" : "N"}`);
+        }
+      }
+      if (bod) casti.push(`@${Math.round(bod.x)},${Math.round(bod.y)}`);
+      if (event) {
+        casti.push(`cancelable=${event.cancelable ? "Y" : "N"}`);
+        casti.push(`prevented=${event.defaultPrevented ? "Y" : "N"}`);
+        casti.push(`trusted=${event.isTrusted ? "Y" : "N"}`);
+      }
+      casti.push(infoCile(event?.target));
+      casti.push(webviewSelectionStav());
+      casti.push(infoDomVyberu());
+      if (extra) casti.push(extra);
+      zapis(casti.join(" | "));
+    };
+
+    const fingerprint = webviewFingerprint();
+    zapis(`WEBVIEW SNAPSHOT | ${fingerprint.zaklad}`);
+    zapis(`WEBVIEW API | ${fingerprint.api}`);
+    zapis(`WEBVIEW VIEWPORT | ${fingerprint.viewport} | inner=${window.innerWidth}x${window.innerHeight}`);
+    zapis(`WEBVIEW SELECTION | ${webviewSelectionStav()} | ${infoDomVyberu()}`);
+
+    ["pointerdown", "pointerup", "pointercancel"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => {
+        if (typ === "pointerdown") {
+          aktivniPointery.set(event.pointerId, { cas: performance.now(), x: event.clientX, y: event.clientY });
+        }
+        let extra = "";
+        if (typ === "pointerup" || typ === "pointercancel") {
+          const start = aktivniPointery.get(event.pointerId);
+          if (start) {
+            extra = `hold=${Math.round(performance.now() - start.cas)}ms move=${Math.round(Math.hypot(event.clientX - start.x, event.clientY - start.y))}px`;
+          }
+          aktivniPointery.delete(event.pointerId);
+        }
+        zapisUdalost(typ.toUpperCase(), event, extra);
+      }, true);
+    });
+
+    pridejPosluchac(uklidy, document, "pointermove", event => {
+      if (!aktivniPointery.has(event.pointerId)) return;
+      const ted = performance.now();
+      if (ted - posledniMoveLog < 90) return;
+      posledniMoveLog = ted;
+      zapisUdalost("POINTERMOVE", event);
+    }, true);
+
+    ["touchstart", "touchend", "touchcancel"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => {
+        zapisUdalost(typ.toUpperCase(), event, `touches=${event.touches?.length ?? 0} changed=${event.changedTouches?.length ?? 0}`);
+      }, true);
+    });
+
+    ["click", "dblclick", "contextmenu", "selectstart", "focusin", "focusout"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => zapisUdalost(typ.toUpperCase(), event), true);
+    });
+
+    pridejPosluchac(uklidy, document, "selectionchange", () => {
+      const vyber = window.getSelection();
+      const custom = Boolean(document.querySelector(".ln-v2-editor.ln-v2-selection-custom-active"));
+      const nativeRange = Boolean(vyber?.rangeCount && !vyber.getRangeAt(0).collapsed);
+      const konflikt = custom && nativeRange ? "NATIVE_CONFLICT=Y" : "NATIVE_CONFLICT=N";
+      zapis(`WV SELECTIONCHANGE | ${konflikt} | ${webviewSelectionStav()} | ${infoDomVyberu()}`);
+    }, true);
+
+    pridejPosluchac(uklidy, document, "lubanote:editor-selection-debug", event => {
+      const detail = event.detail || {};
+      const text = Object.entries(detail)
+        .map(([klic, hodnota]) => `${klic}=${zkratText(hodnota, 52)}`)
+        .join(" | ");
+      zapis(`WV LUBANOTE_SELECTION | ${text || "-"} | ${webviewSelectionStav()}`);
+    }, true);
+
+    const zapisViewport = typ => {
+      const f = webviewFingerprint();
+      zapis(`WV ${typ} | ${f.viewport} | inner=${window.innerWidth}x${window.innerHeight} | active=${popisPrvku(document.activeElement)}`);
+    };
+
+    if (window.visualViewport) {
+      pridejPosluchac(uklidy, window.visualViewport, "resize", () => zapisViewport("VV_RESIZE"), { passive: true });
+      pridejPosluchac(uklidy, window.visualViewport, "scroll", () => zapisViewport("VV_SCROLL"), { passive: true });
+    }
+    pridejPosluchac(uklidy, window, "resize", () => zapisViewport("WINDOW_RESIZE"), { passive: true });
+    pridejPosluchac(uklidy, document, "visibilitychange", () => {
+      zapis(`WV VISIBILITY | state=${document.visibilityState} | hidden=${document.hidden ? "Y" : "N"}`);
+    }, true);
+
+    zapis("START WEBVIEW WATCH 677G | read-only diagnostics");
+
+    return () => {
+      aktivniPointery.clear();
+      uklidy.forEach(uklid => uklid());
     };
   }
 
@@ -2073,6 +2247,8 @@
       stopAktivnihoModulu = spustTodoSelection();
     } else if (aktivniModul === "editorSelection") {
       stopAktivnihoModulu = spustEditorSelection();
+    } else if (aktivniModul === "webviewWatch") {
+      stopAktivnihoModulu = spustWebViewWatch();
     } else if (aktivniModul === "titleTagSelection") {
       stopAktivnihoModulu = spustTitleTagSelectionWatch();
     } else if (aktivniModul === "ownerIsolation") {
@@ -2786,6 +2962,7 @@ async function zkopirujTagVdReport(tlacitko) {
     startStartup: () => spustAdminModul("startup"),
     startTodoSelection: () => spustAdminModul("todoSelection"),
     startEditorSelection: () => spustAdminModul("editorSelection"),
+    startWebViewWatch: () => spustAdminModul("webviewWatch"),
     startTitleTagSelection: () => spustAdminModul("titleTagSelection"),
     startOwnerIsolation: () => spustAdminModul("ownerIsolation"),
     startGestures: () => spustAdminModul("gestures"),

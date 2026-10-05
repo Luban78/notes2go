@@ -167,16 +167,22 @@
   let filtr = "pending";
   let nacitam = false;
 
-  /* PATCH 627A – DOČASNÝ VÝVOJOVÝ NOUZOVÝ DEBUG.
+  /* PATCH 677G – GLOBÁLNÍ VÝVOJOVÝ 5× TAP PRO DEBUG.
    *
    * Před veřejným vydáním odstranit / přepnout na false.
    * Nezapisuje se do localStorage a po reloadu je znovu zamčený.
-   * 5× rychlý tap na „Poznámky“ ho odemkne jen pro aktuální relaci.
+   * Pět krátkých tapů prakticky na stejném místě funguje na libovolné
+   * obrazovce včetně Core V2 editoru a LubaKeyboard. Gesto pouze odemkne
+   * interní nástroje pro aktuální relaci; běžný tap/scroll nijak neblokuje.
    */
   const POVOLIT_NOUZOVY_DEBUG_5X = true;
-  const NOUZOVY_DEBUG_OKNO_MS = 2200;
+  const NOUZOVY_DEBUG_OKNO_MS = 2800;
+  const NOUZOVY_DEBUG_RADIUS_PX = 44;
+  const NOUZOVY_DEBUG_MAX_POHYB_PX = 18;
+  const NOUZOVY_DEBUG_MAX_TAP_MS = 520;
   let nouzovyDevDebug = false;
   let nouzoveKliky = [];
+  let nouzovyPointerStart = null;
 
   /*
    * Jediná klientská brána pro interní nástroje. Normálně rozhoduje
@@ -1782,25 +1788,31 @@
     window.LubaNoteDebugHub?.open?.();
   }
 
-  /* PATCH 627A – vývojový nouzový 5× tap.
+  /* PATCH 677G – globální 5× tap bez závislosti na click eventu.
    *
-   * Přesně navazuje na původní gesto LubaNote: 5× rychle klepnout na
-   * záložku „Poznámky“. Záložní cíle jsou staré logo/login logo, pokud
-   * na dané obrazovce existují. Po odemčení rovnou zobrazíme společný
-   * debug dock a spustíme Start / sync / síť, aby šel problém okamžitě
-   * zkopírovat i tehdy, když Admin Dashboard kvůli startu vůbec nenaběhl.
+   * WebView může v editoru click potlačit nebo převést na selection gesto,
+   * proto posloucháme Pointer Events už v capture fázi. Počítají se jen
+   * krátké tapy bez dragu a všechny musí být v jednom 44px shluku. Tím se
+   * minimalizuje náhodné odemčení při běžném psaní, selection nebo scrollu.
+   * Po odemčení se rovnou spustí nový WebView Watch, protože právě WebView
+   * je nejčastějším zdrojem sporadických selection/touch regresí.
    */
   function spustNouzovyDebug() {
     if (!POVOLIT_NOUZOVY_DEBUG_5X) return false;
 
     nouzovyDevDebug = true;
     nouzoveKliky = [];
+    nouzovyPointerStart = null;
 
     console.warn(
-      "DEV DEBUG 627A | EMERGENCY 5X UNLOCK | session only"
+      "DEV DEBUG 677G | GLOBAL 5X UNLOCK | session only"
     );
 
     window.LubaNoteVisualDebug?.showDock?.();
+
+    if (window.LubaNoteDebugHub?.startWebViewWatch?.()) {
+      return true;
+    }
 
     if (window.LubaNoteDebugHub?.startStartup?.()) {
       return true;
@@ -1809,31 +1821,102 @@
     return Boolean(window.LubaNoteDebugHub?.open?.());
   }
 
+  function jeNouzovyDebugPrvek(target) {
+    const prvek = target instanceof Element
+      ? target
+      : target?.parentElement;
+
+    return Boolean(
+      prvek?.closest?.(
+        "#ln-debug-hub, #ln-vd-panel, #ln-vd-quickbar, #ln-vd-highlight, #ln-vd-measure"
+      )
+    );
+  }
+
+  function pridejNouzovyTap(x, y) {
+    const ted = performance.now();
+    const bod = { cas: ted, x: Number(x), y: Number(y) };
+
+    if (!Number.isFinite(bod.x) || !Number.isFinite(bod.y)) return;
+
+    nouzoveKliky = nouzoveKliky.filter(
+      tap => ted - tap.cas <= NOUZOVY_DEBUG_OKNO_MS
+    );
+
+    if (nouzoveKliky.length) {
+      const kotva = nouzoveKliky[0];
+      const vzdalenost = Math.hypot(bod.x - kotva.x, bod.y - kotva.y);
+      if (vzdalenost > NOUZOVY_DEBUG_RADIUS_PX) {
+        nouzoveKliky = [];
+      }
+    }
+
+    nouzoveKliky.push(bod);
+
+    if (nouzoveKliky.length >= 5) {
+      spustNouzovyDebug();
+    }
+  }
+
   function registrujNouzovyDebug5x() {
     if (!POVOLIT_NOUZOVY_DEBUG_5X) return;
 
-    const cile = [
-      document.getElementById("notesModuleButton"),
-      document.querySelector(".moduleLogo"),
-      document.querySelector(".loginLogoImage")
-    ].filter(Boolean);
+    if (window.PointerEvent) {
+      document.addEventListener("pointerdown", event => {
+        if (!event.isPrimary || jeNouzovyDebugPrvek(event.target)) return;
+        nouzovyPointerStart = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          cas: performance.now()
+        };
+      }, true);
 
-    const zpracujKlik = () => {
-      const ted = performance.now();
+      document.addEventListener("pointercancel", event => {
+        if (nouzovyPointerStart?.id === event.pointerId) {
+          nouzovyPointerStart = null;
+        }
+      }, true);
 
-      nouzoveKliky = nouzoveKliky.filter(
-        cas => ted - cas < NOUZOVY_DEBUG_OKNO_MS
-      );
-      nouzoveKliky.push(ted);
+      document.addEventListener("pointerup", event => {
+        if (!event.isPrimary || jeNouzovyDebugPrvek(event.target)) return;
+        const start = nouzovyPointerStart;
+        nouzovyPointerStart = null;
+        if (!start || start.id !== event.pointerId) return;
 
-      if (nouzoveKliky.length >= 5) {
-        spustNouzovyDebug();
-      }
-    };
+        const doba = performance.now() - start.cas;
+        const pohyb = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (doba > NOUZOVY_DEBUG_MAX_TAP_MS || pohyb > NOUZOVY_DEBUG_MAX_POHYB_PX) return;
 
-    cile.forEach(prvek => {
-      prvek.addEventListener("click", zpracujKlik, true);
-    });
+        pridejNouzovyTap(event.clientX, event.clientY);
+      }, true);
+      return;
+    }
+
+    /* Fallback pro starší WebView bez Pointer Events. */
+    let touchStart = null;
+    document.addEventListener("touchstart", event => {
+      if (event.touches?.length !== 1 || jeNouzovyDebugPrvek(event.target)) return;
+      const t = event.touches[0];
+      touchStart = { x: t.clientX, y: t.clientY, cas: performance.now() };
+    }, { capture: true, passive: true });
+
+    document.addEventListener("touchcancel", () => {
+      touchStart = null;
+    }, { capture: true, passive: true });
+
+    document.addEventListener("touchend", event => {
+      const start = touchStart;
+      touchStart = null;
+      const t = event.changedTouches?.[0];
+      if (!start || !t || jeNouzovyDebugPrvek(event.target)) return;
+
+      const doba = performance.now() - start.cas;
+      const pohyb = Math.hypot(t.clientX - start.x, t.clientY - start.y);
+      if (doba > NOUZOVY_DEBUG_MAX_TAP_MS || pohyb > NOUZOVY_DEBUG_MAX_POHYB_PX) return;
+
+      pridejNouzovyTap(t.clientX, t.clientY);
+    }, { capture: true, passive: true });
   }
 
   menuTlacitko.addEventListener(
