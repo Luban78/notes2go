@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – Production Maintenance / Drain V1
-   PATCH 677T
+   PATCH 677T1
 
    - čte pouze veřejný Control Point,
    - nikdy samo nepřepíná backend,
@@ -30,6 +30,7 @@
   let overlayTitulek = null;
   let overlayText = null;
   let overlayMeta = null;
+  let cekajiciMaintenanceControl = null;
 
   function aktivniBackendId() {
     const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
@@ -79,11 +80,22 @@
   }
 
   function vytvorOverlay() {
-    if (overlay) return overlay;
+    /* PATCH 677T1 – auth renderer může během bootstrapu přestavět DOM.
+     * Starý 677T si pak ponechal JS referenci na odpojený overlay a capture
+     * guard blokoval login neviditelnou vrstvou. Proto vždy ověřujeme, že
+     * overlay opravdu stále žije v dokumentu. */
+    if (overlay?.isConnected) return overlay;
 
-    const style = document.createElement("style");
-    style.id = "lubanoteMaintenanceStyle677T";
-    style.textContent = `
+    overlay = null;
+    overlayTitulek = null;
+    overlayText = null;
+    overlayMeta = null;
+
+    let style = document.getElementById("lubanoteMaintenanceStyle677T");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "lubanoteMaintenanceStyle677T";
+      style.textContent = `
       #lubanoteMaintenanceOverlay677T {
         position: fixed;
         inset: 0;
@@ -133,8 +145,9 @@
         opacity: .72;
         font-size: 13px;
       }
-    `;
-    document.head.appendChild(style);
+      `;
+      document.head.appendChild(style);
+    }
 
     overlay = document.createElement("div");
     overlay.id = "lubanoteMaintenanceOverlay677T";
@@ -157,7 +170,17 @@
     return overlay;
   }
 
+  function jeAuthUiAktivni() {
+    return Boolean(document.body?.classList?.contains("authPending"));
+  }
+
   function nastavOverlay(titulek, text, meta = "") {
+    /* Login/registrace musí zůstat vždy ovladatelné. Bez platné session
+     * stejně nelze zapisovat do SOURCE, takže zde není co write-freezovat. */
+    if (jeAuthUiAktivni()) {
+      skryjOverlay();
+      return;
+    }
     vytvorOverlay();
     if (overlayTitulek) overlayTitulek.textContent = titulek;
     if (overlayText) overlayText.textContent = text;
@@ -173,6 +196,9 @@
 
   function zablokujEvent(event) {
     if (!maintenanceAktivni) return;
+    /* Fail-safe: přihlášení se nesmí nikdy stát neinteraktivním ani při
+     * chybě lifecycle/overlaye. */
+    if (jeAuthUiAktivni()) return;
     if (overlay?.contains(event.target)) return;
 
     event.preventDefault?.();
@@ -284,7 +310,30 @@
     }
   }
 
+  function pozastavMaintenanceProAuth(control = posledniStav) {
+    cekajiciMaintenanceControl =
+      control?.mode === "MAINTENANCE" ? control : null;
+
+    maintenanceAktivni = false;
+    writeFreezeAktivni = false;
+    drainHotovy = false;
+    clearTimeout(drainTimer);
+    clearTimeout(freezeTimer);
+    drainTimer = null;
+    freezeTimer = null;
+    skryjOverlay();
+  }
+
   function aktivujMaintenance(control) {
+    /* Maintenance se aktivuje až po platném login/account bootstrapu.
+     * Na loginu jen zapamatujeme serverový požadavek a po auth-valid jej
+     * znovu ověříme. */
+    if (jeAuthUiAktivni()) {
+      pozastavMaintenanceProAuth(control);
+      return;
+    }
+
+    cekajiciMaintenanceControl = null;
     if (!maintenanceAktivni) {
       maintenanceAktivni = true;
       writeFreezeAktivni = false;
@@ -329,7 +378,11 @@
   }
 
   function ukonciMaintenance() {
-    if (!maintenanceAktivni) return;
+    cekajiciMaintenanceControl = null;
+    if (!maintenanceAktivni) {
+      skryjOverlay();
+      return;
+    }
 
     maintenanceAktivni = false;
     writeFreezeAktivni = false;
@@ -355,8 +408,16 @@
     const platiProTotoZarizeni = profil && control.active_backend === profil;
 
     if (control.mode === "MAINTENANCE" && platiProTotoZarizeni) {
-      aktivujMaintenance(control);
+      if (jeAuthUiAktivni()) {
+        pozastavMaintenanceProAuth(control);
+      } else {
+        aktivujMaintenance(control);
+      }
       return;
+    }
+
+    if (control.mode === "NORMAL" && platiProTotoZarizeni) {
+      cekajiciMaintenanceControl = null;
     }
 
     /* Odemknout smíme jen tehdy, když NORMAL stále patří stejnému
@@ -418,6 +479,20 @@
     }, INTERVAL_MS);
   }
 
+  window.addEventListener("lubanote:auth-valid", () => {
+    /* Session + account jsou potvrzené. Stav načteme znovu ze serveru;
+     * nepoužíváme slepě starý payload z doby loginu. */
+    void zkontrolujControlPoint();
+  });
+
+  ["lubanote:auth-expired", "lubanote:auth-required"].forEach((typ) => {
+    window.addEventListener(typ, () => {
+      if (maintenanceAktivni || cekajiciMaintenanceControl) {
+        pozastavMaintenanceProAuth(posledniStav);
+      }
+    });
+  });
+
   window.addEventListener("online", () => {
     void zkontrolujControlPoint();
     if (maintenanceAktivni && !drainHotovy) void spustDrain();
@@ -430,11 +505,12 @@
   });
 
   window.LubaNoteMaintenance = Object.freeze({
-    verze: "677T",
+    verze: "677T1",
     controlUrl: CONTROL_URL,
     jeAktivni: () => maintenanceAktivni,
     jeWriteFreezeAktivni: () => writeFreezeAktivni,
     jeDrainHotovy: () => drainHotovy,
+    cekaNaAuth: () => Boolean(cekajiciMaintenanceControl),
     ziskejPosledniControl: () => posledniStav ? { ...posledniStav } : null,
     zkontrolujTed: zkontrolujControlPoint
   });
