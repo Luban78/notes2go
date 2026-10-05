@@ -567,6 +567,8 @@ window.LubaNoteLanguagePacks.push({
     "selection.copy": "Kopírovat",
     "selection.paste": "Vložit",
     "selection.all": "Vše",
+    "selection.dictionary": "Slovník",
+    "selection.translate": "Přeložit",
 
     "noteLinks.noMatch": "Žádná odpovídající poznámka",
     "noteLinks.create": "+ Vytvořit poznámku „{value}“",

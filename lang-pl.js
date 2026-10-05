@@ -447,6 +447,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "selection.copy": "Kopiuj",
       "selection.paste": "Wklej",
       "selection.all": "Wszystko",
+      "selection.dictionary": "Słownik",
+      "selection.translate": "Tłumacz",
       "noteLinks.noMatch": "Brak pasującej notatki",
       "noteLinks.create": "+ Utwórz notatkę „{value}”",
       "noteLinks.deleted": "⚠ Usunięta notatka",

@@ -15323,9 +15323,9 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 @media (max-width: 899px) {
   .selectionMenu[data-ln-v2-owner="1"] {
     display: block;
-    /* 658CL – selection menu musí být výš než LubaKeyboard (max 2147482700),
-       ale stále pod diagnostickými Visual Lab panely (2147483500). */
-    z-index: 2147483200 !important;
+    /* 658CL / 677E – selection menu musí být výš než LubaKeyboard a custom
+       handles (2147483200), ale pod lupou (2147483300) a Visual Labem. */
+    z-index: 2147483250 !important;
     width: max-content;
     max-width: calc(100vw - 24px);
     padding: 5px;

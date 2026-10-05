@@ -229,7 +229,9 @@
     ["#selectionVyjmout", "selection.cut"],
     ["#selectionKopirovat", "selection.copy"],
     ["#selectionVlozit", "selection.paste"],
-    ["#selectionVybratVse", "selection.all"]
+    ["#selectionVybratVse", "selection.all"],
+    ["#selectionDoSlovniku", "selection.dictionary"],
+    ["#selectionPrelozit", "selection.translate"]
   ];
 
   const atributoveVazby = [

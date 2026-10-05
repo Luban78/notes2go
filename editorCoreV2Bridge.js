@@ -179,6 +179,13 @@
      - pokud Android WebView během custom selection zkusí znovu vytvořit vlastní
        DOM Selection, okamžitě jej scrubneme bez zásahu do modelového Range. */
 
+  /* PATCH 677E – long-selection menu anchor + panel layering:
+     - u dlouhého výběru bez explicitní drag kotvy se menu přichytí k právě
+       viditelnému selection endpointu místo prvního horního rectu rozsahu,
+     - pokud jsou viditelné oba endpointy a výběr je víceřádkový, preferuje se
+       konec výběru; explicitně tažený start/end má stále absolutní prioritu,
+     - z-index panelu je nad custom handles, takže kapky už přes panel neprosvítají. */
+
   /* PATCH 673G11 – caret při scrollu nyní řídí přímo Core V2, protože
      skutečným zdrojem plovoucího kurzoru je .ln-v2-luba-caret overlay. */
 
@@ -848,6 +855,20 @@
       preferovanyKonec = v2SelectionScroll.menuKotvaStrana;
       bod = ziskejV2SelectionHandleBodProMenu(v2SelectionScroll.range, preferovanyKonec);
       odsazeniNad = 32;
+    }
+
+    /* PATCH 677E – po dlouhém výběru mohl obecný selection hook ztratit
+       explicitní stranu a pozicujV2SelectionMenu pak automaticky použil první
+       horní rect. Pokud je jeden selection endpoint skutečně vidět, kotvíme
+       panel k němu. U víceřádkového výběru s oběma endpointy na obrazovce je
+       přirozenou výchozí kotvou konec výběru. */
+    if (!bod && !preferovanyKonec) {
+      const automatickaKotva = ziskejV2SelectionAutomatickouKotvu(range);
+      if (automatickaKotva?.bod) {
+        preferovanyKonec = automatickaKotva.strana;
+        bod = automatickaKotva.bod;
+        odsazeniNad = 32;
+      }
     }
 
     core()?.zachytAktualniVyber?.();
@@ -2931,6 +2952,48 @@
     if (!body.length) return null;
     const bod = strana === "start" ? body[0] : body[body.length - 1];
     return bod ? { x: Number(bod.x), y: Number(bod.y) } : null;
+  }
+
+  function ziskejV2SelectionAutomatickouKotvu(range) {
+    if (!range || range.collapsed) return null;
+    const body = ziskejV2SelectionHandleBody(range);
+    if (body.length < 2) return null;
+
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
+    const editorRect = editor?.getBoundingClientRect?.() || null;
+    const viewportTop = Number(window.visualViewport?.offsetTop || 0);
+    const viewportBottom = viewportTop + Number(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+    const klavesnice = document.querySelector(".ln-luba-keyboard:not([hidden])");
+    const klavesniceRect = klavesnice?.getBoundingClientRect?.() || null;
+    const horniHrana = Math.max(viewportTop + 8, editorRect ? Number(editorRect.top) : viewportTop + 8);
+    const spodniHrana = Math.min(
+      viewportBottom - 8,
+      editorRect ? Number(editorRect.bottom) : viewportBottom - 8,
+      klavesniceRect && klavesniceRect.height > 0 ? Number(klavesniceRect.top) - 8 : viewportBottom - 8
+    );
+
+    const jeViditelny = (bod) => !!bod
+      && Number.isFinite(Number(bod.x))
+      && Number.isFinite(Number(bod.y))
+      && Number(bod.y) >= horniHrana
+      && Number(bod.y) <= spodniHrana
+      && (!editorRect || (Number(bod.x) >= Number(editorRect.left) - 8 && Number(bod.x) <= Number(editorRect.right) + 8));
+
+    const startViditelny = jeViditelny(body[0]);
+    const endViditelny = jeViditelny(body[1]);
+    if (startViditelny !== endViditelny) {
+      const strana = endViditelny ? "end" : "start";
+      const bod = endViditelny ? body[1] : body[0];
+      return { strana, bod: { x: Number(bod.x), y: Number(bod.y) } };
+    }
+
+    if (startViditelny && endViditelny) {
+      const rects = Array.from(range.getClientRects?.() || []).filter((rect) => rect.width || rect.height);
+      if (rects.length > 1) {
+        return { strana: "end", bod: { x: Number(body[1].x), y: Number(body[1].y) } };
+      }
+    }
+    return null;
   }
 
   function dorovnejV2SelectionHandleNadLubaKeyboard(stav, strana = "end") {

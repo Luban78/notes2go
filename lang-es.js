@@ -443,6 +443,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "selection.copy": "Copiar",
       "selection.paste": "Pegar",
       "selection.all": "Todo",
+      "selection.dictionary": "Diccionario",
+      "selection.translate": "Traducir",
       "noteLinks.noMatch": "No hay ninguna nota coincidente",
       "noteLinks.create": "+ Crear nota “{value}”",
       "noteLinks.deleted": "⚠ Nota eliminada",

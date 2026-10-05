@@ -447,6 +447,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "selection.copy": "Kopírovať",
       "selection.paste": "Vložiť",
       "selection.all": "Všetko",
+      "selection.dictionary": "Slovník",
+      "selection.translate": "Preložiť",
       "noteLinks.noMatch": "Žiadna zodpovedajúca poznámka",
       "noteLinks.create": "+ Vytvoriť poznámku „{value}“",
       "noteLinks.deleted": "⚠ Zmazaná poznámka",

@@ -557,6 +557,8 @@ window.LubaNoteLanguagePacks.push({
     "selection.copy": "Copy",
     "selection.paste": "Paste",
     "selection.all": "All",
+    "selection.dictionary": "Dictionary",
+    "selection.translate": "Translate",
 
     "noteLinks.noMatch": "No matching note",
     "noteLinks.create": "+ Create note “{value}”",
