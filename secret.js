@@ -1246,9 +1246,12 @@ async function pripravHlavniHesloNaNovemZarizeni(heslo) {
     )
   );
 
-  zobrazZpravuAplikace(
-    "Zabezpečení LubaNote",
-    "Zařízení bylo bezpečně připojeno. E2E fotografie jsou připravené a synchronizace může pokračovat."
+  /* PATCH 677N – na novém zařízení po ověření hlavního hesla
+     nepřekrýváme následné první načtení dalším potvrzovacím OK modalem.
+     Sync V2 Safe Bootstrap okamžitě zobrazí blokující průběh 0/N -> N/N. */
+  window.LubaNoteStartupDiag?.zapis?.(
+    "SECURITY",
+    "DEVICE READY | waiting-for-initial-data"
   );
 
   return true;

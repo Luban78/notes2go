@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=675e-editor-find-align">
+  <link rel="stylesheet" href="style.css?v=677n-initial-download-progress">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -2250,13 +2250,20 @@
      Uživatel musí první načtení výslovně potvrdit.
      ======================================== -->
   <div id="safeBootstrapModal" class="appMessageModal" hidden>
-    <div class="appMessageDialog" role="dialog" aria-modal="true" aria-labelledby="safeBootstrapTitle">
+    <div class="appMessageDialog safeBootstrapDialog" role="dialog" aria-modal="true" aria-labelledby="safeBootstrapTitle">
       <h3 id="safeBootstrapTitle">
         Načíst data z cloudu?
       </h3>
 
       <p id="safeBootstrapText">
       </p>
+
+      <div id="safeBootstrapProgress" class="safeBootstrapProgress" hidden>
+        <div class="safeBootstrapProgressTrack" aria-hidden="true">
+          <div id="safeBootstrapProgressBar" class="safeBootstrapProgressBar"></div>
+        </div>
+        <div id="safeBootstrapProgressCount" class="safeBootstrapProgressCount" aria-live="polite"></div>
+      </div>
 
       <div class="appMessageActions">
         <button id="safeBootstrapLaterButton" type="button">
@@ -2695,7 +2702,7 @@
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
-  <script src="secret.js?v=20260916-master-password-device-gate-559"></script>
+  <script src="secret.js?v=677n-initial-download-progress"></script>
   <!-- E2E fotografie běžných poznámek – media klíč je odvozen ze stejného hlavního hesla jako Secret. -->
   <script src="mediaCrypto.js?v=20260920-shared-identity-wrap-653a"></script>
   <!-- Shared E2E identita účtu – ECDH P-256, soukromý klíč chráněný hlavním heslem. -->
@@ -2717,7 +2724,7 @@
   <script src="syncRealtime.js?v=20260915-small-consistency-548"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=668d-native-reconnect-pending"></script>
+  <script src="sync.js?v=677n-initial-download-progress"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>

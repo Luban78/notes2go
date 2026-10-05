@@ -3445,12 +3445,30 @@ function ziskejSafeBootstrapModalPrvky() {
   const later = document.getElementById(
     "safeBootstrapLaterButton"
   );
+  const progress = document.getElementById(
+    "safeBootstrapProgress"
+  );
+  const progressBar = document.getElementById(
+    "safeBootstrapProgressBar"
+  );
+  const progressCount = document.getElementById(
+    "safeBootstrapProgressCount"
+  );
 
   if (!modal || !title || !text || !start || !later) {
     return null;
   }
 
-  return { modal, title, text, start, later };
+  return {
+    modal,
+    title,
+    text,
+    start,
+    later,
+    progress,
+    progressBar,
+    progressCount
+  };
 }
 
 function maLokalniDataProSafeBootstrap() {
@@ -3492,7 +3510,12 @@ function nastavSafeBootstrapModal({
   laterText = "Později",
   startHidden = false,
   laterHidden = false,
-  disabled = false
+  disabled = false,
+  progressVisible = false,
+  progressHotovo = null,
+  progressCelkem = null,
+  progressText = "",
+  progressIndeterminate = false
 } = {}) {
   const ui = ziskejSafeBootstrapModalPrvky();
   if (!ui) return null;
@@ -3505,6 +3528,47 @@ function nastavSafeBootstrapModal({
   ui.later.hidden = Boolean(laterHidden);
   ui.start.disabled = Boolean(disabled);
   ui.later.disabled = Boolean(disabled);
+
+  if (ui.progress && ui.progressBar && ui.progressCount) {
+    ui.progress.hidden = !progressVisible;
+    ui.progress.classList.toggle(
+      "isIndeterminate",
+      Boolean(progressVisible && progressIndeterminate)
+    );
+
+    if (progressVisible) {
+      const hotovo = Number(progressHotovo);
+      const celkem = Number(progressCelkem);
+      const maPevnyProgress =
+        Number.isFinite(hotovo) &&
+        Number.isFinite(celkem) &&
+        celkem > 0;
+
+      if (maPevnyProgress && !progressIndeterminate) {
+        const procent = Math.max(
+          0,
+          Math.min(100, (hotovo / celkem) * 100)
+        );
+        ui.progressBar.style.width = `${procent.toFixed(1)}%`;
+      } else {
+        ui.progressBar.style.width = "";
+      }
+
+      ui.progressCount.textContent =
+        progressText ||
+        (maPevnyProgress
+          ? `${Math.min(hotovo, celkem)} / ${celkem}`
+          : "Připravuji…");
+    } else {
+      ui.progressBar.style.width = "0%";
+      ui.progressCount.textContent = "";
+    }
+  }
+
+  ui.modal.setAttribute(
+    "aria-busy",
+    progressVisible ? "true" : "false"
+  );
   ui.modal.hidden = false;
 
   return ui;
@@ -3849,15 +3913,24 @@ function aktualizujSafeBootstrapProgress(
   celkem,
   approxBytes
 ) {
+  const bezpecneCelkem = Math.max(0, Number(celkem) || 0);
+  const bezpecneHotovo = Math.max(
+    0,
+    Math.min(Number(hotovo) || 0, bezpecneCelkem)
+  );
+
   nastavSafeBootstrapModal({
-    title: "Načítám data z cloudu",
+    title: "Načítám poznámky",
     text:
-      `Připraveno ${hotovo} / ${celkem} poznámek. ` +
       `Cloudový obsah je přibližně ${formatBootstrapVelikost(approxBytes)}. ` +
-      "Skutečný RX/TX vidíš průběžně nahoře.",
-    startText: "Načítám…",
+      "Aplikace se odemkne až po bezpečném dokončení načítání.",
+    startHidden: true,
     laterHidden: true,
-    disabled: true
+    disabled: true,
+    progressVisible: true,
+    progressHotovo: bezpecneHotovo,
+    progressCelkem: bezpecneCelkem,
+    progressText: `${bezpecneHotovo} / ${bezpecneCelkem} poznámek`
   });
 }
 
@@ -3969,6 +4042,22 @@ async function spustSafeBootstrapV2(
   safeBootstrapModalDokoncen = false;
   ulozSafeBootstrapMarker(userId);
   nastavStavSynchronizaceUI("syncing");
+
+  /* PATCH 677N – při prvním/čistém načtení nesmí uživatel vidět
+     poloprázdnou aplikaci. Blokující modal se ukáže ještě před manifestem
+     a po jeho načtení přejde na přesný počet hotovo/celkem. */
+  nastavSafeBootstrapModal({
+    title: "Načítám poznámky",
+    text:
+      "Zjišťuji počet cloudových poznámek. Aplikace zůstane do dokončení uzamčená.",
+    startHidden: true,
+    laterHidden: true,
+    disabled: true,
+    progressVisible: true,
+    progressIndeterminate: true,
+    progressText: "Připravuji načítání…"
+  });
+
   window.LubaNoteSyncTraffic?.zacniSync?.();
 
   const diag = window.LubaNoteStartupDiag?.zacni?.(
@@ -4036,13 +4125,11 @@ async function spustSafeBootstrapV2(
     );
 
     let hotovo = liveRows.length - pending.length;
-    if (!automaticky) {
-      aktualizujSafeBootstrapProgress(
-        hotovo,
-        liveRows.length,
-        approxBytes
-      );
-    }
+    aktualizujSafeBootstrapProgress(
+      hotovo,
+      liveRows.length,
+      approxBytes
+    );
 
     const davky = vytvorSafeBootstrapDavky(pending);
 
@@ -4102,13 +4189,11 @@ async function spustSafeBootstrapV2(
          průchod od headStart. */
       hotovo += davka.length;
 
-      if (!automaticky) {
-        aktualizujSafeBootstrapProgress(
-          Math.min(hotovo, liveRows.length),
-          liveRows.length,
-          approxBytes
-        );
-      }
+      aktualizujSafeBootstrapProgress(
+        Math.min(hotovo, liveRows.length),
+        liveRows.length,
+        approxBytes
+      );
 
       window.LubaNoteStartupDiag?.zapis?.(
         "BOOTSTRAP",
@@ -4205,28 +4290,34 @@ async function spustSafeBootstrapV2(
     const legacySecret =
       error?.code === "LUBANOTE_BOOTSTRAP_LEGACY_SECRET";
 
+    const ui = nastavSafeBootstrapModal({
+      title: legacySecret
+        ? "Starší Secret data"
+        : "Načítání je pozastavené",
+      text: legacySecret
+        ? "V cloudu je starší Secret formát. LubaNote ho z bezpečnostních důvodů neuloží jako plaintext. Nejdřív ho převeď na aktuální Secret formát na zařízení, kde Secret funguje."
+        : "Načtení se bezpečně přerušilo. Nic se nemaže. Klepni na Pokračovat a LubaNote naváže pouze chybějícími poznámkami.",
+      startText: legacySecret
+        ? "Zkusit znovu"
+        : "Pokračovat",
+      laterHidden: true,
+      progressVisible: false
+    });
+
+    if (ui?.start) {
+      ui.start.onclick = () => {
+        spustSafeBootstrapV2(
+          userId,
+          { automaticky }
+        ).catch(() => {});
+      };
+    }
+
     if (automaticky && !legacySecret) {
-      /* Automatický první start nesmí uživatele uvěznit v opakovaném
-         klikání na „Pokračovat“. Marker zůstává uložený a další běžný
-         foreground/start bezpečně naváže. */
-      zavriSafeBootstrapModal();
       window.LubaNoteStartupDiag?.zapis?.(
         "BOOTSTRAP",
-        "AUTO DEFER | resume-next-start"
+        "AUTO PAUSED | blocking-retry"
       );
-    } else {
-      nastavSafeBootstrapModal({
-        title: legacySecret
-          ? "Starší Secret data"
-          : "Načítání je pozastavené",
-        text: legacySecret
-          ? "V cloudu je starší Secret formát. LubaNote ho z bezpečnostních důvodů neuloží jako plaintext. Nejdřív ho převeď na aktuální Secret formát na zařízení, kde Secret funguje."
-          : "Načtení se bezpečně přerušilo. Nic se nemaže a při dalším pokusu LubaNote naváže pouze chybějícími změnami.",
-        startText: legacySecret
-          ? "Zkusit znovu"
-          : "Pokračovat",
-        laterHidden: true
-      });
     }
 
     return false;
