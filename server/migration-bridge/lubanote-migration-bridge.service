@@ -1,0 +1,28 @@
+[Unit]
+Description=LubaNote Migration Bridge
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luban78
+Group=luban78
+WorkingDirectory=/home/luban78/luba-server/migration-bridge
+EnvironmentFile=/home/luban78/luba-server/migration-bridge/bridge.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/luban78/luba-server/migration-bridge/bridge.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
