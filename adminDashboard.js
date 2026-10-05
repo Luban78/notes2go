@@ -227,6 +227,13 @@
   let serverStatusNacitam = false;
   let serverStatusTimer = null;
 
+  /* PATCH 677J – Android/WebView systémové Zpět uvnitř Admin Dashboardu.
+   * Dashboard dostane vlastní lehkou history vrstvu: Server/UI/Účty ->
+   * Dashboard -> aplikace. Systémové Zpět tak už nespadne rovnou ven z APK.
+   */
+  const ADMIN_HISTORY_KEY = "lubanoteAdminDashboardViewV1";
+  let adminHistoryDepth = 0;
+
   /* PATCH 677G – GLOBÁLNÍ VÝVOJOVÝ 5× TAP PRO DEBUG.
    *
    * Před veřejným vydáním odstranit / přepnout na false.
@@ -916,7 +923,115 @@
       secret.filter((note) => note?.storageScope === "local").length;
   }
 
-  function zkontrolujCloudPredTestBackendem() {
+  async function overIndexedDbLocalPoznamkyProBackendSwitch() {
+    const mode = localStorage.getItem("lubanoteRegularNotesStorageModeV1");
+    if (mode !== "indexeddb") {
+      return { ok: true, localPocet: 0 };
+    }
+
+    if (!window.indexedDB) {
+      return {
+        ok: false,
+        localPocet: null,
+        zprava: "IndexedDB cache je aktivní, ale nejde ji bezpečně přečíst. Přepnutí proto zůstává blokované."
+      };
+    }
+
+    try {
+      await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
+
+      const ownerId = String(
+        localStorage.getItem("lubanoteLocalOwnerUserId") || ""
+      ).trim();
+
+      if (!ownerId) {
+        return {
+          ok: false,
+          localPocet: null,
+          zprava: "IndexedDB cache nemá ověřeného vlastníka. Přepnutí je pro jistotu blokované."
+        };
+      }
+
+      if (typeof indexedDB.databases === "function") {
+        const seznam = await indexedDB.databases();
+        const existuje = seznam.some(
+          (db) => db?.name === "LubaNoteRegularNotesCache"
+        );
+        if (!existuje) {
+          return {
+            ok: false,
+            localPocet: null,
+            zprava: "IndexedDB overflow marker je aktivní, ale plná cache nebyla nalezena. Přepnutí je blokované."
+          };
+        }
+      }
+
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open("LubaNoteRegularNotesCache", 1);
+        let vytvariSe = false;
+
+        request.onupgradeneeded = () => {
+          vytvariSe = true;
+          try { request.transaction?.abort?.(); } catch (_) {}
+        };
+        request.onsuccess = () => {
+          if (vytvariSe) {
+            request.result?.close?.();
+            reject(new Error("missing-cache"));
+            return;
+          }
+          resolve(request.result);
+        };
+        request.onerror = () => reject(
+          request.error || new Error("indexeddb-open-failed")
+        );
+      });
+
+      try {
+        if (!db.objectStoreNames.contains("regularNotes")) {
+          return {
+            ok: false,
+            localPocet: null,
+            zprava: "Plná IndexedDB cache nemá očekávané úložiště. Přepnutí je blokované."
+          };
+        }
+
+        const zaznam = await new Promise((resolve, reject) => {
+          const tx = db.transaction("regularNotes", "readonly");
+          const request = tx.objectStore("regularNotes").get(ownerId);
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => reject(
+            request.error || new Error("indexeddb-read-failed")
+          );
+        });
+
+        if (!zaznam || !Array.isArray(zaznam.notes)) {
+          return {
+            ok: false,
+            localPocet: null,
+            zprava: "Plnou IndexedDB cache tohoto účtu se nepodařilo ověřit. Přepnutí je blokované."
+          };
+        }
+
+        const localPocet = zaznam.notes.filter(
+          (note) => String(note?.storageScope || "cloud") === "local"
+        ).length;
+
+        return { ok: true, localPocet };
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      console.warn("Backend switch IndexedDB check failed:", error);
+      return {
+        ok: false,
+        localPocet: null,
+        zprava: "IndexedDB cache se nepodařilo bezpečně ověřit. Přepnutí je pro jistotu blokované."
+      };
+    }
+  }
+
+  async function zkontrolujCloudPredTestBackendem() {
     if (!navigator.onLine) {
       return {
         ok: false,
@@ -932,21 +1047,37 @@
       };
     }
 
-    if (
-      localStorage.getItem("lubanoteRegularNotesStorageModeV1") ===
-      "indexeddb"
-    ) {
+    const localPocetLehky = spocitejLocalPoznamkyProBackendSwitch();
+    if (localPocetLehky > 0) {
       return {
         ok: false,
-        zprava: "Toto zařízení používá IndexedDB overflow cache. Automatické přepnutí proto raději blokujeme, aby se neztratila LOCAL data."
+        zprava: `Na zařízení je ${localPocetLehky} LOCAL poznámek. Přepnutí je záměrně blokované, protože bezpečný reset by je smazal.`
       };
     }
 
-    const localPocet = spocitejLocalPoznamkyProBackendSwitch();
-    if (localPocet > 0) {
+    const idbKontrola = await overIndexedDbLocalPoznamkyProBackendSwitch();
+    if (!idbKontrola.ok) {
+      return idbKontrola;
+    }
+    if (Number(idbKontrola.localPocet) > 0) {
       return {
         ok: false,
-        zprava: `Na zařízení je ${localPocet} LOCAL poznámek. Přepnutí je záměrně blokované, protože bezpečný reset by je smazal.`
+        zprava: `V plné IndexedDB cache je ${idbKontrola.localPocet} LOCAL poznámek. Přepnutí je záměrně blokované, protože reset by je smazal.`
+      };
+    }
+
+    const attachmentDiag =
+      await window.LubaNoteAttachmentsLocal?.ziskejDiagnostiku?.();
+    if (attachmentDiag?.dostupne === false) {
+      return {
+        ok: false,
+        zprava: "Lokální frontu obrázků/příloh se nepodařilo bezpečně ověřit. Přepnutí je blokované."
+      };
+    }
+    if (Number(attachmentDiag?.cekajiciUploady || 0) > 0) {
+      return {
+        ok: false,
+        zprava: `Ještě čeká ${Number(attachmentDiag.cekajiciUploady)} obrázků/příloh na cloudový upload. Nejdřív nech synchronizaci doběhnout.`
       };
     }
 
@@ -1010,7 +1141,7 @@
     }, 7000);
   }
 
-  function prepniBackendZarizeni(cilId) {
+  async function prepniBackendZarizeni(cilId) {
     const config = window.LubaNoteBackendConfig;
     if (!config?.prepinaniPovoleno || !config?.nastavAktivniProfil) {
       zobrazBackendSwitchChybu("Přepínání backendu v této verzi není dostupné.");
@@ -1026,7 +1157,7 @@
     }
 
     if (aktualni.id === "supabaseCloud" && cil.id === "lubanoteServer") {
-      const kontrola = zkontrolujCloudPredTestBackendem();
+      const kontrola = await zkontrolujCloudPredTestBackendem();
       if (!kontrola.ok) {
         zobrazBackendSwitchChybu(kontrola.zprava);
         return;
@@ -2152,6 +2283,45 @@
     }
   }
 
+  function zapisAdminHistory(view) {
+    try {
+      const aktualni = history.state?.[ADMIN_HISTORY_KEY];
+      if (aktualni === view) return;
+      history.pushState(
+        { ...(history.state || {}), [ADMIN_HISTORY_KEY]: view },
+        "",
+        window.location.href
+      );
+      adminHistoryDepth += 1;
+    } catch (error) {
+      console.warn("Admin Dashboard history push failed:", error);
+    }
+  }
+
+  function zavriDashboardPresHistorii() {
+    const kroku = Math.max(0, adminHistoryDepth);
+    modal.hidden = true;
+    zastavServerStatusAutoRefresh();
+    zobrazDomov();
+    adminHistoryDepth = 0;
+
+    if (kroku > 0) {
+      try {
+        history.go(-kroku);
+      } catch (_) {}
+    }
+  }
+
+  function adminHistoryZpetNaDomov() {
+    if (adminHistoryDepth > 1) {
+      try {
+        history.back();
+        return;
+      } catch (_) {}
+    }
+    zobrazDomov();
+  }
+
   async function otevriDashboard() {
     if (!jeAdmin) {
       return;
@@ -2172,12 +2342,13 @@
 
     modal.hidden = false;
     zobrazDomov();
+    if (!history.state?.[ADMIN_HISTORY_KEY]) {
+      zapisAdminHistory("home");
+    }
   }
 
   function zavriDashboard() {
-    modal.hidden = true;
-    zastavServerStatusAutoRefresh();
-    zobrazDomov();
+    zavriDashboardPresHistorii();
   }
 
   async function otevriUcty() {
@@ -2352,11 +2523,20 @@
     }
   });
 
-  uctyTlacitko.addEventListener("click", otevriUcty);
-  serverTlacitko.addEventListener("click", zobrazServer);
-  uiTlacitko.addEventListener("click", zobrazUi);
-  serverZpetTlacitko.addEventListener("click", zobrazDomov);
-  uiZpetTlacitko.addEventListener("click", zobrazDomov);
+  uctyTlacitko.addEventListener("click", async () => {
+    zapisAdminHistory("accounts");
+    await otevriUcty();
+  });
+  serverTlacitko.addEventListener("click", () => {
+    zapisAdminHistory("server");
+    zobrazServer();
+  });
+  uiTlacitko.addEventListener("click", () => {
+    zapisAdminHistory("ui");
+    zobrazUi();
+  });
+  serverZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
+  uiZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
   serverObnovitTlacitko?.addEventListener("click", () => nactiServerStatus());
   useLubaServerTlacitko?.addEventListener(
     "click",
@@ -2510,7 +2690,7 @@
   );
   zpetNaNastrojeTlacitko.addEventListener(
     "click",
-    zobrazDomov
+    adminHistoryZpetNaDomov
   );
 
   cekajiciTab.addEventListener(
@@ -2553,6 +2733,30 @@
    * Bezpečnost se nemění: žádný lokální bypass. Admin nástroje se stále
    * zobrazí jen po úspěšném RPC lubanote_admin_is_current_user = true.
    */
+  window.addEventListener("popstate", (event) => {
+    const view = event.state?.[ADMIN_HISTORY_KEY] || null;
+
+    if (view) {
+      modal.hidden = false;
+      adminHistoryDepth = Math.max(1, adminHistoryDepth - 1);
+      if (view === "server") zobrazServer();
+      else if (view === "ui") zobrazUi();
+      else if (view === "accounts") {
+        zobrazUcty();
+        nastavFiltr("pending");
+        nactiUzivatele();
+      } else zobrazDomov();
+      return;
+    }
+
+    if (!modal.hidden) {
+      adminHistoryDepth = 0;
+      modal.hidden = true;
+      zastavServerStatusAutoRefresh();
+      zobrazDomov();
+    }
+  });
+
   window.addEventListener("online", () => {
     if (!serverPohled.hidden && !modal.hidden) {
       nactiServerStatus();
