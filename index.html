@@ -1650,17 +1650,53 @@
           <div class="adminMigrationHead">
             <div>
               <span class="adminServerEyebrow">Migrace / produkce</span>
-              <strong>PREPARE → VERIFY → CUTOVER</strong>
+              <strong>Bezpečný přesun Cloud → LubaServer</strong>
             </div>
             <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
+
+          <div class="adminMigrationRoute" aria-label="Směr migrace">
+            <span class="adminMigrationEndpoint">
+              <small>SOURCE</small>
+              <strong>Supabase Cloud</strong>
+            </span>
+            <span class="adminMigrationRouteArrow" aria-hidden="true">→</span>
+            <span class="adminMigrationEndpoint adminMigrationEndpointTarget">
+              <small>DESTINATION</small>
+              <strong>LubaServer TEST</strong>
+            </span>
+          </div>
+
           <p id="adminMigrationMessage" aria-live="polite">
             Načítám stav bezpečného Migration Bridge…
           </p>
-          <div class="adminMigrationActions" aria-label="Stav kroků migrace">
-            <button id="adminMigrationPrepareButton" type="button" disabled>PREPARE</button>
-            <button id="adminMigrationVerifyButton" type="button" disabled>VERIFY</button>
-            <button id="adminMigrationCutoverButton" type="button" disabled>CUTOVER</button>
+
+          <div class="adminMigrationActions" aria-label="Kroky migrace">
+            <button id="adminMigrationPrepareButton" type="button" disabled>
+              <span>1</span><strong>PREPARE</strong><small>Snapshot + checkpoint</small>
+            </button>
+            <button id="adminMigrationVerifyButton" type="button" disabled>
+              <span>2</span><strong>VERIFY</strong><small>Kontrola shody</small>
+            </button>
+            <button id="adminMigrationCutoverButton" type="button" disabled title="CUTOVER je v Migration Manager V2 fyzicky zamčený">
+              <span>3</span><strong>CUTOVER</strong><small>Zamčeno</small>
+            </button>
+          </div>
+
+          <div id="adminMigrationProgress" class="adminMigrationProgress" hidden>
+            <div class="adminMigrationProgressHead">
+              <strong id="adminMigrationProgressTitle">Průběh migrace</strong>
+              <span id="adminMigrationProgressMeta">0 / 0</span>
+            </div>
+            <div class="adminMigrationProgressBar" aria-hidden="true">
+              <span id="adminMigrationProgressBarFill"></span>
+            </div>
+            <div id="adminMigrationProgressList" class="adminMigrationProgressList"></div>
+          </div>
+
+          <div class="adminMigrationSafety">
+            <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
+            <span>CUTOVER zůstává fyzicky zamčený v Migration Manager V2.</span>
           </div>
         </section>
 
@@ -1797,6 +1833,27 @@
         <p id="adminDashboardStatus" class="adminDashboardStatus" aria-live="polite"></p>
         <div id="adminUsersList" class="adminUsersList"></div>
       </section>
+    </div>
+  </div>
+
+  <!-- PATCH 677S – vlastní LubaNote potvrzení migrace -->
+  <div id="adminMigrationConfirmModal" class="adminMigrationConfirmModal" hidden>
+    <div class="adminMigrationConfirmContent" role="dialog" aria-modal="true" aria-labelledby="adminMigrationConfirmTitle">
+      <div class="adminMigrationConfirmTop">
+        <span id="adminMigrationConfirmBadge" class="adminMigrationConfirmBadge">PREPARE</span>
+        <button id="adminMigrationConfirmClose" class="adminMigrationConfirmClose" type="button" aria-label="Zavřít">×</button>
+      </div>
+      <h3 id="adminMigrationConfirmTitle">Spustit PREPARE?</h3>
+      <p id="adminMigrationConfirmText"></p>
+      <div class="adminMigrationConfirmFacts" aria-label="Bezpečnostní informace">
+        <div><span>Cloud SOURCE</span><strong id="adminMigrationConfirmSource">beze změny</strong></div>
+        <div><span>CUTOVER</span><strong>zamčený</strong></div>
+      </div>
+      <p id="adminMigrationConfirmHint" class="adminMigrationConfirmHint"></p>
+      <div class="adminMigrationConfirmActions">
+        <button id="adminMigrationConfirmCancel" type="button">Zrušit</button>
+        <button id="adminMigrationConfirmOk" type="button">Spustit PREPARE</button>
+      </div>
     </div>
   </div>
 

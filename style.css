@@ -16200,3 +16200,489 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     font-size: 0.76rem;
   }
 }
+
+/* ==================================================
+   PATCH 677S – MIGRATION UX
+   Vlastní potvrzení + živý PREPARE/VERIFY progress.
+================================================== */
+.adminMigrationCard {
+  margin-top: 14px;
+  padding: 15px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--color-accent) 5%, transparent),
+      transparent 36%),
+    var(--color-surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.10);
+}
+
+.adminMigrationHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminMigrationHead > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.adminMigrationHead strong {
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.adminMigrationRoute {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.adminMigrationEndpoint {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-background) 74%, var(--color-surface));
+}
+
+.adminMigrationEndpoint small {
+  color: var(--color-text-secondary);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+.adminMigrationEndpoint strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminMigrationEndpointTarget {
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+}
+
+.adminMigrationRouteArrow {
+  color: var(--color-accent);
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+#adminMigrationMessage {
+  min-height: 2.7em;
+  margin: 12px 2px 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.adminMigrationActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.adminMigrationActions > button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 7px;
+  row-gap: 1px;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 58px;
+  padding: 9px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+  color: var(--color-text);
+  text-align: left;
+}
+
+.adminMigrationActions > button > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 34%, var(--color-border));
+  border-radius: 999px;
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.adminMigrationActions > button > strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+}
+
+.adminMigrationActions > button > small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 0.61rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminMigrationActions > button:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 11%, var(--color-surface));
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--color-accent) 12%, transparent);
+  cursor: pointer;
+}
+
+.adminMigrationActions > button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+#adminMigrationCutoverButton:disabled {
+  opacity: 0.38;
+}
+
+.adminMigrationProgress {
+  margin-top: 13px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-background) 76%, var(--color-surface));
+}
+
+.adminMigrationProgress[hidden] {
+  display: none !important;
+}
+
+.adminMigrationProgressHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adminMigrationProgressHead strong {
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+#adminMigrationProgressMeta {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.adminMigrationProgressBar {
+  height: 5px;
+  margin: 9px 0 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+#adminMigrationProgressBarFill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 180ms ease;
+}
+
+.adminMigrationProgressList {
+  display: grid;
+  gap: 6px;
+}
+
+.adminMigrationStep {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.adminMigrationStepMark {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.adminMigrationStepText {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.adminMigrationStepText strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminMigrationStepText small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminMigrationStepState {
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.adminMigrationStep[data-state="running"] {
+  border-color: color-mix(in srgb, #e8b44f 28%, transparent);
+  background: color-mix(in srgb, #e8b44f 7%, transparent);
+}
+
+.adminMigrationStep[data-state="running"] .adminMigrationStepMark,
+.adminMigrationStep[data-state="running"] .adminMigrationStepState {
+  border-color: color-mix(in srgb, #e8b44f 60%, var(--color-border));
+  color: #f0c76f;
+}
+
+.adminMigrationStep[data-state="done"] .adminMigrationStepMark,
+.adminMigrationStep[data-state="done"] .adminMigrationStepState {
+  border-color: color-mix(in srgb, #52c77b 58%, var(--color-border));
+  color: #74d99a;
+}
+
+.adminMigrationStep[data-state="fail"] {
+  border-color: color-mix(in srgb, #e36b6b 34%, transparent);
+  background: color-mix(in srgb, #e36b6b 7%, transparent);
+}
+
+.adminMigrationStep[data-state="fail"] .adminMigrationStepMark,
+.adminMigrationStep[data-state="fail"] .adminMigrationStepState {
+  border-color: color-mix(in srgb, #e36b6b 58%, var(--color-border));
+  color: #ef8a8a;
+}
+
+.adminMigrationSafety {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 11px;
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.adminMigrationSafetyDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #74d99a;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #52c77b 16%, transparent);
+}
+
+.adminMigrationConfirmModal {
+  position: fixed;
+  inset: 0;
+  z-index: 3800;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(5px);
+}
+
+.adminMigrationConfirmModal[hidden] {
+  display: none !important;
+}
+
+.adminMigrationConfirmContent {
+  width: min(100%, 460px);
+  box-sizing: border-box;
+  padding: 17px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 26%, var(--color-border));
+  border-radius: 22px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+.adminMigrationConfirmTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adminMigrationConfirmBadge {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.adminMigrationConfirmClose {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.adminMigrationConfirmContent h3 {
+  margin: 14px 0 7px;
+  color: var(--color-text);
+  font-size: 1.2rem;
+}
+
+#adminMigrationConfirmText {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.adminMigrationConfirmFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.adminMigrationConfirmFacts > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+}
+
+.adminMigrationConfirmFacts span {
+  color: var(--color-text-secondary);
+  font-size: 0.66rem;
+}
+
+.adminMigrationConfirmFacts strong {
+  color: #74d99a;
+  font-size: 0.78rem;
+}
+
+.adminMigrationConfirmHint {
+  margin: 12px 1px 0;
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: color-mix(in srgb, #e8b44f 8%, transparent);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.adminMigrationConfirmActions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.adminMigrationConfirmActions button {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-weight: 800;
+}
+
+#adminMigrationConfirmOk {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+  color: var(--color-accent);
+}
+
+@media (max-width: 520px) {
+  .adminMigrationCard {
+    padding: 13px;
+  }
+
+  .adminMigrationActions {
+    grid-template-columns: 1fr;
+  }
+
+  .adminMigrationActions > button {
+    min-height: 52px;
+  }
+
+  .adminMigrationRoute {
+    grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .adminMigrationEndpoint {
+    padding-inline: 9px;
+  }
+
+  .adminMigrationStep {
+    grid-template-columns: 25px minmax(0, 1fr);
+  }
+
+  .adminMigrationStepState {
+    grid-column: 2;
+  }
+
+  .adminMigrationConfirmModal {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .adminMigrationConfirmContent {
+    width: 100%;
+    border-radius: 22px 22px 18px 18px;
+    padding-bottom: max(17px, env(safe-area-inset-bottom));
+  }
+}
+
+#adminMigrationProgressBarFill[data-state="fail"] {
+  background: #ef8a8a;
+}
