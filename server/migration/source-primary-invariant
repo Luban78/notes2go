@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+BASE="/home/luban78/luba-server/migration-manager"
+CONTROL_FILE="/home/luban78/luba-server/migration-bridge/control-state.json"
+CONFIG_DIR="$BASE/config"
+
+fail() {
+  echo "CHYBA: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+Pouziti:
+  source-primary-invariant check [--backend ID] [--config PATH]
+  source-primary-invariant recover [--backend ID] [--config PATH]
+USAGE
+  exit 2
+}
+
+COMMAND="${1:-}"
+shift || true
+case "$COMMAND" in
+  check|recover) ;;
+  *) usage ;;
+esac
+
+BACKEND_ID=""
+CONFIG_PATH=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --backend)
+      [ "$#" -ge 2 ] || usage
+      BACKEND_ID="$2"
+      shift 2
+      ;;
+    --config)
+      [ "$#" -ge 2 ] || usage
+      CONFIG_PATH="$2"
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+
+read_control_backend() {
+  [ -f "$CONTROL_FILE" ] || return 0
+  python3 - "$CONTROL_FILE" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+    value = data.get("active_backend")
+    if isinstance(value, str):
+        print(value.strip())
+except Exception:
+    pass
+PY
+}
+
+read_env_key() {
+  local file="$1" key="$2"
+  [ -f "$file" ] || return 0
+  python3 - "$file" "$key" <<'PY'
+import sys
+path, key = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() != key:
+                continue
+            v = v.strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+                v = v[1:-1]
+            print(v)
+            break
+except OSError:
+    pass
+PY
+}
+
+if [ -z "$BACKEND_ID" ]; then
+  BACKEND_ID="$(read_control_backend)"
+fi
+
+if [ -z "$CONFIG_PATH" ]; then
+  if [ -n "$BACKEND_ID" ] && [ -f "$CONFIG_DIR/source-$BACKEND_ID.env" ]; then
+    CONFIG_PATH="$CONFIG_DIR/source-$BACKEND_ID.env"
+  elif [ "$BACKEND_ID" = "cloud" ] && [ -f "$CONFIG_DIR/source-cloud.env" ]; then
+    CONFIG_PATH="$CONFIG_DIR/source-cloud.env"
+  elif [ -f "$CONFIG_DIR/source.env" ]; then
+    SOURCE_ENV_BACKEND="$(read_env_key "$CONFIG_DIR/source.env" SOURCE_BACKEND_ID)"
+    if [ -z "$BACKEND_ID" ] || [ "$SOURCE_ENV_BACKEND" = "$BACKEND_ID" ]; then
+      CONFIG_PATH="$CONFIG_DIR/source.env"
+    fi
+  fi
+fi
+
+[ -n "$CONFIG_PATH" ] || fail "Nelze jednoznacne vybrat SOURCE konfiguraci pro backend '${BACKEND_ID:-?}'."
+[ -f "$CONFIG_PATH" ] || fail "SOURCE konfigurace neexistuje: $CONFIG_PATH"
+
+set -a
+# shellcheck disable=SC1090
+source "$CONFIG_PATH"
+set +a
+
+if [ -z "${SOURCE_BACKEND_ID:-}" ]; then
+  case "$(basename "$CONFIG_PATH")" in
+    source-cloud.env) SOURCE_BACKEND_ID="cloud" ;;
+  esac
+fi
+
+if [ -n "$BACKEND_ID" ] && [ -n "${SOURCE_BACKEND_ID:-}" ] && [ "$SOURCE_BACKEND_ID" != "$BACKEND_ID" ]; then
+  fail "SOURCE_BACKEND_ID='$SOURCE_BACKEND_ID' neodpovida pozadovanemu backendu '$BACKEND_ID'."
+fi
+
+if [ -z "${SOURCE_MODE:-}" ]; then
+  case "$(basename "$CONFIG_PATH")" in
+    source-cloud.env) SOURCE_MODE="remote" ;;
+    *) fail "V $CONFIG_PATH chybi SOURCE_MODE." ;;
+  esac
+fi
+
+SOURCE_DB_NAME="${SOURCE_DB_NAME:-postgres}"
+SOURCE_DB_USER="${SOURCE_DB_USER:-postgres}"
+SOURCE_DB_PORT="${SOURCE_DB_PORT:-5432}"
+SOURCE_DB_SSLMODE="${SOURCE_DB_SSLMODE:-require}"
+SOURCE_SSH_PORT="${SOURCE_SSH_PORT:-22}"
+
+safe_word() {
+  [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]]
+}
+
+safe_word "$SOURCE_DB_NAME" || fail "Neocekavany SOURCE_DB_NAME."
+safe_word "$SOURCE_DB_USER" || fail "Neocekavany SOURCE_DB_USER."
+
+run_psql() {
+  local sql="$1"
+  case "$SOURCE_MODE" in
+    docker)
+      [ -n "${SOURCE_DOCKER_CONTAINER:-}" ] || fail "Chybi SOURCE_DOCKER_CONTAINER."
+      safe_word "$SOURCE_DOCKER_CONTAINER" || fail "Neocekavany SOURCE_DOCKER_CONTAINER."
+      printf '%s\n' "$sql" | docker exec -i "$SOURCE_DOCKER_CONTAINER" \
+        psql -U "$SOURCE_DB_USER" -d "$SOURCE_DB_NAME" -X -q -v ON_ERROR_STOP=1 -At
+      ;;
+    ssh)
+      [ -n "${SOURCE_SSH_HOST:-}" ] || fail "Chybi SOURCE_SSH_HOST."
+      [ -n "${SOURCE_SSH_USER:-}" ] || fail "Chybi SOURCE_SSH_USER."
+      [ -n "${SOURCE_DOCKER_CONTAINER:-}" ] || fail "Chybi SOURCE_DOCKER_CONTAINER."
+      safe_word "$SOURCE_SSH_HOST" || fail "Neocekavany SOURCE_SSH_HOST."
+      safe_word "$SOURCE_SSH_USER" || fail "Neocekavany SOURCE_SSH_USER."
+      safe_word "$SOURCE_DOCKER_CONTAINER" || fail "Neocekavany SOURCE_DOCKER_CONTAINER."
+      printf '%s\n' "$sql" | ssh \
+        -p "$SOURCE_SSH_PORT" \
+        -o BatchMode=yes \
+        -o ConnectTimeout=10 \
+        "$SOURCE_SSH_USER@$SOURCE_SSH_HOST" \
+        docker exec -i "$SOURCE_DOCKER_CONTAINER" \
+        psql -U "$SOURCE_DB_USER" -d "$SOURCE_DB_NAME" -X -q -v ON_ERROR_STOP=1 -At
+      ;;
+    remote)
+      [ -n "${SOURCE_DB_HOST:-}" ] || fail "Chybi SOURCE_DB_HOST."
+      [ -n "${SOURCE_DB_PASSWORD:-}" ] || fail "Chybi SOURCE_DB_PASSWORD."
+      printf '%s\n' "$sql" | docker run --rm -i \
+        -e PGPASSWORD="$SOURCE_DB_PASSWORD" \
+        -e PGSSLMODE="$SOURCE_DB_SSLMODE" \
+        postgres:17-alpine \
+        psql -h "$SOURCE_DB_HOST" -p "$SOURCE_DB_PORT" \
+        -U "$SOURCE_DB_USER" -d "$SOURCE_DB_NAME" \
+        -X -q -v ON_ERROR_STOP=1 -At
+      ;;
+    *)
+      fail "Nepodporovany SOURCE_MODE='$SOURCE_MODE'."
+      ;;
+  esac
+}
+
+freeze_state() {
+  run_psql "SELECT CASE WHEN frozen THEN 'FROZEN' ELSE 'UNFROZEN' END FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;" \
+    | tail -n 1 | tr -d '\r'
+}
+
+write_probe() {
+  local sql
+  read -r -d '' sql <<'SQL' || true
+BEGIN;
+DO $lubanote_probe$
+DECLARE
+  n public.notes%ROWTYPE;
+  result jsonb;
+BEGIN
+  SELECT * INTO n
+  FROM public.notes
+  WHERE deleted_at IS NULL
+  ORDER BY updated_at DESC NULLS LAST, id
+  LIMIT 1;
+
+  IF n.id IS NULL THEN
+    RAISE EXCEPTION 'LUBANOTE_WRITE_PROBE_NO_NOTE';
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', n.user_id::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', n.user_id::text, 'role', 'authenticated')::text,
+    true
+  );
+
+  EXECUTE 'SET LOCAL ROLE authenticated';
+
+  SELECT to_jsonb(public.save_note_safe(
+    n.id,
+    n.data,
+    n.revision,
+    false,
+    NULL
+  )) INTO result;
+
+  IF COALESCE((result->>'ok')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'LUBANOTE_WRITE_PROBE_SAVE_FAILED: %', result;
+  END IF;
+END
+$lubanote_probe$;
+ROLLBACK;
+SQL
+  run_psql "$sql" >/dev/null
+}
+
+if [ "$COMMAND" = "recover" ]; then
+  run_psql "BEGIN; UPDATE lubanote_migration_internal.write_freeze_state SET frozen=false, updated_at=now() WHERE singleton=true; COMMIT;" >/dev/null
+fi
+
+STATE="$(freeze_state)"
+[ "$STATE" = "UNFROZEN" ] || fail "SOURCE zustava FROZEN."
+
+echo "SOURCE_BACKEND_ID=${SOURCE_BACKEND_ID:-${BACKEND_ID:-unknown}}"
+echo "SOURCE_CONFIG=$(basename "$CONFIG_PATH")"
+echo "FREEZE_STATE=UNFROZEN"
+
+write_probe
+
+echo "WRITE_PROBE=PASS"
+
+after="$(freeze_state)"
+[ "$after" = "UNFROZEN" ] || fail "Freeze state se po write probe neocekavane zmenil."
+echo "FREEZE_STATE_UNCHANGED=PASS"
+echo "SOURCE_WRITABLE=YES"
