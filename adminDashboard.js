@@ -2035,11 +2035,11 @@
     }
   }
 
-  async function zkontrolujCloudPredTestBackendem() {
+  async function zkontrolujBackendPredPrepnutim() {
     if (!navigator.onLine) {
       return {
         ok: false,
-        zprava: "Nejdřív se připoj k internetu. Do TEST LubaServeru přepneme jen ze synchronizovaného Cloud stavu."
+        zprava: "Nejdřív se připoj k internetu. Backend lze bezpečně přepnout jen ze synchronizovaného stavu."
       };
     }
 
@@ -2047,7 +2047,7 @@
     if (syncStav !== "synced") {
       return {
         ok: false,
-        zprava: "Cloud ještě není ve stavu „Synchronizováno“. Počkej na dokončení synchronizace a zkus přepnutí znovu."
+        zprava: "Aktuální backend ještě není ve stavu „Synchronizováno“. Počkej na dokončení synchronizace a zkus přepnutí znovu."
       };
     }
 
@@ -2137,18 +2137,18 @@
       deviceBackendMode.textContent = jeTest
         ? "TEST backend · pouze toto zařízení"
         : jeCloud
-          ? "Supabase Cloud · pouze toto zařízení"
-          : "PROD LubaServer · pouze toto zařízení";
+          ? "HLAVNÍ PRODUKCE · Supabase Cloud · pouze toto zařízení"
+          : "STANDBY LubaServer · pouze toto zařízení";
     }
 
     if (deviceBackendBadge) {
-      deviceBackendBadge.textContent = jeTest ? "TEST" : jeCloud ? "CLOUD" : "PRODUKCE";
+      deviceBackendBadge.textContent = jeTest ? "TEST" : jeCloud ? "PRODUKCE" : "STANDBY";
       deviceBackendBadge.dataset.state = jeTest ? "warning" : "ok";
     }
 
     if (deviceBackendMessage) {
       deviceBackendMessage.textContent =
-        "Backend se volí samostatně pro toto zařízení. Přepnutí mezi backendy provede bezpečný lokální reset, aby se jejich cache nesmíchala.";
+        "Výchozí produkce je Supabase Cloud. LubaServer zůstává připravený STANDBY/TEST. Backend lze na tomto zařízení vědomě přepnout; před resetem se vždy kontroluje synchronizační dluh.";
     }
 
     if (useLubaServerTlacitko) {
@@ -2187,10 +2187,11 @@
       return;
     }
 
-    /* Přechod z Cloud profilu nesmí smazat lokální cache, pokud na zařízení
-     * čeká sync dluh. Tohle je kritické hlavně pro pracovní PC. */
-    if (aktualni.id === "supabaseCloud") {
-      const kontrola = await zkontrolujCloudPredTestBackendem();
+    /* 678D: bezpečnostní kontrola platí pro KAŽDÝ směr přepnutí.
+     * Nikdy nesmíme smazat lokální cache backendu, pokud na zařízení
+     * čeká neodeslaný synchronizační dluh. */
+    {
+      const kontrola = await zkontrolujBackendPredPrepnutim();
       if (!kontrola.ok) {
         zobrazBackendSwitchChybu(kontrola.zprava);
         return;
@@ -2202,7 +2203,7 @@
         ? "Supabase Cloud"
         : cil.id === "lubanoteServer"
           ? "TEST LubaServer"
-          : "produkční LubaServer";
+          : "STANDBY LubaServer";
 
     otevriAdminPotvrzeni({
       nadpis: `Přepnout toto zařízení na ${cilPopis}?`,

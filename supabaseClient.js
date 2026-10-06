@@ -1,27 +1,18 @@
 /*
- * BI-1E / PATCH 678C: backend endpoint vždy dodává backendConfig.js.
- * Uložený profil konkrétního zařízení má přednost. Fallback se používá
- * pouze při chybě konfigurace: GitHub Pages -> Cloud, ostatní -> PROD LubaServer.
+ * BI-1F / PATCH 678D: backend endpoint vždy dodává backendConfig.js.
+ * Uložený profil konkrétního zařízení má přednost. Pokud by konfigurace
+ * selhala, bezpečný fallback je VŽDY původní hlavní produkce Supabase Cloud.
+ * Žádný hostname ani typ zařízení nesmí klienta automaticky přesunout
+ * na LubaServer.
  */
-const LUBANOTE_GITHUB_PAGES =
-  String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
-
 const LUBANOTE_BACKEND =
   window.LubaNoteBackendConfig?.nactiAktivniProfil?.() ||
-  (LUBANOTE_GITHUB_PAGES
-    ? {
-        url: "https://nwdacgigplofksexssws.supabase.co/",
-        publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
-        projectRef: "nwdacgigplofksexssws",
-        authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
-      }
-    : {
-        url: "https://api.lubanote.com",
-        publishableKey:
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
-        projectRef: "lubanote-server",
-        authStorageKey: "sb-lubanote-server-auth-token"
-      });
+  {
+    url: "https://nwdacgigplofksexssws.supabase.co/",
+    publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
+    projectRef: "nwdacgigplofksexssws",
+    authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
+  };
 
 const SUPABASE_URL = LUBANOTE_BACKEND.url;
 const SUPABASE_PUBLISHABLE_KEY = LUBANOTE_BACKEND.publishableKey;

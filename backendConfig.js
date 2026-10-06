@@ -2,25 +2,20 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / PATCH 678C
+   * BACKEND INDEPENDENCE V1 / PATCH 678D
    * -------------------------------------------------
-   * Každé zařízení si volí backend samo přes localStorage.
-   * Význam profilů je stabilní a NIKDY se nemění podle hostname:
-   * - supabaseCloud      = původní Supabase Cloud / rollback
-   * - lubanoteProduction = produkční LubaServer / api.lubanote.com
-   * - lubanoteServer     = TEST LubaServer / test.lubanote.com
-   *
-   * GitHub Pages má pouze bezpečný výchozí profil Cloud, aby pracovní PC
-   * za FortiGuardem zůstalo použitelné. Jakmile uživatel profil přepne,
-   * uložená volba má vždy přednost. APK/ostatní hosty mají jako nový
-   * výchozí profil produkční LubaServer.
+   * PUVODNI ARCHITEKTURA LUBANOTE:
+   * - Supabase Cloud je vychozi a hlavni produkce pro VSECHNA zarizeni.
+   * - LubaServer PROD je pripraveny STANDBY cil pro budouci rizeny cutover.
+   * - LubaServer TEST je testovaci/staging profil.
+   * - Kazde zarizeni muze profil vedome prepnout v Admin Dashboardu.
+   * - Hostname (GitHub Pages / APK / app.lubanote.com) NIKDY sam
+   *   nerozhoduje, ktery backend je produkce.
+   * - Budouci migrace na silnejsi server se ridi Migration Managerem
+   *   pres zadany DESTINATION host; klientsky default se nemeni bez
+   *   vyslovneho produkcniho cutoveru.
    */
-  const JE_GITHUB_PAGES =
-    String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
-
-  const VYCHOZI_PROFIL_ID = JE_GITHUB_PAGES
-    ? "supabaseCloud"
-    : "lubanoteProduction";
+  const VYCHOZI_PROFIL_ID = "supabaseCloud";
 
   const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
 
@@ -32,7 +27,7 @@
       id: "supabaseCloud",
       nazev: "Supabase Cloud",
       typ: "supabase-cloud",
-      prostredi: "rollback",
+      prostredi: "production",
       backendId: "cloud",
       povolen: true,
       url: "https://nwdacgigplofksexssws.supabase.co/",
@@ -43,9 +38,9 @@
 
     lubanoteProduction: Object.freeze({
       id: "lubanoteProduction",
-      nazev: "LubaNote Server",
+      nazev: "LubaServer STANDBY",
       typ: "supabase-selfhosted",
-      prostredi: "production",
+      prostredi: "standby",
       backendId: "lubaserver",
       povolen: true,
       url: "https://api.lubanote.com",
@@ -136,7 +131,7 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1E-678C",
+    verze: "BI-1F-678D",
     prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
     aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,

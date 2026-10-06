@@ -1638,7 +1638,7 @@
 
           <div class="adminBackendSwitchActions">
             <button id="adminUseLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Použít LubaServer PROD
+              Použít LubaServer STANDBY
             </button>
             <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">
               Testovat LubaServer
@@ -1683,7 +1683,7 @@
           <div class="adminMigrationHead">
             <div>
               <span class="adminServerEyebrow">Migrace / produkce</span>
-              <strong>Bezpečný přesun Cloud → LubaServer</strong>
+              <strong>Cloud produkce → připravený nový server</strong>
             </div>
             <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
@@ -1738,7 +1738,7 @@
 
           <div class="adminMigrationSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>CUTOVER se odemkne pouze po úspěšném VERIFY. Starý server zůstává rollback.</span>
+            <span>Supabase Cloud zůstává hlavní produkcí až do výslovně potvrzeného CUTOVER. Po přepnutí zůstává předchozí server zachovaný jako rollback.</span>
           </div>
         </section>
 
@@ -2774,13 +2774,13 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Backend Independence V1 / BI-1A: jediný zdroj endpointu backendu. -->
-  <script src="backendConfig.js?v=678c-device-backend-switch"></script>
+  <script src="backendConfig.js?v=678d-original-architecture"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
   <script src="syncTraffic.js?v=659a-backend-independence-bi1a"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=678c-device-backend-switch"></script>
+  <script src="supabaseClient.js?v=678d-original-architecture"></script>
   <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
   <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
@@ -2795,7 +2795,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=678c-device-backend-switch"></script>
+  <script src="adminDashboard.js?v=678d-original-architecture"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2824,7 +2824,7 @@
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=677t-maintenance-drain"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
-  <script src="maintenance.js?v=678c-device-backend-switch"></script>
+  <script src="maintenance.js?v=678d-original-architecture"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>
