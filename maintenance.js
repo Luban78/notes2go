@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – Production Maintenance / Drain V1
-   PATCH 677T1
+   PATCH 677T1 / 678A
 
    - čte pouze veřejný Control Point,
    - nikdy samo nepřepíná backend,
@@ -34,7 +34,9 @@
 
   function aktivniBackendId() {
     const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.id === "supabaseCloud") return "cloud";
+    // PATCH 678A: legacy profil ID supabaseCloud už po CUTOVERU reprezentuje
+    // produkční LubaServer. TEST profil je rovněž LubaServer.
+    if (profil?.id === "supabaseCloud") return "lubaserver";
     if (profil?.id === "lubanoteServer") return "lubaserver";
     return null;
   }

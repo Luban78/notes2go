@@ -2,28 +2,31 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / BI-1B / PATCH 677M
+   * BACKEND INDEPENDENCE V1 / BI-1C / PATCH 678A
    * -------------------------------------------------
-   * Produkční výchozí profil zůstává Supabase Cloud.
-   * Admin může na jednom zařízení dočasně přepnout do odděleného
-   * TEST LubaServer profilu. Přepnutí vždy probíhá přes lokální reset,
-   * aby se nemíchala cache Cloud ↔ LubaServer.
+   * Po produkčním CUTOVERU je výchozí produkční backend LubaServer.
+   * Legacy ID "supabaseCloud" zůstává úmyslně zachované, aby zařízení
+   * s již uloženým profilem přešla na produkční LubaServer BEZ resetu
+   * IndexedDB/cache a neztratila čekající lokální Sync V2 změny.
+   * TEST LubaServer zůstává oddělený profil na test.lubanote.com.
    */
   const VYCHOZI_PROFIL_ID = "supabaseCloud";
   const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
 
   const PROFILY = Object.freeze({
+    // Legacy ID zachováváme kvůli bezpečnému in-place cutoveru starých klientů.
+    // Význam profilu je od 678A produkční LubaServer, nikoli Supabase Cloud.
     supabaseCloud: Object.freeze({
       id: "supabaseCloud",
-      nazev: "Supabase Cloud",
-      typ: "supabase-cloud",
+      nazev: "LubaNote Server",
+      typ: "supabase-selfhosted",
       prostredi: "production",
       povolen: true,
-      url: "https://nwdacgigplofksexssws.supabase.co/",
+      url: "https://api.lubanote.com",
       publishableKey:
-        "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
-      projectRef: "nwdacgigplofksexssws",
-      authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
+      projectRef: "lubanote-server",
+      authStorageKey: "sb-lubanote-server-auth-token"
     }),
 
     lubanoteServer: Object.freeze({
@@ -116,7 +119,7 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1B-677M",
+    verze: "BI-1C-678A",
     prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
     aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,
