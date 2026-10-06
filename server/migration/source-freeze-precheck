@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+BASE="$HOME/luba-server/migration-manager"
+BIN="$BASE/bin"
+CONTROL_FILE="${SOURCE_CONTROL_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+
+source "$BIN/source-lib"
+source_load
+
+STATE="$(cat "$BASE/state/state" 2>/dev/null || true)"
+RUN_ID="$(cat "$BASE/state/current_run" 2>/dev/null || true)"
+RUN="$BASE/runs/$RUN_ID"
+IDENTITY="$RUN/run-identity.env"
+
+[ "$STATE" = "VERIFIED" ] || {
+  echo "BLOKACE: Migration Manager neni VERIFIED. State=$STATE"
+  exit 20
+}
+
+[ -n "$RUN_ID" ] && [ -f "$IDENTITY" ] || {
+  echo "BLOKACE: VERIFIED run nema generickou run identity."
+  exit 21
+}
+
+CURRENT_SOURCE_NAME="$SOURCE_NAME"
+CURRENT_SOURCE_MODE="$SOURCE_MODE"
+CURRENT_SOURCE_BACKEND_ID="${SOURCE_BACKEND_ID:-}"
+
+# shellcheck disable=SC1090
+source "$IDENTITY"
+
+[ "${RUN_ID:-}" = "$(basename "$RUN")" ] || {
+  echo "BLOKACE: RUN_ID identity nesouhlasi s current_run."
+  exit 22
+}
+
+[ "${SOURCE_NAME:-}" = "$CURRENT_SOURCE_NAME" ] || {
+  echo "BLOKACE: SOURCE_NAME se od VERIFIED runu zmenil."
+  exit 23
+}
+
+[ "${SOURCE_MODE:-}" = "$CURRENT_SOURCE_MODE" ] || {
+  echo "BLOKACE: SOURCE_MODE se od VERIFIED runu zmenil."
+  exit 24
+}
+
+[ "${SOURCE_BACKEND_ID:-}" = "$CURRENT_SOURCE_BACKEND_ID" ] || {
+  echo "BLOKACE: SOURCE_BACKEND_ID se od VERIFIED runu zmenil."
+  exit 25
+}
+
+[ -f "$CONTROL_FILE" ] || {
+  echo "BLOKACE: chybi lokalni Control Point $CONTROL_FILE"
+  exit 26
+}
+
+python3 - "$CONTROL_FILE" "$CURRENT_SOURCE_BACKEND_ID" <<'PY'
+import json, sys
+path, expected = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+if data.get("mode") != "MAINTENANCE":
+    raise SystemExit("BLOKACE: Control Point neni v MAINTENANCE.")
+if data.get("active_backend") != expected:
+    raise SystemExit(f"BLOKACE: active_backend neodpovida SOURCE. expected={expected} actual={data.get('active_backend')}")
+if data.get("cutover_enabled") is not False:
+    raise SystemExit("BLOKACE: cutover_enabled musi byt pred SOURCE freeze false.")
+print("PASS: VERIFIED run identity")
+print("PASS: lokalni Control Point MAINTENANCE")
+print("PASS: active_backend=" + expected)
+print("PASS: cutover_enabled=false")
+PY
+
+unguarded="$(
+source_psql -At -c "
+WITH expected AS (
+  SELECT c.oid
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='public'
+    AND c.relkind='r'
+    AND c.relname <> 'lubanote_server_status'
+),
+guarded AS (
+  SELECT DISTINCT tgrelid
+  FROM pg_trigger
+  WHERE tgname='lubanote_migration_write_freeze_guard'
+    AND NOT tgisinternal
+)
+SELECT count(*)
+FROM expected e
+LEFT JOIN guarded g ON g.tgrelid=e.oid
+WHERE g.tgrelid IS NULL;
+"
+)"
+
+[ "$unguarded" = "0" ] || {
+  echo "BLOKACE: $unguarded datovych public tabulek nema freeze guard."
+  exit 28
+}
+
+storage_guard="$(
+source_psql -At -c "
+SELECT count(*)
+FROM pg_trigger t
+JOIN pg_class c ON c.oid=t.tgrelid
+JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='storage'
+  AND c.relname='objects'
+  AND t.tgname='lubanote_migration_write_freeze_guard'
+  AND NOT tgisinternal;
+"
+)"
+
+[ "$storage_guard" = "1" ] || {
+  echo "BLOKACE: storage.objects freeze guard neni presne 1."
+  exit 29
+}
+
+auth_guards="$(
+source_psql -At -c "
+SELECT count(*)
+FROM pg_trigger t
+JOIN pg_class c ON c.oid=t.tgrelid
+JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='auth'
+  AND c.relname IN ('users','identities')
+  AND t.tgname='lubanote_migration_auth_stable_guard'
+  AND NOT tgisinternal;
+"
+)"
+
+[ "$auth_guards" = "2" ] || {
+  echo "BLOKACE: Auth stable guards nejsou presne 2."
+  exit 30
+}
+
+echo "PASS: public data freeze coverage"
+echo "PASS: storage.objects freeze guard"
+echo "PASS: Auth stable guards"
+echo "PRECHECK: PASS"

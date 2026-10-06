@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+BASE="$HOME/luba-server/migration-manager"
+BIN="$BASE/bin"
+
+source "$BIN/source-lib"
+source_load
+
+source_psql -At -v ON_ERROR_STOP=1 -c "
+BEGIN;
+UPDATE lubanote_migration_internal.write_freeze_state
+SET frozen=false,
+    updated_at=now()
+WHERE singleton=true;
+DO \$\$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM lubanote_migration_internal.write_freeze_state
+    WHERE singleton=true
+      AND frozen=false
+  ) THEN
+    RAISE EXCEPTION 'SOURCE freeze state was not disabled';
+  END IF;
+END
+\$\$;
+COMMIT;
+SELECT CASE
+  WHEN frozen THEN 'SOURCE_STILL_FROZEN'
+  ELSE 'SOURCE_UNFROZEN'
+END
+FROM lubanote_migration_internal.write_freeze_state
+WHERE singleton=true;
+"
+
+"$BIN/source-primary-invariant" check --config "$BASE/config/source.env"
+echo "SOURCE_FREEZE_DISABLE_POSTCHECK=PASS"

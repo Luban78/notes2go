@@ -14,8 +14,11 @@ fail() {
 usage() {
   cat >&2 <<'USAGE'
 Pouziti:
-  source-primary-invariant check [--backend ID] [--config PATH]
-  source-primary-invariant recover [--backend ID] [--config PATH]
+  source-primary-invariant state --backend ID [--config PATH]
+  source-primary-invariant check --backend ID [--config PATH]
+  source-primary-invariant recover --backend ID [--config PATH]
+  source-primary-invariant freeze --backend ID [--config PATH]
+  source-primary-invariant check-frozen --backend ID [--config PATH]
 USAGE
   exit 2
 }
@@ -23,7 +26,7 @@ USAGE
 COMMAND="${1:-}"
 shift || true
 case "$COMMAND" in
-  check|recover) ;;
+  state|check|recover|freeze|check-frozen) ;;
   *) usage ;;
 esac
 
@@ -44,21 +47,6 @@ while [ "$#" -gt 0 ]; do
     *) usage ;;
   esac
 done
-
-read_control_backend() {
-  [ -f "$CONTROL_FILE" ] || return 0
-  python3 - "$CONTROL_FILE" <<'PY'
-import json, sys
-try:
-    with open(sys.argv[1], "r", encoding="utf-8") as f:
-        data = json.load(f)
-    value = data.get("active_backend")
-    if isinstance(value, str):
-        print(value.strip())
-except Exception:
-    pass
-PY
-}
 
 read_env_key() {
   local file="$1" key="$2"
@@ -85,18 +73,15 @@ except OSError:
 PY
 }
 
-if [ -z "$BACKEND_ID" ]; then
-  BACKEND_ID="$(read_control_backend)"
-fi
-
 if [ -z "$CONFIG_PATH" ]; then
-  if [ -n "$BACKEND_ID" ] && [ -f "$CONFIG_DIR/source-$BACKEND_ID.env" ]; then
+  [ -n "$BACKEND_ID" ] || fail "Chybi --backend nebo --config."
+  if [ -f "$CONFIG_DIR/source-$BACKEND_ID.env" ]; then
     CONFIG_PATH="$CONFIG_DIR/source-$BACKEND_ID.env"
   elif [ "$BACKEND_ID" = "cloud" ] && [ -f "$CONFIG_DIR/source-cloud.env" ]; then
     CONFIG_PATH="$CONFIG_DIR/source-cloud.env"
   elif [ -f "$CONFIG_DIR/source.env" ]; then
     SOURCE_ENV_BACKEND="$(read_env_key "$CONFIG_DIR/source.env" SOURCE_BACKEND_ID)"
-    if [ -z "$BACKEND_ID" ] || [ "$SOURCE_ENV_BACKEND" = "$BACKEND_ID" ]; then
+    if [ "$SOURCE_ENV_BACKEND" = "$BACKEND_ID" ]; then
       CONFIG_PATH="$CONFIG_DIR/source.env"
     fi
   fi
@@ -119,6 +104,11 @@ fi
 if [ -n "$BACKEND_ID" ] && [ -n "${SOURCE_BACKEND_ID:-}" ] && [ "$SOURCE_BACKEND_ID" != "$BACKEND_ID" ]; then
   fail "SOURCE_BACKEND_ID='$SOURCE_BACKEND_ID' neodpovida pozadovanemu backendu '$BACKEND_ID'."
 fi
+
+if [ -z "$BACKEND_ID" ]; then
+  BACKEND_ID="${SOURCE_BACKEND_ID:-}"
+fi
+[ -n "$BACKEND_ID" ] || fail "Nelze urcit SOURCE_BACKEND_ID."
 
 if [ -z "${SOURCE_MODE:-}" ]; then
   case "$(basename "$CONFIG_PATH")" in
@@ -182,8 +172,18 @@ run_psql() {
 }
 
 freeze_state() {
-  run_psql "SELECT CASE WHEN frozen THEN 'FROZEN' ELSE 'UNFROZEN' END FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;" \
-    | tail -n 1 | tr -d '\r'
+  local raw
+  raw="$(run_psql "SELECT count(*)::text || '|' || COALESCE(bool_or(frozen)::text,'null') FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;" | tail -n 1 | tr -d '\r')"
+  case "$raw" in
+    '1|t') printf 'FROZEN\n' ;;
+    '1|f') printf 'UNFROZEN\n' ;;
+    *) fail "Neplatny write_freeze_state ($raw)." ;;
+  esac
+}
+
+set_freeze() {
+  local value="$1"
+  run_psql "BEGIN; UPDATE lubanote_migration_internal.write_freeze_state SET frozen=$value, updated_at=now() WHERE singleton=true; COMMIT;" >/dev/null
 }
 
 write_probe() {
@@ -195,14 +195,18 @@ DECLARE
   n public.notes%ROWTYPE;
   result jsonb;
 BEGIN
-  SELECT * INTO n
-  FROM public.notes
-  WHERE deleted_at IS NULL
-  ORDER BY updated_at DESC NULLS LAST, id
+  SELECT n0.* INTO n
+  FROM public.notes n0
+  WHERE n0.deleted_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.note_collaborators c WHERE c.note_id = n0.id
+    )
+    AND public.lubanote_user_has_data_access(n0.user_id)
+  ORDER BY n0.updated_at DESC NULLS LAST, n0.id
   LIMIT 1;
 
   IF n.id IS NULL THEN
-    RAISE EXCEPTION 'LUBANOTE_WRITE_PROBE_NO_NOTE';
+    RAISE EXCEPTION 'LUBANOTE_WRITE_PROBE_NO_ELIGIBLE_PRIVATE_NOTE';
   END IF;
 
   PERFORM set_config('request.jwt.claim.sub', n.user_id::text, true);
@@ -215,13 +219,13 @@ BEGIN
 
   EXECUTE 'SET LOCAL ROLE authenticated';
 
-  SELECT to_jsonb(public.save_note_safe(
+  SELECT public.save_note_safe(
     n.id,
     n.data,
     n.revision,
     false,
     NULL
-  )) INTO result;
+  ) INTO result;
 
   IF COALESCE((result->>'ok')::boolean, false) IS NOT TRUE THEN
     RAISE EXCEPTION 'LUBANOTE_WRITE_PROBE_SAVE_FAILED: %', result;
@@ -233,22 +237,69 @@ SQL
   run_psql "$sql" >/dev/null
 }
 
-if [ "$COMMAND" = "recover" ]; then
-  run_psql "BEGIN; UPDATE lubanote_migration_internal.write_freeze_state SET frozen=false, updated_at=now() WHERE singleton=true; COMMIT;" >/dev/null
-fi
+check_guard_coverage_frozen() {
+  local raw
+  raw="$(run_psql "
+WITH expected AS (
+  SELECT c.oid
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='public'
+    AND c.relkind='r'
+    AND c.relname <> 'lubanote_server_status'
+), guarded AS (
+  SELECT DISTINCT tgrelid
+  FROM pg_trigger
+  WHERE tgname='lubanote_migration_write_freeze_guard'
+    AND NOT tgisinternal
+), stats AS (
+  SELECT
+    (SELECT frozen FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true) AS frozen,
+    (SELECT count(*) FROM expected e LEFT JOIN guarded g ON g.tgrelid=e.oid WHERE g.tgrelid IS NULL) AS public_unguarded,
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='storage' AND c.relname='objects' AND t.tgname='lubanote_migration_write_freeze_guard' AND NOT t.tgisinternal) AS storage_guards,
+    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='auth' AND c.relname IN ('users','identities') AND t.tgname='lubanote_migration_auth_stable_guard' AND NOT t.tgisinternal) AS auth_guards
+)
+SELECT frozen::text || '|' || public_unguarded::text || '|' || storage_guards::text || '|' || auth_guards::text FROM stats;
+" | tail -n 1 | tr -d '\r')"
+  [ "$raw" = "true|0|1|2" ] || [ "$raw" = "t|0|1|2" ] || fail "Freeze coverage neni kompletni ($raw)."
+}
 
-STATE="$(freeze_state)"
-[ "$STATE" = "UNFROZEN" ] || fail "SOURCE zustava FROZEN."
-
-echo "SOURCE_BACKEND_ID=${SOURCE_BACKEND_ID:-${BACKEND_ID:-unknown}}"
-echo "SOURCE_CONFIG=$(basename "$CONFIG_PATH")"
-echo "FREEZE_STATE=UNFROZEN"
-
-write_probe
-
-echo "WRITE_PROBE=PASS"
-
-after="$(freeze_state)"
-[ "$after" = "UNFROZEN" ] || fail "Freeze state se po write probe neocekavane zmenil."
-echo "FREEZE_STATE_UNCHANGED=PASS"
-echo "SOURCE_WRITABLE=YES"
+case "$COMMAND" in
+  state)
+    freeze_state
+    ;;
+  freeze)
+    set_freeze true
+    [ "$(freeze_state)" = "FROZEN" ] || fail "SOURCE se nepodarilo zmrazit."
+    echo "SOURCE_BACKEND_ID=$BACKEND_ID"
+    echo "FREEZE_STATE=FROZEN"
+    ;;
+  recover)
+    set_freeze false
+    echo "SOURCE_BACKEND_ID=$BACKEND_ID"
+    echo "FREEZE_STATE=UNFROZEN"
+    write_probe
+    echo "WRITE_PROBE=PASS"
+    [ "$(freeze_state)" = "UNFROZEN" ] || fail "Freeze state se po write probe neocekavane zmenil."
+    echo "FREEZE_STATE_UNCHANGED=PASS"
+    echo "SOURCE_WRITABLE=YES"
+    ;;
+  check)
+    [ "$(freeze_state)" = "UNFROZEN" ] || fail "SOURCE je FROZEN."
+    echo "SOURCE_BACKEND_ID=$BACKEND_ID"
+    echo "SOURCE_CONFIG=$(basename "$CONFIG_PATH")"
+    echo "FREEZE_STATE=UNFROZEN"
+    write_probe
+    echo "WRITE_PROBE=PASS"
+    [ "$(freeze_state)" = "UNFROZEN" ] || fail "Freeze state se po write probe neocekavane zmenil."
+    echo "FREEZE_STATE_UNCHANGED=PASS"
+    echo "SOURCE_WRITABLE=YES"
+    ;;
+  check-frozen)
+    [ "$(freeze_state)" = "FROZEN" ] || fail "SOURCE neni FROZEN."
+    check_guard_coverage_frozen
+    echo "SOURCE_BACKEND_ID=$BACKEND_ID"
+    echo "FREEZE_STATE=FROZEN"
+    echo "FREEZE_COVERAGE=PASS"
+    ;;
+esac

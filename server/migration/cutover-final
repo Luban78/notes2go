@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+BASE="$HOME/luba-server/migration-manager"
+BRIDGE="$HOME/luba-server/migration-bridge"
+CONTROL="$BRIDGE/control-state.json"
+HELPER="$BASE/bin/source-primary-invariant"
+STATE="$(cat "$BASE/state/state")"
+RUN_ID="$(cat "$BASE/state/current_run")"
+RUN="$BASE/runs/$RUN_ID"
+REPORT="$RUN/verify-report.txt"
+IDENTITY="$RUN/run-identity.env"
+
+fail() { echo "BLOKACE: $*" >&2; exit 1; }
+
+[ "$STATE" = "VERIFIED" ] || fail "Manager neni VERIFIED."
+[ -f "$REPORT" ] || fail "Chybi verify-report."
+grep -qx 'VERIFY: PASS' "$REPORT" || fail "Final VERIFY neni PASS."
+[ -f "$IDENTITY" ] || fail "VERIFIED run nema run-identity.env."
+[ -x "$HELPER" ] || fail "Chybi PRIMARY invariant helper."
+
+# shellcheck disable=SC1090
+source "$IDENTITY"
+SOURCE_ID="${SOURCE_BACKEND_ID:-}"
+[ -n "$SOURCE_ID" ] || fail "Run identity nema SOURCE_BACKEND_ID."
+
+python3 - "$CONTROL" "$SOURCE_ID" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    d = json.load(f)
+expected = sys.argv[2]
+assert d.get("mode") == "MAINTENANCE", "Control neni MAINTENANCE"
+assert d.get("active_backend") == expected, "active_backend neodpovida SOURCE"
+assert d.get("cutover_enabled") is False, "cutover_enabled uz neni false"
+print("PASS: Control MAINTENANCE + SOURCE active")
+PY
+
+echo "PASS: Manager VERIFIED"
+echo "PASS: Final VERIFY PASS"
+
+"$HELPER" check-frozen --backend "$SOURCE_ID"
+
+echo "PASS: SOURCE FROZEN + kompletni guard coverage"
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+CHECKPOINT="$BASE/backups/cutover-control-$STAMP.json"
+mkdir -p "$BASE/backups"
+cp -a "$CONTROL" "$CHECKPOINT"
+
+echo "CUTOVER: prepinam active_backend=lubaserver (Control zustava MAINTENANCE)"
+python3 - "$CONTROL" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+from pathlib import Path
+p = Path(sys.argv[1])
+d = json.loads(p.read_text(encoding="utf-8"))
+if d.get("mode") != "MAINTENANCE":
+    raise SystemExit("BLOKACE: Control neni MAINTENANCE")
+if d.get("cutover_enabled") is not False:
+    raise SystemExit("BLOKACE: cutover_enabled uz neni false")
+d["active_backend"] = "lubaserver"
+d["cutover_enabled"] = True
+d["updated_utc"] = datetime.now(timezone.utc).isoformat()
+tmp = p.with_suffix(".json.cutover.tmp")
+with tmp.open("w", encoding="utf-8") as f:
+    json.dump(d, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+    f.flush()
+    os.fsync(f.fileno())
+os.chmod(tmp, 0o600)
+os.replace(tmp, p)
+print("CUTOVER: active_backend=lubaserver")
+print("CUTOVER: cutover_enabled=true")
+print("Control zustava MAINTENANCE")
+PY
+
+echo "CUTOVER_FINAL=PASS"
+echo "Control checkpoint: $CHECKPOINT"
+echo "Rollback na puvodni SOURCE provadej pouze: $BASE/bin/restore-primary-normal $SOURCE_ID"
