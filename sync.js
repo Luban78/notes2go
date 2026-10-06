@@ -3934,7 +3934,11 @@ function aktualizujSafeBootstrapProgress(
   });
 }
 
-async function dokonciSafeBootstrapV2(userId, headStart) {
+async function dokonciSafeBootstrapV2(
+  userId,
+  headStart,
+  { targetConfirmRecovery = false } = {}
+) {
   const headEnd = await ziskejPrivateSyncV2Head();
 
   if (headEnd === null) {
@@ -3952,7 +3956,12 @@ async function dokonciSafeBootstrapV2(userId, headStart) {
     );
 
     const deltaOk =
-      await synchronizujVzdalenePrivateDeltaV2(userId);
+      await synchronizujVzdalenePrivateDeltaV2(
+        userId,
+        targetConfirmRecovery
+          ? { targetConfirmRecovery: true }
+          : {}
+      );
 
     if (deltaOk !== true) {
       return false;
@@ -4407,6 +4416,23 @@ function nabidniSafeBootstrapPokudJeTreba(userId) {
 let existingClientReconcilePraveBezi = null;
 let existingClientReconcilePosledniPokus = 0;
 const EXISTING_RECONCILE_COOLDOWN_MS = 15000;
+
+/*
+ * PATCH 679A – TARGET CONFIRM RECOVERY
+ *
+ * Po úspěšném save_note_safe může výjimečně chybět lokální V2 cursor
+ * (např. po resetu / přechodovém bootstrapu), případně už change feed
+ * neobsahuje právě potvrzenou vlastní událost. Obsahový upload je v tu
+ * chvíli už hotový, ale stará potvrzovací smyčka zůstala každých 1,5 s
+ * v pending a opakovala malé RPC requesty.
+ *
+ * Recovery nesmí spustit full snapshot ani přepsat lokální data. Použije
+ * existující manifestový Existing Client Reconcile, který pracuje pouze
+ * s metadaty + targeted ID a má vlastní RX budget. Cooldown brání tomu,
+ * aby případná skutečná serverová chyba znovu vytvořila retry/egress smyčku.
+ */
+let targetConfirmReconcilePosledniPokus = 0;
+const TARGET_CONFIRM_RECONCILE_COOLDOWN_MS = 15000;
 /* Nouzový měsíční quota guard: automatický reconcile nikdy nesmí
  * překvapit několika MB targeted downloadu při ztracené lokální meta.
  * Manifest je malý; obsah nad tento rozpočet se pouze odloží. */
@@ -4511,7 +4537,10 @@ async function uploadExistingReconcileWinnerV2(noteId) {
   return false;
 }
 
-async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
+async function spustExistingClientReconcileV2(
+  userId,
+  { force = false, targetConfirmRecovery = false } = {}
+) {
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
     return false;
@@ -4541,14 +4570,24 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
   existingClientReconcilePosledniPokus = ted;
 
   existingClientReconcilePraveBezi = (async () => {
-    if (
-      maCilenyPrivateV2Dluh() ||
-      nactiCekajiciSmazani().length > 0 ||
-      aktivniKonfliktySyncu.size > 0
-    ) {
+    const maBlokujiciLokalniDluh = targetConfirmRecovery
+      ? (
+          cekajiciCilenePrivateV2.size > 0 ||
+          nactiCekajiciSmazani().length > 0 ||
+          aktivniKonfliktySyncu.size > 0
+        )
+      : (
+          maCilenyPrivateV2Dluh() ||
+          nactiCekajiciSmazani().length > 0 ||
+          aktivniKonfliktySyncu.size > 0
+        );
+
+    if (maBlokujiciLokalniDluh) {
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
-        "RECONCILE DEFER | local-debt"
+        targetConfirmRecovery
+          ? "RECONCILE DEFER | target-confirm-content-debt"
+          : "RECONCILE DEFER | local-debt"
       );
       return false;
     }
@@ -4930,7 +4969,10 @@ async function spustExistingClientReconcileV2(userId, { force = false } = {}) {
 
       const potvrzeno = await dokonciSafeBootstrapV2(
         userId,
-        headStart
+        headStart,
+        targetConfirmRecovery
+          ? { targetConfirmRecovery: true }
+          : {}
       );
 
       if (potvrzeno !== true) {
@@ -8235,6 +8277,65 @@ function maCilenyPrivateV2Dluh() {
   );
 }
 
+async function zachranTargetConfirmPresExistingReconcileV2(
+  userId,
+  duvod = "unknown"
+) {
+  if (!userId || !navigator.onLine) {
+    return false;
+  }
+
+  if (
+    cekajiciCilenePrivateV2.size > 0 ||
+    nactiCekajiciSmazani().length > 0 ||
+    aktivniKonfliktySyncu.size > 0
+  ) {
+    return false;
+  }
+
+  const ted = Date.now();
+  if (
+    ted - targetConfirmReconcilePosledniPokus <
+      TARGET_CONFIRM_RECONCILE_COOLDOWN_MS
+  ) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET CONFIRM RECONCILE COOLDOWN | reason=${duvod}`
+    );
+    return false;
+  }
+
+  targetConfirmReconcilePosledniPokus = ted;
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET CONFIRM RECONCILE | reason=${duvod}`
+  );
+
+  const obnoveno = await spustExistingClientReconcileV2(
+    userId,
+    {
+      force: true,
+      targetConfirmRecovery: true
+    }
+  );
+
+  if (obnoveno !== true) {
+    return false;
+  }
+
+  potvrzeneCileneRevizeV2.clear();
+  cileneV2CekaNaFastPotvrzeni = false;
+  synchronizaceOdlozenaKvuliLokalniZmene = false;
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2",
+    `TARGET CONFIRM RECONCILED | reason=${duvod}`
+  );
+
+  return true;
+}
+
 async function potvrdCilenePrivateZapisyV2(userId) {
   if (
     !userId ||
@@ -8254,7 +8355,11 @@ async function potvrdCilenePrivateZapisyV2(userId) {
       "V2",
       "TARGET CONFIRM DEFER | cursor-missing"
     );
-    return false;
+
+    return await zachranTargetConfirmPresExistingReconcileV2(
+      userId,
+      "cursor-missing"
+    );
   }
 
   const zmeny = await ziskejPrivateSyncV2ZmenyOd(
@@ -8275,7 +8380,11 @@ async function potvrdCilenePrivateZapisyV2(userId) {
       "V2",
       "TARGET CONFIRM DEFER | feed-limit"
     );
-    return false;
+
+    return await zachranTargetConfirmPresExistingReconcileV2(
+      userId,
+      "feed-limit"
+    );
   }
 
   let posledniSeq = cursor.lastSeq;
@@ -8427,7 +8536,11 @@ async function potvrdCilenePrivateZapisyV2(userId) {
       "V2",
       `TARGET CONFIRM DEFER | own-event-missing | id=${chybejiciPotvrzenaId[0]}`
     );
-    return false;
+
+    return await zachranTargetConfirmPresExistingReconcileV2(
+      userId,
+      "own-event-missing"
+    );
   }
 
   const headPredFingerprintem =
