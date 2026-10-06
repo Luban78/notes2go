@@ -1693,22 +1693,13 @@
             <span class="adminMigrationRouteArrow" aria-hidden="true">→</span>
             <span class="adminMigrationEndpoint adminMigrationEndpointTarget">
               <small>DESTINATION</small>
-              <strong id="adminMigrationDestinationLabel">Nový VPS</strong>
+              <strong>LubaServer TEST</strong>
             </span>
           </div>
 
           <p id="adminMigrationMessage" aria-live="polite">
             Načítám stav bezpečného Migration Bridge…
           </p>
-
-          <div class="adminMigrationDestination">
-            <label for="adminMigrationDestinationInput">Nový VPS · IP nebo hostname</label>
-            <div class="adminMigrationDestinationRow">
-              <input id="adminMigrationDestinationInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="např. 203.0.113.10 nebo vps.example.com">
-              <button id="adminMigrationDestinationSave" type="button">Nastavit server</button>
-            </div>
-            <small id="adminMigrationDestinationHint">Adresa se uloží pouze na Migration Manageru. Hesla ani SSH klíče se do APK neukládají.</small>
-          </div>
 
           <div class="adminMigrationActions" aria-label="Kroky migrace">
             <button id="adminMigrationPrepareButton" type="button" disabled>
@@ -1717,8 +1708,8 @@
             <button id="adminMigrationVerifyButton" type="button" disabled>
               <span>2</span><strong>VERIFY</strong><small>Kontrola shody</small>
             </button>
-            <button id="adminMigrationCutoverButton" type="button" disabled title="CUTOVER se odemkne až po úspěšném VERIFY">
-              <span>3</span><strong>CUTOVER</strong><small>Produkční přepnutí</small>
+            <button id="adminMigrationCutoverButton" type="button" disabled title="CUTOVER je v Migration Manager V2 fyzicky zamčený">
+              <span>3</span><strong>CUTOVER</strong><small>Zamčeno</small>
             </button>
           </div>
 
@@ -1735,7 +1726,7 @@
 
           <div class="adminMigrationSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>CUTOVER se odemkne pouze po úspěšném VERIFY. Starý server zůstává rollback.</span>
+            <span>CUTOVER zůstává fyzicky zamčený v Migration Manager V2.</span>
           </div>
         </section>
 
@@ -2771,13 +2762,13 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Backend Independence V1 / BI-1A: jediný zdroj endpointu backendu. -->
-  <script src="backendConfig.js?v=677i-device-backend-switch"></script>
+  <script src="backendConfig.js?v=678b-workpc-emergency"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
   <script src="syncTraffic.js?v=659a-backend-independence-bi1a"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=659a-backend-independence-bi1a"></script>
+  <script src="supabaseClient.js?v=678b-workpc-emergency"></script>
   <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
   <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
@@ -2821,7 +2812,7 @@
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=677t-maintenance-drain"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
-  <script src="maintenance.js?v=677t1-auth-safe-maintenance"></script>
+  <script src="maintenance.js?v=678b-workpc-emergency"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>

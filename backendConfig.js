@@ -2,31 +2,41 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / BI-1C / PATCH 678A
+   * BACKEND INDEPENDENCE V1 / BI-1D / PATCH 678B
    * -------------------------------------------------
-   * Po produkčním CUTOVERU je výchozí produkční backend LubaServer.
-   * Legacy ID "supabaseCloud" zůstává úmyslně zachované, aby zařízení
-   * s již uloženým profilem přešla na produkční LubaServer BEZ resetu
-   * IndexedDB/cache a neztratila čekající lokální Sync V2 změny.
-   * TEST LubaServer zůstává oddělený profil na test.lubanote.com.
+   * Nouzový pracovní režim 678B:
+   * - GitHub Pages (luban78.github.io) dočasně používá Supabase Cloud jen
+   *   pro Auth/čtení, protože firemní FortiGuard blokuje api.lubanote.com.
+   * - zápisy na Cloud zůstávají serverově frozen a Sync V2 je nechá v lokální frontě.
+   * - APK / ostatní hosty dál používají produkční LubaServer.
+   * Legacy ID "supabaseCloud" zůstává zachované, takže se nemaže IndexedDB/cache.
    */
   const VYCHOZI_PROFIL_ID = "supabaseCloud";
   const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
+  const JE_NOUZOVY_GITHUB_WEB =
+    String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
 
   const PROFILY = Object.freeze({
-    // Legacy ID zachováváme kvůli bezpečnému in-place cutoveru starých klientů.
-    // Význam profilu je od 678A produkční LubaServer, nikoli Supabase Cloud.
+    // Legacy ID zachováváme, aby se kvůli nouzovému WEB režimu nespustil
+    // backend-switch reset lokální cache. Na GitHub Pages je to dočasně Cloud,
+    // všude jinde produkční LubaServer.
     supabaseCloud: Object.freeze({
       id: "supabaseCloud",
-      nazev: "LubaNote Server",
-      typ: "supabase-selfhosted",
+      nazev: JE_NOUZOVY_GITHUB_WEB ? "Supabase Cloud – nouzový WEB" : "LubaNote Server",
+      typ: JE_NOUZOVY_GITHUB_WEB ? "supabase-cloud-emergency" : "supabase-selfhosted",
       prostredi: "production",
       povolen: true,
-      url: "https://api.lubanote.com",
-      publishableKey:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
-      projectRef: "lubanote-server",
-      authStorageKey: "sb-lubanote-server-auth-token"
+      nouzovyWebCloud: JE_NOUZOVY_GITHUB_WEB,
+      url: JE_NOUZOVY_GITHUB_WEB
+        ? "https://nwdacgigplofksexssws.supabase.co/"
+        : "https://api.lubanote.com",
+      publishableKey: JE_NOUZOVY_GITHUB_WEB
+        ? "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c"
+        : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
+      projectRef: JE_NOUZOVY_GITHUB_WEB ? "nwdacgigplofksexssws" : "lubanote-server",
+      authStorageKey: JE_NOUZOVY_GITHUB_WEB
+        ? "sb-nwdacgigplofksexssws-auth-token"
+        : "sb-lubanote-server-auth-token"
     }),
 
     lubanoteServer: Object.freeze({
@@ -119,7 +129,7 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1C-678A",
+    verze: "BI-1D-678B",
     prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
     aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,

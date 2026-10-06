@@ -1,16 +1,27 @@
 /*
- * BI-1A / PATCH 678A: backend endpoint není vlastnictvím tohoto modulu.
- * Aktivní profil dodává backendConfig.js. Po produkčním CUTOVERU musí i
- * nouzový fallback mířit na LubaServer, nikdy zpět na frozen Cloud.
+ * BI-1A / PATCH 678B: backend endpoint není vlastnictvím tohoto modulu.
+ * Aktivní profil dodává backendConfig.js. Fallback kopíruje nouzové pravidlo:
+ * GitHub Pages = dočasně Cloud pro Auth/čtení; ostatní = produkční LubaServer.
  */
+const LUBANOTE_NOUZOVY_GITHUB_WEB =
+  String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
+
 const LUBANOTE_BACKEND =
-  window.LubaNoteBackendConfig?.nactiAktivniProfil?.() || {
-    url: "https://api.lubanote.com",
-    publishableKey:
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
-    projectRef: "lubanote-server",
-    authStorageKey: "sb-lubanote-server-auth-token"
-  };
+  window.LubaNoteBackendConfig?.nactiAktivniProfil?.() ||
+  (LUBANOTE_NOUZOVY_GITHUB_WEB
+    ? {
+        url: "https://nwdacgigplofksexssws.supabase.co/",
+        publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
+        projectRef: "nwdacgigplofksexssws",
+        authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
+      }
+    : {
+        url: "https://api.lubanote.com",
+        publishableKey:
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
+        projectRef: "lubanote-server",
+        authStorageKey: "sb-lubanote-server-auth-token"
+      });
 
 const SUPABASE_URL = LUBANOTE_BACKEND.url;
 const SUPABASE_PUBLISHABLE_KEY =
