@@ -172,11 +172,14 @@ run_psql() {
 }
 
 freeze_state() {
-  local raw
-  raw="$(run_psql "SELECT count(*)::text || '|' || COALESCE(bool_or(frozen)::text,'null') FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;" | tail -n 1 | tr -d '\r')"
-  case "$raw" in
-    '1|t') printf 'FROZEN\n' ;;
-    '1|f') printf 'UNFROZEN\n' ;;
+  local raw normalized
+  # Nevazeme se na textovou reprezentaci PostgreSQL booleanu (t/f vs true/false).
+  # SQL vraci kanonicky 1/0; parser navic prijima obe historicke reprezentace.
+  raw="$(run_psql "SELECT count(*)::text || '|' || CASE WHEN bool_or(frozen) IS TRUE THEN '1' WHEN bool_or(frozen) IS FALSE THEN '0' ELSE 'null' END FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;" | tail -n 1 | tr -d '\r')"
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$normalized" in
+    '1|1'|'1|t'|'1|true') printf 'FROZEN\n' ;;
+    '1|0'|'1|f'|'1|false') printf 'UNFROZEN\n' ;;
     *) fail "Neplatny write_freeze_state ($raw)." ;;
   esac
 }
@@ -259,9 +262,12 @@ WITH expected AS (
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='storage' AND c.relname='objects' AND t.tgname='lubanote_migration_write_freeze_guard' AND NOT t.tgisinternal) AS storage_guards,
     (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='auth' AND c.relname IN ('users','identities') AND t.tgname='lubanote_migration_auth_stable_guard' AND NOT t.tgisinternal) AS auth_guards
 )
-SELECT frozen::text || '|' || public_unguarded::text || '|' || storage_guards::text || '|' || auth_guards::text FROM stats;
+SELECT CASE WHEN frozen IS TRUE THEN '1' WHEN frozen IS FALSE THEN '0' ELSE 'null' END || '|' || public_unguarded::text || '|' || storage_guards::text || '|' || auth_guards::text FROM stats;
 " | tail -n 1 | tr -d '\r')"
-  [ "$raw" = "true|0|1|2" ] || [ "$raw" = "t|0|1|2" ] || fail "Freeze coverage neni kompletni ($raw)."
+  case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')" in
+    '1|0|1|2'|'true|0|1|2'|'t|0|1|2') ;;
+    *) fail "Freeze coverage neni kompletni ($raw)." ;;
+  esac
 }
 
 case "$COMMAND" in
