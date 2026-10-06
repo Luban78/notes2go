@@ -2187,9 +2187,30 @@
       return;
     }
 
-    /* 678D: bezpečnostní kontrola platí pro KAŽDÝ směr přepnutí.
-     * Nikdy nesmíme smazat lokální cache backendu, pokud na zařízení
-     * čeká neodeslaný synchronizační dluh. */
+    /* 678E TEMP: nouzový návrat pracovního PC na Supabase Cloud.
+     *
+     * DŮLEŽITÉ: při tomto jediném směru záměrně NEVOLÁME local-reset.
+     * Důvod: pracovní PC má čekající lokální synchronizační dluh, který
+     * nesmíme smazat. Profil pouze přepneme na Cloud a lokální cache,
+     * IndexedDB i pending fronty zachováme, aby je Sync V2 mohl po
+     * přihlášení bezpečně dosynchronizovat.
+     *
+     * Pro všechny ostatní směry zůstává 678D bezpečnostní gate aktivní. */
+    if (cil.id === "supabaseCloud") {
+      otevriAdminPotvrzeni({
+        nadpis: "Nouzově přepnout toto zařízení na Supabase Cloud?",
+        zprava:
+          "Dočasný režim 678E zachová lokální cache i čekající synchronizační fronty. Nic se nemaže. Po přepnutí se zařízení připojí k Supabase Cloud a čekající změny se mohou dosynchronizovat.",
+        potvrditText: "Přepnout na Cloud",
+        poPotvrzeni: async () => {
+          config.nastavAktivniProfil("supabaseCloud");
+          window.location.replace("./?backendEmergencyCloud=678E");
+        }
+      });
+      return;
+    }
+
+    /* Ostatní směry stále chráníme před ztrátou lokální práce. */
     {
       const kontrola = await zkontrolujBackendPredPrepnutim();
       if (!kontrola.ok) {
