@@ -29,7 +29,7 @@ normalize_backend_id() {
 }
 
 status() {
-  echo "=== LubaNote Migration Manager V3 / 50E40 ==="
+  echo "=== LubaNote Migration Manager V3 / 50E40B ==="
   echo "State: $(stav)"
   echo
   echo "=== CUTOVER ==="
@@ -73,13 +73,8 @@ prepare() {
     exit 1
   fi
 
-  run_id="prepare-$(date -u +%Y%m%dT%H%M%SZ)"
-  run_dir="$RUNS_DIR/$run_id"
-  mkdir -p "$run_dir"
-  chmod 700 "$run_dir"
-  printf '%s\n' "$run_id" > "$CURRENT_RUN_FILE"
-  set_state PREPARING
-
+  # 50E40B: vsechny smerove/control invarianty overit PRED vytvorenim runu,
+  # PRED PREPARING a PRED jakoukoli mutaci DEST.
   source "$BIN/source-lib"
   source_load
 
@@ -90,13 +85,54 @@ prepare() {
   DEST_BACKEND_ID="${DEST_BACKEND_ID:-$(normalize_backend_id "$DEST_NAME")}"
 
   [[ "$SOURCE_BACKEND_ID" =~ ^[A-Za-z0-9._-]+$ ]] || {
-    echo "CHYBA: SOURCE_BACKEND_ID obsahuje nepovolene znaky." >&2
+    echo "BLOKACE: SOURCE_BACKEND_ID obsahuje nepovolene znaky." >&2
     exit 1
   }
   [[ "$DEST_BACKEND_ID" =~ ^[A-Za-z0-9._-]+$ ]] || {
-    echo "CHYBA: DEST_BACKEND_ID obsahuje nepovolene znaky." >&2
+    echo "BLOKACE: DEST_BACKEND_ID obsahuje nepovolene znaky." >&2
     exit 1
   }
+
+  [ "$SOURCE_BACKEND_ID" != "$DEST_BACKEND_ID" ] || {
+    echo "BLOKACE: SOURCE a DEST backend jsou stejne: $SOURCE_BACKEND_ID" >&2
+    echo "PREPARE nebyl zahajen; State zustava IDLE." >&2
+    exit 40
+  }
+
+  CONTROL="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+  [ -f "$CONTROL" ] || {
+    echo "BLOKACE: chybi control-state.json: $CONTROL" >&2
+    exit 41
+  }
+
+  python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PYCTRL'
+import json, sys
+from pathlib import Path
+
+p = Path(sys.argv[1])
+source = sys.argv[2]
+data = json.loads(p.read_text(encoding="utf-8"))
+
+if data.get("mode") != "NORMAL":
+    raise SystemExit("BLOKACE: PREPARE vyzaduje Control Point NORMAL")
+if data.get("active_backend") != source:
+    raise SystemExit(
+        "BLOKACE: active_backend=%s, ale SOURCE_BACKEND_ID=%s" %
+        (data.get("active_backend"), source)
+    )
+if data.get("cutover_enabled") is not False:
+    raise SystemExit("BLOKACE: PREPARE vyzaduje cutover_enabled=false")
+
+print("PASS: PREPARE direction invariant SOURCE != DEST")
+print("PASS: PREPARE Control Point NORMAL + SOURCE active")
+PYCTRL
+
+  run_id="prepare-$(date -u +%Y%m%dT%H%M%SZ)"
+  run_dir="$RUNS_DIR/$run_id"
+  mkdir -p "$run_dir"
+  chmod 700 "$run_dir"
+  printf '%s\n' "$run_id" > "$CURRENT_RUN_FILE"
+  set_state PREPARING
 
   {
     echo "run_id=$run_id"
