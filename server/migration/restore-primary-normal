@@ -3,79 +3,60 @@ set -Eeuo pipefail
 umask 077
 
 BASE="$HOME/luba-server/migration-manager"
-CONTROL="$HOME/luba-server/migration-bridge/control-state.json"
-HELPER="$BASE/bin/source-primary-invariant"
-BACKEND="${1:-cloud}"
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-BACKUP="$BASE/backups/primary-restore-$STAMP"
+BIN="$BASE/bin"
+CONTROL="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+PRIMARY_BACKEND="${1:-}"
 
-[ -x "$HELPER" ] || { echo "CHYBA: chybi $HELPER" >&2; exit 1; }
-[ -f "$CONTROL" ] || { echo "CHYBA: chybi $CONTROL" >&2; exit 1; }
-[[ "$BACKEND" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "CHYBA: neplatny backend id" >&2; exit 1; }
-
-mkdir -p "$BACKUP"
-cp -a "$CONTROL" "$BACKUP/control-state.json.before"
-INITIAL_FREEZE="$($HELPER state --backend "$BACKEND")"
-printf '%s\n' "$INITIAL_FREEZE" > "$BACKUP/freeze-state.before"
-
-rollback() {
-  rc=$?
-  echo "CHYBA: restore PRIMARY selhal, vracim puvodni Control Point." >&2
-  cp -a "$BACKUP/control-state.json.before" "$CONTROL" || true
-  if [ "$INITIAL_FREEZE" = "FROZEN" ]; then
-    if ! "$HELPER" freeze --backend "$BACKEND" >/dev/null 2>&1; then
-      echo "KRITICKE: nepodarilo se vratit puvodni FROZEN stav SOURCE. Zkontroluj write_freeze_state." >&2
-    fi
-  fi
-  exit "$rc"
+fail() {
+  echo "PRIMARY_RESTORE=FAIL" >&2
+  echo "REASON=$*" >&2
+  exit 1
 }
-trap rollback ERR
 
-echo "=== PRIMARY RESTORE: $BACKEND ==="
-echo "Checkpoint: $BACKUP"
+[ -n "$PRIMARY_BACKEND" ] || fail "Pouziti: restore-primary-normal BACKEND_ID"
+[[ "$PRIMARY_BACKEND" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Neplatny BACKEND_ID"
+[ -f "$CONTROL" ] || fail "Chybi control-state.json: $CONTROL"
 
-echo "1/3 Obnovuji SOURCE zapisovatelnost..."
-"$HELPER" recover --backend "$BACKEND"
+echo "=== PRIMARY RESTORE / 1: SOURCE UNFREEZE + WRITE PROBE ==="
+"$BIN/source-freeze-disable"
 
-echo "2/3 Publikuji NORMAL + active_backend=$BACKEND..."
-python3 - "$CONTROL" "$BACKEND" <<'PY'
+echo "=== PRIMARY RESTORE / 2: PUBLISH NORMAL PRIMARY ==="
+python3 - "$CONTROL" "$PRIMARY_BACKEND" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
+
 p = Path(sys.argv[1])
-backend = sys.argv[2]
-d = json.loads(p.read_text(encoding="utf-8"))
-d["ok"] = True
-d["version"] = int(d.get("version") or 1)
-d["mode"] = "NORMAL"
-d["active_backend"] = backend
-d["cutover_enabled"] = False
-d["updated_utc"] = datetime.now(timezone.utc).isoformat()
-tmp = p.with_suffix(".json.primary-restore.tmp")
-with tmp.open("w", encoding="utf-8") as f:
-    json.dump(d, f, ensure_ascii=False, indent=2)
-    f.write("\n")
-    f.flush()
-    os.fsync(f.fileno())
+primary = sys.argv[2]
+data = json.loads(p.read_text(encoding="utf-8"))
+
+data["mode"] = "NORMAL"
+data["active_backend"] = primary
+data["cutover_enabled"] = False
+data["updated_utc"] = datetime.now(timezone.utc).isoformat()
+
+tmp = p.with_name(p.name + ".restore-primary.tmp")
+tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 os.chmod(tmp, 0o600)
 os.replace(tmp, p)
 PY
 
-echo "3/3 Finalni invariant..."
-"$HELPER" check --backend "$BACKEND"
-python3 - "$CONTROL" "$BACKEND" <<'PY'
+python3 - "$CONTROL" "$PRIMARY_BACKEND" <<'PY'
 import json, sys
-with open(sys.argv[1], "r", encoding="utf-8") as f:
-    d = json.load(f)
-expected = sys.argv[2]
-assert d.get("mode") == "NORMAL", d
-assert d.get("active_backend") == expected, d
-assert d.get("cutover_enabled") is False, d
-print("CONTROL_POINT=NORMAL")
-print("ACTIVE_BACKEND=" + expected)
-print("CUTOVER_ENABLED=false")
-PY
+from pathlib import Path
 
-trap - ERR
-echo "PRIMARY_RESTORE=PASS"
-echo "Rollback checkpoint: $BACKUP"
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+primary = sys.argv[2]
+
+if data.get("mode") != "NORMAL":
+    raise SystemExit("Control Point neni NORMAL")
+if data.get("active_backend") != primary:
+    raise SystemExit("active_backend neni PRIMARY")
+if data.get("cutover_enabled") is not False:
+    raise SystemExit("cutover_enabled neni false")
+
+print("CONTROL_POINT=NORMAL")
+print("ACTIVE_BACKEND=" + primary)
+print("CUTOVER_ENABLED=false")
+print("PRIMARY_RESTORE=PASS")
+PY

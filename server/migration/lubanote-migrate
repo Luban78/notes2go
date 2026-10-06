@@ -1,29 +1,55 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
+
 BASE="$HOME/luba-server/migration-manager"
 STATE_DIR="$BASE/state"
 RUNS_DIR="$BASE/runs"
 BIN="$BASE/bin"
 STATE_FILE="$STATE_DIR/state"
 CURRENT_RUN_FILE="$STATE_DIR/current_run"
+
 mkdir -p "$STATE_DIR" "$RUNS_DIR"
 [ -f "$STATE_FILE" ] || printf 'IDLE\n' > "$STATE_FILE"
+
 stav() { cat "$STATE_FILE"; }
 set_state() { printf '%s\n' "$1" > "$STATE_FILE"; }
 current_run() { [ -f "$CURRENT_RUN_FILE" ] && cat "$CURRENT_RUN_FILE" || true; }
 latest_run() { find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -n 1 || true; }
 
+normalize_backend_id() {
+  local raw="$1"
+  local out
+  out="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9._-')"
+  [ -n "$out" ] || {
+    echo "CHYBA: z DEST_NAME nelze odvodit DEST_BACKEND_ID." >&2
+    return 1
+  }
+  printf '%s\n' "$out"
+}
+
 status() {
-  echo "=== LubaNote Migration Manager V2 ==="
+  echo "=== LubaNote Migration Manager V3 / 50E40 ==="
   echo "State: $(stav)"
   echo
-  echo "=== BACKENDY ==="
-  echo "SOURCE:      Supabase Cloud"
-  echo "DESTINATION: LubaServer"
-  echo
   echo "=== CUTOVER ==="
-  echo "LOCKED (V2: zamerne deaktivovan)"
+  case "$(stav)" in
+    VERIFIED)
+      echo "READY (vyzaduje Control Point MAINTENANCE)"
+      ;;
+    CUTTING_OVER)
+      echo "IN PROGRESS"
+      ;;
+    CUTOVER_COMPLETE)
+      echo "COMPLETE"
+      ;;
+    ROLLBACK_REQUIRED)
+      echo "BLOCKED: ROLLBACK_REQUIRED"
+      ;;
+    *)
+      echo "LOCKED (vyzaduje VERIFIED)"
+      ;;
+  esac
   echo
   echo "=== AKTUALNI RUN ==="
   r="$(current_run)"
@@ -46,22 +72,59 @@ prepare() {
     echo "Aktualni stav: $current"
     exit 1
   fi
+
   run_id="prepare-$(date -u +%Y%m%dT%H%M%SZ)"
   run_dir="$RUNS_DIR/$run_id"
   mkdir -p "$run_dir"
   chmod 700 "$run_dir"
   printf '%s\n' "$run_id" > "$CURRENT_RUN_FILE"
   set_state PREPARING
+
+  source "$BIN/source-lib"
+  source_load
+
+  source "$BIN/destination-lib"
+  dest_load
+
+  : "${SOURCE_BACKEND_ID:?chybi SOURCE_BACKEND_ID}"
+  DEST_BACKEND_ID="${DEST_BACKEND_ID:-$(normalize_backend_id "$DEST_NAME")}"
+
+  [[ "$SOURCE_BACKEND_ID" =~ ^[A-Za-z0-9._-]+$ ]] || {
+    echo "CHYBA: SOURCE_BACKEND_ID obsahuje nepovolene znaky." >&2
+    exit 1
+  }
+  [[ "$DEST_BACKEND_ID" =~ ^[A-Za-z0-9._-]+$ ]] || {
+    echo "CHYBA: DEST_BACKEND_ID obsahuje nepovolene znaky." >&2
+    exit 1
+  }
+
   {
     echo "run_id=$run_id"
     echo "created_utc=$(date -u +%FT%TZ)"
-    echo "source=supabase-cloud"
-    echo "destination=lubaserver"
-    echo "manager=v2"
+    echo "source_name=$SOURCE_NAME"
+    echo "source_mode=$SOURCE_MODE"
+    echo "source_backend_id=$SOURCE_BACKEND_ID"
+    echo "destination_name=$DEST_NAME"
+    echo "destination_mode=$DEST_MODE"
+    echo "destination_backend_id=$DEST_BACKEND_ID"
+    echo "manager=v3-50E40"
   } > "$run_dir/manifest"
+
+  {
+    printf 'RUN_ID=%q\n' "$run_id"
+    printf 'SOURCE_NAME=%q\n' "$SOURCE_NAME"
+    printf 'SOURCE_MODE=%q\n' "$SOURCE_MODE"
+    printf 'SOURCE_BACKEND_ID=%q\n' "$SOURCE_BACKEND_ID"
+    printf 'DEST_NAME=%q\n' "$DEST_NAME"
+    printf 'DEST_MODE=%q\n' "$DEST_MODE"
+    printf 'DEST_BACKEND_ID=%q\n' "$DEST_BACKEND_ID"
+  } > "$run_dir/run-identity.env"
+
+  chmod 600 "$run_dir/run-identity.env"
 
   on_error() {
     rc=$?
+    trap - ERR
     echo "failed_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest" || true
     echo "exit_code=$rc" >> "$run_dir/manifest" || true
     if [ -f "$run_dir/MUTATION_STARTED" ]; then
@@ -75,17 +138,18 @@ prepare() {
   }
   trap on_error ERR
 
-  echo "=== PREPARE V2 / 1: source preflight ==="
+  echo "=== PREPARE V3 / 1: source preflight ==="
   "$BIN/source-preflight"
-  echo "=== PREPARE V2 / 2: source DB snapshot ==="
+  echo "=== PREPARE V3 / 2: source DB snapshot ==="
   "$BIN/source-db-snapshot" "$run_dir"
-  echo "=== PREPARE V2 / 3: source manifests ==="
+  echo "=== PREPARE V3 / 3: source manifests ==="
   "$BIN/source-manifests" "$run_dir"
-  echo "=== PREPARE V2 / 4: source Storage snapshot ==="
+  echo "=== PREPARE V3 / 4: source Storage snapshot ==="
   "$BIN/source-storage-snapshot" "$run_dir"
-  echo "=== PREPARE V2 / 5: destination precheck ==="
+  echo "=== PREPARE V3 / 5: destination precheck ==="
   pre="$run_dir/destination-before"
   "$BIN/destination-manifests" "$run_dir" "$pre"
+
   if ! cmp -s "$run_dir/auth-stable.tsv" "$pre/auth-stable.tsv"; then
     echo "BLOKACE: Auth stable fingerprint se lisi. Auth nebude automaticky prepisovan." >&2
     return 20
@@ -95,66 +159,87 @@ prepare() {
     return 21
   fi
   if ! cmp -s "$run_dir/storage-objects.tsv" "$pre/storage-objects.tsv"; then
-    echo "BLOKACE: Storage object list se lisi. V2 nema automaticky Storage delta adapter." >&2
+    echo "BLOKACE: Storage object list se lisi. V3 nema online Storage delta adapter." >&2
     return 22
   fi
+
   echo "PASS: Auth + Storage metadata precheck"
 
-  echo "=== PREPARE V2 / 6: rollback checkpoint ==="
-  cp_path="$($BIN/destination-checkpoint "$run_id" | tee "$run_dir/checkpoint.log" | tail -n 1)"
+  echo "=== PREPARE V3 / 6: rollback checkpoint ==="
+  cp_path="$("$BIN/destination-checkpoint" "$run_id" | tee "$run_dir/checkpoint.log" | tail -n 1)"
   printf '%s\n' "$cp_path" > "$run_dir/checkpoint-path"
 
-  echo "=== PREPARE V2 / 7: public data apply ==="
+  echo "=== PREPARE V3 / 7: public data apply ==="
   touch "$run_dir/MUTATION_STARTED"
   "$BIN/apply-public" "$run_dir"
+
   printf 'PREPARED\n' > "$STATE_FILE"
   echo "prepared_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest"
   trap - ERR
+
   echo
   echo "PREPARE: PASS"
   echo "State: PREPARED"
   echo "Run: $run_id"
   echo "Rollback: $cp_path"
-  echo "CUTOVER zustava LOCKED. Dalsi krok: lubanote-migrate verify"
+  echo "Dalsi krok: lubanote-migrate verify"
 }
 
 verify() {
   current="$(stav)"
-  [ "$current" = "PREPARED" ] || { echo "CHYBA: VERIFY vyzaduje PREPARED. Aktualni stav: $current"; exit 1; }
+  [ "$current" = "PREPARED" ] || {
+    echo "CHYBA: VERIFY vyzaduje PREPARED. Aktualni stav: $current"
+    exit 1
+  }
+
   run_id="$(current_run)"
-  [ -n "$run_id" ] || { echo "CHYBA: chybi current_run"; exit 1; }
+  [ -n "$run_id" ] || {
+    echo "CHYBA: chybi current_run"
+    exit 1
+  }
+
   run_dir="$RUNS_DIR/$run_id"
   set_state VERIFYING
+
   if "$BIN/verify-run" "$run_dir"; then
     set_state VERIFIED
     echo "verified_utc=$(date -u +%FT%TZ)" >> "$run_dir/manifest"
     echo
     echo "VERIFY: PASS"
     echo "State: VERIFIED"
-    echo "CUTOVER zustava LOCKED v Migration Manager V2."
+    echo "CUTOVER je pripraven; pred nim musi byt Control Point MAINTENANCE."
   else
     set_state PREPARED
     echo
     echo "VERIFY: FAIL"
-    echo "State vracen na PREPARED; CUTOVER zustava LOCKED."
+    echo "State vracen na PREPARED."
     exit 1
   fi
 }
 
 cutover() {
-  echo "CUTOVER ODMÍTNUT."
-  echo "Migration Manager V2 umyslne nema aktivni produkcni cutover adapter."
-  echo "Nejprve musi byt VERIFIED a nasledne bude CUTOVER implementovan jako samostatny krok s finalni deltou a rollbackem."
-  exit 1
+  current="$(stav)"
+  [ "$current" = "VERIFIED" ] || {
+    echo "CHYBA: CUTOVER vyzaduje VERIFIED. Aktualni stav: $current"
+    exit 1
+  }
+
+  exec "$BIN/cutover-final"
+}
+
+prepare_server() {
+  "$BIN/destination-prepare-server"
 }
 
 case "${1:-status}" in
+  prepare-server) prepare_server ;;
   status) status ;;
   prepare) prepare ;;
   verify) verify ;;
   cutover) cutover ;;
   *)
     echo "Pouziti:"
+    echo "  lubanote-migrate prepare-server"
     echo "  lubanote-migrate status"
     echo "  lubanote-migrate prepare"
     echo "  lubanote-migrate verify"

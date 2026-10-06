@@ -3,78 +3,314 @@ set -Eeuo pipefail
 umask 077
 
 BASE="$HOME/luba-server/migration-manager"
-BRIDGE="$HOME/luba-server/migration-bridge"
-CONTROL="$BRIDGE/control-state.json"
-HELPER="$BASE/bin/source-primary-invariant"
-STATE="$(cat "$BASE/state/state")"
-RUN_ID="$(cat "$BASE/state/current_run")"
-RUN="$BASE/runs/$RUN_ID"
-REPORT="$RUN/verify-report.txt"
-IDENTITY="$RUN/run-identity.env"
+BIN="$BASE/bin"
+RUNS="$BASE/runs"
+STATE_FILE="$BASE/state/state"
+CURRENT_RUN_FILE="$BASE/state/current_run"
+CONTROL="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
 
-fail() { echo "BLOKACE: $*" >&2; exit 1; }
+fail() {
+  echo "BLOKACE: $*" >&2
+  return 1
+}
 
-[ "$STATE" = "VERIFIED" ] || fail "Manager neni VERIFIED."
-[ -f "$REPORT" ] || fail "Chybi verify-report."
-grep -qx 'VERIFY: PASS' "$REPORT" || fail "Final VERIFY neni PASS."
-[ -f "$IDENTITY" ] || fail "VERIFIED run nema run-identity.env."
-[ -x "$HELPER" ] || fail "Chybi PRIMARY invariant helper."
+normalize_backend_id() {
+  local raw="$1"
+  local out
+  out="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9._-')"
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out"
+}
+
+STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
+BASELINE_ID="$(cat "$CURRENT_RUN_FILE" 2>/dev/null || true)"
+BASELINE="$RUNS/$BASELINE_ID"
+IDENTITY="$BASELINE/run-identity.env"
+REPORT="$BASELINE/verify-report.txt"
+
+[ "$STATE" = "VERIFIED" ] || { fail "Manager neni VERIFIED. State=$STATE"; exit 10; }
+[ -n "$BASELINE_ID" ] || { fail "Chybi current_run."; exit 11; }
+[ -f "$IDENTITY" ] || { fail "VERIFIED run nema run-identity.env."; exit 12; }
+[ -f "$REPORT" ] || { fail "Chybi verify-report.txt."; exit 13; }
+grep -qx 'VERIFY: PASS' "$REPORT" || { fail "VERIFIED baseline nema VERIFY: PASS."; exit 14; }
+[ -f "$CONTROL" ] || { fail "Chybi control-state.json: $CONTROL"; exit 15; }
+
+source "$BIN/source-lib"
+source_load
+CURRENT_SOURCE_NAME="$SOURCE_NAME"
+CURRENT_SOURCE_MODE="$SOURCE_MODE"
+CURRENT_SOURCE_BACKEND_ID="${SOURCE_BACKEND_ID:-}"
+
+source "$BIN/destination-lib"
+dest_load
+CURRENT_DEST_NAME="$DEST_NAME"
+CURRENT_DEST_MODE="$DEST_MODE"
+CURRENT_DEST_BACKEND_ID="${DEST_BACKEND_ID:-$(normalize_backend_id "$DEST_NAME")}"
 
 # shellcheck disable=SC1090
 source "$IDENTITY"
-SOURCE_ID="${SOURCE_BACKEND_ID:-}"
-[ -n "$SOURCE_ID" ] || fail "Run identity nema SOURCE_BACKEND_ID."
 
-python3 - "$CONTROL" "$SOURCE_ID" <<'PY'
+[ "${RUN_ID:-}" = "$BASELINE_ID" ] || { fail "RUN_ID baseline identity nesouhlasi."; exit 16; }
+[ "${SOURCE_NAME:-}" = "$CURRENT_SOURCE_NAME" ] || { fail "SOURCE_NAME se od VERIFY zmenil."; exit 17; }
+[ "${SOURCE_MODE:-}" = "$CURRENT_SOURCE_MODE" ] || { fail "SOURCE_MODE se od VERIFY zmenil."; exit 18; }
+[ "${SOURCE_BACKEND_ID:-}" = "$CURRENT_SOURCE_BACKEND_ID" ] || { fail "SOURCE_BACKEND_ID se od VERIFY zmenil."; exit 19; }
+[ "${DEST_NAME:-}" = "$CURRENT_DEST_NAME" ] || { fail "DEST_NAME se od VERIFY zmenil."; exit 20; }
+[ "${DEST_MODE:-}" = "$CURRENT_DEST_MODE" ] || { fail "DEST_MODE se od VERIFY zmenil."; exit 21; }
+[ "${DEST_BACKEND_ID:-}" = "$CURRENT_DEST_BACKEND_ID" ] || { fail "DEST_BACKEND_ID se od VERIFY zmenil."; exit 22; }
+
+SOURCE_BACKEND_ID="$CURRENT_SOURCE_BACKEND_ID"
+DEST_BACKEND_ID="$CURRENT_DEST_BACKEND_ID"
+
+[ -n "$SOURCE_BACKEND_ID" ] || { fail "SOURCE_BACKEND_ID je prazdny."; exit 23; }
+[ -n "$DEST_BACKEND_ID" ] || { fail "DEST_BACKEND_ID je prazdny."; exit 24; }
+[ "$SOURCE_BACKEND_ID" != "$DEST_BACKEND_ID" ] || { fail "SOURCE a DEST backend ID jsou stejne."; exit 25; }
+
+python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
 import json, sys
-with open(sys.argv[1], "r", encoding="utf-8") as f:
-    d = json.load(f)
-expected = sys.argv[2]
-assert d.get("mode") == "MAINTENANCE", "Control neni MAINTENANCE"
-assert d.get("active_backend") == expected, "active_backend neodpovida SOURCE"
-assert d.get("cutover_enabled") is False, "cutover_enabled uz neni false"
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+source = sys.argv[2]
+
+def is_false(v):
+    if v is False or v is None:
+        return True
+    if isinstance(v, (int, float)):
+        return v == 0
+    if isinstance(v, str):
+        return v.strip().lower() in {"0", "false", "f", "no", "off", ""}
+    return False
+
+if data.get("mode") != "MAINTENANCE":
+    raise SystemExit("BLOKACE: Control Point neni MAINTENANCE")
+if data.get("active_backend") != source:
+    raise SystemExit("BLOKACE: active_backend neni SOURCE")
+if not is_false(data.get("cutover_enabled")):
+    raise SystemExit("BLOKACE: cutover_enabled neni false")
+
 print("PASS: Control MAINTENANCE + SOURCE active")
 PY
 
-echo "PASS: Manager VERIFIED"
-echo "PASS: Final VERIFY PASS"
+FINAL_ID="cutover-$(date -u +%Y%m%dT%H%M%SZ)"
+FINAL="$RUNS/$FINAL_ID"
+mkdir -p "$FINAL"
+chmod 700 "$FINAL"
+cp -a "$CONTROL" "$FINAL/control-state.before.json"
 
-"$HELPER" check-frozen --backend "$SOURCE_ID"
+{
+  echo "run_id=$FINAL_ID"
+  echo "parent_verified_run=$BASELINE_ID"
+  echo "created_utc=$(date -u +%FT%TZ)"
+  echo "source_name=$CURRENT_SOURCE_NAME"
+  echo "source_mode=$CURRENT_SOURCE_MODE"
+  echo "source_backend_id=$SOURCE_BACKEND_ID"
+  echo "destination_name=$CURRENT_DEST_NAME"
+  echo "destination_mode=$CURRENT_DEST_MODE"
+  echo "destination_backend_id=$DEST_BACKEND_ID"
+  echo "manager=v3-50E40"
+  echo "phase=cutover"
+} > "$FINAL/manifest"
 
-echo "PASS: SOURCE FROZEN + kompletni guard coverage"
+{
+  printf 'RUN_ID=%q\n' "$FINAL_ID"
+  printf 'SOURCE_NAME=%q\n' "$CURRENT_SOURCE_NAME"
+  printf 'SOURCE_MODE=%q\n' "$CURRENT_SOURCE_MODE"
+  printf 'SOURCE_BACKEND_ID=%q\n' "$SOURCE_BACKEND_ID"
+  printf 'DEST_NAME=%q\n' "$CURRENT_DEST_NAME"
+  printf 'DEST_MODE=%q\n' "$CURRENT_DEST_MODE"
+  printf 'DEST_BACKEND_ID=%q\n' "$DEST_BACKEND_ID"
+} > "$FINAL/run-identity.env"
+chmod 600 "$FINAL/run-identity.env"
 
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-CHECKPOINT="$BASE/backups/cutover-control-$STAMP.json"
-mkdir -p "$BASE/backups"
-cp -a "$CONTROL" "$CHECKPOINT"
+FREEZE_ACTIVE=0
 
-echo "CUTOVER: prepinam active_backend=lubaserver (Control zustava MAINTENANCE)"
-python3 - "$CONTROL" <<'PY'
+rollback_after_failure() {
+  local rc="$1"
+  trap - ERR
+  set +e
+
+  echo "failed_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+  echo "exit_code=$rc" >> "$FINAL/manifest"
+  touch "$FINAL/CUTOVER_FAILED"
+
+  if [ "$FREEZE_ACTIVE" -eq 1 ]; then
+    echo
+    echo "=== CUTOVER FAIL: automaticky navrat na PRIMARY ==="
+    if "$BIN/restore-primary-normal" "$SOURCE_BACKEND_ID"; then
+      printf 'IDLE\n' > "$STATE_FILE"
+      echo "rollback_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+      echo "rollback=PASS" >> "$FINAL/manifest"
+      echo "CUTOVER_ROLLBACK=PASS"
+      echo "State: IDLE"
+    else
+      printf 'ROLLBACK_REQUIRED\n' > "$STATE_FILE"
+      echo "rollback=FAIL" >> "$FINAL/manifest"
+      echo "CUTOVER_ROLLBACK=FAIL" >&2
+      echo "State: ROLLBACK_REQUIRED" >&2
+      exit 90
+    fi
+  fi
+
+  exit "$rc"
+}
+
+echo "=== CUTOVER 50E40 / 1: SOURCE freeze precheck + freeze ==="
+"$BIN/source-freeze-enable"
+FREEZE_ACTIVE=1
+printf 'CUTTING_OVER\n' > "$STATE_FILE"
+printf '%s\n' "$FINAL_ID" > "$CURRENT_RUN_FILE"
+echo "freeze_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+
+trap 'rollback_after_failure $?' ERR
+
+echo "=== CUTOVER 50E40 / 2: fresh frozen SOURCE snapshot ==="
+"$BIN/source-db-snapshot" "$FINAL"
+"$BIN/source-manifests" "$FINAL"
+"$BIN/source-storage-snapshot" "$FINAL"
+
+echo "=== CUTOVER 50E40 / 3: no online Auth/Storage delta invariant ==="
+for f in auth-stable.tsv storage-buckets.tsv storage-objects.tsv storage-SHA256SUMS; do
+  if ! cmp -s "$BASELINE/$f" "$FINAL/$f"; then
+    echo "BLOKACE: $f se od VERIFIED baseline zmenil; V3 nema online Auth/Storage delta adapter." >&2
+    false
+  fi
+done
+echo "PASS: Auth + Storage beze zmeny od VERIFIED baseline"
+
+echo "=== CUTOVER 50E40 / 4: final DEST checkpoint ==="
+CP_PATH="$("$BIN/destination-checkpoint" "$FINAL_ID" | tee "$FINAL/checkpoint.log" | tail -n 1)"
+printf '%s\n' "$CP_PATH" > "$FINAL/checkpoint-path"
+echo "checkpoint=$CP_PATH" >> "$FINAL/manifest"
+
+echo "=== CUTOVER 50E40 / 5: final public refresh ==="
+touch "$FINAL/MUTATION_STARTED"
+"$BIN/apply-public" "$FINAL"
+
+echo "=== CUTOVER 50E40 / 6: final VERIFY 8/8 ==="
+"$BIN/verify-run" "$FINAL"
+grep -qx 'VERIFY: PASS' "$FINAL/verify-report.txt"
+echo "final_verify_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+
+echo "=== CUTOVER 50E40 / 7: single atomic SOURCE -> DEST switch ==="
+python3 - "$CONTROL" "$SOURCE_BACKEND_ID" "$DEST_BACKEND_ID" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
+
 p = Path(sys.argv[1])
-d = json.loads(p.read_text(encoding="utf-8"))
-if d.get("mode") != "MAINTENANCE":
-    raise SystemExit("BLOKACE: Control neni MAINTENANCE")
-if d.get("cutover_enabled") is not False:
-    raise SystemExit("BLOKACE: cutover_enabled uz neni false")
-d["active_backend"] = "lubaserver"
-d["cutover_enabled"] = True
-d["updated_utc"] = datetime.now(timezone.utc).isoformat()
-tmp = p.with_suffix(".json.cutover.tmp")
-with tmp.open("w", encoding="utf-8") as f:
-    json.dump(d, f, ensure_ascii=False, indent=2)
-    f.write("\n")
-    f.flush()
-    os.fsync(f.fileno())
+source = sys.argv[2]
+dest = sys.argv[3]
+data = json.loads(p.read_text(encoding="utf-8"))
+
+def is_false(v):
+    if v is False or v is None:
+        return True
+    if isinstance(v, (int, float)):
+        return v == 0
+    if isinstance(v, str):
+        return v.strip().lower() in {"0", "false", "f", "no", "off", ""}
+    return False
+
+if data.get("mode") != "MAINTENANCE":
+    raise SystemExit("Control neni MAINTENANCE")
+if data.get("active_backend") != source:
+    raise SystemExit("active_backend uz neni SOURCE")
+if not is_false(data.get("cutover_enabled")):
+    raise SystemExit("cutover_enabled uz neni false")
+
+data["active_backend"] = dest
+data["cutover_enabled"] = True
+data["updated_utc"] = datetime.now(timezone.utc).isoformat()
+
+tmp = p.with_name(p.name + ".cutover.tmp")
+tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 os.chmod(tmp, 0o600)
 os.replace(tmp, p)
-print("CUTOVER: active_backend=lubaserver")
-print("CUTOVER: cutover_enabled=true")
-print("Control zustava MAINTENANCE")
+
+print("CUTOVER_SWITCH=PASS")
+print("ACTIVE_BACKEND=" + dest)
+print("CONTROL_POINT=MAINTENANCE")
 PY
 
-echo "CUTOVER_FINAL=PASS"
-echo "Control checkpoint: $CHECKPOINT"
-echo "Rollback na puvodni SOURCE provadej pouze: $BASE/bin/restore-primary-normal $SOURCE_ID"
+echo "switch_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+
+echo "=== CUTOVER 50E40 / 8: post-switch DEST check ==="
+python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
+import json, sys
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+dest = sys.argv[2]
+
+if data.get("mode") != "MAINTENANCE":
+    raise SystemExit("post-check: mode neni MAINTENANCE")
+if data.get("active_backend") != dest:
+    raise SystemExit("post-check: active_backend neni DEST")
+if data.get("cutover_enabled") is not True:
+    raise SystemExit("post-check: cutover_enabled neni true")
+
+print("PASS: post-switch control state")
+PY
+
+source "$BIN/destination-lib"
+dest_load
+read -r healthy total < <(dest_supabase_health)
+[ "$total" -eq 11 ] && [ "$healthy" -eq 11 ]
+echo "PASS: DEST Supabase $healthy/$total healthy"
+
+echo "=== CUTOVER 50E40 / 9: publish NORMAL on DEST ==="
+python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+p = Path(sys.argv[1])
+dest = sys.argv[2]
+data = json.loads(p.read_text(encoding="utf-8"))
+
+if data.get("mode") != "MAINTENANCE":
+    raise SystemExit("Control neni MAINTENANCE pred NORMAL")
+if data.get("active_backend") != dest:
+    raise SystemExit("active_backend neni DEST pred NORMAL")
+if data.get("cutover_enabled") is not True:
+    raise SystemExit("cutover_enabled neni true pred NORMAL")
+
+data["mode"] = "NORMAL"
+data["updated_utc"] = datetime.now(timezone.utc).isoformat()
+
+tmp = p.with_name(p.name + ".normal.tmp")
+tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+os.chmod(tmp, 0o600)
+os.replace(tmp, p)
+PY
+
+python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
+import json, sys
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+dest = sys.argv[2]
+
+if data.get("mode") != "NORMAL":
+    raise SystemExit("FINAL: mode neni NORMAL")
+if data.get("active_backend") != dest:
+    raise SystemExit("FINAL: active_backend neni DEST")
+if data.get("cutover_enabled") is not True:
+    raise SystemExit("FINAL: cutover_enabled neni true")
+
+print("CONTROL_POINT=NORMAL")
+print("ACTIVE_BACKEND=" + dest)
+print("CUTOVER_ENABLED=true")
+PY
+
+printf 'CUTOVER_COMPLETE\n' > "$STATE_FILE"
+echo "cutover_complete_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
+touch "$FINAL/CUTOVER_COMPLETE"
+trap - ERR
+
+echo
+echo "CUTOVER=PASS"
+echo "State: CUTOVER_COMPLETE"
+echo "Run: $FINAL_ID"
+echo "SOURCE_FROZEN=YES"
+echo "ROLLBACK_PRIMARY=$SOURCE_BACKEND_ID"

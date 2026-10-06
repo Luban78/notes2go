@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 BASE="$HOME/luba-server/migration-manager"
 BIN="$BASE/bin"
-CONTROL_FILE="${SOURCE_CONTROL_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
 
 source "$BIN/source-lib"
 source_load
@@ -50,26 +49,59 @@ source "$IDENTITY"
   exit 25
 }
 
-[ -f "$CONTROL_FILE" ] || {
-  echo "BLOKACE: chybi lokalni Control Point $CONTROL_FILE"
-  exit 26
+[ -n "$CURRENT_SOURCE_BACKEND_ID" ] || {
+  echo "BLOKACE: SOURCE_BACKEND_ID je prazdny."
+  exit 25
 }
 
-python3 - "$CONTROL_FILE" "$CURRENT_SOURCE_BACKEND_ID" <<'PY'
+CONTROL_FILE="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+
+if [ -r "$CONTROL_FILE" ]; then
+  CONTROL="$(cat "$CONTROL_FILE")"
+  CONTROL_FROM="local:$CONTROL_FILE"
+else
+  CONTROL_URL="${SOURCE_CONTROL_URL:-https://api.lubanote.com/control/v1/status}"
+  CONTROL="$(curl -fsS "$CONTROL_URL")"
+  CONTROL_FROM="$CONTROL_URL"
+fi
+
+python3 - "$CONTROL" "$CURRENT_SOURCE_BACKEND_ID" "$CONTROL_FROM" <<'PY'
 import json, sys
-path, expected = sys.argv[1], sys.argv[2]
-with open(path, "r", encoding="utf-8") as f:
-    data = json.load(f)
+
+data = json.loads(sys.argv[1])
+expected = sys.argv[2]
+origin = sys.argv[3]
+
+def is_false(v):
+    if v is False or v is None:
+        return True
+    if isinstance(v, (int, float)):
+        return v == 0
+    if isinstance(v, str):
+        return v.strip().lower() in {"0", "false", "f", "no", "off", ""}
+    return False
+
 if data.get("mode") != "MAINTENANCE":
-    raise SystemExit("BLOKACE: Control Point neni v MAINTENANCE.")
+    print("BLOKACE: Control Point neni v MAINTENANCE.")
+    print("Mode:", data.get("mode"))
+    sys.exit(26)
+
 if data.get("active_backend") != expected:
-    raise SystemExit(f"BLOKACE: active_backend neodpovida SOURCE. expected={expected} actual={data.get('active_backend')}")
-if data.get("cutover_enabled") is not False:
-    raise SystemExit("BLOKACE: cutover_enabled musi byt pred SOURCE freeze false.")
+    print("BLOKACE: active_backend neodpovida SOURCE.")
+    print("Expected:", expected)
+    print("Actual:", data.get("active_backend"))
+    sys.exit(27)
+
+if not is_false(data.get("cutover_enabled")):
+    print("BLOKACE: cutover_enabled musi byt pred CUTOVER false.")
+    print("Actual:", data.get("cutover_enabled"))
+    sys.exit(31)
+
 print("PASS: VERIFIED run identity")
-print("PASS: lokalni Control Point MAINTENANCE")
+print("PASS: Control Point MAINTENANCE")
 print("PASS: active_backend=" + expected)
 print("PASS: cutover_enabled=false")
+print("PASS: control_source=" + origin)
 PY
 
 unguarded="$(
@@ -109,7 +141,7 @@ JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='storage'
   AND c.relname='objects'
   AND t.tgname='lubanote_migration_write_freeze_guard'
-  AND NOT tgisinternal;
+  AND NOT t.tgisinternal;
 "
 )"
 

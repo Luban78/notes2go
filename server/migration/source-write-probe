@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+BASE="$HOME/luba-server/migration-manager"
+BIN="$BASE/bin"
+
+source "$BIN/source-lib"
+source_load
+
+RESULT="$(
+  source_psql -q -At -v ON_ERROR_STOP=1 -c "
+BEGIN;
+WITH touched AS (
+  UPDATE public.notes
+  SET id=id
+  WHERE ctid=(SELECT ctid FROM public.notes LIMIT 1)
+  RETURNING 1
+)
+SELECT CASE
+  WHEN count(*)=1 THEN 'WRITE_PROBE_PASS'
+  ELSE 'WRITE_PROBE_NO_ROW'
+END
+FROM touched;
+ROLLBACK;
+"
+)"
+
+[ "$RESULT" = "WRITE_PROBE_PASS" ] || {
+  echo "WRITE_PROBE=FAIL" >&2
+  echo "DETAIL=$RESULT" >&2
+  exit 1
+}
+
+echo "WRITE_PROBE=PASS"

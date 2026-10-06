@@ -4,6 +4,8 @@ set -Eeuo pipefail
 BASE="$HOME/luba-server/migration-manager"
 BIN="$BASE/bin"
 
+"$BIN/source-freeze-precheck"
+
 source "$BIN/source-lib"
 source_load
 
@@ -12,7 +14,7 @@ source_psql -q -At -v ON_ERROR_STOP=1 -c "
 BEGIN;
 
 UPDATE lubanote_migration_internal.write_freeze_state
-SET frozen=false,
+SET frozen=true,
     updated_at=now()
 WHERE singleton=true;
 
@@ -22,9 +24,9 @@ BEGIN
     SELECT 1
     FROM lubanote_migration_internal.write_freeze_state
     WHERE singleton=true
-      AND frozen=false
+      AND frozen=true
   ) THEN
-    RAISE EXCEPTION 'SOURCE freeze state was not disabled';
+    RAISE EXCEPTION 'SOURCE freeze state was not enabled';
   END IF;
 END
 \$\$;
@@ -32,20 +34,19 @@ END
 COMMIT;
 
 SELECT CASE
-  WHEN frozen THEN 'SOURCE_STILL_FROZEN'
-  ELSE 'SOURCE_UNFROZEN'
+  WHEN frozen THEN 'SOURCE_FROZEN'
+  ELSE 'SOURCE_NOT_FROZEN'
 END
 FROM lubanote_migration_internal.write_freeze_state
 WHERE singleton=true;
 "
 )"
 
-[ "$RESULT" = "SOURCE_UNFROZEN" ] || {
+[ "$RESULT" = "SOURCE_FROZEN" ] || {
   echo "FREEZE_STATE=FAIL" >&2
   echo "DETAIL=$RESULT" >&2
   exit 1
 }
 
-echo "FREEZE_STATE=UNFROZEN"
-"$BIN/source-write-probe"
-echo "PRIMARY_WRITABLE_POSTCHECK=PASS"
+echo "FREEZE_STATE=FROZEN"
+echo "SOURCE_FROZEN"
