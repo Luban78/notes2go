@@ -1,5 +1,5 @@
 /* ==================================================
-   LUBANOTE – CLOUDOVÉ PŘÍLOHY – FÁZE B
+   LUBANOTE – CLOUDOVÉ PŘÍLOHY – FÁZE B 
 
    Cloudová STÍNOVÁ vrstva:
    - nové normální obrázky mají dál Data URL v poznámce,
