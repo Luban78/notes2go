@@ -1693,13 +1693,22 @@
             <span class="adminMigrationRouteArrow" aria-hidden="true">→</span>
             <span class="adminMigrationEndpoint adminMigrationEndpointTarget">
               <small>DESTINATION</small>
-              <strong>LubaServer TEST</strong>
+              <strong id="adminMigrationDestinationLabel">Nový VPS</strong>
             </span>
           </div>
 
           <p id="adminMigrationMessage" aria-live="polite">
             Načítám stav bezpečného Migration Bridge…
           </p>
+
+          <div class="adminMigrationDestination">
+            <label for="adminMigrationDestinationInput">Nový VPS · IP nebo hostname</label>
+            <div class="adminMigrationDestinationRow">
+              <input id="adminMigrationDestinationInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="např. 203.0.113.10 nebo vps.example.com">
+              <button id="adminMigrationDestinationSave" type="button">Nastavit server</button>
+            </div>
+            <small id="adminMigrationDestinationHint">Adresa se uloží pouze na Migration Manageru. Hesla ani SSH klíče se do APK neukládají.</small>
+          </div>
 
           <div class="adminMigrationActions" aria-label="Kroky migrace">
             <button id="adminMigrationPrepareButton" type="button" disabled>
@@ -1708,8 +1717,8 @@
             <button id="adminMigrationVerifyButton" type="button" disabled>
               <span>2</span><strong>VERIFY</strong><small>Kontrola shody</small>
             </button>
-            <button id="adminMigrationCutoverButton" type="button" disabled title="CUTOVER je v Migration Manager V2 fyzicky zamčený">
-              <span>3</span><strong>CUTOVER</strong><small>Zamčeno</small>
+            <button id="adminMigrationCutoverButton" type="button" disabled title="CUTOVER se odemkne až po úspěšném VERIFY">
+              <span>3</span><strong>CUTOVER</strong><small>Produkční přepnutí</small>
             </button>
           </div>
 
@@ -1726,7 +1735,7 @@
 
           <div class="adminMigrationSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>CUTOVER zůstává fyzicky zamčený v Migration Manager V2.</span>
+            <span>CUTOVER se odemkne pouze po úspěšném VERIFY. Starý server zůstává rollback.</span>
           </div>
         </section>
 

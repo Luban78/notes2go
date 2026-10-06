@@ -16793,3 +16793,13 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* PATCH 50E-FINAL – Migration V1 destination */
+.adminMigrationDestination { margin: 12px 0; display: grid; gap: 7px; }
+.adminMigrationDestination > label { font-size: 12px; font-weight: 700; opacity: .78; }
+.adminMigrationDestinationRow { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+.adminMigrationDestinationRow input { min-width: 0; border: 1px solid var(--border-color, rgba(127,127,127,.35)); border-radius: 10px; padding: 10px 12px; background: var(--card-bg, rgba(127,127,127,.08)); color: inherit; font: inherit; }
+.adminMigrationDestinationRow button { border-radius: 10px; padding: 9px 12px; font-weight: 700; }
+#adminMigrationDestinationHint { opacity: .66; line-height: 1.35; }
+@media (max-width: 560px) { .adminMigrationDestinationRow { grid-template-columns: 1fr; } }

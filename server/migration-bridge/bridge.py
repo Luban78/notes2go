@@ -35,7 +35,8 @@ RUNTIME_DIR = Path(
 )
 JOBS_DIR = RUNTIME_DIR / "jobs"
 MAX_LOG_TAIL_BYTES = 32_768
-ALLOWED_ACTIONS = {"prepare", "verify"}
+DESTINATION_ENV = Path(os.environ.get("DESTINATION_ENV", "/home/luban78/luba-server/migration-manager/config/destination.env"))
+ALLOWED_ACTIONS = {"prepare", "verify", "cutover"}
 
 job_lock = threading.Lock()
 current_job: dict[str, Any] | None = None
@@ -143,6 +144,66 @@ def write_job_meta(job: dict[str, Any]) -> None:
     temp.replace(path)
 
 
+def destination_public() -> dict[str, Any]:
+    return {
+        "host": read_env_value(str(DESTINATION_ENV), "DEST_SSH_HOST"),
+        "mode": read_env_value(str(DESTINATION_ENV), "DEST_MODE"),
+    }
+
+
+def configure_destination(host: str) -> tuple[bool, str]:
+    host = (host or "").strip()
+    if host.startswith("https://"):
+        host = host[8:]
+    elif host.startswith("http://"):
+        host = host[7:]
+    host = host.strip().strip("/")
+    if not host or len(host) > 253 or not all(c.isalnum() or c in ".:-" for c in host):
+        return False, "invalid_destination_host"
+    if "/" in host or "@" in host:
+        return False, "invalid_destination_host"
+
+    try:
+        lines = DESTINATION_ENV.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False, "destination_config_unavailable"
+
+    updates = {
+        "DEST_NAME": "LubaServerNext",
+        "DEST_MODE": "ssh",
+        "DEST_SSH_HOST": host,
+        "DEST_SSH_USER": "luban78",
+        "DEST_SSH_PORT": "22",
+        "DEST_DOCKER_CONTAINER": "supabase-db",
+        "DEST_SUPABASE_DIR": "/home/luban78/luba-server/luba-supabase",
+        "DEST_STORAGE_DIR": "/home/luban78/luba-server/luba-supabase/volumes/storage",
+        "DEST_SERVER_BASE": "/home/luban78/luba-server",
+        "DEST_SERVER_PROJECT": "luba-supabase",
+    }
+    seen = set()
+    out = []
+    for line in lines:
+        if "=" in line and not line.lstrip().startswith("#"):
+            key = line.split("=", 1)[0].strip()
+            if key in updates:
+                out.append(f"{key}={updates[key]}")
+                seen.add(key)
+                continue
+        out.append(line)
+    for key, value in updates.items():
+        if key not in seen:
+            out.append(f"{key}={value}")
+
+    temp = DESTINATION_ENV.with_suffix(".env.tmp")
+    try:
+        temp.write_text("\n".join(out) + "\n", encoding="utf-8")
+        os.chmod(temp, 0o600)
+        temp.replace(DESTINATION_ENV)
+    except OSError:
+        return False, "destination_config_write_failed"
+    return True, host
+
+
 def run_action(job_id: str, action: str, log_path: str) -> None:
     global current_job
     exit_code = 1
@@ -151,13 +212,20 @@ def run_action(job_id: str, action: str, log_path: str) -> None:
     try:
         with open(log_path, "a", encoding="utf-8", buffering=1) as log:
             log.write(f"[{utc_now()}] START {action}\n")
-            process = subprocess.Popen(
-                [MIGRATE, action],
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            exit_code = process.wait()
+            commands = [[MIGRATE, action]]
+            if action == "prepare":
+                commands = [[MIGRATE, "prepare-server"], [MIGRATE, "prepare"]]
+            for command in commands:
+                log.write(f"[{utc_now()}] RUN {' '.join(command[1:])}\n")
+                process = subprocess.Popen(
+                    command,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                exit_code = process.wait()
+                if exit_code != 0:
+                    break
             log.write(f"[{utc_now()}] END {action} exit={exit_code}\n")
     except Exception as exc:
         error_text = f"{type(exc).__name__}: {exc}"
@@ -262,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
                     "service": "lubanote-migration-bridge",
                     "version": 1,
                     "manager_state": read_state(),
-                    "cutover_enabled": False,
+                    "cutover_enabled": read_state() == "VERIFIED",
                 },
             )
             return
@@ -292,16 +360,39 @@ class Handler(BaseHTTPRequestHandler):
                     "status": True,
                     "prepare": True,
                     "verify": True,
-                    "cutover": False,
+                    "cutover": read_state() == "VERIFIED",
+                    "destination": True,
                 },
+                "destination": destination_public(),
                 "manager_status": manager_status_output(),
             },
         )
 
     def do_POST(self) -> None:
+        if self.path == "/migration/v1/destination":
+            if not self.authenticate_admin():
+                return
+            try:
+                length = min(int(self.headers.get("Content-Length", "0")), 4096)
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except (ValueError, json.JSONDecodeError):
+                self.send_json(400, {"ok": False, "error": "invalid_json"})
+                return
+            with job_lock:
+                if current_job and current_job.get("status") == "running":
+                    self.send_json(409, {"ok": False, "error": "migration_busy"})
+                    return
+            ok, result = configure_destination(str(payload.get("host", "")))
+            if not ok:
+                self.send_json(400, {"ok": False, "error": result})
+                return
+            self.send_json(200, {"ok": True, "destination": destination_public()})
+            return
+
         path_to_action = {
             "/migration/v1/prepare": "prepare",
             "/migration/v1/verify": "verify",
+            "/migration/v1/cutover": "cutover",
         }
         action = path_to_action.get(self.path)
         if not action:
@@ -324,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": True,
                 "accepted": True,
                 "job": result,
-                "cutover_enabled": False,
+                "cutover_enabled": read_state() == "VERIFIED",
             },
         )
 

@@ -27,7 +27,8 @@ fi
 for line in \
   'HOST=127.0.0.1' \
   'PORT=9083' \
-  'MIGRATE=/usr/local/bin/lubanote-migrate'
+  'MIGRATE=/usr/local/bin/lubanote-migrate' \
+  'DESTINATION_ENV=/home/luban78/luba-server/migration-manager/config/destination.env'
 do
   key="${line%%=*}"
   if ! grep -q "^${key}=" "$CONFIG"; then

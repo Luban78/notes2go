@@ -83,6 +83,14 @@
     document.getElementById("adminMigrationVerifyButton");
   const migrationCutoverTlacitko =
     document.getElementById("adminMigrationCutoverButton");
+  const migrationDestinationInput =
+    document.getElementById("adminMigrationDestinationInput");
+  const migrationDestinationSave =
+    document.getElementById("adminMigrationDestinationSave");
+  const migrationDestinationLabel =
+    document.getElementById("adminMigrationDestinationLabel");
+  const migrationDestinationHint =
+    document.getElementById("adminMigrationDestinationHint");
   const migrationProgress =
     document.getElementById("adminMigrationProgress");
   const migrationProgressTitulek =
@@ -1071,6 +1079,15 @@
 
     const preparePovoleno = vysledek?.capabilities?.prepare === true;
     const verifyPovoleno = vysledek?.capabilities?.verify === true;
+    const cutoverPovoleno = vysledek?.capabilities?.cutover === true;
+
+    const destHost = String(vysledek?.destination?.host || "").trim();
+    if (migrationDestinationInput && document.activeElement !== migrationDestinationInput) {
+      migrationDestinationInput.value = destHost;
+    }
+    if (migrationDestinationLabel) {
+      migrationDestinationLabel.textContent = destHost || "Nový VPS";
+    }
 
     /* Starý failed/success job v RAM nesmí blokovat nový PREPARE.
      * Autorita je vždy aktuální stav Migration Manageru.
@@ -1089,6 +1106,14 @@
       migrationVerifyTlacitko
     ) {
       migrationVerifyTlacitko.disabled = false;
+    }
+
+    if (
+      managerState === "VERIFIED" &&
+      cutoverPovoleno &&
+      migrationCutoverTlacitko
+    ) {
+      migrationCutoverTlacitko.disabled = false;
     }
   }
 
@@ -1579,20 +1604,26 @@
     }
 
     const jeVerify = akce === "verify";
-    migrationConfirmBadge.textContent = jeVerify ? "VERIFY" : "PREPARE";
-    migrationConfirmTitulek.textContent = jeVerify
-      ? "Ověřit připravenou migraci?"
-      : "Připravit LubaServer?";
-    migrationConfirmText.textContent = jeVerify
-      ? "VERIFY porovná připravený snapshot s LubaServerem: public data, sekvence, Auth fingerprint, Storage metadata/SHA a zdraví všech Supabase služeb."
-      : "PREPARE stáhne čerstvý snapshot ze Supabase Cloud, ověří Auth a Storage, vytvoří rollback checkpoint a poté aplikuje public data na TEST LubaServer.";
+    const jeCutover = akce === "cutover";
+    const nazev = jeCutover ? "CUTOVER" : (jeVerify ? "VERIFY" : "PREPARE");
+    migrationConfirmBadge.textContent = nazev;
+    migrationConfirmTitulek.textContent = jeCutover
+      ? "Přepnout produkci na nový server?"
+      : (jeVerify ? "Ověřit připravenou migraci?" : "Připravit nový server?");
+    migrationConfirmText.textContent = jeCutover
+      ? "CUTOVER provede finální bezpečné přepnutí všech uživatelů na ověřený nový server. Starý server zůstane jako rollback."
+      : (jeVerify
+        ? "VERIFY porovná připravený snapshot s novým serverem: public data, sekvence, Auth fingerprint, Storage metadata/SHA a zdraví Supabase služeb."
+        : "PREPARE připraví zadaný VPS, vytvoří snapshot a checkpoint a přenese DB, Auth i Storage na nový server.");
     if (migrationConfirmSource) {
-      migrationConfirmSource.textContent = jeVerify ? "jen čtení" : "beze změny";
+      migrationConfirmSource.textContent = jeCutover ? "finální sync" : (jeVerify ? "jen čtení" : "beze změny");
     }
-    migrationConfirmHint.textContent = jeVerify
-      ? "VERIFY nemění migrovaná data. Při úspěchu skončí Manager ve stavu VERIFIED. CUTOVER se nespustí."
-      : "Během PREPARE v LubaNote nic neupravuj. Supabase Cloud se tím nemění a CUTOVER se nespustí.";
-    migrationConfirmOk.textContent = jeVerify ? "Spustit VERIFY" : "Spustit PREPARE";
+    migrationConfirmHint.textContent = jeCutover
+      ? "CUTOVER je povolen pouze po úspěšném VERIFY. Po přepnutí ověř stav aplikace; rollback zůstává zachovaný."
+      : (jeVerify
+        ? "VERIFY nemění migrovaná data. Při úspěchu odemkne CUTOVER."
+        : "Během PREPARE v LubaNote nic neupravuj. Zdrojový server se tím nepřepne.");
+    migrationConfirmOk.textContent = `Spustit ${nazev}`;
     migrationConfirmModal.hidden = false;
 
     if (migrationConfirmResolve) {
@@ -1695,7 +1726,7 @@
             "Bridge ONLINE · VERIFY skončil chybou · Manager se bezpečně vrátil do PREPARED · po diagnostice lze VERIFY zopakovat.";
         } else if (managerState === "VERIFIED") {
           migrationZprava.textContent =
-            "Bridge ONLINE · VERIFY dokončen · všech 8 kontrol PASS · stav VERIFIED. CUTOVER zůstává zamčený.";
+            "Bridge ONLINE · VERIFY dokončen · všech 8 kontrol PASS · CUTOVER je připraven.";
         } else if (managerState === "PREPARED") {
           migrationZprava.textContent =
             "Bridge ONLINE · PREPARE dokončen 7/7 · stav PREPARED · VERIFY je připraven.";
@@ -1733,13 +1764,15 @@
     if (!jeAdmin || migrationAkceBezi) return;
 
     const jeVerify = akce === "verify";
+    const jeCutover = akce === "cutover";
+    const nazevAkce = jeCutover ? "CUTOVER" : (jeVerify ? "VERIFY" : "PREPARE");
     const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
     if (profil?.id !== "lubanoteServer") {
       nastavMigrationTlacitkaZamcena();
       nastavMigrationStav("warning", "ČEKÁ");
       if (migrationZprava) {
         migrationZprava.textContent =
-          `${jeVerify ? "VERIFY" : "PREPARE"} lze spustit jen z TEST LubaServer profilu.`;
+          `${nazevAkce} lze spustit jen z aktivního LubaServer profilu.`;
       }
       return;
     }
@@ -1748,15 +1781,19 @@
     const managerState = String(aktualni?.manager_state || "")
       .trim()
       .toUpperCase();
-    const povoleno = jeVerify
-      ? managerState === "PREPARED" && aktualni?.capabilities?.verify === true
-      : managerState === "IDLE" && aktualni?.capabilities?.prepare === true;
+    const povoleno = jeCutover
+      ? managerState === "VERIFIED" && aktualni?.capabilities?.cutover === true
+      : (jeVerify
+        ? managerState === "PREPARED" && aktualni?.capabilities?.verify === true
+        : managerState === "IDLE" && aktualni?.capabilities?.prepare === true);
 
     if (!povoleno || aktualni?.job?.status === "running") {
       if (migrationZprava) {
-        migrationZprava.textContent = jeVerify
-          ? `VERIFY teď nelze spustit. Migration Manager musí být PREPARED; aktuálně je ${managerState || "UNKNOWN"}.`
-          : `PREPARE teď nelze spustit. Migration Manager musí být IDLE; aktuálně je ${managerState || "UNKNOWN"}.`;
+        migrationZprava.textContent = jeCutover
+          ? `CUTOVER teď nelze spustit. Migration Manager musí být VERIFIED; aktuálně je ${managerState || "UNKNOWN"}.`
+          : (jeVerify
+            ? `VERIFY teď nelze spustit. Migration Manager musí být PREPARED; aktuálně je ${managerState || "UNKNOWN"}.`
+            : `PREPARE teď nelze spustit. Migration Manager musí být IDLE; aktuálně je ${managerState || "UNKNOWN"}.`);
       }
       nastavMigrationOvladani(aktualni || {});
       return;
@@ -1767,10 +1804,10 @@
 
     migrationAkceBezi = true;
     nastavMigrationTlacitkaZamcena();
-    nastavMigrationStav("warning", jeVerify ? "VERIFY" : "PREPARE");
+    nastavMigrationStav("warning", nazevAkce);
     if (migrationZprava) {
       migrationZprava.textContent =
-        `Odesílám bezpečný požadavek ${jeVerify ? "VERIFY" : "PREPARE"}…`;
+        `Odesílám bezpečný požadavek ${nazevAkce}…`;
     }
 
     try {
@@ -1791,24 +1828,24 @@
 
       if (!odpoved.ok || vysledek?.ok !== true || vysledek?.accepted !== true) {
         const kod = vysledek?.error || `HTTP_${odpoved.status}`;
-        throw new Error(`${jeVerify ? "VERIFY" : "PREPARE"} nebyl přijat (${kod}).`);
+        throw new Error(`${nazevAkce} nebyl přijat (${kod}).`);
       }
 
-      nastavMigrationStav("warning", jeVerify ? "VERIFYING" : "PREPARING");
+      nastavMigrationStav("warning", jeCutover ? "CUTOVER" : (jeVerify ? "VERIFYING" : "PREPARING"));
       if (migrationZprava) {
         migrationZprava.textContent =
-          `${jeVerify ? "VERIFY" : "PREPARE"} byl přijat Migration Bridgem · načítám živý průběh…`;
+          `${nazevAkce} byl přijat Migration Bridgem · načítám živý průběh…`;
       }
       spustMigrationLiveRefresh();
     } catch (error) {
       console.warn(
-        `Migration ${jeVerify ? "VERIFY" : "PREPARE"} failed to start:`,
+        `Migration ${nazevAkce} failed to start:`,
         error?.message || error
       );
       nastavMigrationStav("fail", "CHYBA");
       if (migrationZprava) {
         migrationZprava.textContent =
-          `${jeVerify ? "VERIFY" : "PREPARE"} se nepodařilo spustit: ${error?.message || "neznámá chyba"}`;
+          `${nazevAkce} se nepodařilo spustit: ${error?.message || "neznámá chyba"}`;
       }
     } finally {
       migrationAkceBezi = false;
@@ -1822,6 +1859,34 @@
 
   function spustMigrationVerify() {
     return spustMigrationAkci("verify");
+  }
+
+  function spustMigrationCutover() {
+    return spustMigrationAkci("cutover");
+  }
+
+  async function ulozMigrationDestination() {
+    if (!jeAdmin || migrationAkceBezi || !migrationDestinationInput) return;
+    const host = migrationDestinationInput.value.trim();
+    if (!host) {
+      if (migrationDestinationHint) migrationDestinationHint.textContent = "Zadej IP adresu nebo hostname nového VPS.";
+      return;
+    }
+    try {
+      const token = await ziskejMigrationBearerToken();
+      const odpoved = await fetch(`${MIGRATION_CONTROL_BASE}/destination`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ host }),
+        cache: "no-store"
+      });
+      const data = await odpoved.json().catch(() => ({}));
+      if (!odpoved.ok || data?.ok !== true) throw new Error(data?.error || `HTTP_${odpoved.status}`);
+      if (migrationDestinationHint) migrationDestinationHint.textContent = `Cíl uložen: ${data.destination?.host || host}. PREPARE může začít.`;
+      await nactiMigrationStatus();
+    } catch (error) {
+      if (migrationDestinationHint) migrationDestinationHint.textContent = `Server se nepodařilo nastavit: ${error?.message || "neznámá chyba"}`;
+    }
   }
 
   function nactiJsonPoleProBackendSwitch(klic) {
@@ -3519,6 +3584,14 @@
   migrationVerifyTlacitko?.addEventListener(
     "click",
     spustMigrationVerify
+  );
+  migrationCutoverTlacitko?.addEventListener(
+    "click",
+    spustMigrationCutover
+  );
+  migrationDestinationSave?.addEventListener(
+    "click",
+    ulozMigrationDestination
   );
   migrationConfirmOk?.addEventListener("click", () => {
     zavriMigrationPotvrzeni(true);
