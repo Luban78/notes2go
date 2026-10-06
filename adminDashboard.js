@@ -71,6 +71,8 @@
     document.getElementById("adminDeviceBackendMessage");
   const useLubaServerTlacitko =
     document.getElementById("adminUseLubaServerButton");
+  const useTestLubaServerTlacitko =
+    document.getElementById("adminUseTestLubaServerButton");
   const useCloudTlacitko =
     document.getElementById("adminUseCloudButton");
   const migrationStav =
@@ -1082,6 +1084,8 @@
     const cutoverPovoleno = vysledek?.capabilities?.cutover === true;
 
     const destHost = String(vysledek?.destination?.host || "").trim();
+    const destMode = String(vysledek?.destination?.mode || "").trim().toLowerCase();
+    const destNastaven = Boolean(destHost) && destMode === "ssh";
     if (migrationDestinationInput && document.activeElement !== migrationDestinationInput) {
       migrationDestinationInput.value = destHost;
     }
@@ -1094,6 +1098,7 @@
      */
     if (
       managerState === "IDLE" &&
+      destNastaven &&
       preparePovoleno &&
       migrationPrepareTlacitko
     ) {
@@ -1110,6 +1115,7 @@
 
     if (
       managerState === "VERIFIED" &&
+      destNastaven &&
       cutoverPovoleno &&
       migrationCutoverTlacitko
     ) {
@@ -1175,10 +1181,10 @@
 
     if (mode === "MAINTENANCE") {
       controlZprava.textContent =
-        "MAINTENANCE je aktivní pro Cloud klienty. Ti dokončí existující Sync V2 dluh a zůstanou zamčení. SOURCE DB write-freeze ještě není aktivní.";
+        "MAINTENANCE je aktivní pro produkční klienty na aktuálním backendu. Ti dokončí existující Sync V2 dluh a zůstanou zamčení. SOURCE DB write-freeze ještě není aktivní.";
     } else if (mode === "NORMAL") {
       controlZprava.textContent =
-        "NORMAL · Cloud klienti jsou odemčení. Ovládání mění pouze klientský Maintenance/Drain; SOURCE DB write-freeze je samostatný další krok.";
+        "NORMAL · produkční klienti jsou odemčení. Ovládání mění pouze klientský Maintenance/Drain; aktivní backend ani CUTOVER tím nemění.";
     } else {
       controlZprava.textContent =
         "Control Point vrátil neznámý stav. Produkční režim neměň, dokud nebude stav ověřen.";
@@ -1213,8 +1219,8 @@
         vysledek?.ok === true &&
         Number(vysledek?.version) === 1 &&
         ["NORMAL", "MAINTENANCE"].includes(String(vysledek?.mode || "").toUpperCase()) &&
-        String(vysledek?.active_backend || "") === "cloud" &&
-        vysledek?.cutover_enabled === false;
+        ["cloud", "lubaserver"].includes(String(vysledek?.active_backend || "")) &&
+        typeof vysledek?.cutover_enabled === "boolean";
 
       if (!validni) {
         const kod = vysledek?.error || `HTTP_${odpoved.status}`;
@@ -1246,8 +1252,8 @@
         ? "Zapnout bezpečnou údržbu?"
         : "Ukončit bezpečnou údržbu?",
       zprava: jeMaintenance
-        ? "Cloud klienti přestanou přijímat nové uživatelské zápisy, dokončí existující Sync V2 frontu a zůstanou zamčení. TEST LubaServer zůstane ovladatelný. Toto ještě není databázový write-freeze a CUTOVER zůstává zamčený."
-        : "Control Point se vrátí do NORMAL a Cloud klienti se po další kontrole odemknou. Aktivní backend zůstává Cloud a CUTOVER zůstává zamčený.",
+        ? "Produkční klienti na aktuálním backendu přestanou přijímat nové uživatelské zápisy, dokončí existující Sync V2 frontu a zůstanou zamčení. Toto ještě není databázový write-freeze."
+        : "Control Point se vrátí do NORMAL a produkční klienti se po další kontrole odemknou. Aktivní backend ani CUTOVER se touto akcí nemění.",
       potvrditText: jeMaintenance ? "Zapnout údržbu" : "Vrátit NORMAL",
       nebezpecne: jeMaintenance,
       poPotvrzeni: () => provedControlAkci(cilovyMode)
@@ -1314,8 +1320,8 @@
         odpoved.ok &&
         vysledek?.ok === true &&
         String(vysledek?.mode || "").toUpperCase() === cilovyMode &&
-        String(vysledek?.active_backend || "") === "cloud" &&
-        vysledek?.cutover_enabled === false;
+        String(vysledek?.active_backend || "") === String(aktualni?.active_backend || "") &&
+        vysledek?.cutover_enabled === aktualni?.cutover_enabled;
 
       if (!validni) {
         const kod = vysledek?.error || `HTTP_${odpoved.status}`;
@@ -1882,7 +1888,7 @@
       });
       const data = await odpoved.json().catch(() => ({}));
       if (!odpoved.ok || data?.ok !== true) throw new Error(data?.error || `HTTP_${odpoved.status}`);
-      if (migrationDestinationHint) migrationDestinationHint.textContent = `Cíl uložen: ${data.destination?.host || host}. PREPARE může začít.`;
+      if (migrationDestinationHint) migrationDestinationHint.textContent = `Cíl uložen: ${data.destination?.host || host}. Starý VERIFY byl zneplatněn; nový PREPARE může začít.`;
       await nactiMigrationStatus();
     } catch (error) {
       if (migrationDestinationHint) migrationDestinationHint.textContent = `Server se nepodařilo nastavit: ${error?.message || "neznámá chyba"}`;
@@ -2119,6 +2125,8 @@
   function aktualizujBackendZarizeniUi() {
     const config = window.LubaNoteBackendConfig;
     const profil = config?.nactiAktivniProfil?.();
+    const jeCloud = profil?.id === "supabaseCloud";
+    const jeProd = profil?.id === "lubanoteProduction";
     const jeTest = profil?.id === "lubanoteServer";
 
     if (deviceBackendName) {
@@ -2128,25 +2136,29 @@
     if (deviceBackendMode) {
       deviceBackendMode.textContent = jeTest
         ? "TEST backend · pouze toto zařízení"
-        : "Produkční backend · výchozí";
+        : jeCloud
+          ? "Supabase Cloud · pouze toto zařízení"
+          : "PROD LubaServer · pouze toto zařízení";
     }
 
     if (deviceBackendBadge) {
-      deviceBackendBadge.textContent = jeTest ? "TEST" : "PRODUKCE";
+      deviceBackendBadge.textContent = jeTest ? "TEST" : jeCloud ? "CLOUD" : "PRODUKCE";
       deviceBackendBadge.dataset.state = jeTest ? "warning" : "ok";
     }
 
     if (deviceBackendMessage) {
-      deviceBackendMessage.textContent = jeTest
-        ? "Jsi v TEST LubaServeru. Návrat na Cloud znovu vyčistí lokální testovací cache, takže se data obou backendů nesmíchají."
-        : "Přepnutí do TEST LubaServeru je pouze pro toto zařízení. Před změnou musí být Cloud plně synchronizovaný; lokální cache se bezpečně vyčistí.";
+      deviceBackendMessage.textContent =
+        "Backend se volí samostatně pro toto zařízení. Přepnutí mezi backendy provede bezpečný lokální reset, aby se jejich cache nesmíchala.";
     }
 
     if (useLubaServerTlacitko) {
-      useLubaServerTlacitko.hidden = jeTest;
+      useLubaServerTlacitko.hidden = jeProd;
+    }
+    if (useTestLubaServerTlacitko) {
+      useTestLubaServerTlacitko.hidden = jeTest;
     }
     if (useCloudTlacitko) {
-      useCloudTlacitko.hidden = !jeTest;
+      useCloudTlacitko.hidden = jeCloud;
     }
   }
 
@@ -2175,33 +2187,30 @@
       return;
     }
 
-    if (aktualni.id === "supabaseCloud" && cil.id === "lubanoteServer") {
+    /* Přechod z Cloud profilu nesmí smazat lokální cache, pokud na zařízení
+     * čeká sync dluh. Tohle je kritické hlavně pro pracovní PC. */
+    if (aktualni.id === "supabaseCloud") {
       const kontrola = await zkontrolujCloudPredTestBackendem();
       if (!kontrola.ok) {
         zobrazBackendSwitchChybu(kontrola.zprava);
         return;
       }
-
-      otevriAdminPotvrzeni({
-        nadpis: "Přepnout do TEST LubaServeru?",
-        zprava:
-          "Cloud je synchronizovaný. LubaNote teď přepne pouze toto zařízení na test.lubanote.com, vyčistí lokální cloudovou cache a bude vyžadovat nové přihlášení. Produkční Supabase Cloud se nezmění.",
-        potvrditText: "Přepnout do TEST",
-        poPotvrzeni: async () => {
-          config.nastavAktivniProfil("lubanoteServer");
-          window.location.replace("./local-reset.html?backendSwitch=1");
-        }
-      });
-      return;
     }
 
+    const cilPopis =
+      cil.id === "supabaseCloud"
+        ? "Supabase Cloud"
+        : cil.id === "lubanoteServer"
+          ? "TEST LubaServer"
+          : "produkční LubaServer";
+
     otevriAdminPotvrzeni({
-      nadpis: "Vrátit toto zařízení na Cloud?",
+      nadpis: `Přepnout toto zařízení na ${cilPopis}?`,
       zprava:
-        "Lokální TEST cache se smaže a zařízení se vrátí na produkční Supabase Cloud. Změny, které ještě nejsou uložené na TEST LubaServeru, se zahodí. Produkční Cloud data se před resetem nemažou.",
-      potvrditText: "Vrátit na Cloud",
+        `Přepnutí se týká pouze tohoto zařízení. LubaNote vyčistí lokální cache aktuálního backendu, aby se data nesmíchala, a po přepnutí bude vyžadovat nové přihlášení.`,
+      potvrditText: "Přepnout backend",
       poPotvrzeni: async () => {
-        config.nastavAktivniProfil("supabaseCloud");
+        config.nastavAktivniProfil(cil.id);
         window.location.replace("./local-reset.html?backendSwitch=1");
       }
     });
@@ -3608,6 +3617,10 @@
     }
   });
   useLubaServerTlacitko?.addEventListener(
+    "click",
+    () => prepniBackendZarizeni("lubanoteProduction")
+  );
+  useTestLubaServerTlacitko?.addEventListener(
     "click",
     () => prepniBackendZarizeni("lubanoteServer")
   );

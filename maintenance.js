@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – Production Maintenance / Drain V1
-   PATCH 677T1 / 678B
+   PATCH 677T1
 
    - čte pouze veřejný Control Point,
    - nikdy samo nepřepíná backend,
@@ -34,12 +34,12 @@
 
   function aktivniBackendId() {
     const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    // PATCH 678B: firemní GitHub Pages může dočasně běžet proti frozen Cloud
-    // pouze jako nouzový lokální pracovní režim. Control Point se na něj
-    // nevztahuje, protože na produkční LubaServer se z této sítě nedostane.
-    if (profil?.nouzovyWebCloud === true) return null;
-    if (profil?.id === "supabaseCloud") return "lubaserver";
-    if (profil?.id === "lubanoteServer") return "lubaserver";
+    if (profil?.backendId === "cloud") return "cloud";
+    if (profil?.backendId === "lubaserver") return "lubaserver";
+    if (profil?.id === "supabaseCloud") return "cloud";
+    if (["lubanoteProduction", "lubanoteServer"].includes(profil?.id)) {
+      return "lubaserver";
+    }
     return null;
   }
 

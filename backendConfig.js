@@ -2,54 +2,69 @@
   "use strict";
 
   /*
-   * BACKEND INDEPENDENCE V1 / BI-1D / PATCH 678B
+   * BACKEND INDEPENDENCE V1 / PATCH 678C
    * -------------------------------------------------
-   * Nouzový pracovní režim 678B:
-   * - GitHub Pages (luban78.github.io) dočasně používá Supabase Cloud jen
-   *   pro Auth/čtení, protože firemní FortiGuard blokuje api.lubanote.com.
-   * - zápisy na Cloud zůstávají serverově frozen a Sync V2 je nechá v lokální frontě.
-   * - APK / ostatní hosty dál používají produkční LubaServer.
-   * Legacy ID "supabaseCloud" zůstává zachované, takže se nemaže IndexedDB/cache.
+   * Každé zařízení si volí backend samo přes localStorage.
+   * Význam profilů je stabilní a NIKDY se nemění podle hostname:
+   * - supabaseCloud      = původní Supabase Cloud / rollback
+   * - lubanoteProduction = produkční LubaServer / api.lubanote.com
+   * - lubanoteServer     = TEST LubaServer / test.lubanote.com
+   *
+   * GitHub Pages má pouze bezpečný výchozí profil Cloud, aby pracovní PC
+   * za FortiGuardem zůstalo použitelné. Jakmile uživatel profil přepne,
+   * uložená volba má vždy přednost. APK/ostatní hosty mají jako nový
+   * výchozí profil produkční LubaServer.
    */
-  const VYCHOZI_PROFIL_ID = "supabaseCloud";
-  const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
-  const JE_NOUZOVY_GITHUB_WEB =
+  const JE_GITHUB_PAGES =
     String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
 
+  const VYCHOZI_PROFIL_ID = JE_GITHUB_PAGES
+    ? "supabaseCloud"
+    : "lubanoteProduction";
+
+  const AKTIVNI_PROFIL_STORAGE_KEY = "lubanoteBackendProfileV1";
+
+  const LUBASERVER_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U";
+
   const PROFILY = Object.freeze({
-    // Legacy ID zachováváme, aby se kvůli nouzovému WEB režimu nespustil
-    // backend-switch reset lokální cache. Na GitHub Pages je to dočasně Cloud,
-    // všude jinde produkční LubaServer.
     supabaseCloud: Object.freeze({
       id: "supabaseCloud",
-      nazev: JE_NOUZOVY_GITHUB_WEB ? "Supabase Cloud – nouzový WEB" : "LubaNote Server",
-      typ: JE_NOUZOVY_GITHUB_WEB ? "supabase-cloud-emergency" : "supabase-selfhosted",
-      prostredi: "production",
+      nazev: "Supabase Cloud",
+      typ: "supabase-cloud",
+      prostredi: "rollback",
+      backendId: "cloud",
       povolen: true,
-      nouzovyWebCloud: JE_NOUZOVY_GITHUB_WEB,
-      url: JE_NOUZOVY_GITHUB_WEB
-        ? "https://nwdacgigplofksexssws.supabase.co/"
-        : "https://api.lubanote.com",
-      publishableKey: JE_NOUZOVY_GITHUB_WEB
-        ? "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c"
-        : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
-      projectRef: JE_NOUZOVY_GITHUB_WEB ? "nwdacgigplofksexssws" : "lubanote-server",
-      authStorageKey: JE_NOUZOVY_GITHUB_WEB
-        ? "sb-nwdacgigplofksexssws-auth-token"
-        : "sb-lubanote-server-auth-token"
+      url: "https://nwdacgigplofksexssws.supabase.co/",
+      publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
+      projectRef: "nwdacgigplofksexssws",
+      authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
+    }),
+
+    lubanoteProduction: Object.freeze({
+      id: "lubanoteProduction",
+      nazev: "LubaNote Server",
+      typ: "supabase-selfhosted",
+      prostredi: "production",
+      backendId: "lubaserver",
+      povolen: true,
+      url: "https://api.lubanote.com",
+      publishableKey: LUBASERVER_KEY,
+      projectRef: "lubanote-server",
+      authStorageKey: "sb-lubanote-server-auth-token"
     }),
 
     lubanoteServer: Object.freeze({
       id: "lubanoteServer",
-      nazev: "LubaNote Server",
+      nazev: "LubaNote Server TEST",
       typ: "supabase-selfhosted",
       prostredi: "test",
+      backendId: "lubaserver",
       povolen: true,
       url: "https://test.lubanote.com",
-      publishableKey:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwNjQ4ODA4LCJleHAiOjE5NDgzMjg4MDh9.JgT3DIL-JUgjQcH9TGuilZdUjK99jWuACuaASzxwN9U",
-      projectRef: "lubanote-server",
-      authStorageKey: "sb-lubanote-server-auth-token"
+      publishableKey: LUBASERVER_KEY,
+      projectRef: "lubanote-server-test",
+      authStorageKey: "sb-lubanote-server-test-auth-token"
     })
   });
 
@@ -99,19 +114,11 @@
 
   function jeBackendPozadavek(input) {
     try {
-      const url =
-        typeof input === "string"
-          ? input
-          : input?.url;
-
+      const url = typeof input === "string" ? input : input?.url;
       if (!url) return false;
 
       const cil = new URL(url, window.location.href);
-      const backend = new URL(
-        nactiAktivniProfil().url,
-        window.location.href
-      );
-
+      const backend = new URL(nactiAktivniProfil().url, window.location.href);
       return cil.origin === backend.origin;
     } catch {
       return false;
@@ -129,7 +136,7 @@
   }
 
   window.LubaNoteBackendConfig = Object.freeze({
-    verze: "BI-1D-678B",
+    verze: "BI-1E-678C",
     prepinaniPovoleno: true,
     vychoziProfilId: VYCHOZI_PROFIL_ID,
     aktivniProfilStorageKey: AKTIVNI_PROFIL_STORAGE_KEY,

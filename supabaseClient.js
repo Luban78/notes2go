@@ -1,14 +1,14 @@
 /*
- * BI-1A / PATCH 678B: backend endpoint není vlastnictvím tohoto modulu.
- * Aktivní profil dodává backendConfig.js. Fallback kopíruje nouzové pravidlo:
- * GitHub Pages = dočasně Cloud pro Auth/čtení; ostatní = produkční LubaServer.
+ * BI-1E / PATCH 678C: backend endpoint vždy dodává backendConfig.js.
+ * Uložený profil konkrétního zařízení má přednost. Fallback se používá
+ * pouze při chybě konfigurace: GitHub Pages -> Cloud, ostatní -> PROD LubaServer.
  */
-const LUBANOTE_NOUZOVY_GITHUB_WEB =
+const LUBANOTE_GITHUB_PAGES =
   String(window.location?.hostname || "").toLowerCase() === "luban78.github.io";
 
 const LUBANOTE_BACKEND =
   window.LubaNoteBackendConfig?.nactiAktivniProfil?.() ||
-  (LUBANOTE_NOUZOVY_GITHUB_WEB
+  (LUBANOTE_GITHUB_PAGES
     ? {
         url: "https://nwdacgigplofksexssws.supabase.co/",
         publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
@@ -24,8 +24,7 @@ const LUBANOTE_BACKEND =
       });
 
 const SUPABASE_URL = LUBANOTE_BACKEND.url;
-const SUPABASE_PUBLISHABLE_KEY =
-  LUBANOTE_BACKEND.publishableKey;
+const SUPABASE_PUBLISHABLE_KEY = LUBANOTE_BACKEND.publishableKey;
 
 /*
  * OFFLINE-FIRST START LUBANOTE
