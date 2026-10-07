@@ -20,12 +20,20 @@
 
   const SYNC_TRAFFIC_VISIBLE_KEY = "lubanoteSyncTrafficVisibleV1";
   let panelViditelnyUzivatelem = true;
+  let ucetAktivni = false;
 
   try {
     panelViditelnyUzivatelem =
       localStorage.getItem(SYNC_TRAFFIC_VISIBLE_KEY) !== "0";
   } catch (_error) {}
 
+  /*
+   * PATCH 679C – RX/TX/E panel vlastni i skutecny DOM stav `hidden`.
+   * Driv o nem rozhodoval neprimo supabaseClient.js pri refreshi stavu uctu.
+   * Po backend handoffu mohl byt prepinac spravne Zapnuto, ale HTML atribut
+   * `hidden` zustal viset. Panel se ted po potvrzeni aktivniho uctu zobrazi
+   * deterministicky a pri odhlaseni / blokaci se zase skryje.
+   */
   function aplikujViditelnostPanelu() {
     document.body?.classList.toggle(
       "lubaSyncTrafficUserHidden",
@@ -33,12 +41,22 @@
     );
 
     if (barEl) {
-      if (panelViditelnyUzivatelem) {
+      const maBytViditelny =
+        panelViditelnyUzivatelem && ucetAktivni;
+
+      barEl.hidden = !maBytViditelny;
+
+      if (maBytViditelny) {
         barEl.removeAttribute("aria-hidden");
       } else {
         barEl.setAttribute("aria-hidden", "true");
       }
     }
+  }
+
+  function nastavAktivniUcet(hodnota) {
+    ucetAktivni = Boolean(hodnota);
+    aplikujViditelnostPanelu();
   }
 
   function nastavPanelViditelny(hodnota) {
@@ -615,6 +633,23 @@
       zdroj
     );
   }
+
+  window.addEventListener(
+    "lubanote:account-active",
+    () => nastavAktivniUcet(true)
+  );
+
+  [
+    "lubanote:auth-required",
+    "lubanote:auth-expired",
+    "lubanote:account-blocked",
+    "lubanote:account-access-denied"
+  ].forEach((nazevUdalosti) => {
+    window.addEventListener(
+      nazevUdalosti,
+      () => nastavAktivniUcet(false)
+    );
+  });
 
   window.addEventListener(
     "lubanote:storage-scope-change",
