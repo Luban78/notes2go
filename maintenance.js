@@ -21,6 +21,17 @@
   const FETCH_TIMEOUT_MS = 5000;
   const RETRY_DRAIN_MS = 2200;
 
+  function zapisMaintenance(text) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "MAINT",
+      String(text || "")
+    );
+  }
+
+  let posledniDiagControl = "";
+
+  zapisMaintenance(`LOADED | poll=${INTERVAL_MS}ms`);
+
   let posledniStav = null;
   let maintenanceAktivni = false;
   let writeFreezeAktivni = false;
@@ -555,6 +566,20 @@
     const profil = aktivniBackendId();
     const platiProTotoZarizeni = profil && control.active_backend === profil;
 
+    const diagControl = [
+      String(control?.mode || "-"),
+      String(control?.active_backend || "-"),
+      String(profil || "-"),
+      platiProTotoZarizeni ? "Y" : "N"
+    ].join("|");
+
+    if (diagControl !== posledniDiagControl) {
+      posledniDiagControl = diagControl;
+      zapisMaintenance(
+        `CONTROL | mode=${control?.mode || "-"} | active=${control?.active_backend || "-"} | local=${profil || "-"} | applies=${platiProTotoZarizeni ? "Y" : "N"}`
+      );
+    }
+
     if (control.mode === "MAINTENANCE" && platiProTotoZarizeni) {
       if (jeAuthUiAktivni()) {
         pozastavMaintenanceProAuth(control);
@@ -595,6 +620,9 @@
         return control;
       } catch (error) {
         console.warn("LubaNote Control Point není dostupný:", error);
+        zapisMaintenance(
+          `CONTROL ERROR | ${error?.name || "Error"} | ${error?.message || "unknown"}`
+        );
 
         /* NORMAL provoz zůstává offline-first. Během už potvrzeného
          * maintenance ale nikdy neodemkneme UI jen kvůli výpadku kontroly. */

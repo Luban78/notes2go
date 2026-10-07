@@ -58,6 +58,31 @@ if (settingsVersionValue) {
     window.LUBANOTE_VERSION || "DEV";
 }
 
+/* 680A5 – vždy viditelná verze klienta.
+ * Hodnota pochází ze stávajícího build-version.js; žádná druhá verze
+ * aplikace se zde nevymýšlí. Na APK ji generuje GitHub Actions. */
+function aktualizujLubaNoteVersionBadge() {
+  let badge = document.getElementById("lubaNoteVersionBadge");
+
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "lubaNoteVersionBadge";
+    badge.className = "lubaNoteVersionBadge";
+    badge.setAttribute("aria-hidden", "true");
+    document.body.appendChild(badge);
+  }
+
+  const verze = String(window.LUBANOTE_VERSION || "DEV").trim() || "DEV";
+  const build = String(window.LUBANOTE_BUILD || "").trim();
+
+  badge.textContent = `v${verze}`;
+  badge.title = build && build !== verze
+    ? `LubaNote ${verze} · build ${build}`
+    : `LubaNote ${verze}`;
+}
+
+aktualizujLubaNoteVersionBadge();
+
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
 

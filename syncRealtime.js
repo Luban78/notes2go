@@ -22,6 +22,15 @@
   const ZPOZDENI_BLOKOVANE_POZNAMKY_MS = 700;
   const ZPOZDENI_OPAKOVANI_PO_CHYBE_MS = 1200;
 
+  function zapisRt(text) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "RT-SYNC",
+      String(text || "")
+    );
+  }
+
+  zapisRt("NOTE SYNC REALTIME LOADED");
+
   let realtimeKanal = null;
   let realtimeUserId = null;
   let realtimePriprava = null;
@@ -153,6 +162,10 @@
       });
     }
 
+    zapisRt(
+      `RECV | notes=${noteIds.length}${noteIds.length === 0 ? " | global" : ""}`
+    );
+
     naplanujVzdalenySync(
       ZPOZDENI_PRIJMU_MS
     );
@@ -194,6 +207,8 @@
       ) {
         await odstranRealtimeKanal();
       }
+
+      zapisRt("CHANNEL PREPARE");
 
       const kanal = supabaseClient.channel(
         `${KANAL_PREFIX}-${user.id}`,
@@ -239,6 +254,8 @@
           );
 
           kanal.subscribe((stav) => {
+            zapisRt(`CHANNEL STATUS | ${stav}`);
+
             if (stav === "SUBSCRIBED") {
               dokoncit(true);
               return;
@@ -393,6 +410,8 @@
       }
     });
 
+    zapisRt(`SEND | notes=${noteIds.length} | result=${String(vysledek)}`);
+
     if (vysledek !== "ok") {
       return false;
     }
@@ -507,8 +526,14 @@
         return false;
       }
 
+      zapisRt(
+        `REMOTE SYNC START | notes=${neblokovaneId.length}${snapshotGlobalni !== 0 ? " | global" : ""}`
+      );
+
       const synchronizovano =
         await syncFn();
+
+      zapisRt(`REMOTE SYNC END | result=${String(synchronizovano)}`);
 
       if (synchronizovano !== true) {
         naplanujVzdalenySync(
@@ -686,9 +711,11 @@
   window.addEventListener(
     UDALOST_ZAPISU,
     (event) => {
-      pridejPotvrzenyLokalniZapis(
-        event?.detail || {}
+      const detail = event?.detail || {};
+      zapisRt(
+        `LOCAL WRITE CONFIRMED | note=${String(detail?.noteId || "-").slice(0, 8)} | rev=${detail?.revision ?? "-"}`
       );
+      pridejPotvrzenyLokalniZapis(detail);
     }
   );
 
