@@ -31,6 +31,9 @@ STATE_FILE = Path(
         "/home/luban78/luba-server/migration-manager/state/state",
     )
 )
+CURRENT_RUN_FILE = STATE_FILE.parent / "current_run"
+RUNS_DIR = STATE_FILE.parent.parent / "runs"
+SOURCE_ENV = Path(os.environ.get("SOURCE_ENV", "/home/luban78/luba-server/migration-manager/config/source.env"))
 RUNTIME_DIR = Path(
     os.environ.get("BRIDGE_RUNTIME_DIR", "/home/luban78/luba-server/migration-bridge")
 )
@@ -220,6 +223,44 @@ def write_job_meta(job: dict[str, Any]) -> None:
     temp.replace(path)
 
 
+def source_public() -> dict[str, Any]:
+    return {
+        "backend_id": read_env_value(str(SOURCE_ENV), "SOURCE_BACKEND_ID"),
+        "name": read_env_value(str(SOURCE_ENV), "SOURCE_NAME"),
+        "mode": read_env_value(str(SOURCE_ENV), "SOURCE_MODE"),
+    }
+
+
+def current_run_direction() -> dict[str, Any] | None:
+    try:
+        run_id = CURRENT_RUN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not run_id or not re.fullmatch(r"[A-Za-z0-9._-]+", run_id):
+        return None
+    manifest = RUNS_DIR / run_id / "manifest"
+    try:
+        values: dict[str, str] = {}
+        for raw in manifest.read_text(encoding="utf-8").splitlines():
+            if "=" not in raw:
+                continue
+            key, value = raw.split("=", 1)
+            values[key.strip()] = value.strip()
+    except OSError:
+        return None
+    source_backend = values.get("source_backend_id", "").lower()
+    dest_backend = values.get("destination_backend_id", "").lower()
+    if not BACKEND_ID_RE.fullmatch(source_backend) or not BACKEND_ID_RE.fullmatch(dest_backend):
+        return None
+    return {
+        "run_id": run_id,
+        "source_backend_id": source_backend,
+        "source_name": values.get("source_name", ""),
+        "destination_backend_id": dest_backend,
+        "destination_name": values.get("destination_name", ""),
+    }
+
+
 def destination_public() -> dict[str, Any]:
     return {
         "backend_id": read_env_value(str(DESTINATION_ENV), "DEST_BACKEND_ID"),
@@ -394,7 +435,7 @@ def start_action(action: str) -> tuple[bool, dict[str, Any]]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LubaNoteMigrationBridge/1.2-50E42"
+    server_version = "LubaNoteMigrationBridge/1.3-50E43"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log request headers/tokens. Base log format contains only method/path/status.
@@ -480,7 +521,9 @@ class Handler(BaseHTTPRequestHandler):
                     "destination": True,
                     "bidirectional": True,
                 },
+                "source": source_public(),
                 "destination": destination_public(),
+                "direction": current_run_direction(),
                 "manager_status": manager_status_output(),
             },
         )

@@ -29,7 +29,7 @@ normalize_backend_id() {
 }
 
 status() {
-  echo "=== LubaNote Migration Manager V3 / 50E42 ==="
+  echo "=== LubaNote Migration Manager V3 / 50E43 ==="
   echo "State: $(stav)"
   echo
   echo "=== BACKENDY ==="
@@ -41,7 +41,7 @@ status() {
   echo "=== CUTOVER ==="
   case "$(stav)" in
     VERIFIED)
-      echo "READY (vyzaduje Control Point MAINTENANCE)"
+      echo "READY (MAINTENANCE zapne CUTOVER automaticky)"
       ;;
     CUTTING_OVER)
       echo "IN PROGRESS"
@@ -251,7 +251,7 @@ verify() {
     echo
     echo "VERIFY: PASS"
     echo "State: VERIFIED"
-    echo "CUTOVER je pripraven; pred nim musi byt Control Point MAINTENANCE."
+    echo "CUTOVER je pripraven; MAINTENANCE/Drain zapne CUTOVER automaticky."
   else
     set_state PREPARED
     echo

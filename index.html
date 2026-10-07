@@ -1614,7 +1614,7 @@
             <div class="adminServerMetric"><span>Disk</span><strong id="adminServerDisk">—</strong></div>
             <div class="adminServerMetric"><span>Volné místo</span><strong id="adminServerDiskFree">—</strong></div>
             <div class="adminServerMetric"><span>Baterie</span><strong id="adminServerBattery">—</strong></div>
-            <div class="adminServerMetric"><span>Supabase</span><strong id="adminServerSupabase">—</strong></div>
+            <div class="adminServerMetric"><span>Self-hosted Supabase</span><strong id="adminServerSupabase">—</strong></div>
             <div class="adminServerMetric"><span>Docker</span><strong id="adminServerDocker">—</strong></div>
             <div class="adminServerMetric"><span>Cloudflare</span><strong id="adminServerCloudflare">—</strong></div>
           </div>
@@ -1641,10 +1641,10 @@
               Použít LubaServer PROD
             </button>
             <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Testovat LubaServer
+              Připojit toto zařízení k TEST LubaServeru
             </button>
             <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">
-              Vrátit na aktivní produkci
+              Opustit TEST a použít aktivní produkci
             </button>
           </div>
         </section>
@@ -1665,7 +1665,7 @@
           <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
             <button id="adminControlMaintenanceButton" type="button" disabled>
               <strong>Zapnout údržbu</strong>
-              <small>Drain aktivní produkce</small>
+              <small>Servisní ruční drain</small>
             </button>
             <button id="adminControlNormalButton" type="button" disabled>
               <strong>Vrátit NORMAL</strong>
@@ -1683,7 +1683,7 @@
           <div class="adminMigrationHead">
             <div>
               <span class="adminServerEyebrow">Migrace / produkce</span>
-              <strong>Aktivní produkce → připravený nový server</strong>
+              <strong>Aktivní produkce → zvolený cílový backend</strong>
             </div>
             <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
@@ -1705,7 +1705,7 @@
           </p>
 
           <div class="adminMigrationDestination">
-            <label>Připravený cíl</label>
+            <label>Cílový produkční backend</label>
             <div class="adminMigrationDestinationRow">
               <button id="adminMigrationUseCloud" type="button">Supabase Cloud</button>
               <button id="adminMigrationUseLubaServer" type="button">LubaServer</button>
@@ -1743,7 +1743,7 @@
 
           <div class="adminMigrationSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>Supabase Cloud zůstává hlavní produkcí až do výslovně potvrzeného CUTOVER. Po přepnutí zůstává předchozí server zachovaný jako rollback.</span>
+            <span>Aktuální SOURCE zůstává produkcí až do potvrzeného CUTOVERu. CUTOVER zapne údržbu automaticky; po přepnutí zůstává předchozí backend zachovaný jako rollback.</span>
           </div>
         </section>
 
@@ -2800,7 +2800,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679d-bidirectional-backend"></script>
+  <script src="adminDashboard.js?v=679e-migration-ux"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

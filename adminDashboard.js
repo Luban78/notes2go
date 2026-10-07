@@ -1063,6 +1063,22 @@
     }
   ];
 
+
+  const MIGRATION_CUTOVER_KROKY = [
+    { label: "Cílový profil", detail: "Veřejné API cíle a klientský profil", marker: "=== CUTOVER 50E43 / 0A: DEST client profile + freeze state ===" },
+    { label: "Údržba + drain", detail: "Automatické zamčení produkce a doběhnutí front", marker: "=== CUTOVER 50E43 / 0B: automatic MAINTENANCE + drain ===" },
+    { label: "SOURCE freeze", detail: "Databázový write-freeze zdroje", marker: "=== CUTOVER 50E43 / 1: SOURCE freeze ===" },
+    { label: "Finální snapshot", detail: "Čerstvý frozen snapshot SOURCE", marker: "=== CUTOVER 50E43 / 2: fresh frozen SOURCE snapshot ===" },
+    { label: "DEST drift guard", detail: "Kontrola, že se cíl od PREPARE nezměnil", marker: "=== CUTOVER 50E43 / 3: DEST drift guard ===" },
+    { label: "Rollback checkpoint", detail: "Finální bod návratu cílového backendu", marker: "=== CUTOVER 50E43 / 4: final DEST checkpoint ===" },
+    { label: "Public data", detail: "Finální public refresh", marker: "=== CUTOVER 50E43 / 5: final public refresh ===" },
+    { label: "Auth + Storage delta", detail: "Finální delta po freeze", marker: "=== CUTOVER 50E43 / 5B: frozen Auth/Storage delta ===" },
+    { label: "Final VERIFY", detail: "Poslední úplná kontrola shody", marker: "=== CUTOVER 50E43 / 6: final VERIFY ===" },
+    { label: "Atomický switch", detail: "Control Point SOURCE → DEST", marker: "=== CUTOVER 50E43 / 7: atomic SOURCE -> DEST switch ===" },
+    { label: "DEST zápisy", detail: "Odemknutí cíle a health check", marker: "=== CUTOVER 50E43 / 8: activate DEST writes ===" },
+    { label: "NORMAL", detail: "Odemknutí produkčních klientů", marker: "=== CUTOVER 50E43 / 9: publish NORMAL on DEST ===" }
+  ];
+
   function nastavMigrationStav(stav, text) {
     if (!migrationStav) return;
     migrationStav.dataset.state = stav;
@@ -1094,11 +1110,21 @@
     const destBackend = String(vysledek?.destination?.backend_id || "").trim().toLowerCase();
     const destName = String(vysledek?.destination?.name || "").trim();
     const destNastaven = ["docker", "remote"].includes(destMode) || (Boolean(destHost) && destMode === "ssh");
+    const smer = vysledek?.direction || null;
+    const smerSourceName = String(smer?.source_name || "").trim();
+    const smerSourceBackend = String(smer?.source_backend_id || "").trim().toLowerCase();
+    const smerDestName = String(smer?.destination_name || "").trim();
+    const smerDestBackend = String(smer?.destination_backend_id || "").trim().toLowerCase();
     if (migrationDestinationInput && document.activeElement !== migrationDestinationInput) {
       migrationDestinationInput.value = destMode === "ssh" ? destHost : "";
     }
+    if (migrationSourceLabel && smerSourceBackend) {
+      migrationSourceLabel.textContent = smerSourceName || (smerSourceBackend === "cloud" ? "Supabase Cloud" : smerSourceBackend === "lubaserver" ? "LubaServer" : smerSourceBackend);
+    }
     if (migrationDestinationLabel) {
-      migrationDestinationLabel.textContent = destName || (destBackend === "cloud" ? "Supabase Cloud" : destBackend === "lubaserver" ? "LubaServer" : (destHost || "Nový VPS"));
+      migrationDestinationLabel.textContent = smerDestBackend
+        ? (smerDestName || (smerDestBackend === "cloud" ? "Supabase Cloud" : smerDestBackend === "lubaserver" ? "LubaServer" : smerDestBackend))
+        : (destName || (destBackend === "cloud" ? "Supabase Cloud" : destBackend === "lubaserver" ? "LubaServer" : (destHost || "Nový VPS")));
     }
     const sourceBackend = String(controlPosledniStatus?.active_backend || "").trim().toLowerCase();
     if (migrationUseCloud) migrationUseCloud.disabled = migrationAkceBezi || sourceBackend === "cloud" || vysledek?.job?.status === "running";
@@ -1173,11 +1199,15 @@
     controlPosledniStatus = vysledek || null;
 
     if (migrationSourceLabel) {
-      const aktivni = String(vysledek?.active_backend || "").trim();
-      migrationSourceLabel.textContent =
-        aktivni === "cloud" ? "Supabase Cloud" :
-        aktivni === "lubaserver" ? "LubaServer" :
-        (aktivni || "Aktivní produkce");
+      const managerState = String(migrationPosledniStatus?.manager_state || "").trim().toUpperCase();
+      const maRunSmer = Boolean(migrationPosledniStatus?.direction?.source_backend_id);
+      if (!maRunSmer || managerState === "IDLE") {
+        const aktivni = String(vysledek?.active_backend || "").trim();
+        migrationSourceLabel.textContent =
+          aktivni === "cloud" ? "Supabase Cloud" :
+          aktivni === "lubaserver" ? "LubaServer" :
+          (aktivni || "Aktivní produkce");
+      }
     }
 
     if (mode === "NORMAL") {
@@ -1368,8 +1398,8 @@
     if (stav === "CUTOVER_COMPLETE") return { ui: "ok", text: "COMPLETE" };
     if (stav === "VERIFIED") return { ui: "ok", text: "VERIFIED" };
     if (stav === "PREPARED") return { ui: "ok", text: "PREPARED" };
-    if (stav === "PREPARING" || stav === "VERIFYING") {
-      return { ui: "warning", text: stav };
+    if (stav === "PREPARING" || stav === "VERIFYING" || stav === "CUTTING_OVER") {
+      return { ui: "warning", text: stav === "CUTTING_OVER" ? "CUTOVER" : stav };
     }
     if (
       stav === "FAILED" ||
@@ -1554,6 +1584,35 @@
     return { hotovo, celkem: kroky.length, aktivni, selhany };
   }
 
+  function pripravCutoverProgress(vysledek) {
+    const managerState = String(vysledek?.manager_state || "").trim().toUpperCase();
+    const job = vysledek?.job;
+    const jobBezi = job?.status === "running";
+    const jobSelhal = job?.status === "failed";
+    const log = String(job?.log_tail || "");
+    const dokonceno = managerState === "CUTOVER_COMPLETE" && !jobSelhal;
+
+    let posledniNalezeny = -1;
+    MIGRATION_CUTOVER_KROKY.forEach((krok, index) => {
+      if (log.includes(krok.marker)) posledniNalezeny = index;
+    });
+
+    const kroky = MIGRATION_CUTOVER_KROKY.map((krok, index) => {
+      let state = "idle";
+      if (dokonceno) state = "done";
+      else if (index < posledniNalezeny) state = "done";
+      else if (index === posledniNalezeny) state = jobSelhal ? "fail" : jobBezi ? "running" : "done";
+      else if (index === 0 && posledniNalezeny < 0 && jobBezi) state = "running";
+      return { ...krok, state };
+    });
+
+    const hotovo = kroky.filter((krok) => krok.state === "done").length;
+    const aktivni = kroky.find((krok) => krok.state === "running");
+    const selhany = kroky.find((krok) => krok.state === "fail");
+    vykresliMigrationKroky("CUTOVER · 12 bezpečných kroků", kroky);
+    return { hotovo, celkem: kroky.length, aktivni, selhany };
+  }
+
   function vykresliMigrationPrubeh(vysledek) {
     const managerState = String(vysledek?.manager_state || "")
       .trim()
@@ -1562,6 +1621,7 @@
     const akce = String(job?.action || "").trim().toLowerCase();
 
     if (job?.status === "running") {
+      if (akce === "cutover") return { typ: "cutover", ...pripravCutoverProgress(vysledek) };
       return akce === "verify"
         ? { typ: "verify", ...pripravVerifyProgress(vysledek) }
         : { typ: "prepare", ...pripravPrepareProgress(vysledek) };
@@ -1580,6 +1640,14 @@
       managerState !== "IDLE"
     ) {
       return { typ: "prepare", ...pripravPrepareProgress(vysledek) };
+    }
+
+    if (managerState === "CUTOVER_COMPLETE" || managerState === "CUTTING_OVER") {
+      return { typ: "cutover", ...pripravCutoverProgress(vysledek) };
+    }
+
+    if (job?.status === "failed" && akce === "cutover") {
+      return { typ: "cutover", ...pripravCutoverProgress(vysledek) };
     }
 
     if (managerState === "VERIFIED") {
@@ -1633,19 +1701,20 @@
     const jeCutover = akce === "cutover";
     const nazev = jeCutover ? "CUTOVER" : (jeVerify ? "VERIFY" : "PREPARE");
     migrationConfirmBadge.textContent = nazev;
+    const cilNazev = String(migrationDestinationLabel?.textContent || "cílový backend").trim() || "cílový backend";
     migrationConfirmTitulek.textContent = jeCutover
-      ? "Přepnout produkci na nový server?"
-      : (jeVerify ? "Ověřit připravenou migraci?" : "Připravit nový server?");
+      ? `Přepnout produkci na ${cilNazev}?`
+      : (jeVerify ? `Ověřit migraci na ${cilNazev}?` : `Připravit ${cilNazev}?`);
     migrationConfirmText.textContent = jeCutover
-      ? "CUTOVER provede finální bezpečné přepnutí všech uživatelů na ověřený nový server. Starý server zůstane jako rollback."
+      ? `CUTOVER automaticky zapne bezpečnou údržbu, nechá doběhnout sync fronty, provede finální freeze/sync a atomicky přepne všechny produkční klienty na ${cilNazev}. Předchozí backend zůstane jako rollback.`
       : (jeVerify
-        ? "VERIFY porovná připravený snapshot s novým serverem: public data, sekvence, Auth fingerprint, Storage metadata/SHA a zdraví Supabase služeb."
-        : "PREPARE připraví zadaný VPS, vytvoří snapshot a checkpoint a přenese DB, Auth i Storage na nový server.");
+        ? `VERIFY porovná připravený snapshot s cílem ${cilNazev}: public data, sekvence, Auth fingerprint, Storage metadata/SHA a zdraví Supabase služeb.`
+        : `PREPARE vytvoří snapshot a rollback checkpoint a připraví data na cíli ${cilNazev}. Aktivní SOURCE se tím nepřepne.`);
     if (migrationConfirmSource) {
       migrationConfirmSource.textContent = jeCutover ? "finální sync" : (jeVerify ? "jen čtení" : "beze změny");
     }
     migrationConfirmHint.textContent = jeCutover
-      ? "CUTOVER je povolen pouze po úspěšném VERIFY. Po přepnutí ověř stav aplikace; rollback zůstává zachovaný."
+      ? "CUTOVER je povolen pouze po úspěšném VERIFY. MAINTENANCE/Drain provede automaticky; ruční Údržba není pro běžnou migraci potřeba."
       : (jeVerify
         ? "VERIFY nemění migrovaná data. Při úspěchu odemkne CUTOVER."
         : "Během PREPARE v LubaNote nic neupravuj. Zdrojový server se tím nepřepne.");
@@ -1752,7 +1821,8 @@
             "Bridge ONLINE · VERIFY skončil chybou · Manager se bezpečně vrátil do PREPARED · po diagnostice lze VERIFY zopakovat.";
         } else if (managerState === "CUTOVER_COMPLETE") {
           migrationZprava.textContent =
-            "Bridge ONLINE · CUTOVER dokončen · produkční klienti následují Control Point; TEST profil zůstává připnutý pro administraci.";
+            "Bridge ONLINE · CUTOVER dokončen · Control Point obnovuji; TEST profil zůstává připnutý pro administraci.";
+          void nactiControlStatus({ tichy: true }).then(() => aktualizujBackendZarizeniUi());
         } else if (managerState === "VERIFIED") {
           migrationZprava.textContent =
             "Bridge ONLINE · VERIFY dokončen · všech 8 kontrol PASS · CUTOVER je připraven.";
@@ -2203,7 +2273,9 @@
     }
     if (useCloudTlacitko) {
       useCloudTlacitko.hidden = !jeTest;
-      useCloudTlacitko.textContent = "Vrátit na aktivní produkci";
+      const aktivniBackend = String(controlPosledniStatus?.active_backend || "").trim().toLowerCase();
+      const aktivniNazev = aktivniBackend === "cloud" ? "Supabase Cloud" : aktivniBackend === "lubaserver" ? "LubaServer PROD" : "aktivní produkci";
+      useCloudTlacitko.textContent = `Opustit TEST → ${aktivniNazev}`;
     }
   }
 
@@ -2268,10 +2340,10 @@
       }
 
       otevriAdminPotvrzeni({
-        nadpis: "Vrátit toto zařízení na aktivní produkci?",
+        nadpis: `Opustit TEST a použít ${cil.nazev || control.active_backend}?`,
         zprava:
           `Control Point ukazuje ${cil.nazev || control.active_backend}. TEST cache se bezpečně oddělí resetem; produkční backend se globálně nemění.`,
-        potvrditText: "Vrátit na produkci",
+        potvrditText: `Použít ${cil.nazev || "produkci"}`,
         poPotvrzeni: async () => {
           const nasledovani = config.sledujControlPoint?.(control, { vynutit: true });
           if (nasledovani?.ok !== true) {
@@ -3919,6 +3991,28 @@
       zobrazDomov();
     }
   });
+
+  /* PATCH 679E – Android systémové Zpět musí zavřít Admin Dashboard
+   * stejně jako naše vlastní tlačítko, ne ukončit Activity. Zachováváme
+   * chain ostatních modalů/editorů přes původní handler. */
+  const puvodniAndroidZpetAdmin = window.LubaNoteZpracujAndroidZpet;
+  window.LubaNoteZpracujAndroidZpet = function () {
+    if (migrationConfirmModal && !migrationConfirmModal.hidden) {
+      zavriMigrationPotvrzeni(false);
+      return true;
+    }
+    if (!modal.hidden) {
+      if (!serverPohled.hidden || !uiPohled.hidden || !uctyPohled.hidden) {
+        adminHistoryZpetNaDomov();
+      } else {
+        zavriDashboardPresHistorii();
+      }
+      return true;
+    }
+    return typeof puvodniAndroidZpetAdmin === "function"
+      ? puvodniAndroidZpetAdmin()
+      : false;
+  };
 
   window.addEventListener("online", () => {
     if (!serverPohled.hidden && !modal.hidden) {

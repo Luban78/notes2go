@@ -27,17 +27,20 @@ source "$IDENTITY"
 SOURCE_BACKEND_ID="$CURRENT_SOURCE_BACKEND_ID"; DEST_BACKEND_ID="$CURRENT_DEST_BACKEND_ID"
 [ -n "$SOURCE_BACKEND_ID" ] && [ -n "$DEST_BACKEND_ID" ] && [ "$SOURCE_BACKEND_ID" != "$DEST_BACKEND_ID" ] || { fail "neplatny smer"; exit 18; }
 
-python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
+CONTROL_MODE_BEFORE="$(python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
 import json,sys
 from pathlib import Path
 d=json.loads(Path(sys.argv[1]).read_text()); src=sys.argv[2]
-if d.get('mode')!='MAINTENANCE': raise SystemExit('BLOKACE: Control Point neni MAINTENANCE')
+mode=str(d.get('mode','')).upper()
+if mode not in {'NORMAL','MAINTENANCE'}: raise SystemExit('BLOKACE: Control Point nema platny rezim')
 if d.get('active_backend')!=src: raise SystemExit('BLOKACE: active_backend neni SOURCE')
 if d.get('cutover_enabled') is not False: raise SystemExit('BLOKACE: cutover_enabled neni false')
-print('PASS: Control MAINTENANCE + SOURCE active')
+print(mode)
 PY
+)"
+echo "PASS: Control SOURCE active; mode=$CONTROL_MODE_BEFORE"
 
-echo "=== CUTOVER 50E42 / 0: DEST client profile + freeze state ==="
+echo "=== CUTOVER 50E43 / 0A: DEST client profile + freeze state ==="
 CLIENT_PROFILE_JSON="$("$BIN/destination-client-profile")"
 python3 - "$DEST_BACKEND_ID" "$CLIENT_PROFILE_JSON" <<'PY'
 import json,sys
@@ -59,7 +62,7 @@ mkdir -p "$FINAL"; chmod 700 "$FINAL"; cp -a "$CONTROL" "$FINAL/control-state.be
  echo "run_id=$FINAL_ID"; echo "parent_verified_run=$BASELINE_ID"; echo "created_utc=$(date -u +%FT%TZ)";
  echo "source_name=$CURRENT_SOURCE_NAME"; echo "source_mode=$CURRENT_SOURCE_MODE"; echo "source_backend_id=$SOURCE_BACKEND_ID";
  echo "destination_name=$CURRENT_DEST_NAME"; echo "destination_mode=$CURRENT_DEST_MODE"; echo "destination_backend_id=$DEST_BACKEND_ID";
- echo "dest_freeze_before=$DEST_FREEZE_BEFORE"; echo "manager=v3-50E42"; echo "phase=cutover";
+ echo "dest_freeze_before=$DEST_FREEZE_BEFORE"; echo "manager=v3-50E43"; echo "phase=cutover";
 } > "$FINAL/manifest"
 {
  printf 'RUN_ID=%q\n' "$FINAL_ID"; printf 'SOURCE_NAME=%q\n' "$CURRENT_SOURCE_NAME"; printf 'SOURCE_MODE=%q\n' "$CURRENT_SOURCE_MODE"; printf 'SOURCE_BACKEND_ID=%q\n' "$SOURCE_BACKEND_ID";
@@ -67,11 +70,23 @@ mkdir -p "$FINAL"; chmod 700 "$FINAL"; cp -a "$CONTROL" "$FINAL/control-state.be
 } > "$FINAL/run-identity.env"; chmod 600 "$FINAL/run-identity.env"
 printf '%s\n' "$CLIENT_PROFILE_JSON" > "$FINAL/client-profile.json"; chmod 600 "$FINAL/client-profile.json"
 
-FREEZE_ACTIVE=0; DEST_UNFROZEN=0
+FREEZE_ACTIVE=0; DEST_UNFROZEN=0; MAINTENANCE_AUTO=0
 restore_dest_freeze(){
   if [ "$DEST_UNFROZEN" -eq 1 ]; then
     if [ "$DEST_FREEZE_BEFORE" = true ]; then "$BIN/destination-freeze-enable" >/dev/null; else "$BIN/destination-freeze-disable" >/dev/null; fi
   fi
+}
+restore_auto_maintenance(){
+  [ "$MAINTENANCE_AUTO" -eq 1 ] || return 0
+  python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
+import json,os,sys
+from datetime import datetime,timezone
+from pathlib import Path
+p=Path(sys.argv[1]); src=sys.argv[2]; d=json.loads(p.read_text())
+if d.get('mode')=='MAINTENANCE' and d.get('active_backend')==src and d.get('cutover_enabled') is False:
+    d['mode']='NORMAL'; d['updated_utc']=datetime.now(timezone.utc).isoformat()
+    t=p.with_name(p.name+'.autonormal.tmp'); t.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n'); os.chmod(t,0o600); os.replace(t,p)
+PY
 }
 rollback_after_failure(){
   local rc="$1"; trap - ERR; set +e
@@ -84,31 +99,68 @@ rollback_after_failure(){
     else
       printf 'ROLLBACK_REQUIRED\n' > "$STATE_FILE"; echo "rollback=FAIL" >> "$FINAL/manifest"; echo "CUTOVER_ROLLBACK=FAIL" >&2; exit 90
     fi
+  else
+    restore_auto_maintenance || true
   fi
   exit "$rc"
 }
-
-echo "=== CUTOVER 50E42 / 1: SOURCE freeze ==="
-"$BIN/source-freeze-enable"; FREEZE_ACTIVE=1; printf 'CUTTING_OVER\n' > "$STATE_FILE"; printf '%s\n' "$FINAL_ID" > "$CURRENT_RUN_FILE"
 trap 'rollback_after_failure $?' ERR
 
-echo "=== CUTOVER 50E42 / 2: fresh frozen SOURCE snapshot ==="
+echo "=== CUTOVER 50E43 / 0B: automatic MAINTENANCE + drain ==="
+if [ "$CONTROL_MODE_BEFORE" = "NORMAL" ]; then
+  python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
+import json,os,sys
+from datetime import datetime,timezone
+from pathlib import Path
+p=Path(sys.argv[1]); src=sys.argv[2]; d=json.loads(p.read_text())
+if d.get('mode')!='NORMAL' or d.get('active_backend')!=src or d.get('cutover_enabled') is not False:
+    raise SystemExit('BLOKACE: Control state se pred automatickou udrzbou zmenil')
+d['mode']='MAINTENANCE'; d['updated_utc']=datetime.now(timezone.utc).isoformat()
+t=p.with_name(p.name+'.automaint.tmp'); t.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n'); os.chmod(t,0o600); os.replace(t,p)
+PY
+  MAINTENANCE_AUTO=1
+  echo "AUTO_MAINTENANCE=PASS"
+  DRAIN_WAIT_SEC="${CUTOVER_DRAIN_WAIT_SEC:-35}"
+  [[ "$DRAIN_WAIT_SEC" =~ ^[0-9]+$ ]] || DRAIN_WAIT_SEC=35
+  remaining="$DRAIN_WAIT_SEC"
+  while [ "$remaining" -gt 0 ]; do
+    echo "DRAIN_WAIT_REMAINING=${remaining}s"
+    step=5; [ "$remaining" -lt "$step" ] && step="$remaining"
+    sleep "$step"
+    remaining=$((remaining-step))
+  done
+else
+  echo "AUTO_MAINTENANCE=SKIP_ALREADY_ACTIVE"
+fi
+python3 - "$CONTROL" "$SOURCE_BACKEND_ID" <<'PY'
+import json,sys
+from pathlib import Path
+d=json.loads(Path(sys.argv[1]).read_text()); src=sys.argv[2]
+if d.get('mode')!='MAINTENANCE' or d.get('active_backend')!=src or d.get('cutover_enabled') is not False:
+    raise SystemExit('BLOKACE: Control Point neni po drainu MAINTENANCE na SOURCE')
+print('PASS: Control MAINTENANCE + SOURCE active')
+PY
+
+echo "=== CUTOVER 50E43 / 1: SOURCE freeze ==="
+"$BIN/source-freeze-enable"; FREEZE_ACTIVE=1; printf 'CUTTING_OVER\n' > "$STATE_FILE"; printf '%s\n' "$FINAL_ID" > "$CURRENT_RUN_FILE"
+
+echo "=== CUTOVER 50E43 / 2: fresh frozen SOURCE snapshot ==="
 "$BIN/source-db-snapshot" "$FINAL"; "$BIN/source-manifests" "$FINAL"; "$BIN/source-storage-snapshot" "$FINAL"
 
-echo "=== CUTOVER 50E42 / 3: DEST drift guard ==="
+echo "=== CUTOVER 50E43 / 3: DEST drift guard ==="
 DRIFT="$FINAL/destination-precutover"; "$BIN/destination-manifests" "$FINAL" "$DRIFT"
 for f in auth-stable.tsv storage-buckets.tsv storage-objects.tsv; do
   cmp -s "$BASELINE/destination-before/$f" "$DRIFT/$f" || { echo "BLOKACE: DEST $f se od PREPARE zmenil" >&2; false; }
 done
 echo "PASS: inactive DEST Auth/Storage beze zmeny od PREPARE"
 
-echo "=== CUTOVER 50E42 / 4: final DEST checkpoint ==="
+echo "=== CUTOVER 50E43 / 4: final DEST checkpoint ==="
 CP_PATH="$("$BIN/destination-checkpoint" "$FINAL_ID" | tee "$FINAL/checkpoint.log" | tail -n1)"; printf '%s\n' "$CP_PATH" > "$FINAL/checkpoint-path"
 
-echo "=== CUTOVER 50E42 / 5: final public refresh ==="
+echo "=== CUTOVER 50E43 / 5: final public refresh ==="
 touch "$FINAL/MUTATION_STARTED"; "$BIN/apply-public" "$FINAL"
 
-echo "=== CUTOVER 50E42 / 5B: frozen Auth/Storage delta ==="
+echo "=== CUTOVER 50E43 / 5B: frozen Auth/Storage delta ==="
 AFTER_PUBLIC="$FINAL/destination-after-public"; "$BIN/destination-manifests" "$FINAL" "$AFTER_PUBLIC"
 if cmp -s "$FINAL/auth-stable.tsv" "$AFTER_PUBLIC/auth-stable.tsv" && cmp -s "$FINAL/storage-buckets.tsv" "$AFTER_PUBLIC/storage-buckets.tsv" && cmp -s "$FINAL/storage-objects.tsv" "$AFTER_PUBLIC/storage-objects.tsv"; then
   echo "AUTH_STORAGE_DELTA=SKIP_ALREADY_EQUAL"
@@ -116,11 +168,11 @@ else
   "$BIN/apply-auth-storage" "$FINAL"
 fi
 
-echo "=== CUTOVER 50E42 / 6: final VERIFY ==="
+echo "=== CUTOVER 50E43 / 6: final VERIFY ==="
 rm -f "$FINAL/pending-delta.env"
 "$BIN/verify-run" "$FINAL"; grep -qx 'VERIFY: PASS' "$FINAL/verify-report.txt"
 
-echo "=== CUTOVER 50E42 / 7: atomic SOURCE -> DEST switch ==="
+echo "=== CUTOVER 50E43 / 7: atomic SOURCE -> DEST switch ==="
 python3 - "$CONTROL" "$SOURCE_BACKEND_ID" "$DEST_BACKEND_ID" "$FINAL/client-profile.json" <<'PY'
 import json,os,sys
 from datetime import datetime,timezone
@@ -134,14 +186,14 @@ d['updated_utc']=datetime.now(timezone.utc).isoformat(); t=p.with_name(p.name+'.
 print('CUTOVER_SWITCH=PASS'); print('ACTIVE_BACKEND='+dst); print('CONTROL_POINT=MAINTENANCE')
 PY
 
-echo "=== CUTOVER 50E42 / 8: activate DEST writes ==="
+echo "=== CUTOVER 50E43 / 8: activate DEST writes ==="
 "$BIN/destination-freeze-disable"; DEST_UNFROZEN=1
 source "$BIN/destination-lib"; dest_load
 read -r healthy total < <(dest_supabase_health); expected="$(dest_expected_health_total)"
 [ "$healthy" = "$expected" ] && [ "$total" = "$expected" ] || false
 echo "PASS: DEST health $healthy/$total"
 
-echo "=== CUTOVER 50E42 / 9: publish NORMAL on DEST ==="
+echo "=== CUTOVER 50E43 / 9: publish NORMAL on DEST ==="
 python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
 import json,os,sys
 from datetime import datetime,timezone
