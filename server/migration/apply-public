@@ -3,8 +3,12 @@ set -Eeuo pipefail
 fail() { echo "CHYBA: $*" >&2; exit 1; }
 [ "$#" -eq 1 ] || fail "Pouziti: apply-public /run-dir"
 RUN="$(readlink -m "$1")"
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+BIN="$BASE/bin"
 [ -f "$RUN/source-db.dump" ] || fail "Chybi source-db.dump"
 [ -f "$RUN/public-data.list" ] || fail "Chybi public-data.list"
+source "$BIN/destination-lib"
+dest_load
 mapfile -t TABLES < <(awk '$4=="TABLE" && $5=="DATA" && $6=="public" {print $7}' "$RUN/public-data.list" | sort -u)
 [ "${#TABLES[@]}" -gt 0 ] || fail "Nenalezeny public tabulky."
 TRUNC=""
@@ -14,6 +18,7 @@ for t in "${TABLES[@]}"; do
   TRUNC+="public.\"$t\""
 done
 
+echo "[apply] DESTINATION=${DEST_NAME:-?} [${DEST_BACKEND_ID:-?}] / ${DEST_MODE:-?}"
 echo "[apply] public data: ${#TABLES[@]} tabulek"
 {
   echo 'BEGIN;'
@@ -22,10 +27,14 @@ echo "[apply] public data: ${#TABLES[@]} tabulek"
   docker run --rm -v "$RUN:/in:ro" postgres:17-alpine \
     pg_restore --use-list=/in/public-data.list --data-only --no-owner --no-privileges --file=- /in/source-db.dump
   echo 'COMMIT;'
-} | docker exec -i supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1
+} | dest_psql
 
-echo "[apply] Storage ownership repair (jen validni UUID prefixy)..."
-docker exec -i supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 <<'SQL'
+# Freeze stav DESTINATION zustava beze zmeny. Pro tuto admin migracni opravu
+# owner/owner_id se guard obchazi pouze uvnitr jedine transakce/session.
+echo "[apply] Storage ownership repair na skutecnem DESTINATION (freeze state zachovan)..."
+dest_psql <<'SQL'
+BEGIN;
+SET LOCAL session_replication_role = replica;
 UPDATE storage.objects o
 SET owner = split_part(o.name,'/',1)::uuid,
     owner_id = split_part(o.name,'/',1)
@@ -35,6 +44,7 @@ WHERE o.bucket_id = 'lubanote-attachments'
     SELECT 1 FROM auth.users u
     WHERE u.id = split_part(o.name,'/',1)::uuid
   );
+COMMIT;
 SQL
 
-echo "PASS: public data aplikovana bez --clean; Auth/Storage schema nebyla obnovovana."
+echo "PASS: public data aplikovana na skutecny DESTINATION; Auth/Storage schema nebylo cisteno."
