@@ -18,7 +18,7 @@ echo "[destination] public fingerprints..."
 while IFS=$'\t' read -r table _count _digest; do
   [[ "$table" =~ ^[a-zA-Z0-9_]+$ ]] || fail "Neocekavany nazev tabulky: $table"
   dest_psql -At -F $'\t' -c "SELECT '$table', count(*)::bigint, md5(COALESCE(string_agg(h, '' ORDER BY h), '')) FROM (SELECT md5(to_jsonb(t)::text) h FROM public.\"$table\" t) s;" \
-    >> "$OUT/public-fingerprints.tsv"
+    </dev/null >> "$OUT/public-fingerprints.tsv"
 done < "$RUN/public-fingerprints.tsv"
 
 : > "$OUT/public-sequences.tsv"
@@ -26,7 +26,7 @@ while IFS=$'\t' read -r seq _; do
   q=${seq#public.}
   [[ "$q" =~ ^[a-zA-Z0-9_]+$ ]] || fail "Neocekavana sekvence: $q"
   dest_psql -At -F $'\t' -c "SELECT 'public.$q', COALESCE(last_value::text,'NULL') FROM pg_sequences WHERE schemaname='public' AND sequencename='$q';" \
-    >> "$OUT/public-sequences.tsv"
+    </dev/null >> "$OUT/public-sequences.tsv"
 done < "$RUN/public-sequences.tsv"
 
 dest_psql -At -F $'\t' -c "
