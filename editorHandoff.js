@@ -1844,9 +1844,27 @@ async function pripravOtevreniEditoru(noteId) {
     }
 
     /*
+     * PATCH 680A3 – OFFLINE EDITOR HANDOFF FAST FALLBACK
+     *
+     * Android WebView může i bez dosažitelného internetu ponechat
+     * navigator.onLine=true. Pokud samotný claim skončí transportní
+     * chybou, nesmíme ještě několik sekund pollovat note_editor_sessions
+     * v restart-recovery větvi. Handoff je pouze doplňková ochrana;
+     * lokální editor proto okamžitě otevřeme a posledním airbagem dál
+     * zůstává existující revision ochrana Sync V2.
+     */
+    if (claim?.error === true) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "OPEN",
+        "HANDOFF NETWORK FALLBACK | local editor"
+      );
+      return true;
+    }
+
+    /*
      * Po hard killu APK může server ještě držet lease téže instalace.
-     * Na nativním Androidu ho bezpečně nahradíme novou session bez
-     * falešného modalu "Poznámka je otevřená jinde".
+     * Tuto serverovou recovery zkoušíme jen po skutečně doručené
+     * odpovědi claimu. Při síťové chybě jsme se vrátili výše.
      */
     const obnovenaVlastniSession =
       await zkusObnovitVlastniEditorPoRestartu(
@@ -1855,14 +1873,6 @@ async function pripravOtevreniEditoru(noteId) {
       );
 
     if (obnovenaVlastniSession) {
-      return true;
-    }
-
-    if (claim?.error === true) {
-      /*
-       * Chyba nové doplňkové vrstvy nesmí zablokovat celý editor.
-       * Revision ochrana dál zůstává posledním airbagem.
-       */
       return true;
     }
 
