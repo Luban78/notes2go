@@ -47,7 +47,7 @@ REMOTE
 esac
 [ -n "$ANON_KEY" ] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=anon_key_missing' >&2; exit 36; }
 [[ "$CLIENT_URL" =~ ^https?://[^[:space:]]+$ ]] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=invalid_client_url' >&2; exit 37; }
-curl -fsS --max-time 8 -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" "$CLIENT_URL/rest/v1/" >/dev/null || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=client_endpoint_unreachable' >&2; exit 38; }
+curl -fsS --max-time 8 -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" "$CLIENT_URL/auth/v1/settings" >/dev/null || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=client_endpoint_unreachable' >&2; exit 38; }
 PROJECT_REF="${DEST_CLIENT_PROJECT_REF:-$BACKEND_ID}"
 AUTH_KEY="${DEST_CLIENT_AUTH_STORAGE_KEY:-sb-${PROJECT_REF}-auth-token}"
 NAME="${DEST_CLIENT_NAME:-$DEST_NAME}"
