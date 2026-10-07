@@ -299,6 +299,7 @@
   const MIGRATION_CONTROL_BASE = "https://api.lubanote.com/migration/v1";
   const CONTROL_POINT_BASE = "https://api.lubanote.com/control/v1";
   const MIGRATION_LIVE_INTERVAL_MS = 1200;
+  const BACKEND_SESSION_HANDOFF_KEY = "lubanoteBackendSessionHandoffV1";
 
   /* PATCH 677J – Android/WebView systémové Zpět uvnitř Admin Dashboardu.
    * Dashboard dostane vlastní lehkou history vrstvu: Server/UI/Účty ->
@@ -1162,7 +1163,7 @@
 
   /* PATCH 677U – produkcni Control Point v Admin Dashboardu.
    * Status je verejny read-only. Zmenu NORMAL/MAINTENANCE smi poslat jen
-   * admin prihlaseny na TEST LubaServeru; Bridge znovu overi Bearer session.
+   * admin přihlášený na právě aktivní produkci; Bridge znovu ověří Bearer session proti aktivnímu backendu.
    * Tento krok NENI DB write-freeze a nikdy nemeni active_backend/CUTOVER. */
   function nastavControlStav(stav, text) {
     if (!controlStav) return;
@@ -1179,9 +1180,6 @@
     zamkniControlTlacitka();
     if (!jeAdmin || controlAkceBezi) return;
 
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.id !== "lubanoteServer") return;
-
     const mode = String(vysledek?.mode || "").trim().toUpperCase();
     if (mode === "NORMAL" && controlMaintenanceTlacitko) {
       controlMaintenanceTlacitko.disabled = false;
@@ -1193,9 +1191,6 @@
 
   function vykresliControlStatus(vysledek, { tichy = false } = {}) {
     const mode = String(vysledek?.mode || "UNKNOWN").trim().toUpperCase();
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    const jeTest = profil?.id === "lubanoteServer";
-
     controlPosledniStatus = vysledek || null;
 
     if (migrationSourceLabel) {
@@ -1221,12 +1216,6 @@
     nastavControlOvladani(vysledek || {});
 
     if (!controlZprava) return;
-
-    if (!jeTest) {
-      controlZprava.textContent =
-        `Control Point: ${mode || "UNKNOWN"} · aktivní backend ${String(vysledek?.active_backend || "—")} · pro změnu režimu přepni toto zařízení do TEST LubaServeru.`;
-      return;
-    }
 
     if (mode === "MAINTENANCE") {
       controlZprava.textContent =
@@ -1311,17 +1300,6 @@
 
   async function provedControlAkci(cilovyMode) {
     if (!jeAdmin || controlAkceBezi) return;
-
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.id !== "lubanoteServer") {
-      zamkniControlTlacitka();
-      nastavControlStav("warning", "ČEKÁ");
-      if (controlZprava) {
-        controlZprava.textContent =
-          "Produkční režim lze měnit jen z TEST LubaServer profilu, protože Bridge ověřuje LubaServer admin session.";
-      }
-      return;
-    }
 
     const aktualni = await nactiControlStatus({ tichy: true });
     const aktualniMode = String(aktualni?.mode || "").trim().toUpperCase();
@@ -1734,7 +1712,7 @@
   async function ziskejMigrationBearerToken() {
     const pripraven = await pripravClient();
     if (!pripraven || !supabaseClient?.auth) {
-      throw new Error("LubaServer klient není dostupný.");
+      throw new Error("Aktivní produkční klient není dostupný.");
     }
 
     const { data, error } = await supabaseClient.auth.getSession();
@@ -1742,27 +1720,66 @@
 
     const token = data?.session?.access_token;
     if (!token) {
-      throw new Error("LubaServer přihlášení nemá aktivní session.");
+      throw new Error("Aktivní produkční účet nemá platnou session.");
     }
     return token;
+  }
+
+  function fyzickyBackendIdProfilu(profil) {
+    const id = String(profil?.backendId || "").trim().toLowerCase();
+    if (id === "lubaserver-test") return "lubaserver";
+    return id;
+  }
+
+  async function pripravBackendSessionHandoff(control, cilProfil, sourceProfil = null) {
+    const source = sourceProfil || window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    const sourceBackend = fyzickyBackendIdProfilu(source);
+    const destinationBackend = String(control?.active_backend || cilProfil?.backendId || "").trim().toLowerCase();
+
+    if (!sourceBackend || !destinationBackend) {
+      throw new Error("Nelze určit SOURCE/DEST pro přenos přihlášení.");
+    }
+
+    if (sourceBackend === destinationBackend) {
+      const raw = localStorage.getItem(String(source?.authStorageKey || ""));
+      const cilovyKlic = String(cilProfil?.authStorageKey || "");
+      if (raw && cilovyKlic) localStorage.setItem(cilovyKlic, raw);
+      return { ok: true, localCopy: true };
+    }
+
+    const token = await ziskejMigrationBearerToken();
+    const odpoved = await fetch(`${CONTROL_POINT_BASE}/session-handoff`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        source_backend: sourceBackend,
+        destination_backend: destinationBackend
+      }),
+      cache: "no-store"
+    });
+    const data = await odpoved.json().catch(() => ({}));
+    if (!odpoved.ok || data?.ok !== true || !data?.token_hash) {
+      throw new Error(data?.error || `HTTP_${odpoved.status}`);
+    }
+
+    localStorage.setItem(BACKEND_SESSION_HANDOFF_KEY, JSON.stringify({
+      version: 1,
+      sourceBackend,
+      destinationBackend,
+      targetAuthStorageKey: String(cilProfil?.authStorageKey || ""),
+      tokenHash: String(data.token_hash),
+      tokenType: String(data.token_type || "magiclink"),
+      issuedUtc: String(data.issued_utc || new Date().toISOString())
+    }));
+    return { ok: true, remote: true };
   }
 
   async function nactiMigrationStatus({ tichy = false } = {}) {
     if (!jeAdmin || migrationStatusNacitam) return migrationPosledniStatus;
     nastavMigrationTlacitkaZamcena();
-
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.id !== "lubanoteServer") {
-      zastavMigrationLiveRefresh();
-      migrationPosledniStatus = null;
-      schovejMigrationProgress();
-      nastavMigrationStav("warning", "ČEKÁ");
-      if (migrationZprava && !tichy) {
-        migrationZprava.textContent =
-          "Migration Bridge se z bezpečnostních důvodů ověřuje účtem na LubaServeru. Přepni nejdřív toto zařízení do TEST LubaServeru.";
-      }
-      return null;
-    }
 
     migrationStatusNacitam = true;
     if (!tichy) {
@@ -1821,7 +1838,7 @@
             "Bridge ONLINE · VERIFY skončil chybou · Manager se bezpečně vrátil do PREPARED · po diagnostice lze VERIFY zopakovat.";
         } else if (managerState === "CUTOVER_COMPLETE") {
           migrationZprava.textContent =
-            "Bridge ONLINE · CUTOVER dokončen · Control Point obnovuji; TEST profil zůstává připnutý pro administraci.";
+            "Bridge ONLINE · CUTOVER dokončen · Control Point obnovuji; produkční klient se přepne automaticky bez mazání lokálních dat.";
           void nactiControlStatus({ tichy: true }).then(() => aktualizujBackendZarizeniUi());
         } else if (managerState === "VERIFIED") {
           migrationZprava.textContent =
@@ -1865,17 +1882,6 @@
     const jeVerify = akce === "verify";
     const jeCutover = akce === "cutover";
     const nazevAkce = jeCutover ? "CUTOVER" : (jeVerify ? "VERIFY" : "PREPARE");
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.id !== "lubanoteServer") {
-      nastavMigrationTlacitkaZamcena();
-      nastavMigrationStav("warning", "ČEKÁ");
-      if (migrationZprava) {
-        migrationZprava.textContent =
-          `${nazevAkce} lze spustit jen z aktivního LubaServer profilu.`;
-      }
-      return;
-    }
-
     const aktualni = await nactiMigrationStatus({ tichy: true });
     const managerState = String(aktualni?.manager_state || "")
       .trim()
@@ -2259,8 +2265,8 @@
 
     if (deviceBackendMessage) {
       deviceBackendMessage.textContent = jeTest
-        ? "TEST profil se automaticky nepřepíná a slouží pro bezpečnou administraci migrace. Tlačítkem níže se vrátíš na aktuální produkci z Control Pointu."
-        : "Produkční backend tohoto zařízení sleduje Control Point. CUTOVER přepne všechny produkční klienty; lokální sync fronty se nemažou.";
+        ? "Izolovaný TEST profil je pouze servisní režim. Pro PREPARE / VERIFY / CUTOVER už není potřeba. Tlačítkem níže se vrátíš na aktivní produkci bez mazání lokálních dat."
+        : "Produkční backend tohoto zařízení sleduje Control Point. Migraci lze řídit přímo z produkce; CUTOVER zachová lokální cache i přihlášení.";
     }
 
     /* Produkční Cloud/LubaServer už nesmí být ruční lokální přepínač.
@@ -2270,6 +2276,7 @@
     }
     if (useTestLubaServerTlacitko) {
       useTestLubaServerTlacitko.hidden = jeTest;
+      useTestLubaServerTlacitko.textContent = "Servisní TEST LubaServeru (izolovaný)";
     }
     if (useCloudTlacitko) {
       useCloudTlacitko.hidden = !jeTest;
@@ -2315,7 +2322,7 @@
       otevriAdminPotvrzeni({
         nadpis: "Přepnout toto zařízení do TEST LubaServeru?",
         zprava:
-          "TEST je ručně připnutý pouze pro toto zařízení a slouží pro administraci migrace během MAINTENANCE. Produkční Control Point se tím nemění.",
+          "Izolovaný TEST je jen servisní režim a pro migraci už není potřeba. Vstup do TESTu oddělí lokální testovací cache; produkční Control Point se tím nemění.",
         potvrditText: "Přejít do TEST",
         poPotvrzeni: async () => {
           config.nastavAktivniProfil("lubanoteServer");
@@ -2345,12 +2352,18 @@
           `Control Point ukazuje ${cil.nazev || control.active_backend}. TEST cache se bezpečně oddělí resetem; produkční backend se globálně nemění.`,
         potvrditText: `Použít ${cil.nazev || "produkci"}`,
         poPotvrzeni: async () => {
+          try {
+            await pripravBackendSessionHandoff(control, cil, aktualni);
+          } catch (error) {
+            zobrazBackendSwitchChybu(`Přihlášení nelze bezpečně přenést: ${error?.message || "neznámá chyba"}`);
+            return;
+          }
           const nasledovani = config.sledujControlPoint?.(control, { vynutit: true });
           if (nasledovani?.ok !== true) {
             zobrazBackendSwitchChybu("Aktivní produkční backend nelze bezpečně aktivovat.");
             return;
           }
-          window.location.replace("./local-reset.html?backendSwitch=1&backendFollow=1");
+          window.location.replace(`./?backendFollow=${encodeURIComponent(String(control.active_backend || "production"))}`);
         }
       });
       return;

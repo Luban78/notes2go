@@ -41,6 +41,7 @@ JOBS_DIR = RUNTIME_DIR / "jobs"
 CONTROL_STATE_FILE = RUNTIME_DIR / "control-state.json"
 MAX_LOG_TAIL_BYTES = 32_768
 DESTINATION_ENV = Path(os.environ.get("DESTINATION_ENV", "/home/luban78/luba-server/migration-manager/config/destination.env"))
+BACKEND_PROFILES_DIR = SOURCE_ENV.parent / "backend-profiles"
 ALLOWED_ACTIONS = {"prepare", "verify", "cutover"}
 BACKEND_SELECT = os.environ.get("BACKEND_SELECT", "/home/luban78/luba-server/migration-manager/bin/backend-select")
 ALLOWED_CONTROL_MODES = {"NORMAL", "MAINTENANCE"}
@@ -181,19 +182,69 @@ def manager_status_output() -> str:
         return f"status unavailable: {type(exc).__name__}"
 
 
+def backend_source_auth_target(backend_id: str) -> tuple[str, str] | None:
+    backend = str(backend_id or "").strip().lower()
+    if not BACKEND_ID_RE.fullmatch(backend):
+        return None
+
+    # Domaci LubaServer overujeme pres lokalni Kong, bez zavislosti na verejne siti.
+    if backend == "lubaserver":
+        key = read_env_value(SUPABASE_ENV, "ANON_KEY")
+        return ("http://127.0.0.1:8000", key) if key else None
+
+    profile = BACKEND_PROFILES_DIR / f"{backend}.source.env"
+    api_url = read_env_value(str(profile), "SOURCE_API_URL").rstrip("/")
+    api_key = (
+        read_env_value(str(profile), "SOURCE_ANON_KEY")
+        or read_env_value(str(profile), "SOURCE_SERVICE_ROLE_KEY")
+    )
+    if not api_url or not api_key:
+        return None
+    return api_url, api_key
+
+
+def backend_destination_admin_target(backend_id: str) -> tuple[str, str] | None:
+    backend = str(backend_id or "").strip().lower()
+    if not BACKEND_ID_RE.fullmatch(backend):
+        return None
+
+    if backend == "lubaserver":
+        key = read_env_value(SUPABASE_ENV, "SERVICE_ROLE_KEY")
+        return ("http://127.0.0.1:8000", key) if key else None
+
+    # Po CUTOVERu destination.env stale popisuje prave novy PRIMARY.
+    dest_backend = read_env_value(str(DESTINATION_ENV), "DEST_BACKEND_ID").strip().lower()
+    profile = DESTINATION_ENV if dest_backend == backend else BACKEND_PROFILES_DIR / f"{backend}.destination.env"
+    api_url = (
+        read_env_value(str(profile), "DEST_API_URL")
+        or read_env_value(str(profile), "DEST_CLIENT_URL")
+    ).rstrip("/")
+    service_key = read_env_value(str(profile), "DEST_SERVICE_ROLE_KEY")
+    if not api_url or not service_key:
+        return None
+    return api_url, service_key
+
+
 def verify_admin(auth_header: str | None) -> tuple[bool, str]:
     if not auth_header or not auth_header.startswith("Bearer "):
         return False, "missing_bearer"
 
-    anon_key = read_env_value(SUPABASE_ENV, "ANON_KEY")
-    if not anon_key:
-        return False, "anon_key_unavailable"
+    try:
+        control = read_control_state()
+    except Exception:
+        return False, "control_unavailable"
+
+    target = backend_source_auth_target(str(control.get("active_backend", "")))
+    if not target:
+        return False, "active_backend_auth_unavailable"
+    base_url, api_key = target
+    rpc_url = f"{base_url.rstrip('/')}/rest/v1/rpc/lubanote_admin_is_current_user"
 
     try:
         response = requests.post(
-            SUPABASE_RPC_URL,
+            rpc_url,
             headers={
-                "apikey": anon_key,
+                "apikey": api_key,
                 "Authorization": auth_header,
                 "Content-Type": "application/json",
             },
@@ -213,6 +264,111 @@ def verify_admin(auth_header: str | None) -> tuple[bool, str]:
 
     return (True, "ok") if is_admin else (False, "not_admin")
 
+
+def create_session_handoff(auth_header: str | None, request_payload: dict[str, Any] | None = None) -> tuple[bool, dict[str, Any]]:
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return False, {"error": "missing_bearer"}
+
+    try:
+        control = read_control_state()
+    except Exception:
+        return False, {"error": "control_unavailable"}
+
+    request_payload = request_payload or {}
+    source_backend = str(request_payload.get("source_backend", "")).strip().lower()
+    destination_backend = str(control.get("active_backend", "")).strip().lower()
+    requested_destination = str(request_payload.get("destination_backend", destination_backend)).strip().lower()
+
+    if not BACKEND_ID_RE.fullmatch(source_backend):
+        return False, {"error": "handoff_source_backend_invalid"}
+    if requested_destination != destination_backend:
+        return False, {"error": "handoff_destination_not_active"}
+    if source_backend == destination_backend:
+        return False, {"error": "handoff_same_backend"}
+
+    source_target = backend_source_auth_target(source_backend)
+    dest_target = backend_destination_admin_target(destination_backend)
+    if not source_target or not dest_target:
+        return False, {"error": "handoff_backend_auth_unavailable"}
+
+    source_url, source_key = source_target
+    dest_url, dest_service_key = dest_target
+
+    try:
+        source_user_response = requests.get(
+            f"{source_url.rstrip('/')}/auth/v1/user",
+            headers={"apikey": source_key, "Authorization": auth_header},
+            timeout=8,
+        )
+    except requests.RequestException:
+        return False, {"error": "handoff_source_auth_unreachable"}
+    if source_user_response.status_code != 200:
+        return False, {"error": "handoff_source_session_rejected"}
+
+    try:
+        source_user = source_user_response.json()
+    except ValueError:
+        return False, {"error": "handoff_source_user_invalid"}
+    user_id = str(source_user.get("id", "")).strip()
+    email = str(source_user.get("email", "")).strip()
+    if not user_id or not email:
+        return False, {"error": "handoff_source_identity_incomplete"}
+
+    admin_headers = {
+        "apikey": dest_service_key,
+        "Authorization": f"Bearer {dest_service_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        dest_user_response = requests.get(
+            f"{dest_url.rstrip('/')}/auth/v1/admin/users/{user_id}",
+            headers=admin_headers,
+            timeout=8,
+        )
+    except requests.RequestException:
+        return False, {"error": "handoff_destination_auth_unreachable"}
+    if dest_user_response.status_code != 200:
+        return False, {"error": "handoff_destination_user_missing"}
+    try:
+        dest_user = dest_user_response.json()
+    except ValueError:
+        return False, {"error": "handoff_destination_user_invalid"}
+    if str(dest_user.get("id", "")).strip() != user_id or str(dest_user.get("email", "")).strip().lower() != email.lower():
+        return False, {"error": "handoff_destination_identity_mismatch"}
+
+    try:
+        link_response = requests.post(
+            f"{dest_url.rstrip('/')}/auth/v1/admin/generate_link",
+            headers=admin_headers,
+            json={"type": "magiclink", "email": email},
+            timeout=8,
+        )
+    except requests.RequestException:
+        return False, {"error": "handoff_link_unreachable"}
+    if link_response.status_code != 200:
+        return False, {"error": "handoff_link_rejected"}
+    try:
+        link_data = link_response.json()
+    except ValueError:
+        return False, {"error": "handoff_link_invalid"}
+    token_hash = str(
+        link_data.get("hashed_token")
+        or (link_data.get("properties") or {}).get("hashed_token")
+        or ""
+    ).strip()
+    if not token_hash:
+        return False, {"error": "handoff_token_missing"}
+
+    return True, {
+        "ok": True,
+        "version": 1,
+        "source_backend": source_backend,
+        "destination_backend": destination_backend,
+        "user_id": user_id,
+        "token_hash": token_hash,
+        "token_type": "magiclink",
+        "issued_utc": utc_now(),
+    }
 
 def write_job_meta(job: dict[str, Any]) -> None:
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -435,7 +591,7 @@ def start_action(action: str) -> tuple[bool, dict[str, Any]]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LubaNoteMigrationBridge/1.3-50E43"
+    server_version = "LubaNoteMigrationBridge/1.4-50E44"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log request headers/tokens. Base log format contains only method/path/status.
@@ -529,6 +685,22 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:
+        if self.path == "/control/v1/session-handoff":
+            try:
+                length = min(int(self.headers.get("Content-Length", "0")), 2048)
+                request_payload = json.loads(self.rfile.read(length) or b"{}")
+            except (ValueError, json.JSONDecodeError):
+                self.send_json(400, {"ok": False, "error": "invalid_json"})
+                return
+            ok, payload = create_session_handoff(self.headers.get("Authorization"), request_payload)
+            if not ok:
+                error = str(payload.get("error", "handoff_failed"))
+                status = 401 if error in {"missing_bearer", "handoff_source_session_rejected"} else 409
+                self.send_json(status, {"ok": False, **payload})
+                return
+            self.send_json(200, payload)
+            return
+
         control_paths = {
             "/control/v1/maintenance": "MAINTENANCE",
             "/control/v1/normal": "NORMAL",

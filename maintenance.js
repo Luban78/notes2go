@@ -1,6 +1,6 @@
 /* ==================================================
-   LubaNote – Production Maintenance / Drain V2
-   PATCH 679B
+   LubaNote – Production Maintenance / Drain V3
+   PATCH 679F
 
    - čte pouze veřejný Control Point,
    - produkční profil automaticky následuje active_backend,
@@ -15,6 +15,8 @@
   "use strict";
 
   const CONTROL_URL = "https://api.lubanote.com/control/v1/status";
+  const CONTROL_HANDOFF_URL = "https://api.lubanote.com/control/v1/session-handoff";
+  const BACKEND_SESSION_HANDOFF_KEY = "lubanoteBackendSessionHandoffV1";
   const INTERVAL_MS = 30000;
   const FETCH_TIMEOUT_MS = 5000;
   const RETRY_DRAIN_MS = 2200;
@@ -403,61 +405,118 @@
     }
   }
 
-  function srovnejProdukcniBackend(control) {
+  async function pripravSessionHandoff(control, aktualni, cil) {
+    const sourceBackend = String(aktualni?.backendId || "").trim().toLowerCase();
+    const destinationBackend = String(control?.active_backend || cil?.backendId || "").trim().toLowerCase();
+    if (!sourceBackend || !destinationBackend) throw new Error("backend-id-missing");
+    if (sourceBackend === destinationBackend) return { ok: true, skipped: true };
+
+    const pripraven = await window.LubaNoteSupabase?.pripravClient?.();
+    if (!pripraven || !supabaseClient?.auth) throw new Error("source-client-unavailable");
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+    const token = data?.session?.access_token;
+    if (!token) {
+      if (localStorage.getItem("lubanoteAuthOk") === "1") throw new Error("source-session-missing");
+      return { ok: true, skipped: true };
+    }
+
+    const response = await fetch(CONTROL_HANDOFF_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ source_backend: sourceBackend, destination_backend: destinationBackend }),
+      cache: "no-store",
+      credentials: "omit"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok !== true || !payload?.token_hash) {
+      throw new Error(payload?.error || `handoff-http-${response.status}`);
+    }
+
+    localStorage.setItem(BACKEND_SESSION_HANDOFF_KEY, JSON.stringify({
+      version: 1,
+      sourceBackend,
+      destinationBackend,
+      targetAuthStorageKey: String(cil?.authStorageKey || ""),
+      tokenHash: String(payload.token_hash),
+      tokenType: String(payload.token_type || "magiclink"),
+      issuedUtc: String(payload.issued_utc || new Date().toISOString())
+    }));
+    return { ok: true };
+  }
+
+  async function srovnejProdukcniBackend(control) {
     const config = window.LubaNoteBackendConfig;
     if (!config?.sledujControlPoint) {
       return { ok: false, duvod: "backend-control-unavailable" };
     }
 
-    const vysledek = config.sledujControlPoint(control);
-    if (vysledek?.pinnedTest) return vysledek;
-
-    if (vysledek?.ok !== true) {
+    const aktualni = config.nactiAktivniProfil?.();
+    if (aktualni?.prostredi === "test") {
+      return { ok: true, changed: false, pinnedTest: true, profil: aktualni };
+    }
+    const cil = config.profilProControlPoint?.(control);
+    if (!cil) {
       maintenanceAktivni = true;
       writeFreezeAktivni = true;
-      drainHotovy = false;
-      clearTimeout(drainTimer);
-      clearTimeout(freezeTimer);
-      drainTimer = null;
-      freezeTimer = null;
       nastavOverlay(
         "Produkční backend nelze bezpečně určit",
         "Control Point ukazuje nový server, ale chybí platný klientský profil.",
         "LubaNote zůstává zamčený, aby nezapisoval na starý backend."
       );
-      return vysledek;
+      return { ok: false, duvod: "unknown-production-backend" };
     }
 
-    if (vysledek.changed) {
-      window.LubaNoteBackendSwitching = true;
-      maintenanceAktivni = true;
-      writeFreezeAktivni = true;
-      drainHotovy = false;
-      clearTimeout(drainTimer);
-      clearTimeout(freezeTimer);
-      drainTimer = null;
-      freezeTimer = null;
+    const stejny = String(aktualni?.backendId || "") === String(cil?.backendId || "") &&
+      String(aktualni?.url || "").replace(/\/$/, "") === String(cil?.url || "").replace(/\/$/, "");
+    if (stejny) return { ok: true, changed: false, profil: aktualni };
 
+    window.LubaNoteBackendSwitching = true;
+    maintenanceAktivni = true;
+    writeFreezeAktivni = true;
+    drainHotovy = false;
+    clearTimeout(drainTimer);
+    clearTimeout(freezeTimer);
+    drainTimer = null;
+    freezeTimer = null;
+    nastavOverlay(
+      "Připravuji bezpečné přepnutí",
+      `Nová produkce: ${cil?.nazev || control.active_backend}.`,
+      "Přenáším přihlášení; lokální poznámky, Secret klíče a sync cursory zůstávají v zařízení."
+    );
+
+    try {
+      await pripravSessionHandoff(control, aktualni, cil);
+    } catch (error) {
+      console.warn("Backend session handoff failed:", error);
       nastavOverlay(
-        "Přepínám produkční backend",
-        `Nová produkce: ${vysledek.profil?.nazev || control.active_backend}.`,
-        "Lokální data a čekající synchronizační fronty zůstávají zachované."
+        "Přihlášení nelze bezpečně přenést",
+        "Produkce už byla přepnuta, ale automatický session handoff selhal.",
+        "Zařízení zůstává zamčené na starém backendu a nic na něj nezapisuje. Zkus kontrolu znovu."
       );
-
-      try { document.activeElement?.blur?.(); } catch (_) {}
-      window.setTimeout(() => {
-        const cil = encodeURIComponent(String(control.active_backend || "production"));
-        window.location.replace(`./?backendFollow=${cil}`);
-      }, 80);
+      return { ok: false, duvod: "session-handoff-failed", error };
     }
 
-    return vysledek;
+    const vysledek = config.sledujControlPoint(control);
+    if (vysledek?.ok !== true) return vysledek;
+
+    nastavOverlay(
+      "Přepínám produkční backend",
+      `Nová produkce: ${vysledek.profil?.nazev || control.active_backend}.`,
+      "Přihlášení i lokální data zůstávají zachované."
+    );
+    try { document.activeElement?.blur?.(); } catch (_) {}
+    window.setTimeout(() => {
+      const cilId = encodeURIComponent(String(control.active_backend || "production"));
+      window.location.replace(`./?backendFollow=${cilId}`);
+    }, 80);
+    return { ...vysledek, changed: true };
   }
 
-  function aplikujControl(control) {
+  async function aplikujControl(control) {
     posledniStav = control;
 
-    const srovnani = srovnejProdukcniBackend(control);
+    const srovnani = await srovnejProdukcniBackend(control);
     if (srovnani?.ok !== true || srovnani?.changed) return;
 
     const profil = aktivniBackendId();
@@ -499,7 +558,7 @@
     probihaKontrola = (async () => {
       try {
         const control = await nactiControlPoint();
-        aplikujControl(control);
+        await aplikujControl(control);
         return control;
       } catch (error) {
         console.warn("LubaNote Control Point není dostupný:", error);

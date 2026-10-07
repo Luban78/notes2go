@@ -1641,7 +1641,7 @@
               Použít LubaServer PROD
             </button>
             <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Připojit toto zařízení k TEST LubaServeru
+              Servisní TEST LubaServeru (izolovaný)
             </button>
             <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">
               Opustit TEST a použít aktivní produkci
@@ -2779,13 +2779,13 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Backend Independence V1 / BI-1A: jediný zdroj endpointu backendu. -->
-  <script src="backendConfig.js?v=679b-global-backend-control"></script>
+  <script src="backendConfig.js?v=679f-seamless-backend-auth"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
   <script src="syncTraffic.js?v=679c-rx-visibility-owner"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=679b-no-hidden-cloud-fallback"></script>
+  <script src="supabaseClient.js?v=679f-session-handoff"></script>
   <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
   <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
@@ -2800,7 +2800,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679e-migration-ux"></script>
+  <script src="adminDashboard.js?v=679f-production-admin"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2829,7 +2829,7 @@
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=679a-target-confirm-recovery"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
-  <script src="maintenance.js?v=679b-production-follower"></script>
+  <script src="maintenance.js?v=679f-session-handoff"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>

@@ -31,6 +31,7 @@ const LUBANOTE_AUTH_OK_KEY = "lubanoteAuthOk";
 const LUBANOTE_AUTH_BLOCKED_KEY = "lubanoteAuthBlocked";
 const LUBANOTE_LOCAL_OWNER_KEY = "lubanoteLocalOwnerUserId";
 const LUBANOTE_ACCESS_CACHE_KEY = "lubanoteAccessCacheV1";
+const LUBANOTE_BACKEND_SESSION_HANDOFF_KEY = "lubanoteBackendSessionHandoffV1";
 const SUPABASE_PROJECT_REF =
   LUBANOTE_BACKEND.projectRef || "nwdacgigplofksexssws";
 const SUPABASE_AUTH_STORAGE_KEY =
@@ -2699,6 +2700,48 @@ async function overPrihlaseniOnline({
   }
 }
 
+async function dokonciBackendSessionHandoffPokudJe() {
+  let handoff = null;
+  try {
+    const raw = localStorage.getItem(LUBANOTE_BACKEND_SESSION_HANDOFF_KEY);
+    if (!raw) return false;
+    handoff = JSON.parse(raw);
+  } catch (_) {
+    localStorage.removeItem(LUBANOTE_BACKEND_SESSION_HANDOFF_KEY);
+    return false;
+  }
+
+  const cil = String(handoff?.destinationBackend || "").trim().toLowerCase();
+  const aktivni = String(LUBANOTE_BACKEND?.backendId || "").trim().toLowerCase();
+  const tokenHash = String(handoff?.tokenHash || "").trim();
+  const tokenType = String(handoff?.tokenType || "magiclink").trim() || "magiclink";
+  const issuedMs = Date.parse(String(handoff?.issuedUtc || ""));
+  if (!cil || cil !== aktivni || !tokenHash || !Number.isFinite(issuedMs) || Date.now() - issuedMs > 10 * 60 * 1000) {
+    localStorage.removeItem(LUBANOTE_BACKEND_SESSION_HANDOFF_KEY);
+    return false;
+  }
+
+  try {
+    const pripraven = await pripravSupabaseClient();
+    if (!pripraven || !supabaseClient?.auth) throw new Error("target-client-unavailable");
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: tokenType
+    });
+    if (error) throw error;
+    if (!data?.session?.access_token || !data?.user?.id) throw new Error("handoff-session-missing");
+
+    localStorage.removeItem(LUBANOTE_BACKEND_SESSION_HANDOFF_KEY);
+    oznacPredchoziPrihlaseni();
+    window.LubaNoteStartupDiag?.zapis?.("AUTH", `BACKEND SESSION HANDOFF PASS | backend=${aktivni}`);
+    return true;
+  } catch (error) {
+    console.warn("Backend session handoff pending/failed:", error?.message || error);
+    window.LubaNoteStartupDiag?.zapis?.("AUTH", `BACKEND SESSION HANDOFF RETRY | backend=${aktivni}`);
+    return false;
+  }
+}
+
 async function updateLoginScreen() {
   /*
    * Potvrzení e-mailu je samostatný auth návrat, ne vypršení session.
@@ -3685,8 +3728,13 @@ window.addEventListener("online", () => {
   });
 });
 
-aktualizujAuthTexty();
-updateLoginScreen();
+async function spustAuthBootstrap679F() {
+  await dokonciBackendSessionHandoffPokudJe();
+  aktualizujAuthTexty();
+  await updateLoginScreen();
+}
+
+void spustAuthBootstrap679F();
 
 
 /* PATCH 612 – WebView/Chrome mohou background timer pozastavit. Při návratu
