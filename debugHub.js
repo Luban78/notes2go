@@ -7,7 +7,7 @@
    2) samostatné tlačítko „Debug Hub"
    3) vývojový globální 5× tap (patch 677G, session-only)
    4) konkrétní modul se začne logovat až po „Spustit"; 5× tap
-      automaticky spustí WebView Watch.
+      automaticky spustí Start / sync / síť.
 
    Diagnostický build může nastavit window.LUBANOTE_TAG_VD_AUTO = true.
    V tom případě se modul Start / sync / síť připojí automaticky na

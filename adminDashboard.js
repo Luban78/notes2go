@@ -3654,14 +3654,14 @@
     window.LubaNoteDebugHub?.open?.();
   }
 
-  /* PATCH 677G – globální 5× tap bez závislosti na click eventu.
+  /* PATCH 680A2 – globální 5× tap bez závislosti na click eventu.
    *
    * WebView může v editoru click potlačit nebo převést na selection gesto,
    * proto posloucháme Pointer Events už v capture fázi. Počítají se jen
    * krátké tapy bez dragu a všechny musí být v jednom 44px shluku. Tím se
    * minimalizuje náhodné odemčení při běžném psaní, selection nebo scrollu.
-   * Po odemčení se rovnou spustí nový WebView Watch, protože právě WebView
-   * je nejčastějším zdrojem sporadických selection/touch regresí.
+   * Po odemčení se vždy spustí hlavní Start / sync / síť diagnostika.
+   * WebView Watch zůstává dostupný jen jako ručně zvolený modul.
    */
   function spustNouzovyDebug() {
     if (!POVOLIT_NOUZOVY_DEBUG_5X) return false;
@@ -3675,10 +3675,6 @@
     );
 
     window.LubaNoteVisualDebug?.showDock?.();
-
-    if (window.LubaNoteDebugHub?.startWebViewWatch?.()) {
-      return true;
-    }
 
     if (window.LubaNoteDebugHub?.startStartup?.()) {
       return true;
