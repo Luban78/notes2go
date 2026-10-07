@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – Production Maintenance / Drain V3
-   PATCH 679F
+   PATCH 679H
 
    - čte pouze veřejný Control Point,
    - produkční profil automaticky následuje active_backend,
@@ -177,11 +177,43 @@
     return Boolean(document.body?.classList?.contains("authPending"));
   }
 
+  function jeAdminCutoverKonzoleAktivni() {
+    try {
+      return window.LubaNoteAdminCutoverConsole?.jeAktivni?.() === true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function jePovolenyAdminCutoverTarget(event) {
+    if (!jeAdminCutoverKonzoleAktivni()) return false;
+    const cil = event?.target;
+    const adminModal = document.getElementById("adminDashboardModal");
+    if (!adminModal || adminModal.hidden || !cil || !adminModal.contains(cil)) return false;
+
+    /* Dotyk/pointer dovolíme v celé konzoli kvůli scrollu. Samotný click
+     * smí během freeze pouze do migrační karty nebo na zavření dashboardu. */
+    if (event.type === "pointerdown" || event.type === "touchstart") return true;
+    if (event.type === "click") {
+      return Boolean(
+        cil.closest?.(".adminMigrationCard") ||
+        cil.closest?.("#closeAdminDashboardButton") ||
+        cil.closest?.("#adminServerBackButton")
+      );
+    }
+    return false;
+  }
+
   function nastavOverlay(titulek, text, meta = "") {
     /* Login/registrace musí zůstat vždy ovladatelné. Bez platné session
      * stejně nelze zapisovat do SOURCE, takže zde není co write-freezovat. */
     if (jeAuthUiAktivni()) {
       skryjOverlay();
+      return;
+    }
+    if (jeAdminCutoverKonzoleAktivni()) {
+      if (overlay) overlay.hidden = true;
+      document.body.classList.add("lubanoteMaintenanceActive677T");
       return;
     }
     vytvorOverlay();
@@ -202,6 +234,7 @@
     /* Fail-safe: přihlášení se nesmí nikdy stát neinteraktivním ani při
      * chybě lifecycle/overlaye. */
     if (jeAuthUiAktivni()) return;
+    if (jePovolenyAdminCutoverTarget(event)) return;
     if (overlay?.contains(event.target)) return;
 
     event.preventDefault?.();
@@ -608,6 +641,20 @@
     });
   });
 
+  window.addEventListener("lubanote:admin-cutover-console-change", () => {
+    if (!maintenanceAktivni) return;
+    if (jeAdminCutoverKonzoleAktivni()) {
+      if (overlay) overlay.hidden = true;
+      document.body.classList.add("lubanoteMaintenanceActive677T");
+      return;
+    }
+    nastavOverlay(
+      drainHotovy ? "Zařízení je bezpečně synchronizované" : "Probíhá bezpečná údržba LubaNote",
+      drainHotovy ? "Všechny čekající změny z tohoto zařízení jsou odeslané." : "Dokončuji synchronizaci tohoto zařízení…",
+      drainHotovy ? "LubaNote zůstane zamčený do ukončení údržby." : "Aplikaci teď nezavírej."
+    );
+  });
+
   window.addEventListener("online", () => {
     void zkontrolujControlPoint();
     if (maintenanceAktivni && !drainHotovy) void spustDrain();
@@ -620,7 +667,7 @@
   });
 
   window.LubaNoteMaintenance = Object.freeze({
-    verze: "679B",
+    verze: "679H",
     controlUrl: CONTROL_URL,
     jeAktivni: () => maintenanceAktivni,
     jeWriteFreezeAktivni: () => writeFreezeAktivni,

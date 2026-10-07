@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=679g-migration-local-metadata">
+  <link rel="stylesheet" href="style.css?v=679h-cutover-console-ux">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -1899,7 +1899,7 @@
       <p id="adminMigrationConfirmText"></p>
       <div class="adminMigrationConfirmFacts" aria-label="Bezpečnostní informace">
         <div><span id="adminMigrationConfirmSourceName">SOURCE</span><strong id="adminMigrationConfirmSource">beze změny</strong></div>
-        <div><span>CUTOVER</span><strong>zamčený</strong></div>
+        <div><span>CUTOVER</span><strong id="adminMigrationConfirmCutover">zamčený</strong></div>
       </div>
       <p id="adminMigrationConfirmHint" class="adminMigrationConfirmHint"></p>
       <div class="adminMigrationConfirmActions">
@@ -2805,7 +2805,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679g-migration-local-metadata"></script>
+  <script src="adminDashboard.js?v=679h-cutover-console-ux"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2834,7 +2834,7 @@
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=679a-target-confirm-recovery"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
-  <script src="maintenance.js?v=679f-session-handoff"></script>
+  <script src="maintenance.js?v=679h-cutover-console-ux"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>

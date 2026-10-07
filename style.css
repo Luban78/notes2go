@@ -16872,3 +16872,56 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 .adminControlBody #adminControlMessage {
   margin-top: 12px;
 }
+
+
+/* ==================================================
+   PATCH 679H – CUTOVER CONSOLE / MOBILE TEXT FIT
+   Admin migrace zůstává čitelná na úzkém mobilu; texty se nesekají
+   ellipsis uvnitř ovládacích tlačítek.
+================================================== */
+.adminBackendSwitchButton,
+.adminMigrationDestinationRow button,
+.adminMigrationActions > button,
+.adminMigrationConfirmActions button {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.2;
+}
+
+.adminMigrationActions > button > strong,
+.adminMigrationActions > button > small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.adminMigrationEndpoint strong,
+.adminMigrationConfirmFacts span,
+.adminMigrationConfirmFacts strong {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.adminDashboardModal[data-cutover-console="1"] .adminMigrationCard {
+  border-color: color-mix(in srgb, #52c77b 42%, var(--color-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #52c77b 10%, transparent),
+              0 10px 28px rgba(0, 0, 0, 0.10);
+}
+
+@media (max-width: 430px) {
+  .adminMigrationDestinationRow button,
+  .adminMigrationConfirmActions button {
+    padding-inline: 10px;
+    font-size: 0.78rem;
+  }
+
+  .adminMigrationConfirmFacts > div {
+    padding-inline: 9px;
+  }
+}

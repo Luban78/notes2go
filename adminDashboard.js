@@ -121,6 +121,8 @@
     document.getElementById("adminMigrationConfirmSourceName");
   const migrationConfirmSource =
     document.getElementById("adminMigrationConfirmSource");
+  const migrationConfirmCutover =
+    document.getElementById("adminMigrationConfirmCutover");
   const migrationConfirmHint =
     document.getElementById("adminMigrationConfirmHint");
   const migrationConfirmOk =
@@ -295,6 +297,9 @@
   let migrationLiveTimer = null;
   let migrationPosledniStatus = null;
   let migrationConfirmResolve = null;
+  let migrationOcekavanyJobId = "";
+  const CUTOVER_CONSOLE_SESSION_KEY = "lubanoteAdminCutoverConsoleV1";
+  let migrationCutoverKonzoleZapnuta = sessionStorage.getItem(CUTOVER_CONSOLE_SESSION_KEY) === "1";
   let controlStatusNacitam = false;
   let controlAkceBezi = false;
   let controlPosledniStatus = null;
@@ -302,6 +307,39 @@
   const CONTROL_POINT_BASE = "https://api.lubanote.com/control/v1";
   const MIGRATION_LIVE_INTERVAL_MS = 1200;
   const BACKEND_SESSION_HANDOFF_KEY = "lubanoteBackendSessionHandoffV1";
+
+  /* PATCH 679H – CUTOVER konzole zůstává během MAINTENANCE dostupná jen
+   * pro ověřeného admina na Server/Migrace pohledu. Běžné LubaNote UI
+   * zůstává write-frozen. Session flag přežije jediný backend reload. */
+  function jeCutoverKonzoleAktivni() {
+    return Boolean(
+      migrationCutoverKonzoleZapnuta &&
+      jeAdmin &&
+      modal && !modal.hidden &&
+      serverPohled && !serverPohled.hidden
+    );
+  }
+
+  function oznamCutoverKonzoli() {
+    if (modal) modal.dataset.cutoverConsole = jeCutoverKonzoleAktivni() ? "1" : "0";
+    window.dispatchEvent(new CustomEvent("lubanote:admin-cutover-console-change", {
+      detail: { active: jeCutoverKonzoleAktivni() }
+    }));
+  }
+
+  function nastavCutoverKonzoli(aktivni, { zachovatSession = false } = {}) {
+    migrationCutoverKonzoleZapnuta = Boolean(aktivni);
+    if (migrationCutoverKonzoleZapnuta) {
+      sessionStorage.setItem(CUTOVER_CONSOLE_SESSION_KEY, "1");
+    } else if (!zachovatSession) {
+      sessionStorage.removeItem(CUTOVER_CONSOLE_SESSION_KEY);
+    }
+    oznamCutoverKonzoli();
+  }
+
+  window.LubaNoteAdminCutoverConsole = Object.freeze({
+    jeAktivni: jeCutoverKonzoleAktivni
+  });
 
   /* PATCH 677J – Android/WebView systémové Zpět uvnitř Admin Dashboardu.
    * Dashboard dostane vlastní lehkou history vrstvu: Server/UI/Účty ->
@@ -793,6 +831,7 @@
     aktualizujSyncTrafficNastroj();
     aktualizujNotesVisualTuning();
     aktualizujPlannerVisualNastroje();
+    oznamCutoverKonzoli();
   }
 
   function zobrazUcty() {
@@ -801,6 +840,7 @@
     serverPohled.hidden = true;
     uiPohled.hidden = true;
     zastavServerStatusAutoRefresh();
+    oznamCutoverKonzoli();
   }
 
   function zobrazServer() {
@@ -822,6 +862,7 @@
         nactiControlStatus({ tichy: true });
       }
     }, 15000);
+    oznamCutoverKonzoli();
   }
 
   function zobrazUi() {
@@ -833,6 +874,7 @@
     zastavServerStatusAutoRefresh();
     aktualizujNotesVisualTuning();
     aktualizujPlannerVisualNastroje();
+    oznamCutoverKonzoli();
   }
 
   function formatBajty(hodnota) {
@@ -1691,6 +1733,9 @@
     if (migrationConfirmSource) {
       migrationConfirmSource.textContent = jeCutover ? "finální sync" : (jeVerify ? "jen čtení" : "beze změny");
     }
+    if (migrationConfirmCutover) {
+      migrationConfirmCutover.textContent = jeCutover ? "připravený" : "zamčený";
+    }
     migrationConfirmHint.textContent = jeCutover
       ? "CUTOVER je povolen pouze po úspěšném VERIFY. MAINTENANCE/Drain provede automaticky; ruční Údržba není pro běžnou migraci potřeba."
       : (jeVerify
@@ -1816,7 +1861,19 @@
       const prubeh = vykresliMigrationPrubeh(vysledek);
       const job = vysledek.job;
 
-      if (job?.status === "running") {
+      const aktualniJobId = String(job?.id || "");
+      const cekameNaPrijatouUlohu = Boolean(
+        migrationOcekavanyJobId && aktualniJobId !== migrationOcekavanyJobId
+      );
+      const dorazilaPrijataUloha = Boolean(
+        migrationOcekavanyJobId && aktualniJobId === migrationOcekavanyJobId
+      );
+
+      if (dorazilaPrijataUloha && job?.status !== "running") {
+        migrationOcekavanyJobId = "";
+      }
+
+      if (job?.status === "running" || cekameNaPrijatouUlohu) {
         spustMigrationLiveRefresh();
       } else {
         zastavMigrationLiveRefresh();
@@ -1839,7 +1896,12 @@
         } else if (managerState === "CUTOVER_COMPLETE") {
           migrationZprava.textContent =
             "Bridge ONLINE · CUTOVER dokončen · Control Point obnovuji; produkční klient se přepne automaticky bez mazání lokálních dat.";
-          void nactiControlStatus({ tichy: true }).then(() => aktualizujBackendZarizeniUi());
+          void nactiControlStatus({ tichy: true }).then((control) => {
+            aktualizujBackendZarizeniUi();
+            if (String(control?.mode || "").toUpperCase() === "NORMAL") {
+              nastavCutoverKonzoli(false);
+            }
+          });
         } else if (managerState === "VERIFIED") {
           migrationZprava.textContent =
             "Bridge ONLINE · VERIFY dokončen · všech 8 kontrol PASS · CUTOVER je připraven.";
@@ -1936,6 +1998,10 @@
         throw new Error(`${nazevAkce} nebyl přijat (${kod}).`);
       }
 
+      migrationOcekavanyJobId = String(vysledek?.job?.id || "");
+      if (jeCutover) {
+        nastavCutoverKonzoli(true);
+      }
       nastavMigrationStav("warning", jeCutover ? "CUTOVER" : (jeVerify ? "VERIFYING" : "PREPARING"));
       if (migrationZprava) {
         migrationZprava.textContent =
@@ -1943,6 +2009,8 @@
       }
       spustMigrationLiveRefresh();
     } catch (error) {
+      migrationOcekavanyJobId = "";
+      if (jeCutover) nastavCutoverKonzoli(false);
       console.warn(
         `Migration ${nazevAkce} failed to start:`,
         error?.message || error
@@ -2401,6 +2469,17 @@
         window.LubaNoteDebugHub?.close?.();
         window.LubaNoteVisualDebug?.lock?.();
       }
+      oznamCutoverKonzoli();
+      return;
+    }
+
+    if (migrationCutoverKonzoleZapnuta) {
+      modal.hidden = false;
+      zobrazServer();
+      if (!history.state?.[ADMIN_HISTORY_KEY]) {
+        zapisAdminHistory("server");
+      }
+      oznamCutoverKonzoli();
     }
   }
 
@@ -3490,6 +3569,7 @@
     modal.hidden = true;
     zastavServerStatusAutoRefresh();
     zobrazDomov();
+    oznamCutoverKonzoli();
     adminHistoryDepth = 0;
 
     if (kroku > 0) {
@@ -3529,6 +3609,7 @@
 
     modal.hidden = false;
     zobrazDomov();
+    oznamCutoverKonzoli();
     if (!history.state?.[ADMIN_HISTORY_KEY]) {
       zapisAdminHistory("home");
     }
@@ -4002,6 +4083,7 @@
       modal.hidden = true;
       zastavServerStatusAutoRefresh();
       zobrazDomov();
+      oznamCutoverKonzoli();
     }
   });
 
@@ -4026,6 +4108,12 @@
       ? puvodniAndroidZpetAdmin()
       : false;
   };
+
+  window.addEventListener("lubanote:maintenance-end", () => {
+    if (migrationCutoverKonzoleZapnuta) {
+      nastavCutoverKonzoli(false);
+    }
+  });
 
   window.addEventListener("online", () => {
     if (!serverPohled.hidden && !modal.hidden) {
