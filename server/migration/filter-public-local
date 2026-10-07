@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+fail(){ echo "CHYBA: $*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: filter-public-local /run-dir"
+RUN="$(readlink -m "$1")"
+FP="$RUN/public-fingerprints.tsv"
+DATA="$RUN/public-data.list"
+SEQ="$RUN/public-sequences.tsv"
+
+[ -f "$FP" ] || fail "Chybi $FP"
+[ -f "$DATA" ] || fail "Chybi $DATA"
+
+# Tabulky, ktere patri konkretnimu serverovemu uzlu a nejsou uzivatelskymi daty.
+# Nesmime je prenaset mezi Cloud/LubaServer/VPS ani je pozadovat na DEST.
+je_lokalni_tabulka(){
+  case "$1" in
+    lubanote_server_status) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pred="$(wc -l < "$FP" | tr -d ' ')"
+tmp_fp="$FP.local-filter.$$"
+: > "$tmp_fp"
+while IFS=$'\t' read -r tabulka pocet digest zbytek; do
+  [ -n "${tabulka:-}" ] || continue
+  if je_lokalni_tabulka "$tabulka"; then
+    echo "SKIP_LOCAL_PUBLIC_TABLE=$tabulka"
+    continue
+  fi
+  printf '%s\t%s\t%s' "$tabulka" "$pocet" "$digest" >> "$tmp_fp"
+  [ -z "${zbytek:-}" ] || printf '\t%s' "$zbytek" >> "$tmp_fp"
+  printf '\n' >> "$tmp_fp"
+done < "$FP"
+mv "$tmp_fp" "$FP"
+
+# pg_restore use-list musi pouzit stejnou mnozinu migracnich tabulek.
+tmp_data="$DATA.local-filter.$$"
+awk '!( $4=="TABLE" && $5=="DATA" && $6=="public" && $7=="lubanote_server_status" )' "$DATA" > "$tmp_data"
+mv "$tmp_data" "$DATA"
+
+# Bezpecnost do budoucna, pokud by lokalni status nekdy dostal vlastni sekvenci.
+if [ -f "$SEQ" ]; then
+  tmp_seq="$SEQ.local-filter.$$"
+  awk -F'\t' '$1 !~ /^public\.lubanote_server_status(_|$)/' "$SEQ" > "$tmp_seq"
+  mv "$tmp_seq" "$SEQ"
+fi
+
+po="$(wc -l < "$FP" | tr -d ' ')"
+echo "PASS: migracni public manifest ${pred}->${po}; local-only metadata vynechana."

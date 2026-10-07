@@ -186,6 +186,7 @@ PYCTRL
   "$BIN/source-db-snapshot" "$run_dir"
   echo "=== PREPARE V3 / 3: source manifests ==="
   "$BIN/source-manifests" "$run_dir"
+  "$BIN/filter-public-local" "$run_dir"
   echo "=== PREPARE V3 / 4: source Storage snapshot ==="
   "$BIN/source-storage-snapshot" "$run_dir"
   echo "=== PREPARE V3 / 5: destination precheck ==="

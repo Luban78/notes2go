@@ -145,7 +145,7 @@ echo "=== CUTOVER 50E43 / 1: SOURCE freeze ==="
 "$BIN/source-freeze-enable"; FREEZE_ACTIVE=1; printf 'CUTTING_OVER\n' > "$STATE_FILE"; printf '%s\n' "$FINAL_ID" > "$CURRENT_RUN_FILE"
 
 echo "=== CUTOVER 50E43 / 2: fresh frozen SOURCE snapshot ==="
-"$BIN/source-db-snapshot" "$FINAL"; "$BIN/source-manifests" "$FINAL"; "$BIN/source-storage-snapshot" "$FINAL"
+"$BIN/source-db-snapshot" "$FINAL"; "$BIN/source-manifests" "$FINAL"; "$BIN/filter-public-local" "$FINAL"; "$BIN/source-storage-snapshot" "$FINAL"
 
 echo "=== CUTOVER 50E43 / 3: DEST drift guard ==="
 DRIFT="$FINAL/destination-precutover"; "$BIN/destination-manifests" "$FINAL" "$DRIFT"

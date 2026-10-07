@@ -117,6 +117,8 @@
     document.getElementById("adminMigrationConfirmTitle");
   const migrationConfirmText =
     document.getElementById("adminMigrationConfirmText");
+  const migrationConfirmSourceName =
+    document.getElementById("adminMigrationConfirmSourceName");
   const migrationConfirmSource =
     document.getElementById("adminMigrationConfirmSource");
   const migrationConfirmHint =
@@ -979,37 +981,37 @@
     {
       label: "Source preflight",
       detail: "Připojení a dostupnost zdroje",
-      marker: "=== PREPARE V2 / 1: source preflight ==="
+      marker: "=== PREPARE V3 / 1: source preflight ==="
     },
     {
       label: "DB snapshot",
-      detail: "Čerstvý snapshot Supabase Cloud",
-      marker: "=== PREPARE V2 / 2: source DB snapshot ==="
+      detail: "Čerstvý snapshot SOURCE",
+      marker: "=== PREPARE V3 / 2: source DB snapshot ==="
     },
     {
       label: "Source manifesty",
       detail: "Public, Auth a Storage metadata",
-      marker: "=== PREPARE V2 / 3: source manifests ==="
+      marker: "=== PREPARE V3 / 3: source manifests ==="
     },
     {
       label: "Storage snapshot",
       detail: "Bezpečná kopie objektů ze SOURCE",
-      marker: "=== PREPARE V2 / 4: source Storage snapshot ==="
+      marker: "=== PREPARE V3 / 4: source Storage snapshot ==="
     },
     {
       label: "Destination precheck",
       detail: "Auth + Storage kontrola před mutací",
-      marker: "=== PREPARE V2 / 5: destination precheck ==="
+      marker: "=== PREPARE V3 / 5: destination precheck ==="
     },
     {
       label: "Rollback checkpoint",
-      detail: "Bod návratu LubaServeru",
-      marker: "=== PREPARE V2 / 6: rollback checkpoint ==="
+      detail: "Bod návratu DESTINATION",
+      marker: "=== PREPARE V3 / 6: rollback checkpoint ==="
     },
     {
       label: "Public data apply",
-      detail: "Aplikace public dat na LubaServer",
-      marker: "=== PREPARE V2 / 7: public data apply ==="
+      detail: "Aplikace public dat na DESTINATION",
+      marker: "=== PREPARE V3 / 7: public data apply ==="
     }
   ];
 
@@ -1612,11 +1614,7 @@
       return { typ: "verify", ...pripravVerifyProgress(vysledek) };
     }
 
-    if (
-      job?.status === "failed" &&
-      akce === "prepare" &&
-      managerState !== "IDLE"
-    ) {
+    if (job?.status === "failed" && akce === "prepare") {
       return { typ: "prepare", ...pripravPrepareProgress(vysledek) };
     }
 
@@ -1680,6 +1678,8 @@
     const nazev = jeCutover ? "CUTOVER" : (jeVerify ? "VERIFY" : "PREPARE");
     migrationConfirmBadge.textContent = nazev;
     const cilNazev = String(migrationDestinationLabel?.textContent || "cílový backend").trim() || "cílový backend";
+    const sourceNazev = String(migrationSourceLabel?.textContent || "SOURCE").trim() || "SOURCE";
+    if (migrationConfirmSourceName) migrationConfirmSourceName.textContent = `${sourceNazev} SOURCE`;
     migrationConfirmTitulek.textContent = jeCutover
       ? `Přepnout produkci na ${cilNazev}?`
       : (jeVerify ? `Ověřit migraci na ${cilNazev}?` : `Připravit ${cilNazev}?`);

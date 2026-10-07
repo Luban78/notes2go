@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=677u-control-point-admin">
+  <link rel="stylesheet" href="style.css?v=679g-migration-local-metadata">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -1649,35 +1649,40 @@
           </div>
         </section>
 
-        <section class="adminControlCard" aria-label="Produkční režim LubaNote">
-          <div class="adminControlHead">
-            <div>
-              <span class="adminServerEyebrow">Produkční režim</span>
-              <strong>Control Point · produkční klienti</strong>
+        <details class="adminControlCard adminControlDetails" aria-label="Produkční režim LubaNote">
+          <summary class="adminControlSummary">
+            <span class="adminControlSummaryText">
+              <strong>Údržba</strong>
+              <small>Servisní ruční ovládání</small>
+            </span>
+            <span class="adminControlSummaryRight">
+              <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
+              <span class="adminControlChevron" aria-hidden="true">›</span>
+            </span>
+          </summary>
+
+          <div class="adminControlBody">
+            <p id="adminControlMessage" aria-live="polite">
+              Načítám veřejný Control Point…
+            </p>
+
+            <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
+              <button id="adminControlMaintenanceButton" type="button" disabled>
+                <strong>Zapnout údržbu</strong>
+                <small>Servisní ruční drain</small>
+              </button>
+              <button id="adminControlNormalButton" type="button" disabled>
+                <strong>Vrátit NORMAL</strong>
+                <small>Odemknout klienty</small>
+              </button>
             </div>
-            <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
-          </div>
 
-          <p id="adminControlMessage" aria-live="polite">
-            Načítám veřejný Control Point…
-          </p>
-
-          <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
-            <button id="adminControlMaintenanceButton" type="button" disabled>
-              <strong>Zapnout údržbu</strong>
-              <small>Servisní ruční drain</small>
-            </button>
-            <button id="adminControlNormalButton" type="button" disabled>
-              <strong>Vrátit NORMAL</strong>
-              <small>Odemknout klienty</small>
-            </button>
+            <div class="adminControlSafety">
+              <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
+              <span>Control Point je jediná autorita produkčního backendu; běžný CUTOVER zapíná údržbu automaticky.</span>
+            </div>
           </div>
-
-          <div class="adminControlSafety">
-            <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>Control Point je jediná autorita produkčního backendu; NORMAL/ÚDRŽBA řídí Maintenance/Drain a CUTOVER mění aktivní produkci.</span>
-          </div>
-        </section>
+        </details>
 
         <section class="adminMigrationCard" aria-label="Migrace a produkční přepnutí">
           <div class="adminMigrationHead">
@@ -1893,7 +1898,7 @@
       <h3 id="adminMigrationConfirmTitle">Spustit PREPARE?</h3>
       <p id="adminMigrationConfirmText"></p>
       <div class="adminMigrationConfirmFacts" aria-label="Bezpečnostní informace">
-        <div><span>Cloud SOURCE</span><strong id="adminMigrationConfirmSource">beze změny</strong></div>
+        <div><span id="adminMigrationConfirmSourceName">SOURCE</span><strong id="adminMigrationConfirmSource">beze změny</strong></div>
         <div><span>CUTOVER</span><strong>zamčený</strong></div>
       </div>
       <p id="adminMigrationConfirmHint" class="adminMigrationConfirmHint"></p>
@@ -2800,7 +2805,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679f-production-admin"></script>
+  <script src="adminDashboard.js?v=679g-migration-local-metadata"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
