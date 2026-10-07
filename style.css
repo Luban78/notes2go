@@ -16925,3 +16925,298 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     padding-inline: 9px;
   }
 }
+
+/* ==================================================
+   PATCH 679H1 – SERVER CLARITY / SAFE MIGRATION GUIDE
+   Servisní prvky jsou sbalené, migrace je hlavní workflow a žádný
+   dekorativní chevron neruší Server obrazovku.
+================================================== */
+
+/* Na Server obrazovce nepoužíváme dekorativní navigační šipky. */
+#adminServerView .adminToolArrow,
+#adminServerView .adminControlChevron {
+  display: none !important;
+}
+
+/* Aktuální produkce je kompaktní informační karta. */
+.adminBackendSwitchCard {
+  padding: 14px;
+}
+
+.adminBackendSwitchMessage {
+  margin-bottom: 0;
+}
+
+/* Migrace je hlavní a nejčitelnější blok obrazovky. */
+.adminMigrationCard {
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+}
+
+.adminMigrationDestination > label {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.adminMigrationPresetRow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.adminMigrationPresetRow > button,
+.adminMigrationDestinationRow > button {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.22;
+}
+
+/* Nový VPS je vzácný scénář – zůstává viditelný, ale sbalený. */
+.adminVpsDetails {
+  margin-top: 2px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--color-background) 60%, var(--color-surface));
+  overflow: hidden;
+}
+
+.adminVpsDetails > summary,
+.adminServerStatusSummary,
+.adminAdvancedSummary,
+.adminMigrationGuideButton {
+  list-style: none;
+}
+
+.adminVpsDetails > summary::-webkit-details-marker,
+.adminServerStatusSummary::-webkit-details-marker,
+.adminAdvancedSummary::-webkit-details-marker,
+.adminMigrationGuideButton::-webkit-details-marker {
+  display: none;
+}
+
+.adminVpsDetails > summary {
+  padding: 11px 12px;
+  color: var(--color-text);
+  font-size: 0.79rem;
+  font-weight: 800;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.adminVpsBody {
+  display: grid;
+  gap: 7px;
+  padding: 0 12px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
+}
+
+.adminVpsBody > label {
+  padding-top: 10px;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* Údržba: čistý sbalený řádek bez šipky. */
+.adminControlSummary {
+  cursor: pointer;
+}
+
+.adminControlSummaryRight {
+  flex: 0 0 auto;
+}
+
+/* LubaServer status je vždy sbalený; detaily jsou servisní informace. */
+.adminServerStatusDetails {
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.adminServerStatusSummary {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 12px 15px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.adminServerStatusSummaryText {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.adminServerStatusSummaryText #adminServerOverall {
+  font-size: 1rem;
+}
+
+.adminServerStatusBody {
+  padding: 12px 14px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.adminServerStatusRefresh {
+  width: 100%;
+  min-height: 42px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+/* TEST backend je servisní nástroj, ne součást běžné migrace. */
+.adminAdvancedDetails {
+  margin-top: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.adminAdvancedSummary {
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 12px 15px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.adminAdvancedSummary > span {
+  display: grid;
+  gap: 2px;
+}
+
+.adminAdvancedSummary strong {
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.adminAdvancedSummary small {
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.adminAdvancedBody {
+  padding: 12px 14px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.adminAdvancedBody > p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.adminAdvancedBody .adminBackendSwitchActions {
+  grid-template-columns: 1fr;
+}
+
+/* Kompletní bezpečný návod je úplně dole a standardně nezabírá místo. */
+.adminMigrationGuide {
+  margin-top: 16px;
+  border: 1px solid color-mix(in srgb, #52c77b 42%, var(--color-border));
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #52c77b 6%, transparent), transparent 42%),
+    var(--color-surface);
+  overflow: hidden;
+}
+
+.adminMigrationGuideButton {
+  display: grid;
+  place-items: center;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 11px 14px;
+  color: #79d99b;
+  text-align: center;
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+}
+
+.adminMigrationGuideBody {
+  padding: 14px;
+  border-top: 1px solid color-mix(in srgb, #52c77b 24%, var(--color-border));
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.adminMigrationGuideBody h3 {
+  margin: 0 0 8px;
+  color: var(--color-text);
+  font-size: 0.94rem;
+  line-height: 1.3;
+}
+
+.adminMigrationGuideLead {
+  margin: 0 0 10px;
+}
+
+.adminMigrationGuideBody ol {
+  margin: 0;
+  padding-left: 1.35rem;
+}
+
+.adminMigrationGuideBody li + li {
+  margin-top: 8px;
+}
+
+.adminMigrationGuideBody li strong,
+.adminMigrationGuideWarning strong,
+.adminMigrationGuideExample strong {
+  color: var(--color-text);
+}
+
+.adminMigrationGuideWarning,
+.adminMigrationGuideExample {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 13px;
+}
+
+.adminMigrationGuideWarning {
+  border: 1px solid color-mix(in srgb, #e8b44f 38%, var(--color-border));
+  background: color-mix(in srgb, #e8b44f 8%, transparent);
+}
+
+.adminMigrationGuideExample {
+  border: 1px solid color-mix(in srgb, #52c77b 30%, var(--color-border));
+  background: color-mix(in srgb, #52c77b 7%, transparent);
+}
+
+@media (max-width: 430px) {
+  .adminMigrationPresetRow {
+    grid-template-columns: 1fr;
+  }
+
+  .adminMigrationEndpoint small {
+    letter-spacing: 0.035em;
+    font-size: 0.58rem;
+  }
+
+  .adminMigrationEndpoint strong {
+    font-size: 0.78rem;
+  }
+
+  .adminControlSummaryText > small {
+    max-width: 235px;
+  }
+}

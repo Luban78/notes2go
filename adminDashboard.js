@@ -1163,15 +1163,22 @@
     if (migrationDestinationInput && document.activeElement !== migrationDestinationInput) {
       migrationDestinationInput.value = destMode === "ssh" ? destHost : "";
     }
-    if (migrationSourceLabel && smerSourceBackend) {
-      migrationSourceLabel.textContent = smerSourceName || (smerSourceBackend === "cloud" ? "Supabase Cloud" : smerSourceBackend === "lubaserver" ? "LubaServer" : smerSourceBackend);
+    const sourceBackend = String(controlPosledniStatus?.active_backend || "").trim().toLowerCase();
+    const jeDokoncenyCutover = managerState === "CUTOVER_COMPLETE";
+    if (migrationSourceLabel) {
+      if (jeDokoncenyCutover && sourceBackend) {
+        migrationSourceLabel.textContent = sourceBackend === "cloud" ? "Supabase Cloud" : sourceBackend === "lubaserver" ? "LubaServer" : sourceBackend;
+      } else if (smerSourceBackend) {
+        migrationSourceLabel.textContent = smerSourceName || (smerSourceBackend === "cloud" ? "Supabase Cloud" : smerSourceBackend === "lubaserver" ? "LubaServer" : smerSourceBackend);
+      }
     }
     if (migrationDestinationLabel) {
-      migrationDestinationLabel.textContent = smerDestBackend
-        ? (smerDestName || (smerDestBackend === "cloud" ? "Supabase Cloud" : smerDestBackend === "lubaserver" ? "LubaServer" : smerDestBackend))
-        : (destName || (destBackend === "cloud" ? "Supabase Cloud" : destBackend === "lubaserver" ? "LubaServer" : (destHost || "Nový VPS")));
+      migrationDestinationLabel.textContent = jeDokoncenyCutover
+        ? "Vyber cíl"
+        : (smerDestBackend
+          ? (smerDestName || (smerDestBackend === "cloud" ? "Supabase Cloud" : smerDestBackend === "lubaserver" ? "LubaServer" : smerDestBackend))
+          : (destName || (destBackend === "cloud" ? "Supabase Cloud" : destBackend === "lubaserver" ? "LubaServer" : (destHost || "Nový VPS"))));
     }
-    const sourceBackend = String(controlPosledniStatus?.active_backend || "").trim().toLowerCase();
     if (migrationUseCloud) migrationUseCloud.disabled = migrationAkceBezi || sourceBackend === "cloud" || vysledek?.job?.status === "running";
     if (migrationUseLubaServer) migrationUseLubaServer.disabled = migrationAkceBezi || sourceBackend === "lubaserver" || vysledek?.job?.status === "running";
 
@@ -1240,7 +1247,7 @@
     if (migrationSourceLabel) {
       const managerState = String(migrationPosledniStatus?.manager_state || "").trim().toUpperCase();
       const maRunSmer = Boolean(migrationPosledniStatus?.direction?.source_backend_id);
-      if (!maRunSmer || managerState === "IDLE") {
+      if (!maRunSmer || managerState === "IDLE" || managerState === "CUTOVER_COMPLETE") {
         const aktivni = String(vysledek?.active_backend || "").trim();
         migrationSourceLabel.textContent =
           aktivni === "cloud" ? "Supabase Cloud" :
@@ -1895,7 +1902,7 @@
             "Bridge ONLINE · VERIFY skončil chybou · Manager se bezpečně vrátil do PREPARED · po diagnostice lze VERIFY zopakovat.";
         } else if (managerState === "CUTOVER_COMPLETE") {
           migrationZprava.textContent =
-            "Bridge ONLINE · CUTOVER dokončen · Control Point obnovuji; produkční klient se přepne automaticky bez mazání lokálních dat.";
+            "Bridge ONLINE · poslední CUTOVER dokončen. Produkce běží na backendu řízeném Control Pointem; pro další migraci vyber nový cíl níže.";
           void nactiControlStatus({ tichy: true }).then((control) => {
             aktualizujBackendZarizeniUi();
             if (String(control?.mode || "").toUpperCase() === "NORMAL") {

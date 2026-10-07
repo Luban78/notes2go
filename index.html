@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=679h-cutover-console-ux">
+  <link rel="stylesheet" href="style.css?v=679h1-server-clarity-guide">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -1595,37 +1595,10 @@
           <strong>Server</strong>
         </div>
 
-        <section class="adminServerStatusCard" aria-label="Stav LubaServeru">
-          <div class="adminServerStatusHead">
-            <div>
-              <span class="adminServerEyebrow">LubaServer</span>
-              <strong id="adminServerOverall">Načítám…</strong>
-              <small id="adminServerUpdated">—</small>
-            </div>
-            <button id="adminServerRefreshButton" class="adminRefreshButton lubaIconOnlyButton" type="button" aria-label="Obnovit stav serveru" title="Obnovit">
-              <span class="lubaActionIcon" data-luba-icon="obnovit" aria-hidden="true"></span>
-            </button>
-          </div>
-
-          <div class="adminServerMetrics">
-            <div class="adminServerMetric"><span>Běží</span><strong id="adminServerUptime">—</strong></div>
-            <div class="adminServerMetric"><span>CPU</span><strong id="adminServerCpu">—</strong></div>
-            <div class="adminServerMetric"><span>RAM</span><strong id="adminServerRam">—</strong></div>
-            <div class="adminServerMetric"><span>Disk</span><strong id="adminServerDisk">—</strong></div>
-            <div class="adminServerMetric"><span>Volné místo</span><strong id="adminServerDiskFree">—</strong></div>
-            <div class="adminServerMetric"><span>Baterie</span><strong id="adminServerBattery">—</strong></div>
-            <div class="adminServerMetric"><span>Self-hosted Supabase</span><strong id="adminServerSupabase">—</strong></div>
-            <div class="adminServerMetric"><span>Docker</span><strong id="adminServerDocker">—</strong></div>
-            <div class="adminServerMetric"><span>Cloudflare</span><strong id="adminServerCloudflare">—</strong></div>
-          </div>
-
-          <p id="adminServerStatusMessage" class="adminServerStatusMessage" aria-live="polite"></p>
-        </section>
-
         <section class="adminBackendSwitchCard" aria-label="Backend tohoto zařízení">
           <div class="adminBackendSwitchHead">
             <div>
-              <span class="adminServerEyebrow">Backend tohoto zařízení</span>
+              <span class="adminServerEyebrow">Aktuální produkce</span>
               <strong id="adminDeviceBackendName">—</strong>
               <small id="adminDeviceBackendMode">—</small>
             </div>
@@ -1633,75 +1606,28 @@
           </div>
 
           <p id="adminDeviceBackendMessage" class="adminBackendSwitchMessage">
-            Přepnutí se týká pouze tohoto zařízení.
+            Produkční backend tohoto zařízení řídí Control Point.
           </p>
-
-          <div class="adminBackendSwitchActions">
-            <button id="adminUseLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Použít LubaServer PROD
-            </button>
-            <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Servisní TEST LubaServeru (izolovaný)
-            </button>
-            <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">
-              Opustit TEST a použít aktivní produkci
-            </button>
-          </div>
         </section>
-
-        <details class="adminControlCard adminControlDetails" aria-label="Produkční režim LubaNote">
-          <summary class="adminControlSummary">
-            <span class="adminControlSummaryText">
-              <strong>Údržba</strong>
-              <small>Servisní ruční ovládání</small>
-            </span>
-            <span class="adminControlSummaryRight">
-              <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
-              <span class="adminControlChevron" aria-hidden="true">›</span>
-            </span>
-          </summary>
-
-          <div class="adminControlBody">
-            <p id="adminControlMessage" aria-live="polite">
-              Načítám veřejný Control Point…
-            </p>
-
-            <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
-              <button id="adminControlMaintenanceButton" type="button" disabled>
-                <strong>Zapnout údržbu</strong>
-                <small>Servisní ruční drain</small>
-              </button>
-              <button id="adminControlNormalButton" type="button" disabled>
-                <strong>Vrátit NORMAL</strong>
-                <small>Odemknout klienty</small>
-              </button>
-            </div>
-
-            <div class="adminControlSafety">
-              <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-              <span>Control Point je jediná autorita produkčního backendu; běžný CUTOVER zapíná údržbu automaticky.</span>
-            </div>
-          </div>
-        </details>
 
         <section class="adminMigrationCard" aria-label="Migrace a produkční přepnutí">
           <div class="adminMigrationHead">
             <div>
               <span class="adminServerEyebrow">Migrace / produkce</span>
-              <strong>Aktivní produkce → zvolený cílový backend</strong>
+              <strong>Bezpečná migrace produkce</strong>
             </div>
             <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
 
           <div class="adminMigrationRoute" aria-label="Směr migrace">
             <span class="adminMigrationEndpoint">
-              <small>SOURCE</small>
+              <small>AKTUÁLNÍ PRODUKCE</small>
               <strong id="adminMigrationSourceLabel">Supabase Cloud</strong>
             </span>
             <span class="adminMigrationRouteArrow" aria-hidden="true">→</span>
             <span class="adminMigrationEndpoint adminMigrationEndpointTarget">
-              <small>DESTINATION</small>
-              <strong id="adminMigrationDestinationLabel">Nový VPS</strong>
+              <small>CÍL</small>
+              <strong id="adminMigrationDestinationLabel">Vyber cíl</strong>
             </span>
           </div>
 
@@ -1710,17 +1636,23 @@
           </p>
 
           <div class="adminMigrationDestination">
-            <label>Cílový produkční backend</label>
-            <div class="adminMigrationDestinationRow">
+            <label>Kam chci přepnout produkci</label>
+            <div class="adminMigrationDestinationRow adminMigrationPresetRow">
               <button id="adminMigrationUseCloud" type="button">Supabase Cloud</button>
               <button id="adminMigrationUseLubaServer" type="button">LubaServer</button>
             </div>
-            <label for="adminMigrationDestinationInput">Nový VPS · IP nebo hostname</label>
-            <div class="adminMigrationDestinationRow">
-              <input id="adminMigrationDestinationInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="např. 203.0.113.10 nebo vps.example.com">
-              <button id="adminMigrationDestinationSave" type="button">Nastavit server</button>
-            </div>
-            <small id="adminMigrationDestinationHint">Adresa se uloží pouze na Migration Manageru. Hesla ani SSH klíče se do APK neukládají.</small>
+
+            <details class="adminVpsDetails">
+              <summary>Nový VPS / jiný server</summary>
+              <div class="adminVpsBody">
+                <label for="adminMigrationDestinationInput">IP adresa nebo hostname</label>
+                <div class="adminMigrationDestinationRow">
+                  <input id="adminMigrationDestinationInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="např. 203.0.113.10 nebo vps.example.com">
+                  <button id="adminMigrationDestinationSave" type="button">Nastavit server</button>
+                </div>
+                <small id="adminMigrationDestinationHint">Adresa se uloží pouze na Migration Manageru. Hesla ani SSH klíče se do APK neukládají.</small>
+              </div>
+            </details>
           </div>
 
           <div class="adminMigrationActions" aria-label="Kroky migrace">
@@ -1748,9 +1680,79 @@
 
           <div class="adminMigrationSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>Aktuální SOURCE zůstává produkcí až do potvrzeného CUTOVERu. CUTOVER zapne údržbu automaticky; po přepnutí zůstává předchozí backend zachovaný jako rollback.</span>
+            <span>SOURCE zůstává produkcí až do potvrzeného CUTOVERu. CUTOVER sám zapne údržbu a po přepnutí zachová předchozí backend jako rollback.</span>
           </div>
         </section>
+
+        <details class="adminControlCard adminControlDetails" aria-label="Produkční režim LubaNote">
+          <summary class="adminControlSummary">
+            <span class="adminControlSummaryText">
+              <strong>Údržba</strong>
+              <small>Jen pro ruční servis; běžná migrace ji řídí automaticky</small>
+            </span>
+            <span class="adminControlSummaryRight">
+              <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
+            </span>
+          </summary>
+
+          <div class="adminControlBody">
+            <p id="adminControlMessage" aria-live="polite">Načítám veřejný Control Point…</p>
+            <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
+              <button id="adminControlMaintenanceButton" type="button" disabled>
+                <strong>Zapnout údržbu</strong><small>Servisní ruční drain</small>
+              </button>
+              <button id="adminControlNormalButton" type="button" disabled>
+                <strong>Vrátit NORMAL</strong><small>Odemknout klienty</small>
+              </button>
+            </div>
+            <div class="adminControlSafety">
+              <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
+              <span>Ruční Údržbu při PREPARE / VERIFY / CUTOVER nepoužívej. CUTOVER ji zapíná a ukončuje automaticky.</span>
+            </div>
+          </div>
+        </details>
+
+        <details class="adminServerStatusCard adminServerStatusDetails" aria-label="Stav LubaServeru">
+          <summary class="adminServerStatusSummary">
+            <span class="adminServerStatusSummaryText">
+              <span class="adminServerEyebrow">LubaServer status</span>
+              <strong id="adminServerOverall">Načítám…</strong>
+              <small id="adminServerUpdated">—</small>
+            </span>
+          </summary>
+          <div class="adminServerStatusBody">
+            <button id="adminServerRefreshButton" class="adminServerStatusRefresh" type="button">Obnovit status</button>
+            <div class="adminServerMetrics">
+              <div class="adminServerMetric"><span>Běží</span><strong id="adminServerUptime">—</strong></div>
+              <div class="adminServerMetric"><span>CPU</span><strong id="adminServerCpu">—</strong></div>
+              <div class="adminServerMetric"><span>RAM</span><strong id="adminServerRam">—</strong></div>
+              <div class="adminServerMetric"><span>Disk</span><strong id="adminServerDisk">—</strong></div>
+              <div class="adminServerMetric"><span>Volné místo</span><strong id="adminServerDiskFree">—</strong></div>
+              <div class="adminServerMetric"><span>Baterie</span><strong id="adminServerBattery">—</strong></div>
+              <div class="adminServerMetric"><span>Self-hosted Supabase</span><strong id="adminServerSupabase">—</strong></div>
+              <div class="adminServerMetric"><span>Docker</span><strong id="adminServerDocker">—</strong></div>
+              <div class="adminServerMetric"><span>Cloudflare</span><strong id="adminServerCloudflare">—</strong></div>
+            </div>
+            <p id="adminServerStatusMessage" class="adminServerStatusMessage" aria-live="polite"></p>
+          </div>
+        </details>
+
+        <details class="adminAdvancedDetails" aria-label="Pokročilé a servisní nástroje">
+          <summary class="adminAdvancedSummary">
+            <span>
+              <strong>Pokročilé / servisní nástroje</strong>
+              <small>Izolovaný TEST profil a servisní zásahy</small>
+            </span>
+          </summary>
+          <div class="adminAdvancedBody">
+            <p>TEST LubaServeru není součást běžné migrace. Použij ho jen při diagnostice nebo servisním testu konkrétního zařízení.</p>
+            <div class="adminBackendSwitchActions">
+              <button id="adminUseLubaServerButton" class="adminBackendSwitchButton" type="button">Použít LubaServer PROD</button>
+              <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">Servisní TEST LubaServeru (izolovaný)</button>
+              <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">Opustit TEST a použít aktivní produkci</button>
+            </div>
+          </div>
+        </details>
 
         <div class="adminToolGrid adminSubToolGrid" aria-label="Server nástroje">
           <button id="adminBackendToolButton" class="adminToolCard" type="button">
@@ -1771,6 +1773,31 @@
             <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
           </button>
         </div>
+        <details class="adminMigrationGuide" aria-label="Kompletní návod bezpečné migrace">
+          <summary class="adminMigrationGuideButton">📖 Kompletní návod bezpečné migrace</summary>
+          <div class="adminMigrationGuideBody">
+            <h3>Bezpečný postup Cloud ↔ LubaServer ↔ nový server</h3>
+            <p class="adminMigrationGuideLead">Použij tento návod pokaždé, i když migraci děláš až po dlouhé době. Produkční data se nepřepínají ručně.</p>
+            <ol>
+              <li><strong>Před startem:</strong> nahoře musí být správná aktuální produkce a <strong>Údržba = NORMAL</strong>. Zařízení nech synchronizovat. Nepřepínej se do servisního TESTu.</li>
+              <li><strong>Vyber cíl:</strong> Supabase Cloud, LubaServer nebo nový VPS. SOURCE se určí automaticky podle Control Pointu. SOURCE a DESTINATION musí být různé.</li>
+              <li><strong>PREPARE:</strong> vytvoří snapshot, manifesty a rollback checkpoint a připraví data na cíli. Aktuální SOURCE je stále produkce. Počkej na <strong>7/7 PASS</strong>.</li>
+              <li><strong>VERIFY:</strong> porovná public data, sekvence, Auth, Storage a zdraví cíle. Pokračuj jen při <strong>8/8 PASS</strong>.</li>
+              <li><strong>CUTOVER:</strong> nic ručně nezapínej. CUTOVER sám spustí MAINTENANCE/Drain, zmrazí SOURCE, udělá finální snapshot/deltu, finální VERIFY a atomicky přepne Control Point. Během běhu APK nezabíjej, nemaž cache a znovu se nepřihlašuj.</li>
+              <li><strong>Po CUTOVERu:</strong> počkej na <strong>COMPLETE + NORMAL</strong>. Nahoře musí být nový produkční backend. Ověř RX/TX „Synchronizováno“, otevři existující poznámku a vytvoř/změň jednu testovací poznámku.</li>
+              <li><strong>Rollback:</strong> předchozí backend zůstává po úspěšném CUTOVERu zachovaný a zmrazený jako bezpečný bod návratu. Neměň ho ručně.</li>
+            </ol>
+            <div class="adminMigrationGuideWarning">
+              <strong>Když cokoliv skončí FAIL:</strong>
+              <span>Neopakuj naslepo PREPARE/VERIFY/CUTOVER, nezapínej ručně Údržbu, nemaž cache ani session a nepřihlašuj se znovu. Nejdřív zjisti přesnou příčinu z logu; bezpečnostní stav nech beze změny.</span>
+            </div>
+            <div class="adminMigrationGuideExample">
+              <strong>Kontrola reálných dat:</strong>
+              <span>Před migrací vytvoř na SOURCE testovací poznámku. Po CUTOVERu musí být na DESTINATION. Při návratu vytvoř novou poznámku na druhém backendu a ověř ji po migraci zpět.</span>
+            </div>
+          </div>
+        </details>
+
       </section>
 
       <section id="adminUiView" class="adminDashboardSubView" hidden>
@@ -2805,7 +2832,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679h-cutover-console-ux"></script>
+  <script src="adminDashboard.js?v=679h1-server-clarity-guide"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
