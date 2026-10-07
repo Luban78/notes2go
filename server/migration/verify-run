@@ -1,81 +1,65 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-fail() { echo "CHYBA: $*" >&2; exit 1; }
+fail(){ echo "CHYBA: $*" >&2; exit 1; }
 [ "$#" -eq 1 ] || fail "Pouziti: verify-run /run-dir"
 RUN="$(readlink -m "$1")"
-BASE="$HOME/luba-server/migration-manager"
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
 BIN="$BASE/bin"
-OUT="$RUN/destination-verify"
-rm -rf "$OUT"
+source "$BIN/destination-lib"; dest_load
+OUT="$RUN/destination-verify"; rm -rf "$OUT"
 "$BIN/destination-manifests" "$RUN" "$OUT"
-report="$RUN/verify-report.txt"
-: > "$report"
-failures=0
-pass() { echo "PASS: $*" | tee -a "$report"; }
-bad() { echo "FAIL: $*" | tee -a "$report"; failures=$((failures+1)); }
-cmp_file() {
-  local label="$1" a="$2" b="$3"
-  if cmp -s "$a" "$b"; then pass "$label"; else bad "$label"; fi
-}
+report="$RUN/verify-report.txt"; : > "$report"; failures=0
+pass(){ echo "PASS: $*" | tee -a "$report"; }
+bad(){ echo "FAIL: $*" | tee -a "$report"; failures=$((failures+1)); }
+cmp_file(){ local label="$1" a="$2" b="$3"; if cmp -s "$a" "$b"; then pass "$label"; else bad "$label"; fi; }
+
 cmp_file "PUBLIC DATA fingerprints" "$RUN/public-fingerprints.tsv" "$OUT/public-fingerprints.tsv"
 cmp_file "PUBLIC sequences" "$RUN/public-sequences.tsv" "$OUT/public-sequences.tsv"
-cmp_file "AUTH users/identities stable fingerprint" "$RUN/auth-stable.tsv" "$OUT/auth-stable.tsv"
-cmp_file "STORAGE buckets" "$RUN/storage-buckets.tsv" "$OUT/storage-buckets.tsv"
-cmp_file "STORAGE object list" "$RUN/storage-objects.tsv" "$OUT/storage-objects.tsv"
 
-# Storage owner/owner_id integrita.
-read -r ST_TOTAL ST_OWNER_OK ST_NULLS < <(docker exec -i supabase-db psql -U postgres -d postgres -X -At -F' ' -c "
-SELECT count(*),
-       count(*) FILTER (WHERE owner::text=split_part(name,'/',1) AND owner_id=split_part(name,'/',1)),
-       count(*) FILTER (WHERE owner IS NULL OR owner_id IS NULL)
-FROM storage.objects
-WHERE bucket_id='lubanote-attachments';")
-SRC_STORAGE="$(wc -l < "$RUN/storage-objects.tsv")"
-if [ "$ST_TOTAL" = "$SRC_STORAGE" ] && [ "$ST_OWNER_OK" = "$SRC_STORAGE" ] && [ "$ST_NULLS" = "0" ]; then
-  pass "STORAGE owner/owner_id $ST_OWNER_OK/$SRC_STORAGE"
+pending=0
+if [ -f "$RUN/pending-delta.env" ]; then
+  # shellcheck disable=SC1090
+  source "$RUN/pending-delta.env"
+  [ "${AUTH_DELTA:-0}${STORAGE_BUCKET_DELTA:-0}${STORAGE_OBJECT_DELTA:-0}" != "000" ] && pending=1
+fi
+
+if [ "$pending" -eq 1 ]; then
+  BEFORE="$RUN/destination-before"
+  [ -d "$BEFORE" ] || fail "pending delta nema destination-before"
+  cmp_file "AUTH destination stable before frozen delta" "$BEFORE/auth-stable.tsv" "$OUT/auth-stable.tsv"
+  cmp_file "STORAGE buckets destination stable before frozen delta" "$BEFORE/storage-buckets.tsv" "$OUT/storage-buckets.tsv"
+  cmp_file "STORAGE object list destination stable before frozen delta" "$BEFORE/storage-objects.tsv" "$OUT/storage-objects.tsv"
+
+  read -r ST_TOTAL ST_NULLS < <(dest_psql -At -F' ' -c "SELECT count(*),count(*) FILTER (WHERE owner IS NULL OR owner_id IS NULL) FROM storage.objects WHERE bucket_id='lubanote-attachments';")
+  [ "$ST_NULLS" = "0" ] && pass "STORAGE owner metadata pre-cutover total=$ST_TOTAL" || bad "STORAGE owner metadata pre-cutover null=$ST_NULLS"
+  pass "STORAGE physical SHA deferred to frozen final delta"
 else
-  bad "STORAGE owner/owner_id total=$ST_TOTAL ok=$ST_OWNER_OK null=$ST_NULLS source=$SRC_STORAGE"
+  cmp_file "AUTH users/identities stable fingerprint" "$RUN/auth-stable.tsv" "$OUT/auth-stable.tsv"
+  cmp_file "STORAGE buckets" "$RUN/storage-buckets.tsv" "$OUT/storage-buckets.tsv"
+  cmp_file "STORAGE object list" "$RUN/storage-objects.tsv" "$OUT/storage-objects.tsv"
+
+  read -r ST_TOTAL ST_OWNER_OK ST_NULLS < <(dest_psql -At -F' ' -c "SELECT count(*),count(*) FILTER (WHERE owner::text=split_part(name,'/',1) AND owner_id=split_part(name,'/',1)),count(*) FILTER (WHERE owner IS NULL OR owner_id IS NULL) FROM storage.objects WHERE bucket_id='lubanote-attachments';")
+  SRC_STORAGE="$(wc -l < "$RUN/storage-objects.tsv")"
+  if [ "$ST_TOTAL" = "$SRC_STORAGE" ] && [ "$ST_OWNER_OK" = "$SRC_STORAGE" ] && [ "$ST_NULLS" = "0" ]; then pass "STORAGE owner/owner_id $ST_OWNER_OK/$SRC_STORAGE"; else bad "STORAGE owner/owner_id total=$ST_TOTAL ok=$ST_OWNER_OK null=$ST_NULLS source=$SRC_STORAGE"; fi
+
+  phys_ok=0; phys_total=0
+  while IFS=$'\t' read -r bucket object; do
+    [ -n "$bucket" ] || continue; phys_total=$((phys_total+1)); bq=${bucket//\'/\'\'}; oq=${object//\'/\'\'}
+    version="$(dest_psql -At -c "SELECT COALESCE(version,'') FROM storage.objects WHERE bucket_id='$bq' AND name='$oq' LIMIT 1;")"
+    src="$RUN/storage/$bucket/$object"
+    if [ -n "$version" ] && [ -f "$src" ]; then
+      src_sha="$(sha256sum -- "$src" | awk '{print $1}')"
+      if dst_sha="$(dest_storage_sha256 "stub/stub/$bucket/$object/$version")" && [ "$src_sha" = "$dst_sha" ]; then phys_ok=$((phys_ok+1)); fi
+    fi
+  done < "$RUN/storage-objects.tsv"
+  [ "$phys_ok" = "$phys_total" ] && pass "STORAGE physical SHA $phys_ok/$phys_total" || bad "STORAGE physical SHA $phys_ok/$phys_total"
 fi
 
-# Physical Storage: source bytes vs lokalni file podle DEST version.
-root="$HOME/luba-server/luba-supabase/volumes/storage/stub/stub"
-phys_ok=0
-phys_total=0
-while IFS=$'\t' read -r bucket object; do
-  [ -n "$bucket" ] || continue
-  phys_total=$((phys_total+1))
-  bq=${bucket//\'/\'\'}
-  oq=${object//\'/\'\'}
-  version="$(docker exec -i supabase-db psql -U postgres -d postgres -X -At -c "SELECT COALESCE(version,'') FROM storage.objects WHERE bucket_id='$bq' AND name='$oq' LIMIT 1;")"
-  src="$RUN/storage/$bucket/$object"
-  dst="$root/$bucket/$object/$version"
-  if [ -n "$version" ] && [ -f "$src" ] && [ -f "$dst" ] && [ "$(sha256sum "$src" | awk '{print $1}')" = "$(sha256sum "$dst" | awk '{print $1}')" ]; then
-    phys_ok=$((phys_ok+1))
-  fi
-done < "$RUN/storage-objects.tsv"
-if [ "$phys_ok" = "$phys_total" ] && [ "$phys_total" -gt 0 ]; then
-  pass "STORAGE physical SHA $phys_ok/$phys_total"
-else
-  bad "STORAGE physical SHA $phys_ok/$phys_total"
-fi
+read -r healthy total < <(dest_supabase_health)
+expected="$(dest_expected_health_total)"
+if [ "$healthy" = "$expected" ] && [ "$total" = "$expected" ]; then
+  if [ "$DEST_MODE" = remote ]; then pass "SUPABASE remote DB+API $healthy/$total healthy"; else pass "SUPABASE 11/11 healthy"; fi
+else bad "SUPABASE $healthy/$total healthy (ocekavano $expected/$expected)"; fi
 
-# Supabase health.
-COMPOSE="$HOME/luba-server/luba-supabase/docker-compose.yml"
-mapfile -t IDS < <(docker compose -f "$COMPOSE" ps -q)
-healthy=0
-for id in "${IDS[@]}"; do
-  h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id")"
-  [ "$h" = "healthy" ] && healthy=$((healthy+1))
-done
-total="${#IDS[@]}"
-if [ "$total" -eq 11 ] && [ "$healthy" -eq 11 ]; then
-  pass "SUPABASE 11/11 healthy"
-else
-  bad "SUPABASE $healthy/$total healthy (ocekavano 11/11)"
-fi
-
-if [ "$failures" -ne 0 ]; then
-  echo "VERIFY: FAIL ($failures kontrol)" | tee -a "$report"
-  exit 1
-fi
+if [ "$failures" -ne 0 ]; then echo "VERIFY: FAIL ($failures kontrol)" | tee -a "$report"; exit 1; fi
 echo "VERIFY: PASS" | tee -a "$report"

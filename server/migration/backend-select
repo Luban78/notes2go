@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+CFG="$BASE/config"; PROFILES="$CFG/backend-profiles"
+STATE="$BASE/state/state"; CURRENT="$BASE/state/current_run"
+CONTROL="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+TARGET="${1:-}"
+fail(){ echo "BACKEND_SELECT=FAIL" >&2; echo "REASON=$*" >&2; exit 1; }
+[[ "$TARGET" =~ ^[a-z0-9._-]+$ ]] || fail "neplatny target backend"
+[ -f "$CONTROL" ] || fail "chybi control-state"
+[ -f "$PROFILES/$TARGET.destination.env" ] || fail "neznamy cil $TARGET"
+
+SOURCE_ID="$(python3 - "$CONTROL" <<'PY'
+import json,sys
+from pathlib import Path
+d=json.loads(Path(sys.argv[1]).read_text())
+if d.get('mode')!='NORMAL': raise SystemExit('Control Point neni NORMAL')
+print(d.get('active_backend',''))
+PY
+)" || fail "nelze nacist aktivni backend"
+[[ "$SOURCE_ID" =~ ^[a-z0-9._-]+$ ]] || fail "neplatny aktivni backend"
+[ "$SOURCE_ID" != "$TARGET" ] || fail "SOURCE a DEST jsou stejne"
+[ -f "$PROFILES/$SOURCE_ID.source.env" ] || fail "chybi SOURCE profil $SOURCE_ID"
+
+MSTATE="$(cat "$STATE" 2>/dev/null || echo UNKNOWN)"
+case "$MSTATE" in IDLE|CUTOVER_COMPLETE) ;; *) fail "Manager state $MSTATE nelze prekonfigurovat";; esac
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+cp -a "$CFG/source.env" "$CFG/source.env.before-select-$STAMP"
+cp -a "$CFG/destination.env" "$CFG/destination.env.before-select-$STAMP"
+install -m 600 "$PROFILES/$SOURCE_ID.source.env" "$CFG/source.env.new"
+install -m 600 "$PROFILES/$TARGET.destination.env" "$CFG/destination.env.new"
+mv "$CFG/source.env.new" "$CFG/source.env"
+mv "$CFG/destination.env.new" "$CFG/destination.env"
+
+if [ -f "$CURRENT" ]; then
+  cp -a "$CURRENT" "$BASE/state/current_run.previous-$STAMP"
+  rm -f "$CURRENT"
+fi
+printf 'IDLE\n' > "$STATE"
+
+python3 - "$CONTROL" "$SOURCE_ID" <<'PY'
+import json,os,sys
+from datetime import datetime,timezone
+from pathlib import Path
+p=Path(sys.argv[1]); source=sys.argv[2]
+d=json.loads(p.read_text())
+if d.get('mode')!='NORMAL' or d.get('active_backend')!=source:
+    raise SystemExit('Control Point se behem selectu zmenil')
+d['cutover_enabled']=False
+d['updated_utc']=datetime.now(timezone.utc).isoformat()
+t=p.with_name(p.name+'.select.tmp'); t.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n'); os.chmod(t,0o600); os.replace(t,p)
+PY
+
+echo "BACKEND_SELECT=PASS"
+echo "SOURCE_BACKEND=$SOURCE_ID"
+echo "DEST_BACKEND=$TARGET"
+echo "STATE=IDLE"

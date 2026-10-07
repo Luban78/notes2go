@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+source "$BASE/bin/destination-lib"; dest_load
+dest_psql -At -v ON_ERROR_STOP=1 -c "UPDATE lubanote_migration_internal.write_freeze_state SET frozen=true,updated_at=now() WHERE singleton=true; SELECT CASE WHEN frozen THEN 'DEST_FROZEN' ELSE 'DEST_NOT_FROZEN' END FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true;"

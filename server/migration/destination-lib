@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+
+DEST_BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+DEST_CFG="$DEST_BASE/config/destination.env"
+
+dest_fail() { echo "CHYBA DESTINATION: $*" >&2; return 1; }
+
+read_env_local() {
+  local file="$1" key="$2"
+  sed -n "s/^${key}=//p" "$file" | tail -n1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+
+dest_load() {
+  [ -f "$DEST_CFG" ] || dest_fail "chybi $DEST_CFG" || return 1
+  local perm; perm="$(stat -c '%a' "$DEST_CFG")"
+  [ "$perm" = "600" ] || dest_fail "destination.env musi mit chmod 600" || return 1
+  set -a; . "$DEST_CFG"; set +a
+  : "${DEST_NAME:?chybi DEST_NAME}"
+  : "${DEST_MODE:?chybi DEST_MODE}"
+  : "${DEST_DB_NAME:?chybi DEST_DB_NAME}"
+  : "${DEST_DB_USER:?chybi DEST_DB_USER}"
+  case "$DEST_MODE" in
+    docker)
+      : "${DEST_DOCKER_CONTAINER:?chybi DEST_DOCKER_CONTAINER}"
+      : "${DEST_STORAGE_DIR:?chybi DEST_STORAGE_DIR}"
+      : "${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}"
+      ;;
+    remote)
+      : "${DEST_DB_HOST:?chybi DEST_DB_HOST}"
+      : "${DEST_DB_PORT:?chybi DEST_DB_PORT}"
+      : "${DEST_DB_PASSWORD:?chybi DEST_DB_PASSWORD}"
+      : "${DEST_API_URL:?chybi DEST_API_URL}"
+      : "${DEST_SERVICE_ROLE_KEY:?chybi DEST_SERVICE_ROLE_KEY}"
+      ;;
+    ssh)
+      : "${DEST_SSH_HOST:?chybi DEST_SSH_HOST}"
+      : "${DEST_SSH_USER:?chybi DEST_SSH_USER}"
+      : "${DEST_DOCKER_CONTAINER:?chybi DEST_DOCKER_CONTAINER}"
+      : "${DEST_STORAGE_DIR:?chybi DEST_STORAGE_DIR}"
+      : "${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}"
+      ;;
+    *) dest_fail "neznamy DEST_MODE=$DEST_MODE"; return 1 ;;
+  esac
+}
+
+dest_psql() {
+  case "$DEST_MODE" in
+    docker)
+      docker exec -i "$DEST_DOCKER_CONTAINER" psql -U "$DEST_DB_USER" -d "$DEST_DB_NAME" -X -v ON_ERROR_STOP=1 "$@" ;;
+    remote)
+      PGPASSWORD="$DEST_DB_PASSWORD" PGSSLMODE="${DEST_DB_SSLMODE:-require}" \
+      docker run --rm -i -e PGPASSWORD -e PGSSLMODE postgres:17-alpine psql \
+        --host="$DEST_DB_HOST" --port="$DEST_DB_PORT" --username="$DEST_DB_USER" --dbname="$DEST_DB_NAME" -X -v ON_ERROR_STOP=1 "$@" ;;
+    ssh)
+      ssh -o BatchMode=yes -o ConnectTimeout=10 -p "${DEST_SSH_PORT:-22}" "$DEST_SSH_USER@$DEST_SSH_HOST" \
+        docker exec -i "$DEST_DOCKER_CONTAINER" psql -U "$DEST_DB_USER" -d "$DEST_DB_NAME" -X -v ON_ERROR_STOP=1 "$@" ;;
+  esac
+}
+
+dest_ssh() {
+  [ "$DEST_MODE" = "ssh" ] || { dest_fail "dest_ssh vyzaduje DEST_MODE=ssh"; return 1; }
+  ssh -o BatchMode=yes -o ConnectTimeout=10 -p "${DEST_SSH_PORT:-22}" "$DEST_SSH_USER@$DEST_SSH_HOST" "$@"
+}
+
+dest_api_url() {
+  local u="${DEST_API_URL:-${DEST_CLIENT_URL:-}}"
+  [ -n "$u" ] || { dest_fail "chybi DEST_API_URL/DEST_CLIENT_URL"; return 1; }
+  printf '%s\n' "${u%/}"
+}
+
+dest_service_role_key() {
+  case "$DEST_MODE" in
+    remote)
+      [ -n "${DEST_SERVICE_ROLE_KEY:-}" ] || { dest_fail "chybi DEST_SERVICE_ROLE_KEY"; return 1; }
+      printf '%s\n' "$DEST_SERVICE_ROLE_KEY"
+      ;;
+    docker)
+      local f="${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}/.env" k
+      [ -f "$f" ] || { dest_fail "chybi $f"; return 1; }
+      k="$(read_env_local "$f" SERVICE_ROLE_KEY)"
+      [ -n "$k" ] || { dest_fail "SERVICE_ROLE_KEY chybi"; return 1; }
+      printf '%s\n' "$k"
+      ;;
+    ssh)
+      dest_ssh bash -s -- "${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}/.env" <<'REMOTE'
+set -Eeuo pipefail
+f="$1"
+sed -n 's/^SERVICE_ROLE_KEY=//p' "$f" | tail -n1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+REMOTE
+      ;;
+  esac
+}
+
+dest_storage_fetch() {
+  local bucket="$1" object="$2" dest="$3" api key eb eo url
+  mkdir -p "$(dirname "$dest")"
+  api="$(dest_api_url)"; key="$(dest_service_role_key)"
+  eb="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$bucket")"
+  eo="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe="/"))' "$object")"
+  url="$api/storage/v1/object/authenticated/$eb/$eo"
+  curl --fail --silent --show-error --location -H "Authorization: Bearer $key" -H "apikey: $key" "$url" -o "$dest"
+}
+
+dest_storage_upload() {
+  local bucket="$1" object="$2" file="$3" api key eb eo url
+  [ -f "$file" ] || { dest_fail "upload source chybi: $file"; return 1; }
+  api="$(dest_api_url)"; key="$(dest_service_role_key)"
+  eb="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$bucket")"
+  eo="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe="/"))' "$object")"
+  url="$api/storage/v1/object/$eb/$eo"
+  curl --fail --silent --show-error -X POST \
+    -H "Authorization: Bearer $key" -H "apikey: $key" -H "x-upsert: true" \
+    -H "Content-Type: application/octet-stream" --data-binary "@$file" "$url" >/dev/null
+}
+
+dest_storage_sha256() {
+  local relative="$1" bucket object tmp
+  case "$DEST_MODE" in
+    docker)
+      local file="$DEST_STORAGE_DIR/$relative"; [ -f "$file" ] || return 2; sha256sum "$file" | awk '{print $1}' ;;
+    ssh)
+      local file="$DEST_STORAGE_DIR/$relative"; dest_ssh test -f "$file" || return 2; dest_ssh sha256sum "$file" | awk '{print $1}' ;;
+    remote)
+      # relative = stub/stub/<bucket>/<object>/<version>; pro API staci bucket+object.
+      local rest="${relative#stub/stub/}"; bucket="${rest%%/*}"; rest="${rest#*/}"; object="${rest%/*}"
+      tmp="$(mktemp)"; trap 'rm -f "$tmp"' RETURN
+      dest_storage_fetch "$bucket" "$object" "$tmp" || return 2
+      sha256sum "$tmp" | awk '{print $1}'
+      rm -f "$tmp"; trap - RETURN
+      ;;
+    *) dest_fail "Physical Storage neni podporovan pro DEST_MODE=$DEST_MODE"; return 1 ;;
+  esac
+}
+
+dest_supabase_health() {
+  local compose="${DEST_SUPABASE_DIR:-}/docker-compose.yml"
+  case "$DEST_MODE" in
+    docker)
+      [ -f "$compose" ] || return 1
+      local ids id h healthy=0 total; mapfile -t ids < <(docker compose -f "$compose" ps -q); total="${#ids[@]}"
+      for id in "${ids[@]}"; do h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id")"; [ "$h" = healthy ] && healthy=$((healthy+1)); done
+      printf '%s %s\n' "$healthy" "$total"
+      ;;
+    ssh)
+      dest_ssh bash -s -- "$DEST_SUPABASE_DIR" <<'REMOTE'
+set -Eeuo pipefail
+compose="$1/docker-compose.yml"; mapfile -t ids < <(docker compose -f "$compose" ps -q); healthy=0; total="${#ids[@]}"
+for id in "${ids[@]}"; do h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id")"; [ "$h" = healthy ] && healthy=$((healthy+1)); done
+printf '%s %s\n' "$healthy" "$total"
+REMOTE
+      ;;
+    remote)
+      dest_psql -Atqc 'SELECT 1' >/dev/null || { printf '0 2\n'; return 0; }
+      local api key
+      api="$(dest_api_url)"; key="$(dest_service_role_key)"
+      if curl -fsS --max-time 8 -H "apikey: $key" -H "Authorization: Bearer $key" "$api/rest/v1/" >/dev/null; then printf '2 2\n'; else printf '1 2\n'; fi
+      ;;
+  esac
+}
+
+dest_expected_health_total() { [ "$DEST_MODE" = remote ] && printf '2\n' || printf '11\n'; }

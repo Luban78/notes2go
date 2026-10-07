@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+CFG="$BASE/config"
+PROFILES="$CFG/backend-profiles"
+CONTROL="${SOURCE_CONTROL_STATE_FILE:-$HOME/luba-server/migration-bridge/control-state.json}"
+SOURCE="$CFG/source.env"
+DEST="$CFG/destination.env"
+
+fail(){ echo "PROFILE_INIT=FAIL" >&2; echo "REASON=$*" >&2; exit 1; }
+
+[ -f "$SOURCE" ] || fail "chybi source.env"
+[ -f "$DEST" ] || fail "chybi destination.env"
+[ -f "$CONTROL" ] || fail "chybi control-state.json"
+
+python3 - "$CONTROL" <<'PY'
+import json,sys
+from pathlib import Path
+d=json.loads(Path(sys.argv[1]).read_text())
+assert d.get('mode')=='NORMAL', 'Control Point neni NORMAL'
+assert d.get('active_backend')=='cloud', 'Prvni init profilu vyzaduje Cloud jako aktivni PRIMARY'
+assert d.get('cutover_enabled') is False, 'Prvni init profilu vyzaduje cutover_enabled=false'
+PY
+
+src_id="$(sed -n 's/^SOURCE_BACKEND_ID=//p' "$SOURCE" | tail -n1 | tr -d "'\"")"
+dst_id="$(sed -n 's/^DEST_BACKEND_ID=//p' "$DEST" | tail -n1 | tr -d "'\"")"
+[ "$src_id" = "cloud" ] || fail "source.env neni Cloud (SOURCE_BACKEND_ID=$src_id)"
+[ -z "$dst_id" ] || [ "$dst_id" = "lubaserver" ] || fail "destination.env neni LubaServer (DEST_BACKEND_ID=$dst_id)"
+
+mkdir -p "$PROFILES"
+chmod 700 "$PROFILES"
+
+python3 - "$SOURCE" "$DEST" "$PROFILES" <<'PY'
+from pathlib import Path
+import os,sys
+src=Path(sys.argv[1]); dst=Path(sys.argv[2]); out=Path(sys.argv[3])
+
+def read_env(path):
+    d={}
+    for raw in path.read_text().splitlines():
+        line=raw.strip()
+        if not line or line.startswith('#') or '=' not in line: continue
+        k,v=line.split('=',1); v=v.strip()
+        if len(v)>=2 and v[0]==v[-1] and v[0] in "'\"": v=v[1:-1]
+        d[k.strip()]=v
+    return d
+
+def write_env(path,d):
+    lines=[]
+    for k,v in d.items():
+        if v is None: continue
+        s=str(v)
+        if any(c.isspace() for c in s) or any(c in s for c in "#'\""):
+            s="'"+s.replace("'", "'\"'\"'")+"'"
+        lines.append(f"{k}={s}")
+    tmp=path.with_suffix(path.suffix+'.tmp')
+    tmp.write_text('\n'.join(lines)+'\n')
+    os.chmod(tmp,0o600); os.replace(tmp,path)
+
+S=read_env(src); D=read_env(dst)
+required=['SOURCE_DB_HOST','SOURCE_DB_PORT','SOURCE_DB_NAME','SOURCE_DB_USER','SOURCE_DB_PASSWORD','SOURCE_API_URL','SOURCE_SERVICE_ROLE_KEY']
+missing=[k for k in required if not S.get(k)]
+if missing: raise SystemExit('Cloud source profile chybi: '+','.join(missing))
+
+cloud_source=dict(S)
+cloud_source.update({'SOURCE_NAME':'Supabase Cloud','SOURCE_MODE':'remote','SOURCE_BACKEND_ID':'cloud'})
+write_env(out/'cloud.source.env',cloud_source)
+
+cloud_dest={
+ 'DEST_NAME':'Supabase Cloud','DEST_MODE':'remote','DEST_BACKEND_ID':'cloud',
+ 'DEST_DB_HOST':S['SOURCE_DB_HOST'],'DEST_DB_PORT':S['SOURCE_DB_PORT'],
+ 'DEST_DB_NAME':S['SOURCE_DB_NAME'],'DEST_DB_USER':S['SOURCE_DB_USER'],
+ 'DEST_DB_PASSWORD':S['SOURCE_DB_PASSWORD'],'DEST_DB_SSLMODE':S.get('SOURCE_DB_SSLMODE','require'),
+ 'DEST_API_URL':S['SOURCE_API_URL'],'DEST_SERVICE_ROLE_KEY':S['SOURCE_SERVICE_ROLE_KEY'],
+ 'DEST_CLIENT_URL':S['SOURCE_API_URL'],
+}
+write_env(out/'cloud.destination.env',cloud_dest)
+
+if not D.get('DEST_DB_NAME') or not D.get('DEST_DB_USER') or not D.get('DEST_DOCKER_CONTAINER') or not D.get('DEST_STORAGE_DIR') or not D.get('DEST_SUPABASE_DIR'):
+    raise SystemExit('LubaServer destination profile neni kompletni')
+luba_dest=dict(D)
+luba_dest.update({'DEST_NAME':'LubaServer','DEST_MODE':'docker','DEST_BACKEND_ID':'lubaserver'})
+write_env(out/'lubaserver.destination.env',luba_dest)
+
+luba_source={
+ 'SOURCE_NAME':'LubaServer','SOURCE_MODE':'docker','SOURCE_BACKEND_ID':'lubaserver',
+ 'SOURCE_DB_NAME':D['DEST_DB_NAME'],'SOURCE_DB_USER':D['DEST_DB_USER'],
+ 'SOURCE_DOCKER_CONTAINER':D['DEST_DOCKER_CONTAINER'],
+ 'SOURCE_STORAGE_DIR':D['DEST_STORAGE_DIR'],'SOURCE_SUPABASE_DIR':D['DEST_SUPABASE_DIR'],
+}
+write_env(out/'lubaserver.source.env',luba_source)
+PY
+
+for f in cloud.source.env cloud.destination.env lubaserver.source.env lubaserver.destination.env; do
+  [ -s "$PROFILES/$f" ] || fail "profil nevznikl: $f"
+  [ "$(stat -c '%a' "$PROFILES/$f")" = "600" ] || fail "spatna prava: $f"
+done
+
+echo "PROFILE_INIT=PASS"
+echo "BACKENDS=cloud,lubaserver"

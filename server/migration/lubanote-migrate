@@ -29,8 +29,14 @@ normalize_backend_id() {
 }
 
 status() {
-  echo "=== LubaNote Migration Manager V3 / 50E40B ==="
+  echo "=== LubaNote Migration Manager V3 / 50E42 ==="
   echo "State: $(stav)"
+  echo
+  echo "=== BACKENDY ==="
+  if [ -f "$BIN/source-lib" ] && [ -f "$BIN/destination-lib" ]; then
+    ( source "$BIN/source-lib"; source_load >/dev/null 2>&1; echo "SOURCE:      ${SOURCE_NAME:-?} [${SOURCE_BACKEND_ID:-?}] / ${SOURCE_MODE:-?}" ) || echo "SOURCE:      CONFIG ERROR"
+    ( source "$BIN/destination-lib"; dest_load >/dev/null 2>&1; echo "DESTINATION: ${DEST_NAME:-?} [${DEST_BACKEND_ID:-?}] / ${DEST_MODE:-?}" ) || echo "DESTINATION: CONFIG ERROR"
+  fi
   echo
   echo "=== CUTOVER ==="
   case "$(stav)" in
@@ -186,20 +192,22 @@ PYCTRL
   pre="$run_dir/destination-before"
   "$BIN/destination-manifests" "$run_dir" "$pre"
 
-  if ! cmp -s "$run_dir/auth-stable.tsv" "$pre/auth-stable.tsv"; then
-    echo "BLOKACE: Auth stable fingerprint se lisi. Auth nebude automaticky prepisovan." >&2
-    return 20
+  AUTH_DELTA=0; STORAGE_BUCKET_DELTA=0; STORAGE_OBJECT_DELTA=0
+  cmp -s "$run_dir/auth-stable.tsv" "$pre/auth-stable.tsv" || AUTH_DELTA=1
+  cmp -s "$run_dir/storage-buckets.tsv" "$pre/storage-buckets.tsv" || STORAGE_BUCKET_DELTA=1
+  cmp -s "$run_dir/storage-objects.tsv" "$pre/storage-objects.tsv" || STORAGE_OBJECT_DELTA=1
+  {
+    echo "AUTH_DELTA=$AUTH_DELTA"
+    echo "STORAGE_BUCKET_DELTA=$STORAGE_BUCKET_DELTA"
+    echo "STORAGE_OBJECT_DELTA=$STORAGE_OBJECT_DELTA"
+  } > "$run_dir/pending-delta.env"
+  chmod 600 "$run_dir/pending-delta.env"
+  if [ "${AUTH_DELTA}${STORAGE_BUCKET_DELTA}${STORAGE_OBJECT_DELTA}" = "000" ]; then
+    echo "PASS: Auth + Storage metadata shodna; final delta nebude nutna"
+  else
+    echo "PASS: Auth/Storage rozdil zaznamenan; aplikace je odlozena az do frozen CUTOVER"
+    echo "DELTA: auth=$AUTH_DELTA buckets=$STORAGE_BUCKET_DELTA objects=$STORAGE_OBJECT_DELTA"
   fi
-  if ! cmp -s "$run_dir/storage-buckets.tsv" "$pre/storage-buckets.tsv"; then
-    echo "BLOKACE: Storage bucket konfigurace se lisi." >&2
-    return 21
-  fi
-  if ! cmp -s "$run_dir/storage-objects.tsv" "$pre/storage-objects.tsv"; then
-    echo "BLOKACE: Storage object list se lisi. V3 nema online Storage delta adapter." >&2
-    return 22
-  fi
-
-  echo "PASS: Auth + Storage metadata precheck"
 
   echo "=== PREPARE V3 / 6: rollback checkpoint ==="
   cp_path="$("$BIN/destination-checkpoint" "$run_id" | tee "$run_dir/checkpoint.log" | tail -n 1)"
@@ -264,7 +272,14 @@ cutover() {
 }
 
 prepare_server() {
-  "$BIN/destination-prepare-server"
+  source "$BIN/destination-lib"
+  dest_load
+  if [ "$DEST_MODE" = "ssh" ]; then
+    "$BIN/destination-prepare-server"
+  else
+    echo "PREPARE_SERVER=SKIP"
+    echo "DEST_MODE=$DEST_MODE"
+  fi
 }
 
 case "${1:-status}" in

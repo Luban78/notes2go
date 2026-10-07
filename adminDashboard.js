@@ -89,6 +89,10 @@
     document.getElementById("adminMigrationDestinationInput");
   const migrationDestinationSave =
     document.getElementById("adminMigrationDestinationSave");
+  const migrationUseCloud =
+    document.getElementById("adminMigrationUseCloud");
+  const migrationUseLubaServer =
+    document.getElementById("adminMigrationUseLubaServer");
   const migrationSourceLabel =
     document.getElementById("adminMigrationSourceLabel");
   const migrationDestinationLabel =
@@ -1054,7 +1058,7 @@
     {
       label: "Supabase health",
       detail: "11 služeb musí být healthy",
-      pass: "PASS: SUPABASE 11/11 healthy",
+      pass: "PASS: SUPABASE",
       fail: "FAIL: SUPABASE"
     }
   ];
@@ -1087,15 +1091,18 @@
 
     const destHost = String(vysledek?.destination?.host || "").trim();
     const destMode = String(vysledek?.destination?.mode || "").trim().toLowerCase();
-    const destNastaven =
-      destMode === "docker" || (Boolean(destHost) && destMode === "ssh");
+    const destBackend = String(vysledek?.destination?.backend_id || "").trim().toLowerCase();
+    const destName = String(vysledek?.destination?.name || "").trim();
+    const destNastaven = ["docker", "remote"].includes(destMode) || (Boolean(destHost) && destMode === "ssh");
     if (migrationDestinationInput && document.activeElement !== migrationDestinationInput) {
-      migrationDestinationInput.value = destHost;
+      migrationDestinationInput.value = destMode === "ssh" ? destHost : "";
     }
     if (migrationDestinationLabel) {
-      migrationDestinationLabel.textContent =
-        destMode === "docker" ? "LubaServer" : (destHost || "Nový VPS");
+      migrationDestinationLabel.textContent = destName || (destBackend === "cloud" ? "Supabase Cloud" : destBackend === "lubaserver" ? "LubaServer" : (destHost || "Nový VPS"));
     }
+    const sourceBackend = String(controlPosledniStatus?.active_backend || "").trim().toLowerCase();
+    if (migrationUseCloud) migrationUseCloud.disabled = migrationAkceBezi || sourceBackend === "cloud" || vysledek?.job?.status === "running";
+    if (migrationUseLubaServer) migrationUseLubaServer.disabled = migrationAkceBezi || sourceBackend === "lubaserver" || vysledek?.job?.status === "running";
 
     /* Starý failed/success job v RAM nesmí blokovat nový PREPARE.
      * Autorita je vždy aktuální stav Migration Manageru.
@@ -1885,6 +1892,28 @@
 
   function spustMigrationCutover() {
     return spustMigrationAkci("cutover");
+  }
+
+  async function ulozMigrationDestinationPreset(backend) {
+    if (!jeAdmin || migrationAkceBezi) return;
+    try {
+      const token = await ziskejMigrationBearerToken();
+      const odpoved = await fetch(`${MIGRATION_CONTROL_BASE}/destination`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ backend }),
+        cache: "no-store"
+      });
+      const data = await odpoved.json().catch(() => ({}));
+      if (!odpoved.ok || data?.ok !== true) throw new Error(data?.error || `HTTP_${odpoved.status}`);
+      if (migrationDestinationHint) {
+        migrationDestinationHint.textContent = `Cíl uložen: ${data.destination?.name || data.destination?.backend_id || backend}. Nový migrační cyklus je IDLE.`;
+      }
+      await nactiControlStatus({ tichy: true });
+      await nactiMigrationStatus();
+    } catch (error) {
+      if (migrationDestinationHint) migrationDestinationHint.textContent = `Cíl se nepodařilo nastavit: ${error?.message || "neznámá chyba"}`;
+    }
   }
 
   async function ulozMigrationDestination() {
@@ -3641,6 +3670,14 @@
   migrationCutoverTlacitko?.addEventListener(
     "click",
     spustMigrationCutover
+  );
+  migrationUseCloud?.addEventListener(
+    "click",
+    () => ulozMigrationDestinationPreset("cloud")
+  );
+  migrationUseLubaServer?.addEventListener(
+    "click",
+    () => ulozMigrationDestinationPreset("lubaserver")
   );
   migrationDestinationSave?.addEventListener(
     "click",

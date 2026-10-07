@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+source "$BASE/bin/destination-lib"; dest_load
+v="$(dest_psql -Atqc "SELECT CASE WHEN frozen THEN 'true' ELSE 'false' END FROM lubanote_migration_internal.write_freeze_state WHERE singleton=true")"
+[ "$v" = true ] || [ "$v" = false ] || { echo "DEST_FREEZE_STATE=UNKNOWN" >&2; exit 1; }
+echo "$v"

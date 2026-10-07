@@ -39,6 +39,7 @@ CONTROL_STATE_FILE = RUNTIME_DIR / "control-state.json"
 MAX_LOG_TAIL_BYTES = 32_768
 DESTINATION_ENV = Path(os.environ.get("DESTINATION_ENV", "/home/luban78/luba-server/migration-manager/config/destination.env"))
 ALLOWED_ACTIONS = {"prepare", "verify", "cutover"}
+BACKEND_SELECT = os.environ.get("BACKEND_SELECT", "/home/luban78/luba-server/migration-manager/bin/backend-select")
 ALLOWED_CONTROL_MODES = {"NORMAL", "MAINTENANCE"}
 BACKEND_ID_RE = re.compile(r"^[a-z0-9._-]+$")
 
@@ -221,10 +222,31 @@ def write_job_meta(job: dict[str, Any]) -> None:
 
 def destination_public() -> dict[str, Any]:
     return {
+        "backend_id": read_env_value(str(DESTINATION_ENV), "DEST_BACKEND_ID"),
+        "name": read_env_value(str(DESTINATION_ENV), "DEST_NAME"),
         "host": read_env_value(str(DESTINATION_ENV), "DEST_SSH_HOST"),
         "mode": read_env_value(str(DESTINATION_ENV), "DEST_MODE"),
-        "client_url": read_env_value(str(DESTINATION_ENV), "DEST_CLIENT_URL"),
+        "client_url": read_env_value(str(DESTINATION_ENV), "DEST_CLIENT_URL") or read_env_value(str(DESTINATION_ENV), "DEST_API_URL"),
     }
+
+
+def configure_known_destination(backend_id: str) -> tuple[bool, str]:
+    backend = (backend_id or "").strip().lower()
+    if backend not in {"cloud", "lubaserver"}:
+        return False, "unknown_destination_backend"
+    try:
+        result = subprocess.run(
+            [BACKEND_SELECT, backend],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except Exception:
+        return False, "backend_select_failed"
+    if result.returncode != 0:
+        return False, "backend_select_rejected"
+    return True, backend
 
 
 def configure_destination(host: str) -> tuple[bool, str]:
@@ -372,7 +394,7 @@ def start_action(action: str) -> tuple[bool, dict[str, Any]]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LubaNoteMigrationBridge/1.1-50E41"
+    server_version = "LubaNoteMigrationBridge/1.2-50E42"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log request headers/tokens. Base log format contains only method/path/status.
@@ -456,6 +478,7 @@ class Handler(BaseHTTPRequestHandler):
                     "verify": True,
                     "cutover": read_state() == "VERIFIED",
                     "destination": True,
+                    "bidirectional": True,
                 },
                 "destination": destination_public(),
                 "manager_status": manager_status_output(),
@@ -493,11 +516,15 @@ class Handler(BaseHTTPRequestHandler):
                 if current_job and current_job.get("status") == "running":
                     self.send_json(409, {"ok": False, "error": "migration_busy"})
                     return
-            ok, result = configure_destination(str(payload.get("host", "")))
+            backend = str(payload.get("backend", "")).strip().lower()
+            if backend:
+                ok, result = configure_known_destination(backend)
+            else:
+                ok, result = configure_destination(str(payload.get("host", "")))
             if not ok:
                 self.send_json(400, {"ok": False, "error": result})
                 return
-            self.send_json(200, {"ok": True, "destination": destination_public()})
+            self.send_json(200, {"ok": True, "destination": destination_public(), "manager_state": read_state()})
             return
 
         path_to_action = {

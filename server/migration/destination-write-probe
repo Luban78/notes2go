@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+source "$BASE/bin/destination-lib"; dest_load
+RESULT="$(dest_psql -q -At -v ON_ERROR_STOP=1 -c "BEGIN; WITH touched AS (UPDATE public.notes SET id=id WHERE ctid=(SELECT ctid FROM public.notes LIMIT 1) RETURNING 1) SELECT CASE WHEN count(*)=1 THEN 'WRITE_PROBE_PASS' ELSE 'WRITE_PROBE_NO_ROW' END FROM touched; ROLLBACK;")"
+[ "$RESULT" = WRITE_PROBE_PASS ] || { echo "DEST_WRITE_PROBE=FAIL" >&2; echo "DETAIL=$RESULT" >&2; exit 1; }
+echo "DEST_WRITE_PROBE=PASS"

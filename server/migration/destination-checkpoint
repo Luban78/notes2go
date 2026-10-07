@@ -1,30 +1,58 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-fail() { echo "CHYBA: $*" >&2; exit 1; }
+fail(){ echo "CHYBA: $*" >&2; exit 1; }
 [ "$#" -eq 1 ] || fail "Pouziti: destination-checkpoint RUN_ID"
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
 RUN_ID="$1"
-CP="$HOME/luba-server/checkpoints/pre-production-prepare-$RUN_ID"
-STORAGE_SRC="$HOME/luba-server/luba-supabase/volumes/storage"
+CP="$HOME/luba-server/checkpoints/pre-destination-$RUN_ID"
+source "$BASE/bin/destination-lib"
+dest_load
 [ ! -e "$CP" ] || fail "Checkpoint uz existuje: $CP"
-mkdir -p "$CP"
-chmod 700 "$CP"
+mkdir -p "$CP"; chmod 700 "$CP"
 
-echo "[checkpoint] LubaServer DB..."
-docker exec supabase-db pg_dump -U postgres -d postgres -Fc -f /tmp/lubaserver-before-production-prepare.dump
-docker cp supabase-db:/tmp/lubaserver-before-production-prepare.dump "$CP/lubaserver-db.dump" >/dev/null
-docker exec supabase-db rm -f /tmp/lubaserver-before-production-prepare.dump
+case "$DEST_MODE" in
+  docker)
+    echo "[checkpoint] DEST DB..."
+    docker exec "$DEST_DOCKER_CONTAINER" pg_dump -U "$DEST_DB_USER" -d "$DEST_DB_NAME" -Fc -f /tmp/lubanote-destination-checkpoint.dump
+    docker cp "$DEST_DOCKER_CONTAINER:/tmp/lubanote-destination-checkpoint.dump" "$CP/destination-db.dump" >/dev/null
+    docker exec "$DEST_DOCKER_CONTAINER" rm -f /tmp/lubanote-destination-checkpoint.dump
+    echo "[checkpoint] DEST Storage..."
+    [ -d "$DEST_STORAGE_DIR" ] || fail "Storage dir neexistuje: $DEST_STORAGE_DIR"
+    tar -C "$(dirname "$DEST_STORAGE_DIR")" -czf "$CP/destination-storage.tar.gz" "$(basename "$DEST_STORAGE_DIR")"
+    ;;
+  ssh)
+    echo "[checkpoint] REMOTE SSH DEST DB..."
+    REMOTE_TMP="/tmp/lubanote-destination-checkpoint-$RUN_ID"
+    dest_ssh "mkdir -p '$REMOTE_TMP' && chmod 700 '$REMOTE_TMP'"
+    dest_ssh "docker exec '$DEST_DOCKER_CONTAINER' pg_dump -U '$DEST_DB_USER' -d '$DEST_DB_NAME' -Fc -f /tmp/lubanote-destination-checkpoint.dump && docker cp '$DEST_DOCKER_CONTAINER:/tmp/lubanote-destination-checkpoint.dump' '$REMOTE_TMP/destination-db.dump' && docker exec '$DEST_DOCKER_CONTAINER' rm -f /tmp/lubanote-destination-checkpoint.dump"
+    dest_ssh "tar -C '$(dirname "$DEST_STORAGE_DIR")' -czf '$REMOTE_TMP/destination-storage.tar.gz' '$(basename "$DEST_STORAGE_DIR")'"
+    scp -q -P "${DEST_SSH_PORT:-22}" "$DEST_SSH_USER@$DEST_SSH_HOST:$REMOTE_TMP/destination-db.dump" "$DEST_SSH_USER@$DEST_SSH_HOST:$REMOTE_TMP/destination-storage.tar.gz" "$CP/"
+    dest_ssh "rm -rf '$REMOTE_TMP'"
+    ;;
+  remote)
+    echo "[checkpoint] REMOTE CLOUD DEST DB..."
+    PGPASSWORD="$DEST_DB_PASSWORD" PGSSLMODE="${DEST_DB_SSLMODE:-require}" \
+      docker run --rm -e PGPASSWORD -e PGSSLMODE -v "$CP:/out" postgres:17-alpine pg_dump \
+      --host="$DEST_DB_HOST" --port="$DEST_DB_PORT" --username="$DEST_DB_USER" --dbname="$DEST_DB_NAME" \
+      --format=custom --no-owner --no-privileges --no-subscriptions --file=/out/destination-db.dump
+    echo "[checkpoint] REMOTE CLOUD DEST Storage..."
+    mkdir -p "$CP/storage"
+    dest_psql -At -F $'\t' -c "SELECT bucket_id,name FROM storage.objects ORDER BY bucket_id,name" > "$CP/storage-objects.tsv"
+    while IFS=$'\t' read -r bucket object; do
+      [ -n "$bucket" ] || continue
+      dest_storage_fetch "$bucket" "$object" "$CP/storage/$bucket/$object"
+    done < "$CP/storage-objects.tsv"
+    tar -C "$CP" -czf "$CP/destination-storage.tar.gz" storage storage-objects.tsv
+    ;;
+  *) fail "Checkpoint neni podporovan pro DEST_MODE=$DEST_MODE" ;;
+esac
 
 echo "[checkpoint] kontrola DB dumpu..."
-docker run --rm -v "$CP:/checkpoint:ro" postgres:17-alpine \
-  pg_restore -l /checkpoint/lubaserver-db.dump > "$CP/lubaserver-db.toc"
-
-echo "[checkpoint] Storage..."
-[ -d "$STORAGE_SRC" ] || fail "Storage dir neexistuje: $STORAGE_SRC"
-tar -C "$(dirname "$STORAGE_SRC")" -czf "$CP/lubaserver-storage.tar.gz" "$(basename "$STORAGE_SRC")"
+docker run --rm -v "$CP:/checkpoint:ro" postgres:17-alpine pg_restore -l /checkpoint/destination-db.dump > "$CP/destination-db.toc"
 (
   cd "$CP"
-  sha256sum lubaserver-db.dump lubaserver-storage.tar.gz > SHA256SUMS
+  sha256sum destination-db.dump destination-storage.tar.gz > SHA256SUMS
   sha256sum -c SHA256SUMS
 )
 printf '%s\n' "$CP"

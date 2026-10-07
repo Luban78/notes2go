@@ -1705,6 +1705,11 @@
           </p>
 
           <div class="adminMigrationDestination">
+            <label>Připravený cíl</label>
+            <div class="adminMigrationDestinationRow">
+              <button id="adminMigrationUseCloud" type="button">Supabase Cloud</button>
+              <button id="adminMigrationUseLubaServer" type="button">LubaServer</button>
+            </div>
             <label for="adminMigrationDestinationInput">Nový VPS · IP nebo hostname</label>
             <div class="adminMigrationDestinationRow">
               <input id="adminMigrationDestinationInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="např. 203.0.113.10 nebo vps.example.com">
@@ -2795,7 +2800,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679b-global-backend-control"></script>
+  <script src="adminDashboard.js?v=679d-bidirectional-backend"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

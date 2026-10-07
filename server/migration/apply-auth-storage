@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+fail(){ echo "AUTH_STORAGE_APPLY=FAIL" >&2; echo "REASON=$*" >&2; exit 1; }
+[ "$#" -eq 1 ] || fail "Pouziti: apply-auth-storage /run-dir"
+RUN="$(readlink -m "$1")"
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+source "$BASE/bin/destination-lib"; dest_load
+[ -f "$RUN/source-db.dump" ] || fail "chybi source-db.dump"
+[ -f "$RUN/source-db.toc" ] || fail "chybi source-db.toc"
+[ -f "$RUN/storage-objects.tsv" ] || fail "chybi storage-objects.tsv"
+
+# Vyrob data-only SQL do docasnych staging tabulek.
+LIST="$RUN/auth-storage-data.list"
+SQL_RAW="$RUN/auth-storage-data.sql"
+SQL_STAGE="$RUN/auth-storage-stage.sql"
+: > "$LIST"
+for spec in 'auth users' 'auth identities' 'storage buckets'; do
+  schema="${spec%% *}"; table="${spec#* }"
+  line="$(grep -E "[[:space:]]TABLE DATA ${schema} ${table}[[:space:]]" "$RUN/source-db.toc" | head -n1)"
+  [ -n "$line" ] || fail "TABLE DATA chybi: $schema.$table"
+  printf '%s\n' "$line" >> "$LIST"
+done
+
+docker run --rm --network none --user 0:0 --entrypoint /usr/bin/pg_restore \
+  -v "$RUN:/in:ro" postgres:17-alpine \
+  --use-list=/in/"$(basename "$LIST")" --data-only --no-owner --no-privileges --file=- /in/source-db.dump > "$SQL_RAW"
+[ -s "$SQL_RAW" ] || fail "pg_restore stage SQL je prazdne"
+sed -e 's/^COPY auth\.users /COPY _ln_auth_users /' \
+    -e 's/^COPY auth\.identities /COPY _ln_auth_identities /' \
+    -e 's/^COPY storage\.buckets /COPY _ln_storage_buckets /' \
+    "$SQL_RAW" > "$SQL_STAGE"
+
+grep -q '^COPY _ln_auth_users ' "$SQL_STAGE" || fail "stage chybi auth.users"
+grep -q '^COPY _ln_auth_identities ' "$SQL_STAGE" || fail "stage chybi auth.identities"
+grep -q '^COPY _ln_storage_buckets ' "$SQL_STAGE" || fail "stage chybi storage.buckets"
+
+restore_all_guards(){
+  set +e
+  dest_psql -q -c "ALTER TABLE auth.users ENABLE TRIGGER lubanote_migration_auth_stable_guard;" >/dev/null 2>&1
+  dest_psql -q -c "ALTER TABLE auth.identities ENABLE TRIGGER lubanote_migration_auth_stable_guard;" >/dev/null 2>&1
+  dest_psql -q -c "ALTER TABLE storage.objects ENABLE TRIGGER lubanote_migration_write_freeze_guard;" >/dev/null 2>&1
+}
+trap restore_all_guards EXIT
+
+# DEST muze byt frozen jako predchozi rollback PRIMARY. Docasne vypiname pouze
+# nase migracni guardy; FK/constraint triggery zustavaji aktivni.
+dest_psql -q -c "ALTER TABLE auth.users DISABLE TRIGGER lubanote_migration_auth_stable_guard;"
+dest_psql -q -c "ALTER TABLE auth.identities DISABLE TRIGGER lubanote_migration_auth_stable_guard;"
+dest_psql -q -c "ALTER TABLE storage.objects DISABLE TRIGGER lubanote_migration_write_freeze_guard;"
+
+echo "[auth/storage] metadata mirror..."
+{
+cat <<'SQL'
+BEGIN;
+CREATE TEMP TABLE _ln_auth_users (LIKE auth.users INCLUDING DEFAULTS);
+CREATE TEMP TABLE _ln_auth_identities (LIKE auth.identities INCLUDING DEFAULTS);
+CREATE TEMP TABLE _ln_storage_buckets (LIKE storage.buckets INCLUDING DEFAULTS);
+SQL
+cat "$SQL_STAGE"
+cat <<'SQL'
+DO $$
+DECLARE cols text; sets text;
+BEGIN
+  DELETE FROM auth.identities WHERE id NOT IN (SELECT id FROM _ln_auth_identities);
+  DELETE FROM auth.users WHERE id NOT IN (SELECT id FROM _ln_auth_users);
+
+  SELECT string_agg(format('%I',column_name), ', ' ORDER BY ordinal_position),
+         string_agg(format('%1$I=EXCLUDED.%1$I',column_name), ', ' ORDER BY ordinal_position) FILTER (WHERE column_name <> 'id')
+    INTO cols,sets
+  FROM information_schema.columns WHERE table_schema='auth' AND table_name='users';
+  EXECUTE format('INSERT INTO auth.users (%s) SELECT %s FROM _ln_auth_users ON CONFLICT (id) DO UPDATE SET %s',cols,cols,sets);
+
+  SELECT string_agg(format('%I',column_name), ', ' ORDER BY ordinal_position),
+         string_agg(format('%1$I=EXCLUDED.%1$I',column_name), ', ' ORDER BY ordinal_position) FILTER (WHERE column_name <> 'id')
+    INTO cols,sets
+  FROM information_schema.columns WHERE table_schema='auth' AND table_name='identities';
+  EXECUTE format('INSERT INTO auth.identities (%s) SELECT %s FROM _ln_auth_identities ON CONFLICT (id) DO UPDATE SET %s',cols,cols,sets);
+
+  DELETE FROM storage.objects;
+  DELETE FROM storage.buckets WHERE id NOT IN (SELECT id FROM _ln_storage_buckets);
+
+  SELECT string_agg(format('%I',column_name), ', ' ORDER BY ordinal_position),
+         string_agg(format('%1$I=EXCLUDED.%1$I',column_name), ', ' ORDER BY ordinal_position) FILTER (WHERE column_name <> 'id')
+    INTO cols,sets
+  FROM information_schema.columns WHERE table_schema='storage' AND table_name='buckets';
+  EXECUTE format('INSERT INTO storage.buckets (%s) SELECT %s FROM _ln_storage_buckets ON CONFLICT (id) DO UPDATE SET %s',cols,cols,sets);
+END $$;
+COMMIT;
+SQL
+} | dest_psql
+
+# Auth mirror je hotovy; vrat guardy drive, nez zacne Storage API.
+dest_psql -q -c "ALTER TABLE auth.users ENABLE TRIGGER lubanote_migration_auth_stable_guard;"
+dest_psql -q -c "ALTER TABLE auth.identities ENABLE TRIGGER lubanote_migration_auth_stable_guard;"
+
+# storage.objects guard zustava docasne vypnuty i pro Storage API upload.
+echo "[auth/storage] physical Storage mirror..."
+count=0
+while IFS=$'\t' read -r bucket object; do
+  [ -n "$bucket" ] || continue
+  src="$RUN/storage/$bucket/$object"
+  [ -f "$src" ] || fail "chybi Storage snapshot: $bucket/$object"
+  dest_storage_upload "$bucket" "$object" "$src"
+  count=$((count+1))
+done < "$RUN/storage-objects.tsv"
+
+# Vlastnik je v LubaNote kodovan prvnim UUID segmentem cesty.
+dest_psql <<'SQL'
+UPDATE storage.objects o
+SET owner = split_part(o.name,'/',1)::uuid,
+    owner_id = split_part(o.name,'/',1)
+WHERE o.bucket_id = 'lubanote-attachments'
+  AND split_part(o.name,'/',1) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id=split_part(o.name,'/',1)::uuid);
+SQL
+
+dest_psql -q -c "ALTER TABLE storage.objects ENABLE TRIGGER lubanote_migration_write_freeze_guard;"
+trap - EXIT
+rm -f "$SQL_RAW" "$SQL_STAGE"
+echo "AUTH_STORAGE_APPLY=PASS"
+echo "STORAGE_OBJECTS_UPLOADED=$count"
+echo "AUTH_SESSIONS_PRESERVED_FOR_EXISTING_DEST_USERS=YES"
+echo "NEW_SOURCE_SESSIONS_MIGRATED=NO"
