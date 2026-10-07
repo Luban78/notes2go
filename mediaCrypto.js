@@ -565,6 +565,85 @@
     return new Uint8Array(plaintext);
   }
 
+  async function zabalBajtyE2ECore(bajty, kontext) {
+    if (!jeKlicDostupny()) {
+      await pripravMediaKlicZeZarizeni();
+    }
+
+    if (!jeKlicDostupny()) {
+      const error = new Error(
+        "Pro ochranu E2E Root Key chybí klíč odvozený z hlavního hesla."
+      );
+      error.code = "LUBANOTE_MEDIA_KEY_LOCKED";
+      throw error;
+    }
+
+    const data = bajty instanceof Uint8Array
+      ? bajty
+      : new Uint8Array(bajty || []);
+    const aad = new TextEncoder().encode(
+      `LubaNote-e2e-core-wrap-v1:${String(kontext || "")}`
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData: aad
+      },
+      mediaSifrovaciKlic,
+      data
+    );
+
+    return {
+      version: 1,
+      algorithm: "AES-GCM",
+      iv: prevedBajtyNaBase64(iv),
+      ciphertext: prevedBajtyNaBase64(new Uint8Array(ciphertext))
+    };
+  }
+
+  async function rozbalBajtyE2ECore(record, kontext) {
+    if (!jeKlicDostupny()) {
+      await pripravMediaKlicZeZarizeni();
+    }
+
+    if (!jeKlicDostupny()) {
+      const error = new Error(
+        "Pro odemknutí E2E Root Key chybí klíč odvozený z hlavního hesla."
+      );
+      error.code = "LUBANOTE_MEDIA_KEY_LOCKED";
+      throw error;
+    }
+
+    if (
+      !record ||
+      Number(record.version) !== 1 ||
+      record.algorithm !== "AES-GCM" ||
+      !record.iv ||
+      !record.ciphertext
+    ) {
+      const error = new Error("Zašifrovaný E2E Root Key má neplatný formát.");
+      error.code = "LUBANOTE_E2E_ROOT_BOX_INVALID";
+      throw error;
+    }
+
+    const aad = new TextEncoder().encode(
+      `LubaNote-e2e-core-wrap-v1:${String(kontext || "")}`
+    );
+    const plaintext = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: prevedBase64NaBajty(record.iv),
+        additionalData: aad
+      },
+      mediaSifrovaciKlic,
+      prevedBase64NaBajty(record.ciphertext)
+    );
+
+    return new Uint8Array(plaintext);
+  }
+
   async function desifrujDataUrl(record, noteId, mediaId) {
     if (!jeKlicDostupny()) {
       await pripravMediaKlicZeZarizeni();
@@ -1019,6 +1098,8 @@
     oznamNutneOdemceni,
     zabalBajtyHlavnimKlicem,
     rozbalBajtyHlavnimKlicem,
+    zabalBajtyE2ECore,
+    rozbalBajtyE2ECore,
     nazevPoleTrezoru: POLE_TREZORU
   });
 
