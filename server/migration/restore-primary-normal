@@ -33,6 +33,11 @@ data = json.loads(p.read_text(encoding="utf-8"))
 data["mode"] = "NORMAL"
 data["active_backend"] = primary
 data["cutover_enabled"] = False
+profile = data.get("client_profile")
+if primary == "cloud":
+    data.pop("client_profile", None)
+elif not isinstance(profile, dict) or profile.get("backend_id") != primary:
+    data.pop("client_profile", None)
 data["updated_utc"] = datetime.now(timezone.utc).isoformat()
 
 tmp = p.with_name(p.name + ".restore-primary.tmp")

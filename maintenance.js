@@ -1,9 +1,10 @@
 /* ==================================================
-   LubaNote – Production Maintenance / Drain V1
-   PATCH 677T1
+   LubaNote – Production Maintenance / Drain V2
+   PATCH 679B
 
    - čte pouze veřejný Control Point,
-   - nikdy samo nepřepíná backend,
+   - produkční profil automaticky následuje active_backend,
+   - ručně připnutý TEST profil se automaticky nepřepíná,
    - MAINTENANCE platí jen pro profil, který je právě active_backend,
    - ihned zablokuje nové uživatelské zápisy,
    - nechá doběhnout rozpracovanou změnu a vyprázdní existující Sync V2 frontu,
@@ -34,22 +35,18 @@
 
   function aktivniBackendId() {
     const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
-    if (profil?.backendId === "cloud") return "cloud";
-    if (profil?.backendId === "lubaserver") return "lubaserver";
-    if (profil?.id === "supabaseCloud") return "cloud";
-    if (["lubanoteProduction", "lubanoteServer"].includes(profil?.id)) {
-      return "lubaserver";
-    }
-    return null;
+    const id = String(profil?.backendId || "").trim().toLowerCase();
+    return /^[a-z0-9._-]+$/.test(id) ? id : null;
   }
 
   function jeValidniControl(data) {
+    const backend = String(data?.active_backend || "").trim().toLowerCase();
     return Boolean(
       data &&
       data.ok === true &&
       Number(data.version) === 1 &&
       ["NORMAL", "MAINTENANCE"].includes(String(data.mode || "")) &&
-      ["cloud", "lubaserver"].includes(String(data.active_backend || "")) &&
+      /^[a-z0-9._-]+$/.test(backend) &&
       typeof data.cutover_enabled === "boolean"
     );
   }
@@ -280,7 +277,7 @@
         drainHotovy = true;
         nastavOverlay(
           "Zařízení je bezpečně synchronizované",
-          "Všechny čekající Cloud změny z tohoto zařízení jsou odeslané.",
+          "Všechny čekající změny z tohoto zařízení jsou odeslané.",
           "LubaNote zůstane zamčený do ukončení údržby."
         );
         window.dispatchEvent(new CustomEvent("lubanote:maintenance-drained", {
@@ -369,7 +366,7 @@
     nastavOverlay(
       "Probíhá bezpečná údržba LubaNote",
       drainHotovy
-        ? "Všechny čekající Cloud změny z tohoto zařízení jsou odeslané."
+        ? "Všechny čekající změny z tohoto zařízení jsou odeslané."
         : "Dokončuji synchronizaci tohoto zařízení…",
       drainHotovy
         ? "LubaNote zůstane zamčený do ukončení údržby."
@@ -406,8 +403,63 @@
     }
   }
 
+  function srovnejProdukcniBackend(control) {
+    const config = window.LubaNoteBackendConfig;
+    if (!config?.sledujControlPoint) {
+      return { ok: false, duvod: "backend-control-unavailable" };
+    }
+
+    const vysledek = config.sledujControlPoint(control);
+    if (vysledek?.pinnedTest) return vysledek;
+
+    if (vysledek?.ok !== true) {
+      maintenanceAktivni = true;
+      writeFreezeAktivni = true;
+      drainHotovy = false;
+      clearTimeout(drainTimer);
+      clearTimeout(freezeTimer);
+      drainTimer = null;
+      freezeTimer = null;
+      nastavOverlay(
+        "Produkční backend nelze bezpečně určit",
+        "Control Point ukazuje nový server, ale chybí platný klientský profil.",
+        "LubaNote zůstává zamčený, aby nezapisoval na starý backend."
+      );
+      return vysledek;
+    }
+
+    if (vysledek.changed) {
+      window.LubaNoteBackendSwitching = true;
+      maintenanceAktivni = true;
+      writeFreezeAktivni = true;
+      drainHotovy = false;
+      clearTimeout(drainTimer);
+      clearTimeout(freezeTimer);
+      drainTimer = null;
+      freezeTimer = null;
+
+      nastavOverlay(
+        "Přepínám produkční backend",
+        `Nová produkce: ${vysledek.profil?.nazev || control.active_backend}.`,
+        "Lokální data a čekající synchronizační fronty zůstávají zachované."
+      );
+
+      try { document.activeElement?.blur?.(); } catch (_) {}
+      window.setTimeout(() => {
+        const cil = encodeURIComponent(String(control.active_backend || "production"));
+        window.location.replace(`./?backendFollow=${cil}`);
+      }, 80);
+    }
+
+    return vysledek;
+  }
+
   function aplikujControl(control) {
     posledniStav = control;
+
+    const srovnani = srovnejProdukcniBackend(control);
+    if (srovnani?.ok !== true || srovnani?.changed) return;
+
     const profil = aktivniBackendId();
     const platiProTotoZarizeni = profil && control.active_backend === profil;
 
@@ -509,7 +561,7 @@
   });
 
   window.LubaNoteMaintenance = Object.freeze({
-    verze: "677T1",
+    verze: "679B",
     controlUrl: CONTROL_URL,
     jeAktivni: () => maintenanceAktivni,
     jeWriteFreezeAktivni: () => writeFreezeAktivni,

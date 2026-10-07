@@ -91,6 +91,21 @@ if not is_false(data.get("cutover_enabled")):
 print("PASS: Control MAINTENANCE + SOURCE active")
 PY
 
+echo "=== CUTOVER 50E41 / 0: client profile precheck ==="
+CLIENT_PROFILE_JSON="$("$BIN/destination-client-profile")"
+python3 - "$DEST_BACKEND_ID" "$CLIENT_PROFILE_JSON" <<'PYCLIENT'
+import json, sys
+backend = sys.argv[1]
+data = json.loads(sys.argv[2])
+if data.get("backend_id") != backend:
+    raise SystemExit("BLOKACE: client_profile backend_id neodpovida DEST")
+if not str(data.get("url", "")).startswith(("https://", "http://")):
+    raise SystemExit("BLOKACE: client_profile URL neni platne")
+if not str(data.get("publishable_key", "")).strip():
+    raise SystemExit("BLOKACE: client_profile nema publishable key")
+print("PASS: DEST client profile reachable")
+PYCLIENT
+
 FINAL_ID="cutover-$(date -u +%Y%m%dT%H%M%SZ)"
 FINAL="$RUNS/$FINAL_ID"
 mkdir -p "$FINAL"
@@ -121,6 +136,8 @@ cp -a "$CONTROL" "$FINAL/control-state.before.json"
   printf 'DEST_BACKEND_ID=%q\n' "$DEST_BACKEND_ID"
 } > "$FINAL/run-identity.env"
 chmod 600 "$FINAL/run-identity.env"
+printf '%s\n' "$CLIENT_PROFILE_JSON" > "$FINAL/client-profile.json"
+chmod 600 "$FINAL/client-profile.json"
 
 FREEZE_ACTIVE=0
 
@@ -154,7 +171,7 @@ rollback_after_failure() {
   exit "$rc"
 }
 
-echo "=== CUTOVER 50E40 / 1: SOURCE freeze precheck + freeze ==="
+echo "=== CUTOVER 50E41 / 1: SOURCE freeze precheck + freeze ==="
 "$BIN/source-freeze-enable"
 FREEZE_ACTIVE=1
 printf 'CUTTING_OVER\n' > "$STATE_FILE"
@@ -163,12 +180,12 @@ echo "freeze_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
 
 trap 'rollback_after_failure $?' ERR
 
-echo "=== CUTOVER 50E40 / 2: fresh frozen SOURCE snapshot ==="
+echo "=== CUTOVER 50E41 / 2: fresh frozen SOURCE snapshot ==="
 "$BIN/source-db-snapshot" "$FINAL"
 "$BIN/source-manifests" "$FINAL"
 "$BIN/source-storage-snapshot" "$FINAL"
 
-echo "=== CUTOVER 50E40 / 3: no online Auth/Storage delta invariant ==="
+echo "=== CUTOVER 50E41 / 3: no online Auth/Storage delta invariant ==="
 for f in auth-stable.tsv storage-buckets.tsv storage-objects.tsv storage-SHA256SUMS; do
   if ! cmp -s "$BASELINE/$f" "$FINAL/$f"; then
     echo "BLOKACE: $f se od VERIFIED baseline zmenil; V3 nema online Auth/Storage delta adapter." >&2
@@ -177,22 +194,22 @@ for f in auth-stable.tsv storage-buckets.tsv storage-objects.tsv storage-SHA256S
 done
 echo "PASS: Auth + Storage beze zmeny od VERIFIED baseline"
 
-echo "=== CUTOVER 50E40 / 4: final DEST checkpoint ==="
+echo "=== CUTOVER 50E41 / 4: final DEST checkpoint ==="
 CP_PATH="$("$BIN/destination-checkpoint" "$FINAL_ID" | tee "$FINAL/checkpoint.log" | tail -n 1)"
 printf '%s\n' "$CP_PATH" > "$FINAL/checkpoint-path"
 echo "checkpoint=$CP_PATH" >> "$FINAL/manifest"
 
-echo "=== CUTOVER 50E40 / 5: final public refresh ==="
+echo "=== CUTOVER 50E41 / 5: final public refresh ==="
 touch "$FINAL/MUTATION_STARTED"
 "$BIN/apply-public" "$FINAL"
 
-echo "=== CUTOVER 50E40 / 6: final VERIFY 8/8 ==="
+echo "=== CUTOVER 50E41 / 6: final VERIFY 8/8 ==="
 "$BIN/verify-run" "$FINAL"
 grep -qx 'VERIFY: PASS' "$FINAL/verify-report.txt"
 echo "final_verify_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
 
-echo "=== CUTOVER 50E40 / 7: single atomic SOURCE -> DEST switch ==="
-python3 - "$CONTROL" "$SOURCE_BACKEND_ID" "$DEST_BACKEND_ID" <<'PY'
+echo "=== CUTOVER 50E41 / 7: single atomic SOURCE -> DEST switch ==="
+python3 - "$CONTROL" "$SOURCE_BACKEND_ID" "$DEST_BACKEND_ID" "$FINAL/client-profile.json" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -200,6 +217,7 @@ from pathlib import Path
 p = Path(sys.argv[1])
 source = sys.argv[2]
 dest = sys.argv[3]
+client_profile = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
 data = json.loads(p.read_text(encoding="utf-8"))
 
 def is_false(v):
@@ -220,6 +238,7 @@ if not is_false(data.get("cutover_enabled")):
 
 data["active_backend"] = dest
 data["cutover_enabled"] = True
+data["client_profile"] = client_profile
 data["updated_utc"] = datetime.now(timezone.utc).isoformat()
 
 tmp = p.with_name(p.name + ".cutover.tmp")
@@ -234,7 +253,7 @@ PY
 
 echo "switch_utc=$(date -u +%FT%TZ)" >> "$FINAL/manifest"
 
-echo "=== CUTOVER 50E40 / 8: post-switch DEST check ==="
+echo "=== CUTOVER 50E41 / 8: post-switch DEST check ==="
 python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
 import json, sys
 from pathlib import Path
@@ -248,8 +267,11 @@ if data.get("active_backend") != dest:
     raise SystemExit("post-check: active_backend neni DEST")
 if data.get("cutover_enabled") is not True:
     raise SystemExit("post-check: cutover_enabled neni true")
+profile = data.get("client_profile") or {}
+if profile.get("backend_id") != dest:
+    raise SystemExit("post-check: client_profile neni DEST")
 
-print("PASS: post-switch control state")
+print("PASS: post-switch control state + client profile")
 PY
 
 source "$BIN/destination-lib"
@@ -258,7 +280,7 @@ read -r healthy total < <(dest_supabase_health)
 [ "$total" -eq 11 ] && [ "$healthy" -eq 11 ]
 echo "PASS: DEST Supabase $healthy/$total healthy"
 
-echo "=== CUTOVER 50E40 / 9: publish NORMAL on DEST ==="
+echo "=== CUTOVER 50E41 / 9: publish NORMAL on DEST ==="
 python3 - "$CONTROL" "$DEST_BACKEND_ID" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone

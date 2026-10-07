@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
+source "$BASE/bin/destination-lib"
+dest_load
+
+normalize_backend_id() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9._-'
+}
+
+read_env_local() {
+  local file="$1" key="$2"
+  sed -n "s/^${key}=//p" "$file" | tail -n1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+
+BACKEND_ID="${DEST_BACKEND_ID:-$(normalize_backend_id "$DEST_NAME")}" 
+[ -n "$BACKEND_ID" ] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=missing_backend_id' >&2; exit 31; }
+
+CLIENT_URL="${DEST_CLIENT_URL:-}"
+ANON_KEY="${DEST_CLIENT_ANON_KEY:-}"
+
+case "$DEST_MODE" in
+  docker)
+    [ -n "$CLIENT_URL" ] || CLIENT_URL="https://api.lubanote.com"
+    if [ -z "$ANON_KEY" ]; then
+      ENV_FILE="${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}/.env"
+      [ -f "$ENV_FILE" ] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=destination_env_missing' >&2; exit 32; }
+      ANON_KEY="$(read_env_local "$ENV_FILE" ANON_KEY)"
+    fi
+    ;;
+  ssh)
+    [ -n "$CLIENT_URL" ] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=DEST_CLIENT_URL_missing' >&2; exit 33; }
+    if [ -z "$ANON_KEY" ]; then
+      ANON_KEY="$(dest_ssh bash -s -- "${DEST_SUPABASE_DIR:?chybi DEST_SUPABASE_DIR}/.env" <<'REMOTE'
+set -Eeuo pipefail
+f="$1"
+sed -n 's/^ANON_KEY=//p' "$f" | tail -n1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+REMOTE
+)"
+    fi
+    ;;
+  *)
+    echo 'CLIENT_PROFILE=FAIL' >&2
+    echo "REASON=unsupported_DEST_MODE_$DEST_MODE" >&2
+    exit 34
+    ;;
+esac
+
+[ -n "$ANON_KEY" ] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=anon_key_missing' >&2; exit 35; }
+[[ "$CLIENT_URL" =~ ^https?://[^[:space:]]+$ ]] || { echo 'CLIENT_PROFILE=FAIL' >&2; echo 'REASON=invalid_client_url' >&2; exit 36; }
+
+# Client endpoint musi byt dostupny jeste PRED SOURCE freeze.
+curl -fsS --max-time 8 \
+  -H "apikey: $ANON_KEY" \
+  -H "Authorization: Bearer $ANON_KEY" \
+  "$CLIENT_URL/rest/v1/" >/dev/null || {
+    echo 'CLIENT_PROFILE=FAIL' >&2
+    echo 'REASON=client_endpoint_unreachable' >&2
+    exit 37
+  }
+
+PROJECT_REF="${DEST_CLIENT_PROJECT_REF:-$BACKEND_ID}"
+AUTH_KEY="${DEST_CLIENT_AUTH_STORAGE_KEY:-sb-${PROJECT_REF}-auth-token}"
+NAME="${DEST_CLIENT_NAME:-$DEST_NAME}"
+
+python3 - "$BACKEND_ID" "$CLIENT_URL" "$ANON_KEY" "$PROJECT_REF" "$AUTH_KEY" "$NAME" <<'PY'
+import json, sys
+backend, url, key, project_ref, auth_key, name = sys.argv[1:]
+print(json.dumps({
+    "backend_id": backend,
+    "url": url.rstrip("/"),
+    "publishable_key": key,
+    "project_ref": project_ref,
+    "auth_storage_key": auth_key,
+    "name": name,
+}, ensure_ascii=False, separators=(",", ":")))
+PY

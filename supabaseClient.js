@@ -1,18 +1,20 @@
 /*
- * BI-1F / PATCH 678D: backend endpoint vždy dodává backendConfig.js.
- * Uložený profil konkrétního zařízení má přednost. Pokud by konfigurace
- * selhala, bezpečný fallback je VŽDY původní hlavní produkce Supabase Cloud.
- * Žádný hostname ani typ zařízení nesmí klienta automaticky přesunout
- * na LubaServer.
+ * BACKEND CONTROL V2 / PATCH 679B:
+ * endpoint smi dodat pouze backendConfig.js. Tichy fallback na Cloud je
+ * zakazany, protoze po produkcnim CUTOVERU by vytvoril split-brain a poslal
+ * zapis na stary SOURCE. Pri chybe konfigurace radsi start bezpecne selze.
  */
 const LUBANOTE_BACKEND =
-  window.LubaNoteBackendConfig?.nactiAktivniProfil?.() ||
-  {
-    url: "https://nwdacgigplofksexssws.supabase.co/",
-    publishableKey: "sb_publishable_VQpvaA0VAOcSxLtTG8Zr5Q_USIiro0c",
-    projectRef: "nwdacgigplofksexssws",
-    authStorageKey: "sb-nwdacgigplofksexssws-auth-token"
-  };
+  window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+
+if (
+  !LUBANOTE_BACKEND?.url ||
+  !LUBANOTE_BACKEND?.publishableKey
+) {
+  throw new Error(
+    "LubaNote backend config není připraven; odmítám skrytý fallback na jiný backend."
+  );
+}
 
 const SUPABASE_URL = LUBANOTE_BACKEND.url;
 const SUPABASE_PUBLISHABLE_KEY = LUBANOTE_BACKEND.publishableKey;

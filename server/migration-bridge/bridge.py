@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -34,9 +35,12 @@ RUNTIME_DIR = Path(
     os.environ.get("BRIDGE_RUNTIME_DIR", "/home/luban78/luba-server/migration-bridge")
 )
 JOBS_DIR = RUNTIME_DIR / "jobs"
+CONTROL_STATE_FILE = RUNTIME_DIR / "control-state.json"
 MAX_LOG_TAIL_BYTES = 32_768
 DESTINATION_ENV = Path(os.environ.get("DESTINATION_ENV", "/home/luban78/luba-server/migration-manager/config/destination.env"))
 ALLOWED_ACTIONS = {"prepare", "verify", "cutover"}
+ALLOWED_CONTROL_MODES = {"NORMAL", "MAINTENANCE"}
+BACKEND_ID_RE = re.compile(r"^[a-z0-9._-]+$")
 
 job_lock = threading.Lock()
 current_job: dict[str, Any] | None = None
@@ -70,6 +74,77 @@ def read_state() -> str:
         return state or "UNKNOWN"
     except OSError:
         return "UNKNOWN"
+
+
+def read_control_state() -> dict[str, Any]:
+    data = json.loads(CONTROL_STATE_FILE.read_text(encoding="utf-8"))
+
+    mode = str(data.get("mode", "")).upper()
+    backend = str(data.get("active_backend", "")).strip().lower()
+    cutover_enabled = data.get("cutover_enabled")
+
+    if mode not in ALLOWED_CONTROL_MODES:
+        raise ValueError("invalid_control_mode")
+    if not BACKEND_ID_RE.fullmatch(backend):
+        raise ValueError("invalid_active_backend")
+    if not isinstance(cutover_enabled, bool):
+        raise ValueError("invalid_cutover_enabled")
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "version": 1,
+        "mode": mode,
+        "active_backend": backend,
+        "cutover_enabled": cutover_enabled,
+        "updated_utc": data.get("updated_utc"),
+    }
+
+    client_profile = data.get("client_profile")
+    if isinstance(client_profile, dict):
+        profile_backend = str(client_profile.get("backend_id", "")).strip().lower()
+        profile_url = str(client_profile.get("url", "")).strip()
+        profile_key = str(client_profile.get("publishable_key", "")).strip()
+        if (
+            profile_backend == backend
+            and BACKEND_ID_RE.fullmatch(profile_backend)
+            and profile_url.startswith(("https://", "http://"))
+            and profile_key
+        ):
+            payload["client_profile"] = {
+                "backend_id": profile_backend,
+                "url": profile_url,
+                "publishable_key": profile_key,
+                "project_ref": str(client_profile.get("project_ref", profile_backend)),
+                "auth_storage_key": str(client_profile.get("auth_storage_key", "")),
+                "name": str(client_profile.get("name", "")),
+            }
+
+    return payload
+
+
+def write_control_mode(mode: str) -> dict[str, Any]:
+    mode = mode.upper()
+    if mode not in ALLOWED_CONTROL_MODES:
+        raise ValueError("invalid_control_mode")
+
+    current_raw = json.loads(CONTROL_STATE_FILE.read_text(encoding="utf-8"))
+    current = read_control_state()
+
+    current_raw["ok"] = True
+    current_raw["version"] = 1
+    current_raw["mode"] = mode
+    current_raw["active_backend"] = current["active_backend"]
+    current_raw["cutover_enabled"] = current["cutover_enabled"]
+    current_raw["updated_utc"] = utc_now()
+
+    temp = CONTROL_STATE_FILE.with_suffix(".json.tmp")
+    temp.write_text(
+        json.dumps(current_raw, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(temp, 0o600)
+    temp.replace(CONTROL_STATE_FILE)
+    return read_control_state()
 
 
 def tail_log(path: str | None) -> str:
@@ -148,19 +223,26 @@ def destination_public() -> dict[str, Any]:
     return {
         "host": read_env_value(str(DESTINATION_ENV), "DEST_SSH_HOST"),
         "mode": read_env_value(str(DESTINATION_ENV), "DEST_MODE"),
+        "client_url": read_env_value(str(DESTINATION_ENV), "DEST_CLIENT_URL"),
     }
 
 
 def configure_destination(host: str) -> tuple[bool, str]:
-    host = (host or "").strip()
-    if host.startswith("https://"):
-        host = host[8:]
-    elif host.startswith("http://"):
-        host = host[7:]
-    host = host.strip().strip("/")
-    if not host or len(host) > 253 or not all(c.isalnum() or c in ".:-" for c in host):
+    raw = (host or "").strip()
+    if not raw:
         return False, "invalid_destination_host"
-    if "/" in host or "@" in host:
+
+    client_url = ""
+    if raw.startswith(("https://", "http://")):
+        client_url = raw.rstrip("/")
+        host_only = raw.split("://", 1)[1].strip().strip("/")
+    else:
+        host_only = raw.strip().strip("/")
+        client_url = f"https://{host_only}"
+
+    if not host_only or len(host_only) > 253 or not all(c.isalnum() or c in ".:-" for c in host_only):
+        return False, "invalid_destination_host"
+    if "/" in host_only or "@" in host_only:
         return False, "invalid_destination_host"
 
     try:
@@ -170,8 +252,9 @@ def configure_destination(host: str) -> tuple[bool, str]:
 
     updates = {
         "DEST_NAME": "LubaServerNext",
+        "DEST_BACKEND_ID": "lubaservernext",
         "DEST_MODE": "ssh",
-        "DEST_SSH_HOST": host,
+        "DEST_SSH_HOST": host_only,
         "DEST_SSH_USER": "luban78",
         "DEST_SSH_PORT": "22",
         "DEST_DOCKER_CONTAINER": "supabase-db",
@@ -179,6 +262,10 @@ def configure_destination(host: str) -> tuple[bool, str]:
         "DEST_STORAGE_DIR": "/home/luban78/luba-server/luba-supabase/volumes/storage",
         "DEST_SERVER_BASE": "/home/luban78/luba-server",
         "DEST_SERVER_PROJECT": "luba-supabase",
+        "DEST_CLIENT_URL": client_url,
+        "DEST_CLIENT_PROJECT_REF": "lubaservernext",
+        "DEST_CLIENT_AUTH_STORAGE_KEY": "sb-lubaservernext-auth-token",
+        "DEST_CLIENT_NAME": "LubaServer Next",
     }
     seen = set()
     out = []
@@ -201,7 +288,7 @@ def configure_destination(host: str) -> tuple[bool, str]:
         temp.replace(DESTINATION_ENV)
     except OSError:
         return False, "destination_config_write_failed"
-    return True, host
+    return True, host_only
 
 
 def run_action(job_id: str, action: str, log_path: str) -> None:
@@ -285,7 +372,7 @@ def start_action(action: str) -> tuple[bool, dict[str, Any]]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LubaNoteMigrationBridge/1.0"
+    server_version = "LubaNoteMigrationBridge/1.1-50E41"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         # Never log request headers/tokens. Base log format contains only method/path/status.
@@ -322,6 +409,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        if self.path == "/control/v1/status":
+            try:
+                self.send_json(200, read_control_state())
+            except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                self.send_json(503, {"ok": False, "error": "invalid_control_state", "detail": type(exc).__name__})
+            return
+
         if self.path == "/health":
             self.send_json(
                 200,
@@ -369,6 +463,23 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:
+        control_paths = {
+            "/control/v1/maintenance": "MAINTENANCE",
+            "/control/v1/normal": "NORMAL",
+        }
+        control_mode = control_paths.get(self.path)
+
+        if control_mode:
+            if not self.authenticate_admin():
+                return
+            try:
+                payload = write_control_mode(control_mode)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                self.send_json(500, {"ok": False, "error": "control_state_write_failed"})
+                return
+            self.send_json(200, payload)
+            return
+
         if self.path == "/migration/v1/destination":
             if not self.authenticate_admin():
                 return

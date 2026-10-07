@@ -1638,13 +1638,13 @@
 
           <div class="adminBackendSwitchActions">
             <button id="adminUseLubaServerButton" class="adminBackendSwitchButton" type="button">
-              Použít LubaServer STANDBY
+              Použít LubaServer PROD
             </button>
             <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">
               Testovat LubaServer
             </button>
             <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">
-              Použít Supabase Cloud
+              Vrátit na aktivní produkci
             </button>
           </div>
         </section>
@@ -1653,7 +1653,7 @@
           <div class="adminControlHead">
             <div>
               <span class="adminServerEyebrow">Produkční režim</span>
-              <strong>Control Point · Cloud klienti</strong>
+              <strong>Control Point · produkční klienti</strong>
             </div>
             <span id="adminControlState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
@@ -1665,7 +1665,7 @@
           <div class="adminControlActions" aria-label="Ovládání bezpečné údržby">
             <button id="adminControlMaintenanceButton" type="button" disabled>
               <strong>Zapnout údržbu</strong>
-              <small>Drain Cloud klientů</small>
+              <small>Drain aktivní produkce</small>
             </button>
             <button id="adminControlNormalButton" type="button" disabled>
               <strong>Vrátit NORMAL</strong>
@@ -1675,7 +1675,7 @@
 
           <div class="adminControlSafety">
             <span class="adminMigrationSafetyDot" aria-hidden="true"></span>
-            <span>Control Point zachovává aktuální active_backend a stav CUTOVER; změna NORMAL/ÚDRŽBA je pouze Maintenance/Drain.</span>
+            <span>Control Point je jediná autorita produkčního backendu; NORMAL/ÚDRŽBA řídí Maintenance/Drain a CUTOVER mění aktivní produkci.</span>
           </div>
         </section>
 
@@ -1683,7 +1683,7 @@
           <div class="adminMigrationHead">
             <div>
               <span class="adminServerEyebrow">Migrace / produkce</span>
-              <strong>Cloud produkce → připravený nový server</strong>
+              <strong>Aktivní produkce → připravený nový server</strong>
             </div>
             <span id="adminMigrationState" class="adminToolMiniState" data-state="idle">—</span>
           </div>
@@ -1691,7 +1691,7 @@
           <div class="adminMigrationRoute" aria-label="Směr migrace">
             <span class="adminMigrationEndpoint">
               <small>SOURCE</small>
-              <strong>Supabase Cloud</strong>
+              <strong id="adminMigrationSourceLabel">Supabase Cloud</strong>
             </span>
             <span class="adminMigrationRouteArrow" aria-hidden="true">→</span>
             <span class="adminMigrationEndpoint adminMigrationEndpointTarget">
@@ -2774,13 +2774,13 @@
   <script src="syncStatus.js?v=20260917-local-no-content-sync-586"></script>
 
   <!-- Backend Independence V1 / BI-1A: jediný zdroj endpointu backendu. -->
-  <script src="backendConfig.js?v=678d-original-architecture"></script>
+  <script src="backendConfig.js?v=679b-global-backend-control"></script>
 
   <!-- Měření RX/TX musí existovat dřív, než se vytvoří Supabase klient. -->
   <script src="syncTraffic.js?v=659a-backend-independence-bi1a"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=678d-original-architecture"></script>
+  <script src="supabaseClient.js?v=679b-no-hidden-cloud-fallback"></script>
   <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
   <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
@@ -2795,7 +2795,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=678e-emergency-cloud-no-reset"></script>
+  <script src="adminDashboard.js?v=679b-global-backend-control"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2824,7 +2824,7 @@
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=679a-target-confirm-recovery"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
-  <script src="maintenance.js?v=678d-original-architecture"></script>
+  <script src="maintenance.js?v=679b-production-follower"></script>
 
   <!-- Bezpečné předání otevřené poznámky mezi zařízeními -->
   <script src="editorHandoff.js?v=20260918-web-refresh-recovery-611"></script>
