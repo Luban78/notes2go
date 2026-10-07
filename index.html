@@ -1751,28 +1751,28 @@
               <button id="adminUseTestLubaServerButton" class="adminBackendSwitchButton" type="button">Servisní TEST LubaServeru (izolovaný)</button>
               <button id="adminUseCloudButton" class="adminBackendSwitchButton" type="button">Opustit TEST a použít aktivní produkci</button>
             </div>
+
+            <div class="adminToolGrid adminSubToolGrid adminAdvancedToolGrid" aria-label="Server nástroje">
+              <button id="adminBackendToolButton" class="adminToolCard" type="button">
+                <span class="adminToolIcon" aria-hidden="true">🗄️</span>
+                <span class="adminToolText">
+                  <strong>Backend</strong>
+                  <small>Read-only kontrola Auth, DB, RPC, Storage a Realtime</small>
+                </span>
+                <span class="adminToolArrow" aria-hidden="true">›</span>
+              </button>
+
+              <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
+                <span class="adminToolIcon" aria-hidden="true">↕️</span>
+                <span class="adminToolText">
+                  <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
+                  <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
+                </span>
+                <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
+              </button>
+            </div>
           </div>
         </details>
-
-        <div class="adminToolGrid adminSubToolGrid" aria-label="Server nástroje">
-          <button id="adminBackendToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">🗄️</span>
-            <span class="adminToolText">
-              <strong>Backend</strong>
-              <small>Read-only kontrola Auth, DB, RPC, Storage a Realtime</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminSyncTrafficToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
-            <span class="adminToolIcon" aria-hidden="true">↕️</span>
-            <span class="adminToolText">
-              <strong id="adminSyncTrafficToolTitle">RX/TX/E panel</strong>
-              <small id="adminSyncTrafficToolDescription">Zobrazený nad hlavními moduly</small>
-            </span>
-            <span id="adminSyncTrafficToolState" class="adminToolToggle">Zapnuto</span>
-          </button>
-        </div>
         <details class="adminMigrationGuide" aria-label="Kompletní návod bezpečné migrace">
           <summary class="adminMigrationGuideButton">📖 Kompletní návod bezpečné migrace</summary>
           <div class="adminMigrationGuideBody">

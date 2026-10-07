@@ -1667,7 +1667,15 @@
       return { typ: "prepare", ...pripravPrepareProgress(vysledek) };
     }
 
-    if (managerState === "CUTOVER_COMPLETE" || managerState === "CUTTING_OVER") {
+    /* Po úspěšném COMPLETE už 12/12 panel nezabírá hlavní workflow.
+     * Průběh je důležitý během CUTOVERu nebo při FAIL; po úspěchu stačí
+     * stav COMPLETE + aktuální produkce nahoře. */
+    if (managerState === "CUTOVER_COMPLETE" && job?.status !== "running") {
+      schovejMigrationProgress();
+      return null;
+    }
+
+    if (managerState === "CUTTING_OVER") {
       return { typ: "cutover", ...pripravCutoverProgress(vysledek) };
     }
 

@@ -17220,3 +17220,145 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     max-width: 235px;
   }
 }
+
+
+/* ==================================================
+   PATCH 679I1 – SERVER MOBILE FIT / TRUE COLLAPSE
+   Konkrétní oprava prvků, které na úzkém Androidu přetékaly.
+================================================== */
+
+/* Žádné šipky ani mezi SOURCE/CÍL. Význam je zřejmý z popisků. */
+#adminServerView .adminMigrationRouteArrow {
+  display: none !important;
+}
+
+/* SOURCE a CÍL musí být skutečně dva plnohodnotné boxy, ne tři sloupce
+   s místem rezervovaným pro šipku. */
+#adminServerView .adminMigrationRoute {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#adminServerView .adminMigrationEndpoint {
+  min-width: 0;
+  min-height: 76px;
+  box-sizing: border-box;
+  align-content: center;
+  justify-items: center;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+#adminServerView .adminMigrationEndpoint small {
+  max-width: 100%;
+  font-size: clamp(0.54rem, 2.65vw, 0.62rem);
+  line-height: 1.18;
+  letter-spacing: 0.035em;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+#adminServerView .adminMigrationEndpoint strong {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  font-size: clamp(0.68rem, 3.3vw, 0.82rem);
+  line-height: 1.22;
+}
+
+/* Tlačítka cílového backendu: text nesmí nikdy vyjet mimo kartu. */
+#adminServerView .adminMigrationPresetRow > button,
+#adminServerView .adminMigrationDestinationRow > button,
+#adminServerView .adminBackendSwitchButton {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  overflow: hidden;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.22;
+  font-size: clamp(0.72rem, 3.45vw, 0.84rem);
+  text-align: center;
+}
+
+/* VPS summary je také ovládací prvek – stejná pevná pravidla jako tlačítka. */
+#adminServerView .adminVpsDetails > summary {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-align: center;
+  font-size: clamp(0.72rem, 3.45vw, 0.82rem);
+  line-height: 1.22;
+}
+
+/* Migrační PREPARE/VERIFY/CUTOVER karty jsou na mobilu jeden sloupec.
+   Žádný jejich popis proto nemusí být mačkán do třetiny šířky. */
+@media (max-width: 520px) {
+  #adminServerView .adminMigrationActions {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #adminServerView .adminMigrationActions > button {
+    min-height: 58px;
+    padding: 9px 12px;
+  }
+
+  #adminServerView .adminMigrationActions > button > strong {
+    font-size: 0.82rem;
+    line-height: 1.2;
+  }
+
+  #adminServerView .adminMigrationActions > button > small {
+    font-size: 0.68rem;
+    line-height: 1.25;
+    white-space: normal;
+  }
+}
+
+/* Pokročilé nástroje jsou skutečně uvnitř sbaleného details. */
+#adminServerView .adminAdvancedToolGrid {
+  margin-top: 12px;
+}
+
+#adminServerView .adminAdvancedDetails:not([open]) .adminAdvancedBody {
+  display: none !important;
+}
+
+/* Spodní bezpečná zóna: poslední ovládací prvky nesmí ležet pod Android nav barem. */
+#adminServerView {
+  padding-bottom: max(104px, calc(env(safe-area-inset-bottom, 0px) + 88px));
+}
+
+#adminServerView .adminMigrationGuide {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 380px) {
+  #adminServerView .adminMigrationRoute {
+    grid-template-columns: 1fr;
+  }
+
+  #adminServerView .adminMigrationEndpoint {
+    min-height: 66px;
+  }
+}
