@@ -301,57 +301,72 @@
 }
 
 
-.ln-dh-notes-export {
-  grid-column: 1 / -1 !important;
+.ln-dh-menu-tools {
+  display: grid !important;
+  gap: 7px !important;
+  margin-top: 3px !important;
+  padding-top: 8px !important;
+  border-top: 1px solid rgba(24, 239, 125, 0.18) !important;
+}
+
+.ln-dh-menu-tools-title {
+  padding: 0 3px !important;
+  color: rgba(232, 242, 239, 0.56) !important;
+  font-size: 0.625rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.ln-dh-selection-speed {
+  display: grid !important;
+  gap: 5px !important;
+  padding: 8px 9px !important;
+  border: 1px solid rgba(24, 239, 125, 0.18) !important;
+  border-radius: 10px !important;
+  background: rgba(5, 27, 28, 0.78) !important;
+}
+
+.ln-dh-selection-speed-head {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
-  gap: 9px !important;
-  padding: 9px 10px !important;
-  border: 1px solid rgba(24, 239, 125, 0.2) !important;
-  border-radius: 12px !important;
-  background: rgba(5, 31, 28, 0.76) !important;
+  gap: 8px !important;
 }
 
-.ln-dh-notes-export-text {
-  min-width: 0 !important;
+.ln-dh-selection-speed strong {
+  color: #eef8f4 !important;
+  font-size: 0.6875rem !important;
 }
 
-.ln-dh-notes-export-text strong,
-.ln-dh-notes-export-text small {
-  display: block !important;
-}
-
-.ln-dh-notes-export-text strong {
+.ln-dh-selection-speed output {
   color: #18ef7d !important;
-  font-size: 0.75rem !important;
+  font-size: 0.6875rem !important;
   font-weight: 800 !important;
+  white-space: nowrap !important;
 }
 
-.ln-dh-notes-export-text small {
-  margin-top: 2px !important;
-  color: rgba(232, 242, 239, 0.66) !important;
-  font-size: 0.625rem !important;
+.ln-dh-selection-speed small,
+.ln-dh-selection-speed [data-dh-selection-engine],
+.ln-dh-selection-speed [data-dh-selection-applied] {
+  color: rgba(232, 242, 239, 0.64) !important;
+  font-size: 0.59375rem !important;
   line-height: 1.3 !important;
 }
 
-.ln-dh-notes-export-button {
-  min-height: 38px !important;
-  padding: 7px 10px !important;
-  border-radius: 10px !important;
-  white-space: nowrap !important;
-  font-size: 0.6875rem !important;
-  font-weight: 800 !important;
+.ln-dh-selection-speed input[type="range"] {
+  width: 100% !important;
+  margin: 2px 0 0 !important;
 }
 
-@media (max-width: 520px) {
-  .ln-dh-notes-export {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  .ln-dh-notes-export-button {
-    width: 100% !important;
-  }
+.ln-dh-menu-tool-button {
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 7px 10px !important;
+  border-radius: 10px !important;
+  font-size: 0.6875rem !important;
+  font-weight: 800 !important;
+  text-align: left !important;
 }
 
 .ln-dh-summary {
@@ -398,7 +413,7 @@
 .ln-dh-footer {
   flex: 0 0 auto !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) !important;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr) !important;
   gap: 7px !important;
   padding: 0 10px 10px !important;
 }
@@ -461,21 +476,4 @@
   .ln-dh-run-actions {
     width: 168px !important;
   }
-}
-
-
-/* VD3: tři akce v patičce bez mačkání na úzkém telefonu. */
-#ln-debug-hub .ln-dh-footer {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-}
-
-#ln-debug-hub .ln-dh-footer [data-dh="copy-tag"],
-#ln-debug-hub .ln-dh-footer [data-dh="copy"] {
-  min-width: 0;
-}
-
-#ln-debug-hub .ln-dh-footer [data-dh="copy"] {
-  grid-column: 1 / -1;
 }

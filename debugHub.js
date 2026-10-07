@@ -2446,71 +2446,6 @@ async function zkopirujReport(tlacitko) {
 }
 
 
-function vytvorTagVdReport() {
-  const vsechnyRadky =
-    window.LubaNoteStartupDiag?.radky?.() || [];
-
-  const relevantni = vsechnyRadky.filter((radek) => {
-    const text = String(radek || "");
-    return (
-      text.includes("| TAG-VD") ||
-      text.includes("| EVENT    | ONLINE") ||
-      text.includes("| EVENT    | OFFLINE")
-    );
-  });
-
-  let reconnectStav = null;
-  let barvyStav = "nedostupné";
-
-  try {
-    reconnectStav =
-      window.LubaNoteTagReconnectVD?.stav?.() || null;
-  } catch (_chyba) {
-    reconnectStav = null;
-  }
-
-  try {
-    barvyStav =
-      window.LubaNoteTagColorVD?.shrnuti?.() ||
-      "nedostupné";
-  } catch (_chyba) {
-    barvyStav = "chyba diagnostiky";
-  }
-
-  return [
-    "LUBANOTE TAG-VD COMPACT REPORT",
-    `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
-    `čas: ${new Date().toISOString()}`,
-    `online: ${navigator.onLine}`,
-    `reconnect: ${reconnectStav ? JSON.stringify(reconnectStav) : "nedostupné"}`,
-    `barvy-teď: ${barvyStav}`,
-    "",
-    ...relevantni
-  ].join("\n");
-}
-
-async function zkopirujTagVdReport(tlacitko) {
-  const puvodni = tlacitko.textContent;
-  let zkopirovano = false;
-
-  try {
-    zkopirovano = await zkopirujTextRobustne(
-      vytvorTagVdReport()
-    );
-  } catch (chyba) {
-    console.warn(
-      "Debug Hub: kopírování TAG-VD reportu selhalo.",
-      chyba
-    );
-  }
-
-  tlacitko.textContent =
-    zkopirovano ? "TAG-VD zkopírováno ✓" : "Kopírování selhalo";
-
-  setTimeout(() => {
-    tlacitko.textContent = puvodni;
-  }, 1200);
-}
 
   function vytvorHub() {
     if (hub) return hub;
@@ -2557,6 +2492,39 @@ async function zkopirujTagVdReport(tlacitko) {
                 <span>${popis}</span>
               </button>
             `).join("")}
+
+            <div class="ln-dh-menu-tools" role="group" aria-label="Nástroje Debug Hubu">
+              <div class="ln-dh-menu-tools-title">Nástroje</div>
+
+              <section
+                class="ln-dh-selection-speed"
+                data-dh-selection-speed-panel
+                aria-label="Rychlost výběru při scrollu"
+              >
+                <div class="ln-dh-selection-speed-head">
+                  <strong>Výběr – rychlost scrollu</strong>
+                  <output data-dh-selection-speed-value>${nactiV2SelectionEdgeSpeed()} px/s</output>
+                </div>
+                <small>Live rychlost při držení úchytu u okraje.</small>
+                <div data-dh-selection-engine>Engine: čekám na výběr</div>
+                <div data-dh-selection-applied>Použito: —</div>
+                <input
+                  data-dh-selection-speed
+                  type="range"
+                  min="40"
+                  max="900"
+                  step="10"
+                  value="${nactiV2SelectionEdgeSpeed()}"
+                  aria-label="Rychlost selection edge scrollu"
+                >
+              </section>
+
+              <button
+                type="button"
+                class="ln-dh-menu-tool-button ln-dh-copy"
+                data-dh="copy-notes-visual"
+              >Notes Visual Lab – kopírovat nastavení</button>
+            </div>
           </div>
 
           <select data-dh="module" aria-label="Diagnostický modul" hidden>
@@ -2570,39 +2538,6 @@ async function zkopirujTagVdReport(tlacitko) {
           <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
           <button type="button" data-dh="stop">Stop</button>
         </div>
-
-        <section
-          class="ln-dh-selection-speed"
-          data-dh-selection-speed-panel
-          aria-label="Rychlost výběru při scrollu"
-          style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:10px 12px;border:1px solid rgba(127,203,196,.32);border-radius:12px;"
-        >
-          <div style="min-width:0">
-            <strong style="display:block">Výběr – rychlost scrollu</strong>
-            <small style="opacity:.72">Live rychlost při držení úchytu u okraje</small>
-          </div>
-          <output data-dh-selection-speed-value style="font-weight:700;white-space:nowrap">${nactiV2SelectionEdgeSpeed()} px/s</output>
-          <div data-dh-selection-engine style="grid-column:1 / -1;font-size:12px;opacity:.82">Engine: čekám na výběr</div>
-          <div data-dh-selection-applied style="grid-column:1 / -1;font-size:12px;opacity:.82">Použito: —</div>
-          <input
-            data-dh-selection-speed
-            type="range"
-            min="40"
-            max="900"
-            step="10"
-            value="${nactiV2SelectionEdgeSpeed()}"
-            aria-label="Rychlost selection edge scrollu"
-            style="grid-column:1 / -1;width:100%"
-          >
-        </section>
-
-        <section class="ln-dh-notes-export" aria-label="Notes Visual Lab export">
-          <div class="ln-dh-notes-export-text">
-            <strong>Notes Visual Lab – export</strong>
-            <small>Zkopíruje pouze aktuální nastavení vzhledu Poznámek. Žádné účty, tokeny ani jiná data.</small>
-          </div>
-          <button type="button" class="ln-dh-copy ln-dh-notes-export-button" data-dh="copy-notes-visual">Kopírovat nastavení</button>
-        </section>
       </div>
 
       <div class="ln-dh-summary">modul: vypnutý</div>
@@ -2610,7 +2545,6 @@ async function zkopirujTagVdReport(tlacitko) {
 
       <div class="ln-dh-footer">
         <button type="button" data-dh="clear">Vymazat</button>
-        <button type="button" class="ln-dh-copy" data-dh="copy-tag">Kopírovat TAG-VD</button>
         <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
       </div>
 
@@ -2702,11 +2636,6 @@ async function zkopirujTagVdReport(tlacitko) {
         zaznamy = [];
         startCas = performance.now();
         zapis("RESET");
-        return;
-      }
-
-      if (akce === "copy-tag") {
-        zkopirujTagVdReport(tlacitko);
         return;
       }
 
@@ -2819,9 +2748,22 @@ async function zkopirujTagVdReport(tlacitko) {
       }
     }
 
-    aktualizujStavHubu();
+    /*
+     * PATCH 680A1 – Debug Hub se při běžném otevření vždy vrací na
+     * hlavní Start / sync / síť report. Ostatní moduly zůstávají dostupné
+     * přes rozbalovací nabídku a explicitní start* API je může spustit hned
+     * po otevření. Tím se po starém WebView Watchi neztratí hlavní startup
+     * diagnostika, kterou potřebujeme pro offline/sync/E2E testy.
+     */
+    selectModulu.value = "startup";
+    if (aktivniModul !== "startup") {
+      spustModul();
+    } else {
+      aktualizujStavHubu();
+      prekresli();
+    }
+
     srovnejHubDoViewportu();
-    prekresli();
     document.dispatchEvent(new CustomEvent("lubanote:debug-hub-visibility", {
       detail: { open: true }
     }));
