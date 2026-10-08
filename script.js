@@ -45,22 +45,12 @@ if (window.visualViewport) {
 const aboutVersion =
   document.getElementById("aboutVersion");
 
-if (aboutVersion) {
-  aboutVersion.textContent =
-    `Verze ${window.LUBANOTE_VERSION || "DEV"}`;
-}
-
 const settingsVersionValue =
   document.getElementById("settingsVersionValue");
 
-if (settingsVersionValue) {
-  settingsVersionValue.textContent =
-    window.LUBANOTE_VERSION || "DEV";
-}
-
-/* 680A5 – vždy viditelná verze klienta.
- * Hodnota pochází ze stávajícího build-version.js; žádná druhá verze
- * aplikace se zde nevymýšlí. Na APK ji generuje GitHub Actions. */
+/* 680A5 + 680E – vždy viditelná verze klienta.
+ * APK dostává 0.9.<run> při Android buildu. Web dostává WEB-<commit>
+ * při lubanote-deploy. Lokální Live Server si webovou verzi načte z PROD. */
 function aktualizujLubaNoteVersionBadge() {
   let badge = document.getElementById("lubaNoteVersionBadge");
 
@@ -81,7 +71,25 @@ function aktualizujLubaNoteVersionBadge() {
     : `LubaNote ${verze}`;
 }
 
-aktualizujLubaNoteVersionBadge();
+function aktualizujLubaNoteVerziUI() {
+  const verze = String(window.LUBANOTE_VERSION || "DEV").trim() || "DEV";
+
+  if (aboutVersion) {
+    aboutVersion.textContent = `Verze ${verze}`;
+  }
+
+  if (settingsVersionValue) {
+    settingsVersionValue.textContent = verze;
+  }
+
+  aktualizujLubaNoteVersionBadge();
+}
+
+aktualizujLubaNoteVerziUI();
+window.addEventListener(
+  "lubanote-version-ready",
+  aktualizujLubaNoteVerziUI
+);
 
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
