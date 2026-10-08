@@ -5122,11 +5122,42 @@ async function synchronizujVzdalenePrivateDeltaV2(
   }
 
   if (zmeny.length >= 200) {
+    /*
+     * PATCH 680C – STALE CURSOR / FEED-LIMIT RECOVERY
+     *
+     * Dlouho nepoužitý webový klient může mít platný V2 cursor, ale být
+     * o více než 200 změn za serverem. Samotná delta nesmí hádat konec
+     * feedu, takže staré chování správně odmítlo pokračovat – jenže klient
+     * pak zůstal navždy ve stavu „Čeká na synchronizaci“.
+     *
+     * Bezpečná recovery už v aplikaci existuje: Existing Client Reconcile
+     * stáhne jen malý manifest a případně targeted obsah dotčených ID,
+     * nikdy get_notes_safe() full snapshot. Po úspěšném reconcile zároveň
+     * založí nový potvrzený cursor.
+     *
+     * Pokud jsme už UVNITŘ reconcile (delta-after-bootstrap), nesmíme ho
+     * spustit rekurzivně a čekat sami na sebe. V takovém výjimečném race
+     * zůstává konzervativní DEFER.
+     */
+    if (existingClientReconcilePraveBezi) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        "REMOTE DELTA DEFER | feed-limit-in-reconcile"
+      );
+      return false;
+    }
+
     window.LubaNoteStartupDiag?.zapis?.(
       "V2",
-      "REMOTE DELTA DEFER | feed-limit"
+      "REMOTE DELTA RECOVER | feed-limit -> reconcile"
     );
-    return false;
+
+    return await spustExistingClientReconcileV2(
+      userId,
+      jeTargetConfirmRecovery
+        ? { force: true, targetConfirmRecovery: true }
+        : { force: true }
+    );
   }
 
   let posledniSeq = cursor.lastSeq;
