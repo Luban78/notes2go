@@ -1573,9 +1573,10 @@ function pridejCekajiciSmazaniHromadne(
      až na další foreground/resume událost. */
   oznacLokalniZmenuCekajiciNaSync();
 
-  if (navigator.onLine) {
-    naplanujSynchronizaciPoLokalniZmene(120);
-  }
+  /* PATCH 680B – i tombstone worker naplánujeme bez browserového
+     onLine gate. Offline se pouze bezpečně odloží, APK může nativní
+     stav revalidovat a nezůstane viset na stale onLine=false. */
+  naplanujSynchronizaciPoLokalniZmene(120);
 
   return seznam.length;
 }
@@ -2296,9 +2297,9 @@ async function markNoteDeletedInSupabase(
 
   oznacLokalniZmenuCekajiciNaSync();
 
-  if (navigator.onLine) {
-    naplanujSynchronizaciPoLokalniZmene(120);
-  }
+  /* PATCH 680B – stejně jako obsahový targeted zápis nesmí permanentní
+     delete čekat jen proto, že WebView drží stale navigator.onLine. */
+  naplanujSynchronizaciPoLokalniZmene(120);
 
   return true;
 }
@@ -7713,18 +7714,22 @@ let nativeNetworkPosledniConnectedV2 = null;
 let nativeNetworkCekaNaNovePotvrzeniV2 = false;
 
 function jeTargetV2SitOpravduPouzitelna() {
-  if (!navigator.onLine) {
-    return false;
+  /*
+   * PATCH 680B – Android WebView může po návratu z notifikace držet
+   * navigator.onLine=false, i když nativní ConnectivityManager už má
+   * VALIDATED internet. Jakmile máme nativní autoritu, rozhoduje proto
+   * její potvrzený stav + bezpečnostní latch z PATCH 504. Browserový
+   * offline event latch stále zavře; znovu jej otevře až native callback
+   * nebo explicitní getStatus() revalidace. Web/PWA zůstává beze změny.
+   */
+  if (pouzivaNativeNetworkAutorituV2()) {
+    return (
+      nativeNetworkPosledniConnectedV2 === true &&
+      nativeNetworkCekaNaNovePotvrzeniV2 !== true
+    );
   }
 
-  if (!pouzivaNativeNetworkAutorituV2()) {
-    return true;
-  }
-
-  return (
-    nativeNetworkPosledniConnectedV2 === true &&
-    nativeNetworkCekaNaNovePotvrzeniV2 !== true
-  );
+  return navigator.onLine;
 }
 
 function pouzivaNativeNetworkAutorituV2() {
@@ -8144,9 +8149,10 @@ function zaradKonkretniPrivatePoznamkuV2(note) {
 
   oznacLokalniZmenuCekajiciNaSync();
 
-  if (navigator.onLine) {
-    naplanujSynchronizaciPoLokalniZmene(180);
-  }
+  /* PATCH 680B – plánovač je bezpečný i offline. Worker sám ověří
+     použitelnou síť; na APK navíc umí revalidovat native stav. Tím
+     nezůstane přímý targeted zápis viset jen kvůli stale onLine=false. */
+  naplanujSynchronizaciPoLokalniZmene(180);
 
   return true;
 }
@@ -8649,9 +8655,10 @@ async function synchronizujCilenePrivateZmenyV2() {
      potvrzuje VALIDATED internet. */
   if (
     !jeTargetV2SitOpravduPouzitelna() &&
-    pouzivaNativeNetworkAutorituV2() &&
-    navigator.onLine
+    pouzivaNativeNetworkAutorituV2()
   ) {
+    /* PATCH 680B – getStatus() je lokální nativní dotaz, takže jej smíme
+       použít i při stale navigator.onLine=false po návratu z notifikace. */
     await revalidujNativeNetworkV2("target-entry");
   }
 
@@ -8990,9 +8997,10 @@ async function synchronizujCekajiciLokalniZmenu() {
 
   if (
     !jeTargetV2SitOpravduPouzitelna() &&
-    pouzivaNativeNetworkAutorituV2() &&
-    navigator.onLine
+    pouzivaNativeNetworkAutorituV2()
   ) {
+    /* PATCH 680B – stejná revalidace musí fungovat i když WebView drží
+       stale browserové offline po akci z notifikace. */
     await revalidujNativeNetworkV2("pending-worker");
   }
 
@@ -9216,33 +9224,36 @@ async function provedLokalniZmenuASynchronizuj(
     typeof rezimVyberuKaret !== "undefined" &&
     rezimVyberuKaret === true;
 
-  if (navigator.onLine) {
-    if (vyberKaretAktivni) {
-      /*
-       * Během výběru necháme UI v klidu.
-       * ukonciRezimVyberuKaret() sync následně spustí.
-       */
+  if (vyberKaretAktivni) {
+    /*
+     * Během výběru necháme UI v klidu.
+     * ukonciRezimVyberuKaret() sync následně spustí.
+     */
+    odlozOpakovaniSynchronizace();
+  } else {
+    if (
+      probihajiciStartSync ||
+      probihajiciSync
+    ) {
       odlozOpakovaniSynchronizace();
-    } else {
-      if (
-        probihajiciStartSync ||
-        probihajiciSync
-      ) {
-        odlozOpakovaniSynchronizace();
-      }
-
-      /*
-       * U podporované běžné private změny už časovač nevede na
-       * get_notes_safe. synchronizujCekajiciLokalniZmenu() nejprve
-       * zpracuje targeted frontu. Nepodporované/legacy cesty zůstávají
-       * beze změny a použijí dosavadní bezpečný sync.
-       */
-      naplanujSynchronizaciPoLokalniZmene(
-        cilenaZmenaV2?.podporovano === true
-          ? 220
-          : 350
-      );
     }
+
+    /*
+     * PATCH 680B – následný worker plánujeme vždy, ne podle možná stale
+     * navigator.onLine. Worker před jediným síťovým zápisem ověří
+     * skutečně použitelnou síť a APK si může nativní stav revalidovat.
+     * Offline Web/PWA pouze zůstane pending bez síťového requestu.
+     *
+     * U podporované běžné private změny už časovač nevede na
+     * get_notes_safe. synchronizujCekajiciLokalniZmenu() nejprve
+     * zpracuje targeted frontu. Nepodporované/legacy cesty zůstávají
+     * beze změny a použijí dosavadní bezpečný sync.
+     */
+    naplanujSynchronizaciPoLokalniZmene(
+      cilenaZmenaV2?.podporovano === true
+        ? 220
+        : 350
+    );
   }
 
   return vysledek;
@@ -9266,14 +9277,11 @@ async function spustRychlySyncPoznamekBezpecne() {
     return false;
   }
 
-  if (!navigator.onLine) {
-    return false;
-  }
-
   /*
-   * PATCH 483 – foreground / pageshow nesmí obejít targeted frontu.
-   * Pokud už lokální změna čeká na konkrétní save_note_safe zápis,
-   * dokončíme jej místo fingerprint -> full-sync rozhodování.
+   * PATCH 483/680B – foreground / pageshow nesmí obejít targeted frontu.
+   * Targeted dluh zkusíme dřív než browserový navigator.onLine gate,
+   * protože APK může mít po návratu z notifikace stale onLine=false.
+   * synchronizujCilenePrivateZmenyV2() si síť bezpečně ověří samo.
    */
   if (maCilenyPrivateV2Dluh()) {
     const targetedOk =
@@ -9287,6 +9295,10 @@ async function spustRychlySyncPoznamekBezpecne() {
     }
 
     return targetedOk === true;
+  }
+
+  if (!navigator.onLine) {
+    return false;
   }
 
   /*
@@ -10083,7 +10095,14 @@ function naplanujSyncPoAktivaci(
     setTimeout(() => {
       casovacSyncuPoAktivaci = null;
 
-      if (!navigator.onLine) {
+      /* PATCH 680B – na APK může být browserový onLine po návratu
+         z notifikace stale=false. Pokud už máme native autoritu, necháme
+         notes-only cestu dojít k targeted workeru, který stav revaliduje.
+         Web/PWA zůstává na původním navigator.onLine gate. */
+      if (
+        !navigator.onLine &&
+        !pouzivaNativeNetworkAutorituV2()
+      ) {
         return;
       }
 
