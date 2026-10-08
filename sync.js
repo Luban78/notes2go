@@ -4438,6 +4438,13 @@ const TARGET_CONFIRM_RECONCILE_COOLDOWN_MS = 15000;
  * překvapit několika MB targeted downloadu při ztracené lokální meta.
  * Manifest je malý; obsah nad tento rozpočet se pouze odloží. */
 const EXISTING_RECONCILE_AUTO_RX_BUDGET = 256 * 1024;
+/* PATCH 680D – FEED-LIMIT RECOVERY ma vlastni, stale tvrde omezeny
+ * rozpocet. Bezne automaticke reconcile zustava na 256 kB. Pouze kdyz
+ * change feed prokazatelne narazi na 200-radkovy limit (stary cursor),
+ * smi targeted recovery jednorazove stahnout vic rozdilovych ID.
+ * 1.5 MB je pod velikosti historickeho full snapshotu a stale plati:
+ * get_notes_safe() se zde nikdy nepovoli. */
+const EXISTING_RECONCILE_FEED_LIMIT_RX_BUDGET = 1536 * 1024;
 
 function nactiLokalniSnapshotProExistingReconcile() {
   const localRegular = getLocalNotesForSync();
@@ -4540,7 +4547,11 @@ async function uploadExistingReconcileWinnerV2(noteId) {
 
 async function spustExistingClientReconcileV2(
   userId,
-  { force = false, targetConfirmRecovery = false } = {}
+  {
+    force = false,
+    targetConfirmRecovery = false,
+    feedLimitRecovery = false
+  } = {}
 ) {
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
@@ -4758,15 +4769,24 @@ async function spustExistingClientReconcileV2(
         0
       );
 
-      if (
-        odhadFetchBytes > EXISTING_RECONCILE_AUTO_RX_BUDGET
-      ) {
+      const reconcileRxBudget = feedLimitRecovery
+        ? EXISTING_RECONCILE_FEED_LIMIT_RX_BUDGET
+        : EXISTING_RECONCILE_AUTO_RX_BUDGET;
+
+      if (odhadFetchBytes > reconcileRxBudget) {
         window.LubaNoteStartupDiag?.zapis?.(
           "V2",
-          `RECONCILE DEFER | budget fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(EXISTING_RECONCILE_AUTO_RX_BUDGET / 1024)}kB`
+          `RECONCILE DEFER | budget mode=${feedLimitRecovery ? "feed-limit" : "auto"} fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(reconcileRxBudget / 1024)}kB`
         );
         nastavStavSynchronizaceUI("pending");
         return false;
+      }
+
+      if (feedLimitRecovery) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `RECONCILE FEED-LIMIT BUDGET OK | fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(reconcileRxBudget / 1024)}kB`
+        );
       }
 
       window.LubaNoteStartupDiag?.zapis?.(
@@ -5155,8 +5175,11 @@ async function synchronizujVzdalenePrivateDeltaV2(
     return await spustExistingClientReconcileV2(
       userId,
       jeTargetConfirmRecovery
-        ? { force: true, targetConfirmRecovery: true }
-        : { force: true }
+        ? {
+            targetConfirmRecovery: true,
+            feedLimitRecovery: true
+          }
+        : { feedLimitRecovery: true }
     );
   }
 
