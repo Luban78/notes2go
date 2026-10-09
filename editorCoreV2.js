@@ -2291,6 +2291,29 @@
 
     let novaPozice;
 
+    /* 682I – vložení obrázku pomocí toolbaru do code blocku nesmí
+       rozdělit kód ani převést jeho pravou část na běžný odstavec.
+       Obrázek vložíme jako samostatný blok před/za celý kód. */
+    if (jeKodovyBlok(blok)) {
+      const kam = cil.offset <= 0 ? cil.blok : cil.blok + 1;
+      dokument.bloky.splice(kam, 0, obrazek, vytvorOdstavec(""));
+      novaPozice = { blok: kam + 1, offset: 0 };
+      vybranyObrazekId = obrazek.id;
+      aktivniFormatPsani = null;
+      aktivniFormatPozice = "";
+      aktivniFormatZdroj = "";
+      const novyVyber = { zacatek: novaPozice, konec: novaPozice, sbaleny: true };
+      posledniPozice = { ...novaPozice };
+      posledniVyber = klonVyberu(novyVyber);
+      ulozenyFormatovaciVyber = klonVyberu(novyVyber);
+      ulozZmenuDoHistorie(snapshotPred, "vložit obrázek mezi bloky");
+      vykresli(novyVyber);
+      naplanujV2RadkyVedleObrazku(obrazek.id);
+      nastavStav("Obrázek vložen vedle neporušeného kódu");
+      zapisDebug?.(`EDITOR V2 | image insert next to code | block=${obrazek.id}`);
+      return true;
+    }
+
     /* V2.15 – obrázek uvnitř seznamu patří přímo k položce.
        Není samostatným dokumentovým blokem a při drag & move se tedy
        přesune společně s celou položkou i jejími dětmi. */
@@ -2700,6 +2723,22 @@
       const pozice = domBodNaModel(range.startContainer, range.startOffset);
       if (pozice && jeTextovyBlok(dokument.bloky[pozice.blok])) {
         const blok = dokument.bloky[pozice.blok];
+        /* 682I – při přesunu obrázku se code block chová jako jeden celek.
+           Drop nesmí rozdělit příkaz (např. „lubanote-deploy“) na dva
+           odstavce. Podle svislé poloviny bloku vložíme PŘED / ZA. */
+        if (jeKodovyBlok(blok)) {
+          const radek = Array.from(editor.children).find((el) => el.dataset?.lnV2Blok === blok.id);
+          if (radek) {
+            const rect = radek.getBoundingClientRect();
+            const za = clientY >= rect.top + rect.height / 2;
+            return {
+              typ: "text",
+              cilId: blok.id,
+              offset: za ? textBloku(blok).length : 0,
+              y: za ? rect.bottom : rect.top
+            };
+          }
+        }
         let y = clientY;
         try {
           const r = range.getBoundingClientRect();
@@ -2825,6 +2864,14 @@
       if (index >= 0 && jeTextovyBlok(blok)) {
         const delka = textBloku(blok).length;
         const offset = Math.max(0, Math.min(delka, Number(cil.offset) || 0));
+        /* 682I – ochrana modelu i při přímém volání / fallback dropu.
+           Code block nikdy nedělit kvůli vkládání obrázku. */
+        if (jeKodovyBlok(blok)) {
+          const kam = offset <= 0 ? index : (offset >= delka ? index + 1 :
+            (offset < delka / 2 ? index : index + 1));
+          dokument.bloky.splice(kam, 0, obrazek);
+          return kam;
+        }
         if (offset <= 0) {
           dokument.bloky.splice(index, 0, obrazek);
           return index;

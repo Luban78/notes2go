@@ -857,6 +857,9 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
    Využívá stávající legacyPre model: žádný nový typ dokumentového bloku.
 ========================================== */
 .ln-v2-editor .ln-v2-code-block {
+  /* 682I – kód je samostatný blok; plovoucí obrázek ho nesmí obtékat
+     a zmenšovat jeho šířku nebo posouvat tlačítko Kopírovat. */
+  clear: both;
   position: relative;
   box-sizing: border-box;
   margin: .45em 0 .7em;
