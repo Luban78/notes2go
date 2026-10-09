@@ -5292,6 +5292,24 @@
     return clientX >= stred - pul && clientX <= stred + pul;
   }
 
+  /* 682K – šipka sbalení je akce pro čtení, nikoli textový caret.
+     Šipka je CSS pseudo-element téhož contenteditable DIV. Browser tedy
+     u tapu na šipku může PŘED clickem přesunout selection/focus k jinému
+     řádku (na Androidu často k dříve otevřenému caretu) a odscrollovat.
+     Na začátku gesta rozlišíme jen úzkou zónu značky RODIČE s potomky;
+     obyčejný text, TODO, kontextové tlačítko a long-press MOVE nezměníme. */
+  let v2DotykSbalovaciZnacky = null;
+  function najdiV2SbalovaciZnacku(target, clientX) {
+    if (!editor || !target || !Number.isFinite(clientX)) return null;
+    if (jePrvekMimoV2SeznamMove(target)) return null;
+    const radek = target.closest?.('.ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered');
+    if (!radek || !editor.contains(radek)) return null;
+    const id = String(radek.dataset.lnV2Blok || '');
+    const index = najdiIndexBlokuPodleId(id);
+    if (index < 0 || !maPolozkaSeznamuDeti(index)) return null;
+    return jeV2KlikNaZnacceSeznamu(radek, clientX, true) ? { id, radek } : null;
+  }
+
   function jePrvekMimoV2SeznamMove(target) {
     return Boolean(target?.closest?.(
       ".ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove, .ln-v2-odkaz, a[href], button"
@@ -8705,6 +8723,55 @@
       event.stopPropagation();
       zrusV2VyberPolozkySeznamu();
     });
+
+    /* 682K – žádný nativní posun caretu při TAPU na šipku.
+       Dotyk samotné značky zachytíme v capture fázi ještě před běžným
+       list MOVE kandidátem. PreventDefault se netýká zbytku řádku. */
+    poslouchej(editor, "touchstart", (event) => {
+      v2DotykSbalovaciZnacky = null;
+      if (event.touches?.length !== 1) return;
+      const dotyk = event.touches[0];
+      const znacka = najdiV2SbalovaciZnacku(event.target, dotyk.clientX);
+      if (!znacka) return;
+      v2DotykSbalovaciZnacky = {
+        id: znacka.id,
+        touchId: dotyk.identifier,
+        x: dotyk.clientX,
+        y: dotyk.clientY
+      };
+      if (event.cancelable) event.preventDefault();
+    }, { capture: true, passive: false });
+
+    /* PreventDefault na touchstart může potlačit syntetický click.
+       Pro skutečný krátký tap proto toggle provedeme při touchend.
+       Drag/scroll/long-press nadále patří stávajícímu MOVE enginu. */
+    poslouchej(editor, "touchend", (event) => {
+      const kandidat = v2DotykSbalovaciZnacky;
+      v2DotykSbalovaciZnacky = null;
+      if (!kandidat) return;
+      const dotyk = Array.from(event.changedTouches || [])
+        .find((polozka) => polozka.identifier === kandidat.touchId);
+      if (!dotyk) return;
+      const presun = Math.hypot(dotyk.clientX - kandidat.x, dotyk.clientY - kandidat.y);
+      if (presun > 12 || v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni) return;
+      if (event.cancelable) event.preventDefault();
+      /* Případný opožděný click téhož gesta nesmí větev přepnout podruhé. */
+      potlacKlikSeznamuDo = performance.now() + 700;
+      zrusV2DragSeznamu({ zachovatVyber: false });
+      prepniSbaleniSeznamuPodleId(kandidat.id);
+    }, { capture: true, passive: false });
+    poslouchej(editor, "touchcancel", () => {
+      v2DotykSbalovaciZnacky = null;
+    }, { capture: true, passive: true });
+
+    /* Na PC nativní caret vzniká při mousedown, ještě před clickem.
+       Necháme pointerdown pro long-press MOVE a click pro sbalení, jen
+       zabráníme textové akci mousedown v úzké zóně rodičovské značky. */
+    poslouchej(editor, "mousedown", (event) => {
+      if (event.button !== 0) return;
+      if (!najdiV2SbalovaciZnacku(event.target, event.clientX)) return;
+      if (event.cancelable) event.preventDefault();
+    }, { capture: true });
 
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
