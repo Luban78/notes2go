@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=680f-version-build-split">
+  <link rel="stylesheet" href="style.css?v=682E-visual-baseline">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -27,10 +27,40 @@
   <link rel="stylesheet" href="sharing.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="chat.css?v=658be-global-rem-font-scale">
   
-  <!-- Visual Debug: uložené úpravy podle breakpointu + samotný vývojářský panel -->
-  <link rel="stylesheet" href="debugMobileGenerated.css">
-  <link rel="stylesheet" href="debugTabletGenerated.css">
-  <link rel="stylesheet" href="debugDesktopGenerated.css?v=20260915-core-v2-hardcut-528">
+  <!-- Visual Debug: finální CSS projektu (žádné lokální vizuální přepisy). -->
+  <link rel="stylesheet" href="debugMobileGenerated.css" data-luba-generated-css="mobile">
+  <link rel="stylesheet" href="debugTabletGenerated.css" data-luba-generated-css="tablet">
+  <link rel="stylesheet" href="debugDesktopGenerated.css?v=20260915-core-v2-hardcut-528" data-luba-generated-css="desktop">
+  <!-- 682E – přímé Generated CSS: offline základ + ověřené čerstvé online načtení. -->
+  <script>
+    (() => {
+      const generated = [
+        ['mobile', 'debugMobileGenerated.css'],
+        ['tablet', 'debugTabletGenerated.css'],
+        ['desktop', 'debugDesktopGenerated.css']
+      ];
+      function obnovGeneratedCss() {
+        if (navigator.onLine === false) return;
+        const verze = Date.now();
+        for (const [profil, soubor] of generated) {
+          const puvodni = document.querySelector(`link[data-luba-generated-css="${profil}"]`);
+          if (!puvodni) continue;
+          const novy = document.createElement('link');
+          novy.rel = 'stylesheet';
+          novy.href = `${soubor}?v=${verze}`;
+          novy.setAttribute('data-luba-generated-css-fresh', profil);
+          novy.onload = () => puvodni.remove();
+          novy.onerror = () => novy.remove();
+          document.head.appendChild(novy);
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', obnovGeneratedCss, { once: true });
+      } else {
+        obnovGeneratedCss();
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="visualDebug.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="debugHub.css?v=680A1-clean-main">
   <!-- Editor Core V2 – jediný produkční editor -->
@@ -39,7 +69,39 @@
   <link rel="stylesheet" href="lubaKeyboard.css?v=658bt-editor-selection-safe">
 </head>
 
-<body class="authPending">
+<body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
+  data-luba-notes-cards-border-mode="dark"
+  data-luba-notes-cards-border="on"
+  data-luba-notes-tags-border-mode="dark"
+  data-luba-notes-tags-border="on"
+  data-luba-notes-primary-border-mode="legacy"
+  data-luba-notes-primary-border="on"
+  data-luba-notes-search-border-mode="legacy"
+  data-luba-notes-search-border="on"
+  data-luba-notes-actions-border-mode="legacy"
+  data-luba-notes-actions-border="on"
+  data-luba-notes-traffic-border-mode="legacy"
+  data-luba-notes-traffic-border="on"
+  data-luba-notes-modules-border-mode="legacy"
+  data-luba-notes-modules-border="on"
+  data-luba-notes-fab-border-mode="legacy"
+  data-luba-notes-fab-border="on"
+  data-ln-dnv-modules-border="on"
+  data-ln-dnv-modules-mode="legacy"
+  data-ln-dnv-traffic-border="on"
+  data-ln-dnv-traffic-mode="legacy"
+  data-ln-dnv-search-border="on"
+  data-ln-dnv-search-mode="legacy"
+  data-ln-dnv-primary-border="on"
+  data-ln-dnv-primary-mode="legacy"
+  data-ln-dnv-actions-border="on"
+  data-ln-dnv-actions-mode="legacy"
+  data-ln-dnv-tags-border="on"
+  data-ln-dnv-tags-mode="legacy"
+  data-ln-dnv-cards-border="on"
+  data-ln-dnv-cards-mode="dark"
+  data-ln-dnv-fab-border="on"
+  data-ln-dnv-fab-mode="legacy">
 
   <!-- ========================================
      MOBILNI START / SPLASH SCREEN
@@ -1815,60 +1877,6 @@
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
-
-          <button id="adminNotesVisualToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">📝</span>
-            <span class="adminToolText">
-              <strong>Poznámky</strong>
-              <small>Živé ladění hlavní plochy + kopírování nastavení</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminPlannerVisualToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">📅</span>
-            <span class="adminToolText">
-              <strong>Plán</strong>
-              <small>Kalendář, data, agenda a Připomínky + kopírování nastavení</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminDocumentsVisualToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">📁</span>
-            <span class="adminToolText">
-              <strong>Dokumenty</strong>
-              <small>Složky, hledání, filtry a řádky souborů + kopírování nastavení</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminTextVisualToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">🔤</span>
-            <span class="adminToolText">
-              <strong>Texty</strong>
-              <small>Živé ladění velikostí textů pro Mobil i PC v rem</small>
-            </span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
-          <button id="adminPlannerIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
-            <span class="adminToolIcon" aria-hidden="true">◫</span>
-            <span class="adminToolText">
-              <strong>Ikony položek Plánu</strong>
-              <small id="adminPlannerIconsToolDescription">Metadata ikony v agendě jsou zobrazené</small>
-            </span>
-            <span id="adminPlannerIconsToolState" class="adminToolToggle">Zapnuto</span>
-          </button>
-
-          <button id="adminReminderIconsToolButton" class="adminToolCard adminToolCardToggle" type="button" aria-pressed="true">
-            <span class="adminToolIcon" aria-hidden="true">☷</span>
-            <span class="adminToolText">
-              <strong>Ikony položek Připomínek</strong>
-              <small id="adminReminderIconsToolDescription">Metadata ikony v kartách jsou zobrazené</small>
-            </span>
-            <span id="adminReminderIconsToolState" class="adminToolToggle">Zapnuto</span>
-          </button>
         </div>
       </section>
 
@@ -2755,18 +2763,6 @@
   <!-- Univerzální výběrový modal pro nastavení -->
   <script src="choiceModal.js?v=20260915-modal-close-keyboard-533"></script>
   <script src="themes.js?v=656-theme-pack"></script>
-  <script src="notesVisualTuning.js?v=658at-icon-size-split"></script>
-  <script src="notesVisualPanel.js?v=658at-icon-size-split"></script>
-  <script src="desktopNotesVisualTuning.js?v=658as-visual-lab-audit"></script>
-  <script src="desktopNotesVisualPanel.js?v=658as-visual-lab-audit"></script>
-  <script src="plannerVisualTuning.js?v=658at-icon-size-split"></script>
-  <script src="plannerVisualPanel.js?v=658at-icon-size-split"></script>
-  <script src="desktopPlannerVisualTuning.js?v=658bo-filter-width"></script>
-  <script src="desktopPlannerVisualPanel.js?v=658ah-reminders-timeline"></script>
-  <script src="documentsVisualTuning.js?v=658aw-full-audit"></script>
-  <script src="documentsVisualPanel.js?v=658v-documents-visual-live"></script>
-  <script src="textVisualTuning.js?v=658bm-keyboard-text-checkpoint"></script>
-  <script src="textVisualPanel.js?v=658ba-resizable-panel"></script>
   <div id="lubaTestBackendBadge" class="lubaTestBackendBadge" hidden aria-live="polite">
     TEST · LUBASERVER
   </div>
@@ -2839,7 +2835,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=679h1-server-clarity-guide"></script>
+  <script src="adminDashboard.js?v=682E-one-visual-debug"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2889,7 +2885,7 @@
   <script src="learningDictionarySync.js?v=660b-learning-dictionary-sync-v1"></script>
 
   <!-- Debug Hub – samostatný admin nástroj; diagnostika se zapíná jen na vyžádání. -->
-  <script src="debugHub.js?v=682B-module-persist"></script>
+  <script src="debugHub.js?v=682E-remove-visual-lab"></script>
   
 </body>
 

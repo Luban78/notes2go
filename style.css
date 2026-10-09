@@ -17396,3 +17396,541 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
     color: rgba(255, 255, 255, 0.76);
   }
 }
+
+
+/* ==============================================================
+   682E – pevné výchozí hodnoty vzhledu v projektu.
+   Nahrazují staré VisualTuning/VisualPanel runtime přepisy.
+   Nikdy nečíst produkční vzhled z localStorage.
+   Vlastní finální úpravy patří do debug*Generated.css.
+   ============================================================== */
+:root {
+  --luba-notes-cards-border-width: 2px;
+  --luba-notes-cards-border-strength: 18%;
+  --luba-notes-cards-border-base: 82%;
+  --luba-notes-cards-radius: 22px;
+  --luba-notes-cards-size: 18px;
+  --luba-notes-tags-border-width: 2px;
+  --luba-notes-tags-border-strength: 18%;
+  --luba-notes-tags-border-base: 82%;
+  --luba-notes-tags-radius: 15px;
+  --luba-notes-tags-size: 42px;
+  --luba-notes-primary-border-width: 1px;
+  --luba-notes-primary-border-strength: 18%;
+  --luba-notes-primary-border-base: 82%;
+  --luba-notes-primary-radius: 15px;
+  --luba-notes-primary-size: 42px;
+  --luba-notes-search-border-width: 1px;
+  --luba-notes-search-border-strength: 18%;
+  --luba-notes-search-border-base: 82%;
+  --luba-notes-search-radius: 14px;
+  --luba-notes-search-size: 42px;
+  --luba-notes-actions-border-width: 1px;
+  --luba-notes-actions-border-strength: 18%;
+  --luba-notes-actions-border-base: 82%;
+  --luba-notes-actions-radius: 14px;
+  --luba-notes-actions-size: 42px;
+  --luba-notes-traffic-border-width: 1px;
+  --luba-notes-traffic-border-strength: 18%;
+  --luba-notes-traffic-border-base: 82%;
+  --luba-notes-traffic-radius: 12px;
+  --luba-notes-traffic-size: 46px;
+  --luba-notes-modules-border-width: 1px;
+  --luba-notes-modules-border-strength: 18%;
+  --luba-notes-modules-border-base: 82%;
+  --luba-notes-modules-radius: 12px;
+  --luba-notes-modules-size: 52px;
+  --luba-notes-fab-border-width: 1px;
+  --luba-notes-fab-border-strength: 18%;
+  --luba-notes-fab-border-base: 82%;
+  --luba-notes-fab-radius: 35px;
+  --luba-notes-fab-size: 70px;
+  --luba-notes-primary-icon-size: 27px;
+  --luba-notes-primary-classic-icon-size: 20px;
+  --luba-notes-primary-icon-stroke: 1.25px;
+  --luba-notes-layout-offset-y: 13px;
+  --luba-notes-layout-actions-filters-gap: 5px;
+  --luba-notes-layout-filter-gap: 5px;
+  --luba-notes-layout-tags-gap: 5px;
+  --luba-notes-layout-row-gap: 5px;
+  --luba-notes-top-control-size: 42px;
+  --luba-notes-layout-tags-cards-gap: 5px;
+  --luba-notes-layout-card-column-gap: 5px;
+  --luba-notes-layout-card-row-gap: 5px;
+  --ln-dnv-modules-border-width: 1px;
+  --ln-dnv-modules-border-strength: 18%;
+  --ln-dnv-modules-border-base: 82%;
+  --ln-dnv-modules-radius: 13px;
+  --ln-dnv-modules-size: 54px;
+  --ln-dnv-modules-icon-size: 24px;
+  --ln-dnv-modules-icon-stroke: 1.5;
+  --ln-dnv-modules-classic-icon-size: 24px;
+  --ln-dnv-traffic-border-width: 1px;
+  --ln-dnv-traffic-border-strength: 18%;
+  --ln-dnv-traffic-border-base: 82%;
+  --ln-dnv-traffic-radius: 12px;
+  --ln-dnv-traffic-size: 22px;
+  --ln-dnv-search-border-width: 1px;
+  --ln-dnv-search-border-strength: 18%;
+  --ln-dnv-search-border-base: 82%;
+  --ln-dnv-search-radius: 13px;
+  --ln-dnv-search-size: 420px;
+  --ln-dnv-search-icon-size: 22px;
+  --ln-dnv-search-icon-stroke: 1.5;
+  --ln-dnv-search-classic-icon-size: 22px;
+  --ln-dnv-primary-border-width: 1px;
+  --ln-dnv-primary-border-strength: 18%;
+  --ln-dnv-primary-border-base: 82%;
+  --ln-dnv-primary-radius: 13px;
+  --ln-dnv-primary-size: 50px;
+  --ln-dnv-primary-icon-size: 22px;
+  --ln-dnv-primary-icon-stroke: 1.5;
+  --ln-dnv-primary-classic-icon-size: 22px;
+  --ln-dnv-actions-border-width: 1px;
+  --ln-dnv-actions-border-strength: 18%;
+  --ln-dnv-actions-border-base: 82%;
+  --ln-dnv-actions-radius: 13px;
+  --ln-dnv-actions-size: 50px;
+  --ln-dnv-actions-icon-size: 22px;
+  --ln-dnv-actions-icon-stroke: 1.5;
+  --ln-dnv-actions-classic-icon-size: 22px;
+  --ln-dnv-tags-border-width: 1px;
+  --ln-dnv-tags-border-strength: 18%;
+  --ln-dnv-tags-border-base: 82%;
+  --ln-dnv-tags-radius: 11px;
+  --ln-dnv-tags-size: 38px;
+  --ln-dnv-cards-border-width: 1px;
+  --ln-dnv-cards-border-strength: 18%;
+  --ln-dnv-cards-border-base: 82%;
+  --ln-dnv-cards-radius: 17px;
+  --ln-dnv-cards-size: 16px;
+  --ln-dnv-fab-border-width: 1px;
+  --ln-dnv-fab-border-strength: 18%;
+  --ln-dnv-fab-border-base: 82%;
+  --ln-dnv-fab-radius: 35px;
+  --ln-dnv-fab-size: 70px;
+  --ln-dnv-layout-offsetY: 0px;
+  --ln-dnv-layout-toolbarVyska: 50px;
+  --ln-dnv-layout-toolbarMezera: 8px;
+  --ln-dnv-layout-filtryMezera: 7px;
+  --ln-dnv-layout-toolbarStitkyMezera: 8px;
+  --ln-dnv-layout-stitkyMezera: 8px;
+  --ln-dnv-layout-stitkyKartyMezera: 10px;
+  --ln-dnv-layout-kartySloupceMezera: 14px;
+  --ln-dnv-layout-kartyRadkyMezera: 14px;
+  --ln-dnv-layout-sidebarSirka: 236px;
+  --ln-dnv-layout-sidebarPolozkaVyska: 46px;
+  --ln-dnv-layout-sidebarIkonaVelikost: 20px;
+  --ln-dnv-layout-sidebarKlasikIkonaVelikost: 20px;
+  --ln-dnv-layout-sidebarTextVelikost: 15px;
+  --ln-dnv-layout-sidebarMezera: 7px;
+  --ln-dnv-layout-sidebarRadius: 11px;
+  --ln-dnv-layout-sidebarLogoVelikost: 50px;
+  --ln-dnv-layout-sidebarPaddingX: 16px;
+  --ln-dnv-toolbar-height: 50px;
+  --ln-dnv-toolbar-gap: 8px;
+  --ln-dnv-filter-gap: 7px;
+  --ln-dnv-search-width: 420px;
+  --ln-dnv-filter-width: 50px;
+  --ln-dnv-tag-height: 38px;
+  --ln-dnv-tag-gap: 8px;
+  --ln-dnv-card-padding: 16px;
+  --ln-dnv-card-radius: 17px;
+  --ln-dnv-tag-radius: 11px;
+  --ln-dnv-filter-radius: 13px;
+  --ln-dnv-toolbar-radius: 13px;
+  --ln-dnv-sidebar-width: 236px;
+  --ln-dnv-sidebar-item-height: 46px;
+  --ln-dnv-sidebar-icon-size: 20px;
+  --ln-dnv-sidebar-classic-icon-size: 20px;
+  --ln-dnv-sidebar-text-size: 15px;
+  --ln-dnv-sidebar-gap: 7px;
+  --ln-dnv-sidebar-radius: 11px;
+  --ln-dnv-sidebar-logo-size: 50px;
+  --ln-dnv-sidebar-pad-x: 16px;
+  --ln-pv-subnav-height: 42px;
+  --ln-pv-subnav-radius: 10px;
+  --ln-pv-subnav-gap: 9px;
+  --ln-pv-day-height: 40px;
+  --ln-pv-day-radius: 12px;
+  --ln-pv-day-gap: 4px;
+  --ln-pv-agenda-header-height: 52px;
+  --ln-pv-agenda-header-radius: 14px;
+  --ln-pv-agenda-header-gap: 8px;
+  --ln-pv-agenda-item-pad-y: 2px;
+  --ln-pv-agenda-item-radius: 0px;
+  --ln-pv-agenda-item-gap: 0px;
+  --ln-pv-rem-area-height: 42px;
+  --ln-pv-rem-area-radius: 15px;
+  --ln-pv-rem-area-gap: 14px;
+  --ln-pv-rem-status-pad-y: 7px;
+  --ln-pv-rem-status-radius: 10px;
+  --ln-pv-rem-status-gap: 18px;
+  --ln-pv-rem-item-pad-y: 10px;
+  --ln-pv-rem-item-radius: 10px;
+  --ln-pv-rem-item-gap: 5px;
+  --ln-pv-icon-size: 18px;
+  --ln-pv-classic-icon-size: 18px;
+  --ln-pv-icon-stroke: 1.85;
+  --ln-dpv-screen-width: 1248px;
+  --ln-dpv-calendar-share: 49%;
+  --ln-dpv-grid-width: 570px;
+  --ln-dpv-day-height: 51px;
+  --ln-dpv-day-gap: 5px;
+  --ln-dpv-day-radius: 10px;
+  --ln-dpv-day-font: 17px;
+  --ln-dpv-agenda-columns: 1;
+  --ln-dpv-agenda-pad: 12px;
+  --ln-dpv-agenda-radius: 14px;
+  --ln-dpv-item-font: 15px;
+  --ln-dpv-item-pad-y: 7px;
+  --ln-dpv-item-min-height: 48px;
+  --ln-dpv-item-gap: 9px;
+  --ln-dpv-time-width: 62px;
+  --ln-dpv-subnav-height: 54px;
+  --ln-dpv-subnav-radius: 13px;
+  --ln-dpv-subnav-gap: 12px;
+  --ln-dpv-subnav-font: 16px;
+  --ln-dpr-filter-width: 310px;
+  --ln-dpr-row-min-height: 44px;
+  --ln-dpr-row-font: 16px;
+  --ln-dpr-time-font: 16px;
+  --ln-dpr-group-font: 17px;
+  --ln-dpr-group-gap: 17px;
+  --ln-dpr-row-radius: 10px;
+  --ln-dv-section-pad: 9px;
+  --ln-dv-section-radius: 15px;
+  --ln-dv-section-gap: 7px;
+  --ln-dv-folder-height: 70px;
+  --ln-dv-folder-radius: 13px;
+  --ln-dv-folder-gap: 0px;
+  --ln-dv-search-height: 40px;
+  --ln-dv-search-radius: 13px;
+  --ln-dv-search-gap: 8px;
+  --ln-dv-filter-height: 30px;
+  --ln-dv-filter-radius: 7px;
+  --ln-dv-filter-gap: 5px;
+  --ln-dv-file-pad-y: 4px;
+  --ln-dv-file-radius: 9px;
+  --ln-dv-file-gap: 3px;
+}
+
+/* Notes primary icon baseline from the removed tuning renderer. */
+.categoryTabs > button.categoryTabIconOnly .categoryTabIcon {
+  width: var(--luba-notes-primary-icon-size) !important;
+  height: var(--luba-notes-primary-icon-size) !important;
+}
+.categoryTabs > button.categoryTabIconOnly .categoryTabIcon .lubaSvgIcon {
+  width: var(--luba-notes-primary-icon-size) !important;
+  height: var(--luba-notes-primary-icon-size) !important;
+  stroke-width: var(--luba-notes-primary-icon-stroke) !important;
+}
+.categoryTabs > button.categoryTabIconOnly .categoryTabIcon:not(:has(.lubaSvgIcon)) {
+  font-size: var(--luba-notes-primary-classic-icon-size) !important;
+  width: var(--luba-notes-primary-classic-icon-size) !important;
+  height: var(--luba-notes-primary-classic-icon-size) !important;
+}
+
+/* Původní výchozí typografie z Text Visual Tuning, teď statické CSS. */
+@media (max-width: 1099px), (hover: none), (pointer: coarse) {
+  body .moduleTabText { font-size: 0.85rem !important; }
+
+  body #searchNotes { font-size: 0.95rem !important; }
+
+  body .categoryTabs > .categoryTab:not(.categoryTabIconOnly) { font-size: 1.10rem !important; }
+
+  body #tagFilterButtons .categoryTab { font-size: 0.94rem !important; }
+
+  body .mainMenuLabel { font-size: 0.90rem !important; }
+
+  body .accountPlanMenuInfo,
+  body .accountPlanMenuBadge { font-size: 0.78rem !important; }
+
+  body .syncTrafficBar { font-size: 0.63rem !important; }
+
+  body .appToast { font-size: 0.88rem !important; }
+
+  body .taskCard h3 { font-size: 0.90rem !important; }
+
+  body .taskCard .taskNoteText { font-size: 1.00rem !important; }
+
+  body .taskCard p:not(.taskNoteText) { font-size: 0.81rem !important; }
+
+  body .taskTag { font-size: 0.81rem !important; }
+
+  body .cardMenu button { font-size: 1.00rem !important; }
+
+  body #noSearchResults { font-size: 1.00rem !important; }
+
+  body .noteBacklinksTitle { font-size: 0.82rem !important; }
+
+  body .noteBacklinkName { font-size: 0.88rem !important; }
+
+  body #modalTitle { font-size: 1.50rem !important; }
+
+  body .ln-v2-editor { font-size: 1.15rem !important; }
+
+  body .editorTopBar .dateTimePickerButton > span:last-child { font-size: 0.88rem !important; }
+
+  body .editorTopBar .editorToolbarPanel .editorPanelVolba { font-size: 1.00rem !important; }
+
+  body .selectionMenu button { font-size: 0.81rem !important; }
+
+  body .editorNadpis.h1 { font-size: 2.00rem !important; }
+
+  body .editorNadpis.h2 { font-size: 1.60rem !important; }
+
+  body .editorNadpis.h3 { font-size: 1.30rem !important; }
+
+  body .editorLinkDialog input,
+  body .editorLinkDialog textarea,
+  body .editorLinkActions button { font-size: 1.00rem !important; }
+
+  body .plannerSubnavButton > span:last-child { font-size: 1.00rem !important; }
+
+  body .calendarHeader h2 { font-size: 1.10rem !important; }
+
+  body .calendarWeekdays { font-size: 0.81rem !important; }
+
+  body .calendarDay { font-size: 0.90rem !important; }
+
+  body .calendarSelectedDateButton { font-size: 0.90rem !important; }
+
+  body .calendarWeekNumber { font-size: 0.90rem !important; }
+
+  body .calendarAgenda h3 { font-size: 1.06rem !important; }
+
+  body .calendarAgendaItem { font-size: 1.00rem !important; }
+
+  body .reminderQuickPlannerTask .reminderQuickHeader h3 { font-size: 1.18rem !important; }
+
+  body .reminderQuickPlannerTask button { font-size: 0.95rem !important; }
+
+  body .remindersFilter { font-size: 0.94rem !important; }
+
+  body .remindersStatusTab { font-size: 0.88rem !important; }
+
+  body .remindersGroup h3 { font-size: 0.88rem !important; }
+
+  body .reminderItemTime { font-size: 0.94rem !important; }
+
+  body .reminderItemTitle { font-size: 1.00rem !important; }
+
+  body .reminderItemPreview { font-size: 0.88rem !important; }
+
+  body .reminderQuickHeader h3 { font-size: 1.05rem !important; }
+
+  body .reminderQuickLabel,
+  body .reminderQuickDateTime label { font-size: 0.78rem !important; }
+
+  body .reminderDelayGrid button,
+  body .reminderQuickPrimary,
+  body .reminderQuickFooter button { font-size: 0.90rem !important; }
+
+  body .documentsV1SectionHeader h3 { font-size: 1.00rem !important; }
+
+  body .documentsV1SectionHeader small,
+  body .documentsFilesSectionHeader small { font-size: 0.80rem !important; }
+
+  body .documentsFolderCardName { font-size: 0.95rem !important; }
+
+  body .documentsFolderCard small { font-size: 0.80rem !important; }
+
+  body .documentsSearchBox input { font-size: 0.85rem !important; }
+
+  body .documentsFileFilter,
+  body .documentsTrashButton { font-size: 0.80rem !important; }
+
+  body .documentsFileMain strong { font-size: 0.85rem !important; }
+
+  body .documentsFileMain small { font-size: 0.65rem !important; }
+
+  body .documentsEpubContent { --epub-reader-base-size: 1.40rem !important; }
+
+  body .documentsSqlCode { font-size: 0.81rem !important; }
+
+  body .settingsHeader h2 { font-size: 1.50rem !important; }
+
+  body .settingsSection h3 { font-size: 0.81rem !important; }
+
+  body .settingsSection button,
+  body .fontSizeSetting { font-size: 1.00rem !important; }
+
+  body .choiceDialogTitle { font-size: 1.25rem !important; }
+
+  body .choiceDialogOption { font-size: 1.06rem !important; }
+
+  body .manageTagName { font-size: 1.00rem !important; }
+
+  body .appMessageDialog h3,
+  body .deleteConfirmBox h3 { font-size: 1.25rem !important; }
+
+  body .appMessageDialog p,
+  body .deleteConfirmBox p { font-size: 1.00rem !important; }
+
+  body .ln-lk-brand,
+  body .ln-lk-language { font-size: 0.75rem !important; }
+
+  body #lubaKeyboard .ln-lk-smartbar .ln-lk-suggestion { font-size: 0.94rem !important; }
+
+  body .ln-lk-key { font-size: 1.25rem !important; }
+
+  body .ln-lk-standard-number-row .ln-lk-key { font-size: 1.20rem !important; }
+
+  body .ln-lk-bottom-standard .ln-lk-key,
+  body .ln-lk-fn,
+  body .ln-lk-nav,
+  body .ln-lk-back,
+  body .ln-lk-enter { font-size: 1.00rem !important; }
+
+  body .ln-lk-candidate { font-size: 1.06rem !important; }
+
+  body .sharingModalHeader h3,
+  body .sharingIdentityHeader h3 { font-size: 1.19rem !important; }
+
+  body .sharingModalDescription,
+  body .sharingIdentityDescription { font-size: 0.88rem !important; }
+
+  body .sharingSmallButton { font-size: 0.88rem !important; }
+
+  body .chatContactText strong,
+  body .chatThreadTitleWrap strong { font-size: 1.00rem !important; }
+
+  body .chatContactText span,
+  body .chatStatus,
+  body .chatThreadStatus { font-size: 0.81rem !important; }
+
+  body .chatMessageBody { font-size: 1.00rem !important; }
+
+  body .chatMessageMeta { font-size: 0.63rem !important; }
+
+  body .loginBrand { font-size: 1.50rem !important; }
+
+  body .loginCard h2 { font-size: 1.75rem !important; }
+
+  body .loginCard input,
+  body .loginCard button { font-size: 1.00rem !important; }
+
+  body .adminDashboardHeader h2 { font-size: 1.35rem !important; }
+
+  body .adminToolText strong { font-size: 1.00rem !important; }
+
+  body .adminToolText small { font-size: 0.78rem !important; }
+
+  body #ln-debug-hub { font-size: 0.75rem !important; }
+
+  body .ln-vd-field,
+  body .ln-vd-select,
+  body .ln-vd-number,
+  body .ln-vd-selector { font-size: 0.75rem !important; }
+}
+
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body .moduleTabText { font-size: 1.20rem !important; }
+
+  body #searchNotes { font-size: 1.10rem !important; }
+
+  body .desktopCategoryActions .categoryTab:not(.categoryTabIconOnly),
+  body .categoryTabs > .categoryTab:not(.categoryTabIconOnly) { font-size: 0.95rem !important; }
+
+  body #tagFilterButtons .categoryTab { font-size: 1.00rem !important; }
+
+  body .syncTrafficBar { font-size: 0.70rem !important; }
+
+  body .desktopSidebarBrandText { font-size: 1.35rem !important; }
+
+  body .desktopSidebarButton > span:last-child { font-size: 0.95rem !important; }
+
+  body .desktopSidebarFooter { font-size: 0.85rem !important; }
+
+  body #desktopAdminDashboardButton > span:last-child { font-size: 0.95rem !important; }
+
+  body .taskCard h3 { font-size: 1.15rem !important; }
+
+  body .taskCard .taskNoteText { font-size: 1.05rem !important; }
+
+  body .taskCard p:not(.taskNoteText) { font-size: 0.90rem !important; }
+
+  body .taskTag { font-size: 0.85rem !important; }
+
+  body .mainMenuLabel { font-size: 0.95rem !important; }
+
+  body #modalTitle { font-size: 1.50rem !important; }
+
+  body .ln-v2-editor { font-size: 1.20rem !important; }
+
+  body .editorToolbarPanel .editorPanelVolba { font-size: 1.00rem !important; }
+
+  body .selectionMenu button { font-size: 0.85rem !important; }
+
+  body .plannerSubnavButton > span:last-child { font-size: 1.05rem !important; }
+
+  body .calendarHeader h2 { font-size: 1.40rem !important; }
+
+  body .calendarWeekdays { font-size: 1.05rem !important; }
+
+  body .calendarDay { font-size: 1.10rem !important; }
+
+  body .calendarAgenda h3 { font-size: 0.98rem !important; }
+
+  body .calendarAgendaItem { font-size: 0.94rem !important; }
+
+  body .calendarSelectedDateButton { font-size: 0.94rem !important; }
+
+  body .calendarWeekNumber { font-size: 0.94rem !important; }
+
+  body .desktopRemindersFilterPanel h2,
+  body .desktopRemindersTimelineHeader h2 { font-size: 1.30rem !important; }
+
+  body .desktopReminderSearch input { font-size: 0.90rem !important; }
+
+  body .desktopReminderFilterButton { font-size: 0.95rem !important; }
+
+  body .desktopReminderFilterCount { font-size: 0.80rem !important; }
+
+  body .desktopReminderTimelineActions > button { font-size: 0.88rem !important; }
+
+  body .desktopReminderDayTitle { font-size: 1.10rem !important; }
+
+  body .desktopReminderTimelineRow .reminderItemTime { font-size: 1.00rem !important; }
+
+  body .desktopReminderTimelineRow .reminderItemTitle { font-size: 1.00rem !important; }
+
+  body .desktopReminderTimelineRow .reminderItemPreview { font-size: 0.88rem !important; }
+
+  body .desktopReminderAreaBadge,
+  body .desktopReminderRepeatBadge { font-size: 0.75rem !important; }
+
+  body .documentsV1SectionHeader h3 { font-size: 1.20rem !important; }
+
+  body .documentsFolderCardName { font-size: 0.88rem !important; }
+
+  body .documentsSearchBox input { font-size: 0.88rem !important; }
+
+  body .documentsFileFilter,
+  body .documentsTrashButton { font-size: 0.95rem !important; }
+
+  body .documentsFileMain strong { font-size: 0.88rem !important; }
+
+  body .documentsFileMain small { font-size: 0.69rem !important; }
+
+  body .documentsEpubContent { --epub-reader-base-size: 1.06rem !important; }
+
+  body .settingsHeader h2 { font-size: 1.60rem !important; }
+
+  body .settingsSection h3 { font-size: 1.10rem !important; }
+
+  body .settingsSection button { font-size: 1.20rem !important; }
+
+  body .adminDashboardHeader h2 { font-size: 1.50rem !important; }
+
+  body .adminToolText strong { font-size: 1.25rem !important; }
+
+  body .adminToolText small { font-size: 1.10rem !important; }
+
+  body .appMessageDialog h3,
+  body .choiceDialogTitle { font-size: 1.25rem !important; }
+
+  body .appMessageDialog p,
+  body .choiceDialogOption { font-size: 1.15rem !important; }
+}

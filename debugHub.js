@@ -2353,67 +2353,6 @@ async function zkopirujTextRobustne(text) {
 }
 
 
-function vytvorNotesVisualLabExport() {
-  const api = window.LubaNoteNotesVisualTuning;
-
-  if (!api || typeof api.ziskejStav !== "function") {
-    return [
-      "LUBANOTE NOTES VISUAL LAB EXPORT",
-      `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
-      `čas: ${new Date().toISOString()}`,
-      "stav: Notes Visual Lab API není dostupné"
-    ].join("\n");
-  }
-
-  let stav = null;
-
-  try {
-    stav = api.ziskejStav();
-  } catch (chyba) {
-    return [
-      "LUBANOTE NOTES VISUAL LAB EXPORT",
-      `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
-      `čas: ${new Date().toISOString()}`,
-      `chyba: ${chyba?.message || String(chyba)}`
-    ].join("\n");
-  }
-
-  return [
-    "LUBANOTE NOTES VISUAL LAB EXPORT",
-    `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
-    `prostředí: ${prostredi()}`,
-    `téma: ${aktivniTema()}`,
-    `čas: ${new Date().toISOString()}`,
-    "",
-    "AKTUÁLNÍ NASTAVENÍ:",
-    JSON.stringify(stav, null, 2)
-  ].join("\n");
-}
-
-async function zkopirujNotesVisualLab(tlacitko) {
-  const puvodni = tlacitko.textContent;
-  let zkopirovano = false;
-
-  try {
-    zkopirovano = await zkopirujTextRobustne(
-      vytvorNotesVisualLabExport()
-    );
-  } catch (chyba) {
-    console.warn(
-      "Debug Hub: kopírování Notes Visual Lab nastavení selhalo.",
-      chyba
-    );
-  }
-
-  tlacitko.textContent = zkopirovano
-    ? "Nastavení zkopírováno ✓"
-    : "Kopírování selhalo";
-
-  setTimeout(() => {
-    tlacitko.textContent = puvodni;
-  }, 1400);
-}
-
 async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
@@ -2518,12 +2457,6 @@ async function zkopirujReport(tlacitko) {
                   aria-label="Rychlost selection edge scrollu"
                 >
               </section>
-
-              <button
-                type="button"
-                class="ln-dh-menu-tool-button ln-dh-copy"
-                data-dh="copy-notes-visual"
-              >Notes Visual Lab – kopírovat nastavení</button>
             </div>
           </div>
 
@@ -2641,11 +2574,6 @@ async function zkopirujReport(tlacitko) {
 
       if (akce === "copy") {
         zkopirujReport(tlacitko);
-        return;
-      }
-
-      if (akce === "copy-notes-visual") {
-        zkopirujNotesVisualLab(tlacitko);
         return;
       }
 
