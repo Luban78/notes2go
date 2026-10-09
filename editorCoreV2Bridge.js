@@ -2596,6 +2596,20 @@
     }
   }
 
+  /* 682G – Android WebView nesmi vytvaret dalsi nativni selection, kdyz
+     uz jej vlastni selection engine prevzal (677D). Po ukonceni vlastniho
+     vyberu jednim tapem zablokuj i opozdeny selectstart stejneho gesta.
+     Normalni volbu slova pri prvnim dvojtapu zustava nedotcena. */
+  let v2NativeSelectstartBlokovatDo = 0;
+  function blokujV2SoubeznyNativeSelectstart(event) {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || !hostitel?.contains(event.target)) return;
+    const vlastniBezi = !!(v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed);
+    if (!vlastniBezi && performance.now() >= v2NativeSelectstartBlokovatDo) return;
+    if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select")) return;
+    if (event.cancelable) event.preventDefault();
+  }
+  document.addEventListener("selectstart", blokujV2SoubeznyNativeSelectstart, { capture: true, passive: false });
+
   function zrusV2OznaceniKlikemMimo(event) {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
@@ -2610,6 +2624,7 @@
     const vlastni = v2SelectionScroll?.range;
     if (vlastni && !vlastni.collapsed) {
       if (jeBodUvnitřRozsahu(vlastni, event.clientX, event.clientY)) return;
+      v2NativeSelectstartBlokovatDo = performance.now() + 350;
       zrusV2SelectionScrollStav(v2SelectionScroll);
       /* Nejdřív vypnout custom guard/user-select:none; pak teprve
          přenést caret na uživatelem zvolený DOM bod přes existující Core. */
@@ -4185,6 +4200,7 @@
     }
 
     if (stav.range && !jeBodUvnitřRozsahu(stav.range, x, y)) {
+      v2NativeSelectstartBlokovatDo = performance.now() + 350;
       let zruseno = core()?.zrusVyberNaBoduProSelectionMenu?.(x, y) === true;
       if (!zruseno) {
         try { window.getSelection()?.removeAllRanges?.(); zruseno = true; } catch (_error) {}
