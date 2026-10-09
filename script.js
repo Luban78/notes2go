@@ -4397,15 +4397,18 @@ async function openTaskEditorById(taskId) {
      * Přesně tím se dříve vracel smazaný obrázek i celá karta.
      */
     try {
-      const tokenSharedState = window.LubaNoteStartupDiag?.zacni?.("OPEN SHARED STATE");
-      await window.LubaNoteSharingNotes
-        ?.zajistiAktualniSharedStav?.();
-      window.LubaNoteStartupDiag?.konec?.(tokenSharedState);
+      /* 680G – typ již uložené poznámky čteme okamžitě z místního
+       * seznamu sdílených ID. Online aktualizaci obstarává Shared
+       * Realtime / refresh mimo otevírání editoru. Nečekáme na síť. */
+      const tokenSharedState = window.LubaNoteStartupDiag?.zacni?.("OPEN SHARED STATE LOCAL");
+      const jeVlastniSdilena = window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(taskId) === true;
+      window.LubaNoteStartupDiag?.konec?.(
+        tokenSharedState,
+        jeVlastniSdilena ? "OWNER" : "PRIVATE"
+      );
 
-      if (
-        window.LubaNoteSharingNotes
-          ?.jeVlastniSdilenaPoznamka?.(taskId)
-      ) {
+      if (jeVlastniSdilena) {
         const tokenSharedOpen = window.LubaNoteStartupDiag?.zacni?.("OPEN OWNER SHARED EDITOR");
         const vysledekSharedOpen = await window.LubaNoteSharedEditor
           ?.otevriSdilenouEditaci?.(taskId);

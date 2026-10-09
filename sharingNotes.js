@@ -14,6 +14,10 @@
 
 (() => {
   const CACHE_PREFIX = "lubanoteSharedNotesV1:";
+  /* 680G – malá, účetně oddělená lokální evidence vlastních Shared ID.
+   * Na rozdíl od velké cache poznámek neselže kvůli Data URL obrázkům.
+   * Aktualizuje se jen po úspěšném kompletním serverovém načtení. */
+  const OWNER_IDS_PREFIX = "lubanoteOwnedSharedIdsV1:";
   const CACHE_DB_NAME = "lubanoteSharedNotesCache";
   const CACHE_DB_VERSION = 1;
   const CACHE_DB_STORE = "sharedNotes";
@@ -30,6 +34,7 @@
   let aktualniUserId = localStorage.getItem(LOCAL_OWNER_KEY) || null;
   let startUiPripraven = false;
   let sdilenePoznamky = [];
+  let lokalniVlastniSdileneId = new Set();
   let viewer = null;
   let viewerNoteId = null;
   let probihajiciNacteni = null;
@@ -129,6 +134,44 @@
 
   function cacheKey(userId = ziskejUserId()) {
     return userId ? `${CACHE_PREFIX}${userId}` : null;
+  }
+
+  function nactiLokalniVlastniSdileneId(userId = ziskejUserId()) {
+    if (!userId) return new Set();
+    try {
+      const raw = localStorage.getItem(`${OWNER_IDS_PREFIX}${userId}`);
+      const zaznam = raw ? JSON.parse(raw) : null;
+      if (zaznam?.userId !== userId || !Array.isArray(zaznam.ids)) {
+        return new Set();
+      }
+      return new Set(zaznam.ids.filter(
+        (id) => typeof id === "string" && id.length > 0
+      ));
+    } catch (error) {
+      console.warn("Sdílení: lokální evidence vlastních sdílených ID není dostupná.", error);
+      return new Set();
+    }
+  }
+
+  function ulozLokalniVlastniSdileneId(userId, notes) {
+    const ids = (Array.isArray(notes) ? notes : [])
+      .filter((note) => note?.__lubanoteSharedRole === "owner")
+      .map((note) => String(note.id || "").trim())
+      .filter(Boolean);
+
+    /* In-memory pravda se aktualizuje i při plném localStorage. */
+    lokalniVlastniSdileneId = new Set(ids);
+    if (!userId || userId !== ziskejUserId()) return;
+
+    try {
+      localStorage.setItem(`${OWNER_IDS_PREFIX}${userId}`, JSON.stringify({
+        userId,
+        fetchedAt: new Date().toISOString(),
+        ids
+      }));
+    } catch (error) {
+      console.warn("Sdílení: malou evidenci sdílených ID se nepodařilo uložit.", error);
+    }
   }
 
   function normalizujUsername(hodnota) {
@@ -1358,6 +1401,8 @@
 
         serverovyStavNacten = true;
         sdilenePoznamky = nove;
+        /* 680G: sdílení patří k místním metadatům, ne k čekání při open. */
+        ulozLokalniVlastniSdileneId(userId, nove);
         ulozCache(nove);
 
         if (odebraneSharedIds.length) {
@@ -1489,6 +1534,7 @@
     aktualniUserId = userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
     serverovyStavNacten = false;
     sdilenePoznamky = nactiCache();
+    lokalniVlastniSdileneId = nactiLokalniVlastniSdileneId(aktualniUserId);
     void doplnPlnouCachePokudJeAktualni(aktualniUserId);
 
     if (typeof window.renderTasks === "function") {
@@ -1551,6 +1597,7 @@
   obalAndroidBack();
 
   sdilenePoznamky = nactiCache();
+  lokalniVlastniSdileneId = nactiLokalniVlastniSdileneId();
   void doplnPlnouCachePokudJeAktualni(ziskejUserId());
   vykresliSdileneKarty();
 
@@ -1562,6 +1609,7 @@
     aktualniUserId = null;
     serverovyStavNacten = false;
     sdilenePoznamky = [];
+    lokalniVlastniSdileneId = new Set();
     zavriReadOnly();
 
     if (typeof window.renderTasks === "function") {
@@ -1668,11 +1716,14 @@
       return false;
     }
 
-    return sdilenePoznamky.some(
-      (note) =>
-        note?.id === noteId &&
-        note?.__lubanoteSharedRole === "owner"
-    );
+    /* 680G – synchronní, lokální dotaz bez fetch/await. Malý index
+     * doplňuje existující cache a chrání owner kartu i při výpadku API. */
+    return lokalniVlastniSdileneId.has(String(noteId)) ||
+      sdilenePoznamky.some(
+        (note) =>
+          note?.id === noteId &&
+          note?.__lubanoteSharedRole === "owner"
+      );
   }
 
   function ziskejVlastniSdilenouPoznamku(noteId) {
