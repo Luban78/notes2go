@@ -259,7 +259,23 @@
 
     if (rect) return rect;
 
-    /* Prázdný odstavec / BR nemá spolehlivý collapsed Range rect. */
+    /* FIX 682C – při prázdném odstavci s <br> může být skutečné textové
+       místo napravo/vlevo od plovoucího obrázku. Collapsed Range pro
+       DIV:0 nemá v Chromium/WebView geometrii, ale BR ji má správnou.
+       Starý fallback na levý okraj DIV proto zobrazoval modelový kurzor
+       mimo skutečné místo psaní (a mimo nativní úchyt Androidu).
+       Jen čteme geometrii: neměníme DOM, model, selection ani historii. */
+    if (!text.length && !jeKodovyBlok(blok)) {
+      const prazdnyRadek = blokEl.querySelector(":scope > br[data-ln-v2-prazdny]");
+      if (prazdnyRadek) {
+        const brRect = prazdnyRadek.getBoundingClientRect();
+        if (Number.isFinite(brRect.left) && Number.isFinite(brRect.top) && brRect.height > 0) {
+          return { left: brRect.left, top: brRect.top, height: brRect.height };
+        }
+      }
+    }
+
+    /* Prázdný odstavec / BR bez geometrie: původní bezpečný fallback. */
     const r = blokEl.getBoundingClientRect();
     const styl = getComputedStyle(blokEl);
     const lineHeight = parseFloat(styl.lineHeight) || parseFloat(styl.fontSize) * 1.5 || 24;
