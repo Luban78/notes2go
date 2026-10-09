@@ -2861,6 +2861,12 @@
       user-select: none !important;
       -webkit-touch-callout: none !important;
     }
+    /* 682H – modelovy LubaCaret je vykreslovaci overlay pro PSANI.
+       V dobe vlastniho nesbaleneho vyberu nema svitit u stareho caretu
+       soucasne s kapkami selection (Chrome 154 podporuje :has()). */
+    body:has(.ln-v2-editor.${V2_SELECTION_CUSTOM_ACTIVE_CLASS}) .ln-v2-luba-caret {
+      display: none !important;
+    }
     .ln-v2-selection-magnifier {
       position: fixed;
       width: 148px;
@@ -2955,19 +2961,92 @@
     v2SelectionScrollHighlightRange = null;
   }
 
-  function ziskejV2SelectionHandleBody(range) {
-    try {
-      const rects = Array.from(range?.getClientRects?.() || []).filter((rect) => rect.width || rect.height);
-      if (!rects.length) return [];
-      const prvni = rects[0];
-      const posledni = rects[rects.length - 1];
-      return [
-        { x: prvni.left, y: prvni.bottom },
-        { x: posledni.right, y: posledni.bottom }
-      ];
-    } catch (_error) {
-      return [];
+  /* 682H – poloha handle patri presne ke START/END bodu DOM Range.
+     getClientRects() CELEHO vyberu vraci v PRE/code blocku i obdelnik
+     samotneho DIV a pomocneho Copy buttonu (a pri vyberu pres vice bloku
+     i dalsi netextove recty). Prvni/posledni rect tedy NENI spolehlive
+     poloha textoveho endpointu. Sbaleny Range na skutecnem hranicnim
+     DOM bodu meri caret; model ani skutecny selection tim nemenime. */
+  function ziskejV2TextovyBodProHandle(uzel, offset, zacatek) {
+    if (!uzel) return null;
+    if (uzel.nodeType === Node.TEXT_NODE) {
+      return { node: uzel, offset: Math.max(0, Math.min(uzel.nodeValue?.length || 0, Number(offset) || 0)) };
     }
+    if (uzel.nodeType !== Node.ELEMENT_NODE) return null;
+    const deti = Array.from(uzel.childNodes || []);
+    const index = Math.max(0, Math.min(deti.length, Number(offset) || 0));
+    const najdiText = (koren, odKonce) => {
+      if (!koren || koren.nodeType === Node.ELEMENT_NODE && koren.matches?.('button, figure, svg, [contenteditable="false"]')) return null;
+      if (koren.nodeType === Node.TEXT_NODE) return koren.nodeValue?.length ? koren : null;
+      const walker = document.createTreeWalker(koren, NodeFilter.SHOW_TEXT);
+      let prvni = null;
+      let posledni = null;
+      let node;
+      while ((node = walker.nextNode())) {
+        if (!node.nodeValue?.length || node.parentElement?.closest?.('button, figure, svg, [contenteditable="false"]')) continue;
+        if (!prvni) prvni = node;
+        posledni = node;
+        if (!odKonce) break;
+      }
+      return odKonce ? posledni : prvni;
+    };
+    /* Body Range v elementech (typicky PRE obal s ne-editovatelnym Copy
+       buttonem, prazdny radek a hranice bloku) nejsou textove pixely.
+       START preferuje nasledujici glyph, END predchozi glyph. */
+    const primarni = zacatek
+      ? Array.from({ length: deti.length - index }, (_, i) => [deti[index + i], false])
+      : Array.from({ length: index }, (_, i) => [deti[index - 1 - i], true]);
+    const zaloha = zacatek
+      ? Array.from({ length: index }, (_, i) => [deti[index - 1 - i], true])
+      : Array.from({ length: deti.length - index }, (_, i) => [deti[index + i], false]);
+    for (const [dite, odKonce] of [...primarni, ...zaloha]) {
+      const text = najdiText(dite, odKonce);
+      if (text) return { node: text, offset: odKonce ? text.nodeValue.length : 0 };
+    }
+    return null;
+  }
+
+  function ziskejV2SelectionHandleBod(range, strana) {
+    if (!range || range.collapsed) return null;
+    try {
+      const zacatek = strana === "start";
+      const uzel = zacatek ? range.startContainer : range.endContainer;
+      const offset = zacatek ? range.startOffset : range.endOffset;
+      if (!uzel?.isConnected) return null;
+      const textovy = ziskejV2TextovyBodProHandle(uzel, offset, zacatek);
+      const cilovyUzel = textovy?.node || uzel;
+      const cilovyOffset = textovy?.offset ?? offset;
+      const caret = document.createRange();
+      caret.setStart(cilovyUzel, cilovyOffset);
+      caret.collapse(true);
+      const rects = Array.from(caret.getClientRects?.() || []);
+      const rect = rects.find((r) => Number.isFinite(r.left) && Number.isFinite(r.bottom) && r.height > 0);
+      if (rect) return { x: rect.left, y: rect.bottom };
+
+      /* Fallback pro WebView bez collapsed rectu: pouzijeme jediný znak
+         pripojeny k tomuto endpointu, ne obdelnik pres cely code blok. */
+      if (cilovyUzel.nodeType === Node.TEXT_NODE && (cilovyUzel.nodeValue?.length || 0)) {
+        const delka = cilovyUzel.nodeValue.length;
+        const od = zacatek ? Math.min(cilovyOffset, delka - 1) : Math.max(0, cilovyOffset - 1);
+        const znak = document.createRange();
+        znak.setStart(cilovyUzel, od);
+        znak.setEnd(cilovyUzel, od + 1);
+        const glyph = Array.from(znak.getClientRects?.() || []).find((r) => r.height > 0);
+        if (glyph) return { x: zacatek ? glyph.left : glyph.right, y: glyph.bottom };
+      }
+      if (cilovyUzel.nodeType === Node.ELEMENT_NODE) {
+        const prazdny = cilovyUzel.matches?.('br') ? cilovyUzel : cilovyUzel.querySelector?.(':scope > br');
+        const br = prazdny?.getBoundingClientRect?.();
+        if (br?.height > 0) return { x: br.left, y: br.bottom };
+      }
+    } catch (_error) {}
+    return null;
+  }
+
+  function ziskejV2SelectionHandleBody(range) {
+    const zacatek = ziskejV2SelectionHandleBod(range, "start");
+    const konec = ziskejV2SelectionHandleBod(range, "end");
+    return zacatek && konec ? [zacatek, konec] : [];
   }
 
   function ziskejV2SelectionHandleBodProMenu(range, strana = "end") {
@@ -3324,17 +3403,17 @@
     if (!editor) return false;
 
     try {
-      const rects = Array.from(range.getClientRects?.() || []).filter((rect) => rect.width > 0 && rect.height > 0);
-      if (!rects.length) {
+      /* Stejne presne body jako pro blizky dotyk, kotvu menu a handle drag.
+         Jeden zdroj geometrie = zadne rozdilne umisteni kapky v code bloku. */
+      const konce = ziskejV2SelectionHandleBody(range);
+      if (konce.length !== 2) {
         skryjV2SelectionHandles();
         return false;
       }
-      const prvni = rects[0];
-      const posledni = rects[rects.length - 1];
       const editorRect = editor.getBoundingClientRect();
       const body = [
-        { el: v2SelectionHandleStart, x: prvni.left, y: prvni.bottom },
-        { el: v2SelectionHandleEnd, x: posledni.right, y: posledni.bottom }
+        { el: v2SelectionHandleStart, ...konce[0] },
+        { el: v2SelectionHandleEnd, ...konce[1] }
       ];
       for (const bod of body) {
         const viditelny = bod.y >= editorRect.top - 8 && bod.y <= editorRect.bottom + 8
@@ -4201,6 +4280,11 @@
 
     if (stav.range && !jeBodUvnitřRozsahu(stav.range, x, y)) {
       v2NativeSelectstartBlokovatDo = performance.now() + 350;
+      /* 682H – 682F spravne vypina custom rezim PRED nastavenim caretu
+         v click vetvi. Touchend vetvi to zustalo obracene: nastavila DOM
+         caret a nasledny reset/selectionchange mohl obnovit stary vyber.
+         Sjednoceni poradi se stejnym existujicim postupem z 682F. */
+      zrusV2SelectionScrollStav(stav);
       let zruseno = core()?.zrusVyberNaBoduProSelectionMenu?.(x, y) === true;
       if (!zruseno) {
         try { window.getSelection()?.removeAllRanges?.(); zruseno = true; } catch (_error) {}
@@ -4210,7 +4294,6 @@
       obnovToolbar();
       potlacV2SelectionScrollClickDo = performance.now() + 350;
       zapisSelectionScrollDiag("G14_TAP_COLLAPSE", event, `ok=${zruseno ? "Y" : "N"}`);
-      zrusV2SelectionScrollStav(stav);
       return;
     }
 

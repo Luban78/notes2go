@@ -7287,7 +7287,24 @@
       const codeCopyTlacitka = primeDeti.filter((dite) =>
         dite.matches?.("button.ln-v2-code-copy[data-v2-code-copy]")
       );
-      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka]);
+      /* 682H – sbalený Bullet rodič má vlastní ne-editovatelné tlačítko
+         s počtem přímých potomků. Renderer ho vkládá do DOM, ale DOM GUARD
+         ho dříve neznal; první mutation pak přerenderovala editor a během
+         označování zrušila živý Range. Kontrolujeme přesně jen tento helper. */
+      const badgeDeti = primeDeti.filter((dite) =>
+        dite.matches?.('button.ln-v2-list-child-badge[data-v2-list-toggle]')
+      );
+      const badgeOcekavan = jeBulletBlok(blok) && Boolean(blok.sbaleno)
+        && maPolozkaSeznamuDeti(b)
+        && Number(blokEl.dataset.lnV2ListChildCount || 0) > 0;
+      if (badgeDeti.length !== (badgeOcekavan ? 1 : 0)) {
+        return `blok ${b}: neplatný badge sbalené větve`;
+      }
+      if (badgeOcekavan && (
+        badgeDeti[0].dataset.v2ListToggle !== blok.id
+        || badgeDeti[0].textContent !== blokEl.dataset.lnV2ListChildCount
+      )) return `blok ${b}: jiné údaje badge sbalené větve`;
+      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka, ...badgeDeti]);
       if (primeDeti.some((dite) => !povoleneDeti.has(dite))) {
         return `blok ${b}: cizí přímý DOM prvek`;
       }
