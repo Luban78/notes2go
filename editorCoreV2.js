@@ -1144,6 +1144,20 @@
       predchoziSeznamUroven = uroven;
     });
 
+    /* FIX 682A – zachovat stávající V2 model obrázků, ale vrátit
+       editovatelný řádek ZA poslední fotografii. Starší poznámky mohou
+       končit přímo image blokem nebo Bullet/TODO s obrázkem; klik pod nimi
+       jinak nemá žádný modelový textový cíl a caret skočí PŘED obrázek.
+       Týká se jen konce dokumentu, existující řádky/obsah neměníme. */
+    const posledniBlok = dokument.bloky.at(-1);
+    if (
+      jeObrazkovyBlok(posledniBlok) ||
+      ((jeSeznamovyBlok(posledniBlok) || jeTodoBlok(posledniBlok)) &&
+        Array.isArray(posledniBlok.obrazky) && posledniBlok.obrazky.length > 0)
+    ) {
+      dokument.bloky.push(vytvorOdstavec(""));
+    }
+
     /* Caret musí mít vždy alespoň jeden skutečný textový blok. */
     if (!dokument.bloky.some(jeTextovyBlok)) {
       dokument.bloky.push(vytvorOdstavec(""));
@@ -2267,7 +2281,15 @@
     if (jeSeznamovyBlok(blok) || jeTodoBlok(blok)) {
       if (!Array.isArray(blok.obrazky)) blok.obrazky = [];
       blok.obrazky.push(obrazek);
-      novaPozice = { blok: cil.blok, offset: delka };
+      /* FIX 682A – při vložení obrázku do POSLEDNÍ položky seznamu
+         aktivní caret přesuneme až do editovatelného řádku za obrázkem.
+         Dříve zůstával uvnitř textu před needitovatelným figure. */
+      if (cil.blok === dokument.bloky.length - 1) {
+        dokument.bloky.push(vytvorOdstavec(""));
+        novaPozice = { blok: dokument.bloky.length - 1, offset: 0 };
+      } else {
+        novaPozice = { blok: cil.blok, offset: delka };
+      }
       vybranyObrazekId = obrazek.id;
       const novyVyber = { zacatek: novaPozice, konec: novaPozice, sbaleny: true };
       posledniPozice = { ...novaPozice };
@@ -2315,6 +2337,10 @@
     ulozenyFormatovaciVyber = klonVyberu(novyVyber);
     ulozZmenuDoHistorie(snapshotPred, "vložit obrázek");
     vykresli(novyVyber);
+    /* FIX 682A – původní PATCH 456 už umí vytvořit boční caret řádky
+       u plovoucího obrázku. Jen se při samotném vložení nevolal.
+       Pro samostatný obrázek tedy znovu používáme tento EXISTUJÍCÍ kód. */
+    naplanujV2RadkyVedleObrazku(obrazek.id);
     nastavStav("Obrázek vložen jako samostatný V2 modelový blok");
     zapisDebug?.(`EDITOR V2 | image insert | block=${obrazek.id}`);
     return true;
@@ -8311,6 +8337,14 @@
        první věty/bloku pro případ, že se klávesnice otevře bez tapu do textu. */
     const tokenRender = window.LubaNoteStartupDiag?.zacni?.("CORE RENDER DOCUMENT");
     vykresli(null);
+    /* FIX 682A – i staré uložené plovoucí obrázky otevíráme se stejnými
+       bočními řádky jako po změně nastavení. Použijeme beze změn PATCH 456. */
+    const posledniSamostatnyObrazek = [...dokument.bloky].reverse().find((blok) =>
+      jeObrazkovyBlok(blok) || (jeTextovyBlok(blok) && textBloku(blok).length > 0)
+    );
+    if (jeObrazkovyBlok(posledniSamostatnyObrazek)) {
+      naplanujV2RadkyVedleObrazku(posledniSamostatnyObrazek.id);
+    }
     window.LubaNoteStartupDiag?.konec?.(tokenRender, `blocks=${dokument?.bloky?.length || 0}`);
     skryjV2LubaCaret();
     odstranV2SelectionOverlay();
