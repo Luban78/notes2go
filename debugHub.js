@@ -2748,17 +2748,13 @@ async function zkopirujReport(tlacitko) {
       }
     }
 
-    /*
-     * PATCH 680A1 – Debug Hub se při běžném otevření vždy vrací na
-     * hlavní Start / sync / síť report. Ostatní moduly zůstávají dostupné
-     * přes rozbalovací nabídku a explicitní start* API je může spustit hned
-     * po otevření. Tím se po starém WebView Watchi neztratí hlavní startup
-     * diagnostika, kterou potřebujeme pro offline/sync/E2E testy.
-     */
-    selectModulu.value = "startup";
-    if (aktivniModul !== "startup") {
+    /* PATCH 682B – pri znovuotevreni zachovej bezici diagnostiku a jeji
+       report. Vychozi startup se spusti jen kdyz zadny modul nebezi. */
+    if (!aktivniModul) {
+      selectModulu.value = "startup";
       spustModul();
     } else {
+      selectModulu.value = aktivniModul;
       aktualizujStavHubu();
       prekresli();
     }
