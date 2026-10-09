@@ -2725,7 +2725,14 @@
   </div>
 
   <script src="startupDiagnostics.js?v=20260911-startup-console-quiet-423"></script>
-  <script src="build-version.js?v=680f-version-build-split"></script>
+  <!-- 680J – build-version.js se mění při každém deployi, proto nesmí
+       používat stále stejnou cache URL. Synchronní cache-buster zachová
+       původní pořadí: verze je načtena dřív než script.js. -->
+  <script>
+    document.write(
+      '<script src="build-version.js?v=' + Date.now() + '"><\\/script>'
+    );
+  </script>
 
   <!-- Jazyky: každý překlad je samostatný soubor -->
   <script src="lang-cs.js?v=676b-language-sweep"></script>
