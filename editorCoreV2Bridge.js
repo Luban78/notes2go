@@ -2674,6 +2674,8 @@
   const V2_SELECTION_HANDLE_ATTR = "data-ln-v2-selection-handle";
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
   const V2_SELECTION_EDGE_SPEED_DEFAULT = 450; /* PATCH 674C – final V1 tuning */
+  const V2_SELECTION_EDGE_SPEED_RELEASE_KEY = "lubanote_v2_selection_edge_speed_baseline";
+  const V2_SELECTION_EDGE_SPEED_RELEASE = "682D-450";
   const V2_SELECTION_LUPA_DRAG_PRAH = 4; /* PATCH 677C – px prstu před zobrazením lupy */
   const V2_SELECTION_HANDLE_NEAR_PRAH = 30; /* PATCH 677C – tolerantní převzetí kapky */
   let v2SelectionScrollHighlightObj = null;
@@ -2687,11 +2689,25 @@
   const V2_SELECTION_CUSTOM_ACTIVE_CLASS = "ln-v2-selection-custom-active";
   let v2SelectionEdgeScrollPxS = (() => {
     try {
-      const globalni = Number(window.LUBANOTE_V2_SELECTION_EDGE_SPEED);
-      if (Number.isFinite(globalni)) return Math.max(40, Math.min(900, globalni));
-      const ulozene = Number(localStorage.getItem(V2_SELECTION_EDGE_SPEED_KEY));
-      return Number.isFinite(ulozene) ? Math.max(40, Math.min(900, ulozene)) : V2_SELECTION_EDGE_SPEED_DEFAULT;
+      /* 682D – Schválená rychlost 450 px/s je produkční baseline pro
+         KAŽDOU instalaci, včetně těch se starou hodnotou 740 z ladění.
+         Jednorázově převezmeme release baseline, následné změny v
+         Debug Hubu zůstávají použitelné pro cílenou diagnostiku. */
+      if (localStorage.getItem(V2_SELECTION_EDGE_SPEED_RELEASE_KEY) !== V2_SELECTION_EDGE_SPEED_RELEASE) {
+        localStorage.setItem(V2_SELECTION_EDGE_SPEED_KEY, String(V2_SELECTION_EDGE_SPEED_DEFAULT));
+        localStorage.setItem(V2_SELECTION_EDGE_SPEED_RELEASE_KEY, V2_SELECTION_EDGE_SPEED_RELEASE);
+        return V2_SELECTION_EDGE_SPEED_DEFAULT;
+      }
+      const ulozeneRaw = localStorage.getItem(V2_SELECTION_EDGE_SPEED_KEY);
+      if (ulozeneRaw !== null) {
+        const ulozene = Number(ulozeneRaw);
+        if (Number.isFinite(ulozene) && ulozene >= 40 && ulozene <= 900) {
+          return Math.round(ulozene);
+        }
+      }
+      return V2_SELECTION_EDGE_SPEED_DEFAULT;
     } catch (_error) {
+      /* Pokud není úložiště dostupné, nesmí se použít starý global 740. */
       return V2_SELECTION_EDGE_SPEED_DEFAULT;
     }
   })();
