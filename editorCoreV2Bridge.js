@@ -2599,7 +2599,25 @@
   function zrusV2OznaceniKlikemMimo(event) {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
-    if (jeV2MoveInterakce(event)) return;
+    if (jeV2MoveInterakce(event) || v2SelectionScroll?.handleDrag) return;
+
+    /* 682F – Android custom selection žije mimo window.getSelection().
+       Po 677D je nativní DOM Range úmyslně prázdný, takže původní click
+       guard nikdy nezrušil označení, když WebView vynechal touchend
+       (např. po double-tap fallbacku s touchId=null). Následující caret
+       byl opět smazán selectionchange guardem; editor působil zamrzle.
+       Zruš jen tap MIMO uložený modelový Range, nedotýkej se handle dragu. */
+    const vlastni = v2SelectionScroll?.range;
+    if (vlastni && !vlastni.collapsed) {
+      if (jeBodUvnitřRozsahu(vlastni, event.clientX, event.clientY)) return;
+      zrusV2SelectionScrollStav(v2SelectionScroll);
+      /* Nejdřív vypnout custom guard/user-select:none; pak teprve
+         přenést caret na uživatelem zvolený DOM bod přes existující Core. */
+      core()?.zrusVyberNaBoduProSelectionMenu?.(event.clientX, event.clientY);
+      skryjV2SelectionMenu();
+      obnovToolbar();
+      return;
+    }
 
     const vyber = window.getSelection();
     const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
