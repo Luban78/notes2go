@@ -127,6 +127,41 @@ window.addEventListener(
   aktualizujLubaNoteVerziUI
 );
 
+/* 680H – GitHub Pages nesmí používat vlastní GITHUB_RUN_NUMBER.
+ * Pages workflow má svůj samostatný čítač běhů, zatímco Android APK
+ * používá vlastní čítač. Na GitHub Pages proto po startu načteme
+ * kanonickou verzi z produkčního app.lubanote.com, kterou
+ * lubanote-deploy drží na stejném build čísle jako APK.
+ * Když PROD není dostupný, ponecháme Pages hodnotu jako fallback. */
+(() => {
+  const host = String(window.location?.hostname || "").toLowerCase();
+  const jeGitHubPages = host.endsWith(".github.io");
+  if (!jeGitHubPages) return;
+
+  const produkcniBuild = document.createElement("script");
+  produkcniBuild.src =
+    `https://app.lubanote.com/build-version.js?ghpages=${Date.now()}`;
+  produkcniBuild.async = true;
+
+  produkcniBuild.addEventListener(
+    "load",
+    () => window.dispatchEvent(new Event("lubanote-version-ready")),
+    { once: true }
+  );
+
+  produkcniBuild.addEventListener(
+    "error",
+    () => {
+      console.warn(
+        "LubaNote version: PROD build se nepodařilo načíst, ponechávám GitHub Pages fallback."
+      );
+    },
+    { once: true }
+  );
+
+  document.head.appendChild(produkcniBuild);
+})();
+
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
 
