@@ -48,9 +48,44 @@ const aboutVersion =
 const settingsVersionValue =
   document.getElementById("settingsVersionValue");
 
-/* 680A5 + 680E – vždy viditelná verze klienta.
- * APK dostává 0.9.<run> při Android buildu. Web dostává WEB-<commit>
- * při lubanote-deploy. Lokální Live Server si webovou verzi načte z PROD. */
+/* 680A5 + 680F – vždy viditelná verze klienta.
+ * Interně může APK dál používat 0.9.<GitHub run>, ale uživatelsky se
+ * verze zobrazuje s oddělenou řadou a buildem: „v0.9 · build 764“.
+ * Web dostává stejné build číslo při lubanote-deploy; lokální Preview
+ * si build načte z PROD a navíc zobrazí značku LOCAL. */
+function ziskejLubaNoteVerziProUI() {
+  const syrovaVerze = String(window.LUBANOTE_VERSION || "").trim();
+  let build = String(window.LUBANOTE_BUILD || "").trim();
+  let rada = String(window.LUBANOTE_RELEASE || "").trim();
+
+  const apkShoda = syrovaVerze.match(/^(\d+\.\d+)\.(\d+)$/);
+  if (apkShoda) {
+    rada = rada || apkShoda[1];
+    build = build || apkShoda[2];
+  } else if (!rada && /^\d+\.\d+$/.test(syrovaVerze)) {
+    rada = syrovaVerze;
+  }
+
+  /* Přechodová kompatibilita se starším 680E server deployem. */
+  if (!rada) rada = "0.9";
+  if (!build && /^WEB-/i.test(syrovaVerze)) {
+    build = syrovaVerze.replace(/^WEB-/i, "");
+  }
+
+  const host = String(window.location?.hostname || "").toLowerCase();
+  const lokalni = host === "127.0.0.1" || host === "localhost";
+
+  const zaklad = `v${rada}${build ? ` · build ${build}` : ""}`;
+  return {
+    rada,
+    build,
+    lokalni,
+    text: lokalni ? `${zaklad} · LOCAL` : zaklad
+  };
+}
+
+window.ziskejLubaNoteVerziProUI = ziskejLubaNoteVerziProUI;
+
 function aktualizujLubaNoteVersionBadge() {
   let badge = document.getElementById("lubaNoteVersionBadge");
 
@@ -62,24 +97,25 @@ function aktualizujLubaNoteVersionBadge() {
     document.body.appendChild(badge);
   }
 
-  const verze = String(window.LUBANOTE_VERSION || "DEV").trim() || "DEV";
-  const build = String(window.LUBANOTE_BUILD || "").trim();
+  const info = ziskejLubaNoteVerziProUI();
+  badge.textContent = info.text;
 
-  badge.textContent = `v${verze}`;
-  badge.title = build && build !== verze
-    ? `LubaNote ${verze} · build ${build}`
-    : `LubaNote ${verze}`;
+  const commit = String(window.LUBANOTE_COMMIT || "").trim();
+  badge.title = commit
+    ? `LubaNote ${info.rada}${info.build ? ` · build ${info.build}` : ""} · commit ${commit}`
+    : `LubaNote ${info.rada}${info.build ? ` · build ${info.build}` : ""}`;
 }
 
 function aktualizujLubaNoteVerziUI() {
-  const verze = String(window.LUBANOTE_VERSION || "DEV").trim() || "DEV";
+  const info = ziskejLubaNoteVerziProUI();
+  const textBezPrefixu = `${info.rada}${info.build ? ` · build ${info.build}` : ""}${info.lokalni ? " · LOCAL" : ""}`;
 
   if (aboutVersion) {
-    aboutVersion.textContent = `Verze ${verze}`;
+    aboutVersion.textContent = `Verze ${textBezPrefixu}`;
   }
 
   if (settingsVersionValue) {
-    settingsVersionValue.textContent = verze;
+    settingsVersionValue.textContent = textBezPrefixu;
   }
 
   aktualizujLubaNoteVersionBadge();

@@ -1,24 +1,17 @@
-/* 680E – webová verze bez zásahu do GitHub Actions workflow.
- *
- * APK: android-debug workflow tento soubor před buildem přepíše skutečnou
- * verzí 0.9.<run>, takže chování APK se nemění.
- *
- * PROD/TEST: příkaz lubanote-deploy soubor po deployi přepíše na
- * WEB-<short commit>, tedy přesnou verzi skutečně nasazeného webu.
- *
- * VS Code Live Server: lokální vývojová kopie si přečte verzi z PROD webu,
- * aby místo DEV ukazovala stejný webový build jako app.lubanote.com.
+/* 680F – zdroj verze bez zásahu do GitHub Actions workflow.
+ * Android workflow může dál přepsat LUBANOTE_VERSION na 0.9.<run>.
+ * TEST/PROD přepisuje lubanote-deploy na stejné build číslo jako APK.
+ * Lokální Preview si načte produkční build a pouze přidá značku LOCAL.
  */
 (() => {
   const host = String(window.location?.hostname || "").toLowerCase();
   const jeLokalniWeb = host === "127.0.0.1" || host === "localhost";
 
+  window.LUBANOTE_RELEASE = "0.9";
   window.LUBANOTE_VERSION = jeLokalniWeb ? "LOCAL" : "WEB";
-  window.LUBANOTE_BUILD = jeLokalniWeb ? "LOCAL" : "WEB";
+  window.LUBANOTE_BUILD = "";
 
-  if (!jeLokalniWeb) {
-    return;
-  }
+  if (!jeLokalniWeb) return;
 
   const vzdalenyBuild = document.createElement("script");
   vzdalenyBuild.src =
