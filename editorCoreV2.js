@@ -5168,13 +5168,54 @@
     );
   }
 
+  /* FIX 682J – čtenářské sbalení/rozbalení nesmí přitáhnout dokument
+     k dříve uloženému caretu. PATCH 663E při otevření poznámky úmyslně
+     nevytváří DOM selection, ale původní toggle ho pomocí vykresli(vyber)
+     opět založil (i když uživatel do textu vůbec neklepl).
+     Modelový posledniVyber se NEmaže: zůstává pro další skutečné psaní.
+     Vizuální scroll zachováme podle řádku, jehož šipku uživatel zmáčkl.
+     Žádná změna modelu, drag/MOVE ani selection engine. */
+  function vykresliSbaleniBezSkoku(id) {
+    const editorPred = editor;
+    if (!editorPred) return;
+    const idRadku = String(id || "");
+    const najdiRadek = () => editorPred.querySelector(
+      `[data-ln-v2-blok="${CSS.escape(idRadku)}"]`
+    );
+    const staryRadek = najdiRadek();
+    const yPred = staryRadek?.getBoundingClientRect().top;
+    const scrollPred = editorPred.scrollTop;
+
+    /* Neobnovovat DOM range jen kvůli změně visibility potomků.
+       Původní modelový caret/uložený formátovací výběr zůstává beze změny. */
+    vykresli(null);
+    /* Kliknutí na pseudošipku může samo vytvořit nativní DOM Range.
+       Po změně seznamu z něj nesmí vzniknout skrytý/stale caret. */
+    window.getSelection()?.removeAllRanges();
+    skryjV2LubaCaret();
+    odstranV2SelectionOverlay();
+
+    const obnovPohled = () => {
+      if (editor !== editorPred || !editorPred.isConnected) return;
+      const novyRadek = najdiRadek();
+      if (novyRadek && Number.isFinite(yPred)) {
+        const rozdil = novyRadek.getBoundingClientRect().top - yPred;
+        if (Math.abs(rozdil) > 1) editorPred.scrollTop += rozdil;
+      } else {
+        editorPred.scrollTop = scrollPred;
+      }
+    };
+    obnovPohled();
+    requestAnimationFrame(obnovPohled);
+  }
+
   function prepniSbaleniSeznamuPodleId(id) {
     const index = najdiIndexBlokuPodleId(String(id || ""));
     if (index < 0 || !maPolozkaSeznamuDeti(index)) return false;
     const blok = dokument.bloky[index];
     blok.sbaleno = !Boolean(blok.sbaleno);
     vybranaPolozkaSeznamuId = "";
-    vykresli(posledniVyber || vyberZPosledniPozice());
+    vykresliSbaleniBezSkoku(id);
     nastavStav(blok.sbaleno ? "Větev seznamu sbalena" : "Větev seznamu rozbalena");
     return true;
   }
@@ -5193,7 +5234,7 @@
     }
 
     vybranaPolozkaSeznamuId = "";
-    vykresli(posledniVyber || vyberZPosledniPozice());
+    vykresliSbaleniBezSkoku(id);
     nastavStav("Větev seznamu rozbalena");
     return true;
   }
