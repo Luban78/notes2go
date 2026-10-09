@@ -127,40 +127,112 @@ window.addEventListener(
   aktualizujLubaNoteVerziUI
 );
 
-/* 680H – GitHub Pages nesmí používat vlastní GITHUB_RUN_NUMBER.
- * Pages workflow má svůj samostatný čítač běhů, zatímco Android APK
- * používá vlastní čítač. Na GitHub Pages proto po startu načteme
- * kanonickou verzi z produkčního app.lubanote.com, kterou
- * lubanote-deploy drží na stejném build čísle jako APK.
- * Když PROD není dostupný, ponecháme Pages hodnotu jako fallback. */
-(() => {
+
+/* 680I – GitHub Pages používají stejné build číslo jako Android APK.
+ * Pages a Android workflow mají nezávislé GITHUB_RUN_NUMBER, proto číslo
+ * nečteme z Pages buildu ani z cizího script tagu. U veřejného repozitáře
+ * načteme poslední úspěšný Android Debug run přímo z GitHub API.
+ * Když API dočasně selže, použijeme naposledy ověřené Android build číslo
+ * z lokální cache; teprve bez cache zůstane původní Pages hodnota. */
+async function synchronizujGitHubPagesBuildSApk() {
   const host = String(window.location?.hostname || "").toLowerCase();
-  const jeGitHubPages = host.endsWith(".github.io");
-  if (!jeGitHubPages) return;
+  if (!host.endsWith(".github.io")) {
+    return;
+  }
 
-  const produkcniBuild = document.createElement("script");
-  produkcniBuild.src =
-    `https://app.lubanote.com/build-version.js?ghpages=${Date.now()}`;
-  produkcniBuild.async = true;
+  const cacheKey = "lubanoteGitHubPagesAndroidBuildV1";
+  const url =
+    "https://api.github.com/repos/Luban78/notes2go/actions/workflows/android-debug.yml/runs" +
+    "?branch=main&status=success&per_page=1";
 
-  produkcniBuild.addEventListener(
-    "load",
-    () => window.dispatchEvent(new Event("lubanote-version-ready")),
-    { once: true }
-  );
+  const aplikujBuild = ({ build, commit = "" } = {}) => {
+    const cislo = String(build || "").trim();
+    if (!/^\d+$/.test(cislo)) {
+      return false;
+    }
 
-  produkcniBuild.addEventListener(
-    "error",
-    () => {
-      console.warn(
-        "LubaNote version: PROD build se nepodařilo načíst, ponechávám GitHub Pages fallback."
+    window.LUBANOTE_RELEASE = "0.9";
+    window.LUBANOTE_BUILD = cislo;
+    window.LUBANOTE_VERSION = `0.9.${cislo}`;
+    if (commit) {
+      window.LUBANOTE_COMMIT = String(commit).slice(0, 7);
+    }
+
+    window.dispatchEvent(
+      new Event("lubanote-version-ready")
+    );
+    return true;
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      5000
+    );
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          Accept: "application/vnd.github+json"
+        }
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      throw new Error(`GitHub API HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const run = Array.isArray(data?.workflow_runs)
+      ? data.workflow_runs[0]
+      : null;
+
+    const build = String(run?.run_number || "").trim();
+    const commit = String(run?.head_sha || "").trim();
+
+    if (!aplikujBuild({ build, commit })) {
+      throw new Error("GitHub API nevrátilo platné Android build číslo.");
+    }
+
+    try {
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({ build, commit })
       );
-    },
-    { once: true }
-  );
+    } catch (_) {
+      /* Cache je jen fallback, její selhání nevadí. */
+    }
+  } catch (error) {
+    let cache = null;
+    try {
+      cache = JSON.parse(localStorage.getItem(cacheKey) || "null");
+    } catch (_) {
+      cache = null;
+    }
 
-  document.head.appendChild(produkcniBuild);
-})();
+    if (aplikujBuild(cache || {})) {
+      console.warn(
+        "LubaNote version: GitHub API není dostupné, používám poslední ověřený Android build z cache.",
+        error
+      );
+      return;
+    }
+
+    console.warn(
+      "LubaNote version: Android build se nepodařilo zjistit, ponechávám Pages fallback.",
+      error
+    );
+  }
+}
+
+void synchronizujGitHubPagesBuildSApk();
 
 const deleteConfirmModal =
   document.getElementById("deleteConfirmModal");
