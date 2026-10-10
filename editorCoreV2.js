@@ -5421,6 +5421,36 @@
     };
   }
 
+  /* 683N – Badge počtu potomků je ne-editovatelné tlačítko hned za
+     posledním znakem řádku. WebView se při tapu snaží přesunout native
+     insertion handle na hranici buttonu. Uložení stejné modelové pozice
+     jako u šipky 683G, ale bez podmínky, že caret musí být v badge řádku. */
+  function zachovejV2CaretProBadge() {
+    const selection = window.getSelection?.();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!range?.collapsed || !range.startContainer?.isConnected ||
+        !editor?.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+      v2CaretPredSipkou = null;
+      return;
+    }
+    const model = aktualniVyberModelu();
+    if (!model?.sbaleny) {
+      v2CaretPredSipkou = null;
+      return;
+    }
+    const radek = (range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer : range.startContainer.parentElement)
+      ?.closest?.('.ln-v2-odstavec[data-ln-v2-blok]');
+    if (!radek || !editor.contains(radek)) {
+      v2CaretPredSipkou = null;
+      return;
+    }
+    v2CaretPredSipkou = {
+      radek, range: range.cloneRange(), model: klonVyberu(model),
+      cas: performance.now(), dokdy: performance.now() + 550
+    };
+  }
+
   function obnovV2CaretPoSipce() {
     const zachovany = v2CaretPredSipkou;
     if (!zachovany || !editor?.contains(zachovany.radek)) return;
@@ -8982,7 +9012,7 @@
     }, { capture: true });
 
     poslouchej(document, "pointerdown", (event) => {
-      if (v2CaretPredSipkou && !event.target?.closest?.('[data-v2-list-marker]')) {
+      if (v2CaretPredSipkou && !event.target?.closest?.('[data-v2-list-marker], [data-v2-list-toggle]')) {
         v2CaretPredSipkou = null;
       }
     }, { capture: true });
@@ -9036,6 +9066,25 @@
       );
     }, { passive: false });
 
+    /* 683N – nejprve capture touchstart: ochrana původního caretu
+       PŘED nativní textovou akcí WebView nad inline badge. Pouze tlačítko
+       počtu potomků; jiné dotyky editoru ani MOVE neměníme. */
+    poslouchej(editor, "touchstart", (event) => {
+      const badge = event.target.closest?.('.ln-v2-list-child-badge[data-v2-list-toggle]');
+      if (!badge || !editor.contains(badge) || event.touches?.length !== 1) return;
+      zachovejV2CaretProBadge();
+      if (event.cancelable) event.preventDefault();
+    }, { capture: true, passive: false });
+
+    /* Zabráníme i defaultní focus akci myši/pera na tlačítko, nikoliv
+       standardnímu dotyku v okolním textu. */
+    poslouchej(editor, "mousedown", (event) => {
+      const badge = event.target.closest?.('.ln-v2-list-child-badge[data-v2-list-toggle]');
+      if (badge && editor.contains(badge) && event.button === 0 && event.cancelable) {
+        event.preventDefault();
+      }
+    }, { capture: true });
+
     /* PATCH 663D – Android WebView může u tlačítka uvnitř contenteditable
        vizuálně provést tap, ale syntetický click nedoručit spolehlivě. Badge
        proto obsloužíme přímo na touchend. Je to samostatné tlačítko a je už
@@ -9043,10 +9092,13 @@
     poslouchej(editor, "touchend", (event) => {
       const badge = event.target.closest?.("[data-v2-list-toggle]");
       if (!badge || !editor.contains(badge)) return;
-      event.preventDefault();
+      if (event.cancelable) event.preventDefault();
       event.stopPropagation();
       const id = badge.dataset.v2ListToggle || "";
       rozbalPodstromSeznamuPodleId(id);
+      /* Stejné obnovení jako u chráněné šipky 683G. Nehýbe s textem,
+         scrollTop ani vlastním selection dragem. */
+      obnovV2CaretPoSipce();
     }, { passive: false });
 
     poslouchej(document, "touchmove", zpracujV2TouchMove, { passive: false });
@@ -9170,7 +9222,11 @@
       if (listToggleBadge && editor.contains(listToggleBadge)) {
         event.preventDefault();
         event.stopPropagation();
+        /* Native click (PC/keyboard) preserves caret too. For Android,
+           touchstart already suppressed the synthetic click. */
+        if (!v2CaretPredSipkou) zachovejV2CaretProBadge();
         rozbalPodstromSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
+        obnovV2CaretPoSipce();
         return;
       }
 
