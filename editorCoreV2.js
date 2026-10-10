@@ -8898,6 +8898,10 @@
       const presun = Math.hypot(dotyk.clientX - kandidat.x, dotyk.clientY - kandidat.y);
       if (presun > 12 || v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni) return;
       if (event.cancelable) event.preventDefault();
+      /* 683E: Dokonceny kratky tap na sipku nesmi propadnout do dalsich
+         touchend handleru editoru (caret/selection). Long-press MOVE a
+         scroll jsou vyse odfiltrovany a zustavaji beze zmeny. */
+      event.stopImmediatePropagation();
       /* Případný opožděný click téhož gesta nesmí větev přepnout podruhé. */
       potlacKlikSeznamuDo = performance.now() + 700;
       zrusV2DragSeznamu({ zachovatVyber: false });
