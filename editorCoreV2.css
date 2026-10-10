@@ -970,3 +970,39 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   margin: 0;
   border-radius: 14px;
 }
+
+/* 682O: fyzicky ne-editovatelny hit-target nad puvodni CSS sipkou.
+   Prazdny button nepridava text ani nemeni rozlozeni; pouze oddeli tap
+   od contenteditable textu. Visualni ::before se NEMENI. */
+.ln-v2-editor .ln-v2-list-marker-hit {
+  position: absolute;
+  left: calc(var(--ln-v2-bullet-indent, 30px) - 30px);
+  top: 0;
+  z-index: 2;
+  display: block;
+  width: 30px; /* cela odsazena zona, nikdy ne prvni znak textu */
+  height: 1.5em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5em;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: none;
+}
+.ln-v2-editor .ln-v2-list-marker-hit:focus-visible {
+  outline: 1px solid var(--color-accent, currentColor);
+  outline-offset: 1px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ln-v2-editor .ln-v2-list-marker-hit { cursor: grab; }
+  .ln-v2-editor .ln-v2-list-marker-hit:active { cursor: grabbing; }
+}

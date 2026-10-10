@@ -1686,6 +1686,22 @@
         radek.appendChild(br);
       }
 
+      /* 682O: SKUTECNY ne-editovatelny ovladac sipky pro rodice seznamu.
+         Stary pseudo-element ::before zustava pouze grafika; dotyk zachyti
+         prazdny button bez textovych uzlu, takze nemeni offset textu ani caret.
+         Dlouhy stisk dal prebiraji puvodni MOVE handlery. */
+      if (jeSeznamovyBlok(blok) && seznamMaDeti) {
+        const znacka = document.createElement("button");
+        znacka.type = "button";
+        znacka.className = "ln-v2-list-marker-hit";
+        znacka.dataset.v2ListMarker = blok.id;
+        znacka.contentEditable = "false";
+        znacka.setAttribute("aria-label", blok.sbaleno ? "Rozbalit větev seznamu" : "Sbalit větev seznamu");
+        znacka.setAttribute("aria-expanded", blok.sbaleno ? "false" : "true");
+        /* Bez vkladani znaku do DOM: modelovy text zustava beze zmeny. */
+        radek.appendChild(znacka);
+      }
+
       if (jeBulletBlok(blok) && seznamMaDeti && blok.sbaleno && seznamPocetPrimychDeti > 0) {
         const badge = document.createElement("button");
         badge.type = "button";
@@ -5233,6 +5249,11 @@
           radek.dataset.lnV2ListChildCount = String(pocetPrimychDeti);
         } else delete radek.dataset.lnV2ListChildCount;
 
+        const ovladac = radek.querySelector(":scope > .ln-v2-list-marker-hit[data-v2-list-marker]");
+        if (ovladac) {
+          ovladac.setAttribute("aria-label", blok.sbaleno ? "Rozbalit větev seznamu" : "Sbalit větev seznamu");
+          ovladac.setAttribute("aria-expanded", blok.sbaleno ? "false" : "true");
+        }
         const badge = radek.querySelector(":scope > .ln-v2-list-child-badge[data-v2-list-toggle]");
         const potrebujeBadge = jeBulletBlok(blok) && maDeti && blok.sbaleno && pocetPrimychDeti > 0;
         if (!potrebujeBadge) badge?.remove();
@@ -5379,6 +5400,15 @@
   let v2DotykSbalovaciZnacky = null;
   function najdiV2SbalovaciZnacku(target, clientX) {
     if (!editor || !target || !Number.isFinite(clientX)) return null;
+    const tlacitko = target.closest?.('[data-v2-list-marker]');
+    if (tlacitko && editor.contains(tlacitko)) {
+      const id = String(tlacitko.dataset.v2ListMarker || '');
+      const index = najdiIndexBlokuPodleId(id);
+      const radek = tlacitko.closest('.ln-v2-odstavec');
+      if (radek && index >= 0 && maPolozkaSeznamuDeti(index)) return { id, radek };
+    }
+    /* Markery maji fyzicke tlacitko; ostatni dotyky nemaji togglovat
+       editable DIV pres neviditelnou pseudo-znacku. */
     if (jePrvekMimoV2SeznamMove(target)) return null;
     const radek = target.closest?.('.ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered');
     if (!radek || !editor.contains(radek)) return null;
@@ -5389,6 +5419,9 @@
   }
 
   function jePrvekMimoV2SeznamMove(target) {
+    /* Toto konkretni ne-editovatelne tlacitko musi stale dovolit dlouhe
+       podrzeni pro MOVE rodice. Jina tlacitka (vc. poctu deti) zustavaji mimo. */
+    if (target?.closest?.('[data-v2-list-marker]')) return false;
     return Boolean(target?.closest?.(
       ".ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove, .ln-v2-odkaz, a[href], button"
     ));
@@ -7488,7 +7521,19 @@
         badgeDeti[0].dataset.v2ListToggle !== blok.id
         || badgeDeti[0].textContent !== blokEl.dataset.lnV2ListChildCount
       )) return `blok ${b}: jiné údaje badge sbalené větve`;
-      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka, ...badgeDeti]);
+      /* 682O: vlastni button nad CSS znackou seznamu je legalni DOM helper.
+         Bez tohoto pravidla by DOM guard mohl zrusit probihajici selection. */
+      const markerDeti = primeDeti.filter((dite) =>
+        dite.matches?.('button.ln-v2-list-marker-hit[data-v2-list-marker]')
+      );
+      const markerOcekavan = jeSeznamovyBlok(blok) && maPolozkaSeznamuDeti(b);
+      if (markerDeti.length !== (markerOcekavan ? 1 : 0)) {
+        return `blok ${b}: neplatný ovladač seznamové šipky`;
+      }
+      if (markerOcekavan && markerDeti[0].dataset.v2ListMarker !== blok.id) {
+        return `blok ${b}: nesprávné ID seznamové šipky`;
+      }
+      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka, ...badgeDeti, ...markerDeti]);
       if (primeDeti.some((dite) => !povoleneDeti.has(dite))) {
         return `blok ${b}: cizí přímý DOM prvek`;
       }
@@ -9039,6 +9084,16 @@
         event.preventDefault();
         event.stopPropagation();
         rozbalPodstromSeznamuPodleId(listToggleBadge.dataset.v2ListToggle);
+        return;
+      }
+
+      const listMarkerButton = event.target.closest?.('[data-v2-list-marker]');
+      if (listMarkerButton && editor.contains(listMarkerButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (performance.now() >= potlacKlikSeznamuDo) {
+          prepniSbaleniSeznamuPodleId(listMarkerButton.dataset.v2ListMarker);
+        }
         return;
       }
 
