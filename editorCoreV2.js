@@ -104,6 +104,11 @@
      čistě vizuální a nic nemění v modelu, historii ani DOM obsahu. */
   let v2LubaCaret = null;
   let v2LubaCaretRaf = 0;
+  /* 683O – pouze JEDEN náš vlastní úchyt pro collapsed caret.
+     Native handle je odstraněn ne-editovatelným režimem DOM v APK.
+     Výběr dvou slovních úchytů z Bridge je nezávislý. */
+  let v2SingleCaretHandle = null;
+  let v2SingleCaretDrag = null;
 
   /* PATCH 673G11 – skutečný „plovoucí kurzor“ nebyl nativní WebView caret,
      ale náš vlastní fixed overlay .ln-v2-luba-caret z PATCH 497. Původní
@@ -151,6 +156,53 @@
     );
   }
 
+  function ziskejV2SingleCaretHandle() {
+    if (!v2SingleCaretHandle?.isConnected) {
+      v2SingleCaretHandle = document.createElement("div");
+      v2SingleCaretHandle.className = "ln-v2-single-caret-handle";
+      v2SingleCaretHandle.setAttribute("aria-hidden", "true");
+      v2SingleCaretHandle.hidden = true;
+      /* Špička SVG leží na společné ose X modelového caretu.
+         44px element slouží jen jako pohodlná dotyková oblast. */
+      v2SingleCaretHandle.innerHTML = '<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true" focusable="false"><path d="M13 1 C9 7 0 16 0 22 A13 12 0 0 0 26 22 C26 16 17 7 13 1 Z" fill="#ff2020"/></svg>';
+      v2SingleCaretHandle.addEventListener("pointerdown", (event) => {
+        if (!editor?.isConnected || editor.dataset.lnV2OwnCaretOnly !== "1" || !lubaCaretMaBytViditelny()) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        const model = posledniVyber || aktualniVyberModelu();
+        if (!model?.sbaleny) return;
+        const rect = rectV2LubaCaretu(model.konec);
+        if (!rect) return;
+        v2SingleCaretDrag = {
+          pointerId: event.pointerId,
+          deltaX: rect.left - event.clientX,
+          deltaY: rect.top + rect.height / 2 - event.clientY
+        };
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        try { v2SingleCaretHandle.setPointerCapture(event.pointerId); } catch (_error) {}
+      }, { passive: false });
+      v2SingleCaretHandle.addEventListener("pointermove", (event) => {
+        if (!v2SingleCaretDrag || v2SingleCaretDrag.pointerId !== event.pointerId || !editor?.isConnected) return;
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        const rectEditoru = editor.getBoundingClientRect();
+        const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, event.clientX + v2SingleCaretDrag.deltaX));
+        const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, event.clientY + v2SingleCaretDrag.deltaY));
+        zrusVyberNaBoduProSelectionMenu(cilX, cilY);
+      }, { passive: false });
+      const ukonci = (event) => {
+        if (!v2SingleCaretDrag || v2SingleCaretDrag.pointerId !== event.pointerId) return;
+        v2SingleCaretDrag = null;
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+      };
+      v2SingleCaretHandle.addEventListener("pointerup", ukonci, { passive: false });
+      v2SingleCaretHandle.addEventListener("pointercancel", ukonci, { passive: false });
+      document.body.appendChild(v2SingleCaretHandle);
+    }
+    return v2SingleCaretHandle;
+  }
+
   function zajistiV2LubaCaret() {
     if (!v2LubaCaret?.isConnected) {
       v2LubaCaret = document.createElement("div");
@@ -166,6 +218,7 @@
     cancelAnimationFrame(v2LubaCaretRaf);
     v2LubaCaretRaf = 0;
     if (v2LubaCaret) v2LubaCaret.hidden = true;
+    if (v2SingleCaretHandle) v2SingleCaretHandle.hidden = true;
   }
 
   function rectV2LubaCaretu(pozice) {
@@ -340,6 +393,16 @@
     caret.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
     caret.style.height = `${vyskaCaretu}px`;
     caret.hidden = false;
+    /* 683O – jen v nativním read-only režimu s LubaKeyboard.
+       Kapka a caret se KRESLÍ ZE STEJNÉHO RECTU. */
+    if (editor.dataset.lnV2OwnCaretOnly === "1") {
+      const uchyt = ziskejV2SingleCaretHandle();
+      uchyt.style.left = `${Math.round(rect.left)}px`;
+      uchyt.style.top = `${Math.round(rect.top + vyskaCaretu)}px`;
+      uchyt.hidden = false;
+    } else if (v2SingleCaretHandle) {
+      v2SingleCaretHandle.hidden = true;
+    }
   }
 
   function naplanujV2LubaCaret(vyber = posledniVyber) {
@@ -8883,6 +8946,7 @@
       <div
         class="ln-v2-editor"
         contenteditable="true"
+        tabindex="0"
         role="textbox"
         aria-multiline="true"
         inputmode="none"

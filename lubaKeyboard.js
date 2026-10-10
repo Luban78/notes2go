@@ -773,6 +773,20 @@
 
   function nastavLubaAtributy(editor) {
     if (!editor) return;
+    /* 683O – pro APK + LubaKeyboard nesmí být Core V2 nativní
+       contenteditable. WebView by totiž i při user-select:none kreslil
+       vlastní modrý insertion handle. LubaKeyboard zapisuje přímo do
+       modelu Core V2, nikoli do DOM editoru. Je proto bezpečné zachovat
+       Core jen jako fokusovatelnou projekci; jeho vlastní červený caret
+       a vlastní úchyt se vykreslují z téhož modelového rectu.
+       Ostatní pole, název poznámky a PC se vůbec nemění. */
+    const chromeMajor = Number(String(navigator.userAgent || "").match(/(?:Chrome|Chromium)\/(\d+)/i)?.[1] || 0);
+    if (document.body?.classList?.contains("nativeApp") && chromeMajor >= 120 &&
+        editor.matches?.(".ln-v2-editor[data-ln-v2-editor]")) {
+      editor.setAttribute("contenteditable", "false");
+      editor.setAttribute("tabindex", "0");
+      editor.dataset.lnV2OwnCaretOnly = "1";
+    }
     editor.setAttribute("inputmode", "none");
     editor.setAttribute("autocorrect", "off");
     editor.setAttribute("autocomplete", "off");
@@ -784,6 +798,12 @@
 
   function nastavSystemoveAtributy(editor) {
     if (!editor) return;
+    /* 683O – explicitní systémová klávesnice zůstává plně editovatelná.
+       Přepínání v Nastavení obnoví i původní DOM režim. */
+    if (editor.matches?.(".ln-v2-editor[data-ln-v2-editor]")) {
+      editor.setAttribute("contenteditable", "true");
+      editor.removeAttribute("data-ln-v2-own-caret-only");
+    }
     editor.setAttribute("inputmode", "text");
     editor.removeAttribute("virtualkeyboardpolicy");
     editor.setAttribute("autocorrect", "on");

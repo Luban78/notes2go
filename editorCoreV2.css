@@ -1019,3 +1019,27 @@ body.nativeApp #modalRichTextV2Host .ln-v2-editor {
   user-select: none !important;
   -webkit-touch-callout: none !important;
 }
+
+
+/* 683O – jediný LubaNote insertion handle. Společná osa X s .ln-v2-luba-caret.
+   Hitbox zůstává 44px, vizuál je 26px. Nižší vrstva než LubaKeyboard. */
+.ln-v2-single-caret-handle {
+  position: fixed;
+  width: 44px;
+  height: 44px;
+  z-index: 2147482450;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: transparent;
+}
+.ln-v2-single-caret-handle[hidden] { display: none !important; }
+.ln-v2-single-caret-handle svg { pointer-events: none; }
+body:has(.ln-v2-editor.ln-v2-selection-custom-active) .ln-v2-single-caret-handle,
+body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !important; }
