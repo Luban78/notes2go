@@ -8995,6 +8995,48 @@
       zrusV2VyberPolozkySeznamu();
     });
 
+    /* 683P – Core V2 není s LubaKeyboard nativně editovatelný (683O),
+       takže Android už sám nepřesune DOM selection na místo krátkého tapu.
+       Každý platný KRÁTKÝ dotyk běžného textu proto explicitně překládáme
+       do modelového caretu. Psaní, kurzor a naše červená kapka pak používají
+       stejné modelové místo. Neměníme dotykové události ani jejich default.
+       Dvojtap zůstává Bridge 683M; marker, badge, TODO, obraz, MOVE a scroll
+       zůstávají mimo tento handler. */
+    let v2VlastniTapCaret = null;
+    const jeV2VlastniTextovyTap = (cil) => {
+      if (editor?.dataset?.lnV2OwnCaretOnly !== "1" || !cil || !editor.contains(cil)) return false;
+      const element = cil.nodeType === Node.TEXT_NODE ? cil.parentElement : cil;
+      if (!element?.closest) return false;
+      if (element.closest('button, figure, img, input, textarea, select, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check]')) return false;
+      const readonly = element.closest('[contenteditable="false"]');
+      if (readonly && readonly !== editor) return false;
+      return true;
+    };
+    poslouchej(editor, "touchstart", (event) => {
+      v2VlastniTapCaret = null;
+      if (event.touches?.length !== 1 || !jeV2VlastniTextovyTap(event.target)) return;
+      const t = event.touches[0];
+      v2VlastniTapCaret = {
+        id: t.identifier, x: t.clientX, y: t.clientY, cas: performance.now(),
+        scroll: Number(editor.scrollTop || 0)
+      };
+    }, { capture: true, passive: true });
+    poslouchej(editor, "touchend", (event) => {
+      const pred = v2VlastniTapCaret;
+      v2VlastniTapCaret = null;
+      if (!pred || !jeV2VlastniTextovyTap(event.target)) return;
+      if (editor.classList.contains('ln-v2-selection-custom-active')) return;
+      const t = Array.from(event.changedTouches || []).find(p => p.identifier === pred.id);
+      if (!t || performance.now() - pred.cas > 330 ||
+          Math.hypot(t.clientX - pred.x, t.clientY - pred.y) > 12 ||
+          Math.abs(Number(editor.scrollTop || 0) - pred.scroll) > 3 ||
+          v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni || v2DragObrazku?.aktivni) return;
+      /* Pokud se souřadnice nedají namapovat do textového bloku, necháme
+         předchozí modelový caret být. Žádný fallback na začátek řádku. */
+      zrusVyberNaBoduProSelectionMenu(t.clientX, t.clientY);
+    }, { passive: true });
+    poslouchej(editor, "touchcancel", () => { v2VlastniTapCaret = null; }, { passive: true });
+
     /* 682N – kontrolní report 783: pseudo-šipka je součást editovatelného
        DIV, zatímco ne-editovatelné tlačítko počtu potomků neskáče.
        Zrušíme NATIVNÍ default pointer gesta pouze v úzké zóně značky rodiče.

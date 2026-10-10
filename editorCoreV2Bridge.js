@@ -4112,7 +4112,11 @@
     const dotyk = event.touches[0];
     const editor = core()?.ziskejEditorElement?.();
     const cil = event.target;
-    if (!editor?.contains(cil) || cil.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select, [contenteditable=false]")) {
+    /* 683P – 683O nastavuje contenteditable=false na CELÉM editoru.
+       Closest jej tedy vrátí pro každý textový span a 683M pak omylem
+       odmítne všechny dvojtapy. Vylučujeme pouze skutečné vnořené ovladače. */
+    const neTextovyPrvek = cil.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select, [contenteditable=false]");
+    if (!editor?.contains(cil) || (neTextovyPrvek && neTextovyPrvek !== editor)) {
       v2ZacatekDotykuDvojtap = null;
       return;
     }
