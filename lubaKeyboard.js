@@ -787,6 +787,14 @@
       editor.setAttribute("tabindex", "0");
       editor.dataset.lnV2OwnCaretOnly = "1";
     }
+    /* 683R – pouze APK + LubaKeyboard: nadpis používá vlastní caret.
+       PC, ostatní textová pole a explicitní systémová IME beze změny. */
+    if (editor.id === "modalTitle") {
+      const major = Number(String(navigator.userAgent || "").match(/(?:Chrome|Chromium)\/(\d+)/i)?.[1] || 0);
+      window.LubaNoteTitleCaret?.nastavRezim(
+        Boolean(document.body?.classList.contains("nativeApp") && major >= 120)
+      );
+    }
     editor.setAttribute("inputmode", "none");
     editor.setAttribute("autocorrect", "off");
     editor.setAttribute("autocomplete", "off");
@@ -804,6 +812,7 @@
       editor.setAttribute("contenteditable", "true");
       editor.removeAttribute("data-ln-v2-own-caret-only");
     }
+    if (editor.id === "modalTitle") window.LubaNoteTitleCaret?.nastavRezim(false);
     editor.setAttribute("inputmode", "text");
     editor.removeAttribute("virtualkeyboardpolicy");
     editor.setAttribute("autocorrect", "on");
@@ -1749,6 +1758,8 @@
   function ziskejVyberNazvu() {
     const title = najdiNazevEditoru();
     if (!title) return null;
+    const own = window.LubaNoteTitleCaret?.ziskejVyber();
+    if (own && own.title === title) return own;
 
     const text = String(title.textContent || "");
     let start = text.length;
@@ -1783,6 +1794,8 @@
 
   function nastavVyberNazvu(title, start, end = start) {
     if (!title) return;
+    if (window.LubaNoteTitleCaret?.jeAktivni() &&
+        window.LubaNoteTitleCaret.nastavVyber(start, end)) return;
     let textNode = title.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE || title.childNodes.length !== 1) {
       const text = String(title.textContent || "");
@@ -1812,6 +1825,7 @@
     title.dataset.prazdny = clean.length ? "false" : "true";
     nastavVyberNazvu(title, caretStart, caretEnd);
     title.dispatchEvent(new Event("input", { bubbles: true }));
+    window.LubaNoteTitleCaret?.aktualizuj();
     queueMicrotask(aktualizujNavrhy);
     return true;
   }

@@ -17935,3 +17935,40 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   body .appMessageDialog p,
   body .choiceDialogOption { font-size: 1.15rem !important; }
 }
+
+
+/* 683R – nadpis v Android APK s LubaKeyboard: pouze naše červené UI.
+   Záměrně až ZA pravidly 594 s !important; systémová IME a PC beze změny. */
+body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  caret-color: transparent !important;
+  touch-action: manipulation;
+}
+.ln-title-own-caret, .ln-title-own-handle, .ln-title-own-selection {
+  position: fixed;
+  pointer-events: none;
+}
+.ln-title-own-caret {
+  width: 2px;
+  border-radius: 1px;
+  background: #ff2020;
+  z-index: 2147482420;
+  animation: ln-v2-luba-caret-blink 1s steps(1, end) infinite;
+}
+.ln-title-own-handle {
+  width: 44px;
+  height: 44px;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  touch-action: none;
+  pointer-events: auto;
+  z-index: 2147482421;
+}
+.ln-title-own-handle svg { width: 22px; height: 29px; pointer-events: none; }
+.ln-title-own-selection { background: rgba(255, 80, 95, 0.4); z-index: 2147482419; }
+.ln-title-own-caret[hidden], .ln-title-own-handle[hidden],
+.ln-title-own-selection[hidden] { display: none !important; }
