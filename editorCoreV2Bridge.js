@@ -2352,6 +2352,7 @@
       event.stopImmediatePropagation();
       core()?.zachytAktualniVyber?.();
       core()?.nastavVelikost?.(cil.dataset.velikost);
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("editorPanelVelikost").hidden = true;
       obnovToolbar();
       return;
@@ -2370,6 +2371,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       core()?.nastavStylTextu?.(cil.dataset.styl || "div");
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("editorPanelStyl").hidden = true;
       obnovToolbar();
       return;
@@ -2388,6 +2390,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       core()?.nastavZarovnani?.(cil.dataset.zarovnani || "left");
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("editorPanelZarovnani").hidden = true;
       obnovToolbar();
       return;
@@ -2405,6 +2408,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       core()?.nastavBarvu?.("barva", cil.dataset.textColor || "zaklad");
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("textColorPanel").hidden = true;
       obnovToolbar();
       return;
@@ -2422,6 +2426,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       core()?.nastavBarvu?.("pozadi", cil.dataset.highlightColor || "zaklad");
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("textColorPalette").hidden = true;
       obnovToolbar();
       return;
@@ -2431,6 +2436,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       core()?.nastavBarvu?.("pozadi", "zaklad");
+      obnovV2CustomSelectionPoModeloveAkci();
       document.getElementById("textColorPalette").hidden = true;
       obnovToolbar();
       return;
@@ -2536,6 +2542,7 @@
       else if (id === "tlacitkoTucne") core()?.prepniFormat?.("tucne");
       else if (id === "tlacitkoKurziva") core()?.prepniFormat?.("kurziva");
       else if (id === "tlacitkoPodtrzeni") core()?.prepniFormat?.("podtrzeni");
+      obnovV2CustomSelectionPoModeloveAkci();
       obnovToolbar();
       return;
     }
@@ -2621,6 +2628,15 @@
        (např. po double-tap fallbacku s touchId=null). Následující caret
        byl opět smazán selectionchange guardem; editor působil zamrzle.
        Zruš jen tap MIMO uložený modelový Range, nedotýkej se handle dragu. */
+    /* 683D – i pokud se DOM vyměnil jinou akcí než tlačítkem formátu,
+       klik mimo musí uklidit staré handles a povolit modelový caret. */
+    if (v2SelectionScroll && !jeV2CustomSelectionRangePlatny(v2SelectionScroll)) {
+      zrusV2SelectionScrollStav(v2SelectionScroll);
+      core()?.zrusVyberNaBoduProSelectionMenu?.(event.clientX, event.clientY);
+      skryjV2SelectionMenu();
+      obnovToolbar();
+      return;
+    }
     const vlastni = v2SelectionScroll?.range;
     if (vlastni && !vlastni.collapsed) {
       if (jeBodUvnitřRozsahu(vlastni, event.clientX, event.clientY)) return;
@@ -3835,6 +3851,47 @@
     if (v2SelectionScroll === stav) v2SelectionScroll = null;
   }
 
+  /* PATCH 683D – po formátování Core V2 překreslí textové DOM uzly a
+     v microtasku obnoví modelový výběr na NOVÝCH uzlech. Dosavadní vlastní
+     Range/Highlight/handles Bridge ale ukazovaly na odstraněné uzly:
+     barevné označení zmizelo, dvě kapky zůstaly a :has(custom-active)
+     skrýval LubaCaret. Rebind až PO Core microtasku, bez změny modelu. */
+  function jeV2CustomSelectionRangePlatny(stav) {
+    const range = stav?.range;
+    if (!stav?.editor?.isConnected || !range || range.collapsed) return false;
+    try {
+      return stav.editor.contains(range.startContainer) && stav.editor.contains(range.endContainer);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function obnovV2CustomSelectionPoModeloveAkci() {
+    const stav = v2SelectionScroll;
+    if (!stav || !stav.range || stav.handleDrag) return;
+
+    /* Core vykresli() naplánuje nastavVyberModelu() jako microtask uvnitř
+       právě dokončené toolbar akce. Náš microtask tedy musí být až za ní. */
+    queueMicrotask(() => {
+      if (!aktivni || v2SelectionScroll !== stav || stav.handleDrag) return;
+      const vyber = window.getSelection?.();
+      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+      if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+        /* Zachováme výběr pro další B/I/U a návazný handle drag. */
+        stav.range = range.cloneRange();
+        nastavV2SelectionScrollHighlight(stav.range);
+        ulozV2VizualniRangeDoCore(stav.range);
+        zobrazV2SelectionHandles(stav.range);
+        potlacV2NativeSelection();
+        return;
+      }
+      /* Pokud akce skončila caretem nebo už neexistuje živý rozsah,
+         nesmí zůstat custom-active, které schovává kurzor. */
+      zrusV2SelectionScrollStav(stav);
+      skryjV2SelectionMenu();
+    });
+  }
+
   function zobrazV2VizualniSelectionPoScrollu(stav, duvod = "settle", preferovanyKonec = null) {
     if (!stav || v2SelectionScroll !== stav || !aktivni || !stav.range || stav.range.collapsed) return false;
     if (stav.obnovTimer) {
@@ -4535,6 +4592,16 @@
     if (event.target.closest("#editorToolbarToggle, .editorQuickToolbar, .editorToolbarPanel, .editorBottomBar")) {
       core()?.zachytAktualniVyber?.();
     }
+  }, true);
+
+  /* 683D – opuštěný custom výběr z jiného renderu se musí uvolnit ještě
+     před nativním pointer/caret gestem; platný drag a výběr neovlivníme. */
+  document.addEventListener("pointerdown", (event) => {
+    const stav = v2SelectionScroll;
+    if (!aktivni || !stav || stav.handleDrag || !hostitel?.contains(event.target)) return;
+    if (jeV2CustomSelectionRangePlatny(stav)) return;
+    zrusV2SelectionScrollStav(stav);
+    skryjV2SelectionMenu();
   }, true);
 
   document.addEventListener("click", zrusV2OznaceniKlikemMimo, true);
