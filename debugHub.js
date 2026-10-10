@@ -33,9 +33,11 @@
   let zmenaVelikostiHubu = null;
   let geometrieHubuPredMinimalizaci = null;
   let stabilitaPanel = null;
-  const stabilitaVysledky = new Map(); // only session memory; no localStorage
+  const stabilitaVysledky = new Map();
   const stabilitaOtevreneTesty = new Set();
   let stabilitaTechnickyAudit = [];
+  let stabilitaUlozeniInfo = "Lokální úložiště zatím neověřeno";
+  let stabilitaUlozeniOk = false;
 
   const MAX_ZAZNAMU = 700;
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
@@ -88,8 +90,9 @@
   };
 
 
-  /* 683A – Stability Registry V1. Manual PASS is never inferred from DOM checks.
-     Registry and reports are held in memory only; no application state writes. */
+  /* 683C – persistent Stability Registry V1. Manual PASS is never inferred from DOM checks.
+     Only user-entered test status, version, time and notes are stored locally.
+     No note content, E2E keys, backend settings or editor data are modified. */
   const STABILITA_TESTY = Object.freeze([
     { id: "editor-plain", skupina: "Editor", nazev: "Běžný text – psaní a mazání", krok: "Vytvoř text, uprav ho uprostřed a smaž jeden znak; ověř, že kurzor zůstává správně." },
     { id: "editor-undo", skupina: "Editor", nazev: "Undo / Redo", krok: "Uprav větu, vrať změnu a obnov ji; zkontroluj i formátování." },
@@ -136,6 +139,86 @@
   function stabilitaStav(test) {
     return stabilitaVysledky.get(test.id)?.stav || "NETESTOVÁNO";
   }
+  const STABILITA_STORAGE_KEY = "lubanote_debug_stability_registry_v1";
+  const STABILITA_STORAGE_SCHEMA = 1;
+  const STABILITA_MAX_POZNAMKA = 2000;
+
+  function stabilitaVerze() {
+    return String(window.LUBANOTE_VERSION || "DEV");
+  }
+
+  function stabilitaHistorickyVysledek(vysledek) {
+    return (vysledek?.stav === "PASS" || vysledek?.stav === "FAIL") &&
+      (!vysledek.verze || vysledek.verze !== stabilitaVerze());
+  }
+
+  function stabilitaStavUlozeni() {
+    const prvek = stabilitaPanel?.querySelector("[data-ln-stability-storage]");
+    if (prvek) {
+      prvek.textContent = stabilitaUlozeniInfo;
+      prvek.dataset.saved = stabilitaUlozeniOk ? "yes" : "no";
+    }
+  }
+
+  function stabilitaNactiVysledky() {
+    try {
+      const raw = window.localStorage.getItem(STABILITA_STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data?.schema !== STABILITA_STORAGE_SCHEMA || !data.results ||
+            typeof data.results !== "object" || Array.isArray(data.results)) {
+          throw new Error("unsupported registry format");
+        }
+        for (const test of STABILITA_TESTY) {
+          const hodnota = data.results[test.id];
+          if (!hodnota || typeof hodnota !== "object" || Array.isArray(hodnota)) continue;
+          const stav = ["PASS", "FAIL", "NETESTOVÁNO"].includes(hodnota.stav)
+            ? hodnota.stav : "NETESTOVÁNO";
+          stabilitaVysledky.set(test.id, {
+            stav,
+            poznamka: typeof hodnota.poznamka === "string"
+              ? hodnota.poznamka.slice(0, STABILITA_MAX_POZNAMKA) : "",
+            cas: typeof hodnota.cas === "string" ? hodnota.cas.slice(0, 48) : "",
+            verze: typeof hodnota.verze === "string" ? hodnota.verze.slice(0, 48) : ""
+          });
+        }
+      }
+      // Reading can succeed even where private-mode/quota policies block writes.
+      // The save operation itself determines whether persistence is working.
+      stabilitaUlozeniOk = true;
+      stabilitaUlozeniInfo = `Načteno ${stabilitaVysledky.size} záznamů · uložení v zařízení`;
+    } catch (_) {
+      stabilitaUlozeniOk = false;
+      stabilitaUlozeniInfo = "POZOR: výsledky nelze načíst z localStorage – zkopíruj souhrn";
+    }
+  }
+
+  function stabilitaUlozVysledky() {
+    const results = {};
+    for (const test of STABILITA_TESTY) {
+      const zaznam = stabilitaVysledky.get(test.id);
+      if (!zaznam) continue;
+      results[test.id] = {
+        stav: zaznam.stav || "NETESTOVÁNO",
+        poznamka: String(zaznam.poznamka || "").slice(0, STABILITA_MAX_POZNAMKA),
+        cas: zaznam.cas || "",
+        verze: zaznam.verze || ""
+      };
+    }
+    try {
+      window.localStorage.setItem(STABILITA_STORAGE_KEY,
+        JSON.stringify({ schema: STABILITA_STORAGE_SCHEMA, updatedAt: new Date().toISOString(), results }));
+      stabilitaUlozeniOk = true;
+      stabilitaUlozeniInfo = `Uloženo v zařízení · ${Object.keys(results).length} záznamů`;
+    } catch (_) {
+      stabilitaUlozeniOk = false;
+      stabilitaUlozeniInfo = "POZOR: ukládání selhalo – zkopíruj souhrn, jinak se výsledky ztratí";
+    }
+    stabilitaStavUlozeni();
+  }
+
+  stabilitaNactiVysledky();
+
 
   function stabilitaVypis() {
     if (!stabilitaPanel) return;
@@ -143,28 +226,35 @@
     if (!obsah) return;
     const hodnotaFiltru = stabilitaPanel.querySelector("[data-ln-stability-filter]")?.value || "vse";
     const vybrane = STABILITA_TESTY.filter(test => hodnotaFiltru === "vse" || test.skupina === hodnotaFiltru);
-    const pocty = { PASS: 0, FAIL: 0, "NETESTOVÁNO": 0 };
-    STABILITA_TESTY.forEach(test => pocty[stabilitaStav(test)]++);
+    const pocty = { PASS: 0, FAIL: 0, "NETESTOVÁNO": 0, STARE: 0 };
+    STABILITA_TESTY.forEach(test => {
+      const vysledek = stabilitaVysledky.get(test.id);
+      if (stabilitaHistorickyVysledek(vysledek)) pocty.STARE++;
+      else pocty[stabilitaStav(test)]++;
+    });
     const pocitadlo = stabilitaPanel.querySelector("[data-ln-stability-summary]");
-    if (pocitadlo) pocitadlo.textContent = `${pocty.PASS} PASS · ${pocty.FAIL} FAIL · ${pocty["NETESTOVÁNO"]} netestováno`;
+    if (pocitadlo) pocitadlo.textContent = `${pocty.PASS} PASS · ${pocty.FAIL} FAIL · ${pocty.STARE} starší build · ${pocty["NETESTOVÁNO"]} netestováno`;
+    stabilitaStavUlozeni();
 
     obsah.innerHTML = vybrane.map(test => {
       const vysledek = stabilitaVysledky.get(test.id);
       const stav = stabilitaStav(test);
+      const starsi = stabilitaHistorickyVysledek(vysledek);
+      const oznaceni = starsi ? `${stav} · STARŠÍ BUILD` : stav;
       return `<details class="ln-dh-stab-test" data-ln-stability-test="${test.id}" ${stabilitaOtevreneTesty.has(test.id) ? "open" : ""}>
         <summary class="ln-dh-stab-test-head"><strong>${stabilitaEsc(test.nazev)}</strong>
-          <span class="ln-dh-stab-state" data-state="${stav}">${stav}</span></summary>
+          <span class="ln-dh-stab-state" data-state="${starsi ? "OLD" : stav}">${stabilitaEsc(oznaceni)}</span></summary>
         <div class="ln-dh-stab-detail"><div class="ln-dh-stab-category">${stabilitaEsc(test.skupina)}${test.checkpoint ? " · referenční bod " + stabilitaEsc(test.checkpoint) : ""}</div>
         <div class="ln-dh-stab-steps">${stabilitaEsc(test.krok)}</div>
         <div class="ln-dh-stab-actions">
           <button type="button" data-dh-stab="pass" data-test-id="${test.id}">✓ PASS</button>
           <button type="button" data-dh-stab="fail" data-test-id="${test.id}">✕ FAIL</button>
-          <button type="button" data-dh-stab="reset" data-test-id="${test.id}">—</button>
+          <button type="button" data-dh-stab="reset" data-test-id="${test.id}" title="Vymazat jen tento výsledek">Reset</button>
           <button type="button" data-dh-stab="copy" data-test-id="${test.id}" class="ln-dh-stab-copy">Kopírovat report</button>
         </div>
         <label class="ln-dh-stab-note-label" for="ln-stab-note-${test.id}">Co přesně selhalo (volitelné)</label>
-        <textarea id="ln-stab-note-${test.id}" data-dh-stab-note="${test.id}" rows="2" placeholder="Např. obrázek překrývá třetí odrážku…">${stabilitaEsc(vysledek?.poznamka || "")}</textarea>
-        ${vysledek?.cas ? `<div class="ln-dh-stab-datetime">${stabilitaEsc(vysledek.cas)} · build ${stabilitaEsc(vysledek.verze || "-")}</div>` : ""}
+        <textarea id="ln-stab-note-${test.id}" data-dh-stab-note="${test.id}" rows="2" maxlength="${STABILITA_MAX_POZNAMKA}" placeholder="Např. obrázek překrývá třetí odrážku…">${stabilitaEsc(vysledek?.poznamka || "")}</textarea>
+        ${vysledek?.cas ? `<div class="ln-dh-stab-datetime">${stabilitaEsc(vysledek.cas)} · build ${stabilitaEsc(vysledek.verze || "-")}${starsi ? " · ověř znovu v tomto buildu" : ""}</div>` : ""}
         </div></details>`;
     }).join("");
   }
@@ -251,6 +341,7 @@
       `test: ${test.nazev}`,
       `skupina: ${test.skupina}`,
       `výsledek: ${stav.stav || "NETESTOVÁNO"} (ručně zadané, ne automatické potvrzení)`,
+      `ověřený build: ${stav.verze || "-"} | současný build: ${stabilitaVerze()} | ${stabilitaHistorickyVysledek(stav) ? "STARŠÍ BUILD – ZNOVU OVĚŘIT" : "aktuální nebo netestováno"}`,
       `ref: ${test.checkpoint || "neověřeno"}`,
       `postup: ${test.krok}`,
       `poznámka uživatele: ${stav.poznamka || "-"}`,
@@ -271,7 +362,7 @@
   function spustStabilityCenter() {
     stabilitaVypis();
     stabilitaVypisAuto();
-    zapis("STABILITY CENTER V1 | READ-ONLY + ruční PASS/FAIL | všechny výsledky jen v paměti relace");
+    zapis(`STABILITY CENTER V1 | READ-ONLY + ruční PASS/FAIL | ${stabilitaUlozeniInfo}`);
     zapis(`TESTY | ${STABILITA_TESTY.length} scénářů · žádné testy automaticky nemění poznámky`);
     return () => {};
   }
@@ -2860,6 +2951,7 @@ async function zkopirujReport(tlacitko) {
           <strong>Centrum stability V1</strong>
           <p>Ruční regresní scénáře. PASS znamená tvé potvrzení, nikoli automatický test. Bez zásahu do poznámek.</p>
           <div data-ln-stability-summary>0 PASS · 0 FAIL</div>
+          <div data-ln-stability-storage role="status" aria-live="polite">Kontroluji lokální úložiště…</div>
         </div>
         <div class="ln-dh-stab-toolbar">
           <label>Oblast <select data-ln-stability-filter>
@@ -2871,7 +2963,7 @@ async function zkopirujReport(tlacitko) {
         </div>
         <pre class="ln-dh-stab-auto" data-ln-stability-auto>Spusť technickou kontrolu po otevření testovací poznámky.</pre>
         <div class="ln-dh-stab-list" data-ln-stability-list></div>
-        <div class="ln-dh-stab-disclaimer">V1 nevrací starý kód. Výsledky zůstávají pouze v paměti do restartu aplikace. Před testováním dat používej testovací poznámky.</div>
+        <div class="ln-dh-stab-disclaimer">Výsledky PASS/FAIL a poznámky se ukládají pouze na tomto zařízení a původu aplikace. Nesynchronizují se s cloudem; odinstalace, smazání dat nebo změna webové adresy je může odstranit. Starší build vyžaduje nové ověření. V1 nevrací starý kód. Pro jistotu můžeš kopírovat souhrn.</div>
       </section>
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
@@ -2946,7 +3038,7 @@ async function zkopirujReport(tlacitko) {
           `prostředí: ${webviewFingerprint().zaklad}`,
           ...STABILITA_TESTY.map(test => {
             const vysledek = stabilitaVysledky.get(test.id) || {};
-            return `${vysledek.stav || "NETESTOVÁNO"} | ${test.id} | ${test.nazev} | ref=${test.checkpoint || "-"} | ${vysledek.poznamka || ""}`;
+            return `${vysledek.stav || "NETESTOVÁNO"}${stabilitaHistorickyVysledek(vysledek) ? " [STARŠÍ BUILD – ZNOVU OVĚŘIT]" : ""} | ${test.id} | ${test.nazev} | ověřeno=${vysledek.verze || "-"} | čas=${vysledek.cas || "-"} | ref=${test.checkpoint || "-"} | ${vysledek.poznamka || ""}`;
           }),
           `DOM SNAPSHOT | ${stabilitaStavEditoru().shrnuti}`,
           ...(STABILITA_TESTY.some(test => test.id.startsWith("image-") && stabilitaStav(test) === "FAIL") ? stabilitaGeometrie() : [])
@@ -2963,19 +3055,28 @@ async function zkopirujReport(tlacitko) {
         return;
       }
       if (!["pass", "fail", "reset"].includes(akce)) return;
-      const puvodni = stabilitaVysledky.get(test.id) || {};
-      const stav = akce === "reset" ? "NETESTOVÁNO" : akce.toUpperCase();
-      const vysledek = { ...puvodni, stav, cas: new Date().toISOString(), verze: window.LUBANOTE_VERSION || "DEV" };
-      stabilitaVysledky.set(test.id, vysledek);
-      zapis(`STABILITY ${stav} | ${test.id} | build=${vysledek.verze}`);
+      if (akce === "reset") {
+        stabilitaVysledky.delete(test.id); // Jen konkrétní test; smaže i jeho poznámku.
+        stabilitaUlozVysledky();
+        zapis(`STABILITY RESET | ${test.id}`);
+      } else {
+        const puvodni = stabilitaVysledky.get(test.id) || {};
+        const stav = akce.toUpperCase();
+        const vysledek = { ...puvodni, stav, cas: new Date().toISOString(), verze: stabilitaVerze() };
+        stabilitaVysledky.set(test.id, vysledek);
+        stabilitaUlozVysledky();
+        zapis(`STABILITY ${stav} | ${test.id} | build=${vysledek.verze}`);
+      }
       stabilitaVypis();
     });
 
     hub.addEventListener("input", event => {
       const note = event.target.closest("textarea[data-dh-stab-note]");
       if (!note || aktivniModul !== "stabilityCenter") return;
+      if (!stabilitaNajdiTest(note.dataset.dhStabNote)) return;
       const puvodni = stabilitaVysledky.get(note.dataset.dhStabNote) || {};
       stabilitaVysledky.set(note.dataset.dhStabNote, { ...puvodni, poznamka: note.value });
+      stabilitaUlozVysledky(); // Okamžitě i při psaní, bez závislosti na zavření Hubu.
     });
 
     hub.addEventListener("change", event => {

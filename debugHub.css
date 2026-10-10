@@ -524,3 +524,8 @@
 #ln-debug-hub .ln-dh-stab-note-label { font-size: .625rem !important; color: #b5c9be !important; }
 #ln-debug-hub .ln-dh-stab-test textarea { box-sizing: border-box !important; display: block !important; width: 100% !important; padding: 7px !important; border: 1px solid #31544a !important; border-radius: 8px !important; color: white !important; background: #061412 !important; font-size: .6875rem !important; min-height: 48px !important; }
 #ln-debug-hub .ln-dh-stab-datetime, #ln-debug-hub .ln-dh-stab-disclaimer { font-size: .625rem !important; color: #9eada7 !important; }
+
+/* 683C – stav lokálního úložiště a historické výsledky. */
+#ln-debug-hub [data-ln-stability-storage] { font-size: .625rem !important; color: #a5e3c5 !important; margin-top: 5px !important; overflow-wrap: anywhere !important; }
+#ln-debug-hub [data-ln-stability-storage][data-saved="no"] { color: #ffad8f !important; font-weight: 800 !important; }
+#ln-debug-hub .ln-dh-stab-state[data-state="OLD"] { color: #f0c987 !important; background: #41341b !important; }
