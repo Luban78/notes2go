@@ -4068,11 +4068,55 @@
     return true;
   }
 
+  /* 683F – krátký tap na skutečnou šipku 682O patří Core, ne textové
+     selection vrstvě. Bridge poslouchá TOUCHEND na document/capture, tedy
+     DŘÍVE než 683E stopImmediatePropagation na editor/capture. Právě proto
+     683E nedokázal zabránit obnově starých úchytů u značky. */
+  let v2MarkerDotyk = null;
+  let v2MarkerPotlacNativeDo = 0;
+  let v2MarkerGenerace = 0;
+
+  function jeV2SkutecnaSipka(event) {
+    const znacka = event.target?.closest?.('button.ln-v2-list-marker-hit[data-v2-list-marker]');
+    return !!(znacka && hostitel?.contains(znacka));
+  }
+
+  function uklidV2SelectionPoSipce() {
+    if (v2SelectionScroll && !v2SelectionScroll.handleDrag) {
+      zrusV2SelectionScrollStav(v2SelectionScroll);
+    }
+    if (v2SelectionPrevodTimer) {
+      clearTimeout(v2SelectionPrevodTimer);
+      v2SelectionPrevodTimer = null;
+    }
+    skryjV2SelectionHandles();
+    skryjV2SelectionMenu();
+    v2PosledniTapSelection = null;
+    nastavV2SelectionMenuNuceneSkryti(false);
+    // Modelový caret ani focus NEMĚNÍME. Odstraníme jen případný nativní
+    // označený rozsah (ne platný collapsed caret na původním místě).
+    const vyber = window.getSelection?.();
+    if (vyber?.rangeCount && !vyber.isCollapsed) potlacV2NativeSelection();
+  }
+
   /* 673G16 – po prvním scrollu drží výběr CSS Highlight a naše LubaNote handles.
      Běžný scroll zůstává compositorový. Vlastní handle drag má nově bezpečný
      edge auto-scroll, protože celý pohyb i Range řídíme sami a nebojujeme s
      nativním Android selection enginem. */
   document.addEventListener("touchstart", (event) => {
+    ++v2MarkerGenerace;
+    v2MarkerPotlacNativeDo = 0;
+    v2MarkerDotyk = null;
+    if (aktivni && jeV2SkutecnaSipka(event) && event.touches?.length === 1) {
+      const dotyk = event.touches[0];
+      v2MarkerDotyk = {
+        id: dotyk.identifier, x: dotyk.clientX, y: dotyk.clientY,
+        cas: performance.now()
+      };
+      v2PosledniTapSelection = null;
+      // Skutečný dlouhý stisk zůstává plně v režii Core MOVE.
+      return;
+    }
     const handle = event.target?.closest?.(`[${V2_SELECTION_HANDLE_ATTR}]`);
     if (handle && v2SelectionScroll?.range && event.touches?.length === 1) {
       const stav = v2SelectionScroll;
@@ -4263,6 +4307,29 @@
   }, { passive: false, capture: true });
 
   document.addEventListener("touchend", (event) => {
+    const marker = v2MarkerDotyk;
+    v2MarkerDotyk = null;
+    if (marker && aktivni && jeV2SkutecnaSipka(event)) {
+      const dotyk = Array.from(event.changedTouches || [])
+        .find((polozka) => polozka.identifier === marker.id);
+      const kratkyTap = dotyk &&
+        Math.hypot(dotyk.clientX - marker.x, dotyk.clientY - marker.y) <= 12 &&
+        performance.now() - marker.cas < 500 &&
+        !jeV2MoveInterakce(event);
+      if (kratkyTap) {
+        /* Nesmíme projít obecným G14_TAP_COLLAPSE: ten by nastavil caret
+           podle souřadnic šipky, případně obnovil starý výběr. */
+        v2MarkerPotlacNativeDo = performance.now() + 260;
+        uklidV2SelectionPoSipce();
+        const generace = v2MarkerGenerace;
+        requestAnimationFrame(() => {
+          if (!aktivni || generace !== v2MarkerGenerace) return;
+          // WebView může poslat opožděný selectionchange až po toggle Core.
+          uklidV2SelectionPoSipce();
+        });
+        return;
+      }
+    }
     const stav = v2SelectionScroll;
     if (!stav || !aktivni) return;
 
@@ -4678,6 +4745,12 @@
     const range = vyber.getRangeAt(0);
     if (!hostitel?.contains(range.commonAncestorContainer)) return;
 
+    if (!jeDesktopSelection && !range.collapsed &&
+        performance.now() < v2MarkerPotlacNativeDo) {
+      // Krátký dozvuk nativního výběru po tapu na ovladač seznamu.
+      potlacV2NativeSelection();
+      return;
+    }
     if (!jeDesktopSelection && !range.collapsed && !v2SelectionScroll?.range) {
       naplanujV2PrevodNativeSelection("selectionchange-stable");
       ohlasV2SelectionEngineStav({ engine: "NATIVE" });
