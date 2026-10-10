@@ -4490,6 +4490,54 @@
     event.stopImmediatePropagation();
   }, true);
 
+  /* 683I – READ-ONLY audit caret/handle po tapu na skutečnou šipku.
+     NERESTORUJE Selection, neovlivňuje touch/focus/scroll. Do reportu patří
+     pouze souřadnice, počet Range a vizuální viditelnost, nikoliv text. */
+  let v2DiagnostikaSipkaDo = 0;
+  function zapisV2SipkaCaretGeometrii(faze) {
+    if (!aktivni) return;
+    try {
+      const native = window.getSelection?.();
+      const range = native?.rangeCount ? native.getRangeAt(0) : null;
+      const nativeRect = range ? (range.getClientRects?.()[0] || range.getBoundingClientRect?.()) : null;
+      const caret = document.querySelector('.ln-v2-luba-caret:not([hidden])');
+      const caretRect = caret?.getBoundingClientRect?.() || null;
+      const editor = core()?.ziskejEditorElement?.();
+      const pozice = (rect) => rect && Number.isFinite(rect.left)
+        ? `${Math.round(rect.left)},${Math.round(rect.top)}` : '-';
+      const handleEl = Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom'));
+      const viditelne = handleEl.filter(el => !el.hidden && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden');
+      const handlePos = viditelne.map(el => `${el.getAttribute('data-ln-v2-selection-handle')}:${pozice(el.getBoundingClientRect())}`).join(';') || '-';
+      zapisSelectionScrollDiag('683I_ARROW_CARET', null,
+        `phase=${faze} native=${range ? (range.collapsed ? 'caret' : 'selection') : 'none'} ` +
+        `nativeXY=${pozice(nativeRect)} lubaXY=${pozice(caretRect)} ` +
+        `custom=${handlePos} focus=${document.activeElement?.tagName || '-'} ` +
+        `scroll=${Math.round(editor?.scrollTop || 0)}`);
+    } catch (error) {
+      zapisSelectionScrollDiag('683I_ARROW_CARET_ERROR', null, `phase=${faze} msg=${String(error?.name || 'unknown')}`);
+    }
+  }
+  document.addEventListener('pointerdown', (event) => {
+    if (!aktivni || !event.target?.closest?.('.ln-v2-list-marker-hit, [data-v2-list-marker]')) return;
+    v2DiagnostikaSipkaDo = performance.now() + 700;
+    zapisV2SipkaCaretGeometrii('before');
+  }, { passive: true, capture: true });
+  document.addEventListener('touchend', (event) => {
+    if (!aktivni || !event.target?.closest?.('.ln-v2-list-marker-hit, [data-v2-list-marker]')) return;
+    zapisV2SipkaCaretGeometrii('touchend_capture');
+    setTimeout(() => {
+      if (aktivni) zapisV2SipkaCaretGeometrii('after_100ms');
+    }, 100);
+    setTimeout(() => {
+      if (aktivni) zapisV2SipkaCaretGeometrii('after_300ms');
+    }, 300);
+  }, { passive: true, capture: true });
+  document.addEventListener('selectionchange', () => {
+    if (aktivni && performance.now() < v2DiagnostikaSipkaDo) {
+      zapisV2SipkaCaretGeometrii('selectionchange');
+    }
+  }, { passive: true });
+
   ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel"].forEach((typ) => {
     document.addEventListener(typ, (event) => {
       if (!aktivni || (!hostitel?.contains(event.target) && !event.target?.closest?.(`[${V2_SELECTION_HANDLE_ATTR}]`))) return;
