@@ -2738,3 +2738,22 @@
   }
 }
 
+
+/* 683T / UX-05, UX-06 – jen PC s myší, mobilní editor beze změny. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #taskModal .editorFindBar {
+    width: min(520px, calc(100% - 24px));
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #taskModal .editorTopBar .dateTimeInputs {
+    margin-left: auto;
+    margin-right: 0;
+    gap: 5px;
+  }
+  #taskModal .editorTopBar .editorTopActions {
+    flex: 0 0 auto;
+    margin-left: 0;
+    gap: 4px;
+  }
+}

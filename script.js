@@ -258,10 +258,14 @@ const puvodniTextPotvrzeniSmazani =
   "Poznámka se přesune do Koše a můžeš ji později obnovit.";
 
 let hromadneMazaniIds = null;
+/* 683T / BUG-04: potvrzovací dialog umí také ZAHODIT dosud
+   neuložený nový koncept bez vytváření karty v Koši. */
+let potvrzeniZahozeniNove = false;
 
 cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
   hromadneMazaniIds = null;
+  potvrzeniZahozeniNove = false;
   
   if (deleteConfirmTitle) {
     deleteConfirmTitle.textContent =
@@ -291,6 +295,39 @@ const appMessageNormalButton =
 
 
 confirmDeleteButton.addEventListener("click", async () => {
+  /* Nová rozepsaná poznámka ještě nemá uloženou kartu. Nesnažíme se
+     mazat savedTask[-1]; uklidíme jen konkrétní draft a jeho přílohy.
+     Potvrzení je explicitní, mazání do Koše by zde bylo zavádějící. */
+  if (potvrzeniZahozeniNove) {
+    potvrzeniZahozeniNove = false;
+    const draftId = ziskejDraftIdPoznamky();
+    deleteConfirmModal.hidden = true;
+    if (activeTaskId || activeTaskIndex !== null || !draftId) return;
+    clearTimeout(draftUlozeniTimer);
+    draftUlozeniTimer = null;
+    const vymazano = await smazPersistovanyDraftPoznamky(draftId);
+    if (!vymazano && ziskejVlastnikaDraftu()) {
+      zobrazZpravuAplikace(
+        "Zahození konceptu",
+        "Koncept se nepodařilo bezpečně odstranit z obnovy. Editor zůstal otevřený."
+      );
+      return;
+    }
+    await zahodLokalniPrilohyDraftu();
+    zahajVizualniZavreniEditoru();
+    taskModal.classList.remove("show");
+    document.body.classList.remove("noScroll");
+    ziskejEditorCoreV2Bridge()?.zavri?.();
+    taskModal.removeAttribute("data-task-id");
+    activeTaskIndex = null;
+    activeTaskId = null;
+    ukonciDraftPoznamky();
+    editorSessionId += 1;
+    dokoncVizualniZavreniEditoru();
+    if (deleteConfirmTitle) deleteConfirmTitle.textContent = puvodniNadpisPotvrzeniSmazani;
+    if (deleteConfirmText) deleteConfirmText.textContent = puvodniTextPotvrzeniSmazani;
+    return;
+  }
   /* Hromadné smazání vybraných karet. */
   if (Array.isArray(hromadneMazaniIds)) {
     const idsKeSmazani = [...hromadneMazaniIds];
@@ -1170,11 +1207,20 @@ const deleteTaskButton =
 deleteTaskButton?.addEventListener("click", () => {
   const tasks = loadTask();
   const aktivni = najdiAktivniPoznamku(tasks);
-  
+
   if (!aktivni) {
+    /* Jde o novou nerozepsanou/rozepsanou poznámku bez savedTask.
+       Potvrzení smí zahodit jen tento koncept, ne cizí uložený záznam. */
+    if (activeTaskId !== null || activeTaskIndex !== null || !ziskejDraftIdPoznamky()) return;
+    potvrzeniZahozeniNove = true;
+    selectedCardIndex = null;
+    if (deleteConfirmTitle) deleteConfirmTitle.textContent = "Zahodit rozepsanou poznámku?";
+    if (deleteConfirmText) deleteConfirmText.textContent = "Poznámka ještě nebyla uložená. Koncept se odstraní natrvalo (nebude v Koši).";
+    deleteConfirmModal.hidden = false;
     return;
   }
-  
+
+  potvrzeniZahozeniNove = false;
   selectedCardIndex = aktivni.index;
   
   deleteConfirmModal.hidden = false;
@@ -3946,6 +3992,30 @@ editorBackButton.addEventListener(
     } catch (_error) {}
   }
 );
+
+/* 683T – desktop Ctrl+S uloží bez zavření editoru. Neobchází
+   existující save/lock/E2E větev; volba nezavirat se už používá při
+   bezpečném předání editoru mezi zařízeními. */
+document.addEventListener("keydown", async (event) => {
+  if (event.defaultPrevented || event.repeat || event.isComposing) return;
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || String(event.key).toLowerCase() !== "s") return;
+  if (!window.matchMedia("(min-width: 900px) and (hover: hover) and (pointer: fine)").matches) return;
+  if (!taskModal || taskModal.hidden) return;
+  if ((appMessageModal && !appMessageModal.hidden) || (deleteConfirmModal && !deleteConfirmModal.hidden)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  await ulozAZavriEditor(null, { nezavirat: true });
+}, true);
+
+/* 683T – na desktopu klik výhradně na tmavé pozadí editoru
+   vykoná totéž co existující tlačítko Uložit a zavřít.
+   Klik dovnitř .modalContent ani na scrollbar neřešíme. */
+taskModal?.addEventListener("click", (event) => {
+  if (event.target !== taskModal || event.button !== 0 || taskModal.hidden) return;
+  if (!window.matchMedia("(min-width: 900px) and (hover: hover) and (pointer: fine)").matches) return;
+  if (probihaUlozeniEditoru || !appMessageModal.hidden || !deleteConfirmModal.hidden) return;
+  editorBackButton?.click();
+});
 
 appMessageNormalButton?.addEventListener(
   "click",

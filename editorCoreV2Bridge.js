@@ -1445,6 +1445,7 @@
     return window.innerWidth >= 900;
   }
 
+  let desktopNastrojeRozbalene = true;
   function nastavToolbarV2(rezim = "cas") {
     const tlacitko = document.getElementById("editorToolbarToggle");
     const textToolbar = document.getElementById("editorQuickToolbar");
@@ -1457,9 +1458,14 @@
 
     if (jeDesktopToolbarV2()) {
       datumCas.hidden = false;
-      textToolbar.hidden = false;
-      toolsToolbar.hidden = false;
-      tlacitko.hidden = true;
+      textToolbar.hidden = !desktopNastrojeRozbalene;
+      toolsToolbar.hidden = !desktopNastrojeRozbalene;
+      tlacitko.hidden = false;
+      tlacitko.textContent = "Aa";
+      tlacitko.classList.toggle("active", desktopNastrojeRozbalene);
+      tlacitko.setAttribute("aria-expanded", String(desktopNastrojeRozbalene));
+      tlacitko.setAttribute("aria-pressed", String(desktopNastrojeRozbalene));
+      tlacitko.setAttribute("aria-label", desktopNastrojeRozbalene ? "Skrýt nástroje" : "Zobrazit nástroje");
       if (pripominka) pripominka.hidden = false;
       zavriPanelyFormatu();
       return true;
@@ -1518,6 +1524,11 @@
   }
 
   function cyklujToolbarV2() {
+    if (jeDesktopToolbarV2()) {
+      desktopNastrojeRozbalene = !desktopNastrojeRozbalene;
+      nastavToolbarV2();
+      return;
+    }
     const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
     if (jeSdilenyEditor) {
       nastavToolbarV2(rezimToolbaruV2 === "text" ? "nastroje" : "text");
@@ -4790,6 +4801,19 @@
 
     /* Nic dalšího zde neděláme. Event pokračuje do script.js, kde
        `zpracujZavreniEditoru()` drží jedinou správnou save/discard logiku. */
+  }, true);
+
+  /* 683T / BUG-01 – LubaKeyboard smaže nebo nahradí označený text
+     modelem, nikoli nativním inputem. Starý custom Range v Bridge pak
+     nesmí držet dvě kapky na již smazaném rozsahu. Modelový signál
+     vzniká až PO vykreslení, takže nezasahujeme do samotného mazání. */
+  document.addEventListener("lubanote:v2-model-input", (event) => {
+    if (!aktivni || !v2SelectionScroll?.range) return;
+    const editor = core()?.ziskejEditorElement?.();
+    if (!editor || event.target !== editor || v2SelectionScroll.handleDrag) return;
+    zrusV2SelectionScrollStav(v2SelectionScroll);
+    skryjV2SelectionMenu();
+    obnovToolbar();
   }, true);
 
   document.addEventListener("selectionchange", () => {

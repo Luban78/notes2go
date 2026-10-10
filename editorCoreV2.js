@@ -9577,10 +9577,27 @@
       naplanujV2SelectionOverlay(posledniVyber);
     }, true);
 
-    poslouchej(editor, "touchstart", () => {
+    /* 683T / BUG-02 – první viditelný posun gestem předchází scroll
+       eventu. Skryjeme fixní caret i vlastní kapku už při skutečném
+       tažení (>7 CSS px), aby neplavaly přes další řádek. Tap a dvojtap
+       bez pohybu zůstávají netknuté; MOVE ani selection nepřebíráme. */
+    let v2DotykCaretStart = null;
+    poslouchej(editor, "touchstart", (event) => {
       v2LubaCaretTouchAktivni = true;
+      const dotyk = event.touches?.length === 1 ? event.touches[0] : null;
+      v2DotykCaretStart = dotyk ? { id: dotyk.identifier, x: dotyk.clientX, y: dotyk.clientY } : null;
+    }, { passive: true });
+    poslouchej(editor, "touchmove", (event) => {
+      const start = v2DotykCaretStart;
+      if (!start || !v2LubaCaretTouchAktivni) return;
+      const dotyk = Array.from(event.touches || []).find((d) => d.identifier === start.id);
+      if (!dotyk) return;
+      if (Math.hypot(dotyk.clientX - start.x, dotyk.clientY - start.y) <= 7) return;
+      v2DotykCaretStart = null;
+      skryjV2LubaCaretProScroll();
     }, { passive: true });
     const ukonciV2LubaCaretTouch = () => {
+      v2DotykCaretStart = null;
       v2LubaCaretTouchAktivni = false;
       if (v2LubaCaretScrollAktivni) naplanujV2LubaCaretPoScrollu();
     };
