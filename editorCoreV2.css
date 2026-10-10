@@ -1008,3 +1008,14 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   .ln-v2-editor .ln-v2-list-marker-hit { cursor: grab; }
   .ln-v2-editor .ln-v2-list-marker-hit:active { cursor: grabbing; }
 }
+
+
+/* 683M – nativní modré selection handles Androidu nechceme v Editor Core V2.
+   Programmatic Range, caretPositionFromPoint a náš CSS Highlight zůstávají.
+   Jen APK Core editor; název poznámky, textová pole a PC jsou beze změny.
+   V dalších regresích ověřit Android caret drag / klávesnici / MOVE. */
+body.nativeApp #modalRichTextV2Host .ln-v2-editor {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}

@@ -89,6 +89,10 @@
 
   let potlacV2SelectionMenuDo = 0;
   let v2PosledniTapSelection = null;
+  /* 683M – druhý tap převezmeme ještě před nativním Android selectstart.
+     První tap a normální caret ponecháváme průchozí. */
+  let v2ZacatekDotykuDvojtap = null;
+  let v2PrimyDruhyTap = null;
 
   /* PATCH 673G20 – selection-scroll UX: panel je během každého custom
      handle dragu tvrdě skrytý a po puštění se vrací nad skutečný tažený
@@ -2611,7 +2615,7 @@
   function blokujV2SoubeznyNativeSelectstart(event) {
     if (!jeAndroidApkSelectionScroll() || !aktivni || !hostitel?.contains(event.target)) return;
     const vlastniBezi = !!(v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed);
-    if (!vlastniBezi && performance.now() >= v2NativeSelectstartBlokovatDo) return;
+    if (!vlastniBezi && !v2PrimyDruhyTap && performance.now() >= v2NativeSelectstartBlokovatDo) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select")) return;
     if (event.cancelable) event.preventDefault();
   }
@@ -4099,6 +4103,32 @@
     if (vyber?.rangeCount && !vyber.isCollapsed) potlacV2NativeSelection();
   }
 
+  /* 683M – druhý tap v editoru: včasný preventDefault pouze na druhý
+     krátký tap stejného slova. Neplatí pro šipky, MOVE, obrázky ani odkazy.
+     Zabraňuje Androidu vytvořit první modré selection handles. */
+  document.addEventListener("touchstart", (event) => {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || event.touches?.length !== 1) return;
+    v2PrimyDruhyTap = null;
+    const dotyk = event.touches[0];
+    const editor = core()?.ziskejEditorElement?.();
+    const cil = event.target;
+    if (!editor?.contains(cil) || cil.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select, [contenteditable=false]")) {
+      v2ZacatekDotykuDvojtap = null;
+      return;
+    }
+    const aktualni = { id: dotyk.identifier, x: dotyk.clientX, y: dotyk.clientY,
+      cas: performance.now(), scroll: Number(editor.scrollTop || 0) };
+    const predchozi = v2PosledniTapSelection;
+    v2ZacatekDotykuDvojtap = aktualni;
+    if (!predchozi || aktualni.cas - predchozi.cas > 360 ||
+        Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34 ||
+        jeV2MoveInterakce(event)) return;
+    v2PrimyDruhyTap = aktualni;
+    v2NativeSelectstartBlokovatDo = performance.now() + 450;
+    if (event.cancelable) event.preventDefault();
+    zapisSelectionScrollDiag("683M_SECOND_TAP_GUARD", event, `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
+  }, { passive: false, capture: true });
+
   /* 673G16 – po prvním scrollu drží výběr CSS Highlight a naše LubaNote handles.
      Běžný scroll zůstává compositorový. Vlastní handle drag má nově bezpečný
      edge auto-scroll, protože celý pohyb i Range řídíme sami a nebojujeme s
@@ -4548,33 +4578,46 @@
     if (!dotyk) return;
     const ted = performance.now();
     const aktualni = { x: dotyk.clientX, y: dotyk.clientY, cas: ted };
+    const zacatek = v2ZacatekDotykuDvojtap;
+    v2ZacatekDotykuDvojtap = null;
+    /* Skutečný tap nesmí být scroll ani dlouhé podržení pro MOVE. */
+    const editor = core()?.ziskejEditorElement?.();
+    const jeKratkyTap = !jeAndroidApkSelectionScroll() || (
+      !!zacatek && zacatek.id === dotyk.identifier &&
+      ted - zacatek.cas < 320 &&
+      Math.hypot(aktualni.x - zacatek.x, aktualni.y - zacatek.y) < 12 &&
+      Math.abs(Number(editor?.scrollTop || 0) - zacatek.scroll) < 3
+    );
+    const primy = v2PrimyDruhyTap;
+    v2PrimyDruhyTap = null;
+    if (!jeKratkyTap) {
+      v2PosledniTapSelection = null;
+      return;
+    }
     const predchozi = v2PosledniTapSelection;
     v2PosledniTapSelection = aktualni;
-
-    if (!predchozi) return;
-    if (ted - predchozi.cas > 360 || Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
-
+    if (!predchozi || ted - predchozi.cas > 360 ||
+        Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
     v2PosledniTapSelection = null;
     zapisV2Stabilitu("DOUBLE_TAP_DETECTED", `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
-    setTimeout(() => {
-      if (!aktivni) return;
-      const vyber = window.getSelection();
-      const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-      if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
-        zobrazV2SelectionMenuProOznaceni(range);
-        return;
-      }
 
-      /* PATCH 677F – WebView občas po double-tapu nechá jen caret (typicky
-         po předchozím custom selection cyklu) a žádný selectionchange sel:N
-         už nepřijde. V tom případě slovo vybere přímo LubaNote engine. */
-      if (aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "touchend")) return;
-
-      if (range && jeV2SelectionRozsah(range)) {
-        zobrazV2SelectionMenuProKurzor({ x: aktualni.x, y: aktualni.y });
-      }
-    }, 70);
-  }, { passive: true, capture: true });
+    /* 683M: ŽÁDNÉ čekání 70ms na Android. Word range určí LubaNote.
+       PreventDefault na druhém touchstart už zablokoval native word handles. */
+    if (jeAndroidApkSelectionScroll() && primy &&
+        aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "683M-direct")) {
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
+      zapisSelectionScrollDiag("683M_CUSTOM_WORD_READY", event);
+      return;
+    }
+    /* Bezpečný fallback pokud zařízení včasný druhý touchstart neohlásí. */
+    if (aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "683M-fallback")) return;
+    const vyber = window.getSelection();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+      zobrazV2SelectionMenuProOznaceni(range);
+    }
+  }, { passive: false, capture: true });
 
   document.addEventListener("dblclick", (event) => {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
