@@ -76,6 +76,7 @@
     gestures: "Gesta – pointer / touch / click",
     keyboardWatch: "Klávesnice – Gboard / focus watch",
     bulletDrag: "Bullet – drag / hierarchie",
+    listScrollWatch: "Bullet – skok při sbalení (READ-ONLY)",
     cardDrag: "Karty – reálný drag + tuning",
     cardDragLab: "Karty – Drag Lab (syntetický)",
     performance: "Výkon – benchmark"
@@ -582,6 +583,185 @@
 
     return () => {
       uklidy.forEach(uklid => uklid());
+    };
+  }
+
+  /* 682L – výhradně READ-ONLY diagnostika skoku pohledu po sbalení.
+     Žádné preventDefault, stopPropagation, focus, scrollTop setter,
+     DOM změny, override funkcí ani zásah do Core V2. */
+  function spustListScrollWatch() {
+    const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
+    const uklidy = [];
+    const cekajici = new Set();
+    let transakce = null;
+    let poradi = 0;
+    let posledniScrollLog = 0;
+    let posledniSelection = "";
+    let posledniPriprava = "";
+    let pripravaTimer = 0;
+
+    if (!editor) {
+      zapis("CHYBA | Otevři poznámku a spusť modul znovu");
+      return () => {};
+    }
+
+    const naplanuj = (funkce, zpozdeni) => {
+      const timer = setTimeout(() => {
+        cekajici.delete(timer);
+        if (aktivniModul === "listScrollWatch") funkce();
+      }, zpozdeni);
+      cekajici.add(timer);
+    };
+
+    const yPrvku = (prvek) => {
+      if (!prvek?.isConnected) return "-";
+      const y = prvek.getBoundingClientRect().top;
+      return Number.isFinite(y) ? String(Math.round(y)) : "-";
+    };
+
+    const ziskejRadek = (id) => {
+      if (!id) return null;
+      return [...editor.querySelectorAll(".ln-v2-odstavec[data-ln-v2-blok]")]
+        .find(prvek => prvek.dataset.lnV2Blok === id) || null;
+    };
+
+    const stav = (t) => {
+      const radek = ziskejRadek(t?.id);
+      const s = window.getSelection?.();
+      const rozsah = s?.rangeCount ? s.getRangeAt(0) : null;
+      const vv = window.visualViewport;
+      const fokus = document.activeElement;
+      const caret = document.querySelector(".ln-v2-luba-caret");
+      return [
+        `scroll=${Math.round(editor.scrollTop)}/${Math.round(Math.max(0, editor.scrollHeight - editor.clientHeight))}`,
+        `height=${editor.scrollHeight}/${editor.clientHeight}`,
+        `pageY=${Math.round(window.scrollY || 0)}`,
+        `vvY=${Math.round(vv?.offsetTop || 0)}`,
+        `focus=${popisPrvku(fokus)}`,
+        `sel=${rozsah ? (rozsah.collapsed ? "caret" : "range") + ':' + popisPrvku(rozsah.startContainer) + ':' + rozsah.startOffset : "none"}`,
+        `caretY=${yPrvku(caret)}`,
+        `anchorY=${yPrvku(radek)}`,
+        `anchorExists=${radek ? "Y" : "N"}`,
+        `editorConnected=${editor.isConnected ? "Y" : "N"}`,
+        `rootChildren=${editor.childElementCount}`
+      ].join(" | ");
+    };
+
+    const radekProDotyk = (event) => {
+      const cil = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const badge = cil?.closest?.("[data-v2-list-toggle]");
+      const radek = cil?.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered") || null;
+      if (!editor.contains(badge || radek)) return null;
+      const bod = bodUdalosti(event);
+      const rect = radek?.getBoundingClientRect();
+      const uroven = Number(radek?.dataset.lnV2BulletUroven || 0);
+      const stred = rect ? rect.left + 15 + Math.max(0, uroven) * 24 : NaN;
+      const znacka = Boolean(bod && Number.isFinite(stred) && Math.abs(bod.x - stred) <= 22);
+      const id = badge?.dataset?.v2ListToggle || radek?.dataset?.lnV2Blok || "";
+      return {
+        id, radek, badge: Boolean(badge), znacka,
+        x: bod ? Math.round(bod.x) : "-", y: bod ? Math.round(bod.y) : "-"
+      };
+    };
+
+    const faze = (text, t = transakce) => {
+      if (!t || t !== transakce) return;
+      zapis(`LIST#${t.cislo} ${text} | ${stav(t)}`);
+    };
+
+    const sledujPoGeste = t => {
+      if (t.sledovaniNaplanovano) return;
+      t.sledovaniNaplanovano = true;
+      for (const ms of [0, 35, 100, 250, 600, 1200, 2000]) {
+        naplanuj(() => faze(`AFTER +${ms}ms`, t), ms);
+      }
+      naplanuj(() => {
+        if (t !== transakce) return;
+        const puvodni = t.pocatek;
+        const pozdeji = ziskejRadek(t.id);
+        const novyY = pozdeji?.getBoundingClientRect().top;
+        const aktualniMax = Math.max(0, editor.scrollHeight - editor.clientHeight);
+        zapis(`LIST#${t.cislo} SUMMARY | deltaScroll=${Math.round(editor.scrollTop - puvodni.scroll)} | deltaHeight=${editor.scrollHeight - puvodni.height} | deltaMaxScroll=${Math.round(aktualniMax - puvodni.maxScroll)} | deltaAnchorY=${Number.isFinite(novyY) && Number.isFinite(puvodni.anchorY) ? Math.round(novyY - puvodni.anchorY) : "-"} | rootReplace=${t.rootReplace || 0}`);
+      }, 2050);
+    };
+
+    const zaznamenej = (typ, event) => {
+      if (jeDebugPrvek(event.target)) return;
+      const cil = radekProDotyk(event);
+      if (!cil) return;
+      const ted = performance.now();
+      if (!transakce || ted - transakce.zacatek > 500 || transakce.id !== cil.id) {
+        transakce = {
+          ...cil, cislo: ++poradi, zacatek: ted,
+          pocatek: {
+            scroll: editor.scrollTop,
+            height: editor.scrollHeight,
+            maxScroll: Math.max(0, editor.scrollHeight - editor.clientHeight),
+            anchorY: ziskejRadek(cil.id)?.getBoundingClientRect().top
+          }
+        };
+        faze(`GESTURE ${typ} @${cil.x},${cil.y} | badge=${cil.badge ? "Y" : "N"} marker=${cil.znacka ? "Y" : "N"} row=${cil.id || "-"}`);
+      } else {
+        faze(`${typ} @${cil.x},${cil.y} | prevented=${event.defaultPrevented ? "Y" : "N"}`);
+      }
+      if (typ === "touchend" || typ === "pointerup" || typ === "click") sledujPoGeste(transakce);
+    };
+
+    ["pointerdown", "touchstart", "mousedown", "pointerup", "touchend", "click", "pointercancel", "touchcancel"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => zaznamenej(typ, event), {capture: true, passive: true});
+    });
+
+    pridejPosluchac(uklidy, editor, "scroll", () => {
+      const ted = performance.now();
+      if (transakce && ted - transakce.zacatek < 2500) {
+        if (ted - posledniScrollLog >= 75) {
+          posledniScrollLog = ted;
+          faze("SCROLL EVENT");
+        }
+      } else {
+        posledniPriprava = `scroll=${Math.round(editor.scrollTop)}/${Math.round(Math.max(0, editor.scrollHeight - editor.clientHeight))}`;
+        if (pripravaTimer) clearTimeout(pripravaTimer);
+        pripravaTimer = setTimeout(() => {
+          pripravaTimer = 0;
+          if (aktivniModul === "listScrollWatch") zapis(`READING POSITION | ${posledniPriprava}`);
+        }, 240);
+      }
+    }, {passive: true});
+
+    pridejPosluchac(uklidy, document, "selectionchange", () => {
+      if (!transakce || performance.now() - transakce.zacatek > 2500) return;
+      const popis = infoDomVyberu();
+      if (popis === posledniSelection) return;
+      posledniSelection = popis;
+      faze(`SELECTIONCHANGE ${zkratText(popis, 110)}`);
+    }, true);
+
+    ["focusin", "focusout"].forEach(typ => {
+      pridejPosluchac(uklidy, document, typ, event => {
+        if (transakce && performance.now() - transakce.zacatek < 2500) {
+          faze(`${typ.toUpperCase()} target=${popisPrvku(event.target)}`);
+        }
+      }, true);
+    });
+
+    const observer = new MutationObserver(zmeny => {
+      if (!transakce || performance.now() - transakce.zacatek > 2500) return;
+      const pridano = zmeny.reduce((s, z) => s + z.addedNodes.length, 0);
+      const odebrano = zmeny.reduce((s, z) => s + z.removedNodes.length, 0);
+      transakce.rootReplace = (transakce.rootReplace || 0) + 1;
+      faze(`DOM ROOT REPLACE +${pridano}/-${odebrano}`);
+    });
+    observer.observe(editor, {childList: true});
+    pridejObserver(uklidy, observer);
+
+    zapis(`START BULLET SCROLL WATCH | READ-ONLY | ${stav(null)}`);
+    zapis("POSTUP | Odsuň poznámku od kurzoru a klepni na šipku rodiče; pak Kopírovat celý report");
+
+    return () => {
+      uklidy.forEach(uklid => uklid());
+      cekajici.forEach(timer => clearTimeout(timer));
+      cekajici.clear();
+      if (pripravaTimer) clearTimeout(pripravaTimer);
     };
   }
 
@@ -2259,6 +2439,8 @@
       stopAktivnihoModulu = spustGesta();
     } else if (aktivniModul === "keyboardWatch") {
       stopAktivnihoModulu = spustKeyboardWatch();
+    } else if (aktivniModul === "listScrollWatch") {
+      stopAktivnihoModulu = spustListScrollWatch();
     } else if (aktivniModul === "bulletDrag") {
       stopAktivnihoModulu = spustBulletDrag();
     } else if (aktivniModul === "cardDrag") {
