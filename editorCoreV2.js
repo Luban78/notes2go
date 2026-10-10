@@ -6175,6 +6175,28 @@
       : Math.min(puvodniUroven, normalizujUrovenBulletu(pred.uroven) + 1);
   }
 
+  /* 683W – vizualni kotva k posledni VIDITELNE sipce/odrazce
+     stejne urovne nad budouci pozici. Model listu se nemeni. */
+  function najdiV2KotvuVodiciCary(uroven, cilY) {
+    if (uroven === null || !editor) return null;
+    const radky = viditelneV2ListRadkyMimoPodstrom();
+    for (let i = radky.length - 1; i >= 0; i -= 1) {
+      const radek = radky[i];
+      /* TODO nema uroven ani sipku; nesmi byt falesnou kotvou urovne 1. */
+      if (!radek.classList.contains("ln-v2-bullet") && !radek.classList.contains("ln-v2-ordered")) continue;
+      if (normalizujUrovenBulletu(radek.dataset.lnV2BulletUroven) !== uroven) continue;
+      const r = radek.getBoundingClientRect();
+      if (r.top >= cilY - 7 || r.bottom < 0) continue;
+      const odsazeni = Number.parseFloat(getComputedStyle(radek).paddingLeft) || (30 + uroven * 24);
+      /* ::before je 24px siroke a zacina padding-30. */
+      const x = r.left + odsazeni - 18;
+      const radekVyska = Number.parseFloat(getComputedStyle(radek).lineHeight) || 30;
+      const y = r.top + Math.min(r.height, radekVyska) / 2;
+      return { x, y };
+    }
+    return null;
+  }
+
   function aktualizujV2DragSeznamu(x, y, riditAutoScroll = true) {
     if (!v2DragSeznamu?.aktivni) return;
     v2DragSeznamu.lastX = x;
@@ -6188,13 +6210,20 @@
       /* 683V – zobraz cilovou uroven a odpovidajici odsazeni.
          DROP/MOVE engine zustava beze zmeny. */
       const uroven = ziskejV2UrovenVodiciCary(v2DragSeznamu);
-      const posun = uroven === null ? 10 : 30 + uroven * 24;
-      const leva = Math.round(rect.left + posun);
+      const kotva = najdiV2KotvuVodiciCary(uroven, cil.y);
+      const leva = Math.round(kotva?.x ?? (rect.left + (uroven === null ? 10 : 12 + uroven * 24)));
       indicator.style.left = `${leva}px`;
       indicator.style.width = `${Math.max(20, Math.round(rect.right - leva - 10))}px`;
       indicator.style.top = `${Math.round(cil.y)}px`;
-      if (uroven === null) delete indicator.dataset.uroven;
-      else indicator.dataset.uroven = String(uroven + 1);
+      if (kotva && kotva.y < cil.y - 3) {
+        indicator.dataset.lnGuideAnchor = "1";
+        indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotva.y - cil.y)}px`);
+        indicator.style.setProperty("--ln-guide-vertical-height", `${Math.round(cil.y - kotva.y)}px`);
+      } else {
+        delete indicator.dataset.lnGuideAnchor;
+        indicator.style.removeProperty("--ln-guide-vertical-top");
+        indicator.style.removeProperty("--ln-guide-vertical-height");
+      }
       indicator.hidden = false;
     } else {
       indicator.hidden = true;
@@ -6983,6 +7012,11 @@
       suffix,
       celeSlovo: text.slice(zacatek, konec),
       predchoziSlovo: predchoziMatch?.[1] || "",
+      predchoziDveSlova: (() => {
+        const posledniUsek = predSlovem.split(/[.!?;\n\r]+/).pop() || "";
+        try { return (posledniUsek.match(/[\p{L}\p{M}\p{N}'’\-]+/gu) || []).slice(-2); }
+        catch (_error) { return (posledniUsek.match(/[A-Za-zÀ-ž0-9'’\-]+/g) || []).slice(-2); }
+      })(),
       textPredCaretem: predCaret
     };
   }

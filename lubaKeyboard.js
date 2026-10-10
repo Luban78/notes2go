@@ -25,6 +25,8 @@
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
   const ULOZ_KANDIDATY = "lubanote_lubakeyboard_word_candidates_v1";
   const ULOZ_KONTEXT = "lubanote_lubakeyboard_bigrams_v1";
+  /* 683W – oddelena lokalni pamet frazi. Starsi dvojice nechavame beze zmeny. */
+  const ULOZ_FRAZE = "lubanote_lubakeyboard_trigrams_v1";
   const ULOZ_OWNER = "lubanoteLocalOwnerUserId";
   let vlastnikOsobnihoSlovniku = String(localStorage.getItem(ULOZ_OWNER) || "").trim();
 
@@ -44,6 +46,12 @@
     return vlastnikOsobnihoSlovniku
       ? `${ULOZ_KONTEXT}:${vlastnikOsobnihoSlovniku}`
       : ULOZ_KONTEXT;
+  }
+
+  function klicKontextuFrazi() {
+    return vlastnikOsobnihoSlovniku
+      ? `${ULOZ_FRAZE}:${vlastnikOsobnihoSlovniku}`
+      : ULOZ_FRAZE;
   }
 
   function migrujLegacySlovnikProVlastnika() {
@@ -648,6 +656,7 @@
   let naucenaSlova = nactiNaucenaSlova();
   let kandidatiSlov = nactiKandidatySlov();
   let nauceneDvojice = nactiNauceneDvojice();
+  let nauceneFraze = nactiNauceneFraze();
 
   function core() {
     return window.LubaNoteEditorV2 || null;
@@ -964,6 +973,74 @@
       .slice(0, 3);
   }
 
+  /* 683W – jazykove a vlastnicky oddelene trojice slov (2 predchozi -> dalsi).
+     Ukladame jen cetnosti kratkych frazi, bez celeho textu poznamky. */
+  function nactiNauceneFraze() {
+    try {
+      const value = JSON.parse(localStorage.getItem(klicKontextuFrazi()) || "{}");
+      return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch (_error) { return {}; }
+  }
+
+  function ulozNauceneFraze() {
+    try { localStorage.setItem(klicKontextuFrazi(), JSON.stringify(nauceneFraze)); }
+    catch (_error) {}
+  }
+
+  function posledniDveSlovaZTextu(value) {
+    const text = String(value || "").split(/[.!?;\n\r]+/).pop() || "";
+    let slova;
+    try { slova = text.match(/[\p{L}\p{M}\p{N}'’\-]+/gu) || []; }
+    catch (_error) { slova = text.match(/[A-Za-zÀ-ž0-9'’\-]+/g) || []; }
+    return slova.slice(-2);
+  }
+
+  function klicFraze(prvni, druhe, layout) {
+    const a = lowerLocale(prvni, layout);
+    const b = lowerLocale(druhe, layout);
+    return a && b ? `${a}\u001f${b}` : "";
+  }
+
+  function naucFrazi(prvni, druhe, dalsi, bonus = 1, layout = aktualniLayout()) {
+    if (![prvni, druhe, dalsi].every(jeSlovoProUceni)) return false;
+    const id = layout.id || "en";
+    const klic = klicFraze(prvni, druhe, layout);
+    const slovoKlic = lowerLocale(dalsi, layout);
+    if (!klic || !slovoKlic) return false;
+    const mapa = nauceneFraze[id] && typeof nauceneFraze[id] === "object" ? nauceneFraze[id] : {};
+    const zaznam = mapa[klic] && typeof mapa[klic] === "object" ? mapa[klic] : {};
+    zaznam[slovoKlic] = {
+      word: String(dalsi).trim(),
+      count: Math.min(9999, Number(zaznam[slovoKlic]?.count || 0) + Math.max(1, Number(bonus || 1)))
+    };
+    mapa[klic] = Object.fromEntries(Object.entries(zaznam)
+      .sort((a, b) => Number(b[1]?.count || 0) - Number(a[1]?.count || 0)).slice(0, 8));
+    nauceneFraze[id] = Object.keys(mapa).length > 800
+      ? Object.fromEntries(Object.entries(mapa)
+          .sort((a, b) => {
+            const soucet = x => Object.values(x || {}).reduce((sum, y) => sum + Number(y?.count || 0), 0);
+            return soucet(b[1]) - soucet(a[1]);
+          }).slice(0, 800))
+      : mapa;
+    ulozNauceneFraze();
+    return true;
+  }
+
+  function frazoveNavrhy(prvni, druhe, layout = aktualniLayout(), prefix = "") {
+    const klic = klicFraze(prvni, druhe, layout);
+    if (!klic) return [];
+    const zadani = lowerLocale(prefix, layout);
+    const bez = bezDiakritiky(zadani);
+    return Object.values(nauceneFraze[layout.id]?.[klic] || {})
+      .filter(x => Number(x?.count || 0) >= 2)
+      .filter(x => {
+        const slovo = lowerLocale(x?.word || "", layout);
+        return !zadani || slovo.startsWith(zadani) || bezDiakritiky(slovo).startsWith(bez);
+      })
+      .sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0))
+      .map(x => String(x?.word || "").trim()).filter(Boolean).slice(0, 3);
+  }
+
   function oznamZmenuSlovniku(detail = {}) {
     window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {
       detail: { source: "local", ...detail }
@@ -1073,6 +1150,9 @@
     if (!slovo) return;
     naucSlovo(slovo, 2);
     if (kontext?.predchoziSlovo) naucDvojici(kontext.predchoziSlovo, slovo, 1);
+    if (kontext?.predchoziDveSlova?.length === 2) {
+      naucFrazi(...kontext.predchoziDveSlova, slovo, 1);
+    }
   }
 
   function zachovejVelikost(prefix, navrh, layout) {
@@ -1094,9 +1174,12 @@
      obecna nejcastejsi slova. Po predchozim slovu (vcetne mezery)
      NADÁLE navrhujeme dalsi slova z naucenych kontextovych dvojic.
      Nezasahujeme do uceni, ulozeneho slovniku ani prefixovych navrhu. */
-  function vychoziNavrhy(layout, predchoziSlovo = "") {
+  function vychoziNavrhy(layout, predchoziSlovo = "", predchoziDveSlova = []) {
     if (!String(predchoziSlovo || "").trim()) return [];
-    return kontextoveNavrhy(predchoziSlovo, layout);
+    const fraze = predchoziDveSlova.length === 2
+      ? frazoveNavrhy(...predchoziDveSlova, layout) : [];
+    const dvojice = kontextoveNavrhy(predchoziSlovo, layout);
+    return [...fraze, ...dvojice].filter((x, i, arr) => arr.indexOf(x) === i).slice(0, 3);
   }
 
   function vypocitejNavrhy() {
@@ -1110,7 +1193,8 @@
         : core()?.ziskejKontextVlastniKlavesnice?.();
     const prefix = String(kontext?.prefix || "");
     const predchoziSlovo = String(kontext?.predchoziSlovo || "");
-    if (!prefix) return vychoziNavrhy(layout, predchoziSlovo);
+    const predchoziDveSlova = kontext?.predchoziDveSlova || [];
+    if (!prefix) return vychoziNavrhy(layout, predchoziSlovo, predchoziDveSlova);
 
     const key = lowerLocale(prefix, layout);
     const keyBez = bezDiakritiky(key);
@@ -1134,6 +1218,11 @@
        skutečně napsal, zůstává vždy přijatelné i bez automatické opravy. */
     pridej(prefix, 100000);
 
+    if (predchoziDveSlova.length === 2) {
+      frazoveNavrhy(...predchoziDveSlova, layout, prefix).forEach((word, index) => {
+        pridej(word, 95000 - index * 10);
+      });
+    }
     kontextoveNavrhy(predchoziSlovo, layout, prefix).forEach((word, index) => {
       pridej(word, 90000 - index * 10);
     });
@@ -1682,6 +1771,7 @@
       prefix,
       celeSlovo: `${prefix}${suffix}`,
       predchoziSlovo: posledniSlovoZTextu(predSlovem),
+      predchoziDveSlova: posledniDveSlovaZTextu(predSlovem),
       zacatek: state.start - prefix.length,
       konec: state.end + suffix.length
     };
@@ -1951,6 +2041,7 @@
       prefix,
       celeSlovo: `${prefix}${suffix}`,
       predchoziSlovo: posledniSlovoZTextu(predSlovem),
+      predchoziDveSlova: posledniDveSlovaZTextu(predSlovem),
       zacatek: state.start - prefix.length,
       konec: state.end + suffix.length
     };
@@ -2888,6 +2979,9 @@
         : core()?.ziskejKontextVlastniKlavesnice?.();
     naucSlovo(navrh, 4);
     if (kontext?.predchoziSlovo) naucDvojici(kontext.predchoziSlovo, navrh, 4);
+    if (kontext?.predchoziDveSlova?.length === 2) {
+      naucFrazi(...kontext.predchoziDveSlova, navrh, 4);
+    }
     commandCore("suggestion", navrh);
     aktualizujNavrhy();
   }
@@ -4329,6 +4423,7 @@
     naucenaSlova = nactiNaucenaSlova();
     kandidatiSlov = nactiKandidatySlov();
     nauceneDvojice = nactiNauceneDvojice();
+    nauceneFraze = nactiNauceneFraze();
     aktualizujNavrhy();
 
     window.dispatchEvent(new CustomEvent("lubanote:dictionary-change", {

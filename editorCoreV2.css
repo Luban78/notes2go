@@ -494,21 +494,18 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   display: none !important;
 }
 
-/* 683V / UX-02 – popisek skutecne cilove urovne pri presunu odrazky. */
-.ln-v2-list-drop-indicator[data-uroven]::after {
-  content: "Úroveň " attr(data-uroven);
+/* 683W / UX-02 – vodici cara + kolmice k oznaceni cilove urovne.
+   Je to ciste vizualni vrstva bez zmeny MOVE enginu. */
+.ln-v2-list-drop-indicator[data-ln-guide-anchor="1"]::before {
+  content: "";
   position: absolute;
-  right: 0;
-  bottom: 7px;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: var(--color-surface, #211b29);
-  color: var(--color-text, #fff);
-  border: 1px solid var(--color-border, rgba(255,255,255,.3));
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1.2;
-  white-space: nowrap;
+  left: -1px;
+  top: var(--ln-guide-vertical-top, -20px);
+  width: 3px;
+  height: var(--ln-guide-vertical-height, 20px);
+  border-radius: 3px;
+  background: var(--color-accent, #8958f6);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #8958f6) 20%, transparent);
   pointer-events: none;
 }
 
