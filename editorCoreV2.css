@@ -1050,3 +1050,10 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
    Samotný modelový caret, výběr, MOVE a scroll zůstávají nedotčené. */
 .ln-v2-single-caret-handle { margin-left: 1px; }
 .ln-v2-single-caret-handle svg { width: 22px; height: 29px; }
+
+/* 683U / BUG-02 – společný lokální souřadnicový systém caretu a úchytu.
+   Výběr i obsah zůstávají modelem; vizuální overlay se scrolluje nativně
+   se svým textovým řádkem, bez přepočítávání během scrollování. */
+.ln-v2-editor > .ln-v2-odstavec { position: relative; }
+.ln-v2-luba-caret.ln-v2-caret-scroll-anchored,
+.ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored { position: absolute; }

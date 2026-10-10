@@ -1445,7 +1445,6 @@
     return window.innerWidth >= 900;
   }
 
-  let desktopNastrojeRozbalene = true;
   function nastavToolbarV2(rezim = "cas") {
     const tlacitko = document.getElementById("editorToolbarToggle");
     const textToolbar = document.getElementById("editorQuickToolbar");
@@ -1458,14 +1457,9 @@
 
     if (jeDesktopToolbarV2()) {
       datumCas.hidden = false;
-      textToolbar.hidden = !desktopNastrojeRozbalene;
-      toolsToolbar.hidden = !desktopNastrojeRozbalene;
-      tlacitko.hidden = false;
-      tlacitko.textContent = "Aa";
-      tlacitko.classList.toggle("active", desktopNastrojeRozbalene);
-      tlacitko.setAttribute("aria-expanded", String(desktopNastrojeRozbalene));
-      tlacitko.setAttribute("aria-pressed", String(desktopNastrojeRozbalene));
-      tlacitko.setAttribute("aria-label", desktopNastrojeRozbalene ? "Skrýt nástroje" : "Zobrazit nástroje");
+      textToolbar.hidden = false;
+      toolsToolbar.hidden = false;
+      tlacitko.hidden = true;
       if (pripominka) pripominka.hidden = false;
       zavriPanelyFormatu();
       return true;
@@ -1524,11 +1518,6 @@
   }
 
   function cyklujToolbarV2() {
-    if (jeDesktopToolbarV2()) {
-      desktopNastrojeRozbalene = !desktopNastrojeRozbalene;
-      nastavToolbarV2();
-      return;
-    }
     const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
     if (jeSdilenyEditor) {
       nastavToolbarV2(rezimToolbaruV2 === "text" ? "nastroje" : "text");

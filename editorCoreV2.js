@@ -144,12 +144,16 @@
      už na pointerdown. */
   let v2KodovyBlokPredKlikemMimo = -1;
 
+  function pouzivaV2UkotvenyCaret() {
+    return editor?.dataset.lnV2OwnCaretOnly === "1";
+  }
+
   function lubaCaretMaBytViditelny() {
     const klavesnice = window.LubaNoteKeyboard;
     return Boolean(
       editor?.isConnected &&
       jadroEditoru && !jadroEditoru.hidden &&
-      !v2LubaCaretScrollAktivni &&
+      (!v2LubaCaretScrollAktivni || pouzivaV2UkotvenyCaret()) &&
       klavesnice?.ziskejZdroj?.() === "luba" &&
       klavesnice?.jeOtevrena?.() &&
       klavesnice?.ziskejCilPsani?.() === "body"
@@ -161,6 +165,7 @@
       v2SingleCaretHandle = document.createElement("div");
       v2SingleCaretHandle.className = "ln-v2-single-caret-handle";
       v2SingleCaretHandle.setAttribute("aria-hidden", "true");
+      v2SingleCaretHandle.contentEditable = "false";
       v2SingleCaretHandle.hidden = true;
       /* Špička SVG leží na společné ose X modelového caretu.
          44px element slouží jen jako pohodlná dotyková oblast. */
@@ -209,6 +214,7 @@
       v2LubaCaret.className = "ln-v2-luba-caret";
       v2LubaCaret.hidden = true;
       v2LubaCaret.setAttribute("aria-hidden", "true");
+      v2LubaCaret.contentEditable = "false";
       document.body.appendChild(v2LubaCaret);
     }
     return v2LubaCaret;
@@ -390,19 +396,35 @@
     }
 
     const caret = zajistiV2LubaCaret();
-    caret.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
     caret.style.height = `${vyskaCaretu}px`;
-    caret.hidden = false;
-    /* 683O – jen v nativním read-only režimu s LubaKeyboard.
-       Kapka a caret se KRESLÍ ZE STEJNÉHO RECTU. */
-    if (editor.dataset.lnV2OwnCaretOnly === "1") {
+    /* 683U – kapka i caret jsou umístěné ve stejném TEXTOVÉM řádku.
+       Prohlížeč je tím pádem scrolluje SPOLEČNĚ s textem již při
+       compositor scrollu. Nečekáme na scroll-event/RAF a neschováváme
+       je během scrollu s otevřenou LubaKeyboard. DOM helpery nemají text. */
+    if (pouzivaV2UkotvenyCaret()) {
+      const blok = dokument?.bloky?.[vyber.konec.blok];
+      const radek = blok && editor.querySelector(`[data-ln-v2-blok="${CSS.escape(blok.id)}"]`);
+      if (!radek) { skryjV2LubaCaret(); return; }
+      const radekRect = radek.getBoundingClientRect();
+      const x = Math.round(rect.left - radekRect.left);
+      const y = Math.round(rect.top - radekRect.top);
+      caret.classList.add("ln-v2-caret-scroll-anchored");
+      caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      radek.appendChild(caret);
       const uchyt = ziskejV2SingleCaretHandle();
-      uchyt.style.left = `${Math.round(rect.left)}px`;
-      uchyt.style.top = `${Math.round(rect.top + vyskaCaretu)}px`;
+      uchyt.classList.add("ln-v2-caret-scroll-anchored");
+      uchyt.style.left = `${x}px`;
+      uchyt.style.top = `${y + vyskaCaretu}px`;
+      radek.appendChild(uchyt);
+      caret.hidden = false;
       uchyt.hidden = false;
-    } else if (v2SingleCaretHandle) {
-      v2SingleCaretHandle.hidden = true;
+      return;
     }
+    caret.classList.remove("ln-v2-caret-scroll-anchored");
+    caret.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
+    document.body.appendChild(caret);
+    caret.hidden = false;
+    if (v2SingleCaretHandle) v2SingleCaretHandle.hidden = true;
   }
 
   function naplanujV2LubaCaret(vyber = posledniVyber) {
@@ -7680,7 +7702,10 @@
       if (markerOcekavan && markerDeti[0].dataset.v2ListMarker !== blok.id) {
         return `blok ${b}: nesprávné ID seznamové šipky`;
       }
-      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka, ...badgeDeti, ...markerDeti]);
+      /* 683U: dva vlastní prázdné vizuální prvky mohou být v aktivním
+         řádku. Nesmějí vytvářet další textový segment ani měnit model. */
+      const vizualniCaret = primeDeti.filter((dite) => dite.matches?.(".ln-v2-luba-caret.ln-v2-caret-scroll-anchored, .ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored"));
+      const povoleneDeti = new Set([...segmentyDom, ...prazdneBr, ...obrazkyDom, ...todoCheckboxy, ...codeCopyTlacitka, ...badgeDeti, ...markerDeti, ...vizualniCaret]);
       if (primeDeti.some((dite) => !povoleneDeti.has(dite))) {
         return `blok ${b}: cizí přímý DOM prvek`;
       }
@@ -9573,7 +9598,9 @@
        modelový LubaCaret (fixed overlay) se během pohybu NESMÍ překreslovat.
        Jinak kvůli zpoždění rAF opticky plave o několik řádků. */
     poslouchej(document, "scroll", () => {
-      skryjV2LubaCaretProScroll();
+      /* 683U: v own-caret režimu se caret i úchyt scrollují s řádkem
+         přímo v DOM; žádné opakované hide/show či přeskok o řádek. */
+      if (!pouzivaV2UkotvenyCaret()) skryjV2LubaCaretProScroll();
       naplanujV2SelectionOverlay(posledniVyber);
     }, true);
 
@@ -9594,7 +9621,7 @@
       if (!dotyk) return;
       if (Math.hypot(dotyk.clientX - start.x, dotyk.clientY - start.y) <= 7) return;
       v2DotykCaretStart = null;
-      skryjV2LubaCaretProScroll();
+      if (!pouzivaV2UkotvenyCaret()) skryjV2LubaCaretProScroll();
     }, { passive: true });
     const ukonciV2LubaCaretTouch = () => {
       v2DotykCaretStart = null;

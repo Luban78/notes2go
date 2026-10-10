@@ -249,6 +249,13 @@ const deleteConfirmTitle =
 const deleteConfirmText =
   deleteConfirmModal?.querySelector("p");
 
+const deleteConfirmActionText = confirmDeleteButton?.querySelector("span:last-child");
+function nastavTlacitkoZahozeniNoveho(jeKoncept = false) {
+  const textNormalni = window.LubaNoteI18n?.t?.("trash.moveAction", "Do koše") || "Do koše";
+  if (deleteConfirmActionText) deleteConfirmActionText.textContent = jeKoncept ? "Smazat" : textNormalni;
+  if (confirmDeleteButton) confirmDeleteButton.setAttribute("aria-label", jeKoncept ? "Smazat rozepsanou poznámku natrvalo" : textNormalni);
+}
+
 const puvodniNadpisPotvrzeniSmazani =
   deleteConfirmTitle?.textContent?.trim() ||
   "Přesunout do koše?";
@@ -266,7 +273,8 @@ cancelDeleteButton.addEventListener("click", () => {
   deleteConfirmModal.hidden = true;
   hromadneMazaniIds = null;
   potvrzeniZahozeniNove = false;
-  
+  nastavTlacitkoZahozeniNoveho(false);
+
   if (deleteConfirmTitle) {
     deleteConfirmTitle.textContent =
       puvodniNadpisPotvrzeniSmazani;
@@ -326,6 +334,7 @@ confirmDeleteButton.addEventListener("click", async () => {
     dokoncVizualniZavreniEditoru();
     if (deleteConfirmTitle) deleteConfirmTitle.textContent = puvodniNadpisPotvrzeniSmazani;
     if (deleteConfirmText) deleteConfirmText.textContent = puvodniTextPotvrzeniSmazani;
+    nastavTlacitkoZahozeniNoveho(false);
     return;
   }
   /* Hromadné smazání vybraných karet. */
@@ -1213,14 +1222,16 @@ deleteTaskButton?.addEventListener("click", () => {
        Potvrzení smí zahodit jen tento koncept, ne cizí uložený záznam. */
     if (activeTaskId !== null || activeTaskIndex !== null || !ziskejDraftIdPoznamky()) return;
     potvrzeniZahozeniNove = true;
+    nastavTlacitkoZahozeniNoveho(true);
     selectedCardIndex = null;
     if (deleteConfirmTitle) deleteConfirmTitle.textContent = "Zahodit rozepsanou poznámku?";
-    if (deleteConfirmText) deleteConfirmText.textContent = "Poznámka ještě nebyla uložená. Koncept se odstraní natrvalo (nebude v Koši).";
+    if (deleteConfirmText) deleteConfirmText.textContent = "Tato rozepsaná poznámka ještě nebyla uložená. Opravdu ji chceš trvale smazat?";
     deleteConfirmModal.hidden = false;
     return;
   }
 
   potvrzeniZahozeniNove = false;
+  nastavTlacitkoZahozeniNoveho(false);
   selectedCardIndex = aktivni.index;
   
   deleteConfirmModal.hidden = false;
@@ -3993,9 +4004,9 @@ editorBackButton.addEventListener(
   }
 );
 
-/* 683T – desktop Ctrl+S uloží bez zavření editoru. Neobchází
-   existující save/lock/E2E větev; volba nezavirat se už používá při
-   bezpečném předání editoru mezi zařízeními. */
+/* 683U / UX-04 – na PC Ctrl+S znamená ULOŽIT A ZAVŘÍT.
+   Použije stejnou cestu jako tlačítko uložení, včetně ochrany proti
+   chybě a bezpečného uzavření editorové session. */
 document.addEventListener("keydown", async (event) => {
   if (event.defaultPrevented || event.repeat || event.isComposing) return;
   if (!(event.ctrlKey || event.metaKey) || event.altKey || String(event.key).toLowerCase() !== "s") return;
@@ -4004,7 +4015,7 @@ document.addEventListener("keydown", async (event) => {
   if ((appMessageModal && !appMessageModal.hidden) || (deleteConfirmModal && !deleteConfirmModal.hidden)) return;
   event.preventDefault();
   event.stopPropagation();
-  await ulozAZavriEditor(null, { nezavirat: true });
+  editorBackButton?.click();
 }, true);
 
 /* 683T – na desktopu klik výhradně na tmavé pozadí editoru
