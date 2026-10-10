@@ -266,17 +266,16 @@
   const ADMIN_HISTORY_KEY = "lubanoteAdminDashboardViewV1";
   let adminHistoryDepth = 0;
 
-  /* PATCH 677G – GLOBÁLNÍ VÝVOJOVÝ 5× TAP PRO DEBUG.
+  /* PATCH 683B – 5× tap výhradně v levém horním rohu viewportu.
    *
-   * Před veřejným vydáním odstranit / přepnout na false.
-   * Nezapisuje se do localStorage a po reloadu je znovu zamčený.
-   * Pět krátkých tapů prakticky na stejném místě funguje na libovolné
-   * obrazovce včetně Core V2 editoru a LubaKeyboard. Gesto pouze odemkne
-   * interní nástroje pro aktuální relaci; běžný tap/scroll nijak neblokuje.
+   * Funguje na každé obrazovce, ale nesleduje ostatní plochu.
+   * Před veřejným vydáním vypnout / odstranit vývojový fallback.
+   * Session-only: bez změn dat, focusu a běžných touch/click událostí.
    */
   const POVOLIT_NOUZOVY_DEBUG_5X = true;
   const NOUZOVY_DEBUG_OKNO_MS = 2800;
   const NOUZOVY_DEBUG_RADIUS_PX = 44;
+  const NOUZOVY_DEBUG_ROH_PX = 70; // CSS px od levého a horního okraje viewportu
   const NOUZOVY_DEBUG_MAX_POHYB_PX = 18;
   const NOUZOVY_DEBUG_MAX_TAP_MS = 520;
   let nouzovyDevDebug = false;
@@ -3098,33 +3097,38 @@
     window.LubaNoteDebugHub?.open?.();
   }
 
-  /* PATCH 680A2 – globální 5× tap bez závislosti na click eventu.
-   *
-   * WebView může v editoru click potlačit nebo převést na selection gesto,
-   * proto posloucháme Pointer Events už v capture fázi. Počítají se jen
-   * krátké tapy bez dragu a všechny musí být v jednom 44px shluku. Tím se
-   * minimalizuje náhodné odemčení při běžném psaní, selection nebo scrollu.
-   * Po odemčení se vždy spustí hlavní Start / sync / síť diagnostika.
-   * WebView Watch zůstává dostupný jen jako ručně zvolený modul.
+  /* PATCH 683B – přesný roh + zachování rozběhnuté diagnostiky.
+   * Pointer/touch capture je pouze pasivní pozorování; žádné preventDefault.
+   * Debug Hub.open už samo zachovává aktivní modul i report (682B).
    */
   function spustNouzovyDebug() {
     if (!POVOLIT_NOUZOVY_DEBUG_5X) return false;
 
+    const prvniOdemceni = !nouzovyDevDebug;
     nouzovyDevDebug = true;
     nouzoveKliky = [];
     nouzovyPointerStart = null;
 
-    console.warn(
-      "DEV DEBUG 677G | GLOBAL 5X UNLOCK | session only"
-    );
-
-    window.LubaNoteVisualDebug?.showDock?.();
-
-    if (window.LubaNoteDebugHub?.startStartup?.()) {
-      return true;
+    if (prvniOdemceni) {
+      console.info("DEV DEBUG 683B | TOP-LEFT 5X UNLOCK | session only");
     }
 
+    const panel = document.getElementById("ln-debug-hub");
+    if (panel && !panel.hidden) return true; // již otevřený: nikdy nerestartovat
+
+    window.LubaNoteVisualDebug?.showDock?.();
     return Boolean(window.LubaNoteDebugHub?.open?.());
+  }
+
+  function jeNouzovyDebugRoh(x, y) {
+    return Number.isFinite(x) && Number.isFinite(y) &&
+      x >= 0 && x <= NOUZOVY_DEBUG_ROH_PX &&
+      y >= 0 && y <= NOUZOVY_DEBUG_ROH_PX;
+  }
+
+  function resetNouzovyDebugGesto() {
+    nouzoveKliky = [];
+    nouzovyPointerStart = null;
   }
 
   function jeNouzovyDebugPrvek(target) {
@@ -3143,7 +3147,10 @@
     const ted = performance.now();
     const bod = { cas: ted, x: Number(x), y: Number(y) };
 
-    if (!Number.isFinite(bod.x) || !Number.isFinite(bod.y)) return;
+    if (!jeNouzovyDebugRoh(bod.x, bod.y)) {
+      resetNouzovyDebugGesto();
+      return;
+    }
 
     nouzoveKliky = nouzoveKliky.filter(
       tap => ted - tap.cas <= NOUZOVY_DEBUG_OKNO_MS
@@ -3169,7 +3176,12 @@
 
     if (window.PointerEvent) {
       document.addEventListener("pointerdown", event => {
-        if (!event.isPrimary || jeNouzovyDebugPrvek(event.target)) return;
+        if (!event.isPrimary || event.button !== 0 ||
+            jeNouzovyDebugPrvek(event.target) ||
+            !jeNouzovyDebugRoh(event.clientX, event.clientY)) {
+          resetNouzovyDebugGesto();
+          return;
+        }
         nouzovyPointerStart = {
           id: event.pointerId,
           x: event.clientX,
@@ -3185,7 +3197,11 @@
       }, true);
 
       document.addEventListener("pointerup", event => {
-        if (!event.isPrimary || jeNouzovyDebugPrvek(event.target)) return;
+        if (!event.isPrimary || jeNouzovyDebugPrvek(event.target) ||
+            !jeNouzovyDebugRoh(event.clientX, event.clientY)) {
+          resetNouzovyDebugGesto();
+          return;
+        }
         const start = nouzovyPointerStart;
         nouzovyPointerStart = null;
         if (!start || start.id !== event.pointerId) return;
@@ -3202,8 +3218,13 @@
     /* Fallback pro starší WebView bez Pointer Events. */
     let touchStart = null;
     document.addEventListener("touchstart", event => {
-      if (event.touches?.length !== 1 || jeNouzovyDebugPrvek(event.target)) return;
-      const t = event.touches[0];
+      const t = event.touches?.[0];
+      if (event.touches?.length !== 1 || jeNouzovyDebugPrvek(event.target) ||
+          !t || !jeNouzovyDebugRoh(t.clientX, t.clientY)) {
+        touchStart = null;
+        nouzoveKliky = [];
+        return;
+      }
       touchStart = { x: t.clientX, y: t.clientY, cas: performance.now() };
     }, { capture: true, passive: true });
 
@@ -3215,7 +3236,11 @@
       const start = touchStart;
       touchStart = null;
       const t = event.changedTouches?.[0];
-      if (!start || !t || jeNouzovyDebugPrvek(event.target)) return;
+      if (!start || !t || jeNouzovyDebugPrvek(event.target) ||
+          !jeNouzovyDebugRoh(t.clientX, t.clientY)) {
+        nouzoveKliky = [];
+        return;
+      }
 
       const doba = performance.now() - start.cas;
       const pohyb = Math.hypot(t.clientX - start.x, t.clientY - start.y);
