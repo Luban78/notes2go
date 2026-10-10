@@ -5398,6 +5398,60 @@
      Na začátku gesta rozlišíme jen úzkou zónu značky RODIČE s potomky;
      obyčejný text, TODO, kontextové tlačítko a long-press MOVE nezměníme. */
   let v2DotykSbalovaciZnacky = null;
+
+  /* 683G – caret v rodicovskem radku nesmi byt po tapu na sipku zamenen
+     za nativni caret Androidu u ne-editovatelneho tlacitka. Snapshot bereme
+     pred defaultni dotykovou akci a po toggle obnovime STEJNY Range/model,
+     nikoli novou pozici podle souradnic sipky. Jiny radek a MOVE nemenime. */
+  let v2CaretPredSipkou = null;
+  function zachovejV2CaretProSipku(target) {
+    const radek = target?.closest?.('.ln-v2-odstavec[data-ln-v2-blok]');
+    const selection = window.getSelection?.();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!radek || !range?.collapsed || !radek.contains(range.startContainer) ||
+        !editor?.contains(range.endContainer)) {
+      v2CaretPredSipkou = null;
+      return;
+    }
+    const model = aktualniVyberModelu();
+    if (!model?.sbaleny) return;
+    v2CaretPredSipkou = {
+      radek, range: range.cloneRange(), model: klonVyberu(model),
+      cas: performance.now(), dokdy: performance.now() + 550
+    };
+  }
+
+  function obnovV2CaretPoSipce() {
+    const zachovany = v2CaretPredSipkou;
+    if (!zachovany || !editor?.contains(zachovany.radek)) return;
+    zachovany.dokdy = performance.now() + 260;
+    const obnov = () => {
+      if (v2CaretPredSipkou !== zachovany || !editor?.isConnected) return;
+      const range = zachovany.range;
+      if (!range.startContainer?.isConnected || !editor.contains(range.startContainer) ||
+          !editor.contains(range.endContainer) || zachovany.radek.hidden) return;
+      const scrollPred = editor.scrollTop;
+      try {
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range.cloneRange());
+        posledniVyber = klonVyberu(zachovany.model);
+        posledniPozice = { ...zachovany.model.konec };
+        ulozenyFormatovaciVyber = klonVyberu(zachovany.model);
+        naplanujV2SelectionOverlay(posledniVyber);
+        naplanujV2LubaCaret(posledniVyber);
+        if (editor.scrollTop !== scrollPred) editor.scrollTop = scrollPred;
+      } catch (_error) { /* Pozice nesmi zmenit obsah ani rozbit toggle. */ }
+    };
+    /* WebView muze prepsat DOM caret az po TOUCHEND; druhy pruchod po
+       renderu vycisti opozdeny nativni uchyt. Nove gesto guard zrusi. */
+    queueMicrotask(obnov);
+    requestAnimationFrame(obnov);
+    setTimeout(() => {
+      if (v2CaretPredSipkou === zachovany) v2CaretPredSipkou = null;
+    }, 290);
+  }
+
   function najdiV2SbalovaciZnacku(target, clientX) {
     if (!editor || !target || !Number.isFinite(clientX)) return null;
     const tlacitko = target.closest?.('[data-v2-list-marker]');
@@ -8856,6 +8910,7 @@
     poslouchej(editor, "pointerdown", (event) => {
       if (event.pointerType !== "touch" || event.isPrimary === false) return;
       if (!najdiV2SbalovaciZnacku(event.target, event.clientX)) return;
+      zachovejV2CaretProSipku(event.target);
       if (event.cancelable) event.preventDefault();
     }, { capture: true, passive: false });
     poslouchej(editor, "pointerup", (event) => {
@@ -8876,6 +8931,7 @@
       const dotyk = event.touches[0];
       const znacka = najdiV2SbalovaciZnacku(event.target, dotyk.clientX);
       if (!znacka) return;
+      if (!v2CaretPredSipkou) zachovejV2CaretProSipku(event.target);
       v2DotykSbalovaciZnacky = {
         id: znacka.id,
         touchId: dotyk.identifier,
@@ -8896,7 +8952,10 @@
         .find((polozka) => polozka.identifier === kandidat.touchId);
       if (!dotyk) return;
       const presun = Math.hypot(dotyk.clientX - kandidat.x, dotyk.clientY - kandidat.y);
-      if (presun > 12 || v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni) return;
+      if (presun > 12 || v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni) {
+        v2CaretPredSipkou = null;
+        return;
+      }
       if (event.cancelable) event.preventDefault();
       /* 683E: Dokonceny kratky tap na sipku nesmi propadnout do dalsich
          touchend handleru editoru (caret/selection). Long-press MOVE a
@@ -8906,8 +8965,10 @@
       potlacKlikSeznamuDo = performance.now() + 700;
       zrusV2DragSeznamu({ zachovatVyber: false });
       prepniSbaleniSeznamuPodleId(kandidat.id);
+      obnovV2CaretPoSipce();
     }, { capture: true, passive: false });
     poslouchej(editor, "touchcancel", () => {
+      v2CaretPredSipkou = null;
       v2DotykSbalovaciZnacky = null;
     }, { capture: true, passive: true });
 
@@ -8920,6 +8981,28 @@
       if (event.cancelable) event.preventDefault();
     }, { capture: true });
 
+    poslouchej(document, "pointerdown", (event) => {
+      if (v2CaretPredSipkou && !event.target?.closest?.('[data-v2-list-marker]')) {
+        v2CaretPredSipkou = null;
+      }
+    }, { capture: true });
+    poslouchej(document, "lubanote:v2-list-move-takeover", () => {
+      v2CaretPredSipkou = null;
+    }, { capture: true });
+    poslouchej(document, "lubanote:v2-model-input", () => {
+      v2CaretPredSipkou = null;
+    }, { capture: true });
+    poslouchej(editor, "beforeinput", () => {
+      v2CaretPredSipkou = null;
+    }, { capture: true });
+    poslouchej(editor, "touchmove", (event) => {
+      const dotyk = event.touches?.[0];
+      const kandidat = v2DotykSbalovaciZnacky;
+      if (kandidat && dotyk &&
+          Math.hypot(dotyk.clientX - kandidat.x, dotyk.clientY - kandidat.y) > 12) {
+        v2CaretPredSipkou = null;
+      }
+    }, { passive: true, capture: true });
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
@@ -9303,6 +9386,9 @@
     poslouchej(document, "selectionchange", () => {
       if (!jadroEditoru || jadroEditoru.hidden || !editor) return;
       if (v2ImeKompozice?.nativni) return;
+      /* 683G: opozdeny selectionchange z dotyku sipky nesmi prepocitat
+         modelovy caret podle buttonu. Nasledujici normalni gesto guard zrusi. */
+      if (v2CaretPredSipkou && performance.now() < v2CaretPredSipkou.dokdy) return;
       const vyber = window.getSelection();
       if (!vyber?.rangeCount) return;
       const range = vyber.getRangeAt(0);
