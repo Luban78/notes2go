@@ -477,3 +477,50 @@
     width: 168px !important;
   }
 }
+
+
+/* 683A – Centrum stability. Produkční rozměry určeny výhradně v CSS. */
+#ln-debug-hub .ln-dh-stability[hidden] { display: none !important; }
+#ln-debug-hub .ln-dh-stability {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  padding: 8px 10px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  background: rgba(4, 18, 21, 0.9) !important;
+}
+#ln-debug-hub:has(.ln-dh-stability:not([hidden])) .ln-dh-log { display: none !important; }
+#ln-debug-hub .ln-dh-stab-intro strong { color: #18ef7d !important; font-size: 0.875rem !important; }
+#ln-debug-hub .ln-dh-stab-intro p { margin: 4px 0 !important; color: #bed0cc !important; }
+#ln-debug-hub .ln-dh-stab-intro [data-ln-stability-summary] { color: #f4f9f7 !important; font-weight: 800 !important; }
+#ln-debug-hub .ln-dh-stab-toolbar { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+#ln-debug-hub .ln-dh-stab-toolbar label { grid-column: 1/-1 !important; display: grid !important; gap: 3px !important; color: #bad8cb !important; }
+#ln-debug-hub .ln-dh-stab-toolbar select { width: 100% !important; min-height: 36px !important; padding: 6px !important; background: #102725 !important; border: 1px solid #31544a !important; border-radius: 8px !important; color: white !important; }
+#ln-debug-hub .ln-dh-stab-toolbar button,
+#ln-debug-hub .ln-dh-stab-actions button { min-height: 34px !important; padding: 5px !important; border: 1px solid #31544a !important; border-radius: 8px !important; color: #eff6f2 !important; background: #112826 !important; font-weight: 700 !important; font-size: 0.6875rem !important; }
+#ln-debug-hub .ln-dh-stab-toolbar button:active,
+#ln-debug-hub .ln-dh-stab-actions button:active { background: #1d473a !important; }
+#ln-debug-hub .ln-dh-stab-auto { margin: 0 !important; padding: 8px !important; white-space: pre-wrap !important; word-break: break-word !important; color: #afc8c0 !important; background: #081917 !important; border-radius: 9px !important; font-size: 0.625rem !important; }
+#ln-debug-hub .ln-dh-stab-list { display: grid !important; gap: 9px !important; }
+#ln-debug-hub .ln-dh-stab-test { padding: 10px !important; border: 1px solid rgba(68, 116, 102, .7) !important; border-radius: 12px !important; background: #091e1d !important; display: grid !important; gap: 5px !important; }
+#ln-debug-hub .ln-dh-stab-test-head { display: flex !important; align-items: start !important; gap: 7px !important; justify-content: space-between !important; cursor: pointer !important; list-style: none !important; }
+#ln-debug-hub .ln-dh-stab-test-head::-webkit-details-marker { display: none !important; }
+#ln-debug-hub .ln-dh-stab-test-head:before { content: "▸"; color: #18ef7d; flex: 0 0 auto; }
+#ln-debug-hub .ln-dh-stab-test[open] .ln-dh-stab-test-head:before { content: "▾"; }
+#ln-debug-hub .ln-dh-stab-detail { display: grid !important; gap: 6px !important; margin-top: 7px !important; }
+#ln-debug-hub .ln-dh-stab-test-head strong { font-size: 0.75rem !important; line-height: 1.35 !important; }
+#ln-debug-hub .ln-dh-stab-state { font-size: 0.625rem !important; background: #253b39 !important; border-radius: 6px !important; padding: 3px 5px !important; flex-shrink: 0 !important; }
+#ln-debug-hub .ln-dh-stab-state[data-state="PASS"] { color: #18ef7d !important; background: #123f2b !important; }
+#ln-debug-hub .ln-dh-stab-state[data-state="FAIL"] { color: #ff9090 !important; background: #4a1e23 !important; }
+#ln-debug-hub .ln-dh-stab-category { font-size: .625rem !important; color: #7fb3a6 !important; }
+#ln-debug-hub .ln-dh-stab-steps { font-size: .6875rem !important; color: #d5dfda !important; }
+#ln-debug-hub .ln-dh-stab-actions { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 5px !important; }
+#ln-debug-hub .ln-dh-stab-actions [data-dh-stab="pass"] { color: #18ef7d !important; }
+#ln-debug-hub .ln-dh-stab-actions [data-dh-stab="fail"] { color: #ffaaa9 !important; }
+#ln-debug-hub .ln-dh-stab-actions .ln-dh-stab-copy { grid-column: 1/-1 !important; color: #18ef7d !important; }
+#ln-debug-hub .ln-dh-stab-note-label { font-size: .625rem !important; color: #b5c9be !important; }
+#ln-debug-hub .ln-dh-stab-test textarea { box-sizing: border-box !important; display: block !important; width: 100% !important; padding: 7px !important; border: 1px solid #31544a !important; border-radius: 8px !important; color: white !important; background: #061412 !important; font-size: .6875rem !important; min-height: 48px !important; }
+#ln-debug-hub .ln-dh-stab-datetime, #ln-debug-hub .ln-dh-stab-disclaimer { font-size: .625rem !important; color: #9eada7 !important; }

@@ -32,6 +32,10 @@
   let presunHubu = null;
   let zmenaVelikostiHubu = null;
   let geometrieHubuPredMinimalizaci = null;
+  let stabilitaPanel = null;
+  const stabilitaVysledky = new Map(); // only session memory; no localStorage
+  const stabilitaOtevreneTesty = new Set();
+  let stabilitaTechnickyAudit = [];
 
   const MAX_ZAZNAMU = 700;
   const V2_SELECTION_EDGE_SPEED_KEY = "lubanote_v2_selection_edge_speed";
@@ -67,6 +71,7 @@
 
   const MODULY = {
     startup: "Start / sync / síť",
+    stabilityCenter: "Centrum stability V1",
     todoSelection: "TODO – výběr / Vložit / Vše",
     editorSelection: "Editor – výběr textu",
     webviewWatch: "WebView – touch / selection / viewport",
@@ -81,6 +86,195 @@
     cardDragLab: "Karty – Drag Lab (syntetický)",
     performance: "Výkon – benchmark"
   };
+
+
+  /* 683A – Stability Registry V1. Manual PASS is never inferred from DOM checks.
+     Registry and reports are held in memory only; no application state writes. */
+  const STABILITA_TESTY = Object.freeze([
+    { id: "editor-plain", skupina: "Editor", nazev: "Běžný text – psaní a mazání", krok: "Vytvoř text, uprav ho uprostřed a smaž jeden znak; ověř, že kurzor zůstává správně." },
+    { id: "editor-undo", skupina: "Editor", nazev: "Undo / Redo", krok: "Uprav větu, vrať změnu a obnov ji; zkontroluj i formátování." },
+    { id: "editor-caret", skupina: "Editor", nazev: "Kurzor a otevření poznámky", krok: "Otevři delší poznámku a klikni do textu; kurzor musí souhlasit s místem dotyku i klávesnicí." },
+    { id: "editor-selection", skupina: "Editor", nazev: "Dvojtap a výběr textu", krok: "Dvojtap na slovo, přetáhni oba úchyty a klikni mimo výběr." },
+    { id: "editor-edge", skupina: "Editor", nazev: "Výběr – multiscroll", krok: "Přetáhni úchyt výběru k okraji a ověř plynulý výběr přes více odstavců." },
+    { id: "editor-format", skupina: "Editor", nazev: "Formátování a nadpisy", krok: "Použij tučné, kurzívu, podtržení a nadpis; znovu otevři poznámku." },
+    { id: "list-toggle", skupina: "Seznamy", nazev: "Sbalení šipkou bez skoku", checkpoint: "682O / build 785 – potvrzený PASS", krok: "Nech kurzor mimo obrazovku, odscrolluj a opakovaně sbal i rozbal rodiče šipkou; obrazovka nesmí skočit." },
+    { id: "list-badge", skupina: "Seznamy", nazev: "Rozbalení přes počet potomků", krok: "U sbaleného rodiče klepni na číslo potomků a ověř zachování místa čtení." },
+    { id: "list-levels", skupina: "Seznamy", nazev: "Zanoření, vynoření, vnořené větve", krok: "Přesuň odrážku do rodiče, ven z rodiče a sbal několik úrovní." },
+    { id: "list-move", skupina: "Seznamy", nazev: "Dlouhý stisk a MOVE", krok: "Dlouze podrž šipku / odrážku, přesuň položku a zkontroluj hierarchii." },
+    { id: "list-selection", skupina: "Seznamy", nazev: "Výběr nad sbaleným rodičem", krok: "Označ text přímo nad sbalenou odrážkou a znovu po rozbalení." },
+    { id: "code-integrity", skupina: "Kód", nazev: "Celistvost kódového bloku", krok: "Zadej dlouhý příkaz do code, označ a kopíruj; ověř, že se nerozdělí." },
+    { id: "code-caret", skupina: "Kód", nazev: "Kurzor a úchyty v kódu", krok: "Vyber text v code, přesuň úchyty a porovnej jejich pozici s výběrem na PC i mobilu." },
+    { id: "code-image", skupina: "Kód", nazev: "Obrázek mezi dvěma code bloky", krok: "Vlož obrázek mezi dva code bloky; žádný příkaz se nesmí rozdělit ani zúžit." },
+    { id: "image-between", skupina: "Obrázky", nazev: "Obrázek mezi odstavci / odrážkami", krok: "Vlož obrázek mezi dvě textové odrážky; žádný následující text nesmí ležet přes obrázek." },
+    { id: "image-wrap", skupina: "Obrázky", nazev: "Obrázek + obtékání běžného textu", krok: "Zkus levé i pravé obtékání normálního textu; po vložení mezi bloky musí zachovat pořadí." },
+    { id: "image-move", skupina: "Obrázky", nazev: "Obrázek – přesun a rozměry", krok: "Přesuň a změň velikost obrázku; ověř, že text nezasahuje pod obrázek." },
+    { id: "image-reopen", skupina: "Obrázky", nazev: "Obrázky po uložení a otevření", krok: "Ulož poznámku s obrázkem, zavři ji a znovu otevři; vzhled se nesmí změnit." },
+    { id: "notes-create", skupina: "Poznámky", nazev: "Nová poznámka – smazání před uložením", krok: "Založ poznámku, napiš text a vyzkoušej Koš ještě před uložením." },
+    { id: "notes-trash", skupina: "Poznámky", nazev: "Koš a obnovení", krok: "Na zkušební poznámce otestuj smazání a obnovení z Koše." },
+    { id: "notes-search", skupina: "Poznámky", nazev: "Hledání v editoru a seznamu", krok: "Vyhledej text uvnitř poznámky i podle názvu; projdi více výsledků." },
+    { id: "notes-offline", skupina: "Data", nazev: "LOCAL – offline a přechod online", krok: "Na testovací LOCAL poznámce ověř offline čtení, zápis a následnou synchronizaci dle jejího režimu." },
+    { id: "sync-two-devices", skupina: "Data", nazev: "SYNC – druhé zařízení a předání editace", krok: "Použij dvě testovací zařízení, ověř aktualizaci i předání otevřené poznámky." },
+    { id: "sync-convert", skupina: "Data", nazev: "LOCAL ↔ SYNC", krok: "Na testovací poznámce prověř konverzi oběma směry a zachování obsahu." },
+    { id: "security-e2e", skupina: "Data", nazev: "E2E – dostupnost a znovuotevření", krok: "Na testovacích datech zkontroluj šifrovaný obsah po zavření a obnovení relace." },
+    { id: "pc-mouse", skupina: "PC", nazev: "PC – výběr myší, klávesnice", krok: "Na PC otestuj kliknutí, tah výběru, Ctrl+C / Ctrl+V a Undo/Redo." },
+    { id: "pc-indent", skupina: "PC", nazev: "PC – hierarchie seznamů", krok: "Na PC otestuj drag vnoření, vynoření a klik na šipku/počet potomků." },
+    { id: "app-planner", skupina: "Ostatní", nazev: "Planner / připomínky", krok: "Na testovacím úkolu ověř plánování, opakování a upozornění." },
+    { id: "app-documents", skupina: "Ostatní", nazev: "Dokumenty / PDF Reader", krok: "Otevři testovací soubor a PDF; ověř posun, návrat a čtení." },
+    { id: "app-i18n", skupina: "Ostatní", nazev: "Překlady a změna jazyka", krok: "Změň jazyk a projdi editor, dokumenty a nastavení bez zbylých českých textů." }
+  ]);
+
+  function stabilitaNajdiTest(id) {
+    return STABILITA_TESTY.find(test => test.id === id) || null;
+  }
+
+  function stabilitaEsc(text) {
+    return String(text ?? "").replace(/[&<>"']/g, znak => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[znak]);
+  }
+
+  function stabilitaStav(test) {
+    return stabilitaVysledky.get(test.id)?.stav || "NETESTOVÁNO";
+  }
+
+  function stabilitaVypis() {
+    if (!stabilitaPanel) return;
+    const obsah = stabilitaPanel.querySelector("[data-ln-stability-list]");
+    if (!obsah) return;
+    const hodnotaFiltru = stabilitaPanel.querySelector("[data-ln-stability-filter]")?.value || "vse";
+    const vybrane = STABILITA_TESTY.filter(test => hodnotaFiltru === "vse" || test.skupina === hodnotaFiltru);
+    const pocty = { PASS: 0, FAIL: 0, "NETESTOVÁNO": 0 };
+    STABILITA_TESTY.forEach(test => pocty[stabilitaStav(test)]++);
+    const pocitadlo = stabilitaPanel.querySelector("[data-ln-stability-summary]");
+    if (pocitadlo) pocitadlo.textContent = `${pocty.PASS} PASS · ${pocty.FAIL} FAIL · ${pocty["NETESTOVÁNO"]} netestováno`;
+
+    obsah.innerHTML = vybrane.map(test => {
+      const vysledek = stabilitaVysledky.get(test.id);
+      const stav = stabilitaStav(test);
+      return `<details class="ln-dh-stab-test" data-ln-stability-test="${test.id}" ${stabilitaOtevreneTesty.has(test.id) ? "open" : ""}>
+        <summary class="ln-dh-stab-test-head"><strong>${stabilitaEsc(test.nazev)}</strong>
+          <span class="ln-dh-stab-state" data-state="${stav}">${stav}</span></summary>
+        <div class="ln-dh-stab-detail"><div class="ln-dh-stab-category">${stabilitaEsc(test.skupina)}${test.checkpoint ? " · referenční bod " + stabilitaEsc(test.checkpoint) : ""}</div>
+        <div class="ln-dh-stab-steps">${stabilitaEsc(test.krok)}</div>
+        <div class="ln-dh-stab-actions">
+          <button type="button" data-dh-stab="pass" data-test-id="${test.id}">✓ PASS</button>
+          <button type="button" data-dh-stab="fail" data-test-id="${test.id}">✕ FAIL</button>
+          <button type="button" data-dh-stab="reset" data-test-id="${test.id}">—</button>
+          <button type="button" data-dh-stab="copy" data-test-id="${test.id}" class="ln-dh-stab-copy">Kopírovat report</button>
+        </div>
+        <label class="ln-dh-stab-note-label" for="ln-stab-note-${test.id}">Co přesně selhalo (volitelné)</label>
+        <textarea id="ln-stab-note-${test.id}" data-dh-stab-note="${test.id}" rows="2" placeholder="Např. obrázek překrývá třetí odrážku…">${stabilitaEsc(vysledek?.poznamka || "")}</textarea>
+        ${vysledek?.cas ? `<div class="ln-dh-stab-datetime">${stabilitaEsc(vysledek.cas)} · build ${stabilitaEsc(vysledek.verze || "-")}</div>` : ""}
+        </div></details>`;
+    }).join("");
+  }
+
+  function stabilitaStavEditoru() {
+    const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || document.querySelector(".ln-v2-editor");
+    const root = editor?.isConnected ? editor : null;
+    const sel = window.getSelection();
+    const aktivni = document.activeElement;
+    return {
+      editor: root,
+      shrnuti: [
+        `editor=${root ? "connected" : "not-open"}`,
+        `focused=${popisPrvku(aktivni)}`,
+        `selection=${sel?.rangeCount ? (sel.getRangeAt(0).collapsed ? "caret" : "range") : "none"}`,
+        `scrollTop=${root ? Math.round(root.scrollTop) : "-"}`,
+        `scrollHeight=${root ? root.scrollHeight : "-"}`,
+        `clientHeight=${root ? root.clientHeight : "-"}`,
+        `rows=${root ? root.querySelectorAll(":scope > .ln-v2-odstavec").length : "-"}`,
+        `images=${root ? root.querySelectorAll("figure.ln-v2-obrazek").length : "-"}`,
+        `listButtons=${root ? root.querySelectorAll("button[data-v2-list-marker]").length : "-"}`,
+        `listBadges=${root ? root.querySelectorAll("button[data-v2-list-toggle]").length : "-"}`
+      ].join(" | ")
+    };
+  }
+
+  function stabilitaGeometrie() {
+    const { editor } = stabilitaStavEditoru();
+    if (!editor) return ["IMAGE GEOMETRY | N/A – otevři poznámku s obrázkem"];
+    const obrazky = [...editor.querySelectorAll("figure.ln-v2-obrazek")];
+    if (!obrazky.length) return ["IMAGE GEOMETRY | N/A – v poznámce nejsou obrázky"];
+    const radky = [...editor.querySelectorAll(":scope > .ln-v2-odstavec")];
+    const radkyOkolo = (imageRect) => radky.filter(row => {
+      const r = row.getBoundingClientRect();
+      return r.bottom > imageRect.top - 100 && r.top < imageRect.bottom + 100;
+    }).slice(0, 8);
+    const r = (rect) => [rect.x, rect.y, rect.width, rect.height].map(n => Math.round(n)).join(",");
+    const vystup = [];
+    for (const [i, figure] of obrazky.slice(0, 12).entries()) {
+      const rect = figure.getBoundingClientRect();
+      const style = getComputedStyle(figure);
+      const adjacent = radkyOkolo(rect).map(row => {
+        const rr = row.getBoundingClientRect();
+        const overlapX = Math.min(rect.right, rr.right) - Math.max(rect.left, rr.left);
+        const overlapY = Math.min(rect.bottom, rr.bottom) - Math.max(rect.top, rr.top);
+        const isOverlap = overlapX > 3 && overlapY > 3;
+        return `row(${row.classList.contains("ln-v2-bullet") ? "bullet" : row.classList.contains("ln-v2-ordered") ? "ordered" : row.classList.contains("ln-v2-code-block") ? "code" : "text"},${r(rr)},overlap=${isOverlap ? "Y" : "N"})`;
+      });
+      vystup.push(`IMAGE #${i + 1} rect=${r(rect)} float=${style.cssFloat} position=${style.position} clear=${style.clear} display=${style.display} parent=${popisPrvku(figure.parentElement)} nearby=${adjacent.join(";") || "none"}`);
+    }
+    if (obrazky.length > 12) vystup.push(`IMAGE LIMIT | ${obrazky.length} total, first 12 reported`);
+    return vystup;
+  }
+
+  function stabilitaTechnickeKontroly() {
+    const { editor } = stabilitaStavEditoru();
+    const podminky = [
+      ["Core V2 runtime dostupný", Boolean(window.LubaNoteEditorV2), "Neověřuje funkčnost editoru."],
+      ["Editor otevřen a připojen k DOM", Boolean(editor), "Pro ostatní testy otevři poznámku."],
+      ["Selection menu existuje", Boolean(document.getElementById("selectionMenu")), "Ověřuje jen existenci prvku."],
+      ["Šipka seznamu – skutečné ne-editovatelné tlačítko", editor?.querySelector("button[data-v2-list-marker]") ? editor.querySelector("button[data-v2-list-marker]").getAttribute("contenteditable") === "false" : null, "Otevři poznámku s rodičem odrážek."],
+      ["Obrázky – ne-editovatelná figure", editor?.querySelector("figure.ln-v2-obrazek") ? editor.querySelector("figure.ln-v2-obrazek").getAttribute("contenteditable") === "false" : null, "Otevři poznámku s obrázkem."]
+    ];
+    stabilitaTechnickyAudit = podminky.map(([nazev, splneno, komentar]) => ({
+      nazev, stav: splneno === null ? "N/A" : splneno ? "OK" : "POZOR", komentar
+    }));
+    zapis(`STABILITY AUDIT | ${stabilitaTechnickyAudit.map(x => `${x.nazev}=${x.stav}`).join(" | ")}`);
+    stabilitaVypisAuto();
+  }
+
+  function stabilitaVypisAuto() {
+    const panel = stabilitaPanel?.querySelector("[data-ln-stability-auto]");
+    if (!panel) return;
+    panel.textContent = stabilitaTechnickyAudit.length
+      ? stabilitaTechnickyAudit.map(x => `${x.stav} | ${x.nazev} – ${x.komentar}`).join("\n")
+      : "Spusť technickou kontrolu po otevření testovací poznámky.";
+  }
+
+  function stabilitaReport(test) {
+    const stav = stabilitaVysledky.get(test.id) || {};
+    return [
+      "LUBANOTE STABILITY CENTER V1 / 683A",
+      `test-id: ${test.id}`,
+      `test: ${test.nazev}`,
+      `skupina: ${test.skupina}`,
+      `výsledek: ${stav.stav || "NETESTOVÁNO"} (ručně zadané, ne automatické potvrzení)`,
+      `ref: ${test.checkpoint || "neověřeno"}`,
+      `postup: ${test.krok}`,
+      `poznámka uživatele: ${stav.poznamka || "-"}`,
+      `čas testu: ${stav.cas || "-"}`,
+      ...hlavickaReportu().trimEnd().split("\n"),
+      `DOM SNAPSHOT | ${stabilitaStavEditoru().shrnuti}`,
+      ...(["image-between", "image-wrap", "image-move", "image-reopen", "code-image"].includes(test.id) ? stabilitaGeometrie() : []),
+      ...(["list-toggle", "list-badge", "list-levels", "list-move", "list-selection"].includes(test.id) ?
+        [`LIST SNAPSHOT | ${stabilitaStavEditoru().shrnuti}`] : []),
+      "TECHNICKÝ AUDIT (neměří funkční správnost):",
+      ...(stabilitaTechnickyAudit.length ? stabilitaTechnickyAudit.map(x => `${x.stav} | ${x.nazev}`) : ["neproveden"]),
+      "HUB LOG (max 90 posledních řádků):",
+      ...zaznamy.slice(-90),
+      "POZNÁMKA: report neobsahuje text poznámky, obrázek, URL ani šifrovací klíče."
+    ].join("\n");
+  }
+
+  function spustStabilityCenter() {
+    stabilitaVypis();
+    stabilitaVypisAuto();
+    zapis("STABILITY CENTER V1 | READ-ONLY + ruční PASS/FAIL | všechny výsledky jen v paměti relace");
+    zapis(`TESTY | ${STABILITA_TESTY.length} scénářů · žádné testy automaticky nemění poznámky`);
+    return () => {};
+  }
 
   function jeDebugPrvek(target) {
     const prvek = target instanceof Element
@@ -1875,6 +2069,7 @@
   }
 
   function aktualizujStavHubu() {
+    if (stabilitaPanel) stabilitaPanel.hidden = aktivniModul !== "stabilityCenter";
     if (statusEl) {
       statusEl.textContent = aktivniModul
         ? `běží: ${MODULY[aktivniModul] || aktivniModul}`
@@ -2421,7 +2616,11 @@
     startCas = performance.now();
     zaznamy = [];
 
-    if (aktivniModul === "startup") {
+    if (stabilitaPanel) stabilitaPanel.hidden = aktivniModul !== "stabilityCenter";
+
+    if (aktivniModul === "stabilityCenter") {
+      stopAktivnihoModulu = spustStabilityCenter();
+    } else if (aktivniModul === "startup") {
       stopAktivnihoModulu = spustStartupDiagnostiku();
     } else if (aktivniModul === "todoSelection") {
       stopAktivnihoModulu = spustTodoSelection();
@@ -2656,6 +2855,24 @@ async function zkopirujReport(tlacitko) {
       </div>
 
       <div class="ln-dh-summary">modul: vypnutý</div>
+      <section class="ln-dh-stability" data-ln-stability-panel hidden aria-label="Centrum stability V1">
+        <div class="ln-dh-stab-intro">
+          <strong>Centrum stability V1</strong>
+          <p>Ruční regresní scénáře. PASS znamená tvé potvrzení, nikoli automatický test. Bez zásahu do poznámek.</p>
+          <div data-ln-stability-summary>0 PASS · 0 FAIL</div>
+        </div>
+        <div class="ln-dh-stab-toolbar">
+          <label>Oblast <select data-ln-stability-filter>
+            <option value="vse">Všechny funkce</option>
+            ${["Editor", "Seznamy", "Kód", "Obrázky", "Poznámky", "Data", "PC", "Ostatní"].map(x => `<option value="${x}">${x}</option>`).join("")}
+          </select></label>
+          <button type="button" data-dh-stab="auto">Technická kontrola</button>
+          <button type="button" data-dh-stab="copy-all">Kopírovat souhrn</button>
+        </div>
+        <pre class="ln-dh-stab-auto" data-ln-stability-auto>Spusť technickou kontrolu po otevření testovací poznámky.</pre>
+        <div class="ln-dh-stab-list" data-ln-stability-list></div>
+        <div class="ln-dh-stab-disclaimer">V1 nevrací starý kód. Výsledky zůstávají pouze v paměti do restartu aplikace. Před testováním dat používej testovací poznámky.</div>
+      </section>
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
@@ -2674,6 +2891,7 @@ async function zkopirujReport(tlacitko) {
     document.body.appendChild(hub);
 
     logEl = hub.querySelector(".ln-dh-log");
+    stabilitaPanel = hub.querySelector("[data-ln-stability-panel]");
     summaryEl = hub.querySelector(".ln-dh-summary");
     statusEl = hub.querySelector(".ln-dh-status");
     selectModulu = hub.querySelector('[data-dh="module"]');
@@ -2714,6 +2932,62 @@ async function zkopirujReport(tlacitko) {
     }
 
     aktualizujStavHubu();
+
+    hub.addEventListener("click", async event => {
+      const stabButton = event.target.closest("button[data-dh-stab]");
+      if (!stabButton || aktivniModul !== "stabilityCenter") return;
+      const akce = stabButton.dataset.dhStab;
+      if (akce === "auto") { stabilitaTechnickeKontroly(); return; }
+      if (akce === "copy-all") {
+        const vse = [
+          "LUBANOTE STABILITY CENTER V1 – SOUHRN",
+          `verze: ${window.LUBANOTE_VERSION || "DEV"} | ${prostredi()}`,
+          `čas: ${new Date().toISOString()}`,
+          `prostředí: ${webviewFingerprint().zaklad}`,
+          ...STABILITA_TESTY.map(test => {
+            const vysledek = stabilitaVysledky.get(test.id) || {};
+            return `${vysledek.stav || "NETESTOVÁNO"} | ${test.id} | ${test.nazev} | ref=${test.checkpoint || "-"} | ${vysledek.poznamka || ""}`;
+          }),
+          `DOM SNAPSHOT | ${stabilitaStavEditoru().shrnuti}`,
+          ...(STABILITA_TESTY.some(test => test.id.startsWith("image-") && stabilitaStav(test) === "FAIL") ? stabilitaGeometrie() : [])
+        ].join("\n");
+        const ok = await zkopirujTextRobustne(vse);
+        stabButton.textContent = ok ? "Zkopírováno ✓" : "Kopírování selhalo";
+        return;
+      }
+      const test = stabilitaNajdiTest(stabButton.dataset.testId);
+      if (!test) return;
+      if (akce === "copy") {
+        const ok = await zkopirujTextRobustne(stabilitaReport(test));
+        stabButton.textContent = ok ? "Zkopírováno ✓" : "Kopírování selhalo";
+        return;
+      }
+      if (!["pass", "fail", "reset"].includes(akce)) return;
+      const puvodni = stabilitaVysledky.get(test.id) || {};
+      const stav = akce === "reset" ? "NETESTOVÁNO" : akce.toUpperCase();
+      const vysledek = { ...puvodni, stav, cas: new Date().toISOString(), verze: window.LUBANOTE_VERSION || "DEV" };
+      stabilitaVysledky.set(test.id, vysledek);
+      zapis(`STABILITY ${stav} | ${test.id} | build=${vysledek.verze}`);
+      stabilitaVypis();
+    });
+
+    hub.addEventListener("input", event => {
+      const note = event.target.closest("textarea[data-dh-stab-note]");
+      if (!note || aktivniModul !== "stabilityCenter") return;
+      const puvodni = stabilitaVysledky.get(note.dataset.dhStabNote) || {};
+      stabilitaVysledky.set(note.dataset.dhStabNote, { ...puvodni, poznamka: note.value });
+    });
+
+    hub.addEventListener("change", event => {
+      if (event.target.matches("[data-ln-stability-filter]")) stabilitaVypis();
+    });
+
+    hub.addEventListener("toggle", event => {
+      const det = event.target;
+      if (!det.matches?.("details[data-ln-stability-test]")) return;
+      if (det.open) stabilitaOtevreneTesty.add(det.dataset.lnStabilityTest);
+      else stabilitaOtevreneTesty.delete(det.dataset.lnStabilityTest);
+    }, true);
 
     hub.addEventListener("click", event => {
       const volbaModulu = event.target.closest("[data-dh-module]");
