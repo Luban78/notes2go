@@ -6175,23 +6175,70 @@
       : Math.min(puvodniUroven, normalizujUrovenBulletu(pred.uroven) + 1);
   }
 
-  /* 683W – vizualni kotva k posledni VIDITELNE sipce/odrazce
-     stejne urovne nad budouci pozici. Model listu se nemeni. */
-  function najdiV2KotvuVodiciCary(uroven, cilY) {
-    if (uroven === null || !editor) return null;
+  /* 683X – jedna fyzicka oblast pro voditko i jeho kotvu. Ciste vizualni.
+     Vyhledavani DROP cile, auto-scroll ani modelovy MOVE engine se nemeni. */
+  function viditelneV2MezeVoditka() {
+    if (!editor) return null;
+    const rect = editor.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const nahore = Math.max(0, rect.top, Number(vv?.offsetTop || 0));
+    let dole = Math.min(rect.bottom, Number(vv?.offsetTop || 0) + Number(vv?.height || window.innerHeight));
+    const klavesnice = document.getElementById("lubaKeyboard");
+    if (klavesnice && !klavesnice.hidden && getComputedStyle(klavesnice).display !== "none") {
+      dole = Math.min(dole, klavesnice.getBoundingClientRect().top);
+    }
+    /* Ukazatel nesmi kreslit pres kraj nebo pres vlastni klavesnici. */
+    if (dole - nahore < 38 || rect.width < 60) return null;
+    return { top: nahore + 6, bottom: dole - 8, left: rect.left + 8, right: rect.right - 10 };
+  }
+
+  /* DROP slot zustava stejny; zobrazeni muze lezet mezi sousednimi radky.
+     Pri velke mezere tedy linka drzi u prstu, ne u neviditelneho radku. */
+  function zobrazovaciV2PoziceCile(cil, prstY, meze) {
+    if (!cil || !meze || !Number.isFinite(prstY)) return null;
+    if (prstY < meze.top - 15 || prstY > meze.bottom + 15) return null;
+    let slot = Number(cil.y);
+    if (!Number.isFinite(slot)) return null;
+    /* Prst muze byt uvnitr mnoharadkove odrazky, zatimco cil uz ukazuje
+       na NASLEDUJICI radek. V takovem pripade voditko kresli na hranici
+       cele polozky, ne doprostred textu a ne k neviditelnemu dalsimu radku. */
+    const radekPodPrstem = viditelneV2ListRadkyMimoPodstrom().find((radek) => {
+      const r = radek.getBoundingClientRect();
+      return r.height > 0 && prstY >= r.top && prstY <= r.bottom;
+    });
+    if (radekPodPrstem) {
+      const r = radekPodPrstem.getBoundingClientRect();
+      const hranice = prstY < r.top + r.height / 2 ? r.top : r.bottom;
+      if (slot < meze.top || slot > meze.bottom || Math.abs(slot - prstY) > 40) {
+        /* Neda se kreslit za LubaKeyboard nebo mimo editor; cekame na scroll. */
+        if (hranice < meze.top || hranice > meze.bottom) return null;
+        slot = hranice;
+      }
+    } else if (slot < meze.top || slot > meze.bottom || Math.abs(slot - prstY) > 40) {
+      /* V mezeře mezi řádky drž ukazatel u prstu – ne u vzdáleného řádku. */
+      slot = prstY;
+    }
+    return Math.max(meze.top, Math.min(meze.bottom, slot));
+  }
+
+  /* 683X – kolmica se smi spojit jen s VIDITELNOU sipkou/odrazkou
+     stejné cílové úrovně a pouze NAD vodorovnou linkou. */
+  function najdiV2KotvuVodiciCary(uroven, cilY, meze) {
+    if (uroven === null || !meze || !editor) return null;
     const radky = viditelneV2ListRadkyMimoPodstrom();
     for (let i = radky.length - 1; i >= 0; i -= 1) {
       const radek = radky[i];
-      /* TODO nema uroven ani sipku; nesmi byt falesnou kotvou urovne 1. */
       if (!radek.classList.contains("ln-v2-bullet") && !radek.classList.contains("ln-v2-ordered")) continue;
       if (normalizujUrovenBulletu(radek.dataset.lnV2BulletUroven) !== uroven) continue;
       const r = radek.getBoundingClientRect();
-      if (r.top >= cilY - 7 || r.bottom < 0) continue;
-      const odsazeni = Number.parseFloat(getComputedStyle(radek).paddingLeft) || (30 + uroven * 24);
-      /* ::before je 24px siroke a zacina padding-30. */
-      const x = r.left + odsazeni - 18;
+      if (r.height <= 0 || r.bottom <= meze.top || r.top >= meze.bottom) continue;
       const radekVyska = Number.parseFloat(getComputedStyle(radek).lineHeight) || 30;
-      const y = r.top + Math.min(r.height, radekVyska) / 2;
+      /* Spodek sipky / stredu odrazky, nikoliv spodek viceřadkoveho bloku. */
+      const y = r.top + Math.min(r.height, radekVyska) * 0.65;
+      if (y < meze.top + 2 || y >= cilY - 7) continue;
+      const odsazeni = Number.parseFloat(getComputedStyle(radek).paddingLeft) || (30 + uroven * 24);
+      const x = r.left + odsazeni - 18;
+      if (x < meze.left || x > meze.right - 30) continue;
       return { x, y };
     }
     return null;
@@ -6206,25 +6253,32 @@
 
     const indicator = zajistiV2ListDropIndicator();
     if (cil) {
-      const rect = editor.getBoundingClientRect();
-      /* 683V – zobraz cilovou uroven a odpovidajici odsazeni.
-         DROP/MOVE engine zustava beze zmeny. */
-      const uroven = ziskejV2UrovenVodiciCary(v2DragSeznamu);
-      const kotva = najdiV2KotvuVodiciCary(uroven, cil.y);
-      const leva = Math.round(kotva?.x ?? (rect.left + (uroven === null ? 10 : 12 + uroven * 24)));
-      indicator.style.left = `${leva}px`;
-      indicator.style.width = `${Math.max(20, Math.round(rect.right - leva - 10))}px`;
-      indicator.style.top = `${Math.round(cil.y)}px`;
-      if (kotva && kotva.y < cil.y - 3) {
-        indicator.dataset.lnGuideAnchor = "1";
-        indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotva.y - cil.y)}px`);
-        indicator.style.setProperty("--ln-guide-vertical-height", `${Math.round(cil.y - kotva.y)}px`);
-      } else {
+      const meze = viditelneV2MezeVoditka();
+      const linkaY = zobrazovaciV2PoziceCile(cil, y, meze);
+      if (linkaY === null) {
+        /* Cil se muze autoscrollem objevit za chvili; zadna cara pres klavesnici. */
+        indicator.hidden = true;
         delete indicator.dataset.lnGuideAnchor;
-        indicator.style.removeProperty("--ln-guide-vertical-top");
-        indicator.style.removeProperty("--ln-guide-vertical-height");
+      } else {
+        const uroven = ziskejV2UrovenVodiciCary(v2DragSeznamu);
+        const kotva = najdiV2KotvuVodiciCary(uroven, linkaY, meze);
+        const odsazeni = uroven === null ? 10 : 12 + uroven * 24;
+        const leva = Math.round(Math.max(meze.left, Math.min(meze.right - 24,
+          kotva?.x ?? (editor.getBoundingClientRect().left + odsazeni))));
+        indicator.style.left = `${leva}px`;
+        indicator.style.width = `${Math.max(20, Math.round(meze.right - leva))}px`;
+        indicator.style.top = `${Math.round(linkaY)}px`;
+        if (kotva) {
+          indicator.dataset.lnGuideAnchor = "1";
+          indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotva.y - linkaY)}px`);
+          indicator.style.setProperty("--ln-guide-vertical-height", `${Math.max(0, Math.round(linkaY - kotva.y))}px`);
+        } else {
+          delete indicator.dataset.lnGuideAnchor;
+          indicator.style.removeProperty("--ln-guide-vertical-top");
+          indicator.style.removeProperty("--ln-guide-vertical-height");
+        }
+        indicator.hidden = false;
       }
-      indicator.hidden = false;
     } else {
       indicator.hidden = true;
     }

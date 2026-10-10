@@ -494,8 +494,8 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   display: none !important;
 }
 
-/* 683W / UX-02 – vodici cara + kolmice k oznaceni cilove urovne.
-   Je to ciste vizualni vrstva bez zmeny MOVE enginu. */
+/* 683X / UX-02 – indikator i kolmice zustavaji uvnitr viditelne casti editoru.
+   Pozice/rozsah jsou vypoctene v editorCoreV2.js proti skutecne LubaKeyboard. */
 .ln-v2-list-drop-indicator[data-ln-guide-anchor="1"]::before {
   content: "";
   position: absolute;
