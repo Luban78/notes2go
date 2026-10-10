@@ -17368,8 +17368,10 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 .lubaNoteVersionBadge {
   position: fixed;
   right: max(5px, env(safe-area-inset-right, 0px));
-  bottom: max(3px, env(safe-area-inset-bottom, 0px));
-  z-index: 2147483000;
+  /* 683H – uplne dolu do webove plochy. Systemovou Android listu CSS
+     ovladat nemuze; klavesnice s vyssi vrstvou badge pri psani prekryje. */
+  bottom: 0;
+  z-index: 2147482000;
   max-width: 45vw;
   padding: 2px 6px;
   border-radius: 6px;

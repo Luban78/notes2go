@@ -2811,7 +2811,8 @@
       /* 44px zůstává jen neviditelná dotyková plocha. Samotný úchyt je menší. */
       width: 44px;
       height: 44px;
-      z-index: 2147483200;
+      /* 683H – selection uchyty musi zustat POD LubaKeyboard (2147482500). */
+      z-index: 2147482200;
       pointer-events: auto;
       touch-action: none;
       user-select: none;
@@ -2855,18 +2856,22 @@
       visibility: hidden !important;
       pointer-events: none !important;
     }
-    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
-      transform: translate(-100%, 0);
+    /* 683H – stred kapky je presne na X souradnici textoveho caret endpointu;
+       hitbox zustava 44 px a algoritmus handle drag se nemeni. */
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"],
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"] {
+      transform: translate(-50%, 0);
+    }
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"]::before,
+    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"]::before {
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
     }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"]::before {
-      right: 0;
       border-radius: 11px 0 11px 11px;
     }
-    .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"] {
-      transform: translate(0, 0);
-    }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="end"]::before {
-      left: 0;
       border-radius: 0 11px 11px 11px;
     }
     /* PATCH 677 – jakmile selection převezme náš engine, WebView už nesmí
