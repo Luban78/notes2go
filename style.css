@@ -7206,8 +7206,9 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 }
 
 ::highlight(luba-toolbar-vyber) {
-  background: rgba(80, 180, 220, 0.45);
-  color: inherit;
+  /* 683J DIAG – světle červený výběr napříč tématy. */
+  background: #ffb3bd;
+  color: #290b0b;
 }
 
 

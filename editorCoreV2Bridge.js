@@ -2800,11 +2800,11 @@
     const styl = document.createElement("style");
     styl.id = "ln-v2-selection-scroll-highlight-style";
     styl.textContent = `::highlight(${V2_SELECTION_SCROLL_HIGHLIGHT}) {
-      color: inherit;
+      color: #290b0b;
       /* 673G15 – vizuálně stejné jako Android/WebView selection v APK.
          Opaque barva brání tmavšímu "dvojitému" překryvu při přechodu
          z nativního selection na náš compositor-friendly highlight. */
-      background-color: rgb(14, 76, 91);
+      background-color: #ffb3bd;
     }
     .ln-v2-selection-handle-custom {
       position: fixed;
@@ -2826,7 +2826,7 @@
       top: 0;
       width: 22px;
       height: 22px;
-      background: rgb(128, 203, 196);
+      background: #ff2020;
       border: 0;
       box-shadow: none;
       box-sizing: border-box;
@@ -2932,7 +2932,7 @@
       height: 36px;
       margin-left: -1px;
       border-radius: 2px;
-      background: rgb(128, 203, 196);
+      background: #ff2020;
       box-shadow: 0 0 0 1px rgba(0, 0, 0, .18);
       pointer-events: none;
     }`;
