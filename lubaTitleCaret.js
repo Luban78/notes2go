@@ -175,17 +175,35 @@
     return { title, text, start: maxPosun(zacatek), end: maxPosun(konec) };
   }
 
-  function vyberSlovo(pozice) {
+  function vyberSlovo(pozice, dotykX = null, dotykY = null) {
     const text = String(title.textContent || "");
     let a = maxPosun(pozice);
     let b = a;
     const znak = (ch) => /[\p{L}\p{M}\p{N}_'-]/u.test(ch || "");
     if (!znak(text[a]) && a > 0 && znak(text[a - 1])) a--;
-    if (!znak(text[a])) { nastavVyber(a); return; }
+    if (!znak(text[a])) { nastavVyber(maxPosun(pozice)); return false; }
     b = a + 1;
     while (a > 0 && znak(text[a - 1])) a--;
     while (b < text.length && znak(text[b])) b++;
+    /* 683S – stejná tolerance jako Editor Core V2. Dvojtap na mezeru,
+       těsně za slovem nebo při hraně slova ponechá jen caret. Longpress
+       bez souřadnic zůstává v původním režimu výběru slova. */
+    if (Number.isFinite(dotykX) && Number.isFinite(dotykY)) {
+      const uzel = textovyUzel();
+      if (!uzel) { nastavVyber(maxPosun(pozice)); return false; }
+      const range = document.createRange();
+      range.setStart(uzel, a);
+      range.setEnd(uzel, b);
+      const podSlovem = Array.from(range.getClientRects?.() || []).some(r => {
+        if (r.width <= 0 || r.height <= 0) return false;
+        const okraj = Math.min(5, Math.max(1, r.width / 4));
+        return dotykY >= r.top - 3 && dotykY <= r.bottom + 3 &&
+          dotykX > r.left + okraj && dotykX < r.right - okraj;
+      });
+      if (!podSlovem) { nastavVyber(maxPosun(pozice)); return false; }
+    }
     nastavVyber(a, b);
+    return true;
   }
 
   function nastavRezim(zapnuto) {
@@ -275,8 +293,12 @@
     const dvojtap = posledniTap && performance.now() - posledniTap.t < 360 &&
       Math.hypot(event.clientX - posledniTap.x, event.clientY - posledniTap.y) < 28;
     if (dvojtap) {
-      vyberSlovo(pos);
+      /* 683S – 683R kreslil označení správně, ale nikdy nespustil
+         existující LubaKeyboard clipboard popup. Pro slovo nabídka
+         Kopírovat/Vyjmout, pro mezeru a hrany Vložit/Vše. */
+      vyberSlovo(pos, event.clientX, event.clientY);
       posledniTap = null;
+      otevriSchranku(event.clientX, event.clientY);
     } else {
       nastavVyber(pos);
       posledniTap = { t: performance.now(), x: event.clientX, y: event.clientY };

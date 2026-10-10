@@ -1428,7 +1428,13 @@
     const snap = titleClipboardSnapshot;
     const maVyber = Boolean(snap && snap.start !== snap.end);
     const cut = popup.querySelector('[data-title-clipboard="cut"]');
-    if (cut) cut.disabled = !maVyber;
+    const copy = popup.querySelector('[data-title-clipboard="copy"]');
+    /* 683S – jen pro vlastní nadpis: při collapsed caret kompaktní
+       Vložit/Vše místo nabídky označeného slova. Historické chování
+       ostatních input/textarea a systémové IME neměníme. */
+    const jeVlastniNazev = Boolean(snap?.title?.dataset?.lnTitleOwnCaret === "1");
+    if (cut) { cut.disabled = !maVyber; cut.hidden = jeVlastniNazev && !maVyber; }
+    if (copy) copy.hidden = jeVlastniNazev && !maVyber;
   }
 
   function zavriTitleClipboardPopup() {

@@ -3650,7 +3650,21 @@
       const range = document.createRange();
       range.setStart(node, start);
       range.setEnd(node, end);
-      return range.collapsed ? null : range;
+      if (range.collapsed) return null;
+
+      /* 683S – dvojtap na MEZERU / za slovem není výběr slova.
+         caretPositionFromPoint na hranici vrací offset na konci slova,
+         a původní fallback offset-1 pak nesprávně označil celé slovo.
+         Rozhoduje SKUTEČNÝ rect slova pod prstem. V posledních cca 5px
+         na obou hranách je caret + malé Vložit/Vše, nikoli word select.
+         Platí také u různě formátovaných spanů a zalomených řádků. */
+      const recty = Array.from(range.getClientRects?.() || []).filter(r => r.width > 0 && r.height > 0);
+      const uvnitrSlova = recty.some(r => {
+        const okraj = Math.min(5, Math.max(1, r.width / 4));
+        return clientY >= r.top - 3 && clientY <= r.bottom + 3 &&
+          clientX > r.left + okraj && clientX < r.right - okraj;
+      });
+      return uvnitrSlova ? range : null;
     } catch (_error) {
       return null;
     }
@@ -4605,17 +4619,26 @@
     v2PosledniTapSelection = null;
     zapisV2Stabilitu("DOUBLE_TAP_DETECTED", `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
 
-    /* 683M: ŽÁDNÉ čekání 70ms na Android. Word range určí LubaNote.
-       PreventDefault na druhém touchstart už zablokoval native word handles. */
-    if (jeAndroidApkSelectionScroll() && primy &&
-        aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "683M-direct")) {
-      if (event.cancelable) event.preventDefault();
-      event.stopPropagation();
-      zapisSelectionScrollDiag("683M_CUSTOM_WORD_READY", event);
+    /* 683S – jeden výběrový pokus. Pokud uživatel dvojtapnul na hranici
+       slova/mezeru, nemáme zkoušet další offset-1: nabídneme caret menu.
+       Vlastní caret se po touchend dorovná modelem, nikoli Androidem. */
+    if (aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y,
+        primy ? "683S-word-direct" : "683S-word-fallback")) {
+      if (primy && event.cancelable) event.preventDefault();
+      if (primy) event.stopPropagation();
       return;
     }
-    /* Bezpečný fallback pokud zařízení včasný druhý touchstart neohlásí. */
-    if (aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "683M-fallback")) return;
+    if (jeAndroidApkSelectionScroll()) {
+      const bod = { x: aktualni.x, y: aktualni.y };
+      requestAnimationFrame(() => {
+        if (!aktivni || !core()?.ziskejEditorElement?.()?.isConnected) return;
+        /* 683P: přesuneme modelový caret na místo druhého tapu. */
+        core()?.zrusVyberNaBoduProSelectionMenu?.(bod.x, bod.y);
+        zobrazV2SelectionMenuProKurzor(bod);
+        zapisSelectionScrollDiag("683S_CARET_MENU", null, "space-or-word-boundary");
+      });
+      return;
+    }
     const vyber = window.getSelection();
     const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
     if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
