@@ -5168,13 +5168,96 @@
     );
   }
 
-  /* FIX 682J – čtenářské sbalení/rozbalení nesmí přitáhnout dokument
-     k dříve uloženému caretu. PATCH 663E při otevření poznámky úmyslně
-     nevytváří DOM selection, ale původní toggle ho pomocí vykresli(vyber)
-     opět založil (i když uživatel do textu vůbec neklepl).
-     Modelový posledniVyber se NEmaže: zůstává pro další skutečné psaní.
-     Vizuální scroll zachováme podle řádku, jehož šipku uživatel zmáčkl.
-     Žádná změna modelu, drag/MOVE ani selection engine. */
+  /* FIX 682M – sbaleni seznamu BEZ vytvareni novych DOM radku.
+     Debug Hub 682L / build 782: klik na sipku nahradil vsech 55 radku,
+     pak bez zmeny focusu/selection doslo ke skoku scrollTop 1374 -> 196.
+     Pri toggle menime jen viditelnost a seznamova metadata existujicich radku.
+     Textovy DOM, vlastni handles, input selection, MOVE i obrazky zustavaji.
+     Observer je docasne vypnut stejne jako v beznem vykresli(). */
+  function aktualizujSbaleniVExistujicimDomu() {
+    if (!editor || !dokument?.bloky) return false;
+    const radky = Array.from(editor.children);
+    if (radky.length !== dokument.bloky.length) return false;
+    /* Zadny castecny patch: pred zmenou overime vsechny identifikatory. */
+    for (let i = 0; i < radky.length; i += 1) {
+      const blok = dokument.bloky[i];
+      const radek = radky[i];
+      if (jeObrazkovyBlok(blok)) {
+        if (radek.dataset.lnV2Obrazek !== blok.id) return false;
+      } else if (radek.dataset.lnV2Blok !== blok.id) {
+        return false;
+      }
+    }
+    let skryvaUroven = null;
+    const otevrenaVetevPodleUrovne = [];
+    observerDomu?.disconnect();
+    try {
+      dokument.bloky.forEach((blok, index) => {
+        if (jeObrazkovyBlok(blok)) return;
+        const radek = radky[index];
+        if (!jeSeznamovyBlok(blok)) {
+          /* Shodne s vykresli(): nova bezna veta prerusi seznamovou vetvu. */
+          return;
+        }
+        const uroven = normalizujUrovenBulletu(blok.uroven);
+        otevrenaVetevPodleUrovne.length = Math.min(otevrenaVetevPodleUrovne.length, uroven + 1);
+        const primyPotomekOtevrene = uroven > 0 && Boolean(otevrenaVetevPodleUrovne[uroven - 1]);
+        if (primyPotomekOtevrene) radek.dataset.lnV2OpenBranchChild = "1";
+        else delete radek.dataset.lnV2OpenBranchChild;
+        otevrenaVetevPodleUrovne[uroven] = "";
+
+        if (skryvaUroven !== null) {
+          if (uroven > skryvaUroven) radek.hidden = true;
+          else { radek.hidden = false; skryvaUroven = null; }
+        } else radek.hidden = false;
+
+        const dalsi = dokument.bloky[index + 1];
+        const maDeti = Boolean(jeSeznamovyBlok(dalsi) && normalizujUrovenBulletu(dalsi.uroven) > uroven);
+        radek.dataset.lnV2ListHasChildren = maDeti ? "1" : "0";
+        radek.dataset.lnV2ListCollapsed = maDeti && blok.sbaleno ? "1" : "0";
+        if (maDeti && !blok.sbaleno) {
+          radek.dataset.lnV2OpenBranchParent = "1";
+          otevrenaVetevPodleUrovne[uroven] = blok.id;
+        } else delete radek.dataset.lnV2OpenBranchParent;
+        if (maDeti && blok.sbaleno) skryvaUroven = uroven;
+
+        let pocetPrimychDeti = 0;
+        if (maDeti) {
+          for (let i = index + 1; i < dokument.bloky.length; i += 1) {
+            const dalsiBlok = dokument.bloky[i];
+            if (!jeSeznamovyBlok(dalsiBlok)) break;
+            const dalsiUroven = normalizujUrovenBulletu(dalsiBlok.uroven);
+            if (dalsiUroven <= uroven) break;
+            if (dalsiUroven === uroven + 1) pocetPrimychDeti += 1;
+          }
+          radek.dataset.lnV2ListChildCount = String(pocetPrimychDeti);
+        } else delete radek.dataset.lnV2ListChildCount;
+
+        const badge = radek.querySelector(":scope > .ln-v2-list-child-badge[data-v2-list-toggle]");
+        const potrebujeBadge = jeBulletBlok(blok) && maDeti && blok.sbaleno && pocetPrimychDeti > 0;
+        if (!potrebujeBadge) badge?.remove();
+        else if (badge) badge.textContent = String(pocetPrimychDeti);
+        else {
+          const novyBadge = document.createElement("button");
+          novyBadge.type = "button";
+          novyBadge.className = "ln-v2-list-child-badge";
+          novyBadge.dataset.v2ListToggle = blok.id;
+          novyBadge.contentEditable = "false";
+          novyBadge.setAttribute("aria-label", "Rozbalit větev seznamu");
+          novyBadge.textContent = String(pocetPrimychDeti);
+          /* Renderer umi badge pred obrazky v seznamove polozce. */
+          const prvniObrazek = radek.querySelector(":scope > .ln-v2-list-image");
+          radek.insertBefore(novyBadge, prvniObrazek || null);
+        }
+      });
+    } finally {
+      observerDomu?.observe(editor, {
+        childList: true, subtree: true, attributes: true, characterData: true
+      });
+    }
+    return true;
+  }
+
   function vykresliSbaleniBezSkoku(id) {
     const editorPred = editor;
     if (!editorPred) return;
@@ -5186,24 +5269,19 @@
     const yPred = staryRadek?.getBoundingClientRect().top;
     const scrollPred = editorPred.scrollTop;
 
-    /* Neobnovovat DOM range jen kvůli změně visibility potomků.
-       Původní modelový caret/uložený formátovací výběr zůstává beze změny. */
-    vykresli(null);
-    /* Kliknutí na pseudošipku může samo vytvořit nativní DOM Range.
-       Po změně seznamu z něj nesmí vzniknout skrytý/stale caret. */
-    window.getSelection()?.removeAllRanges();
-    skryjV2LubaCaret();
-    odstranV2SelectionOverlay();
-
+    if (!aktualizujSbaleniVExistujicimDomu()) {
+      /* Jen nouzova cesta pri poskozenem DOM; nesmi dojit k castecne zmene. */
+      vykresli(null);
+    }
+    /* U pouheho rozbaleni/sbaleni NESAHAME na Range ani focus.
+       Puvodni DOM textovych uzlu zustava zachovan i pro puvodni caret. */
     const obnovPohled = () => {
       if (editor !== editorPred || !editorPred.isConnected) return;
       const novyRadek = najdiRadek();
       if (novyRadek && Number.isFinite(yPred)) {
         const rozdil = novyRadek.getBoundingClientRect().top - yPred;
         if (Math.abs(rozdil) > 1) editorPred.scrollTop += rozdil;
-      } else {
-        editorPred.scrollTop = scrollPred;
-      }
+      } else editorPred.scrollTop = scrollPred;
     };
     obnovPohled();
     requestAnimationFrame(obnovPohled);
