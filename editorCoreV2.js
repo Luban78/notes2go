@@ -8802,6 +8802,26 @@
       zrusV2VyberPolozkySeznamu();
     });
 
+    /* 682N – kontrolní report 783: pseudo-šipka je součást editovatelného
+       DIV, zatímco ne-editovatelné tlačítko počtu potomků neskáče.
+       Zrušíme NATIVNÍ default pointer gesta pouze v úzké zóně značky rodiče.
+       touchstart/touchend dále obslouží naše vlastní krátké klepnutí;
+       pointer/touch události dál PROPAGUJÍ pro stávající long-press MOVE.
+       Žádné focus(), Range, scrollTop ani nový DOM. */
+    poslouchej(editor, "pointerdown", (event) => {
+      if (event.pointerType !== "touch" || event.isPrimary === false) return;
+      if (!najdiV2SbalovaciZnacku(event.target, event.clientX)) return;
+      if (event.cancelable) event.preventDefault();
+    }, { capture: true, passive: false });
+    poslouchej(editor, "pointerup", (event) => {
+      if (event.pointerType !== "touch" || event.isPrimary === false) return;
+      const kandidat = v2DotykSbalovaciZnacky;
+      if (!kandidat) return;
+      if (Math.hypot(event.clientX - kandidat.x, event.clientY - kandidat.y) > 12) return;
+      if (v2DragSeznamu?.pripraven || v2DragSeznamu?.aktivni) return;
+      if (event.cancelable) event.preventDefault();
+    }, { capture: true, passive: false });
+
     /* 682K – žádný nativní posun caretu při TAPU na šipku.
        Dotyk samotné značky zachytíme v capture fázi ještě před běžným
        list MOVE kandidátem. PreventDefault se netýká zbytku řádku. */
