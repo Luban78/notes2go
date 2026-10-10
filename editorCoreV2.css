@@ -1043,3 +1043,10 @@ body.nativeApp #modalRichTextV2Host .ln-v2-editor {
 .ln-v2-single-caret-handle svg { pointer-events: none; }
 body:has(.ln-v2-editor.ln-v2-selection-custom-active) .ln-v2-single-caret-handle,
 body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !important; }
+
+
+/* 683Q – pouze VISUAL. X kapky o 1 CSS px vpravo, kapka o cca 15 %
+   menší (22 x 29 místo 26 x 34). Dotyková plocha 44 x 44 se nemění.
+   Samotný modelový caret, výběr, MOVE a scroll zůstávají nedotčené. */
+.ln-v2-single-caret-handle { margin-left: 1px; }
+.ln-v2-single-caret-handle svg { width: 22px; height: 29px; }
