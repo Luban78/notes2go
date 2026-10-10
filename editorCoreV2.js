@@ -6133,6 +6133,48 @@
     return { id: posledni.dataset.lnV2Blok, za: true, y: rect.bottom, predchoziId: posledni.dataset.lnV2Blok };
   }
 
+  /* 683V / UX-02 – jen projekce urovne pro vodici caru behem MOVE.
+     Stejne kroky jako v presunV2SeznamovyPodstrom, ale BEZ zmeny modelu. */
+  function ziskejV2UrovenVodiciCary(drag) {
+    if (!drag?.cil || !dokument?.bloky) return null;
+    const zdroj = najdiIndexBlokuPodleId(drag.blokId);
+    if (zdroj < 0 || jeTodoBlok(dokument.bloky[zdroj])) return null;
+
+    const puvodniUroven = normalizujUrovenBulletu(dokument.bloky[zdroj].uroven);
+    const rozsah = rozsahPodstromuSeznamu(zdroj);
+    const zbyvajici = dokument.bloky.filter((_blok, index) => index < rozsah.od || index > rozsah.do);
+    const cilIndex = zbyvajici.findIndex((blok) => blok.id === drag.cil.id);
+    if (cilIndex < 0) return null;
+
+    let vlozitNa = cilIndex;
+    if (drag.cil.za) {
+      vlozitNa = cilIndex + 1;
+      if (jeSeznamovyBlok(zbyvajici[cilIndex])) {
+        const cilUroven = normalizujUrovenBulletu(zbyvajici[cilIndex].uroven);
+        while (vlozitNa < zbyvajici.length) {
+          const dalsi = zbyvajici[vlozitNa];
+          if (!jeSeznamovyBlok(dalsi) || normalizujUrovenBulletu(dalsi.uroven) <= cilUroven) break;
+          vlozitNa += 1;
+        }
+      }
+    }
+
+    const dx = drag.lastX - drag.startX;
+    if (dx > PRAH_VNOR_SEZNAMU) {
+      const predId = drag.cil.predchoziId || (drag.cil.za ? drag.cil.id : "");
+      const pred = zbyvajici.find((blok) => blok.id === predId);
+      return pred && jeSeznamovyBlok(pred)
+        ? Math.min(6, normalizujUrovenBulletu(pred.uroven) + 1)
+        : puvodniUroven;
+    }
+    if (dx < -PRAH_VNOR_SEZNAMU) return Math.max(0, puvodniUroven - 1);
+
+    const pred = zbyvajici[vlozitNa - 1];
+    return !jeSeznamovyBlok(pred)
+      ? 0
+      : Math.min(puvodniUroven, normalizujUrovenBulletu(pred.uroven) + 1);
+  }
+
   function aktualizujV2DragSeznamu(x, y, riditAutoScroll = true) {
     if (!v2DragSeznamu?.aktivni) return;
     v2DragSeznamu.lastX = x;
@@ -6143,9 +6185,16 @@
     const indicator = zajistiV2ListDropIndicator();
     if (cil) {
       const rect = editor.getBoundingClientRect();
-      indicator.style.left = `${Math.round(rect.left + 10)}px`;
-      indicator.style.width = `${Math.max(20, Math.round(rect.width - 20))}px`;
+      /* 683V – zobraz cilovou uroven a odpovidajici odsazeni.
+         DROP/MOVE engine zustava beze zmeny. */
+      const uroven = ziskejV2UrovenVodiciCary(v2DragSeznamu);
+      const posun = uroven === null ? 10 : 30 + uroven * 24;
+      const leva = Math.round(rect.left + posun);
+      indicator.style.left = `${leva}px`;
+      indicator.style.width = `${Math.max(20, Math.round(rect.right - leva - 10))}px`;
       indicator.style.top = `${Math.round(cil.y)}px`;
+      if (uroven === null) delete indicator.dataset.uroven;
+      else indicator.dataset.uroven = String(uroven + 1);
       indicator.hidden = false;
     } else {
       indicator.hidden = true;

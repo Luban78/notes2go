@@ -1090,17 +1090,13 @@
     return out;
   }
 
+  /* 683V / UX-08 – bez napsaneho prefixu nesmi smartbar naplnit
+     obecna nejcastejsi slova. Po predchozim slovu (vcetne mezery)
+     NADÁLE navrhujeme dalsi slova z naucenych kontextovych dvojic.
+     Nezasahujeme do uceni, ulozeneho slovniku ani prefixovych navrhu. */
   function vychoziNavrhy(layout, predchoziSlovo = "") {
-    const kontext = kontextoveNavrhy(predchoziSlovo, layout);
-    const naucene = Object.values(naucenaSlova[layout.id] || {})
-      .sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0))
-      .map((x) => x?.word)
-      .filter(Boolean);
-    const fallback = layout.id === "cs" ? ["a", "je", "se"]
-      : layout.id === "en" ? ["the", "and", "I"] : [];
-    return [...kontext, ...naucene, ...fallback]
-      .filter((x, i, arr) => arr.indexOf(x) === i)
-      .slice(0, 3);
+    if (!String(predchoziSlovo || "").trim()) return [];
+    return kontextoveNavrhy(predchoziSlovo, layout);
   }
 
   function vypocitejNavrhy() {
