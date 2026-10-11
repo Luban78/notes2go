@@ -1058,3 +1058,10 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
 .ln-v2-luba-caret.ln-v2-caret-scroll-anchored,
 .ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored { position: absolute; }
 
+
+/* 683AJ – automatická čitelnost barevného zvýraznění v Editor Core V2.
+   Jen pro skutečný text, nikoliv pro code bloky (jejich původní jednotný
+   vzhled 669A/682I je FROZEN). Modelová barva a HTML export se nemění. */
+.ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"] {
+  color: var(--ln-v2-kontrast-pisma-683aj) !important;
+}

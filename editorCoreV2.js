@@ -1474,6 +1474,40 @@
     );
   }
 
+  /* 683AJ – kontrast písma na barevném zvýraznění.
+   * Mění se POUZE vizuální vrstva editoru. Barvu textu v modelu
+   * (format.barva) nepřepisujeme: po odebrání zvýraznění se obnoví
+   * původní písmo a synchronizace/export HTML zůstanou beze změny.
+   * Stejná sRGB/WCAG hranice jako u štítků 683AB.
+   */
+  function kontrastPismaNaPozadi683AJ(pozadi) {
+    const zapis = String(pozadi || "").trim();
+    let kanaly = null;
+    const hex = /^#([0-9a-f]{6})$/i.exec(zapis);
+    const kratkyHex = /^#([0-9a-f]{3})$/i.exec(zapis);
+    if (hex) {
+      kanaly = [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16));
+    } else if (kratkyHex) {
+      kanaly = kratkyHex[1].split("").map((cislice) => parseInt(cislice + cislice, 16));
+    } else {
+      // Pro starší/importovaný HTML obsah podporujeme také rgb()/rgba().
+      const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(1(?:\.0+)?))?\s*\)$/i.exec(zapis);
+      if (rgb) kanaly = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+    }
+    if (!kanaly || kanaly.some((hodnota) => hodnota < 0 || hodnota > 255)) return "";
+
+    const linearni = (kanal) => {
+      const hodnota = kanal / 255;
+      return hodnota <= 0.04045
+        ? hodnota / 12.92
+        : Math.pow((hodnota + 0.055) / 1.055, 2.4);
+    };
+    const jas = 0.2126 * linearni(kanaly[0])
+      + 0.7152 * linearni(kanaly[1])
+      + 0.0722 * linearni(kanaly[2]);
+    return jas > 0.179 ? "#000000" : "#ffffff";
+  }
+
   function vykresliFormat(span, format) {
     const velikost = cisloVelikosti(format?.velikost);
     if (velikost !== null) {
@@ -1488,6 +1522,13 @@
     if (format?.podtrzeni) span.style.textDecoration = "underline";
     if (format?.barva) span.style.color = format.barva;
     if (format?.pozadi) span.style.backgroundColor = format.pozadi;
+    const kontrast = kontrastPismaNaPozadi683AJ(format?.pozadi);
+    if (kontrast) {
+      // CSS přebije jen výslednou barvu zobrazeného textu, nikoliv
+      // jeho modelovou/inline hodnotu kontrolovanou DOM Guardem.
+      span.dataset.lnV2Kontrast683aj = "1";
+      span.style.setProperty("--ln-v2-kontrast-pisma-683aj", kontrast);
+    }
     if (format?.kod) {
       span.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
       span.dataset.lnV2Kod = "1";
