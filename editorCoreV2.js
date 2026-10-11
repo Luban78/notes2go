@@ -1810,6 +1810,7 @@
     observerDomu?.disconnect();
     editor.replaceChildren(fragment);
     editor.style.fontSize = `${zakladniVelikost()}px`;
+    editor.querySelectorAll(".ln-v2-bullet:has(> .ln-v2-list-child-badge)").forEach(ukotviV2PocetDetiNaText);
     observerDomu?.observe(editor, {
       childList: true,
       subtree: true,
@@ -5355,6 +5356,7 @@
           const prvniObrazek = radek.querySelector(":scope > .ln-v2-list-image");
           radek.insertBefore(novyBadge, prvniObrazek || null);
         }
+        ukotviV2PocetDetiNaText(radek);
       });
     } finally {
       observerDomu?.observe(editor, {
@@ -5362,6 +5364,39 @@
       });
     }
     return true;
+  }
+
+  /* 683Z: počet sbalených dětí má být vedle skutečného textu rodiče.
+     Pokud text končí zalomením, inline badge se jinak vykreslí na prázdném
+     řádku. Ukotvení je vizuální a nezasahuje do segmentů ani offsetu caretu. */
+  function ukotviV2PocetDetiNaText(radek) {
+    const badge = radek?.querySelector?.(":scope > .ln-v2-list-child-badge");
+    if (!badge) return;
+    let posledniUzel = null;
+    let znakNa = 0;
+    const segmenty = Array.from(radek.querySelectorAll(":scope > .ln-v2-cast"));
+    for (let i = segmenty.length - 1; i >= 0 && !posledniUzel; i -= 1) {
+      const obsah = segmenty[i].firstChild;
+      if (!obsah || obsah.nodeType !== 3) continue;
+      const text = obsah.textContent || "";
+      const doZnaku = text.replace(/\s+$/u, "").length;
+      if (doZnaku) { posledniUzel = obsah; znakNa = doZnaku; }
+    }
+    if (!posledniUzel) return;
+    const range = document.createRange();
+    range.setStart(posledniUzel, znakNa - 1);
+    range.setEnd(posledniUzel, znakNa);
+    const r = range.getBoundingClientRect();
+    const row = radek.getBoundingClientRect();
+    const sirka = badge.getBoundingClientRect().width || 22;
+    if (!r.width || !row.width) return;
+    /* Poslední glyph je referenční bod i u vícerádkového textu. */
+    const left = Math.max(0, Math.min(row.width - sirka - 3, r.right - row.left + 8));
+    const top = Math.max(0, r.top - row.top + (r.height - (badge.offsetHeight || 22)) / 2);
+    badge.style.position = "absolute";
+    badge.style.left = `${Math.round(left)}px`;
+    badge.style.top = `${Math.round(top)}px`;
+    badge.style.marginLeft = "0";
   }
 
   function vykresliSbaleniBezSkoku(id) {
@@ -6254,6 +6289,7 @@
   const PRAH_ZAMKU_OSY_SEZNAMU = 28;
   const KROK_RODICE_SEZNAMU = 40;
   const TOLERANCE_SVISLEHO_ZACATKU = 52;
+  const V2_KOREN_SEZNAMU = "__ln_v2_root__";
 
   function najdiV2RodiceProGesto(drag, dx) {
     const bloky = dokument?.bloky || [];
@@ -6272,10 +6308,13 @@
           uroven = jeho;
         }
       }
-      /* 1. krok vlevo = rodič o JEDNU úroveň výš oproti dosavadnímu rodiči.
-         Pro pátý(L4): třetí(L2), pak druhý(L1), pak první(L0). */
+      /* 683Z: jeden krok vlevo = jeden stupeň VYSUNUTÍ.
+         L4 -> dítě třetího, pak druhého, pak prvního, nakonec
+         KOŘEN (sourozenec prvního, nikoli další dítě prvního).
+         L1 -> přímo KOŘEN. Kořen není datový blok ani ID rodiče. */
       const kroky = 1 + Math.floor((Math.abs(dx) - PRAH_VNOR_SEZNAMU) / KROK_RODICE_SEZNAMU);
-      return predci[Math.min(predci.length - 1, kroky)] || null;
+      if (kroky >= predci.length) return predci.length ? V2_KOREN_SEZNAMU : null;
+      return predci[kroky] || null;
     }
     if (dx > PRAH_VNOR_SEZNAMU && hloubka < 6) {
       /* Směrem doprava lze vytvořit dítě z předchozího sourozence. */
@@ -6300,6 +6339,26 @@
     const odebirane = bloky.slice(rozsah.od, rozsah.do + 1);
     if (!odebirane.length || odebirane.some((b) => b.id === rodicId)) return null;
     const zbytek = bloky.filter((_b, i) => i < rozsah.od || i > rozsah.do);
+    if (rodicId === V2_KOREN_SEZNAMU) {
+      /* Kořen není dítě "prvního". Po vyjmutí přesuň celý podstrom
+         ZA strom nejbližšího nadřazeného kořenového bloku. */
+      const puvodniUroven = normalizujUrovenBulletu(bloky[zdroj].uroven);
+      if (puvodniUroven === 0) return null;
+      let korenId = "";
+      for (let i = zdroj - 1; i >= 0; i -= 1) {
+        const b = bloky[i];
+        if (!jeSeznamovyBlok(b) || jeTodoBlok(b)) break;
+        if (normalizujUrovenBulletu(b.uroven) === 0) { korenId = b.id; break; }
+      }
+      if (!korenId) return null;
+      const indexKorene = zbytek.findIndex((b) => b.id === korenId);
+      if (indexKorene < 0) return null;
+      let vlozitNa = indexKorene + 1;
+      while (vlozitNa < zbytek.length && jeSeznamovyBlok(zbytek[vlozitNa]) &&
+             normalizujUrovenBulletu(zbytek[vlozitNa].uroven) > 0) vlozitNa += 1;
+      return { rodicId, kotvaId: korenId, zdroj, rozsah, odebirane, zbytek, vlozitNa,
+        puvodniUroven, novaUroven: 0 };
+    }
     const indexRodice = zbytek.findIndex((b) => b.id === rodicId);
     if (indexRodice < 0) return null;
     const rodic = zbytek[indexRodice];
@@ -6313,7 +6372,7 @@
     const urovenRodice = normalizujUrovenBulletu(rodic.uroven);
     while (vlozitNa < zbytek.length && jeSeznamovyBlok(zbytek[vlozitNa]) &&
            normalizujUrovenBulletu(zbytek[vlozitNa].uroven) > urovenRodice) vlozitNa += 1;
-    return { rodicId, zdroj, rozsah, odebirane, zbytek, vlozitNa,
+    return { rodicId, kotvaId: rodicId, zdroj, rozsah, odebirane, zbytek, vlozitNa,
       puvodniUroven, novaUroven };
   }
 
@@ -6328,10 +6387,11 @@
   function geometrieV2NahleduDite(plan) {
     const meze = viditelneV2MezeVoditka();
     if (!plan || !meze) return null;
-    const radekRodice = najdiV2ElementBloku(plan.rodicId);
+    const radekRodice = najdiV2ElementBloku(plan.kotvaId || plan.rodicId);
     if (!radekRodice) return null;
     const r = radekRodice.getBoundingClientRect();
-    const markerX = r.left + 30 + (plan.novaUroven - 1) * 24 - 22;
+    const korenovySlot = plan.rodicId === V2_KOREN_SEZNAMU;
+    const markerX = r.left + 30 + (korenovySlot ? 0 : plan.novaUroven - 1) * 24 - 22;
     const budX = Math.max(meze.left + 6, Math.min(meze.right - 24,
       r.left + 30 + plan.novaUroven * 24 - 22));
     const dalsi = plan.zbytek[plan.vlozitNa];
@@ -6539,7 +6599,9 @@
       vybranaPolozkaSeznamuId = "";
       ulozZmenuDoHistorie(snapshotPred, "přesun pod vybraného rodiče");
       vykresli(vyberPo);
-      nastavStav(`Položka přesunuta pod rodiče · úroveň ${plan.novaUroven}`);
+      nastavStav(plan.rodicId === V2_KOREN_SEZNAMU
+        ? "Položka přesunuta na kořenovou úroveň"
+        : `Položka přesunuta pod rodiče · úroveň ${plan.novaUroven}`);
       return true;
     }
 
