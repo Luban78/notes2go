@@ -861,6 +861,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.savingOrder": "Tag-Reihenfolge wird gespeichert…",
       "tags.colorAria": "Tag-Farbe {name}",
       "tags.customColor": "Eigene Farbe",
+    "tags.shadeNumber": "Farbton {number}",
+    "tags.chooseColor": "Etikettenfarbe",
       "tags.customColorShort": "Eigene",
       "tags.colorPickerTitle": "Farbe wählen",
       "tags.colorPickerHue": "Farbton",

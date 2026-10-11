@@ -865,6 +865,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.savingOrder": "Zapisywanie kolejności etykiet…",
       "tags.colorAria": "Kolor etykiety {name}",
       "tags.customColor": "Własny kolor",
+    "tags.shadeNumber": "Odcień {number}",
+    "tags.chooseColor": "Kolor etykiety",
       "tags.customColorShort": "Własny",
       "tags.colorPickerTitle": "Wybierz kolor",
       "tags.colorPickerHue": "Odcień",

@@ -18209,3 +18209,179 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
     transparent
   );
 }
+
+
+
+/* 683AE – osm tonálních odstínů v každém motivu; světlá → tmavá.
+   Interní názvy zůstávají kvůli existujícím štítkům/poznámkám,
+   uložené vlastní #RRGGBB se nemění. Společné pro mobil i PC. */
+:root {
+  --card-cervena: #fffaf8;
+  --card-oranzova: #f7e5ec;
+  --card-zluta: #ead0df;
+  --card-zelena: #cb9dbb;
+  --card-tyrkysova: #996c94;
+  --card-modra: #694465;
+  --card-fialova: #42283f;
+  --card-ruzova: #1d111c;
+}
+body.theme-dark {
+  --card-cervena: #f6f0ff;
+  --card-oranzova: #e1d3f5;
+  --card-zluta: #baa3dc;
+  --card-zelena: #9074bc;
+  --card-tyrkysova: #684e93;
+  --card-modra: #493565;
+  --card-fialova: #30233f;
+  --card-ruzova: #15111d;
+}
+body.theme-cappuccino {
+  --card-cervena: #fffaf1;
+  --card-oranzova: #f2e2cf;
+  --card-zluta: #dcc6aa;
+  --card-zelena: #bea183;
+  --card-tyrkysova: #977656;
+  --card-modra: #72543e;
+  --card-fialova: #4a3428;
+  --card-ruzova: #201611;
+}
+body.theme-ocean {
+  --card-cervena: #f1fdff;
+  --card-oranzova: #ccf6fb;
+  --card-zluta: #9ae6f0;
+  --card-zelena: #65cbdc;
+  --card-tyrkysova: #369db2;
+  --card-modra: #226d83;
+  --card-fialova: #124354;
+  --card-ruzova: #061e2a;
+}
+body.theme-darkg {
+  --card-cervena: #f8f8f8;
+  --card-oranzova: #e5e5e5;
+  --card-zluta: #c3c3c3;
+  --card-zelena: #999999;
+  --card-tyrkysova: #6d6d6d;
+  --card-modra: #4b4b4b;
+  --card-fialova: #292929;
+  --card-ruzova: #0d0d0d;
+}
+body.theme-arctic {
+  --card-cervena: #f7fdff;
+  --card-oranzova: #e0f3fa;
+  --card-zluta: #bcdfeb;
+  --card-zelena: #8cbccc;
+  --card-tyrkysova: #608f9f;
+  --card-modra: #426979;
+  --card-fialova: #2a4657;
+  --card-ruzova: #131f2d;
+}
+body.theme-violetnight {
+  --card-cervena: #faf5ff;
+  --card-oranzova: #e6dcfa;
+  --card-zluta: #c8b4ee;
+  --card-zelena: #a58ad8;
+  --card-tyrkysova: #8066b1;
+  --card-modra: #5b447e;
+  --card-fialova: #3c2b59;
+  --card-ruzova: #1b142c;
+}
+body.theme-solar {
+  --card-cervena: #fffdec;
+  --card-oranzova: #eff0c9;
+  --card-zluta: #cfd7a0;
+  --card-zelena: #a8bb80;
+  --card-tyrkysova: #759b77;
+  --card-modra: #427973;
+  --card-fialova: #245257;
+  --card-ruzova: #102d38;
+}
+body.theme-retro {
+  --card-cervena: #fff7e0;
+  --card-oranzova: #f1deb1;
+  --card-zluta: #d9bc81;
+  --card-zelena: #ba935c;
+  --card-tyrkysova: #916b43;
+  --card-modra: #6b4c33;
+  --card-fialova: #452e25;
+  --card-ruzova: #201719;
+}
+body.secretModeActive {
+  --card-cervena: #fff2f8;
+  --card-oranzova: #f2cedf;
+  --card-zluta: #d99cbf;
+  --card-zelena: #b66d9c;
+  --card-tyrkysova: #884775;
+  --card-modra: #602e58;
+  --card-fialova: #40203d;
+  --card-ruzova: #1d101f;
+}
+
+/* 683AE – Správa štítků: názvy čitelné zleva, ne zděděné centrování body. */
+.manageTagName { text-align: left !important; }
+.manageTagRenameInput { text-align: left; }
+
+/* Vlastní – tlačítko je současně náhled opravdu vybrané barvy.
+   Barva textu/plusu se vypočte stejným WCAG algoritmem jako na kartách. */
+.manageTagColorPalette .manageTagCustomColorButton,
+.newTagColorPalette683AE .manageTagCustomColorButton {
+  background: var(--luba-preview-color-683AE, var(--color-accent)) !important;
+  color: var(--luba-preview-text-683AE, var(--color-on-accent, #ffffff)) !important;
+  border-color: color-mix(in srgb, currentColor 55%, transparent) !important;
+}
+.manageTagColorPalette .manageTagCustomColorButton .manageTagCustomPlus,
+.newTagColorPalette683AE .manageTagCustomColorButton .manageTagCustomPlus {
+  background: color-mix(in srgb, currentColor 17%, transparent);
+  color: inherit;
+}
+.manageTagColorPalette .manageTagColorOption[data-luba-chosen="true"],
+.newTagColorPalette683AE .manageTagColorOption[data-luba-chosen="true"] {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.newTagColorTitle683AE { text-align: left; font-size: .91rem; font-weight: 700; margin: 16px 0 8px; color: var(--color-text); }
+.newTagColorPalette683AE {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px 12px;
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.newTagColorPalette683AE::-webkit-scrollbar { display: none; }
+.newTagColorPalette683AE .manageTagColorOption { flex: 0 0 42px; }
+.newTagColorPalette683AE .manageTagCustomColorButton { flex: 0 0 auto; }
+/* PC + mobil – vytvoření štítku vždy navázané na barvy motivu. */
+#cancelNewTagModalButton {
+  background: var(--color-background) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+#saveNewTagModalButton,
+#closeTagMessageButton {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+  color: var(--luba-on-accent-683AE, var(--color-on-accent, #ffffff)) !important;
+}
+/* Výběr vlastní barvy může být otevřen nad dialogem nového štítku. */
+.lubaTagColorOverlay683AC { z-index: 10100; }
+.newTagDialog { width: min(92vw, 420px); box-sizing: border-box; }
+@media (max-width: 480px) {
+  .newTagDialog { padding: 16px; }
+  .newTagColorPalette683AE { margin-inline: -2px; }
+}
+
+
+/* 683AE – všech osm odstínů musí být viditelných bez vodorovného pátrání.
+   Na mobilu se paleta přirozeně zalomí, na PC je v jednom řádku. */
+.manageTagColorPalette,
+.newTagColorPalette683AE {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  overflow-y: visible;
+  row-gap: 10px;
+}

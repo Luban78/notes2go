@@ -865,6 +865,8 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.savingOrder": "Ukladám poradie štítkov…",
       "tags.colorAria": "Farba štítku {name}",
       "tags.customColor": "Vlastná farba",
+    "tags.shadeNumber": "Odtieň {number}",
+    "tags.chooseColor": "Farba štítka",
       "tags.customColorShort": "Vlastná",
       "tags.colorPickerTitle": "Vybrať farbu",
       "tags.colorPickerHue": "Odtieň",

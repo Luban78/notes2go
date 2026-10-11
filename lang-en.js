@@ -977,6 +977,8 @@ window.LubaNoteLanguagePacks.push({
     "tags.savingOrder": "Saving tag order…",
     "tags.colorAria": "Tag color {name}",
     "tags.customColor": "Custom color",
+    "tags.shadeNumber": "Shade {number}",
+    "tags.chooseColor": "Tag color",
     "tags.customColorShort": "Custom",
     "tags.colorPickerTitle": "Choose color",
     "tags.colorPickerHue": "Hue",

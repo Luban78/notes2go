@@ -563,6 +563,7 @@ async function vytvorLokalniStitek(
   {
     tajny = false,
     userId = "",
+    barva = "system",
     prekreslit = true
   } = {}
 ) {
@@ -649,7 +650,7 @@ async function vytvorLokalniStitek(
     encrypted_name: encryptedName,
     is_secret: tajny,
     sort_order: dalsiPoradi,
-    color: "system",
+    color: barva,
     created_at: new Date().toISOString()
   };
 
@@ -1867,6 +1868,7 @@ newTagModalInput.addEventListener("keydown", (event) => {
 
 saveNewTagModalButton.addEventListener("click", async () => {
   const name = newTagModalInput.value.trim();
+  const novaBarva = ziskejBarvuNovehoStitku683AE();
   
   if (!name || saveNewTagModalButton.disabled) {
     return;
@@ -1907,7 +1909,7 @@ saveNewTagModalButton.addEventListener("click", async () => {
   try {
     if (vytvarimeTajnyStitek) {
       const uspesne =
-        await vytvorTajnyStitek(name);
+        await vytvorTajnyStitek(name, novaBarva);
       
       if (!uspesne) {
         return;
@@ -1930,7 +1932,7 @@ saveNewTagModalButton.addEventListener("click", async () => {
     if (jeAktivniLokalniProstorStitku()) {
       const lokalniStitek = await vytvorLokalniStitek(
         name,
-        { userId: user.id }
+        { userId: user.id, barva: novaBarva }
       );
 
       if (!lokalniStitek) {
@@ -1947,7 +1949,8 @@ saveNewTagModalButton.addEventListener("click", async () => {
         user_id: user.id,
         name: name,
         is_secret: false,
-        sort_order: syncedTags.length
+        sort_order: syncedTags.length,
+        color: novaBarva
       });
     
     if (error) {
@@ -3855,23 +3858,15 @@ function vykresliSpravuStitku() {
       const paleta = document.createElement("div");
       paleta.className = "manageTagColorPalette";
       
-      [
-        "cervena",
-        "oranzova",
-        "zluta",
-        "zelena",
-        "tyrkysova",
-        "modra",
-        "fialova",
-        "ruzova"
-      ].forEach((barva) => {
+      BARVY_PALETY_STITKU_683AE.forEach((barva, index) => {
         const volba = document.createElement("button");
         
         volba.type = "button";
         volba.className = "manageTagColorOption";
         volba.dataset.tagColor = barva;
-        
-        const popisBarvy = tagsT(`tags.color.${barva}`, barva);
+        volba.dataset.lubaChosen = String(tag.color === barva);
+        volba.setAttribute("aria-pressed", String(tag.color === barva));
+        const popisBarvy = popisOdstinu683AE(index);
         volba.setAttribute(
           "aria-label",
           tagsT("tags.setColorAria", "Nastavit barvu štítku na {color}", { color: popisBarvy })
@@ -3895,21 +3890,8 @@ function vykresliSpravuStitku() {
         paleta.append(volba);
       });
 
-      // 683AC – vlastní barva je PRVNÍ a výrazná volba, ne schované
-      // systémové kolečko za osmi předvolenými odstíny.
-      const vlastniBarva = document.createElement("button");
-      vlastniBarva.type = "button";
-      vlastniBarva.className = "manageTagCustomColorButton";
-      vlastniBarva.setAttribute("aria-label", tagsT("tags.customColor", "Vlastní barva"));
-      vlastniBarva.title = tagsT("tags.customColor", "Vlastní barva");
-      const plus = document.createElement("span");
-      plus.className = "manageTagCustomPlus";
-      plus.textContent = "+";
-      plus.setAttribute("aria-hidden", "true");
-      const napis = document.createElement("span");
-      napis.textContent = tagsT("tags.customColorShort", "Vlastní");
-      vlastniBarva.append(plus, napis);
-      vlastniBarva.addEventListener("click", () => {
+      // 683AE – první ovládací prvek zároveň náhled aktuální barvy štítku.
+      const vlastniBarva = vytvorTlacitkoVlastniBarvy683AE(tag.color || "system", () => {
         otevriVyberBarvyStitku683AC(tag);
       });
       paleta.prepend(vlastniBarva);
@@ -4547,7 +4529,7 @@ function lubaHexNaHsl683AC(hex) {
   return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
 }
 
-function otevriVyberBarvyStitku683AC(tag) {
+function otevriVyberBarvyStitku683AC(tag, priVyberu = null) {
   // Při dalším otevření nikdy nezůstane staré dialogové okno.
   document.querySelector(".lubaTagColorOverlay683AC")?.remove();
   const puvodni = jeVlastniBarvaStitku683AB(tag.color)
@@ -4672,7 +4654,11 @@ function otevriVyberBarvyStitku683AC(tag) {
     potvrdit.disabled = true;
     potvrdit.textContent = tagsT("tags.savingShort", "Ukládám…");
     let ulozeno = false;
-    try { ulozeno = await zmenBarvuStitku(tag, nova); }
+    try {
+      ulozeno = typeof priVyberu === "function"
+        ? await priVyberu(nova)
+        : await zmenBarvuStitku(tag, nova);
+    }
     finally {
       uklada = false;
       potvrdit.disabled = false;
@@ -4680,10 +4666,100 @@ function otevriVyberBarvyStitku683AC(tag) {
     }
     if (ulozeno) {
       zavri();
-      vykresliSpravuStitku();
+      if (typeof priVyberu !== "function") vykresliSpravuStitku();
     }
   });
   // Vynecháme automatické otevření klávesnice v APK.
+}
+
+
+/* 683AE – osm pevných ID, ale odstíny vznikají z aktuálního motivu.
+   Výběr vlastní barvy před vytvořením NIKDY nezapisuje do databáze. */
+const BARVY_PALETY_STITKU_683AE = [
+  "cervena", "oranzova", "zluta", "zelena",
+  "tyrkysova", "modra", "fialova", "ruzova"
+];
+let barvaProNovyStitek683AE = "system";
+
+function popisOdstinu683AE(index) {
+  return tagsT("tags.shadeNumber", "Odstín {number}", {number: index + 1});
+}
+
+function aplikujNahledVlastnihoTlacitka683AE(tlacitko, barva) {
+  if (!tlacitko) return;
+  const pozadi = podkladStitku683AB(barva);
+  tlacitko.dataset.lubaPreviewColor683ae = String(barva || "system");
+  if (pozadi) {
+    tlacitko.style.setProperty("--luba-preview-color-683AE", pozadi);
+    tlacitko.style.setProperty("--luba-preview-text-683AE", barvaTextuStitku683AB(pozadi));
+  } else {
+    tlacitko.style.removeProperty("--luba-preview-color-683AE");
+    const accent = getComputedStyle(document.body).getPropertyValue("--color-accent").trim();
+    tlacitko.style.setProperty("--luba-preview-text-683AE", /^#[0-9a-fA-F]{6}$/.test(accent)
+      ? barvaTextuStitku683AB(accent) : "#ffffff");
+  }
+}
+
+function vytvorTlacitkoVlastniBarvy683AE(barva, onClick) {
+  const tlacitko = document.createElement("button");
+  tlacitko.type = "button";
+  tlacitko.className = "manageTagCustomColorButton";
+  tlacitko.setAttribute("aria-label", tagsT("tags.customColor", "Vlastní barva"));
+  tlacitko.title = tagsT("tags.customColor", "Vlastní barva");
+  const plus = document.createElement("span");
+  plus.className = "manageTagCustomPlus";
+  plus.textContent = "+";
+  plus.setAttribute("aria-hidden", "true");
+  const napis = document.createElement("span");
+  napis.textContent = tagsT("tags.customColorShort", "Vlastní");
+  tlacitko.append(plus, napis);
+  aplikujNahledVlastnihoTlacitka683AE(tlacitko, barva);
+  tlacitko.addEventListener("click", onClick);
+  return tlacitko;
+}
+
+function obnovPaletuNovehoStitku683AE() {
+  const paleta = document.getElementById("newTagColorPalette683AE");
+  if (!paleta) return;
+  const title = document.getElementById("newTagColorTitle683AE");
+  if (title) title.textContent = tagsT("tags.chooseColor", "Barva štítku");
+  paleta.replaceChildren();
+  const vlastni = vytvorTlacitkoVlastniBarvy683AE(barvaProNovyStitek683AE, () => {
+    const jmeno = String(newTagModalInput?.value || "").trim() || tagsT("tags.new", "Nový štítek");
+    otevriVyberBarvyStitku683AC({name:jmeno, color:barvaProNovyStitek683AE}, async (barva) => {
+      barvaProNovyStitek683AE = barva;
+      obnovPaletuNovehoStitku683AE();
+      return true;
+    });
+  });
+  paleta.append(vlastni);
+  BARVY_PALETY_STITKU_683AE.forEach((barva, index) => {
+    const volba = document.createElement("button");
+    volba.type = "button";
+    volba.className = "manageTagColorOption";
+    volba.dataset.tagColor = barva;
+    volba.dataset.lubaChosen = String(barvaProNovyStitek683AE === barva);
+    const popis = popisOdstinu683AE(index);
+    volba.title = popis;
+    volba.setAttribute("aria-label", popis);
+    volba.setAttribute("aria-pressed", String(barvaProNovyStitek683AE === barva));
+    volba.addEventListener("click", () => {
+      barvaProNovyStitek683AE = barva;
+      obnovPaletuNovehoStitku683AE();
+    });
+    paleta.append(volba);
+  });
+}
+
+function otevriBarevnyVyberNovehoStitku683AE() {
+  barvaProNovyStitek683AE = "system";
+  obnovPaletuNovehoStitku683AE();
+}
+
+function ziskejBarvuNovehoStitku683AE() {
+  const barva = String(barvaProNovyStitek683AE || "system");
+  return BARVY_PALETY_STITKU_683AE.includes(barva) || jeVlastniBarvaStitku683AB(barva)
+    ? barva : "system";
 }
 
 /* PATCH 683AB – barvy štítků a čitelný kontrast.
@@ -4755,6 +4831,13 @@ function obnovKontrastStitkuPoTematu683AB() {
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.tagColor));
   document.querySelectorAll(".taskCard[data-barva-karty]")
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.barvaKarty, true));
+  document.querySelectorAll(".manageTagCustomColorButton[data-luba-preview-color683ae]")
+    .forEach((prvek) => aplikujNahledVlastnihoTlacitka683AE(prvek, prvek.dataset.lubaPreviewColor683ae));
+  // Tlačítka vytváření jsou navázána na motiv, bez natvrdo fialové barvy.
+  const accent = getComputedStyle(document.body).getPropertyValue("--color-accent").trim();
+  const naAkcentu = /^#[0-9a-fA-F]{6}$/.test(accent)
+    ? barvaTextuStitku683AB(accent) : "#ffffff";
+  document.body.style.setProperty("--luba-on-accent-683AE", naAkcentu);
 }
 
 (function hlidejKontrastStitkuPriZmeneTematu683AB() {
@@ -5437,6 +5520,7 @@ function renderTagFilters() {
     
     newTagModal.hidden = false;
     newTagModalInput.value = "";
+    otevriBarevnyVyberNovehoStitku683AE();
     /* FIX 532 – modal se otevírá bez focusu/klávesnice. Uživatel ji otevře až tapem do pole. */
   });
   
@@ -5878,6 +5962,7 @@ createSecretTagButton?.addEventListener(
     
     newTagModal.hidden = false;
     newTagModalInput.value = "";
+    otevriBarevnyVyberNovehoStitku683AE();
     /* FIX 532 – modal se otevírá bez focusu/klávesnice. Uživatel ji otevře až tapem do pole. */
   }
 );
@@ -5982,7 +6067,7 @@ renderTagFilters();
 // s příznakem is_secret = true.
 // ==========================================
 
-async function vytvorTajnyStitek(nazev) {
+async function vytvorTajnyStitek(nazev, barva = "system") {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -6033,7 +6118,7 @@ async function vytvorTajnyStitek(nazev) {
   if (jeAktivniLokalniProstorStitku()) {
     const lokalniStitek = await vytvorLokalniStitek(
       novyNazev,
-      { tajny: true, userId: user.id }
+      { tajny: true, userId: user.id, barva }
     );
 
     return Boolean(lokalniStitek);
@@ -6069,7 +6154,7 @@ async function vytvorTajnyStitek(nazev) {
       encrypted_name: zasifrovanyNazev,
       is_secret: true,
       sort_order: syncedTags.length,
-      color: "system"
+      color: barva
     });
 
   if (error) {

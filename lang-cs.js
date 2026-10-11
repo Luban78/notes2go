@@ -987,6 +987,8 @@ window.LubaNoteLanguagePacks.push({
     "tags.savingOrder": "Ukládám pořadí štítků…",
     "tags.colorAria": "Barva štítku {name}",
     "tags.customColor": "Vlastní barva",
+    "tags.shadeNumber": "Odstín {number}",
+    "tags.chooseColor": "Barva štítku",
     "tags.customColorShort": "Vlastní",
     "tags.colorPickerTitle": "Vybrat barvu",
     "tags.colorPickerHue": "Odstín",

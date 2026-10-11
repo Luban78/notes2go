@@ -6243,6 +6243,17 @@ function zobrazPaletuBarevKarty() {
     </button>
   `;
 
+  /* 683AE: barevná paleta je nyní škála osmi odstínů aktivního motivu.
+     Interní ID zůstávají původní kvůli uloženým kartám; aria/title
+     už nesmí zavádějícím způsobem slibovat "červenou" nebo "žlutou". */
+  cardMenu.querySelectorAll('.cardColorOption:not(.cardColorSystem)').forEach((tlacitko, i) => {
+    const popis = window.LubaNoteI18n?.t?.(
+      'tags.shadeNumber', 'Odstín {number}', {number:i + 1}
+    ) || `Odstín ${i + 1}`;
+    tlacitko.setAttribute('aria-label', popis);
+    tlacitko.title = popis;
+  });
+
   if (pouzivaSvgIkonyRozhrani()) {
     window.LubaNoteIcons?.naplnDeklarovaneIkony?.(cardMenu);
   } else {
