@@ -18385,3 +18385,100 @@ body.secretModeActive {
   overflow-y: visible;
   row-gap: 10px;
 }
+
+
+/* ============================================================
+   683AH – pouze Novy stitek (NAVRAT Z OVERENEHO 683AE).
+   Jeden pevny petisloupcovy rastr; custom zabira prvni dva sloupce.
+   Nenastavujeme layout ani barvy ostatnich modalnich oken.
+   ============================================================ */
+#newTagModal .newTagDialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(90dvh, 720px);
+  overflow: hidden;
+}
+#newTagModal .newTagDialog > h3,
+#newTagModal #newTagModalInput,
+#newTagModal .newTagDialogActions {
+  flex: 0 0 auto;
+}
+#newTagModal #newTagColorPalette683AE {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+  align-content: start;
+  gap: 10px 2px;
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 12px 0 0;
+  padding: 5px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#newTagModal #newTagColorPalette683AE .manageTagCustomColorButton {
+  grid-column: span 2;
+  justify-self: stretch;
+  box-sizing: border-box;
+  width: calc(100% - 4px);
+  min-width: 0;
+  height: 43px;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: .82rem;
+}
+#newTagModal #newTagColorPalette683AE .manageTagCustomPlus {
+  flex-basis: 21px;
+  height: 21px;
+}
+#newTagModal #newTagColorPalette683AE .manageTagColorOption {
+  justify-self: center;
+  box-sizing: border-box;
+  width: min(42px, 82%);
+  height: auto;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+#newTagModal .newTagDialogActions {
+  margin-top: 13px;
+  padding-top: 3px;
+  flex-shrink: 0;
+}
+/* Klavesnice je samostatny fixed panel. Mezi jeho hornim okrajem
+   a spodkem dialogu nechavame 2px. Ostatni prvky zustavaji nedotcene. */
+#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] {
+  position: fixed;
+  top: 0;
+  bottom: auto;
+  height: var(--ln-tag-available-683AH);
+  box-sizing: border-box;
+  padding: max(7px, env(safe-area-inset-top)) 10px 0;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialog {
+  max-height: calc(100% - 7px);
+  padding: 13px;
+}
+#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialog h3 {
+  margin-bottom: 10px;
+}
+#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] #newTagColorPalette683AE {
+  margin-top: 8px;
+  padding-block: 3px;
+  row-gap: 7px;
+}
+#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialogActions {
+  margin-top: 10px;
+}
