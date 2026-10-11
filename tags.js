@@ -4721,8 +4721,8 @@ function vytvorTlacitkoVlastniBarvy683AE(barva, onClick) {
 function obnovPaletuNovehoStitku683AE() {
   const paleta = document.getElementById("newTagColorPalette683AE");
   if (!paleta) return;
-  const title = document.getElementById("newTagColorTitle683AE");
-  if (title) title.textContent = tagsT("tags.chooseColor", "Barva štítku");
+  // Viditelný nadpis odstraněn – paleta sama je výběrem barvy.
+  paleta.setAttribute("aria-label", tagsT("tags.chooseColor", "Barva štítku"));
   paleta.replaceChildren();
   const vlastni = vytvorTlacitkoVlastniBarvy683AE(barvaProNovyStitek683AE, () => {
     const jmeno = String(newTagModalInput?.value || "").trim() || tagsT("tags.new", "Nový štítek");
@@ -4754,7 +4754,77 @@ function obnovPaletuNovehoStitku683AE() {
 function otevriBarevnyVyberNovehoStitku683AE() {
   barvaProNovyStitek683AE = "system";
   obnovPaletuNovehoStitku683AE();
+  // Otevření modalu má správné rozměry již PŘED příchodem klávesnice.
+  pozicujDialogNovehoStitku683AF();
 }
+
+/* 683AF – Dialog nového štítku musí celý ležet NAD skutečnou LubaKeyboard.
+ * Na Androidu má LubaKeyboard vlastní fixed overlay (nezmenší visualViewport).
+ * Proto se řídíme její skutečnou horní hranou, nikoli 100vh nebo odhadem výšky.
+ * Změny ukládání štítků a barev ponecháváme beze změny.
+ */
+function pozicujDialogNovehoStitku683AF() {
+  const modal = document.getElementById("newTagModal");
+  if (!modal || modal.hidden) return;
+  const vv = window.visualViewport;
+  const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+  let top = Math.max(0, vv?.offsetTop || 0);
+  let bottom = vv ? Math.min(layoutHeight, top + vv.height) : layoutHeight;
+  const keyboard = document.getElementById("lubaKeyboard");
+  if (keyboard && !keyboard.hidden && getComputedStyle(keyboard).display !== "none") {
+    const rect = keyboard.getBoundingClientRect();
+    // Ignorovat nulový či právě zavíraný panel a zastaralé souřadnice.
+    if (rect.height > 120 && rect.top > top + 120 && rect.top < bottom) {
+      bottom = Math.min(bottom, rect.top);
+    }
+  }
+  // Podpora malých obrazovek; uvnitř dialogu je rezervní scroll.
+  bottom = Math.max(top + 100, bottom);
+  modal.style.setProperty("--ln-new-tag-top-683AF", `${Math.round(top)}px`);
+  modal.style.setProperty("--ln-new-tag-height-683AF", `${Math.round(bottom - top)}px`);
+}
+
+(function aktivujPozicovaniNovehoStitku683AF() {
+  const modal = document.getElementById("newTagModal");
+  if (!modal) return;
+  let raf = 0;
+  let sledovanaKlavesnice = null;
+  function pripojPozorovaniKlavesnice() {
+    const klavesnice = document.getElementById("lubaKeyboard");
+    if (!klavesnice || klavesnice === sledovanaKlavesnice) return;
+    sledovanaKlavesnice = klavesnice;
+    new MutationObserver(aktualizuj).observe(klavesnice, {
+      attributes:true, attributeFilter:["hidden", "class", "style"]
+    });
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(aktualizuj).observe(klavesnice);
+    }
+  }
+  const aktualizuj = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      pripojPozorovaniKlavesnice();
+      pozicujDialogNovehoStitku683AF();
+    });
+  };
+  // Otevření/zavření modalu a změna obsahu barevné palety.
+  new MutationObserver(aktualizuj).observe(modal, {attributes:true, attributeFilter:["hidden"]});
+  // Vlastní LubaKeyboard mění výšku a viditelnost za běhu.
+  // Klávesnice může vzniknout až PO načtení tags.js.
+  pripojPozorovaniKlavesnice();
+  // Keyboard ve WebView mění --ln-lk-height na html; chytneme jeho změnu.
+  new MutationObserver(aktualizuj).observe(document.documentElement, {
+    attributes:true, attributeFilter:["style"]
+  });
+  window.visualViewport?.addEventListener("resize", aktualizuj);
+  window.visualViewport?.addEventListener("scroll", aktualizuj);
+  window.addEventListener("resize", aktualizuj);
+  document.getElementById("newTagModalInput")?.addEventListener("focus", aktualizuj);
+  document.getElementById("newTagModalInput")?.addEventListener("blur", aktualizuj);
+  // Paleta je připravena již před prvním kliknutím, bez závislosti na focusu.
+  obnovPaletuNovehoStitku683AE();
+})();
 
 function ziskejBarvuNovehoStitku683AE() {
   const barva = String(barvaProNovyStitek683AE || "system");

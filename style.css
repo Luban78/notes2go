@@ -18338,7 +18338,6 @@ body.secretModeActive {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
-.newTagColorTitle683AE { text-align: left; font-size: .91rem; font-weight: 700; margin: 16px 0 8px; color: var(--color-text); }
 .newTagColorPalette683AE {
   display: flex;
   align-items: center;
@@ -18385,3 +18384,40 @@ body.secretModeActive {
   overflow-y: visible;
   row-gap: 10px;
 }
+
+
+/* 683AF – Nový štítek: bez nadpisu barvy, paleta okamžitě pod textovým polem.
+ * Overlay se centrováním řídí skutečnou viditelnou oblastí nad LubaKeyboard.
+ * JS nastaví hranici podle getBoundingClientRect() klávesnice, ne podle 100vh.
+ */
+.newTagModal {
+  top: var(--ln-new-tag-top-683AF, 0px);
+  bottom: auto;
+  height: var(--ln-new-tag-height-683AF, 100dvh);
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: hidden;
+}
+.newTagModal .newTagDialog {
+  max-height: calc(var(--ln-new-tag-height-683AF, 100dvh) - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+.newTagModal .newTagColorPalette683AE {
+  margin-top: 12px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  min-height: 42px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: start;
+  overflow: visible;
+}
+.newTagModal .newTagColorPalette683AE .manageTagColorOption {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+.newTagModal .newTagDialogActions { margin-top: 12px; }
