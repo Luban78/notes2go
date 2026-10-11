@@ -986,6 +986,7 @@ window.LubaNoteLanguagePacks.push({
     "tags.orderSaveFailed": "Pořadí štítků se nepodařilo uložit.",
     "tags.savingOrder": "Ukládám pořadí štítků…",
     "tags.colorAria": "Barva štítku {name}",
+    "tags.customColor": "Vlastní barva",
     "tags.setColorAria": "Nastavit barvu štítku na {color}",
     "tags.renameAria": "Přejmenovat štítek {name}",
     "tags.renaming": "Přejmenovávám štítek…",

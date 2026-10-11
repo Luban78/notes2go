@@ -5143,6 +5143,9 @@ function renderTasks() {
     if (barvaHlavnihoStitku !== "system") {
       loadedCard.dataset.barvaKarty =
         barvaHlavnihoStitku;
+      if (typeof aplikujKontrastStitku683AB === "function") {
+        aplikujKontrastStitku683AB(loadedCard, barvaHlavnihoStitku, true);
+      }
     }
     
     const loadedHeading = document.createElement("h3");

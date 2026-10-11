@@ -3829,6 +3829,7 @@ function vykresliSpravuStitku() {
     barvaTlacitko.className = "manageTagColorButton";
     barvaTlacitko.dataset.tagColor =
       tag.color || "system";
+    aplikujKontrastStitku683AB(barvaTlacitko, tag.color || "system");
     
     barvaTlacitko.setAttribute(
       "aria-label",
@@ -3893,7 +3894,28 @@ function vykresliSpravuStitku() {
         
         paleta.append(volba);
       });
-      
+
+      // Jediný další ovladač: systémový výběr libovolného odstínu.
+      const vlastniBarva = document.createElement("input");
+      vlastniBarva.type = "color";
+      vlastniBarva.className = "manageTagCustomColorInput";
+      vlastniBarva.value = jeVlastniBarvaStitku683AB(tag.color)
+        ? tag.color : "#19a7a7";
+      vlastniBarva.setAttribute("aria-label", tagsT("tags.customColor", "Vlastní barva"));
+      vlastniBarva.title = tagsT("tags.customColor", "Vlastní barva");
+      vlastniBarva.addEventListener("change", async () => {
+        const nova = vlastniBarva.value.toLowerCase();
+        if (!jeVlastniBarvaStitku683AB(nova)) return;
+        vlastniBarva.disabled = true;
+        const ulozeno = await zmenBarvuStitku(tag, nova);
+        if (ulozeno) {
+          vykresliSpravuStitku();
+        } else {
+          vlastniBarva.disabled = false;
+        }
+      });
+      paleta.append(vlastniBarva);
+
       radek.append(paleta);
     });
     
@@ -4489,6 +4511,89 @@ function getAllTags() {
   ];
 }
 
+
+/* PATCH 683AB – barvy štítků a čitelný kontrast.
+ * Vlastní barva se ukládá do stejného pole color jako předvolené odstíny.
+ * Nepoužívat neověřené CSS řetězce, jen přesný formát #RRGGBB.
+ */
+const LUBA_BARVY_STITKU_683AB = new Set([
+  "cervena", "oranzova", "zluta", "zelena",
+  "tyrkysova", "modra", "fialova", "ruzova"
+]);
+
+function jeVlastniBarvaStitku683AB(barva) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(barva || ""));
+}
+
+function podkladStitku683AB(barva) {
+  const hodnota = String(barva || "");
+  if (jeVlastniBarvaStitku683AB(hodnota)) {
+    return hodnota;
+  }
+  if (!LUBA_BARVY_STITKU_683AB.has(hodnota)) {
+    return null;
+  }
+  const styl = getComputedStyle(document.body || document.documentElement);
+  const zTematu = styl.getPropertyValue(`--card-${hodnota}`).trim();
+  return /^#[0-9a-fA-F]{6}$/.test(zTematu) ? zTematu : null;
+}
+
+function barvaTextuStitku683AB(pozadi) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(String(pozadi || ""))) return "";
+  const kanal = (pozice) => {
+    const hodnota = parseInt(pozadi.slice(pozice, pozice + 2), 16) / 255;
+    return hodnota <= 0.04045
+      ? hodnota / 12.92
+      : Math.pow((hodnota + 0.055) / 1.055, 2.4);
+  };
+  const jas = 0.2126 * kanal(1) + 0.7152 * kanal(3) + 0.0722 * kanal(5);
+  // WCAG: větší kontrast má černý text od hodnoty luminance ~0.179.
+  return jas > 0.179 ? "#000000" : "#ffffff";
+}
+
+function aplikujKontrastStitku683AB(prvek, barva, karta = false) {
+  if (!prvek) return;
+  const pozadi = podkladStitku683AB(barva);
+  if (!pozadi) return;
+  if (jeVlastniBarvaStitku683AB(barva)) {
+    if (karta) {
+      prvek.style.setProperty("--luba-card-bg", pozadi);
+    } else {
+      prvek.style.setProperty("background-color", pozadi);
+    }
+  }
+  const barvaTextu = barvaTextuStitku683AB(pozadi);
+  if (karta) {
+    prvek.style.setProperty("--luba-tag-text-683AB", barvaTextu);
+    prvek.dataset.lubaTagContrast = "card";
+  } else {
+    prvek.style.setProperty("color", barvaTextu, "important");
+  }
+}
+
+function obnovKontrastStitkuPoTematu683AB() {
+  document.querySelectorAll(".categoryTab[data-tag-color], .tagOptions button[data-tag-color], .manageTagColorButton[data-tag-color]")
+    .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.tagColor));
+  document.querySelectorAll(".taskCard[data-barva-karty]")
+    .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.barvaKarty, true));
+}
+
+(function hlidejKontrastStitkuPriZmeneTematu683AB() {
+  if (!document.body || typeof MutationObserver !== "function") return;
+  let ceka = false;
+  const naplanuj = () => {
+    if (ceka) return;
+    ceka = true;
+    requestAnimationFrame(() => {
+      ceka = false;
+      obnovKontrastStitkuPoTematu683AB();
+    });
+  };
+  const observer = new MutationObserver(naplanuj);
+  observer.observe(document.body, {attributes: true, attributeFilter: ["class", "data-theme"]});
+  observer.observe(document.documentElement, {attributes: true, attributeFilter: ["class", "data-theme"]});
+})();
+
 function ziskejBarvuStitku(nazevStitku) {
   const stitek = syncedTags.find(
     (tag) =>
@@ -4792,7 +4897,8 @@ async function renderTagMenuTags() {
     
     button.dataset.tagColor =
       ziskejBarvuStitku(tag);
-    
+    aplikujKontrastStitku683AB(button, button.dataset.tagColor);
+
     button.textContent = tag;
     
     button.classList.toggle(
@@ -5052,6 +5158,7 @@ function renderTagFilters() {
     button.dataset.tagFilter = tag;
     button.dataset.tagColor =
       ziskejBarvuStitku(tag);
+    aplikujKontrastStitku683AB(button, button.dataset.tagColor);
 
     if (zaznamStitku?.id) {
       button.dataset.tagId = String(zaznamStitku.id);

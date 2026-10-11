@@ -17972,3 +17972,29 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
 .ln-title-own-selection { background: rgba(255, 80, 95, 0.4); z-index: 2147482419; }
 .ln-title-own-caret[hidden], .ln-title-own-handle[hidden],
 .ln-title-own-selection[hidden] { display: none !important; }
+
+/* 683AB – volitelný přesný odstín + kontrast na kartách. */
+.manageTagCustomColorInput {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  padding: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+.manageTagCustomColorInput::-webkit-color-swatch-wrapper { padding: 0; }
+.manageTagCustomColorInput::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.taskCard[data-luba-tag-contrast="card"] {
+  color: var(--luba-tag-text-683AB) !important;
+}
+.taskCard[data-luba-tag-contrast="card"] h3,
+.taskCard[data-luba-tag-contrast="card"] .taskNoteText,
+.taskCard[data-luba-tag-contrast="card"] p:not(.taskNoteText) {
+  color: var(--luba-tag-text-683AB) !important;
+}
+.taskCard[data-luba-tag-contrast="card"] p:not(.taskNoteText) {
+  opacity: .82;
+}

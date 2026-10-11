@@ -864,6 +864,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.orderSaveFailed": "Poradie štítkov sa nepodarilo uložiť.",
       "tags.savingOrder": "Ukladám poradie štítkov…",
       "tags.colorAria": "Farba štítku {name}",
+      "tags.customColor": "Vlastná farba",
       "tags.setColorAria": "Nastaviť farbu štítku na {color}",
       "tags.renameAria": "Premenovať štítok {name}",
       "tags.renaming": "Premenúvam štítok…",

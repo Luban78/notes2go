@@ -976,6 +976,7 @@ window.LubaNoteLanguagePacks.push({
     "tags.orderSaveFailed": "The tag order could not be saved.",
     "tags.savingOrder": "Saving tag order…",
     "tags.colorAria": "Tag color {name}",
+    "tags.customColor": "Custom color",
     "tags.setColorAria": "Set tag color to {color}",
     "tags.renameAria": "Rename tag {name}",
     "tags.renaming": "Renaming tag…",

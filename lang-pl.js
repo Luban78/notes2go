@@ -864,6 +864,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.orderSaveFailed": "Nie udało się zapisać kolejności etykiet.",
       "tags.savingOrder": "Zapisywanie kolejności etykiet…",
       "tags.colorAria": "Kolor etykiety {name}",
+      "tags.customColor": "Własny kolor",
       "tags.setColorAria": "Ustaw kolor etykiety na {color}",
       "tags.renameAria": "Zmień nazwę etykiety {name}",
       "tags.renaming": "Zmienianie nazwy etykiety…",

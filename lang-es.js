@@ -860,6 +860,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "tags.orderSaveFailed": "No se pudo guardar el orden de las etiquetas.",
       "tags.savingOrder": "Guardando el orden de las etiquetas…",
       "tags.colorAria": "Color de la etiqueta {name}",
+      "tags.customColor": "Color personalizado",
       "tags.setColorAria": "Establecer el color de la etiqueta en {color}",
       "tags.renameAria": "Cambiar el nombre de la etiqueta {name}",
       "tags.renaming": "Cambiando el nombre de la etiqueta…",
