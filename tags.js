@@ -4721,7 +4721,8 @@ function vytvorTlacitkoVlastniBarvy683AE(barva, onClick) {
 function obnovPaletuNovehoStitku683AE() {
   const paleta = document.getElementById("newTagColorPalette683AE");
   if (!paleta) return;
-  paleta.setAttribute("aria-label", tagsT("tags.chooseColor", "Barva štítku"));
+  const title = document.getElementById("newTagColorTitle683AE");
+  if (title) title.textContent = tagsT("tags.chooseColor", "Barva štítku");
   paleta.replaceChildren();
   const vlastni = vytvorTlacitkoVlastniBarvy683AE(barvaProNovyStitek683AE, () => {
     const jmeno = String(newTagModalInput?.value || "").trim() || tagsT("tags.new", "Nový štítek");
@@ -4754,67 +4755,6 @@ function otevriBarevnyVyberNovehoStitku683AE() {
   barvaProNovyStitek683AE = "system";
   obnovPaletuNovehoStitku683AE();
 }
-
-/* 683AH – bezpecne umisteni dialogu Noveho stitku nad LubaKeyboard.
- * U custom fixed klavesnice se Android visualViewport nemusi zmensit.
- * Merime proto primo horní hranu skutecneho panelu, nikoli pocitany offset.
- * Zmena se tyka pouze #newTagModal, ne ostatnich modalu a ne dat.
- */
-(function sledujNovyStitekNadKlavesnici683AH() {
-  const modal = document.getElementById("newTagModal");
-  if (!modal) return;
-  let raf = 0;
-  let pozorovanyPanel = null;
-  let panelResize = null;
-
-  function aktualizuj() {
-    if (modal.hidden) {
-      modal.removeAttribute("data-ln-tag-keyboard-683AH");
-      modal.style.removeProperty("--ln-tag-available-683AH");
-      return;
-    }
-    const panel = document.querySelector(".ln-luba-keyboard:not([hidden])");
-    const jeOtevrena = document.body.classList.contains("ln-luba-klavesnice-open");
-    let vrsek = NaN;
-    if (panel && jeOtevrena && getComputedStyle(panel).display !== "none") {
-      const rect = panel.getBoundingClientRect();
-      if (rect.height > 80 && rect.top > 80) vrsek = rect.top;
-    }
-    // Kdyz se klavesnice prave vytvari, nezobrazovat chybny docking.
-    if (Number.isFinite(vrsek)) {
-      modal.style.setProperty("--ln-tag-available-683AH", `${Math.max(120, Math.floor(vrsek - 2))}px`);
-      modal.setAttribute("data-ln-tag-keyboard-683AH", "open");
-    } else {
-      modal.removeAttribute("data-ln-tag-keyboard-683AH");
-      modal.style.removeProperty("--ln-tag-available-683AH");
-    }
-    if (panel && panel !== pozorovanyPanel && typeof ResizeObserver !== "undefined") {
-      if (panelResize) panelResize.disconnect();
-      pozorovanyPanel = panel;
-      panelResize = new ResizeObserver(planuj);
-      panelResize.observe(panel);
-    }
-  }
-
-  function planuj() {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      aktualizuj();
-    });
-  }
-
-  new MutationObserver(planuj).observe(modal, {
-    attributes: true, attributeFilter: ["hidden"]
-  });
-  window.addEventListener("lubanote:luba-keyboard-state", planuj);
-  window.addEventListener("resize", planuj);
-  window.visualViewport?.addEventListener("resize", planuj);
-  window.visualViewport?.addEventListener("scroll", planuj);
-  document.getElementById("newTagModalInput")?.addEventListener("focus", planuj);
-  document.getElementById("newTagModalInput")?.addEventListener("blur", planuj);
-  planuj();
-})();
 
 function ziskejBarvuNovehoStitku683AE() {
   const barva = String(barvaProNovyStitek683AE || "system");

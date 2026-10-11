@@ -18387,98 +18387,151 @@ body.secretModeActive {
 }
 
 
-/* ============================================================
-   683AH – pouze Novy stitek (NAVRAT Z OVERENEHO 683AE).
-   Jeden pevny petisloupcovy rastr; custom zabira prvni dva sloupce.
-   Nenastavujeme layout ani barvy ostatnich modalnich oken.
-   ============================================================ */
-#newTagModal .newTagDialog {
-  box-sizing: border-box;
+/* ================================================================
+   683AI: Oprava obou palet BEZ zasahu do barev a dat.
+   1) Sprava stitku = vodorovny scroller jako pred 683AE.
+   2) Novy stitek = dvouradkova petisloupcova mrizka.
+   3) Dialog nad LubaKeyboard, tlacitka vzdy mimo rolovaci cast.
+   Predchozi spolecne pravidlo 683AE nelze smazat kvuli minimalni
+   regresi: konkretni selektory ho bezpecne prebiji.
+   ================================================================ */
+
+/* Sprava stitku: zde NESMI platit globalni flex-wrap 683AE. */
+#manageTagsModal .manageTagColorPalette {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: min(90dvh, 720px);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  touch-action: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+#manageTagsModal .manageTagColorPalette > * {
+  flex-shrink: 0;
+}
+
+/* Dialog tvorby noveho stitku: zruseni nechtěného smrsknuti palety. */
+#newTagModal.newTagModal {
+  box-sizing: border-box;
   overflow: hidden;
 }
-#newTagModal .newTagDialog > h3,
-#newTagModal #newTagModalInput,
-#newTagModal .newTagDialogActions {
+#newTagModal .newTagDialog {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  max-height: calc(100dvh - 24px);
+  max-height: calc(100vh - 24px); /* fallback doplnen v bloku supports nize */
+  overflow: hidden;
+  width: min(92vw, 420px);
+  flex: 0 1 auto;
+}
+@supports (height: 100dvh) {
+  #newTagModal .newTagDialog { max-height: calc(100dvh - 24px); }
+}
+#newTagModal .newTagDialog > h3 {
   flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+/* Jedina vnitrni rolovaci sekce. Pri male vysce nema pravo
+   zmensit samotne barvy na nulovou vysku – misto toho scrolluje. */
+#newTagModal .newTagFields683AI {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 3px 3px 5px;
+}
+#newTagModal .newTagFields683AI > #newTagModalInput {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
 }
 #newTagModal #newTagColorPalette683AE {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: center;
+  gap: 10px 3px;
   justify-items: center;
+  align-items: center;
   align-content: start;
-  gap: 10px 2px;
-  flex: 0 1 auto;
-  min-height: 0;
-  min-width: 0;
   width: 100%;
-  box-sizing: border-box;
+  min-width: 0;
   max-width: 100%;
+  height: auto;
+  min-height: 0;
+  box-sizing: border-box;
   margin: 12px 0 0;
-  padding: 5px 2px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  padding: 5px 0 5px;
+  overflow: visible;
+  flex: none;
+  flex-wrap: initial;
+  touch-action: manipulation;
 }
 #newTagModal #newTagColorPalette683AE .manageTagCustomColorButton {
   grid-column: span 2;
   justify-self: stretch;
-  box-sizing: border-box;
   width: calc(100% - 4px);
   min-width: 0;
+  max-width: 100%;
   height: 43px;
-  gap: 5px;
   padding: 4px 6px;
-  font-size: .82rem;
-}
-#newTagModal #newTagColorPalette683AE .manageTagCustomPlus {
-  flex-basis: 21px;
-  height: 21px;
-}
-#newTagModal #newTagColorPalette683AE .manageTagColorOption {
-  justify-self: center;
+  gap: 5px;
+  font-size: .81rem;
   box-sizing: border-box;
-  width: min(42px, 82%);
-  height: auto;
-  aspect-ratio: 1;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-}
-#newTagModal .newTagDialogActions {
-  margin-top: 13px;
-  padding-top: 3px;
-  flex-shrink: 0;
-}
-/* Klavesnice je samostatny fixed panel. Mezi jeho hornim okrajem
-   a spodkem dialogu nechavame 2px. Ostatni prvky zustavaji nedotcene. */
-#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] {
-  position: fixed;
-  top: 0;
-  bottom: auto;
-  height: var(--ln-tag-available-683AH);
-  box-sizing: border-box;
-  padding: max(7px, env(safe-area-inset-top)) 10px 0;
-  align-items: flex-end;
-  justify-content: center;
   overflow: hidden;
 }
-#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialog {
-  max-height: calc(100% - 7px);
-  padding: 13px;
+#newTagModal #newTagColorPalette683AE .manageTagCustomPlus {
+  flex: 0 0 22px;
+  height: 22px;
 }
-#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialog h3 {
-  margin-bottom: 10px;
+#newTagModal #newTagColorPalette683AE .manageTagColorOption {
+  box-sizing: border-box;
+  flex: none;
+  min-width: 0;
+  width: min(44px, 86%);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 0;
+  padding: 0;
 }
-#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] #newTagColorPalette683AE {
+/* Zachova oba ovladace pevne v dialogu, ne v rolovatelne casti. */
+#newTagModal .newTagDialogActions {
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 3px;
+}
+
+/* LubaKeyboard uz poskytuje presne zmerenou --ln-lk-height.
+   Dialog se umisti nad horní hranu keyboard; zadne DOM merici hooky.
+   Omezujeme pouze modal noveho stitku, ne Spravu stitku ani editor. */
+body.ln-luba-klavesnice-open #newTagModal.newTagModal:not([hidden]) {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 8px 10px calc(var(--ln-lk-height, 260px) + 2px);
+}
+body.ln-luba-klavesnice-open #newTagModal.newTagModal:not([hidden]) .newTagDialog {
+  max-height: calc(100vh - var(--ln-lk-height, 260px) - 10px);
+  padding: 12px 14px;
+}
+@supports (height: 100dvh) {
+  body.ln-luba-klavesnice-open #newTagModal.newTagModal:not([hidden]) .newTagDialog {
+    max-height: calc(100dvh - var(--ln-lk-height, 260px) - 10px);
+  }
+}
+body.ln-luba-klavesnice-open #newTagModal .newTagDialog > h3 {
+  margin-bottom: 8px;
+}
+body.ln-luba-klavesnice-open #newTagModal #newTagColorPalette683AE {
   margin-top: 8px;
   padding-block: 3px;
   row-gap: 7px;
 }
-#newTagModal.newTagModal[data-ln-tag-keyboard-683AH="open"] .newTagDialogActions {
-  margin-top: 10px;
+body.ln-luba-klavesnice-open #newTagModal .newTagDialogActions {
+  margin-top: 8px;
 }
