@@ -17998,3 +17998,196 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
 .taskCard[data-luba-tag-contrast="card"] p:not(.taskNoteText) {
   opacity: .82;
 }
+
+
+/* 683AC – jednoznačný vstup do vlastní barvy a vlastní LubaNote dialog.
+   Pouze Správa štítků. Paleta a dialog fungují stejně na PC i v APK. */
+.manageTagColorPalette {
+  align-items: center;
+  min-height: 62px;
+  gap: 10px;
+}
+.manageTagColorPalette .manageTagCustomColorButton {
+  flex: 0 0 auto;
+  min-width: 94px;
+  height: 48px;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border: 1.5px solid var(--color-accent, #20b9cd);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-accent, #20b9cd) 13%, var(--color-surface));
+  color: var(--color-text);
+  font-size: .87rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.manageTagColorPalette .manageTagCustomColorButton .manageTagCustomPlus {
+  display: grid;
+  place-items: center;
+  flex: 0 0 23px;
+  height: 23px;
+  border-radius: 8px;
+  background: var(--color-accent, #20b9cd);
+  color: var(--color-on-accent, #061e29);
+  font-size: 23px;
+  line-height: 1;
+  font-weight: 600;
+}
+.manageTagColorPalette .manageTagCustomColorButton:active { transform: scale(.97); }
+.manageTagColorPalette .manageTagCustomColorButton:focus-visible,
+.lubaTagColorDialog683AC button:focus-visible,
+.lubaTagColorDialog683AC input:focus-visible {
+  outline: 2px solid var(--color-accent, #20b9cd);
+  outline-offset: 3px;
+}
+.manageTagColorPalette .manageTagColorOption { flex-shrink: 0; }
+
+.lubaTagColorOverlay683AC {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px));
+  background: rgba(0, 9, 17, .72);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.lubaTagColorDialog683AC {
+  box-sizing: border-box;
+  width: min(100%, 450px);
+  max-height: min(90dvh, 720px);
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid var(--color-border, #365265);
+  border-radius: 23px;
+  background: var(--color-surface, #102c3b);
+  color: var(--color-text, #f3fcff);
+  box-shadow: 0 24px 70px rgba(0,0,0,.4);
+  font: inherit;
+}
+.lubaTagColorHeader683AC {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 19px;
+}
+.lubaTagColorHeader683AC h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 4vw, 1.5rem);
+  line-height: 1.15;
+  font-weight: 750;
+}
+.lubaTagColorHeader683AC .lubaTagColorClose683AC {
+  flex: 0 0 41px;
+  width: 41px;
+  height: 41px;
+  border: 1px solid var(--color-border, #365265);
+  border-radius: 12px;
+  background: var(--color-background, #071c27);
+  color: var(--color-text, #f3fcff);
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.lubaTagColorPreview683AC {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lubaTagColorSample683AC {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 65px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.13);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow-wrap: anywhere;
+  font-size: 1.12rem;
+  font-weight: 750;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.13);
+}
+.lubaTagColorHex683AC {
+  width: 84px;
+  color: var(--color-text-secondary, #abc4d1);
+  text-align: right;
+  font-size: .86rem;
+  font-family: ui-monospace, monospace;
+  font-weight: 650;
+}
+.lubaTagColorControls683AC { display: grid; gap: 20px; }
+.lubaTagColorControl683AC { display: grid; gap: 11px; color: var(--color-text); }
+.lubaTagColorControl683AC > span { font-size: .98rem; font-weight: 650; }
+.lubaTagColorControl683AC input[type=range] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.22);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.lubaTagColorControl683AC input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 27px;
+  height: 27px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #13394a;
+  box-shadow: 0 1px 7px rgba(0,0,0,.5);
+}
+.lubaTagColorControl683AC input[type=range]::-moz-range-thumb {
+  width: 21px;
+  height: 21px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #13394a;
+}
+.lubaTagColorFooter683AC {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 27px;
+}
+.lubaTagColorFooter683AC button {
+  flex: 1;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 13px;
+  border: 1px solid var(--color-border, #365265);
+  background: var(--color-background, #071c27);
+  color: var(--color-text, #f3fcff);
+  font: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.lubaTagColorFooter683AC .lubaTagColorSave683AC {
+  border-color: var(--color-accent, #20b9cd);
+  background: var(--color-accent, #20b9cd);
+  color: var(--color-on-accent, #06212a);
+}
+.lubaTagColorFooter683AC button:disabled { opacity: .55; }
+@media (max-width: 480px) {
+  .lubaTagColorDialog683AC { padding: 19px; border-radius: 20px; }
+  .lubaTagColorControls683AC { gap: 19px; }
+}

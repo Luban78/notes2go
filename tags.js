@@ -3895,26 +3895,24 @@ function vykresliSpravuStitku() {
         paleta.append(volba);
       });
 
-      // Jediný další ovladač: systémový výběr libovolného odstínu.
-      const vlastniBarva = document.createElement("input");
-      vlastniBarva.type = "color";
-      vlastniBarva.className = "manageTagCustomColorInput";
-      vlastniBarva.value = jeVlastniBarvaStitku683AB(tag.color)
-        ? tag.color : "#19a7a7";
+      // 683AC – vlastní barva je PRVNÍ a výrazná volba, ne schované
+      // systémové kolečko za osmi předvolenými odstíny.
+      const vlastniBarva = document.createElement("button");
+      vlastniBarva.type = "button";
+      vlastniBarva.className = "manageTagCustomColorButton";
       vlastniBarva.setAttribute("aria-label", tagsT("tags.customColor", "Vlastní barva"));
       vlastniBarva.title = tagsT("tags.customColor", "Vlastní barva");
-      vlastniBarva.addEventListener("change", async () => {
-        const nova = vlastniBarva.value.toLowerCase();
-        if (!jeVlastniBarvaStitku683AB(nova)) return;
-        vlastniBarva.disabled = true;
-        const ulozeno = await zmenBarvuStitku(tag, nova);
-        if (ulozeno) {
-          vykresliSpravuStitku();
-        } else {
-          vlastniBarva.disabled = false;
-        }
+      const plus = document.createElement("span");
+      plus.className = "manageTagCustomPlus";
+      plus.textContent = "+";
+      plus.setAttribute("aria-hidden", "true");
+      const napis = document.createElement("span");
+      napis.textContent = tagsT("tags.customColorShort", "Vlastní");
+      vlastniBarva.append(plus, napis);
+      vlastniBarva.addEventListener("click", () => {
+        otevriVyberBarvyStitku683AC(tag);
       });
-      paleta.append(vlastniBarva);
+      paleta.prepend(vlastniBarva);
 
       radek.append(paleta);
     });
@@ -4511,6 +4509,182 @@ function getAllTags() {
   ];
 }
 
+
+/* PATCH 683AC – vlastní výběr barvy LubaNote pro mobil i PC.
+ * Pouze vrstva UI: zapisuje přes stávající zmenBarvuStitku (LOCAL/SYNC).
+ * Žádný nativní input[type=color], žádné průběžné zápisy do DB.
+ */
+function lubaHslNaHex683AC(h, s, l) {
+  h = (((Number(h) % 360) + 360) % 360) / 360;
+  s = Math.max(0, Math.min(100, Number(s))) / 100;
+  l = Math.max(0, Math.min(100, Number(l))) / 100;
+  const a = s * Math.min(l, 1 - l);
+  const kanal = (n) => {
+    const k = (n + h * 12) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  return "#" + [kanal(0), kanal(8), kanal(4)]
+    .map((n) => n.toString(16).padStart(2, "0")).join("");
+}
+
+function lubaHexNaHsl683AC(hex) {
+  if (!jeVlastniBarvaStitku683AB(hex)) return [185, 76, 47];
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = rgb;
+  const maxi = Math.max(...rgb), mini = Math.min(...rgb);
+  const delta = maxi - mini;
+  let h = 0, s = 0;
+  const l = (maxi + mini) / 2;
+  if (delta > 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    switch (maxi) {
+      case r: h = ((g - b) / delta) % 6; break;
+      case g: h = (b - r) / delta + 2; break;
+      default: h = (r - g) / delta + 4;
+    }
+    h = (h * 60 + 360) % 360;
+  }
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function otevriVyberBarvyStitku683AC(tag) {
+  // Při dalším otevření nikdy nezůstane staré dialogové okno.
+  document.querySelector(".lubaTagColorOverlay683AC")?.remove();
+  const puvodni = jeVlastniBarvaStitku683AB(tag.color)
+    ? tag.color : (podkladStitku683AB(tag.color) || "#19b7c8");
+  let [h, s, l] = lubaHexNaHsl683AC(puvodni);
+  let zmenenoUzivatelem = false;
+  // Při barvě z předvolené palety se UI otevře v jejím odstínu.
+  const overlay = document.createElement("div");
+  overlay.className = "lubaTagColorOverlay683AC";
+  overlay.setAttribute("role", "presentation");
+  const dialog = document.createElement("section");
+  dialog.className = "lubaTagColorDialog683AC";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  const nadpisId = "lubaTagColorTitle683AC";
+  dialog.setAttribute("aria-labelledby", nadpisId);
+
+  const hlavicka = document.createElement("div");
+  hlavicka.className = "lubaTagColorHeader683AC";
+  const titulek = document.createElement("h2");
+  titulek.id = nadpisId;
+  titulek.textContent = tagsT("tags.colorPickerTitle", "Vlastní barva");
+  const zavrit = document.createElement("button");
+  zavrit.type = "button";
+  zavrit.className = "lubaTagColorClose683AC";
+  zavrit.textContent = "×";
+  zavrit.setAttribute("aria-label", tagsT("tags.colorPickerCancel", "Zrušit"));
+  hlavicka.append(titulek, zavrit);
+
+  const nahledBox = document.createElement("div");
+  nahledBox.className = "lubaTagColorPreview683AC";
+  const barevny = document.createElement("div");
+  barevny.className = "lubaTagColorSample683AC";
+  barevny.textContent = tag.name;
+  const hexHodnota = document.createElement("span");
+  hexHodnota.className = "lubaTagColorHex683AC";
+  nahledBox.append(barevny, hexHodnota);
+
+  const controls = document.createElement("div");
+  controls.className = "lubaTagColorControls683AC";
+  const range = (key, fallback, max, value) => {
+    const box = document.createElement("label");
+    box.className = "lubaTagColorControl683AC";
+    const popis = document.createElement("span");
+    popis.textContent = tagsT(key, fallback);
+    const ovladac = document.createElement("input");
+    ovladac.type = "range";
+    ovladac.min = "0";
+    ovladac.max = String(max);
+    ovladac.step = "1";
+    ovladac.value = String(value);
+    ovladac.setAttribute("aria-label", popis.textContent);
+    box.append(popis, ovladac);
+    controls.append(box);
+    return ovladac;
+  };
+  const odstin = range("tags.colorPickerHue", "Odstín", 359, h);
+  const sytost = range("tags.colorPickerSaturation", "Sytost", 100, s);
+  const svetlost = range("tags.colorPickerLightness", "Světlost", 100, l);
+
+  const paticka = document.createElement("div");
+  paticka.className = "lubaTagColorFooter683AC";
+  const zrusit = document.createElement("button");
+  zrusit.type = "button";
+  zrusit.className = "lubaTagColorCancel683AC";
+  zrusit.textContent = tagsT("tags.colorPickerCancel", "Zrušit");
+  const potvrdit = document.createElement("button");
+  potvrdit.type = "button";
+  potvrdit.className = "lubaTagColorSave683AC";
+  potvrdit.textContent = tagsT("tags.colorPickerSave", "Nastavit");
+  paticka.append(zrusit, potvrdit);
+  dialog.append(hlavicka, nahledBox, controls, paticka);
+  overlay.append(dialog);
+  document.body.append(overlay);
+
+  function obnovNahled() {
+    h = Number(odstin.value);
+    s = Number(sytost.value);
+    l = Number(svetlost.value);
+    const barva = zmenenoUzivatelem
+      ? lubaHslNaHex683AC(h, s, l) : puvodni;
+    barevny.style.backgroundColor = barva;
+    barevny.style.color = barvaTextuStitku683AB(barva);
+    hexHodnota.textContent = barva.toUpperCase();
+    odstin.style.background = "linear-gradient(to right, #ff4a4a, #ffdf50, #48df68, #43dbe9, #547bff, #bf50ff, #ff4a75)";
+    sytost.style.background = `linear-gradient(to right, hsl(${h}, 0%, ${l}%), hsl(${h}, 100%, ${l}%))`;
+    svetlost.style.background = `linear-gradient(to right, #000000, hsl(${h}, ${s}%, 50%), #ffffff)`;
+  }
+  [odstin, sytost, svetlost].forEach((input) => {
+    input.addEventListener("input", () => {
+      zmenenoUzivatelem = true;
+      obnovNahled();
+    });
+  });
+  obnovNahled();
+
+  let uklada = false;
+  const puvodniFocus = document.activeElement;
+  function zavri() {
+    if (uklada) return;
+    overlay.remove();
+    document.removeEventListener("keydown", escapeHandler);
+    if (puvodniFocus?.isConnected) {
+      try { puvodniFocus.focus({ preventScroll: true }); } catch (_) {}
+    }
+  }
+  function escapeHandler(event) {
+    if (event.key === "Escape") { event.preventDefault(); zavri(); }
+  }
+  document.addEventListener("keydown", escapeHandler);
+  zavrit.addEventListener("click", zavri);
+  zrusit.addEventListener("click", zavri);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) zavri();
+  });
+  potvrdit.addEventListener("click", async () => {
+    if (uklada) return;
+    const nova = zmenenoUzivatelem
+      ? lubaHslNaHex683AC(h, s, l) : puvodni;
+    if (!jeVlastniBarvaStitku683AB(nova)) return;
+    uklada = true;
+    potvrdit.disabled = true;
+    potvrdit.textContent = tagsT("tags.savingShort", "Ukládám…");
+    let ulozeno = false;
+    try { ulozeno = await zmenBarvuStitku(tag, nova); }
+    finally {
+      uklada = false;
+      potvrdit.disabled = false;
+      potvrdit.textContent = tagsT("tags.colorPickerSave", "Nastavit");
+    }
+    if (ulozeno) {
+      zavri();
+      vykresliSpravuStitku();
+    }
+  });
+  // Vynecháme automatické otevření klávesnice v APK.
+}
 
 /* PATCH 683AB – barvy štítků a čitelný kontrast.
  * Vlastní barva se ukládá do stejného pole color jako předvolené odstíny.
