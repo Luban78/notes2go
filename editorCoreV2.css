@@ -1072,3 +1072,28 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
 .ln-v2-editor > .ln-v2-odstavec { position: relative; }
 .ln-v2-luba-caret.ln-v2-caret-scroll-anchored,
 .ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored { position: absolute; }
+
+/* 683Y – skutečný budoucí slot X+Y, samostatný od plovoucího prstu.
+   Zobrazení je výhradně mimo editor DOM, žádné falešné bloky v dokumentu. */
+.ln-v2-list-drag-preview.ln-v2-list-ghost-final {
+  transform: none;
+  box-sizing: border-box;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--color-surface, #102d3a) 82%, transparent);
+  box-shadow: 0 3px 12px rgba(0,0,0,.2);
+  opacity: .94;
+  max-height: 58px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ln-v2-list-drag-preview.ln-v2-list-ghost-final::after {
+  content: none !important;
+}
+
+/* Jemná značka ghostu zobrazuje skutečný budoucí bullet, ne prst. */
+.ln-v2-list-drag-preview.ln-v2-list-ghost-final { padding-left: 29px; }
+.ln-v2-list-drag-preview.ln-v2-list-ghost-final::before {
+  content: "•"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--color-accent, #35b9ca); font-size: 20px; line-height: 1;
+}

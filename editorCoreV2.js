@@ -5951,6 +5951,8 @@
     if (v2ListDropIndicator) v2ListDropIndicator.hidden = true;
     if (v2ListDragPreview) {
       v2ListDragPreview.hidden = true;
+      v2ListDragPreview.classList.remove("ln-v2-list-ghost-final");
+      v2ListDragPreview.style.maxWidth = "";
       v2ListDragPreview.classList.remove(
         "chce-zanorit",
         "chce-vysunout",
@@ -6064,7 +6066,9 @@
       startX: clientX, startY: clientY, lastX: clientX, lastY: clientY,
       startCas: performance.now(),
       pripraven: false, aktivni: false, cil: null,
-      caretPredPresunem: zachytV2CaretPredPresunem()
+      caretPredPresunem: zachytV2CaretPredPresunem(),
+      /* 683Y: rozhodnutí X/Y až po jasném pohybu; při X gesto nekmitá po Y. */
+      smerGesta: "", rodicId: "", planDite: null
     };
     zapisV2TodoDragVD("PREPARE", {
       blok: blokId, typ, touchId, pointerId,
@@ -6244,10 +6248,202 @@
     return null;
   }
 
+  /* 683Y – horizontální gesto je odlišné od svislého MOVE.
+     Každý rodič je konkrétní blok (ID), nikoli jen číselná úroveň.
+     Model během tažení zůstává NEDOTČENÝ. */
+  const PRAH_ZAMKU_OSY_SEZNAMU = 28;
+  const KROK_RODICE_SEZNAMU = 40;
+  const TOLERANCE_SVISLEHO_ZACATKU = 52;
+
+  function najdiV2RodiceProGesto(drag, dx) {
+    const bloky = dokument?.bloky || [];
+    const zdroj = najdiIndexBlokuPodleId(drag.blokId);
+    if (zdroj < 0 || jeTodoBlok(bloky[zdroj])) return null;
+    const hloubka = normalizujUrovenBulletu(bloky[zdroj].uroven);
+    if (dx < -PRAH_VNOR_SEZNAMU) {
+      const predci = [];
+      let uroven = hloubka;
+      for (let i = zdroj - 1; i >= 0 && uroven > 0; i -= 1) {
+        const blok = bloky[i];
+        if (!jeSeznamovyBlok(blok) || jeTodoBlok(blok)) break;
+        const jeho = normalizujUrovenBulletu(blok.uroven);
+        if (jeho < uroven) {
+          predci.push(blok.id);
+          uroven = jeho;
+        }
+      }
+      /* 1. krok vlevo = rodič o JEDNU úroveň výš oproti dosavadnímu rodiči.
+         Pro pátý(L4): třetí(L2), pak druhý(L1), pak první(L0). */
+      const kroky = 1 + Math.floor((Math.abs(dx) - PRAH_VNOR_SEZNAMU) / KROK_RODICE_SEZNAMU);
+      return predci[Math.min(predci.length - 1, kroky)] || null;
+    }
+    if (dx > PRAH_VNOR_SEZNAMU && hloubka < 6) {
+      /* Směrem doprava lze vytvořit dítě z předchozího sourozence. */
+      for (let i = zdroj - 1; i >= 0; i -= 1) {
+        const blok = bloky[i];
+        if (!jeSeznamovyBlok(blok) || jeTodoBlok(blok)) return null;
+        const jeho = normalizujUrovenBulletu(blok.uroven);
+        if (jeho < hloubka) return null;
+        if (jeho === hloubka) return blok.id;
+      }
+    }
+    return null;
+  }
+
+  /* Jediný výpočet cíle pro náhled i atomický drop. Vkládá ZA všechny
+     stávající potomky vybraného rodiče, nikdy doprostřed jeho podstromu. */
+  function planV2PresunuPodRodice(drag, rodicId) {
+    const bloky = dokument?.bloky || [];
+    const zdroj = najdiIndexBlokuPodleId(drag.blokId);
+    if (zdroj < 0 || !rodicId) return null;
+    const rozsah = rozsahPodstromuSeznamu(zdroj);
+    const odebirane = bloky.slice(rozsah.od, rozsah.do + 1);
+    if (!odebirane.length || odebirane.some((b) => b.id === rodicId)) return null;
+    const zbytek = bloky.filter((_b, i) => i < rozsah.od || i > rozsah.do);
+    const indexRodice = zbytek.findIndex((b) => b.id === rodicId);
+    if (indexRodice < 0) return null;
+    const rodic = zbytek[indexRodice];
+    if (!jeSeznamovyBlok(rodic) || jeTodoBlok(rodic)) return null;
+    const novaUroven = Math.min(6, normalizujUrovenBulletu(rodic.uroven) + 1);
+    const puvodniUroven = normalizujUrovenBulletu(bloky[zdroj].uroven);
+    /* Podstrom nesmí přetéct přes level 6 – nezkracujeme ho potichu. */
+    if (odebirane.some((b) => jeSeznamovyBlok(b) &&
+      normalizujUrovenBulletu(b.uroven) + novaUroven - puvodniUroven > 6)) return null;
+    let vlozitNa = indexRodice + 1;
+    const urovenRodice = normalizujUrovenBulletu(rodic.uroven);
+    while (vlozitNa < zbytek.length && jeSeznamovyBlok(zbytek[vlozitNa]) &&
+           normalizujUrovenBulletu(zbytek[vlozitNa].uroven) > urovenRodice) vlozitNa += 1;
+    return { rodicId, zdroj, rozsah, odebirane, zbytek, vlozitNa,
+      puvodniUroven, novaUroven };
+  }
+
+  function najdiV2ElementBloku(id) {
+    if (!id || !editor) return null;
+    /* ID neinterpolujeme do CSS selectoru. */
+    return Array.from(editor.querySelectorAll(".ln-v2-odstavec[data-ln-v2-blok]"))
+      .find((el) => el.dataset.lnV2Blok === id) || null;
+  }
+
+  /* Reálná budoucí pozice po odebrání podstromu ze starého místa. */
+  function geometrieV2NahleduDite(plan) {
+    const meze = viditelneV2MezeVoditka();
+    if (!plan || !meze) return null;
+    const radekRodice = najdiV2ElementBloku(plan.rodicId);
+    if (!radekRodice) return null;
+    const r = radekRodice.getBoundingClientRect();
+    const markerX = r.left + 30 + (plan.novaUroven - 1) * 24 - 22;
+    const budX = Math.max(meze.left + 6, Math.min(meze.right - 24,
+      r.left + 30 + plan.novaUroven * 24 - 22));
+    const dalsi = plan.zbytek[plan.vlozitNa];
+    const pred = plan.zbytek[plan.vlozitNa - 1];
+    const dalsiEl = najdiV2ElementBloku(dalsi?.id);
+    const predEl = najdiV2ElementBloku(pred?.id);
+    const zdrojRect = v2DragSeznamu.radek?.getBoundingClientRect?.();
+    const rozsahEls = plan.odebirane.map((b) => najdiV2ElementBloku(b.id)).filter(Boolean);
+    const viditelneEls = rozsahEls.filter((el) => !el.hidden);
+    let odstranenaVyska = 0;
+    if (viditelneEls.length) {
+      const prvni = viditelneEls[0].getBoundingClientRect();
+      const posledni = viditelneEls[viditelneEls.length - 1].getBoundingClientRect();
+      const okraj = parseFloat(getComputedStyle(viditelneEls[viditelneEls.length - 1]).marginBottom) || 0;
+      odstranenaVyska = Math.max(0, posledni.bottom - prvni.top + okraj);
+    }
+    let slotY = null;
+    if (dalsiEl && !dalsiEl.hidden) {
+      slotY = dalsiEl.getBoundingClientRect().top;
+      if (plan.zdroj < dokument.bloky.findIndex((b) => b.id === dalsi.id))
+        slotY -= odstranenaVyska;
+    } else if (predEl && !predEl.hidden) {
+      slotY = predEl.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(predEl).marginBottom) || 0);
+      if (plan.zdroj < dokument.bloky.findIndex((b) => b.id === pred.id))
+        slotY -= odstranenaVyska;
+    } else if (zdrojRect) {
+      slotY = zdrojRect.top;
+    }
+    /* Přesun pouze změnou rodiče u poslední položky často nemění Y. */
+    if (slotY == null) return null;
+    const zdrojEl = v2DragSeznamu.radek;
+    const stejnySlot = plan.vlozitNa === plan.zdroj;
+    if (stejnySlot && zdrojEl) slotY = zdrojEl.getBoundingClientRect().top;
+    const rodicVyska = parseFloat(getComputedStyle(radekRodice).lineHeight) || 30;
+    const kotvaY = r.top + Math.min(r.height, rodicVyska) * 0.65;
+    return { meze, markerX, budX, slotY, kotvaY };
+  }
+
+  function aktualizujV2HorizontalniNahled(drag) {
+    const indicator = zajistiV2ListDropIndicator();
+    const preview = zajistiV2ListDragPreview();
+    drag.rodicId = najdiV2RodiceProGesto(drag, drag.lastX - drag.startX) || "";
+    drag.planDite = planV2PresunuPodRodice(drag, drag.rodicId);
+    if (drag.planDite && drag.planDite.puvodniUroven === drag.planDite.novaUroven &&
+        drag.planDite.vlozitNa === drag.planDite.zdroj) drag.planDite = null;
+    const geo = geometrieV2NahleduDite(drag.planDite);
+    if (!geo) {
+      drag.planDite = null;
+      indicator.hidden = true;
+      preview.hidden = true;
+      return;
+    }
+    const { meze, markerX, budX, slotY, kotvaY } = geo;
+    const viditelnySlot = slotY >= meze.top && slotY <= meze.bottom - 58;
+    /* Bez pravdivého náhledu nesmí následovat neviditelný DROP. */
+    if (!viditelnySlot) drag.planDite = null;
+    preview.classList.add("ln-v2-list-ghost-final");
+    if (viditelnySlot) {
+      preview.style.left = `${Math.round(budX)}px`;
+      preview.style.top = `${Math.round(slotY + 3)}px`;
+      preview.style.maxWidth = `${Math.max(85, Math.round(meze.right - budX))}px`;
+      preview.hidden = false;
+    } else {
+      /* Nikdy nepředstíráme, že offscreen výsledek skončí u prstu. */
+      preview.hidden = true;
+    }
+    const spojit = viditelnySlot && kotvaY >= meze.top && kotvaY < slotY - 7;
+    if (viditelnySlot) {
+      const leva = Math.max(meze.left, Math.min(meze.right - 24, markerX));
+      indicator.style.left = `${Math.round(leva)}px`;
+      indicator.style.top = `${Math.round(slotY)}px`;
+      indicator.style.width = `${Math.round(Math.max(24, meze.right - leva))}px`;
+      if (spojit) {
+        indicator.dataset.lnGuideAnchor = "1";
+        indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotvaY - slotY)}px`);
+        indicator.style.setProperty("--ln-guide-vertical-height", `${Math.round(slotY - kotvaY)}px`);
+      } else {
+        delete indicator.dataset.lnGuideAnchor;
+      }
+      indicator.hidden = false;
+    } else {
+      indicator.hidden = true;
+    }
+  }
+
   function aktualizujV2DragSeznamu(x, y, riditAutoScroll = true) {
     if (!v2DragSeznamu?.aktivni) return;
     v2DragSeznamu.lastX = x;
     v2DragSeznamu.lastY = y;
+    const drag = v2DragSeznamu;
+    const zdrojIndexProOsu = najdiIndexBlokuPodleId(drag.blokId);
+    const jeBulletProOsu = zdrojIndexProOsu >= 0 && !jeTodoBlok(dokument.bloky[zdrojIndexProOsu]);
+    if (jeBulletProOsu && !drag.smerGesta) {
+      const dx = x - drag.startX;
+      const dy = y - drag.startY;
+      if (Math.abs(dx) >= PRAH_ZAMKU_OSY_SEZNAMU && Math.abs(dx) > Math.abs(dy) * 1.25) {
+        drag.smerGesta = "x";
+        zastavV2ListAutoScroll();
+      } else if (Math.abs(dy) >= TOLERANCE_SVISLEHO_ZACATKU && Math.abs(dy) > Math.abs(dx) * 1.25) {
+        drag.smerGesta = "y";
+      }
+    }
+    if (drag.smerGesta === "x") {
+      drag.cil = null;
+      zastavV2ListAutoScroll();
+      aktualizujV2HorizontalniNahled(drag);
+      return;
+    }
+    /* Dosavadní vertikální reorder a TODO akce zůstávají beze změny. */
+    const previewDocasne = zajistiV2ListDragPreview();
+    previewDocasne.classList.remove("ln-v2-list-ghost-final");
+    previewDocasne.style.maxWidth = "";
     const cil = cilV2DragSeznamuZBodu(y);
     v2DragSeznamu.cil = cil;
 
@@ -6320,6 +6516,32 @@
     const zdroj = najdiIndexBlokuPodleId(drag.blokId);
     if (zdroj < 0) return false;
     const snapshotPred = vytvorSnapshotHistorie(posledniVyber || vyberZPosledniPozice());
+
+    /* Nezamčená Bullet gesta kratší než 52 px po Y nic nepřerovnají. */
+    if (!jeTodoBlok(dokument.bloky[zdroj]) && !drag.smerGesta &&
+        Math.abs(drag.lastY - drag.startY) < TOLERANCE_SVISLEHO_ZACATKU) return false;
+
+    if (drag.smerGesta === "x" && !jeTodoBlok(dokument.bloky[zdroj])) {
+      /* Commit přesně téhož plánu, který ukazuje živý duch. */
+      const plan = drag.planDite;
+      if (!plan || !drag.rodicId || plan.rodicId !== drag.rodicId) return false;
+      if (plan.novaUroven === plan.puvodniUroven && plan.vlozitNa === plan.zdroj) return false;
+      const rozdil = plan.novaUroven - plan.puvodniUroven;
+      const presunute = plan.odebirane.map((blok) => {
+        if (jeSeznamovyBlok(blok)) blok.uroven = normalizujUrovenBulletu(blok.uroven + rozdil);
+        return blok;
+      });
+      dokument.bloky = plan.zbytek.slice();
+      dokument.bloky.splice(plan.vlozitNa, 0, ...presunute);
+      normalizujDokument();
+      const vyberPo = obnovV2CaretPoPresunu(drag.caretPredPresunem);
+      nastavV2CaretPoPresunu(vyberPo);
+      vybranaPolozkaSeznamuId = "";
+      ulozZmenuDoHistorie(snapshotPred, "přesun pod vybraného rodiče");
+      vykresli(vyberPo);
+      nastavStav(`Položka přesunuta pod rodiče · úroveň ${plan.novaUroven}`);
+      return true;
+    }
 
     /*
      * FIX 526 + 618 – TODO dál používá stejný long-press MOVE engine.
