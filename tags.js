@@ -4739,6 +4739,11 @@ function aplikujKontrastStitku683AB(prvek, barva, karta = false) {
   const barvaTextu = barvaTextuStitku683AB(pozadi);
   if (karta) {
     prvek.style.setProperty("--luba-tag-text-683AB", barvaTextu);
+    // 683AD: čip uvnitř barevné karty potřebuje vlastní čitelný podklad.
+    // U světlé karty použij bílý nádech, u tmavé černý;
+    // samotný text čipu vždy zdědí ověřený kontrast karty.
+    prvek.style.setProperty("--luba-tag-chip-tint-683AD",
+      barvaTextu === "#ffffff" ? "#000000" : "#ffffff");
     prvek.dataset.lubaTagContrast = "card";
   } else {
     prvek.style.setProperty("color", barvaTextu, "important");

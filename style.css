@@ -18191,3 +18191,21 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
   .lubaTagColorDialog683AC { padding: 19px; border-radius: 20px; }
   .lubaTagColorControls683AC { gap: 19px; }
 }
+
+/* 683AD – kontrast malých štítků UVNITŘ barevných karet.
+   Předchozí 683AB měnil nadpis/náhled, ale .taskTag si ponechal
+   globální tyrkysové barvy motivu a na sytých kartách splýval.
+   U karet bez vlastní barvy zachovat původní vzhled. */
+.taskCard[data-luba-tag-contrast="card"] .taskTag {
+  background: color-mix(
+    in srgb,
+    var(--luba-card-bg) 70%,
+    var(--luba-tag-chip-tint-683AD, #000000) 30%
+  ) !important;
+  color: var(--luba-tag-text-683AB) !important;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--luba-tag-text-683AB) 17%,
+    transparent
+  );
+}
