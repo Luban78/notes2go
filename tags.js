@@ -4763,66 +4763,78 @@ function otevriBarevnyVyberNovehoStitku683AE() {
  * Proto se řídíme její skutečnou horní hranou, nikoli 100vh nebo odhadem výšky.
  * Změny ukládání štítků a barev ponecháváme beze změny.
  */
+/* 683AG – při otevřené vlastní klávesnici držet CELÝ dialog nad jejím okrajem.
+ * Horní hranici LubaKeyboard měříme přímo; body class a keyboard event
+ * používáme jako spouštěče, protože na Androidu visualViewport nemusí
+ * při otevření naší vlastní klávesnice vůbec změnit výšku.
+ * Tlačítka Zrušit / Vytvořit mají nezmenšitelnou sekci v dolní části.
+ */
 function pozicujDialogNovehoStitku683AF() {
   const modal = document.getElementById("newTagModal");
   if (!modal || modal.hidden) return;
-  const vv = window.visualViewport;
-  const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
-  let top = Math.max(0, vv?.offsetTop || 0);
-  let bottom = vv ? Math.min(layoutHeight, top + vv.height) : layoutHeight;
+  const viewport = window.visualViewport;
+  const total = window.innerHeight || document.documentElement.clientHeight;
+  const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  let bottom = viewport ? Math.min(total, top + viewport.height) : total;
   const keyboard = document.getElementById("lubaKeyboard");
-  if (keyboard && !keyboard.hidden && getComputedStyle(keyboard).display !== "none") {
+  const bodyOpen = document.body.classList.contains("ln-luba-klavesnice-open");
+  const visible = keyboard && !keyboard.hidden && getComputedStyle(keyboard).display !== "none";
+  let keyboardTop = NaN;
+  if (visible) {
     const rect = keyboard.getBoundingClientRect();
-    // Ignorovat nulový či právě zavíraný panel a zastaralé souřadnice.
-    if (rect.height > 120 && rect.top > top + 120 && rect.top < bottom) {
-      bottom = Math.min(bottom, rect.top);
-    }
+    if (rect.height > 100 && rect.top > top + 100 && rect.top < total) keyboardTop = rect.top;
   }
-  // Podpora malých obrazovek; uvnitř dialogu je rezervní scroll.
-  bottom = Math.max(top + 100, bottom);
-  modal.style.setProperty("--ln-new-tag-top-683AF", `${Math.round(top)}px`);
-  modal.style.setProperty("--ln-new-tag-height-683AF", `${Math.round(bottom - top)}px`);
+  if (!Number.isFinite(keyboardTop) && bodyOpen) {
+    const declared = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ln-lk-height"));
+    if (Number.isFinite(declared) && declared > 100 && declared < total) keyboardTop = total - declared;
+  }
+  const isOpen = Number.isFinite(keyboardTop);
+  if (isOpen) bottom = Math.min(bottom, keyboardTop);
+  const available = Math.max(110, Math.floor(bottom - top));
+  modal.dataset.lubaKeyboardOpen = isOpen ? "true" : "false";
+  modal.style.setProperty("--ln-new-tag-top-683AF", `${top}px`);
+  modal.style.setProperty("--ln-new-tag-height-683AF", `${available}px`);
 }
 
 (function aktivujPozicovaniNovehoStitku683AF() {
   const modal = document.getElementById("newTagModal");
   if (!modal) return;
   let raf = 0;
-  let sledovanaKlavesnice = null;
-  function pripojPozorovaniKlavesnice() {
-    const klavesnice = document.getElementById("lubaKeyboard");
-    if (!klavesnice || klavesnice === sledovanaKlavesnice) return;
-    sledovanaKlavesnice = klavesnice;
-    new MutationObserver(aktualizuj).observe(klavesnice, {
-      attributes:true, attributeFilter:["hidden", "class", "style"]
+  let keyboardObserved = null;
+  function sledujKlavesnici() {
+    const k = document.getElementById("lubaKeyboard");
+    if (!k || k === keyboardObserved) return;
+    keyboardObserved = k;
+    new MutationObserver(aktualizuj).observe(k, {
+      attributes: true, attributeFilter: ["hidden", "class", "style"]
     });
-    if (typeof ResizeObserver !== "undefined") {
-      new ResizeObserver(aktualizuj).observe(klavesnice);
-    }
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(aktualizuj).observe(k);
   }
-  const aktualizuj = () => {
+  function aktualizuj() {
     if (raf) return;
     raf = requestAnimationFrame(() => {
       raf = 0;
-      pripojPozorovaniKlavesnice();
+      sledujKlavesnici();
       pozicujDialogNovehoStitku683AF();
     });
-  };
-  // Otevření/zavření modalu a změna obsahu barevné palety.
-  new MutationObserver(aktualizuj).observe(modal, {attributes:true, attributeFilter:["hidden"]});
-  // Vlastní LubaKeyboard mění výšku a viditelnost za běhu.
-  // Klávesnice může vzniknout až PO načtení tags.js.
-  pripojPozorovaniKlavesnice();
-  // Keyboard ve WebView mění --ln-lk-height na html; chytneme jeho změnu.
-  new MutationObserver(aktualizuj).observe(document.documentElement, {
-    attributes:true, attributeFilter:["style"]
+  }
+  new MutationObserver(aktualizuj).observe(modal, {
+    attributes: true, attributeFilter: ["hidden"]
   });
+  new MutationObserver(aktualizuj).observe(document.documentElement, {
+    attributes: true, attributeFilter: ["style"]
+  });
+  new MutationObserver(aktualizuj).observe(document.body, {
+    attributes: true, attributeFilter: ["class"]
+  });
+  // Klávesnice panel otevírá i zavírá touto událostí, nezávisle na resize.
+  window.addEventListener("lubanote:luba-keyboard-state", aktualizuj);
   window.visualViewport?.addEventListener("resize", aktualizuj);
   window.visualViewport?.addEventListener("scroll", aktualizuj);
   window.addEventListener("resize", aktualizuj);
   document.getElementById("newTagModalInput")?.addEventListener("focus", aktualizuj);
   document.getElementById("newTagModalInput")?.addEventListener("blur", aktualizuj);
-  // Paleta je připravena již před prvním kliknutím, bez závislosti na focusu.
+  sledujKlavesnici();
   obnovPaletuNovehoStitku683AE();
 })();
 
