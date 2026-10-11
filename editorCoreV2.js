@@ -6430,47 +6430,38 @@
     return { meze, markerX, budX, slotY, kotvaY };
   }
 
+  /* 683AA – jednoduché MOVE: duch stále nad prstem, žádná kolmice.
+     Výpočet cíle z 683Z zůstává, ale duch už NIKDY neleží pod prstem
+     nebo v cílovém řádku. Linka pouze volitelně ukazuje místo vložení. */
   function aktualizujV2HorizontalniNahled(drag) {
     const indicator = zajistiV2ListDropIndicator();
     const preview = zajistiV2ListDragPreview();
-    drag.rodicId = najdiV2RodiceProGesto(drag, drag.lastX - drag.startX) || "";
+    const dx = drag.lastX - drag.startX;
+    drag.rodicId = najdiV2RodiceProGesto(drag, dx) || "";
     drag.planDite = planV2PresunuPodRodice(drag, drag.rodicId);
     if (drag.planDite && drag.planDite.puvodniUroven === drag.planDite.novaUroven &&
         drag.planDite.vlozitNa === drag.planDite.zdroj) drag.planDite = null;
     const geo = geometrieV2NahleduDite(drag.planDite);
-    if (!geo) {
-      drag.planDite = null;
-      indicator.hidden = true;
-      preview.hidden = true;
-      return;
-    }
-    const { meze, markerX, budX, slotY, kotvaY } = geo;
-    const viditelnySlot = slotY >= meze.top && slotY <= meze.bottom - 58;
-    /* Bez pravdivého náhledu nesmí následovat neviditelný DROP. */
+    const viditelnySlot = !!geo && geo.slotY >= geo.meze.top && geo.slotY <= geo.meze.bottom - 58;
+    /* Bez viditelného cíle nedojde k přesunu naslepo. */
     if (!viditelnySlot) drag.planDite = null;
-    preview.classList.add("ln-v2-list-ghost-final");
+
+    preview.classList.remove("ln-v2-list-ghost-final");
+    preview.style.maxWidth = "";
+    preview.style.left = `${Math.round(Math.max(40, Math.min(window.innerWidth - 40, drag.lastX)))}px`;
+    preview.style.top = `${Math.round(drag.lastY - 92)}px`;
+    preview.classList.toggle("chce-vysunout", dx < -PRAH_VNOR_SEZNAMU);
+    preview.classList.toggle("chce-zanorit", dx > PRAH_VNOR_SEZNAMU);
+    preview.hidden = false;
+
+    delete indicator.dataset.lnGuideAnchor;
+    indicator.style.removeProperty("--ln-guide-vertical-top");
+    indicator.style.removeProperty("--ln-guide-vertical-height");
     if (viditelnySlot) {
-      preview.style.left = `${Math.round(budX)}px`;
-      preview.style.top = `${Math.round(slotY + 3)}px`;
-      preview.style.maxWidth = `${Math.max(85, Math.round(meze.right - budX))}px`;
-      preview.hidden = false;
-    } else {
-      /* Nikdy nepředstíráme, že offscreen výsledek skončí u prstu. */
-      preview.hidden = true;
-    }
-    const spojit = viditelnySlot && kotvaY >= meze.top && kotvaY < slotY - 7;
-    if (viditelnySlot) {
-      const leva = Math.max(meze.left, Math.min(meze.right - 24, markerX));
-      indicator.style.left = `${Math.round(leva)}px`;
+      const { meze, budX, slotY } = geo;
+      indicator.style.left = `${Math.round(budX)}px`;
       indicator.style.top = `${Math.round(slotY)}px`;
-      indicator.style.width = `${Math.round(Math.max(24, meze.right - leva))}px`;
-      if (spojit) {
-        indicator.dataset.lnGuideAnchor = "1";
-        indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotvaY - slotY)}px`);
-        indicator.style.setProperty("--ln-guide-vertical-height", `${Math.round(slotY - kotvaY)}px`);
-      } else {
-        delete indicator.dataset.lnGuideAnchor;
-      }
+      indicator.style.width = `${Math.round(Math.max(24, meze.right - budX))}px`;
       indicator.hidden = false;
     } else {
       indicator.hidden = true;
@@ -6508,31 +6499,22 @@
     v2DragSeznamu.cil = cil;
 
     const indicator = zajistiV2ListDropIndicator();
+    delete indicator.dataset.lnGuideAnchor;
+    indicator.style.removeProperty("--ln-guide-vertical-top");
+    indicator.style.removeProperty("--ln-guide-vertical-height");
     if (cil) {
       const meze = viditelneV2MezeVoditka();
       const linkaY = zobrazovaciV2PoziceCile(cil, y, meze);
       if (linkaY === null) {
-        /* Cil se muze autoscrollem objevit za chvili; zadna cara pres klavesnici. */
         indicator.hidden = true;
-        delete indicator.dataset.lnGuideAnchor;
       } else {
         const uroven = ziskejV2UrovenVodiciCary(v2DragSeznamu);
-        const kotva = najdiV2KotvuVodiciCary(uroven, linkaY, meze);
         const odsazeni = uroven === null ? 10 : 12 + uroven * 24;
         const leva = Math.round(Math.max(meze.left, Math.min(meze.right - 24,
-          kotva?.x ?? (editor.getBoundingClientRect().left + odsazeni))));
+          editor.getBoundingClientRect().left + odsazeni)));
         indicator.style.left = `${leva}px`;
         indicator.style.width = `${Math.max(20, Math.round(meze.right - leva))}px`;
         indicator.style.top = `${Math.round(linkaY)}px`;
-        if (kotva) {
-          indicator.dataset.lnGuideAnchor = "1";
-          indicator.style.setProperty("--ln-guide-vertical-top", `${Math.round(kotva.y - linkaY)}px`);
-          indicator.style.setProperty("--ln-guide-vertical-height", `${Math.max(0, Math.round(linkaY - kotva.y))}px`);
-        } else {
-          delete indicator.dataset.lnGuideAnchor;
-          indicator.style.removeProperty("--ln-guide-vertical-top");
-          indicator.style.removeProperty("--ln-guide-vertical-height");
-        }
         indicator.hidden = false;
       }
     } else {

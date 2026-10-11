@@ -494,21 +494,6 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   display: none !important;
 }
 
-/* 683X / UX-02 – indikator i kolmice zustavaji uvnitr viditelne casti editoru.
-   Pozice/rozsah jsou vypoctene v editorCoreV2.js proti skutecne LubaKeyboard. */
-.ln-v2-list-drop-indicator[data-ln-guide-anchor="1"]::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: var(--ln-guide-vertical-top, -20px);
-  width: 3px;
-  height: var(--ln-guide-vertical-height, 20px);
-  border-radius: 3px;
-  background: var(--color-accent, #8958f6);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #8958f6) 20%, transparent);
-  pointer-events: none;
-}
-
 .ln-v2-list-drag-preview {
   position: fixed;
   z-index: 2147483460;
@@ -1073,27 +1058,3 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
 .ln-v2-luba-caret.ln-v2-caret-scroll-anchored,
 .ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored { position: absolute; }
 
-/* 683Y – skutečný budoucí slot X+Y, samostatný od plovoucího prstu.
-   Zobrazení je výhradně mimo editor DOM, žádné falešné bloky v dokumentu. */
-.ln-v2-list-drag-preview.ln-v2-list-ghost-final {
-  transform: none;
-  box-sizing: border-box;
-  border-style: dashed;
-  background: color-mix(in srgb, var(--color-surface, #102d3a) 82%, transparent);
-  box-shadow: 0 3px 12px rgba(0,0,0,.2);
-  opacity: .94;
-  max-height: 58px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ln-v2-list-drag-preview.ln-v2-list-ghost-final::after {
-  content: none !important;
-}
-
-/* Jemná značka ghostu zobrazuje skutečný budoucí bullet, ne prst. */
-.ln-v2-list-drag-preview.ln-v2-list-ghost-final { padding-left: 29px; }
-.ln-v2-list-drag-preview.ln-v2-list-ghost-final::before {
-  content: "•"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
-  color: var(--color-accent, #35b9ca); font-size: 20px; line-height: 1;
-}
