@@ -33,7 +33,9 @@ public class LubaNoteStickyDismissReceiver extends BroadcastReceiver {
       if (extra == null) return;
       String typ = extra.optString("lubanoteType", "");
       if (!"note".equals(typ) && !"planned".equals(typ)) return;
-      if (!json.optBoolean("ongoing", false) || json.optBoolean("autoCancel", true)) return;
+      // 683AZ: prvni oznameni se doruci bez ongoing flagu kvuli Mi Fitness.
+      // Ochrana stale plati jen pro registrovanou LubaNote pripominku.
+      if (json.optBoolean("autoCancel", true)) return;
       if (!"reminders".equals(json.optString("channelId", ""))) return;
 
       PendingIntent open = intent.getParcelableExtra(OPEN);

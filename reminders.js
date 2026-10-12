@@ -195,12 +195,12 @@ async function scheduleNotification(
         id: notificationId,
         channelId: "reminders",
         /*
-         * 683AT: Aktivni pripominka zustava v Android liste do vyrizeni.
-         * Ongoing chrani zejmena pred "Vymazat vse". Na Android 14+
-         * muze uzivatel jednotlive oznameni i presto odsunout.
-         * Pouhe otevreni pripominky ji samo neodstrani.
+         * 683AZ: Prvni doruceni musi byt BEZ ongoing flagu, aby jej
+         * ctecky beznych upozorneni (napr. Mi Fitness) mohly predat hodinkam.
+         * autoCancel:false zachovava po klepnuti; nativni 683AU/683AZ
+         * ochrana pres deleteIntent jej po smazani vrati POTICHU.
          */
-        ongoing: true,
+        ongoing: false,
         autoCancel: false,
         extra,
 

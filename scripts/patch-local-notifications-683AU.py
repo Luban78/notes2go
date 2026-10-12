@@ -18,6 +18,29 @@ if not manager.is_file():
 source = manager.read_text(encoding="utf-8")
 
 
+def kompatibilita_hodinek_683AZ(kod):
+    """Preserve 683AU/683AX protection when the first alert is not ongoing.
+
+    This keeps the initial Android notification in the alerting category
+    so notification listeners (such as Mi Fitness) can see it. Only the
+    LubaNote reminders channel and autoCancel:false get sticky handling.
+    """
+    stare = 'if (localNotification.isOngoing() && !localNotification.isAutoCancel()'
+    nove = 'if (!localNotification.isAutoCancel()'
+    if kod.count(stare) == 2:
+        kod = kod.replace(stare, nove)
+    elif kod.count(nove) != 2:
+        raise SystemExit('683AZ: two native sticky guards not found; stopping build')
+
+    stare_tap = 'lubaPayload683AU.optBoolean("ongoing", false)\n                    && !lubaPayload683AU.optBoolean("autoCancel", true)'
+    nove_tap = '!lubaPayload683AU.optBoolean("autoCancel", true)'
+    if kod.count(stare_tap) == 1:
+        kod = kod.replace(stare_tap, nove_tap)
+    elif kod.count(nove_tap) != 1:
+        raise SystemExit('683AZ: protected tap guard not found; stopping build')
+    return kod
+
+
 def ochrana_otevreni_po_odlozeni_683AX(kod):
     """Keep the already displayed notification's PendingIntent valid on replan.
 
@@ -47,8 +70,9 @@ def ochrana_otevreni_po_odlozeni_683AX(kod):
 
 if "LubaNoteStickyDismissReceiver" in source and "683AU" in source:
     source = ochrana_otevreni_po_odlozeni_683AX(source)
+    source = kompatibilita_hodinek_683AZ(source)
     manager.write_text(source, encoding="utf-8")
-    print("683AX: applied after existing 683AU patch")
+    print("683AZ: compatible with Mi Band; 683AU/683AX preserved")
     raise SystemExit(0)
 
 # 1. Do not explicitly cancel reminder on DEFAULT click with autoCancel:false.
@@ -102,5 +126,6 @@ extra = f'''
 '''
 source = source[:match.end()] + extra + source[match.end():]
 source = ochrana_otevreni_po_odlozeni_683AX(source)
+source = kompatibilita_hodinek_683AZ(source)
 manager.write_text(source, encoding="utf-8")
-print("683AX: Native sticky tap + snooze fixes patched; version verified (6.1.3)")
+print("683AZ: Native wearable-compatible sticky and snooze fixes patched (6.1.3)")
