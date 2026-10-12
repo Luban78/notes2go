@@ -10,10 +10,22 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="LubaNote">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#121212">
   <link rel="manifest" href="manifest.webmanifest?v=683AV-ln-rebrand">
   <link rel="icon" type="image/png" href="icons/lubanote.png?v=683AV-ln-rebrand">
   <link rel="apple-touch-icon" href="icons/lubanote.png?v=683AV-ln-rebrand">
+
+  <!-- 683AW: splash ma pevne barvy uz v prvnim vykresleni, pred nactenim motivu. -->
+  <style id="ln-splash-first-paint-683AW">
+    html { background-color: #121212; }
+    @media (max-width: 899px) {
+      #appSplash { background: #121212; color: #f2f2f2; }
+      #appSplash .appSplashTitle { color: #f2f2f2; }
+      #appSplash .appSplashTitle span { color: #60db93; }
+      #appSplash .appSplashSubtitle { color: #aeb2b8; opacity: 1; }
+      #appSplash .appSplashLoader span { background: #60db93; }
+    }
+  </style>
 
   <title>LubaNote</title>
   
