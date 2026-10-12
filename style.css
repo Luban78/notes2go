@@ -17365,22 +17365,22 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
 }
 
 
-/* 680A5 + 680F – čitelná vždy viditelná verze klienta v pravém dolním rohu. */
+/* 683AN – krátká verze až u spodního okraje, bez překryvu klávesnice. */
 .lubaNoteVersionBadge {
   position: fixed;
-  right: max(5px, env(safe-area-inset-right, 0px));
-  bottom: max(3px, env(safe-area-inset-bottom, 0px));
+  right: 0;
+  bottom: 0;
   z-index: 2147483000;
-  max-width: 45vw;
-  padding: 2px 6px;
-  border-radius: 6px;
+  max-width: min(48vw, 145px);
+  padding: 1px 5px;
+  border-radius: 6px 0 0 0;
   background: rgba(0, 0, 0, 0.58);
   color: rgba(255, 255, 255, 0.78);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+  line-height: 1.2;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -17389,13 +17389,9 @@ body.ln-pv-hide-reminder-icons .reminderItemMeta {
   -webkit-user-select: none;
 }
 
-@media (min-width: 700px) {
-  .lubaNoteVersionBadge {
-    right: 8px;
-    bottom: 6px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.76);
-  }
+body.ln-luba-klavesnice-open .lubaNoteVersionBadge,
+body.ln-version-keyboard-hidden .lubaNoteVersionBadge {
+  display: none !important;
 }
 
 
@@ -18600,5 +18596,27 @@ body:has(#notesModuleButton.active) #quickThemeButton {
   .searchRow .searchActions { gap: 4px; }
   body:has(#notesModuleButton.active) .searchRow .searchActions > button {
     width: 38px !important;
+  }
+}
+
+/* 683AN – mobil/tablet: datum a čas zarovnané doprava k budíku.
+ * Jen rozmístění, původní ovládání data/času a připomínky beze změny. */
+@media (max-width: 899px) {
+  #taskModal .editorTopBar .dateTimeInputs {
+    flex: 0 1 auto;
+    width: auto;
+    margin-left: auto;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+  #taskModal .editorTopBar .editorTopActions {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+  #taskModal .editorTopBar #modalDateButton {
+    flex: 0 0 clamp(108px, 31vw, 126px);
+  }
+  #taskModal .editorTopBar #modalTimeButton {
+    flex: 0 0 clamp(64px, 19vw, 83px);
   }
 }

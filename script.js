@@ -98,12 +98,26 @@ function aktualizujLubaNoteVersionBadge() {
   }
 
   const info = ziskejLubaNoteVerziProUI();
-  badge.textContent = info.text;
+  // 683AN – značka skutečně aktivního backendu, nikoli hostitele WebView.
+  // S=Cloud, L=LubaServer PROD, T=TEST, V=dynamický VPS.
+  let backendZkratka = "?";
+  let backendNazev = "Nezjištěný backend";
+  try {
+    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    const id = String(profil?.backendId || "").toLowerCase();
+    if (id === "cloud") backendZkratka = "S";
+    else if (id === "lubaserver") backendZkratka = "L";
+    else if (profil?.prostredi === "test") backendZkratka = "T";
+    else if (id) backendZkratka = "V";
+    if (profil?.nazev) backendNazev = profil.nazev;
+  } catch (_) {
+    /* Neukazovat nesprávný server při dočasně nedostupné konfiguraci. */
+  }
+  badge.textContent = `v${info.rada}${info.build ? `.${info.build}` : ""} · ${backendZkratka}`;
 
   const commit = String(window.LUBANOTE_COMMIT || "").trim();
-  badge.title = commit
-    ? `LubaNote ${info.rada}${info.build ? ` · build ${info.build}` : ""} · commit ${commit}`
-    : `LubaNote ${info.rada}${info.build ? ` · build ${info.build}` : ""}`;
+  badge.title = `LubaNote ${info.rada}${info.build ? ` · build ${info.build}` : ""} · ${backendNazev}` +
+    (commit ? ` · commit ${commit}` : "");
 }
 
 function aktualizujLubaNoteVerziUI() {
@@ -126,6 +140,61 @@ window.addEventListener(
   "lubanote-version-ready",
   aktualizujLubaNoteVerziUI
 );
+
+/* 683AN – indikátor verze nesmí překrývat LubaKeyboard ani systémovou
+ * klávesnici. Zjišťujeme pouze stav zobrazení, nijak neovládáme editor. */
+(() => {
+  let vyskaBezKlavesnice = Math.max(
+    window.innerHeight || 0,
+    window.visualViewport?.height || 0
+  );
+  let lubaOtevrena = false;
+
+  const piseme = () => {
+    const aktivni = document.activeElement;
+    if (!aktivni) return false;
+    return aktivni.matches?.("input, textarea, [contenteditable='true'], [contenteditable='plaintext-only']") ||
+      Boolean(aktivni.closest?.("[contenteditable='true'], [contenteditable='plaintext-only']"));
+  };
+
+  const aktualizujSkryti = () => {
+    const vyska = Math.min(
+      window.innerHeight || 0,
+      window.visualViewport?.height || window.innerHeight || 0
+    );
+    const vlastniOtevrena = lubaOtevrena || document.body.classList.contains("ln-luba-klavesnice-open");
+    // Android může zmenšit innerHeight i visualViewport zároveň.
+    const systemovaOtevrena = piseme() && vyskaBezKlavesnice - vyska > 140;
+    document.body.classList.toggle("ln-version-keyboard-hidden", Boolean(vlastniOtevrena || systemovaOtevrena));
+    if (!piseme() && !vlastniOtevrena && vyska > 0) {
+      vyskaBezKlavesnice = vyska;
+    }
+  };
+
+  window.addEventListener("lubanote:luba-keyboard-state", (udalost) => {
+    lubaOtevrena = udalost.detail?.source === "luba" && udalost.detail?.open === true;
+    aktualizujSkryti();
+  });
+  window.visualViewport?.addEventListener("resize", aktualizujSkryti);
+  window.addEventListener("resize", aktualizujSkryti);
+  document.addEventListener("focusin", aktualizujSkryti);
+  document.addEventListener("focusout", () => requestAnimationFrame(aktualizujSkryti));
+  aktualizujSkryti();
+})();
+
+// Konfigurace backendu se načítá až za script.js. Po jejím načtení
+// a při návratu do aplikace proto aktualizujeme pouze nápis.
+window.addEventListener("load", aktualizujLubaNoteVersionBadge);
+window.addEventListener("pageshow", aktualizujLubaNoteVersionBadge);
+window.addEventListener("focus", aktualizujLubaNoteVersionBadge);
+window.addEventListener("storage", (udalost) => {
+  if (udalost.key === "lubanoteBackendProfileV1") aktualizujLubaNoteVersionBadge();
+});
+// Control Point může změnit produkci i bez opětovného načtení stránky.
+// Jen čtení lokálního profilu; žádné síťové požadavky.
+window.setInterval(() => {
+  if (!document.hidden) aktualizujLubaNoteVersionBadge();
+}, 5000);
 
 
 /* 680I – GitHub Pages používají stejné build číslo jako Android APK.
