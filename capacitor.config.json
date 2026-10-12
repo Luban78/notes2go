@@ -1,5 +1,11 @@
 {
   "appId": "cz.luban.notes2go",
   "appName": "Notes2Go",
-  "webDir": "www"
+  "webDir": "www",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_lubanote",
+      "iconColor": "#55D98C"
+    }
+  }
 }
