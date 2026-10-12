@@ -3235,7 +3235,17 @@ secretTaskButton.classList.toggle(
   aktualizujIkonuTajnePoznamky();
   secretTaskButton.classList.toggle("active", secretTaskEnabled);
   activeArea = "private";
-  activeTags = [];
+  /* PATCH 683AL – nový záznam dědí právě zvolený horní filtr štítku.
+   * Pouze existující štítek z aktivního LOCAL/SYNC prostoru;
+   * Secret štítek nikdy nepřebíráme, pokud je Secret zamčený.
+   * Výchozí chování bez filtru zůstává prázdné. */
+  const stitekZFiltru =
+    typeof activeTagFilter === "string" &&
+    getAllTags().includes(activeTagFilter) &&
+    (!jeTajnyStitek(activeTagFilter) || tajnyRezimOdemceny)
+      ? activeTagFilter
+      : null;
+  activeTags = stitekZFiltru ? [stitekZFiltru] : [];
   updateTagMenuUI();
   closeTagMenu();
   
