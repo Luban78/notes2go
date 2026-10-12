@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=683AO-todo-doubletap">
+  <link rel="stylesheet" href="style.css?v=683AS-own-selection-theme">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -64,7 +64,7 @@
   <link rel="stylesheet" href="visualDebug.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="debugHub.css?v=683C-stability-persist">
   <!-- Editor Core V2 – jediný produkční editor -->
-  <link rel="stylesheet" href="editorCoreV2.css?v=683AR-selection-color-preview">
+  <link rel="stylesheet" href="editorCoreV2.css?v=683AS-own-selection-theme">
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="lubaKeyboard.css?v=658bt-editor-selection-safe">
 </head>
@@ -1889,6 +1889,14 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
         </div>
+        <div class="adminOwnSelectionPalette" aria-labelledby="adminOwnSelectionPaletteTitle">
+          <strong id="adminOwnSelectionPaletteTitle">Vlastní výběr textu a úchyty</strong>
+          <p>Tematické barvy jsou výchozí. Červenou zapni jen pro diagnostiku. Nastavení platí pouze na tomto zařízení.</p>
+          <div class="adminOwnSelectionOptions" role="group" aria-label="Barvy vlastního výběru">
+            <button id="adminOwnSelectionThemeButton" type="button" aria-pressed="true">🎨 Tematické</button>
+            <button id="adminOwnSelectionRedButton" type="button" aria-pressed="false">🔴 Diagnostická červená</button>
+          </div>
+        </div>
       </section>
 
       <section id="adminAccountsView" class="adminAccountsView" hidden>
@@ -2848,7 +2856,7 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=683B-debug-top-left-only"></script>
+  <script src="adminDashboard.js?v=683AS-own-selection-theme"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>

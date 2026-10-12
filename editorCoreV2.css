@@ -21,7 +21,7 @@
   overflow: auto;
   padding: 18px 16px 80px;
   outline: none;
-  caret-color: #ff2020;
+  caret-color: var(--ln-own-handle-color, #ff2020);
   font-size: var(--font-size, 1rem);
   line-height: 1.5;
   /* V2.4a – mezery jsou součást modelu.
@@ -39,9 +39,9 @@
    Výběr zůstává viditelný, ale barva znaku se bere z vykresleného V2 segmentu. */
 .ln-v2-editor::selection,
 .ln-v2-editor ::selection {
-  /* 683J DIAG – stejná světle červená bez ohledu na téma. */
-  color: #290b0b;
-  background-color: #ffb3bd;
+  /* 683AS – tematicky vlastni vyber, volitelna diagnosticka cervena. */
+  color: var(--ln-own-selection-text, #290b0b);
+  background-color: var(--ln-own-selection-fill, #ffb3bd);
 }
 
 /*
@@ -68,7 +68,7 @@
   pointer-events: none;
   box-sizing: border-box;
   border-radius: 3px;
-  background: rgba(255, 140, 150, 0.55);
+  background: var(--ln-own-selection-overlay, rgba(255, 140, 150, .55));
 }
 
 /* PATCH 497 – při otevřené LubaKeyboard používáme jediný, modelový caret.
@@ -88,7 +88,7 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   min-height: 12px;
   z-index: 2147482300;
   pointer-events: none;
-  background: #ff2020;
+  background: var(--ln-own-handle-color, #ff2020);
   border-radius: 2px;
   transform-origin: top left;
   animation: ln-v2-luba-caret-blink 1s steps(1, end) infinite;
@@ -1074,10 +1074,27 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
 .ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[style*="color"]::selection,
 .ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"]::selection {
   color: currentColor;
-  background-color: rgba(255, 179, 189, 0.16);
+  background-color: var(--ln-own-selection-preview, rgba(255, 179, 189, .16));
 }
 .ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[style*="color"]::highlight(lubanote-selection-scroll),
 .ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"]::highlight(lubanote-selection-scroll) {
-  color: currentColor;
-  background-color: rgba(255, 179, 189, 0.16);
+  color: currentColor !important;
+  background-color: var(--ln-own-selection-preview, rgba(255, 179, 189, .16)) !important;
+}
+
+/* 683AS – JS Bridge ma historicky natvrdo cervene styly (673G/683J).
+   Prebijeme JEN jejich barvy, nikdy rozmery/pozice, skryvani ani gesta.
+   !important je nutny, protoze Bridge vklada svuj <style> az za CSS. */
+.ln-v2-selection-handle-custom::before {
+  background: var(--ln-own-handle-color, #ff2020) !important;
+}
+.ln-v2-selection-magnifier-caret {
+  background: var(--ln-own-handle-color, #ff2020) !important;
+}
+.ln-v2-single-caret-handle svg path {
+  fill: var(--ln-own-handle-color, #ff2020);
+}
+::highlight(lubanote-selection-scroll) {
+  color: var(--ln-own-selection-text, #290b0b) !important;
+  background-color: var(--ln-own-selection-fill, #ffb3bd) !important;
 }

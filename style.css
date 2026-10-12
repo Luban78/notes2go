@@ -7206,9 +7206,9 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
 }
 
 ::highlight(luba-toolbar-vyber) {
-  /* 683J DIAG – světle červený výběr napříč tématy. */
-  background: #ffb3bd;
-  color: #290b0b;
+  /* 683AS – barva vlastniho vyberu podle motivu / diagnostiky. */
+  background: var(--ln-own-selection-fill, #ffb3bd);
+  color: var(--ln-own-selection-text, #290b0b);
 }
 
 
@@ -17949,7 +17949,7 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
 .ln-title-own-caret {
   width: 2px;
   border-radius: 1px;
-  background: #ff2020;
+  background: var(--ln-own-handle-color, #ff2020);
   z-index: 2147482420;
   animation: ln-v2-luba-caret-blink 1s steps(1, end) infinite;
 }
@@ -17965,7 +17965,7 @@ body.nativeApp #modalTitle[data-ln-title-own-caret="1"] {
   z-index: 2147482421;
 }
 .ln-title-own-handle svg { width: 22px; height: 29px; pointer-events: none; }
-.ln-title-own-selection { background: rgba(255, 80, 95, 0.4); z-index: 2147482419; }
+.ln-title-own-selection { background: var(--ln-own-selection-overlay, rgba(255, 80, 95, 0.4)); z-index: 2147482419; }
 .ln-title-own-caret[hidden], .ln-title-own-handle[hidden],
 .ln-title-own-selection[hidden] { display: none !important; }
 
@@ -18619,4 +18619,60 @@ body:has(#notesModuleButton.active) #quickThemeButton {
   #taskModal .editorTopBar #modalTimeButton {
     flex: 0 0 clamp(64px, 19vw, 83px);
   }
+}
+
+
+/* 683AS – vlastni vyber/uchyty: barvy vychazeji z aktivniho motivu.
+   Pouze vizual; zadne zmeny gest, hitboxu, Range ani modelu editoru.
+   Barvy se definuji na body (motivove promenne jsou na body, ne :root). */
+body {
+  --ln-own-handle-color: var(--color-accent, #20abc0);
+  --ln-own-selection-fill: color-mix(in srgb, var(--color-accent, #20abc0) 40%, var(--color-surface, #082533) 60%);
+  --ln-own-selection-text: var(--color-editor-text, var(--color-text, #eef7fa));
+  --ln-own-selection-overlay: color-mix(in srgb, var(--color-accent, #20abc0) 46%, transparent);
+  --ln-own-selection-preview: color-mix(in srgb, var(--color-accent, #20abc0) 16%, transparent);
+}
+:root[data-ln-own-selection="red"] body {
+  --ln-own-handle-color: #ff2020;
+  --ln-own-selection-fill: #ffb3bd;
+  --ln-own-selection-text: #290b0b;
+  --ln-own-selection-overlay: rgba(255, 140, 150, .55);
+  --ln-own-selection-preview: rgba(255, 179, 189, .16);
+}
+/* Stejna paleta i pro nas vlastni vyber v nazvu poznamky. */
+.ln-title-own-caret { background: var(--ln-own-handle-color); }
+.ln-title-own-handle svg path { fill: var(--ln-own-handle-color); }
+.ln-title-own-selection { background: var(--ln-own-selection-overlay); }
+::highlight(luba-toolbar-vyber) {
+  background: var(--ln-own-selection-fill);
+  color: var(--ln-own-selection-text);
+}
+
+/* Admin Dashboard / UI – diagnosticky prepinac jen pro toto zarizeni. */
+.adminOwnSelectionPalette {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border, #50616a);
+  border-radius: 14px;
+  background: var(--color-surface, #112c36);
+  color: var(--color-text, #f0f7fa);
+}
+.adminOwnSelectionPalette strong { display: block; margin-bottom: 5px; }
+.adminOwnSelectionPalette p { margin: 0 0 12px; color: var(--color-text-secondary, #adbfc9); font-size: .9rem; }
+.adminOwnSelectionOptions { display: flex; flex-wrap: wrap; gap: 9px; }
+.adminOwnSelectionOptions button {
+  flex: 1 1 140px;
+  min-height: 44px;
+  border: 1px solid var(--color-border, #50616a);
+  border-radius: 10px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--color-text, #f0f7fa);
+  background: var(--color-background, #091e29);
+  cursor: pointer;
+}
+.adminOwnSelectionOptions button[aria-pressed="true"] {
+  border-color: var(--color-accent, #20abc0);
+  box-shadow: inset 0 0 0 1px var(--color-accent, #20abc0);
+  background: color-mix(in srgb, var(--color-accent, #20abc0) 12%, var(--color-surface, #112c36));
 }

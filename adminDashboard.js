@@ -5,6 +5,26 @@
 ================================================== */
 
 (() => {
+  /* 683AS – barevny vzhled vlastniho vyberu. Jen lokalni UI nastaveni;
+     zadne serverove zmeny ani zasahy do editoru. */
+  const VYBER_BARVY_KLIC = "lubanoteOwnSelectionPaletteV1";
+  const vyberTematickeTlacitko = document.getElementById("adminOwnSelectionThemeButton");
+  const vyberCerveneTlacitko = document.getElementById("adminOwnSelectionRedButton");
+  function nastavBarvyVlastnihoVyberu(rezim, ulozit = false) {
+    const cervena = rezim === "red";
+    document.documentElement.dataset.lnOwnSelection = cervena ? "red" : "theme";
+    vyberTematickeTlacitko?.setAttribute("aria-pressed", String(!cervena));
+    vyberCerveneTlacitko?.setAttribute("aria-pressed", String(cervena));
+    if (ulozit) {
+      try { localStorage.setItem(VYBER_BARVY_KLIC, cervena ? "red" : "theme"); } catch (_) {}
+    }
+  }
+  let ulozenyRezim = "theme";
+  try { ulozenyRezim = localStorage.getItem(VYBER_BARVY_KLIC) || "theme"; } catch (_) {}
+  nastavBarvyVlastnihoVyberu(ulozenyRezim);
+  vyberTematickeTlacitko?.addEventListener("click", () => nastavBarvyVlastnihoVyberu("theme", true));
+  vyberCerveneTlacitko?.addEventListener("click", () => nastavBarvyVlastnihoVyberu("red", true));
+
   const menuTlacitko =
     document.getElementById("adminDashboardButton");
   const hlavniMenuTlacitko =
