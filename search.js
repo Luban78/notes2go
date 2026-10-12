@@ -236,6 +236,13 @@ searchNotes.addEventListener(
   pripravVyhledavaniPoKliknuti
 );
 
+/* 683AM: v kompaktnim mobilnim radku zustava lupicka klikatelna,
+   i kdyz nove tlacitko zmensi samotnou textovou cast hledani. */
+searchRow?.querySelector(".searchIcon")?.addEventListener("pointerdown", () => {
+  pripravVyhledavaniPoKliknuti();
+  searchNotes.focus();
+});
+
 searchNotes.addEventListener(
   "keydown",
   (event) => {

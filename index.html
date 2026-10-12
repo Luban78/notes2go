@@ -17,7 +17,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=683AI-safe-tag-dialog">
+  <link rel="stylesheet" href="style.css?v=683AM-quick-theme-toggle">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -365,7 +365,18 @@
           <span class="lubaActionIcon" data-luba-icon="zavrit" data-luba-classic-icon="×" aria-hidden="true"></span>
         </button>
       </div>
-      
+
+      <!-- 683AM: rychle prepnutí denniho/nocniho motivu; navazuje na Nastaveni. -->
+      <button id="quickThemeButton" type="button" aria-label="Zapnout noční režim" title="Zapnout noční režim" data-quick-theme-mode="day">
+        <svg class="quickThemeMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20.3 15.8A8.5 8.5 0 0 1 8.2 3.7 8.5 8.5 0 1 0 20.3 15.8Z"></path>
+        </svg>
+        <svg class="quickThemeSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path>
+        </svg>
+      </button>
+
       <div class="searchActions">
         <!-- 1 sloupec / 2 sloupce -->
         <button id="changeViewButton" type="button" aria-label="Změnit zobrazení karet">
@@ -2769,7 +2780,7 @@
     TEST · LUBASERVER
   </div>
 
-  <script src="settings.js?v=676b-language-sweep"></script>
+  <script src="settings.js?v=683AM-quick-theme-toggle"></script>
   
   
   <script src="recurringTasks.js"></script>
@@ -2809,7 +2820,7 @@
   
   <script src="cardView.js?v=20260909-card-drag-order-326"></script>
   
-  <script src="search.js?v=658cf-expandable-search"></script>
+  <script src="search.js?v=683AM-compact-search-icon"></script>
   
   
   <!-- Viditelný stav synchronizace nad ikonou Připomínky -->

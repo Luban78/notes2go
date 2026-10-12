@@ -14,6 +14,23 @@
   const currentThemeLabel =
     document.getElementById("currentThemeLabel");
 
+  const quickThemeButton = document.getElementById("quickThemeButton");
+  const quickThemeDayKey = "lubanote_quick_theme_day_v1";
+  const quickThemeNightKey = "lubanote_quick_theme_night_v1";
+  // Svetle motivy podle skutecnych barev v theme.css; ostatni volitelne jsou tmave.
+  const svetleMotivy = new Set(["light", "cappuccino"]);
+  function jeTmavyMotiv(motiv) {
+    return !svetleMotivy.has(motiv);
+  }
+  function aktualizujRychlyMotiv(motiv) {
+    if (!quickThemeButton) return;
+    const tmavy = jeTmavyMotiv(motiv);
+    quickThemeButton.dataset.quickThemeMode = tmavy ? "night" : "day";
+    const popisek = tmavy ? "Zapnout denní režim" : "Zapnout noční režim";
+    quickThemeButton.setAttribute("aria-label", popisek);
+    quickThemeButton.title = popisek;
+  }
+
   const openIconStyleModalButton =
     document.getElementById("openIconStyleModalButton");
 
@@ -353,6 +370,16 @@ const motivy = nactenaTemata.map(tema => ({
   if (theme !== "light") {
     document.body.classList.add(`theme-${theme}`);
   }
+
+  // 683AM: pamet naposled pouziteho denniho/nocniho motivu.
+  // Zapisujeme jen skutečne volitelne motivy; SECRET rezim zustava oddeleny.
+  if (motivy.some(polozka => polozka.hodnota === theme)) {
+    localStorage.setItem(
+      jeTmavyMotiv(theme) ? quickThemeNightKey : quickThemeDayKey,
+      theme
+    );
+  }
+  aktualizujRychlyMotiv(theme);
 }
 
   function prelozNastaveni(klic, vychozi, parametry = {}) {
@@ -1130,6 +1157,22 @@ openReminderDelaySettingsButton?.addEventListener(
 
   applyTheme(ulozenyMotiv);
   nastavPopisekMotivu(ulozenyMotiv);
+
+  // 683AM: pouziva stejny applyTheme, ulozenou volbu a popisek v Nastaveni.
+  quickThemeButton?.addEventListener("click", () => {
+    const aktualni = localStorage.getItem("theme") || "light";
+    const cilJeTmavy = !jeTmavyMotiv(aktualni);
+    const ulozenyCil = localStorage.getItem(
+      cilJeTmavy ? quickThemeNightKey : quickThemeDayKey
+    );
+    const jePlatnyCil = motivy.some(polozka => polozka.hodnota === ulozenyCil);
+    const cil = jePlatnyCil && jeTmavyMotiv(ulozenyCil) === cilJeTmavy
+      ? ulozenyCil
+      : (cilJeTmavy ? "dark" : "light");
+    applyTheme(cil);
+    localStorage.setItem("theme", cil);
+    nastavPopisekMotivu(cil);
+  });
 
   const ulozenyStylIkon =
     window.LubaNoteIcons?.ziskejStylIkon?.() ||
