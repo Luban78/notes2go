@@ -171,6 +171,14 @@ async function scheduleNotification(
 
         id: notificationId,
         channelId: "reminders",
+        /*
+         * 683AT: Aktivni pripominka zustava v Android liste do vyrizeni.
+         * Ongoing chrani zejmena pred "Vymazat vse". Na Android 14+
+         * muze uzivatel jednotlive oznameni i presto odsunout.
+         * Pouhe otevreni pripominky ji samo neodstrani.
+         */
+        ongoing: true,
+        autoCancel: false,
         extra,
 
         schedule: {
@@ -356,10 +364,21 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
   }
 
   /*
-   * Nejdřív bezpodmínečně zrušíme starou notifikaci poznámky.
-   * To je důležité při změně běžné poznámky na tajnou.
+   * 683AT: Pokud pripominka uz mela zazvonit a stale je aktivni,
+   * bezna synchronizace ji nesmi smazat z Android listy.
+   * Pri dokončení, vypnuti pripominky, presunu terminu nebo pri
+   * prepnuti na SECRET se stara notifikace dale spravne zrusi.
    */
-  if (note.notificationId) {
+  const zachovatDorucenouPripominku =
+    note.isSecret !== true &&
+    note.completed !== true &&
+    note.reminder === true &&
+    note.repeat?.enabled !== true &&
+    Boolean(note.date) &&
+    Number.isFinite(new Date(note.date).getTime()) &&
+    new Date(note.date).getTime() <= Date.now();
+
+  if (note.notificationId && !zachovatDorucenouPripominku) {
     await cancelNotification(note.notificationId);
   }
 
@@ -371,9 +390,25 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
     ? note.plannedItems
     : [];
 
-  /* Zrušíme také všechny systémové notifikace Planner položek. */
+  /*
+   * U doruceneho, dosud nesplneneho Planner ukolu plati stejna
+   * ochrana. Budouci, dokončene a vypnute pripominky se nadale
+   * obnovuji / rusi puvodnim zpusobem.
+   */
   for (const item of plannedItems) {
-    if (item?.notificationId) {
+    if (!item?.notificationId) continue;
+
+    const casUkolu = new Date(item.plannedAt).getTime();
+    const zachovatDorucenyPlanner =
+      note.isSecret !== true &&
+      note.completed !== true &&
+      item.completed !== true &&
+      jePlanovanaPripominkaZapnuta(item) &&
+      Boolean(item.plannedAt) &&
+      Number.isFinite(casUkolu) &&
+      casUkolu <= Date.now();
+
+    if (!zachovatDorucenyPlanner) {
       await cancelNotification(item.notificationId);
     }
   }
@@ -436,6 +471,73 @@ async function obnovNotifikacePoznamkyPodleSoukromi(note) {
         sourceNoteId: note.id
       }
     );
+  }
+}
+
+/*
+ * 683AT: Pokud uzivatel vyridi pripominku na druhem zarizeni,
+ * dorucena "ongoing" notifikace se musi uklidit i zde po syncu.
+ * Nikdy nesahame na nesouvisejici notifikace nebo jiny ucet.
+ */
+async function uklidNeplatneDorucenePripominkyPoSync(noteIds, poznamky) {
+  const plugin = window.Capacitor?.Plugins?.LocalNotifications;
+  if (
+    !plugin?.getDeliveredNotifications ||
+    !plugin?.removeDeliveredNotifications ||
+    !noteIds?.size
+  ) return;
+
+  try {
+    const dorucene = await plugin.getDeliveredNotifications();
+    const podleId = new Map(
+      (poznamky || []).filter(note => note?.id)
+        .map(note => [note.id, note])
+    );
+
+    const keZruseni = (dorucene?.notifications || []).filter(notification => {
+      const extra = notification?.extra || {};
+      const noteId = extra.taskId || extra.sourceNoteId;
+      if (!noteId || !noteIds.has(noteId)) return false;
+      if (!Number.isInteger(notification.id)) return false;
+
+      const note = podleId.get(noteId);
+      if (!note || note.isSecret === true || note.completed === true) {
+        return true;
+      }
+
+      if (extra.lubanoteType === "planned") {
+        const item = (note.plannedItems || []).find(
+          candidate => candidate?.id === extra.plannedItemId
+        );
+        return !item ||
+          item.notificationId !== notification.id ||
+          item.completed === true ||
+          !jePlanovanaPripominkaZapnuta(item) ||
+          !item.plannedAt ||
+          new Date(item.plannedAt).getTime() > Date.now();
+      }
+
+      if (extra.lubanoteType === "note") {
+        if (extra.recurring === true) {
+          return note.reminder !== true || note.repeat?.enabled !== true;
+        }
+        return note.repeat?.enabled === true ||
+          note.reminder !== true ||
+          note.notificationId !== notification.id ||
+          !note.date ||
+          new Date(note.date).getTime() > Date.now();
+      }
+
+      return false;
+    });
+
+    if (keZruseni.length) {
+      await plugin.removeDeliveredNotifications({
+        notifications: keZruseni
+      });
+    }
+  } catch (error) {
+    console.warn("Uklid dorucenych pripominek po syncu se odlozil:", error);
   }
 }
 
@@ -516,6 +618,7 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
   }
 
   const poznamky = loadTask();
+  await uklidNeplatneDorucenePripominkyPoSync(cilovaId, poznamky);
 
   for (const noteId of cilovaId) {
     const note = poznamky.find(
