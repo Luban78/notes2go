@@ -16,8 +16,39 @@ manager = root / "node_modules/@capacitor/local-notifications/android/src/main/j
 if not manager.is_file():
     raise SystemExit(f"683AU: plugin source missing: {manager}")
 source = manager.read_text(encoding="utf-8")
+
+
+def ochrana_otevreni_po_odlozeni_683AX(kod):
+    """Keep the already displayed notification's PendingIntent valid on replan.
+
+    FLAG_CANCEL_CURRENT invalidates old PendingIntent handles; Android may
+    still show a notification holding one after repeated scheduling.
+    UPDATE_CURRENT refreshes extras without invalidating the old handle.
+    """
+    if "683AX: keep tap intent alive" in kod:
+        return kod
+
+    zacatek = kod.find("void createActionIntents(")
+    if zacatek < 0:
+        raise SystemExit("683AX: createActionIntents missing; stopping build")
+    konec = kod.find("// Dismiss intent", zacatek)
+    if konec < 0:
+        raise SystemExit("683AX: dismiss intent marker missing; stopping build")
+
+    hlava = kod[zacatek:konec]
+    puvodni = "int flags = PendingIntent.FLAG_CANCEL_CURRENT;"
+    if hlava.count(puvodni) != 1:
+        raise SystemExit("683AX: tap flags changed; stopping build")
+
+    opravene = 'int flags = PendingIntent.FLAG_CANCEL_CURRENT;\n        // 683AX: keep tap intent alive for LubaNote reminders after Snooze/replan.\n        // Re-scheduling the same ID must not invalidate the PendingIntent held\n        // by an already displayed notification (683AU sticky / Android shade).\n        if (localNotification.isOngoing() && !localNotification.isAutoCancel()\n                && "reminders".equals(localNotification.getChannelId())) {\n            flags = PendingIntent.FLAG_UPDATE_CURRENT;\n        }'
+    hlava = hlava.replace(puvodni, opravene, 1)
+    return kod[:zacatek] + hlava + kod[konec:]
+
+
 if "LubaNoteStickyDismissReceiver" in source and "683AU" in source:
-    print("683AU: patch already applied")
+    source = ochrana_otevreni_po_odlozeni_683AX(source)
+    manager.write_text(source, encoding="utf-8")
+    print("683AX: applied after existing 683AU patch")
     raise SystemExit(0)
 
 # 1. Do not explicitly cancel reminder on DEFAULT click with autoCancel:false.
@@ -70,5 +101,6 @@ extra = f'''
         }}
 '''
 source = source[:match.end()] + extra + source[match.end():]
+source = ochrana_otevreni_po_odlozeni_683AX(source)
 manager.write_text(source, encoding="utf-8")
-print("683AU: Native tap + swipe protections patched; version verified (6.1.3)")
+print("683AX: Native sticky tap + snooze fixes patched; version verified (6.1.3)")
