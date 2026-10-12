@@ -6486,7 +6486,18 @@
     if (drag.planDite && drag.planDite.puvodniUroven === drag.planDite.novaUroven &&
         drag.planDite.vlozitNa === drag.planDite.zdroj) drag.planDite = null;
     const geo = geometrieV2NahleduDite(drag.planDite);
-    const viditelnySlot = !!geo && geo.slotY >= geo.meze.top && geo.slotY <= geo.meze.bottom - 58;
+    /* 683AP – poslední Bullet lze zanořit i těsně nad spodkem editoru.
+       Původní bezpečnostní rezerva 58 px zde odmítala VIDITELNÝ řádek,
+       dokud uživatel nepřidal další Bullet a neposunul jej nahoru.
+       Výjimka platí pouze pro poslední podstrom, který se nepřesouvá
+       na jinou Y pozici (mění jen úroveň). Ostatní cíle drží 58 px. */
+    const posledniZanoreniNaMiste = !!drag.planDite &&
+      drag.planDite.rozsah.do === dokument.bloky.length - 1 &&
+      drag.planDite.vlozitNa === drag.planDite.zdroj &&
+      drag.planDite.novaUroven > drag.planDite.puvodniUroven;
+    const spodniRezerva = posledniZanoreniNaMiste ? 8 : 58;
+    const viditelnySlot = !!geo && geo.slotY >= geo.meze.top &&
+      geo.slotY <= geo.meze.bottom - spodniRezerva;
     /* Bez viditelného cíle nedojde k přesunu naslepo. */
     if (!viditelnySlot) drag.planDite = null;
 
