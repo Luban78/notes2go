@@ -79,9 +79,13 @@ const EDITOR_LEASE_SECONDS = 120;
 const EDITOR_HEARTBEAT_MS = 20000;
 const EDITOR_HANDOFF_TIMEOUT_MS = 45000;
 const EDITOR_HANDOFF_POLL_MS = 450;
+/* 683AK: fallback při ztraceném Realtime UPDATE na PŮVODNÍM editoru. */
+const EDITOR_OWNER_REQUEST_POLL_MS = 1400;
 
 let aktivniVzdalenyEditor = null;
 let editorHeartbeatTimer = null;
+let editorOwnerRequestTimer = null;
+let editorOwnerRequestInFlight = false;
 let editorRealtimeKanal = null;
 let editorRealtimeUserId = null;
 let probihaZpracovaniPredani = false;
@@ -710,9 +714,64 @@ async function pripravSupabaseProEditorHandoff() {
   );
 }
 
+/*
+ * PATCH 683AK – bezpečná záloha Realtime pro převzetí editoru.
+ * Realtime zůstává primární rychlou cestou, ale samotná ztráta UPDATE
+ * nesmí nechat požadavek viset. Čteme POUZE serverový stav session,
+ * obsah poznámky se zde nikdy neukládá ani nepřepisuje.
+ * Zpracování i COMPLETE používají původní kontrolu device/session
+ * a serverový atomický handoff – žádný force-claim.
+ */
+function zastavEditorRequestPolling() {
+  clearInterval(editorOwnerRequestTimer);
+  editorOwnerRequestTimer = null;
+}
+
+async function overZadostOPredaniNaServeru() {
+  const session = aktivniVzdalenyEditor;
+  if (
+    editorOwnerRequestInFlight ||
+    probihaZpracovaniPredani ||
+    !session ||
+    !navigator.onLine
+  ) {
+    return;
+  }
+
+  editorOwnerRequestInFlight = true;
+  try {
+    const row = await ziskejServerovouEditorSession(session.noteId);
+    /* Starý výsledek nepoužít, pokud se během requestu editor zavřel. */
+    if (
+      !row ||
+      aktivniVzdalenyEditor !== session ||
+      row.takeover_status !== "requested" ||
+      !row.takeover_request_id
+    ) {
+      return;
+    }
+
+    await zpracujEditorSessionUpdate(row);
+  } catch (error) {
+    console.warn("Editor handoff fallback poll error:", error);
+  } finally {
+    editorOwnerRequestInFlight = false;
+  }
+}
+
+function spustEditorRequestPolling() {
+  zastavEditorRequestPolling();
+  if (!aktivniVzdalenyEditor) return;
+  editorOwnerRequestTimer = setInterval(
+    () => { void overZadostOPredaniNaServeru(); },
+    EDITOR_OWNER_REQUEST_POLL_MS
+  );
+}
+
 function zastavEditorHeartbeat() {
   clearInterval(editorHeartbeatTimer);
   editorHeartbeatTimer = null;
+  zastavEditorRequestPolling();
 }
 
 async function obnovEditorLease() {
@@ -780,6 +839,7 @@ function spustEditorHeartbeat() {
     },
     EDITOR_HEARTBEAT_MS
   );
+  spustEditorRequestPolling();
 }
 
 async function pripravRealtimeKanalEditoru() {
