@@ -1065,3 +1065,19 @@ body.ln-v2-selection-ui-blocked .ln-v2-single-caret-handle { display: none !impo
 .ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"] {
   color: var(--ln-v2-kontrast-pisma-683aj) !important;
 }
+
+/* 683AR – live nahled barvy uvnitr aktivniho vyberu.
+   Puvodni nepruhledne ruzove ::selection / CSS Highlight prekryvalo prave
+   zvolenou barvu az do odkliknuti. Pouze barevne formatovane segmenty maji
+   jemne prusvitny vyber a vlastni skutecnou barvu textu. Nezasahuje do
+   modelu, Range, vlastnich uchytu, bezneho vyberu ani code bloku. */
+.ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[style*="color"]::selection,
+.ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"]::selection {
+  color: currentColor;
+  background-color: rgba(255, 179, 189, 0.16);
+}
+.ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[style*="color"]::highlight(lubanote-selection-scroll),
+.ln-v2-editor .ln-v2-odstavec:not(.ln-v2-code-block) > .ln-v2-cast[data-ln-v2-kontrast683aj="1"]::highlight(lubanote-selection-scroll) {
+  color: currentColor;
+  background-color: rgba(255, 179, 189, 0.16);
+}
