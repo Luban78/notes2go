@@ -132,6 +132,29 @@ function createUniqueNotificationId() {
 }
 
 
+/* 683AU: Id aktivni pripominky drzi i nativni receiver pri vypnutem WebView. */
+async function oznacAndroidPripominku683AU(id, aktivni) {
+  if (
+    !Number.isInteger(id) || id <= 0 ||
+    window.Capacitor?.getPlatform?.() !== "android"
+  ) return;
+
+  const plugin = window.Capacitor?.Plugins?.LubaNoteSticky;
+  const metoda = aktivni ? "activate" : "deactivate";
+  if (typeof plugin?.[metoda] !== "function") return;
+  try {
+    await plugin[metoda]({ id });
+  } catch (error) {
+    console.warn("683AU: Nativni registr pripominky neni dostupny:", error);
+  }
+}
+
+async function oznacAndroidPripominky683AU(ids, aktivni) {
+  for (const id of ids || []) {
+    await oznacAndroidPripominku683AU(id, aktivni);
+  }
+}
+
 async function scheduleNotification(
   notificationId,
   title,
@@ -188,6 +211,8 @@ async function scheduleNotification(
       }
     ]
   });
+
+  await oznacAndroidPripominku683AU(notificationId, true);
 }
 
 // ==========================================
@@ -299,6 +324,7 @@ async function zrusCekajiciOpakovaneNotifikacePoznamky(noteId) {
         }));
 
     if (notifications.length > 0) {
+      await oznacAndroidPripominky683AU(notifications.map(n => n.id), false);
       await LocalNotifications.cancel({
         notifications
       });
@@ -532,6 +558,7 @@ async function uklidNeplatneDorucenePripominkyPoSync(noteIds, poznamky) {
     });
 
     if (keZruseni.length) {
+      await oznacAndroidPripominky683AU(keZruseni.map(n => n.id), false);
       await plugin.removeDeliveredNotifications({
         notifications: keZruseni
       });
@@ -760,6 +787,9 @@ async function cancelNotification(notificationId) {
   if (!LocalNotifications || !notificationId) {
     return;
   }
+
+  /* Pred app cancel() nejdriv zneplatnime nativni ochranu. */
+  await oznacAndroidPripominku683AU(notificationId, false);
 
   /* Zrušíme případný budoucí alarm. */
   try {

@@ -45,6 +45,9 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+      - name: Protect persistent Android notifications (683AU)
+        run: python3 scripts/patch-local-notifications-683AU.py
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
