@@ -238,7 +238,10 @@ searchNotes.addEventListener(
 
 /* 683AM: v kompaktnim mobilnim radku zustava lupicka klikatelna,
    i kdyz nove tlacitko zmensi samotnou textovou cast hledani. */
-searchRow?.querySelector(".searchIcon")?.addEventListener("pointerdown", () => {
+searchRow?.querySelector(".searchIcon")?.addEventListener("pointerdown", (event) => {
+  // 683AQ: dotyk na ikone nesmi po focusu textoveho pole vyvolat blur.
+  // Jinak se prazdne hledani hned sbali a pouze problikne.
+  if (event.cancelable) event.preventDefault();
   pripravVyhledavaniPoKliknuti();
   searchNotes.focus();
 });
