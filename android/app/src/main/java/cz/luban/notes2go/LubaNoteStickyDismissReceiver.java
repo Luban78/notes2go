@@ -43,7 +43,7 @@ public class LubaNoteStickyDismissReceiver extends BroadcastReceiver {
       NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "reminders")
         .setContentTitle(json.optString("title", "LubaNote"))
         .setContentText(json.optString("body", ""))
-        .setSmallIcon(context.getApplicationInfo().icon)
+        .setSmallIcon(R.drawable.ic_stat_lubanote)
         .setContentIntent(open)
         .setAutoCancel(false)
         .setOngoing(true)
