@@ -706,6 +706,9 @@
    */
   const PRAH_TODO_SMAZAT = 88;
   let v2DragSeznamu = null;
+  /* 683AO – pouze TODO: dva rychlé tapy na stejný textový řádek
+     patří Bridge výběru slova, ne novému long-press MOVE kandidátu. */
+  let posledniKratkyTapTodo = null;
   let v2DragSeznamCasovac = null;
   let v2ListDropIndicator = null;
   let v2ListDragPreview = null;
@@ -6859,6 +6862,17 @@
       return;
     }
 
+    /* 683AO: první KRÁTKÝ tap na TODO uložíme jen pro rozlišení druhého
+       tapu. Žádná změna modelu, žádné vybrání řádku. Časové a prostorové
+       meze jsou stejné jako ve stávajícím Bridge dvojtapu (683M). */
+    const id = String(v2DragSeznamu.blokId || "");
+    const index = najdiIndexBlokuPodleId(id);
+    const cas = performance.now();
+    posledniKratkyTapTodo = (
+      index >= 0 && jeTodoBlok(dokument.bloky[index]) &&
+      cas - v2DragSeznamu.startCas < 320 &&
+      vzdalenostV2ListDrag(dotyk.clientX, dotyk.clientY) < 12
+    ) ? { id, x: dotyk.clientX, y: dotyk.clientY, cas } : null;
     /* Krátký tap je normální editace/selection. MOVE MODE vznikne až
        skutečným long-pressem na značce/checkboxu. */
     zrusV2DragSeznamu({ zachovatVyber: false });
@@ -9614,6 +9628,17 @@
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
       if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
       const dotyk = event.touches[0];
+      const predchozi = posledniKratkyTapTodo;
+      posledniKratkyTapTodo = null;
+      if (radek.classList.contains("ln-v2-todo") && predchozi &&
+          predchozi.id === (radek.dataset.lnV2Blok || "") &&
+          performance.now() - predchozi.cas <= 360 &&
+          Math.hypot(dotyk.clientX - predchozi.x, dotyk.clientY - predchozi.y) <= 34) {
+        /* Druhý rychlý tap: Bridge 683M smí vybrat slovo. Nezakládat
+           MOVE kandidáta, časovač ani řádkový TODO multiselect. */
+        zapisV2TodoDragVD("TODO_DOUBLE_TAP_TEXT", { blok: predchozi.id });
+        return;
+      }
       zapisV2TodoDragVD("TOUCHSTART", {
         blok: radek.dataset.lnV2Blok || "-",
         typBloku: radek.classList.contains("ln-v2-todo") ? "todo" : (radek.classList.contains("ln-v2-ordered") ? "ordered" : "bullet"),
