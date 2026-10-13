@@ -80,6 +80,7 @@
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="lubaKeyboard.css?v=658bt-editor-selection-safe">
   <link rel="stylesheet" href="homeToolbarPreferences.css?v=683BB-main-toolbar-visibility">
+  <link rel="stylesheet" href="homeDateTimeAndStatus683BC.css?v=683BC-home-clock-status">
 </head>
 
 <body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
@@ -342,6 +343,12 @@
       <span class="syncTrafficDivider" aria-hidden="true">·</span>
       <span id="syncTrafficEgress" class="syncTrafficEgress" title="Přesný zůstatek egressu zatím není dostupný.">E —</span>
       <span id="syncStatusText" class="syncStatusText" hidden aria-hidden="true"></span>
+    </div>
+
+    <!-- 683BC: lokalni datum a zivy cas, vzdy nad hlavni navigaci. -->
+    <div id="lnHomeDateTime683BC" class="lnHomeDateTime683BC" role="group" aria-label="Datum a čas">
+      <time id="lnHomeDate683BC" class="lnHomeDate683BC"></time>
+      <time id="lnHomeTime683BC" class="lnHomeTime683BC"></time>
     </div>
 
     <!-- HLAVNÍ MODULY LUBANOTE -->
@@ -2835,6 +2842,7 @@
 
   <script src="settings.js?v=683AM-quick-theme-toggle"></script>
   <script src="homeToolbarPreferences.js?v=683BB-main-toolbar-visibility"></script>
+  <script src="homeDateTime683BC.js?v=683BC-home-clock-status"></script>
   
   
   <script src="recurringTasks.js"></script>

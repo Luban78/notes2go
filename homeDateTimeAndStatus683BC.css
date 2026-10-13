@@ -1,0 +1,80 @@
+/* 683BC – datum vlevo, hodiny vpravo; 1 kompaktni radek nad moduly. */
+.lnHomeDateTime683BC {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 9px;
+  padding: 3px 2px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+.lnHomeDate683BC {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: clamp(0.80rem, 3.1vw, 0.98rem);
+  font-weight: 650;
+}
+.lnHomeTime683BC {
+  flex: 0 0 auto;
+  color: var(--color-text);
+  font-size: clamp(1.05rem, 4vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* 683BC – vyraznejsi potvrzovaci panel ve vsech motivech.
+ * Pokrok zalohy (601) a cekaci spinner maji zachovane puvodni chovani.
+ */
+.actionStatusModal:not(.actionStatusBackupProgress) .actionStatusDialog {
+  box-sizing: border-box;
+  min-width: min(290px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  min-height: 76px;
+  padding: 18px 21px;
+  gap: 15px;
+  border: 2px solid color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-accent) 28%);
+  color: var(--color-text);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.38),
+              0 0 18px color-mix(in srgb, var(--color-accent) 23%, transparent);
+}
+.actionStatusModal:not(.actionStatusBackupProgress) #actionStatusText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.02rem, 3.5vw, 1.2rem);
+  font-weight: 750;
+  line-height: 1.33;
+}
+/* Odstrani jak SVG, tak emoji fallback nebo podbarveny ctverec fajfky. */
+.actionStatusModal:not(.actionStatusWaiting):not(.actionStatusBackupProgress) .actionStatusIcon {
+  box-sizing: border-box;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-accent) 16%);
+  color: var(--color-accent-text, var(--color-text));
+}
+.actionStatusModal:not(.actionStatusWaiting):not(.actionStatusBackupProgress) .actionStatusIcon > * {
+  display: none !important;
+}
+.actionStatusModal:not(.actionStatusWaiting):not(.actionStatusBackupProgress) .actionStatusIcon::after {
+  content: "";
+  box-sizing: border-box;
+  display: block;
+  width: 12px;
+  height: 20px;
+  margin-top: -4px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
