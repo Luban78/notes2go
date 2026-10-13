@@ -27,6 +27,23 @@
     overflow: visible !important;
   }
   /* LN-VD:div.searchBox%3Anth-of-type(1):END */
+
+
+  /* LN-VD:%23lnHomeDateTime683BC:START */
+  :is(#ln-vd-specificity-a, #lnHomeDateTime683BC):is(#ln-vd-specificity-b, #lnHomeDateTime683BC) {
+    z-index: 20 !important;
+    overflow: visible !important;
+    translate: 0px 6px !important;
+    scale: 0.9 !important;
+  }
+  /* LN-VD:%23lnHomeDateTime683BC:END */
+
+
+  /* LN-VD:header.homeHeader:START */
+  :is(#ln-vd-specificity-a, header.homeHeader):is(#ln-vd-specificity-b, header.homeHeader) {
+    overflow: visible !important;
+  }
+  /* LN-VD:header.homeHeader:END */
 /* LN-VD-SECTION:HOME / NOTES:END */
 
   /* LN-VD-SECTION:EDITOR:START */
