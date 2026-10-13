@@ -61,7 +61,7 @@
   :is(#ln-vd-specificity-a, #lnHomeTime683BC):is(#ln-vd-specificity-b, #lnHomeTime683BC) {
     z-index: 20 !important;
     overflow: visible !important;
-    translate: 21px 0px !important;
+    translate: -18px 0px !important;
   }
   /* LN-VD:%23lnHomeTime683BC:END */
 
@@ -70,7 +70,7 @@
   :is(#ln-vd-specificity-a, #lnHomeDate683BC):is(#ln-vd-specificity-b, #lnHomeDate683BC) {
     z-index: 20 !important;
     overflow: visible !important;
-    translate: -25px 0px !important;
+    translate: 2px 0px !important;
   }
   /* LN-VD:%23lnHomeDate683BC:END */
 /* LN-VD-SECTION:HOME / NOTES:END */
