@@ -44,6 +44,35 @@
     overflow: visible !important;
   }
   /* LN-VD:header.homeHeader:END */
+
+
+  /* LN-VD:%23lnHomeDateTime683BC%20time:START */
+  :is(#ln-vd-specificity-a, #lnHomeDateTime683BC time):is(#ln-vd-specificity-b, #lnHomeDateTime683BC time) {
+    position: relative !important;
+    z-index: 20 !important;
+    overflow: visible !important;
+    color: #ffffff !important;
+    scale: 0.89 !important;
+  }
+  /* LN-VD:%23lnHomeDateTime683BC%20time:END */
+
+
+  /* LN-VD:%23lnHomeTime683BC:START */
+  :is(#ln-vd-specificity-a, #lnHomeTime683BC):is(#ln-vd-specificity-b, #lnHomeTime683BC) {
+    z-index: 20 !important;
+    overflow: visible !important;
+    translate: 21px 0px !important;
+  }
+  /* LN-VD:%23lnHomeTime683BC:END */
+
+
+  /* LN-VD:%23lnHomeDate683BC:START */
+  :is(#ln-vd-specificity-a, #lnHomeDate683BC):is(#ln-vd-specificity-b, #lnHomeDate683BC) {
+    z-index: 20 !important;
+    overflow: visible !important;
+    translate: -25px 0px !important;
+  }
+  /* LN-VD:%23lnHomeDate683BC:END */
 /* LN-VD-SECTION:HOME / NOTES:END */
 
   /* LN-VD-SECTION:EDITOR:START */
