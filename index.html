@@ -79,6 +79,7 @@
   <link rel="stylesheet" href="editorCoreV2.css?v=683AS-own-selection-theme">
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="lubaKeyboard.css?v=658bt-editor-selection-safe">
+  <link rel="stylesheet" href="homeToolbarPreferences.css?v=683BB-main-toolbar-visibility">
 </head>
 
 <body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
@@ -2169,6 +2170,38 @@
         
       </section>
       
+      <!-- 683BB – Volitelne ikony v horni liste, vyhledavani a menu zustavaji dostupne. -->
+      <section class="settingsSection lnToolbarSettingsSection" aria-labelledby="lnToolbarSettingsTitle">
+        <h3 id="lnToolbarSettingsTitle">Ikony na hlavní obrazovce</h3>
+        <p id="lnToolbarSettingsHint" class="lnToolbarSettingsHint">Skryté ikony nezabírají místo. Pole hledání se roztáhne.</p>
+        <div id="lnToolbarSettingsList" class="lnToolbarSettingsList">
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="lupa">Lupa ve vyhledávání</span>
+            <input type="checkbox" data-ln-toolbar-option="lupa" checked>
+          </label>
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="motiv">Denní/noční režim</span>
+            <input type="checkbox" data-ln-toolbar-option="motiv" checked>
+          </label>
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="karty">Rozložení karet</span>
+            <input type="checkbox" data-ln-toolbar-option="karty" checked>
+          </label>
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="slovicka">Výuka jazyků</span>
+            <input type="checkbox" data-ln-toolbar-option="slovicka" checked>
+          </label>
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="pozvanky">Pozvánky</span>
+            <input type="checkbox" data-ln-toolbar-option="pozvanky" checked>
+          </label>
+          <label class="lnToolbarSettingsItem">
+            <span data-ln-toolbar-label="chat">Chat</span>
+            <input type="checkbox" data-ln-toolbar-option="chat" checked>
+          </label>
+        </div>
+      </section>
+
       <!-- ====================================
      NASTAVENÍ PŘIPOMÍNEK
      ==================================== -->
@@ -2801,6 +2834,7 @@
   </div>
 
   <script src="settings.js?v=683AM-quick-theme-toggle"></script>
+  <script src="homeToolbarPreferences.js?v=683BB-main-toolbar-visibility"></script>
   
   
   <script src="recurringTasks.js"></script>

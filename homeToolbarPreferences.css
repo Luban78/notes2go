@@ -1,0 +1,77 @@
+/* 683BB – volitelne ikony hlavni listy bez prazdnych mist.
+ * Pri defaultnich sesti zapnutych volbach se puvodni CSS nelisi.
+ */
+.searchRow .ln-toolbar-683BB-hidden,
+.searchRow .searchActions > .ln-toolbar-683BB-hidden,
+.searchRow .searchBox > .ln-toolbar-683BB-hidden {
+  display: none !important;
+}
+
+/* chat.css drive pridaval natvrdo 199px. Po vypnuti tlacitek zbytek
+ * nesmi drzet prazdne misto, ale ma pripadnout vyhledavani.
+ */
+.searchRow.ln-toolbar-683BB-customized .searchActions {
+  width: max-content !important;
+  flex: 0 0 auto !important;
+}
+.searchRow.ln-toolbar-683BB-customized .searchBox {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* PC Visual Debug ma pevne rozměry; az pri volitelnem skryti
+ * jedne ikony se zbytek radku muze priradit vyhledavani. */
+@media (min-width: 900px) {
+  body.desktopNotesToolbarA .searchRow.ln-toolbar-683BB-customized .searchBox {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+}
+
+.lnToolbarSettingsSection .lnToolbarSettingsHint {
+  margin: 0 6px 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+.lnToolbarSettingsList {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.lnToolbarSettingsItem {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.lnToolbarSettingsItem + .lnToolbarSettingsItem {
+  border-top: 1px solid var(--color-border);
+}
+.lnToolbarSettingsItem > span {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+.lnToolbarSettingsItem input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 21px;
+  height: 21px;
+  margin: 0;
+  accent-color: var(--color-accent, #1aabb8);
+  cursor: pointer;
+}
+.lnToolbarSettingsItem:focus-within {
+  outline: 2px solid var(--color-accent, #1aabb8);
+  outline-offset: -2px;
+}
