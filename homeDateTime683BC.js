@@ -25,9 +25,11 @@
     if (den !== posledniDen || locale !== posledniJazyk) {
       posledniDen = den;
       posledniJazyk = locale;
-      datum.textContent = new Intl.DateTimeFormat(locale, {
-        weekday: "short", day: "numeric", month: "numeric", year: "numeric"
+      const textData = new Intl.DateTimeFormat(locale, {
+        weekday: "short", day: "numeric", month: "numeric"
       }).format(ted);
+      // Zacatek nazvu dne velkym pismenem; ostatni lokalni format zachovat.
+      datum.textContent = textData.charAt(0).toLocaleUpperCase(locale) + textData.slice(1);
     }
     cas.textContent = new Intl.DateTimeFormat(locale, {
       hour: "2-digit", minute: "2-digit", hourCycle: "h23"
