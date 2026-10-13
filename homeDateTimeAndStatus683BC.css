@@ -1,4 +1,7 @@
-/* 683BC – datum vlevo, hodiny vpravo; 1 kompaktni radek nad moduly. */
+/* 683BD – datum a cas na uplnem hornim okraji BEZ posunu obsahu.
+ * Oprava puvodniho 683BC: hodiny nesmi byt samostatnym radkem layoutu.
+ * Na telefonu/APK vyuzivaji volnou oblast skryte stavove listy.
+ */
 .lnHomeDateTime683BC {
   display: flex;
   align-items: center;
@@ -11,22 +14,42 @@
   padding: 3px 2px;
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.25;
+  line-height: 1.1;
+}
+.lnHomeDate683BC,
+.lnHomeTime683BC {
+  font-size: clamp(1rem, 4vw, 1.18rem);
+  font-weight: 700;
+  line-height: 1.1;
 }
 .lnHomeDate683BC {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: clamp(0.80rem, 3.1vw, 0.98rem);
-  font-weight: 650;
 }
 .lnHomeTime683BC {
   flex: 0 0 auto;
   color: var(--color-text);
-  font-size: clamp(1.05rem, 4vw, 1.25rem);
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 899px) {
+  .lnHomeDateTime683BC {
+    /* fixed/0: mimo document flow, proto NEPOSOUVA moduly ani karty. */
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 2;
+    box-sizing: border-box;
+    height: 24px;
+    width: 100%;
+    margin: 0;
+    padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    border: 0;
+    background: transparent;
+    pointer-events: none;
+    font-size: inherit;
+  }
 }
 
 /* 683BC – vyraznejsi potvrzovaci panel ve vsech motivech.
