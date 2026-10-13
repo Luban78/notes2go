@@ -3700,7 +3700,20 @@ async function ulozAZavriEditor(
     
     if (aktivni) {
       const currentTask = aktivni.task;
-      
+
+      /* PATCH 683BA – hotová karta se při skutečné změně termínu na
+         budoucí datum znovu aktivuje. Pouhá editace textu, stejné
+         datum nebo minulý termín stav Hotovo nemění. */
+      const novyCasKarty = date ? new Date(date).getTime() : NaN;
+      const puvodniCasKarty = currentTask.date
+        ? new Date(currentTask.date).getTime()
+        : NaN;
+      const znovuAktivovatKartu =
+        currentTask.completed === true &&
+        Number.isFinite(novyCasKarty) &&
+        novyCasKarty > Date.now() &&
+        novyCasKarty !== puvodniCasKarty;
+
       const updatedTask = {
         ...currentTask,
         updatedAt: new Date().toISOString(),
@@ -3708,6 +3721,7 @@ async function ulozAZavriEditor(
         note,
         richContent,
         date,
+        completed: znovuAktivovatKartu ? false : currentTask.completed,
         reminder: reminderEnabled,
         planned: secretTaskEnabled ? false : plannedEnabled,
         favorite: favoriteEnabled,
