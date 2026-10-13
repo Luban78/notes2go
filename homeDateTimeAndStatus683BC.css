@@ -101,3 +101,16 @@
   border-radius: 1px;
   transform: rotate(45deg);
 }
+
+/* 683BE – datum a cas lze vybrat dotykem ve Visual Debugu.
+ * V normalnim provozu zustava panel pruchozi (pointer-events: none),
+ * aby neblokoval ovladani aplikace pod skrytou systemovou listou.
+ * Vizualni vyber aktivujeme jen po stisku „Vybrat prvek“.
+ */
+@media (max-width: 899px) {
+  body.ln-vd-picking #lnHomeDateTime683BC,
+  body.ln-vd-picking #lnHomeDate683BC,
+  body.ln-vd-picking #lnHomeTime683BC {
+    pointer-events: auto !important;
+  }
+}
