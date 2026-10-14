@@ -1,0 +1,200 @@
+/* LubaNote 683BJ — nove Nastaveni A3. Jen lokalni styly; Visual Debug CSS beze zmen. */
+#settingsModal.ln683BJEnabled .settingsContent {
+  padding-left: clamp(10px, 3.5vw, 18px);
+  padding-right: clamp(10px, 3.5vw, 18px);
+}
+#settingsModal.ln683BJEnabled .settingsHeader { margin-bottom: 16px; }
+#settingsModal.ln683BJEnabled .ln683BJAccordion {
+  display:flex; flex-direction:column; gap:10px; padding:3px 0 20px;
+}
+#settingsModal.ln683BJEnabled .ln683BJCard {
+  overflow:hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 18px;
+  color:var(--color-text);
+  transition: border-color .18s ease, background .18s ease;
+}
+#settingsModal.ln683BJEnabled .ln683BJCard.ln683BJOpen {
+  border-color: var(--color-accent, #1ab5c6);
+}
+#settingsModal.ln683BJEnabled .ln683BJHeadRow {
+  display:flex; align-items:stretch; gap:0; min-height:76px;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeading {
+  width:100%; flex:1 1 auto; min-width:0;
+  padding:13px 12px;
+  display:flex; flex-direction:row; gap:13px; align-items:center;
+  border:0; background:transparent; color:inherit;
+  font:inherit; text-align:left; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeading:focus-visible,
+#settingsModal.ln683BJEnabled .ln683BJInfo:focus-visible {
+  outline: 2px solid var(--color-accent, #1ab5c6);
+  outline-offset:-3px;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeading[aria-expanded="true"] .ln683BJHeadingText strong { color: var(--color-accent, #1ab5c6); }
+#settingsModal.ln683BJEnabled .ln683BJIcon {
+  flex:0 0 42px; width:42px; height:42px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:12px;
+  background:color-mix(in srgb, var(--color-accent, #1ab5c6) 13%, var(--color-surface));
+  color:var(--color-accent, #1ab5c6);
+}
+#settingsModal.ln683BJEnabled .ln683BJHeadingText {
+  flex:1 1 auto; min-width:0;
+  display:flex; flex-direction:column; gap:4px; line-height:1.25;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeadingText strong {
+  font-size:1.08rem; font-weight:730; overflow-wrap:anywhere;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeadingText small {
+  color: var(--color-text-secondary); font-size:.82rem; line-height:1.3;
+}
+#settingsModal.ln683BJEnabled .ln683BJHeadingActions {
+  flex:0 0 auto; display:flex; align-items:center; padding-right:11px;
+}
+#settingsModal.ln683BJEnabled .ln683BJInfo {
+  display:inline-flex; align-items:center; justify-content:center;
+  flex:0 0 auto; width:23px; height:23px; padding:0;
+  border:1px solid var(--color-text-secondary);
+  background:transparent; color:var(--color-text-secondary);
+  border-radius:50%; font-size:.88rem; font-weight:650; font-family:serif;
+  cursor:pointer;
+}
+#settingsModal.ln683BJEnabled .ln683BJBody {
+  padding: 0 9px 11px;
+  animation: ln683BJFade .17s ease-out;
+}
+#settingsModal.ln683BJEnabled .ln683BJBody[hidden] { display:none!important; }
+@keyframes ln683BJFade { from { opacity:0; transform:translateY(-4px); } to {opacity:1; transform:translateY(0);} }
+@media (prefers-reduced-motion:reduce) {
+  #settingsModal.ln683BJEnabled .ln683BJBody {animation:none!important;}
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal { margin:0; }
+#settingsModal.ln683BJEnabled .ln683BJOriginal > h3 {display:none;}
+#settingsModal.ln683BJEnabled .lnToolbarSettingsSection > h3 {
+  display:block;
+  margin:14px 4px 7px;
+  letter-spacing:0; text-transform:none;
+  font-size:.92rem;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting,
+#settingsModal.ln683BJEnabled .ln683BJOriginal .fontSizeSetting {
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px; padding-left:9px; padding-right:9px;
+  border-radius:0;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSelectButton {
+  min-width:0; max-width:min(55%, 235px);
+  padding-left:0; padding-right:0;
+  white-space:normal; overflow-wrap:anywhere;
+}
+/* Vyberove sipecky z puvodnich radku nejsou v Nastaveni potreba;
+ * tlacitka zustavaji plne funkcni. */
+#settingsModal.ln683BJEnabled .themeSelectArrow {display:none!important;}
+#settingsModal.ln683BJEnabled #dataSettingsSection > button::after { content:none!important; }
+#settingsModal.ln683BJEnabled #dataSettingsSection > button {
+  padding-left:10px; padding-right:10px; min-height:60px;
+}
+#settingsModal.ln683BJEnabled .lnToolbarSettingsList {margin-top:7px;}
+#settingsModal.ln683BJEnabled .ln683BJPlanned {
+  padding:15px; background:var(--color-background); color:var(--color-text-secondary);
+  font-size:.92rem; line-height:1.5; margin:0; border-radius:12px;
+}
+#settingsModal.ln683BJEnabled .ln683BJRowInfo {
+  vertical-align:middle; margin-left:5px; width:21px; height:21px;
+}
+#settingsModal.ln683BJEnabled .ln683BJHelpOverlay {
+  position:fixed; inset:0; z-index:10;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  background:rgba(0,0,0,.62);
+}
+#settingsModal.ln683BJEnabled .ln683BJHelpOverlay[hidden] {display:none!important;}
+#settingsModal.ln683BJEnabled .ln683BJHelpBox {
+  width:min(100%,430px); border-radius:18px; padding:20px;
+  background:var(--color-surface); border:1px solid var(--color-border);
+  color:var(--color-text); box-shadow:0 16px 44px rgba(0,0,0,.35);
+}
+#settingsModal.ln683BJEnabled .ln683BJHelpBox h3 {font-size:1.1rem; margin:0 0 9px;}
+#settingsModal.ln683BJEnabled .ln683BJHelpBox p {line-height:1.5; margin:0 0 15px;}
+#settingsModal.ln683BJEnabled .ln683BJHelpBox button {
+  display:block; width:100%; padding:12px; border-radius:12px;
+  border:1px solid var(--color-border); color:var(--color-text);
+  background:var(--color-background);
+}
+@media(max-width:370px) {
+  #settingsModal.ln683BJEnabled .ln683BJIcon { width:36px; height:36px; flex-basis:36px; }
+  #settingsModal.ln683BJEnabled .ln683BJHeading { gap:9px; padding-left:9px; padding-right:6px; }
+  #settingsModal.ln683BJEnabled .ln683BJHeadingText strong {font-size:1rem;}
+}
+
+/* 683BJ: datum/cas take v editoru, bez obsazeni jakehokoli mista layoutu.
+ * Stav systemove listy se prevezme z fungujiciho home overlay 683BI.
+ */
+@media(max-width:899px) {
+  #taskModal .lnEditorDateTime683BJ {
+    position:fixed;
+    inset:0 0 auto 0;
+    z-index:10;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    box-sizing:border-box;
+    height:24px;
+    width:100%;
+    padding:0 max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));
+    margin:0;
+    background:transparent;
+    color:var(--color-editor-text, var(--color-text));
+    pointer-events:none;
+  }
+  #taskModal .lnEditorDateTime683BJ .lnHomeDate683BC,
+  #taskModal .lnEditorDateTime683BJ .lnHomeTime683BC {
+    font-size:clamp(1rem,4vw,1.18rem);
+    font-weight:700;
+    line-height:1.1;
+    color:inherit;
+    font-variant-numeric:tabular-nums;
+  }
+  body:has(#lnHomeDateTime683BC.ln683BG-system-overlay) #taskModal .lnEditorDateTime683BJ,
+  body:not(.lubaSyncTrafficUserHidden):has(#syncTrafficBar:not([hidden])) #taskModal .lnEditorDateTime683BJ {
+    visibility:hidden!important;
+  }
+  body.ln-vd-picking #taskModal .lnEditorDateTime683BJ,
+  body.ln-vd-picking #taskModal #lnEditorDate683BJ,
+  body.ln-vd-picking #taskModal #lnEditorTime683BJ {
+    pointer-events:auto!important;
+  }
+}
+@media(min-width:900px) {
+  #taskModal .lnEditorDateTime683BJ {display:none;}
+}
+/* Fix 683BJ: tlacitka v rozbalenych radcich nesmi drtit hodnoty na pismena. */
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting > span:first-child {
+  min-width:0;
+  flex:1 1 auto;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSelectButton {
+  min-width:max-content!important;
+  flex:0 1 auto;
+  max-width:63%;
+  word-break:normal;
+  overflow-wrap:normal;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSelectButton > span:first-child {
+  white-space:normal;
+  overflow-wrap:normal;
+}
+/* V otevrenem editoru zobrazujeme jen jedny hodiny, nikoliv domaci radek
+   pod editorovou fullscreen vrstvou. */
+body:has(#taskModal:not([hidden])) #lnHomeDateTime683BC {
+  visibility:hidden!important;
+}
