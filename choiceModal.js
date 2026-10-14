@@ -367,6 +367,62 @@
        po otevření modalu znovu objevit systémová klávesnice. */
   }
 
+  /* 683BT - opt-in time picker for the fixed tomorrow snooze choice.
+   * No effect on existing number/choice modal paths. */
+  function otevriCasovyModal({ nadpis, popisek, hodnota, poPotvrzeni, poZruseni } = {}) {
+    vytvorModalPokudChybi();
+    predchoziFokus = document.activeElement;
+    nadpisElement.textContent = nadpis || choiceT("settings.time", "Čas");
+    moznostiElement.replaceChildren();
+    const pole = document.createElement("label");
+    pole.className = "choiceDialogFieldLabel";
+    pole.textContent = popisek || choiceT("settings.time", "Čas");
+    const vstup = document.createElement("input");
+    vstup.className = "choiceDialogInput";
+    vstup.type = "time";
+    vstup.step = "60";
+    vstup.value = /^([01]\d|2[0-3]):[0-5]\d$/.test(hodnota || "") ? hodnota : "08:00";
+    pole.append(vstup);
+    const chyba = document.createElement("p");
+    chyba.className = "choiceDialogError";
+    chyba.hidden = true;
+    const akce = document.createElement("div");
+    akce.className = "choiceDialogActions";
+    const zrusit = document.createElement("button");
+    zrusit.type = "button";
+    zrusit.className = "choiceDialogSecondary";
+    zrusit.textContent = choiceT("actions.cancel", "Zrušit");
+    const ulozit = document.createElement("button");
+    ulozit.type = "button";
+    ulozit.className = "choiceDialogSave";
+    ulozit.textContent = choiceT("actions.apply", "Použít");
+    akce.append(zrusit, ulozit);
+    moznostiElement.append(pole, chyba, akce);
+    zrusit.addEventListener("click", () => {
+      if (typeof poZruseni === "function") poZruseni();
+      else zavriVyberovyModal();
+    });
+    ulozit.addEventListener("click", async () => {
+      const value = vstup.value;
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+        chyba.textContent = choiceT("settings.validTime", "Vyber platný čas.");
+        chyba.hidden = false;
+        return;
+      }
+      ulozit.disabled = true;
+      try {
+        if (typeof poPotvrzeni === "function") await poPotvrzeni(value);
+        else zavriVyberovyModal();
+      } catch (error) {
+        console.error("Časový modal: uložení selhalo.", error);
+        ulozit.disabled = false;
+      }
+    });
+    vstup.addEventListener("input", () => { chyba.hidden = true; });
+    pripravKlavesniciProModal();
+    modal.hidden = false;
+  }
+
   function otevriNastavovaciModal({
     nadpis = choiceT("settings.title", "Nastavení"),
     polozky = [],
@@ -416,6 +472,26 @@
             const spoustecVlastnihoVstupu =
               vlastniVstup?.spoustecHodnota ||
               "vlastni";
+
+            const casovyVstup = polozka.casovyVstup;
+            if (casovyVstup && novaHodnota === (casovyVstup.spoustecHodnota || "upravit_cas")) {
+              otevriCasovyModal({
+                nadpis: casovyVstup.nadpis || polozka.popisek,
+                popisek: casovyVstup.popisek,
+                hodnota: (typeof casovyVstup.ziskejCas === "function"
+                  ? casovyVstup.ziskejCas(pracovniHodnoty[polozka.klic])
+                  : String(pracovniHodnoty[polozka.klic] || "").slice(-5)) || casovyVstup.vychoziHodnota,
+                poPotvrzeni: (cas) => {
+                  const nova = casovyVstup.vytvorHodnotu(cas);
+                  pracovniHodnoty[polozka.klic] = nova;
+                  polozka.hodnota = nova;
+                  polozka.zobrazeni = casovyVstup.vytvorZobrazeni(nova);
+                  otevriNastavovaciModal({ nadpis, polozky, poUlozeni });
+                },
+                poZruseni: () => otevriNastavovaciModal({ nadpis, polozky, poUlozeni })
+              });
+              return;
+            }
 
             if (
               vlastniVstup &&

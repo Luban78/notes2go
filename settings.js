@@ -628,12 +628,12 @@ const motivy = nactenaTemata.map(tema => ({
 openReminderDelaySettingsButton?.addEventListener(
   "click",
   () => {
-    // 683BR: Puvodni ctyri volby zustavaji, vlastni interval pro kazdou zvlast.
+    // 683BT: 3 intervaly + pevna 4. volba Zitra s nastavitelnym casem.
     const vychozi = {
       volba1: "15",
       volba2: "30",
       volba3: "60",
-      volba4: "tomorrow"
+      volba4: "tomorrow@08:00"
     };
     let ulozene = {};
     try {
@@ -651,9 +651,9 @@ openReminderDelaySettingsButton?.addEventListener(
     const ulozeneRychleOdlozeni = {};
     Object.keys(vychozi).forEach((klic) => {
       const hodnota = String(ulozene[klic] ?? vychozi[klic]);
-      ulozeneRychleOdlozeni[klic] =
-        hodnota === "tomorrow" && klic === "volba4" || spravneMinuty(hodnota)
-          ? hodnota : vychozi[klic];
+      ulozeneRychleOdlozeni[klic] = klic === "volba4"
+        ? (window.LubaNoteTomorrowSnooze683BT?.parse(hodnota) || vychozi[klic])
+        : (spravneMinuty(hodnota) ? hodnota : vychozi[klic]);
     });
 
     const snoozeMin = (count) =>
@@ -686,11 +686,11 @@ openReminderDelaySettingsButton?.addEventListener(
       { hodnota: "120", popisek: snoozeHours(2) },
       { hodnota: "180", popisek: snoozeHours(3) }
     ]);
-    const moznosti4 = vyber([
-      { hodnota: "tomorrow", popisek: prelozNastaveni("reminders.tomorrow8", "Zítra 8:00") },
-      { hodnota: "120", popisek: snoozeHours(2) },
-      { hodnota: "180", popisek: snoozeHours(3) }
-    ]);
+    const zitra = window.LubaNoteTomorrowSnooze683BT;
+    const moznosti4 = [{
+      hodnota: "upravit_cas",
+      popisek: zitra.title()
+    }];
     const zobrazeni = (hodnota, moznosti) => {
       const pevna = moznosti.find((m) => m.hodnota === hodnota);
       return pevna?.popisek || (spravneMinuty(hodnota) ? snoozeMin(Number(hodnota)) : "—");
@@ -716,16 +716,27 @@ openReminderDelaySettingsButton?.addEventListener(
         klic,
         popisek: prelozNastaveni(`settings.choice${i + 1}`, `${i + 1}. volba`),
         hodnota: ulozeneRychleOdlozeni[klic],
-        zobrazeni: zobrazeni(ulozeneRychleOdlozeni[klic], moznosti),
+        zobrazeni: klic === "volba4" ? zitra.format(ulozeneRychleOdlozeni[klic])
+          : zobrazeni(ulozeneRychleOdlozeni[klic], moznosti),
         moznosti,
-        vlastniVstup
+        ...(klic === "volba4" ? {
+          casovyVstup: {
+            spoustecHodnota: "upravit_cas",
+            nadpis: zitra.title(),
+            popisek: prelozNastaveni("settings.time", "Čas"),
+            vychoziHodnota: zitra.time(ulozeneRychleOdlozeni[klic]),
+            vytvorHodnotu: cas => `tomorrow@${cas}`,
+            vytvorZobrazeni: val => zitra.format(val)
+          }
+        } : { vlastniVstup })
       })),
       poUlozeni: (hodnoty) => {
         const bezpecne = {};
         Object.keys(vychozi).forEach((klic) => {
           const nova = String(hodnoty?.[klic] ?? "");
-          bezpecne[klic] = nova === "tomorrow" && klic === "volba4"
-            ? nova : spravneMinuty(nova) ? String(Math.round(Number(nova)))
+          bezpecne[klic] = klic === "volba4"
+            ? (zitra.parse(nova) || ulozeneRychleOdlozeni[klic])
+            : spravneMinuty(nova) ? String(Math.round(Number(nova)))
             : ulozeneRychleOdlozeni[klic];
         });
         localStorage.setItem("rychleOdlozeni", JSON.stringify(bezpecne));

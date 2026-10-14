@@ -2217,7 +2217,7 @@ function openReminderQuickMenu(
   }
 
 const vychoziRychleOdlozeni = {
-  volba1: "15", volba2: "30", volba3: "60", volba4: "tomorrow"
+  volba1: "15", volba2: "30", volba3: "60", volba4: "tomorrow@08:00"
 };
 let ulozeneRychleOdlozeni = {};
 try {
@@ -2234,12 +2234,13 @@ const platnyInterval = (hodnota) => {
 const rychleOdlozeni = {};
 Object.keys(vychoziRychleOdlozeni).forEach((klic) => {
   const hodnota = String(ulozeneRychleOdlozeni[klic] ?? "");
-  rychleOdlozeni[klic] = (klic === "volba4" && hodnota === "tomorrow") ||
-    platnyInterval(hodnota) ? hodnota : vychoziRychleOdlozeni[klic];
+  rychleOdlozeni[klic] = klic === "volba4"
+    ? (window.LubaNoteTomorrowSnooze683BT?.parse(hodnota) || vychoziRychleOdlozeni[klic])
+    : (platnyInterval(hodnota) ? hodnota : vychoziRychleOdlozeni[klic]);
 });
 const formatOdlozeni = (hodnota) => {
-  if (hodnota === "tomorrow") {
-    return remindersT("reminders.tomorrow8", "Zítra 8:00");
+  if (window.LubaNoteTomorrowSnooze683BT?.parse(hodnota)) {
+    return window.LubaNoteTomorrowSnooze683BT.format(hodnota);
   }
   const minuty = Number(hodnota);
   if (!platnyInterval(hodnota)) return "—";
@@ -2655,48 +2656,20 @@ async function postponeReminder(minutes) {
 
 
 async function postponeReminderToTomorrowMorning() {
-  let ulozenaVolba = "tomorrow";
-  try {
-    const data = JSON.parse(localStorage.getItem("rychleOdlozeni") || "null");
-    ulozenaVolba = String(data?.volba4 ?? "tomorrow");
-  } catch (_) {}
-
-  if (ulozenaVolba !== "tomorrow") {
-    const minuty = Number(ulozenaVolba);
-    if (Number.isInteger(minuty) && minuty >= 1 && minuty <= 10080) {
-      await postponeReminder(minuty);
-      return;
-    }
-    // Poskozenou/starou hodnotu bereme jako bezpecny default zitra rano.
-  }
-
   const entry = getSelectedReminderEntry();
-  
-  if (!entry) {
-    return;
-  }
-  
-  const tomorrow = new Date();
-  
-  tomorrow.setDate(
-    tomorrow.getDate() + 1
-  );
-  
-  tomorrow.setHours(8, 0, 0, 0);
-  
+  if (!entry) return;
+  let stored = null;
+  try {
+    stored = JSON.parse(localStorage.getItem("rychleOdlozeni") || "null")?.volba4;
+  } catch (_) {}
+  // 683BT: fourth button never means minutes, even with legacy saved settings.
+  const tomorrow = window.LubaNoteTomorrowSnooze683BT.nextDate(stored);
   if (entry.kind === "planned") {
-    await savePlannedReminderDate(
-      entry.id,
-      tomorrow
-    );
+    await savePlannedReminderDate(entry.id, tomorrow);
   } else {
-    await saveReminderDate(
-      entry.id,
-      tomorrow
-    );
+    await saveReminderDate(entry.id, tomorrow);
   }
 }
-
 
 async function saveCustomReminderDate() {
   const entry = getSelectedReminderEntry();

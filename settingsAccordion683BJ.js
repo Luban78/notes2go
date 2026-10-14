@@ -12,7 +12,7 @@
       ['Vzhled', 'Motiv, písmo, ikony', 'Zde nastavíš vzhled aplikace, velikost písma a ovládací ikony hlavní obrazovky.'],
       ['Editor a klávesnice', 'Psaní a chování editoru', 'Tady nastavíš klávesnici a místo, na kterém se poznámka po otevření zobrazí. Velikost zobrazení textu editoru a znaků LubaKeyboard lze nastavit zvlášť. Typ písma editoru si lze vybrat samostatně.'],
       ['Plán a připomínky', 'Odložení, připomenutí, úklid', 'Připomínky při plánování a odložení úkolů. Úklid po termínu řeší staré nedokončené položky Planneru a vypnutí jednorázových připomínek.'],
-      ['Bezpečnost a přihlášení', 'Účet, hesla a ochrana dat', 'Nastavení přihlašovacího hesla a E2E přístupu je zatím v přípravě. Reset přihlášení neznamená automatické obnovení šifrovacích klíčů.'],
+      ['Bezpečnost a přihlášení', 'Účet, hesla a ochrana dat', 'Zde najdeš přehled účtu, změnu přihlašovacího hesla a stav E2E. Hlavní šifrovací heslo se nemění; reset přihlášení automaticky neobnoví šifrovací klíče.'],
       ['Data, soubory a zálohy', 'Export, import, úložiště', 'Zálohy lze exportovat a importovat. Nastavení složek a bezpečný převod LOCAL ↔ SYNC budou připraveny až po samostatném ověření.'],
       ['Jazyk a výuka', 'Jazyk, slovník a slovíčka', 'Zde si vybereš jazyk LubaNote a otevřeš svůj slovník nebo výuku slovíček.'],
       ['Účet a sdílení', 'Uživatelské jméno a sdílení', 'Veřejné uživatelské jméno se používá ke sdílení. Tvůj e-mail se ostatním nezobrazuje.'],
@@ -22,7 +22,7 @@
       ['Appearance','Theme, text and icons','Configure the app theme, text size and home toolbar icons.'],
       ['Editor and keyboard','Writing and editor behavior','Keyboard and note opening position. Editor display text size and key-label size can be adjusted separately. Choose the editor font separately.'],
       ['Planner and reminders','Snooze, reminders and cleanup','Reminder defaults, snooze choices and handling of past-due planned items.'],
-      ['Security and sign-in','Account, passwords and protection','Account password and E2E access controls are planned. Resetting sign-in does not restore encryption keys.'],
+      ['Security and sign-in','Account, passwords and protection','Account status, sign-in password change and local E2E state. The main E2E password remains separate. Restoring sign-in does not restore encryption keys.'],
       ['Data, files and backups','Export, import and storage','Backups are available. Folder selection and safe LOCAL ↔ SYNC conversion need separate verification.'],
       ['Language and learning','Language, dictionary and words','Choose the app language, manage your dictionary and language learning.'],
       ['Account and sharing','Username and sharing','Your public username is used for sharing. Your email address is not public.'],
@@ -32,7 +32,7 @@
       ['Vzhľad','Motív, písmo, ikony','Nastavenia motívu, veľkosti písma a ikon hlavnej obrazovky.'],
       ['Editor a klávesnica','Písanie a správanie editora','Klávesnica a poloha pri otvorení poznámky. Veľkosť zobrazenia textu editora a znakov LubaKeyboard nastavíš samostatne. Písmo editora si môžeš vybrať samostatne.'],
       ['Plán a pripomienky','Odloženie, upozornenia, čistenie','Nastavenia pripomienok, odkladania a starých plánovaných položiek.'],
-      ['Bezpečnosť a prihlásenie','Účet, heslá a ochrana dát','Nastavenia hesiel a E2E prístupu pripravujeme. Reset prihlásenia neobnovuje šifrovacie kľúče.'],
+      ['Bezpečnosť a prihlásenie','Účet, heslá a ochrana dát','Prehľad účtu, zmena prihlasovacieho hesla a stav E2E. Hlavné E2E heslo sa nemení. Reset prihlásenia neobnovuje kľúče.'],
       ['Dáta, súbory a zálohy','Export, import, úložisko','Zálohy sú k dispozícii. Priečinky a bezpečný prevod LOCAL ↔ SYNC vyžadujú overenie.'],
       ['Jazyk a výučba','Jazyk, slovník a slovíčka','Výber jazyka, vlastný slovník a výučba jazykov.'],
       ['Účet a zdieľanie','Používateľské meno a zdieľanie','Verejné meno slúži na zdieľanie, e-mail nie je verejný.'],
@@ -42,7 +42,7 @@
       ['Darstellung','Design, Schrift und Symbole','Design, Schriftgröße und Symbole der Startseite.'],
       ['Editor und Tastatur','Schreiben und Editorverhalten','Tastatur und Öffnungsposition. Editor-Textanzeige und Tastenbeschriftungen lassen sich separat anpassen. Die Editor-Schriftart kann separat ausgewählt werden.'],
       ['Planung und Erinnerungen','Schlummern und Aufräumen','Erinnerungen, Schlummerfunktionen und abgelaufene Planungen.'],
-      ['Sicherheit und Anmeldung','Konto und Datenschutz','Passwort- und E2E-Einstellungen sind geplant. Ein Login-Reset stellt keine Schlüssel wieder her.'],
+      ['Sicherheit und Anmeldung','Konto und Datenschutz','Kontoübersicht, Anmeldepasswort ändern und lokaler E2E-Status. Das E2E-Hauptpasswort bleibt separat; Login-Reset stellt keine Schlüssel wieder her.'],
       ['Daten, Dateien und Backups','Export, Import, Speicher','Backups sind verfügbar. Ordner und LOCAL ↔ SYNC benötigen weitere Prüfung.'],
       ['Sprache und Lernen','Sprache und Wörterbuch','Sprache, persönliches Wörterbuch und Vokabeltraining.'],
       ['Konto und Teilen','Benutzername und Teilen','Der öffentliche Benutzername dient zum Teilen; Ihre E-Mail bleibt privat.'],
@@ -52,7 +52,7 @@
       ['Wygląd','Motyw, tekst i ikony','Motyw aplikacji, rozmiar tekstu i ikony ekranu głównego.'],
       ['Edytor i klawiatura','Pisanie i działanie edytora','Klawiatura i pozycja otwierania notatki. Rozmiar tekstu w edytorze i oznaczeń klawiszy można ustawić oddzielnie. Czcionkę edytora można wybrać oddzielnie.'],
       ['Plan i przypomnienia','Drzemka i porządkowanie','Przypomnienia, odkładanie i przeterminowane elementy planu.'],
-      ['Bezpieczeństwo i logowanie','Konto i ochrona danych','Hasła i opcje E2E są w przygotowaniu. Reset logowania nie przywraca kluczy.'],
+      ['Bezpieczeństwo i logowanie','Konto i ochrona danych','Stan konta, zmiana hasła logowania i stan E2E. Hasło główne E2E pozostaje oddzielne. Reset logowania nie przywraca kluczy.'],
       ['Dane, pliki i kopie','Eksport, import, pamięć','Kopie zapasowe są dostępne. Foldery i LOCAL ↔ SYNC wymagają testów.'],
       ['Język i nauka','Język, słownik i słówka','Język aplikacji, słownik i nauka języków.'],
       ['Konto i udostępnianie','Nazwa użytkownika','Publiczna nazwa służy do udostępniania. E-mail pozostaje prywatny.'],
@@ -62,7 +62,7 @@
       ['Apariencia','Tema, letra e iconos','Tema, tamaño del texto e iconos de la pantalla principal.'],
       ['Editor y teclado','Escritura y comportamiento','Teclado y posición al abrir notas. El tamaño visible del editor y de las letras del teclado se ajusta por separado. También puedes elegir el tipo de letra del editor.'],
       ['Plan y recordatorios','Posponer y limpiar','Recordatorios, aplazamientos y tareas vencidas.'],
-      ['Seguridad e inicio de sesión','Cuenta y protección','Los controles de contraseñas y E2E están previstos. Restablecer el acceso no recupera claves.'],
+      ['Seguridad e inicio de sesión','Cuenta y protección','Cuenta, cambio de contraseña de acceso y estado E2E local. La contraseña E2E es distinta; restablecer el acceso no restaura las claves.'],
       ['Datos, archivos y copias','Exportar, importar, almacenamiento','Las copias están disponibles. Carpetas y LOCAL ↔ SYNC requieren pruebas.'],
       ['Idioma y aprendizaje','Idioma y vocabulario','Idioma de la aplicación, diccionario y aprendizaje.'],
       ['Cuenta y compartir','Nombre de usuario','El nombre público se usa para compartir; tu correo sigue privado.'],
@@ -73,32 +73,32 @@
   // 683BR: Napoveda k jednotlivym polozkam - ne obecny text cele kategorie.
   const POLOZKOVA_NAPOVEDA = {
     cs: {
-      delay: ['Rychlé odložení', 'Nastaví čtyři tlačítka v panelu připomínky. Každému můžeš zadat vlastní počet minut (1 až 10080). Odložení se počítá od původního budoucího termínu, nebo od teď, pokud už připomínka prošla. Přesné datum a čas nastavíš přímo v panelu tlačítkem Termín.'],
+      delay: ['Rychlé odložení', 'Nastaví čtyři tlačítka v panelu připomínky. První tři volby jsou vlastní intervaly (1 až 10080 minut); čtvrtá je vždy Zítra s nastavitelným časem. Odložení se počítá od původního budoucího termínu, nebo od teď, pokud už připomínka prošla. Přesné datum a čas nastavíš přímo v panelu tlačítkem Termín.'],
       planning: ['Připomínka u nových termínů', 'Určuje výchozí zapnutí zvonku při vytváření nových plánovaných úkolů a termínů. Nezapíná zpětně upozornění existujícím položkám. Každý nový termín můžeš nastavit zvlášť.'],
       cleanup: ['Úklid po termínu', 'Po potvrzení pravidla se po nastaveném počtu dní odstraní staré NEDOKONČENÉ položky Planneru a vypnou prošlé jednorázové připomínky. Celé poznámky se nemažou, dokončené úkoly a opakované připomínky se touto funkcí neodstraňují. Volba Nikdy úklid vypne.']
     },
     en: {
-      delay: ['Quick snooze', 'Sets four buttons in the reminder sheet. Each can use a custom interval in minutes (1–10080). Snoozing starts from the future due time, or now if overdue. For an exact date and time, use Date/Time in the sheet.'],
+      delay: ['Quick snooze', 'Sets four buttons in the reminder sheet. The first three use custom minute intervals (1–10080); the fourth always means tomorrow at a chosen time. Snoozing starts from the future due time, or now if overdue. For an exact date and time, use Date/Time in the sheet.'],
       planning: ['Reminders for new plans', 'Controls whether reminders default to on when creating new planned tasks and dates. Existing items are not changed. You can override this per item.'],
       cleanup: ['Overdue cleanup', 'After confirmation, removes old INCOMPLETE Planner items and switches off old one-time reminders after the selected days. It does not delete whole notes, completed tasks or repeating reminders. Never disables cleanup.']
     },
     sk: {
-      delay: ['Rýchle odloženie', 'Štyri tlačidlá v okne pripomienky. Každému nastavíš vlastný počet minút (1 až 10080). Ak termín už prešiel, čas sa počíta od teraz. Presný dátum a čas nastavíš cez Termín.'],
+      delay: ['Rýchle odloženie', 'Štyri tlačidlá v okne pripomienky. Prvé tri voľby sú intervaly 1–10080 minút. Štvrtá je vždy Zajtra v zvolenom čase. Ak termín už prešiel, čas sa počíta od teraz. Presný dátum a čas nastavíš cez Termín.'],
       planning: ['Pripomienky pri nových termínoch', 'Určuje predvolené zapnutie pripomienky pri nových plánovaných úlohách a termínoch. Existujúce položky nemení.'],
       cleanup: ['Čistenie po termíne', 'Po potvrdení odstráni staré NEDOKONČENÉ položky Plánovača a vypne staré jednorazové pripomienky. Nemaže celé poznámky, dokončené úlohy ani opakované pripomienky. Nikdy čistenie vypne.']
     },
     de: {
-      delay: ['Schnell schlummern', 'Vier Tasten im Erinnerungsfenster. Jede kann ein eigenes Intervall in Minuten (1–10080) erhalten. Ist der Termin vorbei, gilt die Zeit ab jetzt. Ein genaues Datum/Uhrzeit lässt sich im Fenster einstellen.'],
+      delay: ['Schnell schlummern', 'Vier Tasten im Erinnerungsfenster. Die ersten drei sind Minutenintervalle (1–10080), die vierte ist immer Morgen mit wählbarer Uhrzeit. Ist der Termin vorbei, gilt die Zeit ab jetzt. Ein genaues Datum/Uhrzeit lässt sich im Fenster einstellen.'],
       planning: ['Neue Termine erinnern', 'Legt fest, ob neue Planungen standardmäßig eine Erinnerung erhalten. Bestehende Einträge bleiben unverändert; jeder Termin ist einzeln anpassbar.'],
       cleanup: ['Überfälliges aufräumen', 'Nach Bestätigung werden alte UNERLEDIGTE Planner-Einträge entfernt und einmalige Erinnerungen deaktiviert. Ganze Notizen, erledigte Aufgaben und wiederkehrende Erinnerungen bleiben erhalten. Nie deaktiviert die Bereinigung.']
     },
     pl: {
-      delay: ['Szybka drzemka', 'Cztery przyciski w oknie przypomnienia. Każdy może mieć własny interwał 1–10080 minut. Po terminie czas liczy się od teraz. Dokładną datę i godzinę ustawisz w oknie.'],
+      delay: ['Szybka drzemka', 'Cztery przyciski w oknie przypomnienia. Pierwsze trzy to interwały 1–10080 minut. Czwarta to zawsze jutro o wybranej godzinie. Po terminie czas liczy się od teraz. Dokładną datę i godzinę ustawisz w oknie.'],
       planning: ['Przypomnienia nowych terminów', 'Domyślnie włącza przypomnienia dla nowo planowanych zadań i terminów. Nie zmienia istniejących pozycji.'],
       cleanup: ['Porządki po terminie', 'Po potwierdzeniu usuwa stare NIEUKOŃCZONE pozycje Planu i wyłącza dawne jednorazowe przypomnienia. Nie usuwa całych notatek, ukończonych zadań ani przypomnień cyklicznych. Nigdy wyłącza czyszczenie.']
     },
     es: {
-      delay: ['Posponer rápido', 'Cuatro botones en el recordatorio. Cada uno admite un intervalo propio de 1–10080 minutos. Si ya venció, se calcula desde ahora. La fecha y hora exactas se eligen en el panel.'],
+      delay: ['Posponer rápido', 'Cuatro botones en el recordatorio. Las tres primeras son intervalos de 1–10080 minutos. La cuarta es siempre mañana a la hora elegida. Si ya venció, se calcula desde ahora. La fecha y hora exactas se eligen en el panel.'],
       planning: ['Avisos en nuevos planes', 'Activa de forma predeterminada los avisos de nuevas tareas y fechas planificadas. No modifica elementos existentes.'],
       cleanup: ['Limpiar vencidos', 'Tras confirmar, elimina elementos ANTIGUOS E INCOMPLETOS del plan y desactiva recordatorios únicos vencidos. No borra notas enteras, tareas completadas ni recordatorios periódicos. Nunca desactiva la limpieza.']
     }
