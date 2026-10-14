@@ -76,13 +76,25 @@
 html[data-ln683bn-editor-size="custom"] .ln-v2-editor {
   font-size:var(--ln683bn-editor-display-size) !important;
 }
-/* Nedotýkáme se výšky, šířky ani rozestupů kláves. Jen text znakových
- * tlačítek. Výchozích 100 % nepřidá žádné override pravidlo. */
-html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body .ln-lk-key:not(.ln-lk-fn):not(.ln-lk-nav):not(.ln-lk-back):not(.ln-lk-enter):not(.ln-lk-space) {
-  font-size: calc(clamp(0.875rem, 4.3vw, 1.1875rem) * var(--ln683bn-key-label-scale, 1));
+/* 683BO – fonty LubaKeyboard: opravena kolize s mobilni typografii
+ * v style.css, kde body .ln-lk-key ma font-size s !important.
+ * Pouze skutecne znaky, ne ovladaci klavesy (Shift, Backspace, Enter,
+ * mezernik, rychle volby). Vyska, sirka a rozlozeni zustavaji puvodni.
+ * Vychozi 100 % se resi odstranenim data atributu v JS 683BN. */
+@media (max-width: 1099px), (hover: none), (pointer: coarse) {
+  html[data-ln683bn-key-labels="custom"] body .ln-luba-keyboard .ln-lk-body .ln-lk-row:not(.ln-lk-bottom) .ln-lk-key[data-lk-action="text"] {
+    font-size: calc(1.25rem * var(--ln683bn-key-label-scale, 1)) !important;
+  }
+  html[data-ln683bn-key-labels="custom"] body .ln-luba-keyboard .ln-lk-body.is-standard .ln-lk-standard-number-row .ln-lk-key[data-lk-action="text"] {
+    font-size: calc(1.20rem * var(--ln683bn-key-label-scale, 1)) !important;
+  }
 }
-@media(max-height:540px) {
-  html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body .ln-lk-key:not(.ln-lk-fn):not(.ln-lk-nav):not(.ln-lk-back):not(.ln-lk-enter):not(.ln-lk-space) {
-    font-size: calc(0.875rem * var(--ln683bn-key-label-scale, 1));
+/* Ostatni layouty (desktop) zachovaji puvodni font vypocteny z VW. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body .ln-lk-row:not(.ln-lk-bottom) .ln-lk-key[data-lk-action="text"] {
+    font-size: calc(clamp(0.875rem, 4.3vw, 1.1875rem) * var(--ln683bn-key-label-scale, 1)) !important;
+  }
+  html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body.is-standard .ln-lk-standard-number-row .ln-lk-key[data-lk-action="text"] {
+    font-size: calc(0.9375rem * var(--ln683bn-key-label-scale, 1)) !important;
   }
 }
