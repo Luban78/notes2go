@@ -1,0 +1,88 @@
+/* 683BN – jen lokální zobrazení. Bez zásahu do modelu, selection a výšky kláves. */
+#settingsModal.ln683BJEnabled .ln683BNPreferences {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--color-border, #255265);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--color-surface, #0c2b3c);
+  margin-bottom: 8px;
+}
+#settingsModal.ln683BJEnabled .ln683BNRow {
+  display:flex;
+  gap: 10px;
+  align-items: center;
+  justify-content:space-between;
+  padding: 12px 10px;
+  min-width:0;
+}
+#settingsModal.ln683BJEnabled .ln683BNRow + .ln683BNRow {
+  border-top: 1px solid var(--color-border, #255265);
+}
+#settingsModal.ln683BJEnabled .ln683BNDescription {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  flex:1 1 auto;
+}
+#settingsModal.ln683BJEnabled .ln683BNDescription strong {
+  color: var(--color-text, #f2f7fa);
+  font-size: .95rem;
+  font-weight: 550;
+  line-height: 1.25;
+}
+#settingsModal.ln683BJEnabled .ln683BNDescription small {
+  font-size:.73rem;
+  color:var(--color-text-secondary, #a7c4d1);
+  line-height:1.25;
+}
+#settingsModal.ln683BJEnabled .ln683BNControls {
+  display:flex;
+  flex:0 0 auto;
+  align-items:center;
+  gap:4px;
+}
+#settingsModal.ln683BJEnabled .ln683BNControls button {
+  display:grid;
+  place-items:center;
+  margin:0;
+  min-width:32px;
+  height:34px;
+  border:1px solid var(--color-border, #255265);
+  border-radius:9px;
+  background:var(--color-background, #0a2430);
+  color:var(--color-text, #fff);
+  font-weight:700;
+  font-size:1.15rem;
+  padding:0 6px;
+  cursor:pointer;
+}
+#settingsModal.ln683BJEnabled .ln683BNControls button.ln683BNValue {
+  min-width:65px;
+  max-width:95px;
+  font-size:.80rem;
+  font-weight:700;
+  color:var(--color-accent, #26b6ce);
+  white-space:nowrap;
+}
+#settingsModal.ln683BJEnabled .ln683BNControls button:disabled {opacity:.35; cursor:default;}
+@media (max-width:370px) {
+  #settingsModal.ln683BJEnabled .ln683BNRow {flex-wrap:wrap;}
+  #settingsModal.ln683BJEnabled .ln683BNControls {margin-left:auto;}
+}
+/* Editor V2 při překreslení zapisuje základní font inline z modelu poznámky.
+ * Výslovně nastavená zobrazovací preference proto přebije pouze tento
+ * VIZUÁLNÍ údaj, nikoliv uložený dokument nebo velikosti vybraných segmentů. */
+html[data-ln683bn-editor-size="custom"] .ln-v2-editor {
+  font-size:var(--ln683bn-editor-display-size) !important;
+}
+/* Nedotýkáme se výšky, šířky ani rozestupů kláves. Jen text znakových
+ * tlačítek. Výchozích 100 % nepřidá žádné override pravidlo. */
+html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body .ln-lk-key:not(.ln-lk-fn):not(.ln-lk-nav):not(.ln-lk-back):not(.ln-lk-enter):not(.ln-lk-space) {
+  font-size: calc(clamp(0.875rem, 4.3vw, 1.1875rem) * var(--ln683bn-key-label-scale, 1));
+}
+@media(max-height:540px) {
+  html[data-ln683bn-key-labels="custom"] .ln-luba-keyboard .ln-lk-body .ln-lk-key:not(.ln-lk-fn):not(.ln-lk-nav):not(.ln-lk-back):not(.ln-lk-enter):not(.ln-lk-space) {
+    font-size: calc(0.875rem * var(--ln683bn-key-label-scale, 1));
+  }
+}

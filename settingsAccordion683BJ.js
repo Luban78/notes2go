@@ -10,7 +10,7 @@
   const PREKLADY = {
     cs: [
       ['Vzhled', 'Motiv, písmo, ikony', 'Zde nastavíš vzhled aplikace, velikost písma a ovládací ikony hlavní obrazovky.'],
-      ['Editor a klávesnice', 'Psaní a chování editoru', 'Tady nastavíš klávesnici a místo, na kterém se poznámka po otevření zobrazí. Velikost písma editoru, fonty a znaky klávesnice připravujeme samostatně.'],
+      ['Editor a klávesnice', 'Psaní a chování editoru', 'Tady nastavíš klávesnici a místo, na kterém se poznámka po otevření zobrazí. Velikost zobrazení textu editoru a znaků LubaKeyboard lze nastavit zvlášť. Výběr typu písma doplníme později.'],
       ['Plán a připomínky', 'Odložení, připomenutí, úklid', 'Připomínky při plánování a odložení úkolů. Položka Mazat po termínu určuje zacházení s prošlými plánovanými položkami.'],
       ['Bezpečnost a přihlášení', 'Účet, hesla a ochrana dat', 'Nastavení přihlašovacího hesla a E2E přístupu je zatím v přípravě. Reset přihlášení neznamená automatické obnovení šifrovacích klíčů.'],
       ['Data, soubory a zálohy', 'Export, import, úložiště', 'Zálohy lze exportovat a importovat. Nastavení složek a bezpečný převod LOCAL ↔ SYNC budou připraveny až po samostatném ověření.'],
@@ -20,7 +20,7 @@
     ],
     en: [
       ['Appearance','Theme, text and icons','Configure the app theme, text size and home toolbar icons.'],
-      ['Editor and keyboard','Writing and editor behavior','Keyboard and note opening position. Editor font and key-label sizing will be added separately.'],
+      ['Editor and keyboard','Writing and editor behavior','Keyboard and note opening position. Editor display text size and key-label size can be adjusted separately. More fonts will follow.'],
       ['Planner and reminders','Snooze, reminders and cleanup','Reminder defaults, snooze choices and handling of past-due planned items.'],
       ['Security and sign-in','Account, passwords and protection','Account password and E2E access controls are planned. Resetting sign-in does not restore encryption keys.'],
       ['Data, files and backups','Export, import and storage','Backups are available. Folder selection and safe LOCAL ↔ SYNC conversion need separate verification.'],
@@ -30,7 +30,7 @@
     ],
     sk: [
       ['Vzhľad','Motív, písmo, ikony','Nastavenia motívu, veľkosti písma a ikon hlavnej obrazovky.'],
-      ['Editor a klávesnica','Písanie a správanie editora','Klávesnica a poloha pri otvorení poznámky. Písmo editora a klávesnice doplníme samostatne.'],
+      ['Editor a klávesnica','Písanie a správanie editora','Klávesnica a poloha pri otvorení poznámky. Veľkosť zobrazenia textu editora a znakov LubaKeyboard nastavíš samostatne. Fonty doplníme neskôr.'],
       ['Plán a pripomienky','Odloženie, upozornenia, čistenie','Nastavenia pripomienok, odkladania a starých plánovaných položiek.'],
       ['Bezpečnosť a prihlásenie','Účet, heslá a ochrana dát','Nastavenia hesiel a E2E prístupu pripravujeme. Reset prihlásenia neobnovuje šifrovacie kľúče.'],
       ['Dáta, súbory a zálohy','Export, import, úložisko','Zálohy sú k dispozícii. Priečinky a bezpečný prevod LOCAL ↔ SYNC vyžadujú overenie.'],
@@ -40,7 +40,7 @@
     ],
     de: [
       ['Darstellung','Design, Schrift und Symbole','Design, Schriftgröße und Symbole der Startseite.'],
-      ['Editor und Tastatur','Schreiben und Editorverhalten','Tastatur und Öffnungsposition. Weitere Schrifteinstellungen folgen separat.'],
+      ['Editor und Tastatur','Schreiben und Editorverhalten','Tastatur und Öffnungsposition. Editor-Textanzeige und Tastenbeschriftungen lassen sich separat anpassen. Weitere Schriftarten folgen.'],
       ['Planung und Erinnerungen','Schlummern und Aufräumen','Erinnerungen, Schlummerfunktionen und abgelaufene Planungen.'],
       ['Sicherheit und Anmeldung','Konto und Datenschutz','Passwort- und E2E-Einstellungen sind geplant. Ein Login-Reset stellt keine Schlüssel wieder her.'],
       ['Daten, Dateien und Backups','Export, Import, Speicher','Backups sind verfügbar. Ordner und LOCAL ↔ SYNC benötigen weitere Prüfung.'],
@@ -50,7 +50,7 @@
     ],
     pl: [
       ['Wygląd','Motyw, tekst i ikony','Motyw aplikacji, rozmiar tekstu i ikony ekranu głównego.'],
-      ['Edytor i klawiatura','Pisanie i działanie edytora','Klawiatura i pozycja otwierania notatki. Więcej opcji czcionek w przygotowaniu.'],
+      ['Edytor i klawiatura','Pisanie i działanie edytora','Klawiatura i pozycja otwierania notatki. Rozmiar tekstu w edytorze i oznaczeń klawiszy można ustawić oddzielnie. Kolejne czcionki są planowane.'],
       ['Plan i przypomnienia','Drzemka i porządkowanie','Przypomnienia, odkładanie i przeterminowane elementy planu.'],
       ['Bezpieczeństwo i logowanie','Konto i ochrona danych','Hasła i opcje E2E są w przygotowaniu. Reset logowania nie przywraca kluczy.'],
       ['Dane, pliki i kopie','Eksport, import, pamięć','Kopie zapasowe są dostępne. Foldery i LOCAL ↔ SYNC wymagają testów.'],
@@ -60,7 +60,7 @@
     ],
     es: [
       ['Apariencia','Tema, letra e iconos','Tema, tamaño del texto e iconos de la pantalla principal.'],
-      ['Editor y teclado','Escritura y comportamiento','Teclado y posición al abrir notas. Pronto habrá más opciones de fuentes.'],
+      ['Editor y teclado','Escritura y comportamiento','Teclado y posición al abrir notas. El tamaño visible del editor y de las letras del teclado se ajusta por separado. Habrá más fuentes después.'],
       ['Plan y recordatorios','Posponer y limpiar','Recordatorios, aplazamientos y tareas vencidas.'],
       ['Seguridad e inicio de sesión','Cuenta y protección','Los controles de contraseñas y E2E están previstos. Restablecer el acceso no recupera claves.'],
       ['Datos, archivos y copias','Exportar, importar, almacenamiento','Las copias están disponibles. Carpetas y LOCAL ↔ SYNC requieren pruebas.'],
