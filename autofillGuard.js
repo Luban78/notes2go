@@ -1,5 +1,5 @@
 /* ==================================================
-   OCHRANA LUBANOTE PROTI CREDENTIAL AUTOFILLU
+   OCHRANA LUBANOTE PROTI CREDENTIAL AUTOFILLU 
    --------------------------------------------------
    Chrome / password managery smějí pracovat s
    přihlašovacími údaji pouze na skutečné login page.
