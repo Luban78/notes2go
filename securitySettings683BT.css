@@ -46,3 +46,25 @@
 .ln683BTSecurityActions button:first-child {background:var(--color-background);color:var(--color-text);border:1px solid var(--color-border);}
 .ln683BTSecurityActions button:last-child {background:var(--color-accent,#1ab5c6);color:var(--color-background);border:0;font-weight:700;}
 .ln683BTSecurityActions button[hidden] {display:none;}
+
+/* 683BV: three stable columns, reserve an independent help icon column. */
+#settingsModal.ln683BJEnabled .ln683BTSecurityRow {
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(72px,43%) 26px;
+  gap:8px;align-items:center;padding-inline:4px;
+}
+#settingsModal.ln683BJEnabled .ln683BTSecurityLabel {min-width:0;text-align:left;overflow-wrap:normal;word-break:normal;hyphens:none;}
+#settingsModal.ln683BJEnabled .ln683BTSecurityValue {
+  min-width:0;max-width:none;text-align:right;overflow:hidden;overflow-wrap:normal;word-break:normal;hyphens:none;
+}
+#settingsModal.ln683BJEnabled .ln683BTSecurityRow:first-child .ln683BTSecurityValue {
+  text-overflow:ellipsis;white-space:nowrap;cursor:pointer;
+}
+#settingsModal.ln683BJEnabled .ln683BTSecurityInfo {width:26px;height:26px;min-width:26px;}
+#settingsModal.ln683BJEnabled .ln683BTSecurityRow button.ln683BTSecurityValue {max-width:100%;line-height:1.2;}
+#settingsModal.ln683BJEnabled .ln683BTSecurityPassword {font-size:1rem;}
+.ln683BVForgotLogin {
+  color:var(--color-accent,#19b5c6)!important;background:transparent!important;
+  border:0!important;padding:9px 2px!important;min-height:42px;
+  width:100%;font-size:.95rem!important;text-decoration:underline;cursor:pointer;
+}
+.ln683BVForgotLogin[hidden] {display:none!important;}
