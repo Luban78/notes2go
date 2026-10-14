@@ -55,13 +55,15 @@
   const horniRadek = document.getElementById("lnHomeDateTime683BC");
   let androidOknoAktivni = true;
   let webOknoAktivni = true;
+  // 683BH: transientni Android status bar muze byt videt i pri zachovanem fokusu.
+  let androidSystemovaListaViditelna = false;
   let obnoveniCekani = null;
 
   function aplikujSkryti() {
     if (!horniRadek) return;
     horniRadek.classList.toggle(
       "ln683BG-system-overlay",
-      document.hidden || !androidOknoAktivni || !webOknoAktivni
+      document.hidden || !androidOknoAktivni || !webOknoAktivni || androidSystemovaListaViditelna
     );
   }
 
@@ -89,6 +91,15 @@
       zrusObnoveni();
       aplikujSkryti();
     }
+  });
+
+  // 683BH: Android WindowInsets.Type.statusBars() umi hlasit i prechodne
+  // zobrazeni systemove listy, kdy onWindowFocusChanged vubec neprijde.
+  // Dalsi overlay stavy (RX panel, blur) zustavaji nezavisle.
+  window.addEventListener("lubanote:android-statusbar-visibility", (udalost) => {
+    androidSystemovaListaViditelna = udalost.detail?.visible === true;
+    zrusObnoveni();
+    aplikujSkryti();
   });
 
   // Fallback pro PWA / prohlizec a prechod mimo WebView.

@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.ActionMode;
 import android.view.View;
 import android.view.WindowInsets;
@@ -21,6 +23,58 @@ public class MainActivity extends BridgeActivity {
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
   private int lubaImeResumeGenerace = 0;
+
+  // 683BH: pozorovani skutecne viditelnosti transientni systemove listy.
+  // Neprebirame WindowInsetsListener u decorView ani WebView (bez zasahu
+  // do Capacitor insets, fullscreen layoutu nebo IME).
+  private static final long KONTROLA_SYSTEMOVE_LISTY_MS = 150L;
+  private final Handler systemovaListaHandler = new Handler(Looper.getMainLooper());
+  private boolean kontrolaSystemoveListyBezi = false;
+  private Boolean posledniSystemovaListaViditelna = null;
+  private final Runnable kontrolaSystemoveListy = new Runnable() {
+    @Override
+    public void run() {
+      if (!kontrolaSystemoveListyBezi) return;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        View dekor = getWindow().getDecorView();
+        WindowInsets insets = dekor.getRootWindowInsets();
+        if (insets != null) {
+          boolean viditelna = insets.isVisible(WindowInsets.Type.statusBars());
+          if (posledniSystemovaListaViditelna == null
+              || posledniSystemovaListaViditelna.booleanValue() != viditelna) {
+            posledniSystemovaListaViditelna = viditelna;
+            posliStavSystemoveListy(viditelna);
+          }
+        }
+      }
+      systemovaListaHandler.postDelayed(this, KONTROLA_SYSTEMOVE_LISTY_MS);
+    }
+  };
+
+  private void posliStavSystemoveListy(boolean viditelna) {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      getBridge().getWebView().evaluateJavascript(
+        "window.dispatchEvent(new CustomEvent('lubanote:android-statusbar-visibility'," +
+          "{detail:{visible:" + viditelna + "}}));",
+        null
+      );
+    } catch (RuntimeException ignored) {
+      // WebView se muze prave ukoncovat.
+    }
+  }
+
+  private void spustKontroluSystemoveListy() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || kontrolaSystemoveListyBezi) return;
+    kontrolaSystemoveListyBezi = true;
+    posledniSystemovaListaViditelna = null;
+    systemovaListaHandler.post(kontrolaSystemoveListy);
+  }
+
+  private void zastavKontroluSystemoveListy() {
+    kontrolaSystemoveListyBezi = false;
+    systemovaListaHandler.removeCallbacks(kontrolaSystemoveListy);
+  }
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -232,6 +286,9 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onPause() {
+    zastavKontroluSystemoveListy();
+    // Pri prekryti celym System UI jsou hodiny pod systemovou listou skryte.
+    posliStavSystemoveListy(true);
     zrusNaplanovaneLubaImeHide();
     /* Legacy <=110 dál ruší focus; moderní WebView pouze schová IME bez
        zásahu do browserového caretu/InputConnection. */
@@ -252,6 +309,7 @@ public class MainActivity extends BridgeActivity {
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
     obnovFullscreen();
+    spustKontroluSystemoveListy();
   }
 
 
