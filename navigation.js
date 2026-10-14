@@ -311,10 +311,19 @@
     closeMainMenu();
     settingsModal.hidden = false;
 
+    // 683BM: v A3 se sekce Data musi nejprve skutecne rozbalit.
+    // Puvodni prechod zustava jako fallback, pokud by accordion nenabehl.
     requestAnimationFrame(() => {
-      dataSettingsSection?.scrollIntoView({
-        block: "start"
-      });
+      const karta = document.querySelector('[data-ln683bj-category="data"]');
+      const hlavicka = document.getElementById('ln683BJHeading-data');
+      if (karta && hlavicka) {
+        if (hlavicka.getAttribute('aria-expanded') !== 'true') {
+          hlavicka.click();
+        }
+        karta.scrollIntoView({block: 'start', behavior: 'smooth'});
+      } else {
+        dataSettingsSection?.scrollIntoView({block: 'start'});
+      }
     });
   });
 

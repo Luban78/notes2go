@@ -1,0 +1,89 @@
+/* 683BM – servisni menu ⋮ vizualne sjednocene s A3. Bez sipek. */
+#mainMenu.ln683BMQuickMenu {
+  width: min(325px, calc(100vw - 20px));
+  max-height: min(78dvh, 670px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 19px;
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: 0 18px 42px rgba(0,0,0,.35);
+}
+#mainMenu.ln683BMQuickMenu button:not([hidden]) {
+  display: grid;
+  grid-template-columns: 39px minmax(0, 1fr) !important;
+  column-gap: 11px !important;
+  width: 100%;
+  min-height: 58px;
+  margin: 0 0 5px;
+  padding: 8px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface) !important;
+  text-align: left;
+  color: var(--color-text);
+  line-height: 1.26;
+  font-weight: 650;
+  transition: background-color .14s ease, border-color .14s ease;
+}
+#mainMenu.ln683BMQuickMenu button[hidden] { display: none !important; }
+#mainMenu.ln683BMQuickMenu .mainMenuIcon {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 39px !important;
+  height: 39px !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface)) !important;
+  color: var(--color-accent);
+  transform: none;
+}
+#mainMenu.ln683BMQuickMenu .mainMenuLabel {
+  font-size: .94rem;
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#mainMenu.ln683BMQuickMenu .mainMenuArrow {display: none !important;}
+#mainMenu.ln683BMQuickMenu button:hover,
+#mainMenu.ln683BMQuickMenu button:focus-visible {
+  border-color: var(--color-accent);
+}
+#mainMenu.ln683BMQuickMenu button:active,
+#mainMenu.ln683BMQuickMenu button.luba-menu-touch-feedback {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)) !important;
+}
+#mainMenu.ln683BMQuickMenu hr {margin: 7px 8px 10px;}
+#mainMenu.ln683BMQuickMenu #logoutButton {
+  color: var(--color-danger-text, #e17676);
+  border-color: color-mix(in srgb, var(--color-danger-text, #e17676) 25%, var(--color-border));
+  margin-bottom: 0;
+}
+#mainMenu.ln683BMQuickMenu #logoutButton .mainMenuIcon {
+  background: color-mix(in srgb, var(--color-danger-text, #e17676) 12%, var(--color-surface)) !important;
+  color: var(--color-danger-text, #e17676);
+}
+/* Razeni uz neni soucasti leveho PC sidebaru; je v Nastaveni → Vzhled. */
+#desktopCardSortButton { display: none !important; }
+/* Vzhled: stav napravo, zadne sipecky. */
+#settingsModal.ln683BJEnabled .ln683BMCardSortRow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+#settingsModal.ln683BJEnabled .ln683BMCardSortRow > span:first-child {
+  min-width: 0; flex: 1 1 auto;
+}
+#settingsModal.ln683BJEnabled .ln683BMCardSortRow .themeSelectButton {
+  min-width: max-content !important;
+  max-width: 45%;
+  text-align: right;
+}
+#settingsModal.ln683BJEnabled .ln683BMCardSortRow .themeSelectButton > span:first-child {
+  color: color-mix(in srgb, var(--color-accent) 58%, var(--color-text) 42%);
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  #mainMenu.ln683BMQuickMenu button { transition: none; }
+}
