@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.ActionMode;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -23,6 +24,60 @@ public class MainActivity extends BridgeActivity {
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
   private int lubaImeResumeGenerace = 0;
+
+  // 683BI: pasivni rozpoznani tahu od horni hrany. Android muze systemovy
+  // tah zachytit sam, proto jde pouze o doplnek k 683BH (WindowInsets).
+  // Dotyky nikdy nekonzumujeme ani neblokujeme.
+  private float lubaHorniGestoStartX = -1f;
+  private float lubaHorniGestoStartY = -1f;
+  private boolean lubaHorniGestoOhlaseno = false;
+
+  private void oznamHorniGestoProHodiny() {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      getBridge().getWebView().evaluateJavascript(
+        "window.dispatchEvent(new Event('lubanote:android-top-edge-swipe'));",
+        null
+      );
+    } catch (RuntimeException ignored) {
+      // Nevyzadujeme zivotaschopne WebView pri odchodu z aplikace.
+    }
+  }
+
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent event) {
+    final int akce = event.getActionMasked();
+    final float hustota = getResources().getDisplayMetrics().density;
+    if (akce == MotionEvent.ACTION_DOWN) {
+      // 24dp je tolerance pro zacatek tahu blizko horni hrany;
+      // 0-10px by mohlo byt pri ruznych hustotach neproveditelne.
+      lubaHorniGestoStartY = event.getRawY() <= 24f * hustota
+          ? event.getRawY() : -1f;
+      lubaHorniGestoStartX = event.getRawX();
+      lubaHorniGestoOhlaseno = false;
+    } else if (akce == MotionEvent.ACTION_MOVE && lubaHorniGestoStartY >= 0f
+        && !lubaHorniGestoOhlaseno) {
+      float rozdilY = event.getRawY() - lubaHorniGestoStartY;
+      float rozdilX = Math.abs(event.getRawX() - lubaHorniGestoStartX);
+      if (rozdilY >= 4f * hustota && rozdilY > rozdilX * 1.5f) {
+        lubaHorniGestoOhlaseno = true;
+        oznamHorniGestoProHodiny();
+      }
+    } else if (akce == MotionEvent.ACTION_UP || akce == MotionEvent.ACTION_CANCEL) {
+      // Pri prevzeti okrajoveho tahu systemem muze prijit ACTION_CANCEL
+      // drive, nez se do nasi Activity doruci dostatecny ACTION_MOVE.
+      if (akce == MotionEvent.ACTION_CANCEL && lubaHorniGestoStartY >= 0f
+          && !lubaHorniGestoOhlaseno) {
+        lubaHorniGestoOhlaseno = true;
+        oznamHorniGestoProHodiny();
+      }
+      lubaHorniGestoStartY = -1f;
+      lubaHorniGestoStartX = -1f;
+    }
+    // Zasadni: system i WebView dostanou udalost beze zmeny.
+    return super.dispatchTouchEvent(event);
+  }
+
 
   // 683BH: pozorovani skutecne viditelnosti transientni systemove listy.
   // Neprebirame WindowInsetsListener u decorView ani WebView (bez zasahu

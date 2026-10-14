@@ -58,12 +58,35 @@
   // 683BH: transientni Android status bar muze byt videt i pri zachovanem fokusu.
   let androidSystemovaListaViditelna = false;
   let obnoveniCekani = null;
+  // 683BI: doplnkove skryti po tahu od horniho okraje (pokud Android
+  // dotyky aplikaci doruci). Kratky systemovy nahled nekdy neposila insets.
+  let kratkeHorniGestoAktivni = false;
+  let konecKratkehoGesta = null;
+
+  function zrusKratkeGesto() {
+    if (konecKratkehoGesta !== null) clearTimeout(konecKratkehoGesta);
+    konecKratkehoGesta = null;
+    kratkeHorniGestoAktivni = false;
+  }
+
+  window.addEventListener("lubanote:android-top-edge-swipe", () => {
+    zrusKratkeGesto();
+    kratkeHorniGestoAktivni = true;
+    aplikujSkryti();
+    // Fallback: pri kratkem "mrknuti" do systemove listy nemusi Android
+    // poslat signal o jejim zavreni. Vratime proto hodiny automaticky.
+    konecKratkehoGesta = setTimeout(() => {
+      konecKratkehoGesta = null;
+      kratkeHorniGestoAktivni = false;
+      aplikujSkryti();
+    }, 3200);
+  });
 
   function aplikujSkryti() {
     if (!horniRadek) return;
     horniRadek.classList.toggle(
       "ln683BG-system-overlay",
-      document.hidden || !androidOknoAktivni || !webOknoAktivni || androidSystemovaListaViditelna
+      document.hidden || !androidOknoAktivni || !webOknoAktivni || androidSystemovaListaViditelna || kratkeHorniGestoAktivni
     );
   }
 
@@ -85,6 +108,7 @@
   window.addEventListener("lubanote:android-window-focus", (udalost) => {
     androidOknoAktivni = udalost.detail?.focused === true;
     if (androidOknoAktivni) {
+      zrusKratkeGesto();
       webOknoAktivni = true;
       obnovPoSystemoveAnimaci();
     } else {
@@ -98,6 +122,7 @@
   // Dalsi overlay stavy (RX panel, blur) zustavaji nezavisle.
   window.addEventListener("lubanote:android-statusbar-visibility", (udalost) => {
     androidSystemovaListaViditelna = udalost.detail?.visible === true;
+    if (!androidSystemovaListaViditelna) zrusKratkeGesto();
     zrusObnoveni();
     aplikujSkryti();
   });
@@ -109,12 +134,14 @@
     aplikujSkryti();
   });
   window.addEventListener("focus", () => {
+    zrusKratkeGesto();
     webOknoAktivni = true;
     obnovPoSystemoveAnimaci();
   });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) naplanuj();
     if (document.hidden) {
+      zrusKratkeGesto();
       zrusObnoveni();
       aplikujSkryti();
     } else {
