@@ -114,3 +114,15 @@
     pointer-events: auto !important;
   }
 }
+
+/* 683BG – skryt hodinovy overlay, pokud je opravdu zobrazen RX/TX/E panel
+ * nebo je otevrena systemova Android lista. Hodiny nezabiraji misto v layoutu.
+ * Respektujeme uzivatelske skryti RX panelu (679C) i Visual Debug CSS.
+ */
+@media (max-width: 899px) {
+  .lnHomeDateTime683BC.ln683BG-system-overlay,
+  body:not(.lubaSyncTrafficUserHidden):has(#syncTrafficBar:not([hidden]))
+    .lnHomeDateTime683BC {
+    visibility: hidden !important;
+  }
+}

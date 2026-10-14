@@ -255,9 +255,26 @@ public class MainActivity extends BridgeActivity {
   }
 
 
+  /* 683BG – pouze signal pro horni datum/cas. Pri otevreni Android
+   * notifikacni listy okno ztrati focus. WebView se jen dozvi stav;
+   * fullscreen, IME ani Android Back zde nijak nemenime. */
+  private void oznamFocusProHodiny(boolean maFokus) {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      getBridge().getWebView().evaluateJavascript(
+        "window.dispatchEvent(new CustomEvent('lubanote:android-window-focus'," +
+          "{detail:{focused:" + maFokus + "}}));",
+        null
+      );
+    } catch (RuntimeException ignored) {
+      // Pri ukoncovani Activity muze byt WebView uz odpojene.
+    }
+  }
+
   @Override
   public void onWindowFocusChanged(boolean hasFocus) {
     super.onWindowFocusChanged(hasFocus);
+    oznamFocusProHodiny(hasFocus);
 
     if (hasFocus) {
       schovejSystemovouImeProLubaKeyboard(false);

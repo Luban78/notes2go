@@ -49,9 +49,68 @@
     casovac = setTimeout(naplanuj, prodleva);
   }
 
+  // 683BG – datum/cas se schovaji pri systemove liste nebo jinem
+  // prekryti Android okna. RX panel se resi samostatne ciste CSS.
+  // Nemenime rozlozeni ani hodnoty Visual Debug Generated CSS.
+  const horniRadek = document.getElementById("lnHomeDateTime683BC");
+  let androidOknoAktivni = true;
+  let webOknoAktivni = true;
+  let obnoveniCekani = null;
+
+  function aplikujSkryti() {
+    if (!horniRadek) return;
+    horniRadek.classList.toggle(
+      "ln683BG-system-overlay",
+      document.hidden || !androidOknoAktivni || !webOknoAktivni
+    );
+  }
+
+  function zrusObnoveni() {
+    if (obnoveniCekani !== null) clearTimeout(obnoveniCekani);
+    obnoveniCekani = null;
+  }
+
+  function obnovPoSystemoveAnimaci() {
+    zrusObnoveni();
+    // Android animaci zabalene listy dokoncuje az po navratu fokusu.
+    obnoveniCekani = setTimeout(() => {
+      obnoveniCekani = null;
+      aplikujSkryti();
+    }, 220);
+  }
+
+  // Presny signal z Android MainActivity.onWindowFocusChanged().
+  window.addEventListener("lubanote:android-window-focus", (udalost) => {
+    androidOknoAktivni = udalost.detail?.focused === true;
+    if (androidOknoAktivni) {
+      webOknoAktivni = true;
+      obnovPoSystemoveAnimaci();
+    } else {
+      zrusObnoveni();
+      aplikujSkryti();
+    }
+  });
+
+  // Fallback pro PWA / prohlizec a prechod mimo WebView.
+  window.addEventListener("blur", () => {
+    webOknoAktivni = false;
+    zrusObnoveni();
+    aplikujSkryti();
+  });
+  window.addEventListener("focus", () => {
+    webOknoAktivni = true;
+    obnovPoSystemoveAnimaci();
+  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) naplanuj();
+    if (document.hidden) {
+      zrusObnoveni();
+      aplikujSkryti();
+    } else {
+      obnovPoSystemoveAnimaci();
+    }
   });
+  aplikujSkryti();
   window.addEventListener("pageshow", naplanuj);
   // i18n.js pri zmene jazyka meni atribut lang na <html>.
   new MutationObserver(() => vykresli()).observe(document.documentElement, {
