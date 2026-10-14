@@ -367,60 +367,69 @@
        po otevření modalu znovu objevit systémová klávesnice. */
   }
 
-  /* 683BT - opt-in time picker for the fixed tomorrow snooze choice.
-   * No effect on existing number/choice modal paths. */
-  function otevriCasovyModal({ nadpis, popisek, hodnota, poPotvrzeni, poZruseni } = {}) {
+  /* 683BU – čtvrtá předvolba používá JIŽ EXISTUJÍCÍ LubaNote ciferník.
+   * Žádný input[type=time]: ten v APK spouštěl systémové Android hodiny.
+   * Editorový čas, repeat a plánování se nemění. */
+  function otevriCasovyModal({ hodnota, poPotvrzeni, poZruseni } = {}) {
     vytvorModalPokudChybi();
-    predchoziFokus = document.activeElement;
-    nadpisElement.textContent = nadpis || choiceT("settings.time", "Čas");
-    moznostiElement.replaceChildren();
-    const pole = document.createElement("label");
-    pole.className = "choiceDialogFieldLabel";
-    pole.textContent = popisek || choiceT("settings.time", "Čas");
-    const vstup = document.createElement("input");
-    vstup.className = "choiceDialogInput";
-    vstup.type = "time";
-    vstup.step = "60";
-    vstup.value = /^([01]\d|2[0-3]):[0-5]\d$/.test(hodnota || "") ? hodnota : "08:00";
-    pole.append(vstup);
-    const chyba = document.createElement("p");
-    chyba.className = "choiceDialogError";
-    chyba.hidden = true;
-    const akce = document.createElement("div");
-    akce.className = "choiceDialogActions";
-    const zrusit = document.createElement("button");
-    zrusit.type = "button";
-    zrusit.className = "choiceDialogSecondary";
-    zrusit.textContent = choiceT("actions.cancel", "Zrušit");
-    const ulozit = document.createElement("button");
-    ulozit.type = "button";
-    ulozit.className = "choiceDialogSave";
-    ulozit.textContent = choiceT("actions.apply", "Použít");
-    akce.append(zrusit, ulozit);
-    moznostiElement.append(pole, chyba, akce);
-    zrusit.addEventListener("click", () => {
+    const otevritCifernik = window.otevriVlastniVyberCasu;
+    const picker = document.getElementById("timePickerModal");
+    const zavrit = document.getElementById("closeTimePickerButton");
+    const zrusit = document.getElementById("timePickerCancelButton");
+
+    // Bez připojeného editorového ciferníku nic neotevírej a zachovej nabídku.
+    if (typeof otevritCifernik !== "function" || !picker || !zavrit || !zrusit) {
+      console.error("LubaNote: vlastní ciferník času není dostupný.");
       if (typeof poZruseni === "function") poZruseni();
-      else zavriVyberovyModal();
-    });
-    ulozit.addEventListener("click", async () => {
-      const value = vstup.value;
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
-        chyba.textContent = choiceT("settings.validTime", "Vyber platný čas.");
-        chyba.hidden = false;
-        return;
+      return;
+    }
+
+    const vychoziCas = /^([01]\d|2[0-3]):[0-5]\d$/.test(hodnota || "") ? hodnota : "08:00";
+    // Editorový picker používá objekt s .value; není potřeba skutečný input.
+    const docasnyCas = { value: vychoziCas };
+    let hotovo = false;
+
+    const odebratPosluchace = () => {
+      zavrit.removeEventListener("click", priZruseni);
+      zrusit.removeEventListener("click", priZruseni);
+    };
+    const priZruseni = () => {
+      if (hotovo) return;
+      hotovo = true;
+      odebratPosluchace();
+      // Standardní handler ciferníku okno schovává.
+      if (typeof poZruseni === "function") poZruseni();
+      else modal.hidden = false;
+    };
+    const priVyberu = (cas) => {
+      if (hotovo) return;
+      hotovo = true;
+      odebratPosluchace();
+      if (typeof poPotvrzeni === "function") {
+        poPotvrzeni(cas);
+      } else {
+        modal.hidden = false;
       }
-      ulozit.disabled = true;
-      try {
-        if (typeof poPotvrzeni === "function") await poPotvrzeni(value);
-        else zavriVyberovyModal();
-      } catch (error) {
-        console.error("Časový modal: uložení selhalo.", error);
-        ulozit.disabled = false;
-      }
-    });
-    vstup.addEventListener("input", () => { chyba.hidden = true; });
-    pripravKlavesniciProModal();
-    modal.hidden = false;
+    };
+
+    // Choice modal je nad ciferníkem (z-index 10000 > 7200).
+    // Dočasně jej schováme, po výběru či zrušení obnovíme pracovní hodnoty.
+    modal.hidden = true;
+    zavrit.addEventListener("click", priZruseni);
+    zrusit.addEventListener("click", priZruseni);
+    try {
+      otevritCifernik({
+        input: docasnyCas,
+        povolOpakovani: false,
+        poVyberu: priVyberu
+      });
+    } catch (error) {
+      hotovo = true;
+      odebratPosluchace();
+      modal.hidden = false;
+      console.error("LubaNote: otevření ciferníku se nezdařilo.", error);
+      if (typeof poZruseni === "function") poZruseni();
+    }
   }
 
   function otevriNastavovaciModal({
