@@ -62,14 +62,40 @@
   border-radius:50%; font-size:.88rem; font-weight:650; font-family:serif;
   cursor:pointer;
 }
+/* 683BK – rozbaleni/sbaleni skutecne meni vysku, bez preskakovani obsahu.
+ * Accordion ma vzdy jedinou otevrenou kategorii, bez sipek a +/-.
+ */
 #settingsModal.ln683BJEnabled .ln683BJBody {
-  padding: 0 9px 11px;
-  animation: ln683BJFade .17s ease-out;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: 0 9px;
+  transition: grid-template-rows .24s cubic-bezier(.2,.75,.25,1),
+              opacity .18s ease, visibility 0s linear .24s;
 }
-#settingsModal.ln683BJEnabled .ln683BJBody[hidden] { display:none!important; }
-@keyframes ln683BJFade { from { opacity:0; transform:translateY(-4px); } to {opacity:1; transform:translateY(0);} }
-@media (prefers-reduced-motion:reduce) {
-  #settingsModal.ln683BJEnabled .ln683BJBody {animation:none!important;}
+#settingsModal.ln683BJEnabled .ln683BJCard.ln683BJOpen .ln683BJBody {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: grid-template-rows .24s cubic-bezier(.2,.75,.25,1),
+              opacity .2s ease, visibility 0s;
+}
+#settingsModal.ln683BJEnabled .ln683BJBodyInner {
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+  transition: padding-bottom .24s cubic-bezier(.2,.75,.25,1);
+}
+#settingsModal.ln683BJEnabled .ln683BJCard.ln683BJOpen .ln683BJBodyInner {
+  padding-bottom: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  #settingsModal.ln683BJEnabled .ln683BJBody {
+    transition: none !important;
+  }
 }
 #settingsModal.ln683BJEnabled .ln683BJOriginal { margin:0; }
 #settingsModal.ln683BJEnabled .ln683BJOriginal > h3 {display:none;}
@@ -129,48 +155,6 @@
   #settingsModal.ln683BJEnabled .ln683BJHeadingText strong {font-size:1rem;}
 }
 
-/* 683BJ: datum/cas take v editoru, bez obsazeni jakehokoli mista layoutu.
- * Stav systemove listy se prevezme z fungujiciho home overlay 683BI.
- */
-@media(max-width:899px) {
-  #taskModal .lnEditorDateTime683BJ {
-    position:fixed;
-    inset:0 0 auto 0;
-    z-index:10;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    box-sizing:border-box;
-    height:24px;
-    width:100%;
-    padding:0 max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));
-    margin:0;
-    background:transparent;
-    color:var(--color-editor-text, var(--color-text));
-    pointer-events:none;
-  }
-  #taskModal .lnEditorDateTime683BJ .lnHomeDate683BC,
-  #taskModal .lnEditorDateTime683BJ .lnHomeTime683BC {
-    font-size:clamp(1rem,4vw,1.18rem);
-    font-weight:700;
-    line-height:1.1;
-    color:inherit;
-    font-variant-numeric:tabular-nums;
-  }
-  body:has(#lnHomeDateTime683BC.ln683BG-system-overlay) #taskModal .lnEditorDateTime683BJ,
-  body:not(.lubaSyncTrafficUserHidden):has(#syncTrafficBar:not([hidden])) #taskModal .lnEditorDateTime683BJ {
-    visibility:hidden!important;
-  }
-  body.ln-vd-picking #taskModal .lnEditorDateTime683BJ,
-  body.ln-vd-picking #taskModal #lnEditorDate683BJ,
-  body.ln-vd-picking #taskModal #lnEditorTime683BJ {
-    pointer-events:auto!important;
-  }
-}
-@media(min-width:900px) {
-  #taskModal .lnEditorDateTime683BJ {display:none;}
-}
 /* Fix 683BJ: tlacitka v rozbalenych radcich nesmi drtit hodnoty na pismena. */
 #settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting {
   display:flex;
@@ -193,8 +177,26 @@
   white-space:normal;
   overflow-wrap:normal;
 }
-/* V otevrenem editoru zobrazujeme jen jedny hodiny, nikoliv domaci radek
-   pod editorovou fullscreen vrstvou. */
-body:has(#taskModal:not([hidden])) #lnHomeDateTime683BC {
-  visibility:hidden!important;
+/* 683BK: stejny realny hodinovy DOM uzel prechazi mezi home a editorem.
+ * Zachovava vlastni selektory i veskera ulozena pravidla Visual Debugu.
+ * Neschovavame jej pri otevreni editoru, protoze uz neni v homeHeader.
+ */
+#taskModal > #lnHomeDateTime683BC {
+  color: var(--color-editor-text, var(--color-text));
+  z-index: 10;
+}
+
+/* 683BK: hodnoty/akce jsou odstinem motivu odlisene od popisku.
+ * Misto ciste akcentove barvy michame s beznym textem kvuli kontrastu
+ * ve svetlych i tmavych motivech. */
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSelectButton > span:first-child,
+#settingsModal.ln683BJEnabled .ln683BJOriginal .settingsValue,
+#settingsModal.ln683BJEnabled .ln683BJOriginal #fontSizeValue,
+#settingsModal.ln683BJEnabled .ln683BJOriginal #settingsExportButton,
+#settingsModal.ln683BJEnabled .ln683BJOriginal #settingsImportButton {
+  color: color-mix(in srgb, var(--color-accent, #1ab5c6) 58%, var(--color-text) 42%);
+  font-weight: 700;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSelectButton {
+  text-align: right;
 }

@@ -128,8 +128,12 @@
     hlava.id = 'ln683BJHeading-' + typ;
     const telo = document.createElement('div');
     telo.className = 'ln683BJBody';
-    telo.hidden = true;
     telo.id = 'ln683BJBody-' + typ;
+    telo.setAttribute('aria-hidden', 'true');
+    telo.inert = true;
+    const vnitrni = document.createElement('div');
+    vnitrni.className = 'ln683BJBodyInner';
+    telo.append(vnitrni);
     hlava.setAttribute('aria-controls', telo.id);
     const ikona = document.createElement('span');
     ikona.className = 'ln683BJIcon';
@@ -155,14 +159,15 @@
     card.append(headerWrap,telo);
     koren.append(card);
     karty.push({card,hlava,telo,texty,index});
-    oblasti[typ] = telo;
+    oblasti[typ] = vnitrni;
     hlava.addEventListener('click', () => {
       const otevirame = hlava.getAttribute('aria-expanded') !== 'true';
       karty.forEach(p => {
         const otevrena = otevirame && p.hlava === hlava;
         p.hlava.setAttribute('aria-expanded', String(otevrena));
         p.card.classList.toggle('ln683BJOpen', otevrena);
-        p.telo.hidden = !otevrena;
+        p.telo.setAttribute('aria-hidden', String(!otevrena));
+        p.telo.inert = !otevrena;
       });
     });
   });
@@ -255,7 +260,8 @@
       zavriNapovedu();
       karty.forEach(p => {
         p.hlava.setAttribute('aria-expanded','false');
-        p.telo.hidden = true;
+        p.telo.setAttribute('aria-hidden', 'true');
+        p.telo.inert = true;
         p.card.classList.remove('ln683BJOpen');
       });
     }
