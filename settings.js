@@ -628,127 +628,107 @@ const motivy = nactenaTemata.map(tema => ({
 openReminderDelaySettingsButton?.addEventListener(
   "click",
   () => {
-    const ulozeneRychleOdlozeni =
-      JSON.parse(
-        localStorage.getItem("rychleOdlozeni")
-      ) || {
-        volba1: "15",
-        volba2: "30",
-        volba3: "60",
-        volba4: "tomorrow"
-      };
-
-    const ziskejPopisek = (
-      hodnota,
-      moznosti
-    ) => {
-      const nalezenaMoznost =
-        moznosti.find(
-          (moznost) =>
-            moznost.hodnota === hodnota
-        );
-
-      return nalezenaMoznost
-        ? nalezenaMoznost.popisek
-        : hodnota;
+    // 683BR: Puvodni ctyri volby zustavaji, vlastni interval pro kazdou zvlast.
+    const vychozi = {
+      volba1: "15",
+      volba2: "30",
+      volba3: "60",
+      volba4: "tomorrow"
     };
+    let ulozene = {};
+    try {
+      const nactene = JSON.parse(localStorage.getItem("rychleOdlozeni") || "null");
+      if (nactene && typeof nactene === "object" && !Array.isArray(nactene)) {
+        ulozene = nactene;
+      }
+    } catch (_) {}
 
-    const snoozeMin = (count) => prelozNastaveni("settings.snoozeMinutes", `${count} minut`, { count });
-    const snoozeHours = (count) => prelozNastaveni("settings.snoozeHours", `${count} hodiny`, { count });
+    const spravneMinuty = (v) => {
+      const cislo = Number(v);
+      return String(v).trim() !== "" && Number.isInteger(cislo) &&
+        cislo >= 1 && cislo <= 10080;
+    };
+    const ulozeneRychleOdlozeni = {};
+    Object.keys(vychozi).forEach((klic) => {
+      const hodnota = String(ulozene[klic] ?? vychozi[klic]);
+      ulozeneRychleOdlozeni[klic] =
+        hodnota === "tomorrow" && klic === "volba4" || spravneMinuty(hodnota)
+          ? hodnota : vychozi[klic];
+    });
 
-    const moznostiVolba1 = [
+    const snoozeMin = (count) =>
+      prelozNastaveni("settings.snoozeMinutes", `${count} min`, { count });
+    const snoozeHours = (count) =>
+      prelozNastaveni("settings.snoozeHours", `${count} h`, { count });
+    const customLabel = prelozNastaveni(
+      "settings.customSnooze", "Vlastní interval…"
+    );
+    const customMinutes = prelozNastaveni(
+      "settings.customSnoozeMinutes", "Počet minut (1–10080)"
+    );
+    const customOption = { hodnota: "vlastni", popisek: customLabel };
+    const vyber = (values) => [
+      ...values,
+      { ...customOption }
+    ];
+    const moznosti1 = vyber([
       { hodnota: "5", popisek: snoozeMin(5) },
       { hodnota: "10", popisek: snoozeMin(10) },
       { hodnota: "15", popisek: snoozeMin(15) },
       { hodnota: "30", popisek: snoozeMin(30) },
       { hodnota: "60", popisek: snoozeHours(1) }
-    ];
-
-    const moznostiVolba2 = [
-      { hodnota: "5", popisek: snoozeMin(5) },
-      { hodnota: "10", popisek: snoozeMin(10) },
-      { hodnota: "15", popisek: snoozeMin(15) },
-      { hodnota: "30", popisek: snoozeMin(30) },
-      { hodnota: "60", popisek: snoozeHours(1) }
-    ];
-
-    const moznostiVolba3 = [
+    ]);
+    const moznosti2 = [...moznosti1];
+    const moznosti3 = vyber([
       { hodnota: "15", popisek: snoozeMin(15) },
       { hodnota: "30", popisek: snoozeMin(30) },
       { hodnota: "60", popisek: snoozeHours(1) },
       { hodnota: "120", popisek: snoozeHours(2) },
       { hodnota: "180", popisek: snoozeHours(3) }
-    ];
-
-    const moznostiVolba4 = [
+    ]);
+    const moznosti4 = vyber([
       { hodnota: "tomorrow", popisek: prelozNastaveni("reminders.tomorrow8", "Zítra 8:00") },
       { hodnota: "120", popisek: snoozeHours(2) },
       { hodnota: "180", popisek: snoozeHours(3) }
-    ];
+    ]);
+    const zobrazeni = (hodnota, moznosti) => {
+      const pevna = moznosti.find((m) => m.hodnota === hodnota);
+      return pevna?.popisek || (spravneMinuty(hodnota) ? snoozeMin(Number(hodnota)) : "—");
+    };
+    const vlastniVstup = {
+      nadpis: customLabel,
+      popisek: customMinutes,
+      min: 1,
+      max: 10080,
+      krok: "1",
+      vychoziHodnota: "45",
+      vytvorZobrazeni: (v) => snoozeMin(Number(v))
+    };
 
     otevriNastavovaciModal({
       nadpis: prelozNastaveni("settings.quickDelay", "Rychlé odložení"),
-
       polozky: [
-        {
-          klic: "volba1",
-          popisek: prelozNastaveni("settings.choice1", "1. volba"),
-          hodnota:
-            ulozeneRychleOdlozeni.volba1,
-          zobrazeni: ziskejPopisek(
-            ulozeneRychleOdlozeni.volba1,
-            moznostiVolba1
-          ),
-          moznosti: moznostiVolba1
-        },
-
-        {
-          klic: "volba2",
-          popisek: prelozNastaveni("settings.choice2", "2. volba"),
-          hodnota:
-            ulozeneRychleOdlozeni.volba2,
-          zobrazeni: ziskejPopisek(
-            ulozeneRychleOdlozeni.volba2,
-            moznostiVolba2
-          ),
-          moznosti: moznostiVolba2
-        },
-
-        {
-          klic: "volba3",
-          popisek: prelozNastaveni("settings.choice3", "3. volba"),
-          hodnota:
-            ulozeneRychleOdlozeni.volba3,
-          zobrazeni: ziskejPopisek(
-            ulozeneRychleOdlozeni.volba3,
-            moznostiVolba3
-          ),
-          moznosti: moznostiVolba3
-        },
-
-        {
-          klic: "volba4",
-          popisek: prelozNastaveni("settings.choice4", "4. volba"),
-          hodnota:
-            ulozeneRychleOdlozeni.volba4,
-          zobrazeni: ziskejPopisek(
-            ulozeneRychleOdlozeni.volba4,
-            moznostiVolba4
-          ),
-          moznosti: moznostiVolba4
-        }
-      ],
-
+        ["volba1", moznosti1],
+        ["volba2", moznosti2],
+        ["volba3", moznosti3],
+        ["volba4", moznosti4]
+      ].map(([klic, moznosti], i) => ({
+        klic,
+        popisek: prelozNastaveni(`settings.choice${i + 1}`, `${i + 1}. volba`),
+        hodnota: ulozeneRychleOdlozeni[klic],
+        zobrazeni: zobrazeni(ulozeneRychleOdlozeni[klic], moznosti),
+        moznosti,
+        vlastniVstup
+      })),
       poUlozeni: (hodnoty) => {
-        localStorage.setItem(
-          "rychleOdlozeni",
-          JSON.stringify(hodnoty)
-        );
-
-        /*console.log(
-          "Uložené rychlé odložení:",
-          hodnoty
-        );*/
+        const bezpecne = {};
+        Object.keys(vychozi).forEach((klic) => {
+          const nova = String(hodnoty?.[klic] ?? "");
+          bezpecne[klic] = nova === "tomorrow" && klic === "volba4"
+            ? nova : spravneMinuty(nova) ? String(Math.round(Number(nova)))
+            : ulozeneRychleOdlozeni[klic];
+        });
+        localStorage.setItem("rychleOdlozeni", JSON.stringify(bezpecne));
       }
     });
   }

@@ -2216,76 +2216,59 @@ function openReminderQuickMenu(
     );
   }
 
-const rychleOdlozeni =
-  JSON.parse(
-    localStorage.getItem("rychleOdlozeni")
-  ) || {
-    volba1: "15",
-    volba2: "30",
-    volba3: "60",
-    volba4: "tomorrow"
-  };
-
+const vychoziRychleOdlozeni = {
+  volba1: "15", volba2: "30", volba3: "60", volba4: "tomorrow"
+};
+let ulozeneRychleOdlozeni = {};
+try {
+  const raw = JSON.parse(localStorage.getItem("rychleOdlozeni") || "null");
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    ulozeneRychleOdlozeni = raw;
+  }
+} catch (_) {}
+const platnyInterval = (hodnota) => {
+  const minuty = Number(hodnota);
+  return String(hodnota).trim() !== "" && Number.isInteger(minuty) &&
+    minuty >= 1 && minuty <= 10080;
+};
+const rychleOdlozeni = {};
+Object.keys(vychoziRychleOdlozeni).forEach((klic) => {
+  const hodnota = String(ulozeneRychleOdlozeni[klic] ?? "");
+  rychleOdlozeni[klic] = (klic === "volba4" && hodnota === "tomorrow") ||
+    platnyInterval(hodnota) ? hodnota : vychoziRychleOdlozeni[klic];
+});
 const formatOdlozeni = (hodnota) => {
   if (hodnota === "tomorrow") {
-    return "Zítra 8:00";
+    return remindersT("reminders.tomorrow8", "Zítra 8:00");
   }
-
   const minuty = Number(hodnota);
-
-  if (minuty === 60) {
-    return "+ 1 hod";
-  }
-
-  if (minuty === 120) {
-    return "+ 2 hod";
-  }
-
-  if (minuty === 180) {
-    return "+ 3 hod";
-  }
-
-  return `+ ${minuty} min`;
+  if (!platnyInterval(hodnota)) return "—";
+  if (minuty < 60) return `+ ${minuty} min`;
+  const dny = Math.floor(minuty / 1440);
+  const hodiny = Math.floor((minuty % 1440) / 60);
+  const zbytek = minuty % 60;
+  return "+ " + [
+    dny ? `${dny} d` : "",
+    hodiny ? `${hodiny} h` : "",
+    zbytek ? `${zbytek} min` : ""
+  ].filter(Boolean).join(" ");
 };
 
-const tlacitkaOdlozeni =
-  document.querySelectorAll(
-    "[data-reminder-delay]"
-  );
-
+const tlacitkaOdlozeni = document.querySelectorAll("[data-reminder-delay]");
 const hodnotyOdlozeni = [
   rychleOdlozeni.volba1,
   rychleOdlozeni.volba2,
   rychleOdlozeni.volba3
 ];
-
-tlacitkaOdlozeni.forEach(
-  (tlacitko, index) => {
-    const hodnota =
-      hodnotyOdlozeni[index];
-
-    if (!hodnota) {
-      return;
-    }
-
-    tlacitko.dataset.reminderDelay =
-      hodnota;
-
-    tlacitko.textContent =
-      formatOdlozeni(hodnota);
-  }
-);
-
-const zitraTlacitko =
-  document.getElementById(
-    "reminderTomorrowMorningButton"
-  );
-
+tlacitkaOdlozeni.forEach((tlacitko, index) => {
+  const hodnota = hodnotyOdlozeni[index];
+  if (!hodnota) return;
+  tlacitko.dataset.reminderDelay = hodnota;
+  tlacitko.textContent = formatOdlozeni(hodnota);
+});
+const zitraTlacitko = document.getElementById("reminderTomorrowMorningButton");
 if (zitraTlacitko) {
-  zitraTlacitko.textContent =
-    formatOdlozeni(
-      rychleOdlozeni.volba4
-    );
+  zitraTlacitko.textContent = formatOdlozeni(rychleOdlozeni.volba4);
 }
   reminderQuickMenu.hidden = false;
 }
@@ -2672,26 +2655,21 @@ async function postponeReminder(minutes) {
 
 
 async function postponeReminderToTomorrowMorning() {
-  const rychleOdlozeni =
-    JSON.parse(
-      localStorage.getItem("rychleOdlozeni")
-    ) || {
-      volba4: "tomorrow"
-    };
-  
-  const ctvrtaVolba =
-    rychleOdlozeni.volba4 || "tomorrow";
-  
-  if (ctvrtaVolba !== "tomorrow") {
-    const minuty = Number(ctvrtaVolba);
-    
-    if (Number.isFinite(minuty)) {
+  let ulozenaVolba = "tomorrow";
+  try {
+    const data = JSON.parse(localStorage.getItem("rychleOdlozeni") || "null");
+    ulozenaVolba = String(data?.volba4 ?? "tomorrow");
+  } catch (_) {}
+
+  if (ulozenaVolba !== "tomorrow") {
+    const minuty = Number(ulozenaVolba);
+    if (Number.isInteger(minuty) && minuty >= 1 && minuty <= 10080) {
       await postponeReminder(minuty);
+      return;
     }
-    
-    return;
+    // Poskozenou/starou hodnotu bereme jako bezpecny default zitra rano.
   }
-  
+
   const entry = getSelectedReminderEntry();
   
   if (!entry) {
@@ -5047,7 +5025,7 @@ document
         button.dataset.reminderDelay
       );
 
-      if (!Number.isFinite(minutes)) {
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080) {
         return;
       }
 

@@ -11,7 +11,7 @@
     cs: [
       ['Vzhled', 'Motiv, písmo, ikony', 'Zde nastavíš vzhled aplikace, velikost písma a ovládací ikony hlavní obrazovky.'],
       ['Editor a klávesnice', 'Psaní a chování editoru', 'Tady nastavíš klávesnici a místo, na kterém se poznámka po otevření zobrazí. Velikost zobrazení textu editoru a znaků LubaKeyboard lze nastavit zvlášť. Typ písma editoru si lze vybrat samostatně.'],
-      ['Plán a připomínky', 'Odložení, připomenutí, úklid', 'Připomínky při plánování a odložení úkolů. Položka Mazat po termínu určuje zacházení s prošlými plánovanými položkami.'],
+      ['Plán a připomínky', 'Odložení, připomenutí, úklid', 'Připomínky při plánování a odložení úkolů. Úklid po termínu řeší staré nedokončené položky Planneru a vypnutí jednorázových připomínek.'],
       ['Bezpečnost a přihlášení', 'Účet, hesla a ochrana dat', 'Nastavení přihlašovacího hesla a E2E přístupu je zatím v přípravě. Reset přihlášení neznamená automatické obnovení šifrovacích klíčů.'],
       ['Data, soubory a zálohy', 'Export, import, úložiště', 'Zálohy lze exportovat a importovat. Nastavení složek a bezpečný převod LOCAL ↔ SYNC budou připraveny až po samostatném ověření.'],
       ['Jazyk a výuka', 'Jazyk, slovník a slovíčka', 'Zde si vybereš jazyk LubaNote a otevřeš svůj slovník nebo výuku slovíček.'],
@@ -70,6 +70,40 @@
     ]
   };
 
+  // 683BR: Napoveda k jednotlivym polozkam - ne obecny text cele kategorie.
+  const POLOZKOVA_NAPOVEDA = {
+    cs: {
+      delay: ['Rychlé odložení', 'Nastaví čtyři tlačítka v panelu připomínky. Každému můžeš zadat vlastní počet minut (1 až 10080). Odložení se počítá od původního budoucího termínu, nebo od teď, pokud už připomínka prošla. Přesné datum a čas nastavíš přímo v panelu tlačítkem Termín.'],
+      planning: ['Připomínka u nových termínů', 'Určuje výchozí zapnutí zvonku při vytváření nových plánovaných úkolů a termínů. Nezapíná zpětně upozornění existujícím položkám. Každý nový termín můžeš nastavit zvlášť.'],
+      cleanup: ['Úklid po termínu', 'Po potvrzení pravidla se po nastaveném počtu dní odstraní staré NEDOKONČENÉ položky Planneru a vypnou prošlé jednorázové připomínky. Celé poznámky se nemažou, dokončené úkoly a opakované připomínky se touto funkcí neodstraňují. Volba Nikdy úklid vypne.']
+    },
+    en: {
+      delay: ['Quick snooze', 'Sets four buttons in the reminder sheet. Each can use a custom interval in minutes (1–10080). Snoozing starts from the future due time, or now if overdue. For an exact date and time, use Date/Time in the sheet.'],
+      planning: ['Reminders for new plans', 'Controls whether reminders default to on when creating new planned tasks and dates. Existing items are not changed. You can override this per item.'],
+      cleanup: ['Overdue cleanup', 'After confirmation, removes old INCOMPLETE Planner items and switches off old one-time reminders after the selected days. It does not delete whole notes, completed tasks or repeating reminders. Never disables cleanup.']
+    },
+    sk: {
+      delay: ['Rýchle odloženie', 'Štyri tlačidlá v okne pripomienky. Každému nastavíš vlastný počet minút (1 až 10080). Ak termín už prešiel, čas sa počíta od teraz. Presný dátum a čas nastavíš cez Termín.'],
+      planning: ['Pripomienky pri nových termínoch', 'Určuje predvolené zapnutie pripomienky pri nových plánovaných úlohách a termínoch. Existujúce položky nemení.'],
+      cleanup: ['Čistenie po termíne', 'Po potvrdení odstráni staré NEDOKONČENÉ položky Plánovača a vypne staré jednorazové pripomienky. Nemaže celé poznámky, dokončené úlohy ani opakované pripomienky. Nikdy čistenie vypne.']
+    },
+    de: {
+      delay: ['Schnell schlummern', 'Vier Tasten im Erinnerungsfenster. Jede kann ein eigenes Intervall in Minuten (1–10080) erhalten. Ist der Termin vorbei, gilt die Zeit ab jetzt. Ein genaues Datum/Uhrzeit lässt sich im Fenster einstellen.'],
+      planning: ['Neue Termine erinnern', 'Legt fest, ob neue Planungen standardmäßig eine Erinnerung erhalten. Bestehende Einträge bleiben unverändert; jeder Termin ist einzeln anpassbar.'],
+      cleanup: ['Überfälliges aufräumen', 'Nach Bestätigung werden alte UNERLEDIGTE Planner-Einträge entfernt und einmalige Erinnerungen deaktiviert. Ganze Notizen, erledigte Aufgaben und wiederkehrende Erinnerungen bleiben erhalten. Nie deaktiviert die Bereinigung.']
+    },
+    pl: {
+      delay: ['Szybka drzemka', 'Cztery przyciski w oknie przypomnienia. Każdy może mieć własny interwał 1–10080 minut. Po terminie czas liczy się od teraz. Dokładną datę i godzinę ustawisz w oknie.'],
+      planning: ['Przypomnienia nowych terminów', 'Domyślnie włącza przypomnienia dla nowo planowanych zadań i terminów. Nie zmienia istniejących pozycji.'],
+      cleanup: ['Porządki po terminie', 'Po potwierdzeniu usuwa stare NIEUKOŃCZONE pozycje Planu i wyłącza dawne jednorazowe przypomnienia. Nie usuwa całych notatek, ukończonych zadań ani przypomnień cyklicznych. Nigdy wyłącza czyszczenie.']
+    },
+    es: {
+      delay: ['Posponer rápido', 'Cuatro botones en el recordatorio. Cada uno admite un intervalo propio de 1–10080 minutos. Si ya venció, se calcula desde ahora. La fecha y hora exactas se eligen en el panel.'],
+      planning: ['Avisos en nuevos planes', 'Activa de forma predeterminada los avisos de nuevas tareas y fechas planificadas. No modifica elementos existentes.'],
+      cleanup: ['Limpiar vencidos', 'Tras confirmar, elimina elementos ANTIGUOS E INCOMPLETOS del plan y desactiva recordatorios únicos vencidos. No borra notas enteras, tareas completadas ni recordatorios periódicos. Nunca desactiva la limpieza.']
+    }
+  };
+
   const svg = (paths) => `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const IKONY = [
     svg('<circle cx="12" cy="12" r="9"/><circle cx="7.5" cy="10" r="1"/><circle cx="11" cy="6.5" r="1"/><circle cx="16.5" cy="9" r="1"/><path d="M12.5 15c-3 1.7-1 4.5 1 4.5 3 0 4-4-1-5.4"/>'),
@@ -109,10 +143,12 @@
   const zavriNapovedu = () => { napoveda.hidden = true; };
   napoveda.addEventListener('click', e => { if (e.target === napoveda) zavriNapovedu(); });
   napoveda.querySelector('#ln683BJHelpClose').addEventListener('click', zavriNapovedu);
-  function otevriNapovedu(index) {
-    const polozka = (PREKLADY[locale()] || PREKLADY.cs)[index];
+  function otevriNapovedu(index, klicPolozky = null) {
+    const polozka = klicPolozky
+      ? (POLOZKOVA_NAPOVEDA[locale()] || POLOZKOVA_NAPOVEDA.cs)[klicPolozky]
+      : (PREKLADY[locale()] || PREKLADY.cs)[index];
     napoveda.querySelector('#ln683BJHelpTitle').textContent = polozka[0];
-    napoveda.querySelector('#ln683BJHelpText').textContent = polozka[2];
+    napoveda.querySelector('#ln683BJHelpText').textContent = polozka[klicPolozky ? 1 : 2];
     napoveda.hidden = false;
     napoveda.querySelector('#ln683BJHelpClose').focus();
   }
@@ -236,11 +272,12 @@
 
   // Rozsirené informace na kliknuti "i", nikoliv neexistujici akce.
   const radkove = [
-    ['openPlannerReminderDefaultButton',2],
-    ['openOverdueRetentionSettingsButton',2],
+    ['openReminderDelaySettingsButton',2,'delay'],
+    ['openPlannerReminderDefaultButton',2,'planning'],
+    ['openOverdueRetentionSettingsButton',2,'cleanup'],
     ['openNoteOpenPositionButton',1]
   ];
-  radkove.forEach(([id,index]) => {
+  radkove.forEach(([id,index,klicPolozky]) => {
     const radek = document.getElementById(id)?.closest('.themeSetting');
     const popisek = radek?.querySelector(':scope > span:first-child');
     if (!popisek) return;
@@ -249,8 +286,9 @@
     info.className = 'ln683BJInfo ln683BJRowInfo';
     info.textContent = 'i';
     info.setAttribute('aria-label','Nápověda');
-    info.addEventListener('click',e=>{e.stopPropagation();otevriNapovedu(index);});
-    popisek.append(' ',info);
+    info.addEventListener('click',e=>{e.stopPropagation();otevriNapovedu(index,klicPolozky);});
+    // Info jako samostatny sibling: pri zmene jazyka i18n prepisuje textContent popisku.
+    popisek.after(info);
   });
 
   scroll.append(koren);
