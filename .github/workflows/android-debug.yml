@@ -36,11 +36,15 @@ jobs:
           echo "window.LUBANOTE_VERSION = '0.9.${GITHUB_RUN_NUMBER}';" > build-version.js
           echo "window.LUBANOTE_BUILD = '${GITHUB_RUN_NUMBER}';" >> build-version.js
 
+      - name: Bundle offline font alternatives (683BQ)
+        run: python3 scripts/setup-font-assets-683BQ.py
+
       - name: Prepare web assets
         run: |
           mkdir -p www
           cp index.html local-reset.html *.css *.js www/
           cp -r icons www/
+          cp -r fonts683BQ www/
 
       - name: Sync Capacitor Android
         run: npx cap sync android

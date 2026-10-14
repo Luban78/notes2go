@@ -1,0 +1,57 @@
+/* 683BQ: Global UI font + independent CoreV2 display font. No model changes.
+   The fontAssets683BQ.css stylesheet is local in signed APK builds. */
+:root { --ln683bq-original-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+:root[data-ln683bq-app-font="arimo"] {--ln683bq-app-family:"Arimo",sans-serif;}
+:root[data-ln683bq-app-font="carlito"] {--ln683bq-app-family:"Carlito",sans-serif;}
+:root[data-ln683bq-app-font="tinos"] {--ln683bq-app-family:"Tinos",serif;}
+:root[data-ln683bq-app-font="cousine"] {--ln683bq-app-family:"Cousine",monospace;}
+:root[data-ln683bq-app-font="gelasio"] {--ln683bq-app-family:"Gelasio",serif;}
+/* Scope to app UI, not editor code spans or embedded documents and not keyboard geometry. */
+html[data-ln683bq-app-font] body,
+html[data-ln683bq-app-font] body button,
+html[data-ln683bq-app-font] body input,
+html[data-ln683bq-app-font] body textarea,
+html[data-ln683bq-app-font] body select,
+html[data-ln683bq-app-font] body .taskModal,
+html[data-ln683bq-app-font] body .settingsModal,
+html[data-ln683bq-app-font] body .taskCard,
+html[data-ln683bq-app-font] body .settingsSection,
+html[data-ln683bq-app-font] body .ln683BJAccordion {
+  font-family:var(--ln683bq-app-family) !important;
+}
+/* Keep the built-in LubaKeyboard label rendering separate from global font. */
+html[data-ln683bq-app-font] #lubaKeyboard,
+html[data-ln683bq-app-font] #lubaKeyboard :is(button,span,div,small,strong) {font-family:var(--ln683bq-original-font) !important;}
+/* CoreV2 body text can use application font or a specific override. */
+html[data-ln683bq-editor-font="app"] .ln-v2-editor {font-family:var(--ln683bq-app-family, var(--ln683bq-original-font)) !important;}
+html[data-ln683bq-editor-font="default"] .ln-v2-editor {font-family:var(--ln683bq-original-font) !important;}
+html[data-ln683bq-editor-font="arimo"] .ln-v2-editor {font-family:"Arimo",sans-serif !important;}
+html[data-ln683bq-editor-font="carlito"] .ln-v2-editor {font-family:"Carlito",sans-serif !important;}
+html[data-ln683bq-editor-font="tinos"] .ln-v2-editor {font-family:"Tinos",serif !important;}
+html[data-ln683bq-editor-font="cousine"] .ln-v2-editor {font-family:"Cousine",monospace !important;}
+html[data-ln683bq-editor-font="gelasio"] .ln-v2-editor {font-family:"Gelasio",serif !important;}
+/* Preserve dedicated code fonts and inline user formatting. */
+html[data-ln683bq-editor-font] .ln-v2-editor :is(pre,code,kbd,samp) {font-family:ui-monospace,Consolas,monospace !important;}
+/* Internal A3 selection; no arrows, no plus/minus. */
+#settingsModal.ln683BJEnabled .ln683BQFontSetting {background:var(--color-surface,#0c2b3c); border:1px solid var(--color-border,#255265); border-radius:14px; margin:0 0 9px; overflow:hidden; color:var(--color-text,#fff);}
+#settingsModal.ln683BJEnabled .ln683BQHeader {box-sizing:border-box;display:flex;gap:10px;align-items:center;justify-content:space-between;min-height:64px;width:100%;padding:11px 12px;text-align:left;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer;}
+#settingsModal.ln683BJEnabled .ln683BQCopy {flex:1;min-width:0;display:grid;gap:3px;}
+#settingsModal.ln683BJEnabled .ln683BQCopy strong {font-size:.96rem; font-weight:650;}
+#settingsModal.ln683BJEnabled .ln683BQCopy small {font-size:.74rem;line-height:1.35;color:var(--color-text-secondary,#9ab8c6);}
+#settingsModal.ln683BJEnabled .ln683BQSelected {font-weight:700;font-size:.89rem;color:var(--color-accent,#22b7c9);max-width:43%;text-align:right;overflow-wrap:anywhere;}
+#settingsModal.ln683BJEnabled .ln683BQChoices[hidden] {display:none!important;}
+#settingsModal.ln683BJEnabled .ln683BQChoices {display:grid;gap:4px;padding:6px;border-top:1px solid var(--color-border,#255265);}
+#settingsModal.ln683BJEnabled .ln683BQOption {display:flex;justify-content:space-between;align-items:center;gap:6px;padding:9px 11px;min-height:54px;border:1px solid transparent;background:var(--color-background,#071c27);color:var(--color-text,#fff);border-radius:10px;font:inherit;text-align:left;cursor:pointer;}
+#settingsModal.ln683BJEnabled .ln683BQOption[aria-pressed="true"] {border-color:var(--color-accent,#22b7c9);background:color-mix(in srgb,var(--color-accent,#22b7c9) 12%,var(--color-surface,#0c2b3c));}
+#settingsModal.ln683BJEnabled .ln683BQOptionLabel {display:grid;gap:2px;min-width:0;}
+#settingsModal.ln683BJEnabled .ln683BQOptionLabel strong {font-size:.89rem; font-weight:600;}
+#settingsModal.ln683BJEnabled .ln683BQOptionLabel small {font-size:.70rem;color:var(--color-text-secondary,#9ab8c6);}
+#settingsModal.ln683BJEnabled .ln683BQPreview {flex:0 0 auto;font-size:1.05rem;white-space:nowrap;color:var(--color-text,#fff);}
+#settingsModal.ln683BJEnabled [data-sample-font="arimo"]{font-family:"Arimo",sans-serif;}
+#settingsModal.ln683BJEnabled [data-sample-font="carlito"]{font-family:"Carlito",sans-serif;}
+#settingsModal.ln683BJEnabled [data-sample-font="tinos"]{font-family:"Tinos",serif;}
+#settingsModal.ln683BJEnabled [data-sample-font="cousine"]{font-family:"Cousine",monospace;}
+#settingsModal.ln683BJEnabled [data-sample-font="gelasio"]{font-family:"Gelasio",serif;}
+#settingsModal.ln683BJEnabled .ln683BQHeader:focus-visible,
+#settingsModal.ln683BJEnabled .ln683BQOption:focus-visible {outline:2px solid var(--color-accent,#22b7c9);outline-offset:-3px;}
+@media(max-width:370px){#settingsModal.ln683BJEnabled .ln683BQOption{flex-wrap:wrap;}#settingsModal.ln683BJEnabled .ln683BQPreview{margin-left:auto;}#settingsModal.ln683BJEnabled .ln683BQSelected{max-width:40%;}}
