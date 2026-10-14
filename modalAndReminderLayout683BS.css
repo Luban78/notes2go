@@ -1,0 +1,86 @@
+/* 683BS – sjednoceni sirek vyberovych modalu a ochrana celych slov.
+ * Pouze vizualni uprava sdileneho choiceModal; bez zmeny ulozenych hodnot.
+ */
+.choiceModal {
+  padding: 10px;
+}
+.choiceDialog {
+  width: min(100%, 520px);
+  max-width: 100%;
+  padding: clamp(14px, 3.6vw, 22px);
+}
+.choiceDialogSettingRow {
+  gap: 12px;
+  padding-inline: clamp(11px, 3vw, 18px);
+}
+.choiceDialogSettingLabel {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.choiceDialogSettingValue {
+  /* 'Zapnuto' a dalsi jednotliva slova se nikdy nebudou lamat uvnitr. */
+  flex: 0 0 auto;
+  max-width: 53%;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+@media (max-width: 370px) {
+  .choiceModal { padding: 6px; }
+  .choiceDialogSettingRow { gap: 8px; padding-inline: 10px; }
+}
+
+/* 683BS – napoveda u kazdeho radku Planu a pripominek.
+ * Ikona 'i' ma vlastni prostor napravo; dlouhe hodnoty ji nevytlaci
+ * mimo kartu a zustava samostatne klikatelna (bez zmeny JS handleru).
+ */
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting:has(> .ln683BJRowInfo) {
+  position: relative;
+  padding-right: 39px;
+  gap: 8px;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting > .ln683BJRowInfo {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  width: 23px;
+  height: 23px;
+  display: inline-flex;
+  z-index: 1;
+}
+#settingsModal.ln683BJEnabled .ln683BJOriginal .themeSetting:has(> .ln683BJRowInfo) > .themeSelectButton {
+  min-width: 0 !important;
+  max-width: 58%;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#settingsModal.ln683BJEnabled .ln683BJHelpBox {
+  width: min(100%, 500px);
+  max-height: calc(100dvh - 44px);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 683BS – aktivni pripominky s datumem: samostatny sirsi sloupec.
+ * Puvodni 661K pravidlo je ve style.css ulozeno s doslovnym '\\n',
+ * tedy se spravne neuplatnuje. Dnesek, Zitra a Po terminu nemenime.
+ */
+@media (max-width: 1099px) {
+  .reminderItemLaterDate > .reminderItemSwipeContent,
+  .reminderItemLaterDate:not(:has(> .reminderItemSwipeContent)) {
+    grid-template-columns: max(9.5ch, 82px) minmax(0, 1fr) max(30px, 1.9rem) !important;
+  }
+  .reminderItemLaterDate .reminderItemTime {
+    min-width: 0 !important;
+    width: auto !important;
+    padding-right: 0 !important;
+  }
+  .reminderItemLaterDate .reminderItemContent {
+    min-width: 0;
+  }
+}
