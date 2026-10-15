@@ -112,6 +112,7 @@
   let view = 'info';
   const close = () => {
     overlay.hidden = true; overlay.setAttribute('aria-hidden','true');
+    overlay.removeAttribute('data-ln683by-recovery-login');
     inputNew.value=''; inputAgain.value=''; inputEmail.value=''; message.textContent=''; message.hidden=true;
     cancel.disabled=false;
     submit.disabled=false;
@@ -145,6 +146,14 @@
     try {window.LubaNoteKeyboard?.skryjProModal?.();}catch(_){}
   }
   function showRecovery(prefill='') {
+    // The login privacy gate hides all top-level modals by default.
+    // Opt out only for the recovery dialog opened on the visible signed-out login screen.
+    const signedOutLogin = document.getElementById('loginScreen');
+    if (signedOutLogin && !signedOutLogin.hidden && document.body.classList.contains('authPending')) {
+      overlay.setAttribute('data-ln683by-recovery-login', '');
+    } else {
+      overlay.removeAttribute('data-ln683by-recovery-login');
+    }
     view='recovery'; heading.textContent=rt('title'); description.textContent=rt('hint');
     form.hidden=false; labelNew.hidden=true; labelAgain.hidden=true; labelEmail.hidden=false;
     labelEmail.replaceChildren(document.createTextNode(rt('email')),inputEmail);

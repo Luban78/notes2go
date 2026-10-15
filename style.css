@@ -2549,7 +2549,8 @@ body.authPending .addTaskButton {
  * pokud masterPasswordRequired NENÍ aktivní. Tím privacy lock zůstává stejně
  * přísný a výjimka platí jen pro povinný onboarding hlavního hesla.
  */
-body.authPending > :not(#appSplash):not(#loginScreen):not(#secretUnlockModal):not(#appMessageModal):not(script) {
+/* 683BY: retain the login privacy gate, except while the signed-out recovery form is explicitly open. */
+body.authPending > :not(#appSplash):not(#loginScreen):not(#secretUnlockModal):not(#appMessageModal):not(.ln683BTSecurityOverlay[data-ln683by-recovery-login]):not(script) {
   visibility: hidden !important;
   pointer-events: none !important;
 }
