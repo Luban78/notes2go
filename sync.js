@@ -7761,6 +7761,7 @@ let nativeNetworkBridgeV2Inicializovan = false;
 let nativeNetworkListenerV2 = null;
 let nativeNetworkAutoritaV2 = false;
 let nativeNetworkPosledniConnectedV2 = null;
+let nativeNetworkPosledniId683BX = null;
 /* PATCH 504 – browser offline může přijít dřív než Android callback.
    Na APK smí browser stav pouze konzervativně ZABLOKOVAT síť.
    Znovu ji povolí až nový native VALIDATED=true. Browser online ji
@@ -7904,6 +7905,108 @@ function zpracujTargetV2NavratSite(duvod = "network") {
   });
 }
 
+/* 683BX – Zotavení po výměně transportu (Wi-Fi ↔ mobilní data).
+ * Je to pouze probuzení existujícího single-flight synchronizačního toku,
+ * nikoliv nový sync engine nebo zásah do 1,4s editor handoffu.
+ * Nevoláme refreshSession(): starý refresh token se nesmí použít souběžně.
+ */
+let casovacObnoveniSite683BX = null;
+let probihajiciObnoveniSite683BX = false;
+let generaceObnoveniSite683BX = 0;
+const PRODLEVY_OBNOVENI_SITE_683BX = [450, 7000, 16000, 30000, 60000];
+
+function oznamStavObnoveniSite683BX(stav) {
+  window.dispatchEvent(new CustomEvent(
+    "lubanote:network-recovery-state",
+    { detail: { stav } }
+  ));
+}
+
+function zastavObnoveniSite683BX() {
+  generaceObnoveniSite683BX += 1;
+  clearTimeout(casovacObnoveniSite683BX);
+  casovacObnoveniSite683BX = null;
+}
+
+function naplanujObnoveniSite683BX(duvod = "network") {
+  zastavObnoveniSite683BX();
+  if (!jeTargetV2SitOpravduPouzitelna()) {
+    if (!jeAktivniRezimPouzeTotoZarizeni()) {
+      nastavStavSynchronizaceUI("pending");
+      oznamStavObnoveniSite683BX("pending");
+    }
+    return;
+  }
+
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    oznamStavObnoveniSite683BX("healthy");
+    return;
+  }
+
+  /* Když je spuštěn jiný recovery pokus, jeho generaci zneplatníme.
+     Další běh začne až po dokončení probíhajícího pokusu. */
+  const mojeGenerace = generaceObnoveniSite683BX;
+  nastavStavSynchronizaceUI("pending");
+  oznamStavObnoveniSite683BX("pending");
+  stitkyCekajiNaRefreshPoNavratuInternetu = true;
+
+  function dalsiPokus(poradi) {
+    if (mojeGenerace !== generaceObnoveniSite683BX) return;
+    const prodleva = PRODLEVY_OBNOVENI_SITE_683BX[
+      Math.min(poradi, PRODLEVY_OBNOVENI_SITE_683BX.length - 1)
+    ];
+    casovacObnoveniSite683BX = setTimeout(async () => {
+      casovacObnoveniSite683BX = null;
+      if (mojeGenerace !== generaceObnoveniSite683BX) return;
+      if (!jeTargetV2SitOpravduPouzitelna()) return;
+      if (document.visibilityState === "hidden") {
+        dalsiPokus(Math.min(poradi + 1, 3));
+        return;
+      }
+      if (probihajiciObnoveniSite683BX) {
+        dalsiPokus(poradi);
+        return;
+      }
+
+      probihajiciObnoveniSite683BX = true;
+      let hotovo = false;
+      try {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "NET683BX", `RECOVER START | ${duvod} | attempt=${poradi + 1}`
+        );
+        /* Fronta cílených změn má stále přednost. */
+        await zpracujTargetV2NavratSite("683BX-" + duvod);
+        if (mojeGenerace !== generaceObnoveniSite683BX) return;
+        hotovo = await spustStartSyncBezpecne() === true;
+        window.LubaNoteStartupDiag?.zapis?.(
+          "NET683BX", `RECOVER ${hotovo ? "OK" : "DEFER"} | ${duvod}`
+        );
+      } catch (error) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "NET683BX", `RECOVER ERROR | ${String(error?.name || error)}`
+        );
+      } finally {
+        probihajiciObnoveniSite683BX = false;
+      }
+
+      if (mojeGenerace !== generaceObnoveniSite683BX) return;
+      if (hotovo) {
+        oznamStavObnoveniSite683BX("healthy");
+        /* Realtime kanál z původního transportu může zůstat stale.
+           Nezasahujeme do editorHandoff kanálu ani jeho lease. */
+        window.LubaNoteSyncRealtime?.obnovPoZmeneSite?.()
+          ?.catch?.(() => {});
+      } else {
+        nastavStavSynchronizaceUI("pending");
+        oznamStavObnoveniSite683BX("pending");
+        dalsiPokus(poradi + 1);
+      }
+    }, prodleva);
+  }
+
+  dalsiPokus(0);
+}
+
 async function aktivujNativeNetworkBridgeV2() {
   if (nativeNetworkBridgeV2Inicializovan) return;
   nativeNetworkBridgeV2Inicializovan = true;
@@ -7927,37 +8030,37 @@ async function aktivujNativeNetworkBridgeV2() {
       (stav) => {
         const connected = stav?.connected === true;
         const predchozi = nativeNetworkPosledniConnectedV2;
+        const predchoziId = nativeNetworkPosledniId683BX;
+        const aktualniId = connected ? String(stav?.networkId || "") : "";
+        const presunMeziSitemi = (
+          connected && predchozi === true &&
+          !!aktualniId && !!predchoziId && aktualniId !== predchoziId
+        );
         nativeNetworkPosledniConnectedV2 = connected;
+        nativeNetworkPosledniId683BX = aktualniId;
 
         window.LubaNoteStartupDiag?.zapis?.(
           "V2",
-          `NATIVE NETWORK | ${connected ? "online" : "offline"}`
+          `NATIVE NETWORK | ${connected ? "online" : "offline"}` +
+            (presunMeziSitemi ? " | transport-changed" : "")
         );
 
         if (!connected) {
           nativeNetworkCekaNaNovePotvrzeniV2 = true;
           stitkyCekajiNaRefreshPoNavratuInternetu = true;
+          naplanujObnoveniSite683BX("native-offline");
           return;
         }
 
         nativeNetworkCekaNaNovePotvrzeniV2 = false;
-
-        const drainPromise =
+        if (predchozi === false || presunMeziSitemi) {
+          /* 683BX: rozpoznáme také true→true, nečekáme na restart APK. */
+          naplanujObnoveniSite683BX(
+            presunMeziSitemi ? "transport-switch" : "native-online"
+          );
+        } else {
+          /* Původní targeted fronta musí probudit i inicializační event. */
           zpracujTargetV2NavratSite("native-network");
-
-        /*
-         * PATCH 505 – běžný start až PO queue drainu. Initial status=true
-         * při studeném startu stále nesmí vytvořit druhý start.
-         */
-        if (predchozi === false) {
-          Promise.resolve(drainPromise)
-            .catch(() => false)
-            .finally(() => {
-              setTimeout(
-                spustStartSyncBezpecne,
-                120
-              );
-            });
         }
       }
     );
@@ -7968,6 +8071,7 @@ async function aktivujNativeNetworkBridgeV2() {
     nativeNetworkListenerV2 = null;
     nativeNetworkAutoritaV2 = false;
     nativeNetworkPosledniConnectedV2 = null;
+    nativeNetworkPosledniId683BX = null;
     nativeNetworkCekaNaNovePotvrzeniV2 = false;
     return;
   }
@@ -7977,6 +8081,9 @@ async function aktivujNativeNetworkBridgeV2() {
       const stav = await plugin.getStatus();
       const connected = stav?.connected === true;
       nativeNetworkPosledniConnectedV2 = connected;
+      nativeNetworkPosledniId683BX = connected
+        ? String(stav?.networkId || nativeNetworkPosledniId683BX || "")
+        : "";
 
       if (connected) {
         nativeNetworkCekaNaNovePotvrzeniV2 = false;
@@ -10254,6 +10361,7 @@ window.addEventListener(
          Staré native=true už nesmí povolit žádný další targeted request.
          Browser online tento latch nezruší; čekáme na nový VALIDATED=true. */
       nativeNetworkCekaNaNovePotvrzeniV2 = true;
+      naplanujObnoveniSite683BX("browser-veto");
 
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
@@ -10279,6 +10387,12 @@ window.addEventListener(
         "V2",
         "BROWSER NETWORK IGNORE | online | native-authority"
       );
+      /* Revalidace je lokální Android dotaz, nevěříme browser online. */
+      revalidujNativeNetworkV2("browser-online")
+        .then((validni) => {
+          if (validni) naplanujObnoveniSite683BX("browser-revalidated");
+        })
+        .catch(() => {});
       return;
     }
 

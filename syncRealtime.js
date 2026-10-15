@@ -768,7 +768,34 @@
     pripravRealtimeKanal().catch(() => {});
   }, 0);
 
+  /* 683BX: po změně síťového transportu nezůstane viset starý kanál.
+     Samotný obsah poznámek synchronizuje výhradně sync.js. */
+  let obnovaKanaluPoZmeneSite = null;
+  function obnovPoZmeneSite() {
+    if (obnovaKanaluPoZmeneSite) return obnovaKanaluPoZmeneSite;
+
+    obnovaKanaluPoZmeneSite = (async () => {
+      await odstranRealtimeKanal();
+      const ok = await pripravRealtimeKanal();
+      zapisRt(`NETWORK CHANNEL RECOVER | ${ok ? "OK" : "DEFER"}`);
+      if (ok) {
+        if (cekajiciGlobalniSignal !== 0 || cekajiciVzdalenyId.size > 0) {
+          naplanujVzdalenySync(180);
+        }
+        if (cekajiciLokalniZapisy.size > 0) {
+          naplanujOdeslaniSignalu(0);
+        }
+      }
+      return ok;
+    })().finally(() => {
+      obnovaKanaluPoZmeneSite = null;
+    });
+
+    return obnovaKanaluPoZmeneSite;
+  }
+
   window.LubaNoteSyncRealtime = {
+    obnovPoZmeneSite,
     priprav: pripravRealtimeKanal,
     pockejPredOtevrenim:
       pockejNaCerstvouPoznamkuPredOtevrenim,

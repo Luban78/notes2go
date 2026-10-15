@@ -30,6 +30,8 @@ public class LubaNoteNetworkStatePlugin extends Plugin {
   private ConnectivityManager connectivityManager;
   private ConnectivityManager.NetworkCallback networkCallback;
   private volatile Boolean posledniConnected = null;
+  /* 683BX: VALIDATED=true samo nestačí – Wi-Fi → data zůstane true. */
+  private volatile String posledniSit = null;
 
   @Override
   public void load() {
@@ -90,27 +92,44 @@ public class LubaNoteNetworkStatePlugin extends Plugin {
     }
   }
 
+  private String ziskejIdentituAktivniSite() {
+    if (connectivityManager == null) return "";
+    try {
+      Network aktivni = connectivityManager.getActiveNetwork();
+      return aktivni == null ? "" : aktivni.toString();
+    } catch (Exception ignored) {
+      return "";
+    }
+  }
+
   private void oznamAktualniStav() {
     boolean connected = maValidovanyInternet();
+    String sit = connected ? ziskejIdentituAktivniSite() : "";
 
-    if (posledniConnected != null && posledniConnected == connected) {
+    /* Vysílej také při přepnutí dvou validovaných sítí (true → true). */
+    if (posledniConnected != null && posledniConnected == connected &&
+        sit.equals(posledniSit)) {
       return;
     }
 
     posledniConnected = connected;
+    posledniSit = sit;
 
     JSObject data = new JSObject();
     data.put("connected", connected);
+    data.put("networkId", sit);
     notifyListeners("networkStatusChange", data, true);
   }
 
   @PluginMethod
   public void getStatus(PluginCall call) {
     boolean connected = maValidovanyInternet();
+    /* getStatus nemění posledniSit – callback nesmí změnu sítě spolknout. */
     posledniConnected = connected;
 
     JSObject result = new JSObject();
     result.put("connected", connected);
+    result.put("networkId", connected ? ziskejIdentituAktivniSite() : "");
     call.resolve(result);
   }
 

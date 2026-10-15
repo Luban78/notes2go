@@ -74,6 +74,53 @@
     statusText.title = text;
   }
 
+  /* 683BX – běžný uživatel RX/TX panel nevidí. Závažnější čekání
+     na síť proto ukážeme samostatně, bez modalu a bez zásahu do editoru. */
+  const upozorneni = document.createElement("div");
+  upozorneni.className = "lnSyncRecoveryNotice683BX";
+  upozorneni.hidden = true;
+  upozorneni.setAttribute("role", "status");
+  document.body.appendChild(upozorneni);
+  let casovacUpozorneni = null;
+  let sitoveZotaveniCeka = false;
+
+  function skryjUpozorneni() {
+    clearTimeout(casovacUpozorneni);
+    casovacUpozorneni = null;
+    upozorneni.hidden = true;
+  }
+
+  function vykresliUpozorneni() {
+    if (!upozorneni.hidden) {
+      upozorneni.textContent = preloz(
+        "sync.pending", "⏳ Čeká na synchronizaci"
+      );
+    }
+  }
+
+  function naplanujUpozorneni(rychle = false) {
+    if (aktualniStav !== "pending" || casovacUpozorneni ||
+        !upozorneni.hidden) return;
+    casovacUpozorneni = setTimeout(() => {
+      casovacUpozorneni = null;
+      if (aktualniStav !== "pending" ||
+          window.LubaNoteStorageScope?.ziskejAktivni?.() === "local") return;
+      upozorneni.hidden = false;
+      vykresliUpozorneni();
+    }, rychle ? 7000 : 25000);
+  }
+
+  window.addEventListener("lubanote:network-recovery-state", (event) => {
+    sitoveZotaveniCeka = event?.detail?.stav === "pending";
+    if (sitoveZotaveniCeka) {
+      clearTimeout(casovacUpozorneni);
+      casovacUpozorneni = null;
+      naplanujUpozorneni(true);
+    } else {
+      skryjUpozorneni();
+    }
+  });
+
   function nastavStav(stav) {
     const localAktivni =
       window.LubaNoteStorageScope
@@ -95,6 +142,7 @@
     if (stav === "restore") {
       aktualniStav = posledniStabilniStav;
       vykresli();
+      if (aktualniStav !== "pending") skryjUpozorneni();
       return;
     }
 
@@ -119,6 +167,11 @@
 
     aktualniStav = stav;
     vykresli();
+    if (stav === "pending") {
+      naplanujUpozorneni(sitoveZotaveniCeka);
+    } else {
+      skryjUpozorneni();
+    }
   }
 
   window.addEventListener(
@@ -143,6 +196,7 @@
     "lubanote:language-change",
     () => {
       vykresli();
+      vykresliUpozorneni();
     }
   );
 
