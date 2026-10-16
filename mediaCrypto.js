@@ -684,6 +684,46 @@
     );
   }
 
+  /* 686L – RAM-only proof for an EXISTING media vault record.
+   * Never calls pripravMediaKlicZeZarizeni or desifrujPoznamkuZCloudu:
+   * those legacy paths can persist local repair/migration markers.
+   * No plaintext, image or identifiers are returned/logged.
+   */
+  async function recoveryOverMediaRecord686L(record, noteId, mediaId) {
+    if (!jeKlicDostupny()) return {ok:false,reason:"media_key_unavailable"};
+    if (!noteId || !mediaId || !record ||
+        Number(record.version) !== VERZE || record.algorithm !== "AES-GCM" ||
+        typeof record.mimeType !== "string" || !/^image\/[a-z0-9.+-]{1,40}$/i.test(record.mimeType) ||
+        typeof record.iv !== "string" || typeof record.ciphertext !== "string") {
+      return {ok:false,reason:"invalid_media_record"};
+    }
+    // Guard RAM allocation and malformed base64 before atob.
+    if (record.iv.length > 32 || record.ciphertext.length > 16 * 1024 * 1024 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.iv) ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.ciphertext)) {
+      return {ok:false,reason:"invalid_media_size_or_base64"};
+    }
+    let plaintext = null;
+    try {
+      const iv = prevedBase64NaBajty(record.iv);
+      const data = prevedBase64NaBajty(record.ciphertext);
+      if (iv.length !== 12 || data.length <= 16) {
+        return {ok:false,reason:"invalid_media_ciphertext"};
+      }
+      plaintext = new Uint8Array(await crypto.subtle.decrypt(
+        {name:"AES-GCM",iv,additionalData:vytvorAad(noteId,mediaId,record.mimeType)},
+        mediaSifrovaciKlic,data
+      ));
+      if (!plaintext.length) return {ok:false,reason:"empty_media_payload"};
+      // Authentication of the exact ciphertext, media AAD and old KEK succeeded.
+      return {ok:true,reason:"authenticated_media_payload"};
+    } catch (_error) {
+      return {ok:false,reason:"media_authentication_failed"};
+    } finally {
+      plaintext?.fill(0);
+    }
+  }
+
   function klonuj(hodnota) {
     if (typeof structuredClone === "function") {
       return structuredClone(hodnota);
@@ -1100,6 +1140,7 @@
     rozbalBajtyHlavnimKlicem,
     zabalBajtyE2ECore,
     rozbalBajtyE2ECore,
+    recoveryOverMediaRecord686L,
     nazevPoleTrezoru: POLE_TREZORU
   });
 

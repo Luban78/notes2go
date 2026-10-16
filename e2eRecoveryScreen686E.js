@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686K · SECRET/MEDIA AUDIT</span>
+          <span class="ln686e-badge">TEST WEB · 686L · MEDIA READ PROOF</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -220,7 +220,15 @@
             <p class="ln686e-note">READ-ONLY. TEST a PROD mohou sdílet databázi. Změna hesla není povolená, dokud nebude bezpečně prověřen i skrytý obsah médií.</p>
           </section>
           <section class="ln686e-card">
-            <h2>9. Report</h2>
+            <h2>9. 686L – Ověření čitelnosti médií (BEZ ZÁPISU)</h2>
+            <p>Ověříme skutečné rozšifrování starého mediálního trezoru i případných trezorů uvnitř E2E poznámek. Fotografie se nezobrazí ani neuloží. Test čte jen záznamy tohoto účtu a nic nemění.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="media-content-proof">Ověřit čitelnost médií</button>
+            <div class="ln686e-state" data-ln686l-status role="status" aria-live="polite"></div>
+            <div data-ln686l-checks></div>
+            <p class="ln686e-note">Kontrola je pouze pro přímé poznámky účtu (max. 30). Soubory Storage a sdílené poznámky zatím nejsou zahrnuté. Ani PASS nedovoluje změnit E2E heslo.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>10. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -244,6 +252,7 @@
       if (akce === "backend-shared-audit") { await spustBackendSharedAudit686I(); return; }
       if (akce === "shared-rewrap-dry-run") { await spustSharedRewrap686J(); return; }
       if (akce === "secret-media-audit") { await spustSecretMediaAudit686K(); return; }
+      if (akce === "media-content-proof") { await spustMediaProof686L(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -802,6 +811,76 @@
       "E2E password/keys/notes/server modified: NO"
     ].join("\n");
     nastavReport(bezK + (bezK ? "\n" : "") + report);
+  }
+
+  /* 686L – independent RAM-only check. Never starts the old tests. */
+  async function spustMediaProof686L() {
+    if (!obrazovka || obrazovka.hidden) return;
+    const btn=prvek('[data-ln686e="media-content-proof"]');
+    const stav=prvek('[data-ln686l-status]');
+    const obsah=prvek('[data-ln686l-checks]');
+    const mojeGenerace=++generace;
+    if (btn) btn.disabled=true;
+    if (stav) {
+      stav.textContent="Ověřuji šifrované záznamy v paměti…";
+      stav.removeAttribute("data-result");
+    }
+    if (obsah) obsah.textContent="";
+    let vysledek;
+    try {
+      const funkce=window.LubaNoteE2ECore?.recoveryMediaContentProof686L;
+      vysledek=typeof funkce==="function" ? await funkce() :
+        {ok:false,reason:"proof_unavailable"};
+    } catch (_error) {vysledek={ok:false,reason:"proof_failed"};}
+    if (mojeGenerace!==generace || !obrazovka || obrazovka.hidden) return;
+    if (btn) btn.disabled=false;
+    if (stav) {
+      stav.textContent=vysledek.ok
+        ? "ČITELNOST PASS – média poznámek ověřena; Storage stále ne (BEZ ZÁPISU)"
+        : "ČITELNOST NEDOKONČENA – nic nebylo změněno";
+      stav.dataset.result=vysledek.ok?"pass":"fail";
+    }
+    const pocet=v=>Number.isSafeInteger(v)&&v>=0?v:"?";
+    const radekP=(k,v)=>`<div class="ln686e-row"><span>${k}</span><strong>${pocet(v)}</strong></div>`;
+    if (obsah) obsah.innerHTML=[
+      radek("Účet ověřen",vysledek.accountVerified),
+      radek("Root Key dostupný",vysledek.rootVerified),
+      radek("Starý media klíč dostupný",vysledek.mediaKekReady),
+      radekP("Přečtené serverové poznámky",vysledek.remoteRowsScanned),
+      radekP("Rozšifrované E2E poznámky",vysledek.remoteE2EChecked),
+      radekP("Staré mediální trezory",vysledek.remoteLegacyVaultNotes),
+      radekP("Trezory uvnitř E2E poznámek",vysledek.remoteE2EVaultNotes),
+      radekP("Nalezené šifrované soubory v trezorech",vysledek.mediaItemsFound),
+      radekP("Úspěšně ověřené soubory",vysledek.mediaItemsAuthenticated),
+      radek("Obsah E2E poznámek prověřen",vysledek.e2eInnerPayloadAudited),
+      radek("Soubory ve Storage prověřeny",vysledek.storageObjectsAudited),
+      radek("Skutečná změna hesla povolena",vysledek.safeToRotate)
+    ].join("");
+    const yes=v=>v===true?"YES":"NO";
+    const num=v=>String(pocet(v));
+    const bezL=posledniReport.replace(/\n?LUBANOTE 686L – MEDIA CONTENT PROOF \(READ-ONLY\)[\s\S]*$/,"");
+    const report=[
+      "LUBANOTE 686L – MEDIA CONTENT PROOF (READ-ONLY)",
+      "mediaContentProof: "+(vysledek.ok?"NOTE_VAULT_PASS":"INCOMPLETE"),
+      "accountVerified: "+yes(vysledek.accountVerified),
+      "rootVerified: "+yes(vysledek.rootVerified),
+      "mediaKekReady: "+yes(vysledek.mediaKekReady),
+      "remoteNotesCount: "+num(vysledek.remoteNotesCount),
+      "remoteRowsScanned: "+num(vysledek.remoteRowsScanned),
+      "remoteE2EChecked: "+num(vysledek.remoteE2EChecked),
+      "remoteLegacyVaultNotes: "+num(vysledek.remoteLegacyVaultNotes),
+      "remoteE2EVaultNotes: "+num(vysledek.remoteE2EVaultNotes),
+      "mediaItemsFound: "+num(vysledek.mediaItemsFound),
+      "mediaItemsAuthenticated: "+num(vysledek.mediaItemsAuthenticated),
+      "legacyMediaAuthenticated: "+yes(vysledek.legacyMediaAuthenticated),
+      "e2eInnerPayloadAudited: "+yes(vysledek.e2eInnerPayloadAudited),
+      "storageObjectsAudited: NO",
+      "serverMediaContentAudited: NO",
+      "safeToRotate: NO",
+      "reason: "+String(vysledek.reason||"unknown").slice(0,90),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(bezL+(bezL?"\n":"")+report);
   }
 
   async function zkopirujReport(tlacitko) {

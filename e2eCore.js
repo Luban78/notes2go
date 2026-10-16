@@ -1856,6 +1856,124 @@
     }
   }
 
+  /* 686L – targeted read-only proof for legacy media and E2E inner vaults.
+   * Uses authenticated server note reads and the existing non-extractable keys.
+   * Does not call legacy note conversion, migration, write or device rehydrate.
+   * Does not inspect Storage objects, shared data, or other accounts.
+   * May run against PROD-backed TEST: NEVER writes; safeToRotate ALWAYS false.
+   */
+  async function recoveryMediaContentProof686L() {
+    const vysledek = {
+      ok:false,readOnly:true,safeToRotate:false,reason:"not_started",
+      accountVerified:false,rootVerified:false,mediaKekReady:false,
+      remoteNotesCount:0,remoteRowsScanned:0,remoteE2EChecked:0,
+      remoteLegacyVaultNotes:0,remoteE2EVaultNotes:0,
+      mediaItemsFound:0,mediaItemsAuthenticated:0,
+      legacyMediaAuthenticated:false,e2eInnerPayloadAudited:false,
+      storageObjectsAudited:false,serverMediaContentAudited:false
+    };
+    try {
+      if (String(location.hostname||"").toLowerCase() !== "test.lubanote.com") {
+        vysledek.reason="test_web_only";return vysledek;
+      }
+      if (!navigator.onLine) {vysledek.reason="offline";return vysledek;}
+      const klient=ziskejSupabase();
+      if (!klient?.auth?.getUser || !klient?.from) {
+        vysledek.reason="backend_unavailable";return vysledek;
+      }
+      const {data:auth,error:authChyba}=await klient.auth.getUser();
+      const userId=auth?.user?.id;
+      if (authChyba || !userId ||
+          String(localStorage.getItem("lubanoteLocalOwnerUserId")||"")!==userId) {
+        vysledek.reason="account_or_local_owner_unverified";return vysledek;
+      }
+      vysledek.accountVerified=true;
+      const stav=window.LubaNoteE2ECore?.getStav?.();
+      vysledek.rootVerified=Boolean(jeRootKlicDostupny() && rootKontext?.userId===userId &&
+        stav?.ready===true && stav?.userId===userId);
+      if (!vysledek.rootVerified) {vysledek.reason="root_unavailable";return vysledek;}
+      const media=window.LubaNoteMediaCrypto;
+      vysledek.mediaKekReady=media?.jeKlicDostupny?.()===true;
+      if (!vysledek.mediaKekReady || typeof media.recoveryOverMediaRecord686L!=="function") {
+        vysledek.reason="media_key_or_verifier_unavailable";return vysledek;
+      }
+      const e2e=window.LubaNoteNotesCrypto;
+      if (typeof e2e?.desifruj!=="function") {
+        vysledek.reason="e2e_read_unavailable";return vysledek;
+      }
+      const pocet=await klient.from("notes").select("id",{count:"exact",head:true})
+        .eq("user_id",userId).is("deleted_at",null);
+      if (pocet.error || !Number.isSafeInteger(pocet.count) || pocet.count<0) {
+        vysledek.reason="note_count_unavailable";return vysledek;
+      }
+      vysledek.remoteNotesCount=pocet.count;
+      // Bounded read-only test. Larger accounts need a paged specialized audit.
+      if (pocet.count>30) {vysledek.reason="over_30_notes_limit";return vysledek;}
+      const {data:rows,error:rowsChyba}=await klient.from("notes")
+        .select("id,data").eq("user_id",userId).is("deleted_at",null)
+        .order("id",{ascending:true}).limit(31);
+      if (rowsChyba || !Array.isArray(rows) || rows.length!==pocet.count) {
+        vysledek.reason="note_read_incomplete";return vysledek;
+      }
+      for (const row of rows) {
+        const obj=row?.data;
+        if (!row?.id || !obj || typeof obj!=="object" || Array.isArray(obj)) {
+          vysledek.reason="invalid_note_data";return vysledek;
+        }
+        let note=obj;
+        if (Object.prototype.hasOwnProperty.call(obj,"__lubanoteE2ENote")) {
+          // Direct authenticated decrypt only; do NOT call CloudRead which
+          // alters its protected-ID guard. Never expose decrypted note in UI.
+          try {note=await e2e.desifruj(obj,userId,row.id);}
+          catch (_error) {vysledek.reason="e2e_inner_decrypt_failed";return vysledek;}
+          vysledek.remoteE2EChecked++;
+        }
+        const vault=note?.__lubanoteMediaVault;
+        if (vault!==undefined && vault!==null) {
+          if (Number(vault.version)!==1 || vault.algorithm!=="AES-GCM" ||
+              !vault.items || typeof vault.items!=="object" || Array.isArray(vault.items)) {
+            vysledek.reason="media_vault_invalid";return vysledek;
+          }
+          if (note===obj) vysledek.remoteLegacyVaultNotes++;
+          else vysledek.remoteE2EVaultNotes++;
+          const zaznamy=Object.entries(vault.items);
+          if (zaznamy.length>30) {vysledek.reason="over_30_media_limit";return vysledek;}
+          for (const [mediaId,record] of zaznamy) {
+            if (++vysledek.mediaItemsFound>30) {
+              vysledek.reason="over_30_media_limit";return vysledek;
+            }
+            const proof=await media.recoveryOverMediaRecord686L(record,row.id,mediaId);
+            if (proof?.ok!==true) {vysledek.reason=proof?.reason||"media_failed";return vysledek;}
+            vysledek.mediaItemsAuthenticated++;
+          }
+        }
+        vysledek.remoteRowsScanned++;
+      }
+      const overeniPoctu=await klient.from("notes")
+        .select("id",{count:"exact",head:true})
+        .eq("user_id",userId).is("deleted_at",null);
+      const {data:aktualni,error:aktualniChyba}=await klient.auth.getUser();
+      if (overeniPoctu.error || overeniPoctu.count!==pocet.count ||
+          aktualniChyba || aktualni?.user?.id!==userId ||
+          !jeRootKlicDostupny() || rootKontext?.userId!==userId ||
+          media.jeKlicDostupny?.()!==true) {
+        vysledek.reason="account_or_data_changed";return vysledek;
+      }
+      vysledek.legacyMediaAuthenticated=vysledek.remoteLegacyVaultNotes>0 &&
+        vysledek.mediaItemsAuthenticated===vysledek.mediaItemsFound;
+      vysledek.e2eInnerPayloadAudited=true; // Only these direct-owner rows.
+      vysledek.ok=true;
+      vysledek.reason=vysledek.mediaItemsFound===0
+        ? "no_vault_items_in_owner_notes_storage_unverified"
+        : "owner_note_vault_items_authenticated_storage_unverified";
+      // storageObjectsAudited/serverMediaContentAudited/safeToRotate
+      // intentionally remain FALSE until separate comprehensive validation.
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason="media_content_proof_failed";return vysledek;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1887,6 +2005,7 @@
     recoveryBackendSharedAudit686I,
     recoverySharedRewrapDryRun686J,
     recoverySecretMediaAudit686K,
+    recoveryMediaContentProof686L,
     getStav,
     resetPametiProTest
   });
