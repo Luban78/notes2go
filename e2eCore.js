@@ -778,6 +778,64 @@
     }
   }
 
+  /* 686A: pouze diagnostika obnovy; nikdy nemeni klice ani data.
+     Vysledek neobsahuje hesla, obalky ani identifikatory uctu. */
+  async function recoveryPreflight() {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      reason: null,
+      rootReady: jeRootKlicDostupny(),
+      deviceKekReady: Boolean(window.LubaNoteMediaCrypto?.jeKlicDostupny?.()),
+      localEnvelope: false,
+      serverEnvelope: false,
+      sameKeyId: false,
+      online: Boolean(navigator.onLine)
+    };
+
+    try {
+      const userId = await ziskejAktualniUserId();
+      if (!userId) {
+        vysledek.reason = "not_authenticated";
+        return vysledek;
+      }
+
+      const lokalni = await nactiLokalniRootRecord(userId);
+      vysledek.localEnvelope = maPlatnyLokalniRecord(lokalni, userId);
+
+      if (!vysledek.online) {
+        vysledek.reason = "offline";
+        return vysledek;
+      }
+
+      const server = await nactiServerRootRecord(userId);
+      if (!server.ok) {
+        vysledek.reason = server.reason || "server_read_failed";
+        return vysledek;
+      }
+
+      vysledek.serverEnvelope = maPlatnyServerRecord(server.data);
+      vysledek.sameKeyId = Boolean(
+        vysledek.localEnvelope &&
+        vysledek.serverEnvelope &&
+        lokalni.keyId === server.data.e2e_root_key_id
+      );
+
+      vysledek.ok = Boolean(
+        vysledek.rootReady &&
+        vysledek.deviceKekReady &&
+        vysledek.localEnvelope &&
+        vysledek.serverEnvelope &&
+        vysledek.sameKeyId
+      );
+      vysledek.reason = vysledek.ok ? null : "recovery_prerequisites_missing";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "preflight_failed";
+      return vysledek;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -801,6 +859,7 @@
     pripravRootKlicProUcet,
     odvodDomenovyKlic,
     selfTest,
+    recoveryPreflight,
     getStav,
     resetPametiProTest
   });
