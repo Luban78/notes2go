@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686H · LEGACY AUDIT</span>
+          <span class="ln686e-badge">TEST WEB · 686I · BACKEND / SHARED AUDIT</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -187,7 +187,16 @@
             <p class="ln686e-note">686H je výhradně diagnostika. Ani úspěšná kontrola nepovolí přepsání hesla. TEST web nemusí znamenat samostatnou databázi.</p>
           </section>
           <section class="ln686e-card">
-            <h2>6. Report</h2>
+            <h2>6. 686I – Backend a Shared identita</h2>
+            <p>Nový samostatný TEST, bez opakování 686G. Zjistí skutečnou adresu API a ověří existující Shared identitu bez jakéhokoli zápisu.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="backend-shared-audit">Zkontrolovat backend a Shared klíč</button>
+            <div class="ln686e-state" data-ln686i-status role="status" aria-live="polite"></div>
+            <p class="ln686e-note" data-ln686i-backend style="white-space:pre-wrap"></p>
+            <div data-ln686i-checks></div>
+            <p class="ln686e-note">TEST web ani název profilu nedokazují samostatnou databázi. Změna hlavního hesla zůstává zakázaná. Kontrola pouze čte šifrovanou obálku a ověřuje klíče v paměti.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>7. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -208,6 +217,7 @@
       if (akce === "dry-run") { await spustDryRun(); return; }
       if (akce === "new-password-test") { await spustNoveHesloDryRun(); return; }
       if (akce === "legacy-audit") { await spustLegacyAudit686H(); return; }
+      if (akce === "backend-shared-audit") { await spustBackendSharedAudit686I(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -533,6 +543,85 @@
     ].join("\n");
     const zaklad = posledniReport.replace(/\nlegacyAudit: [\s\S]*$/, "");
     nastavReport(zaklad + "\n" + txt);
+  }
+
+  /* 686I can be run immediately after opening the TEST screen. Previous
+     686G/686H tests are not required again just to inspect this issue. */
+  async function spustBackendSharedAudit686I() {
+    if (!obrazovka || obrazovka.hidden) return;
+    const mojeGenerace = ++generace;
+    const tlacitko = prvek('[data-ln686e="backend-shared-audit"]');
+    const stav = prvek('[data-ln686i-status]');
+    const backend = prvek('[data-ln686i-backend]');
+    const obsah = prvek('[data-ln686i-checks]');
+    if (tlacitko) tlacitko.disabled = true;
+    if (stav) {
+      stav.textContent = "Ověřuji backend a existující Shared identitu…";
+      stav.removeAttribute("data-result");
+    }
+    if (backend) backend.textContent = "";
+    if (obsah) obsah.textContent = "";
+    let audit;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoveryBackendSharedAudit686I;
+      audit = typeof funkce === "function"
+        ? await funkce()
+        : { ok: false, reason: "backend_shared_audit_unavailable" };
+    } catch (_error) {
+      audit = { ok: false, reason: "backend_shared_audit_failed" };
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (tlacitko) tlacitko.disabled = false;
+    if (stav) {
+      stav.textContent = audit.ok
+        ? (audit.productionApi
+          ? "PRODUKČNÍ API – KONTROLA DOKONČENA, BEZ ZÁPISU"
+          : "KONTROLA DOKONČENA – ZMĚNA HESLA ZAKÁZÁNA")
+        : "KONTROLA NEDOKONČENA – ZMĚNA HESLA ZAKÁZÁNA";
+      stav.dataset.result = audit.ok && !audit.productionApi ? "pass" : "fail";
+    }
+    if (backend) {
+      backend.textContent = [
+        "Skutečné API: " + String(audit.actualApiHost || "unknown"),
+        "Backend: " + String(audit.configuredBackendId || "unknown"),
+        "Profil: " + String(audit.configuredProfileId || "unknown"),
+        "Prostředí: " + String(audit.configuredEnvironment || "unknown")
+      ].join("\n");
+    }
+    if (obsah) obsah.innerHTML = [
+      radek("Účet ověřen", audit.accountVerified),
+      radek("Nastavení odpovídá skutečnému API", audit.backendUrlMatchesClient),
+      radek("Shared identita nalezena", audit.sharedIdentityFound),
+      radek("Metadata Shared identity", audit.sharedIdentityMetadataValid),
+      radek("Původní ochranný klíč", audit.mediaKekReady),
+      radek("Shared obálka rozbalena", audit.sharedPrivateEnvelopeDecrypted),
+      radek("Shared klíčový pár ověřen", audit.sharedKeyPairVerified),
+      radek("Samostatná TEST DB prokázána", audit.isolatedTestDatabaseVerified),
+      radek("Skutečná změna hesla povolena", audit.safeToRotate)
+    ].join("");
+    const anoNe = (v) => v === true ? "YES" : "NO";
+    const predesly = posledniReport.replace(/\nLUBANOTE 686I – BACKEND SHARED AUDIT \(READ-ONLY\)[\s\S]*$/, "");
+    const textReportu = [
+      "LUBANOTE 686I – BACKEND SHARED AUDIT (READ-ONLY)",
+      "backendSharedAudit: " + (audit.ok ? "COMPLETED" : "INCOMPLETE"),
+      "actualApiHost: " + String(audit.actualApiHost || "unknown"),
+      "configuredBackendId: " + String(audit.configuredBackendId || "unknown"),
+      "configuredEnvironment: " + String(audit.configuredEnvironment || "unknown"),
+      "configuredProfileId: " + String(audit.configuredProfileId || "unknown"),
+      "backendUrlMatchesClient: " + anoNe(audit.backendUrlMatchesClient),
+      "productionApi: " + anoNe(audit.productionApi),
+      "isolatedTestDatabaseVerified: NO",
+      "accountVerified: " + anoNe(audit.accountVerified),
+      "sharedIdentityFound: " + anoNe(audit.sharedIdentityFound),
+      "sharedIdentityMetadataValid: " + anoNe(audit.sharedIdentityMetadataValid),
+      "mediaKekReady: " + anoNe(audit.mediaKekReady),
+      "sharedPrivateEnvelopeDecrypted: " + anoNe(audit.sharedPrivateEnvelopeDecrypted),
+      "sharedKeyPairVerified: " + anoNe(audit.sharedKeyPairVerified),
+      "safeToRotate: NO",
+      "reason: " + String(audit.reason || "unknown").slice(0, 80),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(predesly + (predesly ? "\n" : "") + textReportu);
   }
 
   async function zkopirujReport(tlacitko) {

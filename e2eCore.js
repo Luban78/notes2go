@@ -1323,6 +1323,178 @@
     }
   }
 
+  /* 686I – TEST WEB read-only provenance and Shared identity cryptographic audit.
+   * The TEST website does not imply a separate API/DB. This function shows
+   * the ACTUAL Supabase client's endpoint and never certifies DB isolation.
+   * The Shared private key is decrypted only into ephemeral memory, verified
+   * against the server public key using ECDH symmetry, and immediately cleared.
+   * No key generation for the account, no writes, no rewrap, no password reset.
+   */
+  async function recoveryBackendSharedAudit686I() {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      safeToRotate: false,
+      reason: "not_started",
+      testWeb: false,
+      accountVerified: false,
+      configuredBackendId: "unknown",
+      configuredEnvironment: "unknown",
+      configuredProfileId: "unknown",
+      actualApiHost: "unknown",
+      backendUrlMatchesClient: false,
+      productionApi: false,
+      isolatedTestDatabaseVerified: false,
+      sharedIdentityFound: false,
+      sharedIdentityMetadataValid: false,
+      mediaKekReady: false,
+      sharedPrivateEnvelopeDecrypted: false,
+      sharedKeyPairVerified: false
+    };
+    let soukromyPkcs8 = null;
+    let dukazLevy = null;
+    let dukazPravy = null;
+    try {
+      vysledek.testWeb = String(location.hostname || "").toLowerCase() === "test.lubanote.com";
+      if (!vysledek.testWeb) {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      if (!navigator.onLine) {
+        vysledek.reason = "offline";
+        return vysledek;
+      }
+      const klient = ziskejSupabase();
+      const profil = typeof LUBANOTE_BACKEND !== "undefined" ? LUBANOTE_BACKEND : null;
+      if (!klient?.auth?.getUser || !klient?.from || !profil?.url || !klient.supabaseUrl) {
+        vysledek.reason = "backend_client_unavailable";
+        return vysledek;
+      }
+      const nakonfigurovano = new URL(profil.url);
+      const skutecne = new URL(klient.supabaseUrl);
+      if (nakonfigurovano.protocol !== "https:" || skutecne.protocol !== "https:") {
+        vysledek.reason = "insecure_backend_url";
+        return vysledek;
+      }
+      vysledek.configuredBackendId = String(profil.backendId || "unknown").slice(0, 60);
+      vysledek.configuredEnvironment = String(profil.prostredi || "unknown").slice(0, 32);
+      vysledek.configuredProfileId = String(profil.id || "unknown").slice(0, 60);
+      vysledek.actualApiHost = skutecne.hostname.slice(0, 100);
+      vysledek.backendUrlMatchesClient = nakonfigurovano.origin === skutecne.origin;
+      /* Report recognizes established production API hosts; physical DB
+         separation can NOT be proven merely from an API hostname/profile. */
+      vysledek.productionApi = [
+        "api.lubanote.com",
+        "nwdacgigplofksexssws.supabase.co"
+      ].includes(vysledek.actualApiHost);
+      if (!vysledek.backendUrlMatchesClient) {
+        vysledek.reason = "configured_and_runtime_api_mismatch";
+        return vysledek;
+      }
+      const { data: prihlaseny, error: authChyba } = await klient.auth.getUser();
+      const userId = prihlaseny?.user?.id;
+      if (authChyba || !userId) {
+        vysledek.reason = "account_unverified";
+        return vysledek;
+      }
+      vysledek.accountVerified = true;
+      const { data: identita, error: chybaIdentity } = await klient
+        .from("lubanote_shared_crypto_identities")
+        .select("user_id, algorithm, key_version, public_key_jwk, private_key_box")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (chybaIdentity) {
+        vysledek.reason = "shared_identity_read_failed";
+        return vysledek;
+      }
+      vysledek.sharedIdentityFound = Boolean(identita);
+      if (!identita) {
+        vysledek.ok = true;
+        vysledek.reason = "shared_identity_missing";
+        return vysledek;
+      }
+      vysledek.sharedIdentityMetadataValid = Boolean(
+        identita.user_id === userId &&
+        identita.algorithm === "ECDH-P256" &&
+        Number(identita.key_version) === 1 &&
+        identita.public_key_jwk?.kty === "EC" &&
+        identita.public_key_jwk?.crv === "P-256" &&
+        identita.private_key_box?.algorithm === "AES-GCM" &&
+        Number(identita.private_key_box?.version) === 1
+      );
+      if (!vysledek.sharedIdentityMetadataValid) {
+        vysledek.reason = "shared_identity_metadata_invalid";
+        return vysledek;
+      }
+      const media = window.LubaNoteMediaCrypto;
+      vysledek.mediaKekReady = media?.jeKlicDostupny?.() === true;
+      if (!vysledek.mediaKekReady || !media?.rozbalBajtyHlavnimKlicem) {
+        vysledek.reason = "shared_media_kek_locked";
+        return vysledek;
+      }
+      /* Read/decrypt only – NEVER call zajistiIdentitu(), which may create a
+         new server identity if one is absent. */
+      soukromyPkcs8 = await media.rozbalBajtyHlavnimKlicem(
+        identita.private_key_box,
+        `shared-identity:${userId}:v1`
+      );
+      if (!(soukromyPkcs8 instanceof Uint8Array) ||
+          soukromyPkcs8.length < 60 || soukromyPkcs8.length > 1024) {
+        vysledek.reason = "shared_private_key_invalid";
+        return vysledek;
+      }
+      vysledek.sharedPrivateEnvelopeDecrypted = true;
+      /* P-256 consistency without exporting/replacing private key:
+         ECDH(old private, ephemeral public) must match
+         ECDH(ephemeral private, old public). */
+      const starySoukromy = await crypto.subtle.importKey(
+        "pkcs8", soukromyPkcs8,
+        { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]
+      );
+      const staryVerejny = await crypto.subtle.importKey(
+        "jwk", identita.public_key_jwk,
+        { name: "ECDH", namedCurve: "P-256" }, false, []
+      );
+      const docasny = await crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]
+      );
+      dukazLevy = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "ECDH", public: docasny.publicKey }, starySoukromy, 256
+      ));
+      dukazPravy = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "ECDH", public: staryVerejny }, docasny.privateKey, 256
+      ));
+      let rozdil = dukazLevy.length ^ dukazPravy.length;
+      for (let i = 0; i < Math.min(dukazLevy.length, dukazPravy.length); i += 1) {
+        rozdil |= dukazLevy[i] ^ dukazPravy[i];
+      }
+      vysledek.sharedKeyPairVerified = rozdil === 0 && dukazLevy.length === 32;
+      if (!vysledek.sharedKeyPairVerified) {
+        vysledek.reason = "shared_key_pair_mismatch";
+        return vysledek;
+      }
+      const { data: kontrola, error: chybaKontroly } = await klient.auth.getUser();
+      if (chybaKontroly || kontrola?.user?.id !== userId) {
+        vysledek.reason = "active_account_changed";
+        return vysledek;
+      }
+      vysledek.ok = true;
+      vysledek.reason = vysledek.productionApi
+        ? "production_api_shared_key_verified_read_only"
+        : "shared_key_verified_read_only";
+      /* safeToRotate remains FALSE: server media/Secret/shared migration
+         and atomic replacement procedure have NOT been validated. */
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "shared_identity_crypto_audit_failed";
+      return vysledek;
+    } finally {
+      soukromyPkcs8?.fill(0);
+      dukazLevy?.fill(0);
+      dukazPravy?.fill(0);
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1351,6 +1523,7 @@
     recoveryRewrapDryRun,
     recoveryNoveHesloDryRun,
     recoveryLegacyAudit686H,
+    recoveryBackendSharedAudit686I,
     getStav,
     resetPametiProTest
   });
