@@ -1,6 +1,6 @@
-/* LubaNote 685A – priprava E2E obalky bez zapojeni do Sync.
- * Tento modul NIC neposila, nezapisuje ani nemigruje. Zapojeni cteni,
- * zapisu, konfliktu a sdileni prijde az po samostatnem regresnim testu.
+/* LubaNote 685B – priprava BEZPECNEHO CTENI E2E obalky v private Sync.
+ * Zapis obsahu zustava legacy; pri cteni chraneneho cloudu se pripadny
+ * plaintext re-upload stejneho ID zastavi. Zadne migrace ani DB zmeny.
  */
 (() => {
   "use strict";
@@ -13,6 +13,9 @@
   const MAX_BAJTU = 25 * 1024 * 1024;
   let posledniTestovanyKlic = null;
   let probihaTest = false;
+  let posledniTest685B = null;
+  let probihaTest685B = false;
+  const chranenaCloudId = new Set();
 
   function chyba(kod, zprava) {
     const vysledek = new Error(zprava);
@@ -123,7 +126,9 @@
     const id = overId(noteId, "note ID");
     if (!jeObalka(obalka) || obalka.version !== VERZE ||
         obalka.algorithm !== "AES-256-GCM" ||
-        typeof obalka.keyId !== "string") {
+        typeof obalka.keyId !== "string" ||
+        Object.keys(obalka).sort().join(",") !==
+          "__lubanoteE2ENote,algorithm,ciphertext,iv,keyId,version") {
       throw chyba("E2E_INVALID_ENVELOPE", "Nepodporovana E2E obalka.");
     }
     const { klic, keyId } = await nactiKlic(vlastnik);
@@ -159,6 +164,101 @@
     return poznamka;
   }
 
+  /*
+   * 685B: v serverovem JSONB se smi objevit E2E obalka.
+   * Zasifrovana poznamka se NIKDY nesmi vydavat za beznou prazdnou
+   * poznamku pri chybe klice, verze, identity ani autentizace.
+   */
+  function maRezervovanyE2EMarker(data) {
+    return Boolean(data && typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.prototype.hasOwnProperty.call(data, "__lubanoteE2ENote"));
+  }
+
+  function jeChraneneCloudId(noteId) {
+    return chranenaCloudId.has(String(noteId || ""));
+  }
+
+  async function pripravCloudRadkyProCteni(rows, userId) {
+    if (!Array.isArray(rows)) {
+      throw chyba("E2E_INVALID_ROWS", "Ocekavany seznam cloudovych radku.");
+    }
+    if (!rows.some(row => !row?.deleted_at && maRezervovanyE2EMarker(row?.data))) {
+      return rows;
+    }
+
+    const vlastnik = overId(userId, "user ID");
+    const vysledek = [];
+    let pocetDesifrovanych = 0;
+
+    for (const row of rows) {
+      if (!row || row.deleted_at || !maRezervovanyE2EMarker(row.data)) {
+        vysledek.push(row);
+        continue;
+      }
+      const id = overId(row.id, "note ID");
+      if (row.user_id != null && String(row.user_id) !== vlastnik) {
+        throw chyba("E2E_OWNER_MISMATCH", "Cloudovy radek nepatri prihlasenemu uctu.");
+      }
+      /* Pred decryptem zablokovat downgradovaci zapis pro dane ID,
+         a to i kdyz chybi klic nebo se overeni ciphertextu nezdari. */
+      chranenaCloudId.add(id);
+      /* Zaznam s markerem, ale chybnou/nepodporovanou obalkou
+         MUSI skoncit chybou, nikdy plaintext fallbackem. */
+      if (!jeObalka(row.data)) {
+        throw chyba("E2E_INVALID_ENVELOPE", "Neplatny E2E marker poznámky.");
+      }
+      const poznamka = await desifruj(row.data, vlastnik, id);
+      if (poznamka.id !== id || poznamka.isSecret === true) {
+        throw chyba("E2E_INVALID_PAYLOAD", "Nesouhlasi identita poznamky.");
+      }
+      /* Jiz rozpoznanou E2E poznamku 685B NESMI zapsat zpet jako
+         plaintext. Ochrana funguje i po pripadnem lokalnim editovani. */
+      pocetDesifrovanych++;
+      vysledek.push({ ...row, data: poznamka });
+    }
+
+    if (pocetDesifrovanych > 0) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "E2E", `685B CLOUD READ | decrypted=${pocetDesifrovanych} | write-guard=ON`
+      );
+    }
+    return vysledek;
+  }
+
+  async function selfTestCloudRead(userId) {
+    const vlastnik = overId(userId, "user ID");
+    const id = "685B-self-test-note";
+    const testovaci = { id, isSecret: false, title: "685B_ONLY_RAM", note: "685B_PAYLOAD" };
+    const obalka = await zasifruj(testovaci, vlastnik);
+    const normalni = { id: "685B-legacy-note", data: { id: "685B-legacy-note", note: "legacy" } };
+    const vysledek = await pripravCloudRadkyProCteni([
+      normalni, { id, user_id: vlastnik, data: obalka }
+    ], vlastnik);
+    if (vysledek.length !== 2 || vysledek[0] !== normalni ||
+        JSON.stringify(vysledek[1].data) !== JSON.stringify(testovaci) ||
+        !jeChraneneCloudId(id)) {
+      throw chyba("E2E_READ_SELFTEST_FAILED", "Roundtrip cloud read selhal.");
+    }
+    let chyby = 0;
+    for (const test of [
+      { id: "other-note-id", user_id: vlastnik, data: obalka },
+      { id, user_id: "other-account", data: obalka },
+      { id, user_id: vlastnik, data: { ...obalka, ciphertext: obalka.ciphertext.slice(0, -4) + "AAAA" } },
+      { id, user_id: vlastnik, data: { ...obalka, __lubanoteE2ENote: false } }
+    ]) {
+      try {
+        await pripravCloudRadkyProCteni([test], vlastnik);
+      } catch (_) {
+        chyby++;
+      }
+    }
+    if (chyby !== 4) {
+      throw chyba("E2E_READ_SELFTEST_FAILED", "Neplatny cloudovy radek nebyl odmitnut.");
+    }
+    return { ok: true, module: "685B" };
+  }
+
   async function selfTest(userId) {
     const vlastnik = overId(userId, "user ID");
     const id = "685A-self-test-note";
@@ -189,11 +289,29 @@
     }).finally(() => { probihaTest = false; });
   });
 
+  window.addEventListener("lubanote:e2e-core-state", (udalost) => {
+    const stav = udalost?.detail;
+    if (!stav?.ready || !stav.userId || !stav.keyId) return;
+    const identita = `${stav.userId}:${stav.keyId}`;
+    if (probihaTest685B || identita === posledniTest685B) return;
+    probihaTest685B = true;
+    void selfTestCloudRead(stav.userId).then(() => {
+      posledniTest685B = identita;
+      window.LubaNoteStartupDiag?.zapis?.("E2E", "685B CLOUD READ SELF TEST PASS (RAM ONLY)");
+    }).catch((error) => {
+      window.LubaNoteStartupDiag?.zapis?.("E2E", `685B CLOUD READ SELF TEST FAIL | ${error.code || "unknown"}`);
+    }).finally(() => { probihaTest685B = false; });
+  });
+
   window.LubaNoteNotesCrypto = Object.freeze({
-    verze: "685A-PREPARATION",
+    verze: "685B-READ-ONLY",
     jeObalka,
+    maRezervovanyE2EMarker,
+    jeChraneneCloudId,
     zasifruj,
     desifruj,
-    selfTest
+    pripravCloudRadkyProCteni,
+    selfTest,
+    selfTestCloudRead
   });
 })();

@@ -1221,6 +1221,19 @@ async function provedBezpecnyZapisPoznamky({
     return { ok: false };
   }
 
+  /* 685B – diagnosticka read faze nesmi downgradovat cloud E2E
+     zaznam na plaintext ani jej smazat. Na 685C ceka E2E zapis. */
+  if (window.LubaNoteNotesCrypto?.jeChraneneCloudId?.(id) === true) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "E2E", "685B WRITE BLOCKED | encrypted cloud record | id=" + id
+    );
+    return {
+      ok: false,
+      wrote: false,
+      reason: "e2e_write_not_enabled"
+    };
+  }
+
   const { data: vysledek, error } =
     await supabaseClient.rpc(
       "save_note_safe",
@@ -2396,6 +2409,38 @@ async function nactiCloudSnapshotJednimPokusem() {
   }
 }
 
+/*
+ * 685B: centralni adapter pro oba private read vstupy (full i targeted).
+ * Nezasahuje do legacy radku, pri zamcenem/spravne neoverenem Root Key
+ * odmita E2E radek – zadna prazdna poznamka ani plaintext fallback.
+ */
+async function pripravCloudRadky685B(rows) {
+  if (!Array.isArray(rows)) {
+    throw new Error("685B: neplatna odpoved cloudu.");
+  }
+
+  const modul = window.LubaNoteNotesCrypto;
+  if (!modul?.maRezervovanyE2EMarker ||
+      !modul?.pripravCloudRadkyProCteni) {
+    if (rows.some(row => row?.data &&
+        Object.prototype.hasOwnProperty.call(row.data, "__lubanoteE2ENote"))) {
+      throw new Error("685B: E2E modul neni dostupny, synchronizace zastavena.");
+    }
+    return rows;
+  }
+
+  if (!rows.some(row => !row?.deleted_at &&
+      modul.maRezervovanyE2EMarker(row?.data))) {
+    return rows;
+  }
+
+  const uzivatel = await getCurrentUser();
+  if (!uzivatel?.id) {
+    throw new Error("685B: neni overeny ucet pro E2E cloud read.");
+  }
+  return await modul.pripravCloudRadkyProCteni(rows, uzivatel.id);
+}
+
 async function getCloudNotesForSync() {
   const user = await getCurrentUser();
 
@@ -2463,16 +2508,15 @@ async function getCloudNotesForSync() {
     );
   }
 
-  /* PATCH 551 – cloudové běžné poznámky mohou obsahovat E2E media
-     trezor. Dešifrujeme jej ještě PŘED revision merge, aby všechny
-     existující porovnávací cesty dál pracovaly s kanonickým lokálním
-     plaintext modelem a nevytvářely falešné konflikty. */
+  /* 685B: nejdrive cely E2E payload -> kanonicka poznamka, pak
+     dosavadni foto-media vault. Chyba klice zablokuje cely merge. */
+  const pripraveneRadky = await pripravCloudRadky685B(data);
   if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
     return await window.LubaNoteMediaCrypto
-      .pripravCloudRadkyProLokalniPouziti(data);
+      .pripravCloudRadkyProLokalniPouziti(pripraveneRadky);
   }
 
-  return data;
+  return pripraveneRadky;
 }
 
 
@@ -2538,6 +2582,15 @@ async function ziskejVlastniSdileneIdProSync() {
 }
 
 function vytvorCloudRegularNote(row) {
+  /* Zadne vybaleni obalky jako prazdne regular note, kdyby nektera
+     budouci vedlejsi read cesta zapomnela projit adapterem 685B. */
+  if (row?.data && Object.prototype.hasOwnProperty.call(
+    row.data, "__lubanoteE2ENote"
+  )) {
+    const chyba = new Error("685B: neodsifrovany cloud E2E zaznam.");
+    chyba.code = "LUBANOTE_E2E_UNDECRYPTED";
+    throw chyba;
+  }
   if (
     !row?.data ||
     row.deleted_at ||
@@ -3304,20 +3357,20 @@ async function nactiCloudPoznamkyPodleIdV2(noteIds) {
 
   const radky = Array.isArray(data) ? data : [];
 
-  if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
-    try {
+  try {
+    const e2eRadky = await pripravCloudRadky685B(radky);
+    if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
       return await window.LubaNoteMediaCrypto
-        .pripravCloudRadkyProLokalniPouziti(radky);
-    } catch (error) {
-      console.warn(
-        "Sync V2: targeted download šifrovaných fotografií čeká na odemčení Secret.",
-        error
-      );
-      return null;
+        .pripravCloudRadkyProLokalniPouziti(e2eRadky);
     }
+    return e2eRadky;
+  } catch (error) {
+    console.warn(
+      "Sync V2: 685B E2E/media read odlozen – zadny radek nebude aplikovan:",
+      error?.code || error?.message || "unknown"
+    );
+    return null;
   }
-
-  return radky;
 }
 
 
