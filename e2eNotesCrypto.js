@@ -304,7 +304,7 @@
   });
 
   window.LubaNoteNotesCrypto = Object.freeze({
-    verze: "685B-READ-ONLY",
+    verze: "685D-PRIVATE-WRITE",
     jeObalka,
     maRezervovanyE2EMarker,
     jeChraneneCloudId,

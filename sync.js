@@ -1223,7 +1223,9 @@ async function provedBezpecnyZapisPoznamky({
 
   /* 685B – diagnosticka read faze nesmi downgradovat cloud E2E
      zaznam na plaintext ani jej smazat. Na 685C ceka E2E zapis. */
-  if (window.LubaNoteNotesCrypto?.jeChraneneCloudId?.(id) === true) {
+  if (window.LubaNoteNotesCrypto?.jeChraneneCloudId?.(id) === true &&
+      window.LubaNoteNotesCrypto?.jeObalka?.(data) !== true &&
+      deleteNote !== true) {
     window.LubaNoteStartupDiag?.zapis?.(
       "E2E", "685B WRITE BLOCKED | encrypted cloud record | id=" + id
     );
@@ -2094,6 +2096,33 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
     };
   }
 
+  /* 685D: novy private zaznam bez serverove revize se zapisuje jako
+   * AES-GCM obalka. Legacy zaznamy s revizi zustavaji beze zmeny.
+   * Shared poznamky a Secret pouzivaji vlastni sync cesty.
+   * Pokud klic chybi, sync odlozime, nikoliv plaintext fallback.
+   */
+  const e2eModul = window.LubaNoteNotesCrypto;
+  const maServerovouRevizi = ziskejCloudSyncMeta(note.id) !== null;
+  const jeSdilena = window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(note.id) === true;
+  const jeChranena = e2eModul?.jeChraneneCloudId?.(note.id) === true;
+  if (note.isSecret !== true && !jeSdilena &&
+      (!maServerovouRevizi || jeChranena)) {
+    if (typeof e2eModul?.zasifruj !== "function") {
+      console.error("685D: E2E modul chybi, cloud zapis odlozen.");
+      return moznosti?.vratitDetailV2 === true
+        ? { ok: false, wrote: false, reason: "e2e_module_missing" }
+        : false;
+    }
+    try {
+      dataToStore = await e2eModul.zasifruj(dataToStore, user.id);
+    } catch (error) {
+      console.error("685D: E2E sifrovani selhalo, zapis odlozen.", error);
+      return moznosti?.vratitDetailV2 === true
+        ? { ok: false, wrote: false, reason: error?.code || "e2e_encrypt_failed", error }
+        : false;
+    }
+  }
+
   const vysledek = await zaradServerovyZapis(
     note.id,
     async () => {
@@ -2169,7 +2198,7 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
          * pending_delete; fyzický soubor se v této fázi nemaže.
          */
         await cloud.synchronizujReferencePrilohPoznamky(
-          mediaChranenaE2E ? dataToStore : note
+          e2eModul?.jeObalka?.(dataToStore) === true ? dataToStore : (mediaChranenaE2E ? dataToStore : note)
         );
       } else if (cloud.oznacPrilohyPoznamkyJakoAktivni) {
         /*
@@ -2177,7 +2206,7 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
          * starší serverové/JS vrstvě bez reconciliation RPC.
          */
         await cloud.oznacPrilohyPoznamkyJakoAktivni(
-          mediaChranenaE2E ? dataToStore : note
+          e2eModul?.jeObalka?.(dataToStore) === true ? dataToStore : (mediaChranenaE2E ? dataToStore : note)
         );
       }
     } catch (error) {
