@@ -1156,6 +1156,173 @@
     }
   }
 
+  /* PATCH 686H – READ-ONLY inventory before any potential main-password reset.
+   * This is NOT authorization to rotate secret_settings. Legacy Secret notes,
+   * image vaults, Secret tags and shared identities are encrypted under V1
+   * password-derived keys, unlike ordinary Root Key E2E notes. Replacing
+   * their salt/verifier without a migration can irreversibly lock them.
+   * The server bootstrap manifest contains metadata, not image-vault JSON,
+   * so remote media absence CANNOT be inferred from it. Fail closed.
+   */
+  async function recoveryLegacyAudit686H() {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      safeToRotate: false,
+      reason: "not_started",
+      testWeb: false,
+      testBackend: false,
+      rootVerified: false,
+      localSecretNotes: 0,
+      localLegacySecretNotes: 0,
+      localMediaVaults: 0,
+      serverNotes: 0,
+      serverSecretNotes: 0,
+      serverSecretTags: 0,
+      serverSecretAttachments: 0,
+      serverSharedIdentities: 0,
+      serverMediaContentAudited: false
+    };
+
+    try {
+      vysledek.testWeb = String(location.hostname || "").toLowerCase() === "test.lubanote.com";
+      if (!vysledek.testWeb) {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      if (!navigator.onLine) {
+        vysledek.reason = "offline";
+        return vysledek;
+      }
+
+      const konfig = typeof LUBANOTE_BACKEND !== "undefined" ? LUBANOTE_BACKEND : null;
+      vysledek.testBackend = Boolean(
+        konfig?.prostredi === "test" &&
+        konfig?.backendId === "lubaserver-test" &&
+        String(konfig?.url || "").replace(/\/$/, "") === "https://test.lubanote.com"
+      );
+
+      const klient = ziskejSupabase();
+      if (!klient?.auth?.getUser || !klient?.rpc) {
+        vysledek.reason = "auth_unavailable";
+        return vysledek;
+      }
+      const { data: overeny, error: authChyba } = await klient.auth.getUser();
+      const userId = overeny?.user?.id;
+      if (authChyba || !userId) {
+        vysledek.reason = "account_unverified";
+        return vysledek;
+      }
+
+      const predpoklady = await recoveryPreflight();
+      if (!predpoklady.ok) {
+        vysledek.reason = "root_preflight_failed";
+        return vysledek;
+      }
+      vysledek.rootVerified = true;
+
+      /* Prevent reading another account's local Secret cache. */
+      const lokalniOwner = String(localStorage.getItem("lubanoteLocalOwnerUserId") || "").trim();
+      if (!lokalniOwner || lokalniOwner !== userId) {
+        vysledek.reason = "local_owner_unverified";
+        return vysledek;
+      }
+      if (
+        typeof nactiSifrovaneTajneZaznamy !== "function" ||
+        typeof nactiStarePlaintextTajnePoznamky !== "function" ||
+        typeof getLocalNotesForSync !== "function"
+      ) {
+        vysledek.reason = "local_audit_unavailable";
+        return vysledek;
+      }
+
+      const tajne = nactiSifrovaneTajneZaznamy();
+      const legacy = nactiStarePlaintextTajnePoznamky();
+      const bezne = getLocalNotesForSync();
+      if (!Array.isArray(tajne) || !Array.isArray(legacy) || !Array.isArray(bezne)) {
+        vysledek.reason = "local_audit_invalid";
+        return vysledek;
+      }
+      vysledek.localSecretNotes = tajne.length;
+      vysledek.localLegacySecretNotes = legacy.length;
+      vysledek.localMediaVaults = bezne.filter(
+        (note) => window.LubaNoteMediaCrypto?.maSifrovanaMedia?.(note) === true
+      ).length;
+
+      /* Metadata-only server inspection: no private note contents downloaded. */
+      const { data: manifest, error: manifestChyba } = await klient.rpc(
+        "lubanote_get_private_bootstrap_manifest"
+      );
+      if (manifestChyba || !Array.isArray(manifest)) {
+        vysledek.reason = "server_manifest_unavailable";
+        return vysledek;
+      }
+      const aktivni = manifest.filter((row) => row && !row.deleted_at);
+      vysledek.serverNotes = aktivni.length;
+      vysledek.serverSecretNotes = aktivni.filter((row) => row.is_secret === true).length;
+
+      async function spocitej(tab, filtr) {
+        let dotaz = klient.from(tab).select("id", { count: "exact", head: true });
+        dotaz = dotaz.eq("user_id", userId);
+        if (filtr) dotaz = filtr(dotaz);
+        const { count, error } = await dotaz;
+        if (error || !Number.isSafeInteger(count) || count < 0) {
+          throw new Error("audit_count_unavailable");
+        }
+        return count;
+      }
+      try {
+        vysledek.serverSecretTags = await spocitej(
+          "tags", (q) => q.eq("is_secret", true).is("deleted_at", null)
+        );
+        vysledek.serverSecretAttachments = await spocitej(
+          "attachments", (q) => q.eq("is_secret", true)
+        );
+        /* Shared private identity is encrypted with the old V1 media KEK. */
+        const { count: identityCount, error: identityError } = await klient
+          .from("lubanote_shared_crypto_identities")
+          .select("user_id", { count: "exact", head: true })
+          .eq("user_id", userId);
+        if (identityError || !Number.isSafeInteger(identityCount) || identityCount < 0) {
+          throw new Error("shared_identity_count_unavailable");
+        }
+        vysledek.serverSharedIdentities = identityCount;
+      } catch (_err) {
+        vysledek.reason = "server_legacy_counts_unavailable";
+        return vysledek;
+      }
+
+      /* Remote media vaults may be nested in encrypted/private JSON.
+         Metadata cannot establish their absence. This read-only phase
+         deliberately NEVER yields safeToRotate=true. */
+      const staleRiziko = Boolean(
+        vysledek.localSecretNotes || vysledek.localLegacySecretNotes ||
+        vysledek.localMediaVaults || vysledek.serverSecretNotes ||
+        vysledek.serverSecretTags || vysledek.serverSecretAttachments ||
+        vysledek.serverSharedIdentities
+      );
+      const { data: konec, error: kontrolaChyba } = await klient.auth.getUser();
+      if (kontrolaChyba || konec?.user?.id !== userId ||
+          !jeRootKlicDostupny() || rootKontext?.userId !== userId) {
+        vysledek.reason = "account_or_root_changed";
+        return vysledek;
+      }
+
+      vysledek.ok = true;
+      vysledek.reason = !vysledek.testBackend
+        ? "test_backend_not_confirmed"
+        : staleRiziko
+          ? "legacy_encrypted_content_detected"
+          : vysledek.serverNotes > 0
+            ? "remote_media_not_audited"
+            : "write_procedure_not_installed";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "legacy_audit_failed";
+      return vysledek;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1183,6 +1350,7 @@
     overHesloUctuProRecovery,
     recoveryRewrapDryRun,
     recoveryNoveHesloDryRun,
+    recoveryLegacyAudit686H,
     getStav,
     resetPametiProTest
   });

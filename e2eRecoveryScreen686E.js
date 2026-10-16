@@ -15,6 +15,7 @@
   let lzeOverovat = false;
   let reautentizaceOk = false;
   let rootDryRunOk = false;
+  let newPasswordTestOk = false;
   let generace = 0;
 
   const styl = document.createElement("style");
@@ -134,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686G · NEW PASSWORD TEST</span>
+          <span class="ln686e-badge">TEST WEB · 686H · LEGACY AUDIT</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -178,7 +179,15 @@
             <p class="ln686e-note">Stará data Secret a média mohou používat jiný klíč. Před skutečným resetem je nutná samostatná bezpečnostní kontrola.</p>
           </section>
           <section class="ln686e-card">
-            <h2>5. Report</h2>
+            <h2>5. 686H – Kontrola starších šifrovaných dat</h2>
+            <p>Před změnou hlavního hesla zjistíme, zda jsou v účtu starší Secret poznámky, tajné štítky, média nebo Shared klíče závislé na původním hesle. Kontrolujeme pouze počty a metadata; žádná data se nemažou ani nepřepisují.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="legacy-audit" disabled>Zkontrolovat rizika změny hesla</button>
+            <div class="ln686e-state" data-ln686h-status role="status" aria-live="polite"></div>
+            <div data-ln686h-checks></div>
+            <p class="ln686e-note">686H je výhradně diagnostika. Ani úspěšná kontrola nepovolí přepsání hesla. TEST web nemusí znamenat samostatnou databázi.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>6. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -198,6 +207,7 @@
       if (akce === "verify") { await overHeslo(); return; }
       if (akce === "dry-run") { await spustDryRun(); return; }
       if (akce === "new-password-test") { await spustNoveHesloDryRun(); return; }
+      if (akce === "legacy-audit") { await spustLegacyAudit686H(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -238,6 +248,8 @@
     lzeOverovat = false;
     reautentizaceOk = false;
     rootDryRunOk = false;
+    newPasswordTestOk = false;
+    resetujLegacyAudit686H();
     resetujNovaHesla();
     const dryButton = prvek('[data-ln686e="dry-run"]');
     const dryStatus = prvek('[data-ln686e-dry-status]');
@@ -314,6 +326,8 @@
     if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
     reautentizaceOk = overeni.ok === true;
     rootDryRunOk = false;
+    newPasswordTestOk = false;
+    resetujLegacyAudit686H();
     resetujNovaHesla();
     const dryButton = prvek('[data-ln686e="dry-run"]');
     if (dryButton) dryButton.disabled = !reautentizaceOk;
@@ -415,6 +429,8 @@
     }
     const mojeGenerace = ++generace;
     rootDryRunOk = false; // Test je jednorázový; další pokus vyžaduje znovu 686F.
+    newPasswordTestOk = false;
+    resetujLegacyAudit686H();
     nastavDostupnostNovychHesel(false);
     if (tlacitko) tlacitko.textContent = "Odvozuji nový šifrovací klíč…";
     if (stav) {
@@ -436,6 +452,9 @@
       stav.dataset.result = vysledek.ok ? "pass" : "fail";
     }
     if (tlacitko) tlacitko.textContent = "Otestovat nové E2E heslo";
+    newPasswordTestOk = vysledek.ok === true;
+    const auditTlacitko = prvek('[data-ln686e="legacy-audit"]');
+    if (auditTlacitko) auditTlacitko.disabled = !newPasswordTestOk;
     const anoNe = (v) => v === true ? "PASS" : "FAIL";
     const bezTestu = posledniReport.replace(/\nnewPasswordCryptoTest: [\s\S]*$/, "");
     nastavReport(bezTestu +
@@ -448,6 +467,72 @@
       "\nnewPasswordTestReason: " + String(vysledek.reason || "none").slice(0, 80) +
       "\nE2E keys/notes/server unchanged: YES" +
       "\nPOZOR: Heslo NEBYLO zmeneno. Pred skutecnou obnovou nutna kontrola legacy Secret/media.");
+  }
+
+  function resetujLegacyAudit686H() {
+    newPasswordTestOk = false;
+    const btn = prvek('[data-ln686e="legacy-audit"]');
+    if (btn) btn.disabled = true;
+    const stav = prvek('[data-ln686h-status]');
+    if (stav) { stav.textContent = ""; stav.removeAttribute("data-result"); }
+    const obsah = prvek('[data-ln686h-checks]');
+    if (obsah) obsah.textContent = "";
+  }
+
+  async function spustLegacyAudit686H() {
+    if (!newPasswordTestOk || !obrazovka || obrazovka.hidden) return;
+    const mojeGenerace = ++generace;
+    newPasswordTestOk = false;
+    const btn = prvek('[data-ln686e="legacy-audit"]');
+    const stav = prvek('[data-ln686h-status]');
+    const obsah = prvek('[data-ln686h-checks]');
+    if (btn) btn.disabled = true;
+    if (stav) { stav.textContent = "Ověřuji lokální a serverová metadata…"; stav.removeAttribute("data-result"); }
+    let audit;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoveryLegacyAudit686H;
+      audit = typeof funkce === "function"
+        ? await funkce()
+        : { ok: false, reason: "legacy_audit_unavailable", readOnly: true };
+    } catch (_err) {
+      audit = { ok: false, reason: "legacy_audit_failed", readOnly: true };
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (stav) {
+      stav.textContent = audit.ok
+        ? "KONTROLA DOKONČENA – ZMĚNA HESLA STÁLE ZAKÁZÁNA"
+        : "KONTROLA NEDOKONČENA – ZMĚNA HESLA ZAKÁZÁNA";
+      stav.dataset.result = audit.ok ? "pass" : "fail";
+    }
+    if (obsah) obsah.innerHTML = [
+      radek("TEST web", audit.testWeb),
+      radek("TEST backend", audit.testBackend),
+      radek("Root Key ověřen", audit.rootVerified),
+      radek("Serverová média ověřena", audit.serverMediaContentAudited),
+      radek("Skutečná změna hesla povolena", audit.safeToRotate)
+    ].join("");
+    const n = (v) => Number.isSafeInteger(v) && v >= 0 ? String(v) : "nezjištěno";
+    const txt = [
+      "LUBANOTE 686H – E2E LEGACY AUDIT (READ-ONLY)",
+      "legacyAudit: " + (audit.ok ? "COMPLETED" : "INCOMPLETE"),
+      "testWeb: " + (audit.testWeb ? "YES" : "NO"),
+      "testBackend: " + (audit.testBackend ? "YES" : "NO"),
+      "rootVerified: " + (audit.rootVerified ? "YES" : "NO"),
+      "localSecretNotes: " + n(audit.localSecretNotes),
+      "localLegacySecretNotes: " + n(audit.localLegacySecretNotes),
+      "localMediaVaults: " + n(audit.localMediaVaults),
+      "serverNotes: " + n(audit.serverNotes),
+      "serverSecretNotes: " + n(audit.serverSecretNotes),
+      "serverSecretTags: " + n(audit.serverSecretTags),
+      "serverSecretAttachments: " + n(audit.serverSecretAttachments),
+      "serverSharedIdentities: " + n(audit.serverSharedIdentities),
+      "serverMediaContentAudited: NO",
+      "safeToRotate: NO",
+      "auditReason: " + String(audit.reason || "unknown").slice(0, 80),
+      "E2E data/password/server modified: NO"
+    ].join("\n");
+    const zaklad = posledniReport.replace(/\nlegacyAudit: [\s\S]*$/, "");
+    nastavReport(zaklad + "\n" + txt);
   }
 
   async function zkopirujReport(tlacitko) {
@@ -506,6 +591,8 @@
     ++generace;
     reautentizaceOk = false;
     rootDryRunOk = false;
+    newPasswordTestOk = false;
+    resetujLegacyAudit686H();
     resetujNovaHesla();
     obrazovka.hidden = true;
     const pole = prvek("[data-ln686e-password]");
