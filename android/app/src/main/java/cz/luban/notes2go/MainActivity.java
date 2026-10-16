@@ -339,8 +339,36 @@ public class MainActivity extends BridgeActivity {
     }
   }
 
+  /* 685F: Pouze diagnostický most Native -> Start / sync / síť.
+   * Nezasahuje do WebView vrstvy, fullscreen ani klávesnice. */
+  private void ohlasZivotniCyklus685F(String faze) {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      View web = getBridge().getWebView();
+      View decor = getWindow().getDecorView();
+      String javascript = "window.dispatchEvent(new CustomEvent('lubanote:native-lifecycle'," +
+        "{detail:{phase:'" + faze + "'," +
+        "uptimeMs:" + android.os.SystemClock.elapsedRealtime() + "," +
+        "epochMs:" + System.currentTimeMillis() + "," +
+        "webShown:" + web.isShown() + "," +
+        "webVisibility:" + web.getVisibility() + "," +
+        "decorFocus:" + decor.hasWindowFocus() + "," +
+        "webHardware:" + web.isHardwareAccelerated() + "}}));";
+      getBridge().getWebView().evaluateJavascript(javascript, null);
+    } catch (RuntimeException ignored) {
+      // Na pozadí může být WebView už pozastavené.
+    }
+  }
+
+  @Override
+  protected void onStart() {
+    super.onStart();
+    ohlasZivotniCyklus685F("ON_START");
+  }
+
   @Override
   public void onPause() {
+    ohlasZivotniCyklus685F("ON_PAUSE");
     zastavKontroluSystemoveListy();
     // Pri prekryti celym System UI jsou hodiny pod systemovou listou skryte.
     posliStavSystemoveListy(true);
@@ -353,6 +381,7 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onStop() {
+    ohlasZivotniCyklus685F("ON_STOP");
     zrusNaplanovaneLubaImeHide();
     schovejSystemovouImeProLubaKeyboard(true);
     super.onStop();
@@ -361,9 +390,11 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+    ohlasZivotniCyklus685F("ON_RESUME");
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
     obnovFullscreen();
+    ohlasZivotniCyklus685F("ON_RESUME_FULLSCREEN");
     spustKontroluSystemoveListy();
   }
 
@@ -389,6 +420,7 @@ public class MainActivity extends BridgeActivity {
     super.onWindowFocusChanged(hasFocus);
     oznamFocusProHodiny(hasFocus);
 
+    ohlasZivotniCyklus685F(hasFocus ? "FOCUS_GAIN" : "FOCUS_LOSS");
     if (hasFocus) {
       schovejSystemovouImeProLubaKeyboard(false);
       naplanujModerniLubaImeHidePoNavratu();

@@ -256,6 +256,120 @@
     zapis("EVENT", `VISIBILITY ${document.visibilityState}`);
   });
 
+  /* 685F: PASIVNÍ diagnostika černého okna při návratu z backgroundu.
+   * Žádný overlay, CSS ani synchronizační stav se nemění.
+   * Nečteme text poznámek ani privátní data. Vše jde do Start / sync / síť. */
+  (() => {
+    let navratCislo = 0;
+    let posledniStart = -100000;
+    let skrytoOd = null;
+    let posledniRaf = 0;
+    let rafDo = 0;
+
+    function zkratStavPrvku(prvek) {
+      if (!prvek) return "none";
+      const tag = String(prvek.tagName || "?").toLowerCase();
+      const id = prvek.id ? `#${String(prvek.id).slice(0, 32)}` : "";
+      const cls = typeof prvek.className === "string"
+        ? `.${prvek.className.trim().split(/\s+/).slice(0, 2).join(".")}`
+        : "";
+      return `${tag}${id}${cls}`.slice(0, 58);
+    }
+
+    function snimekStavu(popis, cislo, start) {
+      if (cislo !== navratCislo || document.visibilityState !== "visible") return;
+      try {
+        const html = document.documentElement;
+        const body = document.body;
+        const splash = document.getElementById("appSplash");
+        const prostredni = document.elementFromPoint(
+          Math.floor(innerWidth / 2), Math.floor(innerHeight / 2)
+        );
+        const hlavicka = document.querySelector(".homeHeader");
+        const stylBody = body ? getComputedStyle(body) : null;
+        const stylHtml = getComputedStyle(html);
+        const stylHlavicka = hlavicka ? getComputedStyle(hlavicka) : null;
+        zapis("RESUME", `#${cislo} ${popis} +${Math.round(performance.now() - start)}ms` +
+          ` | v=${document.visibilityState} f=${document.hasFocus() ? "Y" : "N"}` +
+          ` | root=${stylHtml.backgroundColor} body=${stylBody?.backgroundColor || "?"}` +
+          ` | bodyVis=${stylBody?.visibility || "?"} auth=${body?.classList.contains("authPending") ? "Y" : "N"}` +
+          ` | splash=${splash ? getComputedStyle(splash).visibility : "removed"}` +
+          ` | header=${stylHlavicka?.visibility || "none"} center=${zkratStavPrvku(prostredni)}`);
+      } catch (chyba) {
+        zapis("RESUME", `#${cislo} ${popis} snapshot-error=${chyba?.name || "unknown"}`);
+      }
+    }
+
+    function zacniNavrat(zdroj) {
+      const ted = performance.now();
+      if (ted - posledniStart < 1200) {
+        zapis("RESUME", `SIGNAL ${zdroj} | same-return #${navratCislo}`);
+        return;
+      }
+      posledniStart = ted;
+      const cislo = ++navratCislo;
+      const odchod = skrytoOd === null ? "unknown" : `${Math.round(ted - skrytoOd)}ms`;
+      zapis("RESUME", `BEGIN #${cislo} via=${zdroj} | hiddenFor=${odchod}`);
+      snimekStavu("t0", cislo, ted);
+      // SetTimeout odhalí blokovanou JS smyčku: skutečný čas píšeme z performance.now().
+      for (const ms of [100, 350, 800, 1600, 3000, 5000]) {
+        setTimeout(() => snimekStavu(`scheduled=${ms}ms`, cislo, ted), ms);
+      }
+      rafDo = ted + 5200;
+      posledniRaf = 0;
+      function zmerRaf(t) {
+        if (cislo !== navratCislo || document.visibilityState !== "visible") return;
+        if (posledniRaf && t - posledniRaf >= 180) {
+          zapis("RESUME", `#${cislo} RAF_GAP ${Math.round(t - posledniRaf)}ms`);
+        }
+        posledniRaf = t;
+        if (t < rafDo) requestAnimationFrame(zmerRaf);
+      }
+      requestAnimationFrame((t) => {
+        zapis("RESUME", `#${cislo} FIRST_RAF +${Math.round(performance.now() - ted)}ms`);
+        posledniRaf = t;
+        if (t < rafDo) requestAnimationFrame(zmerRaf);
+      });
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        skrytoOd = performance.now();
+        navratCislo++; // stop old sampling; no work while hidden
+        zapis("RESUME", `BACKGROUND | hidden at ${Math.round(skrytoOd)}ms`);
+      } else if (document.visibilityState === "visible") {
+        zacniNavrat("visibility-visible");
+      }
+    });
+    window.addEventListener("focus", () => {
+      if (document.visibilityState === "visible" && skrytoOd !== null) zacniNavrat("window-focus");
+    });
+    window.addEventListener("pageshow", (udalost) => {
+      if (skrytoOd !== null) zacniNavrat(`pageshow persisted=${udalost.persisted ? "Y" : "N"}`);
+    });
+    window.addEventListener("resize", () => {
+      if (performance.now() - posledniStart < 5500) {
+        zapis("RESUME", `#${navratCislo} WINDOW_RESIZE ${innerWidth}x${innerHeight}`);
+      }
+    });
+    window.visualViewport?.addEventListener("resize", () => {
+      if (performance.now() - posledniStart < 5500) {
+        zapis("RESUME", `#${navratCislo} VISUAL_RESIZE ${Math.round(visualViewport.width)}x${Math.round(visualViewport.height)}`);
+      }
+    });
+    window.addEventListener("lubanote:native-lifecycle", (udalost) => {
+      const data = udalost.detail || {};
+      zapis("NATIVE", `${String(data.phase || "unknown").slice(0, 30)}` +
+        ` | uptime=${Number(data.uptimeMs) || 0} wall=${Number(data.epochMs) || 0}` +
+        ` | shown=${data.webShown ? "Y" : "N"} visibility=${data.webVisibility}` +
+        ` | focus=${data.decorFocus ? "Y" : "N"} hw=${data.webHardware ? "Y" : "N"}`);
+      if (data.phase === "ON_RESUME" && skrytoOd !== null && document.visibilityState === "visible") {
+        zacniNavrat("native-onResume");
+      }
+    });
+    zapis("RESUME", "685F lifecycle + paint diagnostics armed (passive)");
+  })();
+
   setTimeout(() => {
     if (!splashPripraven) {
       zapis("WATCH", "8 s od startu a UI READY ještě nepřišlo");
