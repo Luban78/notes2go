@@ -103,12 +103,28 @@ function aktualizujLubaNoteVersionBadge() {
   let backendZkratka = "?";
   let backendNazev = "Nezjištěný backend";
   try {
-    const profil = window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    /* 685J – nejdřív profil, ze kterého se skutečně vytvořil klient.
+     * BackendConfig se načítá až PO script.js, takže první paint často
+     * ukázal „?“. Pozdější čtení lokálního profilu není jediný zdroj:
+     * runtime LUBANOTE_BACKEND je uzamčen pro reálný Supabase klient.
+     * Pokud ještě není dostupný ani jeden, zůstane poctivě „?“.
+     */
+    const runtime = typeof LUBANOTE_BACKEND !== "undefined"
+      ? LUBANOTE_BACKEND
+      : null;
+    const profil = runtime ||
+      window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
     const id = String(profil?.backendId || "").toLowerCase();
-    if (id === "cloud") backendZkratka = "S";
-    else if (id === "lubaserver") backendZkratka = "L";
-    else if (profil?.prostredi === "test") backendZkratka = "T";
-    else if (id) backendZkratka = "V";
+    const url = String(profil?.url || "").toLowerCase();
+    if (profil?.prostredi === "test" || id === "lubaserver-test") {
+      backendZkratka = "T";
+    } else if (id === "cloud" || url.includes(".supabase.co")) {
+      backendZkratka = "S";
+    } else if (id === "lubaserver" || url.startsWith("https://api.lubanote.com")) {
+      backendZkratka = "L";
+    } else if (id && url) {
+      backendZkratka = "V";
+    }
     if (profil?.nazev) backendNazev = profil.nazev;
   } catch (_) {
     /* Neukazovat nesprávný server při dočasně nedostupné konfiguraci. */
@@ -185,6 +201,8 @@ window.addEventListener(
 // Konfigurace backendu se načítá až za script.js. Po jejím načtení
 // a při návratu do aplikace proto aktualizujeme pouze nápis.
 window.addEventListener("load", aktualizujLubaNoteVersionBadge);
+/* 685J – backend konfigurace může být dostupná až po prvním vykreslení. */
+window.addEventListener("lubanote-backend-ready", aktualizujLubaNoteVersionBadge);
 window.addEventListener("pageshow", aktualizujLubaNoteVersionBadge);
 window.addEventListener("focus", aktualizujLubaNoteVersionBadge);
 window.addEventListener("storage", (udalost) => {

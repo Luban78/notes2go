@@ -5288,10 +5288,44 @@ async function synchronizujVzdalenePrivateDeltaV2(
     }
 
     /*
-     * Hard delete / převod vlastnictví zůstává konzervativně odložený.
-     * Důležité je, že PATCH 485 ani zde nikdy nepadá na full snapshot.
+     * PATCH 685J – REMOTE REMOVE / MANIFEST RECOVERY.
+     * Samotná akce remove nesmí automaticky smazat lokální obsah ani
+     * posunout cursor. Dosavadní DEFER však nechával PC navždy pending.
+     * Ověříme proto stav existujícím manifestovým reconcile: ten respektuje
+     * tombstone revize, lokální dluhy/konflikty a targeted RX budget.
+     * Nikdy zde nevoláme full snapshot ani přímo nemažeme podle feedu.
+     * Pokud jsme již v reconcile (delta-after-bootstrap), nepokoušíme
+     * se rekurzivně čekat sami na sebe.
      */
     if (radek?.action !== "upsert") {
+      if (radek?.action === "remove") {
+        if (existingClientReconcilePraveBezi) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2",
+            `REMOTE REMOVE DEFER | in-reconcile id=${id}`
+          );
+          return false;
+        }
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `REMOTE REMOVE RECOVER | manifest-reconcile id=${id}`
+        );
+
+        const obnoveno = await spustExistingClientReconcileV2(
+          userId,
+          jeTargetConfirmRecovery
+            ? { targetConfirmRecovery: true }
+            : {}
+        );
+
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2",
+          `REMOTE REMOVE ${obnoveno === true ? "RECOVERED" : "DEFER"} | id=${id}`
+        );
+        return obnoveno === true;
+      }
+
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
         `REMOTE DELTA DEFER | action=${radek?.action || "?"} id=${id}`

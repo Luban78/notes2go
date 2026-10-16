@@ -294,6 +294,10 @@
     nactiZnameAuthStorageKeys
   });
 
+  /* 685J – oznamujeme pouze dostupnost konfigurace, neprovádíme
+     přepnutí backendu ani žádný síťový požadavek. */
+  window.dispatchEvent(new Event("lubanote-backend-ready"));
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", aktualizujTestBadge, { once: true });
   } else {
