@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
   private int lubaImeResumeGenerace = 0;
+  private boolean vrstva685INastavena = false;
 
   // 683BI: pasivni rozpoznani tahu od horni hrany. Android muze systemovy
   // tah zachytit sam, proto jde pouze o doplnek k 683BH (WindowInsets).
@@ -163,6 +164,7 @@ public class MainActivity extends BridgeActivity {
 
     super.onCreate(savedInstanceState);
 
+    nastavTestovaciSoftwarovouVrstvu685I();
     nastavFullscreen();
 
     getWindow().setNavigationBarColor(Color.TRANSPARENT);
@@ -280,6 +282,40 @@ public class MainActivity extends BridgeActivity {
     }
   }
 
+  /* 685I – pouze diagnostický A/B pokus pro Chromium WebView 153/154.
+   * Známé regresní problémy těchto verzí mohou vytvářet černé plochy
+   * při akcelerovaném vykreslování. Software layer nastavíme jednou,
+   * před prvním návratem z pozadí; pouze pro WebView major 153 nebo 154.
+   * Na jiných verzích ponecháme původní GPU rendering.
+   * Není to definitivní produkční volba: software layer může zpomalit UI.
+   */
+  private void nastavTestovaciSoftwarovouVrstvu685I() {
+    if (vrstva685INastavena) return;
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      int major = webViewChromeMajor();
+      if (major == 0) return;
+      if (major >= 153 && major <= 154) {
+        getBridge().getWebView().setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+      }
+      vrstva685INastavena = true;
+    } catch (RuntimeException ignored) {
+      // Pokus nesmí bránit spuštění nebo návratu aplikace.
+    }
+  }
+
+  private void ohlasVrstvu685I() {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      int typ = getBridge().getWebView().getLayerType();
+      int major = webViewChromeMajor();
+      ohlasZivotniCyklus685F(
+        "685I_RENDER_LAYER_" + (typ == View.LAYER_TYPE_SOFTWARE ? "SOFTWARE" : "DEFAULT")
+          + "_WEBVIEW_" + major
+      );
+    } catch (RuntimeException ignored) {}
+  }
+
   /*
    * FIX 471 – LubaKeyboard používá vlastní panel a systémovou IME nechce.
    * Starý WebView 103 si ale při minimalizaci umí zapamatovat InputConnection
@@ -392,6 +428,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onStart() {
     super.onStart();
+    nastavTestovaciSoftwarovouVrstvu685I();
     ohlasZivotniCyklus685F("ON_START");
   }
 
@@ -419,7 +456,9 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+    nastavTestovaciSoftwarovouVrstvu685I();
     ohlasZivotniCyklus685F("ON_RESUME");
+    ohlasVrstvu685I();
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
     // 685H: onResume uz neprovadi vynuceny fullscreen relayout.
