@@ -2857,6 +2857,36 @@ async function zkopirujReport(tlacitko) {
 }
 
 
+/* 685G – kratky diagnosticky report NAVRATU, bez dlouheho startup/sync vypisu.
+ * Zdroj je EXISTUJICI pasivni buffer 685F. Neprovadime zadne zmeny v aplikaci. */
+async function zkopirujNavrat685G(tlacitko) {
+  const vsechny = window.LubaNoteStartupDiag?.radky?.() || [];
+  const dulezite = vsechny.filter((radek) =>
+    /\|\s*(?:RESUME|NATIVE)\s*\|/.test(radek) ||
+    /\|\s*EVENT\s*\|\s*VISIBILITY/.test(radek) ||
+    /\|\s*LK497\s*\|\s*VISIBILITY/.test(radek) ||
+    /\|\s*RT-SYNC\s*\|\s*CHANNEL_ERROR/.test(radek)
+  );
+  // Limit na konci, aby se ve zprave neztratil nejdulezitejsi posledni navrat.
+  const vyber = dulezite.slice(-65);
+  const report = [
+    "LUBANOTE 685G – NAVRAT Z POZADI (RESUME / NATIVE)",
+    `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
+    `cas: ${new Date().toISOString()}`,
+    `prostredi: ${prostredi()}`,
+    `stav: ${document.visibilityState}`,
+    `zaznamy: ${vyber.length}/${dulezite.length} relevantnich (${vsechny.length} vsech)` ,
+    "---",
+    ...(vyber.length ? vyber : ["Zatim zadne zaznamy RESUME/NATIVE – nech aplikaci jednou na pozadi a vrat se."])
+  ].join("\n");
+  const puvodni = tlacitko.textContent;
+  let ok = false;
+  try { ok = await zkopirujTextRobustne(report); } catch (_) { ok = false; }
+  tlacitko.textContent = ok ? "Návrat zkopírován ✓" : "Kopírování selhalo";
+  setTimeout(() => { tlacitko.textContent = puvodni; }, 1500);
+}
+
+
 
   function vytvorHub() {
     if (hub) return hub;
@@ -2968,6 +2998,7 @@ async function zkopirujReport(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+        <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
         <button type="button" data-dh="clear">Vymazat</button>
         <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
       </div>
@@ -3126,6 +3157,11 @@ async function zkopirujReport(tlacitko) {
         zaznamy = [];
         startCas = performance.now();
         zapis("RESET");
+        return;
+      }
+
+      if (akce === "copy-resume") {
+        zkopirujNavrat685G(tlacitko);
         return;
       }
 
