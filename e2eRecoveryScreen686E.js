@@ -13,6 +13,7 @@
   let puvodniOverflow = null;
   let posledniReport = "";
   let lzeOverovat = false;
+  let reautentizaceOk = false;
   let generace = 0;
 
   const styl = document.createElement("style");
@@ -132,7 +133,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686E · READ-ONLY</span>
+          <span class="ln686e-badge">TEST WEB · 686F · CRYPTO DRY-RUN</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -155,7 +156,14 @@
             <p class="ln686e-note">Heslo se neukládá ani neobjeví v reportu. Samotný test nic neobnovuje.</p>
           </section>
           <section class="ln686e-card">
-            <h2>3. Report</h2>
+            <h2>3. Kryptografická zkouška bez zápisu</h2>
+            <p>Po ověření přihlašovacího hesla zkusíme skutečně rozbalit Root Key a znovu jej zabalit <b>pouze v paměti telefonu</b>. Žádné heslo ani šifrování poznámek se nemění.</p>
+            <button type="button" class="ln686e-primary" data-ln686e="dry-run" disabled>Ověřit rozbalení a nové zabalení</button>
+            <div class="ln686e-state" data-ln686e-dry-status role="status" aria-live="polite"></div>
+            <p class="ln686e-note">Použije se náhodný dočasný klíč, nikoliv tvoje nové E2E heslo. Výsledek je zkouška, ne obnova.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>4. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -173,6 +181,7 @@
       if (akce === "back") { zavriObrazovku(); return; }
       if (akce === "check") { await spustPreflight(); return; }
       if (akce === "verify") { await overHeslo(); return; }
+      if (akce === "dry-run") { await spustDryRun(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -194,7 +203,7 @@
   function pripravText(stav) {
     const anoNe = (v) => v === true ? "PASS" : "FAIL";
     return [
-      "LUBANOTE 686E – E2E RECOVERY PREFLIGHT (READ-ONLY)",
+      "LUBANOTE 686F – E2E RECOVERY PREFLIGHT (READ-ONLY)",
       "Vysledek: " + (stav.ok ? "PREFLIGHT PASS" : "PREFLIGHT FAIL"),
       "rootReady: " + anoNe(stav.rootReady),
       "deviceKekReady: " + anoNe(stav.deviceKekReady),
@@ -211,6 +220,11 @@
     if (!obrazovka || obrazovka.hidden) return;
     const mojeGenerace = ++generace;
     lzeOverovat = false;
+    reautentizaceOk = false;
+    const dryButton = prvek('[data-ln686e="dry-run"]');
+    const dryStatus = prvek('[data-ln686e-dry-status]');
+    if (dryButton) dryButton.disabled = true;
+    if (dryStatus) { dryStatus.textContent = ""; dryStatus.removeAttribute("data-result"); }
     const status = prvek("[data-ln686e-status]");
     const obsah = prvek("[data-ln686e-checks]");
     const heslo = prvek("[data-ln686e-password]");
@@ -280,6 +294,9 @@
       overeni = { ok: false, reason: "reauth_failed" };
     }
     if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    reautentizaceOk = overeni.ok === true;
+    const dryButton = prvek('[data-ln686e="dry-run"]');
+    if (dryButton) dryButton.disabled = !reautentizaceOk;
     if (stavText) {
       stavText.textContent = overeni.ok ? "PŘIHLAŠOVACÍ HESLO – PASS ✓" : "PŘIHLAŠOVACÍ HESLO – FAIL";
       stavText.dataset.result = overeni.ok ? "pass" : "fail";
@@ -292,6 +309,47 @@
     if (tlacitko) { tlacitko.disabled = false; tlacitko.textContent = "Ověřit heslo k účtu"; }
     if (znovu) znovu.disabled = false;
     if (pole) pole.disabled = false;
+  }
+
+  async function spustDryRun() {
+    if (!reautentizaceOk || !obrazovka || obrazovka.hidden) return;
+    const mojeGenerace = ++generace;
+    reautentizaceOk = false; // každý dry-run vyžaduje nové ověření hesla
+    const tlacitko = prvek('[data-ln686e="dry-run"]');
+    const status = prvek('[data-ln686e-dry-status]');
+    const overit = prvek('[data-ln686e="verify"]');
+    const heslo = prvek('[data-ln686e-password]');
+    if (tlacitko) { tlacitko.disabled = true; tlacitko.textContent = "Zkouším…"; }
+    if (overit) overit.disabled = true;
+    if (heslo) heslo.disabled = true;
+    if (status) { status.textContent = "Ověřuji Root Key v paměti…"; status.removeAttribute("data-result"); }
+    let vysledek;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoveryRewrapDryRun;
+      vysledek = typeof funkce === "function"
+        ? await funkce()
+        : { ok: false, reason: "cryptographic_test_unavailable" };
+    } catch (_chyba) {
+      vysledek = { ok: false, reason: "cryptographic_test_failed" };
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (status) {
+      status.textContent = vysledek.ok ? "ROOT REWRAP DRY-RUN – PASS ✓" : "ROOT REWRAP DRY-RUN – FAIL";
+      status.dataset.result = vysledek.ok ? "pass" : "fail";
+    }
+    const anoNe = (v) => v === true ? "PASS" : "FAIL";
+    const bezDryRun = posledniReport.replace(/\nrootRewrapDryRun: [\s\S]*$/, "");
+    nastavReport(bezDryRun +
+      "\nrootRewrapDryRun: " + anoNe(vysledek.ok) +
+      "\nsourceEnvelopeVerified: " + anoNe(vysledek.sourceEnvelopeVerified) +
+      "\ntemporaryRewrapVerified: " + anoNe(vysledek.temporaryRewrapVerified) +
+      "\nsameKeyIdAfterRewrap: " + anoNe(vysledek.sameKeyId) +
+      "\nrewrapReason: " + String(vysledek.reason || "none").slice(0, 80) +
+      "\nE2E notes/keys/server unchanged: YES" +
+      "\nPOZOR: Rewrap dry-run NENI zmena E2E hesla ani ulozeni nove obalky.");
+    if (tlacitko) tlacitko.textContent = "Ověřit rozbalení a nové zabalení";
+    if (overit) overit.disabled = false;
+    if (heslo) heslo.disabled = false;
   }
 
   async function zkopirujReport(tlacitko) {
@@ -348,6 +406,7 @@
   function zavriObrazovku() {
     if (!obrazovka || obrazovka.hidden) return;
     ++generace;
+    reautentizaceOk = false;
     obrazovka.hidden = true;
     const pole = prvek("[data-ln686e-password]");
     if (pole) pole.value = "";

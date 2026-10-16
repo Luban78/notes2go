@@ -936,6 +936,85 @@
     }
   }
 
+  /* 686F – DRY-RUN: prokaž, že aktuální KEK opravdu rozbalí serverový
+     Root Key a že jej lze znovu bezpečně zabalit. VŠE POUZE V PAMĚTI.
+     Nezapisuje IndexedDB ani server; neobnovuje heslo ani Secret/media. */
+  async function recoveryRewrapDryRun() {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      reason: null,
+      sourceEnvelopeVerified: false,
+      temporaryRewrapVerified: false,
+      sameKeyId: false,
+      notesAndKeysUnchanged: true
+    };
+    let raw = null;
+    let rozbalene = null;
+    let ciphertext = null;
+    try {
+      if (String(location.hostname || "").toLowerCase() !== "test.lubanote.com") {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      const predpoklady = await recoveryPreflight();
+      if (!predpoklady.ok) {
+        vysledek.reason = "preflight_failed";
+        return vysledek;
+      }
+      const userId = await ziskejAktualniUserId();
+      const server = await nactiServerRootRecord(userId);
+      if (!server.ok || !maPlatnyServerRecord(server.data)) {
+        vysledek.reason = "server_envelope_unavailable";
+        return vysledek;
+      }
+      const keyId = server.data.e2e_root_key_id;
+      raw = await rozbalRootRaw(server.data.e2e_root_key_box, userId);
+      if (!(raw instanceof Uint8Array) || raw.length !== 32) {
+        vysledek.reason = "invalid_root_length";
+        return vysledek;
+      }
+      vysledek.sourceEnvelopeVerified = (await vytvorKeyId(raw)) === keyId;
+      if (!vysledek.sourceEnvelopeVerified) {
+        vysledek.reason = "source_root_id_mismatch";
+        return vysledek;
+      }
+      /* Náhodný dočasný AES klíč simuluje nový wrap key.
+         NENÍ to ještě odvození KEK z nového E2E hesla. */
+      const docasnyKlic = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const aad = new TextEncoder().encode(
+        `LubaNote-e2e-recovery-dry-run-v1:${userId}:${keyId}`
+      );
+      ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, docasnyKlic, raw
+      ));
+      rozbalene = new Uint8Array(await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, docasnyKlic, ciphertext
+      ));
+      vysledek.temporaryRewrapVerified =
+        rozbalene.length === 32 &&
+        rozbalene.every((byte, i) => byte === raw[i]);
+      vysledek.sameKeyId = vysledek.temporaryRewrapVerified &&
+        (await vytvorKeyId(rozbalene)) === keyId;
+      vysledek.ok = vysledek.sourceEnvelopeVerified &&
+        vysledek.temporaryRewrapVerified && vysledek.sameKeyId;
+      vysledek.reason = vysledek.ok ? null : "rewrap_roundtrip_failed";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "cryptographic_dry_run_failed";
+      return vysledek;
+    } finally {
+      raw?.fill(0);
+      rozbalene?.fill(0);
+      ciphertext?.fill(0);
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -961,6 +1040,7 @@
     selfTest,
     recoveryPreflight,
     overHesloUctuProRecovery,
+    recoveryRewrapDryRun,
     getStav,
     resetPametiProTest
   });
