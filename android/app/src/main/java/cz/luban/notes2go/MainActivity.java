@@ -68,8 +68,11 @@ public class MainActivity extends BridgeActivity {
     try {
       if (Build.VERSION.SDK_INT >= 23 && getBridge() != null && getBridge().getWebView() != null) {
         WebView web = getBridge().getWebView();
-        web.postVisualStateCallback(generace, requestId -> {
-          if (generace == generaceZaznamu685L) ohlasZivotniCyklus685F("685L_VISUAL_STATE_READY");
+        web.postVisualStateCallback(generace, new WebView.VisualStateCallback() {
+          @Override
+          public void onComplete(long requestId) {
+            if (generace == generaceZaznamu685L) ohlasZivotniCyklus685F("685L_VISUAL_STATE_READY");
+          }
         });
       }
     } catch (RuntimeException ignored) { ohlasZivotniCyklus685F("685L_VISUAL_STATE_ERROR"); }
