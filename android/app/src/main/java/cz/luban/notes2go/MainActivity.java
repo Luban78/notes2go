@@ -251,6 +251,35 @@ public class MainActivity extends BridgeActivity {
   }
 
 
+  /* 685H – resume bez opakovaneho prelayoutovani celeho okna.
+   * Po navratu jsou systemove listy zpravidla stale spravne skryte.
+   * Opakovane setDecorFitsSystemWindows(false) + hide() pak muze
+   * zbytecne vyvolavat relayout povrchu WebView. Pri focus gain obnovime
+   * fullscreen pouze pokud Android skutecne zobrazuje horni listu.
+   * Pri onCreate zustava puvodni plna inicializace fullscreen.
+   */
+  private void obnovFullscreenJenPriViditelneListe685H() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      WindowInsets insets = getWindow().getDecorView().getRootWindowInsets();
+      if (insets != null && !insets.isVisible(WindowInsets.Type.statusBars())) {
+        ohlasZivotniCyklus685F("685H_FULLSCREEN_ALREADY_HIDDEN");
+        return;
+      }
+      // Pokud insets nejsou k dispozici, zachovame puvodni obnovu.
+    }
+    obnovFullscreen();
+    ohlasZivotniCyklus685F("685H_FULLSCREEN_RESTORED");
+  }
+
+  private void pozadejPrekresleni685H() {
+    try {
+      if (getBridge() == null || getBridge().getWebView() == null) return;
+      getBridge().getWebView().postInvalidateOnAnimation();
+    } catch (RuntimeException ignored) {
+      // Pri obnovovani Activity muze byt WebView teprve znovu pripojene.
+    }
+  }
+
   /*
    * FIX 471 – LubaKeyboard používá vlastní panel a systémovou IME nechce.
    * Starý WebView 103 si ale při minimalizaci umí zapamatovat InputConnection
@@ -393,8 +422,10 @@ public class MainActivity extends BridgeActivity {
     ohlasZivotniCyklus685F("ON_RESUME");
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
-    obnovFullscreen();
-    ohlasZivotniCyklus685F("ON_RESUME_FULLSCREEN");
+    // 685H: onResume uz neprovadi vynuceny fullscreen relayout.
+    // Pripadne odkrytou horni listu vyridi onWindowFocusChanged.
+    pozadejPrekresleni685H();
+    ohlasZivotniCyklus685F("685H_ON_RESUME_REPAINT");
     spustKontroluSystemoveListy();
   }
 
@@ -424,7 +455,8 @@ public class MainActivity extends BridgeActivity {
     if (hasFocus) {
       schovejSystemovouImeProLubaKeyboard(false);
       naplanujModerniLubaImeHidePoNavratu();
-      obnovFullscreen();
+      obnovFullscreenJenPriViditelneListe685H();
+      pozadejPrekresleni685H();
     } else {
       zrusNaplanovaneLubaImeHide();
     }
