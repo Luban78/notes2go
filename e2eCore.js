@@ -1495,6 +1495,202 @@
     }
   }
 
+  /* 686J – TEST-only Shared identity password rewrap dry run.
+   * The server's original ECDH private key is decrypted with the EXISTING
+   * local media KEK; then wrapped in memory under a NEW password-derived
+   * media KEK using exactly the mediaCrypto V1 PBKDF2 domain and shared-wrap
+   * AES-GCM AAD. Decryption and key-pair match are verified in memory.
+   * No updates/inserts/RPCs, no persisted salt, no server/local key mutation.
+   * This does NOT make a real password reset safe: Secret/media auditing,
+   * atomic multi-record rotation and rollback are still outstanding.
+   */
+  async function recoverySharedRewrapDryRun686J(noveHeslo) {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      safeToRotate: false,
+      reason: "not_started",
+      accountVerified: false,
+      sourceEnvelopeDecrypted: false,
+      sourceKeyPairVerified: false,
+      newPasswordKekDerived: false,
+      temporaryRewrapRoundtrip: false,
+      samePrivateKey: false,
+      samePublicIdentity: false,
+      serverMediaContentAudited: false
+    };
+    let soukromyPkcs8 = null;
+    let rozbalenyPkcs8 = null;
+    let ciphertext = null;
+    let oldProof = null;
+    let newProof = null;
+    let serverProof = null;
+    let salt = null;
+    let derivacniSalt = null;
+    let hesloBajty = null;
+    let aad = null;
+    try {
+      if (String(location.hostname || "").toLowerCase() !== "test.lubanote.com") {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      // The password is used only here; it is never stored, logged or returned.
+      if (typeof noveHeslo !== "string" || noveHeslo.length < 8) {
+        vysledek.reason = "new_password_too_short";
+        return vysledek;
+      }
+      if (!navigator.onLine) {
+        vysledek.reason = "offline";
+        return vysledek;
+      }
+      const klient = ziskejSupabase();
+      if (!klient?.auth?.getUser || !klient?.from) {
+        vysledek.reason = "backend_client_unavailable";
+        return vysledek;
+      }
+      const { data: overeni, error: authChyba } = await klient.auth.getUser();
+      const userId = overeni?.user?.id;
+      if (authChyba || !userId) {
+        vysledek.reason = "account_unverified";
+        return vysledek;
+      }
+      vysledek.accountVerified = true;
+      const { data: identita, error: chybaIdentity } = await klient
+        .from("lubanote_shared_crypto_identities")
+        .select("user_id, algorithm, key_version, public_key_jwk, private_key_box")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (chybaIdentity || !identita) {
+        vysledek.reason = chybaIdentity ? "shared_identity_read_failed" : "shared_identity_missing";
+        return vysledek;
+      }
+      if (
+        identita.user_id !== userId ||
+        identita.algorithm !== "ECDH-P256" ||
+        Number(identita.key_version) !== 1 ||
+        identita.public_key_jwk?.kty !== "EC" ||
+        identita.public_key_jwk?.crv !== "P-256" ||
+        identita.private_key_box?.algorithm !== "AES-GCM" ||
+        Number(identita.private_key_box?.version) !== 1
+      ) {
+        vysledek.reason = "shared_identity_metadata_invalid";
+        return vysledek;
+      }
+      const media = window.LubaNoteMediaCrypto;
+      if (media?.jeKlicDostupny?.() !== true || !media?.rozbalBajtyHlavnimKlicem) {
+        vysledek.reason = "old_media_kek_unavailable";
+        return vysledek;
+      }
+      soukromyPkcs8 = await media.rozbalBajtyHlavnimKlicem(
+        identita.private_key_box, `shared-identity:${userId}:v1`
+      );
+      if (!(soukromyPkcs8 instanceof Uint8Array) ||
+          soukromyPkcs8.length < 60 || soukromyPkcs8.length > 1024) {
+        vysledek.reason = "source_private_key_invalid";
+        return vysledek;
+      }
+      vysledek.sourceEnvelopeDecrypted = true;
+      const staryPrivatni = await crypto.subtle.importKey(
+        "pkcs8", soukromyPkcs8,
+        { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]
+      );
+      const verejny = await crypto.subtle.importKey(
+        "jwk", identita.public_key_jwk,
+        { name: "ECDH", namedCurve: "P-256" }, false, []
+      );
+      const docasny = await crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]
+      );
+      oldProof = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "ECDH", public: docasny.publicKey }, staryPrivatni, 256
+      ));
+      serverProof = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "ECDH", public: verejny }, docasny.privateKey, 256
+      ));
+      let rozdil = 0;
+      for (let i = 0; i < oldProof.length; i++) rozdil |= oldProof[i] ^ serverProof[i];
+      vysledek.sourceKeyPairVerified = oldProof.length === 32 && rozdil === 0;
+      if (!vysledek.sourceKeyPairVerified) {
+        vysledek.reason = "source_key_pair_mismatch";
+        return vysledek;
+      }
+
+      // Same PBKDF2 domain separation as mediaCrypto.js, no settings persisted.
+      salt = crypto.getRandomValues(new Uint8Array(16));
+      const encoder = new TextEncoder();
+      const prefix = encoder.encode("LubaNote-media-encryption-v1");
+      derivacniSalt = new Uint8Array(prefix.length + salt.length);
+      derivacniSalt.set(prefix);
+      derivacniSalt.set(salt, prefix.length);
+      hesloBajty = encoder.encode(noveHeslo);
+      const material = await crypto.subtle.importKey(
+        "raw", hesloBajty, "PBKDF2", false, ["deriveKey"]
+      );
+      const novyKek = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: derivacniSalt, iterations: 600000, hash: "SHA-256" },
+        material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+      );
+      vysledek.newPasswordKekDerived = Boolean(novyKek);
+      aad = encoder.encode(`LubaNote-shared-wrap-v1:shared-identity:${userId}:v1`);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, novyKek, soukromyPkcs8
+      ));
+      rozbalenyPkcs8 = new Uint8Array(await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, novyKek, ciphertext
+      ));
+      vysledek.temporaryRewrapRoundtrip = rozbalenyPkcs8.length === soukromyPkcs8.length;
+      let diff = soukromyPkcs8.length ^ rozbalenyPkcs8.length;
+      for (let i = 0; i < Math.min(soukromyPkcs8.length, rozbalenyPkcs8.length); i++) {
+        diff |= soukromyPkcs8[i] ^ rozbalenyPkcs8[i];
+      }
+      vysledek.samePrivateKey = vysledek.temporaryRewrapRoundtrip && diff === 0;
+      if (!vysledek.samePrivateKey) {
+        vysledek.reason = "shared_rewrap_roundtrip_mismatch";
+        return vysledek;
+      }
+      const znovuPrivatni = await crypto.subtle.importKey(
+        "pkcs8", rozbalenyPkcs8,
+        { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]
+      );
+      newProof = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "ECDH", public: docasny.publicKey }, znovuPrivatni, 256
+      ));
+      let diffDukazu = newProof.length ^ serverProof.length;
+      for (let i = 0; i < Math.min(newProof.length, serverProof.length); i++) {
+        diffDukazu |= newProof[i] ^ serverProof[i];
+      }
+      vysledek.samePublicIdentity = newProof.length === 32 && diffDukazu === 0;
+      const { data: kontrola, error: chybaKontroly } = await klient.auth.getUser();
+      if (chybaKontroly || kontrola?.user?.id !== userId) {
+        vysledek.reason = "active_account_changed";
+        return vysledek;
+      }
+      vysledek.ok = Boolean(
+        vysledek.accountVerified && vysledek.sourceEnvelopeDecrypted &&
+        vysledek.sourceKeyPairVerified && vysledek.newPasswordKekDerived &&
+        vysledek.temporaryRewrapRoundtrip && vysledek.samePrivateKey &&
+        vysledek.samePublicIdentity
+      );
+      vysledek.reason = vysledek.ok ? "shared_rewrap_verified_read_only" : "shared_rewrap_failed";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "shared_rewrap_crypto_failed";
+      return vysledek;
+    } finally {
+      soukromyPkcs8?.fill(0);
+      rozbalenyPkcs8?.fill(0);
+      ciphertext?.fill(0);
+      oldProof?.fill(0);
+      newProof?.fill(0);
+      serverProof?.fill(0);
+      salt?.fill(0);
+      derivacniSalt?.fill(0);
+      hesloBajty?.fill(0);
+      aad?.fill(0);
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1524,6 +1720,7 @@
     recoveryNoveHesloDryRun,
     recoveryLegacyAudit686H,
     recoveryBackendSharedAudit686I,
+    recoverySharedRewrapDryRun686J,
     getStav,
     resetPametiProTest
   });

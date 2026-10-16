@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686I · BACKEND / SHARED AUDIT</span>
+          <span class="ln686e-badge">TEST WEB · 686J · SHARED REWRAP DRY-RUN</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -196,7 +196,23 @@
             <p class="ln686e-note">TEST web ani název profilu nedokazují samostatnou databázi. Změna hlavního hesla zůstává zakázaná. Kontrola pouze čte šifrovanou obálku a ověřuje klíče v paměti.</p>
           </section>
           <section class="ln686e-card">
-            <h2>7. Report</h2>
+            <h2>7. 686J – Shared klíč pod novým heslem (BEZ ZÁPISU)</h2>
+            <p>Bez opakování 686G: ověříme, že <b>stejný původní Shared klíč</b> lze dočasně ochránit novým E2E heslem, znovu rozbalit a porovnat s jeho veřejným klíčem.</p>
+            <label for="ln686j-new">Nové testovací E2E heslo (alespoň 8 znaků)</label>
+            <input type="password" id="ln686j-new" data-ln686j-new
+              autocomplete="off" autocapitalize="off" spellcheck="false"
+              placeholder="Nové E2E heslo pro suchý test">
+            <label for="ln686j-confirm">Zopakuj heslo</label>
+            <input type="password" id="ln686j-confirm" data-ln686j-confirm
+              autocomplete="off" autocapitalize="off" spellcheck="false"
+              placeholder="Zopakovat nové heslo">
+            <button type="button" class="ln686e-secondary" data-ln686e="shared-rewrap-dry-run">Otestovat přebalení Shared klíče</button>
+            <div class="ln686e-state" data-ln686j-status role="status" aria-live="polite"></div>
+            <div data-ln686j-checks></div>
+            <p class="ln686e-note">TEST bez zápisu: nový salt, obálka a heslo se <b>neukládají</b>. Heslo zůstává nezměněno a další ochrana Secret/médií ještě není vyřešená. TEST a PROD mohou sdílet databázi.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>8. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -218,6 +234,7 @@
       if (akce === "new-password-test") { await spustNoveHesloDryRun(); return; }
       if (akce === "legacy-audit") { await spustLegacyAudit686H(); return; }
       if (akce === "backend-shared-audit") { await spustBackendSharedAudit686I(); return; }
+      if (akce === "shared-rewrap-dry-run") { await spustSharedRewrap686J(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -624,6 +641,78 @@
     nastavReport(predesly + (predesly ? "\n" : "") + textReportu);
   }
 
+  /* 686J – independent TEST-only Shared dry run. No previous 686G/686I
+     button sequence required; password fields are cleared immediately. */
+  async function spustSharedRewrap686J() {
+    if (!obrazovka || obrazovka.hidden) return;
+    const nove = prvek('[data-ln686j-new]');
+    const potvrzeni = prvek('[data-ln686j-confirm]');
+    const btn = prvek('[data-ln686e="shared-rewrap-dry-run"]');
+    const stav = prvek('[data-ln686j-status]');
+    const obsah = prvek('[data-ln686j-checks]');
+    const heslo = nove?.value || "";
+    const stejne = Boolean(heslo && heslo === potvrzeni?.value);
+    // Never leave test passwords in the DOM or logs.
+    if (nove) nove.value = "";
+    if (potvrzeni) potvrzeni.value = "";
+    if (!stejne || heslo.length < 8) {
+      if (stav) {
+        stav.textContent = "Zadej stejné nové heslo do obou polí (alespoň 8 znaků).";
+        stav.dataset.result = "fail";
+      }
+      return;
+    }
+    const mojeGenerace = ++generace;
+    if (btn) btn.disabled = true;
+    if (stav) { stav.textContent = "Testuji přebalení stejného Shared klíče pouze v paměti…"; stav.removeAttribute("data-result"); }
+    if (obsah) obsah.textContent = "";
+    let vysledek;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoverySharedRewrapDryRun686J;
+      vysledek = typeof funkce === "function"
+        ? await funkce(heslo)
+        : { ok: false, reason: "shared_rewrap_test_unavailable" };
+    } catch (_err) {
+      vysledek = { ok: false, reason: "shared_rewrap_test_failed" };
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (btn) btn.disabled = false;
+    if (stav) {
+      stav.textContent = vysledek.ok
+        ? "SHARED REWRAP PASS – původní identita zachována (BEZ ZÁPISU)"
+        : "SHARED REWRAP FAIL – nic nebylo změněno";
+      stav.dataset.result = vysledek.ok ? "pass" : "fail";
+    }
+    if (obsah) obsah.innerHTML = [
+      radek("Účet ověřen", vysledek.accountVerified),
+      radek("Původní Shared obálka rozbalena", vysledek.sourceEnvelopeDecrypted),
+      radek("Původní pár klíčů ověřen", vysledek.sourceKeyPairVerified),
+      radek("Nový ochranný klíč odvozen", vysledek.newPasswordKekDerived),
+      radek("Nová dočasná obálka rozbalena", vysledek.temporaryRewrapRoundtrip),
+      radek("Stejný soukromý klíč", vysledek.samePrivateKey),
+      radek("Stejná veřejná identita", vysledek.samePublicIdentity),
+      radek("Skutečná změna hesla povolena", vysledek.safeToRotate)
+    ].join("");
+    const anoNe = (v) => v === true ? "YES" : "NO";
+    const bezJ = posledniReport.replace(/\n?LUBANOTE 686J – SHARED REWRAP DRY-RUN \(READ-ONLY\)[\s\S]*$/, "");
+    const report = [
+      "LUBANOTE 686J – SHARED REWRAP DRY-RUN (READ-ONLY)",
+      "sharedRewrapDryRun: " + (vysledek.ok ? "PASS" : "FAIL"),
+      "accountVerified: " + anoNe(vysledek.accountVerified),
+      "sourceEnvelopeDecrypted: " + anoNe(vysledek.sourceEnvelopeDecrypted),
+      "sourceKeyPairVerified: " + anoNe(vysledek.sourceKeyPairVerified),
+      "newPasswordKekDerived: " + anoNe(vysledek.newPasswordKekDerived),
+      "temporaryRewrapRoundtrip: " + anoNe(vysledek.temporaryRewrapRoundtrip),
+      "samePrivateKey: " + anoNe(vysledek.samePrivateKey),
+      "samePublicIdentity: " + anoNe(vysledek.samePublicIdentity),
+      "serverMediaContentAudited: NO",
+      "safeToRotate: NO",
+      "reason: " + String(vysledek.reason || "unknown").slice(0, 80),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(bezJ + (bezJ ? "\n" : "") + report);
+  }
+
   async function zkopirujReport(tlacitko) {
     if (!posledniReport) return;
     let ok = false;
@@ -686,6 +775,10 @@
     obrazovka.hidden = true;
     const pole = prvek("[data-ln686e-password]");
     if (pole) pole.value = "";
+    const noveShared = prvek("[data-ln686j-new]");
+    const potvrzeneShared = prvek("[data-ln686j-confirm]");
+    if (noveShared) noveShared.value = "";
+    if (potvrzeneShared) potvrzeneShared.value = "";
     document.body.style.overflow = puvodniOverflow === null ? "" : puvodniOverflow;
     predchoziFocus?.focus?.({ preventScroll: true });
   }
