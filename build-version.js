@@ -11,6 +11,16 @@
   window.LUBANOTE_VERSION = jeLokalniWeb ? "LOCAL" : "WEB";
   window.LUBANOTE_BUILD = "";
 
+  /* 686D – TEST frontend UI, nezavisle na skutecne zvolenem backendu.
+     Produkce ani LOCAL Preview tuto diagnostickou vrstvu nenacita. */
+  if (host === "test.lubanote.com") {
+    document.documentElement.classList.add("ln-test-web-686D");
+    const stylTestu = document.createElement("link");
+    stylTestu.rel = "stylesheet";
+    stylTestu.href = "debugHubRecovery686D.css?v=686D";
+    document.head.appendChild(stylTestu);
+  }
+
   if (!jeLokalniWeb) return;
 
   const vzdalenyBuild = document.createElement("script");

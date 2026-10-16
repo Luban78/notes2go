@@ -1,0 +1,62 @@
+/* LubaNote 686D – pouze TEST web. Izolovana vrstva pro diagnostiku;
+   zadne zmeny v editoru, E2E klicich ani v produkcnim UI. */
+html.ln-test-web-686D #ln-debug-hub .ln-dh-title::after {
+  content: "TEST WEB · E2E patch 686D";
+  display: block !important;
+  margin-top: 3px !important;
+  color: #f6d59b !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  letter-spacing: .02em !important;
+}
+
+/* Badge rozlisuje WEB TEST od skutecneho backendu (L/T/S/?).
+   Otaznik je diagnosticky signal nezjisteneho backendu, nikoliv verze. */
+html.ln-test-web-686D #lubaNoteVersionBadge::after {
+  content: " · TEST";
+  color: #f6d59b !important;
+  font-weight: 800 !important;
+}
+
+/* 686C pridalo formulář pod log; puvodni footer se NESMEL zmensit
+   (flex: 0 0 auto) a nemel overflow – posledni tlacitka byla mimo panel. */
+html.ln-test-web-686D #ln-debug-hub .ln-dh-footer {
+  flex: 0 1 auto !important;
+  min-height: 110px !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(24,239,125,.55) transparent !important;
+  padding-bottom: 20px !important;
+}
+
+/* Při otevrenem testu uvolni vysku pro vysledek a formular.
+   Jen modul v TEST – ostatni Debug Hub funkce zustavaji beze zmeny. */
+html.ln-test-web-686D #ln-debug-hub:has([data-dh-e2e-recovery-result]:not([hidden])) .ln-dh-log,
+html.ln-test-web-686D #ln-debug-hub:has([data-dh-e2e-recovery-result]:not([hidden])) .ln-dh-summary {
+  display: none !important;
+}
+html.ln-test-web-686D #ln-debug-hub:has([data-dh-e2e-recovery-result]:not([hidden])) .ln-dh-footer {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+/* Vlastni scroll uvnitr vysledku nema blokovat pristup k formulari. */
+html.ln-test-web-686D #ln-debug-hub [data-dh-e2e-recovery-result] {
+  max-height: min(160px, 25dvh) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+}
+
+/* Fyzicka mobilni klavesnice zmensuje dvh; footer musi jit posunout. */
+@media (max-width: 899px) {
+  html.ln-test-web-686D #ln-debug-hub {
+    max-height: min(78dvh, 620px) !important;
+  }
+}
