@@ -340,8 +340,18 @@ document.addEventListener("visibilitychange", () => {
     document.visibilityState === "visible" &&
     !vyhledavaniAktivovaneUzivatelem
   ) {
+    // 685N: pri neaktivnim hledani zbytecny renderTasks() prekresloval
+    // cely strom poznamek pri kazdem navratu Android WebView z pozadi.
+    // Vymazani pripadneho autofillu zustava; seznam se nemusi menit,
+    // protoze aktivni hledaci filtr zde neexistuje.
     zajistiCisteNeaktivniVyhledavani();
-    prekresliVysledkyVyhledavani();
+    const androidWebView685N = /Android/i.test(navigator.userAgent || "") &&
+      /(?:; wv\)|\bwv\b)/i.test(navigator.userAgent || "");
+    if (androidWebView685N) {
+      aktualizujPrazdnyVysledekVyhledavani();
+    } else {
+      prekresliVysledkyVyhledavani();
+    }
   }
 });
 
