@@ -2868,9 +2868,9 @@ async function zkopirujNavrat685G(tlacitko) {
     /\|\s*RT-SYNC\s*\|\s*CHANNEL_ERROR/.test(radek)
   );
   // Limit na konci, aby se ve zprave neztratil nejdulezitejsi posledni navrat.
-  const vyber = dulezite.slice(-130);
+  const vyber = dulezite.slice(-65);
   const report = [
-    "LUBANOTE 685L – BLACK SCREEN FLIGHT RECORDER (RESUME / NATIVE / PIXEL)",
+    "LUBANOTE 685G – NAVRAT Z POZADI (RESUME / NATIVE)",
     `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
     `cas: ${new Date().toISOString()}`,
     `prostredi: ${prostredi()}`,
@@ -2998,6 +2998,9 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+        <button type="button" data-dh="e2e-recovery-test" style="grid-column:1 / -1">🔐 E2E Recovery – TEST 686B</button>
+        <pre data-dh-e2e-recovery-result style="grid-column:1 / -1;white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;margin:0;padding:8px;border:1px solid currentColor;border-radius:6px" hidden></pre>
+        <button type="button" data-dh="e2e-recovery-copy" style="grid-column:1 / -1" hidden>Kopírovat E2E report</button>
         <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
         <button type="button" data-dh="clear">Vymazat</button>
         <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
@@ -3121,7 +3124,7 @@ async function zkopirujNavrat685G(tlacitko) {
       else stabilitaOtevreneTesty.delete(det.dataset.lnStabilityTest);
     }, true);
 
-    hub.addEventListener("click", event => {
+    hub.addEventListener("click", async event => {
       const volbaModulu = event.target.closest("[data-dh-module]");
 
       if (volbaModulu) {
@@ -3157,6 +3160,55 @@ async function zkopirujNavrat685G(tlacitko) {
         zaznamy = [];
         startCas = performance.now();
         zapis("RESET");
+        return;
+      }
+
+      if (akce === "e2e-recovery-test") {
+        const vystup = hub.querySelector("[data-dh-e2e-recovery-result]");
+        const kopirovat = hub.querySelector('[data-dh="e2e-recovery-copy"]');
+        tlacitko.disabled = true;
+        tlacitko.textContent = "🔐 Kontroluji E2E…";
+        if (vystup) {
+          vystup.hidden = false;
+          vystup.textContent = "Probíhá READ-ONLY kontrola…";
+        }
+        if (kopirovat) kopirovat.hidden = true;
+        try {
+          const funkce = window.LubaNoteE2ECore?.recoveryPreflight;
+          const stav = typeof funkce === "function"
+            ? await funkce()
+            : { ok: false, reason: "recovery_preflight_unavailable" };
+          const anoNe = (v) => v === true ? "PASS" : "FAIL";
+          const radky = [
+            "LUBANOTE 686B – E2E RECOVERY PREFLIGHT (READ-ONLY)",
+            "Vysledek: " + (stav.ok ? "PREFLIGHT PASS" : "PREFLIGHT FAIL"),
+            "rootReady: " + anoNe(stav.rootReady),
+            "deviceKekReady: " + anoNe(stav.deviceKekReady),
+            "localEnvelope: " + anoNe(stav.localEnvelope),
+            "serverEnvelope: " + anoNe(stav.serverEnvelope),
+            "sameKeyId: " + anoNe(stav.sameKeyId),
+            "online: " + anoNe(stav.online),
+            "reason: " + String(stav.reason || "none"),
+            "POZOR: Preflight PASS neni overeni vlastnictvi zarizeni ani hotova obnova hesla."
+          ];
+          if (vystup) vystup.textContent = radky.join("\n");
+        } catch (_error) {
+          if (vystup) vystup.textContent =
+            "LUBANOTE 686B – E2E RECOVERY PREFLIGHT\nVysledek: FAIL\nreason: unexpected_error";
+        } finally {
+          tlacitko.disabled = false;
+          tlacitko.textContent = "🔐 E2E Recovery – TEST 686B";
+          if (kopirovat) kopirovat.hidden = false;
+        }
+        return;
+      }
+
+      if (akce === "e2e-recovery-copy") {
+        const report = hub.querySelector("[data-dh-e2e-recovery-result]")?.textContent || "";
+        if (!report) return;
+        const ok = await zkopirujTextRobustne(report);
+        tlacitko.textContent = ok ? "E2E report zkopírován ✓" : "Kopírování selhalo";
+        setTimeout(() => { tlacitko.textContent = "Kopírovat E2E report"; }, 1600);
         return;
       }
 
