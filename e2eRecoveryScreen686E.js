@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686L · MEDIA READ PROOF</span>
+          <span class="ln686e-badge">TEST WEB · 686M · STORAGE/MEDIA DRY-RUN</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -228,7 +228,19 @@
             <p class="ln686e-note">Kontrola je pouze pro přímé poznámky účtu (max. 30). Soubory Storage a sdílené poznámky zatím nejsou zahrnuté. Ani PASS nedovoluje změnit E2E heslo.</p>
           </section>
           <section class="ln686e-card">
-            <h2>10. Report</h2>
+            <h2>10. 686M – Storage a nové heslo pro média (BEZ ZÁPISU)</h2>
+            <p>V jednom kroku sečteme přístupné přílohy v uživatelské cestě Storage a vyzkoušíme, že staré šifrované médium lze znovu otevřít po dočasném přebalení pod novým E2E heslem. Bez změny stávajících dat.</p>
+            <label for="ln686m-new">Nové testovací E2E heslo (alespoň 8 znaků)</label>
+            <input type="password" id="ln686m-new" data-ln686m-new autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Heslo jen pro bezpečný test">
+            <label for="ln686m-confirm">Zopakuj heslo</label>
+            <input type="password" id="ln686m-confirm" data-ln686m-confirm autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Zopakovat heslo">
+            <button type="button" class="ln686e-secondary" data-ln686e="storage-media-rewrap">Prověřit Storage a přebalení média</button>
+            <div class="ln686e-state" data-ln686m-status role="status" aria-live="polite"></div>
+            <div data-ln686m-checks></div>
+            <p class="ln686e-note">READ-ONLY. Kontrola Storage je omezená na bucket lubanote-attachments a složku tohoto účtu (metadata, ne obsah souborů). Ostatní buckety, sdílené položky a úplná integrita Storage zůstávají neověřené. Změna hesla není povolená ani při PASS.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>11. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -253,6 +265,7 @@
       if (akce === "shared-rewrap-dry-run") { await spustSharedRewrap686J(); return; }
       if (akce === "secret-media-audit") { await spustSecretMediaAudit686K(); return; }
       if (akce === "media-content-proof") { await spustMediaProof686L(); return; }
+      if (akce === "storage-media-rewrap") { await spustStorageMedia686M(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -883,6 +896,88 @@
     nastavReport(bezL+(bezL?"\n":"")+report);
   }
 
+  /* 686M – stand-alone test; does not repeat 686G–L. */
+  async function spustStorageMedia686M() {
+    if(!obrazovka || obrazovka.hidden)return;
+    const nove=prvek('[data-ln686m-new]');
+    const potvrzeni=prvek('[data-ln686m-confirm]');
+    const btn=prvek('[data-ln686e="storage-media-rewrap"]');
+    const stav=prvek('[data-ln686m-status]');
+    const obsah=prvek('[data-ln686m-checks]');
+    const heslo=nove?.value||"";
+    const stejne=heslo.length>=8 && heslo.length<=1024 && heslo===potvrzeni?.value;
+    if(nove)nove.value="";
+    if(potvrzeni)potvrzeni.value="";
+    if(!stejne){
+      if(stav){stav.textContent="Hesla se neshodují nebo mají méně než 8 znaků.";stav.dataset.result="fail";}
+      return;
+    }
+    const mojeGenerace=++generace;
+    if(btn)btn.disabled=true;
+    if(stav){stav.textContent="Ověřuji Storage a dočasně přebaluji šifrované médium…";stav.removeAttribute("data-result");}
+    if(obsah)obsah.textContent="";
+    let v;
+    try {
+      const fn=window.LubaNoteE2ECore?.recoveryStorageMediaDryRun686M;
+      v=typeof fn==="function"?await fn(heslo):{ok:false,reason:"test_unavailable"};
+    }catch(_error){v={ok:false,reason:"test_failed"};}
+    // The input fields have been cleared BEFORE any asynchronous work.
+    // Always re-enable the button even if the screen was closed meanwhile.
+    if(btn)btn.disabled=false;
+    if(mojeGenerace!==generace || !obrazovka || obrazovka.hidden)return;
+    if(stav){
+      stav.textContent=v.ok?"ROZSAHOVÝ TEST PASS – media znovu otevřena, známá Storage cesta projita; změna hesla stále zakázána":
+        "KONTROLA NEDOKONČENA – stav dílčích kontrol je v reportu; nic nebylo změněno";
+      stav.dataset.result=v.ok?"pass":"fail";
+    }
+    const p=n=>Number.isSafeInteger(n)&&n>=0?n:"?";
+    const ř=(k,v)=>`<div class="ln686e-row"><span>${k}</span><strong>${p(v)}</strong></div>`;
+    if(obsah) obsah.innerHTML=[
+      radek("Účet ověřen",v.accountVerified),
+      radek("Root Key dostupný",v.rootVerified),
+      radek("Původní media klíč dostupný",v.mediaKekReady),
+      radek("Nový dočasný media klíč",v.newMediaKekDerived),
+      ř("Prověřené poznámky",v.remoteRowsScanned),
+      ř("Přebalené položky v paměti",v.mediaItemsRewrapped),
+      radek("Přebalení původních médií",v.legacyMediaRewrapVerified),
+      ř("Řádky příloh v databázi",v.storageAttachmentRows),
+      ř("Objekty v dostupné složce Storage",v.storageObjectsFound),
+      radek("Známá složka Storage prošla",v.storageUserPrefixListed),
+      radek("Veškerý Storage ověřen",v.storageObjectsAudited),
+      radek("Skutečná změna hesla povolena",v.safeToRotate)
+    ].join("");
+    const ano=x=>x===true?"YES":"NO";
+    const bezM=posledniReport.replace(/\n?LUBANOTE 686M – STORAGE MEDIA DRY-RUN \(READ-ONLY\)[\s\S]*$/,"");
+    const report=[
+      "LUBANOTE 686M – STORAGE MEDIA DRY-RUN (READ-ONLY)",
+      "storageMediaDryRun: "+(v.ok?"SCOPED_PASS":"INCOMPLETE"),
+      "accountVerified: "+ano(v.accountVerified),
+      "rootVerified: "+ano(v.rootVerified),
+      "mediaKekReady: "+ano(v.mediaKekReady),
+      "newMediaKekDerived: "+ano(v.newMediaKekDerived),
+      "remoteRowsScanned: "+p(v.remoteRowsScanned),
+      "e2eNotesDecrypted: "+p(v.e2eNotesDecrypted),
+      "legacyMediaVaults: "+p(v.legacyMediaVaults),
+      "mediaItemsFound: "+p(v.mediaItemsFound),
+      "mediaItemsRewrapped: "+p(v.mediaItemsRewrapped),
+      "legacyMediaRewrapVerified: "+ano(v.legacyMediaRewrapVerified),
+      "mediaProofReason: "+String(v.mediaProofReason||"unknown").slice(0,90),
+      "storageBucket: lubanote-attachments",
+      "storageUserPrefixListed: "+ano(v.storageUserPrefixListed),
+      "storageObjectsFound: "+p(v.storageObjectsFound),
+      "storageFoldersScanned: "+p(v.storageFoldersScanned),
+      "storageAttachmentRows: "+p(v.storageAttachmentRows),
+      "storageListingReason: "+String(v.storageListingReason||"unknown").slice(0,90),
+      "storageAllBucketsAudited: NO",
+      "storageObjectContentsAudited: NO",
+      "storageObjectsAudited: NO",
+      "safeToRotate: NO",
+      "reason: "+String(v.reason||"unknown").slice(0,90),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(bezM+(bezM?"\n":"")+report);
+  }
+
   async function zkopirujReport(tlacitko) {
     if (!posledniReport) return;
     let ok = false;
@@ -949,6 +1044,10 @@
     const potvrzeneShared = prvek("[data-ln686j-confirm]");
     if (noveShared) noveShared.value = "";
     if (potvrzeneShared) potvrzeneShared.value = "";
+    const noveMedia = prvek("[data-ln686m-new]");
+    const potvrzeneMedia = prvek("[data-ln686m-confirm]");
+    if (noveMedia) noveMedia.value = "";
+    if (potvrzeneMedia) potvrzeneMedia.value = "";
     document.body.style.overflow = puvodniOverflow === null ? "" : puvodniOverflow;
     predchoziFocus?.focus?.({ preventScroll: true });
   }

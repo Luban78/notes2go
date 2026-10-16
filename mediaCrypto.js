@@ -724,6 +724,49 @@
     }
   }
 
+  /* 686M – authenticated OLD -> NEW -> OLD-equivalent media bytes in RAM.
+   * The new key is password-derived in e2eCore.js and is never persisted.
+   * No migration helpers; no storage, note or IndexedDB writes. */
+  async function recoveryMediaRewrapRecord686M(record, noteId, mediaId, novyMediaKlic) {
+    if (!jeKlicDostupny()) return {ok:false,reason:"old_media_key_unavailable"};
+    if (!(novyMediaKlic instanceof CryptoKey) ||
+        novyMediaKlic.algorithm?.name!=="AES-GCM" || novyMediaKlic.algorithm.length!==256 ||
+        !novyMediaKlic.usages.includes("encrypt") || !novyMediaKlic.usages.includes("decrypt")) {
+      return {ok:false,reason:"new_media_key_invalid"};
+    }
+    if (!noteId || !mediaId || !record ||
+        Number(record.version)!==VERZE || record.algorithm!=="AES-GCM" ||
+        typeof record.mimeType!=="string" || !/^image\/[a-z0-9.+-]{1,40}$/i.test(record.mimeType) ||
+        typeof record.iv!=="string" || typeof record.ciphertext!=="string" ||
+        record.iv.length>32 || record.ciphertext.length>16*1024*1024 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.iv) ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.ciphertext)) {
+      return {ok:false,reason:"invalid_media_record"};
+    }
+    let puvodni=null, noveOtevrene=null, novyCipher=null;
+    try {
+      const puvodniIv=prevedBase64NaBajty(record.iv);
+      const puvodniCipher=prevedBase64NaBajty(record.ciphertext);
+      if(puvodniIv.length!==12 || puvodniCipher.length<=16) {
+        return {ok:false,reason:"invalid_media_ciphertext"};
+      }
+      const aad=vytvorAad(noteId,mediaId,record.mimeType);
+      puvodni=new Uint8Array(await crypto.subtle.decrypt(
+        {name:"AES-GCM",iv:puvodniIv,additionalData:aad},mediaSifrovaciKlic,puvodniCipher));
+      if(!puvodni.length) return {ok:false,reason:"empty_media_payload"};
+      const novyIv=crypto.getRandomValues(new Uint8Array(12));
+      novyCipher=new Uint8Array(await crypto.subtle.encrypt(
+        {name:"AES-GCM",iv:novyIv,additionalData:aad},novyMediaKlic,puvodni));
+      noveOtevrene=new Uint8Array(await crypto.subtle.decrypt(
+        {name:"AES-GCM",iv:novyIv,additionalData:aad},novyMediaKlic,novyCipher));
+      let rozdil=puvodni.length^noveOtevrene.length;
+      for(let i=0;i<Math.min(puvodni.length,noveOtevrene.length);i++) rozdil|=puvodni[i]^noveOtevrene[i];
+      return {ok:rozdil===0 && puvodni.length===noveOtevrene.length,
+        reason:rozdil===0 && puvodni.length===noveOtevrene.length ? "roundtrip_verified" : "roundtrip_mismatch"};
+    } catch(_error) {return {ok:false,reason:"media_rewrap_authentication_failed"};}
+    finally {puvodni?.fill(0);noveOtevrene?.fill(0);novyCipher?.fill(0);}
+  }
+
   function klonuj(hodnota) {
     if (typeof structuredClone === "function") {
       return structuredClone(hodnota);
@@ -1141,6 +1184,7 @@
     zabalBajtyE2ECore,
     rozbalBajtyE2ECore,
     recoveryOverMediaRecord686L,
+    recoveryMediaRewrapRecord686M,
     nazevPoleTrezoru: POLE_TREZORU
   });
 

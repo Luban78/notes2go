@@ -1974,6 +1974,191 @@
     }
   }
 
+  /* 686M – bounded scoped Storage metadata inventory + RAM-only legacy media
+   * rewrap under NEW password-derived media KEK. NEVER writes to DB, Storage,
+   * IndexedDB or localStorage. TEST may route to production DB.
+   * Storage prefix listing is NOT proof of full storage-object coverage,
+   * content authenticity, snapshots, shared notes or other buckets.
+   */
+  async function recoveryStorageMediaDryRun686M(noveHeslo) {
+    const v={ok:false,readOnly:true,safeToRotate:false,reason:"not_started",
+      accountVerified:false,rootVerified:false,mediaKekReady:false,
+      newMediaKekDerived:false,legacyMediaRewrapVerified:false,
+      remoteRowsScanned:0,e2eNotesDecrypted:0,legacyMediaVaults:0,
+      mediaItemsFound:0,mediaItemsRewrapped:0,mediaProofReason:"not_started",
+      storageBucket:"lubanote-attachments",storageUserPrefixListed:false,
+      storageObjectsFound:0,storageFoldersScanned:0,
+      storageAttachmentRows:0,storageListingReason:"not_started",
+      storageAllBucketsAudited:false,storageObjectContentsAudited:false,
+      storageObjectsAudited:false,serverMediaContentAudited:false};
+    let salt=null,kdfSalt=null,novyKlic=null;
+    try {
+      if(String(location.hostname||"").toLowerCase()!=="test.lubanote.com") {
+        v.reason="test_web_only";return v;
+      }
+      if(!navigator.onLine){v.reason="offline";return v;}
+      if(typeof noveHeslo!=="string" || noveHeslo.length<8 || noveHeslo.length>1024){
+        v.reason="new_password_length_invalid";return v;
+      }
+      const klient=ziskejSupabase();
+      if(!klient?.auth?.getUser || !klient?.from || !klient?.storage?.from){
+        v.reason="backend_storage_unavailable";return v;
+      }
+      const {data:auth,error:authChyba}=await klient.auth.getUser();
+      const userId=auth?.user?.id;
+      if(authChyba || !userId ||
+          String(localStorage.getItem("lubanoteLocalOwnerUserId")||"")!==userId){
+        v.reason="account_or_local_owner_unverified";return v;
+      }
+      v.accountVerified=true;
+      const stav=window.LubaNoteE2ECore?.getStav?.();
+      v.rootVerified=Boolean(jeRootKlicDostupny() && rootKontext?.userId===userId &&
+        stav?.ready===true && stav?.userId===userId);
+      const media=window.LubaNoteMediaCrypto;
+      v.mediaKekReady=media?.jeKlicDostupny?.()===true;
+      if(!v.rootVerified || !v.mediaKekReady ||
+          typeof media?.recoveryMediaRewrapRecord686M!=="function" ||
+          typeof window.LubaNoteNotesCrypto?.desifruj!=="function"){
+        v.reason="root_or_media_key_unavailable";return v;
+      }
+      // Storage: app's known private bucket, ONLY current user's prefix.
+      // list(...) is a GET, never upload / createSignedUrl / download.
+      try {
+        const {count,error:attachError}=await klient.from("attachments")
+          .select("id",{count:"exact",head:true}).eq("user_id",userId);
+        if(attachError || !Number.isSafeInteger(count) || count<0){
+          v.storageListingReason="attachment_metadata_unavailable";
+        } else {
+          v.storageAttachmentRows=count;
+          const cesta=[{path:userId,depth:0}];
+          const seen=new Set();let calls=0,folders=0,objects=0;
+          let problem="";
+          const bucket=window.LubaNoteAttachmentsCloud?.bucket || "lubanote-attachments";
+          // Explicit allowlist to avoid silently auditing an arbitrary bucket.
+          if(bucket!=="lubanote-attachments"){
+            problem="unknown_attachment_bucket";
+          } else {
+            while(cesta.length && !problem){
+              const {path,depth}=cesta.shift();
+              if(seen.has(path)){problem="storage_duplicate_prefix";break;}
+              seen.add(path);folders++;
+              if(folders>60 || depth>7){problem="storage_tree_limit";break;}
+              for(let offset=0; !problem; offset+=100){
+                if(++calls>40){problem="storage_request_limit";break;}
+                const {data:items,error:listError}=await klient.storage
+                  .from(bucket).list(path,{limit:100,offset,sortBy:{column:"name",order:"asc"}});
+                if(listError || !Array.isArray(items)){problem="storage_list_failed";break;}
+                if(items.length>100){problem="storage_page_invalid";break;}
+                for(const item of items){
+                  const name=String(item?.name||"");
+                  if(!name || name==="." || name===".." || name.includes("/") || name.length>255){
+                    problem="storage_item_name_invalid";break;
+                  }
+                  if(item.id==null && item.metadata==null){
+                    cesta.push({path:`${path}/${name}`,depth:depth+1});
+                  } else if(item.id!=null) {
+                    objects++;
+                    if(objects>300){problem="storage_object_limit";break;}
+                  } else {problem="storage_entry_ambiguous";break;}
+                }
+                if(items.length<100)break;
+              }
+            }
+          }
+          v.storageObjectsFound=objects;
+          v.storageFoldersScanned=folders;
+          v.storageUserPrefixListed=!problem;
+          v.storageListingReason=problem||"known_bucket_user_prefix_listed_metadata_only";
+        }
+      }catch(_error){v.storageListingReason="storage_inventory_failed";}
+      // Media test: decrypt existing note vault bytes under OLD key,
+      // re-encrypt ONLY in RAM with derived NEW key and compare decrypted bytes.
+      try {
+        const countResult=await klient.from("notes").select("id",{count:"exact",head:true})
+          .eq("user_id",userId).is("deleted_at",null);
+        if(countResult.error || !Number.isSafeInteger(countResult.count) || countResult.count<0){
+          v.mediaProofReason="note_count_unavailable";
+        } else if(countResult.count>30){
+          v.mediaProofReason="over_30_notes_limit";
+        } else {
+          const {data:rows,error:rowsError}=await klient.from("notes")
+            .select("id,data").eq("user_id",userId).is("deleted_at",null)
+            .order("id",{ascending:true}).limit(31);
+          if(rowsError || !Array.isArray(rows) || rows.length!==countResult.count){
+            v.mediaProofReason="note_read_incomplete";
+          } else {
+            // Same domain-separated media PBKDF2 as mediaCrypto.js, fresh salt.
+            salt=crypto.getRandomValues(new Uint8Array(16));
+            const prefix=new TextEncoder().encode("LubaNote-media-encryption-v1");
+            kdfSalt=new Uint8Array(prefix.length+salt.length);
+            kdfSalt.set(prefix,0);kdfSalt.set(salt,prefix.length);
+            const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(noveHeslo),
+              "PBKDF2",false,["deriveKey"]);
+            novyKlic=await crypto.subtle.deriveKey(
+              {name:"PBKDF2",salt:kdfSalt,iterations:600000,hash:"SHA-256"},
+              material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+            v.newMediaKekDerived=true;
+            let problem="";
+            for(const row of rows){
+              const obj=row?.data;
+              if(!row?.id || !obj || typeof obj!=="object" || Array.isArray(obj)){
+                problem="invalid_note_data";break;
+              }
+              let note=obj;
+              if(Object.prototype.hasOwnProperty.call(obj,"__lubanoteE2ENote")){
+                try {note=await window.LubaNoteNotesCrypto.desifruj(obj,userId,row.id);}
+                catch(_error){problem="e2e_note_decrypt_failed";break;}
+                v.e2eNotesDecrypted++;
+              }
+              const vault=note?.__lubanoteMediaVault;
+              if(vault!=null){
+                if(Number(vault.version)!==1 || vault.algorithm!=="AES-GCM" ||
+                   !vault.items || typeof vault.items!=="object" || Array.isArray(vault.items)){
+                  problem="invalid_media_vault";break;
+                }
+                if(note===obj)v.legacyMediaVaults++;
+                const items=Object.entries(vault.items);
+                if(items.length>30){problem="over_30_media_items";break;}
+                for(const [mediaId,record] of items){
+                  if(++v.mediaItemsFound>30){problem="over_30_media_items";break;}
+                  const proof=await media.recoveryMediaRewrapRecord686M(
+                    record,row.id,mediaId,novyKlic);
+                  if(proof?.ok!==true){problem=proof?.reason||"media_rewrap_failed";break;}
+                  v.mediaItemsRewrapped++;
+                }
+                if(problem)break;
+              }
+              v.remoteRowsScanned++;
+            }
+            if(!problem){
+              const rescan=await klient.from("notes").select("id",{count:"exact",head:true})
+                .eq("user_id",userId).is("deleted_at",null);
+              if(rescan.error || rescan.count!==countResult.count){
+                problem="notes_changed_during_scan";
+              }
+            }
+            v.legacyMediaRewrapVerified=!problem && v.mediaItemsFound>0 &&
+              v.remoteRowsScanned===countResult.count &&
+              v.mediaItemsRewrapped===v.mediaItemsFound;
+            v.mediaProofReason=problem||(v.mediaItemsFound===0 ? "no_media_to_rewrap" : "new_password_media_roundtrip_verified_in_memory");
+          }
+        }
+      }catch(_error){v.mediaProofReason="media_rewrap_dry_run_failed";}
+      const {data:check,error:checkError}=await klient.auth.getUser();
+      if(checkError || check?.user?.id!==userId ||
+        !jeRootKlicDostupny() || rootKontext?.userId!==userId ||
+        media.jeKlicDostupny?.()!==true){
+        v.reason="account_or_keys_changed";return v;
+      }
+      v.ok=v.legacyMediaRewrapVerified && v.storageUserPrefixListed;
+      v.reason=v.ok?"known_storage_prefix_and_media_dry_run_pass_other_scope_unverified":
+        (v.legacyMediaRewrapVerified?"media_pass_storage_incomplete":"media_dry_run_incomplete");
+      // safeToRotate deliberately remains FALSE in all cases.
+      return v;
+    }catch(_error){v.reason="storage_media_audit_failed";return v;}
+    finally {salt?.fill(0);kdfSalt?.fill(0);novyKlic=null;}
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -2006,6 +2191,7 @@
     recoverySharedRewrapDryRun686J,
     recoverySecretMediaAudit686K,
     recoveryMediaContentProof686L,
+    recoveryStorageMediaDryRun686M,
     getStav,
     resetPametiProTest
   });
