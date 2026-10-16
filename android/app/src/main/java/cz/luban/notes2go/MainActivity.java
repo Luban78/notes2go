@@ -2,9 +2,6 @@ package cz.luban.notes2go;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Bitmap;
-import android.view.PixelCopy;
-import android.webkit.WebView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -24,62 +21,6 @@ import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-
-  // 685L: pouze diagnostika. Zadne zmeny vykreslovaci vrstvy ani dat.
-  private int generaceZaznamu685L = 0;
-  private final Handler handlerZaznamu685L = new Handler(Looper.getMainLooper());
-
-  private void zmerPovrch685L(final int generace, final int odstupMs) {
-    if (generace != generaceZaznamu685L || isFinishing()) return;
-    try {
-      final View web = getBridge() == null ? null : getBridge().getWebView();
-      if (web == null || !web.isAttachedToWindow()) {
-        ohlasZivotniCyklus685F("685L_SURFACE_" + odstupMs + "_DETACHED");
-        return;
-      }
-      // PixelCopy cte vysledek systemove kompozice, nikoli DOM ani obsah poznamek.
-      // Bitmap existuje jen v RAM; nikdy ji neukladame ani neposilame.
-      if (Build.VERSION.SDK_INT >= 26) {
-        final Bitmap snimek = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888);
-        PixelCopy.request(getWindow(), snimek, result -> {
-          if (generace != generaceZaznamu685L) { snimek.recycle(); return; }
-          if (result == PixelCopy.SUCCESS) {
-            long suma = 0; int temne = 0; int min = 255; int max = 0;
-            for (int y=0; y<24; y++) for (int x=0; x<24; x++) {
-              int pixel = snimek.getPixel(x,y);
-              int jas = (Color.red(pixel)*299 + Color.green(pixel)*587 + Color.blue(pixel)*114)/1000;
-              suma += jas; if (jas < 12) temne++; min=Math.min(min,jas); max=Math.max(max,jas);
-            }
-            ohlasZivotniCyklus685F("685L_PIXEL_" + odstupMs + "_AVG" + (suma/576) + "_DARK" + temne + "_RANGE" + min + "TO" + max);
-          } else {
-            ohlasZivotniCyklus685F("685L_PIXEL_" + odstupMs + "_ERR" + result);
-          }
-          snimek.recycle();
-        }, handlerZaznamu685L);
-      }
-    } catch (RuntimeException error) {
-      ohlasZivotniCyklus685F("685L_PIXEL_" + odstupMs + "_EXCEPTION");
-    }
-  }
-
-  private void spustZaznam685L() {
-    final int generace = ++generaceZaznamu685L;
-    ohlasZivotniCyklus685F("685L_CAPTURE_ARMED");
-    try {
-      if (Build.VERSION.SDK_INT >= 23 && getBridge() != null && getBridge().getWebView() != null) {
-        WebView web = getBridge().getWebView();
-        web.postVisualStateCallback(generace, new WebView.VisualStateCallback() {
-          @Override
-          public void onComplete(long requestId) {
-            if (generace == generaceZaznamu685L) ohlasZivotniCyklus685F("685L_VISUAL_STATE_READY");
-          }
-        });
-      }
-    } catch (RuntimeException ignored) { ohlasZivotniCyklus685F("685L_VISUAL_STATE_ERROR"); }
-    for (final int delay : new int[]{100, 400, 900, 1700, 3000}) {
-      handlerZaznamu685L.postDelayed(() -> zmerPovrch685L(generace, delay), delay);
-    }
-  }
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
   private int lubaImeResumeGenerace = 0;
@@ -483,9 +424,9 @@ public class MainActivity extends BridgeActivity {
     naplanujModerniLubaImeHidePoNavratu();
     // 685H: onResume uz neprovadi vynuceny fullscreen relayout.
     // Pripadne odkrytou horni listu vyridi onWindowFocusChanged.
-    pozadejPrekresleni685H();
-    ohlasZivotniCyklus685F("685H_ON_RESUME_REPAINT");
-    spustZaznam685L();
+    // 685P: WebView si po resume ridi vykresleni samo.
+    // Nevnucujeme dalsi invalidaci celeho povrchu.
+    ohlasZivotniCyklus685F("685P_RESUME_NO_FORCED_INVALIDATE");
     spustKontroluSystemoveListy();
   }
 
@@ -516,7 +457,7 @@ public class MainActivity extends BridgeActivity {
       schovejSystemovouImeProLubaKeyboard(false);
       naplanujModerniLubaImeHidePoNavratu();
       obnovFullscreenJenPriViditelneListe685H();
-      pozadejPrekresleni685H();
+      // 685P: ani focus gain nevyvolava druhou invalidaci WebView.
     } else {
       zrusNaplanovaneLubaImeHide();
     }
