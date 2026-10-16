@@ -8,7 +8,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.os.SystemClock;
 import android.view.PixelCopy;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -33,7 +32,7 @@ public class MainActivity extends BridgeActivity {
    * Overlay je pasivní (ViewOverlay), neblokuje dotyky ani WebView.
    * Zobrazujeme jen po delší pauze, odstranění má pevný timeout. */
   private Bitmap snimekPredPozadim685Q;
-  private ImageView prekryti685Q;
+  private BitmapDrawable prekryti685Q;
   private long casPozadi685Q;
   private int generace685Q = 0;
   private final Handler handler685Q = new Handler(Looper.getMainLooper());
@@ -84,14 +83,10 @@ public class MainActivity extends BridgeActivity {
     final int gen = ++generace685Q;
     final View decor = getWindow().getDecorView();
     final Bitmap bmp = snimekPredPozadim685Q;
-    final ImageView image = new ImageView(this);
-    image.setImageBitmap(bmp);
-    image.setScaleType(ImageView.ScaleType.FIT_XY);
-    image.setClickable(false);
-    image.setFocusable(false);
-    image.layout(0, 0, decor.getWidth(), decor.getHeight());
-    prekryti685Q = image;
-    decor.getOverlay().add(image);
+    final BitmapDrawable obraz = new BitmapDrawable(getResources(), bmp);
+    obraz.setBounds(0, 0, decor.getWidth(), decor.getHeight());
+    prekryti685Q = obraz;
+    decor.getOverlay().add(obraz);
     // Neodstraňovat pouze na callback: další snímek se vykreslí až po něm.
     final Runnable uklid = () -> {
       if (gen == generace685Q) uklidSnimek685Q();
