@@ -2868,9 +2868,9 @@ async function zkopirujNavrat685G(tlacitko) {
     /\|\s*RT-SYNC\s*\|\s*CHANNEL_ERROR/.test(radek)
   );
   // Limit na konci, aby se ve zprave neztratil nejdulezitejsi posledni navrat.
-  const vyber = dulezite.slice(-65);
+  const vyber = dulezite.slice(-130);
   const report = [
-    "LUBANOTE 685G – NAVRAT Z POZADI (RESUME / NATIVE)",
+    "LUBANOTE 685L – BLACK SCREEN FLIGHT RECORDER (RESUME / NATIVE / PIXEL)",
     `verze: ${window.LUBANOTE_VERSION || "DEV"}`,
     `cas: ${new Date().toISOString()}`,
     `prostredi: ${prostredi()}`,
