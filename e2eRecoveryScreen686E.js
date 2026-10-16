@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686J · SHARED REWRAP DRY-RUN</span>
+          <span class="ln686e-badge">TEST WEB · 686K · SECRET/MEDIA AUDIT</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -212,7 +212,15 @@
             <p class="ln686e-note">TEST bez zápisu: nový salt, obálka a heslo se <b>neukládají</b>. Heslo zůstává nezměněno a další ochrana Secret/médií ještě není vyřešená. TEST a PROD mohou sdílet databázi.</p>
           </section>
           <section class="ln686e-card">
-            <h2>8. Report</h2>
+            <h2>8. 686K – Inventura Secret a médií (BEZ ZÁPISU)</h2>
+            <p>Jedním tlačítkem zkontrolujeme počty Secret dat a serverové značky šifrovaných fotografií. Nečteme fotografie ani text poznámek; šifrovaný obsah E2E poznámek nelze takto prozkoumat. Nuly proto neznamenají důkaz, že stará média neexistují.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="secret-media-audit">Zkontrolovat Secret a média</button>
+            <div class="ln686e-state" data-ln686k-status role="status" aria-live="polite"></div>
+            <div data-ln686k-checks></div>
+            <p class="ln686e-note">READ-ONLY. TEST a PROD mohou sdílet databázi. Změna hesla není povolená, dokud nebude bezpečně prověřen i skrytý obsah médií.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>9. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -235,6 +243,7 @@
       if (akce === "legacy-audit") { await spustLegacyAudit686H(); return; }
       if (akce === "backend-shared-audit") { await spustBackendSharedAudit686I(); return; }
       if (akce === "shared-rewrap-dry-run") { await spustSharedRewrap686J(); return; }
+      if (akce === "secret-media-audit") { await spustSecretMediaAudit686K(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -711,6 +720,88 @@
       "E2E password/keys/notes/server modified: NO"
     ].join("\n");
     nastavReport(bezJ + (bezJ ? "\n" : "") + report);
+  }
+
+  /* 686K – independent metadata-only Secret/media inventory. */
+  async function spustSecretMediaAudit686K() {
+    if (!obrazovka || obrazovka.hidden) return;
+    const btn = prvek('[data-ln686e="secret-media-audit"]');
+    const stav = prvek('[data-ln686k-status]');
+    const obsah = prvek('[data-ln686k-checks]');
+    const mojeGenerace = ++generace;
+    if (btn) btn.disabled = true;
+    if (stav) {
+      stav.textContent = "Čtu pouze počty a metadata Secret/médií…";
+      stav.removeAttribute("data-result");
+    }
+    if (obsah) obsah.textContent = "";
+    let vysledek;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoverySecretMediaAudit686K;
+      vysledek = typeof funkce === "function"
+        ? await funkce()
+        : {ok: false, reason: "audit_unavailable"};
+    } catch (_error) {
+      vysledek = {ok: false, reason: "audit_failed"};
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (btn) btn.disabled = false;
+    if (stav) {
+      stav.textContent = vysledek.ok
+        ? "INVENTURA PASS – obsah médií ještě není ověřen (BEZ ZÁPISU)"
+        : "INVENTURA NEDOKONČENA – nic nebylo změněno";
+      stav.dataset.result = vysledek.ok ? "pass" : "fail";
+    }
+    const pocet = value => Number.isSafeInteger(value) && value >= 0 ? value : "?";
+    const radekPocet = (nazev, value) =>
+      `<div class="ln686e-row"><span>${nazev}</span><strong>${pocet(value)}</strong></div>`;
+    if (obsah) obsah.innerHTML = [
+      radek("Účet ověřen", vysledek.accountVerified),
+      radek("Root Key ověřen", vysledek.rootVerified),
+      radek("Lokální účet ověřen", vysledek.localOwnerVerified),
+      radekPocet("Lokální Secret poznámky", vysledek.localSecretNotes),
+      radekPocet("Lokální staré Secret záznamy", vysledek.localLegacySecretNotes),
+      radekPocet("Lokální media vaulty", vysledek.localMediaVaults),
+      radekPocet("Serverové poznámky", vysledek.serverNotes),
+      radekPocet("Serverové Secret poznámky", vysledek.serverSecretNotes),
+      radekPocet("Serverové Secret štítky", vysledek.serverSecretTags),
+      radekPocet("Serverové Secret přílohy", vysledek.serverSecretAttachments),
+      radekPocet("Serverové poznámky s E2E obálkou", vysledek.remoteE2ENotes),
+      radekPocet("Serverové značky starých media vaultů", vysledek.remoteLegacyMediaVaultMarkers),
+      radekPocet("Prohlédnutá serverová metadata", vysledek.remoteRowsScanned),
+      radek("Metadata prověřena", vysledek.remoteMediaMetadataScanComplete),
+      radek("Obsah serverových médií ověřen", vysledek.serverMediaContentAudited),
+      radek("Skutečná změna hesla povolena", vysledek.safeToRotate)
+    ].join("");
+    const yes = v => v === true ? "YES" : "NO";
+    const c = value => String(pocet(value));
+    const bezK = posledniReport.replace(/\n?LUBANOTE 686K – SECRET MEDIA AUDIT \(READ-ONLY\)[\s\S]*$/, "");
+    const report = [
+      "LUBANOTE 686K – SECRET MEDIA AUDIT (READ-ONLY)",
+      "secretMediaAudit: " + (vysledek.ok ? "INVENTORY_PASS" : "INCOMPLETE"),
+      "accountVerified: " + yes(vysledek.accountVerified),
+      "rootVerified: " + yes(vysledek.rootVerified),
+      "localOwnerVerified: " + yes(vysledek.localOwnerVerified),
+      "localSecretNotes: " + c(vysledek.localSecretNotes),
+      "localLegacySecretNotes: " + c(vysledek.localLegacySecretNotes),
+      "localMediaVaults: " + c(vysledek.localMediaVaults),
+      "serverNotes: " + c(vysledek.serverNotes),
+      "serverSecretNotes: " + c(vysledek.serverSecretNotes),
+      "serverSecretTags: " + c(vysledek.serverSecretTags),
+      "serverSecretAttachments: " + c(vysledek.serverSecretAttachments),
+      "remoteRowsScanned: " + c(vysledek.remoteRowsScanned),
+      "remoteE2ENotes: " + c(vysledek.remoteE2ENotes),
+      "remoteLegacyMediaVaultMarkers: " + c(vysledek.remoteLegacyMediaVaultMarkers),
+      "remotePlainOrOtherNotes: " + c(vysledek.remotePlainOrOtherNotes),
+      "remoteMediaMetadataScanComplete: " + yes(vysledek.remoteMediaMetadataScanComplete),
+      "serverMediaContentAudited: NO",
+      "storageObjectsAudited: NO",
+      "e2eInnerPayloadAudited: NO",
+      "safeToRotate: NO",
+      "reason: " + String(vysledek.reason || "unknown").slice(0, 80),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(bezK + (bezK ? "\n" : "") + report);
   }
 
   async function zkopirujReport(tlacitko) {

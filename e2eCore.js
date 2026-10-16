@@ -1691,6 +1691,171 @@
     }
   }
 
+  /* 686K – TEST-only Secret/media metadata audit. READ-ONLY.
+   * Selects only server note IDs and projected JSONB marker scalars, never
+   * the full note data/ciphertext/image bytes. The E2E note marker hides
+   * its inner contents, so media absence can NEVER be established here.
+   * May read from PROD-backed TEST, so never write/rotate anything.
+   */
+  async function recoverySecretMediaAudit686K() {
+    const vysledek = {
+      ok: false, readOnly: true, safeToRotate: false,
+      reason: "not_started", accountVerified: false,
+      rootVerified: false, localOwnerVerified: false,
+      localSecretNotes: 0, localLegacySecretNotes: 0,
+      localMediaVaults: 0,
+      serverNotes: 0, serverSecretNotes: 0,
+      serverSecretTags: 0, serverSecretAttachments: 0,
+      remoteRowsScanned: 0, remoteE2ENotes: 0,
+      remoteLegacyMediaVaultMarkers: 0,
+      remotePlainOrOtherNotes: 0,
+      remoteMediaMetadataScanComplete: false,
+      serverMediaContentAudited: false,
+      storageObjectsAudited: false,
+      e2eInnerPayloadAudited: false
+    };
+    try {
+      if (String(location.hostname || "").toLowerCase() !== "test.lubanote.com") {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      if (!navigator.onLine) { vysledek.reason = "offline"; return vysledek; }
+      const klient = ziskejSupabase();
+      if (!klient?.auth?.getUser || !klient?.from || !klient?.rpc) {
+        vysledek.reason = "backend_unavailable";
+        return vysledek;
+      }
+      const { data: auth, error: authChyba } = await klient.auth.getUser();
+      const userId = auth?.user?.id;
+      if (authChyba || !userId) {
+        vysledek.reason = "account_unverified";
+        return vysledek;
+      }
+      vysledek.accountVerified = true;
+      vysledek.rootVerified = jeRootKlicDostupny() && rootKontext?.userId === userId;
+      if (!vysledek.rootVerified) {
+        vysledek.reason = "root_key_unavailable";
+        return vysledek;
+      }
+      const localOwner = String(localStorage.getItem("lubanoteLocalOwnerUserId") || "").trim();
+      vysledek.localOwnerVerified = localOwner === userId;
+      if (!vysledek.localOwnerVerified) {
+        vysledek.reason = "local_owner_unverified";
+        return vysledek;
+      }
+      if (typeof nactiSifrovaneTajneZaznamy !== "function" ||
+          typeof nactiStarePlaintextTajnePoznamky !== "function" ||
+          typeof getLocalNotesForSync !== "function") {
+        vysledek.reason = "local_inventory_unavailable";
+        return vysledek;
+      }
+      const secret = nactiSifrovaneTajneZaznamy();
+      const legacy = nactiStarePlaintextTajnePoznamky();
+      const notes = getLocalNotesForSync();
+      if (!Array.isArray(secret) || !Array.isArray(legacy) || !Array.isArray(notes)) {
+        vysledek.reason = "local_inventory_invalid";
+        return vysledek;
+      }
+      vysledek.localSecretNotes = secret.length;
+      vysledek.localLegacySecretNotes = legacy.length;
+      vysledek.localMediaVaults = notes.filter(
+        note => window.LubaNoteMediaCrypto?.maSifrovanaMedia?.(note) === true
+      ).length;
+
+      /* Manifest is already the established private metadata-only RPC. */
+      const { data: manifest, error: manifestChyba } = await klient.rpc(
+        "lubanote_get_private_bootstrap_manifest"
+      );
+      if (manifestChyba || !Array.isArray(manifest)) {
+        vysledek.reason = "manifest_unavailable";
+        return vysledek;
+      }
+      const live = manifest.filter(row => row && !row.deleted_at);
+      vysledek.serverNotes = live.length;
+      vysledek.serverSecretNotes = live.filter(row => row.is_secret === true).length;
+      async function spocitej(tab, filtr) {
+        let q = klient.from(tab).select("id", {count: "exact", head: true})
+          .eq("user_id", userId);
+        if (filtr) q = filtr(q);
+        const {count, error} = await q;
+        if (error || !Number.isSafeInteger(count) || count < 0) {
+          throw new Error("count_unavailable");
+        }
+        return count;
+      }
+      try {
+        vysledek.serverSecretTags = await spocitej(
+          "tags", q => q.eq("is_secret", true).is("deleted_at", null)
+        );
+        vysledek.serverSecretAttachments = await spocitej(
+          "attachments", q => q.eq("is_secret", true)
+        );
+      } catch (_error) {
+        vysledek.reason = "secret_metadata_unavailable";
+        return vysledek;
+      }
+      /* Only direct-owner remote notes; shared/inaccessible/stale media remain
+         unverified. Check count to prevent unbounded metadata scans. */
+      const {count, error: countError} = await klient.from("notes")
+        .select("id", {count: "exact", head: true})
+        .eq("user_id", userId).is("deleted_at", null);
+      if (countError || !Number.isSafeInteger(count) || count < 0) {
+        vysledek.reason = "remote_notes_count_unavailable";
+        return vysledek;
+      }
+      if (count > 1000) {
+        vysledek.reason = "remote_notes_over_1000_limit";
+        return vysledek;
+      }
+      // PostgREST projects JSONB scalar fields server-side; no ciphertext,
+      // actual image contents, URLs, note text or private IDs in the report.
+      for (let offset = 0; offset < count; offset += 100) {
+        const {data: rows, error} = await klient.from("notes")
+          .select("id,e2e_marker:data->>__lubanoteE2ENote,media_vault_version:data->__lubanoteMediaVault->>version,media_vault_algorithm:data->__lubanoteMediaVault->>algorithm")
+          .eq("user_id", userId).is("deleted_at", null)
+          .order("id", {ascending: true})
+          .range(offset, Math.min(offset + 99, count - 1));
+        if (error || !Array.isArray(rows) || rows.length !== Math.min(100, count-offset)) {
+          vysledek.reason = "remote_media_metadata_unavailable";
+          return vysledek;
+        }
+        for (const row of rows) {
+          const e2e = row?.e2e_marker === "true" || row?.e2e_marker === true;
+          const legacyMedia = row?.media_vault_version != null ||
+            row?.media_vault_algorithm != null;
+          if (e2e) vysledek.remoteE2ENotes++;
+          else vysledek.remotePlainOrOtherNotes++;
+          if (legacyMedia) vysledek.remoteLegacyMediaVaultMarkers++;
+          vysledek.remoteRowsScanned++;
+        }
+      }
+      // Count the owner-scoped rows again to reject a concurrent count change.
+      const {count: kontrolniPocet, error: kontrolniChyba} = await klient.from("notes")
+        .select("id", {count: "exact", head: true})
+        .eq("user_id", userId).is("deleted_at", null);
+      if (kontrolniChyba || kontrolniPocet !== count ||
+          vysledek.remoteRowsScanned !== count) {
+        vysledek.reason = "remote_notes_changed_during_scan";
+        return vysledek;
+      }
+      const {data: current, error: currentError} = await klient.auth.getUser();
+      if (currentError || current?.user?.id !== userId ||
+          !jeRootKlicDostupny() || rootKontext?.userId !== userId) {
+        vysledek.reason = "account_or_root_changed";
+        return vysledek;
+      }
+      vysledek.remoteMediaMetadataScanComplete = true;
+      vysledek.ok = true;
+      // This is INVENTORY PASS, never "no old media" proof. E2E note
+      // ciphertext may contain hidden legacy media vaults and attachments.
+      vysledek.reason = "metadata_only_media_contents_unverified";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "secret_media_audit_failed";
+      return vysledek;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1721,6 +1886,7 @@
     recoveryLegacyAudit686H,
     recoveryBackendSharedAudit686I,
     recoverySharedRewrapDryRun686J,
+    recoverySecretMediaAudit686K,
     getStav,
     resetPametiProTest
   });
