@@ -1,6 +1,6 @@
 /* ==================================================
    LubaNote – Backend Independence V1 / BI-1B
-   Read-only diagnostika aktivního backendu.
+   Read-only diagnostika  aktivního backendu.
    Nic nepřepíná a nic do backendu nezapisuje.
 ================================================== */
 
