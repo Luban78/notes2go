@@ -1535,6 +1535,7 @@
 
   function jeKeyboardWatchCil(prvek) {
     if (!(prvek instanceof Element)) return false;
+    if (jeDebugPrvek(prvek) || prvek.matches?.('input[type="password"]')) return false;
 
     const editor = window.LubaNoteEditorV2?.ziskejEditorElement?.() || null;
     if (editor && (prvek === editor || editor.contains(prvek))) return true;
@@ -2998,8 +2999,17 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
-        <button type="button" data-dh="e2e-recovery-test" style="grid-column:1 / -1">🔐 E2E Recovery – TEST 686B</button>
+        <button type="button" data-dh="e2e-recovery-test" style="grid-column:1 / -1">🔐 E2E Recovery – TEST 686C</button>
         <pre data-dh-e2e-recovery-result style="grid-column:1 / -1;white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;margin:0;padding:8px;border:1px solid currentColor;border-radius:6px" hidden></pre>
+        <section data-dh-e2e-reauth-panel hidden style="grid-column:1 / -1;min-width:0">
+          <div style="font-size:12px;margin-bottom:6px">686C: Ověř přihlašovací heslo k TEST účtu. Heslo neukládáme, do reportu se nedostane. Tento test NEMĚNÍ E2E heslo.</div>
+          <input type="password" data-dh-e2e-login-password
+                 autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="Přihlašovací heslo k účtu"
+                 aria-label="Přihlašovací heslo k testovacímu účtu"
+                 style="box-sizing:border-box;width:100%;padding:8px;min-width:0;margin-bottom:6px">
+          <button type="button" data-dh="e2e-verify-login" style="width:100%">Ověřit heslo k účtu – TEST</button>
+        </section>
         <button type="button" data-dh="e2e-recovery-copy" style="grid-column:1 / -1" hidden>Kopírovat E2E report</button>
         <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
         <button type="button" data-dh="clear">Vymazat</button>
@@ -3166,6 +3176,10 @@ async function zkopirujNavrat685G(tlacitko) {
       if (akce === "e2e-recovery-test") {
         const vystup = hub.querySelector("[data-dh-e2e-recovery-result]");
         const kopirovat = hub.querySelector('[data-dh="e2e-recovery-copy"]');
+        const panelHesla = hub.querySelector("[data-dh-e2e-reauth-panel]");
+        const poleHesla = hub.querySelector("[data-dh-e2e-login-password]");
+        if (panelHesla) panelHesla.hidden = true;
+        if (poleHesla) poleHesla.value = "";
         tlacitko.disabled = true;
         tlacitko.textContent = "🔐 Kontroluji E2E…";
         if (vystup) {
@@ -3192,13 +3206,49 @@ async function zkopirujNavrat685G(tlacitko) {
             "POZOR: Preflight PASS neni overeni vlastnictvi zarizeni ani hotova obnova hesla."
           ];
           if (vystup) vystup.textContent = radky.join("\n");
+          if (panelHesla) panelHesla.hidden = !stav.ok;
         } catch (_error) {
           if (vystup) vystup.textContent =
             "LUBANOTE 686B – E2E RECOVERY PREFLIGHT\nVysledek: FAIL\nreason: unexpected_error";
         } finally {
           tlacitko.disabled = false;
-          tlacitko.textContent = "🔐 E2E Recovery – TEST 686B";
+          tlacitko.textContent = "🔐 E2E Recovery – TEST 686C";
           if (kopirovat) kopirovat.hidden = false;
+        }
+        return;
+      }
+
+      if (akce === "e2e-verify-login") {
+        const pole = hub.querySelector("[data-dh-e2e-login-password]");
+        const vystup = hub.querySelector("[data-dh-e2e-recovery-result]");
+        const heslo = pole?.value || "";
+        /* Vymazat z DOM pred jakymkoliv asynchronnim volanim. */
+        if (pole) pole.value = "";
+        if (!heslo) {
+          if (vystup) vystup.textContent += "\naccountPassword: FAIL\naccountPasswordReason: password_required";
+          return;
+        }
+        tlacitko.disabled = true;
+        tlacitko.textContent = "Ověřuji u LubaServeru…";
+        try {
+          const overeni = window.LubaNoteE2ECore?.overHesloUctuProRecovery;
+          const stav = typeof overeni === "function"
+            ? await overeni(heslo)
+            : { ok: false, reason: "reauth_unavailable" };
+          if (vystup) {
+            vystup.textContent = vystup.textContent.replace(
+              /\naccountPassword: (PASS|FAIL)[\s\S]*$/,
+              ""
+            ) + "\naccountPassword: " + (stav.ok ? "PASS" : "FAIL") +
+                "\naccountPasswordReason: " + String(stav.reason || "none") +
+                "\nE2E keys/notes unchanged: YES" +
+                "\nPOZOR: Heslo musi byt znovu overeno i pri skutecne obnove.";
+          }
+        } catch (_error) {
+          if (vystup) vystup.textContent += "\naccountPassword: FAIL\naccountPasswordReason: unexpected_error";
+        } finally {
+          tlacitko.disabled = false;
+          tlacitko.textContent = "Ověřit heslo k účtu – TEST";
         }
         return;
       }

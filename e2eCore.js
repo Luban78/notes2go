@@ -836,6 +836,106 @@
     }
   }
 
+  /* 686C TEST – reautentizace heslem uctu pro budouci E2E obnovu.
+     NENI to opravneni ulozene pro pozdejsi pouziti. Pri skutecne obnove
+     je nutne overit heslo znovu v te same operaci a zkontrolovat identitu.
+     Tento krok nezapisuje zadna E2E data ani neprepina existujici session. */
+  async function overHesloUctuProRecovery(heslo) {
+    const vysledek = {
+      ok: false,
+      e2eUnchanged: true,
+      sessionUnchanged: true,
+      reason: "not_started"
+    };
+
+    if (typeof heslo !== "string" || heslo.length === 0) {
+      vysledek.reason = "password_required";
+      return vysledek;
+    }
+    if (!navigator.onLine) {
+      vysledek.reason = "offline";
+      return vysledek;
+    }
+
+    let docasny = null;
+    try {
+      const predpoklady = await recoveryPreflight();
+      if (!predpoklady.ok) {
+        vysledek.reason = "preflight_failed";
+        return vysledek;
+      }
+
+      const stavajici = ziskejSupabase();
+      if (
+        !stavajici?.auth?.getUser ||
+        !stavajici.supabaseUrl ||
+        !stavajici.supabaseKey ||
+        typeof window.supabase?.createClient !== "function"
+      ) {
+        vysledek.reason = "auth_unavailable";
+        return vysledek;
+      }
+
+      /* getUser kontroluje ucet na serveru, ne jen obsah lokalni session. */
+      const { data: overeny, error: chybaUctu } =
+        await stavajici.auth.getUser();
+      const user = overeny?.user;
+      if (chybaUctu || !user?.id || !user?.email) {
+        vysledek.reason = "account_unverified";
+        return vysledek;
+      }
+
+      /* Oddeleny GoTrue klient: bez IndexedDB/localStorage, bez refresh,
+         bez zachyceni Auth tokenu aplikace a bez vymeny aktivni session. */
+      docasny = window.supabase.createClient(
+        stavajici.supabaseUrl,
+        stavajici.supabaseKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            storageKey: "ln-e2e-686c-reauth-ephemeral"
+          }
+        }
+      );
+
+      const { data, error } = await docasny.auth.signInWithPassword({
+        email: user.email,
+        password: heslo
+      });
+      if (error || !data?.user?.id) {
+        vysledek.reason = "invalid_credentials_or_auth_error";
+        return vysledek;
+      }
+      if (data.user.id !== user.id) {
+        vysledek.reason = "account_identity_mismatch";
+        return vysledek;
+      }
+
+      /* Po kontrole znovu potvrdime, ze zustava stejny aktivni ucet. */
+      const { data: aktualni, error: chybaKontroly } =
+        await stavajici.auth.getUser();
+      if (chybaKontroly || aktualni?.user?.id !== user.id) {
+        vysledek.reason = "active_account_changed";
+        return vysledek;
+      }
+
+      vysledek.ok = true;
+      vysledek.reason = null;
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "reauth_failed";
+      return vysledek;
+    } finally {
+      /* Pouze docasna session (scope local), nikdy hlavni Auth klient. */
+      if (docasny?.auth?.signOut) {
+        try { await docasny.auth.signOut({ scope: "local" }); }
+        catch (_error) { /* Bez perzistence neni co uklizet na disku. */ }
+      }
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -860,6 +960,7 @@
     odvodDomenovyKlic,
     selfTest,
     recoveryPreflight,
+    overHesloUctuProRecovery,
     getStav,
     resetPametiProTest
   });
