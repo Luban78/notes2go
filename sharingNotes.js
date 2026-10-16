@@ -1653,11 +1653,19 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      sdilenePoznamky = nactiCache();
-      void doplnPlnouCachePokudJeAktualni(ziskejUserId());
+      // 685K: Android WebView při návratu z pozadí nepřekresluje celý
+      // seznam jen kvůli visibilitychange. Realtime head-check níže
+      // zůstává aktivní a skutečné změny vykreslí běžnou cestou.
+      const androidWebView685K =
+        /Android/i.test(navigator.userAgent || "") &&
+        /(?:; wv\)|\bwv\b)/i.test(navigator.userAgent || "");
+      if (!androidWebView685K) {
+        sdilenePoznamky = nactiCache();
+        void doplnPlnouCachePokudJeAktualni(ziskejUserId());
 
-      if (typeof window.renderTasks === "function") {
-        window.renderTasks();
+        if (typeof window.renderTasks === "function") {
+          window.renderTasks();
+        }
       }
 
       /* 621A: po resume už nestahujeme celé Shared; head-check rozhodne o změně. */
