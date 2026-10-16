@@ -2,6 +2,13 @@ package cz.luban.notes2go;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
+import android.os.SystemClock;
+import android.view.PixelCopy;
+import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,6 +28,86 @@ import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+  /* 685Q: Pouze RAM, nikdy soubor. Snímek celého okna z doby odchodu.
+   * Overlay je pasivní (ViewOverlay), neblokuje dotyky ani WebView.
+   * Zobrazujeme jen po delší pauze, odstranění má pevný timeout. */
+  private Bitmap snimekPredPozadim685Q;
+  private ImageView prekryti685Q;
+  private long casPozadi685Q;
+  private int generace685Q = 0;
+  private final Handler handler685Q = new Handler(Looper.getMainLooper());
+
+  private void uklidPrekryti685Q() {
+    if (prekryti685Q != null) {
+      try { getWindow().getDecorView().getOverlay().remove(prekryti685Q); }
+      catch (RuntimeException ignored) {}
+      prekryti685Q = null;
+    }
+  }
+
+  private void uklidSnimek685Q() {
+    uklidPrekryti685Q();
+    if (snimekPredPozadim685Q != null) {
+      snimekPredPozadim685Q.recycle();
+      snimekPredPozadim685Q = null;
+    }
+  }
+
+  private void zachytPredPozadim685Q() {
+    final int gen = ++generace685Q;
+    uklidSnimek685Q();
+    final View decor = getWindow().getDecorView();
+    final int w = decor.getWidth(), h = decor.getHeight();
+    if (w < 100 || h < 100 || Build.VERSION.SDK_INT < 26) return;
+    // Poloviční rozlišení: krátkodobě ~1/4 paměti, bez software WebView.
+    final Bitmap bmp;
+    try { bmp = Bitmap.createBitmap(Math.max(1,w/2), Math.max(1,h/2), Bitmap.Config.ARGB_8888); }
+    catch (OutOfMemoryError ignored) { return; }
+    try {
+      PixelCopy.request(getWindow(), bmp, result -> {
+        if (gen != generace685Q || result != PixelCopy.SUCCESS) {
+          bmp.recycle();
+          return;
+        }
+        snimekPredPozadim685Q = bmp;
+      }, handler685Q);
+    } catch (RuntimeException ignored) { bmp.recycle(); }
+  }
+
+  private void zobrazPrekrytiPriNavratu685Q() {
+    if (snimekPredPozadim685Q == null || casPozadi685Q == 0 ||
+        SystemClock.elapsedRealtime() - casPozadi685Q < 15000L) {
+      uklidSnimek685Q();
+      return;
+    }
+    final int gen = ++generace685Q;
+    final View decor = getWindow().getDecorView();
+    final Bitmap bmp = snimekPredPozadim685Q;
+    final ImageView image = new ImageView(this);
+    image.setImageBitmap(bmp);
+    image.setScaleType(ImageView.ScaleType.FIT_XY);
+    image.setClickable(false);
+    image.setFocusable(false);
+    image.layout(0, 0, decor.getWidth(), decor.getHeight());
+    prekryti685Q = image;
+    decor.getOverlay().add(image);
+    // Neodstraňovat pouze na callback: další snímek se vykreslí až po něm.
+    final Runnable uklid = () -> {
+      if (gen == generace685Q) uklidSnimek685Q();
+    };
+    handler685Q.postDelayed(uklid, 1400L); // nouzové odstranění vždy
+    try {
+      if (getBridge() != null && getBridge().getWebView() != null) {
+        getBridge().getWebView().postVisualStateCallback(gen, new android.webkit.WebView.VisualStateCallback() {
+          @Override public void onComplete(long requestId) {
+            if (gen != generace685Q) return;
+            handler685Q.postDelayed(uklid, 180L);
+          }
+        });
+      }
+    } catch (RuntimeException ignored) {}
+  }
 
   private static final long FULLSCREEN_OBNOVA_ZPOZDENI_MS = 180L;
   private int lubaImeResumeGenerace = 0;
@@ -397,6 +484,9 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onPause() {
+    // 685Q: capture ještě před ztrátou povrchu, bez změny WebView režimu.
+    zachytPredPozadim685Q();
+    casPozadi685Q = SystemClock.elapsedRealtime();
     ohlasZivotniCyklus685F("ON_PAUSE");
     zastavKontroluSystemoveListy();
     // Pri prekryti celym System UI jsou hodiny pod systemovou listou skryte.
@@ -419,6 +509,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+    zobrazPrekrytiPriNavratu685Q();
     ohlasZivotniCyklus685F("ON_RESUME");
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
