@@ -1015,6 +1015,147 @@
     }
   }
 
+  /* 686G TEST – kryptograficky ověří ochranu EXISTUJÍCÍHO Root Key
+     NOVÝM uživatelským E2E heslem. Bez jakéhokoli trvalého zápisu.
+     PBKDF2 media KEK, salt, AAD a verifier odpovídají stávající V1.
+     V reálné obnově bude nutná transakční změna secret_settings,
+     lokálních obálek a detekce legacy Secret/media. */
+  async function recoveryNoveHesloDryRun(noveHeslo) {
+    const vysledek = {
+      ok: false,
+      readOnly: true,
+      reason: null,
+      sourceEnvelopeVerified: false,
+      passwordDerivedKekVerified: false,
+      newEnvelopeRoundtrip: false,
+      verifierCompatible: false,
+      sameKeyId: false,
+      serverAndKeysUnchanged: true
+    };
+    let raw = null;
+    let rozbalene = null;
+    let ciphertext = null;
+    let verifierBytes = null;
+    let saltSVerifierem = null;
+    let saltSKlicem = null;
+    let material = null;
+    try {
+      if (String(location.hostname || "").toLowerCase() !== "test.lubanote.com") {
+        vysledek.reason = "test_web_only";
+        return vysledek;
+      }
+      if (typeof noveHeslo !== "string" || noveHeslo.length < 12) {
+        vysledek.reason = "new_password_too_short";
+        return vysledek;
+      }
+      const preflight = await recoveryPreflight();
+      if (!preflight.ok) {
+        vysledek.reason = "preflight_failed";
+        return vysledek;
+      }
+      const userId = await ziskejAktualniUserId();
+      const server = await nactiServerRootRecord(userId);
+      if (!server.ok || !maPlatnyServerRecord(server.data)) {
+        vysledek.reason = "server_envelope_unavailable";
+        return vysledek;
+      }
+      const keyId = server.data.e2e_root_key_id;
+      raw = await rozbalRootRaw(server.data.e2e_root_key_box, userId);
+      vysledek.sourceEnvelopeVerified =
+        raw instanceof Uint8Array && raw.length === 32 &&
+        (await vytvorKeyId(raw)) === keyId;
+      if (!vysledek.sourceEnvelopeVerified) {
+        vysledek.reason = "source_root_mismatch";
+        return vysledek;
+      }
+
+      // Stejný KDF jako mediaCrypto.js: 600 000 iterací, 16B náhodný salt.
+      // Nový salt/verifier NIKDY neopustí paměť během tohoto testu.
+      const iterations = 600000;
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const encoder = new TextEncoder();
+      const spojSalt = (prefix) => {
+        const cast = encoder.encode(prefix);
+        const kombinace = new Uint8Array(cast.length + salt.length);
+        kombinace.set(cast);
+        kombinace.set(salt, cast.length);
+        return kombinace;
+      };
+      saltSKlicem = spojSalt("LubaNote-media-encryption-v1");
+      saltSVerifierem = spojSalt("LubaNote-verifier-v1");
+      material = await crypto.subtle.importKey(
+        "raw", encoder.encode(noveHeslo), "PBKDF2", false,
+        ["deriveKey", "deriveBits"]
+      );
+      const novyKek = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: saltSKlicem, iterations, hash: "SHA-256" },
+        material, { name: "AES-GCM", length: 256 }, false,
+        ["encrypt", "decrypt"]
+      );
+      vysledek.passwordDerivedKekVerified = Boolean(novyKek);
+
+      verifierBytes = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: saltSVerifierem, iterations, hash: "SHA-256" },
+        material, 256
+      ));
+      /* Kompatibilita se secret.js – stejná 256bit délka a domain prefix.
+         Verifier se záměrně nikdy nevypisuje ani neposílá na server. */
+      /* Nezávisle porovnej s přesně tou funkcí, kterou používal Secret.
+         Kontrola jen délky by mohla falešně projít s chybným KDF. */
+      if (typeof vytvorVerifierZHesla !== "function") {
+        vysledek.reason = "secret_verifier_unavailable";
+        return vysledek;
+      }
+      const base64Salt = btoa(String.fromCharCode(...salt));
+      const verifierPodleSecretu = await vytvorVerifierZHesla(
+        noveHeslo, base64Salt, iterations
+      );
+      vysledek.verifierCompatible =
+        verifierBytes.length === 32 &&
+        verifierPodleSecretu === btoa(String.fromCharCode(...verifierBytes));
+      if (!vysledek.verifierCompatible) {
+        vysledek.reason = "verifier_algorithm_mismatch";
+        return vysledek;
+      }
+
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const aad = encoder.encode(
+        `LubaNote-e2e-core-wrap-v1:${rootWrapKontext(userId)}`
+      );
+      ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, novyKek, raw
+      ));
+      rozbalene = new Uint8Array(await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv, additionalData: aad }, novyKek, ciphertext
+      ));
+      vysledek.newEnvelopeRoundtrip =
+        rozbalene.length === 32 &&
+        rozbalene.every((byte, i) => byte === raw[i]);
+      vysledek.sameKeyId = vysledek.newEnvelopeRoundtrip &&
+        (await vytvorKeyId(rozbalene)) === keyId;
+      vysledek.ok = Boolean(
+        vysledek.sourceEnvelopeVerified &&
+        vysledek.passwordDerivedKekVerified &&
+        vysledek.newEnvelopeRoundtrip &&
+        vysledek.verifierCompatible &&
+        vysledek.sameKeyId
+      );
+      vysledek.reason = vysledek.ok ? null : "new_password_roundtrip_failed";
+      return vysledek;
+    } catch (_error) {
+      vysledek.reason = "new_password_crypto_failed";
+      return vysledek;
+    } finally {
+      raw?.fill(0);
+      rozbalene?.fill(0);
+      ciphertext?.fill(0);
+      verifierBytes?.fill(0);
+      saltSVerifierem?.fill(0);
+      saltSKlicem?.fill(0);
+      material = null;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -1041,6 +1182,7 @@
     recoveryPreflight,
     overHesloUctuProRecovery,
     recoveryRewrapDryRun,
+    recoveryNoveHesloDryRun,
     getStav,
     resetPametiProTest
   });

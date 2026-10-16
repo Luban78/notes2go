@@ -1,4 +1,4 @@
-/* LubaNote 686E – TEST-only full-screen E2E Recovery diagnostics.
+/* LubaNote 686G – TEST-only full-screen E2E Recovery diagnostics.
  * UI only: no E2E password change, no keys/notes mutation.
  * Keeps the existing Debug Hub intact and intercepts its TEST launch button.
  */
@@ -14,6 +14,7 @@
   let posledniReport = "";
   let lzeOverovat = false;
   let reautentizaceOk = false;
+  let rootDryRunOk = false;
   let generace = 0;
 
   const styl = document.createElement("style");
@@ -133,7 +134,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686F · CRYPTO DRY-RUN</span>
+          <span class="ln686e-badge">TEST WEB · 686G · NEW PASSWORD TEST</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -163,7 +164,21 @@
             <p class="ln686e-note">Použije se náhodný dočasný klíč, nikoliv tvoje nové E2E heslo. Výsledek je zkouška, ne obnova.</p>
           </section>
           <section class="ln686e-card">
-            <h2>4. Report</h2>
+            <h2>4. Zkouška nového E2E hesla – BEZ ZÁPISU</h2>
+            <p>Teď už zkusíme <b>opravdové nové E2E heslo</b>. Jen v paměti telefonu z něj odvodíme nový ochranný klíč a ověříme znovuzabalení stejného Root Key.</p>
+            <p class="ln686e-note">Toto ještě <b>není změna hesla</b>. Heslo se nikam neuloží a po dokončení jej bude potřeba při skutečné obnově zadat znovu. Použij pouze testovací účet.</p>
+            <label for="ln686g-new-password">Nové E2E heslo (alespoň 12 znaků)</label>
+            <input type="password" id="ln686g-new-password" data-ln686g-new-password
+              autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nové E2E heslo" disabled>
+            <label for="ln686g-confirm-password">Zopakuj nové E2E heslo</label>
+            <input type="password" id="ln686g-confirm-password" data-ln686g-confirm-password
+              autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Zopakovat heslo" disabled>
+            <button type="button" class="ln686e-primary" data-ln686e="new-password-test" disabled>Otestovat nové E2E heslo</button>
+            <div class="ln686e-state" data-ln686g-status role="status" aria-live="polite"></div>
+            <p class="ln686e-note">Stará data Secret a média mohou používat jiný klíč. Před skutečným resetem je nutná samostatná bezpečnostní kontrola.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>5. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -182,6 +197,7 @@
       if (akce === "check") { await spustPreflight(); return; }
       if (akce === "verify") { await overHeslo(); return; }
       if (akce === "dry-run") { await spustDryRun(); return; }
+      if (akce === "new-password-test") { await spustNoveHesloDryRun(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -203,7 +219,7 @@
   function pripravText(stav) {
     const anoNe = (v) => v === true ? "PASS" : "FAIL";
     return [
-      "LUBANOTE 686F – E2E RECOVERY PREFLIGHT (READ-ONLY)",
+      "LUBANOTE 686G – E2E RECOVERY PREFLIGHT (READ-ONLY)",
       "Vysledek: " + (stav.ok ? "PREFLIGHT PASS" : "PREFLIGHT FAIL"),
       "rootReady: " + anoNe(stav.rootReady),
       "deviceKekReady: " + anoNe(stav.deviceKekReady),
@@ -221,6 +237,8 @@
     const mojeGenerace = ++generace;
     lzeOverovat = false;
     reautentizaceOk = false;
+    rootDryRunOk = false;
+    resetujNovaHesla();
     const dryButton = prvek('[data-ln686e="dry-run"]');
     const dryStatus = prvek('[data-ln686e-dry-status]');
     if (dryButton) dryButton.disabled = true;
@@ -295,6 +313,8 @@
     }
     if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
     reautentizaceOk = overeni.ok === true;
+    rootDryRunOk = false;
+    resetujNovaHesla();
     const dryButton = prvek('[data-ln686e="dry-run"]');
     if (dryButton) dryButton.disabled = !reautentizaceOk;
     if (stavText) {
@@ -333,6 +353,8 @@
       vysledek = { ok: false, reason: "cryptographic_test_failed" };
     }
     if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    rootDryRunOk = vysledek.ok === true;
+    nastavDostupnostNovychHesel(rootDryRunOk);
     if (status) {
       status.textContent = vysledek.ok ? "ROOT REWRAP DRY-RUN – PASS ✓" : "ROOT REWRAP DRY-RUN – FAIL";
       status.dataset.result = vysledek.ok ? "pass" : "fail";
@@ -350,6 +372,82 @@
     if (tlacitko) tlacitko.textContent = "Ověřit rozbalení a nové zabalení";
     if (overit) overit.disabled = false;
     if (heslo) heslo.disabled = false;
+  }
+
+  function resetujNovaHesla() {
+    for (const selector of ["[data-ln686g-new-password]", "[data-ln686g-confirm-password]"]) {
+      const input = prvek(selector);
+      if (input) { input.value = ""; input.disabled = true; }
+    }
+    const tlacitko = prvek('[data-ln686e="new-password-test"]');
+    if (tlacitko) tlacitko.disabled = true;
+    const stav = prvek("[data-ln686g-status]");
+    if (stav) { stav.textContent = ""; stav.removeAttribute("data-result"); }
+  }
+
+  function nastavDostupnostNovychHesel(povoleno) {
+    const active = povoleno && obrazovka && !obrazovka.hidden;
+    for (const selector of ["[data-ln686g-new-password]", "[data-ln686g-confirm-password]"]) {
+      const input = prvek(selector);
+      if (input) input.disabled = !active;
+    }
+    const tlacitko = prvek('[data-ln686e="new-password-test"]');
+    if (tlacitko) tlacitko.disabled = !active;
+  }
+
+  async function spustNoveHesloDryRun() {
+    if (!rootDryRunOk || !obrazovka || obrazovka.hidden) return;
+    const nove = prvek("[data-ln686g-new-password]");
+    const potvrzeni = prvek("[data-ln686g-confirm-password]");
+    const stav = prvek("[data-ln686g-status]");
+    const tlacitko = prvek('[data-ln686e="new-password-test"]');
+    const heslo = nove?.value || "";
+    const shoda = heslo.length >= 12 && heslo === (potvrzeni?.value || "");
+    if (nove) nove.value = "";
+    if (potvrzeni) potvrzeni.value = "";
+    if (!shoda) {
+      if (stav) {
+        stav.textContent = heslo.length < 12 ?
+          "Nové E2E heslo musí mít alespoň 12 znaků." : "Hesla se neshodují.";
+        stav.dataset.result = "fail";
+      }
+      return;
+    }
+    const mojeGenerace = ++generace;
+    rootDryRunOk = false; // Test je jednorázový; další pokus vyžaduje znovu 686F.
+    nastavDostupnostNovychHesel(false);
+    if (tlacitko) tlacitko.textContent = "Odvozuji nový šifrovací klíč…";
+    if (stav) {
+      stav.textContent = "Ověřuji nový E2E klíč v paměti…";
+      stav.removeAttribute("data-result");
+    }
+    let vysledek;
+    try {
+      const funkce = window.LubaNoteE2ECore?.recoveryNoveHesloDryRun;
+      vysledek = typeof funkce === "function"
+        ? await funkce(heslo)
+        : { ok: false, reason: "new_password_test_unavailable" };
+    } catch (_chyba) {
+      vysledek = { ok: false, reason: "new_password_test_failed" };
+    }
+    if (mojeGenerace !== generace || !obrazovka || obrazovka.hidden) return;
+    if (stav) {
+      stav.textContent = vysledek.ok ? "NOVÉ E2E HESLO – CRYPTO PASS ✓" : "NOVÉ E2E HESLO – FAIL";
+      stav.dataset.result = vysledek.ok ? "pass" : "fail";
+    }
+    if (tlacitko) tlacitko.textContent = "Otestovat nové E2E heslo";
+    const anoNe = (v) => v === true ? "PASS" : "FAIL";
+    const bezTestu = posledniReport.replace(/\nnewPasswordCryptoTest: [\s\S]*$/, "");
+    nastavReport(bezTestu +
+      "\nnewPasswordCryptoTest: " + anoNe(vysledek.ok) +
+      "\nsourceEnvelopeVerified: " + anoNe(vysledek.sourceEnvelopeVerified) +
+      "\npasswordDerivedKekVerified: " + anoNe(vysledek.passwordDerivedKekVerified) +
+      "\nnewEnvelopeRoundtrip: " + anoNe(vysledek.newEnvelopeRoundtrip) +
+      "\nverifierCompatible: " + anoNe(vysledek.verifierCompatible) +
+      "\nsameKeyIdNewPassword: " + anoNe(vysledek.sameKeyId) +
+      "\nnewPasswordTestReason: " + String(vysledek.reason || "none").slice(0, 80) +
+      "\nE2E keys/notes/server unchanged: YES" +
+      "\nPOZOR: Heslo NEBYLO zmeneno. Pred skutecnou obnovou nutna kontrola legacy Secret/media.");
   }
 
   async function zkopirujReport(tlacitko) {
@@ -407,6 +505,8 @@
     if (!obrazovka || obrazovka.hidden) return;
     ++generace;
     reautentizaceOk = false;
+    rootDryRunOk = false;
+    resetujNovaHesla();
     obrazovka.hidden = true;
     const pole = prvek("[data-ln686e-password]");
     if (pole) pole.value = "";
