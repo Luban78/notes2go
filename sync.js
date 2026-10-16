@@ -5315,8 +5315,8 @@ async function synchronizujVzdalenePrivateDeltaV2(
         const obnoveno = await spustExistingClientReconcileV2(
           userId,
           jeTargetConfirmRecovery
-            ? { targetConfirmRecovery: true }
-            : {}
+            ? { targetConfirmRecovery: true, feedLimitRecovery: true }
+            : { feedLimitRecovery: true }
         );
 
         window.LubaNoteStartupDiag?.zapis?.(
