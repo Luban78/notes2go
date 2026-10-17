@@ -2551,6 +2551,102 @@
     }catch(_error){v.reason="storage_audit_read_failed";return v;}
   }
 
+  /* 686Q – TEST-only multi-device INVENTORY, not a write fence.
+   * Only SELECT auth user's RLS-visible public.devices rows. No write/RPC,
+   * auth logout, token refresh, device ID creation or local state modification.
+   * Device census cannot prove protection from stale offline clients or JWTs.
+   */
+  async function recoveryMultiDeviceFenceAudit686Q() {
+    const v={ok:false,readOnly:true,safeToRotate:false,reason:"not_started",
+      accountVerified:false,currentDeviceIdPresent:false,devicesMetadataReadable:false,
+      deviceRowsComplete:false,deviceSnapshotStable:false,listedCurrentDevice:false,
+      visibleDevices:0,otherVisibleDevices:0,devicesWithMissingSyncTime:0,
+      devicesOlderThan30Days:0,invalidDeviceIds:0,duplicateDeviceIds:0,
+      authenticatedSessionsEnumerated:false,offlineClientsExcluded:false,
+      allDevicesAudited:false,serverWriteFenceInspected:false,
+      serverWriteFenceVerified:false,multiDeviceFenceVerified:false,
+      serverModified:false};
+    try {
+      if(String(location.hostname||"").toLowerCase()!=="test.lubanote.com") {
+        v.reason="test_web_only";return v;
+      }
+      if(!navigator.onLine){v.reason="offline";return v;}
+      const klient=ziskejSupabase();
+      if(!klient?.auth?.getUser || !klient?.from){v.reason="backend_unavailable";return v;}
+      const {data:auth,error:authError}=await klient.auth.getUser();
+      const userId=auth?.user?.id;
+      if(authError || !userId ||
+         String(localStorage.getItem("lubanoteLocalOwnerUserId")||"")!==userId){
+        v.reason="account_or_local_owner_unverified";return v;
+      }
+      v.accountVerified=true;
+      // Never call getDeviceId(): it would create and persist a new identifier.
+      const ownDevice=localStorage.getItem("lubanoteDeviceId");
+      if(typeof ownDevice!=="string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownDevice)){
+        v.reason="current_device_id_missing_or_invalid";return v;
+      }
+      v.currentDeviceIdPresent=true;
+      const readDevices=async()=>{
+        const {count,error}=await klient.from("devices")
+          .select("device_id",{count:"exact",head:true}).eq("user_id",userId);
+        if(error || !Number.isSafeInteger(count) || count<0 || count>300){
+          return {ok:false,reason:count>300?"device_row_limit":"device_count_unavailable"};
+        }
+        const rows=[];
+        for(let start=0;start<count;start+=100){
+          const {data,error:e}=await klient.from("devices")
+            .select("device_id,last_sync_at")
+            .eq("user_id",userId).order("device_id",{ascending:true})
+            .range(start,Math.min(start+99,count-1));
+          if(e || !Array.isArray(data) || data.length!==Math.min(100,count-start)){
+            return {ok:false,reason:"device_page_incomplete"};
+          }
+          rows.push(...data);
+        }
+        if(rows.length!==count)return {ok:false,reason:"device_count_mismatch"};
+        return {ok:true,rows,signature:JSON.stringify(rows.map(r=>
+          [r?.device_id??null,r?.last_sync_at??null]))};
+      };
+      const first=await readDevices();
+      if(!first.ok){v.reason=first.reason;return v;}
+      v.devicesMetadataReadable=true;
+      v.visibleDevices=first.rows.length;
+      v.deviceRowsComplete=true;
+      const seen=new Set();
+      const now=Date.now();
+      for(const r of first.rows){
+        const id=r?.device_id;
+        if(typeof id!=="string" ||
+           !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)){
+          v.invalidDeviceIds++;continue;
+        }
+        const normalized=id.toLowerCase();
+        if(seen.has(normalized)){v.duplicateDeviceIds++;continue;}
+        seen.add(normalized);
+        if(normalized===ownDevice.toLowerCase())v.listedCurrentDevice=true;
+        else v.otherVisibleDevices++;
+        const t=Date.parse(r?.last_sync_at??"");
+        if(!Number.isFinite(t) || t>now+60000){v.devicesWithMissingSyncTime++;continue;}
+        if(now-t>30*24*60*60*1000)v.devicesOlderThan30Days++;
+      }
+      const last=await readDevices();
+      if(!last.ok){v.reason="device_recheck_failed";return v;}
+      const {data:authAfter,error:authAfterError}=await klient.auth.getUser();
+      if(authAfterError || authAfter?.user?.id!==userId){
+        v.reason="account_changed_during_audit";return v;
+      }
+      v.deviceSnapshotStable=first.signature===last.signature;
+      if(!v.deviceSnapshotStable){v.reason="device_metadata_changed_during_audit";return v;}
+      if(v.invalidDeviceIds || v.duplicateDeviceIds){v.reason="device_ids_invalid_or_duplicate";return v;}
+      if(!v.listedCurrentDevice){v.reason="current_device_not_in_visible_registry";return v;}
+      // No promise of all-device coverage: RLS, expired/offline clients, and
+      // sessions outside public.devices cannot be enumerated by this client.
+      v.ok=true;
+      v.reason="visible_device_inventory_consistent_server_fence_not_verified";
+      return v;
+    }catch(_error){v.reason="device_inventory_read_failed";return v;}
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -2586,6 +2682,7 @@
     recoveryStorageMediaDryRun686M,
     recoveryAtomicInputStaging686O,
     recoveryStorageScopeAudit686P,
+    recoveryMultiDeviceFenceAudit686Q,
     getStav,
     resetPametiProTest
   });

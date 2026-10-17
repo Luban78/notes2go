@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686P · STORAGE SCOPE AUDIT</span>
+          <span class="ln686e-badge">TEST WEB · 686Q · MULTI-DEVICE INVENTORY</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -260,7 +260,15 @@
             <p class="ln686e-note">READ-ONLY. Nevstupuje do souborů ani jejich obsahu. PASS znamená shodu pouze viditelných metadat v jednom bucketu a složce účtu; RLS, jiné buckety, smazaná historie a ostatní účty nejsou ověřeny. Skutečná změna hesla zůstává zakázaná.</p>
           </section>
           <section class="ln686e-card">
-            <h2>13. Report</h2>
+            <h2>13. 686Q – Audit dalších zařízení (BEZ ZÁPISU)</h2>
+            <p>Ověřím záznamy zařízení viditelné přihlášenému účtu. Zjistím počet dalších zařízení, dostupnost jejich evidence a poslední synchronizaci. Nepošlu nic na server kromě čtení.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="device-audit-686q">Prověřit další zařízení 686Q</button>
+            <div class="ln686e-state" data-ln686q-status role="status" aria-live="polite"></div>
+            <div data-ln686q-checks></div>
+            <p class="ln686e-note">I úspěšný soupis zařízení není ověřená ochrana zápisů. Offline instalace a jiná přihlášení nemusí být v tabulce devices vidět. Ochrana musí být vynucena SERVEREM při každém zápisu; to tento test neprokazuje. Změna hesla zůstává zakázaná.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>14. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -288,6 +296,7 @@
       if (akce === "storage-media-rewrap") { await spustStorageMedia686M(); return; }
       if (akce === "atomic-staging-686o") { await spustAtomicStaging686O(); return; }
       if (akce === "storage-audit-686p") { await spustStorageAudit686P(); return; }
+      if (akce === "device-audit-686q") { await spustDeviceAudit686Q(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -1143,6 +1152,75 @@
       "serverSideInventoryAudited: NO",
       "storageScopeVerified: NO",
       "multiDeviceFenceVerified: NO",
+      "safeToRotate: NO",
+      "reason: "+String(v.reason||"unknown").slice(0,100),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(base+(base?"\n":"")+report);
+  }
+
+  /* 686Q – read-only inventory; server write fence is NOT verified. */
+  async function spustDeviceAudit686Q() {
+    if(!obrazovka || obrazovka.hidden)return;
+    const btn=prvek('[data-ln686e="device-audit-686q"]');
+    const status=prvek('[data-ln686q-status]');
+    const checks=prvek('[data-ln686q-checks]');
+    const mojaGenerace=++generace;
+    if(btn)btn.disabled=true;
+    if(status){status.textContent="Načítám pouze metadata zařízení…";status.removeAttribute("data-result");}
+    if(checks)checks.textContent="";
+    let v;
+    try {
+      const fn=window.LubaNoteE2ECore?.recoveryMultiDeviceFenceAudit686Q;
+      v=typeof fn==="function"?await fn():{ok:false,reason:"test_unavailable"};
+    }catch(_error){v={ok:false,reason:"test_failed"};}
+    if(btn)btn.disabled=false;
+    if(mojaGenerace!==generace || !obrazovka || obrazovka.hidden)return;
+    if(status){
+      status.textContent=v.ok?
+        "INVENTORY PASS – evidovaná zařízení načtena; ochrana serverových zápisů NEOVĚŘENA":
+        "SOUPIS NEDOKONČEN – viz report; nic nebylo změněno";
+      status.dataset.result=v.ok?"pass":"fail";
+    }
+    const n=x=>Number.isSafeInteger(x)&&x>=0?x:"?";
+    const numeric=(name,x)=>`<div class="ln686e-row"><span>${name}</span><strong>${n(x)}</strong></div>`;
+    if(checks)checks.innerHTML=[
+      radek("Účet ověřen",v.accountVerified),
+      radek("Identifikátor zařízení existuje",v.currentDeviceIdPresent),
+      radek("Evidence zařízení načtena",v.deviceRowsComplete),
+      numeric("Viditelná zařízení",v.visibleDevices),
+      numeric("Další evidovaná zařízení",v.otherVisibleDevices),
+      numeric("Zařízení bez platného času synchronizace",v.devicesWithMissingSyncTime),
+      numeric("Zařízení bez synchronizace přes 30 dní",v.devicesOlderThan30Days),
+      radek("Aktuální zařízení v evidenci",v.listedCurrentDevice),
+      radek("Snapshot zařízení stabilní",v.deviceSnapshotStable),
+      radek("Serverový write-fence ověřen",v.serverWriteFenceVerified),
+      radek("Změna hesla povolena",v.safeToRotate)
+    ].join("");
+    const yes=x=>x===true?"YES":"NO";
+    const base=posledniReport.replace(/\n?LUBANOTE 686(?:M – STORAGE MEDIA DRY-RUN|O – ATOMIC INPUT STAGING|P – STORAGE SCOPE AUDIT|Q – MULTI-DEVICE INVENTORY) \(READ-ONLY\)[\s\S]*$/ ,"");
+    const report=[
+      "LUBANOTE 686Q – MULTI-DEVICE INVENTORY (READ-ONLY)",
+      "multiDeviceInventory: "+(v.ok?"INVENTORY_PASS":"INCOMPLETE"),
+      "accountVerified: "+yes(v.accountVerified),
+      "currentDeviceIdPresent: "+yes(v.currentDeviceIdPresent),
+      "devicesMetadataReadable: "+yes(v.devicesMetadataReadable),
+      "deviceRowsComplete: "+yes(v.deviceRowsComplete),
+      "deviceSnapshotStable: "+yes(v.deviceSnapshotStable),
+      "listedCurrentDevice: "+yes(v.listedCurrentDevice),
+      "visibleDevices: "+n(v.visibleDevices),
+      "otherVisibleDevices: "+n(v.otherVisibleDevices),
+      "devicesWithMissingSyncTime: "+n(v.devicesWithMissingSyncTime),
+      "devicesOlderThan30Days: "+n(v.devicesOlderThan30Days),
+      "invalidDeviceIds: "+n(v.invalidDeviceIds),
+      "duplicateDeviceIds: "+n(v.duplicateDeviceIds),
+      "authenticatedSessionsEnumerated: NO",
+      "offlineClientsExcluded: NO",
+      "allDevicesAudited: NO",
+      "serverWriteFenceInspected: NO",
+      "serverWriteFenceVerified: NO",
+      "multiDeviceFenceVerified: NO",
+      "serverAtomicCommitCalled: NO",
       "safeToRotate: NO",
       "reason: "+String(v.reason||"unknown").slice(0,100),
       "E2E password/keys/notes/server modified: NO"
