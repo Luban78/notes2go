@@ -343,6 +343,25 @@
       throw error;
     }
   }
+  // 688R: pouze bezpecny chybovy kod z neuspesne RPC, nikdy hesla/ID/payload.
+  // Nezasahuje do RPC, jeho parametru, transakce ani rewrap kontrol.
+  function bezpecnyKodRpc688R(error,data,expectedNotes,expectedTags){
+    for(const x of [error?.message,error?.details,error?.hint]){
+      const found=String(x||'').match(/\b688[A-Z]_[A-Z0-9_]+\b/);
+      if(found)return 'rpc_rejected_'+found[0];
+    }
+    if(error){
+      const code=String(error.code||'');
+      return 'rpc_rejected_'+(/^[A-Z0-9]{4,12}$/.test(code)?code:'unknown');
+    }
+    if(!data || typeof data!=='object')return 'rpc_response_missing';
+    if(data.ok!==true)return 'rpc_response_not_ok';
+    if(data.atomic!==true)return 'rpc_response_not_atomic';
+    if(data.root_key_id_preserved!==true)return 'rpc_root_id_unconfirmed';
+    if(Number(data.notes_rewrapped)!==expectedNotes)return 'rpc_note_count_mismatch';
+    if(Number(data.tags_rewrapped)!==expectedTags)return 'rpc_tag_count_mismatch';
+    return 'rpc_reply_not_confirmed';
+  }
   let probiha=false;
   async function zmen(noveHeslo,prihlasovaciHeslo,hlas){
     if(probiha) return {ok:false,reason:'already_running'};
@@ -383,7 +402,8 @@
           current?.e2e_root_key_id===stage.novy.e2e_root_key_id &&
           ['algorithm','version','iv','ciphertext'].every(k=>
             current?.e2e_root_key_box?.[k]===stage.novy.e2e_root_key_box?.[k]);
-        if(!same)throw new Error(readError?'commit_status_unknown':'atomic_commit_not_confirmed');
+        if(!same)throw new Error(readError?'commit_status_unknown':
+          bezpecnyKodRpc688R(error,data,stage.noteZmeny.length,stage.tagZmeny.length));
       }
       potvrzeno=true;
       hlas?.('Server změnu potvrdil. Aktualizuji zařízení…');
