@@ -554,14 +554,23 @@
             lokalniPlatny &&
             lokalni.keyId === server.data.e2e_root_key_id
           ) {
-            await pripravZLokalnihoRecordu(lokalni, id);
-            return nastavStav({
-              ok: true,
-              ready: true,
-              source: "device+server-verified",
-              keyId: lokalni.keyId,
-              userId: id
-            });
+            /* PATCH 688I – při změně E2E hesla může v zařízení zůstat
+             * stará lokální obálka Root Key, přestože media KEK už je nový.
+             * Místo uzamčení účtu ověř aktuální serverovou obálku.
+             * Nezakládej nový Root Key a nikdy nepřepisuj server.
+             */
+            try {
+              await pripravZLokalnihoRecordu(lokalni, id);
+              return nastavStav({
+                ok: true,
+                ready: true,
+                source: "device+server-verified",
+                keyId: lokalni.keyId,
+                userId: id
+              });
+            } catch (_localniChyba) {
+              zapisDiag("688I ROOT DEVICE BOX STALE | TRY SERVER ENVELOPE");
+            }
           }
 
           await pripravZeServerRecordu(server.data, id);
