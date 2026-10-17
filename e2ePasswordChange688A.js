@@ -319,12 +319,20 @@
         kontroluj(typeof ulozSyroveLokalniStitky==='function' &&
           ulozSyroveLokalniStitky(stage.lokalniStitky,stage.uid)===true,'local_tags_update_failed');
       }
-      kontroluj(window.LubaNoteE2ECore?.recoveryPersistRootBox688A,'local_root_storage_missing');
-      await window.LubaNoteE2ECore.recoveryPersistRootBox688A(
-        stage.novy.e2e_root_key_box,stage.uid,stage.novy.e2e_root_key_id);
+      // 688J: The server already committed. Install new local settings and
+      // media KEK before replacing the Root envelope. Never store a Root box
+      // requiring a new KEK while the browser still has only the old KEK.
       kontroluj(typeof ulozLokalniTajneNastaveni==='function' &&
         ulozLokalniTajneNastaveni(stage.novy,stage.uid)===true,'local_settings_update_failed');
+      kontroluj(typeof media?.nastavKlicZHesla==='function','media_key_setter_missing');
       await media.nastavKlicZHesla(noveHeslo,{...stage.novy,userId:stage.uid});
+      kontroluj(media.jeKlicDostupny?.()===true,'new_media_key_not_ready');
+      kontroluj(typeof window.LubaNoteE2ECore?.recoveryPersistRootBox688A==='function',
+        'local_root_storage_missing');
+      await window.LubaNoteE2ECore.recoveryPersistRootBox688A(
+        stage.novy.e2e_root_key_box,stage.uid,stage.novy.e2e_root_key_id);
+      try {window.LubaNoteStartupDiag?.zapis?.('E2E','688J LOCAL KEYS UPDATED | media=READY root=STORED');}
+      catch (_error) {}
       if(stage.secretOdemceny && typeof tajnySifrovaciKlic!=='undefined'){
         tajnySifrovaciKlic=stage.novySecretKlic;
       }
@@ -341,6 +349,11 @@
       }
       return {ok:true,reason:'password_changed',notes:stage.noteZmeny.length,tags:stage.tagZmeny.length};
     } catch(error){
+      if(potvrzeno){
+        const duvod=String(error?.message||error?.code||'unknown_local_error');
+        try {window.LubaNoteStartupDiag?.zapis?.('E2E','688J LOCAL FINISH FAIL | '+duvod.slice(0,100));}
+        catch (_error) {}
+      }
       return {ok:false,committed:potvrzeno,reason:potvrzeno?'server_changed_local_finishing_failed':String(error?.message||'change_failed')};
     } finally {
       if(docasnyKlient?.auth?.signOut) {
