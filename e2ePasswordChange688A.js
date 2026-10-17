@@ -31,6 +31,37 @@
   const dec = new TextDecoder('utf-8',{fatal:true});
   const kopie = o => JSON.parse(JSON.stringify(o));
   function kontroluj(stav, duvod) { if (!stav) throw new Error(duvod); }
+  // 688L: AES-GCM pouziva nahodne IV; rozdilna obalka muze chranit totozny obsah.
+  // Porovnavame CELOU JSON strukturu vcetne metadat (nikdy jen viditelny text).
+  function kanonickyJSON688L(hodnota) {
+    if (Array.isArray(hodnota)) return '['+hodnota.map(kanonickyJSON688L).join(',')+']';
+    if (hodnota && typeof hodnota==='object') return '{'+Object.keys(hodnota).sort()
+      .map(k=>JSON.stringify(k)+':'+kanonickyJSON688L(hodnota[k])).join(',')+'}';
+    return JSON.stringify(hodnota);
+  }
+  async function overShoduSecretObsahu688L(lokalni,serverovy) {
+    kontroluj(lokalni?.id && serverovy?.id && String(lokalni.id)===String(serverovy.id),
+      'unsynced_local_secret_record');
+    const a=lokalni.encrypted,b=serverovy.data?.encrypted;
+    kontroluj(a && b && Number(a.version)===1 && Number(b.version)===1 &&
+      a.algorithm==='AES-GCM' && b.algorithm==='AES-GCM' &&
+      typeof a.iv==='string' && typeof a.ciphertext==='string' &&
+      typeof b.iv==='string' && typeof b.ciphertext==='string',
+      'local_secret_envelope_invalid');
+    kontroluj(typeof desifrujTajnouPoznamku==='function','secret_decrypt_unavailable');
+    let pa,pb;
+    try {pa=await desifrujTajnouPoznamku(a,lokalni.id);}
+    catch(_error){throw new Error('local_secret_decrypt_failed');}
+    try {pb=await desifrujTajnouPoznamku(b,serverovy.id);}
+    catch(_error){throw new Error('server_secret_decrypt_failed');}
+    kontroluj(pa && pb && typeof pa==='object' && !Array.isArray(pa) &&
+      typeof pb==='object' && !Array.isArray(pb) &&
+      String(pa.id)===String(lokalni.id) && String(pb.id)===String(serverovy.id),
+      'secret_note_id_mismatch');
+    kontroluj(kanonickyJSON688L(pa)===kanonickyJSON688L(pb),
+      'local_secret_plaintext_mismatch');
+    return ['version','algorithm','iv','ciphertext'].every(k=>a[k]===b[k]);
+  }
   function klient() {
     try { if(typeof supabaseClient!=='undefined') return supabaseClient; } catch(_e){}
     return window.supabaseClient;
@@ -149,8 +180,10 @@
       const tajnaMapa=new Map(tajne.map(r=>[String(r.id),r]));
       for(const rec of lokalniTajne){
         const cloud=tajnaMapa.get(String(rec.id));
-        kontroluj(cloud && ['version','algorithm','iv','ciphertext'].every(
-          k=>cloud.data?.encrypted?.[k]===rec.encrypted?.[k]), 'unsynced_local_secret_record');
+        kontroluj(!!cloud,'unsynced_local_secret_record');
+        // 688L: obe obalky musi uspesne desifrovat na totozny cely obsah.
+        // Pokud je obsah jiny / klic neplati, zmena hesla se pred RPC zastavi.
+        await overShoduSecretObsahu688L(rec,cloud);
       }
       const localStages=[];
       for(const lt of lokalniTajneStitky){
@@ -362,35 +395,42 @@
       docasnyKlient=null;stage=null;probiha=false;
     }
   }
-  // 688K – explicitni READ-ONLY diagnostika shody Secret obalek.
-  // Bez zapisovani, meneni hesla, zobrazovani ID, IV nebo ciphertextu.
-  async function diagnostikujSecret688K() {
+  // 688L – READ-ONLY: semanticka kontrola Secret; zadne heslo, zapis ani ID v reportu.
+  async function diagnostikujSecret688L() {
     const cl=klient();
     kontroluj(navigator.onLine && cl?.auth?.getUser && cl?.from,'online_backend_required');
     const {data:auth,error:chybaAuth}=await cl.auth.getUser();
     const uid=auth?.user?.id;
     kontroluj(!chybaAuth && uid && uid===localStorage.getItem('lubanoteLocalOwnerUserId'),'owner_mismatch');
+    kontroluj(typeof tajnySifrovaciKlic!=='undefined' && tajnySifrovaciKlic instanceof CryptoKey &&
+      typeof tajnyRezimOdemceny!=='undefined' && tajnyRezimOdemceny===true,'unlock_secret_first');
     const rows=await nactiVse('notes','id,data,deleted_at',uid,5000);
-    const cloud=rows.filter(r=>!r.deleted_at && r.data?.__lubanoteSecret===true);
+    const cloud=rows.filter(r=>r.data?.__lubanoteSecret===true);
     kontroluj(typeof nactiSifrovaneTajneZaznamy==='function','local_secret_storage_unavailable');
-    const local=nactiSifrovaneTajneZaznamy();
-    const mapa=new Map(cloud.map(r=>[String(r.id),r]));
-    const rozdily={missing:0,version:0,algorithm:0,iv:0,ciphertext:0};
-    let matched=0;
+    const local=nactiSifrovaneTajneZaznamy(),mapa=new Map(cloud.map(r=>[String(r.id),r]));
+    const pocty={sameEnvelope:0,samePlaintext:0,missing:0,plainMismatch:0,decryptFail:0,invalid:0};
+    const pouzite=new Set();
     for(const rec of local){
-      const row=mapa.get(String(rec.id));
-      if(!row){rozdily.missing++;continue;}
-      let shoda=true;
-      for(const k of ['version','algorithm','iv','ciphertext']){
-        if(row.data?.encrypted?.[k]!==rec.encrypted?.[k]){
-          rozdily[k]++;
-          shoda=false;
-        }
+      const key=String(rec.id),row=mapa.get(key);
+      if(!row || pouzite.has(key)){pocty.missing++;continue;}
+      pouzite.add(key);
+      try {
+        const obalkaShodna=await overShoduSecretObsahu688L(rec,row);
+        if(obalkaShodna)pocty.sameEnvelope++;
+        else pocty.samePlaintext++;
+      } catch(error) {
+        const reason=String(error?.message||'');
+        if(reason==='local_secret_plaintext_mismatch')pocty.plainMismatch++;
+        else if(reason.includes('decrypt_failed'))pocty.decryptFail++;
+        else pocty.invalid++;
       }
-      if(shoda)matched++;
     }
-    const celkem=Object.values(rozdily).reduce((a,b)=>a+b,0);
-    const report=`688K SECRET READ-ONLY\nserver=${cloud.length} local=${local.length} matched=${matched}\nmissing=${rozdily.missing} version=${rozdily.version} algorithm=${rozdily.algorithm}\niv=${rozdily.iv} ciphertext=${rozdily.ciphertext}\nresult=${celkem===0?'MATCH':'MISMATCH'}`;
+    const ok=pocty.missing===0 && pocty.plainMismatch===0 && pocty.decryptFail===0 && pocty.invalid===0;
+    const report=`688L SECRET READ-ONLY\nserver=${cloud.length} local=${local.length}`+
+      `\nidentical_envelope=${pocty.sameEnvelope} equivalent_plaintext=${pocty.samePlaintext}`+
+      `\nmissing=${pocty.missing} plaintext_mismatch=${pocty.plainMismatch}`+
+      `\ndecrypt_failed=${pocty.decryptFail} invalid=${pocty.invalid}`+
+      `\nresult=${ok?'PASS':'BLOCKED'}`;
     try {window.LubaNoteStartupDiag?.zapis?.('E2E',report.replace(/\n/g,' | '));} catch(_error){}
     return report;
   }
@@ -408,7 +448,7 @@
         <label data-label-new for="ln688a-new"></label><input id="ln688a-new" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <label data-label-repeat for="ln688a-confirm"></label><input id="ln688a-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <p data-status role="status" aria-live="polite" style="margin:0;font-size:.9rem;min-height:1.4em;white-space:pre-wrap"></p>
-        <button type="button" data-secret-check style="padding:10px 12px;background:#303932;color:#e4f7e7;border:1px solid #65806d;border-radius:8px">Kontrola Secret (688K) – pouze čtení</button>
+        <button type="button" data-secret-check style="padding:10px 12px;background:#303932;color:#e4f7e7;border:1px solid #65806d;border-radius:8px">Kontrola Secret (688L) – pouze čtení</button>
         <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-cancel style="padding:11px 16px"></button><button type="submit" data-submit style="padding:11px 16px;background:#399d57;border:0;border-radius:8px;color:#fff;font-weight:700"></button></div></form>`;
       document.body.appendChild(el);
       const form=el.querySelector('form'),status=el.querySelector('[data-status]');
@@ -417,9 +457,9 @@
         if(probiha)return;
         const btn=el.querySelector('[data-secret-check]');
         btn.disabled=true;
-        status.textContent='688K: Kontroluji pouze soulad Secret záznamů…';
-        try {status.textContent=await diagnostikujSecret688K();}
-        catch(error) {status.textContent='688K READ-ONLY FAIL: '+String(error?.message||'unknown').slice(0,100);}
+        status.textContent='688L: Porovnávám dešifrovaný obsah (pouze čtení)…';
+        try {status.textContent=await diagnostikujSecret688L();}
+        catch(error) {status.textContent='688L READ-ONLY FAIL: '+String(error?.message||'unknown').slice(0,100);}
         finally {btn.disabled=false;}
       });
       form.addEventListener('submit',async e=>{
@@ -456,5 +496,5 @@
     form.reset();panel.style.display='flex';
     form.querySelector('#ln688b-account').focus();
   }
-  window.LubaNoteE2EPasswordChange688A=Object.freeze({open,zmen,diagnostikujSecret688K});
+  window.LubaNoteE2EPasswordChange688A=Object.freeze({open,zmen,diagnostikujSecret688L});
 })();
