@@ -205,7 +205,12 @@
       tagRadky=await nactiVse('tags','id,encrypted_name,is_secret,deleted_at',uid,1000);
       // Secret is stored in notes.data, not in a notes.is_secret column.
       const tajne=noteRadky.filter(r=>r.data?.__lubanoteSecret===true);
-      const soukromeStitky=tagRadky.filter(r=>r.is_secret===true);
+      // 688Q: Tombstones bez ciphertextu neobsahuji E2E nazev, ktery lze prebalit.
+      // Aktivni Secret stitky VZDY overit; smazane s ciphertextem take prebalit.
+      // Zaznamy v DB zachovat beze zmeny; SQL RPC musi pouzit STEJNY rozsah.
+      const musiPrebalitTajnyStitek688Q=r=>r.is_secret===true &&
+        (!r.deleted_at || Boolean(r.encrypted_name?.ciphertext));
+      const soukromeStitky=tagRadky.filter(musiPrebalitTajnyStitek688Q);
       let localTags=[];
       if(typeof nactiSyroveLokalniStitky==='function')localTags=nactiSyroveLokalniStitky();
       const lokalniTajneStitky=localTags.filter(r=>r.is_secret===true);
@@ -233,7 +238,7 @@
       }
       if(localStages.length)lokalniStitky=localTags.map(r=>localStages.find(t=>t.id===r.id)||r);
       for(const r of tagRadky){
-        if(r.is_secret!==true)continue;
+        if(!musiPrebalitTajnyStitek688Q(r))continue;
         kontroluj(r.encrypted_name?.ciphertext && typeof desifrujNazevTajnehoStitku==='function','secret_tag_invalid');
         const plain=await desifrujNazevTajnehoStitku(r.encrypted_name,r.id);
         const next=await prebalBox(enc.encode(plain),novySecretKlic,`LubaNote-secret-tag-v1:${r.id}`);
