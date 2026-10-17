@@ -1,4 +1,4 @@
-/* LubaNote 688B – změna HLAVNÍHO E2E hesla na odemčeném zařízení.
+/* LubaNote 688C – změna HLAVNÍHO E2E hesla na odemčeném zařízení.
  * Heslo nikdy neukládej ani neloguj. Běžné legacy plaintext poznámky
  * nezměníme, Root Key zůstává stejný. DB commit je jediná transakce.
  */
@@ -131,9 +131,10 @@
         kontroluj(stejne(a,b),'shared_identity_mismatch');a.fill(0);b.fill(0);
       }
       hlas?.('Kontroluji poznámky a tajné štítky…');
-      noteRadky=await nactiVse('notes','id,data,is_secret,is_e2e,deleted_at',uid,5000);
+      noteRadky=await nactiVse('notes','id,data,deleted_at',uid,5000);
       tagRadky=await nactiVse('tags','id,encrypted_name,is_secret,deleted_at',uid,1000);
-      const tajne=noteRadky.filter(r=>r.is_secret===true);
+      // Secret is stored in notes.data, not in a notes.is_secret column.
+      const tajne=noteRadky.filter(r=>r.data?.__lubanoteSecret===true);
       const soukromeStitky=tagRadky.filter(r=>r.is_secret===true);
       let localTags=[];
       if(typeof nactiSyroveLokalniStitky==='function')localTags=nactiSyroveLokalniStitky();
@@ -170,7 +171,15 @@
         const old=r.data;
         kontroluj(old && typeof old==='object' && !Array.isArray(old),'invalid_note_data');
         const e2e=old.__lubanoteE2ENote===true;
-        const secret=r.is_secret===true;
+        const secret=old.__lubanoteSecret===true;
+        // Never allow malformed envelopes or legacy plaintext Secret to slip by.
+        kontroluj(!(Object.prototype.hasOwnProperty.call(old,'__lubanoteSecret') &&
+          (!secret || old.encrypted?.algorithm!=='AES-GCM' ||
+           !old.encrypted?.iv || !old.encrypted?.ciphertext)),
+          'secret_envelope_invalid');
+        kontroluj(!(old.isSecret===true && !secret),'legacy_plaintext_secret_unsupported');
+        kontroluj(!(Object.prototype.hasOwnProperty.call(old,'__lubanoteE2ENote') &&
+          old.__lubanoteE2ENote!==true),'e2e_envelope_invalid');
         kontroluj(!(e2e&&secret),'unsupported_mixed_note');
         let note=old;
         if(e2e){
@@ -179,8 +188,6 @@
         } else if(secret){
           kontroluj(old?.encrypted && typeof desifrujTajnouPoznamku==='function','secret_note_invalid');
           note=await desifrujTajnouPoznamku(old.encrypted,r.id);
-        } else if(r.is_e2e===true){
-          throw new Error('e2e_flag_missing_envelope');
         }
         let changed=false;
         const copy=kopie(note);
@@ -212,8 +219,11 @@
           noteZmeny.push({id:r.id,old_data:old,new_data:replacement});
         }
       }
-      const cetka=noteRadky.filter(r=>r.is_secret===true || r.data.__lubanoteE2ENote===true ||
-        !!r.data.__lubanoteMediaVault).length;
+      const cetka=noteRadky.filter(r=>
+        Object.prototype.hasOwnProperty.call(r.data,'__lubanoteSecret') ||
+        Object.prototype.hasOwnProperty.call(r.data,'__lubanoteE2ENote') ||
+        Object.prototype.hasOwnProperty.call(r.data,'__lubanoteMediaVault') ||
+        r.data.isSecret===true).length;
       kontroluj(noteZmeny.length===cetka && tagZmeny.length===soukromeStitky.length,
         'protected_data_coverage_failed');
       kontroluj(enc.encode(JSON.stringify(noteZmeny)).length<14000000,'notes_payload_too_large');

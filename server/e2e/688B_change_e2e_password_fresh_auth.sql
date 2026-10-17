@@ -1,4 +1,4 @@
--- 688B: unlocked-device E2E main-password change, one atomic DB transaction.
+-- 688C: unlocked-device E2E main-password change, one atomic DB transaction.
 -- Install ONLY after DB backup and controlled testing. Does not change Auth password.
 -- Never run on main deployment just to test; TEST web can target production DB.
 -- 688B SECURITY: proof of a newly CREATED Auth session from account-password
@@ -133,7 +133,8 @@ BEGIN
   SELECT count(*) INTO note_count FROM public.notes WHERE user_id = who;
   SELECT count(*) INTO tag_count FROM public.tags WHERE user_id = who;
   SELECT count(*) INTO protected_count FROM public.notes WHERE user_id = who AND
-    (is_secret IS TRUE OR data ? '__lubanoteE2ENote' OR data ? '__lubanoteMediaVault');
+    (data ? '__lubanoteSecret' OR data ? '__lubanoteE2ENote'
+     OR data ? '__lubanoteMediaVault' OR data->>'isSecret' = 'true');
   SELECT count(*) INTO private_count FROM public.tags WHERE user_id = who AND is_secret IS TRUE;
   IF note_count <> p_expected_notes OR tag_count <> p_expected_tags
     OR protected_count <> jsonb_array_length(p_note_changes)
@@ -152,12 +153,19 @@ BEGIN
     SELECT * INTO row_n FROM public.notes
       WHERE user_id=who AND id::text=v_row_id FOR UPDATE;
     IF NOT FOUND OR row_n.data IS DISTINCT FROM item->'old_data'
-       OR NOT (row_n.is_secret IS TRUE OR row_n.data ? '__lubanoteE2ENote'
-               OR row_n.data ? '__lubanoteMediaVault') THEN
+       OR NOT (row_n.data ? '__lubanoteSecret' OR row_n.data ? '__lubanoteE2ENote'
+               OR row_n.data ? '__lubanoteMediaVault' OR row_n.data->>'isSecret' = 'true') THEN
       RAISE EXCEPTION '688A_NOTE_CHANGED';
     END IF;
-    IF (row_n.is_secret IS TRUE AND
-        (jsonb_typeof(item->'new_data'->'encrypted') IS DISTINCT FROM 'object'
+    -- A legacy plaintext Secret note must never be silently treated as ordinary data.
+    IF row_n.data->>'isSecret' = 'true'
+       AND NOT (row_n.data @> '{"__lubanoteSecret":true}'::jsonb) THEN
+      RAISE EXCEPTION '688C_LEGACY_SECRET_UNSUPPORTED';
+    END IF;
+    IF (row_n.data ? '__lubanoteSecret' AND
+        (NOT (row_n.data @> '{"__lubanoteSecret":true}'::jsonb)
+         OR NOT (item->'new_data' @> '{"__lubanoteSecret":true}'::jsonb)
+         OR jsonb_typeof(item->'new_data'->'encrypted') IS DISTINCT FROM 'object'
          OR item->'new_data'->'encrypted'->>'algorithm' IS DISTINCT FROM 'AES-GCM'))
        OR (row_n.data ? '__lubanoteE2ENote' AND
            (item->'new_data'->>'__lubanoteE2ENote' IS DISTINCT FROM 'true'
