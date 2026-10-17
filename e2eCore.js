@@ -2159,6 +2159,265 @@
     finally {salt?.fill(0);kdfSalt?.fill(0);novyKlic=null;}
   }
 
+  /* 686O – complete candidate for the future atomic 686N call,
+   * constructed, authenticated and DROPPED entirely in RAM. Nothing is
+   * submitted to RPC/DB/Storage, stored locally, logged or returned.
+   * TEST hostname is NOT an isolated backend; any scope uncertainty fails.
+   * Passing this bounded staging is NOT permission to rotate credentials.
+   */
+  async function recoveryAtomicInputStaging686O(noveHeslo) {
+    const v={ok:false,readOnly:true,safeToRotate:false,reason:"not_started",
+      accountVerified:false,settingsLoaded:false,newVerifierVerified:false,
+      rootEnvelopeVerified:false,rootKeyIdPreserved:false,
+      sharedIdentityStaged:false,sharedIdentityVerified:false,
+      liveNotesScanned:0,e2eNotesRestaged:0,legacyVaultNotesStaged:0,
+      mediaItemsStaged:0,allStagedNotesVerified:false,
+      atomicInputsPreparedInMemory:false,serverSnapshotUnchanged:false,
+      storageScopeVerified:false,multiDeviceFenceVerified:false,
+      serverAtomicCommitCalled:false,serverAndLocalModified:false};
+    let rootRaw=null, rootRoundtrip=null, sharedRaw=null, sharedRoundtrip=null;
+    let verifierRaw=null, hesloBajty=null, salt=null, mediaSalt=null, verifierSalt=null;
+    let novyMediaKlic=null, stagedInputs=null;
+    // Deliberately do NOT call initializers that may write local state.
+    try {
+      if(String(location.hostname||"").toLowerCase()!=="test.lubanote.com") {
+        v.reason="test_web_only";return v;
+      }
+      if(!navigator.onLine){v.reason="offline";return v;}
+      if(typeof noveHeslo!=="string" || noveHeslo.length<12 || noveHeslo.length>1024){
+        v.reason="new_password_length_invalid";return v;
+      }
+      const klient=ziskejSupabase();
+      const media=window.LubaNoteMediaCrypto;
+      const notesCrypto=window.LubaNoteNotesCrypto;
+      if(!klient?.auth?.getUser || !klient?.from ||
+         typeof media?.recoveryStageMediaRecord686O!=="function" ||
+         typeof media?.rozbalBajtyHlavnimKlicem!=="function" ||
+         typeof notesCrypto?.zasifruj!=="function" ||
+         typeof notesCrypto?.desifruj!=="function"){
+        v.reason="staging_dependencies_unavailable";return v;
+      }
+      const {data:auth,error:authError}=await klient.auth.getUser();
+      const userId=auth?.user?.id;
+      if(authError || !userId || String(localStorage.getItem("lubanoteLocalOwnerUserId")||"")!==userId){
+        v.reason="account_or_local_owner_unverified";return v;
+      }
+      const rootStav=getStav();
+      if(!jeRootKlicDostupny() || rootKontext?.userId!==userId ||
+         rootStav?.ready!==true || rootStav?.userId!==userId ||
+         !media.jeKlicDostupny?.()){
+        v.reason="root_or_media_key_unavailable";return v;
+      }
+      v.accountVerified=true;
+      const {data:settings,error:settingsError}=await klient.from("secret_settings")
+        .select("user_id,salt,verifier,kdf_iterations,e2e_root_key_version,e2e_root_key_algorithm,e2e_root_key_id,e2e_root_key_box")
+        .eq("user_id",userId).maybeSingle();
+      if(settingsError || !settings || settings.user_id!==userId ||
+         typeof settings.salt!=="string" || typeof settings.verifier!=="string" ||
+         Number(settings.kdf_iterations)!==600000 || !maPlatnyServerRecord(settings) ||
+         rootKontext.keyId!==settings.e2e_root_key_id){
+        v.reason="settings_missing_or_changed";return v;
+      }
+      v.settingsLoaded=true;
+      rootRaw=await rozbalRootRaw(settings.e2e_root_key_box,userId);
+      if(rootRaw.length!==32 || await vytvorKeyId(rootRaw)!==settings.e2e_root_key_id){
+        v.reason="root_source_invalid";return v;
+      }
+      const enc=new TextEncoder();
+      hesloBajty=enc.encode(noveHeslo);
+      salt=crypto.getRandomValues(new Uint8Array(16));
+      const prefix=(str)=>{const p=enc.encode(str);const b=new Uint8Array(p.length+salt.length);
+        b.set(p);b.set(salt,p.length);return b;};
+      mediaSalt=prefix("LubaNote-media-encryption-v1");
+      verifierSalt=prefix("LubaNote-verifier-v1");
+      const material=await crypto.subtle.importKey("raw",hesloBajty,"PBKDF2",false,["deriveKey","deriveBits"]);
+      novyMediaKlic=await crypto.subtle.deriveKey(
+        {name:"PBKDF2",salt:mediaSalt,iterations:600000,hash:"SHA-256"},
+        material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+      verifierRaw=new Uint8Array(await crypto.subtle.deriveBits(
+        {name:"PBKDF2",salt:verifierSalt,iterations:600000,hash:"SHA-256"},material,256));
+      const b64=(b)=>btoa(String.fromCharCode(...b));
+      const saltBase64=b64(salt);
+      if(typeof vytvorVerifierZHesla!=="function" ||
+         await vytvorVerifierZHesla(noveHeslo,saltBase64,600000)!==b64(verifierRaw)){
+        v.reason="verifier_incompatible";return v;
+      }
+      v.newVerifierVerified=true;
+      const stageBox=async(raw,aadText)=>{
+        const iv=crypto.getRandomValues(new Uint8Array(12));
+        const aad=enc.encode(aadText);
+        const bytes=new Uint8Array(await crypto.subtle.encrypt(
+          {name:"AES-GCM",iv,additionalData:aad},novyMediaKlic,raw));
+        const box={version:1,algorithm:"AES-GCM",iv:b64(iv),ciphertext:b64(bytes)};
+        const check=new Uint8Array(await crypto.subtle.decrypt(
+          {name:"AES-GCM",iv,additionalData:aad},novyMediaKlic,bytes));
+        bytes.fill(0);
+        return {box,check};
+      };
+      const rootStage=await stageBox(rootRaw,`LubaNote-e2e-core-wrap-v1:${rootWrapKontext(userId)}`);
+      rootRoundtrip=rootStage.check;
+      v.rootEnvelopeVerified=rootRoundtrip.length===rootRaw.length &&
+        rootRoundtrip.every((b,i)=>b===rootRaw[i]);
+      v.rootKeyIdPreserved=v.rootEnvelopeVerified &&
+        await vytvorKeyId(rootRoundtrip)===settings.e2e_root_key_id;
+      if(!v.rootKeyIdPreserved){v.reason="root_restaging_failed";return v;}
+      const {data:shared,error:sharedError}=await klient.from("lubanote_shared_crypto_identities")
+        .select("user_id,algorithm,key_version,public_key_jwk,private_key_box")
+        .eq("user_id",userId).maybeSingle();
+      if(sharedError){v.reason="shared_identity_read_failed";return v;}
+      let sharedOldBox=null,sharedNewBox=null;
+      if(shared){
+        if(shared.user_id!==userId || shared.algorithm!=="ECDH-P256" ||
+           Number(shared.key_version)!==1 ||
+           shared.public_key_jwk?.kty!=="EC" || shared.public_key_jwk?.crv!=="P-256" ||
+           shared.private_key_box?.algorithm!=="AES-GCM" ||
+           Number(shared.private_key_box?.version)!==1){
+          v.reason="shared_identity_invalid";return v;
+        }
+        sharedOldBox=shared.private_key_box;
+        sharedRaw=await media.rozbalBajtyHlavnimKlicem(
+          sharedOldBox,`shared-identity:${userId}:v1`);
+        const stage=await stageBox(sharedRaw,`LubaNote-shared-wrap-v1:shared-identity:${userId}:v1`);
+        sharedRoundtrip=stage.check;sharedNewBox=stage.box;
+        v.sharedIdentityStaged=true;
+        const same=sharedRaw.length===sharedRoundtrip.length &&
+          sharedRaw.every((b,i)=>b===sharedRoundtrip[i]);
+        if(!same){v.reason="shared_key_roundtrip_mismatch";return v;}
+        // Check that the staged private key still agrees with public identity.
+        const privateKey=await crypto.subtle.importKey("pkcs8",sharedRoundtrip,
+          {name:"ECDH",namedCurve:"P-256"},false,["deriveBits"]);
+        const publicKey=await crypto.subtle.importKey("jwk",shared.public_key_jwk,
+          {name:"ECDH",namedCurve:"P-256"},false,[]);
+        const probe=await crypto.subtle.generateKey({name:"ECDH",namedCurve:"P-256"},false,["deriveBits"]);
+        const a=new Uint8Array(await crypto.subtle.deriveBits(
+          {name:"ECDH",public:probe.publicKey},privateKey,256));
+        const b=new Uint8Array(await crypto.subtle.deriveBits(
+          {name:"ECDH",public:publicKey},probe.privateKey,256));
+        v.sharedIdentityVerified=a.length===32 && b.length===32 && a.every((n,i)=>n===b[i]);
+        a.fill(0);b.fill(0);
+        if(!v.sharedIdentityVerified){v.reason="shared_public_identity_mismatch";return v;}
+      }else{
+        v.sharedIdentityVerified=true; // No shared identity record to rewrap.
+      }
+      const {count,error:countError}=await klient.from("notes")
+        .select("id",{count:"exact",head:true}).eq("user_id",userId).is("deleted_at",null);
+      if(countError || !Number.isSafeInteger(count) || count<0 || count>30){
+        v.reason="bounded_notes_count_unavailable";return v;
+      }
+      const {data:rows,error:rowError}=await klient.from("notes")
+        .select("id,data").eq("user_id",userId).is("deleted_at",null)
+        .order("id",{ascending:true}).limit(31);
+      if(rowError || !Array.isArray(rows) || rows.length!==count){
+        v.reason="notes_snapshot_unavailable";return v;
+      }
+      const changes=[];
+      for(const row of rows){
+        const obj=row?.data;
+        if(!row?.id || !obj || typeof obj!=="object" || Array.isArray(obj)){
+          v.reason="note_data_invalid";return v;
+        }
+        const isE2E=obj.__lubanoteE2ENote===true;
+        let decrypted=isE2E ? await notesCrypto.desifruj(obj,userId,row.id) : obj;
+        const vault=decrypted?.__lubanoteMediaVault;
+        const hasVault=vault!=null;
+        if(hasVault && (Number(vault.version)!==1 || vault.algorithm!=="AES-GCM" ||
+           !vault.items || typeof vault.items!=="object" || Array.isArray(vault.items))){
+          v.reason="media_vault_invalid";return v;
+        }
+        if(!isE2E && !hasVault){v.liveNotesScanned++;continue;}
+        // Clone before modifying, so the server snapshot cannot be mutated.
+        let replacement=JSON.parse(JSON.stringify(decrypted));
+        if(hasVault){
+          const items=Object.entries(vault.items);
+          if(items.length>30){v.reason="media_items_limit";return v;}
+          for(const [mediaId,record] of items){
+            if(++v.mediaItemsStaged>30){v.reason="media_items_limit";return v;}
+            const result=await media.recoveryStageMediaRecord686O(record,row.id,mediaId,novyMediaKlic);
+            if(!result.ok){v.reason=result.reason||"media_stage_failed";return v;}
+            replacement.__lubanoteMediaVault.items[mediaId]=result.record;
+          }
+          if(!isE2E)v.legacyVaultNotesStaged++;
+        }
+        let newData;
+        if(isE2E){
+          newData=await notesCrypto.zasifruj(replacement,userId);
+          const roundtrip=await notesCrypto.desifruj(newData,userId,row.id);
+          if(JSON.stringify(roundtrip)!==JSON.stringify(replacement)){
+            v.reason="e2e_note_roundtrip_mismatch";return v;
+          }
+          v.e2eNotesRestaged++;
+        }else{newData=replacement;}
+        if(JSON.stringify(newData)===JSON.stringify(obj)){
+          v.reason="restaged_note_unchanged";return v;
+        }
+        changes.push({id:row.id,old_data:obj,new_data:newData});
+        v.liveNotesScanned++;
+      }
+      v.allStagedNotesVerified=v.liveNotesScanned===count;
+      // 686N accepts no more than 4 MB of note changes (pg_column_size).
+      // This conservative JSON byte ceiling avoids falsely advertising
+      // completeness for candidates that the server would reject.
+      if(enc.encode(JSON.stringify(changes)).byteLength>3500000){
+        v.reason="atomic_input_payload_too_large";return v;
+      }
+      // Staging data follows the 686N input contract, but is NEVER sent there.
+      stagedInputs={expected_settings:{salt:settings.salt,verifier:settings.verifier,
+          kdf_iterations:600000,e2e_root_key_id:settings.e2e_root_key_id,
+          e2e_root_key_box:settings.e2e_root_key_box},
+        new_settings:{salt:saltBase64,verifier:b64(verifierRaw),kdf_iterations:600000,
+          e2e_root_key_id:settings.e2e_root_key_id,e2e_root_key_box:rootStage.box},
+        expected_shared_box:sharedOldBox,new_shared_box:sharedNewBox,
+        note_changes:changes,expected_live_note_count:count};
+      const snapshotHash=async(x)=>{
+        const data=enc.encode(JSON.stringify(x));
+        const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",data));
+        return b64(digest);
+      };
+      const originalDigest=await snapshotHash(rows);
+      const {data:after,error:afterError}=await klient.from("notes")
+        .select("id,data").eq("user_id",userId).is("deleted_at",null)
+        .order("id",{ascending:true}).limit(31);
+      const {data:settingsAfter,error:settingsAfterError}=await klient.from("secret_settings")
+        .select("salt,verifier,kdf_iterations,e2e_root_key_id,e2e_root_key_box")
+        .eq("user_id",userId).maybeSingle();
+      const {data:sharedAfter,error:sharedAfterError}=await klient.from("lubanote_shared_crypto_identities")
+        .select("private_key_box").eq("user_id",userId).maybeSingle();
+      const {count:countAfter,error:countAfterError}=await klient.from("notes")
+        .select("id",{count:"exact",head:true}).eq("user_id",userId).is("deleted_at",null);
+      const {data:authAfter,error:authAfterError}=await klient.auth.getUser();
+      if(afterError || settingsAfterError || sharedAfterError || countAfterError || authAfterError ||
+         !Array.isArray(after) || after.length!==count || countAfter!==count ||
+         authAfter?.user?.id!==userId || !jeRootKlicDostupny() ||
+         rootKontext?.userId!==userId || rootKontext?.keyId!==settings.e2e_root_key_id ||
+         !media.jeKlicDostupny?.()){
+        v.reason="source_changed_during_staging";return v;
+      }
+      v.serverSnapshotUnchanged=await snapshotHash(after)===originalDigest &&
+        settingsAfter?.salt===settings.salt &&
+        settingsAfter?.verifier===settings.verifier &&
+        Number(settingsAfter?.kdf_iterations)===600000 &&
+        settingsAfter?.e2e_root_key_id===settings.e2e_root_key_id &&
+        JSON.stringify(settingsAfter?.e2e_root_key_box)===JSON.stringify(settings.e2e_root_key_box) &&
+        JSON.stringify(sharedAfter?.private_key_box??null)===JSON.stringify(sharedOldBox??null);
+      if(!v.serverSnapshotUnchanged){v.reason="source_snapshot_changed";return v;}
+      // Existence + bounded shape (never return or persist the actual fields).
+      v.atomicInputsPreparedInMemory=!!(stagedInputs.new_settings.e2e_root_key_box &&
+        stagedInputs.new_settings.verifier &&
+        Array.isArray(stagedInputs.note_changes) &&
+        stagedInputs.note_changes.length===v.e2eNotesRestaged+v.legacyVaultNotesStaged);
+      v.ok=v.newVerifierVerified && v.rootKeyIdPreserved && v.sharedIdentityVerified &&
+        v.allStagedNotesVerified && v.atomicInputsPreparedInMemory && v.serverSnapshotUnchanged;
+      v.reason=v.ok?"atomic_inputs_verified_in_ram_scope_still_unverified":"staging_incomplete";
+      return v;
+    }catch(_error){v.reason="staging_crypto_or_read_failed";return v;}
+    finally {
+      rootRaw?.fill(0);rootRoundtrip?.fill(0);
+      sharedRaw?.fill(0);sharedRoundtrip?.fill(0);verifierRaw?.fill(0);
+      hesloBajty?.fill(0);salt?.fill(0);mediaSalt?.fill(0);verifierSalt?.fill(0);
+      novyMediaKlic=null;stagedInputs=null;
+    }
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -2192,6 +2451,7 @@
     recoverySecretMediaAudit686K,
     recoveryMediaContentProof686L,
     recoveryStorageMediaDryRun686M,
+    recoveryAtomicInputStaging686O,
     getStav,
     resetPametiProTest
   });

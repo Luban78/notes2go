@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686M · STORAGE/MEDIA DRY-RUN</span>
+          <span class="ln686e-badge">TEST WEB · 686O · ATOMIC INPUT STAGING</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -240,7 +240,19 @@
             <p class="ln686e-note">READ-ONLY. Kontrola Storage je omezená na bucket lubanote-attachments a složku tohoto účtu (metadata, ne obsah souborů). Ostatní buckety, sdílené položky a úplná integrita Storage zůstávají neověřené. Změna hesla není povolená ani při PASS.</p>
           </section>
           <section class="ln686e-card">
-            <h2>11. Report</h2>
+            <h2>11. 686O – Atomické vstupy pouze v paměti (BEZ ZÁPISU)</h2>
+            <p>Připravíme skutečný formát nového ověřovače, obálky Root Key a Shared identity i přebalená média a poznámky. Kandidátní vstupy pro budoucí transakci se ověří a ihned zahodí.</p>
+            <label for="ln686o-new">Nové testovací E2E heslo (alespoň 12 znaků)</label>
+            <input type="password" id="ln686o-new" data-ln686o-new autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Heslo pouze pro test">
+            <label for="ln686o-confirm">Zopakuj nové heslo</label>
+            <input type="password" id="ln686o-confirm" data-ln686o-confirm autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Stejné nové heslo">
+            <button type="button" class="ln686e-secondary" data-ln686e="atomic-staging-686o">Ověřit připravené atomické vstupy</button>
+            <div class="ln686e-state" data-ln686o-status role="status" aria-live="polite"></div>
+            <div data-ln686o-checks></div>
+            <p class="ln686e-note">686O nevolá žádné RPC, nic nezapisuje ani nemění heslo. Plná Storage, historie Secret a ochrana zápisů dalších zařízení zůstávají neověřené. Skutečné obnovení hesla je stále zakázané.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>12. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -266,6 +278,7 @@
       if (akce === "secret-media-audit") { await spustSecretMediaAudit686K(); return; }
       if (akce === "media-content-proof") { await spustMediaProof686L(); return; }
       if (akce === "storage-media-rewrap") { await spustStorageMedia686M(); return; }
+      if (akce === "atomic-staging-686o") { await spustAtomicStaging686O(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -976,6 +989,80 @@
       "E2E password/keys/notes/server modified: NO"
     ].join("\n");
     nastavReport(bezM+(bezM?"\n":"")+report);
+  }
+
+  /* 686O – single independent read-only candidate staging test. */
+  async function spustAtomicStaging686O() {
+    if(!obrazovka || obrazovka.hidden)return;
+    const nove=prvek('[data-ln686o-new]');
+    const potvrzeni=prvek('[data-ln686o-confirm]');
+    const btn=prvek('[data-ln686e="atomic-staging-686o"]');
+    const stav=prvek('[data-ln686o-status]');
+    const obsah=prvek('[data-ln686o-checks]');
+    const heslo=nove?.value||"";
+    const stejne=heslo.length>=12 && heslo.length<=1024 && heslo===potvrzeni?.value;
+    if(nove)nove.value="";
+    if(potvrzeni)potvrzeni.value="";
+    if(!stejne){
+      if(stav){stav.textContent="Hesla se neshodují nebo mají méně než 12 znaků.";stav.dataset.result="fail";}
+      return;
+    }
+    const mojeGenerace=++generace;
+    if(btn)btn.disabled=true;
+    if(stav){stav.textContent="Připravuji a ověřuji šifrované vstupy pouze v paměti…";stav.removeAttribute("data-result");}
+    if(obsah)obsah.textContent="";
+    let v;
+    try {
+      const fn=window.LubaNoteE2ECore?.recoveryAtomicInputStaging686O;
+      v=typeof fn==="function"?await fn(heslo):{ok:false,reason:"test_unavailable"};
+    }catch(_error){v={ok:false,reason:"test_failed"};}
+    if(btn)btn.disabled=false;
+    if(mojeGenerace!==generace || !obrazovka || obrazovka.hidden)return;
+    if(stav){
+      stav.textContent=v.ok?"RAM STAGING PASS – vstupy ověřeny a zahozeny, změna hesla stále zakázána":
+        "RAM STAGING NEDOKONČEN – žádné heslo, klíče ani serverová data nezměněna";
+      stav.dataset.result=v.ok?"pass":"fail";
+    }
+    const p=n=>Number.isSafeInteger(n)&&n>=0?n:"?";
+    const radC=(j,n)=>`<div class="ln686e-row"><span>${j}</span><strong>${p(n)}</strong></div>`;
+    if(obsah)obsah.innerHTML=[
+      radek("Účet ověřen",v.accountVerified),
+      radek("Nový ověřovač",v.newVerifierVerified),
+      radek("Root Key ID zachováno",v.rootKeyIdPreserved),
+      radek("Shared identita ověřena",v.sharedIdentityVerified),
+      radC("E2E poznámky znovu zabaleny",v.e2eNotesRestaged),
+      radC("Mediální položky v paměti",v.mediaItemsStaged),
+      radek("Serverový snapshot nezměněn",v.serverSnapshotUnchanged),
+      radek("Vstupy pro transakci připraveny",v.atomicInputsPreparedInMemory),
+      radek("Skutečná změna hesla povolena",v.safeToRotate)
+    ].join("");
+    const ano=x=>x===true?"YES":"NO";
+    const bezO=posledniReport.replace(/\n?LUBANOTE 686O – ATOMIC INPUT STAGING \(READ-ONLY\)[\s\S]*$/ ,"");
+    const report=[
+      "LUBANOTE 686O – ATOMIC INPUT STAGING (READ-ONLY)",
+      "atomicInputStaging: "+(v.ok?"RAM_PASS":"INCOMPLETE"),
+      "accountVerified: "+ano(v.accountVerified),
+      "settingsLoaded: "+ano(v.settingsLoaded),
+      "newVerifierVerified: "+ano(v.newVerifierVerified),
+      "rootEnvelopeVerified: "+ano(v.rootEnvelopeVerified),
+      "rootKeyIdPreserved: "+ano(v.rootKeyIdPreserved),
+      "sharedIdentityStaged: "+ano(v.sharedIdentityStaged),
+      "sharedIdentityVerified: "+ano(v.sharedIdentityVerified),
+      "liveNotesScanned: "+p(v.liveNotesScanned),
+      "e2eNotesRestaged: "+p(v.e2eNotesRestaged),
+      "legacyVaultNotesStaged: "+p(v.legacyVaultNotesStaged),
+      "mediaItemsStaged: "+p(v.mediaItemsStaged),
+      "allStagedNotesVerified: "+ano(v.allStagedNotesVerified),
+      "atomicInputsPreparedInMemory: "+ano(v.atomicInputsPreparedInMemory),
+      "serverSnapshotUnchanged: "+ano(v.serverSnapshotUnchanged),
+      "storageScopeVerified: NO",
+      "multiDeviceFenceVerified: NO",
+      "serverAtomicCommitCalled: NO",
+      "safeToRotate: NO",
+      "reason: "+String(v.reason||"unknown").slice(0,90),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(bezO+(bezO?"\n":"")+report);
   }
 
   async function zkopirujReport(tlacitko) {
