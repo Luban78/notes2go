@@ -147,6 +147,16 @@
             <button type="button" class="ln686e-secondary" data-ln686e="check">Zopakovat kontrolu</button>
           </section>
           <section class="ln686e-card">
+            <h2>688H – Opravit klíč médií po změně E2E hesla</h2>
+            <p>Jen pokud po změně hesla synchronizace hlásí <b>MEDIA READ FAIL / OperationError</b>. Použije se aktuální E2E heslo, které už platí na serveru. Heslo účtu, Root Key ani serverová data se nemění.</p>
+            <label for="ln688h-current-password">Aktuální E2E heslo (nové heslo po změně)</label>
+            <input type="password" id="ln688h-current-password" data-ln688h-current-password
+              autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Zadej aktuální E2E heslo">
+            <button type="button" class="ln686e-primary" data-ln686e="media-key-repair-688h">Opravit klíč médií v tomto prohlížeči</button>
+            <div class="ln686e-state" data-ln688h-status role="status" aria-live="polite"></div>
+            <p class="ln686e-note">Heslo se neukládá ani nekopíruje do reportu. Server se pouze čte; mění se lokální nastavení a klíč uložený v zařízení. Po úspěchu stránku obnov.</p>
+          </section>
+          <section class="ln686e-card">
             <h2>2. Ověření hesla k účtu</h2>
             <p>Pro další krok je potřeba přihlašovací heslo <b>testovacího účtu</b>. E2E heslo se nemění.</p>
             <label for="ln686e-password">Přihlašovací heslo</label>
@@ -297,10 +307,90 @@
       if (akce === "atomic-staging-686o") { await spustAtomicStaging686O(); return; }
       if (akce === "storage-audit-686p") { await spustStorageAudit686P(); return; }
       if (akce === "device-audit-686q") { await spustDeviceAudit686Q(); return; }
+      if (akce === "media-key-repair-688h") { await opravMediaKlic688H(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
     return sekce;
+  }
+
+  // 688H: TEST-only device repair after a committed E2E password change.
+  // Never changes credentials, encrypted notes, Root Key or server state.
+  let opravujeMedia688H = false;
+  async function opravMediaKlic688H() {
+    if (opravujeMedia688H) return;
+    const pole = prvek('[data-ln688h-current-password]');
+    const tlacitko = prvek('[data-ln686e="media-key-repair-688h"]');
+    const status = prvek('[data-ln688h-status]');
+    const heslo = String(pole?.value || "");
+    if (!heslo) {
+      if (status) { status.textContent = "Zadej aktuální E2E heslo."; status.dataset.result = "fail"; }
+      return;
+    }
+    opravujeMedia688H = true;
+    if (tlacitko) tlacitko.disabled = true;
+    if (pole) pole.disabled = true;
+    if (status) { status.textContent = "Ověřuji E2E heslo proti serveru…"; status.removeAttribute("data-result"); }
+    try {
+      const cl = typeof supabaseClient !== "undefined" ? supabaseClient : window.supabaseClient;
+      const media = window.LubaNoteMediaCrypto;
+      if (!navigator.onLine || !cl?.auth?.getUser || !cl?.from ||
+          typeof vytvorVerifierZHesla !== "function" ||
+          typeof ulozLokalniTajneNastaveni !== "function" ||
+          typeof media?.nastavKlicZHesla !== "function") {
+        throw new Error("not_ready");
+      }
+      const {data:auth, error:authError} = await cl.auth.getUser();
+      const uid = auth?.user?.id;
+      const localOwner = localStorage.getItem("lubanoteLocalOwnerUserId");
+      if (authError || !uid || !localOwner || uid !== localOwner) throw new Error("account_mismatch");
+      const {data:settings, error:readError} = await cl.from("secret_settings")
+        .select("user_id,salt,verifier,kdf_iterations,e2e_root_key_id")
+        .eq("user_id", uid).maybeSingle();
+      if (readError || !settings || settings.user_id !== uid ||
+          !settings.salt || !settings.verifier || Number(settings.kdf_iterations) !== 600000) {
+        throw new Error("settings_unavailable");
+      }
+      const root = window.LubaNoteE2ECore?.getStav?.();
+      if (!root?.ready || root?.userId !== uid || root.keyId !== settings.e2e_root_key_id) {
+        throw new Error("root_mismatch");
+      }
+      const verifier = await vytvorVerifierZHesla(heslo, settings.salt, 600000);
+      if (verifier !== settings.verifier) throw new Error("wrong_e2e_password");
+      const {data:stillAuth, error:stillError} = await cl.auth.getUser();
+      if (stillError || stillAuth?.user?.id !== uid ||
+          localStorage.getItem("lubanoteLocalOwnerUserId") !== uid) {
+        throw new Error("account_changed");
+      }
+      if (status) status.textContent = "Heslo ověřeno. Obnovuji místní klíč médií…";
+      const ulozeno = ulozLokalniTajneNastaveni({...settings, userId: uid}, uid);
+      if (ulozeno !== true) throw new Error("local_settings_failed");
+      await media.nastavKlicZHesla(heslo, {...settings, userId: uid});
+      if (media.jeKlicDostupny?.() !== true) throw new Error("media_key_unavailable");
+      if (status) {
+        status.textContent = "HOTOVO ✓ Klíč médií obnoven v tomto prohlížeči. Teď obnov stránku a zkontroluj synchronizaci.";
+        status.dataset.result = "pass";
+      }
+      window.LubaNoteStartupDiag?.zapis?.("E2E", "688H MEDIA KEY REPAIR PASS | device-only");
+    } catch (error) {
+      const reason = String(error?.message || "unknown");
+      const messages = {
+        not_ready: "Potřebné moduly nejsou připravené.",
+        account_mismatch: "Nesouhlasí přihlášený účet a vlastník místních dat.",
+        settings_unavailable: "Nelze ověřit aktuální E2E nastavení ze serveru.",
+        root_mismatch: "Root Key neodpovídá serveru. Klíč médií se neopravoval.",
+        wrong_e2e_password: "Nesprávné aktuální E2E heslo. Nic se nezměnilo.",
+        account_changed: "Během kontroly se změnil účet. Nic se nezměnilo.",
+        local_settings_failed: "Nepodařilo se uložit místní nastavení.",
+        media_key_unavailable: "Nový mediální klíč není v zařízení dostupný."
+      };
+      if (status) { status.textContent = messages[reason] || "Oprava se nepodařila. Stav zařízení ponechán, pošli nový Debug Hub report."; status.dataset.result = "fail"; }
+      window.LubaNoteStartupDiag?.zapis?.("E2E", "688H MEDIA KEY REPAIR FAIL | " + (messages[reason] ? reason : "unknown"));
+    } finally {
+      if (pole) { pole.value = ""; pole.disabled = false; }
+      if (tlacitko) tlacitko.disabled = false;
+      opravujeMedia688H = false;
+    }
   }
 
   function prvek(selector) { return obrazovka?.querySelector(selector) || null; }
