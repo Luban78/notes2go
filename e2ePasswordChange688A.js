@@ -362,6 +362,38 @@
       docasnyKlient=null;stage=null;probiha=false;
     }
   }
+  // 688K – explicitni READ-ONLY diagnostika shody Secret obalek.
+  // Bez zapisovani, meneni hesla, zobrazovani ID, IV nebo ciphertextu.
+  async function diagnostikujSecret688K() {
+    const cl=klient();
+    kontroluj(navigator.onLine && cl?.auth?.getUser && cl?.from,'online_backend_required');
+    const {data:auth,error:chybaAuth}=await cl.auth.getUser();
+    const uid=auth?.user?.id;
+    kontroluj(!chybaAuth && uid && uid===localStorage.getItem('lubanoteLocalOwnerUserId'),'owner_mismatch');
+    const rows=await nactiVse('notes','id,data,deleted_at',uid,5000);
+    const cloud=rows.filter(r=>!r.deleted_at && r.data?.__lubanoteSecret===true);
+    kontroluj(typeof nactiSifrovaneTajneZaznamy==='function','local_secret_storage_unavailable');
+    const local=nactiSifrovaneTajneZaznamy();
+    const mapa=new Map(cloud.map(r=>[String(r.id),r]));
+    const rozdily={missing:0,version:0,algorithm:0,iv:0,ciphertext:0};
+    let matched=0;
+    for(const rec of local){
+      const row=mapa.get(String(rec.id));
+      if(!row){rozdily.missing++;continue;}
+      let shoda=true;
+      for(const k of ['version','algorithm','iv','ciphertext']){
+        if(row.data?.encrypted?.[k]!==rec.encrypted?.[k]){
+          rozdily[k]++;
+          shoda=false;
+        }
+      }
+      if(shoda)matched++;
+    }
+    const celkem=Object.values(rozdily).reduce((a,b)=>a+b,0);
+    const report=`688K SECRET READ-ONLY\nserver=${cloud.length} local=${local.length} matched=${matched}\nmissing=${rozdily.missing} version=${rozdily.version} algorithm=${rozdily.algorithm}\niv=${rozdily.iv} ciphertext=${rozdily.ciphertext}\nresult=${celkem===0?'MATCH':'MISMATCH'}`;
+    try {window.LubaNoteStartupDiag?.zapis?.('E2E',report.replace(/\n/g,' | '));} catch(_error){}
+    return report;
+  }
   let panel=null;
   function open(){
     if(panel && panel.style.display!=='none')return;
@@ -375,11 +407,21 @@
         <label data-label-account for="ln688b-account"></label><input id="ln688b-account" type="password" autocomplete="current-password" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <label data-label-new for="ln688a-new"></label><input id="ln688a-new" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <label data-label-repeat for="ln688a-confirm"></label><input id="ln688a-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
-        <p data-status role="status" aria-live="polite" style="margin:0;font-size:.9rem;min-height:1.4em"></p>
+        <p data-status role="status" aria-live="polite" style="margin:0;font-size:.9rem;min-height:1.4em;white-space:pre-wrap"></p>
+        <button type="button" data-secret-check style="padding:10px 12px;background:#303932;color:#e4f7e7;border:1px solid #65806d;border-radius:8px">Kontrola Secret (688K) – pouze čtení</button>
         <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-cancel style="padding:11px 16px"></button><button type="submit" data-submit style="padding:11px 16px;background:#399d57;border:0;border-radius:8px;color:#fff;font-weight:700"></button></div></form>`;
       document.body.appendChild(el);
       const form=el.querySelector('form'),status=el.querySelector('[data-status]');
       el.querySelector('[data-cancel]').addEventListener('click',()=>{if(!probiha){form.reset();el.style.display='none';}});
+      el.querySelector('[data-secret-check]').addEventListener('click',async()=>{
+        if(probiha)return;
+        const btn=el.querySelector('[data-secret-check]');
+        btn.disabled=true;
+        status.textContent='688K: Kontroluji pouze soulad Secret záznamů…';
+        try {status.textContent=await diagnostikujSecret688K();}
+        catch(error) {status.textContent='688K READ-ONLY FAIL: '+String(error?.message||'unknown').slice(0,100);}
+        finally {btn.disabled=false;}
+      });
       form.addEventListener('submit',async e=>{
         e.preventDefault();
         if(probiha)return;
@@ -414,5 +456,5 @@
     form.reset();panel.style.display='flex';
     form.querySelector('#ln688b-account').focus();
   }
-  window.LubaNoteE2EPasswordChange688A=Object.freeze({open,zmen});
+  window.LubaNoteE2EPasswordChange688A=Object.freeze({open,zmen,diagnostikujSecret688K});
 })();
