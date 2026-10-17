@@ -63,6 +63,17 @@
       .map(k=>JSON.stringify(k)+':'+kanonickyJSON688L(hodnota[k])).join(',')+'}';
     return JSON.stringify(hodnota);
   }
+  function shodaSecretSPripustnymCasem688P(a,b) {
+    if (kanonickyJSON688L(a)===kanonickyJSON688L(b)) return true;
+    const maCas=x=>Object.prototype.hasOwnProperty.call(x,'updatedAt') &&
+      typeof x.updatedAt==='string' && x.updatedAt.trim()!=='' &&
+      Number.isFinite(Date.parse(x.updatedAt));
+    if (!maCas(a) || !maCas(b)) return false;
+    // Vylucime VYHRADNE nejvyssi updatedAt, ne stejnojmenna vnorenna pole.
+    const aData={...a},bData={...b};
+    delete aData.updatedAt;delete bData.updatedAt;
+    return kanonickyJSON688L(aData)===kanonickyJSON688L(bData);
+  }
   async function overShoduSecretObsahu688L(lokalni,serverovy) {
     kontroluj(lokalni?.id && serverovy?.id && String(lokalni.id)===String(serverovy.id),
       'unsynced_local_secret_record');
@@ -82,101 +93,13 @@
       typeof pb==='object' && !Array.isArray(pb) &&
       String(pa.id)===String(lokalni.id) && String(pb.id)===String(serverovy.id),
       'secret_note_id_mismatch');
-    kontroluj(kanonickyJSON688L(pa)===kanonickyJSON688L(pb),
+    // 688P: pripustny je POUZE rozdil v top-level casovem udaji updatedAt.
+    // Oba dokumenty museji mit platne casove razitko; veskery ostatni
+    // desifrovany obsah a metadata musi byt bitove/strukturne shodne.
+    // Pri prebaleni zachovavame serverovou kanonickou verzi dokumentu.
+    kontroluj(shodaSecretSPripustnymCasem688P(pa,pb),
       'local_secret_plaintext_mismatch');
     return ['version','algorithm','iv','ciphertext'].every(k=>a[k]===b[k]);
-  }
-  // 688O: samostatna diagnostika parity Secret, pouze cteni.
-  // Nikdy nekopiruje hodnoty poznamek, texty, ID, sifrovane obalky ani klice.
-  const bezpecnaPole688O=new Set([
-    'id','title','text','content','html','body','blocks','children','items','type',
-    'name','description','note','notes','tags','tagIds','color','createdAt',
-    'updatedAt','deletedAt','created_at','updated_at','deleted_at','isSecret',
-    'is_secret','__lubanoteSecret','__lubanoteMediaVault','version','data',
-    'media','attachments','order','sort','completed','done','status','parentId',
-    'style','styles','format','metadata','meta','checked','isChecked'
-  ]);
-  function poleCesta688O(nazev) {
-    return bezpecnaPole688O.has(nazev)?nazev:'<field>';
-  }
-  function typ688O(h) {
-    return h===null?'null':Array.isArray(h)?'array':typeof h;
-  }
-  function zjistiRozdilnaPole688O(a,b,max=10) {
-    const result=[];
-    function pridej(cesta,duvod) {
-      if(result.length<max)result.push(`${cesta||'<root>'} (${duvod})`);
-    }
-    function visit(x,y,path,hloubka){
-      if(result.length>=max)return;
-      const tx=typ688O(x),ty=typ688O(y);
-      if(tx!==ty){pridej(path,'type');return;}
-      if(hloubka>=10){
-        if(kanonickyJSON688L(x)!==kanonickyJSON688L(y))pridej(path,'nested');
-        return;
-      }
-      if(tx==='array') {
-        if(x.length!==y.length)pridej(path,'array_length');
-        for(let i=0;i<Math.min(x.length,y.length)&&result.length<max;i++)
-          visit(x[i],y[i],`${path}[]`,hloubka+1);
-      } else if(tx==='object') {
-        const keys=new Set([...Object.keys(x),...Object.keys(y)]);
-        for(const k of [...keys].sort()) {
-          if(result.length>=max)break;
-          const next=path?`${path}.${poleCesta688O(k)}`:poleCesta688O(k);
-          if(!Object.prototype.hasOwnProperty.call(x,k) ||
-             !Object.prototype.hasOwnProperty.call(y,k))pridej(next,'presence');
-          else visit(x[k],y[k],next,hloubka+1);
-        }
-      } else if(x!==y)pridej(path,'value');
-    }
-    visit(a,b,'',0);
-    return result;
-  }
-  async function diagnostikujSecret688O() {
-    const cl=klient();
-    kontroluj(navigator.onLine && cl?.auth?.getUser && cl?.from,'online_backend_required');
-    kontroluj(typeof nactiSifrovaneTajneZaznamy==='function' &&
-      typeof desifrujTajnouPoznamku==='function','secret_storage_unavailable');
-    kontroluj(typeof tajnySifrovaciKlic!=='undefined' &&
-      tajnySifrovaciKlic instanceof CryptoKey &&
-      typeof tajnyRezimOdemceny!=='undefined' && tajnyRezimOdemceny===true,
-      'unlock_secret_first');
-    const {data:auth,error:chybaAuth}=await cl.auth.getUser();
-    const uid=auth?.user?.id;
-    kontroluj(!chybaAuth && uid &&
-      uid===localStorage.getItem('lubanoteLocalOwnerUserId'),'owner_mismatch');
-    const server=(await nactiVse('notes','id,data,deleted_at',uid,5000))
-      .filter(r=>r.data?.__lubanoteSecret===true);
-    const local=nactiSifrovaneTajneZaznamy();
-    const mapa=new Map(server.map(r=>[String(r.id),r]));
-    let parity=0,mismatch=0,missing=0,failed=0;
-    const details=[];
-    const used=new Set();
-    for(let i=0;i<local.length;i++){
-      const r=local[i],key=String(r?.id||''),other=mapa.get(key);
-      if(!key || !other || used.has(key)) {
-        missing++;details.push(`#${i+1}: missing_or_duplicate`);continue;
-      }
-      used.add(key);
-      let a,b;
-      try{
-        a=await desifrujTajnouPoznamku(r.encrypted,r.id);
-        b=await desifrujTajnouPoznamku(other.data.encrypted,other.id);
-        const rozdily=zjistiRozdilnaPole688O(a,b);
-        if(rozdily.length){
-          mismatch++;details.push(`#${i+1}: ${rozdily.join('; ')}`);
-        } else parity++;
-      } catch(_error){failed++;details.push(`#${i+1}: decrypt_or_compare_failed`);}
-      finally{a=null;b=null;}
-    }
-    const remoteOnly=server.length-used.size;
-    return ['688O SECRET PARITY READ-ONLY',
-      `server=${server.length} local=${local.length}`,
-      `equivalent=${parity} mismatch=${mismatch} missing=${missing} remote_only=${remoteOnly} failed=${failed}`,
-      ...details.slice(0,15),
-      details.length>15?`more_records=${details.length-15}`:'',
-      'No values, IDs, passwords or keys included.'].filter(Boolean).join('\n');
   }
   function klient() {
     try { if(typeof supabaseClient!=='undefined') return supabaseClient; } catch(_e){}
@@ -539,10 +462,6 @@
               autocapitalize="off" spellcheck="false"></label>
           <p data-status class="ln683BTSecurityMessage ln688NChangeStatus" role="status"
              aria-live="polite"></p>
-          <div class="ln688OParityActions">
-            <button type="button" data-parity-check>Ověřit rozdíly Secret (pouze čtení)</button>
-            <button type="button" data-parity-copy hidden>Kopírovat report</button>
-          </div>
           <div class="ln683BTSecurityActions ln688NChangeActions">
             <button type="button" data-cancel></button><button type="submit" data-submit></button>
           </div>
@@ -550,35 +469,6 @@
       </div>`;
       document.body.appendChild(el);
       const form=el.querySelector('form'),status=el.querySelector('[data-status]');
-      // Diagnostiku lze spustit bez opakovane zmeny hesla a bez zapisu.
-      let parityReport688O='';
-      const btnDiagnostika=el.querySelector('[data-parity-check]');
-      const btnKopie=el.querySelector('[data-parity-copy]');
-      btnDiagnostika.addEventListener('click',async()=>{
-        if(probiha)return;
-        btnDiagnostika.disabled=true;btnKopie.hidden=true;
-        status.textContent='Kontroluji rozdíly Secret (pouze čtení)…';
-        try {
-          parityReport688O=await diagnostikujSecret688O();
-          status.textContent=parityReport688O;
-          btnKopie.hidden=false;
-        } catch(_error) {
-          const reason=String(_error?.message||'read_only_check_failed');
-          // Chybova hlaska je interni kontrolovany kod, bez dat poznamky.
-          status.textContent='READ-ONLY FAIL: '+reason.slice(0,100);
-          parityReport688O='';
-        } finally {btnDiagnostika.disabled=false;}
-      });
-      btnKopie.addEventListener('click',async()=>{
-        if(!parityReport688O)return;
-        try {await navigator.clipboard.writeText(parityReport688O);}
-        catch(_error){
-          const ta=document.createElement('textarea');
-          ta.value=parityReport688O;ta.style.position='fixed';ta.style.opacity='0';
-          document.body.appendChild(ta);ta.select();
-          try {document.execCommand('copy');} finally {ta.remove();}
-        }
-      });
       const close=()=>{
         if(probiha)return;
         if(zmenaDokoncena688M){
@@ -586,7 +476,7 @@
           window.location.reload();
           return;
         }
-        form.reset();status.textContent='';btnKopie.hidden=true;parityReport688O='';el.style.display='none';
+        form.reset();status.textContent='';el.style.display='none';
         el.setAttribute('aria-hidden','true');
         try{window.LubaNoteKeyboard?.skryjPoZavreniModalu?.();}catch(_e){}
       };
@@ -635,7 +525,6 @@
     form.querySelector('[data-cancel]').textContent=t[4];
     form.querySelector('[data-submit]').textContent=t[3];
     form.querySelector('[data-status]').textContent='';
-    form.querySelector('[data-parity-copy]').hidden=true;
     zmenaDokoncena688M=false;
     form.querySelector('[data-submit]').hidden=false;
     form.reset();panel.style.display='flex';
