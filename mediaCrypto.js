@@ -1210,6 +1210,15 @@
     }
   }
 
+  /* 688A: repair OLD-key local media-vault cache before the server commit.
+   * Never call this after replacing the media key.
+   */
+  async function recoveryPreRewrapLocalMedia688A() {
+    if (!jeKlicDostupny()) return {ok:false,reason:"old_media_key_unavailable"};
+    const result = await opravLokalniSifrovanaMediaPoZiskaniKlice();
+    return {ok:result?.chyby===0,reason:result?.chyby===0?"ok":"local_media_rehydrate_failed"};
+  }
+
   window.LubaNoteMediaCrypto = Object.freeze({
     verze: "MEDIA-E2E-558-LOCAL-REHYDRATE",
     jeKlicDostupny,
@@ -1231,6 +1240,7 @@
     recoveryOverMediaRecord686L,
     recoveryMediaRewrapRecord686M,
     recoveryStageMediaRecord686O,
+    recoveryPreRewrapLocalMedia688A,
     nazevPoleTrezoru: POLE_TREZORU
   });
 

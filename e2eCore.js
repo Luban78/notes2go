@@ -2647,6 +2647,18 @@
     }catch(_error){v.reason="device_inventory_read_failed";return v;}
   }
 
+  /* 688A – after an atomic server commit, replace the cached Root envelope
+   * while keeping the Account Root Key ID and the in-memory key unchanged.
+   */
+  async function recoveryPersistRootBox688A(box, userId, keyId) {
+    if (!box || !userId || !keyId || rootKontext?.userId !== userId ||
+        rootKontext?.keyId !== keyId || !jeRootKlicDostupny()) {
+      throw new Error("688A_ROOT_CONTEXT_CHANGED");
+    }
+    await ulozLokalniRootRecord({ userId, keyId, box });
+    return true;
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -2683,6 +2695,7 @@
     recoveryAtomicInputStaging686O,
     recoveryStorageScopeAudit686P,
     recoveryMultiDeviceFenceAudit686Q,
+    recoveryPersistRootBox688A,
     getStav,
     resetPametiProTest
   });
