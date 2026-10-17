@@ -1,4 +1,4 @@
-/* LubaNote 688A – změna HLAVNÍHO E2E hesla na odemčeném zařízení.
+/* LubaNote 688B – změna HLAVNÍHO E2E hesla na odemčeném zařízení.
  * Heslo nikdy neukládej ani neloguj. Běžné legacy plaintext poznámky
  * nezměníme, Root Key zůstává stejný. DB commit je jediná transakce.
  */
@@ -10,13 +10,13 @@
       'Hesla se neshodují.', 'Heslo musí mít alespoň 12 znaků.', 'Připravuji bezpečnou změnu…',
       'Heslo změněno na serveru i v zařízení. Restartuj LubaNote a případně odemkni Secret novým heslem.',
       'Změna na serveru proběhla, ale místní dokončení selhalo. Neodinstalovávej aplikaci ani nemaž data. Po restartu použij NOVÉ E2E heslo.',
-      'Nejdřív dokonči synchronizaci všech poznámek.', 'Původní heslo a nové heslo jsou stejné.'],
+      'Nejdřív dokonči synchronizaci všech poznámek.', 'Původní heslo a nové heslo jsou stejné.', 'Přihlašovací heslo k účtu (jednorázové ověření)', 'Zadej přihlašovací heslo k účtu. Nemění se.'],
     en: ['Change main E2E password','New E2E password (at least 12 characters)','Repeat new E2E password',
       'Change E2E password','Cancel','Device must be unlocked and fully synced. Unlock Secret first if you use it. Re-unlock other devices with the new password. Secret biometrics will be disabled for safety.',
       'Passwords do not match.','Use at least 12 characters.','Preparing secure change…',
       'Password changed on server and device. Restart LubaNote and unlock Secret with the new password if necessary.',
       'Server change succeeded but local finishing failed. Do not clear app data. Restart and use the NEW E2E password.',
-      'Finish synchronizing all notes first.','The new password is the same as the old password.']
+      'Finish synchronizing all notes first.','The new password is the same as the old password.', 'Account sign-in password (one-time verification)', 'Enter your account sign-in password. It will not be changed.']
   };
   const jazyk = () => {
     const k = String(window.LubaNoteI18n?.getLanguage?.() || document.documentElement.lang || 'cs').slice(0,2).toLowerCase();
@@ -225,11 +225,42 @@
         novySecretKlic,secretOdemceny:(typeof tajnyRezimOdemceny!=='undefined' && tajnyRezimOdemceny===true)};
     } finally {rootRaw?.fill(0);sharedRaw?.fill(0);material=null;novyMediaKlic=null;}
   }
+  // Separate one-time Auth login proves the account password to GoTrue.
+  // The server independently verifies auth.sessions.created_at and the JWT's
+  // session_id; a refreshed old JWT cannot pass by changing its iat.
+  async function overJednorazovePrihlaseni(heslo, userId) {
+    kontroluj(typeof heslo==='string' && heslo.length>0,'account_password_required');
+    const cl=klient();
+    kontroluj(cl?.supabaseUrl && cl?.supabaseKey &&
+      typeof window.supabase?.createClient==='function','reauth_client_unavailable');
+    const {data:current,error:currentError}=await cl.auth.getUser();
+    kontroluj(!currentError && current?.user?.id===userId &&
+      typeof current.user.email==='string' && current.user.email,'active_account_changed');
+    const temporary=window.supabase.createClient(cl.supabaseUrl,cl.supabaseKey,{
+      auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,
+        storageKey:'ln688b-once-no-persistence'}
+    });
+    try {
+      const {data:login,error:loginError}=await temporary.auth.signInWithPassword({
+        email:current.user.email,password:heslo
+      });
+      kontroluj(!loginError && login?.user?.id===userId &&
+        typeof login?.session?.access_token==='string','account_reauthentication_failed');
+      const {data:check,error:checkError}=await temporary.auth.getUser();
+      kontroluj(!checkError && check?.user?.id===userId,'reauth_identity_changed');
+      const {data:after,error:afterError}=await cl.auth.getUser();
+      kontroluj(!afterError && after?.user?.id===userId,'active_account_changed');
+      return temporary;
+    } catch(error) {
+      try {await temporary.auth.signOut({scope:'local'});} catch(_e){}
+      throw error;
+    }
+  }
   let probiha=false;
-  async function zmen(noveHeslo,hlas){
+  async function zmen(noveHeslo,prihlasovaciHeslo,hlas){
     if(probiha) return {ok:false,reason:'already_running'};
     probiha=true;
-    let stage=null,potvrzeno=false;
+    let stage=null,potvrzeno=false,docasnyKlient=null;
     try {
       stage=await pripravZmenu(noveHeslo,hlas);
       const media=window.LubaNoteMediaCrypto,cl=klient();
@@ -239,8 +270,11 @@
         kontroluj(r?.ok===true,'local_media_cache_not_ready');
       }
       kontroluj(window.LubaNoteSyncStatus?.ziskejStav?.()==='synced','sync_changed_during_staging');
+      hlas?.('Ověřuji přihlašovací heslo k účtu…');
+      docasnyKlient=await overJednorazovePrihlaseni(prihlasovaciHeslo,stage.uid);
+      kontroluj(window.LubaNoteSyncStatus?.ziskejStav?.()==='synced','sync_changed_after_reauth');
       hlas?.('Ukládám změnu hesla jako jednu transakci…');
-      const {data,error}=await cl.rpc('lubanote_change_e2e_password_688a',{
+      const {data,error}=await docasnyKlient.rpc('lubanote_change_e2e_password_688b',{
         p_expected_settings:stage.stary,p_new_settings:stage.novy,
         p_expected_shared_box:stage.puvodniShared,p_new_shared_box:stage.novyShared,
         p_note_changes:stage.noteZmeny,p_tag_changes:stage.tagZmeny,
@@ -298,7 +332,12 @@
       return {ok:true,reason:'password_changed',notes:stage.noteZmeny.length,tags:stage.tagZmeny.length};
     } catch(error){
       return {ok:false,committed:potvrzeno,reason:potvrzeno?'server_changed_local_finishing_failed':String(error?.message||'change_failed')};
-    } finally {stage=null;probiha=false;}
+    } finally {
+      if(docasnyKlient?.auth?.signOut) {
+        try {await docasnyKlient.auth.signOut({scope:'local'});} catch(_e){}
+      }
+      docasnyKlient=null;stage=null;probiha=false;
+    }
   }
   let panel=null;
   function open(){
@@ -310,6 +349,7 @@
       el.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#000c;display:flex;align-items:center;justify-content:center;padding:16px;';
       el.innerHTML=`<form style="width:min(460px,100%);max-height:90vh;overflow:auto;background:#242729;color:#f1f3f1;border:1px solid #46534c;border-radius:14px;padding:24px;box-sizing:border-box;display:grid;gap:12px" autocomplete="off">
         <strong data-title style="font-size:1.25rem"></strong><p data-hint style="font-size:.9rem;line-height:1.5;margin:0;color:#cdd1cd"></p>
+        <label data-label-account for="ln688b-account"></label><input id="ln688b-account" type="password" autocomplete="current-password" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <label data-label-new for="ln688a-new"></label><input id="ln688a-new" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <label data-label-repeat for="ln688a-confirm"></label><input id="ln688a-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required style="font:inherit;padding:12px;background:#141715;color:#fff;border:1px solid #657068;border-radius:8px"/>
         <p data-status role="status" aria-live="polite" style="margin:0;font-size:.9rem;min-height:1.4em"></p>
@@ -321,14 +361,16 @@
         e.preventDefault();
         if(probiha)return;
         const p=form.querySelector('#ln688a-new'),q=form.querySelector('#ln688a-confirm');
-        let pass=p.value;
+        const acct=form.querySelector('#ln688b-account');
+        let pass=p.value,accountPass=acct.value;
+        if(!accountPass){status.textContent=jazyk()[14];return;}
         if(pass!==q.value){status.textContent=jazyk()[6];return;}
         if(Array.from(pass).length<12){status.textContent=jazyk()[7];return;}
-        p.value='';q.value='';
+        p.value='';q.value='';acct.value='';
         const btn=form.querySelector('[data-submit]');btn.disabled=true;
         status.textContent=jazyk()[8];
-        const r=await zmen(pass,txt=>{status.textContent=txt;});
-        pass='';btn.disabled=false;
+        const r=await zmen(pass,accountPass,txt=>{status.textContent=txt;});
+        pass='';accountPass='';btn.disabled=false;
         status.textContent=r.ok?jazyk()[9]:r.committed?jazyk()[10]:
           (r.reason==='sync_not_finished'?jazyk()[11]:r.reason==='same_password'?jazyk()[12]:
           'Změna nebyla provedena: '+r.reason);
@@ -340,13 +382,14 @@
     form.querySelector('[data-title]').textContent=t[0];
     form.querySelector('[data-hint]').textContent=t[5];
     form.querySelector('[data-label-new]').textContent=t[1];
+    form.querySelector('[data-label-account]').textContent=t[13];
     form.querySelector('[data-label-repeat]').textContent=t[2];
     form.querySelector('[data-cancel]').textContent=t[4];
     form.querySelector('[data-submit]').textContent=t[3];
     form.querySelector('[data-status]').textContent='';
     form.querySelector('[data-submit]').hidden=false;
     form.reset();panel.style.display='flex';
-    form.querySelector('#ln688a-new').focus();
+    form.querySelector('#ln688b-account').focus();
   }
   window.LubaNoteE2EPasswordChange688A=Object.freeze({open,zmen});
 })();
