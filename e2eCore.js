@@ -2418,6 +2418,139 @@
     }
   }
 
+  /* 686P – bounded, authenticated READ-ONLY storage metadata scope audit.
+   * Uses only signed-in user's attachment metadata and normal Storage list().
+   * No download, signed URLs, crypto, RPC, upload, deletion or local storage writes.
+   * RLS-limited views and the unaudited buckets/objects prevent GLOBAL PASS.
+   * A passing result means only this one visible bucket/user prefix is consistent.
+   */
+  async function recoveryStorageScopeAudit686P() {
+    const v={ok:false,readOnly:true,safeToRotate:false,reason:"not_started",
+      accountVerified:false,dbMetadataComplete:false,dbSnapshotStable:false,
+      bucket:"lubanote-attachments",userPrefixListed:false,
+      attachmentRows:0,attachmentPaths:0,attachmentWithoutPath:0,
+      deletedRows:0,storageObjects:0,storageFolders:0,storageListCalls:0,
+      duplicatePaths:0,invalidPaths:0,missingObjects:0,untrackedObjects:0,
+      visiblePathsMatched:false,storageScopeVerified:false,
+      allBucketsAudited:false,objectContentsAudited:false,
+      otherUsersAudited:false,serverSideInventoryAudited:false,
+      serverModified:false};
+    try {
+      if(String(location.hostname||"").toLowerCase()!=="test.lubanote.com"){
+        v.reason="test_web_only";return v;
+      }
+      if(!navigator.onLine){v.reason="offline";return v;}
+      const klient=ziskejSupabase();
+      if(!klient?.auth?.getUser || !klient?.from || !klient?.storage?.from){
+        v.reason="backend_unavailable";return v;
+      }
+      const {data:auth,error:authError}=await klient.auth.getUser();
+      const userId=auth?.user?.id;
+      if(authError || !userId ||
+         String(localStorage.getItem("lubanoteLocalOwnerUserId")||"")!==userId){
+        v.reason="account_or_local_owner_unverified";return v;
+      }
+      v.accountVerified=true;
+      const bucket=window.LubaNoteAttachmentsCloud?.bucket || "lubanote-attachments";
+      if(bucket!==v.bucket){v.reason="unrecognized_bucket";return v;}
+      // Standard user's RLS-visible rows only; never treat this as a server-wide inventory.
+      const readRows=async()=>{
+        const {count,error}=await klient.from("attachments")
+          .select("id",{count:"exact",head:true}).eq("user_id",userId);
+        if(error || !Number.isSafeInteger(count) || count<0 || count>300){
+          return {ok:false,reason:count>300?"attachment_row_limit":"attachment_count_unavailable"};
+        }
+        const rows=[];
+        for(let start=0;start<count;start+=100){
+          const {data,error:e}=await klient.from("attachments")
+            .select("id,storage_path,status")
+            .eq("user_id",userId).order("id",{ascending:true})
+            .range(start,Math.min(start+99,count-1));
+          if(e || !Array.isArray(data) || data.length!==Math.min(100,count-start)){
+            return {ok:false,reason:"attachment_page_incomplete"};
+          }
+          rows.push(...data);
+        }
+        if(rows.length!==count || new Set(rows.map(r=>String(r?.id||""))).size!==count ||
+           rows.some(r=>!r?.id))return {ok:false,reason:"attachment_rows_ambiguous"};
+        // Sanitize snapshot to compare metadata before/after (without returning paths).
+        return {ok:true,rows,signature:JSON.stringify(rows.map(r=>
+          [String(r.id),r.storage_path??null,r.status??null]))};
+      };
+      const first=await readRows();
+      if(!first.ok){v.reason=first.reason;return v;}
+      v.attachmentRows=first.rows.length;
+      v.dbMetadataComplete=true;
+      const reference=new Set();
+      const prefix=userId+"/";
+      const validPath=path=>typeof path==="string" && path.startsWith(prefix) &&
+        path.length>prefix.length && path.length<=1024 && !path.includes("\\") &&
+        !path.split("/").some(s=>!s || s==="." || s===".." || s.length>255 || /[\x00-\x1f]/.test(s));
+      for(const r of first.rows){
+        if(String(r.status||"").toLowerCase()==="deleted") {v.deletedRows++;continue;}
+        const path=r.storage_path;
+        if(path==null || path==="") {v.attachmentWithoutPath++;continue;}
+        if(!validPath(path)){v.invalidPaths++;continue;}
+        if(reference.has(path)){v.duplicatePaths++;continue;}
+        reference.add(path);
+      }
+      v.attachmentPaths=reference.size;
+      if(v.invalidPaths || v.duplicatePaths){v.reason="attachment_paths_invalid_or_duplicate";return v;}
+      // Storage list returns only user-permitted objects; never claim global coverage.
+      const actual=new Set(), queue=[{path:userId,depth:0}],seenFolders=new Set();
+      let issue="";
+      while(queue.length && !issue){
+        const next=queue.shift();
+        if(seenFolders.has(next.path)){issue="repeated_storage_directory";break;}
+        seenFolders.add(next.path);
+        if(++v.storageFolders>60 || next.depth>7){issue="storage_tree_limit";break;}
+        for(let offset=0;!issue;offset+=100){
+          if(++v.storageListCalls>40){issue="storage_request_limit";break;}
+          const {data,error}=await klient.storage.from(bucket).list(next.path,
+            {limit:100,offset,sortBy:{column:"name",order:"asc"}});
+          if(error || !Array.isArray(data)){issue="storage_list_failed";break;}
+          if(data.length>100){issue="storage_page_invalid";break;}
+          for(const item of data){
+            const name=item?.name;
+            if(typeof name!=="string" || !name || name==="." || name===".." ||
+               name.includes("/") || name.includes("\\") || name.length>255 ||
+               /[\x00-\x1f]/.test(name)){
+              issue="storage_item_invalid";break;
+            }
+            const path=next.path+"/"+name;
+            if(item.id==null && item.metadata==null){
+              queue.push({path,depth:next.depth+1});
+            }else if(item.id!=null){
+              if(actual.has(path)){issue="duplicate_storage_object";break;}
+              actual.add(path);
+              if(actual.size>300){issue="storage_object_limit";break;}
+            }else {issue="storage_item_ambiguous";break;}
+          }
+          if(data.length<100)break;
+        }
+      }
+      v.storageObjects=actual.size;
+      if(issue){v.reason=issue;return v;}
+      v.userPrefixListed=true;
+      for(const path of reference)if(!actual.has(path))v.missingObjects++;
+      for(const path of actual)if(!reference.has(path))v.untrackedObjects++;
+      const last=await readRows();
+      if(!last.ok){v.reason="attachment_recheck_failed";return v;}
+      const {data:authAfter,error:authAfterError}=await klient.auth.getUser();
+      if(authAfterError || authAfter?.user?.id!==userId){
+        v.reason="account_changed_during_audit";return v;
+      }
+      v.dbSnapshotStable=first.signature===last.signature;
+      if(!v.dbSnapshotStable){v.reason="attachment_metadata_changed_during_audit";return v;}
+      // Still not an atomic Storage snapshot; concurrent object changes are possible.
+      v.visiblePathsMatched=v.missingObjects===0 && v.untrackedObjects===0;
+      v.ok=v.visiblePathsMatched && v.userPrefixListed && v.dbMetadataComplete && v.dbSnapshotStable;
+      v.reason=v.ok?"visible_account_storage_metadata_consistent_global_scope_unverified":
+        "storage_metadata_path_mismatch";
+      return v;
+    }catch(_error){v.reason="storage_audit_read_failed";return v;}
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -2452,6 +2585,7 @@
     recoveryMediaContentProof686L,
     recoveryStorageMediaDryRun686M,
     recoveryAtomicInputStaging686O,
+    recoveryStorageScopeAudit686P,
     getStav,
     resetPametiProTest
   });

@@ -135,7 +135,7 @@
         <button type="button" class="ln686e-back" data-ln686e="back">← Zpět</button>
         <div class="ln686e-headtitle">
           <strong>🔐 E2E Recovery</strong>
-          <span class="ln686e-badge">TEST WEB · 686O · ATOMIC INPUT STAGING</span>
+          <span class="ln686e-badge">TEST WEB · 686P · STORAGE SCOPE AUDIT</span>
         </div>
       </header>
       <div class="ln686e-body">
@@ -252,7 +252,15 @@
             <p class="ln686e-note">686O nevolá žádné RPC, nic nezapisuje ani nemění heslo. Plná Storage, historie Secret a ochrana zápisů dalších zařízení zůstávají neověřené. Skutečné obnovení hesla je stále zakázané.</p>
           </section>
           <section class="ln686e-card">
-            <h2>12. Report</h2>
+            <h2>12. 686P – Porovnání Storage metadata/cesty (BEZ ZÁPISU)</h2>
+            <p>Načtu pouze metadata příloh tohoto účtu a seznam souborů v jeho složce Storage. Ověřím stránkování, duplicity a zda odpovídají cesty evidovaných příloh a nalezených objektů.</p>
+            <button type="button" class="ln686e-secondary" data-ln686e="storage-audit-686p">Ověřit rozsah Storage 686P</button>
+            <div class="ln686e-state" data-ln686p-status role="status" aria-live="polite"></div>
+            <div data-ln686p-checks></div>
+            <p class="ln686e-note">READ-ONLY. Nevstupuje do souborů ani jejich obsahu. PASS znamená shodu pouze viditelných metadat v jednom bucketu a složce účtu; RLS, jiné buckety, smazaná historie a ostatní účty nejsou ověřeny. Skutečná změna hesla zůstává zakázaná.</p>
+          </section>
+          <section class="ln686e-card">
+            <h2>13. Report</h2>
             <div class="ln686e-actions">
               <button type="button" class="ln686e-secondary" data-ln686e="copy" disabled>Kopírovat E2E report</button>
             </div>
@@ -279,6 +287,7 @@
       if (akce === "media-content-proof") { await spustMediaProof686L(); return; }
       if (akce === "storage-media-rewrap") { await spustStorageMedia686M(); return; }
       if (akce === "atomic-staging-686o") { await spustAtomicStaging686O(); return; }
+      if (akce === "storage-audit-686p") { await spustStorageAudit686P(); return; }
       if (akce === "copy") { await zkopirujReport(tlacitko); }
     });
     obrazovka = sekce;
@@ -1063,6 +1072,82 @@
       "E2E password/keys/notes/server modified: NO"
     ].join("\n");
     nastavReport(bezO+(bezO?"\n":"")+report);
+  }
+
+  /* 686P – standalone read-only account Storage metadata consistency check. */
+  async function spustStorageAudit686P() {
+    if(!obrazovka || obrazovka.hidden)return;
+    const btn=prvek('[data-ln686e="storage-audit-686p"]');
+    const stav=prvek('[data-ln686p-status]');
+    const obsah=prvek('[data-ln686p-checks]');
+    const mojeGenerace=++generace;
+    if(btn)btn.disabled=true;
+    if(stav){stav.textContent="Porovnávám viditelná metadata a cesty Storage…";stav.removeAttribute("data-result");}
+    if(obsah)obsah.textContent="";
+    let v;
+    try {
+      const fn=window.LubaNoteE2ECore?.recoveryStorageScopeAudit686P;
+      v=typeof fn==="function"?await fn():{ok:false,reason:"test_unavailable"};
+    }catch(_error){v={ok:false,reason:"test_failed"};}
+    if(btn)btn.disabled=false;
+    if(mojeGenerace!==generace || !obrazovka || obrazovka.hidden)return;
+    if(stav){
+      stav.textContent=v.ok?"SCOPED PASS – viditelné cesty souhlasí; plné Storage stále neověřeno":
+        "AUDIT NEDOKONČEN – viz report; nic nebylo změněno";
+      stav.dataset.result=v.ok?"pass":"fail";
+    }
+    const p=n=>Number.isSafeInteger(n)&&n>=0?n:"?";
+    const radC=(j,n)=>`<div class="ln686e-row"><span>${j}</span><strong>${p(n)}</strong></div>`;
+    if(obsah)obsah.innerHTML=[
+      radek("Účet ověřen",v.accountVerified),
+      radek("Metadata načtena úplně",v.dbMetadataComplete),
+      radC("Metadata příloh",v.attachmentRows),
+      radC("Aktivní cesty",v.attachmentPaths),
+      radC("Přílohy bez cesty",v.attachmentWithoutPath),
+      radC("Smazané záznamy",v.deletedRows),
+      radC("Storage objekty",v.storageObjects),
+      radC("Složky Storage",v.storageFolders),
+      radC("Neshoda: chybí objekt",v.missingObjects),
+      radC("Neshoda: objekt bez evidence",v.untrackedObjects),
+      radek("Viditelné cesty souhlasí",v.visiblePathsMatched),
+      radek("Metadata po kontrole stabilní",v.dbSnapshotStable),
+      radek("Všechny buckety ověřeny",v.allBucketsAudited),
+      radek("Skutečná změna hesla povolena",v.safeToRotate)
+    ].join("");
+    const ano=x=>x===true?"YES":"NO";
+    // Keep 686G preflight but replace any previous 686M/O/P tail with this latest check.
+    const base=posledniReport.replace(/\n?LUBANOTE 686(?:M – STORAGE MEDIA DRY-RUN|O – ATOMIC INPUT STAGING|P – STORAGE SCOPE AUDIT) \(READ-ONLY\)[\s\S]*$/ ,"");
+    const report=[
+      "LUBANOTE 686P – STORAGE SCOPE AUDIT (READ-ONLY)",
+      "storageScopeAudit: "+(v.ok?"SCOPED_PASS":"INCOMPLETE"),
+      "accountVerified: "+ano(v.accountVerified),
+      "dbMetadataComplete: "+ano(v.dbMetadataComplete),
+      "dbSnapshotStable: "+ano(v.dbSnapshotStable),
+      "storageBucket: lubanote-attachments",
+      "userPrefixListed: "+ano(v.userPrefixListed),
+      "attachmentRows: "+p(v.attachmentRows),
+      "attachmentPaths: "+p(v.attachmentPaths),
+      "attachmentWithoutPath: "+p(v.attachmentWithoutPath),
+      "deletedRows: "+p(v.deletedRows),
+      "storageObjects: "+p(v.storageObjects),
+      "storageFolders: "+p(v.storageFolders),
+      "storageListCalls: "+p(v.storageListCalls),
+      "invalidPaths: "+p(v.invalidPaths),
+      "duplicatePaths: "+p(v.duplicatePaths),
+      "missingObjects: "+p(v.missingObjects),
+      "untrackedObjects: "+p(v.untrackedObjects),
+      "visiblePathsMatched: "+ano(v.visiblePathsMatched),
+      "allBucketsAudited: NO",
+      "objectContentsAudited: NO",
+      "otherUsersAudited: NO",
+      "serverSideInventoryAudited: NO",
+      "storageScopeVerified: NO",
+      "multiDeviceFenceVerified: NO",
+      "safeToRotate: NO",
+      "reason: "+String(v.reason||"unknown").slice(0,100),
+      "E2E password/keys/notes/server modified: NO"
+    ].join("\n");
+    nastavReport(base+(base?"\n":"")+report);
   }
 
   async function zkopirujReport(tlacitko) {
