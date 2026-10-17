@@ -3445,11 +3445,27 @@ async function nactiCloudPoznamkyPodleIdV2(noteIds) {
   const radky = Array.isArray(data) ? data : [];
 
   try {
-    const e2eRadky = await pripravCloudRadky685B(radky);
-    if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
-      return await window.LubaNoteMediaCrypto
-        .pripravCloudRadkyProLokalniPouziti(e2eRadky);
+    // 688F TEST READ-ONLY: distinguish E2E decryption from media conversion.
+    let e2eRadky;
+    try {
+      e2eRadky = await pripravCloudRadky685B(radky);
+      window.LubaNoteStartupDiag?.zapis?.("V2", `688F E2E READ OK | rows=${e2eRadky.length}`);
+    } catch (chyba) {
+      window.LubaNoteStartupDiag?.zapis?.("V2", `688F E2E READ FAIL | ${String(chyba?.code || chyba?.message || chyba).slice(0,160)}`);
+      throw chyba;
     }
+    if (window.LubaNoteMediaCrypto?.pripravCloudRadkyProLokalniPouziti) {
+      try {
+        const vysledek = await window.LubaNoteMediaCrypto
+          .pripravCloudRadkyProLokalniPouziti(e2eRadky);
+        window.LubaNoteStartupDiag?.zapis?.("V2", `688F MEDIA READ OK | rows=${vysledek?.length ?? "?"}`);
+        return vysledek;
+      } catch (chyba) {
+        window.LubaNoteStartupDiag?.zapis?.("V2", `688F MEDIA READ FAIL | code=${String(chyba?.code || "none").slice(0,80)} message=${String(chyba?.message || chyba).slice(0,160)} keyReady=${window.LubaNoteMediaCrypto?.jeKlicDostupny?.() === true}`);
+        throw chyba;
+      }
+    }
+    window.LubaNoteStartupDiag?.zapis?.("V2", "688F MEDIA READ SKIPPED | module unavailable");
     return e2eRadky;
   } catch (error) {
     console.warn(
@@ -5494,6 +5510,7 @@ async function synchronizujVzdalenePrivateDeltaV2(
   const cloudRows = await nactiCloudPoznamkyPodleIdV2(ids);
 
   if (!cloudRows) {
+    window.LubaNoteStartupDiag?.zapis?.("V2", "688F TARGET DOWNLOAD FAILED | see E2E/MEDIA diagnostics above");
     return false;
   }
 
@@ -5736,6 +5753,7 @@ async function synchronizujVzdalenePrivateDeltaV2(
       const record = vytvorCloudEncryptedRecord(row);
 
       if (!record) {
+        window.LubaNoteStartupDiag?.zapis?.("V2", `688F SECRET RECORD INVALID | id=${id}`);
         return false;
       }
 
