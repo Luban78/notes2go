@@ -554,14 +554,21 @@
             lokalniPlatny &&
             lokalni.keyId === server.data.e2e_root_key_id
           ) {
-            await pripravZLokalnihoRecordu(lokalni, id);
-            return nastavStav({
-              ok: true,
-              ready: true,
-              source: "device+server-verified",
-              keyId: lokalni.keyId,
-              userId: id
-            });
+            /* 688I: stale local envelope may use the OLD media key after
+             * another device changes the E2E password. Use the verified
+             * server envelope instead; never create or overwrite Root Key. */
+            try {
+              await pripravZLokalnihoRecordu(lokalni, id);
+              return nastavStav({
+                ok: true,
+                ready: true,
+                source: "device+server-verified",
+                keyId: lokalni.keyId,
+                userId: id
+              });
+            } catch (_localniChyba) {
+              zapisDiag("688I ROOT DEVICE BOX STALE | TRY SERVER ENVELOPE");
+            }
           }
 
           await pripravZeServerRecordu(server.data, id);
@@ -778,6 +785,18 @@
     }
   }
 
+  /* 688A – after an atomic server commit, replace the cached Root envelope
+   * while keeping the Account Root Key ID and the in-memory key unchanged.
+   */
+  async function recoveryPersistRootBox688A(box, userId, keyId) {
+    if (!box || !userId || !keyId || rootKontext?.userId !== userId ||
+        rootKontext?.keyId !== keyId || !jeRootKlicDostupny()) {
+      throw new Error("688A_ROOT_CONTEXT_CHANGED");
+    }
+    await ulozLokalniRootRecord({ userId, keyId, box });
+    return true;
+  }
+
   function getStav() {
     return { ...posledniStav };
   }
@@ -801,6 +820,7 @@
     pripravRootKlicProUcet,
     odvodDomenovyKlic,
     selfTest,
+    recoveryPersistRootBox688A,
     getStav,
     resetPametiProTest
   });

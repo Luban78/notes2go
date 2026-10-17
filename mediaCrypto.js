@@ -684,6 +684,51 @@
     );
   }
 
+  /* 686O – stage a V1 media record into an in-memory NEW password KEK.
+   * Return only the replacement encrypted record to 686O; never persist it.
+   * Caller must discard staged result after verifying the full candidate.
+   */
+  async function recoveryStageMediaRecord686O(record, noteId, mediaId, novyMediaKlic) {
+    if (!jeKlicDostupny()) return {ok:false,reason:"old_media_key_unavailable"};
+    if (!(novyMediaKlic instanceof CryptoKey) || novyMediaKlic.algorithm?.name!=="AES-GCM" ||
+        novyMediaKlic.algorithm.length!==256 ||
+        !novyMediaKlic.usages.includes("encrypt") || !novyMediaKlic.usages.includes("decrypt")) {
+      return {ok:false,reason:"new_media_key_invalid"};
+    }
+    if (!noteId || !mediaId || !record || Number(record.version)!==VERZE ||
+        record.algorithm!=="AES-GCM" ||
+        typeof record.mimeType!=="string" || !/^image\/[a-z0-9.+-]{1,40}$/i.test(record.mimeType) ||
+        typeof record.iv!=="string" || typeof record.ciphertext!=="string" ||
+        record.iv.length>32 || record.ciphertext.length>16*1024*1024 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.iv) ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(record.ciphertext)) {
+      return {ok:false,reason:"invalid_media_record"};
+    }
+    let puvodni=null, overene=null, cipher=null;
+    try {
+      const iv=prevedBase64NaBajty(record.iv);
+      const data=prevedBase64NaBajty(record.ciphertext);
+      if(iv.length!==12 || data.length<=16) return {ok:false,reason:"invalid_media_ciphertext"};
+      const aad=vytvorAad(noteId,mediaId,record.mimeType);
+      puvodni=new Uint8Array(await crypto.subtle.decrypt(
+        {name:"AES-GCM",iv,additionalData:aad},mediaSifrovaciKlic,data));
+      if(!puvodni.length) return {ok:false,reason:"empty_media_payload"};
+      const novyIv=crypto.getRandomValues(new Uint8Array(12));
+      cipher=new Uint8Array(await crypto.subtle.encrypt(
+        {name:"AES-GCM",iv:novyIv,additionalData:aad},novyMediaKlic,puvodni));
+      overene=new Uint8Array(await crypto.subtle.decrypt(
+        {name:"AES-GCM",iv:novyIv,additionalData:aad},novyMediaKlic,cipher));
+      let rozdil=puvodni.length^overene.length;
+      for(let i=0;i<Math.min(puvodni.length,overene.length);i++) rozdil|=puvodni[i]^overene[i];
+      if(rozdil!==0) return {ok:false,reason:"new_media_roundtrip_mismatch"};
+      return {ok:true,reason:"new_media_stage_verified",record:{
+        ...record,iv:prevedBajtyNaBase64(novyIv),
+        ciphertext:prevedBajtyNaBase64(cipher)
+      }};
+    } catch(_error) {return {ok:false,reason:"media_staging_failed"};}
+    finally {puvodni?.fill(0);overene?.fill(0);cipher?.fill(0);}
+  }
+
   function klonuj(hodnota) {
     if (typeof structuredClone === "function") {
       return structuredClone(hodnota);
@@ -1082,6 +1127,15 @@
     }
   }
 
+  /* 688A: repair OLD-key local media-vault cache before the server commit.
+   * Never call this after replacing the media key.
+   */
+  async function recoveryPreRewrapLocalMedia688A() {
+    if (!jeKlicDostupny()) return {ok:false,reason:"old_media_key_unavailable"};
+    const result = await opravLokalniSifrovanaMediaPoZiskaniKlice();
+    return {ok:result?.chyby===0,reason:result?.chyby===0?"ok":"local_media_rehydrate_failed"};
+  }
+
   window.LubaNoteMediaCrypto = Object.freeze({
     verze: "MEDIA-E2E-558-LOCAL-REHYDRATE",
     jeKlicDostupny,
@@ -1100,6 +1154,8 @@
     rozbalBajtyHlavnimKlicem,
     zabalBajtyE2ECore,
     rozbalBajtyE2ECore,
+    recoveryStageMediaRecord686O,
+    recoveryPreRewrapLocalMedia688A,
     nazevPoleTrezoru: POLE_TREZORU
   });
 
