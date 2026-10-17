@@ -8,15 +8,15 @@
     cs: ['Změna hlavního E2E hesla', 'Nové E2E heslo (alespoň 12 znaků)', 'Zopakuj nové E2E heslo',
       'Změnit E2E heslo', 'Zrušit', 'Zařízení musí být odemčené a zcela synchronizované. Pokud používáš Secret poznámky, nejprve odemkni také Secret. Po změně znovu odemkni ostatní zařízení novým heslem. Biometrie Secret se z bezpečnostních důvodů vypne.',
       'Hesla se neshodují.', 'Heslo musí mít alespoň 12 znaků.', 'Připravuji bezpečnou změnu…',
-      'Heslo změněno na serveru i v zařízení. Restartuj LubaNote a případně odemkni Secret novým heslem.',
+      'Heslo změněno na serveru i v zařízení. Klepni na Hotovo – LubaNote se sama obnoví. Secret případně odemkni novým heslem.',
       'Změna na serveru proběhla, ale místní dokončení selhalo. Neodinstalovávej aplikaci ani nemaž data. Po restartu použij NOVÉ E2E heslo.',
-      'Nejdřív dokonči synchronizaci všech poznámek.', 'Původní heslo a nové heslo jsou stejné.', 'Přihlašovací heslo k účtu (jednorázové ověření)', 'Zadej přihlašovací heslo k účtu. Nemění se.'],
+      'Nejdřív dokonči synchronizaci všech poznámek.', 'Původní heslo a nové heslo jsou stejné.', 'Přihlašovací heslo k účtu (jednorázové ověření)', 'Zadej přihlašovací heslo k účtu. Nemění se.', 'Hotovo'],
     en: ['Change main E2E password','New E2E password (at least 12 characters)','Repeat new E2E password',
       'Change E2E password','Cancel','Device must be unlocked and fully synced. Unlock Secret first if you use it. Re-unlock other devices with the new password. Secret biometrics will be disabled for safety.',
       'Passwords do not match.','Use at least 12 characters.','Preparing secure change…',
-      'Password changed on server and device. Restart LubaNote and unlock Secret with the new password if necessary.',
+      'Password changed on server and device. Tap Done to reload LubaNote automatically. Unlock Secret with the new password if needed.',
       'Server change succeeded but local finishing failed. Do not clear app data. Restart and use the NEW E2E password.',
-      'Finish synchronizing all notes first.','The new password is the same as the old password.', 'Account sign-in password (one-time verification)', 'Enter your account sign-in password. It will not be changed.']
+      'Finish synchronizing all notes first.','The new password is the same as the old password.', 'Account sign-in password (one-time verification)', 'Enter your account sign-in password. It will not be changed.', 'Done']
   };
   const jazyk = () => {
     const k = String(window.LubaNoteI18n?.getLanguage?.() || document.documentElement.lang || 'cs').slice(0,2).toLowerCase();
@@ -435,6 +435,7 @@
     return report;
   }
   let panel=null;
+  let zmenaDokoncena688M=false;
   function open(){
     if(panel && panel.style.display!=='none')return;
     const t=jazyk();
@@ -452,7 +453,16 @@
         <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-cancel style="padding:11px 16px"></button><button type="submit" data-submit style="padding:11px 16px;background:#399d57;border:0;border-radius:8px;color:#fff;font-weight:700"></button></div></form>`;
       document.body.appendChild(el);
       const form=el.querySelector('form'),status=el.querySelector('[data-status]');
-      el.querySelector('[data-cancel]').addEventListener('click',()=>{if(!probiha){form.reset();el.style.display='none';}});
+      el.querySelector('[data-cancel]').addEventListener('click',()=>{
+        if(probiha)return;
+        if(zmenaDokoncena688M){
+          // 688M: jen po serverovem i lokalnim potvrzeni, az uzivatel klepne na Hotovo.
+          window.location.reload();
+          return;
+        }
+        form.reset();
+        el.style.display='none';
+      });
       el.querySelector('[data-secret-check]').addEventListener('click',async()=>{
         if(probiha)return;
         const btn=el.querySelector('[data-secret-check]');
@@ -479,7 +489,11 @@
         status.textContent=r.ok?jazyk()[9]:r.committed?jazyk()[10]:
           (r.reason==='sync_not_finished'?jazyk()[11]:r.reason==='same_password'?jazyk()[12]:
           'Změna nebyla provedena: '+r.reason);
-        if(r.ok){btn.hidden=true;form.querySelector('[data-cancel]').textContent='Zavřít';}
+        if(r.ok){
+          zmenaDokoncena688M=true;
+          btn.hidden=true;
+          form.querySelector('[data-cancel]').textContent=jazyk()[15];
+        }
       });
       panel=el;
     }
@@ -492,6 +506,7 @@
     form.querySelector('[data-cancel]').textContent=t[4];
     form.querySelector('[data-submit]').textContent=t[3];
     form.querySelector('[data-status]').textContent='';
+    zmenaDokoncena688M=false;
     form.querySelector('[data-submit]').hidden=false;
     form.reset();panel.style.display='flex';
     form.querySelector('#ln688b-account').focus();
