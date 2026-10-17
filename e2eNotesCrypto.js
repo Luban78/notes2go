@@ -179,6 +179,13 @@
     return chranenaCloudId.has(String(noteId || ""));
   }
 
+  /* 687C: potvrzeni E2E stavu po uspesnem sifrovanem zapisu nebo
+   * po explicitnim DOWNGRADE_BLOCKED ze serveroveho guardu.
+   * V pameti udrzime ID chranene i bez noveho cloud readu. */
+  function oznacChraneneCloudIdPoGuardu(noteId) {
+    chranenaCloudId.add(overId(String(noteId || ""), "note ID"));
+  }
+
   async function pripravCloudRadkyProCteni(rows, userId) {
     if (!Array.isArray(rows)) {
       throw chyba("E2E_INVALID_ROWS", "Ocekavany seznam cloudovych radku.");
@@ -308,6 +315,7 @@
     jeObalka,
     maRezervovanyE2EMarker,
     jeChraneneCloudId,
+    oznacChraneneCloudIdPoGuardu,
     zasifruj,
     desifruj,
     pripravCloudRadkyProCteni,
