@@ -1,8 +1,7 @@
 name: LubaNote AutoTester 689C
 
+# AutoTester is launched from APK only. Manual GitHub fallback available but never runs on push.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
