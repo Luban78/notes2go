@@ -1933,6 +1933,67 @@ function jeCloudSecretRow(row) {
     jeLegacyCloudSecretRow(row);
 }
 
+/* 688U – authoritative per-note E2E write preflight.
+ * Local revision metadata says WHEN the note was synced, not WHETHER its
+ * current server representation is E2E. A password rotation/reload can
+ * leave the in-memory protected-ID set empty. Never send a plaintext
+ * candidate for an existing private note until server representation has
+ * been checked. This read does not decrypt, mutate, or import cloud data.
+ * Old plaintext server notes remain plaintext by design (V1 compatibility).
+ */
+async function overServerovouOchranuPredZapiskem688U(noteId, userId, e2eModul) {
+  let odpoved;
+  try {
+    odpoved = await supabaseClient.rpc(
+      "lubanote_get_notes_by_ids_safe",
+      { p_note_ids: [String(noteId)] }
+    );
+  } catch (_error) {
+    return { ok: false, reason: "e2e_preflight_network_error" };
+  }
+
+  if (odpoved?.error || !Array.isArray(odpoved?.data)) {
+    return { ok: false, reason: "e2e_preflight_read_failed" };
+  }
+
+  const radky = odpoved.data;
+  if (radky.length !== 1 || String(radky[0]?.id || "") !== String(noteId)) {
+    return { ok: false, reason: "e2e_preflight_row_unavailable" };
+  }
+
+  const row = radky[0];
+  if ((row.user_id != null && String(row.user_id) !== String(userId)) ||
+      row.deleted_at || !row.data || typeof row.data !== "object" ||
+      Array.isArray(row.data) || row.is_secret === true ||
+      row.data.__lubanoteSecret === true || row.data.isSecret === true) {
+    return { ok: false, reason: "e2e_preflight_incompatible_row" };
+  }
+
+  const maMarker = Object.prototype.hasOwnProperty.call(
+    row.data, "__lubanoteE2ENote"
+  );
+  if (maMarker &&
+      (row.data.__lubanoteE2ENote !== true ||
+       e2eModul?.jeObalka?.(row.data) !== true ||
+       typeof e2eModul?.oznacChraneneCloudIdPoGuardu !== "function")) {
+    return { ok: false, reason: "e2e_preflight_invalid_envelope" };
+  }
+
+  if (maMarker) {
+    try {
+      e2eModul.oznacChraneneCloudIdPoGuardu(String(noteId));
+    } catch (_error) {
+      return { ok: false, reason: "e2e_preflight_guard_unavailable" };
+    }
+  }
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "E2E",
+    `688U SERVER WRITE PREFLIGHT | protected=${maMarker ? "Y" : "N"} | id=${noteId}`
+  );
+  return { ok: true, protected: maMarker };
+}
+
 async function uploadLocalNoteToSupabase(note, moznosti = {}) {
   // 688T: online writes must verify current E2E key epoch first.
   if (window.LubaNoteE2EDeviceGuard688T &&
@@ -1958,6 +2019,32 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
 
   if (!user || !note?.id) {
     return false;
+  }
+
+  const e2eModul = window.LubaNoteNotesCrypto;
+  const maServerovouRevizi = ziskejCloudSyncMeta(note.id) !== null;
+  const jeSdilena = window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(note.id) === true;
+  let jeChranena = e2eModul?.jeChraneneCloudId?.(note.id) === true;
+
+  /* 688U: A remembered revision does NOT mean plaintext on the server.
+   * On an existing private note without an observed E2E marker, verify
+   * the current authoritative format before ANY plaintext save. This
+   * fixes moves to Trash after 688R password change without migrating
+   * legacy notes or weakening the server downgrade guard. */
+  if (note.isSecret !== true && !jeSdilena &&
+      maServerovouRevizi && !jeChranena) {
+    const kontrola = await overServerovouOchranuPredZapiskem688U(
+      note.id, user.id, e2eModul
+    );
+    if (kontrola.ok !== true) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "E2E", `688U WRITE DEFER | reason=${kontrola.reason} | id=${note.id}`
+      );
+      return moznosti?.vratitDetailV2 === true
+        ? { ok: false, wrote: false, reason: kontrola.reason }
+        : false;
+    }
+    jeChranena = kontrola.protected === true;
   }
 
   let dataToStore = note;
@@ -2056,6 +2143,7 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
   if (
     note.isSecret !== true &&
     !mediaChranenaE2E &&
+    !jeChranena &&
     window.LubaNoteAttachmentsCloud
       ?.zajistiStinovePrilohyPoznamkyVCloudu
   ) {
@@ -2104,10 +2192,6 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
    * Shared poznamky a Secret pouzivaji vlastni sync cesty.
    * Pokud klic chybi, sync odlozime, nikoliv plaintext fallback.
    */
-  const e2eModul = window.LubaNoteNotesCrypto;
-  const maServerovouRevizi = ziskejCloudSyncMeta(note.id) !== null;
-  const jeSdilena = window.LubaNoteSharingNotes?.jeSdilenaPoznamka?.(note.id) === true;
-  const jeChranena = e2eModul?.jeChraneneCloudId?.(note.id) === true;
   if (note.isSecret !== true && !jeSdilena &&
       (!maServerovouRevizi || jeChranena)) {
     if (typeof e2eModul?.zasifruj !== "function") {
@@ -7786,6 +7870,18 @@ let probihajiciSyncCekajiciLokalniZmeny = null;
  * full snapshot. Shared cesta zůstává oddělená.
  */
 const cekajiciCilenePrivateV2 = new Map();
+/* 688U: non-network RPC rejection must not retry at 1.5 s forever.
+ * Keep the local note and its targeted queue item intact. Retry after a
+ * bounded pause, on a changed content fingerprint, or after app restart. */
+const odmitnuteCileneV2Pauzy688U = new Map();
+const ODMITNUTY_TARGET_PAUZA_MS_688U = 60000;
+function jeServeroveOdmitnutiTargetu688U(error) {
+  if (!error || jeSitovaChybaTargetV2(error)) return false;
+  const kod = String(error.code || "").toUpperCase();
+  return Number(error.status) === 400 ||
+    /^(?:P0001|22[A-Z0-9]{3}|23[A-Z0-9]{3}|PGRST[0-9]+)$/.test(kod) ||
+    /(?:DOWNGRADE|ENCRYPTED|E2E_)/i.test(String(error.message || ""));
+}
 let probihajiciCilenyPrivateV2 = null;
 let cileneV2CekaNaFastPotvrzeni = false;
 const potvrzeneCileneRevizeV2 = new Map();
@@ -9012,6 +9108,14 @@ async function synchronizujCilenePrivateZmenyV2() {
             continue;
           }
 
+          const pauza688U = odmitnuteCileneV2Pauzy688U.get(String(id));
+          if (pauza688U && pauza688U.otisk === zaznam.otisk &&
+              Date.now() < pauza688U.do) {
+            nastavStavSynchronizaceUI("pending");
+            return false;
+          }
+          odmitnuteCileneV2Pauzy688U.delete(String(id));
+
           window.LubaNoteStartupDiag?.zapis?.(
             "V2",
             `${zaznam.secret === true ? "TARGET SECRET UPLOAD" : "TARGET UPLOAD"} | id=${id}`
@@ -9027,6 +9131,18 @@ async function synchronizujCilenePrivateZmenyV2() {
             );
 
           if (detail?.ok !== true) {
+            if (jeServeroveOdmitnutiTargetu688U(detail?.error)) {
+              const kod = String(detail.error.code || "rpc_rejected")
+                .replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
+              odmitnuteCileneV2Pauzy688U.set(String(id), {
+                otisk: zaznam.otisk,
+                do: Date.now() + ODMITNUTY_TARGET_PAUZA_MS_688U
+              });
+              window.LubaNoteStartupDiag?.zapis?.(
+                "V2", `688U TARGET RPC REJECTED | code=${kod} | retry=60s | id=${id}`
+              );
+              nastavStavSynchronizaceUI("pending");
+            }
             window.LubaNoteStartupDiag?.zapis?.(
               "V2",
               `TARGET UPLOAD DEFER | id=${id}`
