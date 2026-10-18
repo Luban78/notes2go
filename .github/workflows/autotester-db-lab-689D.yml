@@ -1,0 +1,23 @@
+name: LubaNote AutoTester 689D - isolated PostgreSQL lab
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-db-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Previous AutoTester regression suite (689C)
+        run: node tests/autotester-ci.cjs
+      - name: Real PostgreSQL engine / isolated fixture / no production access
+        run: bash tests/autotester-db-lab-689D.sh
