@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690D — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690E — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -10,16 +10,16 @@
   let running=false;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={all:'Všechny dostupné testy + Core V2 bullet a hierarchie 10× + pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10× + Tab'};
+  const suiteNames={all:'Všechny dostupné testy + Core V2 bullet + MOVE + výběr 10× + pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10× + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>690D</span></h1><p>Skutečný Core V2 · 10× bullet + Tab/Shift+Tab + Undo/Redo · stabilita V1.</p></div>
+    <h1>AutoTester <span>690E</span></h1><p>Skutečný Core V2 · 10× bullet + hierarchie + MOVE + výběr · stabilita V1.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie. <b>CORE PASS</b> = skutečný Core V2 se syntetickými daty a DOM klikem / Tab; nikoli Android touch/MOVE.</p></section>
+    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie. <b>CORE PASS</b> = skutečný Core V2 se syntetickými daty a DOM klikem / Tab; nikoli nativní Android touch nebo selection handles.</p></section>
     <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button data-lat="run" data-suite="e2e">E2E poznámky</button>
       <button data-lat="run" data-suite="sync">Synchronizace</button>
@@ -31,7 +31,7 @@
       <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">690D: „Spustit vše“ provede 690A i 10× test bullet a 10× zanoření v odděleném sandboxu, a načte registr Centra stability V1. PASS z DOM click není důkaz nativního Android dotyku nebo MOVE. Produkční poznámky ani aplikovaný Core se nemění.</footer>`;}
+    <footer class="lat-footer">690E: „Spustit vše“ provede 690A i 10× test bullet, zanoření, MOVE a výběru v odděleném sandboxu, a načte registr Centra stability V1. Syntetický DOM pointer/Range není důkaz fyzického Android dotyku nebo selection handles. Produkční poznámky ani aplikovaný Core se nemění.</footer>`;}
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -128,13 +128,13 @@
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
       render();return;
     }
-    const bulletProof=new Map([['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent']]);
+    const bulletProof=new Map([['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse']]);
     for(const item of vybrane){
       const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
       const partial=coreResult?.status==='CORE_PASS';
       results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
         status:partial?'PARTIAL':'NOT_TESTED',ms:0,
-        detail:partial?'10× skutečný Core V2 v izolovaném DOM s automatickou interakcí PASS; nativní Android dotyky / WebView scroll a MOVE nejsou plně ověřeny.':'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
+        detail:partial?'10× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.':'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
     }
     render();
   }
@@ -206,6 +206,39 @@
     if(generace===generaceBehu&&!screen.hidden)render();
   }
 
+  // 690E: actual Core V2 receives synthetic pointer long-press/MOVE and browser Selection Range.
+  async function spustitBulletMoveVyber690E(generace){
+    const expected=['core-list-move-pointer','core-list-selection-collapse'];
+    const blocked=why=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX_POINTER',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,165)}));
+    try{
+      if(!window.LubaNoteAutoTesterBullet690E?.runRepeated){
+        const url=new URL('lubaAutoTesterBullet690E.js?v=690E-pointer-move-selection',location.href);
+        if(url.origin!==location.origin)throw Error('cross_origin_module');
+        await new Promise((resolve,reject)=>{
+          const tag=document.createElement('script');
+          const timer=setTimeout(()=>{tag.remove();reject(Error('move_module_timeout'));},12000);
+          tag.src=url.href;
+          tag.onload=()=>{clearTimeout(timer);resolve();};
+          tag.onerror=()=>{clearTimeout(timer);reject(Error('move_module_load_failed'));};
+          document.head.appendChild(tag);
+        });
+      }
+      if(generace!==generaceBehu||screen.hidden)return;
+      const rows=await window.LubaNoteAutoTesterBullet690E.runRepeated(
+        ()=>generace===generaceBehu&&!screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);}
+      );
+      if(generace!==generaceBehu||screen.hidden)return;
+      const valid=Array.isArray(rows)&&rows.length===2&&new Set(rows.map(r=>r.id)).size===2&&
+        rows.every(r=>expected.includes(r.id)&&['CORE_PASS','CORE_FAIL','CORE_BLOCKED'].includes(r.status));
+      results.push(...(valid?rows:blocked('invalid_move_selection_rows')));
+    }catch(e){
+      if(generace!==generaceBehu||screen.hidden)return;
+      results.push(...blocked(e?.message||'move_selection_unavailable'));
+    }
+    if(generace===generaceBehu&&!screen.hidden)render();
+  }
+
   async function spustitServeroveTesty(generace){
     let vysledky;
     try {
@@ -242,6 +275,7 @@
       setStatus('Provádím 10× bullet testy skutečného Core V2…');
       await spustitBulletCore690C(generace);
       if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
+      if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
     }
     if(generace===generaceBehu && activeSuite==='all'){
       setStatus('Načítám pokrytí Centra stability V1…');
@@ -257,7 +291,8 @@
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
     if(activeSuite==='stability' || activeSuite==='bullet'){
-      if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);}
+      if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
+      if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);}
       if(generace===generaceBehu)await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':'all');
       if(generace===generaceBehu)dokoncitBeh();
       return;
@@ -294,13 +329,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690D',
+      'LUBANOTE AUTOTESTER / 690E',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690D: CORE_PASS means actual shipped editorCoreV2.js under synthetic sandbox DOM/keyboard 10x. Native Android touch, MOVE and selection remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690E: CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
