@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690A — developer-only in-app test screen.
+/* LubaNote AutoTester 690B — registry bridge + isolated 690A checks.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -10,26 +10,28 @@
   let running=false;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={all:'Všechny dostupné testy',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru'};
+  const suiteNames={all:'Všechny dostupné testy + pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – pokrytí'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>690A</span></h1><p>Jedno tlačítko pro lokální testy a izolované databázové kontroly na LubaServeru.</p></div>
+    <h1>AutoTester <span>690B</span></h1><p>Testy z 690A + mapa pokrytí skutečných scénářů Centra stability V1.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>DB LIVE PASS</b> = nový test spuštěný z APK v odděleném PostgreSQL na LubaServeru; <b>PASS</b> = skutečný E2E modul; <b>CLIENT PASS</b> = skutečný sync.js nad paměťovým RPC (bez DB); <b>SIM PASS</b> = samostatný protokolový model; <b>AUDIT</b> = kontrola zdrojového kódu; <b>NETESTOVÁNO</b> = plné triggery / reálná zařízení / Android integrace.</p></section>
+    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie.</p></section>
     <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button data-lat="run" data-suite="e2e">E2E poznámky</button>
       <button data-lat="run" data-suite="sync">Synchronizace</button>
       <button data-lat="run" data-suite="ui">Android / UI</button>
-      <button data-lat="run" data-suite="db" title="Spustí nový izolovaný databázový test na LubaServeru">Test databáze</button></section>
+      <button data-lat="run" data-suite="db" title="Spustí nový izolovaný databázový test na LubaServeru">Test databáze</button>
+      <button data-lat="run" data-suite="stability" title="Vypíše skutečný registr Centra stability V1 a dosud nezautomatizované scénáře">Pokrytí stability V1</button>
+      <button data-lat="run" data-suite="bullet" title="Vypíše scénáře bullet a seznamů; 690B zatím netestuje jejich chování">Bullet / seznamy</button></section>
     <section class="lat-reportbar"><div id="lat-state" role="status">Připraveno k testování.</div>
       <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">690A: „Spustit vše“ spustí lokální testy v APK a NOVÉ izolované SQL testy na LubaServeru. GitHub není potřeba. Žádné produkční poznámky ani triggery se netestují. Reálná synchronizace dvou zařízení a Android integrace zůstávají NETESTOVÁNO.</footer>`;}
+    <footer class="lat-footer">690B: „Spustit vše“ provede stávající 690A testy a načte úplný registr Centra stability V1 přímo z debugHub.js. Scénáře bez funkční automatizace zůstanou NETESTOVÁNO, nikdy falešně PASS. Tlačítko Bullet / seznamy nyní ukáže mezery v pokrytí; 10× funkční testy patří do navazující etapy 690C. Produkční poznámky se nemění.</footer>`;}
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -67,6 +69,67 @@
     }).join('') || `<div class="lat-empty">Spusť automatické testy. Výsledky se objeví tady.</div>`;
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0;
   }
+  /* 690B: Single source of truth = STABILITA_TESTY in the shipped debugHub.js.
+   * Read source text ONLY, never evaluate it or load any user's data.
+   * Coverage is NOT a functional test; NOT_TESTED is intentional until a
+   * real isolated behavioral runner for a scenario is implemented.
+   */
+  async function nacistScenareV1(){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),10000);
+    try {
+      const url=new URL('debugHub.js?v=690B-stability-registry',location.href);
+      if(url.origin!==location.origin)throw Error('stability_source_other_origin');
+      const response=await fetch(url.href,{credentials:'omit',cache:'no-store',redirect:'error',signal:controller.signal});
+      if(!response.ok)throw Error('stability_source_http_'+response.status);
+      const src=await response.text();
+      const marker='const STABILITA_TESTY = Object.freeze([';
+      const start=src.indexOf(marker);
+      if(start<0)throw Error('stability_registry_missing');
+      const end=src.indexOf('\n  ]);',start);
+      if(end<0 || end-start>25000)throw Error('stability_registry_end_missing');
+      const rows=src.slice(start+marker.length,end).split('\n').filter(x=>/^\s*\{\s*id:/.test(x));
+      const names=new Set();
+      const result=[];
+      const pattern=/^\s*\{\s*id:\s*"([^"\\]+)"\s*,\s*skupina:\s*"([^"\\]+)"\s*,\s*nazev:\s*"([^"\\]+)"/;
+      for(const row of rows){
+        const hit=row.match(pattern);
+        if(!hit || !/^[a-z0-9-]{2,64}$/.test(hit[1]) || names.has(hit[1]))throw Error('stability_registry_invalid_row');
+        names.add(hit[1]);
+        // Human-readable procedural steps are intentionally not interpreted as proof.
+        result.push({id:hit[1],group:hit[2],name:hit[3]});
+      }
+      if(result.length<30 || result.length!==rows.length)throw Error('stability_registry_incomplete');
+      for(const required of ['editor-plain','list-toggle','list-move','notes-trash','app-planner']){
+        if(!names.has(required))throw Error('stability_registry_key_missing_'+required);
+      }
+      return result;
+    }finally {clearTimeout(timer);}
+  }
+  async function pridejPokrytiV1(generace,scope){
+    let scenare;
+    try {scenare=await nacistScenareV1();}
+    catch(e){
+      if(generace!==generaceBehu || !screen || screen.hidden)return;
+      results.push({id:'stability-registry-unavailable',name:'Centrum stability V1 – registr nelze ověřit',
+        kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:String(e?.message||'read_error').slice(0,150)});
+      render();
+      return;
+    }
+    if(generace!==generaceBehu || !screen || screen.hidden)return;
+    const vybrane=scope==='bullet'?scenare.filter(x=>x.group==='Seznamy'):scenare;
+    if(scope==='bullet' && vybrane.length<5){
+      results.push({id:'stability-bullet-registry-incomplete',name:'Bullet / seznamy – chybí scénáře',
+        kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
+      render();return;
+    }
+    for(const item of vybrane){
+      results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
+        status:'NOT_TESTED',ms:0,
+        detail:'Scénář je v Centru stability V1. Automatický funkční test ještě není implementován; ruční PASS se nepřebírá.'});
+    }
+    render();
+  }
   async function spustitServeroveTesty(generace){
     let vysledky;
     try {
@@ -87,7 +150,9 @@
   function dokoncitBeh(){
     running=false;
     const count=sums();
-    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.NOT_TESTED} neověřeno`);
+    const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
+    const suffix=registr.length?` · Centrum V1: 0/${registr.length} funkčně ověřeno`:'';
+    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
   }
   async function dokoncitWorker(generace){
     if(generace!==generaceBehu)return;
@@ -96,6 +161,10 @@
     if(activeSuite==='all' || activeSuite==='sync'){
       setStatus('Místní testy hotovy · spouštím databázové testy na LubaServeru…');
       await spustitServeroveTesty(generace);
+    }
+    if(generace===generaceBehu && activeSuite==='all'){
+      setStatus('Načítám pokrytí Centra stability V1…');
+      await pridejPokrytiV1(generace,'all');
     }
     if(generace===generaceBehu)dokoncitBeh();
   }
@@ -106,6 +175,11 @@
     results=[];running=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
+    if(activeSuite==='stability' || activeSuite==='bullet'){
+      await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':'all');
+      if(generace===generaceBehu)dokoncitBeh();
+      return;
+    }
     if(activeSuite==='db'){
       await spustitServeroveTesty(generace);
       if(generace===generaceBehu)dokoncitBeh();
@@ -138,11 +212,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690A',
+      'LUBANOTE AUTOTESTER / 690B',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
+      `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0`,
+      '690B: STABILITY_V1 rows are coverage inventory, NOT functional automatic tests. Bullet repeated behavioral execution is not yet implemented.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
