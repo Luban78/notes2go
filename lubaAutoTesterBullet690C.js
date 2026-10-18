@@ -29,7 +29,7 @@
     ];
     const totals = new Map(ids.map((id,i)=>[id,{id,name:names[i],ok:0,fail:0,blocked:0,ms:0,reason:''}]));
     const assert=(ok,why)=>{if(!ok)throw new Error(why);};
-    const tick=()=>new Promise(r=>setTimeout(r,visual?190:30));
+    const tick=()=>new Promise(r=>setTimeout(r,visual?650:30));
     const textBlock = b => (b.obsah||[]).map(s=>s.text||'').join('');
     const record=(id,status,reason='',ms=0,iter=0)=>{
       const q=totals.get(id); q.ms+=Math.round(ms);
@@ -75,6 +75,7 @@
           ed=core.ziskejEditorElement();
           assert(ed && host.contains(ed),'editor_is_not_in_test_host');
           assert(ed.children.length===31,'render_block_count');
+          if(visual)await tick();
           const expected=core.ziskejModel().bloky;
           for(let i=0;i<expected.length;i++){
             const row=ed.children[i];
@@ -116,6 +117,7 @@
         try {
           send('progress',`Bullet ${iteration}/10 · rozbaluji větev`);
           const t=performance.now();
+          if(visual)await tick();
           if(!markerOk){record(ids[3],'blocked','collapse_precondition_failed',0,iteration);}
           else {
             const parentRow=ed.children[10], childA=ed.children[11], grand=ed.children[13];
@@ -202,7 +204,7 @@
         frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0;';
         const policy=`default-src 'none'; script-src 'nonce-${token}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; form-action 'none'`;
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:170px;max-height:170px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}#ln-690c-host [hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:18px}</style><script nonce="${esc(token)}" src="${esc(coreUrl)}"><\/script></head><body><div id="ln-690c-host"></div><script nonce="${esc(token)}">(${isolatedRunner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isEnabled?.())});<\/script></body></html>`;
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())?530:170}px;max-height:530px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}#ln-690c-host [hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:18px}</style>${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())?`<style>html,body{background:#fff;color:#192f23;font:20px/1.45 system-ui}body{margin:10px}.ln-v2-editor{font-size:20px!important}.ln-v2-odstavec.ln-v2-bullet{position:relative;border-bottom:1px solid #ecf0ed;box-sizing:border-box;padding-left:22px}.ln-v2-odstavec.ln-v2-bullet::before{content:"•";position:absolute;left:4px;color:#178050;font-weight:800}[data-ln-v2-bullet-uroven="1"]{margin-left:18px}[data-ln-v2-bullet-uroven="2"]{margin-left:36px}[data-v2-list-marker]{border:1px solid #448d61;background:#d9f4e4;border-radius:5px;font-size:18px;min-width:24px;min-height:22px}[data-v2-list-toggle]{border:1px solid #3c8c66;background:#e3f8e9;border-radius:6px;font-weight:700;color:#135b39;font-size:17px}</style>`:''}<script nonce="${esc(token)}" src="${esc(coreUrl)}"><\/script></head><body><div id="ln-690c-host"></div><script nonce="${esc(token)}">(${isolatedRunner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())});<\/script></body></html>`;
         if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Načítám skutečný Core V2 v izolovaném testovacím okně…');
       } catch(e){cleanup(fallback(String(e?.message||'sandbox_creation_failed').slice(0,145)));}

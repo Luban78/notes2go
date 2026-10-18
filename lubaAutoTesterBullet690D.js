@@ -72,19 +72,22 @@
           pattern(core,[0,0,1,0],idsOriginal);
           send('progress',`Zanoření ${repeat}/10 · Tab`);
           select(core,idsOriginal[1]);key(core,'Tab',false);
-          if(visual)await new Promise(r=>setTimeout(r,180));
+          if(visual)await new Promise(r=>setTimeout(r,700));
           pattern(core,[0,1,2,0],idsOriginal);
           send('progress',`Vynoření ${repeat}/10 · Shift+Tab`);
           select(core,idsOriginal[1]);key(core,'Tab',true);
           pattern(core,[0,0,1,0],idsOriginal);
+          if(visual)await new Promise(r=>setTimeout(r,650));
           record(0,'PASS','',performance.now()-t,repeat);
           first=true;
           send('progress',`Undo/Redo ${repeat}/10`);
           const h=performance.now();
           check(core.undo()===true,'undo_failed');
           pattern(core,[0,1,2,0],idsOriginal);
+          if(visual)await new Promise(r=>setTimeout(r,350));
           check(core.redo()===true,'redo_failed');
           pattern(core,[0,0,1,0],idsOriginal);
+          if(visual)await new Promise(r=>setTimeout(r,350));
           const html=core.exportujHtml();
           check(typeof html==='string'&&html.includes('Bravo'),'export_missing');
           const roundtrip=core.importujHtml(html);
@@ -131,7 +134,7 @@
         }
       };
       window.addEventListener('message',receive);
-      timeout=setTimeout(()=>cleanup(blocked('levels_sandbox_timeout_35s')),35000);
+      timeout=setTimeout(()=>cleanup(blocked('levels_sandbox_timeout_70s')),70000);
       interval=setInterval(()=>{if(!shouldContinue())cleanup(blocked('interrupted'));},250);
       try{
         const origin=location.origin;
@@ -144,7 +147,7 @@
         frame.sandbox='allow-scripts'; // Keep opaque origin. No allow-same-origin.
         frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:180px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}[hidden]{display:none!important}</style><script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690d-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isEnabled?.())});<\/script></body></html>`;
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:180px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}[hidden]{display:none!important}</style>${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())?`<style>html,body{background:#fff;color:#192f23;font:20px/1.45 system-ui}body{margin:10px}.ln-v2-editor{font-size:20px!important}.ln-v2-odstavec.ln-v2-bullet{position:relative;border-bottom:1px solid #ecf0ed;box-sizing:border-box;padding-left:22px}.ln-v2-odstavec.ln-v2-bullet::before{content:"•";position:absolute;left:4px;color:#178050;font-weight:800}[data-ln-v2-bullet-uroven="1"]{margin-left:18px}[data-ln-v2-bullet-uroven="2"]{margin-left:36px}[data-v2-list-marker]{border:1px solid #448d61;background:#d9f4e4;border-radius:5px;font-size:18px;min-width:24px;min-height:22px}[data-v2-list-toggle]{border:1px solid #3c8c66;background:#e3f8e9;border-radius:6px;font-weight:700;color:#135b39;font-size:17px}</style>`:''}<script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690d-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())});<\/script></body></html>`;
         if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Spouštím skutečný Core V2 · hierarchie Tab/Shift+Tab…');
       }catch(e){cleanup(blocked(e?.message||'failed_to_create_sandbox'));}

@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690F — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690F1 — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -16,7 +16,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690F</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690F1</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
@@ -27,7 +27,8 @@
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
     </section>
     <section class="lat-laboratory" aria-label="Živá vizuální laboratoř">
-      <div class="lat-lab-top"><strong>Živý testovací editor</strong><button type="button" data-lat="visual" aria-pressed="true">Náhled zapnutý</button></div>
+      <div class="lat-lab-top"><strong>Živý testovací editor</strong>
+        <div class="lat-lab-buttons"><button type="button" data-lat="speed" aria-pressed="true">🐢 Pomalu</button><button type="button" data-lat="expand" aria-pressed="false">⛶ Zvětšit</button><button type="button" data-lat="visual" aria-pressed="true">Náhled zapnutý</button></div></div>
       <div class="lat-live-stage" id="lat-live-stage"><span class="lat-live-placeholder">Po spuštění testu se zde zobrazí skutečné testovací okno Core V2. Databázové testy obraz editoru nemají.</span></div>
       <div class="lat-progress-info"><span id="lat-live-step">Připraveno</span><span id="lat-progress-num">–</span></div>
       <div class="lat-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="lat-progress-track"><div id="lat-progress-fill"></div></div>
@@ -35,8 +36,10 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690F: živý iframe ukazuje skutečný produkční Core V2 v odděleném sandboxu se syntetickými daty. Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690F1: živý iframe ukazuje skutečný produkční Core V2 v odděleném sandboxu se syntetickými daty. Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
+  let slowMode=true;
+  let expanded=false;
   let phase='';
   function setPhase(title){phase=title;setStatus(title);updateProgress(0,10,title);}
   function updateProgress(current,total,label){
@@ -51,13 +54,12 @@
   function attachLiveFrame(frame){
     const host=screen?.querySelector('#lat-live-stage');
     if(!host||!visualEnabled||screen.hidden)return false;
-    const width=Math.max(240,host.clientWidth||320);
-    const scale=Math.min(.80,(width-10)/420);
-    frame.style.cssText='position:absolute;left:4px;top:0;width:420px;height:640px;transform:scale('+scale+');transform-origin:top left;opacity:1;pointer-events:none;border:0;background:#fff;';
+    // Bez zmensovaci transformace: testovaci WebView vyuzije celou sirku panelu.
+    frame.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;pointer-events:none;border:0;background:#fff;';
     host.classList.add('lat-has-live-frame');
     host.appendChild(frame);return true;
   }
-  window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled});
+  window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode});
   // Two taps in the same 70px upper-left region, only after server-verified admin login.
   // The old emergency five-tap fallback stays unchanged for this UI-only patch.
   let lastAdminTap=null;
@@ -95,6 +97,18 @@
         css.textContent+=`#ln-auto-tester .lat-main-controls{display:grid;gap:10px;margin:16px 0}#ln-auto-tester .lat-main-run{background:#187b51;border-color:#1ea86d;font-size:1.08rem;min-height:58px;color:#fff}#ln-auto-tester .lat-subrun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#ln-auto-tester .lat-subrun select{min-width:0;background:#26362e;color:#fff;border:1px solid #52675b;border-radius:10px;padding:10px;font:inherit}#ln-auto-tester .lat-subrun button{min-height:48px}#ln-auto-tester .lat-laboratory{background:#1b2b23;border:1px solid #38654b;border-radius:15px;padding:12px;margin:14px 0}#ln-auto-tester .lat-lab-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.9rem}#ln-auto-tester .lat-lab-top button{font-size:.75rem;min-height:35px;padding:6px 9px}#ln-auto-tester .lat-live-stage{height:340px;position:relative;overflow:hidden;background:#f5f8f4;border-radius:11px;border:2px solid #4c705c;margin:11px 0;color:#4e6254}#ln-auto-tester .lat-live-placeholder{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:22px;font-size:.9rem;line-height:1.5}#ln-auto-tester .lat-live-stage.lat-has-live-frame .lat-live-placeholder{display:none}#ln-auto-tester .lat-progress-info{display:flex;gap:8px;justify-content:space-between;font-size:.82rem;color:#c5d7ca}#ln-auto-tester .lat-progress-track{height:9px;background:#32483c;border-radius:9px;overflow:hidden;margin-top:10px}#ln-auto-tester #lat-progress-fill{height:100%;width:0;background:#37c681;transition:width .22s}#ln-auto-tester .lat-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 8px}#ln-auto-tester .lat-result-head p{font-size:.82rem;line-height:1.4;margin-top:5px}#ln-auto-tester .lat-result-head button{flex:none;font-size:.84rem}#ln-auto-tester .lat-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 18px}#ln-auto-tester .lat-summary>div{padding:11px 4px}#ln-auto-tester .lat-details{border:1px solid #45584b;border-radius:12px;overflow:hidden}#ln-auto-tester .lat-details>summary{padding:15px;cursor:pointer;font-weight:700;background:#26352d}#ln-auto-tester .lat-details .lat-list{padding:10px}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b}#ln-auto-tester .lat-footer{padding-bottom:28px}#ln-auto-tester .lat-live-stage[data-off='1']{height:90px;background:#24362b;color:#bfd1c5}#ln-auto-tester .lat-laboratory[data-off='1'] .lat-live-placeholder{display:grid}@media(max-width:380px){#ln-auto-tester .lat-subrun{grid-template-columns:minmax(0,1fr)}#ln-auto-tester .lat-live-stage{height:300px}#ln-auto-tester .lat-result-head{flex-wrap:wrap}}`;
         document.head.appendChild(css);
       }
+      if(!document.getElementById('lat-690f1-large-preview')){
+        const extra=document.createElement('style');extra.id='lat-690f1-large-preview';
+        extra.textContent=`#ln-auto-tester .lat-live-stage{height:clamp(490px,65dvh,780px);border-width:1px}`+
+        `#ln-auto-tester .lat-lab-top{display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px}`+
+        `#ln-auto-tester .lat-lab-buttons{display:flex;gap:5px;align-items:center;flex-wrap:wrap}`+
+        `#ln-auto-tester .lat-lab-buttons button{min-height:34px;padding:5px 7px;font-size:.74rem}`+
+        `#ln-auto-tester .lat-lab-buttons button[aria-pressed='true']{border-color:#42c88a;color:#b1ffd8}`+
+        `#ln-auto-tester .lat-laboratory.lat-expanded{position:fixed;inset:0;z-index:2147483605;background:#17251e;margin:0;border-radius:0;display:flex;flex-direction:column;max-height:100dvh;padding:max(12px,env(safe-area-inset-top)) 12px max(14px,env(safe-area-inset-bottom))}`+
+        `#ln-auto-tester .lat-laboratory.lat-expanded .lat-live-stage{height:auto;flex:1;min-height:0;margin:10px 0}`+
+        `#ln-auto-tester .lat-laboratory.lat-expanded .lat-progress-info{font-size:.95rem}`;
+        document.head.appendChild(extra);
+      }
       document.body.appendChild(screen);
       screen.addEventListener('click',(e)=>{
         const btn=e.target.closest('button[data-lat]');if(!btn)return;
@@ -102,6 +116,8 @@
         if(action==='close'){close();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
         if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
+        if(action==='speed'){slowMode=!slowMode;btn.textContent=slowMode?'🐢 Pomalu':'⚡ Rychle';btn.setAttribute('aria-pressed',String(slowMode));return;}
+        if(action==='expand'){expanded=!expanded;screen.querySelector('.lat-laboratory')?.classList.toggle('lat-expanded',expanded);btn.textContent=expanded?'↙ Zmenšit':'⛶ Zvětšit';btn.setAttribute('aria-pressed',String(expanded));return;}
         if(action==='visual'){visualEnabled=!visualEnabled;btn.textContent=visualEnabled?'Náhled zapnutý':'Náhled vypnutý';btn.setAttribute('aria-pressed',String(visualEnabled));const lab=screen.querySelector('.lat-laboratory');if(lab)lab.dataset.off=visualEnabled?'0':'1';return;}
         if(action==='copy'){void copyReport(btn);}
       });
@@ -109,7 +125,7 @@
     }
     screen.hidden=false;document.body.classList.add('lat-open');
   }
-  function close(){if(!screen)return;screen.hidden=true;document.body.classList.remove('lat-open');stop();}
+  function close(){if(!screen)return;expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();}
   function stop(){
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
@@ -140,6 +156,7 @@
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('')||'<div class="lat-empty">Spusť test. Průběh uvidíš výše, výsledky po dokončení zde.</div>';
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0||running;
+    const speedButton=screen.querySelector('[data-lat="speed"]');if(speedButton)speedButton.disabled=running;
   }
   /* 690B: Single source of truth = STABILITA_TESTY in the shipped debugHub.js.
    * Read source text ONLY, never evaluate it or load any user's data.
@@ -401,13 +418,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690F',
+      'LUBANOTE AUTOTESTER / 690F1',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690F: LIVE VISUAL PREVIEW is actual sandbox Core V2. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690F1: LIVE VISUAL PREVIEW is actual sandbox Core V2. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
