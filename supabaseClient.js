@@ -2551,6 +2551,11 @@ async function zpracujStavPrihlasenehoUzivatele(
      * ještě nepovolíme a vyžádáme jednorázové zadání hlavního hesla.
      */
     if (maHlavniHeslo === true) {
+      // 688T: check fresh server E2E password epoch BEFORE app and sync.
+      const gate = window.LubaNoteE2EDeviceGuard688T;
+      if (gate && await gate.overAktualnost(user.id, { vynutit: true }) !== true) {
+        return false;
+      }
       const mediaKlicPripraven =
         await maZarizeniPripravenyMediaKlic();
 

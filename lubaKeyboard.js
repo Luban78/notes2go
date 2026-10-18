@@ -1141,6 +1141,7 @@
   }
 
   function naucAktualniSlovo() {
+    if (jeAktivniTextovePole() && aktivniTextovePole.type === 'password') return;
     const kontext = jeAktivniTextovePole()
       ? ziskejKontextTextovehoPole()
       : jeAktivniNazev()
@@ -1183,6 +1184,7 @@
   }
 
   function vypocitejNavrhy() {
+    if (jeAktivniTextovePole() && aktivniTextovePole.type === 'password') return [];
     const layout = aktualniLayout();
     if (mode !== "letters" || layout.compose || layout.id === "emoji" || layout.id === "unicode") return [];
 
@@ -1562,6 +1564,7 @@
     const title = event.target?.closest?.("#modalTitle");
     const pole = event.target?.closest?.('input[data-luba-keyboard-field], textarea[data-luba-keyboard-field]');
     if (!title && !pole) return false;
+    if (pole?.type === 'password') return false; // no password clipboard actions
 
     let state = null;
     if (pole && jeLubaTextovePole(pole)) {
@@ -2771,7 +2774,7 @@
     if (!text) return false;
     if (jeAktivniTextovePole()) {
       const ok = provedPrikazTextovehoPole("text", text);
-      if (ok) ulozRecent(text);
+      if (ok && aktivniTextovePole.type !== 'password') ulozRecent(text);
       return ok;
     }
     if (jeAktivniNazev()) {
@@ -2970,6 +2973,7 @@
   }
 
   function suggestionAction(value) {
+    if (jeAktivniTextovePole() && aktivniTextovePole.type === 'password') return;
     const navrh = String(value || "").trim();
     if (!navrh) return;
     const kontext = jeAktivniTextovePole()
@@ -3854,7 +3858,14 @@
       Array.from(document.querySelectorAll(selektorBlokujicichModalu))
         .filter(jeViditelnyModalniDialog)
     );
-    const pribylNovy = Array.from(aktualni).some((element) => !posledniViditelneModaly.has(element));
+    const pribylNovy = Array.from(aktualni).some((element) => {
+      if (posledniViditelneModaly.has(element)) return false;
+      // 688T: password dialog focus deliberately opens LubaKeyboard.
+      // Modal observer must not immediately hide it in the same frame.
+      if (element.closest?.('#ln688a-change-password') &&
+          document.activeElement?.matches?.('#ln688a-change-password input[data-luba-keyboard-field]')) return false;
+      return true;
+    });
     const zavrelSeModal = Array.from(posledniViditelneModaly).some((element) => !aktualni.has(element));
     /* Textové pole může být i v panelu bez aria-modal (Visual Debug,
        nový štítek v editoru). Jeho skrytí/odpojení má stejný close kontrakt. */

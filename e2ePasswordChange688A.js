@@ -366,6 +366,7 @@
   async function zmen(noveHeslo,prihlasovaciHeslo,hlas){
     if(probiha) return {ok:false,reason:'already_running'};
     probiha=true;
+    window.LubaNoteE2EDeviceGuard688T?.zacinaMistniZmenu?.();
     let stage=null,potvrzeno=false,docasnyKlient=null;
     try {
       stage=await pripravZmenu(noveHeslo,hlas);
@@ -444,6 +445,7 @@
           kontroluj(vypnuto===true,'old_biometric_password_not_revoked');
         }
       }
+      window.LubaNoteE2EDeviceGuard688T?.potvrdMistniZmenu?.(stage.uid,stage.novy.salt);
       return {ok:true,reason:'password_changed',notes:stage.noteZmeny.length,tags:stage.tagZmeny.length};
     } catch(error){
       if(potvrzeno){
@@ -456,6 +458,7 @@
       if(docasnyKlient?.auth?.signOut) {
         try {await docasnyKlient.auth.signOut({scope:'local'});} catch(_e){}
       }
+      window.LubaNoteE2EDeviceGuard688T?.konciMistniZmena?.();
       docasnyKlient=null;stage=null;probiha=false;
     }
   }
@@ -475,14 +478,14 @@
           <h3 data-title id="ln688NChangeTitle"></h3>
           <p data-hint class="ln688NChangeHint"></p>
           <label><span data-label-account></span>
-            <input class="ln683BTSecurityPassword" id="ln688b-account" type="password"
+            <input class="ln683BTSecurityPassword" data-luba-keyboard-field="e2e-password" id="ln688b-account" type="password"
               autocomplete="current-password" required autocapitalize="off" spellcheck="false"></label>
           <label><span data-label-new></span>
-            <input class="ln683BTSecurityPassword" id="ln688a-new" type="password"
+            <input class="ln683BTSecurityPassword" data-luba-keyboard-field="e2e-password" id="ln688a-new" type="password"
               autocomplete="new-password" minlength="12" maxlength="1024" required
               autocapitalize="off" spellcheck="false"></label>
           <label><span data-label-repeat></span>
-            <input class="ln683BTSecurityPassword" id="ln688a-confirm" type="password"
+            <input class="ln683BTSecurityPassword" data-luba-keyboard-field="e2e-password" id="ln688a-confirm" type="password"
               autocomplete="new-password" minlength="12" maxlength="1024" required
               autocapitalize="off" spellcheck="false"></label>
           <p data-status class="ln683BTSecurityMessage ln688NChangeStatus" role="status"

@@ -1208,15 +1208,6 @@ function oznamLimitPoznamek(vysledek = {}) {
   );
 }
 
-/* 687C: retry povolen POUZE na explicitni serverovy E2E downgrade guard.
- * Jine 400, konflikt revize ani neplatna obalka se nesmi maskovat. */
-function jeServeremOdmitnutyE2EDowngrade(error) {
-  return String(error?.code || "") === "23514" &&
-    [error?.message, error?.details].some((zprava) =>
-      String(zprava || "").includes("LUBANOTE_E2E_DOWNGRADE_BLOCKED")
-    );
-}
-
 async function provedBezpecnyZapisPoznamky({
   id,
   data,
@@ -1264,13 +1255,6 @@ async function provedBezpecnyZapisPoznamky({
       "Bezpečný sync zápis selhal:",
       id,
       error.message
-    );
-
-    /* Bez obsahu, titulku a klicu. U 400 staci diagnosticky kod
-       a presne serverem potvrzene pravidlo. */
-    window.LubaNoteStartupDiag?.zapis?.(
-      "V2",
-      `SAVE NOTE ERROR | id=${id} | code=${String(error?.code || "unknown")} | e2eDowngrade=${jeServeremOdmitnutyE2EDowngrade(error) ? "YES" : "NO"}`
     );
 
     aktivujTargetV2SitovouPauzu(error);
@@ -1950,6 +1934,9 @@ function jeCloudSecretRow(row) {
 }
 
 async function uploadLocalNoteToSupabase(note, moznosti = {}) {
+  // 688T: online writes must verify current E2E key epoch first.
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   if (jePoznamkaPouzeLokalniProSync(note)) {
     window.LubaNoteStartupDiag?.zapis?.(
       "LOCAL",
@@ -2148,62 +2135,20 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
           ? Number(meta.revision)
           : 0;
 
-      const provedZapis = (payload) => provedBezpecnyZapisPoznamky({
+      return await provedBezpecnyZapisPoznamky({
         id: note.id,
-        data: payload,
+        data: dataToStore,
         expectedRevision,
-        localUpdatedAt: note.updatedAt || null,
+        localUpdatedAt:
+          note.updatedAt || null,
         deleteNote: false,
         deletedByDeviceId: null,
-        /* Secret konflikt zustava konzervativne blokovany. */
+        /* Secret konflikt zůstává konzervativně blokovaný.
+           Běžný konflikt převezme centrální revizní merge. */
         oznamitKonflikt: note.isSecret === true
       });
-
-      let vysledekZapisu = await provedZapis(dataToStore);
-
-      /* 687C: po restartu zna V2 manifest pouze revizi, nikoliv E2E
-       * marker. Proto mohl klient poslat plaintext do existujici E2E
-       * poznamky. Server to spravne odmita (SQLSTATE 23514).
-       * JEN pri explicitnim DOWNGRADE_BLOCKED zkusime jednou zapis
-       * znovu jako E2E se stejnou revizi; legacy poznamky nemenime. */
-      if (
-        vysledekZapisu?.ok !== true &&
-        jeServeremOdmitnutyE2EDowngrade(vysledekZapisu?.error) &&
-        note.isSecret !== true && !jeSdilena &&
-        e2eModul?.jeObalka?.(dataToStore) !== true
-      ) {
-        if (typeof e2eModul?.zasifruj !== "function" ||
-            typeof e2eModul?.oznacChraneneCloudIdPoGuardu !== "function") {
-          return { ok: false, wrote: false, reason: "e2e_module_missing", error: vysledekZapisu.error };
-        }
-
-        /* Server potvrdil, ze jde o drive zasifrovanou poznamku.
-         * Od tohoto okamziku nesmime zkusit plaintext fallback. */
-        e2eModul.oznacChraneneCloudIdPoGuardu(note.id);
-        try {
-          dataToStore = await e2eModul.zasifruj(dataToStore, user.id);
-        } catch (error) {
-          window.LubaNoteStartupDiag?.zapis?.(
-            "E2E", `687C RECOVERY DEFER | id=${note.id} | reason=${String(error?.code || "encrypt_failed")}`
-          );
-          return { ok: false, wrote: false, reason: error?.code || "e2e_encrypt_failed", error };
-        }
-
-        window.LubaNoteStartupDiag?.zapis?.(
-          "E2E", `687C DOWNGRADE RECOVERY | id=${note.id} | retry=encrypted`
-        );
-        vysledekZapisu = await provedZapis(dataToStore);
-      }
-
-      return vysledekZapisu;
     }
   );
-
-  /* 687C: uspesny E2E create/update si zapamatujeme i bez
-   * nasledneho cloud readu. Chranime dalsi zapis v teze relaci. */
-  if (vysledek?.ok === true && e2eModul?.jeObalka?.(dataToStore) === true) {
-    e2eModul?.oznacChraneneCloudIdPoGuardu?.(note.id);
-  }
 
   if (
     !vysledek.ok &&
@@ -5202,6 +5147,8 @@ async function synchronizujVzdalenePrivateDeltaV2(
   userId,
   moznosti = {}
 ) {
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost(userId) !== true) return false;
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
     return false;
@@ -7447,6 +7394,8 @@ async function provedOnboardingPoBezpecnemSyncu({
 }
 
 async function startSync() {
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   /*
    * Splash nesmíme zavřít po neautentizovaném pokusu o sync.
    * Při obnovení session přijde lubanote:auth-valid a start se
@@ -8973,6 +8922,8 @@ async function potvrdCilenePrivateZapisyV2(userId) {
 }
 
 async function synchronizujCilenePrivateZmenyV2() {
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
     return false;
@@ -9301,6 +9252,8 @@ function potvrzLokalniZmenuNaServeru() {
 }
 
 async function synchronizujCekajiciLokalniZmenu() {
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     zastavKontroluNavratuInternetu();
     nastavStavPouzeTotoZarizeni();
@@ -9595,6 +9548,8 @@ async function provedLokalniZmenuASynchronizuj(
 }
 
 async function spustRychlySyncPoznamekBezpecne() {
+  if (window.LubaNoteE2EDeviceGuard688T &&
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     nastavStavPouzeTotoZarizeni();
     return false;

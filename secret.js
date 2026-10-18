@@ -1418,22 +1418,17 @@ confirmSecretUnlockButton?.addEventListener(
 // ==========================================
 
 async function overHlavniHeslo(heslo) {
-  let nastaveni =
-    nactiLokalniTajneNastaveni();
+  let nastaveni = nactiLokalniTajneNastaveni();
 
-  /*
-   * Bez lokální cache ji při online provozu jednou stáhneme.
-   * Po tomto úspěšném načtení už další odemykání funguje offline.
-   */
-  if (!nastaveni) {
-    const cloud =
-      await nactiTajneNastaveniZCloudu();
-
-    if (cloud.stav !== "ok") {
-      return null;
-    }
-
+  /* 688T: ONLINE stale verifier must NEVER approve an old password.
+   * Only an authoritative server read may approve online unlocking.
+   * Offline unlock continues using the device cache, without sync. */
+  if (navigator.onLine) {
+    const cloud = await nactiTajneNastaveniZCloudu();
+    if (cloud.stav !== "ok") return null; // fail closed, not cached success
     nastaveni = cloud.data;
+  } else if (!nastaveni) {
+    return null;
   }
 
   let vypocitanyVerifier =

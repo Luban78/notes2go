@@ -88,7 +88,7 @@
   <link rel="stylesheet" href="globalFonts683BQ.css?v=683BQ-global-fonts">
   <link rel="stylesheet" href="modalAndReminderLayout683BS.css?v=683BS-modal-reminder-spacing">
   <link rel="stylesheet" href="securitySettings683BT.css?v=683BV-security-recovery">
-  <link rel="stylesheet" href="e2ePasswordChange688N.css?v=688P-secret-updatedAt-only">
+  <link rel="stylesheet" href="e2ePasswordChange688N.css?v=688T-keyboard-scroll">
 </head>
 
 <body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
@@ -2905,7 +2905,7 @@
   <script src="syncTraffic.js?v=679c-rx-visibility-owner"></script>
 
   <!-- Supabase přihlášení / offline-first loader -->
-  <script src="supabaseClient.js?v=679f-session-handoff"></script>
+  <script src="supabaseClient.js?v=688T-auth-epoch-gate"></script>
   <!-- BI-1B: read-only kontrola Auth / DB / RPC / Storage / Realtime. -->
   <script src="backendDiagnostics.js?v=659b-backend-diagnostics-bi1b"></script>
   <!-- S2A: veřejná identita @username pro budoucí sdílení. -->
@@ -2931,16 +2931,16 @@
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
   <!-- Tajný režim – heslo, šifrování a automatické zamykání -->
-  <script src="secret.js?v=677n-initial-download-progress"></script>
+  <script src="secret.js?v=688T-online-verifier"></script>
   <!-- E2E fotografie běžných poznámek – media klíč je odvozen ze stejného hlavního hesla jako Secret. -->
   <script src="mediaCrypto.js?v=688N-media-change-key"></script>
   <script src="e2eCore.js?v=688N-root-envelope-safe-fallback"></script>
   <!-- 685B: bezpecne cteni E2E obalky ve private Sync, write stale vypnut. -->
   <script src="e2eNotesCrypto.js?v=687C-e2e-sync-guard-recovery"></script>
-  <script src="e2ePasswordChange688A.js?v=688R-rpc-error-code"></script>
+  <script src="e2ePasswordChange688A.js?v=688T-source-epoch-and-luba-keyboard"></script>
   <!-- Shared E2E identita účtu – ECDH P-256, soukromý klíč chráněný hlavním heslem. -->
   <script src="sharedMediaCrypto.js?v=20260920-shared-revoke-653h"></script>
-  <script src="secretBiometric.js?v=20260907-secret-fast-unlock-1"></script>
+  <script src="secretBiometric.js?v=688T-native-confirm-removed"></script>
   
   <!-- Navigace modulů a servisní nabídka -->
   <script src="navigation.js?v=20260919-main-nav-documents-633"></script>
@@ -2957,7 +2957,7 @@
   <script src="syncRealtime.js?v=683BX-transport-realtime"></script>
 
   <!-- Synchronizace poznámek -->
-  <script src="sync.js?v=687C-e2e-sync-guard-recovery"></script>
+  <script src="sync.js?v=688T-sync-epoch-gate"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
   <script src="maintenance.js?v=680a5-prod-version-realtime"></script>
 
@@ -2974,7 +2974,9 @@
   <script src="editorCoreV2.js?v=683AP-last-bullet-indent"></script>
   <script src="editorCoreV2Bridge.js?v=683U-fix1"></script>
   <script src="lubaTitleCaret.js?v=683S-title-menu"></script>
-  <script src="lubaKeyboard.js?v=683W-phrase-prediction"></script>
+  <script src="lubaKeyboard.js?v=688T-sensitive-password-fields"></script>
+  <!-- 688T: cross-device E2E password epoch preflight + keyboard-safe dialog. -->
+  <script src="e2eDeviceGuard688T.js?v=688T-cross-device-key-epoch"></script>
   <script src="editorFind.js?v=676a-find-reset"></script>
   <script src="dictionarySync.js?v=20260920-dictionary-sync-650b"></script>
   <script src="learningDictionarySync.js?v=660b-learning-dictionary-sync-v1"></script>

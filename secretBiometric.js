@@ -450,20 +450,31 @@
     }
   );
 
-  disableBiometricButton?.addEventListener(
-    "click",
-    async () => {
-      const potvrzeno = window.confirm(
-        "Vypnout odemykání Secret režimu otiskem na tomto zařízení?"
-      );
-
-      if (!potvrzeno) {
-        return;
-      }
-
-      await vypniBiometrii();
-    }
-  );
+  /* 688T: in-app confirmation, never Android window.confirm. */
+  disableBiometricButton?.addEventListener("click", () => {
+    if (document.getElementById('ln688t-biometric-confirm')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'ln688t-biometric-confirm';
+    overlay.className = 'ln683BTSecurityOverlay';
+    overlay.innerHTML = `<div class="ln683BTSecurityDialog" role="dialog" aria-modal="true"
+      aria-labelledby="ln688t-bio-title">
+      <h3 id="ln688t-bio-title">Vypnout odemykání otiskem?</h3>
+      <p>Vypnout odemykání Secret režimu otiskem na tomto zařízení?</p>
+      <div class="ln683BTSecurityActions">
+        <button type="button" data-cancel>Zrušit</button>
+        <button type="button" data-confirm>Vypnout</button>
+      </div></div>`;
+    document.body.appendChild(overlay);
+    window.LubaNoteKeyboard?.skryjProModal?.();
+    const close = () => {overlay.remove();window.LubaNoteKeyboard?.skryjPoZavreniModalu?.();};
+    overlay.querySelector('[data-cancel]').addEventListener('click',close);
+    overlay.querySelector('[data-confirm]').addEventListener('click',async () => {
+      const button=overlay.querySelector('[data-confirm]');button.disabled=true;
+      const ok=await vypniBiometrii();
+      if (!ok) button.disabled=false; else close();
+    });
+    overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
+  });
 
   window.addEventListener(
     "lubanote:supabase-ready",
