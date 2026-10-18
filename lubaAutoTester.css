@@ -57,7 +57,7 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-indicator{background:#ff8585}
 #ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}
 
-/* 689E GitHub Actions DB LAB last-result read only metadata. */
+/* 690A isolated DB LIVE result after actual on-demand server run. */
 #ln-auto-tester .lat-result[data-status='DB_PASS'] .lat-indicator{background:#38cd81}
 #ln-auto-tester .lat-result[data-status='DB_PASS'] .lat-pill{color:#84f5b6;border-color:#287c54}
 #ln-auto-tester .lat-result[data-status='DB_FAIL'] .lat-indicator{background:#f06e70}

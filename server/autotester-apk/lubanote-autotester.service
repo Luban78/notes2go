@@ -1,0 +1,30 @@
+[Unit]
+Description=LubaNote AutoTester – fixed disposable PostgreSQL suites (690A)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=luban78
+Group=luban78
+SupplementaryGroups=docker
+WorkingDirectory=/opt/lubanote-autotester
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -B /opt/lubanote-autotester/bridge.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=60
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
