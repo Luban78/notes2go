@@ -38,12 +38,21 @@ CONTAINER="$(docker run --detach --rm --network none --name "$NAME" \
   -e POSTGRES_USER=autotester -e POSTGRES_DB=autotester \
   -e POSTGRES_PASSWORD="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')" \
   "$IMAGE")"
+# pg_isready may succeed against the TEMPORARY postmaster used by the official
+# Postgres entrypoint during initdb. That server shuts down before the final
+# postgres process starts, causing a sporadic missing socket on the first psql.
+# Only run fixtures after PID 1 is the final postgres process AND SELECT 1 works.
 READY=0
-for _ in $(seq 1 40); do
-  if docker exec "$CONTAINER" pg_isready -q -U autotester -d autotester; then READY=1; break; fi
+for _ in $(seq 1 60); do
+  if docker exec "$CONTAINER" sh -c 'test "$(cat /proc/1/comm 2>/dev/null)" = postgres' >/dev/null 2>&1 &&
+     docker exec "$CONTAINER" pg_isready -q -U autotester -d autotester >/dev/null 2>&1 &&
+     [[ "$(docker exec "$CONTAINER" psql -U autotester -d autotester -X -A -t -q -c 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" == '1' ]]; then
+    READY=1
+    break
+  fi
   sleep 1
 done
-[[ "$READY" -eq 1 ]] || { echo 'REAL_RPC_BLOCKED: DB did not start'; exit 2; }
+[[ "$READY" -eq 1 ]] || { echo 'REAL_RPC_BLOCKED: final PostgreSQL did not become ready'; exit 2; }
 NET="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$CONTAINER")"
 PORTS="$(docker port "$CONTAINER" 2>/dev/null || true)"
 MOUNTS="$(docker inspect -f '{{range .Mounts}}{{.Type}}:{{.Destination}};{{end}}' "$CONTAINER")"
