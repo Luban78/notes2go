@@ -1,6 +1,6 @@
 /* ==================================================
    LUBANOTE – LOKÁLNÍ PŘÍLOHY / INDEXEDDB – FÁZE B
-
+ 
    FÁZE B = cloudová STÍNOVÁ vrstva.
 
    DŮLEŽITÉ:
