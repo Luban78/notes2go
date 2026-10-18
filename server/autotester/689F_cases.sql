@@ -112,13 +112,16 @@ BEGIN
   DELETE FROM public.note_collaborators WHERE note_id=n;
   RAISE NOTICE 'REAL_RPC_PASS 12 shared collaborator prevents private save';
 
-  r := public.save_note_safe(n, null, 3, true, 'synthetic-device');
+  -- 689F FIX: production sync.js sends {"deleted":true} on permanent deletion.
+  -- Real save_note_safe stores p_data as provided; it does NOT preserve old ciphertext.
+  r := public.save_note_safe(n, '{"deleted":true}'::jsonb, 3, true, 'synthetic-device');
   IF r->>'ok' <> 'true' OR (r->>'revision')::bigint <> 4 OR
      (SELECT deleted_at FROM public.notes WHERE id=n) IS NULL OR
-     (SELECT data FROM public.notes WHERE id=n) IS DISTINCT FROM box1 THEN
+     (SELECT deleted_by_device_id FROM public.notes WHERE id=n) <> 'synthetic-device' OR
+     (SELECT data FROM public.notes WHERE id=n) IS DISTINCT FROM '{"deleted":true}'::jsonb THEN
     RAISE EXCEPTION '689F_TOMBSTONE_FAILED: %',r;
   END IF;
-  RAISE NOTICE 'REAL_RPC_PASS 13 hard-delete tombstone and revision=4';
+  RAISE NOTICE 'REAL_RPC_PASS 13 permanent deletion stores client tombstone and revision=4';
 
   r := public.save_note_safe(n, box1, 4, false, null);
   IF r->>'ok' <> 'true' OR (r->>'revision')::bigint <> 5 OR
