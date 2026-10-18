@@ -1,0 +1,23 @@
+name: LubaNote AutoTester 689A
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-safety-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+      - name: Install Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Real E2E synthetic tests and source audits (NO backend)
+        run: node tests/autotester-ci.cjs

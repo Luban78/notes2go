@@ -1,0 +1,44 @@
+/* AutoTester 689A — fully scoped developer tool. */
+#ln-auto-tester[hidden]{display:none!important}
+#ln-auto-tester{position:fixed;inset:0;z-index:2147483600;display:block;overflow:auto;overscroll-behavior:contain;background:#101513;color:#eaf1ed;font-family:inherit;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+body.lat-open{overflow:hidden}
+#ln-auto-tester .lat-inner{max-width:850px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));padding-top:calc(max(18px,env(safe-area-inset-top)) + 8px)}
+#ln-auto-tester .lat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+#ln-auto-tester .lat-eyebrow{font-size:.73rem;color:#98b0a5;letter-spacing:.09em;font-weight:750}
+#ln-auto-tester h1{font-size:clamp(1.65rem,5vw,2.15rem);line-height:1.15;color:#f5f8f6;margin:8px 0 6px}
+#ln-auto-tester h1 span{font-size:.7rem;color:#76caa5;vertical-align:middle;font-weight:600}
+#ln-auto-tester p{line-height:1.45;margin:6px 0;color:#bed0c7;font-size:.9rem}
+#ln-auto-tester button{color:#eaf1ed;border:1px solid #52675b;background:#27352f;border-radius:11px;font:inherit;font-weight:650;min-height:43px;padding:9px 13px;cursor:pointer}
+#ln-auto-tester button:disabled{opacity:.55;cursor:not-allowed}
+#ln-auto-tester .lat-close{font-size:1.55rem;line-height:1;width:43px;min-width:43px;padding:6px}
+#ln-auto-tester .lat-notice{border:1px solid #375c4b;border-radius:14px;padding:13px 15px;background:#182b21;margin:17px 0}
+#ln-auto-tester .lat-notice strong{color:#b1e7cc}
+#ln-auto-tester .lat-notice p{margin:5px 0;font-size:.83rem}
+#ln-auto-tester .lat-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:15px 0}
+#ln-auto-tester .lat-actions button:first-child{background:#187b51;border-color:#1ea86d;color:white}
+#ln-auto-tester .lat-reportbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:20px 0 10px}
+#ln-auto-tester .lat-reportbar #lat-state{font-size:.86rem;line-height:1.35;color:#b6c9bd}
+#ln-auto-tester .lat-reportbar button{white-space:nowrap;font-size:.83rem}
+#ln-auto-tester .lat-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:14px}
+#ln-auto-tester .lat-summary>div{background:#223029;border:1px solid #394e40;border-radius:10px;padding:10px 4px;text-align:center}
+#ln-auto-tester .lat-summary b{display:block;font-size:1.45rem;font-variant-numeric:tabular-nums}
+#ln-auto-tester .lat-summary span{display:block;font-size:.59rem;letter-spacing:.02em;color:#c3d3c9;overflow-wrap:anywhere}
+#ln-auto-tester .lat-list{display:grid;gap:8px}
+#ln-auto-tester .lat-result{border:1px solid #364a3e;border-radius:12px;background:#1b2620;overflow:hidden}
+#ln-auto-tester .lat-result summary{display:flex;gap:9px;padding:13px 10px;align-items:center;list-style:none;cursor:pointer}
+#ln-auto-tester .lat-result summary::-webkit-details-marker{display:none}
+#ln-auto-tester .lat-indicator{width:9px;height:9px;border-radius:50%;background:#9ca8a1;flex:none}
+#ln-auto-tester .lat-result[data-status='PASS'] .lat-indicator{background:#37c681}
+#ln-auto-tester .lat-result[data-status='FAIL'] .lat-indicator{background:#f07a70}
+#ln-auto-tester .lat-result[data-status='AUDIT'] .lat-indicator{background:#6db8e8}
+#ln-auto-tester .lat-result-title{font-size:.84rem;font-weight:650;min-width:0;flex:1}
+#ln-auto-tester .lat-pill{font-size:.62rem;font-weight:800;color:#ddece4;border:1px solid #54695d;padding:4px 6px;border-radius:7px;white-space:nowrap}
+#ln-auto-tester .lat-result[data-status='PASS'] .lat-pill{color:#7af0b3;border-color:#287c54}
+#ln-auto-tester .lat-result[data-status='FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}
+#ln-auto-tester .lat-result[data-status='AUDIT'] .lat-pill{color:#7ac9f0;border-color:#3f7995}
+#ln-auto-tester .lat-result-body{border-top:1px solid #374b3e;font-size:.79rem;line-height:1.5;padding:10px 14px;color:#b3c9bb;overflow-wrap:anywhere}
+#ln-auto-tester .lat-result-body p{font-size:.78rem}
+#ln-auto-tester .lat-empty{padding:32px 12px;text-align:center;color:#b4c7b9}
+#ln-auto-tester .lat-footer{font-size:.75rem;color:#95ad9e;line-height:1.5;padding:20px 0 10px}
+#ln-debug-hub .lat-launch{background:#20513a;color:#e6f8ea;border:1px solid #2fa36b;border-radius:8px;padding:8px 10px;min-height:35px;cursor:pointer;font:inherit;font-weight:700;font-size:.85rem}
+@media(max-width:380px){#ln-auto-tester .lat-reportbar{flex-wrap:wrap}#ln-auto-tester .lat-summary b{font-size:1.23rem}#ln-auto-tester .lat-summary span{font-size:.51rem}#ln-auto-tester .lat-inner{padding-left:12px;padding-right:12px}}
