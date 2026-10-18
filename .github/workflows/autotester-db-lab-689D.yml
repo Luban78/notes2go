@@ -25,3 +25,5 @@ jobs:
         run: node tests/autotester-ci-status-689E.cjs
       - name: Real PostgreSQL engine / isolated fixture / no production access
         run: bash tests/autotester-db-lab-689D.sh
+      - name: Exported production RPC bodies / synthetic auth + data + real PostgreSQL (689F)
+        run: bash tests/autotester-real-rpc-689F.sh
