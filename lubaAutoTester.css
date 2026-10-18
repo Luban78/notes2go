@@ -50,3 +50,9 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester .lat-result[data-status='SIM_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}
 #ln-auto-tester .lat-result[data-status='BLOCKED'] .lat-indicator{background:#f0b65d}
 #ln-auto-tester .lat-summary{row-gap:7px}
+
+/* 689C: production sync.js under RAM-RPC must never be confused with real DB PASS. */
+#ln-auto-tester .lat-result[data-status='CLIENT_PASS'] .lat-indicator{background:#65c9cb}
+#ln-auto-tester .lat-result[data-status='CLIENT_PASS'] .lat-pill{color:#86e7e9;border-color:#398a90}
+#ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-indicator{background:#ff8585}
+#ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}

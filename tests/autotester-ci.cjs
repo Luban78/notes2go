@@ -1,4 +1,4 @@
-/* 689B: real E2E, simulated sync protocol and source audit suite as in the APK.
+/* 689C: real E2E, actual sync.js RAM-backed client, simulated protocol and audit.
  * Node 20 builtins only; no application, account, DB or network access.
  * CI fails on FAIL/BLOCKED. Integration NOT_TESTED is explicitly reported.
  */
@@ -54,9 +54,10 @@ async function main(){
   console.log('AUTOTESTER',JSON.stringify(counts));
   if((counts.PASS||0)<13)throw Error('Too few real tests were run');
   if((counts.SIM_PASS||0)<12)throw Error('Too few simulated sync scenarios passed');
+  if((counts.CLIENT_PASS||0)<5)throw Error('Too few actual client sync scenarios passed');
   if((counts.AUDIT||0)<5)throw Error('Source audits missing');
   if((counts.NOT_TESTED||0)<4)throw Error('Unimplemented scenarios not disclosed');
-  if((counts.FAIL||0)||(counts.SIM_FAIL||0)||(counts.BLOCKED||0))throw Error('Regression: at least one test failed/blocked');
-  console.log('AUTOTESTER 689B: actual E2E PASS, virtual protocol SIM_PASS; production backend remains NOT_TESTED.');
+  if((counts.FAIL||0)||(counts.CLIENT_FAIL||0)||(counts.SIM_FAIL||0)||(counts.BLOCKED||0))throw Error('Regression: at least one test failed/blocked');
+  console.log('AUTOTESTER 689C: real E2E PASS, actual sync.js CLIENT_PASS (RAM RPC), SIM_PASS; LubaServer remains NOT_TESTED.');
 }
 main().catch(err=>{console.error('AUTOTESTER CI FAILED:',err.message);process.exitCode=1;});

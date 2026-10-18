@@ -76,6 +76,19 @@ async function simulationTests(){
     return [entry('sim-bootstrap','Virtuální synchronizační engine','SIMULATED','BLOCKED',error?.code || error?.message || 'unavailable',0)];
   }
 }
+// 689C: CLIENT tests execute shipped sync.js itself in this isolated Worker.
+// The only backend is strict in-memory RPC (no user/DB/network credentials).
+async function actualClientTests(){
+  try {
+    await initializeRealCrypto();
+    importScripts('lubaAutoTesterClient689C.js');
+    assert(typeof self.LubaNoteAutoTesterClient689C?.run==='function','actual_client_runner_not_loaded');
+    return await self.LubaNoteAutoTesterClient689C.run();
+  }catch(error){
+    return [entry('actual-client-bootstrap','Skutečný Sync V2 v izolovaném Workeru','ACTUAL_CLIENT_SYNC_RAM_BACKEND',
+      'BLOCKED',error?.code||error?.message||'client_sync_unavailable',0)];
+  }
+}
 const pending=[
   entry('sync-real-two-devices','Reálný sync mezi dvěma izolovanými zařízeními','INTEGRATION','NOT_TESTED','Vyžaduje oddělený testovací backend a dva testovací klienty.',0),
   entry('sync-real-trash','Reálný zápis do Koše a potvrzení revize serverem','INTEGRATION','NOT_TESTED','Statický audit není náhradou za RPC a zápis na testovací server.',0),
@@ -98,6 +111,9 @@ self.addEventListener('message',async(e)=>{
     }
     if(suite==='all'||suite==='sync'){
       const result=await simulationTests();for(const t of result)emit(t);
+    }
+    if(suite==='all'||suite==='sync'){
+      const result=await actualClientTests();for(const t of result)emit(t);
     }
     for(const r of pending){if(suite==='all'||suite==='sync'&&r.id.startsWith('sync')||suite==='e2e'&&r.id.startsWith('security')||suite==='ui'&&r.id.startsWith('ui'))emit(r);}
     self.postMessage({type:'done',count:tests.length});
