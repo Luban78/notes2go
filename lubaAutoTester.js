@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690E — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690F — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -15,23 +15,74 @@
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
-    <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>690E</span></h1><p>Skutečný Core V2 · 10× bullet + hierarchie + MOVE + výběr · stabilita V1.</p></div>
+    <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
+    <h1>AutoTester <span>690F</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
-    <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie. <b>CORE PASS</b> = skutečný Core V2 se syntetickými daty a DOM klikem / Tab; nikoli nativní Android touch nebo selection handles.</p></section>
-    <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
-      <button data-lat="run" data-suite="e2e">E2E poznámky</button>
-      <button data-lat="run" data-suite="sync">Synchronizace</button>
-      <button data-lat="run" data-suite="ui">Android / UI</button>
-      <button data-lat="run" data-suite="db" title="Spustí nový izolovaný databázový test na LubaServeru">Test databáze</button>
-      <button data-lat="run" data-suite="stability" title="Vypíše skutečný registr Centra stability V1 a dosud nezautomatizované scénáře">Pokrytí stability V1</button>
-      <button data-lat="run" data-suite="bullet" title="Provádí 10× funkční testy skutečného Core V2 nad izolovanou syntetickou poznámkou">Bullet / seznamy</button></section>
-    <section class="lat-reportbar"><div id="lat-state" role="status">Připraveno k testování.</div>
-      <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
+    <section class="lat-main-controls">
+      <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
+      <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
+        <option value="bullet">Bullet / seznamy (10×)</option><option value="e2e">E2E poznámky</option>
+        <option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
+        <option value="db">Databáze</option><option value="stability">Pokrytí stability V1</option>
+      </select><button type="button" data-lat="area">Spustit oblast</button></div>
+    </section>
+    <section class="lat-laboratory" aria-label="Živá vizuální laboratoř">
+      <div class="lat-lab-top"><strong>Živý testovací editor</strong><button type="button" data-lat="visual" aria-pressed="true">Náhled zapnutý</button></div>
+      <div class="lat-live-stage" id="lat-live-stage"><span class="lat-live-placeholder">Po spuštění testu se zde zobrazí skutečné testovací okno Core V2. Databázové testy obraz editoru nemají.</span></div>
+      <div class="lat-progress-info"><span id="lat-live-step">Připraveno</span><span id="lat-progress-num">–</span></div>
+      <div class="lat-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="lat-progress-track"><div id="lat-progress-fill"></div></div>
+    </section>
+    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
-    <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">690E: „Spustit vše“ provede 690A i 10× test bullet, zanoření, MOVE a výběru v odděleném sandboxu, a načte registr Centra stability V1. Syntetický DOM pointer/Range není důkaz fyzického Android dotyku nebo selection handles. Produkční poznámky ani aplikovaný Core se nemění.</footer>`;}
+    <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
+    <footer class="lat-footer">690F: živý iframe ukazuje skutečný produkční Core V2 v odděleném sandboxu se syntetickými daty. Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+  let visualEnabled=true;
+  let phase='';
+  function setPhase(title){phase=title;setStatus(title);updateProgress(0,10,title);}
+  function updateProgress(current,total,label){
+    if(!screen)return;
+    const n=Number(current)||0, t=Math.max(1,Number(total)||1);
+    const percent=Math.round(Math.max(0,Math.min(100,100*n/t)));
+    const fill=screen.querySelector('#lat-progress-fill');if(fill)fill.style.width=percent+'%';
+    const track=screen.querySelector('#lat-progress-track');if(track)track.setAttribute('aria-valuenow',String(percent));
+    const num=screen.querySelector('#lat-progress-num');if(num)num.textContent=n+' / '+t;
+    const text=screen.querySelector('#lat-live-step');if(text)text.textContent=label||phase||'Testování';
+  }
+  function attachLiveFrame(frame){
+    const host=screen?.querySelector('#lat-live-stage');
+    if(!host||!visualEnabled||screen.hidden)return false;
+    const width=Math.max(240,host.clientWidth||320);
+    const scale=Math.min(.80,(width-10)/420);
+    frame.style.cssText='position:absolute;left:4px;top:0;width:420px;height:640px;transform:scale('+scale+');transform-origin:top left;opacity:1;pointer-events:none;border:0;background:#fff;';
+    host.classList.add('lat-has-live-frame');
+    host.appendChild(frame);return true;
+  }
+  window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled});
+  // Two taps in the same 70px upper-left region, only after server-verified admin login.
+  // The old emergency five-tap fallback stays unchanged for this UI-only patch.
+  let lastAdminTap=null;
+  function setupAdminDoubleTap(){
+    const allowed=()=>{const button=document.getElementById('adminDashboardButton');return Boolean(button && !button.hidden && window.LubaNoteAdminTools?.isAllowed?.()===true);};
+    const excluded=target=>Boolean(target?.closest?.('#ln-auto-tester,#ln-debug-hub,#ln-vd-panel,#ln-vd-quickbar'));
+    let start=null;
+    document.addEventListener('pointerdown',e=>{
+      start=null;
+      if(!e.isPrimary||e.button!==0||excluded(e.target)||e.clientX<0||e.clientX>70||e.clientY<0||e.clientY>70)return;
+      start={id:e.pointerId,x:e.clientX,y:e.clientY,t:performance.now()};
+    },true);
+    document.addEventListener('pointerup',e=>{
+      const x=start;start=null;
+      if(!x||!e.isPrimary||e.pointerId!==x.id||Math.hypot(e.clientX-x.x,e.clientY-x.y)>18||performance.now()-x.t>520)return;
+      if(!allowed()){lastAdminTap=null;return;}
+      const now=performance.now();
+      if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
+        lastAdminTap=null;
+        window.LubaNoteDebugHub?.open?.();
+      }else{lastAdminTap={t:now,x:e.clientX,y:e.clientY};}
+    },true);
+    document.addEventListener('pointercancel',()=>{start=null;},true);
+  }
+  setupAdminDoubleTap();
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -41,6 +92,7 @@
       if(!document.getElementById('lat-core-colors-690c')){
         const css=document.createElement('style');css.id='lat-core-colors-690c';
         css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
+        css.textContent+=`#ln-auto-tester .lat-main-controls{display:grid;gap:10px;margin:16px 0}#ln-auto-tester .lat-main-run{background:#187b51;border-color:#1ea86d;font-size:1.08rem;min-height:58px;color:#fff}#ln-auto-tester .lat-subrun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#ln-auto-tester .lat-subrun select{min-width:0;background:#26362e;color:#fff;border:1px solid #52675b;border-radius:10px;padding:10px;font:inherit}#ln-auto-tester .lat-subrun button{min-height:48px}#ln-auto-tester .lat-laboratory{background:#1b2b23;border:1px solid #38654b;border-radius:15px;padding:12px;margin:14px 0}#ln-auto-tester .lat-lab-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.9rem}#ln-auto-tester .lat-lab-top button{font-size:.75rem;min-height:35px;padding:6px 9px}#ln-auto-tester .lat-live-stage{height:340px;position:relative;overflow:hidden;background:#f5f8f4;border-radius:11px;border:2px solid #4c705c;margin:11px 0;color:#4e6254}#ln-auto-tester .lat-live-placeholder{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:22px;font-size:.9rem;line-height:1.5}#ln-auto-tester .lat-live-stage.lat-has-live-frame .lat-live-placeholder{display:none}#ln-auto-tester .lat-progress-info{display:flex;gap:8px;justify-content:space-between;font-size:.82rem;color:#c5d7ca}#ln-auto-tester .lat-progress-track{height:9px;background:#32483c;border-radius:9px;overflow:hidden;margin-top:10px}#ln-auto-tester #lat-progress-fill{height:100%;width:0;background:#37c681;transition:width .22s}#ln-auto-tester .lat-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 8px}#ln-auto-tester .lat-result-head p{font-size:.82rem;line-height:1.4;margin-top:5px}#ln-auto-tester .lat-result-head button{flex:none;font-size:.84rem}#ln-auto-tester .lat-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 18px}#ln-auto-tester .lat-summary>div{padding:11px 4px}#ln-auto-tester .lat-details{border:1px solid #45584b;border-radius:12px;overflow:hidden}#ln-auto-tester .lat-details>summary{padding:15px;cursor:pointer;font-weight:700;background:#26352d}#ln-auto-tester .lat-details .lat-list{padding:10px}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b}#ln-auto-tester .lat-footer{padding-bottom:28px}#ln-auto-tester .lat-live-stage[data-off='1']{height:90px;background:#24362b;color:#bfd1c5}#ln-auto-tester .lat-laboratory[data-off='1'] .lat-live-placeholder{display:grid}@media(max-width:380px){#ln-auto-tester .lat-subrun{grid-template-columns:minmax(0,1fr)}#ln-auto-tester .lat-live-stage{height:300px}#ln-auto-tester .lat-result-head{flex-wrap:wrap}}`;
         document.head.appendChild(css);
       }
       document.body.appendChild(screen);
@@ -49,6 +101,8 @@
         const action=btn.dataset.lat;
         if(action==='close'){close();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
+        if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
+        if(action==='visual'){visualEnabled=!visualEnabled;btn.textContent=visualEnabled?'Náhled zapnutý':'Náhled vypnutý';btn.setAttribute('aria-pressed',String(visualEnabled));const lab=screen.querySelector('.lat-laboratory');if(lab)lab.dataset.off=visualEnabled?'0':'1';return;}
         if(action==='copy'){void copyReport(btn);}
       });
       document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();close();}},true);
@@ -62,17 +116,30 @@
     if(worker){worker.terminate();worker=null;}
     if(running){running=false;setStatus('Přerušeno. Nedokončené testy se nepovažují za PASS.');}
   }
-  function setStatus(s){const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;}
+  function setStatus(s){
+    const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;
+    if(!screen)return;
+    const progress=String(s).match(/(\d+)\s*\/\s*(10|50)\b/);
+    if(progress)updateProgress(Number(progress[1]),Number(progress[2]),s);
+    else {const label=screen.querySelector('#lat-live-step');if(label)label.textContent=s;}
+  }
   function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
-    const count=sums();const summary=screen.querySelector('#lat-summary');
-    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.CLIENT_PASS}</b><span>CLIENT PASS</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.DB_PASS}</b><span>DB LIVE PASS</span></div><div><b>${count.DB_FAIL}</b><span>DB LIVE FAIL</span></div><div><b>${count.DB_BLOCKED}</b><span>DB LIVE NEDOSTUPNÉ</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.CLIENT_FAIL}</b><span>CLIENT FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div><div><b>${count.CORE_PASS}</b><span>CORE V2 PASS</span></div><div><b>${count.CORE_FAIL}</b><span>CORE V2 FAIL</span></div><div><b>${count.CORE_BLOCKED}</b><span>CORE V2 BLOK</span></div><div><b>${count.PARTIAL}</b><span>ČÁSTEČNĚ</span></div>`;
+    if(!screen)return;
+    const count=sums(), summary=screen.querySelector('#lat-summary');
+    const passing=count.PASS+count.CLIENT_PASS+count.SIM_PASS+count.DB_PASS+count.CORE_PASS;
+    const failing=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL;
+    const blocked=count.BLOCKED+count.DB_BLOCKED+count.CORE_BLOCKED;
+    const missing=count.NOT_TESTED+count.PARTIAL+count.AUDIT;
+    summary.innerHTML=`<div><b>${passing}</b><span>PROVEDENO PASS</span></div><div><b>${failing}</b><span>CHYBY</span></div><div><b>${blocked}</b><span>BLOKOVÁNO</span></div><div><b>${missing}</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT</span></div>`;
     const list=screen.querySelector('#lat-list');
-    list.innerHTML=results.map(r=>{
+    const priority={FAIL:0,CORE_FAIL:0,DB_FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,BLOCKED:1,CORE_BLOCKED:1,DB_BLOCKED:1,NOT_TESTED:2,PARTIAL:3,AUDIT:4};
+    const ordered=results.slice().sort((a,b)=>(priority[a.status]??5)-(priority[b.status]??5));
+    list.innerHTML=ordered.map(r=>{
       const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
-    }).join('') || `<div class="lat-empty">Spusť automatické testy. Výsledky se objeví tady.</div>`;
-    screen.querySelector('[data-lat="copy"]').disabled=results.length===0;
+    }).join('')||'<div class="lat-empty">Spusť test. Průběh uvidíš výše, výsledky po dokončení zde.</div>';
+    screen.querySelector('[data-lat="copy"]').disabled=results.length===0||running;
   }
   /* 690B: Single source of truth = STABILITA_TESTY in the shipped debugHub.js.
    * Read source text ONLY, never evaluate it or load any user's data.
@@ -258,9 +325,12 @@
   }
   function dokoncitBeh(){
     running=false;
+    screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
+    render();
     const count=sums();
     const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
     const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${count.PARTIAL} částečně`:'';
+    updateProgress(10,10,'Dokončeno – výsledky jsou níže');
     setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.CORE_PASS} CORE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
   }
   async function dokoncitWorker(generace){
@@ -288,7 +358,9 @@
     stop();
     const generace=generaceBehu;
     results=[];running=true;
-    startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
+    startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
+    screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
+    render();updateProgress(0,10,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
     if(activeSuite==='stability' || activeSuite==='bullet'){
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
@@ -329,13 +401,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690E',
+      'LUBANOTE AUTOTESTER / 690F',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690E: CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690F: LIVE VISUAL PREVIEW is actual sandbox Core V2. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'

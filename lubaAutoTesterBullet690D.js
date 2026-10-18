@@ -11,7 +11,7 @@
   };
   let busy=false;
   const blocked=(why)=>IDS.map(id=>({id,name:LABELS[id],kind:'REAL_SHIPPED_CORE_V2_SANDBOX_KEYBOARD',status:'CORE_BLOCKED',ms:0,detail:String(why||'unavailable').slice(0,180)}));
-  function runner(token){
+  function runner(token,visual){
     'use strict';
     const send=(type,data)=>parent.postMessage({scope:'LN_690D_CORE_BULLET',token,type,data},'*');
     const ids=['core-list-indent','core-list-level-history'];
@@ -70,12 +70,16 @@
           opened=true;
           const idsOriginal=core.ziskejModel().bloky.map(b=>b.id);
           pattern(core,[0,0,1,0],idsOriginal);
+          send('progress',`Zanoření ${repeat}/10 · Tab`);
           select(core,idsOriginal[1]);key(core,'Tab',false);
+          if(visual)await new Promise(r=>setTimeout(r,180));
           pattern(core,[0,1,2,0],idsOriginal);
+          send('progress',`Vynoření ${repeat}/10 · Shift+Tab`);
           select(core,idsOriginal[1]);key(core,'Tab',true);
           pattern(core,[0,0,1,0],idsOriginal);
           record(0,'PASS','',performance.now()-t,repeat);
           first=true;
+          send('progress',`Undo/Redo ${repeat}/10`);
           const h=performance.now();
           check(core.undo()===true,'undo_failed');
           pattern(core,[0,1,2,0],idsOriginal);
@@ -140,8 +144,8 @@
         frame.sandbox='allow-scripts'; // Keep opaque origin. No allow-same-origin.
         frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:180px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}[hidden]{display:none!important}</style><script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690d-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)});<\/script></body></html>`;
-        document.body.appendChild(frame);
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:180px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}[hidden]{display:none!important}</style><script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690d-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isEnabled?.())});<\/script></body></html>`;
+        if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Spouštím skutečný Core V2 · hierarchie Tab/Shift+Tab…');
       }catch(e){cleanup(blocked(e?.message||'failed_to_create_sandbox'));}
     });

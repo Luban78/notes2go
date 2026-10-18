@@ -127,6 +127,7 @@
       if(!host){send('blocked','sandbox_host_missing');return;}
       for(let i=1;i<=10;i++){
         for(let kind=0;kind<2;kind++){
+          send('progress',`Bullet ${i}/10 · ${kind===0?'MOVE dlouhý stisk/přesun':'výběr textu'} – start`);
           const before=performance.now();let opened=false;
           try{
             opened=true;
@@ -157,7 +158,7 @@
       const receive=e=>{
         if(!frame||e.source!==frame.contentWindow||e.data?.scope!=='LN_690E_CORE_BULLET'||e.data.token!==token)return;
         if(!shouldContinue()){cleanup(blocked('interrupted'));return;}
-        if(e.data.type==='progress')onProgress(String(e.data.data||'').slice(0,90));
+        if(e.data.type==='progress'){lastStep=String(e.data.data||'').slice(0,100);onProgress(lastStep);}
         else if(e.data.type==='blocked')cleanup(blocked('sandbox_blocked_'+String(e.data.data||'error').slice(0,130)));
         else if(e.data.type==='done'){
           const rows=e.data.data;
@@ -167,7 +168,7 @@
         }
       };
       window.addEventListener('message',receive);
-      timeout=setTimeout(()=>cleanup(blocked('sandbox_timeout_45s')),45000);
+      timeout=setTimeout(()=>cleanup(blocked('sandbox_timeout_45s_last='+lastStep)),45000);
       interval=setInterval(()=>{if(!shouldContinue())cleanup(blocked('interrupted'));},250);
       try{
         const origin=location.origin;
@@ -181,7 +182,7 @@
         frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
         frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:440px;max-height:440px;overflow-y:auto;display:block}.ln-v2-odstavec{height:72px;min-height:72px;line-height:25px;display:block}[hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:20px}</style><script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690e-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)});<\/script></body></html>`;
-        document.body.appendChild(frame);
+        if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Core V2 · připravuji syntetický MOVE a výběr textu…');
       }catch(e){cleanup(blocked('sandbox_creation_'+String(e?.message||'error').slice(0,130)));}
     });

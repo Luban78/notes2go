@@ -17,7 +17,7 @@
     return IDS.map(id => ({id,name:LABELS[id],kind:'CORE_V2_SANDBOX',status:kind,ms:0,detail:String(reason||'no_result').slice(0,165)}));
   }
   // This function is serialized into a sandboxed, opaque-origin srcdoc iframe.
-  function isolatedRunner(token) {
+  function isolatedRunner(token, visual) {
     'use strict';
     const send = (type, data) => parent.postMessage({scope:'LN_690C_CORE_BULLET',token,type,data},'*');
     const ids = ['core-list-import','core-list-render','core-list-toggle','core-list-badge'];
@@ -29,7 +29,7 @@
     ];
     const totals = new Map(ids.map((id,i)=>[id,{id,name:names[i],ok:0,fail:0,blocked:0,ms:0,reason:''}]));
     const assert=(ok,why)=>{if(!ok)throw new Error(why);};
-    const tick=()=>new Promise(r=>setTimeout(r,30));
+    const tick=()=>new Promise(r=>setTimeout(r,visual?190:30));
     const textBlock = b => (b.obsah||[]).map(s=>s.text||'').join('');
     const record=(id,status,reason='',ms=0,iter=0)=>{
       const q=totals.get(id); q.ms+=Math.round(ms);
@@ -50,6 +50,7 @@
       const host=document.getElementById('ln-690c-host');
       if(!host){send('blocked','sandbox_host_missing');return;}
       for(let iteration=1;iteration<=10;iteration++){
+        send('progress',`Bullet ${iteration}/10 · import hierarchie`);
         let imported=null, ed=null, model0=null;
         const started=performance.now();
         try {
@@ -68,6 +69,7 @@
           send('progress',`Bullet ${iteration}/10`);continue;
         }
         try {
+          send('progress',`Bullet ${iteration}/10 · vykresluji model`);
           const t=performance.now();
           assert(core.otevriVHostu(host,imported.model)===true,'core_open_failed');
           ed=core.ziskejEditorElement();
@@ -89,6 +91,7 @@
         }
         let markerOk=false;
         try {
+          send('progress',`Bullet ${iteration}/10 · sbaluji větev`);
           const t=performance.now();
           const parentRow=ed.children[10], childA=ed.children[11], childB=ed.children[12], grandChild=ed.children[13];
           const marker=parentRow.querySelector('button[data-v2-list-marker]');
@@ -111,6 +114,7 @@
           record(ids[2],'ok','',performance.now()-t,iteration);
         }catch(e){record(ids[2],'fail',e?.message||'collapse_error',performance.now()-started,iteration);}
         try {
+          send('progress',`Bullet ${iteration}/10 · rozbaluji větev`);
           const t=performance.now();
           if(!markerOk){record(ids[3],'blocked','collapse_precondition_failed',0,iteration);}
           else {
@@ -198,8 +202,8 @@
         frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0;';
         const policy=`default-src 'none'; script-src 'nonce-${token}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; form-action 'none'`;
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:170px;max-height:170px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}#ln-690c-host [hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:18px}</style><script nonce="${esc(token)}" src="${esc(coreUrl)}"><\/script></head><body><div id="ln-690c-host"></div><script nonce="${esc(token)}">(${isolatedRunner.toString()})(${JSON.stringify(token)});<\/script></body></html>`;
-        document.body.appendChild(frame);
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:170px;max-height:170px;overflow-y:auto;display:block}.ln-v2-odstavec{min-height:24px;display:block}#ln-690c-host [hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:18px}</style><script nonce="${esc(token)}" src="${esc(coreUrl)}"><\/script></head><body><div id="ln-690c-host"></div><script nonce="${esc(token)}">(${isolatedRunner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isEnabled?.())});<\/script></body></html>`;
+        if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Načítám skutečný Core V2 v izolovaném testovacím okně…');
       } catch(e){cleanup(fallback(String(e?.message||'sandbox_creation_failed').slice(0,145)));}
     });
