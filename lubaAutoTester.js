@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690B — registry bridge + isolated 690A checks.
+/* LubaNote AutoTester 690C — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -10,34 +10,39 @@
   let running=false;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={all:'Všechny dostupné testy + pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – pokrytí'};
+  const suiteNames={all:'Všechny dostupné testy + Core V2 bullet 10× + pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10×'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>690B</span></h1><p>Testy z 690A + mapa pokrytí skutečných scénářů Centra stability V1.</p></div>
+    <h1>AutoTester <span>690C</span></h1><p>Izolované testy skutečného Core V2 · 10× opakování bullet · registr stability V1.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie.</p></section>
+    <p><b>PASS</b> = provedený test, <b>CLIENT PASS</b> = produkční sync.js s RAM RPC, <b>SIM PASS</b> = model, <b>DB LIVE PASS</b> = izolovaný PostgreSQL na LubaServeru. <b>AUDIT</b> není funkční test. <b>NETESTOVÁNO</b> znamená, že automatické provedení příslušného scénáře zatím chybí. Scénáře V1 se nepovažují za PASS podle ruční historie. <b>CORE PASS</b> = skutečný Core V2 se syntetickými daty a DOM klikem, nikoli Android touch/MOVE.</p></section>
     <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button data-lat="run" data-suite="e2e">E2E poznámky</button>
       <button data-lat="run" data-suite="sync">Synchronizace</button>
       <button data-lat="run" data-suite="ui">Android / UI</button>
       <button data-lat="run" data-suite="db" title="Spustí nový izolovaný databázový test na LubaServeru">Test databáze</button>
       <button data-lat="run" data-suite="stability" title="Vypíše skutečný registr Centra stability V1 a dosud nezautomatizované scénáře">Pokrytí stability V1</button>
-      <button data-lat="run" data-suite="bullet" title="Vypíše scénáře bullet a seznamů; 690B zatím netestuje jejich chování">Bullet / seznamy</button></section>
+      <button data-lat="run" data-suite="bullet" title="Provádí 10× funkční testy skutečného Core V2 nad izolovanou syntetickou poznámkou">Bullet / seznamy</button></section>
     <section class="lat-reportbar"><div id="lat-state" role="status">Připraveno k testování.</div>
       <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">690B: „Spustit vše“ provede stávající 690A testy a načte úplný registr Centra stability V1 přímo z debugHub.js. Scénáře bez funkční automatizace zůstanou NETESTOVÁNO, nikdy falešně PASS. Tlačítko Bullet / seznamy nyní ukáže mezery v pokrytí; 10× funkční testy patří do navazující etapy 690C. Produkční poznámky se nemění.</footer>`;}
+    <footer class="lat-footer">690C: „Spustit vše“ provede 690A i 10× test skutečného Core V2 v sandboxu, a načte registr Centra stability V1. PASS z DOM click není důkaz nativního Android dotyku nebo MOVE. Produkční poznámky ani aplikovaný Core se nemění.</footer>`;}
   function open(){
     if(!isAllowed())return;
     if(!screen){
       screen=document.createElement('section');screen.id='ln-auto-tester';
       screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','LubaNote AutoTester');
       screen.innerHTML=`<div class="lat-inner">${header()}</div>`;
+      if(!document.getElementById('lat-core-colors-690c')){
+        const css=document.createElement('style');css.id='lat-core-colors-690c';
+        css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
+        document.head.appendChild(css);
+      }
       document.body.appendChild(screen);
       screen.addEventListener('click',(e)=>{
         const btn=e.target.closest('button[data-lat]');if(!btn)return;
@@ -58,13 +63,13 @@
     if(running){running=false;setStatus('Přerušeno. Nedokončené testy se nepovažují za PASS.');}
   }
   function setStatus(s){const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;}
-  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
+  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
     const count=sums();const summary=screen.querySelector('#lat-summary');
-    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.CLIENT_PASS}</b><span>CLIENT PASS</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.DB_PASS}</b><span>DB LIVE PASS</span></div><div><b>${count.DB_FAIL}</b><span>DB LIVE FAIL</span></div><div><b>${count.DB_BLOCKED}</b><span>DB LIVE NEDOSTUPNÉ</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.CLIENT_FAIL}</b><span>CLIENT FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div>`;
+    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.CLIENT_PASS}</b><span>CLIENT PASS</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.DB_PASS}</b><span>DB LIVE PASS</span></div><div><b>${count.DB_FAIL}</b><span>DB LIVE FAIL</span></div><div><b>${count.DB_BLOCKED}</b><span>DB LIVE NEDOSTUPNÉ</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.CLIENT_FAIL}</b><span>CLIENT FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div><div><b>${count.CORE_PASS}</b><span>CORE V2 PASS</span></div><div><b>${count.CORE_FAIL}</b><span>CORE V2 FAIL</span></div><div><b>${count.CORE_BLOCKED}</b><span>CORE V2 BLOK</span></div><div><b>${count.PARTIAL}</b><span>ČÁSTEČNĚ</span></div>`;
     const list=screen.querySelector('#lat-list');
     list.innerHTML=results.map(r=>{
-      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
+      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('') || `<div class="lat-empty">Spusť automatické testy. Výsledky se objeví tady.</div>`;
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0;
@@ -123,12 +128,49 @@
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
       render();return;
     }
+    const bulletProof=new Map([['list-toggle','core-list-toggle'],['list-badge','core-list-badge']]);
     for(const item of vybrane){
+      const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
+      const partial=coreResult?.status==='CORE_PASS';
       results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
-        status:'NOT_TESTED',ms:0,
-        detail:'Scénář je v Centru stability V1. Automatický funkční test ještě není implementován; ruční PASS se nepřebírá.'});
+        status:partial?'PARTIAL':'NOT_TESTED',ms:0,
+        detail:partial?'10× izolovaný Core V2 a syntetický DOM click PASS; reálné Android dotyky, WebView scroll a MOVE ještě nejsou ověřeny.':'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
     }
     render();
+  }
+  // 690C: run the ACTUAL shipped Core V2 in opaque-origin sandbox only.
+  // The module is loaded on demand, so old builds fail CLOSED (not PASS).
+  async function spustitBulletCore690C(generace){
+    const expected=['core-list-import','core-list-render','core-list-toggle','core-list-badge'];
+    const blocked=(reason)=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX',status:'CORE_BLOCKED',ms:0,detail:String(reason||'not_loaded').slice(0,165)}));
+    try {
+      if(!window.LubaNoteAutoTesterBullet690C?.runRepeated){
+        const js=new URL('lubaAutoTesterBullet690C.js?v=690C-real-dom-bullet',location.href);
+        if(js.origin!==location.origin)throw Error('bullet_module_origin_blocked');
+        await new Promise((resolve,reject)=>{
+          const element=document.createElement('script');
+          const timeout=setTimeout(()=>{element.remove();reject(Error('bullet_module_load_timeout'));},12000);
+          element.src=js.href;
+          element.onload=()=>{clearTimeout(timeout);resolve();};
+          element.onerror=()=>{clearTimeout(timeout);reject(Error('bullet_module_load_failed'));};
+          document.head.appendChild(element);
+        });
+      }
+      if(generace!==generaceBehu || screen.hidden)return;
+      const rows=await window.LubaNoteAutoTesterBullet690C.runRepeated(
+        ()=>generace===generaceBehu && !screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);}
+      );
+      if(generace!==generaceBehu || screen.hidden)return;
+      const good=Array.isArray(rows) && rows.length===4 &&
+        rows.every(r=>expected.includes(r.id) && ['CORE_PASS','CORE_FAIL','CORE_BLOCKED'].includes(r.status)) &&
+        new Set(rows.map(r=>r.id)).size===4;
+      results.push(...(good?rows:blocked('bullet_test_results_invalid')));
+    }catch(e){
+      if(generace!==generaceBehu || screen.hidden)return;
+      results.push(...blocked(e?.message||'bullet_module_unavailable'));
+    }
+    if(generace===generaceBehu && !screen.hidden)render();
   }
   async function spustitServeroveTesty(generace){
     let vysledky;
@@ -151,8 +193,8 @@
     running=false;
     const count=sums();
     const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
-    const suffix=registr.length?` · Centrum V1: 0/${registr.length} funkčně ověřeno`:'';
-    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
+    const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${count.PARTIAL} částečně`:'';
+    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.CORE_PASS} CORE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
   }
   async function dokoncitWorker(generace){
     if(generace!==generaceBehu)return;
@@ -161,6 +203,10 @@
     if(activeSuite==='all' || activeSuite==='sync'){
       setStatus('Místní testy hotovy · spouštím databázové testy na LubaServeru…');
       await spustitServeroveTesty(generace);
+    }
+    if(generace===generaceBehu && activeSuite==='all'){
+      setStatus('Provádím 10× bullet testy skutečného Core V2…');
+      await spustitBulletCore690C(generace);
     }
     if(generace===generaceBehu && activeSuite==='all'){
       setStatus('Načítám pokrytí Centra stability V1…');
@@ -176,7 +222,8 @@
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
     if(activeSuite==='stability' || activeSuite==='bullet'){
-      await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':'all');
+      if(activeSuite==='bullet')await spustitBulletCore690C(generace);
+      if(generace===generaceBehu)await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':'all');
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -212,13 +259,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690B',
+      'LUBANOTE AUTOTESTER / 690C',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
-      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
-      `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0`,
-      '690B: STABILITY_V1 rows are coverage inventory, NOT functional automatic tests. Bullet repeated behavioral execution is not yet implemented.', 
+      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
+      `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
+      '690C: CORE_PASS means ACTUAL shipped editorCoreV2.js with 10x synthetic DOM interaction in opaque-origin sandbox, NOT real Android native touch or MOVE. V1 PARTIAL is NOT a complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
