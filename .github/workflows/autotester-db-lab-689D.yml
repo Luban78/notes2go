@@ -1,6 +1,8 @@
 name: LubaNote AutoTester 689D - isolated PostgreSQL lab
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,5 +21,7 @@ jobs:
           node-version: '20'
       - name: Previous AutoTester regression suite (689C)
         run: node tests/autotester-ci.cjs
+      - name: Test public CI status evaluator (689E)
+        run: node tests/autotester-ci-status-689E.cjs
       - name: Real PostgreSQL engine / isolated fixture / no production access
         run: bash tests/autotester-db-lab-689D.sh

@@ -1,32 +1,35 @@
-/* LubaNote AutoTester 689C — developer-only in-app test screen.
+/* LubaNote AutoTester 689E — developer-only in-app test screen.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
- * No local user notes, accounts, passwords, keys or server data are read.
+ * No local user notes, credentials, keys or production LubaServer data are read.
+ * Optional status GET only observes a previous public GitHub Actions run.
  */
 (() => {
   'use strict';
   let screen=null, worker=null, results=[], startedAt='',activeSuite='all';
   let runTimeout=null;
   let running=false;
+  let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={all:'Všechny dostupné testy',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání'};
+  const suiteNames={all:'Všechny dostupné testy',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Výsledek DB LAB na GitHubu'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>689C</span></h1><p>Skutečný E2E modul, virtuální synchronizace a izolovaný klientský Sync V2. Bez zásahu do tvých poznámek.</p></div>
+    <h1>AutoTester <span>689E</span></h1><p>Skutečný E2E modul, virtuální synchronizace a izolovaný klientský Sync V2. Bez zásahu do tvých poznámek.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>PASS</b> = skutečný E2E modul; <b>CLIENT PASS</b> = skutečný sync.js nad paměťovým RPC (bez DB); <b>SIM PASS</b> = samostatný protokolový model; <b>AUDIT</b> = kontrola zdrojového kódu; <b>NETESTOVÁNO</b> = skutečný LubaServer / Android integrace.</p></section>
+    <p><b>DB CI PASS</b> = poslední úspěšný běh PostgreSQL laboratoře na GitHubu pro aktuální MAIN (nejde o test přímo v APK); <b>PASS</b> = skutečný E2E modul; <b>CLIENT PASS</b> = skutečný sync.js nad paměťovým RPC (bez DB); <b>SIM PASS</b> = samostatný protokolový model; <b>AUDIT</b> = kontrola zdrojového kódu; <b>NETESTOVÁNO</b> = skutečný LubaServer / Android integrace.</p></section>
     <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button data-lat="run" data-suite="e2e">E2E poznámky</button>
       <button data-lat="run" data-suite="sync">Synchronizace</button>
-      <button data-lat="run" data-suite="ui">Android / UI</button></section>
+      <button data-lat="run" data-suite="ui">Android / UI</button>
+      <button data-lat="run" data-suite="db" title="Pouze načte poslední výsledek; nový test na GitHubu nespouští">Výsledek DB LAB</button></section>
     <section class="lat-reportbar"><div id="lat-state" role="status">Připraveno k testování.</div>
       <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">689C: CLIENT PASS testuje skutečný produkční sync.js proti RPC náhražce v izolovaném Workeru. SIM PASS je oddělený protokolový model. Ani jeden neověřuje skutečný LubaServer – ten zůstává NETESTOVÁNO.</footer>`;}
+    <footer class="lat-footer">689E: „Spustit vše“ otestuje moduly lokálně a NAČTE poslední databázový výsledek z veřejného GitHubu (bez tokenu). Tlačítko nespouští nový SQL test. DB CI PASS není test produkční databáze ani důkaz shody s instalovanou APK. Čtyři integrační scénáře zůstávají NETESTOVÁNO.</footer>`;}
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -47,28 +50,60 @@
   }
   function close(){if(!screen)return;screen.hidden=true;document.body.classList.remove('lat-open');stop();}
   function stop(){
+    generaceBehu++; // Ignore late GitHub responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
     if(worker){worker.terminate();worker=null;}
     if(running){running=false;setStatus('Přerušeno. Nedokončené testy se nepovažují za PASS.');}
   }
   function setStatus(s){const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;}
-  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
+  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
     const count=sums();const summary=screen.querySelector('#lat-summary');
-    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.CLIENT_PASS}</b><span>CLIENT PASS</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.CLIENT_FAIL}</b><span>CLIENT FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div>`;
+    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.CLIENT_PASS}</b><span>CLIENT PASS</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.DB_PASS}</b><span>DB CI PASS</span></div><div><b>${count.DB_FAIL}</b><span>DB CI FAIL</span></div><div><b>${count.DB_BLOCKED}</b><span>DB CI NEDOSTUPNÉ</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.CLIENT_FAIL}</b><span>CLIENT FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div>`;
     const list=screen.querySelector('#lat-list');
     list.innerHTML=results.map(r=>{
-      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
+      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB CI PASS',DB_FAIL:'DB CI FAIL',DB_BLOCKED:'DB CI NEDOSTUPNÉ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('') || `<div class="lat-empty">Spusť automatické testy. Výsledky se objeví tady.</div>`;
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0;
   }
+  async function nacistCiStav(generace){
+    let vysledek;
+    try {
+      vysledek=await window.LubaNoteAutoTesterCi689E?.zjistiStav?.();
+    } catch (_error) { /* Missing helper is correctly marked BLOCKED. */ }
+    if(generace!==generaceBehu || !screen || screen.hidden)return;
+    results.push(vysledek && ['DB_PASS','DB_FAIL','DB_BLOCKED'].includes(vysledek.status)
+      ? vysledek : {id:'db-lab-ci-689e',name:'GitHub DB LAB nelze ověřit',kind:'READ_ONLY_GITHUB_CI',status:'DB_BLOCKED',ms:0,detail:'Ověření se nepodařilo; PASS nelze potvrdit.'});
+    render();
+  }
+  function dokoncitBeh(){
+    running=false;
+    const count=sums();
+    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB CI PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.NOT_TESTED} neověřeno`);
+  }
+  async function dokoncitWorker(generace){
+    if(generace!==generaceBehu)return;
+    if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
+    worker?.terminate();worker=null;
+    if(activeSuite==='all' || activeSuite==='sync'){
+      setStatus('Místní testy hotovy · ověřuji poslední DB LAB na GitHubu…');
+      await nacistCiStav(generace);
+    }
+    if(generace===generaceBehu)dokoncitBeh();
+  }
   async function run(suite){
     if(running)return;
     stop();
+    const generace=generaceBehu;
     results=[];running=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
+    if(activeSuite==='db'){
+      await nacistCiStav(generace);
+      if(generace===generaceBehu)dokoncitBeh();
+      return;
+    }
     try {worker=new Worker('lubaAutoTesterWorker.js?v=689C');}
     catch(e){running=false;results=[{id:'worker-start',name:'Testovací engine nelze spustit',kind:'REAL',status:'BLOCKED',detail:String(e?.message||'Worker_unavailable'),ms:0}];render();setStatus('Tester BLOKOVÁN. Nejde o PASS.');return;}
     worker.addEventListener('message',(e)=>{
@@ -78,9 +113,7 @@
         if(!r || !['PASS','CLIENT_PASS','SIM_PASS','FAIL','CLIENT_FAIL','SIM_FAIL','AUDIT','BLOCKED','NOT_TESTED'].includes(r.status))return;
         results.push(r);render();setStatus(`Probíhá testování · ${results.length} výsledků`);
       }else if(e.data?.type==='done'){
-        running=false;const count=sums();setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL} FAIL, ${count.BLOCKED+count.NOT_TESTED} neověřeno`);
-        if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
-        worker?.terminate();worker=null;
+        void dokoncitWorker(generace);
       }
     });
     worker.addEventListener('error',(e)=>{
@@ -98,12 +131,12 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 689C',
+      'LUBANOTE AUTOTESTER / 689E',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
-      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
-      'UPOZORNENI: CLIENT_PASS spousti skutecny sync.js v izolovanem Workeru s umelym RAM RPC, NIKOLIV skutecnym LubaServerem. SIM_PASS simuluje protokol. AUDIT neni funkcni test. Skutecny server zatim NETESTOVAN.',
+      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_CI_PASS=${counts.DB_PASS} DB_CI_FAIL=${counts.DB_FAIL} DB_CI_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
+      'UPOZORNENI: DB_CI_PASS je POUZE posledni verejny vysledek GitHub workflow pro aktualni HEAD main, NE test teto APK ani produkcni databaze. Spustit vse nespousti novy GitHub job. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model, AUDIT=kontrola zdroju. Produkcni RPC a nativni Android integrace zustavaji NETESTOVANO.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
     ];

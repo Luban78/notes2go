@@ -56,3 +56,12 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester .lat-result[data-status='CLIENT_PASS'] .lat-pill{color:#86e7e9;border-color:#398a90}
 #ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-indicator{background:#ff8585}
 #ln-auto-tester .lat-result[data-status='CLIENT_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}
+
+/* 689E GitHub Actions DB LAB last-result read only metadata. */
+#ln-auto-tester .lat-result[data-status='DB_PASS'] .lat-indicator{background:#38cd81}
+#ln-auto-tester .lat-result[data-status='DB_PASS'] .lat-pill{color:#84f5b6;border-color:#287c54}
+#ln-auto-tester .lat-result[data-status='DB_FAIL'] .lat-indicator{background:#f06e70}
+#ln-auto-tester .lat-result[data-status='DB_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}
+#ln-auto-tester .lat-result[data-status='DB_BLOCKED'] .lat-indicator{background:#efb65d}
+#ln-auto-tester .lat-result[data-status='DB_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}
+#ln-auto-tester .lat-actions button:last-child:nth-child(odd){grid-column:1/-1}
