@@ -17,6 +17,7 @@ async function shouldReject(action, code){let seen='';try{await action();}catch(
 function entry(id,name,kind,status,detail,elapsed){return {id,name,kind,status,detail: String(detail || '').slice(0,230),ms:elapsed};}
 async function caseRun(id,name,kind,fn){const start=performance.now();try{await fn();return entry(id,name,kind,kind==='AUDIT'?'AUDIT':'PASS','',Math.round(performance.now()-start));}catch(e){return entry(id,name,kind,'FAIL',e?.code || e?.message || 'unknown',Math.round(performance.now()-start));}}
 async function initializeRealCrypto(){
+  if (self.LubaNoteNotesCrypto?.zasifruj) return;
   assert(Boolean(self.crypto?.subtle), 'WebCrypto_unavailable');
   syntheticKey=await crypto.subtle.importKey('raw',crypto.getRandomValues(new Uint8Array(32)),{name:'AES-GCM'},false,['encrypt','decrypt']);
   self.LubaNoteE2ECore=Object.freeze({
@@ -63,6 +64,18 @@ async function codeAudits(){
   await add('audit-retry','Synchronizace rozpoznává odmítnutý zápis',()=>{assert(sync.includes('688U TARGET RPC REJECTED')&&sync.includes('Number(error.status) === 400'),'http_400_path_not_identified');});
   return tests;
 }
+// 689B — isolated synthetic protocol simulator using the real shipped E2E module.
+// Every result is SIM_PASS/SIM_FAIL, never a production integration PASS.
+async function simulationTests(){
+  try {
+    await initializeRealCrypto();
+    importScripts('lubaAutoTesterSync689B.js');
+    assert(typeof self.LubaNoteAutoTesterSync689B?.run==='function','sync_model_not_loaded');
+    return await self.LubaNoteAutoTesterSync689B.run();
+  }catch(error){
+    return [entry('sim-bootstrap','Virtuální synchronizační engine','SIMULATED','BLOCKED',error?.code || error?.message || 'unavailable',0)];
+  }
+}
 const pending=[
   entry('sync-real-two-devices','Reálný sync mezi dvěma izolovanými zařízeními','INTEGRATION','NOT_TESTED','Vyžaduje oddělený testovací backend a dva testovací klienty.',0),
   entry('sync-real-trash','Reálný zápis do Koše a potvrzení revize serverem','INTEGRATION','NOT_TESTED','Statický audit není náhradou za RPC a zápis na testovací server.',0),
@@ -82,6 +95,9 @@ self.addEventListener('message',async(e)=>{
     }
     if(suite==='all'||suite==='sync'){
       const result=await codeAudits();for(const t of result)emit(t);
+    }
+    if(suite==='all'||suite==='sync'){
+      const result=await simulationTests();for(const t of result)emit(t);
     }
     for(const r of pending){if(suite==='all'||suite==='sync'&&r.id.startsWith('sync')||suite==='e2e'&&r.id.startsWith('security')||suite==='ui'&&r.id.startsWith('ui'))emit(r);}
     self.postMessage({type:'done',count:tests.length});

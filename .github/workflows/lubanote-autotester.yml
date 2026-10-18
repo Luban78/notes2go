@@ -1,4 +1,4 @@
-name: LubaNote AutoTester 689A
+name: LubaNote AutoTester 689B
 
 on:
   push:
@@ -19,5 +19,5 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Real E2E synthetic tests and source audits (NO backend)
+      - name: Real E2E and virtual sync protocol tests (NO backend)
         run: node tests/autotester-ci.cjs

@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 689A — developer-only in-app test screen.
+/* LubaNote AutoTester 689B — developer-only in-app test screen.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, accounts, passwords, keys or server data are read.
  */
@@ -14,10 +14,10 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VÝVOJOVÝ NÁSTROJ</div>
-    <h1>AutoTester <span>689A</span></h1><p>Skutečné testy E2E ve virtuálním prostředí. Bez zásahu do tvých poznámek.</p></div>
+    <h1>AutoTester <span>689B</span></h1><p>E2E testy a virtuální synchronizace. Bez zásahu do tvých poznámek.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-notice"><strong>Bezpečný testovací režim</strong><p>Oddělený testovací Worker · umělé poznámky a klíč · žádné připojení k produkční databázi.</p>
-    <p><b>PASS</b> = reálně provedený test; <b>AUDIT</b> = kontrola přítomnosti ochrany v kódu, nikoliv funkční test; <b>NETESTOVÁNO</b> = čeká na testovací server či nativní zařízení.</p></section>
+    <p><b>PASS</b> = skutečný E2E modul; <b>SIM PASS</b> = virtuální server a dvě simulovaná zařízení se skutečným E2E modulem (nikoli produkční Sync V2); <b>AUDIT</b> = kontrola zdrojového kódu; <b>NETESTOVÁNO</b> = skutečný LubaServer / Android integrace.</p></section>
     <section class="lat-actions" aria-label="Kategorie testů"><button data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button data-lat="run" data-suite="e2e">E2E poznámky</button>
       <button data-lat="run" data-suite="sync">Synchronizace</button>
@@ -26,7 +26,7 @@
       <button data-lat="copy" type="button" disabled>Kopírovat report</button></section>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div>
-    <footer class="lat-footer">AutoTester 689A je první základ. Dvouzařízení, skutečné RPC a nativní klávesnice budou přidány v další etapě a do té doby se nikdy nevykazují jako PASS.</footer>`;}
+    <footer class="lat-footer">689B: Virtuální model umí scénáře Koše, revizí a konfliktů v RAM. Nepoužívá skutečný sync.js ani serverové RPC. Skutečná integrace zůstává NETESTOVÁNO až do oddělených testů na backendu.</footer>`;}
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -52,13 +52,13 @@
     if(running){running=false;setStatus('Přerušeno. Nedokončené testy se nepovažují za PASS.');}
   }
   function setStatus(s){const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;}
-  function sums(){const sum={PASS:0,FAIL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
+  function sums(){const sum={PASS:0,SIM_PASS:0,FAIL:0,SIM_FAIL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
     const count=sums();const summary=screen.querySelector('#lat-summary');
-    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div>`;
+    summary.innerHTML=`<div><b>${count.PASS}</b><span>PASS E2E</span></div><div><b>${count.SIM_PASS}</b><span>SIM PASS</span></div><div><b>${count.FAIL}</b><span>FAIL</span></div><div><b>${count.SIM_FAIL}</b><span>SIM FAIL</span></div><div><b>${count.AUDIT}</b><span>AUDIT</span></div><div><b>${count.BLOCKED}</b><span>BLOKOVÁNO</span></div><div><b>${count.NOT_TESTED}</b><span>NETESTOVÁNO</span></div>`;
     const list=screen.querySelector('#lat-list');
     list.innerHTML=results.map(r=>{
-      const label={PASS:'PASS',FAIL:'FAIL',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
+      const label={PASS:'PASS',FAIL:'FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('') || `<div class="lat-empty">Spusť automatické testy. Výsledky se objeví tady.</div>`;
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0;
@@ -69,13 +69,13 @@
     results=[];running=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';render();
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
-    try {worker=new Worker('lubaAutoTesterWorker.js?v=689A');}
+    try {worker=new Worker('lubaAutoTesterWorker.js?v=689B');}
     catch(e){running=false;results=[{id:'worker-start',name:'Testovací engine nelze spustit',kind:'REAL',status:'BLOCKED',detail:String(e?.message||'Worker_unavailable'),ms:0}];render();setStatus('Tester BLOKOVÁN. Nejde o PASS.');return;}
     worker.addEventListener('message',(e)=>{
       if(!running)return;
       if(e.data?.type==='result'){
         const r=e.data.result;
-        if(!r || !['PASS','FAIL','AUDIT','BLOCKED','NOT_TESTED'].includes(r.status))return;
+        if(!r || !['PASS','SIM_PASS','FAIL','SIM_FAIL','AUDIT','BLOCKED','NOT_TESTED'].includes(r.status))return;
         results.push(r);render();setStatus(`Probíhá testování · ${results.length} výsledků`);
       }else if(e.data?.type==='done'){
         running=false;const count=sums();setStatus(`Hotovo · ${count.PASS} PASS, ${count.FAIL} FAIL, ${count.AUDIT} AUDIT, ${count.BLOCKED+count.NOT_TESTED} neověřeno`);
@@ -98,12 +98,12 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 689A',
+      'LUBANOTE AUTOTESTER / 689B',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
-      `PASS=${counts.PASS} FAIL=${counts.FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
-      'UPOZORNENI: AUDIT neni funkcni test. Skutecny sync a backend V1 zatim NETESTOVAN.',
+      `PASS_E2E=${counts.PASS} SIM_PASS=${counts.SIM_PASS} FAIL=${counts.FAIL} SIM_FAIL=${counts.SIM_FAIL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
+      'UPOZORNENI: SIM_PASS simuluje protokol v RAM, ne produkcni sync.js ani DB RPC. AUDIT neni funkcni test. Skutecny sync s testovacim serverem zatim NETESTOVAN.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
     ];
