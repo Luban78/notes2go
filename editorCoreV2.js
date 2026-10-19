@@ -2255,12 +2255,12 @@
       if (textBloku(blok).length === 0 && !(Array.isArray(blok.obrazky) && blok.obrazky.length)) {
         dokument.bloky.splice(caret.blok, 1);
         if (!dokument.bloky.some(jeTextovyBlok)) dokument.bloky.push(vytvorOdstavec(""));
-        // Po odstraneni prazdneho TODO zustane caret na ZACATKU dalsiho textoveho bloku.
-        // Na konec predchoziho prejde jen tehdy, kdyz za smazanym radkem jiz zadny neni.
-        const dalsi = caret.blok < dokument.bloky.length ? najdiTextovyBlokOd(caret.blok, 1) : -1;
-        if (dalsi >= 0) return { blok: dalsi, offset: 0 };
-        const predchozi = najdiTextovyBlokOd(dokument.bloky.length - 1, -1);
-        return { blok: Math.max(0, predchozi), offset: predchozi >= 0 ? textBloku(dokument.bloky[predchozi]).length : 0 };
+        // 690L: Backspace smaze prazdny TODO, caret patri na KONEC predchoziho textoveho bloku.
+        // Prvni TODO nema predchozi blok: jen v tom pripade zvolime zacatek nasledujiciho.
+        const predchozi = caret.blok > 0 ? najdiTextovyBlokOd(caret.blok - 1, -1) : -1;
+        if (predchozi >= 0) return { blok: predchozi, offset: textBloku(dokument.bloky[predchozi]).length };
+        const dalsi = najdiTextovyBlokOd(Math.min(caret.blok, dokument.bloky.length - 1), 1);
+        return { blok: Math.max(0, dalsi), offset: 0 };
       }
       return caret;
     }

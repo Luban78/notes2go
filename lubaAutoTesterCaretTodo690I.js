@@ -116,19 +116,15 @@
       mark(`VÝBĚR ${blockIndex+1}:${offset}${tailIndex!==null?` → ${tailIndex+1}:${tailOffset}`:''}`,r);
       return r;
     }
-    async function checkCaret(expectedId,expectedOffset=null,rule='strict'){
+    async function checkCaret(expectedId,expectedOffset=null){
       // Real V2 vykresli() obnovuje DOM selection pomoci queueMicrotask.
       // Kontrola ve stejnem stacku cetla odpojeny/stary DOM bod = falesny FAIL.
       await Promise.resolve();
       const model=core.zachytAktualniVyber();
       assert(Boolean(model?.sbaleny), 'caret_not_collapsed_after_action');
       const b=getBlocks()[model.zacatek.blok];assert(b,'caret_outside_document');
-      if(rule==='not_next_end'){
-        assert(!(b.id==='690i-2' && model.zacatek.offset>=text(b).length),'caret_jumped_to_end_of_next_todo');
-      }else{
-        assert(b.id===expectedId,`caret_moved_to_wrong_todo_${b.id}_expected_${expectedId}`);
-        if(expectedOffset!==null) assert(model.zacatek.offset===expectedOffset,`caret_wrong_offset_${model.zacatek.offset}_expected_${expectedOffset}`);
-      }
+      assert(b.id===expectedId,`caret_moved_to_wrong_todo_${b.id}_expected_${expectedId}`);
+      if(expectedOffset!==null) assert(model.zacatek.offset===expectedOffset,`caret_wrong_offset_${model.zacatek.offset}_expected_${expectedOffset}`);
       const range=selection()?.rangeCount?selection().getRangeAt(0):null;
       assert(Boolean(range),'dom_caret_not_present');
       assert(range.collapsed===true,'dom_selection_did_not_collapse');
@@ -277,11 +273,23 @@
           assert(text(getBlocks().find(b=>b.id==='690i-1'))==='','todo_clear_not_empty');await show(200);break;
         }
         case 'caret-todo-empty':{
-          fixture(['Zacatek','','Nasledujici ukol']);locate(1,0);progress('Backspace na prázdném ToDo',i);await show(220);
-          key('backspace');keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
-          await checkCaret(null,null,'not_next_end');
-          // Second Backspace must not modify the next task.
-          key('backspace');keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
+          fixture(['Zacatek','','Nasledujici ukol']);locate(1,0);
+          progress('Odstranuji prazdny ToDo a overuji konec PREDCHOZIHO ukolu',i);await show(220);
+          key('backspace');
+          assert(getBlocks().length===2,'todo_empty_checkbox_not_removed');
+          keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
+          // V2 obnovuje DOM vyber v microtasku; nevynucujeme falešný FAIL před vykreslením.
+          await Promise.resolve();
+          const poSmazani=core.zachytAktualniVyber();
+          const skutecny=getBlocks()[poSmazani?.zacatek?.blok];
+          assert(skutecny?.id==='690i-0' && poSmazani.zacatek.offset===7,
+            'caret_after_empty_todo_must_be_at_previous_end; actual='+String(skutecny?.id||'none')+':'+String(poSmazani?.zacatek?.offset));
+          await checkCaret('690i-0',7);await show(130);
+          progress('Dalsi Backspace maze PREDCHOZI text, ne nasledujici ukol',i);
+          key('backspace');
+          keepNeighbor('690i-0','Zacate');keepNeighbor('690i-2','Nasledujici ukol');
+          assert(getBlocks().length===2,'todo_count_changed_after_second_backspace');
+          await checkCaret('690i-0',6);
           await show(240);break;
         }
         case 'caret-todo-last':{
