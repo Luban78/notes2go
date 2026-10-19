@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690I2 — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690I3 — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -16,7 +16,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690I2</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690I3</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
@@ -36,7 +36,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690I2: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690I3: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -80,8 +80,8 @@
       const now=performance.now();
       if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
-        // 690I2D: Dvojtap musi obnovit spolecny VD/DH +/- dock.
-        // Bez tohoto kroku se po prime Debug Hub.open() mini panel nezobrazi.
+        // 690I3: zachovat puvodni minidock VD / DH / minus / plus.
+        // Dvojtap otevre DH, ale nikdy nesmi obejit zobrazeni VD docku.
         const dock=document.getElementById('ln-vd-quickbar');
         if(!dock || dock.hidden || getComputedStyle(dock).display==='none'){
           window.LubaNoteVisualDebug?.showDock?.();
@@ -117,12 +117,65 @@
         `#ln-auto-tester .lat-laboratory.lat-expanded .lat-progress-info{font-size:.95rem}`;
         document.head.appendChild(extra);
       }
+      // Graphite Compact vyber oblasti: nativni Android select je pouze datovy zdroj.
+      // Uzivatel vidi vlastni panel ve stylu LubaNote; zadne systemove sede menu.
+      const areaSelect=screen.querySelector('#lat-area');
+      const areaChooser=document.createElement('button');
+      areaChooser.type='button';areaChooser.className='lat-area-chooser';
+      areaChooser.dataset.lat='choose';areaChooser.setAttribute('aria-haspopup','dialog');
+      areaChooser.setAttribute('aria-expanded','false');
+      areaChooser.textContent=(areaSelect.selectedOptions?.[0]?.textContent||'Vybrat oblast')+'  ▾';
+      areaSelect.hidden=true;
+      areaSelect.after(areaChooser);
+      const picker=document.createElement('div');picker.id='lat-area-picker';picker.className='lat-area-picker';
+      picker.hidden=true;
+      picker.innerHTML='<div class="lat-area-picker-shade" data-picker-close="1"></div>'+
+        '<div class="lat-area-picker-panel" role="dialog" aria-modal="true" aria-label="Vybrat testovanou oblast">'+
+        '<div class="lat-area-picker-head"><strong>Vybrat oblast</strong><button type="button" class="lat-area-picker-x" data-picker-close="1" aria-label="Zavřít výběr">×</button></div>'+
+        '<div class="lat-area-picker-options" role="radiogroup" aria-label="Oblasti AutoTesteru">'+
+        Array.from(areaSelect.options).map(o=>'<button type="button" class="lat-area-picker-option" role="radio" data-picker-value="'+safe(o.value)+'" aria-checked="'+String(o.selected)+'"><span>'+safe(o.textContent)+'</span><span class="lat-area-picker-check" aria-hidden="true">'+(o.selected?'✓':'')+'</span></button>').join('')+'</div></div>';
+      screen.appendChild(picker);
+      picker.addEventListener('click',e=>{
+        if(e.target.closest('[data-picker-close]')){closeAreaPicker();return;}
+        const item=e.target.closest('[data-picker-value]');
+        if(!item)return;
+        const val=item.dataset.pickerValue;
+        if(!Array.from(areaSelect.options).some(o=>o.value===val))return;
+        areaSelect.value=val;
+        areaChooser.textContent=(areaSelect.selectedOptions?.[0]?.textContent||'Vybrat oblast')+'  ▾';
+        closeAreaPicker();
+      });
+      picker.addEventListener('keydown',e=>{
+        if(!['ArrowDown','ArrowUp'].includes(e.key))return;
+        const options=Array.from(picker.querySelectorAll('.lat-area-picker-option'));
+        const index=options.indexOf(document.activeElement);
+        if(!options.length)return;
+        e.preventDefault();options[(index+(e.key==='ArrowDown'?1:-1)+options.length)%options.length].focus();
+      });
+      const pickerStyle=document.createElement('style');pickerStyle.id='lat-area-picker-690i3';
+      pickerStyle.textContent=`
+        #ln-auto-tester #lat-area[hidden]{display:none!important}
+        #ln-auto-tester .lat-area-chooser{width:100%;min-width:0;min-height:52px;padding:12px 15px;text-align:left;background:#25382f;color:#e8f3ed;border:1px solid #567162;border-radius:13px;font:inherit;line-height:1.35}
+        #ln-auto-tester .lat-area-chooser:focus-visible,#ln-auto-tester .lat-area-picker-option:focus-visible{outline:2px solid #41c993;outline-offset:2px}
+        #ln-auto-tester .lat-area-picker[hidden]{display:none!important}
+        #ln-auto-tester .lat-area-picker{position:fixed;inset:0;z-index:2147483620;display:flex;align-items:center;justify-content:center;padding:14px}
+        #ln-auto-tester .lat-area-picker-shade{position:absolute;inset:0;background:rgba(0,0,0,.78)}
+        #ln-auto-tester .lat-area-picker-panel{position:relative;width:min(100%,520px);max-height:min(79dvh,750px);display:flex;flex-direction:column;overflow:hidden;background:#192a23;border:1px solid #416e54;border-radius:16px;box-shadow:0 18px 50px #0009;color:#eef8f1}
+        #ln-auto-tester .lat-area-picker-head{padding:13px 17px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #405749;font-size:1rem}
+        #ln-auto-tester .lat-area-picker-x{height:36px;min-width:36px;border-radius:9px;border:1px solid #587261;background:#293a31;color:#fff;font-size:1.35rem}
+        #ln-auto-tester .lat-area-picker-options{overflow-y:auto;overscroll-behavior:contain;padding:6px}
+        #ln-auto-tester .lat-area-picker-option{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;gap:12px;min-height:52px;padding:12px 13px;background:transparent;color:#e3f0e6;border:0;border-bottom:1px solid #344b3d;border-radius:7px;font:inherit;font-size:.92rem;line-height:1.35}
+        #ln-auto-tester .lat-area-picker-option[aria-checked='true']{background:#184c38;color:#baffd6}
+        #ln-auto-tester .lat-area-picker-check{font-weight:800;color:#55d695;min-width:20px;text-align:right}
+      `;
+      document.head.appendChild(pickerStyle);
       document.body.appendChild(screen);
       screen.addEventListener('click',(e)=>{
         const btn=e.target.closest('button[data-lat]');if(!btn)return;
         const action=btn.dataset.lat;
         if(action==='close'){close();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
+        if(action==='choose'){openAreaPicker();return;}
         if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
         if(action==='speed'){if(slowMode&&!extraSlowMode){extraSlowMode=true;}else if(extraSlowMode){slowMode=false;extraSlowMode=false;}else{slowMode=true;}btn.textContent=extraSlowMode?'🐌 Velmi pomalu':slowMode?'🐢 Pomalu':'⚡ Rychle';btn.setAttribute('aria-pressed',String(slowMode));return;}
         if(action==='expand'){expanded=!expanded;screen.querySelector('.lat-laboratory')?.classList.toggle('lat-expanded',expanded);btn.textContent=expanded?'↙ Zmenšit':'⛶ Zvětšit';btn.setAttribute('aria-pressed',String(expanded));return;}
@@ -141,8 +194,30 @@
     if(btn){btn.textContent='⛶ Zvětšit';btn.setAttribute('aria-pressed','false');}
     return true;
   }
+  function closeAreaPicker(){
+    const picker=screen?.querySelector('#lat-area-picker');
+    if(!picker||picker.hidden)return false;
+    picker.hidden=true;
+    screen.querySelector('.lat-area-chooser')?.setAttribute('aria-expanded','false');
+    screen.querySelector('.lat-area-chooser')?.focus({preventScroll:true});
+    return true;
+  }
+  function openAreaPicker(){
+    const picker=screen?.querySelector('#lat-area-picker');
+    if(!picker||!screen||screen.hidden)return;
+    const selected=screen.querySelector('#lat-area')?.value;
+    picker.querySelectorAll('[data-picker-value]').forEach(btn=>{
+      const on=btn.dataset.pickerValue===selected;
+      btn.setAttribute('aria-checked',String(on));
+      btn.querySelector('.lat-area-picker-check').textContent=on?'✓':'';
+    });
+    picker.hidden=false;
+    screen.querySelector('.lat-area-chooser')?.setAttribute('aria-expanded','true');
+    (picker.querySelector('[aria-checked="true"]')||picker.querySelector('[data-picker-value]'))?.focus({preventScroll:true});
+  }
   function handleTesterBack(){
     if(!screen||screen.hidden)return false;
+    if(closeAreaPicker())return true;
     if(collapseExpanded())return true;
     close();return true;
   }
@@ -153,7 +228,7 @@
     if(screen&&!screen.hidden)return handleTesterBack();
     return typeof backHandlerBeforeTester==='function'?backHandlerBeforeTester.apply(this,arguments):false;
   };
-  function close(){if(!screen)return;expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();}
+  function close(){if(!screen)return;closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();}
   function stop(){
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
@@ -431,7 +506,7 @@
     const blocked=why=>needed.map(id=>({id,name:'Kurzor / ToDo – '+id,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,180)}));
     try{
       if(!window.LubaNoteAutoTesterCaretTodo690I?.runRepeated){
-        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690I2-csp-fix',location.href);
+        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690I3-dom-caret-async',location.href);
         if(url.origin!==location.origin)throw Error('caret_module_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -563,14 +638,14 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690I2',
+      'LUBANOTE AUTOTESTER / 690I3',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690I2: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690I3: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'

@@ -1,4 +1,4 @@
-/* LubaNote 690I2 — actual shipped Core V2 selection/caret/TODO regression.
+/* LubaNote 690I3 — actual shipped Core V2 selection/caret/TODO regression.
    Opaque-origin sandbox, synthetic test data. Red point/blue marks are
    diagnostic overlays: NOT native Android touch or selection handles. */
 (() => {
@@ -116,7 +116,10 @@
       mark(`VÝBĚR ${blockIndex+1}:${offset}${tailIndex!==null?` → ${tailIndex+1}:${tailOffset}`:''}`,r);
       return r;
     }
-    function checkCaret(expectedId,expectedOffset=null,rule='strict'){
+    async function checkCaret(expectedId,expectedOffset=null,rule='strict'){
+      // Real V2 vykresli() obnovuje DOM selection pomoci queueMicrotask.
+      // Kontrola ve stejnem stacku cetla odpojeny/stary DOM bod = falesny FAIL.
+      await Promise.resolve();
       const model=core.zachytAktualniVyber();
       assert(Boolean(model?.sbaleny), 'caret_not_collapsed_after_action');
       const b=getBlocks()[model.zacatek.blok];assert(b,'caret_outside_document');
@@ -133,7 +136,9 @@
         assert(range.startContainer.isConnected,'dom_caret_detached');
         const node=range.startContainer, el=node.nodeType===3?node.parentElement:node;
         const domRow=el?.closest?.('[data-ln-v2-blok]');
-        assert(Boolean(domRow),'dom_caret_outside_todo_row');
+        const at = node?.nodeType===3 ? '#text' : (node?.nodeName||'unknown');
+        const focus = document.activeElement===ed() ? 'editor' : (document.activeElement?.tagName||'none');
+        assert(Boolean(domRow),`dom_caret_outside_row_node_${at}_focus_${focus}`);
         assert(domRow.dataset.lnV2Blok===b.id,`dom_caret_wrong_todo_${domRow.dataset.lnV2Blok}`);
         mark(`KURZOR ${b.id}:${model.zacatek.offset}`,range);
       }
@@ -191,7 +196,7 @@
           assert(getBlocks()[0].id===before[0].id&&text(getBlocks()[0])==='Prvni radek','plain_prev_changed');
           assert(getBlocks()[2].id===before[2].id&&text(getBlocks()[2])==='Treti radek','plain_next_changed');
           assert(text(getBlocks()[1])==='Druh text','plain_target_text_wrong');
-          checkCaret(before[1].id,4);await show(260);break;
+          await checkCaret(before[1].id,4);await show(260);break;
         }
         case 'caret-bullet-text':{
           const imp=core.importujHtml('<ul><li>Alpha</li><li>Bravo</li><li>Charlie</li></ul>');
@@ -203,7 +208,7 @@
           assert(text(getBlocks()[1])==='Brvo','bullet_text_delete_wrong');
           assert(getBlocks()[0].id===before[0].id&&text(getBlocks()[0])==='Alpha','bullet_prev_changed');
           assert(getBlocks()[2].id===before[2].id&&text(getBlocks()[2])==='Charlie','bullet_next_changed');
-          checkCaret(before[1].id,2);await show(240);break;
+          await checkCaret(before[1].id,2);await show(240);break;
         }
         case 'caret-editor-format':{
           const imp=core.importujHtml('<p>Formatovat text</p>');assert(imp?.ok===true,'format_import');
@@ -242,8 +247,8 @@
           const previous=getBlocks()[53].id, last=getBlocks()[54].id;
           locate(54,9);key('backspace');
           assert(getBlocks()[53].id===previous&&text(getBlocks()[53])==='Radek-053','scroll_prev_changed');
-          assert(text(getBlocks()[54])==='Radek-04','scroll_last_wrong');
-          checkCaret(last,8);await show(280);break;
+          assert(text(getBlocks()[54])==='Radek-05','scroll_last_wrong');
+          await checkCaret(last,8);await show(280);break;
         }
         case 'caret-editor-image':{
           const imp=core.importujHtml('<p>Pred obrazkem</p><p>Za obrazkem</p>');
@@ -263,35 +268,35 @@
           fixture();locate(1,5);progress('mažu znak uvnitř prostředního ToDo',i);await show(220);
           key('backspace');keepNeighbor('690i-0','Prvni ukol');keepNeighbor('690i-2','Treti ukol');
           assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Druh ukol','middle_delete_wrong_text');
-          checkCaret('690i-1',4);await show(230);break;
+          await checkCaret('690i-1',4);await show(230);break;
         }
         case 'caret-todo-clear':{
           fixture(['Pred','Dát','Po']);locate(1,3);progress('mažu Dát až na prázdný řádek',i);
-          for(let j=0;j<3;j++){key('backspace');keepNeighbor('690i-0','Pred');keepNeighbor('690i-2','Po');checkCaret('690i-1',2-j);await show(170);}
+          for(let j=0;j<3;j++){key('backspace');keepNeighbor('690i-0','Pred');keepNeighbor('690i-2','Po');await checkCaret('690i-1',2-j);await show(170);}
           assert(text(getBlocks().find(b=>b.id==='690i-1'))==='','todo_clear_not_empty');await show(200);break;
         }
         case 'caret-todo-empty':{
           fixture(['Zacatek','','Nasledujici ukol']);locate(1,0);progress('Backspace na prázdném ToDo',i);await show(220);
           key('backspace');keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
-          checkCaret(null,null,'not_next_end');await show(240);break;
+          await checkCaret(null,null,'not_next_end');await show(240);break;
         }
         case 'caret-todo-last':{
           fixture(['Prvni ukol','Druhy ukol','Z']);locate(2,1);progress('mažu poslední ToDo',i);
           key('backspace');keepNeighbor('690i-0','Prvni ukol');keepNeighbor('690i-1','Druhy ukol');
-          assert(text(getBlocks().find(b=>b.id==='690i-2'))==='','last_todo_not_empty');checkCaret('690i-2',0);await show(250);break;
+          assert(text(getBlocks().find(b=>b.id==='690i-2'))==='','last_todo_not_empty');await checkCaret('690i-2',0);await show(250);break;
         }
         case 'caret-todo-range':{
           fixture(['Pred','Opravit vzorce','Po']);locate(1,3,1,7);progress('táhnu úchyty a nahrazuji vybraný text',i);await show(320);
           key('text','ABC');keepNeighbor('690i-0','Pred');keepNeighbor('690i-2','Po');
           assert(text(getBlocks().find(b=>b.id==='690i-1'))==='OprABC vzorce','range_replace_wrong_text');
-          checkCaret('690i-1',6);await show(230);break;
+          await checkCaret('690i-1',6);await show(230);break;
         }
         case 'caret-todo-reopen':{
           fixture(['Pred','Stred','Po']);locate(1,3);progress('vkládám text a vracím historii',i);key('text','!');
-          assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Str!ed','history_edit_wrong_text');checkCaret('690i-1',4);await show(170);
+          assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Str!ed','history_edit_wrong_text');await checkCaret('690i-1',4);await show(170);
           assert(core.undo()===true,'history_undo_failed');keepNeighbor('690i-0','Pred');keepNeighbor('690i-2','Po');
-          assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Stred','history_undo_wrong_text');checkCaret('690i-1',3);await show(170);
-          assert(core.redo()===true,'history_redo_failed');assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Str!ed','history_redo_wrong_text');checkCaret('690i-1',4);await show(170);break;
+          assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Stred','history_undo_wrong_text');await checkCaret('690i-1',3);await show(170);
+          assert(core.redo()===true,'history_redo_failed');assert(text(getBlocks().find(b=>b.id==='690i-1'))==='Str!ed','history_redo_wrong_text');await checkCaret('690i-1',4);await show(170);break;
         }
         case 'caret-todo-done-move':{
           fixture(['Ukol A','Hotovy ukol','Ukol C'],[false,true,false]);progress('držím hotové ToDo a přesouvám ho',i);
