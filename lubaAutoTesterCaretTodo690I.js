@@ -1,4 +1,4 @@
-/* LubaNote 690I1 — actual shipped Core V2 selection/caret/TODO regression.
+/* LubaNote 690I2 — actual shipped Core V2 selection/caret/TODO regression.
    Opaque-origin sandbox, synthetic test data. Red point/blue marks are
    diagnostic overlays: NOT native Android touch or selection handles. */
 (() => {
@@ -13,10 +13,16 @@
     ['caret-todo-done-move','ToDo – hotový úkol, long-press MOVE a zachování stavu'],
     ['caret-todo-done-longpress','ToDo – long-press bez tažení nesmí změnit obsah'],
     ['caret-bullet-first-move','Bullet – dlouhý stisk a přesun první položky na konec'],
-    ['caret-bullet-last-move','Bullet – dlouhý stisk a přesun poslední položky na začátek']
+    ['caret-bullet-last-move','Bullet – dlouhý stisk a přesun poslední položky na začátek'],
+    ['caret-editor-plain','Editor – běžný text: Backspace a správný kurzor'],
+    ['caret-bullet-text','Bullet – editace textu bez skoku do další odrážky'],
+    ['caret-editor-format','Editor – tučné, kurziva a podtržení výběru'],
+    ['caret-editor-colors','Editor – barva a podbarvení textu'],
+    ['caret-editor-scroll','Editor – dlouhý text, scroll a správný caret'],
+    ['caret-editor-image','Editor – vložení obrázku mezi texty a úprava velikosti']
   ];
   let busy=false;
-  const expected = scope => CASES.filter(([id]) => scope==='all' || (scope==='todo' && id.startsWith('caret-todo-')) || (scope==='editor' && ['caret-todo-range','caret-todo-reopen'].includes(id)) || (scope==='bullet' && id.startsWith('caret-bullet-')));
+  const expected = scope => CASES.filter(([id]) => scope==='all' || (scope==='todo' && id.startsWith('caret-todo-')) || (scope==='editor' && (id.startsWith('caret-editor-') || ['caret-todo-range','caret-todo-reopen'].includes(id))) || (scope==='bullet' && (id.startsWith('caret-bullet-') || id==='caret-bullet-text')));
   const blocked = (scope,reason) => expected(scope).map(([id,name])=>({id,name,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(reason||'unavailable').slice(0,190)}));
 
   function sandboxRunner(token,scope,visual){
@@ -31,14 +37,21 @@
       ['caret-todo-done-move','ToDo – hotový úkol, long-press MOVE a zachování stavu'],
       ['caret-todo-done-longpress','ToDo – long-press bez tažení nesmí změnit obsah'],
     ['caret-bullet-first-move','Bullet – dlouhý stisk a přesun první položky na konec'],
-    ['caret-bullet-last-move','Bullet – dlouhý stisk a přesun poslední položky na začátek']
-    ].filter(([id])=>scope==='all' || (scope==='todo'&&id.startsWith('caret-todo-')) || (scope==='editor'&&['caret-todo-range','caret-todo-reopen'].includes(id)) || (scope==='bullet'&&id.startsWith('caret-bullet-')));
+    ['caret-bullet-last-move','Bullet – dlouhý stisk a přesun poslední položky na začátek'],
+    ['caret-editor-plain','Editor – běžný text: Backspace a správný kurzor'],
+    ['caret-bullet-text','Bullet – editace textu bez skoku do další odrážky'],
+    ['caret-editor-format','Editor – tučné, kurziva a podtržení výběru'],
+    ['caret-editor-colors','Editor – barva a podbarvení textu'],
+    ['caret-editor-scroll','Editor – dlouhý text, scroll a správný caret'],
+    ['caret-editor-image','Editor – vložení obrázku mezi texty a úprava velikosti']
+    ].filter(([id])=>scope==='all' || (scope==='todo'&&id.startsWith('caret-todo-')) || (scope==='editor'&&(id.startsWith('caret-editor-')||['caret-todo-range','caret-todo-reopen'].includes(id))) || (scope==='bullet'&&id.startsWith('caret-bullet-')));
     const send=(type,data)=>parent.postMessage({scope:'LN_690I_CARET',token,type,data},'*');
     const rows=source.map(([id,name])=>({id,name,kind:'CORE_V2_CARET_SANDBOX_690I',ok:0,fail:0,ms:0,reason:''}));
     const assert=(cond,name)=>{if(!cond)throw Error(name);};
     const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
     const show=ms=>visual?sleep(Math.round(ms*visual)):Promise.resolve();
     const text=b=>(b?.obsah||[]).map(x=>String(x.text||'')).join('');
+    send('ready',{loaded:true,coreAvailable:Boolean(window.LubaNoteEditorV2)});
     const core=window.LubaNoteEditorV2;
     const host=document.querySelector('#lat-690i-host');
     const getBlocks=()=>core.ziskejModel()?.bloky||[];
@@ -166,6 +179,86 @@
       switch(id){
         case 'caret-bullet-first-move':{progress('přesouvám první Bullet na konec',i);await bulletMove(i,'first');break;}
         case 'caret-bullet-last-move':{progress('přesouvám poslední Bullet na začátek',i);await bulletMove(i,'last');break;}
+
+        case 'caret-editor-plain':{
+          const imp=core.importujHtml('<p>Prvni radek</p><p>Druhy text</p><p>Treti radek</p>');
+          assert(imp?.ok===true,'plain_import_failed');
+          assert(core.otevriVHostu(host,imp.model)===true,'plain_open_failed');
+          const before=getBlocks().map(b=>({id:b.id,txt:text(b)}));
+          assert(before.length===3,'plain_blocks_count');
+          locate(1,5);progress('mažu ve druhém odstavci, hlídám caret',i);await show(280);
+          key('backspace');
+          assert(getBlocks()[0].id===before[0].id&&text(getBlocks()[0])==='Prvni radek','plain_prev_changed');
+          assert(getBlocks()[2].id===before[2].id&&text(getBlocks()[2])==='Treti radek','plain_next_changed');
+          assert(text(getBlocks()[1])==='Druh text','plain_target_text_wrong');
+          checkCaret(before[1].id,4);await show(260);break;
+        }
+        case 'caret-bullet-text':{
+          const imp=core.importujHtml('<ul><li>Alpha</li><li>Bravo</li><li>Charlie</li></ul>');
+          assert(imp?.ok===true,'bullet_text_import');assert(core.otevriVHostu(host,imp.model)===true,'bullet_text_open');
+          const before=getBlocks().map(b=>({id:b.id,txt:text(b)}));
+          assert(before.length===3,'bullet_text_fixture_count');
+          locate(1,3);progress('mažu v Bullet Bravo, kontroluji úchyt',i);await show(240);
+          key('backspace');
+          assert(text(getBlocks()[1])==='Brvo','bullet_text_delete_wrong');
+          assert(getBlocks()[0].id===before[0].id&&text(getBlocks()[0])==='Alpha','bullet_prev_changed');
+          assert(getBlocks()[2].id===before[2].id&&text(getBlocks()[2])==='Charlie','bullet_next_changed');
+          checkCaret(before[1].id,2);await show(240);break;
+        }
+        case 'caret-editor-format':{
+          const imp=core.importujHtml('<p>Formatovat text</p>');assert(imp?.ok===true,'format_import');
+          assert(core.otevriVHostu(host,imp.model)===true,'format_open');
+          for(const flag of ['tucne','kurziva','podtrzeni']){
+            locate(0,0,0,9);progress('testuji formát '+flag,i);await show(160);
+            core.prepniFormat(flag);
+            const special=getBlocks()[0]?.obsah?.filter(z=>z.text&&z.format?.[flag]===true).map(z=>z.text).join('')||'';
+            assert(special.includes('Formatova'),`format_${flag}_not_applied`);
+          }
+          assert(text(getBlocks()[0])==='Formatovat text','format_changed_text');
+          await show(220);break;
+        }
+        case 'caret-editor-colors':{
+          const imp=core.importujHtml('<p>Barva podklad</p>');assert(imp?.ok===true,'color_import');
+          assert(core.otevriVHostu(host,imp.model)===true,'color_open');
+          locate(0,0,0,5);progress('obarvuji text a podbarvení',i);await show(240);
+          core.nastavBarvu('barva','#e53935');
+          locate(0,0,0,5);
+          core.nastavBarvu('pozadi','#fff59d');
+          const colored=getBlocks()[0]?.obsah?.find(z=>z.text==='Barva');
+          assert(colored?.format?.barva==='#e53935','foreground_color_missing');
+          assert(colored?.format?.pozadi==='#fff59d','background_color_missing');
+          assert(text(getBlocks()[0])==='Barva podklad','colors_changed_text');
+          await show(260);break;
+        }
+        case 'caret-editor-scroll':{
+          const html=Array.from({length:55},(_,j)=>'<p>Radek-'+String(j).padStart(3,'0')+'</p>').join('');
+          const imp=core.importujHtml(html);assert(imp?.ok===true,'scroll_import');
+          assert(core.otevriVHostu(host,imp.model)===true,'scroll_open');
+          const editor=ed();editor.style.height='160px';editor.style.overflowY='auto';
+          assert(getBlocks().length===55,'scroll_line_count');
+          assert(editor.scrollHeight>editor.clientHeight+150,'scroll_not_scrollable');
+          editor.scrollTop=editor.scrollHeight;progress('scrolluji 55 odstavců a mažu poslední znak',i);await show(300);
+          assert(editor.scrollTop>0,'scroll_did_not_move');
+          const previous=getBlocks()[53].id, last=getBlocks()[54].id;
+          locate(54,9);key('backspace');
+          assert(getBlocks()[53].id===previous&&text(getBlocks()[53])==='Radek-053','scroll_prev_changed');
+          assert(text(getBlocks()[54])==='Radek-04','scroll_last_wrong');
+          checkCaret(last,8);await show(280);break;
+        }
+        case 'caret-editor-image':{
+          const imp=core.importujHtml('<p>Pred obrazkem</p><p>Za obrazkem</p>');
+          assert(imp?.ok===true,'image_import');assert(core.otevriVHostu(host,imp.model)===true,'image_open');
+          locate(0,4);progress('vkládám obrázek mezi texty a měním velikost',i);await show(260);
+          const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+HrtkAAAAASUVORK5CYII=';
+          assert(core.vlozObrazek({zdroj:png,alt:'Test obrazek',velikost:'prizpusobit',zarovnani:'stred'})===true,'image_insert_failed');
+          const b=getBlocks(),pic=b.find(x=>x.typ==='obrazek');
+          assert(Boolean(pic),'image_block_missing');
+          assert(b.filter(x=>x.typ!=='obrazek').map(text).join('').includes('Pred obrazkemZa obrazkem'),'image_changed_neighbor_text');
+          assert(core.nastavNastaveniObrazku(pic.id,{velikost:'50',zarovnani:'vpravo'})===true,'image_settings_rejected');
+          const updated=getBlocks().find(x=>x.id===pic.id);
+          assert(updated?.velikost==='50'&&updated?.zarovnani==='vpravo','image_settings_not_saved');
+          await show(310);break;
+        }
         case 'caret-todo-middle':{
           fixture();locate(1,5);progress('mažu znak uvnitř prostředního ToDo',i);await show(220);
           key('backspace');keepNeighbor('690i-0','Prvni ukol');keepNeighbor('690i-2','Treti ukol');
@@ -297,7 +390,10 @@
         if(!frame||e.source!==frame.contentWindow||e.data?.scope!=='LN_690I_CARET'||e.data.token!==token)return;
         lastMessage=Date.now();
         if(!shouldContinue()){done(fallback('user_interrupted'));return;}
-        if(e.data.type==='progress'){
+        if(e.data.type==='ready'){
+          lastStep='sandbox_ready_core_'+(e.data.data?.coreAvailable?'yes':'no');
+          onProgress('Testovací editor načten · spouštím scénáře…');
+        }else if(e.data.type==='progress'){
           lastStep=String(e.data.data||'').slice(0,130);
           onProgress(lastStep);
         }else if(e.data.type==='checkpoint'){
@@ -323,13 +419,14 @@
         const u=new URL('editorCoreV2.js?v=690I-caret-todo',location.href);
         if(u.origin!==location.origin)throw Error('core_cross_origin');
         if(!/^https?:\/\/|^capacitor:\/\//.test(location.origin))throw Error('unsupported_origin');
-        const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-        const csp=`default-src 'none'; script-src 'nonce-${token}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; form-action 'none'`;
+        const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const csp=`default-src 'none'; script-src 'nonce-${token}'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; font-src 'none'; frame-src 'none'; form-action 'none'`;
         const styles=`html,body{background:#fff;color:#153525;font:20px/1.5 system-ui}body{margin:12px}.ln-v2-editor{min-height:500px;display:block}.ln-v2-odstavec{position:relative;min-height:65px;padding:9px 10px 9px 48px;border-bottom:1px solid #e2eae5;box-sizing:border-box}.ln-v2-todo:before{content:'☐';position:absolute;left:7px;top:8px;color:#137657}.ln-v2-todo-hotovo:before{content:'☑'}.ln-v2-todo-check{position:absolute;left:6px;top:11px;opacity:.1;width:25px;height:25px}#lat-690i-overlay{position:fixed;inset:0;pointer-events:none;z-index:2147483646}.lat-690i-red-dot{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;background:#ef263c;border:3px solid white;border-radius:50%;box-shadow:0 0 0 3px rgba(239,38,60,.5)}.lat-690i-handle{position:absolute;width:5px;height:27px;background:#17b7d8;border-radius:4px;transform:translate(-50%,-85%)}.lat-690i-handle:after{content:'';position:absolute;left:-6px;bottom:-13px;width:18px;height:18px;border-radius:50%;background:#17b7d8;border:2px solid #fff}.ln-v2-list-drag-preview{position:fixed;z-index:2147483460;max-width:360px;padding:9px 13px;transform:translateX(-50%);border:2px solid #178050;border-radius:12px;background:#173b32;color:#fff;pointer-events:none}.ln-v2-list-drag-preview[hidden],.ln-v2-list-drop-indicator[hidden]{display:none!important}.ln-v2-list-drop-indicator{position:fixed;height:4px;pointer-events:none;background:#178050}.lat-690i-hint{position:absolute;left:4%;top:7px;background:#173b32;color:#fff;font:15px system-ui;padding:4px 9px;border-radius:8px}[hidden]{display:none!important}`;
         frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.tabIndex=-1;frame.setAttribute('aria-label','Izolovaný test kurzoru ToDo');
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
         frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(csp)}"><style>${styles}</style><script nonce="${esc(token)}" src="${esc(u.href)}"><\/script></head><body><div id="lat-690i-host"></div><script nonce="${esc(token)}">(${sandboxRunner.toString()})(${JSON.stringify(token)},${JSON.stringify(scope)},${visual});<\/script></body></html>`;
         if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame))document.body.appendChild(frame);
+        lastStep='iframe_created_waiting_for_ready';
         onProgress('Spouštím Core V2 – kurzor, úchyty a mazání ToDo…');
       }catch(e){done(blocked(scope,'sandbox_creation_'+String(e?.message||e).slice(0,90)));}
     });

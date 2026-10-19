@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690I1 — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690I2 — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -16,7 +16,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690I1</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690I2</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
@@ -36,7 +36,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690H: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690I2: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -123,10 +123,30 @@
         if(action==='visual'){visualEnabled=!visualEnabled;btn.textContent=visualEnabled?'Náhled zapnutý':'Náhled vypnutý';btn.setAttribute('aria-pressed',String(visualEnabled));const lab=screen.querySelector('.lat-laboratory');if(lab)lab.dataset.off=visualEnabled?'0':'1';return;}
         if(action==='copy'){void copyReport(btn);}
       });
-      document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();close();}},true);
+      document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();e.stopImmediatePropagation();handleTesterBack();}},true);
     }
     screen.hidden=false;document.body.classList.add('lat-open');
   }
+  function collapseExpanded(){
+    if(!screen||!expanded)return false;
+    expanded=false;
+    screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');
+    const btn=screen.querySelector('[data-lat="expand"]');
+    if(btn){btn.textContent='⛶ Zvětšit';btn.setAttribute('aria-pressed','false');}
+    return true;
+  }
+  function handleTesterBack(){
+    if(!screen||screen.hidden)return false;
+    if(collapseExpanded())return true;
+    close();return true;
+  }
+  // MainActivity calls this global synchronously and closes Activity on false.
+  // Preserve the existing Android Back chain for every other LubaNote view.
+  const backHandlerBeforeTester=window.LubaNoteZpracujAndroidZpet;
+  window.LubaNoteZpracujAndroidZpet=function(){
+    if(screen&&!screen.hidden)return handleTesterBack();
+    return typeof backHandlerBeforeTester==='function'?backHandlerBeforeTester.apply(this,arguments):false;
+  };
   function close(){if(!screen)return;expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();}
   function stop(){
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
@@ -220,7 +240,7 @@
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
       render();return;
     }
-    const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['editor-caret','caret-todo-reopen'],['editor-selection','caret-todo-range'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse']]);
+    const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['editor-caret','caret-editor-plain'],['editor-format','caret-editor-format'],['editor-edge','caret-editor-scroll'],['image-between','caret-editor-image'],['editor-caret','caret-todo-reopen'],['editor-selection','caret-todo-range'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse']]);
     for(const item of vybrane){
       const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
       const partial=item.id==='app-planner'
@@ -400,12 +420,12 @@
   // 690I: synthetic caret, DOM selection and TODO edge cases in the actual shipped Core V2.
   // Blue selection marks and red pointer dot are VISUAL diagnostics, not native Android handles.
   async function spustitKurzorTodo690I(generace,scope='all'){
-    const allIds=['caret-todo-middle','caret-todo-clear','caret-todo-empty','caret-todo-last','caret-todo-range','caret-todo-reopen','caret-todo-done-move','caret-todo-done-longpress','caret-bullet-first-move','caret-bullet-last-move'];
-    const needed=scope==='editor'?allIds.filter(id=>['caret-todo-range','caret-todo-reopen'].includes(id)):scope==='todo'?allIds.filter(id=>id.startsWith('caret-todo-')):scope==='bullet'?allIds.filter(id=>id.startsWith('caret-bullet-')):allIds;
+    const allIds=['caret-todo-middle','caret-todo-clear','caret-todo-empty','caret-todo-last','caret-todo-range','caret-todo-reopen','caret-todo-done-move','caret-todo-done-longpress','caret-bullet-first-move','caret-bullet-last-move','caret-editor-plain','caret-bullet-text','caret-editor-format','caret-editor-colors','caret-editor-scroll','caret-editor-image'];
+    const needed=scope==='editor'?allIds.filter(id=>id.startsWith('caret-editor-')||['caret-todo-range','caret-todo-reopen'].includes(id)):scope==='todo'?allIds.filter(id=>id.startsWith('caret-todo-')):scope==='bullet'?allIds.filter(id=>id.startsWith('caret-bullet-')):allIds;
     const blocked=why=>needed.map(id=>({id,name:'Kurzor / ToDo – '+id,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,180)}));
     try{
       if(!window.LubaNoteAutoTesterCaretTodo690I?.runRepeated){
-        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690I1-caret-watchdog',location.href);
+        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690I2-csp-fix',location.href);
         if(url.origin!==location.origin)throw Error('caret_module_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -537,14 +557,14 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690I1',
+      'LUBANOTE AUTOTESTER / 690I2',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690I1: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690I2: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
