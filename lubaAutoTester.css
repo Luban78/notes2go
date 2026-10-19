@@ -77,3 +77,11 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester.lat-finished .lat-laboratory{margin:8px 0;padding:10px 12px}
 #ln-auto-tester.lat-finished .lat-progress-track{display:none}
 #ln-auto-tester.lat-finished .lat-progress-info{display:none}
+
+/* 691E: Real editor playback must NEVER depend on VD/DH/T dock CSS. */
+#ln-auto-tester.lat-app-playback{background:transparent!important;overflow:hidden!important;pointer-events:none!important}
+#ln-auto-tester.lat-app-playback .lat-inner{display:none!important}
+#ln-auto-tester.lat-app-playback #lat-app-hud{display:flex!important;position:fixed;left:8px;right:8px;bottom:calc(10px + env(safe-area-inset-bottom));min-height:43px;border:1px solid #32b979;border-radius:12px;align-items:center;gap:8px;background:#10251de9;color:#dff7e7;padding:6px 10px;pointer-events:auto!important;box-shadow:0 6px 20px #0008;font:12px/1.2 system-ui;z-index:2147483600}
+#ln-auto-tester #lat-app-hud[hidden]{display:none!important}
+#ln-auto-tester #lat-app-hud-text{flex:1;min-width:0}
+#ln-auto-tester #lat-app-hud button{min-height:34px;padding:5px 8px;font-size:12px;border-color:#bd7658}
