@@ -2255,9 +2255,12 @@
       if (textBloku(blok).length === 0 && !(Array.isArray(blok.obrazky) && blok.obrazky.length)) {
         dokument.bloky.splice(caret.blok, 1);
         if (!dokument.bloky.some(jeTextovyBlok)) dokument.bloky.push(vytvorOdstavec(""));
-        const cil = najdiTextovyBlokOd(Math.min(caret.blok, dokument.bloky.length - 1), -1);
-        const index = cil >= 0 ? cil : najdiTextovyBlokOd(0, 1);
-        return { blok: Math.max(0, index), offset: index >= 0 ? textBloku(dokument.bloky[index]).length : 0 };
+        // Po odstraneni prazdneho TODO zustane caret na ZACATKU dalsiho textoveho bloku.
+        // Na konec predchoziho prejde jen tehdy, kdyz za smazanym radkem jiz zadny neni.
+        const dalsi = caret.blok < dokument.bloky.length ? najdiTextovyBlokOd(caret.blok, 1) : -1;
+        if (dalsi >= 0) return { blok: dalsi, offset: 0 };
+        const predchozi = najdiTextovyBlokOd(dokument.bloky.length - 1, -1);
+        return { blok: Math.max(0, predchozi), offset: predchozi >= 0 ? textBloku(dokument.bloky[predchozi]).length : 0 };
       }
       return caret;
     }
