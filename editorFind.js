@@ -40,21 +40,22 @@
     CSS.highlights.delete(NAZEV_HIGHLIGHT_AKTUALNI);
   }
 
+  // 691G – hledáme v produkčních textových segmentech Core V2, nikoli
+  // v náhodných DOM textových uzlech (checkboxy, code tlačítka, dekorace).
+  // Každý segment je viditelný text zdrojového modelu; žádný HTML mirror.
   function textoveUzly(koren) {
     if (!koren) return [];
     const uzly = [];
-    const walker = document.createTreeWalker(koren, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node?.data) return NodeFilter.FILTER_REJECT;
-        const rodic = node.parentElement;
-        if (!rodic) return NodeFilter.FILTER_REJECT;
-        if (rodic.closest("[contenteditable='false'], script, style")) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
+    const segmenty = koren.querySelectorAll(
+      '[data-ln-v2-blok] > span.ln-v2-cast[data-ln-v2-segment]'
+    );
+    for (const segment of segmenty) {
+      const walker = document.createTreeWalker(segment, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.data && !node.parentElement?.closest('[contenteditable="false"]')) uzly.push(node);
       }
-    });
-
-    let node;
-    while ((node = walker.nextNode())) uzly.push(node);
+    }
     return uzly;
   }
 

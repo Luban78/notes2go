@@ -36,7 +36,7 @@ function write(label){
  window.getSelection()?.removeAllRanges();
  ensure(api()?.provedPrikazVlastniKlavesnice?.('enter')===true,'enter_selhal');
  ensure(api()?.provedPrikazVlastniKlavesnice?.('text',label)===true,'zapis_textu_selhal');
- const b=find(label);ensure(b&&row(b)?.isConnected,'text_neni_v_produkcnim_DOM');return b;
+ const b=find(label);ensure(b&&row(b)?.isConnected&&row(b)?.textContent?.includes(label),'text_neni_v_produkcnim_DOM');return b;
 }
 async function open(id){
  await window.openTaskEditorById(id);await pause(150);
@@ -54,7 +54,33 @@ async function tool(id){
  for(let i=0;i<5&&!vis(button);i++){ensure(t,'chybi_prepinac_toolbar');t.click();await pause(85)}
  ensure(vis(button),'tlacitko_neni_viditelne_'+id);return button;
 }
-function query(word){const input=el('editorFindInput');ensure(input,'chybi_find_input');input.value=word;input.dispatchEvent(new Event('input',{bubbles:true}));}
+async function query(word){
+ const input=el('editorFindInput');ensure(input,'chybi_find_input');
+ ensure(vis(input),'vstup_hledani_neni_viditelny');
+ input.focus({preventScroll:true});
+ // Produkční pole spolupracuje s LubaKeyboard; dodržíme předběžnou událost.
+ // Tato úprava testuje reálné hledání, nemění přímo počítadlo ani výsledky.
+ const pred=new InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data:word});
+ ensure(input.dispatchEvent(pred),'hledani_odmitlo_vstup');
+ input.value=word;input.setSelectionRange(word.length,word.length);
+ input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:word}));
+ ensure(input.value===word,'vyhledavaci_pole_zmenilo_dotaz');
+ await pause(80);
+}
+function findDiagnostics(word){
+ const e=el('taskModal')?.querySelector('.ln-v2-editor[data-ln-v2-editor]');
+ const m=blocks().map(text).join('\n');
+ const d=Array.from(e?.querySelectorAll('[data-ln-v2-blok] > span.ln-v2-cast[data-ln-v2-segment]')||[]).map(x=>x.textContent||'').join('\n');
+ const q=el('editorFindInput')?.value||'';
+ return 'model='+Number(m.includes(word))+' DOM='+Number(d.includes(word))+' query='+Number(q===word)+' coreEditor='+Number(!!e)+' matchesDOM='+d.split(word).length-1+' findCount='+String(el('editorFindCount')?.textContent||'').trim();
+}
+async function waitCounter(value,word){
+ for(let n=0;n<20;n++){
+  if(el('editorFindCount')?.textContent?.trim()===value)return;
+  await pause(100);
+ }
+ throw Error('pocet_nalezu_'+findDiagnostics(word)+'_ocekavano_'+value);
+}
 function counter(n){ensure(el('editorFindCount')?.textContent?.trim()===n,'nesouhlasi_pocet_nalezu_'+el('editorFindCount')?.textContent+'_ocekavano_'+n);}
 function select(b){
  const segment=row(b)?.querySelector(':scope > .ln-v2-cast');ensure(segment,'chybi_editovatelny_segment');
@@ -104,16 +130,16 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
    try{
     if(i===0){await open(id);preserved();proof='Produkční editor otevřel vlastní Testy poznámku.';}
     else if(i===1){await ensurePlain(write(f1));await ensurePlain(write(f2));ensure(find(f1)?.typ==='odstavec'&&find(f2)?.typ==='odstavec','dve_vyhledatelne_fraze_neexistuji');proof='Oba rozdílné odstavce jsou v modelu i DOM.';}
-    else if(i===2){const b=await tool('editorFindButton');b.click();await pause(90);ensure(!el('editorFindBar')?.hidden&&window.LubaNoteEditorFind?.jeOtevrene?.()===true,'realny_find_panel_neni_otevren');proof='Skutečné tlačítko Hledat otevřelo produkční panel.';}
-    else if(i===3){query(phrase);await pause(95);counter('1 / 2');ensure(!el('editorFindNext')?.disabled,'navigace_neni_povolena');proof='Produkční Find našel dva přesné výskyty.';}
+    else if(i===2){const b=await tool('editorFindButton');b.click();await pause(180);ensure(!el('editorFindBar')?.hidden&&window.LubaNoteEditorFind?.jeOtevrene?.()===true,'realny_find_panel_neni_otevren');proof='Skutečné tlačítko Hledat otevřelo produkční panel.';}
+    else if(i===3){await query(phrase);await waitCounter('1 / 2',phrase);ensure(!el('editorFindNext')?.disabled,'navigace_neni_povolena');proof='Produkční Find našel dva přesné výskyty.';}
     else if(i===4){el('editorFindNext').click();await pause(45);counter('2 / 2');el('editorFindPrev').click();await pause(45);counter('1 / 2');proof='Další i Předchozí mění aktivní výsledek.';}
-    else if(i===5){query('NENALEZITELNY_RETEZEC_'+seed);await pause(60);counter('0 / 0');ensure(el('editorFindNext')?.disabled&&el('editorFindPrev')?.disabled,'navigace_povolena_bez_nalezu');proof='Nenalezená fráze vrací 0 / 0 a deaktivuje navigaci.';}
+    else if(i===5){await query('NENALEZITELNY_RETEZEC_'+seed);await waitCounter('0 / 0','NENALEZITELNY_RETEZEC_'+seed);ensure(el('editorFindNext')?.disabled&&el('editorFindPrev')?.disabled,'navigace_povolena_bez_nalezu');proof='Nenalezená fráze vrací 0 / 0 a deaktivuje navigaci.';}
     else if(i===6){el('editorFindClose').click();await pause(50);ensure(el('editorFindBar')?.hidden&&el('editorFindInput')?.value==='','find_panel_se_nezavrel_nebo_nevymazal');(await tool('editorFindButton')).click();await pause(70);ensure(!el('editorFindBar')?.hidden&&el('editorFindInput')?.value==='','novy_find_nezacina_prazdny');el('editorFindClose').click();proof='Zavření smaže dotaz, nové otevření začíná prázdné.';}
     else if(i===7){await align(left,'center');proof='Skutečná paleta Zarovnání změnila model i DOM na střed.';}
     else if(i===8){await align(right,'right');proof='Skutečná paleta Zarovnání změnila model i DOM vpravo.';}
     else if(i===9){const b=find(right);const button=await tool('tlacitkoZarovnaniTextu');select(b);button.click();await pause(65);ensure(!el('editorPanelZarovnani')?.hidden,'panel_zarovnani_se_neotevrel');select(b);el('editorPanelZarovnani').querySelector('[data-zarovnani="left"]').click();await pause(95);ensure(find(right)?.zarovnani==='left'&&getComputedStyle(row(find(right))).textAlign==='left','navrat_doleva_neprosel');proof='Zarovnání lze přes skutečnou paletu vrátit doleva.';}
     else if(i===10){await save();await open(id);ensure(find(left)?.zarovnani==='center'&&find(right)?.zarovnani==='left','zarovnani_se_ztratilo_po_ulozeni');ensure(find(f1)&&find(f2),'hledatelny_text_se_ztratil_po_ulozeni');proof='Zarovnání i obě fráze přežily Uložit a znovuotevření.';}
-    else if(i===11){(await tool('editorFindButton')).click();await pause(75);ensure(!el('editorFindBar')?.hidden,'find_po_reopen_neotevren');query(phrase);await pause(85);counter('1 / 2');el('editorFindClose').click();proof='Hledání stále funguje po znovuotevření poznámky.';}
+    else if(i===11){(await tool('editorFindButton')).click();await pause(75);ensure(!el('editorFindBar')?.hidden,'find_po_reopen_neotevren');await query(phrase);await waitCounter('1 / 2',phrase);el('editorFindClose').click();proof='Hledání stále funguje po znovuotevření poznámky.';}
     else if(i===12){preserved();await save();proof='Původní Bullet a ToDo zůstaly zachované, testovací LOCAL poznámka je uložená.';}
     out.push({id:caseId,name,kind:KIND,status:'APP_PASS',ms:Math.round(performance.now()-started),detail:proof+' Produkční UI/Core V2; programová aktivace, ne fyzický prst.'});
     const sf=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);await pause(sf>0?Math.round(sf*540):100);
