@@ -243,6 +243,11 @@ public class MainActivity extends BridgeActivity {
       LubaNoteStickyPlugin.class
     );
 
+    // 690R: nativni testovaci vstup pouze do docasne plochy AutoTesteru.
+    registerPlugin(
+      LubaNoteNativeTesterPlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();

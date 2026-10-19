@@ -1,0 +1,119 @@
+/* 690R – Native WebView input tests in the running Android APK.
+ * Ephemeral diagnostic surface; no note, database or persistent state is accessed.
+ * This probes Java MotionEvent -> WebView -> TRUSTED DOM event delivery.
+ * It does NOT prove physical fingers, Android OS selection handles, or app editor UI.
+ */
+(() => {
+  'use strict';
+  const CASES = [
+    ['native-webview-tap', 'Android WebView – skutečné doručení klepnutí', 'tap'],
+    ['native-webview-doubletap', 'Android WebView – skutečné doručení dvojklepnutí', 'doubletap'],
+    ['native-webview-swipe', 'Android WebView – doručení tažení prstem', 'swipe'],
+    ['native-webview-longpress', 'Android WebView – doručení dlouhého stisku', 'longpress'],
+    ['native-webview-selection', 'Android WebView – výběr slova dlouhým stiskem', 'longpress']
+  ];
+  let busy = false;
+  const blocked = why => CASES.map(([id, name]) => ({
+    id, name, kind: 'ANDROID_WEBVIEW_NATIVE_MOTIONEVENT', status: 'NATIVE_BLOCKED',
+    ms: 0, detail: String(why || 'native_unavailable').slice(0, 240)
+  }));
+  const plugin = () => window.Capacitor?.Plugins?.LubaNoteNativeTester;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function runRepeated(shouldContinue = () => true, onProgress = () => {}, repeats = 1) {
+    if (busy) return blocked('already_running');
+    busy = true;
+    const results = [];
+    const n = Math.max(1, Math.min(50, Math.trunc(Number(repeats) || 1)));
+    let surface = null;
+    try {
+      if (window.LubaNoteAdminTools?.isAllowed?.() !== true) return blocked('admin_required');
+      if (!window.Capacitor?.isNativePlatform?.() || !plugin()) {
+        return blocked('Android APK native plugin unavailable – web/PC cannot prove native touch');
+      }
+      const env = await plugin().environment();
+      if (!env?.nativeDispatch) return blocked('native_dispatch_unavailable');
+      // Stage is at viewport level to receive real WebView MotionEvent dispatch.
+      surface = document.createElement('section');
+      surface.id = 'lat-native-surface';
+      surface.setAttribute('aria-label', 'Izolovaný test Android WebView');
+      surface.style.cssText = [
+        'position:fixed!important', 'z-index:2147483640!important',
+        'left:50%!important', 'transform:translateX(-50%)!important',
+        'top:clamp(70px,25dvh,180px)!important',
+        'width:min(90vw,360px)!important','height:250px!important',
+        'padding:18px!important','border-radius:16px!important',
+        'border:3px solid #32ca89!important','background:#ecf5ef!important',
+        'color:#193927!important','box-sizing:border-box!important',
+        'font:16px/1.5 system-ui,sans-serif!important',
+        'user-select:text!important','-webkit-user-select:text!important',
+        'touch-action:auto!important','overflow:hidden!important'
+      ].join(';');
+      surface.innerHTML = '<strong>ANDROID WEBVIEW – NATIVNÍ TEST</strong>' +
+        '<p style="margin:12px 0;color:#173929;user-select:text;-webkit-user-select:text">' +
+        'Dlouhý stisk, dvojtap a tah proběhnou zde, nikoli ve tvých poznámkách.</p>' +
+        '<p style="margin:0;color:#36714b">690R – jednorázová testovací plocha</p>';
+      const events = [];
+      for (const name of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+        surface.addEventListener(name, event => {
+          events.push({ name, trusted: event.isTrusted, at: performance.now() });
+          if (events.length > 250) events.shift();
+          event.stopPropagation();
+        }, { passive: true });
+      }
+      surface.addEventListener('click', event => event.stopPropagation());
+      document.body.append(surface);
+      await sleep(160);
+      if (surface.getBoundingClientRect().bottom > innerHeight) {
+        return blocked('native_stage_not_fully_visible');
+      }
+      for (const [id, name, gesture] of CASES) {
+        let pass = 0, fail = 0, reason = '', elapsed = 0;
+        for (let i = 1; i <= n; i++) {
+          if (!shouldContinue()) return [...results, ...blocked('cancelled').filter(x => !results.some(r => r.id === x.id))];
+          onProgress(`Android WebView ${i}/${n}: ${gesture}`);
+          const beginning = performance.now();
+          events.length = 0;
+          window.getSelection()?.removeAllRanges();
+          try {
+            // Native receives ONLY fractions of the verified stage; caller
+            // cannot supply arbitrary screen coordinates.
+            const response = await plugin().gesture({ type: gesture, x: 0.38, y: 0.47 });
+            await sleep(100);
+            const trusted = name => events.filter(e => e.name === name && e.trusted).length;
+            const starts = trusted('touchstart'), ends = trusted('touchend');
+            const terminations = ends + trusted('touchcancel');
+            const moves = trusted('touchmove');
+            if (response?.delivery !== 'WEBVIEW_DISPATCH_TOUCH_EVENT') throw Error('native_ack_missing');
+            if (starts < (gesture === 'doubletap' ? 2 : 1)) throw Error(`trusted_touchstart_missing_${starts}`);
+            if (terminations < (gesture === 'doubletap' ? 2 : 1)) throw Error(`trusted_touch_termination_missing_${terminations}`);
+            if (gesture === 'swipe' && moves < 2) throw Error(`trusted_touchmove_missing_${moves}`);
+            if (id === 'native-webview-selection' && !window.getSelection()?.toString()?.trim()) {
+              throw Error('native_longpress_did_not_select_text');
+            }
+            pass++;
+          } catch (error) {
+            fail++;
+            if (!reason) reason = String(error?.message || error).slice(0, 180);
+          }
+          elapsed += performance.now() - beginning;
+        }
+        results.push({
+          id, name, kind: 'ANDROID_WEBVIEW_NATIVE_MOTIONEVENT',
+          status: fail ? 'NATIVE_FAIL' : 'NATIVE_PASS',
+          ms: Math.round(elapsed),
+          detail: `${pass}/${n} PASS, ${fail} FAIL. ` + (reason ? 'První chyba: ' + reason + '. ' : '') +
+            'Java MotionEvent -> skutečné WebView -> isTrusted touch události; ' +
+            'ne fyzický prst, ne přetažení Android selection handles ani kompletní UI editoru.'
+        });
+      }
+      return results;
+    } catch (error) {
+      return [...results, ...blocked(error?.message || 'native_suite_exception').filter(x => !results.some(r => r.id === x.id))];
+    } finally {
+      surface?.remove();
+      busy = false;
+    }
+  }
+  window.LubaNoteAutoTesterNative690R = Object.freeze({ runRepeated });
+})();
