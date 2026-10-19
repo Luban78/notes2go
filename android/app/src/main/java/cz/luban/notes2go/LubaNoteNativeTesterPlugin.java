@@ -16,9 +16,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * 690R – native WebView event probe. Only touches the visible ephemeral
- * #lat-native-surface while an authenticated administrator has AutoTester open.
- * No Android input permission, no accessibility service, no access to notes.
+ * 690U – native WebView input probe. Baseline only touches ephemeral
+ * #lat-native-surface. gestureOwnedEditor may touch ONLY verified owned Testy
+ * note editor/handles during visible AutoTester playback; never arbitrary notes.
+ * No Android input permission, no accessibility service.
  * dispatchTouchEvent is NOT a replacement for physical finger / OS injection.
  */
 @CapacitorPlugin(name = "LubaNoteNativeTester")
@@ -87,6 +88,99 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
           } catch (Exception e) { busy = false; call.reject("native_stage_geometry_invalid"); }
         });
       } catch (Exception e) { busy = false; call.reject("native_evaluate_failed"); }
+    });
+  }
+
+
+  /** 690U: Reuse MotionEvent only for the REAL Core V2 UI of one owned Testy note.
+   * Never accept absolute coordinates from JavaScript or operate on arbitrary notes.
+   * The tested text/caret/selection-handle is resolved and hit-tested inside the WebView.
+   */
+  @PluginMethod
+  public void gestureOwnedEditor(PluginCall call) {
+    final String noteId = call.getString("id", "");
+    final String target = call.getString("target", "");
+    final String type = call.getString("type", "");
+    if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
+        !("word".equals(target) || "selection-end".equals(target) || "caret-handle".equals(target)) ||
+        !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type))) {
+      call.reject("invalid_owned_editor_request"); return;
+    }
+    if ("swipe".equals(type) && "word".equals(target)) {
+      call.reject("word_swipe_not_authorized"); return;
+    }
+    ui.post(() -> {
+      if (busy) { call.reject("native_test_busy"); return; }
+      WebView web = getBridge() == null ? null : getBridge().getWebView();
+      if (web == null || !web.isAttachedToWindow() || web.getWidth() < 100) {
+        call.reject("native_webview_unavailable"); return;
+      }
+      busy = true;
+      final String quotedId = JSONObject.quote(noteId);
+      final String quotedTarget = JSONObject.quote(target);
+      final String js = "(function(){try{" +
+        "const id=" + quotedId + ";const target=" + quotedTarget + ";" +
+        "const tester=document.getElementById('ln-auto-tester');" +
+        "const modal=document.getElementById('taskModal');" +
+        "const note=window.loadTask?.().find(n=>n?.id===id);" +
+        "const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();" +
+        "const ok=window.LubaNoteAdminTools?.isAllowed?.()===true&&tester&&!tester.hidden&&" +
+        "tester.classList.contains('lat-app-playback')&&modal&&!modal.hidden&&" +
+        "modal.dataset.taskId===id&&note&&note.storageScope==='local'&&note.isSecret!==true&&" +
+        "note.tags?.includes('Testy')&&String(note.title||'').startsWith('[AutoTester 690T]')&&" +
+        "window.LubaNoteEditorV2Bridge?.jeAktivni?.()===true&&" +
+        "editor&&editor.isConnected&&modal.contains(editor)&&" +
+        "editor.dataset.lnV2OwnCaretOnly==='1';" +
+        "if(!ok)return JSON.stringify({ok:false});" +
+        "let bounds=null;let el=null;" +
+        "if(target==='word'){" +
+          "const w=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let n;" +
+          "while(n=w.nextNode()){const i=String(n.nodeValue||'').indexOf('Zapis_z_viditelneho_editoru_690T');" +
+            "if(i<0)continue;const rg=document.createRange();rg.setStart(n,i+2);rg.setEnd(n,i+4);" +
+            "bounds=rg.getBoundingClientRect();break;}" +
+          "el=editor;" +
+        "}else{el=target==='caret-handle'?document.querySelector('.ln-v2-single-caret-handle:not([hidden])'):" +
+          "document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle=\"end\"]:not([hidden])');" +
+          "bounds=el?.getBoundingClientRect();}" +
+        "if(!bounds||bounds.width<=0||bounds.height<=0)return JSON.stringify({ok:false});" +
+        "const x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;" +
+        "const hit=document.elementFromPoint(x,y);" +
+        "const targetOk=target==='word'?editor.contains(hit):(hit===el||el?.contains(hit));" +
+        "const er=editor.getBoundingClientRect();" +
+        "const viewportOk=x>=2&&x<innerWidth-2&&y>=2&&y<innerHeight-2;" +
+        "const delta=target==='selection-end'?Math.max(-70,Math.min(70,er.right-x-25)):45;" +
+        "return JSON.stringify({ok:!!(targetOk&&viewportOk),x,y,viewport:innerWidth,delta});" +
+      "}catch(e){return JSON.stringify({ok:false});}})()";
+      try {
+        web.evaluateJavascript(js, raw -> {
+          try {
+            JSONObject where = new JSONObject(new JSONArray("[" + raw + "]").getString(0));
+            if (!where.optBoolean("ok", false)) {
+              busy = false; call.reject("owned_custom_target_missing_or_covered"); return;
+            }
+            double viewport=where.optDouble("viewport",0);
+            if (viewport <= 0) { busy=false;call.reject("owned_editor_viewport_invalid");return; }
+            float scale=(float)(web.getWidth()/viewport);
+            float x=(float)(where.getDouble("x")*scale);
+            float y=(float)(where.getDouble("y")*scale);
+            if(x<0||x>=web.getWidth()||y<0||y>=web.getHeight()){
+              busy=false;call.reject("owned_editor_point_outside_webview");return;
+            }
+            if ("swipe".equals(type)) {
+              float end=Math.max(5f,Math.min(web.getWidth()-5f,x+(float)where.optDouble("delta",40)*scale));
+              final long down=SystemClock.uptimeMillis();
+              emit(web,down,MotionEvent.ACTION_DOWN,x,y);
+              for (int i=1;i<=10;i++) {
+                final int k=i;
+                ui.postDelayed(()->emit(web,down,MotionEvent.ACTION_MOVE,x+(end-x)*k/10f,y),k*35L);
+              }
+              ui.postDelayed(()->finish(web,down,end,y,type,call),390L);
+            } else {
+              runGesture(web,type,x,y,new JSONObject(),scale,call);
+            }
+          } catch(Exception e){busy=false;call.reject("owned_editor_geometry_invalid");}
+        });
+      }catch(Exception e){busy=false;call.reject("owned_editor_dispatch_failed");}
     });
   }
 

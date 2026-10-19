@@ -1,4 +1,4 @@
-/* 690R – Native WebView input tests in the running Android APK.
+/* 690U – Native WebView delivery diagnostics (NOT native selection test) in the running Android APK.
  * Ephemeral diagnostic surface; no note, database or persistent state is accessed.
  * This probes Java MotionEvent -> WebView -> TRUSTED DOM event delivery.
  * It does NOT prove physical fingers, Android OS selection handles, or app editor UI.
@@ -9,8 +9,7 @@
     ['native-webview-tap', 'Android WebView – skutečné doručení klepnutí', 'tap'],
     ['native-webview-doubletap', 'Android WebView – skutečné doručení dvojklepnutí', 'doubletap'],
     ['native-webview-swipe', 'Android WebView – doručení tažení prstem', 'swipe'],
-    ['native-webview-longpress', 'Android WebView – doručení dlouhého stisku', 'longpress'],
-    ['native-webview-selection', 'Android WebView – výběr slova dlouhým stiskem', 'longpress']
+    ['native-webview-longpress', 'Android WebView – doručení dlouhého stisku', 'longpress']
   ];
   let busy = false;
   const blocked = why => CASES.map(([id, name]) => ({
@@ -88,9 +87,6 @@
             if (starts < (gesture === 'doubletap' ? 2 : 1)) throw Error(`trusted_touchstart_missing_${starts}`);
             if (terminations < (gesture === 'doubletap' ? 2 : 1)) throw Error(`trusted_touch_termination_missing_${terminations}`);
             if (gesture === 'swipe' && moves < 2) throw Error(`trusted_touchmove_missing_${moves}`);
-            if (id === 'native-webview-selection' && !window.getSelection()?.toString()?.trim()) {
-              throw Error('native_longpress_did_not_select_text');
-            }
             pass++;
           } catch (error) {
             fail++;
@@ -104,7 +100,7 @@
           ms: Math.round(elapsed),
           detail: `${pass}/${n} PASS, ${fail} FAIL. ` + (reason ? 'První chyba: ' + reason + '. ' : '') +
             'Java MotionEvent -> skutečné WebView -> isTrusted touch události; ' +
-            'ne fyzický prst, ne přetažení Android selection handles ani kompletní UI editoru.'
+            'pouze doručení vstupu; LubaNote vlastní výběr a caret ověřují ui-own-* testy v běžném editoru.'
         });
       }
       return results;
