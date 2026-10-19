@@ -1,5 +1,5 @@
-/* 690S – REAL LOCAL NOTE lifecycle. Uses production LubaNote storage functions,
-   never user notes as fixtures; no cloud writes, and strict ID-scoped cleanup.
+/* 690T – REAL LOCAL NOTE lifecycle (retain reviewable test notes). Uses production LubaNote storage functions,
+   never user notes as fixtures; no cloud writes, and strictly ID-scoped writes.
    APP_PASS proves LOCAL data operations, not editor clicks or cross-device sync. */
 (() => {
   'use strict';
@@ -9,9 +9,11 @@
     ['local-notes-reload','LOCAL Testy – znovu načíst uložený obsah'],
     ['local-notes-trash','LOCAL Testy – přesunout vlastní poznámku do Koše'],
     ['local-notes-restore','LOCAL Testy – obnovit vlastní poznámku z Koše'],
-    ['local-notes-cleanup','LOCAL Testy – trvale odstranit pouze testovací poznámku']
+    ['local-notes-retained','LOCAL Testy – ponechat hotovou poznámku pro kontrolu']
   ]);
   let busy = false;
+  let lastCreatedId=null;
+  let lastCreatedTitle='';
   const row = (id, name, status, count, n, detail, ms=0) => ({
     id, name, status, kind:'REAL_LOCAL_NOTE_STORAGE_690S', ms,
     detail:`${count}/${n} PASS. ${String(detail || '').slice(0,200)}`
@@ -22,7 +24,7 @@
   const current = id => window.loadTask().find(x=>x?.id===id);
   const trash = id => window.nactiPoznamkyVKosi({tajne:false}).find(x=>x?.id===id);
   const valid = (note,id,marker) => note?.id===id && note.storageScope==='local' && note.isSecret!==true &&
-    Array.isArray(note.tags) && note.tags.includes('Testy') && String(note.title||'').startsWith('[AutoTester 690S]') &&
+    Array.isArray(note.tags) && note.tags.includes('Testy') && String(note.title||'').startsWith('[AutoTester 690T]') &&
     (!marker || String(note.note||'').includes(marker));
   const scopedMutation = async (f,note) => {
     const fn=window.LubaNoteSync?.provedLokalniZmenuASynchronizuj;
@@ -32,21 +34,6 @@
     await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
     return ok;
   };
-  async function purgeOwned(id, prototype) {
-    if (!id || !prototype) return true;
-    let note=current(id), inTrash=trash(id);
-    if (!note && !inTrash) return true;
-    assert(valid(note||inTrash,id),'cleanup_ownership_mismatch');
-    if (note) {
-      await scopedMutation(()=>window.deleteTasksByIds([id]),note);
-      inTrash=trash(id);
-      assert(valid(inTrash,id),'cleanup_move_to_trash_failed');
-    }
-    const removed=await window.smazPoznamkuZKoseTrvale(id,false);
-    assert(removed===true,'cleanup_purge_failed');
-    assert(!current(id) && !trash(id),'cleanup_id_still_present');
-    return true;
-  }
   function preflight() {
     assert(window.LubaNoteAdminTools?.isAllowed?.()===true,'admin_required');
     const modal=document.getElementById('taskModal');
@@ -67,6 +54,7 @@
     if (busy) return blocked('lifecycle_already_running');
     busy = true;
     try {preflight();} catch(e) {busy=false;return blocked(e.message||'preflight_failed');}
+    lastCreatedId=null;lastCreatedTitle='';
     const n=Number.isInteger(Number(repeats)) && Number(repeats)>=1 && Number(repeats)<=50 ? Number(repeats) : 1;
     const counters=CASES.map(()=>({ok:0,fail:0,ms:0,why:''}));
     let previousFailed=false;
@@ -74,8 +62,8 @@
       for (let i=1;i<=n;i++) {
         if (!shouldContinue()) {previousFailed=true;break;}
         const id=crypto.randomUUID();
-        const marker='LN690S-'+id;
-        const note={id,storageScope:'local',updatedAt:new Date().toISOString(),title:'[AutoTester 690S] LOCAL Testy',
+        const marker='LN690T-'+id;
+        const note={id,storageScope:'local',updatedAt:new Date().toISOString(),title:'[AutoTester 690T] Pruchod '+i+' – '+id.slice(0,8),
           note:'Prvni zapis '+marker,richContent:'<p>Prvni zapis '+marker+'</p>',
           tags:['Testy'],date:new Date().toISOString().slice(0,10),isSecret:false,
           completed:false,reminder:false,planned:false,favorite:false,pinned:false,notificationId:null,area:'private',todos:[]};
@@ -92,7 +80,10 @@
             assert(!current(id)&&valid(trash(id),id),'trash_transition_failed');},
           async()=>{assert(valid(trash(id),id),'restore_target_invalid');const ok=await window.obnovPoznamkuZKose(id,false);
             assert(ok===true && valid(current(id),id,marker) && !trash(id),'restore_transition_failed');},
-          async()=>{await purgeOwned(id,note);}
+          async()=>{const preserved=current(id);assert(valid(preserved,id,marker),'retained_note_missing');
+              await window.LubaNoteRegularNotesStore.cekejNaUlozeni();
+              assert(valid(current(id),id,marker),'retained_note_not_persisted');
+              lastCreatedId=id;lastCreatedTitle=preserved.title;}
         ];
         let stepIndex=0;
         try {
@@ -109,11 +100,11 @@
           c.why=String(e?.message||e).slice(0,140);
           previousFailed=true;
         } finally {
-          try {await purgeOwned(id,note);} catch(error) {
-            // An orphan must never silently count as a successful test.
-            counters[5].fail++;
-            counters[5].why='CLEANUP FAILED: '+String(error?.message||error).slice(0,125);
-            previousFailed=true;
+          // 690T: Uzivatel chce testovaci poznamky zkontrolovat.
+          // Neprovadej automaticky purge ani pri chybe; jen nahlas presne ID.
+          const owned=current(id)||trash(id);
+          if(owned && valid(owned,id)){
+            lastCreatedId=id;lastCreatedTitle=owned.title;
           }
         }
         if(previousFailed) break;
@@ -124,8 +115,8 @@
       const c=counters[i];const status=c.fail?'APP_FAIL':c.ok===n?'APP_PASS':'APP_BLOCKED';
       const detail=c.why?`První chyba: ${c.why}. `:'';
       return row(id,name,status,c.ok,n,detail+
-        'Skutečné LOCAL storage API, štítek Testy, izolované UUID. Nejde o UI klikání ani cloudovou synchronizaci.',c.ms);
+        'Skutecne LOCAL storage API. Testovaci poznamka je PONECHANA pod stitkem Testy v prostoru LOCAL; bez cloud sync.',c.ms);
     });
   }
-  window.LubaNoteAutoTesterNotes690S=Object.freeze({runRepeated});
+  window.LubaNoteAutoTesterNotes690S=Object.freeze({runRepeated, getLastCreatedId:()=>lastCreatedId, getLastCreatedTitle:()=>lastCreatedTitle});
 })();

@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690S — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690T — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -9,6 +9,7 @@
   let runTimeout=null;
   let running=false;
   let activeRep=1;
+  let lastTestNoteId=null;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const suiteNames={notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky Core V2 – skutečný modul',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
@@ -17,7 +18,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690S</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690T</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -38,8 +39,9 @@
     </section>
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
+    <div class="lat-note-review"><button type="button" data-lat="review-note" id="lat-review-note" hidden>Otevřít poslední poznámku Testy v aplikaci</button><small>Poznámky z testů zůstávají v prostoru LOCAL pod štítkem Testy.</small></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690S: Skutečné LOCAL testovací poznámky pod štítkem Testy se po běhu uklidí, uživatelské poznámky se nemění. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690T: Testovací LOCAL poznámky se štítkem Testy zůstávají po běhu k prohlédnutí. Viditelný průchod editorem je skutečná UI obrazovka, nikoli Android UIAutomator. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -54,6 +56,7 @@
     const track=screen.querySelector('#lat-progress-track');if(track)track.setAttribute('aria-valuenow',String(percent));
     const num=screen.querySelector('#lat-progress-num');if(num)num.textContent=n+' / '+t;
     const text=screen.querySelector('#lat-live-step');if(text)text.textContent=label||phase||'Testování';
+    const hud=screen.querySelector('#lat-app-hud-text');if(hud&&label)hud.textContent=label;
   }
   function attachLiveFrame(frame){
     const host=screen?.querySelector('#lat-live-stage');
@@ -65,7 +68,7 @@
   }
   window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode?0:(extraSlowMode?2.5:1)});
   // 690M: Dvojtap admina ukaze POUZE panel VD / DH / T, zadny nastroj neotvira.
-  window.LubaNoteDockBuild='690S';
+  window.LubaNoteDockBuild='690T';
   let lastAdminTap=null;
   function povolenDok(){
     try{return window.LubaNoteAdminTools?.isAllowed?.()===true;}catch(_){return false;}
@@ -91,7 +94,8 @@
     if(!document.getElementById('ln-vd-dock-t-690m-style')){
       const css=document.createElement('style');css.id='ln-vd-dock-t-690m-style';
       css.textContent='#ln-vd-quickbar #ln-vd-dock-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}';
-      document.head.appendChild(css);
+      css.textContent+=`#ln-auto-tester .lat-note-review{display:grid;gap:5px;margin:10px 0;color:#a5c6b0;font-size:.75rem}#ln-auto-tester #lat-review-note{background:#194e38;border-color:#31ac70;color:#e2fff0}#ln-auto-tester.lat-app-playback{background:transparent!important;overflow:hidden!important;pointer-events:none!important}#ln-auto-tester.lat-app-playback .lat-inner{display:none!important}#ln-auto-tester.lat-app-playback #lat-app-hud{display:flex!important;position:fixed;left:8px;right:8px;bottom:calc(10px + env(safe-area-inset-bottom));min-height:43px;border:1px solid #32b979;border-radius:12px;align-items:center;gap:8px;background:#10251de9;color:#dff7e7;padding:6px 10px;pointer-events:auto!important;box-shadow:0 6px 20px #0008;font:12px/1.2 system-ui;z-index:2147483600}#ln-auto-tester #lat-app-hud[hidden]{display:none!important}#ln-auto-tester #lat-app-hud-text{flex:1;min-width:0}#ln-auto-tester #lat-app-hud button{min-height:34px;padding:5px 8px;font-size:12px;border-color:#bd7658}`;
+        document.head.appendChild(css);
     }
     const tester=document.getElementById('ln-auto-tester');
     document.getElementById('ln-vd-dock-t')?.classList.toggle('active',Boolean(tester&&!tester.hidden));
@@ -150,7 +154,7 @@
     if(!screen){
       screen=document.createElement('section');screen.id='ln-auto-tester';
       screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','LubaNote AutoTester');
-      screen.innerHTML=`<div class="lat-inner">${header()}</div>`;
+      screen.innerHTML=`<div class="lat-inner">${header()}</div><div id="lat-app-hud" hidden><span id="lat-app-hud-text">Testuji v aplikaci…</span><button data-lat="stop-playback" type="button">Zpět / Stop</button></div>`;
       if(!document.getElementById('lat-core-colors-690c')){
         const css=document.createElement('style');css.id='lat-core-colors-690c';
         css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
@@ -229,6 +233,8 @@
         const btn=e.target.closest('button[data-lat]');if(!btn)return;
         const action=btn.dataset.lat;
         if(action==='close'){close();return;}
+        if(action==='stop-playback'){if(running)stop();restoreTestScreen();return;}
+        if(action==='review-note'){void reviewLastNote();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
         if(action==='choose'){openAreaPicker();return;}
         if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
@@ -284,7 +290,47 @@
     if(screen&&!screen.hidden)return handleTesterBack();
     return typeof backHandlerBeforeTester==='function'?backHandlerBeforeTester.apply(this,arguments):false;
   };
-  function close(){if(!screen)return;closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();zajistiTesterVDocku();}
+  function minimizeTestScreen(){
+    if(!screen||screen.hidden)return;
+    screen.classList.add('lat-app-playback');
+    const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=false;
+    document.body.classList.remove('lat-open');
+  }
+  function restoreTestScreen(){
+    if(!screen)return;
+    screen.classList.remove('lat-app-playback');
+    const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=true;
+    if(!screen.hidden)document.body.classList.add('lat-open');
+  }
+  async function reviewLastNote(){
+    const id=lastTestNoteId;
+    if(!id||!window.loadTask?.().some(n=>n?.id===id&&n.storageScope==='local'&&n.tags?.includes('Testy'))){
+      setStatus('Testovaci poznamka uz v LOCAL neni.');return;
+    }
+    if(typeof window.openTaskEditorById!=='function'){setStatus('Otevreni poznamky neni dostupne.');return;}
+    minimizeTestScreen();
+    try{
+      const ok=await window.openTaskEditorById(id);
+      if(ok===false||document.getElementById('taskModal')?.hidden)throw Error('editor_not_opened');
+      setStatus('Poznamka Testy je otevrena. Pro navrat do testeru pouzij dolni panel.');
+    }catch(e){restoreTestScreen();setStatus('Otevreni selhalo: '+String(e?.message||e));}
+  }
+  async function spustitSkutecnyEditor690T(generace){
+    const id=lastTestNoteId;
+    if(!id)return;
+    const module=window.LubaNoteAutoTesterUi690T;
+    if(!module?.run){results.push({id:'ui-visible-run',name:'Viditelne ovladani skutecneho editoru',kind:'REAL_UI',status:'APP_BLOCKED',ms:0,detail:'UI modul chybi'});return;}
+    const ready=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
+    const emit=m=>{if(ready())setStatus(m);};
+    try{
+      const rows=await module.run(id,ready,emit,minimizeTestScreen,restoreTestScreen);
+      if(!ready())return;
+      if(!Array.isArray(rows)||!rows.length||rows.some(r=>!['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status)))throw Error('ui_results_invalid');
+      results.push(...rows);render();
+    }catch(e){if(ready())results.push({id:'ui-visible-run',name:'Viditelne ovladani skutecneho editoru',kind:'REAL_UI',status:'APP_FAIL',ms:0,detail:String(e?.message||e).slice(0,170)});}
+    finally{restoreTestScreen();}
+  }
+  function close(){if(!screen)return;restoreTestScreen();closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();zajistiTesterVDocku();}
   function stop(){
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
@@ -297,6 +343,7 @@
     const progress=running ? String(s).match(/(\d+)\s*\/\s*(\d+)\b/) : null;
     if(progress)updateProgress(Number(progress[1]),Number(progress[2]),s);
     else {const label=screen.querySelector('#lat-live-step');if(label)label.textContent=s;}
+    const hud=screen.querySelector('#lat-app-hud-text');if(hud)hud.textContent=s;
   }
   function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,APP_PASS:0,APP_FAIL:0,APP_BLOCKED:0,NATIVE_PASS:0,NATIVE_FAIL:0,NATIVE_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
@@ -564,7 +611,7 @@
     const blocked=why=>needed.map(id=>({id,name:'Kurzor / ToDo – '+id,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,180)}));
     try{
       if(window.LubaNoteAutoTesterCaretTodo690I?.supportsRepeatCount!==true){
-        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690N-mixed-delete-text',location.href);
+        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690T-hint-bottom-1',location.href);
         if(url.origin!==location.origin)throw Error('caret_module_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -675,14 +722,13 @@
     if(generace===generaceBehu && !screen.hidden)render();
   }
 
-  // 690S: first real application storage lifecycle. Explicit admin/Testy gate,
-  // LOCAL only, unique IDs and cleanup in the runner itself.
+  // 690T: real LOCAL note lifecycle; admin/Testy gate, unique IDs and retained results.
   async function spustitPoznamky690S(generace){
-    const expected=['local-notes-create','local-notes-edit','local-notes-reload','local-notes-trash','local-notes-restore','local-notes-cleanup'];
+    const expected=['local-notes-create','local-notes-edit','local-notes-reload','local-notes-trash','local-notes-restore','local-notes-retained'];
     const blocked=why=>expected.map(id=>({id,name:id,kind:'REAL_LOCAL_NOTE_STORAGE_690S',status:'APP_BLOCKED',ms:0,detail:String(why).slice(0,165)}));
     try{
       if(!window.LubaNoteAutoTesterNotes690S){
-        const u=new URL('lubaAutoTesterNotes690S.js?v=690S-notes-local-1',location.href);
+        const u=new URL('lubaAutoTesterNotes690S.js?v=690T-notes-retained-1',location.href);
         if(u.origin!==location.origin)throw Error('notes_module_other_origin');
         await new Promise((resolve,reject)=>{
           const element=document.createElement('script');
@@ -701,6 +747,9 @@
       const good=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(x=>x.id)).size===expected.length&&
         rows.every(x=>expected.includes(x.id)&&['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(x.status));
       results.push(...(good?rows:blocked('local_notes_result_schema_invalid')));
+      if(good){lastTestNoteId=window.LubaNoteAutoTesterNotes690S.getLastCreatedId?.()||null;
+        try{window.renderTasks?.();}catch(_e){}
+        const review=screen?.querySelector('#lat-review-note');if(review)review.hidden=!lastTestNoteId;}
     }catch(e){
       if(generace!==generaceBehu||screen.hidden)return;
       results.push(...blocked(e?.message||'local_notes_unavailable'));
@@ -762,7 +811,7 @@
       if(generace===generaceBehu)await spustitPlanner690H(generace);
     }
     if(generace===generaceBehu&&activeSuite==='all'){
-      setStatus('Skutečné LOCAL poznámky – štítek Testy, vytvoření/Koš/obnova/úklid…');
+      setStatus('Skutečné LOCAL poznámky – vytvoření/Koš/obnova, pak je ponechám pod Testy…');
       await spustitPoznamky690S(generace);
     }
     if(generace===generaceBehu && (activeSuite==='all'||activeSuite==='ui')){
@@ -773,6 +822,7 @@
       setStatus('Načítám pokrytí Centra stability V1…');
       await pridejPokrytiV1(generace,'all');
     }
+    if(generace===generaceBehu&&activeSuite==='all'&&lastTestNoteId)await spustitSkutecnyEditor690T(generace);
     if(generace===generaceBehu)dokoncitBeh();
   }
   async function run(suite){
@@ -782,7 +832,7 @@
     activeRep=requested;
     stop();
     const generace=generaceBehu;
-    results=[];running=true;
+    results=[];running=true;lastTestNoteId=null;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     const placeholder=screen?.querySelector('.lat-live-placeholder');
@@ -813,6 +863,7 @@
     }
     if(activeSuite==='notes'){
       await spustitPoznamky690S(generace);
+      if(generace===generaceBehu&&lastTestNoteId)await spustitSkutecnyEditor690T(generace);
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -848,7 +899,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690S',
+      'LUBANOTE AUTOTESTER / 690T',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -856,7 +907,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690S: LOCAL Testy note lifecycle uses live local storage with ID-scoped cleanup. 690S: Testy scope = real LOCAL save/edit/reload/trash/restore/purge via production storage APIs; never alters existing notes, no cloud E2E cross-device or real UI clicks. 690R: Android probe injects Java MotionEvent into real WebView and checks trusted touch events in an ephemeral overlay; it is NOT a physical finger, Android OS UIAutomator nor a guarantee of native selection handles. PC reports NATIVE_BLOCKED. Testy label is used only for explicitly generated LOCAL test notes with unique UUID and exact-ID cleanup.',
+      '690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R Android MotionEvent tests use isolated overlay, not production selection handles.',
       '690N: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range with the reported repetition count. Red pointer only denotes an actual synthetic PointerEvent; blue marks represent the actual DOM Range, not Android handles, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
