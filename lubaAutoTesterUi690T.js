@@ -1,4 +1,4 @@
-/* 690U – own LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 690V – corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -22,6 +22,59 @@
   const assert=(condition,code)=>{if(!condition)throw Error(code);};
   const owned=id=>window.loadTask?.().find(n=>n?.id===id&&n.storageScope==='local'&&
     n.isSecret!==true&&n.tags?.includes('Testy')&&String(n.title||'').startsWith('[AutoTester 690T]'));
+  // 690V: Produkcni engine kresli vlastni caret POUZE po skutecnem TAPU do tela.
+  // Samotne focus()+LubaKeyboard.zobraz() aktivniCilPsani='body' nenastavi.
+  const viditelne=el=>Boolean(el?.isConnected&&!el.hidden&&
+    el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0&&
+    getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden');
+  const ownStav=(core,keyboard,editor)=>{
+    const caret=document.querySelector('.ln-v2-luba-caret');
+    const handle=document.querySelector('.ln-v2-single-caret-handle');
+    const model=core?.zachytAktualniVyber?.();
+    return {caret,handle,model,
+      ready:keyboard?.ziskejZdroj?.()==='luba'&&keyboard?.jeOtevrena?.()===true&&
+        keyboard?.ziskejCilPsani?.()==='body'&&editor?.dataset?.lnV2OwnCaretOnly==='1'&&
+        model?.sbaleny===true&&viditelne(caret)&&viditelne(handle)};
+  };
+  const ownDiagnostika=(core,keyboard,editor)=>{
+    const s=ownStav(core,keyboard,editor);
+    return ['source='+String(keyboard?.ziskejZdroj?.()||'-'),
+      'open='+String(keyboard?.jeOtevrena?.()),
+      'target='+String(keyboard?.ziskejCilPsani?.()||'-'),
+      'ownMode='+String(editor?.dataset?.lnV2OwnCaretOnly||'-'),
+      'model='+String(s.model?.sbaleny?'collapsed':'missing-or-range'),
+      'caret='+String(viditelne(s.caret)),
+      'handle='+String(viditelne(s.handle))].join(', ');
+  };
+  async function inicializujVlastniCaret(id,core,keyboard,editor,alive){
+    assert(keyboard?.ziskejZdroj?.()==='luba','luba_keyboard_mode_not_active');
+    assert(editor?.isConnected,'custom_editor_missing');
+    assert(typeof keyboard?.pripravEditor==='function','production_keyboard_prepare_missing');
+    const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
+    assert(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function',
+      'owned_native_bridge_unavailable');
+    keyboard.pripravEditor(editor); // pouze produkcni API, nemeni nastaveni klavesnice
+    editor.focus({preventScroll:true});
+    const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+    let textNode=null,n;
+    while((n=walker.nextNode()))if(String(n.nodeValue||'').includes('Zapis_z_viditelneho_editoru_690T')){textNode=n;break;}
+    assert(textNode,'test_marker_missing_in_editor');
+    const radek=textNode.parentElement?.closest?.('.ln-v2-odstavec')||textNode.parentElement;
+    radek?.scrollIntoView?.({block:'center',inline:'nearest',behavior:'instant'});
+    await wait(160);
+    assert(alive(),'cancelled_before_own_native_tap');
+    // DULEZITE: tento skutecny Android MotionEvent aktivuje otevriPoSkutecnemTapu().
+    const ack=await plugin.gestureOwnedEditor({id,target:'word',type:'tap'});
+    assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_caret_setup_native_tap_missing_ack');
+    let stav;
+    for(let tries=0;tries<18;tries++){
+      if(!alive())throw Error('cancelled_waiting_for_own_caret');
+      await wait(100);
+      stav=ownStav(core,keyboard,editor);
+      if(stav.ready)return stav;
+    }
+    throw Error('own_caret_not_ready_after_real_tap: '+ownDiagnostika(core,keyboard,editor));
+  }
   async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=>{}){
     if(busy)return rows.map(([id,name])=>({id,name,status:'APP_BLOCKED',kind:'REAL_VISIBLE_EDITOR_690T',ms:0,detail:'ui_runner_busy'}));
     busy=true;
@@ -69,26 +122,21 @@
             const core=window.LubaNoteEditorV2;
             const keyboard=window.LubaNoteKeyboard;
             const editor=core?.ziskejEditorElement?.();
-            assert(editor?.isConnected,'custom_editor_missing');
-            assert(keyboard?.ziskejZdroj?.()==='luba','luba_keyboard_mode_not_active');
-            editor.focus({preventScroll:true});
-            keyboard.zobraz?.();
-            await wait(400);
-            assert(editor.dataset.lnV2OwnCaretOnly==='1','own_caret_mode_not_enabled');
-            const cursor=document.querySelector('.ln-v2-luba-caret:not([hidden])');
-            const handle=document.querySelector('.ln-v2-single-caret-handle:not([hidden])');
-            const visible=el=>Boolean(el?.isConnected&&el.getBoundingClientRect().height>0&&
-              getComputedStyle(el).display!=='none'&&getComputedStyle(el).visibility!=='hidden');
-            assert(visible(cursor),'luba_caret_not_rendered');
-            assert(visible(handle),'luba_insertion_handle_not_rendered');
-            const model=core.zachytAktualniVyber?.();
-            assert(model?.sbaleny===true&&model.konec?.offset>=0,'own_caret_model_position_missing');
+            await inicializujVlastniCaret(id,core,keyboard,editor,alive);
+            assert(ownStav(core,keyboard,editor).ready,
+              'own_caret_missing_after_native_tap: '+ownDiagnostika(core,keyboard,editor));
           }else if(i===4){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function',
               'owned_native_bridge_unavailable');
-            const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
-            const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
+            const core=window.LubaNoteEditorV2;
+            const editor=core?.ziskejEditorElement?.();
+            // Nastavime opravdu JINOU pocatecni pozici nez testovaci slovo.
+            // Produkcni API ji umisti na konec a az nasledny realny tap vytvori caret.
+            assert(core?.nastavPoziciOtevreni?.('end')===true,'own_tap_baseline_not_set');
+            await wait(180); // dvoufazovy RAF scroll z Core V2 nesmi prekryt novy tap
+            const before=core?.zachytAktualniVyber?.();
+            assert(before?.sbaleny===true&&before?.konec,'own_tap_baseline_model_missing');
             let trusted=0;
             const listener=e=>{if(e.isTrusted)trusted++;};
             editor?.addEventListener('touchstart',listener,true);
@@ -102,6 +150,8 @@
             assert(after?.sbaleny===true,'tap_not_mapped_to_own_caret');
             assert(before?.konec&&(before.konec.offset!==after.konec.offset||before.konec.blok!==after.konec.blok),
               'native_tap_did_not_move_own_caret');
+            assert(ownStav(core,window.LubaNoteKeyboard,editor).ready,
+              'own_caret_not_visible_after_native_retap: '+ownDiagnostika(core,window.LubaNoteKeyboard,editor));
           }else if(i===5){
             const core=window.LubaNoteEditorV2;
             const before=core?.zachytAktualniVyber?.();
@@ -166,7 +216,7 @@
           const cause=String(error?.message||error);
           const unavailable=/owned_native_bridge_unavailable|luba_keyboard_mode_not_active|own_caret_mode_not_enabled/.test(cause);
           output.push({id:testId,name,status:unavailable?(i>=4&&i<=7?'NATIVE_BLOCKED':'APP_BLOCKED'):(i>=4&&i<=7?'NATIVE_FAIL':'APP_FAIL'),kind:i>=4&&i<=7?'OWN_LUBANOTE_NATIVE_INPUT_690U':'REAL_VISIBLE_EDITOR_690T',ms:Math.round(performance.now()-tick),
-            detail:String(error?.message||error).slice(0,170)+' · poznámka Testy byla ponechána pro diagnostiku.'});
+            detail:String(error?.message||error).slice(0,280)+' · poznámka Testy byla ponechána pro diagnostiku.'});
           break;
         }
       }
