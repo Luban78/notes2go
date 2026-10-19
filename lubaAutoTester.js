@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690Z</span></h1><p>Testy Core V2 v izolaci a viditelné kroky v běžném editoru Testy. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691A</span></h1><p>Testy Core V2 v izolaci a viditelné kroky v běžném editoru Testy. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -402,6 +402,26 @@
     }catch(e){if(alive())results.push(...blocked(e?.message||e));}
     finally{restoreTestScreen();if(alive())render();}
   }
+  async function spustitSmiseneTodo691A(generace){
+    const expected=['ui-livea-open','ui-livea-heading','ui-livea-previous','ui-livea-middle','ui-livea-next','ui-livea-reload','ui-livea-clear','ui-livea-delete','ui-livea-persist'];
+    const blocked=m=>expected.map(id=>({id,name:id,kind:'REAL_EDITOR_MIXED_TODO_691A',status:'APP_BLOCKED',ms:0,detail:String(m).slice(0,175)}));
+    const alive=()=>generace===generaceBehu&&running&&!screen?.hidden;
+    try{
+      if(!alive())return;
+      if(!lastTestNoteId){results.push(...blocked('Chybí vlastní LOCAL Testy poznámka'));render();return;}
+      if(!results.some(x=>x.id==='ui-livez-save'&&x.status==='APP_PASS')){
+        results.push(...blocked('Předchozí živá Bullet regrese nedokončena'));render();return;
+      }
+      const mod=window.LubaNoteAutoTesterLive691A;
+      if(!mod?.run){results.push(...blocked('691A modul se nenačetl'));render();return;}
+      const rows=await mod.run(lastTestNoteId,alive,msg=>{if(alive())setStatus(msg);},minimizeTestScreen,restoreTestScreen);
+      if(!alive())return;
+      if(!Array.isArray(rows)||rows.length!==expected.length||new Set(rows.map(x=>x.id)).size!==expected.length||
+        rows.some(x=>!expected.includes(x.id)||!['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(x.status)))throw Error('691A invalid results');
+      results.push(...rows);
+    }catch(e){if(alive())results.push(...blocked(e?.message||e));}
+    finally{restoreTestScreen();if(alive())render();}
+  }
   async function spustitZivePredIzolaci690Z(generace){
     if(generace!==generaceBehu||!running)return;
     setStatus('1/2: Skutečná LubaNote – vytvářím poznámku Testy…');
@@ -413,6 +433,7 @@
       await spustitSkutecnyEditor690T(generace);
       if(generace===generaceBehu)await spustitViditelneNastroje690Y(generace);
       if(generace===generaceBehu)await spustitLive690Z(generace);
+      if(generace===generaceBehu)await spustitSmiseneTodo691A(generace);
     }
     liveFirstDone=true;
     if(generace===generaceBehu&&running)setStatus('2/2: Doplňkové izolované regrese Core V2, E2E, DB a pokrytí V1…');
@@ -1001,7 +1022,8 @@
       await spustitPoznamky690S(generace);
       if(generace===generaceBehu&&lastTestNoteId){await spustitSkutecnyEditor690T(generace);
         if(generace===generaceBehu)await spustitViditelneNastroje690Y(generace);
-        if(generace===generaceBehu)await spustitLive690Z(generace);}
+        if(generace===generaceBehu)await spustitLive690Z(generace);
+        if(generace===generaceBehu)await spustitSmiseneTodo691A(generace);}
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -1043,7 +1065,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690X',
+      'LUBANOTE AUTOTESTER / 691A',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -1051,7 +1073,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
+      '691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
