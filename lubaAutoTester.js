@@ -11,7 +11,7 @@
   let activeRep=1;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky Core V2 – skutečný modul',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
@@ -24,7 +24,7 @@
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
         <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
         <option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
-        <option value="db">Databáze</option><option value="stability">Pokrytí stability V1</option>
+        <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Centrum stability V1 – dostupná automatizace</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
       <label class="lat-repeat-control" for="lat-repetitions">Opakování každého Core/Planner testu <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
       <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. E2E a izolované DB testy zatím běží 1×.</small>
@@ -65,6 +65,7 @@
   }
   window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode?0:(extraSlowMode?2.5:1)});
   // 690M: Dvojtap admina ukaze POUZE panel VD / DH / T, zadny nastroj neotvira.
+  window.LubaNoteDockBuild='690Q';
   let lastAdminTap=null;
   function povolenDok(){
     try{return window.LubaNoteAdminTools?.isAllowed?.()===true;}catch(_){return false;}
@@ -130,6 +131,7 @@
       if(lastAdminTap&&now-lastAdminTap.t<520&&lastAdminTap.desktop===prev.desktop&&Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
         zobrazDebugDockPokudJeTreba();
+        if(prev.desktop){e.preventDefault();e.stopImmediatePropagation();}
       }else lastAdminTap={t:now,x:e.clientX,y:e.clientY,desktop:prev.desktop};
     },true);
     document.addEventListener('pointercancel',()=>{start=null;},true);
@@ -137,6 +139,7 @@
     document.addEventListener('dblclick',e=>{
       if(!logo(e.target)||excluded(e.target)||!povolenDok())return;
       e.preventDefault();
+      e.stopImmediatePropagation();
       zobrazDebugDockPokudJeTreba();
     },true);
   }
@@ -313,7 +316,7 @@
     const priority={FAIL:0,CORE_FAIL:0,APP_FAIL:0,DB_FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,BLOCKED:1,CORE_BLOCKED:1,APP_BLOCKED:1,DB_BLOCKED:1,NOT_TESTED:2,PARTIAL:3,AUDIT:4};
     const ordered=results.slice().sort((a,b)=>(priority[a.status]??5)-(priority[b.status]??5));
     list.innerHTML=ordered.map(r=>{
-      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',APP_PASS:'PLANNER PASS',APP_FAIL:'PLANNER FAIL',APP_BLOCKED:'PLANNER BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
+      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',APP_PASS:'MODUL PASS',APP_FAIL:'MODUL FAIL',APP_BLOCKED:'MODUL BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('')||'<div class="lat-empty">Spusť test. Průběh uvidíš výše, výsledky po dokončení zde.</div>';
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0||running;
@@ -373,7 +376,9 @@
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
       render();return;
     }
-    const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['editor-caret','caret-editor-plain'],['editor-format','caret-editor-format'],['editor-edge','caret-editor-scroll'],['image-between','caret-editor-image'],['editor-caret','caret-todo-reopen'],['editor-selection','caret-todo-range'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse']]);
+    const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['editor-caret','caret-todo-reopen'],['editor-format','caret-editor-format'],['editor-edge','caret-editor-scroll'],['image-between','caret-editor-image'],['editor-selection','caret-todo-range'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse'],
+      // 690Q – nove skutecne Core V2 operace. Pouze PARTIAL: nativni gesta a cela aplikace nejsou timto potvrzene.
+      ['code-integrity','core-code-import'],['code-caret','core-code-caret'],['code-image','core-code-image'],['image-wrap','core-image-size'],['image-reopen','core-image-roundtrip']]);
     for(const item of vybrane){
       const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
       const partial=item.id==='app-planner'
@@ -584,6 +589,50 @@
     if(generace===generaceBehu&&!screen.hidden)render();
   }
 
+  // 690Q: additional shipped Core V2 code/image/roundtrip + real language pack parity.
+  // Neither a SIM result nor complete user-flow/Android regression proof.
+  async function spustitPokrocile690Q(generace,scope='all'){
+    const catalog=[
+      ['core-code-import','Code – skutečný import, export a nedělitelný blok','CORE'],
+      ['core-code-caret','Code – skutečný DOM Range uvnitř bloku','CORE'],
+      ['core-code-image','Code – vložení obrázku zachová dva code bloky','CORE'],
+      ['core-code-toggle','Code – převod běžného textu na code a zpět','CORE'],
+      ['core-image-roundtrip','Obrázek – export a znovunačtení dokumentu','CORE'],
+      ['core-image-size','Obrázek – změna velikosti a zarovnání','CORE'],
+      ['core-image-delete-undo','Obrázek – odstranění a skutečné Undo','CORE'],
+      ['core-image-order','Obrázek mezi texty – zachování pořadí a obsahu','CORE'],
+      ['core-mixed-html','Smíšený obsah – nadpis, ToDo, code a HTML roundtrip','CORE'],
+      ['app-i18n-packs','Překlady – 6 skutečných balíčků a shoda klíčů','APP']
+    ];
+    const expected=catalog.filter(x=>scope==='all'||scope==='editor'&&x[0].startsWith('core-code')||scope==='image'&&x[0].startsWith('core-image')||scope==='i18n'&&x[0].startsWith('app-i18n'));
+    const blocked=why=>expected.map(([id,name,type])=>({id,name,kind:'REAL_MODULE_690Q_SANDBOX',status:type==='APP'?'APP_BLOCKED':'CORE_BLOCKED',ms:0,detail:String(why||'runner_missing').slice(0,200)}));
+    try{
+      if(window.LubaNoteAutoTesterExtended690Q?.supportsRepeatCount!==true){
+        const u=new URL('lubaAutoTesterExtended690Q.js?v=690Q-first-coverage',location.href);
+        if(u.origin!==location.origin)throw Error('extended_runner_cross_origin');
+        await new Promise((resolve,reject)=>{
+          const tag=document.createElement('script');
+          const timer=setTimeout(()=>{tag.remove();reject(Error('extended_runner_load_timeout'));},12000);
+          tag.src=u.href;tag.onload=()=>{clearTimeout(timer);resolve();};
+          tag.onerror=()=>{clearTimeout(timer);reject(Error('extended_runner_load_failed'));};
+          document.head.appendChild(tag);
+        });
+      }
+      if(generace!==generaceBehu||screen.hidden)return;
+      const rows=await window.LubaNoteAutoTesterExtended690Q.runRepeated(scope,
+        ()=>generace===generaceBehu&&!screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
+      if(generace!==generaceBehu||screen.hidden)return;
+      const valid=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(r=>r.id)).size===expected.length&&
+        rows.every(r=>expected.some(x=>x[0]===r.id)&&['CORE_PASS','CORE_FAIL','CORE_BLOCKED','APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status));
+      results.push(...(valid?rows:blocked('extended_runner_invalid_rows')));
+    }catch(e){
+      if(generace!==generaceBehu||screen.hidden)return;
+      results.push(...blocked(e?.message||'extended_runner_unavailable'));
+    }
+    if(generace===generaceBehu&&!screen.hidden)render();
+  }
+
   async function spustitServeroveTesty(generace){
     let vysledky;
     try {
@@ -609,7 +658,8 @@
     render();
     const count=sums();
     const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
-    const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${count.PARTIAL} částečně`:'';
+    const partialV1=registr.filter(x=>x.status==='PARTIAL').length;
+    const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${partialV1} částečně`:'';
     updateProgress(activeRep,activeRep,'Dokončeno – výsledky jsou níže');
     const failed=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL+count.APP_FAIL;
     const blocked=count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED;
@@ -634,6 +684,7 @@
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitEditorTodo690G(generace,'all');
       if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'all');
+      if(generace===generaceBehu)await spustitPokrocile690Q(generace,'all');
       if(generace===generaceBehu)await spustitPlanner690H(generace);
     }
     if(generace===generaceBehu && activeSuite==='all'){
@@ -656,14 +707,25 @@
     if(placeholder)placeholder.textContent='Spouštím živé testovací okno Core V2…';
     render();updateProgress(0,activeRep,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
-    if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'){
+    if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'||activeSuite==='extended'||activeSuite==='image'||activeSuite==='i18n'){
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');
       if(activeSuite==='planner')await spustitPlanner690H(generace);
+      if(['extended','image','i18n'].includes(activeSuite))await spustitPokrocile690Q(generace,activeSuite==='extended'?'all':activeSuite);
+      if(activeSuite==='editor' && generace===generaceBehu)await spustitPokrocile690Q(generace,'editor');
+      if(activeSuite==='stability' && generace===generaceBehu){
+        await spustitBulletCore690C(generace);
+        if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
+        if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
+        if(generace===generaceBehu)await spustitEditorTodo690G(generace,'all');
+        if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'all');
+        if(generace===generaceBehu)await spustitPokrocile690Q(generace,'all');
+        if(generace===generaceBehu)await spustitPlanner690H(generace);
+      }
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'bullet');}
-      if(generace===generaceBehu)await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
+      if(generace===generaceBehu && !['extended','image','i18n'].includes(activeSuite))await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
