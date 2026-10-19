@@ -80,6 +80,12 @@
       const now=performance.now();
       if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
+        // 690I2D: Dvojtap musi obnovit spolecny VD/DH +/- dock.
+        // Bez tohoto kroku se po prime Debug Hub.open() mini panel nezobrazi.
+        const dock=document.getElementById('ln-vd-quickbar');
+        if(!dock || dock.hidden || getComputedStyle(dock).display==='none'){
+          window.LubaNoteVisualDebug?.showDock?.();
+        }
         window.LubaNoteDebugHub?.open?.();
       }else{lastAdminTap={t:now,x:e.clientX,y:e.clientY};}
     },true);
