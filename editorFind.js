@@ -53,7 +53,11 @@
       const walker = document.createTreeWalker(segment, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode())) {
-        if (node.data && !node.parentElement?.closest('[contenteditable="false"]')) uzly.push(node);
+        // 691I: LubaKeyboard na Androidu spravne drzi cely editor
+        // contenteditable="false". To nesmi skryt skutecne textove segmenty
+        // pred hledanim; vnorene needitovatelne prvky dal ignorujeme.
+        const needitovatelny = node.parentElement?.closest('[contenteditable="false"]');
+        if (node.data && (!needitovatelny || needitovatelny === koren)) uzly.push(node);
       }
     }
     return uzly;
