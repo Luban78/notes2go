@@ -1,6 +1,6 @@
-/* LubaNote AutoTester 690M — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690S — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
- * No local user notes, credentials, keys or production LubaServer data are read.
+ * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
  */
 (() => {
@@ -11,19 +11,19 @@
   let activeRep=1;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky Core V2 – skutečný modul',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky Core V2 – skutečný modul',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690R</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690S</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
         <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
-        <option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
+        <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Centrum stability V1 – dostupná automatizace</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
       <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
@@ -39,7 +39,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690S: Skutečné LOCAL testovací poznámky pod štítkem Testy se po běhu uklidí, uživatelské poznámky se nemění. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -65,7 +65,7 @@
   }
   window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode?0:(extraSlowMode?2.5:1)});
   // 690M: Dvojtap admina ukaze POUZE panel VD / DH / T, zadny nastroj neotvira.
-  window.LubaNoteDockBuild='690R';
+  window.LubaNoteDockBuild='690S';
   let lastAdminTap=null;
   function povolenDok(){
     try{return window.LubaNoteAdminTools?.isAllowed?.()===true;}catch(_){return false;}
@@ -379,15 +379,15 @@
     }
     const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['editor-caret','caret-todo-reopen'],['editor-format','caret-editor-format'],['editor-edge','caret-editor-scroll'],['image-between','caret-editor-image'],['editor-selection','caret-todo-range'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse'],
       // 690Q – nove skutecne Core V2 operace. Pouze PARTIAL: nativni gesta a cela aplikace nejsou timto potvrzene.
-      ['code-integrity','core-code-import'],['code-caret','core-code-caret'],['code-image','core-code-image'],['image-wrap','core-image-size'],['image-reopen','core-image-roundtrip']]);
+      ['notes-create','local-notes-create'],['notes-trash','local-notes-trash'],['code-integrity','core-code-import'],['code-caret','core-code-caret'],['code-image','core-code-image'],['image-wrap','core-image-size'],['image-reopen','core-image-roundtrip']]);
     for(const item of vybrane){
       const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
       const partial=item.id==='app-planner'
         ? ['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy'].every(id=>results.some(r=>r.id===id&&r.status==='APP_PASS'))
-        :coreResult?.status==='CORE_PASS';
+        :coreResult?.status==='CORE_PASS' || (['notes-create','notes-trash'].includes(item.id) && coreResult?.status==='APP_PASS');
       results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
         status:partial?'PARTIAL':'NOT_TESTED',ms:0,
-        detail:partial?(item.id==='app-planner'?`7×${activeRep} testů skutečného recurringTasks.js PASS v izolaci; neověřuje uložené události, Android alarmy ani doručení připomínek.`:`${activeRep}× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.`):'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
+        detail:partial?(['notes-create','notes-trash'].includes(item.id)?'Skutečné lokalni API pro ulozeni, Kos a obnovu se stitkem Testy; zamerne netestuje UI editoru ani cloud sync.':item.id==='app-planner'?`7×${activeRep} testů skutečného recurringTasks.js PASS v izolaci; neověřuje uložené události, Android alarmy ani doručení připomínek.`:`${activeRep}× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.`):'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
     }
     render();
   }
@@ -675,6 +675,38 @@
     if(generace===generaceBehu && !screen.hidden)render();
   }
 
+  // 690S: first real application storage lifecycle. Explicit admin/Testy gate,
+  // LOCAL only, unique IDs and cleanup in the runner itself.
+  async function spustitPoznamky690S(generace){
+    const expected=['local-notes-create','local-notes-edit','local-notes-reload','local-notes-trash','local-notes-restore','local-notes-cleanup'];
+    const blocked=why=>expected.map(id=>({id,name:id,kind:'REAL_LOCAL_NOTE_STORAGE_690S',status:'APP_BLOCKED',ms:0,detail:String(why).slice(0,165)}));
+    try{
+      if(!window.LubaNoteAutoTesterNotes690S){
+        const u=new URL('lubaAutoTesterNotes690S.js?v=690S-notes-local-1',location.href);
+        if(u.origin!==location.origin)throw Error('notes_module_other_origin');
+        await new Promise((resolve,reject)=>{
+          const element=document.createElement('script');
+          const timeout=setTimeout(()=>{element.remove();reject(Error('notes_script_timeout'));},12000);
+          element.src=u.href;
+          element.onload=()=>{clearTimeout(timeout);resolve();};
+          element.onerror=()=>{clearTimeout(timeout);reject(Error('notes_script_missing'));};
+          document.head.appendChild(element);
+        });
+      }
+      if(generace!==generaceBehu||!running||screen.hidden)return;
+      const rows=await window.LubaNoteAutoTesterNotes690S.runRepeated(
+        ()=>generace===generaceBehu&&running&&!screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
+      if(generace!==generaceBehu||screen.hidden)return;
+      const good=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(x=>x.id)).size===expected.length&&
+        rows.every(x=>expected.includes(x.id)&&['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(x.status));
+      results.push(...(good?rows:blocked('local_notes_result_schema_invalid')));
+    }catch(e){
+      if(generace!==generaceBehu||screen.hidden)return;
+      results.push(...blocked(e?.message||'local_notes_unavailable'));
+    }
+    if(generace===generaceBehu&&!screen.hidden)render();
+  }
   async function spustitServeroveTesty(generace){
     let vysledky;
     try {
@@ -729,6 +761,10 @@
       if(generace===generaceBehu)await spustitPokrocile690Q(generace,'all');
       if(generace===generaceBehu)await spustitPlanner690H(generace);
     }
+    if(generace===generaceBehu&&activeSuite==='all'){
+      setStatus('Skutečné LOCAL poznámky – štítek Testy, vytvoření/Koš/obnova/úklid…');
+      await spustitPoznamky690S(generace);
+    }
     if(generace===generaceBehu && (activeSuite==='all'||activeSuite==='ui')){
       setStatus('Spouštím nativní Android WebView testy…');
       await spustitNativniWebView690R(generace);
@@ -775,6 +811,11 @@
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
+    if(activeSuite==='notes'){
+      await spustitPoznamky690S(generace);
+      if(generace===generaceBehu)dokoncitBeh();
+      return;
+    }
     if(activeSuite==='db'){
       await spustitServeroveTesty(generace);
       if(generace===generaceBehu)dokoncitBeh();
@@ -807,7 +848,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690R',
+      'LUBANOTE AUTOTESTER / 690S',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -815,7 +856,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690R: Android probe injects Java MotionEvent into real WebView and checks trusted touch events in an ephemeral overlay; it is NOT a physical finger, Android OS UIAutomator nor a guarantee of native selection handles. PC reports NATIVE_BLOCKED. Test label Testy is reserved for future isolated create/save/trash workflow; no user notes are modified.',
+      '690S: LOCAL Testy note lifecycle uses live local storage with ID-scoped cleanup. 690S: Testy scope = real LOCAL save/edit/reload/trash/restore/purge via production storage APIs; never alters existing notes, no cloud E2E cross-device or real UI clicks. 690R: Android probe injects Java MotionEvent into real WebView and checks trusted touch events in an ephemeral overlay; it is NOT a physical finger, Android OS UIAutomator nor a guarantee of native selection handles. PC reports NATIVE_BLOCKED. Testy label is used only for explicitly generated LOCAL test notes with unique UUID and exact-ID cleanup.',
       '690N: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range with the reported repetition count. Red pointer only denotes an actual synthetic PointerEvent; blue marks represent the actual DOM Range, not Android handles, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
