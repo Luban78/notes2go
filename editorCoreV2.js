@@ -2225,7 +2225,15 @@
     const blok = dokument.bloky[caret.blok];
     const text = textBloku(blok);
 
-    if (caret.offset > 0) {
+    /* 690N – ToDo, ktere VYPADA PRAZDNE, muze v legacy/smisenem modelu
+       obsahovat jen BR/newline, NBSP nebo zero-width znaky. Pri Backspace
+       odstran cele kolecko, nikdy se nepokousej mazat skryty znak po jednom.
+       Prave napsany skutecny znak (nespace text) stale zustava dvoukrokovy. */
+    const prazdneTodoProBackspace = jeTodoBlok(blok) &&
+      !(/[\S]/u.test(text.replace(/[\u200B\uFEFF]/gu, ""))) &&
+      !(Array.isArray(blok.obrazky) && blok.obrazky.length);
+
+    if (caret.offset > 0 && !prazdneTodoProBackspace) {
       const interniAtom = rozsahInternihoOdkazuNaHranici(blok, caret.offset, -1);
       if (interniAtom) {
         return smazVyber({
@@ -2252,7 +2260,7 @@
        odstraní celý checkbox. Neprázdný TODO na offsetu 0 se s předchozím
        řádkem automaticky neslučuje. Obrázkový TODO se Backspacem nemaže. */
     if (jeTodoBlok(blok)) {
-      if (textBloku(blok).length === 0 && !(Array.isArray(blok.obrazky) && blok.obrazky.length)) {
+      if (prazdneTodoProBackspace) {
         dokument.bloky.splice(caret.blok, 1);
         if (!dokument.bloky.some(jeTextovyBlok)) dokument.bloky.push(vytvorOdstavec(""));
         // 690L: Backspace smaze prazdny TODO, caret patri na KONEC predchoziho textoveho bloku.
@@ -8783,6 +8791,13 @@
           docasny.appendChild(uzel.cloneNode(true));
         });
         importujInlineUzly(docasny, VYCHOZI_FORMAT, obsah, nepodporovane);
+        /* 690N – stary ulozeny ToDo HTML <br> je jen placeholder prazdneho checkboxu.
+           Stejna normalizace jako v importu smisenych RichContent 690M. */
+        if (docasny.childNodes.length === 1 &&
+            docasny.firstChild?.nodeType === Node.ELEMENT_NODE &&
+            docasny.firstChild.tagName === "BR" &&
+            obsah.length === 1 && obsah[0]?.text === "\n" &&
+            !String(todo?.text || "").trim()) obsah.length = 0;
       }
 
       if (!obsah.length) obsah.push(vytvorSegment(String(todo?.text || ""), VYCHOZI_FORMAT));

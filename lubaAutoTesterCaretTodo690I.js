@@ -7,7 +7,8 @@
     ['caret-todo-middle','ToDo – Backspace uprostřed úkolu a pevný kurzor'],
     ['caret-todo-clear','ToDo – mazání textu až do prázdného úkolu'],
     ['caret-todo-empty','ToDo – prázdný řádek bez poškození dalšího úkolu'],
-    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít a smazat prázdné kolečko'],
+    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít, mazat TEXT i kolečko'],
+    ['caret-todo-legacy-html','ToDo – starý HTML placeholder BR nesmí držet kolečko'],
     ['caret-todo-last','ToDo – mazání posledního úkolu bez poškození předchozího'],
     ['caret-todo-range','ToDo – výběr části textu, náhrada a kontrola úchytů'],
     ['caret-todo-reopen','ToDo – kurzor po Undo/Redo a obnovení DOM'],
@@ -32,7 +33,8 @@
       ['caret-todo-middle','ToDo – Backspace uprostřed úkolu a pevný kurzor'],
       ['caret-todo-clear','ToDo – mazání textu až do prázdného úkolu'],
       ['caret-todo-empty','ToDo – prázdný řádek bez poškození dalšího úkolu'],
-    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít a smazat prázdné kolečko'],
+    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít, mazat TEXT i kolečko'],
+    ['caret-todo-legacy-html','ToDo – starý HTML placeholder BR nesmí držet kolečko'],
       ['caret-todo-last','ToDo – mazání posledního úkolu bez poškození předchozího'],
       ['caret-todo-range','ToDo – výběr části textu, náhrada a kontrola úchytů'],
       ['caret-todo-reopen','ToDo – kurzor po Undo/Redo a obnovení DOM'],
@@ -298,7 +300,7 @@
           // Skutecny format smisenych poznamek: HTML richContent, nikoli pouze importujTodos.
           const puvodni=core.importujTodos([
             {id:'690i-0',text:'Predchozi'},
-            {id:'690i-1',text:''},
+            {id:'690i-1',text:'ABC'},
             {id:'690i-2',text:'Nasledujici'}
           ]);
           const nadpis=core.importujHtml('<h2>Nadpis poznamky</h2>');
@@ -314,8 +316,16 @@
           const pred=getBlocks();
           assert(pred.length===4&&pred[0].typ==='odstavec'&&pred[2].typ==='todo',
             'mixed_structure_after_reopen_incorrect');
-          assert(text(pred[2])==='','mixed_empty_todo_contains_invisible_newline_after_html_import');
-          locate(2,0);progress('Smisena poznamka: Backspace odstranuje prazdne ToDo po znovuotevreni',i);
+          assert(text(pred[2])==='ABC','mixed_todo_text_lost_after_reopen');
+          locate(2,3);progress('Smisena poznamka: mazu text ABC znak po znaku, pak kolecko',i);
+          for(const [expected,caretOffset] of [['AB',2],['A',1],['',0]]){
+            key('backspace');
+            assert(text(getBlocks().find(b=>b.id==='690i-1'))===expected,
+              'mixed_todo_text_delete_incorrect_expected_'+caretOffset);
+            keepNeighbor('690i-0','Predchozi');keepNeighbor('690i-2','Nasledujici');
+            await checkCaret('690i-1',caretOffset);await show(80);
+          }
+          assert(getBlocks().length===4,'mixed_todo_disappeared_before_final_backspace');
           key('backspace');
           assert(getBlocks().length===3,'mixed_empty_todo_checkbox_not_removed');
           keepNeighbor('690i-0','Predchozi');keepNeighbor('690i-2','Nasledujici');
@@ -328,6 +338,22 @@
           assert(text(getBlocks()[0])==='Nadpis poznamky','mixed_second_backspace_modified_heading');
           await checkCaret('690i-0','Predchoz'.length);
           await show(210);break;
+        }
+        case 'caret-todo-legacy-html':{
+          const imported=core.importujTodos([
+            {id:'690i-0',text:'Pred',html:'Pred'},
+            {id:'690i-1',text:'',html:'<br>'},
+            {id:'690i-2',text:'Po',html:'Po'}
+          ]);
+          assert(imported?.ok===true,'legacy_html_import_failed');
+          assert(core.otevriVHostu(host,imported.model)===true,'legacy_html_open_failed');
+          const middle=getBlocks().find(b=>b.id==='690i-1');
+          assert(text(middle)==='', 'legacy_empty_br_imported_as_text');
+          locate(1,0);progress('Stare HTML ToDo s <br>: mazu prazdne kolecko',i);
+          key('backspace');
+          assert(getBlocks().length===2,'legacy_empty_checkbox_remained_after_backspace');
+          keepNeighbor('690i-0','Pred');keepNeighbor('690i-2','Po');
+          await checkCaret('690i-0',4);await show(150);break;
         }
         case 'caret-todo-last':{
           fixture(['Prvni ukol','Druhy ukol','Z']);locate(2,1);progress('mažu poslední ToDo',i);
@@ -471,7 +497,7 @@
         else if(Date.now()-lastMessage>35000)done(fallback('no_progress_35s'));
       },500);
       try{
-        const u=new URL('editorCoreV2.js?v=690M-mixed-todo-regression',location.href);
+        const u=new URL('editorCoreV2.js?v=690N-empty-backspace-e2e',location.href);
         if(u.origin!==location.origin)throw Error('core_cross_origin');
         if(!/^https?:\/\/|^capacitor:\/\//.test(location.origin))throw Error('unsupported_origin');
         const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
