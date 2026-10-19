@@ -1,4 +1,4 @@
-/* 690V – corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 690W – resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -44,7 +44,12 @@
       'ownMode='+String(editor?.dataset?.lnV2OwnCaretOnly||'-'),
       'model='+String(s.model?.sbaleny?'collapsed':'missing-or-range'),
       'caret='+String(viditelne(s.caret)),
-      'handle='+String(viditelne(s.handle))].join(', ');
+      'handle='+String(viditelne(s.handle)),
+      'handleExists='+Boolean(s.handle?.isConnected),
+      'handleHidden='+String(s.handle?.hidden),
+      'handleDisplay='+String(s.handle?getComputedStyle(s.handle).display:'missing'),
+      'selectionUiBlocked='+String(document.body.classList.contains('ln-v2-selection-ui-blocked')),
+      'testerModal='+String(document.getElementById('ln-auto-tester')?.getAttribute('aria-modal'))].join(', ');
   };
   async function inicializujVlastniCaret(id,core,keyboard,editor,alive){
     assert(keyboard?.ziskejZdroj?.()==='luba','luba_keyboard_mode_not_active');

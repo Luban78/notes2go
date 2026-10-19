@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690U — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690W — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -18,7 +18,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690U</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690W</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -37,11 +37,11 @@
       <div class="lat-progress-info"><span id="lat-live-step">Připraveno</span><span id="lat-progress-num">–</span></div>
       <div class="lat-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="lat-progress-track"><div id="lat-progress-fill"></div></div>
     </section>
-    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
+    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><div class="lat-result-actions"><button type="button" data-lat="jump-first-problem" id="lat-jump-first-problem" hidden>↓ Přejít na chybu</button><button data-lat="copy" type="button" disabled>Kopírovat report</button></div></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div class="lat-note-review"><button type="button" data-lat="review-note" id="lat-review-note" hidden>Otevřít poslední poznámku Testy v aplikaci</button><small>Poznámky z testů zůstávají v prostoru LOCAL pod štítkem Testy.</small></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690U: vlastní LubaNote caret, kapky a výběr se testují v běžném editoru. 690T: Testovací LOCAL poznámky se štítkem Testy zůstávají po běhu k prohlédnutí. Viditelný průchod editorem je skutečná UI obrazovka, nikoli Android UIAutomator. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690W: oprava modalni kolize kapek a prechod na chybu. 690U: vlastní LubaNote caret, kapky a výběr se testují v běžném editoru. 690T: Testovací LOCAL poznámky se štítkem Testy zůstávají po běhu k prohlédnutí. Viditelný průchod editorem je skutečná UI obrazovka, nikoli Android UIAutomator. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -176,6 +176,18 @@
         `#ln-auto-tester .lat-laboratory.lat-expanded .lat-progress-info{font-size:.95rem}`;
         document.head.appendChild(extra);
       }
+      if(!document.getElementById('lat-690w-clickable-problems')){
+        const jumpStyle=document.createElement('style');jumpStyle.id='lat-690w-clickable-problems';
+        jumpStyle.textContent=`#ln-auto-tester .lat-result-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}`+
+          `#ln-auto-tester #lat-jump-first-problem:not([hidden]){background:#552c2a;border-color:#dc7774;color:#fff1ed}`+
+          `#ln-auto-tester .lat-summary>button{background:#223029;border:1px solid #b66e65;border-radius:10px;padding:10px 4px;color:#fff;font:inherit;text-align:center;cursor:pointer;min-width:0}`+
+          `#ln-auto-tester .lat-summary>button b{display:block;font-size:1.45rem;font-variant-numeric:tabular-nums}`+
+          `#ln-auto-tester .lat-summary>button span{display:block;font-size:.59rem;letter-spacing:.02em;overflow-wrap:anywhere;color:#ffe4db}`+
+          `#ln-auto-tester #lat-state[data-jump='yes']{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#e68d7c;text-underline-offset:3px}`+
+          `#ln-auto-tester .lat-result.lat-jump-highlight{border-color:#f28a78;box-shadow:0 0 0 2px #f28a7860}`+
+          `@media(max-width:380px){#ln-auto-tester .lat-summary>button b{font-size:1.23rem}#ln-auto-tester .lat-summary>button span{font-size:.51rem}}`;
+        document.head.appendChild(jumpStyle);
+      }
       // Graphite Compact vyber oblasti: nativni Android select je pouze datovy zdroj.
       // Uzivatel vidi vlastni panel ve stylu LubaNote; zadne systemove sede menu.
       const areaSelect=screen.querySelector('#lat-area');
@@ -241,7 +253,15 @@
         if(action==='speed'){if(slowMode&&!extraSlowMode){extraSlowMode=true;}else if(extraSlowMode){slowMode=false;extraSlowMode=false;}else{slowMode=true;}btn.textContent=extraSlowMode?'🐌 Velmi pomalu':slowMode?'🐢 Pomalu':'⚡ Rychle';btn.setAttribute('aria-pressed',String(slowMode));return;}
         if(action==='expand'){expanded=!expanded;screen.querySelector('.lat-laboratory')?.classList.toggle('lat-expanded',expanded);btn.textContent=expanded?'↙ Zmenšit':'⛶ Zvětšit';btn.setAttribute('aria-pressed',String(expanded));return;}
         if(action==='visual'){visualEnabled=!visualEnabled;btn.textContent=visualEnabled?'Náhled zapnutý':'Náhled vypnutý';btn.setAttribute('aria-pressed',String(visualEnabled));const lab=screen.querySelector('.lat-laboratory');if(lab)lab.dataset.off=visualEnabled?'0':'1';return;}
+                if(action==='jump-first-problem'){jumpToFirstProblem();return;}
         if(action==='copy'){void copyReport(btn);}
+      });
+      // Tapping the displayed error itself should jump to its diagnosis.
+      screen.querySelector('#lat-state')?.addEventListener('click',()=>jumpToFirstProblem());
+      screen.querySelector('#lat-state')?.addEventListener('keydown',e=>{
+        if((e.key==='Enter'||e.key===' ')&&screen.querySelector('#lat-state')?.dataset.jump==='yes'){
+          e.preventDefault();jumpToFirstProblem();
+        }
       });
       document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();e.stopImmediatePropagation();handleTesterBack();}},true);
     }
@@ -290,15 +310,21 @@
     if(screen&&!screen.hidden)return handleTesterBack();
     return typeof backHandlerBeforeTester==='function'?backHandlerBeforeTester.apply(this,arguments):false;
   };
+  // 690W: While testing the REAL editor, the AutoTester is a small HUD,
+  // NOT a modal dialog. Its old aria-modal=true caused the production
+  // selection guard [role=dialog][aria-modal=true] to HIDE OWN caret handles.
+  // Revert modal semantics BEFORE returning to the full test screen.
   function minimizeTestScreen(){
     if(!screen||screen.hidden)return;
-    screen.classList.add('lat-app-playback');
+    screen.removeAttribute('aria-modal');
+    screen.classList.add('lat-app-playback'); // observed by Core V2 UI-overlay guard
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=false;
     document.body.classList.remove('lat-open');
   }
   function restoreTestScreen(){
     if(!screen)return;
-    screen.classList.remove('lat-app-playback');
+    screen.setAttribute('aria-modal','true');
+    screen.classList.remove('lat-app-playback'); // observed by Core V2 UI-overlay guard
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=true;
     if(!screen.hidden)document.body.classList.add('lat-open');
   }
@@ -345,6 +371,28 @@
     else {const label=screen.querySelector('#lat-live-step');if(label)label.textContent=s;}
     const hud=screen.querySelector('#lat-app-hud-text');if(hud)hud.textContent=s;
   }
+  const problemStatuses=new Set(['FAIL','CLIENT_FAIL','SIM_FAIL','DB_FAIL','CORE_FAIL','APP_FAIL','NATIVE_FAIL']);
+  const blockedStatuses=new Set(['BLOCKED','DB_BLOCKED','CORE_BLOCKED','APP_BLOCKED','NATIVE_BLOCKED']);
+  function jumpToFirstProblem(){
+    if(!screen||screen.hidden)return false;
+    const issue=results.find(r=>problemStatuses.has(r.status)) || results.find(r=>blockedStatuses.has(r.status));
+    if(!issue)return false;
+    const details=screen.querySelector('.lat-details');
+    if(!details)return false;
+    details.open=true;
+    const target=Array.from(details.querySelectorAll('.lat-result')).find(el=>el.dataset.resultId===issue.id);
+    if(!target)return false;
+    target.open=true;
+    details.querySelectorAll('.lat-result.lat-jump-highlight').forEach(el=>el.classList.remove('lat-jump-highlight'));
+    target.classList.add('lat-jump-highlight');
+    requestAnimationFrame(()=>{
+      target.scrollIntoView({behavior:'smooth',block:'center'});
+      const line=target.querySelector('summary');
+      line?.setAttribute('tabindex','-1');
+      try{line?.focus({preventScroll:true});}catch(_error){}
+    });
+    return true;
+  }
   function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,APP_PASS:0,APP_FAIL:0,APP_BLOCKED:0,NATIVE_PASS:0,NATIVE_FAIL:0,NATIVE_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
     if(!screen)return;
@@ -353,8 +401,16 @@
     const failing=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL+count.APP_FAIL+count.NATIVE_FAIL;
     const blocked=count.BLOCKED+count.DB_BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED+count.NATIVE_BLOCKED;
     const missing=count.NOT_TESTED+count.PARTIAL+count.AUDIT;
-    summary.innerHTML=`<div><b>${passing}</b><span>PROVEDENO PASS</span></div><div><b>${failing}</b><span>CHYBY</span></div><div><b>${blocked}</b><span>BLOKOVÁNO</span></div><div><b>${missing}</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT</span></div>`;
+    summary.innerHTML=`<div><b>${passing}</b><span>PROVEDENO PASS</span></div>${failing ? `<button type="button" data-lat="jump-first-problem" aria-label="Přejít na první chybu"><b>${failing}</b><span>CHYBY ↓</span></button>` : `<div><b>${failing}</b><span>CHYBY</span></div>`}${blocked&&!failing ? `<button type="button" data-lat="jump-first-problem" aria-label="Přejít na první blokovaný test"><b>${blocked}</b><span>BLOKOVÁNO ↓</span></button>` : `<div><b>${blocked}</b><span>BLOKOVÁNO</span></div>`}<div><b>${missing}</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT</span></div>`;
     const state=screen.querySelector('#lat-state');
+    const haveProblem=failing>0||blocked>0;
+    const jump=screen.querySelector('#lat-jump-first-problem');
+    if(jump){jump.hidden=!haveProblem||running;jump.textContent=failing>0?'↓ Přejít na chybu':'↓ Přejít na blokování';}
+    if(state){
+      state.dataset.jump=haveProblem&&!running?'yes':'no';
+      state.setAttribute('tabindex',haveProblem&&!running?'0':'-1');
+      state.title=haveProblem&&!running?'Klepnutím zobrazíš přesný chybný test':'';
+    }
     if(state&&!running){
       if(failing>0)state.textContent=`⛔ CHYBA: ${failing} testů selhalo. ${blocked} dalších je blokovaných. Zkopíruj report.`;
       else if(blocked>0)state.textContent=`⚠️ NEDOKONČENO: ${blocked} testů BLOKOVÁNO. Není to PASS celé aplikace! Zkopíruj report.`;
@@ -367,7 +423,7 @@
       const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',APP_PASS:'MODUL PASS',APP_FAIL:'MODUL FAIL',APP_BLOCKED:'MODUL BLOKOVÁNO',NATIVE_PASS:'ANDROID WEBVIEW PASS',NATIVE_FAIL:'ANDROID WEBVIEW FAIL',NATIVE_BLOCKED:'ANDROID BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       const ownLabel=r.kind==='OWN_LUBANOTE_NATIVE_INPUT_690U' ?
         ({NATIVE_PASS:'LUBANOTE VLASTNÍ PASS',NATIVE_FAIL:'LUBANOTE VLASTNÍ FAIL',NATIVE_BLOCKED:'LUBANOTE BLOKOVÁNO'}[r.status]||label):label;
-      return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${ownLabel}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
+      return `<details class="lat-result" data-result-id="${safe(r.id)}" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${ownLabel}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('')||'<div class="lat-empty">Spusť test. Průběh uvidíš výše, výsledky po dokončení zde.</div>';
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0||running;
     const speedButton=screen.querySelector('[data-lat="speed"]');if(speedButton)speedButton.disabled=running;
@@ -901,7 +957,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690U',
+      'LUBANOTE AUTOTESTER / 690W',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -909,6 +965,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
+      '690W: AutoTester is nonmodal during visible editor playback (custom caret/handles remain eligible), modal restored after playback; error summary navigates to first failed case.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
