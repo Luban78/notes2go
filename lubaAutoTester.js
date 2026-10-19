@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690G — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690H — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -10,18 +10,18 @@
   let running=false;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={editor:'Editor Core V2 10×',todo:'ToDo Core V2 10×',all:'Všechny dostupné testy – Bullet, Editor, ToDo, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10× + MOVE'};
+  const suiteNames={planner:'Planner / opakování (10×)',editor:'Editor Core V2 10×',todo:'ToDo Core V2 10×',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10× + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690G</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690H</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
-        <option value="bullet">Bullet / seznamy (10×)</option><option value="editor">Editor / Core V2 (10×)</option><option value="todo">ToDo (10×)</option><option value="e2e">E2E poznámky</option>
+        <option value="bullet">Bullet / seznamy (10×)</option><option value="editor">Editor / Core V2 (10×)</option><option value="todo">ToDo (10×)</option><option value="planner">Planner / opakování (10×)</option><option value="e2e">E2E poznámky</option>
         <option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="stability">Pokrytí stability V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
@@ -36,7 +36,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690G: živý iframe ukazuje skutečný Core V2 – Bullet, Editor a ToDo na syntetických datech. Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690H: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let expanded=false;
@@ -95,6 +95,7 @@
         const css=document.createElement('style');css.id='lat-core-colors-690c';
         css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
         css.textContent+=`#ln-auto-tester .lat-main-controls{display:grid;gap:10px;margin:16px 0}#ln-auto-tester .lat-main-run{background:#187b51;border-color:#1ea86d;font-size:1.08rem;min-height:58px;color:#fff}#ln-auto-tester .lat-subrun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#ln-auto-tester .lat-subrun select{min-width:0;background:#26362e;color:#fff;border:1px solid #52675b;border-radius:10px;padding:10px;font:inherit}#ln-auto-tester .lat-subrun button{min-height:48px}#ln-auto-tester .lat-laboratory{background:#1b2b23;border:1px solid #38654b;border-radius:15px;padding:12px;margin:14px 0}#ln-auto-tester .lat-lab-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.9rem}#ln-auto-tester .lat-lab-top button{font-size:.75rem;min-height:35px;padding:6px 9px}#ln-auto-tester .lat-live-stage{height:340px;position:relative;overflow:hidden;background:#f5f8f4;border-radius:11px;border:2px solid #4c705c;margin:11px 0;color:#4e6254}#ln-auto-tester .lat-live-placeholder{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:22px;font-size:.9rem;line-height:1.5}#ln-auto-tester .lat-live-stage.lat-has-live-frame .lat-live-placeholder{display:none}#ln-auto-tester .lat-progress-info{display:flex;gap:8px;justify-content:space-between;font-size:.82rem;color:#c5d7ca}#ln-auto-tester .lat-progress-track{height:9px;background:#32483c;border-radius:9px;overflow:hidden;margin-top:10px}#ln-auto-tester #lat-progress-fill{height:100%;width:0;background:#37c681;transition:width .22s}#ln-auto-tester .lat-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 8px}#ln-auto-tester .lat-result-head p{font-size:.82rem;line-height:1.4;margin-top:5px}#ln-auto-tester .lat-result-head button{flex:none;font-size:.84rem}#ln-auto-tester .lat-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 18px}#ln-auto-tester .lat-summary>div{padding:11px 4px}#ln-auto-tester .lat-details{border:1px solid #45584b;border-radius:12px;overflow:hidden}#ln-auto-tester .lat-details>summary{padding:15px;cursor:pointer;font-weight:700;background:#26352d}#ln-auto-tester .lat-details .lat-list{padding:10px}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b}#ln-auto-tester .lat-footer{padding-bottom:28px}#ln-auto-tester .lat-live-stage[data-off='1']{height:90px;background:#24362b;color:#bfd1c5}#ln-auto-tester .lat-laboratory[data-off='1'] .lat-live-placeholder{display:grid}@media(max-width:380px){#ln-auto-tester .lat-subrun{grid-template-columns:minmax(0,1fr)}#ln-auto-tester .lat-live-stage{height:300px}#ln-auto-tester .lat-result-head{flex-wrap:wrap}}`;
+        css.textContent += `#ln-auto-tester .lat-result[data-status='APP_PASS'] .lat-indicator{background:#3bcf8b}#ln-auto-tester .lat-result[data-status='APP_PASS'] .lat-pill{color:#87eeb2;border-color:#287c54}#ln-auto-tester .lat-result[data-status='APP_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='APP_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}#ln-auto-tester .lat-result[data-status='APP_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='APP_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}`;
         document.head.appendChild(css);
       }
       if(!document.getElementById('lat-690f1-large-preview')){
@@ -139,20 +140,20 @@
     if(progress)updateProgress(Number(progress[1]),Number(progress[2]),s);
     else {const label=screen.querySelector('#lat-live-step');if(label)label.textContent=s;}
   }
-  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
+  function sums(){const sum={PASS:0,CLIENT_PASS:0,SIM_PASS:0,FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,DB_PASS:0,DB_FAIL:0,DB_BLOCKED:0,CORE_PASS:0,CORE_FAIL:0,CORE_BLOCKED:0,APP_PASS:0,APP_FAIL:0,APP_BLOCKED:0,PARTIAL:0,AUDIT:0,BLOCKED:0,NOT_TESTED:0};for(const r of results)sum[r.status]=(sum[r.status]||0)+1;return sum;}
   function render(){
     if(!screen)return;
     const count=sums(), summary=screen.querySelector('#lat-summary');
-    const passing=count.PASS+count.CLIENT_PASS+count.SIM_PASS+count.DB_PASS+count.CORE_PASS;
-    const failing=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL;
-    const blocked=count.BLOCKED+count.DB_BLOCKED+count.CORE_BLOCKED;
+    const passing=count.PASS+count.CLIENT_PASS+count.SIM_PASS+count.DB_PASS+count.CORE_PASS+count.APP_PASS;
+    const failing=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL+count.APP_FAIL;
+    const blocked=count.BLOCKED+count.DB_BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED;
     const missing=count.NOT_TESTED+count.PARTIAL+count.AUDIT;
     summary.innerHTML=`<div><b>${passing}</b><span>PROVEDENO PASS</span></div><div><b>${failing}</b><span>CHYBY</span></div><div><b>${blocked}</b><span>BLOKOVÁNO</span></div><div><b>${missing}</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT</span></div>`;
     const list=screen.querySelector('#lat-list');
-    const priority={FAIL:0,CORE_FAIL:0,DB_FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,BLOCKED:1,CORE_BLOCKED:1,DB_BLOCKED:1,NOT_TESTED:2,PARTIAL:3,AUDIT:4};
+    const priority={FAIL:0,CORE_FAIL:0,APP_FAIL:0,DB_FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,BLOCKED:1,CORE_BLOCKED:1,APP_BLOCKED:1,DB_BLOCKED:1,NOT_TESTED:2,PARTIAL:3,AUDIT:4};
     const ordered=results.slice().sort((a,b)=>(priority[a.status]??5)-(priority[b.status]??5));
     list.innerHTML=ordered.map(r=>{
-      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
+      const label={PASS:'PASS',FAIL:'FAIL',CLIENT_PASS:'CLIENT PASS',CLIENT_FAIL:'CLIENT FAIL',SIM_PASS:'SIM PASS',SIM_FAIL:'SIM FAIL',DB_PASS:'DB LIVE PASS',DB_FAIL:'DB LIVE FAIL',DB_BLOCKED:'DB LIVE NEDOSTUPNÉ',CORE_PASS:'CORE V2 PASS',CORE_FAIL:'CORE V2 FAIL',CORE_BLOCKED:'CORE V2 BLOKOVÁNO',APP_PASS:'PLANNER PASS',APP_FAIL:'PLANNER FAIL',APP_BLOCKED:'PLANNER BLOKOVÁNO',PARTIAL:'ČÁSTEČNĚ',AUDIT:'AUDIT',BLOCKED:'BLOKOVÁNO',NOT_TESTED:'NETESTOVÁNO'}[r.status]||'NEZNÁMÉ';
       return `<details class="lat-result" data-status="${safe(r.status)}"><summary><span class="lat-indicator" aria-hidden="true"></span><span class="lat-result-title">${safe(r.name)}</span><span class="lat-pill">${label}</span></summary><div class="lat-result-body"><div>Typ: ${safe(r.kind)} · Trvání: ${Number(r.ms)||0} ms</div><div>ID testu: ${safe(r.id)}</div>${r.detail?`<p>${safe(r.detail)}</p>`:''}</div></details>`;
     }).join('')||'<div class="lat-empty">Spusť test. Průběh uvidíš výše, výsledky po dokončení zde.</div>';
     screen.querySelector('[data-lat="copy"]').disabled=results.length===0||running;
@@ -206,7 +207,7 @@
       return;
     }
     if(generace!==generaceBehu || !screen || screen.hidden)return;
-    const vybrane=scope==='bullet'?scenare.filter(x=>x.group==='Seznamy'):scope==='editor'?scenare.filter(x=>x.group==='Editor'):scope==='todo'?[]:scenare;
+    const vybrane=scope==='bullet'?scenare.filter(x=>x.group==='Seznamy'):scope==='editor'?scenare.filter(x=>x.group==='Editor'):scope==='todo'?[]:scope==='planner'?scenare.filter(x=>x.id==='app-planner'):scenare;
     if(scope==='bullet' && vybrane.length<5){
       results.push({id:'stability-bullet-registry-incomplete',name:'Bullet / seznamy – chybí scénáře',
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
@@ -215,10 +216,12 @@
     const bulletProof=new Map([['editor-plain','core-editor-keyboard'],['editor-undo','core-editor-history'],['list-toggle','core-list-toggle'],['list-badge','core-list-badge'],['list-levels','core-list-indent'],['list-move','core-list-move-pointer'],['list-selection','core-list-selection-collapse']]);
     for(const item of vybrane){
       const coreResult=results.find(r=>r.id===bulletProof.get(item.id));
-      const partial=coreResult?.status==='CORE_PASS';
+      const partial=item.id==='app-planner'
+        ? ['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy'].every(id=>results.some(r=>r.id===id&&r.status==='APP_PASS'))
+        :coreResult?.status==='CORE_PASS';
       results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
         status:partial?'PARTIAL':'NOT_TESTED',ms:0,
-        detail:partial?'10× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.':'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
+        detail:partial?(item.id==='app-planner'?'7×10 testů skutečného recurringTasks.js PASS v izolaci; neověřuje uložené události, Android alarmy ani doručení připomínek.':'10× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.'):'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
     }
     render();
   }
@@ -355,6 +358,38 @@
     if(generace===generaceBehu&&!screen.hidden)render();
   }
 
+  // 690H: actual shipped recurrence algorithms, no production planner records or notifications.
+  async function spustitPlanner690H(generace){
+    const expected=['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end',
+      'planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy'];
+    const blocked=why=>expected.map(id=>({id,name:id,kind:'SHIPPED_RECURRING_TASKS_ISOLATED',status:'APP_BLOCKED',ms:0,detail:String(why||'missing').slice(0,160)}));
+    try{
+      if(!window.LubaNoteAutoTesterPlanner690H?.runRepeated){
+        const url=new URL('lubaAutoTesterPlanner690H.js?v=690H-planner-repeat',location.href);
+        if(url.origin!==location.origin)throw Error('planner_cross_origin');
+        await new Promise((resolve,reject)=>{
+          const tag=document.createElement('script');
+          const timer=setTimeout(()=>{tag.remove();reject(Error('planner_module_load_timeout'));},12000);
+          tag.src=url.href;tag.onload=()=>{clearTimeout(timer);resolve();};
+          tag.onerror=()=>{clearTimeout(timer);reject(Error('planner_module_load_failed'));};
+          document.head.appendChild(tag);
+        });
+      }
+      if(generace!==generaceBehu||screen.hidden)return;
+      const rows=await window.LubaNoteAutoTesterPlanner690H.runRepeated(
+        ()=>generace===generaceBehu&&!screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);});
+      if(generace!==generaceBehu||screen.hidden)return;
+      const valid=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(r=>r.id)).size===expected.length&&
+        rows.every(r=>expected.includes(r.id)&&['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status));
+      results.push(...(valid?rows:blocked('invalid_planner_results')));
+    }catch(e){
+      if(generace!==generaceBehu||screen.hidden)return;
+      results.push(...blocked(e?.message||'planner_runner_unavailable'));
+    }
+    if(generace===generaceBehu&&!screen.hidden)render();
+  }
+
   async function spustitServeroveTesty(generace){
     let vysledky;
     try {
@@ -380,7 +415,7 @@
     const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
     const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${count.PARTIAL} částečně`:'';
     updateProgress(10,10,'Dokončeno – výsledky jsou níže');
-    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.CORE_PASS} CORE PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
+    setStatus(`Hotovo · ${count.PASS} E2E PASS, ${count.CLIENT_PASS} CLIENT PASS, ${count.SIM_PASS} SIM PASS, ${count.DB_PASS} DB LIVE PASS, ${count.CORE_PASS} CORE PASS, ${count.APP_PASS} PLANNER PASS, ${count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL+count.APP_FAIL} FAIL, ${count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED+count.NOT_TESTED} neověřeno${suffix}`);
   }
   async function dokoncitWorker(generace){
     if(generace!==generaceBehu)return;
@@ -396,6 +431,7 @@
       if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitEditorTodo690G(generace,'all');
+      if(generace===generaceBehu)await spustitPlanner690H(generace);
     }
     if(generace===generaceBehu && activeSuite==='all'){
       setStatus('Načítám pokrytí Centra stability V1…');
@@ -412,11 +448,12 @@
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     render();updateProgress(0,10,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
-    if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo'){
+    if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner'){
       if(activeSuite==='editor'||activeSuite==='todo')await spustitEditorTodo690G(generace,activeSuite);
+      if(activeSuite==='planner')await spustitPlanner690H(generace);
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);}
-      if(generace===generaceBehu)await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':'all');
+      if(generace===generaceBehu)await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':'all');
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -452,13 +489,13 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690G',
+      'LUBANOTE AUTOTESTER / 690H',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
-      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
+      `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690G: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690H: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Physical Android touch, native text handles and system WebView gesture arbitration are NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
