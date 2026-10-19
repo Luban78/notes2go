@@ -16,7 +16,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * 690U – native WebView input probe. Baseline only touches ephemeral
+ * 690X – native WebView input probe, two guarded text tap anchors. Baseline only touches ephemeral
  * #lat-native-surface. gestureOwnedEditor may touch ONLY verified owned Testy
  * note editor/handles during visible AutoTester playback; never arbitrary notes.
  * No Android input permission, no accessibility service.
@@ -102,7 +102,8 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     final String target = call.getString("target", "");
     final String type = call.getString("type", "");
     if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
-        !("word".equals(target) || "selection-end".equals(target) || "caret-handle".equals(target)) ||
+        !("word".equals(target) || "word-early".equals(target) || "word-late".equals(target) ||
+          "selection-end".equals(target) || "caret-handle".equals(target)) ||
         !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type))) {
       call.reject("invalid_owned_editor_request"); return;
     }
@@ -133,10 +134,11 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "editor.dataset.lnV2OwnCaretOnly==='1';" +
         "if(!ok)return JSON.stringify({ok:false});" +
         "let bounds=null;let el=null;" +
-        "if(target==='word'){" +
+        "if(target==='word'||target==='word-early'||target==='word-late'){" +
           "const w=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let n;" +
           "while(n=w.nextNode()){const i=String(n.nodeValue||'').indexOf('Zapis_z_viditelneho_editoru_690T');" +
-            "if(i<0)continue;const rg=document.createRange();rg.setStart(n,i+2);rg.setEnd(n,i+4);" +
+            "if(i<0)continue;const d=target==='word-late'?17:target==='word-early'?3:2;" +
+            "const rg=document.createRange();rg.setStart(n,i+d);rg.setEnd(n,i+d+1);" +
             "bounds=rg.getBoundingClientRect();break;}" +
           "el=editor;" +
         "}else{el=target==='caret-handle'?document.querySelector('.ln-v2-single-caret-handle:not([hidden])'):" +
@@ -145,7 +147,7 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "if(!bounds||bounds.width<=0||bounds.height<=0)return JSON.stringify({ok:false});" +
         "const x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;" +
         "const hit=document.elementFromPoint(x,y);" +
-        "const targetOk=target==='word'?editor.contains(hit):(hit===el||el?.contains(hit));" +
+        "const targetOk=(target==='word'||target==='word-early'||target==='word-late')?editor.contains(hit):(hit===el||el?.contains(hit));" +
         "const er=editor.getBoundingClientRect();" +
         "const viewportOk=x>=2&&x<innerWidth-2&&y>=2&&y<innerHeight-2;" +
         "const delta=target==='selection-end'?Math.max(-70,Math.min(70,er.right-x-25)):45;" +

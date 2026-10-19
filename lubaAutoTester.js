@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690W — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690X — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -18,7 +18,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690W</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690X</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -751,7 +751,7 @@
     const blocked=why=>cases.map(([id,name])=>({id,name,kind:'ANDROID_WEBVIEW_NATIVE_MOTIONEVENT',status:'NATIVE_BLOCKED',ms:0,detail:String(why||'native_missing').slice(0,210)}));
     try {
       if(!window.LubaNoteAutoTesterNative690R){
-        const url=new URL('lubaAutoTesterNative690R.js?v=690U-transport-only',location.href);
+        const url=new URL('lubaAutoTesterNative690R.js?v=690X-no-system-selection',location.href);
         if(url.origin!==location.origin)throw Error('native_script_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -957,7 +957,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690W',
+      'LUBANOTE AUTOTESTER / 690X',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -965,7 +965,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690W: AutoTester is nonmodal during visible editor playback (custom caret/handles remain eligible), modal restored after playback; error summary navigates to first failed case.',
+      '690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',

@@ -36,22 +36,22 @@
       surface = document.createElement('section');
       surface.id = 'lat-native-surface';
       surface.setAttribute('aria-label', 'Izolovaný test Android WebView');
+      // 690X: This measures transport ONLY; never invoke WebView system selection.
       surface.style.cssText = [
         'position:fixed!important', 'z-index:2147483640!important',
         'left:50%!important', 'transform:translateX(-50%)!important',
-        'top:clamp(70px,25dvh,180px)!important',
-        'width:min(90vw,360px)!important','height:250px!important',
-        'padding:18px!important','border-radius:16px!important',
-        'border:3px solid #32ca89!important','background:#ecf5ef!important',
-        'color:#193927!important','box-sizing:border-box!important',
+        'top:clamp(70px,22dvh,150px)!important',
+        'width:min(82vw,320px)!important','height:132px!important',
+        'padding:12px!important','border-radius:12px!important',
+        'border:2px solid #32ca89!important','background:#14271f!important',
+        'color:#daf5e4!important','box-sizing:border-box!important',
         'font:16px/1.5 system-ui,sans-serif!important',
-        'user-select:text!important','-webkit-user-select:text!important',
-        'touch-action:auto!important','overflow:hidden!important'
+        'user-select:none!important','-webkit-user-select:none!important',
+        '-webkit-touch-callout:none!important','touch-action:none!important','overflow:hidden!important'
       ].join(';');
-      surface.innerHTML = '<strong>ANDROID WEBVIEW – NATIVNÍ TEST</strong>' +
-        '<p style="margin:12px 0;color:#173929;user-select:text;-webkit-user-select:text">' +
-        'Dlouhý stisk, dvojtap a tah proběhnou zde, nikoli ve tvých poznámkách.</p>' +
-        '<p style="margin:0;color:#36714b">690R – jednorázová testovací plocha</p>';
+      surface.innerHTML = '<strong>TEST DORUČENÍ DOTYKŮ</strong>' +
+        '<p style="margin:8px 0;color:#c1dfce;-webkit-user-select:none;user-select:none">' +
+        'Není to test označování textu. Náš vlastní výběr se zkouší v editoru.</p>';
       const events = [];
       for (const name of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
         surface.addEventListener(name, event => {
@@ -61,6 +61,7 @@
         }, { passive: true });
       }
       surface.addEventListener('click', event => event.stopPropagation());
+      surface.addEventListener('selectstart', event => { if(event.cancelable) event.preventDefault(); }, {passive:false});
       document.body.append(surface);
       await sleep(160);
       if (surface.getBoundingClientRect().bottom > innerHeight) {
@@ -107,6 +108,8 @@
     } catch (error) {
       return [...results, ...blocked(error?.message || 'native_suite_exception').filter(x => !results.some(r => r.id === x.id))];
     } finally {
+      // Clear any OS selection left by older WebView before OWN LubaNote tests.
+      try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
       surface?.remove();
       busy = false;
     }

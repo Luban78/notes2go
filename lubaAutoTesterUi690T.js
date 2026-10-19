@@ -1,4 +1,4 @@
-/* 690W – resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 690X – two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -131,32 +131,73 @@
             assert(ownStav(core,keyboard,editor).ready,
               'own_caret_missing_after_native_tap: '+ownDiagnostika(core,keyboard,editor));
           }else if(i===4){
+            // 690X: Compare TWO native taps at two different LETTERS in the
+            // same known test marker. Do not compare against an artificial
+            // scroll/fallback position: nastavPoziciOtevreni('end') intentionally
+            // hides the caret and is not a user tap.
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function',
               'owned_native_bridge_unavailable');
             const core=window.LubaNoteEditorV2;
             const editor=core?.ziskejEditorElement?.();
-            // Nastavime opravdu JINOU pocatecni pozici nez testovaci slovo.
-            // Produkcni API ji umisti na konec a az nasledny realny tap vytvori caret.
-            assert(core?.nastavPoziciOtevreni?.('end')===true,'own_tap_baseline_not_set');
-            await wait(180); // dvoufazovy RAF scroll z Core V2 nesmi prekryt novy tap
-            const before=core?.zachytAktualniVyber?.();
-            assert(before?.sbaleny===true&&before?.konec,'own_tap_baseline_model_missing');
-            let trusted=0;
-            const listener=e=>{if(e.isTrusted)trusted++;};
-            editor?.addEventListener('touchstart',listener,true);
-            try{
-              const ack=await plugin.gestureOwnedEditor({id,target:'word',type:'tap'});
-              assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_editor_tap_no_ack');
-              await wait(260);
-            }finally{editor?.removeEventListener('touchstart',listener,true);}
-            assert(trusted>=1,'real_editor_trusted_touch_missing');
-            const after=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
-            assert(after?.sbaleny===true,'tap_not_mapped_to_own_caret');
-            assert(before?.konec&&(before.konec.offset!==after.konec.offset||before.konec.blok!==after.konec.blok),
-              'native_tap_did_not_move_own_caret');
+            assert(editor?.isConnected&&editor?.dataset?.lnV2OwnCaretOnly==='1',
+              'own_tap_editor_not_in_own_mode');
+            const probeText=()=>{
+              const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+              let node,off=-1;
+              while((node=walker.nextNode())){
+                off=String(node.nodeValue||'').indexOf('Zapis_z_viditelneho_editoru_690T');
+                if(off>=0)break;
+              }
+              assert(node&&off>=0,'own_tap_marker_node_missing');
+              const pointAt=part=>{
+                const delta=part==='word-early'?3:17;
+                const range=document.createRange();
+                range.setStart(node,off+delta);range.setEnd(node,off+delta+1);
+                const r=range.getBoundingClientRect();
+                assert(r.width>0&&r.height>0,'own_tap_marker_not_rendered_'+part);
+                const x=r.left+r.width/2,y=r.top+r.height/2;
+                const cp=document.caretPositionFromPoint?.(x,y)||document.caretRangeFromPoint?.(x,y);
+                return {x:Math.round(x),y:Math.round(y),offset:cp?.offset??cp?.startOffset??'-',
+                  nodeOk:Boolean(editor.contains(cp?.offsetNode||cp?.startContainer))};
+              };
+              return {early:pointAt('word-early'),late:pointAt('word-late')};
+            };
+            const points=probeText();
+            assert(Math.hypot(points.early.x-points.late.x,points.early.y-points.late.y)>=8,
+              'own_tap_targets_not_distinct');
+            assert(points.early.nodeOk&&points.late.nodeOk,'own_tap_targets_outside_editor_text');
+            const format=sel=>sel?.sbaleny&&sel?.konec?
+              `${sel.konec.blok}:${sel.konec.offset}`:'invalid';
+            const ownTap=async target=>{
+              let starts=0,ends=0;
+              const start=e=>{if(e.isTrusted)starts++;};
+              const finish=e=>{if(e.isTrusted)ends++;};
+              editor.addEventListener('touchstart',start,true);
+              editor.addEventListener('touchend',finish,true);
+              try{
+                const ack=await plugin.gestureOwnedEditor({id,target,type:'tap'});
+                assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT',
+                  `native_tap_ack_missing_${target}`);
+                await wait(240);
+              }finally{
+                editor.removeEventListener('touchstart',start,true);
+                editor.removeEventListener('touchend',finish,true);
+              }
+              return {at:format(core.zachytAktualniVyber?.()),starts,ends};
+            };
+            const early=await ownTap('word-early');
+            const late=await ownTap('word-late');
+            const detail=`early=${early.at} late=${late.at}; `+
+              `touch=${early.starts}/${early.ends},${late.starts}/${late.ends}; `+
+              `target=${points.early.x},${points.early.y}->${points.late.x},${points.late.y}; `+
+              `dom=${points.early.offset}->${points.late.offset}`;
+            assert(early.starts>0&&early.ends>0&&late.starts>0&&late.ends>0,
+              'own_tap_trusted_touch_missing: '+detail);
+            assert(early.at!=='invalid'&&late.at!=='invalid'&&early.at!==late.at,
+              'native_taps_did_not_change_own_model: '+detail);
             assert(ownStav(core,window.LubaNoteKeyboard,editor).ready,
-              'own_caret_not_visible_after_native_retap: '+ownDiagnostika(core,window.LubaNoteKeyboard,editor));
+              'own_caret_not_visible_after_native_taps: '+detail+'; '+ownDiagnostika(core,window.LubaNoteKeyboard,editor));
           }else if(i===5){
             const core=window.LubaNoteEditorV2;
             const before=core?.zachytAktualniVyber?.();
