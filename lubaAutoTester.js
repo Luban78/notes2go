@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690I3 — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690I4 — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -16,7 +16,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690I3</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690I4</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
@@ -36,7 +36,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690I3: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690I4: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -64,8 +64,34 @@
   // Two taps in the same 70px upper-left region, only after server-verified admin login.
   // The old emergency five-tap fallback stays unchanged for this UI-only patch.
   let lastAdminTap=null;
+  // Vraceni existujiciho VD docku (zadna druha kopie panelu).
+  function zobrazDebugDockPokudJeTreba(){
+    if(window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
+    let dock=document.getElementById('ln-vd-quickbar');
+    if(!dock || dock.hidden || getComputedStyle(dock).display==='none'){
+      window.LubaNoteVisualDebug?.showDock?.();
+      dock=document.getElementById('ln-vd-quickbar');
+    }
+    if(!dock || dock.hidden)return false;
+    // Oprava polohy docku po presunu mezi displeji a zmene velikosti PC okna.
+    const rect=dock.getBoundingClientRect();
+    if(rect.width && rect.height &&
+       (rect.right<24 || rect.left>innerWidth-24 ||
+        rect.bottom<24 || rect.top>innerHeight-24)){
+      for(const side of ['left','right','top','bottom']){
+        dock.style.removeProperty(side);
+      }
+    }
+    return true;
+  }
   function setupAdminDoubleTap(){
-    const allowed=()=>{const button=document.getElementById('adminDashboardButton');return Boolean(button && !button.hidden && window.LubaNoteAdminTools?.isAllowed?.()===true);};
+    // 690I4: Desktop ma vlastni admin tlacitko, mobilni muze byt skryte.
+    const allowed=()=>{
+      if(window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
+      const mobile=document.getElementById('adminDashboardButton');
+      const desktop=document.getElementById('desktopAdminDashboardButton');
+      return Boolean((mobile && !mobile.hidden)||(desktop && !desktop.hidden));
+    };
     const excluded=target=>Boolean(target?.closest?.('#ln-auto-tester,#ln-debug-hub,#ln-vd-panel,#ln-vd-quickbar'));
     let start=null;
     document.addEventListener('pointerdown',e=>{
@@ -80,12 +106,8 @@
       const now=performance.now();
       if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
-        // 690I3: zachovat puvodni minidock VD / DH / minus / plus.
-        // Dvojtap otevre DH, ale nikdy nesmi obejit zobrazeni VD docku.
-        const dock=document.getElementById('ln-vd-quickbar');
-        if(!dock || dock.hidden || getComputedStyle(dock).display==='none'){
-          window.LubaNoteVisualDebug?.showDock?.();
-        }
+        // 690I4: stejny dok VD / DH / minus / plus pro Android i desktop.
+        zobrazDebugDockPokudJeTreba();
         window.LubaNoteDebugHub?.open?.();
       }else{lastAdminTap={t:now,x:e.clientX,y:e.clientY};}
     },true);
@@ -638,14 +660,14 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690I3',
+      'LUBANOTE AUTOTESTER / 690I4',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690I3: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690I4: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
@@ -675,7 +697,11 @@
   }
   // Debug Hub emits this only when a developer opens it; no global DOM observer.
   document.addEventListener('lubanote:debug-hub-visibility',(event)=>{
-    if(event?.detail?.open===true)addLaunch();
+    if(event?.detail?.open===true){
+      // Take pri otevreni pres desktopove Admin menu musi byt dock viditelny.
+      zobrazDebugDockPokudJeTreba();
+      addLaunch();
+    }
   });
   addLaunch();
   window.LubaNoteAutoTester=Object.freeze({open,close});
