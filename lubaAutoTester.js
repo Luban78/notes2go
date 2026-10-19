@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 691C — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 691D — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -19,10 +19,11 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691C</span></h1><p>Testy Core V2 v izolaci a viditelné kroky v běžném editoru Testy. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691D</span></h1><p>Testy Core V2 v izolaci a viditelné kroky v běžném editoru Testy. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
+      <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
         <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
         <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
@@ -156,6 +157,13 @@
       screen=document.createElement('section');screen.id='ln-auto-tester';
       screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','LubaNote AutoTester');
       screen.innerHTML=`<div class="lat-inner">${header()}</div><div id="lat-app-hud" hidden><span id="lat-app-hud-text">Testuji v aplikaci…</span><button data-lat="stop-playback" type="button">Zpět / Stop</button></div>`;
+      // A touchmove originating inside the modal must not reach the production
+      // Core V2 document-level MOVE listeners. Those can preventDefault when a
+      // previous native drag has left a temporary touch state. Stop propagation
+      // without cancelling the scroll gesture of our own scroll container.
+      screen.addEventListener('touchmove', event => {
+        if(!screen.hidden && !screen.classList.contains('lat-app-playback')) event.stopPropagation();
+      }, {passive:true});
       if(!document.getElementById('lat-core-colors-690c')){
         const css=document.createElement('style');css.id='lat-core-colors-690c';
         css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
@@ -248,6 +256,7 @@
         const btn=e.target.closest('button[data-lat]');if(!btn)return;
         const action=btn.dataset.lat;
         if(action==='close'){close();return;}
+        if(action==='show-results'){showResults();return;}
         if(action==='stop-playback'){if(running)stop();restoreTestScreen();return;}
         if(action==='review-note'){void reviewLastNote();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
@@ -270,6 +279,7 @@
       document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();e.stopImmediatePropagation();handleTesterBack();}},true);
     }
     screen.hidden=false;document.body.classList.add('lat-open');
+    restoreTesterScroll();
     zajistiTesterVDocku();
   }
   function collapseExpanded(){
@@ -325,12 +335,32 @@
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=false;
     document.body.classList.remove('lat-open');
   }
+  // 691D: Restore scrolling independently of body.lat-open after native MOVE.
+  // No production editor gesture or selection handler is changed.
+  function restoreTesterScroll(){
+    if(!screen || screen.hidden || screen.classList.contains('lat-app-playback'))return;
+    screen.style.setProperty('overflow-y','auto','important');
+    screen.style.setProperty('overflow-x','hidden','important');
+    screen.style.setProperty('touch-action','pan-y','important');
+    screen.style.setProperty('pointer-events','auto','important');
+    screen.style.setProperty('-webkit-overflow-scrolling','touch');
+  }
+  function showResults(){
+    if(!screen || screen.hidden || screen.classList.contains('lat-app-playback'))return false;
+    restoreTesterScroll();
+    const target=screen.querySelector('.lat-result-head');
+    if(!target)return false;
+    const top=screen.scrollTop + target.getBoundingClientRect().top - screen.getBoundingClientRect().top - 12;
+    screen.scrollTop=Math.max(0,Math.min(top,screen.scrollHeight-screen.clientHeight));
+    return true;
+  }
   function restoreTestScreen(){
     if(!screen)return;
     screen.setAttribute('aria-modal','true');
     screen.classList.remove('lat-app-playback'); // observed by Core V2 UI-overlay guard
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=true;
     if(!screen.hidden)document.body.classList.add('lat-open');
+    restoreTesterScroll();
   }
   async function reviewLastNote(){
     const id=lastTestNoteId;
@@ -554,6 +584,8 @@
       else if(blocked>0)state.textContent=`⚠️ NEDOKONČENO: ${blocked} testů BLOKOVÁNO. Není to PASS celé aplikace! Zkopíruj report.`;
       else if(missing>0)state.textContent=`Dokončeno bez zjištěné chyby v provedených testech. ${missing} položek je jen audit / částečně / netestováno.`;
     }
+    const showButton=screen.querySelector('#lat-show-results');
+    if(showButton)showButton.hidden=results.length===0 || screen.classList.contains('lat-app-playback');
     const list=screen.querySelector('#lat-list');
     const priority={FAIL:0,CORE_FAIL:0,APP_FAIL:0,DB_FAIL:0,CLIENT_FAIL:0,SIM_FAIL:0,NATIVE_FAIL:0,BLOCKED:1,NATIVE_BLOCKED:1,CORE_BLOCKED:1,APP_BLOCKED:1,DB_BLOCKED:1,NOT_TESTED:2,PARTIAL:3,AUDIT:4};
     const ordered=results.slice().sort((a,b)=>(priority[a.status]??5)-(priority[b.status]??5));
@@ -970,6 +1002,10 @@
   }
   function dokoncitBeh(){
     running=false;
+    restoreTestScreen();
+    collapseExpanded();
+    screen?.classList.add('lat-finished');
+    restoreTesterScroll();
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     const placeholder=screen?.querySelector('.lat-live-placeholder');
     if(placeholder)placeholder.textContent='Běh skončil. Tento náhled není záznamem testu. Pro sledování živého editoru zvol 🐌 Velmi pomalu a spusť konkrétní oblast.';
@@ -986,6 +1022,9 @@
     else if(count.NOT_TESTED||count.PARTIAL||count.AUDIT) setStatus(`DOČASNÝ VÝSLEDEK – bez nalezeného FAIL v testované části; ${count.NOT_TESTED} NETESTOVÁNO, ${count.PARTIAL} ČÁSTEČNĚ, ${count.AUDIT} AUDIT. Nejde o kompletní PASS.${suffix}`);
     else setStatus('Dokončeno – všechny dostupné vykonané kontroly prošly.');
     updateProgress(1,1,'Dokončeno – podrobnosti a rozsah pokrytí níže');
+    // Let the last render/layout finish, then scroll the real modal to results.
+    // This does not rely on the Android scroll gesture remaining usable.
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{if(screen&&!screen.hidden&&!running)showResults();}));
   }
   async function dokoncitWorker(generace){
     if(generace!==generaceBehu)return;
@@ -1031,11 +1070,13 @@
     activeRep=requested;
     stop();
     const generace=generaceBehu;
+    screen?.classList.remove('lat-finished');
     results=[];running=true;lastTestNoteId=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     const placeholder=screen?.querySelector('.lat-live-placeholder');
     if(placeholder)placeholder.textContent='Spouštím živé testovací okno Core V2…';
+    restoreTesterScroll();
     render();updateProgress(0,activeRep,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
     if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'||activeSuite==='extended'||activeSuite==='image'||activeSuite==='i18n'){
@@ -1109,7 +1150,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691C',
+      'LUBANOTE AUTOTESTER / 691D',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -1117,7 +1158,7 @@
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
+      '691D: FIX scrollování výsledků po nativním Bullet MOVE; ochrana před globálním touchmove a automatický přechod na report. 691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',

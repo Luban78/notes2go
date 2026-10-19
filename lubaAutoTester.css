@@ -65,3 +65,15 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester .lat-result[data-status='DB_BLOCKED'] .lat-indicator{background:#efb65d}
 #ln-auto-tester .lat-result[data-status='DB_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}
 #ln-auto-tester .lat-actions button:last-child:nth-child(odd){grid-column:1/-1}
+
+/* 691D: AutoTester owns its scroll gesture. The application body stays locked. */
+#ln-auto-tester:not(.lat-app-playback):not([hidden]){
+  overflow-y:auto!important;overflow-x:hidden!important;
+  touch-action:pan-y!important;pointer-events:auto!important;
+  -webkit-overflow-scrolling:touch;
+}
+#ln-auto-tester #lat-show-results{background:#194e38;border-color:#37b87a;color:#e6fff1}
+#ln-auto-tester.lat-finished .lat-live-stage{display:none!important}
+#ln-auto-tester.lat-finished .lat-laboratory{margin:8px 0;padding:10px 12px}
+#ln-auto-tester.lat-finished .lat-progress-track{display:none}
+#ln-auto-tester.lat-finished .lat-progress-info{display:none}
