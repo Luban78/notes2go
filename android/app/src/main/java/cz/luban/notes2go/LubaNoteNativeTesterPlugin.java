@@ -186,6 +186,107 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     });
   }
 
+
+  /** 691C: Native, vertical-only long-press MOVE of a generated Bullet subtree.
+   * The caller cannot pick absolute coordinates or any existing user note.
+   * Geometry, note ownership and the three exact test labels are verified inside WebView.
+   */
+  @PluginMethod
+  public void gestureOwnedBulletMove(PluginCall call) {
+    final String noteId = call.getString("id", "");
+    final String root = call.getString("root", "");
+    final String child = call.getString("child", "");
+    final String target = call.getString("target", "");
+    final String rp = "AUTOTEST_MOVE_691C_ROOT_";
+    final String cp = "AUTOTEST_MOVE_691C_CHILD_";
+    final String tp = "AUTOTEST_MOVE_691C_TARGET_";
+    if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
+        root == null || child == null || target == null ||
+        !root.matches("AUTOTEST_MOVE_691C_ROOT_[0-9]+_[0-9]+") ||
+        !child.matches("AUTOTEST_MOVE_691C_CHILD_[0-9]+_[0-9]+") ||
+        !target.matches("AUTOTEST_MOVE_691C_TARGET_[0-9]+_[0-9]+") ||
+        !root.substring(rp.length()).equals(child.substring(cp.length())) ||
+        !root.substring(rp.length()).equals(target.substring(tp.length()))) {
+      call.reject("invalid_generated_bullet_move_request"); return;
+    }
+    ui.post(() -> {
+      if (busy) { call.reject("native_test_busy"); return; }
+      final WebView web = getBridge() == null ? null : getBridge().getWebView();
+      if (web == null || !web.isAttachedToWindow() || web.getWidth() < 100) {
+        call.reject("native_webview_unavailable"); return;
+      }
+      busy = true;
+      final String js = "(function(){try{" +
+        "const id=" + JSONObject.quote(noteId) + ";" +
+        "const root=" + JSONObject.quote(root) + ";" +
+        "const child=" + JSONObject.quote(child) + ";" +
+        "const target=" + JSONObject.quote(target) + ";" +
+        "const modal=document.getElementById('taskModal');" +
+        "const tester=document.getElementById('ln-auto-tester');" +
+        "const note=window.loadTask?.().find(n=>n?.id===id);" +
+        "const core=window.LubaNoteEditorV2;const editor=core?.ziskejEditorElement?.();" +
+        "const bs=core?.ziskejModel?.()?.bloky||[];" +
+        "const text=b=>(b?.obsah||[]).map(x=>String(x?.text||'')).join('');" +
+        "const ri=bs.findIndex(b=>text(b)===root),ci=bs.findIndex(b=>text(b)===child),ti=bs.findIndex(b=>text(b)===target);" +
+        "const ownership=window.LubaNoteAdminTools?.isAllowed?.()===true&&" +
+          "tester&&!tester.hidden&&tester.classList.contains('lat-app-playback')&&" +
+          "modal&&!modal.hidden&&modal.dataset.taskId===id&&" +
+          "note?.storageScope==='local'&&note.isSecret!==true&&" +
+          "note?.tags?.includes('Testy')&&String(note?.title||'').startsWith('[AutoTester 690T]')&&" +
+          "window.LubaNoteEditorV2Bridge?.jeAktivni?.()===true&&" +
+          "editor?.isConnected&&modal.contains(editor)&&" +
+          "ri>=0&&ci===ri+1&&ti>ci&&" +
+          "bs[ri]?.typ==='bullet'&&bs[ci]?.typ==='bullet'&&bs[ti]?.typ==='bullet'&&" +
+          "bs[ri]?.uroven===0&&bs[ci]?.uroven===1&&bs[ti]?.uroven===0;" +
+        "if(!ownership)return JSON.stringify({ok:false,reason:'ownership_or_bullet_model'});" +
+        "const row=b=>editor.querySelector('[data-ln-v2-blok=\"'+CSS.escape(b.id)+'\"]');" +
+        "const sr=row(bs[ri]),tr=row(bs[ti]);const seg=sr?.querySelector(':scope > .ln-v2-cast');" +
+        "const node=seg?.firstChild;if(!sr||!tr||!node||node.nodeType!==3||node.textContent.length<2)return JSON.stringify({ok:false,reason:'dom_rows'});" +
+        "const range=document.createRange();range.setStart(node,1);range.setEnd(node,2);" +
+        "const r=range.getBoundingClientRect(),t=tr.getBoundingClientRect(),e=editor.getBoundingClientRect();" +
+        "const x=r.left+r.width/2,y=r.top+r.height/2,endY=t.top+t.height*.8;" +
+        "const hit=document.elementFromPoint(x,y);" +
+        "const valid=sr.contains(hit)&&r.width>0&&r.height>0&&" +
+          "y>e.top+2&&endY<e.bottom-3&&x>e.left+2&&x<e.right-2&&" +
+          "y>3&&endY<innerHeight-4&&x>3&&x<innerWidth-3&&endY-y>60&&" +
+          "t.top>r.bottom;" +
+        "return JSON.stringify({ok:!!valid,x,y,endY,viewport:innerWidth,reason:valid?'ok':'geometry'});" +
+      "}catch(e){return JSON.stringify({ok:false,reason:'exception'});}})()";
+      try {
+        web.evaluateJavascript(js, raw -> {
+          try {
+            JSONObject at = new JSONObject(new JSONArray("[" + raw + "]").getString(0));
+            if (!at.optBoolean("ok", false)) {
+              busy=false; call.reject("bullet_move_target_missing_" + at.optString("reason", "invalid")); return;
+            }
+            final double viewport = at.optDouble("viewport", 0);
+            if (viewport <= 0) { busy=false; call.reject("bullet_move_viewport_invalid"); return; }
+            final float scale = (float)(web.getWidth()/viewport);
+            final float x = (float)(at.getDouble("x")*scale);
+            final float y = (float)(at.getDouble("y")*scale);
+            final float endY = (float)(at.getDouble("endY")*scale);
+            if (x < 4 || x >= web.getWidth()-4 || y < 4 || endY >= web.getHeight()-4 || endY <= y+40) {
+              busy=false; call.reject("bullet_move_outside_webview"); return;
+            }
+            final long down = SystemClock.uptimeMillis();
+            emit(web, down, MotionEvent.ACTION_DOWN, x, y);
+            // Core V2 long-press threshold is 420ms. Keep finger still for 720ms.
+            ui.postDelayed(() -> {
+              for (int i=1;i<=16;i++) {
+                final int step=i;
+                ui.postDelayed(() -> emit(web,down,MotionEvent.ACTION_MOVE,x,
+                  y+(endY-y)*step/16f), step*36L);
+              }
+              ui.postDelayed(() -> {
+                finish(web,down,x,endY,"bullet-subtree-move",call);
+              },620L);
+            },720L);
+          } catch (Exception e) { busy=false;call.reject("bullet_move_geometry_invalid"); }
+        });
+      } catch (Exception e) { busy=false;call.reject("bullet_move_evaluate_failed"); }
+    });
+  }
+
   private void emit(WebView web, long down, int action, float x, float y) {
     if (!web.isAttachedToWindow()) return;
     MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
