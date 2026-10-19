@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690I4 — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690J — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -8,23 +8,26 @@
   let screen=null, worker=null, results=[], startedAt='',activeSuite='all';
   let runTimeout=null;
   let running=false;
+  let activeRep=1;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={caret:'Kurzor, úchyty a mazání ToDo 10×',planner:'Planner / opakování (10×)',editor:'Editor Core V2 10×',todo:'ToDo Core V2 10×',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 10× + MOVE'};
+  const suiteNames={caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Centrum stability V1 – pokrytí',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>690I4</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
+    <h1>AutoTester <span>690J</span></h1><p>Skutečný testovací editor v izolovaném okně. Tvoje poznámky zůstávají nedotčené.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit kompletní test</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
-        <option value="bullet">Bullet / seznamy (10×)</option><option value="editor">Editor / Core V2 (10×)</option><option value="todo">ToDo (10×)</option><option value="caret">Kurzor / úchyty / mazání (10×)</option><option value="planner">Planner / opakování (10×)</option><option value="e2e">E2E poznámky</option>
+        <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
         <option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="stability">Pokrytí stability V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
+      <label class="lat-repeat-control" for="lat-repetitions">Opakování každého Core/Planner testu <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
+      <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. E2E a izolované DB testy zatím běží 1×.</small>
     </section>
     <section class="lat-laboratory" aria-label="Živá vizuální laboratoř">
       <div class="lat-lab-top"><strong>Živý testovací editor</strong>
@@ -36,7 +39,7 @@
     <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><button data-lat="copy" type="button" disabled>Kopírovat report</button></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690I4: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+    <footer class="lat-footer">690J: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -85,7 +88,7 @@
     return true;
   }
   function setupAdminDoubleTap(){
-    // 690I4: Desktop ma vlastni admin tlacitko, mobilni muze byt skryte.
+    // 690J: Desktop ma vlastni admin tlacitko, mobilni muze byt skryte.
     const allowed=()=>{
       if(window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
       const mobile=document.getElementById('adminDashboardButton');
@@ -106,7 +109,7 @@
       const now=performance.now();
       if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
-        // 690I4: stejny dok VD / DH / minus / plus pro Android i desktop.
+        // 690J: stejny dok VD / DH / minus / plus pro Android i desktop.
         zobrazDebugDockPokudJeTreba();
         window.LubaNoteDebugHub?.open?.();
       }else{lastAdminTap={t:now,x:e.clientX,y:e.clientY};}
@@ -125,6 +128,7 @@
         css.textContent=`#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-indicator{background:#40d38e}#ln-auto-tester .lat-result[data-status='CORE_PASS'] .lat-pill{color:#88f2b7;border-color:#287c54}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='CORE_FAIL'] .lat-pill{color:#ff9292;border-color:#93463e}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='PARTIAL'] .lat-pill{color:#ffd89b;border-color:#937242}`;
         css.textContent+=`#ln-auto-tester .lat-main-controls{display:grid;gap:10px;margin:16px 0}#ln-auto-tester .lat-main-run{background:#187b51;border-color:#1ea86d;font-size:1.08rem;min-height:58px;color:#fff}#ln-auto-tester .lat-subrun{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#ln-auto-tester .lat-subrun select{min-width:0;background:#26362e;color:#fff;border:1px solid #52675b;border-radius:10px;padding:10px;font:inherit}#ln-auto-tester .lat-subrun button{min-height:48px}#ln-auto-tester .lat-laboratory{background:#1b2b23;border:1px solid #38654b;border-radius:15px;padding:12px;margin:14px 0}#ln-auto-tester .lat-lab-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.9rem}#ln-auto-tester .lat-lab-top button{font-size:.75rem;min-height:35px;padding:6px 9px}#ln-auto-tester .lat-live-stage{height:340px;position:relative;overflow:hidden;background:#f5f8f4;border-radius:11px;border:2px solid #4c705c;margin:11px 0;color:#4e6254}#ln-auto-tester .lat-live-placeholder{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:22px;font-size:.9rem;line-height:1.5}#ln-auto-tester .lat-live-stage.lat-has-live-frame .lat-live-placeholder{display:none}#ln-auto-tester .lat-progress-info{display:flex;gap:8px;justify-content:space-between;font-size:.82rem;color:#c5d7ca}#ln-auto-tester .lat-progress-track{height:9px;background:#32483c;border-radius:9px;overflow:hidden;margin-top:10px}#ln-auto-tester #lat-progress-fill{height:100%;width:0;background:#37c681;transition:width .22s}#ln-auto-tester .lat-result-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 8px}#ln-auto-tester .lat-result-head p{font-size:.82rem;line-height:1.4;margin-top:5px}#ln-auto-tester .lat-result-head button{flex:none;font-size:.84rem}#ln-auto-tester .lat-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin:10px 0 18px}#ln-auto-tester .lat-summary>div{padding:11px 4px}#ln-auto-tester .lat-details{border:1px solid #45584b;border-radius:12px;overflow:hidden}#ln-auto-tester .lat-details>summary{padding:15px;cursor:pointer;font-weight:700;background:#26352d}#ln-auto-tester .lat-details .lat-list{padding:10px}#ln-auto-tester .lat-result[data-status='CORE_BLOCKED'] .lat-pill{color:#ffd89b}#ln-auto-tester .lat-footer{padding-bottom:28px}#ln-auto-tester .lat-live-stage[data-off='1']{height:90px;background:#24362b;color:#bfd1c5}#ln-auto-tester .lat-laboratory[data-off='1'] .lat-live-placeholder{display:grid}@media(max-width:380px){#ln-auto-tester .lat-subrun{grid-template-columns:minmax(0,1fr)}#ln-auto-tester .lat-live-stage{height:300px}#ln-auto-tester .lat-result-head{flex-wrap:wrap}}`;
         css.textContent += `#ln-auto-tester .lat-result[data-status='APP_PASS'] .lat-indicator{background:#3bcf8b}#ln-auto-tester .lat-result[data-status='APP_PASS'] .lat-pill{color:#87eeb2;border-color:#287c54}#ln-auto-tester .lat-result[data-status='APP_FAIL'] .lat-indicator{background:#f06e70}#ln-auto-tester .lat-result[data-status='APP_FAIL'] .lat-pill{color:#ff9690;border-color:#93463e}#ln-auto-tester .lat-result[data-status='APP_BLOCKED'] .lat-indicator{background:#efb65d}#ln-auto-tester .lat-result[data-status='APP_BLOCKED'] .lat-pill{color:#ffd89b;border-color:#937242}`;
+        css.textContent+='#ln-auto-tester .lat-repeat-control{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#def2e5;font-weight:750}#ln-auto-tester #lat-repetitions{width:78px;min-height:44px;background:#14241c;color:#fff;border:1px solid #62bb8a;border-radius:9px;padding:6px;text-align:center;font:inherit}#ln-auto-tester .lat-repeat-help{color:#a8beb1;font-size:.75rem;line-height:1.4}';
         document.head.appendChild(css);
       }
       if(!document.getElementById('lat-690f1-large-preview')){
@@ -260,7 +264,7 @@
   function setStatus(s){
     const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;
     if(!screen)return;
-    const progress=String(s).match(/(\d+)\s*\/\s*(10|50)\b/);
+    const progress=String(s).match(/(\d+)\s*\/\s*(\d+)\b/);
     if(progress)updateProgress(Number(progress[1]),Number(progress[2]),s);
     else {const label=screen.querySelector('#lat-live-step');if(label)label.textContent=s;}
   }
@@ -351,7 +355,7 @@
         :coreResult?.status==='CORE_PASS';
       results.push({id:'stability-v1-'+item.id,name:item.name,kind:'STABILITY_V1/'+item.group,
         status:partial?'PARTIAL':'NOT_TESTED',ms:0,
-        detail:partial?(item.id==='app-planner'?'7×10 testů skutečného recurringTasks.js PASS v izolaci; neověřuje uložené události, Android alarmy ani doručení připomínek.':'10× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.'):'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
+        detail:partial?(item.id==='app-planner'?`7×${activeRep} testů skutečného recurringTasks.js PASS v izolaci; neověřuje uložené události, Android alarmy ani doručení připomínek.`:`${activeRep}× skutečný Core V2 v izolovaném DOM se syntetickými interakcemi PASS; nativní Android dotyky, gesta a selection handles nejsou plně ověřeny.`):'Scénář V1 dosud není funkčně ověřen v celém rozsahu; ruční PASS se nepřebírá.'});
     }
     render();
   }
@@ -361,8 +365,8 @@
     const expected=['core-list-import','core-list-render','core-list-toggle','core-list-badge'];
     const blocked=(reason)=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX',status:'CORE_BLOCKED',ms:0,detail:String(reason||'not_loaded').slice(0,165)}));
     try {
-      if(!window.LubaNoteAutoTesterBullet690C?.runRepeated){
-        const js=new URL('lubaAutoTesterBullet690C.js?v=690C-real-dom-bullet',location.href);
+      if(window.LubaNoteAutoTesterBullet690C?.supportsRepeatCount!==true){
+        const js=new URL('lubaAutoTesterBullet690C_690J.js?v=690J-690J-repeat-count',location.href);
         if(js.origin!==location.origin)throw Error('bullet_module_origin_blocked');
         await new Promise((resolve,reject)=>{
           const element=document.createElement('script');
@@ -376,7 +380,7 @@
       if(generace!==generaceBehu || screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterBullet690C.runRepeated(
         ()=>generace===generaceBehu && !screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);}
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep
       );
       if(generace!==generaceBehu || screen.hidden)return;
       const good=Array.isArray(rows) && rows.length===4 &&
@@ -395,8 +399,8 @@
     const expected=['core-list-indent','core-list-level-history'];
     const blocked=why=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX_KEYBOARD',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,165)}));
     try{
-      if(!window.LubaNoteAutoTesterBullet690D?.runRepeated){
-        const url=new URL('lubaAutoTesterBullet690D.js?v=690D-level-hierarchy',location.href);
+      if(window.LubaNoteAutoTesterBullet690D?.supportsRepeatCount!==true){
+        const url=new URL('lubaAutoTesterBullet690D_690J.js?v=690J-690D-level-hierarchy',location.href);
         if(url.origin!==location.origin)throw Error('cross_origin_module');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -410,7 +414,7 @@
       if(generace!==generaceBehu||screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterBullet690D.runRepeated(
         ()=>generace===generaceBehu&&!screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);}
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep
       );
       if(generace!==generaceBehu||screen.hidden)return;
       const valid=Array.isArray(rows)&&rows.length===2&&new Set(rows.map(r=>r.id)).size===2&&
@@ -428,8 +432,8 @@
     const expected=['core-list-move-pointer','core-list-selection-collapse'];
     const blocked=why=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX_POINTER',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,165)}));
     try{
-      if(!window.LubaNoteAutoTesterBullet690E?.runRepeated){
-        const url=new URL('lubaAutoTesterBullet690E.js?v=690E-pointer-move-selection',location.href);
+      if(window.LubaNoteAutoTesterBullet690E?.supportsRepeatCount!==true){
+        const url=new URL('lubaAutoTesterBullet690E_690J.js?v=690J-690J-repeat-count-move-selection',location.href);
         if(url.origin!==location.origin)throw Error('cross_origin_module');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -443,7 +447,7 @@
       if(generace!==generaceBehu||screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterBullet690E.runRepeated(
         ()=>generace===generaceBehu&&!screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);}
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep
       );
       if(generace!==generaceBehu||screen.hidden)return;
       const valid=Array.isArray(rows)&&rows.length===2&&new Set(rows.map(r=>r.id)).size===2&&
@@ -462,8 +466,8 @@
     const expected=ids.filter(id=>scope==='all'||(scope==='editor'?id.startsWith('core-editor-'):id.startsWith('core-todo-')));
     const blocked=why=>expected.map(id=>({id,name:id,kind:'CORE_V2_SANDBOX_690G',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,165)}));
     try{
-      if(!window.LubaNoteAutoTesterEditorTodo690G?.runRepeated){
-        const url=new URL('lubaAutoTesterEditorTodo690G.js?v=690G-v1',location.href);
+      if(window.LubaNoteAutoTesterEditorTodo690G?.supportsRepeatCount!==true){
+        const url=new URL('lubaAutoTesterEditorTodo690G_690J.js?v=690J-690G-v1',location.href);
         if(url.origin!==location.origin)throw Error('editor_todo_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -476,7 +480,7 @@
       if(generace!==generaceBehu||screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterEditorTodo690G.runRepeated(scope,
         ()=>generace===generaceBehu&&!screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);});
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
       if(generace!==generaceBehu||screen.hidden)return;
       const valid=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(r=>r.id)).size===expected.length&&
         rows.every(r=>expected.includes(r.id)&&['CORE_PASS','CORE_FAIL','CORE_BLOCKED'].includes(r.status));
@@ -494,8 +498,8 @@
       'planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy'];
     const blocked=why=>expected.map(id=>({id,name:id,kind:'SHIPPED_RECURRING_TASKS_ISOLATED',status:'APP_BLOCKED',ms:0,detail:String(why||'missing').slice(0,160)}));
     try{
-      if(!window.LubaNoteAutoTesterPlanner690H?.runRepeated){
-        const url=new URL('lubaAutoTesterPlanner690H.js?v=690H-planner-repeat',location.href);
+      if(window.LubaNoteAutoTesterPlanner690H?.supportsRepeatCount!==true){
+        const url=new URL('lubaAutoTesterPlanner690H_690J.js?v=690J-690J-repeat-count',location.href);
         if(url.origin!==location.origin)throw Error('planner_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -508,7 +512,7 @@
       if(generace!==generaceBehu||screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterPlanner690H.runRepeated(
         ()=>generace===generaceBehu&&!screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);});
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
       if(generace!==generaceBehu||screen.hidden)return;
       const valid=Array.isArray(rows)&&rows.length===expected.length&&new Set(rows.map(r=>r.id)).size===expected.length&&
         rows.every(r=>expected.includes(r.id)&&['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status));
@@ -527,8 +531,8 @@
     const needed=scope==='editor'?allIds.filter(id=>id.startsWith('caret-editor-')||['caret-todo-range','caret-todo-reopen'].includes(id)):scope==='todo'?allIds.filter(id=>id.startsWith('caret-todo-')):scope==='bullet'?allIds.filter(id=>id.startsWith('caret-bullet-')):allIds;
     const blocked=why=>needed.map(id=>({id,name:'Kurzor / ToDo – '+id,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,180)}));
     try{
-      if(!window.LubaNoteAutoTesterCaretTodo690I?.runRepeated){
-        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690I3-dom-caret-async',location.href);
+      if(window.LubaNoteAutoTesterCaretTodo690I?.supportsRepeatCount!==true){
+        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690J-repeat-count',location.href);
         if(url.origin!==location.origin)throw Error('caret_module_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');
@@ -542,7 +546,7 @@
       if(generace!==generaceBehu||screen.hidden)return;
       const rows=await window.LubaNoteAutoTesterCaretTodo690I.runRepeated(scope,
         ()=>generace===generaceBehu&&!screen.hidden,
-        msg=>{if(generace===generaceBehu)setStatus(msg);});
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
       if(generace!==generaceBehu||screen.hidden)return;
       const good=Array.isArray(rows)&&rows.length===needed.length&&new Set(rows.map(r=>r.id)).size===needed.length&&
         rows.every(r=>needed.includes(r.id)&&['CORE_PASS','CORE_FAIL','CORE_BLOCKED'].includes(r.status));
@@ -578,7 +582,7 @@
     const count=sums();
     const registr=results.filter(x=>x.id.startsWith('stability-v1-'));
     const suffix=registr.length?` · Centrum V1: 0/${registr.length} plně ověřeno, ${count.PARTIAL} částečně`:'';
-    updateProgress(10,10,'Dokončeno – výsledky jsou níže');
+    updateProgress(activeRep,activeRep,'Dokončeno – výsledky jsou níže');
     const failed=count.FAIL+count.CLIENT_FAIL+count.SIM_FAIL+count.DB_FAIL+count.CORE_FAIL+count.APP_FAIL;
     const blocked=count.DB_BLOCKED+count.BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED;
     if(failed) setStatus(`⛔ CHYBA: ${failed} testů FAIL, ${blocked} BLOKOVÁNO. Kopírovat report.`);
@@ -594,7 +598,7 @@
       await spustitServeroveTesty(generace);
     }
     if(generace===generaceBehu && activeSuite==='all'){
-      setStatus('Provádím 10× bullet testy skutečného Core V2…');
+      setStatus(`Provádím ${activeRep}× bullet testy skutečného Core V2…`);
       await spustitBulletCore690C(generace);
       if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
@@ -610,12 +614,15 @@
   }
   async function run(suite){
     if(running)return;
+    const requested=Number(screen?.querySelector('#lat-repetitions')?.value);
+    if(!Number.isInteger(requested)||requested<1||requested>50){setStatus('Zadej celý počet opakování od 1 do 50.');return;}
+    activeRep=requested;
     stop();
     const generace=generaceBehu;
     results=[];running=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
-    render();updateProgress(0,10,'Připravuji test…');
+    render();updateProgress(0,activeRep,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
     if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'){
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
@@ -660,14 +667,15 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 690I4',
+      'LUBANOTE AUTOTESTER / 690J',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
+      `pozadovana_opakovani_core_planner=${activeRep}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
       `PASS_E2E=${counts.PASS} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=0 STABILITY_V1_PARTIAL=${counts.PARTIAL}`,
-      '690I4: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range 10x. Red dots and blue simulated caret/selection handles in 690I are diagnostic drawings, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
+      '690J: LIVE VISUAL PREVIEW uses sandbox Core V2 for Bullet, Editor and ToDo plus recurringTasks.js for Planner calculations. CORE_PASS means actual shipped editorCoreV2.js under synthetic DOM/keyboard/pointer/Range with the reported repetition count. Red pointer only denotes an actual synthetic PointerEvent; blue marks represent the actual DOM Range, not Android handles, NOT Android system touch/handles. Physical Android touch, native text handles and system WebView gesture arbitration remain NOT TESTED. V1 PARTIAL is not complete regression PASS.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'

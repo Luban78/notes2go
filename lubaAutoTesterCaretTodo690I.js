@@ -1,4 +1,4 @@
-/* LubaNote 690I3 — actual shipped Core V2 selection/caret/TODO regression.
+/* LubaNote 690J — actual shipped Core V2 selection/caret/TODO regression.
    Opaque-origin sandbox, synthetic test data. Red point/blue marks are
    diagnostic overlays: NOT native Android touch or selection handles. */
 (() => {
@@ -25,7 +25,7 @@
   const expected = scope => CASES.filter(([id]) => scope==='all' || (scope==='todo' && id.startsWith('caret-todo-')) || (scope==='editor' && (id.startsWith('caret-editor-') || ['caret-todo-range','caret-todo-reopen'].includes(id))) || (scope==='bullet' && (id.startsWith('caret-bullet-') || id==='caret-bullet-text')));
   const blocked = (scope,reason) => expected(scope).map(([id,name])=>({id,name,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(reason||'unavailable').slice(0,190)}));
 
-  function sandboxRunner(token,scope,visual){
+  function sandboxRunner(token,scope,visual,repeats){
     'use strict';
     const source=[
       ['caret-todo-middle','ToDo – Backspace uprostřed úkolu a pevný kurzor'],
@@ -58,7 +58,7 @@
     const ed=()=>core.ziskejEditorElement();
     const selection=()=>window.getSelection();
     const overlay=document.createElement('div');overlay.id='lat-690i-overlay';document.body.appendChild(overlay);
-    const pointer=document.createElement('div');pointer.className='lat-690i-red-dot';
+    const pointer=document.createElement('div');pointer.className='lat-690i-red-dot';pointer.hidden=true;
     const startHandle=document.createElement('div');startHandle.className='lat-690i-handle';
     const endHandle=document.createElement('div');endHandle.className='lat-690i-handle';
     const hint=document.createElement('div');hint.className='lat-690i-hint';
@@ -75,11 +75,11 @@
         const b=target?.getBoundingClientRect?.();
         if(b){x=b.left+Math.min(30,b.width/2);y=b.top+Math.min(15,b.height/2);}
       }
-      place(pointer,x,y+8);place(startHandle,x,y+10);
+      pointer.hidden=true;place(startHandle,x,y+10);
       if(rng&&!rng.collapsed){const e=rng.getClientRects();const last=e[e.length-1]||rect;place(endHandle,last.right,last.bottom);}
       else endHandle.hidden=true;
     }
-    function progress(label,iteration){send('progress',`Kurzor / ToDo ${iteration}/10 · ${label}`);}
+    function progress(label,iteration){send('progress',`Kurzor / ToDo ${iteration}/${repeats} · ${label}`);}
     function fixture(texts=['Prvni ukol','Druhy ukol','Treti ukol'],completed=[false,false,false]){
       const items=texts.map((t,i)=>({id:`690i-${i}`,text:t,completed:Boolean(completed[i])}));
       const imp=core.importujTodos(items);
@@ -168,7 +168,7 @@
       const movingGhost=document.querySelector('.ln-v2-list-drag-preview');
       assert(Boolean(movingGhost)&&!movingGhost.hidden,'bullet_move_preview_missing');
       assert(getComputedStyle(movingGhost).position==='fixed','bullet_move_preview_wrong_position');
-      document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));await show(200);
+      document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));pointer.hidden=true;await show(200);
       const ghost=document.querySelector('.ln-v2-list-drag-preview');
       assert(!ghost||ghost.hidden||getComputedStyle(ghost).display==='none','bullet_drag_ghost_visible_after_drop');
       const wanted=direction==='first'?['Bravo','Charlie','Delta','Alpha']:['Delta','Alpha','Bravo','Charlie'];
@@ -181,6 +181,7 @@
     }
 
     async function test(id,i){
+      pointer.hidden=true;startHandle.hidden=true;endHandle.hidden=true;
       switch(id){
         case 'caret-bullet-first-move':{progress('přesouvám první Bullet na konec',i);await bulletMove(i,'first');break;}
         case 'caret-bullet-last-move':{progress('přesouvám poslední Bullet na začátek',i);await bulletMove(i,'last');break;}
@@ -278,7 +279,10 @@
         case 'caret-todo-empty':{
           fixture(['Zacatek','','Nasledujici ukol']);locate(1,0);progress('Backspace na prázdném ToDo',i);await show(220);
           key('backspace');keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
-          await checkCaret(null,null,'not_next_end');await show(240);break;
+          await checkCaret(null,null,'not_next_end');
+          // Second Backspace must not modify the next task.
+          key('backspace');keepNeighbor('690i-0','Zacatek');keepNeighbor('690i-2','Nasledujici ukol');
+          await show(240);break;
         }
         case 'caret-todo-last':{
           fixture(['Prvni ukol','Druhy ukol','Z']);locate(2,1);progress('mažu poslední ToDo',i);
@@ -314,7 +318,7 @@
           const movingGhost=document.querySelector('.ln-v2-list-drag-preview');
           assert(Boolean(movingGhost)&&!movingGhost.hidden,'todo_move_preview_missing');
           assert(getComputedStyle(movingGhost).position==='fixed','todo_move_preview_wrong_position');
-          document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));await show(180);
+          document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));pointer.hidden=true;await show(180);
           const ghost=document.querySelector('.ln-v2-list-drag-preview');
           assert(!ghost||ghost.hidden||getComputedStyle(ghost).display==='none','todo_drag_ghost_visible_after_drop');
           const blocks=getBlocks();assert(blocks.length===3,'todo_move_item_count');
@@ -331,7 +335,7 @@
           const row=ed().children[1],span=row.querySelector('.ln-v2-cast');assert(span,'todo_longpress_span');
           const b=row.getBoundingClientRect(),x=b.left+Math.min(75,b.width/2),y=b.top+b.height/2,pid=950+i;
           place(pointer,x,y);span.dispatchEvent(pointerEvent('pointerdown',x,y,pid));await sleep(485);
-          document.dispatchEvent(pointerEvent('pointerup',x,y,pid));await show(180);
+          document.dispatchEvent(pointerEvent('pointerup',x,y,pid));pointer.hidden=true;await show(180);
           assert(getBlocks().map(text).join('|')==='Ukol A|Hotovy ukol|Ukol C','todo_longpress_unexpected_reorder');
           assert(getBlocks()[1].hotovo===true,'todo_longpress_completion_lost');
           break;
@@ -346,17 +350,17 @@
       if(typeof window.getSelection!=='function'||!document.createRange){send('blocked','dom_selection_api_missing');return;}
       // Finish one scenario at a time. Report each step to parent before the next one.
       for(const row of rows){
-        for(let iteration=1;iteration<=10;iteration++){
-          send('progress',`${row.name} · opakování ${iteration}/10`);
+        for(let iteration=1;iteration<=repeats;iteration++){
+          send('progress',`${row.name} · opakování ${iteration}/${repeats}`);
           const begin=performance.now();let opened=false;
           try{opened=true;await test(row.id,iteration);row.ok++;}
           catch(e){
             row.fail++;
             const problem=String(e?.message||e).slice(0,115);
             if(!row.reason)row.reason=`opakování ${iteration}: ${problem}`;
-            hint.textContent=`CHYBA ${iteration}/10: ${problem}`;
+            hint.textContent=`CHYBA ${iteration}/${repeats}: ${problem}`;
             hint.style.background='#a51c30';
-            send('progress',`CHYBA ${iteration}/10 · ${row.id}: ${problem}`);
+            send('progress',`CHYBA ${iteration}/${repeats} · ${row.id}: ${problem}`);
             await show(700);
             hint.style.background='';
           }
@@ -367,13 +371,14 @@
           }
           send('checkpoint',{id:row.id,name:row.name,ok:row.ok,fail:row.fail,ms:row.ms,iteration,reason:row.reason||''});
         }
-        send('progress',`Dokončena sada ${row.name}: ${row.ok}/10 PASS, ${row.fail} FAIL`);
+        send('progress',`Dokončena sada ${row.name}: ${row.ok}/${repeats} PASS, ${row.fail} FAIL`);
       }
-      send('done',rows.map(r=>({id:r.id,name:r.name,kind:r.kind,status:r.fail?'CORE_FAIL':r.ok===10?'CORE_PASS':'CORE_BLOCKED',ms:r.ms,detail:`${r.ok}/10 PASS, ${r.fail} FAIL. ${r.reason||'Core V2 / DOM Range a syntetické pointer události. Nejde o nativní Android úchyty.'}`})));
+      send('done',rows.map(r=>({id:r.id,name:r.name,kind:r.kind,status:r.fail?'CORE_FAIL':r.ok===repeats?'CORE_PASS':'CORE_BLOCKED',ms:r.ms,detail:`${r.ok}/${repeats} PASS, ${r.fail} FAIL. ${r.reason||'Core V2 / DOM Range a syntetické pointer události. Nejde o nativní Android úchyty.'}`})));
     })().catch(e=>send('blocked','fatal_'+String(e?.message||e).slice(0,110)));
   }
 
-  async function runRepeated(scope='all',shouldContinue=()=>true,onProgress=()=>{}){
+  async function runRepeated(scope='all',shouldContinue=()=>true,onProgress=()=>{},repeats=1){
+    repeats=(Number.isInteger(Number(repeats))&&Number(repeats)>=1&&Number(repeats)<=50)?Number(repeats):1;
     if(!['all','todo','editor','bullet'].includes(scope))return blocked('all','invalid_scope');
     if(busy)return blocked(scope,'another_caret_runner_active');
     busy=true;
@@ -383,10 +388,10 @@
     return new Promise(resolve=>{
       const fallback=reason=>expected(scope).map(([id,name])=>{
         const x=snapshots.get(id);
-        const completed=Number(x?.iteration||0)===10;
+        const completed=Number(x?.iteration||0)===repeats;
         return {id,name,kind:'CORE_V2_CARET_SANDBOX_690I',
-          status:x?.fail>0?'CORE_FAIL':completed&&x?.ok===10?'CORE_PASS':'CORE_BLOCKED',ms:Number(x?.ms)||0,
-          detail:`${x?.ok||0}/10 PASS, ${x?.fail||0} FAIL. ${x?.reason||''} ${completed?'':`NEDOKONČENO: ${reason}; poslední krok: ${lastStep}`}`.slice(0,320)};
+          status:x?.fail>0?'CORE_FAIL':completed&&x?.ok===repeats?'CORE_PASS':'CORE_BLOCKED',ms:Number(x?.ms)||0,
+          detail:`${x?.ok||0}/${repeats} PASS, ${x?.fail||0} FAIL. ${x?.reason||''} ${completed?'':`NEDOKONČENO: ${reason}; poslední krok: ${lastStep}`}`.slice(0,320)};
       });
       const done=rows=>{if(finished)return;finished=true;clearInterval(interval);window.removeEventListener('message',onMessage);
         try{frame?.remove();}catch(_e){}busy=false;resolve(rows);
@@ -403,7 +408,7 @@
           onProgress(lastStep);
         }else if(e.data.type==='checkpoint'){
           const x=e.data.data;
-          if(x&&expected(scope).some(([id])=>id===x.id)&&Number.isInteger(x.iteration)&&x.iteration>=1&&x.iteration<=10){
+          if(x&&expected(scope).some(([id])=>id===x.id)&&Number.isInteger(x.iteration)&&x.iteration>=1&&x.iteration<=repeats){
             snapshots.set(x.id,{iteration:x.iteration,ok:Number(x.ok)||0,fail:Number(x.fail)||0,ms:Number(x.ms)||0,reason:String(x.reason||'').slice(0,135)});
           }
         }else if(e.data.type==='blocked')done(fallback(String(e.data.data||'sandbox_blocked')));
@@ -429,12 +434,12 @@
         const styles=`html,body{background:#fff;color:#153525;font:20px/1.5 system-ui}body{margin:12px}.ln-v2-editor{min-height:500px;display:block}.ln-v2-odstavec{position:relative;min-height:65px;padding:9px 10px 9px 48px;border-bottom:1px solid #e2eae5;box-sizing:border-box}.ln-v2-todo:before{content:'☐';position:absolute;left:7px;top:8px;color:#137657}.ln-v2-todo-hotovo:before{content:'☑'}.ln-v2-todo-check{position:absolute;left:6px;top:11px;opacity:.1;width:25px;height:25px}#lat-690i-overlay{position:fixed;inset:0;pointer-events:none;z-index:2147483646}.lat-690i-red-dot{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;background:#ef263c;border:3px solid white;border-radius:50%;box-shadow:0 0 0 3px rgba(239,38,60,.5)}.lat-690i-handle{position:absolute;width:5px;height:27px;background:#17b7d8;border-radius:4px;transform:translate(-50%,-85%)}.lat-690i-handle:after{content:'';position:absolute;left:-6px;bottom:-13px;width:18px;height:18px;border-radius:50%;background:#17b7d8;border:2px solid #fff}.ln-v2-list-drag-preview{position:fixed;z-index:2147483460;max-width:360px;padding:9px 13px;transform:translateX(-50%);border:2px solid #178050;border-radius:12px;background:#173b32;color:#fff;pointer-events:none}.ln-v2-list-drag-preview[hidden],.ln-v2-list-drop-indicator[hidden]{display:none!important}.ln-v2-list-drop-indicator{position:fixed;height:4px;pointer-events:none;background:#178050}.lat-690i-hint{position:absolute;left:4%;top:7px;background:#173b32;color:#fff;font:15px system-ui;padding:4px 9px;border-radius:8px}[hidden]{display:none!important}`;
         frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.tabIndex=-1;frame.setAttribute('aria-label','Izolovaný test kurzoru ToDo');
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(csp)}"><style>${styles}</style><script nonce="${esc(token)}" src="${esc(u.href)}"><\/script></head><body><div id="lat-690i-host"></div><script nonce="${esc(token)}">(${sandboxRunner.toString()})(${JSON.stringify(token)},${JSON.stringify(scope)},${visual});<\/script></body></html>`;
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(csp)}"><style>${styles}</style><script nonce="${esc(token)}" src="${esc(u.href)}"><\/script></head><body><div id="lat-690i-host"></div><script nonce="${esc(token)}">(${sandboxRunner.toString()})(${JSON.stringify(token)},${JSON.stringify(scope)},${visual},${repeats});<\/script></body></html>`;
         if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame))document.body.appendChild(frame);
         lastStep='iframe_created_waiting_for_ready';
         onProgress('Spouštím Core V2 – kurzor, úchyty a mazání ToDo…');
       }catch(e){done(blocked(scope,'sandbox_creation_'+String(e?.message||e).slice(0,90)));}
     });
   }
-  window.LubaNoteAutoTesterCaretTodo690I=Object.freeze({runRepeated});
+  window.LubaNoteAutoTesterCaretTodo690I=Object.freeze({runRepeated,supportsRepeatCount:true});
 })();
