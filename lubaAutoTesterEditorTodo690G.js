@@ -25,7 +25,7 @@
     const send=(type,data)=>parent.postMessage({scope:'LN_690G_CORE',token,type,data},'*');
     const rows=source.map(([id,name])=>({id,name,kind:'CORE_V2_SANDBOX_690G',ok:0,fail:0,blocked:0,ms:0,reason:''}));
     const assert=(b,m)=>{if(!b)throw Error(m);};
-    const pause=ms=>visual?new Promise(r=>setTimeout(r,ms)):Promise.resolve();
+    const pause=ms=>visual?new Promise(r=>setTimeout(r,Math.round(ms*visual))):Promise.resolve();
     const txt=b=>(b?.obsah||[]).map(x=>x.text||'').join('');
     const record=(row,status,reason,duration,i)=>{row.ms+=Math.round(duration||0);
       if(status==='pass')row.ok++;
@@ -112,7 +112,7 @@
     if(busy)return blocked(scope,'runner_already_active');
     busy=true;
     const token='ln690g-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
-    const visual=Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.());
+    const visual=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);
     let frame=null,finished=false,timer=null,interval=null;
     return new Promise(resolve=>{
       const cleanup=rows=>{if(finished)return;finished=true;
@@ -132,7 +132,7 @@
         }
       };
       window.addEventListener('message',receive);
-      timer=setTimeout(()=>cleanup(blocked(scope,'editor_todo_sandbox_timeout_100s')),100000);
+      timer=setTimeout(()=>cleanup(blocked(scope,'editor_todo_sandbox_timeout')),Math.round(100000*Math.max(1,visual)));
       interval=setInterval(()=>{if(!shouldContinue())cleanup(blocked(scope,'interrupted'));},300);
       try{
         const u=new URL('editorCoreV2.js?v=690G-editor-todo',location.href);

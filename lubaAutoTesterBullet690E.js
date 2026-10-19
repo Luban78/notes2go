@@ -62,10 +62,16 @@
       check(editor.classList.contains('ln-v2-list-drag-mode'),'move_long_press_not_ready');
       const dropY=last.bottom-3;
       document.dispatchEvent(pointer('pointermove',x,dropY,id));
-      await wait(slow?700:25);
+      await wait(slow?Math.round(700*slow):25);
       check(editor.classList.contains('ln-v2-list-drag-mode'),'move_drag_not_started');
+      const movingGhost=document.querySelector('.ln-v2-list-drag-preview');
+      check(Boolean(movingGhost)&&!movingGhost.hidden,'move_preview_missing_during_drag');
+      check(getComputedStyle(movingGhost).position==='fixed','move_preview_wrong_css_position');
+      check(Math.abs(movingGhost.getBoundingClientRect().top-(dropY-92))<55,'move_preview_far_from_pointer');
       document.dispatchEvent(pointer('pointerup',x,dropY,id));
-      await wait(slow?650:15);
+      await wait(slow?Math.round(650*slow):15);
+      const ghost=document.querySelector('.ln-v2-list-drag-preview');
+      check(!ghost||ghost.hidden||getComputedStyle(ghost).display==='none','move_ghost_still_visible_after_drop');
       modelCheck(core,['Alpha','Delta','Bravo','Charlie'],[0,0,0,1],idsOriginal);
       check(core.undo()===true,'move_undo_failed');
       modelCheck(core,['Alpha','Bravo','Charlie','Delta'],[0,0,1,0],idsOriginal);
@@ -90,7 +96,7 @@
       // Synteticky scenar nesmi nasledujici klonny click poslat do teto ochranne lhuty.
       await wait(565);
       marker.click();
-      await wait(slow?650:50);
+      await wait(slow?Math.round(650*slow):50);
       check(core.ziskejModel().bloky[1].sbaleno===true,'selection_parent_not_collapsed');
       check(ed.children[2].hidden && ed.children[3].hidden,'selection_children_still_visible');
       const alpha=ed.children[0].querySelector('.ln-v2-cast')?.firstChild;
@@ -104,7 +110,7 @@
       check(modelSelection && modelSelection.sbaleny===false,'selection_range_not_captured');
       check(modelSelection.zacatek.blok===0&&modelSelection.konec.blok===1,'selection_wrong_model_range');
       check(selection.toString().includes('Rod'),'selection_missing_parent_text');
-      if(slow)await wait(750);
+      if(slow)await wait(Math.round(750*slow));
       check(ed.children[2].hidden&&ed.children[3].hidden,'selection_unhid_children');
       const previous=core.ziskejModel().bloky.map(b=>`${b.id}:${b.typ}:${b.uroven}:${text(b)}:${Boolean(b.sbaleno)}`).join('|');
       const exported=core.exportujHtml();
@@ -117,7 +123,7 @@
       const badge=parentRow.querySelector('[data-v2-list-toggle]');
       check(Boolean(badge),'selection_badge_missing');
       badge.click();
-      await wait(slow?450:50);
+      await wait(slow?Math.round(450*slow):50);
       check(core.ziskejModel().bloky[1].sbaleno===false,'selection_badge_failed');
       check(!ed.children[2].hidden && !ed.children[3].hidden,'selection_badge_children_hidden');
       check(selection.anchorNode?.isConnected,'selection_caret_detached');
@@ -172,7 +178,7 @@
         }
       };
       window.addEventListener('message',receive);
-      timeout=setTimeout(()=>cleanup(blocked('sandbox_timeout_90s_last='+lastStep)),90000);
+      timeout=setTimeout(()=>cleanup(blocked('sandbox_timeout_last='+lastStep)),Math.round(90000*Math.max(1,Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||1))));
       interval=setInterval(()=>{if(!shouldContinue())cleanup(blocked('interrupted'));},250);
       try{
         const origin=location.origin;
@@ -185,7 +191,7 @@
         frame.sandbox='allow-scripts'; // IMPORTANT: never allow-same-origin.
         frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
-        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:440px;max-height:440px;overflow-y:auto;display:block}.ln-v2-odstavec{height:72px;min-height:72px;line-height:25px;display:block}[hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:20px}</style>${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())?`<style>html,body{background:#fff;color:#192f23;font:20px/1.45 system-ui}body{margin:10px}.ln-v2-editor{font-size:20px!important}.ln-v2-odstavec.ln-v2-bullet{position:relative;border-bottom:1px solid #ecf0ed;box-sizing:border-box;padding-left:22px}.ln-v2-odstavec.ln-v2-bullet::before{content:"•";position:absolute;left:4px;color:#178050;font-weight:800}[data-ln-v2-bullet-uroven="1"]{margin-left:18px}[data-ln-v2-bullet-uroven="2"]{margin-left:36px}[data-v2-list-marker]{border:1px solid #448d61;background:#d9f4e4;border-radius:5px;font-size:18px;min-width:24px;min-height:22px}[data-v2-list-toggle]{border:1px solid #3c8c66;background:#e3f8e9;border-radius:6px;font-weight:700;color:#135b39;font-size:17px}</style>`:''}<script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690e-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)},${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())});<\/script></body></html>`;
+        frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><style>.ln-v2-editor{height:440px;max-height:440px;overflow-y:auto;display:block}.ln-v2-odstavec{height:72px;min-height:72px;line-height:25px;display:block}[hidden]{display:none!important}.ln-v2-list-marker-hit{width:25px;height:20px}.ln-v2-list-drag-preview{position:fixed;z-index:2147483460;max-width:360px;padding:9px 13px;transform:translateX(-50%);border:2px solid #178050;border-radius:12px;background:#173b32;color:white;pointer-events:none}.ln-v2-list-drag-preview[hidden],.ln-v2-list-drop-indicator[hidden]{display:none!important}.ln-v2-list-drop-indicator{position:fixed;height:4px;pointer-events:none;background:#178050}</style>${Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.())?`<style>html,body{background:#fff;color:#192f23;font:20px/1.45 system-ui}body{margin:10px}.ln-v2-editor{font-size:20px!important}.ln-v2-odstavec.ln-v2-bullet{position:relative;border-bottom:1px solid #ecf0ed;box-sizing:border-box;padding-left:22px}.ln-v2-odstavec.ln-v2-bullet::before{content:"•";position:absolute;left:4px;color:#178050;font-weight:800}[data-ln-v2-bullet-uroven="1"]{margin-left:18px}[data-ln-v2-bullet-uroven="2"]{margin-left:36px}[data-v2-list-marker]{border:1px solid #448d61;background:#d9f4e4;border-radius:5px;font-size:18px;min-width:24px;min-height:22px}[data-v2-list-toggle]{border:1px solid #3c8c66;background:#e3f8e9;border-radius:6px;font-weight:700;color:#135b39;font-size:17px}</style>`:''}<script nonce="${esc(token)}" src="${esc(url.href)}"><\/script></head><body><div id="ln-690e-host"></div><script nonce="${esc(token)}">(${runner.toString()})(${JSON.stringify(token)},${Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0)});<\/script></body></html>`;
         if(!window.LubaNoteAutoTesterVisual690F?.attachFrame?.(frame)) document.body.appendChild(frame);
         onProgress('Core V2 · připravuji syntetický MOVE a výběr textu…');
       }catch(e){cleanup(blocked('sandbox_creation_'+String(e?.message||'error').slice(0,130)));}

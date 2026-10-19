@@ -1,4 +1,4 @@
-/* LubaNote 690I — actual shipped Core V2 selection/caret/TODO regression.
+/* LubaNote 690I1 — actual shipped Core V2 selection/caret/TODO regression.
    Opaque-origin sandbox, synthetic test data. Red point/blue marks are
    diagnostic overlays: NOT native Android touch or selection handles. */
 (() => {
@@ -37,7 +37,7 @@
     const rows=source.map(([id,name])=>({id,name,kind:'CORE_V2_CARET_SANDBOX_690I',ok:0,fail:0,ms:0,reason:''}));
     const assert=(cond,name)=>{if(!cond)throw Error(name);};
     const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-    const show=ms=>visual?sleep(ms):Promise.resolve();
+    const show=ms=>visual?sleep(Math.round(ms*visual)):Promise.resolve();
     const text=b=>(b?.obsah||[]).map(x=>String(x.text||'')).join('');
     const core=window.LubaNoteEditorV2;
     const host=document.querySelector('#lat-690i-host');
@@ -147,7 +147,12 @@
       assert(ed().classList.contains('ln-v2-list-drag-mode'),'bullet_longpress_not_ready');
       place(pointer,x,dy);
       document.dispatchEvent(pointerEvent('pointermove',x,dy,pid));await sleep(35);
+      const movingGhost=document.querySelector('.ln-v2-list-drag-preview');
+      assert(Boolean(movingGhost)&&!movingGhost.hidden,'bullet_move_preview_missing');
+      assert(getComputedStyle(movingGhost).position==='fixed','bullet_move_preview_wrong_position');
       document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));await show(200);
+      const ghost=document.querySelector('.ln-v2-list-drag-preview');
+      assert(!ghost||ghost.hidden||getComputedStyle(ghost).display==='none','bullet_drag_ghost_visible_after_drop');
       const wanted=direction==='first'?['Bravo','Charlie','Delta','Alpha']:['Delta','Alpha','Bravo','Charlie'];
       const actual=getBlocks();
       assert(actual.map(text).join('|')===wanted.join('|'),'bullet_move_'+direction+'_wrong_order_'+actual.map(text).join('|'));
@@ -208,7 +213,12 @@
           assert(ed().classList.contains('ln-v2-list-drag-mode'),'todo_longpress_not_ready');
           const dy=target.bottom-3;place(pointer,x,dy);
           document.dispatchEvent(pointerEvent('pointermove',x,dy,pid));await sleep(35);
+          const movingGhost=document.querySelector('.ln-v2-list-drag-preview');
+          assert(Boolean(movingGhost)&&!movingGhost.hidden,'todo_move_preview_missing');
+          assert(getComputedStyle(movingGhost).position==='fixed','todo_move_preview_wrong_position');
           document.dispatchEvent(pointerEvent('pointerup',x,dy,pid));await show(180);
+          const ghost=document.querySelector('.ln-v2-list-drag-preview');
+          assert(!ghost||ghost.hidden||getComputedStyle(ghost).display==='none','todo_drag_ghost_visible_after_drop');
           const blocks=getBlocks();assert(blocks.length===3,'todo_move_item_count');
           assert(blocks.map(text).join('|')==='Ukol A|Ukol C|Hotovy ukol','todo_move_wrong_order');
           assert(blocks[2].hotovo===true && blocks[0].hotovo===false&&blocks[1].hotovo===false,'todo_move_done_status_lost');
@@ -236,8 +246,10 @@
     (async()=>{
       if(!host||!core?.importujHtml||!core?.importujTodos||!core?.undo||!core?.otevriVHostu||!core?.ziskejModel||!core?.ziskejEditorElement||!core?.zachytAktualniVyber||!core?.provedPrikazVlastniKlavesnice){send('blocked','core_caret_required_api_missing');return;}
       if(typeof window.getSelection!=='function'||!document.createRange){send('blocked','dom_selection_api_missing');return;}
-      for(let iteration=1;iteration<=10;iteration++){
-        for(const row of rows){
+      // Finish one scenario at a time. Report each step to parent before the next one.
+      for(const row of rows){
+        for(let iteration=1;iteration<=10;iteration++){
+          send('progress',`${row.name} · opakování ${iteration}/10`);
           const begin=performance.now();let opened=false;
           try{opened=true;await test(row.id,iteration);row.ok++;}
           catch(e){
@@ -255,8 +267,9 @@
             try{if(opened)core.zavriVHostu?.();}catch(_e){}
             try{selection()?.removeAllRanges();}catch(_e){}
           }
+          send('checkpoint',{id:row.id,name:row.name,ok:row.ok,fail:row.fail,ms:row.ms,iteration,reason:row.reason||''});
         }
-        send('progress',`Kurzory / ToDo ${iteration}/10`);
+        send('progress',`Dokončena sada ${row.name}: ${row.ok}/10 PASS, ${row.fail} FAIL`);
       }
       send('done',rows.map(r=>({id:r.id,name:r.name,kind:r.kind,status:r.fail?'CORE_FAIL':r.ok===10?'CORE_PASS':'CORE_BLOCKED',ms:r.ms,detail:`${r.ok}/10 PASS, ${r.fail} FAIL. ${r.reason||'Core V2 / DOM Range a syntetické pointer události. Nejde o nativní Android úchyty.'}`})));
     })().catch(e=>send('blocked','fatal_'+String(e?.message||e).slice(0,110)));
@@ -266,35 +279,53 @@
     if(!['all','todo','editor','bullet'].includes(scope))return blocked('all','invalid_scope');
     if(busy)return blocked(scope,'another_caret_runner_active');
     busy=true;
-    let frame=null,timer=null,interval=null,finished=false;
+    let frame=null,interval=null,finished=false,lastMessage=Date.now(),lastStep='start',snapshots=new Map();
     const token='690i-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
-    const visual=Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.());
+    const visual=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()??(window.LubaNoteAutoTesterVisual690F?.isSlow?.()?1:0));
     return new Promise(resolve=>{
-      const done=rows=>{if(finished)return;finished=true;clearTimeout(timer);clearInterval(interval);window.removeEventListener('message',onMessage);
+      const fallback=reason=>expected(scope).map(([id,name])=>{
+        const x=snapshots.get(id);
+        const completed=Number(x?.iteration||0)===10;
+        return {id,name,kind:'CORE_V2_CARET_SANDBOX_690I',
+          status:x?.fail>0?'CORE_FAIL':completed&&x?.ok===10?'CORE_PASS':'CORE_BLOCKED',ms:Number(x?.ms)||0,
+          detail:`${x?.ok||0}/10 PASS, ${x?.fail||0} FAIL. ${x?.reason||''} ${completed?'':`NEDOKONČENO: ${reason}; poslední krok: ${lastStep}`}`.slice(0,320)};
+      });
+      const done=rows=>{if(finished)return;finished=true;clearInterval(interval);window.removeEventListener('message',onMessage);
         try{frame?.remove();}catch(_e){}busy=false;resolve(rows);
       };
       const onMessage=e=>{
         if(!frame||e.source!==frame.contentWindow||e.data?.scope!=='LN_690I_CARET'||e.data.token!==token)return;
-        if(!shouldContinue()){done(blocked(scope,'user_interrupted'));return;}
-        if(e.data.type==='progress')onProgress(String(e.data.data||'').slice(0,130));
-        else if(e.data.type==='blocked')done(blocked(scope,String(e.data.data||'sandbox_blocked').slice(0,140)));
+        lastMessage=Date.now();
+        if(!shouldContinue()){done(fallback('user_interrupted'));return;}
+        if(e.data.type==='progress'){
+          lastStep=String(e.data.data||'').slice(0,130);
+          onProgress(lastStep);
+        }else if(e.data.type==='checkpoint'){
+          const x=e.data.data;
+          if(x&&expected(scope).some(([id])=>id===x.id)&&Number.isInteger(x.iteration)&&x.iteration>=1&&x.iteration<=10){
+            snapshots.set(x.id,{iteration:x.iteration,ok:Number(x.ok)||0,fail:Number(x.fail)||0,ms:Number(x.ms)||0,reason:String(x.reason||'').slice(0,135)});
+          }
+        }else if(e.data.type==='blocked')done(fallback(String(e.data.data||'sandbox_blocked')));
         else if(e.data.type==='done'){
           const out=e.data.data,keys=expected(scope);
           const valid=Array.isArray(out)&&out.length===keys.length&&new Set(out.map(x=>x.id)).size===keys.length &&
             out.every(x=>keys.some(([id])=>id===x.id)&&['CORE_PASS','CORE_FAIL','CORE_BLOCKED'].includes(x.status)&&typeof x.detail==='string');
-          done(valid?out.map(x=>({...x,detail:x.detail.slice(0,235)})):blocked(scope,'invalid_caret_runner_results'));
+          done(valid?out.map(x=>({...x,detail:x.detail.slice(0,320)})):fallback('invalid_caret_runner_results'));
         }
       };
       window.addEventListener('message',onMessage);
-      timer=setTimeout(()=>done(blocked(scope,'caret_sandbox_timeout_150s')),150000);
-      interval=setInterval(()=>{if(!shouldContinue())done(blocked(scope,'user_interrupted'));},350);
+      // Monitor inactivity, not cumulative duration; the 100 steps can take >150 s on phones.
+      interval=setInterval(()=>{
+        if(!shouldContinue())done(fallback('user_interrupted'));
+        else if(Date.now()-lastMessage>35000)done(fallback('no_progress_35s'));
+      },500);
       try{
         const u=new URL('editorCoreV2.js?v=690I-caret-todo',location.href);
         if(u.origin!==location.origin)throw Error('core_cross_origin');
         if(!/^https?:\/\/|^capacitor:\/\//.test(location.origin))throw Error('unsupported_origin');
         const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
         const csp=`default-src 'none'; script-src 'nonce-${token}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; form-action 'none'`;
-        const styles=`html,body{background:#fff;color:#153525;font:20px/1.5 system-ui}body{margin:12px}.ln-v2-editor{min-height:500px;display:block}.ln-v2-odstavec{position:relative;min-height:65px;padding:9px 10px 9px 48px;border-bottom:1px solid #e2eae5;box-sizing:border-box}.ln-v2-todo:before{content:'☐';position:absolute;left:7px;top:8px;color:#137657}.ln-v2-todo-hotovo:before{content:'☑'}.ln-v2-todo-check{position:absolute;left:6px;top:11px;opacity:.1;width:25px;height:25px}#lat-690i-overlay{position:fixed;inset:0;pointer-events:none;z-index:2147483646}.lat-690i-red-dot{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;background:#ef263c;border:3px solid white;border-radius:50%;box-shadow:0 0 0 3px rgba(239,38,60,.5)}.lat-690i-handle{position:absolute;width:5px;height:27px;background:#17b7d8;border-radius:4px;transform:translate(-50%,-85%)}.lat-690i-handle:after{content:'';position:absolute;left:-6px;bottom:-13px;width:18px;height:18px;border-radius:50%;background:#17b7d8;border:2px solid #fff}.lat-690i-hint{position:absolute;left:4%;top:7px;background:#173b32;color:#fff;font:15px system-ui;padding:4px 9px;border-radius:8px}[hidden]{display:none!important}`;
+        const styles=`html,body{background:#fff;color:#153525;font:20px/1.5 system-ui}body{margin:12px}.ln-v2-editor{min-height:500px;display:block}.ln-v2-odstavec{position:relative;min-height:65px;padding:9px 10px 9px 48px;border-bottom:1px solid #e2eae5;box-sizing:border-box}.ln-v2-todo:before{content:'☐';position:absolute;left:7px;top:8px;color:#137657}.ln-v2-todo-hotovo:before{content:'☑'}.ln-v2-todo-check{position:absolute;left:6px;top:11px;opacity:.1;width:25px;height:25px}#lat-690i-overlay{position:fixed;inset:0;pointer-events:none;z-index:2147483646}.lat-690i-red-dot{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;background:#ef263c;border:3px solid white;border-radius:50%;box-shadow:0 0 0 3px rgba(239,38,60,.5)}.lat-690i-handle{position:absolute;width:5px;height:27px;background:#17b7d8;border-radius:4px;transform:translate(-50%,-85%)}.lat-690i-handle:after{content:'';position:absolute;left:-6px;bottom:-13px;width:18px;height:18px;border-radius:50%;background:#17b7d8;border:2px solid #fff}.ln-v2-list-drag-preview{position:fixed;z-index:2147483460;max-width:360px;padding:9px 13px;transform:translateX(-50%);border:2px solid #178050;border-radius:12px;background:#173b32;color:#fff;pointer-events:none}.ln-v2-list-drag-preview[hidden],.ln-v2-list-drop-indicator[hidden]{display:none!important}.ln-v2-list-drop-indicator{position:fixed;height:4px;pointer-events:none;background:#178050}.lat-690i-hint{position:absolute;left:4%;top:7px;background:#173b32;color:#fff;font:15px system-ui;padding:4px 9px;border-radius:8px}[hidden]{display:none!important}`;
         frame=document.createElement('iframe');frame.sandbox='allow-scripts';frame.tabIndex=-1;frame.setAttribute('aria-label','Izolovaný test kurzoru ToDo');
         frame.style.cssText='position:fixed;left:-10000px;top:0;width:420px;height:640px;opacity:0;pointer-events:none;border:0';
         frame.srcdoc=`<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${esc(csp)}"><style>${styles}</style><script nonce="${esc(token)}" src="${esc(u.href)}"><\/script></head><body><div id="lat-690i-host"></div><script nonce="${esc(token)}">(${sandboxRunner.toString()})(${JSON.stringify(token)},${JSON.stringify(scope)},${visual});<\/script></body></html>`;

@@ -29,7 +29,7 @@
     ];
     const results=specs.map(([id,name])=>({id,name,kind:'SHIPPED_RECURRING_TASKS_ISOLATED',ok:0,fail:0,ms:0,reason:''}));
     const check=(ok,reason)=>{if(!ok)throw Error(reason);};
-    const wait=(ms)=>visual?new Promise(resolve=>setTimeout(resolve,ms)):Promise.resolve();
+    const wait=(ms)=>visual?new Promise(resolve=>setTimeout(resolve,Math.round(ms*visual))):Promise.resolve();
     const key = value => [value.getFullYear(),String(value.getMonth()+1).padStart(2,'0'),String(value.getDate()).padStart(2,'0')].join('-');
     const dateTime = value => key(value)+' '+String(value.getHours()).padStart(2,'0')+':'+String(value.getMinutes()).padStart(2,'0');
     const host = document.getElementById('ln-690h-planner');
@@ -127,7 +127,7 @@
     busy=true;
     let frame=null,finished=false,timer=null,interval=null;
     const token='ln690h-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
-    const visual=Boolean(window.LubaNoteAutoTesterVisual690F?.isSlow?.());
+    const visual=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);
     return new Promise(resolve=>{
       const done=rows=>{if(finished)return;finished=true;
         clearTimeout(timer);clearInterval(interval);window.removeEventListener('message',receive);
