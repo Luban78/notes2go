@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 690J — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 690M — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * No local user notes, credentials, keys or production LubaServer data are read.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -64,59 +64,84 @@
     host.appendChild(frame);return true;
   }
   window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode?0:(extraSlowMode?2.5:1)});
-  // Two taps in the same 70px upper-left region, only after server-verified admin login.
-  // The old emergency five-tap fallback stays unchanged for this UI-only patch.
+  // 690M: Dvojtap admina ukaze POUZE panel VD / DH / T, zadny nastroj neotvira.
   let lastAdminTap=null;
-  // Vraceni existujiciho VD docku (zadna druha kopie panelu).
+  function povolenDok(){
+    try{return window.LubaNoteAdminTools?.isAllowed?.()===true;}catch(_){return false;}
+  }
+  function zajistiTesterVDocku(){
+    if(!povolenDok())return;
+    const tabs=document.getElementById('ln-vd-dock-tabs');
+    if(!tabs)return;
+    if(!document.getElementById('ln-vd-dock-t')){
+      const button=document.createElement('button');
+      button.id='ln-vd-dock-t';button.type='button';button.textContent='T';
+      button.setAttribute('aria-label','Otevřít nebo minimalizovat AutoTester');
+      button.title='AutoTester';
+      button.addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();
+        if(!povolenDok())return;
+        const tester=document.getElementById('ln-auto-tester');
+        if(tester&&!tester.hidden)window.LubaNoteAutoTester?.close?.();
+        else window.LubaNoteAutoTester?.open?.();
+      });
+      tabs.appendChild(button);
+    }
+    if(!document.getElementById('ln-vd-dock-t-690m-style')){
+      const css=document.createElement('style');css.id='ln-vd-dock-t-690m-style';
+      css.textContent='#ln-vd-quickbar #ln-vd-dock-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}';
+      document.head.appendChild(css);
+    }
+    const tester=document.getElementById('ln-auto-tester');
+    document.getElementById('ln-vd-dock-t')?.classList.toggle('active',Boolean(tester&&!tester.hidden));
+  }
+  document.addEventListener('lubanote:visual-debug-ready',zajistiTesterVDocku);
   function zobrazDebugDockPokudJeTreba(){
-    if(window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
+    if(!povolenDok())return false;
     let dock=document.getElementById('ln-vd-quickbar');
-    if(!dock || dock.hidden || getComputedStyle(dock).display==='none'){
+    if(!dock||dock.hidden||getComputedStyle(dock).display==='none'){
       window.LubaNoteVisualDebug?.showDock?.();
       dock=document.getElementById('ln-vd-quickbar');
     }
-    if(!dock || dock.hidden)return false;
-    // Oprava polohy docku po presunu mezi displeji a zmene velikosti PC okna.
+    if(!dock||dock.hidden||getComputedStyle(dock).display==='none')return false;
+    zajistiTesterVDocku();
     const rect=dock.getBoundingClientRect();
-    if(rect.width && rect.height &&
-       (rect.right<24 || rect.left>innerWidth-24 ||
-        rect.bottom<24 || rect.top>innerHeight-24)){
-      for(const side of ['left','right','top','bottom']){
-        dock.style.removeProperty(side);
-      }
+    if(rect.width&&rect.height&&(rect.right<24||rect.left>innerWidth-24||rect.bottom<24||rect.top>innerHeight-24)){
+      for(const side of ['left','right','top','bottom'])dock.style.removeProperty(side);
     }
     return true;
   }
   function setupAdminDoubleTap(){
-    // 690J: Desktop ma vlastni admin tlacitko, mobilni muze byt skryte.
-    const allowed=()=>{
-      if(window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
-      const mobile=document.getElementById('adminDashboardButton');
-      const desktop=document.getElementById('desktopAdminDashboardButton');
-      return Boolean((mobile && !mobile.hidden)||(desktop && !desktop.hidden));
-    };
     const excluded=target=>Boolean(target?.closest?.('#ln-auto-tester,#ln-debug-hub,#ln-vd-panel,#ln-vd-quickbar'));
+    const logo=target=>Boolean(target?.closest?.('.desktopSidebarBrand'));
     let start=null;
     document.addEventListener('pointerdown',e=>{
       start=null;
-      if(!e.isPrimary||e.button!==0||excluded(e.target)||e.clientX<0||e.clientX>70||e.clientY<0||e.clientY>70)return;
-      start={id:e.pointerId,x:e.clientX,y:e.clientY,t:performance.now()};
+      if(!e.isPrimary||e.button!==0||excluded(e.target))return;
+      const mobileCorner=e.clientX>=0&&e.clientX<=70&&e.clientY>=0&&e.clientY<=70;
+      if(!logo(e.target)&&!mobileCorner)return;
+      start={id:e.pointerId,x:e.clientX,y:e.clientY,t:performance.now(),desktop:logo(e.target)};
     },true);
     document.addEventListener('pointerup',e=>{
-      const x=start;start=null;
-      if(!x||!e.isPrimary||e.pointerId!==x.id||Math.hypot(e.clientX-x.x,e.clientY-x.y)>18||performance.now()-x.t>520)return;
-      if(!allowed()){lastAdminTap=null;return;}
+      const prev=start;start=null;
+      if(!prev||!e.isPrimary||e.pointerId!==prev.id||Math.hypot(e.clientX-prev.x,e.clientY-prev.y)>18||performance.now()-prev.t>520)return;
+      if(!povolenDok()){lastAdminTap=null;return;}
       const now=performance.now();
-      if(lastAdminTap && now-lastAdminTap.t<480 && Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
+      if(lastAdminTap&&now-lastAdminTap.t<520&&lastAdminTap.desktop===prev.desktop&&Math.hypot(lastAdminTap.x-e.clientX,lastAdminTap.y-e.clientY)<44){
         lastAdminTap=null;
-        // 690J: stejny dok VD / DH / minus / plus pro Android i desktop.
         zobrazDebugDockPokudJeTreba();
-        window.LubaNoteDebugHub?.open?.();
-      }else{lastAdminTap={t:now,x:e.clientX,y:e.clientY};}
+      }else lastAdminTap={t:now,x:e.clientX,y:e.clientY,desktop:prev.desktop};
     },true);
     document.addEventListener('pointercancel',()=>{start=null;},true);
+    // Na PC se pracuje dvojklikem mysi; logo neni ve viewportovem rohu.
+    document.addEventListener('dblclick',e=>{
+      if(!logo(e.target)||excluded(e.target)||!povolenDok())return;
+      e.preventDefault();
+      zobrazDebugDockPokudJeTreba();
+    },true);
   }
   setupAdminDoubleTap();
+  zajistiTesterVDocku();
   function open(){
     if(!isAllowed())return;
     if(!screen){
@@ -211,6 +236,7 @@
       document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!screen.hidden){e.preventDefault();e.stopImmediatePropagation();handleTesterBack();}},true);
     }
     screen.hidden=false;document.body.classList.add('lat-open');
+    zajistiTesterVDocku();
   }
   function collapseExpanded(){
     if(!screen||!expanded)return false;
@@ -254,7 +280,7 @@
     if(screen&&!screen.hidden)return handleTesterBack();
     return typeof backHandlerBeforeTester==='function'?backHandlerBeforeTester.apply(this,arguments):false;
   };
-  function close(){if(!screen)return;closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();}
+  function close(){if(!screen)return;closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();zajistiTesterVDocku();}
   function stop(){
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
@@ -527,12 +553,12 @@
   // 690I: synthetic caret, DOM selection and TODO edge cases in the actual shipped Core V2.
   // Blue selection marks and red pointer dot are VISUAL diagnostics, not native Android handles.
   async function spustitKurzorTodo690I(generace,scope='all'){
-    const allIds=['caret-todo-middle','caret-todo-clear','caret-todo-empty','caret-todo-last','caret-todo-range','caret-todo-reopen','caret-todo-done-move','caret-todo-done-longpress','caret-bullet-first-move','caret-bullet-last-move','caret-editor-plain','caret-bullet-text','caret-editor-format','caret-editor-colors','caret-editor-scroll','caret-editor-image'];
+    const allIds=['caret-todo-middle','caret-todo-clear','caret-todo-empty','caret-todo-mixed','caret-todo-last','caret-todo-range','caret-todo-reopen','caret-todo-done-move','caret-todo-done-longpress','caret-bullet-first-move','caret-bullet-last-move','caret-editor-plain','caret-bullet-text','caret-editor-format','caret-editor-colors','caret-editor-scroll','caret-editor-image'];
     const needed=scope==='editor'?allIds.filter(id=>id.startsWith('caret-editor-')||['caret-todo-range','caret-todo-reopen'].includes(id)):scope==='todo'?allIds.filter(id=>id.startsWith('caret-todo-')):scope==='bullet'?allIds.filter(id=>id.startsWith('caret-bullet-')):allIds;
     const blocked=why=>needed.map(id=>({id,name:'Kurzor / ToDo – '+id,kind:'CORE_V2_CARET_SANDBOX_690I',status:'CORE_BLOCKED',ms:0,detail:String(why||'missing').slice(0,180)}));
     try{
       if(window.LubaNoteAutoTesterCaretTodo690I?.supportsRepeatCount!==true){
-        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690J-repeat-count',location.href);
+        const url=new URL('lubaAutoTesterCaretTodo690I.js?v=690M-mixed-todo',location.href);
         if(url.origin!==location.origin)throw Error('caret_module_cross_origin');
         await new Promise((resolve,reject)=>{
           const tag=document.createElement('script');

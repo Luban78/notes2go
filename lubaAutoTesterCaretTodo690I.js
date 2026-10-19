@@ -1,4 +1,4 @@
-/* LubaNote 690J — actual shipped Core V2 selection/caret/TODO regression.
+/* LubaNote 690M — actual shipped Core V2 selection/caret/TODO regression.
    Opaque-origin sandbox, synthetic test data. Red point/blue marks are
    diagnostic overlays: NOT native Android touch or selection handles. */
 (() => {
@@ -7,6 +7,7 @@
     ['caret-todo-middle','ToDo – Backspace uprostřed úkolu a pevný kurzor'],
     ['caret-todo-clear','ToDo – mazání textu až do prázdného úkolu'],
     ['caret-todo-empty','ToDo – prázdný řádek bez poškození dalšího úkolu'],
+    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít a smazat prázdné kolečko'],
     ['caret-todo-last','ToDo – mazání posledního úkolu bez poškození předchozího'],
     ['caret-todo-range','ToDo – výběr části textu, náhrada a kontrola úchytů'],
     ['caret-todo-reopen','ToDo – kurzor po Undo/Redo a obnovení DOM'],
@@ -31,6 +32,7 @@
       ['caret-todo-middle','ToDo – Backspace uprostřed úkolu a pevný kurzor'],
       ['caret-todo-clear','ToDo – mazání textu až do prázdného úkolu'],
       ['caret-todo-empty','ToDo – prázdný řádek bez poškození dalšího úkolu'],
+    ['caret-todo-mixed','ToDo – nadpis + ToDo, uložit/otevřít a smazat prázdné kolečko'],
       ['caret-todo-last','ToDo – mazání posledního úkolu bez poškození předchozího'],
       ['caret-todo-range','ToDo – výběr části textu, náhrada a kontrola úchytů'],
       ['caret-todo-reopen','ToDo – kurzor po Undo/Redo a obnovení DOM'],
@@ -292,6 +294,41 @@
           await checkCaret('690i-0',6);
           await show(240);break;
         }
+        case 'caret-todo-mixed':{
+          // Skutecny format smisenych poznamek: HTML richContent, nikoli pouze importujTodos.
+          const puvodni=core.importujTodos([
+            {id:'690i-0',text:'Predchozi'},
+            {id:'690i-1',text:''},
+            {id:'690i-2',text:'Nasledujici'}
+          ]);
+          const nadpis=core.importujHtml('<h2>Nadpis poznamky</h2>');
+          assert(puvodni?.ok===true&&nadpis?.ok===true,'mixed_fixture_import_failed');
+          const model={...puvodni.model,bloky:[...nadpis.model.bloky,...puvodni.model.bloky]};
+          assert(core.otevriVHostu(host,model)===true,'mixed_fixture_open_failed');
+          const ulozeneHtml=core.exportujHtml();
+          assert(ulozeneHtml.includes('data-lubanote-v2-todo'),'mixed_todo_marker_missing');
+          core.zavriVHostu();
+          const obnovene=core.importujHtml(ulozeneHtml);
+          assert(obnovene?.ok===true,'mixed_html_reimport_failed');
+          assert(core.otevriVHostu(host,obnovene.model)===true,'mixed_reopen_failed');
+          const pred=getBlocks();
+          assert(pred.length===4&&pred[0].typ==='odstavec'&&pred[2].typ==='todo',
+            'mixed_structure_after_reopen_incorrect');
+          assert(text(pred[2])==='','mixed_empty_todo_contains_invisible_newline_after_html_import');
+          locate(2,0);progress('Smisena poznamka: Backspace odstranuje prazdne ToDo po znovuotevreni',i);
+          key('backspace');
+          assert(getBlocks().length===3,'mixed_empty_todo_checkbox_not_removed');
+          keepNeighbor('690i-0','Predchozi');keepNeighbor('690i-2','Nasledujici');
+          assert(text(getBlocks()[0])==='Nadpis poznamky','mixed_heading_modified');
+          await checkCaret('690i-0','Predchozi'.length);
+          await show(150);
+          key('backspace');
+          assert(getBlocks().length===3,'mixed_second_backspace_changed_block_count');
+          keepNeighbor('690i-0','Predchoz');keepNeighbor('690i-2','Nasledujici');
+          assert(text(getBlocks()[0])==='Nadpis poznamky','mixed_second_backspace_modified_heading');
+          await checkCaret('690i-0','Predchoz'.length);
+          await show(210);break;
+        }
         case 'caret-todo-last':{
           fixture(['Prvni ukol','Druhy ukol','Z']);locate(2,1);progress('mažu poslední ToDo',i);
           key('backspace');keepNeighbor('690i-0','Prvni ukol');keepNeighbor('690i-1','Druhy ukol');
@@ -434,7 +471,7 @@
         else if(Date.now()-lastMessage>35000)done(fallback('no_progress_35s'));
       },500);
       try{
-        const u=new URL('editorCoreV2.js?v=690I-caret-todo',location.href);
+        const u=new URL('editorCoreV2.js?v=690M-mixed-todo-regression',location.href);
         if(u.origin!==location.origin)throw Error('core_cross_origin');
         if(!/^https?:\/\/|^capacitor:\/\//.test(location.origin))throw Error('unsupported_origin');
         const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

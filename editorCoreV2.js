@@ -8713,6 +8713,16 @@
     });
 
     importujInlineUzly(docasny, VYCHOZI_FORMAT, obsah, nepodporovane);
+    /* 690M – RichContent exportuje prazdny ToDo jako <br>. Import inline uzlu
+       jej vykladal jako text "\n", takze Backspace nesmazal checkbox.
+       Menime VYHRADNE jediny placeholder <br> prazdneho TODO – skutecne
+       uzivatelske odradkovani, text i prilozene obrazky zustavaji zachovany. */
+    if (docasny.childNodes.length === 1 &&
+        docasny.firstChild?.nodeType === Node.ELEMENT_NODE &&
+        docasny.firstChild.tagName === "BR" &&
+        obsah.length === 1 && obsah[0]?.text === "\n") {
+      obsah.length = 0;
+    }
     if (!obsah.length) obsah.push(vytvorSegment("", VYCHOZI_FORMAT));
     const blok = vytvorTodoZObsahu(
       obsah,
