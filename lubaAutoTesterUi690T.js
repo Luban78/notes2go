@@ -1,4 +1,4 @@
-/* 690X – two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -230,16 +230,29 @@
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');
             assert(ownSelectionBefore.length>0,'missing_previous_own_selection');
-            const ack=await plugin.gestureOwnedEditor({id,target:'selection-end',type:'swipe'});
-            assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_handle_drag_no_ack');
-            await wait(320);
+            // 691H: Selection may end near a row/viewport edge. A 5px swipe
+            // could ACK as delivered yet fail to change the actual OWN selection.
+            // Exercise END first, then START only if the real model stayed the same.
+            // Neither gesture directly edits model, DOM selection or handles.
             const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
-            assert(editor?.classList.contains('ln-v2-selection-custom-active'),
-              'custom_selection_lost_after_drag');
-            const current=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
-            const after=typeof current==='string'?current:String(current?.text||'');
+            const selected=()=>{
+              const value=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
+              return typeof value==='string'?value:String(value?.text||'');
+            };
+            const drag=async target=>{
+              const ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});
+              assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT',
+                'own_handle_drag_no_ack_'+target);
+              await wait(350);
+              assert(editor?.classList.contains('ln-v2-selection-custom-active'),
+                'custom_selection_lost_after_drag_'+target);
+              return selected();
+            };
+            let after=await drag('selection-end');
+            if(after===ownSelectionBefore)after=await drag('selection-start');
             assert(after.length>0&&after!==ownSelectionBefore,
-              'own_handle_drag_did_not_change_selected_text');
+              'own_handle_drag_did_not_change_selected_text: beforeLength='+
+              ownSelectionBefore.length+', afterLength='+after.length);
           }else if(i===8){
             const save=document.getElementById('editorBackButton');
             assert(save&&!save.disabled,'real_save_button_missing');
@@ -263,6 +276,10 @@
           const unavailable=/owned_native_bridge_unavailable|luba_keyboard_mode_not_active|own_caret_mode_not_enabled/.test(cause);
           output.push({id:testId,name,status:unavailable?(i>=4&&i<=7?'NATIVE_BLOCKED':'APP_BLOCKED'):(i>=4&&i<=7?'NATIVE_FAIL':'APP_FAIL'),kind:i>=4&&i<=7?'OWN_LUBANOTE_NATIVE_INPUT_690U':'REAL_VISIBLE_EDITOR_690T',ms:Math.round(performance.now()-tick),
             detail:String(error?.message||error).slice(0,280)+' · poznámka Testy byla ponechána pro diagnostiku.'});
+          // 691H: The handle gesture is a standalone assertion; SAVE is not
+          // dependent on that assertion. Retain the actual FAIL but still run
+          // production save/reopen so later independent live tests may proceed.
+          if(i===7)continue;
           break;
         }
       }

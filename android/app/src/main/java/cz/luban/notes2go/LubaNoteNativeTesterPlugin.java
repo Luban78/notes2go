@@ -103,7 +103,7 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     final String type = call.getString("type", "");
     if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
         !("word".equals(target) || "word-early".equals(target) || "word-late".equals(target) ||
-          "selection-end".equals(target) || "caret-handle".equals(target)) ||
+          "selection-end".equals(target) || "selection-start".equals(target) || "caret-handle".equals(target)) ||
         !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type))) {
       call.reject("invalid_owned_editor_request"); return;
     }
@@ -142,7 +142,8 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
             "bounds=rg.getBoundingClientRect();break;}" +
           "el=editor;" +
         "}else{el=target==='caret-handle'?document.querySelector('.ln-v2-single-caret-handle:not([hidden])'):" +
-          "document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle=\"end\"]:not([hidden])');" +
+          "document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle=\"'+" +
+          "(target==='selection-start'?'start':'end')+'\"]:not([hidden])');" +
           "bounds=el?.getBoundingClientRect();}" +
         "if(!bounds||bounds.width<=0||bounds.height<=0)return JSON.stringify({ok:false});" +
         "const x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;" +
@@ -150,8 +151,15 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "const targetOk=(target==='word'||target==='word-early'||target==='word-late')?editor.contains(hit):(hit===el||el?.contains(hit));" +
         "const er=editor.getBoundingClientRect();" +
         "const viewportOk=x>=2&&x<innerWidth-2&&y>=2&&y<innerHeight-2;" +
-        "const delta=target==='selection-end'?Math.max(-70,Math.min(70,er.right-x-25)):45;" +
-        "return JSON.stringify({ok:!!(targetOk&&viewportOk),x,y,viewport:innerWidth,delta});" +
+        // 691H: Drag towards editable text, not into blank right margin.
+        // If the selection is at the end of a line, dragging to the right can
+        // ACK while leaving selection text unchanged. Try shrinking it first.
+        "const left=Math.max(0,x-Math.max(er.left+24,8));" +
+        "const right=Math.max(0,Math.min(er.right-24,innerWidth-8)-x);" +
+        "const selection=target==='selection-end'||target==='selection-start';" +
+        "const delta=target==='selection-end'?(left>=48?-Math.min(95,left):Math.min(95,right)):" +
+          "target==='selection-start'?(right>=48?Math.min(95,right):-Math.min(95,left)):45;" +
+        "return JSON.stringify({ok:!!(targetOk&&viewportOk&&(!selection||Math.abs(delta)>=30)),x,y,viewport:innerWidth,delta});" +
       "}catch(e){return JSON.stringify({ok:false});}})()";
       try {
         web.evaluateJavascript(js, raw -> {
