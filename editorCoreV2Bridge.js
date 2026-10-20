@@ -94,6 +94,28 @@
   let v2ZacatekDotykuDvojtap = null;
   let v2PrimyDruhyTap = null;
 
+  /* 691X – media/selection bridge guard.
+   * The 691U image-vs-caret handlers call this guard on touchstart,
+   * touchend, dblclick and contextmenu. The helper itself was missing,
+   * causing ReferenceError on ordinary TEXT taps and aborting custom
+   * doubletap selection before it could establish its own handles.
+   * Reuse the single authoritative IMAGE geometry in Core V2; never
+   * classify a text tap by proximity, and never steal image buttons.
+   */
+  function jeMediaObrazekPodDotykem(event, dotyk = null) {
+    const cil = event?.target;
+    if (!(cil instanceof Element)) return false;
+    const bod = dotyk || event?.changedTouches?.[0] || event?.touches?.[0];
+    const x = Number(bod?.clientX ?? event?.clientX);
+    const y = Number(bod?.clientY ?? event?.clientY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    try {
+      return window.LubaNoteEditorV2?.jeBodNaObrazku?.(x, y, cil) === true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   /* PATCH 673G20 – selection-scroll UX: panel je během každého custom
      handle dragu tvrdě skrytý a po puštění se vrací nad skutečný tažený
      úchyt. Rychlost edge-scrollu řídí přímo Debug Hub přes sdílenou live

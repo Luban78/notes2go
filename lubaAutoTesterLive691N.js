@@ -1,4 +1,4 @@
-/* 691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
+/* 691X/691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
  * Native tests use guarded Java WebView MotionEvent (not a physical finger).
  * Crop/settings/save use actual shipped production UI and model. All failures
  * are explicit; unrelated image settings run despite native gesture failure. */
@@ -100,7 +100,7 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
     if(setupFailed){status=kind==='NATIVE'?'NATIVE_BLOCKED':'APP_BLOCKED';detail='image_setup_did_not_pass';}
     else if(i===0){await open(id);detail='Real production V2 + own LOCAL Testy note.';}
     else if(i===1){core()?.nastavPoziciOtevreni?.('start');window.getSelection()?.removeAllRanges?.();const before=blocks().length;
-      activeTestImageAlt='AUTOTEST_691W_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+      activeTestImageAlt='AUTOTEST_691N_691X_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
       assert(core()?.vlozObrazek?.({dataUrl:imageSource(),alt:activeTestImageAlt,velikost:'50',zarovnani:'stred'})===true,'core_image_insert_failed');
       assert(blocks().length>=before+1&&picture()&&image(),'insert_model_or_DOM_missing');
       await showImage();original=source();detail='Generated local PNG inserted with real Core V2 API, checked model+DOM.';
