@@ -1,4 +1,4 @@
-/* 691Z / 690Z: PRODUCTION APP visual regression. Own LOCAL Testy notes only.
+/* 691AA / 691Z / 690Z: PRODUCTION APP visual regression. Own LOCAL Testy notes only.
  * Runs actual shipped editor handlers / toolbar controls. No fake success when controls absent.
  * It does not replace native MotionEvent coverage or isolated Core unit tests.
  */
@@ -35,6 +35,7 @@ const visible=b=>!!(b&&!b.hidden&&b.isConnected&&getComputedStyle(b).display!=='
 const seed=String(Date.now()).slice(-8);
 const rootLabel='AUTOTEST_BULLET_RODIC_'+seed;
 const childLabel='AUTOTEST_BULLET_POTOMEK_'+seed;
+const deepRootLabel='AUTOTEST_BULLET_HLOUBKA0_'+seed;
 const subLabel='AUTOTEST_BULLET_VNORENY_'+seed;
 const leafLabel='AUTOTEST_BULLET_HLOUBKA2_'+seed;
 async function toolbar(id){
@@ -75,15 +76,15 @@ function keyOn(b,shift=false){
  editor.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',code:'Tab',bubbles:true,cancelable:true,shiftKey:shift}));
 }
 function nestedTree(){
- const anchor=find(childLabel), sub=find(subLabel), leaf=find(leafLabel);
+ const anchor=find(deepRootLabel), sub=find(subLabel), leaf=find(leafLabel);
  assert(anchor?.typ==='bullet'&&sub?.typ==='bullet'&&leaf?.typ==='bullet','chybi_tri_bullety_hlubky');
  const positions=[anchor,sub,leaf].map(b=>blocks().findIndex(x=>x.id===b.id));
- assert(positions[0]<positions[1]&&positions[1]<positions[2],'viceurovnove_poradi_neplatne');
+ assert(positions[0]>=0&&positions[1]===positions[0]+1&&positions[2]===positions[1]+1,'viceurovnove_polozky_nejsou_souvisle');
  assert(row(anchor)?.isConnected&&row(sub)?.isConnected&&row(leaf)?.isConnected,'vnorene_bullety_nejsou_v_DOM');
  return {anchor,sub,leaf};
 }
 function assertDepth(block,level){
- assert(block?.uroven===level,'uroven_model_neodpovida_'+level);
+ assert(block?.uroven===level,'uroven_model_neodpovida_'+level+' actual='+String(block?.uroven??'missing'));
  assert(row(block)?.dataset?.lnV2BulletUroven===String(level),'uroven_DOM_neodpovida_'+level);
 }
 function clickMarker(block){
@@ -163,33 +164,44 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
      await window.openTaskEditorById(id);await sleep(160);
      assert(document.getElementById('taskModal')?.hidden===false,'vnoreni_editor_neotevren');
      assert(document.getElementById('taskModal')?.dataset?.taskId===id,'vnoreni_spatna_poznamka');
-     assert(find(childLabel)?.typ==='bullet'&&find(childLabel)?.uroven===0,'chybi_kotva_viceurovni');
-     evidence='Testovací LOCAL poznámka znovu otevřena; starší Bullet strom zachován.';
+     assert(find(childLabel)?.typ==='bullet'&&find(childLabel)?.uroven===0,'puvodni_Bullet_strom_poskozen');
+     evidence='Testovací LOCAL poznámka znovu otevřena, původní strom zachován. Nový strom vytvoří následující krok.';
     }else if(i===9){
-     const sub=await makeBullet(subLabel);keyOn(sub,false);await sleep(150);
-     assertDepth(find(subLabel),1);
-     const leaf=await makeBullet(leafLabel);keyOn(leaf,false);await sleep(115);
-     assertDepth(find(leafLabel),1);
-     keyOn(find(leafLabel),false);await sleep(150);
+     // 691AA: vynuceni vlastniho sousedniho korene. Po re-open nemusí být
+     // posledním blokem stará Bullet kotva a produkční Tab vyžaduje sourozence.
+     const anchor=await makeBullet(deepRootLabel);assertDepth(anchor,0);
+     const sub=await makeBullet(subLabel);assertDepth(sub,0);
+     assert(blocks().findIndex(b=>b.id===sub.id)===blocks().findIndex(b=>b.id===anchor.id)+1,'novy_potomek_neni_za_korenem');
+     keyOn(sub,false);await sleep(160);assertDepth(find(subLabel),1);
+     // Core V2 po Enter z list item úrovně 1 přenáší úroveň na nový řádek.
+     // Druhý Tab zanoří z 1 na 2. 691Z mylně zkoušel Tab dvakrát od 0.
+     const leaf=await makeBullet(leafLabel);assertDepth(leaf,1);
+     assert(blocks().findIndex(b=>b.id===leaf.id)===blocks().findIndex(b=>b.id===sub.id)+1,'vnorene_dite_neni_za_rodicem');
+     keyOn(leaf,false);await sleep(165);
      const tree=nestedTree();assertDepth(tree.anchor,0);assertDepth(tree.sub,1);assertDepth(tree.leaf,2);
-     evidence='Dvě skutečná zanoření Tab, tři úrovně 0/1/2 ověřeny v produkčním modelu i DOM.';
+     evidence='Vlastní souvislý strom: Bullet 0, skutečný Tab 0→1, Enter zdědil 1, skutečný Tab 1→2; ověřeno modelem i DOM.';
     }else if(i===10){
      const tree=nestedTree();assertDepth(tree.leaf,2);
      clickMarker(tree.sub);await sleep(125);
      assert(find(subLabel)?.sbaleno===true,'vnorena_sipka_nezbalila');
      assert(row(find(subLabel))?.querySelector('[data-v2-list-toggle]'),'vnorene_sbaleni_bez_poctu');
-     clickMarker(find(childLabel));await sleep(140);
-     assert(find(childLabel)?.sbaleno===true,'rodicovska_sipka_nezbalila');
-     assert(row(find(childLabel))?.querySelector('[data-v2-list-toggle]'),'rodicovske_sbaleni_bez_poctu');
+     clickMarker(find(deepRootLabel));await sleep(140);
+     assert(find(deepRootLabel)?.sbaleno===true,'rodicovska_sipka_nezbalila');
+     assert(row(find(deepRootLabel))?.querySelector('[data-v2-list-toggle]'),'rodicovske_sbaleni_bez_poctu');
      evidence='Dvě různé vnořené větve sbaleny skutečnými šipkami; obě zaznamenány v modelu.';
     }else if(i===11){
-     assert(find(childLabel)?.sbaleno===true&&find(subLabel)?.sbaleno===true,'pred_rozbalenim_nejsou_dve_sbalene_vetve');
-     clickBadge(find(childLabel));await sleep(135);
-     assert(find(childLabel)?.sbaleno===false,'rodicovsky_badge_nerozbalil');
+     assert(find(deepRootLabel)?.sbaleno===true&&find(subLabel)?.sbaleno===true,'pred_rozbalenim_nejsou_dve_sbalene_vetve');
+     clickBadge(find(deepRootLabel));await sleep(135);
+     assert(find(deepRootLabel)?.sbaleno===false,'rodicovsky_badge_nerozbalil');
+     // Produkční badge kořene rozbalí celý podstrom (PATCH 663D), tedy i sub.
+     // Chceme-li ověřit druhý badge, musíme sub znovu samostatně sbalit.
+     assert(find(subLabel)?.sbaleno===false,'root_badge_nerozbalil_vnoreni');
+     clickMarker(find(subLabel));await sleep(130);
+     assert(find(subLabel)?.sbaleno===true,'nelze_znovu_sbalit_vnorenou_vetev');
      clickBadge(find(subLabel));await sleep(135);
      assert(find(subLabel)?.sbaleno===false,'vnoreny_badge_nerozbalil');
      assertDepth(nestedTree().leaf,2);
-     evidence='Rozbalení obou úrovní přes produkční tlačítka s počtem dětí; DOM i model drží hloubku 2.';
+     evidence='Root badge rozbalil celý podstrom, podvětev byla znovu sbalena a rozbalena vlastním badge; DOM i model drží hloubku 2.';
     }else if(i===12){
      const {leaf}=nestedTree();assertDepth(leaf,2);
      keyOn(leaf,true);await sleep(140);assertDepth(find(leafLabel),1);
