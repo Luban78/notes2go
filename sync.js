@@ -4776,7 +4776,8 @@ async function spustExistingClientReconcileV2(
     const maBlokujiciLokalniDluh = targetConfirmRecovery
       ? (
           cekajiciCilenePrivateV2.size > 0 ||
-          nactiCekajiciSmazani().length > 0 ||
+          nactiNeodeslanaCekajiciSmazani().length > 0 ||
+          nactiBlokovanaCekajiciSmazani().length > 0 ||
           aktivniKonfliktySyncu.size > 0
         )
       : (
@@ -5281,7 +5282,8 @@ async function synchronizujVzdalenePrivateDeltaV2(
   const maBlokujiciLokalniDluh = jeTargetConfirmRecovery
     ? (
         cekajiciCilenePrivateV2.size > 0 ||
-        nactiCekajiciSmazani().length > 0 ||
+        nactiNeodeslanaCekajiciSmazani().length > 0 ||
+        nactiBlokovanaCekajiciSmazani().length > 0 ||
         aktivniKonfliktySyncu.size > 0
       )
     : (
@@ -8685,6 +8687,40 @@ function maCilenyPrivateV2Dluh() {
   );
 }
 
+/* 691R – server potvrzeny tombstone zustava v persistentni fronte az
+ * do uspesneho potvrzeni remote delta / reconcile. Odstranovat ho driv
+ * nesmime: po restartu bychom ztratili moznost bezpecne navazat.
+ * Zde se cisti VYHRADNE uploadedRevision a jen kdyz neni zadny
+ * neodeslany nebo blokovany delete. Normalni confirm cestu nemenime. */
+function dokonceneSmazaniPoPotvrzeni691R(zdroj) {
+  if (
+    nactiNeodeslanaCekajiciSmazani().length > 0 ||
+    nactiBlokovanaCekajiciSmazani().length > 0
+  ) {
+    return false;
+  }
+
+  const zaznamy = nactiCekajiciSmazani();
+  const odeslane = zaznamy.filter(
+    maCekajiciSmazaniPotvrzenouServerovouRevizi
+  );
+
+  if (odeslane.length > 0) {
+    ulozCekajiciSmazani(
+      zaznamy.filter(
+        (zaznam) =>
+          !maCekajiciSmazaniPotvrzenouServerovouRevizi(zaznam)
+      )
+    );
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `691R TARGET DELETE CONFIRMED | via=${zdroj} | removed=${odeslane.length} | remaining=${nactiCekajiciSmazani().length}`
+    );
+  }
+
+  return true;
+}
+
 async function zachranTargetConfirmPresExistingReconcileV2(
   userId,
   duvod = "unknown"
@@ -8695,7 +8731,8 @@ async function zachranTargetConfirmPresExistingReconcileV2(
 
   if (
     cekajiciCilenePrivateV2.size > 0 ||
-    nactiCekajiciSmazani().length > 0 ||
+    nactiNeodeslanaCekajiciSmazani().length > 0 ||
+    nactiBlokovanaCekajiciSmazani().length > 0 ||
     aktivniKonfliktySyncu.size > 0
   ) {
     return false;
@@ -8728,7 +8765,8 @@ async function zachranTargetConfirmPresExistingReconcileV2(
     }
   );
 
-  if (obnoveno !== true) {
+  if (obnoveno !== true ||
+      !dokonceneSmazaniPoPotvrzeni691R("reconcile")) {
     return false;
   }
 
@@ -8840,7 +8878,8 @@ async function potvrdCilenePrivateZapisyV2(userId) {
             { targetConfirmRecovery: true }
           );
 
-        if (deltaPotvrzena === true) {
+        if (deltaPotvrzena === true &&
+            dokonceneSmazaniPoPotvrzeni691R("remote-delta")) {
           potvrzeneCileneRevizeV2.clear();
           cileneV2CekaNaFastPotvrzeni = false;
           synchronizaceOdlozenaKvuliLokalniZmene = false;
