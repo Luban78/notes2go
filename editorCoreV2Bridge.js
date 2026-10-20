@@ -2622,6 +2622,7 @@
   document.addEventListener("selectstart", blokujV2SoubeznyNativeSelectstart, { capture: true, passive: false });
 
   function zrusV2OznaceniKlikemMimo(event) {
+    if (jeMediaObrazekPodDotykem(event)) return;
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     if (event.target.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz")) return;
     if (jeV2MoveInterakce(event) || v2SelectionScroll?.handleDrag) return;
@@ -4124,6 +4125,12 @@
     if (!jeAndroidApkSelectionScroll() || !aktivni || event.touches?.length !== 1) return;
     v2PrimyDruhyTap = null;
     const dotyk = event.touches[0];
+    if (jeMediaObrazekPodDotykem(event,dotyk)) {
+      v2ZacatekDotykuDvojtap=null;
+      v2PrimyDruhyTap=null;
+      v2PosledniTapSelection=null;
+      return;
+    }
     const editor = core()?.ziskejEditorElement?.();
     const cil = event.target;
     /* 683P – 683O nastavuje contenteditable=false na CELÉM editoru.
@@ -4155,6 +4162,12 @@
     ++v2MarkerGenerace;
     v2MarkerPotlacNativeDo = 0;
     v2MarkerDotyk = null;
+    if (aktivni && jeMediaObrazekPodDotykem(event, event.touches?.[0])) {
+      v2PosledniTapSelection=null;
+      v2ZacatekDotykuDvojtap=null;
+      v2PrimyDruhyTap=null;
+      return;
+    }
     if (aktivni && jeV2SkutecnaSipka(event) && event.touches?.length === 1) {
       const dotyk = event.touches[0];
       v2MarkerDotyk = {
@@ -4355,6 +4368,10 @@
   }, { passive: false, capture: true });
 
   document.addEventListener("touchend", (event) => {
+    if (jeMediaObrazekPodDotykem(event,event.changedTouches?.[0])) {
+      v2MarkerDotyk=null;
+      return;
+    }
     const marker = v2MarkerDotyk;
     v2MarkerDotyk = null;
     if (marker && aktivni && jeV2SkutecnaSipka(event)) {
@@ -4583,6 +4600,12 @@
   document.addEventListener("touchend", (event) => {
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("TOUCHEND", `target=${event.target?.className || event.target?.tagName || "-"}`);
+    if (jeMediaObrazekPodDotykem(event,event.changedTouches?.[0])) {
+      v2ZacatekDotykuDvojtap=null;
+      v2PosledniTapSelection=null;
+      v2PrimyDruhyTap=null;
+      return;
+    }
     if (jeV2MoveInterakce(event)) {
       potlacSelectionMenuKvuliMove();
       return;
@@ -4647,6 +4670,7 @@
   }, { passive: false, capture: true });
 
   document.addEventListener("dblclick", (event) => {
+    if (jeMediaObrazekPodDotykem(event)) return;
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("DBLCLICK", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event)) {
@@ -4672,6 +4696,7 @@
   }, true);
 
   document.addEventListener("contextmenu", (event) => {
+    if (jeMediaObrazekPodDotykem(event)) return;
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("CONTEXTMENU", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
     if (jeV2MoveInterakce(event, true)) {

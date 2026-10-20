@@ -660,37 +660,33 @@
   const DVOJTAP_V2_OBRAZKU_VZDALENOST = 50;
   let posledniTapV2Obrazku = null;
   let odemkniTlacitkaObrazkuTimer = null;
-  /* 691N: Obrazek nikdy neni textovy cil. Dotyk se nesmi zmenit v
-     systemovy selection, vlastni caret, kontextove menu ani klavesnici. */
+  /* 691U – PHOTO HIT TEST / TOUCH OWNERSHIP
+     V Android WebView se obrazek muze vizualne kreslit nad editovatelnym
+     DIV, ktery ale vyhraje event.target. Pro rozhodnuti, zda je skutecny
+     bod na obrazku, proto overujeme realny DOM rect IMG. Ne podle
+     event.target, a nikdy jen podle casu predchoziho dvojtapu. */
   let dotykObrazkuV2 = null;
   let potlacSyntetickyKlikObrazkuDo = 0;
-  /* 691T – první tap může posunout obsah (focus/klávesnice) ještě
-     před druhým tapem. WebView pak hlásí DIV místo IMG, a původní
-     listener v editoru druhý tap ignoruje. Zachytíme jen pokračování
-     GESTA již zahájeného na IMG; běžný dvojtap textu zůstává beze změny. */
-  let druhyTapObrazkuV2 = null;
   let potlacTextovyKlikObrazkuV2 = null;
 
-  function najdiNavazujiciTapNaObrazekV2(target, x, y) {
-    const prvni = posledniTapV2Obrazku;
-    if (!prvni || !editor?.contains?.(target) ||
-        performance.now() - prvni.cas > DVOJTAP_V2_OBRAZKU_MS ||
-        Math.hypot(x - prvni.x, y - prvni.y) > DVOJTAP_V2_OBRAZKU_VZDALENOST ||
-        target.closest?.('button, input, textarea, select, a[href], [data-v2-list-marker], [data-v2-list-toggle]')) {
-      return null;
+  function najdiV2ObrazekPodBodem(x, y, target) {
+    const cil = target?.nodeType === 3 ? target.parentElement : target;
+    if (!editor || !cil || !editor.contains(cil) ||
+        !Number.isFinite(x) || !Number.isFinite(y) ||
+        cil.closest?.('button, input, textarea, select, a[href], [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check]')) return null;
+    const prvek = cil.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+    const kandidati = prvek ? [prvek] : editor.querySelectorAll('.ln-v2-obrazek[data-ln-v2-obrazek]');
+    for (const figure of kandidati) {
+      const image = figure.querySelector(':scope > img');
+      if (!image?.isConnected) continue;
+      const r = image.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      /* Uplatni se jen uvnitr skutecne viditelne plochy fotografie.
+         V okoli media neprebirame obycejny textovy tap ani scroll. */
+      if (x >= r.left - 1 && x <= r.right + 1 &&
+          y >= r.top - 1 && y <= r.bottom + 1) return {figure, image};
     }
-    const zasazenyObrazek = target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
-    if (zasazenyObrazek && zasazenyObrazek.dataset.lnV2Obrazek !== prvni.id) return null;
-    const figure = Array.from(editor.querySelectorAll('.ln-v2-obrazek[data-ln-v2-obrazek]'))
-      .find(el => el.dataset.lnV2Obrazek === prvni.id);
-    const image = figure?.querySelector?.(':scope > img');
-    if (!figure?.isConnected || !image?.isConnected) return null;
-    const rect = image.getBoundingClientRect();
-    /* Tolerujeme malý posun obrázku po prvním tapu, nikoli gesto
-       nad vzdáleným textem nebo jiným objektem. */
-    if (x < rect.left - 28 || x > rect.right + 28 ||
-        y < rect.top - 55 || y > rect.bottom + 28) return null;
-    return { figure, image };
+    return null;
   }
 
   function predTapemNaV2Obrazek(skrytKlavesnici = true) {
@@ -715,7 +711,7 @@
       nastavVybranyV2Obrazek('');
       window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(image);
       window.LubaNoteStartupDiag?.zapis?.('IMAGE',
-        `691T FULLSCREEN ${document.querySelector('.lubaNoteImagePreview') ? 'OPEN' : 'NOT_OPEN'} | id=${id}`);
+        `691U FULLSCREEN ${document.querySelector('.lubaNoteImagePreview') ? 'OPEN' : 'NOT_OPEN'} | id=${id}`);
       return true;
     }
     posledniTapV2Obrazku = { id, cas: ted, x, y };
@@ -9625,6 +9621,7 @@
       v2VlastniTapCaret = null;
       if (event.touches?.length !== 1 || !jeV2VlastniTextovyTap(event.target)) return;
       const t = event.touches[0];
+      if (najdiV2ObrazekPodBodem(t.clientX,t.clientY,event.target)) return;
       v2VlastniTapCaret = {
         id: t.identifier, x: t.clientX, y: t.clientY, cas: performance.now(),
         scroll: Number(editor.scrollTop || 0)
@@ -9636,6 +9633,7 @@
       if (!pred || !jeV2VlastniTextovyTap(event.target)) return;
       if (editor.classList.contains('ln-v2-selection-custom-active')) return;
       const t = Array.from(event.changedTouches || []).find(p => p.identifier === pred.id);
+      if (t && najdiV2ObrazekPodBodem(t.clientX,t.clientY,event.target)) return;
       if (!t || performance.now() - pred.cas > 330 ||
           Math.hypot(t.clientX - pred.x, t.clientY - pred.y) > 12 ||
           Math.abs(Number(editor.scrollTop || 0) - pred.scroll) > 3 ||
@@ -9777,56 +9775,80 @@
       );
     }, { passive: false });
 
-    /* 691T: Druhý tap po IMG může v Android WebView dopadnout na DIV,
-       protože první tap změnil polohu/focus. Před běžným editorem proto
-       jen druhý tap zachytíme v document capture. Nepřepisujeme model,
-       neměníme gesta seznamů a nikdy tím nespouštíme textový caret. */
+    /* 691U – vsechny kratke image tapy maji jedinou koordinatovou cestu.
+       Posluchac je na document capture a plati i kdyz Android misto IMG
+       vrati DIV.ln-v2-odstavec. Bridge proto stejnym hit-testem vylucuje
+       foto z textoveho selection (viz editorCoreV2Bridge.js). */
     poslouchej(document, 'pointerdown', (event) => {
-      if (event.pointerType !== 'touch' || !editor) return;
-      if (najdiNavazujiciTapNaObrazekV2(event.target, event.clientX, event.clientY)) {
-        if (event.cancelable) event.preventDefault();
-      }
+      if (event.pointerType !== 'touch') return;
+      if (!najdiV2ObrazekPodBodem(event.clientX, event.clientY, event.target)) return;
+      if (event.cancelable) event.preventDefault();
+      predTapemNaV2Obrazek(false);
     }, {capture:true,passive:false});
+
     poslouchej(document, 'touchstart', (event) => {
-      if (!editor || event.touches?.length !== 1 || event.changedTouches?.length !== 1) return;
-      const t = event.changedTouches[0];
-      const kandidat = najdiNavazujiciTapNaObrazekV2(event.target, t.clientX, t.clientY);
-      if (!kandidat) return;
-      druhyTapObrazkuV2 = { ...kandidat, touchId:t.identifier,
-        x:t.clientX, y:t.clientY, cas:performance.now() };
-      if (event.cancelable) event.preventDefault();
-      event.stopImmediatePropagation();
-      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
-        `691T SECOND TAP CAPTURED | target=${event.target.tagName || '?'} | x=${Math.round(t.clientX)} y=${Math.round(t.clientY)}`);
-    }, {capture:true,passive:false});
-    poslouchej(document, 'touchend', (event) => {
-      const druhy = druhyTapObrazkuV2;
-      if (!druhy) return;
-      if (!Array.from(event.changedTouches || []).some(t => t.identifier === druhy.touchId)) return;
-      druhyTapObrazkuV2 = null;
-      if (event.cancelable) event.preventDefault();
-      event.stopImmediatePropagation();
-      const t = Array.from(event.changedTouches).find(t => t.identifier === druhy.touchId);
-      if (!t || performance.now()-druhy.cas > 420 ||
-          Math.hypot(t.clientX-druhy.x,t.clientY-druhy.y)>18) return;
       dotykObrazkuV2 = null;
-      potlacSyntetickyKlikObrazkuDo = performance.now() + 520;
-      potlacTextovyKlikObrazkuV2 = {x:t.clientX,y:t.clientY,do:performance.now()+520};
-      const otevreno = provedV2TapNaObrazek(druhy.figure,druhy.image,t.clientX,t.clientY);
-      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
-        `691T SECOND TAP RESULT | fullscreen=${otevreno ? 'Y' : 'N'}`);
+      if (event.touches?.length !== 1 || event.changedTouches?.length !== 1) return;
+      const t = event.changedTouches[0];
+      const kandidat = najdiV2ObrazekPodBodem(t.clientX,t.clientY,event.target);
+      if (!kandidat) return;
+      dotykObrazkuV2 = { ...kandidat, touchId:t.identifier,
+        x:t.clientX, y:t.clientY, cas:performance.now(),
+        scrollTop:Number(editor.scrollTop || 0),
+        modalScrollTop:Number(editor.closest('.modalContent')?.scrollTop || 0),
+        puvodniTarget:event.target?.tagName || '?' };
+      /* Kdyz IMG prekryje editovatelny DIV, HTML default se nesmi zmenit
+         v textovy caret. U primo zasazeneho obrazku zustava prvni tap
+         scrollovatelny; pro druhy tap se vypne nativni textovy doubletap. */
+      const zDiv = !event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+      const prvni = posledniTapV2Obrazku;
+      const druhy = !!(prvni && prvni.id === kandidat.figure.dataset.lnV2Obrazek &&
+        performance.now()-prvni.cas <= DVOJTAP_V2_OBRAZKU_MS &&
+        Math.hypot(t.clientX-prvni.x,t.clientY-prvni.y) <= DVOJTAP_V2_OBRAZKU_VZDALENOST);
+      if ((zDiv || druhy) && event.cancelable) event.preventDefault();
+      /* DIV prekrývajici IMG musi dovolit i image MOVE long-press. Pro
+         skutecny IMG tento kandidát již zakládá standardni listener. */
+      if (zDiv) pripravV2DlouhyStisk('touch',kandidat.image,t.clientX,t.clientY,null,t.identifier);
     }, {capture:true,passive:false});
-    poslouchej(document, 'touchcancel', (event) => {
-      if (druhyTapObrazkuV2 && Array.from(event.changedTouches || [])
-          .some(t => t.identifier === druhyTapObrazkuV2.touchId)) {
-        druhyTapObrazkuV2 = null;
-      }
+
+    poslouchej(document, 'touchmove', (event) => {
+      const start=dotykObrazkuV2;
+      if (!start) return;
+      if (event.touches?.length !== 1) { dotykObrazkuV2=null;return; }
+      const t=Array.from(event.touches).find(el=>el.identifier===start.touchId);
+      if (!t || Math.hypot(t.clientX-start.x,t.clientY-start.y)>16) dotykObrazkuV2=null;
     }, {capture:true,passive:true});
+
+    poslouchej(document, 'touchend', (event) => {
+      const start=dotykObrazkuV2;
+      if (!start) return;
+      const t=Array.from(event.changedTouches || []).find(el=>el.identifier===start.touchId);
+      if (!t) return;
+      dotykObrazkuV2=null;
+      if (event.changedTouches?.length!==1 || event.touches?.length>0 ||
+          performance.now()-start.cas>420 ||
+          Math.hypot(t.clientX-start.x,t.clientY-start.y)>16 ||
+          Math.abs(Number(editor.scrollTop||0)-start.scrollTop)>3 ||
+          Math.abs(Number(editor.closest('.modalContent')?.scrollTop||0)-start.modalScrollTop)>3 ||
+          v2DragObrazku?.pripraven || !start.figure?.isConnected || !start.image?.isConnected) return;
+      if (event.cancelable) event.preventDefault();
+      potlacSyntetickyKlikObrazkuDo=performance.now()+520;
+      potlacTextovyKlikObrazkuV2={x:t.clientX,y:t.clientY,do:performance.now()+520};
+      const fullscreen=provedV2TapNaObrazek(start.figure,start.image,t.clientX,t.clientY);
+      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
+        `691U PHOTO TAP | target=${start.puvodniTarget} | action=${fullscreen ? 'fullscreen' : 'select'} | id=${start.figure.dataset.lnV2Obrazek}`);
+    }, {capture:true,passive:false});
+
+    poslouchej(document, 'touchcancel', (event) => {
+      if (dotykObrazkuV2 && Array.from(event.changedTouches||[])
+          .some(t=>t.identifier===dotykObrazkuV2.touchId)) dotykObrazkuV2=null;
+    }, {capture:true,passive:true});
+
     poslouchej(document, 'click', (event) => {
-      const blok = potlacTextovyKlikObrazkuV2;
-      if (!blok || performance.now() > blok.do) { potlacTextovyKlikObrazkuV2=null;return; }
-      if (!editor?.contains?.(event.target) || event.target.closest?.('button')) return;
-      if (Math.hypot(event.clientX-blok.x,event.clientY-blok.y) > 55) return;
+      const blok=potlacTextovyKlikObrazkuV2;
+      if (!blok || performance.now()>blok.do) {potlacTextovyKlikObrazkuV2=null;return;}
+      if (!editor?.contains(event.target) || event.target.closest?.('button')) return;
+      if (Math.hypot(event.clientX-blok.x,event.clientY-blok.y)>35) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       potlacTextovyKlikObrazkuV2=null;
@@ -9834,12 +9856,7 @@
 
     /* 691N: Potlaceni implicitni textove fokusace driv nez browser
        zpracuje dotyk na figure, ale bez ruseni scrollu a long-press MOVE. */
-    poslouchej(editor, 'pointerdown', (event) => {
-      const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
-      if (!figure || !editor.contains(figure) || event.target.closest?.('button')) return;
-      if (event.cancelable) event.preventDefault();
-      predTapemNaV2Obrazek(false);
-    }, {capture:true,passive:false});
+    /* Mouse/pen image focus still blocked (Android touch handled above). */
     poslouchej(editor, 'mousedown', (event) => {
       const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
       if (figure && !event.target.closest?.('button') && event.cancelable) event.preventDefault();
@@ -9847,37 +9864,6 @@
     poslouchej(editor, 'selectstart', (event) => {
       if (event.target.closest?.('.ln-v2-obrazek') && event.cancelable) event.preventDefault();
     }, {capture:true});
-    poslouchej(editor, 'touchstart', (event) => {
-      dotykObrazkuV2 = null;
-      const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
-      if (event.touches?.length !== 1 || !figure || event.target.closest?.('button')) return;
-      const t = event.touches[0];
-      dotykObrazkuV2 = {id:t.identifier,figure,x:t.clientX,y:t.clientY,cas:performance.now()};
-      /* 691S: Druhy tap na stejnem obrazku je gesto media, nikoli
-         androidi textovy dvojtap. Prvni touchstart nechavame nativnimu
-         scrollu; preventDefault se tyka jen potvrzeneho druheho tapu. */
-      const prvni = posledniTapV2Obrazku;
-      if (prvni && prvni.id === (figure.dataset.lnV2Obrazek || '') &&
-          performance.now() - prvni.cas <= DVOJTAP_V2_OBRAZKU_MS &&
-          Math.hypot(t.clientX - prvni.x, t.clientY - prvni.y) <= DVOJTAP_V2_OBRAZKU_VZDALENOST) {
-        if (event.cancelable) event.preventDefault();
-      }
-    }, {capture:true,passive:false});
-    poslouchej(editor, 'touchend', (event) => {
-      const start=dotykObrazkuV2; dotykObrazkuV2=null;
-      if (!start || event.changedTouches?.length !== 1) return;
-      const t=event.changedTouches[0];
-      if (t.identifier !== start.id || performance.now()-start.cas > 420 ||
-          Math.hypot(t.clientX-start.x,t.clientY-start.y)>14 ||
-          !start.figure?.isConnected || v2DragObrazku?.pripraven) return;
-      const image=start.figure.querySelector(':scope > img');
-      if (!image) return;
-      // Spolehlive zpracovani i pokud preventDefault v pointerdown zrusi click.
-      if (event.cancelable) event.preventDefault();
-      potlacSyntetickyKlikObrazkuDo=performance.now()+520;
-      provedV2TapNaObrazek(start.figure,image,t.clientX,t.clientY);
-    }, {passive:false});
-    poslouchej(editor, 'touchcancel', ()=>{dotykObrazkuV2=null;}, {passive:true});
 
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
@@ -10128,6 +10114,16 @@
       }
 
       const figure = event.target.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
+      if (!figure) {
+        const mediaPodBodem=najdiV2ObrazekPodBodem(event.clientX,event.clientY,event.target);
+        if (mediaPodBodem) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (performance.now() >= potlacSyntetickyKlikObrazkuDo)
+            provedV2TapNaObrazek(mediaPodBodem.figure,mediaPodBodem.image,event.clientX,event.clientY,event.detail);
+          return;
+        }
+      }
       if (!figure || !editor.contains(figure)) {
         posledniTapV2Obrazku = null;
         odemkniTlacitkaObrazku();
@@ -10434,6 +10430,7 @@
     jeImeKompoziceAktivni: () => Boolean(v2ImeKompozice?.aktivni),
     provedPrikazVlastniKlavesnice,
     ziskejKontextVlastniKlavesnice,
-    ziskejEditorElement: () => editor
+    ziskejEditorElement: () => editor,
+    jeBodNaObrazku: (x,y,cil) => Boolean(najdiV2ObrazekPodBodem(x,y,cil))
   });
 })();
