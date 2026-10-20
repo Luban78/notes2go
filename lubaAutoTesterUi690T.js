@@ -1,4 +1,4 @@
-/* 691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 691W/691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -224,20 +224,44 @@
           }else if(i===6){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');
-            const ack=await plugin.gestureOwnedEditor({id,target:'word',type:'doubletap'});
-            assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_editor_doubletap_no_ack');
-            await wait(440);
             const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
             const ownedHandle=(side)=>document.querySelector('.ln-v2-selection-handle-custom'+
               '[data-ln-v2-selection-handle="'+side+'"]:not([hidden])');
-            assert(editor?.classList.contains('ln-v2-selection-custom-active')===true,
-              'custom_selection_engine_not_activated');
-            assert(ownedHandle('start')&&ownedHandle('end'),'own_selection_handles_not_visible');
-            assert(document.getElementById('selectionMenu')?.dataset?.lnV2Owner==='1',
-              'selection_menu_not_owned_by_lubanote');
-            const selected=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
-            ownSelectionBefore=typeof selected==='string'?selected:String(selected?.text||'');
-            assert(ownSelectionBefore.length>0,'own_selection_has_no_model_text');
+            const capture=()=>{
+              const selected=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
+              const text=typeof selected==='string'?selected:String(selected?.text||'');
+              return {text,active:editor?.classList.contains('ln-v2-selection-custom-active')===true,
+                handles:!!(ownedHandle('start')&&ownedHandle('end')),
+                menu:document.getElementById('selectionMenu')?.dataset?.lnV2Owner==='1'};
+            };
+            const attempts=[];let result=null;
+            // 691W: after a prior caret-handle swipe the text marker can be
+            // outside the actual visible content. Recenter the exact owned
+            // marker and use at most ONE second native doubletap if needed.
+            for(const target of ['word','word-early']){
+              if(!alive())throw Error('selection_test_cancelled');
+              const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+              let node=null,item;
+              while((item=walker.nextNode())){
+                if(String(item.nodeValue||'').includes('Zapis_z_viditelneho_editoru_690T')){node=item;break;}
+              }
+              assert(node,'selection_test_marker_missing');
+              node.parentElement?.closest?.('.ln-v2-odstavec')?.scrollIntoView?.(
+                {block:'center',inline:'nearest',behavior:'instant'});
+              await wait(180);
+              const ack=await plugin.gestureOwnedEditor({id,target,type:'doubletap'});
+              assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_editor_doubletap_no_ack_'+target);
+              await wait(440);
+              result=capture();attempts.push(target+':'+
+                [result.active,result.handles,result.menu,result.text.length].join('/'));
+              if(result.active&&result.handles&&result.menu&&result.text.length>0)break;
+            }
+            assert(result?.active===true,'custom_selection_engine_not_activated: '+attempts.join(', ')+
+              '; '+ownDiagnostika(window.LubaNoteEditorV2,window.LubaNoteKeyboard,editor));
+            assert(result.handles,'own_selection_handles_not_visible: '+attempts.join(', '));
+            assert(result.menu,'selection_menu_not_owned_by_lubanote: '+attempts.join(', '));
+            ownSelectionBefore=result.text;
+            assert(ownSelectionBefore.length>0,'own_selection_has_no_model_text: '+attempts.join(', '));
           }else if(i===7){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');

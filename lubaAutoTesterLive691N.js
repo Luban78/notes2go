@@ -1,4 +1,4 @@
-/* 691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
+/* 691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
  * Native tests use guarded Java WebView MotionEvent (not a physical finger).
  * Crop/settings/save use actual shipped production UI and model. All failures
  * are explicit; unrelated image settings run despite native gesture failure. */
@@ -27,7 +27,9 @@ const assert=(yes,reason)=>{if(!yes)throw Error(reason);};
 const el=id=>document.getElementById(id);
 const core=()=>window.LubaNoteEditorV2;
 const blocks=()=>core()?.ziskejModel?.()?.bloky||[];
-const picture=()=>blocks().find(b=>b?.typ==='obrazek'&&String(b.alt||'').startsWith('AUTOTEST_691N'));
+let activeTestImageAlt='';
+const picture=()=>blocks().find(b=>b?.typ==='obrazek'&&
+ (activeTestImageAlt?String(b.alt||'')===activeTestImageAlt:String(b.alt||'').startsWith('AUTOTEST_691N')));
 const figure=()=>{const b=picture();return b?core()?.ziskejEditorElement?.()?.querySelector('.ln-v2-obrazek[data-ln-v2-obrazek="'+CSS.escape(b.id)+'"]'):null;};
 const image=()=>figure()?.querySelector(':scope > img');
 const preview=()=>document.querySelector('.lubaNoteImagePreview[aria-modal="true"]');
@@ -84,7 +86,7 @@ function zoom(){const str=String(preview()?.querySelector('img')?.style?.transfo
 function transform(){return String(preview()?.querySelector('img')?.style?.transform||'');}
 async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=()=>{}){
  if(busy)return CASES.map(([key,name,kind])=>({id:key,name,kind:KIND,status:kind==='NATIVE'?'NATIVE_BLOCKED':'APP_BLOCKED',ms:0,detail:'image_tester_busy'}));
- busy=true;const out=[];let setupFailed=false,hasPreview=false,original='',cropped='';
+ busy=true;activeTestImageAlt='';const out=[];let setupFailed=false,hasPreview=false,original='',cropped='';
  try{
   assert(window.LubaNoteAdminTools?.isAllowed?.()===true,'admin_not_authorized');
   assert(owned(id),'not_own_LOCAL_Testy_note');
@@ -97,8 +99,9 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
    try{
     if(setupFailed){status=kind==='NATIVE'?'NATIVE_BLOCKED':'APP_BLOCKED';detail='image_setup_did_not_pass';}
     else if(i===0){await open(id);detail='Real production V2 + own LOCAL Testy note.';}
-    else if(i===1){core()?.nastavPoziciOtevreni?.('end');window.getSelection()?.removeAllRanges?.();const before=blocks().length;
-      assert(core()?.vlozObrazek?.({dataUrl:imageSource(),alt:'AUTOTEST_691N_'+Date.now(),velikost:'50',zarovnani:'stred'})===true,'core_image_insert_failed');
+    else if(i===1){core()?.nastavPoziciOtevreni?.('start');window.getSelection()?.removeAllRanges?.();const before=blocks().length;
+      activeTestImageAlt='AUTOTEST_691W_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+      assert(core()?.vlozObrazek?.({dataUrl:imageSource(),alt:activeTestImageAlt,velikost:'50',zarovnani:'stred'})===true,'core_image_insert_failed');
       assert(blocks().length>=before+1&&picture()&&image(),'insert_model_or_DOM_missing');
       await showImage();original=source();detail='Generated local PNG inserted with real Core V2 API, checked model+DOM.';
     }
@@ -158,13 +161,32 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
       assert(core()?.undo?.()===true,'image_delete_last_undo_failed');assert(picture()?.id===idpic,'image_restoration_failed');
       detail='Delete/Undo/Redo/Undo on generated image; image stays for review.';}
     else if(i===14){const b=picture();assert(b&&image(),'image_missing_before_save');
-      const snapshot={id:b.id,src:b.zdroj,size:b.velikost,align:b.zarovnani};
+      const snapshot={alt:b.alt,src:b.zdroj,size:b.velikost,align:b.zarovnani};
       const textBefore=blocks().filter(x=>x.typ!=='obrazek').length;
-      await save();await open(id);const after=picture();
-      assert(after&&image()&&after.id===snapshot.id&&after.zdroj===snapshot.src&&
-        after.velikost===snapshot.size&&after.zarovnani===snapshot.align,'image_lost_or_changed_after_reopen');
+      await save();
+      // Core V2 stores HTML, not its transient generated block id. Verify
+      // persisted bytes + settings via the real saved note BEFORE reopening.
+      const saved=window.loadTask?.().find(n=>n?.id===id);
+      assert(saved?.storageScope==='local','saved_LOCAL_note_not_found');
+      const template=document.createElement('template');
+      template.innerHTML=String(saved.richContent||'');
+      const persisted=[...template.content.querySelectorAll('figure img')]
+        .find(img=>img.getAttribute('alt')===snapshot.alt);
+      assert(persisted,'image_absent_from_saved_HTML');
+      const savedFigure=persisted.closest('figure');
+      assert(persisted.getAttribute('src')===snapshot.src,'image_source_changed_in_saved_HTML');
+      assert(savedFigure?.dataset?.velikost===snapshot.size,'image_size_changed_in_saved_HTML');
+      assert(savedFigure?.dataset?.zarovnani===snapshot.align,'image_align_changed_in_saved_HTML');
+      await open(id);const after=picture();
+      assert(after&&image(),'image_missing_after_reopen');
+      assert(after.alt===snapshot.alt,'image_alt_changed_after_reopen');
+      assert(after.zdroj===snapshot.src,'image_source_changed_after_reopen');
+      assert(after.velikost===snapshot.size,'image_size_changed_after_reopen');
+      assert(after.zarovnani===snapshot.align,'image_align_changed_after_reopen');
+      // Deliberately DO NOT compare after.id: importing saved HTML creates
+      // a fresh internal image id. Equal IDs are not a persistence contract.
       assert(blocks().filter(x=>x.typ!=='obrazek').length>=textBefore,'neighbor_text_lost_after_image_save');
-      await save();detail='Image bytes/size/position and neighboring text persisted after production save/reopen.';}
+      await save();detail='Stored HTML and reopened Core V2 preserve image pixels, size, alignment, alt and neighboring text. Temporary block IDs are regenerated.';}
    }catch(e){status=kind==='NATIVE'?'NATIVE_FAIL':'APP_FAIL';detail=String(e?.message||e).slice(0,175);
      if(i<2)setupFailed=true;
      if(i===2&&detail==='native_image_gesture_not_available'){status='NATIVE_BLOCKED';}
