@@ -1251,6 +1251,22 @@ async function provedBezpecnyZapisPoznamky({
     );
 
   if (error) {
+    /* 691O – pouze čtecí diagnostika PostgREST/SQL chyby.
+       Nezasahuje do fronty smazání ani do návratových hodnot RPC.
+       Nikdy nevypisovat p_data, Auth tokeny ani obsah poznámky. */
+    try {
+      const kod = String(error.code || "unknown").slice(0, 36);
+      const stav = String(error.status ?? error.statusCode ?? "?").slice(0, 12);
+      const zprava = String(error.message || "unknown")
+        .replace(/\s+/g, " ").slice(0, 220);
+      window.LubaNoteStartupDiag?.zapis?.(
+        "SYNC-RPC",
+        `SAVE_NOTE_SAFE ERROR | delete=${deleteNote === true ? "Y" : "N"} | code=${kod} | http=${stav} | message=${zprava}`
+      );
+    } catch (_diagnosticError) {
+      // Diagnostika nesmi nikdy ovlivnit sync.
+    }
+
     console.error(
       "Bezpečný sync zápis selhal:",
       id,
@@ -1767,9 +1783,15 @@ async function odesliCekajiciSmazaniDoSupabase() {
         return false;
       }
 
+      /* 691O – ponechat tombstone beze zmeny, zaznamenat duvod pro opravu. */
+      const chyba = vysledek?.error;
+      const kodChyby = String(chyba?.code || vysledek?.result?.reason || "unknown")
+        .replace(/\s+/g, " ").slice(0, 50);
+      const zpravaChyby = String(chyba?.message || "unknown")
+        .replace(/\s+/g, " ").slice(0, 160);
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
-        `TARGET DELETE DEFER | id=${zaznam.id}`
+        `TARGET DELETE DEFER | id=${zaznam.id} | expectedRev=${expectedRevision} | code=${kodChyby} | message=${zpravaChyby}`
       );
       return false;
     }
