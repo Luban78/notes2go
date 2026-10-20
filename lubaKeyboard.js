@@ -650,6 +650,33 @@
   const LUBA_TAP_MAX_POHYB_PX = 12;
   let lubaEditorGesto = null;
 
+  /* 691V – FOTO NENI TEXTOVY TAP.
+     691U rozlisuje fotografii podle jeji skutecne obdelnikove plochy,
+     i kdyz WebView vrati jako event.target okolni DIV. Stejne pravidlo
+     musi respektovat i LubaKeyboard, jinak pointerup muze naplanovat
+     zobraz() AZ PO skryti klavesnice a otevreni fullscreen. */
+  let generaceFotoGesta691V = 0;
+  function jeFotoNahledOtevren691V() {
+    return document.body.classList.contains('lubaNoteImagePreviewOpen') ||
+      Boolean(document.querySelector('.lubaNoteImagePreview'));
+  }
+  function jeBodNaEditorFotografii691V(editor, x, y) {
+    if (!editor?.isConnected || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    for (const image of editor.querySelectorAll('.ln-v2-obrazek[data-ln-v2-obrazek] > img')) {
+      if (!image.isConnected) continue;
+      const r = image.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      if (x >= r.left - 1 && x <= r.right + 1 &&
+          y >= r.top - 1 && y <= r.bottom + 1) return true;
+    }
+    return false;
+  }
+  document.addEventListener('lubanote:v2-image-interaction', () => {
+    generaceFotoGesta691V += 1;
+    lubaEditorGesto = null;
+    potlacAutomatickeOtevreni = true;
+  }, true);
+
   let zakladniViewportHeight = 0;
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
@@ -2146,7 +2173,11 @@
     };
 
     const otevriPoSkutecnemTapu = (clientX = null, clientY = null) => {
-      if (!editor?.isConnected || ziskejZdrojKlavesnice() === "system") return;
+      /* 691V: Ani opozdeny tap nesmi predat obrazek textove klavesnici. */
+      if (!editor?.isConnected || ziskejZdrojKlavesnice() === "system" ||
+          jeFotoNahledOtevren691V() ||
+          jeBodNaEditorFotografii691V(editor, clientX, clientY)) return;
+      const generacePriTapu = generaceFotoGesta691V;
       aktivniEditor = editor;
       aktivniCilPsani = "body";
       potlacAutomatickeOtevreni = false;
@@ -2180,7 +2211,11 @@
       }
 
       requestAnimationFrame(() => {
-        if (!editor?.isConnected) return;
+        /* 691V: Foto mohlo otevrit fullscreen mezi pointerup a timto RAF.
+           Zadne dodatecne zobraz(), caret ani refocus pres fotografii. */
+        if (!editor?.isConnected || generacePriTapu !== generaceFotoGesta691V ||
+            jeFotoNahledOtevren691V() ||
+            jeBodNaEditorFotografii691V(editor, clientX, clientY)) return;
 
         /* Focus už je definitivně v těle. Teď teprve nastav přesný caret
            z bodu tapu přes existující Core V2 převod DOM -> model. */
@@ -2197,16 +2232,19 @@
       });
     };
 
-    const jeTextovyCilTapu = (target) => {
-      if (!target || !editor.contains(target)) return false;
+    const jeTextovyCilTapu = (target, x, y) => {
+      if (!target || !editor.contains(target) || jeFotoNahledOtevren691V()) return false;
       if (target.closest?.("button, a[href], .ln-v2-obrazek, .lubaNoteImageSettings, .lubaNoteImageRemove")) return false;
+      /* 691V: I kdyz event.target je DIV, uvnitr skutecneho IMG
+         ma dotyk prednostne vlastnika foto, ne LubaKeyboard. */
+      if (jeBodNaEditorFotografii691V(editor, x, y)) return false;
       return target === editor || Boolean(target.closest?.(".ln-v2-odstavec"));
     };
 
     const zacniPointerGesto = (event) => {
       if (ziskejZdrojKlavesnice() === "system") return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (!jeTextovyCilTapu(event.target)) return;
+      if (!jeTextovyCilTapu(event.target, event.clientX, event.clientY)) return;
       lubaEditorGesto = {
         editor,
         pointerId: event.pointerId,
@@ -2230,7 +2268,9 @@
       const presun = gesto.presun ||
         Math.hypot(event.clientX - gesto.x, event.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
       lubaEditorGesto = null;
-      if (presun) return; // SWIPE/DRAG = pouze scroll/selection, žádná klávesnice.
+      if (presun || jeFotoNahledOtevren691V() ||
+          jeBodNaEditorFotografii691V(editor, event.clientX, event.clientY)) return;
+      // SWIPE/DRAG/FOTO = neotevirat klavesnici.
       otevriPoSkutecnemTapu(event.clientX, event.clientY);
     };
 
@@ -2252,8 +2292,8 @@
       /* Fallback pro starší WebView bez Pointer Events. */
       editor.addEventListener("touchstart", (event) => {
         if (ziskejZdrojKlavesnice() === "system" || event.touches?.length !== 1) return;
-        if (!jeTextovyCilTapu(event.target)) return;
         const t = event.touches[0];
+        if (!jeTextovyCilTapu(event.target, t.clientX, t.clientY)) return;
         lubaEditorGesto = { editor, touchId: t.identifier, x: t.clientX, y: t.clientY, presun: false };
       }, { capture: true, passive: true });
       editor.addEventListener("touchmove", (event) => {
@@ -2270,7 +2310,10 @@
         if (!t) return;
         const presun = gesto.presun || Math.hypot(t.clientX - gesto.x, t.clientY - gesto.y) > LUBA_TAP_MAX_POHYB_PX;
         lubaEditorGesto = null;
-        if (!presun) otevriPoSkutecnemTapu(t.clientX, t.clientY);
+        if (!presun && !jeFotoNahledOtevren691V() &&
+            !jeBodNaEditorFotografii691V(editor, t.clientX, t.clientY)) {
+          otevriPoSkutecnemTapu(t.clientX, t.clientY);
+        }
       }, { capture: true, passive: true });
       editor.addEventListener("touchcancel", () => {
         if (lubaEditorGesto?.editor === editor) lubaEditorGesto = null;
@@ -3629,6 +3672,13 @@
   }
 
   function zobraz() {
+    /* 691V: fullscreen foto je modalni vrstva. I opozdene focusin,
+       pointerup nebo keyboard RAF musi zostat skryte po celou dobu nahledu. */
+    if (jeFotoNahledOtevren691V()) {
+      potlacAutomatickeOtevreni = true;
+      window.LubaNoteStartupDiag?.zapis?.('IMAGE', '691V KEYBOARD OPEN BLOCKED | fullscreen');
+      return;
+    }
     potlacAutomatickeOtevreni = false;
     const editor = aktivniEditor || najdiEditor();
     const title = najdiNazevEditoru();
