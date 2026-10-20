@@ -9072,6 +9072,12 @@ async function synchronizujCilenePrivateZmenyV2() {
   }
 
   if (probihajiciStartSync || probihajiciSync) {
+    /* 691P – startup nemuze sam sobe provest targeted upload.
+       Dokonceni po uvolneni start-locku zajisti post-start kick. */
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2",
+      `TARGET ENTRY DEFER | start=${probihajiciStartSync ? "Y" : "N"} | full=${probihajiciSync ? "Y" : "N"}`
+    );
     odlozOpakovaniSynchronizace();
     return false;
   }
@@ -9391,7 +9397,10 @@ function potvrzLokalniZmenuNaServeru() {
 
 async function synchronizujCekajiciLokalniZmenu() {
   if (window.LubaNoteE2EDeviceGuard688T &&
-      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
+      await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) {
+    window.LubaNoteStartupDiag?.zapis?.("V2", "TARGET DEFER | e2e-device-epoch-guard");
+    return false;
+  }
   if (jeAktivniRezimPouzeTotoZarizeni()) {
     zastavKontroluNavratuInternetu();
     nastavStavPouzeTotoZarizeni();
@@ -10109,6 +10118,39 @@ async function spustStartSyncBezpecne() {
   } finally {
     probihajiciStartSync = null;
 
+    /* 691P – startup vyvolal TARGET DELETE RESUME uvnitr start-locku,
+       ktery targeted worker spravne blokuje. Kdyz nesla behem startu
+       jina lokalni editace, puvodni odlozeny-sync blok nize nemusi
+       bezpecne navazat na persistentni tombstone frontu. Smazani
+       proto zkusime JEDNOU po odemceni, pres puvodni bezpecnou cestu.
+       Frontu, data, revize ani E2E sem nijak neupravujeme. */
+    if (
+      nactiCekajiciSmazani().length > 0 &&
+      nactiBlokovanaCekajiciSmazani().length === 0 &&
+      !jeAktivniRezimPouzeTotoZarizeni() &&
+      !synchronizaceOdlozenaKvuliLokalniZmene &&
+      !probihajiciLokalniZmena &&
+      !lokalniZmenaRezervovana
+    ) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2", `691P DELETE POST-START SCHEDULE | count=${nactiCekajiciSmazani().length}`
+      );
+      setTimeout(() => {
+        if (probihajiciStartSync || !maCilenyPrivateV2Dluh()) return;
+        synchronizujCekajiciLokalniZmenu()
+          .then((ok) => {
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `691P DELETE POST-START RESULT | ${ok === true ? "OK" : "DEFER"} | remaining=${nactiCekajiciSmazani().length}`
+            );
+          })
+          .catch((error) => {
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `691P DELETE POST-START ERROR | ${String(error?.message || "unknown").replace(/\s+/g, " ").slice(0, 130)}`
+            );
+          });
+      }, 180);
+    }
+
     /*
      * Pokud během tohoto syncu přišla lokální změna, pustíme
      * po jeho skončení nový sync z čerstvého lokálního stavu.
@@ -10128,7 +10170,10 @@ async function spustStartSyncBezpecne() {
       synchronizaceOdlozenaKvuliLokalniZmene = false;
 
       setTimeout(() => {
-        if (lokalniZmenaCekaNaPotvrzeniServerem) {
+        if (lokalniZmenaCekaNaPotvrzeniServerem || maCilenyPrivateV2Dluh()) {
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2", "691P DEFERRED TARGET RESUME | persistent-debt"
+          );
           synchronizujCekajiciLokalniZmenu().catch(
             (error) => {
               console.warn(
