@@ -664,6 +664,35 @@
      systemovy selection, vlastni caret, kontextove menu ani klavesnici. */
   let dotykObrazkuV2 = null;
   let potlacSyntetickyKlikObrazkuDo = 0;
+  /* 691T – první tap může posunout obsah (focus/klávesnice) ještě
+     před druhým tapem. WebView pak hlásí DIV místo IMG, a původní
+     listener v editoru druhý tap ignoruje. Zachytíme jen pokračování
+     GESTA již zahájeného na IMG; běžný dvojtap textu zůstává beze změny. */
+  let druhyTapObrazkuV2 = null;
+  let potlacTextovyKlikObrazkuV2 = null;
+
+  function najdiNavazujiciTapNaObrazekV2(target, x, y) {
+    const prvni = posledniTapV2Obrazku;
+    if (!prvni || !editor?.contains?.(target) ||
+        performance.now() - prvni.cas > DVOJTAP_V2_OBRAZKU_MS ||
+        Math.hypot(x - prvni.x, y - prvni.y) > DVOJTAP_V2_OBRAZKU_VZDALENOST ||
+        target.closest?.('button, input, textarea, select, a[href], [data-v2-list-marker], [data-v2-list-toggle]')) {
+      return null;
+    }
+    const zasazenyObrazek = target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+    if (zasazenyObrazek && zasazenyObrazek.dataset.lnV2Obrazek !== prvni.id) return null;
+    const figure = Array.from(editor.querySelectorAll('.ln-v2-obrazek[data-ln-v2-obrazek]'))
+      .find(el => el.dataset.lnV2Obrazek === prvni.id);
+    const image = figure?.querySelector?.(':scope > img');
+    if (!figure?.isConnected || !image?.isConnected) return null;
+    const rect = image.getBoundingClientRect();
+    /* Tolerujeme malý posun obrázku po prvním tapu, nikoli gesto
+       nad vzdáleným textem nebo jiným objektem. */
+    if (x < rect.left - 28 || x > rect.right + 28 ||
+        y < rect.top - 55 || y > rect.bottom + 28) return null;
+    return { figure, image };
+  }
+
   function predTapemNaV2Obrazek(skrytKlavesnici = true) {
     if (skrytKlavesnici) try { window.LubaNoteKeyboard?.skryj?.(); } catch (_e) {}
     skryjV2LubaCaret();
@@ -685,6 +714,8 @@
       odemkniTlacitkaObrazku();
       nastavVybranyV2Obrazek('');
       window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(image);
+      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
+        `691T FULLSCREEN ${document.querySelector('.lubaNoteImagePreview') ? 'OPEN' : 'NOT_OPEN'} | id=${id}`);
       return true;
     }
     posledniTapV2Obrazku = { id, cas: ted, x, y };
@@ -9746,6 +9777,61 @@
       );
     }, { passive: false });
 
+    /* 691T: Druhý tap po IMG může v Android WebView dopadnout na DIV,
+       protože první tap změnil polohu/focus. Před běžným editorem proto
+       jen druhý tap zachytíme v document capture. Nepřepisujeme model,
+       neměníme gesta seznamů a nikdy tím nespouštíme textový caret. */
+    poslouchej(document, 'pointerdown', (event) => {
+      if (event.pointerType !== 'touch' || !editor) return;
+      if (najdiNavazujiciTapNaObrazekV2(event.target, event.clientX, event.clientY)) {
+        if (event.cancelable) event.preventDefault();
+      }
+    }, {capture:true,passive:false});
+    poslouchej(document, 'touchstart', (event) => {
+      if (!editor || event.touches?.length !== 1 || event.changedTouches?.length !== 1) return;
+      const t = event.changedTouches[0];
+      const kandidat = najdiNavazujiciTapNaObrazekV2(event.target, t.clientX, t.clientY);
+      if (!kandidat) return;
+      druhyTapObrazkuV2 = { ...kandidat, touchId:t.identifier,
+        x:t.clientX, y:t.clientY, cas:performance.now() };
+      if (event.cancelable) event.preventDefault();
+      event.stopImmediatePropagation();
+      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
+        `691T SECOND TAP CAPTURED | target=${event.target.tagName || '?'} | x=${Math.round(t.clientX)} y=${Math.round(t.clientY)}`);
+    }, {capture:true,passive:false});
+    poslouchej(document, 'touchend', (event) => {
+      const druhy = druhyTapObrazkuV2;
+      if (!druhy) return;
+      if (!Array.from(event.changedTouches || []).some(t => t.identifier === druhy.touchId)) return;
+      druhyTapObrazkuV2 = null;
+      if (event.cancelable) event.preventDefault();
+      event.stopImmediatePropagation();
+      const t = Array.from(event.changedTouches).find(t => t.identifier === druhy.touchId);
+      if (!t || performance.now()-druhy.cas > 420 ||
+          Math.hypot(t.clientX-druhy.x,t.clientY-druhy.y)>18) return;
+      dotykObrazkuV2 = null;
+      potlacSyntetickyKlikObrazkuDo = performance.now() + 520;
+      potlacTextovyKlikObrazkuV2 = {x:t.clientX,y:t.clientY,do:performance.now()+520};
+      const otevreno = provedV2TapNaObrazek(druhy.figure,druhy.image,t.clientX,t.clientY);
+      window.LubaNoteStartupDiag?.zapis?.('IMAGE',
+        `691T SECOND TAP RESULT | fullscreen=${otevreno ? 'Y' : 'N'}`);
+    }, {capture:true,passive:false});
+    poslouchej(document, 'touchcancel', (event) => {
+      if (druhyTapObrazkuV2 && Array.from(event.changedTouches || [])
+          .some(t => t.identifier === druhyTapObrazkuV2.touchId)) {
+        druhyTapObrazkuV2 = null;
+      }
+    }, {capture:true,passive:true});
+    poslouchej(document, 'click', (event) => {
+      const blok = potlacTextovyKlikObrazkuV2;
+      if (!blok || performance.now() > blok.do) { potlacTextovyKlikObrazkuV2=null;return; }
+      if (!editor?.contains?.(event.target) || event.target.closest?.('button')) return;
+      if (Math.hypot(event.clientX-blok.x,event.clientY-blok.y) > 55) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      potlacTextovyKlikObrazkuV2=null;
+    }, {capture:true,passive:false});
+
     /* 691N: Potlaceni implicitni textove fokusace driv nez browser
        zpracuje dotyk na figure, ale bez ruseni scrollu a long-press MOVE. */
     poslouchej(editor, 'pointerdown', (event) => {
@@ -9776,7 +9862,7 @@
           Math.hypot(t.clientX - prvni.x, t.clientY - prvni.y) <= DVOJTAP_V2_OBRAZKU_VZDALENOST) {
         if (event.cancelable) event.preventDefault();
       }
-    }, {capture:true,passive:true});
+    }, {capture:true,passive:false});
     poslouchej(editor, 'touchend', (event) => {
       const start=dotykObrazkuV2; dotykObrazkuV2=null;
       if (!start || event.changedTouches?.length !== 1) return;
