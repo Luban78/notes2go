@@ -422,7 +422,7 @@
     finally{restoreTestScreen();if(alive())render();}
   }
   async function spustitLive690Z(generace){
-    const expected=['ui-livez-open','ui-livez-bullet-root','ui-livez-bullet-indent','ui-livez-bullet-collapse','ui-livez-bullet-expand','ui-livez-bullet-outdent','ui-livez-bullet-undo','ui-livez-save'];
+    const expected=['ui-livez-open','ui-livez-bullet-root','ui-livez-bullet-indent','ui-livez-bullet-collapse','ui-livez-bullet-expand','ui-livez-bullet-outdent','ui-livez-bullet-undo','ui-livez-save','ui-livez-deep-open','ui-livez-deep-indent','ui-livez-deep-collapse','ui-livez-deep-expand','ui-livez-deep-outdent','ui-livez-deep-persist'];
     const blocked=m=>expected.map(id=>({id,name:id,kind:'REAL_EDITOR_LIVE_690Z',status:'APP_BLOCKED',ms:0,detail:String(m).slice(0,175)}));
     const alive=()=>generace===generaceBehu&&running&&!screen?.hidden;
     try{
@@ -752,6 +752,14 @@
       ['editor-undo',['ui-livek-undo-text','ui-livek-undo-format','ui-livek-persist']],
       ['editor-format',['ui-live-format','ui-liveb-italic','ui-liveb-underline','ui-liveb-heading','ui-liveb-persist']],
       ['list-move',['ui-livec-native-move','ui-livec-verify','ui-livec-history','ui-livec-persist']],
+      // 691Z: the complete multi-level list case runs actual Tab, Shift+Tab,
+      // two nested collapse/expand pairs and UI save/reopen in ONE APK run.
+      // A missing/failed independent step never counts as a V1 PASS.
+      ['list-levels',[
+        'ui-livez-bullet-indent','ui-livez-bullet-outdent','ui-livez-save',
+        'ui-livez-deep-open','ui-livez-deep-indent','ui-livez-deep-collapse',
+        'ui-livez-deep-expand','ui-livez-deep-outdent','ui-livez-deep-persist'
+      ]],
       // 691Y: the full manual Find scenario requires actual editor and list UI,
       // multiple editor hits, next/previous, absence, clearing and persistence.
       // Every dependency must pass in this SAME run; no partial green status.

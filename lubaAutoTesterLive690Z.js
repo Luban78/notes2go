@@ -1,4 +1,4 @@
-/* 690Z: PRODUCTION APP visual regression. Own LOCAL Testy notes only.
+/* 691Z / 690Z: PRODUCTION APP visual regression. Own LOCAL Testy notes only.
  * Runs actual shipped editor handlers / toolbar controls. No fake success when controls absent.
  * It does not replace native MotionEvent coverage or isolated Core unit tests.
  */
@@ -13,7 +13,14 @@ const cases=[
  ['ui-livez-bullet-expand','V aplikaci – rozbalit Bullet přes počet dětí'],
  ['ui-livez-bullet-outdent','V aplikaci – vynořit Bullet pomocí Shift+Tab'],
  ['ui-livez-bullet-undo','V aplikaci – Undo / Redo hierarchie'],
- ['ui-livez-save','V aplikaci – uložit a znovu otevřít hierarchii']
+ ['ui-livez-save','V aplikaci – uložit a znovu otevřít hierarchii'],
+ // 691Z: Separate real UI evidence for 2-level nested tree (no synthetic PASS).
+ ['ui-livez-deep-open','V aplikaci – znovu otevřít Bullet pro více úrovní'],
+ ['ui-livez-deep-indent','V aplikaci – dvě úrovně zanoření přes skutečný Tab'],
+ ['ui-livez-deep-collapse','V aplikaci – sbalit dvě vnořené větve šipkami'],
+ ['ui-livez-deep-expand','V aplikaci – rozbalit obě vnořené větve počty'],
+ ['ui-livez-deep-outdent','V aplikaci – dvě úrovně vynoření pomocí Shift+Tab'],
+ ['ui-livez-deep-persist','V aplikaci – uložit a obnovit vnořenou hierarchii']
 ];
 const sleep=n=>new Promise(r=>setTimeout(r,n));
 const assert=(x,m)=>{if(!x)throw Error(m);};
@@ -28,6 +35,8 @@ const visible=b=>!!(b&&!b.hidden&&b.isConnected&&getComputedStyle(b).display!=='
 const seed=String(Date.now()).slice(-8);
 const rootLabel='AUTOTEST_BULLET_RODIC_'+seed;
 const childLabel='AUTOTEST_BULLET_POTOMEK_'+seed;
+const subLabel='AUTOTEST_BULLET_VNORENY_'+seed;
+const leafLabel='AUTOTEST_BULLET_HLOUBKA2_'+seed;
 async function toolbar(id){
  const b=document.getElementById(id);assert(b,'chybi_tlacitko_'+id);
  const t=document.getElementById('editorToolbarToggle');
@@ -64,6 +73,26 @@ function keyOn(b,shift=false){
  const editor=api()?.ziskejEditorElement?.();assert(editor?.isConnected,'produkčni_editor_neni_pripojen');
  positionOn(b);
  editor.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',code:'Tab',bubbles:true,cancelable:true,shiftKey:shift}));
+}
+function nestedTree(){
+ const anchor=find(childLabel), sub=find(subLabel), leaf=find(leafLabel);
+ assert(anchor?.typ==='bullet'&&sub?.typ==='bullet'&&leaf?.typ==='bullet','chybi_tri_bullety_hlubky');
+ const positions=[anchor,sub,leaf].map(b=>blocks().findIndex(x=>x.id===b.id));
+ assert(positions[0]<positions[1]&&positions[1]<positions[2],'viceurovnove_poradi_neplatne');
+ assert(row(anchor)?.isConnected&&row(sub)?.isConnected&&row(leaf)?.isConnected,'vnorene_bullety_nejsou_v_DOM');
+ return {anchor,sub,leaf};
+}
+function assertDepth(block,level){
+ assert(block?.uroven===level,'uroven_model_neodpovida_'+level);
+ assert(row(block)?.dataset?.lnV2BulletUroven===String(level),'uroven_DOM_neodpovida_'+level);
+}
+function clickMarker(block){
+ const marker=row(block)?.querySelector('[data-v2-list-marker]');
+ assert(visible(marker),'chybi_klikaci_sipka_pro_vnoreni');marker.click();
+}
+function clickBadge(block){
+ const badge=row(block)?.querySelector('[data-v2-list-toggle]');
+ assert(visible(badge),'chybi_viditelny_pocet_potomku');badge.click();
 }
 function parentChild(){
  const parent=find(rootLabel),child=find(childLabel);assert(parent?.typ==='bullet'&&child?.typ==='bullet','neexistuji_dva_bullety');
@@ -130,6 +159,49 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
      assert(find(childLabel)?.uroven===0,'po_reload_se_zmenila_uroven');
      evidence='Uložení, zavření a nové otevření zachovalo oba Bullet řádky a úroveň.';
      await saveClose();
+    }else if(i===8){
+     await window.openTaskEditorById(id);await sleep(160);
+     assert(document.getElementById('taskModal')?.hidden===false,'vnoreni_editor_neotevren');
+     assert(document.getElementById('taskModal')?.dataset?.taskId===id,'vnoreni_spatna_poznamka');
+     assert(find(childLabel)?.typ==='bullet'&&find(childLabel)?.uroven===0,'chybi_kotva_viceurovni');
+     evidence='Testovací LOCAL poznámka znovu otevřena; starší Bullet strom zachován.';
+    }else if(i===9){
+     const sub=await makeBullet(subLabel);keyOn(sub,false);await sleep(150);
+     assertDepth(find(subLabel),1);
+     const leaf=await makeBullet(leafLabel);keyOn(leaf,false);await sleep(115);
+     assertDepth(find(leafLabel),1);
+     keyOn(find(leafLabel),false);await sleep(150);
+     const tree=nestedTree();assertDepth(tree.anchor,0);assertDepth(tree.sub,1);assertDepth(tree.leaf,2);
+     evidence='Dvě skutečná zanoření Tab, tři úrovně 0/1/2 ověřeny v produkčním modelu i DOM.';
+    }else if(i===10){
+     const tree=nestedTree();assertDepth(tree.leaf,2);
+     clickMarker(tree.sub);await sleep(125);
+     assert(find(subLabel)?.sbaleno===true,'vnorena_sipka_nezbalila');
+     assert(row(find(subLabel))?.querySelector('[data-v2-list-toggle]'),'vnorene_sbaleni_bez_poctu');
+     clickMarker(find(childLabel));await sleep(140);
+     assert(find(childLabel)?.sbaleno===true,'rodicovska_sipka_nezbalila');
+     assert(row(find(childLabel))?.querySelector('[data-v2-list-toggle]'),'rodicovske_sbaleni_bez_poctu');
+     evidence='Dvě různé vnořené větve sbaleny skutečnými šipkami; obě zaznamenány v modelu.';
+    }else if(i===11){
+     assert(find(childLabel)?.sbaleno===true&&find(subLabel)?.sbaleno===true,'pred_rozbalenim_nejsou_dve_sbalene_vetve');
+     clickBadge(find(childLabel));await sleep(135);
+     assert(find(childLabel)?.sbaleno===false,'rodicovsky_badge_nerozbalil');
+     clickBadge(find(subLabel));await sleep(135);
+     assert(find(subLabel)?.sbaleno===false,'vnoreny_badge_nerozbalil');
+     assertDepth(nestedTree().leaf,2);
+     evidence='Rozbalení obou úrovní přes produkční tlačítka s počtem dětí; DOM i model drží hloubku 2.';
+    }else if(i===12){
+     const {leaf}=nestedTree();assertDepth(leaf,2);
+     keyOn(leaf,true);await sleep(140);assertDepth(find(leafLabel),1);
+     keyOn(find(leafLabel),true);await sleep(145);assertDepth(find(leafLabel),0);
+     assertDepth(find(subLabel),1);
+     evidence='Dva skutečné Shift+Tab v produkčním editoru: 2→1→0; vedlejší vnořený Bullet zůstal na úrovni 1.';
+    }else if(i===13){
+     await saveClose();await window.openTaskEditorById(id);await sleep(170);
+     const tree=nestedTree();assertDepth(tree.anchor,0);assertDepth(tree.sub,1);assertDepth(tree.leaf,0);
+     assert(tree.anchor.sbaleno!==true&&tree.sub.sbaleno!==true,'rozbaleny_stav_se_ztratil');
+     evidence='Skutečné Uložit a zavřít / znovu otevřít zachovalo tři testovací Bullet položky, pořadí a úrovně 0/1/0.';
+     await saveClose();
     }
     rows.push({id:testId,name:label,kind,status:'APP_PASS',ms:Math.round(performance.now()-start),detail:evidence+' Skutečné UI/model LubaNote, ne simulovaná projekce.'});
     const faktor=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);
@@ -137,7 +209,15 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
    }catch(e){failed=true;rows.push({id:testId,name:label,kind,status:'APP_FAIL',ms:Math.round(performance.now()-start),detail:String(e?.message||e).slice(0,190)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
   }
  }catch(e){failed=true;rows.push({id:cases[0][0],name:cases[0][1],kind,status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,195)});}
- finally{restore();busy=false;}
+ finally{
+  if(failed){
+   const modal=document.getElementById('taskModal');
+   if(modal?.hidden===false&&modal.dataset.taskId===id){
+    try{await saveClose();}catch(_cleanupError){/* do not conceal original failure */}
+   }
+  }
+  restore();busy=false;
+ }
  const completed=new Set(rows.map(x=>x.id));for(const [id,name] of cases)if(!completed.has(id))rows.push({id,name,kind,status:'APP_BLOCKED',ms:0,detail:failed?'Předchozí krok selhal – netestováno.':'Netestováno.'});
  return rows;
 }
