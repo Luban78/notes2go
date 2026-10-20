@@ -656,8 +656,8 @@
    * produkční editor. Nevytvářet druhý image viewer: zoom, zavření
    * a safe-area chování mají zůstat na jednom místě v editorMediaV2.js.
    */
-  const DVOJTAP_V2_OBRAZKU_MS = 430;
-  const DVOJTAP_V2_OBRAZKU_VZDALENOST = 42;
+  const DVOJTAP_V2_OBRAZKU_MS = 560;
+  const DVOJTAP_V2_OBRAZKU_VZDALENOST = 50;
   let posledniTapV2Obrazku = null;
   let odemkniTlacitkaObrazkuTimer = null;
   /* 691N: Obrazek nikdy neni textovy cil. Dotyk se nesmi zmenit v
@@ -9767,7 +9767,15 @@
       if (event.touches?.length !== 1 || !figure || event.target.closest?.('button')) return;
       const t = event.touches[0];
       dotykObrazkuV2 = {id:t.identifier,figure,x:t.clientX,y:t.clientY,cas:performance.now()};
-      // Touchstart samotny NERUSIME: svisly scroll pres obrazek musi zustat.
+      /* 691S: Druhy tap na stejnem obrazku je gesto media, nikoli
+         androidi textovy dvojtap. Prvni touchstart nechavame nativnimu
+         scrollu; preventDefault se tyka jen potvrzeneho druheho tapu. */
+      const prvni = posledniTapV2Obrazku;
+      if (prvni && prvni.id === (figure.dataset.lnV2Obrazek || '') &&
+          performance.now() - prvni.cas <= DVOJTAP_V2_OBRAZKU_MS &&
+          Math.hypot(t.clientX - prvni.x, t.clientY - prvni.y) <= DVOJTAP_V2_OBRAZKU_VZDALENOST) {
+        if (event.cancelable) event.preventDefault();
+      }
     }, {capture:true,passive:true});
     poslouchej(editor, 'touchend', (event) => {
       const start=dotykObrazkuV2; dotykObrazkuV2=null;

@@ -217,6 +217,10 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   border-radius: 0;
   background: transparent;
   outline: none;
+  /* 691S: atomicky obrazkovy blok neni textovy vyber. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .ln-v2-editor .ln-v2-obrazek[data-velikost="prizpusobit"],

@@ -381,10 +381,16 @@
      Dvěma prsty lze obrázek plynule zvětšit/zmenšit. Po zvětšení jej lze
      jedním prstem posouvat. Nejde o page zoom; mění se jen fullscreen img.
   ======================================== */
-  function zapojPinchZoomNahledu(nahled) {
-    if (!nahled) return () => {};
+  function zapojPinchZoomNahledu(nahled, overlay) {
+    if (!nahled || !overlay) return () => {};
 
+    /* 691S: Fyzicky pinch casto zacina mimo samotne <img> (cerne okraje
+       fullscreen). Pointery proto sbirame z celeho overlaye. Obrazek je
+       stale jediny transformovany prvek; tlacitko Zavrit se nevazuje. */
+    const plocha = overlay;
     const body = document.body;
+    let potlacZavreniDo = 0;
+    overlay._lnV2PotlacBackdropClick = () => performance.now() < potlacZavreniDo;
     const ukazatele = new Map();
     let meritko = 1;
     let posunX = 0;
@@ -411,9 +417,11 @@
     };
 
     const pointerDown = (event) => {
+      if (event.target?.closest?.(".lubaNoteImagePreviewClose")) return;
       if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (event.cancelable) event.preventDefault();
       ukazatele.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      try { nahled.setPointerCapture?.(event.pointerId); } catch (_error) {}
+      try { plocha.setPointerCapture?.(event.pointerId); } catch (_error) {}
 
       if (ukazatele.size >= 2) {
         const [a, b] = Array.from(ukazatele.values()).slice(0, 2);
@@ -425,6 +433,7 @@
           posunY
         };
         panStart = null;
+        potlacZavreniDo = performance.now() + 650;
         body.classList.add("lubaNoteImagePreviewPinching");
       } else if (meritko > 1.01) {
         pripravPanZeZbyvajiciho();
@@ -437,6 +446,7 @@
 
       if (ukazatele.size >= 2 && pinchStart) {
         event.preventDefault();
+        potlacZavreniDo = performance.now() + 650;
         const [a, b] = Array.from(ukazatele.values()).slice(0, 2);
         const aktualniStred = stred(a, b);
         const pomer = vzdalenost(a, b) / pinchStart.vzdalenost;
@@ -454,6 +464,7 @@
 
       if (ukazatele.size === 1 && meritko > 1.01 && panStart) {
         event.preventDefault();
+        potlacZavreniDo = performance.now() + 650;
         posunX = panStart.posunX + (event.clientX - panStart.x);
         posunY = panStart.posunY + (event.clientY - panStart.y);
         vykresli();
@@ -462,7 +473,7 @@
 
     const pointerKonec = (event) => {
       ukazatele.delete(event.pointerId);
-      try { nahled.releasePointerCapture?.(event.pointerId); } catch (_error) {}
+      try { plocha.releasePointerCapture?.(event.pointerId); } catch (_error) {}
       if (ukazatele.size < 2) {
         pinchStart = null;
         body.classList.remove("lubaNoteImagePreviewPinching");
@@ -476,17 +487,18 @@
       }
     };
 
-    nahled.addEventListener("pointerdown", pointerDown);
-    nahled.addEventListener("pointermove", pointerMove);
-    nahled.addEventListener("pointerup", pointerKonec);
-    nahled.addEventListener("pointercancel", pointerKonec);
+    plocha.addEventListener("pointerdown", pointerDown);
+    plocha.addEventListener("pointermove", pointerMove);
+    plocha.addEventListener("pointerup", pointerKonec);
+    plocha.addEventListener("pointercancel", pointerKonec);
 
     return () => {
       body.classList.remove("lubaNoteImagePreviewPinching");
-      nahled.removeEventListener("pointerdown", pointerDown);
-      nahled.removeEventListener("pointermove", pointerMove);
-      nahled.removeEventListener("pointerup", pointerKonec);
-      nahled.removeEventListener("pointercancel", pointerKonec);
+      plocha.removeEventListener("pointerdown", pointerDown);
+      plocha.removeEventListener("pointermove", pointerMove);
+      plocha.removeEventListener("pointerup", pointerKonec);
+      plocha.removeEventListener("pointercancel", pointerKonec);
+      delete overlay._lnV2PotlacBackdropClick;
       ukazatele.clear();
     };
   }
@@ -527,7 +539,7 @@
     document.body.append(overlay);
     document.body.classList.add("lubaNoteImagePreviewOpen");
     nahledObrazku = overlay;
-    uklidPinchNahledu = zapojPinchZoomNahledu(nahled);
+    uklidPinchNahledu = zapojPinchZoomNahledu(nahled, overlay);
 
     zavrit.addEventListener("click", (event) => {
       event.preventDefault();
@@ -535,7 +547,12 @@
       zavriNahledObrazku();
     });
     overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) zavriNahledObrazku();
+      /* Pointer-capture muze po pinchi vytvorit click na overlayi.
+         Gesto nema omylem zavrit fullscreen. Jednoduche tapnuti
+         do cerne plochy jej nadale zavira. */
+      if (event.target === overlay && !overlay._lnV2PotlacBackdropClick?.()) {
+        zavriNahledObrazku();
+      }
     });
   }
 

@@ -9689,6 +9689,12 @@ body.lubaNoteImagePreviewOpen {
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.92);
   -webkit-tap-highlight-color: transparent;
+  /* 691S: oba prsty mohou byt i v cernych okrajich nahledu. */
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .lubaNoteImagePreviewImg {
