@@ -660,6 +660,41 @@
   const DVOJTAP_V2_OBRAZKU_VZDALENOST = 42;
   let posledniTapV2Obrazku = null;
   let odemkniTlacitkaObrazkuTimer = null;
+  /* 691N: Obrazek nikdy neni textovy cil. Dotyk se nesmi zmenit v
+     systemovy selection, vlastni caret, kontextove menu ani klavesnici. */
+  let dotykObrazkuV2 = null;
+  let potlacSyntetickyKlikObrazkuDo = 0;
+  function predTapemNaV2Obrazek(skrytKlavesnici = true) {
+    if (skrytKlavesnici) try { window.LubaNoteKeyboard?.skryj?.(); } catch (_e) {}
+    skryjV2LubaCaret();
+    try { window.getSelection()?.removeAllRanges?.(); } catch (_e) {}
+    document.dispatchEvent(new CustomEvent('lubanote:v2-image-interaction'));
+  }
+  function provedV2TapNaObrazek(figure, image, x, y, detail = 0) {
+    if (!figure?.isConnected || !image?.isConnected) return false;
+    const ted = performance.now();
+    const id = figure.dataset.lnV2Obrazek || '';
+    const previous = posledniTapV2Obrazku;
+    const jeDvojtap = Boolean(previous && previous.id === id &&
+      ted - previous.cas <= DVOJTAP_V2_OBRAZKU_MS &&
+      Math.hypot(x - previous.x, y - previous.y) <= DVOJTAP_V2_OBRAZKU_VZDALENOST) ||
+      (detail >= 2 && (!previous || previous.id === id));
+    predTapemNaV2Obrazek();
+    if (jeDvojtap) {
+      posledniTapV2Obrazku = null;
+      odemkniTlacitkaObrazku();
+      nastavVybranyV2Obrazek('');
+      window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(image);
+      return true;
+    }
+    posledniTapV2Obrazku = { id, cas: ted, x, y };
+    nastavVybranyV2Obrazek(id);
+    zadrzTlacitkaObrazkuPriDvojtapu(figure);
+    // figure.focus() uvnitr editoru muze vyvolat nativni caret a selection.
+    nastavStav('Obrazek V2 vybran · 2x tap nahled · nastaveni · odstraneni');
+    return false;
+  }
+
 
   /* 691M: První tap zobrazí výběr, ale během okna pro dvojtap nenecháme
      tlačítka Nastavení/Smazat zachytit druhý tap nad horní částí obrázku.
@@ -9711,6 +9746,45 @@
       );
     }, { passive: false });
 
+    /* 691N: Potlaceni implicitni textove fokusace driv nez browser
+       zpracuje dotyk na figure, ale bez ruseni scrollu a long-press MOVE. */
+    poslouchej(editor, 'pointerdown', (event) => {
+      const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+      if (!figure || !editor.contains(figure) || event.target.closest?.('button')) return;
+      if (event.cancelable) event.preventDefault();
+      predTapemNaV2Obrazek(false);
+    }, {capture:true,passive:false});
+    poslouchej(editor, 'mousedown', (event) => {
+      const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+      if (figure && !event.target.closest?.('button') && event.cancelable) event.preventDefault();
+    }, {capture:true});
+    poslouchej(editor, 'selectstart', (event) => {
+      if (event.target.closest?.('.ln-v2-obrazek') && event.cancelable) event.preventDefault();
+    }, {capture:true});
+    poslouchej(editor, 'touchstart', (event) => {
+      dotykObrazkuV2 = null;
+      const figure = event.target.closest?.('.ln-v2-obrazek[data-ln-v2-obrazek]');
+      if (event.touches?.length !== 1 || !figure || event.target.closest?.('button')) return;
+      const t = event.touches[0];
+      dotykObrazkuV2 = {id:t.identifier,figure,x:t.clientX,y:t.clientY,cas:performance.now()};
+      // Touchstart samotny NERUSIME: svisly scroll pres obrazek musi zustat.
+    }, {capture:true,passive:true});
+    poslouchej(editor, 'touchend', (event) => {
+      const start=dotykObrazkuV2; dotykObrazkuV2=null;
+      if (!start || event.changedTouches?.length !== 1) return;
+      const t=event.changedTouches[0];
+      if (t.identifier !== start.id || performance.now()-start.cas > 420 ||
+          Math.hypot(t.clientX-start.x,t.clientY-start.y)>14 ||
+          !start.figure?.isConnected || v2DragObrazku?.pripraven) return;
+      const image=start.figure.querySelector(':scope > img');
+      if (!image) return;
+      // Spolehlive zpracovani i pokud preventDefault v pointerdown zrusi click.
+      if (event.cancelable) event.preventDefault();
+      potlacSyntetickyKlikObrazkuDo=performance.now()+520;
+      provedV2TapNaObrazek(start.figure,image,t.clientX,t.clientY);
+    }, {passive:false});
+    poslouchej(editor, 'touchcancel', ()=>{dotykObrazkuV2=null;}, {passive:true});
+
     poslouchej(editor, "touchstart", (event) => {
       if (event.touches?.length !== 1) return;
       const image = event.target.closest?.(".ln-v2-obrazek img");
@@ -9967,50 +10041,19 @@
         return;
       }
 
-      /* 691M: i klik přímo na obal figure patří obrázku; samotná ovládací
-         tlačítka zůstávají samostatné akce (po uplynutí dvojtap okna). */
-      const klikDoObrazku = event.target === figure || Boolean(event.target.closest?.('.ln-v2-obrazek img'));
-      const obrazek = klikDoObrazku ? figure.querySelector('img') : null;
-
-      if (obrazek) {
-        const ted = performance.now();
-        const id = figure.dataset.lnV2Obrazek || "";
-        const predchozi = posledniTapV2Obrazku;
-        const jeDvojtap = Boolean(
-          predchozi &&
-          predchozi.id === id &&
-          ted - predchozi.cas <= DVOJTAP_V2_OBRAZKU_MS &&
-          Math.hypot(
-            event.clientX - predchozi.x,
-            event.clientY - predchozi.y
-          ) <= DVOJTAP_V2_OBRAZKU_VZDALENOST
-        ) || (event.detail >= 2 && klikDoObrazku && (!predchozi || predchozi.id === id));
-
-        if (jeDvojtap) {
-          event.preventDefault();
-          event.stopPropagation();
-          posledniTapV2Obrazku = null;
-          odemkniTlacitkaObrazku();
-          nastavVybranyV2Obrazek("");
-          window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(obrazek);
-          return;
-        }
-
-        posledniTapV2Obrazku = {
-          id,
-          cas: ted,
-          x: event.clientX,
-          y: event.clientY
-        };
-      } else {
-        posledniTapV2Obrazku = null;
+      if (performance.now() < potlacSyntetickyKlikObrazkuDo) {
+        event.preventDefault();event.stopPropagation();return;
       }
-
+      const klikDoObrazku = event.target === figure || Boolean(event.target.closest?.('.ln-v2-obrazek img'));
+      const obrazek = klikDoObrazku ? figure.querySelector(':scope > img') : null;
+      if (obrazek) {
+        event.preventDefault();event.stopPropagation();
+        provedV2TapNaObrazek(figure,obrazek,event.clientX,event.clientY,event.detail);
+        return;
+      }
+      // Ovládací tlačítka si ponechávají své vlastní click handlery.
       event.preventDefault();
-      nastavVybranyV2Obrazek(figure.dataset.lnV2Obrazek || "");
-      if (obrazek) zadrzTlacitkaObrazkuPriDvojtapu(figure);
-      figure.focus({ preventScroll: true });
-      nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
+      nastavVybranyV2Obrazek(figure.dataset.lnV2Obrazek || '');
     });
 
     poslouchej(editor, "compositionstart", (event) => {

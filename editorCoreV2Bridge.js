@@ -4714,6 +4714,20 @@
     if (aktivni) skryjV2SelectionMenu();
   }, true);
 
+  /* 691N: image belongs to media gestures, not text selection. Safely
+     dismiss only selection UI; do not modify text, caret position or model. */
+  document.addEventListener('lubanote:v2-image-interaction', () => {
+    if (!aktivni) return;
+    if (v2SelectionScroll && !v2SelectionScroll.handleDrag) {
+      zrusV2SelectionScrollStav(v2SelectionScroll);
+    }
+    v2PosledniTapSelection = null;
+    v2PrimyDruhyTap = null;
+    skryjV2SelectionMenu();
+    skryjV2SelectionHandles();
+    try { window.getSelection()?.removeAllRanges?.(); } catch (_e) {}
+  }, true);
+
   document.addEventListener("pointerdown", (event) => {
     if (!aktivni) return;
     if (selectionMenu?.contains(event.target)) return;

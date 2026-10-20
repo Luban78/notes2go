@@ -302,6 +302,106 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     });
   }
 
+  /** 691N: ONLY generated LOCAL Testy image AUTOTEST_691N in current editor.
+   * Gestures target the actual image or its fullscreen viewer (never user media).
+   * Native MotionEvent, NOT physical hand or OS instrumentation. */
+  @PluginMethod
+  public void gestureOwnedImage(PluginCall call) {
+    final String id=call.getString("id", "");
+    final String target=call.getString("target", "");
+    final String type=call.getString("type", "");
+    if(id==null||id.length()<8||id.length()>100 ||
+       !("image-top".equals(target)||"image-bottom".equals(target)||"preview".equals(target)) ||
+       !("doubletap".equals(type)||"tap".equals(type)||"pinch".equals(type)||"pan".equals(type)) ||
+       ("preview".equals(target) != ("pinch".equals(type)||"pan".equals(type)))) {
+      call.reject("invalid_owned_image_gesture");return;
+    }
+    ui.post(()->{
+      if(busy){call.reject("native_test_busy");return;}
+      final WebView web=getBridge()==null?null:getBridge().getWebView();
+      if(web==null||!web.isAttachedToWindow()||web.getWidth()<100){call.reject("native_webview_unavailable");return;}
+      busy=true;
+      final String js="(function(){try{"+
+        "const id="+JSONObject.quote(id)+",target="+JSONObject.quote(target)+";"+
+        "const tester=document.getElementById('ln-auto-tester');"+
+        "const modal=document.getElementById('taskModal'),note=window.loadTask?.().find(n=>n?.id===id);"+
+        "const ed=window.LubaNoteEditorV2?.ziskejEditorElement?.();"+
+        "const base=window.LubaNoteAdminTools?.isAllowed?.()===true&&tester&&!tester.hidden&&"+
+        "tester.classList.contains('lat-app-playback')&&modal&&!modal.hidden&&modal.dataset.taskId===id&&"+
+        "note?.storageScope==='local'&&note.isSecret!==true&&note?.tags?.includes('Testy')&&"+
+        "String(note.title||'').startsWith('[AutoTester 690T]')&&"+
+        "window.LubaNoteEditorV2Bridge?.jeAktivni?.()===true&&ed?.isConnected&&modal.contains(ed)&&"+
+        "ed.querySelector('.ln-v2-obrazek img[alt^=\"AUTOTEST_691N\"]');"+
+        "if(!base)return JSON.stringify({ok:false,reason:'owner'});"+
+        "let el=target==='preview'?document.querySelector('.lubaNoteImagePreviewImg'):"+
+        "ed.querySelector('.ln-v2-obrazek img[alt^=\"AUTOTEST_691N\"]');"+
+        "const r=el?.getBoundingClientRect();"+
+        "if(!r||r.width<110||r.height<80)return JSON.stringify({ok:false,reason:'size'});"+
+        "const x=r.left+r.width*(target==='image-top'?0.20:target==='image-bottom'?0.50:0.50);"+
+        "const y=r.top+r.height*(target==='image-top'?0.12:target==='image-bottom'?0.85:0.50);"+
+        "const hit=document.elementFromPoint(x,y);"+
+        "const ok=x>=90&&x<innerWidth-8&&y>=8&&y<innerHeight-8&&"+
+        "(hit===el||el.contains(hit))&&"+
+        "(target!=='preview'||document.querySelector('.lubaNoteImagePreview[aria-modal=true]'));"+
+        "return JSON.stringify({ok:!!ok,x,y,viewport:innerWidth,span:Math.min(r.width,r.height)});"+
+      "}catch(e){return JSON.stringify({ok:false,reason:String(e)});}})()";
+      try{web.evaluateJavascript(js,raw->{
+        try{
+          JSONObject at=new JSONObject(new JSONArray("["+raw+"]").getString(0));
+          if(!at.optBoolean("ok",false)){busy=false;call.reject("owned_image_target_missing_or_covered: "+at.optString("reason"));return;}
+          float scale=(float)(web.getWidth()/at.optDouble("viewport",1));
+          float x=(float)(at.getDouble("x")*scale),y=(float)(at.getDouble("y")*scale);
+          if(x<5||x>=web.getWidth()-5||y<5||y>=web.getHeight()-5){busy=false;call.reject("image_point_outside_webview");return;}
+          if("pinch".equals(type))runImagePinch(web,x,y,scale,call);
+          else if("pan".equals(type)){
+            final long down=SystemClock.uptimeMillis();final float end=x+Math.min(80f*scale,web.getWidth()-x-7f);
+            emit(web,down,MotionEvent.ACTION_DOWN,x,y);
+            for(int i=1;i<=8;i++){
+              final int step=i;ui.postDelayed(()->emit(web,down,MotionEvent.ACTION_MOVE,x+(end-x)*step/8f,y),step*30L);
+            }
+            ui.postDelayed(()->finish(web,down,end,y,type,call),285L);
+          }else runGesture(web,type,x,y,new JSONObject(),scale,call);
+        }catch(Exception e){busy=false;call.reject("owned_image_geometry_invalid");}
+      });}catch(Exception e){busy=false;call.reject("owned_image_dispatch_failed");}
+    });
+  }
+
+  private void emitPinchPair(WebView web,long down,int action,float x1,float x2,float y){
+    if(!web.isAttachedToWindow())return;
+    MotionEvent.PointerProperties a=new MotionEvent.PointerProperties();
+    a.id=0;a.toolType=MotionEvent.TOOL_TYPE_FINGER;
+    MotionEvent.PointerProperties b=new MotionEvent.PointerProperties();
+    b.id=1;b.toolType=MotionEvent.TOOL_TYPE_FINGER;
+    MotionEvent.PointerCoords c=new MotionEvent.PointerCoords();
+    c.x=x1;c.y=y;c.pressure=1;c.size=1;
+    MotionEvent.PointerCoords d=new MotionEvent.PointerCoords();
+    d.x=x2;d.y=y;d.pressure=1;d.size=1;
+    MotionEvent e=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,2,
+      new MotionEvent.PointerProperties[]{a,b},new MotionEvent.PointerCoords[]{c,d},
+      0,0,1f,1f,0,0,android.view.InputDevice.SOURCE_TOUCHSCREEN,0);
+    try{web.dispatchTouchEvent(e);}finally{e.recycle();}
+  }
+
+  private void runImagePinch(WebView web,float cx,float cy,float scale,PluginCall call){
+    final long down=SystemClock.uptimeMillis();
+    final float a=26f*scale,b=65f*scale;
+    if(cx-b<5||cx+b>=web.getWidth()-5){busy=false;call.reject("pinch_viewport_too_narrow");return;}
+    emit(web,down,MotionEvent.ACTION_DOWN,cx-a,cy);
+    ui.postDelayed(()->emitPinchPair(web,down,MotionEvent.ACTION_POINTER_DOWN|(1<<MotionEvent.ACTION_POINTER_INDEX_SHIFT),cx-a,cx+a,cy),45L);
+    for(int i=1;i<=10;i++){
+      final float d=a+(b-a)*i/10f;
+      final int step=i;
+      ui.postDelayed(()->emitPinchPair(web,down,MotionEvent.ACTION_MOVE,cx-d,cx+d,cy),45L+step*32L);
+    }
+    ui.postDelayed(()->{
+      emitPinchPair(web,down,MotionEvent.ACTION_POINTER_UP|(1<<MotionEvent.ACTION_POINTER_INDEX_SHIFT),cx-b,cx+b,cy);
+      emit(web,down,MotionEvent.ACTION_UP,cx-b,cy);
+      busy=false;
+      JSObject out=new JSObject();out.put("type","pinch");out.put("delivery","WEBVIEW_DISPATCH_TOUCH_EVENT");
+      out.put("physicalFinger",false);call.resolve(out);
+    },415L);
+  }
+
   private void emit(WebView web, long down, int action, float x, float y) {
     if (!web.isAttachedToWindow()) return;
     MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);

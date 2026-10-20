@@ -13,13 +13,13 @@
   let lastTestNoteId=null;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky Core V2 – skutečný modul',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691M</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691N</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -27,7 +27,7 @@
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
         <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
         <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
-        <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
+        <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
       <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
       <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. Spustit vše upřednostňuje skutečný editor; staré izolované testy Bullet/Editor/ToDo zůstávají ve volbě Izolované regrese. E2E a DB běží 1×. Android používá MotionEvent ve WebView, ne fyzický prst.</small>
@@ -559,6 +559,27 @@
     }catch(e){if(alive())results.push(...blocked(e?.message||e));}
     finally{if(alive())render();}
   }
+  // 691N – independent REAL image suite: never gated by earlier caret test.
+  async function spustitObrazky691N(generace){
+    const mod=window.LubaNoteAutoTesterLive691N;
+    const expected=mod?.expected||[];
+    const alive=()=>generace===generaceBehu&&running&&!screen?.hidden;
+    if(!alive())return;
+    if(!lastTestNoteId){
+      results.push({id:'ui-img-setup',name:'Obrázky – LOCAL Testy fixture',kind:'REAL_EDITOR_IMAGE_691N',status:'APP_BLOCKED',ms:0,detail:'No owned Testy note.'});
+      render();return;
+    }
+    try{
+      if(!mod?.run||expected.length!==15)throw Error('691N live image module missing or invalid');
+      const rows=await mod.run(lastTestNoteId,alive,msg=>{if(alive())setStatus(msg);},minimizeTestScreen,restoreTestScreen);
+      if(!alive())return;
+      if(!Array.isArray(rows)||expected.some(id=>!rows.some(r=>r.id===id))||
+        rows.some(r=>!['APP_PASS','APP_FAIL','APP_BLOCKED','NATIVE_PASS','NATIVE_FAIL','NATIVE_BLOCKED'].includes(r.status)))
+        throw Error('691N image results invalid');
+      results.push(...rows);
+    }catch(e){if(alive())results.push({id:'ui-img-run',name:'Obrázky – živý test',kind:'REAL_EDITOR_IMAGE_691N',status:'APP_FAIL',ms:0,detail:String(e?.message||e).slice(0,190)});}
+    finally{restoreTestScreen();if(alive())render();}
+  }
   async function spustitZivePredIzolaci690Z(generace){
     if(generace!==generaceBehu||!running)return;
     setStatus('1/2: Skutečná LubaNote – vytvářím poznámku Testy…');
@@ -576,6 +597,7 @@
       if(generace===generaceBehu)await spustitHledaniZarovnani691F(generace);
       if(generace===generaceBehu)await spustitTextHistorii691K(generace);
       if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);
+      if(generace===generaceBehu)await spustitObrazky691N(generace);
     }
     liveFirstDone=true;
     if(generace===generaceBehu&&running)setStatus('2/2: Doplňkové izolované regrese Core V2, E2E, DB a pokrytí V1…');
@@ -746,10 +768,10 @@
       ['code-integrity',['core-code-import']],
       ['code-caret',['core-code-caret']],
       ['code-image',['core-code-image']],
-      ['image-between',['core-image-order','caret-editor-image']],
-      ['image-wrap',['core-image-size']],
-      ['image-move',['core-image-size']],
-      ['image-reopen',['core-image-roundtrip']],
+      ['image-between',['core-image-order','caret-editor-image','ui-img-insert']],
+      ['image-wrap',['core-image-size','ui-img-wrap','ui-img-persist']],
+      ['image-move',['core-image-size','ui-img-size','ui-img-wrap']],
+      ['image-reopen',['core-image-roundtrip','ui-img-persist']],
       ['notes-create',['local-notes-create','ui-real-open']],
       ['notes-trash',['local-notes-trash','local-notes-restore']],
       ['notes-search',['ui-livel-ready','ui-livel-title','ui-livel-missing','ui-livel-clear']],
@@ -1194,6 +1216,10 @@
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');
       if(activeSuite==='planner')await spustitPlanner690H(generace);
       if(['extended','image','i18n'].includes(activeSuite))await spustitPokrocile690Q(generace,activeSuite==='extended'?'all':activeSuite);
+      if(activeSuite==='image' && generace===generaceBehu){
+        await spustitPoznamky690S(generace);
+        if(generace===generaceBehu)await spustitObrazky691N(generace);
+      }
       if(activeSuite==='editor' && generace===generaceBehu)await spustitPokrocile690Q(generace,'editor');
       if(activeSuite==='stability' && generace===generaceBehu){
         await spustitBulletCore690C(generace);
@@ -1207,7 +1233,7 @@
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'bullet');}
-      if(generace===generaceBehu && !['extended','image','i18n'].includes(activeSuite))await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
+      if(generace===generaceBehu && !['extended','i18n'].includes(activeSuite))await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -1221,7 +1247,8 @@
         if(generace===generaceBehu)await spustitNativniBulletMove691C(generace);
       if(generace===generaceBehu)await spustitHledaniZarovnani691F(generace);
       if(generace===generaceBehu)await spustitTextHistorii691K(generace);
-      if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);}
+      if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);
+      if(generace===generaceBehu)await spustitObrazky691N(generace);}
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
@@ -1271,7 +1298,7 @@
       `PASS_E2E=${results.filter(x=>x.id.startsWith('e2e-')&&x.status==='PASS').length} CLIENT_PASS=${counts.CLIENT_PASS} SIM_PASS=${counts.SIM_PASS} DB_LIVE_PASS=${counts.DB_PASS} DB_LIVE_FAIL=${counts.DB_FAIL} DB_LIVE_BLOCKED=${counts.DB_BLOCKED} FAIL=${counts.FAIL} CLIENT_FAIL=${counts.CLIENT_FAIL} SIM_FAIL=${counts.SIM_FAIL} CORE_PASS=${counts.CORE_PASS} CORE_FAIL=${counts.CORE_FAIL} CORE_BLOCKED=${counts.CORE_BLOCKED} APP_PASS=${counts.APP_PASS} APP_FAIL=${counts.APP_FAIL} APP_BLOCKED=${counts.APP_BLOCKED} NATIVE_PASS=${counts.NATIVE_PASS} NATIVE_FAIL=${counts.NATIVE_FAIL} NATIVE_BLOCKED=${counts.NATIVE_BLOCKED} PARTIAL=${counts.PARTIAL} AUDIT=${counts.AUDIT} BLOCKED=${counts.BLOCKED} NOT_TESTED=${counts.NOT_TESTED}`,
       `RUN_OUTCOME=${(counts.FAIL+counts.CLIENT_FAIL+counts.SIM_FAIL+counts.DB_FAIL+counts.CORE_FAIL+counts.APP_FAIL+counts.NATIVE_FAIL)>0?'FAIL':(counts.BLOCKED+counts.DB_BLOCKED+counts.CORE_BLOCKED+counts.APP_BLOCKED+counts.NATIVE_BLOCKED)>0?'INCOMPLETE_BLOCKED':'CHECKED_WITH_COVERAGE_GAPS'}`,
       `STABILITY_V1_TOTAL=${results.filter(x=>x.id.startsWith('stability-v1-')).length} STABILITY_V1_AUTOMATED_PASS=${counts.V1_PASS} STABILITY_V1_PARTIAL=${results.filter(x=>x.id.startsWith('stability-v1-')&&x.status==='PARTIAL').length}`,
-      '691M: Ochrana dvojtapu obrázku proti překrytí tlačítky Nastavení/Smazat a dovoleno kliknutí na figure. NATIVE OWN text vybere viditelný znak, případné NATIVE_FAIL nezablokuje nezávislé testy; 691L: hledání textu v seznamu poznámek. 691K: Vlastni LOCAL Testy poznamka: modelovy caret uprostred textu, znakovani/Backspace, Undo/Redo textu i formatu a trvale ulozeni; V1 editor-plain/editor-undo se meni na PASS jen po vsech zive vykonanych krocich. 691J: Spustit vse bez starych 690C/D/E/G/I duplicit; samostatna oblast Izolovane regrese je zachovana. V1 PASS jen podle zdokumentovane kombinace skutecnych testu Android/editoru. Pocet V1 PASS neni znovu prictan k poctu vykonanych testu. 691H: Vlastni uchyty – overeni smeru gesta, alternativni skutecny tah pri nezmenenem vyberu, zachovani FAIL bez blokovani ulozeni a dalsich nezavislych zivych testu. 691G: Find skenuje reálné Core V2 textové segmenty, test čeká na výsledek a hlásí model/DOM/pole; 691F: ŽIVÉ hledání uvnitř poznámky, navigace výsledků a zarovnání přes skutečné UI s uložením; 691E: FIX modal overlay pointer-events over actual editor; maintain result scrolling. 691D: FIX scrollování výsledků po nativním Bullet MOVE; ochrana před globálním touchmove a automatický přechod na report. 691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
+      '691N: Obrazek nevyvolava textovy caret/menu/klavesnici; nativni obrazkovy test LOCAL Testy zahrnuje dvojtap na horni/spodni cast, pinch/pan fullscreen, orez, velikost, zarovnani, float-obtekani, delete/Undo/Redo a save/reopen. V1 obrazkove scenare zustavaji PARTIAL, dokud nejsou overene kompletne. 691M: Ochrana dvojtapu obrázku proti překrytí tlačítky Nastavení/Smazat a dovoleno kliknutí na figure. NATIVE OWN text vybere viditelný znak, případné NATIVE_FAIL nezablokuje nezávislé testy; 691L: hledání textu v seznamu poznámek. 691K: Vlastni LOCAL Testy poznamka: modelovy caret uprostred textu, znakovani/Backspace, Undo/Redo textu i formatu a trvale ulozeni; V1 editor-plain/editor-undo se meni na PASS jen po vsech zive vykonanych krocich. 691J: Spustit vse bez starych 690C/D/E/G/I duplicit; samostatna oblast Izolovane regrese je zachovana. V1 PASS jen podle zdokumentovane kombinace skutecnych testu Android/editoru. Pocet V1 PASS neni znovu prictan k poctu vykonanych testu. 691H: Vlastni uchyty – overeni smeru gesta, alternativni skutecny tah pri nezmenenem vyberu, zachovani FAIL bez blokovani ulozeni a dalsich nezavislych zivych testu. 691G: Find skenuje reálné Core V2 textové segmenty, test čeká na výsledek a hlásí model/DOM/pole; 691F: ŽIVÉ hledání uvnitř poznámky, navigace výsledků a zarovnání přes skutečné UI s uložením; 691E: FIX modal overlay pointer-events over actual editor; maintain result scrolling. 691D: FIX scrollování výsledků po nativním Bullet MOVE; ochrana před globálním touchmove a automatický přechod na report. 691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
