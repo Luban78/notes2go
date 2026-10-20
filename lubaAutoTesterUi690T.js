@@ -163,6 +163,18 @@
               };
               return {early:pointAt('word-early'),late:pointAt('word-late')};
             };
+            // 691M: po otevření vlastní klávesnice se může zmenšit viewport.
+            // Obnovit viditelnost markeru až po inicializaci OWN caretu.
+            const walkerMarker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+            let markerNode=null, uzel;
+            while((uzel=walkerMarker.nextNode())){
+              if(String(uzel.nodeValue||'').includes('Zapis_z_viditelneho_editoru_690T')){
+                markerNode=uzel;break;
+              }
+            }
+            markerNode?.parentElement?.closest?.('.ln-v2-odstavec')?.scrollIntoView?.(
+              {block:'center',inline:'nearest',behavior:'instant'});
+            await wait(150);
             const points=probeText();
             assert(Math.hypot(points.early.x-points.late.x,points.early.y-points.late.y)>=8,
               'own_tap_targets_not_distinct');
@@ -276,9 +288,10 @@
           const unavailable=/owned_native_bridge_unavailable|luba_keyboard_mode_not_active|own_caret_mode_not_enabled/.test(cause);
           output.push({id:testId,name,status:unavailable?(i>=4&&i<=7?'NATIVE_BLOCKED':'APP_BLOCKED'):(i>=4&&i<=7?'NATIVE_FAIL':'APP_FAIL'),kind:i>=4&&i<=7?'OWN_LUBANOTE_NATIVE_INPUT_690U':'REAL_VISIBLE_EDITOR_690T',ms:Math.round(performance.now()-tick),
             detail:String(error?.message||error).slice(0,280)+' · poznámka Testy byla ponechána pro diagnostiku.'});
-          // 691H: The handle gesture is a standalone assertion; SAVE is not
-          // dependent on that assertion. Retain the actual FAIL but still run
-          // production save/reopen so later independent live tests may proceed.
+          // 691M: Zachovat NATIVE_FAIL. Další OWN gesta bez výchozího
+          // stavu jsou BLOCKED, nikoli PASS; ale Uložit a nezávislé živé
+          // regrese už tím nesmějí být zbytečně zablokovány.
+          if(i>=4&&i<=6){i=7;continue;}
           if(i===7)continue;
           break;
         }

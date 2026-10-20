@@ -357,6 +357,15 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   transform: scale(1);
 }
 
+/* 691M: Horní ovladače se po prvním tapu objeví až po okně dvojtapu.
+   Jinak druhý tap na horní části obrázku trefí tlačítko místo <img>. */
+.ln-v2-editor .ln-v2-obrazek.ln-v2-image-doubletap-wait .lubaNoteImageSettings,
+.ln-v2-editor .ln-v2-obrazek.ln-v2-image-doubletap-wait .lubaNoteImageRemove {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* ==========================================
    V2.15 – KOMPLETNÍ OVLÁDÁNÍ SEZNAMU
 ========================================== */

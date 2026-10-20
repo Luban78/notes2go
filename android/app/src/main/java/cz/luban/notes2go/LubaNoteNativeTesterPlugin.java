@@ -137,9 +137,16 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "if(target==='word'||target==='word-early'||target==='word-late'){" +
           "const w=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let n;" +
           "while(n=w.nextNode()){const i=String(n.nodeValue||'').indexOf('Zapis_z_viditelneho_editoru_690T');" +
-            "if(i<0)continue;const d=target==='word-late'?17:target==='word-early'?3:2;" +
-            "const rg=document.createRange();rg.setStart(n,i+d);rg.setEnd(n,i+d+1);" +
-            "bounds=rg.getBoundingClientRect();break;}" +
+            "if(i<0)continue;" +
+            "const offs=target==='word-late'?[17,20,23,26]:target==='word-early'?[3,6,9,12]:[2,5,8,11];" +
+            "const er=editor.getBoundingClientRect();" +
+            "for(const d of offs){if(i+d+1>n.nodeValue.length)continue;" +
+              "const rg=document.createRange();rg.setStart(n,i+d);rg.setEnd(n,i+d+1);" +
+              "const b=rg.getBoundingClientRect();const px=b.left+b.width/2,py=b.top+b.height/2;" +
+              "if(b.width<=0||b.height<=0||px<Math.max(er.left,2)||px>=Math.min(er.right,innerWidth-2)||" +
+                "py<Math.max(er.top,2)||py>=Math.min(er.bottom,innerHeight-2))continue;" +
+              "if(editor.contains(document.elementFromPoint(px,py))){bounds=b;break;}" +
+            "}break;}" +
           "el=editor;" +
         "}else{el=target==='caret-handle'?document.querySelector('.ln-v2-single-caret-handle:not([hidden])'):" +
           "document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle=\"'+" +

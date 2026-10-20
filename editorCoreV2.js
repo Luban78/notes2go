@@ -659,6 +659,27 @@
   const DVOJTAP_V2_OBRAZKU_MS = 430;
   const DVOJTAP_V2_OBRAZKU_VZDALENOST = 42;
   let posledniTapV2Obrazku = null;
+  let odemkniTlacitkaObrazkuTimer = null;
+
+  /* 691M: První tap zobrazí výběr, ale během okna pro dvojtap nenecháme
+     tlačítka Nastavení/Smazat zachytit druhý tap nad horní částí obrázku.
+     Model, dlouhý stisk i produkční fullscreen prohlížeč zůstávají stejné. */
+  function odemkniTlacitkaObrazku() {
+    clearTimeout(odemkniTlacitkaObrazkuTimer);
+    odemkniTlacitkaObrazkuTimer = null;
+    editor?.querySelectorAll?.('.ln-v2-image-doubletap-wait').forEach(el => {
+      el.classList.remove('ln-v2-image-doubletap-wait');
+    });
+  }
+
+  function zadrzTlacitkaObrazkuPriDvojtapu(figure) {
+    odemkniTlacitkaObrazku();
+    figure?.classList.add('ln-v2-image-doubletap-wait');
+    odemkniTlacitkaObrazkuTimer = setTimeout(() => {
+      figure?.classList.remove('ln-v2-image-doubletap-wait');
+      odemkniTlacitkaObrazkuTimer = null;
+    }, DVOJTAP_V2_OBRAZKU_MS);
+  }
 
   /* ==========================================
      V2.15 – KOMPLETNÍ MOVE SYSTÉM SEZNAMŮ
@@ -9933,6 +9954,7 @@
         event.preventDefault();
         event.stopPropagation();
         posledniTapV2Obrazku = null;
+        odemkniTlacitkaObrazku();
         smazObrazekZModelu(smazat.dataset.v2ImageRemove);
         return;
       }
@@ -9940,11 +9962,15 @@
       const figure = event.target.closest?.(".ln-v2-obrazek[data-ln-v2-obrazek]");
       if (!figure || !editor.contains(figure)) {
         posledniTapV2Obrazku = null;
+        odemkniTlacitkaObrazku();
         nastavVybranyV2Obrazek("");
         return;
       }
 
-      const obrazek = event.target.closest?.(".ln-v2-obrazek img");
+      /* 691M: i klik přímo na obal figure patří obrázku; samotná ovládací
+         tlačítka zůstávají samostatné akce (po uplynutí dvojtap okna). */
+      const klikDoObrazku = event.target === figure || Boolean(event.target.closest?.('.ln-v2-obrazek img'));
+      const obrazek = klikDoObrazku ? figure.querySelector('img') : null;
 
       if (obrazek) {
         const ted = performance.now();
@@ -9958,12 +9984,13 @@
             event.clientX - predchozi.x,
             event.clientY - predchozi.y
           ) <= DVOJTAP_V2_OBRAZKU_VZDALENOST
-        );
+        ) || (event.detail >= 2 && klikDoObrazku && (!predchozi || predchozi.id === id));
 
         if (jeDvojtap) {
           event.preventDefault();
           event.stopPropagation();
           posledniTapV2Obrazku = null;
+          odemkniTlacitkaObrazku();
           nastavVybranyV2Obrazek("");
           window.LubaNoteEditorMediaV2?.otevriNahledObrazku?.(obrazek);
           return;
@@ -9981,6 +10008,7 @@
 
       event.preventDefault();
       nastavVybranyV2Obrazek(figure.dataset.lnV2Obrazek || "");
+      if (obrazek) zadrzTlacitkaObrazkuPriDvojtapu(figure);
       figure.focus({ preventScroll: true });
       nastavStav("Obrázek V2 vybrán · 2× tap náhled · ⚙ nastavení · ✕ odstraní modelový blok");
     });
