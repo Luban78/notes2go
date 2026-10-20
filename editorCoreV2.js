@@ -5541,6 +5541,21 @@
      Stránka/klávesnice může přesunout scroll až po prvním rAF (683G caret).
      Ochrana platí jen pro toggle seznamu, nikoli při běžném psaní či MOVE. */
   let ochranaPohleduSeznamu = null;
+  // 691AG: WebView může posunout viewport už při pointerdown/touchstart,
+  // dávno před samotným toggle. Proto uložit místo čtení při začátku gesta.
+  let pohledPredDotykemSeznamu = null;
+  function zachytPohledPredDotykemSeznamu(id) {
+    if (!editor || !id) return;
+    const radek = editor.querySelector(`[data-ln-v2-blok="${CSS.escape(String(id))}"]`);
+    if (!radek?.isConnected) return;
+    const hranice = editor.getBoundingClientRect();
+    const pozice = radek.getBoundingClientRect();
+    if (!(pozice.bottom > hranice.top && pozice.top < hranice.bottom)) return;
+    pohledPredDotykemSeznamu = {
+      id: String(id), editor, scroll: editor.scrollTop,
+      y: pozice.top - hranice.top, cas: performance.now()
+    };
+  }
   function vykresliSbaleniBezSkoku(id) {
     const editorPred = editor;
     if (!editorPred) return;
@@ -5550,19 +5565,26 @@
       `[data-ln-v2-blok="${CSS.escape(idRadku)}"]`
     );
     const staryRadek = najdiRadek();
-    const scrollPred = editorPred.scrollTop;
+    const predDotykem = pohledPredDotykemSeznamu;
+    pohledPredDotykemSeznamu = null; // jednorázové, nikdy nepoužít pro jiné gesto
+    const platnaKotva = predDotykem?.editor === editorPred &&
+      predDotykem.id === idRadku && performance.now() - predDotykem.cas < 1200;
+    const scrollPred = platnaKotva ? predDotykem.scroll : editorPred.scrollTop;
     const hranicePred = editorPred.getBoundingClientRect();
     const radekPred = staryRadek?.getBoundingClientRect();
-    const yPred = radekPred ? radekPred.top - hranicePred.top : NaN;
-    const jeViditelny = radekPred && radekPred.bottom > hranicePred.top &&
-      radekPred.top < hranicePred.bottom;
+    const yPred = platnaKotva ? predDotykem.y :
+      (radekPred ? radekPred.top - hranicePred.top : NaN);
+    const jeViditelny = platnaKotva || (radekPred &&
+      radekPred.bottom > hranicePred.top && radekPred.top < hranicePred.bottom);
     const predchoziKotveni = editorPred.style.overflowAnchor;
     // Dočasně vypnout automatické scroll anchoring pouze během toggle.
     editorPred.style.overflowAnchor = "none";
     let aktivni = true;
+    let cekaNaFrame = false;
     const ukonci = () => {
       if (!aktivni) return;
       aktivni = false;
+      editorPred.removeEventListener("scroll", priScrollu);
       editorPred.style.overflowAnchor = predchoziKotveni;
       for (const typ of ["pointerdown", "touchstart", "wheel", "keydown"]) {
         editorPred.removeEventListener(typ, ukonci, true);
@@ -5596,16 +5618,25 @@
         editorPred.scrollTop = Math.min(scrollPred, maximum);
       }
     };
+    // 691AG: Pozdější nativní scroll může přijít po rAF i setTimeout.
+    // Scroll listener pouze vrací uživatele na původní rodičovský řádek;
+    // první následující dotyk, kolečko či klávesa ochranu ihned zruší.
+    function priScrollu() {
+      if (!aktivni || cekaNaFrame) return;
+      cekaNaFrame = true;
+      requestAnimationFrame(() => { cekaNaFrame = false; obnovPohled(); });
+    }
+    editorPred.addEventListener("scroll", priScrollu, { passive: true });
     obnovPohled();
     queueMicrotask(obnovPohled);
     requestAnimationFrame(() => {
       obnovPohled();
       requestAnimationFrame(obnovPohled);
     });
-    // Pojistky na opozděné WebView ukotvení k aktivnímu caretu.
     setTimeout(obnovPohled, 100);
     setTimeout(obnovPohled, 225);
-    setTimeout(() => { obnovPohled(); ukonci(); }, 370);
+    setTimeout(obnovPohled, 450);
+    setTimeout(() => { obnovPohled(); ukonci(); }, 900);
   }
 
   function prepniSbaleniSeznamuPodleId(id) {
@@ -9693,8 +9724,16 @@
        pointer/touch události dál PROPAGUJÍ pro stávající long-press MOVE.
        Žádné focus(), Range, scrollTop ani nový DOM. */
     poslouchej(editor, "pointerdown", (event) => {
-      if (event.pointerType !== "touch" || event.isPrimary === false) return;
-      if (!najdiV2SbalovaciZnacku(event.target, event.clientX)) return;
+      if (event.isPrimary === false) return;
+      const badge = event.target?.closest?.('[data-v2-list-toggle]');
+      if (badge && editor.contains(badge)) {
+        zachytPohledPredDotykemSeznamu(badge.dataset.v2ListToggle);
+        return;
+      }
+      const znacka = najdiV2SbalovaciZnacku(event.target, event.clientX);
+      if (!znacka) return;
+      zachytPohledPredDotykemSeznamu(znacka.id);
+      if (event.pointerType !== "touch") return;
       zachovejV2CaretProSipku(event.target);
       if (event.cancelable) event.preventDefault();
     }, { capture: true, passive: false });
@@ -9716,6 +9755,11 @@
       const dotyk = event.touches[0];
       const znacka = najdiV2SbalovaciZnacku(event.target, dotyk.clientX);
       if (!znacka) return;
+      // Pointerdown bývá dříve; nikdy nepřepsat jeho původní pozici.
+      if (pohledPredDotykemSeznamu?.id !== znacka.id ||
+          performance.now() - pohledPredDotykemSeznamu.cas > 500) {
+        zachytPohledPredDotykemSeznamu(znacka.id);
+      }
       if (!v2CaretPredSipkou) zachovejV2CaretProSipku(event.target);
       v2DotykSbalovaciZnacky = {
         id: znacka.id,
@@ -9755,6 +9799,17 @@
     poslouchej(editor, "touchcancel", () => {
       v2CaretPredSipkou = null;
       v2DotykSbalovaciZnacky = null;
+      pohledPredDotykemSeznamu = null;
+    }, { capture: true, passive: true });
+
+    poslouchej(editor, "touchstart", (event) => {
+      const badge = event.target?.closest?.('[data-v2-list-toggle]');
+      if (!badge || !editor.contains(badge)) return;
+      const id = badge.dataset.v2ListToggle;
+      if (pohledPredDotykemSeznamu?.id !== id ||
+          performance.now() - pohledPredDotykemSeznamu.cas > 500) {
+        zachytPohledPredDotykemSeznamu(id);
+      }
     }, { capture: true, passive: true });
 
     /* Na PC nativní caret vzniká při mousedown, ještě před clickem.
