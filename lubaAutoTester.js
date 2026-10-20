@@ -422,7 +422,7 @@
     finally{restoreTestScreen();if(alive())render();}
   }
   async function spustitLive690Z(generace){
-    const expected=['ui-livez-open','ui-livez-bullet-root','ui-livez-bullet-indent','ui-livez-bullet-collapse','ui-livez-bullet-expand','ui-livez-bullet-outdent','ui-livez-bullet-undo','ui-livez-save','ui-livez-deep-open','ui-livez-deep-indent','ui-livez-deep-collapse','ui-livez-deep-expand','ui-livez-deep-outdent','ui-livez-deep-persist'];
+    const expected=['ui-livez-open','ui-livez-bullet-root','ui-livez-bullet-indent','ui-livez-bullet-collapse','ui-livez-bullet-expand','ui-livez-bullet-outdent','ui-livez-bullet-undo','ui-livez-save','ui-livez-deep-open','ui-livez-deep-indent','ui-livez-deep-collapse','ui-livez-deep-expand','ui-livez-deep-outdent','ui-livez-deep-persist','ui-livez-scroll-nojump'];
     const blocked=m=>expected.map(id=>({id,name:id,kind:'REAL_EDITOR_LIVE_690Z',status:'APP_BLOCKED',ms:0,detail:String(m).slice(0,175)}));
     const alive=()=>generace===generaceBehu&&running&&!screen?.hidden;
     try{
@@ -780,7 +780,7 @@
       ['editor-selection',['ui-own-selection','ui-own-handle-drag','caret-todo-range']],
       ['editor-edge',['caret-editor-scroll']],
       ['editor-format',['ui-live-format','ui-liveb-italic','ui-liveb-persist','caret-editor-format']],
-      ['list-toggle',['ui-livez-bullet-collapse','ui-livez-bullet-expand','core-list-toggle']],
+      ['list-toggle',['ui-livez-bullet-collapse','ui-livez-bullet-expand','ui-livez-scroll-nojump','core-list-toggle']],
       ['list-badge',['ui-livez-bullet-expand','core-list-badge']],
       ['list-levels',['ui-livez-bullet-indent','ui-livez-bullet-outdent','core-list-indent']],
       ['list-move',['ui-livec-native-move','core-list-move-pointer']],

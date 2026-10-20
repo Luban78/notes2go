@@ -20,7 +20,8 @@ const cases=[
  ['ui-livez-deep-collapse','V aplikaci – sbalit dvě vnořené větve šipkami'],
  ['ui-livez-deep-expand','V aplikaci – rozbalit obě vnořené větve počty'],
  ['ui-livez-deep-outdent','V aplikaci – dvě úrovně vynoření pomocí Shift+Tab'],
- ['ui-livez-deep-persist','V aplikaci – uložit a obnovit vnořenou hierarchii']
+ ['ui-livez-deep-persist','V aplikaci – uložit a obnovit vnořenou hierarchii'],
+ ['ui-livez-scroll-nojump','Bullet – opakované sbalení a rozbalení bez skoku scrollu']
 ];
 const sleep=n=>new Promise(r=>setTimeout(r,n));
 const assert=(x,m)=>{if(!x)throw Error(m);};
@@ -99,6 +100,35 @@ function parentChild(){
  const parent=find(rootLabel),child=find(childLabel);assert(parent?.typ==='bullet'&&child?.typ==='bullet','neexistuji_dva_bullety');
  assert(blocks().findIndex(b=>b.id===child.id)===blocks().findIndex(b=>b.id===parent.id)+1,'potomek_neni_hned_za_rodicem');
  return {parent,child};
+}
+// 691AB: capture actual scroller positions AND the on-screen parent row position.
+// This tests real rendered UI click handlers, not a physical Android finger.
+async function toggleWithoutJump(parent,collapse){
+ const editor=api()?.ziskejEditorElement?.();
+ const current=row(parent);
+ assert(editor?.isConnected&&current?.isConnected,'scroll_fixture_editor_or_parent_missing');
+ current.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+ await sleep(110);
+ const candidates=[editor,editor.closest('.modalContent')];
+ const scrollers=[...new Set(candidates.filter(el=>el&&el.scrollHeight-el.clientHeight>70))];
+ if(!scrollers.length)throw Error('BLOCKED_691AB_scroll_container_not_scrollable');
+ const beforeTop=current.getBoundingClientRect().top;
+ const before=scrollers.map(el=>({el,top:el.scrollTop,
+   remaining:Math.max(0,el.scrollHeight-el.clientHeight-el.scrollTop)}));
+ if(before.some(s=>s.remaining<80))throw Error('BLOCKED_691AB_scroll_fixture_near_bottom');
+ if(collapse)clickMarker(parent);else clickBadge(parent);
+ await sleep(170);
+ const currentModel=blocks().find(b=>b.id===parent.id);
+ assert(currentModel?.sbaleno===collapse,'scroll_toggle_model_not_updated');
+ const currentRow=row(currentModel);
+ assert(currentRow?.isConnected,'scroll_parent_lost_from_dom');
+ const dy=currentRow.getBoundingClientRect().top-beforeTop;
+ const deltas=before.map(s=>s.el.scrollTop-s.top);
+ assert(Math.abs(dy)<=9&&deltas.every(d=>Math.abs(d)<=8),
+   'BULLET_SCROLL_JUMP_'+(collapse?'collapse':'expand')+
+   '_offset='+Math.round(dy)+'_scroll='+deltas.map(d=>Math.round(d)).join(','));
+ return (collapse?'sbaleno':'rozbaleno')+' offset='+Math.round(dy)+
+   'px scroll='+deltas.map(d=>Math.round(d)).join('/')+'px';
 }
 async function saveClose(){
  const btn=document.getElementById('editorBackButton');assert(btn&&!btn.disabled,'chybi_ulozit_a_zavrit');btn.click();
@@ -214,11 +244,48 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
      assert(tree.anchor.sbaleno!==true&&tree.sub.sbaleno!==true,'rozbaleny_stav_se_ztratil');
      evidence='Skutečné Uložit a zavřít / znovu otevřít zachovalo tři testovací Bullet položky, pořadí a úrovně 0/1/0.';
      await saveClose();
+    }else if(i===14){
+     // 691AB: independent scroll fixture AFTER the previously verified 691AA
+     // tree. It cannot change the result of the deep hierarchy regression.
+     await window.openTaskEditorById(id);await sleep(165);
+     assert(document.getElementById('taskModal')?.dataset?.taskId===id,'scroll_wrong_note');
+     const parentLabel='AUTOTEST_SCROLL_PARENT_'+seed;
+     const childLabel='AUTOTEST_SCROLL_CHILD_'+seed;
+     const parent=await makeBullet(parentLabel);assertDepth(parent,0);
+     const child=await makeBullet(childLabel);keyOn(child,false);await sleep(120);
+     assertDepth(find(childLabel),1);
+     // Many following, level-0 siblings prevent browser scroll clamping when
+     // the child is hidden. Only this tester's LOCAL Testy note is touched.
+     let finalTail='';
+     for(let j=0;j<16;j++){
+       const label='AUTOTEST_SCROLL_TAIL_'+seed+'_'+j+' '+('konec radku '.repeat(13));
+       typeNew(label);
+       if(j===0){const first=find(label);assert(first,'scroll_tail_first_missing');
+         if(first.uroven>0){keyOn(first,true);await sleep(75);}
+         assertDepth(find(label),0);
+       }
+       finalTail=label;
+     }
+     const last=find(finalTail);assert(last,'scroll_tail_last_missing');
+     assertDepth(last,0);
+     positionOn(last); // caret is deliberately away from the parent row
+     const scrolled=[];
+     for(let j=0;j<2;j++){
+       scrolled.push(await toggleWithoutJump(find(parentLabel),true));
+       scrolled.push(await toggleWithoutJump(find(parentLabel),false));
+     }
+     assert(find(parentLabel)?.sbaleno===false&&find(childLabel)?.uroven===1,
+       'scroll_test_changed_list_hierarchy');
+     await saveClose();
+     evidence='4 skutečné UI přepnutí při vzdáleném caretu; '+scrolled.join('; ')+
+       '. Kontrolovány scrollTop a pozice řádku, nikoli fyzický Android tap.';
     }
     rows.push({id:testId,name:label,kind,status:'APP_PASS',ms:Math.round(performance.now()-start),detail:evidence+' Skutečné UI/model LubaNote, ne simulovaná projekce.'});
     const faktor=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);
     await sleep(faktor>0?Math.round(900*faktor):130);
-   }catch(e){failed=true;rows.push({id:testId,name:label,kind,status:'APP_FAIL',ms:Math.round(performance.now()-start),detail:String(e?.message||e).slice(0,190)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
+   }catch(e){failed=true;const problem=String(e?.message||e);
+     rows.push({id:testId,name:label,kind,status:problem.startsWith('BLOCKED_691AB_')?'APP_BLOCKED':'APP_FAIL',
+       ms:Math.round(performance.now()-start),detail:problem.slice(0,190)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
   }
  }catch(e){failed=true;rows.push({id:cases[0][0],name:cases[0][1],kind,status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,195)});}
  finally{

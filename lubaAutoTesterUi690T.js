@@ -15,7 +15,7 @@
     ['ui-own-tap','LubaNote – nativní dotyk ovládá náš caret'],
     ['ui-own-caret-drag','LubaNote – nativní tah vlastní kapky posune caret'],
     ['ui-own-selection','LubaNote – dvojtap vytvoří náš výběr a dvě vlastní kapky'],
-    ['ui-own-handle-drag','LubaNote – nativní tah vlastní kapky změní výběr'],
+    ['ui-own-handle-drag','LubaNote – nativní tah obou kapek nezávisle změní výběr'],
     ['ui-real-save','Běžná aplikace – uložení tlačítkem a nové načtení']
   ];
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -266,10 +266,10 @@
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');
             assert(ownSelectionBefore.length>0,'missing_previous_own_selection');
-            // 691H: Selection may end near a row/viewport edge. A 5px swipe
-            // could ACK as delivered yet fail to change the actual OWN selection.
-            // Exercise END first, then START only if the real model stayed the same.
-            // Neither gesture directly edits model, DOM selection or handles.
+            // 691AB: Both native OWN selection handles must independently move
+            // the actual production selection. A successful END swipe must not
+            // silently stand in for an untested START handle. Java MotionEvent
+            // is not a human finger; this remains a partial V1 scenario proof.
             const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
             const selected=()=>{
               const value=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
@@ -284,11 +284,14 @@
                 'custom_selection_lost_after_drag_'+target);
               return selected();
             };
-            let after=await drag('selection-end');
-            if(after===ownSelectionBefore)after=await drag('selection-start');
-            assert(after.length>0&&after!==ownSelectionBefore,
-              'own_handle_drag_did_not_change_selected_text: beforeLength='+
-              ownSelectionBefore.length+', afterLength='+after.length);
+            const afterEnd=await drag('selection-end');
+            assert(afterEnd.length>0&&afterEnd!==ownSelectionBefore,
+              'own_END_handle_did_not_change_selection: beforeLength='+
+              ownSelectionBefore.length+', afterLength='+afterEnd.length);
+            const afterStart=await drag('selection-start');
+            assert(afterStart.length>0&&afterStart!==afterEnd,
+              'own_START_handle_did_not_change_selection: afterEndLength='+
+              afterEnd.length+', afterStartLength='+afterStart.length);
           }else if(i===8){
             const save=document.getElementById('editorBackButton');
             assert(save&&!save.disabled,'real_save_button_missing');
