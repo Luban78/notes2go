@@ -5537,33 +5537,75 @@
     badge.style.marginLeft = "0";
   }
 
+  /* 691AE: pozdní WebView scroll/focus po sbalení nesmí odnést místo čtení.
+     Stránka/klávesnice může přesunout scroll až po prvním rAF (683G caret).
+     Ochrana platí jen pro toggle seznamu, nikoli při běžném psaní či MOVE. */
+  let ochranaPohleduSeznamu = null;
   function vykresliSbaleniBezSkoku(id) {
     const editorPred = editor;
     if (!editorPred) return;
+    ochranaPohleduSeznamu?.ukonci?.();
     const idRadku = String(id || "");
     const najdiRadek = () => editorPred.querySelector(
       `[data-ln-v2-blok="${CSS.escape(idRadku)}"]`
     );
     const staryRadek = najdiRadek();
-    const yPred = staryRadek?.getBoundingClientRect().top;
     const scrollPred = editorPred.scrollTop;
+    const hranicePred = editorPred.getBoundingClientRect();
+    const radekPred = staryRadek?.getBoundingClientRect();
+    const yPred = radekPred ? radekPred.top - hranicePred.top : NaN;
+    const jeViditelny = radekPred && radekPred.bottom > hranicePred.top &&
+      radekPred.top < hranicePred.bottom;
+    const predchoziKotveni = editorPred.style.overflowAnchor;
+    // Dočasně vypnout automatické scroll anchoring pouze během toggle.
+    editorPred.style.overflowAnchor = "none";
+    let aktivni = true;
+    const ukonci = () => {
+      if (!aktivni) return;
+      aktivni = false;
+      editorPred.style.overflowAnchor = predchoziKotveni;
+      for (const typ of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+        editorPred.removeEventListener(typ, ukonci, true);
+      }
+      if (ochranaPohleduSeznamu?.ukonci === ukonci) ochranaPohleduSeznamu = null;
+    };
+    ochranaPohleduSeznamu = { ukonci };
+    // Další skutečná interakce má přednost před ochranou předchozího tapu.
+    for (const typ of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+      editorPred.addEventListener(typ, ukonci, true);
+    }
 
     if (!aktualizujSbaleniVExistujicimDomu()) {
-      /* Jen nouzova cesta pri poskozenem DOM; nesmi dojit k castecne zmene. */
+      /* Jen nouzová cesta při poškozeném DOM; bez částečného patchování. */
       vykresli(null);
     }
-    /* U pouheho rozbaleni/sbaleni NESAHAME na Range ani focus.
-       Puvodni DOM textovych uzlu zustava zachovan i pro puvodni caret. */
+    /* Nedotýkat se Range, focusu, modelového caretu ani struktury řádků.
+       Udržet rodiče na stejné pozici i po odloženém Android scrollu. */
     const obnovPohled = () => {
-      if (editor !== editorPred || !editorPred.isConnected) return;
+      if (!aktivni || editor !== editorPred || !editorPred.isConnected) return;
       const novyRadek = najdiRadek();
-      if (novyRadek && Number.isFinite(yPred)) {
-        const rozdil = novyRadek.getBoundingClientRect().top - yPred;
-        if (Math.abs(rozdil) > 1) editorPred.scrollTop += rozdil;
-      } else editorPred.scrollTop = scrollPred;
+      if (jeViditelny && novyRadek && Number.isFinite(yPred)) {
+        const rozdil = novyRadek.getBoundingClientRect().top -
+          editorPred.getBoundingClientRect().top - yPred;
+        if (Math.abs(rozdil) > 1) {
+          const maximum = Math.max(0, editorPred.scrollHeight - editorPred.clientHeight);
+          editorPred.scrollTop = Math.max(0, Math.min(maximum, editorPred.scrollTop + rozdil));
+        }
+      } else {
+        const maximum = Math.max(0, editorPred.scrollHeight - editorPred.clientHeight);
+        editorPred.scrollTop = Math.min(scrollPred, maximum);
+      }
     };
     obnovPohled();
-    requestAnimationFrame(obnovPohled);
+    queueMicrotask(obnovPohled);
+    requestAnimationFrame(() => {
+      obnovPohled();
+      requestAnimationFrame(obnovPohled);
+    });
+    // Pojistky na opozděné WebView ukotvení k aktivnímu caretu.
+    setTimeout(obnovPohled, 100);
+    setTimeout(obnovPohled, 225);
+    setTimeout(() => { obnovPohled(); ukonci(); }, 370);
   }
 
   function prepniSbaleniSeznamuPodleId(id) {
