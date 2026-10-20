@@ -1,4 +1,4 @@
-/* LubaNote AutoTester 691K — 690B registry + isolated Core V2 bullet behavioral tests.
+/* LubaNote AutoTester 691L — 690B registry + isolated Core V2 bullet behavioral tests.
  * Explicit opt-in; isolated Worker runs synthetic cases only.
  * Local Testy smoke suite uses production storage for its own UUID; no credentials/keys are logged or sent to the runner.
  * A secure administrator-only LubaServer runner executes isolated SQL tests on demand.
@@ -542,6 +542,23 @@
     }catch(e){if(alive())results.push(...blocked(e?.message||e));}
     finally{restoreTestScreen();if(alive())render();}
   }
+  async function spustitHledaniSeznamu691L(generace){
+    const expected=['ui-livel-ready','ui-livel-title','ui-livel-missing','ui-livel-clear','ui-livel-preserve'];
+    const alive=()=>generace===generaceBehu&&running&&!screen?.hidden;
+    const blocked=msg=>expected.map(id=>({id,name:id,kind:'REAL_NOTES_TEXT_SEARCH_691L',status:'APP_BLOCKED',ms:0,detail:String(msg).slice(0,190)}));
+    try{
+      if(!alive())return;
+      if(!lastTestNoteId){results.push(...blocked('Chybi vlastni LOCAL Testy poznamka'));render();return;}
+      if(!results.some(r=>r.id==='ui-livek-preserve'&&r.status==='APP_PASS')){results.push(...blocked('691K predchozi test neprosel'));render();return;}
+      const mod=window.LubaNoteAutoTesterLive691L;
+      if(!mod?.run){results.push(...blocked('691L modul se nenacetl'));render();return;}
+      const rows=await mod.run(lastTestNoteId,alive,msg=>{if(alive())setStatus(msg);});
+      if(!alive())return;
+      if(!Array.isArray(rows)||rows.length!==expected.length||rows.some((r,i)=>r.id!==expected[i]||!['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status)))throw Error('691L neplatny report');
+      results.push(...rows);
+    }catch(e){if(alive())results.push(...blocked(e?.message||e));}
+    finally{if(alive())render();}
+  }
   async function spustitZivePredIzolaci690Z(generace){
     if(generace!==generaceBehu||!running)return;
     setStatus('1/2: Skutečná LubaNote – vytvářím poznámku Testy…');
@@ -558,6 +575,7 @@
       if(generace===generaceBehu)await spustitNativniBulletMove691C(generace);
       if(generace===generaceBehu)await spustitHledaniZarovnani691F(generace);
       if(generace===generaceBehu)await spustitTextHistorii691K(generace);
+      if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);
     }
     liveFirstDone=true;
     if(generace===generaceBehu&&running)setStatus('2/2: Doplňkové izolované regrese Core V2, E2E, DB a pokrytí V1…');
@@ -734,7 +752,7 @@
       ['image-reopen',['core-image-roundtrip']],
       ['notes-create',['local-notes-create','ui-real-open']],
       ['notes-trash',['local-notes-trash','local-notes-restore']],
-      ['notes-search',['ui-livef-find-count','ui-livef-find-navigation','ui-livef-find-reopen']],
+      ['notes-search',['ui-livel-ready','ui-livel-title','ui-livel-missing','ui-livel-clear']],
       ['security-e2e',['e2e-self','e2e-no-plaintext']],
       ['app-planner',['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy']],
       ['app-i18n',['app-i18n-packs']]
@@ -1202,7 +1220,8 @@
         if(generace===generaceBehu)await spustitBarvyFormat691B(generace);
         if(generace===generaceBehu)await spustitNativniBulletMove691C(generace);
       if(generace===generaceBehu)await spustitHledaniZarovnani691F(generace);
-      if(generace===generaceBehu)await spustitTextHistorii691K(generace);}
+      if(generace===generaceBehu)await spustitTextHistorii691K(generace);
+      if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);}
       if(generace===generaceBehu)dokoncitBeh();
       return;
     }
