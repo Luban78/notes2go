@@ -1,4 +1,4 @@
-/* 691X/691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
+/* 691Y/691X/691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
  * Native tests use guarded Java WebView MotionEvent (not a physical finger).
  * Crop/settings/save use actual shipped production UI and model. All failures
  * are explicit; unrelated image settings run despite native gesture failure. */
@@ -84,6 +84,37 @@ function sizeAlign(id,size,align){
 }
 function zoom(){const str=String(preview()?.querySelector('img')?.style?.transform||'');return Number(str.match(/scale\(([^)]+)\)/)?.[1]||1);}
 function transform(){return String(preview()?.querySelector('img')?.style?.transform||'');}
+// 691Y: verify the real rendered appearance, not only persisted HTML bytes.
+// Ratios are relative to editor width, so a soft keyboard or screen size does
+// not turn normal responsive layout into a false image-data failure.
+async function appearance(){
+  await showImage();
+  const img=image(), fig=figure(), editor=core()?.ziskejEditorElement?.();
+  assert(img&&fig&&editor,'visual_image_elements_missing');
+  for(let n=0;n<15&&(!img.complete||img.naturalWidth<=0);n++)await wait(70);
+  assert(img.complete&&img.naturalWidth>0&&img.naturalHeight>0,'visual_image_not_loaded');
+  const ir=img.getBoundingClientRect(),er=editor.getBoundingClientRect();
+  assert(ir.width>1&&ir.height>1&&er.width>1,'visual_image_geometry_missing');
+  const fs=getComputedStyle(fig),is=getComputedStyle(img);
+  return {
+    widthRatio:ir.width/er.width,aspectRatio:ir.height/ir.width,
+    naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight,
+    float:fs.float,position:fs.position,objectFit:is.objectFit,
+    text:String(core()?.exportujProstyText?.()||'')
+  };
+}
+function assertAppearance(before,after){
+  assert(before&&after,'visual_image_comparison_missing');
+  assert(before.naturalWidth===after.naturalWidth&&before.naturalHeight===after.naturalHeight,
+    'image_intrinsic_size_changed_after_reopen');
+  assert(Math.abs(before.widthRatio-after.widthRatio)<0.045,
+    'image_display_width_changed_after_reopen');
+  assert(Math.abs(before.aspectRatio-after.aspectRatio)<0.035,
+    'image_display_aspect_changed_after_reopen');
+  assert(before.float===after.float&&before.position===after.position&&
+    before.objectFit===after.objectFit,'image_css_appearance_changed_after_reopen');
+  assert(before.text===after.text,'neighbor_text_changed_after_image_save');
+}
 async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=()=>{}){
  if(busy)return CASES.map(([key,name,kind])=>({id:key,name,kind:KIND,status:kind==='NATIVE'?'NATIVE_BLOCKED':'APP_BLOCKED',ms:0,detail:'image_tester_busy'}));
  busy=true;activeTestImageAlt='';const out=[];let setupFailed=false,hasPreview=false,original='',cropped='';
@@ -163,6 +194,7 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
     else if(i===14){const b=picture();assert(b&&image(),'image_missing_before_save');
       const snapshot={alt:b.alt,src:b.zdroj,size:b.velikost,align:b.zarovnani};
       const textBefore=blocks().filter(x=>x.typ!=='obrazek').length;
+      const beforeAppearance=await appearance();
       await save();
       // Core V2 stores HTML, not its transient generated block id. Verify
       // persisted bytes + settings via the real saved note BEFORE reopening.
@@ -186,7 +218,9 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
       // Deliberately DO NOT compare after.id: importing saved HTML creates
       // a fresh internal image id. Equal IDs are not a persistence contract.
       assert(blocks().filter(x=>x.typ!=='obrazek').length>=textBefore,'neighbor_text_lost_after_image_save');
-      await save();detail='Stored HTML and reopened Core V2 preserve image pixels, size, alignment, alt and neighboring text. Temporary block IDs are regenerated.';}
+      const afterAppearance=await appearance();
+      assertAppearance(beforeAppearance,afterAppearance);
+      await save();detail='Stored HTML, reopened model and rendered DOM preserve image pixels, intrinsic dimensions, relative display width/aspect, CSS appearance and identical surrounding text. Temporary block IDs are regenerated.';}
    }catch(e){status=kind==='NATIVE'?'NATIVE_FAIL':'APP_FAIL';detail=String(e?.message||e).slice(0,175);
      if(i<2)setupFailed=true;
      if(i===2&&detail==='native_image_gesture_not_available'){status='NATIVE_BLOCKED';}

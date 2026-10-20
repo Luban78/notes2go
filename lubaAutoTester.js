@@ -751,7 +751,19 @@
       ['editor-plain',['ui-livek-plain-write','ui-livek-plain-middle','ui-livek-plain-delete','ui-livek-persist']],
       ['editor-undo',['ui-livek-undo-text','ui-livek-undo-format','ui-livek-persist']],
       ['editor-format',['ui-live-format','ui-liveb-italic','ui-liveb-underline','ui-liveb-heading','ui-liveb-persist']],
-      ['list-move',['ui-livec-native-move','ui-livec-verify','ui-livec-history','ui-livec-persist']]
+      ['list-move',['ui-livec-native-move','ui-livec-verify','ui-livec-history','ui-livec-persist']],
+      // 691Y: the full manual Find scenario requires actual editor and list UI,
+      // multiple editor hits, next/previous, absence, clearing and persistence.
+      // Every dependency must pass in this SAME run; no partial green status.
+      ['notes-search',[
+        'ui-livef-find-open','ui-livef-find-count','ui-livef-find-navigation',
+        'ui-livef-find-missing','ui-livef-find-close','ui-livef-find-reopen',
+        'ui-livel-ready','ui-livel-title','ui-livel-missing',
+        'ui-livel-clear','ui-livel-preserve'
+      ]],
+      // 691Y: image roundtrip now verifies pixels, CSS appearance, sizing,
+      // alignment and neighboring text before and after a real UI save/reopen.
+      ['image-reopen',['ui-img-persist']]
     ]);
     const castecneDukazy=new Map([
       ['editor-plain',['ui-real-keyboard','ui-livea-clear','core-editor-keyboard']],
