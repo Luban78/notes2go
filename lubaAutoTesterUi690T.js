@@ -266,7 +266,7 @@
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');
             assert(ownSelectionBefore.length>0,'missing_previous_own_selection');
-            // 691AB: Both native OWN selection handles must independently move
+            // 691AC: Both native OWN selection handles must independently move
             // the actual production selection. A successful END swipe must not
             // silently stand in for an untested START handle. Java MotionEvent
             // is not a human finger; this remains a partial V1 scenario proof.
@@ -275,23 +275,59 @@
               const value=window.LubaNoteEditorV2?.ziskejTextVyberuProSelectionMenu?.();
               return typeof value==='string'?value:String(value?.text||'');
             };
+            // 691AC: measure both REAL touch streams and model endpoints.
+            // A delivered MotionEvent ACK alone does not prove the handle moved.
+            const readModel=()=>{
+              const v=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
+              return [v?.zacatek?.blok,v?.zacatek?.offset,v?.konec?.blok,v?.konec?.offset].map(x=>String(x??'?')).join(':');
+            };
             const drag=async target=>{
-              const ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});
+              let trustedDown=0,trustedMove=0,hit='-';
+              const onStart=e=>{
+                if(!e.isTrusted)return;
+                const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
+                if(t){trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';}
+              };
+              const onMove=e=>{if(e.isTrusted)trustedMove++;};
+              document.addEventListener('touchstart',onStart,true);
+              document.addEventListener('touchmove',onMove,true);
+              const before=readModel();let ack;
+              try {ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});await wait(350);}
+              finally {
+                document.removeEventListener('touchstart',onStart,true);
+                document.removeEventListener('touchmove',onMove,true);
+              }
               assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT',
                 'own_handle_drag_no_ack_'+target);
-              await wait(350);
               assert(editor?.classList.contains('ln-v2-selection-custom-active'),
                 'custom_selection_lost_after_drag_'+target);
-              return selected();
+              return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit};
             };
             const afterEnd=await drag('selection-end');
-            assert(afterEnd.length>0&&afterEnd!==ownSelectionBefore,
-              'own_END_handle_did_not_change_selection: beforeLength='+
-              ownSelectionBefore.length+', afterLength='+afterEnd.length);
+            assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
+              'own_END_handle_did_not_change_selection: beforeLength='+ownSelectionBefore.length+
+              ', afterLength='+afterEnd.text.length+', touch='+afterEnd.trustedDown+'/'+afterEnd.trustedMove+
+              ', hit='+afterEnd.hit+', model='+afterEnd.before+'>'+afterEnd.after);
+            // The end handle has just shrunk the range. Re-select a fresh word
+            // with actual Android taps before independently testing START.
+            // Otherwise a near-collapsed range can make the second gesture
+            // geometrically impossible even when START is functional.
+            const reTap=await plugin.gestureOwnedEditor({id,target:'word-early',type:'tap'});
+            assert(reTap?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_tap_no_ack');
+            await wait(200);
+            const reDouble=await plugin.gestureOwnedEditor({id,target:'word-early',type:'doubletap'});
+            assert(reDouble?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_doubletap_no_ack');
+            await wait(450);
+            const startBefore=selected();
+            const hStart=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="start"]:not([hidden])');
+            const hEnd=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]:not([hidden])');
+            assert(editor?.classList.contains('ln-v2-selection-custom-active')&&startBefore.length>0&&hStart&&hEnd,
+              'own_start_fresh_selection_not_ready: length='+startBefore.length+',handles='+!!hStart+'/'+!!hEnd);
             const afterStart=await drag('selection-start');
-            assert(afterStart.length>0&&afterStart!==afterEnd,
-              'own_START_handle_did_not_change_selection: afterEndLength='+
-              afterEnd.length+', afterStartLength='+afterStart.length);
+            assert(afterStart.text.length>0&&afterStart.text!==startBefore,
+              'own_START_handle_did_not_change_selection: beforeLength='+startBefore.length+
+              ', afterLength='+afterStart.text.length+', touch='+afterStart.trustedDown+'/'+afterStart.trustedMove+
+              ', hit='+afterStart.hit+', model='+afterStart.before+'>'+afterStart.after);
           }else if(i===8){
             const save=document.getElementById('editorBackButton');
             assert(save&&!save.disabled,'real_save_button_missing');
