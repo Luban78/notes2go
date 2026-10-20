@@ -312,22 +312,35 @@
             // with actual Android taps before independently testing START.
             // Otherwise a near-collapsed range can make the second gesture
             // geometrically impossible even when START is functional.
-            const reTap=await plugin.gestureOwnedEditor({id,target:'word-early',type:'tap'});
-            assert(reTap?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_tap_no_ack');
-            await wait(200);
-            const reDouble=await plugin.gestureOwnedEditor({id,target:'word-early',type:'doubletap'});
-            assert(reDouble?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_doubletap_no_ack');
-            await wait(450);
-            const startBefore=selected();
-            const hStart=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="start"]:not([hidden])');
-            const hEnd=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]:not([hidden])');
-            assert(editor?.classList.contains('ln-v2-selection-custom-active')&&startBefore.length>0&&hStart&&hEnd,
-              'own_start_fresh_selection_not_ready: length='+startBefore.length+',handles='+!!hStart+'/'+!!hEnd);
-            const afterStart=await drag('selection-start');
-            assert(afterStart.text.length>0&&afterStart.text!==startBefore,
-              'own_START_handle_did_not_change_selection: beforeLength='+startBefore.length+
-              ', afterLength='+afterStart.text.length+', touch='+afterStart.trustedDown+'/'+afterStart.trustedMove+
-              ', hit='+afterStart.hit+', model='+afterStart.before+'>'+afterStart.after);
+            const startAttempts=[];
+            let startChanged=false;
+            // Both are real Android MotionEvents in the OWN Testy note.
+            // First use a later visible word so START can travel outward to the
+            // left rather than cross the END handle near the line margin.
+            for(const slovo of ['word-late','word-early']){
+              if(!alive())throw Error('own_start_drag_cancelled');
+              try{
+                const reTap=await plugin.gestureOwnedEditor({id,target:slovo,type:'tap'});
+                assert(reTap?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_tap_no_ack_'+slovo);
+                await wait(210);
+                const reDouble=await plugin.gestureOwnedEditor({id,target:slovo,type:'doubletap'});
+                assert(reDouble?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_start_reset_doubletap_no_ack_'+slovo);
+                await wait(450);
+                const startBefore=selected();
+                const hStart=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="start"]:not([hidden])');
+                const hEnd=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]:not([hidden])');
+                assert(editor?.classList.contains('ln-v2-selection-custom-active')&&startBefore.length>0&&hStart&&hEnd,
+                  'own_start_selection_not_ready_'+slovo+': length='+startBefore.length+',handles='+!!hStart+'/'+!!hEnd);
+                const moved=await drag('selection-start');
+                const changed=moved.text.length>0&&moved.text!==startBefore&&
+                  moved.trustedDown>0&&moved.trustedMove>0&&moved.hit==='start'&&moved.before!==moved.after;
+                startAttempts.push(slovo+':'+startBefore.length+'>'+moved.text.length+
+                  ',touch='+moved.trustedDown+'/'+moved.trustedMove+',hit='+moved.hit+
+                  ',model='+moved.before+'>'+moved.after);
+                if(changed){startChanged=true;break;}
+              }catch(error){startAttempts.push(slovo+':'+String(error?.message||error).slice(0,130));}
+            }
+            assert(startChanged,'own_START_handle_did_not_change_selection: '+startAttempts.join(' | '));
           }else if(i===8){
             const save=document.getElementById('editorBackButton');
             assert(save&&!save.disabled,'real_save_button_missing');

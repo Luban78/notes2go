@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691N</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691AD</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -32,7 +32,7 @@
       <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
       <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. Spustit vše upřednostňuje skutečný editor; staré izolované testy Bullet/Editor/ToDo zůstávají ve volbě Izolované regrese. E2E a DB běží 1×. Android používá MotionEvent ve WebView, ne fyzický prst.</small>
     </section>
-    <section class="lat-laboratory" aria-label="Živá vizuální laboratoř">
+    <section class="lat-laboratory" data-compact="1" aria-label="Izolované diagnostické testy">
       <div class="lat-lab-top"><strong>Doplňkové izolované testy Core V2</strong>
         <div class="lat-lab-buttons"><button type="button" data-lat="speed" aria-pressed="true">🐢 Pomalu</button><button type="button" data-lat="expand" aria-pressed="false">⛶ Zvětšit</button><button type="button" data-lat="visual" aria-pressed="true">Náhled zapnutý</button></div></div>
       <div class="lat-live-stage" id="lat-live-stage"><span class="lat-live-placeholder">Zde se zobrazují pouze izolované regresní testy Core V2. Testy skutečného UI běží v běžné poznámce LubaNote Testy. Databázové testy obraz editoru nemají.</span></div>
@@ -62,13 +62,13 @@
   }
   function attachLiveFrame(frame){
     const host=screen?.querySelector('#lat-live-stage');
-    if(!host||!visualEnabled||screen.hidden)return false;
+    if(!host||!visualEnabled||screen.hidden||host.closest('[data-compact="1"]'))return false;
     // Bez zmensovaci transformace: testovaci WebView vyuzije celou sirku panelu.
     frame.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;pointer-events:none;border:0;background:#fff;';
     host.classList.add('lat-has-live-frame');
     host.appendChild(frame);return true;
   }
-  window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode?0:(extraSlowMode?2.5:1)});
+  window.LubaNoteAutoTesterVisual690F=Object.freeze({attachFrame:attachLiveFrame,isEnabled:()=>visualEnabled,isSlow:()=>visualEnabled&&slowMode,getSpeedFactor:()=>!visualEnabled||!slowMode||screen?.querySelector('.lat-laboratory')?.dataset.compact==='1'?0:(extraSlowMode?2.5:1)});
   // 690M: Dvojtap admina ukaze POUZE panel VD / DH / T, zadny nastroj neotvira.
   window.LubaNoteDockBuild='690U';
   let lastAdminTap=null;
@@ -1225,6 +1225,10 @@
     screen?.classList.remove('lat-finished');
     results=[];running=true;lastTestNoteId=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
+    // 691AD: only explicit isolated diagnostic suites need the large visual lab.
+    // In the regular one-button run the same sandbox checks execute offscreen.
+    const lab=screen?.querySelector('.lat-laboratory');
+    if(lab)lab.dataset.compact=['all','ui','notes','e2e','sync','db'].includes(activeSuite)?'1':'0';
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     const placeholder=screen?.querySelector('.lat-live-placeholder');
     if(placeholder)placeholder.textContent='Spouštím živé testovací okno Core V2…';
@@ -1310,7 +1314,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691M',
+      'LUBANOTE AUTOTESTER / 691AD',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,

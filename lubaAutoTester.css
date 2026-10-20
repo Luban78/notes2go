@@ -85,3 +85,8 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester #lat-app-hud[hidden]{display:none!important}
 #ln-auto-tester #lat-app-hud-text{flex:1;min-width:0}
 #ln-auto-tester #lat-app-hud button{min-height:34px;padding:5px 8px;font-size:12px;border-color:#bd7658}
+
+/* 691AD: no old white sandbox preview in one-button regression. */
+#ln-auto-tester .lat-laboratory[data-compact="1"] .lat-live-stage,
+#ln-auto-tester .lat-laboratory[data-compact="1"] .lat-lab-buttons{display:none!important}
+#ln-auto-tester .lat-laboratory[data-compact="1"] .lat-lab-top{margin-bottom:8px}

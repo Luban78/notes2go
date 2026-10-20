@@ -110,16 +110,27 @@ async function toggleWithoutJump(parent,collapse){
  // 691AC: Core V2's .ln-v2-editor is the actual overflow:auto
  // reading viewport. .modalContent has overflow:hidden and its layout
  // measurements must not disqualify a valid editor scroll fixture.
- current.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
- await sleep(110);
- const max=Math.max(0,editor.scrollHeight-editor.clientHeight);
- if(max<130)throw Error('BLOCKED_691AC_editor_not_scrollable_max='+Math.round(max));
+ // 691AD: scrollIntoView alone stayed at the document bottom in APK 0.9.956.
+ // Position the actual Core V2 scroll container directly, not its modal.
+ // Never count the operation as PASS until the parent is visibly on screen.
+ let max=Math.max(0,editor.scrollHeight-editor.clientHeight);
+ if(max<130)throw Error('BLOCKED_691AD_editor_not_scrollable_max='+Math.round(max));
+ for(let pokus=0;pokus<3;pokus++){
+   const pozice=current.getBoundingClientRect(),plocha=editor.getBoundingClientRect();
+   if(pozice.top>=plocha.top+12&&pozice.bottom<=plocha.bottom-12&&
+       max-editor.scrollTop>=80)break;
+   const pozadovaneY=plocha.top+Math.min(180,plocha.height*0.32);
+   const rozdil=pozice.top-pozadovaneY;
+   editor.scrollTop=Math.max(0,Math.min(max,editor.scrollTop+rozdil));
+   await sleep(120);
+   max=Math.max(0,editor.scrollHeight-editor.clientHeight);
+ }
  const remaining=Math.max(0,max-editor.scrollTop);
  const rect=current.getBoundingClientRect(),viewport=editor.getBoundingClientRect();
- const inView=rect.top>=viewport.top+5&&rect.bottom<=viewport.bottom-5;
+ const inView=rect.top>=viewport.top+12&&rect.bottom<=viewport.bottom-12;
  // A legitimate no-jump assertion needs enough content *below* the
  // parent; otherwise browser scroll clamping would hide a real defect.
- if(!inView||remaining<80)throw Error('BLOCKED_691AC_scroll_fixture_geometry_'+
+ if(!inView||remaining<80)throw Error('BLOCKED_691AD_scroll_fixture_geometry_'+
    'visible='+inView+'_top='+Math.round(editor.scrollTop)+
    '_max='+Math.round(max)+'_below='+Math.round(remaining)+
    '_row='+Math.round(rect.top)+'_viewport='+Math.round(viewport.top)+'/'+Math.round(viewport.bottom));
@@ -294,7 +305,7 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
     const faktor=Number(window.LubaNoteAutoTesterVisual690F?.getSpeedFactor?.()||0);
     await sleep(faktor>0?Math.round(900*faktor):130);
    }catch(e){failed=true;const problem=String(e?.message||e);
-     rows.push({id:testId,name:label,kind,status:/^BLOCKED_691A[BC]_/.test(problem)?'APP_BLOCKED':'APP_FAIL',
+     rows.push({id:testId,name:label,kind,status:/^BLOCKED_691A[BCD]_/.test(problem)?'APP_BLOCKED':'APP_FAIL',
        ms:Math.round(performance.now()-start),detail:problem.slice(0,190)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
   }
  }catch(e){failed=true;rows.push({id:cases[0][0],name:cases[0][1],kind,status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,195)});}
