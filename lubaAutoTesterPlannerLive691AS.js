@@ -1,4 +1,4 @@
-/* 691ASB – REAL Android Planner reminder scheduling / native pending / cancellation.
+/* 691ASC – REAL Android Planner reminder scheduling / temporary cancel / restore / final cleanup.
  * Generated LOCAL Testy note only. Permission preflight NEVER requests permissions.
  * The production Planner button stores a reminder-enabled plan and schedules it.
  * Cleanup removes only this test's plan and notification. No real user plans touched.
@@ -10,8 +10,8 @@ const CASES=[
   ['planner-as-preflight','Planner – již povolené Android notifikace a izolace'],
   ['planner-as-open','Planner – vytvořit vlastní LOCAL poznámku a otevřít plánování'],
   ['planner-as-schedule','Planner – skutečně uložit a naplánovat Android připomínku'],
-  ['planner-as-cancel','Planner – zrušit pouze vlastní čekající notifikaci'],
-  ['planner-as-reopen','Planner – znovu otevřít poznámku a ověřit uloženou připomínku'],
+  ['planner-as-cancel','Planner – dočasně zrušit jen vlastní čekající notifikaci'],
+  ['planner-as-reopen','Planner – znovuotevření obnoví stále zapnutou připomínku'],
   ['planner-as-cleanup','Planner – odstranit jen vlastní testovací plán a alarm']
 ];
 const $=id=>document.getElementById(id);
@@ -307,7 +307,7 @@ async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},rest
    await step(3,async()=>{
      assert(planId&&nativeId&&mayHaveScheduled,'own_scheduled_alarm_unavailable');
      await cancelOwnAlarm();await preserveNativeIds();
-     return 'Produkční cancelNotification zrušil přesné vlastní native ID; kontrola getPending nenašla alarm, původní čekající ID zůstala zachována.';
+     return 'Produkční cancelNotification dočasně zrušil přesné vlastní native ID; getPending nenašel alarm a původní ID zůstala zachována. Záznam reminder=true je stále uložen.';
    });
    await step(4,async()=>{
      await editorClose(noteId);await editorOpen(noteId);
@@ -317,8 +317,25 @@ async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},rest
      assert(ownNote(note,noteId)&&ownPlan(item,noteId,marker)&&ownPlan(local,noteId,marker),'planner_item_missing_after_reopen');
      assert(item.reminder===true&&local.reminder===true,'reminder_flag_changed_after_reopen');
      assert(String(window.LubaNoteEditorV2Bridge?.ziskejObsahProProdukci?.()?.richContent||'').includes(planId),'selection_backlink_missing');
-     assert(!(await getPending()).some(p=>Number(p.id)===nativeId),'cancelled_alarm_reappeared');
-     return 'Po skutečném znovuotevření trvá naplánovaný záznam, termín a backlink; zrušený alarm se neobnovil.';
+     // 691ASC: Canceling an Android alarm is temporary while the saved plan
+     // still has reminder=true. Opening the note / app recovery correctly
+     // re-arms that future alarm. Previous 691AS expected it to STAY canceled,
+     // falsely reporting a working restoration as an APP_FAIL.
+     assert(item.plannedAt===local.plannedAt&&new Date(item.plannedAt).getTime()>Date.now(),
+       'saved_reminder_term_missing_or_not_in_future');
+     const restored=await waitForPending(nativeId,true,45).catch(error=>{
+       if(String(error?.message||error)==='native_alarm_missing_after_save')throw Error('native_alarm_not_restored_after_reopen');
+       throw error;
+     });
+     const matches=restored.filter(p=>Number(p?.id)===nativeId);
+     assert(matches.length===1,'restored_alarm_missing_or_duplicated');
+     const alarm=matches[0];
+     if(alarm?.extra?.plannedItemId!=null)
+       assert(alarm.extra.plannedItemId===planId,'restored_alarm_plan_owner_mismatch');
+     if(alarm?.extra?.sourceNoteId!=null)
+       assert(alarm.extra.sourceNoteId===noteId,'restored_alarm_note_owner_mismatch');
+     await preserveNativeIds();
+     return 'Uložený plán, termín a backlink přetrvaly. Při znovuotevření se správně obnovil jediný vlastní Android alarm, protože reminder=true zůstává zapnuté. Definitivní zrušení řeší závěrečný úklid dat.';
    });
  }catch(error){
    const reason=String(error?.message||error);
