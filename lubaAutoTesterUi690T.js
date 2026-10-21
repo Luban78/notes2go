@@ -1,4 +1,4 @@
-/* 691AK/691W/691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 691BC/691AK/691W/691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -211,16 +211,69 @@
             assert(ownStav(core,window.LubaNoteKeyboard,editor).ready,
               'own_caret_not_visible_after_native_taps: '+detail+'; '+ownDiagnostika(core,window.LubaNoteKeyboard,editor));
           }else if(i===5){
+            // 691BC: Previous native step ends near the late part of a word.
+            // A blind 45px rightward swipe can hit the end of a line and leave
+            // the OWN model unchanged even when the handle is working.
+            // Establish a reproducible EARLY caret position by a REAL native
+            // tap, then capture the model. ONLY the subsequent native handle
+            // swipe may satisfy the movement assertion; setup never counts.
             const core=window.LubaNoteEditorV2;
-            const before=core?.zachytAktualniVyber?.();
-            const ack=await window.Capacitor?.Plugins?.LubaNoteNativeTester?.gestureOwnedEditor?.(
-              {id,target:'caret-handle',type:'swipe'});
+            const keyboard=window.LubaNoteKeyboard;
+            const editor=core?.ziskejEditorElement?.();
+            const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
+            assert(editor?.isConnected&&typeof plugin?.gestureOwnedEditor==='function',
+              'own_caret_drag_preflight_unavailable');
+            const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+            let markerNode=null,node;
+            while((node=walker.nextNode())){
+              if(String(node.nodeValue||'').includes('Zapis_z_viditelneho_editoru_690T')){
+                markerNode=node;break;
+              }
+            }
+            assert(markerNode,'own_caret_drag_marker_missing');
+            markerNode.parentElement?.closest?.('.ln-v2-odstavec')?.scrollIntoView?.(
+              {block:'center',inline:'nearest',behavior:'instant'});
+            await wait(150);
+            const setup=await plugin.gestureOwnedEditor({id,target:'word-early',type:'tap'});
+            assert(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT',
+              'own_caret_drag_setup_native_tap_no_ack');
+            await wait(200);
+            assert(ownStav(core,keyboard,editor).ready,
+              'own_caret_drag_not_ready_after_setup: '+ownDiagnostika(core,keyboard,editor));
+            const before=core.zachytAktualniVyber?.();
+            const location=sel=>sel?.sbaleny&&sel?.konec?
+              String(sel.konec.blok)+':'+String(sel.konec.offset):'invalid';
+            assert(before?.sbaleny===true&&before?.konec,
+              'own_caret_drag_before_invalid');
+            let down=0,move=0,up=0,hit='-';
+            const onDown=e=>{
+              if(!e.isTrusted)return;
+              const h=e.target?.closest?.('.ln-v2-single-caret-handle');
+              if(h){down++;hit='OWN';}
+            };
+            const onMove=e=>{if(e.isTrusted)move++;};
+            const onUp=e=>{if(e.isTrusted)up++;};
+            document.addEventListener('touchstart',onDown,true);
+            document.addEventListener('touchmove',onMove,true);
+            document.addEventListener('touchend',onUp,true);
+            let ack;
+            try{
+              ack=await plugin.gestureOwnedEditor({id,target:'caret-handle',type:'swipe'});
+              await wait(260);
+            }finally{
+              document.removeEventListener('touchstart',onDown,true);
+              document.removeEventListener('touchmove',onMove,true);
+              document.removeEventListener('touchend',onUp,true);
+            }
             assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_caret_drag_no_native_ack');
-            await wait(260);
-            const after=core?.zachytAktualniVyber?.();
-            assert(after?.sbaleny===true&&before?.konec&&
+            const after=core.zachytAktualniVyber?.();
+            const evidence='before='+location(before)+' after='+location(after)+
+              ' touch='+down+'/'+move+'/'+up+' hit='+hit;
+            assert(down>0&&move>0&&up>0&&hit==='OWN',
+              'own_caret_drag_trusted_touch_missing: '+evidence);
+            assert(after?.sbaleny===true&&after?.konec&&
               (after.konec.blok!==before.konec.blok||after.konec.offset!==before.konec.offset),
-              'own_caret_handle_drag_did_not_move_model');
+              'own_caret_handle_drag_did_not_move_model: '+evidence);
           }else if(i===6){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');

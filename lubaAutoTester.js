@@ -19,15 +19,15 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691BB</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691BC</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
       <button class="lat-main-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
-        <option value="editor-sync">Editor + SYNC (živé testy)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
-        <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="ui">Android / UI</option>
+        <option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
+        <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
       <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
@@ -1426,7 +1426,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691BB',
+      'LUBANOTE AUTOTESTER / 691BC',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
