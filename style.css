@@ -18684,6 +18684,64 @@ body {
   background: color-mix(in srgb, var(--color-accent, #20abc0) 12%, var(--color-surface, #112c36));
 }
 
+/* 691BP – globální FPS monitor, nezávislý na modalech a na modulu poznámek. */
+#ln-global-fps-691BP:not([hidden]) {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+  top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+  left: calc(env(safe-area-inset-left, 0px) + 8px) !important;
+  width: max-content;
+  min-width: 53px;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  background: #0e1821;
+  color: #bdf8d9;
+  border: 1px solid #527565;
+  border-radius: 7px;
+  font: 700 12px/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  touch-action: none !important;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .3);
+}
+#ln-global-fps-691BP[hidden] { display: none !important; }
+.adminFpsPanel691BP {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border, #50616a);
+  border-radius: 14px;
+  background: var(--color-surface, #112c36);
+  color: var(--color-text, #f0f7fa);
+}
+.adminFpsHead691BP { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.adminFpsHead691BP strong { display: block; margin-bottom: 4px; }
+.adminFpsHead691BP p { margin: 0; color: var(--color-text-secondary, #adbfc9); font-size: .85rem; line-height: 1.35; }
+.adminFpsHead691BP button {
+  flex: 0 0 auto;
+  min-width: 88px;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border, #50616a);
+  border-radius: 10px;
+  background: var(--color-background, #091e29);
+  color: var(--color-text, #f0f7fa);
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 700;
+}
+.adminFpsHead691BP button[aria-pressed="true"] {
+  border-color: var(--color-accent, #20abc0);
+  color: var(--color-accent-text, #98fff0);
+  background: color-mix(in srgb, var(--color-accent, #20abc0) 15%, var(--color-surface, #112c36));
+}
+.adminFpsLabel691BP { display: flex; justify-content: space-between; gap: 8px; margin: 14px 0 5px; font-size: .9rem; }
+.adminFpsLabel691BP output { font-variant-numeric: tabular-nums; font-weight: 700; }
+#adminFpsTransparency691BP { display: block; width: 100%; min-height: 28px; margin: 0; accent-color: var(--color-accent, #20abc0); }
+
 /* 683BX – síťová synchronizace viditelná i bez technického RX/TX panelu. */
 .lnSyncRecoveryNotice683BX:not([hidden]) {
   position: fixed;

@@ -223,6 +223,98 @@
   }
 
   let jeAdmin = false;
+  /* 691BP – plovoucí FPS přes celou aplikaci.
+     Pouze po serverovém ověření admina, nastavení jen v tomto zařízení.
+     Monitor nemění žádnou aplikační logiku ani DOM poznámek. */
+  const FPS_VISIBLE_KEY_691BP = "lubanoteFpsVisible691BP";
+  const FPS_TRANSPARENCY_KEY_691BP = "lubanoteFpsTransparency691BP";
+  const fpsToggle691BP = document.getElementById("adminFpsToggle691BP");
+  const fpsTransparency691BP = document.getElementById("adminFpsTransparency691BP");
+  const fpsTransparencyValue691BP = document.getElementById("adminFpsTransparencyValue691BP");
+  let fpsEnabled691BP = false;
+  let fpsAlphaLoss691BP = 30; // 30 % průhlednost; 0 % je plně neprůhledný
+  try {
+    fpsEnabled691BP = localStorage.getItem(FPS_VISIBLE_KEY_691BP) === "1";
+    const saved = localStorage.getItem(FPS_TRANSPARENCY_KEY_691BP);
+    if (saved !== null && Number.isFinite(Number(saved))) {
+      fpsAlphaLoss691BP = Math.max(0, Math.min(90, Math.round(Number(saved) / 5) * 5));
+    }
+  } catch (_) {}
+  let fpsIndicator691BP = null;
+  let fpsRequest691BP = 0;
+  let fpsWindowStart691BP = 0;
+  let fpsWindowFrames691BP = 0;
+
+  function zajistiFpsIndicator691BP() {
+    if (!fpsIndicator691BP?.isConnected) {
+      fpsIndicator691BP = document.createElement("div");
+      fpsIndicator691BP.id = "ln-global-fps-691BP";
+      fpsIndicator691BP.textContent = "FPS —";
+      fpsIndicator691BP.hidden = true;
+      fpsIndicator691BP.setAttribute("aria-hidden", "true");
+      document.body.appendChild(fpsIndicator691BP);
+    }
+    return fpsIndicator691BP;
+  }
+
+  function zastavFps691BP() {
+    if (fpsRequest691BP) cancelAnimationFrame(fpsRequest691BP);
+    fpsRequest691BP = 0;
+    fpsWindowStart691BP = 0;
+    fpsWindowFrames691BP = 0;
+  }
+
+  function krokFps691BP(cas) {
+    fpsRequest691BP = 0;
+    if (!jeAdmin || !fpsEnabled691BP || document.hidden) return;
+    if (!fpsWindowStart691BP) fpsWindowStart691BP = cas;
+    fpsWindowFrames691BP += 1;
+    const elapsed = cas - fpsWindowStart691BP;
+    if (elapsed >= 900) {
+      const hodnota = Math.max(0, Math.min(240, Math.round((fpsWindowFrames691BP - 1) * 1000 / elapsed)));
+      if (fpsIndicator691BP?.isConnected) fpsIndicator691BP.textContent = `FPS ${hodnota}`;
+      fpsWindowStart691BP = cas;
+      fpsWindowFrames691BP = 0;
+    }
+    fpsRequest691BP = requestAnimationFrame(krokFps691BP);
+  }
+
+  function synchronizujFps691BP() {
+    if (fpsToggle691BP) {
+      fpsToggle691BP.setAttribute("aria-pressed", String(fpsEnabled691BP));
+      fpsToggle691BP.textContent = fpsEnabled691BP ? "Zapnuto" : "Vypnuto";
+    }
+    if (fpsTransparency691BP) fpsTransparency691BP.value = String(fpsAlphaLoss691BP);
+    if (fpsTransparencyValue691BP) fpsTransparencyValue691BP.textContent = `${fpsAlphaLoss691BP} %`;
+    const aktivni = jeAdmin && fpsEnabled691BP && !document.hidden;
+    if (!aktivni) {
+      zastavFps691BP();
+      if (fpsIndicator691BP) fpsIndicator691BP.hidden = true;
+      return;
+    }
+    const ukazatel = zajistiFpsIndicator691BP();
+    ukazatel.style.opacity = String(1 - fpsAlphaLoss691BP / 100);
+    ukazatel.hidden = false;
+    if (!fpsRequest691BP) fpsRequest691BP = requestAnimationFrame(krokFps691BP);
+  }
+
+  fpsToggle691BP?.addEventListener("click", () => {
+    if (!jeAdmin) return;
+    fpsEnabled691BP = !fpsEnabled691BP;
+    try { localStorage.setItem(FPS_VISIBLE_KEY_691BP, fpsEnabled691BP ? "1" : "0"); } catch (_) {}
+    if (fpsIndicator691BP) fpsIndicator691BP.textContent = "FPS —";
+    zastavFps691BP();
+    synchronizujFps691BP();
+  });
+  fpsTransparency691BP?.addEventListener("input", () => {
+    if (!jeAdmin) return;
+    fpsAlphaLoss691BP = Math.max(0, Math.min(90, Number(fpsTransparency691BP.value) || 0));
+    try { localStorage.setItem(FPS_TRANSPARENCY_KEY_691BP, String(fpsAlphaLoss691BP)); } catch (_) {}
+    synchronizujFps691BP();
+  });
+  document.addEventListener("visibilitychange", synchronizujFps691BP);
+  synchronizujFps691BP();
+
   let startUiPripraven = false;
   let ucetAktivni = false;
   let uzivatele = [];
@@ -2067,6 +2159,7 @@
 
   function nastavViditelnostAdmina(hodnota) {
     jeAdmin = Boolean(hodnota);
+    synchronizujFps691BP();
     menuTlacitko.hidden = !jeAdmin;
 
     if (desktopTlacitko) {

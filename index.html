@@ -1920,6 +1920,20 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
         </div>
+        <!-- 691BP: zapnutí globálního FPS měření pouze pro ověřeného admina. -->
+        <div class="adminFpsPanel691BP" aria-labelledby="adminFpsTitle691BP">
+          <div class="adminFpsHead691BP">
+            <div>
+              <strong id="adminFpsTitle691BP">Plovoucí FPS</strong>
+              <p>Měřič vlevo nahoře ve všech částech LubaNote. Nastavení pouze pro toto zařízení.</p>
+            </div>
+            <button id="adminFpsToggle691BP" type="button" aria-pressed="false">Vypnuto</button>
+          </div>
+          <label class="adminFpsLabel691BP" for="adminFpsTransparency691BP">
+            <span>Průhlednost</span><output id="adminFpsTransparencyValue691BP" for="adminFpsTransparency691BP">30 %</output>
+          </label>
+          <input id="adminFpsTransparency691BP" type="range" min="0" max="90" step="5" value="30" aria-label="Průhlednost FPS ukazatele v procentech">
+        </div>
         <div class="adminOwnSelectionPalette" aria-labelledby="adminOwnSelectionPaletteTitle">
           <strong id="adminOwnSelectionPaletteTitle">Vlastní výběr textu a úchyty</strong>
           <p>Tematické barvy jsou výchozí. Červenou zapni jen pro diagnostiku. Nastavení platí pouze na tomto zařízení.</p>
