@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691AD</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691AR</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -796,7 +796,7 @@
       ['notes-trash',['local-notes-trash','local-notes-restore']],
       ['notes-search',['ui-livel-ready','ui-livel-title','ui-livel-missing','ui-livel-clear']],
       ['security-e2e',['e2e-self','e2e-no-plaintext']],
-      ['app-planner',['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy']],
+      ['app-planner',['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy','planner-live-picker-routing','planner-live-reminder-toggle','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup']],
       ['app-i18n',['app-i18n-packs']]
     ]);
     const dukazy=new Map(results.map(x=>[x.id,x]));
@@ -1001,6 +1001,24 @@
       results.push(...expected.map(id=>({id,name:id,kind:'PLANNER_LIVE_UI_691AQ',status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,160)})));
     }
     if(generace===generaceBehu&&!screen.hidden)render();
+  }
+
+  // 691AR: production Planner modal + real LOCAL Testy note, safely cleaned after proof.
+  async function spustitPlannerLive691AR(generace){
+    const expected=['planner-ar-fixture','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup'];
+    const alive=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
+    const blocked=msg=>expected.map(id=>({id,name:id,kind:'PLANNER_LIVE_STORAGE_691AR',status:'APP_BLOCKED',ms:0,detail:String(msg).slice(0,190)}));
+    if(!alive())return;
+    try{
+      const mod=window.LubaNoteAutoTesterPlannerLive691AR;
+      if(!mod?.run)throw Error('691AR_live_module_not_loaded');
+      const rows=await mod.run(null,alive,msg=>{if(alive())setStatus(msg);},minimizeTestScreen,restoreTestScreen);
+      if(!alive())return;
+      if(!Array.isArray(rows)||rows.length!==expected.length||rows.some((r,i)=>r.id!==expected[i]||
+        !['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status)))throw Error('691AR_invalid_rows');
+      results.push(...rows);
+    }catch(e){if(alive())results.push(...blocked(e?.message||e));}
+    finally{restoreTestScreen();if(alive())render();}
   }
 
   // 690I: synthetic caret, DOM selection and TODO edge cases in the actual shipped Core V2.
@@ -1215,6 +1233,7 @@
       await spustitPokrocile690Q(generace,'all');
       if(generace===generaceBehu)await spustitPlanner690H(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
     }
     if(generace===generaceBehu&&activeSuite==='all'&&!liveFirstDone){
       setStatus('Skutečné LOCAL poznámky – vytvoření/Koš/obnova, pak je ponechám pod Testy…');
@@ -1258,7 +1277,8 @@
     if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'||activeSuite==='extended'||activeSuite==='image'||activeSuite==='i18n'){
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');
-      if(activeSuite==='planner'){await spustitPlanner690H(generace);if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);}
+      if(activeSuite==='planner'){await spustitPlanner690H(generace);if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AR(generace);}
       if(['extended','image','i18n'].includes(activeSuite))await spustitPokrocile690Q(generace,activeSuite==='extended'?'all':activeSuite);
       if(activeSuite==='image' && generace===generaceBehu){
         await spustitPoznamky690S(generace);
@@ -1274,6 +1294,7 @@
         if(generace===generaceBehu)await spustitPokrocile690Q(generace,'all');
         if(generace===generaceBehu)await spustitPlanner690H(generace);
         if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
       }
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
@@ -1335,7 +1356,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691AD',
+      'LUBANOTE AUTOTESTER / 691AR',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
