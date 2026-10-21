@@ -984,6 +984,25 @@
     if(generace===generaceBehu&&!screen.hidden)render();
   }
 
+  // 691AQ: real Planner button handlers, no Planner records or notifications touched.
+  async function spustitPlannerLive691AQ(generace){
+    if(generace!==generaceBehu||screen.hidden)return;
+    const expected=['planner-live-picker-routing','planner-live-reminder-toggle'];
+    try{
+      const mod=window.LubaNoteAutoTesterPlannerLive691AQ;
+      if(!mod?.runRepeated)throw Error('691AQ_script_missing');
+      const rows=await mod.runRepeated(()=>generace===generaceBehu&&!screen.hidden,
+        msg=>{if(generace===generaceBehu)setStatus(msg);},activeRep);
+      if(generace!==generaceBehu||screen.hidden)return;
+      if(!Array.isArray(rows)||rows.length!==expected.length||rows.some((r,i)=>r.id!==expected[i]||!['APP_PASS','APP_FAIL'].includes(r.status)))throw Error('691AQ_invalid_rows');
+      results.push(...rows);
+    }catch(e){
+      if(generace!==generaceBehu||screen.hidden)return;
+      results.push(...expected.map(id=>({id,name:id,kind:'PLANNER_LIVE_UI_691AQ',status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,160)})));
+    }
+    if(generace===generaceBehu&&!screen.hidden)render();
+  }
+
   // 690I: synthetic caret, DOM selection and TODO edge cases in the actual shipped Core V2.
   // Blue selection marks and red pointer dot are VISUAL diagnostics, not native Android handles.
   async function spustitKurzorTodo690I(generace,scope='all'){
@@ -1195,6 +1214,7 @@
       setStatus('Doplňkové testy Code / obrázky / překlady / opakování…');
       await spustitPokrocile690Q(generace,'all');
       if(generace===generaceBehu)await spustitPlanner690H(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
     }
     if(generace===generaceBehu&&activeSuite==='all'&&!liveFirstDone){
       setStatus('Skutečné LOCAL poznámky – vytvoření/Koš/obnova, pak je ponechám pod Testy…');
@@ -1238,7 +1258,7 @@
     if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'||activeSuite==='extended'||activeSuite==='image'||activeSuite==='i18n'){
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');
-      if(activeSuite==='planner')await spustitPlanner690H(generace);
+      if(activeSuite==='planner'){await spustitPlanner690H(generace);if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);}
       if(['extended','image','i18n'].includes(activeSuite))await spustitPokrocile690Q(generace,activeSuite==='extended'?'all':activeSuite);
       if(activeSuite==='image' && generace===generaceBehu){
         await spustitPoznamky690S(generace);
@@ -1253,6 +1273,7 @@
         if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'all');
         if(generace===generaceBehu)await spustitPokrocile690Q(generace,'all');
         if(generace===generaceBehu)await spustitPlanner690H(generace);
+        if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
       }
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
