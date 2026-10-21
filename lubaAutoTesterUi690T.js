@@ -294,6 +294,7 @@
               let duringChanged=false,engineStart='-',engineMove=0,engineLast='-';
               let pointsFirst='-',pointsLast='-',handleY='-';
               let traceStart='-',traceMiddle='-',traceEnd='-',traceFinish='-';
+              let engineTrace=[],captureTrace=[],bubbleTrace=[];
               const before=readModel();
               const coordinate=e=>{
                 const t=e.touches?.[0]||e.changedTouches?.[0];
@@ -339,6 +340,27 @@
                 const d=window.LUBANOTE_V2_SELECTION_DIAG;
                 return d?.dragging===true?('D'+(d.side==='start'?'S':d.side==='end'?'E':'?')):'N';
               };
+              // 691AN: READ-ONLY trace of selection engine and event propagation.
+              // Capture and bubble are both observed; no production handler changes.
+              const engineState=()=>{
+                const d=window.LUBANOTE_V2_SELECTION_DIAG;
+                if(!d)return 'none';
+                const v=x=>x==null?'-':typeof x==='object'?'obj':String(x).slice(0,24);
+                return 'drag='+v(d.dragging)+',side='+v(d.side)+
+                  ',keys='+Object.keys(d).slice(0,14).join('/');
+              };
+              const captureMove=e=>{
+                if(!e.isTrusted||captureTrace.length>=4)return;
+                const c=coordinate(e);
+                captureTrace.push('c'+captureTrace.length+':'+(c?c.x+'/'+c.y:'-')+
+                  ':'+readModel()+':'+engineState());
+              };
+              const bubbleMove=e=>{
+                if(!e.isTrusted||bubbleTrace.length>=4)return;
+                const c=coordinate(e);
+                bubbleTrace.push('b'+bubbleTrace.length+':'+(c?c.x+'/'+c.y:'-')+
+                  ':'+readModel()+':'+engineState()+':default='+e.defaultPrevented);
+              };
               const onStart=e=>{
                 if(!e.isTrusted)return;
                 const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
@@ -354,6 +376,7 @@
                 trustedMove++;last=coordinate(e);
                 if(readModel()!==before)duringChanged=true;
                 const phase=engine();engineLast=phase;
+                if(engineTrace.length<5)engineTrace.push(trustedMove+':'+readModel()+':'+engineState());
                 if(phase.startsWith('D'))engineMove++;
                 if(trustedMove===1){pointsFirst=atPoint(last);traceMiddle=glyphPath(last);}
                 if(trustedMove===Math.max(1,Math.floor(5)))traceEnd=glyphPath(last);
@@ -363,12 +386,16 @@
               document.addEventListener('touchend',onFinish,true);
               document.addEventListener('touchstart',onStart,true);
               document.addEventListener('touchmove',onMove,true);
+              window.addEventListener('touchmove',captureMove,true);
+              document.addEventListener('touchmove',bubbleMove,false);
               let ack;
               try {ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});await wait(350);}
               finally {
                 document.removeEventListener('touchend',onFinish,true);
                 document.removeEventListener('touchstart',onStart,true);
                 document.removeEventListener('touchmove',onMove,true);
+                window.removeEventListener('touchmove',captureMove,true);
+                document.removeEventListener('touchmove',bubbleMove,false);
               }
               assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT',
                 'own_handle_drag_no_ack_'+target);
@@ -376,7 +403,7 @@
                 'custom_selection_lost_after_drag_'+target);
               return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit,
                 first,last,duringChanged,engineStart,engineMove,engineLast,
-                pointsFirst,pointsLast,handleY,traceStart,traceMiddle,traceEnd,traceFinish};
+                pointsFirst,pointsLast,handleY,traceStart,traceMiddle,traceEnd,traceFinish,engineTrace,captureTrace,bubbleTrace};
             };
             const afterEnd=await drag('selection-end');
             assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
@@ -417,7 +444,10 @@
                   ',hitY='+moved.handleY+',p='+moved.pointsFirst+'>'+moved.pointsLast+
                   ',model='+moved.before+'>'+moved.after+
                   ',path='+moved.traceStart+'>'+moved.traceMiddle+'>'+
-                    moved.traceEnd+'>'+moved.traceFinish);
+                    moved.traceEnd+'>'+moved.traceFinish+
+                    ',engineSteps='+moved.engineTrace.join(';')+
+                    ',capture='+moved.captureTrace.join(';')+
+                    ',bubble='+moved.bubbleTrace.join(';'));
                 if(changed){startChanged=true;break;}
               }catch(error){startAttempts.push(slovo+':'+String(error?.message||error).slice(0,130));}
             }
