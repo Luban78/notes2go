@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691AR</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691AS</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -796,7 +796,7 @@
       ['notes-trash',['local-notes-trash','local-notes-restore']],
       ['notes-search',['ui-livel-ready','ui-livel-title','ui-livel-missing','ui-livel-clear']],
       ['security-e2e',['e2e-self','e2e-no-plaintext']],
-      ['app-planner',['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy','planner-live-picker-routing','planner-live-reminder-toggle','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup']],
+      ['app-planner',['planner-repeat-daily','planner-repeat-weekly','planner-repeat-month-end','planner-repeat-bounds','planner-repeat-next','planner-repeat-future','planner-repeat-copy','planner-live-picker-routing','planner-live-reminder-toggle','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup','planner-as-open','planner-as-schedule','planner-as-cancel','planner-as-reopen','planner-as-cleanup']],
       ['app-i18n',['app-i18n-packs']]
     ]);
     const dukazy=new Map(results.map(x=>[x.id,x]));
@@ -1005,7 +1005,7 @@
 
   // 691AR: production Planner modal + real LOCAL Testy note, safely cleaned after proof.
   async function spustitPlannerLive691AR(generace){
-    const expected=['planner-ar-fixture','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup'];
+    const expected=['planner-ar-fixture','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup','planner-as-open','planner-as-schedule','planner-as-cancel','planner-as-reopen','planner-as-cleanup'];
     const alive=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
     const blocked=msg=>expected.map(id=>({id,name:id,kind:'PLANNER_LIVE_STORAGE_691AR',status:'APP_BLOCKED',ms:0,detail:String(msg).slice(0,190)}));
     if(!alive())return;
@@ -1016,6 +1016,26 @@
       if(!alive())return;
       if(!Array.isArray(rows)||rows.length!==expected.length||rows.some((r,i)=>r.id!==expected[i]||
         !['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status)))throw Error('691AR_invalid_rows');
+      results.push(...rows);
+    }catch(e){if(alive())results.push(...blocked(e?.message||e));}
+    finally{restoreTestScreen();if(alive())render();}
+  }
+
+  // 691AS: real Android notification requested by real Planner UI; scoped native cancel.
+  async function spustitPlannerLive691AS(generace){
+    const expected=['planner-as-preflight','planner-as-open','planner-as-schedule',
+      'planner-as-cancel','planner-as-reopen','planner-as-cleanup'];
+    const alive=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
+    const blocked=msg=>expected.map(id=>({id,name:id,kind:'PLANNER_ANDROID_REMINDER_691AS',
+      status:'APP_BLOCKED',ms:0,detail:String(msg).slice(0,195)}));
+    if(!alive())return;
+    try{
+      const mod=window.LubaNoteAutoTesterPlannerLive691AS;
+      if(!mod?.run)throw Error('691AS_planner_module_not_loaded');
+      const rows=await mod.run(null,alive,msg=>{if(alive())setStatus(msg);},minimizeTestScreen,restoreTestScreen);
+      if(!alive())return;
+      if(!Array.isArray(rows)||rows.length!==expected.length||rows.some((r,i)=>r.id!==expected[i]||
+        !['APP_PASS','APP_FAIL','APP_BLOCKED'].includes(r.status)))throw Error('691AS_invalid_rows');
       results.push(...rows);
     }catch(e){if(alive())results.push(...blocked(e?.message||e));}
     finally{restoreTestScreen();if(alive())render();}
@@ -1234,6 +1254,7 @@
       if(generace===generaceBehu)await spustitPlanner690H(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AS(generace);
     }
     if(generace===generaceBehu&&activeSuite==='all'&&!liveFirstDone){
       setStatus('Skutečné LOCAL poznámky – vytvoření/Koš/obnova, pak je ponechám pod Testy…');
@@ -1278,7 +1299,8 @@
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');
       if(activeSuite==='planner'){await spustitPlanner690H(generace);if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
-      if(generace===generaceBehu)await spustitPlannerLive691AR(generace);}
+      if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AS(generace);}
       if(['extended','image','i18n'].includes(activeSuite))await spustitPokrocile690Q(generace,activeSuite==='extended'?'all':activeSuite);
       if(activeSuite==='image' && generace===generaceBehu){
         await spustitPoznamky690S(generace);
@@ -1295,6 +1317,7 @@
         if(generace===generaceBehu)await spustitPlanner690H(generace);
         if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
+      if(generace===generaceBehu)await spustitPlannerLive691AS(generace);
       }
       if(activeSuite==='bullet'){await spustitBulletCore690C(generace);if(generace===generaceBehu)await spustitBulletHierarchie690D(generace);
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
@@ -1356,7 +1379,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691AR',
+      'LUBANOTE AUTOTESTER / 691AS',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
