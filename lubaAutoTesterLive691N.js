@@ -1,4 +1,4 @@
-/* 691Y/691X/691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
+/* 691BD/691Y/691X/691W/691N – REAL IMAGE regression on a GENERATED picture in a LOCAL Testy note.
  * Native tests use guarded Java WebView MotionEvent (not a physical finger).
  * Crop/settings/save use actual shipped production UI and model. All failures
  * are explicit; unrelated image settings run despite native gesture failure. */
@@ -143,9 +143,38 @@ async function run(id,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=(
       assert(window.LubaNoteKeyboard?.jeOtevrena?.()!==true,'image_tap_opened_keyboard');
       detail='Native image tap delivered; no caret/drop/selection menu/keyboard.';
     }
-    else if(i===3){await showImage();await native(id,'image-top','doubletap');await wait(260);
-      assert(visible(preview()),'native_top_doubletap_did_not_open_fullscreen');hasPreview=true;
-      detail='Two native taps in upper part opened the production fullscreen overlay.';
+    else if(i===3){
+      await showImage();
+      /* 691BD: The previous test does ONE real tap on this same image.
+       * Core V2 retains its last image tap for 560 ms. Without isolation,
+       * tap #1 of our native doubletap can unexpectedly OPEN fullscreen
+       * and tap #2 can CLOSE it. That is a false negative from test order.
+       * Wait past the product's real gesture window; never fake a tap or
+       * call the product preview API to obtain PASS. */
+      await wait(720);
+      const touched=[];
+      const observed=e=>{
+        if(!e.isTrusted || touched.length>=4)return;
+        const el=e.target;
+        touched.push(el?.closest?.('.lubaNoteImagePreview')?'P':
+          el?.closest?.('.ln-v2-obrazek')?'I':'X');
+      };
+      const diagStart=window.LubaNoteStartupDiag?.radky?.().length||0;
+      document.addEventListener('touchend',observed,true);
+      try{await native(id,'image-top','doubletap');}
+      finally{document.removeEventListener('touchend',observed,true);}
+      await wait(260);
+      const trace=(window.LubaNoteStartupDiag?.radky?.()||[]).slice(diagStart)
+        .filter(row=>/691U (PHOTO TAP|FULLSCREEN)/.test(row)).slice(-4)
+        .map(row=>row.includes('FULLSCREEN OPEN')?'open':
+          row.includes('FULLSCREEN NOT_OPEN')?'no-open':
+          row.includes('action=fullscreen')?'full':
+          row.includes('action=select')?'select':'other').join('/');
+      assert(visible(preview()),'native_top_doubletap_did_not_open_fullscreen; '+
+        'touch='+String(touched.join('/')||'-')+',path='+String(trace||'-'));
+      hasPreview=true;
+      detail='Two native taps in upper image, after isolated 560ms window, opened production fullscreen. '+
+        'touch='+String(touched.join('/')||'-')+'; path='+String(trace||'-');
     }
     else if(i===4){if(!visible(preview())){status='NATIVE_BLOCKED';detail='fullscreen_not_open';}
       else{await native(id,'preview','pinch');await wait(200);assert(zoom()>1.2,'native_pinch_did_not_increase_zoom_'+zoom());
