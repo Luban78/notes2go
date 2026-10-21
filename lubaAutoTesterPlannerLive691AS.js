@@ -1,4 +1,4 @@
-/* 691AS – REAL Android Planner reminder scheduling / native pending / cancellation.
+/* 691ASB – REAL Android Planner reminder scheduling / native pending / cancellation.
  * Generated LOCAL Testy note only. Permission preflight NEVER requests permissions.
  * The production Planner button stores a reminder-enabled plan and schedules it.
  * Cleanup removes only this test's plan and notification. No real user plans touched.
@@ -109,6 +109,94 @@ async function waitForPending(id,shouldExist,attempts=35){
  }
  throw Error(shouldExist?'native_alarm_missing_after_save':'native_alarm_not_cancelled');
 }
+// 691ASB – Cancel only an ID verified against our generated LOCAL note/plan.
+// Production cancel catches plugin exceptions; pending-state confirmation is essential.
+async function cancelVerifiedTestAlarm(id,noteId,planId){
+  if(!Number.isInteger(id)||id<1||!noteId||!planId)throw Error('test_alarm_identity_missing');
+  const ownPending=async()=>{
+    const entries=(await getPending()).filter(p=>Number(p?.id)===id);
+    for(const item of entries){
+      const extra=item?.extra||{};
+      if(extra?.sourceNoteId!=null&&extra.sourceNoteId!==noteId||
+         extra?.plannedItemId!=null&&extra.plannedItemId!==planId)
+        throw Error('native_alarm_owner_changed_refuse_cancel');
+    }
+    return entries;
+  };
+  await ownPending();
+  assert(typeof window.cancelNotification==='function','production_cancel_missing');
+  await window.cancelNotification(id);
+  let remaining=await ownPending();
+  if(remaining.length){
+    // Native fallback limited to the same verified ID; no blanket cancellation.
+    await native().cancel({notifications:[{id}]});
+  }
+  for(let attempt=0;attempt<20;attempt++){
+    await wait(150);
+    remaining=await ownPending();
+    if(!remaining.length)break;
+    if(attempt===8)await native().cancel({notifications:[{id}]});
+  }
+  if(remaining.length)throw Error('native_alarm_not_cancelled_after_scoped_native_cancel');
+  // A queued sync callback can re-arm the item even after an initial cancel.
+  await wait(300);
+  remaining=await ownPending();
+  if(remaining.length){
+    await window.cancelNotification(id);
+    await native().cancel({notifications:[{id}]});
+    await waitForPending(id,false,18);
+  }
+}
+
+// Recover only previous 691AS-generated LOCAL Testy fixtures. This is intentionally
+// narrower than even a generic Testy-note cleanup. Leave the reviewable note itself.
+async function recoverPrior691AS(){
+  let recovered=0;
+  const all=window.loadTask();
+  for(const note of all){
+    const id=String(note?.id||'');
+    if(!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(id))continue;
+    const marker='AUTOTEST_PLANNER_691AS_'+id.replace(/-/g,'');
+    if(!ownNote(note,id)||note.title!=='[AutoTester 690T] Planner 691AS '+id.slice(0,8)||
+       String(note.note||'')!==marker)continue;
+    const byNote=(note.plannedItems||[]).filter(p=>ownPlan(p,id,marker));
+    const byLocal=localPlans().filter(p=>ownPlan(p,id,marker));
+    const unique=new Map([...byNote,...byLocal].filter(p=>p?.id).map(p=>[p.id,p]));
+    if(!unique.size)continue;
+    for(const plan of unique.values()){
+      const n=Number(plan.notificationId);
+      assert(Number.isInteger(n)&&n>0,'old_test_alarm_invalid_id');
+      // Never cancel a number also referenced by a non-test item.
+      const allUsed=all.some(other=>other?.id!==id&&
+        (Number(other.notificationId)===n||(other.plannedItems||[]).some(p=>Number(p.notificationId)===n)));
+      const localUsed=localPlans().some(p=>!unique.has(p?.id)&&Number(p.notificationId)===n);
+      const sameNoteOtherPlan=(note.plannedItems||[]).some(p=>!unique.has(p?.id)&&Number(p.notificationId)===n);
+      assert(!allUsed&&!localUsed&&!sameNoteOtherPlan,'old_test_alarm_id_used_by_another_item');
+      const pending=(await getPending()).filter(p=>Number(p.id)===n);
+      assert(pending.every(p=>
+        (p?.extra?.plannedItemId==null||p.extra.plannedItemId===plan.id)&&
+        (p?.extra?.sourceNoteId==null||p.extra.sourceNoteId===id)),
+        'old_test_alarm_pending_owner_mismatch');
+    }
+    // Remove test plan data BEFORE cancel; otherwise sync can re-schedule it.
+    const fresh=localPlans();
+    const cleanLocal=fresh.filter(p=>!unique.has(p?.id));
+    if(cleanLocal.length!==fresh.length)localStorage.setItem('plannedItems',JSON.stringify(cleanLocal));
+    const allNow=window.loadTask(),current=allNow.find(n=>n?.id===id);
+    assert(ownNote(current,id)&&String(current.note||'')===marker,'old_test_note_scope_changed');
+    const reset={...current,note:marker,richContent:'<p>'+marker+'</p>',
+      plannedItems:(current.plannedItems||[]).filter(p=>!unique.has(p?.id)),updatedAt:new Date().toISOString()};
+    await safeNoteWrite(()=>window.saveAllTasks(allNow.map(n=>n?.id===id?reset:n)),reset);
+    for(const plan of unique.values()){
+      await cancelVerifiedTestAlarm(Number(plan.notificationId),id,plan.id);
+    }
+    assert(!(noteById(id)?.plannedItems||[]).some(p=>unique.has(p?.id)),'old_test_plan_note_cleanup_failed');
+    assert(!localPlans().some(p=>unique.has(p?.id)),'old_test_plan_local_cleanup_failed');
+    recovered+=unique.size;
+  }
+  return recovered;
+}
+
 let busy=false;
 async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},restore=()=>{}){
  if(busy)return CASES.map(([id,name])=>({id,name,kind:KIND,status:'APP_BLOCKED',ms:0,detail:'691AS_tester_busy'}));
@@ -155,10 +243,11 @@ async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},rest
        const exact=await plugin.checkExactNotificationSetting();
        assert(exact?.exact_alarm==='granted','exact_alarm_permission_not_previously_granted_no_prompt');
      }
+     const repaired=await recoverPrior691AS();
      beforePending=new Map((await getPending()).map(item=>[Number(item?.id),item]));
      beforePlanIds=new Set(localPlans().map(p=>p?.id).filter(Boolean));
      assert(window.getAllTags?.().includes('Testy'),'Testy_label_missing');
-     return `Nativní Android oprávnění již povolena. Původních čekajících upozornění: ${beforePending.size}. Žádná žádost o oprávnění ani změna uživatelských dat.`;
+     return `Android oprávnění povolena; zachované čekající alarmy: ${beforePending.size}; uklizeno starých vlastních 691AS testovacích plánů: ${repaired}. Žádné zásahy do jiných poznámek.`;
    });
    await step(1,async()=>{
      const note=fixtureNote(noteId,marker);
@@ -239,22 +328,11 @@ async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},rest
  }finally{
    stepIndex=5;const started=performance.now();
    try{
-     // Native cleanup is always attempted, even if the production Planner's save failed.
-     // Never cancel a notification that was present before this test run.
+     // Let a production Planner write settle before editing the owned fixture.
      if(saveStarted&&!saveCompleted){
        for(let i=0;i<35&&$('plannerModal')?.hidden!==true;i++)await wait(100);
        assert($('plannerModal')?.hidden===true,'asynchronous_planner_save_not_settled_cleanup_deferred');
        saveCompleted=true;
-     }
-     if(beforePending&&fixture){
-       const known=(noteById(noteId)?.plannedItems||[])
-         .filter(p=>ownPlan(p,noteId,marker)&&!beforePlanIds.has(p.id));
-       if(!nativeId&&known.length===1){
-         const inferred=Number(known[0].notificationId);
-         if(Number.isInteger(inferred)&&inferred>0&&!beforePending.has(inferred))nativeId=inferred;
-       }
-       // Cancel only the unique ID from this generated note, never any user ID.
-       if(nativeId&&!beforePending.has(nativeId))await cancelOwnAlarm();
      }
      if($('plannerModal')?.hidden===false){
        assert($('taskModal')?.dataset.taskId===noteId,'refuse_to_close_other_planner');
@@ -264,28 +342,36 @@ async function run(_unused,alive=()=>true,onProgress=()=>{},minimize=()=>{},rest
      if(fixture){
        await editorClose(noteId);
        assert(ownNote(noteById(noteId),noteId),'refuse_to_modify_nonowned_note');
-       const all=window.loadTask();const current=all.find(p=>p?.id===noteId);
+       // We must remove the active plan in BOTH persistence layers BEFORE native
+       // cancellation. Otherwise an asynchronous reminder restore can re-arm it.
+       const oldLocal=localPlans();
+       const generated=oldLocal.filter(p=>ownPlan(p,noteId,marker)&&!beforePlanIds?.has(p?.id));
+       if(generated.length)localStorage.setItem('plannedItems',JSON.stringify(
+         oldLocal.filter(p=>!generated.includes(p))));
+       const all=window.loadTask(),current=all.find(n=>n?.id===noteId);
        assert(ownNote(current,noteId),'fixture_disappeared_during_cleanup');
        const reset=fixtureNote(noteId,marker);
        const noteClean={...current,note:reset.note,richContent:reset.richContent,
          plannedItems:(current.plannedItems||[]).filter(p=>!ownPlan(p,noteId,marker)),updatedAt:new Date().toISOString()};
        await safeNoteWrite(()=>window.saveAllTasks(all.map(p=>p?.id===noteId?noteClean:p)),noteClean);
-       // Planner's localStorage layer is cleaned with fresh read-modify-write, not a stale snapshot.
-       const allLocal=localPlans();const removed=allLocal.filter(p=>ownPlan(p,noteId,marker)&&!beforePlanIds.has(p?.id));
-       if(removed.length){
-         localStorage.setItem('plannedItems',JSON.stringify(allLocal.filter(p=>!removed.includes(p))));
-       }
-       assert(!localPlans().some(p=>ownPlan(p,noteId,marker)&&!beforePlanIds.has(p.id)),'local_test_plan_left_behind');
+       assert(!localPlans().some(p=>ownPlan(p,noteId,marker)&&!beforePlanIds?.has(p.id)),'local_test_plan_left_behind');
        assert(!(noteById(noteId)?.plannedItems||[]).some(p=>ownPlan(p,noteId,marker)),'note_test_plan_left_behind');
        if(planId)assert(!String(noteById(noteId)?.richContent||'').includes(planId),'test_backlink_left_behind');
      }
      if(beforePending){
+       // Recover identity from our stored plan only (never guess from a generic
+       // notification or user note). This ID was absent before this run.
+       if(nativeId&&!beforePending.has(nativeId)){
+         assert(planId,'test_alarm_plan_id_missing_cleanup_refused');
+         await cancelVerifiedTestAlarm(nativeId,noteId,planId);
+       }
        await preserveNativeIds();
-       if(nativeId&&!beforePending.has(nativeId))assert(!(await getPending()).some(p=>Number(p.id)===nativeId),'native_test_alarm_left_behind');
+       if(nativeId&&!beforePending.has(nativeId))
+         assert(!(await getPending()).some(p=>Number(p.id)===nativeId),'native_test_alarm_left_behind');
      }
      record(5,fixture||beforePending?'APP_PASS':'APP_BLOCKED',fixture
-       ?'Vlastní testovací plán odstraněn; LOCAL Testy poznámka ponechána bez plánu. Jediný testovací Android alarm zrušen, ostatní čekající ID zachována.'
-       :'Nebyla vytvořena žádná testovací data ani Android alarm.',performance.now()-started);
+       ?'Vlastní plán odebrán z obou úložišť ještě před zrušením Android alarmu; ověřená absence ID a zachované původní pending ID.'
+       :'Nevznikla žádná testovací data ani alarm.',performance.now()-started);
    }catch(error){
      record(5,'APP_FAIL','Úklid není potvrzen: '+String(error?.message||error).slice(0,220)+'. Testovací LOCAL poznámka může zůstat ke kontrole.',performance.now()-started);
    }

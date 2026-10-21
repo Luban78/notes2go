@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691AS</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691ASB</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -1005,7 +1005,7 @@
 
   // 691AR: production Planner modal + real LOCAL Testy note, safely cleaned after proof.
   async function spustitPlannerLive691AR(generace){
-    const expected=['planner-ar-fixture','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup','planner-as-open','planner-as-schedule','planner-as-cancel','planner-as-reopen','planner-as-cleanup'];
+    const expected=['planner-ar-fixture','planner-ar-open','planner-ar-save','planner-ar-reopen','planner-ar-cleanup'];
     const alive=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
     const blocked=msg=>expected.map(id=>({id,name:id,kind:'PLANNER_LIVE_STORAGE_691AR',status:'APP_BLOCKED',ms:0,detail:String(msg).slice(0,190)}));
     if(!alive())return;
@@ -1379,7 +1379,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691AS',
+      'LUBANOTE AUTOTESTER / 691ASB',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
