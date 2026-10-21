@@ -673,27 +673,110 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
 }
 
 
+/* 691AW – idempotent recurring reminder startup verification.
+ * When Android ALREADY has exactly the next 32 correct alarms for a note,
+ * do not cancel/re-register them at every launch. Any doubt or unexpected
+ * native shape falls back to the original full restore. No notes are edited.
+ * The sticky native registry remains unchanged when pending alarms match;
+ * it was activated when those alarms were originally scheduled.
+ */
+function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
+  if (!note?.id || !window.LubaNoteRecurring?.vypocitejBudouciTerminy ||
+      !Array.isArray(pending) ||
+      (Array.isArray(note.plannedItems) && note.plannedItems.length > 0)) {
+    return { ok: false, reason: "scope-or-planner" };
+  }
+  const terminy = window.LubaNoteRecurring.vypocitejBudouciTerminy(
+    note.date, note.repeat, 32, ted
+  );
+  if (!Array.isArray(terminy) || !terminy.length || terminy.length > 32) {
+    return { ok: false, reason: "no-future-terms" };
+  }
+  // An unrelated note / stale occurrence must never satisfy the fast path.
+  const vlastni = pending.filter((item) =>
+    item?.extra?.taskId === note.id && item?.extra?.recurring === true
+  );
+  if (vlastni.length !== terminy.length) {
+    return { ok: false, reason: "count-changed" };
+  }
+  const byId = new Map(vlastni.map((item) => [Number(item?.id), item]));
+  if (byId.size !== vlastni.length) {
+    return { ok: false, reason: "duplicate-native-ids" };
+  }
+  const obsah = String(note.note || "").replace(/\s+/g, " ").trim();
+  const kratky = obsah.length > 140 ? obsah.slice(0, 140) + "…" : obsah;
+  const body = kratky || "Máš naplánovanou připomínku.";
+  const largeBody = obsah || "Máš naplánovanou připomínku.";
+  const title = note.title || "LubaNote";
+  for (let i = 0; i < terminy.length; i++) {
+    const termin = terminy[i];
+    const when = termin instanceof Date ? termin.getTime() : NaN;
+    const id = i === 0 && note.notificationId
+      ? Number(note.notificationId)
+      : vytvorIdOpakovaneNotifikace(note.id, termin.toISOString());
+    const item = byId.get(id);
+    if (!item || !Number.isFinite(when) || when <= ted.getTime())
+      return { ok: false, reason: "id-or-term-missing" };
+    if (item.title !== title || item.body !== body || item.largeBody !== largeBody)
+      return { ok: false, reason: "content-different-or-unverifiable" };
+    if (item?.extra?.lubanoteType !== "note" || item.channelId !== "reminders")
+      return { ok: false, reason: "type-or-channel-different" };
+    if (new Date(item?.schedule?.at).getTime() !== when ||
+        item?.schedule?.allowWhileIdle !== true)
+      return { ok: false, reason: "schedule-different-or-unverifiable" };
+  }
+  return { ok: true, reason: "native-exact-match" };
+}
+
 async function obnovNotifikaceOpakovanychPoznamek() {
-  if (typeof loadTask !== "function") {
-    return;
+  if (typeof loadTask !== "function") return;
+
+  const opakovanePoznamky = loadTask().filter((note) =>
+    note?.id && note.isSecret !== true && note.completed !== true &&
+    note.reminder === true && note.date && note.repeat?.enabled === true
+  );
+  if (!opakovanePoznamky.length) return;
+
+  let pending = null;
+  const plugin = window.Capacitor?.Plugins?.LocalNotifications;
+  if (typeof plugin?.getPending === "function") {
+    try {
+      const odpoved = await plugin.getPending();
+      if (Array.isArray(odpoved?.notifications)) pending = odpoved.notifications;
+    } catch (_error) {
+      // Native read failure must NEVER stop the established restore path.
+    }
   }
 
-  const opakovanePoznamky =
-    loadTask().filter(
-      (note) =>
-        note?.id &&
-        note.isSecret !== true &&
-        note.completed !== true &&
-        note.reminder === true &&
-        note.date &&
-        note.repeat?.enabled === true
-    );
-
+  const zacatek = performance.now();
+  let overeno = 0, obnoveno = 0;
+  const duvody = Object.create(null);
+  const ted = new Date();
   for (const note of opakovanePoznamky) {
-    await obnovNotifikacePoznamkyPodleSoukromi(
-      note
-    );
+    let shoda = false, duvod = pending ? "unverified" : "native-pending-unavailable";
+    if (pending) {
+      try {
+        const overeni = overCekajiciOpakovaneAlarmy691AW(note, pending, ted);
+        shoda = overeni.ok;
+        duvod = overeni.reason;
+      } catch (_error) {
+        duvod = "verification-error";
+      }
+    }
+    if (shoda) {
+      overeno++;
+      continue;
+    }
+    duvody[duvod] = (duvody[duvod] || 0) + 1;
+    obnoveno++;
+    // Original implementation unchanged for missing/stale/unverifiable alarms.
+    await obnovNotifikacePoznamkyPodleSoukromi(note);
   }
+  const prehled = Object.entries(duvody).map(([k, v]) => k + ":" + v).join(",") || "none";
+  window.LubaNoteStartupDiag?.zapis?.(
+    "REM-FAST",
+    `691AW recurring notes=${opakovanePoznamky.length} alreadyExact=${overeno} restored=${obnoveno} reasons=${prehled} elapsedMs=${Math.round(performance.now() - zacatek)}`
+  );
 }
 
 
