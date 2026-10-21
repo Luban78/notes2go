@@ -7735,14 +7735,38 @@ async function startSync() {
       });
   }
 
-  await registerCurrentDevice();
-  await cleanupSafeDeletedNotes();
+  /* 691AV – read-only START SYNC TAIL timing. Every awaited phase retains
+   * its exact original order and return behavior. No extra RPC or DB calls.
+   * Do not log note content, IDs, passwords or notification payloads. */
+  const syncTailDiag691AV = window.LubaNoteStartupDiag?.zacni?.("SYNC TAIL AFTER UI READY");
+  try {
+    const deviceDiag691AV = window.LubaNoteStartupDiag?.zacni?.("SYNC TAIL REGISTER DEVICE");
+    try {
+      await registerCurrentDevice();
+    } finally {
+      window.LubaNoteStartupDiag?.konec?.(deviceDiag691AV, "DONE");
+    }
 
-  if (
-    typeof obnovNotifikaceOpakovanychPoznamek ===
-    "function"
-  ) {
-    await obnovNotifikaceOpakovanychPoznamek();
+    const cleanupDiag691AV = window.LubaNoteStartupDiag?.zacni?.("SYNC TAIL TOMBSTONE CLEANUP");
+    try {
+      await cleanupSafeDeletedNotes();
+    } finally {
+      window.LubaNoteStartupDiag?.konec?.(cleanupDiag691AV, "DONE");
+    }
+
+    if (
+      typeof obnovNotifikaceOpakovanychPoznamek ===
+      "function"
+    ) {
+      const remindersDiag691AV = window.LubaNoteStartupDiag?.zacni?.("SYNC TAIL RECURRING REMINDERS");
+      try {
+        await obnovNotifikaceOpakovanychPoznamek();
+      } finally {
+        window.LubaNoteStartupDiag?.konec?.(remindersDiag691AV, "DONE");
+      }
+    }
+  } finally {
+    window.LubaNoteStartupDiag?.konec?.(syncTailDiag691AV, "DONE");
   }
 
   if (startPouzeLokalneKvuliEgressu) {

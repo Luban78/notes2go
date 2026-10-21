@@ -1,4 +1,4 @@
-/* 691AH READ-ONLY scroll diagnostic. Does not prevent events or alter editor scroll. */
+/* 691AV / 691AH READ-ONLY scroll diagnostic. Visible only in admin Debug Hub; no floating button. */
 (() => {
   "use strict";
   const logs = [];
@@ -12,7 +12,7 @@
     const er = e?.getBoundingClientRect(), rr = row?.getBoundingClientRect();
     const active = document.activeElement;
     const data = {
-      t:now(), label, type:event?.type || "", target:event?.target?.closest?.("[data-v2-list-toggle],[data-v2-list-marker],[data-ln-v2-blok]")?.outerHTML?.slice(0,180) || "",
+      t:now(), label, type:event?.type || "", target:(()=>{const t=event?.target?.closest?.("[data-v2-list-toggle],[data-v2-list-marker],[data-ln-v2-blok]");return t ? (t.tagName||"")+":"+(t.hasAttribute("data-v2-list-toggle")?"TOGGLE":t.hasAttribute("data-v2-list-marker")?"MARKER":"ROW") : "";})(),
       editorScroll:e?.scrollTop, editorMax:e ? e.scrollHeight-e.clientHeight : null,
       editorHeight:e?.clientHeight, editorRect:er ? [Math.round(er.top),Math.round(er.bottom)] : null,
       parentY:rr ? Math.round(rr.top) : null, parentH:rr ? Math.round(rr.height) : null,
@@ -27,11 +27,18 @@
   };
   const btn=document.createElement("button");
   btn.textContent="Diagnostika scrollu";
-  Object.assign(btn.style,{position:"fixed",top:"8px",right:"8px",zIndex:"2147483647",
-    background:"#173d39",color:"#fff",border:"1px solid #4ab88f",
-    borderRadius:"12px",padding:"9px",fontSize:"12px"});
   btn.type="button";
-  document.addEventListener("DOMContentLoaded",()=>document.body.appendChild(btn),{once:true});
+  btn.className="ln-dh-copy";
+  btn.style.gridColumn="1 / -1";
+  btn.title="Diagnostika scrollu – spusť v Debug Hubu, zavři Hub, proveď gesto, znovu otevři a ukonči pro kopii";
+  /* The existing Debug Hub emits a visibility event only after server-side
+   * admin authorisation. Never mount this control into normal user UI. */
+  document.addEventListener("lubanote:debug-hub-visibility",(event)=>{
+    if(event?.detail?.open!==true || window.LubaNoteAdminTools?.isAllowed?.()!==true)return;
+    const hub=document.getElementById("ln-debug-hub");
+    const footer=hub?.querySelector(".ln-dh-footer");
+    if(footer&&!footer.contains(btn))footer.appendChild(btn);
+  });
   const listeners=[];
   function observe(target,type,fn,opts){target?.addEventListener(type,fn,opts);listeners.push(()=>target?.removeEventListener(type,fn,opts));}
   function stop(){
