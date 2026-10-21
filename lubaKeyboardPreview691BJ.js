@@ -142,7 +142,7 @@
 })();
 
 
-/* 691BK/691BL – Move overlay UX (visual-only), separate from 691BJ keyboard code.
+/* 691BJ/691BK/691BM – Move overlay UX (visual-only), separate from 691BJ keyboard code.
  * The index.html already loads this module; do not touch Core V2 gesture
  * recognizers, note model, selection or persistence.
  *  - Suppress the own caret/handles from long-press MOVE takeover until
@@ -192,21 +192,16 @@
       document.body.classList.add(SUSPEND_CLASS);
     });
 
-    /* 691BL: A new tap must first MOVE the model caret before we display it.
-       Core V2 processes own-caret taps on touchend, then draws in rAF.
-       Releasing our visibility guard on pointerdown exposed the OLD handle
-       for a frame (691BK regression). Gesture/model code is untouched. */
-    let pendingTap691BL = null;
-    let restoreEpoch691BL = 0;
-    const isSuspended691BL = () => document.body.classList.contains(SUSPEND_CLASS);
-    const getCaretRange691BL = (editor) => {
-      const selection = window.getSelection();
-      if (!selection?.rangeCount || !selection.isCollapsed) return null;
-      const range = selection.getRangeAt(0);
-      if (!editor?.contains(range.startContainer)) return null;
-      return { node: range.startContainer, offset: range.startOffset, range };
-    };
-    const textEditor691BL = (target) => {
+    /* 691BM: Android own-caret is model-based and can have NO native DOM
+       selection at all. The previous 691BL required window.getSelection()
+       to become nonempty; when it stayed empty, the visual guard was never
+       lifted. Reposition via the existing, exported Core V2 function instead.
+       Keep the guard until Core has rendered the fresh caret/handle in rAF.
+       Do not change the MOVE gesture, model, toolbar, or stored notes. */
+    let pendingTap691BM = null;
+    let restoreEpoch691BM = 0;
+    const isSuspended691BM = () => document.body.classList.contains(SUSPEND_CLASS);
+    const textEditor691BM = (target) => {
       const element = target?.nodeType === 3 ? target.parentElement : target;
       if (!(element instanceof Element)) return null;
       const editor = element.closest('.ln-v2-editor');
@@ -214,93 +209,78 @@
       if (element.closest('button, figure, img, input, textarea, select, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check], [contenteditable="false"]')) return null;
       return editor;
     };
-    function resumeAfterReposition691BL(tap) {
+    function resumeAfterReposition691BM(tap) {
       if (!tap) return;
-      const epoch = ++restoreEpoch691BL;
-      const check = (retries) => {
+      const epoch = ++restoreEpoch691BM;
+      /* First frame runs AFTER Core's touchend tap handling. It uses precisely
+         the same public Core V2 caret-position operation as the normal tap.
+         No old DOM selection / row comparison – that is unreliable in APK. */
+      requestAnimationFrame(() => {
+        if (epoch !== restoreEpoch691BM || !isSuspended691BM() ||
+            !tap.editor.isConnected || tap.editor.classList.contains('ln-v2-list-drag-mode')) return;
+        let positioned = false;
+        try {
+          positioned = window.LubaNoteEditorV2?.zrusVyberNaBoduProSelectionMenu?.(tap.x, tap.y) === true;
+        } catch (_error) {}
+        if (!positioned) return; // Invalid point: never expose old caret.
+        /* Core scheduled its own caret rAF on successful model positioning.
+           Register release AFTER that repaint. No old-position flash. */
         requestAnimationFrame(() => {
-          if (epoch !== restoreEpoch691BL || !isSuspended691BL() ||
+          if (epoch !== restoreEpoch691BM || !isSuspended691BM() ||
               !tap.editor.isConnected || tap.editor.classList.contains('ln-v2-list-drag-mode')) return;
-          const state = getCaretRange691BL(tap.editor);
-          if (!state) return;
-          const moved = !tap.before || state.node !== tap.before.node || state.offset !== tap.before.offset;
-          let near = false;
-          try {
-            const rect = state.range.getBoundingClientRect();
-            near = Math.abs(rect.left - tap.x) < 42 &&
-              Math.abs(rect.top + rect.height / 2 - tap.y) < 38;
-          } catch (_error) {}
-          if (!moved && !near) return; // Do not reveal the old caret.
-
-          /* The Android own caret is attached to its current paragraph in
-             Core V2's rAF. Wait until that paragraph matches the new Range. */
-          if (tap.editor.dataset.lnV2OwnCaretOnly === '1') {
-            const nodeEl = state.node.nodeType === 3 ? state.node.parentElement : state.node;
-            const selectedRow = nodeEl?.closest?.('[data-ln-v2-blok]');
-            const caretEl = document.querySelector('.ln-v2-luba-caret');
-            const caretRow = caretEl?.closest?.('[data-ln-v2-blok]');
-            if (!selectedRow || !caretEl || caretEl.hidden || caretRow !== selectedRow) {
-              if (retries > 0) check(retries - 1);
-              return;
-            }
-          }
           document.body.classList.remove(SUSPEND_CLASS);
         });
-      };
-      /* Two frames: first lets Core V2 commit the new model position,
-         second lets its visual caret/handle catch up. */
-      requestAnimationFrame(() => check(4));
+      });
     }
 
     document.addEventListener('lubanote:v2-list-move-takeover', () => {
-      restoreEpoch691BL++;
-      pendingTap691BL = null;
+      restoreEpoch691BM++;
+      pendingTap691BM = null;
     });
 
     document.addEventListener('touchstart', event => {
-      pendingTap691BL = null;
-      if (!isSuspended691BL() || event.touches?.length !== 1 ||
+      pendingTap691BM = null;
+      if (!isSuspended691BM() || event.touches?.length !== 1 ||
           event.changedTouches?.length !== 1) return;
-      const editor = textEditor691BL(event.target);
+      const editor = textEditor691BM(event.target);
       if (!editor) return;
       const touch = event.changedTouches[0];
-      pendingTap691BL = { editor, id: touch.identifier, x: touch.clientX,
-        y: touch.clientY, scroll: editor.scrollTop, at: performance.now(),
-        before: getCaretRange691BL(editor) };
+      pendingTap691BM = { editor, id: touch.identifier, x: touch.clientX,
+        y: touch.clientY, scroll: editor.scrollTop, at: performance.now() };
     }, { capture: true, passive: true });
 
     document.addEventListener('touchend', event => {
-      const tap = pendingTap691BL;
-      pendingTap691BL = null;
-      if (!tap || !isSuspended691BL()) return;
+      const tap = pendingTap691BM;
+      pendingTap691BM = null;
+      if (!tap || !isSuspended691BM()) return;
       const touch = Array.from(event.changedTouches || [])
         .find(item => item.identifier === tap.id);
       if (!touch || event.touches?.length ||
           performance.now() - tap.at > 330 ||
           Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > 12 ||
           Math.abs(tap.editor.scrollTop - tap.scroll) > 3 ||
-          !textEditor691BL(event.target)) return;
-      resumeAfterReposition691BL(tap);
+          textEditor691BM(event.target) !== tap.editor) return;
+      resumeAfterReposition691BM(tap);
     }, { capture: true, passive: true });
     document.addEventListener('touchcancel', () => {
-      pendingTap691BL = null;
+      pendingTap691BM = null;
     }, { capture: true, passive: true });
 
-    /* Desktop mouse: editor selection is processed on click. Same guard. */
-    let mouseTap691BL = null;
+    /* Desktop pointer click remains independent of Android touch routing. */
+    let mouseTap691BM = null;
     document.addEventListener('pointerdown', event => {
-      if (event.pointerType === 'touch' || event.button !== 0 || !isSuspended691BL()) return;
-      const editor = textEditor691BL(event.target);
-      mouseTap691BL = editor ? {editor, x:event.clientX, y:event.clientY,
-        at:performance.now(), before:getCaretRange691BL(editor)} : null;
+      if (event.pointerType === 'touch' || event.button !== 0 || !isSuspended691BM()) return;
+      const editor = textEditor691BM(event.target);
+      mouseTap691BM = editor ? { editor, x: event.clientX, y: event.clientY,
+        at: performance.now() } : null;
     }, true);
     document.addEventListener('click', event => {
-      const tap = mouseTap691BL;
-      mouseTap691BL = null;
-      if (!tap || !isSuspended691BL() || !textEditor691BL(event.target) ||
+      const tap = mouseTap691BM;
+      mouseTap691BM = null;
+      if (!tap || !isSuspended691BM() || textEditor691BM(event.target) !== tap.editor ||
           Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 12 ||
           performance.now() - tap.at > 330) return;
-      resumeAfterReposition691BL(tap);
+      resumeAfterReposition691BM(tap);
     }, false);
 
     let preview = null;
