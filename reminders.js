@@ -884,6 +884,111 @@ async function obnovNotifikaceOpakovanychPoznamek() {
 }
 
 
+/* 691AZ – pred kompletni obnovou overit skutecne CELE pending.
+ * Kontrolni bod nikdy nemeni notifikace. Jakakoli nejistota vraci false
+ * a stavajici obnovovaci algoritmus zustane v platnosti.
+ * Neni pouzita lokalni znacka "hotovo" ani pocet alarmu bez identit.
+ */
+async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
+  if (!Array.isArray(poznamky) || !Array.isArray(pending)) {
+    return { ok: false, reason: "snapshot-unavailable" };
+  }
+  if (typeof window.LubaNoteRecurring?.vypocitejBudouciTerminy !== "function") {
+    return { ok: false, reason: "recurring-module-unavailable" };
+  }
+
+  const ted = new Date();
+  const pendingById = new Map();
+  for (const item of pending) {
+    const id = Number(item?.id);
+    if (!Number.isSafeInteger(id) || id <= 0 || pendingById.has(id)) {
+      return { ok: false, reason: "invalid-or-duplicate-native-id" };
+    }
+    pendingById.set(id, item);
+  }
+
+  const zkontrolovane = new Set();
+  const kratkyText = (s) => {
+    const t = String(s || "").replace(/\s+/g, " ").trim();
+    return t.length > 140 ? t.slice(0, 140) + "…" : t;
+  };
+  const overJeden = (id, title, body, at, extra) => {
+    id = Number(id);
+    if (!Number.isSafeInteger(id) || id <= 0 || zkontrolovane.has(id)) return false;
+    const item = pendingById.get(id);
+    if (!item || !Number.isFinite(at) || at <= ted.getTime()) return false;
+    if (item.title !== title || item.body !== body) return false;
+    const realDate = new Date(item?.schedule?.at).getTime();
+    if (realDate !== at || item?.schedule?.repeats === true ||
+        item?.schedule?.every || item?.schedule?.on) return false;
+    if (item?.extra?.lubanoteType !== extra.type) return false;
+    if (extra.type === "note") {
+      if (item.extra.taskId !== extra.noteId || item.extra.recurring === true) return false;
+    } else if (item.extra.sourceNoteId !== extra.noteId ||
+               item.extra.plannedItemId !== extra.plannedItemId) return false;
+    zkontrolovane.add(id);
+    return true;
+  };
+
+  const noteIds = new Set();
+  for (const note of poznamky) {
+    if (!note?.id) continue;
+    if (noteIds.has(note.id)) return { ok: false, reason: "duplicate-note-id" };
+    noteIds.add(note.id);
+    if (note.isSecret === true || note.completed === true) continue;
+
+    if (note.reminder === true && note.date) {
+      if (note.repeat?.enabled === true) {
+        // 691AX proof kontroluje i cely text, metadata, presny termin a vlastnika.
+        // Planner polozky overime nezavisle pod timto blokem.
+        const overeni = await overCekajiciOpakovaneAlarmy691AW(
+          { ...note, plannedItems: [] }, pending, ted
+        );
+        if (!overeni.ok) return { ok: false, reason: "recurring-" + overeni.reason };
+        for (const item of pending) {
+          if (item?.extra?.taskId === note.id && item?.extra?.recurring === true) {
+            if (zkontrolovane.has(Number(item.id))) return { ok: false, reason: "shared-notification-id" };
+            zkontrolovane.add(Number(item.id));
+          }
+        }
+      } else if (new Date(note.date).getTime() > ted.getTime()) {
+        if (!note.notificationId) return { ok: false, reason: "note-id-missing" };
+        const fullText = String(note.note || "").replace(/\s+/g, " ").trim();
+        // Nativni getPending nezverejnuje largeBody; dlouhy text nelze uplne dokazat.
+        if (fullText.length > 140) return { ok: false, reason: "note-fulltext-unverifiable" };
+        if (!overJeden(note.notificationId, note.title || "LubaNote",
+          kratkyText(note.note) || "Máš naplánovanou připomínku.",
+          new Date(note.date).getTime(), { type: "note", noteId: note.id })) {
+          return { ok: false, reason: "note-alarm-different" };
+        }
+      }
+    }
+
+    for (const plan of (Array.isArray(note.plannedItems) ? note.plannedItems : [])) {
+      if (!plan?.plannedAt || plan.completed === true ||
+          !jePlanovanaPripominkaZapnuta(plan) ||
+          new Date(plan.plannedAt).getTime() <= ted.getTime()) continue;
+      if (!plan.notificationId) return { ok: false, reason: "planner-id-missing" };
+      const body = note.title ? `Z poznámky: ${note.title}` : plan.text;
+      const fullBody = String(body || "").replace(/\s+/g, " ").trim();
+      if (fullBody.length > 140) return { ok: false, reason: "planner-fulltext-unverifiable" };
+      if (!overJeden(plan.notificationId, plan.text || "Naplánovaný úkol",
+        kratkyText(body) || "Máš naplánovanou připomínku.",
+        new Date(plan.plannedAt).getTime(),
+        { type: "planned", noteId: note.id, plannedItemId: plan.id })) {
+        return { ok: false, reason: "planner-alarm-different" };
+      }
+    }
+  }
+
+  // Kazdy native pending musi mit presne jednoho platneho vlastnika. Zbyvajici
+  // stary, cizi, tajny ci smazany alarm znamena originalni bezpecny full restore.
+  if (zkontrolovane.size !== pending.length) {
+    return { ok: false, reason: "orphan-or-unexpected-native-alarm" };
+  }
+  return { ok: true, checked: zkontrolovane.size };
+}
+
 async function obnovSystemoveNotifikacePoKompletniObnove(
   poznamky
 ) {
@@ -903,12 +1008,43 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
 
   await createReminderChannel();
 
+  // 691AZ: Zabranime zbytecnemu globalnimu cancel/reschedule pri kazdem
+  // load/auth-valid, pokud jsou *vsechny* aktualni alarmy dokazatelne spravne.
+  // Jde o read-only preflight, nikoli cache ci domnenku o stavu Androidu.
+  let pendingPredObnovou691AZ = null;
+  if (typeof LocalNotifications.getPending === "function") {
+    try {
+      const stav = await LocalNotifications.getPending();
+      if (Array.isArray(stav?.notifications)) pendingPredObnovou691AZ = stav.notifications;
+    } catch (_error) { /* fallback puvodni obnovy */ }
+  }
+  if (pendingPredObnovou691AZ) {
+    try {
+      const kontrola = await overKompletniNativniAlarmy691AZ(
+        poznamky, pendingPredObnovou691AZ
+      );
+      if (kontrola.ok) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "REM-GUARD", `691AZ PRESERVED | checked=${kontrola.checked} | no-global-reset`
+        );
+        return true;
+      }
+      window.LubaNoteStartupDiag?.zapis?.(
+        "REM-GUARD", `691AZ FALLBACK | ${kontrola.reason} | native=${pendingPredObnovou691AZ.length}`
+      );
+    } catch (_error) {
+      window.LubaNoteStartupDiag?.zapis?.("REM-GUARD", "691AZ FALLBACK | proof-error");
+    }
+  } else {
+    window.LubaNoteStartupDiag?.zapis?.("REM-GUARD", "691AZ FALLBACK | native-unavailable");
+  }
+
+  // Puvodni globalni obnovení zustava beze zmen pri kazde nejistote.
   if (
     typeof LocalNotifications.getPending ===
     "function"
   ) {
-    const pending =
-      await LocalNotifications.getPending();
+    const pending = await LocalNotifications.getPending();
 
     const notifications =
       (pending?.notifications || [])
