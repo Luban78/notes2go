@@ -293,6 +293,7 @@
               let trustedDown=0,trustedMove=0,hit='-',first=null,last=null;
               let duringChanged=false,engineStart='-',engineMove=0,engineLast='-';
               let pointsFirst='-',pointsLast='-',handleY='-';
+              let targetStart='-',targetMid='-',targetEnd='-';
               let traceStart='-',traceMiddle='-',traceEnd='-',traceFinish='-';
               let engineTrace=[],captureTrace=[],bubbleTrace=[];
               const before=readModel();
@@ -315,6 +316,32 @@
                 }catch(_){return '!';}
               };
               const atPoint=c=>c?probe(c.x,c.y)+'/'+probe(c.x,c.y-22):'-';
+              // 691AO: target-point proof at touch and text-glyph Y; read-only.
+              // DOM caret may be absent when the finger sits on the handle.
+              const targetProof=c=>{
+                if(!c)return '-';
+                const out=[];
+                for(const dy of [0,-22,-36]){
+                  const y=c.y+dy;
+                  try{
+                    const cp=document.caretPositionFromPoint?.(c.x,y);
+                    const cr=cp?.offsetNode?null:document.caretRangeFromPoint?.(c.x,y);
+                    const n=cp?.offsetNode||cr?.startContainer;
+                    const off=cp?.offset??cr?.startOffset;
+                    let inside=Boolean(n&&editor?.contains(n));
+                    let range='-';
+                    if(inside&&n?.nodeType===Node.TEXT_NODE&&Number.isInteger(off)){
+                      const rg=document.createRange();rg.setStart(n,off);rg.collapse(true);
+                      const rect=rg.getBoundingClientRect();
+                      range=Math.round(rect.x)+'/'+Math.round(rect.y);
+                    }
+                    out.push(dy+':'+(inside?'I':'O')+
+                      (n?.nodeType===Node.TEXT_NODE?'T':'E')+
+                      (off??'?')+'@'+range);
+                  }catch(_){out.push(dy+':!');}
+                }
+                return out.join(';');
+              };
               // 691AM: A missing caretPositionFromPoint alone does not prove
               // the target left the editor. Record the actual element and viewport
               // on the touch path, without altering the native gesture.
@@ -366,7 +393,7 @@
                 const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
                 if(t){
                   trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';
-                  first=coordinate(e);engineStart=engine();traceStart=glyphPath(first);
+                  first=coordinate(e);engineStart=engine();traceStart=glyphPath(first);targetStart=targetProof(first);
                   const rect=t.getBoundingClientRect();
                   handleY=Math.round(rect.top)+'-'+Math.round(rect.bottom);
                 }
@@ -378,9 +405,9 @@
                 const phase=engine();engineLast=phase;
                 if(engineTrace.length<5)engineTrace.push(trustedMove+':'+readModel()+':'+engineState());
                 if(phase.startsWith('D'))engineMove++;
-                if(trustedMove===1){pointsFirst=atPoint(last);traceMiddle=glyphPath(last);}
+                if(trustedMove===1){pointsFirst=atPoint(last);traceMiddle=glyphPath(last);targetMid=targetProof(last);}
                 if(trustedMove===Math.max(1,Math.floor(5)))traceEnd=glyphPath(last);
-                if(trustedMove===10)pointsLast=atPoint(last);
+                if(trustedMove===10){pointsLast=atPoint(last);targetEnd=targetProof(last);}
               };
               const onFinish=e=>{if(e.isTrusted)traceFinish=glyphPath(coordinate(e));};
               document.addEventListener('touchend',onFinish,true);
@@ -403,7 +430,7 @@
                 'custom_selection_lost_after_drag_'+target);
               return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit,
                 first,last,duringChanged,engineStart,engineMove,engineLast,
-                pointsFirst,pointsLast,handleY,traceStart,traceMiddle,traceEnd,traceFinish,engineTrace,captureTrace,bubbleTrace};
+                pointsFirst,pointsLast,handleY,traceStart,traceMiddle,traceEnd,traceFinish,engineTrace,captureTrace,bubbleTrace,targetStart,targetMid,targetEnd};
             };
             const afterEnd=await drag('selection-end');
             assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
@@ -436,7 +463,7 @@
                 const moved=await drag('selection-start');
                 const changed=moved.text.length>0&&moved.text!==startBefore&&
                   moved.trustedDown>0&&moved.trustedMove>0&&moved.hit==='start'&&moved.before!==moved.after;
-                startAttempts.push(slovo+':'+startBefore.length+'>'+moved.text.length+
+                startAttempts.push(slovo+':TARGET='+moved.targetStart+'>'+moved.targetMid+'>'+moved.targetEnd+':'+startBefore.length+'>'+moved.text.length+
                   ',touch='+moved.trustedDown+'/'+moved.trustedMove+',hit='+moved.hit+
                   ',coords='+[moved.first?.x,moved.first?.y].join('/')+'>'+[moved.last?.x,moved.last?.y].join('/')+
                   ',everChanged='+moved.duringChanged+',engine='+moved.engineStart+'/'+
