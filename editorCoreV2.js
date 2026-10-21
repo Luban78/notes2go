@@ -5540,6 +5540,64 @@
   /* 691AE: pozdní WebView scroll/focus po sbalení nesmí odnést místo čtení.
      Stránka/klávesnice může přesunout scroll až po prvním rAF (683G caret).
      Ochrana platí jen pro toggle seznamu, nikoli při běžném psaní či MOVE. */
+  /* 691AI – když se po sbalení obsah zkrátí pod výšku viewportu,
+     WebView musí vynulovat scrollTop. Žádný rAF jej nemůže vrátit,
+     pokud scrollHeight <= clientHeight. Kompenzace je POUZE spodní
+     padding editoru; nevkládá modelové/DOM řádky a nikdy se neukládá. */
+  let spodniProstorSbaleni = null;
+  function zrusSpodniProstorSbaleni() {
+    const stav = spodniProstorSbaleni;
+    spodniProstorSbaleni = null;
+    if (stav?.editor) stav.editor.style.paddingBottom = stav.puvodniInline;
+  }
+  function zajistiSpodniProstorSbaleni(editorCil, chtenyScroll) {
+    const stary = spodniProstorSbaleni;
+    let puvodniInline, zakladniPadding;
+    if (stary?.editor === editorCil) {
+      puvodniInline = stary.puvodniInline;
+      zakladniPadding = stary.zakladniPadding;
+    } else {
+      zrusSpodniProstorSbaleni();
+      puvodniInline = editorCil.style.paddingBottom;
+      zakladniPadding = parseFloat(getComputedStyle(editorCil).paddingBottom) || 0;
+    }
+    // Předchozí doplněný prostor přepočítat znovu, nikoli sčítat.
+    editorCil.style.paddingBottom = puvodniInline;
+    const cil = Math.max(0, Number(chtenyScroll) || 0);
+    const maximum = Math.max(0, editorCil.scrollHeight - editorCil.clientHeight);
+    if (cil <= maximum + 1) {
+      spodniProstorSbaleni = null;
+      editorCil.scrollTop = Math.min(cil, maximum);
+      return;
+    }
+    // Po sbalení může být celý obsah kratší než viewport. Navyšovat
+    // padding postupně, aby nevznikal zbytečně velký prázdný prostor.
+    let pridano = 0;
+    let krok = Math.max(16, cil - maximum + 3);
+    for (let opakovani = 0; opakovani < 9; opakovani += 1) {
+      pridano += krok;
+      editorCil.style.paddingBottom = `${zakladniPadding + pridano}px`;
+      const aktualniMax = Math.max(0, editorCil.scrollHeight - editorCil.clientHeight);
+      if (aktualniMax >= cil + 2) break;
+      krok = Math.max(16, cil - aktualniMax + 3, Math.min(editorCil.clientHeight / 2, 250));
+    }
+    // Najít nejmenší potřebný prostor (přesnost řádově jednotky px).
+    let spodni = 0, horni = pridano;
+    for (let pokus = 0; pokus < 7; pokus += 1) {
+      const stred = (spodni + horni) / 2;
+      editorCil.style.paddingBottom = `${zakladniPadding + stred}px`;
+      const dostupne = Math.max(0, editorCil.scrollHeight - editorCil.clientHeight);
+      if (dostupne >= cil + 2) horni = stred;
+      else spodni = stred;
+    }
+    pridano = horni + 2;
+    editorCil.style.paddingBottom = `${zakladniPadding + pridano}px`;
+    spodniProstorSbaleni = {
+      editor: editorCil, puvodniInline, zakladniPadding
+    };
+    editorCil.scrollTop = Math.min(cil, Math.max(0, editorCil.scrollHeight - editorCil.clientHeight));
+  }
+
   let ochranaPohleduSeznamu = null;
   // 691AG: WebView může posunout viewport už při pointerdown/touchstart,
   // dávno před samotným toggle. Proto uložit místo čtení při začátku gesta.
@@ -5601,6 +5659,10 @@
       /* Jen nouzová cesta při poškozeném DOM; bez částečného patchování. */
       vykresli(null);
     }
+    // 691AI: po skrytí potomků může být maxScroll = 0.
+    // Vytvořit jen tolik spodního prostoru, aby čtená pozice existovala.
+    // Vše proběhne synchronně před vykreslením dalšího snímku.
+    zajistiSpodniProstorSbaleni(editorPred, scrollPred);
     /* Nedotýkat se Range, focusu, modelového caretu ani struktury řádků.
        Udržet rodiče na stejné pozici i po odloženém Android scrollu. */
     const obnovPohled = () => {
@@ -9519,6 +9581,8 @@
     jadroEditoru.classList.add("otevreno");
     zrusV2TodoMultiSelect();
     window.LubaNoteStartupDiag?.konec?.(tokenAttach);
+    ochranaPohleduSeznamu?.ukonci?.();
+    zrusSpodniProstorSbaleni(); // 691AI: nikdy nepřenášet prostor do jiné poznámky.
     nastavDokumentProHost(model);
 
     /* LubaKeyboard musí mít atributy připravené PŘED prvním skutečným tapem.
@@ -9536,6 +9600,8 @@
 
   function zavriVHostu() {
     if (!jadroEditoru || !vlozenyRezim) return;
+    ochranaPohleduSeznamu?.ukonci?.();
+    zrusSpodniProstorSbaleni();
     zrusV2TodoMultiSelect();
     zrusV2DragSeznamu();
 
