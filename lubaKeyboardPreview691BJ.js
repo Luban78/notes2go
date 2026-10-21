@@ -140,3 +140,124 @@
     init();
   }
 })();
+
+
+/* 691BK – Move overlay UX (visual-only), separate from 691BJ keyboard code.
+ * The index.html already loads this module; do not touch Core V2 gesture
+ * recognizers, note model, selection or persistence.
+ *  - Suppress the own caret/handles from long-press MOVE takeover until
+ *    the next genuine input gesture.
+ *  - Clamp the visual drag label to screen and ellipsize long ToDo text.
+ */
+(() => {
+  'use strict';
+  const STYLE_ID = 'ln-v2-move-ux-style-691BK';
+  const SUSPEND_CLASS = 'ln-v2-move-caret-suspended-691BK';
+  const TEXT_CLASS = 'ln-v2-drag-label-text-691BK';
+  const SELECTOR = '.ln-v2-list-drag-preview';
+
+  function init() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      body.${SUSPEND_CLASS} .ln-v2-luba-caret,
+      body.${SUSPEND_CLASS} .ln-v2-single-caret-handle,
+      body.${SUSPEND_CLASS} .ln-v2-selection-handle-custom,
+      body.${SUSPEND_CLASS} .ln-v2-selection-magnifier {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      ${SELECTOR} {
+        box-sizing: border-box !important;
+        width: max-content !important;
+        max-width: min(76vw, 360px, calc(100vw - 24px)) !important;
+        white-space: normal !important;
+        overflow: visible !important; /* action label ::after stays visible */
+      }
+      ${SELECTOR} > .${TEXT_CLASS} {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // This event is already emitted by the shipped Core V2 at LONGPRESS_READY,
+    // before the first drag movement. Does not change model or gesture handling.
+    document.addEventListener('lubanote:v2-list-move-takeover', () => {
+      document.body.classList.add(SUSPEND_CLASS);
+    });
+
+    document.addEventListener('pointerdown', event => {
+      if (!document.body.classList.contains(SUSPEND_CLASS)) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (event.pointerType === 'touch' && !event.isPrimary) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      const editor = target.closest('.ln-v2-editor');
+      // Never re-enable during the current MOVE gesture or on its release.
+      if (editor && !editor.classList.contains('ln-v2-list-drag-mode')) {
+        document.body.classList.remove(SUSPEND_CLASS);
+      } else if (target.closest('#lubaKeyboard') &&
+                 !document.querySelector('.ln-v2-editor.ln-v2-list-drag-mode')) {
+        // Typing a new character is also a deliberate request for a caret.
+        document.body.classList.remove(SUSPEND_CLASS);
+      }
+    }, true);
+
+    let preview = null;
+    let previewObserver = null;
+    function fitPreview() {
+      if (!preview || !preview.isConnected || preview.hidden) return;
+      const already = preview.children.length === 1 &&
+        preview.firstElementChild?.classList.contains(TEXT_CLASS);
+      if (!already) {
+        // Core V2 writes only preview.textContent, never HTML. Keep it that way.
+        const span = document.createElement('span');
+        span.className = TEXT_CLASS;
+        span.textContent = preview.textContent;
+        preview.replaceChildren(span);
+      }
+      const r = preview.getBoundingClientRect();
+      const viewportWidth = Math.min(window.innerWidth, document.documentElement.clientWidth);
+      if (!(r.width > 0 && viewportWidth > 40)) return;
+      const margin = 9;
+      let delta = 0;
+      if (r.left < margin) delta = margin - r.left;
+      else if (r.right > viewportWidth - margin) delta = viewportWidth - margin - r.right;
+      const old = Number.parseFloat(preview.style.left);
+      if (Math.abs(delta) > 0.75 && Number.isFinite(old)) {
+        const next = old + delta;
+        if (Math.abs(next - old) > 0.75) preview.style.left = `${next.toFixed(1)}px`;
+      }
+    }
+    function connectPreview() {
+      const found = document.querySelector(SELECTOR);
+      if (!found || found === preview) return;
+      previewObserver?.disconnect();
+      preview = found;
+      previewObserver = new MutationObserver(fitPreview);
+      previewObserver.observe(preview, {
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden'],
+        childList: true
+      });
+      fitPreview();
+    }
+    connectPreview();
+    // Core V2 creates the drag preview lazily on the first MOVE. Watch only
+    // direct body children; no editor mutation observation or polling.
+    const finder = new MutationObserver(connectPreview);
+    finder.observe(document.body, {childList: true});
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, {once: true});
+  } else {
+    init();
+  }
+})();
