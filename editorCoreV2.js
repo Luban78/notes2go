@@ -109,6 +109,10 @@
      Výběr dvou slovních úchytů z Bridge je nezávislý. */
   let v2SingleCaretHandle = null;
   let v2SingleCaretDrag = null;
+  /* 691BO – Core V2 own-caret visibility follows the MODEL, not a body
+     class. MOVE hides the old position; only a successfully positioned
+     text tap (or real model text input) can release the visual caret. */
+  let v2LubaCaretCekaNaNovyTapPoMove = false;
 
   /* PATCH 673G11 – skutečný „plovoucí kurzor“ nebyl nativní WebView caret,
      ale náš vlastní fixed overlay .ln-v2-luba-caret z PATCH 497. Původní
@@ -153,6 +157,7 @@
     return Boolean(
       editor?.isConnected &&
       jadroEditoru && !jadroEditoru.hidden &&
+      !v2LubaCaretCekaNaNovyTapPoMove &&
       (!v2LubaCaretScrollAktivni || pouzivaV2UkotvenyCaret()) &&
       klavesnice?.ziskejZdroj?.() === "luba" &&
       klavesnice?.jeOtevrena?.() &&
@@ -4303,6 +4308,17 @@
     if (!pozice) return false;
 
     nastavVyberModelu(pozice, pozice);
+    /* 691BO – release AFTER Core V2 has updated the real model selection.
+       The next caret rAF uses this new position; no old-location flash.
+       No CSS blockers, no native-Range polling and no delayed timers. */
+    if (v2LubaCaretCekaNaNovyTapPoMove &&
+        !v2DragSeznamu?.pripraven && !v2DragSeznamu?.aktivni &&
+        posledniVyber?.sbaleny &&
+        posledniVyber.konec.blok === pozice.blok &&
+        posledniVyber.konec.offset === pozice.offset) {
+      v2LubaCaretCekaNaNovyTapPoMove = false;
+      naplanujV2LubaCaret(posledniVyber);
+    }
     aktivniFormatPsani = null;
     aktivniFormatPozice = klicPozice(pozice);
     aktivniFormatZdroj = "";
@@ -6335,6 +6351,13 @@
     vybranaPolozkaSeznamuId = v2DragSeznamu.blokId;
     aplikujV2OznaceniPresunovanehoPodstromu(v2DragSeznamu.blokId);
 
+    /* 691BO – as soon as long-press becomes MOVE (before drag starts),
+       hide both anchored overlays and cancel any pending caret rAF.
+       Never clear the pause on MOVE end: the old model caret is not a
+       user-selected insertion point after moving an item. */
+    v2LubaCaretCekaNaNovyTapPoMove = true;
+    skryjV2LubaCaret();
+
     /*
      * FIX 521 – od tohoto okamžiku je long-press výhradně MOVE. Bridge musí
      * okamžitě zavřít případný mobilní selection panel a zapomenout pending
@@ -7778,6 +7801,15 @@
 
 
   function oznamModelovyTextovyVstup(inputType = "") {
+    /* 691BO – if the user types instead of tapping after MOVE, the model
+       already contains the new insertion. Re-enable its visual caret only
+       after this actual text-input operation (never on MOVE drop). */
+    if (v2LubaCaretCekaNaNovyTapPoMove &&
+        !v2DragSeznamu?.pripraven && !v2DragSeznamu?.aktivni &&
+        posledniVyber?.sbaleny) {
+      v2LubaCaretCekaNaNovyTapPoMove = false;
+      naplanujV2LubaCaret(posledniVyber);
+    }
     /*
      * V2 záměrně preventDefault()uje browserový beforeinput, takže Android
      * nemusí následně vyvolat nativní `input`/`keyup`. Funkce typu [[ autocomplete
@@ -9459,6 +9491,8 @@
   }
 
   function nastavDokumentProHost(model) {
+    /* 691BO – MOVE pause belongs to one open document, never the next. */
+    v2LubaCaretCekaNaNovyTapPoMove = false;
     const tokenSetDoc = window.LubaNoteStartupDiag?.zacni?.("CORE SET DOCUMENT");
     const tokenClone = window.LubaNoteStartupDiag?.zacni?.("CORE CLONE MODEL");
     dokument = klonDat(model);
@@ -9600,6 +9634,7 @@
 
   function zavriVHostu() {
     if (!jadroEditoru || !vlozenyRezim) return;
+    v2LubaCaretCekaNaNovyTapPoMove = false;
     ochranaPohleduSeznamu?.ukonci?.();
     zrusSpodniProstorSbaleni();
     zrusV2TodoMultiSelect();
