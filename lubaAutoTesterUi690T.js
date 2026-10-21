@@ -281,17 +281,31 @@
               const v=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
               return [v?.zacatek?.blok,v?.zacatek?.offset,v?.konec?.blok,v?.konec?.offset].map(x=>String(x??'?')).join(':');
             };
+            // 691AJ: Failing START swipe must carry usable native evidence.
+            // Observe trusted coordinates and whether the model EVER moves,
+            // even temporarily during the 10 Java MotionEvent steps.
+            // DO NOT turn a failed selection into PASS based on delivery alone.
             const drag=async target=>{
-              let trustedDown=0,trustedMove=0,hit='-';
+              let trustedDown=0,trustedMove=0,hit='-',first=null,last=null;
+              let duringChanged=false;
+              const before=readModel();
+              const coordinate=e=>{
+                const t=e.touches?.[0]||e.changedTouches?.[0];
+                return t?{x:Math.round(t.clientX),y:Math.round(t.clientY)}:null;
+              };
               const onStart=e=>{
                 if(!e.isTrusted)return;
                 const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
-                if(t){trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';}
+                if(t){trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';first=coordinate(e);}
               };
-              const onMove=e=>{if(e.isTrusted)trustedMove++;};
+              const onMove=e=>{
+                if(!e.isTrusted)return;
+                trustedMove++;last=coordinate(e);
+                if(readModel()!==before)duringChanged=true;
+              };
               document.addEventListener('touchstart',onStart,true);
               document.addEventListener('touchmove',onMove,true);
-              const before=readModel();let ack;
+              let ack;
               try {ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});await wait(350);}
               finally {
                 document.removeEventListener('touchstart',onStart,true);
@@ -301,7 +315,8 @@
                 'own_handle_drag_no_ack_'+target);
               assert(editor?.classList.contains('ln-v2-selection-custom-active'),
                 'custom_selection_lost_after_drag_'+target);
-              return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit};
+              return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit,
+                first,last,duringChanged};
             };
             const afterEnd=await drag('selection-end');
             assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
@@ -336,7 +351,8 @@
                   moved.trustedDown>0&&moved.trustedMove>0&&moved.hit==='start'&&moved.before!==moved.after;
                 startAttempts.push(slovo+':'+startBefore.length+'>'+moved.text.length+
                   ',touch='+moved.trustedDown+'/'+moved.trustedMove+',hit='+moved.hit+
-                  ',model='+moved.before+'>'+moved.after);
+                  ',coords='+[moved.first?.x,moved.first?.y].join('/')+'>'+[moved.last?.x,moved.last?.y].join('/')+
+                  ',everChanged='+moved.duringChanged+',model='+moved.before+'>'+moved.after);
                 if(changed){startChanged=true;break;}
               }catch(error){startAttempts.push(slovo+':'+String(error?.message||error).slice(0,130));}
             }
@@ -363,7 +379,7 @@
           const cause=String(error?.message||error);
           const unavailable=/owned_native_bridge_unavailable|luba_keyboard_mode_not_active|own_caret_mode_not_enabled/.test(cause);
           output.push({id:testId,name,status:unavailable?(i>=4&&i<=7?'NATIVE_BLOCKED':'APP_BLOCKED'):(i>=4&&i<=7?'NATIVE_FAIL':'APP_FAIL'),kind:i>=4&&i<=7?'OWN_LUBANOTE_NATIVE_INPUT_690U':'REAL_VISIBLE_EDITOR_690T',ms:Math.round(performance.now()-tick),
-            detail:String(error?.message||error).slice(0,280)+' · poznámka Testy byla ponechána pro diagnostiku.'});
+            detail:String(error?.message||error).slice(0,650)+' · poznámka Testy byla ponechána pro diagnostiku.'});
           // 691M: Zachovat NATIVE_FAIL. Další OWN gesta bez výchozího
           // stavu jsou BLOCKED, nikoli PASS; ale Uložit a nezávislé živé
           // regrese už tím nesmějí být zbytečně zablokovány.

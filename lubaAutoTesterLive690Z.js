@@ -134,22 +134,39 @@ async function toggleWithoutJump(parent,collapse){
    'visible='+inView+'_top='+Math.round(editor.scrollTop)+
    '_max='+Math.round(max)+'_below='+Math.round(remaining)+
    '_row='+Math.round(rect.top)+'_viewport='+Math.round(viewport.top)+'/'+Math.round(viewport.bottom));
- const scrollers=[editor];
- const beforeTop=rect.top;
- const before=[{el:editor,top:editor.scrollTop}];
+ // 691AJ: Porovnavat skutecnou cteci pozici UVNITR editoru.
+ // Pri programovem kliknuti muze toolbar presunout cely editor o ~43px,
+ // ackoliv obsah v editoru vubec neposkocil. Absolutni screen Y by byl
+ // falesny FAIL. Skutecny posun je rozdil (row.top - editor.top).
+ // Kontrolu scrollTop ponechavame nezavislou: skutecny skok NESMIME skryt.
+ const beforeEditorTop=viewport.top;
+ const beforeScreenTop=rect.top;
+ const beforeRelativeY=beforeScreenTop-beforeEditorTop;
+ const beforeScroll=editor.scrollTop;
+ const beforeMax=Math.max(0,editor.scrollHeight-editor.clientHeight);
  if(collapse)clickMarker(parent);else clickBadge(parent);
  await sleep(170);
  const currentModel=blocks().find(b=>b.id===parent.id);
  assert(currentModel?.sbaleno===collapse,'scroll_toggle_model_not_updated');
  const currentRow=row(currentModel);
  assert(currentRow?.isConnected,'scroll_parent_lost_from_dom');
- const dy=currentRow.getBoundingClientRect().top-beforeTop;
- const deltas=before.map(s=>s.el.scrollTop-s.top);
- assert(Math.abs(dy)<=9&&deltas.every(d=>Math.abs(d)<=8),
-   'BULLET_SCROLL_JUMP_'+(collapse?'collapse':'expand')+
-   '_offset='+Math.round(dy)+'_scroll='+deltas.map(d=>Math.round(d)).join(','));
- return (collapse?'sbaleno':'rozbaleno')+' offset='+Math.round(dy)+
-   'px scroll='+deltas.map(d=>Math.round(d)).join('/')+'px';
+ const afterScreenTop=currentRow.getBoundingClientRect().top;
+ const afterEditorTop=editor.getBoundingClientRect().top;
+ const afterRelativeY=afterScreenTop-afterEditorTop;
+ const relativeShift=afterRelativeY-beforeRelativeY;
+ const screenShift=afterScreenTop-beforeScreenTop;
+ const editorShift=afterEditorTop-beforeEditorTop;
+ const scrollShift=editor.scrollTop-beforeScroll;
+ const afterMax=Math.max(0,editor.scrollHeight-editor.clientHeight);
+ const evidence='relative='+Math.round(relativeShift)+
+   '_screen='+Math.round(screenShift)+
+   '_editor='+Math.round(editorShift)+
+   '_scroll='+Math.round(scrollShift)+
+   '_max='+Math.round(beforeMax)+'>'+Math.round(afterMax)+
+   '_pad='+Math.round(parseFloat(getComputedStyle(editor).paddingBottom)||0);
+ assert(Math.abs(relativeShift)<=9&&Math.abs(scrollShift)<=8,
+   'BULLET_SCROLL_JUMP_'+(collapse?'collapse':'expand')+'_'+evidence);
+ return (collapse?'sbaleno':'rozbaleno')+' '+evidence.replaceAll('_',' ');
 }
 async function saveClose(){
  const btn=document.getElementById('editorBackButton');assert(btn&&!btn.disabled,'chybi_ulozit_a_zavrit');btn.click();
@@ -306,7 +323,7 @@ async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=
     await sleep(faktor>0?Math.round(900*faktor):130);
    }catch(e){failed=true;const problem=String(e?.message||e);
      rows.push({id:testId,name:label,kind,status:/^BLOCKED_691A[BCD]_/.test(problem)?'APP_BLOCKED':'APP_FAIL',
-       ms:Math.round(performance.now()-start),detail:problem.slice(0,190)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
+       ms:Math.round(performance.now()-start),detail:problem.slice(0,430)+'; vlastní poznámka Testy ponechána pro diagnostiku.'});break;}
   }
  }catch(e){failed=true;rows.push({id:cases[0][0],name:cases[0][1],kind,status:'APP_BLOCKED',ms:0,detail:String(e?.message||e).slice(0,195)});}
  finally{
