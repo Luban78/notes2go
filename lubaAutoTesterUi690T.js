@@ -285,6 +285,7 @@
             // Observe trusted coordinates and whether the model EVER moves,
             // even temporarily during the 10 Java MotionEvent steps.
             // DO NOT turn a failed selection into PASS based on delivery alone.
+            // 691AM: READ-ONLY glyph path and viewport diagnostic for genuine Java MotionEvent.
             // 691AK: READ-ONLY diagnostic for genuine Java MotionEvent.
             // Inspect actual touch and the glyph under the finger vs 22px above.
             // No synthetic PASS, no change to selection, gestures or production engine.
@@ -292,6 +293,7 @@
               let trustedDown=0,trustedMove=0,hit='-',first=null,last=null;
               let duringChanged=false,engineStart='-',engineMove=0,engineLast='-';
               let pointsFirst='-',pointsLast='-',handleY='-';
+              let traceStart='-',traceMiddle='-',traceEnd='-',traceFinish='-';
               const before=readModel();
               const coordinate=e=>{
                 const t=e.touches?.[0]||e.changedTouches?.[0];
@@ -312,6 +314,27 @@
                 }catch(_){return '!';}
               };
               const atPoint=c=>c?probe(c.x,c.y)+'/'+probe(c.x,c.y-22):'-';
+              // 691AM: A missing caretPositionFromPoint alone does not prove
+              // the target left the editor. Record the actual element and viewport
+              // on the touch path, without altering the native gesture.
+              const glyphPath=c=>{
+                if(!c)return '-';
+                try{
+                  const r=editor?.getBoundingClientRect();
+                  const el=document.elementFromPoint(c.x,c.y);
+                  const cls=el?.classList;
+                  const where=el===editor?'EDITOR':editor?.contains(el)?'INSIDE':'OUTSIDE';
+                  const kind=cls?.contains('ln-v2-selection-handle-custom')?'HANDLE':
+                    cls?.contains('ln-v2-odstavec')?'ROW':String(el?.tagName||'?').slice(0,8);
+                  const bounds=r?Math.round(r.left)+','+Math.round(r.top)+','+
+                    Math.round(r.right)+','+Math.round(r.bottom):'-';
+                  const vv=window.visualViewport;
+                  return c.x+','+c.y+':'+where+'/'+kind+
+                    ':glyph='+probe(c.x,c.y)+'/'+probe(c.x,c.y-22)+
+                    ':editor='+bounds+':vp='+Math.round(vv?.width||innerWidth)+'x'+
+                    Math.round(vv?.height||innerHeight);
+                }catch(_){return '!';}
+              };
               const engine=()=>{
                 const d=window.LUBANOTE_V2_SELECTION_DIAG;
                 return d?.dragging===true?('D'+(d.side==='start'?'S':d.side==='end'?'E':'?')):'N';
@@ -321,7 +344,7 @@
                 const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
                 if(t){
                   trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';
-                  first=coordinate(e);engineStart=engine();
+                  first=coordinate(e);engineStart=engine();traceStart=glyphPath(first);
                   const rect=t.getBoundingClientRect();
                   handleY=Math.round(rect.top)+'-'+Math.round(rect.bottom);
                 }
@@ -332,14 +355,18 @@
                 if(readModel()!==before)duringChanged=true;
                 const phase=engine();engineLast=phase;
                 if(phase.startsWith('D'))engineMove++;
-                if(trustedMove===1)pointsFirst=atPoint(last);
+                if(trustedMove===1){pointsFirst=atPoint(last);traceMiddle=glyphPath(last);}
+                if(trustedMove===Math.max(1,Math.floor(5)))traceEnd=glyphPath(last);
                 if(trustedMove===10)pointsLast=atPoint(last);
               };
+              const onFinish=e=>{if(e.isTrusted)traceFinish=glyphPath(coordinate(e));};
+              document.addEventListener('touchend',onFinish,true);
               document.addEventListener('touchstart',onStart,true);
               document.addEventListener('touchmove',onMove,true);
               let ack;
               try {ack=await plugin.gestureOwnedEditor({id,target,type:'swipe'});await wait(350);}
               finally {
+                document.removeEventListener('touchend',onFinish,true);
                 document.removeEventListener('touchstart',onStart,true);
                 document.removeEventListener('touchmove',onMove,true);
               }
@@ -349,7 +376,7 @@
                 'custom_selection_lost_after_drag_'+target);
               return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit,
                 first,last,duringChanged,engineStart,engineMove,engineLast,
-                pointsFirst,pointsLast,handleY};
+                pointsFirst,pointsLast,handleY,traceStart,traceMiddle,traceEnd,traceFinish};
             };
             const afterEnd=await drag('selection-end');
             assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
@@ -388,7 +415,9 @@
                   ',everChanged='+moved.duringChanged+',engine='+moved.engineStart+'/'+
                     moved.engineMove+'/'+moved.engineLast+
                   ',hitY='+moved.handleY+',p='+moved.pointsFirst+'>'+moved.pointsLast+
-                  ',model='+moved.before+'>'+moved.after);
+                  ',model='+moved.before+'>'+moved.after+
+                  ',path='+moved.traceStart+'>'+moved.traceMiddle+'>'+
+                    moved.traceEnd+'>'+moved.traceFinish);
                 if(changed){startChanged=true;break;}
               }catch(error){startAttempts.push(slovo+':'+String(error?.message||error).slice(0,130));}
             }
