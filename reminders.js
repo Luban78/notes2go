@@ -769,6 +769,51 @@ async function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
   return { ok: true, reason: "native-confirmed-with-full-payload-proof" };
 }
 
+/* 691AY – pouze ciselna diagnostika bez ID, nazvu, textu a datumu.
+ * Srovnava pocet nativnich zaznamu s presnymi identifikatory generovanych
+ * terminu a signalizuje, kdy by byla bezpecna parcialni obnova.
+ * Neovlivnuje overovani 691AX, nerusi ani neplanuje zadny alarm. */
+function spocitejOpakovaneAlarmy691AY(note, pending, ted) {
+  if (!note?.id || !Array.isArray(pending) ||
+      typeof window.LubaNoteRecurring?.vypocitejBudouciTerminy !== "function") return null;
+  let terminy;
+  try {
+    terminy = window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date, note.repeat, 32, ted);
+  } catch (_) { return null; }
+  if (!Array.isArray(terminy)) return null;
+  const vlastni = pending.filter(n => n?.extra?.recurring === true && n?.extra?.taskId === note.id);
+  const normalizovane = pending.filter(n => n?.extra?.recurring === true &&
+    n?.extra?.taskId != null && String(n.extra.taskId) === String(note.id));
+  const expected = new Set();
+  for (let i = 0; i < terminy.length; i++) {
+    const t = terminy[i];
+    if (!(t instanceof Date) || !Number.isFinite(t.getTime())) return null;
+    expected.add(Number(i === 0 && note.notificationId
+      ? note.notificationId : vytvorIdOpakovaneNotifikace(note.id, t.toISOString())));
+  }
+  const nativeIds = new Set(normalizovane.map(n => Number(n.id)));
+  const overlap = [...expected].filter(id => nativeIds.has(id)).length;
+  const extra = [...nativeIds].filter(id => !expected.has(id)).length;
+  const expired = normalizovane.filter(n => {
+    const t = new Date(n?.schedule?.at).getTime();
+    return Number.isFinite(t) && t <= ted.getTime();
+  }).length;
+  return { e: terminy.length, n: vlastni.length, l: normalizovane.length,
+    o: overlap, m: expected.size - overlap, x: extra, a: expired,
+    d: terminy.length - expected.size };
+}
+function prehledPocetnichShod691AY(notes, pending, ted) {
+  if (!Array.isArray(pending)) return "native-unavailable";
+  const counts = Object.create(null);
+  for (const n of notes) {
+    const s = spocitejOpakovaneAlarmy691AY(n, pending, ted);
+    const key = s ? `E${s.e}-N${s.n}-L${s.l}-O${s.o}-M${s.m}-X${s.x}-A${s.a}-D${s.d}` : "unknown";
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return `pendingTotal=${pending.length} groups=` +
+    (Object.entries(counts).map(([k,v]) => `${k}x${v}`).join(",") || "none");
+}
+
 async function obnovNotifikaceOpakovanychPoznamek() {
   if (typeof loadTask !== "function") return;
 
@@ -789,6 +834,8 @@ async function obnovNotifikaceOpakovanychPoznamek() {
     }
   }
 
+  // Pocetni prehled jen pro diagnostiku; zadna data ani ID neodesila.
+  const predObnovou691AY = prehledPocetnichShod691AY(opakovanePoznamky, pending, new Date());
   const zacatek = performance.now();
   let overeno = 0, obnoveno = 0;
   const duvody = Object.create(null);
@@ -818,6 +865,22 @@ async function obnovNotifikaceOpakovanychPoznamek() {
     "REM-FAST",
     `691AX recurring notes=${opakovanePoznamky.length} alreadyExact=${overeno} restored=${obnoveno} reasons=${prehled} elapsedMs=${Math.round(performance.now() - zacatek)}`
   );
+  if (duvody["count-changed"] && pending) {
+    window.LubaNoteStartupDiag?.zapis?.("REM-COUNT", `691AY BEFORE ${predObnovou691AY}`);
+    // Read-only native post-check az PO dokonceni startu; ceka jen samostatna diagnostika,
+    // nikdy synchronizace, E2E ani notifikacni planovani.
+    setTimeout(() => {
+      Promise.resolve()
+        .then(() => plugin.getPending())
+        .then((value) => {
+          const native = Array.isArray(value?.notifications) ? value.notifications : null;
+          window.LubaNoteStartupDiag?.zapis?.(
+            "REM-COUNT", `691AY AFTER ${prehledPocetnichShod691AY(opakovanePoznamky, native, new Date())}`
+          );
+        })
+        .catch(() => window.LubaNoteStartupDiag?.zapis?.("REM-COUNT", "691AY AFTER native-read-error"));
+    }, 0);
+  }
 }
 
 
