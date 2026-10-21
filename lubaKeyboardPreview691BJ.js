@@ -142,17 +142,14 @@
 })();
 
 
-/* 691BJ/691BK/691BM – Move overlay UX (visual-only), separate from 691BJ keyboard code.
- * The index.html already loads this module; do not touch Core V2 gesture
- * recognizers, note model, selection or persistence.
- *  - Suppress the own caret/handles from long-press MOVE takeover until
- *    the next genuine input gesture.
- *  - Clamp the visual drag label to screen and ellipsize long ToDo text.
+/* 691BN – SAFE RECOVERY. Preserve the proven keyboard 691BJ and the
+ * successful 691BK long-label ellipsis. REMOVE all previous 691BK/BL/BM
+ * caret-hide guards. The own caret remains entirely under Core V2 control.
+ * This is a rollback of the broken caret behavior, not yet the MOVE UX fix.
  */
 (() => {
   'use strict';
   const STYLE_ID = 'ln-v2-move-ux-style-691BK';
-  const SUSPEND_CLASS = 'ln-v2-move-caret-suspended-691BK';
   const TEXT_CLASS = 'ln-v2-drag-label-text-691BK';
   const SELECTOR = '.ln-v2-list-drag-preview';
 
@@ -161,13 +158,6 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      body.${SUSPEND_CLASS} .ln-v2-luba-caret,
-      body.${SUSPEND_CLASS} .ln-v2-single-caret-handle,
-      body.${SUSPEND_CLASS} .ln-v2-selection-handle-custom,
-      body.${SUSPEND_CLASS} .ln-v2-selection-magnifier {
-        display: none !important;
-        visibility: hidden !important;
-      }
       ${SELECTOR} {
         box-sizing: border-box !important;
         width: max-content !important;
@@ -185,103 +175,6 @@
       }
     `;
     document.head.appendChild(style);
-
-    // This event is already emitted by the shipped Core V2 at LONGPRESS_READY,
-    // before the first drag movement. Does not change model or gesture handling.
-    document.addEventListener('lubanote:v2-list-move-takeover', () => {
-      document.body.classList.add(SUSPEND_CLASS);
-    });
-
-    /* 691BM: Android own-caret is model-based and can have NO native DOM
-       selection at all. The previous 691BL required window.getSelection()
-       to become nonempty; when it stayed empty, the visual guard was never
-       lifted. Reposition via the existing, exported Core V2 function instead.
-       Keep the guard until Core has rendered the fresh caret/handle in rAF.
-       Do not change the MOVE gesture, model, toolbar, or stored notes. */
-    let pendingTap691BM = null;
-    let restoreEpoch691BM = 0;
-    const isSuspended691BM = () => document.body.classList.contains(SUSPEND_CLASS);
-    const textEditor691BM = (target) => {
-      const element = target?.nodeType === 3 ? target.parentElement : target;
-      if (!(element instanceof Element)) return null;
-      const editor = element.closest('.ln-v2-editor');
-      if (!editor || editor.classList.contains('ln-v2-list-drag-mode')) return null;
-      if (element.closest('button, figure, img, input, textarea, select, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check], [contenteditable="false"]')) return null;
-      return editor;
-    };
-    function resumeAfterReposition691BM(tap) {
-      if (!tap) return;
-      const epoch = ++restoreEpoch691BM;
-      /* First frame runs AFTER Core's touchend tap handling. It uses precisely
-         the same public Core V2 caret-position operation as the normal tap.
-         No old DOM selection / row comparison – that is unreliable in APK. */
-      requestAnimationFrame(() => {
-        if (epoch !== restoreEpoch691BM || !isSuspended691BM() ||
-            !tap.editor.isConnected || tap.editor.classList.contains('ln-v2-list-drag-mode')) return;
-        let positioned = false;
-        try {
-          positioned = window.LubaNoteEditorV2?.zrusVyberNaBoduProSelectionMenu?.(tap.x, tap.y) === true;
-        } catch (_error) {}
-        if (!positioned) return; // Invalid point: never expose old caret.
-        /* Core scheduled its own caret rAF on successful model positioning.
-           Register release AFTER that repaint. No old-position flash. */
-        requestAnimationFrame(() => {
-          if (epoch !== restoreEpoch691BM || !isSuspended691BM() ||
-              !tap.editor.isConnected || tap.editor.classList.contains('ln-v2-list-drag-mode')) return;
-          document.body.classList.remove(SUSPEND_CLASS);
-        });
-      });
-    }
-
-    document.addEventListener('lubanote:v2-list-move-takeover', () => {
-      restoreEpoch691BM++;
-      pendingTap691BM = null;
-    });
-
-    document.addEventListener('touchstart', event => {
-      pendingTap691BM = null;
-      if (!isSuspended691BM() || event.touches?.length !== 1 ||
-          event.changedTouches?.length !== 1) return;
-      const editor = textEditor691BM(event.target);
-      if (!editor) return;
-      const touch = event.changedTouches[0];
-      pendingTap691BM = { editor, id: touch.identifier, x: touch.clientX,
-        y: touch.clientY, scroll: editor.scrollTop, at: performance.now() };
-    }, { capture: true, passive: true });
-
-    document.addEventListener('touchend', event => {
-      const tap = pendingTap691BM;
-      pendingTap691BM = null;
-      if (!tap || !isSuspended691BM()) return;
-      const touch = Array.from(event.changedTouches || [])
-        .find(item => item.identifier === tap.id);
-      if (!touch || event.touches?.length ||
-          performance.now() - tap.at > 330 ||
-          Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > 12 ||
-          Math.abs(tap.editor.scrollTop - tap.scroll) > 3 ||
-          textEditor691BM(event.target) !== tap.editor) return;
-      resumeAfterReposition691BM(tap);
-    }, { capture: true, passive: true });
-    document.addEventListener('touchcancel', () => {
-      pendingTap691BM = null;
-    }, { capture: true, passive: true });
-
-    /* Desktop pointer click remains independent of Android touch routing. */
-    let mouseTap691BM = null;
-    document.addEventListener('pointerdown', event => {
-      if (event.pointerType === 'touch' || event.button !== 0 || !isSuspended691BM()) return;
-      const editor = textEditor691BM(event.target);
-      mouseTap691BM = editor ? { editor, x: event.clientX, y: event.clientY,
-        at: performance.now() } : null;
-    }, true);
-    document.addEventListener('click', event => {
-      const tap = mouseTap691BM;
-      mouseTap691BM = null;
-      if (!tap || !isSuspended691BM() || textEditor691BM(event.target) !== tap.editor ||
-          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 12 ||
-          performance.now() - tap.at > 330) return;
-      resumeAfterReposition691BM(tap);
-    }, false);
 
     let preview = null;
     let previewObserver = null;
