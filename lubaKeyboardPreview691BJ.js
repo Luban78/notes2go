@@ -142,7 +142,7 @@
 })();
 
 
-/* 691BK – Move overlay UX (visual-only), separate from 691BJ keyboard code.
+/* 691BK/691BL – Move overlay UX (visual-only), separate from 691BJ keyboard code.
  * The index.html already loads this module; do not touch Core V2 gesture
  * recognizers, note model, selection or persistence.
  *  - Suppress the own caret/handles from long-press MOVE takeover until
@@ -192,22 +192,116 @@
       document.body.classList.add(SUSPEND_CLASS);
     });
 
+    /* 691BL: A new tap must first MOVE the model caret before we display it.
+       Core V2 processes own-caret taps on touchend, then draws in rAF.
+       Releasing our visibility guard on pointerdown exposed the OLD handle
+       for a frame (691BK regression). Gesture/model code is untouched. */
+    let pendingTap691BL = null;
+    let restoreEpoch691BL = 0;
+    const isSuspended691BL = () => document.body.classList.contains(SUSPEND_CLASS);
+    const getCaretRange691BL = (editor) => {
+      const selection = window.getSelection();
+      if (!selection?.rangeCount || !selection.isCollapsed) return null;
+      const range = selection.getRangeAt(0);
+      if (!editor?.contains(range.startContainer)) return null;
+      return { node: range.startContainer, offset: range.startOffset, range };
+    };
+    const textEditor691BL = (target) => {
+      const element = target?.nodeType === 3 ? target.parentElement : target;
+      if (!(element instanceof Element)) return null;
+      const editor = element.closest('.ln-v2-editor');
+      if (!editor || editor.classList.contains('ln-v2-list-drag-mode')) return null;
+      if (element.closest('button, figure, img, input, textarea, select, a[href], .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check], [contenteditable="false"]')) return null;
+      return editor;
+    };
+    function resumeAfterReposition691BL(tap) {
+      if (!tap) return;
+      const epoch = ++restoreEpoch691BL;
+      const check = (retries) => {
+        requestAnimationFrame(() => {
+          if (epoch !== restoreEpoch691BL || !isSuspended691BL() ||
+              !tap.editor.isConnected || tap.editor.classList.contains('ln-v2-list-drag-mode')) return;
+          const state = getCaretRange691BL(tap.editor);
+          if (!state) return;
+          const moved = !tap.before || state.node !== tap.before.node || state.offset !== tap.before.offset;
+          let near = false;
+          try {
+            const rect = state.range.getBoundingClientRect();
+            near = Math.abs(rect.left - tap.x) < 42 &&
+              Math.abs(rect.top + rect.height / 2 - tap.y) < 38;
+          } catch (_error) {}
+          if (!moved && !near) return; // Do not reveal the old caret.
+
+          /* The Android own caret is attached to its current paragraph in
+             Core V2's rAF. Wait until that paragraph matches the new Range. */
+          if (tap.editor.dataset.lnV2OwnCaretOnly === '1') {
+            const nodeEl = state.node.nodeType === 3 ? state.node.parentElement : state.node;
+            const selectedRow = nodeEl?.closest?.('[data-ln-v2-blok]');
+            const caretEl = document.querySelector('.ln-v2-luba-caret');
+            const caretRow = caretEl?.closest?.('[data-ln-v2-blok]');
+            if (!selectedRow || !caretEl || caretEl.hidden || caretRow !== selectedRow) {
+              if (retries > 0) check(retries - 1);
+              return;
+            }
+          }
+          document.body.classList.remove(SUSPEND_CLASS);
+        });
+      };
+      /* Two frames: first lets Core V2 commit the new model position,
+         second lets its visual caret/handle catch up. */
+      requestAnimationFrame(() => check(4));
+    }
+
+    document.addEventListener('lubanote:v2-list-move-takeover', () => {
+      restoreEpoch691BL++;
+      pendingTap691BL = null;
+    });
+
+    document.addEventListener('touchstart', event => {
+      pendingTap691BL = null;
+      if (!isSuspended691BL() || event.touches?.length !== 1 ||
+          event.changedTouches?.length !== 1) return;
+      const editor = textEditor691BL(event.target);
+      if (!editor) return;
+      const touch = event.changedTouches[0];
+      pendingTap691BL = { editor, id: touch.identifier, x: touch.clientX,
+        y: touch.clientY, scroll: editor.scrollTop, at: performance.now(),
+        before: getCaretRange691BL(editor) };
+    }, { capture: true, passive: true });
+
+    document.addEventListener('touchend', event => {
+      const tap = pendingTap691BL;
+      pendingTap691BL = null;
+      if (!tap || !isSuspended691BL()) return;
+      const touch = Array.from(event.changedTouches || [])
+        .find(item => item.identifier === tap.id);
+      if (!touch || event.touches?.length ||
+          performance.now() - tap.at > 330 ||
+          Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > 12 ||
+          Math.abs(tap.editor.scrollTop - tap.scroll) > 3 ||
+          !textEditor691BL(event.target)) return;
+      resumeAfterReposition691BL(tap);
+    }, { capture: true, passive: true });
+    document.addEventListener('touchcancel', () => {
+      pendingTap691BL = null;
+    }, { capture: true, passive: true });
+
+    /* Desktop mouse: editor selection is processed on click. Same guard. */
+    let mouseTap691BL = null;
     document.addEventListener('pointerdown', event => {
-      if (!document.body.classList.contains(SUSPEND_CLASS)) return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (event.pointerType === 'touch' && !event.isPrimary) return;
-      if (event.pointerType === 'mouse' && event.button !== 0) return;
-      const editor = target.closest('.ln-v2-editor');
-      // Never re-enable during the current MOVE gesture or on its release.
-      if (editor && !editor.classList.contains('ln-v2-list-drag-mode')) {
-        document.body.classList.remove(SUSPEND_CLASS);
-      } else if (target.closest('#lubaKeyboard') &&
-                 !document.querySelector('.ln-v2-editor.ln-v2-list-drag-mode')) {
-        // Typing a new character is also a deliberate request for a caret.
-        document.body.classList.remove(SUSPEND_CLASS);
-      }
+      if (event.pointerType === 'touch' || event.button !== 0 || !isSuspended691BL()) return;
+      const editor = textEditor691BL(event.target);
+      mouseTap691BL = editor ? {editor, x:event.clientX, y:event.clientY,
+        at:performance.now(), before:getCaretRange691BL(editor)} : null;
     }, true);
+    document.addEventListener('click', event => {
+      const tap = mouseTap691BL;
+      mouseTap691BL = null;
+      if (!tap || !isSuspended691BL() || !textEditor691BL(event.target) ||
+          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 12 ||
+          performance.now() - tap.at > 330) return;
+      resumeAfterReposition691BL(tap);
+    }, false);
 
     let preview = null;
     let previewObserver = null;
