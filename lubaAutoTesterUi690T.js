@@ -1,4 +1,4 @@
-/* 691W/691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
+/* 691AK/691W/691H – resilient OWN selection-handle drag, preserve independent save/real-UI tests. Based on 690X; two distinct native taps verify OWN model movement; resolve modal block of OWN handles + corrected native TAP setup of OWN LubaNote caret/selection in the live production editor, plus 690T walkthrough for an owned LOCAL Testy note.
  * Uses real LubaNote screen, toolbar button and the shipped LubaKeyboard command path.
  * This is not Android UIAutomator. The original toolbar/save clicks are programmatic;
  * steps ui-own-* now use native Java MotionEvent in the actual OWN-LubaNote editor.
@@ -285,23 +285,55 @@
             // Observe trusted coordinates and whether the model EVER moves,
             // even temporarily during the 10 Java MotionEvent steps.
             // DO NOT turn a failed selection into PASS based on delivery alone.
+            // 691AK: READ-ONLY diagnostic for genuine Java MotionEvent.
+            // Inspect actual touch and the glyph under the finger vs 22px above.
+            // No synthetic PASS, no change to selection, gestures or production engine.
             const drag=async target=>{
               let trustedDown=0,trustedMove=0,hit='-',first=null,last=null;
-              let duringChanged=false;
+              let duringChanged=false,engineStart='-',engineMove=0,engineLast='-';
+              let pointsFirst='-',pointsLast='-',handleY='-';
               const before=readModel();
               const coordinate=e=>{
                 const t=e.touches?.[0]||e.changedTouches?.[0];
                 return t?{x:Math.round(t.clientX),y:Math.round(t.clientY)}:null;
               };
+              const probe=(x,y)=>{
+                try{
+                  let node=null,off=null;
+                  const p=document.caretPositionFromPoint?.(x,y);
+                  if(p?.offsetNode){node=p.offsetNode;off=p.offset;}
+                  else{
+                    const r=document.caretRangeFromPoint?.(x,y);
+                    node=r?.startContainer;off=r?.startOffset;
+                  }
+                  if(!node)return '-';
+                  return (editor?.contains(node)?'I':'O')+
+                    (node.nodeType===Node.TEXT_NODE?'T':'E')+String(off??'?');
+                }catch(_){return '!';}
+              };
+              const atPoint=c=>c?probe(c.x,c.y)+'/'+probe(c.x,c.y-22):'-';
+              const engine=()=>{
+                const d=window.LUBANOTE_V2_SELECTION_DIAG;
+                return d?.dragging===true?('D'+(d.side==='start'?'S':d.side==='end'?'E':'?')):'N';
+              };
               const onStart=e=>{
                 if(!e.isTrusted)return;
                 const t=e.target?.closest?.('[data-ln-v2-selection-handle]');
-                if(t){trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';first=coordinate(e);}
+                if(t){
+                  trustedDown++;hit=t.getAttribute('data-ln-v2-selection-handle')||'-';
+                  first=coordinate(e);engineStart=engine();
+                  const rect=t.getBoundingClientRect();
+                  handleY=Math.round(rect.top)+'-'+Math.round(rect.bottom);
+                }
               };
               const onMove=e=>{
                 if(!e.isTrusted)return;
                 trustedMove++;last=coordinate(e);
                 if(readModel()!==before)duringChanged=true;
+                const phase=engine();engineLast=phase;
+                if(phase.startsWith('D'))engineMove++;
+                if(trustedMove===1)pointsFirst=atPoint(last);
+                if(trustedMove===10)pointsLast=atPoint(last);
               };
               document.addEventListener('touchstart',onStart,true);
               document.addEventListener('touchmove',onMove,true);
@@ -316,7 +348,8 @@
               assert(editor?.classList.contains('ln-v2-selection-custom-active'),
                 'custom_selection_lost_after_drag_'+target);
               return {text:selected(),before,after:readModel(),trustedDown,trustedMove,hit,
-                first,last,duringChanged};
+                first,last,duringChanged,engineStart,engineMove,engineLast,
+                pointsFirst,pointsLast,handleY};
             };
             const afterEnd=await drag('selection-end');
             assert(afterEnd.text.length>0&&afterEnd.text!==ownSelectionBefore,
@@ -352,7 +385,10 @@
                 startAttempts.push(slovo+':'+startBefore.length+'>'+moved.text.length+
                   ',touch='+moved.trustedDown+'/'+moved.trustedMove+',hit='+moved.hit+
                   ',coords='+[moved.first?.x,moved.first?.y].join('/')+'>'+[moved.last?.x,moved.last?.y].join('/')+
-                  ',everChanged='+moved.duringChanged+',model='+moved.before+'>'+moved.after);
+                  ',everChanged='+moved.duringChanged+',engine='+moved.engineStart+'/'+
+                    moved.engineMove+'/'+moved.engineLast+
+                  ',hitY='+moved.handleY+',p='+moved.pointsFirst+'>'+moved.pointsLast+
+                  ',model='+moved.before+'>'+moved.after);
                 if(changed){startChanged=true;break;}
               }catch(error){startAttempts.push(slovo+':'+String(error?.message||error).slice(0,130));}
             }
