@@ -165,7 +165,7 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "const right=Math.max(0,Math.min(er.right-24,innerWidth-8)-x);" +
         "const selection=target==='selection-end'||target==='selection-start';" +
         "const delta=target==='selection-end'?(left>=48?-Math.min(95,left):Math.min(95,right)):" +
-          "target==='selection-start'?(right>=48?Math.min(95,right):-Math.min(95,left)):45;" +
+          "target==='selection-start'?(left>=48?-Math.min(95,left):Math.min(95,right)):45;" +
         "return JSON.stringify({ok:!!(targetOk&&viewportOk&&(!selection||Math.abs(delta)>=30)),x,y,viewport:innerWidth,delta});" +
       "}catch(e){return JSON.stringify({ok:false});}})()";
       try {
