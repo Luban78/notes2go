@@ -338,6 +338,31 @@ async function zrusCekajiciOpakovaneNotifikacePoznamky(noteId) {
 }
 
 
+/* 691AX – Capacitor Android getPending() exposes title/body/id/schedule/extra,
+ * NOT largeBody/channelId/allowWhileIdle (those are only input fields).
+ * Bind full payload and native scheduling flags to an opaque SHA-256 proof.
+ * A legacy or unverifiable alarm is always restored via the old code path.
+ * No note contents or proof values are logged to Debug Hub. */
+async function vytvorOtiskOpakovanehoAlarmu691AX(note) {
+  try {
+    if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") return null;
+    const data = JSON.stringify([
+      "691AX-recurring-notification-v1",
+      String(note?.id || ""),
+      String(note?.title || "LubaNote"),
+      String(note?.note || "").replace(/\s+/g, " ").trim(),
+      String(note?.date || ""),
+      note?.repeat || null,
+      note?.notificationId ?? null,
+      "reminders", true, false, false
+    ]);
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+    return "v1:" + Array.from(new Uint8Array(bytes), v => v.toString(16).padStart(2, "0")).join("");
+  } catch (_error) {
+    return null;
+  }
+}
+
 async function naplanujOpakovaneNotifikacePoznamky(note) {
   if (
     !note?.id ||
@@ -359,6 +384,8 @@ async function naplanujOpakovaneNotifikacePoznamky(note) {
         new Date()
       );
 
+  const dokaz691AX = await vytvorOtiskOpakovanehoAlarmu691AX(note);
+
   for (let index = 0; index < terminy.length; index++) {
     const termin = terminy[index];
     const notificationId =
@@ -377,7 +404,8 @@ async function naplanujOpakovaneNotifikacePoznamky(note) {
       {
         lubanoteType: "note",
         taskId: note.id,
-        recurring: true
+        recurring: true,
+        ...(dokaz691AX ? { lubanoteRecurringProof691AX: dokaz691AX } : {})
       }
     );
   }
@@ -680,7 +708,7 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
  * The sticky native registry remains unchanged when pending alarms match;
  * it was activated when those alarms were originally scheduled.
  */
-function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
+async function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
   if (!note?.id || !window.LubaNoteRecurring?.vypocitejBudouciTerminy ||
       !Array.isArray(pending) ||
       (Array.isArray(note.plannedItems) && note.plannedItems.length > 0)) {
@@ -692,7 +720,6 @@ function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
   if (!Array.isArray(terminy) || !terminy.length || terminy.length > 32) {
     return { ok: false, reason: "no-future-terms" };
   }
-  // An unrelated note / stale occurrence must never satisfy the fast path.
   const vlastni = pending.filter((item) =>
     item?.extra?.taskId === note.id && item?.extra?.recurring === true
   );
@@ -703,6 +730,8 @@ function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
   if (byId.size !== vlastni.length) {
     return { ok: false, reason: "duplicate-native-ids" };
   }
+  const proof = await vytvorOtiskOpakovanehoAlarmu691AX(note);
+  if (!proof) return { ok: false, reason: "proof-crypto-unavailable" };
   const obsah = String(note.note || "").replace(/\s+/g, " ").trim();
   const kratky = obsah.length > 140 ? obsah.slice(0, 140) + "…" : obsah;
   const body = kratky || "Máš naplánovanou připomínku.";
@@ -717,15 +746,27 @@ function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
     const item = byId.get(id);
     if (!item || !Number.isFinite(when) || when <= ted.getTime())
       return { ok: false, reason: "id-or-term-missing" };
-    if (item.title !== title || item.body !== body || item.largeBody !== largeBody)
-      return { ok: false, reason: "content-different-or-unverifiable" };
-    if (item?.extra?.lubanoteType !== "note" || item.channelId !== "reminders")
-      return { ok: false, reason: "type-or-channel-different" };
-    if (new Date(item?.schedule?.at).getTime() !== when ||
-        item?.schedule?.allowWhileIdle !== true)
-      return { ok: false, reason: "schedule-different-or-unverifiable" };
+    if (item.title !== title || item.body !== body)
+      return { ok: false, reason: "native-title-or-body-different" };
+    if (item?.extra?.lubanoteType !== "note" ||
+        item?.extra?.taskId !== note.id || item?.extra?.recurring !== true)
+      return { ok: false, reason: "native-type-or-owner-different" };
+    if (item?.extra?.lubanoteRecurringProof691AX !== proof)
+      return { ok: false, reason: "proof-missing-or-stale" };
+    // Only compare optional fields if the native plugin actually returns them.
+    if (item.largeBody !== undefined && item.largeBody !== largeBody)
+      return { ok: false, reason: "native-large-body-different" };
+    if (item.channelId !== undefined && item.channelId !== "reminders")
+      return { ok: false, reason: "native-channel-different" };
+    const at = item?.schedule?.at;
+    if (at == null || new Date(at).getTime() !== when)
+      return { ok: false, reason: "native-schedule-missing-or-different" };
+    if (item.schedule.allowWhileIdle !== undefined && item.schedule.allowWhileIdle !== true)
+      return { ok: false, reason: "native-idle-flag-different" };
+    if (item.schedule.repeats === true || item.schedule.every || item.schedule.on)
+      return { ok: false, reason: "unexpected-native-recurring-rule" };
   }
-  return { ok: true, reason: "native-exact-match" };
+  return { ok: true, reason: "native-confirmed-with-full-payload-proof" };
 }
 
 async function obnovNotifikaceOpakovanychPoznamek() {
@@ -756,7 +797,7 @@ async function obnovNotifikaceOpakovanychPoznamek() {
     let shoda = false, duvod = pending ? "unverified" : "native-pending-unavailable";
     if (pending) {
       try {
-        const overeni = overCekajiciOpakovaneAlarmy691AW(note, pending, ted);
+        const overeni = await overCekajiciOpakovaneAlarmy691AW(note, pending, ted);
         shoda = overeni.ok;
         duvod = overeni.reason;
       } catch (_error) {
@@ -775,7 +816,7 @@ async function obnovNotifikaceOpakovanychPoznamek() {
   const prehled = Object.entries(duvody).map(([k, v]) => k + ":" + v).join(",") || "none";
   window.LubaNoteStartupDiag?.zapis?.(
     "REM-FAST",
-    `691AW recurring notes=${opakovanePoznamky.length} alreadyExact=${overeno} restored=${obnoveno} reasons=${prehled} elapsedMs=${Math.round(performance.now() - zacatek)}`
+    `691AX recurring notes=${opakovanePoznamky.length} alreadyExact=${overeno} restored=${obnoveno} reasons=${prehled} elapsedMs=${Math.round(performance.now() - zacatek)}`
   );
 }
 
