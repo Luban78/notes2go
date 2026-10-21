@@ -7502,6 +7502,8 @@ async function provedOnboardingPoBezpecnemSyncu({
 }
 
 async function startSync() {
+  // Pokud novy start selze, predchozi potvrzeni nesmi opravnovat skip.
+  posledniPotvrzenyStart691BA = null;
   if (window.LubaNoteE2EDeviceGuard688T &&
       await window.LubaNoteE2EDeviceGuard688T.overAktualnost() !== true) return false;
   /*
@@ -7873,7 +7875,62 @@ async function startSync() {
     }
   }
 
+  /* 691BA: potvrzeni si pamatujeme JEN po uspesnem Fast Sync SKIP,
+   * nulovych dluzich a poslednim opravnenem userId. Jiny start nema skip. */
+  if (posledniFastSyncStav === "SKIP" &&
+      !startPouzeLokalneKvuliEgressu &&
+      !lokalniZmenaCekaNaPotvrzeniServerem &&
+      !maCilenyPrivateV2Dluh() &&
+      nactiCekajiciSmazani().length === 0 &&
+      nactiBlokovanaCekajiciSmazani().length === 0 &&
+      aktivniKonfliktySyncu.size === 0) {
+    const stav = nactiFastSyncStav(user.id);
+    const generace = ziskejTrvalouGeneraciLokalnichZmenProFastSync();
+    if (stav && generace !== null && stav.localGeneration === generace) {
+      posledniPotvrzenyStart691BA = {
+        userId: String(user.id),
+        serverFingerprint: stav.serverFingerprint,
+        localGeneration: generace,
+        writeCount: pocetPotvrzenychServerovychZapisu,
+        cas: performance.now()
+      };
+    }
+  }
+
   return true;
+}
+
+/* 691BA – jednorázová ochrana proti opožděnému auth-valid po již
+ * POTVRZENÉM Fast Sync startu. Jen RAM a pouze během prvního auth-valid.
+ * Žádný login, offline reconnect, manuální sync ani datový dluh se nemaže. */
+let prvniAuthValidCas691BA = null;
+let pocetAuthValid691BA = 0;
+let posledniPotvrzenyStart691BA = null;
+
+function lzePreskocitDuplicitniAuthStart691BA(userId) {
+  const z = posledniPotvrzenyStart691BA;
+  if (!z || !userId || String(userId) !== z.userId ||
+      pocetAuthValid691BA !== 1 || prvniAuthValidCas691BA === null ||
+      performance.now() - prvniAuthValidCas691BA > 3500 ||
+      performance.now() - z.cas > 3500 ||
+      z.localGeneration !== ziskejTrvalouGeneraciLokalnichZmenProFastSync() ||
+      z.writeCount !== pocetPotvrzenychServerovychZapisu ||
+      !navigator.onLine ||
+      window.LubaNoteSupabase?.jeAktivniUcetPotvrzenProTentoBeh?.() !== true ||
+      posledniFastSyncStav !== "SKIP" ||
+      aktivniKonfliktySyncu.size > 0 ||
+      stitkyCekajiNaRefreshPoNavratuInternetu ||
+      nactiCekajiciSmazani().length > 0 ||
+      nactiBlokovanaCekajiciSmazani().length > 0 ||
+      maCilenyPrivateV2Dluh() ||
+      lokalniZmenaCekaNaPotvrzeniServerem ||
+      synchronizaceOdlozenaKvuliLokalniZmene ||
+      probihajiciLokalniZmena || lokalniZmenaRezervovana ||
+      probihajiciSync) return false;
+  const aktualni = nactiFastSyncStav(userId);
+  return Boolean(aktualni &&
+    aktualni.localGeneration === z.localGeneration &&
+    aktualni.serverFingerprint === z.serverFingerprint);
 }
 
 let probihajiciStartSync = null;
@@ -10047,6 +10104,29 @@ async function spustStartSyncBezpecne() {
     return probihajiciStartSync;
   }
 
+  /* 691BA: po prvnim auth-valid se muze zpozdile vratit dalsi volajici.
+   * Bez noveho obsahu / serveroveho dluhu a s potvrzenym stejnym uctem
+   * nepoustime druhy start. Overeni userId je pred skipem povinne. */
+  if (posledniPotvrzenyStart691BA &&
+      pocetAuthValid691BA === 1 &&
+      prvniAuthValidCas691BA !== null &&
+      performance.now() - prvniAuthValidCas691BA <= 3500 &&
+      performance.now() - posledniPotvrzenyStart691BA.cas <= 3500) {
+    try {
+      const user = await getCurrentUser();
+      if (!probihajiciStartSync &&
+          lzePreskocitDuplicitniAuthStart691BA(user?.id)) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2", "691BA AUTH DUPLICATE SKIP | verified-user no-debt"
+        );
+        return true;
+      }
+    } catch (_error) {
+      // Kdyz nelze ucet overit, musi probehnout puvodni start.
+    }
+    if (probihajiciStartSync) return probihajiciStartSync;
+  }
+
   probihajiciStartSync =
     (async () => {
       /*
@@ -10721,10 +10801,11 @@ spustStartSyncBezpecne();
 window.addEventListener(
   "lubanote:auth-valid",
   () => {
-    setTimeout(
-      spustStartSyncBezpecne,
-      0
-    );
+    pocetAuthValid691BA += 1;
+    if (pocetAuthValid691BA === 1) {
+      prvniAuthValidCas691BA = performance.now();
+    }
+    setTimeout(spustStartSyncBezpecne, 0);
   }
 );
 
