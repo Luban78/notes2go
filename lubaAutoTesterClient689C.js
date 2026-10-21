@@ -149,6 +149,17 @@
       assert(detail?.ok===true,'new_save_failed');
       assert(backend.rows.get(note.id)?.data?.__lubanoteE2ENote===true,'new_plaintext_leak');
       assert(backend.rows.get(note.id)?.revision===1,'new_revision_wrong');
+    }],
+    // 691AT: real shipped sync.js must NEVER upload explicit LOCAL note content.
+    // The strict RAM RPC records any request; this test fails if LOCAL scope
+    // accidentally enters preflight, E2E upload or cloud write path.
+    ['actual-local-no-rpc','Produkční sync.js: LOCAL poznámka nevolá žádné cloudové RPC',async()=>{
+      const note={...sample(106),storageScope:'local'};
+      const detail=await uploadLocalNoteToSupabase(note,{vratitDetailV2:true});
+      assert(detail?.ok===true && detail?.wrote===false && detail?.reason==='local_only',
+        'local_scope_did_not_short_circuit_upload');
+      assert(backend.calls.length===0,'local_scope_caused_remote_rpc');
+      assert(backend.rows.size===0,'local_scope_created_cloud_row');
     }]
   ];
   async function run(){

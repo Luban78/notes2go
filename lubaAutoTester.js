@@ -13,19 +13,20 @@
   let lastTestNoteId=null;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691ASC</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691AT</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
+      <button class="lat-main-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
-        <option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
+        <option value="editor-sync">Editor + SYNC (živé testy)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
         <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
@@ -738,7 +739,16 @@
       return;
     }
     if(generace!==generaceBehu || !screen || screen.hidden)return;
-    const vybrane=scope==='bullet'?scenare.filter(x=>x.group==='Seznamy'):scope==='editor'?scenare.filter(x=>x.group==='Editor'):scope==='todo'?[]:scope==='planner'?scenare.filter(x=>x.id==='app-planner'):scenare;
+    const editorSyncIds=new Set([
+      'editor-plain','editor-undo','editor-caret','editor-selection','editor-edge','editor-format',
+      'list-toggle','list-badge','list-levels','list-move','list-selection',
+      'code-integrity','code-caret','code-image',
+      'image-between','image-wrap','image-move','image-reopen',
+      'notes-create','notes-trash','notes-search','notes-offline',
+      'sync-two-devices','sync-convert','security-e2e'
+    ]);
+    const vybrane=scope==='editor-sync'?scenare.filter(x=>editorSyncIds.has(x.id)):
+      scope==='bullet'?scenare.filter(x=>x.group==='Seznamy'):scope==='editor'?scenare.filter(x=>x.group==='Editor'):scope==='todo'?[]:scope==='planner'?scenare.filter(x=>x.id==='app-planner'):scenare;
     if(scope==='bullet' && vybrane.length<5){
       results.push({id:'stability-bullet-registry-incomplete',name:'Bullet / seznamy – chybí scénáře',
         kind:'STABILITY_REGISTRY',status:'BLOCKED',ms:0,detail:'Očekáváno alespoň 5 scénářů Seznamy.'});
@@ -1241,7 +1251,7 @@
     if(generace!==generaceBehu)return;
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
     worker?.terminate();worker=null;
-    if(activeSuite==='all' || activeSuite==='sync'){
+    if(activeSuite==='all' || activeSuite==='sync' || activeSuite==='editor-sync'){
       setStatus('Místní testy hotovy · spouštím databázové testy na LubaServeru…');
       await spustitServeroveTesty(generace);
     }
@@ -1255,6 +1265,12 @@
       if(generace===generaceBehu)await spustitPlannerLive691AQ(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AR(generace);
       if(generace===generaceBehu)await spustitPlannerLive691AS(generace);
+    }
+    if(generace===generaceBehu && activeSuite==='editor-sync'){
+      // 691AT: only editor-oriented isolated Code checks. No Planner or language suite.
+      setStatus('Editor + SYNC · doplňkové izolované Code testy…');
+      await spustitPokrocile690Q(generace,'editor');
+      if(generace===generaceBehu)await pridejPokrytiV1(generace,'editor-sync');
     }
     if(generace===generaceBehu&&activeSuite==='all'&&!liveFirstDone){
       setStatus('Skutečné LOCAL poznámky – vytvoření/Koš/obnova, pak je ponechám pod Testy…');
@@ -1288,7 +1304,7 @@
     // 691AD: only explicit isolated diagnostic suites need the large visual lab.
     // In the regular one-button run the same sandbox checks execute offscreen.
     const lab=screen?.querySelector('.lat-laboratory');
-    if(lab)lab.dataset.compact=['all','ui','notes','e2e','sync','db'].includes(activeSuite)?'1':'0';
+    if(lab)lab.dataset.compact=['all','editor-sync','ui','notes','e2e','sync','db'].includes(activeSuite)?'1':'0';
     screen?.querySelector('#lat-live-stage')?.classList.remove('lat-has-live-frame');
     const placeholder=screen?.querySelector('.lat-live-placeholder');
     if(placeholder)placeholder.textContent='Spouštím živé testovací okno Core V2…';
@@ -1348,11 +1364,11 @@
     }
     // 690Z: visible real-editor workflows FIRST; isolated unit tests SECOND.
     // Never silently replace real UI coverage with the sandbox test cases.
-    if(activeSuite==='all'||activeSuite==='ui'){
+    if(activeSuite==='all'||activeSuite==='ui'||activeSuite==='editor-sync'){
       await spustitZivePredIzolaci690Z(generace);
       if(generace!==generaceBehu||!running)return;
     }
-    try {worker=new Worker('lubaAutoTesterWorker.js?v=689C');}
+    try {worker=new Worker('lubaAutoTesterWorker.js?v=691AT-editor-sync');}
     catch(e){running=false;results=[{id:'worker-start',name:'Testovací engine nelze spustit',kind:'REAL',status:'BLOCKED',detail:String(e?.message||'Worker_unavailable'),ms:0}];render();setStatus('Tester BLOKOVÁN. Nejde o PASS.');return;}
     worker.addEventListener('message',(e)=>{
       if(!running)return;
@@ -1374,12 +1390,13 @@
       results.push({id:'worker-timeout',name:'Časový limit testů',kind:'REAL',status:'BLOCKED',detail:'test_runner_timeout_30s',ms:30000});
       running=false;render();setStatus('Časový limit. Nedokončené testy nejsou PASS.');stop();
     },30000);
-    worker.postMessage({action:'run',suite:activeSuite});
+    // 691AT: the focused suite still uses shipped E2E + actual sync.js in isolated RAM.
+    worker.postMessage({action:'run',suite:activeSuite==='editor-sync'?'all':activeSuite});
   }
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691ASC',
+      'LUBANOTE AUTOTESTER / 691AT',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -1390,6 +1407,7 @@
       '691N: Obrazek nevyvolava textovy caret/menu/klavesnici; nativni obrazkovy test LOCAL Testy zahrnuje dvojtap na horni/spodni cast, pinch/pan fullscreen, orez, velikost, zarovnani, float-obtekani, delete/Undo/Redo a save/reopen. V1 obrazkove scenare zustavaji PARTIAL, dokud nejsou overene kompletne. 691M: Ochrana dvojtapu obrázku proti překrytí tlačítky Nastavení/Smazat a dovoleno kliknutí na figure. NATIVE OWN text vybere viditelný znak, případné NATIVE_FAIL nezablokuje nezávislé testy; 691L: hledání textu v seznamu poznámek. 691K: Vlastni LOCAL Testy poznamka: modelovy caret uprostred textu, znakovani/Backspace, Undo/Redo textu i formatu a trvale ulozeni; V1 editor-plain/editor-undo se meni na PASS jen po vsech zive vykonanych krocich. 691J: Spustit vse bez starych 690C/D/E/G/I duplicit; samostatna oblast Izolovane regrese je zachovana. V1 PASS jen podle zdokumentovane kombinace skutecnych testu Android/editoru. Pocet V1 PASS neni znovu prictan k poctu vykonanych testu. 691H: Vlastni uchyty – overeni smeru gesta, alternativni skutecny tah pri nezmenenem vyberu, zachovani FAIL bez blokovani ulozeni a dalsich nezavislych zivych testu. 691G: Find skenuje reálné Core V2 textové segmenty, test čeká na výsledek a hlásí model/DOM/pole; 691F: ŽIVÉ hledání uvnitř poznámky, navigace výsledků a zarovnání přes skutečné UI s uložením; 691E: FIX modal overlay pointer-events over actual editor; maintain result scrolling. 691D: FIX scrollování výsledků po nativním Bullet MOVE; ochrana před globálním touchmove a automatický přechod na report. 691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
+      '691AT: Volba Editor + SYNC spousti stejne produkcni editorove a Android WebView testy jako Spustit vse, bez Planneru a doplnkovych obrazkovych/jazykovych sandboxu; Worker spousti E2E a skutecny sync.js proti RAM RPC, plus izolovany PostgreSQL DB test. Neprokazuje realny sync dvou zarizeni.',
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'

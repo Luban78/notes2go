@@ -81,7 +81,7 @@ async function simulationTests(){
 async function actualClientTests(){
   try {
     await initializeRealCrypto();
-    importScripts('lubaAutoTesterClient689C.js');
+    importScripts('lubaAutoTesterClient689C.js?v=691AT-local-scope-guard');
     assert(typeof self.LubaNoteAutoTesterClient689C?.run==='function','actual_client_runner_not_loaded');
     return await self.LubaNoteAutoTesterClient689C.run();
   }catch(error){
