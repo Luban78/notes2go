@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691AT</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691AU</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -1368,7 +1368,7 @@
       await spustitZivePredIzolaci690Z(generace);
       if(generace!==generaceBehu||!running)return;
     }
-    try {worker=new Worker('lubaAutoTesterWorker.js?v=691AT-editor-sync');}
+    try {worker=new Worker('lubaAutoTesterWorker.js?v=691AU-sync-regression');}
     catch(e){running=false;results=[{id:'worker-start',name:'Testovací engine nelze spustit',kind:'REAL',status:'BLOCKED',detail:String(e?.message||'Worker_unavailable'),ms:0}];render();setStatus('Tester BLOKOVÁN. Nejde o PASS.');return;}
     worker.addEventListener('message',(e)=>{
       if(!running)return;
@@ -1396,7 +1396,7 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691AT',
+      'LUBANOTE AUTOTESTER / 691AU',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
@@ -1407,6 +1407,7 @@
       '691N: Obrazek nevyvolava textovy caret/menu/klavesnici; nativni obrazkovy test LOCAL Testy zahrnuje dvojtap na horni/spodni cast, pinch/pan fullscreen, orez, velikost, zarovnani, float-obtekani, delete/Undo/Redo a save/reopen. V1 obrazkove scenare zustavaji PARTIAL, dokud nejsou overene kompletne. 691M: Ochrana dvojtapu obrázku proti překrytí tlačítky Nastavení/Smazat a dovoleno kliknutí na figure. NATIVE OWN text vybere viditelný znak, případné NATIVE_FAIL nezablokuje nezávislé testy; 691L: hledání textu v seznamu poznámek. 691K: Vlastni LOCAL Testy poznamka: modelovy caret uprostred textu, znakovani/Backspace, Undo/Redo textu i formatu a trvale ulozeni; V1 editor-plain/editor-undo se meni na PASS jen po vsech zive vykonanych krocich. 691J: Spustit vse bez starych 690C/D/E/G/I duplicit; samostatna oblast Izolovane regrese je zachovana. V1 PASS jen podle zdokumentovane kombinace skutecnych testu Android/editoru. Pocet V1 PASS neni znovu prictan k poctu vykonanych testu. 691H: Vlastni uchyty – overeni smeru gesta, alternativni skutecny tah pri nezmenenem vyberu, zachovani FAIL bez blokovani ulozeni a dalsich nezavislych zivych testu. 691G: Find skenuje reálné Core V2 textové segmenty, test čeká na výsledek a hlásí model/DOM/pole; 691F: ŽIVÉ hledání uvnitř poznámky, navigace výsledků a zarovnání přes skutečné UI s uložením; 691E: FIX modal overlay pointer-events over actual editor; maintain result scrolling. 691D: FIX scrollování výsledků po nativním Bullet MOVE; ochrana před globálním touchmove a automatický přechod na report. 691C: REAL native Android WebView Bullet subtree MOVE via guarded Java MotionEvent + own editor model/Undo/Redo/persistence. 691B: LIVE real toolbar italic, underline, text color, highlight, H2, font size, clear highlight, and save/reopen; 691A: REAL APP mixed ToDo regression – text-by-text Backspace, empty checkbox removal, caret to previous ToDo, persisted re-open. 690Z: REAL APP FIRST – Bullet hierarchy Tab/ShiftTab, collapse, badge, Undo/Redo and save/reopen. Isolated tests remain separate. 690Y: LIVE 7-step UI toolbar regression on owned Testy LOCAL note (programmatic clicks, real model checks); PARTIAL/NOT_TESTED link navigates to coverage. 690X: OWN tap compares two separate native touches in the production editor; 690R transport stage cannot select system text. 690W: AutoTester HUD is nonmodal during live edit; error summary jumps to first FAIL.',
       '690U: OWN CARET/HANDLES tested inside owned Testy note by Java MotionEvent, not OS selection. 690T: LOCAL notes tagged Testy are saved, edited, restored and RETAINED for review. Visible editor walkthrough uses actual app screen, toolbar button, production keyboard command and save button; not OS UIAutomator or physical finger. 690R transport smoke uses isolated overlay only; own-editor touch, caret and selection are separate ui-own-* tests.',
       '690N: Isolated CORE_PASS runs shipped Core V2 with synthetic DOM events, not Android native input. 690U adds separate tests of LubaNote OWN caret, OWN handles and OWN selection inside the real editor using Java MotionEvent; system Android selection handles are deliberately disabled in the modern LubaKeyboard APK. No physical finger/OS UIAutomator and no complete V1 regression are claimed.', 
+      '691AU: Sync.js RAM obsahuje testy vypadku zapisu RPC a retry, reviznich konfliktu, Kose a obnovy, persistentni fronty trvaleho smazani a blokovani zastaraleho tombstonu. Bez realneho backendu a dvou zarizeni.',
       '691AT: Volba Editor + SYNC spousti stejne produkcni editorove a Android WebView testy jako Spustit vse, bez Planneru a doplnkovych obrazkovych/jazykovych sandboxu; Worker spousti E2E a skutecny sync.js proti RAM RPC, plus izolovany PostgreSQL DB test. Neprokazuje realny sync dvou zarizeni.',
       'UPOZORNENI: DB_LIVE_PASS je NOVY izolovany PostgreSQL test vyvolany z APK na LubaServeru. 689D=SQL model, 689F=exportovana tela skutecnych RPC s testovacimi zavislostmi. NEtestuje produkcni databazi, realne triggery, prava RLS, dve zarizeni ani Android UI. CLIENT_PASS=skutecny sync.js s RAM RPC, SIM_PASS=model.',
       ...results.map(r=>`${r.status} | ${r.id} | ${r.name} | ${r.ms||0}ms | ${r.detail||'-'}`),

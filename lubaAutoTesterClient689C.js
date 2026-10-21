@@ -20,7 +20,7 @@
     clear:()=>db.clear()
   };
   class RamBackend {
-    constructor(){this.rows=new Map();this.calls=[];this.readError=false;}
+    constructor(){this.rows=new Map();this.calls=[];this.readError=false;this.writeError=false;}
     async rpc(name,params){
       this.calls.push(name);
       if(name==='lubanote_get_notes_by_ids_safe'){
@@ -29,10 +29,11 @@
           .filter(row=>row?.user_id===OWNER).map(clone)};
       }
       if(name==='save_note_safe'){
+        if(this.writeError)return {error:{message:'test_write_transport_down',status:503}};
         const key=String(params.p_id),previous=this.rows.get(key);
         if(previous && previous.user_id!==OWNER)return {error:{message:'not_owner',status:403}};
         const expected=Number(params.p_expected_revision);
-        if((previous?.revision||0)!==expected)return {data:{ok:false,reason:'revision_conflict',revision:previous?.revision||0}};
+        if((previous?.revision||0)!==expected)return {data:{ok:false,reason:params.p_delete?'revision_mismatch':'revision_conflict',revision:previous?.revision||0}};
         if(previous?.deleted_at && !params.p_delete)return {data:{ok:false,reason:'already_deleted'}};
         const protectedOld=previous?.data?.__lubanoteE2ENote===true;
         if(protectedOld && params.p_data?.__lubanoteE2ENote!==true && !params.p_delete){
@@ -160,24 +161,141 @@
         'local_scope_did_not_short_circuit_upload');
       assert(backend.calls.length===0,'local_scope_caused_remote_rpc');
       assert(backend.rows.size===0,'local_scope_created_cloud_row');
+    }],
+    // 691AU: exercise the actual shipped sync.js error and retry path against
+    // a strict RAM RPC. Not an offline IndexedDB persistence or device test.
+    ['actual-write-retry','Produkční sync.js: výpadek zápisu RPC a bezpečné opakování',async()=>{
+      const original=await protectedRow(107,4);
+      const changed={...original,note:'edited_during_rpc_outage'};
+      const before=clone(backend.rows.get(original.id));
+      backend.writeError=true;
+      const refused=await uploadLocalNoteToSupabase(changed,{vratitDetailV2:true});
+      assert(refused?.ok!==true&&refused?.wrote!==true,'write_error_accepted');
+      assert(backend.calls.includes('save_note_safe'),'real_write_path_not_called');
+      assert(JSON.stringify(backend.rows.get(original.id))===JSON.stringify(before),'failed_write_mutated_server');
+      assert(changed.note==='edited_during_rpc_outage','local_fixture_lost_after_error');
+      backend.writeError=false;
+      const retried=await uploadLocalNoteToSupabase(changed,{vratitDetailV2:true});
+      assert(retried?.ok===true&&retried?.wrote===true,'retry_not_accepted');
+      const saved=backend.rows.get(original.id);
+      assert(saved?.revision===5&&saved.data?.__lubanoteE2ENote===true,'retry_revision_or_e2e_wrong');
+      const plain=await self.LubaNoteNotesCrypto.desifruj(saved.data,OWNER,original.id);
+      assert(plain.note===changed.note,'retry_lost_modified_text');
+      assert(backend.calls.filter(x=>x==='save_note_safe').length===2,'retry_not_exactly_two_write_attempts');
+    }],
+    ['actual-revision-guard','Produkční sync.js: zastaralá revize nesmí přepsat novější E2E text',async()=>{
+      const original=await protectedRow(108,5);
+      const before=clone(backend.rows.get(original.id));
+      setMeta(original.id,4); // This client's revision is stale; server is at 5.
+      const edited={...original,note:'unsent_local_revision_4_edit'};
+      const refused=await uploadLocalNoteToSupabase(edited,{vratitDetailV2:true});
+      assert(refused?.ok!==true&&refused?.wrote!==true,'stale_revision_accepted');
+      assert(backend.calls.includes('save_note_safe'),'revision_rpc_not_called');
+      assert(JSON.stringify(backend.rows.get(original.id))===JSON.stringify(before),'stale_revision_overwrote_newer_cloud');
+      const latest=await self.LubaNoteNotesCrypto.desifruj(before.data,OWNER,original.id);
+      assert(latest.note===original.note,'server_original_changed');
+      // Simulate an explicit revision reconciliation, not a real merge.
+      setMeta(original.id,5);
+      const retried=await uploadLocalNoteToSupabase(edited,{vratitDetailV2:true});
+      assert(retried?.ok===true&&retried?.wrote===true,'write_after_revision_reconciliation_failed');
+      const saved=backend.rows.get(original.id);
+      assert(saved?.revision===6,'revision_after_reconciled_write_wrong');
+      const plain=await self.LubaNoteNotesCrypto.desifruj(saved.data,OWNER,original.id);
+      assert(plain.note===edited.note,'reconciled_write_lost_text');
+    }],
+    ['actual-trash-restore','Produkční sync.js: E2E Koš a obnovení přes skutečné revizní zápisy',async()=>{
+      const original=await protectedRow(109,2);
+      const moved={...original,trashedAt:'2026-10-21T05:00:00.000Z',updatedAt:'2026-10-21T05:01:00.000Z'};
+      const trashWrite=await uploadLocalNoteToSupabase(moved,{vratitDetailV2:true});
+      assert(trashWrite?.ok===true&&trashWrite?.wrote===true,'trash_write_failed');
+      const trashed=backend.rows.get(original.id);
+      assert(trashed?.revision===3&&trashed?.deleted_at===null,'trash_revision_wrong');
+      const trashText=await self.LubaNoteNotesCrypto.desifruj(trashed.data,OWNER,original.id);
+      assert(trashText.trashedAt===moved.trashedAt,'trash_field_missing');
+      const restored={...original,updatedAt:'2026-10-21T05:02:00.000Z'};
+      const restoreWrite=await uploadLocalNoteToSupabase(restored,{vratitDetailV2:true});
+      assert(restoreWrite?.ok===true&&restoreWrite?.wrote===true,'restore_write_failed');
+      const saved=backend.rows.get(original.id);
+      assert(saved?.revision===4,'restore_revision_wrong');
+      const plain=await self.LubaNoteNotesCrypto.desifruj(saved.data,OWNER,original.id);
+      assert(!plain.trashedAt&&plain.note===original.note,'restore_reintroduced_trash_or_lost_content');
+    }],
+    ['actual-delete-queue-retry','Produkční sync.js: trvalé smazání přežije chybu RPC v persistentní frontě',async()=>{
+      const original=await protectedRow(110,3);
+      const count=pridejCekajiciSmazaniHromadne([original],'2026-10-21T05:03:00.000Z');
+      assert(count===1,'tombstone_not_enqueued');
+      const queue=JSON.parse(store.getItem('lubanotePendingDeletes')||'[]');
+      assert(queue.length===1&&queue[0].id===original.id&&queue[0].expectedRevision===3,'queue_missing_expected_revision');
+      backend.writeError=true;
+      const failed=await odesliCekajiciSmazaniDoSupabase();
+      assert(failed===false,'failed_delete_rpc_accepted');
+      assert(backend.rows.get(original.id)?.deleted_at===null,'failed_delete_mutated_server');
+      const retained=JSON.parse(store.getItem('lubanotePendingDeletes')||'[]');
+      assert(retained.length===1&&!retained[0].uploadedRevision,'failed_delete_discarded_queue');
+      backend.writeError=false;
+      const sent=await odesliCekajiciSmazaniDoSupabase();
+      assert(sent===true,'retry_delete_did_not_finish');
+      const gone=backend.rows.get(original.id);
+      assert(gone?.revision===4&&gone?.deleted_at,'retry_delete_tombstone_missing');
+      const confirmed=JSON.parse(store.getItem('lubanotePendingDeletes')||'[]');
+      assert(confirmed.length===1&&confirmed[0].uploadedRevision===4,'server_revision_not_persisted_to_queue');
+      const oldDevice=await uploadLocalNoteToSupabase(original,{vratitDetailV2:true});
+      assert(oldDevice?.ok!==true,'old_client_resurrected_deleted_note');
+      assert(backend.rows.get(original.id).revision===4,'deleted_row_revision_changed_after_stale_upload');
+    }],
+    ['actual-delete-conflict','Produkční sync.js: zastaralý tombstone nesmí smazat novější revizi',async()=>{
+      const original=await protectedRow(111,6);
+      const before=clone(backend.rows.get(original.id));
+      setMeta(original.id,5);
+      assert(pridejCekajiciSmazaniHromadne([original],'2026-10-21T05:04:00.000Z')===1,'delete_conflict_queue_failed');
+      const refused=await odesliCekajiciSmazaniDoSupabase();
+      assert(refused===false,'stale_delete_was_accepted');
+      assert(JSON.stringify(backend.rows.get(original.id))===JSON.stringify(before),'stale_delete_destroyed_newer_row');
+      const queue=JSON.parse(store.getItem('lubanotePendingDeletes')||'[]');
+      assert(queue.length===1&&queue[0].blockedReason==='revision_mismatch'&&queue[0].expectedRevision===5,
+        'stale_delete_not_persistently_blocked');
+      const calls=backend.calls.filter(x=>x==='save_note_safe').length;
+      assert((await odesliCekajiciSmazaniDoSupabase())===false,'blocked_delete_retried');
+      assert(backend.calls.filter(x=>x==='save_note_safe').length===calls,'blocked_tombstone_repeated_rpc');
     }]
   ];
   async function run(){
     const results=[];
-    try {await initialize();}
-    catch(error){return [{id:'actual-sync-bootstrap',name:'Načtení skutečného Sync V2 do izolovaného Workeru',kind:'ACTUAL_CLIENT_SYNC_RAM_BACKEND',status:'BLOCKED',detail:String(error?.code||error?.message||error).slice(0,230),ms:0}];}
+    // 691AU: real sync.js can schedule an automatic follow-up after a revision
+    // conflict or a tombstone enqueue. In this isolated, manually-driven test
+    // runner it must not race the NEXT fixture and produce false positives.
+    // Automatic retry timing, offline survival after process restart and the
+    // real server are intentionally NOT covered here.
     const originalFetch=self.fetch;
     const originalXHR=self.XMLHttpRequest;
+    const originalSetTimeout=self.setTimeout;
+    const originalSetInterval=self.setInterval;
+    const originalClearTimeout=self.clearTimeout;
+    const originalClearInterval=self.clearInterval;
+    let timerId=0;
     try {
+      self.setTimeout=()=>++timerId;
+      self.setInterval=()=>++timerId;
+      self.clearTimeout=()=>{};
+      self.clearInterval=()=>{};
+      try {await initialize();}
+      catch(error){return [{id:'actual-sync-bootstrap',name:'Načtení skutečného Sync V2 do izolovaného Workeru',kind:'ACTUAL_CLIENT_SYNC_RAM_BACKEND',status:'BLOCKED',detail:String(error?.code||error?.message||error).slice(0,230),ms:0}];}
       self.fetch=async()=>{throw Error('689C_external_network_forbidden');};
       self.XMLHttpRequest=function(){throw Error('689C_xml_http_forbidden');};
       for(const [id,name,test] of suite){
         reset();const started=performance.now();
-        try{await test();results.push({id,name,kind:'ACTUAL_CLIENT_SYNC_RAM_BACKEND',status:'CLIENT_PASS',detail:'Skutečný sync.js + E2E modul; RPC pouze v paměti. NE skutečná DB.',ms:Math.round(performance.now()-started)});}
+        try{await test();results.push({id,name,kind:'ACTUAL_CLIENT_SYNC_RAM_BACKEND',status:'CLIENT_PASS',detail:'Skutečný sync.js + E2E modul; izolované RAM RPC. Neověřuje reálnou DB, offline úložiště ani dvě zařízení.',ms:Math.round(performance.now()-started)});}
         catch(error){results.push({id,name,kind:'ACTUAL_CLIENT_SYNC_RAM_BACKEND',status:'CLIENT_FAIL',detail:String(error?.code||error?.message||error).slice(0,230),ms:Math.round(performance.now()-started)});}
       }
       return results;
-    } finally {self.fetch=originalFetch;self.XMLHttpRequest=originalXHR;}
+    } finally {
+      self.fetch=originalFetch;
+      self.XMLHttpRequest=originalXHR;
+      self.setTimeout=originalSetTimeout;
+      self.setInterval=originalSetInterval;
+      self.clearTimeout=originalClearTimeout;
+      self.clearInterval=originalClearInterval;
+    }
   }
   self.LubaNoteAutoTesterClient689C=Object.freeze({run});
 })();
