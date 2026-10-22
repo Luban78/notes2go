@@ -22,13 +22,14 @@
    */
   const VYCHOZI_NASTAVENI = Object.freeze({
     scalePct: 100,
-    ghostScalePct: 93,
+    ghostScalePct: 88,
+    targetScalePct: 97,
     longPressMs: 430,
     preLongMovePx: 16,
-    dwellMs: 160,
-    reorderMs: 200,
-    dropMs: 180,
-    focusMs: 120,
+    dwellMs: 120,
+    reorderMs: 160,
+    dropMs: 110,
+    focusMs: 80,
     insetPx: 8,
     jitterPx: 11,
     autoScrollEdgePx: 85,
@@ -38,7 +39,8 @@
 
   const DEFINICE_PARAMETRU = Object.freeze({
     scalePct: { label: "Scale okolních", unit: "%", min: 70, max: 100, step: 1 },
-    ghostScalePct: { label: "Scale tažené", unit: "%", min: 85, max: 120, step: 1 },
+    ghostScalePct: { label: "Scale tažené", unit: "%", min: 80, max: 120, step: 1 },
+    targetScalePct: { label: "Scale cílové", unit: "%", min: 90, max: 100, step: 1 },
     longPressMs: { label: "Long press", unit: "ms", min: 200, max: 700, step: 20 },
     preLongMovePx: { label: "Pohyb před LP", unit: "px", min: 6, max: 30, step: 1 },
     dwellMs: { label: "Dwell / zamknutí", unit: "ms", min: 120, max: 600, step: 20 },
@@ -82,6 +84,7 @@
   const MAPA_RADKU_NASTAVENI = Object.freeze({
     "Scale okolních": "scalePct",
     "Scale tažené": "ghostScalePct",
+    "Scale cílové": "targetScalePct",
     "Long press": "longPressMs",
     "Pohyb před LP": "preLongMovePx",
     "Dwell / zamknutí": "dwellMs",
@@ -137,6 +140,7 @@
     return [
       `Scale okolních: ${hodnoty.scalePct} %`,
       `Scale tažené: ${hodnoty.ghostScalePct} %`,
+      `Scale cílové: ${hodnoty.targetScalePct} %`,
       `Long press: ${hodnoty.longPressMs} ms`,
       `Pohyb před LP: ${hodnoty.preLongMovePx} px`,
       `Dwell / zamknutí: ${hodnoty.dwellMs} ms`,
@@ -178,7 +182,7 @@
   }
 
   function souhrnNastaveni() {
-    return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | drop=${nastaveni.dropMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | autoEdge=${nastaveni.autoScrollEdgePx}px | autoMax=${nastaveni.autoScrollMaxPx}px/f`;
+    return `scale=${nastaveni.scalePct}% | ghost=${nastaveni.ghostScalePct}% | target=${nastaveni.targetScalePct}% | longpress=${nastaveni.longPressMs}ms | preMove=${nastaveni.preLongMovePx}px | dwell=${nastaveni.dwellMs}ms | reorder=${nastaveni.reorderMs}ms | drop=${nastaveni.dropMs}ms | focus=${nastaveni.focusMs}ms | inset=${nastaveni.insetPx}px | jitter=${nastaveni.jitterPx}px | autoEdge=${nastaveni.autoScrollEdgePx}px | autoMax=${nastaveni.autoScrollMaxPx}px/f`;
   }
 
   function vlozDragStyly() {
@@ -186,6 +190,8 @@
     const style = document.createElement("style");
     style.id = "ln-card-drag-real-style";
     style.textContent = `
+      /* 691CJ: visual target is quiet; the internal placeholder remains
+         in layout so the proven 2-column slot geometry is untouched. */
       .taskCard.lubaCardDragSource {
         visibility: hidden !important;
         pointer-events: none !important;
@@ -193,54 +199,49 @@
       }
       .taskCard.lubaCardDragGhost {
         will-change: transform, scale !important;
-        transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1), box-shadow 120ms ease, opacity 120ms ease !important;
+        transition: scale var(--ln-card-focus-ms, 80ms) cubic-bezier(.2,.8,.2,1), box-shadow 100ms ease !important;
       }
-      body.lubaCardDragMode .taskCard:not(.lubaCardDragSource):not(.lubaCardDragGhost) {
-        transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1) !important;
+      .taskCard.lubaCardDragGhost.lubaCardDragDropping {
+        transition: transform var(--ln-card-drop-ms, 110ms) cubic-bezier(.2,.8,.2,1),
+                    scale var(--ln-card-drop-ms, 110ms) cubic-bezier(.2,.8,.2,1) !important;
       }
+      body.lubaCardDragMode .taskCard.lubaCardDragHoverTarget {
+        scale: var(--ln-card-target-scale, .97) !important;
+        transition: scale var(--ln-card-focus-ms, 80ms) ease-out !important;
+      }
+      /* Opposite pinned group remains blocked in logic, without global
+         grayscale/opacity transitions that flash on finger-up. */
       body.lubaCardDragMode .taskCard.lubaCardDragBlockedGroup {
-        filter: grayscale(1) saturate(.12) brightness(.82) !important;
-        opacity: .46 !important;
-        transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1), filter 160ms ease, opacity 160ms ease !important;
+        filter: none !important;
+        opacity: 1 !important;
       }
-      .lubaCardDragPlaceholder {
+      .lubaCardDragPlaceholder,
+      .lubaCardDragPlaceholder.lubaCardDragPlaceholderTarget {
         position: relative !important;
         display: block !important;
         width: 100% !important;
         box-sizing: border-box !important;
         margin: 0 0 12px !important;
-        border: 2px dashed color-mix(in srgb, var(--color-accent) 70%, transparent) !important;
-        border-radius: 22px !important;
-        background: color-mix(in srgb, var(--color-accent) 8%, transparent) !important;
-        opacity: .8 !important;
+        border: 0 !important;
+        background: transparent !important;
+        outline: none !important;
+        box-shadow: none !important;
+        opacity: 0 !important;
         pointer-events: none !important;
       }
-      .lubaCardDragPlaceholder.lubaCardDragPlaceholderTarget {
-        border-style: solid !important;
-        background: color-mix(in srgb, var(--color-accent) 16%, transparent) !important;
-        box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 14%, transparent) !important;
+      .lubaCardDragPlaceholder::after,
+      .lubaCardDragPlaceholder.lubaCardDragPlaceholderTarget::after,
+      .lubaCardDropMarker,
+      .lubaCardDropMarker.lubaCardDropMarkerCandidate {
+        display: none !important;
+        content: none !important;
       }
-      .lubaCardDragPlaceholder.lubaCardDragPlaceholderTarget::after {
-        content: "SEM";
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--color-accent);
-        font-weight: 800;
-        font-size: 0.75rem;
-      }
-      .lubaCardDropMarker.lubaCardDropMarkerCandidate::after {
-        content: "DRŽ";
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--color-accent);
-        font-weight: 800;
-        font-size: 0.75rem;
+      /* Disable arrival animation solely during the completion re-render.
+         No global flash even when renderTasks rebuilds note-card elements. */
+      body.lubaCardDropSettling691CJ .taskCard,
+      body.lubaCardDropSettling691CJ .taskCard * {
+        animation: none !important;
+        transition: none !important;
       }
       #ln-card-drag-tuning,
       #ln-card-drag-tuning * { box-sizing: border-box; }
@@ -604,6 +605,18 @@
     const listMode = localStorage.getItem("cardView") === "list";
     const desktopGrid = window.matchMedia("(min-width: 900px)").matches && !listMode;
 
+    /* 691CJ: do not detach/append EVERY card on drop (it repaints everything).
+       Backward keyed insertion changes only genuinely out-of-place siblings. */
+    const minimalniPoradi = (rodic, prvkyVPoradi) => {
+      let nasledujici = null;
+      for (let i = prvkyVPoradi.length - 1; i >= 0; i--) {
+        const prvek = prvkyVPoradi[i];
+        if (prvek.parentElement !== rodic || prvek.nextElementSibling !== nasledujici) {
+          rodic.insertBefore(prvek, nasledujici);
+        }
+        nasledujici = prvek;
+      }
+    };
     if (desktopGrid) {
       let sloupce = [...left.querySelectorAll(":scope > .desktopMasonryColumn")];
       while (sloupce.length < 4) {
@@ -612,11 +625,13 @@
         left.append(sloupec);
         sloupce.push(sloupec);
       }
-      prvky.forEach((prvek, index) => sloupce[index % 4].append(prvek));
+      sloupce.forEach((sloupec, col) => minimalniPoradi(sloupec,
+        prvky.filter((_, index) => index % 4 === col)));
     } else if (listMode) {
-      prvky.forEach((prvek) => left.append(prvek));
+      minimalniPoradi(left, prvky);
     } else {
-      prvky.forEach((prvek, index) => (index % 2 === 0 ? left : right).append(prvek));
+      minimalniPoradi(left, prvky.filter((_, index) => index % 2 === 0));
+      minimalniPoradi(right, prvky.filter((_, index) => index % 2 !== 0));
     }
 
     if (!animovat || nastaveni.reorderMs <= 0) return;
@@ -685,7 +700,9 @@
     const scrollRect = ziskejScrollRect(scrollKontejner);
     const scroll = ziskejScrollPozici(scrollKontejner);
     const jePlaceholder = prvek.classList?.contains("lubaCardDragPlaceholder");
-    const scale = jePlaceholder ? 1 : Math.max(.01, nastaveni.scalePct / 100);
+    const scale = jePlaceholder ? 1 : Math.max(.01,
+      prvek.classList?.contains("lubaCardDragHoverTarget")
+        ? nastaveni.targetScalePct / 100 : nastaveni.scalePct / 100);
     const skutecneScale = document.body.classList.contains("lubaCardDragMode") ? scale : 1;
     const sirka = rect.width / skutecneScale;
     const vyska = rect.height / skutecneScale;
@@ -751,6 +768,9 @@
   function aplikujFocus(stav, zapnout) {
     if (!stav) return;
     document.documentElement.style.setProperty("--ln-card-focus-ms", `${nastaveni.focusMs}ms`);
+    // Never write scale=1 onto every card. This used to cause a visible flash.
+    if (zapnout && nastaveni.scalePct === 100) return;
+    if (!zapnout && stav.puvodniScale.size === 0) return;
     const scale = String(nastaveni.scalePct / 100);
     stav.mapaPrvkuOriginal.forEach((prvek, klic) => {
       if (!prvek?.isConnected || klic === stav.dragKlic) return;
@@ -883,6 +903,8 @@
 
   function zrusKandidata(stav, duvod = "") {
     if (!stav) return;
+    if (stav.hoverTargetEl) stav.hoverTargetEl.classList.remove("lubaCardDragHoverTarget");
+    stav.hoverTargetEl = null;
     zrusTimerKandidata(stav);
     if (stav.kandidatIndex !== null && nastaveni.detailLog) {
       emitujDragDebug("TARGET_CANCEL", {
@@ -1012,7 +1034,13 @@
       stav.kandidatIndex = kandidatIndex;
       stav.kandidatStartX = x;
       stav.kandidatStartY = y;
-      zobrazDropMarker(stav, kandidatIndex);
+      // The target alone subtly shrinks. No dashed overlay or "SEM" text.
+      const targetEl = stav.mapaPrvkuDrag.get(kandidat.klic);
+      if (targetEl?.classList?.contains("taskCard")) {
+        stav.hoverTargetEl = targetEl;
+        targetEl.style.setProperty("--ln-card-target-scale", String(nastaveni.targetScalePct / 100));
+        targetEl.classList.add("lubaCardDragHoverTarget");
+      }
       if (nastaveni.detailLog) {
         emitujDragDebug("TARGET", {
           card: zkratKlic(stav.dragKlic),
@@ -1259,21 +1287,22 @@
       animaceLockTimer = null;
     }
     odstranDropMarker(stav);
+    zrusKandidata(stav, "end");
+    document.body.classList.add("lubaCardDropSettling691CJ");
     aplikujFocus(stav, false);
     aplikujBlokaciOpacneSkupiny(stav, false);
     oznacPlaceholder(stav, false);
-    stav.karta?.remove();
+    // Keep the ghost visible until the real source is in its final position.
     stav.placeholder?.remove();
-
     const mapaFinal = new Map(stav.mapaPrvkuOriginal);
     mapaFinal.set(stav.dragKlic, stav.zdrojKarta);
     rozmistitKarty(poradiKlicu, mapaFinal, { animovat: false });
-
-    stav.zdrojKarta?.classList.remove("lubaCardDragSource");
     if (stav.zdrojKarta) {
       if (stav.puvodniStylKarty == null) stav.zdrojKarta.removeAttribute("style");
       else stav.zdrojKarta.setAttribute("style", stav.puvodniStylKarty);
+      stav.zdrojKarta.classList.remove("lubaCardDragSource");
     }
+    stav.karta?.remove();
     document.body.classList.remove("lubaCardDragMode");
   }
 
@@ -1514,6 +1543,7 @@
       kandidatStartY: null,
       kandidatTimer: null,
       dropMarker: null,
+      hoverTargetEl: null,
       autoScrollAktivni: false,
       posledniDebugScroll: 0,
       offsetX,
@@ -1590,14 +1620,11 @@
       return;
     }
 
-    const cilLeft =
-      cil.left +
-      Math.max(0, (cil.width - kartaRect.width) / 2);
-
-    const cilTop =
-      cil.top +
-      Math.max(0, (cil.height - kartaRect.height) / 2);
-
+    // The ghost scales back to 100%; aim at the full-size slot origin.
+    const cilLeft = cil.left;
+    const cilTop = cil.top;
+    stav.karta.style.setProperty("--ln-card-drop-ms", `${nastaveni.dropMs}ms`);
+    stav.karta.classList.add("lubaCardDragDropping");
     stav.karta.style.transition = [
       `transform ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
       `scale ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`
@@ -1714,6 +1741,9 @@
     blokovatKlikDo = Date.now() + 500;
 
     if (!zmeneno) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.body.classList.remove("lubaCardDropSettling691CJ");
+      }));
       emitujDragDebug("END", { card: zkratKlic(stav.dragKlic), from: stav.puvodniIndexSkupiny, to: finalniIndex, changed: false });
       return;
     }
@@ -1729,8 +1759,15 @@
       next: zkratKlic(nasledujiciKlic)
     });
 
-    await ulozPresun(stav.cardId, predchoziKlic, nasledujiciKlic);
-    stav.onAfterReorder?.();
+    try {
+      await ulozPresun(stav.cardId, predchoziKlic, nasledujiciKlic);
+    } finally {
+      try { stav.onAfterReorder?.(); } finally {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          document.body.classList.remove("lubaCardDropSettling691CJ");
+        }));
+      }
+    }
   }
 
   function zrusPresun() {
@@ -1752,6 +1789,9 @@
       autoScrollFrame = null;
     }
     obnovKartu(stav, stav.poradiOriginal);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.body.classList.remove("lubaCardDropSettling691CJ");
+    }));
     blokovatKlikDo = Date.now() + 400;
     emitujDragDebug("CANCEL", { card: zkratKlic(stav.dragKlic), from: stav.puvodniIndexSkupiny, to: stav.cilovyIndexSkupiny });
   }
