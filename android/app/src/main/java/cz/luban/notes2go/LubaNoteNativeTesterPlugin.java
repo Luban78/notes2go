@@ -103,11 +103,14 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     final String type = call.getString("type", "");
     if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
         !("word".equals(target) || "word-early".equals(target) || "word-late".equals(target) ||
-          "selection-end".equals(target) || "selection-start".equals(target) || "caret-handle".equals(target)) ||
+          "perf-word-center".equals(target) || "selection-end".equals(target) ||
+          "selection-start".equals(target) || "caret-handle".equals(target)) ||
         !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type) || "swipe-edge-691CS".equals(type))) {
       call.reject("invalid_owned_editor_request"); return;
     }
-    if (("swipe".equals(type) && "word".equals(target)) || ("swipe-edge-691CS".equals(type) && !"selection-end".equals(target))) {
+    if (("swipe".equals(type) && "word".equals(target)) ||
+        ("perf-word-center".equals(target) && !"doubletap".equals(type)) ||
+        ("swipe-edge-691CS".equals(type) && !"selection-end".equals(target))) {
       call.reject("word_swipe_not_authorized"); return;
     }
     ui.post(() -> {
@@ -134,7 +137,28 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "editor.dataset.lnV2OwnCaretOnly==='1';" +
         "if(!ok)return JSON.stringify({ok:false});" +
         "let bounds=null;let el=null;" +
-        "if(target==='word'||target==='word-early'||target==='word-late'){" +
+        // 691CV: TEST-ONLY anchor. Pick the short word "Výkon" in a real
+        // visible paragraph near the middle of the editor. The touch is still
+        // a real Android MotionEvent doubletap; no JavaScript selection edits.
+        "if(target==='perf-word-center'){" +
+          "const er=editor.getBoundingClientRect(),w=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);" +
+          "const cy=(er.top+er.bottom)/2,cx=(er.left+er.right)/2;" +
+          "const padY=Math.min(65,er.height/5),padX=Math.min(25,er.width/6);" +
+          "let n,best=Infinity;" +
+          "while(n=w.nextNode()){const val=String(n.nodeValue||'');let from=0,i;" +
+            "while((i=val.indexOf('Výkon',from))>=0){from=i+5;" +
+              "const rg=document.createRange();rg.setStart(n,i);rg.setEnd(n,i+5);" +
+              "const b=rg.getBoundingClientRect(),px=b.left+b.width/2,py=b.top+b.height/2;" +
+              "if(b.width<12||b.width>100||b.height<=3||" +
+                "px<=er.left+padX||px>=er.right-padX||" +
+                "py<=er.top+padY||py>=er.bottom-padY||" +
+                "px<=5||px>=innerWidth-5||py<=5||py>=innerHeight-5||" +
+                "!editor.contains(document.elementFromPoint(px,py)))continue;" +
+              "const score=Math.abs(py-cy)+Math.abs(px-cx)*.1;" +
+              "if(score<best){best=score;bounds=b;}" +
+            "}" +
+          "}el=editor;" +
+        "}else if(target==='word'||target==='word-early'||target==='word-late'){" +
           "const w=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let n;" +
           "while(n=w.nextNode()){const i=String(n.nodeValue||'').indexOf('Zapis_z_viditelneho_editoru_690T');" +
             "if(i<0)continue;" +
@@ -155,7 +179,7 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "if(!bounds||bounds.width<=0||bounds.height<=0)return JSON.stringify({ok:false});" +
         "const x=bounds.left+bounds.width/2,y=bounds.top+bounds.height/2;" +
         "const hit=document.elementFromPoint(x,y);" +
-        "const targetOk=(target==='word'||target==='word-early'||target==='word-late')?editor.contains(hit):(hit===el||el?.contains(hit));" +
+        "const targetOk=(target==='perf-word-center'||target==='word'||target==='word-early'||target==='word-late')?editor.contains(hit):(hit===el||el?.contains(hit));" +
         "const er=editor.getBoundingClientRect();" +
         "const viewportOk=x>=2&&x<innerWidth-2&&y>=2&&y<innerHeight-2;" +
         // 691H: Drag towards editable text, not into blank right margin.

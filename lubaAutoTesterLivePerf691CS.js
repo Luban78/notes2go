@@ -1,4 +1,4 @@
-/* 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
+/* 691CV – short-word native doubletap setup; 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
  * Own LOCAL Testy note only; never touches arbitrary user notes. No synthetic DOM events.
  */
 (()=>{'use strict';
@@ -49,48 +49,38 @@
       for(let k=0;k<3;k++){
         check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3`);
         scroll.scrollTop=0;await wait(180);
-        // 691CT: custom-active class alone does not prove a visible red handle.
-        // Give the real Core V2 compositor time to create and position its handle;
-        // never fabricate a handle or a selection in the test.
-        const describeHandles=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom')).map(el=>{
+        // 691CV: a native doubletap on the long test marker selected a long
+        // identifier whose endpoints can lie outside the editor viewport.
+        // Use a REAL doubletap on a short ordinary word chosen by the native
+        // plugin near the middle of the live editor. Never fabricate a Range,
+        // unhide a handle, or scroll while a selection is active.
+        const visibleHandle=side=>Array.from(document.querySelectorAll(
+          '.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="'+side+'"]'
+        )).find(el=>{
           const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
-          return `${el.getAttribute('data-ln-v2-selection-handle')||'?'}:hidden=${el.hidden?1:0},rect=${Math.round(r.width)}x${Math.round(r.height)},display=${cs.display},visibility=${cs.visibility},opacity=${cs.opacity}`;
+          return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&
+            cs.visibility!=='hidden'&&Number(cs.opacity)>0;
+        });
+        const handlesReady=()=>editor.classList.contains('ln-v2-selection-custom-active')&&
+          Boolean(visibleHandle('start')&&visibleHandle('end'));
+        const describeNewHandles=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom')).map(el=>{
+          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+          return `${el.getAttribute('data-ln-v2-selection-handle')||'?'}:hidden=${el.hidden?1:0},rect=${Math.round(r.width)}x${Math.round(r.height)},top=${Math.round(r.top)},display=${cs.display}`;
         }).join('|')||'none';
-        const visibleEnd=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]')).find(el=>{
-          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
-          return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;
-        });
-        // 691CU: the editor intentionally hides an endpoint outside its viewport.
-        // Never force hidden=false or synthesize a Range. After a genuine native
-        // doubletap, move the real scroll container to bring both endpoints into
-        // the viewport; allow the production compositor to update the handles.
-        const visibleStart=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="start"]')).find(el=>{
-          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
-          return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;
-        });
-        const bothVisible=()=>Boolean(visibleStart()&&visibleEnd()&&editor.classList.contains('ln-v2-selection-custom-active'));
         let handle=null,setup=null;
-        const initialSetupTop=scroll.scrollTop;
-        for(const target of ['word-early','word-late']){
-          scroll.scrollTop=initialSetupTop;
-          await wait(160);
-          setup=await plugin.gestureOwnedEditor({id,target,type:'doubletap'});
+        for(const top of [0,140]){
+          scroll.scrollTop=top;
+          await wait(220);
+          setup=await plugin.gestureOwnedEditor({id,target:'perf-word-center',type:'doubletap'});
           check(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_doubletap_ack_missing');
-          for(let retry=0;retry<8;retry++){
+          for(let retry=0;retry<10;retry++){
             await wait(120);
-            if(bothVisible()){handle=visibleEnd();break;}
-          }
-          if(handle)break;
-          // Only scroll the owned test editor; do not touch the selection model.
-          for(const shift of [24,48,80,120,180,240]){
-            scroll.scrollTop=initialSetupTop+shift;
-            await wait(150);
-            if(bothVisible()){handle=visibleEnd();break;}
+            if(handlesReady()){handle=visibleHandle('end');break;}
           }
           if(handle)break;
         }
         check(editor.classList.contains('ln-v2-selection-custom-active'),'own_selection_not_activated');
-        check(handle,'red_handles_not_both_visible; scrollTop='+Math.round(scroll.scrollTop)+'; handles='+describeHandles().slice(0,130));
+        check(handle,'short_word_handles_not_ready; top='+Math.round(scroll.scrollTop)+'; '+describeNewHandles().slice(0,155));
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
@@ -120,7 +110,7 @@
           scroll:deltaScroll,frames:gaps.length});
       }
       const avg=key=>Math.round(results.reduce((a,x)=>a+x[key],0)/results.length*10)/10;
-      const detail=`691CS LIVE_NATIVE_EDGE PASS 3/3; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const detail=`691CV LIVE_NATIVE_EDGE PASS 3/3; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; own LOCAL Testy; Java MotionEvent, not finger`;
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
     }catch(e){return row(String(e?.message||e).includes('unavailable')||String(e?.message||e).includes('missing')?'NATIVE_BLOCKED':'NATIVE_FAIL',String(e?.message||e).slice(0,220),Math.round(performance.now()-began));}
     finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();restore();busy=false;}
