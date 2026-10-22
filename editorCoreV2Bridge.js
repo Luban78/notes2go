@@ -3248,8 +3248,10 @@
   }
 
   function zajistiV2SelectionLupu() {
-    zajistiV2SelectionScrollHighlightStyl();
+    // 691CW: during the active drag the magnifier is already mounted.
+    // Avoid a full-document style lookup in every edge-scroll animation frame.
     if (v2SelectionLupa?.isConnected) return true;
+    zajistiV2SelectionScrollHighlightStyl();
 
     v2SelectionLupa = document.createElement("div");
     v2SelectionLupa.className = "ln-v2-selection-magnifier";
@@ -3313,6 +3315,23 @@
       node.nodeType === Node.TEXT_NODE ? String(node.nodeValue || "").length : Number(node.childNodes?.length || 0)
     ));
 
+    /* 691CW: scrolling may repaint the magnifier many times over the same
+       character. Cache only a connected text node + offset + unchanged text;
+       do NOT cache element endpoints (inline markup can change their context).
+       Cache belongs to this single handle drag and dies with it. */
+    const hodnota = node.nodeType === Node.TEXT_NODE ? node.nodeValue : null;
+    const predchozi = stav.handleDrag?.lupaTextMemo;
+    if (hodnota !== null && predchozi?.node === node &&
+        predchozi.offset === offset && predchozi.hodnota === hodnota) {
+      return predchozi.kontext;
+    }
+    const zapamatuj = (kontext) => {
+      if (hodnota !== null && stav.handleDrag) {
+        stav.handleDrag.lupaTextMemo = { node, offset, hodnota, kontext };
+      }
+      return kontext;
+    };
+
     /* 677C – kontext bereme jen z nejbližšího blokového řádku/odstavce.
        Díky Range.toString() se správně slepí i text rozdělený do inline spanů
        (B/I/U, odkazy atd.), ale neprochází se při každém touchmove celá poznámka. */
@@ -3333,16 +3352,16 @@
       const poRange = document.createRange();
       poRange.selectNodeContents(blok);
       poRange.setStart(node, offset);
-      return {
+      return zapamatuj({
         pred: ocisti(predRange.toString()).slice(-24),
         po: ocisti(poRange.toString()).slice(0, 24)
-      };
+      });
     } catch (_error) {
       const text = node.nodeType === Node.TEXT_NODE ? String(node.nodeValue || "") : "";
-      return {
+      return zapamatuj({
         pred: ocisti(text.slice(Math.max(0, offset - 24), offset)),
         po: ocisti(text.slice(offset, Math.min(text.length, offset + 24)))
-      };
+      });
     }
   }
 
@@ -3360,8 +3379,9 @@
     if (![xPrstu, yPrstu, xCile, yCile].every(Number.isFinite)) return false;
 
     const kontext = ziskejV2LupaTextKontext(stav);
-    v2SelectionLupaPred.textContent = kontext.pred;
-    v2SelectionLupaPo.textContent = kontext.po;
+    // 691CW: an unchanged context must not invalidate DOM text/layout each RAF.
+    if (v2SelectionLupaPred.textContent !== kontext.pred) v2SelectionLupaPred.textContent = kontext.pred;
+    if (v2SelectionLupaPo.textContent !== kontext.po) v2SelectionLupaPo.textContent = kontext.po;
 
     const sirka = 148;
     const vyska = 60;
@@ -3376,14 +3396,28 @@
     /* PATCH 677D – magnifier a panel jsou vzájemně exkluzivní. Body class
        je CSS pojistka i proti jinému pozdnímu menu hooku. Zároveň během drag
        fáze schováme kapky; přesný Range/highlight zůstává plně aktivní. */
-    nastavV2SelectionMenuNuceneSkryti(true);
-    skryjV2SelectionMenu();
+    // 691CW: preserve the existing guards while avoiding redundant menu/style
+    // writes and document-wide handle searches on every stationary edge frame.
+    if (!v2SelectionMenuNuceneSkryty || selectionMenu?.hidden === false) {
+      nastavV2SelectionMenuNuceneSkryti(true);
+    }
+    if (v2SelectionMenuAktivni || selectionMenu?.dataset?.lnV2Owner === "1") {
+      skryjV2SelectionMenu();
+    }
     potlacV2NativeSelection();
-    skryjV2SelectionHandles();
-    document.body?.classList?.add("ln-v2-selection-magnifier-active");
-    v2SelectionLupa.style.left = `${Math.round(left)}px`;
-    v2SelectionLupa.style.top = `${Math.round(top)}px`;
-    v2SelectionLupa.hidden = false;
+    if (!stav.handleDrag.lupaHandlesSkryty ||
+        !v2SelectionHandleStart?.hidden || !v2SelectionHandleEnd?.hidden) {
+      skryjV2SelectionHandles();
+      stav.handleDrag.lupaHandlesSkryty = true;
+    }
+    if (!document.body?.classList?.contains("ln-v2-selection-magnifier-active")) {
+      document.body?.classList?.add("ln-v2-selection-magnifier-active");
+    }
+    const novyLeft = `${Math.round(left)}px`;
+    const novyTop = `${Math.round(top)}px`;
+    if (v2SelectionLupa.style.left !== novyLeft) v2SelectionLupa.style.left = novyLeft;
+    if (v2SelectionLupa.style.top !== novyTop) v2SelectionLupa.style.top = novyTop;
+    if (v2SelectionLupa.hidden) v2SelectionLupa.hidden = false;
     return true;
   }
 
