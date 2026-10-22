@@ -1533,6 +1533,11 @@
         'editor-render-200':'200 radku – synteticky render',
         'search-500':'500 poznamek – synteticke hledani'
       };
+      if(latest?.deepDelete){
+        lines.push('','691BU DEEP TRACE – IZOLovane synteticke mazani 20x; ne realny Core V2 Backspace:');
+        for(const [count,entry] of Object.entries(latest.deepDelete))
+          lines.push(`${count} radku: celkem ${met(entry?.total)} | kopie modelu avg=${n(entry?.clone?.avg)}ms | zmena modelu avg=${n(entry?.model?.avg)}ms | DOM avg=${n(entry?.dom?.avg)}ms | layout avg=${n(entry?.layout?.avg)}ms`);
+      }
       for(const [id,v] of Object.entries(latest?.synthetic||{}))
         lines.push(`${names[id]||id} (ms, 20x): ${met(v)}`);
       if(saved.baseline && typeof saved.baseline==='object'){

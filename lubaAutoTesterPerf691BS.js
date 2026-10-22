@@ -61,6 +61,33 @@
     const el=document.createElement('div');el.className='ln-v2-odstavec'+(i%3===0?' ln-v2-todo':i%3===1?' ln-v2-bullet':'');
     const span=document.createElement('span');span.className='ln-v2-cast';span.textContent='Syntetický text bloku '+i+' pro benchmark rendereru';el.append(span);fragment.append(el);
   }return fragment;}
+  /* 691BU — isolated deep delete trace, never the user's document.
+     Timing is split into model clone, model update, DOM replacement and forced
+     layout. It is explicitly NOT an exact Core V2 model or real key gesture. */
+  function buildDeepRows(lines, value='syntetický text pro mazání a výkonové měření') {
+    const root=document.createDocumentFragment();
+    for(let i=0;i<lines;i++){
+      const row=document.createElement('div');row.className='ln-v2-odstavec';
+      const span=document.createElement('span');span.className='ln-v2-cast';
+      span.textContent=value+' '+i+' — '+('obsah řádku '.repeat(5));
+      row.append(span);root.append(row);
+    }return root;
+  }
+  function measureDeepDelete(lines, sandbox){
+    const t0=performance.now();
+    // Represent the required source/document copy separately from DOM work.
+    const blocks=Array.from({length:lines},(_,i)=>({id:i,text:'syntetický text '+i+' '+('obsah '.repeat(16))}));
+    const snapshot=typeof structuredClone==='function'?structuredClone(blocks):JSON.parse(JSON.stringify(blocks));
+    const t1=performance.now();
+    blocks[blocks.length-1].text=blocks[blocks.length-1].text.slice(0,-1);
+    const t2=performance.now();
+    sandbox.replaceChildren(buildDeepRows(lines));
+    const t3=performance.now();
+    void sandbox.scrollHeight;
+    const t4=performance.now();
+    if(snapshot.length!==lines)throw Error('deep_clone_count_mismatch');
+    return {clone:t1-t0,model:t2-t1,dom:t3-t2,layout:t4-t3,total:t4-t0};
+  }
   const haystack=Array.from({length:500},(_,i)=>('Syntetická poznámka '+i+' — hledání test benchmark bez reálných dat').toLocaleLowerCase('cs'));
   async function nextFrame(){await new Promise(resolve=>requestAnimationFrame(()=>resolve()));}
   function measureOne(type, sandbox){let target;
@@ -181,6 +208,28 @@
         rows.push(metricRow(name,title+' (izolovaný DOM)','PERF_SYNTHETIC_20X','AUDIT',data.avg,
           `opakování=20/20; průměr=${data.avg}ms; p95=${data.p95}ms; nejhorší=${data.max}ms; změna vůči baseline=${delta===null?'první měření':`${delta>0?'+':''}${delta}%`}; jde o syntetické DOM, ne skutečné gesto.`));
         if(!baseline)prior.baseline[comparableId(name)]={avg:data.avg,p95:data.p95,date:s.startDate};
+      }
+      /* 691BU: three workloads, twenty repeats each, same per-run sandbox.
+         The local test note is untouched. Report phase timings, not fake FPS. */
+      captured.deepDelete={};
+      for(const lineCount of [40,200,600]){
+        const times={clone:[],model:[],dom:[],layout:[],total:[]};
+        for(let i=0;i<COUNT;i++){
+          if(!still())throw Error('Přerušený 691BU deep trace');
+          if(progress)progress(`Deep Trace: mazání ${lineCount} řádků ${i+1}/${COUNT}`);
+          await nextFrame();
+          if(!still())throw Error('Přerušený 691BU deep trace');
+          const one=measureDeepDelete(lineCount,sandbox);
+          for(const [name,val] of Object.entries(one))times[name].push(val);
+        }
+        const entry={};for(const [name,values] of Object.entries(times))entry[name]=stats(values);
+        captured.deepDelete[String(lineCount)]=entry;
+        const total=entry.total;
+        rows.push(metricRow(`deep-delete-${lineCount}`,`691BU Deep Trace – mazání a render ${lineCount} syntetických řádků`,
+          'PERF_SYNTHETIC_DEEP_TRACE','AUDIT',total.avg,
+          `20/20; CELKEM avg=${total.avg}ms, p95=${total.p95}ms, max=${total.max}ms; `+
+          `kopie modelu=${entry.clone.avg}ms, změna modelu=${entry.model.avg}ms, DOM=${entry.dom.avg}ms, layout=${entry.layout.avg}ms; `+
+          'IZOLOVANÉ syntetické měření, ne skutečný Backspace Core V2 ani FPS editoru.'));
       }
     }catch(e){if(still())rows.push(metricRow('incomplete','Výkonové 20× testy nedokončeny','PERF_AUDIT','PARTIAL',0,String(e?.message||e)));}
     finally{sandbox?.remove();}
