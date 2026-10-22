@@ -1436,8 +1436,15 @@
     ghost.classList.add("lubaCardDragActive", "lubaCardDragGhost");
     ghost.style.removeProperty("--luba-swipe-x");
     ghost.setAttribute("aria-hidden", "true");
-    ghost.style.width = `${Math.round(rect.width)}px`;
-    ghost.style.height = `${Math.round(rect.height)}px`;
+    /* 691CK: the source inherits text-align:left from .app, while the
+       fixed ghost is appended to body (text-align:center). Preserve the
+       source layout before scaling the WHOLE ghost, including its content. */
+    const inherited = window.getComputedStyle(karta);
+    ghost.style.textAlign = inherited.textAlign;
+    ghost.style.direction = inherited.direction;
+    // Keep subpixel layout width: rounding can rewrap a title near its edge.
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
     ghost.style.left = `${Math.round(rect.left)}px`;
     ghost.style.top = `${Math.round(rect.top)}px`;
     ghost.style.zIndex = "4500";
