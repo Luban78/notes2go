@@ -178,7 +178,7 @@
      Weighted geometric mean avoids additive metric units and treats smaller times
      as better; all eight metrics must be present in full. Component ratio capped
      at 0.5..2 per test to avoid one noisy sub-millisecond metric dominating. */
-  const SCORE_VERSION='691BZ-v1';
+  const SCORE_VERSION='691CB-v2';
   const SCORE_PARTS=[
     ['real-backspace','Core V2 Backspace / Testy LOCAL',.25,'lower',c=>c.actualInput?.backspace],
     ['real-typing','Core V2 psaní / Testy LOCAL',.05,'lower',c=>c.actualInput?.typing],
@@ -195,7 +195,18 @@
     const platform=window.Capacitor?.isNativePlatform?.()?'APK':'WEB';
     return [SCORE_VERSION,platform,c.environment,c.viewport].join('|');
   }
-  function computeScore(c,prior,ownedOk,fpsCount){
+  function computeScore(c,prior,ownedOk,fpsCount,functionalStatus){
+    /* 691CB: a failed/blocked AutoTester run must NEVER seed a score reference.
+       Old 691BZ-v1 references remain historical but are not used by v2. */
+    const validated=functionalStatus?.completed===true &&
+      Number(functionalStatus.passed)>0 &&
+      Number(functionalStatus.failed)===0 &&
+      Number(functionalStatus.blocked)===0;
+    if(!validated) {
+      const f=Number.isFinite(functionalStatus?.failed)?functionalStatus.failed:'?';
+      const b=Number.isFinite(functionalStatus?.blocked)?functionalStatus.blocked:'?';
+      return {version:SCORE_VERSION,value:null,reason:`Funkční regrese není bez chyb: FAIL=${f}, BLOCKED=${b}. Referenčních 1000 bodů se neukládá.`};
+    }
     const unavailable=[];
     const parts=SCORE_PARTS.map(([id,label,weight,direction,pick])=>{
       const stat=pick(c);
@@ -207,7 +218,7 @@
     }
     prior.scoreBaselines ||= {};
     const key=scoreKey(c);
-    if(!prior.scoreBaselines[key])prior.scoreBaselines[key]={date:c.date,build:c.build,values:Object.fromEntries(parts.map(x=>[x.id,x.msOrFps]))};
+    if(!prior.scoreBaselines[key])prior.scoreBaselines[key]={date:c.date,build:c.build,validated:true,values:Object.fromEntries(parts.map(x=>[x.id,x.msOrFps]))};
     const baseline=prior.scoreBaselines[key];
     const ratios=[];
     for(const part of parts){
@@ -299,7 +310,7 @@
     }catch(e){if(still())rows.push(metricRow('incomplete','Výkonové 20× testy nedokončeny','PERF_AUDIT','PARTIAL',0,String(e?.message||e)));}
     finally{sandbox?.remove();}
     if(!still()){current=null;return [];} 
-    captured.score=computeScore(captured,prior,ownedResult.ok,fps.length);
+    captured.score=computeScore(captured,prior,ownedResult.ok,fps.length,options.functionalStatus);
     const score=captured.score;
     rows.push(metricRow('performance-score','LubaNote Performance Score – index výkonu','PERF_COMPOSITE_INDEX',
       score.value!==null?'AUDIT':'PARTIAL',0,score.value!==null?
@@ -312,5 +323,15 @@
     last={rows,date:s.startDate,saved,score:captured.score};current=null;
     return rows;
   }
-  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last});
+  /* 691CB: explicit confirmed admin action only. Deletes performance-local
+     AutoTester history/baselines, NOT manual history or the test notes. */
+  function clearSaved(){
+    if(current || window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
+    try{
+      localStorage.removeItem(KEY);
+      if(localStorage.getItem(KEY)!==null)return false;
+      last=null;return true;
+    }catch(_error){return false;}
+  }
+  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last,clearSaved});
 })();

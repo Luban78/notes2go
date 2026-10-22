@@ -12,6 +12,8 @@
   let activeRep=1;
   let lastTestNoteId=null;
   let currentRunPerformanceScore=null;
+  let performanceHistoryClearArmed=false;
+  let performanceHistoryNotice="";
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const suiteNames={'sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
@@ -20,7 +22,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691BV</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691CB</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -279,6 +281,24 @@
         if(action==='show-results'){showResults();return;}
         if(action==='stop-playback'){if(running)stop();restoreTestScreen();return;}
         if(action==='review-note'){void reviewLastNote();return;}
+        if(action==='perf-clear-arm'){
+          if(running || !isAllowed())return;
+          performanceHistoryClearArmed=true;render();return;
+        }
+        if(action==='perf-clear-cancel'){
+          performanceHistoryClearArmed=false;render();return;
+        }
+        if(action==='perf-clear-confirm'){
+          if(running || !isAllowed() || !performanceHistoryClearArmed)return;
+          performanceHistoryClearArmed=false;
+          const cleared=window.LubaNoteAutoTesterPerf691BS?.clearSaved?.()===true;
+          if(cleared){
+            currentRunPerformanceScore=null;
+            results=results.filter(r=>r.id!=='perf691bs-performance-score');
+            performanceHistoryNotice='Výkonová historie a chybná reference byly smazány. Nové skóre vznikne až po kompletním bezchybném běhu Spustit vše.';
+          }else performanceHistoryNotice='Vymazání výkonové historie se nepodařilo. Nic jiného nebylo změněno.';
+          render();return;
+        }
         if(action==='run'){void run(btn.dataset.suite);return;}
         if(action==='choose'){openAreaPicker();return;}
         if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
@@ -701,7 +721,35 @@
           `<div style="font-size:2.25rem;font-weight:800;font-variant-numeric:tabular-nums">${score.value} <span style="font-size:.85rem">bodů</span></div>`+
           `<div style="font-size:.92rem">Změna proti prvním 1 000 bodům: ${change} % · ${score.components.length} měřených oblastí</div>`+
           `<div style="font-size:.72rem;opacity:.8;margin-top:5px">Index výkonu na tomto zařízení; ne 3DMark ani kompletní PASS. Kombinuje Core V2 v krátké Testy poznámce, FPS během regresí a syntetické DOM.</div>`;
-      }else scoreNode.textContent='LubaNote Performance Score: nedostupné – výkonové měření je neúplné. Podrobnosti v FPS reportu.';
+      }else {
+        scoreNode.textContent=score?.reason
+          ? `LubaNote Performance Score: nevypočteno – ${score.reason}`
+          : 'LubaNote Performance Score: nedostupné – výkonové měření je neúplné. Podrobnosti v FPS reportu.';
+      }
+      if(performanceHistoryNotice){
+        const note=document.createElement('p');
+        note.textContent=performanceHistoryNotice;
+        note.style.cssText='font-size:.8rem;line-height:1.45;color:#e7efe9;margin:10px 0';
+        scoreNode.appendChild(note);
+      }
+      const actions=document.createElement('div');
+      actions.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
+      if(performanceHistoryClearArmed){
+        const warning=document.createElement('p');
+        warning.style.cssText='width:100%;margin:0;color:#ffd9b8;font-size:.82rem';
+        warning.textContent='Smazat všechna uložená VÝKONOVÁ měření AutoTesteru a jeho baseline? Poznámky, ruční benchmark ani funkční testy se nemažou.';
+        actions.appendChild(warning);
+        const yes=document.createElement('button');yes.type='button';yes.dataset.lat='perf-clear-confirm';yes.textContent='Ano, vymazat výkonovou historii';
+        const cancel=document.createElement('button');cancel.type='button';cancel.dataset.lat='perf-clear-cancel';cancel.textContent='Zrušit';
+        actions.append(yes,cancel);
+      }else{
+        const clear=document.createElement('button');clear.type='button';clear.dataset.lat='perf-clear-arm';
+        clear.textContent='Vymazat výkonovou historii';actions.appendChild(clear);
+      }
+      actions.querySelectorAll('button').forEach(btn=>{
+        btn.style.cssText='min-height:42px;padding:8px 12px;border:1px solid #5c806a;border-radius:11px;color:#e9fff0;background:#253d32;font:inherit;font-size:.82rem';
+      });
+      scoreNode.appendChild(actions);
     }
     const state=screen.querySelector('#lat-state');
     const haveProblem=failing>0||blocked>0;
@@ -1293,7 +1341,13 @@
         perfRows=await perf.finish(
           () => running && genPerf === generaceBehu && !!screen && !screen.hidden,
           message => { if(genPerf===generaceBehu && running) setStatus(message); },
-          {testNoteId:lastTestNoteId}
+          {testNoteId:lastTestNoteId,
+            functionalStatus:{
+              completed:true,
+              passed:results.filter(r=>['SERVER_PASS','PASS','CLIENT_PASS','SIM_PASS','DB_PASS','CORE_PASS','APP_PASS','NATIVE_PASS'].includes(r.status)&&!r.id.startsWith('stability-v1-')).length,
+              failed:results.filter(r=>r.status==='FAIL'||r.status?.endsWith('_FAIL')).length,
+              blocked:results.filter(r=>r.status==='BLOCKED'||r.status?.endsWith('_BLOCKED')).length
+            }}
         );
       } catch(error) {
         perfRows=[{id:'perf691bs-error',name:'Výkonový benchmark nedokončen',
@@ -1387,7 +1441,7 @@
     stop();
     const generace=generaceBehu;
     screen?.classList.remove('lat-finished');
-    results=[];running=true;lastTestNoteId=null;currentRunPerformanceScore=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
+    results=[];running=true;lastTestNoteId=null;currentRunPerformanceScore=null;performanceHistoryClearArmed=false;performanceHistoryNotice='';liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
     if(activeSuite==='all')window.LubaNoteAutoTesterPerf691BS?.start?.();
     // 691AD: only explicit isolated diagnostic suites need the large visual lab.
