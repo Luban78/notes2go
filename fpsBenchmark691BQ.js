@@ -3,12 +3,14 @@
    Real quick sync executes only after an explicit user click, sequentially. */
 (() => {
   'use strict';
-  const VERSION = '691BZ';
+  const VERSION = '691CR';
   const INPUT_TAIL_MS = 240; // initial action-local frame tagging
   const POST_TAIL_MS = 10000; // 10 seconds AFTER input #20, including continued hold
   const STORE_KEY = 'lubanoteLocalPerfBaselines691BQ';
   const REPEATS = 20;
   const WINDOW_MS = 800;
+  const AUTO_SCROLL_DISTANCE_PX = 600; // fixed 600px traversals, ten return cycles
+  const AUTO_SCROLL_WAIT_MS = 45000;
   // Guided batch: manual interactions cannot be safely synthesized, and are never
   // reported as 20 real actions unless Core V2 emits 20 action measurements.
   const SUITE_ORDER = [
@@ -29,6 +31,7 @@
     'note-open': 'Otevírání poznámek', 'note-save': 'Uložení / zavření poznámek',
     'todo-toggle': 'ToDo označení', 'bullet-move': 'Bullet/ToDo MOVE',
     selection: 'Výběr textu / úchyty', 'editor-scroll': 'Scroll editoru',
+    'editor-scroll-auto': 'Automatický scroll skutečné poznámky',
     planner: 'Planner / připomínky', documents: 'Dokumenty', search: 'Hledání / filtry', tags: 'Štítky / filtry',
     images: 'Obrázky', navigation: 'Přepínání modulů', 'sync-live': 'Běžná synchronizace'
   };
@@ -67,6 +70,7 @@
     if(scenario==='typing') return 'Spusť měření, přejdi do testovací poznámky a napiš 20 znaků na LubaKeyboard. Nic se nevkládá automaticky. Typické znaky a mezery se počítají jako skutečné operace.';
     if(scenario==='sync-quick') return 'POZOR: 20× postupně vyvolá existující rychlý sync přes LubaServer (reálná síť). Test probíhá jen na výslovné spuštění, zastaví se po chybě; nic nevytváří jako testovací poznámku. Tento test je rychlý sync, ne plný přenos všech dat.';
     if(scenario==='idle') return 'Po spuštění zavři Admin Dashboard a nech aplikaci bez dotyku. Proběhne 20 měřicích oken po 0,8 s, tedy celkem přibližně 16 s.';
+    if(scenario==='editor-scroll-auto') return 'AUTOMATICKY: spusť test, zavři Dashboard a otevři stejnou dlouhou poznámku (nebo ji ponech otevřenou). Na text NESAHEJ. Tester sám nastaví začátek a provede 20 pevně časovaných pohybů po 600 px, včetně návratů. 20 FPS oken / asi 16 s. Není to fyzický tah prstem.';
     return 'Po spuštění zavři Dashboard a prováděj tuto činnost; měření se zapne 0,9 s po zavření. Nasbíráme 20 po sobě jdoucích časových oken FPS (0,8 s). Jde o časové vzorky během reálného používání, NE o automatické 20násobné provedení funkce.';
   }
   function hud() {
@@ -147,6 +151,13 @@
     if(s?.armTimer)clearTimeout(s.armTimer);
     if(s?.postTimer)clearTimeout(s.postTimer);
     if(s?.countdownTimer)clearInterval(s.countdownTimer);
+    if(s?.autoWaitTimer)clearInterval(s.autoWaitTimer);
+    if(s?.autoWarmupTimer)clearTimeout(s.autoWarmupTimer);
+    if(s?.autoDriveFrame)cancelAnimationFrame(s.autoDriveFrame);
+    s?.autoStopListening?.();
+    if(s?.autoEditor?.isConnected && Number.isFinite(s.autoOriginalTop)) {
+      try { s.autoEditor.scrollTop=s.autoOriginalTop; } catch (_) {}
+    }
     s?.armObserver?.disconnect?.();
     if(s) {s.frameRequest=0;s.observer?.disconnect?.();}
   }
@@ -180,6 +191,15 @@
   const noteSizeClass = chars => chars<1000?'0–999 znaků':chars<5000?'1000–4999 znaků':chars<20000?'5000–19999 znaků':'20000+ znaků';
   const noteBlockClass = count => count<=10?'1–10 bloků':count<=100?'11–100 bloků':'101+ bloků';
   function comparabilityKey(r) {
+    if(r?.scenario==='editor-scroll-auto' && r?.measurementVersion==='691CR_AUTO_SCROLL_V1') {
+      const a=r.metrics?.autoScroll;
+      if(!a)return null;
+      // Do not mix another note, viewport, FPS overlay or 60/120Hz cohorts.
+      // Stored geometry and text length are metadata only (never note text/ID).
+      return [r.scenario,r.measurementVersion,r.environment,r.viewport,
+        a.noteChars,a.blockCount,Math.round(a.scrollHeight/20),Math.round(a.clientHeight/20),
+        a.distancePx,r.fpsOverlayEnabled?'fps-on':'fps-off',r.refreshClass].join('|');
+    }
     if(!isNewInput(r)) return null;
     return [r.scenario,'input-active-'+r.measurementVersion,r.environment,r.viewport,
       r.inputMode,r.noteSizeClass,noteBlockClass(r.noteBlocks),r.fpsOverlayEnabled?'fps-on':'fps-off',
@@ -187,7 +207,7 @@
   }
   function baselineFor(r) {
     if(!r)return null;
-    if(r.scenario==='backspace'||r.scenario==='typing') {
+    if(r.scenario==='backspace'||r.scenario==='typing'||r.scenario==='editor-scroll-auto') {
       const key=comparabilityKey(r);
       return key ? store.comparableBaseline?.[key] || null : null;
     }
@@ -195,7 +215,8 @@
   }
   function comparable(a,b){
     if(!a||!b)return false;
-    if(a.scenario==='backspace'||a.scenario==='typing'||b.scenario==='backspace'||b.scenario==='typing') {
+    if(a.scenario==='backspace'||a.scenario==='typing'||b.scenario==='backspace'||b.scenario==='typing'||
+       a.scenario==='editor-scroll-auto'||b.scenario==='editor-scroll-auto') {
       const keyA=comparabilityKey(a),keyB=comparabilityKey(b);
       return Boolean(keyA&&keyB&&keyA===keyB);
     }
@@ -203,9 +224,16 @@
   }
   function inputDisplayMode(mode){return mode==='hold'?'podržení Backspace':mode==='mixed'?'kombinované klepnutí/podržení':'jednotlivé stisky';}
   function baselineDiff(run,base) {
-    if(!base) return 'První baseline pro tento scénář.';
+    if(!base) return run.scenario==='editor-scroll-auto'
+      ? 'První automatický scroll pro tuto poznámku, geometrii, panel FPS a frekvenci rAF. Nová nezávislá baseline.'
+      : 'První baseline pro tento scénář.';
     if(!comparable(run,base))return 'Nesrovnatelné metody / podmínky – rozdíl nezobrazen.';
     const a=run.metrics;const b=base.metrics;
+    if(run.scenario==='editor-scroll-auto') {
+      const change=(x,y)=>Number.isFinite(x)&&Number.isFinite(y)&&y>0
+        ? `${(100*(x/y-1))>=0?'+':''}${fmt(100*(x/y-1))} %`:'N/A';
+      return `Proti SROVNATELNÉ AUTO baseline: frame p95 ${change(a.frames.p95FrameMs,b.frames.p95FrameMs)} · nejhorší frame ${change(a.frames.worstFrameMs,b.frames.worstFrameMs)} · LongTask počet ${a.longTasks.count}/${b.longTasks.count}. Nižší prodlevy jsou lepší.`;
+    }
     if(isNewInput(run)) {
       const fields=[];
       const aMain=run.measurementVersion==='691BZ'?a.after20:a.activeFrames;
@@ -276,6 +304,13 @@
     txt+=`Frame >33 ms: ${m.frames.framesOver33} | frame >50 ms: ${m.frames.framesOver50}\n`;
     txt+=`LongTask >50 ms: ${m.longTasks.supported?m.longTasks.count:'N/A'} | nejhorší: ${fmt(m.longTasks.worstMs)} ms\n`;
     if(m.fpsWindows) txt+=`20 oken FPS: průměr ${fmt(m.fpsWindows.avg)}, minimum ${fmt(m.fpsWindows.min)}, p95 ${fmt(m.fpsWindows.p95)}\n`;
+    if(m.autoScroll) {
+      const a=m.autoScroll;
+      txt+=`AUTOSCROLL 691CR: SKUTEČNÝ otevřený editor; programové scrollTop (NE fyzický touch/fling).\n`;
+      txt+=`Trasa: ${a.passes} půltahů za 16 s, pevně ${a.distancePx}px tam/zpět, krok 0,8 s; změny scrollTop=${a.writes}, dosaženo max=${fmt(a.peakPx)}px.\n`;
+      txt+=`Poznámka: ${a.noteChars} znaků, ${a.blockCount} bloků, scrollHeight=${fmt(a.scrollHeight)}px, clientHeight=${fmt(a.clientHeight)}px, fyzická frekvence NEZMĚŘENA; rAF skupina=${r.refreshClass}.\n`;
+      txt+='Srovnávat POUZE s jiným AUTO testem stejné poznámky/rozměrů/120 vs 60 rAF a FPS panelu; staré ruční baseline sem NEPATŘÍ.\n';
+    }
     if(m.operationMs) txt+=`Akce: průměr ${fmt(m.operationMs.avg)} ms | medián ${fmt(m.operationMs.median)} ms | p95 ${fmt(m.operationMs.p95)} ms | maximum ${fmt(m.operationMs.max)} ms\n`;
     if(m.blockCount) txt+=`Délka poznámky: cca ${fmt(m.blockCount.avg,0)} modelových bloků (průměr)\n`;
     if(m.breakdown?.nextFrameMs)txt+=`Odezva do DALŠÍHO rAF callbacku: avg ${fmt(m.breakdown.nextFrameMs.avg)} ms | p95 ${fmt(m.breakdown.nextFrameMs.p95)} ms | max ${fmt(m.breakdown.nextFrameMs.max)} ms (nikoli čas hotového vykreslení)\n`;
@@ -383,6 +418,12 @@
   }
   function complete(s) {
     if(active!==s || s.cancelled)return;
+    if(s.scenario==='editor-scroll-auto' &&
+      (!s.autoStarted || s.autoWrites<45 || s.autoPeakPx<s.autoDistance*.7)) {
+      stop();
+      const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL NEDOKONČEN: editor se dostatečně neposunul; nic neuloženo.';
+      return;
+    }
     active=null;stopFrame(s);hud().hidden=true;switchButtons(false);
     const frames=summarizeFrames(s.frameGaps);
     const m={frames,longTasks:{supported:s.longTaskSupported,count:s.longTaskRecords.length,worstMs:s.longTaskRecords.length?Math.max(...s.longTaskRecords):null}};
@@ -408,8 +449,13 @@
       }
       if(s.scenario==='sync-quick')m.syncSuccess=s.samples.filter(x=>x.ok).length;
     }
+    if(s.scenario==='editor-scroll-auto')m.autoScroll={
+      passes:20,distancePx:s.autoDistance,writes:s.autoWrites,peakPx:s.autoPeakPx,
+      noteChars:s.autoNoteChars,blockCount:s.autoBlockCount,scrollHeight:s.autoScrollHeight,clientHeight:s.autoClientHeight
+    };
     const r={scenario:s.scenario,mode:s.scenarioMode,date:new Date().toISOString(),build:String(window.LUBANOTE_VERSION||'neuveden'),environment:window.Capacitor?.isNativePlatform?.()?'APK/WebView':'WEB',
       viewport:`${innerWidth}x${innerHeight}`,fpsOverlayEnabled:localStorage.getItem('lubanoteFpsVisible691BP')==='1',count:s.samples.length,metrics:m,samples:s.samples,
+      ...(s.scenario==='editor-scroll-auto'?{measurementVersion:'691CR_AUTO_SCROLL_V1',refreshClass:Math.round((m.frames.estimatedRefreshHz||60)/30)*30+'Hz'}:{}),
       ...(s.scenarioMode==='real-operation'?{
         measurementVersion:'691BZ',extraActions:s.extraActions||0,postActionsBySecond:s.postActionsBySecond,inputMode:s.repeatCount>=10?'hold':s.repeatCount?'mixed':'single',
         repeatCount:s.repeatCount,noteChars:s.noteChars??0,noteBlocks:s.noteBlocks??0,
@@ -418,7 +464,7 @@
       }:{})};
     // Only full, comparable series become baselines. A failed sync is never a PASS.
     if(s.samples.length===REPEATS && (s.scenario!=='sync-quick' || m.syncSuccess===REPEATS)) {
-      if(isNewInput(r)) {
+      if(isNewInput(r)||r.scenario==='editor-scroll-auto') {
         const key=comparabilityKey(r);
         if(key && !store.comparableBaseline[key])store.comparableBaseline[key]=r;
       } else if(!store.baseline[r.scenario])store.baseline[r.scenario]=r;
@@ -455,6 +501,110 @@
     s.armObserver=new MutationObserver(arm);
     s.armObserver.observe(modal,{attributes:true,attributeFilter:['hidden']});
   }
+  /* 691CR: deterministic, REAL current Core V2 DOM scroll. No synthetic note, no
+     touch emulation, no data edits. Only the scrollTop of a visible open note.
+     This catches repeatable regressions in scroll-event/listener/layout workload;
+     it does NOT measure Android finger fling or GPU paint. */
+  function armAutoScrollAfterModal(s) {
+    const modal=byId('adminDashboardModal');
+    const ready=()=>{
+      if(active!==s||s.cancelled||document.hidden)return;
+      if(modal&&!modal.hidden)return;
+      const task=byId('taskModal');
+      const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
+      if(!task||task.hidden||!task.classList.contains('show')||!editor?.isConnected)return;
+      const max=editor.scrollHeight-editor.clientHeight;
+      if(editor.clientHeight<100||max<Math.max(700,editor.clientHeight*1.2))return;
+      if(editor.getClientRects().length===0)return;
+      clearInterval(s.autoWaitTimer);s.autoWaitTimer=0;
+      s.autoEditor=editor;s.autoTask=task;s.autoToken=task.dataset.taskId||task.dataset.draftTaskId||null;
+      s.autoOriginalTop=Number(editor.scrollTop)||0;
+      s.autoDistance=AUTO_SCROLL_DISTANCE_PX;
+      s.autoScrollHeight=editor.scrollHeight;s.autoClientHeight=editor.clientHeight;
+      s.autoNoteChars=editor.textContent?.length||0;
+      s.autoBlockCount=editor.querySelectorAll('[data-ln-v2-blok]').length;
+      s.autoPeakPx=0;s.autoWrites=0;s.autoStarted=false;
+      s.autoLastTarget=null;s.autoNextCheck=0;
+      const cancelOnTouch=e=>{
+        if(active===s && s.autoStarted && task.contains(e.target)){
+          stop();
+          const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL ZRUŠEN: během měření došlo k dotyku editoru; nic neuloženo.';
+        }
+      };
+      document.addEventListener('pointerdown',cancelOnTouch,true);
+      document.addEventListener('touchstart',cancelOnTouch,{capture:true,passive:true});
+      s.autoStopListening=()=>{
+        document.removeEventListener('pointerdown',cancelOnTouch,true);
+        document.removeEventListener('touchstart',cancelOnTouch,true);
+      };
+      // Return to identical initial position without touching caret/selection.
+      editor.scrollTop=0;
+      const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL: start ze začátku poznámky; nyní se měří 20 pohybů.';
+      const launch=()=>{
+        if(active!==s||s.cancelled)return;
+        if(task.hidden||!task.classList.contains('show')){stop();return;}
+        s.autoStarted=true;s.autoStartedAt=performance.now();
+        beginMonitor(s);
+        s.autoDriveFrame=requestAnimationFrame(t=>driveAutoScroll(s,t));
+      };
+      // Let the just-opened editor and pending navigation/layout settle first.
+      s.autoWarmupTimer=setTimeout(()=>{
+        if(active!==s||s.cancelled)return;
+        editor.scrollTop=0;
+        requestAnimationFrame(()=>requestAnimationFrame(launch));
+      },600);
+    };
+    const begun=performance.now();
+    const st=byId('ln-fb-status');
+    if(st)st.textContent='AUTO SCROLL: zavři Dashboard, otevři stejnou dlouhou poznámku; potom už na ni nesahej.';
+    const h=hud();h.hidden=false;h.textContent='AUTO SCROLL · OTEVŘI DLOUHOU POZNÁMKU';
+    s.autoWaitTimer=setInterval(()=>{
+      if(active!==s||s.cancelled){clearInterval(s.autoWaitTimer);return;}
+      if(performance.now()-begun>AUTO_SCROLL_WAIT_MS){
+        stop();
+        const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL: čas vypršel nebo poznámka není dostatečně dlouhá. Žádné měření neuloženo.';
+        return;
+      }
+      ready();
+    },150);
+    ready();
+  }
+  function driveAutoScroll(s,timestamp) {
+    s.autoDriveFrame=0;
+    if(active!==s||s.cancelled||document.hidden)return;
+    const editor=s.autoEditor,task=s.autoTask;
+    if(!editor?.isConnected||task?.hidden||!task.classList.contains('show')||
+      window.LubaNoteEditorV2?.ziskejEditorElement?.()!==editor||
+      (task.dataset.taskId||task.dataset.draftTaskId||null)!==s.autoToken){
+      stop();
+      const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL ZRUŠEN: editor, poznámka nebo rozměry se během běhu změnily; nic neuloženo.';
+      return;
+    }
+    // 20 fixed 800ms passes (alternating down and up), exactly 600px.
+    // Timestamp, not accumulated frame count, controls position: frame drops
+    // do not silently slow the scripted gesture.
+    const elapsed=Math.max(0,timestamp-s.autoStartedAt);
+    const pass=Math.floor(elapsed/WINDOW_MS);
+    const fraction=Math.min(1,(elapsed%WINDOW_MS)/WINDOW_MS);
+    const eased=(1-Math.cos(Math.PI*fraction))/2;
+    const target=Math.round(s.autoDistance*(pass%2===0?eased:1-eased));
+    if(target!==s.autoLastTarget){
+      editor.scrollTop=target;s.autoWrites++;s.autoLastTarget=target;
+    }
+    // Deliberately avoid per-frame layout reads: only check actual position
+    // and note geometry every ~400ms, outside the hot 60/120Hz path.
+    if(timestamp>=s.autoNextCheck){
+      s.autoNextCheck=timestamp+400;
+      s.autoPeakPx=Math.max(s.autoPeakPx,Number(editor.scrollTop)||0);
+      if(Math.abs(editor.scrollHeight-s.autoScrollHeight)>Math.max(30,s.autoScrollHeight*.03)||
+        Math.abs(editor.clientHeight-s.autoClientHeight)>12){
+        stop();
+        const st=byId('ln-fb-status');if(st)st.textContent='AUTO SCROLL ZRUŠEN: během testu se změnily rozměry editoru.';
+        return;
+      }
+    }
+    s.autoDriveFrame=requestAnimationFrame(t=>driveAutoScroll(s,t));
+  }
   function start(scenario, bySuite = false) {
     if(active || !isAllowed() || !names[scenario] || (suite && !bySuite))return false;
     const s={scenario,scenarioMode:modeOf(scenario),samples:[],cancelled:false,lastFrame:null,frameGaps:[],frameRequest:0,windowStart:0,windowFrames:0,
@@ -468,6 +618,7 @@
     if(byId('ln-fb-progress'))byId('ln-fb-progress').value=0;
     uiProgress(s);
     if(scenario==='sync-quick') {beginMonitor(s);runQuickSync(s);}
+    else if(scenario==='editor-scroll-auto')armAutoScrollAfterModal(s);
     else if(s.scenarioMode==='fps-windows')armWindowsAfterModal(s);
     // Reálné Backspace/psaní: start měření až první operací v editoru,
     // nikoli cestou z Admin Dashboardu – přesnější FPS baseline.
@@ -799,6 +950,13 @@
     `;
     document.head.append(style);
     const scenario=byId('ln-fb-scenario');
+    // 691CR: insert into the existing custom LubaNote picker, NO Android native select.
+    const beforeAuto=scenario?.querySelector('option[value="editor-scroll"]');
+    if(beforeAuto && !scenario.querySelector('option[value="editor-scroll-auto"]')) {
+      const option=document.createElement('option');
+      option.value='editor-scroll-auto';option.textContent='AUTO · Scroll dlouhé poznámky (bez prstu)';
+      beforeAuto.before(option);
+    }
     initPicker(scenario);
     // 691BV: pouze jednotlivé ruční scénáře; hromadné testy zůstávají v AutoTesteru.
     const refresh=()=>{const val=scenario?.value||'backspace';const g=byId('ln-fb-guidance');if(g)g.textContent=guidance(val);
