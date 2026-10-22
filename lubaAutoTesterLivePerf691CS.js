@@ -1,4 +1,4 @@
-/* 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
+/* 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
  * Own LOCAL Testy note only; never touches arbitrary user notes. No synthetic DOM events.
  */
 (()=>{'use strict';
@@ -60,19 +60,37 @@
           const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
           return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;
         });
+        // 691CU: the editor intentionally hides an endpoint outside its viewport.
+        // Never force hidden=false or synthesize a Range. After a genuine native
+        // doubletap, move the real scroll container to bring both endpoints into
+        // the viewport; allow the production compositor to update the handles.
+        const visibleStart=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="start"]')).find(el=>{
+          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+          return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;
+        });
+        const bothVisible=()=>Boolean(visibleStart()&&visibleEnd()&&editor.classList.contains('ln-v2-selection-custom-active'));
         let handle=null,setup=null;
+        const initialSetupTop=scroll.scrollTop;
         for(const target of ['word-early','word-late']){
+          scroll.scrollTop=initialSetupTop;
+          await wait(160);
           setup=await plugin.gestureOwnedEditor({id,target,type:'doubletap'});
           check(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_doubletap_ack_missing');
-          for(let retry=0;retry<10;retry++){
+          for(let retry=0;retry<8;retry++){
             await wait(120);
-            handle=visibleEnd();
-            if(handle&&editor.classList.contains('ln-v2-selection-custom-active'))break;
+            if(bothVisible()){handle=visibleEnd();break;}
           }
-          if(handle&&editor.classList.contains('ln-v2-selection-custom-active'))break;
+          if(handle)break;
+          // Only scroll the owned test editor; do not touch the selection model.
+          for(const shift of [24,48,80,120,180,240]){
+            scroll.scrollTop=initialSetupTop+shift;
+            await wait(150);
+            if(bothVisible()){handle=visibleEnd();break;}
+          }
+          if(handle)break;
         }
         check(editor.classList.contains('ln-v2-selection-custom-active'),'own_selection_not_activated');
-        check(handle,'red_end_handle_not_visible; handles='+describeHandles().slice(0,150));
+        check(handle,'red_handles_not_both_visible; scrollTop='+Math.round(scroll.scrollTop)+'; handles='+describeHandles().slice(0,130));
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
