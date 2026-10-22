@@ -1729,6 +1729,44 @@
     });
   }
 
+  /* 691BX – narrow incremental Backspace visual path (Core V2 owns the model).
+     Zero new keyboard listeners / no timers beyond existing selection microtask. */
+  function vykresliJenZmenenyText691BX(index, blockId, previousLength, selection) {
+    const block = dokument?.bloky?.[index];
+    if (!editor || !block || block.id !== blockId || !jeTextovyBlok(block) ||
+        !Array.isArray(block.obsah) || block.obsah.length !== 1 ||
+        typeof block.obsah[0]?.text !== 'string') return false;
+    const freshText = block.obsah[0].text;
+    // No cross-block change, no empty row, no segment splitting, no additions.
+    if (!freshText || freshText.length >= previousLength ||
+        previousLength - freshText.length > 2 || !selection?.sbaleny ||
+        selection.konec.blok !== index) return false;
+    const row = editor.querySelector(`[data-ln-v2-blok="${CSS.escape(blockId)}"]`);
+    const spans = row?.querySelectorAll(':scope > .ln-v2-cast');
+    if (!row || row.hidden || spans?.length !== 1) return false;
+    const textNode = spans[0].firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE ||
+        spans[0].childNodes.length !== 1 ||
+        textNode.data.length !== previousLength) return false;
+    observerDomu?.disconnect();
+    try { textNode.data = freshText; }
+    catch (_error) { return false; }
+    finally {
+      observerDomu?.observe(editor, {
+        childList: true, subtree: true, attributes: true, characterData: true
+      });
+    }
+    // Restore model caret using the SAME Core V2 helper as full rendering.
+    queueMicrotask(() => {
+      try {
+        if (!editor?.isConnected) return;
+        nastavVyberModelu(selection.zacatek, selection.konec);
+        aktualizujToolbarVelikosti(selection);
+      } catch (_error) {}
+    });
+    return true;
+  }
+
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
     if (!editor) return;
     normalizujDokument();
@@ -7745,8 +7783,7 @@
       return true;
     }
 
-    /* 691BQ – jen dobrovolně aktivní benchmark reálné LubaKeyboard.
-       Bez běžícího benchmarku neměří ani nemění editor a neukládá obsah. */
+    /* 691BQ – instrument only while a real benchmark is active. */
     const fpsBench691BQ = window.LubaNoteFpsBenchmark691BQ;
     const meriAkci691BQ = fpsBench691BQ?.meriAkci?.(typ) === true;
     const startAkce691BQ = meriAkci691BQ ? performance.now() : 0;
@@ -7755,6 +7792,17 @@
     let caret = { ...vyber.zacatek };
     let formatPoMazani = null;
     let inputType = "insertText";
+    /* 691BX: only a collapsed single-segment deletion is eligible. */
+    const bxIndex = vyber.sbaleny ? vyber.konec.blok : -1;
+    const bxBefore = bxIndex >= 0 ? dokument?.bloky?.[bxIndex] : null;
+    const bxSingle = typ === "backspace" && vyber.sbaleny && vyber.konec.offset > 0 &&
+      bxBefore && jeTextovyBlok(bxBefore) && !bxBefore.legacyPre &&
+      Array.isArray(bxBefore.obsah) && bxBefore.obsah.length === 1 &&
+      typeof bxBefore.obsah[0]?.text === "string" && bxBefore.obsah[0].text.length > 1 &&
+      (!Array.isArray(bxBefore.obrazky) || bxBefore.obrazky.length === 0) &&
+      !v2ImeKompozice?.aktivni;
+    const bxOldId = bxSingle ? bxBefore.id : null;
+    const bxOldTextLength = bxSingle ? bxBefore.obsah[0].text.length : 0;
 
     if (typ === "text") {
       const vlozenyText = String(data ?? "");
@@ -7801,7 +7849,12 @@
     ulozenyFormatovaciVyber = klonVyberu(novyVyber);
 
     const predRenderem691BQ = meriAkci691BQ ? performance.now() : 0;
-    vykresli(novyVyber);
+    /* 691BX: Never rebuild the entire document for a single deletion inside
+       one existing, one-segment, non-empty row. Any mismatch uses the frozen
+       full renderer. Undo/history/model remain unchanged. */
+    const bxDone = bxSingle && bxOldId && caret.blok === bxIndex &&
+      vykresliJenZmenenyText691BX(bxIndex, bxOldId, bxOldTextLength, novyVyber);
+    if (!bxDone) vykresli(novyVyber);
     const poRenderu691BQ = meriAkci691BQ ? performance.now() : 0;
     oznamModelovyTextovyVstup(inputType);
     nastavStav(`LubaKeyboard: ${inputType}`);
@@ -7811,7 +7864,7 @@
         fpsBench691BQ.zaznamAkce({
           typ,
           totalMs: performance.now() - startAkce691BQ,
-          selectionMs: 0, /* čas před snapshotem není součástí detailního řezu */
+          selectionMs: 0,
           snapshotMs: poSnapshotu691BQ - startAkce691BQ,
           modelMs: poModelu691BQ - poSnapshotu691BQ,
           historyMs: poHistorii691BQ - poModelu691BQ,
@@ -7819,7 +7872,7 @@
           extraMs: predRenderem691BQ - poHistorii691BQ,
           blockCount: dokument?.bloky?.length || 0
         });
-      } catch (_error) { /* Měření nikdy nesmí shodit editor. */ }
+      } catch (_error) { /* Diagnostics must never break editor. */ }
     }
     return true;
   }
