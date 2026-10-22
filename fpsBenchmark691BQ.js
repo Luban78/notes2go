@@ -3,7 +3,7 @@
    Real quick sync executes only after an explicit user click, sequentially. */
 (() => {
   'use strict';
-  const VERSION = '691BR';
+  const VERSION = '691BV';
   const STORE_KEY = 'lubanoteLocalPerfBaselines691BQ';
   const REPEATS = 20;
   const WINDOW_MS = 800;
@@ -35,7 +35,7 @@
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (saved && saved.version === 1 && Array.isArray(saved.runs) && saved.baseline) {
-      store = { version:1, baseline:saved.baseline, runs:saved.runs.slice(-80), suites:Array.isArray(saved.suites)?saved.suites.slice(-10):[] };
+      store = { version:1, baseline:saved.baseline, runs:saved.runs.slice(-160), suites:Array.isArray(saved.suites)?saved.suites.slice(-10):[] };
       latest = store.runs.at(-1) || null;
       latestSuite = store.suites.at(-1) || null;
     }
@@ -159,7 +159,7 @@
   function reportRun(r) {
     if(!r)return 'Zatím žádná uložená měření.';
     const m=r.metrics,base=store.baseline[r.scenario];
-    let txt=`LUBANOTE FPS BENCHMARK / ${VERSION}\nScénář: ${label(r.scenario)}\nTyp: ${r.mode}\nVzorky: ${r.count}/${REPEATS}\nČas: ${r.date}\nProstředí: ${r.environment}\n`;
+    let txt=`LUBANOTE FPS BENCHMARK / ${VERSION}\nScénář: ${label(r.scenario)}\nBuild: ${r.build||'historické měření'}\nTyp: ${r.mode}\nVzorky: ${r.count}/${REPEATS}\nČas: ${r.date}\nProstředí: ${r.environment}\n`;
     txt+=`FPS průměr: ${fmt(m.frames.avgFps)} | refresh odhad: ${fmt(m.frames.estimatedRefreshHz)} Hz\n`;
     txt+=`FPS panel při měření: ${r.fpsOverlayEnabled?'ZAP':'VYP'} | viewport: ${r.viewport}\n`;
     txt+=`Frame p95: ${fmt(m.frames.p95FrameMs)} ms | nejhorší frame: ${fmt(m.frames.worstFrameMs)} ms\n`;
@@ -168,6 +168,7 @@
     if(m.fpsWindows) txt+=`20 oken FPS: průměr ${fmt(m.fpsWindows.avg)}, minimum ${fmt(m.fpsWindows.min)}, p95 ${fmt(m.fpsWindows.p95)}\n`;
     if(m.operationMs) txt+=`Akce: průměr ${fmt(m.operationMs.avg)} ms | medián ${fmt(m.operationMs.median)} ms | p95 ${fmt(m.operationMs.p95)} ms | maximum ${fmt(m.operationMs.max)} ms\n`;
     if(m.blockCount) txt+=`Délka poznámky: cca ${fmt(m.blockCount.avg,0)} modelových bloků (průměr)\n`;
+    if(m.breakdown?.nextFrameMs)txt+=`Odezva do DALŠÍHO rAF callbacku: avg ${fmt(m.breakdown.nextFrameMs.avg)} ms | p95 ${fmt(m.breakdown.nextFrameMs.p95)} ms | max ${fmt(m.breakdown.nextFrameMs.max)} ms (nikoli čas hotového vykreslení)\n`;
     if(m.breakdown) {
       for(const [k,v] of Object.entries(m.breakdown)) txt+=`${k} průměr: ${fmt(v.avg)} ms | p95: ${fmt(v.p95)} ms\n`;
     }
@@ -176,11 +177,87 @@
     txt+=`Pozn.: FPS je WebView requestAnimationFrame, ne GPU profiler. 20 časových oken != 20 akcí. Měření Backspace a psaní vzniká jen při reálném vstupu uživatele.\n`;
     return txt;
   }
+  /* 691BV: persistent per-scenario trend, including previous 691BQ/691BR runs.
+     Keep automatic 691BS results separate: synthetic DOM is not comparable to
+     manual frame samples or real keyboard operations. */
+  const hEsc = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  function numericValue(run){
+    if (!run?.metrics)return null;
+    if(run.mode==='fps-windows')return run.metrics.fpsWindows?.avg ?? null;
+    return run.metrics.operationMs?.avg ?? null;
+  }
+  function goodDelta(now,baseline,mode){
+    if(!Number.isFinite(now)||!Number.isFinite(baseline)||baseline<=0)return null;
+    return (mode==='fps-windows' ? 1 : -1)*100*(now/baseline-1);
+  }
+  function renderHistory(){
+    const scenario=byId('ln-fb-scenario')?.value||'backspace';
+    const items=store.runs.filter(r=>r.scenario===scenario);
+    const baseline=store.baseline?.[scenario];
+    const base=numericValue(baseline);
+    const latestOne=items.at(-1);
+    const now=numericValue(latestOne);
+    const delta=goodDelta(now,base,latestOne?.mode);
+    const trend=byId('ln-fb-trend');
+    const lower=latestOne?.mode!=='fps-windows';
+    if(trend){
+      const unit=lower?'ms/akce':'FPS';
+      const compare=delta===null?'Zatím bez srovnatelné baseline':`${delta>=0?'+':''}${fmt(delta)} % ${delta>=0?'zlepšení':'zhoršení'} proti baseline`;
+      trend.textContent=`${items.length} uložených měření · baseline ${fmt(base)} ${unit} · poslední ${fmt(now)} ${unit} · ${compare}`;
+      trend.dataset.direction=delta===null?'none':delta>=0?'better':'worse';
+    }
+    const out=byId('ln-fb-history-list');
+    if(out){
+      if(!items.length)out.textContent='Pro tuto akci dosud nemáme dokončené měření.';
+      else {
+        const rev=items.slice(-12).reverse();
+        const values=items.map(numericValue).filter(Number.isFinite);
+        const high=Math.max(...values,Number.isFinite(base)?base:0,1);
+        out.innerHTML=rev.map((item,i)=>{
+          const val=numericValue(item),pct=Number.isFinite(val)?Math.max(2,Math.min(100,100*val/high)):0;
+          const diff=goodDelta(val,base,item.mode);
+          const date=new Date(item.date);
+          const when=Number.isFinite(date.getTime()) ? date.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Bez data';
+          const trendText=diff===null?'baseline chybí':`${diff>=0?'+':''}${fmt(diff)} %`;
+          return `<div class="ln-fb-history-row"><span class="ln-fb-history-date">${hEsc(when)}<small>${hEsc(item.build||'starší')}</small></span><div class="ln-fb-history-bar"><span style="width:${pct.toFixed(1)}%"></span></div><strong>${fmt(val)} ${lower?'ms':'FPS'}</strong><small class="${diff===null?'':diff>=0?'ln-fb-better':'ln-fb-worse'}">${hEsc(trendText)}</small></div>`;
+        }).join('');
+      }
+    }
+    const auto=byId('ln-fb-auto-history-list');
+    if(auto){
+      try{
+        const saved=JSON.parse(localStorage.getItem('lubanoteAutoTesterPerfBaseline691BS')||'null');
+        const runs=Array.isArray(saved?.runs)?saved.runs.slice(-12).reverse():[];
+        if(!runs.length)auto.textContent='AutoTester nemá uloženou výkonovou historii.';
+        else auto.innerHTML=runs.map((r,i)=>{
+          const date=new Date(r.date);const when=Number.isFinite(date.getTime())?date.toLocaleString('cs-CZ'):String(r.date||'');
+          const f=r.fps?.avg,b=r.actualInput?.backspace?.avg;
+          const gaps=r.frames?.p95;
+          return `<div class="ln-fb-auto-row"><strong>${hEsc(when)} · build ${hEsc(r.build||'starší')}</strong><span>AutoTester: FPS ${fmt(f)} · Backspace ${fmt(b)} ms · P95 snímku ${fmt(gaps)} ms</span></div>`;
+        }).join('');
+      }catch(_e){auto.textContent='Historii AutoTesteru nelze načíst.';}
+    }
+  }
+  function historyReport(){
+    const id=byId('ln-fb-scenario')?.value||'backspace';
+    const rows=store.runs.filter(r=>r.scenario===id);
+    const base=numericValue(store.baseline?.[id]);
+    const lines=[`LUBANOTE – MANUAL PERF HISTORIE ${VERSION}`,`Scénář: ${label(id)}`,
+      `Baseline: ${fmt(base)} ${rows[0]?.mode==='fps-windows'?'FPS':'ms'}`,`Uložené běhy: ${rows.length}`];
+    rows.forEach((r,i)=>lines.push(`${i+1}. ${r.date} | build=${r.build||'-'} | ${fmt(numericValue(r))} ${r.mode==='fps-windows'?'FPS':'ms'} | progres=${fmt(goodDelta(numericValue(r),base,r.mode))}% | ${r.count}/20 vzorků`));
+    return lines.join('\n');
+  }
   function render(r=latest) {
-    const el=byId('ln-fb-result');if(!el)return;
-    if(!r){el.textContent='Zatím žádné uložené měření.';return;}
-    const count=store.runs.filter(x=>x.scenario===r.scenario).length;
-    el.textContent=`${reportRun(r)}\nUložené běhy scénáře: ${count} · celkem ${store.runs.length}`;
+    const el=byId('ln-fb-result');
+    if(el) {
+      if(!r)el.textContent='Zatím žádné uložené měření.';
+      else {
+        const count=store.runs.filter(x=>x.scenario===r.scenario).length;
+        el.textContent=`${reportRun(r)}\nUložené běhy scénáře: ${count} · celkem ${store.runs.length}`;
+      }
+    }
+    renderHistory();
   }
   function complete(s) {
     if(active!==s || s.cancelled)return;
@@ -191,18 +268,18 @@
     else {
       m.operationMs=summarize(s.samples.map(x=>x.durationMs));
       if(s.scenarioMode==='real-operation') {
-        const keys=['snapshotMs','modelMs','historyMs','renderMs','extraMs'];
+        const keys=['snapshotMs','modelMs','historyMs','renderMs','extraMs','nextFrameMs'];
         m.breakdown=Object.fromEntries(keys.map(k=>[k,summarize(s.samples.map(v=>v[k]).filter(Number.isFinite))]));
         m.blockCount=summarize(s.samples.map(v=>v.blockCount).filter(Number.isFinite));
       }
       if(s.scenario==='sync-quick')m.syncSuccess=s.samples.filter(x=>x.ok).length;
     }
-    const r={scenario:s.scenario,mode:s.scenarioMode,date:new Date().toISOString(),environment:window.Capacitor?.isNativePlatform?.()?'APK/WebView':'WEB',
+    const r={scenario:s.scenario,mode:s.scenarioMode,date:new Date().toISOString(),build:String(window.LUBANOTE_VERSION||'neuveden'),environment:window.Capacitor?.isNativePlatform?.()?'APK/WebView':'WEB',
       viewport:`${innerWidth}x${innerHeight}`,fpsOverlayEnabled:localStorage.getItem('lubanoteFpsVisible691BP')==='1',count:s.samples.length,metrics:m,samples:s.samples};
     // Only full, comparable series become baselines. A failed sync is never a PASS.
     if(s.samples.length===REPEATS && (s.scenario!=='sync-quick' || m.syncSuccess===REPEATS)) {
       if(!store.baseline[r.scenario])store.baseline[r.scenario]=r;
-      store.runs.push(r);store.runs=store.runs.slice(-80);latest=r;
+      store.runs.push(r);store.runs=store.runs.slice(-160);latest=r;
       const saved=save();const st=byId('ln-fb-status');if(st)st.textContent=`Dokončeno ${REPEATS}/${REPEATS} · ${saved?'uloženo do localStorage':'POZOR: místní uložení selhalo'}`;
       render(r);
       if(suite && suite.phase==='running') finishSuiteStep('PASS',r);
@@ -278,9 +355,14 @@
     if(s.scenario==='backspace' ? m.typ!=='backspace' : !['text','space'].includes(m.typ))return;
     if(!Number.isFinite(m.totalMs)||m.totalMs<0)return;
     if(!s.frameRequest)beginMonitor(s);
-    s.samples.push({durationMs:m.totalMs,snapshotMs:m.snapshotMs,modelMs:m.modelMs,historyMs:m.historyMs,renderMs:m.renderMs,extraMs:m.extraMs,blockCount:m.blockCount});
-    uiProgress(s); // Outside timed Core operation; show 1/20 ... 20/20 live.
-    if(s.samples.length>=REPEATS) requestAnimationFrame(()=>complete(s));
+    const sample={durationMs:m.totalMs,snapshotMs:m.snapshotMs,modelMs:m.modelMs,historyMs:m.historyMs,renderMs:m.renderMs,extraMs:m.extraMs,blockCount:m.blockCount};
+    s.samples.push(sample);
+    // 691BV: delay up to NEXT rAF callback after a real Core V2 operation.
+    // This is not paint-completion time; report distinctly from synchronous Core ms.
+    const returnedAt=performance.now();
+    requestAnimationFrame(()=>{if(!s.cancelled)sample.nextFrameMs=performance.now()-returnedAt;});
+    uiProgress(s);
+    if(s.samples.length>=REPEATS)requestAnimationFrame(()=>requestAnimationFrame(()=>complete(s)));
   }
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden && active){
@@ -502,6 +584,26 @@
     #ln-fps-benchmark-691BQ progress {accent-color:var(--color-accent,#26b46b)}
     #ln-fb-hud-691BQ {position:fixed;top:calc(env(safe-area-inset-top,0px) + 66px);right:9px;z-index:2147482000;pointer-events:none;background:rgba(10,13,17,.81);color:#c9ffe0;border:1px solid #48856a;border-radius:10px;padding:6px 8px;font:700 12px/1.2 monospace;box-shadow:0 3px 10px rgba(0,0,0,.25)}
     #ln-fb-hud-691BQ[hidden] {display:none!important}
+    #ln-fps-benchmark-691BQ .ln-fb-history {display:grid;gap:9px;border-top:1px solid var(--color-border,#666);padding-top:13px;margin-top:7px}
+    #ln-fps-benchmark-691BQ #ln-fb-trend {font-size:12px;line-height:1.5;padding:10px;border-radius:10px;background:color-mix(in srgb,var(--color-accent,#2c9e74) 9%,transparent)}
+    #ln-fps-benchmark-691BQ #ln-fb-trend[data-direction="better"] {border-left:3px solid #31b77f}
+    #ln-fps-benchmark-691BQ #ln-fb-trend[data-direction="worse"] {border-left:3px solid #dc845c}
+    #ln-fps-benchmark-691BQ .ln-fb-history-list {display:grid;gap:7px;max-height:320px;overflow-y:auto}
+    #ln-fps-benchmark-691BQ .ln-fb-history-row {display:grid;grid-template-columns:74px minmax(10px,1fr) 77px 67px;gap:6px;align-items:center;font:11px/1.35 system-ui,sans-serif}
+    #ln-fps-benchmark-691BQ .ln-fb-history-date {opacity:.75;white-space:nowrap;display:grid;gap:1px}
+    #ln-fps-benchmark-691BQ .ln-fb-history-date small {font-size:10px;opacity:.78}
+    #ln-fps-benchmark-691BQ .ln-fb-history-bar {height:9px;background:color-mix(in srgb,currentColor 13%,transparent);border-radius:6px;overflow:hidden}
+    #ln-fps-benchmark-691BQ .ln-fb-history-bar span {display:block;height:100%;background:var(--color-accent,#31aa7a);border-radius:6px}
+    #ln-fps-benchmark-691BQ .ln-fb-history-row strong {font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+    #ln-fps-benchmark-691BQ .ln-fb-history-row small {text-align:right;white-space:nowrap}
+    #ln-fps-benchmark-691BQ .ln-fb-better {color:#54d79e}
+    #ln-fps-benchmark-691BQ .ln-fb-worse {color:#e6a184}
+    #ln-fps-benchmark-691BQ .ln-fb-auto-history {border-top:1px solid var(--color-border,#666);padding-top:10px}
+    #ln-fps-benchmark-691BQ .ln-fb-auto-history summary {cursor:pointer;font-size:12px;font-weight:700}
+    #ln-fps-benchmark-691BQ #ln-fb-auto-history-list {margin-top:8px;max-height:250px;overflow:auto;display:grid;gap:8px}
+    #ln-fps-benchmark-691BQ .ln-fb-auto-row {display:grid;gap:2px;padding:7px;border-radius:8px;background:color-mix(in srgb,currentColor 5%,transparent);font-size:11px}
+    #ln-fps-benchmark-691BQ .ln-fb-auto-row span {opacity:.8}
+
     #ln-fps-benchmark-691BQ .ln-fb-all {background:var(--color-accent,#187d60)!important;color:#fff!important;border-color:transparent!important;font-weight:800;font-size:13px}
     #ln-fps-benchmark-691BQ #ln-fb-suite-summary-691BR {padding:8px 10px;border:1px solid var(--color-border,#666);border-radius:11px;font-size:11px;line-height:1.4}
     #ln-fb-suite-guide-691BR {position:fixed;top:calc(env(safe-area-inset-top,0px) + 70px);right:7px;max-width:min(290px,calc(100vw - 18px));width:290px;z-index:2147483000;padding:11px 12px;box-sizing:border-box;border-radius:15px;border:1px solid var(--color-accent,#31aa7a);color:var(--color-text,#eee);background:var(--color-surface,#232b30);box-shadow:0 9px 28px rgba(0,0,0,.48);font-size:12px}
@@ -519,24 +621,23 @@
     document.head.append(style);
     const scenario=byId('ln-fb-scenario');
     initPicker(scenario);
-    suiteOverlay();suiteStatus();
+    // 691BV: pouze jednotlivé ruční scénáře; hromadné testy zůstávají v AutoTesteru.
     const refresh=()=>{const val=scenario?.value||'backspace';const g=byId('ln-fb-guidance');if(g)g.textContent=guidance(val);
       const found=store.runs.filter(x=>x.scenario===val).at(-1);render(found||latest);};
     scenario?.addEventListener('change',refresh);refresh();
     byId('ln-fb-start')?.addEventListener('click',()=>{if(!isAllowed()){alert('Benchmark je určen pouze pro ověřeného admina.');return;}start(scenario.value);});
-    byId('ln-fb-all')?.addEventListener('click',()=>{if(!beginSuite()){
-      const st=byId('ln-fb-status');if(st)st.textContent='Sadu lze spustit pouze v klidu a s Admin oprávněním.';
-    }});
+
     byId('ln-fb-stop')?.addEventListener('click',()=>stop());
-    byId('ln-fb-copy-suite')?.addEventListener('click',async()=>{
-      const ok=await copyText(suiteReport());
-      const st=byId('ln-fb-status');if(st)st.textContent=ok?'Souhrn celé sady zkopírován.':'Kopírování se nepodařilo.';
-    });
+
     byId('ln-fb-copy')?.addEventListener('click',async()=>{
       const r=store.runs.filter(x=>x.scenario===scenario.value).at(-1)||latest;
       const report=reportRun(r);
       try {await navigator.clipboard.writeText(report);const st=byId('ln-fb-status');if(st)st.textContent='Report zkopírován.';}
       catch(_e){const area=document.createElement('textarea');area.value=report;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();document.execCommand('copy');area.remove();}
+    });
+    byId('ln-fb-copy-history')?.addEventListener('click',async()=>{
+      const ok=await copyText(historyReport());
+      const st=byId('ln-fb-status');if(st)st.textContent=ok?'Historie zkopírována.':'Kopírování historie se nepodařilo.';
     });
     byId('ln-fb-baseline')?.addEventListener('click',()=>{
       if(!isAllowed())return;const r=store.runs.filter(x=>x.scenario===scenario.value).at(-1);

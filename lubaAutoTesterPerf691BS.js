@@ -47,7 +47,15 @@
       (['text','space'].includes(typ)&&current.ops.typing.length<COUNT)));}
   function zaznamAkce(m){const s=current;if(!s||!meriAkci(m.typ)||!Number.isFinite(m.totalMs))return;
     const bucket=m.typ==='backspace'?s.ops.backspace:s.ops.typing;
-    bucket.push({total:num(m.totalMs),snapshot:num(m.snapshotMs),model:num(m.modelMs),history:num(m.historyMs),render:num(m.renderMs),blocks:Number(m.blockCount)||0});
+    const item={total:num(m.totalMs),snapshot:num(m.snapshotMs),model:num(m.modelMs),history:num(m.historyMs),render:num(m.renderMs),blocks:Number(m.blockCount)||0,afterFrame:null};
+    bucket.push(item);
+    // 691BV – skutečný produkční Core V2: jak dlouho od konce příkazu
+    // do příštího requestAnimationFrame callbacku. Měří reakci fronty UI,
+    // NENÍ to čas dokončeného GPU vykreslení.
+    const ended=performance.now();
+    requestAnimationFrame(()=>{
+      if(current===s&&!s.cancelled)item.afterFrame=num(performance.now()-ended);
+    });
   }
   function createSandbox(){const el=document.createElement('div');el.setAttribute('aria-hidden','true');
     el.style.cssText='position:fixed;left:-15000px;top:0;width:375px;height:800px;overflow:auto;visibility:hidden;pointer-events:none;contain:layout style paint;';
@@ -186,11 +194,20 @@
       const a=s.ops[key],t=stats(a.map(v=>v.total));
       const baselineInput=prior.baseline[key]?.avg;const inputDelta=baselineInput>0&&t.avg!==null?num((t.avg/baselineInput-1)*100):null;
       if(a.length===COUNT&&!prior.baseline[key])prior.baseline[key]={avg:t.avg,date:s.startDate};
+      const response=stats(a.map(v=>v.afterFrame));
       rows.push(metricRow(key,name,'PERF_REAL_INPUT',a.length===COUNT?'AUDIT':a.length?'PARTIAL':'NOT_TESTED',t.avg||0,
-        `akce=${a.length}/${COUNT}; průměr=${t.avg??'N/A'}ms; proti baseline=${inputDelta===null?'bez srovnání':`${inputDelta>0?'+':''}${inputDelta}%`}; p95=${t.p95??'N/A'}ms; max=${t.max??'N/A'}ms; historie=${stats(a.map(v=>v.history)).avg??'N/A'}ms; render=${stats(a.map(v=>v.render)).avg??'N/A'}ms. Test neprovádí žádné dodatečné mazání uživatelských poznámek.`));
+        `akce=${a.length}/${COUNT}; průměr=${t.avg??'N/A'}ms; proti baseline=${inputDelta===null?'bez srovnání':`${inputDelta>0?'+':''}${inputDelta}%`}; p95=${t.p95??'N/A'}ms; max=${t.max??'N/A'}ms; kopie=${stats(a.map(v=>v.snapshot)).avg??'N/A'}ms; model=${stats(a.map(v=>v.model)).avg??'N/A'}ms; historie=${stats(a.map(v=>v.history)).avg??'N/A'}ms; render=${stats(a.map(v=>v.render)).avg??'N/A'}ms; příští rAF průměr=${response.avg??'N/A'}ms, p95=${response.p95??'N/A'}ms, max=${response.max??'N/A'}ms (čekání na callback, ne dokončené vykreslení); bloků=${stats(a.map(v=>v.blocks)).avg??'N/A'}. Test neprovádí žádné dodatečné mazání uživatelských poznámek.`));
     }
-    const captured={date:s.startDate,environment:navigator.userAgent.match(/Chrome\/\d+/)?.[0]||'WebView',viewport:`${innerWidth}x${innerHeight}`,
-      fps:fpsStats,frames:gaps,actualInput:{backspace:stats(s.ops.backspace.map(x=>x.total)),typing:stats(s.ops.typing.map(x=>x.total))},synthetic:{}};
+    const captured={date:s.startDate,build:String(window.LUBANOTE_VERSION||'neuveden'),environment:navigator.userAgent.match(/Chrome\/\d+/)?.[0]||'WebView',viewport:`${innerWidth}x${innerHeight}`,
+      fps:fpsStats,frames:gaps,actualInput:{backspace:stats(s.ops.backspace.map(x=>x.total)),typing:stats(s.ops.typing.map(x=>x.total))},
+      realCoreTrace:Object.fromEntries(['backspace','typing'].map(key=>[key,{
+        nextRaf:stats(s.ops[key].map(x=>x.afterFrame)),
+        history:stats(s.ops[key].map(x=>x.history)),
+        render:stats(s.ops[key].map(x=>x.render)),
+        snapshot:stats(s.ops[key].map(x=>x.snapshot)),
+        model:stats(s.ops[key].map(x=>x.model)),
+        blocks:stats(s.ops[key].map(x=>x.blocks))
+      }])),synthetic:{}};
     let sandbox;
     try{
       if(!still())throw Error('Přerušený běh');

@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691BT</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691BV</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -1496,7 +1496,7 @@
      to Core V2, no production sync, no change to existing AutoTester results. */
   function fpsReport691BT(){
     const lines=[
-      'LUBANOTE – FPS / VYKONOVY REPORT 691BT',
+      'LUBANOTE – FPS / VYKONOVY REPORT 691BV',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `export: ${new Date().toISOString()}`,
       'PROVENIENCE: AUDIT; vykonove hodnoty nejsou funkcni PASS.',
@@ -1521,12 +1521,19 @@
     if(saved && Array.isArray(saved.runs) && saved.runs.length){
       const runs=saved.runs;
       const latest=runs[runs.length-1];
-      lines.push('',`POSLEDNI ULOZENE MERENI: ${latest?.date||'-'} | ulozenych behu=${runs.length}`);
+      lines.push('',`POSLEDNI ULOZENE MERENI: ${latest?.date||'-'} | build=${latest?.build||'starsi'} | ulozenych behu=${runs.length}`);
       lines.push(`Prostredi: ${latest?.environment||'WebView'} | viewport ${latest?.viewport||'-'}`);
       lines.push(`FPS okna 20x: ${met(latest?.fps)}`);
       lines.push(`Casy jednotlivych snimku (ms): ${met(latest?.frames)}`);
       lines.push(`Backspace 20x (ms): ${met(latest?.actualInput?.backspace)}`);
       lines.push(`Psani 20x (ms): ${met(latest?.actualInput?.typing)}`);
+      if(latest.realCoreTrace){
+        lines.push('','691BV SKUTECNY CORE V2 – zaznamenané klávesnicové příkazy v LOCAL Testy:');
+        for(const [key,entry] of Object.entries(latest.realCoreTrace)){
+          lines.push(`${key}: do dalsiho rAF callbacku ${met(entry?.nextRaf)} | historie ${met(entry?.history)} | render ${met(entry?.render)} | kopie ${met(entry?.snapshot)} | model ${met(entry?.model)} | modelovych bloku ${met(entry?.blocks)}`);
+        }
+        lines.push('Pozn.: příští rAF callback není přesná doba fyzického vykreslení snímku. Nejde o fyzický stisk Backspace v dlouhé běžné poznámce.');
+      }
       const names={
         'cards-render-100':'100 karet – render',
         'cards-reorder-100':'100 karet – preskladani',
