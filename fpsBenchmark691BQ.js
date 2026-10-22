@@ -3,10 +3,21 @@
    Real quick sync executes only after an explicit user click, sequentially. */
 (() => {
   'use strict';
-  const VERSION = '691BQ';
+  const VERSION = '691BR';
   const STORE_KEY = 'lubanoteLocalPerfBaselines691BQ';
   const REPEATS = 20;
   const WINDOW_MS = 800;
+  // Guided batch: manual interactions cannot be safely synthesized, and are never
+  // reported as 20 real actions unless Core V2 emits 20 action measurements.
+  const SUITE_ORDER = [
+    'idle', 'backspace', 'typing', 'editor-scroll', 'selection',
+    'todo-toggle', 'bullet-move', 'note-open', 'note-save',
+    'card-hold', 'card-drag', 'search', 'tags', 'planner', 'documents',
+    'images', 'navigation', 'sync-live', 'sync-quick'
+  ];
+  let suite = null;
+  let latestSuite = null;
+
   const ACTION_MODES = new Set(['backspace', 'typing']);
   const names = {
     backspace: 'Backspace (reálný)', typing: 'Psaní (reálné)',
@@ -20,12 +31,13 @@
   };
   let active = null;
   let latest = null;
-  let store = {version:1, baseline:{}, runs:[]};
+  let store = {version:1, baseline:{}, runs:[], suites:[]};
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (saved && saved.version === 1 && Array.isArray(saved.runs) && saved.baseline) {
-      store = { version:1, baseline:saved.baseline, runs:saved.runs.slice(-80) };
+      store = { version:1, baseline:saved.baseline, runs:saved.runs.slice(-80), suites:Array.isArray(saved.suites)?saved.suites.slice(-10):[] };
       latest = store.runs.at(-1) || null;
+      latestSuite = store.suites.at(-1) || null;
     }
   } catch (_error) {}
   const byId = id => document.getElementById(id);
@@ -65,11 +77,21 @@
     const p=byId('ln-fb-progress');if(p)p.value=count;
     const text=`${label(s.scenario)} · ${count}/${REPEATS}`;
     const st=byId('ln-fb-status');if(st)st.textContent=s.cancelled?'Přerušeno':text;
-    const h=hud();h.hidden=false;h.textContent=`BENCH ${count}/${REPEATS}`;
+    if(suite) {
+      hud().hidden=true;
+      refreshSuiteOverlay();
+    } else {
+      const h=hud();h.hidden=false;h.textContent=`BENCH ${count}/${REPEATS}`;
+    }
   }
   function switchButtons(running) {
     const start=byId('ln-fb-start');const stop=byId('ln-fb-stop');const select=byId('ln-fb-scenario');
-    if(start)start.disabled=running;if(stop)stop.disabled=!running;if(select)select.disabled=running;
+    const locked=running||Boolean(suite);
+    if(start)start.disabled=locked;
+    if(stop)stop.disabled=!running;
+    if(select)select.disabled=locked;
+    const all=byId('ln-fb-all');if(all)all.disabled=locked;
+    const picker=byId('ln-fb-picker-button');if(picker)picker.disabled=locked;
   }
   function frameLoop(s, timestamp) {
     if(active!==s || s.cancelled || document.hidden) return;
@@ -97,11 +119,17 @@
     s?.armObserver?.disconnect?.();
     if(s) {s.frameRequest=0;s.observer?.disconnect?.();}
   }
-  function stop() {
+  function stop(duvod = '') {
     const s=active;if(!s)return;
     s.cancelled=true;active=null;stopFrame(s);
-    hud().hidden=true;switchButtons(false);
-    const st=byId('ln-fb-status');if(st)st.textContent=`Zrušeno · ${s.samples.length}/${REPEATS}, neuloženo`;
+    hud().hidden=true;
+    if(suite && suite.phase==='running') {
+      suite.phase='waiting';
+      suite.message=duvod||`Opakuj nedokončený scénář (${s.samples.length}/${REPEATS}).`;
+      refreshSuiteOverlay();
+    }
+    switchButtons(false);
+    const st=byId('ln-fb-status');if(st)st.textContent=`Přerušeno · ${s.samples.length}/${REPEATS}, neuloženo`;
   }
   function summarizeFrames(gaps) {
     const clean=gaps.filter(x=>Number.isFinite(x)&&x>0);
@@ -177,8 +205,10 @@
       store.runs.push(r);store.runs=store.runs.slice(-80);latest=r;
       const saved=save();const st=byId('ln-fb-status');if(st)st.textContent=`Dokončeno ${REPEATS}/${REPEATS} · ${saved?'uloženo do localStorage':'POZOR: místní uložení selhalo'}`;
       render(r);
+      if(suite && suite.phase==='running') finishSuiteStep('PASS',r);
     } else {
       const st=byId('ln-fb-status');if(st)st.textContent=`Nedokončeno: ${s.samples.length}/${REPEATS} · neuloženo do baseline`;
+      if(suite && suite.phase==='running') finishSuiteStep('FAIL',null);
     }
   }
   function beginMonitor(s) {
@@ -205,8 +235,8 @@
     s.armObserver=new MutationObserver(arm);
     s.armObserver.observe(modal,{attributes:true,attributeFilter:['hidden']});
   }
-  function start(scenario) {
-    if(active || !isAllowed() || !names[scenario])return false;
+  function start(scenario, bySuite = false) {
+    if(active || !isAllowed() || !names[scenario] || (suite && !bySuite))return false;
     const s={scenario,scenarioMode:modeOf(scenario),samples:[],cancelled:false,lastFrame:null,frameGaps:[],frameRequest:0,windowStart:0,windowFrames:0,
       longTaskRecords:[],longTaskSupported:false,observer:null,armTimer:0,armObserver:null};
     if(document.hidden) return false;
@@ -222,7 +252,7 @@
   }
   async function runQuickSync(s) {
     const sync=window.LubaNoteSync?.spustRychle;
-    if(typeof sync!=='function' || !navigator.onLine){stop();const st=byId('ln-fb-status');if(st)st.textContent='Rychlý sync není dostupný nebo je zařízení offline.';return;}
+    if(typeof sync!=='function' || !navigator.onLine){stop('Rychlý sync není dostupný nebo je zařízení offline.');const st=byId('ln-fb-status');if(st)st.textContent='Rychlý sync není dostupný nebo je zařízení offline.';return;}
     for(let i=0;i<REPEATS;i++) {
       if(active!==s||s.cancelled||document.hidden||!isAllowed()) {if(active===s)stop();return;}
       const begin=performance.now();let ok=false;
@@ -230,7 +260,7 @@
       if(active!==s||s.cancelled)return;
       const durationMs=performance.now()-begin;
       s.samples.push({durationMs,ok});uiProgress(s);
-      if(!ok) {stop();const st=byId('ln-fb-status');if(st)st.textContent=`Sync nevrátil PASS (${i+1}/${REPEATS}). Série zastavena, baseline se neuložila.`;return;}
+      if(!ok) {stop(`Sync nevrátil PASS (${i+1}/${REPEATS}). Zkus znovu nebo přeskoč.`);const st=byId('ln-fb-status');if(st)st.textContent=`Sync nevrátil PASS (${i+1}/${REPEATS}). Série zastavena, baseline se neuložila.`;return;}
       if(i<REPEATS-1) await new Promise(resolve=>setTimeout(resolve,200));
     }
     if(active===s)requestAnimationFrame(()=>complete(s));
@@ -245,7 +275,7 @@
     if(!Number.isFinite(m.totalMs)||m.totalMs<0)return;
     if(!s.frameRequest)beginMonitor(s);
     s.samples.push({durationMs:m.totalMs,snapshotMs:m.snapshotMs,modelMs:m.modelMs,historyMs:m.historyMs,renderMs:m.renderMs,extraMs:m.extraMs,blockCount:m.blockCount});
-    if(s.samples.length%5===0)uiProgress(s);
+    uiProgress(s); // Outside timed Core operation; show 1/20 ... 20/20 live.
     if(s.samples.length>=REPEATS) requestAnimationFrame(()=>complete(s));
   }
   document.addEventListener('visibilitychange',()=>{
@@ -253,6 +283,192 @@
       const s=active;stop();const st=byId('ln-fb-status');if(st)st.textContent=`Přerušeno při přechodu na pozadí (${s.samples.length}/${REPEATS}) – neuloženo.`;
     }
   });
+  // 691BR – modeless guide. The benchmark remains visible when leaving the
+  // Dashboard. No data editing or synthetic gestures are hidden in this flow.
+  function suiteGuide(scenario) {
+    const extras={
+      'card-hold':'Na kartách opakuj dlouhé stisky. 20 FPS oken, nikoliv 20 potvrzených long-pressů.',
+      'card-drag':'Přesouvej několik karet a nech je přeskládat. 20 FPS oken.',
+      'note-open':'Otevírej poznámky, zavírej je a opakuj. 20 FPS oken.',
+      'note-save':'V editoru proveď změnu a zavírej/ukládej poznámku. 20 FPS oken.',
+      'todo-toggle':'Přepínej dokončení TODO. 20 FPS oken, nikoliv počet kliknutí.',
+      'bullet-move':'V editoru přesouvej Bullet/ToDo včetně podstromů. 20 FPS oken.',
+      selection:'V editoru vybírej text a posouvej červené úchyty. 20 FPS oken.',
+      'editor-scroll':'Otevři dlouhou poznámku a opakovaně roluj. 20 FPS oken.',
+      planner:'Přepínej Planner a připomínky. 20 FPS oken.',
+      documents:'Otevírej dokumenty a jejich přehledy. 20 FPS oken.',
+      images:'Otevírej fotografie a fullscreen. 20 FPS oken.',
+      search:'Vyhledávej a měň dotazy. 20 FPS oken.',
+      tags:'Přepínej štítky a filtry. 20 FPS oken.',
+      navigation:'Přepínej sekce aplikace. 20 FPS oken.',
+      'sync-live':'Používej aplikaci během běžného syncu. Tento test sám sync nevyvolává; 20 FPS oken.',
+      'sync-quick':'20 skutečných postupných rychlých síťových synců. Pouze na tento výslovně spuštěný krok.'
+    };
+    return extras[scenario]||guidance(scenario);
+  }
+  function suiteOverlay() {
+    let el=byId('ln-fb-suite-guide-691BR');
+    if(el)return el;
+    el=document.createElement('section');
+    el.id='ln-fb-suite-guide-691BR';el.hidden=true;
+    el.setAttribute('aria-label','Průvodce výkonovým benchmarkem');
+    el.innerHTML=`<div class="ln-fb-suite-head"><strong id="ln-fb-suite-head">Sada 20×</strong><span id="ln-fb-suite-count"></span></div>
+      <div id="ln-fb-suite-instruction" class="ln-fb-suite-instruction"></div>
+      <div class="ln-fb-suite-actions">
+        <button type="button" data-suite-action="begin">▶ Měřit nyní</button>
+        <button type="button" data-suite-action="skip">Přeskočit</button>
+        <button type="button" data-suite-action="cancel">Ukončit sadu</button>
+      </div>`;
+    el.addEventListener('click',event=>{
+      const action=event.target.closest('[data-suite-action]')?.dataset.suiteAction;
+      if(action==='begin')beginSuiteStep();
+      else if(action==='skip')skipSuiteStep();
+      else if(action==='cancel')endSuite('PŘERUŠENO');
+    });
+    document.body.append(el);
+    return el;
+  }
+  function suiteStatus() {
+    const box=byId('ln-fb-suite-summary-691BR');
+    if(!box)return;
+    if(suite) {
+      box.textContent=`Celá sada · ${suite.index}/${SUITE_ORDER.length} dokončených/přeskočených · právě ${label(SUITE_ORDER[suite.index])}`;
+    } else if(latestSuite) {
+      const ok=latestSuite.steps.filter(x=>x.status==='PASS').length;
+      box.textContent=`Poslední sada: ${latestSuite.status} · ${ok}/${SUITE_ORDER.length} hotových · ${latestSuite.date}`;
+    } else box.textContent='Zatím žádná celá sada. První kompletní scénář vytvoří baseline.';
+  }
+  function refreshSuiteOverlay() {
+    const box=suiteOverlay();
+    if(!suite){box.hidden=true;suiteStatus();return;}
+    const current=SUITE_ORDER[suite.index];
+    const s=active;
+    box.hidden=false;
+    box.classList.toggle('ln-fb-suite-running',suite.phase==='running');
+    byId('ln-fb-suite-head').textContent=`${suite.index+1}/${SUITE_ORDER.length} · ${label(current)}`;
+    byId('ln-fb-suite-count').textContent=(suite.phase==='running'?`${Math.min(20,s?.samples.length||0)}/20`:'PŘIPRAVENO');
+    byId('ln-fb-suite-instruction').textContent=suite.phase==='running'
+      ? (modeOf(current)==='fps-windows'?'Měřím 20 FPS oken · pokračuj v uvedené činnosti.':
+         current==='sync-quick'?'Probíhá 20 skutečných rychlých synců…':'Proveď 20 skutečných vstupů v editoru.')
+      : `${suite.message?suite.message+' · ':''}${suiteGuide(current)}`;
+    const begin=box.querySelector('[data-suite-action="begin"]');
+    const skip=box.querySelector('[data-suite-action="skip"]');
+    if(begin)begin.hidden=suite.phase==='running';
+    if(skip)skip.hidden=suite.phase==='running';
+    if(begin)begin.textContent='▶ Měřit nyní';
+    suiteStatus();
+    switchButtons(Boolean(active));
+  }
+  function beginSuite() {
+    if(suite||active||!isAllowed())return false;
+    suite={startedAt:new Date().toISOString(),index:0,steps:[],phase:'waiting',message:''};
+    refreshSuiteOverlay();return true;
+  }
+  function beginSuiteStep() {
+    if(!suite||suite.phase!=='waiting'||active||!isAllowed())return;
+    const scenario=SUITE_ORDER[suite.index];
+    suite.message='';suite.phase='running';
+    // Dashboard is not the tested surface. Close it with its existing handler.
+    const modal=byId('adminDashboardModal');
+    if(modal&&!modal.hidden)byId('closeAdminDashboardButton')?.click();
+    if(!start(scenario,true)) {
+      suite.phase='waiting';suite.message='Spuštění se nepodařilo. Zkus to znovu.';
+    }
+    refreshSuiteOverlay();
+  }
+  function finishSuiteStep(status,run) {
+    if(!suite)return;
+    const scenario=SUITE_ORDER[suite.index];
+    suite.steps.push({scenario,status,run:run?{
+      date:run.date,mode:run.mode,count:run.count,metrics:run.metrics
+    }:null});
+    suite.index++;
+    suite.phase='waiting';suite.message='';
+    if(suite.index>=SUITE_ORDER.length)endSuite('DOKONČENO');
+    else refreshSuiteOverlay();
+  }
+  function skipSuiteStep() {
+    if(!suite||!isAllowed())return;
+    if(active)stop();
+    finishSuiteStep('PŘESKOČENO',null);
+  }
+  function endSuite(status) {
+    if(!suite)return;
+    const finished=suite;
+    suite=null;
+    if(active)stop();
+    const summary={date:new Date().toISOString(),startedAt:finished.startedAt,status,steps:finished.steps};
+    store.suites.push(summary);store.suites=store.suites.slice(-10);
+    latestSuite=summary;
+    const saved=save();
+    hud().hidden=true;refreshSuiteOverlay();switchButtons(false);
+    const el=byId('ln-fb-status');
+    if(el)el.textContent=`Sada ${status.toLowerCase()} · ${finished.steps.filter(x=>x.status==='PASS').length}/${SUITE_ORDER.length} PASS · ${saved?'uloženo':'uložení selhalo'}`;
+    render(latest);
+  }
+  function suiteReport() {
+    const item=latestSuite;
+    if(!item)return 'Ještě neproběhla žádná sada „Spustit vše“. ';
+    const lines=[`LUBANOTE / PERFORMANCE BATCH ${VERSION}`,`Datum: ${item.date}`,`Stav: ${item.status}`,`Začátek: ${item.startedAt}`,`Scénáře: ${item.steps.length}/${SUITE_ORDER.length}`];
+    for(const step of item.steps){
+      const f=step.run?.metrics?.frames;
+      const op=step.run?.metrics?.operationMs;
+      const w=step.run?.metrics?.fpsWindows;
+      lines.push(`${step.status} | ${label(step.scenario)} | režim=${step.run?.mode||'—'} | vzorků=${step.run?.count||0}/20 | FPS=${fmt(w?.avg??f?.avgFps)} | operace=${fmt(op?.avg)} ms | frame p95=${fmt(f?.p95FrameMs)} ms`);
+    }
+    lines.push('20 FPS oken = časové vzorky, nikoli 20 provedení funkce. Jen psaní, Backspace a quick sync mají 20 reálných operací.');
+    return lines.join('\n');
+  }
+  async function copyText(text) {
+    try {await navigator.clipboard.writeText(text);return true;}
+    catch(_e){
+      try {const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();document.execCommand('copy');area.remove();return true;}
+      catch(_e2){return false;}
+    }
+  }
+  // Own LubaNote picker: never opens Android's native SELECT UI.
+  function initPicker(select) {
+    const trigger=byId('ln-fb-picker-button');
+    const popup=byId('ln-fb-picker-popup');
+    if(!select||!trigger||!popup)return () => {};
+    const hide=()=>{popup.hidden=true;trigger.setAttribute('aria-expanded','false');};
+    const update=()=>{
+      trigger.querySelector('.ln-fb-picker-value').textContent=select.selectedOptions[0]?.textContent||'Vyber scénář';
+      popup.querySelectorAll('[data-scenario]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.scenario===select.value)));
+    };
+    for(const group of select.querySelectorAll('optgroup')){
+      const groupLabel=document.createElement('div');groupLabel.className='ln-fb-picker-group';groupLabel.textContent=group.label;popup.append(groupLabel);
+      for(const option of group.querySelectorAll('option')){
+        const b=document.createElement('button');b.type='button';b.className='ln-fb-picker-option';
+        b.dataset.scenario=option.value;b.setAttribute('role','option');b.textContent=option.textContent;
+        b.addEventListener('click',()=>{if(select.disabled)return;select.value=option.value;hide();update();select.dispatchEvent(new Event('change',{bubbles:true}));trigger.focus();});
+        popup.append(b);
+      }
+    }
+    function position() {
+      const r=trigger.getBoundingClientRect();
+      const below=Math.max(0,innerHeight-r.bottom-10),above=Math.max(0,r.top-10);
+      const up=below<210 && above>below;
+      popup.style.position='fixed';
+      popup.style.left=`${Math.round(Math.max(6,r.left))}px`;
+      popup.style.width=`${Math.round(Math.min(r.width,innerWidth-12))}px`;
+      popup.style.maxHeight=`${Math.round(Math.max(110,Math.min(340,up?above:below)))}px`;
+      popup.style.top=up?'auto':`${Math.round(r.bottom+3)}px`;
+      popup.style.bottom=up?`${Math.round(innerHeight-r.top+3)}px`:'auto';
+    }
+    trigger.addEventListener('click',()=>{if(trigger.disabled)return;
+      if(!popup.hidden){hide();return;}
+      position();popup.hidden=false;trigger.setAttribute('aria-expanded','true');update();
+    });
+    trigger.addEventListener('keydown',e=>{if(e.key==='ArrowDown'||e.key==='Enter'&&popup.hidden){e.preventDefault();trigger.click();}});
+    popup.addEventListener('keydown',e=>{if(e.key==='Escape'){hide();trigger.focus();}});
+    document.addEventListener('pointerdown',e=>{if(!popup.hidden&&!popup.contains(e.target)&&!trigger.contains(e.target))hide();},true);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!popup.hidden)hide();});
+    window.addEventListener('resize',()=>{if(!popup.hidden)position();});
+    select.addEventListener('change',update);
+    update();return hide;
+  }
+
   function init() {
     const panel=byId('ln-fps-benchmark-691BQ');if(!panel)return;
     const style=document.createElement('style');style.id='ln-fps-benchmark-style-691BQ';
@@ -261,8 +477,18 @@
     #ln-fps-benchmark-691BQ .ln-fb-heading {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
     #ln-fps-benchmark-691BQ p {margin:2px 0;font-size:12px;line-height:1.45;opacity:.85}
     #ln-fps-benchmark-691BQ label {font-size:13px;font-weight:600}
-    #ln-fps-benchmark-691BQ select {color:inherit;background:var(--color-surface, #333);border:1px solid var(--color-border,#666);border-radius:9px;padding:10px;min-width:0;width:100%;font-size:14px}
-    #ln-fps-benchmark-691BQ option,#ln-fps-benchmark-691BQ optgroup {color:initial;background:white}
+    #ln-fps-benchmark-691BQ #ln-fb-scenario {display:none!important}
+    #ln-fps-benchmark-691BQ .ln-fb-picker {position:relative;width:100%}
+    #ln-fps-benchmark-691BQ #ln-fb-picker-button {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:11px 13px;text-align:left;border:1px solid var(--color-border,#666);border-radius:13px;background:var(--color-surface,#30343a);font-size:13px;min-height:46px}
+    #ln-fps-benchmark-691BQ #ln-fb-picker-button[aria-expanded="true"] {outline:2px solid var(--color-accent,#31aa7a)}
+    #ln-fps-benchmark-691BQ .ln-fb-picker-value {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #ln-fps-benchmark-691BQ .ln-fb-picker-arrow {color:var(--color-accent,#31aa7a);font-size:19px}
+    #ln-fb-picker-popup {z-index:2147483001;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:7px;background:var(--color-surface,#23262a);border:1px solid var(--color-border,#707070);box-shadow:0 12px 38px rgba(0,0,0,.48);border-radius:14px;color:var(--color-text,#f0f0f0)}
+    #ln-fb-picker-popup[hidden] {display:none!important}
+    #ln-fb-picker-popup .ln-fb-picker-group {padding:11px 9px 4px;font-size:10px;letter-spacing:.04em;opacity:.65;font-weight:750}
+    #ln-fb-picker-popup .ln-fb-picker-option {display:block;width:100%;text-align:left;padding:12px 11px;border:0;border-radius:10px;color:inherit;background:transparent;font-size:13px;line-height:1.3}
+    #ln-fb-picker-popup .ln-fb-picker-option[aria-selected="true"] {background:color-mix(in srgb,var(--color-accent,#31aa7a) 19%,transparent);outline:1px solid var(--color-accent,#31aa7a)}
+    #ln-fb-picker-popup .ln-fb-picker-option:active {background:color-mix(in srgb,var(--color-accent,#31aa7a) 32%,transparent)}
     #ln-fps-benchmark-691BQ .ln-fb-buttons {display:flex;flex-wrap:wrap;gap:7px}
     #ln-fps-benchmark-691BQ button {border-radius:9px;border:1px solid var(--color-border, #777);background:var(--color-surface, #333);color:inherit;padding:9px 10px;font-size:12px}
     #ln-fps-benchmark-691BQ button:first-child {font-weight:700}
@@ -272,14 +498,36 @@
     #ln-fps-benchmark-691BQ progress {accent-color:var(--color-accent,#26b46b)}
     #ln-fb-hud-691BQ {position:fixed;top:calc(env(safe-area-inset-top,0px) + 66px);right:9px;z-index:2147482000;pointer-events:none;background:rgba(10,13,17,.81);color:#c9ffe0;border:1px solid #48856a;border-radius:10px;padding:6px 8px;font:700 12px/1.2 monospace;box-shadow:0 3px 10px rgba(0,0,0,.25)}
     #ln-fb-hud-691BQ[hidden] {display:none!important}
+    #ln-fps-benchmark-691BQ .ln-fb-all {background:var(--color-accent,#187d60)!important;color:#fff!important;border-color:transparent!important;font-weight:800;font-size:13px}
+    #ln-fps-benchmark-691BQ #ln-fb-suite-summary-691BR {padding:8px 10px;border:1px solid var(--color-border,#666);border-radius:11px;font-size:11px;line-height:1.4}
+    #ln-fb-suite-guide-691BR {position:fixed;top:calc(env(safe-area-inset-top,0px) + 70px);right:7px;max-width:min(290px,calc(100vw - 18px));width:290px;z-index:2147483000;padding:11px 12px;box-sizing:border-box;border-radius:15px;border:1px solid var(--color-accent,#31aa7a);color:var(--color-text,#eee);background:var(--color-surface,#232b30);box-shadow:0 9px 28px rgba(0,0,0,.48);font-size:12px}
+    #ln-fb-suite-guide-691BR[hidden] {display:none!important}
+    #ln-fb-suite-guide-691BR .ln-fb-suite-head {display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:12px}
+    #ln-fb-suite-guide-691BR .ln-fb-suite-head span {font-size:11px;opacity:.8;white-space:nowrap}
+    #ln-fb-suite-guide-691BR .ln-fb-suite-instruction {line-height:1.4;margin:8px 0;font-size:11px;max-height:145px;overflow:auto}
+    #ln-fb-suite-guide-691BR .ln-fb-suite-actions {display:flex;gap:5px;flex-wrap:wrap}
+    #ln-fb-suite-guide-691BR button {padding:8px;border:1px solid var(--color-border,#666);color:inherit;background:transparent;border-radius:10px;font-size:11px}
+    #ln-fb-suite-guide-691BR button[data-suite-action="begin"] {background:var(--color-accent,#187d60);color:white;border-color:transparent;font-weight:700}
+    #ln-fb-suite-guide-691BR.ln-fb-suite-running {width:auto;max-width:270px;padding:7px 9px}
+    #ln-fb-suite-guide-691BR.ln-fb-suite-running .ln-fb-suite-instruction {display:none}
+    #ln-fb-suite-guide-691BR.ln-fb-suite-running .ln-fb-suite-actions {margin-top:5px}
     `;
     document.head.append(style);
     const scenario=byId('ln-fb-scenario');
+    initPicker(scenario);
+    suiteOverlay();suiteStatus();
     const refresh=()=>{const val=scenario?.value||'backspace';const g=byId('ln-fb-guidance');if(g)g.textContent=guidance(val);
       const found=store.runs.filter(x=>x.scenario===val).at(-1);render(found||latest);};
     scenario?.addEventListener('change',refresh);refresh();
     byId('ln-fb-start')?.addEventListener('click',()=>{if(!isAllowed()){alert('Benchmark je určen pouze pro ověřeného admina.');return;}start(scenario.value);});
-    byId('ln-fb-stop')?.addEventListener('click',stop);
+    byId('ln-fb-all')?.addEventListener('click',()=>{if(!beginSuite()){
+      const st=byId('ln-fb-status');if(st)st.textContent='Sadu lze spustit pouze v klidu a s Admin oprávněním.';
+    }});
+    byId('ln-fb-stop')?.addEventListener('click',()=>stop());
+    byId('ln-fb-copy-suite')?.addEventListener('click',async()=>{
+      const ok=await copyText(suiteReport());
+      const st=byId('ln-fb-status');if(st)st.textContent=ok?'Souhrn celé sady zkopírován.':'Kopírování se nepodařilo.';
+    });
     byId('ln-fb-copy')?.addEventListener('click',async()=>{
       const r=store.runs.filter(x=>x.scenario===scenario.value).at(-1)||latest;
       const report=reportRun(r);
@@ -292,6 +540,6 @@
       store.baseline[scenario.value]=r;save();render(r);const st=byId('ln-fb-status');if(st)st.textContent='Poslední dokončený běh je nová baseline.';
     });
   }
-  window.LubaNoteFpsBenchmark691BQ={meriAkci,zaznamAkce,stop,verze:VERSION};
+  window.LubaNoteFpsBenchmark691BQ={meriAkci,zaznamAkce,stop,verze:VERSION,spustVse:beginSuite};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();

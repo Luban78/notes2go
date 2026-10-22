@@ -1936,10 +1936,14 @@
         </div>
         <!-- 691BQ – opakovatelné FPS/perf baseline, výsledky jen lokálně. -->
         <section class="ln-fb-panel" id="ln-fps-benchmark-691BQ" aria-labelledby="ln-fb-title">
-          <div class="ln-fb-heading"><strong id="ln-fb-title">Výkonový benchmark · 20×</strong><small>691BQ · uložené baseline tohoto zařízení</small></div>
+          <div class="ln-fb-heading"><strong id="ln-fb-title">Výkonový benchmark · 20×</strong><small>691BR · uložené baseline tohoto zařízení</small></div>
           <p>Reálné akce měříme odděleně od časových FPS oken. Každý scénář má 20 vzorků; nic se neposílá na server kromě výslovně spuštěného rychlého syncu.</p>
-          <label for="ln-fb-scenario">Co změříme</label>
-          <select id="ln-fb-scenario">
+          <label for="ln-fb-picker-button">Co změříme</label>
+          <div class="ln-fb-picker">
+            <button type="button" id="ln-fb-picker-button" aria-haspopup="listbox" aria-controls="ln-fb-picker-popup" aria-expanded="false"><span class="ln-fb-picker-value">Backspace · 20 skutečných smazání</span><span class="ln-fb-picker-arrow" aria-hidden="true">⌄</span></button>
+            <div id="ln-fb-picker-popup" role="listbox" aria-label="Vyber měřený scénář" hidden></div>
+          </div>
+          <select id="ln-fb-scenario" hidden aria-hidden="true" tabindex="-1">
             <optgroup label="20 skutečných operací">
               <option value="backspace">Backspace · 20 skutečných smazání</option>
               <option value="typing">Psaní · 20 skutečných znaků</option>
@@ -1966,15 +1970,20 @@
           </select>
           <p id="ln-fb-guidance" class="ln-fb-hint"></p>
           <div class="ln-fb-buttons">
-            <button id="ln-fb-start" type="button">▶ Spustit 20×</button>
+            <button id="ln-fb-all" class="ln-fb-all" type="button">▶ Spustit vše (19 scénářů)</button>
+            <button id="ln-fb-start" type="button">▶ Jen vybraný 20×</button>
             <button id="ln-fb-stop" type="button" disabled>■ Zrušit</button>
             <button id="ln-fb-copy" type="button">Kopírovat report</button>
           </div>
           <div id="ln-fb-status" role="status" aria-live="polite">Připraveno</div>
           <progress id="ln-fb-progress" value="0" max="20" style="width:100%"></progress>
           <div id="ln-fb-result" class="ln-fb-result">Zatím žádné měření.</div>
-          <div class="ln-fb-buttons"><button id="ln-fb-baseline" type="button">Nastavit baseline z posledního běhu</button></div>
-          <p class="ln-fb-hint">Původní baseline se ukládá automaticky při prvním kompletním měření scénáře. Další běhy se s ní porovnají. Bez obsahu poznámek.</p>
+          <div id="ln-fb-suite-summary-691BR">Zatím žádná kompletní sada.</div>
+          <div class="ln-fb-buttons">
+            <button id="ln-fb-copy-suite" type="button">Kopírovat celou sadu</button>
+            <button id="ln-fb-baseline" type="button">Nastavit baseline z posledního běhu</button>
+          </div>
+          <p class="ln-fb-hint">„Spustit vše“ tě provede všemi 19 scénáři; další krok potvrzuješ, až jsi na správné obrazovce. Interaktivní testy jen měří reálné používání (20 FPS oken), nenapodobují uživatele. Backspace, psaní a rychlý sync zachycují 20 skutečných akcí. První kompletní běh uloží baseline. Bez obsahu poznámek.</p>
         </section>
         <div class="adminOwnSelectionPalette" aria-labelledby="adminOwnSelectionPaletteTitle">
           <strong id="adminOwnSelectionPaletteTitle">Vlastní výběr textu a úchyty</strong>
@@ -2985,7 +2994,7 @@
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <script src="adminDashboard.js?v=683AS-own-selection-theme"></script>
-  <script src="fpsBenchmark691BQ.js?v=691BQ-real-20x-performance"></script>
+  <script src="fpsBenchmark691BQ.js?v=691BR-batch-own-picker"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
