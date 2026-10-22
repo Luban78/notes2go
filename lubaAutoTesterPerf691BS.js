@@ -307,6 +307,74 @@
   ];
   let quickRunning=false,quickRecent=null;
   function quickLoad(){try{return JSON.parse(localStorage.getItem(QUICK_KEY)||'null');}catch(_){return null;}}
+  /* 691CF: an evidence-based, synthetic-only index. Baseline uses THREE
+     completed, consistent 691CE runs on the same build, viewport and engine.
+     Historical invalid 691BZ/691CB points are NEVER reused. The baseline is
+     immutable once created and survives the rolling 20-run history limit. */
+  const QUICK_INDEX_VERSION='691CF-synthetic-index-v1';
+  const QUICK_IDS=QUICK_ITEMS.map(item=>item[0]);
+  const quickMedian=a=>percentile(a,.5);
+  function quickSignature(r){
+    return r&&[r.method,r.viewport,r.environment].join('|');
+  }
+  function quickValid(r){
+    if(r?.method!=='691CE-synthetic-only-v1'||r.stable!==true||!r.build||
+       !Array.isArray(r.measurements)||r.measurements.length!==QUICK_IDS.length)return false;
+    const byId=new Map(r.measurements.map(x=>[x.id,x]));
+    return QUICK_IDS.every(id=>{
+      const item=byId.get(id);
+      return item && Number(item.medianMs)>0 && Number.isFinite(item.medianMs) &&
+        item.stable===true && Number.isFinite(item.variationPercent) && item.variationPercent<=20;
+    });
+  }
+  function quickMs(r,id){return r.measurements.find(x=>x.id===id).medianMs;}
+  function quickAcrossSpread(group,id){
+    const values=group.map(r=>quickMs(r,id));
+    return 100*(Math.max(...values)/Math.min(...values)-1);
+  }
+  function quickCreateBaseline(history){
+    const valid=history.filter(quickValid);
+    for(let i=0;i+2<valid.length;i++){
+      const group=valid.slice(i,i+3);
+      if(!group.every(r=>quickSignature(r)===quickSignature(group[0])&&r.build===group[0].build))continue;
+      if(QUICK_IDS.some(id=>quickAcrossSpread(group,id)>20))continue;
+      return {version:QUICK_INDEX_VERSION,build:group[0].build,
+        signature:quickSignature(group[0]),date:group[2].date,
+        reference:Object.fromEntries(QUICK_IDS.map(id=>[id,num(quickMedian(group.map(r=>quickMs(r,id))))]))};
+    }
+    return null;
+  }
+  function quickState(){
+    const saved=quickLoad()||{v:1,runs:[]};
+    const history=Array.isArray(saved.runs)?saved.runs:[];
+    let base=saved.quickIndexBaseline?.version===QUICK_INDEX_VERSION ? saved.quickIndexBaseline:null;
+    if(!base){
+      base=quickCreateBaseline(history);
+      if(base){
+        saved.quickIndexBaseline=base;
+        try{localStorage.setItem(QUICK_KEY,JSON.stringify(saved));}catch(_error){}
+      }
+    }
+    return {saved,history,base};
+  }
+  function quickScore(run=quickLast()){
+    const {history,base}=quickState();
+    if(!run)return {value:null,reason:'Zatím žádné rychlé měření.'};
+    if(!quickValid(run))return {value:null,reason:'Nekompletní nebo nestabilní série (více než 20 %).'};
+    if(!base)return {value:null,reason:'Pro referenci jsou potřeba 3 stabilní běhy stejného buildu.'};
+    if(quickSignature(run)!==base.signature)return {value:null,reason:'Jiné rozlišení/metoda/prostředí než reference.'};
+    const group=history.filter(r=>quickValid(r)&&quickSignature(r)===base.signature&&r.build===run.build).slice(-3);
+    if(!group.length)return {value:null,reason:'Nelze najít srovnatelné výsledky.'};
+    const spread=Object.fromEntries(QUICK_IDS.map(id=>[id,num(quickAcrossSpread(group,id))]));
+    if(QUICK_IDS.some(id=>spread[id]>20))return {value:null,reason:'Opakování mezi běhy kolísá o více než 20 %; skóre nehodnotíme.',runs:group.length};
+    const medians=Object.fromEntries(QUICK_IDS.map(id=>[id,quickMedian(group.map(r=>quickMs(r,id)))]));
+    const ratios=QUICK_IDS.map(id=>Number(base.reference[id])/medians[id]);
+    if(ratios.some(n=>!Number.isFinite(n)||n<=0))return {value:null,reason:'Neplatné referenční hodnoty.'};
+    const value=Math.round(1000*Math.exp(ratios.reduce((acc,v)=>acc+Math.log(v),0)/ratios.length));
+    return {value,delta:Math.round((value/1000-1)*1000)/10,
+      runs:group.length,confirmed:group.length===3,referenceBuild:base.build,
+      build:run.build,referenceDate:base.date,spread};
+  }
   function quickMeasure(type,sandbox){return type==='deep'?measureDeepDelete(600,sandbox).total:measureOne(type,sandbox);}
   async function quickRun(alive=()=>true,progress=()=>{}){
     if(quickRunning||current||document.hidden||window.LubaNoteAdminTools?.isAllowed?.()!==true)
@@ -342,11 +410,13 @@
         build:String(window.LUBANOTE_VERSION||'neuveden'),viewport:`${innerWidth}x${innerHeight}`,
         environment:navigator.userAgent.match(/Chrome\/\d+/)?.[0]||'WebView',
         stable:measurements.every(x=>x.stable),measurements};
-      const prior=quickLoad();
-      const history=Array.isArray(prior?.runs)?prior.runs.slice(-19):[];
+      const prior=quickLoad()||{v:1,runs:[]};
+      const history=Array.isArray(prior.runs)?prior.runs.slice(-19):[];
       history.push(run);
+      const baseline=prior.quickIndexBaseline?.version===QUICK_INDEX_VERSION
+        ? prior.quickIndexBaseline : quickCreateBaseline(history);
       let saved=false;
-      try {localStorage.setItem(QUICK_KEY,JSON.stringify({v:1,runs:history}));saved=true;}catch(_){}
+      try {localStorage.setItem(QUICK_KEY,JSON.stringify({v:1,runs:history,quickIndexBaseline:baseline||null}));saved=true;}catch(_){}
       quickRecent=run;
       const rows=measurements.map(item=>metricRow('quick-'+item.id,item.label,
         'PERF_691CE_SYNTHETIC','AUDIT',item.medianMs,
@@ -359,12 +429,15 @@
   function quickReport(){
     const run=quickLast();
     if(!run)return '691CE: Samostatný rychlý benchmark ještě nebyl spuštěn.';
-    const history=quickLoad()?.runs||[];
-    const lines=[`LUBANOTE RYCHLY VYKON / 691CE`,
+    const history=quickState().history;
+    const score=quickScore(run);
+    const lines=[`LUBANOTE RYCHLY VYKON / 691CF`,
       `Build ${run.build} | ${run.date} | ${run.viewport} | ${run.environment}`,
       `Metoda: 5 POUZE SYNTETICKYCH oblasti, kazda 3 serie x 10 opakovani.`,
       `Kvalita mereni: ${run.stable?'rozptyl serii do 20 %':'NESTABILNI – nektere serie kolisaji nad 20 %'}`,
-      `BODOVE SKORE: NEPLATNE / POZASTAVENO. Bez srovnani s 691BZ/691CB.`,
+      `SYNTETICKY VYKONOVY INDEX: ${score.value===null?'NEDOSTUPNY – '+score.reason:`${score.value} bodu | zmena ${score.delta>0?'+':''}${score.delta}% | ${score.confirmed?'POTVRZENO':'PRED_BEZNE (1–2 behy)'} | behu v porovnani ${score.runs}/3`}`,
+      `Reference: ${score.referenceBuild||'-'} | 3 stabilni behy | prvni reference = 1000 bodu; drivejsi 691BZ/691CB body NEPLATNE.`,
+      `DULEZITE: Index je jen 5 syntetickych oblasti. NEMERI skutecny Backspace, Android FPS ani plynulost aplikace.`,
       `Ulozenych rychlych behu: ${history.length}`];
     for(const row of run.measurements){
       lines.push(`${row.label}: median ${row.medianMs} ms | serie ${row.roundMedians.join(' / ')} ms | rozptyl ${row.variationPercent}% | ${row.stable?'OK':'NESTABILNI'}`);
@@ -384,5 +457,5 @@
       last=null;return true;
     }catch(_error){return false;}
   }
-  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last,clearSaved,quickRun,quickLast,quickReport});
+  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last,clearSaved,quickRun,quickLast,quickReport,quickScore});
 })();

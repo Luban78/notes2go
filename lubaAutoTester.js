@@ -22,7 +22,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691CE</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691CF</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -324,6 +324,7 @@
     screen.hidden=false;document.body.classList.add('lat-open');
     restoreTesterScroll();
     zajistiTesterVDocku();
+    render(); // 691CF: read-only saved quick index from the 3 existing runs
   }
   function collapseExpanded(){
     if(!screen||!expanded)return false;
@@ -714,17 +715,39 @@
       scoreNode.style.cssText='margin:10px 0 15px;padding:14px 16px;border:1px solid #4e8165;border-radius:16px;background:#192c24;color:#e9ffef;line-height:1.4';
       summary.insertAdjacentElement('afterend',scoreNode);
     }
-    scoreNode.hidden=running||!['all','performance'].includes(activeSuite)||results.length===0;
+    const savedSyntheticIndex=window.LubaNoteAutoTesterPerf691BS?.quickScore?.();
+    scoreNode.hidden=running||!['all','performance'].includes(activeSuite)||
+      (results.length===0 && !Number.isFinite(savedSyntheticIndex?.value));
     if(!scoreNode.hidden){
-      // 691CE: invalid legacy scoring MUST NOT be displayed as numerical points.
-      scoreNode.innerHTML='<div style="font-size:.79rem;letter-spacing:.04em;opacity:.85">LUBANOTE · VÝKONOVÉ MĚŘENÍ</div>'+
-        '<div style="font-size:1.3rem;font-weight:800;margin-top:6px">Bodové skóre pozastaveno</div>'+
-        '<div style="font-size:.84rem;opacity:.9;margin-top:7px">Původní hodnoty 1000, 856 a 1649 nejsou průkazně srovnatelné. Skládaly se z proměnlivého AutoTesteru, rozdílné testovací poznámky a syntetických dat. Historii zachováváme, ale body nevydáváme za výkon aplikace.</div>';
-      if(activeSuite==='performance'){
+      // 691CF: quick index is computed ONLY from the five stable synthetic
+      // measures; obsolete 691BZ/691CB score is invalid even in Spustit vse.
+      scoreNode.innerHTML='<div style="font-size:.79rem;letter-spacing:.04em;opacity:.85">LUBANOTE · VÝKONOVÉ MĚŘENÍ</div>';
+      if(activeSuite==='performance'||results.length===0){
+        const index=savedSyntheticIndex;
+        const headline=document.createElement('div');
+        headline.style.cssText='font-size:2.5rem;font-weight:800;font-variant-numeric:tabular-nums;margin-top:5px';
+        headline.textContent=Number.isFinite(index?.value)?`${index.value} bodů`:'Skóre zatím nedostupné';
+        scoreNode.appendChild(headline);
+        const detail=document.createElement('div');
+        detail.style.cssText='font-size:.9rem;line-height:1.5;margin-top:4px';
+        detail.textContent=Number.isFinite(index?.value)
+          ? `Proti referenci 1000: ${index.delta>0?'+':''}${index.delta} % · ${index.confirmed?'potvrzený medián 3 běhů':'orientační – zatím '+index.runs+'/3 běhů'} · reference build ${index.referenceBuild}`
+          : (index?.reason||'Je nutné dokončit tři srovnatelné rychlé benchmarky.');
+        scoreNode.appendChild(detail);
+        const warning=document.createElement('div');
+        warning.style.cssText='font-size:.75rem;opacity:.78;line-height:1.5;margin-top:8px';
+        warning.textContent='POUZE SYNTETICKÝ INDEX z pěti oblastí (DOM/hledání/layout). Není to FPS ani měření skutečného Backspace. Staré body 691BZ/691CB jsou neplatné.';
+        scoreNode.appendChild(warning);
+      }else{
+        const message=document.createElement('div');
+        message.style.cssText='font-size:.9rem;line-height:1.5;margin-top:8px';
+        message.textContent='Původní bodování Spustit vše je pozastavené. Samostatný srovnatelný index zobrazí tlačítko Rychlý výkon.';
+        scoreNode.appendChild(message);
+      }      if(activeSuite==='performance'){
         const q=window.LubaNoteAutoTesterPerf691BS?.quickLast?.();
         const p=document.createElement('p');
         p.style.cssText='font-size:.82rem;line-height:1.5;margin:12px 0 0';
-        p.textContent=q ? `Rychlé izolované měření ${q.build}: ${q.stable?'rozptyl všech pěti oblastí do 20 %':'nejméně jedna oblast kolísá nad 20 %'}; konkrétní časy jsou v Kopírovat FPS report. Není to měření skutečného Backspace.` : 'Rychlé měření zatím není dostupné.';
+        p.textContent=q ? `Rychlé izolované měření ${q.build}: ${q.stable?'všech pět oblastí stabilních v rámci jednoho běhu':'nejméně jedna oblast kolísá nad 20 %'}; přesné časy jsou v Kopírovat FPS report.` : 'Rychlé měření zatím není dostupné.';
         scoreNode.appendChild(p);
       }
       if(performanceHistoryNotice){
@@ -1351,7 +1374,7 @@
     running=false;
     if(outcome?.ok) {
       results=outcome.rows;
-      setStatus(`Rychlý výkon dokončen: 5 syntetických oblastí. ${outcome.run.stable?'Rozptyl v rámci 20 %.':'NESTABILNÍ – rozptyl nad 20 %.'} Žádné funkční testy neproběhly. Bodové skóre pozastaveno.`);
+      setStatus(`Rychlý výkon dokončen: 5 syntetických oblastí. ${outcome.run.stable?'Rozptyl v rámci 20 %.':'NESTABILNÍ – rozptyl nad 20 %.'} Žádné funkční testy neproběhly. Výsledek indexu je níže.`);
     }else{
       results=[{id:'perf691ce-quick-incomplete',name:'Rychlý výkon nedokončen',kind:'PERF_AUDIT',status:'PARTIAL',ms:0,detail:outcome?.reason||'Neznámá chyba'}];
       setStatus('Rychlý výkon nedokončen; žádné výsledky nejsou PASS.');
@@ -1359,7 +1382,7 @@
     screen?.classList.add('lat-finished');
     render();
     setStatus(outcome?.ok
-      ? `Rychlý výkon: ${outcome.run.stable?'série s rozptylem do 20 %':'NESTABILNÍ série, rozptyl nad 20 %'}. Neběžely žádné funkční testy ani reálný Backspace. Bodové skóre pozastaveno.`
+      ? `Rychlý výkon: ${outcome.run.stable?'série s rozptylem do 20 %':'NESTABILNÍ série, rozptyl nad 20 %'}. Neběžely žádné funkční testy ani reálný Backspace. Index je níže.`
       : `Rychlý výkon nedokončen: ${outcome?.reason||'neznámá příčina'}.`);
   }
   async function dokoncitBeh(){
