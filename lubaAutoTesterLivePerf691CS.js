@@ -1,4 +1,4 @@
-/* 691CV – short-word native doubletap setup; 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
+/* 691CZ – long continuous 15s edge gesture; 691CV – short-word native doubletap setup; 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
  * Own LOCAL Testy note only; never touches arbitrary user notes. No synthetic DOM events.
  */
 (()=>{'use strict';
@@ -41,9 +41,9 @@
       check(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function','native_android_plugin_unavailable');
       const n=owned(id);const marker='Zapis_z_viditelneho_editoru_690T';
       const paragraph='Výkon výběru červenou kapkou – opakovaný dlouhý odstavec pro test automatického posouvání. ';
-      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:240},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
+      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:700},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
       // Preserve the note's test ownership and existing identifying text; mutate only its own UUID.
-      const revised={...n,note:marker+'\n'+Array.from({length:240},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
+      const revised={...n,note:marker+'\n'+Array.from({length:700},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
       const safeSave=window.LubaNoteSync?.provedLokalniZmenuASynchronizuj;
       check(typeof safeSave==='function'&&typeof window.saveAllTasks==='function','safe_local_storage_missing');
       await safeSave(()=>window.saveAllTasks(window.loadTask().map(x=>x.id===id?revised:x)),revised);
@@ -60,8 +60,8 @@
       const text=Array.from(editor.querySelectorAll('*')).find(e=>e.textContent?.includes(marker)&&e.children.length===0);
       text?.scrollIntoView({block:'center',behavior:'instant'});await wait(160);
       const results=[];
-      for(let k=0;k<5;k++){
-        check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/5`);
+      for(let k=0;k<3;k++){
+        check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3${k===0?" (15 s)":" (3 s)"}`);
         scroll.scrollTop=0;await wait(180);
         // 691CV: a native doubletap on the long test marker selected a long
         // identifier whose endpoints can lie outside the editor viewport.
@@ -98,7 +98,7 @@
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
-        const gaps=[],longTasks=[],stallAt=[];let last=0,first=0;
+        const gaps=[],longTasks=[],stallAt=[],stall40=[];let last=0,first=0;
         if(window.PerformanceObserver?.supportedEntryTypes?.includes('longtask')){
           observer=new PerformanceObserver(list=>{if(collect)for(const e of list.getEntries())longTasks.push(e.duration);});
           observer.observe({entryTypes:['longtask']});
@@ -108,10 +108,11 @@
           const dt=t-last;gaps.push(dt);
           /* Jen casove znaceni – zadne logovani/DOM prace behem tahu. */
           if(dt>=70)stallAt.push(Math.round(t-first));
+          if(dt>=40)stall40.push(Math.round(t-first));
         }last=t;raf=requestAnimationFrame(frame);};
         raf=requestAnimationFrame(frame);
         let ack;
-        try{ack=await plugin.gestureOwnedEditor({id,target:'selection-end',type:'swipe-edge-691CS'});}
+        try{ack=await plugin.gestureOwnedEditor({id,target:'selection-end',type:k===0?'swipe-edge-long-691CZ':'swipe-edge-691CS'});}
         finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();observer=null;}
         check(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_long_drag_ack_missing');
         await wait(100);
@@ -125,10 +126,10 @@
         const p95=gaps[Math.min(gaps.length-1,Math.ceil(gaps.length*.95)-1)];
         results.push({p95:Math.round(p95*10)/10,max:Math.round(gaps.at(-1)*10)/10,
           long:longTasks.filter(x=>x>50).length,largest:Math.round((longTasks.at(-1)||0)*10)/10,
-          scroll:deltaScroll,frames:gaps.length,stalls70:stallAt.length,stallAt:stallAt.slice(0,12)});
+          scroll:deltaScroll,frames:gaps.length,stalls70:stallAt.length,stallAt:stallAt.slice(0,60),stalls40:stall40.length,stall40At:stall40.slice(0,120)});
       }
       const avg=key=>Math.round(results.reduce((a,x)=>a+x[key],0)/results.length*10)/10;
-      const detail=`691CY LIVE_NATIVE_EDGE PASS 5/5; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const detail=`691CZ LIVE_NATIVE_EDGE PASS 3/3 (15s+3s+3s); frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; stalls40ms=[${results.map(x=>x.stalls40)}]; stall40AtMs=[${results.map(x=>'('+x.stall40At.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
       await closeOwnedEditorIfOpen(id);
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
     }catch(e){
