@@ -7897,10 +7897,6 @@
   }
 
 
-  /* 691CC: keep only the newest post-input caret-visibility check.
-     Holding Backspace can submit more edits before the next painted frame.
-     Scheduling older snapshots wastes geometry work and risks late scroll. */
-  let v2CaretVisibilityInputRaf691CC = 0;
   function oznamModelovyTextovyVstup(inputType = "") {
     /* 691BO – if the user types instead of tapping after MOVE, the model
        already contains the new insertion. Re-enable its visual caret only
@@ -7927,17 +7923,9 @@
       /* HOTFIX 509 – přesun řádku nad LubaKeyboard pouze JEDNOU po
          skutečném modelovém vstupu. Scroll sám další vstup nevytvoří, takže
          zde nevzniká řetězec render -> selection -> scroll -> ... */
-      if (v2CaretVisibilityInputRaf691CC) {
-        cancelAnimationFrame(v2CaretVisibilityInputRaf691CC);
-      }
-      const sourceEditor691CC = editor;
-      v2CaretVisibilityInputRaf691CC = requestAnimationFrame(() => {
-        v2CaretVisibilityInputRaf691CC = 0;
-        if (!editor?.isConnected || editor !== sourceEditor691CC) return;
-        const currentSelection691CC = posledniVyber;
-        if (currentSelection691CC?.sbaleny) {
-          posunV2CaretPoVstupuDoViditelneOblasti(currentSelection691CC);
-        }
+      const snapshot = posledniVyber ? klonVyberu(posledniVyber) : null;
+      requestAnimationFrame(() => {
+        posunV2CaretPoVstupuDoViditelneOblasti(snapshot);
       });
     });
   }
