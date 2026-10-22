@@ -16,7 +16,7 @@
   let performanceHistoryNotice="";
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={'sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={'live-perf-691CS':'Výkon – živý nativní výběr 691CS','sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
@@ -26,6 +26,7 @@
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
+      <button class="lat-main-run" type="button" data-lat="run" data-suite="live-perf-691CS">▶ Výkon – živé červené úchyty</button>
       <button class="lat-main-run" type="button" data-lat="perf-quick">▶ Rychlý výkon (bez dlouhé regrese)</button>
       <button class="lat-main-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
@@ -1539,6 +1540,22 @@
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'bullet');}
       if(generace===generaceBehu && !['extended','i18n'].includes(activeSuite))await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
+      if(generace===generaceBehu)await dokoncitBeh();
+      return;
+    }
+    if(activeSuite==='live-perf-691CS'){
+      await spustitPoznamky690S(generace);
+      if(generace===generaceBehu&&running){
+        const mod=window.LubaNoteAutoTesterLivePerf691CS;
+        const alive=()=>generace===generaceBehu&&running&&screen&&!screen.hidden;
+        if(!lastTestNoteId||!mod?.run){results.push({id:'perf-live-handle-691CS',name:'Výkon – živé červené úchyty',kind:'NATIVE_LIVE_PERF',status:'NATIVE_BLOCKED',detail:'owned_test_note_or_module_missing',ms:0});}
+        else {
+          try {const row=await mod.run(lastTestNoteId,alive,m=>{if(alive())setStatus(m);},minimizeTestScreen,restoreTestScreen);
+            if(alive())results.push(row);
+          }catch(e){if(alive())results.push({id:'perf-live-handle-691CS',name:'Výkon – živé červené úchyty',kind:'NATIVE_LIVE_PERF',status:'NATIVE_FAIL',detail:String(e?.message||e).slice(0,210),ms:0});}
+          finally{restoreTestScreen();}
+        }
+      }
       if(generace===generaceBehu)await dokoncitBeh();
       return;
     }

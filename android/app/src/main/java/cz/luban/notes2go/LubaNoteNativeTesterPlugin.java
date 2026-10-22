@@ -104,10 +104,10 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
     if (noteId == null || noteId.length() < 8 || noteId.length() > 100 ||
         !("word".equals(target) || "word-early".equals(target) || "word-late".equals(target) ||
           "selection-end".equals(target) || "selection-start".equals(target) || "caret-handle".equals(target)) ||
-        !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type))) {
+        !("tap".equals(type) || "doubletap".equals(type) || "swipe".equals(type) || "swipe-edge-691CS".equals(type))) {
       call.reject("invalid_owned_editor_request"); return;
     }
-    if ("swipe".equals(type) && "word".equals(target)) {
+    if (("swipe".equals(type) && "word".equals(target)) || ("swipe-edge-691CS".equals(type) && !"selection-end".equals(target))) {
       call.reject("word_swipe_not_authorized"); return;
     }
     ui.post(() -> {
@@ -166,7 +166,8 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
         "const selection=target==='selection-end'||target==='selection-start';" +
         "const delta=target==='selection-end'?(left>=48?-Math.min(95,left):Math.min(95,right)):" +
           "target==='selection-start'?(left>=48?-Math.min(95,left):Math.min(95,right)):45;" +
-        "return JSON.stringify({ok:!!(targetOk&&viewportOk&&(!selection||Math.abs(delta)>=30)),x,y,viewport:innerWidth,delta});" +
+        "const edgeY=Math.min(innerHeight-22,Math.max(y+50,er.bottom-18));" +
+        "return JSON.stringify({ok:!!(targetOk&&viewportOk&&(!selection||Math.abs(delta)>=30)),x,y,edgeY,viewport:innerWidth,delta});" +
       "}catch(e){return JSON.stringify({ok:false});}})()";
       try {
         web.evaluateJavascript(js, raw -> {
@@ -183,7 +184,21 @@ public class LubaNoteNativeTesterPlugin extends Plugin {
             if(x<0||x>=web.getWidth()||y<0||y>=web.getHeight()){
               busy=false;call.reject("owned_editor_point_outside_webview");return;
             }
-            if ("swipe".equals(type)) {
+            if ("swipe-edge-691CS".equals(type)) {
+              // 691CS: only an OWN LOCAL Testy selection-end handle may trigger this.
+              // Real WebView MotionEvents, time-based path; keep finger near editor bottom
+              // to exercise production selection-edge autoscroll (not DOM scrollTop).
+              float edgeY=(float)(where.optDouble("edgeY",0)*scale);
+              if(edgeY<=y+12f || edgeY>=web.getHeight()-3f){busy=false;call.reject("owned_edge_geometry_invalid");return;}
+              final long down=SystemClock.uptimeMillis();
+              emit(web,down,MotionEvent.ACTION_DOWN,x,y);
+              for(int i=1;i<=90;i++){
+                final int k=i;
+                final float yy=y+(edgeY-y)*Math.min(k,28)/28f;
+                ui.postDelayed(()->emit(web,down,MotionEvent.ACTION_MOVE,x,yy),k*32L);
+              }
+              ui.postDelayed(()->finish(web,down,x,edgeY,type,call),2950L);
+            } else if ("swipe".equals(type)) {
               float end=Math.max(5f,Math.min(web.getWidth()-5f,x+(float)where.optDouble("delta",40)*scale));
               final long down=SystemClock.uptimeMillis();
               emit(web,down,MotionEvent.ACTION_DOWN,x,y);
