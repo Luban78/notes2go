@@ -3343,7 +3343,12 @@
     if (!["backspace", "left", "right"].includes(action)) return;
     stopRepeat();
     repeatTimer = setTimeout(() => {
-      repeatInterval = setInterval(() => provedAkci(action), 68);
+      repeatInterval = setInterval(() => {
+        const jeBackspace = action === "backspace";
+        if (jeBackspace) window.LubaNoteFpsBenchmark691BQ?.oznacOpakovaniBackspace?.(true);
+        try { provedAkci(action); }
+        finally { if (jeBackspace) window.LubaNoteFpsBenchmark691BQ?.oznacOpakovaniBackspace?.(false); }
+      }, 68);
     }, 430);
   }
 

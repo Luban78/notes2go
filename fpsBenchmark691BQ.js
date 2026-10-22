@@ -3,7 +3,8 @@
    Real quick sync executes only after an explicit user click, sequentially. */
 (() => {
   'use strict';
-  const VERSION = '691BV';
+  const VERSION = '691BW';
+  const INPUT_TAIL_MS = 240; // same short post-input window for each real action
   const STORE_KEY = 'lubanoteLocalPerfBaselines691BQ';
   const REPEATS = 20;
   const WINDOW_MS = 800;
@@ -15,6 +16,7 @@
     'card-hold', 'card-drag', 'search', 'tags', 'planner', 'documents',
     'images', 'navigation', 'sync-live', 'sync-quick'
   ];
+  let opakovaniBackspace = false; // set only by LubaKeyboard repeat interval
   let suite = null;
   let latestSuite = null;
 
@@ -31,11 +33,11 @@
   };
   let active = null;
   let latest = null;
-  let store = {version:1, baseline:{}, runs:[], suites:[]};
+  let store = {version:1, baseline:{}, comparableBaseline:{}, runs:[], suites:[]};
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (saved && saved.version === 1 && Array.isArray(saved.runs) && saved.baseline) {
-      store = { version:1, baseline:saved.baseline, runs:saved.runs.slice(-160), suites:Array.isArray(saved.suites)?saved.suites.slice(-10):[] };
+      store = { version:1, baseline:saved.baseline, comparableBaseline:saved.comparableBaseline || {}, runs:saved.runs.slice(-160), suites:Array.isArray(saved.suites)?saved.suites.slice(-10):[] };
       latest = store.runs.at(-1) || null;
       latestSuite = store.suites.at(-1) || null;
     }
@@ -60,7 +62,7 @@
   function label(scenario) {return names[scenario]||scenario;}
   function modeOf(scenario) {return ACTION_MODES.has(scenario)?'real-operation':scenario==='sync-quick'?'real-network':'fps-windows';}
   function guidance(scenario) {
-    if(scenario==='backspace') return 'Připrav si testovací poznámku s textem. Spusť měření, zavři Dashboard a 20× stiskni Backspace nebo jej podrž. Měří se skutečné volání Core V2, historie, model a render. Neděje se žádné automatické mazání.';
+    if(scenario==='backspace') return 'Otevři stejnou testovací poznámku a zvol vždy stejné gesto: buď 20 jednotlivých stisků, nebo jedno delší podržení Backspace (20 příkazů). Měří se jen rámce u skutečných stisků, velikost textu a historie. Předchozí metodika se do baseline nemíchá.';
     if(scenario==='typing') return 'Spusť měření, přejdi do testovací poznámky a napiš 20 znaků na LubaKeyboard. Nic se nevkládá automaticky. Typické znaky a mezery se počítají jako skutečné operace.';
     if(scenario==='sync-quick') return 'POZOR: 20× postupně vyvolá existující rychlý sync přes LubaServer (reálná síť). Test probíhá jen na výslovné spuštění, zastaví se po chybě; nic nevytváří jako testovací poznámku. Tento test je rychlý sync, ne plný přenos všech dat.';
     if(scenario==='idle') return 'Po spuštění zavři Admin Dashboard a nech aplikaci bez dotyku. Proběhne 20 měřicích oken po 0,8 s, tedy celkem přibližně 16 s.';
@@ -97,7 +99,13 @@
     if(active!==s || s.cancelled || document.hidden) return;
     if(s.lastFrame!==null) {
       const dt=timestamp-s.lastFrame;
-      if(dt>0 && dt<60000) s.frameGaps.push(dt);
+      if(dt>0 && dt<60000) {
+        s.frameGaps.push(dt);
+        if(s.scenarioMode==='real-operation' && s.lastActionAt!=null &&
+           (s.lastActionAt>=s.lastFrame-1 || timestamp-s.lastActionAt<=INPUT_TAIL_MS)) {
+          s.activeFrameGaps.push(dt);
+        }
+      }
     }
     s.lastFrame=timestamp;
     if(s.scenarioMode==='fps-windows') {
@@ -110,6 +118,12 @@
         uiProgress(s);
         if(s.samples.length>=REPEATS) {complete(s);return;}
       }
+    }
+    if(s.scenarioMode==='real-operation' && s.finishing &&
+       timestamp>=s.lastActionAt+INPUT_TAIL_MS) {
+      s.frameRequest=0;
+      requestAnimationFrame(()=>{if(active===s&&!s.cancelled)complete(s);});
+      return;
     }
     s.frameRequest=requestAnimationFrame(t=>frameLoop(s,t));
   }
@@ -142,9 +156,54 @@
       estimatedRefreshHz:clean.length ? 1000/percentile(clean,.5):null
     };
   }
+  /* 691BW: same sampling method + hold/taps + document size + FPS overlay.
+     Never silently compare 691BV's all-window FPS with action-local FPS.
+     Earlier measurements are preserved in history as historical data. */
+  const isNewInput = r => (r?.scenario==='backspace'||r?.scenario==='typing') && r?.measurementVersion==='691BW';
+  const noteSizeClass = chars => chars<1000?'0–999 znaků':chars<5000?'1000–4999 znaků':chars<20000?'5000–19999 znaků':'20000+ znaků';
+  const noteBlockClass = count => count<=10?'1–10 bloků':count<=100?'11–100 bloků':'101+ bloků';
+  function comparabilityKey(r) {
+    if(!isNewInput(r)) return null;
+    return [r.scenario,'input-active-691BW',r.environment,r.viewport,
+      r.inputMode,r.noteSizeClass,noteBlockClass(r.noteBlocks),r.fpsOverlayEnabled?'fps-on':'fps-off',r.refreshClass].join('|');
+  }
+  function baselineFor(r) {
+    if(!r)return null;
+    if(r.scenario==='backspace'||r.scenario==='typing') {
+      const key=comparabilityKey(r);
+      return key ? store.comparableBaseline?.[key] || null : null;
+    }
+    return store.baseline[r.scenario] || null;
+  }
+  function comparable(a,b){
+    if(!a||!b)return false;
+    if(a.scenario==='backspace'||a.scenario==='typing'||b.scenario==='backspace'||b.scenario==='typing') {
+      const keyA=comparabilityKey(a),keyB=comparabilityKey(b);
+      return Boolean(keyA&&keyB&&keyA===keyB);
+    }
+    return a.mode===b.mode && a.scenario===b.scenario;
+  }
+  function inputDisplayMode(mode){return mode==='hold'?'podržení Backspace':mode==='mixed'?'kombinované klepnutí/podržení':'jednotlivé stisky';}
   function baselineDiff(run,base) {
     if(!base) return 'První baseline pro tento scénář.';
+    if(!comparable(run,base))return 'Nesrovnatelné metody / podmínky – rozdíl nezobrazen.';
     const a=run.metrics;const b=base.metrics;
+    if(isNewInput(run)) {
+      const fields=[];
+      if(a.activeFrames?.avgFps>0&&b.activeFrames?.avgFps>0) {
+        const d=100*(a.activeFrames.avgFps/b.activeFrames.avgFps-1);
+        fields.push(`FPS během vstupu ${d>=0?'+':''}${fmt(d)} %`);
+      }
+      if(a.operationMs?.avg>0&&b.operationMs?.avg>0) {
+        const d=100*(a.operationMs.avg/b.operationMs.avg-1);
+        fields.push(`doba příkazu ${d>=0?'+':''}${fmt(d)} % (méně je lépe)`);
+      }
+      if(a.breakdown?.nextFrameMs?.p95>0&&b.breakdown?.nextFrameMs?.p95>0) {
+        const d=100*(a.breakdown.nextFrameMs.p95/b.breakdown.nextFrameMs.p95-1);
+        fields.push(`p95 čekání na další rAF ${d>=0?'+':''}${fmt(d)} % (méně je lépe)`);
+      }
+      return fields.length?`Proti SROVNATELNÉ baseline: ${fields.join(' · ')}`:'Bez společné srovnatelné metriky.';
+    }
     const fields=[];
     if(Number.isFinite(a.frames.avgFps)&&Number.isFinite(b.frames.avgFps)&&b.frames.avgFps>0) {
       const diff=100*(a.frames.avgFps/b.frames.avgFps-1);
@@ -158,10 +217,17 @@
   }
   function reportRun(r) {
     if(!r)return 'Zatím žádná uložená měření.';
-    const m=r.metrics,base=store.baseline[r.scenario];
+    const m=r.metrics,base=baselineFor(r);
     let txt=`LUBANOTE FPS BENCHMARK / ${VERSION}\nScénář: ${label(r.scenario)}\nBuild: ${r.build||'historické měření'}\nTyp: ${r.mode}\nVzorky: ${r.count}/${REPEATS}\nČas: ${r.date}\nProstředí: ${r.environment}\n`;
-    txt+=`FPS průměr: ${fmt(m.frames.avgFps)} | refresh odhad: ${fmt(m.frames.estimatedRefreshHz)} Hz\n`;
+    txt+=`FPS celého měřicího intervalu: ${fmt(m.frames.avgFps)} | refresh odhad: ${fmt(m.frames.estimatedRefreshHz)} Hz\n`;
     txt+=`FPS panel při měření: ${r.fpsOverlayEnabled?'ZAP':'VYP'} | viewport: ${r.viewport}\n`;
+    if(isNewInput(r)) {
+      txt+=`METODIKA 691BW: 20 reálných příkazů, rAF jen do 240 ms po každém vstupu; ne plošný FPS průměr.\n`;
+      txt+=`Vstup: ${inputDisplayMode(r.inputMode)} | opakování držení=${r.repeatCount}/${REPEATS} | velikost poznámky≈${r.noteChars} znaků (${r.noteSizeClass}), ${r.noteBlocks} bloků\n`;
+      txt+=`FPS BĚHEM MAZÁNÍ/PSANÍ (aktivní rAF intervaly): ${fmt(m.activeFrames?.avgFps)} | vzorků snímků: ${m.activeFrames?.frameCount||0} | p95: ${fmt(m.activeFrames?.p95FrameMs)} ms | nejhorší: ${fmt(m.activeFrames?.worstFrameMs)} ms\n`;
+      txt+=`LongTask V OKOLÍ VSTUPU: ${m.inputLongTasks?.count??'N/A'} | nejhorší ${fmt(m.inputLongTasks?.worstMs)} ms\n`;
+      txt+=`Poznámka: odhad rAF není GPU paint profiler a 1/čas dalšího rAF není okamžité FPS displeje.\n`;
+    }
     txt+=`Frame p95: ${fmt(m.frames.p95FrameMs)} ms | nejhorší frame: ${fmt(m.frames.worstFrameMs)} ms\n`;
     txt+=`Frame >33 ms: ${m.frames.framesOver33} | frame >50 ms: ${m.frames.framesOver50}\n`;
     txt+=`LongTask >50 ms: ${m.longTasks.supported?m.longTasks.count:'N/A'} | nejhorší: ${fmt(m.longTasks.worstMs)} ms\n`;
@@ -174,6 +240,7 @@
     }
     if(r.scenario==='sync-quick') txt+=`Sync PASS: ${m.syncSuccess}/${REPEATS} | jde o rychlý fingerprint/delta sync, nemusí proběhnout plný přenos.\n`;
     txt+=`${baselineDiff(r,base)}\n`;
+    if(isNewInput(r) && !base) txt+='Baseline: zatím žádný srovnatelný běh; starší 691BV se NEPOROVNÁVÁ.\n';
     txt+=`Pozn.: FPS je WebView requestAnimationFrame, ne GPU profiler. 20 časových oken != 20 akcí. Měření Backspace a psaní vzniká jen při reálném vstupu uživatele.\n`;
     return txt;
   }
@@ -184,27 +251,32 @@
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function numericValue(run){
     if (!run?.metrics)return null;
+    if(isNewInput(run))return run.metrics.activeFrames?.avgFps ?? null;
     if(run.mode==='fps-windows')return run.metrics.fpsWindows?.avg ?? null;
     return run.metrics.operationMs?.avg ?? null;
   }
-  function goodDelta(now,baseline,mode){
+  function goodDelta(now,baseline,mode,run){
     if(!Number.isFinite(now)||!Number.isFinite(baseline)||baseline<=0)return null;
-    return (mode==='fps-windows' ? 1 : -1)*100*(now/baseline-1);
+    return ((mode==='fps-windows'||isNewInput(run)) ? 1 : -1)*100*(now/baseline-1);
   }
   function renderHistory(){
     const scenario=byId('ln-fb-scenario')?.value||'backspace';
     const items=store.runs.filter(r=>r.scenario===scenario);
-    const baseline=store.baseline?.[scenario];
-    const base=numericValue(baseline);
-    const latestOne=items.at(-1);
-    const now=numericValue(latestOne);
-    const delta=goodDelta(now,base,latestOne?.mode);
+    const latestOne=items.at(-1),baseline=baselineFor(latestOne);
+    const base=numericValue(baseline),now=numericValue(latestOne);
+    const oldMethod=(scenario==='backspace'||scenario==='typing') && !isNewInput(latestOne);
+    const compatible=items.filter(item=>baseline&&comparable(item,baseline));
+    const delta=oldMethod||!compatible.length?null:goodDelta(now,base,latestOne?.mode,latestOne);
     const trend=byId('ln-fb-trend');
-    const lower=latestOne?.mode!=='fps-windows';
+    const lower=latestOne?.mode!=='fps-windows'&&!isNewInput(latestOne);
     if(trend){
       const unit=lower?'ms/akce':'FPS';
-      const compare=delta===null?'Zatím bez srovnatelné baseline':`${delta>=0?'+':''}${fmt(delta)} % ${delta>=0?'zlepšení':'zhoršení'} proti baseline`;
-      trend.textContent=`${items.length} uložených měření · baseline ${fmt(base)} ${unit} · poslední ${fmt(now)} ${unit} · ${compare}`;
+      const description=oldMethod?'Poslední měření používá starší metodiku; předchozí procenta nejsou srovnatelná.':
+        !baseline?'První měření stejné metody a velikosti poznámky vytvoří baseline.':
+        delta===null?'Srovnatelná baseline existuje, ale zatím bez odpovídající metriky.':
+        `${delta>=0?'+':''}${fmt(delta)} % ${delta>=0?'zlepšení':'zhoršení'} ${isNewInput(latestOne)?'aktivního FPS':'doby operace'}`;
+      const mode=isNewInput(latestOne)?` · ${inputDisplayMode(latestOne.inputMode)} · ${latestOne.noteSizeClass}`:'';
+      trend.textContent=`${items.length} měření celkem · ${compatible.length} srovnatelných${mode} · baseline ${fmt(base)} ${unit} · poslední ${fmt(now)} ${unit} · ${description}`;
       trend.dataset.direction=delta===null?'none':delta>=0?'better':'worse';
     }
     const out=byId('ln-fb-history-list');
@@ -214,13 +286,14 @@
         const rev=items.slice(-12).reverse();
         const values=items.map(numericValue).filter(Number.isFinite);
         const high=Math.max(...values,Number.isFinite(base)?base:0,1);
-        out.innerHTML=rev.map((item,i)=>{
+        out.innerHTML=rev.map(item=>{
           const val=numericValue(item),pct=Number.isFinite(val)?Math.max(2,Math.min(100,100*val/high)):0;
-          const diff=goodDelta(val,base,item.mode);
+          const isCmp=baseline&&comparable(item,baseline);
+          const diff=isCmp?goodDelta(val,base,item.mode,item):null;
           const date=new Date(item.date);
           const when=Number.isFinite(date.getTime()) ? date.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Bez data';
-          const trendText=diff===null?'baseline chybí':`${diff>=0?'+':''}${fmt(diff)} %`;
-          return `<div class="ln-fb-history-row"><span class="ln-fb-history-date">${hEsc(when)}<small>${hEsc(item.build||'starší')}</small></span><div class="ln-fb-history-bar"><span style="width:${pct.toFixed(1)}%"></span></div><strong>${fmt(val)} ${lower?'ms':'FPS'}</strong><small class="${diff===null?'':diff>=0?'ln-fb-better':'ln-fb-worse'}">${hEsc(trendText)}</small></div>`;
+          const trendText=!isCmp?'jiná metoda':diff===null?'bez dat':`${diff>=0?'+':''}${fmt(diff)} %`;
+          return `<div class="ln-fb-history-row"><span class="ln-fb-history-date">${hEsc(when)}<small>${hEsc(item.build||'starší')}</small></span><div class="ln-fb-history-bar"><span style="width:${pct.toFixed(1)}%"></span></div><strong>${fmt(val)} ${isNewInput(item)||item.mode==='fps-windows'?'FPS':'ms'}</strong><small class="${!isCmp?'':diff>=0?'ln-fb-better':'ln-fb-worse'}">${hEsc(trendText)}</small></div>`;
         }).join('');
       }
     }
@@ -242,10 +315,15 @@
   function historyReport(){
     const id=byId('ln-fb-scenario')?.value||'backspace';
     const rows=store.runs.filter(r=>r.scenario===id);
-    const base=numericValue(store.baseline?.[id]);
+    const latestComparable=rows.at(-1);
+    const baseline=baselineFor(latestComparable);
+    const base=numericValue(baseline);
     const lines=[`LUBANOTE – MANUAL PERF HISTORIE ${VERSION}`,`Scénář: ${label(id)}`,
-      `Baseline: ${fmt(base)} ${rows[0]?.mode==='fps-windows'?'FPS':'ms'}`,`Uložené běhy: ${rows.length}`];
-    rows.forEach((r,i)=>lines.push(`${i+1}. ${r.date} | build=${r.build||'-'} | ${fmt(numericValue(r))} ${r.mode==='fps-windows'?'FPS':'ms'} | progres=${fmt(goodDelta(numericValue(r),base,r.mode))}% | ${r.count}/20 vzorků`));
+      `Baseline: ${fmt(base)} ${isNewInput(latestComparable)||latestComparable?.mode==='fps-windows'?'FPS':'ms'}`,`Uložené běhy: ${rows.length}`];
+    rows.forEach((r,i)=>{
+      const cmp=baseline&&comparable(r,baseline);
+      lines.push(`${i+1}. ${r.date} | build=${r.build||'-'} | ${fmt(numericValue(r))} ${isNewInput(r)||r.mode==='fps-windows'?'FPS':'ms'} | ${cmp?`změna=${fmt(goodDelta(numericValue(r),base,r.mode,r))}%`:'NEPOROVNATELNÉ'} | ${r.count}/20 | ${r.noteSizeClass||'-'} | ${r.inputMode||'-'}`);
+    });
     return lines.join('\n');
   }
   function render(r=latest) {
@@ -268,6 +346,9 @@
     else {
       m.operationMs=summarize(s.samples.map(x=>x.durationMs));
       if(s.scenarioMode==='real-operation') {
+        m.activeFrames=summarizeFrames(s.activeFrameGaps);
+        const longDuringInput=s.longTaskEntries.filter(entry=>s.actionTimes.some(t=>entry.at<=t+INPUT_TAIL_MS && entry.at+entry.duration>=t-5));
+        m.inputLongTasks={count:longDuringInput.length,worstMs:longDuringInput.length?Math.max(...longDuringInput.map(v=>v.duration)):null};
         const keys=['snapshotMs','modelMs','historyMs','renderMs','extraMs','nextFrameMs'];
         m.breakdown=Object.fromEntries(keys.map(k=>[k,summarize(s.samples.map(v=>v[k]).filter(Number.isFinite))]));
         m.blockCount=summarize(s.samples.map(v=>v.blockCount).filter(Number.isFinite));
@@ -275,10 +356,19 @@
       if(s.scenario==='sync-quick')m.syncSuccess=s.samples.filter(x=>x.ok).length;
     }
     const r={scenario:s.scenario,mode:s.scenarioMode,date:new Date().toISOString(),build:String(window.LUBANOTE_VERSION||'neuveden'),environment:window.Capacitor?.isNativePlatform?.()?'APK/WebView':'WEB',
-      viewport:`${innerWidth}x${innerHeight}`,fpsOverlayEnabled:localStorage.getItem('lubanoteFpsVisible691BP')==='1',count:s.samples.length,metrics:m,samples:s.samples};
+      viewport:`${innerWidth}x${innerHeight}`,fpsOverlayEnabled:localStorage.getItem('lubanoteFpsVisible691BP')==='1',count:s.samples.length,metrics:m,samples:s.samples,
+      ...(s.scenarioMode==='real-operation'?{
+        measurementVersion:'691BW',inputMode:s.repeatCount>=10?'hold':s.repeatCount?'mixed':'single',
+        repeatCount:s.repeatCount,noteChars:s.noteChars??0,noteBlocks:s.noteBlocks??0,
+        noteSizeClass:noteSizeClass(s.noteChars??0),
+        refreshClass:Math.round((m.activeFrames.estimatedRefreshHz||m.frames.estimatedRefreshHz||60)/30)*30+'Hz'
+      }:{})};
     // Only full, comparable series become baselines. A failed sync is never a PASS.
     if(s.samples.length===REPEATS && (s.scenario!=='sync-quick' || m.syncSuccess===REPEATS)) {
-      if(!store.baseline[r.scenario])store.baseline[r.scenario]=r;
+      if(isNewInput(r)) {
+        const key=comparabilityKey(r);
+        if(key && !store.comparableBaseline[key])store.comparableBaseline[key]=r;
+      } else if(!store.baseline[r.scenario])store.baseline[r.scenario]=r;
       store.runs.push(r);store.runs=store.runs.slice(-160);latest=r;
       const saved=save();const st=byId('ln-fb-status');if(st)st.textContent=`Dokončeno ${REPEATS}/${REPEATS} · ${saved?'uloženo do localStorage':'POZOR: místní uložení selhalo'}`;
       render(r);
@@ -291,7 +381,7 @@
   function beginMonitor(s) {
     if(active!==s||s.cancelled||s.frameRequest)return;
     if(window.PerformanceObserver?.supportedEntryTypes?.includes?.('longtask')) {
-      try {s.observer=new PerformanceObserver(list=>list.getEntries().forEach(x=>s.longTaskRecords.push(x.duration)));
+      try {s.observer=new PerformanceObserver(list=>list.getEntries().forEach(x=>(s.longTaskRecords.push(x.duration),s.longTaskEntries.push({at:x.startTime,duration:x.duration}))));
         s.observer.observe({type:'longtask',buffered:false});s.longTaskSupported=true;}catch(_e){}
     }
     s.frameRequest=requestAnimationFrame(t=>frameLoop(s,t));
@@ -315,7 +405,9 @@
   function start(scenario, bySuite = false) {
     if(active || !isAllowed() || !names[scenario] || (suite && !bySuite))return false;
     const s={scenario,scenarioMode:modeOf(scenario),samples:[],cancelled:false,lastFrame:null,frameGaps:[],frameRequest:0,windowStart:0,windowFrames:0,
-      longTaskRecords:[],longTaskSupported:false,observer:null,armTimer:0,armObserver:null};
+      longTaskRecords:[],longTaskEntries:[],longTaskSupported:false,observer:null,armTimer:0,armObserver:null,
+      activeFrameGaps:[],lastActionAt:null,actionTimes:[],repeatCount:0,finishing:false,
+      noteChars:null,noteBlocks:null,noteToken:null};
     if(document.hidden) return false;
     active=s;switchButtons(true);
     const st=byId('ln-fb-status');if(st)st.textContent=`Připraveno: ${label(scenario)} · 0/${REPEATS}`;
@@ -354,7 +446,25 @@
     const s=active;if(!s||s.cancelled||s.scenarioMode!=='real-operation'||s.samples.length>=REPEATS||!isAllowed())return;
     if(s.scenario==='backspace' ? m.typ!=='backspace' : !['text','space'].includes(m.typ))return;
     if(!Number.isFinite(m.totalMs)||m.totalMs<0)return;
-    if(!s.frameRequest)beginMonitor(s);
+    const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
+    const modal=byId('taskModal');
+    const token=modal?.dataset?.taskId || null; // memory-only; never persisted
+    if(s.noteToken===null) s.noteToken=token;
+    else if(s.noteToken!==token) {
+      stop('Během měření byla otevřena jiná poznámka – série není srovnatelná.');return;
+    }
+    if(s.noteChars===null) {
+      // Approximate textual size. No note text or IDs enter localStorage/report.
+      s.noteChars=editor?.textContent?.length||0;
+      s.noteBlocks=Math.max(0,Number(m.blockCount)||0);
+    }
+    const now=performance.now();
+    s.actionTimes.push(now);s.lastActionAt=now;
+    if(m.typ==='backspace' && opakovaniBackspace)s.repeatCount++;
+    if(!s.frameRequest) {
+      s.lastFrame=now; // include first post-input wait in active-frame timing
+      beginMonitor(s);
+    }
     const sample={durationMs:m.totalMs,snapshotMs:m.snapshotMs,modelMs:m.modelMs,historyMs:m.historyMs,renderMs:m.renderMs,extraMs:m.extraMs,blockCount:m.blockCount};
     s.samples.push(sample);
     // 691BV: delay up to NEXT rAF callback after a real Core V2 operation.
@@ -362,7 +472,7 @@
     const returnedAt=performance.now();
     requestAnimationFrame(()=>{if(!s.cancelled)sample.nextFrameMs=performance.now()-returnedAt;});
     uiProgress(s);
-    if(s.samples.length>=REPEATS)requestAnimationFrame(()=>requestAnimationFrame(()=>complete(s)));
+    if(s.samples.length>=REPEATS)s.finishing=true; // collect 240 ms after last actual press before saving
   }
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden && active){
@@ -642,9 +752,17 @@
     byId('ln-fb-baseline')?.addEventListener('click',()=>{
       if(!isAllowed())return;const r=store.runs.filter(x=>x.scenario===scenario.value).at(-1);
       if(!r){const st=byId('ln-fb-status');if(st)st.textContent='Nejdřív dokonči 20 měření vybraného scénáře.';return;}
-      store.baseline[scenario.value]=r;save();render(r);const st=byId('ln-fb-status');if(st)st.textContent='Poslední dokončený běh je nová baseline.';
+      if((r.scenario==='backspace'||r.scenario==='typing') && !isNewInput(r)) {
+        const st=byId('ln-fb-status');if(st)st.textContent='Starší metodiku nelze nastavit jako novou baseline. Nejprve změř 20 vstupů v 691BW.';return;
+      }
+      const key=comparabilityKey(r);
+      if(key)store.comparableBaseline[key]=r;
+      else store.baseline[scenario.value]=r;
+      save();render(r);const st=byId('ln-fb-status');if(st)st.textContent='Poslední dokončený běh je nová baseline.';
     });
   }
-  window.LubaNoteFpsBenchmark691BQ={meriAkci,zaznamAkce,stop,verze:VERSION,spustVse:beginSuite};
+  // Called only around the real keyboard hold-repeat callback (68 ms cadence).
+  function oznacOpakovaniBackspace(active){opakovaniBackspace=active===true;}
+  window.LubaNoteFpsBenchmark691BQ={meriAkci,zaznamAkce,oznacOpakovaniBackspace,stop,verze:VERSION,spustVse:beginSuite};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
