@@ -195,42 +195,13 @@
     const platform=window.Capacitor?.isNativePlatform?.()?'APK':'WEB';
     return [SCORE_VERSION,platform,c.environment,c.viewport].join('|');
   }
-  function computeScore(c,prior,ownedOk,fpsCount,functionalStatus){
-    /* 691CB: a failed/blocked AutoTester run must NEVER seed a score reference.
-       Old 691BZ-v1 references remain historical but are not used by v2. */
-    const validated=functionalStatus?.completed===true &&
-      Number(functionalStatus.passed)>0 &&
-      Number(functionalStatus.failed)===0 &&
-      Number(functionalStatus.blocked)===0;
-    if(!validated) {
-      const f=Number.isFinite(functionalStatus?.failed)?functionalStatus.failed:'?';
-      const b=Number.isFinite(functionalStatus?.blocked)?functionalStatus.blocked:'?';
-      return {version:SCORE_VERSION,value:null,reason:`Funkční regrese není bez chyb: FAIL=${f}, BLOCKED=${b}. Referenčních 1000 bodů se neukládá.`};
-    }
-    const unavailable=[];
-    const parts=SCORE_PARTS.map(([id,label,weight,direction,pick])=>{
-      const stat=pick(c);
-      if(!stat||stat.count!==COUNT||!(Number(stat.avg)>0))unavailable.push(label);
-      return {id,label,weight,direction,msOrFps:stat?.avg};
-    });
-    if(!ownedOk||fpsCount!==COUNT||unavailable.length){
-      return {version:SCORE_VERSION,value:null,reason:[!ownedOk?'Neúplný reálný Core V2 test':null,fpsCount!==COUNT?'Neúplná FPS okna':null,...unavailable].filter(Boolean).join('; ')};
-    }
-    prior.scoreBaselines ||= {};
-    const key=scoreKey(c);
-    if(!prior.scoreBaselines[key])prior.scoreBaselines[key]={date:c.date,build:c.build,validated:true,values:Object.fromEntries(parts.map(x=>[x.id,x.msOrFps]))};
-    const baseline=prior.scoreBaselines[key];
-    const ratios=[];
-    for(const part of parts){
-      const reference=Number(baseline.values?.[part.id]);
-      if(!(reference>0))return {version:SCORE_VERSION,value:null,reason:'Poškozená referenční hodnota '+part.id};
-      const raw=part.direction==='higher'?part.msOrFps/reference:reference/part.msOrFps;
-      ratios.push({...part,reference,ratio:Math.min(2,Math.max(.5,raw))});
-    }
-    const value=Math.round(1000*Math.exp(ratios.reduce((sum,p)=>sum+p.weight*Math.log(p.ratio),0)));
-    return {version:SCORE_VERSION,value,baseline:1000,changePercent:Math.round((value/1000-1)*1000)/10,
-      referenceDate:baseline.date,referenceBuild:baseline.build,platformKey:key,
-      components:ratios.map(p=>({id:p.id,label:p.label,weight:p.weight,reference:p.reference,current:p.msOrFps,ratio:Math.round(p.ratio*1000)/1000}))};
+  /* 691CE: Previous 691BZ/691CB score mixed changing LOCAL test notes,
+     regression-dependent rAF windows and unrelated synthetic workloads.
+     Those are not a repeatable, fixed benchmark. Never show invented points,
+     seed a 1000-point baseline or compare those historical values. */
+  function computeScore(){
+    return {version:'691CE-invalidated',value:null,
+      reason:'Bodové skóre 691BZ/691CB pozastaveno: nestejné vstupy a kolísající zátěž. Historické hodnoty 1000/856/1649 NEJSOU důkaz změny výkonu. Použij samostatný Rychlý výkon a porovnávej dílčí časy.'};
   }
   function comparableId(name){return name+'@'+(window.innerWidth>=900?'desktop':'mobile');}
   function metricRow(id,name,kind,status,ms,detail){return {id:'perf691bs-'+id,name,kind,status,ms:Math.round(ms||0),detail};}
@@ -313,9 +284,9 @@
     captured.score=computeScore(captured,prior,ownedResult.ok,fps.length,options.functionalStatus);
     const score=captured.score;
     rows.push(metricRow('performance-score','LubaNote Performance Score – index výkonu','PERF_COMPOSITE_INDEX',
-      score.value!==null?'AUDIT':'PARTIAL',0,score.value!==null?
+      'AUDIT',0,score.value!==null?
       `SKÓRE ${score.value} bodů; reference=1000 bodů (${score.referenceDate}); změna=${score.changePercent>0?'+':''}${score.changePercent} %; ${score.components.length} složek. Relativní index tohoto zařízení, není funkční PASS ani měření dlouhého Backspace; 20% váhy připadá na FPS během regresí a ostatní na Core V2 a syntetické DOM.`:
-      `Skóre nelze spočítat: ${score.reason}`));
+      `Neplatné historické bodování: ${score.reason}`));
     captured.completed=performance.now()-s.started;captured.rows=rows.map(r=>({id:r.id,status:r.status,ms:r.ms}));
     if(fps.length===COUNT&&!prior.baseline.fps)prior.baseline.fps={avg:fpsStats.avg,date:s.startDate};
     prior.runs.push(captured);prior.runs=prior.runs.slice(-12);
@@ -323,15 +294,95 @@
     last={rows,date:s.startDate,saved,score:captured.score};current=null;
     return rows;
   }
+  /* 691CE – independent synthetic performance check; NO app notes, sync, editor
+     commands, no general score. Fixed sandbox and 3 rounds of 10 operations.
+     Report round-to-round spread, mark noisy runs, and retain exact measurements. */
+  const QUICK_KEY='lubanoteAutoTesterQuick691CE';
+  const QUICK_ITEMS=[
+    ['cards-render-100','100 karet – vytvoření DOM','cards'],
+    ['cards-reorder-100','100 karet – přeskládání DOM','reorder'],
+    ['editor-render-200','200 řádků – vytvoření DOM','editor'],
+    ['search-500','500 poznámek – syntetické hledání','search'],
+    ['deep-600','600 řádků – DOM a layout','deep']
+  ];
+  let quickRunning=false,quickRecent=null;
+  function quickLoad(){try{return JSON.parse(localStorage.getItem(QUICK_KEY)||'null');}catch(_){return null;}}
+  function quickMeasure(type,sandbox){return type==='deep'?measureDeepDelete(600,sandbox).total:measureOne(type,sandbox);}
+  async function quickRun(alive=()=>true,progress=()=>{}){
+    if(quickRunning||current||document.hidden||window.LubaNoteAdminTools?.isAllowed?.()!==true)
+      return {ok:false,reason:'Benchmark je zaneprázdněn nebo administrátor není ověřen.'};
+    quickRunning=true;
+    let sandbox=null;
+    try{
+      sandbox=createSandbox();
+      const measurements=[];
+      for(const [id,label,type] of QUICK_ITEMS){
+        if(!alive()||document.hidden)throw Error('Přerušeno');
+        // Warm-up only; excluded from all timings.
+        for(let i=0;i<3;i++)quickMeasure(type,sandbox);
+        const roundStats=[];
+        for(let round=0;round<3;round++){
+          const values=[];
+          for(let i=0;i<10;i++){
+            if(!alive()||document.hidden)throw Error('Přerušeno');
+            progress(`${label}: série ${round+1}/3, vzorek ${i+1}/10`);
+            await nextFrame();
+            if(!alive()||document.hidden)throw Error('Přerušeno');
+            values.push(quickMeasure(type,sandbox));
+          }
+          roundStats.push(stats(values));
+        }
+        const medians=roundStats.map(v=>v.median);
+        const median=num(percentile(medians,.5));
+        const spread=num(median>0?(Math.max(...medians)/Math.min(...medians)-1)*100:NaN);
+        measurements.push({id,label,medianMs:median,variationPercent:spread,
+          roundMedians:medians,roundStats,stable:Number.isFinite(spread)&&spread<=20});
+      }
+      const run={method:'691CE-synthetic-only-v1',date:new Date().toISOString(),
+        build:String(window.LUBANOTE_VERSION||'neuveden'),viewport:`${innerWidth}x${innerHeight}`,
+        environment:navigator.userAgent.match(/Chrome\/\d+/)?.[0]||'WebView',
+        stable:measurements.every(x=>x.stable),measurements};
+      const prior=quickLoad();
+      const history=Array.isArray(prior?.runs)?prior.runs.slice(-19):[];
+      history.push(run);
+      let saved=false;
+      try {localStorage.setItem(QUICK_KEY,JSON.stringify({v:1,runs:history}));saved=true;}catch(_){}
+      quickRecent=run;
+      const rows=measurements.map(item=>metricRow('quick-'+item.id,item.label,
+        'PERF_691CE_SYNTHETIC','AUDIT',item.medianMs,
+        `3×10 izolovaných měření; medián=${item.medianMs}ms; mediány sérií=${item.roundMedians.join(', ')}ms; rozptyl=${item.variationPercent}%; ${item.stable?'opakovatelnější':'KOLÍSÁNÍ nad 20 %'}; nikoli skutečný editor/drag.`));
+      return {ok:true,run,rows,saved};
+    }catch(err){return {ok:false,reason:String(err?.message||err)};}
+    finally{sandbox?.remove();quickRunning=false;}
+  }
+  function quickLast(){return quickRecent||quickLoad()?.runs?.at(-1)||null;}
+  function quickReport(){
+    const run=quickLast();
+    if(!run)return '691CE: Samostatný rychlý benchmark ještě nebyl spuštěn.';
+    const history=quickLoad()?.runs||[];
+    const lines=[`LUBANOTE RYCHLY VYKON / 691CE`,
+      `Build ${run.build} | ${run.date} | ${run.viewport} | ${run.environment}`,
+      `Metoda: 5 POUZE SYNTETICKYCH oblasti, kazda 3 serie x 10 opakovani.`,
+      `Kvalita mereni: ${run.stable?'rozptyl serii do 20 %':'NESTABILNI – nektere serie kolisaji nad 20 %'}`,
+      `BODOVE SKORE: NEPLATNE / POZASTAVENO. Bez srovnani s 691BZ/691CB.`,
+      `Ulozenych rychlych behu: ${history.length}`];
+    for(const row of run.measurements){
+      lines.push(`${row.label}: median ${row.medianMs} ms | serie ${row.roundMedians.join(' / ')} ms | rozptyl ${row.variationPercent}% | ${row.stable?'OK':'NESTABILNI'}`);
+    }
+    lines.push('Skutecny Backspace a drzeni klavesy mer v Admin Dashboardu.');
+    return lines.join('\n');
+  }
   /* 691CB: explicit confirmed admin action only. Deletes performance-local
      AutoTester history/baselines, NOT manual history or the test notes. */
   function clearSaved(){
     if(current || window.LubaNoteAdminTools?.isAllowed?.()!==true)return false;
     try{
       localStorage.removeItem(KEY);
+      localStorage.removeItem(QUICK_KEY);
+      quickRecent=null;
       if(localStorage.getItem(KEY)!==null)return false;
       last=null;return true;
     }catch(_error){return false;}
   }
-  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last,clearSaved});
+  window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last,clearSaved,quickRun,quickLast,quickReport});
 })();

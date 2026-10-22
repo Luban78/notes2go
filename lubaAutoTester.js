@@ -22,10 +22,11 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691CB</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691CE</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
+      <button class="lat-main-run" type="button" data-lat="perf-quick">▶ Rychlý výkon (bez dlouhé regrese)</button>
       <button class="lat-main-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
@@ -295,10 +296,11 @@
           if(cleared){
             currentRunPerformanceScore=null;
             results=results.filter(r=>r.id!=='perf691bs-performance-score');
-            performanceHistoryNotice='Výkonová historie a chybná reference byly smazány. Nové skóre vznikne až po kompletním bezchybném běhu Spustit vše.';
+            performanceHistoryNotice='Výkonová historie byla smazána. Bodové skóre 691BZ/691CB zůstává pozastavené; funkční testy a poznámky se nemažou.';
           }else performanceHistoryNotice='Vymazání výkonové historie se nepodařilo. Nic jiného nebylo změněno.';
           render();return;
         }
+        if(action==='perf-quick'){void runQuickPerformance691CE();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
         if(action==='choose'){openAreaPicker();return;}
         if(action==='area'){void run(screen.querySelector('#lat-area')?.value || 'bullet');return;}
@@ -712,19 +714,18 @@
       scoreNode.style.cssText='margin:10px 0 15px;padding:14px 16px;border:1px solid #4e8165;border-radius:16px;background:#192c24;color:#e9ffef;line-height:1.4';
       summary.insertAdjacentElement('afterend',scoreNode);
     }
-    scoreNode.hidden=running||activeSuite!=='all'||results.length===0;
+    scoreNode.hidden=running||!['all','performance'].includes(activeSuite)||results.length===0;
     if(!scoreNode.hidden){
-      const score=currentRunPerformanceScore;
-      if(score && Number.isFinite(score.value)){
-        const change=score.changePercent>0?'+'+score.changePercent:score.changePercent;
-        scoreNode.innerHTML=`<div style="font-size:.79rem;letter-spacing:.04em;opacity:.85">LUBANOTE PERFORMANCE SCORE · V1</div>`+
-          `<div style="font-size:2.25rem;font-weight:800;font-variant-numeric:tabular-nums">${score.value} <span style="font-size:.85rem">bodů</span></div>`+
-          `<div style="font-size:.92rem">Změna proti prvním 1 000 bodům: ${change} % · ${score.components.length} měřených oblastí</div>`+
-          `<div style="font-size:.72rem;opacity:.8;margin-top:5px">Index výkonu na tomto zařízení; ne 3DMark ani kompletní PASS. Kombinuje Core V2 v krátké Testy poznámce, FPS během regresí a syntetické DOM.</div>`;
-      }else {
-        scoreNode.textContent=score?.reason
-          ? `LubaNote Performance Score: nevypočteno – ${score.reason}`
-          : 'LubaNote Performance Score: nedostupné – výkonové měření je neúplné. Podrobnosti v FPS reportu.';
+      // 691CE: invalid legacy scoring MUST NOT be displayed as numerical points.
+      scoreNode.innerHTML='<div style="font-size:.79rem;letter-spacing:.04em;opacity:.85">LUBANOTE · VÝKONOVÉ MĚŘENÍ</div>'+
+        '<div style="font-size:1.3rem;font-weight:800;margin-top:6px">Bodové skóre pozastaveno</div>'+
+        '<div style="font-size:.84rem;opacity:.9;margin-top:7px">Původní hodnoty 1000, 856 a 1649 nejsou průkazně srovnatelné. Skládaly se z proměnlivého AutoTesteru, rozdílné testovací poznámky a syntetických dat. Historii zachováváme, ale body nevydáváme za výkon aplikace.</div>';
+      if(activeSuite==='performance'){
+        const q=window.LubaNoteAutoTesterPerf691BS?.quickLast?.();
+        const p=document.createElement('p');
+        p.style.cssText='font-size:.82rem;line-height:1.5;margin:12px 0 0';
+        p.textContent=q ? `Rychlé izolované měření ${q.build}: ${q.stable?'rozptyl všech pěti oblastí do 20 %':'nejméně jedna oblast kolísá nad 20 %'}; konkrétní časy jsou v Kopírovat FPS report. Není to měření skutečného Backspace.` : 'Rychlé měření zatím není dostupné.';
+        scoreNode.appendChild(p);
       }
       if(performanceHistoryNotice){
         const note=document.createElement('p');
@@ -1328,6 +1329,39 @@
     results.push(...vysledky.filter(r=>['DB_PASS','DB_FAIL','DB_BLOCKED'].includes(r?.status)));
     render();
   }
+  /* 691CE: one-click separate 5-area synthetic benchmark, no full regression.
+     Functional PASS/FAIL is neither run nor implied. */
+  async function runQuickPerformance691CE(){
+    if(running||!isAllowed())return;
+    stop();
+    const generation=generaceBehu;
+    results=[];activeSuite='performance';startedAt=new Date().toISOString();
+    currentRunPerformanceScore=null;running=true;
+    screen?.classList.remove('lat-finished');
+    setStatus('691CE: měřím pouze izolovaný výkon; funkční regrese NEBĚŽÍ…');
+    const perf=window.LubaNoteAutoTesterPerf691BS;
+    let outcome;
+    try{
+      if(typeof perf?.quickRun!=='function')throw Error('Modul rychlého výkonu není načten.');
+      outcome=await perf.quickRun(
+        ()=>running&&generaceBehu===generation&&!screen?.hidden,
+        message=>{if(running&&generation===generaceBehu)setStatus('Rychlý výkon · '+message);});
+    }catch(err){outcome={ok:false,reason:String(err?.message||err)};}
+    if(generation!==generaceBehu||!running||screen?.hidden)return;
+    running=false;
+    if(outcome?.ok) {
+      results=outcome.rows;
+      setStatus(`Rychlý výkon dokončen: 5 syntetických oblastí. ${outcome.run.stable?'Rozptyl v rámci 20 %.':'NESTABILNÍ – rozptyl nad 20 %.'} Žádné funkční testy neproběhly. Bodové skóre pozastaveno.`);
+    }else{
+      results=[{id:'perf691ce-quick-incomplete',name:'Rychlý výkon nedokončen',kind:'PERF_AUDIT',status:'PARTIAL',ms:0,detail:outcome?.reason||'Neznámá chyba'}];
+      setStatus('Rychlý výkon nedokončen; žádné výsledky nejsou PASS.');
+    }
+    screen?.classList.add('lat-finished');
+    render();
+    setStatus(outcome?.ok
+      ? `Rychlý výkon: ${outcome.run.stable?'série s rozptylem do 20 %':'NESTABILNÍ série, rozptyl nad 20 %'}. Neběžely žádné funkční testy ani reálný Backspace. Bodové skóre pozastaveno.`
+      : `Rychlý výkon nedokončen: ${outcome?.reason||'neznámá příčina'}.`);
+  }
   async function dokoncitBeh(){
     /* 691BS – single AutoTester run includes non-destructive 20× baseline.
        Synthetic performance results are AUDIT, not functional PASS. */
@@ -1542,12 +1576,13 @@
     worker.postMessage({action:'run',suite:activeSuite==='editor-sync'?'all':activeSuite});
   }
   function report(){
+    if(activeSuite==='performance')return window.LubaNoteAutoTesterPerf691BS?.quickReport?.()||'Rychly vykon nedostupny.';
     const counts=sums();
     const lines=[
       'LUBANOTE AUTOTESTER / 691BZ',
       '691BS: Vykon 20x je soucasti Spustit vse: 20 rAF oken behem testu, 20x izolovane synteticke DOM testy a skutecne Core V2 klavesnicove prikazy zachycene pri regresi. AUDIT NENI funkcni PASS. Realny Backspace/Sync 20x neni automaticky provaden nad uzivatelskymi daty ani produkcnim serverem. Baseline je pouze v localStorage tohoto zarizeni.',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
-      `PERFORMANCE_SCORE=${Number.isFinite(currentRunPerformanceScore?.value)?currentRunPerformanceScore.value:'NEZMERENO'} | reference=1000 | index vykonu (NE funkcni PASS)`,
+      'PERFORMANCE_SCORE=POZASTAVENO | 691BZ/691CB historicke body NEPLATNE; bez zavadejici reference 1000',
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
@@ -1570,6 +1605,7 @@
      691BS baseline/history already saved on this device. No rerun, no calls
      to Core V2, no production sync, no change to existing AutoTester results. */
   function fpsReport691BT(){
+    if(activeSuite==='performance')return window.LubaNoteAutoTesterPerf691BS?.quickReport?.()||'Rychly vykon nedostupny.';
     const lines=[
       'LUBANOTE – FPS / VYKONOVY REPORT 691BZ',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
@@ -1598,14 +1634,8 @@
       const latest=runs[runs.length-1];
       lines.push('',`POSLEDNI ULOZENE MERENI: ${latest?.date||'-'} | build=${latest?.build||'starsi'} | ulozenych behu=${runs.length}`);
       lines.push(`Prostredi: ${latest?.environment||'WebView'} | viewport ${latest?.viewport||'-'}`);
-      if(latest?.score){
-        const sc=latest.score;
-        lines.push('',`LUBANOTE PERFORMANCE SCORE / ${sc.version||'V1'}: ${sc.value??'NEDOSTUPNÉ'} bodu; referencni index=1000; zmena=${n(sc.changePercent)}%; baseline=${sc.referenceDate||'-'}; build reference=${sc.referenceBuild||'-'}`);
-        lines.push('Vážený relativní index daného zařízení. NENÍ to funkční PASS, 3DMark ani plnohodnotné FPS při dlouhém podržení Backspace.');
-        if(Array.isArray(sc.components))for(const item of sc.components)
-          lines.push(`SLOZKA ${item.label}: váha ${Math.round(item.weight*100)}%; měření ${n(item.current)}, baseline ${n(item.reference)}, relativni pomer ${n(item.ratio)}`);
-        if(sc.reason)lines.push('Důvod nedostupnosti: '+sc.reason);
-      }
+      if(latest?.score)lines.push('',
+        'HISTORICKÉ BODOVÉ SKÓRE 691BZ/691CB: NEPLATNÉ / POZASTAVENÉ. Staré body a reference se k porovnání výkonu NEPOUŽÍVAJÍ.');
       lines.push(`FPS okna 20x: ${met(latest?.fps)}`);
       lines.push(`Casy jednotlivych snimku (ms): ${met(latest?.frames)}`);
       lines.push(`Backspace 20x (ms): ${met(latest?.actualInput?.backspace)}`);
@@ -1639,6 +1669,7 @@
       lines.push('','Ulozene vykonove vysledky 691BS zatim nejsou dostupne.');
       lines.push('Spust v AutoTesteru "Spustit vse" a po dokonceni opet zkopiruj FPS report.');
     }
+    lines.push('',window.LubaNoteAutoTesterPerf691BS?.quickReport?.()||'Rychlý výkon 691CE není dostupný.');
     lines.push('','Bez obsahu poznamek, hesel, klicu a uzivatelskych ID.');
     return lines.join('\n');
   }
