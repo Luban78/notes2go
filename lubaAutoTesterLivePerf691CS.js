@@ -98,13 +98,17 @@
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
-        const gaps=[],longTasks=[];let last=0;
+        const gaps=[],longTasks=[],stallAt=[];let last=0,first=0;
         if(window.PerformanceObserver?.supportedEntryTypes?.includes('longtask')){
           observer=new PerformanceObserver(list=>{if(collect)for(const e of list.getEntries())longTasks.push(e.duration);});
           observer.observe({entryTypes:['longtask']});
         }
         collect=true;
-        const frame=t=>{if(!collect)return;if(last)gaps.push(t-last);last=t;raf=requestAnimationFrame(frame);};
+        const frame=t=>{if(!collect)return;if(!first)first=t;if(last){
+          const dt=t-last;gaps.push(dt);
+          /* Jen casove znaceni – zadne logovani/DOM prace behem tahu. */
+          if(dt>=70)stallAt.push(Math.round(t-first));
+        }last=t;raf=requestAnimationFrame(frame);};
         raf=requestAnimationFrame(frame);
         let ack;
         try{ack=await plugin.gestureOwnedEditor({id,target:'selection-end',type:'swipe-edge-691CS'});}
@@ -121,10 +125,10 @@
         const p95=gaps[Math.min(gaps.length-1,Math.ceil(gaps.length*.95)-1)];
         results.push({p95:Math.round(p95*10)/10,max:Math.round(gaps.at(-1)*10)/10,
           long:longTasks.filter(x=>x>50).length,largest:Math.round((longTasks.at(-1)||0)*10)/10,
-          scroll:deltaScroll,frames:gaps.length});
+          scroll:deltaScroll,frames:gaps.length,stalls70:stallAt.length,stallAt:stallAt.slice(0,12)});
       }
       const avg=key=>Math.round(results.reduce((a,x)=>a+x[key],0)/results.length*10)/10;
-      const detail=`691CX LIVE_NATIVE_EDGE PASS 5/5; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const detail=`691CY LIVE_NATIVE_EDGE PASS 5/5; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
       await closeOwnedEditorIfOpen(id);
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
     }catch(e){

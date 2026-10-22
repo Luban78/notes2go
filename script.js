@@ -6016,22 +6016,38 @@ function pouzivaSvgIkonyRozhrani() {
   );
 }
 
-function ziskejViditelneKartySeStabilnimId() {
+/* 691CY – vyber vsech viditelnych karet cte uloziste JEN jednou.
+   Drive Promise.all pro kazdou kartu volal zajistiStabilniIdKarty(),
+   tedy opakovane loadTask() a pro starsi karty i paralelni saveAllTasks(). */
+async function ziskejViditelneKartySeStabilnimId() {
   const nodes = [
     ...document.querySelectorAll('.taskCard[data-card-source-index]')
   ];
+  const tasks = loadTask();
+  const ids = new Set();
+  let doplnenaId = false;
+  const casZmeny = new Date().toISOString();
 
-  return Promise.all(
-    nodes.map(async (node) => {
-      const index = Number(node.dataset.cardSourceIndex);
+  for (const node of nodes) {
+    const index = Number(node.dataset.cardSourceIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= tasks.length) continue;
+    const task = tasks[index];
+    if (!task) continue;
 
-      if (!Number.isInteger(index) || index < 0) {
-        return null;
-      }
+    if (!task.id) {
+      task.id = typeof vytvorStabilniIdStarePoznamky === "function"
+        ? vytvorStabilniIdStarePoznamky(task)
+        : crypto.randomUUID();
+      task.updatedAt = casZmeny;
+      doplnenaId = true;
+    }
+    if (task.id) ids.add(task.id);
+  }
 
-      return zajistiStabilniIdKarty(index);
-    })
-  ).then((ids) => ids.filter(Boolean));
+  if (doplnenaId && await saveAllTasks(tasks) === false) {
+    throw new Error("Ulozeni ID vybranych karet selhalo");
+  }
+  return { ids: [...ids], doplnenaId, nodes };
 }
 
 function zobrazAkceVybranychKaret() {
@@ -6738,19 +6754,38 @@ cardMenu.addEventListener("click", async (event) => {
   }
 
   if (action === "bulk-select-all") {
-    const visibleIds =
-      await ziskejViditelneKartySeStabilnimId();
+    if (cardMenu.getAttribute("aria-busy") === "true") return;
 
-    if (!visibleIds || visibleIds.length === 0) {
-      return;
+    /* Viditelna odezva JESTE pred nactenim a zpracovanim karet. */
+    cardMenu.setAttribute("aria-busy", "true");
+    cardSelectionCompactCount.textContent = "⏳ Označuji karty…";
+    const akceVMenu = cardMenu.querySelectorAll("button");
+    akceVMenu.forEach((button) => { button.disabled = true; });
+    actionButton.textContent = "⏳ Označuji…";
+
+    try {
+      /* Nechame WebView vykreslit stav, nez zacne synchronni loadTask(). */
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+      const vysledek = await ziskejViditelneKartySeStabilnimId();
+      if (!vysledek.ids.length) return;
+
+      vybraneKarty = new Set(vysledek.ids);
+      rezimVyberuKaret = true;
+      if (vysledek.doplnenaId) {
+        /* Po prideleni ID potrebuje karta obnovit i drag key. */
+        renderTasks();
+      } else {
+        /* Bezne oznaceni uz ma stabilni ID: bez draheho renderTasks(). */
+        vysledek.nodes.forEach((node) => node.classList.add("cardSelected"));
+      }
+    } catch (error) {
+      console.error("Vybrat vsechny karty selhalo:", error);
+      zobrazZpravuAplikace?.("Výběr karet", "Nepodařilo se označit všechny karty.");
+    } finally {
+      cardMenu.removeAttribute("aria-busy");
+      aktualizujListuVyberuKaret();
+      if (rezimVyberuKaret) zobrazAkceVybranychKaret();
     }
-
-    vybraneKarty = new Set(visibleIds);
-    rezimVyberuKaret = true;
-
-    aktualizujListuVyberuKaret();
-    renderTasks();
-    zobrazAkceVybranychKaret();
     return;
   }
   
