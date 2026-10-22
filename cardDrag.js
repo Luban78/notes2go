@@ -651,6 +651,32 @@
     return kontejner.scrollTop || 0;
   }
 
+  /* 691CP: Zamez poskoceni celeho seznamu pri finalnim DOM presunu
+     a renderTasks(). WebView muze pri preskladani dvou sloupcu sam
+     posunout scroll anchoring. Poradi karet ani drag algoritmus nemenime. */
+  function zachovejScrollPriDokonceni(stav, akce) {
+    const kontejner = stav?.scrollKontejner;
+    if (!kontejner) return akce();
+
+    const scrollPred = ziskejScrollPozici(kontejner).top;
+    const scrollPrvek = jeDokumentovyScroll(kontejner)
+      ? (document.scrollingElement || document.documentElement)
+      : kontejner;
+    const puvodniAnchor = scrollPrvek?.style?.overflowAnchor || "";
+    if (scrollPrvek?.style) scrollPrvek.style.overflowAnchor = "none";
+
+    try {
+      return akce();
+    } finally {
+      // renderTasks() docasne vyprazdni oba sloupce; vrat presnou
+      // pozici jeste pred dalsim vykreslenym snimkem.
+      nastavScrollTop(kontejner, scrollPred);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (scrollPrvek?.style) scrollPrvek.style.overflowAnchor = puvodniAnchor;
+      }));
+    }
+  }
+
   function pointerDoObsahu(stav, x, y) {
     const kontejner = stav?.scrollKontejner;
     const rect = ziskejScrollRect(kontejner);
@@ -1852,7 +1878,9 @@
       autoScrollFrame = null;
     }
 
-    obnovKartu(stav, zmeneno ? stav.poradiAktualni : stav.poradiOriginal);
+    zachovejScrollPriDokonceni(stav, () =>
+      obnovKartu(stav, zmeneno ? stav.poradiAktualni : stav.poradiOriginal)
+    );
     blokovatKlikDo = Date.now() + 500;
 
     if (!zmeneno) {
@@ -1877,7 +1905,9 @@
     try {
       await ulozPresun(stav.cardId, predchoziKlic, nasledujiciKlic);
     } finally {
-      try { stav.onAfterReorder?.(); } finally {
+      try {
+        zachovejScrollPriDokonceni(stav, () => stav.onAfterReorder?.());
+      } finally {
         requestAnimationFrame(() => requestAnimationFrame(() => {
           document.body.classList.remove("lubaCardDropSettling691CJ");
         }));
