@@ -4616,7 +4616,12 @@
     if (stav?.handleDrag?.autoSmer && target === stav.editor) {
       return;
     }
-    zapisSelectionScrollDiag("SCROLL", event);
+    /* 691CQ: běžný scroll bez aktivního selection-scroll režimu nemá
+       na každém snímku spouštět SEL673D diagnostiku. Ta čte selection,
+       vytváří text reportu a rozesílá event i tehdy, když není co ladit.
+       Při aktivním výběru zůstává původní diagnostika beze změny;
+       touch/scroll/selection engine a UX nejsou nijak upraveny. */
+    if (stav) zapisSelectionScrollDiag("SCROLL", event);
   }, { passive: true, capture: true });
 
   document.addEventListener("touchend", (event) => {
