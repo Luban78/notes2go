@@ -209,11 +209,12 @@
         scale: var(--ln-card-target-scale, .97) !important;
         transition: scale var(--ln-card-focus-ms, 80ms) ease-out !important;
       }
-      /* Opposite pinned group remains blocked in logic, without global
-         grayscale/opacity transitions that flash on finger-up. */
+      /* 691CL: restore visual separation of pinned/unpinned groups.
+         No animated filter/opacity reset on drop (avoids card flashes). */
       body.lubaCardDragMode .taskCard.lubaCardDragBlockedGroup {
-        filter: none !important;
-        opacity: 1 !important;
+        filter: grayscale(1) saturate(.12) brightness(.82) !important;
+        opacity: .46 !important;
+        transition: none !important;
       }
       .lubaCardDragPlaceholder,
       .lubaCardDragPlaceholder.lubaCardDragPlaceholderTarget {
