@@ -22,12 +22,12 @@
    */
   const VYCHOZI_NASTAVENI = Object.freeze({
     scalePct: 100,
-    ghostScalePct: 88,
+    ghostScalePct: 80,
     targetScalePct: 97,
     longPressMs: 430,
     preLongMovePx: 16,
     dwellMs: 120,
-    reorderMs: 160,
+    reorderMs: 360,
     dropMs: 110,
     focusMs: 80,
     insetPx: 8,
