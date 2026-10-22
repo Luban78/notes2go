@@ -249,12 +249,17 @@
       #ln-card-drag-tuning {
         position: fixed;
         z-index: 2147483645;
-        left: 14px;
-        right: 14px;
+        left: 12px;
+        right: auto;
         top: max(74px, env(safe-area-inset-top));
-        max-height: calc(100dvh - 120px);
-        overflow: auto;
-        padding: 12px;
+        width: min(520px, calc(100vw - 24px));
+        max-width: calc(100vw - 24px);
+        height: min(56dvh, 510px);
+        max-height: calc(100dvh - 92px);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        padding: 10px;
         border: 1px solid var(--color-border);
         border-radius: 18px;
         background: color-mix(in srgb, var(--color-background) 96%, transparent);
@@ -287,8 +292,33 @@
         align-items: center;
         gap: 8px;
       }
-      #ln-card-drag-tuning .ln-cdr-top { grid-template-columns: 1fr auto auto; margin-bottom: 10px; }
-      #ln-card-drag-tuning .ln-cdr-top strong { font-size: 1.0625rem; }
+      /* 691CM: move ONLY by the header; the setting list scrolls independently. */
+      #ln-card-drag-tuning .ln-cdr-top {
+        grid-template-columns: minmax(0,1fr) auto auto;
+        gap: 6px;
+        flex: 0 0 auto;
+        margin-bottom: 5px;
+        padding: 3px 0 9px;
+        border-bottom: 1px solid var(--color-border);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: grab;
+      }
+      #ln-card-drag-tuning .ln-cdr-top:active { cursor: grabbing; }
+      #ln-card-drag-tuning .ln-cdr-top strong { display:block; font-size: .95rem; line-height:1.2; }
+      #ln-card-drag-tuning .ln-cdr-grip { display:block; font-size:.72rem; opacity:.78; margin-top:4px; }
+      #ln-card-drag-tuning .ln-cdr-top button { min-height:38px; padding:0 8px; font-size:.85rem; cursor:pointer; }
+      #ln-card-drag-tuning .ln-cdr-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        padding: 0 2px 8px;
+      }
       #ln-card-drag-tuning .ln-cdr-row {
         grid-template-columns: minmax(0,1fr) 82px 52px 52px;
         min-height: 52px;
@@ -329,16 +359,21 @@
       </div>`).join("");
     panel.innerHTML = `
       <div class="ln-cdr-top">
-        <strong>⚙️ Reálné karty – drag tuning</strong>
+        <div class="ln-cdr-drag-handle" aria-label="Přetáhnout panel ladění karet">
+          <strong>⚙️ Reálné karty – drag tuning</strong>
+          <span class="ln-cdr-grip">↕ Přetáhni za tuto hlavičku</span>
+        </div>
         <button type="button" data-action="defaults">Výchozí</button>
         <button type="button" data-action="close">Hotovo</button>
       </div>
-      ${radky}
-      <div class="ln-cdr-foot">
-        <button type="button" data-action="detail">Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}</button>
-        <button type="button" data-action="copy">Kopírovat hodnoty</button>
-      </div>
-      <small>Změny platí hned pro aktuální běh. Po startu se načtou z příslušného TXT souboru; „Výchozí“ vrátí právě načtené hodnoty.</small>`;
+      <div class="ln-cdr-scroll">
+        ${radky}
+        <div class="ln-cdr-foot">
+          <button type="button" data-action="detail">Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}</button>
+          <button type="button" data-action="copy">Kopírovat hodnoty</button>
+        </div>
+        <small>Změny platí hned pro aktuální běh. Po startu se načtou z příslušného TXT souboru; „Výchozí“ vrátí právě načtené hodnoty.</small>
+      </div>`;
     document.body.appendChild(panel);
     tuningPanel = panel;
 
@@ -350,6 +385,7 @@
       tuningTlacitko.hidden = true;
       tuningTlacitko.addEventListener("click", () => {
         panel.hidden = false;
+        panel.lubaDragTuningClamp691CM?.();
         tuningTlacitko.hidden = true;
       });
       document.body.appendChild(tuningTlacitko);
@@ -363,6 +399,59 @@
       const detail = panel.querySelector('[data-action="detail"]');
       if (detail) detail.textContent = `Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}`;
     };
+
+    /* 691CM – touch/mouse drag for the tuning window, not the cards.
+       Clamp to the viewport, keep header actions clickable, and leave the
+       internal parameter list scrollable. Never store screen coordinates. */
+    const hlavicka691CM = panel.querySelector(".ln-cdr-top");
+    let presunPanelu691CM = null;
+    const omez691CM = (hodnota, minimum, maximum) => Math.max(minimum, Math.min(maximum, hodnota));
+    const hranice691CM = () => {
+      const rect = panel.getBoundingClientRect();
+      return {
+        xMax: Math.max(8, window.innerWidth - rect.width - 8),
+        yMax: Math.max(8, window.innerHeight - rect.height - 8)
+      };
+    };
+    const umistiPanel691CM = (x, y) => {
+      const hranice = hranice691CM();
+      panel.style.right = "auto";
+      panel.style.left = `${Math.round(omez691CM(x, 8, hranice.xMax))}px`;
+      panel.style.top = `${Math.round(omez691CM(y, 8, hranice.yMax))}px`;
+    };
+    const srovnejPanel691CM = () => {
+      if (panel.hidden) return;
+      const rect = panel.getBoundingClientRect();
+      umistiPanel691CM(rect.left, rect.top);
+    };
+    hlavicka691CM.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("button")) return;
+      if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+      const rect = panel.getBoundingClientRect();
+      presunPanelu691CM = {
+        pointerId: event.pointerId,
+        x: event.clientX, y: event.clientY,
+        left: rect.left, top: rect.top
+      };
+      umistiPanel691CM(rect.left, rect.top);
+      try { hlavicka691CM.setPointerCapture(event.pointerId); } catch (_) {}
+      event.preventDefault();
+    });
+    hlavicka691CM.addEventListener("pointermove", (event) => {
+      const drag = presunPanelu691CM;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      umistiPanel691CM(drag.left + event.clientX - drag.x, drag.top + event.clientY - drag.y);
+      event.preventDefault();
+    });
+    const dokoncitPresunPanelu691CM = (event) => {
+      if (!presunPanelu691CM || presunPanelu691CM.pointerId !== event.pointerId) return;
+      presunPanelu691CM = null;
+      try { if (hlavicka691CM.hasPointerCapture(event.pointerId)) hlavicka691CM.releasePointerCapture(event.pointerId); } catch (_) {}
+    };
+    hlavicka691CM.addEventListener("pointerup", dokoncitPresunPanelu691CM);
+    hlavicka691CM.addEventListener("pointercancel", dokoncitPresunPanelu691CM);
+    window.addEventListener("resize", srovnejPanel691CM);
+    panel.lubaDragTuningClamp691CM = srovnejPanel691CM;
 
     panel.addEventListener("click", async (event) => {
       const tlacitko = event.target.closest("button");
@@ -413,6 +502,7 @@
   function otevriLadeni() {
     const panel = vytvorTuningPanel();
     panel.hidden = false;
+    panel.lubaDragTuningClamp691CM?.();
     if (tuningTlacitko) tuningTlacitko.hidden = true;
     emitujDragDebug("TUNE", { settings: souhrnNastaveni(), open: true });
   }
