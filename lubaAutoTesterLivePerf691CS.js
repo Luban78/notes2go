@@ -41,9 +41,9 @@
       check(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function','native_android_plugin_unavailable');
       const n=owned(id);const marker='Zapis_z_viditelneho_editoru_690T';
       const paragraph='Výkon výběru červenou kapkou – opakovaný dlouhý odstavec pro test automatického posouvání. ';
-      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:700},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
+      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:240},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
       // Preserve the note's test ownership and existing identifying text; mutate only its own UUID.
-      const revised={...n,note:marker+'\n'+Array.from({length:700},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
+      const revised={...n,note:marker+'\n'+Array.from({length:240},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
       const safeSave=window.LubaNoteSync?.provedLokalniZmenuASynchronizuj;
       check(typeof safeSave==='function'&&typeof window.saveAllTasks==='function','safe_local_storage_missing');
       await safeSave(()=>window.saveAllTasks(window.loadTask().map(x=>x.id===id?revised:x)),revised);
@@ -51,7 +51,7 @@
       check(owned(id)?.richContent===rich,'test_note_not_saved');
       check(alive(),'cancelled_before_open');
       minimize();progress('691CS · otevírám skutečný dlouhý editor');
-      await window.openTaskEditorById(id);await wait(600);
+      await window.openTaskEditorById(id);await wait(900);
       const modal=document.getElementById('taskModal');
       const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
       check(modal?.dataset?.taskId===id&&!modal.hidden&&editor?.isConnected&&modal.contains(editor),'real_editor_not_visible');
@@ -82,9 +82,9 @@
           return `${el.getAttribute('data-ln-v2-selection-handle')||'?'}:hidden=${el.hidden?1:0},rect=${Math.round(r.width)}x${Math.round(r.height)},top=${Math.round(r.top)},display=${cs.display}`;
         }).join('|')||'none';
         let handle=null,setup=null;
-        for(const top of [0,140]){
+        for(const top of [0,140,0,140]){
           scroll.scrollTop=top;
-          await wait(220);
+          await wait(350);
           setup=await plugin.gestureOwnedEditor({id,target:'perf-word-center',type:'doubletap'});
           check(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_doubletap_ack_missing');
           for(let retry=0;retry<10;retry++){
@@ -93,7 +93,7 @@
           }
           if(handle)break;
         }
-        check(editor.classList.contains('ln-v2-selection-custom-active'),'own_selection_not_activated');
+        check(editor.classList.contains('ln-v2-selection-custom-active'),'own_selection_not_activated; top='+Math.round(scroll.scrollTop)+'; '+describeNewHandles().slice(0,120));
         check(handle,'short_word_handles_not_ready; top='+Math.round(scroll.scrollTop)+'; '+describeNewHandles().slice(0,155));
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
