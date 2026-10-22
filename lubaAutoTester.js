@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691BS</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691BT</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -40,7 +40,7 @@
       <div class="lat-progress-info"><span id="lat-live-step">Připraveno</span><span id="lat-progress-num">–</span></div>
       <div class="lat-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="lat-progress-track"><div id="lat-progress-fill"></div></div>
     </section>
-    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><div class="lat-result-actions"><button type="button" data-lat="jump-first-problem" id="lat-jump-first-problem" hidden>↓ Přejít na chybu</button><button data-lat="copy" type="button" disabled>Kopírovat report</button></div></div>
+    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><div class="lat-result-actions"><button type="button" data-lat="jump-first-problem" id="lat-jump-first-problem" hidden>↓ Přejít na chybu</button><button type="button" data-lat="copy-fps" class="lat-copy-fps-691BT" title="Zkopírovat jen výkonový report včetně uložené baseline">📊 Kopírovat FPS report</button><button data-lat="copy" type="button" disabled>Kopírovat report</button></div></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div class="lat-note-review"><button type="button" data-lat="review-note" id="lat-review-note" hidden>Otevřít poslední poznámku Testy v aplikaci</button><small>Poznámky z testů zůstávají v prostoru LOCAL pod štítkem Testy.</small></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
@@ -251,6 +251,24 @@
         #ln-auto-tester .lat-area-picker-option[aria-checked='true']{background:#184c38;color:#baffd6}
         #ln-auto-tester .lat-area-picker-check{font-weight:800;color:#55d695;min-width:20px;text-align:right}
       `;
+      // 691BT: distinct action for the 691BS performance-only report.
+      const fpsCopyStyle=document.createElement('style');
+      fpsCopyStyle.id='lat-fps-copy-691BT';
+      fpsCopyStyle.textContent=`
+        #ln-auto-tester .lat-copy-fps-691BT {
+          min-height:44px;padding:9px 12px;border-radius:11px;
+          border:1px solid #3f9a70;background:#1d5a43;color:#e6fff0;
+          font-size:.86rem;font-weight:700;white-space:normal;
+        }
+        #ln-auto-tester .lat-copy-fps-691BT:active {background:#267658;}
+        #ln-auto-tester .lat-result-actions {display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;}
+        @media(max-width:550px) {
+          #ln-auto-tester .lat-result-head {flex-wrap:wrap;}
+          #ln-auto-tester .lat-result-actions {width:100%;justify-content:stretch;}
+          #ln-auto-tester .lat-result-actions button {flex:1 1 auto;min-width:125px;}
+        }
+      `;
+      document.head.appendChild(fpsCopyStyle);
       document.head.appendChild(pickerStyle);
       document.body.appendChild(screen);
       screen.addEventListener('click',(e)=>{
@@ -268,6 +286,7 @@
         if(action==='visual'){visualEnabled=!visualEnabled;btn.textContent=visualEnabled?'Náhled zapnutý':'Náhled vypnutý';btn.setAttribute('aria-pressed',String(visualEnabled));const lab=screen.querySelector('.lat-laboratory');if(lab)lab.dataset.off=visualEnabled?'0':'1';return;}
                 if(action==='jump-first-problem'){jumpToFirstProblem();return;}
         if(action==='jump-coverage'){jumpToCoverage();return;}
+        if(action==='copy-fps'){void copyFpsReport(btn);return;}
         if(action==='copy'){void copyReport(btn);}
       });
       // Tapping the displayed error itself should jump to its diagnosis.
@@ -1471,6 +1490,80 @@
       'Bez hesel, klicu, poznamek, uzivatelskych identifikatoru a obsahu databaze.'
     ];
     return lines.join('\n');
+  }
+  /* 691BT – one-tap FPS report. Read-only: current performance rows plus the
+     691BS baseline/history already saved on this device. No rerun, no calls
+     to Core V2, no production sync, no change to existing AutoTester results. */
+  function fpsReport691BT(){
+    const lines=[
+      'LUBANOTE – FPS / VYKONOVY REPORT 691BT',
+      `build: ${window.LUBANOTE_VERSION||'neznama'}`,
+      `export: ${new Date().toISOString()}`,
+      'PROVENIENCE: AUDIT; vykonove hodnoty nejsou funkcni PASS.',
+      'FPS: 20 oken pri behu AutoTesteru; ne FPS pri kazdem jednotlivem gestu.',
+      'Backspace/Psani: skutecne prikazy Core V2 do vlastni testovaci LOCAL poznamky; ne fyzicke podrzeni klavesy v dlouhe produkcni poznamce.',
+      'Synteticke vykreslovani: izolovany DOM, nikoli produkcni drag/editor.',
+      'Sync 20x na produkcnim serveru: NETESTOVANO.'
+    ];
+    const live=results.filter(r=>String(r.id||'').startsWith('perf691bs-'));
+    let old;
+    try { old=window.LubaNoteAutoTesterPerf691BS?.last?.()?.rows||[]; } catch(_e){old=[];}
+    const rows=live.length?live:Array.isArray(old)?old:[];
+    if(rows.length){
+      lines.push('',`VYKONOVA KONTROLA (${rows.length} vysledku z tohoto behu):`);
+      for(const r of rows)lines.push(`${r.status||'AUDIT'} | ${r.id||'-'} | ${r.name||'-'} | ${r.ms??0} ms | ${r.detail||'-'}`);
+    }
+    let saved=null;
+    try { saved=JSON.parse(localStorage.getItem('lubanoteAutoTesterPerfBaseline691BS')||'null'); }
+    catch(_e) {lines.push('Ulozena baseline: nelze nacist localStorage.');}
+    const n=v=>typeof v==='number' && Number.isFinite(v) ? String(v) : 'N/A';
+    const met=v=>`n=${n(v?.count)} | prumer=${n(v?.avg)} | median=${n(v?.median)} | p95=${n(v?.p95)} | min=${n(v?.min)} | max=${n(v?.max)}`;
+    if(saved && Array.isArray(saved.runs) && saved.runs.length){
+      const runs=saved.runs;
+      const latest=runs[runs.length-1];
+      lines.push('',`POSLEDNI ULOZENE MERENI: ${latest?.date||'-'} | ulozenych behu=${runs.length}`);
+      lines.push(`Prostredi: ${latest?.environment||'WebView'} | viewport ${latest?.viewport||'-'}`);
+      lines.push(`FPS okna 20x: ${met(latest?.fps)}`);
+      lines.push(`Casy jednotlivych snimku (ms): ${met(latest?.frames)}`);
+      lines.push(`Backspace 20x (ms): ${met(latest?.actualInput?.backspace)}`);
+      lines.push(`Psani 20x (ms): ${met(latest?.actualInput?.typing)}`);
+      const names={
+        'cards-render-100':'100 karet – render',
+        'cards-reorder-100':'100 karet – preskladani',
+        'editor-render-200':'200 radku – synteticky render',
+        'search-500':'500 poznamek – synteticke hledani'
+      };
+      for(const [id,v] of Object.entries(latest?.synthetic||{}))
+        lines.push(`${names[id]||id} (ms, 20x): ${met(v)}`);
+      if(saved.baseline && typeof saved.baseline==='object'){
+        lines.push('','BASELINE ULOZENA NA TOMTO ZARIZENI:');
+        for(const [id,v] of Object.entries(saved.baseline))
+          lines.push(`${id}: prumer=${n(v?.avg)} | p95=${n(v?.p95)} | od=${v?.date||'-'}`);
+      }
+    }else{
+      lines.push('','Ulozene vykonove vysledky 691BS zatim nejsou dostupne.');
+      lines.push('Spust v AutoTesteru "Spustit vse" a po dokonceni opet zkopiruj FPS report.');
+    }
+    lines.push('','Bez obsahu poznamek, hesel, klicu a uzivatelskych ID.');
+    return lines.join('\n');
+  }
+  async function copyFpsReport691BTValue(value){
+    let success=false;
+    try {if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);success=true;}}catch(_e){}
+    if(!success){
+      const area=document.createElement('textarea');area.value=value;
+      area.setAttribute('readonly','');area.style.cssText='position:fixed;left:-10000px;top:0;opacity:0';
+      document.body.appendChild(area);area.select();
+      try{success=document.execCommand('copy');}catch(_e){}
+      area.remove();
+    }
+    return success;
+  }
+  async function copyFpsReport(btn){
+    const original='📊 Kopírovat FPS report';
+    const success=await copyFpsReport691BTValue(fpsReport691BT());
+    btn.textContent=success?'FPS zkopírováno ✓':'Kopírování selhalo';
+    setTimeout(()=>{if(btn.isConnected)btn.textContent=original;},2500);
   }
   async function copyReport(btn){
     const value=report();
