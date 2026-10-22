@@ -1,11 +1,11 @@
-Scale okolních: 78 %
-Scale tažené: 110 %
+Scale okolních: 100 %
+Scale tažené: 93 %
 Long press: 430 ms
 Pohyb před LP: 16 px
-Dwell / zamknutí: 320 ms
-Animace přesunu: 700 ms
+Dwell / zamknutí: 160 ms
+Animace přesunu: 200 ms
 Položení karty: 0 ms
-Animace scale: 20 ms
+Animace scale: 120 ms
 Přesný slot inset: 8 px
 Tolerance klidu: 11 px
 Auto-scroll okraj: 85 px

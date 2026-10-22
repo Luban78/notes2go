@@ -21,14 +21,14 @@
    * doladit bez dalšího patchování kódu.
    */
   const VYCHOZI_NASTAVENI = Object.freeze({
-    scalePct: 78,
-    ghostScalePct: 110,
+    scalePct: 100,
+    ghostScalePct: 93,
     longPressMs: 430,
     preLongMovePx: 16,
-    dwellMs: 320,
-    reorderMs: 700,
+    dwellMs: 160,
+    reorderMs: 200,
     dropMs: 180,
-    focusMs: 20,
+    focusMs: 120,
     insetPx: 8,
     jitterPx: 11,
     autoScrollEdgePx: 85,
@@ -38,7 +38,7 @@
 
   const DEFINICE_PARAMETRU = Object.freeze({
     scalePct: { label: "Scale okolních", unit: "%", min: 70, max: 100, step: 1 },
-    ghostScalePct: { label: "Scale tažené", unit: "%", min: 100, max: 120, step: 1 },
+    ghostScalePct: { label: "Scale tažené", unit: "%", min: 85, max: 120, step: 1 },
     longPressMs: { label: "Long press", unit: "ms", min: 200, max: 700, step: 20 },
     preLongMovePx: { label: "Pohyb před LP", unit: "px", min: 6, max: 30, step: 1 },
     dwellMs: { label: "Dwell / zamknutí", unit: "ms", min: 120, max: 600, step: 20 },
@@ -192,8 +192,7 @@
         margin: 0 !important;
       }
       .taskCard.lubaCardDragGhost {
-        transform: none !important;
-        will-change: left, top, scale !important;
+        will-change: transform, scale !important;
         transition: scale var(--ln-card-focus-ms, 20ms) cubic-bezier(.4,0,.2,1), box-shadow 120ms ease, opacity 120ms ease !important;
       }
       body.lubaCardDragMode .taskCard:not(.lubaCardDragSource):not(.lubaCardDragGhost) {
@@ -1108,10 +1107,8 @@
       });
     }
 
-    stav.karta.style.left =
-      `${Math.round(x - stav.offsetX)}px`;
-    stav.karta.style.top =
-      `${Math.round(y - stav.offsetY)}px`;
+    // 691CI: compositor-friendly ghost motion; left/top remain fixed at pickup.
+    stav.karta.style.transform = `translate3d(${Math.round(x - stav.pickupX)}px, ${Math.round(y - stav.pickupY)}px, 0)`;
 
     aktualizujZamer(x, y);
   }
@@ -1418,6 +1415,7 @@
     ghost.style.pointerEvents = "none";
     ghost.style.transformOrigin = `${Math.round(offsetX)}px ${Math.round(offsetY)}px`;
     ghost.style.scale = String(nastaveni.ghostScalePct / 100);
+    ghost.style.transform = 'translate3d(0px, 0px, 0)';
     document.body.append(ghost);
     return ghost;
   }
@@ -1601,8 +1599,7 @@
       Math.max(0, (cil.height - kartaRect.height) / 2);
 
     stav.karta.style.transition = [
-      `left ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
-      `top ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
+      `transform ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`,
       `scale ${nastaveni.dropMs}ms cubic-bezier(.2,.8,.2,1)`
     ].join(", ");
 
@@ -1611,8 +1608,9 @@
         return;
       }
 
-      stav.karta.style.left = `${Math.round(cilLeft)}px`;
-      stav.karta.style.top = `${Math.round(cilTop)}px`;
+      const originalLeft = Number.parseFloat(stav.karta.style.left) || 0;
+      const originalTop = Number.parseFloat(stav.karta.style.top) || 0;
+      stav.karta.style.transform = `translate3d(${Math.round(cilLeft - originalLeft)}px, ${Math.round(cilTop - originalTop)}px, 0)`;
       stav.karta.style.scale = "1";
     });
 
