@@ -3,8 +3,9 @@
    Real quick sync executes only after an explicit user click, sequentially. */
 (() => {
   'use strict';
-  const VERSION = '691BW';
-  const INPUT_TAIL_MS = 240; // same short post-input window for each real action
+  const VERSION = '691BY';
+  const INPUT_TAIL_MS = 240; // initial action-local frame tagging
+  const POST_TAIL_MS = 10000; // 10 seconds AFTER input #20, including continued hold
   const STORE_KEY = 'lubanoteLocalPerfBaselines691BQ';
   const REPEATS = 20;
   const WINDOW_MS = 800;
@@ -77,13 +78,13 @@
     if (!s) return;
     const count=Math.min(REPEATS,s.samples.length);
     const p=byId('ln-fb-progress');if(p)p.value=count;
-    const text=`${label(s.scenario)} · ${count}/${REPEATS}`;
+    const text=s.finishing?`${label(s.scenario)} · 20/20 · DOSLEDOVÁNÍ 10 s`: `${label(s.scenario)} · ${count}/${REPEATS}`;
     const st=byId('ln-fb-status');if(st)st.textContent=s.cancelled?'Přerušeno':text;
     if(suite) {
       hud().hidden=true;
       refreshSuiteOverlay();
     } else {
-      const h=hud();h.hidden=false;h.textContent=`BENCH ${count}/${REPEATS}`;
+      const h=hud();h.hidden=false;h.textContent=s.finishing?'BENCH 20/20 · DOSLEDOVÁNÍ 10 s':`BENCH ${count}/${REPEATS}`;
     }
   }
   function switchButtons(running) {
@@ -101,6 +102,11 @@
       const dt=timestamp-s.lastFrame;
       if(dt>0 && dt<60000) {
         s.frameGaps.push(dt);
+        if(s.scenarioMode==='real-operation' && s.finishing && timestamp>=s.finishedAt) {
+          s.postFrameGaps.push(dt);
+        } else if(s.scenarioMode==='real-operation') {
+          s.preFrameGaps.push(dt);
+        }
         if(s.scenarioMode==='real-operation' && s.lastActionAt!=null &&
            (s.lastActionAt>=s.lastFrame-1 || timestamp-s.lastActionAt<=INPUT_TAIL_MS)) {
           s.activeFrameGaps.push(dt);
@@ -120,9 +126,8 @@
       }
     }
     if(s.scenarioMode==='real-operation' && s.finishing &&
-       timestamp>=s.lastActionAt+INPUT_TAIL_MS) {
-      s.frameRequest=0;
-      requestAnimationFrame(()=>{if(active===s&&!s.cancelled)complete(s);});
+       timestamp>=s.finishedAt+POST_TAIL_MS) {
+      complete(s);
       return;
     }
     s.frameRequest=requestAnimationFrame(t=>frameLoop(s,t));
@@ -130,6 +135,7 @@
   function stopFrame(s) {
     if(s?.frameRequest) cancelAnimationFrame(s.frameRequest);
     if(s?.armTimer)clearTimeout(s.armTimer);
+    if(s?.postTimer)clearTimeout(s.postTimer);
     s?.armObserver?.disconnect?.();
     if(s) {s.frameRequest=0;s.observer?.disconnect?.();}
   }
@@ -159,12 +165,12 @@
   /* 691BW: same sampling method + hold/taps + document size + FPS overlay.
      Never silently compare 691BV's all-window FPS with action-local FPS.
      Earlier measurements are preserved in history as historical data. */
-  const isNewInput = r => (r?.scenario==='backspace'||r?.scenario==='typing') && r?.measurementVersion==='691BW';
+  const isNewInput = r => (r?.scenario==='backspace'||r?.scenario==='typing') && ['691BW','691BY'].includes(r?.measurementVersion);
   const noteSizeClass = chars => chars<1000?'0–999 znaků':chars<5000?'1000–4999 znaků':chars<20000?'5000–19999 znaků':'20000+ znaků';
   const noteBlockClass = count => count<=10?'1–10 bloků':count<=100?'11–100 bloků':'101+ bloků';
   function comparabilityKey(r) {
     if(!isNewInput(r)) return null;
-    return [r.scenario,'input-active-691BW',r.environment,r.viewport,
+    return [r.scenario,'input-active-'+r.measurementVersion,r.environment,r.viewport,
       r.inputMode,r.noteSizeClass,noteBlockClass(r.noteBlocks),r.fpsOverlayEnabled?'fps-on':'fps-off',r.refreshClass].join('|');
   }
   function baselineFor(r) {
@@ -222,10 +228,21 @@
     txt+=`FPS celého měřicího intervalu: ${fmt(m.frames.avgFps)} | refresh odhad: ${fmt(m.frames.estimatedRefreshHz)} Hz\n`;
     txt+=`FPS panel při měření: ${r.fpsOverlayEnabled?'ZAP':'VYP'} | viewport: ${r.viewport}\n`;
     if(isNewInput(r)) {
-      txt+=`METODIKA 691BW: 20 reálných příkazů, rAF jen do 240 ms po každém vstupu; ne plošný FPS průměr.\n`;
+      txt+=r.measurementVersion==='691BY'
+        ?`METODIKA 691BY: 20 příkazů + 10 sekund pokračujícího sběru PO 20. příkazu; stará 691BW není srovnatelná.\n`
+        :`METODIKA 691BW: 20 reálných příkazů, rAF jen do 240 ms po každém vstupu; ne plošný FPS průměr.\n`;
       txt+=`Vstup: ${inputDisplayMode(r.inputMode)} | opakování držení=${r.repeatCount}/${REPEATS} | velikost poznámky≈${r.noteChars} znaků (${r.noteSizeClass}), ${r.noteBlocks} bloků\n`;
       txt+=`FPS BĚHEM MAZÁNÍ/PSANÍ (aktivní rAF intervaly): ${fmt(m.activeFrames?.avgFps)} | vzorků snímků: ${m.activeFrames?.frameCount||0} | p95: ${fmt(m.activeFrames?.p95FrameMs)} ms | nejhorší: ${fmt(m.activeFrames?.worstFrameMs)} ms\n`;
       txt+=`LongTask V OKOLÍ VSTUPU: ${m.inputLongTasks?.count??'N/A'} | nejhorší ${fmt(m.inputLongTasks?.worstMs)} ms\n`;
+      if(r.measurementVersion==='691BY'){
+        const before=m.before20,after=m.after20;
+        txt+=`PRVNÍCH 20 VSTUPŮ: frame n=${before?.frameCount||0} | FPS=${fmt(before?.avgFps)} | p95=${fmt(before?.p95FrameMs)}ms | nejhorší=${fmt(before?.worstFrameMs)}ms\n`;
+        txt+=`DALŠÍCH 10 s PO 20. VSTUPU: frame n=${after?.frameCount||0} | FPS=${fmt(after?.avgFps)} | p95=${fmt(after?.p95FrameMs)}ms | nejhorší=${fmt(after?.worstFrameMs)}ms | >50ms=${after?.framesOver50||0}\n`;
+        txt+=`LONGTASK PO 20. VSTUPU: počet=${m.postLongTasks?.count??'N/A'} | nejhorší=${fmt(m.postLongTasks?.worstMs)}ms\n`;
+        txt+=`PŘÍKAZY NAD RÁMEC 20 BĚHEM DOSLEDOVÁNÍ: ${r.extraActions||0} (bez měření doby, jen počet).\n`;
+        txt+=`POSLOUPNOST 20 PŘÍKAZŮ (ms, pořadí): ${m.actionSequence?.map(v=>fmt(v)).join(', ')||'N/A'}\n`;
+        txt+=`Pozor: FPS před/po je průměr ze skutečných rAF intervalů, není to GPU paint ani identifikace příčiny zpoždění.\n`;
+      }
       txt+=`Poznámka: odhad rAF není GPU paint profiler a 1/čas dalšího rAF není okamžité FPS displeje.\n`;
     }
     txt+=`Frame p95: ${fmt(m.frames.p95FrameMs)} ms | nejhorší frame: ${fmt(m.frames.worstFrameMs)} ms\n`;
@@ -347,6 +364,11 @@
       m.operationMs=summarize(s.samples.map(x=>x.durationMs));
       if(s.scenarioMode==='real-operation') {
         m.activeFrames=summarizeFrames(s.activeFrameGaps);
+        m.before20=summarizeFrames(s.preFrameGaps);
+        m.after20=summarizeFrames(s.postFrameGaps);
+        m.actionSequence=s.samples.map(x=>x.durationMs);
+        const postLong=s.longTaskEntries.filter(entry=>s.finishedAt && entry.at>=s.finishedAt);
+        m.postLongTasks={count:postLong.length,worstMs:postLong.length?Math.max(...postLong.map(x=>x.duration)):null};
         const longDuringInput=s.longTaskEntries.filter(entry=>s.actionTimes.some(t=>entry.at<=t+INPUT_TAIL_MS && entry.at+entry.duration>=t-5));
         m.inputLongTasks={count:longDuringInput.length,worstMs:longDuringInput.length?Math.max(...longDuringInput.map(v=>v.duration)):null};
         const keys=['snapshotMs','modelMs','historyMs','renderMs','extraMs','nextFrameMs'];
@@ -358,7 +380,7 @@
     const r={scenario:s.scenario,mode:s.scenarioMode,date:new Date().toISOString(),build:String(window.LUBANOTE_VERSION||'neuveden'),environment:window.Capacitor?.isNativePlatform?.()?'APK/WebView':'WEB',
       viewport:`${innerWidth}x${innerHeight}`,fpsOverlayEnabled:localStorage.getItem('lubanoteFpsVisible691BP')==='1',count:s.samples.length,metrics:m,samples:s.samples,
       ...(s.scenarioMode==='real-operation'?{
-        measurementVersion:'691BW',inputMode:s.repeatCount>=10?'hold':s.repeatCount?'mixed':'single',
+        measurementVersion:'691BY',extraActions:s.extraActions||0,inputMode:s.repeatCount>=10?'hold':s.repeatCount?'mixed':'single',
         repeatCount:s.repeatCount,noteChars:s.noteChars??0,noteBlocks:s.noteBlocks??0,
         noteSizeClass:noteSizeClass(s.noteChars??0),
         refreshClass:Math.round((m.activeFrames.estimatedRefreshHz||m.frames.estimatedRefreshHz||60)/30)*30+'Hz'
@@ -406,7 +428,7 @@
     if(active || !isAllowed() || !names[scenario] || (suite && !bySuite))return false;
     const s={scenario,scenarioMode:modeOf(scenario),samples:[],cancelled:false,lastFrame:null,frameGaps:[],frameRequest:0,windowStart:0,windowFrames:0,
       longTaskRecords:[],longTaskEntries:[],longTaskSupported:false,observer:null,armTimer:0,armObserver:null,
-      activeFrameGaps:[],lastActionAt:null,actionTimes:[],repeatCount:0,finishing:false,
+      activeFrameGaps:[],preFrameGaps:[],postFrameGaps:[],lastActionAt:null,actionTimes:[],repeatCount:0,finishing:false,finishedAt:0,postTimer:0,extraActions:0,
       noteChars:null,noteBlocks:null,noteToken:null};
     if(document.hidden) return false;
     active=s;switchButtons(true);
@@ -438,13 +460,15 @@
   function meriAkci(typ) {
     const autoPerf=window.LubaNoteAutoTesterPerf691BS;
     if(autoPerf?.meriAkci?.(typ) === true) return true;
-    const s=active;if(!s||s.cancelled||s.samples.length>=REPEATS||!isAllowed()||s.scenarioMode!=='real-operation')return false;
+    const s=active;if(!s||s.cancelled||!isAllowed()||s.scenarioMode!=='real-operation')return false;
     return s.scenario==='backspace' ? typ==='backspace' : s.scenario==='typing'&&(typ==='text'||typ==='space');
   }
   function zaznamAkce(m) {
     try { window.LubaNoteAutoTesterPerf691BS?.zaznamAkce?.(m); } catch (_) {}
-    const s=active;if(!s||s.cancelled||s.scenarioMode!=='real-operation'||s.samples.length>=REPEATS||!isAllowed())return;
+    const s=active;if(!s||s.cancelled||s.scenarioMode!=='real-operation'||!isAllowed())return;
     if(s.scenario==='backspace' ? m.typ!=='backspace' : !['text','space'].includes(m.typ))return;
+    if(s.finishing){s.extraActions++;return;}
+    if(s.samples.length>=REPEATS)return;
     if(!Number.isFinite(m.totalMs)||m.totalMs<0)return;
     const editor=window.LubaNoteEditorV2?.ziskejEditorElement?.();
     const modal=byId('taskModal');
@@ -472,7 +496,12 @@
     const returnedAt=performance.now();
     requestAnimationFrame(()=>{if(!s.cancelled)sample.nextFrameMs=performance.now()-returnedAt;});
     uiProgress(s);
-    if(s.samples.length>=REPEATS)s.finishing=true; // collect 240 ms after last actual press before saving
+    if(s.samples.length>=REPEATS){
+      s.finishing=true;s.finishedAt=performance.now();
+      // Timer also completes the run if WebView throttles or suppresses rAF.
+      s.postTimer=setTimeout(()=>{if(active===s&&!s.cancelled)complete(s);},POST_TAIL_MS+100);
+      uiProgress(s);
+    }
   }
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden && active){
