@@ -1729,11 +1729,14 @@
     });
   }
 
-  /* 691BX – narrow incremental Backspace visual path (Core V2 owns the model).
-     Zero new keyboard listeners / no timers beyond existing selection microtask. */
+  /* 691CA – DOM Range safety for the 691BX incremental Backspace.
+     CharacterData.data assignment resets a Chromium selection offset to 0.
+     A second synchronous keyboard command then deletes at the WRONG offset.
+     Use targeted deleteData with exact text validation; all other cases use
+     the existing full renderer. Lists/ToDo are deliberately not eligible. */
   function vykresliJenZmenenyText691BX(index, blockId, previousLength, selection) {
     const block = dokument?.bloky?.[index];
-    if (!editor || !block || block.id !== blockId || !jeTextovyBlok(block) ||
+    if (!editor || !block || block.id !== blockId || block.typ !== 'odstavec' ||
         !Array.isArray(block.obsah) || block.obsah.length !== 1 ||
         typeof block.obsah[0]?.text !== 'string') return false;
     const freshText = block.obsah[0].text;
@@ -1748,15 +1751,31 @@
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE ||
         spans[0].childNodes.length !== 1 ||
         textNode.data.length !== previousLength) return false;
+    const removedLength = previousLength - freshText.length;
+    const deletionStart = selection.konec.offset;
+    // Verify the exact grapheme removed: never apply a partial DOM change if
+    // model and DOM disagree or if deletion was outside the current paragraph.
+    const oldText = textNode.data;
+    if (!Number.isInteger(deletionStart) || deletionStart < 0 ||
+        deletionStart + removedLength > previousLength ||
+        oldText.slice(0, deletionStart) + oldText.slice(deletionStart + removedLength) !== freshText) return false;
     observerDomu?.disconnect();
-    try { textNode.data = freshText; }
-    catch (_error) { return false; }
+    try {
+      // deleteData adjusts an existing DOM Range's caret offset immediately;
+      // assigning .data resets the offset to zero in Chromium/WebView.
+      textNode.deleteData(deletionStart, removedLength);
+      if (textNode.data !== freshText) return false;
+      // Consecutive LubaKeyboard commands may arrive before the microtask runs.
+      // Restore the actual DOM selection now; overlay/toolbar remain deferred.
+      nastavVyberModelu(selection.zacatek, selection.konec);
+    } catch (_error) { return false; }
     finally {
       observerDomu?.observe(editor, {
         childList: true, subtree: true, attributes: true, characterData: true
       });
     }
-    // Restore model caret using the SAME Core V2 helper as full rendering.
+    // Keep the usual deferred toolbar/selection refresh; consecutive commands
+    // already see the correct caret from the synchronous restoration above.
     queueMicrotask(() => {
       try {
         if (!editor?.isConnected) return;
@@ -7796,7 +7815,7 @@
     const bxIndex = vyber.sbaleny ? vyber.konec.blok : -1;
     const bxBefore = bxIndex >= 0 ? dokument?.bloky?.[bxIndex] : null;
     const bxSingle = typ === "backspace" && vyber.sbaleny && vyber.konec.offset > 0 &&
-      bxBefore && jeTextovyBlok(bxBefore) && !bxBefore.legacyPre &&
+      bxBefore && bxBefore.typ === 'odstavec' && !bxBefore.legacyPre &&
       Array.isArray(bxBefore.obsah) && bxBefore.obsah.length === 1 &&
       typeof bxBefore.obsah[0]?.text === "string" && bxBefore.obsah[0].text.length > 1 &&
       (!Array.isArray(bxBefore.obrazky) || bxBefore.obrazky.length === 0) &&
