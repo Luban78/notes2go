@@ -306,6 +306,16 @@
         cursor: grab;
       }
       #ln-card-drag-tuning .ln-cdr-top:active { cursor: grabbing; }
+      #ln-card-drag-tuning.ln-cdr-dragging { transition: none !important; user-select: none; -webkit-user-select: none; }
+      /* Same full-width bottom grip as Visual Debug; grab even if only the
+         last 72px of the header are visible beyond the left/right edge. */
+      #ln-card-drag-tuning .ln-cdr-top { position: relative; padding-bottom: 13px; }
+      #ln-card-drag-tuning .ln-cdr-top::after {
+        content: "⋮⋮"; position: absolute; bottom: 0; left: 0; right: 0;
+        height: 12px; color: var(--color-border); font-size: 12px;
+        line-height: 12px; text-align: center; letter-spacing: -3px;
+        pointer-events: none;
+      }
       #ln-card-drag-tuning .ln-cdr-top strong { display:block; font-size: .95rem; line-height:1.2; }
       #ln-card-drag-tuning .ln-cdr-grip { display:block; font-size:.72rem; opacity:.78; margin-top:4px; }
       #ln-card-drag-tuning .ln-cdr-top button { min-height:38px; padding:0 8px; font-size:.85rem; cursor:pointer; }
@@ -400,56 +410,63 @@
       if (detail) detail.textContent = `Detail log: ${nastaveni.detailLog ? "ZAP" : "VYP"}`;
     };
 
-    /* 691CM – touch/mouse drag for the tuning window, not the cards.
-       Clamp to the viewport, keep header actions clickable, and leave the
-       internal parameter list scrollable. Never store screen coordinates. */
+    /* 691CN – REUSE Debug Hub / Visual Debug floating-window behavior.
+       Like Debug Hub omezPoziciHubu(): allow the window to park mostly
+       OUTSIDE the screen, leaving ~70px accessible, not clamp its full body
+       inside the viewport. No persistent coordinates and no changes to cards. */
     const hlavicka691CM = panel.querySelector(".ln-cdr-top");
     let presunPanelu691CM = null;
-    const omez691CM = (hodnota, minimum, maximum) => Math.max(minimum, Math.min(maximum, hodnota));
-    const hranice691CM = () => {
-      const rect = panel.getBoundingClientRect();
-      return {
-        xMax: Math.max(8, window.innerWidth - rect.width - 8),
-        yMax: Math.max(8, window.innerHeight - rect.height - 8)
-      };
-    };
-    const umistiPanel691CM = (x, y) => {
-      const hranice = hranice691CM();
+    const omez691CN = (value, min, max) => Math.max(min, Math.min(max, value));
+    const umistiPanel691CN = (left, top, width, height) => {
+      // Exact side/top semantics used by existing Debug Hub and Visual Debug.
+      const viditelnaHrana = Math.min(72, Math.max(44, height));
+      const minLeft = Math.min(0, 72 - width);
+      const maxLeft = Math.max(0, window.innerWidth - 72);
+      const maxTop = Math.max(0, window.innerHeight - viditelnaHrana);
       panel.style.right = "auto";
-      panel.style.left = `${Math.round(omez691CM(x, 8, hranice.xMax))}px`;
-      panel.style.top = `${Math.round(omez691CM(y, 8, hranice.yMax))}px`;
+      panel.style.bottom = "auto";
+      panel.style.left = `${Math.round(omez691CN(left, minLeft, maxLeft))}px`;
+      panel.style.top = `${Math.round(omez691CN(top, 0, maxTop))}px`;
     };
     const srovnejPanel691CM = () => {
       if (panel.hidden) return;
       const rect = panel.getBoundingClientRect();
-      umistiPanel691CM(rect.left, rect.top);
+      umistiPanel691CN(rect.left, rect.top, rect.width, rect.height);
     };
     hlavicka691CM.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("button")) return;
-      if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+      if (event.target.closest("button, select, input, textarea, a")) return;
+      if (event.isPrimary === false || (event.pointerType === "mouse" && event.button !== 0)) return;
       const rect = panel.getBoundingClientRect();
       presunPanelu691CM = {
         pointerId: event.pointerId,
         x: event.clientX, y: event.clientY,
-        left: rect.left, top: rect.top
+        left: rect.left, top: rect.top,
+        width: rect.width, height: rect.height
       };
-      umistiPanel691CM(rect.left, rect.top);
+      // Behave like Debug Hub even when initial position is partially outside.
+      umistiPanel691CN(rect.left, rect.top, rect.width, rect.height);
+      panel.classList.add("ln-cdr-dragging");
       try { hlavicka691CM.setPointerCapture(event.pointerId); } catch (_) {}
       event.preventDefault();
-    });
-    hlavicka691CM.addEventListener("pointermove", (event) => {
+    }, { passive: false });
+    const pohniPanelem691CN = (event) => {
       const drag = presunPanelu691CM;
-      if (!drag || drag.pointerId !== event.pointerId) return;
-      umistiPanel691CM(drag.left + event.clientX - drag.x, drag.top + event.clientY - drag.y);
-      event.preventDefault();
-    });
+      if (!drag || (event.pointerId != null && drag.pointerId !== event.pointerId)) return;
+      umistiPanel691CN(drag.left + event.clientX - drag.x,
+                       drag.top + event.clientY - drag.y,
+                       drag.width, drag.height);
+      if (event.cancelable) event.preventDefault();
+    };
     const dokoncitPresunPanelu691CM = (event) => {
-      if (!presunPanelu691CM || presunPanelu691CM.pointerId !== event.pointerId) return;
+      if (!presunPanelu691CM || (event?.pointerId != null && presunPanelu691CM.pointerId !== event.pointerId)) return;
       presunPanelu691CM = null;
+      panel.classList.remove("ln-cdr-dragging");
       try { if (hlavicka691CM.hasPointerCapture(event.pointerId)) hlavicka691CM.releasePointerCapture(event.pointerId); } catch (_) {}
     };
-    hlavicka691CM.addEventListener("pointerup", dokoncitPresunPanelu691CM);
-    hlavicka691CM.addEventListener("pointercancel", dokoncitPresunPanelu691CM);
+    // Match Debug Hub: track pointer on WINDOW capture, not just on header.
+    window.addEventListener("pointermove", pohniPanelem691CN, { passive: false, capture: true });
+    window.addEventListener("pointerup", dokoncitPresunPanelu691CM, { passive: true, capture: true });
+    window.addEventListener("pointercancel", dokoncitPresunPanelu691CM, { passive: true, capture: true });
     window.addEventListener("resize", srovnejPanel691CM);
     panel.lubaDragTuningClamp691CM = srovnejPanel691CM;
 
