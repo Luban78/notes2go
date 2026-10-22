@@ -6016,6 +6016,24 @@ function pouzivaSvgIkonyRozhrani() {
   );
 }
 
+function ziskejViditelneKartySeStabilnimId() {
+  const nodes = [
+    ...document.querySelectorAll('.taskCard[data-card-source-index]')
+  ];
+
+  return Promise.all(
+    nodes.map(async (node) => {
+      const index = Number(node.dataset.cardSourceIndex);
+
+      if (!Number.isInteger(index) || index < 0) {
+        return null;
+      }
+
+      return zajistiStabilniIdKarty(index);
+    })
+  ).then((ids) => ids.filter(Boolean));
+}
+
 function zobrazAkceVybranychKaret() {
   if (!rezimVyberuKaret) {
     return;
@@ -6039,6 +6057,10 @@ function zobrazAkceVybranychKaret() {
     );
 
     cardMenu.innerHTML = `
+      <button type="button" data-card-action="bulk-select-all">
+        ☑️ Vybrat vše
+      </button>
+
       <button type="button" data-card-action="bulk-pin">
         ${stav.vsePripnute ? "📍 Odepnout" : "📌 Připnout"}
       </button>
@@ -6071,6 +6093,11 @@ function zobrazAkceVybranychKaret() {
   );
   
   cardMenu.innerHTML = `
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-select-all">
+      <span class="lubaActionIcon" data-luba-icon="oznacit" aria-hidden="true"></span>
+      <span>Vybrat vše</span>
+    </button>
+
     <button type="button" class="lubaHasIcon" data-card-action="bulk-pin">
       <span class="lubaActionIcon" data-luba-icon="${stav.vsePripnute ? "odepnout" : "pripnout"}" aria-hidden="true"></span>
       <span>${stav.vsePripnute ? "Odepnout" : "Připnout"}</span>
@@ -6707,6 +6734,23 @@ cardMenu.addEventListener("click", async (event) => {
   
   if (action === "bulk-exit") {
     ukonciRezimVyberuKaret();
+    return;
+  }
+
+  if (action === "bulk-select-all") {
+    const visibleIds =
+      await ziskejViditelneKartySeStabilnimId();
+
+    if (!visibleIds || visibleIds.length === 0) {
+      return;
+    }
+
+    vybraneKarty = new Set(visibleIds);
+    rezimVyberuKaret = true;
+
+    aktualizujListuVyberuKaret();
+    renderTasks();
+    zobrazAkceVybranychKaret();
     return;
   }
   

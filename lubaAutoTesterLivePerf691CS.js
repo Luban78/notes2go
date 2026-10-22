@@ -16,6 +16,20 @@
     }
     return null;
   };
+  const closeOwnedEditorIfOpen=async(id)=>{
+    const modal=document.getElementById('taskModal');
+    if(modal?.hidden!==false||modal?.dataset?.taskId!==id)return;
+    if(window.LubaNoteEditorV2Bridge?.jeAktivni?.()===true&&
+      window.LubaNoteEditorV2Bridge?.dokoncModelPredExterniAkci?.()!==true)return;
+    const close=window.zpracujZavreniEditoru;
+    if(typeof close==='function'){
+      close();
+      for(let i=0;i<12;i++){
+        await wait(80);
+        if(document.getElementById('taskModal')?.hidden!==false)return;
+      }
+    }
+  };
   async function run(id,alive=()=>true,progress=()=>{},minimize=()=>{},restore=()=>{}){
     if(busy)return row('NATIVE_BLOCKED','already_running',0);
     busy=true;const began=performance.now();let observer=null,raf=0,collect=false;
@@ -27,9 +41,9 @@
       check(window.Capacitor?.getPlatform?.()==='android'&&typeof plugin?.gestureOwnedEditor==='function','native_android_plugin_unavailable');
       const n=owned(id);const marker='Zapis_z_viditelneho_editoru_690T';
       const paragraph='Výkon výběru červenou kapkou – opakovaný dlouhý odstavec pro test automatického posouvání. ';
-      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:160},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
+      const rich='<p>'+marker+' první testovací řádek pro nativní výběr.</p>'+Array.from({length:240},(_,i)=>'<p>'+String(i+1).padStart(3,'0')+' '+paragraph.repeat(2)+'</p>').join('');
       // Preserve the note's test ownership and existing identifying text; mutate only its own UUID.
-      const revised={...n,note:marker+'\n'+Array.from({length:160},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
+      const revised={...n,note:marker+'\n'+Array.from({length:240},(_,i)=>`${i+1} ${paragraph.repeat(2)}`).join('\n'),richContent:rich,updatedAt:new Date().toISOString()};
       const safeSave=window.LubaNoteSync?.provedLokalniZmenuASynchronizuj;
       check(typeof safeSave==='function'&&typeof window.saveAllTasks==='function','safe_local_storage_missing');
       await safeSave(()=>window.saveAllTasks(window.loadTask().map(x=>x.id===id?revised:x)),revised);
@@ -46,8 +60,8 @@
       const text=Array.from(editor.querySelectorAll('*')).find(e=>e.textContent?.includes(marker)&&e.children.length===0);
       text?.scrollIntoView({block:'center',behavior:'instant'});await wait(160);
       const results=[];
-      for(let k=0;k<3;k++){
-        check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3`);
+      for(let k=0;k<5;k++){
+        check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/5`);
         scroll.scrollTop=0;await wait(180);
         // 691CV: a native doubletap on the long test marker selected a long
         // identifier whose endpoints can lie outside the editor viewport.
@@ -110,10 +124,14 @@
           scroll:deltaScroll,frames:gaps.length});
       }
       const avg=key=>Math.round(results.reduce((a,x)=>a+x[key],0)/results.length*10)/10;
-      const detail=`691CV LIVE_NATIVE_EDGE PASS 3/3; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const detail=`691CX LIVE_NATIVE_EDGE PASS 5/5; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      await closeOwnedEditorIfOpen(id);
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
-    }catch(e){return row(String(e?.message||e).includes('unavailable')||String(e?.message||e).includes('missing')?'NATIVE_BLOCKED':'NATIVE_FAIL',String(e?.message||e).slice(0,220),Math.round(performance.now()-began));}
-    finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();restore();busy=false;}
+    }catch(e){
+      await closeOwnedEditorIfOpen(id);
+      return row(String(e?.message||e).includes('unavailable')||String(e?.message||e).includes('missing')?'NATIVE_BLOCKED':'NATIVE_FAIL',String(e?.message||e).slice(0,220),Math.round(performance.now()-began));
+    }
+    finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();await closeOwnedEditorIfOpen(id);restore();busy=false;}
   }
   window.LubaNoteAutoTesterLivePerf691CS={run};
 })();
