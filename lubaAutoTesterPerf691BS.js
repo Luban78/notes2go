@@ -357,23 +357,31 @@
     }
     return {saved,history,base};
   }
+  /* 691CG: score is shown even for a noisy current run, but never certified.
+     Existing validated 3-run baseline remains immutable. An unstable run is
+     calculated from its own five medians, not silently replaced by older data. */
   function quickScore(run=quickLast()){
     const {history,base}=quickState();
     if(!run)return {value:null,reason:'Zatím žádné rychlé měření.'};
-    if(!quickValid(run))return {value:null,reason:'Nekompletní nebo nestabilní série (více než 20 %).'};
     if(!base)return {value:null,reason:'Pro referenci jsou potřeba 3 stabilní běhy stejného buildu.'};
     if(quickSignature(run)!==base.signature)return {value:null,reason:'Jiné rozlišení/metoda/prostředí než reference.'};
-    const group=history.filter(r=>quickValid(r)&&quickSignature(r)===base.signature&&r.build===run.build).slice(-3);
-    if(!group.length)return {value:null,reason:'Nelze najít srovnatelné výsledky.'};
-    const spread=Object.fromEntries(QUICK_IDS.map(id=>[id,num(quickAcrossSpread(group,id))]));
-    if(QUICK_IDS.some(id=>spread[id]>20))return {value:null,reason:'Opakování mezi běhy kolísá o více než 20 %; skóre nehodnotíme.',runs:group.length};
-    const medians=Object.fromEntries(QUICK_IDS.map(id=>[id,quickMedian(group.map(r=>quickMs(r,id)))]));
-    const ratios=QUICK_IDS.map(id=>Number(base.reference[id])/medians[id]);
+    if(!Array.isArray(run.measurements)||run.measurements.length!==QUICK_IDS.length ||
+       QUICK_IDS.some(id=>!(Number(quickMs(run,id))>0)))
+      return {value:null,reason:'Chybí platné časy některé oblasti.'};
+    const latestStable=history.filter(r=>quickValid(r)&&quickSignature(r)===base.signature&&r.build===run.build).slice(-3);
+    const stableCurrent=quickValid(run);
+    const stableGroup=stableCurrent && latestStable.length===3 && latestStable.includes(run) &&
+      QUICK_IDS.every(id=>quickAcrossSpread(latestStable,id)<=20);
+    const values=Object.fromEntries(QUICK_IDS.map(id=>[id,
+      stableGroup?quickMedian(latestStable.map(r=>quickMs(r,id))):quickMs(run,id)]));
+    const ratios=QUICK_IDS.map(id=>Number(base.reference[id])/values[id]);
     if(ratios.some(n=>!Number.isFinite(n)||n<=0))return {value:null,reason:'Neplatné referenční hodnoty.'};
     const value=Math.round(1000*Math.exp(ratios.reduce((acc,v)=>acc+Math.log(v),0)/ratios.length));
     return {value,delta:Math.round((value/1000-1)*1000)/10,
-      runs:group.length,confirmed:group.length===3,referenceBuild:base.build,
-      build:run.build,referenceDate:base.date,spread};
+      runs:stableGroup?3:1,confirmed:stableGroup,unstable:!stableCurrent,
+      quality:stableGroup?'potvrzený medián tří stabilních běhů':
+        !stableCurrent?'ORIENTAČNÍ – NESTABILNÍ SÉRIE':'ORIENTAČNÍ – bez potvrzení třemi srovnatelnými běhy',
+      referenceBuild:base.build,build:run.build,referenceDate:base.date};
   }
   function quickMeasure(type,sandbox){return type==='deep'?measureDeepDelete(600,sandbox).total:measureOne(type,sandbox);}
   async function quickRun(alive=()=>true,progress=()=>{}){
@@ -435,7 +443,7 @@
       `Build ${run.build} | ${run.date} | ${run.viewport} | ${run.environment}`,
       `Metoda: 5 POUZE SYNTETICKYCH oblasti, kazda 3 serie x 10 opakovani.`,
       `Kvalita mereni: ${run.stable?'rozptyl serii do 20 %':'NESTABILNI – nektere serie kolisaji nad 20 %'}`,
-      `SYNTETICKY VYKONOVY INDEX: ${score.value===null?'NEDOSTUPNY – '+score.reason:`${score.value} bodu | zmena ${score.delta>0?'+':''}${score.delta}% | ${score.confirmed?'POTVRZENO':'PRED_BEZNE (1–2 behy)'} | behu v porovnani ${score.runs}/3`}`,
+      `SYNTETICKY VYKONOVY INDEX: ${score.value===null?'NEDOSTUPNY – '+score.reason:`${score.value} bodu | zmena ${score.delta>0?'+':''}${score.delta}% | ${score.quality} | behu v porovnani ${score.runs}/3`}`,
       `Reference: ${score.referenceBuild||'-'} | 3 stabilni behy | prvni reference = 1000 bodu; drivejsi 691BZ/691CB body NEPLATNE.`,
       `DULEZITE: Index je jen 5 syntetickych oblasti. NEMERI skutecny Backspace, Android FPS ani plynulost aplikace.`,
       `Ulozenych rychlych behu: ${history.length}`];
