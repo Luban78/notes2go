@@ -7745,7 +7745,13 @@
       return true;
     }
 
+    /* 691BQ – jen dobrovolně aktivní benchmark reálné LubaKeyboard.
+       Bez běžícího benchmarku neměří ani nemění editor a neukládá obsah. */
+    const fpsBench691BQ = window.LubaNoteFpsBenchmark691BQ;
+    const meriAkci691BQ = fpsBench691BQ?.meriAkci?.(typ) === true;
+    const startAkce691BQ = meriAkci691BQ ? performance.now() : 0;
     const snapshotPred = vytvorSnapshotHistorie(vyber);
+    const poSnapshotu691BQ = meriAkci691BQ ? performance.now() : 0;
     let caret = { ...vyber.zacatek };
     let formatPoMazani = null;
     let inputType = "insertText";
@@ -7773,7 +7779,9 @@
       return false;
     }
 
+    const poModelu691BQ = meriAkci691BQ ? performance.now() : 0;
     ulozZmenuDoHistorie(snapshotPred, `LubaKeyboard ${inputType}`);
+    const poHistorii691BQ = meriAkci691BQ ? performance.now() : 0;
 
     if (formatPoMazani) {
       aktivniFormatPsani = kopieFormatu(formatPoMazani);
@@ -7792,10 +7800,27 @@
     posledniVyber = klonVyberu(novyVyber);
     ulozenyFormatovaciVyber = klonVyberu(novyVyber);
 
+    const predRenderem691BQ = meriAkci691BQ ? performance.now() : 0;
     vykresli(novyVyber);
+    const poRenderu691BQ = meriAkci691BQ ? performance.now() : 0;
     oznamModelovyTextovyVstup(inputType);
     nastavStav(`LubaKeyboard: ${inputType}`);
     zapisDebug?.(`EDITOR V2 | LubaKeyboard | ${inputType} | blok=${caret.blok} offset=${caret.offset}`);
+    if (meriAkci691BQ) {
+      try {
+        fpsBench691BQ.zaznamAkce({
+          typ,
+          totalMs: performance.now() - startAkce691BQ,
+          selectionMs: 0, /* čas před snapshotem není součástí detailního řezu */
+          snapshotMs: poSnapshotu691BQ - startAkce691BQ,
+          modelMs: poModelu691BQ - poSnapshotu691BQ,
+          historyMs: poHistorii691BQ - poModelu691BQ,
+          renderMs: poRenderu691BQ - predRenderem691BQ,
+          extraMs: predRenderem691BQ - poHistorii691BQ,
+          blockCount: dokument?.bloky?.length || 0
+        });
+      } catch (_error) { /* Měření nikdy nesmí shodit editor. */ }
+    }
     return true;
   }
 

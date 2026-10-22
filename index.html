@@ -1934,6 +1934,48 @@
           </label>
           <input id="adminFpsTransparency691BP" type="range" min="0" max="90" step="5" value="30" aria-label="Průhlednost FPS ukazatele v procentech">
         </div>
+        <!-- 691BQ – opakovatelné FPS/perf baseline, výsledky jen lokálně. -->
+        <section class="ln-fb-panel" id="ln-fps-benchmark-691BQ" aria-labelledby="ln-fb-title">
+          <div class="ln-fb-heading"><strong id="ln-fb-title">Výkonový benchmark · 20×</strong><small>691BQ · uložené baseline tohoto zařízení</small></div>
+          <p>Reálné akce měříme odděleně od časových FPS oken. Každý scénář má 20 vzorků; nic se neposílá na server kromě výslovně spuštěného rychlého syncu.</p>
+          <label for="ln-fb-scenario">Co změříme</label>
+          <select id="ln-fb-scenario">
+            <optgroup label="20 skutečných operací">
+              <option value="backspace">Backspace · 20 skutečných smazání</option>
+              <option value="typing">Psaní · 20 skutečných znaků</option>
+              <option value="sync-quick">Rychlý sync · 20 skutečných průchodů</option>
+            </optgroup>
+            <optgroup label="20 časových oken FPS (0,8 s / okno)">
+              <option value="idle">Klid aplikace</option>
+              <option value="card-hold">Dlouhý stisk karty</option>
+              <option value="card-drag">Přesun a přeskládání karet</option>
+              <option value="note-open">Otevírání a zavírání poznámek</option>
+              <option value="note-save">Uložení / zavření editoru</option>
+              <option value="todo-toggle">ToDo · dokončení / návrat</option>
+              <option value="bullet-move">Bullet / ToDo MOVE v editoru</option>
+              <option value="selection">Výběr textu / červené úchyty</option>
+              <option value="editor-scroll">Scroll dlouhé poznámky</option>
+              <option value="planner">Planner a připomínky</option>
+              <option value="documents">Dokumenty / seznamy</option>
+              <option value="search">Hledání / filtry</option>
+              <option value="tags">Štítky / filtry karet</option>
+              <option value="images">Obrázky a fullscreen</option>
+              <option value="navigation">Přepínání modulů / menu</option>
+              <option value="sync-live">Běžná synchronizace při používání</option>
+            </optgroup>
+          </select>
+          <p id="ln-fb-guidance" class="ln-fb-hint"></p>
+          <div class="ln-fb-buttons">
+            <button id="ln-fb-start" type="button">▶ Spustit 20×</button>
+            <button id="ln-fb-stop" type="button" disabled>■ Zrušit</button>
+            <button id="ln-fb-copy" type="button">Kopírovat report</button>
+          </div>
+          <div id="ln-fb-status" role="status" aria-live="polite">Připraveno</div>
+          <progress id="ln-fb-progress" value="0" max="20" style="width:100%"></progress>
+          <div id="ln-fb-result" class="ln-fb-result">Zatím žádné měření.</div>
+          <div class="ln-fb-buttons"><button id="ln-fb-baseline" type="button">Nastavit baseline z posledního běhu</button></div>
+          <p class="ln-fb-hint">Původní baseline se ukládá automaticky při prvním kompletním měření scénáře. Další běhy se s ní porovnají. Bez obsahu poznámek.</p>
+        </section>
         <div class="adminOwnSelectionPalette" aria-labelledby="adminOwnSelectionPaletteTitle">
           <strong id="adminOwnSelectionPaletteTitle">Vlastní výběr textu a úchyty</strong>
           <p>Tematické barvy jsou výchozí. Červenou zapni jen pro diagnostiku. Nastavení platí pouze na tomto zařízení.</p>
@@ -2943,6 +2985,7 @@
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <script src="adminDashboard.js?v=683AS-own-selection-theme"></script>
+  <script src="fpsBenchmark691BQ.js?v=691BQ-real-20x-performance"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
   <script src="sharingAttachments.js?v=20260915-media-e2e-551"></script>
@@ -2987,7 +3030,7 @@
   <script src="visualDebug.js?v=690Q-dock-verification"></script>
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
-  <script src="editorCoreV2.js?v=691AI-bullet-scroll-space-after-collapse"></script>
+  <script src="editorCoreV2.js?v=691BQ-perf-observe-only"></script>
   <script src="editorCoreV2Bridge.js?v=691X-image-tap-helper-defined"></script>
   <script src="lubaTitleCaret.js?v=683S-title-menu"></script>
   <script src="lubaKeyboard.js?v=691V-photo-fullscreen-keyboard-guard"></script>
