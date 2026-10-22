@@ -1,5 +1,5 @@
 /* LubaNote 685B – priprava BEZPECNEHO CTENI E2E obalky v private Sync.
- * Zapis obsahu zustava legacy; pri cteni chraneneho cloudu se pripadny
+ * Zapis obsahu zustava  legacy; pri cteni chraneneho cloudu se pripadny
  * plaintext re-upload stejneho ID zastavi. Zadne migrace ani DB zmeny.
  */
 (() => {
