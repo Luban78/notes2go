@@ -1,4 +1,4 @@
-/* 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
+/* 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
  * Own LOCAL Testy note only; never touches arbitrary user notes. No synthetic DOM events.
  */
 (()=>{'use strict';
@@ -49,12 +49,30 @@
       for(let k=0;k<3;k++){
         check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3`);
         scroll.scrollTop=0;await wait(180);
-        const setup=await plugin.gestureOwnedEditor({id,target:'word-early',type:'doubletap'});
-        check(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_doubletap_ack_missing');
-        await wait(220);
+        // 691CT: custom-active class alone does not prove a visible red handle.
+        // Give the real Core V2 compositor time to create and position its handle;
+        // never fabricate a handle or a selection in the test.
+        const describeHandles=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom')).map(el=>{
+          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+          return `${el.getAttribute('data-ln-v2-selection-handle')||'?'}:hidden=${el.hidden?1:0},rect=${Math.round(r.width)}x${Math.round(r.height)},display=${cs.display},visibility=${cs.visibility},opacity=${cs.opacity}`;
+        }).join('|')||'none';
+        const visibleEnd=()=>Array.from(document.querySelectorAll('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]')).find(el=>{
+          const r=el.getBoundingClientRect(),cs=getComputedStyle(el);
+          return !el.hidden&&r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;
+        });
+        let handle=null,setup=null;
+        for(const target of ['word-early','word-late']){
+          setup=await plugin.gestureOwnedEditor({id,target,type:'doubletap'});
+          check(setup?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_doubletap_ack_missing');
+          for(let retry=0;retry<10;retry++){
+            await wait(120);
+            handle=visibleEnd();
+            if(handle&&editor.classList.contains('ln-v2-selection-custom-active'))break;
+          }
+          if(handle&&editor.classList.contains('ln-v2-selection-custom-active'))break;
+        }
         check(editor.classList.contains('ln-v2-selection-custom-active'),'own_selection_not_activated');
-        const handle=document.querySelector('.ln-v2-selection-handle-custom[data-ln-v2-selection-handle="end"]:not([hidden])');
-        check(handle?.getBoundingClientRect().height>0,'red_end_handle_not_visible');
+        check(handle,'red_end_handle_not_visible; handles='+describeHandles().slice(0,150));
         const before=window.LubaNoteEditorV2?.zachytAktualniVyber?.();
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
