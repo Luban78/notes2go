@@ -267,11 +267,15 @@
   }
   // Called exclusively from the already successful real Core V2 keyboard path.
   function meriAkci(typ) {
+    const autoPerf=window.LubaNoteAutoTesterPerf691BS;
+    if(autoPerf?.meriAkci?.(typ) === true) return true;
     const s=active;if(!s||s.cancelled||s.samples.length>=REPEATS||!isAllowed()||s.scenarioMode!=='real-operation')return false;
     return s.scenario==='backspace' ? typ==='backspace' : s.scenario==='typing'&&(typ==='text'||typ==='space');
   }
   function zaznamAkce(m) {
-    const s=active;if(!s||!meriAkci(m.typ))return;
+    try { window.LubaNoteAutoTesterPerf691BS?.zaznamAkce?.(m); } catch (_) {}
+    const s=active;if(!s||s.cancelled||s.scenarioMode!=='real-operation'||s.samples.length>=REPEATS||!isAllowed())return;
+    if(s.scenario==='backspace' ? m.typ!=='backspace' : !['text','space'].includes(m.typ))return;
     if(!Number.isFinite(m.totalMs)||m.totalMs<0)return;
     if(!s.frameRequest)beginMonitor(s);
     s.samples.push({durationMs:m.totalMs,snapshotMs:m.snapshotMs,modelMs:m.modelMs,historyMs:m.historyMs,renderMs:m.renderMs,extraMs:m.extraMs,blockCount:m.blockCount});

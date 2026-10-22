@@ -19,7 +19,7 @@
   }
   function header(){return `
     <header class="lat-head"><div><div class="lat-eyebrow">LUBANOTE · VIZUÁLNÍ REGRESE</div>
-    <h1>AutoTester <span>691BC</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
+    <h1>AutoTester <span>691BS</span></h1><p>Živé regresní testy aplikace a doplňkové izolované kontroly. Produkční poznámky se nemění.</p></div>
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
@@ -605,12 +605,14 @@
   }
   function close(){if(!screen)return;restoreTestScreen();closeAreaPicker();expanded=false;screen.querySelector('.lat-laboratory')?.classList.remove('lat-expanded');const expand=screen.querySelector('[data-lat="expand"]');if(expand){expand.textContent='⛶ Zvětšit';expand.setAttribute('aria-pressed','false');}screen.hidden=true;document.body.classList.remove('lat-open');stop();zajistiTesterVDocku();}
   function stop(){
+    window.LubaNoteAutoTesterPerf691BS?.cancel?.();
     generaceBehu++; // Ignore late remote test responses from a closed or superseded run.
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
     if(worker){worker.terminate();worker=null;}
     if(running){running=false;setStatus('Přerušeno. Nedokončené testy se nepovažují za PASS.');}
   }
   function setStatus(s){
+    window.LubaNoteAutoTesterPerf691BS?.phase?.(s);
     const el=screen?.querySelector('#lat-state');if(el)el.textContent=s;
     if(!screen)return;
     const progress=running ? String(s).match(/(\d+)\s*\/\s*(\d+)\b/) : null;
@@ -1240,7 +1242,29 @@
     results.push(...vysledky.filter(r=>['DB_PASS','DB_FAIL','DB_BLOCKED'].includes(r?.status)));
     render();
   }
-  function dokoncitBeh(){
+  async function dokoncitBeh(){
+    /* 691BS – single AutoTester run includes non-destructive 20× baseline.
+       Synthetic performance results are AUDIT, not functional PASS. */
+    if (activeSuite === 'all' && running) {
+      const genPerf = generaceBehu;
+      const perf = window.LubaNoteAutoTesterPerf691BS;
+      setStatus('Výkon: připravuji 20× syntetický benchmark a souhrn FPS…');
+      let perfRows=[];
+      try {
+        if (!perf?.finish) throw Error('performance_module_missing');
+        perfRows=await perf.finish(
+          () => running && genPerf === generaceBehu && !!screen && !screen.hidden,
+          message => { if(genPerf===generaceBehu && running) setStatus(message); },
+          {testNoteId:lastTestNoteId}
+        );
+      } catch(error) {
+        perfRows=[{id:'perf691bs-error',name:'Výkonový benchmark nedokončen',
+          kind:'PERF_AUDIT',status:'PARTIAL',ms:0,detail:String(error?.message||error)}];
+      }
+      if (genPerf !== generaceBehu || !running || screen?.hidden) return;
+      results.push(...perfRows);
+    }
+
     running=false;
     restoreTestScreen();
     collapseExpanded();
@@ -1314,7 +1338,7 @@
       await spustitSkutecnyEditor690T(generace);
       if(generace===generaceBehu)await spustitViditelneNastroje690Y(generace);
     }
-    if(generace===generaceBehu)dokoncitBeh();
+    if(generace===generaceBehu)await dokoncitBeh();
   }
   async function run(suite){
     if(running)return;
@@ -1326,6 +1350,7 @@
     screen?.classList.remove('lat-finished');
     results=[];running=true;lastTestNoteId=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
+    if(activeSuite==='all')window.LubaNoteAutoTesterPerf691BS?.start?.();
     // 691AD: only explicit isolated diagnostic suites need the large visual lab.
     // In the regular one-button run the same sandbox checks execute offscreen.
     const lab=screen?.querySelector('.lat-laboratory');
@@ -1364,7 +1389,7 @@
       if(generace===generaceBehu)await spustitBulletMoveVyber690E(generace);
       if(generace===generaceBehu)await spustitKurzorTodo690I(generace,'bullet');}
       if(generace===generaceBehu && !['extended','i18n'].includes(activeSuite))await pridejPokrytiV1(generace,activeSuite==='bullet'?'bullet':activeSuite==='editor'?'editor':activeSuite==='todo'?'todo':activeSuite==='planner'?'planner':activeSuite==='caret'?'editor':'all');
-      if(generace===generaceBehu)dokoncitBeh();
+      if(generace===generaceBehu)await dokoncitBeh();
       return;
     }
     if(activeSuite==='notes'){
@@ -1379,17 +1404,17 @@
       if(generace===generaceBehu)await spustitTextHistorii691K(generace);
       if(generace===generaceBehu)await spustitHledaniSeznamu691L(generace);
       if(generace===generaceBehu)await spustitObrazky691N(generace);}
-      if(generace===generaceBehu)dokoncitBeh();
+      if(generace===generaceBehu)await dokoncitBeh();
       return;
     }
     if(activeSuite==='sync-server'){
       await spustitCloudProbe691BB(generace);
-      if(generace===generaceBehu)dokoncitBeh();
+      if(generace===generaceBehu)await dokoncitBeh();
       return;
     }
     if(activeSuite==='db'){
       await spustitServeroveTesty(generace);
-      if(generace===generaceBehu)dokoncitBeh();
+      if(generace===generaceBehu)await dokoncitBeh();
       return;
     }
     // 690Z: visible real-editor workflows FIRST; isolated unit tests SECOND.
@@ -1426,7 +1451,8 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691BC',
+      'LUBANOTE AUTOTESTER / 691BS',
+      '691BS: Vykon 20x je soucasti Spustit vse: 20 rAF oken behem testu, 20x izolovane synteticke DOM testy a skutecne Core V2 klavesnicove prikazy zachycene pri regresi. AUDIT NENI funkcni PASS. Realny Backspace/Sync 20x neni automaticky provaden nad uzivatelskymi daty ani produkcnim serverem. Baseline je pouze v localStorage tohoto zarizeni.',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
