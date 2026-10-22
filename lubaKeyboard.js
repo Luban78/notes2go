@@ -1633,6 +1633,14 @@
     return true;
   }
 
+  /* 691CH – při dlouhém držení Backspace zbytečně nepočítáme slovník
+     a nepřestavujeme smartbar po každém opakovaném smazání (68 ms).
+     Aktuální návrhy obnovíme JEDNOU po uvolnění klávesy.
+     Běžné psaní, jednotlivý Backspace a nabídku po mezeře neměníme. */
+  let pozastavNavrhyPriDrzeniBackspace691CH = false;
+  let navrhyZmeneneBehemDrzeni691CH = false;
+  let posledniPodobaNavrhu691CH = null;
+
   function aktualizujNavrhy() {
     if (!navrhyBox) return;
 
@@ -1645,11 +1653,20 @@
     const layout = aktualniLayout();
     const podporovano = mode === "letters" && !layout.compose && layout.id !== "emoji" && layout.id !== "unicode";
     navrhyBox.hidden = !podporovano;
-    navrhyBox.replaceChildren();
-    if (!podporovano) return;
+    if (!podporovano) {
+      posledniPodobaNavrhu691CH = null;
+      if (navrhyBox.childElementCount) navrhyBox.replaceChildren();
+      return;
+    }
 
     const navrhy = vypocitejNavrhy();
     while (navrhy.length < 3) navrhy.push("");
+    // Identické návrhy = identické DOM. Přeskočíme zbytečný replaceChildren,
+    // který jinak při každé aktualizaci invaliduje layout smartbaru.
+    const podoba = JSON.stringify([layout.id, window.innerWidth <= 390, ...navrhy.slice(0, 3)]);
+    if (podoba === posledniPodobaNavrhu691CH && navrhyBox.childElementCount === 3) return;
+    posledniPodobaNavrhu691CH = podoba;
+    navrhyBox.replaceChildren();
     navrhy.slice(0, 3).forEach((value, index) => {
       const zobrazene = value ? zkratNavrhUprostred(value, window.innerWidth <= 390 ? 12 : 14) : " ";
       const b = button(zobrazene, "suggestion", value, `ln-lk-suggestion ln-lk-suggestion-${index + 1}`,
@@ -3343,6 +3360,7 @@
     if (!["backspace", "left", "right"].includes(action)) return;
     stopRepeat();
     repeatTimer = setTimeout(() => {
+      if (action === "backspace") pozastavNavrhyPriDrzeniBackspace691CH = true;
       repeatInterval = setInterval(() => {
         const jeBackspace = action === "backspace";
         if (jeBackspace) window.LubaNoteFpsBenchmark691BQ?.oznacOpakovaniBackspace?.(true);
@@ -3357,6 +3375,10 @@
     clearInterval(repeatInterval);
     repeatTimer = null;
     repeatInterval = null;
+    const obnovit = pozastavNavrhyPriDrzeniBackspace691CH && navrhyZmeneneBehemDrzeni691CH;
+    pozastavNavrhyPriDrzeniBackspace691CH = false;
+    navrhyZmeneneBehemDrzeni691CH = false;
+    if (obnovit && panel && !panel.hidden) queueMicrotask(aktualizujNavrhy);
   }
 
   function vytvorPanel() {
@@ -4133,7 +4155,11 @@
 
   document.addEventListener("lubanote:v2-model-input", () => {
     if (!panel || panel.hidden) return;
-    queueMicrotask(aktualizujNavrhy);
+    if (pozastavNavrhyPriDrzeniBackspace691CH) {
+      navrhyZmeneneBehemDrzeni691CH = true;
+    } else {
+      queueMicrotask(aktualizujNavrhy);
+    }
     if (akcniPanelOtevren) queueMicrotask(naplanujSelectionSafeScroll);
   }, true);
 
