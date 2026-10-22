@@ -11,6 +11,7 @@
   let running=false;
   let activeRep=1;
   let lastTestNoteId=null;
+  let currentRunPerformanceScore=null;
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const suiteNames={'sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
@@ -684,6 +685,24 @@
     const blocked=count.SERVER_BLOCKED+count.BLOCKED+count.DB_BLOCKED+count.CORE_BLOCKED+count.APP_BLOCKED+count.NATIVE_BLOCKED;
     const missing=count.NOT_TESTED+count.PARTIAL+count.AUDIT;
     summary.innerHTML=`<div><b>${passing}</b><span>PROVEDENO PASS</span></div>${failing ? `<button type="button" data-lat="jump-first-problem" aria-label="Přejít na první chybu"><b>${failing}</b><span>CHYBY ↓</span></button>` : `<div><b>${failing}</b><span>CHYBY</span></div>`}${blocked&&!failing ? `<button type="button" data-lat="jump-first-problem" aria-label="Přejít na první blokovaný test"><b>${blocked}</b><span>BLOKOVÁNO ↓</span></button>` : `<div><b>${blocked}</b><span>BLOKOVÁNO</span></div>`}${missing ? `<button type="button" data-lat="jump-coverage" class="lat-coverage-button" aria-label="Přejít na první netestovaný nebo částečný scénář"><b>${missing}</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT ↓</span></button>` : `<div><b>0</b><span>NEOVĚŘENO / ČÁSTEČNĚ / AUDIT</span></div>`}`;
+    /* 691BZ – score belongs to PERFORMANCE, never to functional PASS count. */
+    let scoreNode=screen.querySelector('#lat-performance-score-691BZ');
+    if(!scoreNode){
+      scoreNode=document.createElement('div');scoreNode.id='lat-performance-score-691BZ';
+      scoreNode.style.cssText='margin:10px 0 15px;padding:14px 16px;border:1px solid #4e8165;border-radius:16px;background:#192c24;color:#e9ffef;line-height:1.4';
+      summary.insertAdjacentElement('afterend',scoreNode);
+    }
+    scoreNode.hidden=running||activeSuite!=='all'||results.length===0;
+    if(!scoreNode.hidden){
+      const score=currentRunPerformanceScore;
+      if(score && Number.isFinite(score.value)){
+        const change=score.changePercent>0?'+'+score.changePercent:score.changePercent;
+        scoreNode.innerHTML=`<div style="font-size:.79rem;letter-spacing:.04em;opacity:.85">LUBANOTE PERFORMANCE SCORE · V1</div>`+
+          `<div style="font-size:2.25rem;font-weight:800;font-variant-numeric:tabular-nums">${score.value} <span style="font-size:.85rem">bodů</span></div>`+
+          `<div style="font-size:.92rem">Změna proti prvním 1 000 bodům: ${change} % · ${score.components.length} měřených oblastí</div>`+
+          `<div style="font-size:.72rem;opacity:.8;margin-top:5px">Index výkonu na tomto zařízení; ne 3DMark ani kompletní PASS. Kombinuje Core V2 v krátké Testy poznámce, FPS během regresí a syntetické DOM.</div>`;
+      }else scoreNode.textContent='LubaNote Performance Score: nedostupné – výkonové měření je neúplné. Podrobnosti v FPS reportu.';
+    }
     const state=screen.querySelector('#lat-state');
     const haveProblem=failing>0||blocked>0;
     const jump=screen.querySelector('#lat-jump-first-problem');
@@ -1282,6 +1301,7 @@
       }
       if (genPerf !== generaceBehu || !running || screen?.hidden) return;
       results.push(...perfRows);
+      currentRunPerformanceScore=window.LubaNoteAutoTesterPerf691BS?.last?.()?.score||null;
     }
 
     running=false;
@@ -1367,7 +1387,7 @@
     stop();
     const generace=generaceBehu;
     screen?.classList.remove('lat-finished');
-    results=[];running=true;lastTestNoteId=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
+    results=[];running=true;lastTestNoteId=null;currentRunPerformanceScore=null;liveFirstDone=false;const reviewButton=screen?.querySelector('#lat-review-note');if(reviewButton)reviewButton.hidden=true;
     startedAt=new Date().toISOString();activeSuite=suiteNames[suite]?suite:'all';
     if(activeSuite==='all')window.LubaNoteAutoTesterPerf691BS?.start?.();
     // 691AD: only explicit isolated diagnostic suites need the large visual lab.
@@ -1470,9 +1490,10 @@
   function report(){
     const counts=sums();
     const lines=[
-      'LUBANOTE AUTOTESTER / 691BS',
+      'LUBANOTE AUTOTESTER / 691BZ',
       '691BS: Vykon 20x je soucasti Spustit vse: 20 rAF oken behem testu, 20x izolovane synteticke DOM testy a skutecne Core V2 klavesnicove prikazy zachycene pri regresi. AUDIT NENI funkcni PASS. Realny Backspace/Sync 20x neni automaticky provaden nad uzivatelskymi daty ani produkcnim serverem. Baseline je pouze v localStorage tohoto zarizeni.',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
+      `PERFORMANCE_SCORE=${Number.isFinite(currentRunPerformanceScore?.value)?currentRunPerformanceScore.value:'NEZMERENO'} | reference=1000 | index vykonu (NE funkcni PASS)`,
       `cas: ${startedAt||'-'}`,
       `pozadovana_opakovani_core_planner=${activeRep}`,
       `sada: ${suiteNames[activeSuite]||activeSuite}`,
@@ -1496,7 +1517,7 @@
      to Core V2, no production sync, no change to existing AutoTester results. */
   function fpsReport691BT(){
     const lines=[
-      'LUBANOTE – FPS / VYKONOVY REPORT 691BV',
+      'LUBANOTE – FPS / VYKONOVY REPORT 691BZ',
       `build: ${window.LUBANOTE_VERSION||'neznama'}`,
       `export: ${new Date().toISOString()}`,
       'PROVENIENCE: AUDIT; vykonove hodnoty nejsou funkcni PASS.',
@@ -1523,6 +1544,14 @@
       const latest=runs[runs.length-1];
       lines.push('',`POSLEDNI ULOZENE MERENI: ${latest?.date||'-'} | build=${latest?.build||'starsi'} | ulozenych behu=${runs.length}`);
       lines.push(`Prostredi: ${latest?.environment||'WebView'} | viewport ${latest?.viewport||'-'}`);
+      if(latest?.score){
+        const sc=latest.score;
+        lines.push('',`LUBANOTE PERFORMANCE SCORE / ${sc.version||'V1'}: ${sc.value??'NEDOSTUPNÉ'} bodu; referencni index=1000; zmena=${n(sc.changePercent)}%; baseline=${sc.referenceDate||'-'}; build reference=${sc.referenceBuild||'-'}`);
+        lines.push('Vážený relativní index daného zařízení. NENÍ to funkční PASS, 3DMark ani plnohodnotné FPS při dlouhém podržení Backspace.');
+        if(Array.isArray(sc.components))for(const item of sc.components)
+          lines.push(`SLOZKA ${item.label}: váha ${Math.round(item.weight*100)}%; měření ${n(item.current)}, baseline ${n(item.reference)}, relativni pomer ${n(item.ratio)}`);
+        if(sc.reason)lines.push('Důvod nedostupnosti: '+sc.reason);
+      }
       lines.push(`FPS okna 20x: ${met(latest?.fps)}`);
       lines.push(`Casy jednotlivych snimku (ms): ${met(latest?.frames)}`);
       lines.push(`Backspace 20x (ms): ${met(latest?.actualInput?.backspace)}`);

@@ -173,6 +173,54 @@
       }
     }
   }
+  /* 691BZ: 3DMark-inspired but NEVER claims to be 3DMark or a universal speed rank.
+     Composite relative to the first fully comparable AutoTester run (1000 points).
+     Weighted geometric mean avoids additive metric units and treats smaller times
+     as better; all eight metrics must be present in full. Component ratio capped
+     at 0.5..2 per test to avoid one noisy sub-millisecond metric dominating. */
+  const SCORE_VERSION='691BZ-v1';
+  const SCORE_PARTS=[
+    ['real-backspace','Core V2 Backspace / Testy LOCAL',.25,'lower',c=>c.actualInput?.backspace],
+    ['real-typing','Core V2 psaní / Testy LOCAL',.05,'lower',c=>c.actualInput?.typing],
+    ['raf','FPS při regresích',.20,'higher',c=>c.fps],
+    ['editor-200','200 řádků syntetického DOM',.15,'lower',c=>c.synthetic?.['editor-render-200']],
+    ['cards-render','100 karet syntetického DOM',.10,'lower',c=>c.synthetic?.['cards-render-100']],
+    ['cards-reorder','Přeskládání karet syntetického DOM',.10,'lower',c=>c.synthetic?.['cards-reorder-100']],
+    ['search','Hledání 500 syntetických poznámek',.05,'lower',c=>c.synthetic?.['search-500']],
+    ['deep-600','600 řádků syntetického DOM + layout',.10,'lower',c=>c.deepDelete?.['600']?.total]
+  ];
+  function scoreKey(c){
+    // Score is only comparable on the same screen geometry, platform, engine,
+    // and score methodology. Build/version is reported but NOT part of the key.
+    const platform=window.Capacitor?.isNativePlatform?.()?'APK':'WEB';
+    return [SCORE_VERSION,platform,c.environment,c.viewport].join('|');
+  }
+  function computeScore(c,prior,ownedOk,fpsCount){
+    const unavailable=[];
+    const parts=SCORE_PARTS.map(([id,label,weight,direction,pick])=>{
+      const stat=pick(c);
+      if(!stat||stat.count!==COUNT||!(Number(stat.avg)>0))unavailable.push(label);
+      return {id,label,weight,direction,msOrFps:stat?.avg};
+    });
+    if(!ownedOk||fpsCount!==COUNT||unavailable.length){
+      return {version:SCORE_VERSION,value:null,reason:[!ownedOk?'Neúplný reálný Core V2 test':null,fpsCount!==COUNT?'Neúplná FPS okna':null,...unavailable].filter(Boolean).join('; ')};
+    }
+    prior.scoreBaselines ||= {};
+    const key=scoreKey(c);
+    if(!prior.scoreBaselines[key])prior.scoreBaselines[key]={date:c.date,build:c.build,values:Object.fromEntries(parts.map(x=>[x.id,x.msOrFps]))};
+    const baseline=prior.scoreBaselines[key];
+    const ratios=[];
+    for(const part of parts){
+      const reference=Number(baseline.values?.[part.id]);
+      if(!(reference>0))return {version:SCORE_VERSION,value:null,reason:'Poškozená referenční hodnota '+part.id};
+      const raw=part.direction==='higher'?part.msOrFps/reference:reference/part.msOrFps;
+      ratios.push({...part,reference,ratio:Math.min(2,Math.max(.5,raw))});
+    }
+    const value=Math.round(1000*Math.exp(ratios.reduce((sum,p)=>sum+p.weight*Math.log(p.ratio),0)));
+    return {version:SCORE_VERSION,value,baseline:1000,changePercent:Math.round((value/1000-1)*1000)/10,
+      referenceDate:baseline.date,referenceBuild:baseline.build,platformKey:key,
+      components:ratios.map(p=>({id:p.id,label:p.label,weight:p.weight,reference:p.reference,current:p.msOrFps,ratio:Math.round(p.ratio*1000)/1000}))};
+  }
   function comparableId(name){return name+'@'+(window.innerWidth>=900?'desktop':'mobile');}
   function metricRow(id,name,kind,status,ms,detail){return {id:'perf691bs-'+id,name,kind,status,ms:Math.round(ms||0),detail};}
   async function finish(alive, progress, options={}){const s=current;if(!s)return [metricRow('missing','Výkonový sběr není dostupný','PERF_AUDIT','PARTIAL',0,'Běh výkonového monitoru nebyl zahájen.')];
@@ -251,11 +299,17 @@
     }catch(e){if(still())rows.push(metricRow('incomplete','Výkonové 20× testy nedokončeny','PERF_AUDIT','PARTIAL',0,String(e?.message||e)));}
     finally{sandbox?.remove();}
     if(!still()){current=null;return [];} 
+    captured.score=computeScore(captured,prior,ownedResult.ok,fps.length);
+    const score=captured.score;
+    rows.push(metricRow('performance-score','LubaNote Performance Score – index výkonu','PERF_COMPOSITE_INDEX',
+      score.value!==null?'AUDIT':'PARTIAL',0,score.value!==null?
+      `SKÓRE ${score.value} bodů; reference=1000 bodů (${score.referenceDate}); změna=${score.changePercent>0?'+':''}${score.changePercent} %; ${score.components.length} složek. Relativní index tohoto zařízení, není funkční PASS ani měření dlouhého Backspace; 20% váhy připadá na FPS během regresí a ostatní na Core V2 a syntetické DOM.`:
+      `Skóre nelze spočítat: ${score.reason}`));
     captured.completed=performance.now()-s.started;captured.rows=rows.map(r=>({id:r.id,status:r.status,ms:r.ms}));
     if(fps.length===COUNT&&!prior.baseline.fps)prior.baseline.fps={avg:fpsStats.avg,date:s.startDate};
     prior.runs.push(captured);prior.runs=prior.runs.slice(-12);
     const saved=store(prior);if(!saved)rows.push(metricRow('storage','Místní uložení výkonových měření','PERF_AUDIT','PARTIAL',0,'localStorage nedostupné; výsledek zůstává jen v reportu.'));
-    last={rows,date:s.startDate,saved};current=null;
+    last={rows,date:s.startDate,saved,score:captured.score};current=null;
     return rows;
   }
   window.LubaNoteAutoTesterPerf691BS=Object.freeze({start,phase,cancel,finish,meriAkci,zaznamAkce,last:()=>last});
