@@ -284,7 +284,9 @@
       } else return;
       // Read is confirmed only when the intended editor is actually visible.
       const visibleEditor = document.getElementById("taskModal");
-      const opened = result !== false && visibleEditor?.hidden === false &&
+      // The editor may be displayed through CSS while its `hidden` property
+      // remains true. The authoritative note identity is dataset.taskId.
+      const opened = result !== false &&
         String(visibleEditor?.dataset?.taskId || "") === String(noteId);
       if (!opened) return;
       if (active && keyOf(active) === keyOf(entry)) hideToast();
