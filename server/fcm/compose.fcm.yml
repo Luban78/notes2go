@@ -1,0 +1,5 @@
+# 692M server-only override; never commit a service account credential.
+services:
+  functions:
+    environment:
+      FCM_SERVICE_ACCOUNT_BASE64: ${FCM_SERVICE_ACCOUNT_BASE64:?Set_FCM_SERVICE_ACCOUNT_BASE64_in_luba_supabase_env}

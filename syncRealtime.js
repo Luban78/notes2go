@@ -805,3 +805,15 @@
       Array.from(cekajiciVzdalenyId.keys())
   };
 })();
+
+
+/* 692M: load optional Firebase bridge only after existing realtime module.
+   Separate file avoids changing the carefully stabilized sync logic. */
+(() => {
+  if (typeof document === 'undefined') return;
+  const script = document.createElement('script');
+  script.src = 'lubaFcmBridge692M.js';
+  script.async = true;
+  script.onerror = () => { /* FCM optional; existing Realtime keeps working */ };
+  (document.head || document.documentElement).appendChild(script);
+})();
