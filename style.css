@@ -18776,3 +18776,12 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
     border-bottom: 1px solid #777;
   }
 }
+
+/* 691DI – PC: pri otevrenem hledani panel nahradi radek nadpisu.
+   Zabrani soucasnemu zobrazeni lupy a nadpisu; po zavreni se nadpis vrati.
+   Bez zmeny mobilniho rozlozeni a bez zvysovani z-index. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #taskModal .modalContent:has(#editorFindBar:not([hidden])) > .modalTitleRow {
+    display: none;
+  }
+}
