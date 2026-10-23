@@ -29,7 +29,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=691DI-pc-find-title">
+  <link rel="stylesheet" href="style.css?v=692B-pc-status-one-row">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -355,23 +355,22 @@
       <span id="syncStatusText" class="syncStatusText" hidden aria-hidden="true"></span>
     </div>
 
-    <!-- 683BC: lokalni datum a zivy cas, vzdy nad hlavni navigaci. -->
-    <div id="lnHomeDateTime683BC" class="lnHomeDateTime683BC" role="group" aria-label="Datum a čas">
+    <!-- 692B: Spolecna PC lista: datum + sync/cloud/ucet + cas v jednom radku.
+         Mobilni datum a cas zustavaji puvodni; PC panel je v mobilu skryty. -->
+    <div id="lnHomeDateTime683BC" class="lnHomeDateTime683BC" role="group" aria-label="Datum, čas a stav LubaNote">
       <time id="lnHomeDate683BC" class="lnHomeDate683BC"></time>
-      <time id="lnHomeTime683BC" class="lnHomeTime683BC"></time>
-    </div>
-
-    <!-- 692A: PC-only stavovy panel; hodnoty jsou nacitany z overene RPC. -->
-    <div id="lnDesktopStatus692A" class="lnDesktopStatus692A" hidden aria-label="Stav LubaNote">
-      <div class="lnDesktopStatus692A-main">
-        <span id="lnDesktopSync692A" class="lnDesktopStatus692A-sync" role="status">◌ Zjišťuji synchronizaci</span>
-        <div class="lnDesktopStatus692A-quota" title="Logická velikost cloudových dat účtu, nikoli velikost záloh a indexů">
-          <span class="lnDesktopStatus692A-quotaLabel">☁ Cloud</span>
-          <span id="lnDesktopQuotaText692A">Zjišťuji…</span>
-          <div class="lnDesktopStatus692A-track"><span id="lnDesktopQuotaFill692A"></span></div>
+      <div id="lnDesktopStatus692A" class="lnDesktopStatus692A" hidden aria-label="Stav LubaNote">
+        <div class="lnDesktopStatus692A-main">
+          <span id="lnDesktopSync692A" class="lnDesktopStatus692A-sync" role="status">◌ Zjišťuji synchronizaci</span>
+          <div class="lnDesktopStatus692A-quota" title="Logická velikost cloudových dat účtu, nikoli velikost záloh a indexů">
+            <span class="lnDesktopStatus692A-quotaLabel">☁ Cloud</span>
+            <span id="lnDesktopQuotaText692A">Zjišťuji…</span>
+            <div class="lnDesktopStatus692A-track" aria-hidden="true"><span id="lnDesktopQuotaFill692A"></span></div>
+          </div>
         </div>
+        <span id="lnDesktopAccount692A" class="lnDesktopStatus692A-account" title="Přihlášený účet" hidden></span>
       </div>
-      <span id="lnDesktopAccount692A" class="lnDesktopStatus692A-account" title="Přihlášený účet" hidden></span>
+      <time id="lnHomeTime683BC" class="lnHomeTime683BC"></time>
     </div>
 
     <!-- HLAVNÍ MODULY LUBANOTE -->

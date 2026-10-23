@@ -18786,58 +18786,110 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
   }
 }
 
-/* 692A – pouze PC s mysi, bez zasahu do mobilu a tabletu. */
+/* 692B – sloucena horni lista datum | synchronizace | cloud | ucet | cas.
+   Zamerne pouze desktop s presnym ukazatelem; bez zmen mobilniho UI. */
 .lnDesktopStatus692A { display: none !important; }
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
-  .lnDesktopStatus692A:not([hidden]) {
-    display: flex !important;
+  .homeHeader > #lnHomeDateTime683BC {
+    display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 16px;
+    gap: 18px;
+    width: 100%;
     min-width: 0;
-    padding: 9px 14px;
-    margin: 4px 0 12px;
+    min-height: 43px;
+    box-sizing: border-box;
+    padding: 6px 12px;
+    margin: 0 0 12px;
     border: 1px solid var(--color-border, #46515c);
     border-radius: 13px;
     background: var(--color-surface, #15242d);
     color: var(--color-text, #e8f3f4);
-    font-size: .79rem;
+    font-variant-numeric: tabular-nums;
+  }
+  #lnHomeDateTime683BC > #lnHomeDate683BC,
+  #lnHomeDateTime683BC > #lnHomeTime683BC {
+    flex: 0 0 auto;
+    font-size: .96rem;
+    line-height: 1.2;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  #lnHomeDateTime683BC > #lnHomeTime683BC {
+    margin-left: auto;
+  }
+  #lnHomeDateTime683BC > .lnDesktopStatus692A:not([hidden]) {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1 1 auto;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: .78rem;
     text-align: left;
   }
   .lnDesktopStatus692A-main {
-    display: flex; align-items: center; gap: 18px;
-    flex: 1; min-width: 0; flex-wrap: wrap;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    gap: clamp(10px, 1.5vw, 22px);
+    white-space: nowrap;
   }
-  .lnDesktopStatus692A-sync { white-space: nowrap; }
+  .lnDesktopStatus692A-sync { white-space: nowrap; flex: 0 1 auto; }
   .lnDesktopStatus692A-sync[data-state="synced"] { color: #67d5a7; }
   .lnDesktopStatus692A-sync[data-state="pending"],
   .lnDesktopStatus692A-sync[data-state="conflict"],
   .lnDesktopStatus692A-sync[data-state="auth-expired"] { color: #ffbf7c; }
   .lnDesktopStatus692A-quota {
-    display: flex; align-items: center; gap: 10px;
-    min-width: 220px; flex: 1;
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 9px;
+    white-space: nowrap;
   }
-  .lnDesktopStatus692A-quotaLabel { white-space: nowrap; font-weight: 700; }
-  #lnDesktopQuotaText692A { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lnDesktopStatus692A-quotaLabel { flex: 0 0 auto; font-weight: 700; }
+  #lnDesktopQuotaText692A { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
   .lnDesktopStatus692A-track {
-    width: clamp(56px, 9vw, 145px); height: 6px;
-    border-radius: 99px; overflow: hidden;
+    width: clamp(54px, 9vw, 145px);
+    height: 6px;
+    flex: 0 1 auto;
+    border-radius: 99px;
+    overflow: hidden;
     background: color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
   }
   #lnDesktopQuotaFill692A {
-    display: block; width: 0; height: 100%;
+    display: block;
+    width: 0;
+    height: 100%;
     border-radius: inherit;
     background: var(--color-accent, #28c8b2);
     transition: width .2s ease;
   }
   #lnDesktopQuotaFill692A[data-high="1"] { background: #ffb45c; }
   .lnDesktopStatus692A-account {
-    flex: none; min-width: 29px; height: 29px;
-    display: grid; place-items: center;
-    padding: 0 7px; box-sizing: border-box;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    min-width: 29px;
+    height: 29px;
+    padding: 0 7px;
+    box-sizing: border-box;
     border: 1px solid var(--color-border, #46515c);
     border-radius: 99px;
     font-weight: 700;
   }
   .lnDesktopStatus692A-account[hidden] { display: none !important; }
+}
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  #lnHomeDateTime683BC > .lnDesktopStatus692A:not([hidden]) { gap: 8px; }
+  .lnDesktopStatus692A-main { gap: 9px; }
+  .lnDesktopStatus692A-track { width: 55px; }
 }
