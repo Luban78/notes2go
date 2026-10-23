@@ -3821,6 +3821,12 @@
       const aktualniDrag = stav?.handleDrag;
       if (!aktualniDrag || v2SelectionScroll !== stav || !aktivni || !stav.editor) return;
       aktualniDrag.autoRaf = 0;
+      // 691DC: read-only counters. AutoTester activates these only for its own LOCAL Testy note.
+      // No DOM reads, logs or additional scheduled work are performed by the counters.
+      const diag = window.LubaNoteAutoTesterPerfTrace691DC;
+      const diagBucket = diag?.active === true && Array.isArray(diag.buckets)
+        ? diag.buckets[Math.max(0, Math.min(14, Math.floor((cas - diag.started) / 1000)))] : null;
+      const diagFrameStart = diagBucket ? performance.now() : 0;
 
       const smer = ziskejV2HandleAutoSmer(
         stav.editor,
@@ -3887,11 +3893,20 @@
            a drobný viditelný zásek. */
         if (!aktualniDrag.autoRangeCas || cas - aktualniDrag.autoRangeCas >= 14) {
           aktualniDrag.autoRangeCas = cas;
+          const diagRangeStart = diagBucket ? performance.now() : 0;
           if (!aktualizujV2HandleRangeZeSouradnic(stav, aktualniDrag.lastX, aktualniDrag.lastY, true)) {
             aktualniDrag.rangeMiss = Number(aktualniDrag.rangeMiss || 0) + 1;
+            if (diagBucket) diagBucket.rangeMiss++;
           }
+          if (diagBucket) diagBucket.rangeMs += performance.now() - diagRangeStart;
         }
+        const diagScrollStart = diagBucket ? performance.now() : 0;
         stav.editor.scrollTop = dalsi;
+        if (diagBucket) {
+          diagBucket.scrollMs += performance.now() - diagScrollStart;
+          diagBucket.scrollPx += Math.abs(dalsi - pred);
+        }
+        const diagLupaStart = diagBucket ? performance.now() : 0;
         zobrazV2SelectionLupu(
           stav,
           Number.isFinite(aktualniDrag.lastTouchX) ? aktualniDrag.lastTouchX : aktualniDrag.lastX,
@@ -3899,8 +3914,15 @@
           aktualniDrag.lastX,
           aktualniDrag.lastY
         );
+        if (diagBucket) diagBucket.lupaMs += performance.now() - diagLupaStart;
       }
 
+      if (diagBucket) {
+        const celkem = performance.now() - diagFrameStart;
+        diagBucket.frames++;
+        diagBucket.loopMs += celkem;
+        diagBucket.loopMaxMs = Math.max(diagBucket.loopMaxMs, celkem);
+      }
       aktualniDrag.autoRaf = requestAnimationFrame(krok);
     };
 

@@ -79,6 +79,7 @@
       const idle=await idleRafSample(3000);
       check(alive(),'cancelled_after_idle_reference');
       const results=[];
+      let traceResult=null;
       for(let k=0;k<3;k++){
         check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3${k===0?" (15 s)":" (3 s)"}`);
         scroll.scrollTop=0;await wait(180);
@@ -123,6 +124,13 @@
           observer=new PerformanceObserver(list=>{if(collect)for(const e of list.getEntries())longTasks.push(e.duration);});
           observer.observe({entryTypes:['longtask']});
         }
+        // 691DC: same real editor, test-owned passive CPU breakdown per second.
+        // The only source of these counters is the production edge-scroll RAF itself.
+        if(k===0) window.LubaNoteAutoTesterPerfTrace691DC={
+          active:true,started:performance.now(),
+          buckets:Array.from({length:15},()=>({frames:0,rangeMs:0,scrollMs:0,
+            lupaMs:0,loopMs:0,loopMaxMs:0,scrollPx:0,rangeMiss:0}))
+        };
         collect=true;
         const frame=t=>{if(!collect)return;if(!first)first=t;if(last){
           const dt=t-last;gaps.push(dt);
@@ -139,7 +147,14 @@
         raf=requestAnimationFrame(frame);
         let ack;
         try{ack=await plugin.gestureOwnedEditor({id,target:'selection-end',type:k===0?'swipe-edge-long-691CZ':'swipe-edge-691CS'});}
-        finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();observer=null;}
+        finally{
+          collect=false;cancelAnimationFrame(raf);observer?.disconnect();observer=null;
+          if(k===0){
+            const diag=window.LubaNoteAutoTesterPerfTrace691DC;
+            if(diag){diag.active=false;traceResult=diag.buckets;}
+            window.LubaNoteAutoTesterPerfTrace691DC=null;
+          }
+        }
         check(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','native_long_drag_ack_missing');
         await wait(100);
         const afterText=String(window.getSelection?.()?.toString?.()||'');
@@ -158,14 +173,16 @@
       const longBuckets=results[0]?.buckets||[];
       const bySecond=longBuckets.map(x=>x.s40).join(',');
       const bySecondFrames=longBuckets.map(x=>x.frames).join(',');
-      const detail=`691DB LIVE_NATIVE_EDGE PASS 3/3 (15s+3s+3s); idle3sFrames=${idle.frames}; idle3sP95=${idle.p95}ms; idle3sStall40=${idle.s40}; idle3sStall70=${idle.s70}; drag15sStall40BySecond=[${bySecond}]; drag15sFramesBySecond=[${bySecondFrames}]; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; stalls40ms=[${results.map(x=>x.stalls40)}]; stall40AtMs=[${results.map(x=>'('+x.stall40At.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const traceBySecond=(field,digits=0)=>Array.isArray(traceResult)
+        ? `[${traceResult.map(x=>Number(x[field]||0).toFixed(digits)).join(',')}]` : '[]';
+      const detail=`691DC LIVE_NATIVE_EDGE PASS 3/3 (15s+3s+3s); edgeCpuLoopsBySecond=${traceBySecond('frames')}; edgeCpuTotalMsBySecond=${traceBySecond('loopMs',1)}; edgeCpuWorstMsBySecond=${traceBySecond('loopMaxMs',1)}; edgeRangeMsBySecond=${traceBySecond('rangeMs',1)}; edgeScrollMsBySecond=${traceBySecond('scrollMs',1)}; edgeLupaMsBySecond=${traceBySecond('lupaMs',1)}; edgeScrollPxBySecond=${traceBySecond('scrollPx')}; edgeRangeMissBySecond=${traceBySecond('rangeMiss')}; idle3sFrames=${idle.frames}; idle3sP95=${idle.p95}ms; idle3sStall40=${idle.s40}; idle3sStall70=${idle.s70}; drag15sStall40BySecond=[${bySecond}]; drag15sFramesBySecond=[${bySecondFrames}]; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; stalls40ms=[${results.map(x=>x.stalls40)}]; stall40AtMs=[${results.map(x=>'('+x.stall40At.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
       await closeOwnedEditorIfOpen(id);
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
     }catch(e){
       await closeOwnedEditorIfOpen(id);
       return row(String(e?.message||e).includes('unavailable')||String(e?.message||e).includes('missing')?'NATIVE_BLOCKED':'NATIVE_FAIL',String(e?.message||e).slice(0,220),Math.round(performance.now()-began));
     }
-    finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();await closeOwnedEditorIfOpen(id);restore();busy=false;}
+    finally{collect=false;cancelAnimationFrame(raf);observer?.disconnect();window.LubaNoteAutoTesterPerfTrace691DC=null;await closeOwnedEditorIfOpen(id);restore();busy=false;}
   }
   window.LubaNoteAutoTesterLivePerf691CS={run};
 })();
