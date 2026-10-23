@@ -1,0 +1,132 @@
+/* 692C – pouze desktop Chrome / PC (nikdy APK ani dotykový tablet). */
+.lnPcReminderBell692C { display: none !important; }
+#lnPcReminderCenter692C, #lnPcReminderToast692C { display: none !important; }
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .lnDesktopStatus692A:not([hidden]) > .lnPcReminderBell692C {
+    display: inline-flex !important;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 30px;
+    flex: 0 0 34px;
+    margin: 0;
+    padding: 0;
+    color: var(--color-text, #e1f4f6);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .lnPcReminderBell692C:hover,
+  .lnPcReminderBell692C[aria-expanded="true"] {
+    background: rgba(50, 172, 190, .13);
+    border-color: rgba(92, 200, 212, .4);
+  }
+  .lnPcReminderCount692C:not([hidden]) {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    min-width: 15px;
+    height: 15px;
+    box-sizing: border-box;
+    padding: 0 3px;
+    border-radius: 99px;
+    background: #f2b34c;
+    color: #111e26;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 0 0 2px var(--color-surface, #15242d);
+  }
+  #lnPcReminderCenter692C:not([hidden]) {
+    display: block !important;
+    position: fixed;
+    z-index: 4400;
+    right: 26px;
+    top: 110px;
+    width: min(370px, calc(100vw - 36px));
+    max-height: min(540px, calc(100dvh - 150px));
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 14px;
+    border: 1px solid rgba(90, 173, 194, .55);
+    border-radius: 15px;
+    background: var(--color-surface, #142937);
+    color: var(--color-text, #ebf5fa);
+    box-shadow: 0 18px 65px rgba(0,0,0,.48);
+    text-align: left;
+  }
+  .lnPcReminderCenterHead692C,
+  .lnPcReminderToastHead692C { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .lnPcReminderCenterHead692C { margin-bottom: 10px; }
+  .lnPcReminderCenterHead692C strong { font-size: .95rem; }
+  .lnPcReminderMuted692C { color: var(--color-text-muted, #adc3ce); font-size: .78rem; }
+  .lnPcReminderCenterClose692C {
+    background: transparent; border: 0; color: inherit;
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 7px;
+  }
+  .lnPcReminderList692C { display: grid; gap: 5px; margin-bottom: 10px; }
+  .lnPcReminderListItem692C {
+    display: block; width: 100%; text-align: left;
+    border: 1px solid rgba(128,160,180,.26);
+    border-radius: 9px;
+    background: rgba(79, 140, 162, .13);
+    color: inherit;
+    padding: 9px 11px;
+    cursor: pointer;
+  }
+  .lnPcReminderListItem692C:hover { border-color: #4bbfd2; background: rgba(79,140,162,.23); }
+  .lnPcReminderListTitle692C { display: block; font-size: .84rem; font-weight: 700; overflow-wrap: anywhere; }
+  .lnPcReminderListDate692C { display: block; font-size: .75rem; color: #ecb870; margin-top: 3px; }
+  .lnPcReminderCenterFoot692C { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .lnPcReminderPermission692C, .lnPcReminderGo692C {
+    padding: 8px 11px; color: inherit; cursor: pointer;
+    border: 1px solid rgba(86, 192, 211, .55);
+    border-radius: 9px; background: rgba(47, 141, 163, .23);
+    font-size: .78rem; font-weight: 650;
+  }
+  .lnPcReminderPermission692C:hover, .lnPcReminderGo692C:hover { background: rgba(47, 141, 163, .4); }
+  #lnPcReminderToast692C:not([hidden]) {
+    display: block !important;
+    position: fixed;
+    z-index: 4350;
+    right: 24px;
+    bottom: 22px;
+    width: min(360px, calc(100vw - 34px));
+    box-sizing: border-box;
+    padding: 15px;
+    border: 1px solid rgba(66, 198, 215, .65);
+    border-radius: 17px;
+    background: var(--color-surface, #152d39);
+    color: var(--color-text, #e9f5f6);
+    box-shadow: 0 16px 60px rgba(0,0,0,.52);
+    text-align: left;
+  }
+  .lnPcReminderToastHead692C { color: #75dfd3; font-size: .78rem; font-weight: 700; }
+  .lnPcReminderOpen692C {
+    display: block; width: 100%; margin: 10px 0; padding: 4px 0;
+    background: none; border: 0; color: inherit; text-align: left;
+    cursor: pointer;
+  }
+  .lnPcReminderOpen692C:hover .lnPcReminderToastTitle692C { text-decoration: underline; }
+  .lnPcReminderToastTitle692C { display: block; font-size: 1rem; line-height: 1.3; font-weight: 750; overflow-wrap: anywhere; }
+  .lnPcReminderToastSub692C { display: block; margin-top: 5px; font-size: .79rem; color: #bbd0d9; }
+  .lnPcReminderToastActions692C { display: flex; justify-content: flex-end; gap: 8px; margin-top: 11px; }
+  .lnPcReminderToastActions692C button,
+  .lnPcReminderSnoozeChoices692C button {
+    border: 1px solid #618998; border-radius: 9px;
+    background: rgba(65,100,121,.2); color: inherit;
+    font-size: .83rem; font-weight: 650;
+    padding: 8px 13px; cursor: pointer;
+  }
+  .lnPcReminderToastActions692C button:hover,
+  .lnPcReminderSnoozeChoices692C button:hover { border-color: #5bddcf; background: rgba(48,150,161,.21); }
+  .lnPcReminderToastActions692C .lnPcReminderSnooze692C { background: #197b91; border-color: #36b2c4; color: #fff; }
+  .lnPcReminderSnoozeChoices692C:not([hidden]) { display: flex; gap: 6px; flex-wrap: wrap; margin: 7px 0 2px; }
+  .lnPcReminderSnoozeChoices692C[hidden] { display: none !important; }
+  .lnPcReminderError692C:not([hidden]) { color: #ffbd83; font-size: .79rem; margin-top: 8px; }
+  .lnPcReminderError692C[hidden] { display: none !important; }
+}

@@ -1287,7 +1287,7 @@ function jePlanovanaPripominkaZapnuta(item) {
   return Boolean(item?.notificationId);
 }
 
-function getReminderEntries() {
+function getReminderEntries(filterOverride692C = null) {
   const notes =
     typeof loadTask === "function"
       ? loadTask()
@@ -1396,11 +1396,12 @@ function getReminderEntries() {
 
   return entries
     .filter((entry) => {
-      if (activeReminderFilter === "all") {
-        return true;
-      }
-
-      return entry.area === activeReminderFilter;
+      /* 692C: PC zvonek vidi oba typy oblasti, bez zmeny stavajiciho UI filtru. */
+      const filtr = filterOverride692C === "all"
+        ? "all"
+        : activeReminderFilter;
+      if (filtr === "all") return true;
+      return entry.area === filtr;
     })
     .sort((a, b) => {
       return new Date(a.date) -
