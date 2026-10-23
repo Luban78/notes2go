@@ -136,9 +136,12 @@ Deno.serve(async (req: Request) => {
       const revision = Number(body?.revision);
       const times = body?.at;
       const cancel = body?.cancel;
+      const title = body?.title;
+      const preview = body?.preview;
       if (deviceId && !/^[\w:-]{8,128}$/.test(deviceId)) return json(req,400,{ok:false,error:'BAD_DEVICE'});
       if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(revision) || revision<=0 ||
-          !Array.isArray(times) || times.length>48 || !Array.isArray(cancel) || cancel.length>128)
+          !Array.isArray(times) || times.length>48 || !Array.isArray(cancel) || cancel.length>128 ||
+          typeof title !== 'string' || title.length>120 || typeof preview !== 'string' || preview.length>160)
         return json(req,400,{ok:false,error:'BAD_ALARM_DATA'});
       const now = Date.now();
       if (Math.abs(revision-now)>7*24*3600*1000 ||
@@ -147,7 +150,8 @@ Deno.serve(async (req: Request) => {
         return json(req,400,{ok:false,error:'BAD_ALARM_TIMES'});
       const payload = {
         kind:'lubanote_alarm_update_692O',v:'1',owner:await ownerHash(userId),
-        noteId,revision:String(revision),at:JSON.stringify(times),cancel:JSON.stringify(cancel)
+        noteId,revision:String(revision),at:JSON.stringify(times),cancel:JSON.stringify(cancel),
+        title,preview
       };
       if (Object.values(payload).reduce((sum,value)=>sum+value.length,0)>3300)
         return json(req,413,{ok:false,error:'ALARM_PAYLOAD_TOO_LARGE'});

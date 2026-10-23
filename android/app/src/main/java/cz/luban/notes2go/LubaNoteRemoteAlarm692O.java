@@ -165,6 +165,9 @@ final class LubaNoteRemoteAlarm692O {
       JSONObject fresh=new JSONObject();
       fresh.put("revision",revision);
       fresh.put("times",safe);
+      // Preview is bound to the authenticated account's FCM projection.
+      fresh.put("title",data.get("title") == null ? "" : data.get("title"));
+      fresh.put("preview",data.get("preview") == null ? "" : data.get("preview"));
       records.put(id,fresh);
       // Synchronous persistence so an app kill or reboot cannot discard alarms.
       pref.edit().putString(OWNER,owner).putString(RECORDS,records.toString()).commit();
@@ -222,8 +225,8 @@ final class LubaNoteRemoteAlarm692O {
     Notification.Builder builder=Build.VERSION.SDK_INT>=26
         ?new Notification.Builder(ctx,CHANNEL):new Notification.Builder(ctx);
     builder.setSmallIcon(R.drawable.ic_stat_lubanote)
-        .setContentTitle("LubaNote – připomínka")
-        .setContentText("Máš naplánovanou připomínku.")
+        .setContentTitle(row.optString("title", "").isEmpty() ? "LubaNote – připomínka" : row.optString("title"))
+        .setContentText(row.optString("preview", "").isEmpty() ? "Máš naplánovanou připomínku." : row.optString("preview"))
         .setContentIntent(tap)
         .setAutoCancel(true)
         .setWhen(at)

@@ -172,6 +172,10 @@
         const response = await invoke({
           action:'alarm_update',deviceId:deviceId() || '',noteId:id,
           revision:nextRevision(id),at:alarmProjection(note),
+          // Only ordinary notes. E2E content is intentionally disclosed as a
+          // short notification preview to the user's own FCM devices.
+          title: note && note.isSecret !== true ? String(note.title || 'LubaNote').slice(0,120) : '',
+          preview: note && note.isSecret !== true ? String(note.note || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g,' ').trim().slice(0,160) : '',
           cancel:Array.from(new Set([...oldIds,...currentIds])).slice(0,128)
         });
         // If a newer Android hasn't registered, its next foreground sync is
