@@ -361,6 +361,19 @@
       <time id="lnHomeTime683BC" class="lnHomeTime683BC"></time>
     </div>
 
+    <!-- 692A: PC-only stavovy panel; hodnoty jsou nacitany z overene RPC. -->
+    <div id="lnDesktopStatus692A" class="lnDesktopStatus692A" hidden aria-label="Stav LubaNote">
+      <div class="lnDesktopStatus692A-main">
+        <span id="lnDesktopSync692A" class="lnDesktopStatus692A-sync" role="status">◌ Zjišťuji synchronizaci</span>
+        <div class="lnDesktopStatus692A-quota" title="Logická velikost cloudových dat účtu, nikoli velikost záloh a indexů">
+          <span class="lnDesktopStatus692A-quotaLabel">☁ Cloud</span>
+          <span id="lnDesktopQuotaText692A">Zjišťuji…</span>
+          <div class="lnDesktopStatus692A-track"><span id="lnDesktopQuotaFill692A"></span></div>
+        </div>
+      </div>
+      <span id="lnDesktopAccount692A" class="lnDesktopStatus692A-account" title="Přihlášený účet" hidden></span>
+    </div>
+
     <!-- HLAVNÍ MODULY LUBANOTE -->
     <div class="moduleBar">
       <img src="icons/lubanote.png" alt="LubaNote" class="moduleLogo">
@@ -3024,6 +3037,7 @@
 
   <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
   <script src="desktop.js?v=658af-sidebar-icons-scroll"></script>
+  <script src="desktopStatus692A.js?v=692A-pc-cloud-status"></script>
   <script src="desktopReminders.js?v=658aj-reminders-stability"></script>
   
   

@@ -18785,3 +18785,59 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
     display: none;
   }
 }
+
+/* 692A – pouze PC s mysi, bez zasahu do mobilu a tabletu. */
+.lnDesktopStatus692A { display: none !important; }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .lnDesktopStatus692A:not([hidden]) {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 0;
+    padding: 9px 14px;
+    margin: 4px 0 12px;
+    border: 1px solid var(--color-border, #46515c);
+    border-radius: 13px;
+    background: var(--color-surface, #15242d);
+    color: var(--color-text, #e8f3f4);
+    font-size: .79rem;
+    text-align: left;
+  }
+  .lnDesktopStatus692A-main {
+    display: flex; align-items: center; gap: 18px;
+    flex: 1; min-width: 0; flex-wrap: wrap;
+  }
+  .lnDesktopStatus692A-sync { white-space: nowrap; }
+  .lnDesktopStatus692A-sync[data-state="synced"] { color: #67d5a7; }
+  .lnDesktopStatus692A-sync[data-state="pending"],
+  .lnDesktopStatus692A-sync[data-state="conflict"],
+  .lnDesktopStatus692A-sync[data-state="auth-expired"] { color: #ffbf7c; }
+  .lnDesktopStatus692A-quota {
+    display: flex; align-items: center; gap: 10px;
+    min-width: 220px; flex: 1;
+  }
+  .lnDesktopStatus692A-quotaLabel { white-space: nowrap; font-weight: 700; }
+  #lnDesktopQuotaText692A { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lnDesktopStatus692A-track {
+    width: clamp(56px, 9vw, 145px); height: 6px;
+    border-radius: 99px; overflow: hidden;
+    background: color-mix(in srgb, var(--color-text, #fff) 15%, transparent);
+  }
+  #lnDesktopQuotaFill692A {
+    display: block; width: 0; height: 100%;
+    border-radius: inherit;
+    background: var(--color-accent, #28c8b2);
+    transition: width .2s ease;
+  }
+  #lnDesktopQuotaFill692A[data-high="1"] { background: #ffb45c; }
+  .lnDesktopStatus692A-account {
+    flex: none; min-width: 29px; height: 29px;
+    display: grid; place-items: center;
+    padding: 0 7px; box-sizing: border-box;
+    border: 1px solid var(--color-border, #46515c);
+    border-radius: 99px;
+    font-weight: 700;
+  }
+  .lnDesktopStatus692A-account[hidden] { display: none !important; }
+}
