@@ -112,10 +112,14 @@
     } catch (_) {}
   }
   function markRead(entry) {
-    if (!entry || !accountId) return;
+    // Reading an entry is a UI-only acknowledgement, never a reminder edit.
+    // Apply instantly even if the session lookup has not completed yet.
+    if (!entry) return;
     acknowledged.add(keyOf(entry));
     while (acknowledged.size > 600) acknowledged.delete(acknowledged.values().next().value);
-    try { localStorage.setItem(readKey(accountId), JSON.stringify([...acknowledged])); } catch (_) {}
+    if (accountId) {
+      try { localStorage.setItem(readKey(accountId), JSON.stringify([...acknowledged])); } catch (_) {}
+    }
     refreshBell();
     if (!center.hidden) renderCenter();
   }
@@ -273,26 +277,28 @@
   }
   async function openEntry(entry) {
     if (!entry) return;
+    // 692F: The deliberate click itself means "read", regardless of the
+    // editor's CSS visibility, shared-note handoff or async modal lifecycle.
+    // No note, due date, reminder or completion state is changed.
     closeCenter();
-    try {
-      const noteId = entry.sourceNoteId || entry.id;
-      let result;
-      if (entry.kind === "planned" && typeof openPlannedSourceInEditor === "function") {
-        result = await openPlannedSourceInEditor(entry.id);
-      } else if (typeof openTaskEditorById === "function") {
-        result = await openTaskEditorById(noteId);
-      } else return;
-      // Read is confirmed only when the intended editor is actually visible.
-      const visibleEditor = document.getElementById("taskModal");
-      // The editor may be displayed through CSS while its `hidden` property
-      // remains true. The authoritative note identity is dataset.taskId.
-      const opened = result !== false &&
-        String(visibleEditor?.dataset?.taskId || "") === String(noteId);
-      if (!opened) return;
-      if (active && keyOf(active) === keyOf(entry)) hideToast();
+    markRead(entry);
+    if (active && keyOf(active) === keyOf(entry)) hideToast();
+    if (!accountId) {
+      // Session can arrive after the first click. Persist its acknowledgement
+      // once the account is known, without leaking flags across accounts.
       await checkAccount(true);
       markRead(entry);
-    } catch (err) { console.warn("692D: Nelze otevrit poznamku", err); }
+    }
+    try {
+      const noteId = entry.sourceNoteId || entry.id;
+      if (entry.kind === "planned" && typeof openPlannedSourceInEditor === "function") {
+        await openPlannedSourceInEditor(entry.id);
+      } else if (typeof openTaskEditorById === "function") {
+        await openTaskEditorById(noteId);
+      }
+    } catch (err) {
+      console.warn("692F: Poznamku nelze otevrit; pripominka zustava pouze prectena.", err);
+    }
   }
   function notifyOtherTab(entry) {
     if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;

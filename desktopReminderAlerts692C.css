@@ -52,8 +52,8 @@
     overflow: auto;
     box-sizing: border-box;
     padding: 14px;
-    border: 1px solid color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
-    border-radius: 15px;
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
     background: var(--color-surface);
     color: var(--color-text);
     box-shadow: 0 18px 65px rgba(0,0,0,.48);
@@ -72,23 +72,27 @@
   .lnPcReminderListItem692C {
     display: block; width: 100%; text-align: left;
     border: 1px solid var(--color-border);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
-    color: inherit;
-    padding: 9px 11px;
+    border-radius: 13px;
+    background: var(--color-background);
+    color: var(--color-text);
+    padding: 11px 12px;
     cursor: pointer;
   }
-  .lnPcReminderListItem692C:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 17%, var(--color-surface)); }
+  .lnPcReminderListItem692C:hover,
+  .lnPcReminderListItem692C:focus-visible {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-background));
+  }
   .lnPcReminderListTitle692C { display: block; font-size: .84rem; font-weight: 700; overflow-wrap: anywhere; }
   .lnPcReminderListDate692C { display: block; font-size: .75rem; color: var(--color-text-secondary); margin-top: 3px; }
   .lnPcReminderCenterFoot692C { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .lnPcReminderPermission692C, .lnPcReminderGo692C {
     padding: 8px 11px; color: inherit; cursor: pointer;
     border: 1px solid color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
-    border-radius: 9px; background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+    border-radius: 13px; background: var(--color-background);
     font-size: .78rem; font-weight: 650;
   }
-  .lnPcReminderPermission692C:hover, .lnPcReminderGo692C:hover { background: color-mix(in srgb, var(--color-accent) 25%, var(--color-surface)); }
+  .lnPcReminderPermission692C:hover, .lnPcReminderGo692C:hover { background: color-mix(in srgb, var(--color-accent) 8%, var(--color-background)); }
   #lnPcReminderToast692C:not([hidden]) {
     display: block !important;
     position: fixed;
@@ -98,8 +102,8 @@
     width: min(360px, calc(100vw - 34px));
     box-sizing: border-box;
     padding: 15px;
-    border: 1px solid color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
-    border-radius: 17px;
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
     background: var(--color-surface);
     color: var(--color-text);
     box-shadow: 0 16px 60px rgba(0,0,0,.52);
@@ -117,13 +121,13 @@
   .lnPcReminderToastActions692C { display: flex; justify-content: flex-end; gap: 8px; margin-top: 11px; }
   .lnPcReminderToastActions692C button,
   .lnPcReminderSnoozeChoices692C button {
-    border: 1px solid var(--color-border); border-radius: 9px;
-    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); color: inherit;
+    border: 1px solid var(--color-border); border-radius: 13px;
+    background: var(--color-background); color: var(--color-text);
     font-size: .83rem; font-weight: 650;
     padding: 8px 13px; cursor: pointer;
   }
   .lnPcReminderToastActions692C button:hover,
-  .lnPcReminderSnoozeChoices692C button:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }
+  .lnPcReminderSnoozeChoices692C button:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-background)); }
   .lnPcReminderToastActions692C .lnPcReminderSnooze692C { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
   .lnPcReminderSnoozeChoices692C:not([hidden]) { display: flex; gap: 6px; flex-wrap: wrap; margin: 7px 0 2px; }
   .lnPcReminderSnoozeChoices692C[hidden] { display: none !important; }
@@ -140,8 +144,8 @@
     width: min(345px, calc(100vw - 36px));
     padding: 16px;
     box-sizing: border-box;
-    border-radius: 15px;
-    border: 1px solid color-mix(in srgb, var(--color-accent) 60%, var(--color-border));
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
     background: var(--color-surface);
     color: var(--color-text);
     box-shadow: 0 16px 50px rgba(0,0,0,.32);
@@ -158,8 +162,8 @@
   .lnPcReminderPermissionActions692D button {
     border: 1px solid var(--color-border);
     color: var(--color-text);
-    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-    border-radius: 9px;
+    background: var(--color-background);
+    border-radius: 13px;
     padding: 8px 12px;
     cursor: pointer;
     font: inherit;
