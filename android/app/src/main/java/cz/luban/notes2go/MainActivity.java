@@ -248,6 +248,11 @@ public class MainActivity extends BridgeActivity {
       LubaNoteNativeTesterPlugin.class
     );
 
+    // 692L: FCM token bridge only; no push reception or server writes.
+    registerPlugin(
+      LubaNoteFcmTokenPlugin.class
+    );
+
     super.onCreate(savedInstanceState);
 
     nastavFullscreen();
