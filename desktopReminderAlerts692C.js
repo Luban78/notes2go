@@ -45,12 +45,27 @@
       <button class="lnPcReminderDismiss692C" type="button">Zavřít</button>
       <button class="lnPcReminderSnooze692C" type="button" aria-expanded="false">Odložit</button>
     </div>`;
-  document.body.append(center, toast);
+  // Browser permissions need a real click. Offer a small in-app window after sign-in.
+  const permissionPrompt = document.createElement("section");
+  permissionPrompt.id = "lnPcReminderPermissionPrompt692D";
+  permissionPrompt.hidden = true;
+  permissionPrompt.setAttribute("role", "dialog");
+  permissionPrompt.setAttribute("aria-labelledby", "lnPcReminderPermissionTitle692D");
+  permissionPrompt.innerHTML = `
+    <strong id="lnPcReminderPermissionTitle692D">🔔 Upozornění LubaNote na PC</strong>
+    <p>Povol oznámení, abys připomínky viděl i při práci na jiné kartě Chromu.</p>
+    <div class="lnPcReminderPermissionActions692D">
+      <button class="lnPcReminderPermissionLater692D" type="button">Teď ne</button>
+      <button class="lnPcReminderPermissionAllow692D" type="button">Povolit oznámení</button>
+    </div>`;
+  document.body.append(center, toast, permissionPrompt);
 
   const centerList = center.querySelector(".lnPcReminderList692C");
   const centerCount = center.querySelector("#lnPcReminderCenterCount692C");
   const permissionButton = center.querySelector(".lnPcReminderPermission692C");
   const permissionInfo = center.querySelector(".lnPcReminderPermissionInfo692C");
+  const permissionAllow = permissionPrompt.querySelector(".lnPcReminderPermissionAllow692D");
+  const permissionLater = permissionPrompt.querySelector(".lnPcReminderPermissionLater692D");
   const openToast = toast.querySelector(".lnPcReminderOpen692C");
   const toastTitle = toast.querySelector(".lnPcReminderToastTitle692C");
   const toastTime = toast.querySelector(".lnPcReminderToastTime692C");
@@ -75,6 +90,74 @@
   let initialized = false;
   let lastSyncState = "pending";
   let systemNotice = null;
+
+  // The read flag belongs to this browser and logged-in account. It never
+  // edits a note, marks a Planner task complete, or changes the due date.
+  const acknowledged = new Set();
+  let accountId = null;
+  let lastAccountCheck = 0;
+  let accountCheck = null;
+  const readKey = id => `lnPcReminderRead692D:${id}`;
+  const permissionChoiceKey = id => `lnPcReminderPermission692D:${id}`;
+  const unread = () => due.filter(entry => !acknowledged.has(keyOf(entry)));
+
+  function loadAcknowledged(id) {
+    acknowledged.clear();
+    if (!id) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(readKey(id)) || "[]");
+      if (Array.isArray(saved)) saved.slice(-600).forEach(key => {
+        if (typeof key === "string" && key.length <= 400) acknowledged.add(key);
+      });
+    } catch (_) {}
+  }
+  function markRead(entry) {
+    if (!entry || !accountId) return;
+    acknowledged.add(keyOf(entry));
+    while (acknowledged.size > 600) acknowledged.delete(acknowledged.values().next().value);
+    try { localStorage.setItem(readKey(accountId), JSON.stringify([...acknowledged])); } catch (_) {}
+    refreshBell();
+    if (!center.hidden) renderCenter();
+  }
+  function permissionSupported() {
+    return window.isSecureContext && "Notification" in window;
+  }
+  function offerPermission() {
+    if (!accountId || !ready() || document.hidden ||
+        !permissionSupported() || Notification.permission !== "default") return;
+    let ignored = false;
+    try { ignored = localStorage.getItem(permissionChoiceKey(accountId)) === "later"; } catch (_) {}
+    if (!ignored) permissionPrompt.hidden = false;
+  }
+  function setAccount(id) {
+    if (id === accountId) return;
+    accountId = id;
+    if (!id) lastAccountCheck = 0;
+    loadAcknowledged(id);
+    permissionPrompt.hidden = true;
+    if (id) offerPermission();
+    refreshBell();
+    if (!center.hidden) renderCenter();
+  }
+  // Supabase session is used only to scope local UI acknowledgements to the
+  // current account. No new remote writes, RPC, or authentication changes.
+  function checkAccount(force = false) {
+    if (!ready()) return Promise.resolve();
+    if (accountCheck) return accountCheck;
+    if (!force && Date.now() - lastAccountCheck < 30000) return Promise.resolve();
+    const client = typeof supabaseClient !== "undefined" ? supabaseClient : window.supabaseClient;
+    if (typeof client?.auth?.getSession !== "function") return Promise.resolve();
+    lastAccountCheck = Date.now();
+    accountCheck = Promise.resolve().then(() => client.auth.getSession())
+      .then(({ data, error }) => {
+        if (error) return;
+        setAccount(data?.session?.user?.id || null);
+        offerPermission();
+      })
+      .catch(() => {})
+      .finally(() => { accountCheck = null; });
+    return accountCheck;
+  }
 
   const niceDate = value => {
     const dt = new Date(value);
@@ -122,10 +205,11 @@
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
   function refreshBell() {
-    badge.textContent = due.length > 99 ? "99+" : String(due.length);
-    badge.hidden = due.length === 0;
-    bell.setAttribute("aria-label", `Zmeškané připomínky: ${due.length}`);
-    centerCount.textContent = `(${due.length})`;
+    const count = unread().length;
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.hidden = count === 0;
+    bell.setAttribute("aria-label", `Nepřečtené zmeškané připomínky: ${count}`);
+    centerCount.textContent = `(${count})`;
   }
   function closeCenter() {
     center.hidden = true;
@@ -138,13 +222,14 @@
     center.style.right = `${Math.max(12, Math.round(window.innerWidth - box.right))}px`;
     refreshBell();
     centerList.replaceChildren();
-    if (due.length === 0) {
+    const unreadEntries = unread();
+    if (unreadEntries.length === 0) {
       const empty = document.createElement("p");
       empty.className = "lnPcReminderMuted692C";
-      empty.textContent = "Žádné zmeškané připomínky. ✅";
+      empty.textContent = "Všechny připomínky jsou přečtené. Aktivní úkoly zůstávají v Připomínkách. ✓";
       centerList.append(empty);
     }
-    due.slice(0, 15).forEach(entry => {
+    unreadEntries.slice(0, 15).forEach(entry => {
       const item = document.createElement("button");
       item.type = "button";
       item.className = "lnPcReminderListItem692C";
@@ -158,17 +243,17 @@
       item.addEventListener("click", () => void openEntry(entry));
       centerList.append(item);
     });
-    if (due.length > 15) {
+    if (unreadEntries.length > 15) {
       const rest = document.createElement("p");
       rest.className = "lnPcReminderMuted692C";
-      rest.textContent = `Dalších ${due.length - 15} v Připomínkách.`;
+      rest.textContent = `Dalších ${unreadEntries.length - 15} nepřečtených v Připomínkách.`;
       centerList.append(rest);
     }
     if ("Notification" in window && window.isSecureContext) {
       const state = Notification.permission;
       permissionButton.hidden = state !== "default";
       permissionInfo.textContent = state === "denied"
-        ? "Oznámení na jiné kartě jsou v prohlížeči zablokována."
+        ? "Oznámení na jiné kartě zablokoval prohlížeč nebo jeho správce. Upozornění uvnitř LubaNote fungují dál."
         : state === "granted"
           ? "Oznámení na jiné kartě jsou povolena."
           : "Upozornění na jiné kartě můžeš povolit tlačítkem.";
@@ -189,14 +274,23 @@
   async function openEntry(entry) {
     if (!entry) return;
     closeCenter();
-    if (active && keyOf(active) === keyOf(entry)) hideToast();
     try {
+      const noteId = entry.sourceNoteId || entry.id;
+      let result;
       if (entry.kind === "planned" && typeof openPlannedSourceInEditor === "function") {
-        await openPlannedSourceInEditor(entry.id);
+        result = await openPlannedSourceInEditor(entry.id);
       } else if (typeof openTaskEditorById === "function") {
-        await openTaskEditorById(entry.sourceNoteId || entry.id);
-      }
-    } catch (err) { console.warn("692C: Nelze otevrit poznamku", err); }
+        result = await openTaskEditorById(noteId);
+      } else return;
+      // Read is confirmed only when the intended editor is actually visible.
+      const visibleEditor = document.getElementById("taskModal");
+      const opened = result !== false && visibleEditor?.hidden === false &&
+        String(visibleEditor?.dataset?.taskId || "") === String(noteId);
+      if (!opened) return;
+      if (active && keyOf(active) === keyOf(entry)) hideToast();
+      await checkAccount(true);
+      markRead(entry);
+    } catch (err) { console.warn("692D: Nelze otevrit poznamku", err); }
   }
   function notifyOtherTab(entry) {
     if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
@@ -228,9 +322,12 @@
       refreshBell();
       closeCenter();
       hideToast();
+      permissionPrompt.hidden = true;
+      setAccount(null);
       initialized = false;
       return;
     }
+    void checkAccount();
     try { due = getDue(); } catch (err) {
       console.warn("692C: Cteni pripominek se odlozilo", err);
       return;
@@ -241,13 +338,14 @@
     if (!initialized) {
       initialized = true;
       // First load: don't flood the screen with older missed reminders.
-      const latest = due.find(entry => !shown.has(keyOf(entry)) && Date.now() - new Date(entry.date).getTime() <= 86400000);
-      due.forEach(entry => { if (!latest || keyOf(entry) !== keyOf(latest)) remember(keyOf(entry)); });
+      const pending = unread();
+      const latest = pending.find(entry => !shown.has(keyOf(entry)) && Date.now() - new Date(entry.date).getTime() <= 86400000);
+      pending.forEach(entry => { if (!latest || keyOf(entry) !== keyOf(latest)) remember(keyOf(entry)); });
       if (latest) showToast(latest);
       return;
     }
     if (!active && !saving) {
-      const next = due.find(entry => !shown.has(keyOf(entry)));
+      const next = unread().find(entry => !shown.has(keyOf(entry)));
       if (next) showToast(next);
     }
   }
@@ -261,10 +359,27 @@
     closeCenter();
     document.getElementById("remindersModuleButton")?.click();
   });
-  permissionButton.addEventListener("click", async () => {
-    if (!("Notification" in window) || Notification.permission !== "default") return;
-    try { await Notification.requestPermission(); } catch (_) {}
-    renderCenter();
+  function requestDesktopPermission() {
+    if (!permissionSupported() || Notification.permission !== "default") return;
+    // IMPORTANT: invoke requestPermission synchronously inside click.
+    let response;
+    try { response = Notification.requestPermission(); }
+    catch (_) { permissionPrompt.hidden = true; return; }
+    Promise.resolve(response).then(result => {
+      permissionPrompt.hidden = true;
+      if (result === "denied" && accountId) {
+        try { localStorage.setItem(permissionChoiceKey(accountId), "later"); } catch (_) {}
+      }
+      if (!center.hidden) renderCenter();
+    }).catch(() => { permissionPrompt.hidden = true; });
+  }
+  permissionButton.addEventListener("click", requestDesktopPermission);
+  permissionAllow.addEventListener("click", requestDesktopPermission);
+  permissionLater.addEventListener("click", () => {
+    permissionPrompt.hidden = true;
+    if (accountId) {
+      try { localStorage.setItem(permissionChoiceKey(accountId), "later"); } catch (_) {}
+    }
   });
   document.addEventListener("pointerdown", event => {
     if (!center.hidden && !center.contains(event.target) && !bell.contains(event.target)) closeCenter();
@@ -326,9 +441,12 @@
     if (typeof state === "string") lastSyncState = state;
     scan();
   });
-  window.addEventListener("focus", scan);
+  window.addEventListener("focus", () => { scan(); void checkAccount(true); });
   window.addEventListener("online", scan);
-  document.addEventListener("visibilitychange", scan);
+  document.addEventListener("visibilitychange", () => {
+    scan();
+    if (!document.hidden) { void checkAccount(true); offerPermission(); }
+  });
   window.setInterval(scan, 12000);
   window.setTimeout(scan, 500);
 })();
