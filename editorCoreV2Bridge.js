@@ -3378,12 +3378,7 @@
     const yCile = Number(cilY);
     if (![xPrstu, yPrstu, xCile, yCile].every(Number.isFinite)) return false;
 
-    // 691DD: substep timing only while the test-owned CPU trace is active.
-    // Measurements are aggregate counters; no logging or DOM queries added.
-    const traceBucket = window.LubaNoteAutoTesterPerfTrace691DC?.currentBucket || null;
-    const lupaTextStart = traceBucket ? performance.now() : 0;
     const kontext = ziskejV2LupaTextKontext(stav);
-    if (traceBucket) traceBucket.lupaTextMs += performance.now() - lupaTextStart;
     // 691CW: an unchanged context must not invalidate DOM text/layout each RAF.
     if (v2SelectionLupaPred.textContent !== kontext.pred) v2SelectionLupaPred.textContent = kontext.pred;
     if (v2SelectionLupaPo.textContent !== kontext.po) v2SelectionLupaPo.textContent = kontext.po;
@@ -3409,9 +3404,7 @@
     if (v2SelectionMenuAktivni || selectionMenu?.dataset?.lnV2Owner === "1") {
       skryjV2SelectionMenu();
     }
-    const lupaNativeStart = traceBucket ? performance.now() : 0;
     potlacV2NativeSelection();
-    if (traceBucket) traceBucket.lupaNativeMs += performance.now() - lupaNativeStart;
     if (!stav.handleDrag.lupaHandlesSkryty ||
         !v2SelectionHandleStart?.hidden || !v2SelectionHandleEnd?.hidden) {
       skryjV2SelectionHandles();
@@ -3799,9 +3792,7 @@
     const novyRange = rangeV2MeziBody(stav.handleDrag.pevnyBod, bod);
     if (!novyRange) return false;
     stav.range = novyRange;
-    const lupaHighlightStart = traceBucket ? performance.now() : 0;
     nastavV2SelectionScrollHighlight(stav.range);
-    if (traceBucket) traceBucket.lupaHighlightMs += performance.now() - lupaHighlightStart;
 
     /* 673G22 – během edge auto-scrollu jsou handles stejně skryté.
        Nevoláme proto každý RAF getClientRects + core-save + jejich přepozicování.
@@ -3916,7 +3907,6 @@
           diagBucket.scrollPx += Math.abs(dalsi - pred);
         }
         const diagLupaStart = diagBucket ? performance.now() : 0;
-        if (diagBucket) diag.currentBucket = diagBucket;
         zobrazV2SelectionLupu(
           stav,
           Number.isFinite(aktualniDrag.lastTouchX) ? aktualniDrag.lastTouchX : aktualniDrag.lastX,
@@ -3924,10 +3914,7 @@
           aktualniDrag.lastX,
           aktualniDrag.lastY
         );
-        if (diagBucket) {
-          diagBucket.lupaMs += performance.now() - diagLupaStart;
-          diag.currentBucket = null;
-        }
+        if (diagBucket) diagBucket.lupaMs += performance.now() - diagLupaStart;
       }
 
       if (diagBucket) {
