@@ -4961,25 +4961,13 @@ async function spustExistingClientReconcileV2(
         0
       );
 
-      const reconcileRxBudget = feedLimitRecovery
-        ? EXISTING_RECONCILE_FEED_LIMIT_RX_BUDGET
-        : EXISTING_RECONCILE_AUTO_RX_BUDGET;
-
-      if (odhadFetchBytes > reconcileRxBudget) {
-        window.LubaNoteStartupDiag?.zapis?.(
-          "V2",
-          `RECONCILE DEFER | budget mode=${feedLimitRecovery ? "feed-limit" : "auto"} fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(reconcileRxBudget / 1024)}kB`
-        );
-        nastavStavSynchronizaceUI("pending");
-        return false;
-      }
-
-      if (feedLimitRecovery) {
-        window.LubaNoteStartupDiag?.zapis?.(
-          "V2",
-          `RECONCILE FEED-LIMIT BUDGET OK | fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB limit=${Math.round(reconcileRxBudget / 1024)}kB`
-        );
-      }
+      /* 692H: Celkovy objem zmen nesmi zablokovat synchronizaci.
+       * Zachovat bezpecne davky, revizni merge a ochrany proti konfliktum.
+       * Odhad slouzi jen pro diagnostiku, nikoliv jako STOP. */
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2",
+        `RECONCILE BATCHED RECOVERY | mode=${feedLimitRecovery ? "feed-limit" : "auto"} fetch=${fetchManifestRows.length} approx=${Math.round(odhadFetchBytes / 1024)}kB`
+      );
 
       window.LubaNoteStartupDiag?.zapis?.(
         "V2",
@@ -10690,70 +10678,6 @@ window.LubaNoteSync = {
 
 let casovacSyncuPoAktivaci = null;
 
-/* 692G – pouze Android foreground: po bezpečném notes syncu porovnat
- * lehký snapshot upozornění před/po. Realtime již obnovu řeší sám,
- * ale signál ztracený během uspání nemusí existovat ve frontě.
- * Bez změny stavu alarmů nic nerušíme a nesaháme na revizní engine. */
-function ziskejOtiskyAlarmuForeground692G() {
-  if (
-    window.Capacitor?.getPlatform?.() !== "android" ||
-    typeof loadTask !== "function"
-  ) return null;
-
-  try {
-    const otisky = new Map();
-    for (const note of loadTask()) {
-      if (!note?.id) continue;
-      const polozky = Array.isArray(note.plannedItems)
-        ? note.plannedItems : [];
-      otisky.set(String(note.id), JSON.stringify([
-        note.updatedAt ?? null,
-        note.isSecret === true,
-        note.completed === true,
-        note.reminder === true,
-        note.date ?? null,
-        note.repeat ?? null,
-        note.notificationId ?? null,
-        note.title ?? "",
-        note.reminder === true ? String(note.note || "").replace(/\s+/g, " ").trim().slice(0, 150) : null,
-        polozky.map((item) => [
-          item?.id ?? null,
-          item?.plannedAt ?? null,
-          item?.notificationId ?? null,
-          item?.reminder === true,
-          item?.completed === true,
-          item?.text ?? null
-        ])
-      ]));
-    }
-    return otisky;
-  } catch (_) {
-    return null;
-  }
-}
-
-async function obnovZmeneneAlarmyForeground692G(puvodni) {
-  if (!(puvodni instanceof Map)) return;
-  const nove = ziskejOtiskyAlarmuForeground692G();
-  const obnov = window.LubaNoteReminders?.obnovPoSynchronizaci;
-  if (!(nove instanceof Map) || typeof obnov !== "function") return;
-
-  const zmenenaId = new Set();
-  for (const [id, otisk] of puvodni) {
-    if (nove.get(id) !== otisk) zmenenaId.add(id);
-  }
-  for (const id of nove.keys()) {
-    if (!puvodni.has(id)) zmenenaId.add(id);
-  }
-  if (!zmenenaId.size) return;
-
-  const vysledek = await obnov(Array.from(zmenenaId));
-  window.LubaNoteStartupDiag?.zapis?.(
-    "REM-692G",
-    `FOREGROUND RESTORE | changed=${zmenenaId.size} | result=${vysledek === true ? "OK" : "DEFER"}`
-  );
-}
-
 /*
  * Druhé zařízení nemusí stránku ručně obnovovat.
  * Jakmile se uživatel do LubaNote vrátí, stáhneme bezpečně
@@ -10810,18 +10734,10 @@ function naplanujSyncPoAktivaci(
         return;
       }
 
-      const puvodniAlarmy692G =
-        ziskejOtiskyAlarmuForeground692G();
-
       spustRychlySyncPoznamekBezpecne()
-        .then(async (uspesne) => {
-          if (uspesne !== true) return;
-          // Jen úspěšně stažený lokální stav smí změnit native alarmy.
-          await obnovZmeneneAlarmyForeground692G(puvodniAlarmy692G);
-        })
         .catch((error) => {
           console.warn(
-            "Synchronizace nebo obnova alarmů po návratu byla odložena:",
+            "Synchronizace po návratu do aplikace byla odložena:",
             error
           );
         });
