@@ -46,7 +46,10 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     SharedPreferences prefs = getContext().getSharedPreferences(
         LubaNoteFcmMessagingService.PREFS, Context.MODE_PRIVATE);
     String current = Long.toString(prefs.getLong(LubaNoteFcmMessagingService.GENERATION, 0L));
-    if (current.equals(expected)) prefs.edit().putBoolean(LubaNoteFcmMessagingService.PENDING, false).apply();
+    if (current.equals(expected)) {
+      prefs.edit().putBoolean(LubaNoteFcmMessagingService.PENDING, false).apply();
+      LubaNoteFcmMessagingService.clearPendingSyncNotification(getContext());
+    }
     call.resolve();
   }
 }

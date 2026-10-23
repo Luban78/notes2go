@@ -1,6 +1,7 @@
 package cz.luban.notes2go;
 
 import android.Manifest;
+import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -34,7 +35,9 @@ public final class LubaNoteFcmMessagingService extends FirebaseMessagingService 
     long next = prefs.getLong(GENERATION, 0L) + 1L;
     // commit(): ensure signal survives process termination before a tap.
     prefs.edit().putLong(GENERATION, next).putBoolean(PENDING, true).commit();
-    showPendingSyncNotification();
+    // Foreground WebView will reconcile the pending signal itself.
+    // Do not show an extra reminder-change banner while the app is visible.
+    if (!isAppForeground()) showPendingSyncNotification();
   }
 
   @Override
@@ -42,6 +45,25 @@ public final class LubaNoteFcmMessagingService extends FirebaseMessagingService 
     super.onNewToken(token);
     // JavaScript getToken() reads refreshed token when the app is next opened.
     // Never print token or send it without authenticated user context.
+  }
+
+  private boolean isAppForeground() {
+    ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+    if (manager == null) return false;
+    java.util.List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
+    if (processes == null) return false;
+    for (ActivityManager.RunningAppProcessInfo process : processes) {
+      if (process.pid == android.os.Process.myPid()
+          && process.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static void clearPendingSyncNotification(Context context) {
+    NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (manager != null) manager.cancel(NOTIFICATION_ID);
   }
 
   private void showPendingSyncNotification() {
