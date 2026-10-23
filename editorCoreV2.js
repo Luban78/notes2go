@@ -7201,7 +7201,11 @@
   function zpracujV2ListPointerMove(event) {
     if (!v2DragSeznamu || v2DragSeznamu.typ !== "pointer" || v2DragSeznamu.pointerId !== event.pointerId) return;
     if (!v2DragSeznamu.pripraven) {
-      if (vzdalenostV2ListDrag(event.clientX, event.clientY) > MAX_POHYB_LONG_PRESS_SEZNAMU) {
+      /* 691DG: PC mouse: jakmile zacne uzivatel tahnout text, zrusit
+         cekajici MOVE jeste pred 420ms casovacem. Touch cesta beze zmeny.
+         2px toleruje drobny sum mysi pri samotnem podrzeni. */
+      const prah = v2DragSeznamu.typ === "pointer" ? 2 : MAX_POHYB_LONG_PRESS_SEZNAMU;
+      if (vzdalenostV2ListDrag(event.clientX, event.clientY) > prah) {
         zrusV2DragSeznamu({ zachovatVyber: true });
       }
       return;
@@ -10253,6 +10257,7 @@
       if (event.pointerType === "mouse" && event.button !== 0) return;
       zrusVyberMoveSeznamuPokudMimo(event.target);
       const radek = event.target.closest?.(".ln-v2-odstavec.ln-v2-bullet, .ln-v2-odstavec.ln-v2-ordered, .ln-v2-odstavec.ln-v2-todo");
+      if (!radek || !editor.contains(radek)) return;
       if (!radek || !editor.contains(radek) || jePrvekMimoV2SeznamMove(event.target)) return;
       /* PATCH 663F – PC: značka Bullet/šipka je znovu plnohodnotný MOVE handle.
          Krátký klik se dál zpracuje až v click handleru (u rodiče sbalí/rozbalí),
