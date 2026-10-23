@@ -1,4 +1,4 @@
-/* 691CZ – long continuous 15s edge gesture; 691CV – short-word native doubletap setup; 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
+/* 691DB – idle-vs-drag rAF diagnostic, per-second buckets; 691CZ – long continuous 15s edge gesture; 691CV – short-word native doubletap setup; 691CU – viewport-safe handle setup; 691CT – handle readiness diagnostic and retry; 691CS – explicit, foreground-only Android MotionEvent selection-edge performance.
  * Own LOCAL Testy note only; never touches arbitrary user notes. No synthetic DOM events.
  */
 (()=>{'use strict';
@@ -16,6 +16,22 @@
     }
     return null;
   };
+  // 691DB: samostatna referencni klidova perioda stejneho skutecneho editoru.
+  // Zadne DOM dotazy, logovani ani scrollovani behem vzorkovani.
+  const idleRafSample=duration=>new Promise(resolve=>{
+    const gaps=[];let first=0,last=0;
+    const tick=t=>{
+      if(!first)first=t;
+      if(last)gaps.push(t-last);
+      last=t;
+      if(t-first<duration){requestAnimationFrame(tick);return;}
+      gaps.sort((a,b)=>a-b);
+      resolve({frames:gaps.length,
+        p95:Math.round((gaps[Math.min(gaps.length-1,Math.max(0,Math.ceil(gaps.length*.95)-1))]||0)*10)/10,
+        s40:gaps.filter(x=>x>=40).length,s70:gaps.filter(x=>x>=70).length});
+    };
+    requestAnimationFrame(tick);
+  });
   const closeOwnedEditorIfOpen=async(id)=>{
     const modal=document.getElementById('taskModal');
     if(modal?.hidden!==false||modal?.dataset?.taskId!==id)return;
@@ -59,6 +75,9 @@
       const scroll=scrollNode(editor);check(scroll&&scroll.scrollHeight-scroll.clientHeight>500,'real_editor_scroll_range_missing');
       const text=Array.from(editor.querySelectorAll('*')).find(e=>e.textContent?.includes(marker)&&e.children.length===0);
       text?.scrollIntoView({block:'center',behavior:'instant'});await wait(160);
+      progress('691DB · klidovy editor – mereni rAF 3 s');
+      const idle=await idleRafSample(3000);
+      check(alive(),'cancelled_after_idle_reference');
       const results=[];
       for(let k=0;k<3;k++){
         check(alive(),'cancelled');progress(`691CS · živé tažení červené kapky ${k+1}/3${k===0?" (15 s)":" (3 s)"}`);
@@ -99,6 +118,7 @@
         const beforeText=String(window.getSelection?.()?.toString?.()||'');
         const initialScroll=scroll.scrollTop;
         const gaps=[],longTasks=[],stallAt=[],stall40=[];let last=0,first=0;
+        const buckets=k===0?Array.from({length:15},()=>({frames:0,s40:0,s70:0})):null;
         if(window.PerformanceObserver?.supportedEntryTypes?.includes('longtask')){
           observer=new PerformanceObserver(list=>{if(collect)for(const e of list.getEntries())longTasks.push(e.duration);});
           observer.observe({entryTypes:['longtask']});
@@ -109,6 +129,12 @@
           /* Jen casove znaceni – zadne logovani/DOM prace behem tahu. */
           if(dt>=70)stallAt.push(Math.round(t-first));
           if(dt>=40)stall40.push(Math.round(t-first));
+          if(buckets){
+            const bucket=buckets[Math.min(14,Math.floor((t-first)/1000))];
+            bucket.frames++;
+            if(dt>=40)bucket.s40++;
+            if(dt>=70)bucket.s70++;
+          }
         }last=t;raf=requestAnimationFrame(frame);};
         raf=requestAnimationFrame(frame);
         let ack;
@@ -126,10 +152,13 @@
         const p95=gaps[Math.min(gaps.length-1,Math.ceil(gaps.length*.95)-1)];
         results.push({p95:Math.round(p95*10)/10,max:Math.round(gaps.at(-1)*10)/10,
           long:longTasks.filter(x=>x>50).length,largest:Math.round((longTasks.at(-1)||0)*10)/10,
-          scroll:deltaScroll,frames:gaps.length,stalls70:stallAt.length,stallAt:stallAt.slice(0,60),stalls40:stall40.length,stall40At:stall40.slice(0,120)});
+          scroll:deltaScroll,frames:gaps.length,stalls70:stallAt.length,stallAt:stallAt.slice(0,60),stalls40:stall40.length,stall40At:stall40.slice(0,120),buckets});
       }
       const avg=key=>Math.round(results.reduce((a,x)=>a+x[key],0)/results.length*10)/10;
-      const detail=`691CZ LIVE_NATIVE_EDGE PASS 3/3 (15s+3s+3s); frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; stalls40ms=[${results.map(x=>x.stalls40)}]; stall40AtMs=[${results.map(x=>'('+x.stall40At.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
+      const longBuckets=results[0]?.buckets||[];
+      const bySecond=longBuckets.map(x=>x.s40).join(',');
+      const bySecondFrames=longBuckets.map(x=>x.frames).join(',');
+      const detail=`691DB LIVE_NATIVE_EDGE PASS 3/3 (15s+3s+3s); idle3sFrames=${idle.frames}; idle3sP95=${idle.p95}ms; idle3sStall40=${idle.s40}; idle3sStall70=${idle.s70}; drag15sStall40BySecond=[${bySecond}]; drag15sFramesBySecond=[${bySecondFrames}]; frameP95avg=${avg('p95')}ms; worstFrame=${Math.max(...results.map(x=>x.max))}ms; longTasksTotal=${results.reduce((a,x)=>a+x.long,0)}; worstLongTask=${Math.max(...results.map(x=>x.largest))}ms; scrollPx=[${results.map(x=>x.scroll)}]; frames=[${results.map(x=>x.frames)}]; stalls70ms=[${results.map(x=>x.stalls70)}]; stallAtMs=[${results.map(x=>'('+x.stallAt.join(',')+')')}]; stalls40ms=[${results.map(x=>x.stalls40)}]; stall40AtMs=[${results.map(x=>'('+x.stall40At.join(',')+')')}]; own LOCAL Testy; Java MotionEvent, not finger`;
       await closeOwnedEditorIfOpen(id);
       return row('NATIVE_PASS',detail,Math.round(performance.now()-began));
     }catch(e){
