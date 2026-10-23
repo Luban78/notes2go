@@ -1,5 +1,5 @@
 /* ==================================================
-   LubaNote – Admin Dashboard V2
+   LubaNote – Admin Dashboard V2 
    UI nikdy samo nerozhoduje o admin právech.
    Každé čtení i změnu znovu ověřuje SECURITY DEFINER RPC v Supabase.
 ================================================== */
