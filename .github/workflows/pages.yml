@@ -50,40 +50,8 @@ jobs:
 
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-      - name: Add automatic cache version
-        run: |
-          python3 <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          cesta = Path("_site/index.html")
-          html = cesta.read_text(encoding="utf-8")
-
-          verze = os.environ["VERSION"]
-
-          vzor = re.compile(
-              r'((?:src|href)=["\'])'
-              r'(?!https?:|//|data:)'
-              r'([^"\']+\.(?:js|css))'
-              r'(?:\?[^"\']*)?'
-              r'(["\'])'
-          )
-
-          html = vzor.sub(
-              lambda shoda:
-                  f"{shoda.group(1)}"
-                  f"{shoda.group(2)}"
-                  f"?v={verze}"
-                  f"{shoda.group(3)}",
-              html
-          )
-
-          cesta.write_text(
-              html,
-              encoding="utf-8"
-          )
-          PY
+      - name: Fingerprint published JS and CSS
+        run: python3 scripts/auto-cache-version.py _site
 
       - name: Upload Pages
         uses: actions/upload-pages-artifact@v3

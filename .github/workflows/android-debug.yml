@@ -46,6 +46,9 @@ jobs:
           cp -r icons www/
           cp -r fonts683BQ www/
 
+      - name: Fingerprint bundled JS and CSS
+        run: python3 scripts/auto-cache-version.py www
+
       - name: Sync Capacitor Android
         run: npx cap sync android
 
