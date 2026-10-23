@@ -3163,6 +3163,12 @@ modalRichTextV2Host?.addEventListener(
     const editor = ziskejEditorCoreV2Element();
     if (!editor || event.target !== editor) return;
 
+    /* 691DH: PC nadpis se pri scrollu nesbaluje; mobil beze zmeny. */
+    if (window.matchMedia("(min-width: 900px) and (hover: hover) and (pointer: fine)").matches) {
+      taskModal.classList.remove("titleCollapsed");
+      return;
+    }
+
     const scrollTop = editor.scrollTop;
     const jeNazevSbaleny = taskModal.classList.contains("titleCollapsed");
     if (!jeNazevSbaleny && scrollTop > 28) {

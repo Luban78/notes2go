@@ -18766,3 +18766,13 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
   bottom: calc(var(--ln-lk-height, 260px) + 12px);
 }
 .lnSyncRecoveryNotice683BX[hidden] { display: none !important; }
+
+/* 691DH: PC title remains visible; no new stacking context / z-index. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .taskModal.titleCollapsed #modalTitle {
+    max-height: 60px;
+    opacity: 1;
+    pointer-events: auto;
+    border-bottom: 1px solid #777;
+  }
+}
