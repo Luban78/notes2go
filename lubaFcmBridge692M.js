@@ -1,21 +1,19 @@
-/* 692M: background FCM signal -> resume existing V2 sync. No note plaintext in push.
-   Android's data message is NOT a substitute for running JS in the background. */
+/* 692O: FCM background alarm bridge. Only timestamps and numeric Android IDs cross
+   the relay; note titles, note bodies and E2E secrets NEVER leave encrypted sync. */
 (() => {
   'use strict';
   const endpoint = 'lubanote-fcm';
   const plugin = window.Capacitor?.Plugins?.LubaNoteFcmToken || null;
   const isNative = Boolean(plugin && window.Capacitor?.isNativePlatform?.());
-  const apiHost = (() => {
-    try {return new URL(SUPABASE_URL).hostname;} catch {return '';}
-  })();
+  const apiHost = (() => {try {return new URL(SUPABASE_URL).hostname;} catch {return '';}})();
   if (apiHost !== 'api.lubanote.com' && apiHost !== 'test.lubanote.com') return;
-
   let registeredToken = '';
   let registeredUser = '';
   let registrationBusy = false;
   let pendingBusy = false;
-  let wakeTimer = null;
   let lastWake = 0;
+  const pendingUpdates = new Map();
+  const perNoteRevisions = new Map();
 
   function deviceId() {
     try {
@@ -38,7 +36,6 @@
       return answer.data;
     } catch {return null;}
   }
-
   async function registerToken() {
     if (!isNative || registrationBusy || !navigator.onLine) return;
     const session = await currentSession();
@@ -51,14 +48,10 @@
       if (!token) return;
       if (registeredToken === token && registeredUser === session.user.id) return;
       const saved = await invoke({action:'register',deviceId:id,token});
-      if (saved?.registered) {
-        registeredToken = token;
-        registeredUser = session.user.id;
-      }
-    } catch { /* retry upon next focus or auth event */ }
+      if (saved?.registered) {registeredToken = token; registeredUser = session.user.id;}
+    } catch { /* retry on resume */ }
     finally {registrationBusy = false;}
   }
-
   async function checkPendingSync() {
     if (!isNative || pendingBusy || !navigator.onLine || document.hidden) return;
     if (!(await currentSession())) return;
@@ -68,17 +61,18 @@
       if (!pending?.pending) return;
       const synced = await window.LubaNoteSync?.synchronizujPoznamkyTed?.();
       if (synced !== true) return;
-      const restored = await window.LubaNoteReminders?.obnovPoSynchronizaci?.(null);
+      const changedIds = Array.isArray(pending.noteIds) && pending.noteIds.length > 0
+        ? pending.noteIds.filter(id=>typeof id==='string') : null;
+      // For touched notes use the incremental restore path. It cancels stale
+      // Capacitor storage records even if native FCM already cancelled the
+      // underlying PendingIntent (full restore preflight may otherwise skip).
+      const restored = await window.LubaNoteReminders?.obnovPoSynchronizaci?.(changedIds);
       if (restored !== true) return;
       await plugin.ackPendingSync({generation:String(pending.generation || '')});
-    } catch { /* keep pending flag; try after next foreground */ }
+    } catch { /* keep pending signal */ }
     finally {pendingBusy = false;}
   }
-
-  async function resume() {
-    await registerToken();
-    await checkPendingSync();
-  }
+  async function resume() {await registerToken(); await checkPendingSync();}
   function scheduleResume() {setTimeout(() => {void resume();},400);}
   window.addEventListener('lubanote:auth-valid', scheduleResume);
   window.addEventListener('online', scheduleResume);
@@ -86,38 +80,108 @@
   window.addEventListener('pageshow', scheduleResume);
   document.addEventListener('visibilitychange', () => {if (!document.hidden) scheduleResume();});
 
-  // Desktop sends a wake signal only when a confirmed cloud write may affect
-  // reminders. Other note edits remain on the existing Realtime transport.
-  if (!isNative) {
-    let oldReminderNotes = new Set();
-    function reminderIds() {
-      try {
-        return new Set((typeof loadTask === 'function' ? loadTask() : [])
-          .filter(note => note?.id && (note?.reminder === true || Boolean(note?.notificationId) ||
-            note?.plannedItems?.some?.(p => p?.plannedAt)))
-          .map(note => String(note.id)));
-      } catch {return new Set();}
+  /* Snapshot only the scheduling metadata necessary to cancel superseded alarms.
+     No note text ever enters these objects or the FCM data payload. */
+  function recurringId(noteId, iso) {
+    const text = `${noteId}|${iso}`;
+    let hash = 2166136261;
+    for (let i=0;i<text.length;i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash,16777619);
     }
-    oldReminderNotes = reminderIds();
+    return ((hash >>> 0) % 2147483646) + 1;
+  }
+  const snapshot = note => {
+    const ids = [];
+    if (Number.isInteger(Number(note?.notificationId)) && Number(note.notificationId) > 0)
+      ids.push(Number(note.notificationId));
+    if (note?.reminder === true && note?.repeat?.enabled === true && note?.date &&
+        window.LubaNoteRecurring?.vypocitejBudouciTerminy) {
+      try {
+        const terms = window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date,note.repeat,32,new Date()) || [];
+        terms.forEach((term,index) => {
+          if (index !== 0 || !note.notificationId)
+            ids.push(recurringId(String(note.id),term.toISOString()));
+        });
+      } catch {/* no extra cancel IDs if recurring calc unavailable */}
+    }
+    for (const item of (Array.isArray(note?.plannedItems) ? note.plannedItems : [])) {
+      const id = Number(item?.notificationId);
+      if (Number.isInteger(id) && id > 0) ids.push(id);
+    }
+    return Array.from(new Set(ids)).slice(0, 128);
+  };
+  const snapshots = new Map();
+  function collectSnapshots() {
+    try {
+      for (const note of (typeof loadTask === 'function' ? loadTask() : [])) {
+        if (note?.id) snapshots.set(String(note.id), snapshot(note));
+      }
+    } catch {/* app not initialized yet */}
+  }
+  function futureTime(input) {
+    const n = new Date(input).getTime();
+    return Number.isSafeInteger(n) && n > Date.now() + 1000 &&
+      n < Date.now() + 366 * 24 * 3600 * 1000 ? n : null;
+  }
+  function alarmProjection(note) {
+    if (!note || note.isSecret === true || note.completed === true) return [];
+    const items = [];
+    if (note.reminder === true && note.date) {
+      if (note.repeat?.enabled === true && window.LubaNoteRecurring?.vypocitejBudouciTerminy) {
+        try {
+          for (const date of window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date,note.repeat,32,new Date()) || []) {
+            const at = futureTime(date);
+            if (at) items.push(at);
+          }
+        } catch {/* never send a possibly wrong recurring alarm */}
+      } else if (note.notificationId) {
+        const at = futureTime(note.date);
+        if (at) items.push(at);
+      }
+    }
+    for (const item of (Array.isArray(note.plannedItems) ? note.plannedItems : [])) {
+      if (item?.completed === true || !item?.notificationId || item?.reminder === false) continue;
+      const at = futureTime(item.plannedAt);
+      if (at) items.push(at);
+    }
+    return Array.from(new Set(items)).sort((a,b) => a-b).slice(0,48);
+  }
+  function nextRevision(noteId) {
+    const rev = Math.max(Date.now(), (perNoteRevisions.get(noteId) || 0) + 1);
+    perNoteRevisions.set(noteId, rev);
+    return rev;
+  }
+  if (!isNative) {
+    collectSnapshots();
     window.addEventListener('lubanote:cloud-write-confirmed', event => {
       const id = String(event?.detail?.noteId || '');
-      if (!id) return;
-      const current = reminderIds();
-      const touched = current.has(id) || oldReminderNotes.has(id) ||
-        (typeof loadTask === 'function' && !loadTask().some(note => String(note?.id) === id));
-      oldReminderNotes = current;
-      if (!touched) return;
-      clearTimeout(wakeTimer);
-      wakeTimer = setTimeout(async () => {
-        // Bound request frequency; backend also enforces atomic rate limiting.
-        if (Date.now() - lastWake < 21000) return;
-        const response = await invoke({action:'wake',deviceId:deviceId() || ''});
-        if (response?.ok === true) lastWake = Date.now();
-      },1200);
+      if (!/^[\w:-]{1,128}$/.test(id)) return;
+      // Collapse multiple confirmations for the same note, but never suppress a
+      // separate note's change, including deletions and Planner edits.
+      clearTimeout(pendingUpdates.get(id));
+      pendingUpdates.set(id, setTimeout(async () => {
+        pendingUpdates.delete(id);
+        const note = (typeof loadTask === 'function' ? loadTask() : []).find(n => String(n?.id) === id) || null;
+        const oldIds = snapshots.get(id) || [];
+        const currentIds = snapshot(note);
+        const meaningful = !note || oldIds.length > 0 || currentIds.length > 0 ||
+          note?.reminder === true || note?.plannedItems?.some?.(p => p?.plannedAt);
+        snapshots.set(id, currentIds);
+        if (!meaningful) return;
+        const response = await invoke({
+          action:'alarm_update',deviceId:deviceId() || '',noteId:id,
+          revision:nextRevision(id),at:alarmProjection(note),
+          cancel:Array.from(new Set([...oldIds,...currentIds])).slice(0,128)
+        });
+        // If a newer Android hasn't registered, its next foreground sync is
+        // the original reconciliation path. Report failure by keeping the old
+        // cancel set for the next edit; do NOT fake delivery.
+        if (!response?.ok) snapshots.set(id, Array.from(new Set([...oldIds,...currentIds])));
+      },1200));
     });
   }
   scheduleResume();
-  // A cold WebView may initialize auth/sync after this optional script.
-  setTimeout(scheduleResume, 3500);
-  setTimeout(scheduleResume, 10000);
+  setTimeout(scheduleResume,3500);
+  setTimeout(scheduleResume,10000);
 })();

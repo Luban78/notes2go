@@ -1,5 +1,5 @@
-// 692M: Authenticated, minimal FCM relay. NO notes, passwords or plaintext data sent to Firebase.
-// Installed as /home/deno/functions/lubanote-fcm/index.ts in self-hosted Supabase Edge Runtime.
+// 692O: Authenticated FCM alarm projection relay. Data-only messages contain
+// only timestamps, note IDs and Android notification IDs, NEVER E2E text.
 const URL_BASE = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -12,8 +12,7 @@ function cors(req: Request): HeadersInit {
     'Access-Control-Allow-Origin': ORIGINS.has(origin) ? origin : 'null',
     'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
-    'Cache-Control': 'no-store',
+    'Vary': 'Origin', 'Cache-Control': 'no-store',
   };
 }
 function json(req: Request, status: number, body: Record<string, unknown>) {
@@ -70,16 +69,34 @@ async function oauthToken(): Promise<{token: string, projectId: string}> {
   cachedOAuth = {accessToken:data.access_token, until:Date.now() + Math.max(60,Number(data.expires_in||3600)-180)*1000};
   return {token:cachedOAuth.accessToken, projectId:sa.project_id};
 }
-async function send(token: string, auth: {token: string, projectId: string}) {
+async function ownerHash(userId: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(userId)));
+  return Array.from(bytes.slice(0,8), x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function send(token: string, auth: {token: string, projectId: string}, payload: Record<string,string>, ttl: string) {
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(auth.projectId)}/messages:send`, {
     method:'POST', headers:{authorization:`Bearer ${auth.token}`,'content-type':'application/json'},
-    body:JSON.stringify({message:{token,data:{kind:'lubanote_sync_pending',v:'1'},android:{priority:'HIGH',ttl:'3600s'}}}),
+    body:JSON.stringify({message:{token,data:payload,android:{priority:'HIGH',ttl}}}),
     signal:AbortSignal.timeout(10000)
   });
   if (response.ok) return {ok:true, invalid:false};
   const detail = await response.json().catch(() => ({}));
   const codes = (detail?.error?.details || []).map((x: any) => x?.errorCode).filter(Boolean);
   return {ok:false, invalid:codes.includes('UNREGISTERED') || codes.includes('INVALID_ARGUMENT') && response.status === 404};
+}
+async function sendToDevices(userId: string, deviceId: string, payload: Record<string,string>, ttl: string) {
+  const devices = await rest(`lubanote_fcm_tokens?user_id=eq.${encodeURIComponent(userId)}&select=device_id,token&limit=${MAX_DEVICES}`, 'GET');
+  const recipients = (Array.isArray(devices) ? devices : []).filter((d: any) => d?.device_id !== deviceId && typeof d?.token === 'string');
+  if (recipients.length === 0) return {ok:true,queued:0};
+  const google = await oauthToken();
+  const results = await Promise.all(recipients.map(async (device: any) => {
+    try {
+      const result = await send(device.token,google,payload,ttl);
+      if (result.invalid) await rest(`lubanote_fcm_tokens?user_id=eq.${encodeURIComponent(userId)}&token=eq.${encodeURIComponent(device.token)}`, 'DELETE');
+      return result.ok;
+    } catch {return false;}
+  }));
+  return {ok:true,queued:results.filter(Boolean).length,failed:results.filter(x => !x).length};
 }
 
 Deno.serve(async (req: Request) => {
@@ -97,7 +114,6 @@ Deno.serve(async (req: Request) => {
       const deviceId = String(body?.deviceId || '');
       const token = String(body?.token || '');
       if (!/^[a-zA-Z0-9:_-]{8,128}$/.test(deviceId) || token.length < 30 || token.length > 4096 || !/^[\w:.-]+$/.test(token)) return json(req,400,{ok:false,error:'BAD_DEVICE'});
-      // One FCM token is bound to one account at a time, including account changes on a device.
       await rest(`lubanote_fcm_tokens?token=eq.${encodeURIComponent(token)}`, 'DELETE');
       await rest('lubanote_fcm_tokens?on_conflict=user_id,device_id', 'POST', {user_id:userId,device_id:deviceId,token,updated_at:new Date().toISOString()}, 'resolution=merge-duplicates,return=minimal');
       return json(req,200,{ok:true,registered:true});
@@ -110,20 +126,32 @@ Deno.serve(async (req: Request) => {
     }
     if (action === 'wake') {
       const deviceId = String(body?.deviceId || '');
-      const devices = await rest(`lubanote_fcm_tokens?user_id=eq.${encodeURIComponent(userId)}&select=device_id,token&limit=${MAX_DEVICES}`, 'GET');
-      const recipients = (Array.isArray(devices) ? devices : []).filter((d: any) => d?.device_id !== deviceId && typeof d?.token === 'string');
-      if (recipients.length === 0) return json(req,200,{ok:true,queued:0});
       const rate = await rest('rpc/lubanote_fcm_allow_send', 'POST', {p_user_id:userId});
       if (rate !== true) return json(req,200,{ok:true,throttled:true,queued:0});
-      const google = await oauthToken();
-      const results = await Promise.all(recipients.map(async (device: any) => {
-        try {
-          const result = await send(device.token, google);
-          if (result.invalid) await rest(`lubanote_fcm_tokens?user_id=eq.${encodeURIComponent(userId)}&token=eq.${encodeURIComponent(device.token)}`, 'DELETE');
-          return result.ok;
-        } catch {return false;}
-      }));
-      return json(req,200,{ok:true,queued:results.filter(Boolean).length,failed:results.filter(x => !x).length});
+      return json(req,200,await sendToDevices(userId,deviceId,{kind:'lubanote_sync_pending',v:'1'},'3600s'));
+    }
+    if (action === 'alarm_update') {
+      const deviceId = String(body?.deviceId || '');
+      const noteId = String(body?.noteId || '');
+      const revision = Number(body?.revision);
+      const times = body?.at;
+      const cancel = body?.cancel;
+      if (deviceId && !/^[\w:-]{8,128}$/.test(deviceId)) return json(req,400,{ok:false,error:'BAD_DEVICE'});
+      if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(revision) || revision<=0 ||
+          !Array.isArray(times) || times.length>48 || !Array.isArray(cancel) || cancel.length>128)
+        return json(req,400,{ok:false,error:'BAD_ALARM_DATA'});
+      const now = Date.now();
+      if (Math.abs(revision-now)>7*24*3600*1000 ||
+          !times.every((t: unknown) => typeof t === 'number' && Number.isSafeInteger(t) && t>now && t<now+366*24*3600*1000) ||
+          !cancel.every((id: unknown) => typeof id === 'number' && Number.isInteger(id) && id>0 && id<2147483647))
+        return json(req,400,{ok:false,error:'BAD_ALARM_TIMES'});
+      const payload = {
+        kind:'lubanote_alarm_update_692O',v:'1',owner:await ownerHash(userId),
+        noteId,revision:String(revision),at:JSON.stringify(times),cancel:JSON.stringify(cancel)
+      };
+      if (Object.values(payload).reduce((sum,value)=>sum+value.length,0)>3300)
+        return json(req,413,{ok:false,error:'ALARM_PAYLOAD_TOO_LARGE'});
+      return json(req,200,await sendToDevices(userId,deviceId,payload,'604800s'));
     }
     return json(req,400,{ok:false,error:'UNKNOWN_ACTION'});
   } catch (error) {
