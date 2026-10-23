@@ -3052,6 +3052,8 @@
 
   <!-- Synchronizace poznámek -->
   <script src="sync.js?v=692G-android-foreground-reminder-reconcile"></script>
+  <!-- 692P: Start FCM bridge on BOTH PC and Android after sync.js. Without this script, PC sends no background alarm updates. -->
+  <script src="lubaFcmBridge692M.js?v=692P-background-alarm-bridge-load"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
   <script src="maintenance.js?v=680a5-prod-version-realtime"></script>
 
