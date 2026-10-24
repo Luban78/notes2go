@@ -110,6 +110,13 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     call.resolve();
   }
 
+  // 692X: Read-only diagnostic export. No notification or schedule is changed.
+  @PluginMethod public void getAlarmDiagnostics692X(PluginCall call) {
+    JSObject response=new JSObject();
+    response.put("report",LubaNoteRemoteAlarm692O.diagnosticReport692X(getContext()));
+    call.resolve(response);
+  }
+
   @PluginMethod public void getExactAlarmStatus(PluginCall call) {
     JSObject response = new JSObject();
     response.put("allowed", canScheduleExact692R());

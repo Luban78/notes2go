@@ -33,6 +33,7 @@ public final class LubaNoteFcmMessagingService extends FirebaseMessagingService 
     }
     edit.commit();
     if ("lubanote_alarm_update_692O".equals(kind)) {
+      LubaNoteRemoteAlarm692O.diag692X(this,"FCM_MESSAGE_RECEIVED",message.getData().get("noteId"),0,"alarm_update");
       LubaNoteRemoteAlarm692O.apply(this,message.getData());
     }
     // 692N helper banner replaced with silent native alarm planning.

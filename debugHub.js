@@ -2825,6 +2825,20 @@ async function zkopirujTextRobustne(text) {
 }
 
 
+/* 692X: direct native alarm trace, captured even while WebView is suspended.
+ * READ-ONLY. This does not start, cancel, acknowledge or restore any alarm. */
+async function zkopirujAlarmy692X(tlacitko) {
+  const plugin=window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  const puvodni=tlacitko.textContent;
+  try {
+    const data=await plugin?.getAlarmDiagnostics692X?.();
+    const report=String(data?.report || "692X: nativni diagnostika nedostupna (pouze Android APK)");
+    const ok=await zkopirujTextRobustne(report);
+    tlacitko.textContent=ok?"Alarmy zkopírovány ✓":"Kopírování selhalo";
+  } catch (_) {tlacitko.textContent="Diagnostika nedostupná";}
+  setTimeout(()=>{tlacitko.textContent=puvodni;},1800);
+}
+
 async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
@@ -2998,7 +3012,8 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
-        <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
+        <button type="button" data-dh="copy-alarms-692x" style="grid-column:1 / -1">Kopírovat alarmy 692X (Android)</button>
+         <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
         <button type="button" data-dh="clear">Vymazat</button>
         <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
       </div>
@@ -3160,6 +3175,10 @@ async function zkopirujNavrat685G(tlacitko) {
         return;
       }
 
+      if (akce === "copy-alarms-692x") {
+        void zkopirujAlarmy692X(tlacitko);
+        return;
+      }
       if (akce === "copy-resume") {
         zkopirujNavrat685G(tlacitko);
         return;

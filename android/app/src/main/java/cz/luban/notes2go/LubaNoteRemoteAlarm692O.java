@@ -34,6 +34,84 @@ final class LubaNoteRemoteAlarm692O {
 
   private LubaNoteRemoteAlarm692O() {}
 
+  // 692X: read-only delivery forensics, no note text or E2E data. This journal
+  // survives process death and is not transmitted anywhere. Limited to 90 rows.
+  private static final String DIAG_PREF_692X = "lubanote_alarm_diag_692X";
+  private static final String DIAG_ROWS_692X = "rows";
+  static synchronized void diag692X(Context ctx, String kind, String id, long at, String detail) {
+    try {
+      String fingerprint = id == null ? "-" : Integer.toHexString(id.hashCode());
+      String entry = System.currentTimeMillis() + " | " + kind +
+        " | noteHash=" + fingerprint + " | targetMs=" + at +
+        " | lagSec=" + (at > 0 ? (System.currentTimeMillis()-at)/1000L : -1L) +
+        " | " + detail;
+      SharedPreferences pref=ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE);
+      JSONArray previous=new JSONArray(pref.getString(DIAG_ROWS_692X,"[]"));
+      JSONArray next=new JSONArray();
+      for(int i=Math.max(0,previous.length()-89);i<previous.length();i++) next.put(previous.opt(i));
+      next.put(entry);
+      pref.edit().putString(DIAG_ROWS_692X,next.toString()).commit();
+    } catch (Exception ignored) { /* Diagnostics must NEVER interrupt reminders. */ }
+  }
+  static synchronized String diagnosticReport692X(Context ctx) {
+    StringBuilder report=new StringBuilder();
+    report.append("LUBANOTE ALARM FORENSICS / 692X\n");
+    report.append("READ-ONLY | no note titles, bodies, E2E or tokens\n");
+    report.append("CapturedMs=").append(System.currentTimeMillis()).append("\n");
+    report.append("AndroidAPI=").append(Build.VERSION.SDK_INT);
+    AlarmManager alarms=(AlarmManager)ctx.getSystemService(Context.ALARM_SERVICE);
+    report.append(" exactAllowed=").append(alarms!=null && (Build.VERSION.SDK_INT<31 || alarms.canScheduleExactAlarms()));
+    try {
+      android.os.PowerManager power=(android.os.PowerManager)ctx.getSystemService(Context.POWER_SERVICE);
+      if(power!=null) {
+        report.append(" batteryExempt=").append(Build.VERSION.SDK_INT<23 || power.isIgnoringBatteryOptimizations(ctx.getPackageName()));
+        report.append(" powerSave=").append(power.isPowerSaveMode());
+        if(Build.VERSION.SDK_INT>=23) report.append(" idleNow=").append(power.isDeviceIdleMode());
+      }
+    } catch (Exception ignored) {}
+    report.append("\nACTIVE APP NOTIFICATIONS (technical IDs only):\n");
+    HashSet<Integer> remote=new HashSet<>();
+    JSONObject records=load(ctx);
+    JSONArray keys=records.names();
+    if(keys!=null) for(int i=0;i<keys.length();i++) {
+      String id=keys.optString(i,"");
+      JSONObject row=records.optJSONObject(id);
+      if(row==null) continue;
+      for(String k:new String[]{"delivered","times"}) {
+        JSONArray times=row.optJSONArray(k);
+        if(times!=null) for(int j=0;j<times.length();j++) remote.add(requestId(id,times.optLong(j,0)));
+      }
+    }
+    JSONObject local=localIndex692V(ctx);
+    try {
+      NotificationManager manager=(NotificationManager)ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+      if(manager!=null && Build.VERSION.SDK_INT>=23) {
+        android.service.notification.StatusBarNotification[] active=manager.getActiveNotifications();
+        int count=0;
+        for(android.service.notification.StatusBarNotification item:active) {
+          Notification n=item.getNotification();
+          String channel=Build.VERSION.SDK_INT>=26?n.getChannelId():"legacy";
+          if(!CHANNEL.equals(channel)) continue;
+          int nId=item.getId();
+          String route=remote.contains(nId)?"FCM_692O":
+            local.has(Integer.toString(nId))?"APK_LOCAL_INDEXED":"LOCAL_OR_OTHER";
+          report.append("id=").append(nId).append(" route=").append(route)
+              .append(" postedMs=").append(item.getPostTime())
+              .append(" shownWhenMs=").append(n.when)
+              .append(" channel=").append(channel).append("\n");
+          count++;
+        }
+        report.append("activeReminders=").append(count).append("\n");
+      }
+    } catch(Exception error) {report.append("activeReadUnavailable\n");}
+    report.append("EVENT LOG (oldest to newest):\n");
+    try {
+      JSONArray rows=new JSONArray(ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE).getString(DIAG_ROWS_692X,"[]"));
+      for(int i=0;i<rows.length();i++) report.append(rows.optString(i,"")).append("\n");
+    } catch(Exception ignored) {report.append("journalUnavailable\n");}
+    return report.toString();
+  }
+
   private static int requestId(String noteId, long at) {
     return (noteId + "|" + at + "|692O").hashCode() & 0x7fffffff;
   }
@@ -62,22 +140,30 @@ final class LubaNoteRemoteAlarm692O {
   }
 
   private static void schedule(Context ctx, String id, long at) {
-    if (at <= System.currentTimeMillis() + 500L || at > System.currentTimeMillis() + MAX_FUTURE) return;
+    if (at <= System.currentTimeMillis() + 500L || at > System.currentTimeMillis() + MAX_FUTURE) {
+      diag692X(ctx,"REMOTE_ARM_SKIPPED",id,at,"outside_future_window");
+      return;
+    }
     AlarmManager manager = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
     if (manager == null) return;
     PendingIntent pi = intent(ctx,id,at,PendingIntent.FLAG_UPDATE_CURRENT);
+    String method="";
     if (Build.VERSION.SDK_INT >= 23) {
       if (Build.VERSION.SDK_INT >= 31 && !manager.canScheduleExactAlarms()) {
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);
+        method="INEXACT_IDLE_PERMISSION";
       } else {
-        try {manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);}
-        catch (SecurityException ex) {manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);}
+        try {manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);method="EXACT_ALLOW_IDLE";}
+        catch (SecurityException ex) {manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);method="INEXACT_SECURITY_FALLBACK";}
       }
     } else if (Build.VERSION.SDK_INT >= 19) {
       manager.setExact(AlarmManager.RTC_WAKEUP,at,pi);
+      method="EXACT_PRE23";
     } else {
       manager.set(AlarmManager.RTC_WAKEUP,at,pi);
+      method="LEGACY";
     }
+    diag692X(ctx,"REMOTE_ARM",id,at,method);
   }
 
   /* 692V: APK-local alarm index. The browser's numeric notification IDs are
@@ -133,6 +219,7 @@ final class LubaNoteRemoteAlarm692O {
     try {
       local.put(Integer.toString(localId),record692V(noteId,localId,at));
       saveLocalIndex692V(ctx,local);
+      diag692X(ctx,"LOCAL_ARM_TRACKED",noteId,at,"localId="+localId);
       // 692W: never cancel the exact remote alarm merely because a local one exists.
     } catch(Exception ignored) {}
   }
@@ -192,6 +279,7 @@ final class LubaNoteRemoteAlarm692O {
       int flags = PendingIntent.FLAG_NO_CREATE;
       if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
       PendingIntent pi = PendingIntent.getBroadcast(ctx,id,intent,flags);
+      diag692X(ctx,"LOCAL_CANCEL_ATTEMPT",null,0,"localId="+id+" foundPI="+(pi!=null));
       if (pi != null) {
         AlarmManager manager = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (manager != null) manager.cancel(pi);
@@ -202,6 +290,7 @@ final class LubaNoteRemoteAlarm692O {
       NotificationManager manager = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
       if (manager != null) manager.cancel(id);
     } catch (RuntimeException | ClassNotFoundException ignored) {
+      diag692X(ctx,"LOCAL_CANCEL_ERROR",null,0,"localId="+id);
       // Optional Capacitor plugin unavailable; JS restore remains the fallback.
     }
   }
@@ -245,6 +334,7 @@ final class LubaNoteRemoteAlarm692O {
       try { row.put("times",new JSONArray()); records.put(id,row); } catch(Exception ignored) {}
     }
     save(ctx, records);
+    diag692X(ctx,"FOREGROUND_SYNC_HANDOFF",null,0,"remote_future_alarms_cleared");
   }
 
   // Remove only the delivered instance the user acted on (Planner and note
@@ -346,6 +436,7 @@ final class LubaNoteRemoteAlarm692O {
       records.put(id,fresh);
       // Synchronous persistence so an app kill or reboot cannot discard alarms.
       pref.edit().putString(OWNER,owner).putString(RECORDS,records.toString()).commit();
+      diag692X(ctx,"FCM_UPDATE_ACCEPTED",id,0,"scheduled="+safe.length()+" localCancelled="+localChanged);
     } catch (Exception ignored) { /* malformed FCM data must never crash app */ }
   }
 
@@ -365,6 +456,7 @@ final class LubaNoteRemoteAlarm692O {
 
   static synchronized void fire(Context ctx, String id, long at) {
     if (id==null || at<=0) return;
+    diag692X(ctx,"REMOTE_RECEIVER_FIRED",id,at,"native_broadcast");
     JSONObject records=load(ctx);
     JSONObject row=records.optJSONObject(id);
     JSONArray times=row==null?null:row.optJSONArray("times");
@@ -376,7 +468,10 @@ final class LubaNoteRemoteAlarm692O {
       if (value==at) present=true;
       else if(value>System.currentTimeMillis()) rest.put(value);
     }
-    if (!present) return;
+    if (!present) {
+      diag692X(ctx,"REMOTE_FIRE_IGNORED",id,at,"not_in_pending_record");
+      return;
+    }
     try {
       JSONArray delivered=row.optJSONArray("delivered");
       if (delivered==null) delivered=new JSONArray();
@@ -434,6 +529,7 @@ final class LubaNoteRemoteAlarm692O {
         .setCategory(Notification.CATEGORY_REMINDER);
     if(Build.VERSION.SDK_INT<26) builder.setDefaults(Notification.DEFAULT_ALL);
     manager.notify(requestId(id,at),builder.build());
+    diag692X(ctx,"REMOTE_NOTIFICATION_POSTED",id,at,"notificationId="+requestId(id,at));
   }
 }
 
