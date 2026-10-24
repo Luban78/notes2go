@@ -1654,6 +1654,55 @@ function registerNotificationOpenHandler() {
 registerNotificationOpenHandler();
 
 
+/* 692T: Reuse the original reminder quick menu for an FCM/native alarm tap.
+   Note and Planner alarms share one remote noteId, so disambiguate by the
+   exact scheduled timestamp; do not guess the Planner item from its title. */
+const zpracovavaneRemoteKliky692T = new Set();
+window.addEventListener('lubanote:remote-reminder-open', (event) => {
+  const data = event?.detail || {};
+  const noteId = String(data.noteId || '');
+  const at = Number(data.at);
+  const token = String(data.token || '');
+  if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(at) || at <= 0 ||
+      !/^[\w-]{8,80}$/.test(token) || zpracovavaneRemoteKliky692T.has(token)) return;
+  zpracovavaneRemoteKliky692T.add(token);
+  let attempts = 0;
+  const openWhenReady = async () => {
+    let entry = null;
+    try {
+      const note = getReminderEntry('note', noteId);
+      if (note?.reminder && Math.abs(new Date(note.date).getTime() - at) <= 60000) {
+      entry = note;
+    }
+    if (!entry && typeof loadPlannedItems === 'function') {
+      const match = (loadPlannedItems() || []).find(item =>
+        String(item?.sourceNoteId || '') === noteId &&
+        item?.completed !== true &&
+        Math.abs(new Date(item.plannedAt).getTime() - at) <= 60000);
+      if (match) entry = getReminderEntry('planned', match.id);
+    }
+    // Recurring note occurrences can differ from the note's original date.
+    if (!entry && note?.reminder && note.sourceType === 'recurring-note') entry = note;
+    } catch { /* app data may not be loaded yet */ }
+    let opened = false;
+    try { if (entry) opened = openReminderCenterEntry(entry); } catch { /* retry after UI init */ }
+    if (opened) {
+      remoteQuickMenu692T = {kind: entry.kind, id: entry.id, noteId, at};
+      try {
+        await window.Capacitor?.Plugins?.LubaNoteFcmToken?.ackRemoteOpen?.({token});
+      } catch { /* still stored in native prefs, next resume can retry */ }
+      zpracovavaneRemoteKliky692T.delete(token);
+      return;
+    }
+    if (++attempts < 100) {
+      setTimeout(() => {void openWhenReady();}, 250);
+    } else {
+      zpracovavaneRemoteKliky692T.delete(token);
+    }
+  };
+  setTimeout(() => {void openWhenReady();}, 100);
+});
+
 /* ==================================================
    DOPLNĚNÍ NOTIFIKACÍ PRO STARŠÍ PLANNER POLOŽKY
 ================================================== */
@@ -2270,7 +2319,26 @@ function aktualizujSouhrnRychlehoOpakovani(
   }
 }
 
+// The original reminder menu owns this state. Only a successful action
+// resolves the delivered native notification; simply closing does not.
+let remoteQuickMenu692T = null;
+function resolveRemoteAfterSave692T(entry) {
+  const plugin = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  const noteId = String(entry?.sourceNoteId || entry?.id || '');
+  if (!/^[\w:-]{1,128}$/.test(noteId) || typeof plugin?.resolveRemoteAlarm !== 'function') return;
+  const opened = remoteQuickMenu692T;
+  const matchingOpen = opened && opened.noteId === noteId &&
+    opened.kind === entry.kind && String(opened.id) === String(entry.id);
+  const at = matchingOpen ? opened.at : new Date(entry.date).getTime();
+  if (!Number.isSafeInteger(at) || at <= 0) return;
+  // Never block the existing save/navigation flow on a native UI cleanup.
+  try {
+    Promise.resolve(plugin.resolveRemoteAlarm({noteId, at:String(at)})).catch(() => {});
+  } catch { /* notification cleanup must never undo a saved action */ }
+}
+
 function closeReminderQuickMenu() {
+  remoteQuickMenu692T = null;
   if (!reminderQuickMenu) {
     return;
   }
@@ -2296,6 +2364,7 @@ function openReminderQuickMenu(
     return;
   }
 
+  remoteQuickMenu692T = null;
   selectedReminderEntry = {
     kind: entry.kind,
     id: entry.id
@@ -2761,6 +2830,7 @@ async function saveReminderDate(
   }
 
   ukonciCekani();
+  resolveRemoteAfterSave692T({kind:'note', id:taskId, sourceNoteId:taskId, date:currentTask.date});
 
   /*
    * UI se vrátí okamžitě. Android alarm a cloud se dorovnají
@@ -2894,6 +2964,7 @@ async function savePlannedReminderDate(itemId, newDate) {
   }
 
   ukonciCekani();
+  resolveRemoteAfterSave692T({kind:'planned', id:itemId, sourceNoteId:item.sourceNoteId, date:item.plannedAt});
   closeReminderQuickMenu();
 
   if (typeof renderCalendar === "function") {
@@ -3093,6 +3164,7 @@ async function disableSelectedNoteReminder(entry) {
   }
 
   ukonciCekani();
+  resolveRemoteAfterSave692T(entry);
 
   if (typeof renderTasks === "function") {
     requestAnimationFrame(renderTasks);
@@ -3409,6 +3481,7 @@ async function completeSelectedPlannedReminder() {
     }
   }
 
+  resolveRemoteAfterSave692T(entry);
   closeReminderQuickMenu();
 
   if (typeof renderCalendar === "function") {
@@ -3707,6 +3780,7 @@ async function removeSelectedPlannedReminder(entry) {
     );
   }
 
+  resolveRemoteAfterSave692T(entry);
   return true;
 }
 
@@ -3810,6 +3884,7 @@ async function nastavPripominkuPlanovanePolozky(
     );
   }
 
+  if (!enabled) resolveRemoteAfterSave692T(entry);
   zobrazPotvrzeniPripominky(
     enabled
       ? remindersT("reminders.enabled", "Připomenutí zapnuto")

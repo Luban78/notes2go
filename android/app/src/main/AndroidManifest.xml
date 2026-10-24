@@ -11,6 +11,8 @@
     android:supportsRtl="true" android:theme="@style/AppTheme">
     <receiver android:name=".LubaNoteStickyDismissReceiver" android:exported="false" />
     <receiver android:name=".LubaNoteRemoteAlarmReceiver692O" android:exported="false" />
+    <activity android:name=".LubaNoteRemoteOpen692T" android:exported="false"
+      android:noHistory="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     <receiver android:name=".LubaNoteRemoteBootReceiver692O" android:exported="true">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
     </receiver>

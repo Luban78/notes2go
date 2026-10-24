@@ -72,7 +72,28 @@
     } catch { /* keep pending signal */ }
     finally {pendingBusy = false;}
   }
-  async function resume() {await registerToken(); await checkPendingSync();}
+  // 692T: Native notification taps survive process death. Dispatch only the
+  // identifiers, never note text; the original reminders.js opens its own UI.
+  let lastRemoteOpenToken = '';
+  let lastRemoteOpenSentAt = 0;
+  async function checkRemoteOpen692T() {
+    if (!isNative || document.hidden || typeof plugin.getPendingRemoteOpen !== 'function') return;
+    try {
+      const tap = await plugin.getPendingRemoteOpen();
+      if (!tap?.pending || !/^[\w:-]{1,128}$/.test(String(tap.noteId || ''))) return;
+      const token = String(tap.token || '');
+      if (!token || (token === lastRemoteOpenToken && Date.now() - lastRemoteOpenSentAt < 30000)) return;
+      lastRemoteOpenToken = token;
+      lastRemoteOpenSentAt = Date.now();
+      window.dispatchEvent(new CustomEvent('lubanote:remote-reminder-open', {detail: tap}));
+    } catch { /* available after native app init */ }
+  }
+  async function resume() {
+    void checkRemoteOpen692T();
+    await registerToken();
+    await checkPendingSync();
+    void checkRemoteOpen692T();
+  }
   function scheduleResume() {setTimeout(() => {void resume();},400);}
   window.addEventListener('lubanote:auth-valid', scheduleResume);
   window.addEventListener('online', scheduleResume);

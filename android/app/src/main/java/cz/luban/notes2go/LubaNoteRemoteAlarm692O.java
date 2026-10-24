@@ -50,6 +50,10 @@ final class LubaNoteRemoteAlarm692O {
       if (manager != null) manager.cancel(pi);
       pi.cancel();
     }
+    // Remove sticky registration before cancel; the delete receiver must not
+    // silently recreate an alarm which the user already resolved.
+    ctx.getSharedPreferences("lubanote_sticky_notifications_683au", Context.MODE_PRIVATE)
+        .edit().remove("n_" + requestId(id,at)).commit();
     NotificationManager notifications = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
     if (notifications != null) notifications.cancel(requestId(id,at));
   }
@@ -119,6 +123,45 @@ final class LubaNoteRemoteAlarm692O {
   static synchronized void clearAll(Context ctx) {
     clearRecords(ctx,load(ctx));
     ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().remove(RECORDS).apply();
+  }
+
+  // Foreground sync rebuilds future alarms using the existing LubaNote local
+  // scheduler. Keep already delivered notifications visible until the user acts.
+  static synchronized void clearScheduledAfterSync(Context ctx) {
+    JSONObject records = load(ctx);
+    JSONArray keys = records.names();
+    if (keys == null) return;
+    for (int i=0; i<keys.length(); i++) {
+      String id = keys.optString(i, "");
+      JSONObject row = records.optJSONObject(id);
+      if (row == null) continue;
+      JSONArray times = row.optJSONArray("times");
+      if (times != null) for (int j=0; j<times.length(); j++) cancel(ctx,id,times.optLong(j,0));
+      try { row.put("times",new JSONArray()); records.put(id,row); } catch(Exception ignored) {}
+    }
+    save(ctx, records);
+  }
+
+  // Remove only the delivered instance the user acted on (Planner and note
+  // alarms can coexist under one parent note). Must run AFTER a successful save.
+  static synchronized void resolveDelivered(Context ctx,String id,long at) {
+    JSONObject records=load(ctx);
+    JSONObject row=records.optJSONObject(id);
+    if (row == null) return;
+    JSONArray delivered=row.optJSONArray("delivered");
+    if (delivered==null) return;
+    JSONArray remaining=new JSONArray();
+    boolean changed=false;
+    for(int i=0;i<delivered.length();i++) {
+      long t=delivered.optLong(i,0);
+      if (t == at || Math.abs(t-at)<=60000L) {
+        cancel(ctx,id,t);
+        changed=true;
+      } else remaining.put(t);
+    }
+    if (!changed) return;
+    try { row.put("delivered",remaining); records.put(id,row); save(ctx,records); }
+    catch(Exception ignored) {}
   }
 
   static synchronized void apply(Context ctx, java.util.Map<String,String> data) {
@@ -218,17 +261,42 @@ final class LubaNoteRemoteAlarm692O {
       NotificationChannel channel=new NotificationChannel(CHANNEL,"Připomínky",NotificationManager.IMPORTANCE_HIGH);
       manager.createNotificationChannel(channel);
     }
-    Intent open=new Intent(ctx,MainActivity.class);
-    open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    // The internal trampoline records this tap even if WebView is not running.
+    Intent open=new Intent(ctx,LubaNoteRemoteOpen692T.class);
+    open.putExtra("noteId",id);
+    open.putExtra("at",at);
     int flags=PendingIntent.FLAG_UPDATE_CURRENT|(Build.VERSION.SDK_INT>=23?PendingIntent.FLAG_IMMUTABLE:0);
     PendingIntent tap=PendingIntent.getActivity(ctx,requestId(id,at),open,flags);
+    // Exactly the same 683AZ first-delivery contract as local notifications:
+    // Mi Fitness can read the initial non-ongoing notification; if swiped,
+    // LubaNoteStickyDismissReceiver restores it silently as ongoing.
+    JSONObject payload=new JSONObject();
+    try {
+      JSONObject extra=new JSONObject();
+      extra.put("lubanoteType","note");
+      extra.put("taskId",id);
+      payload.put("id",requestId(id,at));
+      payload.put("title",row.optString("title", "LubaNote – připomínka"));
+      payload.put("body",row.optString("preview", "Máš naplánovanou připomínku."));
+      payload.put("largeBody",row.optString("preview", ""));
+      payload.put("channelId",CHANNEL);
+      payload.put("autoCancel",false);
+      payload.put("extra",extra);
+    } catch(Exception ignored) {return;}
+    Intent deleted=new Intent(ctx,LubaNoteStickyDismissReceiver.class);
+    deleted.putExtra(LubaNoteStickyDismissReceiver.PAYLOAD,payload.toString());
+    deleted.putExtra(LubaNoteStickyDismissReceiver.OPEN,tap);
+    PendingIntent onSwipe=PendingIntent.getBroadcast(ctx,requestId(id,at),deleted,flags);
+    ctx.getSharedPreferences("lubanote_sticky_notifications_683au",Context.MODE_PRIVATE)
+        .edit().putBoolean("n_" + requestId(id,at),true).commit();
     Notification.Builder builder=Build.VERSION.SDK_INT>=26
         ?new Notification.Builder(ctx,CHANNEL):new Notification.Builder(ctx);
     builder.setSmallIcon(R.drawable.ic_stat_lubanote)
         .setContentTitle(row.optString("title", "").isEmpty() ? "LubaNote – připomínka" : row.optString("title"))
         .setContentText(row.optString("preview", "").isEmpty() ? "Máš naplánovanou připomínku." : row.optString("preview"))
         .setContentIntent(tap)
-        .setAutoCancel(true)
+        .setDeleteIntent(onSwipe)
+        .setAutoCancel(false)
         .setWhen(at)
         .setShowWhen(true)
         .setCategory(Notification.CATEGORY_REMINDER);

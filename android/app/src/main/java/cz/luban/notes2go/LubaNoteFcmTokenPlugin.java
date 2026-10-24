@@ -31,15 +31,27 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     if (Build.VERSION.SDK_INT < 31 || exactAlarmPromptShown692R) return;
     exactAlarmPromptShown692R = true;
     getActivity().runOnUiThread(() -> {
-      if (canScheduleExact692R()) {
-        // Reschedule any still-pending remote alarms using the exact API.
+      boolean allowed = canScheduleExact692R();
+      if (allowed) {
         LubaNoteRemoteAlarm692O.restoreOnBoot(getContext());
-        return;
       }
       if (getActivity().isFinishing() || getActivity().isDestroyed()) return;
+      SharedPreferences diagnostic = getContext().getSharedPreferences("lubanote_alarm_diag_692T", Context.MODE_PRIVATE);
+      if (!diagnostic.getBoolean("shown", false)) {
+        diagnostic.edit().putBoolean("shown", true).apply();
+        if (allowed) {
+          new AlertDialog.Builder(getActivity())
+              .setTitle("Diagnostika připomínek 692T")
+              .setMessage("Android API " + Build.VERSION.SDK_INT + "\nPřesné alarmy: POVOLENY\nRežim: setExactAndAllowWhileIdle\nTo neprokazuje přesnost doručení.")
+              .setPositiveButton("OK", (dialog, which) -> {})
+              .show();
+          return;
+        }
+      }
+      if (allowed) return;
       new AlertDialog.Builder(getActivity())
-          .setTitle("Přesné připomínky LubaNote")
-          .setMessage("Android zatím nepovoluje přesné alarmy. Připomínky z PC proto mohou chodit o minuty později. Otevřít systémové nastavení a povolit Budíky a připomínky pro LubaNote?")
+          .setTitle("Diagnostika připomínek 692T")
+          .setMessage("Android API " + Build.VERSION.SDK_INT + "\nPřesné alarmy: NEPOVOLENY\nRežim: setAndAllowWhileIdle (nepřesný)\nOtevřít nastavení Budíky a připomínky?")
           .setNegativeButton("Později", (dialog, which) -> {})
           .setPositiveButton("Otevřít nastavení", (dialog, which) -> {
             try {
@@ -56,6 +68,46 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
           })
           .show();
     });
+  }
+
+  // 692T: Consume only after the original reminders screen actually opened.
+  // The same token is retained across a cold start and sync retries.
+  @PluginMethod public void getPendingRemoteOpen(PluginCall call) {
+    SharedPreferences prefs = getContext().getSharedPreferences(LubaNoteRemoteOpen692T.PREF, Context.MODE_PRIVATE);
+    String id = prefs.getString(LubaNoteRemoteOpen692T.NOTE, "");
+    String token = prefs.getString(LubaNoteRemoteOpen692T.TOKEN, "");
+    JSObject result = new JSObject();
+    boolean pending = !id.isEmpty() && !token.isEmpty();
+    result.put("pending", pending);
+    if (pending) {
+      result.put("noteId", id);
+      result.put("at", prefs.getLong(LubaNoteRemoteOpen692T.AT, 0L));
+      result.put("token", token);
+    }
+    call.resolve(result);
+  }
+
+  @PluginMethod public void ackRemoteOpen(PluginCall call) {
+    String token = call.getString("token", "");
+    SharedPreferences prefs = getContext().getSharedPreferences(LubaNoteRemoteOpen692T.PREF, Context.MODE_PRIVATE);
+    if (!token.isEmpty() && token.equals(prefs.getString(LubaNoteRemoteOpen692T.TOKEN, ""))) {
+      prefs.edit().clear().commit();
+    }
+    call.resolve();
+  }
+
+  // Called only after a successful local reminder action, never just by tapping
+  // or dismissing the quick-menu dialog.
+  @PluginMethod public void resolveRemoteAlarm(PluginCall call) {
+    String id = call.getString("noteId", "");
+    String when = call.getString("at", "");
+    if (id.matches("[a-zA-Z0-9_:-]{1,128}")) {
+      try {
+        long at = Long.parseLong(when);
+        if (at > 0L) LubaNoteRemoteAlarm692O.resolveDelivered(getContext(), id, at);
+      } catch (NumberFormatException ignored) { /* invalid timestamp */ }
+    }
+    call.resolve();
   }
 
   @PluginMethod public void getExactAlarmStatus(PluginCall call) {
@@ -91,7 +143,7 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     if(current.equals(expected)) {
       prefs.edit().putBoolean(LubaNoteFcmMessagingService.PENDING,false)
           .remove(LubaNoteFcmMessagingService.NOTE_IDS).commit();
-      LubaNoteRemoteAlarm692O.clearAll(getContext());
+      LubaNoteRemoteAlarm692O.clearScheduledAfterSync(getContext());
       LubaNoteFcmMessagingService.clearPendingSyncNotification(getContext());
     }
     call.resolve();
