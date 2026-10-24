@@ -212,16 +212,40 @@ final class LubaNoteRemoteAlarm692O {
     }
     return false;
   }
-  static synchronized void trackLocal692V(Context ctx,String noteId,int localId,long at) {
+  // 692Y: A remote FCM alarm already owns this (note,time) while it is pending.
+  // Only a pending future alarm qualifies; a delivered or obsolete one never does.
+  private static boolean remoteOwnsTime692Y(Context ctx,String noteId,long at) {
+    JSONObject row=load(ctx).optJSONObject(noteId);
+    JSONArray times=row==null?null:row.optJSONArray("times");
+    if(times==null || at<=System.currentTimeMillis()) return false;
+    for(int i=0;i<times.length();i++) {
+      if(times.optLong(i,0L)!=at) continue;
+      // A persisted FCM row alone is not proof of a real Android alarm.
+      // Suppress the local copy only if its PendingIntent still exists.
+      return intent(ctx,noteId,at,PendingIntent.FLAG_NO_CREATE)!=null;
+    }
+    return false;
+  }
+
+  // Called AFTER Capacitor.schedule(). If an FCM update won the race, tell JS
+  // to call LocalNotifications.cancel() so Capacitor's own storage is cleaned.
+  // Never cancel the good remote exact alarm here.
+  static synchronized boolean trackLocal692V(Context ctx,String noteId,int localId,long at,boolean ambiguous) {
     if(!validNote692V(noteId) || !validLocalId692V(localId) ||
-       at<=System.currentTimeMillis() || at>System.currentTimeMillis()+MAX_FUTURE) return;
+       at<=System.currentTimeMillis() || at>System.currentTimeMillis()+MAX_FUTURE) return false;
     JSONObject local=localIndex692V(ctx);
+    if(!ambiguous && remoteOwnsTime692Y(ctx,noteId,at)) {
+      local.remove(Integer.toString(localId));
+      saveLocalIndex692V(ctx,local);
+      diag692X(ctx,"LOCAL_SUPPRESS_DUPLICATE_692Y",noteId,at,"localId="+localId+" remoteOwns=true");
+      return true;
+    }
     try {
       local.put(Integer.toString(localId),record692V(noteId,localId,at));
       saveLocalIndex692V(ctx,local);
       diag692X(ctx,"LOCAL_ARM_TRACKED",noteId,at,"localId="+localId);
-      // 692W: never cancel the exact remote alarm merely because a local one exists.
     } catch(Exception ignored) {}
+    return false;
   }
   static synchronized void forgetLocal692V(Context ctx,int localId) {
     if(!validLocalId692V(localId)) return;
@@ -229,24 +253,42 @@ final class LubaNoteRemoteAlarm692O {
     local.remove(Integer.toString(localId));
     saveLocalIndex692V(ctx,local);
   }
-  static synchronized boolean replaceLocalSnapshot692V(Context ctx,JSONArray items) {
-    if(items==null || items.length()>4096) return false;
+  // Rebuild a full snapshot of APK local alarms and return duplicates for JS
+  // to remove via Capacitor's own cancellation API. Do not mutate schedules here.
+  static synchronized JSONArray replaceLocalSnapshot692Y(Context ctx,JSONArray items) {
+    if(items==null || items.length()>4096) return null;
     JSONObject local=new JSONObject();
+    JSONArray duplicates=new JSONArray();
+    // Safeguard even if the JS caller omits the ambiguity flag: two distinct
+    // local alarms for one parent/time must not both disappear into one FCM.
+    java.util.HashMap<String,Integer> counts=new java.util.HashMap<>();
+    for(int i=0;i<items.length();i++) {
+      JSONObject row=items.optJSONObject(i);
+      if(row==null) return null;
+      String key=row.optString("noteId","")+"|"+row.optString("at","");
+      counts.put(key,counts.getOrDefault(key,0)+1);
+    }
     try {
       for(int i=0;i<items.length();i++) {
         JSONObject row=items.optJSONObject(i);
-        if(row==null) return false;
+        if(row==null) return null;
         String noteId=row.optString("noteId","");
         int localId=row.optInt("id",0);
         long at=Long.parseLong(row.optString("at","0"));
         if(!validNote692V(noteId) || !validLocalId692V(localId) ||
-           at<=0 || at>System.currentTimeMillis()+MAX_FUTURE) return false;
-        local.put(Integer.toString(localId),record692V(noteId,localId,at));
+           at<=0 || at>System.currentTimeMillis()+MAX_FUTURE) return null;
+        String collisionKey=noteId+"|"+at;
+        if(!row.optBoolean("ambiguous",false) && counts.getOrDefault(collisionKey,0)==1 &&
+           remoteOwnsTime692Y(ctx,noteId,at)) {
+          duplicates.put(localId);
+          diag692X(ctx,"LOCAL_SNAPSHOT_DUPLICATE_692Y",noteId,at,"localId="+localId);
+        } else {
+          local.put(Integer.toString(localId),record692V(noteId,localId,at));
+        }
       }
       saveLocalIndex692V(ctx,local);
-      // 692W: never cancel the exact remote alarm merely because a local one exists.
-      return true;
-    } catch(Exception ignored) {return false;}
+      return duplicates;
+    } catch(Exception ignored) {return null;}
   }
   // A web update may change/disable an alarm. Revoke only local alarms that
   // belong to THIS note and whose old timestamp is no longer requested.
@@ -319,22 +361,36 @@ final class LubaNoteRemoteAlarm692O {
     ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().remove(RECORDS).apply();
   }
 
-  // Foreground sync rebuilds future alarms using the existing LubaNote local
-  // scheduler. Keep already delivered notifications visible until the user acts.
+  // 692Y: Foreground sync may have suppressed its duplicate local alarm.
+  // Keep the working exact FCM alarm unless a distinct live local PendingIntent
+  // for precisely the same (note,time) has actually been verified. Never
+  // leave a reminder with neither route merely because sync acknowledged.
   static synchronized void clearScheduledAfterSync(Context ctx) {
-    JSONObject records = load(ctx);
-    JSONArray keys = records.names();
-    if (keys == null) return;
-    for (int i=0; i<keys.length(); i++) {
-      String id = keys.optString(i, "");
-      JSONObject row = records.optJSONObject(id);
-      if (row == null) continue;
-      JSONArray times = row.optJSONArray("times");
-      if (times != null) for (int j=0; j<times.length(); j++) cancel(ctx,id,times.optLong(j,0));
-      try { row.put("times",new JSONArray()); records.put(id,row); } catch(Exception ignored) {}
+    JSONObject records=load(ctx);
+    JSONObject local=localIndex692V(ctx);
+    JSONArray keys=records.names();
+    if(keys==null) return;
+    int kept=0,cancelled=0;
+    for(int i=0;i<keys.length();i++) {
+      String id=keys.optString(i,"");
+      JSONObject row=records.optJSONObject(id);
+      if(row==null) continue;
+      JSONArray times=row.optJSONArray("times");
+      JSONArray future=new JSONArray();
+      if(times!=null) for(int j=0;j<times.length();j++) {
+        long at=times.optLong(j,0);
+        if(at>System.currentTimeMillis() && hasLocalAt692V(ctx,local,id,at)) {
+          cancel(ctx,id,at);
+          cancelled++;
+        } else if(at>System.currentTimeMillis()) {
+          future.put(at);
+          kept++;
+        }
+      }
+      try {row.put("times",future);records.put(id,row);} catch(Exception ignored) {}
     }
-    save(ctx, records);
-    diag692X(ctx,"FOREGROUND_SYNC_HANDOFF",null,0,"remote_future_alarms_cleared");
+    save(ctx,records);
+    diag692X(ctx,"FOREGROUND_SYNC_HANDOFF_692Y",null,0,"remoteKept="+kept+" remoteCancelledWithLocal="+cancelled);
   }
 
   // Remove only the delivered instance the user acted on (Planner and note
@@ -412,13 +468,21 @@ final class LubaNoteRemoteAlarm692O {
       }
       JSONObject local=localIndex692V(ctx);
       JSONArray localKeys=local.names();
+      java.util.HashMap<Long,Integer> atCounts=new java.util.HashMap<>();
+      if(localKeys!=null) for(int i=0;i<localKeys.length();i++) {
+        JSONObject entry=local.optJSONObject(localKeys.optString(i,""));
+        if(entry!=null && id.equals(entry.optString("noteId",""))) {
+          long at=entry.optLong("at",0);
+          atCounts.put(at,atCounts.getOrDefault(at,0)+1);
+        }
+      }
       boolean localChanged=false;
       if(localKeys!=null) for(int i=0;i<localKeys.length();i++) {
         String key=localKeys.optString(i,"");
         JSONObject entry=local.optJSONObject(key);
         if(entry==null || !id.equals(entry.optString("noteId",""))) continue;
         long at=entry.optLong("at",0L);
-        if(!requested.contains(at)) continue;
+        if(!requested.contains(at) || atCounts.getOrDefault(at,0)>1) continue;
         int localId=entry.optInt("id",0);
         if(validLocalId692V(localId)) {
           cancelCapacitor(ctx,localId);
