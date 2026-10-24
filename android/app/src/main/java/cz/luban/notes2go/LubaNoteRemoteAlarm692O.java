@@ -26,6 +26,9 @@ final class LubaNoteRemoteAlarm692O {
   private static final String PREF = "lubanote_remote_alarm_692O";
   private static final String RECORDS = "records";
   private static final String OWNER = "owner";
+  // 692V: Only technical IDs/timestamps from the APK LocalNotifications scheduler.
+  private static final String LOCAL_PREF_692V = "lubanote_local_alarm_692V";
+  private static final String LOCAL_RECORDS_692V = "alarms";
   private static final String CHANNEL = "reminders";
   private static final long MAX_FUTURE = 366L * 24 * 60 * 60 * 1000;
 
@@ -75,6 +78,135 @@ final class LubaNoteRemoteAlarm692O {
     } else {
       manager.set(AlarmManager.RTC_WAKEUP,at,pi);
     }
+  }
+
+  /* 692V: APK-local alarm index. The browser's numeric notification IDs are
+     NOT transferable across devices. Pair by (parent note, exact timestamp)
+     instead. No note titles/bodies, E2E content or login secrets are stored. */
+  private static JSONObject localIndex692V(Context ctx) {
+    try {
+      return new JSONObject(ctx.getSharedPreferences(LOCAL_PREF_692V,Context.MODE_PRIVATE)
+          .getString(LOCAL_RECORDS_692V,"{}"));
+    } catch(Exception ignored) { return new JSONObject(); }
+  }
+  private static void saveLocalIndex692V(Context ctx,JSONObject data) {
+    ctx.getSharedPreferences(LOCAL_PREF_692V,Context.MODE_PRIVATE).edit()
+        .putString(LOCAL_RECORDS_692V,data.toString()).commit();
+  }
+  private static boolean validNote692V(String noteId) {
+    return noteId!=null && noteId.matches("[a-zA-Z0-9_:-]{1,128}");
+  }
+  private static boolean validLocalId692V(int localId) {
+    return localId > 0;
+  }
+  private static JSONObject record692V(String noteId,int localId,long at) throws org.json.JSONException {
+    JSONObject record=new JSONObject();
+    record.put("noteId",noteId);
+    record.put("id",localId);
+    record.put("at",at);
+    return record;
+  }
+  private static boolean capacitorPendingExists692V(Context ctx,int localId) {
+    try {
+      Class<?> cls=Class.forName("com.capacitorjs.plugins.localnotifications.TimedNotificationPublisher");
+      int flags=PendingIntent.FLAG_NO_CREATE;
+      if(Build.VERSION.SDK_INT>=31) flags|=PendingIntent.FLAG_MUTABLE;
+      PendingIntent pi=PendingIntent.getBroadcast(ctx,localId,new Intent(ctx,cls),flags);
+      return pi!=null;
+    } catch(Exception ignored) {return false;}
+  }
+  private static boolean hasLocalAt692V(Context ctx,JSONObject local,String noteId,long at) {
+    JSONArray keys=local.names();
+    if(keys==null) return false;
+    for(int i=0;i<keys.length();i++) {
+      JSONObject row=local.optJSONObject(keys.optString(i,""));
+      if(row==null || !noteId.equals(row.optString("noteId","")) || row.optLong("at",-1L)!=at) continue;
+      int localId=row.optInt("id",0);
+      if(validLocalId692V(localId) && capacitorPendingExists692V(ctx,localId)) return true;
+    }
+    return false;
+  }
+  private static void dropMatchingRemotePending692V(Context ctx,JSONObject local) {
+    JSONObject records=load(ctx);
+    JSONArray notes=records.names();
+    if(notes==null) return;
+    boolean changed=false;
+    for(int i=0;i<notes.length();i++) {
+      String noteId=notes.optString(i,"");
+      JSONObject row=records.optJSONObject(noteId);
+      JSONArray times=row==null?null:row.optJSONArray("times");
+      if(times==null) continue;
+      JSONArray kept=new JSONArray();
+      boolean changedThisNote=false;
+      for(int j=0;j<times.length();j++) {
+        long at=times.optLong(j,0);
+        if(at>0 && hasLocalAt692V(ctx,local,noteId,at)) {
+          // Cancel only a PENDING remote alarm; never dismiss delivered alerts.
+          cancel(ctx,noteId,at);
+          changedThisNote=true;
+        } else kept.put(at);
+      }
+      if(changedThisNote) {
+        try {row.put("times",kept);records.put(noteId,row);changed=true;}
+        catch(Exception ignored) {}
+      }
+    }
+    if(changed) save(ctx,records);
+  }
+  static synchronized void trackLocal692V(Context ctx,String noteId,int localId,long at) {
+    if(!validNote692V(noteId) || !validLocalId692V(localId) ||
+       at<=System.currentTimeMillis() || at>System.currentTimeMillis()+MAX_FUTURE) return;
+    JSONObject local=localIndex692V(ctx);
+    try {
+      local.put(Integer.toString(localId),record692V(noteId,localId,at));
+      saveLocalIndex692V(ctx,local);
+      dropMatchingRemotePending692V(ctx,local);
+    } catch(Exception ignored) {}
+  }
+  static synchronized void forgetLocal692V(Context ctx,int localId) {
+    if(!validLocalId692V(localId)) return;
+    JSONObject local=localIndex692V(ctx);
+    local.remove(Integer.toString(localId));
+    saveLocalIndex692V(ctx,local);
+  }
+  static synchronized boolean replaceLocalSnapshot692V(Context ctx,JSONArray items) {
+    if(items==null || items.length()>4096) return false;
+    JSONObject local=new JSONObject();
+    try {
+      for(int i=0;i<items.length();i++) {
+        JSONObject row=items.optJSONObject(i);
+        if(row==null) return false;
+        String noteId=row.optString("noteId","");
+        int localId=row.optInt("id",0);
+        long at=Long.parseLong(row.optString("at","0"));
+        if(!validNote692V(noteId) || !validLocalId692V(localId) ||
+           at<=0 || at>System.currentTimeMillis()+MAX_FUTURE) return false;
+        local.put(Integer.toString(localId),record692V(noteId,localId,at));
+      }
+      saveLocalIndex692V(ctx,local);
+      dropMatchingRemotePending692V(ctx,local);
+      return true;
+    } catch(Exception ignored) {return false;}
+  }
+  // A web update may change/disable an alarm. Revoke only local alarms that
+  // belong to THIS note and whose old timestamp is no longer requested.
+  private static void cancelObsoleteLocal692V(Context ctx,String noteId,HashSet<Long> requested) {
+    JSONObject local=localIndex692V(ctx);
+    JSONArray keys=local.names();
+    if(keys==null) return;
+    boolean changed=false;
+    for(int i=0;i<keys.length();i++) {
+      String key=keys.optString(i,"");
+      JSONObject row=local.optJSONObject(key);
+      if(row==null || !noteId.equals(row.optString("noteId",""))) continue;
+      long at=row.optLong("at",0);
+      if(requested.contains(at)) continue;
+      int localId=row.optInt("id",0);
+      if(validLocalId692V(localId)) cancelCapacitor(ctx,localId);
+      local.remove(key);
+      changed=true;
+    }
+    if(changed) saveLocalIndex692V(ctx,local);
   }
 
   /* Cancel an alarm scheduled earlier by Capacitor LocalNotifications 6.x.
@@ -202,9 +334,16 @@ final class LubaNoteRemoteAlarm692O {
         JSONArray delivered=existing.optJSONArray("delivered");
         if (delivered!=null) for (int i=0;i<delivered.length();i++) cancel(ctx,id,delivered.optLong(i,0));
       }
-      for (int i=0;i<ids.length();i++) cancelCapacitor(ctx,ids.getInt(i));
+      // 692V: Web-side numeric IDs cannot identify APK-side alarms safely.
+      // Clean only APK-local records verified to belong to this exact note.
+      cancelObsoleteLocal692V(ctx,id,requested);
+      final JSONObject local=localIndex692V(ctx);
       JSONArray safe=new JSONArray();
-      for (Long at:requested) {safe.put(at);schedule(ctx,id,at);}
+      for (Long at:requested) {
+        if (hasLocalAt692V(ctx,local,id,at)) continue; // local APK owns this due time
+        safe.put(at);
+        schedule(ctx,id,at);
+      }
       JSONObject fresh=new JSONObject();
       fresh.put("revision",revision);
       fresh.put("times",safe);

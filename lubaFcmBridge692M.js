@@ -90,6 +90,10 @@
   }
   async function resume() {
     void checkRemoteOpen692T();
+    // 692V: Index pre-existing local alarms BEFORE a pending FCM sync. This
+    // restores ownership after an APK upgrade without changing their schedule.
+    try { await window.LubaNoteReminders?.obnovIndexLokalnichAlarmu692V?.(); }
+    catch (_) { /* native registration remains best effort */ }
     await registerToken();
     await checkPendingSync();
     void checkRemoteOpen692T();

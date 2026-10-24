@@ -155,6 +155,35 @@ async function oznacAndroidPripominky683AU(ids, aktivni) {
   }
 }
 
+/* 692V – Native index of the ACTUAL scheduled APK notifications.
+   The FCM receiver must not infer this phone's numeric IDs from the web.
+   A native read failure leaves the previous index untouched. */
+async function obnovIndexLokalnichAlarmu692V() {
+  const local = window.Capacitor?.Plugins?.LocalNotifications;
+  const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  if (typeof local?.getPending !== "function" ||
+      typeof native?.replaceLocalSnapshot692V !== "function") return;
+  try {
+    const pending = await local.getPending();
+    if (!Array.isArray(pending?.notifications)) return;
+    const alarms = [];
+    for (const item of pending.notifications) {
+      const extra = item?.extra || {};
+      const noteId = extra.lubanoteType === "planned"
+        ? extra.sourceNoteId : (extra.lubanoteType === "note" ? extra.taskId : "");
+      const id = Number(item?.id);
+      const at = new Date(item?.schedule?.at).getTime();
+      if (!/^[\w:-]{1,128}$/.test(String(noteId || "")) ||
+          !Number.isInteger(id) || id <= 0 ||
+          !Number.isSafeInteger(at) || at <= Date.now()) continue;
+      alarms.push({noteId: String(noteId), id, at: String(at)});
+    }
+    // Never overwrite a valid registry with a truncated snapshot.
+    if (alarms.length > 4096) return;
+    await native.replaceLocalSnapshot692V({alarms});
+  } catch (_) { /* no-op on native read failure */ }
+}
+
 async function scheduleNotification(
   notificationId,
   title,
@@ -213,6 +242,21 @@ async function scheduleNotification(
   });
 
   await oznacAndroidPripominku683AU(notificationId, true);
+
+  // 692V: Let background FCM know that this APK already owns this exact
+  // reminder. Do not disclose content or depend on another device's ID.
+  const native692V = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  const noteId692V = extra?.lubanoteType === "planned"
+    ? extra.sourceNoteId : extra?.taskId;
+  const at692V = new Date(dateTime).getTime();
+  if (noteId692V && Number.isSafeInteger(at692V) &&
+      typeof native692V?.trackLocalAlarm692V === "function") {
+    try {
+      await native692V.trackLocalAlarm692V({
+        noteId: String(noteId692V), id: notificationId, at: String(at692V)
+      });
+    } catch (_) { /* old APK or plugin unavailable: preserve local alarm */ }
+  }
 }
 
 // ==========================================
@@ -697,6 +741,7 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
     );
   }
 
+  await obnovIndexLokalnichAlarmu692V();
   return true;
 }
 
@@ -1027,6 +1072,7 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
         window.LubaNoteStartupDiag?.zapis?.(
           "REM-GUARD", `691AZ PRESERVED | checked=${kontrola.checked} | no-global-reset`
         );
+        await obnovIndexLokalnichAlarmu692V();
         return true;
       }
       window.LubaNoteStartupDiag?.zapis?.(
@@ -1080,6 +1126,7 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
     );
   }
 
+  await obnovIndexLokalnichAlarmu692V();
   return true;
 }
 
@@ -1123,6 +1170,12 @@ async function cancelNotification(notificationId) {
         }
       ]
     });
+    // 692V: Invalidate the APK-local ownership index only AFTER the native
+    // cancel succeeded. Do not leave a stale entry suppressing FCM delivery.
+    try {
+      await window.Capacitor?.Plugins?.LubaNoteFcmToken
+        ?.forgetLocalAlarm692V?.({id: notificationId});
+    } catch (_) { /* preserve established cancel behavior */ }
   } catch (error) {
     console.error(
       "Zrušení čekající notifikace se nepodařilo:",
@@ -5758,6 +5811,7 @@ editReminderRepeatButton?.addEventListener(
 
 window.LubaNoteReminders = {
   ...(window.LubaNoteReminders || {}),
+  obnovIndexLokalnichAlarmu692V: obnovIndexLokalnichAlarmu692V,
   vycistiStarePoTerminu: (moznosti = {}) =>
     vycistiStarePripominkyPoTerminu(moznosti),
   obnovPoSynchronizaci: (noteIds = null) =>

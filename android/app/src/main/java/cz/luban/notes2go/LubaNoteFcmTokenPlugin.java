@@ -127,6 +127,32 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
       JSObject result=new JSObject();result.put("token",token);call.resolve(result);
     });
   }
+  // 692V: Native alarm ownership. The web has no stable numeric IDs for this
+  // Android installation, so only APK-native scheduler entries are accepted.
+  @PluginMethod public void trackLocalAlarm692V(PluginCall call) {
+    String noteId=call.getString("noteId","");
+    Integer id=call.getInt("id");
+    String when=call.getString("at","");
+    try {
+      long at=Long.parseLong(when);
+      if(id!=null) LubaNoteRemoteAlarm692O.trackLocal692V(getContext(),noteId,id,at);
+    } catch(NumberFormatException ignored) {}
+    call.resolve();
+  }
+
+  @PluginMethod public void forgetLocalAlarm692V(PluginCall call) {
+    Integer id=call.getInt("id");
+    if(id!=null) LubaNoteRemoteAlarm692O.forgetLocal692V(getContext(),id);
+    call.resolve();
+  }
+
+  @PluginMethod public void replaceLocalSnapshot692V(PluginCall call) {
+    org.json.JSONArray alarms=call.getArray("alarms");
+    JSObject result=new JSObject();
+    result.put("ok",LubaNoteRemoteAlarm692O.replaceLocalSnapshot692V(getContext(),alarms));
+    call.resolve(result);
+  }
+
   @PluginMethod public void getPendingSync(PluginCall call) {
     SharedPreferences prefs=getContext().getSharedPreferences(LubaNoteFcmMessagingService.PREFS,Context.MODE_PRIVATE);
     JSObject response=new JSObject();
