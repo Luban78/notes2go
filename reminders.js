@@ -155,27 +155,6 @@ async function oznacAndroidPripominky683AU(ids, aktivni) {
   }
 }
 
-/* 692Y: A single FCM timestamp represents only one notification per parent
- * note. If multiple distinct Planner/note reminders share exactly this time,
- * never discard all native items by falsely treating them as one duplicate.
- * Safe fallback for this rare ambiguous case is keeping local notifications.
- */
-function vicePolozekVeStejnemTerminu692Y(noteId, at) {
-  try {
-    const note = typeof loadTask === "function"
-      ? loadTask().find(item => String(item?.id) === String(noteId)) : null;
-    if (!note || !Number.isSafeInteger(at)) return true; // uncertain => don't suppress
-    const plans = Array.isArray(note.plannedItems) ? note.plannedItems : [];
-    const matches = plans.filter(item => item?.completed !== true &&
-      item?.reminder !== false && new Date(item?.plannedAt).getTime() === at).length;
-    const noteAt = note.reminder === true &&
-      (note.repeat?.enabled === true
-        ? (matches > 0) // conservatively protect recurring + Planner overlap
-        : new Date(note.date).getTime() === at);
-    return matches + (noteAt ? 1 : 0) > 1;
-  } catch (_) {return true;}
-}
-
 /* 692V – Native index of the ACTUAL scheduled APK notifications.
    The FCM receiver must not infer this phone's numeric IDs from the web.
    A native read failure leaves the previous index untouched. */
@@ -197,24 +176,11 @@ async function obnovIndexLokalnichAlarmu692V() {
       if (!/^[\w:-]{1,128}$/.test(String(noteId || "")) ||
           !Number.isInteger(id) || id <= 0 ||
           !Number.isSafeInteger(at) || at <= Date.now()) continue;
-      alarms.push({noteId: String(noteId), id, at: String(at),
-        ambiguous: vicePolozekVeStejnemTerminu692Y(noteId,at)});
+      alarms.push({noteId: String(noteId), id, at: String(at)});
     }
     // Never overwrite a valid registry with a truncated snapshot.
     if (alarms.length > 4096) return;
-    const result = await native.replaceLocalSnapshot692V({alarms});
-    // 692Y: The remote exact alarm is already armed; remove the redundant
-    // Capacitor alarm THROUGH Capacitor (not just AlarmManager), so no stale
-    // scheduled state is resurrected after an Android process restart.
-    if (result?.ok === true && Array.isArray(result?.remoteDuplicateIds)) {
-      for (const id of result.remoteDuplicateIds) {
-        if (!Number.isInteger(id) || id <= 0) continue;
-        try {
-          await local.cancel({notifications:[{id}]});
-          await oznacAndroidPripominku683AU(id,false);
-        } catch (_) { /* do not cancel or weaken the remote exact alarm */ }
-      }
-    }
+    await native.replaceLocalSnapshot692V({alarms});
   } catch (_) { /* no-op on native read failure */ }
 }
 
@@ -286,17 +252,9 @@ async function scheduleNotification(
   if (noteId692V && Number.isSafeInteger(at692V) &&
       typeof native692V?.trackLocalAlarm692V === "function") {
     try {
-      const ownership692Y = await native692V.trackLocalAlarm692V({
-        noteId: String(noteId692V), id: notificationId, at: String(at692V),
-        ambiguous: vicePolozekVeStejnemTerminu692Y(noteId692V,at692V)
+      await native692V.trackLocalAlarm692V({
+        noteId: String(noteId692V), id: notificationId, at: String(at692V)
       });
-      if (ownership692Y?.remoteOwns === true) {
-        // 692Y: A Chrome/FCM update arrived before this local schedule.
-        // Native must not cancel the reliable remote alarm; remove only the
-        // just-created duplicate using Capacitor's persistent scheduler API.
-        await LocalNotifications.cancel({notifications:[{id:notificationId}]});
-        await oznacAndroidPripominku683AU(notificationId,false);
-      }
     } catch (_) { /* old APK or plugin unavailable: preserve local alarm */ }
   }
 }

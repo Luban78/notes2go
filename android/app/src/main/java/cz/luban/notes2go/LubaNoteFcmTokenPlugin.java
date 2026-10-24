@@ -140,15 +140,11 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     String noteId=call.getString("noteId","");
     Integer id=call.getInt("id");
     String when=call.getString("at","");
-    boolean ambiguous=Boolean.TRUE.equals(call.getBoolean("ambiguous"));
-    boolean remoteOwns=false;
     try {
       long at=Long.parseLong(when);
-      if(id!=null) remoteOwns=LubaNoteRemoteAlarm692O.trackLocal692V(getContext(),noteId,id,at,ambiguous);
+      if(id!=null) LubaNoteRemoteAlarm692O.trackLocal692V(getContext(),noteId,id,at);
     } catch(NumberFormatException ignored) {}
-    JSObject result=new JSObject();
-    result.put("remoteOwns",remoteOwns);
-    call.resolve(result);
+    call.resolve();
   }
 
   @PluginMethod public void forgetLocalAlarm692V(PluginCall call) {
@@ -160,9 +156,7 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
   @PluginMethod public void replaceLocalSnapshot692V(PluginCall call) {
     org.json.JSONArray alarms=call.getArray("alarms");
     JSObject result=new JSObject();
-    org.json.JSONArray duplicates=LubaNoteRemoteAlarm692O.replaceLocalSnapshot692Y(getContext(),alarms);
-    result.put("ok",duplicates!=null);
-    result.put("remoteDuplicateIds",duplicates==null?new org.json.JSONArray():duplicates);
+    result.put("ok",LubaNoteRemoteAlarm692O.replaceLocalSnapshot692V(getContext(),alarms));
     call.resolve(result);
   }
 
