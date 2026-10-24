@@ -4807,6 +4807,10 @@
       }
 
       render();
+      // 693A: pouze technický počet aktivních dokumentů pro PC navigaci.
+      window.dispatchEvent(new CustomEvent('lubanote:documents-count-changed-693A', {
+        detail: { count: posledniSoubory.filter((soubor) => !jeSouborVKosi(soubor)).length }
+      }));
     } catch (error) {
       console.error('Dokumenty nelze načíst:', error);
       zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.libraryLoadFailed', 'Lokální knihovnu dokumentů se nepodařilo načíst.'));

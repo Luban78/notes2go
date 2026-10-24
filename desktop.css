@@ -2757,3 +2757,199 @@
     gap: 4px;
   }
 }
+
+
+/* PATCH 693A – PC: počet hned vedle názvu a přepínání 4 / 3 sloupců. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .moduleTabs .moduleTab .lnDesktopModuleCount693A {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 27px;
+    min-height: 25px;
+    padding: 2px 8px;
+    margin-left: 7px;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    color: inherit;
+    font-size: 0.85em;
+    font-weight: 750;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+  .moduleTabs .moduleTab .lnDesktopModuleCount693A[hidden] {
+    display: none !important;
+  }
+
+  /* Původní přepínač 4/2: zachovat 4-sloupcové masonry.
+     Změnit POUZE druhý režim ze 2 na 3 sloupce. */
+  .pinnedCards.listView #pinnedLeft {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* PATCH 693B – pouze PC; mobilní layout a jeho ovládání beze změny. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Zachovat původní velikost všech tří modulů. */
+  .moduleTabs .moduleTab .notesStorageScopeIcon { display: none !important; }
+  .moduleTabs .moduleTab .notesModuleIconRow { gap: 0 !important; }
+  .moduleTabs .moduleTab { column-gap: 14px !important; }
+  .moduleTabs .moduleTab .moduleTabText { margin-left: 4px !important; }
+  .moduleTabs .moduleTab .lnDesktopModuleCount693A { margin-left: 12px !important; }
+
+  /* Měsíček se přesouvá přímo před zvoneček. */
+  #lnDesktopStatus692A #quickThemeButton {
+    display: inline-flex !important;
+    position: static !important;
+    flex: 0 0 38px !important;
+    width: 38px !important;
+    height: 38px !important;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    border-radius: 12px;
+  }
+  .lnDesktopLocal693B #lnDesktopStatus692A .lnDesktopStatus692A-quota {
+    display: none !important;
+  }
+
+  /* Pořadí: hledat, vše, pracovní, soukromé, oblíbené, oko,
+     koš, nový štítek, slovník, sdílené, chat, sloupce. */
+  body.desktopNotesToolbarA .searchRow { gap: 7px !important; }
+  body.desktopNotesToolbarA .searchRow .searchBox {
+    flex: 1 1 230px !important;
+    width: auto !important;
+    min-width: 150px !important;
+    max-width: 420px !important;
+  }
+  body.desktopNotesToolbarA .desktopCategoryActions {
+    gap: 6px !important;
+    flex: 0 0 auto;
+  }
+  body.desktopNotesToolbarA .searchActions {
+    gap: 7px !important;
+    margin-left: auto;
+  }
+  body.desktopNotesToolbarA .desktopCategoryActions #lnDesktopNewTag693B {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 106px !important;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    padding: 0 12px !important;
+    border: 1px solid var(--color-border);
+    border-radius: var(--ln-dnv-primary-radius, 13px);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  body.desktopNotesToolbarA #tagFilterButtons > .newTagFilterButton {
+    display: none !important;
+  }
+  body.desktopNotesToolbarA .searchActions #changeViewButton {
+    width: auto !important;
+    min-width: 86px !important;
+    padding: 0 9px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+  .lnDesktopColumnsLabel693B { font-size: 12px; font-weight: 700; white-space: nowrap; }
+  /* Volné místo zůstává volné, žádné nové duplicitní funkce. */
+}
+
+/* 693C – PC responsive modules and true 6/8-square view button. */
+@media (min-width:1100px) and (hover:hover) and (pointer:fine) {
+  .moduleBar { width:100% !important; }
+  nav.moduleTabs {
+    display:grid !important;
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    width:100% !important;
+    max-width:none !important;
+    flex:1 1 100% !important;
+    gap:14px !important;
+    transform:none !important;
+    translate:none !important;
+  }
+  nav.moduleTabs > .moduleTab {
+    box-sizing:border-box !important;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    flex:1 1 auto !important;
+    transform:none !important;
+    translate:none !important;
+    left:auto !important;
+    right:auto !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    gap:28px !important;
+    padding-inline:12px !important;
+    white-space:nowrap;
+  }
+  nav.moduleTabs > .moduleTab .notesModuleIconRow {
+    display:inline-flex !important;
+    align-items:center !important;
+    flex:0 0 auto !important;
+  }
+  nav.moduleTabs > .moduleTab .moduleTabIcon { flex:0 0 auto !important; margin:0 !important; }
+  nav.moduleTabs > .moduleTab .moduleTabText { margin:0 !important; flex:0 0 auto !important; }
+  nav.moduleTabs > .moduleTab .lnDesktopModuleCount693A {
+    margin:0 !important;
+    flex:0 0 auto !important;
+  }
+  body.desktopNotesToolbarA .searchActions #changeViewButton {
+    width:50px !important;
+    min-width:50px !important;
+    padding:0 !important;
+  }
+  body.desktopNotesToolbarA .searchActions #changeViewButton .lnColumnsIcon693C {
+    display:block !important;
+    flex:none;
+  }
+  body.desktopNotesToolbarA .searchActions #changeViewButton .lnDesktopColumnsLabel693B {
+    display:none !important;
+  }
+}
+
+
+/* 693D – stejná výška i šířka čtverečků v obou režimech. */
+@media (min-width:1100px) and (hover:hover) and (pointer:fine) {
+  body.desktopNotesToolbarA .searchActions #changeViewButton {
+    width:66px !important;
+    min-width:66px !important;
+  }
+  body.desktopNotesToolbarA .searchActions #changeViewButton .lnColumnsIcon693C {
+    width:42px !important;
+    height:24px !important;
+    overflow:visible;
+  }
+  #lnDesktopThemeCycle693D {
+    display:inline-flex;
+    width:38px;
+    height:38px;
+    align-items:center;
+    justify-content:center;
+    border-radius:12px;
+    border:1px solid var(--color-border, #bbb);
+    background:transparent;
+    color:inherit;
+    cursor:pointer;
+    flex:none;
+  }
+}
+
+/* 693E – PC: o 3 px větší mezery mezi ovládacími tlačítky. */
+@media (min-width:1100px) and (hover:hover) and (pointer:fine) {
+  body.desktopNotesToolbarA .desktopCategoryActions { gap:9px !important; }
+  body.desktopNotesToolbarA .searchActions { gap:10px !important; }
+}
