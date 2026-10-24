@@ -607,6 +607,27 @@ final class LubaNoteRemoteAlarm692O {
       diag692X(ctx,"REMOTE_FIRE_IGNORED",id,at,"not_in_pending_record");
       return;
     }
+
+    // 692Z-B: Never deliver a native reminder before its persisted due time.
+    // A stale PendingIntent, a clock correction, or unexpected early broadcast
+    // must not consume the pending record or show a notification prematurely.
+    // Validate record membership ABOVE before rearming, so an old/cancelled
+    // broadcast cannot revive a dismissed reminder.
+    long now692ZB = System.currentTimeMillis();
+    if (now692ZB < at) {
+      long earlyMs692ZB = at - now692ZB;
+      diag692X(ctx,"REMOTE_EARLY_BLOCK_692ZB",id,at,
+          "earlyMs="+earlyMs692ZB+" rearm_attempt");
+      try {
+        schedule(ctx,id,at);
+      } catch (RuntimeException error) {
+        // Do not crash the application/receiver; preserve the pending record.
+        diag692X(ctx,"REMOTE_EARLY_REARM_ERROR_692ZB",id,at,
+            "native_alarm_schedule_failed");
+      }
+      return;
+    }
+
     try {
       JSONArray delivered=row.optJSONArray("delivered");
       if (delivered==null) delivered=new JSONArray();
