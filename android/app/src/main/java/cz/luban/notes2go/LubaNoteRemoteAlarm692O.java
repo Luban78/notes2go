@@ -126,33 +126,6 @@ final class LubaNoteRemoteAlarm692O {
     }
     return false;
   }
-  private static void dropMatchingRemotePending692V(Context ctx,JSONObject local) {
-    JSONObject records=load(ctx);
-    JSONArray notes=records.names();
-    if(notes==null) return;
-    boolean changed=false;
-    for(int i=0;i<notes.length();i++) {
-      String noteId=notes.optString(i,"");
-      JSONObject row=records.optJSONObject(noteId);
-      JSONArray times=row==null?null:row.optJSONArray("times");
-      if(times==null) continue;
-      JSONArray kept=new JSONArray();
-      boolean changedThisNote=false;
-      for(int j=0;j<times.length();j++) {
-        long at=times.optLong(j,0);
-        if(at>0 && hasLocalAt692V(ctx,local,noteId,at)) {
-          // Cancel only a PENDING remote alarm; never dismiss delivered alerts.
-          cancel(ctx,noteId,at);
-          changedThisNote=true;
-        } else kept.put(at);
-      }
-      if(changedThisNote) {
-        try {row.put("times",kept);records.put(noteId,row);changed=true;}
-        catch(Exception ignored) {}
-      }
-    }
-    if(changed) save(ctx,records);
-  }
   static synchronized void trackLocal692V(Context ctx,String noteId,int localId,long at) {
     if(!validNote692V(noteId) || !validLocalId692V(localId) ||
        at<=System.currentTimeMillis() || at>System.currentTimeMillis()+MAX_FUTURE) return;
@@ -160,7 +133,7 @@ final class LubaNoteRemoteAlarm692O {
     try {
       local.put(Integer.toString(localId),record692V(noteId,localId,at));
       saveLocalIndex692V(ctx,local);
-      dropMatchingRemotePending692V(ctx,local);
+      // 692W: never cancel the exact remote alarm merely because a local one exists.
     } catch(Exception ignored) {}
   }
   static synchronized void forgetLocal692V(Context ctx,int localId) {
@@ -184,7 +157,7 @@ final class LubaNoteRemoteAlarm692O {
         local.put(Integer.toString(localId),record692V(noteId,localId,at));
       }
       saveLocalIndex692V(ctx,local);
-      dropMatchingRemotePending692V(ctx,local);
+      // 692W: never cancel the exact remote alarm merely because a local one exists.
       return true;
     } catch(Exception ignored) {return false;}
   }
@@ -337,13 +310,33 @@ final class LubaNoteRemoteAlarm692O {
       // 692V: Web-side numeric IDs cannot identify APK-side alarms safely.
       // Clean only APK-local records verified to belong to this exact note.
       cancelObsoleteLocal692V(ctx,id,requested);
-      final JSONObject local=localIndex692V(ctx);
+      // 692W: FCM exact alarm has priority. Do not suppress it based on the
+      // existence of a Capacitor PendingIntent (which may deliver late).
+      // First arm the remote alarm; only then remove matching local alarms.
+      // The normal foreground sync rebuilds local alarms and acknowledges the
+      // handoff by clearing the future remote alarms.
       JSONArray safe=new JSONArray();
       for (Long at:requested) {
-        if (hasLocalAt692V(ctx,local,id,at)) continue; // local APK owns this due time
         safe.put(at);
         schedule(ctx,id,at);
       }
+      JSONObject local=localIndex692V(ctx);
+      JSONArray localKeys=local.names();
+      boolean localChanged=false;
+      if(localKeys!=null) for(int i=0;i<localKeys.length();i++) {
+        String key=localKeys.optString(i,"");
+        JSONObject entry=local.optJSONObject(key);
+        if(entry==null || !id.equals(entry.optString("noteId",""))) continue;
+        long at=entry.optLong("at",0L);
+        if(!requested.contains(at)) continue;
+        int localId=entry.optInt("id",0);
+        if(validLocalId692V(localId)) {
+          cancelCapacitor(ctx,localId);
+          local.remove(key);
+          localChanged=true;
+        }
+      }
+      if(localChanged) saveLocalIndex692V(ctx,local);
       JSONObject fresh=new JSONObject();
       fresh.put("revision",revision);
       fresh.put("times",safe);
