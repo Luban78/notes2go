@@ -184,6 +184,52 @@ async function obnovIndexLokalnichAlarmu692V() {
   } catch (_) { /* no-op on native read failure */ }
 }
 
+/* 692Z-A: Keep Capacitor for Planner and repeating reminders while ordinary
+ * notes use the same exact native slot as FCM. All reads/cancels also include
+ * native ordinary-note pending entries. Old APK/plugin failures remain safe. */
+async function nactiCekajiciSNative692Z(LocalNotifications) {
+  const raw=await LocalNotifications.getPending();
+  const native=window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  if(typeof native?.getLocalNotePending692Z!=="function") return raw;
+  try {
+    const data=await native.getLocalNotePending692Z();
+    const original=Array.isArray(raw?.notifications)?raw.notifications:[];
+    const additional=Array.isArray(data?.notifications)?data.notifications:[];
+    const ids=new Set(original.map(row=>Number(row?.id)));
+    return {notifications:[...original,...additional.filter(row=>!ids.has(Number(row?.id)))]};
+  } catch (_) {return raw;}
+}
+
+async function zrusCekajiciSNative692Z(LocalNotifications,request) {
+  const notifications=Array.isArray(request?.notifications)?request.notifications:[];
+  // Never cancel a native alarm *instead* of calling the proven Capacitor API;
+  // both may coexist during a transition from an older APK build.
+  const native=window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  for(const item of notifications) {
+    const id=Number(item?.id);
+    if(Number.isInteger(id)&&id>0) {
+      try {await native?.cancelLocalNote692Z?.({id});} catch (_) {}
+    }
+  }
+  return await LocalNotifications.cancel(request);
+}
+
+function muzePouzitSpolecnyAlarm692Z(extra,at) {
+  if(extra?.lubanoteType!=="note" || extra?.recurring===true ||
+      !Number.isSafeInteger(at) || at<=Date.now()+500) return false;
+  try {
+    const note=typeof loadTask==="function"
+      ? loadTask().find(n=>String(n?.id)===String(extra.taskId)):null;
+    if(!note || note.isSecret===true || note.completed===true ||
+        note.reminder!==true || new Date(note.date).getTime()!==at) return false;
+    // A parent note and its Planner item must not be collapsed when due
+    // at exactly the same instant. The legacy route is used for ambiguity.
+    return !(Array.isArray(note.plannedItems) && note.plannedItems.some(item=>
+      item && item.completed!==true && item.reminder!==false &&
+      new Date(item.plannedAt).getTime()===at));
+  } catch (_) {return false;}
+}
+
 async function scheduleNotification(
   notificationId,
   title,
@@ -207,6 +253,42 @@ async function scheduleNotification(
     cleanText.length > 140
       ? `${cleanText.slice(0, 140)}…`
       : cleanText;
+
+  const native692Z=window.Capacitor?.isNativePlatform?.()
+    ? window.Capacitor?.Plugins?.LubaNoteFcmToken:null;
+  const at692Z=new Date(dateTime).getTime();
+  if (typeof native692Z?.scheduleLocalNote692Z==="function" &&
+      muzePouzitSpolecnyAlarm692Z(extra,at692Z)) {
+    try {
+      const result=await native692Z.scheduleLocalNote692Z({
+        id:notificationId,noteId:String(extra.taskId),at:String(at692Z),
+        title:title||"LubaNote",preview:shortText||"Máš naplánovanou připomínku."
+      });
+      if(result?.ok===true) {
+        // The exact native PendingIntent is now persistent. Only afterwards
+        // remove an old Capacitor copy of this notification ID.
+        let migrated=false;
+        try {
+          // Most new notes have no Capacitor PendingIntent. Cancellation is
+          // nonetheless required for alarms from a previous APK version.
+          await LocalNotifications.cancel({notifications:[{id:notificationId}]});
+          migrated=true;
+        } catch (_) {
+          // Never leave two active routes after a migration failure.
+          try {await native692Z.cancelLocalNote692Z?.({id:notificationId});}
+          catch (_) {}
+        }
+        if(migrated) {
+          await oznacAndroidPripominku683AU(notificationId,false);
+          try {await native692Z.forgetLocalAlarm692V?.({id:notificationId});}
+          catch (_) {}
+          return;
+        }
+        // Original scheduler below remains the emergency fallback.
+
+      }
+    } catch (_) { /* keep original scheduler as fallback */ }
+  }
 
   await LocalNotifications.schedule({
     notifications: [
@@ -354,7 +436,7 @@ async function zrusCekajiciOpakovaneNotifikacePoznamky(noteId) {
 
   try {
     const pending =
-      await LocalNotifications.getPending();
+      await nactiCekajiciSNative692Z(LocalNotifications);
 
     const notifications =
       (pending?.notifications || [])
@@ -369,7 +451,7 @@ async function zrusCekajiciOpakovaneNotifikacePoznamky(noteId) {
 
     if (notifications.length > 0) {
       await oznacAndroidPripominky683AU(notifications.map(n => n.id), false);
-      await LocalNotifications.cancel({
+      await zrusCekajiciSNative692Z(LocalNotifications,{
         notifications
       });
     }
@@ -689,7 +771,7 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
    */
   if (typeof LocalNotifications.getPending === "function") {
     const pending =
-      await LocalNotifications.getPending();
+      await nactiCekajiciSNative692Z(LocalNotifications);
 
     const keZruseni =
       (pending?.notifications || [])
@@ -710,7 +792,7 @@ async function obnovSystemoveNotifikacePoSynchronizaci(
         }));
 
     if (keZruseni.length > 0) {
-      await LocalNotifications.cancel({
+      await zrusCekajiciSNative692Z(LocalNotifications,{
         notifications: keZruseni
       });
     }
@@ -1059,7 +1141,7 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
   let pendingPredObnovou691AZ = null;
   if (typeof LocalNotifications.getPending === "function") {
     try {
-      const stav = await LocalNotifications.getPending();
+      const stav = await nactiCekajiciSNative692Z(LocalNotifications);
       if (Array.isArray(stav?.notifications)) pendingPredObnovou691AZ = stav.notifications;
     } catch (_error) { /* fallback puvodni obnovy */ }
   }
@@ -1090,7 +1172,7 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
     typeof LocalNotifications.getPending ===
     "function"
   ) {
-    const pending = await LocalNotifications.getPending();
+    const pending = await nactiCekajiciSNative692Z(LocalNotifications);
 
     const notifications =
       (pending?.notifications || [])
@@ -1103,7 +1185,7 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
         }));
 
     if (notifications.length > 0) {
-      await LocalNotifications.cancel({
+      await zrusCekajiciSNative692Z(LocalNotifications,{
         notifications
       });
     }
@@ -1163,7 +1245,7 @@ async function cancelNotification(notificationId) {
 
   /* Zrušíme případný budoucí alarm. */
   try {
-    await LocalNotifications.cancel({
+    await zrusCekajiciSNative692Z(LocalNotifications,{
       notifications: [
         {
           id: notificationId
@@ -1805,7 +1887,7 @@ async function ensureFuturePlannedNotifications() {
     }
 
     const pendingResult =
-      await LocalNotifications.getPending();
+      await nactiCekajiciSNative692Z(LocalNotifications);
 
     const pendingIds = new Set(
       (pendingResult?.notifications || [])

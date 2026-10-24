@@ -314,6 +314,126 @@ final class LubaNoteRemoteAlarm692O {
       if (delivered != null) for (int j=0;j<delivered.length();j++) cancel(ctx,id,delivered.optLong(j,0));
     }
   }
+  /* 692Z-A: Local ordinary note reminders use THE SAME Android PendingIntent
+   * and notification ID as the exact FCM 692O route. This is deliberately
+   * restricted to one non-recurring note occurrence; Planner and recurring
+   * alarms stay on their proven scheduler until their distinct identities
+   * can be migrated safely. FCM and APK no longer create two alarms for
+   * this ordinary-note case. */
+  static synchronized boolean scheduleLocalNote692Z(Context ctx,String id,int localId,
+      long at,String title,String preview) {
+    if(!validNote692V(id) || !validLocalId692V(localId) ||
+        at<=System.currentTimeMillis()+500L || at>System.currentTimeMillis()+MAX_FUTURE) return false;
+    try {
+      JSONObject records=load(ctx);
+      JSONObject row=records.optJSONObject(id);
+      if(row==null) row=new JSONObject();
+      long oldAt=row.optLong("localAt692Z",0L);
+      JSONArray times=row.optJSONArray("times");
+      if(times==null) times=new JSONArray();
+      // Migrate an old note occurrence without changing other FCM/Planner times.
+      JSONArray future=new JSONArray();
+      boolean already=false;
+      for(int i=0;i<times.length();i++) {
+        long current=times.optLong(i,0L);
+        if(current==at) {already=true;future.put(current);}
+        else if(current==oldAt && oldAt>0) cancel(ctx,id,current);
+        else if(current>System.currentTimeMillis()) future.put(current);
+      }
+      if(!already) future.put(at);
+      row.put("times",future);
+      row.put("localAt692Z",at);
+      row.put("localId692Z",localId);
+      row.put("title",title==null || title.isEmpty()?"LubaNote":title);
+      row.put("preview",preview==null || preview.isEmpty()?"Máš naplánovanou připomínku.":preview);
+      // Persist BEFORE arming. Never clear the previous row on failure.
+      records.put(id,row);
+      save(ctx,records);
+      schedule(ctx,id,at);
+      diag692X(ctx,"UNIFIED_LOCAL_ARM_692Z",id,at,"localId="+localId+" sharedNativePI=true");
+      return intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null;
+    } catch(Exception e) {
+      diag692X(ctx,"UNIFIED_LOCAL_ERROR_692Z",id,at,"native_schedule_failed");
+      return false;
+    }
+  }
+
+  // Cancel one locally owned note ID. Do not touch unrelated Planner times.
+  static synchronized boolean cancelLocalNote692Z(Context ctx,int localId) {
+    if(!validLocalId692V(localId)) return false;
+    try {
+      JSONObject records=load(ctx);
+      JSONArray names=records.names();
+      if(names==null) return false;
+      boolean changed=false;
+      for(int i=0;i<names.length();i++) {
+        String id=names.optString(i,"");
+        JSONObject row=records.optJSONObject(id);
+        if(row==null || row.optInt("localId692Z",0)!=localId) continue;
+        long at=row.optLong("localAt692Z",0L);
+        JSONArray times=row.optJSONArray("times");
+        JSONArray future=new JSONArray();
+        if(times!=null) for(int j=0;j<times.length();j++) {
+          long value=times.optLong(j,0);
+          if(value==at) cancel(ctx,id,at);
+          else if(value>System.currentTimeMillis()) future.put(value);
+        }
+        JSONArray delivered=row.optJSONArray("delivered");
+        JSONArray keptDelivered=new JSONArray();
+        if(delivered!=null) for(int j=0;j<delivered.length();j++) {
+          long value=delivered.optLong(j,0);
+          if(value==at) cancel(ctx,id,at);
+          else keptDelivered.put(value);
+        }
+        row.put("times",future);
+        row.put("delivered",keptDelivered);
+        row.remove("localAt692Z");
+        row.remove("localId692Z");
+        records.put(id,row);
+        changed=true;
+        diag692X(ctx,"UNIFIED_LOCAL_CANCEL_692Z",id,at,"localId="+localId);
+      }
+      if(changed) save(ctx,records);
+      return changed;
+    } catch(Exception ignored) {return false;}
+  }
+
+  // For 691AZ/691AX preflight provide exact same pending shape as Capacitor.
+  static synchronized JSONArray localNotePending692Z(Context ctx) {
+    JSONArray result=new JSONArray();
+    try {
+      JSONObject records=load(ctx);
+      JSONArray names=records.names();
+      if(names==null) return result;
+      for(int i=0;i<names.length();i++) {
+        String id=names.optString(i,"");
+        JSONObject row=records.optJSONObject(id);
+        if(row==null) continue;
+        long at=row.optLong("localAt692Z",0);
+        int localId=row.optInt("localId692Z",0);
+        JSONArray times=row.optJSONArray("times");
+        if(at<=System.currentTimeMillis() || !validLocalId692V(localId) || times==null) continue;
+        boolean found=false;
+        for(int j=0;j<times.length();j++) if(times.optLong(j,0)==at) found=true;
+        if(!found || intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)==null) continue;
+        JSONObject item=new JSONObject();
+        item.put("id",localId);
+        item.put("title",row.optString("title","LubaNote"));
+        item.put("body",row.optString("preview","Máš naplánovanou připomínku."));
+        JSONObject extra=new JSONObject();
+        extra.put("lubanoteType","note");
+        extra.put("taskId",id);
+        item.put("extra",extra);
+        JSONObject schedule=new JSONObject();
+        schedule.put("at",at);
+        schedule.put("allowWhileIdle",true);
+        item.put("schedule",schedule);
+        result.put(item);
+      }
+    } catch(Exception ignored) {}
+    return result;
+  }
+
   static synchronized void clearAll(Context ctx) {
     clearRecords(ctx,load(ctx));
     ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().remove(RECORDS).apply();
@@ -330,8 +450,15 @@ final class LubaNoteRemoteAlarm692O {
       JSONObject row = records.optJSONObject(id);
       if (row == null) continue;
       JSONArray times = row.optJSONArray("times");
-      if (times != null) for (int j=0; j<times.length(); j++) cancel(ctx,id,times.optLong(j,0));
-      try { row.put("times",new JSONArray()); records.put(id,row); } catch(Exception ignored) {}
+      JSONArray kept=new JSONArray();
+      long localAt=row.optLong("localAt692Z",0L);
+      if (times != null) for (int j=0; j<times.length(); j++) {
+        long at=times.optLong(j,0L);
+        if(at==localAt && at>System.currentTimeMillis() &&
+            intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null) kept.put(at);
+        else cancel(ctx,id,at);
+      }
+      try { row.put("times",kept); records.put(id,row); } catch(Exception ignored) {}
     }
     save(ctx, records);
     diag692X(ctx,"FOREGROUND_SYNC_HANDOFF",null,0,"remote_future_alarms_cleared");
@@ -429,6 +556,14 @@ final class LubaNoteRemoteAlarm692O {
       if(localChanged) saveLocalIndex692V(ctx,local);
       JSONObject fresh=new JSONObject();
       fresh.put("revision",revision);
+      // Keep the APK-owned ordinary note in the SAME PendingIntent slot.
+      // Remote changes supersede a previous local timestamp; a subsequent
+      // foreground reconcile can set the new local timestamp.
+      long localAt=existing==null?0L:existing.optLong("localAt692Z",0L);
+      if(localAt>now && requested.contains(localAt)) {
+        fresh.put("localAt692Z",localAt);
+        fresh.put("localId692Z",existing.optInt("localId692Z",0));
+      }
       fresh.put("times",safe);
       // Preview is bound to the authenticated account's FCM projection.
       fresh.put("title",data.get("title") == null ? "" : data.get("title"));

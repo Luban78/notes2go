@@ -160,6 +160,31 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     call.resolve(result);
   }
 
+  // 692Z-A: Native ordinary-note bridge; never exposes note/E2E data in logs.
+  @PluginMethod public void scheduleLocalNote692Z(PluginCall call) {
+    Integer id=call.getInt("id");
+    String noteId=call.getString("noteId","");
+    String when=call.getString("at","");
+    boolean ok=false;
+    try {
+      long at=Long.parseLong(when);
+      if(id!=null) ok=LubaNoteRemoteAlarm692O.scheduleLocalNote692Z(
+        getContext(),noteId,id,at,call.getString("title","LubaNote"),
+        call.getString("preview",""));
+    } catch(Exception ignored) { /* old proven Capacitor scheduler is fallback */ }
+    JSObject result=new JSObject(); result.put("ok",ok); call.resolve(result);
+  }
+  @PluginMethod public void cancelLocalNote692Z(PluginCall call) {
+    Integer id=call.getInt("id");
+    JSObject result=new JSObject();
+    result.put("cancelled",id!=null && LubaNoteRemoteAlarm692O.cancelLocalNote692Z(getContext(),id));
+    call.resolve(result);
+  }
+  @PluginMethod public void getLocalNotePending692Z(PluginCall call) {
+    JSObject result=new JSObject();
+    result.put("notifications",LubaNoteRemoteAlarm692O.localNotePending692Z(getContext()));
+    call.resolve(result);
+  }
   @PluginMethod public void getPendingSync(PluginCall call) {
     SharedPreferences prefs=getContext().getSharedPreferences(LubaNoteFcmMessagingService.PREFS,Context.MODE_PRIVATE);
     JSObject response=new JSObject();
