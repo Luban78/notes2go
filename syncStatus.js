@@ -25,6 +25,10 @@
       klic: "sync.pending",
       fallback: "⏳ Čeká na synchronizaci"
     },
+    "editor-wait": {
+      klic: "sync.editorWait692U",
+      fallback: "⏳ Čeká na editor"
+    },
     local: {
       klic: "sync.localOnly",
       fallback: "📱 Pouze v zařízení"
@@ -44,6 +48,7 @@
      první událost. */
   let aktualniStav = "pending";
   let posledniStabilniStav = "pending";
+  let pocetCizichEditoru692U = 0;
 
   function preloz(klic, fallback) {
     return (
@@ -70,8 +75,15 @@
 
     statusText.hidden = false;
     statusText.dataset.state = aktualniStav;
-    statusText.textContent = text;
-    statusText.title = text;
+    if (aktualniStav === "editor-wait") {
+      statusText.textContent = `${text} (${pocetCizichEditoru692U})`;
+      statusText.title =
+        `Ostatní poznámky byly zpracovány. ${pocetCizichEditoru692U} ` +
+        "poznámka/poznámky čekají na uzavření editoru na jiném zařízení.";
+    } else {
+      statusText.textContent = text;
+      statusText.title = text;
+    }
   }
 
   /* 683BX – běžný uživatel RX/TX panel nevidí. Závažnější čekání
@@ -121,7 +133,7 @@
     }
   });
 
-  function nastavStav(stav) {
+  function nastavStav(stav, detail = null) {
     const localAktivni =
       window.LubaNoteStorageScope
         ?.ziskejAktivni?.() === "local";
@@ -149,6 +161,11 @@
     if (!(stav in STAVY)) {
       return;
     }
+    if (stav === "editor-wait") {
+      const count = Number(detail?.count);
+      pocetCizichEditoru692U = Number.isInteger(count) && count > 0
+        ? count : Math.max(1, pocetCizichEditoru692U);
+    }
 
     if (
       stav === "syncing" &&
@@ -159,6 +176,7 @@
 
     if (
       stav === "synced" ||
+      stav === "editor-wait" ||
       stav === "auth-expired" ||
       stav === "conflict"
     ) {
@@ -177,7 +195,7 @@
   window.addEventListener(
     "lubanote:sync-state",
     (event) => {
-      nastavStav(event.detail?.stav);
+      nastavStav(event.detail?.stav, event.detail);
     }
   );
 

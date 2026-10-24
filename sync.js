@@ -848,20 +848,28 @@ function oznamChybejiciOnlineSession() {
   );
 }
 
-function nastavStavSynchronizaceUI(stav) {
+/* 692U: pouze signal neprevzate cloudove revize pod cizim editorovym
+ * zámkem. Nejde o konflikt ani povoleni prepsat rozpracovanou poznamku. */
+let cekajiciCiziEditor692U = null;
+
+function nastavStavSynchronizaceUI(stav, detail = {}) {
   window.dispatchEvent(
     new CustomEvent("lubanote:sync-state", {
-      detail: { stav }
+      detail: { stav, ...detail }
     })
   );
 }
 
 function nastavKoncovyStavSynchronizaceUI() {
-  nastavStavSynchronizaceUI(
-    aktivniKonfliktySyncu.size > 0
-      ? "conflict"
-      : "synced"
-  );
+  if (aktivniKonfliktySyncu.size > 0) {
+    nastavStavSynchronizaceUI("conflict");
+  } else if (cekajiciCiziEditor692U?.ids?.size > 0) {
+    nastavStavSynchronizaceUI("editor-wait", {
+      count: cekajiciCiziEditor692U.ids.size
+    });
+  } else {
+    nastavStavSynchronizaceUI("synced");
+  }
 }
 
 /* PATCH 586 – LOCAL MODE HARD GATE.
@@ -4610,6 +4618,169 @@ let existingClientReconcilePosledniPokus = 0;
 const EXISTING_RECONCILE_COOLDOWN_MS = 15000;
 
 /*
+ * 692U – SAFE REMOTE EDITOR WAIT
+ *
+ * Cizi aktivni editor je opravneni psat, ne chyba synchronizace. Cloudove
+ * radky mimo lock se pri Existing Reconcile nactou/ulozi standardne.
+ * Zamcenou poznamku NEPREPISUJEME, NEUPLOADUJEME, a nepotvrdime V2 cursor,
+ * fingerprint ani lokalni generaci, dokud ma neprevzatou serverovou revizi.
+ * Maly read-only lease check bezi jen ve viditelnem klientu a s backoffem.
+ * Po release znovu pouzijeme originalni revision merge (bez force takeover).
+ */
+let casovacCizihoEditoru692U = null;
+let kontrolaCizihoEditoru692UBezi = false;
+let pocetKontrolCizihoEditoru692U = 0;
+const KONTROLA_CIZIHO_EDITORU_692U_MS = [12000, 30000, 60000, 120000, 300000];
+
+function zastavCekaniNaCiziEditor692U() {
+  clearTimeout(casovacCizihoEditoru692U);
+  casovacCizihoEditoru692U = null;
+  cekajiciCiziEditor692U = null;
+  pocetKontrolCizihoEditoru692U = 0;
+}
+
+function naplanujKontroluCizihoEditoru692U(zpozdeni = null) {
+  if (!cekajiciCiziEditor692U || casovacCizihoEditoru692U !== null) return;
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    zastavCekaniNaCiziEditor692U();
+    return;
+  }
+  const ms = zpozdeni === null
+    ? KONTROLA_CIZIHO_EDITORU_692U_MS[
+        Math.min(pocetKontrolCizihoEditoru692U,
+          KONTROLA_CIZIHO_EDITORU_692U_MS.length - 1)
+      ]
+    : Math.max(0, Number(zpozdeni) || 0);
+  casovacCizihoEditoru692U = setTimeout(() => {
+    casovacCizihoEditoru692U = null;
+    void zkontrolujUvolneniCizihoEditoru692U();
+  }, ms);
+}
+
+function zapamatujCiziEditory692U(userId, ids) {
+  if (!userId || !ids?.size) return;
+  const predchozi = cekajiciCiziEditor692U;
+  const shodnaSkupina = predchozi?.userId === String(userId) &&
+    predchozi.ids.size === ids.size &&
+    [...ids].every((id) => predchozi.ids.has(id));
+  if (!shodnaSkupina) {
+    clearTimeout(casovacCizihoEditoru692U);
+    casovacCizihoEditoru692U = null;
+    pocetKontrolCizihoEditoru692U = 0;
+  }
+  cekajiciCiziEditor692U = {
+    userId: String(userId),
+    ids: new Set([...ids].map(String))
+  };
+  window.LubaNoteStartupDiag?.zapis?.(
+    "V2", `692U EDITOR WAIT | count=${ids.size} cursor=UNCHANGED`
+  );
+  nastavStavSynchronizaceUI("editor-wait", { count: ids.size });
+  naplanujKontroluCizihoEditoru692U();
+}
+
+async function zkontrolujUvolneniCizihoEditoru692U() {
+  const cekani = cekajiciCiziEditor692U;
+  if (!cekani || kontrolaCizihoEditoru692UBezi) return;
+  if (jeAktivniRezimPouzeTotoZarizeni()) {
+    zastavCekaniNaCiziEditor692U();
+    return;
+  }
+  /* V pozadi setrime egress; focus/pageshow znovu naplanuji kontrolu. */
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  if (!navigator.onLine || probihajiciStartSync ||
+      existingClientReconcilePraveBezi || probihajiciSync ||
+      probihajiciLokalniZmena || lokalniZmenaRezervovana) {
+    naplanujKontroluCizihoEditoru692U(10000);
+    return;
+  }
+  kontrolaCizihoEditoru692UBezi = true;
+  pocetKontrolCizihoEditoru692U += 1;
+  try {
+    const user = await getCurrentUser();
+    if (cekajiciCiziEditor692U !== cekani) return;
+    if (!user || String(user.id) !== cekani.userId) {
+      zastavCekaniNaCiziEditor692U();
+      return;
+    }
+    /* Samostatne RPC rozlisuje skutecny prazdny seznam od chyby site.
+     * Fallback pomocne funkce ziskejId... vraci pri chybe Set(), a tim
+     * se pro tento rozhodujici okamzik nesmi argumentovat. */
+    const { data, error } = await supabaseClient.rpc(
+      "lubanote_get_remote_active_editor_note_ids",
+      { p_device_id: getDeviceId() }
+    );
+    if (error || !Array.isArray(data)) {
+      naplanujKontroluCizihoEditoru692U();
+      return;
+    }
+    if (cekajiciCiziEditor692U !== cekani) return;
+    const aktivni = new Set(data.map((row) => String(row?.note_id || "")));
+    const staleZamcene = [...cekani.ids].filter((id) => aktivni.has(id));
+    if (staleZamcene.length === cekani.ids.size) {
+      naplanujKontroluCizihoEditoru692U();
+      return;
+    }
+
+    /* Zmenila se mnozina zamku. Nyni muze standardni Existing Reconcile
+     * prevzit jen UVOLNENE revize, ale vsechny zbyle locky opet vynecha.
+     * Nezalozime novy cursor jen na zaklade prazdneho RPC. */
+    cekajiciCiziEditor692U = null;
+    clearTimeout(casovacCizihoEditoru692U);
+    casovacCizihoEditoru692U = null;
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2", `692U EDITOR RELEASE | was=${cekani.ids.size} remains=${staleZamcene.length} retry=revision-reconcile`
+    );
+    /* Po mezitim hotovem targeted uploadu muze zbyvat uz jen jeho
+     * potvrzeni ve feedu. Tady smi pouzit puvodni targetConfirmRecovery,
+     * nikoliv novy upload nebo podvodne posunuti cursoru. */
+    const targetConfirm = cileneV2CekaNaFastPotvrzeni === true &&
+      cekajiciCilenePrivateV2.size === 0 &&
+      nactiNeodeslanaCekajiciSmazani().length === 0 &&
+      nactiBlokovanaCekajiciSmazani().length === 0;
+    const uspesne = await spustExistingClientReconcileV2(
+      cekani.userId, { force: true, targetConfirmRecovery: targetConfirm }
+    );
+    if (uspesne === true) {
+      if (targetConfirm && dokonceneSmazaniPoPotvrzeni691R("editor-release")) {
+        potvrzeneCileneRevizeV2.clear();
+        cileneV2CekaNaFastPotvrzeni = false;
+        synchronizaceOdlozenaKvuliLokalniZmene = false;
+      }
+      nastavKoncovyStavSynchronizaceUI();
+    } else if (!cekajiciCiziEditor692U) {
+      /* Chyba neni dalsi aktivni editor, stale nejde o full synced. */
+      nastavStavSynchronizaceUI("pending");
+    }
+    /* Pri novem locku se zapamatujCiziEditory692U zavola znovu.
+     * Jina chyba zustane podle puvodniho reconcile jako pending. */
+  } catch (error) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2", `692U EDITOR CHECK DEFER | ${String(error?.message || "RPC").slice(0,90)}`
+    );
+    naplanujKontroluCizihoEditoru692U();
+  } finally {
+    kontrolaCizihoEditoru692UBezi = false;
+  }
+}
+
+function probudCekaniNaCiziEditor692U() {
+  if (!cekajiciCiziEditor692U) return;
+  clearTimeout(casovacCizihoEditoru692U);
+  casovacCizihoEditoru692U = null;
+  naplanujKontroluCizihoEditoru692U(1200);
+}
+
+window.addEventListener("focus", probudCekaniNaCiziEditor692U);
+window.addEventListener("pageshow", probudCekaniNaCiziEditor692U);
+window.addEventListener("online", probudCekaniNaCiziEditor692U);
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") probudCekaniNaCiziEditor692U();
+  });
+}
+
+/*
  * PATCH 679A – TARGET CONFIRM RECOVERY
  *
  * Po úspěšném save_note_safe může výjimečně chybět lokální V2 cursor
@@ -5155,7 +5326,26 @@ async function spustExistingClientReconcileV2(
           );
         }
 
-        nastavStavSynchronizaceUI("pending");
+        /* 692U: Cisty remote-editor wait je PARTIAL sync, ne konflikt.
+         * Ostatni poznamky uz prosly stavajicim bezpecnym merge.
+         * Kurzor/fingerprint se zamerne nepotvrzuji. */
+        const pouzeCiziEditory = [...unresolvedIds].every((id) => {
+          const duvody = unresolvedDuvody.get(id);
+          return duvody?.size === 1 && duvody.has("remote-editor-active");
+        });
+        if (pouzeCiziEditory) {
+          /* Ostatni prijate cloudove ID uz jsou bezpecne ulozena.
+           * Obnovime prehled bez zasahu do aktualne otevreneho editoru. */
+          if (cloudApplyRows.length > 0) {
+            if (typeof renderTasks === "function") renderTasks();
+            if (typeof renderRemindersScreen === "function") renderRemindersScreen();
+            if (typeof renderCalendar === "function") renderCalendar();
+          }
+          zapamatujCiziEditory692U(userId, unresolvedIds);
+        } else {
+          zastavCekaniNaCiziEditor692U();
+          nastavStavSynchronizaceUI("pending");
+        }
         return false;
       }
 
@@ -5195,6 +5385,9 @@ async function spustExistingClientReconcileV2(
         renderCalendar();
       }
 
+      /* 692U: potvrzeny reconcile nema zadne nevyrizene editory.
+       * Teprve ted smime odebrat cekani a ukazat plny synced stav. */
+      zastavCekaniNaCiziEditor692U();
       nastavKoncovyStavSynchronizaceUI();
       posledniFastSyncStav = "SKIP";
       diagStav = "OK";
@@ -5286,6 +5479,22 @@ async function synchronizujVzdalenePrivateDeltaV2(
       "REMOTE DELTA DEFER | local-debt"
     );
     return false;
+  }
+
+  /* 692U: Drobna zmena feedu nesmi prejit kolem ochrany ciziho
+   * aktivniho editoru. Existing Reconcile uplatni ostatni ID a
+   * zamcenou poznamku odlozi bez posunu cursoru. */
+  if (cekajiciCiziEditor692U?.userId === String(userId) &&
+      cekajiciCiziEditor692U.ids.size > 0) {
+    if (existingClientReconcilePraveBezi) return false;
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2", "692U REMOTE DELTA -> EDITOR-AWARE RECONCILE"
+    );
+    return await spustExistingClientReconcileV2(userId,
+      jeTargetConfirmRecovery
+        ? { targetConfirmRecovery: true }
+        : {}
+    );
   }
 
   const cursor = nactiPrivateSyncV2Cursor(userId);
@@ -9960,7 +10169,11 @@ async function spustRychlySyncPoznamekBezpecne() {
           "V2",
           "RECONCILE DEFER | quick"
         );
-        nastavStavSynchronizaceUI("pending");
+        if (cekajiciCiziEditor692U?.ids?.size > 0) {
+          nastavKoncovyStavSynchronizaceUI();
+        } else {
+          nastavStavSynchronizaceUI("pending");
+        }
       }
     } else {
       window.LubaNoteStartupDiag?.zapis?.(
