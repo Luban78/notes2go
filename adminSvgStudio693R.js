@@ -92,9 +92,25 @@
   function normalized(tag, props = {}) {
     return {tag, props: {fill: 'none',stroke: activeColor,'stroke-width':fmt(Number(stroke.value)),'stroke-linecap':'round','stroke-linejoin':'round',...props}};
   }
+  // 693W: Viewport-only pan and zoom. Shapes, exports and 24x24 units remain intact.
+  let zoom693W=1, panX693W=0, panY693W=0;
+  const limit693W=(v,min,max)=>Math.max(min,Math.min(max,v));
+  function applyView693W(){
+    const extent=24/zoom693W;
+    panX693W=limit693W(panX693W,0,24-extent);
+    panY693W=limit693W(panY693W,0,24-extent);
+    svg.setAttribute('viewBox',`${panX693W} ${panY693W} ${extent} ${extent}`);
+    if(zoomText693W)zoomText693W.textContent=`${Math.round(zoom693W*100)} %`;
+  }
+  function zoomTo693W(next){
+    const oldSize=24/zoom693W, centerX=panX693W+oldSize/2,centerY=panY693W+oldSize/2;
+    zoom693W=limit693W(next,1,8);
+    const size=24/zoom693W;panX693W=centerX-size/2;panY693W=centerY-size/2;
+    applyView693W();
+  }
   function point(e) {
-    const r = svg.getBoundingClientRect();
-    return {x:clamp((e.clientX-r.left)*24/r.width), y:clamp((e.clientY-r.top)*24/r.height)};
+    const r = svg.getBoundingClientRect(), extent=24/zoom693W;
+    return {x:clamp(panX693W+(e.clientX-r.left)*extent/r.width), y:clamp(panY693W+(e.clientY-r.top)*extent/r.height)};
   }
   function shapeAt(a, b, kind) {
     const filled = fill?.checked && (kind === 'circle' || kind === 'rect');
@@ -178,14 +194,50 @@
     const d=smoothPoints693V(pts);if(!d)return announce('Tah je příliš krátký.');
     const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
   });
+  // Icon shortcuts mirror the existing select; they do not create a second tool state.
+  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['eraser','eraser','Guma'],['pan','hand','Posun plátna']];
+  const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
+  toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
+  const icons693W={
+    'mouse-pointer-2':'<path d="m5 3 14 9-7 1-3 7z"/>',
+    pencil:'<path d="m4 20 4.6-1 11-11-3.6-3.6-11 11zM14 6l3.6 3.6"/>',
+    minus:'<path d="M4 12h16"/>',circle:'<circle cx="12" cy="12" r="8"/>',
+    square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
+    eraser:'<path d="m20 20-9 0-7-7 9-9 8 8-8 8M8 16l9-9"/>',
+    hand:'<path d="M8 13V6a2 2 0 0 1 4 0v5-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v9c0 4-3 6-7 6H9c-2 0-4-2-6-6l-1-2a2 2 0 0 1 3-2z"/>'};
+  const toolButtons693W=[];
+  for(const [value,icon,label] of tools693W){
+    const b=document.createElement('button');b.type='button';b.className='lnSvgToolButton693W';
+    b.dataset.tool=value;b.setAttribute('aria-label',label);b.title=label;
+    b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons693W[icon]}</svg><span>${label}</span>`;
+    b.addEventListener('click',()=>{tool.value=value;tool.dispatchEvent(new Event('change',{bubbles:true}));});
+    toolButtons693W.push(b);toolBar693W.append(b);
+  }
+  function syncTools693W(){toolButtons693W.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool.value)));}
+  tool.addEventListener('change',syncTools693W);
+  const controls693W=document.createElement('div');controls693W.className='lnSvgZoomBar693W';
+  controls693W.innerHTML='<button type="button" data-zoom="out" aria-label="Oddálit">−</button><output>100 %</output><button type="button" data-zoom="in" aria-label="Přiblížit">+</button><button type="button" data-zoom="reset">Celá ikona</button>';
+  const zoomText693W=controls693W.querySelector('output');
+  controls693W.querySelector('[data-zoom="out"]').addEventListener('click',()=>zoomTo693W(zoom693W/1.5));
+  controls693W.querySelector('[data-zoom="in"]').addEventListener('click',()=>zoomTo693W(zoom693W*1.5));
+  controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();});
+  const toolRow693W=tool.closest('.lnSvgStudioTools');
+  if(toolRow693W){toolRow693W.insertAdjacentElement('beforebegin',toolBar693W);toolRow693W.insertAdjacentElement('afterend',controls693W);}
+  tool.closest('label')?.classList.add('lnSvgOldSelect693W');
+  const panInfo693W=document.createElement('small');panInfo693W.textContent='Pro posun zvětšeného plátna použij ruku. Zoom nemění velikost exportované ikony.';
+  controls693W.insertAdjacentElement('afterend',panInfo693W);
+  panInfo693W.className='lnSvgPanInfo693W';
+  syncTools693W();applyView693W();
   svg.addEventListener('pointerdown', e => {
     if (view.hidden || gesture) return;
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     const p = point(e), kind = tool.value;
     svg.setPointerCapture?.(e.pointerId);
-    gesture = {id:e.pointerId,mode:kind,start:p,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
-    if (kind === 'move') {
+    gesture = {id:e.pointerId,mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
+    if (kind === 'pan') {
+      gesture.initialPan={x:panX693W,y:panY693W};
+    } else if (kind === 'move') {
       selected = hitTest(p);
       gesture.chosen = selected;
       gesture.initial = selected >= 0 ? offset(shapes[selected]) : {x:0,y:0};
@@ -202,6 +254,12 @@
     if (!gesture || e.pointerId !== gesture.id) return;
     const p = point(e), g = gesture;
     if (g.mode === 'eraser') { eraseAt(p); return; }
+    if (g.mode === 'pan') {
+      const r=svg.getBoundingClientRect(),size=24/zoom693W;
+      panX693W=g.initialPan.x-(e.clientX-g.originClientX)*size/r.width;
+      panY693W=g.initialPan.y-(e.clientY-g.originClientY)*size/r.height;
+      applyView693W();return;
+    }
     if (g.mode === 'move') {
       if (g.chosen < 0) return;
       setOffset(shapes[g.chosen], g.initial.x+p.x-g.start.x,g.initial.y+p.y-g.start.y);
@@ -217,7 +275,7 @@
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
     if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
     const p = point(e);
-    if (!['move','eraser'].includes(g.mode)) {
+    if (!['move','eraser','pan'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
       else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
       if (drawing) {

@@ -47,3 +47,15 @@
 .lnSvgStudio .lnSvgSmooth693V{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0 12px;color:var(--color-text)}
 .lnSvgStudio .lnSvgSmooth693V label{display:inline-flex;align-items:center;gap:7px;font-size:13px}
 .lnSvgStudio .lnSvgSmooth693V button{padding:9px 12px;min-height:40px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);font:inherit}
+
+/* 693W – SVG Studio V2: compact, touch-friendly toolbar. */
+.lnSvgStudio .lnSvgToolBar693W{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;padding:5px 2px 9px;scrollbar-width:thin;}
+.lnSvgStudio .lnSvgToolButton693W{flex:0 0 64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:54px;padding:5px 3px;background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);border-radius:12px;font:inherit;-webkit-tap-highlight-color:transparent;}
+.lnSvgStudio .lnSvgToolButton693W svg{width:22px;height:22px;flex:0 0 22px;}
+.lnSvgStudio .lnSvgToolButton693W span{font-size:10px;line-height:1.2;white-space:nowrap;}
+.lnSvgStudio .lnSvgToolButton693W[aria-pressed="true"]{border:2px solid var(--color-accent);color:var(--color-accent-text,var(--color-accent));background:var(--color-surface);}
+.lnSvgStudio .lnSvgOldSelect693W{display:none!important;}
+.lnSvgStudio .lnSvgZoomBar693W{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0;}
+.lnSvgStudio .lnSvgZoomBar693W button{min-width:42px;min-height:40px;padding:7px 10px;border-radius:10px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font:inherit;}
+.lnSvgStudio .lnSvgZoomBar693W output{min-width:64px;text-align:center;font-size:13px;}
+.lnSvgStudio .lnSvgPanInfo693W{display:block;color:var(--color-text-secondary);font-size:11px;margin-bottom:6px;}
