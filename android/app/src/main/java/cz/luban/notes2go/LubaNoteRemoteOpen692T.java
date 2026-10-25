@@ -30,6 +30,9 @@ public final class LubaNoteRemoteOpen692T extends Activity {
           .commit();
     }
     Intent open = new Intent(this, MainActivity.class);
+    // 693G: Explicit signal for an already running MainActivity. Native
+    // SharedPreferences still own the tap; the intent carries no note text.
+    open.putExtra("lubanote_remote_notification_tap_693G", true);
     open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     startActivity(open);
     finish();

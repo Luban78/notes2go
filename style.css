@@ -3975,6 +3975,15 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   background: rgba(0, 0, 0, 0.5);
 }
 
+/* 693G: Mobile quick-snooze backdrop like the About dialog (3 px).
+   Desktop layout/appearance intentionally untouched. */
+@media (max-width: 767px) {
+  .reminderQuickMenu {
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+}
+
 .reminderQuickSheet {
   width: min(100%, 480px);
   box-sizing: border-box;

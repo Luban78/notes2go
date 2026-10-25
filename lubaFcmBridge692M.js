@@ -76,8 +76,11 @@
   // identifiers, never note text; the original reminders.js opens its own UI.
   let lastRemoteOpenToken = '';
   let lastRemoteOpenSentAt = 0;
-  async function checkRemoteOpen692T() {
-    if (!isNative || document.hidden || typeof plugin.getPendingRemoteOpen !== 'function') return;
+  async function checkRemoteOpen692T(nativeTap693G = false) {
+    // 693G: On warm notification tap the Activity can wake this bridge even
+    // before document visibility/focus events. Do not defer the native tap.
+    if (!isNative || (document.hidden && !nativeTap693G) ||
+        typeof plugin.getPendingRemoteOpen !== 'function') return;
     try {
       const tap = await plugin.getPendingRemoteOpen();
       if (!tap?.pending || !/^[\w:-]{1,128}$/.test(String(tap.noteId || ''))) return;
@@ -88,6 +91,11 @@
       window.dispatchEvent(new CustomEvent('lubanote:remote-reminder-open', {detail: tap}));
     } catch { /* available after native app init */ }
   }
+  // 693G: Immediate native handoff for taps while APK is already running.
+  // The ordinary focus/pageshow fallback remains for cold starts.
+  window.addEventListener('lubanote:native-reminder-tap-693G', () => {
+    void checkRemoteOpen692T(true);
+  });
   async function resume() {
     void checkRemoteOpen692T();
     // 692V: Index pre-existing local alarms BEFORE a pending FCM sync. This
