@@ -13,6 +13,10 @@
  .lnHomeDateTime683BC button {pointer-events:auto;}
  .lnHomeDateTime683BC.ln683BG-system-overlay button {pointer-events:none;}
  .lnMobileEnd693J button[hidden],.lnMobileStart693J button[hidden] {display:none!important;}
+ /* 693K: keep the same one-row/24px height; use free horizontal space. */
+ .lnHomeDateTime683BC {padding-left:max(5px,env(safe-area-inset-left))!important;padding-right:max(5px,env(safe-area-inset-right))!important;}
+ .lnMobileEnd693J {gap:9px;}
+ #lnMobilePalette693J,#lnMobileNight693J {width:29px;min-width:29px;padding:0;text-align:center;font-size:16px;line-height:24px;}
 }
 @media (min-width:900px) { .lnMobileStart693J,.lnMobileEnd693J {display:contents} #lnMobileSync693J,#lnMobilePalette693J,#lnMobileNight693J {display:none!important} }
 .lnSyncModal693J[hidden] {display:none!important}
