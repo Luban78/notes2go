@@ -1,7 +1,6 @@
 package cz.luban.notes2go;
 
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
@@ -235,6 +234,9 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(
       LubaNoteNetworkStatePlugin.class
     );
+
+    // 693I: pouze vyzadana diagnostika vyrezu displeje (read-only).
+    registerPlugin(LubaNoteCutoutDiagnostic693I.class);
 
     registerPlugin(
       LubaNoteTtsPlugin.class
@@ -510,28 +512,6 @@ public class MainActivity extends BridgeActivity {
     zrusNaplanovaneLubaImeHide();
     schovejSystemovouImeProLubaKeyboard(true);
     super.onStop();
-  }
-
-  /* 693G: A tap on the native 692T notification trampoline can deliver an
-   * onNewIntent to an already running MainActivity without a new JS focus or
-   * pageshow event. Wake ONLY the pending-reminder bridge for that tap.
-   * No alarm/sync state is read or changed here. */
-  @Override
-  public void onNewIntent(Intent intent) {
-    super.onNewIntent(intent);
-    if (intent == null || !intent.getBooleanExtra(
-        "lubanote_remote_notification_tap_693G", false)) return;
-    try {
-      if (getBridge() == null || getBridge().getWebView() == null) return;
-      getBridge().getWebView().post(() -> {
-        try {
-          if (getBridge() != null && getBridge().getWebView() != null) {
-            getBridge().getWebView().evaluateJavascript(
-              "window.dispatchEvent(new Event('lubanote:native-reminder-tap-693G'));", null);
-          }
-        } catch (RuntimeException ignored) { /* cold start has a JS fallback */ }
-      });
-    } catch (RuntimeException ignored) { /* do not block opening the app */ }
   }
 
   @Override
