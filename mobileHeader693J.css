@@ -41,3 +41,13 @@
 @media (max-width:899px) {
   #quickThemeButton { display:none !important; }
 }
+
+/* 693N: sharp, consistent line-art icons; no glyph/font dependence. */
+@media (max-width: 899px) {
+ #lnMobileNight693J {display:inline-flex;align-items:center;justify-content:center;color:var(--color-text)!important;}
+ #lnMobileNight693J svg {width:19px;height:19px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+ #lnMobilePalette693J {color:var(--color-text)!important;}
+ /* Theme-aware colors even where previous VD export used fixed white. */
+ #lnHomeDateTime683BC #lnHomeDate683BC,
+ #lnHomeDateTime683BC #lnHomeTime683BC {color:var(--color-text)!important;}
+}

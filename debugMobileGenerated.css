@@ -1,18 +1,11 @@
-/* =====================================================
-   LUBANOTE – VISUAL DEBUG GENERATED MOBILE ≤899 CSS
-
-   Tento soubor spravuje Visual Debug.
-   Ruční styly nechávej ve style.css / desktop.css.
-   Pravidla z Visual Debugu patří sem.
-===================================================== */
-
+/* LUBANOTE – VISUAL DEBUG GENERATED MOBILE ≤899 CSS
+   693N: převzaté hodnoty z dodaného exportu VD; bílá změněna na barvu aktivního motivu.
+*/
 @media (max-width: 899px) {
   /* LN-VD-SECTION:LOGIN:START */
   /* LN-VD-SECTION:LOGIN:END */
-
   /* LN-VD-SECTION:HOME / NOTES:START */
-
-/* LN-VD:span.searchIcon.lubaIconHost:START */
+  /* LN-VD:span.searchIcon.lubaIconHost:START */
   :is(#ln-vd-specificity-a, span.searchIcon.lubaIconHost):is(#ln-vd-specificity-b, span.searchIcon.lubaIconHost) {
     position: relative !important;
     z-index: 20 !important;
@@ -21,13 +14,11 @@
   }
   /* LN-VD:span.searchIcon.lubaIconHost:END */
 
-
   /* LN-VD:div.searchBox%3Anth-of-type(1):START */
   :is(#ln-vd-specificity-a, div.searchBox:nth-of-type(1)):is(#ln-vd-specificity-b, div.searchBox:nth-of-type(1)) {
     overflow: visible !important;
   }
   /* LN-VD:div.searchBox%3Anth-of-type(1):END */
-
 
   /* LN-VD:%23lnHomeDateTime683BC:START */
   :is(#ln-vd-specificity-a, #lnHomeDateTime683BC):is(#ln-vd-specificity-b, #lnHomeDateTime683BC) {
@@ -38,64 +29,96 @@
   }
   /* LN-VD:%23lnHomeDateTime683BC:END */
 
-
   /* LN-VD:header.homeHeader:START */
   :is(#ln-vd-specificity-a, header.homeHeader):is(#ln-vd-specificity-b, header.homeHeader) {
     overflow: visible !important;
   }
   /* LN-VD:header.homeHeader:END */
 
-
   /* LN-VD:%23lnHomeDateTime683BC%20time:START */
   :is(#ln-vd-specificity-a, #lnHomeDateTime683BC time):is(#ln-vd-specificity-b, #lnHomeDateTime683BC time) {
     position: relative !important;
     z-index: 20 !important;
     overflow: visible !important;
-    color: #ffffff !important;
+    color: var(--color-text) !important;
     scale: 0.89 !important;
   }
   /* LN-VD:%23lnHomeDateTime683BC%20time:END */
-
 
   /* LN-VD:%23lnHomeTime683BC:START */
   :is(#ln-vd-specificity-a, #lnHomeTime683BC):is(#ln-vd-specificity-b, #lnHomeTime683BC) {
     z-index: 20 !important;
     overflow: visible !important;
-    translate: -18px 0px !important;
+    font-size: 17px !important;
+    translate: 6px 0px !important;
   }
   /* LN-VD:%23lnHomeTime683BC:END */
-
 
   /* LN-VD:%23lnHomeDate683BC:START */
   :is(#ln-vd-specificity-a, #lnHomeDate683BC):is(#ln-vd-specificity-b, #lnHomeDate683BC) {
     z-index: 20 !important;
     overflow: visible !important;
-    translate: 2px 0px !important;
+    font-size: 17px !important;
+    translate: -10px 0px !important;
   }
   /* LN-VD:%23lnHomeDate683BC:END */
-/* LN-VD-SECTION:HOME / NOTES:END */
 
+  /* LN-VD:%23lnMobileNight693J:START */
+  :is(#ln-vd-specificity-a, #lnMobileNight693J):is(#ln-vd-specificity-b, #lnMobileNight693J) {
+    position: relative !important;
+    z-index: 20 !important;
+    overflow: visible !important;
+    font-size: 20px !important;
+    translate: 7px -2px !important;
+  }
+  /* LN-VD:%23lnMobileNight693J:END */
+
+  /* LN-VD:%23lnHomeDateTime683BC%20.lnMobileEnd693J:START */
+  :is(#ln-vd-specificity-a, #lnHomeDateTime683BC .lnMobileEnd693J):is(#ln-vd-specificity-b, #lnHomeDateTime683BC .lnMobileEnd693J) {
+    overflow: visible !important;
+  }
+  /* LN-VD:%23lnHomeDateTime683BC%20.lnMobileEnd693J:END */
+
+  /* LN-VD:%23lnHomeDateTime683BC%20.lnMobileStart693J:START */
+  :is(#ln-vd-specificity-a, #lnHomeDateTime683BC .lnMobileStart693J):is(#ln-vd-specificity-b, #lnHomeDateTime683BC .lnMobileStart693J) {
+    overflow: visible !important;
+  }
+  /* LN-VD:%23lnHomeDateTime683BC%20.lnMobileStart693J:END */
+
+  /* LN-VD:%23lnMobileSync693J:START */
+  :is(#ln-vd-specificity-a, #lnMobileSync693J):is(#ln-vd-specificity-b, #lnMobileSync693J) {
+    position: relative !important;
+    z-index: 20 !important;
+    overflow: visible !important;
+    font-size: 13px !important;
+    translate: -8px 0px !important;
+  }
+  /* LN-VD:%23lnMobileSync693J:END */
+
+  /* LN-VD:%23lnMobilePalette693J:START */
+  :is(#ln-vd-specificity-a, #lnMobilePalette693J):is(#ln-vd-specificity-b, #lnMobilePalette693J) {
+    position: relative !important;
+    z-index: 20 !important;
+    overflow: visible !important;
+    translate: 8px -1px !important;
+  }
+  /* LN-VD:%23lnMobilePalette693J:END */
+
+  /* LN-VD-SECTION:HOME / NOTES:END */
   /* LN-VD-SECTION:EDITOR:START */
   /* LN-VD-SECTION:EDITOR:END */
-
   /* LN-VD-SECTION:PLANNER:START */
   /* LN-VD-SECTION:PLANNER:END */
-
   /* LN-VD-SECTION:REMINDERS:START */
   /* LN-VD-SECTION:REMINDERS:END */
-
   /* LN-VD-SECTION:TAGS / FILTERS:START */
   /* LN-VD-SECTION:TAGS / FILTERS:END */
-
   /* LN-VD-SECTION:TODO / MEDIA:START */
   /* LN-VD-SECTION:TODO / MEDIA:END */
-
   /* LN-VD-SECTION:SETTINGS:START */
   /* LN-VD-SECTION:SETTINGS:END */
-
   /* LN-VD-SECTION:SECRET:START */
   /* LN-VD-SECTION:SECRET:END */
-
   /* LN-VD-SECTION:DIALOGS / MODALS:START */
   /* LN-VD-SECTION:DIALOGS / MODALS:END */
 }

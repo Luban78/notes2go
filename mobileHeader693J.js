@@ -21,7 +21,9 @@
   const baseNightToggle = document.getElementById('quickThemeButton');
   function updateNightIcon693M() {
     const isNight = baseNightToggle?.dataset.quickThemeMode === 'night';
-    night.textContent = isNight ? '☀' : '☾';
+    night.innerHTML = isNight
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.6 15.3A8.6 8.6 0 0 1 8.7 3.4 8.7 8.7 0 1 0 20.6 15.3Z"/></svg>';
     const label = isNight ? 'Zapnout denní režim' : 'Zapnout noční režim';
     night.setAttribute('aria-label', label);
     night.title = label;
