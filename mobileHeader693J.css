@@ -1,0 +1,24 @@
+/* 693J: one-row MOBILE ONLY. Existing 24px fixed header remains unchanged. */
+@media (max-width:899px) {
+ .lnHomeDateTime683BC { gap:0!important; justify-content:space-between!important; }
+ .lnMobileStart693J,.lnMobileEnd693J { display:inline-flex;align-items:center;gap:5px;min-width:0; flex:0 1 auto;white-space:nowrap; }
+ .lnMobileStart693J { max-width:48%; }
+ .lnMobileEnd693J { max-width:48%; margin-left:auto; }
+ .lnHomeDate683BC { font-size:clamp(12px,3.7vw,17px)!important; flex:0 1 auto; }
+ .lnHomeTime683BC { font-size:clamp(12px,3.7vw,17px)!important; flex:0 0 auto; }
+ .lnMobileStart693J button,.lnMobileEnd693J button { flex:0 0 auto;min-width:0;height:24px;padding:0 1px;background:none;border:0;color:var(--color-text);font:600 12px/24px system-ui,sans-serif;cursor:pointer;pointer-events:auto; }
+ #lnMobileSync693J {color:var(--color-accent);font-size:11px;}
+ #lnMobilePalette693J,#lnMobileNight693J {width:23px;font-size:16px;}
+ .lnHomeDateTime683BC {pointer-events:none;}
+ .lnHomeDateTime683BC button {pointer-events:auto;}
+ .lnHomeDateTime683BC.ln683BG-system-overlay button {pointer-events:none;}
+ .lnMobileEnd693J button[hidden],.lnMobileStart693J button[hidden] {display:none!important;}
+}
+@media (min-width:900px) { .lnMobileStart693J,.lnMobileEnd693J {display:contents} #lnMobileSync693J,#lnMobilePalette693J,#lnMobileNight693J {display:none!important} }
+.lnSyncModal693J[hidden] {display:none!important}
+.lnSyncModal693J {position:fixed;inset:0;z-index:25000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.lnSyncBox693J {box-sizing:border-box;width:min(100%,410px);border-radius:20px;background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);padding:20px;box-shadow:0 18px 50px #0007;font:15px/1.5 system-ui}
+.lnSyncBox693J header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;font-weight:700}
+.lnSyncBox693J button {border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);border-radius:10px;padding:7px 12px;min-height:36px}
+.lnSyncTrack693J {height:8px;border-radius:6px;background:var(--color-border);overflow:hidden;margin:10px 0}
+.lnSyncTrack693J span {display:block;height:100%;width:0;background:var(--color-accent)}

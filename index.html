@@ -82,6 +82,7 @@
   <link rel="stylesheet" href="lubaKeyboard.css?v=658bt-editor-selection-safe">
   <link rel="stylesheet" href="homeToolbarPreferences.css?v=683BB-main-toolbar-visibility">
   <link rel="stylesheet" href="homeDateTimeAndStatus683BC.css?v=683BD-clock-edge-no-shift">
+  <link rel="stylesheet" href="mobileHeader693J.css?v=693J-one-row-trial">
   <link rel="stylesheet" href="settingsAccordion683BJ.css?v=683BK-accordion-value-animation">
   <link rel="stylesheet" href="quickMenu683BM.css?v=683BM-quick-menu">
   <link rel="stylesheet" href="editorKeyboardPreferences683BN.css?v=683BN-display-prefs">
@@ -359,7 +360,7 @@
     <!-- 692B: Spolecna PC lista: datum + sync/cloud/ucet + cas v jednom radku.
          Mobilni datum a cas zustavaji puvodni; PC panel je v mobilu skryty. -->
     <div id="lnHomeDateTime683BC" class="lnHomeDateTime683BC" role="group" aria-label="Datum, čas a stav LubaNote">
-      <time id="lnHomeDate683BC" class="lnHomeDate683BC"></time>
+      <span class="lnMobileStart693J"><time id="lnHomeDate683BC" class="lnHomeDate683BC"></time><button type="button" id="lnMobileSync693J" aria-label="Informace o synchronizaci" title="Informace o synchronizaci">◷ SYNC</button></span>
       <div id="lnDesktopStatus692A" class="lnDesktopStatus692A" hidden aria-label="Stav LubaNote">
         <div class="lnDesktopStatus692A-main">
           <span id="lnDesktopSync692A" class="lnDesktopStatus692A-sync" role="status">◌ Zjišťuji synchronizaci</span>
@@ -376,7 +377,7 @@
         </button>
         <span id="lnDesktopAccount692A" class="lnDesktopStatus692A-account" title="Přihlášený účet" hidden></span>
       </div>
-      <time id="lnHomeTime683BC" class="lnHomeTime683BC"></time>
+      <span class="lnMobileEnd693J"><button type="button" id="lnMobilePalette693J" aria-label="Změnit barevný motiv" title="Barevný motiv">🎨</button><button type="button" id="lnMobileNight693J" aria-label="Denní/noční režim" title="Denní/noční režim">☾</button><time id="lnHomeTime683BC" class="lnHomeTime683BC"></time></span>
     </div>
 
     <!-- HLAVNÍ MODULY LUBANOTE -->
@@ -2944,6 +2945,7 @@
   <script src="settings.js?v=683BT-fixed-tomorrow"></script>
   <script src="homeToolbarPreferences.js?v=683BB-main-toolbar-visibility"></script>
   <script src="homeDateTime683BC.js?v=683BC-home-clock-status"></script>
+  <script src="mobileHeader693J.js?v=693J-one-row-trial"></script>
   
   
   <script src="recurringTasks.js"></script>
