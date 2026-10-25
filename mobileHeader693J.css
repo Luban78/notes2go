@@ -17,6 +17,15 @@
  .lnHomeDateTime683BC {padding-left:max(5px,env(safe-area-inset-left))!important;padding-right:max(5px,env(safe-area-inset-right))!important;}
  .lnMobileEnd693J {gap:9px;}
  #lnMobilePalette693J,#lnMobileNight693J {width:29px;min-width:29px;padding:0;text-align:center;font-size:16px;line-height:24px;}
+ /* 693L: Visual Debug picking only; each header item is independently selectable.
+    Normal clicks, fullscreen behaviour, heights and layout stay unchanged. */
+ body.ln-vd-picking .lnMobileStart693J,
+ body.ln-vd-picking .lnMobileEnd693J,
+ body.ln-vd-picking #lnHomeDate683BC,
+ body.ln-vd-picking #lnHomeTime683BC,
+ body.ln-vd-picking #lnMobileSync693J,
+ body.ln-vd-picking #lnMobilePalette693J,
+ body.ln-vd-picking #lnMobileNight693J {pointer-events:auto!important;}
 }
 @media (min-width:900px) { .lnMobileStart693J,.lnMobileEnd693J {display:contents} #lnMobileSync693J,#lnMobilePalette693J,#lnMobileNight693J {display:none!important} }
 .lnSyncModal693J[hidden] {display:none!important}
