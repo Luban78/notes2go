@@ -249,14 +249,16 @@
         ok = true;
       }
     } catch (_) {}
+    if (!ok) {
+      try {
+        const cap = window.Capacitor?.Plugins?.Clipboard;
+        if (cap?.write) { await cap.write({string:value}); ok=true; }
+      } catch (_) {}
+    }
     if (!ok) ok = legacyCopy693T(value);
     if (ok) announce('Zkopírováno do schránky.');
-    else {
-      source.value = value;
-      sourceIsEdited693T = true;
-      source.focus(); source.select();
-      announce('Schránka není dostupná. Kód je označený – zkus Kopírovat v nabídce Androidu.');
-    }
+    else announce('Android nepovolil zápis do schránky. Text v poli zůstal beze změny.');
+    return ok;
   };
   $('lnSvgCopy693R').addEventListener('click',()=>copy(exportSvg()));
   $('lnSvgCopyLuba693R').addEventListener('click',()=>copy(exportForLuba()));
@@ -270,31 +272,78 @@
   pasteButton693T.type = 'button';
   pasteButton693T.textContent = '📋 Vložit ze schránky';
   pasteButton693T.title = 'Načíst text z Android schránky do pole SVG';
+  pasteButton693T.textContent = 'Vložit';
   pasteButton693T.style.cssText = 'min-height:40px;max-width:100%;white-space:normal;';
-  importButton693T.parentNode.insertBefore(pasteButton693T, importButton693T);
-  pasteButton693T.addEventListener('click', async () => {
-    let pasted = '';
-    try {
-      if (navigator.clipboard?.readText) pasted = await navigator.clipboard.readText();
-    } catch (_) {}
-    if (!pasted) {
-      try {
-        const cap = window.Capacitor?.Plugins?.Clipboard;
-        if (cap?.read) {
-          const result = await cap.read();
-          pasted = String(result?.value || result?.text || '');
-        }
-      } catch (_) {}
+  const editBar693U = document.createElement('div');
+  editBar693U.className = 'lnSvgTextTools693U';
+  editBar693U.setAttribute('role', 'group');
+  editBar693U.setAttribute('aria-label', 'Úpravy SVG kódu');
+  source.closest('.lnSvgStudioSource')?.insertAdjacentElement('afterend',editBar693U);
+  function addEditAction693U(label, callback) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.textContent = label;
+    editBar693U.appendChild(button);
+    button.addEventListener('click', callback);
+    return button;
+  }
+  const focusSource693U = () => {
+    try { source.focus({preventScroll:true}); } catch (_) { source.focus(); }
+  };
+  const selectAll693U = () => {
+    focusSource693U(); source.select();
+    source.setSelectionRange(0,source.value.length);
+    announce('Vybrán celý SVG kód.');
+  };
+  const selection693U = () => {
+    const a=source.selectionStart ?? 0,b=source.selectionEnd ?? 0;
+    return {a,b,text:source.value.slice(a,b)};
+  };
+  const deleteSelection693U = () => {
+    const {a,b}=selection693U();
+    if(a===b){announce('Nejdřív označ část kódu nebo zvol Vybrat vše.');return false;}
+    source.setRangeText('',a,b,'start');sourceIsEdited693T=true;
+    focusSource693U();announce('Vybraný text odstraněn.');return true;
+  };
+  async function readClipboard693U() {
+    let result='';
+    try {if(navigator.clipboard?.readText) result=await navigator.clipboard.readText();} catch (_) {}
+    if(!result) try {
+      const cap=window.Capacitor?.Plugins?.Clipboard;
+      if(cap?.read){const data=await cap.read();result=String(data?.value||data?.text||'');}
+    }catch(_){}
+    return result;
+  }
+  addEditAction693U('Vybrat vše',selectAll693U);
+  addEditAction693U('Kopírovat',()=>{const {text}=selection693U();void copy(text || source.value);});
+  addEditAction693U('Vyjmout',async()=>{
+    const {text}=selection693U();
+    if(!text)return announce('Nejdřív vyber text, který chceš vyjmout.');
+    const {a,b}=selection693U();
+    if(await copy(text)){
+      source.setRangeText('',a,b,'start');sourceIsEdited693T=true;
+      announce('Text vyjmut do schránky.');
     }
-    if (!pasted) {
-      announce('WebView nepovolilo čtení schránky. Zkus klepnout do pole a použít Vložit na klávesnici.');
-      source.focus();
-      return;
+  });
+  editBar693U.appendChild(pasteButton693T);
+  pasteButton693T.addEventListener('click',async()=>{
+    const pasted=await readClipboard693U();
+    if(!pasted){announce('Schránka je prázdná nebo Android nepovolil čtení.');return;}
+    const {a,b}=selection693U();
+    const nextLength=source.value.length-(b-a)+pasted.length;
+    if(nextLength>100000)return announce('Výsledný kód je příliš dlouhý (max. 100 000 znaků).');
+    if (!sourceIsEdited693T || !source.value.trim()) {
+      source.value=pasted;
+      source.setSelectionRange(pasted.length,pasted.length);
+    } else {
+      source.setRangeText(pasted,a,b,'end');
     }
-    if (pasted.length > 100000) return announce('Text ze schránky je příliš dlouhý (max. 100 000 znaků).');
-    source.value = pasted;
-    sourceIsEdited693T = true;
-    announce('Vloženo ze schránky. Nyní klepni na Načíst SVG.');
+    sourceIsEdited693T=true;
+    focusSource693U();announce('Text vložen. Potom stiskni Načíst SVG.');
+  });
+  addEditAction693U('Smazat výběr',deleteSelection693U);
+  addEditAction693U('Vymazat pole',()=>{
+    source.value='';sourceIsEdited693T=true;
+    focusSource693U();announce('Textové pole vymazáno. Kresba zůstává beze změny.');
   });
   $('lnSvgImport693R').addEventListener('click',()=>{
     try {
@@ -315,12 +364,53 @@
           if(['stroke','fill'].includes(at.name) && !/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(at.value))throw Error('Nepodporovaná barva.');
           props[at.name]=at.value;
         }
+        /* 693U: root SVG presentation (fill/stroke/width) is inherited by its
+           shapes. The studio displays/exports detached shapes, so materialize
+           that inheritance on each shape. Otherwise valid imported paths can
+           be invisible in the canvas AND both previews. */
+        const defaults693U = {
+          fill: root.hasAttribute('stroke') ? 'none' : 'currentColor',
+          stroke: root.hasAttribute('fill') ? 'none' : 'currentColor',
+          'stroke-width': '1.9',
+          'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+        };
+        for (const [attr, fallback] of Object.entries(defaults693U)) {
+          if (Object.prototype.hasOwnProperty.call(props, attr)) continue;
+          const inherited = root.getAttribute(attr);
+          const resolved = inherited === null ? fallback : inherited;
+          if (['stroke', 'fill'].includes(attr)) {
+            if (!/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(resolved))
+              throw Error('Nepodporovaná barva SVG: ' + attr);
+          } else if (attr === 'stroke-width') {
+            if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(resolved))
+              throw Error('Neplatná tloušťka tahu SVG.');
+          } else if (!['butt', 'round', 'square', 'miter', 'bevel'].includes(resolved)) {
+            throw Error('Nepodporovaný styl SVG: ' + attr);
+          }
+          props[attr] = resolved;
+        }
         next.push({tag:el.localName,props});
       }
       if(!next.length)throw Error('Nenalezeny tvary.');
       const before=snapshot();shapes=next;selected=-1;sourceIsEdited693T=false;record(before);render();announce(`SVG načteno (${next.length} tvarů).`);
     }catch(e){announce('Import: '+e.message);}
   });
+  /* 693U – text-only guide embedded in the admin tool, hidden unless expanded.
+     These are 24 virtual SVG units, not physical phone pixels. */
+  const guide693U=document.createElement('details');
+  guide693U.className='lnSvgStudioGuide693U';
+  guide693U.innerHTML=`<summary>📖 Návod: Jak kreslit SVG ikony</summary>
+    <div class="lnSvgStudioGuideBody693U">
+      <p><strong>1. Co znamená 24 × 24?</strong> Plocha má 24 SVG jednotek na šířku i výšku. Bod (0, 0) je vlevo nahoře, (12, 12) přesný střed a (24, 24) pravý dolní roh. Velká kreslicí plocha je pouze zvětšenina.</p>
+      <p><strong>2. Kam kreslit?</strong> Pro běžné ikony drž většinu kresby mezi hodnotami 2 a 22. Nech cca 2 jednotky od okrajů, ať se silnější tah neuřízne. Pomocná mřížka má krok 2.</p>
+      <p><strong>3. Jak silné čáry?</strong> Začni kolem 1,8–2,0. Pro jemné detaily 1,5, pro výraznější tvary přibližně 2,2. Příliš tenké čáry se při náhledu 24 × 24 ztrácejí.</p>
+      <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem; úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
+      <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
+      <p><strong>6. Velikost a kontrola.</strong> Použij „Centrovat vše“ a pak zkontroluj zejména malý náhled 24 × 24. Pokud není ikona rozeznatelná bez zvětšení, zjednoduš ji nebo zesil tah.</p>
+      <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Import podporuje samostatné tvary jako path, circle, rect a line; složité skupiny a efekty ne. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Návrh si průběžně kopíruj – Studio ho zatím trvale neukládá.</p>
+      <p><strong>Tip pro připínáček:</strong> Hlavní hlavičku nakresli do horní poloviny, hrot směrem ke spodnímu okraji. Před složitostí dej přednost jednoduchému obrysu.</p>
+    </div>`;
+  view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('beforebegin',guide693U);
   open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();});
   back.addEventListener('click',()=>{view.hidden=true;home.hidden=false;});
   new MutationObserver(()=>{if(modal.hidden){view.hidden=true;home.hidden=false;}}).observe(modal,{attributes:true,attributeFilter:['hidden']});
