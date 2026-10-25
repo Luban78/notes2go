@@ -389,6 +389,21 @@ const appMessageNormalButton =
 
 
 
+/* 693H: Po přesunu karet do Koše zachovej polohu seznamu poznámek.
+   Posouvá se .app (nikoli window); po DOM renderu vracíme původní offset.
+   Návrat je omezený na smazání, neovlivňuje filtr ani navigaci. */
+function zachytPoziciKaretPredKosem693H() {
+  const seznam = document.querySelector(".app");
+  const pozice = seznam ? seznam.scrollTop : null;
+  return function obnovPoziciKaretPoKosi693H() {
+    if (!seznam || pozice === null || !seznam.isConnected) return;
+    seznam.scrollTop = pozice;
+    requestAnimationFrame(() => {
+      if (seznam.isConnected) seznam.scrollTop = pozice;
+    });
+  };
+}
+
 confirmDeleteButton.addEventListener("click", async () => {
   /* Nová rozepsaná poznámka ještě nemá uloženou kartu. Nesnažíme se
      mazat savedTask[-1]; uklidíme jen konkrétní draft a jeho přílohy.
@@ -441,12 +456,14 @@ confirmDeleteButton.addEventListener("click", async () => {
         puvodniTextPotvrzeniSmazani;
     }
     
+    const obnovPoziciKaret693H = zachytPoziciKaretPredKosem693H();
     const vysledek =
       await smazPoznamkyPodleId(
         idsKeSmazani
       );
     
     ukonciRezimVyberuKaret();
+    obnovPoziciKaret693H();
     
     if (vysledek?.pocet > 0) {
       zobrazPotvrzeniAkce(
@@ -473,6 +490,7 @@ confirmDeleteButton.addEventListener("click", async () => {
     return;
   }
   
+  const obnovPoziciKaret693H = zachytPoziciKaretPredKosem693H();
   await deleteTask(selectedCardIndex);
   
   deleteConfirmModal.hidden = true;
@@ -491,6 +509,7 @@ confirmDeleteButton.addEventListener("click", async () => {
   editorSessionId += 1;
   
   renderTasks();
+  obnovPoziciKaret693H();
   
   if (typeof renderCalendar === "function") {
     renderCalendar();
