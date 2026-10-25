@@ -21,6 +21,8 @@
   const announce = message => { if (notice) notice.textContent = message; };
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
+  let sourceIsEdited693T = false;
+  source.addEventListener('input', () => { sourceIsEdited693T = true; });
 
   const svgPart = o => {
     const el = document.createElementNS(NS, o.tag);
@@ -82,7 +84,7 @@
       if (!p) continue;
       p.replaceChildren(...shapes.map(svgPart));
     }
-    source.value = exportSvg();
+    if (!sourceIsEdited693T) source.value = exportSvg();
     undoBtn.disabled = history.length === 0;
     if (redoBtn) redoBtn.disabled = future.length === 0;
     updateSelection(); updatePalette();
@@ -225,13 +227,75 @@
   }
   $('lnSvgCenterAll693S')?.addEventListener('click',()=>center());
   $('lnSvgCenterSelected693S')?.addEventListener('click',()=>{if(selected<0)return announce('Nejdřív vyber tvar nástrojem Přesun.');center(selected);});
+  // 693T: Android WebView clipboard fallback, without native selection UI.
+  // ExecCommand is only a fallback; restored focus/selection where possible.
+  function legacyCopy693T(value) {
+    const temp = document.createElement('textarea');
+    temp.value = value;
+    temp.setAttribute('readonly', '');
+    temp.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;z-index:-1';
+    document.body.appendChild(temp);
+    temp.focus(); temp.select(); temp.setSelectionRange(0, temp.value.length);
+    let ok = false;
+    try { ok = document.execCommand('copy') === true; } catch (_) {}
+    temp.remove();
+    return ok;
+  }
   const copy = async value => {
-    try { await navigator.clipboard.writeText(value); announce('Zkopírováno.'); }
-    catch (_) { source.value=value;source.focus();source.select();announce('Kopírování není dostupné. Označený kód můžeš zkopírovat ručně.'); }
+    let ok = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      }
+    } catch (_) {}
+    if (!ok) ok = legacyCopy693T(value);
+    if (ok) announce('Zkopírováno do schránky.');
+    else {
+      source.value = value;
+      sourceIsEdited693T = true;
+      source.focus(); source.select();
+      announce('Schránka není dostupná. Kód je označený – zkus Kopírovat v nabídce Androidu.');
+    }
   };
   $('lnSvgCopy693R').addEventListener('click',()=>copy(exportSvg()));
   $('lnSvgCopyLuba693R').addEventListener('click',()=>copy(exportForLuba()));
   $('lnSvgCopySource693R').addEventListener('click',()=>copy(source.value));
+
+  // An explicit paste control works where the custom WebView selection menu
+  // does not expose Paste. Never clear user content on a failed read.
+  const importButton693T = $('lnSvgImport693R');
+  const pasteButton693T = document.createElement('button');
+  pasteButton693T.id = 'lnSvgPaste693T';
+  pasteButton693T.type = 'button';
+  pasteButton693T.textContent = '📋 Vložit ze schránky';
+  pasteButton693T.title = 'Načíst text z Android schránky do pole SVG';
+  pasteButton693T.style.cssText = 'min-height:40px;max-width:100%;white-space:normal;';
+  importButton693T.parentNode.insertBefore(pasteButton693T, importButton693T);
+  pasteButton693T.addEventListener('click', async () => {
+    let pasted = '';
+    try {
+      if (navigator.clipboard?.readText) pasted = await navigator.clipboard.readText();
+    } catch (_) {}
+    if (!pasted) {
+      try {
+        const cap = window.Capacitor?.Plugins?.Clipboard;
+        if (cap?.read) {
+          const result = await cap.read();
+          pasted = String(result?.value || result?.text || '');
+        }
+      } catch (_) {}
+    }
+    if (!pasted) {
+      announce('WebView nepovolilo čtení schránky. Zkus klepnout do pole a použít Vložit na klávesnici.');
+      source.focus();
+      return;
+    }
+    if (pasted.length > 100000) return announce('Text ze schránky je příliš dlouhý (max. 100 000 znaků).');
+    source.value = pasted;
+    sourceIsEdited693T = true;
+    announce('Vloženo ze schránky. Nyní klepni na Načíst SVG.');
+  });
   $('lnSvgImport693R').addEventListener('click',()=>{
     try {
       if(source.value.length>100000)throw Error('SVG je příliš rozsáhlé.');
@@ -254,7 +318,7 @@
         next.push({tag:el.localName,props});
       }
       if(!next.length)throw Error('Nenalezeny tvary.');
-      const before=snapshot();shapes=next;selected=-1;record(before);render();announce(`SVG načteno (${next.length} tvarů).`);
+      const before=snapshot();shapes=next;selected=-1;sourceIsEdited693T=false;record(before);render();announce(`SVG načteno (${next.length} tvarů).`);
     }catch(e){announce('Import: '+e.message);}
   });
   open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();});
