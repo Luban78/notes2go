@@ -16,6 +16,21 @@
   window.addEventListener('lubanote:sync-state',e=>{const s=e?.detail?.stav;if(states[s]){latest=s;render();}});
   window.addEventListener('focus',render);render();
   palette.addEventListener('click',()=>document.getElementById('openThemeModalButton')?.click());
+  /* 693P: Reuse LubaNote's existing SVG palette when SVG icon mode is selected.
+     For classic/auto-on-mobile keep the original colored emoji. */
+  function updatePaletteIcon693P() {
+    const icons = window.LubaNoteIcons;
+    if (icons?.pouzitSvgIkony?.()) {
+      const svg = icons.vytvorSvgIkonu?.('paleta');
+      if (svg) {
+        palette.replaceChildren(svg);
+        return;
+      }
+    }
+    palette.textContent = '🎨';
+  }
+  updatePaletteIcon693P();
+  window.addEventListener('lubanote:icon-style-change', updatePaletteIcon693P);
   // 693M: mobile icon mirrors the existing day/night controller in settings.js.
   // The underlying button changes data-quick-theme-mode when the theme changes.
   const baseNightToggle = document.getElementById('quickThemeButton');

@@ -6055,6 +6055,16 @@ tagFilterButtons.addEventListener("click", async (event) => {
   updateTagFilterUI();
   
   renderTasks();
+
+  /* 693P: Zmena vlastniho stitku = nova sada karet, zacni od zacatku.
+   * 693H pro presun do Kose zustava beze zmeny a tam pozici zachovava. */
+  const seznamKaret693P = document.querySelector(".app");
+  if (seznamKaret693P) {
+    seznamKaret693P.scrollTop = 0;
+    requestAnimationFrame(() => {
+      if (seznamKaret693P.isConnected) seznamKaret693P.scrollTop = 0;
+    });
+  }
   
 });
 
