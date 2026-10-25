@@ -16,7 +16,23 @@
   window.addEventListener('lubanote:sync-state',e=>{const s=e?.detail?.stav;if(states[s]){latest=s;render();}});
   window.addEventListener('focus',render);render();
   palette.addEventListener('click',()=>document.getElementById('openThemeModalButton')?.click());
-  night.addEventListener('click',()=>document.getElementById('quickThemeButton')?.click());
+  // 693M: mobile icon mirrors the existing day/night controller in settings.js.
+  // The underlying button changes data-quick-theme-mode when the theme changes.
+  const baseNightToggle = document.getElementById('quickThemeButton');
+  function updateNightIcon693M() {
+    const isNight = baseNightToggle?.dataset.quickThemeMode === 'night';
+    night.textContent = isNight ? '☀' : '☾';
+    const label = isNight ? 'Zapnout denní režim' : 'Zapnout noční režim';
+    night.setAttribute('aria-label', label);
+    night.title = label;
+  }
+  if (baseNightToggle) {
+    new MutationObserver(updateNightIcon693M).observe(baseNightToggle, {
+      attributes: true, attributeFilter: ['data-quick-theme-mode']
+    });
+  }
+  updateNightIcon693M();
+  night.addEventListener('click', () => baseNightToggle?.click());
   const overlay=document.createElement('div');overlay.className='lnSyncModal693J';overlay.hidden=true;
   overlay.innerHTML='<div class="lnSyncBox693J" role="dialog" aria-modal="true" aria-label="Stav synchronizace"><header><span>Stav LubaNote</span><button type="button" data-close>✕</button></header><div data-state></div><div data-usage>Načítám využití prostoru…</div><div class="lnSyncTrack693J"><span data-fill></span></div><div data-free></div></div>';
   document.body.appendChild(overlay);

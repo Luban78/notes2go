@@ -35,3 +35,9 @@
 .lnSyncBox693J button {border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);border-radius:10px;padding:7px 12px;min-height:36px}
 .lnSyncTrack693J {height:8px;border-radius:6px;background:var(--color-border);overflow:hidden;margin:10px 0}
 .lnSyncTrack693J span {display:block;height:100%;width:0;background:var(--color-accent)}
+
+/* 693M: Mobile-only: the old theme switch stays in the DOM as the single
+   source of action/state, but does not occupy a second toolbar slot. */
+@media (max-width:899px) {
+  #quickThemeButton { display:none !important; }
+}
