@@ -93,6 +93,7 @@
   <link rel="stylesheet" href="e2ePasswordChange688N.css?v=688T-keyboard-scroll">
   <!-- 689A: izolovany automaticky tester pristupny jen z Debug Hubu. -->
   <link rel="stylesheet" href="lubaAutoTester.css?v=691AD-compact-headless-lab">
+  <link rel="stylesheet" href="adminSvgStudio693R.css?v=693R" />
 </head>
 
 <body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
@@ -1709,7 +1710,27 @@
             </span>
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
+
+          <button id="adminSvgStudio693RButton" class="adminToolCard" type="button">
+            <span class="adminToolIcon" aria-hidden="true">✒️</span>
+            <span class="adminToolText"><strong>SVG Studio</strong><small>Kreslení a úpravy ikon LubaNote</small></span>
+            <span class="adminToolArrow" aria-hidden="true">›</span>
+          </button>
         </div>
+      </section>
+
+      <section id="adminSvgStudio693RView" class="adminDashboardSubView lnSvgStudio" hidden>
+        <div class="adminAccountsHeader"><button id="adminSvgStudio693RBack" class="adminAccountsBackButton" type="button">‹ Dashboard</button><strong>SVG Studio</strong></div>
+        <p>Ikony 24 × 24. Kresli tahem prstu, nebo uprav souřadnice hotových tvarů. Produkční ikony se nemění.</p>
+        <div class="lnSvgStudioTools">
+          <label>Nástroj <select id="lnSvgTool693R"><option value="pen">Volná čára</option><option value="line">Úsečka</option><option value="circle">Kruh</option><option value="rect">Obdélník</option></select></label>
+          <label>Tloušťka <input id="lnSvgStroke693R" type="range" min="1" max="4" step="0.25" value="1.85"><output id="lnSvgStrokeValue693R">1,85</output></label>
+        </div>
+        <div class="lnSvgStudioBoard"><svg id="lnSvgCanvas693R" viewBox="0 0 24 24" role="img" aria-label="Kreslicí plocha SVG 24 krát 24"></svg></div>
+        <div class="lnSvgStudioActions"><button id="lnSvgUndo693R" type="button">↶ Zpět</button><button id="lnSvgClear693R" type="button">Vymazat</button><button id="lnSvgCopy693R" type="button">Kopírovat SVG</button><button id="lnSvgCopyLuba693R" type="button">Kopírovat pro LubaNote</button></div>
+        <label class="lnSvgStudioSource">SVG kód / vložení vlastní ikony<textarea id="lnSvgSource693R" rows="5" spellcheck="false" placeholder="Sem můžeš vložit celé SVG nebo tvary path / circle / rect / line"></textarea></label>
+        <div class="lnSvgStudioActions"><button id="lnSvgImport693R" type="button">Načíst SVG</button><button id="lnSvgCopySource693R" type="button">Kopírovat kód</button></div>
+        <p id="lnSvgMessage693R" role="status">Připraveno. Prstem nakresli první tvar.</p>
       </section>
 
       <section id="adminServerView" class="adminDashboardSubView" hidden>
@@ -3020,6 +3041,7 @@
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <script src="adminDashboard.js?v=683AS-own-selection-theme"></script>
+  <script src="adminSvgStudio693R.js?v=693R"></script>
   <script src="fpsBenchmark691BQ.js?v=691BV-manual-performance-history"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
