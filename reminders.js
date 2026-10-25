@@ -1683,24 +1683,34 @@ function openReminderCenterEntry(entry) {
     return false;
   }
 
-  remindersButton.click();
-
   const remindersScreen =
     document.getElementById("remindersScreen");
 
-  /* Při studeném startu může událost z Androidu dorazit dřív,
-     než navigation.js připojí click listener. V tom případě
-     vrátíme false a handleNotificationOpen() pokus zopakuje. */
+  /* 693F: Navigace už renderRemindersScreen() sama volá. Podruhé
+     nepočítej celý seznam ještě před modálem. Pokud obrazovka
+     už běží, další kliknutí ani render vůbec nepotřebujeme. */
   if (remindersScreen?.hidden) {
+    remindersButton.click();
+  }
+
+  /* Za studeného startu nemusí být navigace ještě zaregistrovaná.
+     V tom případě nesmí být nativní tap ACKnutý jako vyřízený. */
+  if (!remindersScreen || remindersScreen.hidden) {
     return false;
   }
 
-  if (typeof renderRemindersScreen === "function") {
-    renderRemindersScreen();
+  try {
+    openReminderQuickMenu(entry);
+  } catch (error) {
+    // Závada nepovinného obsahu nesmí opakovaně překreslovat obrazovku.
+    console.warn("693F: Otevření odkládacího modalu:", error);
   }
 
-  openReminderQuickMenu(entry);
-  return true;
+  /* 693F: Za úspěch považuj až opravdu zobrazený modal pro
+     správnou položku. Jinak původní 692T zopakuje pokus. */
+  return reminderQuickMenu?.hidden === false &&
+    selectedReminderEntry?.kind === entry.kind &&
+    String(selectedReminderEntry.id) === String(entry.id);
 }
 
 
@@ -2508,6 +2518,12 @@ function openReminderQuickMenu(
     context === "planner" ? "planner" : "reminders";
   selectedReminderDateOverride = dateOverride || null;
 
+  /* 693F: Zpřístupni modal ihned po výběru položky. Další kroky
+     pouze doplňují štítky, datum a ikony; chybná nepovinná ikona
+     tak už nemůže zcela zabránit jeho zobrazení. Prohlížeč vykreslí
+     vše až po dokončení této synchronní funkce. */
+  reminderQuickMenu.hidden = false;
+
   const zobrazeneDatum =
     selectedReminderDateOverride || entry.date;
   const termin = new Date(zobrazeneDatum);
@@ -2799,7 +2815,6 @@ const zitraTlacitko = document.getElementById("reminderTomorrowMorningButton");
 if (zitraTlacitko) {
   zitraTlacitko.textContent = formatOdlozeni(rychleOdlozeni.volba4);
 }
-  reminderQuickMenu.hidden = false;
 }
 
 
