@@ -10,3 +10,24 @@
 .lnSvgStudioSource{display:block;margin-top:12px}
 .lnSvgStudioSource textarea{display:block;box-sizing:border-box;width:100%;margin-top:8px;font:12px/1.5 monospace;min-height:115px}
 #lnSvgMessage693R{font-size:13px;opacity:.8}
+
+/* 693S: additional tools, touch targets, color palette and clean live previews. */
+.lnSvgStudio .lnSvgStudioTools select {max-width:100%;}
+.lnSvgStudioColor693S {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.lnSvgStudioColor693S input[type="color"] {width:48px;height:38px;padding:3px;box-sizing:border-box;}
+.lnSvgStudioColor693S button {min-height:38px;min-width:38px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);padding:6px 10px;}
+.lnSvgStudioColor693S button[aria-pressed="true"] {outline:2px solid var(--color-accent);outline-offset:1px;}
+.lnSvgStudioColor693S .lnSvgSwatch693S {width:35px;height:35px;min-width:35px;min-height:35px;padding:0;background:var(--ln-swatch-color);border:2px solid var(--color-border);}
+.lnSvgStudioColor693S .lnSvgSwatch693S[aria-pressed="true"] {outline:2px solid var(--color-accent);}
+.lnSvgStudioColor693S label {display:inline-flex;align-items:center;gap:6px;}
+.lnSvgStudioColor693S .lnSvgFillLabel693S {padding-left:3px;}
+.lnSvgStudioColor693S input[type="checkbox"] {width:18px;height:18px;}
+.lnSvgStudioPreviewArea693S {display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;margin:12px 0;padding:13px;border:1px solid var(--color-border);border-radius:13px;background:var(--color-surface);}
+.lnSvgStudioPreviewArea693S .lnSvgPreviewBlock693S {display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--color-text);}
+.lnSvgStudioPreviewArea693S svg {display:block;overflow:visible;flex:none;color:var(--color-text);fill:none;stroke:currentColor;stroke-width:0;}
+.lnSvgStudioPreviewArea693S .lnSvgPreviewBlock693S:first-child svg {width:24px;height:24px;}
+.lnSvgStudioPreviewArea693S .lnSvgPreviewBlock693S:nth-child(2) svg {width:64px;height:64px;}
+.lnSvgStudioPreviewArea693S small {font-size:12px;color:var(--color-text-secondary);}
+.lnSvgStudioActions button:disabled {opacity:.45;}
+.lnSvgSelection693S {font-size:12px;color:var(--color-text-secondary);margin:5px 0 0;}
+.lnSvgStudioBoard {touch-action:none;}
