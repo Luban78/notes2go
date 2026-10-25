@@ -52,3 +52,12 @@
  #lnHomeDateTime683BC #lnHomeDate683BC,
  #lnHomeDateTime683BC #lnHomeTime683BC {color:var(--color-text)!important;}
 }
+
+/* 693Q – One global Android/WebView tap-highlight policy for the whole app.
+   Touch/PWA/WebView only; no changes to :active, :focus-visible,
+   custom selection handles, caret, keyboard, cards or layouts. */
+@media (hover: none), (pointer: coarse) {
+  html, html * {
+    -webkit-tap-highlight-color: transparent !important;
+  }
+}
