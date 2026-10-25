@@ -42,3 +42,8 @@
 .lnSvgStudio .lnSvgStudioGuide693U summary{cursor:pointer;font-weight:650;min-height:28px;-webkit-tap-highlight-color:transparent;}
 .lnSvgStudio .lnSvgStudioGuideBody693U{font-size:13px;line-height:1.55;color:var(--color-text);}
 .lnSvgStudio .lnSvgStudioGuideBody693U p{margin:10px 0;}
+
+/* 693V: freehand smoothing / LubaNote import controls */
+.lnSvgStudio .lnSvgSmooth693V{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0 12px;color:var(--color-text)}
+.lnSvgStudio .lnSvgSmooth693V label{display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.lnSvgStudio .lnSvgSmooth693V button{padding:9px 12px;min-height:40px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);font:inherit}

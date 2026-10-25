@@ -140,13 +140,51 @@
     else if (selected > index) selected--;
     render(); return true;
   }
+  /* 693V: Freehand smoothing produces quadratic Bezier segments from touch points.
+     Works only on paths made from M/L points. Imported complex paths remain intact. */
+  function smoothPoints693V(points) {
+    if (points.length < 3) return null;
+    const compact = [points[0]];
+    for (const p of points.slice(1)) {
+      if (distance(p, compact[compact.length - 1]) > .20) compact.push(p);
+    }
+    if (compact.length < 3) return null;
+    // Simple local averaging dampens finger jitter without large distortions.
+    const filtered = compact.map((p,i) => {
+      if (i===0 || i===compact.length-1) return p;
+      const a=compact[i-1], b=compact[i+1];
+      return {x:(a.x+2*p.x+b.x)/4, y:(a.y+2*p.y+b.y)/4};
+    });
+    let d = `M${fmt(filtered[0].x)} ${fmt(filtered[0].y)}`;
+    for (let i=1;i<filtered.length-1;i++) {
+      const m={x:(filtered[i].x+filtered[i+1].x)/2,y:(filtered[i].y+filtered[i+1].y)/2};
+      d += ` Q${fmt(filtered[i].x)} ${fmt(filtered[i].y)} ${fmt(m.x)} ${fmt(m.y)}`;
+    }
+    const last=filtered[filtered.length-1];
+    d+=` Q${fmt(last.x)} ${fmt(last.y)} ${fmt(last.x)} ${fmt(last.y)}`;
+    return d;
+  }
+  const smoothBar693V=document.createElement('div');
+  smoothBar693V.className='lnSvgSmooth693V';
+  smoothBar693V.innerHTML='<label><input type="checkbox" id="lnSvgAutoSmooth693V" checked> Vyhlazovat volnou čáru</label><button type="button" id="lnSvgSmoothSelected693V">Vyhladit vybraný tah</button>';
+  view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('afterend',smoothBar693V);
+  const autoSmooth693V=$('lnSvgAutoSmooth693V');
+  $('lnSvgSmoothSelected693V').addEventListener('click',()=>{
+    if(selected<0 || !shapes[selected] || shapes[selected].tag!=='path') return announce('Vyber volnou čáru nástrojem Přesun.');
+    const path=String(shapes[selected].props.d||'');
+    if (!/^M[-\d.,\s]+(?:L[-\d.,\s]+)+$/i.test(path)) return announce('Vyhlazení vybraného tahu podporuje volnou čáru M/L. Složité SVG křivky neměním.');
+    const nums=(path.match(/-?\d+(?:\.\d+)?/g)||[]).map(Number);
+    const pts=[];for(let i=0;i+1<nums.length;i+=2)pts.push({x:nums[i],y:nums[i+1]});
+    const d=smoothPoints693V(pts);if(!d)return announce('Tah je příliš krátký.');
+    const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
+  });
   svg.addEventListener('pointerdown', e => {
     if (view.hidden || gesture) return;
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     const p = point(e), kind = tool.value;
     svg.setPointerCapture?.(e.pointerId);
-    gesture = {id:e.pointerId,mode:kind,start:p,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`};
+    gesture = {id:e.pointerId,mode:kind,start:p,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
     if (kind === 'move') {
       selected = hitTest(p);
       gesture.chosen = selected;
@@ -168,7 +206,7 @@
       if (g.chosen < 0) return;
       setOffset(shapes[g.chosen], g.initial.x+p.x-g.start.x,g.initial.y+p.y-g.start.y);
     } else if (g.mode === 'pen') {
-      if (distance(p,g.start)>0.06 || g.rawPath.includes(' L')) g.rawPath += ` L${fmt(p.x)} ${fmt(p.y)}`;
+      if (distance(p,g.points[g.points.length-1])>0.065) { g.rawPath += ` L${fmt(p.x)} ${fmt(p.y)}`; g.points.push(p); }
       drawing = normalized('path',{d:g.rawPath});
     } else drawing = shapeAt(g.start,p,g.mode);
     render();
@@ -182,7 +220,12 @@
     if (!['move','eraser'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
       else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
-      if (drawing) shapes.push(drawing);
+      if (drawing) {
+        if(g.mode==='pen' && autoSmooth693V.checked && drawing.tag==='path') {
+          const d=smoothPoints693V(g.points); if(d) drawing.props.d=d;
+        }
+        shapes.push(drawing);
+      }
     }
     drawing = null;
     if (record(g.before)) announce(g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
@@ -345,6 +388,52 @@
     source.value='';sourceIsEdited693T=true;
     focusSource693U();announce('Textové pole vymazáno. Kresba zůstává beze změny.');
   });
+  /* 693V: read ONLY the restricted array syntax emitted by lubaIcons.js.
+     No eval or executing pasted JavaScript. */
+  function parseLuba693V(raw) {
+    let t=String(raw).trim();
+    // Supports a fragment containing one or more ["path", {d: "..."}] entries,
+    // a bracketed array or the named property: pripinacek: [...].
+    t=t.replace(/^\s*(?:[\w\p{L}]+)\s*:\s*/u,'').replace(/;\s*$/,'').trim();
+    t=t.replace(/,\s*$/, '').trim();
+    if(t.startsWith('[') && /^\[\s*["'](?:path|circle|rect|line|ellipse|polygon|polyline)["']\s*,/.test(t)) {
+      // If the copied fragment includes the enclosing array's final ], remove it.
+      if(/\]\s*\]\s*$/.test(t)) t=t.replace(/\]\s*$/, '');
+      t='['+t+']';
+    }
+    else if(t.startsWith('[') && !/^\[\s*\[/.test(t)) throw Error('Neplatný seznam LubaNote tvarů.');
+    // User may paste entries ending with extra ], from their source snippet.
+    t=t.replace(/\]\s*,?\s*\]\s*$/,']]');
+    if(!/^\s*\[/.test(t) || t.length>100000) throw Error('Očekávám pole LubaNote tvarů.');
+    if(/[`;]|=>|function|\b(?:new|window|document|eval)\b/.test(t)) throw Error('Nepodporovaný kód.');
+    // Convert only unquoted JS property names into JSON keys, including d:.
+    t=t.replace(/([,{]\s*)([A-Za-z][\w-]*)\s*:/g,'$1"$2":');
+    let rows;
+    try {rows=JSON.parse(t);} catch(_){throw Error('Zkontroluj závorky a uvozovky formátu LubaNote.');}
+    if(!Array.isArray(rows) || rows.length>100)throw Error('Nejvýše 100 tvarů.');
+    const next=[];
+    for(const row of rows){
+      if(!Array.isArray(row)||row.length!==2||!allowed.has(row[0])||!row[1]||typeof row[1]!=='object'||Array.isArray(row[1]))throw Error('Nepodporovaný typ tvaru.');
+      const props={};
+      for(const [k,v] of Object.entries(row[1])){
+        if(!attrs.has(k)||!['string','number'].includes(typeof v))throw Error('Nepodporovaný atribut: '+k);
+        const val=String(v); if(val.length>10000||/url\s*\(|javascript:|[<>]/i.test(val))throw Error('Nepovolená hodnota.');
+        if(k==='transform'&&!/^translate\(\s*-?\d+(?:\.\d+)?\s*[, ]\s*-?\d+(?:\.\d+)?\s*\)$/.test(val))throw Error('Podporuji pouze translate(x y).');
+        if(['fill','stroke'].includes(k)&&!/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(val))throw Error('Neplatná barva.');
+        props[k]=val;
+      }
+      next.push({tag:row[0],props:{fill:'none',stroke:'currentColor','stroke-width':'1.85','stroke-linecap':'round','stroke-linejoin':'round',...props}});
+    }
+    if(!next.length)throw Error('Žádné tvary.');
+    return next;
+  }
+  const importLuba693V=document.createElement('button');
+  importLuba693V.type='button';importLuba693V.textContent='Načíst kód LubaNote';
+  importButton693T?.insertAdjacentElement('afterend',importLuba693V);
+  importLuba693V.addEventListener('click',()=>{
+    try {const next=parseLuba693V(source.value),before=snapshot();shapes=next;selected=-1;sourceIsEdited693T=false;record(before);render();announce(`Kód LubaNote načten (${next.length} tvarů).`);}
+    catch(e){announce('LubaNote import: '+e.message);}
+  });
   $('lnSvgImport693R').addEventListener('click',()=>{
     try {
       if(source.value.length>100000)throw Error('SVG je příliš rozsáhlé.');
@@ -404,10 +493,10 @@
       <p><strong>1. Co znamená 24 × 24?</strong> Plocha má 24 SVG jednotek na šířku i výšku. Bod (0, 0) je vlevo nahoře, (12, 12) přesný střed a (24, 24) pravý dolní roh. Velká kreslicí plocha je pouze zvětšenina.</p>
       <p><strong>2. Kam kreslit?</strong> Pro běžné ikony drž většinu kresby mezi hodnotami 2 a 22. Nech cca 2 jednotky od okrajů, ať se silnější tah neuřízne. Pomocná mřížka má krok 2.</p>
       <p><strong>3. Jak silné čáry?</strong> Začni kolem 1,8–2,0. Pro jemné detaily 1,5, pro výraznější tvary přibližně 2,2. Příliš tenké čáry se při náhledu 24 × 24 ztrácejí.</p>
-      <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem; úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
+      <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem a volba „Vyhlazovat volnou čáru“ zjemní stopu při dokončení. Pro starší tah M/L ho vyber nástrojem Přesun a použij „Vyhladit vybraný tah“. Úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
       <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
       <p><strong>6. Velikost a kontrola.</strong> Použij „Centrovat vše“ a pak zkontroluj zejména malý náhled 24 × 24. Pokud není ikona rozeznatelná bez zvětšení, zjednoduš ji nebo zesil tah.</p>
-      <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Import podporuje samostatné tvary jako path, circle, rect a line; složité skupiny a efekty ne. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Návrh si průběžně kopíruj – Studio ho zatím trvale neukládá.</p>
+      <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Pro definice z lubaIcons.js použij „Načíst kód LubaNote“; pro celé SVG „Načíst SVG“. Import podporuje základní tvary, nikoli složité skupiny a efekty. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Návrh si průběžně kopíruj – Studio ho zatím trvale neukládá.</p>
       <p><strong>Tip pro připínáček:</strong> Hlavní hlavičku nakresli do horní poloviny, hrot směrem ke spodnímu okraji. Před složitostí dej přednost jednoduchému obrysu.</p>
     </div>`;
   view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('beforebegin',guide693U);
