@@ -200,8 +200,15 @@
 .lnSvgStudio .lnSvgSnapOption694U select{min-height:36px;max-width:170px;padding:6px 9px;font:inherit}
 .lnSvgStudio .lnSvgSnapOption694U select:disabled{opacity:.5}
 .lnSvgStudio .lnSvgSnapOption694U small{color:var(--color-text-secondary);font-size:11px;line-height:1.35}
-
-/* 694W – native SVG file actions */
-.lnSvgFileBar694W{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
-.lnSvgFileBar694W button{min-height:40px;flex:1 1 135px}
-.lnSvgFileBar694W small{flex-basis:100%;opacity:.8}
+/* 694W1: LubaNote-native draft picker and confirmation dialogs. */
+.lnSvgStudio .lnSvgDraftPicker694W1{flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:39px}
+.lnSvgStudio .lnSvgDialog694W1[hidden]{display:none!important}
+.lnSvgStudio .lnSvgDialog694W1{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
+.lnSvgStudio .lnSvgDialogBackdrop694W1{position:absolute;inset:0;background:rgba(0,0,0,.68)}
+.lnSvgStudio .lnSvgDialogCard694W1{position:relative;box-sizing:border-box;width:min(100%,390px);max-height:75vh;overflow:auto;padding:18px;border:1px solid var(--color-border,#315365);border-radius:17px;background:var(--color-surface,#102b3b);color:var(--color-text,#eef7fa);box-shadow:0 18px 60px #0008}
+.lnSvgStudio .lnSvgDialogTitle694W1{font-size:16px;font-weight:650;line-height:1.45;margin-bottom:14px}
+.lnSvgStudio .lnSvgDialogChoices694W1{display:grid;gap:7px;max-height:50vh;overflow:auto}
+.lnSvgStudio .lnSvgDialogChoice694W1{width:100%;text-align:left;overflow-wrap:anywhere}
+.lnSvgStudio .lnSvgDialogActions694W1{display:flex;gap:9px;justify-content:flex-end;margin-top:15px}
+.lnSvgStudio .lnSvgDialogActions694W1 button,.lnSvgStudio .lnSvgDialogChoice694W1{background:var(--color-surface,#102b3b);border:1px solid var(--color-border,#315365);border-radius:10px;padding:11px 13px;color:var(--color-text,#eef7fa);font:inherit;min-height:42px}
+.lnSvgStudio .lnSvgDialogActions694W1 button:last-child{border-color:var(--color-accent,#1bb4bf);color:var(--color-accent,#1bb4bf)}

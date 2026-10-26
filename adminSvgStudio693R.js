@@ -1212,6 +1212,35 @@
   draftsAnchor694K?.insertAdjacentElement('afterend',draftPanel694K);
   const nameInput694K=draftPanel694K.querySelector('[data-draft-name]');
   const list694K=draftPanel694K.querySelector('[data-drafts]');
+  // 694W1: native Android select menu replaced with a compact in-app picker.
+  list694K.hidden=true;
+  const draftPicker694W1=document.createElement('button');
+  draftPicker694W1.type='button';draftPicker694W1.className='lnSvgDraftPicker694W1';
+  draftPicker694W1.textContent='Vybrat uložený návrh ▾';
+  list694K.insertAdjacentElement('afterend',draftPicker694W1);
+  const dialog694W1=document.createElement('div');
+  dialog694W1.className='lnSvgDialog694W1';dialog694W1.hidden=true;
+  dialog694W1.innerHTML='<div class="lnSvgDialogBackdrop694W1"></div><div class="lnSvgDialogCard694W1" role="dialog" aria-modal="true"><div class="lnSvgDialogTitle694W1"></div><div class="lnSvgDialogChoices694W1"></div><div class="lnSvgDialogActions694W1"></div></div>';
+  draftPanel694K.append(dialog694W1);
+  function showDialog694W1(title,choices,buttons){
+    return new Promise(resolve=>{
+      dialog694W1.querySelector('.lnSvgDialogTitle694W1').textContent=title;
+      const area=dialog694W1.querySelector('.lnSvgDialogChoices694W1');area.replaceChildren();
+      const actions=dialog694W1.querySelector('.lnSvgDialogActions694W1');actions.replaceChildren();
+      const finish=value=>{dialog694W1.hidden=true;resolve(value);};
+      for(const item of choices){const b=document.createElement('button');b.type='button';b.className='lnSvgDialogChoice694W1';b.textContent=item.label;b.addEventListener('click',()=>finish(item.value));area.append(b);}
+      for(const item of buttons){const b=document.createElement('button');b.type='button';b.textContent=item.label;b.addEventListener('click',()=>finish(item.value));actions.append(b);}
+      dialog694W1.hidden=false;
+    });
+  }
+  const confirm694W1=message=>showDialog694W1(message,[],[{label:'Zrušit',value:false},{label:'Potvrdit',value:true}]);
+  function refreshPicker694W1(){draftPicker694W1.textContent=(list694K.selectedOptions[0]?.textContent||'Vybrat návrh')+' ▾';}
+  draftPicker694W1.addEventListener('click',async()=>{
+    const choices=Array.from(list694K.options).filter(o=>o.value).map(o=>({label:o.textContent,value:o.value}));
+    if(!choices.length)return message694K('Zatím nemáš žádný uložený návrh.');
+    const id=await showDialog694W1('Vyber uložený SVG návrh',choices,[{label:'Zavřít',value:null}]);
+    if(id){list694K.value=id;refreshPicker694W1();}
+  });
   const recoveryBtn694K=draftPanel694K.querySelector('[data-recover]');
   const draftMessage694K=draftPanel694K.querySelector('[data-draft-message]');
   const state694K=draftPanel694K.querySelector('[data-save-state]');
@@ -1290,6 +1319,7 @@
       });
       if(entries.some(x=>x.id===previous))list694K.value=previous;
       else if(currentId694K && entries.some(x=>x.id===currentId694K))list694K.value=currentId694K;
+      refreshPicker694W1();
       message694K(`${entries.length} uložených návrhů · pouze v tomto zařízení`);
     }catch(e){message694K('Ukládání v tomto zařízení není dostupné: '+e.message);}
   }
@@ -1310,8 +1340,8 @@
     // Recovery slot reflects the opened current workspace, not an older project.
     queueRecovery694K(true);
   }
-  function allowReplace694K(){
-    return !(dirty694K && shapes.length>0) || window.confirm('Aktuální návrh má neuložené změny. Opravdu ho nahradit?');
+  async function allowReplace694K(){
+    return !(dirty694K && shapes.length>0) || await confirm694W1('Aktuální návrh má neuložené změny. Opravdu ho nahradit?');
   }
   draftPanel694K.querySelector('[data-save]').addEventListener('click',async()=>{
     if(gesture){message694K('Nejprve dokonči tah na plátně.');return;}
@@ -1322,13 +1352,13 @@
     try{
       await enqueueWrite694K(()=>dbOp694K('put',draftData694K(id,name)));
       currentId694K=id;markSaved694K();
-      await refreshDrafts694K();list694K.value=id;
+      await refreshDrafts694K();list694K.value=id;refreshPicker694W1();
       message694K(`„${name}“ uloženo do tohoto zařízení.`);
       queueRecovery694K();
     }catch(e){message694K('Nepodařilo se uložit. Zkopíruj SVG jako zálohu. '+e.message);}
   });
-  draftPanel694K.querySelector('[data-new]').addEventListener('click',()=>{
-    if(!allowReplace694K())return;
+  draftPanel694K.querySelector('[data-new]').addEventListener('click',async()=>{
+    if(!await allowReplace694K())return;
     shapes=[];history=[];future=[];gesture=null;drawing=null;selected=-1;
     currentId694K=null;dirty694K=false;sourceIsEdited693T=false;
     nameInput694K.value='Nová ikona';state694K.textContent='Nový návrh';
@@ -1337,7 +1367,7 @@
   draftPanel694K.querySelector('[data-open]').addEventListener('click',async()=>{
     const id=list694K.value;
     if(!id)return message694K('Vyber návrh ze seznamu.');
-    if(!allowReplace694K())return;
+    if(!await allowReplace694K())return;
     try{
       const item=await dbOp694K('get',id);
       if(!item)throw new Error('Návrh nebyl nalezen.');
@@ -1348,16 +1378,16 @@
     const id=list694K.value;
     if(!id)return message694K('Nejdřív vyber uložený návrh.');
     const label=list694K.selectedOptions[0]?.textContent||'tento návrh';
-    if(!window.confirm(`Opravdu odstranit uložený návrh „${label}“?`))return;
+    if(!await confirm694W1(`Opravdu odstranit uložený návrh „${label}“?`))return;
     try{
       await enqueueWrite694K(()=>dbOp694K('delete',id));
       if(currentId694K===id){currentId694K=null;onChanged694K();}
       await refreshDrafts694K();message694K('Uložený návrh odstraněn. Aktuální kresba zůstala nedotčená.');
     }catch(e){message694K('Odstranění selhalo: '+e.message);}
   });
-  recoveryBtn694K.addEventListener('click',()=>{
+  recoveryBtn694K.addEventListener('click',async()=>{
     if(!lastAuto694K)return message694K('Obnovovací kresba není dostupná.');
-    if(!allowReplace694K())return;
+    if(!await allowReplace694K())return;
     try{applyDraft694K(lastAuto694K,AUTO_ID694K);message694K('Poslední rozpracovaná kresba obnovena.');}
     catch(e){message694K('Obnova selhala: '+e.message);}
   });
@@ -1658,65 +1688,6 @@
   }
   pngButton694P.addEventListener('click',exportPng694P);
 
-  // 694W: Real SVG files. Android uses the native document picker, not WebView download.
-  const svgFileBar694W=document.createElement('div');
-  svgFileBar694W.className='lnSvgFileBar694W';
-  const saveFile694W=document.createElement('button');saveFile694W.type='button';saveFile694W.textContent='Uložit SVG soubor';
-  const openFile694W=document.createElement('button');openFile694W.type='button';openFile694W.textContent='Otevřít SVG soubor';
-  const fileStatus694W=document.createElement('small');fileStatus694W.setAttribute('role','status');
-  svgFileBar694W.append(saveFile694W,openFile694W,fileStatus694W);
-  (document.querySelector('#lnSvgMore694L .lnSvgMoreBody694L') || $('lnSvgCopy693R').parentElement).appendChild(svgFileBar694W);
-  const nativeSvg694W=()=>window.Capacitor?.Plugins?.LubaNoteSvgFile;
-  const isNative694W=()=>!!window.Capacitor?.isNativePlatform?.();
-  saveFile694W.addEventListener('click',async()=>{
-    saveFile694W.disabled=true;
-    try {
-      const svgText=exportSvg();
-      const fname='lubanote-ikona.svg';
-      if(isNative694W()){
-        if(!nativeSvg694W()?.ulozSvg)throw Error('Aktualizuj APK pro nativní SVG export.');
-        const r=await nativeSvg694W().ulozSvg({svg:svgText,nazevSouboru:fname});
-        fileStatus694W.textContent=r?.saved?'SVG skutečně uloženo.':r?.canceled?'Ukládání zrušeno.':'Uložení nebylo potvrzeno.';
-      }else{
-        const url=URL.createObjectURL(new Blob([svgText],{type:'image/svg+xml'}));
-        const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url),60000);
-        fileStatus694W.textContent='Prohlížeči byl předán požadavek ke stažení SVG.';
-      }
-    }catch(e){fileStatus694W.textContent='Export SVG: '+(e?.message||e);}
-    finally{saveFile694W.disabled=false;}
-  });
-  const inputSvg694W=document.createElement('input');inputSvg694W.type='file';inputSvg694W.accept='.svg,image/svg+xml';inputSvg694W.hidden=true;
-  svgFileBar694W.appendChild(inputSvg694W);
-  function applyFileSvg694W(text){
-    if(text.length>100000)throw Error('SVG přesahuje limit importu 100 kB.');
-    // Reuse the existing validated SVG importer and its undo/history handling.
-    const oldSource=source.value,oldEdited=sourceIsEdited693T;
-    source.value=text;sourceIsEdited693T=true;
-    importButton693T.click();
-    // The existing importer reports validation errors without changing the drawing.
-    // Keep imported source visible for inspection and correction.
-    fileStatus694W.textContent='Soubor předán SVG importéru; zkontroluj výsledek nad plátnem.';
-  }
-  inputSvg694W.addEventListener('change',async()=>{
-    const file=inputSvg694W.files?.[0];if(!file)return;
-    try{if(file.size>100000)throw Error('SVG přesahuje limit 100 kB.');applyFileSvg694W(await file.text());}
-    catch(e){fileStatus694W.textContent='Import SVG: '+(e?.message||e);}
-    finally{inputSvg694W.value='';}
-  });
-  openFile694W.addEventListener('click',async()=>{
-    if(!isNative694W()){inputSvg694W.click();return;}
-    openFile694W.disabled=true;
-    try{
-      if(!nativeSvg694W()?.otevriSvg)throw Error('Aktualizuj APK pro nativní SVG import.');
-      const r=await nativeSvg694W().otevriSvg();
-      if(r?.canceled){fileStatus694W.textContent='Otevírání zrušeno.';return;}
-      if(typeof r?.svg!=='string')throw Error('Android nevrátil SVG soubor.');
-      applyFileSvg694W(r.svg);
-    }catch(e){fileStatus694W.textContent='Import SVG: '+(e?.message||e);}
-    finally{openFile694W.disabled=false;}
-  });
-
   // 694O: Single actual-size SVG preview + read-only fullscreen viewer.
   // Reuse the existing enlarged preview SVG (render() already refreshes it),
   // never modify shapes, SVG export, tool state, or drawing viewport.
@@ -1889,6 +1860,16 @@
       <div class="lnSvgRefButtons694R"><button type="button" data-ref-center>Vycentrovat</button><button type="button" data-ref-remove>Odebrat podklad</button></div>
       <small data-ref-status role="status">Podklad je jen pomůcka k obkreslování, není součástí exportu.</small>
     </div>`;
+  // 694W1: ignore stray click synthesis after canvas pointer gestures.
+  // A genuine tap starts on the summary; a ghost click from the canvas does not.
+  const refSummary694W1=refPanel694R.querySelector('summary');
+  let summaryArmed694W1=false;
+  refSummary694W1.addEventListener('pointerdown',()=>{summaryArmed694W1=true;});
+  refSummary694W1.addEventListener('pointercancel',()=>{summaryArmed694W1=false;});
+  refSummary694W1.addEventListener('click',event=>{
+    if(event.detail>0 && !summaryArmed694W1){event.preventDefault();event.stopPropagation();}
+    summaryArmed694W1=false;
+  });
   const refAnchor694R=svg.closest('.lnSvgStudioBoard');
   refAnchor694R?.insertAdjacentElement('beforebegin',refPanel694R);
   const refField694R=name=>refPanel694R.querySelector(`[data-ref-${name}]`);
