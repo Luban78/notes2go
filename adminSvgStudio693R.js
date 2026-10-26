@@ -179,6 +179,14 @@
   }
   function updateSelection() {
     if (selectionLabel) selectionLabel.textContent = selected < 0 ? 'Žádný vybraný tvar' : `Vybraný tvar ${selected + 1} / ${shapes.length} (${shapes[selected]?.tag || '—'})`;
+    // 694N: selection-only actions; keep the canvas area clear otherwise.
+    const actions = document.getElementById('lnSvgObjectActions694N');
+    if (actions) {
+      const valid = selected >= 0 && selected < shapes.length;
+      actions.hidden = !valid;
+      actions.querySelector('[data-layer="front"]').disabled = !valid || selected === shapes.length - 1;
+      actions.querySelector('[data-layer="back"]').disabled = !valid || selected === 0;
+    }
   }
   // 694I: edit absolute M/L/Q/C path points; untouched imported/arc paths stay intact.
   // A single supported path segment may contain multiple coordinate pairs.
@@ -1295,6 +1303,40 @@
   open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();initDrafts694K();});
   back.addEventListener('click',()=>{view.hidden=true;home.hidden=false;});
   new MutationObserver(()=>{if(modal.hidden){view.hidden=true;home.hidden=false;}}).observe(modal,{attributes:true,attributeFilter:['hidden']});
+  // 694N: duplicate and layering operate only on the selected vector object.
+  // They modify the existing shapes array, preserving SVG attributes and transforms.
+  const objectActions694N=document.createElement('div');
+  objectActions694N.id='lnSvgObjectActions694N';
+  objectActions694N.className='lnSvgObjectActions694N';
+  objectActions694N.hidden=true;
+  objectActions694N.innerHTML='<button type="button" data-layer="duplicate">⧉ Duplikovat</button><button type="button" data-layer="front">↑ Dopředu</button><button type="button" data-layer="back">↓ Dozadu</button>';
+  const canvasBoard694N=svg.closest('.lnSvgStudioBoard');
+  canvasBoard694N?.insertAdjacentElement('beforebegin',objectActions694N);
+  objectActions694N.addEventListener('click',e=>{
+    const button=e.target.closest('button[data-layer]');
+    if(!button||button.disabled||selected<0||selected>=shapes.length)return;
+    const action=button.dataset.layer;
+    const before=snapshot();
+    if(action==='duplicate'){
+      const clone=deepCopy(shapes[selected]);
+      const t=affine694H(clone);
+      if(t){ setOffset(clone,t.x+0.85,t.y+0.85); }
+      else {
+        // Keep unfamiliar imported transform untouched rather than risk corrupting it.
+        announce('Tento importovaný transform zatím nelze bezpečně duplikovat.');return;
+      }
+      shapes.splice(selected+1,0,clone);
+      selected+=1;
+    } else if(action==='front' && selected < shapes.length-1){
+      [shapes[selected],shapes[selected+1]]=[shapes[selected+1],shapes[selected]];
+      selected+=1;
+    } else if(action==='back' && selected>0){
+      [shapes[selected],shapes[selected-1]]=[shapes[selected-1],shapes[selected]];
+      selected-=1;
+    } else return;
+    record(before);render();
+    announce(action==='duplicate'?'Objekt duplikován.':action==='front'?'Objekt posunut dopředu.':'Objekt posunut dozadu.');
+  });
   // 694L: Compact workbench. Reparent live controls instead of cloning them.
   // Production icons, shape engine, gesture listeners and IndexedDB remain untouched.
   const board694L=svg.closest('.lnSvgStudioBoard');
