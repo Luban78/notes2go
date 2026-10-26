@@ -1688,6 +1688,65 @@
   }
   pngButton694P.addEventListener('click',exportPng694P);
 
+  // 694W: Real SVG files. Android uses the native document picker, not WebView download.
+  const svgFileBar694W=document.createElement('div');
+  svgFileBar694W.className='lnSvgFileBar694W';
+  const saveFile694W=document.createElement('button');saveFile694W.type='button';saveFile694W.textContent='Uložit SVG soubor';
+  const openFile694W=document.createElement('button');openFile694W.type='button';openFile694W.textContent='Otevřít SVG soubor';
+  const fileStatus694W=document.createElement('small');fileStatus694W.setAttribute('role','status');
+  svgFileBar694W.append(saveFile694W,openFile694W,fileStatus694W);
+  (document.querySelector('#lnSvgMore694L .lnSvgMoreBody694L') || $('lnSvgCopy693R').parentElement).appendChild(svgFileBar694W);
+  const nativeSvg694W=()=>window.Capacitor?.Plugins?.LubaNoteSvgFile;
+  const isNative694W=()=>!!window.Capacitor?.isNativePlatform?.();
+  saveFile694W.addEventListener('click',async()=>{
+    saveFile694W.disabled=true;
+    try {
+      const svgText=exportSvg();
+      const fname='lubanote-ikona.svg';
+      if(isNative694W()){
+        if(!nativeSvg694W()?.ulozSvg)throw Error('Aktualizuj APK pro nativní SVG export.');
+        const r=await nativeSvg694W().ulozSvg({svg:svgText,nazevSouboru:fname});
+        fileStatus694W.textContent=r?.saved?'SVG skutečně uloženo.':r?.canceled?'Ukládání zrušeno.':'Uložení nebylo potvrzeno.';
+      }else{
+        const url=URL.createObjectURL(new Blob([svgText],{type:'image/svg+xml'}));
+        const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),60000);
+        fileStatus694W.textContent='Prohlížeči byl předán požadavek ke stažení SVG.';
+      }
+    }catch(e){fileStatus694W.textContent='Export SVG: '+(e?.message||e);}
+    finally{saveFile694W.disabled=false;}
+  });
+  const inputSvg694W=document.createElement('input');inputSvg694W.type='file';inputSvg694W.accept='.svg,image/svg+xml';inputSvg694W.hidden=true;
+  svgFileBar694W.appendChild(inputSvg694W);
+  function applyFileSvg694W(text){
+    if(text.length>100000)throw Error('SVG přesahuje limit importu 100 kB.');
+    // Reuse the existing validated SVG importer and its undo/history handling.
+    const oldSource=source.value,oldEdited=sourceIsEdited693T;
+    source.value=text;sourceIsEdited693T=true;
+    importButton693T.click();
+    // The existing importer reports validation errors without changing the drawing.
+    // Keep imported source visible for inspection and correction.
+    fileStatus694W.textContent='Soubor předán SVG importéru; zkontroluj výsledek nad plátnem.';
+  }
+  inputSvg694W.addEventListener('change',async()=>{
+    const file=inputSvg694W.files?.[0];if(!file)return;
+    try{if(file.size>100000)throw Error('SVG přesahuje limit 100 kB.');applyFileSvg694W(await file.text());}
+    catch(e){fileStatus694W.textContent='Import SVG: '+(e?.message||e);}
+    finally{inputSvg694W.value='';}
+  });
+  openFile694W.addEventListener('click',async()=>{
+    if(!isNative694W()){inputSvg694W.click();return;}
+    openFile694W.disabled=true;
+    try{
+      if(!nativeSvg694W()?.otevriSvg)throw Error('Aktualizuj APK pro nativní SVG import.');
+      const r=await nativeSvg694W().otevriSvg();
+      if(r?.canceled){fileStatus694W.textContent='Otevírání zrušeno.';return;}
+      if(typeof r?.svg!=='string')throw Error('Android nevrátil SVG soubor.');
+      applyFileSvg694W(r.svg);
+    }catch(e){fileStatus694W.textContent='Import SVG: '+(e?.message||e);}
+    finally{openFile694W.disabled=false;}
+  });
+
   // 694O: Single actual-size SVG preview + read-only fullscreen viewer.
   // Reuse the existing enlarged preview SVG (render() already refreshes it),
   // never modify shapes, SVG export, tool state, or drawing viewport.
