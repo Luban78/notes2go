@@ -115,3 +115,7 @@
 .lnSvgStudio .lnSvgMoreBody694L .lnSvgStudioSource textarea{max-width:100%;}
 .lnSvgStudio .lnSvgStudioGuide693U{margin-top:20px;}
 @media(min-width:540px){.lnSvgStudio .lnSvgQuickAction694L{min-height:64px}.lnSvgStudio .lnSvgQuickAction694L small{font-size:11px}}
+
+/* 694M: non-exported center marker is drawn only in the SVG workbench. */
+.lnSvgStudio .lnSvgCenterOption694M{display:flex;align-items:center;gap:9px;margin:10px 3px 2px;font-size:13px;color:var(--color-text)}
+.lnSvgStudio .lnSvgCenterOption694M input{width:18px;height:18px;accent-color:var(--color-accent)}

@@ -19,9 +19,9 @@
     option.textContent = '✋ Posun plátna';
     tool.appendChild(option);
   }
-  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate']);
-  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate']);
-  for (const [value,label] of [['rotate','↻ Otočit objekt'],['nodes','◉ Úprava bodů'],['scale','⤡ Změna velikosti'],['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
+  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
+  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
+  for (const [value,label] of [['bucket','▨ Vyplnit tvar'],['rotate','↻ Otočit objekt'],['nodes','◉ Úprava bodů'],['scale','⤡ Změna velikosti'],['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
   const color = $('lnSvgColor693S'), themeColor = $('lnSvgThemeColor693S');
   const fill = $('lnSvgFill693S'), preview = $('lnSvgPreview693S'), previewLarge = $('lnSvgPreviewLarge693S');
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
@@ -222,6 +222,8 @@
     for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}}
     return closest;
   }
+  // 694M: centered non-exported guides live ONLY in the canvas render, never in shapes.
+  let showCenter694M = true;
   function render() {
     // Keep pointer capture on the persistent SVG root while redrawing children.
     svg.replaceChildren();
@@ -260,6 +262,17 @@
           node.style.pointerEvents='none';svg.appendChild(node);
         }
       }
+    }
+    // 694M: guide at the exact center of the 24x24 drawing plane.
+    // Draw last for visibility; pointerEvents none preserves all touch tools.
+    if(showCenter694M){
+      const sw=fmt(.08/zoom693W),dash=`${fmt(.52/zoom693W)} ${fmt(.40/zoom693W)}`;
+      const axes=svgPart({tag:'path',props:{d:'M12 0V24 M0 12H24',stroke:'#05c5c1','stroke-width':sw,'stroke-dasharray':dash,opacity:'.58',fill:'none'}});
+      axes.style.pointerEvents='none';axes.setAttribute('data-svg-center-guide','axes');svg.appendChild(axes);
+      const ring=svgPart({tag:'circle',props:{cx:'12',cy:'12',r:fmt(.42/zoom693W),fill:'none',stroke:'#132c38','stroke-width':fmt(.24/zoom693W),opacity:'.9'}});
+      ring.style.pointerEvents='none';ring.setAttribute('data-svg-center-guide','ring');svg.appendChild(ring);
+      const dot=svgPart({tag:'circle',props:{cx:'12',cy:'12',r:fmt(.20/zoom693W),fill:'#05c5c1',stroke:'#e5fffa','stroke-width':fmt(.10/zoom693W)}});
+      dot.style.pointerEvents='none';dot.setAttribute('data-svg-center-guide','dot');svg.appendChild(dot);
     }
     for (const p of [preview, previewLarge]) {
       if (!p) continue;
@@ -378,6 +391,54 @@
     }
     return best;
   }
+  // 694M: a vector bucket fills an existing CLOSED shape, not screen pixels.
+  // Imported unknown transforms and open lines are never changed.
+  function closedFillable694M(shape,el) {
+    if(!shape) return false;
+    if(['circle','ellipse','rect','polygon'].includes(shape.tag))return true;
+    if(!['path','polyline'].includes(shape.tag))return false;
+    if(shape.tag==='path' && /[zZ]/.test(String(shape.props.d||'')))return true;
+    try {
+      const length=el.getTotalLength();
+      if(!Number.isFinite(length)||length<1)return false;
+      const start=el.getPointAtLength(0),end=el.getPointAtLength(length);
+      return Math.hypot(start.x-end.x,start.y-end.y)<=.65;
+    }catch(_){return false;}
+  }
+  function bucketAt694M(p) {
+    for(let i=shapes.length-1;i>=0;i--){
+      const shape=shapes[i];
+      if(!shape || !allowed.has(shape.tag) || !['circle','ellipse','rect','polygon','path','polyline'].includes(shape.tag)) continue;
+      const t=affine694H(shape);
+      if(!t) continue;
+      const q=local694J(t,p),el=svgPart(shape);
+      svg.appendChild(el);
+      let inside=false,closed=false;
+      try {
+        closed=closedFillable694M(shape,el);
+        if(!closed)continue;
+        // SVG geometry API accounts for curved outlines, concave paths and holes.
+        if(typeof el.isPointInFill==='function') inside=el.isPointInFill(new DOMPoint(q.x,q.y));
+        else { // Conservative fallback for old WebViews, do not fill random path bounding boxes.
+          const props=shape.props;
+          if(shape.tag==='circle')inside=Math.hypot(q.x-Number(props.cx),q.y-Number(props.cy))<=Number(props.r);
+          else if(shape.tag==='ellipse')inside=((q.x-Number(props.cx))/Number(props.rx))**2+((q.y-Number(props.cy))/Number(props.ry))**2<=1;
+          else if(shape.tag==='rect')inside=q.x>=Number(props.x)&&q.x<=Number(props.x)+Number(props.width)&&q.y>=Number(props.y)&&q.y<=Number(props.y)+Number(props.height);
+        }
+        if(!inside && typeof el.isPointInStroke==='function')inside=el.isPointInStroke(new DOMPoint(q.x,q.y));
+      }catch(_){inside=false;}
+      finally{el.remove();}
+      if(!inside)continue;
+      if(shape.props.fill===activeColor){announce('Tvar už tuto výplň má.');return false;}
+      shape.props.fill=activeColor;
+      selected=-1;
+      render();
+      announce('Uzavřený tvar vyplněn. Zpět obnoví původní výplň.');
+      return true;
+    }
+    announce('Klepni dovnitř uzavřeného tvaru. Otevřené čáry kyblíček nevyplní.');
+    return false;
+  }
   function eraseAt(p) {
     const index = hitTest(p);
     if (index < 0) return false;
@@ -477,7 +538,7 @@
     return Math.hypot(p.x-x,p.y-y)<=tol;
   }
   // Icon shortcuts mirror the existing select; they do not create a second tool state.
-  const tools693W=[['move','mouse-pointer-2','Výběr'],['scale','maximize','Velikost'],['nodes','nodes','Body'],['rotate','rotate-cw','Rotace'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
+  const tools693W=[['move','mouse-pointer-2','Výběr'],['scale','maximize','Velikost'],['nodes','nodes','Body'],['rotate','rotate-cw','Rotace'],['pen','pencil','Tužka'],['bucket','bucket','Výplň'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
   const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
   toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
   const icons693W={
@@ -486,6 +547,7 @@
     nodes:'<path d="M4 18 Q12 3 20 18 M4 18l16 0"/><circle cx="4" cy="18" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="20" cy="18" r="2"/>',
     'rotate-cw':'<path d="M20 11a8 8 0 1 1-3-6 M20 3v8h-8"/>',
     pencil:'<path d="m4 20 4.6-1 11-11-3.6-3.6-11 11zM14 6l3.6 3.6"/>',
+    bucket:'<path d="M3 14l8-8 9 9-8 8-9-9Z M8 9l6 6 M15 5l1.5-2 M18 8l2-2"/><path d="M18 19q2-5 4-1a2 2 0 0 1-4 1Z"/>',
     minus:'<path d="M4 12h16"/>',circle:'<circle cx="12" cy="12" r="8"/>',
     square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
     arc:'<path d="M4 16 A8 8 0 0 1 20 16"/>',
@@ -670,6 +732,8 @@
       gesture.chosen = selected;
       gesture.initial = selected >= 0 ? offset(shapes[selected]) : {x:0,y:0};
       announce(selected < 0 ? 'Klepni na tvar, který chceš přesunout.' : 'Táhni prstem pro přesun vybraného tvaru.');
+    } else if (kind === 'bucket') {
+      selected=-1; bucketAt694M(p);
     } else if (kind === 'partial-eraser') {
       selected=-1; erasePart694G(p);
     } else if (kind === 'eraser') {
@@ -741,7 +805,7 @@
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
     if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
     const p = point(e);
-    if (!['move','eraser','partial-eraser','pan','resize','scale-select','node-drag','node-select','rotate-drag','rotate-select'].includes(g.mode)) {
+    if (!['move','eraser','partial-eraser','bucket','pan','resize','scale-select','node-drag','node-select','rotate-drag','rotate-select'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
       else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
       if (drawing) {
@@ -756,7 +820,7 @@
       // No geometry was modified: only the viewBox moved.
       announce('Plátno posunuto. Posun zůstává aktivní.');
     } else if (record(g.before)) {
-      announce(g.mode==='partial-eraser'?'Část tahu vymazána.':g.mode==='eraser'?'Tvar vymazán.':g.mode==='rotate-drag'?'Objekt otočen.':g.mode==='node-drag'?'Bod křivky upraven.':g.mode==='resize'?'Velikost upravena.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
+      announce(g.mode==='bucket'?'Výplň změněna.':g.mode==='partial-eraser'?'Část tahu vymazána.':g.mode==='eraser'?'Tvar vymazán.':g.mode==='rotate-drag'?'Objekt otočen.':g.mode==='node-drag'?'Bod křivky upraven.':g.mode==='resize'?'Velikost upravena.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
     }
     render();
   }
@@ -770,7 +834,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();}});
   // Changing tools while a stroke is still marked active must not freeze drawing.
   tool.addEventListener('change',cancelInterruptedGesture693X);
-  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber čáru a táhni její žluté nebo tyrkysové body.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':'Nástroj připraven.');});
+  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber čáru a táhni její žluté nebo tyrkysové body.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':'Nástroj připraven.');});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
     const before = snapshot();
@@ -1029,7 +1093,7 @@
       <p><strong>2. Kam kreslit?</strong> Pro běžné ikony drž většinu kresby mezi hodnotami 2 a 22. Nech cca 2 jednotky od okrajů, ať se silnější tah neuřízne. Pomocná mřížka má krok 2.</p>
       <p><strong>3. Jak silné čáry?</strong> Začni kolem 1,8–2,0. Pro jemné detaily 1,5, pro výraznější tvary přibližně 2,2. Příliš tenké čáry se při náhledu 24 × 24 ztrácejí.</p>
       <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem a volba „Vyhlazovat volnou čáru“ zjemní stopu při dokončení. Pro starší tah M/L ho vyber nástrojem Přesun a použij „Vyhladit vybraný tah“. Úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
-      <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
+      <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Nástroj Výplň (kyblíček) vyplní vnitřek již hotového uzavřeného objektu zvolenou barvou, obrys ponechá. Středové čáry jsou jen pomocné, neexportují se. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
       <p><strong>6. Velikost a kontrola.</strong> Použij „Centrovat vše“ a pak zkontroluj zejména malý náhled 24 × 24. Pokud není ikona rozeznatelná bez zvětšení, zjednoduš ji nebo zesil tah.</p>
       <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Pro definice z lubaIcons.js použij „Načíst kód LubaNote“; pro celé SVG „Načíst SVG“. Import podporuje základní tvary, nikoli složité skupiny a efekty. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Rozpracovaný návrh můžeš uložit do místního úložiště zařízení pomocí Moje SVG návrhy. Před odinstalací aplikace jej zálohuj i exportem SVG.</p>
       <p><strong>Tip pro připínáček:</strong> Hlavní hlavičku nakresli do horní poloviny, hrot směrem ke spodnímu okraji. Před složitostí dej přednost jednoduchému obrysu.</p>
@@ -1246,6 +1310,11 @@
     options694L.className='lnSvgOptions694L';
     options694L.innerHTML='<summary>⚙ Nastavení kreslení</summary><div class="lnSvgOptionsBody694L"></div>';
     const optionsBody694L=options694L.querySelector('.lnSvgOptionsBody694L');
+    const centerOption694M=document.createElement('label');
+    centerOption694M.className='lnSvgCenterOption694M';
+    centerOption694M.innerHTML='<input type="checkbox" checked> Zobrazit střed plátna';
+    centerOption694M.querySelector('input').addEventListener('change',e=>{showCenter694M=e.target.checked;render();});
+    optionsBody694L.appendChild(centerOption694M);
     const mainTools694L=view.querySelector('.lnSvgStudioTools');
     const diag694L=view.querySelector('.lnSvgPanDiag693Z, .lnSvgPanDiagnostics693Z, details[data-pan-diagnostic], details.lnSvgDiag693Z');
     for(const item of [arcControls694F,mainTools694L,rotateControls694J,smoothBar693V,diag694L]){
