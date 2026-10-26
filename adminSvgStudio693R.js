@@ -110,6 +110,7 @@
     history.push(before);
     if (history.length > 70) history.shift();
     future = [];
+    onChanged694K();
     return true;
   }
   // 694H: uniform SVG affine transform, preserving precise paths and all SVG geometry.
@@ -522,6 +523,14 @@
   const panInfo693W=document.createElement('small');  panInfo693W.textContent='Dvěma prsty přibližuj a posouvej plátno. Nástroj Velikost upraví jen vybraný objekt; zoom nemění exportovanou ikonu.';
   controls693W.insertAdjacentElement('afterend',panInfo693W);
   panInfo693W.className='lnSvgPanInfo693W';
+  // 694K: place the one existing live toolbar DIRECTLY above the SVG board.
+  // Reparenting preserves button listeners, tool state and gesture handling.
+  const board694K=svg.closest('.lnSvgStudioBoard');
+  if(board694K && toolBar693W){
+    board694K.insertAdjacentElement('beforebegin',toolBar693W);
+    toolBar693W.classList.add('lnSvgToolGrid694K');
+    toolBar693W.setAttribute('aria-label','Nástroje SVG Studia – dvě řady nad plátnem');
+  }
   syncTools693W();applyView693W();
   // 694E: Tool PAN is persistent, like Pencil / Eraser. It never switches
   // itself to a drawing tool, even when one of multiple fingers is lifted.
@@ -944,7 +953,7 @@
       for(const [k,v] of Object.entries(row[1])){
         if(!attrs.has(k)||!['string','number'].includes(typeof v))throw Error('Nepodporovaný atribut: '+k);
         const val=String(v); if(val.length>10000||/url\s*\(|javascript:|[<>]/i.test(val))throw Error('Nepovolená hodnota.');
-        if(k==='transform'&&!/^translate\(\s*-?\d+(?:\.\d+)?\s*[, ]\s*-?\d+(?:\.\d+)?\s*\)$/.test(val))throw Error('Podporuji pouze translate(x y).');
+        if(k==='transform' && (!affine694H({props:{transform:val}}) || val.length>150))throw Error('Podporuji pouze translate nebo matici Rotace/Velikost.');
         if(['fill','stroke'].includes(k)&&!/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(val))throw Error('Neplatná barva.');
         props[k]=val;
       }
@@ -975,7 +984,7 @@
         for(const at of el.attributes){
           if(!attrs.has(at.name)||at.namespaceURI)throw Error('Nepodporovaný atribut: '+at.name);
           if(/url\s*\(|javascript:|[<>]/i.test(at.value))throw Error('Nepovolená hodnota.');
-          if(at.name==='transform' && !/^translate\(\s*-?\d+(?:\.\d+)?\s*[, ]\s*-?\d+(?:\.\d+)?\s*\)$/.test(at.value))throw Error('Podporován je pouze posun translate(x y).');
+          if(at.name==='transform' && (!affine694H({props:{transform:at.value}}) || at.value.length>150))throw Error('Podporuji pouze translate nebo matici Rotace/Velikost.');
           if(['stroke','fill'].includes(at.name) && !/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(at.value))throw Error('Nepodporovaná barva.');
           props[at.name]=at.value;
         }
@@ -1022,11 +1031,204 @@
       <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem a volba „Vyhlazovat volnou čáru“ zjemní stopu při dokončení. Pro starší tah M/L ho vyber nástrojem Přesun a použij „Vyhladit vybraný tah“. Úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
       <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
       <p><strong>6. Velikost a kontrola.</strong> Použij „Centrovat vše“ a pak zkontroluj zejména malý náhled 24 × 24. Pokud není ikona rozeznatelná bez zvětšení, zjednoduš ji nebo zesil tah.</p>
-      <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Pro definice z lubaIcons.js použij „Načíst kód LubaNote“; pro celé SVG „Načíst SVG“. Import podporuje základní tvary, nikoli složité skupiny a efekty. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Návrh si průběžně kopíruj – Studio ho zatím trvale neukládá.</p>
+      <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Pro definice z lubaIcons.js použij „Načíst kód LubaNote“; pro celé SVG „Načíst SVG“. Import podporuje základní tvary, nikoli složité skupiny a efekty. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Rozpracovaný návrh můžeš uložit do místního úložiště zařízení pomocí Moje SVG návrhy. Před odinstalací aplikace jej zálohuj i exportem SVG.</p>
       <p><strong>Tip pro připínáček:</strong> Hlavní hlavičku nakresli do horní poloviny, hrot směrem ke spodnímu okraji. Před složitostí dej přednost jednoduchému obrysu.</p>
     </div>`;
   view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('beforebegin',guide693U);
-  open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();});
+  // 694K: Device-local drafts and emergency recovery via IndexedDB.
+  // This deliberately never connects to Supabase, LubaServer, or production notes.
+  const draftPanel694K=document.createElement('section');
+  draftPanel694K.className='lnSvgDraftPanel694K';
+  draftPanel694K.setAttribute('aria-label','Rozpracované SVG ikony');
+  draftPanel694K.innerHTML=`
+    <div class="lnSvgDraftTitle694K"><strong>💾 Moje SVG návrhy</strong><small data-save-state>Neuložený návrh</small></div>
+    <div class="lnSvgDraftRow694K">
+      <input data-draft-name type="text" maxlength="70" placeholder="Název ikony" aria-label="Název SVG návrhu" value="Nová ikona">
+      <button type="button" data-save>Uložit</button><button type="button" data-new>Nový</button>
+    </div>
+    <div class="lnSvgDraftRow694K">
+      <select data-drafts aria-label="Uložené ikony"><option value="">Žádné uložené ikony</option></select>
+      <button type="button" data-open>Otevřít</button><button type="button" data-delete>Odstranit</button>
+    </div>
+    <div class="lnSvgDraftRow694K lnSvgDraftRecover694K"><button type="button" data-recover hidden>↶ Obnovit poslední rozpracovanou kresbu</button></div>
+    <small data-draft-message role="status">Návrhy se ukládají jen v tomto zařízení. Před odinstalací aplikace je exportuj jako SVG.</small>`;
+  // Saving belongs next to the live previews, never between the tool grid and canvas.
+  const draftsAnchor694K=view.querySelector('.lnSvgStudioPreviewArea693S') || svg.closest('.lnSvgStudioBoard');
+  draftsAnchor694K?.insertAdjacentElement('afterend',draftPanel694K);
+  const nameInput694K=draftPanel694K.querySelector('[data-draft-name]');
+  const list694K=draftPanel694K.querySelector('[data-drafts]');
+  const recoveryBtn694K=draftPanel694K.querySelector('[data-recover]');
+  const draftMessage694K=draftPanel694K.querySelector('[data-draft-message]');
+  const state694K=draftPanel694K.querySelector('[data-save-state]');
+  let currentId694K=null,dirty694K=false,draftReady694K=false;
+  let recoveryTimer694K=null,writeChain694K=Promise.resolve(),lastAuto694K=null;
+  const AUTO_ID694K='__recovery__';
+  let dbOpen694K=null;
+  function getDb694K(){
+    if(!dbOpen694K){
+      dbOpen694K=new Promise((resolve,reject)=>{
+        if(!('indexedDB' in window))return reject(new Error('IndexedDB není dostupné'));
+        const req=indexedDB.open('LubaNote-SVG-Studio-Drafts-694K',1);
+        req.onupgradeneeded=()=>{
+          const db=req.result;
+          if(!db.objectStoreNames.contains('drafts'))db.createObjectStore('drafts',{keyPath:'id'});
+        };
+        req.onerror=()=>reject(req.error||new Error('Nelze otevřít úložiště'));
+        req.onsuccess=()=>resolve(req.result);
+      }).catch(err=>{dbOpen694K=null;throw err;});
+    }
+    return dbOpen694K;
+  }
+  async function dbOp694K(method,arg){
+    const db=await getDb694K();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction('drafts',method==='put'||method==='delete'?'readwrite':'readonly');
+      const store=tx.objectStore('drafts');
+      let result;
+      let request;
+      try{request=method==='all'?store.getAll():method==='get'?store.get(arg):method==='delete'?store.delete(arg):store.put(arg);}
+      catch(err){reject(err);return;}
+      request.onsuccess=()=>{result=request.result;};
+      request.onerror=()=>reject(request.error||new Error('Chyba úložiště'));
+      tx.oncomplete=()=>resolve(result);
+      tx.onerror=()=>reject(tx.error||new Error('Transakce selhala'));
+      tx.onabort=()=>reject(tx.error||new Error('Transakce přerušena'));
+    });
+  }
+  function draftData694K(id,name){
+    return {id,name,updated:new Date().toISOString(),shapes:snapshot(),activeColor,
+      stroke:stroke.value,fill:!!fill?.checked};
+  }
+  function validDraft694K(item){
+    if(!item||!Array.isArray(item.shapes)||item.shapes.length>800)return false;
+    return item.shapes.every(s=>s && allowed.has(s.tag)&&s.props && typeof s.props==='object' &&
+      Object.entries(s.props).every(([k,v])=>attrs.has(k)&&['string','number'].includes(typeof v)&&String(v).length<=20000));
+  }
+  function message694K(value){draftMessage694K.textContent=value;}
+  function markSaved694K(){dirty694K=false;state694K.textContent='Uloženo';}
+  function onChanged694K(){
+    dirty694K=true;state694K.textContent='Neuložené změny';
+    queueRecovery694K();
+  }
+  function enqueueWrite694K(task){
+    writeChain694K=writeChain694K.catch(()=>{}).then(task);
+    return writeChain694K;
+  }
+  function queueRecovery694K(immediate=false){
+    if(recoveryTimer694K!==null)clearTimeout(recoveryTimer694K);
+    recoveryTimer694K=setTimeout(()=>{
+      recoveryTimer694K=null;
+      const data=draftData694K(AUTO_ID694K,nameInput694K.value.trim()||'Rozpracovaná ikona');
+      enqueueWrite694K(()=>dbOp694K('put',data)).then(()=>{lastAuto694K=data;recoveryBtn694K.hidden=!data.shapes.length;})
+        .catch(()=>{message694K('Automatická obnova není dostupná. Pro jistotu zkopíruj SVG kód.');});
+    },immediate?0:600);
+  }
+  async function refreshDrafts694K(){
+    try{
+      const entries=(await dbOp694K('all')).filter(x=>x.id!==AUTO_ID694K).sort((a,b)=>String(b.updated).localeCompare(String(a.updated)));
+      const previous=list694K.value;
+      list694K.replaceChildren();
+      if(!entries.length){const o=new Option('Žádné uložené ikony','');list694K.add(o);}
+      else entries.forEach(item=>{
+        const d=new Date(item.updated); const when=Number.isNaN(d.getTime())?'':` · ${d.toLocaleDateString('cs-CZ')}`;
+        list694K.add(new Option(`${item.name||'Bez názvu'}${when}`,item.id));
+      });
+      if(entries.some(x=>x.id===previous))list694K.value=previous;
+      else if(currentId694K && entries.some(x=>x.id===currentId694K))list694K.value=currentId694K;
+      message694K(`${entries.length} uložených návrhů · pouze v tomto zařízení`);
+    }catch(e){message694K('Ukládání v tomto zařízení není dostupné: '+e.message);}
+  }
+  function applyDraft694K(item,id){
+    if(!validDraft694K(item))throw new Error('Uložené tvary nejsou podporované.');
+    // Never mutate the persisted object while editing.
+    gesture=null;drawing=null;selected=-1;shapes=deepCopy(item.shapes);
+    history=[];future=[];sourceIsEdited693T=false;
+    activeColor=normalColor(item.activeColor||'currentColor');
+    if(Number.isFinite(Number(item.stroke))){stroke.value=String(Math.max(.5,Math.min(4,Number(item.stroke))));
+      $('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');}
+    if(fill)fill.checked=!!item.fill;
+    nameInput694K.value=String(item.name||'Nová ikona').slice(0,70);
+    currentId694K=id===AUTO_ID694K?null:id;
+    dirty694K=id===AUTO_ID694K;
+    state694K.textContent=dirty694K?'Obnovená kresba':'Uloženo';
+    render();
+    // Recovery slot reflects the opened current workspace, not an older project.
+    queueRecovery694K(true);
+  }
+  function allowReplace694K(){
+    return !(dirty694K && shapes.length>0) || window.confirm('Aktuální návrh má neuložené změny. Opravdu ho nahradit?');
+  }
+  draftPanel694K.querySelector('[data-save]').addEventListener('click',async()=>{
+    if(gesture){message694K('Nejprve dokonči tah na plátně.');return;}
+    const name=nameInput694K.value.trim();
+    if(!name)return message694K('Napiš název ikony.');
+    if(!shapes.length)return message694K('Nejdřív nakresli alespoň jeden tvar.');
+    const id=currentId694K||(`svg-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
+    try{
+      await enqueueWrite694K(()=>dbOp694K('put',draftData694K(id,name)));
+      currentId694K=id;markSaved694K();
+      await refreshDrafts694K();list694K.value=id;
+      message694K(`„${name}“ uloženo do tohoto zařízení.`);
+      queueRecovery694K();
+    }catch(e){message694K('Nepodařilo se uložit. Zkopíruj SVG jako zálohu. '+e.message);}
+  });
+  draftPanel694K.querySelector('[data-new]').addEventListener('click',()=>{
+    if(!allowReplace694K())return;
+    shapes=[];history=[];future=[];gesture=null;drawing=null;selected=-1;
+    currentId694K=null;dirty694K=false;sourceIsEdited693T=false;
+    nameInput694K.value='Nová ikona';state694K.textContent='Nový návrh';
+    render();queueRecovery694K(true);message694K('Nová prázdná ikona. Dříve uložené návrhy zůstaly zachovány.');
+  });
+  draftPanel694K.querySelector('[data-open]').addEventListener('click',async()=>{
+    const id=list694K.value;
+    if(!id)return message694K('Vyber návrh ze seznamu.');
+    if(!allowReplace694K())return;
+    try{
+      const item=await dbOp694K('get',id);
+      if(!item)throw new Error('Návrh nebyl nalezen.');
+      applyDraft694K(item,id);message694K(`Otevřeno: ${item.name}`);
+    }catch(e){message694K('Otevření selhalo: '+e.message);}
+  });
+  draftPanel694K.querySelector('[data-delete]').addEventListener('click',async()=>{
+    const id=list694K.value;
+    if(!id)return message694K('Nejdřív vyber uložený návrh.');
+    const label=list694K.selectedOptions[0]?.textContent||'tento návrh';
+    if(!window.confirm(`Opravdu odstranit uložený návrh „${label}“?`))return;
+    try{
+      await enqueueWrite694K(()=>dbOp694K('delete',id));
+      if(currentId694K===id){currentId694K=null;onChanged694K();}
+      await refreshDrafts694K();message694K('Uložený návrh odstraněn. Aktuální kresba zůstala nedotčená.');
+    }catch(e){message694K('Odstranění selhalo: '+e.message);}
+  });
+  recoveryBtn694K.addEventListener('click',()=>{
+    if(!lastAuto694K)return message694K('Obnovovací kresba není dostupná.');
+    if(!allowReplace694K())return;
+    try{applyDraft694K(lastAuto694K,AUTO_ID694K);message694K('Poslední rozpracovaná kresba obnovena.');}
+    catch(e){message694K('Obnova selhala: '+e.message);}
+  });
+  nameInput694K.addEventListener('input',()=>{if(shapes.length){dirty694K=true;state694K.textContent='Neuložený název';queueRecovery694K();}});
+  // Recoverable state is offered on demand, never silently overwrites drawing.
+  async function initDrafts694K(){
+    if(draftReady694K)return;
+    draftReady694K=true;
+    try{
+      const autosaved=await dbOp694K('get',AUTO_ID694K);
+      if(autosaved && validDraft694K(autosaved) && autosaved.shapes.length){
+        lastAuto694K=autosaved;recoveryBtn694K.hidden=false;
+      }
+      await refreshDrafts694K();
+    }catch(e){message694K('Lokální úložiště není dostupné; používej Kopírovat SVG jako zálohu.');}
+  }
+  function flushRecovery694K(){
+    if(!dirty694K)return;
+    if(recoveryTimer694K!==null){clearTimeout(recoveryTimer694K);recoveryTimer694K=null;}
+    const data=draftData694K(AUTO_ID694K,nameInput694K.value.trim()||'Rozpracovaná ikona');
+    // Schedule an immediate IndexedDB write (rather than a timer after pagehide).
+    enqueueWrite694K(()=>dbOp694K('put',data)).catch(()=>{});
+  }
+  window.addEventListener('pagehide',flushRecovery694K);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)flushRecovery694K();});
+  open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();initDrafts694K();});
   back.addEventListener('click',()=>{view.hidden=true;home.hidden=false;});
   new MutationObserver(()=>{if(modal.hidden){view.hidden=true;home.hidden=false;}}).observe(modal,{attributes:true,attributeFilter:['hidden']});
   render();

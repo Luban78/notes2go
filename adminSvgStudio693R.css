@@ -59,3 +59,45 @@
 .lnSvgStudio .lnSvgZoomBar693W button{min-width:42px;min-height:40px;padding:7px 10px;border-radius:10px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font:inherit;}
 .lnSvgStudio .lnSvgZoomBar693W output{min-width:64px;text-align:center;font-size:13px;}
 .lnSvgStudio .lnSvgPanInfo693W{display:block;color:var(--color-text-secondary);font-size:11px;margin-bottom:6px;}
+
+/* 694K: two-row quick tools directly above SVG drawing board. 13 tools = 7+6. */
+.lnSvgStudio .lnSvgToolGrid694K{
+  display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr));
+  grid-template-rows:repeat(2,minmax(59px,auto));gap:4px!important;
+  width:100%;box-sizing:border-box;overflow:visible!important;
+  padding:0!important;margin:8px 0 5px!important;scrollbar-width:none;
+}
+.lnSvgStudio .lnSvgToolGrid694K .lnSvgToolButton693W{
+  box-sizing:border-box;min-width:0!important;width:100%;max-width:none!important;
+  flex:initial!important;min-height:59px;padding:5px 1px;
+  gap:3px;border-radius:9px;
+}
+.lnSvgStudio .lnSvgToolGrid694K .lnSvgToolButton693W svg{width:21px;height:21px;flex:0 0 21px}
+.lnSvgStudio .lnSvgToolGrid694K .lnSvgToolButton693W span{
+  font-size:9px;line-height:1.1;white-space:normal;text-align:center;
+  overflow-wrap:anywhere;hyphens:auto;max-width:100%;
+}
+.lnSvgStudio .lnSvgToolGrid694K + .lnSvgStudioBoard{margin-top:5px;}
+@media(min-width:540px){
+  .lnSvgStudio .lnSvgToolGrid694K{gap:6px!important}
+  .lnSvgStudio .lnSvgToolGrid694K .lnSvgToolButton693W span{font-size:11px}
+  .lnSvgStudio .lnSvgToolGrid694K .lnSvgToolButton693W{min-height:64px}
+}
+/* 694K: small, self-contained local icon-draft controls. */
+.lnSvgStudio .lnSvgDraftPanel694K{
+  padding:11px;margin:10px 0 13px;border:1px solid var(--color-border);
+  border-radius:13px;background:var(--color-surface);color:var(--color-text);
+}
+.lnSvgStudio .lnSvgDraftTitle694K{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+.lnSvgStudio .lnSvgDraftTitle694K small{color:var(--color-text-secondary);font-size:11px;text-align:right}
+.lnSvgStudio .lnSvgDraftRow694K{display:flex;gap:6px;align-items:center;margin:7px 0;min-width:0}
+.lnSvgStudio .lnSvgDraftRow694K input,.lnSvgStudio .lnSvgDraftRow694K select{
+  flex:1 1 120px;min-width:0;max-width:100%;height:39px;box-sizing:border-box;font-size:13px;
+}
+.lnSvgStudio .lnSvgDraftRow694K button{
+  flex:0 0 auto;min-height:39px;padding:7px 9px;background:var(--color-surface);
+  border:1px solid var(--color-border);border-radius:9px;color:var(--color-text);font:inherit;font-size:12px;
+}
+.lnSvgStudio .lnSvgDraftRecover694K button{flex:1;min-height:36px}
+.lnSvgStudio .lnSvgDraftRow694K [hidden]{display:none!important}
+.lnSvgStudio .lnSvgDraftPanel694K [data-draft-message]{display:block;font-size:11px;color:var(--color-text-secondary);line-height:1.35;margin-top:7px}
