@@ -1086,7 +1086,10 @@ async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
         if (!overJeden(note.notificationId, note.title || "LubaNote",
           kratkyText(note.note) || "Máš naplánovanou připomínku.",
           new Date(note.date).getTime(), { type: "note", noteId: note.id })) {
-          return { ok: false, reason: "note-alarm-different" };
+          // 695B: A single ordinary-note mismatch must not invalidate/cancel
+          // hundreds of independently verified recurring alarms. The ID is
+          // used only in memory for a scoped repair; never expose it in logs.
+          return { ok: false, reason: "note-alarm-different", targetedNoteId695B: note.id };
         }
       }
     }
@@ -1103,7 +1106,9 @@ async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
         kratkyText(body) || "Máš naplánovanou připomínku.",
         new Date(plan.plannedAt).getTime(),
         { type: "planned", noteId: note.id, plannedItemId: plan.id })) {
-        return { ok: false, reason: "planner-alarm-different" };
+        // 695B: The affected parent note can restore this Planner alarm
+        // without clearing any other note's pending Android alarms.
+        return { ok: false, reason: "planner-alarm-different", targetedNoteId695B: note.id };
       }
     }
   }
@@ -1156,6 +1161,26 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
         );
         await obnovIndexLokalnichAlarmu692V();
         return true;
+      }
+      // 695B: For a VERIFIED single-note/Planner mismatch, repair only its
+      // owning note. Never global-cancel all 32x recurring alarms because
+      // one ordinary native alarm differs. All other guard failures still
+      // retain the established conservative full-restore fallback.
+      if ((kontrola.reason === "note-alarm-different" ||
+           kontrola.reason === "planner-alarm-different") &&
+          kontrola.targetedNoteId695B != null) {
+        const vlastnik695B = Array.isArray(poznamky)
+          ? poznamky.find(n => n?.id === kontrola.targetedNoteId695B &&
+              n?.isSecret !== true && n?.completed !== true)
+          : null;
+        if (vlastnik695B) {
+          await obnovNotifikacePoznamkyPodleSoukromi(vlastnik695B);
+          await obnovIndexLokalnichAlarmu692V();
+          window.LubaNoteStartupDiag?.zapis?.(
+            "REM-GUARD", `695B TARGETED | ${kontrola.reason} | no-global-reset`
+          );
+          return true;
+        }
       }
       window.LubaNoteStartupDiag?.zapis?.(
         "REM-GUARD", `691AZ FALLBACK | ${kontrola.reason} | native=${pendingPredObnovou691AZ.length}`
