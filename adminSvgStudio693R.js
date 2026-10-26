@@ -1539,7 +1539,7 @@
       ['↷','Vpřed',()=>redoBtn?.click(),'lnSvgRedo693S'],
       ['⊞','Vše',()=>$('lnSvgCenterAll693S')?.click()],
       ['◎','Vybraný',()=>$('lnSvgCenterSelected693S')?.click()],
-      ['▣','Celá ikona',()=>controls693W.querySelector('[data-zoom="reset"]')?.click()],
+      ['⌫','Vymazat',async()=>{if(shapes.length && await confirm694W1('Opravdu vymazat celou kresbu?'))$('lnSvgClear693R')?.click();}],
       ['▤','Uložit',()=>draftPanel694K.querySelector('[data-save]')?.click()],
       ['⋯','Více',()=>{const d=$('lnSvgMore694L');if(d){d.open=!d.open;if(d.open)d.scrollIntoView({block:'nearest'});}}]
     ];
@@ -1555,18 +1555,32 @@
     toolBar693W.classList.add('lnSvgToolGrid694L');
     toolBar693W.setAttribute('aria-label','Nástroje a rychlé akce – tři řady');
 
-    // Existing bottom actions are still present and functional in a collapsible menu.
+    // 694W3: Files and advanced code are different workflows. Keep the original
+    // buttons in the DOM (the proven handlers and quick toolbar proxy them),
+    // but don't duplicate Undo, Redo or Center inside Import/Export.
     const more694L=document.createElement('details');more694L.id='lnSvgMore694L';
     more694L.className='lnSvgMore694L';
-    more694L.innerHTML='<summary>Další akce · import a export</summary><div class="lnSvgMoreBody694L"></div>';
+    more694L.innerHTML='<summary>📁 SVG soubory a export</summary><div class="lnSvgMoreBody694L"></div>';
     const moreBody694L=more694L.querySelector('.lnSvgMoreBody694L');
-    view.querySelectorAll('.lnSvgStudioActions').forEach(row=>moreBody694L.appendChild(row));
-    const source694L=view.querySelector('.lnSvgStudioSource');
-    if(source694L){
-      moreBody694L.appendChild(source694L);
-      const sourceActions694L=view.querySelector('.lnSvgTextTools693U');
-      if(sourceActions694L)moreBody694L.appendChild(sourceActions694L);
+    const legacyEdit694W3=$('lnSvgCenterAll693S')?.closest('.lnSvgStudioActions');
+    if(legacyEdit694W3){
+      legacyEdit694W3.classList.add('lnSvgLegacyEdit694W3');
+      legacyEdit694W3.hidden=true;
+      moreBody694L.appendChild(legacyEdit694W3);
     }
+    const codePanel694W3=document.createElement('details');
+    codePanel694W3.className='lnSvgCode694W3';
+    codePanel694W3.innerHTML='<summary>⌘ SVG kód · pokročilé</summary><div class="lnSvgCodeBody694W3"></div>';
+    const codeBody694W3=codePanel694W3.querySelector('.lnSvgCodeBody694W3');
+    const codeCopyRow694W3=$('lnSvgCopy693R')?.closest('.lnSvgStudioActions');
+    if(codeCopyRow694W3)codeBody694W3.appendChild(codeCopyRow694W3);
+    const source694L=view.querySelector('.lnSvgStudioSource');
+    if(source694L)codeBody694W3.appendChild(source694L);
+    const sourceButtons694W3=$('lnSvgImport693R')?.closest('.lnSvgStudioActions');
+    if(sourceButtons694W3)codeBody694W3.appendChild(sourceButtons694W3);
+    const sourceActions694L=view.querySelector('.lnSvgTextTools693U');
+    if(sourceActions694L)codeBody694W3.appendChild(sourceActions694L);
+    moreBody694L.appendChild(codePanel694W3);
     const status694L=$('lnSvgMessage693R');
     if(status694L)status694L.insertAdjacentElement('beforebegin',more694L);
     else draftPanel694K.insertAdjacentElement('afterend',more694L);
@@ -1582,10 +1596,10 @@
 
   // 694P: Export clean SVG vectors to PNG (independent of canvas grid, viewport and preview).
   // PNG uses only the exported shapes; no editing, guides, or background bitmap.
-  const pngPanel694P=document.createElement('section');
+  const pngPanel694P=document.createElement('details');
   pngPanel694P.className='lnSvgPng694P';
   pngPanel694P.setAttribute('aria-label','Export ikony do PNG');
-  pngPanel694P.innerHTML=`<strong>Export PNG</strong>
+  pngPanel694P.innerHTML=`<summary>🖼 Export PNG <small>volitelné</small></summary><div class="lnSvgPngBody694W3">
     <div class="lnSvgPngControls694P">
       <label>Velikost <select data-png-size>
         <option value="24">24 × 24</option><option value="48">48 × 48</option>
@@ -1597,9 +1611,9 @@
       <label>Pozadí <select data-png-bg><option value="transparent">Průhledné</option><option value="color">Barevné</option></select></label>
       <label data-png-color-wrap hidden>Barva <input data-png-color type="color" value="#ffffff"></label>
       <button type="button" data-png-export>Uložit PNG</button>
-    </div><small data-png-status role="status">Exportuje se jen samotná ikona, bez mřížky a vodítek.</small>`;
+    </div><small data-png-status role="status">Exportuje se jen samotná ikona, bez mřížky a vodítek.</small></div>`;
   const pngParent694P=document.getElementById('lnSvgMore694L')?.querySelector('.lnSvgMoreBody694L');
-  if(pngParent694P)pngParent694P.insertAdjacentElement('afterbegin',pngPanel694P);
+  if(pngParent694P)pngParent694P.insertBefore(pngPanel694P,pngParent694P.querySelector('.lnSvgCode694W3'));
   else view.append(pngPanel694P);
   const pngSize694P=pngPanel694P.querySelector('[data-png-size]');
   const pngCustom694P=pngPanel694P.querySelector('[data-png-custom]');
@@ -1691,11 +1705,17 @@
   // 694W: Real SVG files. Android uses the native document picker, not WebView download.
   const svgFileBar694W=document.createElement('div');
   svgFileBar694W.className='lnSvgFileBar694W';
+  const svgFileTitle694W3=document.createElement('div');
+  svgFileTitle694W3.className='lnSvgFileTitle694W3';
+  svgFileTitle694W3.innerHTML='<strong>SVG soubory</strong><small>Vektorové soubory pro uložení a pokračování v úpravách</small>';
+  svgFileBar694W.appendChild(svgFileTitle694W3);
   const saveFile694W=document.createElement('button');saveFile694W.type='button';saveFile694W.textContent='Uložit SVG soubor';
   const openFile694W=document.createElement('button');openFile694W.type='button';openFile694W.textContent='Otevřít SVG soubor';
   const fileStatus694W=document.createElement('small');fileStatus694W.setAttribute('role','status');
   svgFileBar694W.append(saveFile694W,openFile694W,fileStatus694W);
-  (document.querySelector('#lnSvgMore694L .lnSvgMoreBody694L') || $('lnSvgCopy693R').parentElement).appendChild(svgFileBar694W);
+  const moreFiles694W3=document.querySelector('#lnSvgMore694L .lnSvgMoreBody694L');
+  if(moreFiles694W3)moreFiles694W3.insertAdjacentElement('afterbegin',svgFileBar694W);
+  else $('lnSvgCopy693R').parentElement.appendChild(svgFileBar694W);
   const nativeSvg694W=()=>window.Capacitor?.Plugins?.LubaNoteSvgFile;
   const isNative694W=()=>!!window.Capacitor?.isNativePlatform?.();
   saveFile694W.addEventListener('click',async()=>{

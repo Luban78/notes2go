@@ -212,3 +212,51 @@
 .lnSvgStudio .lnSvgDialogActions694W1{display:flex;gap:9px;justify-content:flex-end;margin-top:15px}
 .lnSvgStudio .lnSvgDialogActions694W1 button,.lnSvgStudio .lnSvgDialogChoice694W1{background:var(--color-surface,#102b3b);border:1px solid var(--color-border,#315365);border-radius:10px;padding:11px 13px;color:var(--color-text,#eef7fa);font:inherit;min-height:42px}
 .lnSvgStudio .lnSvgDialogActions694W1 button:last-child{border-color:var(--color-accent,#1bb4bf);color:var(--color-accent,#1bb4bf)}
+
+
+/* 694W3 – SVG Studio: separate files, optional PNG and advanced code.
+   Layout-only changes. Existing handlers and IndexedDB stay unchanged. */
+.lnSvgStudio .lnSvgLegacyEdit694W3{display:none!important}
+.lnSvgStudio .lnSvgMoreBody694L{display:flex;flex-direction:column;gap:10px;padding:5px 10px 13px}
+.lnSvgStudio .lnSvgMoreBody694L>.lnSvgFileBar694W{order:0}
+.lnSvgStudio .lnSvgMoreBody694L>.lnSvgPng694P{order:1}
+.lnSvgStudio .lnSvgMoreBody694L>.lnSvgCode694W3{order:2}
+.lnSvgStudio .lnSvgFileBar694W{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  min-width:0;padding:12px;border:1px solid var(--color-border);
+  border-radius:12px;background:var(--color-surface);color:var(--color-text);
+}
+.lnSvgStudio .lnSvgFileTitle694W3{grid-column:1/-1;display:flex;flex-direction:column;gap:3px;margin-bottom:2px}
+.lnSvgStudio .lnSvgFileTitle694W3 strong{font-size:15px;font-weight:650}
+.lnSvgStudio .lnSvgFileTitle694W3 small{color:var(--color-text-secondary);font-size:11px;line-height:1.4}
+.lnSvgStudio .lnSvgFileBar694W button{
+  box-sizing:border-box;min-width:0;min-height:43px;border:1px solid var(--color-border);
+  border-radius:10px;background:var(--color-surface);color:var(--color-text);
+  font:inherit;font-size:13px;line-height:1.3;padding:9px 6px;
+  white-space:normal;-webkit-tap-highlight-color:transparent;
+}
+.lnSvgStudio .lnSvgFileBar694W button:disabled{opacity:.45}
+.lnSvgStudio .lnSvgFileBar694W>small[role=status]{grid-column:1/-1;color:var(--color-text-secondary);font-size:11px;line-height:1.4}
+.lnSvgStudio .lnSvgFileBar694W>small[role=status]:empty{display:none}
+.lnSvgStudio .lnSvgPng694P,
+.lnSvgStudio .lnSvgCode694W3{
+  box-sizing:border-box;min-width:0;margin:0;
+  border:1px solid var(--color-border);border-radius:12px;
+  background:var(--color-surface);color:var(--color-text);overflow:hidden;
+}
+.lnSvgStudio .lnSvgPng694P{padding:0}
+.lnSvgStudio .lnSvgPng694P>summary,
+.lnSvgStudio .lnSvgCode694W3>summary{
+  cursor:pointer;padding:11px 13px;min-height:24px;font-weight:650;
+  -webkit-tap-highlight-color:transparent;
+}
+.lnSvgStudio .lnSvgPng694P>summary small{display:inline;margin:0 0 0 7px;font-size:11px;font-weight:400;color:var(--color-text-secondary)}
+.lnSvgStudio .lnSvgPngBody694W3,.lnSvgStudio .lnSvgCodeBody694W3{padding:4px 11px 12px;border-top:1px solid var(--color-border)}
+.lnSvgStudio .lnSvgCodeBody694W3 .lnSvgStudioActions{margin:9px 0}
+.lnSvgStudio .lnSvgCodeBody694W3 .lnSvgStudioActions button{font:inherit;font-size:13px;min-height:40px}
+.lnSvgStudio .lnSvgCodeBody694W3 .lnSvgStudioSource{font-size:13px;margin-top:10px}
+.lnSvgStudio .lnSvgCodeBody694W3 .lnSvgStudioSource textarea{font-size:12px;max-width:100%;box-sizing:border-box}
+@media(max-width:360px){
+  .lnSvgStudio .lnSvgFileBar694W{padding:9px;gap:6px}
+  .lnSvgStudio .lnSvgFileBar694W button{font-size:12px;padding:8px 4px}
+}
