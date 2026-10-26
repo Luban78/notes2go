@@ -1415,6 +1415,90 @@
     if(redoBtn)observer694L.observe(redoBtn,{attributes:true,attributeFilter:['disabled']});
   }
 
+  // 694P: Export clean SVG vectors to PNG (independent of canvas grid, viewport and preview).
+  // PNG uses only the exported shapes; no editing, guides, or background bitmap.
+  const pngPanel694P=document.createElement('section');
+  pngPanel694P.className='lnSvgPng694P';
+  pngPanel694P.setAttribute('aria-label','Export ikony do PNG');
+  pngPanel694P.innerHTML=`<strong>Export PNG</strong>
+    <div class="lnSvgPngControls694P">
+      <label>Velikost <select data-png-size>
+        <option value="24">24 × 24</option><option value="48">48 × 48</option>
+        <option value="64">64 × 64</option><option value="96">96 × 96</option>
+        <option value="128">128 × 128</option><option value="256" selected>256 × 256</option>
+        <option value="512">512 × 512</option><option value="1024">1024 × 1024</option>
+        <option value="custom">Vlastní…</option></select></label>
+      <label data-png-custom-wrap hidden>Rozměr (px) <input data-png-custom type="number" min="24" max="2048" step="1" value="256" inputmode="numeric"></label>
+      <label>Pozadí <select data-png-bg><option value="transparent">Průhledné</option><option value="color">Barevné</option></select></label>
+      <label data-png-color-wrap hidden>Barva <input data-png-color type="color" value="#ffffff"></label>
+      <button type="button" data-png-export>Uložit PNG</button>
+    </div><small data-png-status role="status">Exportuje se jen samotná ikona, bez mřížky a vodítek.</small>`;
+  const pngParent694P=document.getElementById('lnSvgMore694L')?.querySelector('.lnSvgMoreBody694L');
+  if(pngParent694P)pngParent694P.insertAdjacentElement('afterbegin',pngPanel694P);
+  else view.append(pngPanel694P);
+  const pngSize694P=pngPanel694P.querySelector('[data-png-size]');
+  const pngCustom694P=pngPanel694P.querySelector('[data-png-custom]');
+  const pngBg694P=pngPanel694P.querySelector('[data-png-bg]');
+  const pngColor694P=pngPanel694P.querySelector('[data-png-color]');
+  const pngButton694P=pngPanel694P.querySelector('[data-png-export]');
+  const pngStatus694P=pngPanel694P.querySelector('[data-png-status]');
+  pngSize694P.addEventListener('change',()=>pngPanel694P.querySelector('[data-png-custom-wrap]').hidden=pngSize694P.value!=='custom');
+  pngBg694P.addEventListener('change',()=>pngPanel694P.querySelector('[data-png-color-wrap]').hidden=pngBg694P.value!=='color');
+  function pngFilename694P(size){
+    const name=(draftPanel694K.querySelector('[data-draft-name]')?.value || 'luba-ikona')
+      .trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,56)||'luba-ikona';
+    return `${name}-${size}.png`;
+  }
+  async function exportPng694P(){
+    if(pngButton694P.disabled)return;
+    const size=pngSize694P.value==='custom'?Number(pngCustom694P.value):Number(pngSize694P.value);
+    if(!Number.isInteger(size)||size<24||size>2048){pngStatus694P.textContent='Rozměr musí být celé číslo 24–2048 px.';return;}
+    if(!shapes.length){pngStatus694P.textContent='Nejdřív nakresli ikonu.';return;}
+    pngButton694P.disabled=true;pngStatus694P.textContent='Připravuji PNG…';
+    let url=null;
+    try{
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+      const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas není dostupný');
+      if(pngBg694P.value==='color'){
+        ctx.fillStyle=pngColor694P.value;ctx.fillRect(0,0,size,size);
+      }
+      // 'currentColor' must be resolved explicitly: SVG loaded as Image doesn't inherit app CSS.
+      const computed=getComputedStyle(svg).color;
+      const actualColor=/^rgba?\(/.test(computed)?computed:'#ffffff';
+      const clean=exportSvg().replace('<svg ',`<svg width="${size}" height="${size}" color="${actualColor}" `);
+      const svgBlob=new Blob([clean],{type:'image/svg+xml;charset=utf-8'});
+      url=URL.createObjectURL(svgBlob);
+      const img=new Image();
+      await new Promise((resolve,reject)=>{
+        img.onload=resolve;img.onerror=()=>reject(new Error('Nelze vykreslit SVG do PNG'));
+        img.src=url;
+      });
+      ctx.drawImage(img,0,0,size,size);
+      URL.revokeObjectURL(url);url=null;
+      const pngBlob=await new Promise((resolve,reject)=>{
+        try{canvas.toBlob(b=>b?resolve(b):reject(new Error('Převod do PNG selhal')),'image/png');}
+        catch(err){reject(err);}
+      });
+      const fname=pngFilename694P(size);
+      // Use Android's native sharing flow if available; browser downloads remain fallback.
+      if(navigator.canShare && navigator.share){
+        const file=new File([pngBlob],fname,{type:'image/png'});
+        if(navigator.canShare({files:[file]})){
+          try {await navigator.share({files:[file],title:fname});pngStatus694P.textContent=`PNG ${size} × ${size} předáno ke sdílení/uložení.`;return;}
+          catch(e){if(e?.name==='AbortError'){pngStatus694P.textContent='Export zrušen.';return;}}
+        }
+      }
+      const outUrl=URL.createObjectURL(pngBlob);
+      const a=document.createElement('a');a.href=outUrl;a.download=fname;
+      a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(outUrl),60000);
+      pngStatus694P.textContent=`PNG ${size} × ${size}: odeslán požadavek ke stažení ${fname}.`;
+    }catch(e){pngStatus694P.textContent=`Export PNG se nepovedl: ${e?.message||e}`;}
+    finally{if(url)URL.revokeObjectURL(url);pngButton694P.disabled=false;}
+  }
+  pngButton694P.addEventListener('click',exportPng694P);
+
   // 694O: Single actual-size SVG preview + read-only fullscreen viewer.
   // Reuse the existing enlarged preview SVG (render() already refreshes it),
   // never modify shapes, SVG export, tool state, or drawing viewport.

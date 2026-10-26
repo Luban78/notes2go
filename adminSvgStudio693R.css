@@ -141,3 +141,14 @@
 .lnSvgViewer694O .lnSvgViewerBody694O svg{display:block;width:min(calc(100vw - 30px),calc(100dvh - 166px));height:min(calc(100vw - 30px),calc(100dvh - 166px));max-width:100%;max-height:100%;aspect-ratio:1;flex:none;touch-action:none;fill:none;stroke:currentColor;stroke-width:0;user-select:none;-webkit-user-select:none}
 .lnSvgViewer694O .lnSvgViewerBottom694O{display:flex;align-items:center;justify-content:center;gap:14px;min-height:72px;padding:8px 2px;}
 .lnSvgViewer694O .lnSvgViewerBottom694O button{min-width:55px}
+
+/* 694P: compact PNG export in More; separate from production editor controls. */
+.lnSvgStudio .lnSvgPng694P{padding:10px;margin:0 0 12px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-surface);color:var(--color-text)}
+.lnSvgStudio .lnSvgPngControls694P{display:flex;flex-wrap:wrap;align-items:end;gap:9px;margin-top:10px}
+.lnSvgStudio .lnSvgPngControls694P label{display:flex;flex-direction:column;gap:4px;font-size:12px;min-width:108px;flex:1}
+.lnSvgStudio .lnSvgPngControls694P input[type=color]{height:42px;width:58px;padding:4px}
+.lnSvgStudio .lnSvgPngControls694P input[type=number]{max-width:130px}
+.lnSvgStudio .lnSvgPngControls694P button{min-height:42px;padding:8px 12px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);border-radius:10px;font:inherit}
+.lnSvgStudio .lnSvgPngControls694P button:disabled{opacity:.5}
+.lnSvgStudio .lnSvgPng694P small{display:block;margin-top:8px;color:var(--color-text-secondary)}
+.lnSvgStudio .lnSvgPngControls694P [hidden]{display:none!important}
