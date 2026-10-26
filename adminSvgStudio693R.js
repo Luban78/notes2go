@@ -220,7 +220,7 @@
   const zoomText693W=controls693W.querySelector('output');
   controls693W.querySelector('[data-zoom="out"]').addEventListener('click',()=>zoomTo693W(zoom693W/1.5));
   controls693W.querySelector('[data-zoom="in"]').addEventListener('click',()=>zoomTo693W(zoom693W*1.5));
-  controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();});
+  controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();if(typeof restoreDrawingTool693Y==='function')restoreDrawingTool693Y('Celá ikona. Kreslení je aktivní.');});
   const toolRow693W=tool.closest('.lnSvgStudioTools');
   if(toolRow693W){toolRow693W.insertAdjacentElement('beforebegin',toolBar693W);toolRow693W.insertAdjacentElement('afterend',controls693W);}
   tool.closest('label')?.classList.add('lnSvgOldSelect693W');
@@ -228,13 +228,49 @@
   controls693W.insertAdjacentElement('afterend',panInfo693W);
   panInfo693W.className='lnSvgPanInfo693W';
   syncTools693W();applyView693W();
+  // 693Y: Pan is a one-shot action, not a permanent drawing mode.
+  // Remember the last actual tool so that a pan cannot leave the canvas
+  // looking frozen on Android (especially at 100 % zoom).
+  let returnTool693Y = tool.value === 'pan' ? 'pen' : tool.value;
+  let restoringTool693Y = false;
+  function restoreDrawingTool693Y(message) {
+    if (tool.value !== 'pan') return;
+    restoringTool693Y = true;
+    tool.value = returnTool693Y;
+    tool.dispatchEvent(new Event('change', { bubbles: true }));
+    restoringTool693Y = false;
+    if (message) announce(message);
+  }
+  tool.addEventListener('change', () => {
+    if (!restoringTool693Y && tool.value !== 'pan') returnTool693Y = tool.value;
+    if (!restoringTool693Y && tool.value === 'pan' && zoom693W <= 1.00001) {
+      restoreDrawingTool693Y('Při 100 % je celé plátno vidět. Nejdřív přibliž +, potom použij Posun plátna.');
+    }
+  });
+  // 693X: WebView can swallow the last touch event after a system gesture.
+  // A stale gesture must never block a new stroke. Roll back only the unfinished
+  // gesture; already committed shapes and the Undo stack stay untouched.
+  function cancelInterruptedGesture693X() {
+    if (!gesture) return;
+    const old=gesture;
+    gesture=null;
+    try { if (svg.hasPointerCapture?.(old.id)) svg.releasePointerCapture(old.id); } catch (_) {}
+    shapes=old.before;
+    drawing=null;
+    selected=-1;
+    if(old.mode==='pan') restoreDrawingTool693Y('Posun ukončen.');
+    render();
+  }
   svg.addEventListener('pointerdown', e => {
-    if (view.hidden || gesture) return;
+    if (view.hidden) return;
     if (e.button != null && e.button !== 0) return;
+    if (e.isPrimary === false) return; // never treat a second finger as another stroke
+    // A new primary touch means any old gesture was interrupted.
+    if (gesture) cancelInterruptedGesture693X();
     e.preventDefault();
     const p = point(e), kind = tool.value;
-    svg.setPointerCapture?.(e.pointerId);
-    gesture = {id:e.pointerId,mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
+    try { svg.setPointerCapture?.(e.pointerId); } catch (_) { /* window listeners cover no-capture WebViews */ }
+    gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
     if (kind === 'pan') {
       gesture.initialPan={x:panX693W,y:panY693W};
     } else if (kind === 'move') {
@@ -273,7 +309,7 @@
     if (!gesture || e.pointerId !== gesture.id) return;
     const g = gesture; gesture = null;
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
-    if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
+    if (cancelled) {shapes=g.before; drawing=null;selected=-1;if(g.mode==='pan')restoreDrawingTool693Y('Posun ukončen.');render();return;}
     const p = point(e);
     if (!['move','eraser','pan'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
@@ -286,12 +322,24 @@
       }
     }
     drawing = null;
-    if (record(g.before)) announce(g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
+    if (g.mode === 'pan') {
+      // No geometry was modified: only the viewBox moved.
+      restoreDrawingTool693Y('Plátno posunuto. Znovu je aktivní předchozí nástroj.');
+    } else if (record(g.before)) {
+      announce(g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
+    }
     render();
   }
   svg.addEventListener('pointerup', e => finish(e));
   svg.addEventListener('pointercancel', e => finish(e,true));
   svg.addEventListener('lostpointercapture',e => {if(gesture && gesture.id===e.pointerId) finish(e,true);});
+  // Recover gestures finished outside the SVG when pointer capture fails.
+  window.addEventListener('pointerup',e=>{if(gesture && e.pointerId===gesture.id)finish(e);});
+  window.addEventListener('pointercancel',e=>{if(gesture && e.pointerId===gesture.id)finish(e,true);});
+  window.addEventListener('blur',cancelInterruptedGesture693X);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelInterruptedGesture693X();});
+  // Changing tools while a stroke is still marked active must not freeze drawing.
+  tool.addEventListener('change',cancelInterruptedGesture693X);
   tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':'Nástroj připraven.');});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
