@@ -1231,5 +1231,77 @@
   open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();initDrafts694K();});
   back.addEventListener('click',()=>{view.hidden=true;home.hidden=false;});
   new MutationObserver(()=>{if(modal.hidden){view.hidden=true;home.hidden=false;}}).observe(modal,{attributes:true,attributeFilter:['hidden']});
+  // 694L: Compact workbench. Reparent live controls instead of cloning them.
+  // Production icons, shape engine, gesture listeners and IndexedDB remain untouched.
+  const board694L=svg.closest('.lnSvgStudioBoard');
+  if(board694L){
+    // The guide belongs at the very end, not above the drawing surface.
+    view.appendChild(guide693U);
+    const intro694L=view.querySelector(':scope > p');
+    if(intro694L)intro694L.classList.add('lnSvgIntro694L');
+    panInfo693W.classList.add('lnSvgHiddenHint694L');
+
+    // Occasional technical settings are accessible, but do not consume the workspace.
+    const options694L=document.createElement('details');
+    options694L.className='lnSvgOptions694L';
+    options694L.innerHTML='<summary>⚙ Nastavení kreslení</summary><div class="lnSvgOptionsBody694L"></div>';
+    const optionsBody694L=options694L.querySelector('.lnSvgOptionsBody694L');
+    const mainTools694L=view.querySelector('.lnSvgStudioTools');
+    const diag694L=view.querySelector('.lnSvgPanDiag693Z, .lnSvgPanDiagnostics693Z, details[data-pan-diagnostic], details.lnSvgDiag693Z');
+    for(const item of [arcControls694F,mainTools694L,rotateControls694J,smoothBar693V,diag694L]){
+      if(item)optionsBody694L.appendChild(item);
+    }
+    // Keep frequently used color and zoom controls visible immediately above the tool grid.
+    const palette694L=view.querySelector('.lnSvgStudioColor693S');
+    if(palette694L)palette694L.insertAdjacentElement('beforebegin',options694L);
+    else board694L.insertAdjacentElement('beforebegin',options694L);
+
+    // The third row delegates to already tested buttons and their existing handlers.
+    // No second undo stack and no second save implementation.
+    const actions694L=[
+      ['↶','Zpět',()=>undoBtn.click(),'lnSvgUndo693R'],
+      ['↷','Vpřed',()=>redoBtn?.click(),'lnSvgRedo693S'],
+      ['⊞','Vše',()=>$('lnSvgCenterAll693S')?.click()],
+      ['◎','Vybraný',()=>$('lnSvgCenterSelected693S')?.click()],
+      ['▣','Celá ikona',()=>controls693W.querySelector('[data-zoom="reset"]')?.click()],
+      ['▤','Uložit',()=>draftPanel694K.querySelector('[data-save]')?.click()],
+      ['⋯','Více',()=>{const d=$('lnSvgMore694L');if(d){d.open=!d.open;if(d.open)d.scrollIntoView({block:'nearest'});}}]
+    ];
+    actions694L.forEach(([symbol,label,callback,originalId])=>{
+      const b=document.createElement('button');b.type='button';
+      b.className='lnSvgQuickAction694L';b.setAttribute('aria-label',label);
+      b.innerHTML='<span aria-hidden="true"></span><small></small>';
+      b.querySelector('span').textContent=symbol;b.querySelector('small').textContent=label;
+      b.addEventListener('click',callback);
+      if(originalId)b.dataset.mirrorDisabled=originalId;
+      toolBar693W.appendChild(b);
+    });
+    toolBar693W.classList.add('lnSvgToolGrid694L');
+    toolBar693W.setAttribute('aria-label','Nástroje a rychlé akce – tři řady');
+
+    // Existing bottom actions are still present and functional in a collapsible menu.
+    const more694L=document.createElement('details');more694L.id='lnSvgMore694L';
+    more694L.className='lnSvgMore694L';
+    more694L.innerHTML='<summary>Další akce · import a export</summary><div class="lnSvgMoreBody694L"></div>';
+    const moreBody694L=more694L.querySelector('.lnSvgMoreBody694L');
+    view.querySelectorAll('.lnSvgStudioActions').forEach(row=>moreBody694L.appendChild(row));
+    const source694L=view.querySelector('.lnSvgStudioSource');
+    if(source694L){
+      moreBody694L.appendChild(source694L);
+      const sourceActions694L=view.querySelector('.lnSvgTextTools693U');
+      if(sourceActions694L)moreBody694L.appendChild(sourceActions694L);
+    }
+    const status694L=$('lnSvgMessage693R');
+    if(status694L)status694L.insertAdjacentElement('beforebegin',more694L);
+    else draftPanel694K.insertAdjacentElement('afterend',more694L);
+    // Sync disabled states after the original render, without modifying its logic.
+    const observer694L=new MutationObserver(()=>{
+      toolBar693W.querySelectorAll('[data-mirror-disabled]').forEach(b=>{
+        b.disabled=!!$(b.dataset.mirrorDisabled)?.disabled;
+      });
+    });
+    observer694L.observe(undoBtn,{attributes:true,attributeFilter:['disabled']});
+    if(redoBtn)observer694L.observe(redoBtn,{attributes:true,attributeFilter:['disabled']});
+  }
   render();
 })();
