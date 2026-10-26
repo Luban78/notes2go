@@ -200,3 +200,8 @@
 .lnSvgStudio .lnSvgSnapOption694U select{min-height:36px;max-width:170px;padding:6px 9px;font:inherit}
 .lnSvgStudio .lnSvgSnapOption694U select:disabled{opacity:.5}
 .lnSvgStudio .lnSvgSnapOption694U small{color:var(--color-text-secondary);font-size:11px;line-height:1.35}
+
+/* 694W – native SVG file actions */
+.lnSvgFileBar694W{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+.lnSvgFileBar694W button{min-height:40px;flex:1 1 135px}
+.lnSvgFileBar694W small{flex-basis:100%;opacity:.8}
