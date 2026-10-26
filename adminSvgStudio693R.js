@@ -230,6 +230,7 @@
     for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}}
     return closest;
   }
+  // 694S: Preserve reference aspect ratio; never distort bitmap while tracing.
   // 694R: Reference image is a strictly visual, non-exportable canvas layer.
   // It is NEVER inserted into shapes, history, exportSvg(), or PNG renderer.
   let reference694R=null;
@@ -241,7 +242,7 @@
     el.setAttribute('x',String(r.x));el.setAttribute('y',String(r.y));
     el.setAttribute('width',String(r.width));el.setAttribute('height',String(r.height));
     el.setAttribute('opacity',String(r.opacity));
-    el.setAttribute('preserveAspectRatio','none');
+    el.setAttribute('preserveAspectRatio','xMidYMid meet');
     el.setAttribute('data-reference-694R','');
     el.style.pointerEvents='none';
     svg.appendChild(el);
@@ -1754,7 +1755,8 @@
       await new Promise((resolve,reject)=>{picture.onload=resolve;picture.onerror=()=>reject(new Error('Neplatný obrázek'));picture.src=data;});
       const w=picture.naturalWidth,h=picture.naturalHeight;
       if(!w||!h||w*h>24000000)throw new Error('Příliš velký obrázek (max. 24 Mpx)');
-      const fitWidth=24*Math.min(1,h/w),fitHeight=24*Math.min(1,w/h);
+      const fitScale=Math.min(24/w,24/h);
+      const fitWidth=w*fitScale,fitHeight=h*fitScale;
       reference694R={data,visible:true,opacity:.35,scale:1,xOffset:0,yOffset:0,fitWidth,fitHeight,width:fitWidth,height:fitHeight,x:0,y:0};
       refField694R('show').checked=true;refField694R('opacity').value='35';
       refField694R('scale').value='100';refField694R('x').value='0';refField694R('y').value='0';
