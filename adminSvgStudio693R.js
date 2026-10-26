@@ -1481,7 +1481,31 @@
         catch(err){reject(err);}
       });
       const fname=pngFilename694P(size);
-      // Use Android's native sharing flow if available; browser downloads remain fallback.
+      // 694Q: Android APK uses its native create-document picker (the same
+      // saving experience as LubaNote backups). Never claim a download succeeded
+      // after a WebView anchor click.
+      const nativePng694Q=window.Capacitor?.Plugins?.LubaNotePngExport;
+      if(window.Capacitor?.isNativePlatform?.()){
+        if(!nativePng694Q?.ulozPng){
+          throw new Error('Nativní ukládání PNG není v této APK dostupné. Aktualizuj Android build.');
+        }
+        const base64=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+          reader.onerror=()=>reject(new Error('Příprava PNG pro Android selhala.'));
+          reader.readAsDataURL(pngBlob);
+        });
+        const result=await nativePng694Q.ulozPng({nazevSouboru:fname,base64});
+        if(result?.saved){
+          pngStatus694P.textContent=`PNG ${size} × ${size} úspěšně uloženo do zvolené složky.`;
+        }else if(result?.canceled){
+          pngStatus694P.textContent='Ukládání PNG zrušeno.';
+        }else{
+          throw new Error('Android nepotvrdil uložení PNG.');
+        }
+        return;
+      }
+      // Web/browser fallback: native browser download or sharing.
       if(navigator.canShare && navigator.share){
         const file=new File([pngBlob],fname,{type:'image/png'});
         if(navigator.canShare({files:[file]})){

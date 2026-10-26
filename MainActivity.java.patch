@@ -1,0 +1,8 @@
+--- a/android/app/src/main/java/cz/luban/notes2go/MainActivity.java
++++ b/android/app/src/main/java/cz/luban/notes2go/MainActivity.java
+@@
+   protected void onCreate(Bundle savedInstanceState) {
++    // 694Q: native SVG Studio PNG save, identical Android file picker as backup.
++    registerPlugin(LubaNotePngExportPlugin.class);
+     registerPlugin(
+       LubaNoteBackupExportPlugin.class
