@@ -8,7 +8,7 @@
   const assets = {
     svg: ['adminSvgStudio693R.css?v=693S', 'adminSvgStudio693R.js?v=693S'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
-    hub: ['debugHub.css?v=683C-stability-persist', 'debugHub.js?v=692X-alarm-forensics']
+    hub: ['debugHub.css?v=695C-compact', 'debugHub.js?v=695C-compact']
   };
   const jobs = new Map();
 
@@ -35,6 +35,10 @@
       const [css, js] = assets[key];
       const job = inject('link', 'href', css)
         .then(() => inject('script', 'src', js))
+        // 695C: the concise SYNC/REM report is a DH-only helper, not a boot asset.
+        .then(() => key === 'hub'
+          ? inject('script', 'src', 'lubaDebugSyncBrief691BA.js?v=695C-hub-only')
+          : undefined)
         .catch(error => { jobs.delete(key); throw error; });
       jobs.set(key, job);
     }

@@ -1683,6 +1683,7 @@
   }
 
   function spustKeyboardWatch() {
+    spustPasivniKeyboardWatch(); // 695C: opt-in only
     const uklidy = [];
     const historie = keyboardWatchBuffer.slice();
 
@@ -2921,68 +2922,18 @@ async function zkopirujNavrat685G(tlacitko) {
       </div>
 
       <div class="ln-dh-controls">
-        <div class="ln-dh-module-picker">
-          <button
-            type="button"
-            class="ln-dh-module-toggle"
-            data-dh="module-toggle"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="ln-dh-module-dot" aria-hidden="true"></span>
-            <span class="ln-dh-module-label">Start / sync / síť</span>
-            <span class="ln-dh-module-arrow" aria-hidden="true">⌄</span>
-          </button>
-
-          <div class="ln-dh-module-menu" role="listbox" aria-label="Diagnostický modul" hidden>
-            ${Object.entries(MODULY).map(([hodnota, popis]) => `
-              <button
-                type="button"
-                class="ln-dh-module-option"
-                data-dh-module="${hodnota}"
-                role="option"
-                aria-checked="${hodnota === "startup" ? "true" : "false"}"
-              >
-                <span class="ln-dh-module-option-dot" aria-hidden="true"></span>
-                <span>${popis}</span>
-              </button>
-            `).join("")}
-
-            <div class="ln-dh-menu-tools" role="group" aria-label="Nástroje Debug Hubu">
-              <div class="ln-dh-menu-tools-title">Nástroje</div>
-
-              <section
-                class="ln-dh-selection-speed"
-                data-dh-selection-speed-panel
-                aria-label="Rychlost výběru při scrollu"
-              >
-                <div class="ln-dh-selection-speed-head">
-                  <strong>Výběr – rychlost scrollu</strong>
-                  <output data-dh-selection-speed-value>${nactiV2SelectionEdgeSpeed()} px/s</output>
-                </div>
-                <small>Live rychlost při držení úchytu u okraje.</small>
-                <div data-dh-selection-engine>Engine: čekám na výběr</div>
-                <div data-dh-selection-applied>Použito: —</div>
-                <input
-                  data-dh-selection-speed
-                  type="range"
-                  min="40"
-                  max="900"
-                  step="10"
-                  value="${nactiV2SelectionEdgeSpeed()}"
-                  aria-label="Rychlost selection edge scrollu"
-                >
-              </section>
-            </div>
-          </div>
-
-          <select data-dh="module" aria-label="Diagnostický modul" hidden>
-            ${Object.entries(MODULY).map(([hodnota, popis]) => `
-              <option value="${hodnota}">${popis}</option>
-            `).join("")}
-          </select>
+        <!-- 695C: One practical hub. Historical observers are deliberately
+             absent from the visible picker, but their internal code and
+             STABILITA_TESTY source for AutoTester remain intact. -->
+        <div class="ln-dh-compact-module" aria-label="Aktivní diagnostika">
+          <span class="ln-dh-module-dot" aria-hidden="true"></span>
+          <span class="ln-dh-module-label">Start / sync / síť</span>
         </div>
-
+        <select data-dh="module" aria-label="Interní diagnostický modul" hidden>
+          ${Object.entries(MODULY).map(([hodnota, popis]) => `
+            <option value="${hodnota}">${popis}</option>
+          `).join("")}
+        </select>
         <div class="ln-dh-run-actions">
           <button type="button" class="ln-dh-start" data-dh="start">Spustit</button>
           <button type="button" data-dh="stop">Stop</button>
@@ -2990,32 +2941,19 @@ async function zkopirujNavrat685G(tlacitko) {
       </div>
 
       <div class="ln-dh-summary">modul: vypnutý</div>
-      <section class="ln-dh-stability" data-ln-stability-panel hidden aria-label="Centrum stability V1">
-        <div class="ln-dh-stab-intro">
-          <strong>Centrum stability V1</strong>
-          <p>Ruční regresní scénáře. PASS znamená tvé potvrzení, nikoli automatický test. Bez zásahu do poznámek.</p>
-          <div data-ln-stability-summary>0 PASS · 0 FAIL</div>
-          <div data-ln-stability-storage role="status" aria-live="polite">Kontroluji lokální úložiště…</div>
-        </div>
-        <div class="ln-dh-stab-toolbar">
-          <label>Oblast <select data-ln-stability-filter>
-            <option value="vse">Všechny funkce</option>
-            ${["Editor", "Seznamy", "Kód", "Obrázky", "Poznámky", "Data", "PC", "Ostatní"].map(x => `<option value="${x}">${x}</option>`).join("")}
-          </select></label>
-          <button type="button" data-dh-stab="auto">Technická kontrola</button>
-          <button type="button" data-dh-stab="copy-all">Kopírovat souhrn</button>
-        </div>
-        <pre class="ln-dh-stab-auto" data-ln-stability-auto>Spusť technickou kontrolu po otevření testovací poznámky.</pre>
-        <div class="ln-dh-stab-list" data-ln-stability-list></div>
-        <div class="ln-dh-stab-disclaimer">Výsledky PASS/FAIL a poznámky se ukládají pouze na tomto zařízení a původu aplikace. Nesynchronizují se s cloudem; odinstalace, smazání dat nebo změna webové adresy je může odstranit. Starší build vyžaduje nové ověření. V1 nevrací starý kód. Pro jistotu můžeš kopírovat souhrn.</div>
-      </section>
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
-        <button type="button" data-dh="copy-alarms-692x" style="grid-column:1 / -1">Kopírovat alarmy 692X (Android)</button>
-         <button type="button" data-dh="copy-resume" style="grid-column:1 / -1">Kopírovat návrat (RESUME / NATIVE)</button>
-        <button type="button" data-dh="clear">Vymazat</button>
-        <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
+        <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
+        <details class="ln-dh-report-extras">
+          <summary>Další reporty a nástroje</summary>
+          <div class="ln-dh-report-extras-inner">
+            <button type="button" data-dh="copy-alarms-692x">Alarmy Android (692X)</button>
+            <button type="button" data-dh="copy-resume">Návrat aplikace (RESUME)</button>
+            <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
+            <button type="button" data-dh="clear">Vymazat zobrazené záznamy</button>
+          </div>
+        </details>
       </div>
 
       <div
@@ -3459,6 +3397,6 @@ async function zkopirujNavrat685G(tlacitko) {
     stav: () => keyboardWatchStav(document.activeElement)
   });
 
-  spustPasivniKeyboardWatch();
+  // 695C: Keyboard MutationObserver and global listeners only on explicit keyboard diagnostic.
   spustStartupAutomatickyPokudJeTreba();
 })();
