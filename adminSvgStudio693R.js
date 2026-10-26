@@ -9,6 +9,19 @@
 
   const NS = 'http://www.w3.org/2000/svg';
   const tool = $('lnSvgTool693R'), stroke = $('lnSvgStroke693R'), source = $('lnSvgSource693R');
+  // 694B ROOT CAUSE: the 693W quick toolbar introduces mode 'pan', but the
+  // original select did not contain that option. Setting select.value='pan'
+  // then yields '', which used to become an empty SVG tag and crash rendering.
+  // Preserve the existing select as the single source of tool state.
+  if (tool && !Array.from(tool.options).some(option => option.value === 'pan')) {
+    const option = document.createElement('option');
+    option.value = 'pan';
+    option.textContent = '✋ Posun plátna';
+    tool.appendChild(option);
+  }
+  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon']);
+  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon']);
+  for (const [value,label] of [['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
   const color = $('lnSvgColor693S'), themeColor = $('lnSvgThemeColor693S');
   const fill = $('lnSvgFill693S'), preview = $('lnSvgPreview693S'), previewLarge = $('lnSvgPreviewLarge693S');
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
@@ -21,6 +34,67 @@
   const announce = message => { if (notice) notice.textContent = message; };
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
+
+  // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
+  // Event listeners only observe; they never preventDefault or change drawing.
+  const diag693Z = [];
+  const diagStamp693Z = () => new Date().toISOString();
+  function diagState693Z() {
+    let viewBox = 'unavailable';
+    try { viewBox = svg.getAttribute('viewBox') || 'missing'; } catch (_) {}
+    return {
+      tool: tool?.value || 'unknown', zoom: typeof zoom693W === 'number' ? zoom693W : 'not-initialized',
+      panX: typeof panX693W === 'number' ? panX693W : 'not-initialized',
+      panY: typeof panY693W === 'number' ? panY693W : 'not-initialized',
+      gesture: typeof gesture === 'object' && gesture ? {mode:gesture.mode,id:gesture.id} : null,
+      shapes: Array.isArray(shapes) ? shapes.length : null,
+      selected, viewBox, svgConnected: svg.isConnected,
+      viewHidden: view.hidden,
+      canvasRect: (() => { const r=svg.getBoundingClientRect();return [Math.round(r.x),Math.round(r.y),Math.round(r.width),Math.round(r.height)]; })()
+    };
+  }
+  function diagLog693Z(type, info = '') {
+    try {
+      diag693Z.push({time:diagStamp693Z(),type,info:String(info).slice(0,500),state:diagState693Z()});
+      if (diag693Z.length > 90) diag693Z.shift();
+    } catch (_) {}
+  }
+  window.addEventListener('error', e => diagLog693Z('JS_ERROR', `${e.message || 'unknown'} @ ${e.filename || '?'}:${e.lineno || '?'}:${e.colno || '?'} ${e.error?.stack || ''}`));
+  window.addEventListener('unhandledrejection', e => diagLog693Z('PROMISE_REJECTION', String(e.reason?.stack || e.reason)));
+  svg.addEventListener('pointerdown', e => diagLog693Z('POINTER_DOWN', `id=${e.pointerId} primary=${e.isPrimary}`), true);
+  svg.addEventListener('pointerup', e => diagLog693Z('POINTER_UP', `id=${e.pointerId}`), true);
+  svg.addEventListener('pointercancel', e => diagLog693Z('POINTER_CANCEL', `id=${e.pointerId}`), true);
+  svg.addEventListener('lostpointercapture', e => diagLog693Z('LOST_CAPTURE', `id=${e.pointerId}`), true);
+  svg.addEventListener('pointermove', e => {
+    if (diag693Z.length && diag693Z.at(-1)?.type === 'POINTER_MOVE') return;
+    diagLog693Z('POINTER_MOVE', `id=${e.pointerId}`);
+  }, true);
+  tool.addEventListener('change', () => diagLog693Z('TOOL_CHANGE', tool.value), true);
+  document.addEventListener('click', e => {
+    const el=e.target?.closest?.('[data-tool], [data-zoom]');
+    if (el && view.contains(el)) diagLog693Z('CONTROL_CLICK', `tool=${el.dataset.tool || '-'} zoom=${el.dataset.zoom || '-'}`);
+  }, true);
+  window.addEventListener('blur', () => diagLog693Z('WINDOW_BLUR'));
+  document.addEventListener('visibilitychange', () => diagLog693Z('VISIBILITY', document.visibilityState));
+  const diagPanel693Z=document.createElement('details');
+  diagPanel693Z.id='lnSvgDiag693Z';
+  diagPanel693Z.style.cssText='margin:12px 0;padding:12px;border:1px solid var(--color-border,#777);border-radius:12px;color:var(--color-text,inherit);';
+  diagPanel693Z.innerHTML='<summary style="cursor:pointer;font-weight:700">🩺 Diagnostika Posunu plátna (693Z)</summary><p style="font-size:13px">Nakresli čáru → klepni na Posun plátna → zkus táhnout → zkopíruj report. Diagnostika nemění kresbu.</p><button type="button" data-copy style="min-height:42px;margin:6px;padding:8px 14px">Kopírovat diagnostiku</button><button type="button" data-clear style="min-height:42px;margin:6px;padding:8px 14px">Vymazat log</button><pre data-status style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre>';
+  const controlsHost693Z=view.querySelector('.lnSvgStudioTools');
+  if (controlsHost693Z) controlsHost693Z.insertAdjacentElement('afterend',diagPanel693Z);
+  else view.append(diagPanel693Z);
+  const diagText693Z=()=>`LUBANOTE SVG STUDIO – 693Z PAN DIAGNOSTIKA (READ-ONLY)\n${JSON.stringify({created:diagStamp693Z(),userAgent:navigator.userAgent,current:diagState693Z(),events:diag693Z},null,2)}`;
+  const diagStatus693Z=diagPanel693Z.querySelector('[data-status]');
+  diagPanel693Z.querySelector('[data-copy]').addEventListener('click',async()=>{
+    const value=diagText693Z();let copied=false;
+    try {await navigator.clipboard.writeText(value);copied=true;}catch(_){}
+    if(!copied) try {await window.Capacitor?.Plugins?.Clipboard?.write({string:value});copied=true;}catch(_){}
+    if(!copied){const t=document.createElement('textarea');t.value=value;t.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;';document.body.append(t);t.select();try{copied=document.execCommand('copy')===true;}catch(_){}t.remove();}
+    diagStatus693Z.textContent=copied?'Report zkopírován.':'Kopírování selhalo: níže je report pro ruční výběr.\n'+value;
+  });
+  diagPanel693Z.querySelector('[data-clear]').addEventListener('click',()=>{diag693Z.length=0;diagStatus693Z.textContent='Log vymazán.';});
+  diagLog693Z('DIAGNOSTIC_READY');
+
   let sourceIsEdited693T = false;
   source.addEventListener('input', () => { sourceIsEdited693T = true; });
 
@@ -48,7 +122,7 @@
     else s.props.transform = `translate(${fmt(x)} ${fmt(y)})`;
   }
   function exportSvg() {
-    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${shapes.map(s => svgPart(s).outerHTML).join('')}</svg>`;
+    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${shapes.filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
   }
   function exportForLuba() {
     return '[\n' + shapes.map(s => `  [${JSON.stringify(s.tag)}, ${JSON.stringify(s.props)}]`).join(',\n') + '\n]';
@@ -68,7 +142,7 @@
       const path = svgPart({tag:'path',props:{d:`M${i} 0V24 M0 ${i}H24`,stroke:'currentColor','stroke-width':'.055',opacity:'.2',fill:'none'}});
       path.style.pointerEvents = 'none'; svg.appendChild(path);
     }
-    const visible = [...shapes, ...(drawing ? [drawing] : [])];
+    const visible = [...shapes.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
     }
@@ -112,12 +186,54 @@
     const r = svg.getBoundingClientRect(), extent=24/zoom693W;
     return {x:clamp(panX693W+(e.clientX-r.left)*extent/r.width), y:clamp(panY693W+(e.clientY-r.top)*extent/r.height)};
   }
+  // 694F: precise 180° semicircle and crescent built from mathematical SVG arcs.
+  // Drag defines the bounding square; direction is explicitly selectable.
+  let arcDirection694F = 0;
+  const arcDirections694F = ['vpravo','dolů','vlevo','nahoru'];
+  const arcControls694F = document.createElement('div');
+  arcControls694F.className = 'lnSvgArcControls694F';
+  arcControls694F.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 4px';
+  arcControls694F.innerHTML = '<button type="button" data-turn>↻ Otočit tvar</button><span data-dir>Směr: vpravo</span><small>Táhni od jednoho rohu k protějšímu. Rozměr určuješ délkou tahu.</small>';
+  arcControls694F.querySelector('[data-turn]').style.cssText = 'min-height:38px;padding:8px 12px;border-radius:9px;color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border)';
+  arcControls694F.querySelector('[data-turn]').addEventListener('click',()=>{
+    arcDirection694F=(arcDirection694F+1)%4;
+    arcControls694F.querySelector('[data-dir]').textContent='Směr: '+arcDirections694F[arcDirection694F];
+    announce('Směr přesného tvaru: '+arcDirections694F[arcDirection694F]);
+  });
+  view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('beforebegin',arcControls694F);
+  function shapeArc694F(a,b,kind) {
+    const x=Math.min(a.x,b.x), y=Math.min(a.y,b.y);
+    const size=Math.min(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
+    const r=Math.max(.08,size/2), cx=x+r, cy=y+r;
+    const dir=arcDirection694F;
+    // Crescent is two connected exact circular arcs. Outline adapts to theme color.
+    let d;
+    if(kind==='arc') {
+      if(dir===0) d=`M${fmt(cx)} ${fmt(y)} A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(cx)} ${fmt(y+size)}`;
+      else if(dir===1) d=`M${fmt(x)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 0 0 ${fmt(x+size)} ${fmt(cy)}`;
+      else if(dir===2) d=`M${fmt(cx)} ${fmt(y+size)} A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(cx)} ${fmt(y)}`;
+      else d=`M${fmt(x+size)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 0 0 ${fmt(x)} ${fmt(cy)}`;
+      return normalized('path',{d});
+    }
+    const outer=`M${fmt(cx)} ${fmt(y)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(cx)} ${fmt(y+size)}`;
+    // Inner radius 0.7r, endpoints identical; right-hand cutout creates familiar crescent.
+    const inner=`A${fmt(r*0.78)} ${fmt(r*0.78)} 0 0 1 ${fmt(cx)} ${fmt(y)} Z`;
+    d=outer+' '+inner;
+    // Rotate only around the shape's center; editor supports simple translation import,
+    // so bake rotation into the coordinates via orientation-specific arc paths.
+    if(dir===1) d=`M${fmt(x)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(x+size)} ${fmt(cy)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(x)} ${fmt(cy)} Z`;
+    if(dir===2) d=`M${fmt(cx)} ${fmt(y+size)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(cx)} ${fmt(y)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(cx)} ${fmt(y+size)} Z`;
+    if(dir===3) d=`M${fmt(x+size)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(x)} ${fmt(cy)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(x+size)} ${fmt(cy)} Z`;
+    return normalized('path',{d, fill:(fill?.checked ? activeColor : 'none')});
+  }
   function shapeAt(a, b, kind) {
     const filled = fill?.checked && (kind === 'circle' || kind === 'rect');
     let props;
+    if (kind === 'arc' || kind === 'moon') return shapeArc694F(a,b,kind);
     if (kind === 'circle') props = {cx:fmt(a.x),cy:fmt(a.y),r:fmt(Math.hypot(b.x-a.x,b.y-a.y))};
     else if (kind === 'rect') props = {x:fmt(Math.min(a.x,b.x)),y:fmt(Math.min(a.y,b.y)),width:fmt(Math.abs(b.x-a.x)),height:fmt(Math.abs(b.y-a.y))};
-    else props = {x1:fmt(a.x),y1:fmt(a.y),x2:fmt(b.x),y2:fmt(b.y)};
+    else if (kind === 'line') props = {x1:fmt(a.x),y1:fmt(a.y),x2:fmt(b.x),y2:fmt(b.y)};
+    else return null;
     if (filled) props.fill = activeColor;
     return normalized(kind, props);
   }
@@ -195,7 +311,7 @@
     const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
   });
   // Icon shortcuts mirror the existing select; they do not create a second tool state.
-  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['eraser','eraser','Guma'],['pan','hand','Posun plátna']];
+  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['pan','hand','Posun plátna']];
   const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
   toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
   const icons693W={
@@ -203,6 +319,8 @@
     pencil:'<path d="m4 20 4.6-1 11-11-3.6-3.6-11 11zM14 6l3.6 3.6"/>',
     minus:'<path d="M4 12h16"/>',circle:'<circle cx="12" cy="12" r="8"/>',
     square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
+    arc:'<path d="M4 16 A8 8 0 0 1 20 16"/>',
+    moon:'<path d="M18 3 A9 9 0 1 0 18 21 A7 7 0 0 1 18 3 Z"/>',
     eraser:'<path d="m20 20-9 0-7-7 9-9 8 8-8 8M8 16l9-9"/>',
     hand:'<path d="M8 13V6a2 2 0 0 1 4 0v5-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v9c0 4-3 6-7 6H9c-2 0-4-2-6-6l-1-2a2 2 0 0 1 3-2z"/>'};
   const toolButtons693W=[];
@@ -210,17 +328,25 @@
     const b=document.createElement('button');b.type='button';b.className='lnSvgToolButton693W';
     b.dataset.tool=value;b.setAttribute('aria-label',label);b.title=label;
     b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons693W[icon]}</svg><span>${label}</span>`;
-    b.addEventListener('click',()=>{tool.value=value;tool.dispatchEvent(new Event('change',{bubbles:true}));});
+    b.addEventListener('click',()=>{
+      if (!validTools694B.has(value) || !Array.from(tool.options).some(option => option.value === value)) {
+        diagLog693Z('INVALID_TOOL_SHORTCUT', value);
+        announce('Nástroj není dostupný. Kreslení zůstalo aktivní.');
+        return;
+      }
+      tool.value=value;
+      tool.dispatchEvent(new Event('change',{bubbles:true}));
+    });
     toolButtons693W.push(b);toolBar693W.append(b);
   }
-  function syncTools693W(){toolButtons693W.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool.value)));}
+  function syncTools693W(){arcControls694F.hidden=!['arc','moon'].includes(tool.value);toolButtons693W.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool.value)));}
   tool.addEventListener('change',syncTools693W);
   const controls693W=document.createElement('div');controls693W.className='lnSvgZoomBar693W';
   controls693W.innerHTML='<button type="button" data-zoom="out" aria-label="Oddálit">−</button><output>100 %</output><button type="button" data-zoom="in" aria-label="Přiblížit">+</button><button type="button" data-zoom="reset">Celá ikona</button>';
   const zoomText693W=controls693W.querySelector('output');
   controls693W.querySelector('[data-zoom="out"]').addEventListener('click',()=>zoomTo693W(zoom693W/1.5));
   controls693W.querySelector('[data-zoom="in"]').addEventListener('click',()=>zoomTo693W(zoom693W*1.5));
-  controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();if(typeof restoreDrawingTool693Y==='function')restoreDrawingTool693Y('Celá ikona. Kreslení je aktivní.');});
+  controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();announce('Zobrazeno celé plátno. Aktivní nástroj zůstává beze změny.');});
   const toolRow693W=tool.closest('.lnSvgStudioTools');
   if(toolRow693W){toolRow693W.insertAdjacentElement('beforebegin',toolBar693W);toolRow693W.insertAdjacentElement('afterend',controls693W);}
   tool.closest('label')?.classList.add('lnSvgOldSelect693W');
@@ -228,23 +354,12 @@
   controls693W.insertAdjacentElement('afterend',panInfo693W);
   panInfo693W.className='lnSvgPanInfo693W';
   syncTools693W();applyView693W();
-  // 693Y: Pan is a one-shot action, not a permanent drawing mode.
-  // Remember the last actual tool so that a pan cannot leave the canvas
-  // looking frozen on Android (especially at 100 % zoom).
-  let returnTool693Y = tool.value === 'pan' ? 'pen' : tool.value;
-  let restoringTool693Y = false;
-  function restoreDrawingTool693Y(message) {
-    if (tool.value !== 'pan') return;
-    restoringTool693Y = true;
-    tool.value = returnTool693Y;
-    tool.dispatchEvent(new Event('change', { bubbles: true }));
-    restoringTool693Y = false;
-    if (message) announce(message);
-  }
+  // 694E: Tool PAN is persistent, like Pencil / Eraser. It never switches
+  // itself to a drawing tool, even when one of multiple fingers is lifted.
   tool.addEventListener('change', () => {
-    if (!restoringTool693Y && tool.value !== 'pan') returnTool693Y = tool.value;
-    if (!restoringTool693Y && tool.value === 'pan' && zoom693W <= 1.00001) {
-      restoreDrawingTool693Y('Při 100 % je celé plátno vidět. Nejdřív přibliž +, potom použij Posun plátna.');
+    if (tool.value === 'pan' && zoom693W <= 1.00001) {
+      zoomTo693W(1.5);
+      announce('Posun plátna aktivní (150 %). Pro kreslení vyber Tužku.');
     }
   });
   // 693X: WebView can swallow the last touch event after a system gesture.
@@ -258,7 +373,7 @@
     shapes=old.before;
     drawing=null;
     selected=-1;
-    if(old.mode==='pan') restoreDrawingTool693Y('Posun ukončen.');
+    // Pan stays selected until the user explicitly chooses another tool.
     render();
   }
   svg.addEventListener('pointerdown', e => {
@@ -268,6 +383,14 @@
     // A new primary touch means any old gesture was interrupted.
     if (gesture) cancelInterruptedGesture693X();
     e.preventDefault();
+    // 694B: invalid select values must NEVER enter a gesture/shapeAt() path.
+    // This also repairs any unexpected future toolbar/select mismatch.
+    if (!validTools694B.has(tool.value)) {
+      diagLog693Z('INVALID_TOOL_RECOVERED', `value=${JSON.stringify(tool.value)}`);
+      tool.value = drawingTools694B.has(returnTool693Y) ? returnTool693Y : 'pen';
+      tool.dispatchEvent(new Event('change', {bubbles:true}));
+      announce('Nástroj obnoven. Můžeš pokračovat v kreslení.');
+    }
     const p = point(e), kind = tool.value;
     try { svg.setPointerCapture?.(e.pointerId); } catch (_) { /* window listeners cover no-capture WebViews */ }
     gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
@@ -309,7 +432,7 @@
     if (!gesture || e.pointerId !== gesture.id) return;
     const g = gesture; gesture = null;
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
-    if (cancelled) {shapes=g.before; drawing=null;selected=-1;if(g.mode==='pan')restoreDrawingTool693Y('Posun ukončen.');render();return;}
+    if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
     const p = point(e);
     if (!['move','eraser','pan'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
@@ -324,7 +447,7 @@
     drawing = null;
     if (g.mode === 'pan') {
       // No geometry was modified: only the viewBox moved.
-      restoreDrawingTool693Y('Plátno posunuto. Znovu je aktivní předchozí nástroj.');
+      announce('Plátno posunuto. Posun zůstává aktivní.');
     } else if (record(g.before)) {
       announce(g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
     }
