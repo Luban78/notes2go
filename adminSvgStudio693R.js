@@ -19,9 +19,9 @@
     option.textContent = '✋ Posun plátna';
     tool.appendChild(option);
   }
-  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon']);
-  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon']);
-  for (const [value,label] of [['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
+  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser']);
+  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser']);
+  for (const [value,label] of [['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
   const color = $('lnSvgColor693S'), themeColor = $('lnSvgThemeColor693S');
   const fill = $('lnSvgFill693S'), preview = $('lnSvgPreview693S'), previewLarge = $('lnSvgPreviewLarge693S');
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
@@ -215,16 +215,21 @@
       else d=`M${fmt(x+size)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 0 0 ${fmt(x)} ${fmt(cy)}`;
       return normalized('path',{d});
     }
-    const outer=`M${fmt(cx)} ${fmt(y)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(cx)} ${fmt(y+size)}`;
-    // Inner radius 0.7r, endpoints identical; right-hand cutout creates familiar crescent.
-    const inner=`A${fmt(r*0.78)} ${fmt(r*0.78)} 0 0 1 ${fmt(cx)} ${fmt(y)} Z`;
-    d=outer+' '+inner;
-    // Rotate only around the shape's center; editor supports simple translation import,
-    // so bake rotation into the coordinates via orientation-specific arc paths.
-    if(dir===1) d=`M${fmt(x)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(x+size)} ${fmt(cy)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(x)} ${fmt(cy)} Z`;
-    if(dir===2) d=`M${fmt(cx)} ${fmt(y+size)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(cx)} ${fmt(y)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(cx)} ${fmt(y+size)} Z`;
-    if(dir===3) d=`M${fmt(x+size)} ${fmt(cy)} A${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(x)} ${fmt(cy)} A${fmt(r*.78)} ${fmt(r*.78)} 0 0 1 ${fmt(x+size)} ${fmt(cy)} Z`;
-    return normalized('path',{d, fill:(fill?.checked ? activeColor : 'none')});
+    // 694G: two DIFFERENT boundaries. Earlier inner arc had radius < half
+    // the endpoint distance, so SVG silently enlarged it and collapsed the moon.
+    // The outer arc is a precise semicircle; quadratic inner boundary is concave.
+    const rotate = (px,py) => {
+      const dx=px-cx, dy=py-cy;
+      if(dir===1) return {x:cx-dy,y:cy+dx};
+      if(dir===2) return {x:cx-dx,y:cy-dy};
+      if(dir===3) return {x:cx+dy,y:cy-dx};
+      return {x:px,y:py};
+    };
+    const top=rotate(cx,y), bottom=rotate(cx,y+size);
+    const inner=rotate(cx-r*.55,cy);
+    const sweep=dir===0||dir===2?0:0; // rotation preserves the outer sweep.
+    d=`M${fmt(top.x)} ${fmt(top.y)} A${fmt(r)} ${fmt(r)} 0 0 ${sweep} ${fmt(bottom.x)} ${fmt(bottom.y)} Q${fmt(inner.x)} ${fmt(inner.y)} ${fmt(top.x)} ${fmt(top.y)} Z`;
+    return normalized('path',{d,fill:fill?.checked?activeColor:'none'});
   }
   function shapeAt(a, b, kind) {
     const filled = fill?.checked && (kind === 'circle' || kind === 'rect');
@@ -272,6 +277,46 @@
     else if (selected > index) selected--;
     render(); return true;
   }
+  // 694G: non-destructive VECTOR partial eraser. Supported: unfilled paths,
+  // circles, ellipse and lines; each retained fragment becomes editable SVG path.
+  // Filled objects are deliberately skipped (Boolean geometry is a later step).
+  const eraseRadius694G=.60;
+  function erasePart694G(p) {
+    let changed=false;
+    for(let i=shapes.length-1;i>=0;i--){
+      const shape=shapes[i];
+      if(!shape || !['path','line','circle','ellipse','polyline','polygon'].includes(shape.tag) ||
+         (shape.props.fill && shape.props.fill!=='none')) continue;
+      // Do not silently replace unsupported transforms with wrong coordinates.
+      if(shape.props.transform && !/^translate\(\s*-?[\d.]+[ ,]+-?[\d.]+\s*\)$/.test(shape.props.transform)) continue;
+      const el=svgPart(shape); svg.appendChild(el);
+      let length,points=[];
+      try {
+        length=el.getTotalLength();
+        if(!Number.isFinite(length)||length<=0) continue;
+        const count=Math.max(12,Math.min(1200,Math.ceil(length/.12)));
+        for(let k=0;k<=count;k++){const v=el.getPointAtLength(length*k/count);points.push({x:v.x,y:v.y});}
+      } catch(_) { continue; } finally {el.remove();}
+      const shift=offset(shape);
+      const radius=eraseRadius694G+Math.max(0,Number(shape.props['stroke-width']||1)/2);
+      const keep=points.map(q=>Math.hypot(q.x+shift.x-p.x,q.y+shift.y-p.y)>radius);
+      if(keep.every(Boolean))continue;
+      const fragments=[];let segment=[];
+      function flush(){
+        if(segment.length>=2){
+          const d=segment.map((q,k)=>`${k?'L':'M'}${fmt(q.x)} ${fmt(q.y)}`).join(' ');
+          fragments.push({tag:'path',props:{...shape.props,d,fill:'none'}});
+        } segment=[];
+      }
+      for(let k=0;k<points.length;k++){if(keep[k])segment.push(points[k]);else flush();}
+      flush();
+      shapes.splice(i,1,...fragments);
+      if(selected===i)selected=-1;
+      changed=true;
+    }
+    if(changed)render();
+    return changed;
+  }
   /* 693V: Freehand smoothing produces quadratic Bezier segments from touch points.
      Works only on paths made from M/L points. Imported complex paths remain intact. */
   function smoothPoints693V(points) {
@@ -311,7 +356,7 @@
     const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
   });
   // Icon shortcuts mirror the existing select; they do not create a second tool state.
-  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['pan','hand','Posun plátna']];
+  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
   const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
   toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
   const icons693W={
@@ -321,6 +366,7 @@
     square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
     arc:'<path d="M4 16 A8 8 0 0 1 20 16"/>',
     moon:'<path d="M18 3 A9 9 0 1 0 18 21 A7 7 0 0 1 18 3 Z"/>',
+    'partial-eraser':'<path d="M4 20 L10 14 M14 10 L20 4 M4 4h16"/>',
     eraser:'<path d="m20 20-9 0-7-7 9-9 8 8-8 8M8 16l9-9"/>',
     hand:'<path d="M8 13V6a2 2 0 0 1 4 0v5-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v9c0 4-3 6-7 6H9c-2 0-4-2-6-6l-1-2a2 2 0 0 1 3-2z"/>'};
   const toolButtons693W=[];
@@ -401,6 +447,8 @@
       gesture.chosen = selected;
       gesture.initial = selected >= 0 ? offset(shapes[selected]) : {x:0,y:0};
       announce(selected < 0 ? 'Klepni na tvar, který chceš přesunout.' : 'Táhni prstem pro přesun vybraného tvaru.');
+    } else if (kind === 'partial-eraser') {
+      selected=-1; erasePart694G(p);
     } else if (kind === 'eraser') {
       selected = -1; eraseAt(p);
     } else {
@@ -413,6 +461,7 @@
     if (!gesture || e.pointerId !== gesture.id) return;
     const p = point(e), g = gesture;
     if (g.mode === 'eraser') { eraseAt(p); return; }
+    if (g.mode === 'partial-eraser') { erasePart694G(p); return; }
     if (g.mode === 'pan') {
       const r=svg.getBoundingClientRect(),size=24/zoom693W;
       panX693W=g.initialPan.x-(e.clientX-g.originClientX)*size/r.width;
@@ -434,7 +483,7 @@
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
     if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
     const p = point(e);
-    if (!['move','eraser','pan'].includes(g.mode)) {
+    if (!['move','eraser','partial-eraser','pan'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
       else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
       if (drawing) {
@@ -449,7 +498,7 @@
       // No geometry was modified: only the viewBox moved.
       announce('Plátno posunuto. Posun zůstává aktivní.');
     } else if (record(g.before)) {
-      announce(g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
+      announce(g.mode==='partial-eraser'?'Část tahu vymazána.':g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
     }
     render();
   }
