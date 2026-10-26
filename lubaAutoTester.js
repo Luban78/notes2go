@@ -16,7 +16,7 @@
   let performanceHistoryNotice="";
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={'live-perf-691CS':'Výkon – živý nativní výběr 691CS','sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={'live-perf-691CS':'Výkon – živý nativní výběr 691CS','sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',svg:'SVG Studio – bezpečné izolované kontroly',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
@@ -32,7 +32,7 @@
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
       <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
         <option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
-        <option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
+        <option value="svg">SVG Studio – izolované kontroly</option><option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
         <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
       </select><button type="button" data-lat="area">Spustit oblast</button></div>
       <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
@@ -1442,6 +1442,25 @@
     // This does not rely on the Android scroll gesture remaining usable.
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(screen&&!screen.hidden&&!running)showResults();}));
   }
+  // 694Y: Run real SVG Studio internal helpers on isolated RAM fixtures only.
+  // Distinct statuses prevent static presence checks/manual gestures becoming PASS.
+  async function spustitSvgStudio694Y(generace){
+    if(generace!==generaceBehu || !running || screen?.hidden)return;
+    const mod=window.LubaNoteSvgStudioTest694Y;
+    const fallbackIds=mod?.expected||['svg694y-module-unavailable'];
+    const blocked=reason=>fallbackIds.map(id=>({id,name:id,kind:'SVG_STUDIO_ISOLATED_694Y',status:'APP_BLOCKED',ms:0,detail:String(reason).slice(0,180)}));
+    setStatus('SVG Studio – kontroluji skutečné vektorové funkce bezpečně v RAM…');
+    try{
+      if(!mod || typeof mod.run!=='function' || !Array.isArray(mod.expected) || mod.expected.length!==17)throw Error('SVG Studio 694Y bridge missing');
+      const rows=mod.run();
+      const kinds=new Set(['APP_PASS','APP_FAIL','APP_BLOCKED','NOT_TESTED']);
+      if(!Array.isArray(rows)||!mod.expected.every(id=>rows.some(r=>r.id===id))||
+        rows.some(r=>!kinds.has(r.status)||!r.id.startsWith('svg694y-')) || new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('SVG Studio 694Y report invalid');
+      if(generace===generaceBehu&&running){results.push(...rows);render();}
+    }catch(e){
+      if(generace===generaceBehu&&running){results.push(...blocked(e?.message||e));render();}
+    }
+  }
   async function dokoncitWorker(generace){
     if(generace!==generaceBehu)return;
     if(runTimeout){clearTimeout(runTimeout);runTimeout=null;}
@@ -1489,6 +1508,7 @@
       await spustitSkutecnyEditor690T(generace);
       if(generace===generaceBehu)await spustitViditelneNastroje690Y(generace);
     }
+    if(generace===generaceBehu&&activeSuite==='all')await spustitSvgStudio694Y(generace);
     if(generace===generaceBehu)await dokoncitBeh();
   }
   async function run(suite){
@@ -1512,6 +1532,11 @@
     restoreTesterScroll();
     render();updateProgress(0,activeRep,'Připravuji test…');
     setStatus(`Spouštím ${suiteNames[activeSuite].toLowerCase()}…`);
+    if(activeSuite==='svg'){
+      await spustitSvgStudio694Y(generace);
+      if(generace===generaceBehu)await dokoncitBeh();
+      return;
+    }
     if(activeSuite==='stability' || activeSuite==='bullet' || activeSuite==='editor' || activeSuite==='todo' || activeSuite==='planner' || activeSuite==='caret'||activeSuite==='extended'||activeSuite==='image'||activeSuite==='i18n'){
       if(activeSuite==='editor'||activeSuite==='todo'){await spustitEditorTodo690G(generace,activeSuite);if(generace===generaceBehu)await spustitKurzorTodo690I(generace,activeSuite);}
       if(activeSuite==='caret')await spustitKurzorTodo690I(generace,'all');

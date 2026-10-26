@@ -2070,5 +2070,156 @@
     }catch(err){refStatus694R.textContent='Nepodařilo se načíst podklad: '+(err?.message||err);}
   });
 
+  // 694Y: safe, isolated SVG Studio regression bridge for the existing AutoTester.
+  // Runs real shipped pure helpers on disposable in-memory fixtures; NEVER saves,
+  // loads or replaces drafts, touches IndexedDB, dispatches drawing events or
+  // invokes Android document pickers. UI gestures and native IO remain NOT_TESTED.
+  const svgTests694Y = Object.freeze([
+    ['svg694y-mirror-vertical', 'Zrcadlení podle svislé osy'],
+    ['svg694y-mirror-horizontal', 'Zrcadlení podle vodorovné osy'],
+    ['svg694y-reflected-inverse', 'Zrcadlená matice – obousměrné souřadnice'],
+    ['svg694y-affine-invalid', 'Neplatné transformace se odmítají'],
+    ['svg694y-scale-rotation', 'Velikost + rotace – přesná matice'],
+    ['svg694y-edit-nodes', 'Uzly M/L/Q/C – čtení a zápis'],
+    ['svg694y-bucket-closed', 'Kyblíček – jen uzavřený tvar'],
+    ['svg694y-grid-step', 'Mřížka – kroky 2 / 1 / 0,5 a vypnutí'],
+    ['svg694y-export-vector', 'Export SVG – pouze vektorové tvary'],
+    ['svg694y-draft-validation', 'Uložené návrhy – validace tvarů'],
+    ['svg694y-draft-snapshot', 'Návrh + podklad – sestavení kopie v RAM'],
+    ['svg694y-color-safety', 'Bezpečná validace barvy'],
+    ['svg694y-gesture', 'Skutečné kreslení, výběr, posun a pinch'],
+    ['svg694y-undo-redo', 'Undo/Redo gest v živém plátně'],
+    ['svg694y-native-svg-files', 'Android SVG picker – uložit a načíst'],
+    ['svg694y-native-png', 'Android PNG – skutečné pixely a soubor'],
+    ['svg694y-indexeddb', 'IndexedDB – skutečné uložení a obnovení']
+  ]);
+  function runSvgTests694Y(){
+    const statusKind='SVG_STUDIO_ISOLATED_694Y';
+    const result=[];
+    const expected=svgTests694Y;
+    const check=(id,fn)=>{
+      const test=expected.find(x=>x[0]===id);
+      const began=performance.now();
+      try{
+        const detail=fn();
+        result.push({id,name:test[1],kind:statusKind,status:'APP_PASS',ms:Math.round(performance.now()-began),detail:String(detail||'Kontrola produkční funkce na izolovaném tvaru v RAM.')});
+      }catch(e){result.push({id,name:test[1],kind:statusKind,status:'APP_FAIL',ms:Math.round(performance.now()-began),detail:String(e?.message||e).slice(0,180)});}
+    };
+    const assert=(ok,message)=>{if(!ok)throw Error(message)};
+    const near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<.0002;
+    const fixture=()=>({tag:'line',props:{x1:'2',y1:'4',x2:'8',y2:'7',stroke:'#234567','stroke-width':'1.5'}});
+    const pt=(s,x,y)=>world694J(affine694H(s),{x,y});
+    // Even a background run must not race an ongoing finger stroke.
+    if(gesture||drawing){
+      return expected.map(([id,name])=>({id,name,kind:statusKind,status:'APP_BLOCKED',ms:0,detail:'Na SVG plátně probíhá tah; test nedotkne rozpracovaného objektu.'}));
+    }
+    const oldGrid=snapGrid694U,oldStep=gridStep694U;
+    const original=JSON.stringify(shapes);
+    const oldReference=reference694R;
+    try{
+      check('svg694y-mirror-vertical',()=>{
+        const s=fixture(),before=JSON.stringify(s),m=mirrorClone694V(s,'vertical');
+        assert(m&&JSON.stringify(s)===before,'Originál změněn / kopie nevznikla');
+        for(const [x,y] of [[2,4],[8,7]]){const p=pt(m,x,y);assert(near(p.x,24-x)&&near(p.y,y),'Odraz svisle není přes x=12');}
+        return 'Originál nedotčen; 2 odlišné body přesně odraženy přes x=12.';
+      });
+      check('svg694y-mirror-horizontal',()=>{
+        const s=fixture(),m=mirrorClone694V(s,'horizontal');
+        assert(m,'Nefunguje vytvoření kopie');
+        for(const [x,y] of [[2,4],[8,7]]){const p=pt(m,x,y);assert(near(p.x,x)&&near(p.y,24-y),'Odraz vodorovně není přes y=12');}
+        return '2 odlišné body přesně odraženy přes y=12.';
+      });
+      check('svg694y-reflected-inverse',()=>{
+        const m=mirrorClone694V(fixture(),'vertical'),t=affine694H(m);
+        assert(t&&t.m===-1,'Reflexní determinant se ztratil');
+        for(const p of [{x:1.6,y:4.7},{x:10.2,y:9.8}]){
+          const w=world694J(t,p),l=local694J(t,w);
+          assert(near(l.x,p.x)&&near(l.y,p.y),'Inverzní převod bodů není přesný');
+        }
+        return 'Determinant < 0; world/local vrací oba původní body.';
+      });
+      check('svg694y-affine-invalid',()=>{
+        assert(affine694H({props:{transform:'rotate(999 2 4)'}})===null,'Neznámý transform přijat');
+        assert(affine694H({props:{transform:'matrix(2 0 0 1 0 0)'}})===null,'Nestejnoměrné měřítko přijato');
+        assert(affine694H({props:{transform:'matrix(1 1 1 1 0 0)'}})===null,'Singulární matice přijata');
+        return '3 nepodporované transformace odmítnuty produkčním parserem.';
+      });
+      check('svg694y-scale-rotation',()=>{
+        const s=fixture(),t={s:1.75,x:3,y:2,angle:Math.PI/3,m:1};
+        assignAffine694H(s,t);const out=affine694H(s);
+        assert(out&&near(out.s,t.s)&&near(out.x,t.x)&&near(out.y,t.y)&&near(out.angle,t.angle),'Transformace se nepřečetla zpět');
+        const w=world694J(out,{x:6,y:5}),l=local694J(out,w);
+        assert(near(l.x,6)&&near(l.y,5),'Inverzní převod po otočení/škálování selhal');
+        return 'Skutečný matrix transform uložen, načten a obrácen.';
+      });
+      check('svg694y-edit-nodes',()=>{
+        const p={tag:'path',props:{d:'M1 2 L5 6 Q7 8 9 10 C11 12 13 14 15 16'}};
+        const nodes=pathNodes694I(p);
+        assert(nodes?.parsed.length===4&&nodes.handles.length===7,'Parser bodů/Bezierů vrátil chybnou strukturu');
+        const again=pathNodes694I({tag:'path',props:{d:writeNodes694I(nodes.parsed)}});
+        assert(again?.handles.length===7,'Přepis uzlů ztratil řídicí body');
+        return 'M/L/Q/C, 7 uzlů, 2× parser produkčního Studia.';
+      });
+      check('svg694y-bucket-closed',()=>{
+        const closed={tag:'path',props:{d:'M2 2 L10 2 L10 10 Z'}};
+        const openLine={tag:'line',props:{x1:2,y1:2,x2:10,y2:10}};
+        const el=svgPart(closed);
+        assert(closedFillable694M(closed,el)===true,'Uzavřená cesta nepodporuje výplň');
+        assert(closedFillable694M(openLine,svgPart(openLine))===false,'Úsečka je nesprávně vyplnitelná');
+        return 'Z-uzavřená cesta ANO, otevřená úsečka NE.';
+      });
+      check('svg694y-grid-step',()=>{
+        snapGrid694U=true;
+        for(const [step,input,want] of [[2,3.1,4],[1,3.1,3],[.5,3.3,3.5]]){
+          gridStep694U=step;
+          assert(near(snapCoord694U(input),want),'Krok mřížky '+step+' přichycuje nesprávně');
+        }
+        snapGrid694U=false;
+        assert(near(snapCoord694U(3.3),3.3),'Vypnutí mřížky neposkytuje volný bod');
+        return 'Tři kroky + vypnutí: skutečný snapCoord694U.';
+      });
+      check('svg694y-export-vector',()=>{
+        const content=exportSvg(),doc=new DOMParser().parseFromString(content,'image/svg+xml');
+        assert(!doc.querySelector('parsererror'),'Export nemá platnou syntaxi SVG');
+        const root=doc.documentElement;
+        assert(root.localName==='svg'&&root.getAttribute('viewBox')==='0 0 24 24','Chybí 24×24');
+        assert(root.children.length===shapes.filter(s=>s&&allowed.has(s.tag)).length,'Export obsahuje jiný počet tvarů než pracovní model');
+        assert(!content.includes('data-reference-694R')&&!content.includes('data-snap-guide-694U')&&!root.querySelector('image'),'Podklad či vodítka unikají do SVG');
+        return 'Produkční export aktuální kresby čten pouze z RAM; žádná vodítka/podklad.';
+      });
+      check('svg694y-draft-validation',()=>{
+        const valid={shapes:[fixture()],name:'Izolovaný test'};
+        assert(validDraft694K(valid),'Platný lokální návrh odmítnut');
+        assert(!validDraft694K({shapes:[{tag:'script',props:{}}]}),'Nebezpečný tag přijat');
+        assert(!validDraft694K({shapes:[{tag:'line',props:{onclick:'x'}}]}),'Nepovolený atribut přijat');
+        assert(!validDraft694K({shapes:new Array(801).fill(fixture())}),'Limit 800 tvarů se nehlídá');
+        return 'Přijat platný návrh; odmítnut tag, atribut a překročený limit.';
+      });
+      check('svg694y-draft-snapshot',()=>{
+        const data=draftData694K('__svg694y_in_memory__','Isolovaný test');
+        assert(data.id==='__svg694y_in_memory__'&&Array.isArray(data.shapes),'Sestavení uloženého návrhu selhalo');
+        assert(data.shapes!==shapes&&validDraft694K(data),'Snímek není bezpečná kopie');
+        if(oldReference){assert(data.reference?.data===oldReference.data&&data.reference?.opacity===oldReference.opacity,'Podklad se nepřipojil ke snímku');}
+        else assert(data.reference===null,'Bez podkladu se ukládá nečekaný obsah');
+        return 'Snímek v RAM, bez jediného zápisu do IndexedDB'+(oldReference?'; podklad obsažen.':'; podklad nebyl načten.');
+      });
+      check('svg694y-color-safety',()=>{
+        assert(normalColor('#aabbcc')==='#aabbcc','Hex barva odmítnuta');
+        assert(normalColor('url(javascript:alert(1))')==='currentColor','Nebezpečná barva přijata');
+        return 'Platná barva zachována, nebezpečný výraz odmítnut.';
+      });
+    }finally{
+      snapGrid694U=oldGrid;gridStep694U=oldStep;
+    }
+    if(JSON.stringify(shapes)!==original||reference694R!==oldReference){
+      result.push({id:'svg694y-state-integrity',name:'Ochrana skutečných SVG návrhů',kind:statusKind,status:'APP_FAIL',ms:0,detail:'Test změnil uživatelský model nebo referenci – zakázáno.'});
+    }
+    for(const [id,name] of expected.slice(12)){
+      result.push({id,name,kind:'SVG_STUDIO_MANUAL_694Y',status:'NOT_TESTED',ms:0,detail:'694Y neprovádí skutečný dotyk Androidu, zápis uživatelských návrhů ani nativní systémový dialog. Ověřit ručně v APK.'});
+    }
+    return result;
+  }
+  window.LubaNoteSvgStudioTest694Y=Object.freeze({expected:Object.freeze(svgTests694Y.map(row=>row[0])),run:runSvgTests694Y});
+
   render();
 })();
