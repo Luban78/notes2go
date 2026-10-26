@@ -1281,7 +1281,7 @@
   }
   function draftData694K(id,name){
     return {id,name,updated:new Date().toISOString(),shapes:snapshot(),activeColor,
-      stroke:stroke.value,fill:!!fill?.checked};
+      stroke:stroke.value,fill:!!fill?.checked,reference:reference694R ? {data:reference694R.data,visible:reference694R.visible,opacity:reference694R.opacity,scale:reference694R.scale,xOffset:reference694R.xOffset,yOffset:reference694R.yOffset,fitWidth:reference694R.fitWidth,fitHeight:reference694R.fitHeight}:null};
   }
   function validDraft694K(item){
     if(!item||!Array.isArray(item.shapes)||item.shapes.length>800)return false;
@@ -1332,6 +1332,17 @@
     if(Number.isFinite(Number(item.stroke))){stroke.value=String(Math.max(.5,Math.min(4,Number(item.stroke))));
       $('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');}
     if(fill)fill.checked=!!item.fill;
+    // 694X: Old drafts have no reference field; they remain fully compatible.
+    const savedRef=item.reference;
+    if(savedRef && typeof savedRef.data==='string' && /^data:image\/(png|jpeg|webp);base64,/.test(savedRef.data) && savedRef.data.length<=1800000 &&
+       [savedRef.opacity,savedRef.scale,savedRef.xOffset,savedRef.yOffset,savedRef.fitWidth,savedRef.fitHeight].every(Number.isFinite)){
+      reference694R={...savedRef};
+      reference694R.width=savedRef.fitWidth*savedRef.scale;
+      reference694R.height=savedRef.fitHeight*savedRef.scale;
+      reference694R.x=(24-reference694R.width)/2+savedRef.xOffset;
+      reference694R.y=(24-reference694R.height)/2+savedRef.yOffset;
+    }else reference694R=null;
+    if(typeof syncReferenceControls694X==='function')syncReferenceControls694X();
     nameInput694K.value=String(item.name||'Nová ikona').slice(0,70);
     currentId694K=id===AUTO_ID694K?null:id;
     dirty694K=id===AUTO_ID694K;
@@ -1970,6 +1981,23 @@
     }
     refField694R('mode').textContent=fine?'Jemné doladění':'Velký rozsah ±24';
   }
+  function syncReferenceControls694X(){
+    const r=reference694R;
+    refField694R('show').checked=r?!!r.visible:true;
+    refField694R('opacity').value=String(Math.round((r?.opacity??.35)*100));
+    refField694R('scale').value=String(Math.round((r?.scale??1)*100));
+    for(const axis of ['x','y']){
+      const el=refField694R(axis);el.min='-24';el.max='24';el.value=String(r?.[axis+'Offset']??0);
+    }
+    configureRange694T(fineRef694T.checked);
+    for(const key of ['opacity','scale','x','y']){
+      const value=refField694R(key).value;
+      refField694R(key+'-value').textContent=key==='x'||key==='y'?positionText694T(value):value+' %';
+    }
+    refField694R('file').value='';
+    refStatus694R.textContent=r?'Podklad obnoven společně s návrhem.':'Bez podkladového obrázku.';
+  }
+  function referenceChanged694X(){onChanged694K();}
   function refreshReference694R(){
     if(!reference694R)return;
     const r=reference694R;
@@ -1984,7 +2012,7 @@
       const value=refField694R(key).value;
       refField694R(key+'-value').textContent=key==='x'||key==='y'?positionText694T(value):value+' %';
     }
-    render();
+    render();referenceChanged694X();
   }
   for(const key of ['show','opacity','scale','x','y'])refField694R(key).addEventListener('input',refreshReference694R);
   fineRef694T.addEventListener('change',()=>configureRange694T(fineRef694T.checked));
@@ -2004,7 +2032,7 @@
     configureRange694T(fineRef694T.checked);refreshReference694R();
   });
   refField694R('remove').addEventListener('click',()=>{
-    reference694R=null;refField694R('file').value='';render();
+    reference694R=null;refField694R('file').value='';render();referenceChanged694X();
     refStatus694R.textContent='Podklad odebrán. Vektorové tvary zůstaly nedotčené.';
   });
   refField694R('file').addEventListener('change',async e=>{
@@ -2022,9 +2050,18 @@
       await new Promise((resolve,reject)=>{picture.onload=resolve;picture.onerror=()=>reject(new Error('Neplatný obrázek'));picture.src=data;});
       const w=picture.naturalWidth,h=picture.naturalHeight;
       if(!w||!h||w*h>24000000)throw new Error('Příliš velký obrázek (max. 24 Mpx)');
+      // 694X: Store a compact local copy, not the original multi-megabyte photo.
+      const factor=Math.min(1,1024/Math.max(w,h));
+      const bitmap=document.createElement('canvas');
+      bitmap.width=Math.max(1,Math.round(w*factor));bitmap.height=Math.max(1,Math.round(h*factor));
+      const ctx=bitmap.getContext('2d');if(!ctx)throw new Error('Nelze připravit podklad');
+      ctx.drawImage(picture,0,0,bitmap.width,bitmap.height);
+      let compact=bitmap.toDataURL('image/webp',.78);
+      if(!compact.startsWith('data:image/webp;'))compact=bitmap.toDataURL('image/png');
+      if(compact.length>1800000)throw new Error('Podklad je pro bezpečné uložení příliš velký. Zmenši obrázek.');
       const fitScale=Math.min(24/w,24/h);
       const fitWidth=w*fitScale,fitHeight=h*fitScale;
-      reference694R={data,visible:true,opacity:.35,scale:1,xOffset:0,yOffset:0,fitWidth,fitHeight,width:fitWidth,height:fitHeight,x:0,y:0};
+      reference694R={data:compact,visible:true,opacity:.35,scale:1,xOffset:0,yOffset:0,fitWidth,fitHeight,width:fitWidth,height:fitHeight,x:0,y:0};
       refField694R('show').checked=true;refField694R('opacity').value='35';
       refField694R('scale').value='100';
       for(const key of ['x','y']){const input=refField694R(key);input.min='-24';input.max='24';input.value='0';}
