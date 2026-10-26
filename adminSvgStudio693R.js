@@ -230,6 +230,22 @@
     for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}}
     return closest;
   }
+  // 694R: Reference image is a strictly visual, non-exportable canvas layer.
+  // It is NEVER inserted into shapes, history, exportSvg(), or PNG renderer.
+  let reference694R=null;
+  function renderReference694R(){
+    if(!reference694R || !reference694R.visible) return;
+    const r=reference694R;
+    const el=document.createElementNS(NS,'image');
+    el.setAttribute('href',r.data);
+    el.setAttribute('x',String(r.x));el.setAttribute('y',String(r.y));
+    el.setAttribute('width',String(r.width));el.setAttribute('height',String(r.height));
+    el.setAttribute('opacity',String(r.opacity));
+    el.setAttribute('preserveAspectRatio','none');
+    el.setAttribute('data-reference-694R','');
+    el.style.pointerEvents='none';
+    svg.appendChild(el);
+  }
   // 694M: centered non-exported guides live ONLY in the canvas render, never in shapes.
   let showCenter694M = true;
   function render() {
@@ -239,6 +255,7 @@
       const path = svgPart({tag:'path',props:{d:`M${i} 0V24 M0 ${i}H24`,stroke:'currentColor','stroke-width':'.055',opacity:'.2',fill:'none'}});
       path.style.pointerEvents = 'none'; svg.appendChild(path);
     }
+    renderReference694R();
     const visible = [...shapes.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
@@ -1679,5 +1696,72 @@
     previewLarge.addEventListener('lostpointercapture',endTouch694O);
     window.addEventListener('blur',()=>{activeTouches694O.clear();pinch694O=null;single694O=null;});
   }
+  // 694R: local raster reference for manual vector tracing.
+  const refPanel694R=document.createElement('details');
+  refPanel694R.className='lnSvgReference694R';
+  refPanel694R.innerHTML=`<summary>🖼 Podklad pro obkreslení</summary>
+    <div class="lnSvgRefBody694R">
+      <label>Načíst PNG / JPG / WebP <input type="file" accept="image/png,image/jpeg,image/webp" data-ref-file></label>
+      <label><input type="checkbox" data-ref-show checked> Zobrazit podklad</label>
+      <label>Průhlednost <input type="range" min="0" max="100" value="35" data-ref-opacity> <output data-ref-opacity-value>35 %</output></label>
+      <label>Velikost <input type="range" min="20" max="300" value="100" data-ref-scale> <output data-ref-scale-value>100 %</output></label>
+      <label>Vodorovně <input type="range" min="-24" max="24" step=".25" value="0" data-ref-x> <output data-ref-x-value>0</output></label>
+      <label>Svisle <input type="range" min="-24" max="24" step=".25" value="0" data-ref-y> <output data-ref-y-value>0</output></label>
+      <div class="lnSvgRefButtons694R"><button type="button" data-ref-center>Vycentrovat</button><button type="button" data-ref-remove>Odebrat podklad</button></div>
+      <small data-ref-status role="status">Obrázek slouží pouze jako předloha a nikdy se neexportuje. Po opuštění Studia jej může být nutné znovu načíst.</small>
+    </div>`;
+  const refAnchor694R=svg.closest('.lnSvgStudioBoard');
+  refAnchor694R?.insertAdjacentElement('beforebegin',refPanel694R);
+  const refField694R=name=>refPanel694R.querySelector(`[data-ref-${name}]`);
+  const refStatus694R=refField694R('status');
+  function refreshReference694R(){
+    if(!reference694R)return;
+    const r=reference694R;
+    r.visible=refField694R('show').checked;
+    r.opacity=Number(refField694R('opacity').value)/100;
+    r.scale=Number(refField694R('scale').value)/100;
+    r.xOffset=Number(refField694R('x').value);
+    r.yOffset=Number(refField694R('y').value);
+    r.width=r.fitWidth*r.scale;r.height=r.fitHeight*r.scale;
+    r.x=(24-r.width)/2+r.xOffset;r.y=(24-r.height)/2+r.yOffset;
+    for(const key of ['opacity','scale','x','y']){
+      const value=refField694R(key).value;
+      refField694R(key+'-value').textContent=key==='opacity'||key==='scale'?value+' %':value;
+    }
+    render();
+  }
+  for(const key of ['show','opacity','scale','x','y'])refField694R(key).addEventListener('input',refreshReference694R);
+  refField694R('center').addEventListener('click',()=>{
+    for(const key of ['x','y'])refField694R(key).value='0';
+    refField694R('scale').value='100';refreshReference694R();
+  });
+  refField694R('remove').addEventListener('click',()=>{
+    reference694R=null;refField694R('file').value='';render();
+    refStatus694R.textContent='Podklad odebrán. Vektorové tvary zůstaly nedotčené.';
+  });
+  refField694R('file').addEventListener('change',async e=>{
+    const f=e.target.files?.[0];if(!f)return;
+    if(!['image/png','image/jpeg','image/webp'].includes(f.type)||f.size>8*1024*1024){
+      refStatus694R.textContent='Vyber PNG, JPG nebo WebP do 8 MB.';return;
+    }
+    try{
+      const data=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('Soubor nelze přečíst'));
+        reader.readAsDataURL(f);
+      });
+      const picture=new Image();
+      await new Promise((resolve,reject)=>{picture.onload=resolve;picture.onerror=()=>reject(new Error('Neplatný obrázek'));picture.src=data;});
+      const w=picture.naturalWidth,h=picture.naturalHeight;
+      if(!w||!h||w*h>24000000)throw new Error('Příliš velký obrázek (max. 24 Mpx)');
+      const fitWidth=24*Math.min(1,h/w),fitHeight=24*Math.min(1,w/h);
+      reference694R={data,visible:true,opacity:.35,scale:1,xOffset:0,yOffset:0,fitWidth,fitHeight,width:fitWidth,height:fitHeight,x:0,y:0};
+      refField694R('show').checked=true;refField694R('opacity').value='35';
+      refField694R('scale').value='100';refField694R('x').value='0';refField694R('y').value='0';
+      refreshReference694R();
+      refStatus694R.textContent='Podklad načten: '+f.name+'. Kresli nástrojem Tužka nebo tvary přes obrázek.';
+    }catch(err){refStatus694R.textContent='Nepodařilo se načíst podklad: '+(err?.message||err);}
+  });
+
   render();
 })();
