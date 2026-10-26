@@ -1414,5 +1414,162 @@
     observer694L.observe(undoBtn,{attributes:true,attributeFilter:['disabled']});
     if(redoBtn)observer694L.observe(redoBtn,{attributes:true,attributeFilter:['disabled']});
   }
+
+  // 694O: Single actual-size SVG preview + read-only fullscreen viewer.
+  // Reuse the existing enlarged preview SVG (render() already refreshes it),
+  // never modify shapes, SVG export, tool state, or drawing viewport.
+  const previewArea694O=preview?.closest('.lnSvgStudioPreviewArea693S');
+  const tinyPreviewBlock694O=preview?.closest('.lnSvgPreviewBlock693S');
+  if(previewArea694O && tinyPreviewBlock694O && previewLarge){
+    const formerLargeBlock694O=previewLarge.closest('.lnSvgPreviewBlock693S');
+    const viewer694O=document.createElement('div');
+    viewer694O.id='lnSvgViewer694O';
+    viewer694O.className='lnSvgViewer694O';
+    viewer694O.hidden=true;
+    viewer694O.setAttribute('role','dialog');
+    viewer694O.setAttribute('aria-modal','true');
+    viewer694O.setAttribute('aria-label','Náhled SVG přes celou obrazovku');
+    viewer694O.innerHTML=`<div class="lnSvgViewerTop694O">
+      <strong>Náhled ikony</strong><output data-preview-zoom>100 %</output>
+      <button type="button" data-preview-close aria-label="Zavřít náhled">✕ Zavřít</button>
+    </div><div class="lnSvgViewerBody694O"></div>
+    <div class="lnSvgViewerBottom694O">
+      <button type="button" data-preview-out aria-label="Oddálit">−</button>
+      <button type="button" data-preview-reset>Celá ikona</button>
+      <button type="button" data-preview-in aria-label="Přiblížit">+</button>
+    </div>`;
+    document.body.appendChild(viewer694O); // outside transformed Admin modal
+    const viewerBody694O=viewer694O.querySelector('.lnSvgViewerBody694O');
+    viewerBody694O.appendChild(previewLarge);
+    formerLargeBlock694O?.remove();
+    previewArea694O.classList.add('lnSvgOnePreview694O');
+    tinyPreviewBlock694O.classList.add('lnSvgPreviewTrigger694O');
+    tinyPreviewBlock694O.setAttribute('role','button');
+    tinyPreviewBlock694O.setAttribute('tabindex','0');
+    tinyPreviewBlock694O.setAttribute('aria-label','Dvojitým klepnutím otevřít náhled přes celou obrazovku');
+    const hint694O=tinyPreviewBlock694O.querySelector('small');
+    if(hint694O) hint694O.textContent='24 × 24 · dvojtap pro fullscreen';
+
+    const viewerZoomText694O=viewer694O.querySelector('[data-preview-zoom]');
+    const limit694O=(v,min,max)=>Math.max(min,Math.min(max,v));
+    let viewerZoom694O=1,viewerX694O=0,viewerY694O=0;
+    const activeTouches694O=new Map();
+    let pinch694O=null,single694O=null,lastTap694O=null;
+    let oldBodyOverflow694O='';
+    function updateViewer694O(){
+      const size=24/viewerZoom694O;
+      viewerX694O=limit694O(viewerX694O,0,24-size);
+      viewerY694O=limit694O(viewerY694O,0,24-size);
+      previewLarge.setAttribute('viewBox',`${viewerX694O} ${viewerY694O} ${size} ${size}`);
+      viewerZoomText694O.textContent=`${Math.round(viewerZoom694O*100)} %`;
+    }
+    function zoomViewer694O(next, anchor=null){
+      const rect=previewLarge.getBoundingClientRect(), before=24/viewerZoom694O;
+      const fracX=anchor&&rect.width ? limit694O((anchor.x-rect.left)/rect.width,0,1):.5;
+      const fracY=anchor&&rect.height ? limit694O((anchor.y-rect.top)/rect.height,0,1):.5;
+      const atX=viewerX694O+fracX*before, atY=viewerY694O+fracY*before;
+      viewerZoom694O=limit694O(next,1,12);
+      const after=24/viewerZoom694O;
+      viewerX694O=atX-fracX*after;viewerY694O=atY-fracY*after;
+      updateViewer694O();
+    }
+    function resetViewer694O(){
+      viewerZoom694O=1;viewerX694O=0;viewerY694O=0;updateViewer694O();
+    }
+    function showViewer694O(){
+      if(!viewer694O.hidden)return;
+      lastTap694O=null;
+      viewer694O.hidden=false;
+      oldBodyOverflow694O=document.body.style.overflow;
+      document.body.style.overflow='hidden';
+      resetViewer694O();
+      viewer694O.querySelector('[data-preview-close]').focus({preventScroll:true});
+    }
+    function closeViewer694O(){
+      if(viewer694O.hidden)return;
+      viewer694O.hidden=true;
+      document.body.style.overflow=oldBodyOverflow694O;
+      activeTouches694O.clear();pinch694O=null;single694O=null;
+      tinyPreviewBlock694O.focus({preventScroll:true});
+    }
+    let lastPreviewTap694O=null;
+    tinyPreviewBlock694O.addEventListener('pointerup',e=>{
+      if(e.pointerType==='mouse')return;
+      const now=performance.now();
+      if(lastPreviewTap694O && now-lastPreviewTap694O.time<430 &&
+         Math.hypot(e.clientX-lastPreviewTap694O.x,e.clientY-lastPreviewTap694O.y)<42){
+        lastPreviewTap694O=null;showViewer694O();
+      }else lastPreviewTap694O={time:now,x:e.clientX,y:e.clientY};
+    });
+    tinyPreviewBlock694O.addEventListener('dblclick',e=>{e.preventDefault();showViewer694O();});
+    tinyPreviewBlock694O.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){e.preventDefault();showViewer694O();}
+    });
+    viewer694O.querySelector('[data-preview-close]').addEventListener('click',closeViewer694O);
+    viewer694O.querySelector('[data-preview-in]').addEventListener('click',()=>zoomViewer694O(viewerZoom694O*1.5));
+    viewer694O.querySelector('[data-preview-out]').addEventListener('click',()=>zoomViewer694O(viewerZoom694O/1.5));
+    viewer694O.querySelector('[data-preview-reset]').addEventListener('click',resetViewer694O);
+    // Double tap outside? Close only via the explicit close button/Escape.
+    document.addEventListener('keydown',e=>{
+      if(!viewer694O.hidden && (e.key==='Escape'||e.key==='Backspace')){
+        e.preventDefault();closeViewer694O();
+      }
+    },true);
+    back.addEventListener('click',closeViewer694O);
+    new MutationObserver(()=>{if(modal.hidden||view.hidden)closeViewer694O();})
+      .observe(modal,{attributes:true,attributeFilter:['hidden']});
+
+    function centerOfTouches694O(){
+      const v=[...activeTouches694O.values()];
+      return {x:(v[0].x+v[1].x)/2,y:(v[0].y+v[1].y)/2,
+        distance:Math.max(1,Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y))};
+    }
+    function initTouches694O(){
+      if(activeTouches694O.size>=2){
+        const c=centerOfTouches694O();
+        pinch694O={distance:c.distance,zoom:viewerZoom694O,
+          center:{x:c.x,y:c.y}};
+        single694O=null;
+      }else if(activeTouches694O.size===1){
+        const p=[...activeTouches694O.values()][0];
+        pinch694O=null;
+        single694O={x:p.x,y:p.y,panX:viewerX694O,panY:viewerY694O};
+      }else{pinch694O=null;single694O=null;}
+    }
+    previewLarge.addEventListener('pointerdown',e=>{
+      if(viewer694O.hidden || e.pointerType==='mouse' && e.button!==0)return;
+      e.preventDefault();
+      activeTouches694O.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      try{previewLarge.setPointerCapture(e.pointerId);}catch(_){}
+      initTouches694O();
+    });
+    previewLarge.addEventListener('pointermove',e=>{
+      if(!activeTouches694O.has(e.pointerId))return;
+      e.preventDefault();
+      activeTouches694O.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(activeTouches694O.size>=2 && pinch694O){
+        const c=centerOfTouches694O();
+        // Use the midpoint as an anchor so the image stays under the fingers.
+        const target=pinch694O.zoom*c.distance/pinch694O.distance;
+        zoomViewer694O(target,{x:c.x,y:c.y});
+      }else if(single694O && viewerZoom694O>1){
+        const rect=previewLarge.getBoundingClientRect(),size=24/viewerZoom694O;
+        if(!rect.width||!rect.height)return;
+        viewerX694O=single694O.panX-(e.clientX-single694O.x)*size/rect.width;
+        viewerY694O=single694O.panY-(e.clientY-single694O.y)*size/rect.height;
+        updateViewer694O();
+      }
+    });
+    function endTouch694O(e){
+      if(!activeTouches694O.has(e.pointerId))return;
+      activeTouches694O.delete(e.pointerId);
+      try{if(previewLarge.hasPointerCapture(e.pointerId))previewLarge.releasePointerCapture(e.pointerId);}catch(_){}
+      initTouches694O();
+    }
+    previewLarge.addEventListener('pointerup',endTouch694O);
+    previewLarge.addEventListener('pointercancel',endTouch694O);
+    previewLarge.addEventListener('lostpointercapture',endTouch694O);
+    window.addEventListener('blur',()=>{activeTouches694O.clear();pinch694O=null;single694O=null;});
+  }
   render();
 })();
