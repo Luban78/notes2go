@@ -123,7 +123,7 @@
 /* 694N: compact contextual actions, visible only for a selected object. */
 .lnSvgStudio .lnSvgObjectActions694N[hidden]{display:none!important}
 .lnSvgStudio .lnSvgObjectActions694N{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:7px 0 4px}
-.lnSvgStudio .lnSvgObjectActions694N button{min-width:0;min-height:39px;padding:6px 3px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);font:inherit;font-size:12px;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.lnSvgStudio .lnSvgObjectActions694N button{min-width:0;min-height:39px;padding:6px 3px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);color:var(--color-text);font:inherit;font-size:11px;line-height:1.15;white-space:normal;text-align:center;-webkit-tap-highlight-color:transparent}
 .lnSvgStudio .lnSvgObjectActions694N button:disabled{opacity:.4}
 
 /* 694O: one 24x24 preview; double tap opens read-only fullscreen viewer. */

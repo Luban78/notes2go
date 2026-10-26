@@ -117,34 +117,57 @@
   // Unknown imported transforms remain untouched; resize refuses them safely.
   // 694J: uniform similarity transform (scale + rotation + translation).
   // Matrix decomposition keeps previous 694H and 694I features usable after rotation.
+  function matrixAffine694V(values){
+    const [a,b,c,d,x,y]=values;
+    const sx=Math.hypot(a,b), sy=Math.hypot(c,d);
+    if(![a,b,c,d,x,y].every(Number.isFinite))return null;
+    if(sx<.00001||sy<.00001||Math.abs(sx-sy)>.02)return null;
+    const dot=a*c+b*d;
+    if(Math.abs(dot)>.02)return null;
+    const s=(sx+sy)/2;
+    const determinant=a*d-b*c;
+    const m=determinant<0?-1:1;
+    const angle=m<0?Math.atan2(-c,d):Math.atan2(b,a);
+    const co=Math.cos(angle),si=Math.sin(angle);
+    const expected=[s*m*co,s*m*si,-s*si,s*co];
+    if(Math.max(Math.abs(a-expected[0]),Math.abs(b-expected[1]),Math.abs(c-expected[2]),Math.abs(d-expected[3]))>.03)return null;
+    return {s,x,y,angle,m};
+  }
   function affine694H(shape) {
     const value=String(shape?.props?.transform||'').trim();
-    if(!value)return {s:1,x:0,y:0,angle:0};
+    if(!value)return {s:1,x:0,y:0,angle:0,m:1};
     const tr=value.match(/^translate\(\s*(-?(?:\d+(?:\.\d*)?|\.\d+))[,\s]+(-?(?:\d+(?:\.\d*)?|\.\d+))\s*\)$/i);
-    if(tr)return {s:1,x:Number(tr[1]),y:Number(tr[2]),angle:0};
+    if(tr)return {s:1,x:Number(tr[1]),y:Number(tr[2]),angle:0,m:1};
     const ma=value.match(/^matrix\(\s*([^)]*)\)$/i);
     if(!ma)return null;
     const n=ma[1].trim().split(/[\s,]+/).map(Number);
     if(n.length!==6||n.some(v=>!Number.isFinite(v)))return null;
-    const [a,b,c,d,x,y]=n, scale=Math.hypot(a,b);
-    if(scale<.00001||Math.abs(c+b)>.02||Math.abs(d-a)>.02)return null;
-    return {s:scale,x,y,angle:Math.atan2(b,a)};
+    return matrixAffine694V(n);
   }
   function world694J(t,p) {
-    const co=Math.cos(t.angle||0),si=Math.sin(t.angle||0);
-    return {x:t.x+t.s*(p.x*co-p.y*si),y:t.y+t.s*(p.x*si+p.y*co)};
+    const co=Math.cos(t.angle||0),si=Math.sin(t.angle||0),m=t.m||1;
+    return {x:t.x+t.s*(m*p.x*co-p.y*si),y:t.y+t.s*(m*p.x*si+p.y*co)};
   }
   function local694J(t,p) {
-    const co=Math.cos(t.angle||0),si=Math.sin(t.angle||0);
+    const co=Math.cos(t.angle||0),si=Math.sin(t.angle||0),m=t.m||1;
     const dx=(p.x-t.x)/t.s,dy=(p.y-t.y)/t.s;
-    return {x:dx*co+dy*si,y:-dx*si+dy*co};
+    const rx=dx*co+dy*si, ry=-dx*si+dy*co;
+    return {x:m*rx,y:ry};
+  }
+  function matrixFromAffine694V(t){
+    const angle=t.angle||0,co=Math.cos(angle),si=Math.sin(angle),m=t.m||1;
+    return [t.s*m*co,t.s*m*si,-t.s*si,t.s*co,t.x,t.y];
   }
   function assignAffine694H(shape,t) {
-    const angle=t.angle||0,co=Math.cos(angle),si=Math.sin(angle);
-    if(Math.abs(t.s-1)<.000001&&Math.abs(angle)<.000001) {
-      if(Math.abs(t.x)+Math.abs(t.y)<.001)delete shape.props.transform;
-      else shape.props.transform=`translate(${fmt(t.x)} ${fmt(t.y)})`;
-    } else {const mf=n=>String(Math.round(n*1000000)/1000000);shape.props.transform=`matrix(${mf(t.s*co)} ${mf(t.s*si)} ${mf(-t.s*si)} ${mf(t.s*co)} ${mf(t.x)} ${mf(t.y)})`;}
+    const current={s:t.s,x:t.x,y:t.y,angle:t.angle||0,m:t.m||1};
+    if(Math.abs(current.s-1)<.000001&&Math.abs(current.angle)<.000001&&current.m===1) {
+      if(Math.abs(current.x)+Math.abs(current.y)<.001)delete shape.props.transform;
+      else shape.props.transform=`translate(${fmt(current.x)} ${fmt(current.y)})`;
+    } else {
+      const mf=n=>String(Math.round(n*1000000)/1000000);
+      const [a,b,c,d,x,y]=matrixFromAffine694V(current);
+      shape.props.transform=`matrix(${mf(a)} ${mf(b)} ${mf(c)} ${mf(d)} ${mf(x)} ${mf(y)})`;
+    }
   }
   function shapeBounds694H(shape) {
     const t=affine694H(shape);
@@ -823,7 +846,7 @@
       if(snapRotate694J.checked)delta=Math.round(delta/(Math.PI/12))*(Math.PI/12);
       const angle=z.original.angle+delta,co=Math.cos(delta),si=Math.sin(delta),c=z.center;
       const x=z.original.x-c.x,y=z.original.y-c.y;
-      assignAffine694H(shapes[g.chosen],{s:z.original.s,angle,x:c.x+x*co-y*si,y:c.y+x*si+y*co});
+      assignAffine694H(shapes[g.chosen],{s:z.original.s,angle,m:z.original.m||1,x:c.x+x*co-y*si,y:c.y+x*si+y*co});
       render();return;
     }
     if(g.mode==='rotate-select')return;
@@ -847,7 +870,7 @@
       const factor=limit693W(((target.x-z.anchor.x)*dx+(target.y-z.anchor.y)*dy)/den,.15,5);
       assignAffine694H(shapes[g.chosen],{s:z.original.s*factor,
         x:z.anchor.x+factor*(z.original.x-z.anchor.x),
-        y:z.anchor.y+factor*(z.original.y-z.anchor.y),angle:z.original.angle});
+        y:z.anchor.y+factor*(z.original.y-z.anchor.y),angle:z.original.angle,m:z.original.m||1});
     } else if(g.mode==='scale-select'){
       return;
     } else if (g.mode === 'move') {
@@ -1363,13 +1386,29 @@
   open.addEventListener('click',()=>{if(home.hidden||modal.hidden)return;home.hidden=true;view.hidden=false;render();initDrafts694K();});
   back.addEventListener('click',()=>{view.hidden=true;home.hidden=false;});
   new MutationObserver(()=>{if(modal.hidden){view.hidden=true;home.hidden=false;}}).observe(modal,{attributes:true,attributeFilter:['hidden']});
+  // 694V: mirror copy reflects the selected vector object around the canvas center.
+  // Typical use: draw one half of a symmetric icon, then create the second half.
+  function mirrorClone694V(shape, axis) {
+    const base=affine694H(shape);
+    if(!base)return null;
+    const [a,b,c,d,x,y]=matrixFromAffine694V(base);
+    const values=axis==='horizontal'
+      ? [a,-b,c,-d,x,24-y]
+      : [-a,b,-c,d,24-x,y];
+    const next=matrixAffine694V(values);
+    if(!next)return null;
+    const clone=deepCopy(shape);
+    assignAffine694H(clone,next);
+    return clone;
+  }
+
   // 694N: duplicate and layering operate only on the selected vector object.
   // They modify the existing shapes array, preserving SVG attributes and transforms.
   const objectActions694N=document.createElement('div');
   objectActions694N.id='lnSvgObjectActions694N';
   objectActions694N.className='lnSvgObjectActions694N';
   objectActions694N.hidden=true;
-  objectActions694N.innerHTML='<button type="button" data-layer="duplicate">⧉ Duplikovat</button><button type="button" data-layer="front">↑ Dopředu</button><button type="button" data-layer="back">↓ Dozadu</button>';
+  objectActions694N.innerHTML='<button type="button" data-layer="duplicate">⧉ Duplikovat</button><button type="button" data-layer="mirror-x">↔ Zrc. kopie</button><button type="button" data-layer="mirror-y">↕ Zrc. kopie</button><button type="button" data-layer="front">↑ Dopředu</button><button type="button" data-layer="back">↓ Dozadu</button>';
   const canvasBoard694N=svg.closest('.lnSvgStudioBoard');
   canvasBoard694N?.insertAdjacentElement('beforebegin',objectActions694N);
   objectActions694N.addEventListener('click',e=>{
@@ -1387,6 +1426,13 @@
       }
       shapes.splice(selected+1,0,clone);
       selected+=1;
+    } else if(action==='mirror-x' || action==='mirror-y'){
+      const clone=mirrorClone694V(shapes[selected], action==='mirror-y'?'horizontal':'vertical');
+      if(!clone){
+        announce('Tento importovaný transform zatím nelze bezpečně zrcadlit.');return;
+      }
+      shapes.splice(selected+1,0,clone);
+      selected+=1;
     } else if(action==='front' && selected < shapes.length-1){
       [shapes[selected],shapes[selected+1]]=[shapes[selected+1],shapes[selected]];
       selected+=1;
@@ -1395,7 +1441,12 @@
       selected-=1;
     } else return;
     record(before);render();
-    announce(action==='duplicate'?'Objekt duplikován.':action==='front'?'Objekt posunut dopředu.':'Objekt posunut dozadu.');
+    announce(
+      action==='duplicate'?'Objekt duplikován.':
+      action==='mirror-x'?'Zrcadlová kopie vytvořena podle svislé osy středu.':
+      action==='mirror-y'?'Zrcadlová kopie vytvořena podle vodorovné osy středu.':
+      action==='front'?'Objekt posunut dopředu.':'Objekt posunut dozadu.'
+    );
   });
   // 694L: Compact workbench. Reparent live controls instead of cloning them.
   // Production icons, shape engine, gesture listeners and IndexedDB remain untouched.
