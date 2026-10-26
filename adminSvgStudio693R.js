@@ -247,6 +247,26 @@
     el.style.pointerEvents='none';
     svg.appendChild(el);
   }
+  // 694U: optional magnetic grid. Settings apply to future gestures only;
+  // freehand strokes, erasers, pan, rotate and the reference image stay untouched.
+  let snapGrid694U=false, gridStep694U=2;
+  function snapCoord694U(n) {
+    if(!snapGrid694U || !Number.isFinite(n))return n;
+    return Math.round(n/gridStep694U)*gridStep694U;
+  }
+  function snapPoint694U(p) {
+    if(!snapGrid694U)return p;
+    return {x:clamp(snapCoord694U(p.x)),y:clamp(snapCoord694U(p.y))};
+  }
+  function magnetCoord694U(n) {
+    if(!snapGrid694U)return n;
+    // Move objects smoothly until their visual center approaches a grid line.
+    // Tolerance scales with current zoom (~8 screen pixels at most).
+    const r=svg.getBoundingClientRect();
+    const pixelsToUnits=8*24/(zoom693W*Math.max(1,r.width));
+    const delta=snapCoord694U(n)-n;
+    return Math.abs(delta)<=Math.min(gridStep694U*.32,pixelsToUnits)?n+delta:n;
+  }
   // 694M: centered non-exported guides live ONLY in the canvas render, never in shapes.
   let showCenter694M = true;
   function render() {
@@ -257,6 +277,17 @@
       path.style.pointerEvents = 'none'; svg.appendChild(path);
     }
     renderReference694R();
+    if(snapGrid694U){
+      // The snapping grid is visual only; never inserted into shapes or exports.
+      let d='';
+      for(let i=0;i<=Math.round(24/gridStep694U);i++){
+        const v=fmt(Math.min(24,i*gridStep694U));
+        d+=`M${v} 0V24 M0 ${v}H24 `;
+      }
+      const guide=svgPart({tag:'path',props:{d,fill:'none',stroke:'#05c5c1','stroke-width':'.055',opacity:'.27'}});
+      guide.style.pointerEvents='none';guide.setAttribute('data-snap-guide-694U','');
+      svg.appendChild(guide);
+    }
     const visible = [...shapes.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
@@ -707,7 +738,8 @@
     }
     const p = point(e), kind = tool.value;
     try { svg.setPointerCapture?.(e.pointerId); } catch (_) { /* window listeners cover no-capture WebViews */ }
-    gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
+    gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,
+      start:['line','rect','circle','arc','moon'].includes(kind)?snapPoint694U(p):p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
     if (kind === 'pan') {
       gesture.initialPan={x:panX693W,y:panY693W};
     } else if(kind==='rotate'){
@@ -757,6 +789,7 @@
       selected = hitTest(p);
       gesture.chosen = selected;
       gesture.initial = selected >= 0 ? offset(shapes[selected]) : {x:0,y:0};
+      gesture.initialBounds694U = selected>=0 && snapGrid694U ? shapeBounds694H(shapes[selected]) : null;
       announce(selected < 0 ? 'Klepni na tvar, který chceš přesunout.' : 'Táhni prstem pro přesun vybraného tvaru.');
     } else if (kind === 'bucket') {
       selected=-1; bucketAt694M(p);
@@ -799,7 +832,7 @@
       if(!info||!z||!z.transform)return;
       const part=info.parsed[z.segment];if(!part)return;
       const t=z.transform;
-      const local=local694J(t,p);
+      const local=local694J(t,snapPoint694U(p));
       part.nums[z.coordinate]=local.x;
       part.nums[z.coordinate+1]=local.y;
       shape.props.d=writeNodes694I(info.parsed);
@@ -810,7 +843,8 @@
       if(g.chosen<0)return;
       const z=g.resize,dx=z.dx,dy=z.dy,den=dx*dx+dy*dy;
       if(den<=.00001)return;
-      const factor=limit693W(((p.x-z.anchor.x)*dx+(p.y-z.anchor.y)*dy)/den,.15,5);
+      const target=snapPoint694U(p);
+      const factor=limit693W(((target.x-z.anchor.x)*dx+(target.y-z.anchor.y)*dy)/den,.15,5);
       assignAffine694H(shapes[g.chosen],{s:z.original.s*factor,
         x:z.anchor.x+factor*(z.original.x-z.anchor.x),
         y:z.anchor.y+factor*(z.original.y-z.anchor.y),angle:z.original.angle});
@@ -818,11 +852,19 @@
       return;
     } else if (g.mode === 'move') {
       if (g.chosen < 0) return;
-      setOffset(shapes[g.chosen], g.initial.x+p.x-g.start.x,g.initial.y+p.y-g.start.y);
+      const deltaX=p.x-g.start.x,deltaY=p.y-g.start.y;
+      let dx=deltaX,dy=deltaY;
+      if(snapGrid694U && g.initialBounds694U){
+        const b=g.initialBounds694U;
+        const centerX=(b.l+b.r)/2+deltaX,centerY=(b.t+b.b)/2+deltaY;
+        dx+=magnetCoord694U(centerX)-centerX;
+        dy+=magnetCoord694U(centerY)-centerY;
+      }
+      setOffset(shapes[g.chosen],g.initial.x+dx,g.initial.y+dy);
     } else if (g.mode === 'pen') {
       if (distance(p,g.points[g.points.length-1])>0.065) { g.rawPath += ` L${fmt(p.x)} ${fmt(p.y)}`; g.points.push(p); }
       drawing = normalized('path',{d:g.rawPath});
-    } else drawing = shapeAt(g.start,p,g.mode);
+    } else drawing = shapeAt(g.start,snapPoint694U(p),g.mode);
     render();
   });
   function finish(e,cancelled=false) {
@@ -833,7 +875,7 @@
     const p = point(e);
     if (!['move','eraser','partial-eraser','bucket','pan','resize','scale-select','node-drag','node-select','rotate-drag','rotate-select'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
-      else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
+      else if (g.mode !== 'pen') drawing = shapeAt(g.start,snapPoint694U(p),g.mode);
       if (drawing) {
         if(g.mode==='pen' && autoSmooth693V.checked && drawing.tag==='path') {
           const d=smoothPoints693V(g.points); if(d) drawing.props.d=d;
@@ -1375,6 +1417,30 @@
     centerOption694M.innerHTML='<input type="checkbox" checked> Zobrazit střed plátna';
     centerOption694M.querySelector('input').addEventListener('change',e=>{showCenter694M=e.target.checked;render();});
     optionsBody694L.appendChild(centerOption694M);
+    const snapOption694U=document.createElement('div');
+    snapOption694U.className='lnSvgSnapOption694U';
+    snapOption694U.innerHTML=`<label><input data-snap-on type="checkbox"> Přichytávat k mřížce</label>
+      <label>Krok <select data-snap-step aria-label="Krok přichytávání">
+        <option value="2" selected>2 (větší)</option>
+        <option value="1">1 (běžný)</option>
+        <option value="0.5">0,5 (jemný)</option>
+      </select></label>
+      <small>Konce tvarů a body zapadnou na mřížku; vybraný objekt se přichytí středem. Tužka kreslí volně.</small>`;
+    const snapToggle694U=snapOption694U.querySelector('[data-snap-on]');
+    const snapStepSelect694U=snapOption694U.querySelector('[data-snap-step]');
+    snapStepSelect694U.disabled=true;
+    snapToggle694U.addEventListener('change',()=>{
+      snapGrid694U=snapToggle694U.checked;
+      snapStepSelect694U.disabled=!snapGrid694U;
+      render();
+      announce(snapGrid694U?'Přichytávání zapnuto.':'Přichytávání vypnuto.');
+    });
+    snapStepSelect694U.addEventListener('change',()=>{
+      const step=Number(snapStepSelect694U.value);
+      if(![.5,1,2].includes(step))return;
+      gridStep694U=step;render();
+    });
+    optionsBody694L.appendChild(snapOption694U);
     const mainTools694L=view.querySelector('.lnSvgStudioTools');
     const diag694L=view.querySelector('.lnSvgPanDiag693Z, .lnSvgPanDiagnostics693Z, details[data-pan-diagnostic], details.lnSvgDiag693Z');
     for(const item of [arcControls694F,mainTools694L,rotateControls694J,smoothBar693V,diag694L]){
