@@ -19,9 +19,9 @@
     option.textContent = '✋ Posun plátna';
     tool.appendChild(option);
   }
-  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser']);
-  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser']);
-  for (const [value,label] of [['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
+  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser', 'scale']);
+  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser', 'scale']);
+  for (const [value,label] of [['scale','⤡ Změna velikosti'],['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
   const color = $('lnSvgColor693S'), themeColor = $('lnSvgThemeColor693S');
   const fill = $('lnSvgFill693S'), preview = $('lnSvgPreview693S'), previewLarge = $('lnSvgPreviewLarge693S');
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
@@ -112,14 +112,52 @@
     future = [];
     return true;
   }
+  // 694H: uniform SVG affine transform, preserving precise paths and all SVG geometry.
+  // Unknown imported transforms remain untouched; resize refuses them safely.
+  function affine694H(s) {
+    const value=String(s?.props?.transform||'').trim();
+    if (!value) return {s:1,x:0,y:0};
+    const numbers=String.raw`(-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)`;
+    const tr=value.match(new RegExp('^translate\\(\\s*'+numbers+'[\\s,]+'+numbers+'\\s*\\)$','i'));
+    if (tr) return {s:1,x:Number(tr[1]),y:Number(tr[2])};
+    const ma=value.match(/^matrix\(\s*([^)]*)\)$/i);
+    if (!ma) return null;
+    const n=ma[1].trim().split(/[\s,]+/).map(Number);
+    if (n.length!==6 || n.some(v=>!Number.isFinite(v)) || n[0]<=0 ||
+        Math.abs(n[1])>1e-8 || Math.abs(n[2])>1e-8 || Math.abs(n[0]-n[3])>1e-8) return null;
+    return {s:n[0],x:n[4],y:n[5]};
+  }
+  function assignAffine694H(shape,t) {
+    if(Math.abs(t.s-1)<.000001) {
+      if(Math.abs(t.x)+Math.abs(t.y)<.001) delete shape.props.transform;
+      else shape.props.transform=`translate(${fmt(t.x)} ${fmt(t.y)})`;
+    } else shape.props.transform=`matrix(${fmt(t.s)} 0 0 ${fmt(t.s)} ${fmt(t.x)} ${fmt(t.y)})`;
+  }
+  function shapeBounds694H(shape) {
+    const t=affine694H(shape);
+    if(!t) return null;
+    const el=svgPart(shape);svg.appendChild(el);
+    try {
+      const b=el.getBBox();
+      if(![b.x,b.y,b.width,b.height].every(Number.isFinite))return null;
+      return {l:b.x*t.s+t.x,t:b.y*t.s+t.y,r:(b.x+b.width)*t.s+t.x,b:(b.y+b.height)*t.s+t.y};
+    }catch(_){return null;}finally{el.remove();}
+  }
+  function resizeHandle694H(p,b) {
+    const r=svg.getBoundingClientRect(),size=24/zoom693W;
+    const tol=16*size/Math.max(1,r.width);
+    for(const [key,x,y] of [['tl',b.l,b.t],['tr',b.r,b.t],['bl',b.l,b.b],['br',b.r,b.b]])
+      if(Math.hypot(p.x-x,p.y-y)<=tol)return key;
+    return null;
+  }
   function offset(s) {
-    const m = String(s.props.transform || '').match(/^translate\(\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*\)$/);
-    return m ? { x: Number(m[1]), y: Number(m[2]) } : { x: 0, y: 0 };
+    const t=affine694H(s);
+    return t?{x:t.x,y:t.y}:{x:0,y:0};
   }
   function setOffset(s, x, y) {
-    x = Math.round(x * 100) / 100; y = Math.round(y * 100) / 100;
-    if (Math.abs(x) + Math.abs(y) < .001) delete s.props.transform;
-    else s.props.transform = `translate(${fmt(x)} ${fmt(y)})`;
+    const t=affine694H(s);
+    if(!t)return;
+    assignAffine694H(s,{s:t.s,x,y});
   }
   function exportSvg() {
     return `<svg xmlns="${NS}" viewBox="0 0 24 24">${shapes.filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
@@ -146,13 +184,17 @@
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
     }
-    if (selected >= 0 && shapes[selected] && ['move','eraser'].includes(tool.value)) {
-      try {
-        const el = svgPart(shapes[selected]); svg.appendChild(el);
-        const b = el.getBBox(), d = offset(shapes[selected]); el.remove();
-        const mark = svgPart({tag:'rect',props:{x:fmt(b.x+d.x-.6),y:fmt(b.y+d.y-.6),width:fmt(b.width+1.2),height:fmt(b.height+1.2),rx:'.35',fill:'none',stroke:'#00c5b9','stroke-width':'.22','stroke-dasharray':'.7 .45'}});
-        mark.style.pointerEvents = 'none'; svg.appendChild(mark);
-      } catch (_) { /* imported geometry without a measurable box */ }
+    if (selected >= 0 && shapes[selected] && ['move','eraser','scale'].includes(tool.value)) {
+      const b=shapeBounds694H(shapes[selected]);
+      if(b){
+        const pad=.45/zoom693W, h=.38/zoom693W;
+        const mark=svgPart({tag:'rect',props:{x:fmt(b.l-pad),y:fmt(b.t-pad),width:fmt(b.r-b.l+2*pad),height:fmt(b.b-b.t+2*pad),rx:fmt(.2/zoom693W),fill:'none',stroke:'#00c5b9','stroke-width':fmt(.16/zoom693W),'stroke-dasharray':`${fmt(.5/zoom693W)} ${fmt(.3/zoom693W)}`}});
+        mark.style.pointerEvents='none';svg.appendChild(mark);
+        if(tool.value==='scale') for(const [x,y] of [[b.l,b.t],[b.r,b.t],[b.l,b.b],[b.r,b.b]]){
+          const handle=svgPart({tag:'rect',props:{x:fmt(x-h),y:fmt(y-h),width:fmt(2*h),height:fmt(2*h),rx:fmt(.12/zoom693W),fill:'#ffc247',stroke:'#333333','stroke-width':fmt(.11/zoom693W)}});
+          handle.style.pointerEvents='none';svg.appendChild(handle);
+        }
+      }
     }
     for (const p of [preview, previewLarge]) {
       if (!p) continue;
@@ -250,19 +292,21 @@
     for (let i = shapes.length-1; i >= 0; i--) {
       const el = svgPart(shapes[i]); svg.appendChild(el);
       try {
-        const d = offset(shapes[i]), q = {x:p.x-d.x, y:p.y-d.y};
+        const d = affine694H(shapes[i]);
+        if(!d)throw new Error('unsupported imported transform');
+        const q = {x:(p.x-d.x)/d.s, y:(p.y-d.y)/d.s};
         let minimal = Infinity;
         const length = el.getTotalLength?.();
         if (Number.isFinite(length) && length >= 0) {
           const steps = Math.max(12, Math.min(220, Math.ceil(length * 4)));
           for (let k = 0; k <= steps; k++) {
             const v = el.getPointAtLength(length*k/steps);
-            minimal = Math.min(minimal, Math.hypot(q.x-v.x,q.y-v.y));
+            minimal = Math.min(minimal, Math.hypot(q.x-v.x,q.y-v.y)*d.s);
           }
         }
         const bb = el.getBBox();
         if (shapes[i].props.fill !== 'none' && bb.width && bb.height && q.x >= bb.x && q.x <= bb.x+bb.width && q.y >= bb.y && q.y <= bb.y+bb.height) minimal = 0;
-        const threshold = Math.max(bestDistance, Number(shapes[i].props['stroke-width'] || 1.8)/2 + .65);
+        const threshold = Math.max(bestDistance, Number(shapes[i].props['stroke-width'] || 1.8)*d.s/2 + .65);
         if (minimal <= threshold && (minimal < bestDistance || best === -1)) { best = i; bestDistance = minimal; }
       } catch (_) { /* ignore malformed/unmeasurable path */ }
       el.remove();
@@ -288,7 +332,7 @@
       if(!shape || !['path','line','circle','ellipse','polyline','polygon'].includes(shape.tag) ||
          (shape.props.fill && shape.props.fill!=='none')) continue;
       // Do not silently replace unsupported transforms with wrong coordinates.
-      if(shape.props.transform && !/^translate\(\s*-?[\d.]+[ ,]+-?[\d.]+\s*\)$/.test(shape.props.transform)) continue;
+      if(!affine694H(shape)) continue;
       const el=svgPart(shape); svg.appendChild(el);
       let length,points=[];
       try {
@@ -297,9 +341,9 @@
         const count=Math.max(12,Math.min(1200,Math.ceil(length/.12)));
         for(let k=0;k<=count;k++){const v=el.getPointAtLength(length*k/count);points.push({x:v.x,y:v.y});}
       } catch(_) { continue; } finally {el.remove();}
-      const shift=offset(shape);
-      const radius=eraseRadius694G+Math.max(0,Number(shape.props['stroke-width']||1)/2);
-      const keep=points.map(q=>Math.hypot(q.x+shift.x-p.x,q.y+shift.y-p.y)>radius);
+      const shift=affine694H(shape);
+      const radius=eraseRadius694G+Math.max(0,Number(shape.props['stroke-width']||1)*shift.s/2);
+      const keep=points.map(q=>Math.hypot(q.x*shift.s+shift.x-p.x,q.y*shift.s+shift.y-p.y)>radius);
       if(keep.every(Boolean))continue;
       const fragments=[];let segment=[];
       function flush(){
@@ -356,11 +400,12 @@
     const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
   });
   // Icon shortcuts mirror the existing select; they do not create a second tool state.
-  const tools693W=[['move','mouse-pointer-2','Výběr'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
+  const tools693W=[['move','mouse-pointer-2','Výběr'],['scale','maximize','Velikost'],['pen','pencil','Tužka'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
   const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
   toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
   const icons693W={
     'mouse-pointer-2':'<path d="m5 3 14 9-7 1-3 7z"/>',
+    maximize:'<path d="M4 10V4h6 M4 4l6 6 M20 14v6h-6 M20 20l-6-6 M14 4h6v6 M20 4l-6 6 M4 14v6h6 M4 20l6-6"/>',
     pencil:'<path d="m4 20 4.6-1 11-11-3.6-3.6-11 11zM14 6l3.6 3.6"/>',
     minus:'<path d="M4 12h16"/>',circle:'<circle cx="12" cy="12" r="8"/>',
     square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
@@ -396,7 +441,7 @@
   const toolRow693W=tool.closest('.lnSvgStudioTools');
   if(toolRow693W){toolRow693W.insertAdjacentElement('beforebegin',toolBar693W);toolRow693W.insertAdjacentElement('afterend',controls693W);}
   tool.closest('label')?.classList.add('lnSvgOldSelect693W');
-  const panInfo693W=document.createElement('small');panInfo693W.textContent='Pro posun zvětšeného plátna použij ruku. Zoom nemění velikost exportované ikony.';
+  const panInfo693W=document.createElement('small');  panInfo693W.textContent='Dvěma prsty přibližuj a posouvej plátno. Nástroj Velikost upraví jen vybraný objekt; zoom nemění exportovanou ikonu.';
   controls693W.insertAdjacentElement('afterend',panInfo693W);
   panInfo693W.className='lnSvgPanInfo693W';
   syncTools693W();applyView693W();
@@ -422,8 +467,56 @@
     // Pan stays selected until the user explicitly chooses another tool.
     render();
   }
+  // 694H – pinch zoom independent of the active tool. The first unfinished
+  // stroke is rolled back when a second finger joins, avoiding stray marks.
+  const touches694H=new Map();
+  let pinch694H=null, muteTouches694H=false;
+  const midpoint694H=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const length694H=(a,b)=>Math.max(1,Math.hypot(a.x-b.x,a.y-b.y));
+  function startPinch694H(){
+    const [a,b]=[...touches694H.values()];
+    if(!a||!b)return;
+    if(gesture)cancelInterruptedGesture693X();
+    muteTouches694H=true;
+    const mid=midpoint694H(a,b), r=svg.getBoundingClientRect(),span=24/zoom693W;
+    pinch694H={zoom:zoom693W,dist:length694H(a,b),
+      worldX:panX693W+(mid.x-r.left)*span/r.width,
+      worldY:panY693W+(mid.y-r.top)*span/r.height};
+  }
+  function endTouch694H(e){
+    if(e.pointerType!=='touch'||!touches694H.has(e.pointerId))return false;
+    const wasMuted=muteTouches694H;
+    touches694H.delete(e.pointerId);
+    if(touches694H.size<2)pinch694H=null;
+    if(!touches694H.size)muteTouches694H=false;
+    return wasMuted;
+  }
+  function moveTouch694H(e){
+    if(e.pointerType!=='touch'||!touches694H.has(e.pointerId))return false;
+    touches694H.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch694H && touches694H.size>=2){
+      const [a,b]=[...touches694H.values()],mid=midpoint694H(a,b);
+      const r=svg.getBoundingClientRect();
+      zoom693W=limit693W(pinch694H.zoom*length694H(a,b)/pinch694H.dist,1,8);
+      const span=24/zoom693W;
+      panX693W=pinch694H.worldX-(mid.x-r.left)*span/r.width;
+      panY693W=pinch694H.worldY-(mid.y-r.top)*span/r.height;
+      applyView693W();
+      return true;
+    }
+    return muteTouches694H;
+  }
   svg.addEventListener('pointerdown', e => {
     if (view.hidden) return;
+    if(e.pointerType==='touch'){
+      touches694H.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(touches694H.size>=2){
+        startPinch694H();
+        try{svg.setPointerCapture?.(e.pointerId);}catch(_){}
+        e.preventDefault();return;
+      }
+      if(muteTouches694H)return;
+    }
     if (e.button != null && e.button !== 0) return;
     if (e.isPrimary === false) return; // never treat a second finger as another stroke
     // A new primary touch means any old gesture was interrupted.
@@ -433,7 +526,7 @@
     // This also repairs any unexpected future toolbar/select mismatch.
     if (!validTools694B.has(tool.value)) {
       diagLog693Z('INVALID_TOOL_RECOVERED', `value=${JSON.stringify(tool.value)}`);
-      tool.value = drawingTools694B.has(returnTool693Y) ? returnTool693Y : 'pen';
+      tool.value = 'pen';
       tool.dispatchEvent(new Event('change', {bubbles:true}));
       announce('Nástroj obnoven. Můžeš pokračovat v kreslení.');
     }
@@ -442,6 +535,23 @@
     gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,start:p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
     if (kind === 'pan') {
       gesture.initialPan={x:panX693W,y:panY693W};
+    } else if (kind === 'scale') {
+      const bounds=selected>=0?shapeBounds694H(shapes[selected]):null;
+      const corner=bounds?resizeHandle694H(p,bounds):null;
+      const t=corner?affine694H(shapes[selected]):null;
+      if(corner && t){
+        gesture.mode='resize';gesture.chosen=selected;
+        const a={x:corner.includes('l')?bounds.r:bounds.l,y:corner.includes('t')?bounds.b:bounds.t};
+        const h={x:corner.includes('l')?bounds.l:bounds.r,y:corner.includes('t')?bounds.t:bounds.b};
+        gesture.resize={anchor:a,dx:h.x-a.x,dy:h.y-a.y,original:t};
+        announce('Tažením žlutého úchytu měníš velikost objektu.');
+      } else {
+        selected=hitTest(p);
+        gesture.mode='scale-select';
+        if(selected>=0&&!affine694H(shapes[selected])){
+          selected=-1;announce('Tento importovaný transform zatím nelze měnit.');
+        } else announce(selected<0?'Klepni na tvar a potom táhni žlutý úchyt.':'Táhni jeden ze žlutých rohových úchytů.');
+      }
     } else if (kind === 'move') {
       selected = hitTest(p);
       gesture.chosen = selected;
@@ -458,6 +568,7 @@
     render();
   });
   svg.addEventListener('pointermove',e => {
+    if(moveTouch694H(e))return;
     if (!gesture || e.pointerId !== gesture.id) return;
     const p = point(e), g = gesture;
     if (g.mode === 'eraser') { eraseAt(p); return; }
@@ -468,7 +579,17 @@
       panY693W=g.initialPan.y-(e.clientY-g.originClientY)*size/r.height;
       applyView693W();return;
     }
-    if (g.mode === 'move') {
+    if (g.mode === 'resize') {
+      if(g.chosen<0)return;
+      const z=g.resize,dx=z.dx,dy=z.dy,den=dx*dx+dy*dy;
+      if(den<=.00001)return;
+      const factor=limit693W(((p.x-z.anchor.x)*dx+(p.y-z.anchor.y)*dy)/den,.15,5);
+      assignAffine694H(shapes[g.chosen],{s:z.original.s*factor,
+        x:z.anchor.x+factor*(z.original.x-z.anchor.x),
+        y:z.anchor.y+factor*(z.original.y-z.anchor.y)});
+    } else if(g.mode==='scale-select'){
+      return;
+    } else if (g.mode === 'move') {
       if (g.chosen < 0) return;
       setOffset(shapes[g.chosen], g.initial.x+p.x-g.start.x,g.initial.y+p.y-g.start.y);
     } else if (g.mode === 'pen') {
@@ -483,7 +604,7 @@
     try {svg.releasePointerCapture?.(e.pointerId);} catch (_) {}
     if (cancelled) {shapes=g.before; drawing=null;selected=-1;render();return;}
     const p = point(e);
-    if (!['move','eraser','partial-eraser','pan'].includes(g.mode)) {
+    if (!['move','eraser','partial-eraser','pan','resize','scale-select'].includes(g.mode)) {
       if (g.mode === 'pen' && !g.rawPath.includes(' L')) drawing = normalized('circle',{cx:fmt(p.x),cy:fmt(p.y),r:fmt(Number(stroke.value)/2),fill:activeColor});
       else if (g.mode !== 'pen') drawing = shapeAt(g.start,p,g.mode);
       if (drawing) {
@@ -498,21 +619,21 @@
       // No geometry was modified: only the viewBox moved.
       announce('Plátno posunuto. Posun zůstává aktivní.');
     } else if (record(g.before)) {
-      announce(g.mode==='partial-eraser'?'Část tahu vymazána.':g.mode==='eraser'?'Tvar vymazán.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
+      announce(g.mode==='partial-eraser'?'Část tahu vymazána.':g.mode==='eraser'?'Tvar vymazán.':g.mode==='resize'?'Velikost upravena.':g.mode==='move'?'Tvar přesunut.':'Tvar přidán.');
     }
     render();
   }
-  svg.addEventListener('pointerup', e => finish(e));
-  svg.addEventListener('pointercancel', e => finish(e,true));
+  svg.addEventListener('pointerup', e => {if(!endTouch694H(e))finish(e);});
+  svg.addEventListener('pointercancel', e => {if(!endTouch694H(e))finish(e,true);});
   svg.addEventListener('lostpointercapture',e => {if(gesture && gesture.id===e.pointerId) finish(e,true);});
   // Recover gestures finished outside the SVG when pointer capture fails.
-  window.addEventListener('pointerup',e=>{if(gesture && e.pointerId===gesture.id)finish(e);});
-  window.addEventListener('pointercancel',e=>{if(gesture && e.pointerId===gesture.id)finish(e,true);});
-  window.addEventListener('blur',cancelInterruptedGesture693X);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelInterruptedGesture693X();});
+  window.addEventListener('pointerup',e=>{if(endTouch694H(e))return;if(gesture && e.pointerId===gesture.id)finish(e);});
+  window.addEventListener('pointercancel',e=>{if(endTouch694H(e))return;if(gesture && e.pointerId===gesture.id)finish(e,true);});
+  window.addEventListener('blur',()=>{touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();}});
   // Changing tools while a stroke is still marked active must not freeze drawing.
   tool.addEventListener('change',cancelInterruptedGesture693X);
-  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':'Nástroj připraven.');});
+  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':'Nástroj připraven.');});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
     const before = snapshot();
@@ -536,10 +657,9 @@
     const before = snapshot();
     let l=Infinity,t=Infinity,r=-Infinity,b=-Infinity;
     for(const i of ids) {
-      const el=svgPart(shapes[i]);svg.appendChild(el);
-      try { const bb=el.getBBox(), d=offset(shapes[i]);
-        l=Math.min(l,bb.x+d.x);t=Math.min(t,bb.y+d.y);r=Math.max(r,bb.x+bb.width+d.x);b=Math.max(b,bb.y+bb.height+d.y);
-      }catch(_){} el.remove();
+      const bb=shapeBounds694H(shapes[i]);
+      if(!bb) return announce('Tento SVG transform nelze bezpečně vystředit.');
+      l=Math.min(l,bb.l);t=Math.min(t,bb.t);r=Math.max(r,bb.r);b=Math.max(b,bb.b);
     }
     if (!Number.isFinite(l))return announce('Tvary nelze změřit.');
     const dx=12-(l+r)/2,dy=12-(t+b)/2;
