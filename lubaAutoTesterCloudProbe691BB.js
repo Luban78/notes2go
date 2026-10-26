@@ -34,8 +34,14 @@
         new Promise((_,reject)=>{timer=setTimeout(()=>reject(err('rpc_timeout','SERVER_BLOCKED')),18000);})
       ]);
       if(response?.error){
-        const code=Number(response.error.status);
-        throw err(Number.isFinite(code) ? 'server_rpc_http_'+code : 'server_rpc_rejected');
+        // 694Y1: expose only the fixed-format PostgREST/SQLSTATE code or HTTP status,
+        // never the server's free-text message, details, hint, user IDs or payloads.
+        const raw=String(response.error.code||'').trim().toUpperCase();
+        if(/^(?:PGRST[0-9]{3}|[0-9A-Z]{5})$/.test(raw))
+          throw err('server_rpc_code_'+raw.toLowerCase());
+        const status=Number(response.error.status);
+        throw err(Number.isInteger(status)&&status>=100&&status<=599
+          ? 'server_rpc_http_'+status : 'server_rpc_rejected');
       }
       check(response && Object.prototype.hasOwnProperty.call(response,'data'),'missing_rpc_data');
       return response.data;
