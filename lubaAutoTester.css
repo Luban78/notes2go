@@ -90,3 +90,34 @@ body.lat-open{overflow:hidden}
 #ln-auto-tester .lat-laboratory[data-compact="1"] .lat-live-stage,
 #ln-auto-tester .lat-laboratory[data-compact="1"] .lat-lab-buttons{display:none!important}
 #ln-auto-tester .lat-laboratory[data-compact="1"] .lat-lab-top{margin-bottom:8px}
+
+/* 695D – one-button AutoTester. All specialist controls stay opt-in. */
+#ln-auto-tester .lat-advanced-controls {
+  min-width:0; border:1px solid #416553; border-radius:13px;
+  background:#182820; overflow:hidden;
+}
+#ln-auto-tester .lat-advanced-controls > summary {
+  min-height:50px; display:flex; align-items:center;
+  cursor:pointer; padding:11px 15px; font-size:.95rem;
+  font-weight:750; color:#d7f1e1; list-style:none;
+}
+#ln-auto-tester .lat-advanced-controls > summary::-webkit-details-marker{display:none}
+#ln-auto-tester .lat-advanced-controls > summary::before{
+  content:'▸'; color:#54d49a; font-size:1.05rem; margin-right:10px;
+}
+#ln-auto-tester .lat-advanced-controls[open] > summary::before{content:'▾'}
+#ln-auto-tester .lat-advanced-controls[open] > summary{
+  border-bottom:1px solid #345141;
+}
+#ln-auto-tester .lat-advanced-inner {
+  display:grid; gap:10px; min-width:0; padding:12px;
+}
+#ln-auto-tester .lat-advanced-inner .lat-main-run{
+  font-size:.94rem; min-height:48px; background:#244938; border-color:#366e50;
+}
+#ln-auto-tester .lat-tech-notes{
+  font-size:.76rem; color:#96b9a6; line-height:1.55;
+  padding:9px 4px 2px; margin:0;
+}
+#ln-auto-tester .lat-advanced-inner .lat-copy-fps-691BT{min-height:44px}
+#ln-auto-tester .lat-laboratory[data-compact='1'] .lat-lab-top{font-size:.85rem}

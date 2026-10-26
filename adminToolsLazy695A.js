@@ -6,7 +6,7 @@
   if (window.LubaNoteAdminLazy695A) return;
 
   const assets = {
-    svg: ['adminSvgStudio693R.css?v=693S', 'adminSvgStudio693R.js?v=693S'],
+    svg: ['adminSvgStudio693R.css?v=695D-clean-svg', 'adminSvgStudio693R.js?v=693S'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
     hub: ['debugHub.css?v=695C-compact', 'debugHub.js?v=695C-compact']
   };
@@ -45,7 +45,11 @@
     return jobs.get(key);
   }
 
-  async function ensureSvgStudio() { await ensure('svg'); }
+  async function ensureSvgStudio() {
+    await ensure('svg');
+    // 695D: remove historical pan diagnostic panel (not the Pan tool).
+    document.getElementById('lnSvgDiag693Z')?.remove();
+  }
   async function ensureVisualDebug() { await ensure('visual'); }
   async function showDock() {
     if (!allowed()) return false;

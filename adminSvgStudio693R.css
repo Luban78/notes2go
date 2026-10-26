@@ -260,3 +260,6 @@
   .lnSvgStudio .lnSvgFileBar694W{padding:9px;gap:6px}
   .lnSvgStudio .lnSvgFileBar694W button{font-size:12px;padding:8px 4px}
 }
+
+/* 695D: obsolete 693Z pan diagnostic panel is retired; the actual Pan tool stays intact. */
+#adminSvgStudio693RView #lnSvgDiag693Z {display:none!important}

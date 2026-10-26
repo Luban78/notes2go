@@ -26,30 +26,37 @@
     <button type="button" class="lat-close" data-lat="close" aria-label="Zavřít AutoTester">×</button></header>
     <section class="lat-main-controls">
       <button class="lat-main-run" type="button" data-lat="run" data-suite="all">▶ Spustit vše</button>
-      <button class="lat-main-run" type="button" data-lat="run" data-suite="live-perf-691CS">▶ Výkon – živé červené úchyty</button>
-      <button class="lat-main-run" type="button" data-lat="perf-quick">▶ Rychlý výkon (bez dlouhé regrese)</button>
-      <button class="lat-main-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
       <button id="lat-show-results" type="button" data-lat="show-results" hidden>↓ Výsledky testu</button>
-      <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
-        <option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
-        <option value="svg">SVG Studio – izolované kontroly</option><option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
-        <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
-      </select><button type="button" data-lat="area">Spustit oblast</button></div>
-      <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
-      <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. Spustit vše upřednostňuje skutečný editor; staré izolované testy Bullet/Editor/ToDo zůstávají ve volbě Izolované regrese. E2E a DB běží 1×. Android používá MotionEvent ve WebView, ne fyzický prst.</small>
+      <details class="lat-advanced-controls">
+        <summary>Další testy a nastavení</summary>
+        <div class="lat-advanced-inner">
+          <button class="lat-main-run lat-advanced-run" type="button" data-lat="run" data-suite="live-perf-691CS">▶ Výkon – živé červené úchyty</button>
+          <button class="lat-main-run lat-advanced-run" type="button" data-lat="perf-quick">▶ Rychlý výkon (bez dlouhé regrese)</button>
+          <button class="lat-main-run lat-advanced-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
+          <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
+            <option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
+            <option value="svg">SVG Studio – izolované kontroly</option><option value="notes">Poznámky LOCAL / Testy</option><option value="sync">Synchronizace</option><option value="ui">Android / UI</option>
+            <option value="db">Databáze</option><option value="extended">Code / obrázky / jazyky (Core V2)</option><option value="image">Obrázky – živé testy a Core V2</option><option value="i18n">Šest jazykových balíčků</option><option value="stability">Izolované regrese + pokrytí V1</option>
+          </select><button type="button" data-lat="area">Spustit oblast</button></div>
+          <label class="lat-repeat-control" for="lat-repetitions">Opakování Core / Planner / Android WebView testů <input id="lat-repetitions" type="number" inputmode="numeric" min="1" max="50" step="1" value="1"></label>
+          <small class="lat-repeat-help">Výchozí 1×, vlastní počet 1–50. Spustit vše upřednostňuje skutečný editor; staré izolované testy Bullet/Editor/ToDo zůstávají ve volbě Izolované regrese. E2E a DB běží 1×. Android používá MotionEvent ve WebView, ne fyzický prst.</small>
+          <button type="button" data-lat="copy-fps" class="lat-copy-fps-691BT" title="Zkopírovat jen výkonový report včetně uložené baseline">📊 Kopírovat FPS report</button>
+          <p class="lat-tech-notes">690Y: viditelný Bullet / číslovaný seznam / ToDo / formátování a přechod na neověřené. 690W: oprava modalní kolize kapek a přechod na chybu. 690U: vlastní LubaNote caret, kapky a výběr se testují v běžném editoru. 690T: Testovací LOCAL poznámky se štítkem Testy zůstávají po běhu k prohlédnutí. Viditelný průchod editorem je skutečná UI obrazovka, nikoli Android UIAutomator. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</p>
+        </div>
+      </details>
     </section>
     <section class="lat-laboratory" data-compact="1" aria-label="Izolované diagnostické testy">
-      <div class="lat-lab-top"><strong>Doplňkové izolované testy Core V2</strong>
+      <div class="lat-lab-top"><strong>Průběh testování</strong>
         <div class="lat-lab-buttons"><button type="button" data-lat="speed" aria-pressed="true">🐢 Pomalu</button><button type="button" data-lat="expand" aria-pressed="false">⛶ Zvětšit</button><button type="button" data-lat="visual" aria-pressed="true">Náhled zapnutý</button></div></div>
       <div class="lat-live-stage" id="lat-live-stage"><span class="lat-live-placeholder">Zde se zobrazují pouze izolované regresní testy Core V2. Testy skutečného UI běží v běžné poznámce LubaNote Testy. Databázové testy obraz editoru nemají.</span></div>
       <div class="lat-progress-info"><span id="lat-live-step">Připraveno</span><span id="lat-progress-num">–</span></div>
       <div class="lat-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="lat-progress-track"><div id="lat-progress-fill"></div></div>
     </section>
-    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><div class="lat-result-actions"><button type="button" data-lat="jump-first-problem" id="lat-jump-first-problem" hidden>↓ Přejít na chybu</button><button type="button" data-lat="copy-fps" class="lat-copy-fps-691BT" title="Zkopírovat jen výkonový report včetně uložené baseline">📊 Kopírovat FPS report</button><button data-lat="copy" type="button" disabled>Kopírovat report</button></div></div>
+    <div class="lat-result-head"><div><strong>Výsledek kontroly</strong><p id="lat-state" role="status">Zatím nic neproběhlo.</p></div><div class="lat-result-actions"><button type="button" data-lat="jump-first-problem" id="lat-jump-first-problem" hidden>↓ Přejít na chybu</button><button data-lat="copy" type="button" disabled>Kopírovat report</button></div></div>
     <div id="lat-summary" class="lat-summary" aria-live="polite"></div>
     <div class="lat-note-review"><button type="button" data-lat="review-note" id="lat-review-note" hidden>Otevřít poslední poznámku Testy v aplikaci</button><small>Poznámky z testů zůstávají v prostoru LOCAL pod štítkem Testy.</small></div>
     <details class="lat-details"><summary>Podrobnosti a jednotlivé testy</summary><div id="lat-list" class="lat-list" aria-label="Výsledky testování"></div></details>
-    <footer class="lat-footer">690Y: viditelný Bullet / číslovaný seznam / ToDo / formátování a přechod na neověřené. 690W: oprava modalni kolize kapek a prechod na chybu. 690U: vlastní LubaNote caret, kapky a výběr se testují v běžném editoru. 690T: Testovací LOCAL poznámky se štítkem Testy zůstávají po běhu k prohlédnutí. Viditelný průchod editorem je skutečná UI obrazovka, nikoli Android UIAutomator. 690N: živý sandbox testuje skutečný Core V2 (Bullet/Editor/ToDo) a recurringTasks.js (opakování). Syntetický click/pointer/Range není fyzické Android gesto. PASS není důkaz nepokrytých oblastí. Spouští se pouze na vyžádání z APK.</footer>`;}
+`;}
   let visualEnabled=true;
   let slowMode=true;
   let extraSlowMode=false;
@@ -1779,24 +1786,13 @@
     btn.textContent=success?'Zkopírováno ✓':'Kopírování selhalo';
     setTimeout(()=>{if(btn.isConnected)btn.textContent='Kopírovat report';},2500);
   }
-  function addLaunch(){
-    const hub=document.getElementById('ln-debug-hub');
-    if(!hub || hub.querySelector('.lat-launch'))return;
-    const place=hub.querySelector('.ln-dh-run-actions') || hub.querySelector('.ln-dh-head');
-    if(!place)return;
-    const btn=document.createElement('button');btn.type='button';btn.className='lat-launch';btn.textContent='AutoTester';
-    btn.title='Otevřít izolovaný LubaNote AutoTester';
-    btn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();open();});
-    place.appendChild(btn);
-  }
   // Debug Hub emits this only when a developer opens it; no global DOM observer.
   document.addEventListener('lubanote:debug-hub-visibility',(event)=>{
     if(event?.detail?.open===true){
       // Take pri otevreni pres desktopove Admin menu musi byt dock viditelny.
       zobrazDebugDockPokudJeTreba();
-      addLaunch();
+      // 695D: own T button on dock, no duplicate launcher in Debug Hub.
     }
   });
-  addLaunch();
   window.LubaNoteAutoTester=Object.freeze({open,close});
 })();
