@@ -1700,21 +1700,40 @@
   // 694R: local raster reference for manual vector tracing.
   const refPanel694R=document.createElement('details');
   refPanel694R.className='lnSvgReference694R';
+  // 694T: LubaNote-style compact layout with fine positioning of the reference.
   refPanel694R.innerHTML=`<summary>🖼 Podklad pro obkreslení</summary>
     <div class="lnSvgRefBody694R">
-      <label>Načíst PNG / JPG / WebP <input type="file" accept="image/png,image/jpeg,image/webp" data-ref-file></label>
-      <label><input type="checkbox" data-ref-show checked> Zobrazit podklad</label>
-      <label>Průhlednost <input type="range" min="0" max="100" value="35" data-ref-opacity> <output data-ref-opacity-value>35 %</output></label>
-      <label>Velikost <input type="range" min="20" max="300" value="100" data-ref-scale> <output data-ref-scale-value>100 %</output></label>
-      <label>Vodorovně <input type="range" min="-24" max="24" step=".25" value="0" data-ref-x> <output data-ref-x-value>0</output></label>
-      <label>Svisle <input type="range" min="-24" max="24" step=".25" value="0" data-ref-y> <output data-ref-y-value>0</output></label>
+      <label class="lnSvgRefFile694T"><span>Obrázek PNG / JPG / WebP</span><input type="file" accept="image/png,image/jpeg,image/webp" data-ref-file></label>
+      <label class="lnSvgRefShow694T"><input type="checkbox" data-ref-show checked> Zobrazit podklad</label>
+      <div class="lnSvgRefRow694T"><label for="lnSvgRefOpacity694T">Průhlednost</label><input id="lnSvgRefOpacity694T" type="range" min="0" max="100" value="35" data-ref-opacity><output data-ref-opacity-value>35 %</output></div>
+      <div class="lnSvgRefRow694T"><label for="lnSvgRefScale694T">Velikost</label><input id="lnSvgRefScale694T" type="range" min="20" max="300" value="100" data-ref-scale><output data-ref-scale-value>100 %</output></div>
+      <div class="lnSvgRefPrecision694T"><label><input type="checkbox" data-ref-fine checked> Jemný posun</label><small data-ref-mode>Rozsah ±4</small></div>
+      <div class="lnSvgRefMoveRow694T"><label for="lnSvgRefX694T">Vodorovně</label><button type="button" data-ref-nudge="x:-" aria-label="Podklad doleva">−</button><input id="lnSvgRefX694T" type="range" min="-4" max="4" step=".01" value="0" data-ref-x><button type="button" data-ref-nudge="x:+" aria-label="Podklad doprava">+</button><output data-ref-x-value>0,00</output></div>
+      <div class="lnSvgRefMoveRow694T"><label for="lnSvgRefY694T">Svisle</label><button type="button" data-ref-nudge="y:-" aria-label="Podklad nahoru">−</button><input id="lnSvgRefY694T" type="range" min="-4" max="4" step=".01" value="0" data-ref-y><button type="button" data-ref-nudge="y:+" aria-label="Podklad dolů">+</button><output data-ref-y-value>0,00</output></div>
       <div class="lnSvgRefButtons694R"><button type="button" data-ref-center>Vycentrovat</button><button type="button" data-ref-remove>Odebrat podklad</button></div>
-      <small data-ref-status role="status">Obrázek slouží pouze jako předloha a nikdy se neexportuje. Po opuštění Studia jej může být nutné znovu načíst.</small>
+      <small data-ref-status role="status">Podklad je jen pomůcka k obkreslování, není součástí exportu.</small>
     </div>`;
   const refAnchor694R=svg.closest('.lnSvgStudioBoard');
   refAnchor694R?.insertAdjacentElement('beforebegin',refPanel694R);
   const refField694R=name=>refPanel694R.querySelector(`[data-ref-${name}]`);
   const refStatus694R=refField694R('status');
+  // 694T: Fine sliders move only eight SVG units across their full width;
+  // broad mode retains the original +/-24 range. Switching mode reanchors
+  // sliders around their CURRENT values, never jumps the reference.
+  const fineRef694T=refField694R('fine');
+  const positionText694T=v=>Number(v).toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+  function configureRange694T(fine){
+    for(const key of ['x','y']){
+      const input=refField694R(key);
+      const current=Number(input.value);
+      const min=fine?Math.max(-24,current-4):-24;
+      const max=fine?Math.min(24,current+4):24;
+      input.min=String(min);input.max=String(max);
+      input.step='.01';
+      input.value=String(current);
+    }
+    refField694R('mode').textContent=fine?'Jemné doladění':'Velký rozsah ±24';
+  }
   function refreshReference694R(){
     if(!reference694R)return;
     const r=reference694R;
@@ -1727,14 +1746,26 @@
     r.x=(24-r.width)/2+r.xOffset;r.y=(24-r.height)/2+r.yOffset;
     for(const key of ['opacity','scale','x','y']){
       const value=refField694R(key).value;
-      refField694R(key+'-value').textContent=key==='opacity'||key==='scale'?value+' %':value;
+      refField694R(key+'-value').textContent=key==='x'||key==='y'?positionText694T(value):value+' %';
     }
     render();
   }
   for(const key of ['show','opacity','scale','x','y'])refField694R(key).addEventListener('input',refreshReference694R);
+  fineRef694T.addEventListener('change',()=>configureRange694T(fineRef694T.checked));
+  refPanel694R.querySelectorAll('[data-ref-nudge]').forEach(button=>button.addEventListener('click',()=>{
+    const [axis,direction]=button.dataset.refNudge.split(':');
+    const input=refField694R(axis);
+    // 0.10 SVG units ~ 1.4 screen pixels at normal 340px canvas size.
+    const delta=fineRef694T.checked ? 0.10 : 0.50;
+    const next=Number(input.value)+(direction==='+'?delta:-delta);
+    input.value=String(Math.max(Number(input.min),Math.min(Number(input.max),Math.round(next*100)/100)));
+    refreshReference694R();
+  }));
+  configureRange694T(true);
   refField694R('center').addEventListener('click',()=>{
-    for(const key of ['x','y'])refField694R(key).value='0';
-    refField694R('scale').value='100';refreshReference694R();
+    for(const key of ['x','y']){const input=refField694R(key);input.min='-24';input.max='24';input.value='0';}
+    refField694R('scale').value='100';
+    configureRange694T(fineRef694T.checked);refreshReference694R();
   });
   refField694R('remove').addEventListener('click',()=>{
     reference694R=null;refField694R('file').value='';render();
@@ -1759,8 +1790,9 @@
       const fitWidth=w*fitScale,fitHeight=h*fitScale;
       reference694R={data,visible:true,opacity:.35,scale:1,xOffset:0,yOffset:0,fitWidth,fitHeight,width:fitWidth,height:fitHeight,x:0,y:0};
       refField694R('show').checked=true;refField694R('opacity').value='35';
-      refField694R('scale').value='100';refField694R('x').value='0';refField694R('y').value='0';
-      refreshReference694R();
+      refField694R('scale').value='100';
+      for(const key of ['x','y']){const input=refField694R(key);input.min='-24';input.max='24';input.value='0';}
+      configureRange694T(fineRef694T.checked);refreshReference694R();
       refStatus694R.textContent='Podklad načten: '+f.name+'. Kresli nástrojem Tužka nebo tvary přes obrázek.';
     }catch(err){refStatus694R.textContent='Nepodařilo se načíst podklad: '+(err?.message||err);}
   });

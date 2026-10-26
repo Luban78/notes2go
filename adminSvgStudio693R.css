@@ -152,3 +152,43 @@
 .lnSvgStudio .lnSvgPngControls694P button:disabled{opacity:.5}
 .lnSvgStudio .lnSvgPng694P small{display:block;margin-top:8px;color:var(--color-text-secondary)}
 .lnSvgStudio .lnSvgPngControls694P [hidden]{display:none!important}
+
+
+/* 694T: SVG Studio reference panel – compact, aligned LubaNote controls. */
+.lnSvgStudio .lnSvgReference694R{
+  margin:9px 0 7px; border:1px solid var(--color-border); border-radius:13px;
+  background:var(--color-surface); color:var(--color-text); overflow:hidden;
+}
+.lnSvgStudio .lnSvgReference694R>summary{
+  padding:11px 13px; font-weight:650; cursor:pointer; list-style-position:inside;
+  -webkit-tap-highlight-color:transparent;
+}
+.lnSvgStudio .lnSvgRefBody694R{padding:3px 12px 12px;display:grid;gap:10px;min-width:0}
+.lnSvgStudio .lnSvgRefFile694T{display:grid;gap:6px;font-size:12px;color:var(--color-text-secondary);min-width:0}
+.lnSvgStudio .lnSvgRefFile694T input[type=file]{box-sizing:border-box;width:100%;min-width:0;padding:6px;font-size:12px}
+.lnSvgStudio .lnSvgRefFile694T input[type=file]::file-selector-button{
+  color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:9px;padding:8px 10px;margin-right:8px;font:inherit;
+}
+.lnSvgStudio .lnSvgRefShow694T,
+.lnSvgStudio .lnSvgRefPrecision694T label{display:flex;gap:8px;align-items:center;font-size:13px;min-height:28px}
+.lnSvgStudio .lnSvgRefShow694T input[type=checkbox],
+.lnSvgStudio .lnSvgRefPrecision694T input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:var(--color-accent)}
+.lnSvgStudio .lnSvgRefPrecision694T{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:3px;border-top:1px solid var(--color-border)}
+.lnSvgStudio .lnSvgRefPrecision694T small{color:var(--color-text-secondary);font-size:11px}
+.lnSvgStudio .lnSvgRefRow694T{display:grid;grid-template-columns:88px minmax(0,1fr) 48px;gap:7px;align-items:center;min-width:0}
+.lnSvgStudio .lnSvgRefMoveRow694T{display:grid;grid-template-columns:69px 30px minmax(0,1fr) 30px 48px;gap:5px;align-items:center;min-width:0}
+.lnSvgStudio .lnSvgRefRow694T label,.lnSvgStudio .lnSvgRefMoveRow694T label{font-size:12px;min-width:0}
+.lnSvgStudio .lnSvgRefRow694T output,.lnSvgStudio .lnSvgRefMoveRow694T output{font-size:12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lnSvgStudio .lnSvgRefRow694T input[type=range],
+.lnSvgStudio .lnSvgRefMoveRow694T input[type=range]{min-width:0;width:100%;height:24px;margin:0;padding:0;border:0;box-shadow:none;background:transparent;accent-color:var(--color-accent);touch-action:pan-y}
+.lnSvgStudio .lnSvgRefMoveRow694T button{box-sizing:border-box;width:30px;height:34px;min-height:34px;padding:0;border:1px solid var(--color-border);border-radius:9px;color:var(--color-text);background:var(--color-surface);font:inherit;font-size:17px;-webkit-tap-highlight-color:transparent}
+.lnSvgStudio .lnSvgRefButtons694R{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.lnSvgStudio .lnSvgRefButtons694R button{min-width:0;min-height:39px;padding:7px 5px;border:1px solid var(--color-border);border-radius:10px;color:var(--color-text);background:var(--color-surface);font:inherit;font-size:12px}
+.lnSvgStudio .lnSvgRefBody694R [data-ref-status]{display:block;line-height:1.4;font-size:11px;color:var(--color-text-secondary)}
+@media(max-width:370px){
+ .lnSvgStudio .lnSvgRefBody694R{padding-left:8px;padding-right:8px}
+ .lnSvgStudio .lnSvgRefMoveRow694T{grid-template-columns:65px 28px minmax(0,1fr) 28px 46px;gap:4px}
+ .lnSvgStudio .lnSvgRefMoveRow694T button{width:28px}
+ .lnSvgStudio .lnSvgRefRow694T{grid-template-columns:82px minmax(0,1fr) 46px;gap:5px}
+}
