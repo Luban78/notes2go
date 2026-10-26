@@ -111,6 +111,11 @@
   document.addEventListener('lubanote:visual-debug-ready',zajistiTesterVDocku);
   function zobrazDebugDockPokudJeTreba(){
     if(!povolenDok())return false;
+    // 695A: first double-tap loads the visual tool only on demand.
+    if(!window.LubaNoteVisualDebug?.showDock){
+      void window.LubaNoteAdminLazy695A?.showDock?.();
+      return true;
+    }
     let dock=document.getElementById('ln-vd-quickbar');
     if(!dock||dock.hidden||getComputedStyle(dock).display==='none'){
       window.LubaNoteVisualDebug?.showDock?.();
@@ -1446,11 +1451,18 @@
   // Distinct statuses prevent static presence checks/manual gestures becoming PASS.
   async function spustitSvgStudio694Y(generace){
     if(generace!==generaceBehu || !running || screen?.hidden)return;
+    // 695A: SVG Studio is absent at startup. Load only for this explicit suite
+    // or Spustit vse; no user drafts are modified by the isolated checks.
+    let loadError695A=null;
+    try{await window.LubaNoteAdminLazy695A?.ensureSvgStudio?.();}
+    catch(error){loadError695A=error;}
+    if(generace!==generaceBehu || !running || screen?.hidden)return;
     const mod=window.LubaNoteSvgStudioTest694Y;
     const fallbackIds=mod?.expected||['svg694y-module-unavailable'];
     const blocked=reason=>fallbackIds.map(id=>({id,name:id,kind:'SVG_STUDIO_ISOLATED_694Y',status:'APP_BLOCKED',ms:0,detail:String(reason).slice(0,180)}));
     setStatus('SVG Studio – kontroluji skutečné vektorové funkce bezpečně v RAM…');
     try{
+      if(loadError695A)throw Error('SVG Studio 695A load failed');
       if(!mod || typeof mod.run!=='function' || !Array.isArray(mod.expected) || mod.expected.length!==17)throw Error('SVG Studio 694Y bridge missing');
       const rows=mod.run();
       const kinds=new Set(['APP_PASS','APP_FAIL','APP_BLOCKED','NOT_TESTED']);

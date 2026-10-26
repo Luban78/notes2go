@@ -74,8 +74,6 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="visualDebug.css?v=658be-global-rem-font-scale">
-  <link rel="stylesheet" href="debugHub.css?v=683C-stability-persist">
   <!-- Editor Core V2 – jediný produkční editor -->
   <link rel="stylesheet" href="editorCoreV2.css?v=691S-image-no-selection">
   <link rel="stylesheet" href="editorCoreV2Bridge.css?v=658be-global-rem-font-scale">
@@ -93,7 +91,6 @@
   <link rel="stylesheet" href="e2ePasswordChange688N.css?v=688T-keyboard-scroll">
   <!-- 689A: izolovany automaticky tester pristupny jen z Debug Hubu. -->
   <link rel="stylesheet" href="lubaAutoTester.css?v=691AD-compact-headless-lab">
-  <link rel="stylesheet" href="adminSvgStudio693R.css?v=693S" />
 </head>
 
 <body class="authPending ln-pv-hide-plan-icons ln-pv-hide-reminder-icons"
@@ -3056,8 +3053,9 @@
   <!-- Onboarding nového čistého účtu – server zajistí právě jednu uvítací poznámku. -->
   <script src="onboarding.js?v=20260904-c4-mega-client-1"></script>
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
-  <script src="adminDashboard.js?v=683AS-own-selection-theme"></script>
-  <script src="adminSvgStudio693R.js?v=693S"></script>
+  <!-- 695A: Lightweight, admin-only lazy loader; actual tools are not parsed on startup. -->
+  <script src="adminToolsLazy695A.js?v=695A"></script>
+  <script src="adminDashboard.js?v=695A-lazy-admin-tools"></script>
   <script src="fpsBenchmark691BQ.js?v=691BV-manual-performance-history"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=20260918-post-demo-attachment-cleanup-612a"></script>
@@ -3105,7 +3103,6 @@
   <script src="sharingEditor.js?v=668b-shared-trash-delete"></script>
   
   <!-- Visual Debug – dostupný pouze přes serverově ověřený Admin Dashboard -->
-  <script src="visualDebug.js?v=690Q-dock-verification"></script>
   
   <!-- Editor Core V2 – jediný produkční editor. Žádný fallback ani přepínač. -->
   <script src="editorCoreV2.js?v=691DG-pc-mouse-select-before-move"></script>
@@ -3120,7 +3117,6 @@
   <script src="learningDictionarySync.js?v=660b-learning-dictionary-sync-v1"></script>
 
   <!-- Debug Hub – samostatný admin nástroj; diagnostika se zapíná jen na vyžádání. -->
-  <script src="debugHub.js?v=692X-alarm-forensics"></script>
   <script src="lubaDebugSyncBrief691BA.js?v=691BA-sync-brief-copy"></script>
   <script src="lubaAutoTesterRemote690A.js?v=690A-isolated-on-demand"></script>
   <script src="lubaAutoTesterCloudProbe691BB.js?v=691BB-readonly-live-server"></script>

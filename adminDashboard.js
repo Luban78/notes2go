@@ -3200,15 +3200,33 @@
   function otevriVisualDebugZAdmina() {
     if (!jeAdmin) return;
     zavriDashboard();
-    window.LubaNoteVisualDebug?.open?.();
+    void window.LubaNoteAdminLazy695A?.openVisualDebug?.();
   }
 
   function otevriDebugHubZAdmina() {
     if (!jeAdmin) return;
     zavriDashboard();
-    window.LubaNoteVisualDebug?.showDock?.();
-    window.LubaNoteDebugHub?.open?.();
+    void window.LubaNoteAdminLazy695A?.openDebugHub?.();
   }
+
+  // 695A: SVG Studio is initialized only after an explicit admin click.
+  // The original Studio handler is installed by the loaded script, then receives
+  // one replayed click. Failed loading leaves this button retryable.
+  const svgStudioTlacitko695A = document.getElementById("adminSvgStudio693RButton");
+  let svgStudioLoading695A = false;
+  async function prvniOtevreniSvgStudia695A() {
+    if (!jeAdmin || svgStudioLoading695A) return;
+    svgStudioLoading695A = true;
+    try {
+      await window.LubaNoteAdminLazy695A.ensureSvgStudio();
+      svgStudioTlacitko695A.removeEventListener("click", prvniOtevreniSvgStudia695A);
+      if (jeAdmin && !modal.hidden) svgStudioTlacitko695A.click();
+    } catch (error) {
+      svgStudioLoading695A = false;
+      console.warn("SVG Studio 695A: loading failed", error);
+    }
+  }
+  svgStudioTlacitko695A?.addEventListener("click", prvniOtevreniSvgStudia695A);
 
   /* PATCH 683B – přesný roh + zachování rozběhnuté diagnostiky.
    * Pointer/touch capture je pouze pasivní pozorování; žádné preventDefault.
@@ -3229,8 +3247,9 @@
     const panel = document.getElementById("ln-debug-hub");
     if (panel && !panel.hidden) return true; // již otevřený: nikdy nerestartovat
 
-    window.LubaNoteVisualDebug?.showDock?.();
-    return Boolean(window.LubaNoteDebugHub?.open?.());
+    // 695A: first developer gesture loads VD/DH on demand, never at APK start.
+    void window.LubaNoteAdminLazy695A?.openDebugHub?.();
+    return true;
   }
 
   function jeNouzovyDebugRoh(x, y) {

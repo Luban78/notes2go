@@ -2757,7 +2757,11 @@
       if (debugHubPanel && !debugHubPanel.hidden) {
         window.LubaNoteDebugHub?.close?.();
       } else {
-        window.LubaNoteDebugHub?.open?.();
+        if (window.LubaNoteDebugHub?.open) {
+          window.LubaNoteDebugHub.open();
+        } else {
+          void window.LubaNoteAdminLazy695A?.openDebugHub?.();
+        }
       }
     });
     document.addEventListener("lubanote:debug-hub-visibility", event => {
