@@ -1672,8 +1672,9 @@
       <select data-drafts aria-label="Uložené ikony"><option value="">Žádné uložené ikony</option></select>
       <button type="button" data-open>Otevřít</button><button type="button" data-delete>Odstranit</button>
     </div>
+    <div class="lnSvgDraftRow696A"><button type="button" data-cloud-sync>☁ Synchronizovat</button></div>
     <div class="lnSvgDraftRow694K lnSvgDraftRecover694K"><button type="button" data-recover hidden>↶ Obnovit poslední rozpracovanou kresbu</button></div>
-    <small data-draft-message role="status">Návrhy se ukládají jen v tomto zařízení. Před odinstalací aplikace je exportuj jako SVG.</small>`;
+    <small data-draft-message role="status">Návrhy se ukládají lokálně. Tlačítkem Synchronizovat je můžeš přenášet přes LubaServer mezi mobilem a PC.</small>`;
   // Saving belongs next to the live previews, never between the tool grid and canvas.
   const draftsAnchor694K=view.querySelector('.lnSvgStudioPreviewArea693S') || svg.closest('.lnSvgStudioBoard');
   draftsAnchor694K?.insertAdjacentElement('afterend',draftPanel694K);
@@ -1712,6 +1713,8 @@
   const draftMessage694K=draftPanel694K.querySelector('[data-draft-message]');
   const state694K=draftPanel694K.querySelector('[data-save-state]');
   let currentId694K=null,dirty694K=false,draftReady694K=false;
+  // 696A: cloud metadata is saved only alongside local drafts; never added to exported SVG.
+  let cloudRevision696A=0,cloudOwner696A=null;
   let recoveryTimer694K=null,writeChain694K=Promise.resolve(),lastAuto694K=null;
   const AUTO_ID694K='__recovery__';
   let dbOpen694K=null;
@@ -1748,7 +1751,9 @@
   }
   function draftData694K(id,name){
     return {id,name,updated:new Date().toISOString(),shapes:snapshot(),activeColor,
-      stroke:stroke.value,fill:!!fill?.checked,reference:reference694R ? {data:reference694R.data,visible:reference694R.visible,opacity:reference694R.opacity,scale:reference694R.scale,xOffset:reference694R.xOffset,yOffset:reference694R.yOffset,fitWidth:reference694R.fitWidth,fitHeight:reference694R.fitHeight}:null};
+      stroke:stroke.value,fill:!!fill?.checked,reference:reference694R ? {data:reference694R.data,visible:reference694R.visible,opacity:reference694R.opacity,scale:reference694R.scale,xOffset:reference694R.xOffset,yOffset:reference694R.yOffset,fitWidth:reference694R.fitWidth,fitHeight:reference694R.fitHeight}:null,
+      cloudRevision:id===currentId694K?cloudRevision696A:0,
+      cloudOwner:id===currentId694K?cloudOwner696A:null};
   }
   function validDraft694K(item){
     if(!item||!Array.isArray(item.shapes)||item.shapes.length>800)return false;
@@ -1787,7 +1792,7 @@
       if(entries.some(x=>x.id===previous))list694K.value=previous;
       else if(currentId694K && entries.some(x=>x.id===currentId694K))list694K.value=currentId694K;
       refreshPicker694W1();
-      message694K(`${entries.length} uložených návrhů · pouze v tomto zařízení`);
+      message694K(`${entries.length} místních návrhů · pro PC použij Synchronizovat`);
     }catch(e){message694K('Ukládání v tomto zařízení není dostupné: '+e.message);}
   }
   function applyDraft694K(item,id){
@@ -1812,6 +1817,8 @@
     if(typeof syncReferenceControls694X==='function')syncReferenceControls694X();
     nameInput694K.value=String(item.name||'Nová ikona').slice(0,70);
     currentId694K=id===AUTO_ID694K?null:id;
+    cloudRevision696A=id===AUTO_ID694K?0:(Number.isSafeInteger(item.cloudRevision)&&item.cloudRevision>0?item.cloudRevision:0);
+    cloudOwner696A=id===AUTO_ID694K?null:(typeof item.cloudOwner==='string'?item.cloudOwner:null);
     dirty694K=id===AUTO_ID694K;
     state694K.textContent=dirty694K?'Obnovená kresba':'Uloženo';
     render();
@@ -1824,30 +1831,44 @@
   const saveDraft695V=draftPanel694K.querySelector('[data-save]');
   const quickSave695V=toolBar693W.querySelector('[aria-label="Uložit"]');
   let savingDraft695V=false;
-  saveDraft695V.addEventListener('click',async()=>{
-    if(savingDraft695V)return;
-    if(gesture){message694K('Nejprve dokonči tah na plátně.');return;}
+  // 696A: local save is the single source of truth for the editor and cloud push.
+  // Nothing is uploaded until IndexedDB confirms this snapshot is saved.
+  async function saveCurrentDraft696A(){
+    if(savingDraft695V)throw new Error('Ukládání už probíhá, zkus to znovu.');
+    if(gesture)throw new Error('Nejprve dokonči tah na plátně.');
     const name=nameInput694K.value.trim();
-    if(!name)return message694K('Napiš název ikony.');
-    if(!shapes.length)return message694K('Nejdřív nakresli alespoň jeden tvar.');
+    if(!name)throw new Error('Napiš název ikony.');
+    if(!shapes.length)throw new Error('Nejdřív nakresli alespoň jeden tvar.');
     const id=currentId694K||(`svg-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
+    const draft=draftData694K(id,name);
     savingDraft695V=true;
     saveDraft695V.disabled=true;
     if(quickSave695V)quickSave695V.disabled=true;
+    try{
+      await enqueueWrite694K(()=>dbOp694K('put',draft));
+      currentId694K=id;
+      // Do not mark later edits as saved if a draw gesture happened while IndexedDB wrote.
+      if(JSON.stringify(snapshot())===JSON.stringify(draft.shapes)&&nameInput694K.value.trim()===name)markSaved694K();
+      await refreshDrafts694K();list694K.value=id;refreshPicker694W1();
+      queueRecovery694K();
+      return draft;
+    }finally{
+      savingDraft695V=false;saveDraft695V.disabled=false;
+      if(quickSave695V)quickSave695V.disabled=false;
+    }
+  }
+  saveDraft695V.addEventListener('click',async()=>{
     message694K('Ukládám návrh…');
     try{
-      await enqueueWrite694K(()=>dbOp694K('put',draftData694K(id,name)));
-      currentId694K=id;markSaved694K();
-      await refreshDrafts694K();list694K.value=id;refreshPicker694W1();
-      message694K(`„${name}“ uloženo do tohoto zařízení.`);
-      queueRecovery694K();
+      const draft=await saveCurrentDraft696A();
+      message694K(`„${draft.name}“ uloženo do tohoto zařízení.`);
     }catch(e){message694K('Nepodařilo se uložit. Zkopíruj SVG jako zálohu. '+e.message);}
-    finally{savingDraft695V=false;saveDraft695V.disabled=false;if(quickSave695V)quickSave695V.disabled=false;}
   });
   draftPanel694K.querySelector('[data-new]').addEventListener('click',async()=>{
     if(!await allowReplace694K())return;
     shapes=[];history=[];future=[];gesture=null;drawing=null;selected=-1;clearJoinDraft695X();
     currentId694K=null;dirty694K=false;sourceIsEdited693T=false;
+    cloudRevision696A=0;cloudOwner696A=null;
     nameInput694K.value='Nová ikona';state694K.textContent='Nový návrh';
     render();queueRecovery694K(true);message694K('Nová prázdná ikona. Dříve uložené návrhy zůstaly zachovány.');
   });
@@ -1868,7 +1889,7 @@
     if(!await confirm694W1(`Opravdu odstranit uložený návrh „${label}“?`))return;
     try{
       await enqueueWrite694K(()=>dbOp694K('delete',id));
-      if(currentId694K===id){currentId694K=null;onChanged694K();}
+      if(currentId694K===id){currentId694K=null;cloudRevision696A=0;cloudOwner696A=null;onChanged694K();}
       await refreshDrafts694K();message694K('Uložený návrh odstraněn. Aktuální kresba zůstala nedotčená.');
     }catch(e){message694K('Odstranění selhalo: '+e.message);}
   });
@@ -1877,6 +1898,142 @@
     if(!await allowReplace694K())return;
     try{applyDraft694K(lastAuto694K,AUTO_ID694K);message694K('Poslední rozpracovaná kresba obnovena.');}
     catch(e){message694K('Obnova selhala: '+e.message);}
+  });
+  // 696A: Explicit, manual, two-way SVG draft transport. LubaServer is the
+  // active Supabase-compatible backend (never a second cloud endpoint).
+  // Local drafts always remain authoritative until the user explicitly chooses
+  // which revision to publish/open. No background writes or implicit merges.
+  const syncButton696A=draftPanel694K.querySelector('[data-cloud-sync]');
+  let syncBusy696A=false;
+  const cloudTable696A='lubanote_svg_drafts_696a';
+  const cloudRpc696A='lubanote_svg_draft_push_696a';
+  function serverError696A(error){
+    const code=String(error?.code||'');
+    const msg=String(error?.message||error||'Neznámá chyba');
+    if(code==='42P01'||code==='42883'||code==='PGRST202'||code==='PGRST205'||/does not exist|schema cache/i.test(msg))
+      return 'Na LubaServeru ještě není nainstalována SQL migrace 696A pro SVG návrhy.';
+    if(code==='42501'||code==='PGRST301'||/permission denied|jwt expired/i.test(msg))
+      return 'Server odmítl přístup. Zkontroluj přihlášení a oprávnění SVG úložiště.';
+    return msg.slice(0,220);
+  }
+  async function cloudSession696A(){
+    if(!navigator.onLine)throw new Error('Jsi offline. Návrh zůstává bezpečně uložený v zařízení.');
+    const backend=window.LubaNoteBackendConfig?.nactiAktivniProfil?.();
+    if(backend?.typ!=='supabase-selfhosted')
+      throw new Error('Pro SVG návrhy je povolena pouze synchronizace přes vlastní LubaServer, nikoli cloudový backend.');
+    if(typeof getCurrentUser!=='function')throw new Error('Přihlašování ještě není připravené.');
+    const user=await getCurrentUser();
+    if(!user?.id||typeof supabaseClient==='undefined'||!supabaseClient)
+      throw new Error('Pro synchronizaci se přihlas do stejného účtu LubaNote na mobilu i PC.');
+    if(window.LubaNoteSupabase?.jeAktivniUcetPotvrzenProTentoBeh?.()!==true)
+      throw new Error('Pro přenos návrhů nejprve dokonči ověření přihlášeného účtu.');
+    return {client:supabaseClient,user};
+  }
+  function cloudDocument696A(draft){
+    const {cloudRevision,cloudOwner,...doc}=draft;
+    if(!validDraft694K(doc))throw new Error('Návrh není bezpečně uložitelný na server.');
+    if(JSON.stringify(doc).length>2300000)throw new Error('Návrh je pro server příliš velký (maximálně cca 2 MB včetně referenčního obrázku).');
+    return doc;
+  }
+  const newDraftId696A=()=>`svg-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+  async function cloudPush696A(){
+    const {client,user}=await cloudSession696A();
+    // Always save the complete edit-ready snapshot LOCALLY before sending it.
+    message694K('Ukládám lokální zálohu před odesláním…');
+    const draft=await saveCurrentDraft696A();
+    if(draft.cloudOwner && draft.cloudOwner!==user.id)
+      throw new Error('Tento místní návrh patří k jinému účtu. Ulož ho jako novou kopii.');
+    const doc=cloudDocument696A(draft);
+    message694K('Odesílám SVG návrh na LubaServer…');
+    const {data,error}=await client.rpc(cloudRpc696A,{
+      p_id:draft.id,p_name:draft.name,p_document:doc,p_expected_revision:draft.cloudRevision||0
+    });
+    if(error)throw new Error(serverError696A(error));
+    if(data?.ok!==true){
+      if(data?.reason==='revision_conflict'){
+        const choice=await showDialog694W1('Na serveru už je novější nebo jiná verze tohoto návrhu. Místní kresba zůstala nedotčená.',[
+          {label:'Uložit moji verzi jako NOVOU serverovou kopii',value:'copy'}
+        ],[{label:'Ponechat místní kresbu',value:'cancel'}]);
+        if(choice!=='copy')return;
+        const copyId=newDraftId696A();
+        const copyName=(draft.name.slice(0,60)+' – kopie').slice(0,70);
+        const copyDoc={...doc,id:copyId,name:copyName};
+        const {data:copyResult,error:copyError}=await client.rpc(cloudRpc696A,{
+          p_id:copyId,p_name:copyName,p_document:copyDoc,p_expected_revision:0
+        });
+        if(copyError)throw new Error(serverError696A(copyError));
+        if(copyResult?.ok!==true)throw new Error('Novou serverovou kopii se nepodařilo vytvořit.');
+        // Leave active and saved local drafts intact; server copy can be imported by name.
+        message694K('Nová serverová kopie byla uložena. Původní místní návrh zůstal beze změny.');
+        return;
+      }
+      throw new Error('Server odmítl zápis: '+String(data?.reason||'neznámý důvod'));
+    }
+    if(!Number.isSafeInteger(Number(data.revision))||Number(data.revision)<1)
+      throw new Error('Server nepotvrdil platné číslo verze. Místní návrh zůstává uložen.');
+    const revision=Number(data.revision);
+    // Update metadata of the CURRENT local row without rolling back edits made during upload.
+    await enqueueWrite694K(async()=>{
+      const stored=await dbOp694K('get',draft.id);
+      if(stored)await dbOp694K('put',{...stored,cloudRevision:revision,cloudOwner:user.id});
+    });
+    if(currentId694K===draft.id){cloudRevision696A=revision;cloudOwner696A=user.id;}
+    message694K(`„${draft.name}“ synchronizováno na LubaServer (verze ${revision}). Na PC použij Synchronizovat → Otevřít ze serveru.`);
+  }
+  async function cloudPull696A(){
+    const {client,user}=await cloudSession696A();
+    message694K('Načítám seznam SVG návrhů z LubaServeru…');
+    const {data:rows,error}=await client.from(cloudTable696A)
+      .select('id,name,updated_at,revision').eq('user_id',user.id)
+      .order('updated_at',{ascending:false}).limit(200);
+    if(error)throw new Error(serverError696A(error));
+    if(!Array.isArray(rows)||!rows.length){message694K('Na serveru ještě nemáš žádné SVG návrhy. Na mobilu nejdřív použij Synchronizovat → Odeslat.');return;}
+    const chosen=await showDialog694W1('Otevřít SVG návrh z LubaServeru',rows.map(row=>{
+      const day=new Date(row.updated_at);
+      const when=Number.isNaN(day.getTime())?'':` · ${day.toLocaleDateString('cs-CZ')}`;
+      return {label:`${String(row.name||'Bez názvu').slice(0,70)}${when} · v${row.revision}`,value:String(row.id)};
+    }),[{label:'Zavřít',value:null}]);
+    if(!chosen)return;
+    const {data:remote,error:readError}=await client.from(cloudTable696A)
+      .select('id,name,revision,document').eq('user_id',user.id).eq('id',chosen).single();
+    if(readError)throw new Error(serverError696A(readError));
+    if(!remote||!validDraft694K(remote.document))throw new Error('Server vrátil neplatný návrh. Místní kresba zůstává beze změny.');
+    // Preserving every local version is more important than reducing duplicate names.
+    const existing=await dbOp694K('get',remote.id);
+    const doc={...remote.document,id:remote.id,name:String(remote.name||'SVG ikona').slice(0,70)};
+    const comparable696A=value=>{
+      const clean=cloudDocument696A(value);
+      return JSON.stringify({name:clean.name,shapes:clean.shapes,activeColor:clean.activeColor,
+        stroke:clean.stroke,fill:clean.fill,reference:clean.reference});
+    };
+    const sameContent=existing && comparable696A(existing)===comparable696A(doc);
+    const fork=!!existing&&!sameContent;
+    const id=fork?newDraftId696A():remote.id;
+    const name=fork?(doc.name.slice(0,49)+' – ze serveru').slice(0,70):doc.name;
+    const imported={...doc,id,name,cloudRevision:fork?0:Number(remote.revision)||0,cloudOwner:fork?null:user.id,
+      updated:new Date().toISOString()};
+    if(!validDraft694K(imported))throw new Error('Návrh není možné importovat.');
+    if(!await allowReplace694K())return;
+    // Ensure remote snapshot exists as a local backup BEFORE replacing canvas.
+    await enqueueWrite694K(()=>dbOp694K('put',imported));
+    applyDraft694K(imported,id);
+    await refreshDrafts694K();list694K.value=id;refreshPicker694W1();
+    message694K(fork?`„${name}“ otevřeno jako nová místní kopie. Tvoje starší kresba zůstala zachována.`:`„${name}“ staženo z LubaServeru a připraveno k úpravám.`);
+  }
+  syncButton696A.addEventListener('click',async()=>{
+    if(syncBusy696A)return;
+    const action=await showDialog694W1('Synchronizace SVG návrhů přes LubaServer',[
+      {label:'↑ Odeslat aktuální návrh na server',value:'push'},
+      {label:'↓ Otevřít návrh ze serveru',value:'pull'}
+    ],[{label:'Zavřít',value:null}]);
+    if(!action)return;
+    syncBusy696A=true;syncButton696A.disabled=true;
+    try{
+      if(action==='push')await cloudPush696A();
+      else if(action==='pull')await cloudPull696A();
+    }catch(error){
+      message694K('Synchronizace se nepovedla: '+String(error?.message||error).slice(0,230));
+    }finally{syncBusy696A=false;syncButton696A.disabled=false;}
   });
   nameInput694K.addEventListener('input',()=>{if(shapes.length){dirty694K=true;state694K.textContent='Neuložený název';queueRecovery694K();}});
   // Recoverable state is offered on demand, never silently overwrites drawing.

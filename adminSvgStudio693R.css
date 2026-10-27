@@ -573,3 +573,13 @@
   color:var(--color-accent,#1cb6c9);border-color:var(--color-accent,#1cb6c9);
   box-shadow:inset 0 0 0 1px var(--color-accent,#1cb6c9);
 }
+
+/* 696A – cloud sync entrypoint next to existing local SVG drafts. */
+.lnSvgStudio .lnSvgDraftRow696A {display:flex;gap:8px;margin:8px 0;}
+.lnSvgStudio .lnSvgDraftRow696A button {
+  flex:1 1 100%;box-sizing:border-box;min-height:42px;padding:8px 12px;
+  border:1px solid var(--color-accent,#1bb4bf);border-radius:10px;
+  background:var(--color-surface,#102b3b);color:var(--color-text,#eaf8fb);
+  font:inherit;font-weight:650;cursor:pointer;
+}
+.lnSvgStudio .lnSvgDraftRow696A button:disabled {opacity:.5;cursor:default;}
